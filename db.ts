@@ -227,6 +227,10 @@ export let bundle = (db: DatabaseSync, eid: number): Ent => {
   }
 }
 
+// Point a card at a different lens — the tab click's write.
+export let setView = (db: DatabaseSync, card: number, view: string) =>
+  db.prepare('update card set view = ? where eid = ?').run(view, card)
+
 // The root canvas (first canvas entity) and the cards pinned to a canvas.
 export let rootCanvas = (db: DatabaseSync) =>
   db.prepare("select eid from entity where kind = 'canvas' order by eid")
