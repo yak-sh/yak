@@ -189,3 +189,7 @@ export let clientId = () => {
 // in plane coords, w/h the viewport size in screen px. Shared so drags can
 // convert screen px into plane px.
 export let camera = signal({ x: 0, y: 0, zoom: 1, w: 0, h: 0 })
+
+// The vim mode this tab is in — per-tab UI state, never synced. Hotkeys
+// (space, 0, …) only fire in normal mode; the statusbar owns transitions.
+export let mode = signal<'normal' | 'insert' | 'command'>('normal')

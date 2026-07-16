@@ -128,7 +128,14 @@
   max-height: none; /* an explicit height beats the auto cap */
 }
 
+/* Resize grips straddle the card border: sides are --grip wide centered on
+   the line; corners are bigger squares centered on the corner point and
+   painted after the sides, so they win the overlap. */
 .Handle {
+  --grip: 10px;
+  --corner: 18px;
+  --edge: calc(var(--gap) - var(--grip) / 2);
+  --corner-edge: calc(var(--gap) - var(--corner) / 2);
   position: absolute;
   touch-action: none;
 }
@@ -136,42 +143,50 @@
 .Handle-s {
   left: var(--gap);
   right: var(--gap);
-  height: var(--gap);
+  height: var(--grip);
   cursor: ns-resize;
 }
 .Handle-e,
 .Handle-w {
   top: var(--gap);
   bottom: var(--gap);
-  width: var(--gap);
+  width: var(--grip);
   cursor: ew-resize;
 }
-.Handle-n,
+.Handle-n {
+  top: var(--edge);
+}
+.Handle-s {
+  bottom: var(--edge);
+}
+.Handle-e {
+  right: var(--edge);
+}
+.Handle-w {
+  left: var(--edge);
+}
+.Handle-ne,
+.Handle-nw,
+.Handle-se,
+.Handle-sw {
+  width: var(--corner);
+  height: var(--corner);
+}
 .Handle-ne,
 .Handle-nw {
-  top: 0;
+  top: var(--corner-edge);
 }
-.Handle-s,
 .Handle-se,
 .Handle-sw {
-  bottom: 0;
+  bottom: var(--corner-edge);
 }
-.Handle-e,
 .Handle-ne,
 .Handle-se {
-  right: 0;
+  right: var(--corner-edge);
 }
-.Handle-w,
 .Handle-nw,
 .Handle-sw {
-  left: 0;
-}
-.Handle-ne,
-.Handle-nw,
-.Handle-se,
-.Handle-sw {
-  width: var(--gap);
-  height: var(--gap);
+  left: var(--corner-edge);
 }
 .Handle-ne,
 .Handle-sw {
@@ -349,6 +364,39 @@
 }
 .Dependency_Type-contains {
   color: var(--yellow);
+}
+
+/* The vim statusbar: NORMAL / -- INSERT -- / the : command line. */
+.Status {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  padding: 2px var(--gap);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+.Status_Mode {
+  color: var(--dim);
+  font-weight: 600;
+}
+.Status_Mode-insert {
+  color: var(--yellow);
+}
+.Status_Colon {
+  color: var(--text);
+}
+.Status_Cmd {
+  flex: 1;
+  font: inherit;
+  color: var(--text);
+  background: none;
+  border: 0;
+  outline: none;
+  padding: 0;
+}
+.Status_Msg {
+  color: var(--muted);
 }
 
 /* An external page framed in a card. */

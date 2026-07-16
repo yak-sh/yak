@@ -4,6 +4,7 @@ import {
   camera,
   clientId,
   ent,
+  mode,
   mutate,
   myCamera,
   pinned,
@@ -124,13 +125,20 @@ export let Canvas = ({ eid }: { eid: string }) => {
     }
     addEventListener('resize', resize)
 
-    // <space> over a card glides the camera to frame it.
+    // Normal-mode hotkeys: 0 resets zoom; <space> over a card glides the
+    // camera to frame it.
     let key = (e: KeyboardEvent) => {
-      if (e.key != ' ' || e.repeat) return
+      if (mode.value != 'normal' || e.repeat) return
       if (
         e.target instanceof HTMLElement &&
         e.target.matches('input, textarea, select, [contenteditable]')
       ) return
+      if (e.key == '0') {
+        camera.value = { ...camera.value, zoom: 1 }
+        queue('zoom')
+        return
+      }
+      if (e.key != ' ') return
       let pin = document.querySelector<HTMLElement>('.Pin:hover')
       if (!pin) return
       e.preventDefault()
