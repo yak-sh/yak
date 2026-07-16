@@ -179,7 +179,6 @@ let seed = (db: DatabaseSync) => {
   let canvas = ent(db, 'canvas')
   pin(db, canvas, addCard(db, proj, 'Board'), 0, 0, 640, 0)
   pin(db, canvas, addCard(db, view, 'Task'), 664, 0, 320, 0)
-  pin(db, canvas, addCard(db, proj, 'JSON'), 664, 200, 320, 0)
 }
 
 // Open the file, plant the schema, seed once if the graph is empty. Returns a
