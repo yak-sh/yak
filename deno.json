@@ -1,5 +1,5 @@
 {
-  "nodeModulesDir": "manual",
+  "nodeModulesDir": "none",
   "tasks": {
     "check": "deno fmt --check . && deno lint . && deno check",
     "dev": "vite",
@@ -8,24 +8,11 @@
     "seed": "deno run -A db.ts",
     "update": "deno run -A -r jsr:@fresh/update ."
   },
-  "fmt": {
-    "semiColons": false,
-    "singleQuote": true
-  },
+  "fmt": { "semiColons": false, "singleQuote": true },
   "lint": {
-    "rules": {
-      "tags": [
-        "fresh",
-        "recommended"
-      ],
-      "exclude": [
-        "prefer-const"
-      ]
-    }
+    "rules": { "tags": ["fresh", "recommended"], "exclude": ["prefer-const"] }
   },
-  "exclude": [
-    "**/_fresh/*"
-  ],
+  "exclude": ["**/_fresh/*"],
   "imports": {
     "@/": "./",
     "@types/node": "npm:@types/node@^26.1.1",
@@ -37,12 +24,7 @@
     "@types/babel__core": "npm:@types/babel__core@^7.20.5"
   },
   "compilerOptions": {
-    "lib": [
-      "dom",
-      "dom.asynciterable",
-      "dom.iterable",
-      "deno.ns"
-    ],
+    "lib": ["dom", "dom.asynciterable", "dom.iterable", "deno.ns"],
     "jsx": "precompile",
     "jsxImportSource": "preact",
     "jsxPrecompileSkipElements": [
@@ -61,8 +43,6 @@
       "noscript",
       "template"
     ],
-    "types": [
-      "vite/client"
-    ]
+    "types": ["vite/client"]
   }
 }

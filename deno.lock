@@ -34,7 +34,7 @@
     "npm:@opentelemetry/api@^1.9.0": "1.9.1",
     "npm:@preact/signals@^2.5.1": "2.9.4_preact@10.29.7__preact-render-to-string@6.7.0_preact-render-to-string@6.7.0__preact@10.29.7",
     "npm:@preact/signals@^2.9.0": "2.9.4_preact@10.29.7__preact-render-to-string@6.7.0_preact-render-to-string@6.7.0__preact@10.29.7",
-    "npm:@prefresh/vite@^2.4.8": "2.4.12_preact@10.29.7__preact-render-to-string@6.7.0_vite@7.3.6__@types+node@26.1.1_@types+node@26.1.1",
+    "npm:@prefresh/vite@^2.4.8": "2.4.12_preact@10.29.7__preact-render-to-string@6.7.0_vite@7.3.6__@types+node@26.1.1_preact-render-to-string@6.7.0__preact@10.29.7",
     "npm:@remix-run/node-fetch-server@0.12": "0.12.0",
     "npm:@types/babel__core@^7.20.5": "7.20.5",
     "npm:@types/node@^26.1.1": "26.1.1",
@@ -798,7 +798,7 @@
     "@prefresh/utils@1.2.1": {
       "integrity": "sha512-vq/sIuN5nYfYzvyayXI4C2QkprfNaHUQ9ZX+3xLD8nL3rWyzpxOm1+K7RtMbhd+66QcaISViK7amjnheQ/4WZw=="
     },
-    "@prefresh/vite@2.4.12_preact@10.29.7__preact-render-to-string@6.7.0_vite@7.3.6__@types+node@26.1.1_@types+node@26.1.1": {
+    "@prefresh/vite@2.4.12_preact@10.29.7__preact-render-to-string@6.7.0_vite@7.3.6__@types+node@26.1.1_preact-render-to-string@6.7.0__preact@10.29.7": {
       "integrity": "sha512-FY1fzXpUjiuosznMV0YM7XAOPZjB5FIdWS0W24+XnlxYkt9hNAwwsiKYn+cuTEoMtD/ZVazS5QVssBr9YhpCQA==",
       "dependencies": [
         "@babel/core",
