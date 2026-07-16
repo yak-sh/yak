@@ -72,9 +72,20 @@ export let Status = () => {
       mode.value = has ? 'visual' : 'normal'
     }
     document.addEventListener('selectionchange', sel)
+
+    // Pointer clicks don't keep keyboard focus: a clicked tab/×/link would
+    // otherwise swallow the next <space> (browsers activate the focused
+    // button on space). Keyboard activations (detail == 0) keep theirs.
+    let declick = (e: MouseEvent) => {
+      if (e.detail == 0) return
+      let a = document.activeElement
+      if (a instanceof HTMLElement && a.matches('button, a')) a.blur()
+    }
+    addEventListener('click', declick)
     return () => {
       removeEventListener('keydown', key)
       document.removeEventListener('selectionchange', sel)
+      removeEventListener('click', declick)
     }
   }, [])
 
