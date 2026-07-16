@@ -3,7 +3,8 @@ import { applicable, View } from './View.tsx'
 
 // A card: one entity through one chosen lens, framed by a tab per matching
 // lens. Each tab is a button POSTing its lens for this card — no client JS.
-// Geometry belongs to the Drag pin around it.
+// The scroller (not the card) owns the padding, so the scrollbar rides the
+// card border and the padding scrolls away with the content.
 export let Card = ({ p }: { p: Pinned }) => (
   <section class='Card'>
     <form class='Card_Tabs' method='post' action={`/card/${p.eid}`}>
@@ -19,6 +20,8 @@ export let Card = ({ p }: { p: Pinned }) => (
         </button>
       ))}
     </form>
-    <View eid={p.target_eid} view={p.view} />
+    <div class='Card_Scroll'>
+      <View eid={p.target_eid} view={p.view} />
+    </div>
   </section>
 )

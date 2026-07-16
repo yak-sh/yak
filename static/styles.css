@@ -1,81 +1,147 @@
 /* Tasks v2 — hand-written per the product CSS DNA: three-separator names
    (Block / Block_Element / Block-modifier), custom properties as the variant
-   mechanism, modern CSS, no build step, no Tailwind. */
+   mechanism, modern CSS, no build step, no Tailwind.
+   Palette + canvas vibe carried over from the harness web UI (Everforest);
+   one deliberate fix over it: scroll padding lives INSIDE the scroller, so
+   the scrollbar touches the card border and padding scrolls with content. */
 
-:where(:root) {
-  color-scheme: light dark;
-  --gap: 1rem;
+:root {
+  --gap: 0.75rem;
   --half-gap: calc(var(--gap) / 2);
-  --radius: 8px;
-  --line: color-mix(in srgb, currentColor 15%, transparent);
-  --muted: color-mix(in srgb, currentColor 55%, transparent);
+  --radius: 6px;
+
+  --bg: #232a2e; /* app background */
+  --surface: #2d353b; /* panels / card chrome */
+  --card: #343f44; /* raised card body */
+  --border: #3d484d;
+  --border2: #475258;
+
+  --text: #d3c6aa; /* foreground */
+  --muted: #9da9a0;
+  --dim: #7a8478;
+
+  --accent: #a7c080; /* green — selection / primary */
+  --soft: color-mix(in srgb, var(--text) 6%, transparent);
+
   /* status primitives → the dot colours consume these */
-  --open: dodgerblue;
-  --wip: orange;
-  --done: seagreen;
+  --open: #7fbbb3; /* aqua */
+  --wip: #dbbc7f; /* yellow */
+  --done: #a7c080; /* green */
 }
 
 :where(body) {
   margin: 0;
-  font: 15px/1.5 system-ui, sans-serif;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  font: 13px/1.5 ui-monospace, monospace;
+  background: var(--bg);
+  color: var(--text);
 }
 
-.wrap {
-  max-width: 44rem;
-  margin: 3rem auto;
-  padding: 0 var(--gap);
+/* Retro always-visible scrollbars — thin, square, 2-tone (the harness look). */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border2) var(--surface);
+}
+*::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: var(--surface);
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--border2);
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+
+.App {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 
   & h1 {
-    font-size: 1.6rem;
-    margin-bottom: var(--gap);
+    margin: 0;
+    padding: var(--half-gap) var(--gap);
+    font-size: 12px;
+    font-weight: 600;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
   }
   & .sub {
     font-weight: 400;
-    opacity: .5;
+    color: var(--dim);
   }
 }
-.wrap-wide {
-  max-width: 72rem;
-}
 
-/* The canvas: a plane of absolutely-pinned cards. Static for now — pan/zoom
-   is not a v1 concern. */
+/* The canvas: a dot-grid plane of absolutely-pinned cards (pan/zoom later). */
 .Canvas {
+  flex: 1;
   position: relative;
-  min-height: 34rem;
+  overflow: hidden;
+  touch-action: none;
+  background: radial-gradient(var(--soft) 1px, transparent 1px);
+  background-size: 24px 24px;
 }
 
 /* A pin is the draggable slot a card sits in — geometry only. */
 .Pin {
   position: absolute;
+  display: flex;
   touch-action: none;
+  padding: var(--gap);
 }
 
-/* A card frames one entity through one lens; its tab row lists every lens
-   that matches the entity. */
+/* A card frames one entity through one lens: chrome header (the tab row),
+   then one scroller that owns the padding — the scrollbar rides the border. */
 .Card {
-  border: 1px solid var(--line);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  max-height: 70vh;
+  background: var(--card);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: Canvas;
-  padding: var(--half-gap);
+  overflow: hidden;
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.25);
 }
 .Card_Tabs {
   display: flex;
-  gap: var(--half-gap);
-  margin-bottom: var(--half-gap);
+  gap: var(--gap);
+  margin: 0;
+  padding: var(--half-gap);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  cursor: grab;
+  user-select: none;
 }
 .Tab {
-  font: 12px monospace;
-  opacity: .45;
+  font: 12px ui-monospace, monospace;
+  color: var(--dim);
   background: none;
   border: 0;
   padding: 0;
-  color: inherit;
   cursor: pointer;
 }
+.Tab:hover {
+  color: var(--muted);
+}
 .Tab-on {
-  opacity: 1;
+  color: var(--text);
   font-weight: 700;
+}
+
+/* The one scrolling element — padding scrolls away WITH the content. */
+.Card_Scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--gap);
 }
 
 .Board {
@@ -85,20 +151,22 @@
 }
 .Board_Col {
   flex: 1;
+  min-width: 0;
   display: grid;
   gap: var(--half-gap);
   align-content: start;
 }
 .Board_ColName {
-  font: 12px monospace;
+  font-size: 11px;
   text-transform: uppercase;
-  opacity: .5;
+  color: var(--dim);
 }
 
 .Task {
-  border: 1px solid var(--line);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: var(--gap);
+  background: var(--surface);
+  padding: var(--half-gap);
 }
 .Task_Head {
   display: flex;
@@ -110,8 +178,8 @@
 }
 .Task_Id {
   margin-left: auto;
-  opacity: .4;
-  font: 12px monospace;
+  font-size: 11px;
+  color: var(--dim);
 }
 .Task_Body {
   margin: var(--half-gap) 0 0;
@@ -119,9 +187,10 @@
 }
 
 .Dot {
-  --dot: gray;
-  width: .6rem;
-  height: .6rem;
+  --dot: var(--dim);
+  flex: none;
+  width: 0.55rem;
+  height: 0.55rem;
   border-radius: 50%;
   background: var(--dot);
 }
@@ -138,13 +207,12 @@
 .Dependency {
   display: inline-block;
   margin: var(--half-gap) var(--half-gap) 0 0;
-  font-size: 13px;
-  opacity: .7;
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .Json {
-  font: 12px/1.4 monospace;
   margin: 0;
-  overflow: auto;
-  max-height: 20rem;
+  font-size: 12px;
+  white-space: pre;
 }
