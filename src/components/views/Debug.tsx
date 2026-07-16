@@ -84,7 +84,7 @@ export let DebugTaskItem = ({ e }: { e: Ent }) => (
   <Item>
     <View eid={e.eid} view='Id' />
     <Kind>{e.kind}</Kind>
-    <Title>{e.task!.title}</Title>
+    <Title>{e.doc?.title}</Title>
     <Status mod={e.task!.status}>{e.task!.status}</Status>
   </Item>
 )
@@ -93,6 +93,6 @@ export let DebugAnyItem = ({ e }: { e: Ent }) => (
   <Item>
     <View eid={e.eid} view='Id' />
     <Kind>{e.kind}</Kind>
-    {e.project?.title && <Title>{e.project.title}</Title>}
+    {e.doc?.title && <Title>{e.doc.title}</Title>}
   </Item>
 )

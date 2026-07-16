@@ -3,8 +3,9 @@ import { ent } from '../../live.ts'
 import { el } from '../ui.tsx'
 import { idOf } from './Id.tsx'
 
-// A task as markdown with frontmatter — the file a dragged MD tab drops on
-// the desktop, shown raw by the MD view (rendered markdown comes later).
+// A doc as markdown with frontmatter — the file a dragged MD tab drops on
+// the desktop, shown raw by the MD view. Any entity with a doc qualifies;
+// workflow lines (status) appear only where the entity carries them.
 export let mdText = (e: Ent) => {
   let refs = e.refs
     .map((r) => `${r.type}: ${idOf(ent(r.child))}`)
@@ -12,12 +13,12 @@ export let mdText = (e: Ent) => {
   return [
     '---',
     `id: ${idOf(e)}`,
-    `title: ${e.task!.title}`,
-    `status: ${e.task!.status}`,
+    `title: ${e.doc?.title ?? ''}`,
+    ...(e.task ? [`status: ${e.task.status}`] : []),
     ...(refs ? [refs] : []),
     '---',
     '',
-    e.task!.body,
+    e.doc?.body ?? '',
     '',
   ].join('\n')
 }

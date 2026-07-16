@@ -16,7 +16,7 @@ export let TaskTitle = ({ e }: { e: Ent }) => (
     <View eid={e.eid} view='Id' />
     <Dot status={e.task!.status} />
     <Text>
-      <Edit eid={e.eid} comp='task' prop='title' />
+      <Edit eid={e.eid} comp='doc' prop='title' />
     </Text>
   </Frame>
 )
@@ -25,7 +25,7 @@ export let ProjectTitle = ({ e }: { e: Ent }) => (
   <Frame>
     <View eid={e.eid} view='Id' />
     <Text>
-      <Edit eid={e.eid} comp='project' prop='title' />
+      <Edit eid={e.eid} comp='doc' prop='title' />
     </Text>
   </Frame>
 )

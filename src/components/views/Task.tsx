@@ -21,7 +21,7 @@ export let TaskBody = ({ e, mod }: { e: Ent; mod?: string }) => {
       <Body mod={mod}>
         <Edit
           eid={e.eid}
-          comp='task'
+          comp='doc'
           prop='body'
           multi
           open
@@ -33,7 +33,7 @@ export let TaskBody = ({ e, mod }: { e: Ent; mod?: string }) => {
       <Body
         mod={mod}
         onDblClick={() => setSrc(true)}
-        dangerouslySetInnerHTML={{ __html: snarkdown(e.task!.body ?? '') }}
+        dangerouslySetInnerHTML={{ __html: snarkdown(e.doc?.body ?? '') }}
       />
     )
 }
@@ -44,7 +44,7 @@ export let Task = ({ e }: { e: Ent }) => (
     <Head>
       <Dot status={e.task!.status} />
       <Title>
-        <Edit eid={e.eid} comp='task' prop='title' />
+        <Edit eid={e.eid} comp='doc' prop='title' />
       </Title>
       <View eid={e.eid} view='Id' />
     </Head>

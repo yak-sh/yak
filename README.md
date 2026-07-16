@@ -19,8 +19,9 @@ sqlite-vector embeddings, typed short ids (T-123 / C-123).
 
 ```sql
 entity(eid uuid pk, num server-minted, kind, created_at)
-task(eid pk→entity.eid, title, status, body)
-project(eid pk→entity, title)
+doc(eid pk→entity.eid, title, body)      -- the written face; anything can carry one
+task(eid pk→doc carrier, status, priority) -- a task = doc + task-management
+project(eid pk→entity)                     -- a tag: this doc fronts a board
 card(eid pk→entity, target_eid→entity, view)
 pin(eid pk→card, canvas_eid→entity, x, y, w, h)
 client(eid pk→entity, user_agent, ip)

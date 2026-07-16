@@ -21,7 +21,10 @@ let byNum = (num: number) =>
 let task = (title: string, body = '', status = 'open'): Pasted => {
   let eid = uuid()
   return {
-    changes: [{ eid, name: 'task', comp: { eid, title, status, body } }],
+    changes: [
+      { eid, name: 'doc', comp: { eid, title, body } },
+      { eid, name: 'task', comp: { eid, status } },
+    ],
     target: eid,
   }
 }
@@ -37,7 +40,7 @@ let json = (text: string): Pasted | null => {
   if (typeof o.eid == 'string' && cache.value[o.eid]) {
     return { changes: [], target: o.eid }
   }
-  let names = ['task', 'project', 'web'].filter(
+  let names = ['doc', 'task', 'project', 'web'].filter(
     (n) => o[n] && typeof o[n] == 'object',
   )
   if (names.length) {

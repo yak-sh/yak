@@ -26,16 +26,18 @@ let schema = `
     kind       text not null,
     created_at text not null
   );
+  create table if not exists doc (
+    eid   text primary key references entity(eid),
+    title text not null,
+    body  text not null default ''
+  );
   create table if not exists task (
     eid    text primary key references entity(eid),
-    title  text not null,
-    status text not null,
-    body   text not null default '',
+    status text not null default 'open',
     priority real not null default 0
   );
   create table if not exists project (
-    eid   text primary key references entity(eid),
-    title text not null
+    eid text primary key references entity(eid)
   );
   create table if not exists web (
     eid text primary key references entity(eid),
@@ -98,16 +100,21 @@ let ent = (db: DatabaseSync, kind: string) => {
   return eid
 }
 
+let doc = (db: DatabaseSync, eid: string, title: string, body = '') =>
+  db.prepare('insert into doc (eid, title, body) values (?, ?, ?)')
+    .run(eid, title, body)
+
 let addTask = (db: DatabaseSync, title: string, status: string, body = '') => {
   let eid = ent(db, 'task')
-  db.prepare('insert into task (eid, title, status, body) values (?, ?, ?, ?)')
-    .run(eid, title, status, body)
+  doc(db, eid, title, body)
+  db.prepare('insert into task (eid, status) values (?, ?)').run(eid, status)
   return eid
 }
 
 let addProject = (db: DatabaseSync, title: string) => {
   let eid = ent(db, 'project')
-  db.prepare('insert into project (eid, title) values (?, ?)').run(eid, title)
+  doc(db, eid, title)
+  db.prepare('insert into project (eid) values (?)').run(eid)
   return eid
 }
 
@@ -192,6 +199,23 @@ let migrate = (db: DatabaseSync) => {
   if (!has('task', 'priority')) {
     db.exec('alter table task add column priority real not null default 0')
   }
+  // title/body moved to doc — a task is a doc with task-management added,
+  // a project a doc with board-ness; anything else can carry a doc too.
+  if (has('task', 'title')) {
+    db.exec(`
+      insert or ignore into doc (eid, title, body)
+        select eid, title, body from task;
+      alter table task drop column title;
+      alter table task drop column body;
+    `)
+  }
+  if (has('project', 'title')) {
+    db.exec(`
+      insert or ignore into doc (eid, title, body)
+        select eid, title, '' from project;
+      alter table project drop column title;
+    `)
+  }
 }
 
 export let open = () => {
@@ -212,8 +236,9 @@ export let db = open()
 // The component tables the sync layer may write, with their writable columns.
 let cmps: Record<string, string[]> = {
   entity: ['kind'],
-  task: ['title', 'status', 'body', 'priority'],
-  project: ['title'],
+  doc: ['title', 'body'],
+  task: ['status', 'priority'],
+  project: [],
   web: ['url'],
   card: ['target_eid', 'view'],
   pin: ['canvas_eid', 'x', 'y', 'w', 'h', 'z'],

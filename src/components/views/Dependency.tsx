@@ -10,6 +10,6 @@ let { Type } = Sentence
 export let Dependency = ({ e, type }: { e: Ent; [x: string]: unknown }) => (
   <Sentence>
     {typeof type == 'string' && <Type mod={type}>{type}</Type>}{' '}
-    {e.task?.title ?? e.project?.title ?? e.kind}
+    {e.doc?.title ?? e.kind}
   </Sentence>
 )

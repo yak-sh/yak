@@ -71,16 +71,16 @@ let edit = signal<
 let show = (e: NonNullable<typeof edit.value>, caret: boolean) =>
   applyLocal([{
     eid: e.eid,
-    name: 'task',
+    name: 'doc',
     comp: { [e.prop]: caret ? e.text + '█' : e.text },
   }])
 
 let startEdit = () => {
   let here = trail.value.at(-1)
   let eid = here ?? selected()
-  if (!eid || !ent(eid).task) return
+  if (!eid || !ent(eid).doc) return
   let prop: 'title' | 'body' = here ? 'body' : 'title'
-  let was = ent(eid).task![prop] ?? ''
+  let was = ent(eid).doc![prop] ?? ''
   edit.value = { eid, prop, text: was, was }
   mode.value = 'insert'
   show(edit.value, true)
@@ -106,7 +106,7 @@ let endEdit = () => {
   }
   show(e, false) // strip the caret from the local cache
   if (e.text != e.was) {
-    send({ eid: e.eid, name: 'task', comp: { [e.prop]: e.text } })
+    send({ eid: e.eid, name: 'doc', comp: { [e.prop]: e.text } })
   }
   edit.value = null
   mode.value = 'normal'
@@ -174,12 +174,12 @@ let TuiTask = ({ e }: { e: Ent }) => (
   <div class='Task'>
     <div class='Task_Head'>
       <Dot status={e.task!.status} />
-      <span class='Task_Title'>{e.task!.title}</span>
+      <span class='Task_Title'>{e.doc?.title}</span>
       <View eid={e.eid} view='Id' />
     </div>
-    {e.task!.body && (
+    {e.doc?.body && (
       <p class='Task_Body'>
-        <Md text={e.task!.body} />
+        <Md text={e.doc.body} />
       </p>
     )}
     {e.refs.map((r) => (
@@ -275,7 +275,7 @@ export let App = () => {
   let s = selected()
   let here = trail.value.at(-1)
   let crumbs = [
-    p ? ent(p).project!.title : 'no project',
+    p ? ent(p).doc?.title ?? 'untitled' : 'no project',
     ...trail.value.map((eid) => idOf(ent(eid))),
   ]
   return (

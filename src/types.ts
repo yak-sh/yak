@@ -6,15 +6,19 @@
 // children roll up) · parent reads child (read-first, never gates).
 export type Edge = 'requires' | 'contains' | 'reads'
 
+// The written face of an entity — title and markdown body. Anything can
+// carry one: tasks and projects do; notes, comments, and future kinds get
+// rendering/editing/files for free by carrying it too.
+export type Doc = { eid: string; title: string; body: string }
+
+// Workflow state only — a task is a doc with task-management added.
 export type Task = {
   eid: string
-  title: string
   status: string
-  body: string
   priority: number // board order within a status column; lower sorts first
 }
 
-export type Proj = { eid: string; title: string }
+export type Proj = { eid: string } // a tag: "this doc fronts a board"
 export type Web = { eid: string; url: string } // an external page, framed
 export type CardComp = { eid: string; target_eid: string; view: string }
 export type Pin = {
@@ -61,6 +65,7 @@ export type Ent = {
   eid: string
   num: number
   kind: string
+  doc?: Doc
   task?: Task
   project?: Proj
   web?: Web

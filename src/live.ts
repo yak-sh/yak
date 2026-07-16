@@ -8,6 +8,7 @@ import {
   type Change,
   type Client,
   type Dep,
+  type Doc,
   type Ent,
   type Pin,
   type Pinned,
@@ -18,6 +19,7 @@ import {
 
 type Comps = {
   entity?: { eid: string; num: number; kind: string; created_at: string }
+  doc?: Doc
   task?: Task
   project?: Proj
   web?: Web
@@ -129,6 +131,7 @@ export let ent = (eid: string): Ent => {
     eid,
     num: r.entity?.num ?? 0,
     kind: r.entity?.kind ?? 'entity',
+    doc: r.doc,
     task: r.task,
     project: r.project,
     web: r.web,

@@ -41,7 +41,7 @@ let registry: Renderer[] = [
   { view: 'Card.Title', match: () => true, Render: AnyTitle },
   {
     view: 'MD',
-    match: (e) => !!e.task,
+    match: (e) => !!e.doc,
     Render: Md,
     file: { ext: 'md', mime: 'text/markdown', text: mdText },
   },
