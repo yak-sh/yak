@@ -1,12 +1,11 @@
 import { type Ent } from '../../types.ts'
-import { el } from '../ui.tsx'
+import { block } from '../ui.tsx'
 import { View } from '../View.tsx'
 
 let cols = ['open', 'wip', 'done']
 
-let Frame = el('div', 'Board')
-let Col = el('div', 'Board_Col')
-let ColName = el('div', 'Board_ColName')
+let Frame = block('div', 'Board', { Col: 'div', ColName: 'div' })
+let { Col, ColName } = Frame
 
 // A project as kanban: columns derived from task status. Nothing spatial is
 // stored — the same children on a Canvas would read pins.

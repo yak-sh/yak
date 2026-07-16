@@ -12,11 +12,11 @@ import {
   topZ,
   uuid,
 } from '../live.ts'
-import { el as ui } from './ui.tsx'
+import { block } from './ui.tsx'
 import { Card } from './Card.tsx'
 
-let Frame = ui('div', 'Canvas')
-let Plane = ui('div', 'Canvas_Plane')
+let Frame = block('div', 'Canvas', { Plane: 'div' })
+let { Plane } = Frame
 
 // The pannable, zoomable plane of pinned cards. The camera is a per-client,
 // per-canvas entity (canvases nest — a client has one camera per canvas it

@@ -1,15 +1,17 @@
 import { applyLocal, camera, ent, mutate, send, topZ } from '../live.ts'
 import { type Pinned } from '../types.ts'
-import { el } from './ui.tsx'
+import { block, el } from './ui.tsx'
 import { applicable, resolve, View } from './View.tsx'
 import { idOf } from './views/Id.tsx'
 
 let Pin = el('div', 'Pin')
-let Frame = el('section', 'Card')
-let Tabs = el('header', 'Card_Tabs')
-let X = el('button', 'Card_X')
 let Tab = el('button', 'Tab')
-let Scroll = el('div', 'Card_Scroll')
+let Frame = block('section', 'Card', {
+  Tabs: 'header',
+  X: 'button',
+  Scroll: 'div',
+})
+let { Tabs, X, Scroll } = Frame
 
 let b64 = (t: string) =>
   btoa(

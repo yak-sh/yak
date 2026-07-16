@@ -1,5 +1,5 @@
 import { type Ent } from '../../types.ts'
-import { el } from '../ui.tsx'
+import { block } from '../ui.tsx'
 import { View } from '../View.tsx'
 
 // The Debug view: one full inspector for the entity itself — EVERY prop,
@@ -8,16 +8,18 @@ import { View } from '../View.tsx'
 // dispatch lives in Debug.ListItem: tasks get the status row, everything
 // else the generic one; the inspector's own head is its ListItem too.
 
-let Frame = el('div', 'Debug')
-let Grid = el('div', 'Debug_Props')
-let Key = el('span', 'Debug_Key')
-let Comp = el('span', 'Debug_Comp')
-let Val = el('span', 'Debug_Val')
-let Item = el('div', 'Debug_Item')
-let Kind = el('span', 'Debug_Kind')
-let Title = el('span', 'Debug_Title')
-let Status = el('span', 'Debug_Status')
-let KidList = el('div', 'Debug_Kids')
+let Frame = block('div', 'Debug', {
+  Props: 'div',
+  Key: 'span',
+  Comp: 'span',
+  Val: 'span',
+  Item: 'div',
+  Kind: 'span',
+  Title: 'span',
+  Status: 'span',
+  Kids: 'div',
+})
+let { Props: Grid, Key, Comp, Val, Item, Kind, Title, Status, Kids } = Frame
 
 // The comps an entity actually carries, minus the spine — the raw payload.
 let comps = (e: Ent) => {
@@ -48,7 +50,7 @@ let Row = ({ comp, k, v }: { comp?: string; k: string; v: unknown }) => (
 
 // EVERY prop as a key → value grid row — the spine (eid, num, kind), then
 // each component whole ('pin.x  664'). Debug hides nothing.
-let Props = ({ e }: { e: Ent }) => (
+let AllProps = ({ e }: { e: Ent }) => (
   <Grid>
     <Row k='eid' v={e.eid} />
     <Row k='num' v={e.num} />
@@ -62,16 +64,16 @@ let Props = ({ e }: { e: Ent }) => (
 export let Debug = ({ e }: { e: Ent }) => (
   <Frame>
     <View eid={e.eid} view='Debug.ListItem' />
-    <Props e={e} />
+    <AllProps e={e} />
     {e.refs.map((r) => (
       <View key={r.child} eid={r.child} view='Dependency' type={r.type} />
     ))}
     {e.kids.length > 0 && (
-      <KidList>
+      <Kids>
         {e.kids.map((k) => (
           <View key={k.eid} eid={k.eid} view='Debug.ListItem' />
         ))}
-      </KidList>
+      </Kids>
     )}
   </Frame>
 )

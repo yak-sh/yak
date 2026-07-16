@@ -1,9 +1,9 @@
 import { rootCanvas } from '../live.ts'
-import { el } from './ui.tsx'
+import { block } from './ui.tsx'
 import { Canvas } from './Canvas.tsx'
 
-let Frame = el('main', 'App')
-let Sub = el('span', 'App_Sub')
+let Frame = block('main', 'App', { Sub: 'span' })
+let { Sub } = Frame
 
 // The page: a header and the root canvas, rendered straight from the cache.
 export let App = () => {
