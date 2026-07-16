@@ -5,7 +5,15 @@
 // components the browser uses, painted as lines instead of CSS.
 import { signal } from '@preact/signals'
 import { type Ent } from '../types.ts'
-import { byPriority, cache, ent, mode, statuses } from '../live.ts'
+import {
+  applyLocal,
+  byPriority,
+  cache,
+  ent,
+  mode,
+  send,
+  statuses,
+} from '../live.ts'
 import { type Renderer, resolve, View } from '../components/View.tsx'
 import { idOf } from '../components/views/Id.tsx'
 import { clipboard } from './paint.ts'
@@ -45,6 +53,46 @@ let enter = (): boolean => {
 
 let back = () => {
   trail.value = trail.value.slice(0, -1)
+  mode.value = 'normal'
+}
+
+// The in-progress edit. TUI insert mode is append/backspace on one prop:
+// every keystroke lands in the local cache (the text changes in place,
+// live), the wire hears ONE patch when insert ends. Escape commits — vim
+// leaves insert, it doesn't cancel. i on the board edits the selected
+// title; i (or Enter from the board) on a task edits its body.
+let edit = signal<
+  { eid: string; prop: 'title' | 'body'; text: string; was: string } | null
+>(null)
+
+let startEdit = () => {
+  let here = trail.value.at(-1)
+  let eid = here ?? selected()
+  if (!eid || !ent(eid).task) return
+  let prop: 'title' | 'body' = here ? 'body' : 'title'
+  let was = ent(eid).task![prop] ?? ''
+  edit.value = { eid, prop, text: was, was }
+  mode.value = 'insert'
+}
+
+let typeEdit = (k: string) => {
+  let e = edit.value
+  if (!e) return
+  if (k == '\x7f') e = { ...e, text: e.text.slice(0, -1) }
+  else if (k == '\r' && e.prop == 'body') e = { ...e, text: e.text + '\n' }
+  else if (k == '\r') return endEdit()
+  else if (k >= ' ') e = { ...e, text: e.text + k }
+  else return
+  edit.value = e
+  applyLocal([{ eid: e.eid, name: 'task', comp: { [e.prop]: e.text } }])
+}
+
+let endEdit = () => {
+  let e = edit.value
+  if (e && e.text != e.was) {
+    send({ eid: e.eid, name: 'task', comp: { [e.prop]: e.text } })
+  }
+  edit.value = null
   mode.value = 'normal'
 }
 
@@ -126,7 +174,10 @@ let run = (line: string) => {
 // line, which owns every key until Enter or Escape. Ctrl-d backs out of
 // the current entity from ANY mode; everything else is per-mode.
 export let key = (k: string) => {
-  if (k == '\x04') return back()
+  if (k == '\x04') {
+    if (mode.value == 'insert') endEdit() // commit, then out — no data loss
+    return back()
+  }
   if (mode.value == 'command') {
     if (k == '\r') {
       run(buf.value)
@@ -140,8 +191,9 @@ export let key = (k: string) => {
     return
   }
   if (mode.value == 'insert') {
-    if (k == '\x1b') mode.value = 'normal'
-    return // no editing yet — insert only holds the mode
+    if (k == '\x1b') endEdit()
+    else typeEdit(k)
+    return
   }
   if (k == ':') {
     msg.value = ''
@@ -150,8 +202,9 @@ export let key = (k: string) => {
   } else if (k == 'j') vert(1)
   else if (k == 'k') vert(-1)
   else if (k == 'l') enter()
+  else if (k == 'i') startEdit()
   else if (k == '\r') {
-    if (enter()) mode.value = 'insert'
+    if (enter()) startEdit()
   } else if (k == 'h') back()
   else if (k == 'y') yank()
   else if (k == 'q' || k == '\x03') quit.value = true
@@ -167,9 +220,16 @@ let TStatus = () => (
           <span class={`TStatus_Mode TStatus_Mode-${mode.value}`}>
             {mode.value == 'insert' ? '-- INSERT --' : mode.value.toUpperCase()}
           </span>
+          {mode.value == 'insert' && edit.value && (
+            <span class='TStatus_Cmd'>
+              {`${edit.value.prop}: ${
+                edit.value.text.split('\n').at(-1) ?? ''
+              }█`}
+            </span>
+          )}
           {msg.value && <span class='TStatus_Msg'>{msg.value}</span>}
           <span class='TStatus_Hint'>
-            j/k browse · l in · h out · ⏎ edit · y yank · : cmd · q quit
+            j/k browse · l in · h out · i edit · y yank · : cmd · q quit
           </span>
         </>
       )}

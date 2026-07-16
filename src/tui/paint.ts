@@ -74,7 +74,11 @@ let inherit = (parent: Style, node: Style): Style => ({
 
 let inline = (n: TNode, st: Style): Seg[] => {
   if (n instanceof TText) {
-    return n.data ? [{ text: n.data, style: st }] : []
+    // \n survives as a break (blocks() splits on it); \r and \t would let
+    // the terminal do its own cursor moves — one scrolled line breaks the
+    // whole absolute-positioned frame.
+    let text = n.data.replaceAll('\r', '').replaceAll('\t', '  ')
+    return text ? [{ text, style: st }] : []
   }
   let el = n as TElement
   let o = own(el)
@@ -103,7 +107,16 @@ let blocks = (el: TElement, st: Style): Line[] => {
         let segs = inline(c, s)
         if (!segs.length) continue
         if (cur.length) cur.push({ text: ' ', style: s })
-        cur.push(...segs)
+        for (let seg of segs) {
+          // Newlines inside a text node (a task body) are line breaks.
+          seg.text.split('\n').forEach((part, i) => {
+            if (i) {
+              lines.push(cur) // even empty — a blank line is content here
+              cur = []
+            }
+            if (part) cur.push({ text: part, style: seg.style })
+          })
+        }
       } else {
         flush()
         lines.push(...blocks(c as TElement, s))
