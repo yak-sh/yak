@@ -41,7 +41,8 @@ let schema = `
   );
   create table if not exists web (
     eid text primary key references entity(eid),
-    url text not null
+    url text not null,
+    frozen_at text
   );
   create table if not exists card (
     eid        text primary key references entity(eid),
@@ -215,6 +216,9 @@ let migrate = (db: DatabaseSync) => {
         select eid, title, '' from project;
       alter table project drop column title;
     `)
+  }
+  if (!has('web', 'frozen_at')) {
+    db.exec('alter table web add column frozen_at text')
   }
 }
 

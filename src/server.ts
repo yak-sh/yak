@@ -65,6 +65,12 @@ let file = async (root: string, path: string) => {
 // the server applies them and rebroadcasts to every other client. Non-array
 // frames are control messages ('reload', from the watcher).
 let clients = new Set<WebSocket>()
+let cast = (changes: Change[], except?: WebSocket) => {
+  let msg = JSON.stringify(changes)
+  for (let c of clients) {
+    if (c != except && c.readyState == WebSocket.OPEN) c.send(msg)
+  }
+}
 let ws = (req: Request) => {
   let { socket, response } = Deno.upgradeWebSocket(req)
   socket.onopen = () => clients.add(socket)
@@ -83,6 +89,59 @@ let ws = (req: Request) => {
   return response
 }
 
+// Freeze a pasted URL: monolith fetches the page and inlines every asset
+// into ONE self-contained, script-free, network-isolated HTML file. It
+// lands on disk (an inlined page is megabytes — the db and every snapshot
+// stay lean), the entity's web comp gets frozen_at (server-stamped; the
+// wire allowlist doesn't carry it, so clients can't fake an archive), the
+// page <title> becomes the entity's doc, and everyone hears over the ws.
+let frozen = `${Deno.env.get('HOME')}/.tasks/frozen`
+let freeze = async (eid: string) => {
+  let row = db.prepare('select url from web where eid = ?').get(eid) as
+    | { url: string }
+    | undefined
+  if (!row) return new Response('no such web entity', { status: 404 })
+  Deno.mkdirSync(frozen, { recursive: true })
+  let out = `${frozen}/${eid}.html`
+  let cmd = await new Deno.Command('monolith', {
+    args: ['-j', '-f', '-I', '-q', '-t', '30', '-o', out, row.url],
+  }).output()
+  if (!cmd.success) {
+    console.warn(
+      'freeze failed:',
+      row.url,
+      new TextDecoder().decode(cmd.stderr),
+    )
+    return new Response('freeze failed', { status: 502 })
+  }
+  let changes: Change[] = [
+    { eid, name: 'web', comp: { frozen_at: new Date().toISOString() } },
+  ]
+  db.prepare('update web set frozen_at = ? where eid = ?')
+    .run(changes[0].comp!.frozen_at as string, eid)
+  let title = (await Deno.readTextFile(out))
+    .match(/<title[^>]*>([^<]*)<\/title>/i)?.[1].trim()
+  let hasDoc = db.prepare('select 1 from doc where eid = ?').get(eid)
+  if (title && !hasDoc) {
+    db.prepare('insert into doc (eid, title) values (?, ?)').run(eid, title)
+    changes.push({ eid, name: 'doc', comp: { title } })
+  }
+  cast(changes)
+  return Response.json(changes)
+}
+
+// Serve an archive. eid is validated to a bare uuid — no path escapes.
+let serveFrozen = async (eid: string) => {
+  if (!/^[0-9a-f-]{36}$/i.test(eid)) return new Response('no', { status: 400 })
+  try {
+    return new Response(await Deno.readFile(`${frozen}/${eid}.html`), {
+      headers: { 'content-type': mime.html },
+    })
+  } catch {
+    return new Response('not frozen', { status: 404 })
+  }
+}
+
 // Explicit Deno.serve, not a `deno serve` default export: --watch restarts
 // only complete gracefully once the old isolate drains, which a live
 // listener + websockets never guarantee — reusePort lets the new isolate
@@ -90,9 +149,14 @@ let ws = (req: Request) => {
 Deno.serve(
   { port: Number(Deno.env.get('PORT') ?? 5173), reusePort: true },
   (req) => {
-    let path = new URL(req.url).pathname
+    let url = new URL(req.url)
+    let path = url.pathname
     if (path == '/ws') return ws(req)
     if (path == '/snapshot') return Response.json(snapshot(db))
+    if (path == '/freeze') return freeze(url.searchParams.get('eid') ?? '')
+    if (path.startsWith('/frozen/')) {
+      return serveFrozen(path.slice(8).replace(/\.html$/, ''))
+    }
     return file(src.slice(0, -1), path == '/' ? '/index.html' : path)
   },
 )

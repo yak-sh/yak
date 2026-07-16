@@ -19,7 +19,10 @@ export type Task = {
 }
 
 export type Proj = { eid: string } // a tag: "this doc fronts a board"
-export type Web = { eid: string; url: string } // an external page, framed
+// An external page. The URL is what was pasted; the rendered thing is the
+// server's frozen archive of it (one self-contained HTML file on disk),
+// stamped frozen_at when ready — frozen_at is server-owned, never wire-set.
+export type Web = { eid: string; url: string; frozen_at?: string | null }
 export type CardComp = { eid: string; target_eid: string; view: string }
 export type Pin = {
   eid: string

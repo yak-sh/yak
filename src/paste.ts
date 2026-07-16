@@ -3,7 +3,7 @@
 // entity (rendered as the framed page); JSON minting comps, or carrying a
 // known eid, or shaped like a task, does the obvious; anything else becomes
 // a task — first line title, rest body.
-import { cache, uuid } from './live.ts'
+import { cache, config, uuid } from './live.ts'
 import { type Change } from './types.ts'
 
 // What a paste resolves to: comps to mint (none for existing entities),
@@ -73,6 +73,12 @@ export let pasted = (raw: string): Pasted | null => {
   }
   if (/^https?:\/\/\S+$/.test(text)) {
     let eid = uuid()
+    // Ask the server to freeze the page (fire-and-forget: the answer comes
+    // back over the ws as web.frozen_at + a doc with the page title).
+    // Delayed a beat so the mint reaches the server first.
+    setTimeout(() => {
+      fetch(`http://${config.host}/freeze?eid=${eid}`).catch(() => {})
+    }, 300)
     return {
       changes: [{ eid, name: 'web', comp: { eid, url: text } }],
       target: eid,

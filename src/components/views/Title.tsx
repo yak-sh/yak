@@ -37,10 +37,11 @@ export let WebTitle = ({ e }: { e: Ent }) => {
   } catch {
     host = e.web!.url
   }
+  // The freeze stamps the page <title> onto the entity as a doc.
   return (
     <Frame>
       <View eid={e.eid} view='Id' />
-      <Text>{host}</Text>
+      <Text>{e.doc?.title ?? host}</Text>
     </Frame>
   )
 }
