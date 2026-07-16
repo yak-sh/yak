@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'preact/hooks'
+import { useLayoutEffect, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import {
   camera,
@@ -42,7 +42,9 @@ export let Canvas = ({ eid }: { eid: string }) => {
     }, 400)
   }
 
-  useEffect(() => {
+  // Layout effect, not effect: the camera must be measured and restored
+  // BEFORE the first paint, or the screen flashes untransformed content.
+  useLayoutEffect(() => {
     if (!el.current) return
     let id = clientId()
     let size = () => ({
