@@ -1,32 +1,24 @@
 import { define } from '../utils.ts'
-import { deps, open, type Task as Row, tasks } from '../db.ts'
-import { Tasks } from '../components/Tasks.tsx'
-import { Task } from '../components/Task.tsx'
+import { bundle, open, pinned, rootCanvas } from '../db.ts'
+import { Card } from '../components/Card.tsx'
 
 // One handle for the server's lifetime — the graph is the memory substrate.
 let db = open()
 
+// The root is a canvas entity; everything on screen is a pinned card viewing
+// some entity through some lens (the Board is just one of them).
 export default define.page(function Home() {
-  let rows = tasks(db)
-  let edges = deps(db)
-  let name = new Map(rows.map((t: Row) => [t.eid, t.title]))
-  let out = (eid: number) => edges.filter((d) => d.parent == eid)
-
+  let canvas = rootCanvas(db)
   return (
-    <main class='wrap'>
+    <main class='wrap wrap-wide'>
       <h1>
         Tasks v2 <span class='sub'>· the fleet entity graph</span>
       </h1>
-      <Tasks>
-        {rows.map((t: Row) => (
-          <Task
-            key={t.eid}
-            task={t}
-            edges={out(t.eid)}
-            name={(eid) => name.get(eid) ?? `#${eid}`}
-          />
+      <div class='Canvas'>
+        {pinned(db, canvas.eid).map((p) => (
+          <Card key={p.card_eid} p={p} e={bundle(db, p.target_eid)} />
         ))}
-      </Tasks>
+      </div>
     </main>
   )
 })

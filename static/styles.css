@@ -34,12 +34,55 @@
     opacity: .5;
   }
 }
+.wrap-wide {
+  max-width: 72rem;
+}
 
-.Tasks {
-  list-style: none;
-  padding: 0;
-  display: grid;
+/* The canvas: a plane of absolutely-pinned cards. Static for now — pan/zoom
+   is not a v1 concern. */
+.Canvas {
+  position: relative;
+  min-height: 34rem;
+}
+
+/* A card frames one entity through one lens; its tab row lists every lens
+   that matches the entity. */
+.Card {
+  position: absolute;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: Canvas;
+  padding: var(--half-gap);
+}
+.Card_Tabs {
+  display: flex;
+  gap: var(--half-gap);
+  margin-bottom: var(--half-gap);
+}
+.Tab {
+  font: 12px monospace;
+  opacity: .45;
+}
+.Tab-on {
+  opacity: 1;
+  font-weight: 700;
+}
+
+.Board {
+  display: flex;
   gap: var(--gap);
+  align-items: start;
+}
+.Board_Col {
+  flex: 1;
+  display: grid;
+  gap: var(--half-gap);
+  align-content: start;
+}
+.Board_ColName {
+  font: 12px monospace;
+  text-transform: uppercase;
+  opacity: .5;
 }
 
 .Task {
@@ -87,4 +130,11 @@
   margin: var(--half-gap) var(--half-gap) 0 0;
   font-size: 13px;
   opacity: .7;
+}
+
+.Json {
+  font: 12px/1.4 monospace;
+  margin: 0;
+  overflow: auto;
+  max-height: 20rem;
 }
