@@ -156,7 +156,7 @@ export let Canvas = ({ eid, children }: {
     let { x, y, zoom, w, h } = camera.value
     if (e.ctrlKey) {
       e.preventDefault()
-      let z = Math.min(4, Math.max(0.25, zoom * Math.exp(-e.deltaY / 40)))
+      let z = Math.min(4, Math.max(0.25, zoom * Math.exp(-e.deltaY / 80)))
       let r = e.currentTarget.getBoundingClientRect()
       let cx = e.clientX - r.left - w / 2
       let cy = e.clientY - r.top - h / 2

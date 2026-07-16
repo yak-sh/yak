@@ -1,25 +1,19 @@
 import { bundle, db, type Pinned } from '../db.ts'
 import { applicable, View } from './View.tsx'
+import { Tabs } from '../islands/Tabs.tsx'
 
 // A card: one entity through one chosen lens, framed by a tab per matching
-// lens. Each tab is a button POSTing its lens for this card — no client JS.
-// The scroller (not the card) owns the padding, so the scrollbar rides the
-// card border and the padding scrolls away with the content.
+// lens (the Tabs island owns switching). The scroller (not the card) owns
+// the padding, so the scrollbar rides the card border and the padding
+// scrolls away with the content.
 export let Card = ({ p }: { p: Pinned }) => (
   <section class='Card'>
-    <form class='Card_Tabs' method='post' action={`/card/${p.eid}`}>
-      {applicable(bundle(db, p.target_eid)).map((v) => (
-        <button
-          type='submit'
-          class={v.id == p.view ? 'Tab Tab-on' : 'Tab'}
-          name='view'
-          value={v.id}
-          key={v.id}
-        >
-          {v.id}
-        </button>
-      ))}
-    </form>
+    <Tabs
+      card={p.eid}
+      target={p.target_eid}
+      view={p.view}
+      views={applicable(bundle(db, p.target_eid)).map((v) => v.id)}
+    />
     <div class='Card_Scroll'>
       <View eid={p.target_eid} view={p.view} />
     </div>

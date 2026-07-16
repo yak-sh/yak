@@ -42,6 +42,7 @@
     "npm:esbuild@0.25.7": "0.25.7",
     "npm:esbuild@~0.25.5": "0.25.12",
     "npm:preact-render-to-string@^6.6.3": "6.7.0_preact@10.29.7",
+    "npm:preact-render-to-string@^6.7.0": "6.7.0_preact@10.29.7",
     "npm:preact@^10.28.2": "10.29.7_preact-render-to-string@6.7.0",
     "npm:preact@^10.29.1": "10.29.7_preact-render-to-string@6.7.0",
     "npm:rollup@^4.55.1": "4.62.2",
@@ -89,7 +90,7 @@
         "npm:@preact/signals@^2.5.1",
         "npm:esbuild-wasm",
         "npm:esbuild@0.25.7",
-        "npm:preact-render-to-string",
+        "npm:preact-render-to-string@^6.6.3",
         "npm:preact@^10.28.2",
         "npm:preact@^10.29.1"
       ]
@@ -1289,6 +1290,7 @@
       "npm:@preact/signals@^2.9.0",
       "npm:@types/babel__core@^7.20.5",
       "npm:@types/node@^26.1.1",
+      "npm:preact-render-to-string@^6.7.0",
       "npm:preact@^10.29.1",
       "npm:vite@^7.1.3"
     ]
