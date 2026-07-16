@@ -1,0 +1,170 @@
+// The browser half: one entity cache, one socket, one identity, one camera.
+// The cache is the client's whole world — a snapshot fills it, ws patches
+// keep it current, and every component renders straight out of it.
+import { signal } from '@preact/signals'
+import {
+  type Camera,
+  type CardComp,
+  type Change,
+  type Client,
+  type Dep,
+  type Ent,
+  type Pin,
+  type Pinned,
+  type Proj,
+  type Task,
+} from './types.ts'
+
+type Comps = {
+  entity?: { eid: string; num: number; kind: string; created_at: string }
+  task?: Task
+  project?: Proj
+  card?: CardComp
+  pin?: Pin
+  client?: Client
+  camera?: Camera
+}
+
+export let cache = signal<Record<string, Comps>>({})
+export let deps = signal<Dep[]>([])
+
+// Land a batch in the cache with the same patch semantics the db uses:
+// comps merge per-column, comp: null deletes the component, entity: null
+// deletes the entity and every edge touching it.
+export let applyLocal = (changes: Change[]) => {
+  let next = { ...cache.value }
+  for (let { eid, name, comp } of changes) {
+    if (name == 'entity' && comp == null) {
+      delete next[eid]
+      deps.value = deps.value.filter((d) => d.parent != eid && d.child != eid)
+      continue
+    }
+    let row = { ...next[eid] } as Record<string, unknown>
+    if (comp == null) delete row[name]
+    else row[name] = { ...(row[name] as object), ...comp }
+    next[eid] = row as Comps
+  }
+  cache.value = next
+}
+
+// Land a local edit: cache first (instant render), then the wire.
+export let mutate = (...changes: Change[]) => {
+  applyLocal(changes)
+  send(...changes)
+}
+
+// One socket per tab, lazily opened; sends queue behind the handshake.
+// Array frames are sync batches; 'reload' is the server's file watcher.
+// A dropped socket means the server restarted — poll until it's back, then
+// reload for a fresh snapshot (state lives in the db, so nothing is lost).
+let ws: WebSocket | null = null
+export let sock = () => {
+  if (ws && ws.readyState <= WebSocket.OPEN) return ws
+  ws = new WebSocket(`ws://${location.host}/ws`)
+  ws.onmessage = (m) => {
+    let data = JSON.parse(String(m.data))
+    if (Array.isArray(data)) applyLocal(data)
+    else if (data == 'reload') location.reload()
+  }
+  ws.onclose = () => {
+    let poll = setInterval(async () => {
+      try {
+        await fetch('/snapshot', { method: 'HEAD' })
+        clearInterval(poll)
+        location.reload()
+      } catch { /* still down */ }
+    }, 500)
+  }
+  return ws
+}
+
+export let send = (...changes: unknown[]) => {
+  let s = sock()
+  let msg = JSON.stringify(changes)
+  if (s.readyState == WebSocket.OPEN) s.send(msg)
+  else s.addEventListener('open', () => s.send(msg), { once: true })
+}
+
+// Fill the cache and open the socket — main.tsx awaits this before render.
+// (Changes landing between the fetch and the open are missed; fine for now.)
+export let boot = async () => {
+  let snap = await (await fetch('/snapshot')).json()
+  deps.value = snap.deps
+  applyLocal(snap.changes)
+  sock()
+}
+
+// The whole entity, assembled for a renderer: spine, components present,
+// outgoing edge sentences, contained children (recursive — graphs stay
+// small; a view reads as deep as it wants).
+export let ent = (eid: string): Ent => {
+  let r = cache.value[eid] ?? {}
+  return {
+    eid,
+    num: r.entity?.num ?? 0,
+    kind: r.entity?.kind ?? 'entity',
+    task: r.task,
+    project: r.project,
+    card: r.card,
+    pin: r.pin,
+    client: r.client,
+    camera: r.camera,
+    refs: deps.value
+      .filter((d) => d.parent == eid && d.type != 'contains')
+      .map((d) => ({ type: d.type, child: d.child })),
+    kids: deps.value
+      .filter((d) => d.parent == eid && d.type == 'contains')
+      .map((d) => ent(d.child)),
+  }
+}
+
+// The root canvas (first canvas entity) and the cards pinned to a canvas.
+export let rootCanvas = () =>
+  Object.entries(cache.value)
+    .filter(([, r]) => r.entity?.kind == 'canvas')
+    .sort(([, a], [, b]) => a.entity!.num - b.entity!.num)[0]?.[0]
+
+export let pinned = (canvas: string): Pinned[] =>
+  Object.entries(cache.value)
+    .filter(([, r]) => r.pin?.canvas_eid == canvas && r.card)
+    .map(([, r]) => ({
+      ...r.pin!,
+      target_eid: r.card!.target_eid,
+      view: r.card!.view,
+    }))
+    .sort((a, b) => a.eid < b.eid ? -1 : 1)
+
+// This client's camera over one canvas, if it exists yet.
+export let myCamera = (client: string, canvas: string) =>
+  Object.values(cache.value).find((r) =>
+    r.camera?.client_eid == client && r.camera?.canvas_eid == canvas
+  )?.camera
+
+// crypto.randomUUID is gated to secure contexts, and this page is reached
+// over plain http on the tailnet — so mint v4 uuids from getRandomValues,
+// which isn't gated.
+export let uuid = () => {
+  let b = crypto.getRandomValues(new Uint8Array(16))
+  b[6] = (b[6] & 0x0f) | 0x40
+  b[8] = (b[8] & 0x3f) | 0x80
+  let h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('')
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${
+    h.slice(16, 20)
+  }-${h.slice(20)}`
+}
+
+// Who this browser is: a client entity, its uuid minted into localStorage on
+// first visit. The db rows appear when the camera first persists.
+export let clientId = () => {
+  let id = localStorage.getItem('tasks-client')
+  if (!id) {
+    id = uuid()
+    localStorage.setItem('tasks-client', id)
+  }
+  return id
+}
+
+// This tab's camera over the canvas it's viewing: x/y is the viewport CENTER
+// in plane coords, w/h the viewport size in screen px. Shared so drags can
+// convert screen px into plane px.
+export let camera = signal({ x: 0, y: 0, zoom: 1, w: 0, h: 0 })

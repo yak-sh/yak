@@ -1,4 +1,4 @@
-import { type Ent } from '../../db.ts'
+import { type Ent } from '../../types.ts'
 
 // Any entity as raw JSON — the debugging floor; matches everything.
 export let Json = ({ e }: { e: Ent }) => (

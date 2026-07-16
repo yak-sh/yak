@@ -1,87 +1,20 @@
 // The fleet entity graph, in one SQLite file. Star ECS: `entity` holds the
 // shared primary key (`eid`); component tables (`task`, `project`, `card`, …)
 // hang off it by that same id; `dependency` rows are typed eid↔eid edges that
-// read as sentences. This module owns the file + seed; routes read.
+// read as sentences. This module owns the file, the seed, and the two wire
+// operations: apply (patch batches in) and snapshot (the whole graph out).
+// SERVER-ONLY — the browser reads the graph from its cache in live.ts.
 //
 // Ids: `eid` is a UUID so ANY side (client included) can mint entities;
 // `num` is the server-minted human number (T-7 in the UI, one global counter).
 import { DatabaseSync } from 'node:sqlite'
 import { dirname } from 'node:path'
+import { type Change, type Dep, type Snapshot } from './types.ts'
 
 // The db lives outside the repo (this is open source): a home-dir dotpath by
 // default, overridable with DB_PATH.
 let file = Deno.env.get('DB_PATH') ??
   `${Deno.env.get('HOME')}/.tasks/tasks.db`
-
-// The edge vocabulary — every edge reads as a sentence, parent first:
-// parent requires child (hard gate) · parent contains child (decomposition,
-// children roll up) · parent reads child (read-first, never gates).
-export type Edge = 'requires' | 'contains' | 'reads'
-
-export type Task = {
-  eid: string
-  title: string
-  status: string
-  body: string
-}
-
-export type Proj = { eid: string; title: string }
-export type Card = { eid: string; target_eid: string; view: string }
-export type Pin = {
-  eid: string
-  canvas_eid: string
-  x: number
-  y: number
-  w: number
-  h: number
-}
-
-// A browser identity: its uuid is minted client-side into localStorage on
-// first visit. ip is server-stamped (a client can't self-report one).
-export type Client = {
-  eid: string
-  user_agent: string
-  ip: string
-}
-
-// A camera joins a client to a canvas: per-client pan/zoom, one row per
-// (client, canvas) pair — canvases nest, so this is NOT keyed by the client.
-// x/y is the viewport CENTER in plane coords; w/h is the viewport size in
-// screen px, stored so other clients can render each other's viewports.
-export type Camera = {
-  eid: string
-  client_eid: string
-  canvas_eid: string
-  x: number
-  y: number
-  zoom: number
-  w: number
-  h: number
-}
-
-export type Dep = { parent: string; type: Edge; child: string }
-
-// An outgoing edge, verb + child — the Dependency view resolves the name.
-export type Ref = { type: Edge; child: string }
-
-// The bundle a renderer pattern-matches on: the entity plus whichever
-// components it carries, its edge sentences, and the entities it contains.
-export type Ent = {
-  eid: string
-  num: number
-  kind: string
-  task?: Task
-  project?: Proj
-  card?: Card
-  pin?: Pin
-  client?: Client
-  camera?: Camera
-  refs: Ref[]
-  kids: Ent[]
-}
-
-// A pin row joined to its card: where the card sits and what it shows.
-export type Pinned = Pin & { target_eid: string; view: string }
 
 // The star: an entity spine plus one component table per kind, plus the edge
 // table. `if not exists` makes this idempotent — safe to run every boot.
@@ -189,7 +122,7 @@ let pin = (
     'insert into pin (eid, canvas_eid, x, y, w, h) values (?, ?, ?, ?, ?, ?)',
   ).run(card, canvas, x, y, w, h)
 
-let link = (db: DatabaseSync, parent: string, type: Edge, child: string) =>
+let link = (db: DatabaseSync, parent: string, type: string, child: string) =>
   db.prepare(
     'insert into dependency (parent_eid, type, child_eid) values (?, ?, ?)',
   ).run(parent, type, child)
@@ -247,89 +180,8 @@ export let open = () => {
   return db
 }
 
-// The one live handle — routes and views share it for the process lifetime.
+// The one live handle — the server shares it for the process lifetime.
 export let db = open()
-
-// The whole entity, assembled for a renderer: entity row, components present,
-// outgoing edge sentences, contained children (recursive — graphs stay small;
-// a view reads as deep as it wants).
-export let bundle = (db: DatabaseSync, eid: string): Ent => {
-  let e = db.prepare('select eid, num, kind from entity where eid = ?')
-    .get(eid) as { eid: string; num: number; kind: string }
-  let comp = <T>(table: string) =>
-    db.prepare(`select * from ${table} where eid = ?`).get(eid) as
-      | T
-      | undefined
-  let refs = db.prepare(`
-    select type, child_eid as child from dependency
-    where parent_eid = ? and type != 'contains'
-  `).all(eid) as Ref[]
-  let kids = (db.prepare(`
-    select child_eid from dependency
-    where parent_eid = ? and type = 'contains'
-  `).all(eid) as { child_eid: string }[])
-    .map((r) => bundle(db, r.child_eid))
-  return {
-    ...e,
-    task: comp<Task>('task'),
-    project: comp<Proj>('project'),
-    card: comp<Card>('card'),
-    pin: comp<Pin>('pin'),
-    client: comp<Client>('client'),
-    camera: comp<Camera>('camera'),
-    refs,
-    kids,
-  }
-}
-
-// A client's camera over one canvas, for restoring pan/zoom on page load.
-export let camera = (db: DatabaseSync, client: string, canvas: string) =>
-  db.prepare('select * from camera where client_eid = ? and canvas_eid = ?')
-    .get(client, canvas) as Camera | undefined
-
-// Point a card at a different lens — the tab click's write.
-export let setView = (db: DatabaseSync, card: string, view: string) =>
-  db.prepare('update card set view = ? where eid = ?').run(view, card)
-
-// The root canvas (first canvas entity) and the cards pinned to a canvas.
-export let rootCanvas = (db: DatabaseSync) =>
-  db.prepare("select eid from entity where kind = 'canvas' order by num")
-    .get() as { eid: string }
-
-export let pinned = (db: DatabaseSync, canvas: string) =>
-  db.prepare(`
-    select p.eid, p.canvas_eid, p.x, p.y, p.w, p.h, c.target_eid, c.view
-    from pin p join card c on c.eid = p.eid
-    where p.canvas_eid = ?
-    order by p.eid
-  `).all(canvas) as Pinned[]
-
-// A task joined to its entity spine, oldest first.
-export let tasks = (db: DatabaseSync) =>
-  db.prepare(`
-    select t.eid, t.title, t.status, t.body
-    from task t join entity e on e.eid = t.eid
-    order by e.num
-  `).all() as Task[]
-
-// Every edge, as {parent, type, child} — each row IS the sentence.
-export let deps = (db: DatabaseSync) =>
-  db.prepare(
-    'select parent_eid as parent, type, child_eid as child from dependency',
-  ).all() as Dep[]
-
-// The sync unit — one component patch landing on (or leaving) an entity. A
-// batch is a flat array; a comp is a PATCH: omitted columns are untouched
-// (a single prop change sends a single prop), `prop: null` clears that
-// column, comp: null deletes the component, and {name: 'entity', comp: null}
-// deletes the entity, its components, and every edge touching it. Deleting a
-// bunch is just a long batch. Client-minted UUID eids are welcome — the
-// spine (and its num) appears on first touch.
-export type Change = {
-  eid: string
-  name: string
-  comp: Record<string, unknown> | null
-}
 
 // The component tables the sync layer may write, with their writable columns.
 let cmps: Record<string, string[]> = {
@@ -402,7 +254,37 @@ export let apply = (db: DatabaseSync, changes: Change[]) => {
   }
 }
 
+// The whole graph as one batch (plus edges) — what a fresh client cache eats.
+// Entity comps carry num/created_at OUT; apply() never lets them back IN.
+export let snapshot = (db: DatabaseSync): Snapshot => {
+  let changes: Change[] = []
+  for (
+    let name of [
+      'entity',
+      ...Object.keys(cmps).filter((n) => n != 'entity'),
+    ]
+  ) {
+    for (
+      let row of db.prepare(`select * from ${name}`).all() as Record<
+        string,
+        unknown
+      >[]
+    ) {
+      changes.push({ eid: row.eid as string, name, comp: row })
+    }
+  }
+  let deps = db.prepare(
+    'select parent_eid as parent, type, child_eid as child from dependency',
+  ).all() as Dep[]
+  return { changes, deps }
+}
+
 // `deno task seed` (or a direct run) bootstraps the file without the server.
 if (import.meta.main) {
-  console.log(`seeded ${tasks(db).length} tasks, ${deps(db).length} edges`)
+  let n = (q: string) => (db.prepare(q).get() as { n: number }).n
+  console.log(
+    `seeded ${n('select count(*) as n from task')} tasks, ${
+      n('select count(*) as n from dependency')
+    } edges`,
+  )
 }

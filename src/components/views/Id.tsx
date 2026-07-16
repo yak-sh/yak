@@ -1,4 +1,4 @@
-import { type Ent } from '../../db.ts'
+import { type Ent } from '../../types.ts'
 
 let prefix: Record<string, string> = { task: 'T', project: 'P' }
 

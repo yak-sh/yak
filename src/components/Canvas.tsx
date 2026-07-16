@@ -1,18 +1,23 @@
-import { type ComponentChildren } from 'preact'
 import { useEffect, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
-import { IS_BROWSER } from 'fresh/runtime'
-import { camera, clientId, send, sock, uuid } from '../live.ts'
+import {
+  camera,
+  clientId,
+  mutate,
+  myCamera,
+  pinned,
+  send,
+  sock,
+  uuid,
+} from '../live.ts'
+import { Card } from './Card.tsx'
 
 // The pannable, zoomable plane of pinned cards. The camera is a per-client,
-// per-canvas entity in the db (canvases nest — a client has one camera per
-// canvas it looks at), restored on load and patched over the sync socket as
-// pans, zooms, and resizes settle. x/y is the viewport center in plane
-// coords: translate = viewport/2 - center * zoom.
-export let Canvas = ({ eid, children }: {
-  eid: string
-  children: ComponentChildren
-}) => {
+// per-canvas entity (canvases nest — a client has one camera per canvas it
+// looks at), restored from the cache on mount and patched over the sync
+// socket as pans, zooms, and resizes settle. x/y is the viewport center in
+// plane coords: translate = viewport/2 - center * zoom.
+export let Canvas = ({ eid }: { eid: string }) => {
   let el = useRef<HTMLDivElement>(null)
   let cam = useRef('') // this client's camera eid for THIS canvas
   let timer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -38,44 +43,50 @@ export let Canvas = ({ eid, children }: {
   }
 
   useEffect(() => {
-    if (!IS_BROWSER || !el.current) return
+    if (!el.current) return
     let id = clientId()
     let size = () => ({
       w: el.current!.clientWidth,
       h: el.current!.clientHeight,
     })
     let { w, h } = size()
-    camera.value = { ...camera.value, w, h }
 
-    fetch(`/camera/${id}/${eid}`).then((r) => r.json()).then((c) => {
-      if (c) {
-        cam.current = c.eid
-        camera.value = { x: c.x, y: c.y, zoom: c.zoom, w, h }
-        if (c.w != w || c.h != h) save({ w, h })
-      } else {
-        // First look at this canvas: mint the client (whole comp) and a
-        // camera centered so the plane origin sits at the viewport corner.
-        cam.current = uuid()
-        camera.value = { x: w / 2, y: h / 2, zoom: 1, w, h }
-        send(
-          {
-            eid: id,
-            name: 'client',
-            comp: { user_agent: navigator.userAgent },
-          },
-          {
+    // The snapshot is already in the cache — restore this client's camera,
+    // or mint the client + a camera centered so the plane origin sits at
+    // the viewport corner.
+    let mine = myCamera(id, eid)
+    if (mine) {
+      cam.current = mine.eid
+      camera.value = { x: mine.x, y: mine.y, zoom: mine.zoom, w, h }
+      if (mine.w != w || mine.h != h) save({ w, h })
+    } else {
+      cam.current = uuid()
+      camera.value = { x: w / 2, y: h / 2, zoom: 1, w, h }
+      mutate(
+        {
+          eid: id,
+          name: 'client',
+          comp: { eid: id, user_agent: navigator.userAgent },
+        },
+        {
+          eid: cam.current,
+          name: 'camera',
+          comp: {
             eid: cam.current,
-            name: 'camera',
-            comp: { client_eid: id, canvas_eid: eid, ...camera.value },
+            client_eid: id,
+            canvas_eid: eid,
+            ...camera.value,
           },
-        )
-      }
-    })
+        },
+      )
+    }
 
     // Another tab moving this camera moves ours too.
     let s = sock()
     let hear = (m: MessageEvent) => {
-      for (let c of JSON.parse(String(m.data))) {
+      let batch = JSON.parse(String(m.data))
+      if (!Array.isArray(batch)) return
+      for (let c of batch) {
         if (c.eid == cam.current && c.name == 'camera' && c.comp) {
           let { x, y, zoom, w, h } = { ...camera.value, ...c.comp }
           camera.value = { x, y, zoom, w, h }
@@ -197,7 +208,7 @@ export let Canvas = ({ eid, children }: {
         class={glide.value ? 'Canvas_Plane Canvas_Plane-glide' : 'Canvas_Plane'}
         style={`transform:translate(${tx}px,${ty}px) scale(${zoom})`}
       >
-        {children}
+        {pinned(eid).map((p) => <Card key={p.eid} p={p} />)}
       </div>
     </div>
   )

@@ -1,4 +1,4 @@
-import { type Ent } from '../../db.ts'
+import { type Ent } from '../../types.ts'
 
 // An entity as one edge sentence: "<verb> <name>". Never a tab — reached by
 // name, with the verb passed through by the parent's edge row.

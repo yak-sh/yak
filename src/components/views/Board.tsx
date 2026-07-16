@@ -1,4 +1,4 @@
-import { type Ent } from '../../db.ts'
+import { type Ent } from '../../types.ts'
 import { View } from '../View.tsx'
 
 let cols = ['open', 'wip', 'done']

@@ -1,5 +1,6 @@
 import { type JSX } from 'preact'
-import { bundle, db, type Ent } from '../db.ts'
+import { type Ent } from '../types.ts'
+import { ent } from '../live.ts'
 import { Task } from './views/Task.tsx'
 import { Board } from './views/Board.tsx'
 import { Id } from './views/Id.tsx'
@@ -33,12 +34,12 @@ let registry: Entry[] = [
 // The tab row for an entity: every view that matches it unprompted.
 export let applicable = (e: Ent) => registry.filter((v) => v.match(e))
 
-// The one front door: render an entity through the first matching lens.
-// Extra props flow through to the view.
+// The one front door: render an entity (straight out of the live cache)
+// through the first matching lens. Extra props flow through to the view.
 export let View = (
   { eid, view, ...rest }: { eid: string; view?: string; [x: string]: unknown },
 ) => {
-  let e = bundle(db, eid)
+  let e = ent(eid)
   let v = registry.find((r) => r.match(e, view))!
   return <v.View e={e} {...rest} />
 }
