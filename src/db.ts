@@ -30,7 +30,8 @@ let schema = `
     eid    text primary key references entity(eid),
     title  text not null,
     status text not null,
-    body   text not null default ''
+    body   text not null default '',
+    priority real not null default 0
   );
   create table if not exists project (
     eid   text primary key references entity(eid),
@@ -184,6 +185,9 @@ let migrate = (db: DatabaseSync) => {
   if (!has('pin', 'z')) {
     db.exec('alter table pin add column z integer not null default 0')
   }
+  if (!has('task', 'priority')) {
+    db.exec('alter table task add column priority real not null default 0')
+  }
 }
 
 export let open = () => {
@@ -204,7 +208,7 @@ export let db = open()
 // The component tables the sync layer may write, with their writable columns.
 let cmps: Record<string, string[]> = {
   entity: ['kind'],
-  task: ['title', 'status', 'body'],
+  task: ['title', 'status', 'body', 'priority'],
   project: ['title'],
   card: ['target_eid', 'view'],
   pin: ['canvas_eid', 'x', 'y', 'w', 'h', 'z'],

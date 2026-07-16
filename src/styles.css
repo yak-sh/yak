@@ -197,6 +197,9 @@
   text-transform: uppercase;
   color: var(--dim);
 }
+.Board_Item {
+  cursor: grab;
+}
 
 .Task {
   border: 1px solid var(--border);

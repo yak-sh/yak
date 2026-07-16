@@ -1,6 +1,7 @@
 import { type JSX } from 'preact'
 import { type Ent } from '../types.ts'
 import { ent } from '../live.ts'
+import { idOf } from './views/Id.tsx'
 import { Task } from './views/Task.tsx'
 import { Board } from './views/Board.tsx'
 import { Id } from './views/Id.tsx'
@@ -68,11 +69,37 @@ export let resolve = (e: Ent, view?: string) =>
     registry.find((r) => r.view == 'JSON')!
 
 // The one front door: render an entity (straight out of the live cache)
-// through a view. Extra props flow through to the renderer (Debug's depth).
+// through a view. Extra props flow through to the renderer.
 export let View = (
   { eid, view, ...rest }: { eid: string; view?: string; [x: string]: unknown },
 ) => {
   let e = ent(eid)
   let r = resolve(e, view)
   return <r.Render e={e} {...rest} />
+}
+
+let b64 = (t: string) =>
+  btoa(
+    Array.from(new TextEncoder().encode(t), (b) => String.fromCharCode(b))
+      .join(''),
+  )
+
+// Arm a dragstart with the standard payload: the spawn card (for a canvas
+// drop — target + view + width), and, when the view's renderer has a file
+// form, the serialized file (for a desktop drop) plus text for editors.
+export let dragData = (ev: DragEvent, eid: string, view: string, w = 320) => {
+  if (!ev.dataTransfer) return
+  let e = ent(eid)
+  ev.dataTransfer.setData(
+    'application/x-tasks-card',
+    JSON.stringify({ target_eid: eid, view, w }),
+  )
+  let f = resolve(e, view).file
+  if (!f) return
+  let text = f.text(e)
+  ev.dataTransfer.setData('text/plain', text)
+  ev.dataTransfer.setData(
+    'DownloadURL',
+    `${f.mime}:${idOf(e)}.${f.ext}:data:${f.mime};base64,${b64(text)}`,
+  )
 }

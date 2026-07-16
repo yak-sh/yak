@@ -11,6 +11,7 @@ export type Task = {
   title: string
   status: string
   body: string
+  priority: number // board order within a status column; lower sorts first
 }
 
 export type Proj = { eid: string; title: string }

@@ -1,8 +1,7 @@
 import { applyLocal, camera, ent, mutate, send, topZ } from '../live.ts'
 import { type Pinned } from '../types.ts'
 import { block, el } from './ui.tsx'
-import { applicable, resolve, View } from './View.tsx'
-import { idOf } from './views/Id.tsx'
+import { applicable, dragData, View } from './View.tsx'
 
 let Pin = el('div', 'Pin')
 let Tab = el('button', 'Tab')
@@ -12,12 +11,6 @@ let Frame = block('section', 'Card', {
   Scroll: 'div',
 })
 let { Tabs, X, Scroll } = Frame
-
-let b64 = (t: string) =>
-  btoa(
-    Array.from(new TextEncoder().encode(t), (b) => String.fromCharCode(b))
-      .join(''),
-  )
 
 // A card: one entity through one chosen view, framed by a tab per view that
 // applies. Everything renders from the cache, so a tab click is just a card
@@ -61,25 +54,6 @@ export let Card = ({ p }: { p: Pinned }) => {
     el.addEventListener('pointerup', up)
   }
 
-  // A dragged tab carries the spawn payload (for a canvas drop) and, when
-  // the view has a file form, the serialized file (for a desktop drop).
-  let drag = (e: DragEvent, view: string) => {
-    if (!e.dataTransfer) return
-    let target = ent(p.target_eid)
-    e.dataTransfer.setData(
-      'application/x-tasks-card',
-      JSON.stringify({ target_eid: p.target_eid, view, w: p.w }),
-    )
-    let f = resolve(target, view).file
-    if (!f) return
-    let text = f.text(target)
-    e.dataTransfer.setData('text/plain', text)
-    e.dataTransfer.setData(
-      'DownloadURL',
-      `${f.mime}:${idOf(target)}.${f.ext}:data:${f.mime};base64,${b64(text)}`,
-    )
-  }
-
   return (
     <Pin
       style={`left:${p.x}px;top:${p.y}px;z-index:${p.z};` +
@@ -99,7 +73,7 @@ export let Card = ({ p }: { p: Pinned }) => {
               type='button'
               mod={v == p.view && 'on'}
               draggable
-              onDragStart={(e: DragEvent) => drag(e, v)}
+              onDragStart={(e: DragEvent) => dragData(e, p.target_eid, v, p.w)}
               onClick={() =>
                 v != p.view &&
                 mutate({ eid: p.eid, name: 'card', comp: { view: v } })}
