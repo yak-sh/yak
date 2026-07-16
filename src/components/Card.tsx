@@ -77,7 +77,6 @@ export let Card = ({ p }: { p: Pinned }) => {
               {v}
             </Tab>
           ))}
-          <View eid={p.target_eid} view='Id' />
           <X
             type='button'
             onClick={() => mutate({ eid: p.eid, name: 'entity', comp: null })}
