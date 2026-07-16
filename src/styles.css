@@ -34,6 +34,10 @@
   --done: var(--accent);
 }
 
+:where(html) {
+  overscroll-behavior-x: none; /* chrome consults the root, not just body */
+}
+
 :where(body) {
   margin: 0;
   height: 100dvh;
