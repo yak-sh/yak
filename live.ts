@@ -18,12 +18,25 @@ export let send = (...changes: unknown[]) => {
   else s.addEventListener('open', () => s.send(msg), { once: true })
 }
 
+// crypto.randomUUID is gated to secure contexts, and this page is reached
+// over plain http on the tailnet — so mint v4 uuids from getRandomValues,
+// which isn't gated.
+export let uuid = () => {
+  let b = crypto.getRandomValues(new Uint8Array(16))
+  b[6] = (b[6] & 0x0f) | 0x40
+  b[8] = (b[8] & 0x3f) | 0x80
+  let h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('')
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${
+    h.slice(16, 20)
+  }-${h.slice(20)}`
+}
+
 // Who this browser is: a client entity, its uuid minted into localStorage on
 // first visit. The db rows appear when the camera first persists.
 export let clientId = () => {
   let id = localStorage.getItem('tasks-client')
   if (!id) {
-    id = crypto.randomUUID()
+    id = uuid()
     localStorage.setItem('tasks-client', id)
   }
   return id

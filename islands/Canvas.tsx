@@ -1,7 +1,7 @@
 import { type ComponentChildren } from 'preact'
 import { useEffect, useRef } from 'preact/hooks'
 import { IS_BROWSER } from 'fresh/runtime'
-import { camera, clientId, send, sock } from '../live.ts'
+import { camera, clientId, send, sock, uuid } from '../live.ts'
 
 // The pannable, zoomable plane of pinned cards. The camera is a per-client,
 // per-canvas entity in the db (canvases nest — a client has one camera per
@@ -39,7 +39,7 @@ export let Canvas = ({ eid, children }: {
       } else {
         // First look at this canvas: mint the client (whole comp) and a
         // camera centered so the plane origin sits at the viewport corner.
-        cam.current = crypto.randomUUID()
+        cam.current = uuid()
         camera.value = { x: w / 2, y: h / 2, zoom: 1, w, h }
         send(
           {
