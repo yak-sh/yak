@@ -11,9 +11,9 @@ let file = Deno.env.get('DB_PATH') ??
   `${Deno.env.get('HOME')}/.tasks/tasks.db`
 
 // The edge vocabulary — every edge reads as a sentence, parent first:
-// parent needs child (hard gate) · parent contains child (decomposition,
+// parent requires child (hard gate) · parent contains child (decomposition,
 // children roll up) · parent reads child (read-first, never gates).
-export type Edge = 'needs' | 'contains' | 'reads'
+export type Edge = 'requires' | 'contains' | 'reads'
 
 export type Task = {
   eid: number
@@ -41,7 +41,7 @@ let schema = `
   );
   create table if not exists dependency (
     parent_eid integer not null references entity(eid),
-    type       text not null check (type in ('needs','contains','reads')),
+    type       text not null check (type in ('requires','contains','reads')),
     child_eid  integer not null references entity(eid),
     primary key (parent_eid, type, child_eid)
   );
@@ -91,7 +91,7 @@ let seed = (db: DatabaseSync) => {
     'open',
     'Explain the schema and how to run the app.',
   )
-  link(db, view, 'needs', schema) // the view is gated by the schema
+  link(db, view, 'requires', schema) // the view is gated by the schema
   link(db, view, 'contains', keys) // the view work decomposes into shortcuts
   link(db, readme, 'reads', schema) // read the schema before writing docs
 }
