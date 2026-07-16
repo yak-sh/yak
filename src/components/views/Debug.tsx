@@ -23,21 +23,25 @@ let shape = (v: unknown) =>
     ? 'Debug_Val Debug_Val-id'
     : 'Debug_Val'
 
-// Every component prop as a key → value grid row ('pin.x  664'), skipping
-// the eids that every comp row carries and anything the head already shows.
-let Props = ({ e, omit = [] }: { e: Ent; omit?: string[] }) => (
+let Row = ({ comp, k, v }: { comp?: string; k: string; v: unknown }) => (
+  <>
+    <span class='Debug_Key'>
+      {comp && <span class='Debug_Comp'>{comp}.</span>}
+      {k}
+    </span>
+    <span class={shape(v)}>{String(v)}</span>
+  </>
+)
+
+// EVERY prop as a key → value grid row — the spine (eid, num, kind), then
+// each component whole ('pin.x  664'). Debug hides nothing.
+let Props = ({ e }: { e: Ent }) => (
   <div class='Debug_Props'>
+    <Row k='eid' v={e.eid} />
+    <Row k='num' v={e.num} />
+    <Row k='kind' v={e.kind} />
     {comps(e).flatMap(([name, comp]) =>
-      Object.entries(comp)
-        .filter(([k]) => k != 'eid' && !omit.includes(`${name}.${k}`))
-        .map(([k, v]) => (
-          <>
-            <span class='Debug_Key'>
-              <span class='Debug_Comp'>{name}</span>.{k}
-            </span>
-            <span class={shape(v)}>{String(v)}</span>
-          </>
-        ))
+      Object.entries(comp).map(([k, v]) => <Row comp={name} k={k} v={v} />)
     )}
   </div>
 )
@@ -71,7 +75,7 @@ export let DebugTask = (
         {e.task!.status}
       </span>
     </div>
-    <Props e={e} omit={['task.title', 'task.status']} />
+    <Props e={e} />
     {e.refs.map((r) => (
       <View key={r.child} eid={r.child} view='Dependency' type={r.type} />
     ))}
