@@ -383,6 +383,9 @@
 .Status_Mode-insert {
   color: var(--yellow);
 }
+.Status_Mode-visual {
+  color: var(--purple);
+}
 .Status_Colon {
   color: var(--text);
 }

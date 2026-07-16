@@ -53,14 +53,29 @@ export let Status = () => {
         e.preventDefault()
         msg.value = ''
         mode.value = 'command'
-      } else if (e.key == 'i') {
+      } else if (e.key == 'i' && mode.value == 'normal') {
         mode.value = 'insert'
       } else if (e.key == 'Escape') {
         msg.value = ''
+        document.getSelection()?.removeAllRanges() // drops visual too
       }
     }
     addEventListener('keydown', key)
-    return () => removeEventListener('keydown', key)
+
+    // VISUAL is derived, not entered: a live selection outside a text input.
+    let sel = () => {
+      if (mode.value == 'insert' || mode.value == 'command') return
+      let s = document.getSelection()
+      let n = s?.anchorNode
+      let host = n instanceof Element ? n : n?.parentElement
+      let has = !!s && !s.isCollapsed && !host?.closest('input, textarea')
+      mode.value = has ? 'visual' : 'normal'
+    }
+    document.addEventListener('selectionchange', sel)
+    return () => {
+      removeEventListener('keydown', key)
+      document.removeEventListener('selectionchange', sel)
+    }
   }, [])
 
   // The command line grabs focus the moment it appears.
@@ -91,7 +106,11 @@ export let Status = () => {
         : (
           <>
             <Mode mod={mode.value}>
-              {mode.value == 'insert' ? '-- INSERT --' : 'NORMAL'}
+              {mode.value == 'insert'
+                ? '-- INSERT --'
+                : mode.value == 'visual'
+                ? '-- VISUAL --'
+                : 'NORMAL'}
             </Mode>
             {msg.value && <Msg>{msg.value}</Msg>}
           </>
