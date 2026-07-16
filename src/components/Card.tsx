@@ -122,6 +122,13 @@ export let Card = ({ p }: { p: Pinned }) => {
     >
       <section class='Card'>
         <header class='Card_Tabs'>
+          <button
+            type='button'
+            class='Card_X'
+            onClick={() => mutate({ eid: p.eid, name: 'entity', comp: null })}
+          >
+            ×
+          </button>
           {applicable(ent(p.target_eid)).map((v) => (
             <button
               type='button'

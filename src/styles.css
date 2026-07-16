@@ -21,6 +21,7 @@
   --dim: #7a8478;
 
   --accent: #a7c080; /* green — selection / primary */
+  --red: #e67e80;
   --soft: color-mix(in srgb, var(--text) 6%, transparent);
 
   /* status primitives → the dot colours consume these */
@@ -138,6 +139,19 @@
   cursor: grab;
   user-select: none;
 }
+/* The card's remove button — deletes the card entity, not its target. */
+.Card_X {
+  font: 12px ui-monospace, monospace;
+  color: var(--dim);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.Card_X:hover {
+  color: var(--red);
+}
+
 .Tab {
   font: 12px ui-monospace, monospace;
   color: var(--dim);
