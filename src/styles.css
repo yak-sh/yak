@@ -39,6 +39,7 @@
   height: 100dvh;
   display: flex;
   flex-direction: column;
+  overscroll-behavior-x: none; /* two-finger pan must never swipe-navigate */
   font: 13px/1.5 ui-monospace, monospace;
   background: var(--bg);
   color: var(--text);
