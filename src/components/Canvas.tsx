@@ -33,6 +33,7 @@ export let Canvas = ({ eid }: { eid: string }) => {
   let cam = useRef('') // this client's camera eid for THIS canvas
   let timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   let dirty = useRef(new Set<string>())
+  let gesture = useRef<{ mode: 'scroll' | 'pan'; t: number } | null>(null)
   let glide = useSignal(false) // one smooth transition, for zoom-to-card
 
   // Comps travel as patches — send only the props that moved.
@@ -236,11 +237,20 @@ export let Canvas = ({ eid }: { eid: string }) => {
       queue('x', 'y', 'zoom')
     } else {
       // Native scroll keeps the gesture only while something under the
-      // cursor can still move that way; otherwise the canvas pans.
-      if (
+      // cursor can still move that way; otherwise the canvas pans. The
+      // decision LATCHES for the gesture's lifetime (wheel events < 150ms
+      // apart), so a flick that bottoms out a card doesn't dump its
+      // momentum into a pan — pause and scroll again to re-decide.
+      let now = performance.now()
+      let g = gesture.current
+      let mode = g && now - g.t < 150 ? g.mode : (
         e.target instanceof Element &&
-        consumes(e.target, e.currentTarget, e.deltaX, e.deltaY)
-      ) return
+          consumes(e.target, e.currentTarget, e.deltaX, e.deltaY)
+          ? 'scroll' as const
+          : 'pan' as const
+      )
+      gesture.current = { mode, t: now }
+      if (mode == 'scroll') return
       e.preventDefault()
       camera.value = {
         ...camera.value,
