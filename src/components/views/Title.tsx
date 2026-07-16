@@ -13,8 +13,8 @@ let { Text } = Frame
 // dimmed.
 export let TaskTitle = ({ e }: { e: Ent }) => (
   <Frame>
-    <Dot status={e.task!.status} />
     <View eid={e.eid} view='Id' />
+    <Dot status={e.task!.status} />
     <Text>
       <Edit eid={e.eid} comp='task' prop='title' />
     </Text>
