@@ -10,7 +10,3 @@ _fresh/
 # npm + other dependencies
 node_modules/
 vendor/
-
-# SQLite graph (rebuilt from the seed by db.ts)
-data/
-

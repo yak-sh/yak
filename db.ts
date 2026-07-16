@@ -3,8 +3,12 @@
 // same id; `dependencies` are typed eid↔eid edges — anything can block, contain,
 // or inform anything. This module owns the file + the seed; routes only read.
 import { DatabaseSync } from 'node:sqlite'
+import { dirname } from 'node:path'
 
-let file = './data/tasks.db'
+// The db lives outside the repo (this is open source): a home-dir dotpath by
+// default, overridable with DB_PATH.
+let file = Deno.env.get('DB_PATH') ??
+  `${Deno.env.get('HOME')}/.tasks/tasks.db`
 
 // The edge vocabulary. blocks = hard gate, subtask = decomposition (parent
 // rolls up), informs = read-first, never gates.
@@ -59,42 +63,42 @@ let link = (db: DatabaseSync, src: number, dst: number, type: Edge) =>
     'insert into dependencies (src_eid, dst_eid, type) values (?, ?, ?)',
   ).run(src, dst, type)
 
-// A handful of rows, including at least one edge of each type, so the index
-// route has a real graph to render.
+// A handful of neutral demo rows, one edge of each type and one of each status,
+// so the index route has a real graph to render — no fleet data in the repo.
 let seed = (db: DatabaseSync) => {
-  let scaffold = addTask(
+  let schema = addTask(
     db,
-    'Scaffold Tasks v2',
+    'Set up the database schema',
+    'done',
+    'Model the entities and how they relate.',
+  )
+  let view = addTask(
+    db,
+    'Build the task list view',
     'wip',
-    'Fresh + SQLite walking skeleton: the ECS star planted as seed schema.',
+    'Render each task with its dependencies.',
   )
-  let loop = addTask(
+  let keys = addTask(
     db,
-    'Injection loop: task context + SessionStart hook',
+    'Add keyboard shortcuts',
     'open',
-    'The keystone — once it closes, tasks stop disappearing by construction.',
+    'Navigate the list without reaching for the mouse.',
   )
-  let ids = addTask(
+  let readme = addTask(
     db,
-    'Universal typed ids (T-123, C-123)',
+    'Write the README',
     'open',
-    'Per-type counters over entity kinds; slugs stay as aliases.',
+    'Explain the schema and how to run the app.',
   )
-  let design = addTask(
-    db,
-    'Design: tasks as working memory',
-    'open',
-    'The task graph must BE the retrieval path, not a side-channel tracker.',
-  )
-  link(db, loop, scaffold, 'blocks') // loop is gated by the skeleton
-  link(db, ids, loop, 'subtask') // typed ids decompose the loop epic
-  link(db, design, scaffold, 'informs') // read the design before building
+  link(db, view, schema, 'blocks') // the view is gated by the schema
+  link(db, keys, view, 'subtask') // shortcuts decompose the view work
+  link(db, readme, schema, 'informs') // read the schema before writing docs
 }
 
 // Open the file, plant the schema, seed once if the graph is empty. Returns a
 // live handle; the process holds it open for the server's lifetime.
 export let open = () => {
-  Deno.mkdirSync('./data', { recursive: true })
+  Deno.mkdirSync(dirname(file), { recursive: true })
   let db = new DatabaseSync(file)
   db.exec(schema)
   let { n } = db.prepare('select count(*) as n from task').get() as {

@@ -1,0 +1,90 @@
+/* Tasks v2 — hand-written per the product CSS DNA: three-separator names
+   (Block / Block_Element / Block-modifier), custom properties as the variant
+   mechanism, modern CSS, no build step, no Tailwind. */
+
+:where(:root) {
+  color-scheme: light dark;
+  --gap: 1rem;
+  --half-gap: calc(var(--gap) / 2);
+  --radius: 8px;
+  --line: color-mix(in srgb, currentColor 15%, transparent);
+  --muted: color-mix(in srgb, currentColor 55%, transparent);
+  /* status primitives → the dot colours consume these */
+  --open: dodgerblue;
+  --wip: orange;
+  --done: seagreen;
+}
+
+:where(body) {
+  margin: 0;
+  font: 15px/1.5 system-ui, sans-serif;
+}
+
+.wrap {
+  max-width: 44rem;
+  margin: 3rem auto;
+  padding: 0 var(--gap);
+
+  & h1 {
+    font-size: 1.6rem;
+    margin-bottom: var(--gap);
+  }
+  & .sub {
+    font-weight: 400;
+    opacity: .5;
+  }
+}
+
+.Tasks {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: var(--gap);
+}
+
+.Task {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--gap);
+}
+.Task_Head {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+}
+.Task_Title {
+  font-weight: 600;
+}
+.Task_Id {
+  margin-left: auto;
+  opacity: .4;
+  font: 12px monospace;
+}
+.Task_Body {
+  margin: var(--half-gap) 0 0;
+  color: var(--muted);
+}
+
+.Dot {
+  --dot: gray;
+  width: .6rem;
+  height: .6rem;
+  border-radius: 50%;
+  background: var(--dot);
+}
+.Dot-open {
+  --dot: var(--open);
+}
+.Dot-wip {
+  --dot: var(--wip);
+}
+.Dot-done {
+  --dot: var(--done);
+}
+
+.Edge {
+  display: inline-block;
+  margin: var(--half-gap) var(--half-gap) 0 0;
+  font-size: 13px;
+  opacity: .7;
+}

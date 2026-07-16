@@ -23,15 +23,17 @@ task(eid pk→entities.eid, title, status, body)
 dependencies(src_eid→entities, dst_eid→entities, type ∈ blocks|subtask|informs)
 ```
 
-`db.ts` owns the file (`./data/tasks.db`, gitignored), plants the schema on
-first boot (`create … if not exists`), and seeds a handful of tasks plus one
-edge of each type. The index route (`routes/index.tsx`) opens the db once,
-queries `task ⋈ entities`, and renders each task with its outgoing edges.
+`db.ts` owns the file. By default it lives at `~/.tasks/tasks.db` — outside the
+repo; set `DB_PATH` to move it. It plants the schema on first boot
+(`create if not exists`) and seeds a handful of neutral demo tasks with one edge
+of each type. The index route (`routes/index.tsx`) opens the db once, queries
+the task-to-entity join, and composes the small components in `components/`
+(`Tasks`, `Task`, `Dot`, `Edge`) to render each task with its outgoing edges.
 
 ## Run
 
 ```sh
-deno task seed   # bootstrap ./data/tasks.db from the seed (optional; dev does it)
+deno task seed   # bootstrap ~/.tasks/tasks.db from the seed (optional; dev does it)
 deno task dev    # Fresh dev server (Vite) at http://localhost:8000
 deno task check  # deno fmt --check + lint + type-check
 ```
