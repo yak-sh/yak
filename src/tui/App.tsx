@@ -7,6 +7,7 @@ import { signal } from '@preact/signals'
 import { type Ent } from '../types.ts'
 import { byPriority, cache, ent, mode, statuses } from '../live.ts'
 import { type Renderer, View } from '../components/View.tsx'
+import { idOf } from '../components/views/Id.tsx'
 
 export let sel = signal({ col: 0, row: 0 })
 export let quit = signal(false)
@@ -30,15 +31,20 @@ export let selected = () => {
   return list[Math.min(sel.value.row, list.length - 1)]?.eid
 }
 
-// Sideways: hop columns, keeping the row (clamped live against the board —
-// rows come and go under us when another client drags a task away).
-let horiz = (d: number) => {
-  let p = projEid()
-  if (!p) return
-  let col = Math.max(0, Math.min(statuses.length - 1, sel.value.col + d))
-  let len = rows(ent(p), statuses[col]).length
-  let row = Math.max(0, Math.min(len - 1, sel.value.row))
-  sel.value = { col, row }
+// Where we are: a trail of entities entered with l/Enter; empty = the
+// board. h (or Ctrl-d, from any mode) pops back out.
+export let trail = signal<string[]>([])
+
+let enter = (): boolean => {
+  let s = selected()
+  if (!s || trail.value.at(-1) == s) return false
+  trail.value = [...trail.value, s]
+  return true
+}
+
+let back = () => {
+  trail.value = trail.value.slice(0, -1)
+  mode.value = 'normal'
 }
 
 // Vertically the board reads as ONE list: j past the bottom of a column
@@ -53,9 +59,9 @@ let vert = (d: number) => {
   if (!flat.length) return
   let i = flat.findIndex((x) =>
     x.col == sel.value.col && x.row == Math.min(
-      sel.value.row,
-      rows(e, statuses[sel.value.col]).length - 1,
-    )
+        sel.value.row,
+        rows(e, statuses[sel.value.col]).length - 1,
+      )
   )
   sel.value = flat[Math.max(0, Math.min(flat.length - 1, i + d))]
 }
@@ -104,8 +110,10 @@ let run = (line: string) => {
 }
 
 // Raw stdin, one key at a time. Normal mode is vim; : opens the command
-// line, which owns every key until Enter or Escape.
+// line, which owns every key until Enter or Escape. Ctrl-d backs out of
+// the current entity from ANY mode; everything else is per-mode.
 export let key = (k: string) => {
+  if (k == '\x04') return back()
   if (mode.value == 'command') {
     if (k == '\r') {
       run(buf.value)
@@ -118,14 +126,20 @@ export let key = (k: string) => {
     else if (k >= ' ') buf.value += k
     return
   }
+  if (mode.value == 'insert') {
+    if (k == '\x1b') mode.value = 'normal'
+    return // no editing yet — insert only holds the mode
+  }
   if (k == ':') {
     msg.value = ''
     buf.value = ''
     mode.value = 'command'
   } else if (k == 'j') vert(1)
   else if (k == 'k') vert(-1)
-  else if (k == 'h') horiz(-1)
-  else if (k == 'l') horiz(1)
+  else if (k == 'l') enter()
+  else if (k == '\r') {
+    if (enter()) mode.value = 'insert'
+  } else if (k == 'h') back()
   else if (k == 'q' || k == '\x03') quit.value = true
   else if (k == '\x1b') msg.value = ''
 }
@@ -140,25 +154,36 @@ let TStatus = () => (
             {mode.value == 'insert' ? '-- INSERT --' : mode.value.toUpperCase()}
           </span>
           {msg.value && <span class='TStatus_Msg'>{msg.value}</span>}
-          <span class='TStatus_Hint'>j/k/h/l browse · : cmd · q quit</span>
+          <span class='TStatus_Hint'>
+            j/k browse · l in · h out · ⏎ edit · : cmd · q quit
+          </span>
         </>
       )}
   </footer>
 )
 
+// The screen: the board when the trail is empty, else the entered entity
+// through its first applicable view. The title doubles as the breadcrumb.
 export let App = () => {
   let p = projEid()
   let s = selected()
+  let here = trail.value.at(-1)
+  let crumbs = [
+    p ? ent(p).project!.title : 'no project',
+    ...trail.value.map((eid) => idOf(ent(eid))),
+  ]
   return (
     <div class='TApp'>
-      <div class='TTitle'>
-        tasks{p ? ` · ${ent(p).project!.title}` : ' · no project'}
-      </div>
-      {p && <View eid={p} view='Board' />}
-      {s && (
-        <div class='TDetail'>
-          <View eid={s} view='Task' />
-        </div>
+      <div class='TTitle'>{['tasks', ...crumbs].join(' · ')}</div>
+      {here ? <View eid={here} /> : p && (
+        <>
+          <View eid={p} view='Board' />
+          {s && (
+            <div class='TDetail'>
+              <View eid={s} view='Task' />
+            </div>
+          )}
+        </>
       )}
       <TStatus />
     </div>
