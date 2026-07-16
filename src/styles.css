@@ -22,6 +22,8 @@
 
   --accent: #a7c080; /* green — selection / primary */
   --red: #e67e80;
+  --orange: #e69875;
+  --purple: #d699b6;
   --soft: color-mix(in srgb, var(--text) 6%, transparent);
 
   /* status primitives → the dot colours consume these */
@@ -277,15 +279,39 @@
 .Debug_Props {
   display: grid;
   grid-template-columns: max-content 1fr;
-  gap: 1px var(--gap);
+  gap: 2px var(--gap);
+  align-items: baseline;
 }
 .Debug_Key {
   color: var(--dim);
   font-size: 11px;
+  justify-self: end; /* keys hug the value column — one aligned seam */
+}
+.Debug_Comp {
+  color: var(--orange);
 }
 .Debug_Val {
-  color: var(--muted);
+  color: var(--text);
   overflow-wrap: anywhere;
+}
+.Debug_Val-num {
+  color: var(--purple);
+}
+.Debug_Val-id {
+  color: var(--dim);
+  font-size: 11px;
+}
+.Debug_Status {
+  font-size: 11px;
+}
+.Debug_Status-open {
+  color: var(--open);
+}
+.Debug_Status-wip {
+  color: var(--wip);
+}
+.Debug_Status-done {
+  color: var(--done);
 }
 .Debug_More {
   color: var(--dim);

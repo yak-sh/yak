@@ -15,6 +15,14 @@ let comps = (e: Ent) => {
   ][]
 }
 
+// Values color by shape: numbers, uuids, everything else.
+let shape = (v: unknown) =>
+  typeof v == 'number'
+    ? 'Debug_Val Debug_Val-num'
+    : typeof v == 'string' && /^[0-9a-f]{8}(-[0-9a-f]{4}){3}/.test(v)
+    ? 'Debug_Val Debug_Val-id'
+    : 'Debug_Val'
+
 // Every component prop as a key → value grid row ('pin.x  664'), skipping
 // the eids that every comp row carries and anything the head already shows.
 let Props = ({ e, omit = [] }: { e: Ent; omit?: string[] }) => (
@@ -24,8 +32,10 @@ let Props = ({ e, omit = [] }: { e: Ent; omit?: string[] }) => (
         .filter(([k]) => k != 'eid' && !omit.includes(`${name}.${k}`))
         .map(([k, v]) => (
           <>
-            <span class='Debug_Key'>{name}.{k}</span>
-            <span class='Debug_Val'>{String(v)}</span>
+            <span class='Debug_Key'>
+              <span class='Debug_Comp'>{name}</span>.{k}
+            </span>
+            <span class={shape(v)}>{String(v)}</span>
           </>
         ))
     )}
@@ -57,7 +67,9 @@ export let DebugTask = (
       <View eid={e.eid} view='Id' />
       <span class='Debug_Kind'>{e.kind}</span>
       <span>{e.task!.title}</span>
-      <span class='Debug_Kind'>{e.task!.status}</span>
+      <span class={`Debug_Status Debug_Status-${e.task!.status}`}>
+        {e.task!.status}
+      </span>
     </div>
     <Props e={e} omit={['task.title', 'task.status']} />
     {e.refs.map((r) => (
