@@ -47,7 +47,8 @@ let schema = `
     x integer not null,
     y integer not null,
     w integer not null,
-    h integer not null
+    h integer not null,
+    z integer not null default 0
   );
   create table if not exists client (
     eid        text primary key references entity(eid),
@@ -169,10 +170,23 @@ let seed = (db: DatabaseSync) => {
 
 // Open the file, plant the schema, seed once if the graph is empty. Returns a
 // live handle; the process holds it open for the server's lifetime.
+// Additive migrations: `create if not exists` won't grow an existing table,
+// so new columns are altered in when missing.
+let migrate = (db: DatabaseSync) => {
+  let has = (table: string, col: string) =>
+    (db.prepare(
+      'select count(*) as n from pragma_table_info(?) where name = ?',
+    ).get(table, col) as { n: number }).n
+  if (!has('pin', 'z')) {
+    db.exec('alter table pin add column z integer not null default 0')
+  }
+}
+
 export let open = () => {
   Deno.mkdirSync(dirname(file), { recursive: true })
   let db = new DatabaseSync(file)
   db.exec(schema)
+  migrate(db)
   let { n } = db.prepare('select count(*) as n from task').get() as {
     n: number
   }
@@ -189,7 +203,7 @@ let cmps: Record<string, string[]> = {
   task: ['title', 'status', 'body'],
   project: ['title'],
   card: ['target_eid', 'view'],
-  pin: ['canvas_eid', 'x', 'y', 'w', 'h'],
+  pin: ['canvas_eid', 'x', 'y', 'w', 'h', 'z'],
   client: ['user_agent'], // ip is server-stamped, never writable over the wire
   camera: ['client_eid', 'canvas_eid', 'x', 'y', 'zoom', 'w', 'h'],
 }

@@ -132,7 +132,25 @@ export let pinned = (canvas: string): Pinned[] =>
       target_eid: r.card!.target_eid,
       view: r.card!.view,
     }))
-    .sort((a, b) => a.eid < b.eid ? -1 : 1)
+    .sort((a, b) => (a.z - b.z) || (a.eid < b.eid ? -1 : 1))
+
+// The highest stacking order on a canvas — a raised card gets topZ + 1.
+export let topZ = (canvas: string) =>
+  Math.max(
+    0,
+    ...Object.values(cache.value)
+      .filter((r) => r.pin?.canvas_eid == canvas)
+      .map((r) => r.pin!.z),
+  )
+
+// Screen px → plane coords, through the camera over the given canvas rect.
+export let toPlane = (clientX: number, clientY: number, rect: DOMRect) => {
+  let { x, y, zoom, w, h } = camera.value
+  return {
+    x: (clientX - rect.left - (w / 2 - x * zoom)) / zoom,
+    y: (clientY - rect.top - (h / 2 - y * zoom)) / zoom,
+  }
+}
 
 // This client's camera over one canvas, if it exists yet.
 export let myCamera = (client: string, canvas: string) =>

@@ -22,6 +22,7 @@ export type Pin = {
   y: number
   w: number
   h: number
+  z: number // stacking order; dragging a card raises it to top
 }
 
 // A browser identity: its uuid is minted client-side into localStorage on
