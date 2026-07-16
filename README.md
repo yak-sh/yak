@@ -18,8 +18,10 @@ sqlite-vector embeddings, typed short ids (T-123 / C-123).
 ## Schema sketch
 
 ```sql
-entity(eid pk, kind, created_at)
+entity(eid uuid pk, num server-minted, kind, created_at)
 task(eid pk→entity.eid, title, status, body)
+card(eid pk→entity, target_eid→entity, view)
+pin(eid pk→card, canvas_eid→entity, x, y, w, h)
 dependency(parent_eid→entity, type ∈ requires|contains|reads, child_eid→entity)
 ```
 

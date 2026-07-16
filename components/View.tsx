@@ -29,7 +29,7 @@ export let applicable = (e: Ent) => registry.filter((v) => v.match(e))
 // The one front door: render an entity through a lens — the named one, or the
 // best match. Extra props flow through to the view.
 export let View = (
-  { eid, view, ...rest }: { eid: number; view?: string; [x: string]: unknown },
+  { eid, view, ...rest }: { eid: string; view?: string; [x: string]: unknown },
 ) => {
   let e = bundle(db, eid)
   let v = (view && registry.find((r) => r.id == view)) || applicable(e)[0]

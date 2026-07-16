@@ -21,8 +21,8 @@ let send = (change: unknown) => {
 // card content stays static HTML. Dropping sends the whole pin component over
 // the sync socket; a pin change arriving for this eid moves the card.
 export let Drag = ({ eid, canvas, x, y, w, h, children }: {
-  eid: number
-  canvas: number
+  eid: string
+  canvas: string
   x: number
   y: number
   w: number

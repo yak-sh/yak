@@ -2,6 +2,9 @@
 // shared primary key (`eid`); component tables (`task`, `project`, `card`, …)
 // hang off it by that same id; `dependency` rows are typed eid↔eid edges that
 // read as sentences. This module owns the file + seed; routes read.
+//
+// Ids: `eid` is a UUID so ANY side (client included) can mint entities;
+// `num` is the server-minted human number (T-7 in the UI, one global counter).
 import { DatabaseSync } from 'node:sqlite'
 import { dirname } from 'node:path'
 
@@ -16,32 +19,33 @@ let file = Deno.env.get('DB_PATH') ??
 export type Edge = 'requires' | 'contains' | 'reads'
 
 export type Task = {
-  eid: number
+  eid: string
   title: string
   status: string
   body: string
 }
 
-export type Proj = { eid: number; title: string }
-export type Card = { eid: number; target_eid: number; view: string }
+export type Proj = { eid: string; title: string }
+export type Card = { eid: string; target_eid: string; view: string }
 export type Pin = {
-  eid: number
-  canvas_eid: number
+  eid: string
+  canvas_eid: string
   x: number
   y: number
   w: number
   h: number
 }
 
-export type Dep = { parent: number; type: Edge; child: number }
+export type Dep = { parent: string; type: Edge; child: string }
 
 // An outgoing edge, verb + child — the Dependency view resolves the name.
-export type Ref = { type: Edge; child: number }
+export type Ref = { type: Edge; child: string }
 
 // The bundle a renderer pattern-matches on: the entity plus whichever
 // components it carries, its edge sentences, and the entities it contains.
 export type Ent = {
-  eid: number
+  eid: string
+  num: number
   kind: string
   task?: Task
   project?: Proj
@@ -52,54 +56,62 @@ export type Ent = {
 }
 
 // A pin row joined to its card: where the card sits and what it shows.
-export type Pinned = Pin & { target_eid: number; view: string }
+export type Pinned = Pin & { target_eid: string; view: string }
 
 // The star: an entity spine plus one component table per kind, plus the edge
 // table. `if not exists` makes this idempotent — safe to run every boot.
 // A canvas is an entity with no component (yet) — its geometry lives in `pin`.
 let schema = `
   create table if not exists entity (
-    eid        integer primary key autoincrement,
+    eid        text primary key,
+    num        integer not null unique,
     kind       text not null,
     created_at text not null
   );
   create table if not exists task (
-    eid    integer primary key references entity(eid),
+    eid    text primary key references entity(eid),
     title  text not null,
     status text not null,
     body   text not null default ''
   );
   create table if not exists project (
-    eid   integer primary key references entity(eid),
+    eid   text primary key references entity(eid),
     title text not null
   );
   create table if not exists card (
-    eid        integer primary key references entity(eid),
-    target_eid integer not null references entity(eid),
+    eid        text primary key references entity(eid),
+    target_eid text not null references entity(eid),
     view       text not null
   );
   create table if not exists pin (
-    eid        integer primary key references card(eid),
-    canvas_eid integer not null references entity(eid),
+    eid        text primary key references card(eid),
+    canvas_eid text not null references entity(eid),
     x integer not null,
     y integer not null,
     w integer not null,
     h integer not null
   );
   create table if not exists dependency (
-    parent_eid integer not null references entity(eid),
+    parent_eid text not null references entity(eid),
     type       text not null check (type in ('requires','contains','reads')),
-    child_eid  integer not null references entity(eid),
+    child_eid  text not null references entity(eid),
     primary key (parent_eid, type, child_eid)
   );
 `
 
+// Insert an entity spine row: the eid arrives (or is minted) as a UUID, the
+// num is minted HERE — one global counter, safe inside a transaction.
+let spine = (db: DatabaseSync, eid: string, kind: string) =>
+  db.prepare(`
+    insert or ignore into entity (eid, num, kind, created_at)
+    values (?, (select coalesce(max(num), 0) + 1 from entity), ?, ?)
+  `).run(eid, kind, new Date().toISOString())
+
 // Mint a bare entity of a kind; components hang off the returned eid.
 let ent = (db: DatabaseSync, kind: string) => {
-  let { lastInsertRowid } = db
-    .prepare('insert into entity (kind, created_at) values (?, ?)')
-    .run(kind, new Date().toISOString())
-  return Number(lastInsertRowid)
+  let eid = crypto.randomUUID()
+  spine(db, eid, kind)
+  return eid
 }
 
 let addTask = (db: DatabaseSync, title: string, status: string, body = '') => {
@@ -116,7 +128,7 @@ let addProject = (db: DatabaseSync, title: string) => {
 }
 
 // A card views one entity through one lens; pinning places it on a canvas.
-let addCard = (db: DatabaseSync, target: number, view: string) => {
+let addCard = (db: DatabaseSync, target: string, view: string) => {
   let eid = ent(db, 'card')
   db.prepare('insert into card (eid, target_eid, view) values (?, ?, ?)')
     .run(eid, target, view)
@@ -125,8 +137,8 @@ let addCard = (db: DatabaseSync, target: number, view: string) => {
 
 let pin = (
   db: DatabaseSync,
-  canvas: number,
-  card: number,
+  canvas: string,
+  card: string,
   x: number,
   y: number,
   w: number,
@@ -136,14 +148,14 @@ let pin = (
     'insert into pin (eid, canvas_eid, x, y, w, h) values (?, ?, ?, ?, ?, ?)',
   ).run(card, canvas, x, y, w, h)
 
-let link = (db: DatabaseSync, parent: number, type: Edge, child: number) =>
+let link = (db: DatabaseSync, parent: string, type: Edge, child: string) =>
   db.prepare(
     'insert into dependency (parent_eid, type, child_eid) values (?, ?, ?)',
   ).run(parent, type, child)
 
 // A handful of neutral demo rows — a project containing tasks, one edge of
-// each type, and a root canvas showing the same project through two lenses.
-// No fleet data in the repo.
+// each type, and a root canvas showing the project as a Board plus one task
+// card. No fleet data in the repo.
 let seed = (db: DatabaseSync) => {
   let schema = addTask(
     db,
@@ -200,9 +212,9 @@ export let db = open()
 // The whole entity, assembled for a renderer: entity row, components present,
 // outgoing edge sentences, contained children (recursive — graphs stay small;
 // a view reads as deep as it wants).
-export let bundle = (db: DatabaseSync, eid: number): Ent => {
-  let e = db.prepare('select eid, kind from entity where eid = ?')
-    .get(eid) as { eid: number; kind: string }
+export let bundle = (db: DatabaseSync, eid: string): Ent => {
+  let e = db.prepare('select eid, num, kind from entity where eid = ?')
+    .get(eid) as { eid: string; num: number; kind: string }
   let comp = <T>(table: string) =>
     db.prepare(`select * from ${table} where eid = ?`).get(eid) as
       | T
@@ -214,7 +226,7 @@ export let bundle = (db: DatabaseSync, eid: number): Ent => {
   let kids = (db.prepare(`
     select child_eid from dependency
     where parent_eid = ? and type = 'contains'
-  `).all(eid) as { child_eid: number }[])
+  `).all(eid) as { child_eid: string }[])
     .map((r) => bundle(db, r.child_eid))
   return {
     ...e,
@@ -228,15 +240,15 @@ export let bundle = (db: DatabaseSync, eid: number): Ent => {
 }
 
 // Point a card at a different lens — the tab click's write.
-export let setView = (db: DatabaseSync, card: number, view: string) =>
+export let setView = (db: DatabaseSync, card: string, view: string) =>
   db.prepare('update card set view = ? where eid = ?').run(view, card)
 
 // The root canvas (first canvas entity) and the cards pinned to a canvas.
 export let rootCanvas = (db: DatabaseSync) =>
-  db.prepare("select eid from entity where kind = 'canvas' order by eid")
-    .get() as { eid: number }
+  db.prepare("select eid from entity where kind = 'canvas' order by num")
+    .get() as { eid: string }
 
-export let pinned = (db: DatabaseSync, canvas: number) =>
+export let pinned = (db: DatabaseSync, canvas: string) =>
   db.prepare(`
     select p.eid, p.canvas_eid, p.x, p.y, p.w, p.h, c.target_eid, c.view
     from pin p join card c on c.eid = p.eid
@@ -249,7 +261,7 @@ export let tasks = (db: DatabaseSync) =>
   db.prepare(`
     select t.eid, t.title, t.status, t.body
     from task t join entity e on e.eid = t.eid
-    order by e.eid
+    order by e.num
   `).all() as Task[]
 
 // Every edge, as {parent, type, child} — each row IS the sentence.
@@ -262,16 +274,17 @@ export let deps = (db: DatabaseSync) =>
 // batch is a flat array; components travel WHOLE (a comp is small by design —
 // partial rows aren't merged). comp: null deletes the component;
 // {name: 'entity', comp: null} deletes the entity, its components, and every
-// edge touching it. Deleting a bunch is just a long batch.
+// edge touching it. Deleting a bunch is just a long batch. Client-minted
+// UUID eids are welcome — the spine (and its num) appears on first touch.
 export type Change = {
-  eid: number
+  eid: string
   name: string
   comp: Record<string, unknown> | null
 }
 
 // The component tables the sync layer may write, with their writable columns.
 let cmps: Record<string, string[]> = {
-  entity: ['kind', 'created_at'],
+  entity: ['kind'],
   task: ['title', 'status', 'body'],
   project: ['title'],
   card: ['target_eid', 'view'],
@@ -279,7 +292,8 @@ let cmps: Record<string, string[]> = {
 }
 
 // Apply a batch atomically. Unknown component names are ignored (a newer
-// client speaking to an older server shouldn't wedge the socket).
+// client speaking to an older server shouldn't wedge the socket). num and
+// created_at are server-owned — never writable over the wire.
 export let apply = (db: DatabaseSync, changes: Change[]) => {
   db.exec('begin')
   try {
@@ -300,11 +314,13 @@ export let apply = (db: DatabaseSync, changes: Change[]) => {
         db.prepare(`delete from ${name} where eid = ?`).run(eid)
         continue
       }
-      if (name != 'entity') {
-        db.prepare(
-          'insert or ignore into entity (eid, kind, created_at) values (?, ?, ?)',
-        ).run(eid, name, new Date().toISOString())
+      if (name == 'entity') {
+        spine(db, eid, String(comp.kind ?? 'entity'))
+        db.prepare('update entity set kind = ? where eid = ?')
+          .run(String(comp.kind ?? 'entity'), eid)
+        continue
       }
+      spine(db, eid, name)
       let marks = cols.map(() => '?').join(', ')
       db.prepare(
         `insert or replace into ${name} (eid, ${cols.join(', ')})
