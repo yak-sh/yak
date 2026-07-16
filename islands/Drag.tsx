@@ -32,9 +32,10 @@ export let Drag = ({ eid, x, y, w, children }: {
   }, [eid])
 
   let down = (e: PointerEvent & { currentTarget: HTMLDivElement }) => {
-    if (e.target instanceof Element && e.target.closest('button, a, input')) {
-      return
-    }
+    // Only the titlebar drags — and its buttons still click, not drag.
+    if (!(e.target instanceof Element)) return
+    if (e.target.closest('button, a, input')) return
+    if (!e.target.closest('.Card_Tabs')) return
     let el = e.currentTarget
     let from = pos.value
     let sx = e.clientX

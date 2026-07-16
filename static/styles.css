@@ -96,6 +96,16 @@
   transform-origin: 0 0;
 }
 
+/* One smooth camera move (zoom-to-card); dropped again on the next gesture. */
+.Canvas-glide {
+  transition:
+    background-position 0.25s ease,
+    background-size 0.25s ease;
+}
+.Canvas_Plane-glide {
+  transition: transform 0.25s ease;
+}
+
 /* A pin is the draggable slot a card sits in — geometry only. */
 .Pin {
   position: absolute;
@@ -110,6 +120,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
+  cursor: default;
   max-height: 70vh;
   background: var(--card);
   border: 1px solid var(--border);
