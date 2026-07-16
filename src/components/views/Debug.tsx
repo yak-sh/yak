@@ -9,8 +9,28 @@ import { View } from '../View.tsx'
 // The comps an entity actually carries, minus the spine — the raw payload.
 let comps = (e: Ent) => {
   let { eid: _e, num: _n, kind: _k, refs: _r, kids: _kids, ...rest } = e
-  return Object.fromEntries(Object.entries(rest).filter(([, v]) => v))
+  return Object.entries(rest).filter(([, v]) => v) as [
+    string,
+    Record<string, unknown>,
+  ][]
 }
+
+// Every component prop as a key → value grid row ('pin.x  664'), skipping
+// the eids that every comp row carries and anything the head already shows.
+let Props = ({ e, omit = [] }: { e: Ent; omit?: string[] }) => (
+  <div class='Debug_Props'>
+    {comps(e).flatMap(([name, comp]) =>
+      Object.entries(comp)
+        .filter(([k]) => k != 'eid' && !omit.includes(`${name}.${k}`))
+        .map(([k, v]) => (
+          <>
+            <span class='Debug_Key'>{name}.{k}</span>
+            <span class='Debug_Val'>{String(v)}</span>
+          </>
+        ))
+    )}
+  </div>
+)
 
 let Kids = ({ e, depth }: { e: Ent; depth: number }) =>
   depth > 0
@@ -39,7 +59,7 @@ export let DebugTask = (
       <span>{e.task!.title}</span>
       <span class='Debug_Kind'>{e.task!.status}</span>
     </div>
-    <pre class='Debug_Raw'>{JSON.stringify(comps(e), null, 1)}</pre>
+    <Props e={e} omit={['task.title', 'task.status']} />
     {e.refs.map((r) => (
       <View key={r.child} eid={r.child} view='Dependency' type={r.type} />
     ))}
@@ -53,7 +73,7 @@ export let DebugAny = ({ e, depth = 2 }: { e: Ent; [x: string]: unknown }) => (
       <View eid={e.eid} view='Id' />
       <span class='Debug_Kind'>{e.kind}</span>
     </div>
-    <pre class='Debug_Raw'>{JSON.stringify(comps(e), null, 1)}</pre>
+    <Props e={e} />
     <Kids e={e} depth={Number(depth)} />
   </div>
 )

@@ -274,10 +274,18 @@
   color: var(--dim);
   font-size: 11px;
 }
-.Debug_Raw {
-  margin: 0;
+.Debug_Props {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 1px var(--gap);
+}
+.Debug_Key {
+  color: var(--dim);
+  font-size: 11px;
+}
+.Debug_Val {
   color: var(--muted);
-  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .Debug_More {
   color: var(--dim);
