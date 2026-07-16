@@ -10,9 +10,10 @@ import { dirname } from 'node:path'
 let file = Deno.env.get('DB_PATH') ??
   `${Deno.env.get('HOME')}/.tasks/tasks.db`
 
-// The edge vocabulary. blocks = hard gate, contains = decomposition (parent
-// rolls up), informs = read-first, never gates.
-export type Edge = 'blocks' | 'contains' | 'informs'
+// The edge vocabulary — every edge reads as a sentence, parent first:
+// parent needs child (hard gate) · parent contains child (decomposition,
+// children roll up) · parent reads child (read-first, never gates).
+export type Edge = 'needs' | 'contains' | 'reads'
 
 export type Task = {
   eid: number
@@ -22,7 +23,7 @@ export type Task = {
   created_at: string
 }
 
-export type Dep = { parent: number; child: number; type: Edge }
+export type Dep = { parent: number; type: Edge; child: number }
 
 // The star: an entity spine plus one component table per kind, plus the edge
 // table. `if not exists` makes this idempotent — safe to run every boot.
@@ -40,9 +41,9 @@ let schema = `
   );
   create table if not exists dependency (
     parent_eid integer not null references entity(eid),
-    child_eid integer not null references entity(eid),
-    type    text not null check (type in ('blocks','contains','informs')),
-    primary key (parent_eid, child_eid, type)
+    type       text not null check (type in ('needs','contains','reads')),
+    child_eid  integer not null references entity(eid),
+    primary key (parent_eid, type, child_eid)
   );
 `
 
@@ -58,10 +59,10 @@ let addTask = (db: DatabaseSync, title: string, status: string, body = '') => {
   return eid
 }
 
-let link = (db: DatabaseSync, parent: number, child: number, type: Edge) =>
+let link = (db: DatabaseSync, parent: number, type: Edge, child: number) =>
   db.prepare(
-    'insert into dependency (parent_eid, child_eid, type) values (?, ?, ?)',
-  ).run(parent, child, type)
+    'insert into dependency (parent_eid, type, child_eid) values (?, ?, ?)',
+  ).run(parent, type, child)
 
 // A handful of neutral demo rows, one edge of each type and one of each status,
 // so the index route has a real graph to render — no fleet data in the repo.
@@ -90,9 +91,9 @@ let seed = (db: DatabaseSync) => {
     'open',
     'Explain the schema and how to run the app.',
   )
-  link(db, view, schema, 'blocks') // the view is gated by the schema
-  link(db, view, keys, 'contains') // the view work decomposes into shortcuts
-  link(db, readme, schema, 'informs') // read the schema before writing docs
+  link(db, view, 'needs', schema) // the view is gated by the schema
+  link(db, view, 'contains', keys) // the view work decomposes into shortcuts
+  link(db, readme, 'reads', schema) // read the schema before writing docs
 }
 
 // Open the file, plant the schema, seed once if the graph is empty. Returns a
@@ -116,11 +117,10 @@ export let tasks = (db: DatabaseSync) =>
     order by e.eid
   `).all() as Task[]
 
-// Every edge, as {parent, child, type}. The parent depends on its children:
-// children block the parent, the parent contains its containss.
+// Every edge, as {parent, type, child} — each row IS the sentence.
 export let deps = (db: DatabaseSync) =>
   db.prepare(
-    'select parent_eid as parent, child_eid as child, type from dependency',
+    'select parent_eid as parent, type, child_eid as child from dependency',
   ).all() as Dep[]
 
 // `deno task seed` (or a direct run) bootstraps the file without the server.

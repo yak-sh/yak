@@ -8,9 +8,9 @@ memory substrate, modelled as a **star ECS** graph, rendered by a Fresh app.
 - **Component tables** hang off that id. `task` (`eid` PK/FK, `title`, `status`,
   `body`) is the only one so far; more kinds slot in without touching this one.
 - **`dependency`** — typed `eid ↔ eid` edges, so anything relates to anything:
-  - `blocks` — hard gate (the child gates the parent),
+  - `needs` — hard gate (the parent waits on the child),
   - `contains` — decomposition (children roll up to the parent),
-  - `informs` — read-first, never gates.
+  - `reads` — read-first, never gates.
 
 Not yet here (follows the migration plan): v1 data, auth, the API surface,
 sqlite-vector embeddings, typed short ids (T-123 / C-123).
@@ -20,7 +20,7 @@ sqlite-vector embeddings, typed short ids (T-123 / C-123).
 ```sql
 entity(eid pk, kind, created_at)
 task(eid pk→entity.eid, title, status, body)
-dependency(parent_eid→entity, child_eid→entity, type ∈ blocks|contains|informs)
+dependency(parent_eid→entity, type ∈ needs|contains|reads, child_eid→entity)
 ```
 
 `db.ts` owns the file. By default it lives at `~/.tasks/tasks.db` — outside the
