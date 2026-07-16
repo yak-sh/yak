@@ -267,13 +267,44 @@ export let Canvas = ({ eid }: { eid: string }) => {
     )
   }
 
-  // A drag dropped on the canvas spawns a new card with that view.
-  let drop = (e: DragEvent & { currentTarget: HTMLDivElement }) => {
-    let data = e.dataTransfer?.getData('application/x-tasks-card')
-    if (!data) return
+  // A drag dropped on the canvas spawns a new card: our own payloads carry
+  // the view + grab offset; anything from outside (desktop files, dragged
+  // links or text) runs the same pipeline as pasting.
+  let drop = async (e: DragEvent & { currentTarget: HTMLDivElement }) => {
+    let dt = e.dataTransfer
+    if (!dt) return
     e.preventDefault()
-    let { target_eid, view, w, ox, oy } = JSON.parse(data)
-    spawnAt([], target_eid, view, w, e.clientX, e.clientY, ox, oy)
+    let sx = e.clientX
+    let sy = e.clientY
+    let data = dt.getData('application/x-tasks-card')
+    if (data) {
+      let { target_eid, view, w, ox, oy } = JSON.parse(data)
+      spawnAt([], target_eid, view, w, sx, sy, ox, oy)
+      return
+    }
+    let texts: string[] = []
+    for (let f of dt.files) {
+      if (f.type.startsWith('text/') || !f.type) texts.push(await f.text())
+    }
+    if (!texts.length) {
+      let uri = dt.getData('text/uri-list').split('\n')
+        .find((l) => l && !l.startsWith('#'))
+      let t = uri ?? dt.getData('text/plain')
+      if (t) texts.push(t)
+    }
+    for (let [i, t] of texts.entries()) {
+      let spec = pasted(t)
+      if (spec) {
+        spawnAt(
+          spec.changes,
+          spec.target,
+          spec.view,
+          spec.w ?? 320,
+          sx + i * 24,
+          sy + i * 24,
+        )
+      }
+    }
   }
 
   let { x, y, zoom, w, h } = camera.value
