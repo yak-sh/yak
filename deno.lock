@@ -4,6 +4,7 @@
     "npm:@preact/signals-core@^1.14.0": "1.14.4",
     "npm:@preact/signals@^2.9.0": "2.9.4_preact@10.29.7",
     "npm:preact@^10.29.1": "10.29.7",
+    "npm:snarkdown@2": "2.0.0",
     "npm:sucrase@^3.35.0": "3.35.1"
   },
   "npm": {
@@ -75,6 +76,9 @@
     "preact@10.29.7": {
       "integrity": "sha512-DCHYrK/B10yUD3ZjLfhZ3WIE/9Vf9VFUODcRE2dRomTYDpJk6z6L9wecSfhfE6M9ZTHUdyQkoC46arIDhEV84Q=="
     },
+    "snarkdown@2.0.0": {
+      "integrity": "sha512-MgL/7k/AZdXCTJiNgrO7chgDqaB9FGM/1Tvlcenenb7div6obaDATzs16JhFyHHBGodHT3B7RzRc5qk8pFhg3A=="
+    },
     "sucrase@3.35.1": {
       "integrity": "sha512-DhuTmvZWux4H1UOnWMB3sk0sbaCVOoQZjv8u1rDoTV0HTdGem9hkAZtl4JZy8P2z4Bg0nT+YMeOFyVr4zcG5Tw==",
       "dependencies": [
@@ -116,6 +120,7 @@
       "npm:@preact/signals-core@^1.14.0",
       "npm:@preact/signals@^2.9.0",
       "npm:preact@^10.29.1",
+      "npm:snarkdown@2",
       "npm:sucrase@^3.35.0"
     ]
   }

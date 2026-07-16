@@ -18,6 +18,7 @@
     "preact": "npm:preact@^10.29.1",
     "@preact/signals": "npm:@preact/signals@^2.9.0",
     "@preact/signals-core": "npm:@preact/signals-core@^1.14.0",
+    "snarkdown": "npm:snarkdown@^2.0.0",
     "sucrase": "npm:sucrase@^3.35.0"
   },
   "compilerOptions": {

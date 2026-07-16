@@ -16,7 +16,9 @@ import {
 } from '../live.ts'
 import { type Renderer, resolve, View } from '../components/View.tsx'
 import { idOf } from '../components/views/Id.tsx'
+import { Dot } from '../components/Dot.tsx'
 import { clipboard } from './paint.ts'
+import { Md } from './md.tsx'
 
 export let sel = signal({ col: 0, row: 0 })
 export let quit = signal(false)
@@ -164,8 +166,31 @@ let TuiBoard = ({ e }: { e: Ent }) => (
   </div>
 )
 
+// The web Task renders its body as markdown through innerHTML, which the
+// fake DOM ignores — here the raw source IS the readable form (that's
+// markdown's whole point), so the TUI overrides Task with a plain-text
+// twin.
+let TuiTask = ({ e }: { e: Ent }) => (
+  <div class='Task'>
+    <div class='Task_Head'>
+      <Dot status={e.task!.status} />
+      <span class='Task_Title'>{e.task!.title}</span>
+      <View eid={e.eid} view='Id' />
+    </div>
+    {e.task!.body && (
+      <p class='Task_Body'>
+        <Md text={e.task!.body} />
+      </p>
+    )}
+    {e.refs.map((r) => (
+      <View key={r.child} eid={r.child} view='Dependency' type={r.type} />
+    ))}
+  </div>
+)
+
 export let overrides: Renderer[] = [
   { view: 'Board', match: (e) => !!e.project, Render: TuiBoard },
+  { view: 'Task', match: (e) => !!e.task, Render: TuiTask },
 ]
 
 let commands: Record<string, (args: string[]) => string | void> = {

@@ -56,6 +56,9 @@ export class TElement extends TNode {
   get firstChild(): TNode | null {
     return this.childNodes[0] ?? null
   }
+  attr(k: string): string | undefined {
+    return this.attrs.get(k)
+  }
   get className(): string {
     return this.attrs.get('class') ?? ''
   }

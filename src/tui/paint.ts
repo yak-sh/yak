@@ -9,7 +9,11 @@ type Style = {
   fg?: string // hex
   bold?: boolean
   dim?: boolean
+  italic?: boolean
+  underline?: boolean
+  strike?: boolean
   inverse?: boolean
+  href?: string // OSC 8 hyperlink target (from an <a>, not the sheet)
   glyph?: string // paint this instead of children (the Dot)
   indent?: number // shift this element's lines right
   gap?: boolean // blank line after this element's lines
@@ -51,6 +55,16 @@ let sheet: Record<string, Style> = {
   'Debug_Status-done': { fg: '#a7c080' },
   Debug_Kids: { indent: 2 },
   Debug_More: { fg: '#7a8478' },
+
+  // markdown (the TUI Md renderer's spans)
+  Md_B: { bold: true },
+  Md_I: { italic: true },
+  Md_S: { strike: true },
+  Md_Code: { fg: '#e69875' },
+  Md_A: { fg: '#7fbbb3', underline: true },
+  Md_H: { bold: true, fg: '#a7c080' },
+  Md_Q: { fg: '#9da9a0', italic: true },
+  Md_Fence: { fg: '#7a8478' },
 }
 
 type Seg = { text: string; style: Style }
@@ -64,12 +78,16 @@ let own = (el: TElement): Style =>
     ...el.className.split(/\s+/).filter(Boolean).map((c) => sheet[c] ?? {}),
   )
 
-// Inherit color/weight down the tree; glyph/indent/gap act only where set.
+// Inherit text style down the tree; glyph/indent/gap act only where set.
 let inherit = (parent: Style, node: Style): Style => ({
   fg: node.fg ?? parent.fg,
   bold: node.bold ?? parent.bold,
   dim: node.dim ?? parent.dim,
+  italic: node.italic ?? parent.italic,
+  underline: node.underline ?? parent.underline,
+  strike: node.strike ?? parent.strike,
   inverse: node.inverse ?? parent.inverse,
+  href: node.href ?? parent.href,
 })
 
 let inline = (n: TNode, st: Style): Seg[] => {
@@ -82,6 +100,7 @@ let inline = (n: TNode, st: Style): Seg[] => {
   }
   let el = n as TElement
   let o = own(el)
+  if (el.localName == 'a' && el.attr('href')) o.href = el.attr('href')
   let s = inherit(st, o)
   if (o.glyph) return [{ text: o.glyph, style: s }]
   return el.childNodes.flatMap((c) => inline(c, s))
@@ -106,7 +125,13 @@ let blocks = (el: TElement, st: Style): Line[] => {
       if (c instanceof TText || INLINE.has((c as TElement).localName)) {
         let segs = inline(c, s)
         if (!segs.length) continue
-        if (cur.length) cur.push({ text: ' ', style: s })
+        // The gap between inline siblings, unless one side brought its own.
+        if (
+          cur.length && !/\s$/.test(cur[cur.length - 1].text) &&
+          !/^\s/.test(segs[0].text)
+        ) {
+          cur.push({ text: ' ', style: s })
+        }
         for (let seg of segs) {
           // Newlines inside a text node (a task body) are line breaks.
           seg.text.split('\n').forEach((part, i) => {
@@ -141,8 +166,14 @@ let ansi = (line: Line): string =>
     if (s.style.fg) codes.push(`38;2;${rgb(s.style.fg).join(';')}`)
     if (s.style.bold) codes.push('1')
     if (s.style.dim) codes.push('2')
+    if (s.style.italic) codes.push('3')
+    if (s.style.underline) codes.push('4')
     if (s.style.inverse) codes.push('7')
-    return codes.length ? `\x1b[${codes.join(';')}m${s.text}\x1b[0m` : s.text
+    if (s.style.strike) codes.push('9')
+    let t = codes.length ? `\x1b[${codes.join(';')}m${s.text}\x1b[0m` : s.text
+    return s.style.href // OSC 8: the terminal makes it clickable
+      ? `\x1b]8;;${s.style.href}\x07${t}\x1b]8;;\x07`
+      : t
   }).join('')
 
 let clip = (line: Line, width: number): Line => {
