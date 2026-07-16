@@ -360,9 +360,9 @@
    editing adds only a caret and a seam under the text. */
 [contenteditable='plaintext-only'] {
   user-select: text; /* .Card_Tabs turns selection off; editing needs it back */
-  outline: none;
-  border-bottom: 1px solid var(--accent);
-  margin-bottom: -1px; /* the seam doesn't nudge the line */
+  display: inline-block; /* one rectangle — the outline hugs the whole edit */
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
   caret-color: var(--accent);
   cursor: text;
   white-space: pre-wrap; /* multiline sources keep their newlines */
