@@ -28,7 +28,11 @@ let { Tabs, X, Scroll } = Frame
 export let Card = ({ p }: { p: Pinned }) => {
   let down = (e: PointerEvent & { currentTarget: HTMLDivElement }) => {
     if (!(e.target instanceof Element)) return
-    if (e.target.closest('button, a, input')) return
+    if (
+      e.target.closest('button, a, input, [contenteditable="plaintext-only"]')
+    ) {
+      return // an editing title owns its clicks — place the cursor, no drag
+    }
     if (!e.target.closest('.Card_Tabs')) return
     let el = e.currentTarget
     let from = { x: p.x, y: p.y }

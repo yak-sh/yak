@@ -332,6 +332,16 @@
   margin: 0; /* card context: the titlebar is the head, no gap to bridge */
 }
 
+/* In-place editing (double-click a title): the same node, the same look —
+   editing adds only a caret and a seam under the text. */
+[contenteditable='plaintext-only'] {
+  outline: none;
+  border-bottom: 1px solid var(--accent);
+  margin-bottom: -1px; /* the seam doesn't nudge the line */
+  caret-color: var(--accent);
+  cursor: text;
+}
+
 .Dot {
   --dot: var(--dim);
   flex: none;

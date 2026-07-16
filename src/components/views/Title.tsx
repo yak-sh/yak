@@ -1,6 +1,7 @@
 import { type Ent } from '../../types.ts'
 import { block } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
+import { Edit } from '../Edit.tsx'
 import { View } from '../View.tsx'
 
 let Frame = block('div', 'CardTitle', { Text: 'span' })
@@ -14,14 +15,18 @@ export let TaskTitle = ({ e }: { e: Ent }) => (
   <Frame>
     <Dot status={e.task!.status} />
     <View eid={e.eid} view='Id' />
-    <Text>{e.task!.title}</Text>
+    <Text>
+      <Edit eid={e.eid} comp='task' prop='title' />
+    </Text>
   </Frame>
 )
 
 export let ProjectTitle = ({ e }: { e: Ent }) => (
   <Frame>
     <View eid={e.eid} view='Id' />
-    <Text>{e.project!.title}</Text>
+    <Text>
+      <Edit eid={e.eid} comp='project' prop='title' />
+    </Text>
   </Frame>
 )
 

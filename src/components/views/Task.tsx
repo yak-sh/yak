@@ -1,6 +1,7 @@
 import { type Ent } from '../../types.ts'
 import { block } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
+import { Edit } from '../Edit.tsx'
 import { View } from '../View.tsx'
 
 let Frame = block('div', 'Task', { Head: 'div', Title: 'span', Body: 'p' })
@@ -11,7 +12,9 @@ export let Task = ({ e }: { e: Ent }) => (
   <Frame>
     <Head>
       <Dot status={e.task!.status} />
-      <Title>{e.task!.title}</Title>
+      <Title>
+        <Edit eid={e.eid} comp='task' prop='title' />
+      </Title>
       <View eid={e.eid} view='Id' />
     </Head>
     {e.task!.body && <Body>{e.task!.body}</Body>}
