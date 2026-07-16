@@ -85,14 +85,23 @@ let b64 = (t: string) =>
   )
 
 // Arm a dragstart with the standard payload: the spawn card (for a canvas
-// drop — target + view + width), and, when the view's renderer has a file
-// form, the serialized file (for a desktop drop) plus text for editors.
+// drop — target + view + width, plus where in the dragged element the grab
+// happened, so the spawned card lands where the ghost was dropped), and,
+// when the view's renderer has a file form, the serialized file (for a
+// desktop drop) plus text for editors.
 export let dragData = (ev: DragEvent, eid: string, view: string, w = 320) => {
-  if (!ev.dataTransfer) return
+  if (!ev.dataTransfer || !(ev.currentTarget instanceof HTMLElement)) return
   let e = ent(eid)
+  let box = ev.currentTarget.getBoundingClientRect()
   ev.dataTransfer.setData(
     'application/x-tasks-card',
-    JSON.stringify({ target_eid: eid, view, w }),
+    JSON.stringify({
+      target_eid: eid,
+      view,
+      w,
+      ox: ev.clientX - box.left,
+      oy: ev.clientY - box.top,
+    }),
   )
   let f = resolve(e, view).file
   if (!f) return

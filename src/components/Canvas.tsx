@@ -200,17 +200,20 @@ export let Canvas = ({ eid }: { eid: string }) => {
     }
   }
 
-  // A tab dropped on the canvas spawns a new card with that view.
+  // A drag dropped on the canvas spawns a new card with that view, placed
+  // so the grab point inside the dragged element lands under the cursor —
+  // the card materializes where its ghost was dropped.
   let drop = (e: DragEvent & { currentTarget: HTMLDivElement }) => {
     let data = e.dataTransfer?.getData('application/x-tasks-card')
     if (!data) return
     e.preventDefault()
-    let { target_eid, view, w } = JSON.parse(data)
+    let { target_eid, view, w, ox = 24, oy = 12 } = JSON.parse(data)
     let at = toPlane(
       e.clientX,
       e.clientY,
       e.currentTarget.getBoundingClientRect(),
     )
+    let { zoom } = camera.value
     let card = uuid()
     mutate(
       { eid: card, name: 'card', comp: { eid: card, target_eid, view } },
@@ -220,8 +223,8 @@ export let Canvas = ({ eid }: { eid: string }) => {
         comp: {
           eid: card,
           canvas_eid: eid,
-          x: Math.round(at.x - 24),
-          y: Math.round(at.y - 12),
+          x: Math.round(at.x - ox / zoom),
+          y: Math.round(at.y - oy / zoom),
           w,
           h: 0,
           z: topZ(eid) + 1,
