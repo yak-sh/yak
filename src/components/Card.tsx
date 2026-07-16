@@ -1,7 +1,15 @@
 import { applyLocal, camera, ent, mutate, send, topZ } from '../live.ts'
 import { type Pinned } from '../types.ts'
+import { el } from './ui.tsx'
 import { applicable, resolve, View } from './View.tsx'
 import { idOf } from './views/Id.tsx'
+
+let Pin = el('div', 'Pin')
+let Frame = el('section', 'Card')
+let Tabs = el('header', 'Card_Tabs')
+let X = el('button', 'Card_X')
+let Tab = el('button', 'Tab')
+let Scroll = el('div', 'Card_Scroll')
 
 let b64 = (t: string) =>
   btoa(
@@ -71,40 +79,38 @@ export let Card = ({ p }: { p: Pinned }) => {
   }
 
   return (
-    <div
-      class='Pin'
+    <Pin
       style={`left:${p.x}px;top:${p.y}px;z-index:${p.z};` +
         (p.w ? `width:${p.w}px;` : '')}
       onPointerDown={down}
     >
-      <section class='Card'>
-        <header class='Card_Tabs'>
-          <button
+      <Frame>
+        <Tabs>
+          <X
             type='button'
-            class='Card_X'
             onClick={() => mutate({ eid: p.eid, name: 'entity', comp: null })}
           >
             ×
-          </button>
+          </X>
           {applicable(ent(p.target_eid)).map((v) => (
-            <button
+            <Tab
               type='button'
-              class={v == p.view ? 'Tab Tab-on' : 'Tab'}
+              mod={v == p.view && 'on'}
               draggable
-              onDragStart={(e) => drag(e, v)}
+              onDragStart={(e: DragEvent) => drag(e, v)}
               onClick={() =>
                 v != p.view &&
                 mutate({ eid: p.eid, name: 'card', comp: { view: v } })}
               key={v}
             >
               {v}
-            </button>
+            </Tab>
           ))}
-        </header>
-        <div class='Card_Scroll'>
+        </Tabs>
+        <Scroll>
           <View eid={p.target_eid} view={p.view} />
-        </div>
-      </section>
-    </div>
+        </Scroll>
+      </Frame>
+    </Pin>
   )
 }

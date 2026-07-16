@@ -12,7 +12,11 @@ import {
   topZ,
   uuid,
 } from '../live.ts'
+import { el as ui } from './ui.tsx'
 import { Card } from './Card.tsx'
+
+let Frame = ui('div', 'Canvas')
+let Plane = ui('div', 'Canvas_Plane')
 
 // The pannable, zoomable plane of pinned cards. The camera is a per-client,
 // per-canvas entity (canvases nest — a client has one camera per canvas it
@@ -230,22 +234,22 @@ export let Canvas = ({ eid }: { eid: string }) => {
   let tx = w / 2 - x * zoom
   let ty = h / 2 - y * zoom
   return (
-    <div
-      ref={el}
-      class={glide.value ? 'Canvas Canvas-glide' : 'Canvas'}
+    <Frame
+      elRef={el}
+      mod={glide.value && 'glide'}
       style={`background-position:${tx}px ${ty}px;` +
         `background-size:${24 * zoom}px ${24 * zoom}px`}
       onPointerDown={down}
       onWheel={wheel}
-      onDragOver={(e) => e.preventDefault()}
+      onDragOver={(e: DragEvent) => e.preventDefault()}
       onDrop={drop}
     >
-      <div
-        class={glide.value ? 'Canvas_Plane Canvas_Plane-glide' : 'Canvas_Plane'}
+      <Plane
+        mod={glide.value && 'glide'}
         style={`transform:translate(${tx}px,${ty}px) scale(${zoom})`}
       >
         {pinned(eid).map((p) => <Card key={p.eid} p={p} />)}
-      </div>
-    </div>
+      </Plane>
+    </Frame>
   )
 }

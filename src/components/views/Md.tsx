@@ -1,5 +1,6 @@
 import { type Ent } from '../../types.ts'
 import { ent } from '../../live.ts'
+import { el } from '../ui.tsx'
 import { idOf } from './Id.tsx'
 
 // A task as markdown with frontmatter — the file a dragged MD tab drops on
@@ -21,4 +22,6 @@ export let mdText = (e: Ent) => {
   ].join('\n')
 }
 
-export let Md = ({ e }: { e: Ent }) => <pre class='Md'>{mdText(e)}</pre>
+let Pre = el('pre', 'Md')
+
+export let Md = ({ e }: { e: Ent }) => <Pre>{mdText(e)}</Pre>

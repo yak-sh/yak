@@ -78,7 +78,7 @@
     border-bottom: 1px solid var(--border);
     background: var(--surface);
   }
-  & .sub {
+  & .App_Sub {
     font-weight: 400;
     color: var(--dim);
   }

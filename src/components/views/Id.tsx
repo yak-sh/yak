@@ -1,4 +1,5 @@
 import { type Ent } from '../../types.ts'
+import { el } from '../ui.tsx'
 
 let prefix: Record<string, string> = { task: 'T', project: 'P' }
 
@@ -6,6 +7,8 @@ let prefix: Record<string, string> = { task: 'T', project: 'P' }
 export let idOf = (e: Ent) =>
   `${prefix[e.kind] ?? e.kind[0].toUpperCase()}-${e.num}`
 
+let Chip = el('span', 'Id')
+
 // The universal id chip: T-7, P-2, … — one element for every id on screen,
 // so ids grow drag/click behavior in exactly one place.
-export let Id = ({ e }: { e: Ent }) => <span class='Id'>{idOf(e)}</span>
+export let Id = ({ e }: { e: Ent }) => <Chip>{idOf(e)}</Chip>
