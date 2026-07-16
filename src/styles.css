@@ -24,12 +24,14 @@
   --red: #e67e80;
   --orange: #e69875;
   --purple: #d699b6;
+  --blue: #7fbbb3;
+  --yellow: #dbbc7f;
   --soft: color-mix(in srgb, var(--text) 6%, transparent);
 
-  /* status primitives → the dot colours consume these */
-  --open: #7fbbb3; /* aqua */
-  --wip: #dbbc7f; /* yellow */
-  --done: #a7c080; /* green */
+  /* status colours — dots and status text consume these */
+  --open: var(--blue);
+  --wip: var(--yellow);
+  --done: var(--accent);
 }
 
 :where(body) {
@@ -247,6 +249,15 @@
   margin: var(--half-gap) var(--half-gap) 0 0;
   font-size: 12px;
   color: var(--muted);
+}
+.Dependency_Type-requires {
+  color: var(--red);
+}
+.Dependency_Type-reads {
+  color: var(--blue);
+}
+.Dependency_Type-contains {
+  color: var(--yellow);
 }
 
 .Json,
