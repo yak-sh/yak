@@ -9,6 +9,7 @@ import { Dependency } from './views/Dependency.tsx'
 import { Debug, DebugAnyItem, DebugTaskItem } from './views/Debug.tsx'
 import { Json } from './views/Json.tsx'
 import { Md, mdText } from './views/Md.tsx'
+import { Web } from './views/Web.tsx'
 
 // The vocabulary: a VIEW is a string — a named way of looking at an entity
 // ('Task', 'Debug', 'Id', …). It's what a card stores and what a tab picks.
@@ -28,6 +29,7 @@ type Renderer = {
 let registry: Renderer[] = [
   { view: 'Task', match: (e) => !!e.task, Render: Task },
   { view: 'Board', match: (e) => !!e.project, Render: Board },
+  { view: 'Web', match: (e) => !!e.web, Render: Web },
   {
     view: 'MD',
     match: (e) => !!e.task,
@@ -55,7 +57,7 @@ let registry: Renderer[] = [
 // entity iff some renderer serves it; Debug's catch-all means every card
 // gets a Debug tab. Views not listed here (Id, Dependency) are internal —
 // reachable only by explicit name.
-let tabs = ['Task', 'Board', 'MD', 'JSON', 'Debug']
+let tabs = ['Task', 'Board', 'Web', 'MD', 'JSON', 'Debug']
 
 export let applicable = (e: Ent) =>
   tabs.filter((v) => registry.some((r) => r.view == v && r.match(e)))

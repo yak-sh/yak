@@ -15,6 +15,7 @@ export type Task = {
 }
 
 export type Proj = { eid: string; title: string }
+export type Web = { eid: string; url: string } // an external page, framed
 export type CardComp = { eid: string; target_eid: string; view: string }
 export type Pin = {
   eid: string
@@ -62,6 +63,7 @@ export type Ent = {
   kind: string
   task?: Task
   project?: Proj
+  web?: Web
   card?: CardComp
   pin?: Pin
   client?: Client

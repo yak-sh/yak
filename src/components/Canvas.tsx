@@ -3,6 +3,7 @@ import { useSignal } from '@preact/signals'
 import {
   camera,
   clientId,
+  ent,
   mutate,
   myCamera,
   pinned,
@@ -12,7 +13,10 @@ import {
   topZ,
   uuid,
 } from '../live.ts'
+import { type Change } from '../types.ts'
+import { pasted } from '../paste.ts'
 import { block } from './ui.tsx'
+import { applicable } from './View.tsx'
 import { Card } from './Card.tsx'
 
 let Frame = block('div', 'Canvas', { Plane: 'div' })
@@ -25,6 +29,7 @@ let { Plane } = Frame
 // plane coords: translate = viewport/2 - center * zoom.
 export let Canvas = ({ eid }: { eid: string }) => {
   let el = useRef<HTMLDivElement>(null)
+  let mouse = useRef<{ x: number; y: number } | null>(null) // paste lands here
   let cam = useRef('') // this client's camera eid for THIS canvas
   let timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   let dirty = useRef(new Set<string>())
@@ -137,10 +142,29 @@ export let Canvas = ({ eid }: { eid: string }) => {
       queue('x', 'y', 'zoom')
     }
     addEventListener('keydown', key)
+
+    // Paste lands at the cursor (or the viewport centre): the parser turns
+    // eids, T-123 ids, URLs, JSON, or plain text into the right entity and
+    // a card spawns on it.
+    let paste = (ev: ClipboardEvent) => {
+      if (
+        ev.target instanceof HTMLElement &&
+        ev.target.matches('input, textarea, select, [contenteditable]')
+      ) return
+      let spec = pasted(ev.clipboardData?.getData('text/plain') ?? '')
+      if (!spec) return
+      ev.preventDefault()
+      let box = el.current!.getBoundingClientRect()
+      let { x, y } = mouse.current ??
+        { x: box.left + box.width / 2, y: box.top + box.height / 2 }
+      spawnAt(spec.changes, spec.target, spec.view, spec.w ?? 320, x, y)
+    }
+    addEventListener('paste', paste)
     return () => {
       s.removeEventListener('message', hear)
       removeEventListener('resize', resize)
       removeEventListener('keydown', key)
+      removeEventListener('paste', paste)
     }
   }, [eid])
 
@@ -200,37 +224,56 @@ export let Canvas = ({ eid }: { eid: string }) => {
     }
   }
 
-  // A drag dropped on the canvas spawns a new card with that view, placed
-  // so the grab point inside the dragged element lands under the cursor —
-  // the card materializes where its ghost was dropped.
-  let drop = (e: DragEvent & { currentTarget: HTMLDivElement }) => {
-    let data = e.dataTransfer?.getData('application/x-tasks-card')
-    if (!data) return
-    e.preventDefault()
-    let { target_eid, view, w, ox = 24, oy = 12 } = JSON.parse(data)
-    let at = toPlane(
-      e.clientX,
-      e.clientY,
-      e.currentTarget.getBoundingClientRect(),
-    )
+  // Spawn a card+pin at a screen point, minting any comps first. With a
+  // grab offset the card lands where its drag ghost was dropped; without
+  // one it drops centered-x with the titlebar middle under the point.
+  let spawnAt = (
+    changes: Change[],
+    target: string,
+    view: string | undefined,
+    w: number,
+    sx: number,
+    sy: number,
+    ox?: number,
+    oy?: number,
+  ) => {
+    if (changes.length) mutate(...changes)
+    let at = toPlane(sx, sy, el.current!.getBoundingClientRect())
     let { zoom } = camera.value
     let card = uuid()
     mutate(
-      { eid: card, name: 'card', comp: { eid: card, target_eid, view } },
+      {
+        eid: card,
+        name: 'card',
+        comp: {
+          eid: card,
+          target_eid: target,
+          view: view ?? applicable(ent(target))[0] ?? 'JSON',
+        },
+      },
       {
         eid: card,
         name: 'pin',
         comp: {
           eid: card,
           canvas_eid: eid,
-          x: Math.round(at.x - ox / zoom),
-          y: Math.round(at.y - oy / zoom),
+          x: Math.round(at.x - (ox != null ? ox / zoom : w / 2)),
+          y: Math.round(at.y - (oy != null ? oy / zoom : 15)),
           w,
           h: 0,
           z: topZ(eid) + 1,
         },
       },
     )
+  }
+
+  // A drag dropped on the canvas spawns a new card with that view.
+  let drop = (e: DragEvent & { currentTarget: HTMLDivElement }) => {
+    let data = e.dataTransfer?.getData('application/x-tasks-card')
+    if (!data) return
+    e.preventDefault()
+    let { target_eid, view, w, ox, oy } = JSON.parse(data)
+    spawnAt([], target_eid, view, w, e.clientX, e.clientY, ox, oy)
   }
 
   let { x, y, zoom, w, h } = camera.value
@@ -243,6 +286,12 @@ export let Canvas = ({ eid }: { eid: string }) => {
       style={`background-position:${tx}px ${ty}px;` +
         `background-size:${24 * zoom}px ${24 * zoom}px`}
       onPointerDown={down}
+      onPointerMove={(e: PointerEvent) => {
+        mouse.current = { x: e.clientX, y: e.clientY }
+      }}
+      onPointerLeave={() => {
+        mouse.current = null
+      }}
       onWheel={wheel}
       onDragOver={(e: DragEvent) => e.preventDefault()}
       onDrop={drop}

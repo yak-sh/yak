@@ -37,6 +37,10 @@ let schema = `
     eid   text primary key references entity(eid),
     title text not null
   );
+  create table if not exists web (
+    eid text primary key references entity(eid),
+    url text not null
+  );
   create table if not exists card (
     eid        text primary key references entity(eid),
     target_eid text not null references entity(eid),
@@ -210,6 +214,7 @@ let cmps: Record<string, string[]> = {
   entity: ['kind'],
   task: ['title', 'status', 'body', 'priority'],
   project: ['title'],
+  web: ['url'],
   card: ['target_eid', 'view'],
   pin: ['canvas_eid', 'x', 'y', 'w', 'h', 'z'],
   client: ['user_agent'], // ip is server-stamped, never writable over the wire

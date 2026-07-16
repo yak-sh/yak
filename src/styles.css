@@ -183,11 +183,12 @@
 .Board {
   display: flex;
   gap: var(--gap);
-  align-items: start;
+  align-items: stretch; /* every column is a full-height drop target */
 }
 .Board_Col {
   flex: 1;
   min-width: 0;
+  min-height: 5rem; /* droppable even when the whole board is empty */
   display: grid;
   gap: var(--half-gap);
   align-content: start;
@@ -261,6 +262,14 @@
 }
 .Dependency_Type-contains {
   color: var(--yellow);
+}
+
+/* An external page framed in a card. */
+.Web {
+  width: 100%;
+  height: 420px;
+  border: 0;
+  background: #fff;
 }
 
 .Json,

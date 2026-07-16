@@ -13,12 +13,14 @@ import {
   type Pinned,
   type Proj,
   type Task,
+  type Web,
 } from './types.ts'
 
 type Comps = {
   entity?: { eid: string; num: number; kind: string; created_at: string }
   task?: Task
   project?: Proj
+  web?: Web
   card?: CardComp
   pin?: Pin
   client?: Client
@@ -105,6 +107,7 @@ export let ent = (eid: string): Ent => {
     kind: r.entity?.kind ?? 'entity',
     task: r.task,
     project: r.project,
+    web: r.web,
     card: r.card,
     pin: r.pin,
     client: r.client,
