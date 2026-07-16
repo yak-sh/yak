@@ -8,7 +8,7 @@ export let Task = ({ e }: { e: Ent }) => (
     <div class='Task_Head'>
       <Dot status={e.task!.status} />
       <span class='Task_Title'>{e.task!.title}</span>
-      <span class='Task_Id'>T-{e.num}</span>
+      <View eid={e.eid} view='Id' />
     </div>
     {e.task!.body && <p class='Task_Body'>{e.task!.body}</p>}
     {e.refs.map((r) => (

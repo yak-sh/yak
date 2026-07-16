@@ -2,31 +2,16 @@ import { type ComponentChildren } from 'preact'
 import { useEffect } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import { IS_BROWSER } from 'fresh/runtime'
-
-// One socket per client, lazily opened; batches queue behind the handshake.
-let ws: WebSocket | null = null
-let sock = () => {
-  if (ws && ws.readyState <= WebSocket.OPEN) return ws
-  ws = new WebSocket(`ws://${location.host}/ws`)
-  return ws
-}
-let send = (change: unknown) => {
-  let s = sock()
-  let msg = JSON.stringify([change])
-  if (s.readyState == WebSocket.OPEN) s.send(msg)
-  else s.addEventListener('open', () => s.send(msg), { once: true })
-}
+import { camera, send, sock } from '../live.ts'
 
 // The draggable pin around a server-rendered card: geometry lives here, the
 // card content stays static HTML. Dropping sends the whole pin component over
 // the sync socket; a pin change arriving for this eid moves the card.
-export let Drag = ({ eid, canvas, x, y, w, h, children }: {
+export let Drag = ({ eid, x, y, w, children }: {
   eid: string
-  canvas: string
   x: number
   y: number
   w: number
-  h: number
   children: ComponentChildren
 }) => {
   let pos = useSignal({ x, y })
@@ -37,7 +22,8 @@ export let Drag = ({ eid, canvas, x, y, w, h, children }: {
     let hear = (m: MessageEvent) => {
       for (let c of JSON.parse(String(m.data))) {
         if (c.eid == eid && c.name == 'pin' && c.comp) {
-          pos.value = { x: c.comp.x, y: c.comp.y }
+          let { x, y } = { ...pos.value, ...c.comp }
+          pos.value = { x, y }
         }
       }
     }
@@ -50,25 +36,26 @@ export let Drag = ({ eid, canvas, x, y, w, h, children }: {
       return
     }
     let el = e.currentTarget
-    let dx = e.clientX - pos.value.x
-    let dy = e.clientY - pos.value.y
+    let from = pos.value
+    let sx = e.clientX
+    let sy = e.clientY
     el.setPointerCapture(e.pointerId)
     let move = (e: PointerEvent) => {
-      pos.value = { x: e.clientX - dx, y: e.clientY - dy }
+      // Pointer deltas are screen px; the pin lives in plane px.
+      let z = camera.value.zoom
+      pos.value = {
+        x: from.x + (e.clientX - sx) / z,
+        y: from.y + (e.clientY - sy) / z,
+      }
     }
     let up = () => {
       el.removeEventListener('pointermove', move)
       el.removeEventListener('pointerup', up)
+      // A drag only moves the pin — patch just x and y.
       send({
         eid,
         name: 'pin',
-        comp: {
-          canvas_eid: canvas,
-          x: Math.round(pos.value.x),
-          y: Math.round(pos.value.y),
-          w,
-          h,
-        },
+        comp: { x: Math.round(pos.value.x), y: Math.round(pos.value.y) },
       })
     }
     el.addEventListener('pointermove', move)

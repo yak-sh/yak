@@ -1,6 +1,7 @@
 import { define } from '../utils.ts'
 import { db, pinned, rootCanvas } from '../db.ts'
 import { Card } from '../components/Card.tsx'
+import { Canvas } from '../islands/Canvas.tsx'
 import { Drag } from '../islands/Drag.tsx'
 
 // The root is a canvas entity; everything on screen is a pinned card viewing
@@ -13,21 +14,13 @@ export default define.page(function Home() {
       <h1>
         Tasks <span class='sub'>· the fleet entity graph</span>
       </h1>
-      <div class='Canvas'>
+      <Canvas eid={canvas.eid}>
         {pinned(db, canvas.eid).map((p) => (
-          <Drag
-            key={p.eid}
-            eid={p.eid}
-            canvas={p.canvas_eid}
-            x={p.x}
-            y={p.y}
-            w={p.w}
-            h={p.h}
-          >
+          <Drag key={p.eid} eid={p.eid} x={p.x} y={p.y} w={p.w}>
             <Card p={p} />
           </Drag>
         ))}
-      </div>
+      </Canvas>
     </main>
   )
 })

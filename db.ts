@@ -36,6 +36,29 @@ export type Pin = {
   h: number
 }
 
+// A browser identity: its uuid is minted client-side into localStorage on
+// first visit. ip is server-stamped (a client can't self-report one).
+export type Client = {
+  eid: string
+  user_agent: string
+  ip: string
+}
+
+// A camera joins a client to a canvas: per-client pan/zoom, one row per
+// (client, canvas) pair — canvases nest, so this is NOT keyed by the client.
+// x/y is the viewport CENTER in plane coords; w/h is the viewport size in
+// screen px, stored so other clients can render each other's viewports.
+export type Camera = {
+  eid: string
+  client_eid: string
+  canvas_eid: string
+  x: number
+  y: number
+  zoom: number
+  w: number
+  h: number
+}
+
 export type Dep = { parent: string; type: Edge; child: string }
 
 // An outgoing edge, verb + child — the Dependency view resolves the name.
@@ -51,6 +74,8 @@ export type Ent = {
   project?: Proj
   card?: Card
   pin?: Pin
+  client?: Client
+  camera?: Camera
   refs: Ref[]
   kids: Ent[]
 }
@@ -90,6 +115,22 @@ let schema = `
     y integer not null,
     w integer not null,
     h integer not null
+  );
+  create table if not exists client (
+    eid        text primary key references entity(eid),
+    user_agent text not null default '',
+    ip         text not null default ''
+  );
+  create table if not exists camera (
+    eid        text primary key references entity(eid),
+    client_eid text not null references entity(eid),
+    canvas_eid text not null references entity(eid),
+    x    real not null default 0,
+    y    real not null default 0,
+    zoom real not null default 1,
+    w    real not null default 0,
+    h    real not null default 0,
+    unique (client_eid, canvas_eid)
   );
   create table if not exists dependency (
     parent_eid text not null references entity(eid),
@@ -234,10 +275,17 @@ export let bundle = (db: DatabaseSync, eid: string): Ent => {
     project: comp<Proj>('project'),
     card: comp<Card>('card'),
     pin: comp<Pin>('pin'),
+    client: comp<Client>('client'),
+    camera: comp<Camera>('camera'),
     refs,
     kids,
   }
 }
+
+// A client's camera over one canvas, for restoring pan/zoom on page load.
+export let camera = (db: DatabaseSync, client: string, canvas: string) =>
+  db.prepare('select * from camera where client_eid = ? and canvas_eid = ?')
+    .get(client, canvas) as Camera | undefined
 
 // Point a card at a different lens — the tab click's write.
 export let setView = (db: DatabaseSync, card: string, view: string) =>
@@ -270,12 +318,13 @@ export let deps = (db: DatabaseSync) =>
     'select parent_eid as parent, type, child_eid as child from dependency',
   ).all() as Dep[]
 
-// The sync unit — one component row landing on (or leaving) an entity. A
-// batch is a flat array; components travel WHOLE (a comp is small by design —
-// partial rows aren't merged). comp: null deletes the component;
-// {name: 'entity', comp: null} deletes the entity, its components, and every
-// edge touching it. Deleting a bunch is just a long batch. Client-minted
-// UUID eids are welcome — the spine (and its num) appears on first touch.
+// The sync unit — one component patch landing on (or leaving) an entity. A
+// batch is a flat array; a comp is a PATCH: omitted columns are untouched
+// (a single prop change sends a single prop), `prop: null` clears that
+// column, comp: null deletes the component, and {name: 'entity', comp: null}
+// deletes the entity, its components, and every edge touching it. Deleting a
+// bunch is just a long batch. Client-minted UUID eids are welcome — the
+// spine (and its num) appears on first touch.
 export type Change = {
   eid: string
   name: string
@@ -289,6 +338,8 @@ let cmps: Record<string, string[]> = {
   project: ['title'],
   card: ['target_eid', 'view'],
   pin: ['canvas_eid', 'x', 'y', 'w', 'h'],
+  client: ['user_agent'], // ip is server-stamped, never writable over the wire
+  camera: ['client_eid', 'canvas_eid', 'x', 'y', 'zoom', 'w', 'h'],
 }
 
 // Apply a batch atomically. Unknown component names are ignored (a newer
@@ -316,19 +367,33 @@ export let apply = (db: DatabaseSync, changes: Change[]) => {
       }
       if (name == 'entity') {
         spine(db, eid, String(comp.kind ?? 'entity'))
-        db.prepare('update entity set kind = ? where eid = ?')
-          .run(String(comp.kind ?? 'entity'), eid)
+        if ('kind' in comp) {
+          db.prepare('update entity set kind = ? where eid = ?')
+            .run(String(comp.kind), eid)
+        }
         continue
       }
       spine(db, eid, name)
-      let marks = cols.map(() => '?').join(', ')
-      db.prepare(
-        `insert or replace into ${name} (eid, ${cols.join(', ')})
-         values (?, ${marks})`,
-      ).run(
-        eid,
-        ...cols.map((c) => (comp[c] ?? null) as string | number | null),
-      )
+      let sent = cols.filter((c) => c in comp)
+      let vals = sent.map((c) => comp[c] as string | number | null)
+      // Update first (a patch can't re-satisfy not-null columns an insert
+      // would demand); insert only when the row doesn't exist yet — creating
+      // one is the moment its required columns are due.
+      let hit = sent.length
+        ? db.prepare(
+          `update ${name} set ${sent.map((c) => `${c} = ?`).join(', ')}
+           where eid = ?`,
+        ).run(...vals, eid).changes
+        : 0
+      if (!hit && sent.length) {
+        db.prepare(
+          `insert into ${name} (eid${sent.map((c) => `, ${c}`).join('')})
+           values (?${', ?'.repeat(sent.length)})`,
+        ).run(eid, ...vals)
+      } else if (!sent.length) {
+        // A bare {} touch: create with defaults if possible, else no-op.
+        db.prepare(`insert or ignore into ${name} (eid) values (?)`).run(eid)
+      }
     }
     db.exec('commit')
   } catch (e) {

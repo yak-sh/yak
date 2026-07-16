@@ -79,14 +79,21 @@
   }
 }
 
-/* The canvas: a dot-grid plane of absolutely-pinned cards (pan/zoom later). */
+/* The canvas: a pannable, zoomable dot-grid of pinned cards. The camera is a
+   transform on the plane; the grid tracks it via background-position/size. */
 .Canvas {
   flex: 1;
   position: relative;
   overflow: hidden;
   touch-action: none;
+  cursor: grab;
   background: radial-gradient(var(--soft) 1px, transparent 1px);
   background-size: 24px 24px;
+}
+.Canvas_Plane {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
 }
 
 /* A pin is the draggable slot a card sits in — geometry only. */
@@ -176,10 +183,14 @@
 .Task_Title {
   font-weight: 600;
 }
-.Task_Id {
-  margin-left: auto;
+/* The universal id chip (T-7, P-2, …) — never wraps, soon drags and clicks. */
+.Id {
+  white-space: nowrap;
   font-size: 11px;
   color: var(--dim);
+}
+.Task_Head .Id {
+  margin-left: auto;
 }
 .Task_Body {
   margin: var(--half-gap) 0 0;
