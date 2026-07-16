@@ -34,7 +34,7 @@ the task-to-entity join, and composes the small components in `components/`
 
 ```sh
 deno task seed   # bootstrap ~/.tasks/tasks.db from the seed (optional; dev does it)
-deno task dev    # Fresh dev server (Vite) at http://localhost:8000
+deno task dev    # Fresh dev server (Vite) at http://localhost:5173
 deno task check  # deno fmt --check + lint + type-check
 ```
 
