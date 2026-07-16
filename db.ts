@@ -10,9 +10,9 @@ import { dirname } from 'node:path'
 let file = Deno.env.get('DB_PATH') ??
   `${Deno.env.get('HOME')}/.tasks/tasks.db`
 
-// The edge vocabulary. blocks = hard gate, subtask = decomposition (parent
+// The edge vocabulary. blocks = hard gate, contains = decomposition (parent
 // rolls up), informs = read-first, never gates.
-export type Edge = 'blocks' | 'subtask' | 'informs'
+export type Edge = 'blocks' | 'contains' | 'informs'
 
 export type Task = {
   eid: number
@@ -41,7 +41,7 @@ let schema = `
   create table if not exists dependency (
     parent_eid integer not null references entity(eid),
     child_eid integer not null references entity(eid),
-    type    text not null check (type in ('blocks','subtask','informs')),
+    type    text not null check (type in ('blocks','contains','informs')),
     primary key (parent_eid, child_eid, type)
   );
 `
@@ -91,7 +91,7 @@ let seed = (db: DatabaseSync) => {
     'Explain the schema and how to run the app.',
   )
   link(db, view, schema, 'blocks') // the view is gated by the schema
-  link(db, keys, view, 'subtask') // shortcuts decompose the view work
+  link(db, view, keys, 'contains') // the view work decomposes into shortcuts
   link(db, readme, schema, 'informs') // read the schema before writing docs
 }
 
@@ -116,7 +116,8 @@ export let tasks = (db: DatabaseSync) =>
     order by e.eid
   `).all() as Task[]
 
-// Every edge, as {parent, child, type} — the graph the index route draws.
+// Every edge, as {parent, child, type}. The parent depends on its children:
+// children block the parent, the parent contains its containss.
 export let deps = (db: DatabaseSync) =>
   db.prepare(
     'select parent_eid as parent, child_eid as child, type from dependency',
