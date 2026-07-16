@@ -24,6 +24,14 @@ export type Task = {
 
 export type Proj = { eid: number; title: string }
 export type Card = { eid: number; target_eid: number; view: string }
+export type Pin = {
+  eid: number
+  canvas_eid: number
+  x: number
+  y: number
+  w: number
+  h: number
+}
 
 export type Dep = { parent: number; type: Edge; child: number }
 
@@ -38,20 +46,13 @@ export type Ent = {
   task?: Task
   project?: Proj
   card?: Card
+  pin?: Pin
   refs: Ref[]
   kids: Ent[]
 }
 
 // A pin row joined to its card: where the card sits and what it shows.
-export type Pinned = {
-  card_eid: number
-  target_eid: number
-  view: string
-  x: number
-  y: number
-  w: number
-  h: number
-}
+export type Pinned = Pin & { target_eid: number; view: string }
 
 // The star: an entity spine plus one component table per kind, plus the edge
 // table. `if not exists` makes this idempotent — safe to run every boot.
@@ -78,13 +79,12 @@ let schema = `
     view       text not null
   );
   create table if not exists pin (
+    eid        integer primary key references card(eid),
     canvas_eid integer not null references entity(eid),
-    card_eid   integer not null references card(eid),
     x integer not null,
     y integer not null,
     w integer not null,
-    h integer not null,
-    primary key (canvas_eid, card_eid)
+    h integer not null
   );
   create table if not exists dependency (
     parent_eid integer not null references entity(eid),
@@ -133,8 +133,8 @@ let pin = (
   h: number,
 ) =>
   db.prepare(
-    'insert into pin (canvas_eid, card_eid, x, y, w, h) values (?, ?, ?, ?, ?, ?)',
-  ).run(canvas, card, x, y, w, h)
+    'insert into pin (eid, canvas_eid, x, y, w, h) values (?, ?, ?, ?, ?, ?)',
+  ).run(card, canvas, x, y, w, h)
 
 let link = (db: DatabaseSync, parent: number, type: Edge, child: number) =>
   db.prepare(
@@ -221,6 +221,7 @@ export let bundle = (db: DatabaseSync, eid: number): Ent => {
     task: comp<Task>('task'),
     project: comp<Proj>('project'),
     card: comp<Card>('card'),
+    pin: comp<Pin>('pin'),
     refs,
     kids,
   }
@@ -237,10 +238,10 @@ export let rootCanvas = (db: DatabaseSync) =>
 
 export let pinned = (db: DatabaseSync, canvas: number) =>
   db.prepare(`
-    select p.card_eid, c.target_eid, c.view, p.x, p.y, p.w, p.h
-    from pin p join card c on c.eid = p.card_eid
+    select p.eid, p.canvas_eid, p.x, p.y, p.w, p.h, c.target_eid, c.view
+    from pin p join card c on c.eid = p.eid
     where p.canvas_eid = ?
-    order by p.card_eid
+    order by p.eid
   `).all(canvas) as Pinned[]
 
 // A task joined to its entity spine, oldest first.
@@ -256,6 +257,69 @@ export let deps = (db: DatabaseSync) =>
   db.prepare(
     'select parent_eid as parent, type, child_eid as child from dependency',
   ).all() as Dep[]
+
+// The sync unit — one component row landing on (or leaving) an entity. A
+// batch is a flat array; components travel WHOLE (a comp is small by design —
+// partial rows aren't merged). comp: null deletes the component;
+// {name: 'entity', comp: null} deletes the entity, its components, and every
+// edge touching it. Deleting a bunch is just a long batch.
+export type Change = {
+  eid: number
+  name: string
+  comp: Record<string, unknown> | null
+}
+
+// The component tables the sync layer may write, with their writable columns.
+let cmps: Record<string, string[]> = {
+  entity: ['kind', 'created_at'],
+  task: ['title', 'status', 'body'],
+  project: ['title'],
+  card: ['target_eid', 'view'],
+  pin: ['canvas_eid', 'x', 'y', 'w', 'h'],
+}
+
+// Apply a batch atomically. Unknown component names are ignored (a newer
+// client speaking to an older server shouldn't wedge the socket).
+export let apply = (db: DatabaseSync, changes: Change[]) => {
+  db.exec('begin')
+  try {
+    for (let { eid, name, comp } of changes) {
+      let cols = cmps[name]
+      if (!cols) continue
+      if (comp == null) {
+        if (name == 'entity') {
+          for (let t of Object.keys(cmps)) {
+            if (t != 'entity') {
+              db.prepare(`delete from ${t} where eid = ?`).run(eid)
+            }
+          }
+          db.prepare(
+            'delete from dependency where parent_eid = ? or child_eid = ?',
+          ).run(eid, eid)
+        }
+        db.prepare(`delete from ${name} where eid = ?`).run(eid)
+        continue
+      }
+      if (name != 'entity') {
+        db.prepare(
+          'insert or ignore into entity (eid, kind, created_at) values (?, ?, ?)',
+        ).run(eid, name, new Date().toISOString())
+      }
+      let marks = cols.map(() => '?').join(', ')
+      db.prepare(
+        `insert or replace into ${name} (eid, ${cols.join(', ')})
+         values (?, ${marks})`,
+      ).run(
+        eid,
+        ...cols.map((c) => (comp[c] ?? null) as string | number | null),
+      )
+    }
+    db.exec('commit')
+  } catch (e) {
+    db.exec('rollback')
+    throw e
+  }
+}
 
 // `deno task seed` (or a direct run) bootstraps the file without the server.
 if (import.meta.main) {

@@ -45,10 +45,15 @@
   min-height: 34rem;
 }
 
+/* A pin is the draggable slot a card sits in — geometry only. */
+.Pin {
+  position: absolute;
+  touch-action: none;
+}
+
 /* A card frames one entity through one lens; its tab row lists every lens
    that matches the entity. */
 .Card {
-  position: absolute;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: Canvas;
