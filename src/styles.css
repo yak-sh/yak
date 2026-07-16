@@ -335,6 +335,7 @@
 /* In-place editing (double-click a title): the same node, the same look —
    editing adds only a caret and a seam under the text. */
 [contenteditable='plaintext-only'] {
+  user-select: text; /* .Card_Tabs turns selection off; editing needs it back */
   outline: none;
   border-bottom: 1px solid var(--accent);
   margin-bottom: -1px; /* the seam doesn't nudge the line */

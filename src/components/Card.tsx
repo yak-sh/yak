@@ -40,8 +40,16 @@ export let Card = ({ p }: { p: Pinned }) => {
     let sy = e.clientY
     let top = topZ(p.canvas_eid)
     if (p.z != top) mutate({ eid: p.eid, name: 'pin', comp: { z: top + 1 } })
-    el.setPointerCapture(e.pointerId)
+    // A click is not a drag: capturing the pointer retargets the derived
+    // mouse events (a title's dblclick would never fire), so the drag — and
+    // the capture — only start once the pointer has really moved.
+    let dragging = false
     let move = (e: PointerEvent) => {
+      if (!dragging) {
+        if (Math.hypot(e.clientX - sx, e.clientY - sy) < 3) return
+        dragging = true
+        el.setPointerCapture(e.pointerId)
+      }
       // Pointer deltas are screen px; the pin lives in plane px.
       let z = camera.value.zoom
       applyLocal([{
@@ -56,6 +64,7 @@ export let Card = ({ p }: { p: Pinned }) => {
     let up = () => {
       el.removeEventListener('pointermove', move)
       el.removeEventListener('pointerup', up)
+      if (!dragging) return
       let pin = ent(p.eid).pin!
       send({ eid: p.eid, name: 'pin', comp: { x: pin.x, y: pin.y } })
     }
