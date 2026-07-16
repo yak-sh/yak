@@ -66,6 +66,10 @@ let schema = `
     h    real not null default 0,
     unique (client_eid, canvas_eid)
   );
+  create table if not exists tombstone (
+    eid        text primary key,
+    deleted_at text not null
+  );
   create table if not exists dependency (
     parent_eid text not null references entity(eid),
     type       text not null check (type in ('requires','contains','reads')),
@@ -212,14 +216,21 @@ let cmps: Record<string, string[]> = {
 // client speaking to an older server shouldn't wedge the socket). num and
 // created_at are server-owned — never writable over the wire.
 export let apply = (db: DatabaseSync, changes: Change[]) => {
+  let dead = db.prepare('select 1 from tombstone where eid = ?')
   db.exec('begin')
   try {
     for (let { eid, name, comp } of changes) {
       let cols = cmps[name]
       if (!cols) continue
+      // A deleted entity stays deleted: the tombstone voids every late or
+      // replayed change for its eid — an edit racing a delete loses
+      // deterministically, and nothing can resurrect the id.
+      if (dead.get(eid)) continue
       if (comp == null) {
         if (name == 'entity') {
-          for (let t of Object.keys(cmps)) {
+          // Reverse declaration order so dependents go before what they
+          // reference (pin → card must delete pin first).
+          for (let t of Object.keys(cmps).toReversed()) {
             if (t != 'entity') {
               db.prepare(`delete from ${t} where eid = ?`).run(eid)
             }
@@ -227,6 +238,9 @@ export let apply = (db: DatabaseSync, changes: Change[]) => {
           db.prepare(
             'delete from dependency where parent_eid = ? or child_eid = ?',
           ).run(eid, eid)
+          db.prepare(
+            'insert or ignore into tombstone (eid, deleted_at) values (?, ?)',
+          ).run(eid, new Date().toISOString())
         }
         db.prepare(`delete from ${name} where eid = ?`).run(eid)
         continue
@@ -239,26 +253,39 @@ export let apply = (db: DatabaseSync, changes: Change[]) => {
         }
         continue
       }
-      spine(db, eid, name)
       let sent = cols.filter((c) => c in comp)
       let vals = sent.map((c) => comp[c] as string | number | null)
       // Update first (a patch can't re-satisfy not-null columns an insert
-      // would demand); insert only when the row doesn't exist yet — creating
-      // one is the moment its required columns are due.
+      // would demand). An existing row implies an existing spine.
       let hit = sent.length
         ? db.prepare(
           `update ${name} set ${sent.map((c) => `${c} = ?`).join(', ')}
            where eid = ?`,
         ).run(...vals, eid).changes
         : 0
-      if (!hit && sent.length) {
-        db.prepare(
-          `insert into ${name} (eid${sent.map((c) => `, ${c}`).join('')})
-           values (?${', ?'.repeat(sent.length)})`,
-        ).run(eid, ...vals)
-      } else if (!sent.length) {
-        // A bare {} touch: create with defaults if possible, else no-op.
-        db.prepare(`insert or ignore into ${name} (eid) values (?)`).run(eid)
+      if (hit) continue
+      // No row: this change CREATES — spine + comp together, in a savepoint.
+      // A partial patch whose row is gone is an edit racing a delete: the
+      // delete wins, the change rolls back to nothing (no zombie spine) and
+      // the rest of the batch survives. A malformed create fails the same
+      // way, loudly in the log.
+      db.exec('savepoint change')
+      try {
+        spine(db, eid, name)
+        if (sent.length) {
+          db.prepare(
+            `insert into ${name} (eid${sent.map((c) => `, ${c}`).join('')})
+             values (?${', ?'.repeat(sent.length)})`,
+          ).run(eid, ...vals)
+        } else {
+          // A bare {} touch: create with defaults if possible, else no-op.
+          db.prepare(`insert or ignore into ${name} (eid) values (?)`).run(eid)
+        }
+        db.exec('release change')
+      } catch (e) {
+        db.exec('rollback to change')
+        db.exec('release change')
+        console.warn(`sync: change for ${name} ${eid} dropped —`, e)
       }
     }
     db.exec('commit')

@@ -1,4 +1,4 @@
-// The whole backend, as a `deno serve` module: static files out of src/, TS/TSX
+// The whole backend in one Deno.serve: static files out of src/, TS/TSX
 // translated to JS per-request (sucrase strips types + compiles JSX — no
 // bundling, no type-checking; `deno task check` is the type gate), bare
 // imports resolved by the import map in index.html to the vendored ESM in
@@ -83,22 +83,35 @@ let ws = (req: Request) => {
   return response
 }
 
-export default {
-  fetch(req) {
+// Explicit Deno.serve, not a `deno serve` default export: --watch restarts
+// only complete gracefully once the old isolate drains, which a live
+// listener + websockets never guarantee — reusePort lets the new isolate
+// bind alongside the dying one, and only the options object can carry it.
+Deno.serve(
+  { port: Number(Deno.env.get('PORT') ?? 5173), reusePort: true },
+  (req) => {
     let path = new URL(req.url).pathname
     if (path == '/ws') return ws(req)
     if (path == '/snapshot') return Response.json(snapshot(db))
     return file(src.slice(0, -1), path == '/' ? '/index.html' : path)
   },
-} satisfies Deno.ServeDefaultExport
+)
 
 // Watch src/ and tell every client to reload (debounced — editors fire
 // several events per save). The server itself restarts via --watch, whose
-// scope is its own module graph; this covers the client-side files it
-// merely serves.
+// scope is its own module graph — but a graceful restart only completes
+// once THIS isolate's event loop drains, and open websockets hold it
+// forever (the new isolate then dies on AddrInUse). So when a server-graph
+// file changes, close every socket and stop watching: the isolate settles,
+// the port frees, the restart binds. Clients reload-poll their way back.
+let graph = ['server.ts', 'db.ts', 'types.ts']
 let watch = async () => {
   let timer: ReturnType<typeof setTimeout> | null = null
-  for await (let _ of Deno.watchFs(src)) {
+  for await (let e of Deno.watchFs(src)) {
+    if (e.paths.some((p) => graph.some((g) => p.endsWith(`/${g}`)))) {
+      for (let c of clients) c.close()
+      return
+    }
     if (timer) clearTimeout(timer)
     timer = setTimeout(() => {
       for (let c of clients) {
