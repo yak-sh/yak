@@ -6,8 +6,9 @@
 import { signal } from '@preact/signals'
 import { type Ent } from '../types.ts'
 import { byPriority, cache, ent, mode, statuses } from '../live.ts'
-import { type Renderer, View } from '../components/View.tsx'
+import { type Renderer, resolve, View } from '../components/View.tsx'
 import { idOf } from '../components/views/Id.tsx'
+import { clipboard } from './paint.ts'
 
 export let sel = signal({ col: 0, row: 0 })
 export let quit = signal(false)
@@ -45,6 +46,18 @@ let enter = (): boolean => {
 let back = () => {
   trail.value = trail.value.slice(0, -1)
   mode.value = 'normal'
+}
+
+// Yank the current entity through its MD file form (the same registry
+// forms that power drag-to-desktop on the web; non-tasks fall back to
+// JSON). OSC 52 rides the tty, so the copy lands even over ssh.
+let yank = () => {
+  let eid = trail.value.at(-1) ?? selected()
+  if (!eid) return
+  let e = ent(eid)
+  let f = resolve(e, 'MD').file!
+  clipboard(f.text(e))
+  msg.value = `yanked ${idOf(e)}.${f.ext}`
 }
 
 // Vertically the board reads as ONE list: j past the bottom of a column
@@ -140,6 +153,7 @@ export let key = (k: string) => {
   else if (k == '\r') {
     if (enter()) mode.value = 'insert'
   } else if (k == 'h') back()
+  else if (k == 'y') yank()
   else if (k == 'q' || k == '\x03') quit.value = true
   else if (k == '\x1b') msg.value = ''
 }
@@ -155,7 +169,7 @@ let TStatus = () => (
           </span>
           {msg.value && <span class='TStatus_Msg'>{msg.value}</span>}
           <span class='TStatus_Hint'>
-            j/k browse · l in · h out · ⏎ edit · : cmd · q quit
+            j/k browse · l in · h out · ⏎ edit · y yank · : cmd · q quit
           </span>
         </>
       )}

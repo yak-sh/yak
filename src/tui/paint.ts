@@ -149,6 +149,16 @@ let clip = (line: Line, width: number): Line => {
 
 let enc = new TextEncoder()
 
+// OSC 52: hand text to the clipboard THROUGH the terminal — the escape
+// travels the tty like any output, so it works across ssh (the local
+// terminal does the copying; tmux needs set-clipboard on).
+export let clipboard = (text: string) => {
+  let b64 = btoa(
+    Array.from(enc.encode(text), (b) => String.fromCharCode(b)).join(''),
+  )
+  Deno.stdout.writeSync(enc.encode(`\x1b]52;c;${b64}\x07`))
+}
+
 // One full repaint: content lines fill the screen (clipped — no scrolling
 // yet), the tree's last line rides the bottom row as the statusbar.
 export let paint = (root: TElement) => {
