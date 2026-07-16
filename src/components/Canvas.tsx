@@ -8,6 +8,8 @@ import {
   pinned,
   send,
   sock,
+  toPlane,
+  topZ,
   uuid,
 } from '../live.ts'
 import { Card } from './Card.tsx'
@@ -194,6 +196,36 @@ export let Canvas = ({ eid }: { eid: string }) => {
     }
   }
 
+  // A tab dropped on the canvas spawns a new card with that view.
+  let drop = (e: DragEvent & { currentTarget: HTMLDivElement }) => {
+    let data = e.dataTransfer?.getData('application/x-tasks-card')
+    if (!data) return
+    e.preventDefault()
+    let { target_eid, view, w } = JSON.parse(data)
+    let at = toPlane(
+      e.clientX,
+      e.clientY,
+      e.currentTarget.getBoundingClientRect(),
+    )
+    let card = uuid()
+    mutate(
+      { eid: card, name: 'card', comp: { eid: card, target_eid, view } },
+      {
+        eid: card,
+        name: 'pin',
+        comp: {
+          eid: card,
+          canvas_eid: eid,
+          x: Math.round(at.x - 24),
+          y: Math.round(at.y - 12),
+          w,
+          h: 0,
+          z: topZ(eid) + 1,
+        },
+      },
+    )
+  }
+
   let { x, y, zoom, w, h } = camera.value
   let tx = w / 2 - x * zoom
   let ty = h / 2 - y * zoom
@@ -205,6 +237,8 @@ export let Canvas = ({ eid }: { eid: string }) => {
         `background-size:${24 * zoom}px ${24 * zoom}px`}
       onPointerDown={down}
       onWheel={wheel}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={drop}
     >
       <div
         class={glide.value ? 'Canvas_Plane Canvas_Plane-glide' : 'Canvas_Plane'}

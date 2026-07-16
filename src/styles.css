@@ -247,8 +247,38 @@
   color: var(--muted);
 }
 
-.Json {
+.Json,
+.Md {
   margin: 0;
   font-size: 12px;
   white-space: pre;
+}
+
+/* Debug: entity-flavored inspectors, nesting one level shallower per kid. */
+.Debug {
+  display: grid;
+  gap: var(--half-gap);
+  font-size: 12px;
+}
+.Debug .Debug {
+  margin-left: var(--gap);
+  border-left: 1px solid var(--border2);
+  padding-left: var(--half-gap);
+}
+.Debug_Head {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+}
+.Debug_Kind {
+  color: var(--dim);
+  font-size: 11px;
+}
+.Debug_Raw {
+  margin: 0;
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+.Debug_More {
+  color: var(--dim);
 }

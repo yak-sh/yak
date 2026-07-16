@@ -1,27 +1,23 @@
-import { useRef } from 'preact/hooks'
-import {
-  applyLocal,
-  camera,
-  ent,
-  mutate,
-  send,
-  toPlane,
-  topZ,
-  uuid,
-} from '../live.ts'
+import { applyLocal, camera, ent, mutate, send, topZ } from '../live.ts'
 import { type Pinned } from '../types.ts'
-import { applicable, View } from './View.tsx'
+import { applicable, resolve, View } from './View.tsx'
+import { idOf } from './views/Id.tsx'
 
-// A card: one entity through one chosen lens, framed by a tab per matching
-// lens. Everything renders from the cache, so a tab click is just a card
-// patch and a drag is pin patches — local first (instant), wire on drop.
-// Grabbing the titlebar raises the card to the top; dragging a TAB tears it
-// off into a new card showing that view (a plain click still switches).
+let b64 = (t: string) =>
+  btoa(
+    Array.from(new TextEncoder().encode(t), (b) => String.fromCharCode(b))
+      .join(''),
+  )
+
+// A card: one entity through one chosen view, framed by a tab per view that
+// applies. Everything renders from the cache, so a tab click is just a card
+// patch and a titlebar drag is pin patches — local first (instant), wire on
+// drop. Tabs are native draggables: dropped on the canvas they spawn a new
+// card with that view (Canvas owns the drop); dragged to the desktop they
+// become a file when the view's renderer has a file form (JSON, MD).
 // The scroller (not the card) owns the padding, so the scrollbar rides the
 // card border and the padding scrolls away with the content.
 export let Card = ({ p }: { p: Pinned }) => {
-  let torn = useRef(false) // a tab drag just spawned — swallow its click
-
   let down = (e: PointerEvent & { currentTarget: HTMLDivElement }) => {
     if (!(e.target instanceof Element)) return
     if (e.target.closest('button, a, input')) return
@@ -55,62 +51,23 @@ export let Card = ({ p }: { p: Pinned }) => {
     el.addEventListener('pointerup', up)
   }
 
-  // Tear a view tab off into its own card: past a small threshold, mint a
-  // card + pin under the cursor and let the drag carry it until drop.
-  let tear = (e: PointerEvent, view: string) => {
-    let btn = e.currentTarget as HTMLElement
-    let canvas = btn.closest('.Canvas')
-    if (!canvas) return
-    let sx = e.clientX
-    let sy = e.clientY
-    let spawned = ''
-    btn.setPointerCapture(e.pointerId)
-    let move = (e: PointerEvent) => {
-      let at = toPlane(e.clientX, e.clientY, canvas.getBoundingClientRect())
-      if (!spawned) {
-        if (Math.hypot(e.clientX - sx, e.clientY - sy) < 5) return
-        spawned = uuid()
-        applyLocal([
-          {
-            eid: spawned,
-            name: 'card',
-            comp: { eid: spawned, target_eid: p.target_eid, view },
-          },
-          {
-            eid: spawned,
-            name: 'pin',
-            comp: {
-              eid: spawned,
-              canvas_eid: p.canvas_eid,
-              x: Math.round(at.x - 24),
-              y: Math.round(at.y - 12),
-              w: p.w,
-              h: 0,
-              z: topZ(p.canvas_eid) + 1,
-            },
-          },
-        ])
-        return
-      }
-      applyLocal([{
-        eid: spawned,
-        name: 'pin',
-        comp: { x: Math.round(at.x - 24), y: Math.round(at.y - 12) },
-      }])
-    }
-    let up = () => {
-      btn.removeEventListener('pointermove', move)
-      btn.removeEventListener('pointerup', up)
-      if (!spawned) return
-      torn.current = true
-      let s = ent(spawned)
-      send(
-        { eid: spawned, name: 'card', comp: s.card },
-        { eid: spawned, name: 'pin', comp: s.pin },
-      )
-    }
-    btn.addEventListener('pointermove', move)
-    btn.addEventListener('pointerup', up)
+  // A dragged tab carries the spawn payload (for a canvas drop) and, when
+  // the view has a file form, the serialized file (for a desktop drop).
+  let drag = (e: DragEvent, view: string) => {
+    if (!e.dataTransfer) return
+    let target = ent(p.target_eid)
+    e.dataTransfer.setData(
+      'application/x-tasks-card',
+      JSON.stringify({ target_eid: p.target_eid, view, w: p.w }),
+    )
+    let f = resolve(target, view).file
+    if (!f) return
+    let text = f.text(target)
+    e.dataTransfer.setData('text/plain', text)
+    e.dataTransfer.setData(
+      'DownloadURL',
+      `${f.mime}:${idOf(target)}.${f.ext}:data:${f.mime};base64,${b64(text)}`,
+    )
   }
 
   return (
@@ -132,20 +89,15 @@ export let Card = ({ p }: { p: Pinned }) => {
           {applicable(ent(p.target_eid)).map((v) => (
             <button
               type='button'
-              class={v.id == p.view ? 'Tab Tab-on' : 'Tab'}
-              onPointerDown={(e) => tear(e, v.id)}
-              onClick={() => {
-                if (torn.current) {
-                  torn.current = false
-                  return
-                }
-                if (v.id != p.view) {
-                  mutate({ eid: p.eid, name: 'card', comp: { view: v.id } })
-                }
-              }}
-              key={v.id}
+              class={v == p.view ? 'Tab Tab-on' : 'Tab'}
+              draggable
+              onDragStart={(e) => drag(e, v)}
+              onClick={() =>
+                v != p.view &&
+                mutate({ eid: p.eid, name: 'card', comp: { view: v } })}
+              key={v}
             >
-              {v.id}
+              {v}
             </button>
           ))}
         </header>
