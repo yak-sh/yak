@@ -20,3 +20,14 @@ export let Task = ({ e }: { e: Ent }) => (
     ))}
   </Frame>
 )
+
+// The same view in card context: the task IS the card, its head lives in
+// the titlebar (Card.Title) — here just the innards.
+export let TaskCard = ({ e }: { e: Ent }) => (
+  <>
+    {e.task!.body && <Body mod='bare'>{e.task!.body}</Body>}
+    {e.refs.map((r) => (
+      <View key={r.child} eid={r.child} view='Dependency' type={r.type} />
+    ))}
+  </>
+)

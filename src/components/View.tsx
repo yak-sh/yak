@@ -2,7 +2,8 @@ import { type JSX } from 'preact'
 import { type Ent } from '../types.ts'
 import { ent } from '../live.ts'
 import { idOf } from './views/Id.tsx'
-import { Task } from './views/Task.tsx'
+import { Task, TaskCard } from './views/Task.tsx'
+import { AnyTitle, ProjectTitle, TaskTitle, WebTitle } from './views/Title.tsx'
 import { Board } from './views/Board.tsx'
 import { Id } from './views/Id.tsx'
 import { Dependency } from './views/Dependency.tsx'
@@ -16,20 +17,28 @@ import { Web } from './views/Web.tsx'
 // A RENDERER is a component registered for one view + an entity predicate;
 // several renderers can serve the same view (Debug-for-tasks above the
 // generic Debug catch-all — first match wins, so specific goes first).
-// A renderer may also carry a FILE form: how this view of this entity
-// serializes when its tab is dragged to the desktop.
+// A renderer may also carry a CARD variant — the same view rendering as a
+// card body, where the titlebar (the Card.Title view) already shows the
+// head — and a FILE form: how this view of this entity serializes when its
+// tab is dragged to the desktop.
+type Render = (p: { e: Ent; [x: string]: unknown }) => JSX.Element
 type Renderer = {
   view: string
   match: (e: Ent) => boolean
-  Render: (p: { e: Ent; [x: string]: unknown }) => JSX.Element
+  Render: Render
+  Card?: Render
   file?: { ext: string; mime: string; text: (e: Ent) => string }
 }
 
 // Fixed and curated — extended only by editing this file, never at runtime.
 let registry: Renderer[] = [
-  { view: 'Task', match: (e) => !!e.task, Render: Task },
+  { view: 'Task', match: (e) => !!e.task, Render: Task, Card: TaskCard },
   { view: 'Board', match: (e) => !!e.project, Render: Board },
   { view: 'Web', match: (e) => !!e.web, Render: Web },
+  { view: 'Card.Title', match: (e) => !!e.task, Render: TaskTitle },
+  { view: 'Card.Title', match: (e) => !!e.project, Render: ProjectTitle },
+  { view: 'Card.Title', match: (e) => !!e.web, Render: WebTitle },
+  { view: 'Card.Title', match: () => true, Render: AnyTitle },
   {
     view: 'MD',
     match: (e) => !!e.task,
@@ -71,13 +80,20 @@ export let resolve = (e: Ent, view?: string) =>
     registry.find((r) => r.view == 'JSON')!
 
 // The one front door: render an entity (straight out of the live cache)
-// through a view. Extra props flow through to the renderer.
+// through a view. context='Card' prefers the renderer's card variant.
+// Extra props flow through to the renderer.
 export let View = (
-  { eid, view, ...rest }: { eid: string; view?: string; [x: string]: unknown },
+  { eid, view, context, ...rest }: {
+    eid: string
+    view?: string
+    context?: 'Card'
+    [x: string]: unknown
+  },
 ) => {
   let e = ent(eid)
   let r = resolve(e, view)
-  return <r.Render e={e} {...rest} />
+  let R = (context == 'Card' ? r.Card : undefined) ?? r.Render
+  return <R e={e} {...rest} />
 }
 
 let b64 = (t: string) =>

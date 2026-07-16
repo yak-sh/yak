@@ -140,6 +140,7 @@
 }
 .Card_Tabs {
   display: flex;
+  align-items: center;
   gap: var(--gap);
   margin: 0;
   padding: var(--half-gap);
@@ -147,6 +148,26 @@
   border-bottom: 1px solid var(--border);
   cursor: grab;
   user-select: none;
+}
+
+/* The titlebar's identity slot, filled by the Card.Title view — the entity
+   IS the card. Flexes to push tabs/id/× right; long titles ellipsize. */
+.CardTitle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  font-weight: 600;
+}
+.CardTitle_Text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.CardTitle-dim {
+  color: var(--dim);
+  font-weight: 400;
 }
 /* The card's remove button — deletes the card entity, not its target. */
 .Card_X {
@@ -233,6 +254,9 @@
 .Task_Body {
   margin: var(--half-gap) 0 0;
   color: var(--muted);
+}
+.Task_Body-bare {
+  margin: 0; /* card context: the titlebar is the head, no gap to bridge */
 }
 
 .Dot {

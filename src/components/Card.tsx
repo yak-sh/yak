@@ -62,12 +62,7 @@ export let Card = ({ p }: { p: Pinned }) => {
     >
       <Frame>
         <Tabs>
-          <X
-            type='button'
-            onClick={() => mutate({ eid: p.eid, name: 'entity', comp: null })}
-          >
-            ×
-          </X>
+          <View eid={p.target_eid} view='Card.Title' />
           {applicable(ent(p.target_eid)).map((v) => (
             <Tab
               type='button'
@@ -82,9 +77,16 @@ export let Card = ({ p }: { p: Pinned }) => {
               {v}
             </Tab>
           ))}
+          <View eid={p.target_eid} view='Id' />
+          <X
+            type='button'
+            onClick={() => mutate({ eid: p.eid, name: 'entity', comp: null })}
+          >
+            ×
+          </X>
         </Tabs>
         <Scroll>
-          <View eid={p.target_eid} view={p.view} />
+          <View eid={p.target_eid} view={p.view} context='Card' />
         </Scroll>
       </Frame>
     </Pin>
