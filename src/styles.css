@@ -256,21 +256,23 @@
   white-space: pre;
 }
 
-/* Debug: entity-flavored inspectors, nesting one level shallower per kid. */
+/* Debug: one full inspector; children are one linked ListItem row each. */
 .Debug {
   display: grid;
   gap: var(--half-gap);
   font-size: 12px;
 }
-.Debug .Debug {
-  margin-left: var(--gap);
-  border-left: 1px solid var(--border2);
-  padding-left: var(--half-gap);
-}
-.Debug_Head {
+.Debug_Item {
   display: flex;
   align-items: center;
   gap: var(--half-gap);
+}
+.Debug_Kids {
+  display: grid;
+  gap: 2px;
+  margin-left: var(--half-gap);
+  border-left: 1px solid var(--border2);
+  padding-left: var(--half-gap);
 }
 .Debug_Kind {
   color: var(--dim);

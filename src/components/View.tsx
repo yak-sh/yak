@@ -5,7 +5,7 @@ import { Task } from './views/Task.tsx'
 import { Board } from './views/Board.tsx'
 import { Id } from './views/Id.tsx'
 import { Dependency } from './views/Dependency.tsx'
-import { DebugAny, DebugTask } from './views/Debug.tsx'
+import { Debug, DebugAnyItem, DebugTaskItem } from './views/Debug.tsx'
 import { Json } from './views/Json.tsx'
 import { Md, mdText } from './views/Md.tsx'
 
@@ -43,8 +43,9 @@ let registry: Renderer[] = [
       text: (e) => JSON.stringify(e, null, 2),
     },
   },
-  { view: 'Debug', match: (e) => !!e.task, Render: DebugTask },
-  { view: 'Debug', match: () => true, Render: DebugAny },
+  { view: 'Debug', match: () => true, Render: Debug },
+  { view: 'Debug.ListItem', match: (e) => !!e.task, Render: DebugTaskItem },
+  { view: 'Debug.ListItem', match: () => true, Render: DebugAnyItem },
   { view: 'Id', match: () => true, Render: Id },
   { view: 'Dependency', match: () => true, Render: Dependency },
 ]
