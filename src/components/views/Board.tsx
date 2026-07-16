@@ -1,16 +1,10 @@
 import { type Ent } from '../../types.ts'
-import { ent, mutate } from '../../live.ts'
+import { byPriority, ent, mutate, statuses } from '../../live.ts'
 import { block } from '../ui.tsx'
 import { dragData, View } from '../View.tsx'
 
-let cols = ['open', 'wip', 'done']
-
 let Frame = block('div', 'Board', { Col: 'div', ColName: 'div', Item: 'div' })
 let { Col, ColName, Item } = Frame
-
-// Column order: priority first (lower sorts higher), num as the tiebreak.
-let byPriority = (a: Ent, b: Ent) =>
-  (a.task!.priority - b.task!.priority) || (a.num - b.num)
 
 // A project as kanban: columns derived from task status, ordered by
 // priority. Every task row is draggable — dropped on another column (or
@@ -41,8 +35,8 @@ export let Board = ({ e }: { e: Ent }) => {
       return ev.clientY < box.top + box.height / 2
     })
     if (i < 0) i = list.length
-    let prev = list[i - 1]?.task!.priority
-    let next = list[i]?.task!.priority
+    let prev = list[i - 1]?.task?.priority
+    let next = list[i]?.task?.priority
     let priority = prev == null && next == null
       ? 0
       : prev == null
@@ -55,8 +49,12 @@ export let Board = ({ e }: { e: Ent }) => {
 
   return (
     <Frame>
-      {cols.map((s) => (
-        <Col key={s} onDrop={(ev: DragEvent) => drop(ev, s)}>
+      {statuses.map((s) => (
+        <Col
+          key={s}
+          onDrop={(ev: DragEvent & { currentTarget: HTMLElement }) =>
+            drop(ev, s)}
+        >
           <ColName>{s}</ColName>
           {e.kids.filter((k) => k.task?.status == s).sort(byPriority).map(
             (k) => (

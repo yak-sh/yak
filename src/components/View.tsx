@@ -22,7 +22,7 @@ import { Web } from './views/Web.tsx'
 // head — and a FILE form: how this view of this entity serializes when its
 // tab is dragged to the desktop.
 type Render = (p: { e: Ent; [x: string]: unknown }) => JSX.Element
-type Renderer = {
+export type Renderer = {
   view: string
   match: (e: Ent) => boolean
   Render: Render
@@ -62,6 +62,16 @@ let registry: Renderer[] = [
   { view: 'Dependency', match: () => true, Render: Dependency },
 ]
 
+// Platform overlays: another render target (the TUI) prepends its own
+// renderers at boot — same views, same contract, consulted before the
+// shared registry, so first-match-wins doubles as the override mechanism.
+// Still curated: called once from an entry point, never at runtime.
+let overrides: Renderer[] = []
+export let extend = (rs: Renderer[]) => {
+  overrides = [...rs, ...overrides]
+}
+let all = () => (overrides.length ? [...overrides, ...registry] : registry)
+
 // The views that may appear as card tabs, in tab order. A view tabs for an
 // entity iff some renderer serves it; Debug's catch-all means every card
 // gets a Debug tab. Views not listed here (Id, Dependency) are internal —
@@ -69,14 +79,14 @@ let registry: Renderer[] = [
 let tabs = ['Task', 'Board', 'Web', 'MD', 'JSON', 'Debug']
 
 export let applicable = (e: Ent) =>
-  tabs.filter((v) => registry.some((r) => r.view == v && r.match(e)))
+  tabs.filter((v) => all().some((r) => r.view == v && r.match(e)))
 
 // The renderer serving a view of an entity; no view asks for the first
 // applicable tab. An unservable ask falls back to the JSON catch-all.
 export let resolve = (e: Ent, view?: string) =>
   (view
-    ? registry.find((r) => r.view == view && r.match(e))
-    : registry.find((r) => tabs.includes(r.view) && r.match(e))) ??
+    ? all().find((r) => r.view == view && r.match(e))
+    : all().find((r) => tabs.includes(r.view) && r.match(e))) ??
     registry.find((r) => r.view == 'JSON')!
 
 // The one front door: render an entity (straight out of the live cache)

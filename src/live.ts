@@ -30,6 +30,23 @@ type Comps = {
 export let cache = signal<Record<string, Comps>>({})
 export let deps = signal<Dep[]>([])
 
+// Where the server lives and what a code reload means. The browser answers
+// both from its location; other hosts (the TUI) configure these before
+// boot() — a terminal process can't "reload the page".
+let loc = (globalThis as {
+  location?: { host: string; reload(): void }
+}).location
+export let config = {
+  host: loc?.host ?? '127.0.0.1:5173',
+  reload: () => loc?.reload(),
+}
+
+// The status vocabulary in board-column order, and the column sort:
+// priority first (lower sorts higher), num as the tiebreak.
+export let statuses = ['open', 'wip', 'done']
+export let byPriority = (a: Ent, b: Ent) =>
+  (a.task!.priority - b.task!.priority) || (a.num - b.num)
+
 // Land a batch in the cache with the same patch semantics the db uses:
 // comps merge per-column, comp: null deletes the component, entity: null
 // deletes the entity and every edge touching it.
@@ -62,18 +79,18 @@ export let mutate = (...changes: Change[]) => {
 let ws: WebSocket | null = null
 export let sock = () => {
   if (ws && ws.readyState <= WebSocket.OPEN) return ws
-  ws = new WebSocket(`ws://${location.host}/ws`)
+  ws = new WebSocket(`ws://${config.host}/ws`)
   ws.onmessage = (m) => {
     let data = JSON.parse(String(m.data))
     if (Array.isArray(data)) applyLocal(data)
-    else if (data == 'reload') location.reload()
+    else if (data == 'reload') config.reload()
   }
   ws.onclose = () => {
     let poll = setInterval(async () => {
       try {
-        await fetch('/snapshot', { method: 'HEAD' })
+        await fetch(`http://${config.host}/snapshot`, { method: 'HEAD' })
         clearInterval(poll)
-        location.reload()
+        config.reload()
       } catch { /* still down */ }
     }, 500)
   }
@@ -90,7 +107,7 @@ export let send = (...changes: unknown[]) => {
 // Fill the cache and open the socket — main.tsx awaits this before render.
 // (Changes landing between the fetch and the open are missed; fine for now.)
 export let boot = async () => {
-  let snap = await (await fetch('/snapshot')).json()
+  let snap = await (await fetch(`http://${config.host}/snapshot`)).json()
   deps.value = snap.deps
   applyLocal(snap.changes)
   sock()

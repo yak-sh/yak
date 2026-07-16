@@ -53,10 +53,25 @@ The browser fills an entity cache from the snapshot (`src/live.ts`), renders
 everything from it, and keeps it current from the socket. Local edits land in
 the cache first (instant), then go out as patches.
 
+## The TUI
+
+The same app renders in a terminal: `src/tui/` swaps the document for a
+just-enough fake DOM (the undom trick), paints it as ANSI lines, and feeds raw
+keys to the same vim mode machine. Everything below the paint layer is shared —
+cache, socket, signals, and the view registry; the TUI prepends its own
+renderers (a Board becomes a nested list) and every other view renders through
+the exact components the browser uses. It's another live client: edits made in a
+browser appear on the next frame.
+
+```sh
+deno task tui    # vim keys: j/k/h/l browse, : commands, q quits
+```
+
 ## Run
 
 ```sh
 deno task dev    # http://localhost:5173
+deno task tui    # browse the board in the terminal (needs dev running)
 deno task seed   # bootstrap ~/.tasks/tasks.db (optional; dev does it)
 deno task check  # deno fmt --check + lint + type-check
 ```

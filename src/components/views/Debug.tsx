@@ -56,7 +56,9 @@ let AllProps = ({ e }: { e: Ent }) => (
     <Row k='num' v={e.num} />
     <Row k='kind' v={e.kind} />
     {comps(e).flatMap(([name, comp]) =>
-      Object.entries(comp).map(([k, v]) => <Row comp={name} k={k} v={v} />)
+      Object.entries(comp).map(([k, v]) => (
+        <Row key={`${name}.${k}`} comp={name} k={k} v={v} />
+      ))
     )}
   </Grid>
 )
