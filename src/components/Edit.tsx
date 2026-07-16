@@ -28,7 +28,7 @@ export let Edit = ({ eid, comp, prop }: {
     t.dataset.was = t.textContent ?? ''
     t.contentEditable = 'plaintext-only'
     t.focus()
-    getSelection()?.selectAllChildren(t)
+    getSelection()?.setPosition(t, t.childNodes.length) // caret at the end
     mode.value = 'insert'
   }
 
