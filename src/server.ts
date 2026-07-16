@@ -131,11 +131,18 @@ let freeze = async (eid: string) => {
 }
 
 // Serve an archive. eid is validated to a bare uuid — no path escapes.
+// The CSP mirrors the iframe's sandbox but holds in EVERY context (an
+// archive opened directly in a tab has no iframe to sandbox it): no
+// scripts, no network fetches — the freeze stays inert and offline.
 let serveFrozen = async (eid: string) => {
   if (!/^[0-9a-f-]{36}$/i.test(eid)) return new Response('no', { status: 400 })
   try {
     return new Response(await Deno.readFile(`${frozen}/${eid}.html`), {
-      headers: { 'content-type': mime.html },
+      headers: {
+        'content-type': mime.html,
+        'content-security-policy':
+          "sandbox allow-same-origin; script-src 'none'; connect-src 'none'",
+      },
     })
   } catch {
     return new Response('not frozen', { status: 404 })
