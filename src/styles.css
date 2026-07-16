@@ -116,12 +116,70 @@
   transition: transform 0.25s ease;
 }
 
-/* A pin is the draggable slot a card sits in — geometry only. */
+/* A pin is the draggable slot a card sits in — geometry only. Its padding
+   ring doubles as the resize border (the Handle strips live in it). */
 .Pin {
   position: absolute;
   display: flex;
   touch-action: none;
   padding: var(--gap);
+}
+.Pin-sized .Card {
+  max-height: none; /* an explicit height beats the auto cap */
+}
+
+.Handle {
+  position: absolute;
+  touch-action: none;
+}
+.Handle-n,
+.Handle-s {
+  left: var(--gap);
+  right: var(--gap);
+  height: var(--gap);
+  cursor: ns-resize;
+}
+.Handle-e,
+.Handle-w {
+  top: var(--gap);
+  bottom: var(--gap);
+  width: var(--gap);
+  cursor: ew-resize;
+}
+.Handle-n,
+.Handle-ne,
+.Handle-nw {
+  top: 0;
+}
+.Handle-s,
+.Handle-se,
+.Handle-sw {
+  bottom: 0;
+}
+.Handle-e,
+.Handle-ne,
+.Handle-se {
+  right: 0;
+}
+.Handle-w,
+.Handle-nw,
+.Handle-sw {
+  left: 0;
+}
+.Handle-ne,
+.Handle-nw,
+.Handle-se,
+.Handle-sw {
+  width: var(--gap);
+  height: var(--gap);
+}
+.Handle-ne,
+.Handle-sw {
+  cursor: nesw-resize;
+}
+.Handle-nw,
+.Handle-se {
+  cursor: nwse-resize;
 }
 
 /* A card frames one entity through one lens: chrome header (the tab row),

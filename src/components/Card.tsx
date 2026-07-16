@@ -5,6 +5,11 @@ import { applicable, dragData, View } from './View.tsx'
 
 let Pin = el('div', 'Pin')
 let Tab = el('button', 'Tab')
+let Handle = el('div', 'Handle')
+
+// Resize handles live in the Pin's padding ring around the card — every
+// side and corner. Their name says which edges they move.
+let handles = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw']
 let Frame = block('section', 'Card', {
   Tabs: 'header',
   X: 'button',
@@ -54,10 +59,66 @@ export let Card = ({ p }: { p: Pinned }) => {
     el.addEventListener('pointerup', up)
   }
 
+  // Drag a side or corner to size the card; west/north edges move the pin
+  // so the opposite edge stays put. 0 means auto, so an auto dimension
+  // starts from the rendered size the moment a resize grabs it.
+  let resize = (
+    e: PointerEvent & { currentTarget: HTMLDivElement },
+    d: string,
+  ) => {
+    e.stopPropagation()
+    let grip = e.currentTarget
+    let card = grip.parentElement!.querySelector('.Card') as HTMLElement
+    let base = {
+      x: p.x,
+      y: p.y,
+      w: p.w || card.offsetWidth,
+      h: p.h || card.offsetHeight,
+    }
+    let sx = e.clientX
+    let sy = e.clientY
+    let comp: Record<string, number> = {}
+    grip.setPointerCapture(e.pointerId)
+    let move = (e: PointerEvent) => {
+      let z = camera.value.zoom
+      let dx = (e.clientX - sx) / z
+      let dy = (e.clientY - sy) / z
+      comp = {}
+      if (d.includes('e')) comp.w = Math.max(160, Math.round(base.w + dx))
+      if (d.includes('w')) {
+        comp.w = Math.max(160, Math.round(base.w - dx))
+        comp.x = Math.round(base.x + base.w - comp.w)
+      }
+      if (d.includes('s')) comp.h = Math.max(60, Math.round(base.h + dy))
+      if (d.includes('n')) {
+        comp.h = Math.max(60, Math.round(base.h - dy))
+        comp.y = Math.round(base.y + base.h - comp.h)
+      }
+      applyLocal([{ eid: p.eid, name: 'pin', comp }])
+    }
+    let up = () => {
+      grip.removeEventListener('pointermove', move)
+      grip.removeEventListener('pointerup', up)
+      if (Object.keys(comp).length) send({ eid: p.eid, name: 'pin', comp })
+    }
+    grip.addEventListener('pointermove', move)
+    grip.addEventListener('pointerup', up)
+  }
+
+  // Double-click a side to revert that dimension to auto; a corner, both.
+  let reset = (d: string) => {
+    let comp: Record<string, number> = {}
+    if (d.includes('e') || d.includes('w')) comp.w = 0
+    if (d.includes('n') || d.includes('s')) comp.h = 0
+    mutate({ eid: p.eid, name: 'pin', comp })
+  }
+
   return (
     <Pin
+      mod={p.h ? 'sized' : false}
       style={`left:${p.x}px;top:${p.y}px;z-index:${p.z};` +
-        (p.w ? `width:${p.w}px;` : '')}
+        (p.w ? `width:${p.w}px;` : '') +
+        (p.h ? `height:${p.h}px;` : '')}
       onPointerDown={down}
     >
       <Frame>
@@ -88,6 +149,16 @@ export let Card = ({ p }: { p: Pinned }) => {
           <View eid={p.target_eid} view={p.view} context='Card' />
         </Scroll>
       </Frame>
+      {handles.map((d) => (
+        <Handle
+          key={d}
+          mod={d}
+          onPointerDown={(
+            e: PointerEvent & { currentTarget: HTMLDivElement },
+          ) => resize(e, d)}
+          onDblClick={() => reset(d)}
+        />
+      ))}
     </Pin>
   )
 }
