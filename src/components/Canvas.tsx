@@ -192,6 +192,29 @@ export let Canvas = ({ eid }: { eid: string }) => {
     elem.addEventListener('pointerup', up)
   }
 
+  // Can anything between the wheel target and the canvas still consume this
+  // delta? Direction-aware: a scroller at its end stops counting, so the
+  // gesture chains back into panning. Cards with nothing to scroll pan.
+  let consumes = (from: Element, to: Element, dx: number, dy: number) => {
+    let vertical = Math.abs(dy) >= Math.abs(dx)
+    for (let n: Element | null = from; n && n != to; n = n.parentElement) {
+      let s = getComputedStyle(n)
+      if (
+        vertical && /auto|scroll/.test(s.overflowY) &&
+        (dy < 0
+          ? n.scrollTop > 0
+          : n.scrollTop + n.clientHeight < n.scrollHeight - 1)
+      ) return true
+      if (
+        !vertical && /auto|scroll/.test(s.overflowX) &&
+        (dx < 0
+          ? n.scrollLeft > 0
+          : n.scrollLeft + n.clientWidth < n.scrollWidth - 1)
+      ) return true
+    }
+    return false
+  }
+
   // Scroll pans; pinch (ctrl+wheel, per trackpad convention) zooms toward
   // the cursor — the plane point under it stays put.
   let wheel = (e: WheelEvent & { currentTarget: HTMLDivElement }) => {
@@ -212,8 +235,12 @@ export let Canvas = ({ eid }: { eid: string }) => {
       }
       queue('x', 'y', 'zoom')
     } else {
-      // Over a card, native scroll owns the gesture (card content scrolls).
-      if (e.target instanceof Element && e.target.closest('.Pin')) return
+      // Native scroll keeps the gesture only while something under the
+      // cursor can still move that way; otherwise the canvas pans.
+      if (
+        e.target instanceof Element &&
+        consumes(e.target, e.currentTarget, e.deltaX, e.deltaY)
+      ) return
       e.preventDefault()
       camera.value = {
         ...camera.value,
