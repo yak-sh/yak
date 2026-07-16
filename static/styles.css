@@ -125,7 +125,7 @@
   --dot: var(--done);
 }
 
-.Edge {
+.Dependency {
   display: inline-block;
   margin: var(--half-gap) var(--half-gap) 0 0;
   font-size: 13px;

@@ -27,9 +27,8 @@ export type Card = { eid: number; target_eid: number; view: string }
 
 export type Dep = { parent: number; type: Edge; child: number }
 
-// An outgoing edge with its child resolved to a printable name — the sentence
-// a renderer draws ("requires Set up the database schema").
-export type Ref = { type: Edge; child: number; name: string }
+// An outgoing edge, verb + child — the Dependency view resolves the name.
+export type Ref = { type: Edge; child: number }
 
 // The bundle a renderer pattern-matches on: the entity plus whichever
 // components it carries, its edge sentences, and the entities it contains.
@@ -196,6 +195,9 @@ export let open = () => {
   return db
 }
 
+// The one live handle — routes and views share it for the process lifetime.
+export let db = open()
+
 // The whole entity, assembled for a renderer: entity row, components present,
 // outgoing edge sentences, contained children (recursive — graphs stay small;
 // a view reads as deep as it wants).
@@ -207,13 +209,8 @@ export let bundle = (db: DatabaseSync, eid: number): Ent => {
       | T
       | undefined
   let refs = db.prepare(`
-    select d.type, d.child_eid as child,
-           coalesce(t.title, p.title, c.kind) as name
-    from dependency d
-    join entity c on c.eid = d.child_eid
-    left join task t on t.eid = d.child_eid
-    left join project p on p.eid = d.child_eid
-    where d.parent_eid = ? and d.type != 'contains'
+    select type, child_eid as child from dependency
+    where parent_eid = ? and type != 'contains'
   `).all(eid) as Ref[]
   let kids = (db.prepare(`
     select child_eid from dependency
@@ -259,6 +256,5 @@ export let deps = (db: DatabaseSync) =>
 
 // `deno task seed` (or a direct run) bootstraps the file without the server.
 if (import.meta.main) {
-  let db = open()
   console.log(`seeded ${tasks(db).length} tasks, ${deps(db).length} edges`)
 }
