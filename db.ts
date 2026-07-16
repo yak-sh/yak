@@ -22,7 +22,7 @@ export type Task = {
   created_at: string
 }
 
-export type Dep = { src: number; dst: number; type: Edge }
+export type Dep = { parent: number; child: number; type: Edge }
 
 // The star: an entity spine plus one component table per kind, plus the edge
 // table. `if not exists` makes this idempotent — safe to run every boot.
@@ -39,10 +39,10 @@ let schema = `
     body   text not null default ''
   );
   create table if not exists dependency (
-    src_eid integer not null references entity(eid),
-    dst_eid integer not null references entity(eid),
+    parent_eid integer not null references entity(eid),
+    child_eid integer not null references entity(eid),
     type    text not null check (type in ('blocks','subtask','informs')),
-    primary key (src_eid, dst_eid, type)
+    primary key (parent_eid, child_eid, type)
   );
 `
 
@@ -58,10 +58,10 @@ let addTask = (db: DatabaseSync, title: string, status: string, body = '') => {
   return eid
 }
 
-let link = (db: DatabaseSync, src: number, dst: number, type: Edge) =>
+let link = (db: DatabaseSync, parent: number, child: number, type: Edge) =>
   db.prepare(
-    'insert into dependency (src_eid, dst_eid, type) values (?, ?, ?)',
-  ).run(src, dst, type)
+    'insert into dependency (parent_eid, child_eid, type) values (?, ?, ?)',
+  ).run(parent, child, type)
 
 // A handful of neutral demo rows, one edge of each type and one of each status,
 // so the index route has a real graph to render — no fleet data in the repo.
@@ -116,10 +116,10 @@ export let tasks = (db: DatabaseSync) =>
     order by e.eid
   `).all() as Task[]
 
-// Every edge, as {src, dst, type} — the graph the index route draws.
+// Every edge, as {parent, child, type} — the graph the index route draws.
 export let deps = (db: DatabaseSync) =>
   db.prepare(
-    'select src_eid as src, dst_eid as dst, type from dependency',
+    'select parent_eid as parent, child_eid as child, type from dependency',
   ).all() as Dep[]
 
 // `deno task seed` (or a direct run) bootstraps the file without the server.

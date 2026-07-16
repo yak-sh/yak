@@ -10,7 +10,7 @@ export default define.page(function Home() {
   let rows = tasks(db)
   let edges = deps(db)
   let name = new Map(rows.map((t: Row) => [t.eid, t.title]))
-  let out = (eid: number) => edges.filter((d) => d.src == eid)
+  let out = (eid: number) => edges.filter((d) => d.parent == eid)
 
   return (
     <main class='wrap'>

@@ -18,6 +18,6 @@ export let Task = (
       <span class='Task_Id'>T-{task.eid}</span>
     </div>
     {task.body && <p class='Task_Body'>{task.body}</p>}
-    {edges.map((d) => <Edge key={d.dst} type={d.type} to={name(d.dst)} />)}
+    {edges.map((d) => <Edge key={d.child} type={d.type} to={name(d.child)} />)}
   </li>
 )

@@ -20,7 +20,7 @@ sqlite-vector embeddings, typed short ids (T-123 / C-123).
 ```sql
 entity(eid pk, kind, created_at)
 task(eid pk→entity.eid, title, status, body)
-dependency(src_eid→entity, dst_eid→entity, type ∈ blocks|subtask|informs)
+dependency(parent_eid→entity, child_eid→entity, type ∈ blocks|subtask|informs)
 ```
 
 `db.ts` owns the file. By default it lives at `~/.tasks/tasks.db` — outside the
