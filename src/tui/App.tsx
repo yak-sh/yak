@@ -56,14 +56,22 @@ let back = () => {
   mode.value = 'normal'
 }
 
-// The in-progress edit. TUI insert mode is append/backspace on one prop:
-// every keystroke lands in the local cache (the text changes in place,
-// live), the wire hears ONE patch when insert ends. Escape commits — vim
-// leaves insert, it doesn't cancel. i on the board edits the selected
-// title; i (or Enter from the board) on a task edits its body.
+// The in-progress edit. TUI insert mode is append/backspace on one prop,
+// edited right where it lives: the LOCAL cache carries text + a block
+// caret while typing (the wire never sees it), so whatever view shows the
+// prop shows the edit. One clean patch goes out when insert ends. Escape
+// commits — vim leaves insert, it doesn't cancel. i on the board edits
+// the selected title; i (or Enter from the board) on a task, the body.
 let edit = signal<
   { eid: string; prop: 'title' | 'body'; text: string; was: string } | null
 >(null)
+
+let show = (e: NonNullable<typeof edit.value>, caret: boolean) =>
+  applyLocal([{
+    eid: e.eid,
+    name: 'task',
+    comp: { [e.prop]: caret ? e.text + '█' : e.text },
+  }])
 
 let startEdit = () => {
   let here = trail.value.at(-1)
@@ -73,6 +81,7 @@ let startEdit = () => {
   let was = ent(eid).task![prop] ?? ''
   edit.value = { eid, prop, text: was, was }
   mode.value = 'insert'
+  show(edit.value, true)
 }
 
 let typeEdit = (k: string) => {
@@ -84,12 +93,17 @@ let typeEdit = (k: string) => {
   else if (k >= ' ') e = { ...e, text: e.text + k }
   else return
   edit.value = e
-  applyLocal([{ eid: e.eid, name: 'task', comp: { [e.prop]: e.text } }])
+  show(e, true)
 }
 
 let endEdit = () => {
   let e = edit.value
-  if (e && e.text != e.was) {
+  if (!e) {
+    mode.value = 'normal'
+    return
+  }
+  show(e, false) // strip the caret from the local cache
+  if (e.text != e.was) {
     send({ eid: e.eid, name: 'task', comp: { [e.prop]: e.text } })
   }
   edit.value = null
@@ -220,13 +234,6 @@ let TStatus = () => (
           <span class={`TStatus_Mode TStatus_Mode-${mode.value}`}>
             {mode.value == 'insert' ? '-- INSERT --' : mode.value.toUpperCase()}
           </span>
-          {mode.value == 'insert' && edit.value && (
-            <span class='TStatus_Cmd'>
-              {`${edit.value.prop}: ${
-                edit.value.text.split('\n').at(-1) ?? ''
-              }█`}
-            </span>
-          )}
           {msg.value && <span class='TStatus_Msg'>{msg.value}</span>}
           <span class='TStatus_Hint'>
             j/k browse · l in · h out · i edit · y yank · : cmd · q quit
