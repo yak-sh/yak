@@ -76,7 +76,11 @@ export let mutate = (...changes: Change[]) => {
 // Array frames are sync batches; 'reload' is the server's file watcher.
 // A dropped socket means the server restarted — poll until it's back, then
 // reload for a fresh snapshot (state lives in the db, so nothing is lost).
+// One poller, ever: while the server is down every send() mints another
+// doomed socket, and without the guard each one would stack another
+// interval — all firing reload together when the server returns.
 let ws: WebSocket | null = null
+let polling = false
 export let sock = () => {
   if (ws && ws.readyState <= WebSocket.OPEN) return ws
   ws = new WebSocket(`ws://${config.host}/ws`)
@@ -86,10 +90,13 @@ export let sock = () => {
     else if (data == 'reload') config.reload()
   }
   ws.onclose = () => {
+    if (polling) return
+    polling = true
     let poll = setInterval(async () => {
       try {
         await fetch(`http://${config.host}/snapshot`, { method: 'HEAD' })
         clearInterval(poll)
+        polling = false
         config.reload()
       } catch { /* still down */ }
     }, 500)
