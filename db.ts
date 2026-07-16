@@ -1,7 +1,7 @@
-// The fleet entity graph, in one SQLite file. Star ECS: `entities` holds the
+// The fleet entity graph, in one SQLite file. Star ECS: `entity` holds the
 // shared primary key (`eid`); component tables (`task`, …) hang off it by that
-// same id; `dependencies` are typed eid↔eid edges — anything can block, contain,
-// or inform anything. This module owns the file + the seed; routes only read.
+// same id; `dependency` rows are typed eid↔eid edges — anything can block,
+// contain, or inform anything. This module owns the file + seed; routes read.
 import { DatabaseSync } from 'node:sqlite'
 import { dirname } from 'node:path'
 
@@ -24,23 +24,23 @@ export type Task = {
 
 export type Dep = { src: number; dst: number; type: Edge }
 
-// The star: an entities spine plus one component table per kind, plus the edge
+// The star: an entity spine plus one component table per kind, plus the edge
 // table. `if not exists` makes this idempotent — safe to run every boot.
 let schema = `
-  create table if not exists entities (
+  create table if not exists entity (
     eid        integer primary key autoincrement,
     kind       text not null,
     created_at text not null
   );
   create table if not exists task (
-    eid    integer primary key references entities(eid),
+    eid    integer primary key references entity(eid),
     title  text not null,
     status text not null,
     body   text not null default ''
   );
-  create table if not exists dependencies (
-    src_eid integer not null references entities(eid),
-    dst_eid integer not null references entities(eid),
+  create table if not exists dependency (
+    src_eid integer not null references entity(eid),
+    dst_eid integer not null references entity(eid),
     type    text not null check (type in ('blocks','subtask','informs')),
     primary key (src_eid, dst_eid, type)
   );
@@ -50,7 +50,7 @@ let schema = `
 // eid so the caller can wire edges to it.
 let addTask = (db: DatabaseSync, title: string, status: string, body = '') => {
   let { lastInsertRowid } = db
-    .prepare('insert into entities (kind, created_at) values (?, ?)')
+    .prepare('insert into entity (kind, created_at) values (?, ?)')
     .run('task', new Date().toISOString())
   let eid = Number(lastInsertRowid)
   db.prepare('insert into task (eid, title, status, body) values (?, ?, ?, ?)')
@@ -60,7 +60,7 @@ let addTask = (db: DatabaseSync, title: string, status: string, body = '') => {
 
 let link = (db: DatabaseSync, src: number, dst: number, type: Edge) =>
   db.prepare(
-    'insert into dependencies (src_eid, dst_eid, type) values (?, ?, ?)',
+    'insert into dependency (src_eid, dst_eid, type) values (?, ?, ?)',
   ).run(src, dst, type)
 
 // A handful of neutral demo rows, one edge of each type and one of each status,
@@ -112,14 +112,14 @@ export let open = () => {
 export let tasks = (db: DatabaseSync) =>
   db.prepare(`
     select t.eid, t.title, t.status, t.body, e.created_at
-    from task t join entities e on e.eid = t.eid
+    from task t join entity e on e.eid = t.eid
     order by e.eid
   `).all() as Task[]
 
 // Every edge, as {src, dst, type} — the graph the index route draws.
 export let deps = (db: DatabaseSync) =>
   db.prepare(
-    'select src_eid as src, dst_eid as dst, type from dependencies',
+    'select src_eid as src, dst_eid as dst, type from dependency',
   ).all() as Dep[]
 
 // `deno task seed` (or a direct run) bootstraps the file without the server.

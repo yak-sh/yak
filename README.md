@@ -3,11 +3,11 @@
 v2 of the holdco task board. A walking skeleton: one SQLite file is the fleet's
 memory substrate, modelled as a **star ECS** graph, rendered by a Fresh app.
 
-- **`entities`** — the spine. Every thing (task, comment, design doc, persona…)
-  is an entity with a shared primary key (`eid`), a `kind`, and a `created_at`.
+- **`entity`** — the spine. Every thing (task, comment, design doc, persona…) is
+  an entity with a shared primary key (`eid`), a `kind`, and a `created_at`.
 - **Component tables** hang off that id. `task` (`eid` PK/FK, `title`, `status`,
   `body`) is the only one so far; more kinds slot in without touching this one.
-- **`dependencies`** — typed `eid ↔ eid` edges, so anything relates to anything:
+- **`dependency`** — typed `eid ↔ eid` edges, so anything relates to anything:
   - `blocks` — hard gate,
   - `subtask` — decomposition (the parent rolls up),
   - `informs` — read-first, never gates.
@@ -18,9 +18,9 @@ sqlite-vector embeddings, typed short ids (T-123 / C-123).
 ## Schema sketch
 
 ```sql
-entities(eid pk, kind, created_at)
-task(eid pk→entities.eid, title, status, body)
-dependencies(src_eid→entities, dst_eid→entities, type ∈ blocks|subtask|informs)
+entity(eid pk, kind, created_at)
+task(eid pk→entity.eid, title, status, body)
+dependency(src_eid→entity, dst_eid→entity, type ∈ blocks|subtask|informs)
 ```
 
 `db.ts` owns the file. By default it lives at `~/.tasks/tasks.db` — outside the
