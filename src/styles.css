@@ -27,7 +27,6 @@
   --blue: #7fbbb3;
   --yellow: #dbbc7f;
   --soft: color-mix(in srgb, var(--text) 6%, transparent);
-  --bleed: 0px; /* the content inset a full-bleed strip must escape */
 
   /* status colours — dots and status text consume these */
   --open: var(--blue);
@@ -430,28 +429,22 @@
 .Comments_Body p {
   margin: 0;
 }
-/* The input is a full-bleed footer: negative margins walk back whatever
-   inset the container declared (--bleed), so its top rule runs border to
-   border; side padding puts the caret back on the content line. */
+/* The input is an ordinary sunken box at the rail's foot. */
 .Comments_New {
   font: inherit;
   color: var(--text);
   background: var(--surface);
-  border: 0;
-  border-top: 1px solid var(--border);
-  padding: var(--half-gap) var(--bleed);
-  margin: 0 calc(-1 * var(--bleed)) calc(-1 * var(--bleed));
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  padding: var(--half-gap);
   resize: none;
   outline: none;
-}
-.Task .Comments_New {
-  border-radius: 0 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px);
 }
 .Comments_New::placeholder {
   color: var(--dim);
 }
 .Comments_New:focus {
-  border-top-color: var(--accent);
+  border-color: var(--accent);
 }
 
 /* The one scrolling element — padding scrolls away WITH the content. */
@@ -460,7 +453,6 @@
   min-height: 0;
   overflow: auto;
   padding: var(--gap);
-  --bleed: var(--gap);
   border-radius: 0 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px);
 }
 
@@ -561,7 +553,6 @@
   border-radius: var(--radius);
   background: var(--card);
   padding: var(--half-gap);
-  --bleed: var(--half-gap);
 }
 .Task_Head {
   display: flex;
@@ -617,6 +608,19 @@
   white-space: nowrap;
   font-size: 11px;
   color: var(--muted);
+}
+/* The card-context meta line — the board row's grammar on the full card:
+   prio · domain · 💬 · ⚑, under the titlebar, above the body. */
+.Task_Meta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--half-gap);
+  font-size: 11px;
+  color: var(--dim);
+  margin-bottom: var(--half-gap);
+}
+.Task_Comments {
+  white-space: nowrap;
 }
 /* The session lease badge — who's working this, in fleet purple. */
 .Task_Claim,

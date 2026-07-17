@@ -1,4 +1,5 @@
 import { type Ent } from '../../types.ts'
+import { gated } from '../../live.ts'
 import { block } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
 import { Edit } from '../Edit.tsx'
@@ -14,7 +15,7 @@ let { Text } = Frame
 export let TaskTitle = ({ e }: { e: Ent }) => (
   <Frame>
     <View eid={e.eid} view='Id' />
-    <Dot status={e.task!.status} />
+    <Dot status={e.task!.status} gated={gated(e)} />
     <Text>
       <Edit eid={e.eid} comp='doc' prop='title' />
     </Text>

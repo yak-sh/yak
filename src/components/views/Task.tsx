@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks'
 import snarkdown from 'snarkdown'
 import { type Ent } from '../../types.ts'
-import { ent, gated } from '../../live.ts'
+import { commentCount, ent, gated } from '../../live.ts'
 import { block } from '../ui.tsx'
 import { Comments } from '../Comments.tsx'
 import { Dot } from '../Dot.tsx'
@@ -15,8 +15,10 @@ let Frame = block('div', 'Task', {
   Body: 'p',
   Claim: 'span',
   Domain: 'span',
+  Meta: 'div',
+  Comments: 'span',
 })
-let { Head, Title, Body, Claim, Domain } = Frame
+let { Head, Title, Body, Claim, Domain, Meta, Comments: Talk } = Frame
 
 // The body is markdown: rendered as HTML (snarkdown; our own data, so no
 // sanitizer between us and ourselves), double-click swaps in the raw
@@ -69,13 +71,23 @@ export let Task = ({ e }: { e: Ent }) => (
 )
 
 // The same view in card context: the task IS the card, its head lives in
-// the titlebar (Card.Title) — here just the innards.
-export let TaskCard = ({ e }: { e: Ent }) => (
-  <>
-    <TaskBody e={e} mod='bare' />
-    {e.refs.map((r) => (
-      <View key={r.child} eid={r.child} view='Dependency' type={r.type} />
-    ))}
-    <Comments eid={e.eid} />
-  </>
-)
+// the titlebar (Card.Title) — here a meta line (the board row's grammar:
+// prio · domain · 💬 · ⚑), then the innards.
+export let TaskCard = ({ e }: { e: Ent }) => {
+  let talk = commentCount.value[e.eid]
+  return (
+    <>
+      <Meta>
+        <Prio p={e.task!.priority} />
+        {e.task!.domain && <Domain>{e.task!.domain}</Domain>}
+        {talk && <Talk>💬 {talk}</Talk>}
+        {e.claim && <Claim>⚑ {ent(e.claim.session_eid).session?.id}</Claim>}
+      </Meta>
+      <TaskBody e={e} mod='bare' />
+      {e.refs.map((r) => (
+        <View key={r.child} eid={r.child} view='Dependency' type={r.type} />
+      ))}
+      <Comments eid={e.eid} />
+    </>
+  )
+}
