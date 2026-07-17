@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks'
 import snarkdown from 'snarkdown'
 import { type Ent } from '../../types.ts'
 import {
+  backlinks,
   commentCount,
   domains,
   ent,
@@ -30,6 +31,7 @@ let Frame = block('div', 'Task', {
   Pick: 'select',
   Meta: 'div',
   Comments: 'span',
+  Runs: 'div',
 })
 let {
   Head,
@@ -43,6 +45,7 @@ let {
   Pick,
   Meta,
   Comments: Talk,
+  Runs: RunsEl,
 } = Frame
 
 // Every field editor here commits through this one write: a single
@@ -254,9 +257,28 @@ export let Task = ({ e }: { e: Ent }) => (
     {e.refs.map((r) => (
       <View key={r.child} eid={r.child} view='Dependency' type={r.type} />
     ))}
+    <Runs e={e} />
     <Comments eid={e.eid} />
   </Frame>
 )
+
+// The task's sessions: every run that named this task (backlinks via
+// session.requested_task_eid) plus the claim's holder — one row each, so
+// a task is the door to the agents that worked it.
+let Runs = ({ e }: { e: Ent }) => {
+  let ids = new Set(
+    backlinks(e.eid)
+      .filter((b) => b.via == 'session.requested_task_eid')
+      .map((b) => b.from),
+  )
+  if (e.claim) ids.add(e.claim.session_eid)
+  if (!ids.size) return null
+  return (
+    <RunsEl>
+      {[...ids].map((s) => <View key={s} eid={s} view='List.Item' />)}
+    </RunsEl>
+  )
+}
 
 // The same view in card context: the task IS the card, its head lives in
 // the titlebar (Card.Title, where the dot edits status) — here a meta

@@ -909,6 +909,21 @@ html {
 .Task_Head :is(.Task_Claim, .Task_Project, .Task_Caret, .Task_Domain, .Prio, .Task_Field, .Task_Pick) ~ :is(.Task_Project, .Task_Caret, .Task_Domain, .Prio, .Task_Field, .Task_Pick, .Id) {
   margin-left: 0;
 }
+.Task_Runs {
+  display: grid;
+  gap: 2px;
+  margin-top: var(--half-gap);
+}
+.Debug_Linked {
+  display: flex;
+  align-items: baseline;
+  gap: var(--half-gap);
+}
+.Debug_Via {
+  font-size: 11px;
+  color: var(--dim);
+  white-space: nowrap;
+}
 .Task_Body {
   margin: var(--half-gap) 0 0;
   cursor: text; /* double-click edits the markdown source */

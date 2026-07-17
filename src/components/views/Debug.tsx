@@ -1,5 +1,5 @@
 import { comps as vocab, type Ent } from '../../types.ts'
-import { ent } from '../../live.ts'
+import { backlinks, ent } from '../../live.ts'
 import { block } from '../ui.tsx'
 import { Prop } from '../editors.tsx'
 import { View } from '../View.tsx'
@@ -22,6 +22,8 @@ let Frame = block('div', 'Debug', {
   Claim: 'span',
   Prio: 'span',
   Kids: 'div',
+  Linked: 'div',
+  Via: 'span',
 })
 let {
   Props: Grid,
@@ -35,6 +37,8 @@ let {
   Claim,
   Prio,
   Kids,
+  Linked,
+  Via,
 } = Frame
 
 // The comps an entity actually carries, minus the spine — the raw payload.
@@ -107,22 +111,38 @@ let AllProps = ({ e }: { e: Ent }) => (
   </Grid>
 )
 
-export let Debug = ({ e }: { e: Ent }) => (
-  <Frame>
-    <View eid={e.eid} view='Debug.ListItem' />
-    <AllProps e={e} />
-    {e.refs.map((r) => (
-      <View key={r.child} eid={r.child} view='Dependency' type={r.type} />
-    ))}
-    {e.kids.length > 0 && (
-      <Kids>
-        {e.kids.map((k) => (
-          <View key={k.eid} eid={k.eid} view='Debug.ListItem' />
-        ))}
-      </Kids>
-    )}
-  </Frame>
-)
+export let Debug = ({ e }: { e: Ent }) => {
+  // Incoming references too: whatever in the cache points here, said by
+  // which prop brought it (live.ts backlinks, derived from the typed
+  // vocabulary — sessions on their task, cards on their target, …).
+  let links = backlinks(e.eid)
+  return (
+    <Frame>
+      <View eid={e.eid} view='Debug.ListItem' />
+      <AllProps e={e} />
+      {e.refs.map((r) => (
+        <View key={r.child} eid={r.child} view='Dependency' type={r.type} />
+      ))}
+      {e.kids.length > 0 && (
+        <Kids>
+          {e.kids.map((k) => (
+            <View key={k.eid} eid={k.eid} view='Debug.ListItem' />
+          ))}
+        </Kids>
+      )}
+      {links.length > 0 && (
+        <Kids>
+          {links.map((b) => (
+            <Linked key={b.from + b.via}>
+              <Via>← {b.via}</Via>
+              <View eid={b.from} view='Debug.ListItem' />
+            </Linked>
+          ))}
+        </Kids>
+      )}
+    </Frame>
+  )
+}
 
 export let DebugTaskItem = ({ e }: { e: Ent }) => (
   <Item>

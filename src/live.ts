@@ -2,7 +2,13 @@
 // The cache is the client's whole world — a snapshot fills it, ws patches
 // keep it current, and every component renders straight out of it.
 import { computed, signal } from '@preact/signals'
-import { type Change, type Dep, type Ent, type Pinned } from './types.ts'
+import {
+  type Change,
+  comps as vocab,
+  type Dep,
+  type Ent,
+  type Pinned,
+} from './types.ts'
 import { type Row } from './client.ts'
 import { matchQuery, parseQuery } from './query.ts'
 
@@ -257,6 +263,25 @@ export let pinned = (canvas: string): Pinned[] =>
       view: r.card!.view,
     }))
     .sort((a, b) => (a.z - b.z) || (a.eid < b.eid ? -1 : 1))
+
+// Who points HERE, and via what: every eid-typed prop in the vocabulary
+// scanned over the cache. The vocabulary IS the schema, so a new
+// association shows up in backlinks with no second edit — this is how a
+// task finds its sessions (session.requested_task_eid) and Debug lists
+// whatever holds a reference to the entity on screen.
+let eidProps = Object.entries(vocab).flatMap(([c, props]) =>
+  Object.entries(props)
+    .filter(([, t]) => typeof t == 'object' && 'eid' in t)
+    .map(([p]) => [c, p] as [string, string])
+)
+export let backlinks = (eid: string) =>
+  Object.entries(cache.value).flatMap(([from, r]) =>
+    eidProps
+      .filter(([c, p]) =>
+        (r[c as keyof typeof r] as Record<string, unknown>)?.[p] == eid
+      )
+      .map(([c, p]) => ({ from, via: `${c}.${p}` }))
+  )
 
 // The highest stacking order on a canvas — a raised card gets topZ + 1.
 export let topZ = (canvas: string) =>
