@@ -16,6 +16,7 @@ import {
   byBoard,
   claimant,
   claimChanges,
+  commentChanges,
   find,
   idOf,
   param,
@@ -167,12 +168,33 @@ or hand off.`,
   )
 
   server.tool(
+    'task_comment',
+    `Comment on ANY entity (tasks, boards, docs, frozen pages — anything
+with an id). Body is markdown. Pass the same stable session identifier
+you claim with, for attribution.`,
+    { id: z.string(), body: z.string(), session: z.string() },
+    async (
+      { id, body, session }: { id: string; body: string; session: string },
+    ) => {
+      let all = rows(await io.read())
+      let row = find(all, id)
+      if (!row) return text(`no entity: ${id}`)
+      await io.write(commentChanges(all, row.eid, body, session))
+      return text(`commented on ${idOf(row)}`)
+    },
+  )
+
+  server.tool(
     'task_show',
-    'One entity, whole: spine, every component, as JSON. id: T-3, bare num, or eid.',
+    `One entity, whole: spine, every component, its comments, as JSON.
+id: T-3, bare num, or eid.`,
     { id: z.string() },
     async ({ id }: { id: string }) => {
-      let row = find(rows(await io.read()), id)
-      return text(row ? JSON.stringify(row, null, 2) : `no entity: ${id}`)
+      let all = rows(await io.read())
+      let row = find(all, id)
+      if (!row) return text(`no entity: ${id}`)
+      let comments = all.filter((r) => r.comps.comment?.target_eid == row.eid)
+      return text(JSON.stringify({ ...row, comments }, null, 2))
     },
   )
 

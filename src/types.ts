@@ -19,6 +19,7 @@ export let comps: Record<string, string[]> = {
   camera: ['client_eid', 'canvas_eid', 'x', 'y', 'zoom', 'w', 'h'],
   session: ['id'],
   claim: ['session_eid'], // claimed_at is server-stamped
+  comment: ['target_eid', 'author_eid'],
 }
 
 // The status vocabulary, in board-column order.
@@ -38,6 +39,7 @@ export let kindOrder = [
   'camera',
   'session',
   'claim',
+  'comment',
   'doc',
 ]
 export let kindOf = (has: Record<string, unknown>) =>
@@ -109,6 +111,15 @@ export type Session = { eid: string; id: string }
 // the server rejects — release first (comp: null), then claim.
 export type Claim = { eid: string; session_eid: string; claimed_at?: string }
 
+// A comment is a doc AIMED at something — and since target_eid is any
+// entity, ANYTHING is commentable: tasks, boards, frozen pages, other
+// comments. author_eid points at a session or client entity (or null).
+export type Comment = {
+  eid: string
+  target_eid: string
+  author_eid?: string | null
+}
+
 export type Dep = { parent: string; type: Edge; child: string }
 
 // An outgoing edge, verb + child — the Dependency view resolves the name.
@@ -132,6 +143,7 @@ export type Ent = {
   camera?: Camera
   session?: Session
   claim?: Claim
+  comment?: Comment
   refs: Ref[]
   kids: Ent[]
 }

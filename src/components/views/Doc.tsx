@@ -1,5 +1,6 @@
 import { type Ent } from '../../types.ts'
 import { block } from '../ui.tsx'
+import { Comments } from '../Comments.tsx'
 import { Edit } from '../Edit.tsx'
 import { TaskBody } from './Task.tsx'
 import { View } from '../View.tsx'
@@ -22,6 +23,7 @@ export let DocView = ({ e }: { e: Ent }) => (
     {e.refs.map((r) => (
       <View key={r.child} eid={r.child} view='Dependency' type={r.type} />
     ))}
+    <Comments eid={e.eid} />
   </Frame>
 )
 
@@ -32,5 +34,6 @@ export let DocCard = ({ e }: { e: Ent }) => (
     {e.refs.map((r) => (
       <View key={r.child} eid={r.child} view='Dependency' type={r.type} />
     ))}
+    <Comments eid={e.eid} />
   </>
 )

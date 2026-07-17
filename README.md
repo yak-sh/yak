@@ -28,6 +28,7 @@ client(eid pk→entity, user_agent, ip)
 camera(eid pk→entity, client_eid→entity, canvas_eid→entity, x, y, zoom, w, h)
 session(eid pk→entity, id unique)  -- an agent session; grows model/persona/provider
 claim(eid pk→entity, session_eid→entity, claimed_at)  -- a session's lease
+comment(eid pk→entity, target_eid→entity, author_eid)  -- a doc aimed at ANYTHING
 dependency(parent_eid→entity, type ∈ requires|contains|reads, child_eid→entity)
 ```
 

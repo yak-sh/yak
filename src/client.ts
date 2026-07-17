@@ -111,18 +111,48 @@ export let idOf = (r: Row) =>
     ] ?? r.kind[0].toUpperCase()
   }-${r.num}`
 
-// Find-or-mint the session entity for an external session id, plus the
-// claim pointing at it — one batch, atomic on the server.
+// Find-or-mint the session entity for an external session id: its eid
+// plus the change that creates it when it's new.
+export let sessionFor = (all: Row[], session: string) => {
+  let s = all.find((r) => r.comps.session && r.comps.session.id == session)
+  let eid = s?.eid ?? crypto.randomUUID()
+  let changes: Change[] = s
+    ? []
+    : [{ eid, name: 'session', comp: { id: session } }]
+  return { eid, changes }
+}
+
+// The claim pointing at a session entity — one batch, atomic on the server.
 export let claimChanges = (
   all: Row[],
   target: string,
   session: string,
 ): Change[] => {
-  let s = all.find((r) => r.comps.session && r.comps.session.id == session)
-  let seid = s?.eid ?? crypto.randomUUID()
+  let s = sessionFor(all, session)
   return [
-    ...(s ? [] : [{ eid: seid, name: 'session', comp: { id: session } }]),
-    { eid: target, name: 'claim', comp: { session_eid: seid } },
+    ...s.changes,
+    { eid: target, name: 'claim', comp: { session_eid: s.eid } },
+  ]
+}
+
+// A comment: a doc aimed at the target, attributed to a session when
+// one is named.
+export let commentChanges = (
+  all: Row[],
+  target: string,
+  body: string,
+  session?: string,
+): Change[] => {
+  let s = session ? sessionFor(all, session) : undefined
+  let eid = crypto.randomUUID()
+  return [
+    ...(s?.changes ?? []),
+    { eid, name: 'doc', comp: { title: '', body } },
+    {
+      eid,
+      name: 'comment',
+      comp: { target_eid: target, author_eid: s?.eid ?? null },
+    },
   ]
 }
 

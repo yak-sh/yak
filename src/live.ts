@@ -9,6 +9,7 @@ import {
   type Change,
   type Claim,
   type Client,
+  type Comment,
   type Dep,
   type Doc,
   type Ent,
@@ -32,6 +33,7 @@ type Comps = {
   camera?: Camera
   session?: Session
   claim?: Claim
+  comment?: Comment
 }
 
 export let cache = signal<Record<string, Comps>>({})
@@ -147,6 +149,7 @@ export let ent = (eid: string): Ent => {
     camera: r.camera,
     session: r.session,
     claim: r.claim,
+    comment: r.comment,
     refs: deps.value
       .filter((d) => d.parent == eid && d.type != 'contains')
       .map((d) => ({ type: d.type, child: d.child })),
@@ -155,6 +158,14 @@ export let ent = (eid: string): Ent => {
       .map((d) => ent(d.child)),
   }
 }
+
+// Everything said ABOUT an entity, oldest first — comments are entities
+// whose comment.target_eid points here.
+export let commentsOn = (eid: string): Ent[] =>
+  Object.entries(cache.value)
+    .filter(([, r]) => r.comment?.target_eid == eid)
+    .map(([id]) => ent(id))
+    .sort((a, b) => a.num - b.num)
 
 // The root canvas (first canvas-tagged entity) and its pinned cards.
 export let rootCanvas = () =>

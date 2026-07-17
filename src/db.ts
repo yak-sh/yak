@@ -85,6 +85,11 @@ let schema = `
     session_eid text not null references entity(eid),
     claimed_at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
+  create table if not exists comment (
+    eid        text primary key references entity(eid),
+    target_eid text not null references entity(eid),
+    author_eid text
+  );
   create table if not exists tombstone (
     eid        text primary key,
     deleted_at text not null

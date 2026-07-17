@@ -9,12 +9,14 @@ import {
   applyLocal,
   byPriority,
   cache,
+  commentsOn,
   ent,
   mode,
   send,
   statuses,
 } from '../live.ts'
 import { has, type Renderer, resolve, View } from '../components/View.tsx'
+import { author } from '../components/Comments.tsx'
 import { idOf } from '../components/views/Id.tsx'
 import { Dot } from '../components/Dot.tsx'
 import { clipboard } from './paint.ts'
@@ -189,6 +191,12 @@ let TuiTask = ({ e }: { e: Ent }) => (
     )}
     {e.refs.map((r) => (
       <View key={r.child} eid={r.child} view='Dependency' type={r.type} />
+    ))}
+    {commentsOn(e.eid).map((c) => (
+      <div class='TComment'>
+        <span class='Comments_Who'>{author(c.comment!.author_eid)}</span>{' '}
+        <Md text={c.doc?.body ?? ''} />
+      </div>
     ))}
   </div>
 )

@@ -13,6 +13,7 @@ import {
   byBoard,
   claimant,
   claimChanges,
+  commentChanges,
   find,
   host,
   idOf,
@@ -33,6 +34,7 @@ let usage = `task — the entity graph, from a shell
   task show <id>                 print one entity as JSON
   task claim <id> [session]      lease a task for a session ($TASKS_SESSION)
   task release <id>              drop the lease
+  task comment <id> <text...>    say something about ANY entity
 
 dot-params route by prop (.title= → doc.title); where a prop lives in
 several components (pin/camera x,y,w,h) spell it out: .pin.x=12
@@ -128,12 +130,26 @@ let release = async (args: string[]) => {
   console.log(`${idOf(row)} released`)
 }
 
+// Comments attach to anything; attribution rides $TASKS_SESSION when set.
+let comment = async (args: string[]) => {
+  let [id, ...words] = args
+  let body = words.join(' ')
+  if (!id || !body) throw new Error('task comment <id> <text...>')
+  let all = rows(await snapshot())
+  let row = find(all, id)
+  if (!row) throw new Error(`no entity: ${id}`)
+  await send(commentChanges(all, row.eid, body, Deno.env.get('TASKS_SESSION')))
+  console.log(`commented on ${idOf(row)}`)
+}
+
 let show = async (args: string[]) => {
   let [id] = args
   if (!id) throw new Error('task show <id>')
-  let row = find(rows(await snapshot()), id)
+  let all = rows(await snapshot())
+  let row = find(all, id)
   if (!row) throw new Error(`no entity: ${id}`)
-  console.log(JSON.stringify(row, null, 2))
+  let comments = all.filter((r) => r.comps.comment?.target_eid == row.eid)
+  console.log(JSON.stringify({ ...row, comments }, null, 2))
 }
 
 let tui = async () => {
@@ -159,6 +175,7 @@ try {
   else if (cmd == 'set') await set(rest)
   else if (cmd == 'show') await show(rest)
   else if (cmd == 'claim') await claim(rest)
+  else if (cmd == 'comment') await comment(rest)
   else if (cmd == 'release') await release(rest)
   else {
     console.log(usage.trim())

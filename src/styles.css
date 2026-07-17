@@ -242,13 +242,16 @@
   color: var(--dim);
   font-weight: 400;
 }
-/* The card's remove button — deletes the card entity, not its target. */
+/* The card's remove button — deletes the card entity, not its target.
+   Padded well past the glyph: a close button earns its hit area. */
 .Card_X {
-  font: 12px ui-monospace, monospace;
+  font: 14px/1 ui-monospace, monospace;
   color: var(--dim);
   background: none;
   border: 0;
-  padding: 0;
+  padding: 4px 8px;
+  margin: -4px -4px -4px calc(-1 * var(--half-gap));
+  border-radius: calc(var(--radius) - 2px);
   cursor: pointer;
 }
 .Card_X:hover {
@@ -308,6 +311,44 @@
   .Tab_Tip {
     display: none; /* no anchor positioning → icons stand alone */
   }
+}
+
+/* The comment rail — quiet, left-ruled, under any entity's view. The
+   textarea is the rail's last row: borderless until it's spoken to. */
+.Comments {
+  margin-top: var(--gap);
+  display: grid;
+  gap: var(--half-gap);
+}
+.Comments_Item {
+  border-left: 2px solid var(--border2);
+  padding-left: var(--half-gap);
+}
+.Comments_Who {
+  font-size: 11px;
+  color: var(--blue);
+}
+.Comments_Body {
+  color: var(--muted);
+}
+.Comments_Body p {
+  margin: 0;
+}
+.Comments_New {
+  font: inherit;
+  color: var(--text);
+  background: none;
+  border: 0;
+  border-left: 2px solid transparent;
+  padding: 0 0 0 var(--half-gap);
+  resize: none;
+  outline: none;
+}
+.Comments_New::placeholder {
+  color: var(--dim);
+}
+.Comments_New:focus {
+  border-left-color: var(--accent);
 }
 
 /* The one scrolling element — padding scrolls away WITH the content. */
