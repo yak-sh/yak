@@ -76,6 +76,9 @@ let parseFilters = (filters: string[]) =>
   })
 
 let text = (s: string) => ({ content: [{ type: 'text' as const, text: s }] })
+// A refusal IS an error: isError rides the reply so agent harnesses (and
+// telemetry) count it as one, instead of a success that reads like an apology.
+let err = (s: string) => ({ ...text(s), isError: true as const })
 
 let BUS = `Pass your stable session id and the reply also carries anything
 you haven't seen — comments on your claimed tasks, messages aimed at your
@@ -224,7 +227,7 @@ P-19). ${GRAMMAR} ${BUS}`,
     ) => {
       let all = rows(await io.read())
       let row = find(all, id)
-      if (!row) return text(`no entity: ${id}`)
+      if (!row) return err(`no entity: ${id}`)
       await io.write(
         Object.entries(patches(resolveIds(all, parseAll(params))))
           .map(([name, comp]) => ({ eid: row.eid, name, comp })),
@@ -256,11 +259,14 @@ or hand off.`,
     async ({ id, session }: { id: string; session: string }) => {
       let all = rows(await io.read())
       let row = find(all, id)
-      if (!row) return text(`no entity: ${id}`)
+      if (!row) return err(`no entity: ${id}`)
       try {
         await io.write(claimChanges(all, row.eid, session))
       } catch (e) {
-        return bus(`claim failed: ${(e as Error).message}`, session)
+        return {
+          ...await bus(`claim failed: ${(e as Error).message}`, session),
+          isError: true as const,
+        }
       }
       return bus(`claimed ${idOf(row)} for ${session}`, session)
     },
@@ -273,7 +279,7 @@ other sessions. ${BUS}`,
     { id: z.string(), session: z.string().optional() },
     async ({ id, session }: { id: string; session?: string }) => {
       let row = find(rows(await io.read()), id)
-      if (!row) return text(`no entity: ${id}`)
+      if (!row) return err(`no entity: ${id}`)
       await io.write([{ eid: row.eid, name: 'claim', comp: null }])
       return bus(`released ${idOf(row)}`, session)
     },
@@ -290,7 +296,7 @@ you claim with, for attribution.`,
     ) => {
       let all = rows(await io.read())
       let row = find(all, id)
-      if (!row) return text(`no entity: ${id}`)
+      if (!row) return err(`no entity: ${id}`)
       await io.write(commentChanges(all, row.eid, body, session))
       return bus(`commented on ${idOf(row)}`, session)
     },
@@ -374,7 +380,7 @@ screens. ${GRAMMAR}`,
         }
         await io.write(changes)
       } catch (e) {
-        return text(`apply failed: ${(e as Error).message}`)
+        return err(`apply failed: ${(e as Error).message}`)
       }
       return text(`applied ${changes.length} change(s)`)
     },
@@ -463,7 +469,7 @@ card_move).`,
     ) => {
       let all = rows(await io.read())
       let row = find(all, target)
-      if (!row) return text(`no entity: ${target}`)
+      if (!row) return err(`no entity: ${target}`)
       let canvas = all.find((r) => r.kind == 'canvas')
       if (!canvas) return text('no canvas')
       if (x == null || y == null) {
@@ -528,7 +534,7 @@ card_move).`,
       },
     ) => {
       let row = find(rows(await io.read()), id)
-      if (!row?.comps.pin) return text(`no pinned card: ${id}`)
+      if (!row?.comps.pin) return err(`no pinned card: ${id}`)
       let comp = Object.fromEntries(
         Object.entries({ x, y, w, h }).filter(([, v]) => v != null),
       )
@@ -544,7 +550,7 @@ card_move).`,
     { id: z.string() },
     async ({ id }: { id: string }) => {
       let row = find(rows(await io.read()), id)
-      if (!row?.comps.card) return text(`no card: ${id}`)
+      if (!row?.comps.card) return err(`no card: ${id}`)
       await io.write([{ eid: row.eid, name: 'entity', comp: null }])
       return text(`closed ${idOf(row)}`)
     },
@@ -604,7 +610,7 @@ Math.floor(i/4)*280}})); return pins.length`,
           worker.postMessage({ js, snapshot })
         })
       } catch (e) {
-        return text(`code failed: ${(e as Error).message}`)
+        return err(`code failed: ${(e as Error).message}`)
       } finally {
         worker.terminate()
       }
@@ -645,7 +651,7 @@ id: T-3, bare num, or eid. ${BUS}`,
     async ({ id, session }: { id: string; session?: string }) => {
       let all = rows(await io.read())
       let row = find(all, id)
-      if (!row) return text(`no entity: ${id}`)
+      if (!row) return err(`no entity: ${id}`)
       let comments = all.filter((r) => r.comps.comment?.target_eid == row.eid)
       return bus(JSON.stringify({ ...row, comments }, null, 2), session)
     },
