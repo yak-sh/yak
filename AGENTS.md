@@ -119,7 +119,11 @@ a row, not a dependency).
 - **The injection loop**: `.claude/settings.json` runs `bin/task-context` on
   SessionStart — agent sessions in this repo boot into their claimed work
   (`task context` / MCP `task_context`, same digest). The hook must NEVER fail
-  loudly; a dead server means no digest, not a broken session.
+  loudly; a dead server means no digest, not a broken session. SessionEnd
+  mirrors it: `bin/task-lapse` releases the session's claims, commenting on
+  anything not done ("lease lapsed") — no timers, ending the session IS the
+  lapse. SessionStart also reifies the session entity (id + cwd, the worktree it
+  ran in).
 - The MCP surface has two tiers: task_* sugar and the generic tier
   (graph_query/graph_apply/ui_state/card_*/code_run). The generic tier is
   possible because the UI is data — cards/pins/cameras are entities; keep it
