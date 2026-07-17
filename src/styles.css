@@ -428,11 +428,13 @@
   color: var(--purple);
   font-size: 11px;
 }
-.TaskRow_Prio,
 .TaskRow_Id {
   font-size: 11px;
   color: var(--dim);
   white-space: nowrap;
+}
+.TaskRow .Prio {
+  flex: none;
 }
 
 .Task {
@@ -459,18 +461,37 @@
 .Task_Head .Id {
   margin-left: auto;
 }
-.Task_Prio,
 .Debug_Prio {
   font-size: 11px;
   color: var(--dim);
   white-space: nowrap;
 }
-.Task_Head .Task_Claim + .Task_Prio,
-.Task_Head .Task_Prio {
-  margin-left: auto;
+/* The priority badge — a tinted pill. Tier drives the colour: P0 burns,
+   P1 glows, P2 is the quiet default, P3 fades out. */
+.Prio {
+  --pill: var(--dim);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  padding: 0 5px;
+  border-radius: 999px;
+  color: var(--pill);
+  background: color-mix(in srgb, var(--pill) 15%, transparent);
 }
-.Task_Head .Task_Prio ~ .Id {
-  margin-left: 0;
+.Prio-0 {
+  --pill: var(--red);
+}
+.Prio-1 {
+  --pill: var(--orange);
+}
+.Prio-3 {
+  opacity: 0.65;
+}
+/* The domain facet chip (Eng, Legal, Ops, …). */
+.Task_Domain {
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--muted);
 }
 /* The session lease badge — who's working this, in fleet purple. */
 .Task_Claim,
@@ -479,10 +500,12 @@
   font-size: 11px;
   color: var(--purple);
 }
-.Task_Head .Task_Claim {
+/* Head chips gather on the right: the FIRST one present takes the auto
+   margin, everything after it (id included) sits flush. */
+.Task_Head :is(.Task_Claim, .Task_Domain, .Prio) {
   margin-left: auto;
 }
-.Task_Head .Task_Claim + .Id {
+.Task_Head :is(.Task_Claim, .Task_Domain, .Prio) ~ :is(.Task_Domain, .Prio, .Id) {
   margin-left: 0;
 }
 .Task_Body {

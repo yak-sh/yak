@@ -244,6 +244,7 @@ export let open = () => {
     }
   }
   addCol('task', 'project_eid', 'project_eid text references entity(eid)')
+  addCol('task', 'domain', 'domain text')
   addCol('session', 'cwd', 'cwd text')
   let { n } = db.prepare('select count(*) as n from task').get() as {
     n: number

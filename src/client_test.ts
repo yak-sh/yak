@@ -53,6 +53,7 @@ let CASES: [string, { comp: string; prop: string; value: unknown } | RegExp][] =
   [
     ['.title=Hi', { comp: 'doc', prop: 'title', value: 'Hi' }],
     ['.status=done', { comp: 'task', prop: 'status', value: 'done' }],
+    ['.domain=Eng', { comp: 'task', prop: 'domain', value: 'Eng' }],
     ['.priority=1.5', { comp: 'task', prop: 'priority', value: 1.5 }],
     ['.pin.x=12', { comp: 'pin', prop: 'x', value: 12 }],
     ['.x=12', /ambiguous/],

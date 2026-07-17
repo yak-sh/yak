@@ -5,6 +5,7 @@ import { ent } from '../../live.ts'
 import { block } from '../ui.tsx'
 import { Comments } from '../Comments.tsx'
 import { Dot } from '../Dot.tsx'
+import { Prio } from '../Prio.tsx'
 import { Edit } from '../Edit.tsx'
 import { View } from '../View.tsx'
 
@@ -13,9 +14,9 @@ let Frame = block('div', 'Task', {
   Title: 'span',
   Body: 'p',
   Claim: 'span',
-  Prio: 'span',
+  Domain: 'span',
 })
-let { Head, Title, Body, Claim, Prio } = Frame
+let { Head, Title, Body, Claim, Domain } = Frame
 
 // The body is markdown: rendered as HTML (snarkdown; our own data, so no
 // sanitizer between us and ourselves), double-click swaps in the raw
@@ -55,7 +56,8 @@ export let Task = ({ e }: { e: Ent }) => (
         <Edit eid={e.eid} comp='doc' prop='title' />
       </Title>
       {e.claim && <Claim>⚑ {ent(e.claim.session_eid).session?.id}</Claim>}
-      <Prio>p{e.task!.priority}</Prio>
+      {e.task!.domain && <Domain>{e.task!.domain}</Domain>}
+      <Prio p={e.task!.priority} />
       <View eid={e.eid} view='Id' />
     </Head>
     <TaskBody e={e} />

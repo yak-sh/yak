@@ -9,7 +9,7 @@
 // explicit .comp.prop spelling.
 export let comps: Record<string, string[]> = {
   doc: ['title', 'body'],
-  task: ['status', 'priority', 'project_eid'],
+  task: ['status', 'priority', 'project_eid', 'domain'],
   project: [],
   board: [],
   canvas: [],
@@ -78,6 +78,8 @@ export type Task = {
   status: string
   priority: number // board order within a status column; lower sorts first
   project_eid?: string | null // the project (venture) this task belongs to
+  domain?: string | null // cross-project facet (Eng, Legal, Ops, …) — free
+  // text by convention; a picker derives its options from distinct values
 }
 
 // A tag: "this doc fronts a project" (a venture, a workstream). Its name
