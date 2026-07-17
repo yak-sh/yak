@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { md } from '../../md.ts'
 import { type Ent, type LogRow, sessionActive } from '../../types.ts'
 import { base } from '../../live.ts'
@@ -186,11 +186,57 @@ let useLog = (eid: string, live: boolean) => {
   return log
 }
 
+// The host's scroller — a card's Card_Scroll, the fullscreen App_Body —
+// found by walking up to the nearest ancestor that scrolls. Null in the
+// TUI's fake DOM (no parentElement), which switches the feature off there.
+let scrollerOf = (n: HTMLElement | null) => {
+  for (let s = n?.parentElement; s; s = s.parentElement) {
+    if (/auto|scroll/.test(getComputedStyle(s).overflowY)) return s
+  }
+  return null
+}
+
+// Follow the tail: while the reader sits at a scroller's end, each new
+// log row pins it there again; scroll up and it stays put, return to the
+// end and it follows once more. TWO scrollers matter — the log box caps
+// its own height (32lh) and scrolls itself, and the host scrolls the
+// whole pane — so each keeps its own stickiness. That's sampled on
+// scroll events, BEFORE new rows land: right after a render the end has
+// already moved, and measuring would always say "not at end". The
+// programmatic pin fires a scroll event too, re-arming itself.
+let useTail = (live: boolean, seq?: number) => {
+  let frame = useRef<HTMLDivElement>(null)
+  let logEl = useRef<HTMLDivElement>(null)
+  let scrollers = () =>
+    [logEl.current, scrollerOf(frame.current)]
+      .filter((s): s is HTMLElement => !!s)
+  let stuck = useRef(new WeakMap<Element, boolean>())
+  useEffect(() => {
+    let offs = scrollers().map((s) => {
+      stuck.current.set(s, live) // a finished session opens unpinned
+      let sample = () => {
+        // within a scrollbar-rounding of the end still counts as AT it
+        stuck.current.set(s, s.scrollTop + s.clientHeight >= s.scrollHeight - 4)
+      }
+      s.addEventListener('scroll', sample)
+      return () => s.removeEventListener('scroll', sample)
+    })
+    return () => offs.forEach((off) => off())
+  }, [])
+  useLayoutEffect(() => {
+    for (let s of scrollers()) {
+      if (stuck.current.get(s)) s.scrollTop = s.scrollHeight
+    }
+  }, [seq])
+  return { frame, logEl }
+}
+
 export let Session = ({ e }: { e: Ent }) => {
   let s = e.session!
   let status = s.status ?? ''
   let live = sessionActive.includes(status)
   let log = useLog(e.eid, live)
+  let { frame, logEl } = useTail(live, log.entries.at(-1)?.seq)
   // The Final block IS the last agent say — don't print it twice. Only a
   // session whose log grew no say row (an external one, a torn log) still
   // leans on final_text.
@@ -198,7 +244,7 @@ export let Session = ({ e }: { e: Ent }) => {
     (x) => x.row?.kind == 'say' && x.row.role == 'agent',
   )
   return (
-    <Frame>
+    <Frame elRef={frame}>
       <Head>
         <Dot status={status} />
         <Status mod={status}>{status || 'external'}</Status>
@@ -234,7 +280,7 @@ export let Session = ({ e }: { e: Ent }) => {
       )}
       {s.error && <Fault mod='error'>{s.error}</Fault>}
       {s.stop_reason && <Fault>{s.stop_reason}</Fault>}
-      <Log>
+      <Log elRef={logEl}>
         {log.entries.map((x) => <Row key={x.seq} x={x} />)}
       </Log>
       {/* stderr: unordered diagnostics, never inside the log's seqs */}
