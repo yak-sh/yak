@@ -12,6 +12,7 @@ import { apply, db, search, snapshot } from './db.ts'
 import { freeze, serveFrozen } from './freeze.ts'
 import { mcpServer } from './mcp.ts'
 import { logs, recover, start, stop } from './sessions.ts'
+import { outcome, recent, record, toolCall } from './telemetry.ts'
 
 let src = new URL('.', import.meta.url).pathname
 
@@ -106,11 +107,18 @@ let ws = (req: Request) => {
 // strand an agent session — and no node-shim layers to wedge. Tools
 // reach the graph in-process: same apply(), same allowlist, and writes
 // broadcast to every live client.
+//
+// Every tools/call is timed and recorded on the way through (telemetry.ts
+// classifies the body — this route is the only place that sees both the
+// request and its reply).
 let mcp = async (req: Request) => {
+  let call: ReturnType<typeof toolCall> = null
+  let t0 = performance.now()
   try {
     let body = await req.json()
     if (Array.isArray(body)) return new Response('no batches', { status: 400 })
     if (body.id == null) return new Response(null, { status: 202 }) // notification
+    call = toolCall(body)
     let [mine, theirs] = InMemoryTransport.createLinkedPair()
     let server = mcpServer({
       // deno-lint-ignore require-await
@@ -133,11 +141,63 @@ let mcp = async (req: Request) => {
       ),
     ])
     await server.close()
+    if (call) {
+      record(db, {
+        source: 'mcp',
+        ...call,
+        ...outcome(out),
+        ms: performance.now() - t0,
+      })
+    }
     return Response.json(out)
   } catch (e) {
     console.warn('mcp request failed —', e)
+    // A timeout or a crash never reached the tool's own error path —
+    // record it anyway, or the worst calls are the invisible ones.
+    if (call) {
+      record(db, {
+        source: 'mcp',
+        ...call,
+        ok: false,
+        ms: performance.now() - t0,
+        error: String(e),
+      })
+    }
     return new Response('mcp error', { status: 500 })
   }
+}
+
+// Read at most n bytes of a body: a report from a broken page is
+// untrusted in SIZE, if in nothing else. Breaking the loop cancels the
+// stream; a truncated body just fails to parse.
+let bounded = async (req: Request, n: number) => {
+  let out = ''
+  let dec = new TextDecoder()
+  if (!req.body) return out
+  for await (let chunk of req.body) {
+    out += dec.decode(chunk, { stream: true })
+    if (out.length > n) break
+  }
+  return out.slice(0, n)
+}
+
+// The browser's crash channel (main.tsx posts here). Always 204: a
+// reporter that can fail loudly is a second bug on top of the first.
+let clientError = async (req: Request) => {
+  try {
+    let b = JSON.parse(await bounded(req, 16 * 1024))
+    record(db, {
+      source: 'web',
+      name: 'error',
+      session_id: b.client_eid ?? null,
+      ok: false,
+      error: String(b.message ?? 'error'),
+      detail: [b.stack, b.url].filter(Boolean).join('\n\n'),
+    })
+  } catch (e) {
+    console.warn('error report dropped —', e)
+  }
+  return new Response(null, { status: 204 })
 }
 
 // Explicit Deno.serve, not a `deno serve` default export: --watch restarts
@@ -159,13 +219,34 @@ Deno.serve(
       ))
     }
     if (path == '/mcp' && req.method == 'POST') return mcp(req)
+    if (path == '/error' && req.method == 'POST') return clientError(req)
+    if (path == '/telemetry') {
+      return Response.json(recent(db, {
+        since: url.searchParams.get('since') ?? undefined,
+        limit: Number(url.searchParams.get('limit')) || undefined,
+        only: url.searchParams.get('only') ?? undefined,
+      }))
+    }
     // HTTP writes (the CLI and MCP server): same apply, same allowlist,
     // same broadcast — an HTTP client is just a client without a socket.
     if (path == '/apply' && req.method == 'POST') {
+      let t0 = performance.now()
+      let note = (ok: boolean, error?: string) =>
+        record(db, {
+          source: 'http',
+          name: 'apply',
+          ok,
+          ms: performance.now() - t0,
+          error,
+        })
       return req.json().then((changes: Change[]) => {
         cast(apply(db, changes))
+        note(true)
         return Response.json({ ok: true })
-      }).catch((e) => new Response(String(e), { status: 400 }))
+      }).catch((e) => {
+        note(false, String(e))
+        return new Response(String(e), { status: 400 })
+      })
     }
     // Managed sessions: spawn one on a task, ask it to stop, read its log.
     // The handlers stay thin — the lifecycle lives in sessions.ts.
@@ -227,6 +308,7 @@ let graph = [
   'client.ts',
   'sessions.ts',
   'adapters.ts',
+  'telemetry.ts',
 ]
 let watch = async () => {
   let timer: ReturnType<typeof setTimeout> | null = null
