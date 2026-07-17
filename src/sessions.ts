@@ -281,8 +281,8 @@ let spawn = (
   argv: string[],
   cwd: string,
   env: Record<string, string>,
-) =>
-  new Deno.Command('setsid', {
+) => {
+  let child = new Deno.Command('setsid', {
     args: [
       'sh',
       '-c',
@@ -297,6 +297,12 @@ let spawn = (
     stdout: 'null',
     stderr: 'null',
   }).spawn()
+  // unref, or Deno kills the child on --watch reload (setsid is no shield —
+  // the runtime signals the exact pid it tracks). status still resolves
+  // while we live; after a reload the pidfile is how we find it again.
+  child.unref()
+  return child
+}
 
 // ---- start ----
 
