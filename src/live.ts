@@ -18,12 +18,16 @@ export let deps = signal<Dep[]>([])
 // both from its location; other hosts (the TUI) configure these before
 // boot() — a terminal process can't "reload the page".
 let loc = (globalThis as {
-  location?: { host: string; reload(): void }
+  location?: { host: string; protocol?: string; reload(): void }
 }).location
 export let config = {
   host: loc?.host ?? '127.0.0.1:5173',
+  // Behind an https front door the page's scheme must carry through to
+  // the socket and fetches — a hardcoded http:// is mixed content there.
+  secure: loc?.protocol == 'https:',
   reload: () => loc?.reload(),
 }
+let base = () => `http${config.secure ? 's' : ''}://${config.host}`
 
 // The column sort: priority first (lower sorts higher), num as tiebreak.
 export { statuses } from './types.ts'
@@ -75,7 +79,7 @@ let ws: WebSocket | null = null
 let polling = false
 export let sock = () => {
   if (ws && ws.readyState <= WebSocket.OPEN) return ws
-  ws = new WebSocket(`ws://${config.host}/ws`)
+  ws = new WebSocket(`ws${config.secure ? 's' : ''}://${config.host}/ws`)
   ws.onmessage = (m) => {
     let data = JSON.parse(String(m.data))
     if (Array.isArray(data)) applyLocal(data)
@@ -86,7 +90,7 @@ export let sock = () => {
     polling = true
     let poll = setInterval(async () => {
       try {
-        await fetch(`http://${config.host}/snapshot`, { method: 'HEAD' })
+        await fetch(`${base()}/snapshot`, { method: 'HEAD' })
         clearInterval(poll)
         polling = false
         config.reload()
@@ -106,7 +110,7 @@ export let send = (...changes: unknown[]) => {
 // Fill the cache and open the socket — main.tsx awaits this before render.
 // (Changes landing between the fetch and the open are missed; fine for now.)
 export let boot = async () => {
-  let snap = await (await fetch(`http://${config.host}/snapshot`)).json()
+  let snap = await (await fetch(`${base()}/snapshot`)).json()
   deps.value = snap.deps
   applyLocal(snap.changes)
   sock()
