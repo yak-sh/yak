@@ -178,6 +178,10 @@ Deno.test('fts: search finds, follows edits, forgets the dead', () => {
   ])
   assertEquals(search(db, 'xylophone')[0]?.eid, t)
   assertEquals(search(db, 'xylo*')[0]?.kind, 'task') // prefix + derived kind
+  // every term prefix-matches unasked — search is typed live
+  assertEquals(search(db, 'xylo')[0]?.eid, t)
+  assertEquals(search(db, 'xylophone repai')[0]?.eid, t)
+  assertEquals(search(db, 'xylophone repairs').length, 0) // prefix ≠ fuzzy
   apply(db, [{ eid: t, name: 'doc', comp: { title: 'Glockenspiel repair' } }])
   assertEquals(search(db, 'xylophone').length, 0) // the edit moved the index
   // a comment hit opens its TARGET, not itself

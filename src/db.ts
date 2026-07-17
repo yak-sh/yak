@@ -606,10 +606,13 @@ export let apply = (db: DatabaseSync, changes: Change[]): Change[] => {
 }
 
 // Full-text search over every doc — tasks, boards, projects, comments all
-// carry one. User words are quoted into FTS terms (AND semantics; a
-// trailing * keeps prefix search) so raw operator syntax can't error.
-// Title hits outweigh body hits; snippets mark matches with \x01…\x02 so
-// renderers can highlight without trusting HTML. A comment hit points
+// carry one. User words are quoted into FTS terms (AND semantics) so raw
+// operator syntax can't error, and EVERY term prefix-matches — search is
+// typed live, so the words are half-typed more often than not ('card fon'
+// must already find the font mockups). Rank blends bm25 (title hits well
+// over body hits) with recency — what you touched today is what you're
+// looking for — matching the house recall bias. Snippets mark matches
+// with \x01…\x02 so renderers can highlight without trusting HTML. A comment hit points
 // open_eid at its target — you open the conversation, not the aside.
 // A search line mixes FTS terms with dot-param filters (query.ts —
 // 'runner .status=done .modified_at=today'): the TEXT preds drive FTS,
@@ -621,9 +624,8 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
   let filters = preds.filter((p) => p.op != TEXT)
   let match = preds.filter((p) => p.op == TEXT)
     .map((p) => {
-      let prefix = p.value.endsWith('*')
-      let word = (prefix ? p.value.slice(0, -1) : p.value).replaceAll('"', '')
-      return word && `"${word}"${prefix ? '*' : ''}`
+      let word = p.value.replace(/\*+$/, '').replaceAll('"', '')
+      return word && `"${word}"*`
     })
     .filter(Boolean).join(' ')
   if (!match && !filters.length) return []
@@ -637,7 +639,8 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
       join doc d on d.rowid = doc_fts.rowid
       join entity e on e.eid = d.eid
       where doc_fts match ?
-      order by bm25(doc_fts, 4.0, 1.0) limit ?
+      order by bm25(doc_fts, 8.0, 1.0)
+        - 2.0 / (1 + julianday('now') - julianday(e.modified_at)) limit ?
     `).all(match, filters.length ? limit * 10 : limit) as (Omit<
       Hit,
       'kind' | 'open_eid'
