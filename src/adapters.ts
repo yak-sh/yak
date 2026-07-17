@@ -133,16 +133,12 @@ export let adapters: Record<string, Adapter> = {
       'codex',
       'exec',
       '--json',
-      '-s',
-      'workspace-write', // its worktree is its workspace
-      // The owner's config says approvals_reviewer=user, and a headless
-      // exec has no user — codex auto-cancels every MCP call ("user
-      // cancelled MCP tool call"). Per-invocation override to codex's
-      // built-in auto reviewer; the owner's interactive codex keeps
-      // human review. (Config-side per-server approval_mode=never was
-      // tried and does NOT unlock this.)
-      '-c',
-      'approvals_reviewer=auto_review',
+      // No approvals, no sandbox — the owner's call (2026-07-17): a
+      // headless exec has no user to approve, approvals_reviewer=user
+      // auto-cancels every MCP call, and auto_review taxed each call
+      // with a reviewer pass. The session's worktree is its blast
+      // radius. Revisit with T-3593 if the posture changes.
+      '--dangerously-bypass-approvals-and-sandbox',
       '-m',
       j.model,
       ...(j.effort ? ['-c', `model_reasoning_effort=${j.effort}`] : []),
