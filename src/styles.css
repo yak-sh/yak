@@ -554,6 +554,19 @@
 .TaskRow_Claim {
   color: var(--purple);
 }
+/* Edge tallies wear their edge colors, dimmed to meta-line volume. */
+.TaskRow_Deps {
+  white-space: nowrap;
+}
+.TaskRow_Deps-requires {
+  color: var(--red);
+}
+.TaskRow_Deps-contains {
+  color: var(--yellow);
+}
+.TaskRow_Deps-reads {
+  color: var(--blue);
+}
 
 .Task {
   border: 1px solid var(--border);
@@ -616,6 +629,17 @@
   font-size: 11px;
   color: var(--muted);
 }
+/* The task's project, named and linked. */
+.Task_Project {
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--muted);
+  text-decoration: none;
+}
+.Task_Project:hover {
+  text-decoration: underline;
+  color: var(--fg);
+}
 /* The card-context meta line — the board row's grammar on the full card:
    prio · domain · 💬 · ⚑, under the titlebar, above the body. */
 .Task_Meta {
@@ -638,10 +662,10 @@
 }
 /* Head chips gather on the right: the FIRST one present takes the auto
    margin, everything after it (id included) sits flush. */
-.Task_Head :is(.Task_Claim, .Task_Domain, .Prio) {
+.Task_Head :is(.Task_Claim, .Task_Project, .Task_Domain, .Prio) {
   margin-left: auto;
 }
-.Task_Head :is(.Task_Claim, .Task_Domain, .Prio) ~ :is(.Task_Domain, .Prio, .Id) {
+.Task_Head :is(.Task_Claim, .Task_Project, .Task_Domain, .Prio) ~ :is(.Task_Project, .Task_Domain, .Prio, .Id) {
   margin-left: 0;
 }
 .Task_Body {
@@ -785,6 +809,14 @@
   margin: var(--half-gap) var(--half-gap) 0 0;
   font-size: 12px;
   color: var(--muted);
+}
+.Dependency_Name {
+  color: inherit;
+  text-decoration: none;
+}
+.Dependency_Name:hover {
+  text-decoration: underline;
+  color: var(--fg);
 }
 .Dependency_Type-requires {
   color: var(--red);

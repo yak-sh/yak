@@ -1,7 +1,9 @@
 import { signal } from '@preact/signals'
 import { block } from './ui.tsx'
 import { cache, ent, rootCanvas } from '../live.ts'
-import { actionsFor } from './registry.ts'
+import { actionsFor, applicable } from './registry.ts'
+import { type Ent, idOf } from '../types.ts'
+import { dragData } from './View.tsx'
 
 // The URL is the root card: `/` shows the root canvas, `/T-123` (or any
 // id form) shows that entity fullscreened, `?v=List` picks its view.
@@ -20,6 +22,29 @@ export let navigate = (to: string) => {
   if (!his) return
   his.pushState(null, '', to)
   route.value = to
+}
+
+// The plain-click half of an in-app anchor: modifiers, middle-click and
+// the native context menu keep their new-tab forms; a bare click (tap
+// included) navigates in place.
+export let follow = (href: string) => (ev: MouseEvent) => {
+  if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.button != 0) return
+  ev.preventDefault()
+  ev.stopPropagation()
+  navigate(href)
+}
+
+// The whole internal-link contract, spreadable onto any anchor: a real
+// href (new-tab forms and the native menu stay native), plain click
+// follows in place, and dragging it onto the canvas makes a card.
+export let linkProps = (e: Ent) => {
+  let href = `/${idOf(e)}`
+  return {
+    href,
+    onClick: follow(href),
+    draggable: true,
+    onDragStart: (ev: DragEvent) => dragData(ev, e.eid, applicable(e)[0]),
+  }
 }
 
 // Resolve the route to {eid, view}: bare `/` means the root canvas; an
