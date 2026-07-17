@@ -345,6 +345,25 @@ export type StartInput = {
 
 let bad = (error: string, status = 400) => ({ error, status })
 
+// The standing contract every managed spawn carries — the default
+// persona, replaced wholesale once a session names a real one. Repo-
+// agnostic on purpose: a spawn may land in any project's checkout, so
+// the repo's own docs carry the specifics (this graph's docs/STYLE.md
+// names its exact gate chain). Born of S-3648, which merged a commit
+// that failed the format check because nothing told it not to.
+let CONTRACT = `House rules for this run:
+- You are in a dedicated worktree on your own branch. Commit focused
+  work there; merge to the base branch only with git merge --ff-only —
+  if refused, rebase and retry. Never force-push.
+- Before merging, run the repo's checks (format, lint, typecheck,
+  tests — docs/STYLE.md or the task runner names them), chained with
+  && so a failure stops the line, and READ the output. Never merge
+  red; formatting counts.
+- Read docs/STYLE.md before writing code, if the repo has one, and
+  match the existing code's voice.
+- File discoveries as new tasks linked to yours instead of silently
+  widening scope.`
+
 // POST /sessions/start. The session (and its card, if it was started onto
 // a canvas) is minted and broadcast BEFORE any filesystem or process work,
 // so the run is visible from its first moment and every way it can fail is
@@ -409,8 +428,11 @@ export let start = (input: StartInput, cast: Cast) => {
     cwd: tree,
     started_at: now(),
   }, cast)
-  let instruction = [persona?.body, `T-${task.num}: ${task.title}`, task.body]
-    .filter(Boolean).join('\n\n')
+  let instruction = [
+    persona?.body ?? CONTRACT,
+    `T-${task.num}: ${task.title}`,
+    task.body,
+  ].filter(Boolean).join('\n\n')
   // The fs and the child are the SLOW half: hand back the session now, let
   // it fail (visibly) on its own time. `done` is the whole run, for callers
   // that want to await it (tests) — the route doesn't.
