@@ -47,6 +47,22 @@ export let define = (rs: Renderer[], tabViews: string[]) => {
   tabs = tabViews
 }
 
+// ACTIONS — the context-menu verbs, contributed the same way renderers
+// are but with UNION semantics: a task is also a doc is also an entity,
+// so every matching contributor's verbs appear (in registration order),
+// not just the most specific one's. `mod` styles a row ('danger').
+export type Action = { label: string; run: () => void; mod?: string }
+export type Contributor = {
+  match: (e: Ent) => number | boolean
+  acts: (e: Ent) => Action[]
+}
+let contributors: Contributor[] = []
+export let defineActions = (cs: Contributor[]) => {
+  contributors = cs
+}
+export let actionsFor = (e: Ent) =>
+  contributors.filter((c) => c.match(e)).flatMap((c) => c.acts(e))
+
 // Platform overlays: another render target (the TUI) — or one day a
 // plugin — prepends its own renderers at boot: same views, same
 // contract, consulted before the shared registry, so a tie in score goes

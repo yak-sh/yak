@@ -1,6 +1,7 @@
 import { signal } from '@preact/signals'
 import { block } from './ui.tsx'
-import { cache, rootCanvas } from '../live.ts'
+import { cache, ent, rootCanvas } from '../live.ts'
+import { actionsFor } from './registry.ts'
 
 // The URL is the root card: `/` shows the root canvas, `/T-123` (or any
 // id form) shows that entity fullscreened, `?v=List` picks its view.
@@ -38,9 +39,13 @@ export let screenTarget = () => {
   return hit ? { eid: hit[0], view } : null
 }
 
-// The context menu for links: "open here" is the deliberate, slightly
-// buried way to change the root card in place; new tab stays native.
-export let menu = signal<{ x: number; y: number; href: string } | null>(null)
+// The card's context menu: navigation first ("open here" is the
+// deliberate in-place root change; new tab beside it), then whatever
+// verbs the entity's components contribute (registry actionsFor —
+// a task offers its status moves, a claim its release, …).
+export let menu = signal<
+  { x: number; y: number; href: string; eid: string } | null
+>(null)
 
 let Frame = block('div', 'Menu', { Item: 'button' })
 let { Item } = Frame
@@ -51,6 +56,7 @@ export let Menu = () => {
   let close = () => {
     menu.value = null
   }
+  let acts = actionsFor(ent(m.eid))
   return (
     <Frame
       style={`left:${m.x}px;top:${m.y}px`}
@@ -74,6 +80,19 @@ export let Menu = () => {
       >
         open in new tab
       </Item>
+      {acts.map((a, i) => (
+        <Item
+          key={i}
+          type='button'
+          mod={[a.mod, !i && 'first'] as string[]}
+          onClick={() => {
+            a.run()
+            close()
+          }}
+        >
+          {a.label}
+        </Item>
+      ))}
     </Frame>
   )
 }

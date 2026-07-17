@@ -164,6 +164,7 @@ export let Card = ({ p }: { p: Pinned }) => {
           x: ev.clientX,
           y: ev.clientY,
           href: `/${idOf(ent(p.target_eid))}`,
+          eid: p.target_eid,
         }
       }}
     >

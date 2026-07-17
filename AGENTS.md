@@ -73,9 +73,12 @@ cmd/middle-click and the browser's own context menu do the new-tab forms; plain
 click (and tap) navigates in place. The custom menu ("open here" = the
 deliberate in-place root change, plus "open in new tab") belongs to the CARD —
 right-click its pin anywhere that isn't a link, input, or editable text
-(`components/nav.tsx` owns route/navigate/menu, all guarded for the TUI). A
-canvas offers a `List` view — the mobile door — whose rows resolve through
-`List.Item`.
+(`components/nav.tsx` owns route/navigate/menu, all guarded for the TUI). Below
+navigation the menu lists the entity's VERBS, contributed per component with
+UNION semantics (registry `defineActions`/`actionsFor`, curated in View.tsx like
+the renderers): a task offers its status moves, a claim its release, anything
+its delete. Adding a verb = one contributor row. A canvas offers a `List` view —
+the mobile door — whose rows resolve through `List.Item`.
 
 ## Map
 

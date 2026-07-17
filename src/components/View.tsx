@@ -1,6 +1,6 @@
 import { idOf } from '../types.ts'
-import { ent } from '../live.ts'
-import { define, has, resolve } from './registry.ts'
+import { ent, mutate } from '../live.ts'
+import { type Action, define, defineActions, has, resolve } from './registry.ts'
 import { Task, TaskCard } from './views/Task.tsx'
 import {
   AnyTitle,
@@ -84,6 +84,42 @@ define([
   'Markdown',
   'JSON',
   'Debug',
+])
+
+// The context-menu verbs, contributed per component (union — see
+// registry.ts). A task offers its status moves, a live claim offers
+// release, and anything at all can be deleted (the red row at the end).
+defineActions([
+  {
+    match: has('task'),
+    acts: (e) => {
+      let s = e.task!.status
+      let move = (label: string, status: string): Action => ({
+        label,
+        run: () => mutate({ eid: e.eid, name: 'task', comp: { status } }),
+      })
+      return [
+        ...(s != 'wip' ? [move('start', 'wip')] : []),
+        ...(s != 'done' ? [move('done', 'done')] : []),
+        ...(s != 'open' ? [move('reopen', 'open')] : []),
+      ]
+    },
+  },
+  {
+    match: has('claim'),
+    acts: (e) => [{
+      label: `release ${ent(e.claim!.session_eid).session?.id ?? 'claim'}`,
+      run: () => mutate({ eid: e.eid, name: 'claim', comp: null }),
+    }],
+  },
+  {
+    match: () => true,
+    acts: (e) => [{
+      label: 'delete',
+      mod: 'danger',
+      run: () => mutate({ eid: e.eid, name: 'entity', comp: null }),
+    }],
+  },
 ])
 
 // The one front door: render an entity (straight out of the live cache)

@@ -143,6 +143,12 @@
 .Menu_Item:hover {
   background: var(--soft);
 }
+.Menu_Item-first {
+  border-top: 1px solid var(--border); /* navigation above, verbs below */
+}
+.Menu_Item-danger {
+  color: var(--red);
+}
 
 /* A canvas as a list — the mobile door into the graph. */
 .List {

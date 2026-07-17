@@ -1,6 +1,14 @@
 // Scored resolution: the most specific renderer wins, ties go to
 // registration order, platform overrides beat the shared list on ties.
-import { applicable, define, extend, has, resolve } from './registry.ts'
+import {
+  actionsFor,
+  applicable,
+  define,
+  defineActions,
+  extend,
+  has,
+  resolve,
+} from './registry.ts'
 import { type Ent } from '../types.ts'
 import { assertEquals } from '@std/assert'
 
@@ -56,6 +64,24 @@ Deno.test('resolution', () => {
 Deno.test('tabs = views with a live matcher', () => {
   assertEquals(applicable(ent({ doc: {}, task: {} })), ['Task', 'Doc', 'JSON'])
   assertEquals(applicable(ent({})), ['JSON'])
+})
+
+Deno.test('actions union across matching contributors, in order', () => {
+  defineActions([
+    {
+      match: has('task'),
+      acts: (e) => [{
+        label: `set-${(e.task as { status: string }).status}`,
+        run: () => {},
+      }],
+    },
+    { match: () => true, acts: () => [{ label: 'delete', run: () => {} }] },
+  ])
+  assertEquals(
+    actionsFor(ent({ task: { status: 'open' } })).map((a) => a.label),
+    ['set-open', 'delete'], // both contributors, registration order
+  )
+  assertEquals(actionsFor(ent({})).map((a) => a.label), ['delete'])
 })
 
 Deno.test('override wins its tie', () => {
