@@ -74,6 +74,7 @@ a row, not a dependency).
 | `src/client.ts`   | headless HTTP client: rows(), dot-params, find, change builders           |
 | `src/cli.ts`      | the `task` CLI (thin verbs over client.ts)                                |
 | `src/mcp.ts`      | MCP tool registry (io-agnostic; served in-process at /mcp and over stdio) |
+| `src/sandbox.ts`  | code mode's worker: permissionless, graph-only, postMessage SDK           |
 | `src/live.ts`     | browser/TUI half: cache signal, socket, applyLocal/mutate, ent()          |
 | `src/paste.ts`    | clipboard/drop text → entity spec (ids, URLs, JSON, plain text)           |
 | `src/components/` | web UI: registry.ts + View.tsx, Canvas (camera), Card, Edit, Comments     |
@@ -112,6 +113,13 @@ a row, not a dependency).
   drive hovers/keys/clicks over CDP (`--remote-debugging-port`); TUI via
   `tmux new-session -d` + `send-keys` + `capture-pane -p` (`-e` keeps ANSI).
   Clean up any entities a probe creates (delete = `{name:'entity', comp:null}`).
+- The MCP surface has two tiers: task_* sugar and the generic tier
+  (graph_query/graph_apply/ui_state/card_*/code_run). The generic tier is
+  possible because the UI is data — cards/pins/cameras are entities; keep it
+  that way. code_run REQUIRES `--unstable-worker-options` (already on the
+  dev/mcp tasks) and `deno: { permissions: 'none' }` on the worker — never widen
+  those permissions; the sandbox's only capability must stay the postMessage
+  graph SDK.
 - Hot reload: client-file edits broadcast `reload`; server-graph edits restart
   the process (websockets close, clients poll back). The TUI exits 42 to ask its
   wrapper loop to relaunch it — don't "fix" that exit code.

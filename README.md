@@ -109,11 +109,19 @@ task release T-3                  # hand it back
 The dev server IS an MCP server: point an agent at `http://host:5173/mcp`
 (Streamable HTTP, stateless — restarts can't strand a session, no auth on the
 tailnet) and it gets self-documenting `task_list` / `task_new` / `task_update` /
-`task_show` / `task_claim` / `task_release` tools speaking the same dot-param
-grammar. Claims are leases: the server refuses to hand a held lease to another
-session, so agents can pick work without stepping on each other. `deno task mcp`
-serves the identical registry over stdio for clients that launch a process.
-Agent writes broadcast live to every canvas and TUI.
+`task_show` / `task_claim` / `task_release` / `task_comment` tools speaking the
+same dot-param grammar. Claims are leases: the server refuses to hand a held
+lease to another session, so agents can pick work without stepping on each
+other. Beyond tasks sits the generic tier: `graph_query` / `graph_apply` (the
+raw wire), `ui_state` (every viewport and card — the UI is data, so reading the
+UI is a graph read), `card_open` / `card_move` / `card_close`, and **code
+mode**: `code_run` executes agent-written JS in a sandboxed worker (Deno
+`permissions: 'none'` — no fs/net/env; its only capability is the graph over
+postMessage). Scripts read a snapshot, queue changes, and the batch applies
+atomically — `dry_run` returns it unapplied, so a layout can be previewed before
+it moves anyone's cards. `deno task mcp` serves the identical registry over
+stdio for clients that launch a process. Agent writes broadcast live to every
+canvas and TUI.
 
 ## Stack
 
