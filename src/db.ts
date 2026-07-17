@@ -135,6 +135,19 @@ let schema = `
     child_eid  text not null references entity(eid),
     primary key (parent_eid, type, child_eid)
   );
+  -- Log data, not graph: no eid, no components, so snapshot() (which walks
+  -- the comps vocabulary) never carries it. telemetry.ts owns the rows.
+  create table if not exists tool_call (
+    ts         text not null
+               default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    source     text not null check (source in ('mcp','http','web')),
+    name       text not null,
+    session_id text,
+    ok         integer not null,
+    ms         integer,
+    error      text,
+    detail     text
+  );
   create virtual table if not exists doc_fts using fts5(
     title, body, content='doc', content_rowid='rowid'
   );
