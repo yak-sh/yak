@@ -271,7 +271,7 @@
   anchor-scope: --tab;
 }
 .Tab + .Tab {
-  margin-left: calc(-1 * var(--gap)); /* cancel the row gap — gapless chips */
+  margin-left: calc(1px - var(--gap)); /* row gap → 1px, so hover fills don't fuse */
 }
 .Tab:hover {
   color: var(--muted);
