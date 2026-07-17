@@ -163,6 +163,17 @@ html {
 }
 .App_Body > .Board {
   padding: var(--gap);
+  /* Fullscreen, the board fills the floor and each COLUMN scrolls
+     itself. One scroller per axis is what buys touch axis-locking: a
+     vertical finger flings the column (native momentum, no snap physics
+     damping it), a horizontal one chains up to the snapping App_Body —
+     no more lane-hopping mid-scroll. */
+  flex: 1;
+  min-height: 0;
+}
+.App_Body > .Board > .Board_Col {
+  overflow-y: auto;
+  overscroll-behavior-y: contain; /* the column owns its own bounce */
 }
 
 /* The link context menu: "open here" is the deliberate root change. */
