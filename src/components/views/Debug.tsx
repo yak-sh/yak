@@ -1,6 +1,7 @@
-import { type Ent } from '../../types.ts'
+import { comps as vocab, type Ent } from '../../types.ts'
 import { ent } from '../../live.ts'
 import { block } from '../ui.tsx'
+import { Prop } from '../editors.tsx'
 import { View } from '../View.tsx'
 
 // The Debug view: one full inspector for the entity itself — EVERY prop,
@@ -69,14 +70,28 @@ let Row = ({ comp, k, v }: { comp?: string; k: string; v: unknown }) => (
 // EVERY stored prop as a key → value grid row — the spine (eid, num),
 // then each component whole ('pin.x  664'). kind is NOT here: it's
 // derived, not data, and the summary line above already says it.
+// Wire-writable props render through <Prop editable> — the typed
+// vocabulary picks each one's editor, so the WHOLE entity is editable
+// here with the right control and zero per-kind code; server-owned
+// columns stay the plain read they are.
 let AllProps = ({ e }: { e: Ent }) => (
   <Grid>
     <Row k='eid' v={e.eid} />
     <Row k='num' v={e.num} />
     {comps(e).flatMap(([name, comp]) =>
-      Object.entries(comp).map(([k, v]) => (
-        <Row key={`${name}.${k}`} comp={name} k={k} v={v} />
-      ))
+      Object.entries(comp).map(([k, v]) =>
+        k in (vocab[name] ?? {})
+          ? (
+            <>
+              <Key>
+                <Comp>{name}.</Comp>
+                {k}
+              </Key>
+              <Prop eid={e.eid} comp={name} prop={k} editable />
+            </>
+          )
+          : <Row key={`${name}.${k}`} comp={name} k={k} v={v} />
+      )
     )}
   </Grid>
 )

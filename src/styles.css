@@ -1451,3 +1451,90 @@ html {
   max-width: 20rem;
   overflow-wrap: anywhere;
 }
+
+/* <Prop> — a value that knows how to edit itself (editors.tsx). The
+   value never moves: inline editors take its place at its metrics,
+   popout controls anchor above it. */
+.Prop {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+}
+.Prop-live > .Prop_Val {
+  cursor: pointer;
+  border-bottom: 1px dashed transparent;
+}
+.Prop-live > .Prop_Val:hover {
+  border-bottom-color: var(--dim);
+}
+.Prop_Val-nil {
+  color: var(--dim);
+}
+.Prop_Pop {
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 0;
+  z-index: 60;
+  display: flex;
+  gap: 2px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2px;
+  box-shadow: 0 8px 30px color-mix(in srgb, #000 45%, transparent);
+  white-space: nowrap;
+}
+.Prop_Pop-list {
+  flex-direction: column;
+  min-width: 12rem;
+}
+.Prop_Tab {
+  font: inherit;
+  background: none;
+  border: 0;
+  color: var(--muted);
+  padding: 2px var(--half-gap);
+  border-radius: var(--radius);
+  cursor: pointer;
+  min-height: var(--tap);
+}
+.Prop_Tab:hover,
+.Prop_Tab-on {
+  background: var(--soft);
+  color: var(--text);
+}
+.Prop_Row {
+  padding: 2px var(--half-gap);
+  cursor: pointer;
+  border-radius: var(--radius);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.Prop_Row:hover {
+  background: var(--soft);
+}
+.Prop_Row-none {
+  color: var(--dim);
+}
+.Prop_Find {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  outline: none;
+  padding: 2px var(--half-gap);
+}
+/* inline editors: the value's own metrics, a dashed seam saying 'live' */
+.Prop_Num,
+.Prop_Free {
+  font: inherit;
+  color: var(--text);
+  background: none;
+  border: 0;
+  outline: none;
+  border-bottom: 1px dashed var(--accent);
+  padding: 0;
+  min-width: 0;
+  width: 10ch;
+}
