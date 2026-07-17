@@ -213,11 +213,16 @@ Deno.serve(
     if (path == '/ws') return ws(req)
     if (path == '/snapshot') return Response.json(snapshot(db))
     if (path == '/search') {
-      return Response.json(search(
-        db,
-        url.searchParams.get('q') ?? '',
-        Number(url.searchParams.get('limit') ?? 20),
-      ))
+      // a malformed filter is the typist's news, not a server error
+      try {
+        return Response.json(search(
+          db,
+          url.searchParams.get('q') ?? '',
+          Number(url.searchParams.get('limit') ?? 20),
+        ))
+      } catch (e) {
+        return new Response(String((e as Error).message ?? e), { status: 400 })
+      }
     }
     if (path == '/mcp' && req.method == 'POST') return mcp(req)
     if (path == '/error' && req.method == 'POST') return clientError(req)

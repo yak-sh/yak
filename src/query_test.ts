@@ -1,5 +1,5 @@
 // The filter grammar: one parser for boards, CLI and MCP.
-import { adopt, matchQuery, parseQuery, pred } from './query.ts'
+import { adopt, matchQuery, parseQuery, pred, span } from './query.ts'
 import { assertEquals, assertThrows } from '@std/assert'
 
 // A task-shaped entity to filter against.
@@ -68,10 +68,10 @@ Deno.test('query: comparisons never match an absent prop', () => {
   )
 })
 
-Deno.test('query: bad tokens are loud', () => {
+Deno.test('query: bad tokens are loud, bare words are terms', () => {
   assertThrows(() => parseQuery('.hovercraft=eels'), Error, 'unknown prop')
   assertThrows(() => parseQuery('.task.eels=9'), Error, 'no such prop')
-  assertThrows(() => parseQuery('sandwich'), Error, 'not a filter')
+  assertEquals(parseQuery('sandwich')[0].op, 'text') // a term, not an error
 })
 
 Deno.test('query: adopt pins down scalar equalities only', () => {
@@ -94,4 +94,91 @@ Deno.test('query: pred routes and normalizes ops', () => {
   assertEquals(pred('.priority<=1')?.op, '<=')
   assertEquals(pred('.title~=x')?.op, '~')
   assertEquals(pred('not a param'), null)
+})
+
+// ---- time phrases ----
+
+// A fixed clock: Wed 2026-07-15 14:30 local. Spans come back in epoch ms.
+let NOW = new Date(2026, 6, 15, 14, 30).getTime()
+let at = (...a: number[]) =>
+  new Date(a[0], a[1], a[2], a[3] ?? 0, a[4] ?? 0).getTime()
+
+let spans: [string, number, number][] = [
+  ['today', at(2026, 6, 15), at(2026, 6, 16)],
+  ['yesterday', at(2026, 6, 14), at(2026, 6, 15)],
+  ['tomorrow', at(2026, 6, 16), at(2026, 6, 17)],
+  ['now', NOW, NOW],
+  ['2026-07-04', at(2026, 6, 4), at(2026, 6, 5)],
+  ['this week', at(2026, 6, 13), at(2026, 6, 20)], // Monday start
+  ['last week', at(2026, 6, 6), at(2026, 6, 13)],
+  ['this month', at(2026, 6, 1), at(2026, 7, 1)],
+  ['next month', at(2026, 7, 1), at(2026, 8, 1)],
+  ['this year', at(2026, 0, 1), at(2027, 0, 1)],
+  ['this hour', at(2026, 6, 15, 14), at(2026, 6, 15, 15)],
+  ['5 minutes ago', NOW - 300_000, NOW],
+  ['1 hour ago', NOW - 3_600_000, NOW],
+  ['2 days ago', NOW - 2 * 86_400_000, NOW],
+  ['1 month ago', at(2026, 5, 15, 14, 30), NOW],
+  ['in 2 hours', NOW, NOW + 7_200_000],
+  ['1-hour-ago', NOW - 3_600_000, NOW], // glue for quoteless boxes
+  ['1_hour_ago', NOW - 3_600_000, NOW],
+]
+for (let [phrase, start, end] of spans) {
+  Deno.test(`span: ${phrase}`, () =>
+    assertEquals(span(phrase, NOW), { start, end }))
+}
+Deno.test('span: not phrases', () => {
+  for (let s of ['Ops', 'open', '1..3', 'a,b', '', 'todayish']) {
+    assertEquals(span(s, NOW), null)
+  }
+})
+
+// Time preds: the row value is ISO, the filter value a phrase; the op
+// picks the edge of the range the phrase names.
+let when = (modified_at: string) => ({
+  entity: { num: 7, created_at: '2026-07-01T00:00:00Z', modified_at },
+  task: { status: 'open' },
+})
+// matchQuery evaluates phrases on the REAL clock, so the fixtures do too.
+let d = new Date()
+let mid = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12)
+  .toISOString() // noon today, local
+let old = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 5, 12)
+  .toISOString()
+Deno.test('time: = is within the range', () => {
+  assertEquals(matchQuery(when(mid), parseQuery('.modified_at=today')), true)
+  assertEquals(matchQuery(when(old), parseQuery('.modified_at=today')), false)
+  assertEquals(matchQuery(when(old), parseQuery('.modified_at!=today')), true)
+})
+Deno.test('time: >= takes the start, <= the end', () => {
+  assertEquals(matchQuery(when(mid), parseQuery('.modified_at>=today')), true)
+  assertEquals(matchQuery(when(old), parseQuery('.modified_at>=today')), false)
+  assertEquals(matchQuery(when(old), parseQuery('.modified_at<=today')), true)
+  assertEquals(matchQuery(when(mid), parseQuery('.modified_at<today')), false)
+  assertEquals(matchQuery(when(old), parseQuery('.modified_at<today')), true)
+})
+Deno.test('time: a string row named today stays a string', () => {
+  let c = { task: { status: 'open', domain: 'today' } }
+  assertEquals(matchQuery(c, parseQuery('.domain=today')), true)
+})
+
+// ---- text preds + the mixed line ----
+
+Deno.test('text: bare words search the doc, either column', () => {
+  assertEquals(hit('flux'), true)
+  assertEquals(hit('FLUX'), true) // case-insensitive
+  assertEquals(hit('warp'), false)
+  assertEquals(hit('flux .status=open'), true)
+  assertEquals(hit('flux .status=done'), false)
+  assertEquals(hit('"the flux"'), true) // quotes glue a phrase
+  assertEquals(hit('"flux the"'), false)
+})
+Deno.test('mixed line: & segments keep their spaces, space-dot splits', () => {
+  assertEquals(hit('.title~=the flux'), true) // the old grammar survives
+  assertEquals(parseQuery('a .status=done b').length, 3)
+  assertEquals(
+    parseQuery('.modified_at>="1 hour ago"')[0].value,
+    '1 hour ago', // quotes shield the phrase from the whitespace split
+  )
+  assertEquals(parseQuery('.env')[0].op, 'text') // opless dot-word = a term
 })

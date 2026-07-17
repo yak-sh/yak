@@ -270,3 +270,21 @@ Deno.test('edges: a dead endpoint voids the link; delete prunes edges', () => {
 Deno.test('open() is idempotent and additive on live files', () => {
   assertMatch(String(fresh().prepare('select 1 as ok').get()?.ok), /1/)
 })
+
+Deno.test('search: terms and filters mix in one line', () => {
+  let a = uid(), b = uid()
+  apply(db, [
+    { eid: a, name: 'doc', comp: { title: 'Quokka feeding run' } },
+    { eid: a, name: 'task', comp: { status: 'done' } },
+    { eid: b, name: 'doc', comp: { title: 'Quokka photo shoot' } },
+    { eid: b, name: 'task', comp: { status: 'open' } },
+  ])
+  let eids = (q: string) => search(db, q).map((h) => h.eid)
+  assertEquals(eids('quokka').length, 2)
+  assertEquals(eids('quokka .status=done'), [a])
+  assertEquals(eids('quokka .status=open .modified_at=today'), [b])
+  assertEquals(eids('quokka .modified_at=yesterday'), [])
+  // filters alone are a listing, newest touched first
+  assertEquals(eids('.status=done .modified_at>=today').includes(a), true)
+  assertEquals(eids('.status=done .modified_at>=today').includes(b), false)
+})

@@ -51,7 +51,12 @@ values become numbers. Statuses: ${statuses.join(', ')}.`
 let FILTERS = `Filters add operators to that routing: '.priority<=1',
 '.domain=Ops,Eng' (any of), '.priority=1..3' (range; 1...3 excludes the
 end), '.status!=done', '.title~=flux' (contains), '.domain=' (absent),
-'.num=1,2,3'. Boards persist these same queries (board.query).`
+'.num=1,2,3'. Timestamp columns take time phrases — today, yesterday,
+'2026-07-04', this|last|next week|month|year, '5 minutes ago', 'in 2
+days' — a phrase is a RANGE: = within it, >= from its start, <= to its
+end ('.modified_at>="1 hour ago"'; glue with - where quoting is hard).
+Bare words are text terms (doc contains). Boards persist these same
+queries (board.query).`
 
 let line = (all: Row[], r: Row) => {
   let who = claimant(all, r)
@@ -113,9 +118,12 @@ export let mcpServer = (io: IO) => {
     'search',
     `Full-text search (FTS5) across every doc in the graph — task titles
 and bodies, boards, projects, comments. Words AND together; a trailing *
-prefix-matches. Returns ranked hits as 'id kind title — snippet'; a
-comment hit names the entity it targets. Use this FIRST when looking for
-existing work — cheaper and better-ranked than paging graph_query.`,
+prefix-matches. Dot-param filters mix into the same line ('runner
+.status=done .modified_at=today') and screen the hits; filters alone
+list matching entities, newest first. Returns ranked hits as 'id kind
+title — snippet'; a comment hit names the entity it targets. Use this
+FIRST when looking for existing work — cheaper and better-ranked than
+paging graph_query.`,
     { q: z.string(), limit: z.number().optional() },
     async ({ q, limit }: { q: string; limit?: number }) => {
       let hits = await io.find(q, limit ?? 20)

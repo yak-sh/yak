@@ -1,6 +1,8 @@
 import { signal } from '@preact/signals'
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { type Hit, idOf } from '../types.ts'
+import { type Hit, idOf, uuid } from '../types.ts'
+import { mutate } from '../live.ts'
+import { navigate } from './nav.tsx'
 import { block } from './ui.tsx'
 
 // `/` in normal mode opens the palette (Canvas owns the hotkey and the
@@ -28,6 +30,7 @@ let marked = (s: string) =>
 
 export let Search = ({ open }: { open: (eid: string) => void }) => {
   let [hits, setHits] = useState<Hit[]>([])
+  let [err, setErr] = useState('')
   let [sel, setSel] = useState(0)
   let box = useRef<HTMLInputElement>(null)
   let seq = useRef(0)
@@ -44,20 +47,41 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
   }
   let seek = async (q: string) => {
     let mine = ++seq.current
-    let found: Hit[] = q.trim()
-      ? await fetch(`/search?q=${encodeURIComponent(q)}`).then((r) => r.json())
-      : []
+    let found: Hit[] = []
+    let bad = ''
+    if (q.trim()) {
+      let r = await fetch(`/search?q=${encodeURIComponent(q)}`)
+      if (r.ok) found = await r.json()
+      else bad = await r.text() // a malformed filter, said where you typed
+    }
     if (mine != seq.current) return // a newer keystroke owns the list
     setHits(found)
+    setErr(bad)
     setSel(0)
   }
   let pick = (h: Hit) => {
     open(h.open_eid)
     close()
   }
+  // ⌘/Ctrl+Enter: the search BECOMES a board — the line is already a
+  // query (terms are text preds, query.ts), so the board saves it
+  // verbatim and stays live. Named by the line; retitle it in place.
+  let board = (q: string) => {
+    if (!q.trim()) return
+    let eid = uuid()
+    mutate(
+      { eid, name: 'doc', comp: { title: q.trim(), body: '' } },
+      { eid, name: 'board', comp: { query: q.trim() } },
+    )
+    close()
+    navigate(`/${eid}`)
+  }
   let key = (e: KeyboardEvent) => {
     if (e.key == 'Escape') return close()
     if (e.key == 'Enter') {
+      if (e.metaKey || e.ctrlKey) {
+        return board((e.currentTarget as HTMLInputElement).value)
+      }
       if (hits[sel]) pick(hits[sel])
       return
     }
@@ -77,11 +101,12 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
       <Box>
         <input
           ref={box}
-          placeholder='search the graph… (* = prefix)'
+          placeholder='search the graph… (* = prefix, .status=done .modified_at=today filter, ⌘⏎ = board)'
           onInput={(e: InputEvent) =>
             seek((e.currentTarget as HTMLInputElement).value)}
           onKeyDown={key}
         />
+        {err && <Snip>{err}</Snip>}
         {hits.map((h, i) => (
           <Row
             key={h.eid}

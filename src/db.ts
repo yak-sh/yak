@@ -17,6 +17,7 @@ import {
   kindOrder,
   type Snapshot,
 } from './types.ts'
+import { matchQuery, parseQuery, TEXT } from './query.ts'
 
 // The db lives outside the repo (this is open source): a home-dir dotpath by
 // default, overridable with DB_PATH.
@@ -605,25 +606,59 @@ export let apply = (db: DatabaseSync, changes: Change[]): Change[] => {
 // Title hits outweigh body hits; snippets mark matches with \x01…\x02 so
 // renderers can highlight without trusting HTML. A comment hit points
 // open_eid at its target — you open the conversation, not the aside.
+// A search line mixes FTS terms with dot-param filters (query.ts —
+// 'runner .status=done .modified_at=today'): the TEXT preds drive FTS,
+// the rest screen each hit against its components, and a line of ONLY
+// filters is a listing, newest touched first. A malformed filter throws;
+// the doors show the message.
 export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
-  let match = q.trim().split(/\s+/)
-    .map((t) => {
-      let prefix = t.endsWith('*')
-      let word = (prefix ? t.slice(0, -1) : t).replaceAll('"', '')
+  let preds = parseQuery(q)
+  let filters = preds.filter((p) => p.op != TEXT)
+  let match = preds.filter((p) => p.op == TEXT)
+    .map((p) => {
+      let prefix = p.value.endsWith('*')
+      let word = (prefix ? p.value.slice(0, -1) : p.value).replaceAll('"', '')
       return word && `"${word}"${prefix ? '*' : ''}`
     })
     .filter(Boolean).join(' ')
-  if (!match) return []
-  let rows = db.prepare(`
-    select d.eid, d.title,
-      snippet(doc_fts, 1, char(1), char(2), '…', 10) as snip,
-      e.num
-    from doc_fts
-    join doc d on d.rowid = doc_fts.rowid
-    join entity e on e.eid = d.eid
-    where doc_fts match ?
-    order by bm25(doc_fts, 4.0, 1.0) limit ?
-  `).all(match, limit) as (Omit<Hit, 'kind' | 'open_eid'>)[]
+  if (!match && !filters.length) return []
+  // Filters screen AFTER the rank, so cast a wider net before the cap.
+  let rows = match
+    ? db.prepare(`
+      select d.eid, d.title,
+        snippet(doc_fts, 1, char(1), char(2), '…', 10) as snip,
+        e.num
+      from doc_fts
+      join doc d on d.rowid = doc_fts.rowid
+      join entity e on e.eid = d.eid
+      where doc_fts match ?
+      order by bm25(doc_fts, 4.0, 1.0) limit ?
+    `).all(match, filters.length ? limit * 10 : limit) as (Omit<
+      Hit,
+      'kind' | 'open_eid'
+    >)[]
+    : db.prepare(`
+      select d.eid, d.title, '' as snip, e.num
+      from doc d
+      join entity e on e.eid = d.eid
+      order by e.modified_at desc limit ?
+    `).all(limit * 10) as (Omit<Hit, 'kind' | 'open_eid'>)[]
+  if (filters.length) {
+    // Each hit's components, only the ones the filters actually read —
+    // matchQuery sees the same shape a live cache row has.
+    let get = new Map(
+      [...new Set(filters.map((p) => p.comp))].map((
+        c,
+      ) => [c, db.prepare(`select * from ${c} where eid = ?`)]),
+    )
+    rows = rows.filter((r) => {
+      let comps: Record<string, Record<string, unknown> | undefined> = {}
+      for (let [c, s] of get) {
+        comps[c] = s.get(r.eid) as Record<string, unknown> | undefined
+      }
+      return matchQuery(comps, filters)
+    }).slice(0, limit)
+  }
   let is = kindOrder.map((k) =>
     [k, db.prepare(`select 1 from ${k} where eid = ?`)] as const
   )

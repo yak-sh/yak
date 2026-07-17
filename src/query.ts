@@ -1,9 +1,11 @@
 // The FILTER grammar — dot-params in URL query-param form. One parser for
-// every reader: a board's saved query, `task list`, MCP task_list. (Writes
-// keep the plain `.prop=value` setter grammar in client.ts — a setter's
-// comma is a literal comma; only filters interpret value forms.)
+// every reader: a board's saved query, `task list`, MCP task_list, and
+// the search box. (Writes keep the plain `.prop=value` setter grammar in
+// client.ts — a setter's comma is a literal comma; only filters interpret
+// value forms.)
 //
 //   .status=open&.priority<=1&.domain=Ops,Eng
+//   runner exit .status=done .modified_at=today     (search-style mix)
 //
 //   .prop=v          equals (string-compared, like everything on the wire)
 //   .prop=a,b,c      any of
@@ -14,6 +16,19 @@
 //   .prop~=v         contains, case-insensitive
 //   .prop<v <=v >v >=v   comparisons (numeric when both sides are numbers)
 //
+// Bare words are TEXT preds — contains over the doc (title or body),
+// case-insensitive; "quoted words" stay one pred. Separators are '&' and
+// whitespace both: an &-segment that is one dot-param keeps its spaces
+// (.title~=two words survives), a segment with embedded ` .` splits.
+//
+// When the ROW value is an ISO timestamp, the filter value may be a time
+// PHRASE (see span): today, yesterday, tomorrow, now, this|last|next
+// minute|hour|day|week|month|year, "5 minutes ago", "in 2 days" ('-'/'_'
+// glue words where quoting is awkward: 1-hour-ago). A phrase names a
+// RANGE and the op picks its edge: = within, >= from its start, <= until
+// its end, > strictly after, < strictly before. So .modified_at=today is
+// midnight-to-midnight, .modified_at>="1 hour ago" is the last hour.
+//
 // Unqualified props route by component, same rule as writes; `.task.status`
 // is the explicit spelling. `.num` and friends route to the entity spine.
 import { comps } from './types.ts'
@@ -23,6 +38,104 @@ export type Pred = {
   prop: string
   op: string
   value: string
+}
+
+// ---- time phrases ----
+
+export type Span = { start: number; end: number }
+
+let UNIT_MS: Record<string, number> = {
+  minute: 60_000,
+  hour: 3_600_000,
+  day: 86_400_000,
+  week: 604_800_000,
+}
+
+// A phrase to the [start, end) range it names, or null when it isn't one.
+// Calendar units (month, year) shift by calendar, not by a fake constant;
+// day boundaries are the EVALUATOR's midnight — the browser filters in the
+// viewer's day, the server in its own.
+export let span = (s: string, now = Date.now()): Span | null => {
+  let raw = s.trim().toLowerCase()
+  // a plain date is that day, in the evaluator's zone — matched BEFORE
+  // the word-glue pass, whose job is '1-hour-ago', not date hyphens
+  let iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (iso) {
+    return {
+      start: +new Date(+iso[1], +iso[2] - 1, +iso[3]),
+      end: +new Date(+iso[1], +iso[2] - 1, +iso[3] + 1),
+    }
+  }
+  let t = raw.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ')
+  let d = new Date(now)
+  let days = (a: number, b: number): Span => ({
+    start: +new Date(d.getFullYear(), d.getMonth(), d.getDate() + a),
+    end: +new Date(d.getFullYear(), d.getMonth(), d.getDate() + b),
+  })
+  // n calendar units away from now ('minute' etc. are exact, so only
+  // month/year take this road)
+  let shift = (n: number, unit: string) =>
+    unit == 'month'
+      ? +new Date(
+        d.getFullYear(),
+        d.getMonth() + n,
+        d.getDate(),
+        d.getHours(),
+        d.getMinutes(),
+        d.getSeconds(),
+      )
+      : +new Date(
+        d.getFullYear() + n,
+        d.getMonth(),
+        d.getDate(),
+        d.getHours(),
+        d.getMinutes(),
+        d.getSeconds(),
+      )
+  if (t == 'now') return { start: now, end: now }
+  if (t == 'today') return days(0, 1)
+  if (t == 'yesterday') return days(-1, 0)
+  if (t == 'tomorrow') return days(1, 2)
+  let m = t.match(/^(this|last|next) (minute|hour|day|week|month|year)$/)
+  if (m) {
+    let at = m[1] == 'this' ? 0 : m[1] == 'last' ? -1 : 1
+    let u = m[2]
+    if (u == 'day') return days(at, at + 1)
+    if (u == 'week') { // weeks start Monday
+      let mon = d.getDate() - ((d.getDay() + 6) % 7) + at * 7
+      return {
+        start: +new Date(d.getFullYear(), d.getMonth(), mon),
+        end: +new Date(d.getFullYear(), d.getMonth(), mon + 7),
+      }
+    }
+    if (u == 'month') {
+      return {
+        start: +new Date(d.getFullYear(), d.getMonth() + at, 1),
+        end: +new Date(d.getFullYear(), d.getMonth() + at + 1, 1),
+      }
+    }
+    if (u == 'year') {
+      return {
+        start: +new Date(d.getFullYear() + at, 0, 1),
+        end: +new Date(d.getFullYear() + at + 1, 0, 1),
+      }
+    }
+    // minute/hour: floor now to the unit, then step
+    let w = UNIT_MS[u]
+    let start = Math.floor(now / w) * w + at * w
+    return { start, end: start + w }
+  }
+  m = t.match(/^(\d+) (minute|hour|day|week|month|year)s? ago$/)
+  if (m) {
+    let n = Number(m[1]), u = m[2]
+    return { start: UNIT_MS[u] ? now - n * UNIT_MS[u] : shift(-n, u), end: now }
+  }
+  m = t.match(/^in (\d+) (minute|hour|day|week|month|year)s?$/)
+  if (m) {
+    let n = Number(m[1]), u = m[2]
+    return { start: now, end: UNIT_MS[u] ? now + n * UNIT_MS[u] : shift(n, u) }
+  }
+  return null
 }
 
 // What a pred evaluates against: an entity's components, merged — the
@@ -66,18 +179,41 @@ export let pred = (token: string): Pred | null => {
   )
   if (!m) return null
   let [, a, b, op, value] = m
+  // a quoted value is the escape hatch for spaces where whitespace splits
+  value = value.replace(/^"(.*)"$/s, '$1')
   if (b && !routes[a]?.includes(b)) throw new Error(`no such prop: .${a}.${b}`)
   return b
     ? { comp: a, prop: b, op: OPS[op], value }
     : { comp: routeProp(a), prop: a, op: OPS[op], value }
 }
 
-// '&'-joined tokens to preds. Empty query: no preds, matches everything.
+// A bare word: contains over the doc, title or body. comp/prop are for
+// show — matchQuery treats TEXT specially (one pred, two columns).
+export let TEXT = 'text'
+let text = (value: string): Pred => ({
+  comp: 'doc',
+  prop: '*',
+  op: TEXT,
+  value,
+})
+
+// A query string to preds. '&' separates first (an &-segment that IS one
+// dot-param keeps its spaces — the old grammar); a segment holding ` .`
+// or bare words splits on whitespace, quotes glue: that's how a search
+// box mixes terms and filters in one line. Empty: matches everything.
 export let parseQuery = (q: string): Pred[] =>
-  q.split('&').map((t) => t.trim()).filter(Boolean).map((t) => {
-    let p = pred(t)
-    if (!p) throw new Error(`not a filter: ${t}`)
-    return p
+  q.split('&').map((t) => t.trim()).filter(Boolean).flatMap((seg) => {
+    if (seg.startsWith('.') && !/\s\./.test(seg)) {
+      let p = pred(seg) // null = an opless dot-word (.env) — a term
+      if (p) return [p]
+    }
+    return (seg.match(/[^\s"]+"[^"]*"|"[^"]*"|\S+/g) ?? []).map((tok) => {
+      if (tok.startsWith('.')) {
+        let p = pred(tok)
+        if (p) return p
+      }
+      return text(tok.replace(/^"(.*)"$/s, '$1'))
+    })
   })
 
 let asNum = (v: unknown) =>
@@ -114,7 +250,34 @@ let eq = (v: unknown, value: string): boolean => {
   return String(v) == value
 }
 
+// A timestamp row against a time phrase: the phrase names a range, the op
+// picks its edge — = within, >= from the start, <= until the end, > and <
+// strictly outside. Only fires when the ROW is ISO (a domain literally
+// named 'today' stays a string).
+let ISO = /^\d{4}-\d{2}-\d{2}T/
+let inTime = (v: string, p: Pred, s: Span): boolean => {
+  let t = Date.parse(v)
+  switch (p.op) {
+    case '':
+      return t >= s.start && (t < s.end || t == s.start)
+    case '!':
+      return !(t >= s.start && (t < s.end || t == s.start))
+    case '<':
+      return t < s.start
+    case '<=':
+      return t < s.end || t == s.start
+    case '>':
+      return t >= s.end && t != s.start
+    default: // >=
+      return t >= s.start
+  }
+}
+
 let test = (v: unknown, p: Pred): boolean => {
+  if (p.op != '~' && typeof v == 'string' && ISO.test(v)) {
+    let s = span(p.value)
+    if (s) return inTime(v, p, s)
+  }
   switch (p.op) {
     case '':
       return eq(v, p.value)
@@ -134,9 +297,20 @@ let test = (v: unknown, p: Pred): boolean => {
   }
 }
 
-// Does an entity satisfy every pred?
+// Does an entity satisfy every pred? A TEXT pred reads the doc itself —
+// one pred, either column.
 export let matchQuery = (c: Comps, preds: Pred[]) =>
-  preds.every((p) => test(c[p.comp]?.[p.prop], p))
+  preds.every((p) => {
+    if (p.op == TEXT) {
+      let d = c.doc as { title?: string; body?: string } | undefined
+      let needle = p.value.toLowerCase()
+      return !!d && (
+        String(d.title ?? '').toLowerCase().includes(needle) ||
+        String(d.body ?? '').toLowerCase().includes(needle)
+      )
+    }
+    return test(c[p.comp]?.[p.prop], p)
+  })
 
 // The values a row must carry to satisfy the query's scalar equalities on
 // one component — what a board drop patches, so a dropped task JOINS the

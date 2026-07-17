@@ -85,25 +85,25 @@ the mobile door — whose rows resolve through `List.Item`.
 
 ## Map
 
-| file               | owns                                                                      |
-| ------------------ | ------------------------------------------------------------------------- |
-| `src/types.ts`     | THE vocabulary: comps, statuses, kindOrder/kindOf, prefix/idOf, all types |
-| `src/db.ts`        | SQLite schema, seed, `apply()` (patches in), `snapshot()` (graph out)     |
-| `src/server.ts`    | Deno.serve: static+sucrase, /ws sync, /apply, /mcp mount, watcher         |
-| `src/sessions.ts`  | managed sessions: spawn/stop/adopt a detached agent, tail its log file    |
-| `src/adapters.ts`  | the provider table: argv, model/effort allowlists, init/terminal readers  |
-| `src/freeze.ts`    | URL → monolith archive → scrub() → CSP-served, server-only                |
-| `src/client.ts`    | headless HTTP client: rows(), dot-params, find, change builders           |
-| `src/query.ts`     | the FILTER grammar (ops/lists/ranges) — boards, CLI + MCP filters         |
-| `src/cli.ts`       | the `task` CLI (thin verbs over client.ts)                                |
-| `src/mcp.ts`       | MCP tool registry (io-agnostic; served in-process at /mcp and over stdio) |
-| `src/telemetry.ts` | the `tool_call` log: record/recent + the /mcp body classifier             |
-| `src/sandbox.ts`   | code mode's worker: permissionless, graph-only, postMessage SDK           |
-| `src/live.ts`      | browser/TUI half: cache signal, socket, applyLocal/mutate, ent()          |
-| `src/paste.ts`     | clipboard/drop text → entity spec (ids, URLs, JSON, plain text)           |
-| `src/components/`  | web UI: registry.ts + View.tsx, nav.tsx (routing), Canvas, Card, Edit, …  |
-| `src/tui/`         | fake DOM (dom.ts), ANSI painter (paint.ts), Md, App (vim keys), main      |
-| `src/vendor/`      | preact/signals/snarkdown as plain ESM — no node_modules                   |
+| file               | owns                                                                       |
+| ------------------ | -------------------------------------------------------------------------- |
+| `src/types.ts`     | THE vocabulary: comps, statuses, kindOrder/kindOf, prefix/idOf, all types  |
+| `src/db.ts`        | SQLite schema, seed, `apply()` (patches in), `snapshot()` (graph out)      |
+| `src/server.ts`    | Deno.serve: static+sucrase, /ws sync, /apply, /mcp mount, watcher          |
+| `src/sessions.ts`  | managed sessions: spawn/stop/adopt a detached agent, tail its log file     |
+| `src/adapters.ts`  | the provider table: argv, model/effort allowlists, init/terminal readers   |
+| `src/freeze.ts`    | URL → monolith archive → scrub() → CSP-served, server-only                 |
+| `src/client.ts`    | headless HTTP client: rows(), dot-params, find, change builders            |
+| `src/query.ts`     | the FILTER grammar (ops/lists/ranges/time/text) — boards, CLI, MCP, search |
+| `src/cli.ts`       | the `task` CLI (thin verbs over client.ts)                                 |
+| `src/mcp.ts`       | MCP tool registry (io-agnostic; served in-process at /mcp and over stdio)  |
+| `src/telemetry.ts` | the `tool_call` log: record/recent + the /mcp body classifier              |
+| `src/sandbox.ts`   | code mode's worker: permissionless, graph-only, postMessage SDK            |
+| `src/live.ts`      | browser/TUI half: cache signal, socket, applyLocal/mutate, ent()           |
+| `src/paste.ts`     | clipboard/drop text → entity spec (ids, URLs, JSON, plain text)            |
+| `src/components/`  | web UI: registry.ts + View.tsx, nav.tsx (routing), Canvas, Card, Edit, …   |
+| `src/tui/`         | fake DOM (dom.ts), ANSI painter (paint.ts), Md, App (vim keys), main       |
+| `src/vendor/`      | preact/signals/snarkdown as plain ESM — no node_modules                    |
 
 ## Invariants — break these and things rot
 
@@ -159,7 +159,11 @@ the mobile door — whose rows resolve through `List.Item`.
   out-of-band doc writes are healed by the boot-time integrity check + rebuild
   in open()). One surface, four doors: `/search?q=`, `task search`, MCP
   `search`, `/` in the web UI. User words are quoted into terms (trailing `*` =
-  prefix); snippets mark hits with \x01…\x02 — never HTML.
+  prefix); snippets mark hits with \x01…\x02 — never HTML. Dot-param filters mix
+  into the search line and screen the hits (query.ts is the one parser — bare
+  words are text preds, so a search string IS a valid board.query: ⌘⏎ in the
+  palette saves it as a live board). Time phrases (today, "1 hour ago") name
+  RANGES; ops pick their edge.
 - **Telemetry is log data, not graph.** `tool_call` (telemetry.ts: MCP calls,
   HTTP writes, browser crashes) carries no eid and no components, so snapshot()
   never walks it and no client cache holds it — read it at `/telemetry`,
