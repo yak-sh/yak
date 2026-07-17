@@ -38,6 +38,12 @@ the repo; set `DB_PATH` to move it. It plants the schema on first boot
 (`create if not exists`) and seeds a handful of neutral demo tasks with one edge
 of each type.
 
+## Hacking
+
+`AGENTS.md` is the contributor guide — the data model in one page, the file map,
+the invariants, and the recipes (add a component, add a view, verify headless).
+Start there; every file also opens with a paragraph saying what it owns.
+
 ## How it runs
 
 No bundler, no framework. `src/server.ts` is a `deno serve` module that does
