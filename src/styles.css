@@ -1600,8 +1600,6 @@ html {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: var(--half-gap);
-  max-height: 32lh;
-  overflow: auto;
 }
 /* A line the adapter gave no row: its bare type, as the old dump showed. */
 .Session_Line {
