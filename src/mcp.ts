@@ -19,12 +19,14 @@ import {
   commentChanges,
   find,
   idOf,
+  matches,
   param,
   patches,
   type Row,
   rows,
   send,
   snapshot,
+  taskChanges,
 } from './client.ts'
 
 // How the tools reach the graph — in-process on the server, HTTP here.
@@ -70,9 +72,7 @@ filters must ALL match. ${GRAMMAR}`,
       let all = rows(await io.read())
       let hits = all
         .filter((r) => r.comps.task)
-        .filter((r) =>
-          ps.every((p) => String(r.comps[p.comp]?.[p.prop]) == String(p.value))
-        )
+        .filter((r) => matches(r, ps))
         .sort(byBoard)
       return text(
         hits.map((r) => line(all, r)).join('\n') || '(no matches)',
@@ -99,19 +99,10 @@ filters must ALL match. ${GRAMMAR}`,
       },
     ) => {
       let grouped = patches(parseAll(params))
+      grouped.doc = { title, body: body ?? '', ...grouped.doc }
+      if (status) grouped.task = { status, ...grouped.task }
       let eid = crypto.randomUUID()
-      let changes: Change[] = [
-        { eid, name: 'doc', comp: { title, body: body ?? '', ...grouped.doc } },
-        {
-          eid,
-          name: 'task',
-          comp: { status: status ?? 'open', ...grouped.task },
-        },
-        ...Object.entries(grouped)
-          .filter(([n]) => n != 'doc' && n != 'task')
-          .map(([name, comp]) => ({ eid, name, comp })),
-      ]
-      await io.write(changes)
+      await io.write(taskChanges(eid, grouped))
       let made = rows(await io.read()).find((r) => r.eid == eid)
       return text(`created ${made ? idOf(made) : eid}`)
     },

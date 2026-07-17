@@ -8,7 +8,6 @@
 // Dot-params route by prop through the shared vocabulary (.title → doc);
 // collisions use the explicit .comp.prop spelling. TASKS_HOST points at a
 // non-default server.
-import { type Change } from './types.ts'
 import {
   byBoard,
   claimant,
@@ -17,12 +16,14 @@ import {
   find,
   host,
   idOf,
+  matches,
   type Param,
   param,
   patches,
   rows,
   send,
   snapshot,
+  taskChanges,
 } from './client.ts'
 
 let usage = `task — the entity graph, from a shell
@@ -56,9 +57,7 @@ let list = async (args: string[]) => {
   let all = rows(await snapshot())
   let hits = all
     .filter((r) => r.comps.task)
-    .filter((r) =>
-      params.every((p) => String(r.comps[p.comp]?.[p.prop]) == String(p.value))
-    )
+    .filter((r) => matches(r, params))
     .sort(byBoard)
   for (let r of hits) {
     let t = r.comps.task ?? {}
@@ -76,18 +75,10 @@ let list = async (args: string[]) => {
 let create = async (args: string[]) => {
   let { params, words } = split(args)
   let grouped = patches(params)
-  let doc = { title: words.join(' '), ...grouped.doc }
-  if (!doc.title) throw new Error('a task needs a .title')
-  let task = { status: 'open', ...grouped.task }
+  grouped.doc = { title: words.join(' '), ...grouped.doc }
+  if (!grouped.doc.title) throw new Error('a task needs a .title')
   let eid = crypto.randomUUID()
-  let changes: Change[] = [
-    { eid, name: 'doc', comp: doc },
-    { eid, name: 'task', comp: task },
-    ...Object.entries(grouped)
-      .filter(([n]) => n != 'doc' && n != 'task')
-      .map(([name, comp]) => ({ eid, name, comp })),
-  ]
-  await send(changes)
+  await send(taskChanges(eid, grouped))
   let made = rows(await snapshot()).find((r) => r.eid == eid)
   console.log(`${made ? idOf(made) : eid} created`)
 }

@@ -6,10 +6,10 @@
 // reload. State lives in the db, so a reload IS hot: camera, cards, and
 // views all come back where they were.
 import { transform } from 'sucrase'
-import { parseHTML } from 'linkedom'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { type Change } from './types.ts'
 import { apply, db, snapshot } from './db.ts'
+import { freeze, serveFrozen } from './freeze.ts'
 import { mcpServer } from './mcp.ts'
 
 let src = new URL('.', import.meta.url).pathname
@@ -92,118 +92,6 @@ let ws = (req: Request) => {
   return response
 }
 
-// Freeze a pasted URL: monolith fetches the page and inlines every asset
-// into ONE self-contained, script-free, network-isolated HTML file. It
-// lands on disk (an inlined page is megabytes — the db and every snapshot
-// stay lean), the entity's web comp gets frozen_at (server-stamped; the
-// wire allowlist doesn't carry it, so clients can't fake an archive), the
-// page <title> becomes the entity's doc, and everyone hears over the ws.
-let frozen = `${Deno.env.get('HOME')}/.tasks/frozen`
-
-// Self-containment is enforced HERE, not at render: monolith inlines what
-// it can reach, but anything it couldn't (404'd assets, preload hints,
-// srcset variants, favicons) keeps its URL and would fetch when shown.
-// The archive must render from its own bytes alone, so every remaining
-// external reference is REMOVED: leftover scripts/frames/link tags, every
-// url-bearing attribute that isn't data:, inline handlers, and url() in
-// CSS. Returns the scrubbed page and its title (for the entity's doc).
-let URLISH = [
-  'src',
-  'href',
-  'srcset',
-  'poster',
-  'action',
-  'formaction',
-  'ping',
-  'background',
-  'data',
-  'xlink:href',
-]
-let cssScrub = (css: string) =>
-  css.replace(/url\(\s*(?!['"]?\s*data:)[^)]*\)/gi, 'url()')
-let scrub = (raw: string) => {
-  let { document } = parseHTML(raw)
-  let all = (sel: string) => [...document.querySelectorAll(sel)]
-  for (let el of all('script, base, iframe, frame, embed, object')) {
-    el.remove()
-  }
-  for (let el of all('link')) {
-    if (!(el.getAttribute('href') ?? '').startsWith('data:')) el.remove()
-  }
-  for (let el of all('meta[http-equiv]')) {
-    if (/refresh/i.test(el.getAttribute('http-equiv') ?? '')) el.remove()
-  }
-  for (let el of all('*')) {
-    for (let { name } of [...el.attributes]) {
-      if (name.startsWith('on')) el.removeAttribute(name)
-    }
-    for (let a of URLISH) {
-      let v = el.getAttribute(a)
-      if (v && !/^\s*(data:|#|about:)/i.test(v)) el.removeAttribute(a)
-    }
-    let style = el.getAttribute('style')
-    if (style?.includes('url(')) el.setAttribute('style', cssScrub(style))
-  }
-  for (let el of all('style')) el.textContent = cssScrub(el.textContent ?? '')
-  return {
-    html: document.toString(),
-    title: document.querySelector('title')?.textContent?.trim(),
-  }
-}
-
-let freeze = async (eid: string) => {
-  let row = db.prepare('select url from web where eid = ?').get(eid) as
-    | { url: string }
-    | undefined
-  if (!row) return new Response('no such web entity', { status: 404 })
-  Deno.mkdirSync(frozen, { recursive: true })
-  let out = `${frozen}/${eid}.html`
-  let cmd = await new Deno.Command('monolith', {
-    args: ['-j', '-f', '-I', '-q', '-t', '30', '-o', out, row.url],
-  }).output()
-  if (!cmd.success) {
-    console.warn(
-      'freeze failed:',
-      row.url,
-      new TextDecoder().decode(cmd.stderr),
-    )
-    return new Response('freeze failed', { status: 502 })
-  }
-  let { html, title } = scrub(await Deno.readTextFile(out))
-  await Deno.writeTextFile(out, html)
-  let changes: Change[] = [
-    { eid, name: 'web', comp: { frozen_at: new Date().toISOString() } },
-  ]
-  db.prepare('update web set frozen_at = ? where eid = ?')
-    .run(changes[0].comp!.frozen_at as string, eid)
-  let hasDoc = db.prepare('select 1 from doc where eid = ?').get(eid)
-  if (title && !hasDoc) {
-    db.prepare('insert into doc (eid, title) values (?, ?)').run(eid, title)
-    changes.push({ eid, name: 'doc', comp: { title } })
-  }
-  cast(changes)
-  return Response.json(changes)
-}
-
-// Serve an archive. eid is validated to a bare uuid — no path escapes.
-// The CSP mirrors the iframe's sandbox but holds in EVERY context (an
-// archive opened directly in a tab has no iframe to sandbox it): no
-// scripts, no network fetches — the freeze stays inert and offline.
-let serveFrozen = async (eid: string) => {
-  if (!/^[0-9a-f-]{36}$/i.test(eid)) return new Response('no', { status: 400 })
-  try {
-    return new Response(await Deno.readFile(`${frozen}/${eid}.html`), {
-      headers: {
-        'content-type': mime.html,
-        'content-security-policy':
-          "sandbox allow-same-origin; script-src 'none'; connect-src 'none'",
-      },
-    })
-  } catch {
-    return new Response('not frozen', { status: 404 })
-  }
-}
-
 // MCP mounted on THIS server — one port, one process, no extra auth
 // surface. Stateless: every POST is one JSON-RPC message answered by a
 // fresh in-memory server (cheap), so dev-server restarts can never
@@ -264,7 +152,9 @@ Deno.serve(
         return Response.json({ ok: true })
       }).catch((e) => new Response(String(e), { status: 400 }))
     }
-    if (path == '/freeze') return freeze(url.searchParams.get('eid') ?? '')
+    if (path == '/freeze') {
+      return freeze(url.searchParams.get('eid') ?? '', cast)
+    }
     if (path.startsWith('/frozen/')) {
       return serveFrozen(path.slice(8).replace(/\.html$/, ''))
     }
@@ -279,7 +169,17 @@ Deno.serve(
 // forever (the new isolate then dies on AddrInUse). So when a server-graph
 // file changes, close every socket and stop watching: the isolate settles,
 // the port frees, the restart binds. Clients reload-poll their way back.
-let graph = ['server.ts', 'db.ts', 'types.ts']
+// Everything the SERVER imports (transitively) — a change to these needs
+// a process restart, not a client reload. Keep in sync with the imports
+// above (mcp.ts pulls client.ts in).
+let graph = [
+  'server.ts',
+  'db.ts',
+  'types.ts',
+  'freeze.ts',
+  'mcp.ts',
+  'client.ts',
+]
 let watch = async () => {
   let timer: ReturnType<typeof setTimeout> | null = null
   for await (let e of Deno.watchFs(src)) {

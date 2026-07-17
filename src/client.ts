@@ -92,6 +92,25 @@ export let patches = (params: Param[]) => {
   return out
 }
 
+// Does a row satisfy every dot-param filter? String-compared — filters
+// come from a command line.
+export let matches = (r: Row, ps: Param[]) =>
+  ps.every((p) => String(r.comps[p.comp]?.[p.prop]) == String(p.value))
+
+// The standard task-create batch: a doc face, workflow state, then any
+// other grouped components verbatim. Callers put title/body into
+// grouped.doc first.
+export let taskChanges = (
+  eid: string,
+  grouped: Record<string, Record<string, unknown>>,
+): Change[] => [
+  { eid, name: 'doc', comp: { body: '', ...grouped.doc } },
+  { eid, name: 'task', comp: { status: 'open', ...grouped.task } },
+  ...Object.entries(grouped)
+    .filter(([n]) => n != 'doc' && n != 'task')
+    .map(([name, comp]) => ({ eid, name, comp })),
+]
+
 // Resolve 'T-3' / a bare num / an eid to a row.
 export let find = (all: Row[], id: string) => {
   let m = id.match(/^[A-Za-z]+-(\d+)$/) ?? id.match(/^(\d+)$/)
