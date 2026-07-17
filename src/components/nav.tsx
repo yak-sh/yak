@@ -1,7 +1,7 @@
 import { signal } from '@preact/signals'
 import { block, copy } from './ui.tsx'
 import { cache, ent, rootCanvas } from '../live.ts'
-import { actionsFor, applicable } from './registry.ts'
+import { actionsFor, resolve } from './registry.ts'
 import { type Ent, idOf } from '../types.ts'
 import { dragData } from './View.tsx'
 
@@ -43,7 +43,7 @@ export let linkProps = (e: Ent) => {
     href,
     onClick: follow(href),
     draggable: true,
-    onDragStart: (ev: DragEvent) => dragData(ev, e.eid, applicable(e)[0]),
+    onDragStart: (ev: DragEvent) => dragData(ev, e.eid, resolve(e).view),
   }
 }
 

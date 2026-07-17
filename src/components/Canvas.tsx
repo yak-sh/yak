@@ -17,7 +17,7 @@ import {
 import { type Change } from '../types.ts'
 import { pasted } from '../paste.ts'
 import { block } from './ui.tsx'
-import { applicable } from './registry.ts'
+import { resolve } from './registry.ts'
 import { Card } from './Card.tsx'
 import { Search, searchOpen } from './Search.tsx'
 
@@ -398,7 +398,7 @@ export let Canvas = ({ eid }: { eid: string }) => {
         comp: {
           eid: card,
           target_eid: target,
-          view: view ?? applicable(ent(target))[0] ?? 'JSON',
+          view: view ?? resolve(ent(target)).view,
         },
       },
       {

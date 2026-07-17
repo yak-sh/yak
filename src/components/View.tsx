@@ -104,8 +104,8 @@ define([
 ], [
   'Canvas',
   'List',
-  'Show',
   'Board',
+  'Show',
   'Web',
   'Session',
   'Markdown',
