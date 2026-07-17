@@ -1,4 +1,4 @@
-import { applyLocal, camera, ent, mutate, send, topZ } from '../live.ts'
+import { camera, ent, mutate, topZ } from '../live.ts'
 import { idOf, type Pinned } from '../types.ts'
 import { block, el } from './ui.tsx'
 import { applicable } from './registry.ts'
@@ -61,29 +61,36 @@ export let Card = ({ p }: { p: Pinned }) => {
     // mouse events (a title's dblclick would never fire), so the drag — and
     // the capture — only start once the pointer has really moved.
     let dragging = false
+    // The drag is compositor-only: the pin rides the pointer on a
+    // transform, and the GRAPH hears one pin patch on drop — a per-move
+    // cache write would re-render every board row in the app per mouse
+    // event.
+    let dx = 0
+    let dy = 0
     let move = (e: PointerEvent) => {
       if (!dragging) {
         if (Math.hypot(e.clientX - sx, e.clientY - sy) < 3) return
         dragging = true
         el.setPointerCapture(e.pointerId)
+        el.style.willChange = 'transform'
       }
       // Pointer deltas are screen px; the pin lives in plane px.
       let z = camera.value.zoom
-      applyLocal([{
-        eid: p.eid,
-        name: 'pin',
-        comp: {
-          x: Math.round(from.x + (e.clientX - sx) / z),
-          y: Math.round(from.y + (e.clientY - sy) / z),
-        },
-      }])
+      dx = (e.clientX - sx) / z
+      dy = (e.clientY - sy) / z
+      el.style.transform = `translate(${dx}px, ${dy}px)`
     }
     let up = () => {
       el.removeEventListener('pointermove', move)
       el.removeEventListener('pointerup', up)
       if (!dragging) return
-      let pin = ent(p.eid).pin!
-      send({ eid: p.eid, name: 'pin', comp: { x: pin.x, y: pin.y } })
+      mutate({
+        eid: p.eid,
+        name: 'pin',
+        comp: { x: Math.round(from.x + dx), y: Math.round(from.y + dy) },
+      })
+      el.style.transform = ''
+      el.style.willChange = ''
     }
     el.addEventListener('pointermove', move)
     el.addEventListener('pointerup', up)
@@ -109,6 +116,9 @@ export let Card = ({ p }: { p: Pinned }) => {
     let sy = e.clientY
     let comp: Record<string, number> = {}
     grip.setPointerCapture(e.pointerId)
+    // Like the titlebar drag, the gesture rides inline styles — one pin
+    // reflows per move, the graph hears one patch on release.
+    let pin = grip.parentElement as HTMLElement
     let move = (e: PointerEvent) => {
       let z = camera.value.zoom
       let dx = (e.clientX - sx) / z
@@ -124,12 +134,18 @@ export let Card = ({ p }: { p: Pinned }) => {
         comp.h = Math.max(60, Math.round(base.h - dy))
         comp.y = Math.round(base.y + base.h - comp.h)
       }
-      applyLocal([{ eid: p.eid, name: 'pin', comp }])
+      if (comp.x != null) pin.style.left = `${comp.x}px`
+      if (comp.y != null) pin.style.top = `${comp.y}px`
+      if (comp.w != null) pin.style.width = `${comp.w}px`
+      if (comp.h != null) {
+        pin.style.height = `${comp.h}px`
+        pin.classList.add('Pin-sized')
+      }
     }
     let up = () => {
       grip.removeEventListener('pointermove', move)
       grip.removeEventListener('pointerup', up)
-      if (Object.keys(comp).length) send({ eid: p.eid, name: 'pin', comp })
+      if (Object.keys(comp).length) mutate({ eid: p.eid, name: 'pin', comp })
     }
     grip.addEventListener('pointermove', move)
     grip.addEventListener('pointerup', up)

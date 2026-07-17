@@ -512,6 +512,10 @@
 .Board_Item {
   cursor: grab;
   min-width: 0; /* grid child: allow shrinking so the row's title can ellipsize */
+  /* offscreen rows skip layout/paint entirely; the placeholder height keeps
+     the column's scrollbar honest until they scroll into view */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 4rem;
 }
 
 /* The board's card for a task, Trello-shaped: dot + wrapping title, then
