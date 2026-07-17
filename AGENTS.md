@@ -12,7 +12,8 @@ Everything is an **entity** (a uuid + a server-minted number) that carries
 column — an entity _is_ what its components make it:
 
 - a **task** is `doc` (title/body) + `task` (status/priority/project)
-- a **board** is `doc` + the `board` tag; a **project** is `doc` + `project`
+- a **board** is `doc` + `board(query)` — a saved filter over tasks; a
+  **project** is `doc` + `project`
 - a **comment** is `doc` + `comment(target_eid)` — aimed at ANY entity
 - a **claim** is a session's lease on any entity; a **session** is an agent
 
@@ -89,6 +90,7 @@ the mobile door — whose rows resolve through `List.Item`.
 | `src/server.ts`   | Deno.serve: static+sucrase, /ws sync, /apply, /mcp mount, watcher         |
 | `src/freeze.ts`   | URL → monolith archive → scrub() → CSP-served, server-only                |
 | `src/client.ts`   | headless HTTP client: rows(), dot-params, find, change builders           |
+| `src/query.ts`    | the FILTER grammar (ops/lists/ranges) — boards, CLI + MCP filters         |
 | `src/cli.ts`      | the `task` CLI (thin verbs over client.ts)                                |
 | `src/mcp.ts`      | MCP tool registry (io-agnostic; served in-process at /mcp and over stdio) |
 | `src/sandbox.ts`  | code mode's worker: permissionless, graph-only, postMessage SDK           |
@@ -125,6 +127,17 @@ the mobile door — whose rows resolve through `List.Item`.
 - There is NO 'blocked' status. Blocked is a fact about edges — an open
   `requires` dep turns the Dot red (`gated()` in live.ts); resolve the blocker
   or drop the edge.
+- **A board is a saved QUERY, not an edge list** (`board.query`, src/query.ts
+  grammar: `.project_eid=…&.status=open,wip`; empty = every task). Membership is
+  never stored — a task is on a board because it matches, so it can't drift.
+  Never add board→task `contains` edges. A board drop patches status/priority
+  plus the query's scalar equalities (`adopt()`), so the dropped task JOINS the
+  board it lands on.
+- **Two dot-param grammars, one routing.** Writes (`param()` in client.ts) take
+  values literally. Filters (query.ts `pred`) add operators: lists `a,b`, ranges
+  `1..3`/`1...3`, `!=`, `~=` (contains), `<` `<=` `>` `>=`, `=` empty for
+  absent. Boards, `task list`, and MCP task_list/graph_query all speak the
+  filter grammar — extend it in query.ts and every door gets it.
 - Full-text search is FTS5 over `doc` (external-content, trigger-synced —
   out-of-band doc writes are healed by the boot-time integrity check + rebuild
   in open()). One surface, four doors: `/search?q=`, `task search`, MCP

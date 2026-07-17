@@ -20,7 +20,6 @@ import {
   contextDigest,
   find,
   idOf,
-  matches,
   param,
   patches,
   type Row,
@@ -30,6 +29,7 @@ import {
   snapshot,
   taskChanges,
 } from './client.ts'
+import { matchQuery, pred } from './query.ts'
 
 // How the tools reach the graph — in-process on the server, HTTP here.
 export type IO = {
@@ -46,6 +46,11 @@ vocabulary (${
 few collisions (pin/camera x,y,w,h) use '.comp.prop=x'. Numeric-looking
 values become numbers. Statuses: ${statuses.join(', ')}.`
 
+let FILTERS = `Filters add operators to that routing: '.priority<=1',
+'.domain=Ops,Eng' (any of), '.priority=1..3' (range; 1...3 excludes the
+end), '.status!=done', '.title~=flux' (contains), '.domain=' (absent),
+'.num=1,2,3'. Boards persist these same queries (board.query).`
+
 let line = (all: Row[], r: Row) => {
   let who = claimant(all, r)
   return `${idOf(r)}  ${String(r.comps.task?.status ?? r.kind).padEnd(7)} ${
@@ -57,6 +62,14 @@ let parseAll = (params: string[]) =>
   params.map((p) => {
     let hit = param(p)
     if (!hit) throw new Error(`not a dot-param: ${p}`)
+    return hit
+  })
+
+// Filters speak the richer query grammar (operators, lists, ranges).
+let parseFilters = (filters: string[]) =>
+  filters.map((f) => {
+    let hit = pred(f)
+    if (!hit) throw new Error(`not a filter: ${f}`)
     return hit
   })
 
@@ -88,14 +101,14 @@ existing work — cheaper and better-ranked than paging graph_query.`,
   server.tool(
     'task_list',
     `List tasks (id, status, title), board-ordered. Optional dot-param
-filters must ALL match. ${GRAMMAR}`,
+filters must ALL match. ${FILTERS}`,
     { filters: z.array(z.string()).optional() },
     async ({ filters = [] }: { filters?: string[] }) => {
-      let ps = parseAll(filters)
+      let ps = parseFilters(filters)
       let all = rows(await io.read())
       let hits = all
         .filter((r) => r.comps.task)
-        .filter((r) => matches(r, ps))
+        .filter((r) => matchQuery(r.comps, ps))
         .sort(byBoard)
       return text(
         hits.map((r) => line(all, r)).join('\n') || '(no matches)',
@@ -216,13 +229,13 @@ you claim with, for attribution.`,
     'graph_query',
     `The WHOLE graph, not just tasks: every entity as {id, kind, eid,
 comps}, dot-param filtered. Cards, pins (positions), cameras (what each
-client is looking at), sessions, comments — all live here. ${GRAMMAR}`,
+client is looking at), sessions, comments — all live here. ${GRAMMAR} ${FILTERS}`,
     { filters: z.array(z.string()).optional(), kind: z.string().optional() },
     async ({ filters = [], kind }: { filters?: string[]; kind?: string }) => {
-      let ps = parseAll(filters)
+      let ps = parseFilters(filters)
       let hits = rows(await io.read())
         .filter((r) => !kind || r.kind == kind)
-        .filter((r) => matches(r, ps))
+        .filter((r) => matchQuery(r.comps, ps))
       return text(JSON.stringify(
         hits.map((r) => ({
           id: idOf(r),

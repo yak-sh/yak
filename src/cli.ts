@@ -1,7 +1,7 @@
 // The task CLI. Install once, run anywhere the server is reachable:
 //   deno task install       (deno install -g — puts `task` on PATH)
 //   task tui                 the terminal UI
-//   task list [.status=open] list tasks, dot-param filtered
+//   task list [.status=open .priority<=1 .domain=Ops,Eng]  filter grammar
 //   task new .title="Hi" [.body=... .status=wip]   (bare words = title)
 //   task set T-3 .status=done                       patch any entity
 //   task show T-3                                   one entity, whole
@@ -18,7 +18,6 @@ import {
   host,
   idOf,
   lapseChanges,
-  matches,
   type Param,
   param,
   patches,
@@ -29,6 +28,7 @@ import {
   snapshot,
   taskChanges,
 } from './client.ts'
+import { matchQuery, pred } from './query.ts'
 
 let usage = `task — the entity graph, from a shell
 
@@ -61,11 +61,13 @@ let split = (args: string[]) => {
 }
 
 let list = async (args: string[]) => {
-  let { params } = split(args)
+  // Filters speak the query grammar — operators, lists, ranges
+  // ('.priority<=1', '.domain=Ops,Eng'); bare words are ignored.
+  let preds = args.map(pred).filter((p) => p != null)
   let all = rows(await snapshot())
   let hits = all
     .filter((r) => r.comps.task)
-    .filter((r) => matches(r, params))
+    .filter((r) => matchQuery(r.comps, preds))
     .sort(byBoard)
   for (let r of hits) {
     let t = r.comps.task ?? {}

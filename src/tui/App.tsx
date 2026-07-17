@@ -7,6 +7,7 @@ import { signal } from '@preact/signals'
 import { type Ent, idOf } from '../types.ts'
 import {
   applyLocal,
+  boardTasks,
   byPriority,
   cache,
   commentsOn,
@@ -36,7 +37,7 @@ let boardEid = () =>
     ?.[0]
 
 let rows = (e: Ent, status: string) =>
-  e.kids.filter((k) => k.task?.status == status).sort(byPriority)
+  boardTasks(e).filter((k) => k.task?.status == status).sort(byPriority)
 
 export let selected = () => {
   let p = boardEid()

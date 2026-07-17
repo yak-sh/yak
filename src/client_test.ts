@@ -8,13 +8,13 @@ import {
   contextDigest,
   find,
   lapseChanges,
-  matches,
   param,
   patches,
   rows,
   sessionFor,
   taskChanges,
 } from './client.ts'
+import { matchQuery, parseQuery } from './query.ts'
 import { idOf, kindOf, type Snapshot } from './types.ts'
 import { assertEquals, assertThrows } from '@std/assert'
 
@@ -81,9 +81,9 @@ Deno.test('find: T-num, bare num, eid, alias slug', () => {
   assertEquals(find(all, 'T-99'), undefined)
 })
 
-Deno.test('matches + byBoard', () => {
-  assertEquals(matches(by(T1), [param('.status=wip')!]), true)
-  assertEquals(matches(by(T1), [param('.status=done')!]), false)
+Deno.test('rows filter through the query grammar + byBoard', () => {
+  assertEquals(matchQuery(by(T1).comps, parseQuery('.status=wip')), true)
+  assertEquals(matchQuery(by(T1).comps, parseQuery('.status=done')), false)
   assertEquals([...all.filter((r) => r.comps.task)].sort(byBoard)[0].eid, T2) // open before wip
 })
 

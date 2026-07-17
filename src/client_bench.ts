@@ -1,5 +1,6 @@
 // Read-path baselines: the pure half that runs on every ws message.
-import { contextDigest, matches, param, rows } from './client.ts'
+import { contextDigest, rows } from './client.ts'
+import { matchQuery, parseQuery } from './query.ts'
 import { type Change, type Snapshot } from './types.ts'
 
 // Synthetic 2k-task snapshot, one session holding a handful of claims.
@@ -23,14 +24,14 @@ for (let i = 0; i < 2000; i++) {
 }
 let snap: Snapshot = { changes, deps: [] }
 let all = rows(snap)
-let ps = [param('.status=open')!]
+let ps = parseQuery('.status=open&.priority<=1')
 
 Deno.bench('rows: 2k-task snapshot', () => {
   rows(snap)
 })
 
-Deno.bench('matches: filter 2k rows', () => {
-  all.filter((r) => matches(r, ps))
+Deno.bench('query: filter 2k rows (a board render)', () => {
+  all.filter((r) => matchQuery(r.comps, ps))
 })
 
 Deno.bench('contextDigest: 2k-task graph', () => {

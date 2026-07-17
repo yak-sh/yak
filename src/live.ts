@@ -3,6 +3,7 @@
 // keep it current, and every component renders straight out of it.
 import { computed, signal } from '@preact/signals'
 import { type Change, type Dep, type Ent, type Pinned } from './types.ts'
+import { matchQuery, parseQuery } from './query.ts'
 
 // A cache row: the spine plus whichever components the entity carries.
 // Derived from Ent so a new component (types.ts) threads through here —
@@ -133,6 +134,17 @@ export let ent = (eid: string): Ent => {
       .filter((d) => d.parent == eid && d.type == 'contains')
       .map((d) => ent(d.child)),
   }
+}
+
+// A board's tasks: its saved query evaluated against the live cache.
+// Membership is never stored — a task is on a board because it matches,
+// so it appears the moment it's born and leaves the moment it stops
+// matching. Throws on a malformed query; the Board view shows the error.
+export let boardTasks = (e: Ent): Ent[] => {
+  let preds = parseQuery(String(e.board?.query ?? ''))
+  return Object.entries(cache.value)
+    .filter(([, r]) => r.task && matchQuery(r, preds))
+    .map(([eid]) => ent(eid))
 }
 
 // Everything said ABOUT an entity, oldest first — comments are entities

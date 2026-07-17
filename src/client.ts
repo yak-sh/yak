@@ -16,6 +16,7 @@ import {
   statuses,
 } from './types.ts'
 import { idOf } from './types.ts'
+import { routeProp } from './query.ts'
 export { idOf }
 
 export let host = () => Deno.env.get('TASKS_HOST') ?? '127.0.0.1:5173'
@@ -66,22 +67,10 @@ export let send = async (changes: Change[]) => {
   if (!res.ok) throw new Error(`apply failed: ${await res.text()}`)
 }
 
-// ---- dot-params ----
+// ---- dot-params (the WRITE grammar: values are literal; the filter
+// grammar with operators/lists/ranges lives in query.ts) ----
 
 export type Param = { comp: string; prop: string; value: unknown }
-
-// Route a bare prop to its component; ambiguity is an error that names
-// the candidates rather than a guess.
-let routeProp = (prop: string): string => {
-  let hits = Object.entries(comps)
-    .filter(([, cols]) => cols.includes(prop))
-    .map(([name]) => name)
-  if (hits.length == 1) return hits[0]
-  if (!hits.length) throw new Error(`unknown prop: .${prop}`)
-  throw new Error(
-    `.${prop} is ambiguous (${hits.join(', ')}) — use .${hits[0]}.${prop}`,
-  )
-}
 
 let coerce = (v: string): unknown => /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : v
 
@@ -109,11 +98,6 @@ export let patches = (params: Param[]) => {
   }
   return out
 }
-
-// Does a row satisfy every dot-param filter? String-compared — filters
-// come from a command line.
-export let matches = (r: Row, ps: Param[]) =>
-  ps.every((p) => String(r.comps[p.comp]?.[p.prop]) == String(p.value))
 
 // The standard task-create batch: a doc face, workflow state, then any
 // other grouped components verbatim. Callers put title/body into

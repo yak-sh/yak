@@ -11,7 +11,7 @@ export let comps: Record<string, string[]> = {
   doc: ['title', 'body'],
   task: ['status', 'priority', 'project_eid', 'domain'],
   project: [],
-  board: [],
+  board: ['query'], // filter over tasks (src/query.ts grammar); '' = all
   canvas: [],
   web: ['url'], // frozen_at is server-stamped, never writable over the wire
   card: ['target_eid', 'view'],
@@ -88,7 +88,9 @@ export type Task = {
 // is its doc.title — one naming mechanism, no drift.
 export type ProjectTag = { eid: string }
 
-export type BoardTag = { eid: string } // a tag: "this doc fronts a board"
+// A board is a saved filter over tasks: `query` speaks the query.ts
+// grammar ('.project_eid=…&.status=open,wip'); empty/null means every task.
+export type BoardTag = { eid: string; query?: string | null }
 // An external page. The URL is what was pasted; the rendered thing is the
 // server's frozen archive of it (one self-contained HTML file on disk),
 // stamped frozen_at when ready — frozen_at is server-owned, never wire-set.

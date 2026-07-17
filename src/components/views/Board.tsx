@@ -1,5 +1,6 @@
 import { type Ent } from '../../types.ts'
 import {
+  boardTasks,
   byPriority,
   cache,
   clientId,
@@ -7,6 +8,7 @@ import {
   mutate,
   statuses,
 } from '../../live.ts'
+import { adopt, parseQuery } from '../../query.ts'
 import { block } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
 import { dragData, View } from '../View.tsx'
@@ -19,13 +21,25 @@ let Frame = block('div', 'Board', {
 })
 let { Col, ColName, Count, Item } = Frame
 
-// A board as kanban: columns derived from task status, ordered by
-// priority. Every task row is draggable — dropped on another column (or
-// another spot in its own) it patches status + priority, where priority is
-// the midpoint of its new neighbours at the drop point; dragged out to the
-// canvas it spawns a Task card (the standard drag payload — Canvas owns
-// that drop).
+// A board as kanban over its saved QUERY (board.query, query.ts grammar):
+// membership is never stored, a task is here because it matches. Columns
+// derived from task status, ordered by priority. Every task row is
+// draggable — dropped on another column (or another spot in its own) it
+// patches status + priority (midpoint of its new neighbours), plus
+// whatever scalar equalities the query demands, so a foreign task JOINS
+// the board it lands on; dragged out to the canvas it spawns a Task card
+// (the standard drag payload — Canvas owns that drop).
 export let Board = ({ e }: { e: Ent }) => {
+  let tasks: Ent[]
+  try {
+    tasks = boardTasks(e)
+  } catch (err) {
+    return (
+      <Frame>
+        bad query: {String(err instanceof Error ? err.message : err)}
+      </Frame>
+    )
+  }
   // Double-click a column name to fold the column to a vertical header.
   // Folds are graph state like camera — a `fold` entity per (client,
   // board), so they persist, sync across this client's tabs, and agents
@@ -70,7 +84,7 @@ export let Board = ({ e }: { e: Ent }) => {
     ev.stopPropagation()
     // The new neighbours: this column's tasks (minus the dragged one), in
     // render order; the drop's insertion index comes from the row midpoints.
-    let list = e.kids
+    let list = tasks
       .filter((k) => k.task?.status == status && k.eid != target_eid)
       .sort(byPriority)
     let rows = [...ev.currentTarget.querySelectorAll('.Board_Item')]
@@ -89,13 +103,21 @@ export let Board = ({ e }: { e: Ent }) => {
       : next == null
       ? prev + 1
       : (prev + next) / 2
-    mutate({ eid: target_eid, name: 'task', comp: { status, priority } })
+    mutate({
+      eid: target_eid,
+      name: 'task',
+      comp: {
+        ...adopt(parseQuery(String(e.board?.query ?? '')), 'task'),
+        status,
+        priority,
+      },
+    })
   }
 
   return (
     <Frame>
       {statuses.map((s) => {
-        let list = e.kids.filter((k) => k.task?.status == s).sort(byPriority)
+        let list = tasks.filter((k) => k.task?.status == s).sort(byPriority)
         return (
           <Col
             key={s}
