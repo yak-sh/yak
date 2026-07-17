@@ -111,6 +111,7 @@ export let Relate = ({ e }: { e: Ent }) => {
         {verbs.map((v) => (
           <Verb
             key={v.label}
+            mod={v.type}
             type='button'
             onClick={() => setVerb(v)}
           >
@@ -122,7 +123,7 @@ export let Relate = ({ e }: { e: Ent }) => {
   }
   return (
     <Frame>
-      <Verb mod='on' type='button' onClick={close}>{verb.label}</Verb>
+      <Verb mod={verb.type} type='button' onClick={close}>{verb.label}</Verb>
       <Anchor>
         <Find
           elRef={focus}

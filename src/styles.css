@@ -941,17 +941,25 @@ html {
 .Relate_Verb {
   font-size: 11px;
   font-family: inherit;
-  color: var(--dim);
   background: none;
   border: 0;
   padding: 0;
   cursor: pointer;
   white-space: nowrap;
-  opacity: 0.6;
+  opacity: 0.5; /* the faded invitation; full ink on hover or armed */
+}
+/* Each verb wears its edge's color — the same paint the sentence gets. */
+.Relate_Verb-requires {
+  color: var(--red);
+}
+.Relate_Verb-contains {
+  color: var(--yellow);
+}
+.Relate_Verb-reads {
+  color: var(--blue);
 }
 .Relate_Verb:hover,
-.Relate_Verb-on {
-  color: var(--text);
+.Relate:has(.Relate_Anchor) .Relate_Verb {
   opacity: 1;
 }
 .Relate_Anchor {
