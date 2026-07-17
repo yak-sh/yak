@@ -1,5 +1,5 @@
 import { comps as vocab, type Ent } from '../../types.ts'
-import { backlinks, ent } from '../../live.ts'
+import { backlinks, ent, parents } from '../../live.ts'
 import { block } from '../ui.tsx'
 import { Prop } from '../editors.tsx'
 import { View } from '../View.tsx'
@@ -120,6 +120,19 @@ export let Debug = ({ e }: { e: Ent }) => {
     <Frame>
       <View eid={e.eid} view='Debug.ListItem' />
       <AllProps e={e} />
+      {parents(e.eid).map((d) => (
+        <View
+          key={d.parent + d.type}
+          eid={d.parent}
+          view='Dependency'
+          type={d.type}
+          label={{
+            contains: 'part of',
+            requires: 'required by',
+            reads: 'read by',
+          }[d.type] ?? d.type}
+        />
+      ))}
       {e.refs.map((r) => (
         <View key={r.child} eid={r.child} view='Dependency' type={r.type} />
       ))}

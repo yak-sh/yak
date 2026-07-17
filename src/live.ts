@@ -286,6 +286,11 @@ export let backlinks = (eid: string) =>
       .map(([c, p]) => ({ from, via: `${c}.${p}` }))
   )
 
+// The edges that hold an entity FROM ABOVE — every dependency whose child
+// is this eid. refs/kids read downward; this is the climb back up, how a
+// task names the parents that contain or require it.
+export let parents = (eid: string) => deps.value.filter((d) => d.child == eid)
+
 // The highest stacking order on a canvas — a raised card gets topZ + 1.
 export let topZ = (canvas: string) =>
   Math.max(

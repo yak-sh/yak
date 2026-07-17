@@ -7,6 +7,7 @@ import {
   ent,
   gated,
   mutate,
+  parents,
   statuses,
 } from '../../live.ts'
 import { linkProps } from '../nav.tsx'
@@ -157,6 +158,7 @@ export let Task = ({ e }: { e: Ent }) => (
       <View eid={e.eid} view='Id' />
     </Head>
     <TaskBody e={e} />
+    <Above e={e} />
     {e.refs.map((r) => (
       <View key={r.child} eid={r.child} view='Dependency' type={r.type} />
     ))}
@@ -164,6 +166,29 @@ export let Task = ({ e }: { e: Ent }) => (
     <Runs e={e} />
     <Comments eid={e.eid} />
   </Frame>
+)
+
+// The reversed sentences: how each edge above reads from down here.
+let up: Record<string, string> = {
+  contains: 'part of',
+  requires: 'required by',
+  reads: 'read by',
+}
+
+// The view from below — every edge that holds this task, one reversed
+// sentence each ('part of X', 'required by Y'), keeping the edge's color.
+let Above = ({ e }: { e: Ent }) => (
+  <>
+    {parents(e.eid).map((d) => (
+      <View
+        key={d.parent + d.type}
+        eid={d.parent}
+        view='Dependency'
+        type={d.type}
+        label={up[d.type] ?? d.type}
+      />
+    ))}
+  </>
 )
 
 // The task's sessions: every run that named this task (backlinks via
@@ -201,6 +226,7 @@ export let TaskCard = ({ e }: { e: Ent }) => {
         <Stamp e={e} />
       </Meta>
       <TaskBody e={e} mod='bare' />
+      <Above e={e} />
       {e.refs.map((r) => (
         <View key={r.child} eid={r.child} view='Dependency' type={r.type} />
       ))}

@@ -19,7 +19,7 @@ let { Verb, Anchor, Pop, Find, Row, New } = Frame
 let verbs = [
   { label: 'requires', type: 'requires', out: true },
   { label: 'blocks', type: 'requires', out: false },
-  { label: 'sub-task', type: 'contains', out: true },
+  { label: 'contains', type: 'contains', out: true },
   { label: 'part of', type: 'contains', out: false },
   { label: 'reads', type: 'reads', out: true },
 ] as const
