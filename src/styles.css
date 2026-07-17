@@ -1344,8 +1344,7 @@ html {
 }
 .Status_Colon {
   color: var(--text);
-  margin-right: calc(-1 *
-    var(--half-gap)); /* the line hugs the colon, like vim */
+  margin-right: calc(-1 * var(--half-gap)); /* the line hugs the colon */
 }
 .Status_Line {
   flex: 1;
@@ -1355,15 +1354,20 @@ html {
 .Status_Cmd {
   flex: 1;
   font: inherit;
-  color: var(--text);
+  color: transparent; /* the ghost's copy paints the glyphs */
+  caret-color: var(--text);
   background: none;
   border: 0;
   outline: none;
   padding: 0;
   position: relative; /* above the ghost */
 }
-/* The faded completion: an invisible copy of the typed text places the
-   remainder exactly past the caret; the input paints over the copy. */
+.Status_Cmd::selection {
+  color: var(--text); /* selected glyphs paint here, over the copy */
+}
+/* The line's paint layer: a copy of the typed text (the verb colored once
+   it names a command) places the faded completion exactly past the caret;
+   the transparent input above keeps the caret and the selection. */
 .Status_Ghost {
   position: absolute;
   inset: 0;
@@ -1373,8 +1377,11 @@ html {
   overflow: hidden;
 }
 .Status_Was {
-  visibility: hidden;
+  color: var(--text);
   font-style: normal;
+}
+.Status_Verb-known {
+  color: var(--accent);
 }
 /* The command menu, opening UPWARD from the bar — column-reverse keeps
    the best match nearest where you type. */

@@ -30,6 +30,7 @@ let sheet: Record<string, Style> = {
   TStatus_Mode: { fg: '#7a8478', bold: true },
   'TStatus_Mode-insert': { fg: '#dbbc7f' },
   'TStatus_Mode-visual': { fg: '#d699b6' },
+  TStatus_Verb: { fg: '#a7c080' },
   TStatus_Msg: { fg: '#9da9a0' },
   TStatus_Hint: { fg: '#7a8478' },
 

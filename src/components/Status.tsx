@@ -32,6 +32,7 @@ let Frame = block('footer', 'Status', {
   Cmd: 'input',
   Ghost: 'span',
   Was: 'i',
+  Verb: 'span',
   Msg: 'span',
   Hints: 'div',
   Hint: 'div',
@@ -46,6 +47,7 @@ let {
   Cmd,
   Ghost,
   Was,
+  Verb,
   Msg,
   Hints,
   Hint,
@@ -240,6 +242,7 @@ export let Status = () => {
   let [line, setLine] = useState('')
   let [pick, setPick] = useState(0)
   let hints = mode.value == 'command' ? suggest(line, all) : []
+  let [, pre, verb, rest] = line.match(/^(\s*)(\S+)(.*)$/s) ?? []
   let put = (v: string) => {
     if (input.current) input.current.value = v
     setLine(v)
@@ -279,11 +282,23 @@ export let Status = () => {
             <Colon>:</Colon>
             <Line>
               {
-                /* the ghost sits UNDER the input: an invisible copy of the
-                typed text positions the faded completion after the caret */
+                /* the ghost sits UNDER the input and paints the line: the
+                copy shows the typed text (the verb greens once it names a
+                command), the faded completion follows — the input above
+                keeps only the caret and the selection */
               }
               <Ghost aria-hidden>
-                <Was>{line}</Was>
+                <Was>
+                  {verb
+                    ? (
+                      <>
+                        {pre}
+                        <Verb mod={all[verb] && 'known'}>{verb}</Verb>
+                        {rest}
+                      </>
+                    )
+                    : line}
+                </Was>
                 {ghost(line, all)}
               </Ghost>
               <Cmd

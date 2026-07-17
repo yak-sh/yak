@@ -19,7 +19,7 @@ import {
   send,
   statuses,
 } from '../live.ts'
-import { type Command, type Ctx, run } from '../commands.ts'
+import { type Command, commands, type Ctx, run } from '../commands.ts'
 import { has, type Renderer, resolve } from '../components/registry.ts'
 import { View } from '../components/View.tsx'
 import { author } from '../components/Comments.tsx'
@@ -229,10 +229,11 @@ let bye: Command = {
     return {}
   },
 }
+let local: Record<string, Command> = { q: bye, quit: bye }
 
 let exec = (line: string) => {
   try {
-    let r = run(line, ctx(), { q: bye, quit: bye })
+    let r = run(line, ctx(), local)
     if (r.changes?.length) mutate(...r.changes)
     if (r.go) trail.value = [...trail.value, r.go]
     msg.value = r.msg ?? ''
@@ -282,23 +283,43 @@ export let key = (k: string) => {
   else if (k == '\x1b') msg.value = ''
 }
 
-let TStatus = () => (
-  <footer class='TStatus'>
-    {mode.value == 'command'
-      ? <span class='TStatus_Cmd'>:{buf.value}█</span>
-      : (
-        <>
-          <span class={`TStatus_Mode TStatus_Mode-${mode.value}`}>
-            {mode.value == 'insert' ? '-- INSERT --' : mode.value.toUpperCase()}
+let TStatus = () => {
+  // the verb greens once it names a command — the web bar does the same
+  let [, pre, verb, rest] = buf.value.match(/^(\s*)(\S+)(.*)$/s) ?? []
+  return (
+    <footer class='TStatus'>
+      {mode.value == 'command'
+        ? (
+          <span class='TStatus_Cmd'>
+            :{verb
+              ? (
+                <>
+                  {pre}
+                  {(commands[verb] ?? local[verb])
+                    ? <span class='TStatus_Verb'>{verb}</span>
+                    : verb}
+                  {rest}
+                </>
+              )
+              : buf.value}█
           </span>
-          {msg.value && <span class='TStatus_Msg'>{msg.value}</span>}
-          <span class='TStatus_Hint'>
-            j/k browse · l in · h out · i edit · y yank · : cmd · q quit
-          </span>
-        </>
-      )}
-  </footer>
-)
+        )
+        : (
+          <>
+            <span class={`TStatus_Mode TStatus_Mode-${mode.value}`}>
+              {mode.value == 'insert'
+                ? '-- INSERT --'
+                : mode.value.toUpperCase()}
+            </span>
+            {msg.value && <span class='TStatus_Msg'>{msg.value}</span>}
+            <span class='TStatus_Hint'>
+              j/k browse · l in · h out · i edit · y yank · : cmd · q quit
+            </span>
+          </>
+        )}
+    </footer>
+  )
+}
 
 // The screen: the board when the trail is empty, else the entered entity
 // through its first applicable view. The title doubles as the breadcrumb.
