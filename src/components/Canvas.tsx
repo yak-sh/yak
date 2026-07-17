@@ -24,6 +24,10 @@ import { Search, searchOpen } from './Search.tsx'
 let Frame = block('div', 'Canvas', { Plane: 'div' })
 let { Plane } = Frame
 
+// One zoom range for every camera move — pinch and frame-to-fit alike.
+let ZOOM_MIN = 0.1
+let ZOOM_MAX = 4
+
 // The pannable, zoomable plane of pinned cards. The camera is a per-client,
 // per-canvas entity (canvases nest — a client has one camera per canvas it
 // looks at), restored from the cache on mount and patched over the sync
@@ -61,14 +65,13 @@ export let Canvas = ({ eid }: { eid: string }) => {
     if (settle.current) clearTimeout(settle.current)
   }
 
-  // Glide the camera to frame a pin, zoomed to fit with a margin.
+  // Glide the camera to frame a pin, zoomed to fit with a margin. The
+  // margin applies BEFORE the clamp — clamping the raw fit first meant a
+  // card wider than ~4 viewports could never zoom far enough out.
   let frame = (pin: HTMLElement) => {
     let { w, h } = camera.value
-    let z = Math.min(
-      4,
-      Math.max(0.25, Math.min(w / pin.offsetWidth, h / pin.offsetHeight)) *
-        0.9,
-    )
+    let fit = Math.min(w / pin.offsetWidth, h / pin.offsetHeight) * 0.9
+    let z = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, fit))
     glide.value = true
     camera.value = {
       x: pin.offsetLeft + pin.offsetWidth / 2,
@@ -284,7 +287,10 @@ export let Canvas = ({ eid }: { eid: string }) => {
     if (e.ctrlKey) {
       e.preventDefault()
       unlatch()
-      let z = Math.min(4, Math.max(0.25, zoom * Math.exp(-e.deltaY / 80)))
+      let z = Math.min(
+        ZOOM_MAX,
+        Math.max(ZOOM_MIN, zoom * Math.exp(-e.deltaY / 80)),
+      )
       let r = e.currentTarget.getBoundingClientRect()
       let cx = e.clientX - r.left - w / 2
       let cy = e.clientY - r.top - h / 2
