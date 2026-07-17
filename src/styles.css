@@ -118,9 +118,13 @@
   display: flex;
   align-items: center;
   gap: var(--gap);
-  /* No safe-area padding here: the phone's opaque status bar already
-     seats the app below the notch — an inset would double the gap. */
-  padding: var(--half-gap) var(--gap) var(--half-gap) var(--half-gap);
+  /* viewport-fit=cover + black-translucent draw us under the phone's
+     clock — the bar's padding absorbs the notch, its background fills
+     it (sides too, for the landscape notch). */
+  padding: calc(var(--half-gap) + env(safe-area-inset-top, 0px))
+    calc(var(--gap) + env(safe-area-inset-right, 0px))
+    var(--half-gap)
+    calc(var(--half-gap) + env(safe-area-inset-left, 0px));
   border-bottom: 1px solid var(--border);
   background: var(--surface);
 }
