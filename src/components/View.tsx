@@ -6,6 +6,7 @@ import {
   AnyTitle,
   BoardTitle,
   DocTitle,
+  SessionTitle,
   TaskTitle,
   WebTitle,
 } from './views/Title.tsx'
@@ -55,6 +56,7 @@ define([
   { view: 'Card.Title', match: has('doc', 'task'), Render: TaskTitle },
   { view: 'Card.Title', match: has('doc', 'board'), Render: BoardTitle },
   { view: 'Card.Title', match: has('web'), Render: WebTitle },
+  { view: 'Card.Title', match: has('session'), Render: SessionTitle },
   { view: 'Card.Title', match: has('doc'), Render: DocTitle },
   { view: 'Card.Title', match: () => true, Render: AnyTitle },
   {
