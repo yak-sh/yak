@@ -9,6 +9,7 @@
   --gap: 0.75rem;
   --half-gap: calc(var(--gap) / 2);
   --radius: 6px;
+  --tap: 0px; /* touch-target floor — grows under a coarse pointer */
 
   --bg: #232a2e; /* app background */
   --surface: #2d353b; /* panels / card chrome */
@@ -32,6 +33,14 @@
   --open: var(--blue);
   --wip: var(--yellow);
   --done: var(--accent);
+}
+
+/* Fat fingers get fat targets: every control that declares the --tap
+   floor grows to it on touch devices, and only there. */
+@media (pointer: coarse) {
+  :root {
+    --tap: 2.5rem;
+  }
 }
 
 /* Overscroll gestures (swipe-back) die ONLY while a canvas is on screen —
@@ -61,6 +70,14 @@
   font: 13px/1.5 ui-monospace, monospace;
   background: var(--bg);
   color: var(--text);
+}
+
+/* Border-box everywhere: a width IS the box you see. (Pin geometry was
+   the long holdout — the owner accepted the one-time card shrink.) */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
 /* Every textarea sizes itself to what's typed — no manual rows, no
@@ -101,6 +118,8 @@
   display: flex;
   align-items: center;
   gap: var(--gap);
+  /* No safe-area padding here: the phone's opaque status bar already
+     seats the app below the notch — an inset would double the gap. */
   padding: var(--half-gap) var(--gap) var(--half-gap) var(--half-gap);
   border-bottom: 1px solid var(--border);
   background: var(--surface);
@@ -129,8 +148,6 @@
   padding: var(--gap);
   max-width: 52rem;
   width: 100%;
-  box-sizing: border-box; /* width:100% INCLUDES the padding — content-box
-  made every list/prose page 2 gaps wider than the phone */
   margin: 0 auto;
 }
 .App_Body > .Board {
@@ -157,6 +174,9 @@
   border: 0;
   padding: var(--half-gap) var(--gap);
   cursor: pointer;
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
 }
 .Menu_Item:hover {
   background: var(--soft);
@@ -362,6 +382,10 @@
   margin: -4px -4px -4px calc(-1 * var(--half-gap));
   border-radius: calc(var(--radius) - 2px);
   cursor: pointer;
+  min-width: var(--tap);
+  min-height: var(--tap);
+  display: grid;
+  place-items: center;
 }
 .Card_X:hover {
   color: var(--red);
@@ -380,6 +404,10 @@
   border-radius: calc(var(--radius) - 2px);
   padding: 3px 4px;
   cursor: pointer;
+  min-width: var(--tap);
+  min-height: var(--tap);
+  display: grid;
+  place-items: center; /* the glyph stays centered as the floor grows */
 }
 .Tab + .Tab {
   margin-left: calc(-1 * var(--gap)); /* cancel the row gap — gapless chips */
@@ -482,12 +510,24 @@
   align-items: stretch; /* every column is a full-height drop target */
 }
 .Board_Col {
-  flex: 1;
+  /* A column has a real width: a host too narrow for all three scrolls
+     sideways and SNAPS column to column (tasks-v1), instead of crushing
+     them. Wide hosts still see fluid columns filling the row. */
+  flex: 1 0 min(20rem, 85vw);
   min-width: 0;
   min-height: 5rem; /* droppable even when the whole board is empty */
   display: grid;
   gap: var(--half-gap);
   align-content: start;
+  scroll-snap-align: start;
+}
+/* The snap lives on whichever scroller hosts the board — fullscreen
+   (App_Body) or a canvas card (Card_Scroll). Content without snap-align
+   defines no snap areas, so every other page scrolls exactly as before. */
+.App_Body,
+.Card_Scroll {
+  scroll-snap-type: x mandatory;
+  scroll-padding-left: calc(var(--gap) + env(safe-area-inset-left, 0px));
 }
 .Board_ColName {
   font-size: 11px;
@@ -845,7 +885,11 @@
   display: flex;
   align-items: center;
   gap: var(--half-gap);
-  padding: 2px var(--gap);
+  /* On a notched phone the bar's corners are under the screen's rounded
+     glass — keep the bar SLIM and slide the text in sideways instead.
+     inset-bottom is nonzero exactly on those phones; scaled, it clears
+     the corner radius. */
+  padding: 2px calc(var(--gap) + env(safe-area-inset-bottom, 0px) * 0.75);
   background: var(--surface);
   border-top: 1px solid var(--border);
   font-size: 12px;
