@@ -2,9 +2,10 @@
 // translated to JS per-request (sucrase strips types + compiles JSX — no
 // bundling, no type-checking; `deno task check` is the type gate), bare
 // imports resolved by the import map in index.html to the vendored ESM in
-// src/vendor/, the sync websocket, and a src/ watcher that tells clients to
-// reload. State lives in the db, so a reload IS hot: camera, cards, and
-// views all come back where they were.
+// src/vendor/, the sync websocket, and a src/ watcher that hot-swaps
+// clients: component edits re-import under a fresh ?v generation (state
+// survives — it lives in live.ts, above the swap), css edits re-fetch the
+// stylesheet, and only shell/server edits still cost a real reload.
 import { transform } from 'sucrase'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { providers } from './adapters.ts'
@@ -14,6 +15,12 @@ import { freeze, serveFrozen } from './freeze.ts'
 import { mcpServer } from './mcp.ts'
 import { logs, recover, start, stop } from './sessions.ts'
 import { outcome, recent, record, toolCall } from './telemetry.ts'
+import { stamp } from './hot.ts'
+
+// The hot-swap generation: bumped by the watcher on every client-code or
+// css change, stamped into every served module's relative imports so a
+// swap re-fetches the whole component graph (see hot.ts).
+let gen = 1
 
 let src = new URL('.', import.meta.url).pathname
 
@@ -53,7 +60,7 @@ let file = async (root: string, path: string) => {
         }
         ts.set(full, hit)
       }
-      return new Response(hit.js, {
+      return new Response(stamp(hit.js, gen), {
         headers: { 'content-type': mime.js, 'cache-control': 'no-cache' },
       })
     }
@@ -298,38 +305,58 @@ Deno.serve(
 // reaps a child; the watcher below must never learn how.
 recover(cast)
 
-// Watch src/ and tell every client to reload (debounced — editors fire
-// several events per save). The server itself restarts via --watch, whose
-// scope is its own module graph — but a graceful restart only completes
-// once THIS isolate's event loop drains, and open websockets hold it
-// forever (the new isolate then dies on AddrInUse). So when a server-graph
-// file changes, close every socket and stop watching: the isolate settles,
-// the port frees, the restart binds. Clients reload-poll their way back.
-// Everything the SERVER imports (transitively) — a change to these needs
-// a process restart, not a client reload. Keep in sync with the imports
-// above (mcp.ts pulls client.ts in).
+// Watch src/ and tell every client what a save means (debounced — editors
+// fire several events per save):
+//   {hmr: gen}  component/logic edit — re-import the graph under ?v=gen
+//               and re-render; signals in live.ts keep all state
+//   {css: gen}  css-only edit — re-fetch the stylesheet, nothing else
+//   'reload'    a SHELL file (main.tsx, live.ts, index.html, vendor/) —
+//               the swap boundary itself moved; only a real reload applies
+// The server itself restarts via --watch, whose scope is its own module
+// graph — but a graceful restart only completes once THIS isolate's event
+// loop drains, and open websockets hold it forever (the new isolate then
+// dies on AddrInUse). So when a server-graph file changes, close every
+// socket and stop watching: the isolate settles, the port frees, the
+// restart binds. Clients reload-poll their way back.
+// `graph` is everything the SERVER imports (transitively) — a change to
+// these needs a process restart, not a client swap. Keep in sync with the
+// imports above (mcp.ts pulls client.ts in; db.ts pulls query.ts).
 let graph = [
   'server.ts',
   'db.ts',
   'types.ts',
+  'query.ts',
   'freeze.ts',
+  'hot.ts',
   'mcp.ts',
   'client.ts',
   'sessions.ts',
   'adapters.ts',
   'telemetry.ts',
 ]
+let shellish = (p: string) =>
+  p.endsWith('/main.tsx') || p.endsWith('/live.ts') ||
+  p.endsWith('/index.html') || p.includes('/vendor/')
 let watch = async () => {
   let timer: ReturnType<typeof setTimeout> | null = null
+  let batch = new Set<string>()
   for await (let e of Deno.watchFs(src)) {
     if (e.paths.some((p) => graph.some((g) => p.endsWith(`/${g}`)))) {
       for (let c of clients) c.close()
       return
     }
+    for (let p of e.paths) batch.add(p)
     if (timer) clearTimeout(timer)
     timer = setTimeout(() => {
+      let paths = [...batch]
+      batch.clear()
+      let msg = paths.some(shellish)
+        ? 'reload' as const
+        : paths.every((p) => p.endsWith('.css'))
+        ? { css: ++gen }
+        : { hmr: ++gen }
       for (let c of clients) {
-        if (c.readyState == WebSocket.OPEN) c.send(JSON.stringify('reload'))
+        if (c.readyState == WebSocket.OPEN) c.send(JSON.stringify(msg))
       }
     }, 50)
   }

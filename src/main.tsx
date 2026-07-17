@@ -1,5 +1,5 @@
 import { render } from 'preact'
-import { boot, cache, clientId, ent } from './live.ts'
+import { boot, cache, clientId, config, ent } from './live.ts'
 import { idOf } from './types.ts'
 import { route } from './components/nav.tsx'
 import { App } from './components/App.tsx'
@@ -47,3 +47,37 @@ if (legacy) {
 }
 
 render(<App />, document.body)
+
+// Hot swap. The watcher says {hmr: gen}; we re-import the whole component
+// graph under ?v=<gen> (the server stamps every relative import — hot.ts)
+// and re-render it over the LIVING state: cache, camera, and route all
+// survive because they live in live.ts, above the swap boundary. This
+// file and live.ts never re-import — a change to them sends 'reload'
+// instead. A typo mid-edit must not eat the page: a failed import or
+// first render keeps the last good code, and only a failed REVERT — both
+// generations broken — falls back to a real reload.
+let Good = App
+config.swap = async (gen) => {
+  let Next = Good
+  try {
+    Next = (await import(`./components/App.tsx?v=${gen}`)).App as typeof App
+    render(<Next />, document.body)
+    Good = Next
+    console.info(`code v${gen} live`)
+  } catch (e) {
+    report(`hot swap failed: ${e}`, (e as Error)?.stack)
+    if (Next == Good) return
+    try {
+      render(<Good />, document.body)
+    } catch {
+      config.reload()
+    }
+  }
+}
+
+// A css-only edit re-fetches the stylesheet in place: no re-render, no
+// lost scroll, focus, or half-typed text.
+config.css = (gen) => {
+  let link = document.querySelector<HTMLLinkElement>('link[rel=stylesheet]')
+  if (link) link.href = `/styles.css?v=${gen}`
+}

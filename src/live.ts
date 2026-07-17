@@ -28,11 +28,19 @@ export let deps = signal<Dep[]>([])
 
 // Where the server lives and what a code reload means. The browser answers
 // both from its location; other hosts (the TUI) configure these before
-// boot() — a terminal process can't "reload the page".
+// boot() — a terminal process can't "reload the page". swap/css are the
+// hot doors: main.tsx installs them at boot, and a host that doesn't
+// (the TUI) just falls back to reload — a no-op without a location.
 let loc = (globalThis as {
   location?: { host: string; protocol?: string; reload(): void }
 }).location
-export let config = {
+export let config: {
+  host: string
+  secure: boolean
+  reload: () => void
+  swap?: (gen: number) => void
+  css?: (gen: number) => void
+} = {
   host: loc?.host ?? '127.0.0.1:5173',
   // Behind an https front door the page's scheme must carry through to
   // the socket and fetches — a hardcoded http:// is mixed content there.
@@ -99,7 +107,9 @@ export let mutate = (...changes: Change[]) => {
 }
 
 // One socket per tab, lazily opened; sends queue behind the handshake.
-// Array frames are sync batches; 'reload' is the server's file watcher.
+// Array frames are sync batches; the rest is the server's file watcher:
+// {hmr}/{css} hot-swap through the config doors, 'reload' means the swap
+// boundary itself changed.
 // A dropped socket means the server restarted — poll until it's back, then
 // reload for a fresh snapshot (state lives in the db, so nothing is lost).
 // One poller, ever: while the server is down every send() mints another
@@ -114,6 +124,8 @@ export let sock = () => {
     let data = JSON.parse(String(m.data))
     if (Array.isArray(data)) applyLocal(data)
     else if (data == 'reload') config.reload()
+    else if (data?.hmr) config.swap ? config.swap(data.hmr) : config.reload()
+    else if (data?.css) config.css?.(data.css)
   }
   ws.onclose = () => {
     if (polling) return
