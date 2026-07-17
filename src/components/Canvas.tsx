@@ -45,6 +45,54 @@ export let Canvas = ({ eid }: { eid: string }) => {
   >(null)
   let glide = useSignal(false) // one smooth transition, for zoom-to-card
 
+  // The latched card: <space> doesn't just frame a card, it follows it —
+  // when the pin changes shape (a tab switch, an edit growing the body),
+  // the camera re-frames with the same glide. Any manual camera move
+  // (pan, pinch, 0) lets go. The debounce keeps a drag-resize from
+  // fighting the camera mid-gesture: we glide once the shape settles.
+  let latched = useRef<HTMLElement | null>(null)
+  let ro = useRef<ResizeObserver | null>(null)
+  let settle = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  let unlatch = () => {
+    ro.current?.disconnect()
+    latched.current = null
+    if (settle.current) clearTimeout(settle.current)
+  }
+
+  // Glide the camera to frame a pin, zoomed to fit with a margin.
+  let frame = (pin: HTMLElement) => {
+    let { w, h } = camera.value
+    let z = Math.min(
+      4,
+      Math.max(0.25, Math.min(w / pin.offsetWidth, h / pin.offsetHeight)) *
+        0.9,
+    )
+    glide.value = true
+    camera.value = {
+      x: pin.offsetLeft + pin.offsetWidth / 2,
+      y: pin.offsetTop + pin.offsetHeight / 2,
+      zoom: z,
+      w,
+      h,
+    }
+    queue('x', 'y', 'zoom')
+  }
+
+  let latch = (pin: HTMLElement) => {
+    unlatch()
+    frame(pin)
+    latched.current = pin
+    ro.current ??= new ResizeObserver(() => {
+      let el = latched.current
+      if (!el) return
+      if (!el.isConnected) return unlatch() // the card was closed
+      if (settle.current) clearTimeout(settle.current)
+      settle.current = setTimeout(() => frame(el), 150)
+    })
+    ro.current.observe(pin)
+  }
+
   // Comps travel as patches — send only the props that moved.
   let save = (comp: Record<string, number | string>) => {
     if (cam.current) send({ eid: cam.current, name: 'camera', comp })
@@ -126,7 +174,8 @@ export let Canvas = ({ eid }: { eid: string }) => {
     addEventListener('resize', resize)
 
     // Normal-mode hotkeys: 0 resets zoom; <space> over a card glides the
-    // camera to frame it.
+    // camera to frame it and latches on — the camera follows shape changes
+    // until a manual move lets go.
     let key = (e: KeyboardEvent) => {
       if (mode.value != 'normal' || e.repeat) return
       if (
@@ -134,6 +183,7 @@ export let Canvas = ({ eid }: { eid: string }) => {
         e.target.matches('input, textarea, select, [contenteditable]')
       ) return
       if (e.key == '0') {
+        unlatch()
         camera.value = { ...camera.value, zoom: 1 }
         queue('zoom')
         return
@@ -142,21 +192,7 @@ export let Canvas = ({ eid }: { eid: string }) => {
       let pin = document.querySelector<HTMLElement>('.Pin:hover')
       if (!pin) return
       e.preventDefault()
-      let { w, h } = camera.value
-      let z = Math.min(
-        4,
-        Math.max(0.25, Math.min(w / pin.offsetWidth, h / pin.offsetHeight)) *
-          0.9,
-      )
-      glide.value = true
-      camera.value = {
-        x: pin.offsetLeft + pin.offsetWidth / 2,
-        y: pin.offsetTop + pin.offsetHeight / 2,
-        zoom: z,
-        w,
-        h,
-      }
-      queue('x', 'y', 'zoom')
+      latch(pin)
     }
     addEventListener('keydown', key)
 
@@ -178,6 +214,7 @@ export let Canvas = ({ eid }: { eid: string }) => {
     }
     addEventListener('paste', paste)
     return () => {
+      unlatch()
       s.removeEventListener('message', hear)
       removeEventListener('resize', resize)
       removeEventListener('keydown', key)
@@ -187,6 +224,7 @@ export let Canvas = ({ eid }: { eid: string }) => {
 
   let down = (e: PointerEvent & { currentTarget: HTMLDivElement }) => {
     if (e.target instanceof Element && e.target.closest('.Pin')) return
+    unlatch()
     glide.value = false
     let elem = e.currentTarget
     let from = camera.value
@@ -239,6 +277,7 @@ export let Canvas = ({ eid }: { eid: string }) => {
     let { x, y, zoom, w, h } = camera.value
     if (e.ctrlKey) {
       e.preventDefault()
+      unlatch()
       let z = Math.min(4, Math.max(0.25, zoom * Math.exp(-e.deltaY / 80)))
       let r = e.currentTarget.getBoundingClientRect()
       let cx = e.clientX - r.left - w / 2
@@ -283,8 +322,9 @@ export let Canvas = ({ eid }: { eid: string }) => {
         peak: fresh ? mag : Math.max(g!.peak, mag),
         sign: sign || (g?.sign ?? 0),
       }
-      if (mode == 'scroll') return
+      if (mode == 'scroll') return // scrolling a card's body keeps the latch
       e.preventDefault()
+      unlatch()
       camera.value = {
         ...camera.value,
         x: x + e.deltaX / zoom,
