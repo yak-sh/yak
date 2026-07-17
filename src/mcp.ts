@@ -123,6 +123,16 @@ steps, options), ## headings when it has parts, fenced code for code.
 Never one run-on paragraph.`
 let body = () => z.string().describe(DOC)
 
+// The write-time backstop: a long body with not one line break is a
+// wall of text. It still stores (never drop words) — the reply says so
+// at the one moment the writer can fix it cheaply.
+let wall = (s: unknown) =>
+  typeof s == 'string' && s.length > 240 && !s.includes('\n')
+    ? `\nnote: that body is one unbroken ${s.length}-char line — bodies are
+markdown documents (paragraphs, lists, headings). Rewrite via task_update
+".body=".`
+    : ''
+
 // Any *_eid dot-param value may be a human id (T-3, P-19) — resolve it to
 // the eid so callers never do the num→eid lookup dance themselves.
 let resolveIds = (all: Row[], ps: Param[]) =>
@@ -135,7 +145,16 @@ let resolveIds = (all: Row[], ps: Param[]) =>
   })
 
 export let mcpServer = (io: IO) => {
-  let server = new McpServer({ name: 'tasks', version: '0.1.0' })
+  // Server instructions ride the initialize handshake and land in the
+  // agent's standing context — the strongest ambient steering the
+  // protocol offers. Keep it to what every writer must know.
+  let server = new McpServer({ name: 'tasks', version: '0.1.0' }, {
+    instructions: `The graph renders everything as markdown. ${DOC}
+
+Call task_context first each session, and pass the same stable session
+id to every tool that takes one — it is your identity for claims,
+comments, and the comms bus.`,
+  })
 
   // The comms bus, MCP side: a tool that knows who's asking appends what
   // that session hasn't seen and advances the session's own ack cursor —
@@ -246,7 +265,12 @@ P-19). ${GRAMMAR} ${BUS}`,
         let made = after.find((r) => r.eid == eid)
         return made ? idOf(made) : eid
       })
-      return bus(`created ${ids.join(', ')}`, session)
+      return bus(
+        `created ${ids.join(', ')}${
+          wall(want.find((t) => wall(t.body))?.body)
+        }`,
+        session,
+      )
     },
   )
 
@@ -270,11 +294,12 @@ P-19). ${GRAMMAR} ${BUS}`,
       let all = rows(await io.read())
       let row = find(all, id)
       if (!row) return err(`no entity: ${id}`)
+      let grouped = patches(resolveIds(all, parseAll(params)))
       await io.write(
-        Object.entries(patches(resolveIds(all, parseAll(params))))
+        Object.entries(grouped)
           .map(([name, comp]) => ({ eid: row.eid, name, comp })),
       )
-      return bus(`updated ${idOf(row)}`, session)
+      return bus(`updated ${idOf(row)}${wall(grouped.doc?.body)}`, session)
     },
   )
 
@@ -340,7 +365,7 @@ you claim with, for attribution.`,
       let row = find(all, id)
       if (!row) return err(`no entity: ${id}`)
       await io.write(commentChanges(all, row.eid, body, session))
-      return bus(`commented on ${idOf(row)}`, session)
+      return bus(`commented on ${idOf(row)}${wall(body)}`, session)
     },
   )
 
