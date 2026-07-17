@@ -121,14 +121,15 @@ the mobile door — whose rows resolve through `List.Item`.
 - **A managed session's stdout FILE is its durable log**
   (`~/.tasks/logs/<eid>.jsonl`, line number = seq): no log table, no ingester,
   nothing to drift. The server tails it and casts SUMMARY patches; the file is
-  what a client reads back. And the child is DETACHED (setsid, its own process
-  group) precisely so the watcher's restart can't reap it — the restart
-  re-adopts it from its pidfile. Never add reaping. Detachment needs BOTH
-  halves: setsid (its own process group) and child.unref() (deno --watch kills
-  tracked pids on reload — proven live). And a child inherits the SERVER's PATH:
-  the service unit must carry the provider CLIs' dirs (claude, codex, deno) — a
-  missing one is exit 127 with the stderr tail in the session row, not a
-  mystery.
+  what a client reads back. And the agent is DETACHED behind a sh wrapper
+  firebreak: the wrapper is the only pid the runtime tracks (deno --watch KILLS
+  tracked pids on reload — unref is no shield, proven live), the agent is
+  backgrounded into the wrapper's process group, and the wrapper traps INT/TERM
+  — armed strictly AFTER the fork, or the agent inherits the ignore — then waits
+  and reports the exit code. The restart re-adopts the run from its pidfile.
+  Never add reaping. And a child inherits the SERVER's PATH: the service unit
+  must carry the provider CLIs' dirs (claude, codex, deno) — a missing one is
+  exit 127 with the stderr tail in the session row, not a mystery.
 - **Frozen pages must render from their own bytes.** Self-containment is
   enforced at freeze time (scrub removes every external ref); the CSP at serve
   time is defense-in-depth, not the mechanism.
@@ -185,6 +186,21 @@ the mobile door — whose rows resolve through `List.Item`.
   `eid`/`*_eid` values accept human ids (T-3, P-19) everywhere — an agent should
   never need the num→eid lookup dance. If a real agent shells out to `deno eval`
   instead of using a tool, treat it as a bug report (T-3568).
+
+## Principles
+
+These hold everywhere in this repo, whoever — or whatever — writes the code:
+
+- **Simplicity first.** The smallest change that solves the whole problem; touch
+  only what's necessary.
+- **Root causes, never workarounds.** When you find a bug, fix the bug — never
+  route calling code around it. A workaround hides the bug and leaves the debt;
+  the only acceptable one is temporary, with a TODO naming the root cause.
+- **Challenge your own work.** Before presenting a non-trivial change, ask
+  whether a more elegant shape exists. A simple fix that leaves the bug is not a
+  fix.
+- Don't call things "real", "actual", or "honest" — an AI tic; say what it is.
+- `docs/STYLE.md` is normative for every line here — read it before writing.
 
 ## Working here
 
