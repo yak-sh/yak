@@ -80,14 +80,50 @@ html {
   color: var(--purple);
 }
 
-/* Markdown paragraphs. snarkdown (patched, see vendor/) renders a blank
-   line as ONE <br class=p>; this margin is what makes it a paragraph
-   instead of a wall of text. A plain <br> (two-space hard break) stays
-   tight. content:'' + display:block is the standard br-spacing trick. */
-:where(br.p) {
-  content: '';
-  display: block;
-  margin-top: 0.6em;
+/* Markdown bodies (marked, GFM — src/md.ts). Zero-specificity defaults
+   tuned to cards: real paragraphs with modest gaps (edges trimmed so a
+   body hugs its box), headings barely louder than text (a card is not a
+   document), retro-minimal tables. */
+:where(p) {
+  margin: 0.6em 0;
+}
+:where(p:first-child, h1:first-child, h2:first-child, h3:first-child) {
+  margin-top: 0;
+}
+:where(p:last-child) {
+  margin-bottom: 0;
+}
+:where(h1, h2, h3, h4, h5, h6) {
+  margin: 0.7em 0 0.3em;
+  line-height: 1.3;
+}
+:where(h1) {
+  font-size: 1.25em;
+}
+:where(h2) {
+  font-size: 1.15em;
+}
+:where(h3, h4, h5, h6) {
+  font-size: 1.05em;
+}
+:where(table) {
+  border-collapse: collapse;
+  margin: 0.5em 0;
+  font-size: inherit;
+}
+:where(th, td) {
+  border: 1px solid var(--border2);
+  padding: 2px 8px;
+  text-align: left;
+}
+:where(th) {
+  background: var(--soft);
+}
+:where(blockquote) {
+  margin: 0.5em 0;
+  padding-left: var(--gap);
+  border-left: 2px solid var(--border2);
+  color: var(--muted);
 }
 
 :where(body) {

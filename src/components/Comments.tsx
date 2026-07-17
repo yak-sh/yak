@@ -1,5 +1,5 @@
 import { useRef } from 'preact/hooks'
-import snarkdown from 'snarkdown'
+import { md } from '../md.ts'
 import { clientId, commentsOn, ent, mutate, uuid } from '../live.ts'
 import { ago, block, pretty } from './ui.tsx'
 import { idOf } from '../types.ts'
@@ -58,7 +58,7 @@ export let Comments = ({ eid }: { eid: string }) => {
           <Who>{author(c.comment!.author_eid)}</Who>
           <When data-tip={pretty(c.created_at)}>{ago(c.created_at)}</When>
           <Body
-            dangerouslySetInnerHTML={{ __html: snarkdown(c.doc?.body ?? '') }}
+            dangerouslySetInnerHTML={{ __html: md(c.doc?.body ?? '') }}
           />
         </Item>
       ))}

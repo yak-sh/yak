@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import snarkdown from 'snarkdown'
+import { md } from '../../md.ts'
 import { type Ent, type LogRow, sessionActive } from '../../types.ts'
 import { base } from '../../live.ts'
 import { block, Stamp } from '../ui.tsx'
@@ -133,7 +133,7 @@ let Row = ({ x }: { x: Entry }) => {
       // our own data, so no sanitizer — as with a task body
       return r.role == 'user'
         ? <User>{r.text}</User>
-        : <Agent dangerouslySetInnerHTML={{ __html: snarkdown(r.text) }} />
+        : <Agent dangerouslySetInnerHTML={{ __html: md(r.text) }} />
     case 'reason':
       return <Reason>{r.text}</Reason>
     case 'tool':
@@ -276,7 +276,7 @@ export let Session = ({ e }: { e: Ent }) => {
       <Stamp e={e} />
       {/* markdown: our own data, so no sanitizer — as with a task body */}
       {!said && s.final_text && (
-        <Final dangerouslySetInnerHTML={{ __html: snarkdown(s.final_text) }} />
+        <Final dangerouslySetInnerHTML={{ __html: md(s.final_text) }} />
       )}
       {s.error && <Fault mod='error'>{s.error}</Fault>}
       {s.stop_reason && <Fault>{s.stop_reason}</Fault>}

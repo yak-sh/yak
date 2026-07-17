@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks'
-import snarkdown from 'snarkdown'
+import { md } from '../../md.ts'
 import { type Ent } from '../../types.ts'
 import {
   backlinks,
@@ -111,7 +111,7 @@ let Home = ({ e }: { e: Ent }) => (
   />
 )
 
-// The body is markdown: rendered as HTML (snarkdown; our own data, so no
+// The body is markdown: rendered as HTML (md.ts; our own data, so no
 // sanitizer between us and ourselves), double-click swaps in the raw
 // source through the same <Edit>, and the blur that commits swaps the
 // rendered view back. An empty body keeps a line of height to give the
@@ -135,7 +135,7 @@ export let TaskBody = ({ e, mod }: { e: Ent; mod?: string }) => {
       <Body
         mod={mod}
         onDblClick={() => setSrc(true)}
-        dangerouslySetInnerHTML={{ __html: snarkdown(e.doc?.body ?? '') }}
+        dangerouslySetInnerHTML={{ __html: md(e.doc?.body ?? '') }}
       />
     )
 }
