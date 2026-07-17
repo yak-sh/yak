@@ -79,6 +79,12 @@ let glyphs: Record<string, JSX.Element> = {
       <path d='M17.2 17c2.1.2 3.8 1.9 3.8 4' />
     </>
   ),
+  search: (
+    <>
+      <circle cx='11' cy='11' r='8' />
+      <path d='m21 21-4.3-4.3' />
+    </>
+  ),
   bot: (
     <>
       <path d='M12 8V4H8' />

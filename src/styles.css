@@ -1018,15 +1018,22 @@ html {
   box-shadow: 0 12px 40px color-mix(in srgb, #000 45%, transparent);
   overflow: hidden;
 }
+.Search_Line {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  padding-left: var(--gap);
+  border-bottom: 1px solid var(--border);
+  color: var(--dim); /* the glyph; the input restores its own ink */
+}
 .Search_Box input {
-  width: 100%;
-  padding: var(--half-gap) var(--gap);
+  flex: 1;
+  padding: var(--half-gap) var(--gap) var(--half-gap) 0;
   font: inherit;
-  color: inherit;
+  color: var(--text);
   background: none;
   border: 0;
   outline: 0;
-  border-bottom: 1px solid var(--border);
 }
 .Search_Hit {
   padding: var(--half-gap) var(--gap);

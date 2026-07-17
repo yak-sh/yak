@@ -4,6 +4,7 @@ import { type Hit, idOf, uuid } from '../types.ts'
 import { mutate } from '../live.ts'
 import { navigate } from './nav.tsx'
 import { block } from './ui.tsx'
+import { Icon } from './icons.tsx'
 
 // `/` in normal mode opens the palette (Canvas owns the hotkey and the
 // spawn); Escape closes it. Search runs server-side (FTS5 over every
@@ -12,12 +13,13 @@ export let searchOpen = signal(false)
 
 let Frame = block('div', 'Search', {
   Box: 'div',
+  Line: 'div',
   Hit: 'div',
   Title: 'span',
   Id: 'span',
   Snip: 'div',
 })
-let { Box, Hit: Row, Title, Id, Snip } = Frame
+let { Box, Line, Hit: Row, Title, Id, Snip } = Frame
 
 // Matches arrive marked \x01…\x02 — rendered as <mark> WITHOUT parsing
 // any HTML out of the data.
@@ -99,13 +101,16 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
       onMouseDown={(e: MouseEvent) => e.target == e.currentTarget && close()}
     >
       <Box>
-        <input
-          ref={box}
-          placeholder='search the graph… (* = prefix, .status=done .modified_at=today filter, ⌘⏎ = board)'
-          onInput={(e: InputEvent) =>
-            seek((e.currentTarget as HTMLInputElement).value)}
-          onKeyDown={key}
-        />
+        <Line>
+          <Icon name='search' />
+          <input
+            ref={box}
+            placeholder='search the graph… (* = prefix, .status=done .modified_at=today filter, ⌘⏎ = board)'
+            onInput={(e: InputEvent) =>
+              seek((e.currentTarget as HTMLInputElement).value)}
+            onKeyDown={key}
+          />
+        </Line>
         {err && <Snip>{err}</Snip>}
         {hits.map((h, i) => (
           <Row
