@@ -19,7 +19,10 @@ export let comps: Record<string, string[]> = {
   client: ['user_agent'], // ip is server-stamped too
   camera: ['client_eid', 'canvas_eid', 'x', 'y', 'zoom', 'w', 'h'],
   fold: ['client_eid', 'board_eid', 'statuses'],
-  session: ['id', 'cwd'],
+  // acked_at is the session's OWN "seen up to here" cursor for the
+  // while-you-were-away digest — wire-writable because forging it only
+  // deafens yourself.
+  session: ['id', 'cwd', 'acked_at'],
   claim: ['session_eid'], // claimed_at is server-stamped
   conflict: [], // server-minted audit rows — nothing is wire-writable
   comment: ['target_eid', 'author_eid'],
@@ -142,7 +145,12 @@ export type Fold = {
 // An agent session, reified: `id` is its external identity (a Claude
 // session id, an operator name). For now that's all it carries; when we
 // start SPAWNING sessions it grows model, persona, provider, ….
-export type Session = { eid: string; id: string; cwd?: string | null }
+export type Session = {
+  eid: string
+  id: string
+  cwd?: string | null
+  acked_at?: string | null
+}
 
 // A session's lease on an entity — claims point at the session ENTITY.
 // One claim per entity; taking one over another session's is a CONFLICT

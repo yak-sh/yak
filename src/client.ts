@@ -223,6 +223,58 @@ export let contextDigest = (snap: Snapshot, session: string) => {
   return lines.slice(0, 20).join('\n')
 }
 
+// The comms bus, read side: what happened that this session hasn't seen —
+// comments on tasks it CLAIMS plus comments aimed at the session entity
+// itself (commenting on S-31 is how you message that agent). "Seen" is
+// the session's own acked_at cursor; the returned ack change advances it,
+// and the caller applies it exactly when the lines are actually shown.
+export let notices = (snap: Snapshot, session: string) => {
+  let all = rows(snap)
+  let sess = all.find((r) =>
+    r.comps.session && String(r.comps.session.id) == session
+  )
+  if (!sess) return { lines: [] as string[], ack: [] as Change[] }
+  let cutoff = String(
+    sess.comps.session.acked_at ?? sess.comps.entity?.created_at ?? '',
+  )
+  let mine = new Set(
+    all.filter((r) => r.comps.claim?.session_eid == sess.eid)
+      .map((r) => r.eid),
+  )
+  let byEid = new Map(all.map((r) => [r.eid, r]))
+  let unseen = all
+    .filter((r) => {
+      let c = r.comps.comment
+      if (!c || c.author_eid == sess.eid) return false
+      if (!mine.has(String(c.target_eid)) && String(c.target_eid) != sess.eid) {
+        return false
+      }
+      return String(r.comps.entity?.created_at ?? '') > cutoff
+    })
+    .sort((a, b) =>
+      String(a.comps.entity?.created_at).localeCompare(
+        String(b.comps.entity?.created_at),
+      )
+    )
+  if (!unseen.length) return { lines: [] as string[], ack: [] as Change[] }
+  let who = (eid: unknown) =>
+    String(byEid.get(String(eid))?.comps.session?.id ?? 'someone')
+  let lines = unseen.slice(0, 20).map((r) => {
+    let c = r.comps.comment
+    let target = byEid.get(String(c.target_eid))
+    let at = target && target.eid != sess.eid ? `${idOf(target)} ` : ''
+    let body = String(r.comps.doc?.body ?? '').split('\n')[0].slice(0, 120)
+    return `${at}💬 ${who(c.author_eid)}: ${body}`
+  })
+  if (unseen.length > 20) lines.push(`…and ${unseen.length - 20} more`)
+  let ack: Change[] = [{
+    eid: sess.eid,
+    name: 'session',
+    comp: { acked_at: new Date().toISOString() },
+  }]
+  return { lines, ack }
+}
+
 // The lapse batch: a session ended — release every claim it holds, and
 // on tasks it did NOT finish, leave a comment saying so (the simple
 // audit: no timers, no heartbeats, just "ended before done" on the

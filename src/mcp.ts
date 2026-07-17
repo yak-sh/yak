@@ -20,6 +20,8 @@ import {
   contextDigest,
   find,
   idOf,
+  notices,
+  type Param,
   param,
   patches,
   type Row,
@@ -75,8 +77,34 @@ let parseFilters = (filters: string[]) =>
 
 let text = (s: string) => ({ content: [{ type: 'text' as const, text: s }] })
 
+let BUS = `Pass your stable session id and the reply also carries anything
+you haven't seen — comments on your claimed tasks, messages aimed at your
+session (a comment ON S-31 is a message TO that agent).`
+
+// Any *_eid dot-param value may be a human id (T-3, P-19) — resolve it to
+// the eid so callers never do the num→eid lookup dance themselves.
+let resolveIds = (all: Row[], ps: Param[]) =>
+  ps.map((p) => {
+    if (!p.prop.endsWith('_eid') || typeof p.value != 'string') return p
+    if (!/^[A-Za-z]+-\d+$/.test(p.value)) return p
+    let hit = find(all, p.value)
+    if (!hit) throw new Error(`no entity: ${p.value} (.${p.prop})`)
+    return { ...p, value: hit.eid }
+  })
+
 export let mcpServer = (io: IO) => {
   let server = new McpServer({ name: 'tasks', version: '0.1.0' })
+
+  // The comms bus, MCP side: a tool that knows who's asking appends what
+  // that session hasn't seen and advances the session's own ack cursor —
+  // exactly when the lines are actually served.
+  let bus = async (out: string, session?: string) => {
+    if (!session) return text(out)
+    let n = notices(await io.read(), session)
+    if (!n.lines.length) return text(out)
+    await io.write(n.ack)
+    return text(`${out}\n\n— while you were away —\n${n.lines.join('\n')}`)
+  }
 
   server.tool(
     'search',
@@ -101,46 +129,79 @@ existing work — cheaper and better-ranked than paging graph_query.`,
   server.tool(
     'task_list',
     `List tasks (id, status, title), board-ordered. Optional dot-param
-filters must ALL match. ${FILTERS}`,
-    { filters: z.array(z.string()).optional() },
-    async ({ filters = [] }: { filters?: string[] }) => {
+filters must ALL match. ${FILTERS} ${BUS}`,
+    { filters: z.array(z.string()).optional(), session: z.string().optional() },
+    async (
+      { filters = [], session }: { filters?: string[]; session?: string },
+    ) => {
       let ps = parseFilters(filters)
       let all = rows(await io.read())
       let hits = all
         .filter((r) => r.comps.task)
         .filter((r) => matchQuery(r.comps, ps))
         .sort(byBoard)
-      return text(
+      return bus(
         hits.map((r) => line(all, r)).join('\n') || '(no matches)',
+        session,
       )
     },
   )
 
   server.tool(
     'task_new',
-    `Create a task: a doc (title/body) plus workflow (status, default
-'open'). Extra dot-params attach any other components. ${GRAMMAR}`,
+    `Create one task — or a BATCH: pass tasks:[{title, body?, status?,
+params?}] and they land in one atomic apply (shared dot-params go in
+each item's params). *_eid param values accept human ids (.project_eid=
+P-19). ${GRAMMAR} ${BUS}`,
     {
-      title: z.string(),
+      title: z.string().optional(),
       body: z.string().optional(),
       status: z.enum(['open', 'wip', 'done']).optional(),
       params: z.array(z.string()).optional(),
+      tasks: z.array(z.object({
+        title: z.string(),
+        body: z.string().optional(),
+        status: z.enum(['open', 'wip', 'done']).optional(),
+        params: z.array(z.string()).optional(),
+      })).optional(),
+      session: z.string().optional(),
     },
     async (
-      { title, body, status, params = [] }: {
-        title: string
+      { title, body, status, params = [], tasks, session }: {
+        title?: string
         body?: string
         status?: string
         params?: string[]
+        tasks?: {
+          title: string
+          body?: string
+          status?: string
+          params?: string[]
+        }[]
+        session?: string
       },
     ) => {
-      let grouped = patches(parseAll(params))
-      grouped.doc = { title, body: body ?? '', ...grouped.doc }
-      if (status) grouped.task = { status, ...grouped.task }
-      let eid = crypto.randomUUID()
-      await io.write(taskChanges(eid, grouped))
-      let made = rows(await io.read()).find((r) => r.eid == eid)
-      return text(`created ${made ? idOf(made) : eid}`)
+      let all = rows(await io.read())
+      let want = tasks ?? [{ title: title ?? '', body, status, params }]
+      if (!want.length || want.some((t) => !t.title)) {
+        return text('every task needs a title (pass title or tasks[])')
+      }
+      let minted: string[] = []
+      let changes = want.flatMap((t) => {
+        let grouped = patches(resolveIds(all, parseAll(t.params ?? [])))
+        grouped.doc = { title: t.title, body: t.body ?? '', ...grouped.doc }
+        if (t.status) grouped.task = { status: t.status, ...grouped.task }
+        let eid = crypto.randomUUID()
+        minted.push(eid)
+        return taskChanges(eid, grouped)
+      })
+      await io.write(changes)
+      let after = rows(await io.read())
+      let ids = minted.map((eid) => {
+        let made = after.find((r) => r.eid == eid)
+        return made ? idOf(made) : eid
+      })
+      return bus(`created ${ids.join(', ')}`, session)
     },
   )
 
@@ -148,16 +209,27 @@ filters must ALL match. ${FILTERS}`,
     'task_update',
     `Patch an entity by id (T-3, bare num, or eid) with dot-params, e.g.
 [".status=done"] or [".body=notes..."]. Only the named props change.
-${GRAMMAR}`,
-    { id: z.string(), params: z.array(z.string()).min(1) },
-    async ({ id, params }: { id: string; params: string[] }) => {
-      let row = find(rows(await io.read()), id)
+*_eid values accept human ids. ${GRAMMAR} ${BUS}`,
+    {
+      id: z.string(),
+      params: z.array(z.string()).min(1),
+      session: z.string().optional(),
+    },
+    async (
+      { id, params, session }: {
+        id: string
+        params: string[]
+        session?: string
+      },
+    ) => {
+      let all = rows(await io.read())
+      let row = find(all, id)
       if (!row) return text(`no entity: ${id}`)
       await io.write(
-        Object.entries(patches(parseAll(params)))
+        Object.entries(patches(resolveIds(all, parseAll(params))))
           .map(([name, comp]) => ({ eid: row.eid, name, comp })),
       )
-      return text(`updated ${idOf(row)}`)
+      return bus(`updated ${idOf(row)}`, session)
     },
   )
 
@@ -169,7 +241,7 @@ board if you hold nothing. Call this FIRST each session, with the same
 stable session identifier you claim with.`,
     { session: z.string() },
     async ({ session }: { session: string }) => {
-      return text(contextDigest(await io.read(), session))
+      return bus(contextDigest(await io.read(), session), session)
     },
   )
 
@@ -188,21 +260,22 @@ or hand off.`,
       try {
         await io.write(claimChanges(all, row.eid, session))
       } catch (e) {
-        return text(`claim failed: ${(e as Error).message}`)
+        return bus(`claim failed: ${(e as Error).message}`, session)
       }
-      return text(`claimed ${idOf(row)} for ${session}`)
+      return bus(`claimed ${idOf(row)} for ${session}`, session)
     },
   )
 
   server.tool(
     'task_release',
-    'Drop the claim on a task (yours or a stale one), freeing it for other sessions.',
-    { id: z.string() },
-    async ({ id }: { id: string }) => {
+    `Drop the claim on a task (yours or a stale one), freeing it for
+other sessions. ${BUS}`,
+    { id: z.string(), session: z.string().optional() },
+    async ({ id, session }: { id: string; session?: string }) => {
       let row = find(rows(await io.read()), id)
       if (!row) return text(`no entity: ${id}`)
       await io.write([{ eid: row.eid, name: 'claim', comp: null }])
-      return text(`released ${idOf(row)}`)
+      return bus(`released ${idOf(row)}`, session)
     },
   )
 
@@ -219,7 +292,7 @@ you claim with, for attribution.`,
       let row = find(all, id)
       if (!row) return text(`no entity: ${id}`)
       await io.write(commentChanges(all, row.eid, body, session))
-      return text(`commented on ${idOf(row)}`)
+      return bus(`commented on ${idOf(row)}`, session)
     },
   )
 
@@ -254,9 +327,10 @@ client is looking at), sessions, comments — all live here. ${GRAMMAR} ${FILTER
     `Raw wire access: apply a batch of changes atomically. A change is
 {eid, name, comp} — comp is a PATCH (omitted columns untouched), comp:
 null deletes the component, {name:'entity', comp:null} deletes the
-entity. Mint uuids for new entities. Same allowlist and claim-lease
-rules as every other client; writes broadcast live to all screens.
-${GRAMMAR}`,
+entity. Mint uuids for new entities. eid and *_eid comp values accept
+human ids (T-3, P-19) for EXISTING entities. Same allowlist and
+claim-lease rules as every other client; writes broadcast live to all
+screens. ${GRAMMAR}`,
     {
       changes: z.array(z.object({
         eid: z.string(),
@@ -266,6 +340,38 @@ ${GRAMMAR}`,
     },
     async ({ changes }: { changes: Change[] }) => {
       try {
+        // Human ids resolve before the wire sees them — a T-num in eid or
+        // any *_eid column means an EXISTING entity, so a miss is an error
+        // here, never a silent mint.
+        let human = /^[A-Za-z]+-\d+$/
+        let needs = changes.some((c) =>
+          human.test(c.eid) ||
+          Object.entries(c.comp ?? {}).some(([k, v]) =>
+            k.endsWith('_eid') && typeof v == 'string' && human.test(v)
+          )
+        )
+        if (needs) {
+          let all = rows(await io.read())
+          let resolve = (v: string) => {
+            let hit = find(all, v)
+            if (!hit) throw new Error(`no entity: ${v}`)
+            return hit.eid
+          }
+          changes = changes.map((c) => ({
+            ...c,
+            eid: human.test(c.eid) ? resolve(c.eid) : c.eid,
+            comp: c.comp == null ? c.comp : Object.fromEntries(
+              Object.entries(c.comp).map((
+                [k, v],
+              ) => [
+                k,
+                k.endsWith('_eid') && typeof v == 'string' && human.test(v)
+                  ? resolve(v)
+                  : v,
+              ]),
+            ),
+          }))
+        }
         await io.write(changes)
       } catch (e) {
         return text(`apply failed: ${(e as Error).message}`)
@@ -534,14 +640,14 @@ Math.floor(i/4)*280}})); return pins.length`,
   server.tool(
     'task_show',
     `One entity, whole: spine, every component, its comments, as JSON.
-id: T-3, bare num, or eid.`,
-    { id: z.string() },
-    async ({ id }: { id: string }) => {
+id: T-3, bare num, or eid. ${BUS}`,
+    { id: z.string(), session: z.string().optional() },
+    async ({ id, session }: { id: string; session?: string }) => {
       let all = rows(await io.read())
       let row = find(all, id)
       if (!row) return text(`no entity: ${id}`)
       let comments = all.filter((r) => r.comps.comment?.target_eid == row.eid)
-      return text(JSON.stringify({ ...row, comments }, null, 2))
+      return bus(JSON.stringify({ ...row, comments }, null, 2), session)
     },
   )
 

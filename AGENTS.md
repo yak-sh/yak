@@ -146,6 +146,16 @@ the mobile door — whose rows resolve through `List.Item`.
 - Bounced claims are audited: apply() records each rejection as a server-minted
   `conflict` entity (loser/holder as strings — the loser's session row may die
   in the same rollback). `graph_query kind=conflict` is the contention report.
+- **The comms bus is a cursor, not a queue** (`notices()` in client.ts): any
+  task tool told the caller's session appends unseen comments on its claimed
+  tasks + comments aimed at the session entity (commenting on S-31 IS messaging
+  that agent), then advances `session.acked_at`. The cursor is wire-writable on
+  purpose — a session forging its own cursor only deafens itself. Serve lines
+  and ack in the same breath, never ack unserved lines.
+- MCP ergonomics are load-bearing: `task_new` batches via `tasks:[…]`, and
+  `eid`/`*_eid` values accept human ids (T-3, P-19) everywhere — an agent should
+  never need the num→eid lookup dance. If a real agent shells out to `deno eval`
+  instead of using a tool, treat it as a bug report (T-3568).
 
 ## Working here
 

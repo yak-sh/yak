@@ -8,6 +8,7 @@ import {
   contextDigest,
   find,
   lapseChanges,
+  notices,
   param,
   patches,
   rows,
@@ -79,6 +80,55 @@ Deno.test('find: T-num, bare num, eid, alias slug', () => {
   assertEquals(find(all, T1)?.eid, T1)
   assertEquals(find(all, 'old-board-slug')?.eid, T2)
   assertEquals(find(all, 'T-99'), undefined)
+})
+
+Deno.test('notices: unseen comments on claimed tasks + messages to the session', () => {
+  let B = 'aaaaaaaa-0000-4000-8000-000000000010' // another session
+  let mk = (
+    eid: string,
+    target: string,
+    author: string,
+    at: string,
+    body: string,
+  ) => [
+    { eid, name: 'entity', comp: { eid, num: 90, created_at: at } },
+    { eid, name: 'doc', comp: { title: '', body } },
+    { eid, name: 'comment', comp: { target_eid: target, author_eid: author } },
+  ]
+  let busSnap: Snapshot = {
+    changes: [
+      ...snap.changes,
+      { eid: B, name: 'entity', comp: { eid: B, num: 80, created_at: '' } },
+      { eid: B, name: 'session', comp: { id: 'sess-b' } },
+      // on the claimed task, after the cutoff: heard
+      ...mk('c-1', T1, B, '2026-01-02', 'heads up'),
+      // aimed at the session itself: heard (a message TO sess-x)
+      ...mk('c-2', S, B, '2026-01-03', 'ping'),
+      // authored by the listener: never echoed back
+      ...mk('c-3', T1, S, '2026-01-04', 'my own note'),
+      // on an unclaimed task: not ours to hear
+      ...mk('c-4', T2, B, '2026-01-05', 'elsewhere'),
+    ],
+    deps: snap.deps,
+  }
+  let n = notices(busSnap, 'sess-x')
+  assertEquals(n.lines.length, 2)
+  assertEquals(n.lines[0].includes('heads up'), true)
+  assertEquals(n.lines[1].includes('sess-b: ping'), true)
+  assertEquals(n.ack[0].name, 'session')
+  assertEquals(typeof n.ack[0].comp?.acked_at, 'string')
+  // the cursor silences what was served
+  let acked: Snapshot = {
+    changes: busSnap.changes.map((c) =>
+      c.eid == S && c.name == 'session'
+        ? { ...c, comp: { ...c.comp, acked_at: '2026-01-03' } }
+        : c
+    ),
+    deps: snap.deps,
+  }
+  assertEquals(notices(acked, 'sess-x').lines.length, 0)
+  // unknown session: silent, no ack
+  assertEquals(notices(busSnap, 'sess-nobody'), { lines: [], ack: [] })
 })
 
 Deno.test('rows filter through the query grammar + byBoard', () => {

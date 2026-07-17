@@ -280,6 +280,7 @@ export let open = () => {
   addCol('task', 'project_eid', 'project_eid text references entity(eid)')
   addCol('task', 'domain', 'domain text')
   addCol('session', 'cwd', 'cwd text')
+  addCol('session', 'acked_at', 'acked_at text')
   // A board is a saved filter over tasks (query.ts grammar), not an edge
   // list — membership can't drift when it isn't stored.
   addCol('board', 'query', 'query text')

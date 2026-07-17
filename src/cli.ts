@@ -18,6 +18,7 @@ import {
   host,
   idOf,
   lapseChanges,
+  notices,
   type Param,
   param,
   patches,
@@ -29,6 +30,7 @@ import {
   taskChanges,
 } from './client.ts'
 import { matchQuery, pred } from './query.ts'
+import { type Snapshot } from './types.ts'
 
 let usage = `task — the entity graph, from a shell
 
@@ -176,6 +178,17 @@ let context = async (args: string[]) => {
   let hook = args.includes('--hook')
   let sid = args.find((a) => !a.startsWith('--')) ??
     Deno.env.get('TASKS_SESSION')
+  // The digest plus the comms bus: unseen comments ride along, and the
+  // session's ack cursor advances exactly when they're printed.
+  let tell = async (snap: Snapshot, sid: string) => {
+    let out = contextDigest(snap, sid)
+    let n = notices(snap, sid)
+    if (n.lines.length) {
+      await send(n.ack)
+      out += '\n— while you were away —\n' + n.lines.join('\n')
+    }
+    console.log(out)
+  }
   if (hook) {
     try {
       let body = JSON.parse(await new Response(Deno.stdin.readable).text())
@@ -185,14 +198,14 @@ let context = async (args: string[]) => {
       // Reify the session on arrival: id + worktree, before any claim.
       let s = sessionFor(rows(snap), sid, String(body.cwd ?? '') || undefined)
       if (s.changes.length) await send(s.changes)
-      console.log(contextDigest(snap, sid))
+      await tell(snap, sid)
     } catch {
       // silent: offline server or malformed stdin — the session goes on
     }
     return
   }
   if (!sid) throw new Error('task context <session> (or set TASKS_SESSION)')
-  console.log(contextDigest(await snapshot(), sid))
+  await tell(await snapshot(), sid)
 }
 
 // SessionEnd's mirror of context: drop everything the session holds.
