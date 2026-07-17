@@ -118,7 +118,12 @@ the mobile door — whose rows resolve through `List.Item`.
   nothing to drift. The server tails it and casts SUMMARY patches; the file is
   what a client reads back. And the child is DETACHED (setsid, its own process
   group) precisely so the watcher's restart can't reap it — the restart
-  re-adopts it from its pidfile. Never add reaping.
+  re-adopts it from its pidfile. Never add reaping. Detachment needs BOTH
+  halves: setsid (its own process group) and child.unref() (deno --watch kills
+  tracked pids on reload — proven live). And a child inherits the SERVER's PATH:
+  the service unit must carry the provider CLIs' dirs (claude, codex, deno) — a
+  missing one is exit 127 with the stderr tail in the session row, not a
+  mystery.
 - **Frozen pages must render from their own bytes.** Self-containment is
   enforced at freeze time (scrub removes every external ref); the CSP at serve
   time is defense-in-depth, not the mechanism.
