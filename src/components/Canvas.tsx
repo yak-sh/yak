@@ -156,15 +156,18 @@ export let Canvas = ({ eid }: { eid: string }) => {
       )
     }
 
-    // Another tab moving this camera moves ours too.
+    // Another tab moving this camera moves ours too — but only the MOVE
+    // (x/y/zoom). w/h are THIS tab's viewport; letting another tab's size
+    // leak in skews frame-to-fit and centering (the row's w/h is just the
+    // last writer's, for agents' rough sense of what the human sees).
     let s = sock()
     let hear = (m: MessageEvent) => {
       let batch = JSON.parse(String(m.data))
       if (!Array.isArray(batch)) return
       for (let c of batch) {
         if (c.eid == cam.current && c.name == 'camera' && c.comp) {
-          let { x, y, zoom, w, h } = { ...camera.value, ...c.comp }
-          camera.value = { x, y, zoom, w, h }
+          let { x, y, zoom } = { ...camera.value, ...c.comp }
+          camera.value = { ...camera.value, x, y, zoom }
         }
       }
     }
