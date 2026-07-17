@@ -66,13 +66,13 @@ let Row = ({ comp, k, v }: { comp?: string; k: string; v: unknown }) => (
   </>
 )
 
-// EVERY prop as a key → value grid row — the spine (eid, num, kind), then
-// each component whole ('pin.x  664'). Debug hides nothing.
+// EVERY stored prop as a key → value grid row — the spine (eid, num),
+// then each component whole ('pin.x  664'). kind is NOT here: it's
+// derived, not data, and the summary line above already says it.
 let AllProps = ({ e }: { e: Ent }) => (
   <Grid>
     <Row k='eid' v={e.eid} />
     <Row k='num' v={e.num} />
-    <Row k='kind' v={e.kind} />
     {comps(e).flatMap(([name, comp]) =>
       Object.entries(comp).map(([k, v]) => (
         <Row key={`${name}.${k}`} comp={name} k={k} v={v} />
