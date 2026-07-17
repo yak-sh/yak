@@ -1344,7 +1344,8 @@ html {
 }
 .Status_Colon {
   color: var(--text);
-  margin-right: calc(-1 * var(--half-gap)); /* the line hugs the colon, like vim */
+  margin-right: calc(-1 *
+    var(--half-gap)); /* the line hugs the colon, like vim */
 }
 .Status_Line {
   flex: 1;
