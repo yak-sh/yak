@@ -159,7 +159,7 @@ let b64 = (t: string) =>
 // happened, so the spawned card lands where the ghost was dropped), and,
 // when the view's renderer has a file form, the serialized file (for a
 // desktop drop) plus text for editors.
-export let dragData = (ev: DragEvent, eid: string, view: string, w = 320) => {
+export let dragData = (ev: DragEvent, eid: string, view: string, w = 0) => {
   if (!ev.dataTransfer || !(ev.currentTarget instanceof HTMLElement)) return
   let e = ent(eid)
   let box = ev.currentTarget.getBoundingClientRect()

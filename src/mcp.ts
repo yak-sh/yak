@@ -552,7 +552,8 @@ card id (close it with card_close, move it with card_move).`,
           )[0]?.comps.camera as
             | Record<string, number>
             | undefined
-        x ??= (cam ? Number(cam.x) : 0) - 160
+        // Center on the auto width's nominal 480 — same as Canvas spawns.
+        x ??= (cam ? Number(cam.x) : 0) - 240
         y ??= (cam ? Number(cam.y) : 0) - 100
       }
       let z = Math.max(
@@ -581,7 +582,7 @@ card id (close it with card_close, move it with card_move).`,
         {
           eid,
           name: 'pin',
-          comp: { canvas_eid: canvas.eid, x, y, w: 320, h: 0, z },
+          comp: { canvas_eid: canvas.eid, x, y, w: 0, h: 0, z }, // w 0 = auto
         },
       ])
       let made = rows(await io.read()).find((r) => r.eid == eid)
