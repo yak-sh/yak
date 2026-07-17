@@ -53,6 +53,7 @@ let set = (p: EditorProps, v: unknown) => {
 
 let Frame = block('span', 'Prop', {
   Val: 'span',
+  Hand: 'button',
   Pop: 'span',
   Tab: 'button',
   Row: 'span',
@@ -60,7 +61,7 @@ let Frame = block('span', 'Prop', {
   Num: 'input',
   Free: 'input',
 })
-let { Val, Pop, Tab, Row, Find, Num, Free } = Frame
+let { Val, Hand, Pop, Tab, Row, Find, Num, Free } = Frame
 
 // ---- the stock editors ----
 
@@ -217,12 +218,19 @@ defineWells({ domains: () => domains.value })
 // <Prop eid comp prop editable/> — the <View> of values: renders the
 // prop; editable, a click opens the type's editor. An eid value shows
 // its target's title (the association reads as a name, not a uuid).
+// Callers may dress the value: `show` paints a custom face (a badge, a
+// chip, a link) while the registry still owns the editing; `name` is the
+// ghost label when empty; `handle` moves the press to a ▾ beside the
+// face — for faces that are links, whose own click must stay navigation.
 export let Prop = (
-  { eid, comp, prop, editable }: {
+  { eid, comp, prop, editable, name, show: paint, handle }: {
     eid: string
     comp: string
     prop: string
     editable?: boolean
+    name?: string
+    show?: (v: unknown) => JSX.Element | null
+    handle?: boolean
   },
 ) => {
   let [editing, setEditing] = useState(false)
@@ -233,11 +241,12 @@ export let Prop = (
   >
   let value = e[comp]?.[prop]
   let editor = t && editable ? editorFor(t) : undefined
-  let show = value == null || value === ''
+  let text = value == null || value === ''
     ? ''
     : typeof t == 'object' && 'eid' in t
     ? ent(String(value)).doc?.title ?? String(value)
     : String(value)
+  let face = paint ? paint(value) : (text || null)
   let done = () => setEditing(false)
   let ep: EditorProps = { eid, comp, prop, t: t!, value, done }
   // bool never enters an edit mode: the value IS the toggle. For popout
@@ -257,9 +266,16 @@ export let Prop = (
   }
   return (
     <Frame mod={editor && 'live'}>
-      <Val mod={!show && 'nil'} onClick={press}>
-        {show || '—'}
-      </Val>
+      {(face || !handle) && (
+        <Val mod={!face && 'nil'} onClick={handle ? undefined : press}>
+          {face || (paint && editor ? `+ ${name ?? prop}` : '—')}
+        </Val>
+      )}
+      {handle && editor && (
+        <Hand mod={!face && 'empty'} type='button' onClick={press}>
+          {face ? '▾' : `+ ${name ?? prop}`}
+        </Hand>
+      )}
       {editing && editor?.mode == 'popout' && <editor.Edit {...ep} />}
     </Frame>
   )

@@ -900,14 +900,103 @@ html {
   color: var(--purple);
 }
 /* Head chips gather on the right: the FIRST one present takes the auto
-   margin, everything after it (id included) sits flush. A chip's editor
-   stands in the chip's place, so it joins both lists — opening one must
-   not restack the head. */
-.Task_Head :is(.Task_Claim, .Task_Project, .Task_Caret, .Task_Domain, .Prio, .Task_Field, .Task_Pick) {
+   margin, everything after it (id included) sits flush. Every field is a
+   .Prop wrapper now, and an editor stands in its Prop's place — opening
+   one never restacks the head. */
+.Task_Head :is(.Task_Claim, .Prop) {
   margin-left: auto;
 }
-.Task_Head :is(.Task_Claim, .Task_Project, .Task_Caret, .Task_Domain, .Prio, .Task_Field, .Task_Pick) ~ :is(.Task_Project, .Task_Caret, .Task_Domain, .Prio, .Task_Field, .Task_Pick, .Id) {
+.Task_Head :is(.Task_Claim, .Prop) ~ :is(.Prop, .Id) {
   margin-left: 0;
+}
+/* The ▾ beside a link-faced Prop — the face owns navigation, the hand
+   owns the editor. Ghost when the field is empty. */
+.Prop_Hand {
+  white-space: nowrap;
+  font-size: 11px;
+  font-family: inherit;
+  color: var(--dim);
+  cursor: pointer;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+.Prop_Hand:hover {
+  color: var(--text);
+}
+.Prop_Hand-empty {
+  opacity: 0.6;
+}
+.Prop_Hand-empty:hover {
+  opacity: 1;
+}
+/* Grow an edge by finishing its sentence: dim verb chips, then a search
+   whose list OVERLAYS (absolute pop) — nothing below it moves. */
+.Relate {
+  display: flex;
+  align-items: baseline;
+  gap: var(--half-gap);
+  margin-top: var(--half-gap);
+}
+.Relate_Verb {
+  font-size: 11px;
+  font-family: inherit;
+  color: var(--dim);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  white-space: nowrap;
+  opacity: 0.6;
+}
+.Relate_Verb:hover,
+.Relate_Verb-on {
+  color: var(--text);
+  opacity: 1;
+}
+.Relate_Anchor {
+  position: relative;
+  flex: 1;
+}
+.Relate_Find {
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: none;
+  border: 0;
+  outline: 0;
+  border-bottom: 1px dashed var(--border2);
+  width: min(260px, 100%);
+}
+.Relate_Pop {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  z-index: 5;
+  min-width: 240px;
+  max-width: 320px;
+  display: grid;
+  padding: 2px;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: calc(var(--radius) - 2px);
+}
+.Relate_Row,
+.Relate_New {
+  padding: 2px 6px;
+  cursor: pointer;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.Relate_Row-sel,
+.Relate_New-sel {
+  background: var(--soft);
+}
+.Relate_New {
+  color: var(--dim);
+  font-style: italic;
 }
 .Task_Runs {
   display: grid;

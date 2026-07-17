@@ -4,19 +4,19 @@ import { type Ent } from '../../types.ts'
 import {
   backlinks,
   commentCount,
-  domains,
   ent,
   gated,
   mutate,
-  projects,
   statuses,
 } from '../../live.ts'
 import { linkProps } from '../nav.tsx'
-import { block, focus, Stamp } from '../ui.tsx'
+import { block, Stamp } from '../ui.tsx'
 import { Comments } from '../Comments.tsx'
 import { Dot } from '../Dot.tsx'
 import { Prio } from '../Prio.tsx'
 import { Edit } from '../Edit.tsx'
+import { Prop } from '../editors.tsx'
+import { Relate } from './Relate.tsx'
 import { View } from '../View.tsx'
 
 let Frame = block('div', 'Task', {
@@ -26,9 +26,6 @@ let Frame = block('div', 'Task', {
   Claim: 'span',
   Domain: 'span',
   Project: 'a',
-  Caret: 'span',
-  Field: 'input',
-  Pick: 'select',
   Meta: 'div',
   Comments: 'span',
   Runs: 'div',
@@ -40,28 +37,15 @@ let {
   Claim,
   Domain,
   Project,
-  Caret,
-  Field,
-  Pick,
   Meta,
   Comments: Talk,
   Runs: RunsEl,
 } = Frame
 
-// Every field editor here commits through this one write: a single
-// column, patched in place, down the normal mutate() path.
+// The pip commits through this one write: a single column, patched in
+// place, down the normal mutate() path.
 let set = (e: Ent, prop: string, v: unknown) =>
   mutate({ eid: e.eid, name: 'task', comp: { [prop]: v } })
-
-// Enter commits — through blur, so there is ONE commit path, exactly as
-// <Edit> does it. Escape puts the original value back and lets the
-// statusbar's Escape blur us: the commit then sees nothing changed and
-// writes nothing.
-let keys = (ev: KeyboardEvent, was: string) => {
-  let t = ev.currentTarget as HTMLInputElement
-  if (ev.key == 'Enter') t.blur()
-  else if (ev.key == 'Escape') t.value = was
-}
 
 // The status pip IS the status control: a click cycles it through the
 // board's column order (open → wip → done → open). A cycle, not a menu —
@@ -83,129 +67,48 @@ export let Pip = ({ e }: { e: Ent }) => {
   )
 }
 
-// The Prio badge, editable: click swaps in a number box. priority is a
-// REAL — the board's order, where a drop between two rows lands on 1.5 —
-// so whatever number is typed is committed verbatim and no neighbour's
-// value is touched. An empty box is not a zero: nothing typed, nothing
-// written.
-let Rank = ({ e }: { e: Ent }) => {
-  let [edit, setEdit] = useState(false)
-  let p = e.task!.priority
-  let done = (ev: FocusEvent) => {
-    let text = (ev.currentTarget as HTMLInputElement).value.trim()
-    let v = Number(text)
-    if (text && isFinite(v) && v != p) set(e, 'priority', v)
-    setEdit(false)
-  }
-  return edit
-    ? (
-      <Field
-        mod='num'
-        type='number'
-        step='1'
-        value={p}
-        elRef={focus}
-        onKeyDown={(ev: KeyboardEvent) => keys(ev, String(p))}
-        onBlur={done}
-      />
-    )
-    : (
-      <Prio
-        p={p}
-        class='Task_Chip'
-        title='set priority'
-        onClick={() => setEdit(true)}
-      />
-    )
-}
-
-// The domain chip, editable: click swaps in a text box whose <datalist>
-// is the vocabulary the graph already uses (live.ts domains) — domain is
-// free text by convention, so the list suggests and never limits. Empty
-// commits null: clearing a facet is a real edit, and the one thing
-// <Edit>'s revert-on-empty can't say. Unset, the chip is a dim ghost —
-// a field you can't see is a field you can't set.
-let Facet = ({ e }: { e: Ent }) => {
-  let [edit, setEdit] = useState(false)
-  let d = e.task!.domain ?? ''
-  let list = `domains-${e.eid}`
-  let done = (ev: FocusEvent) => {
-    let text = (ev.currentTarget as HTMLInputElement).value.trim()
-    if (text != d) set(e, 'domain', text || null)
-    setEdit(false)
-  }
-  return edit
-    ? (
-      <>
-        <Field
-          type='text'
-          list={list}
-          value={d}
-          placeholder='domain'
-          elRef={focus}
-          onKeyDown={(ev: KeyboardEvent) => keys(ev, d)}
-          onBlur={done}
-        />
-        <datalist id={list}>
-          {domains.value.map((x) => <option key={x} value={x} />)}
-        </datalist>
-      </>
-    )
-    : (
-      <Domain
-        mod={!d && 'empty'}
-        title='set domain'
-        onClick={() => setEdit(true)}
-      >
-        {d || '+ domain'}
-      </Domain>
-    )
-}
-
-// The project picker: every entity carrying the project tag, named by its
-// doc title, plus a 'none' row that clears the field. A <select> is the
-// picker — the platform's own keyboard and menu, the same control the Run
-// door uses.
-let Picker = ({ e, done }: { e: Ent; done: () => void }) => (
-  <Pick
-    elRef={focus}
-    value={String(e.task!.project_eid ?? '')}
-    onChange={(ev: Event) => {
-      set(e, 'project_eid', (ev.target as HTMLSelectElement).value || null)
-      done()
-    }}
-    onKeyDown={(ev: KeyboardEvent) => ev.key == 'Escape' && done()}
-    onBlur={done}
-  >
-    <option value=''>none</option>
-    {projects().map((p) => (
-      <option key={p.eid} value={p.eid}>{p.doc?.title ?? p.kind}</option>
-    ))}
-  </Pick>
+// The head's fields, all through the registry door (editors.tsx Prop):
+// the faces stay the board grammar's chips — Prio badge, domain chip,
+// project link — while the registry supplies each type's editor from the
+// vocabulary (number box, domain well, project search). The project's
+// face is a LINK, so its press rides the ▾ handle beside it.
+let Rank = ({ e }: { e: Ent }) => (
+  <Prop
+    eid={e.eid}
+    comp='task'
+    prop='priority'
+    editable
+    name='priority'
+    show={(v) => <Prio p={Number(v ?? 0)} class='Task_Chip' />}
+  />
 )
 
-// The task's project, named and linked (the full internal-link contract)
-// — so a click can't also open the picker; that's what the caret beside
-// it is for. Unset, the caret IS the ghost chip: nothing to link to, so
-// the whole affordance is one click.
-let Home = ({ e }: { e: Ent }) => {
-  let [pick, setPick] = useState(false)
-  let peid = e.task?.project_eid
-  let p = peid ? ent(String(peid)) : null
-  if (pick) return <Picker e={e} done={() => setPick(false)} />
-  return (
-    <>
-      {p && <Project {...linkProps(p)}>{p.doc?.title ?? p.kind}</Project>}
-      <Caret
-        mod={!p && 'empty'}
-        title='set project'
-        onClick={() => setPick(true)}
-      >
-        {p ? '▾' : '+ project'}
-      </Caret>
-    </>
-  )
-}
+let Facet = ({ e }: { e: Ent }) => (
+  <Prop
+    eid={e.eid}
+    comp='task'
+    prop='domain'
+    editable
+    name='domain'
+    show={(v) => (v ? <Domain>{String(v)}</Domain> : null)}
+  />
+)
+
+let Home = ({ e }: { e: Ent }) => (
+  <Prop
+    eid={e.eid}
+    comp='task'
+    prop='project_eid'
+    editable
+    handle
+    name='project'
+    show={(v) => {
+      if (!v) return null
+      let p = ent(String(v))
+      return <Project {...linkProps(p)}>{p.doc?.title ?? p.kind}</Project>
+    }}
+  />
+)
 
 // The body is markdown: rendered as HTML (snarkdown; our own data, so no
 // sanitizer between us and ourselves), double-click swaps in the raw
@@ -257,6 +160,7 @@ export let Task = ({ e }: { e: Ent }) => (
     {e.refs.map((r) => (
       <View key={r.child} eid={r.child} view='Dependency' type={r.type} />
     ))}
+    <Relate e={e} />
     <Runs e={e} />
     <Comments eid={e.eid} />
   </Frame>
@@ -300,6 +204,7 @@ export let TaskCard = ({ e }: { e: Ent }) => {
       {e.refs.map((r) => (
         <View key={r.child} eid={r.child} view='Dependency' type={r.type} />
       ))}
+      <Relate e={e} />
       <Comments eid={e.eid} />
     </>
   )
