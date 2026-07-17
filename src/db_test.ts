@@ -220,6 +220,53 @@ Deno.test('entity delete cascades to aimed entities, detaches soft refs', () => 
   assertEquals(comp(t2, 'doc')?.title, 'survivor')
 })
 
+Deno.test('edges: link once, unlink by the same sentence', () => {
+  let p = uid(), c = uid()
+  apply(db, [
+    { eid: p, name: 'doc', comp: { title: 'epic' } },
+    { eid: c, name: 'doc', comp: { title: 'step' } },
+    { eid: p, name: 'dependency', comp: { type: 'contains', child_eid: c } },
+    { eid: p, name: 'dependency', comp: { type: 'contains', child_eid: c } },
+  ])
+  let edges = () =>
+    snapshot(db).deps.filter((d) => d.parent == p && d.child == c)
+  assertEquals(edges(), [{ parent: p, type: 'contains', child: c }]) // once
+  apply(db, [{
+    eid: p,
+    name: 'dependency',
+    comp: { type: 'contains', child_eid: c, gone: true },
+  }])
+  assertEquals(edges(), [])
+})
+
+Deno.test('edges: bad type and missing endpoint drop alone, loudly', () => {
+  let p = uid(), c = uid()
+  apply(db, [
+    { eid: p, name: 'doc', comp: { title: 'solid' } },
+    { eid: c, name: 'doc', comp: { title: 'other' } },
+    { eid: p, name: 'dependency', comp: { type: 'blocks', child_eid: c } },
+    { eid: p, name: 'dependency', comp: { type: 'reads', child_eid: uid() } },
+    { eid: p, name: 'doc', comp: { body: 'survives' } }, // batch lives on
+  ])
+  assertEquals(snapshot(db).deps.some((d) => d.parent == p), false)
+  assertEquals(comp(p, 'doc')?.body, 'survives')
+})
+
+Deno.test('edges: a dead endpoint voids the link; delete prunes edges', () => {
+  let p = uid(), c = uid()
+  apply(db, [
+    { eid: p, name: 'doc', comp: { title: 'parent' } },
+    { eid: c, name: 'doc', comp: { title: 'child' } },
+    { eid: p, name: 'dependency', comp: { type: 'requires', child_eid: c } },
+  ])
+  apply(db, [{ eid: c, name: 'entity', comp: null }])
+  assertEquals(snapshot(db).deps.some((d) => d.parent == p), false) // pruned
+  apply(db, [
+    { eid: p, name: 'dependency', comp: { type: 'requires', child_eid: c } },
+  ])
+  assertEquals(snapshot(db).deps.some((d) => d.parent == p), false) // voided
+})
+
 Deno.test('open() is idempotent and additive on live files', () => {
   assertMatch(String(fresh().prepare('select 1 as ok').get()?.ok), /1/)
 })

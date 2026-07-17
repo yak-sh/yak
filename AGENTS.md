@@ -45,7 +45,9 @@ resurrect the eid). A batch is a flat array; db.ts `apply()` runs it atomically.
 Clients mint eids (uuid v4); the spine + num appear on first touch. Browser tabs
 sync over `/ws`; headless clients POST `/apply`; both broadcast to everyone
 else. Special apply rules (the claim lease check) live in `apply()` and hold for
-every entry path.
+every entry path. Edges use name `dependency`: a triple has no row key, so the
+comp names the whole sentence — `{type, child_eid}` links eid→child, the same
+sentence with `gone: true` unlinks; both endpoints must exist.
 
 ## Rendering (web + TUI, one registry)
 

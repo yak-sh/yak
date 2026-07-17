@@ -280,6 +280,11 @@ export type Pinned = Pin & { target_eid: string; view: string }
 // deletes the entity, its components, and every edge touching it. Deleting a
 // bunch is just a long batch. Client-minted UUID eids are welcome — the
 // spine (and its num) appears on first touch.
+//
+// Edges ride the same shape with name 'dependency', but a triple has no
+// row key, so the comp names the WHOLE sentence: {type, child_eid} links
+// eid→child, and the same sentence with gone: true unlinks it (comp: null
+// could never say which edge). Both endpoints must exist.
 export type Change = {
   eid: string
   name: string

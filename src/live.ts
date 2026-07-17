@@ -55,6 +55,24 @@ export let applyLocal = (changes: Change[]) => {
       deps.value = deps.value.filter((d) => d.parent != eid && d.child != eid)
       continue
     }
+    // An edge change names its whole triple (see db.ts): gone removes it,
+    // otherwise it joins the edge list once.
+    if (name == 'dependency') {
+      if (!comp) continue
+      let d = {
+        parent: eid,
+        type: comp.type as Dep['type'],
+        child: String(comp.child_eid),
+      }
+      let same = (x: Dep) =>
+        x.parent == d.parent && x.type == d.type && x.child == d.child
+      deps.value = comp.gone
+        ? deps.value.filter((x) => !same(x))
+        : deps.value.some(same)
+        ? deps.value
+        : [...deps.value, d]
+      continue
+    }
     let row = { ...next[eid] } as Record<string, unknown>
     if (comp == null) delete row[name]
     else row[name] = { ...(row[name] as object), ...comp }

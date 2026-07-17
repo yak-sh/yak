@@ -403,6 +403,48 @@ export let apply = (db: DatabaseSync, changes: Change[]): Change[] => {
   db.exec('begin')
   try {
     for (let { eid, name, comp } of changes) {
+      // An edge is a TRIPLE, not a row keyed by eid: the comp names the
+      // whole (parent=eid, type, child_eid) sentence, so linking is
+      // insert-or-ignore, and unlinking says the same sentence with
+      // gone: true — comp: null could never name WHICH edge to drop.
+      // Both endpoints must be live; a bad edge (unknown type, missing
+      // spine) drops alone in its savepoint like any malformed create.
+      if (name == 'dependency') {
+        if (!comp || dead.get(eid) || dead.get(String(comp.child_eid))) {
+          continue
+        }
+        // Both spines checked HERE (fk enforcement is a pragma nobody
+        // set): an edge may only join entities that exist.
+        let spines = db.prepare(
+          'select count(*) as n from entity where eid in (?, ?)',
+        ).get(eid, String(comp.child_eid)) as { n: number }
+        if (spines.n != 2) {
+          console.warn(`sync: edge for ${eid} dropped — missing endpoint`)
+          continue
+        }
+        db.exec('savepoint change')
+        try {
+          if (comp.gone) {
+            db.prepare(`
+              delete from dependency
+              where parent_eid = ? and type = ? and child_eid = ?
+            `).run(eid, String(comp.type), String(comp.child_eid))
+          } else {
+            db.prepare(`
+              insert or ignore into dependency (parent_eid, type, child_eid)
+              values (?, ?, ?)
+            `).run(eid, String(comp.type), String(comp.child_eid))
+          }
+          db.exec('release change')
+          touched.add(eid) // a moved edge is news at both ends
+          touched.add(String(comp.child_eid))
+        } catch (e) {
+          db.exec('rollback to change')
+          db.exec('release change')
+          console.warn(`sync: edge for ${eid} dropped —`, e)
+        }
+        continue
+      }
       let cols = cmps[name]
       if (!cols) continue
       touched.add(eid)
