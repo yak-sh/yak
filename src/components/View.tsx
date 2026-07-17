@@ -178,8 +178,16 @@ let b64 = (t: string) =>
 // drop — target + view + width, plus where in the dragged element the grab
 // happened, so the spawned card lands where the ghost was dropped), and,
 // when the view's renderer has a file form, the serialized file (for a
-// desktop drop) plus text for editors.
-export let dragData = (ev: DragEvent, eid: string, view: string, w = 0) => {
+// desktop drop) plus text for editors. `pin` rides only for an EXISTING
+// card being relocated (a Tray row dragged out): its presence says MOVE
+// this pin, not clone a new card — tab drags omit it, so they still clone.
+export let dragData = (
+  ev: DragEvent,
+  eid: string,
+  view: string,
+  w = 0,
+  pin?: string,
+) => {
   if (!ev.dataTransfer || !(ev.currentTarget instanceof HTMLElement)) return
   let e = ent(eid)
   let box = ev.currentTarget.getBoundingClientRect()
@@ -191,6 +199,7 @@ export let dragData = (ev: DragEvent, eid: string, view: string, w = 0) => {
       w,
       ox: ev.clientX - box.left,
       oy: ev.clientY - box.top,
+      ...(pin ? { pin } : {}),
     }),
   )
   let f = resolve(e, view).file

@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import {
+  cache,
   camera,
   clientId,
   ent,
@@ -430,7 +431,25 @@ export let Canvas = ({ eid }: { eid: string }) => {
     let sy = e.clientY
     let data = dt.getData('application/x-tasks-card')
     if (data) {
-      let { target_eid, view, w, ox, oy } = JSON.parse(data)
+      let { target_eid, view, w, ox, oy, pin } = JSON.parse(data)
+      // A Tray row carries its pin: MOVE that card here instead of cloning a
+      // new one — it lands under the ghost like a spawn does.
+      if (pin && cache.value[pin]?.pin) {
+        let at = toPlane(sx, sy, el.current!.getBoundingClientRect())
+        let { zoom } = camera.value
+        mutate({
+          eid: pin,
+          name: 'pin',
+          comp: {
+            canvas_eid: eid,
+            x: Math.round(at.x - (ox != null ? ox / zoom : (w || 480) / 2)),
+            y: Math.round(at.y - (oy != null ? oy / zoom : 15)),
+            w: w || 0,
+            h: 0,
+          },
+        })
+        return
+      }
       spawnAt([], target_eid, view, w, sx, sy, ox, oy)
       return
     }

@@ -100,6 +100,11 @@ let schema = `
     statuses   text not null default '',
     unique (client_eid, board_eid)
   );
+  create table if not exists shelf (
+    eid        text primary key references entity(eid),
+    client_eid text not null references entity(eid),
+    unique (client_eid)
+  );
   create table if not exists session (
     eid text primary key references entity(eid),
     id  text not null unique,

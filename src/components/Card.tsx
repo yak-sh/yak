@@ -1,10 +1,11 @@
-import { camera, ent, mutate, toFront } from '../live.ts'
+import { camera, ent, mutate, toFront, topZ } from '../live.ts'
 import { idOf, type Pinned } from '../types.ts'
 import { block, el } from './ui.tsx'
 import { applicable } from './registry.ts'
 import { dragData, View } from './View.tsx'
 import { Icon } from './icons.tsx'
 import { menu } from './nav.tsx'
+import { shelf, shelfMint, trayRect } from './Tray.tsx'
 
 // Each tab view wears an icon; the name moves into an anchored tooltip.
 // Exported: the fullscreen Screen bar (App.tsx) draws the same tabs.
@@ -67,7 +68,11 @@ export let Card = ({ p }: { p: Pinned }) => {
     // event.
     let dx = 0
     let dy = 0
+    let px = 0 // last pointer position, in screen px — up() has no event
+    let py = 0
     let move = (e: PointerEvent) => {
+      px = e.clientX
+      py = e.clientY
       if (!dragging) {
         if (Math.hypot(e.clientX - sx, e.clientY - sy) < 3) return
         dragging = true
@@ -84,13 +89,25 @@ export let Card = ({ p }: { p: Pinned }) => {
       el.removeEventListener('pointermove', move)
       el.removeEventListener('pointerup', up)
       if (!dragging) return
+      el.style.transform = ''
+      el.style.willChange = ''
+      // Dropped over the Tray: the card leaves the canvas for the shelf
+      // (minted on first use) rather than settling at a new x/y.
+      let r = trayRect.value
+      if (r && px >= r.left && px <= r.right && py >= r.top && py <= r.bottom) {
+        let sh = shelf() ?? shelfMint()
+        mutate({
+          eid: p.eid,
+          name: 'pin',
+          comp: { canvas_eid: sh, x: 0, y: 0, w: 0, h: 0, z: topZ(sh) + 1 },
+        })
+        return
+      }
       mutate({
         eid: p.eid,
         name: 'pin',
         comp: { x: Math.round(from.x + dx), y: Math.round(from.y + dy) },
       })
-      el.style.transform = ''
-      el.style.willChange = ''
     }
     el.addEventListener('pointermove', move)
     el.addEventListener('pointerup', up)

@@ -1858,3 +1858,101 @@ html {
   gap: var(--half-gap);
   white-space: nowrap;
 }
+
+/* The Shelf: a quiet tray in the bottom-right, floating above the
+   statusbar. Screen-space chrome, present on every root — a digest of LIVE
+   sessions plus a per-client scratch canvas of pinned cards. Collapsed to a
+   slim strip of status dots + view icons by default. */
+.Tray {
+  position: fixed;
+  right: var(--gap);
+  bottom: calc(var(--gap) + 1.5rem); /* clear the statusbar */
+  z-index: 20;
+  width: max-content;
+  max-width: min(22rem, calc(100vw - 2 * var(--gap)));
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 12px;
+  color: var(--text);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.3);
+}
+.Tray_Head {
+  display: flex;
+  align-items: center;
+  padding: 3px var(--half-gap) 3px var(--gap);
+  border-bottom: 1px solid var(--border);
+}
+.Tray_Label {
+  color: var(--dim);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.Tray_Chevron {
+  margin-left: auto;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 4px;
+}
+.Tray_Group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--half-gap);
+}
+.Tray_Group + .Tray_Group {
+  border-top: 1px solid var(--border);
+}
+.Tray_Group .Tray_Label {
+  padding: 0 var(--half-gap) 2px;
+}
+.Tray_Row {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  padding: 2px var(--half-gap);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.Tray_Row:hover {
+  background: var(--soft);
+}
+/* The summary row (a List.Item) takes the width; the ✕ stays a thumbnail. */
+.Tray_Row > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+.Tray_X {
+  color: var(--dim);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+}
+.Tray_X:hover {
+  color: var(--red);
+}
+.Tray_Hint {
+  padding: var(--gap);
+  color: var(--dim);
+  text-align: center;
+}
+.Tray_Strip {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  padding: 5px var(--gap);
+  min-width: 1.5rem;
+  min-height: 1.25rem;
+  cursor: pointer;
+}
+.Tray_Strip .Icon {
+  color: var(--muted);
+}

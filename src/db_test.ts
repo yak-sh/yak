@@ -65,6 +65,17 @@ Deno.test('repo is a tag on a project: wire-writable, never the kind', () => {
   assertEquals(search(db, 'venture')[0]?.kind, 'project') // repo doesn't name it
 })
 
+Deno.test('shelf tags a canvas to a client; rides the snapshot', () => {
+  let c = uid(), canvas = uid()
+  apply(db, [
+    { eid: c, name: 'client', comp: { user_agent: 'x' } },
+    { eid: canvas, name: 'canvas', comp: {} },
+    { eid: canvas, name: 'shelf', comp: { client_eid: c } },
+  ])
+  assertEquals(comp(canvas, 'shelf')?.client_eid, c)
+  assertEquals(comp(canvas, 'canvas') != null, true) // still a canvas, not a kind
+})
+
 Deno.test('session lifecycle columns are server-owned', () => {
   let s = uid()
   apply(db, [{

@@ -6,6 +6,7 @@ import { Icon } from './icons.tsx'
 import { Menu, menu, navigate, route, screenTarget } from './nav.tsx'
 import { Run, run } from './Run.tsx'
 import { Status } from './Status.tsx'
+import { Tray } from './Tray.tsx'
 import { View } from './View.tsx'
 import { tips } from './overlay.tsx'
 
@@ -59,6 +60,7 @@ export let App = () => {
       </Body>
       <Menu />
       <Run />
+      <Tray />
       <Status />
     </Frame>
   )

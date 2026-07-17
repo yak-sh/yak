@@ -70,6 +70,7 @@ export let comps: Record<string, Record<string, PropType>> = {
     board_eid: { eid: 'board' },
     statuses: 'text',
   },
+  shelf: { client_eid: { eid: 'client' } }, // binds a client to their tray canvas
   // acked_at is the session's OWN "seen up to here" cursor for the
   // while-you-were-away digest — wire-writable because forging it only
   // deafens yourself.
@@ -253,6 +254,11 @@ export type Fold = {
   statuses: string
 }
 
+// The Shelf: a per-client scratch canvas the Tray hangs cards on. A tag
+// like repo — it binds a client to their one shelf without naming the
+// entity (the entity stays a canvas), so it stays out of kindOrder.
+export type Shelf = { eid: string; client_eid: string }
+
 // An agent session, reified: `id` is its external identity (a Claude
 // session id, an operator name), `cwd` where it runs, `acked_at` its own
 // comms-bus cursor — the three things a session may say about itself.
@@ -360,6 +366,7 @@ export type Ent = {
   client?: Client
   camera?: Camera
   fold?: Fold
+  shelf?: Shelf
   session?: Session
   claim?: Claim
   conflict?: Conflict
