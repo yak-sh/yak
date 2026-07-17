@@ -1090,7 +1090,9 @@ html {
   color: var(--dim);
   font-style: italic;
 }
-.Show_Runs {
+.Show_Runs,
+.Show_Boards,
+.Show_Tasks {
   display: grid;
   gap: 2px;
   margin-top: var(--half-gap);

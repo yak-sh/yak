@@ -291,6 +291,15 @@ export let backlinks = (eid: string) =>
 // task names the parents that contain or require it.
 export let parents = (eid: string) => deps.value.filter((d) => d.child == eid)
 
+// The saved boards that WATCH an entity — a board's reference lives
+// inside its query string ('.project_eid=<eid>&…'), not in an eid-typed
+// column, so backlinks can't see it. Eids are uuids: a substring hit IS
+// a reference — no parse needed, no false positives possible.
+export let boardsOver = (eid: string) =>
+  Object.keys(cache.value).filter((b) =>
+    cache.value[b].board?.query?.includes(eid)
+  )
+
 // The highest stacking order on a canvas — a raised card gets topZ + 1.
 export let topZ = (canvas: string) =>
   Math.max(

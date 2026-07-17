@@ -3,6 +3,7 @@ import { md } from '../../md.ts'
 import { type Ent } from '../../types.ts'
 import {
   backlinks,
+  boardsOver,
   commentCount,
   ent,
   gated,
@@ -39,6 +40,8 @@ let Frame = block('div', 'Show', {
   Meta: 'div',
   Comments: 'span',
   Runs: 'div',
+  Boards: 'div',
+  Tasks: 'div',
 })
 let {
   Head,
@@ -50,6 +53,8 @@ let {
   Meta: MetaEl,
   Comments: Talk,
   Runs: RunsEl,
+  Boards: BoardsEl,
+  Tasks: TasksEl,
 } = Frame
 
 // The pip commits through this one write: a single column, patched in
@@ -201,6 +206,39 @@ export let Runs = ({ e }: { e: Ent }) => {
   )
 }
 
+// The saved boards that watch this entity — a project's boards, found by
+// boardsOver's query scan, since a query string is where a board names
+// its subject.
+export let Boards = ({ e }: { e: Ent }) => {
+  let ids = boardsOver(e.eid)
+  if (!ids.length) return null
+  return (
+    <BoardsEl>
+      {ids.map((b) => <View key={b} eid={b} view='List.Item' />)}
+    </BoardsEl>
+  )
+}
+
+// The tasks homed here — every task whose project_eid names this entity.
+// Open work only, board-ordered (status column, then rank): the project
+// page is a working view; the full history lives on its boards.
+export let Tasks = ({ e }: { e: Ent }) => {
+  let ids = backlinks(e.eid)
+    .filter((b) => b.via == 'task.project_eid')
+    .map((b) => ent(b.from))
+    .filter((t) => t.task && t.task.status != 'done')
+    .sort((a, b) =>
+      statuses.indexOf(a.task!.status) - statuses.indexOf(b.task!.status) ||
+      a.task!.priority - b.task!.priority
+    )
+  if (!ids.length) return null
+  return (
+    <TasksEl>
+      {ids.map((t) => <View key={t.eid} eid={t.eid} view='List.Item' />)}
+    </TasksEl>
+  )
+}
+
 // The meta line (card context — the titlebar carries title and pip): the
 // board row's grammar, prio · project · domain · 💬 · ⚑ · age, every
 // field the same editor the full head carries. Only the task fields need
@@ -232,7 +270,7 @@ export let Talkback = ({ e }: { e: Ent }) => <Comments eid={e.eid} />
 
 // The section stack, walked by both contexts — change the order here,
 // every doc-carrying entity follows.
-let stack = ['Dependencies', 'Relate', 'Runs', 'Comments']
+let stack = ['Dependencies', 'Relate', 'Boards', 'Tasks', 'Runs', 'Comments']
 
 // Root context carries the head (pip + editable title + fields + id),
 // then the stack.

@@ -2,6 +2,7 @@ import { idOf } from '../types.ts'
 import { ent, mutate } from '../live.ts'
 import { type Action, define, defineActions, has, resolve } from './registry.ts'
 import {
+  Boards,
   Body,
   Dependencies,
   Meta,
@@ -10,6 +11,7 @@ import {
   Show,
   ShowCard,
   Talkback,
+  Tasks,
 } from './views/Show.tsx'
 import {
   AnyTitle,
@@ -68,6 +70,8 @@ define([
   { view: 'Meta', match: () => true, Render: Meta },
   { view: 'Dependencies', match: () => true, Render: Dependencies },
   { view: 'Relate', match: () => true, Render: Relate },
+  { view: 'Boards', match: () => true, Render: Boards },
+  { view: 'Tasks', match: () => true, Render: Tasks },
   { view: 'Runs', match: () => true, Render: Runs },
   { view: 'Comments', match: () => true, Render: Talkback },
   { view: 'Card.Title', match: has('doc', 'task'), Render: TaskTitle },
