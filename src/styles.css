@@ -889,11 +889,11 @@
   display: flex;
   align-items: center;
   gap: var(--half-gap);
-  /* On a notched phone the bar's corners are under the screen's rounded
-     glass — keep the bar SLIM and slide the text in sideways instead.
-     inset-bottom is nonzero exactly on those phones; scaled, it clears
-     the corner radius. */
-  padding: 2px calc(var(--gap) + env(safe-area-inset-bottom, 0px) * 0.75);
+  /* Flush with the glass: the TEXT stays at its usual height and the
+     bar's background runs on to the physical bottom edge — bottom
+     padding = the home-indicator inset (0 off-phone). The text then
+     rides above the corner radius, so no horizontal dodge is needed. */
+  padding: 2px var(--gap) max(2px, env(safe-area-inset-bottom, 0px));
   background: var(--surface);
   border-top: 1px solid var(--border);
   font-size: 12px;
