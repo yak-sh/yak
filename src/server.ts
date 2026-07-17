@@ -11,7 +11,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { providers } from './adapters.ts'
 import { type Change } from './types.ts'
 import { apply, db, search, snapshot } from './db.ts'
-import { freeze, serveFrozen } from './freeze.ts'
+import { freeze, serveFrozen, store } from './freeze.ts'
 import { mcpServer } from './mcp.ts'
 import { input, logs, recover, start, stop } from './sessions.ts'
 import { outcome, recent, record, toolCall } from './telemetry.ts'
@@ -137,6 +137,10 @@ let mcp = async (req: Request) => {
       },
       // deno-lint-ignore require-await
       find: async (q, limit) => search(db, q, limit),
+      upload: async (eid, html) => {
+        let res = await store(eid, html, cast)
+        if (!res.ok) throw new Error(await res.text())
+      },
     })
     await server.connect(theirs)
     let reply = new Promise((resolve) => mine.onmessage = resolve)
@@ -299,6 +303,11 @@ Deno.serve(
     }
     if (path == '/freeze') {
       return freeze(url.searchParams.get('eid') ?? '', cast)
+    }
+    if (path == '/upload' && req.method == 'POST') {
+      return req.text().then((body) =>
+        store(url.searchParams.get('eid') ?? '', body, cast)
+      )
     }
     if (path.startsWith('/frozen/')) {
       return serveFrozen(path.slice(8).replace(/\.html$/, ''))

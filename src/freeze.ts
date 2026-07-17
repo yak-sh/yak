@@ -65,10 +65,35 @@ let scrub = (raw: string) => {
   }
 }
 
-export let freeze = async (eid: string, cast: (c: Change[]) => void) => {
-  let row = db.prepare('select url from web where eid = ?').get(eid) as
+// The archive landing, shared by both doors: stamp frozen_at (server-
+// owned), adopt the page <title> as the entity's doc when it has none,
+// and tell every live client.
+let land = (
+  eid: string,
+  title: string | undefined,
+  cast: (c: Change[]) => void,
+) => {
+  let changes: Change[] = [
+    { eid, name: 'web', comp: { frozen_at: new Date().toISOString() } },
+  ]
+  db.prepare('update web set frozen_at = ? where eid = ?')
+    .run(changes[0].comp!.frozen_at as string, eid)
+  let hasDoc = db.prepare('select 1 from doc where eid = ?').get(eid)
+  if (title && !hasDoc) {
+    db.prepare('insert into doc (eid, title) values (?, ?)').run(eid, title)
+    changes.push({ eid, name: 'doc', comp: { title } })
+  }
+  cast(changes)
+  return Response.json(changes)
+}
+
+let webRow = (eid: string) =>
+  db.prepare('select url from web where eid = ?').get(eid) as
     | { url: string }
     | undefined
+
+export let freeze = async (eid: string, cast: (c: Change[]) => void) => {
+  let row = webRow(eid)
   if (!row) return new Response('no such web entity', { status: 404 })
   Deno.mkdirSync(frozen, { recursive: true })
   let out = `${frozen}/${eid}.html`
@@ -85,18 +110,23 @@ export let freeze = async (eid: string, cast: (c: Change[]) => void) => {
   }
   let { html, title } = scrub(await Deno.readTextFile(out))
   await Deno.writeTextFile(out, html)
-  let changes: Change[] = [
-    { eid, name: 'web', comp: { frozen_at: new Date().toISOString() } },
-  ]
-  db.prepare('update web set frozen_at = ? where eid = ?')
-    .run(changes[0].comp!.frozen_at as string, eid)
-  let hasDoc = db.prepare('select 1 from doc where eid = ?').get(eid)
-  if (title && !hasDoc) {
-    db.prepare('insert into doc (eid, title) values (?, ?)').run(eid, title)
-    changes.push({ eid, name: 'doc', comp: { title } })
-  }
-  cast(changes)
-  return Response.json(changes)
+  return land(eid, title, cast)
+}
+
+// The upload door: same store, same scrub, same stamp — the page just
+// arrives over the wire (an agent one-shotting a mockup or report)
+// instead of through monolith. The web row must already exist (the
+// uploader mints it first), so a bare POST can't spray files onto disk.
+export let store = async (
+  eid: string,
+  raw: string,
+  cast: (c: Change[]) => void,
+) => {
+  if (!webRow(eid)) return new Response('no such web entity', { status: 404 })
+  Deno.mkdirSync(frozen, { recursive: true })
+  let { html, title } = scrub(raw)
+  await Deno.writeTextFile(`${frozen}/${eid}.html`, html)
+  return land(eid, title, cast)
 }
 
 // Serve an archive. eid is validated to a bare uuid — no path escapes.

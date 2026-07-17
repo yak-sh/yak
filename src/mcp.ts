@@ -18,6 +18,7 @@ import {
   type Hit,
   type PropType,
   statuses,
+  uuid,
 } from './types.ts'
 import {
   byBoard,
@@ -26,6 +27,7 @@ import {
   commentChanges,
   contextDigest,
   find,
+  host,
   idOf,
   notices,
   type Param,
@@ -45,6 +47,8 @@ export type IO = {
   read: () => Promise<{ changes: Change[]; deps: Dep[] }>
   write: (changes: Change[]) => Promise<void>
   find: (q: string, limit?: number) => Promise<Hit[]>
+  // Land an HTML page in the frozen store for an existing web entity.
+  upload: (eid: string, html: string) => Promise<void>
 }
 
 // A prop's type, said inline where it isn't obvious: enums spell their
@@ -588,6 +592,39 @@ card_move).`,
   )
 
   server.tool(
+    'page_put',
+    `Publish an HTML page into the graph — the way to drop a one-shot
+artifact (mockup, report, diagram) where people work. Mints a web
+entity and lands your HTML in its frozen store; it renders in a
+sandboxed iframe after the standard archive scrub (scripts, frames,
+and every external reference removed — inline <style> carries the
+design, so self-contained pages only). Markdown needs no upload: put
+it in any doc body. Show the page with card_open. Passing the id of an
+existing web entity replaces its page instead.`,
+    { title: z.string(), html: z.string(), id: z.string().optional() },
+    async (
+      { title, html, id }: { title: string; html: string; id?: string },
+    ) => {
+      let eid: string
+      if (id) {
+        let row = find(rows(await io.read()), id)
+        if (!row?.comps.web) return err(`no web entity: ${id}`)
+        eid = row.eid
+      } else {
+        eid = uuid()
+        await io.write([
+          { eid, name: 'web', comp: { url: '' } },
+          { eid, name: 'doc', comp: { title } },
+        ])
+      }
+      await io.upload(eid, html)
+      let made = rows(await io.read()).find((r) => r.eid == eid)
+      let name = made ? idOf(made) : eid
+      return text(`published ${name} — card_open ${name} to show it`)
+    },
+  )
+
+  server.tool(
     'code_run',
     `Code mode: run JS against the graph in a sandboxed worker (no fs, no
 net, no env — its ONLY capability is the graph). In scope: graph
@@ -693,6 +730,16 @@ id: T-3, bare num, or eid. ${BUS}`,
 
 // stdio entry: same tools, reaching the graph over HTTP like any client.
 if (import.meta.main) {
-  await mcpServer({ read: snapshot, write: send, find: search })
-    .connect(new StdioServerTransport())
+  await mcpServer({
+    read: snapshot,
+    write: send,
+    find: search,
+    upload: async (eid, html) => {
+      let res = await fetch(`http://${host()}/upload?eid=${eid}`, {
+        method: 'POST',
+        body: html,
+      })
+      if (!res.ok) throw new Error(`server said ${res.status}`)
+    },
+  }).connect(new StdioServerTransport())
 }
