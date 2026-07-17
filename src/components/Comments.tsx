@@ -2,7 +2,7 @@ import { useRef, useState } from 'preact/hooks'
 import { md } from '../md.ts'
 import { base, clientId, commentsOn, ent, mutate, uuid } from '../live.ts'
 import { ago, block, pretty } from './ui.tsx'
-import { idOf, sessionActive } from '../types.ts'
+import { idOf, nick, sessionActive } from '../types.ts'
 
 let Frame = block('div', 'Comments', {
   Item: 'div',
@@ -38,6 +38,11 @@ export let Comments = ({ eid }: { eid: string }) => {
   let settled = !!s && s.origin == 'managed' && !!s.provider_session_id &&
     !sessionActive.includes(String(s.status))
   let [send, setSend] = useState(true)
+  // Who you're addressing: the persona's name when the session has one,
+  // else the model's nick — never the raw session id.
+  let who = s &&
+    ((s.persona_eid && ent(s.persona_eid).doc?.title) ||
+      nick(s.serving_model ?? s.model) || s.id)
 
   let post = () => {
     let body = box.current!.value.trim()
@@ -83,7 +88,7 @@ export let Comments = ({ eid }: { eid: string }) => {
         elRef={box}
         rows={1}
         placeholder={settled && send
-          ? `send to ${s!.id}…`
+          ? `send to ${who}…`
           : s && !settled
           ? 'comment… (the agent hears it on its next tool call)'
           : 'comment…'}

@@ -9,14 +9,11 @@ import { icons } from './Card.tsx'
 import { navigate } from './nav.tsx'
 import { dragData, View } from './View.tsx'
 
-// The Tray ("the Shelf"): screen-space chrome in the bottom-right corner,
-// floating above the statusbar. Two self-gating groups — LIVE sessions that
-// want your eyes, and the SHELF, a per-client scratch canvas you drag cards
-// onto. Collapsed by default to a slim strip of dots + icons.
-
-// Where the tray sits, kept fresh so Card.tsx can hit-test a titlebar drag
-// against it; null while unmounted.
-export let trayRect = signal<DOMRect | null>(null)
+// The Tray ("the Shelf"): the statusbar's right end. The strip — one
+// status dot per LIVE session, one view icon per shelved card — lives IN
+// the bar; clicking it opens a panel anchored above with the full rows.
+// LIVE is the digest of runs that want your eyes; the SHELF is a
+// per-client scratch canvas you drag cards onto and out of.
 
 // Collapsed vs expanded, remembered across visits (default collapsed).
 let expanded = signal(
@@ -27,19 +24,42 @@ let toggle = (v: boolean) => {
   localStorage.setItem('tasks-tray', v ? 'open' : 'shut')
 }
 
+// The mounted tray, for drop hit-testing. A titlebar drag asks overTray
+// on release: the strip in the bar and the open panel both catch.
+let mounted: HTMLElement | null = null
+export let overTray = (x: number, y: number) => {
+  if (!mounted) return false
+  return [mounted, ...mounted.querySelectorAll('.Tray_Panel')]
+    .map((n) => n.getBoundingClientRect())
+    .some((r) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom)
+}
+
 // A managed run stays worth showing for a while after it ends.
 let RECENT = 6 * 60 * 60 * 1000
 
-// LIVE: sessions still running, plus managed ones that finished recently —
-// the digest a human wants without opening every session.
+// Dismissed rows — "seen", per browser. The ✕ on a settled row lands its
+// eid here; the session entity is history and never touched. A signal so
+// the strip and panel repaint on dismiss; localStorage so it sticks.
+let seen = signal<string[]>(
+  JSON.parse(globalThis.localStorage?.getItem('tasks-tray-seen') ?? '[]'),
+)
+let dismiss = (eid: string) => {
+  seen.value = [...seen.value, eid].slice(-100)
+  localStorage.setItem('tasks-tray-seen', JSON.stringify(seen.value))
+}
+
+// LIVE: sessions still running, plus managed ones that finished recently
+// and haven't been dismissed — the digest a human wants without opening
+// every session.
 let live = () =>
   Object.entries(cache.value)
-    .filter(([, r]) => {
+    .filter(([eid, r]) => {
       let s = r.session
       if (!s) return false
       if (sessionActive.includes(s.status ?? '')) return true
       return s.origin == 'managed' && !!s.finished_at &&
-        Date.now() - Date.parse(s.finished_at) < RECENT
+        Date.now() - Date.parse(s.finished_at) < RECENT &&
+        !seen.value.includes(eid)
     })
     .map(([eid]) => eid)
 
@@ -60,16 +80,16 @@ export let shelfMint = () => {
 }
 
 let Frame = block('div', 'Tray', {
-  Head: 'header',
-  Chevron: 'button',
+  Strip: 'button',
+  Chevron: 'span',
+  Panel: 'div',
   Group: 'section',
   Label: 'span',
   Row: 'div',
   X: 'button',
   Hint: 'div',
-  Strip: 'div',
 })
-let { Head, Chevron, Group, Label, Row, X, Hint, Strip } = Frame
+let { Strip, Chevron, Panel, Group, Label, Row, X, Hint } = Frame
 
 // Drop a card payload onto the shelf: repin an existing card ({pin} in the
 // payload) or mint a fresh card+pin for the target. The shelf is born here,
@@ -109,21 +129,10 @@ let over = (ev: DragEvent) => {
 
 export let Tray = () => {
   let root = useRef<HTMLDivElement>(null)
-
-  // Publish the tray's box for hit-testing — remeasured whenever it resizes
-  // (a row lands, a group appears) or the window does.
   useEffect(() => {
-    let node = root.current
-    if (!node) return
-    let sync = () => (trayRect.value = node.getBoundingClientRect())
-    sync()
-    let ro = new ResizeObserver(sync)
-    ro.observe(node)
-    addEventListener('resize', sync)
+    mounted = root.current
     return () => {
-      ro.disconnect()
-      removeEventListener('resize', sync)
-      trayRect.value = null
+      mounted = null
     }
   }, [])
 
@@ -133,67 +142,83 @@ export let Tray = () => {
 
   return (
     <Frame elRef={root} onDragOver={over} onDrop={dropIn}>
-      {expanded.value
-        ? (
-          <>
-            <Head>
-              <Label>shelf</Label>
-              <Chevron
-                type='button'
-                aria-label='collapse'
-                onClick={() => toggle(false)}
-              >
-                ⌄
-              </Chevron>
-            </Head>
-            {ls.length > 0 && (
-              <Group>
-                <Label>live</Label>
-                {ls.map((eid) => (
-                  <Row
-                    key={eid}
-                    onClick={() => navigate('/' + idOf(ent(eid)))}
-                  >
-                    <View eid={eid} view='List.Item' />
-                  </Row>
-                ))}
-              </Group>
-            )}
-            {ps.length > 0 && (
-              <Group>
-                {ps.map((p) => (
-                  <Row
-                    key={p.eid}
-                    draggable
-                    onDragStart={(e: DragEvent) =>
-                      dragData(e, p.target_eid, p.view, p.w, p.eid)}
-                  >
-                    <View eid={p.target_eid} view='List.Item' />
+      <Strip
+        type='button'
+        aria-label={expanded.value ? 'close tray' : 'open tray'}
+        onClick={() => toggle(!expanded.value)}
+      >
+        {ls.map((eid) => (
+          <Dot key={eid} status={ent(eid).session?.status ?? ''} />
+        ))}
+        {ps.map((p) => (
+          <Icon
+            key={p.eid}
+            name={icons[p.view] ?? 'file-text'}
+          />
+        ))}
+        <Chevron>{expanded.value ? '⌄' : '⌃'}</Chevron>
+      </Strip>
+      {expanded.value && (
+        <Panel>
+          {ls.length > 0 && (
+            <Group>
+              <Label>live</Label>
+              {ls.map((eid) => (
+                <Row
+                  key={eid}
+                  draggable
+                  // no pin in the payload: a live row isn't shelved, so
+                  // dropping it on the canvas SPAWNS a session card
+                  onDragStart={(e: DragEvent) => dragData(e, eid, 'Session')}
+                  onClick={() => navigate('/' + idOf(ent(eid)))}
+                >
+                  <View eid={eid} view='List.Item' />
+                  {
+                    /* only a settled run dismisses — a live one wants your
+                      eyes (stop it from its own view) */
+                  }
+                  {!sessionActive.includes(ent(eid).session?.status ?? '') && (
                     <X
                       type='button'
-                      aria-label='remove'
-                      onClick={() =>
-                        mutate({ eid: p.eid, name: 'entity', comp: null })}
+                      aria-label='dismiss'
+                      onClick={(e: MouseEvent) => {
+                        e.stopPropagation()
+                        dismiss(eid)
+                      }}
                     >
                       ×
                     </X>
-                  </Row>
-                ))}
-              </Group>
-            )}
-            {!ls.length && !ps.length && <Hint>drop things here</Hint>}
-          </>
-        )
-        : (
-          <Strip onClick={() => toggle(true)}>
-            {ls.map((eid) => (
-              <Dot key={eid} status={ent(eid).session?.status ?? ''} />
-            ))}
-            {ps.map((p) => (
-              <Icon key={p.eid} name={icons[p.view] ?? 'file-text'} />
-            ))}
-          </Strip>
-        )}
+                  )}
+                </Row>
+              ))}
+            </Group>
+          )}
+          {ps.length > 0 && (
+            <Group>
+              <Label>shelf</Label>
+              {ps.map((p) => (
+                <Row
+                  key={p.eid}
+                  draggable
+                  onDragStart={(e: DragEvent) =>
+                    dragData(e, p.target_eid, p.view, p.w, p.eid)}
+                >
+                  <View eid={p.target_eid} view='List.Item' />
+                  <X
+                    type='button'
+                    aria-label='remove'
+                    onClick={() =>
+                      mutate({ eid: p.eid, name: 'entity', comp: null })}
+                  >
+                    ×
+                  </X>
+                </Row>
+              ))}
+            </Group>
+          )}
+          {!ls.length && !ps.length && <Hint>drop things here</Hint>}
+        </Panel>
+      )}
     </Frame>
   )
 }

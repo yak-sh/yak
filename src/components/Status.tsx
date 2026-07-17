@@ -22,6 +22,7 @@ import {
 } from '../commands.ts'
 import { navigate, screenTarget } from './nav.tsx'
 import { load, providers } from './Run.tsx'
+import { Tray } from './Tray.tsx'
 import { block } from './ui.tsx'
 
 let Frame = block('footer', 'Status', {
@@ -327,6 +328,8 @@ export let Status = () => {
             {msg.value && <Msg>{msg.value}</Msg>}
           </>
         )}
+      {/* the bar's right end is the Tray: live runs + the shelf */}
+      <Tray />
     </Frame>
   )
 }

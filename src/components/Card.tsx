@@ -5,7 +5,7 @@ import { applicable } from './registry.ts'
 import { dragData, View } from './View.tsx'
 import { Icon } from './icons.tsx'
 import { menu } from './nav.tsx'
-import { shelf, shelfMint, trayRect } from './Tray.tsx'
+import { overTray, shelf, shelfMint } from './Tray.tsx'
 
 // Each tab view wears an icon; the name moves into an anchored tooltip.
 // Exported: the fullscreen Screen bar (App.tsx) draws the same tabs.
@@ -93,8 +93,7 @@ export let Card = ({ p }: { p: Pinned }) => {
       el.style.willChange = ''
       // Dropped over the Tray: the card leaves the canvas for the shelf
       // (minted on first use) rather than settling at a new x/y.
-      let r = trayRect.value
-      if (r && px >= r.left && px <= r.right && py >= r.top && py <= r.bottom) {
+      if (overTray(px, py)) {
         let sh = shelf() ?? shelfMint()
         mutate({
           eid: p.eid,

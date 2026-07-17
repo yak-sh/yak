@@ -171,6 +171,16 @@ export let prefix: Record<string, string> = {
 export let idOf = (e: { kind: string; num: number }) =>
   `${prefix[e.kind] ?? e.kind[0].toUpperCase()}-${e.num}`
 
+// A model's short name — 'claude-fable-5' is fable, 'gpt-5.6-sol' is sol:
+// drop the vendor word and anything wearing a digit, keep what's left.
+// The composer greets an agent by it; a persona's name outranks it once
+// personas exist.
+export let nick = (model?: string | null) => {
+  let words = (model ?? '').split('-')
+    .filter((w) => w && !/\d/.test(w) && w != 'claude' && w != 'gpt')
+  return words.join('-') || null
+}
+
 // The edge vocabulary — every edge reads as a sentence, parent first:
 // parent requires child (hard gate) · parent contains child (decomposition,
 // children roll up) · parent reads child (read-first, never gates).

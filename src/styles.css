@@ -1859,29 +1859,27 @@ html {
   white-space: nowrap;
 }
 
-/* The Shelf: a quiet tray in the bottom-right, floating above the
-   statusbar. Screen-space chrome, present on every root — a digest of LIVE
-   sessions plus a per-client scratch canvas of pinned cards. Collapsed to a
-   slim strip of status dots + view icons by default. */
+/* The Shelf: the statusbar's right end. The strip of status dots + view
+   icons sits IN the bar; the panel with the full rows anchors above it. */
 .Tray {
-  position: fixed;
-  right: var(--gap);
-  bottom: calc(var(--gap) + 1.5rem); /* clear the statusbar */
+  position: relative;
+  margin-left: auto; /* the bar's right end is ours */
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text);
+}
+.Tray_Panel {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--half-gap));
   z-index: 20;
   width: max-content;
   max-width: min(22rem, calc(100vw - 2 * var(--gap)));
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  font-size: 12px;
-  color: var(--text);
   box-shadow: 0 4px 16px rgb(0 0 0 / 0.3);
-}
-.Tray_Head {
-  display: flex;
-  align-items: center;
-  padding: 3px var(--half-gap) 3px var(--gap);
-  border-bottom: 1px solid var(--border);
 }
 .Tray_Label {
   color: var(--dim);
@@ -1890,14 +1888,9 @@ html {
   letter-spacing: 0.04em;
 }
 .Tray_Chevron {
-  margin-left: auto;
-  color: var(--muted);
-  background: none;
-  border: 0;
-  cursor: pointer;
-  font-size: 14px;
+  color: var(--dim);
+  font-size: 11px;
   line-height: 1;
-  padding: 0 4px;
 }
 .Tray_Group {
   display: flex;
@@ -1944,14 +1937,21 @@ html {
   color: var(--dim);
   text-align: center;
 }
+/* The strip is a bar-native button: quiet, no chrome of its own. */
 .Tray_Strip {
   display: flex;
   align-items: center;
   gap: var(--half-gap);
-  padding: 5px var(--gap);
+  padding: 0 var(--half-gap);
   min-width: 1.5rem;
-  min-height: 1.25rem;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
   cursor: pointer;
+}
+.Tray_Strip:hover .Tray_Chevron {
+  color: var(--text);
 }
 .Tray_Strip .Icon {
   color: var(--muted);
