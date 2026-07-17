@@ -155,10 +155,14 @@ export let commentCount = computed(() => {
 })
 
 // The root canvas (first canvas-tagged entity) and its pinned cards.
+// A canvas whose num hasn't arrived yet can't be "first" — sorting the
+// unknown to the front would yank every tab sitting on `/` to it.
 export let rootCanvas = () =>
   Object.entries(cache.value)
     .filter(([, r]) => r.canvas)
-    .sort(([, a], [, b]) => (a.entity?.num ?? 0) - (b.entity?.num ?? 0))[0]
+    .sort(([, a], [, b]) =>
+      (a.entity?.num ?? Infinity) - (b.entity?.num ?? Infinity)
+    )[0]
     ?.[0]
 
 export let pinned = (canvas: string): Pinned[] =>

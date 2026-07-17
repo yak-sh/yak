@@ -337,11 +337,14 @@ let AIMED: [string, string][] = [
 // client speaking to an older server shouldn't wedge the socket). num and
 // created_at are server-owned — never writable over the wire. Returns the
 // EFFECTIVE batch: the input plus a synthesized entity-null for every
-// cascade victim, so casting the return keeps every client cache honest.
+// cascade victim and the minted spine of every entity BORN here (num is
+// server-owned, so no cache — the sender's included — knows it otherwise),
+// so casting the return keeps every client cache honest.
 export let apply = (db: DatabaseSync, changes: Change[]): Change[] => {
   let dead = db.prepare('select 1 from tombstone where eid = ?')
   let extra: Change[] = []
   let touched = new Set<string>()
+  let minted = new Set<string>()
   // A bounced claim is worth remembering: noted here mid-transaction,
   // written AFTER the rollback (an audit row can't ride the batch it
   // condemns) as a conflict entity — display strings, not references,
@@ -426,7 +429,8 @@ export let apply = (db: DatabaseSync, changes: Change[]): Change[] => {
         continue
       }
       if (name == 'entity') {
-        spine(db, eid) // a bare touch mints the spine; nothing to patch
+        // a bare touch mints the spine; nothing to patch
+        if (spine(db, eid).changes) minted.add(eid)
         continue
       }
       let sent = cols.filter((c) => c in comp)
@@ -447,7 +451,7 @@ export let apply = (db: DatabaseSync, changes: Change[]): Change[] => {
       // way, loudly in the log.
       db.exec('savepoint change')
       try {
-        spine(db, eid)
+        if (spine(db, eid).changes) minted.add(eid)
         if (sent.length) {
           db.prepare(
             `insert into ${name} (eid${sent.map((c) => `, ${c}`).join('')})
@@ -470,6 +474,16 @@ export let apply = (db: DatabaseSync, changes: Change[]): Change[] => {
     let stamp = db.prepare('update entity set modified_at = ? where eid = ?')
     let now = new Date().toISOString()
     for (let eid of touched) stamp.run(now, eid)
+    // Births ride the return AFTER stamping, so the spine arrives final.
+    // A mint rolled back by its savepoint (or deleted later in the batch)
+    // has no row — the select is the guard.
+    let born = db.prepare(
+      'select eid, num, created_at, modified_at from entity where eid = ?',
+    )
+    for (let eid of minted) {
+      let row = born.get(eid) as Change['comp'] | undefined
+      if (row) extra.push({ eid, name: 'entity', comp: row })
+    }
     db.exec('commit')
     return [...changes, ...extra]
   } catch (e) {

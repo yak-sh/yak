@@ -107,6 +107,24 @@ Deno.test('spine mints once, num is monotonic', () => {
   assertEquals(Number(comp(x, 'entity')?.num), num(x)) // touch ≠ re-mint
 })
 
+Deno.test('a birth rides the return: the minted spine, once', () => {
+  let t = uid()
+  let born = apply(db, [{ eid: t, name: 'doc', comp: { title: 'newborn' } }])
+    .filter((c) => c.eid == t && c.name == 'entity')
+  assertEquals(born.length, 1)
+  assertEquals(Number(born[0].comp?.num) > 0, true)
+  // a patch touches an EXISTING spine — no re-announcement
+  let patched = apply(db, [{ eid: t, name: 'doc', comp: { title: 'named' } }])
+  assertEquals(patched.some((c) => c.name == 'entity'), false)
+  // create-then-delete in one batch: the spine is gone, nothing rides
+  let x = uid()
+  let brief = apply(db, [
+    { eid: x, name: 'doc', comp: { title: 'mayfly' } },
+    { eid: x, name: 'entity', comp: null },
+  ])
+  assertEquals(brief.some((c) => c.name == 'entity' && c.comp), false)
+})
+
 Deno.test('modified_at: server-stamped on every touch, never wire-set', () => {
   let t = uid()
   apply(db, [{ eid: t, name: 'doc', comp: { title: 'aging' } }])
