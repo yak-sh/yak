@@ -33,7 +33,7 @@
     "preact": "npm:preact@^10.29.1",
     "@preact/signals": "npm:@preact/signals@^2.9.0",
     "@preact/signals-core": "npm:@preact/signals-core@^1.14.0",
-    "snarkdown": "npm:snarkdown@^2.0.0",
+    "snarkdown": "./src/vendor/snarkdown.es.js",
     "linkedom": "npm:linkedom@^0.18.12",
     "@modelcontextprotocol/sdk": "npm:@modelcontextprotocol/sdk@^1.12.0",
     "zod": "npm:zod@^3.24.0",
