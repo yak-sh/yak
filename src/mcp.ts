@@ -485,9 +485,9 @@ as ~240px for visibility.`,
   server.tool(
     'card_open',
     `Open a card on the canvas: target entity through a view, at x/y
-(plane coords) — omitted position lands at the center of the newest
-viewport. Returns the card id (close it with card_close, move it with
-card_move).`,
+(plane coords) — omitted position lands at the center of the most
+recently moved viewport (whoever is looking right now). Returns the
+card id (close it with card_close, move it with card_move).`,
     {
       target: z.string(),
       view: z.string().optional(),
@@ -508,8 +508,14 @@ card_move).`,
       let canvas = all.find((r) => r.kind == 'canvas')
       if (!canvas) return text('no canvas')
       if (x == null || y == null) {
+        // The LIVELIEST viewport, not the newest-minted: a camera moves
+        // whenever its human pans, so modified_at names who's looking.
         let cam = all.filter((r) => r.comps.camera?.canvas_eid == canvas.eid)
-          .sort((a, b) => b.num - a.num)[0]?.comps.camera as
+          .sort((a, b) =>
+            String(b.comps.entity?.modified_at ?? '').localeCompare(
+              String(a.comps.entity?.modified_at ?? ''),
+            )
+          )[0]?.comps.camera as
             | Record<string, number>
             | undefined
         x ??= (cam ? Number(cam.x) : 0) - 160
