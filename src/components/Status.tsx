@@ -1,7 +1,17 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { signal } from '@preact/signals'
-import { base, camera, ent, mode, mutate, rows } from '../live.ts'
-import { idOf } from '../types.ts'
+import {
+  base,
+  camera,
+  clientId,
+  ent,
+  mode,
+  mutate,
+  pinned,
+  rows,
+  uuid,
+} from '../live.ts'
+import { type Change, idOf } from '../types.ts'
 import {
   type Command,
   commands,
@@ -66,6 +76,47 @@ let local: Record<string, Command> = {
 }
 let all = { ...commands, ...local }
 
+// What the typist was looking at when the words were typed, said as a
+// comment on the task: the url, the root entity, the camera, and the
+// cards in view — enough for a fix agent to find the pixel the words
+// point at. Each platform attaches its own scene (a TUI would say its
+// screen); this is the web's. The author is this browser's client
+// entity, whose row carries the full user agent for anyone who digs.
+let scene = (task: string): Change[] => {
+  let root = screenTarget()?.eid
+  let r = root ? ent(root) : null
+  let { x, y, zoom, w, h } = camera.value
+  let seen = r?.canvas
+    ? pinned(r.eid).filter((p) =>
+      p.x < x + w / zoom / 2 && p.x + (p.w || 480) > x - w / zoom / 2 &&
+      p.y < y + h / zoom / 2 && p.y + (p.h || 200) > y - h / zoom / 2
+    )
+      .toSorted((a, b) => b.z - a.z)
+      .slice(0, 12)
+      .map((p) => {
+        let t = ent(p.target_eid)
+        return `${idOf(t)} "${t.doc?.title ?? t.kind}" (${p.view})`
+      })
+    : []
+  let body = [
+    `:fix filed from ${location.pathname}`,
+    r && `- looking at: ${idOf(r)} "${r.doc?.title ?? r.kind}"`,
+    r?.canvas &&
+    `- camera: ${Math.round(x)},${Math.round(y)} @ ${zoom.toFixed(2)}×`,
+    seen.length && `- in view: ${seen.join(' · ')}`,
+    `- client: web-${ent(clientId()).num}`,
+  ].filter(Boolean).join('\n')
+  let c = uuid()
+  return [
+    { eid: c, name: 'doc', comp: { title: '', body } },
+    {
+      eid: c,
+      name: 'comment',
+      comp: { target_eid: task, author_eid: clientId() },
+    },
+  ]
+}
+
 // The spawn intent (:fix): defaults are the server's table — first
 // provider, its first model, medium effort when offered — the same list
 // the Run form reads. A freshly minted task rides the ws; the beat
@@ -109,7 +160,10 @@ let exec = (line: string) => {
     let r = run(line, ctx(), local)
     if (r.changes?.length) mutate(...r.changes)
     if (r.go) navigate(`/${idOf(ent(r.go))}`)
-    if (r.spawn) launch(r.spawn)
+    if (r.spawn) {
+      mutate(...scene(r.spawn)) // what you're looking at rides along
+      launch(r.spawn)
+    }
     msg.value = r.msg ?? ''
   } catch (e) {
     msg.value = e instanceof Error ? e.message : String(e)
