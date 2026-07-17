@@ -242,7 +242,7 @@ export let Canvas = ({ eid }: { eid: string }) => {
       let box = el.current!.getBoundingClientRect()
       let { x, y } = mouse.current ??
         { x: box.left + box.width / 2, y: box.top + box.height / 2 }
-      spawnAt(spec.changes, spec.target, spec.view, spec.w ?? 320, x, y)
+      spawnAt(spec.changes, spec.target, spec.view, spec.w ?? 0, x, y)
     }
     addEventListener('paste', paste)
     // The refresh path: flush the pending camera save while the socket
@@ -407,7 +407,9 @@ export let Canvas = ({ eid }: { eid: string }) => {
         comp: {
           eid: card,
           canvas_eid: eid,
-          x: Math.round(at.x - (ox != null ? ox / zoom : w / 2)),
+          // w=0 is auto (the Pin-auto clamp finds the width); center on a
+          // nominal card so the drop point still feels like the middle.
+          x: Math.round(at.x - (ox != null ? ox / zoom : (w || 480) / 2)),
           y: Math.round(at.y - (oy != null ? oy / zoom : 15)),
           w,
           h: 0,
@@ -449,7 +451,7 @@ export let Canvas = ({ eid }: { eid: string }) => {
           spec.changes,
           spec.target,
           spec.view,
-          spec.w ?? 320,
+          spec.w ?? 0,
           sx + i * 24,
           sy + i * 24,
         )
@@ -484,7 +486,7 @@ export let Canvas = ({ eid }: { eid: string }) => {
         if (e.target.closest('a, button, input, [contenteditable]')) return
         let row = e.target.closest('.Board_Item') as HTMLElement | null
         if (!row?.dataset.eid) return
-        spawnAt([], row.dataset.eid, 'Task', 420, e.clientX, e.clientY)
+        spawnAt([], row.dataset.eid, 'Task', 0, e.clientX, e.clientY)
       }}
     >
       <Plane
@@ -500,7 +502,7 @@ export let Canvas = ({ eid }: { eid: string }) => {
             [],
             target,
             undefined,
-            420,
+            0,
             box.left + box.width / 2,
             box.top + box.height / 3,
           )

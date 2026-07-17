@@ -288,6 +288,16 @@ html {
   touch-action: none;
   padding: var(--gap);
 }
+/* Auto width, clamped: a card with no explicit width (w=0) takes its
+   content's width inside [340, 640] — never a sliver that scrolls
+   sideways, never a board-shaped barge. A dragged size is exact and
+   unclamped (inline width, no -auto class); a grip double-click on a
+   side returns the card here. */
+.Pin-auto {
+  width: max-content;
+  min-width: 340px;
+  max-width: 640px;
+}
 .Pin-sized .Card {
   max-height: none; /* an explicit height beats the auto cap */
 }

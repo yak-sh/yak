@@ -161,7 +161,7 @@ export let Card = ({ p }: { p: Pinned }) => {
 
   return (
     <Pin
-      mod={p.h ? 'sized' : false}
+      mod={[p.h && 'sized', !p.w && 'auto']}
       data-eid={p.eid}
       style={`left:${p.x}px;top:${p.y}px;z-index:${p.z};` +
         (p.w ? `width:${p.w}px;` : '') +
