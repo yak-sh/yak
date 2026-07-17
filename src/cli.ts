@@ -31,6 +31,9 @@ import {
 } from './client.ts'
 import { matchQuery, pred } from './query.ts'
 import { type Snapshot } from './types.ts'
+// `import type` (not the repo's usual inline `{ type X }`): telemetry.ts
+// reaches for node:sqlite, and the CLI has no business loading a db driver.
+import type { Log } from './telemetry.ts'
 
 let usage = `task — the entity graph, from a shell
 
@@ -46,6 +49,8 @@ let usage = `task — the entity graph, from a shell
   task backup                    snapshot the db + commit/push the data dir
   task context [session]         this session's working set ($TASKS_SESSION)
   task lapse [session]           session over: release claims, note unfinished
+  task telemetry [--errors]      tool calls + crashes, newest first
+    [--since=ISO] [-n N]
 
 dot-params route by prop (.title= → doc.title); where a prop lives in
 several components (pin/camera x,y,w,h) spell it out: .pin.x=12
@@ -236,6 +241,30 @@ let lapse = async (args: string[]) => {
   }
 }
 
+// What the tools have been doing: MCP calls, HTTP writes and browser
+// crashes, newest first. --errors is the view you want most days.
+let telemetry = async (args: string[]) => {
+  let q = new URLSearchParams()
+  if (args.includes('--errors')) q.set('only', 'errors')
+  let since = args.find((a) => a.startsWith('--since='))
+  if (since) q.set('since', since.slice(8))
+  let n = args.indexOf('-n')
+  if (n >= 0 && args[n + 1]) q.set('limit', args[n + 1])
+  let res = await fetch(`http://${host()}/telemetry?${q}`)
+  if (!res.ok) throw new Error(`server said ${res.status}`)
+  let rows = await res.json() as Log[]
+  if (!rows.length) return console.error('(nothing recorded)')
+  for (let r of rows) {
+    console.log(
+      `${r.ts}  ${r.source.padEnd(4)} ${r.name.padEnd(14)} ${
+        r.ok ? 'ok ' : 'ERR'
+      } ${(r.ms == null ? '' : `${r.ms}ms`).padStart(6)}  ${
+        (r.session_id ?? '-').padEnd(10)
+      }  ${(r.error ?? '').slice(0, 80)}`,
+    )
+  }
+}
+
 // Backup is bin/backup (a data-dir git commit) — the CLI is its front
 // door so 'task backup' works wherever the CLI is installed.
 let backup = async () => {
@@ -277,6 +306,7 @@ try {
   else if (cmd == 'context') await context(rest)
   else if (cmd == 'lapse') await lapse(rest)
   else if (cmd == 'release') await release(rest)
+  else if (cmd == 'telemetry') await telemetry(rest)
   else {
     console.log(usage.trim())
     if (cmd && cmd != 'help' && cmd != '--help') Deno.exit(2)
