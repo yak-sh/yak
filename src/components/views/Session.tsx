@@ -45,6 +45,7 @@ let Frame = block('div', 'Session', {
   Turn: 'div',
   Oops: 'div',
   Err: 'pre',
+  Json: 'pre',
 })
 let {
   Head,
@@ -72,6 +73,7 @@ let {
   Turn,
   Oops,
   Err,
+  Json,
 } = Frame
 
 type Entry = { seq: number; line: string; row?: LogRow }
@@ -115,18 +117,14 @@ let bareType = (line: string) => {
   }
 }
 
-// One log line, matched on the normalized row (adapters.ts). No row means
-// the adapter didn't recognize it: show its bare type, as the dump did.
-let Row = ({ x }: { x: Entry }) => {
+// The transcript face of a line, matched on the normalized row
+// (adapters.ts). No row means the adapter didn't recognize it: show its
+// bare type, as the dump did.
+let Body = ({ x }: { x: Entry }) => {
   let r = x.row
   if (!r) {
     let t = bareType(x.line)
-    return (
-      <Line>
-        <Seq>{x.seq}</Seq>
-        {t ? <Type>{t}</Type> : <Raw>{x.line}</Raw>}
-      </Line>
-    )
+    return t ? <Type>{t}</Type> : <Raw>{x.line}</Raw>
   }
   switch (r.kind) {
     case 'say':
@@ -159,6 +157,36 @@ let Row = ({ x }: { x: Entry }) => {
     case 'error':
       return <Oops>{r.text}</Oops>
   }
+}
+
+// The raw event, pretty when it parses — the whole line, nothing elided.
+let pretty = (line: string) => {
+  try {
+    return JSON.stringify(JSON.parse(line), null, 2)
+  } catch {
+    return line
+  }
+}
+
+// One log line: a seq gutter, the transcript face, and — a click on the
+// seq away — the raw event. The log lines aren't entities on purpose
+// (the FILE is the durable log), so this is where inspection lives: any
+// row, a system frame or a truncated tool chip alike, opens to the full
+// JSON the provider actually wrote.
+let Row = ({ x }: { x: Entry }) => {
+  let [open, setOpen] = useState(false)
+  return (
+    <Line>
+      <Seq
+        data-tip={open ? undefined : 'the raw event'}
+        onClick={() => setOpen(!open)}
+      >
+        {x.seq}
+      </Seq>
+      <Body x={x} />
+      {open && <Json>{pretty(x.line)}</Json>}
+    </Line>
+  )
 }
 
 // Tail the log file. `live` is in the deps on purpose: when the status

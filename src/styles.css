@@ -135,7 +135,7 @@ html {
 /* The mono keepers: ids, chips, badges, edge verbs, timestamps, code,
    and every command/inspector/log surface. Prose everywhere else is
    var(--font) via body. :where keeps this overridable. */
-:where(code, pre, kbd, .Id, .Prio, .Show_Domain, .Show_Project, .Show_Claim, .Prop_Hand, .Dependency_Type, .Relate_Verb, .Stamp, .Comments_When, .Comments_Who, .Board_ColName, .Board_Count, .Board_Chips, .Status, .Search_Box input, .Search_Id, .Debug, .Debug_Claim, .SessionRow, .Session_Facts, .Session_Status, .Session_Model, .Session_Line, .Session_Tool, .Session_Exec, .Session_Turn, .Session_Err) {
+:where(code, pre, kbd, .Id, .Prio, .Show_Domain, .Show_Project, .Show_Claim, .Prop_Hand, .Dependency_Type, .Relate_Verb, .Stamp, .Comments_When, .Comments_Who, .Board_ColName, .Board_Count, .Board_Chips, .Status, .Search_Box input, .Search_Id, .Debug, .Debug_Claim, .SessionRow, .Session_Facts, .Session_Status, .Session_Model, .Session_Tool, .Session_Exec, .Session_Turn, .Session_Err) {
   font-family: var(--mono);
 }
 
@@ -1601,27 +1601,57 @@ html {
   border-radius: var(--radius);
   padding: var(--half-gap);
 }
-/* A line the adapter gave no row: its bare type, as the old dump showed. */
+/* Every line: the seq gutter, the transcript face beside it, and (when
+   opened) the raw-event inspector wrapping to its own full-width row. */
 .Session_Line {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--half-gap);
   min-width: 0;
-  font-family: ui-monospace, monospace;
-  font-size: 11px;
+}
+.Session_Line > :nth-child(2) {
+  flex: 1 1 0;
+  min-width: 0;
 }
 .Session_Seq {
   flex: none;
   text-align: right;
   min-width: 2.5ch;
+  font-family: var(--mono);
+  font-size: 11px;
   color: var(--dim);
+  cursor: pointer;
+  user-select: none;
 }
+.Session_Seq:hover {
+  color: var(--accent);
+}
+/* A line the adapter gave no row: its bare type, as the old dump showed. */
 .Session_Type {
   flex: none;
+  font-family: var(--mono);
+  font-size: 11px;
   color: var(--blue);
 }
 .Session_Raw {
+  font-family: var(--mono);
+  font-size: 11px;
   color: var(--orange); /* not JSON: the bytes as the provider wrote them */
   overflow-wrap: anywhere;
+}
+/* The inspector: the whole event as the provider wrote it. */
+.Session_Json {
+  flex-basis: 100%;
+  margin: 0;
+  padding: var(--half-gap);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 24lh;
+  overflow-y: auto;
 }
 /* What the agent said: its markdown, in the normal text color. */
 .Session_Agent {
