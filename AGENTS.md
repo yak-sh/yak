@@ -63,6 +63,18 @@ from it without cycles.
 an icon row in `Card.tsx` + `components/icons.tsx` (vendored Lucide paths — add
 a row, not a dependency).
 
+## Navigation (web)
+
+The URL is the root card: `/` is the root canvas, `/T-123` any entity
+fullscreened, `?v=` its view — the App bar is that card's titlebar (title +
+tabs), and the server serves index.html for any extensionless path. The
+universal Id chip (`views/Id.tsx`) is the universal LINK, a real anchor:
+cmd/middle-click and the native menu do new-tab; plain click navigates only on
+coarse (touch) pointers; right-click opens the small custom menu whose "open
+here" is the deliberate in-place root change (`components/nav.tsx` owns
+route/navigate/menu, all guarded for the TUI). A canvas offers a `List` view —
+the mobile door — whose rows resolve through `List.Item`.
+
 ## Map
 
 | file              | owns                                                                      |
@@ -77,7 +89,7 @@ a row, not a dependency).
 | `src/sandbox.ts`  | code mode's worker: permissionless, graph-only, postMessage SDK           |
 | `src/live.ts`     | browser/TUI half: cache signal, socket, applyLocal/mutate, ent()          |
 | `src/paste.ts`    | clipboard/drop text → entity spec (ids, URLs, JSON, plain text)           |
-| `src/components/` | web UI: registry.ts + View.tsx, Canvas (camera), Card, Edit, Comments     |
+| `src/components/` | web UI: registry.ts + View.tsx, nav.tsx (routing), Canvas, Card, Edit, …  |
 | `src/tui/`        | fake DOM (dom.ts), ANSI painter (paint.ts), Md, App (vim keys), main      |
 | `src/vendor/`     | preact/signals/snarkdown as plain ESM — no node_modules                   |
 

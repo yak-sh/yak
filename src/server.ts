@@ -172,7 +172,9 @@ Deno.serve(
     if (path.startsWith('/frozen/')) {
       return serveFrozen(path.slice(8).replace(/\.html$/, ''))
     }
-    return file(src.slice(0, -1), path == '/' ? '/index.html' : path)
+    // An extensionless path is a ROUTE (/T-123): the app boots and reads
+    // the URL — same shell, different root card.
+    return file(src.slice(0, -1), path.includes('.') ? path : '/index.html')
   },
 )
 

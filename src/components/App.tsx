@@ -1,21 +1,58 @@
-import { rootCanvas } from '../live.ts'
-import { block } from './ui.tsx'
-import { Canvas } from './Canvas.tsx'
+import { ent } from '../live.ts'
+import { block, el } from './ui.tsx'
+import { applicable } from './registry.ts'
+import { icons } from './Card.tsx'
+import { Icon } from './icons.tsx'
+import { Menu, menu, navigate, route, screenTarget } from './nav.tsx'
 import { Status } from './Status.tsx'
+import { View } from './View.tsx'
 
-let Frame = block('main', 'App', { Sub: 'span' })
-let { Sub } = Frame
+let Frame = block('main', 'App', { Bar: 'header', Brand: 'a', Body: 'div' })
+let { Bar, Brand, Body } = Frame
+let Tab = el('button', 'Tab')
 
-// The page: a header, the root canvas, and the vim statusbar — all straight
-// from the cache.
+// The page IS a fullscreen card: the URL names its target (`/` = the
+// root canvas, `/T-123` = that entity), the bar is its titlebar — title
+// plus the same view tabs any card gets — and `?v=` picks the view. The
+// vim statusbar keeps the floor.
 export let App = () => {
-  let root = rootCanvas()
+  let t = screenTarget()
+  if (!t) return <Frame />
+  let e = ent(t.eid)
+  let tabs = applicable(e)
+  let view = t.view && tabs.includes(t.view) ? t.view : tabs[0]
+  let show = (v: string) => {
+    let url = new URL(route.value, 'http://x')
+    if (v == tabs[0]) url.searchParams.delete('v')
+    else url.searchParams.set('v', v)
+    navigate(url.pathname + url.search)
+  }
   return (
-    <Frame>
-      <h1>
-        Tasks <Sub>· the fleet entity graph</Sub>
-      </h1>
-      {root && <Canvas eid={root} />}
+    <Frame
+      onPointerDown={() => {
+        if (menu.value) menu.value = null
+      }}
+    >
+      <Bar>
+        <Brand href='/'>Tasks</Brand>
+        <View eid={e.eid} view='Card.Title' />
+        {tabs.map((v) => (
+          <Tab
+            type='button'
+            key={v}
+            mod={v == view && 'on'}
+            aria-label={v}
+            data-tip={v}
+            onClick={() => v != view && show(v)}
+          >
+            <Icon name={icons[v]} />
+          </Tab>
+        ))}
+      </Bar>
+      <Body>
+        <View eid={e.eid} view={view} context='Card' />
+      </Body>
+      <Menu />
       <Status />
     </Frame>
   )

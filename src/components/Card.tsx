@@ -6,7 +6,10 @@ import { dragData, View } from './View.tsx'
 import { Icon } from './icons.tsx'
 
 // Each tab view wears an icon; the name moves into an anchored tooltip.
-let icons: Record<string, string> = {
+// Exported: the fullscreen Screen bar (App.tsx) draws the same tabs.
+export let icons: Record<string, string> = {
+  Canvas: 'map',
+  List: 'list',
   Task: 'square-check',
   Board: 'kanban',
   Doc: 'file-text',

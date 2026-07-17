@@ -81,19 +81,92 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+/* The page is a fullscreen card; this bar is its titlebar — brand,
+   Card.Title, view tabs, same grammar as any pinned card's chrome. */
+.App_Bar {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  padding: var(--half-gap) var(--gap) var(--half-gap) var(--half-gap);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.App_Brand {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+  padding: 2px 6px;
+  border-right: 1px solid var(--border);
+}
+.App_Body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+/* Prose-shaped roots read as a page column; a board or canvas takes the
+   whole floor. */
+.App_Body > :not(.Canvas, .Board) {
+  padding: var(--gap);
+  max-width: 52rem;
+  width: 100%;
+  margin: 0 auto;
+}
+.App_Body > .Board {
+  padding: var(--gap);
+}
 
-  & h1 {
-    margin: 0;
-    padding: var(--half-gap) var(--gap);
-    font-size: 12px;
-    font-weight: 600;
-    border-bottom: 1px solid var(--border);
-    background: var(--surface);
-  }
-  & .App_Sub {
-    font-weight: 400;
-    color: var(--dim);
-  }
+/* The link context menu: "open here" is the deliberate root change. */
+.Menu {
+  position: fixed;
+  z-index: 200;
+  display: grid;
+  min-width: 10rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 30px color-mix(in srgb, #000 45%, transparent);
+  overflow: hidden;
+}
+.Menu_Item {
+  font: inherit;
+  text-align: left;
+  color: var(--text);
+  background: none;
+  border: 0;
+  padding: var(--half-gap) var(--gap);
+  cursor: pointer;
+}
+.Menu_Item:hover {
+  background: var(--soft);
+}
+
+/* A canvas as a list — the mobile door into the graph. */
+.List {
+  display: grid;
+  gap: var(--half-gap);
+}
+.List_Row {
+  min-width: 0;
+}
+.ListItem {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  padding: var(--half-gap);
+}
+.ListItem_Title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* The canvas: a pannable, zoomable dot-grid of pinned cards. The camera is a
@@ -455,11 +528,6 @@
   color: var(--purple);
   font-size: 11px;
 }
-.TaskRow_Id {
-  font-size: 11px;
-  color: var(--dim);
-  white-space: nowrap;
-}
 .TaskRow .Prio {
   flex: none;
 }
@@ -479,11 +547,17 @@
 .Task_Title {
   font-weight: 600;
 }
-/* The universal id chip (T-7, P-2, …) — never wraps, soon drags and clicks. */
+/* The universal id chip (T-7, P-2, …) — a real link now: never wraps,
+   underlines only on hover, keeps its dim voice. */
 .Id {
   white-space: nowrap;
   font-size: 11px;
   color: var(--dim);
+  text-decoration: none;
+}
+.Id:hover {
+  text-decoration: underline;
+  color: var(--muted);
 }
 .Task_Head .Id {
   margin-left: auto;

@@ -12,6 +12,8 @@ import {
 import { DocCard, DocView } from './views/Doc.tsx'
 import { Board } from './views/Board.tsx'
 import { TaskRow } from './views/TaskRow.tsx'
+import { List, ListItem } from './views/List.tsx'
+import { Canvas } from './Canvas.tsx'
 import { Id } from './views/Id.tsx'
 import { Dependency } from './views/Dependency.tsx'
 import { Debug, DebugAnyItem, DebugTaskItem } from './views/Debug.tsx'
@@ -30,6 +32,17 @@ export { applicable, extend, has, type Renderer, resolve } from './registry.ts'
 // an entry here, and — if it should appear as a card tab — a name in the
 // tabs list plus an icon in Card.tsx.
 define([
+  // Canvas is referenced lazily (a render closure) — Canvas.tsx imports
+  // this file back, and the cycle only stays sound if define() never
+  // reads the binding at module init.
+  {
+    view: 'Canvas',
+    match: has('canvas'),
+    Render: ({ e }) => <Canvas eid={e.eid} />,
+  },
+  { view: 'List', match: has('canvas'), Render: List },
+  { view: 'List.Item', match: has('doc', 'task'), Render: TaskRow },
+  { view: 'List.Item', match: () => true, Render: ListItem },
   { view: 'Task', match: has('doc', 'task'), Render: Task, Card: TaskCard },
   { view: 'Board', match: has('doc', 'board'), Render: Board },
   { view: 'Task.Row', match: has('doc', 'task'), Render: TaskRow },
@@ -61,7 +74,17 @@ define([
   { view: 'Debug.ListItem', match: () => true, Render: DebugAnyItem },
   { view: 'Id', match: () => true, Render: Id },
   { view: 'Dependency', match: () => true, Render: Dependency },
-], ['Task', 'Board', 'Doc', 'Web', 'Markdown', 'JSON', 'Debug'])
+], [
+  'Canvas',
+  'List',
+  'Task',
+  'Board',
+  'Doc',
+  'Web',
+  'Markdown',
+  'JSON',
+  'Debug',
+])
 
 // The one front door: render an entity (straight out of the live cache)
 // through a view. context='Card' prefers the renderer's card variant.
