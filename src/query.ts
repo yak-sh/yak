@@ -144,7 +144,9 @@ type Comps = Record<string, Record<string, unknown> | undefined>
 
 // The routing table: every component's columns, plus the spine's.
 let routes: Record<string, readonly string[]> = {
-  ...comps,
+  ...Object.fromEntries(
+    Object.entries(comps).map(([name, props]) => [name, Object.keys(props)]),
+  ),
   entity: ['num', 'created_at', 'modified_at'],
 }
 

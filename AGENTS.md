@@ -22,13 +22,16 @@ match on components, most specific match wins (see Rendering).
 
 ## The vocabulary is one list
 
-`src/types.ts` `comps` maps component → wire-writable columns. From that one
-list flow, with **zero further edits**:
+`src/types.ts` `comps` maps component → wire-writable columns **and what each
+one IS** (`PropType`: text/body/number/bool, `{enum}`, `{eid}`, `{text: well}`).
+From that one list flow, with **zero further edits**:
 
-- the db sync allowlist and entity-delete order (db.ts `cmps`)
+- the db sync allowlist and entity-delete order (db.ts `cmps`, from the keys)
 - CLI/MCP dot-param routing (`.title=x` → doc because only doc has title)
-- the MCP tools' self-documentation (GRAMMAR is generated)
+- the MCP tools' self-documentation (GRAMMAR is generated, enums spell their
+  values)
 - the browser/TUI cache shape (live.ts `Comps` derives from `Ent`)
+- prop editors auto-pick their control from the type (the editor registry)
 
 **To add a component**: add it to `comps`, its type + `Ent` field, and (if it
 should name entities) `kindOrder`, all in types.ts; add the table in db.ts

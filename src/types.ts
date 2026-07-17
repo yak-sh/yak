@@ -2,33 +2,87 @@
 // No imports; the only runtime here is the vocabulary itself — safe on
 // both sides of the wire.
 
-// The component tables and their wire-writable columns — THE one list.
-// The db derives its allowlist (and delete order) from it; the CLI and
-// MCP route dot-params (.title= → doc) through it; a prop unique to one
-// component routes bare, a collision (pin/camera geometry) needs the
-// explicit .comp.prop spelling.
-export let comps: Record<string, string[]> = {
-  doc: ['title', 'body'],
-  task: ['status', 'priority', 'project_eid', 'domain'],
-  project: [],
-  repo: ['path', 'base_branch'], // the project's checkout — see Repo
-  board: ['query'], // filter over tasks (src/query.ts grammar); '' = all
-  canvas: [],
-  web: ['url'], // frozen_at is server-stamped, never writable over the wire
-  card: ['target_eid', 'view'],
-  pin: ['canvas_eid', 'x', 'y', 'w', 'h', 'z'],
-  client: ['user_agent'], // ip is server-stamped too
-  camera: ['client_eid', 'canvas_eid', 'x', 'y', 'zoom', 'w', 'h'],
-  fold: ['client_eid', 'board_eid', 'statuses'],
+// What a prop IS — the detection layer editors and docs read. The
+// vocabulary stays deliberately tiny:
+//   'text'            one line (sometimes more)
+//   'body'            long markdown
+//   'number' 'bool'   what they say
+//   {enum: [...]}     a closed set — the values ARE the doc
+//   {eid: 'project'}  an association; the name says which component the
+//                     target carries ('' = any entity)
+//   {text: 'domains'} open text, suggestions from a named WELL the
+//                     browser registers (the schema stays declarative —
+//                     it can't reach a live cache from here)
+export type PropType =
+  | 'text'
+  | 'body'
+  | 'number'
+  | 'bool'
+  | { enum: string[] }
+  | { eid: string }
+  | { text: string }
+
+// The status vocabulary, in board-column order.
+export let statuses = ['open', 'wip', 'done']
+
+// The component tables, their wire-writable columns AND what each column
+// is — THE one list, now with a type dimension. The db derives its
+// allowlist (and delete order) from the keys (cols()); the CLI and MCP
+// route dot-params (.title= → doc) through them; editors and tool docs
+// read the types. A prop unique to one component routes bare, a
+// collision (pin/camera geometry) needs the explicit .comp.prop
+// spelling. No served schema anywhere: this module rides to every side
+// of the wire as-is — the module IS the schema.
+export let comps: Record<string, Record<string, PropType>> = {
+  doc: { title: 'text', body: 'body' },
+  task: {
+    status: { enum: statuses },
+    priority: 'number',
+    project_eid: { eid: 'project' },
+    domain: { text: 'domains' }, // free text; the graph suggests
+  },
+  project: {},
+  repo: { path: 'text', base_branch: 'text' }, // the project's checkout
+  board: { query: 'text' }, // filter over tasks (query.ts grammar); '' = all
+  canvas: {},
+  web: { url: 'text' }, // frozen_at is server-stamped, never wire-writable
+  card: { target_eid: { eid: '' }, view: 'text' },
+  pin: {
+    canvas_eid: { eid: '' },
+    x: 'number',
+    y: 'number',
+    w: 'number',
+    h: 'number',
+    z: 'number',
+  },
+  client: { user_agent: 'text' }, // ip is server-stamped too
+  camera: {
+    client_eid: { eid: 'client' },
+    canvas_eid: { eid: '' },
+    x: 'number',
+    y: 'number',
+    zoom: 'number',
+    w: 'number',
+    h: 'number',
+  },
+  fold: {
+    client_eid: { eid: 'client' },
+    board_eid: { eid: 'board' },
+    statuses: 'text',
+  },
   // acked_at is the session's OWN "seen up to here" cursor for the
   // while-you-were-away digest — wire-writable because forging it only
   // deafens yourself.
-  session: ['id', 'cwd', 'acked_at'],
-  claim: ['session_eid'], // claimed_at is server-stamped
-  conflict: [], // server-minted audit rows — nothing is wire-writable
-  comment: ['target_eid', 'author_eid'],
-  alias: ['slug'],
+  session: { id: 'text', cwd: 'text', acked_at: 'text' },
+  claim: { session_eid: { eid: 'session' } }, // claimed_at server-stamped
+  conflict: {}, // server-minted audit rows — nothing is wire-writable
+  comment: { target_eid: { eid: '' }, author_eid: { eid: '' } },
+  alias: { slug: 'text' },
 }
+
+// A component's wire-writable column names — what most consumers of the
+// old flat list actually want.
+export let cols = (comp: string) => Object.keys(comps[comp] ?? {})
 
 // The eid minter. Both sides of the wire mint them (clients name their own
 // entities), so it must work on both: crypto.randomUUID is gated to secure
@@ -43,9 +97,6 @@ export let uuid = () => {
     h.slice(16, 20)
   }-${h.slice(20)}`
 }
-
-// The status vocabulary, in board-column order.
-export let statuses = ['open', 'wip', 'done']
 
 // A managed session is still going in exactly these statuses; every other
 // one is an ending (see Session below). One list: the server decides what

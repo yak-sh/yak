@@ -83,7 +83,7 @@ export let param = (arg: string): Param | null => {
   let [, a, b, raw] = m
   let value = coerce(raw)
   if (b) {
-    if (!comps[a]?.includes(b)) {
+    if (!(b in (comps[a] ?? {}))) {
       throw new Error(`no such prop: .${a}.${b}`)
     }
     return { comp: a, prop: b, value }

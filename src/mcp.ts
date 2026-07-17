@@ -11,7 +11,14 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
-import { type Change, comps, type Dep, type Hit, statuses } from './types.ts'
+import {
+  type Change,
+  comps,
+  type Dep,
+  type Hit,
+  type PropType,
+  statuses,
+} from './types.ts'
 import {
   byBoard,
   claimant,
@@ -40,10 +47,24 @@ export type IO = {
   find: (q: string, limit?: number) => Promise<Hit[]>
 }
 
+// A prop's type, said inline where it isn't obvious: enums spell their
+// values, associations say (eid) — the doc string derives from the same
+// typed table everything else reads.
+let sig = (t: PropType) =>
+  typeof t == 'string'
+    ? ''
+    : 'enum' in t
+    ? `(${t.enum.join('|')})`
+    : 'eid' in t
+    ? '(eid)'
+    : ''
 let GRAMMAR = `Dot-params: '.prop=value' routes by prop through the component
 vocabulary (${
-  Object.entries(comps).map(([n, cs]) => `${n}: ${cs.join('/') || '(tag)'}`)
-    .join('; ')
+  Object.entries(comps).map(([n, props]) =>
+    `${n}: ${
+      Object.entries(props).map(([p, t]) => p + sig(t)).join('/') || '(tag)'
+    }`
+  ).join('; ')
 }). A prop unique to one component routes bare ('.title=x' → doc); for the
 few collisions (pin/camera x,y,w,h) use '.comp.prop=x'. Numeric-looking
 values become numbers. Statuses: ${statuses.join(', ')}.`

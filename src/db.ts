@@ -368,7 +368,12 @@ export let db = open()
 // The sync allowlist: the shared vocabulary plus the spine (which has no
 // writable columns — num and created_at are server-owned, kind doesn't
 // exist). Order matters — deletes run it REVERSED so dependents go first.
-let cmps: Record<string, string[]> = { entity: [], ...comps }
+let cmps: Record<string, string[]> = {
+  entity: [],
+  ...Object.fromEntries(
+    Object.entries(comps).map(([name, props]) => [name, Object.keys(props)]),
+  ),
+}
 
 // Components whose ROW EXISTENCE hangs on another entity: when that
 // entity dies, the row's whole entity dies with it. Soft references
