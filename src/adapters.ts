@@ -92,7 +92,14 @@ export let adapters: Record<string, Adapter> = {
   // --session-id hands the CLI OUR session uuid, so the provider's id and
   // ours are the same string — correlation for free.
   claude: {
-    models: ['opus', 'sonnet', 'haiku'],
+    // Full ids, not aliases — the version is part of the offer (an alias
+    // silently moves when Anthropic ships). Probed live against the CLI.
+    models: [
+      'claude-fable-5',
+      'claude-opus-4-8',
+      'claude-sonnet-5',
+      'claude-haiku-4-5-20251001',
+    ],
     efforts: [],
     argv: (j) => [
       'claude',
