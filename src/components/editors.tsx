@@ -1,9 +1,10 @@
 import { type JSX } from 'preact'
-import { useState } from 'preact/hooks'
+import { useRef, useState } from 'preact/hooks'
 import { comps, type PropType } from '../types.ts'
 import { cache, domains, ent, mutate } from '../live.ts'
 import { block, focus } from './ui.tsx'
 import { Edit } from './Edit.tsx'
+import { Overlay } from './overlay.tsx'
 
 // The editor registry — the renderer registry's sibling. The typed
 // vocabulary (types.ts comps) is the DETECTION layer: a PropType picks
@@ -234,6 +235,9 @@ export let Prop = (
   },
 ) => {
   let [editing, setEditing] = useState(false)
+  // The face the popout control anchors ABOVE — the value or its handle,
+  // whichever is showing (both wear this ref; only one renders at a time).
+  let anchor = useRef<HTMLElement>(null)
   let t = comps[comp]?.[prop]
   let e = ent(eid) as unknown as Record<
     string,
@@ -267,16 +271,29 @@ export let Prop = (
   return (
     <Frame mod={editor && 'live'}>
       {(face || !handle) && (
-        <Val mod={!face && 'nil'} onClick={handle ? undefined : press}>
+        <Val
+          elRef={anchor}
+          mod={!face && 'nil'}
+          onClick={handle ? undefined : press}
+        >
           {face || (paint && editor ? `+ ${name ?? prop}` : '—')}
         </Val>
       )}
       {handle && editor && (
-        <Hand mod={!face && 'empty'} type='button' onClick={press}>
+        <Hand
+          elRef={anchor}
+          mod={!face && 'empty'}
+          type='button'
+          onClick={press}
+        >
           {face ? '▾' : `+ ${name ?? prop}`}
         </Hand>
       )}
-      {editing && editor?.mode == 'popout' && <editor.Edit {...ep} />}
+      {editing && editor?.mode == 'popout' && (
+        <Overlay anchor={anchor} side='above'>
+          <editor.Edit {...ep} />
+        </Overlay>
+      )}
     </Frame>
   )
 }

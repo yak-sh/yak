@@ -7,6 +7,9 @@ import { Menu, menu, navigate, route, screenTarget } from './nav.tsx'
 import { Run, run } from './Run.tsx'
 import { Status } from './Status.tsx'
 import { View } from './View.tsx'
+import { tips } from './overlay.tsx'
+
+tips() // mount the one delegated [data-tip] tooltip (idempotent)
 
 let Frame = block('main', 'App', { Bar: 'header', Brand: 'a', Body: 'div' })
 let { Bar, Brand, Body } = Frame

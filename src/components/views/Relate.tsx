@@ -1,8 +1,9 @@
-import { useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { type Ent, uuid } from '../../types.ts'
 import { cache, ent, mutate } from '../../live.ts'
 import { spec, taskChanges } from '../../client.ts'
-import { block, focus } from '../ui.tsx'
+import { block } from '../ui.tsx'
+import { Overlay } from '../overlay.tsx'
 
 let Frame = block('span', 'Relate', {
   Verb: 'button',
@@ -35,6 +36,12 @@ export let Relate = ({ e }: { e: Ent }) => {
   let [verb, setVerb] = useState<V | null>(null)
   let [q, setQ] = useState('')
   let [pick, setPick] = useState(0)
+  // The Find input doubles as the picker's anchor; focus it when a verb
+  // opens it (it only mounts then), the way Search takes the palette.
+  let find = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (verb) find.current?.focus()
+  }, [verb])
   let close = () => {
     setVerb(null)
     setQ('')
@@ -126,7 +133,7 @@ export let Relate = ({ e }: { e: Ent }) => {
       <Verb mod={verb.type} type='button' onClick={close}>{verb.label}</Verb>
       <Anchor>
         <Find
-          elRef={focus}
+          elRef={find}
           placeholder='task…'
           onInput={(ev: InputEvent) => {
             setQ((ev.currentTarget as HTMLInputElement).value)
@@ -135,27 +142,31 @@ export let Relate = ({ e }: { e: Ent }) => {
           onKeyDown={key}
           onBlur={close}
         />
-        <Pop>
-          {hits.map((t, i) => (
-            <Row
-              key={t.eid}
-              mod={i == pick && 'sel'}
-              onMouseEnter={() => setPick(i)}
-              onMouseDown={(ev: MouseEvent) => grab(ev, () => link(t.eid))}
-            >
-              {t.doc?.title || t.kind}
-            </Row>
-          ))}
-          {fresh && (
-            <New
-              mod={pick == hits.length && 'sel'}
-              onMouseEnter={() => setPick(hits.length)}
-              onMouseDown={(ev: MouseEvent) => grab(ev, create)}
-            >
-              + new “{fresh}”
-            </New>
-          )}
-        </Pop>
+        {(hits.length || fresh) && (
+          <Overlay anchor={find} side='below'>
+            <Pop>
+              {hits.map((t, i) => (
+                <Row
+                  key={t.eid}
+                  mod={i == pick && 'sel'}
+                  onMouseEnter={() => setPick(i)}
+                  onMouseDown={(ev: MouseEvent) => grab(ev, () => link(t.eid))}
+                >
+                  {t.doc?.title || t.kind}
+                </Row>
+              ))}
+              {fresh && (
+                <New
+                  mod={pick == hits.length && 'sel'}
+                  onMouseEnter={() => setPick(hits.length)}
+                  onMouseDown={(ev: MouseEvent) => grab(ev, create)}
+                >
+                  + new “{fresh}”
+                </New>
+              )}
+            </Pop>
+          </Overlay>
+        )}
       </Anchor>
     </Frame>
   )

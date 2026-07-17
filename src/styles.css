@@ -461,20 +461,26 @@ html {
 .Icon {
   display: block;
 }
-/* The house tooltip: any element wearing data-tip grows a ::before that
-   says it. No anchor(): Chrome won't resolve anchors inside a transformed
-   ancestor, and every card lives in the scaled plane — so the host itself
-   is the containing block (position: relative) and the card doesn't clip.
-   Scales with the canvas, works in every engine. */
-[data-tip] {
-  position: relative; /* the tooltip hangs off its host */
+/* Overlays escape their container by portaling to <body> (overlay.tsx):
+   position:fixed against the VIEWPORT, placed on the trigger's live rect.
+   This dodges two walls at once — CSS anchor() won't resolve inside the
+   canvas plane's transform, and a plain fixed child would take that
+   transform as its containing block. The host is just the positioner; each
+   popover keeps its own box (.Prop_Pop, .Relate_Pop). Above the Search
+   palette's tier so a picker clears the cards it springs from. */
+.Overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 200;
 }
-[data-tip]::before {
-  content: attr(data-tip);
-  position: absolute;
-  bottom: calc(100% + 4px);
-  left: 50%;
-  translate: -50%;
+/* The house tooltip: one portaled node (overlay.tsx delegates [data-tip]),
+   not a ::before per host that the overflow ancestors used to clip. */
+.Tip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 200;
   white-space: nowrap;
   font: 11px ui-monospace, monospace;
   color: var(--text);
@@ -483,14 +489,6 @@ html {
   border-radius: calc(var(--radius) - 2px);
   padding: 1px 6px;
   pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.1s;
-  z-index: 1; /* over siblings that come later in the flow */
-}
-[data-tip]:hover::before,
-[data-tip]:focus-visible::before {
-  opacity: 1;
-  transition-delay: 0.3s; /* linger before naming; vanish instantly */
 }
 
 /* The comment rail — quiet, left-ruled, under any entity's view. The
@@ -977,10 +975,7 @@ html {
   width: min(260px, 100%);
 }
 .Relate_Pop {
-  position: absolute;
-  top: calc(100% + 2px);
-  left: 0;
-  z-index: 5;
+  /* portaled into an .Overlay (overlay.tsx) — box only, no positioning */
   min-width: 240px;
   max-width: 320px;
   display: grid;
@@ -1702,10 +1697,7 @@ html {
   color: var(--dim);
 }
 .Prop_Pop {
-  position: absolute;
-  bottom: calc(100% + 2px);
-  left: 0;
-  z-index: 60;
+  /* portaled into an .Overlay (overlay.tsx) — box only, no positioning */
   display: flex;
   gap: 2px;
   background: var(--card);
