@@ -12,7 +12,7 @@ import {
 } from '../../live.ts'
 import { spec, taskChanges } from '../../client.ts'
 import { adopt, parseQuery } from '../../query.ts'
-import { block, focus, grow } from '../ui.tsx'
+import { block, focus } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
 import { Prio } from '../Prio.tsx'
 import { dragData, View } from '../View.tsx'
@@ -39,16 +39,12 @@ let { Col, ColName, Count, Scroll, Item, Add, New, Chips, Chip } = Frame
 // the board it lands on; dragged out to the canvas it spawns a Task card
 // (the standard drag payload — Canvas owns that drop).
 // The quick-add box, under the header above the rows: ONE growing row —
-// Shift+Enter starts the body and the box follows (ui.tsx grow) — with
-// the parse shown live as chips while you type, so 'P1 .domain=Eng Ship
-// it' announces what Enter will file. Enter files and clears for the
-// next title (filing a list is one uninterrupted keyboard); Escape or
-// clicking away closes. Uncontrolled on purpose: the DOM owns the text,
-// state only mirrors it for the chips.
-let arm = (n: unknown) => {
-  focus(n)
-  grow(n as EventTarget)
-}
+// Shift+Enter starts the body and the box follows (CSS field-sizing) —
+// with the parse shown live as chips while you type, so 'P1 .domain=Eng
+// Ship it' announces what Enter will file. Enter files and clears for
+// the next title (filing a list is one uninterrupted keyboard); Escape
+// or clicking away closes. Uncontrolled on purpose: the DOM owns the
+// text, state only mirrors it for the chips.
 let QuickAdd = (
   { file, close }: { file: (text: string) => boolean; close: () => void },
 ) => {
@@ -70,13 +66,11 @@ let QuickAdd = (
         </Chips>
       )}
       <New
-        elRef={arm}
+        elRef={focus}
         rows={1}
         placeholder='P1 .domain=Eng title…'
-        onInput={(ev: InputEvent) => {
-          setText((ev.currentTarget as HTMLTextAreaElement).value)
-          grow(ev.currentTarget)
-        }}
+        onInput={(ev: InputEvent) =>
+          setText((ev.currentTarget as HTMLTextAreaElement).value)}
         onKeyDown={(ev: KeyboardEvent) => {
           let t = ev.currentTarget as HTMLTextAreaElement
           if (ev.key == 'Enter' && !ev.shiftKey) {
@@ -84,7 +78,6 @@ let QuickAdd = (
             if (file(t.value)) {
               t.value = ''
               setText('')
-              grow(t)
             }
           } else if (ev.key == 'Escape') close()
         }}

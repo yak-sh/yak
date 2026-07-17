@@ -643,7 +643,8 @@ html {
   padding: var(--half-gap);
   min-width: 0; /* grid child: never widen the column to fit the box */
   outline: none;
-  /* one row that GROWS (ui.tsx grow sets the height) — never a panel */
+  /* one row that GROWS with its content — never a resizable panel */
+  field-sizing: content;
   resize: none;
   overflow: hidden;
   line-height: 1.4;
