@@ -82,61 +82,119 @@ let inherit = (ctx: Ctx): Record<string, unknown> => {
   return p ? { project_eid: p } : {}
 }
 
-export let verbs: Record<string, Verb> = {
+// A command carries its own manual — example args and a one-line
+// summary — so the suggest list and the ghost can never drift from what
+// run() accepts: they read the same table.
+export type Command = { args: string; about: string; run: Verb }
+
+export let commands: Record<string, Command> = {
   // :new speaks the spec grammar (client.ts): 'P1 .domain=Eng Ship it'
   // — typed setters win over what the context hands down.
-  new: (rest, ctx) => {
-    let { title, body, grouped } = spec(rest)
-    if (!title) throw new Error('new: needs a title')
-    return {
-      changes: taskChanges(uuid(), {
-        ...grouped,
-        doc: { title, body, ...grouped.doc },
-        task: { ...inherit(ctx), ...grouped.task },
-      }),
-      msg: `new: ${title}`,
-    }
+  new: {
+    args: 'P1 .domain=Eng title…',
+    about: 'file a task where you stand',
+    run: (rest, ctx) => {
+      let { title, body, grouped } = spec(rest)
+      if (!title) throw new Error('new: needs a title')
+      return {
+        changes: taskChanges(uuid(), {
+          ...grouped,
+          doc: { title, body, ...grouped.doc },
+          task: { ...inherit(ctx), ...grouped.task },
+        }),
+        msg: `new: ${title}`,
+      }
+    },
   },
-  open: (rest, ctx) => rest.trim() ? go(rest.trim(), ctx) : reopen(rest, ctx),
-  done: move('done'),
-  wip: move('wip'),
-  claim: (rest, ctx) => {
-    let r = here(ctx)
-    let session = rest.trim() || ctx.session
-    if (!session) throw new Error('claim: name a session (:claim sess-1)')
-    return {
-      changes: claimChanges(ctx.rows, r.eid, session),
-      msg: `${idOf(r)} ⚑ ${session}`,
-    }
+  open: {
+    args: '[T-42]',
+    about: 'reopen the task — or go to T-42',
+    run: (rest, ctx) => rest.trim() ? go(rest.trim(), ctx) : reopen(rest, ctx),
+  },
+  done: { args: '', about: 'move the focused task to done', run: move('done') },
+  wip: { args: '', about: 'move the focused task to wip', run: move('wip') },
+  claim: {
+    args: '[session]',
+    about: 'lease the focused entity',
+    run: (rest, ctx) => {
+      let r = here(ctx)
+      let session = rest.trim() || ctx.session
+      if (!session) throw new Error('claim: name a session (:claim sess-1)')
+      return {
+        changes: claimChanges(ctx.rows, r.eid, session),
+        msg: `${idOf(r)} ⚑ ${session}`,
+      }
+    },
   },
   // Params start at a dot, which is what lets a value hold spaces
   // (:set .title=two words) without quoting rules the CLI's argv gives
   // it for free.
-  set: (rest, ctx) => {
-    let r = here(ctx)
-    let args = rest.trim().split(/\s+(?=\.)/).filter(Boolean)
-    if (!args.length) throw new Error('set: needs .prop=value')
-    let ps = args.map((a) => {
-      let p = param(a)
-      if (!p) throw new Error(`not a param: ${a}`)
-      return p
-    })
-    return {
-      changes: Object.entries(patches(ps))
-        .map(([name, comp]) => ({ eid: r.eid, name, comp })),
-      msg: `${idOf(r)} ${args.join(' ')}`,
-    }
+  set: {
+    args: '.prop=value …',
+    about: 'patch the focused entity',
+    run: (rest, ctx) => {
+      let r = here(ctx)
+      let args = rest.trim().split(/\s+(?=\.)/).filter(Boolean)
+      if (!args.length) throw new Error('set: needs .prop=value')
+      let ps = args.map((a) => {
+        let p = param(a)
+        if (!p) throw new Error(`not a param: ${a}`)
+        return p
+      })
+      return {
+        changes: Object.entries(patches(ps))
+          .map(([name, comp]) => ({ eid: r.eid, name, comp })),
+        msg: `${idOf(r)} ${args.join(' ')}`,
+      }
+    },
   },
 }
 
 export let run = (
   line: string,
   ctx: Ctx,
-  local: Record<string, Verb> = {},
+  local: Record<string, Command> = {},
 ): Result => {
   let [, name, rest] = line.trim().match(/^(\S+)\s*(.*)$/s) ?? []
   if (!name) return {}
-  let v = { ...verbs, ...local }[name]
+  let v = { ...commands, ...local }[name]
   if (!v) throw new Error(`not a command: ${name}`)
-  return v(rest ?? '', ctx)
+  return v.run(rest ?? '', ctx)
+}
+
+// Typeahead over the table: prefix matches lead (`:d` is to the point),
+// substring matches trail, both in table order. An empty line lists
+// everything — that's the menu.
+export let suggest = (
+  line: string,
+  all: Record<string, Command>,
+): [string, Command][] => {
+  let name = line.trimStart().split(/\s/)[0] ?? ''
+  let rows = Object.entries(all)
+  if (!name) return rows
+  return [
+    ...rows.filter(([n]) => n.startsWith(name)),
+    ...rows.filter(([n]) => !n.startsWith(name) && n.includes(name)),
+  ]
+}
+
+// What to paint faded past the caret: the best match's remaining letters
+// while the verb is still being typed; once it stands, the example args
+// it hasn't been given yet — the example is a list of slots, and each
+// typed word consumes one.
+export let ghost = (line: string, all: Record<string, Command>): string => {
+  let m = line.match(/^(\S+)(\s+(.*))?$/s)
+  if (!m) return ''
+  let [, name, spaced, rest] = m
+  if (!spaced) {
+    let best = Object.keys(all).find((n) => n.startsWith(name) && n != name)
+    if (best) return best.slice(name.length)
+    if (!all[name]) return ''
+  }
+  let cmd = all[name]
+  if (!cmd?.args) return ''
+  let typed = (rest ?? '').split(/\s+/).filter(Boolean).length
+  let left = cmd.args.split(/\s+/).slice(typed)
+  if (!left.length) return ''
+  return (/\s$/.test(line) ? '' : ' ') + left.join(' ')
 }

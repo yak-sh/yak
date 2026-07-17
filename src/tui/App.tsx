@@ -19,7 +19,7 @@ import {
   send,
   statuses,
 } from '../live.ts'
-import { type Ctx, run, type Verb } from '../commands.ts'
+import { type Command, type Ctx, run } from '../commands.ts'
 import { has, type Renderer, resolve } from '../components/registry.ts'
 import { View } from '../components/View.tsx'
 import { author } from '../components/Comments.tsx'
@@ -221,9 +221,13 @@ let ctx = (): Ctx => ({ eid: trail.value.at(-1) ?? selected(), rows: graph() })
 
 // Quitting is the one verb a browser has no answer for; the rest of the
 // language is shared (commands.ts).
-let bye: Verb = () => {
-  quit.value = true
-  return {}
+let bye: Command = {
+  args: '',
+  about: 'leave',
+  run: () => {
+    quit.value = true
+    return {}
+  },
 }
 
 let exec = (line: string) => {

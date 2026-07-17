@@ -1075,6 +1075,7 @@ html {
   background: var(--surface);
   border-top: 1px solid var(--border);
   font-size: 12px;
+  position: relative; /* the hints panel anchors to the bar */
 }
 /* The bar sits flush against the glass on phones, which puts its ends
    under the screen's rounded corners — slide the TEXT in past the arc
@@ -1098,6 +1099,11 @@ html {
 .Status_Colon {
   color: var(--text);
 }
+.Status_Line {
+  flex: 1;
+  position: relative;
+  display: flex;
+}
 .Status_Cmd {
   flex: 1;
   font: inherit;
@@ -1106,6 +1112,57 @@ html {
   border: 0;
   outline: none;
   padding: 0;
+  position: relative; /* above the ghost */
+}
+/* The faded completion: an invisible copy of the typed text places the
+   remainder exactly past the caret; the input paints over the copy. */
+.Status_Ghost {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  color: var(--dim);
+  white-space: pre;
+  overflow: hidden;
+}
+.Status_Was {
+  visibility: hidden;
+  font-style: normal;
+}
+/* The command menu, opening UPWARD from the bar — column-reverse keeps
+   the best match nearest where you type. */
+.Status_Hints {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  display: flex;
+  flex-direction: column-reverse;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: var(--half-gap) var(--gap);
+  max-height: 50vh;
+  overflow-y: auto;
+}
+.Status_Hint {
+  display: flex;
+  align-items: baseline;
+  gap: var(--half-gap);
+  padding: 2px var(--half-gap);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.Status_Hint-pick {
+  background: var(--soft);
+}
+.Status_Name {
+  color: var(--text);
+}
+.Status_Args {
+  color: var(--muted);
+}
+.Status_About {
+  color: var(--dim);
+  margin-left: auto;
 }
 .Status_Msg {
   color: var(--muted);

@@ -1,6 +1,6 @@
 // The : command line's pure half: every verb, the :open disambiguation,
 // and what a bad line says. No wire, no DOM — a Ctx is just data.
-import { run, type Verb } from './commands.ts'
+import { type Command, commands, ghost, run, suggest } from './commands.ts'
 import { rows } from './client.ts'
 import { type Snapshot } from './types.ts'
 import { assertEquals, assertThrows } from '@std/assert'
@@ -121,6 +121,32 @@ Deno.test('dispatch: unknown names say so, local verbs ride, empty is a no-op', 
   assertThrows(() => run('nope', ctx(T)), Error, 'not a command: nope')
   assertEquals(run('', ctx(T)), {})
   assertEquals(run('   ', ctx(T)), {})
-  let zoom: Verb = (rest) => ({ msg: `zoom ${rest}` })
+  let zoom: Command = {
+    args: 'n',
+    about: 'test',
+    run: (rest) => ({ msg: `zoom ${rest}` }),
+  }
   assertEquals(run('zoom 2', ctx(T), { zoom }).msg, 'zoom 2')
+})
+
+Deno.test('suggest: prefix leads, substring trails, empty lists all', () => {
+  let names = (line: string) => suggest(line, commands).map(([n]) => n)
+  assertEquals(names(''), Object.keys(commands))
+  assertEquals(names('d')[0], 'done')
+  assertEquals(names('op')[0], 'open')
+  assertEquals(names('e').includes('new'), true) // substring still finds
+  assertEquals(names('zzz'), [])
+})
+
+Deno.test('ghost: verb remainder, then unconsumed example args', () => {
+  let g = (line: string) => ghost(line, commands)
+  assertEquals(g('op'), 'en')
+  assertEquals(g('open'), ' [T-42]') // verb stands: the args appear
+  assertEquals(g('open '), '[T-42]')
+  assertEquals(g('open T-4'), '') // the slot is being consumed
+  assertEquals(g('se'), 't')
+  assertEquals(g('set .status=done '), '…') // one slot down, one to go
+  assertEquals(g('done'), '') // no args to offer
+  assertEquals(g('zzz'), '')
+  assertEquals(g(''), '')
 })
