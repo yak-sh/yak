@@ -6,8 +6,16 @@
 //   .doc.title=Hello    the explicit spelling, for collisions (pin/camera
 //                       geometry) or clarity
 // Values that look like numbers become numbers.
-import { type Change, comps, type Dep, kindOf, statuses } from './types.ts'
-export { idOf } from './types.ts'
+import {
+  type Change,
+  comps,
+  type Dep,
+  kindOf,
+  type Snapshot,
+  statuses,
+} from './types.ts'
+import { idOf } from './types.ts'
+export { idOf }
 
 export let host = () => Deno.env.get('TASKS_HOST') ?? '127.0.0.1:5173'
 
@@ -167,6 +175,53 @@ export let commentChanges = (
       comp: { target_eid: target, author_eid: s?.eid ?? null },
     },
   ]
+}
+
+// The injection-loop digest: what a session sees at start — its claimed
+// work (with unresolved gates and who holds them), or the top of the open
+// board when it holds nothing. ≤20 lines by construction: the tracker
+// stays out of the way, it just makes the working set impossible to lose.
+export let contextDigest = (snap: Snapshot, session: string) => {
+  let all = rows(snap)
+  let byEid = new Map(all.map((r) => [r.eid, r]))
+  let sess = all.find((r) =>
+    r.comps.session && String(r.comps.session.id) == session
+  )
+  let mine = sess
+    ? all.filter((r) => r.comps.claim?.session_eid == sess.eid)
+    : []
+  let lines = [`tasks · session ${session}`]
+  let show = (r: Row) => {
+    lines.push(
+      `  ${idOf(r)} ${String(r.comps.task?.status ?? r.kind).padEnd(5)} ${
+        r.comps.doc?.title ?? ''
+      }`,
+    )
+    for (let d of snap.deps.filter((d) => d.parent == r.eid)) {
+      let c = byEid.get(d.child)
+      if (!c || d.type == 'reads') continue
+      if (String(c.comps.task?.status) == 'done') continue
+      let who = claimant(all, c)
+      lines.push(
+        `    ${d.type} → ${idOf(c)} (${c.comps.task?.status ?? c.kind}${
+          who ? `, ⚑ ${who}` : ''
+        })`,
+      )
+    }
+  }
+  if (mine.length) {
+    lines.push('claimed by you:')
+    mine.slice(0, 4).forEach(show)
+  } else {
+    lines.push('nothing claimed. open work, board order:')
+    all.filter((r) => r.comps.task && r.comps.task.status != 'done')
+      .filter((r) => !r.comps.claim)
+      .sort(byBoard).slice(0, 5).forEach(show)
+  }
+  lines.push(
+    `claim: task claim <id> ${session} · comment: task comment <id> "…" · release when done or handing off`,
+  )
+  return lines.slice(0, 20).join('\n')
 }
 
 // The claimant's session id, resolved through the claim's session entity.

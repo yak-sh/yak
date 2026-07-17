@@ -112,7 +112,9 @@ tailnet) and it gets self-documenting `task_list` / `task_new` / `task_update` /
 `task_show` / `task_claim` / `task_release` / `task_comment` tools speaking the
 same dot-param grammar. Claims are leases: the server refuses to hand a held
 lease to another session, so agents can pick work without stepping on each
-other. Beyond tasks sits the generic tier: `graph_query` / `graph_apply` (the
+other. `task_context` boots an agent session into its claimed work (the repo's
+SessionStart hook injects the same digest — the tracker IS the session's working
+memory). Beyond tasks sits the generic tier: `graph_query` / `graph_apply` (the
 raw wire), `ui_state` (every viewport and card — the UI is data, so reading the
 UI is a graph read), `card_open` / `card_move` / `card_close`, and **code
 mode**: `code_run` executes agent-written JS in a sandboxed worker (Deno

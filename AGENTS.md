@@ -113,6 +113,10 @@ a row, not a dependency).
   drive hovers/keys/clicks over CDP (`--remote-debugging-port`); TUI via
   `tmux new-session -d` + `send-keys` + `capture-pane -p` (`-e` keeps ANSI).
   Clean up any entities a probe creates (delete = `{name:'entity', comp:null}`).
+- **The injection loop**: `.claude/settings.json` runs `bin/task-context` on
+  SessionStart — agent sessions in this repo boot into their claimed work
+  (`task context` / MCP `task_context`, same digest). The hook must NEVER fail
+  loudly; a dead server means no digest, not a broken session.
 - The MCP surface has two tiers: task_* sugar and the generic tier
   (graph_query/graph_apply/ui_state/card_*/code_run). The generic tier is
   possible because the UI is data — cards/pins/cameras are entities; keep it

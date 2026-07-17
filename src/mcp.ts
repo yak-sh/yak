@@ -17,6 +17,7 @@ import {
   claimant,
   claimChanges,
   commentChanges,
+  contextDigest,
   find,
   idOf,
   matches,
@@ -122,6 +123,18 @@ ${GRAMMAR}`,
           .map(([name, comp]) => ({ eid: row.eid, name, comp })),
       )
       return text(`updated ${idOf(row)}`)
+    },
+  )
+
+  server.tool(
+    'task_context',
+    `Your working set, ≤20 lines: the tasks claimed by your session (with
+unresolved dependencies and who holds them), or the top of the open
+board if you hold nothing. Call this FIRST each session, with the same
+stable session identifier you claim with.`,
+    { session: z.string() },
+    async ({ session }: { session: string }) => {
+      return text(contextDigest(await io.read(), session))
     },
   )
 

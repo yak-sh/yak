@@ -13,6 +13,7 @@ import {
   claimant,
   claimChanges,
   commentChanges,
+  contextDigest,
   find,
   host,
   idOf,
@@ -37,6 +38,7 @@ let usage = `task — the entity graph, from a shell
   task release <id>              drop the lease
   task comment <id> <text...>    say something about ANY entity
   task backup                    snapshot the db + commit/push the data dir
+  task context [session]         this session's working set ($TASKS_SESSION)
 
 dot-params route by prop (.title= → doc.title); where a prop lives in
 several components (pin/camera x,y,w,h) spell it out: .pin.x=12
@@ -144,6 +146,28 @@ let show = async (args: string[]) => {
   console.log(JSON.stringify({ ...row, comments }, null, 2))
 }
 
+// The injection loop's front door. Plain: print the digest for a session
+// id. --hook: SessionStart mode — session_id arrives as hook JSON on
+// stdin, and NOTHING may fail loudly (a hook must never wedge a session;
+// no server just means no context today).
+let context = async (args: string[]) => {
+  let hook = args.includes('--hook')
+  let sid = args.find((a) => !a.startsWith('--')) ??
+    Deno.env.get('TASKS_SESSION')
+  if (hook) {
+    try {
+      let body = JSON.parse(await new Response(Deno.stdin.readable).text())
+      sid ??= String(body.session_id ?? '')
+      if (sid) console.log(contextDigest(await snapshot(), sid))
+    } catch {
+      // silent: offline server or malformed stdin — the session goes on
+    }
+    return
+  }
+  if (!sid) throw new Error('task context <session> (or set TASKS_SESSION)')
+  console.log(contextDigest(await snapshot(), sid))
+}
+
 // Backup is bin/backup (a data-dir git commit) — the CLI is its front
 // door so 'task backup' works wherever the CLI is installed.
 let backup = async () => {
@@ -181,6 +205,7 @@ try {
   else if (cmd == 'claim') await claim(rest)
   else if (cmd == 'comment') await comment(rest)
   else if (cmd == 'backup') await backup()
+  else if (cmd == 'context') await context(rest)
   else if (cmd == 'release') await release(rest)
   else {
     console.log(usage.trim())
