@@ -158,10 +158,7 @@ export let Task = ({ e }: { e: Ent }) => (
       <View eid={e.eid} view='Id' />
     </Head>
     <TaskBody e={e} />
-    <Above e={e} />
-    {e.refs.map((r) => (
-      <View key={r.child} eid={r.child} view='Dependency' type={r.type} />
-    ))}
+    <Edges e={e} />
     <Relate e={e} />
     <Runs e={e} />
     <Comments eid={e.eid} />
@@ -175,9 +172,11 @@ let up: Record<string, string> = {
   reads: 'read by',
 }
 
-// The view from below — every edge that holds this task, one reversed
-// sentence each ('part of X', 'required by Y'), keeping the edge's color.
-let Above = ({ e }: { e: Ent }) => (
+// Every edge sentence a task speaks, top-down: what holds it (reversed —
+// 'part of X', 'required by Y'), then what it holds — its contains
+// children (ent() splits those out of refs into kids, so they'd
+// otherwise only show as board tallies) and its requires/reads.
+let Edges = ({ e }: { e: Ent }) => (
   <>
     {parents(e.eid).map((d) => (
       <View
@@ -187,6 +186,12 @@ let Above = ({ e }: { e: Ent }) => (
         type={d.type}
         label={up[d.type] ?? d.type}
       />
+    ))}
+    {e.kids.map((k) => (
+      <View key={k.eid} eid={k.eid} view='Dependency' type='contains' />
+    ))}
+    {e.refs.map((r) => (
+      <View key={r.child} eid={r.child} view='Dependency' type={r.type} />
     ))}
   </>
 )
@@ -226,10 +231,7 @@ export let TaskCard = ({ e }: { e: Ent }) => {
         <Stamp e={e} />
       </Meta>
       <TaskBody e={e} mod='bare' />
-      <Above e={e} />
-      {e.refs.map((r) => (
-        <View key={r.child} eid={r.child} view='Dependency' type={r.type} />
-      ))}
+      <Edges e={e} />
       <Relate e={e} />
       <Comments eid={e.eid} />
     </>
