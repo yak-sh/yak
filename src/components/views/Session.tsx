@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks'
 import snarkdown from 'snarkdown'
 import { type Ent, sessionActive } from '../../types.ts'
 import { base } from '../../live.ts'
-import { block } from '../ui.tsx'
+import { block, Stamp } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
 import { View } from '../View.tsx'
 
@@ -176,6 +176,7 @@ export let Session = ({ e }: { e: Ent }) => {
         <Fact k='started' v={when(s.started_at)} />
         <Fact k='finished' v={when(s.finished_at)} />
       </Facts>
+      <Stamp e={e} />
       {/* markdown: our own data, so no sanitizer — as with a task body */}
       {s.final_text && (
         <Final dangerouslySetInnerHTML={{ __html: snarkdown(s.final_text) }} />

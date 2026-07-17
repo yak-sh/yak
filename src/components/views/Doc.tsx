@@ -1,5 +1,5 @@
 import { type Ent } from '../../types.ts'
-import { block } from '../ui.tsx'
+import { block, Stamp } from '../ui.tsx'
 import { Comments } from '../Comments.tsx'
 import { Edit } from '../Edit.tsx'
 import { TaskBody } from './Task.tsx'
@@ -17,6 +17,7 @@ export let DocView = ({ e }: { e: Ent }) => (
       <Title>
         <Edit eid={e.eid} comp='doc' prop='title' />
       </Title>
+      <Stamp e={e} />
       <View eid={e.eid} view='Id' />
     </Head>
     <TaskBody e={e} />

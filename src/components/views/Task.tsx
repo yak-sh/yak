@@ -11,7 +11,7 @@ import {
   statuses,
 } from '../../live.ts'
 import { linkProps } from '../nav.tsx'
-import { block, focus } from '../ui.tsx'
+import { block, focus, Stamp } from '../ui.tsx'
 import { Comments } from '../Comments.tsx'
 import { Dot } from '../Dot.tsx'
 import { Prio } from '../Prio.tsx'
@@ -247,6 +247,7 @@ export let Task = ({ e }: { e: Ent }) => (
       <Home e={e} />
       <Facet e={e} />
       <Rank e={e} />
+      <Stamp e={e} />
       <View eid={e.eid} view='Id' />
     </Head>
     <TaskBody e={e} />
@@ -271,6 +272,7 @@ export let TaskCard = ({ e }: { e: Ent }) => {
         <Facet e={e} />
         {talk && <Talk>💬 {talk}</Talk>}
         {e.claim && <Claim>⚑ {ent(e.claim.session_eid).session?.id}</Claim>}
+        <Stamp e={e} />
       </Meta>
       <TaskBody e={e} mod='bare' />
       {e.refs.map((r) => (

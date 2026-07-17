@@ -313,7 +313,8 @@ export type Ref = { type: Edge; child: string }
 export type Ent = {
   eid: string
   num: number
-  created_at?: string // server-stamped birth, when the cache carries it
+  created_at?: string // server-stamped, when the cache carries them
+  modified_at?: string
   kind: string
   doc?: Doc
   task?: Task

@@ -505,6 +505,7 @@ html {
 .Comments_When {
   color: var(--dim);
   font-size: 11px;
+  margin-left: var(--half-gap); /* air between author and age */
 }
 .Comments_Who {
   font-size: 11px;
@@ -1558,4 +1559,13 @@ html {
   padding: 0;
   min-width: 0;
   width: 10ch;
+}
+
+/* An entity's age line — dim, small, out of the way. */
+.Stamp {
+  color: var(--dim);
+  font-size: 11px;
+  display: inline-flex;
+  gap: var(--half-gap);
+  white-space: nowrap;
 }

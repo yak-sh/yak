@@ -80,3 +80,23 @@ export let ago = (iso?: string | null) => {
 }
 export let pretty = (iso?: string | null) =>
   iso ? new Date(iso).toLocaleString() : ''
+
+let StampEl = el('span', 'Stamp')
+
+// An entity's age, said the human way: 'created 5 minutes ago', plus
+// 'edited …' only when modified_at actually moved past its birth. Full
+// stamps ride the tooltips. Drop it in any view's meta line.
+export let Stamp = (
+  { e }: { e: { created_at?: string; modified_at?: string } },
+) => {
+  if (!e.created_at) return null
+  let edited = e.modified_at && e.modified_at != e.created_at
+  return (
+    <StampEl>
+      <span title={pretty(e.created_at)}>{ago(e.created_at)}</span>
+      {edited && (
+        <span title={pretty(e.modified_at)}>· edited {ago(e.modified_at)}</span>
+      )}
+    </StampEl>
+  )
+}
