@@ -103,6 +103,30 @@ export let uuid = () => {
 // may be stopped by it, the browser decides what to keep polling by it.
 export let sessionActive = ['starting', 'running', 'stopping']
 
+// One log line, in the vocabulary the RENDERER speaks — flat and small, the
+// same six shapes whatever provider wrote it. Adapters own the dialects
+// (adapters.ts, server-only) and normalize each event down to one of these
+// before it reaches a browser, so the Session view never learns a vendor:
+//   say    what the agent (or the human, resuming) actually said
+//   reason the model thinking out loud — dim, skippable
+//   tool   a tool call as a chip: name + ok/✗, its detail, its error
+//   exec   a shell command it ran
+//   turn   a turn closing, with usage — a thin divider, not content
+//   error  the run itself went wrong
+export type LogRow =
+  | { kind: 'say'; role: 'agent' | 'user'; text: string }
+  | { kind: 'reason'; text: string }
+  | {
+    kind: 'tool'
+    name: string
+    detail?: string
+    ok?: boolean
+    error?: string
+  }
+  | { kind: 'exec'; command: string; exit?: number }
+  | { kind: 'turn'; usage?: string }
+  | { kind: 'error'; text: string }
+
 // kind is DERIVED — an entity is what its components make it, and really
 // the beholder decides (renderers match on components, scored by
 // specificity). This order is only the display/id convention: the most

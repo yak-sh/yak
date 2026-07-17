@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import snarkdown from 'snarkdown'
-import { type Ent, sessionActive } from '../../types.ts'
+import { type Ent, type LogRow, sessionActive } from '../../types.ts'
 import { base } from '../../live.ts'
 import { block, Stamp } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
@@ -8,12 +8,14 @@ import { View } from '../View.tsx'
 
 // An agent session, watched: the lifecycle summary (server-owned columns,
 // riding the snapshot like any component — so the head re-renders itself
-// off the cache as the run moves), then its log.
+// off the cache as the run moves), then its log, then a box to say more.
 //
 // The log is the FILE (src/sessions.ts): we read it back over
-// /sessions/:eid/logs rather than hold lines in the graph, and only while
-// the session is still going — an ending stops the timer instead of a
-// timer noticing the ending.
+// /sessions/:eid/logs, where each line already carries its renderer `row`
+// (the server's adapter normalized the provider's dialect — the browser
+// never learns one). We match on row.kind, so a say is markdown, a tool a
+// chip, reasoning dim — the pane reads like a transcript, not a dump. A
+// line with no row (a heartbeat, a torn frame) falls back to its bare type.
 
 let Frame = block('div', 'Session', {
   Head: 'div',
@@ -29,7 +31,18 @@ let Frame = block('div', 'Session', {
   Line: 'div',
   Seq: 'span',
   Type: 'span',
-  Say: 'span',
+  Raw: 'span',
+  Agent: 'div',
+  User: 'div',
+  Reason: 'div',
+  Tool: 'div',
+  ToolName: 'span',
+  ToolDetail: 'span',
+  ToolErr: 'span',
+  Exec: 'div',
+  Turn: 'div',
+  Oops: 'div',
+  Input: 'textarea',
   Err: 'pre',
 })
 let {
@@ -46,13 +59,23 @@ let {
   Line,
   Seq,
   Type,
-  Say,
+  Raw,
+  Agent,
+  User,
+  Reason,
+  Tool,
+  ToolName,
+  ToolDetail,
+  ToolErr,
+  Exec,
+  Turn,
+  Oops,
+  Input,
   Err,
 } = Frame
 
-type Entry = { seq: number; line: string }
+type Entry = { seq: number; line: string; row?: LogRow }
 type Log = { entries: Entry[]; stderr?: string }
-type Json = Record<string, unknown>
 
 // ISO in the db; a local clock is what a human reads.
 let when = (t?: string | null) => t ? new Date(t).toLocaleString() : null
@@ -68,52 +91,74 @@ let Fact = ({ k, v }: { k: string; v?: string | null }) =>
     )
     : null
 
-let parse = (line: string): Json | null => {
+// Usage, said the compact way — the numbers a turn actually spent.
+let usage = (json?: string) => {
+  if (!json) return ''
   try {
-    let e = JSON.parse(line)
-    return e && typeof e == 'object' ? e as Json : null
+    let u = JSON.parse(json) as Record<string, number>
+    return [
+      u.input_tokens != null && `${u.input_tokens} in`,
+      u.output_tokens != null && `${u.output_tokens} out`,
+    ].filter(Boolean).join(' · ')
+  } catch {
+    return ''
+  }
+}
+
+// The type of a line the adapter had no row for — just enough to place it,
+// or null when it isn't JSON at all (a provider printing over its stream).
+let bareType = (line: string) => {
+  try {
+    return String((JSON.parse(line) as { type?: unknown }).type ?? '?')
   } catch {
     return null
   }
 }
 
-// The one interesting phrase in an event: what the agent SAID, the tool it
-// reached for, the answer it gave. Each provider nests it somewhere else
-// and adapters.ts — the server's own reader — imports Deno, so it's out of
-// reach here: we go looking through the keys they all use rather than
-// teach the browser three dialects. Anything we don't find is just its
-// type, which the line already shows.
-let phrase = (v: unknown): string => {
-  if (typeof v == 'string') return v
-  if (Array.isArray(v)) return v.map(phrase).filter(Boolean).join(' ')
-  if (!v || typeof v != 'object') return ''
-  for (
-    let k of ['text', 'final_text', 'name', 'command', 'result', 'content']
-  ) {
-    let s = phrase((v as Json)[k])
-    if (s) return s
+// One log line, matched on the normalized row (adapters.ts). No row means
+// the adapter didn't recognize it: show its bare type, as the dump did.
+let Row = ({ x }: { x: Entry }) => {
+  let r = x.row
+  if (!r) {
+    let t = bareType(x.line)
+    return (
+      <Line>
+        <Seq>{x.seq}</Seq>
+        {t ? <Type>{t}</Type> : <Raw>{x.line}</Raw>}
+      </Line>
+    )
   }
-  // the wrappers: claude nests the turn under message, codex under item
-  return phrase((v as Json).message) || phrase((v as Json).item)
-}
-
-// One log line: its type and its phrase — or, when it isn't JSON at all
-// (a provider printing over its own stream), the bytes as written.
-let Event = ({ x }: { x: Entry }) => {
-  let e = parse(x.line)
-  return (
-    <Line>
-      <Seq>{x.seq}</Seq>
-      {e
-        ? (
-          <>
-            <Type>{String(e.type ?? '?')}</Type>
-            <Say>{phrase(e)}</Say>
-          </>
-        )
-        : <Say mod='raw'>{x.line}</Say>}
-    </Line>
-  )
+  switch (r.kind) {
+    case 'say':
+      // our own data, so no sanitizer — as with a task body
+      return r.role == 'user'
+        ? <User>{r.text}</User>
+        : <Agent dangerouslySetInnerHTML={{ __html: snarkdown(r.text) }} />
+    case 'reason':
+      return <Reason>{r.text}</Reason>
+    case 'tool':
+      return (
+        <Tool mod={r.ok === false && 'fail'}>
+          <ToolName>
+            {r.name}
+            {r.ok === false ? ' ✗' : r.ok ? ' ✓' : ''}
+          </ToolName>
+          {r.detail && <ToolDetail>{r.detail}</ToolDetail>}
+          {r.error && <ToolErr>{r.error}</ToolErr>}
+        </Tool>
+      )
+    case 'exec':
+      return (
+        <Exec>
+          {r.command}
+          {r.exit != null && r.exit != 0 && ` · exit ${r.exit}`}
+        </Exec>
+      )
+    case 'turn':
+      return <Turn>{usage(r.usage)}</Turn>
+    case 'error':
+      return <Oops>{r.text}</Oops>
+  }
 }
 
 // Tail the log file. `live` is in the deps on purpose: when the status
@@ -141,11 +186,63 @@ let useLog = (eid: string, live: boolean) => {
   return log
 }
 
+// Say more to a settled session: resume it with a line. Enter sends and
+// clears optimistically, Shift+Enter is a newline; while the run is live
+// the box is disabled (v1 types only into a settled session). A refused
+// input's reason lands inline — the server said why, so we show it.
+let Reply = ({ eid, live }: { eid: string; live: boolean }) => {
+  let box = useRef<HTMLTextAreaElement>(null)
+  let [err, setErr] = useState('')
+
+  let send = async () => {
+    let text = box.current!.value.trim()
+    if (!text) return
+    box.current!.value = ''
+    setErr('')
+    try {
+      let r = await fetch(`${base()}/sessions/${eid}/input`, {
+        method: 'POST',
+        body: JSON.stringify({ text }),
+      })
+      if (!r.ok) setErr((await r.text()) || 'input refused')
+    } catch (e) {
+      setErr(String(e))
+    }
+  }
+
+  let key = (e: KeyboardEvent) => {
+    if (e.key == 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      send()
+    }
+    if (e.key == 'Escape') box.current!.blur()
+  }
+
+  return (
+    <>
+      <Input
+        elRef={box}
+        rows={1}
+        disabled={live}
+        placeholder={live ? 'running…' : 'reply…'}
+        onKeyDown={key}
+      />
+      {err && <Fault mod='error'>{err}</Fault>}
+    </>
+  )
+}
+
 export let Session = ({ e }: { e: Ent }) => {
   let s = e.session!
   let status = s.status ?? ''
   let live = sessionActive.includes(status)
   let log = useLog(e.eid, live)
+  // The Final block IS the last agent say — don't print it twice. Only a
+  // session whose log grew no say row (an external one, a torn log) still
+  // leans on final_text.
+  let said = log.entries.some(
+    (x) => x.row?.kind == 'say' && x.row.role == 'agent',
+  )
   return (
     <Frame>
       <Head>
@@ -178,32 +275,33 @@ export let Session = ({ e }: { e: Ent }) => {
       </Facts>
       <Stamp e={e} />
       {/* markdown: our own data, so no sanitizer — as with a task body */}
-      {s.final_text && (
+      {!said && s.final_text && (
         <Final dangerouslySetInnerHTML={{ __html: snarkdown(s.final_text) }} />
       )}
       {s.error && <Fault mod='error'>{s.error}</Fault>}
       {s.stop_reason && <Fault>{s.stop_reason}</Fault>}
       <Log>
-        {log.entries.map((x) => <Event key={x.seq} x={x} />)}
+        {log.entries.map((x) => <Row key={x.seq} x={x} />)}
       </Log>
       {/* stderr: unordered diagnostics, never inside the log's seqs */}
       {log.stderr && <Err>{log.stderr}</Err>}
+      {s.origin == 'managed' && <Reply eid={e.eid} live={live} />}
     </Frame>
   )
 }
 
 // A session in a list: the dot carries the status, the way a task row's
 // does — plus what it's running. Its id chip links through to the view.
-let Row = block('div', 'SessionRow', { Status: 'span', Model: 'span' })
+let RowLine = block('div', 'SessionRow', { Status: 'span', Model: 'span' })
 
 export let SessionRow = ({ e }: { e: Ent }) => {
   let s = e.session!
   return (
-    <Row>
+    <RowLine>
       <Dot status={s.status ?? ''} />
-      <Row.Status>{s.status ?? s.id}</Row.Status>
-      {s.provider && <Row.Model>{s.provider} · {s.model}</Row.Model>}
+      <RowLine.Status>{s.status ?? s.id}</RowLine.Status>
+      {s.provider && <RowLine.Model>{s.provider} · {s.model}</RowLine.Model>}
       <View eid={e.eid} view='Id' />
-    </Row>
+    </RowLine>
   )
 }

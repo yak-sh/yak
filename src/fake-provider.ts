@@ -14,6 +14,10 @@
 //   quiet       skip the terminal event (an agent that just stops talking)
 //   fail:3      exit 3 instead of 0
 //
+// --resume marks a continuation of an existing thread: the session is
+// already known, so it skips the init and just narrates on — the same
+// script a resume argv drives (see adapters.ts).
+//
 // Run: deno run --quiet fake-provider.ts --session S --model M [--effort E] "…"
 let arg = (flag: string) => {
   let i = Deno.args.indexOf(flag)
@@ -33,14 +37,16 @@ let delay = num('delay', 0)
 let beat = () => delay ? new Promise((go) => setTimeout(go, delay)) : undefined
 let say = (e: unknown) => console.log(JSON.stringify(e))
 
-// init first, always: `delay:N` is how a test keeps a session RUNNING, so
-// it must announce itself before it dawdles.
-say({
-  type: 'init',
-  session_id: arg('--session'),
-  model: arg('--model'),
-  effort: arg('--effort') ?? null,
-})
+// init first (unless resuming — the thread already exists): `delay:N` is how
+// a test keeps a session RUNNING, so it must announce itself before it dawdles.
+if (!Deno.args.includes('--resume')) {
+  say({
+    type: 'init',
+    session_id: arg('--session'),
+    model: arg('--model'),
+    effort: arg('--effort') ?? null,
+  })
+}
 await beat()
 say({ type: 'message', role: 'assistant', text: `working: ${instruction}` })
 if (says('noise')) console.error('fake: stderr noise')

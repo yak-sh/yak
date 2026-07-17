@@ -9,7 +9,7 @@
 // `fake` ships in-repo for tests; `claude` and `codex` shell the installed
 // CLIs (subscription auth rides HOME — no keys in argv, no keys in env).
 // Event shapes below are copied from live probes of both CLIs, not docs.
-import { type Session } from './types.ts'
+import { type LogRow, type Session } from './types.ts'
 
 // One parsed log line. Adapters own the dialect; anything they don't
 // recognize is just log, not summary.
@@ -30,8 +30,35 @@ export type Adapter = {
   models: string[]
   efforts: string[]
   argv: (job: Job) => string[]
+  // Resume a settled thread with more to say: the same flags as argv, but
+  // pointed at an existing provider session and carrying the new prompt.
+  resume: (job: Job, provider_session_id: string, text: string) => string[]
   init: (e: Event) => Summary | null
   terminal: (e: Event) => Summary | null
+  // The dialect, normalized: one event → one renderer row (or null when the
+  // line isn't worth showing — thread/turn starts, system init). This is the
+  // ONLY place a vendor's shape is known; the browser reads LogRow, never a
+  // provider's JSON.
+  row: (e: Event) => LogRow | null
+}
+
+// A claude message content block, as much of it as row() reads.
+type Block = {
+  type?: string
+  text?: unknown
+  thinking?: unknown
+  name?: unknown
+  input?: unknown
+  content?: unknown
+  is_error?: unknown
+}
+
+// A one-line, bounded preview of a tool's arguments or a result's body —
+// dim detail on a chip, so it stays small on the wire and on one line.
+let preview = (v: unknown): string => {
+  let s = (typeof v == 'string' ? v : JSON.stringify(v) ?? '')
+    .replace(/\s+/g, ' ').trim()
+  return s.length > 140 ? `${s.slice(0, 140)}…` : s
 }
 
 // The table as a browser may see it (GET /providers): the names and the
@@ -70,6 +97,22 @@ export let adapters: Record<string, Adapter> = {
       ...(j.effort ? ['--effort', j.effort] : []),
       j.instruction,
     ],
+    // Resume: same script, minus the fresh session id (the thread already
+    // exists — `--resume` tells the fake to skip its init), the new prompt
+    // last. Enough to drive the whole input path with no model or key.
+    resume: (j, sid, text) => [
+      Deno.execPath(),
+      'run',
+      '--quiet',
+      fake,
+      '--session',
+      sid,
+      '--model',
+      j.model,
+      ...(j.effort ? ['--effort', j.effort] : []),
+      '--resume',
+      text,
+    ],
     init: (e) =>
       e.type == 'init'
         ? {
@@ -85,6 +128,23 @@ export let adapters: Record<string, Adapter> = {
           usage_json: e.usage ? JSON.stringify(e.usage) : null,
         }
         : null,
+    row: (e) => {
+      if (e.type == 'message') {
+        return {
+          kind: 'say',
+          role: e.role == 'user' ? 'user' : 'agent',
+          text: String(e.text ?? ''),
+        }
+      }
+      if (e.type == 'tool') return { kind: 'tool', name: String(e.name ?? '') }
+      if (e.type == 'result') {
+        return {
+          kind: 'turn',
+          usage: e.usage ? JSON.stringify(e.usage) : undefined,
+        }
+      }
+      return null // init announces, it doesn't narrate
+    },
   },
 
   // claude -p, stream-json: one JSON event per line. init announces the
@@ -115,6 +175,23 @@ export let adapters: Record<string, Adapter> = {
       'bypassPermissions', // it owns its worktree; nobody is at the prompt
       j.instruction,
     ],
+    // Resume: --resume <id> takes the place of --session-id (the CLI won't
+    // accept both — one names an existing thread, the other mints one); the
+    // rest of the flags, and the discipline, are argv's.
+    resume: (j, sid, text) => [
+      'claude',
+      '-p',
+      '--resume',
+      sid,
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--model',
+      j.model,
+      '--permission-mode',
+      'bypassPermissions',
+      text,
+    ],
     init: (e) =>
       e.type == 'system' && e.subtype == 'init'
         ? {
@@ -131,6 +208,58 @@ export let adapters: Record<string, Adapter> = {
           ...(e.is_error ? { error: `result: ${e.subtype}` } : {}),
         }
         : null,
+    // stream-json: one content block per assistant/user event here (probed
+    // live). thinking → reason, text → say; a tool_use is the call, the
+    // matching user tool_result its answer (a separate line, so its own
+    // chip — row() is per-line and can't correlate the two). The result
+    // event closes the turn with usage; its text just repeats the last say.
+    row: (e) => {
+      if (e.type == 'assistant' || e.type == 'user') {
+        let msg = e.message as { content?: unknown } | undefined
+        let c = msg?.content
+        let b = (Array.isArray(c) ? c[0] : c) as Block | string | undefined
+        if (typeof b == 'string') {
+          return {
+            kind: 'say',
+            role: e.type == 'user' ? 'user' : 'agent',
+            text: b,
+          }
+        }
+        if (!b) return null
+        if (b.type == 'thinking') {
+          return { kind: 'reason', text: String(b.thinking ?? '') }
+        }
+        if (b.type == 'text') {
+          return {
+            kind: 'say',
+            role: e.type == 'user' ? 'user' : 'agent',
+            text: String(b.text ?? ''),
+          }
+        }
+        if (b.type == 'tool_use') {
+          return {
+            kind: 'tool',
+            name: String(b.name ?? ''),
+            detail: preview(b.input),
+          }
+        }
+        if (b.type == 'tool_result') {
+          return b.is_error
+            ? { kind: 'tool', name: '↳', ok: false, error: preview(b.content) }
+            : { kind: 'tool', name: '↳', ok: true, detail: preview(b.content) }
+        }
+        return null
+      }
+      if (e.type == 'result') {
+        return e.is_error
+          ? { kind: 'error', text: `result: ${String(e.subtype ?? 'error')}` }
+          : {
+            kind: 'turn',
+            usage: e.usage ? JSON.stringify(e.usage) : undefined,
+          }
+      }
+      return null // system, rate_limit_event, hook chatter
+    },
   },
 
   // codex exec --json. The stream never names its model, and text and
@@ -156,6 +285,21 @@ export let adapters: Record<string, Adapter> = {
       ...(j.effort ? ['-c', `model_reasoning_effort=${j.effort}`] : []),
       j.instruction,
     ],
+    // Resume: `exec resume <id> <prompt>` — the same posture flags as exec,
+    // the id and the new prompt as the two positionals (options first, then
+    // SESSION_ID then PROMPT, per `codex exec resume --help`).
+    resume: (j, sid, text) => [
+      'codex',
+      'exec',
+      'resume',
+      '--json',
+      '--dangerously-bypass-approvals-and-sandbox',
+      '-m',
+      j.model,
+      ...(j.effort ? ['-c', `model_reasoning_effort=${j.effort}`] : []),
+      sid,
+      text,
+    ],
     init: (e) => {
       if (e.type == 'thread.started') {
         return {
@@ -180,5 +324,66 @@ export let adapters: Record<string, Adapter> = {
           ),
         }
         : null,
+    // Only item.COMPLETED narrates — item.started would double every row.
+    // A tool call arrives whole (server.tool, its status, its error); a
+    // command carries its own exit. turn.completed is the usage divider.
+    row: (e) => {
+      if (e.type == 'item.completed') {
+        let it = (e as { item?: Item }).item
+        if (!it) return null
+        if (it.type == 'agent_message') {
+          return { kind: 'say', role: 'agent', text: String(it.text ?? '') }
+        }
+        if (it.type == 'reasoning') {
+          return { kind: 'reason', text: String(it.text ?? '') }
+        }
+        if (it.type == 'mcp_tool_call') {
+          return {
+            kind: 'tool',
+            name: `${it.server ?? ''}.${it.tool ?? ''}`,
+            ok: it.status != 'failed',
+            detail: preview(it.arguments),
+            ...(it.error?.message ? { error: String(it.error.message) } : {}),
+          }
+        }
+        if (it.type == 'command_execution') {
+          return {
+            kind: 'exec',
+            command: String(it.command ?? ''),
+            ...(it.exit_code == null ? {} : { exit: Number(it.exit_code) }),
+          }
+        }
+        return null
+      }
+      if (e.type == 'turn.completed') {
+        return {
+          kind: 'turn',
+          usage: e.usage ? JSON.stringify(e.usage) : undefined,
+        }
+      }
+      if (e.type == 'turn.failed') {
+        return {
+          kind: 'error',
+          text: String(
+            (e as { error?: { message?: string } }).error?.message ??
+              'turn failed',
+          ),
+        }
+      }
+      return null // thread.started, turn.started, item.started
+    },
   },
+}
+
+// A codex item, as much of it as row() reads.
+type Item = {
+  type?: string
+  text?: unknown
+  server?: unknown
+  tool?: unknown
+  arguments?: unknown
+  status?: unknown
+  error?: { message?: unknown } | null
+  command?: unknown
+  exit_code?: unknown
 }

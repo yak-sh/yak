@@ -19,7 +19,7 @@ Deno.env.set('POLL_MS', '10') // tests wait on facts, never on the clock
 Deno.env.set('STOP_GRACE_MS', '1000')
 
 let { apply, db } = await import('./db.ts')
-let { logs, logsDir, recover, running, start, stop } = await import(
+let { input, logs, logsDir, recover, running, start, stop } = await import(
   './sessions.ts'
 )
 
@@ -265,4 +265,57 @@ Deno.test('boot: a session whose provider is gone fails loudly', () => {
   recover(cast)
   assertEquals(row(eid)?.status, 'failed')
   assertMatch(String(row(eid)?.error), /no adapter/)
+})
+
+Deno.test('input: refused unless settled with a thread to resume', () => {
+  // no such session
+  let gone = input(uid(), 'hi', cast)
+  assert('error' in gone && gone.status == 404)
+  // active: the fake started but hasn't reached its provider id yet
+  let active = plant([INIT]) // status 'running'
+  db.prepare('update session set provider_session_id = ? where eid = ?')
+    .run('sid-1', active)
+  assertEquals(input(active, 'hi', cast), {
+    error: 'session is running — wait for it to settle',
+    status: 400,
+  })
+  // settled but never announced a provider thread
+  let settled = plant([INIT])
+  db.prepare("update session set status = 'completed' where eid = ?")
+    .run(settled)
+  let refused = input(settled, 'hi', cast)
+  assert('error' in refused)
+  assertMatch(refused.error, /no provider thread/)
+})
+
+Deno.test('input: the human line joins the log, seq continues, run resumes', async () => {
+  // A real end-to-end run leaves a settled session with a worktree + thread.
+  let { t } = seed()
+  let r = start(job(t), cast)
+  assert('eid' in r)
+  await r.done
+  assertEquals(row(r.eid)?.status, 'completed')
+  let before = row(r.eid)!.latest_seq as number
+
+  heard = []
+  let inp = input(r.eid, 'and one more thing', cast)
+  assert('eid' in inp, JSON.stringify(inp))
+  // Flipped running on the wire, straight away.
+  assertEquals(row(r.eid)?.status, 'running')
+  assertEquals(row(r.eid)?.finished_at, null)
+  assert(heard.some((c) => c.name == 'session' && c.comp?.status == 'running'))
+  // The synthetic line is now in the file, as the next seq, a user say.
+  let page = logs(r.eid, new URLSearchParams(`after=${before}&limit=1`))
+  assertEquals(page.entries[0].seq, before + 1)
+  assertEquals(JSON.parse(page.entries[0].line).type, 'session.input')
+  assertEquals(page.entries[0].row, {
+    kind: 'say',
+    role: 'user',
+    text: 'and one more thing',
+  })
+
+  // The continuation appends and the tailer settles it again — seq only grew.
+  await inp.done
+  assertEquals(row(r.eid)?.status, 'completed')
+  assert((row(r.eid)!.latest_seq as number) > before + 1)
 })

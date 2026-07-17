@@ -13,7 +13,7 @@ import { type Change } from './types.ts'
 import { apply, db, search, snapshot } from './db.ts'
 import { freeze, serveFrozen } from './freeze.ts'
 import { mcpServer } from './mcp.ts'
-import { logs, recover, start, stop } from './sessions.ts'
+import { input, logs, recover, start, stop } from './sessions.ts'
 import { outcome, recent, record, toolCall } from './telemetry.ts'
 import { stamp } from './hot.ts'
 
@@ -276,11 +276,21 @@ Deno.serve(
         )
         .catch((e) => new Response(String(e), { status: 400 }))
     }
-    let session = path.match(/^\/sessions\/([0-9a-f-]{36})\/(stop|logs)$/)
+    let session = path.match(/^\/sessions\/([0-9a-f-]{36})\/(stop|logs|input)$/)
     if (session) {
       let [, eid, verb] = session
       if (verb == 'logs') return Response.json(logs(eid, url.searchParams))
       if (req.method != 'POST') return new Response('no', { status: 405 })
+      if (verb == 'input') {
+        return req.json()
+          .then((b) => input(eid, String(b.text ?? ''), cast))
+          .then((r) =>
+            'error' in r
+              ? new Response(r.error, { status: r.status })
+              : Response.json({ eid: r.eid })
+          )
+          .catch((e) => new Response(String(e), { status: 400 }))
+      }
       return stop(eid, cast).then((r) =>
         'error' in r
           ? new Response(r.error, { status: r.status })

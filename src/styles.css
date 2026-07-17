@@ -1469,43 +1469,111 @@ html {
 .Session_Fault-error {
   color: var(--red);
 }
+/* The log is a transcript now, not a dump: normal text flow, each row
+   styled by its kind. Only the machine rows (exec, an unrecognized line)
+   fall back to monospace. */
 .Session_Log {
   display: grid;
-  gap: 1px;
-  font-family: ui-monospace, monospace;
-  font-size: 11px;
+  gap: var(--half-gap);
+  font-size: 12px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: var(--half-gap);
-  max-height: 24lh;
+  max-height: 32lh;
   overflow: auto;
 }
+/* A line the adapter gave no row: its bare type, as the old dump showed. */
 .Session_Line {
   display: flex;
   gap: var(--half-gap);
   min-width: 0;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
 }
 .Session_Seq {
   flex: none;
   text-align: right;
   min-width: 2.5ch;
+  color: var(--dim);
 }
 .Session_Type {
   flex: none;
   color: var(--blue);
 }
-.Session_Say {
+.Session_Raw {
+  color: var(--orange); /* not JSON: the bytes as the provider wrote them */
+  overflow-wrap: anywhere;
+}
+/* What the agent said: its markdown, in the normal text color. */
+.Session_Agent {
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.Session_Agent p {
+  margin: 0 0 var(--half-gap);
+}
+.Session_Agent :is(p, ul, ol, pre):last-child {
+  margin-bottom: 0;
+}
+/* What the human said, resuming — set off by an accent rail. */
+.Session_User {
   color: var(--muted);
-  /* one line per event, whatever the agent's own newlines say: nowrap
-     collapses them to spaces, and the clip is honest — the file is the
-     whole truth, this is its tail. */
+  border-left: 2px solid var(--accent);
+  padding-left: var(--half-gap);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* The model thinking out loud — dim, skippable. */
+.Session_Reason {
+  color: var(--dim);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+/* A tool call, one chip: name + mark, its detail dim beside it. */
+.Session_Tool {
+  display: flex;
+  gap: var(--half-gap);
+  align-items: baseline;
+  min-width: 0;
+  font-size: 11px;
+}
+.Session_ToolName {
+  flex: none;
+  color: var(--accent);
+  font-family: ui-monospace, monospace;
+}
+.Session_Tool-fail .Session_ToolName {
+  color: var(--red);
+}
+.Session_ToolDetail {
+  color: var(--dim);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.Session_Say-raw {
-  color: var(--orange); /* not JSON: the bytes as the provider wrote them */
+.Session_ToolErr {
+  color: var(--red);
+  overflow-wrap: anywhere;
+}
+/* A shell command it ran — monospace, its nonzero exit spelled out. */
+.Session_Exec {
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+/* A turn closing: a thin dim divider carrying its usage. */
+.Session_Turn {
+  border-top: 1px solid var(--border);
+  padding-top: var(--half-gap);
+  color: var(--dim);
+  font-size: 11px;
+}
+/* The run itself went wrong. */
+.Session_Oops {
+  color: var(--red);
+  overflow-wrap: anywhere;
 }
 .Session_Err {
   margin: 0;
@@ -1516,6 +1584,26 @@ html {
   overflow-wrap: anywhere;
   max-height: 12lh;
   overflow: auto;
+}
+/* The reply box: a sunken box at the pane's foot, the comment rail's twin. */
+.Session_Input {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  padding: var(--half-gap);
+  resize: none;
+  outline: none;
+}
+.Session_Input::placeholder {
+  color: var(--dim);
+}
+.Session_Input:focus {
+  border-color: var(--accent);
+}
+.Session_Input:disabled {
+  opacity: 0.6;
 }
 
 /* A session as a list line — the task row's grammar, one line. */

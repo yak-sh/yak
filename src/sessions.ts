@@ -159,9 +159,12 @@ export let running = new Map<string, Run>()
 
 // The tailer: follow the file until the child is gone, then one LAST pass
 // (the bytes it wrote on its way out are the important ones) and finalize.
-let follow = async (eid: string, ad: Adapter, cast: Cast) => {
+// A resume starts the tail PAST the settled log (input() hands it a Tail at
+// the file's current end), so it reads only the continuation and never
+// re-sees the previous run's terminal event.
+let follow = async (eid: string, ad: Adapter, cast: Cast, from?: Tail) => {
   let run = running.get(eid)!
-  let t: Tail = { at: 0, seq: 0, ended: false, errs: [] }
+  let t: Tail = from ?? { at: 0, seq: 0, ended: false, errs: [] }
   for (;;) {
     let last = await run.exit()
     drain(eid, ad, t, cast)
@@ -200,16 +203,38 @@ let finish = (eid: string, t: Tail, run: Run, cast: Cast) => {
 
 let clip = (s: string) => s.length > 64_000 ? `${s.slice(0, 64_000)}…` : s
 
+// One line, normalized for the renderer: the synthetic input line is a
+// `say` from the human for EVERY provider (so it's handled here, before any
+// dialect dispatch), everything else goes through the session's adapter.
+// A line that isn't JSON, or that the adapter doesn't recognize, carries no
+// row — the client renders it as its bare type, as before.
+let rowOf = (line: string, ad: Adapter | undefined) => {
+  let e: Event
+  try {
+    e = JSON.parse(line)
+  } catch {
+    return undefined
+  }
+  if (e && typeof e == 'object' && e.type == 'session.input') {
+    return { kind: 'say', role: 'user', text: String(e.text ?? '') } as const
+  }
+  return ad?.row(e) ?? undefined
+}
+
 // The log, bounded: `after=N` reads forward from seq N, `tail=N` reads the
-// last N lines, limit clamps at 500 either way. stderr rides along whole
-// (its tail, anyway) — unordered diagnostics, plainly labelled as such.
-// v0 reads the file per request; when logs get big this is where a seq→
-// offset index goes.
+// last N lines, limit clamps at 500 either way. Each line carries its
+// renderer `row` (the adapter's normalization — omitted when the line isn't
+// worth one). stderr rides along whole (its tail, anyway) — unordered
+// diagnostics, plainly labelled as such. v0 reads the file per request; when
+// logs get big this is where a seq→offset index goes.
 export let logs = (eid: string, q: URLSearchParams) => {
   let text = ''
   try {
     text = Deno.readTextFileSync(logFile(eid))
   } catch { /* no log yet: an empty log is not an error */ }
+  let provider = (db.prepare('select provider from session where eid = ?')
+    .get(eid) as { provider: string | null } | undefined)?.provider
+  let ad = adapters[String(provider)]
   let lines = text.split('\n')
   if (lines.at(-1) == '') lines.pop() // the trailing newline isn't a line
   let limit = Math.min(Math.max(Number(q.get('limit') ?? 100) || 100, 1), 500)
@@ -218,7 +243,10 @@ export let logs = (eid: string, q: URLSearchParams) => {
     ? Math.max(0, lines.length - Math.min(tail, limit))
     : Math.max(0, Number(q.get('after') ?? 0))
   let entries = lines.slice(from, from + limit)
-    .map((line, i) => ({ seq: from + i + 1, line: clip(line) }))
+    .map((line, i) => {
+      let row = rowOf(line, ad)
+      return { seq: from + i + 1, line: clip(line), ...(row ? { row } : {}) }
+    })
   let err = errTail(eid)
   return { entries, ...(err ? { stderr: err } : {}) }
 }
@@ -461,30 +489,13 @@ let launch = async (eid: string, ad: Adapter, j: Launch, cast: Cast) => {
     // A minimal env by allowlist: the child gets what a program needs to
     // run, plus its own coordinates. Nothing of this server's environment
     // rides along by accident.
-    let child = spawn(eid, ad.argv(j), j.tree, {
+    await track(eid, ad, ad.argv(j), j.tree, {
       PATH: Deno.env.get('PATH') ?? '',
       HOME: Deno.env.get('HOME') ?? '',
       TERM: Deno.env.get('TERM') ?? 'dumb',
       TASKS_TASK: j.task,
       TASKS_SESSION: j.session_id,
-    })
-    Deno.writeTextFileSync(pidFile(eid), String(child.pid))
-    let code: number | null = null
-    let gone = false
-    child.status.then((s) => {
-      code = s.code
-      gone = true
-    })
-    let run: Run = {
-      pid: child.pid,
-      exit: () => gone,
-      code: () => code,
-      why: null,
-      done: Promise.resolve(),
-    }
-    running.set(eid, run)
-    run.done = follow(eid, ad, cast)
-    await run.done
+    }, cast)
   } catch (e) {
     running.delete(eid)
     stamp(eid, {
@@ -493,6 +504,39 @@ let launch = async (eid: string, ad: Adapter, j: Launch, cast: Cast) => {
       finished_at: now(),
     }, cast)
   }
+}
+
+// Spawn a detached child, record its pid, and follow its output into the
+// row until it exits. The seam a fresh launch and a resume share — the only
+// difference between them is the worktree (launch makes one; a resume runs
+// in the one already there) and where the tail starts (`from`).
+let track = (
+  eid: string,
+  ad: Adapter,
+  argv: string[],
+  cwd: string,
+  env: Record<string, string>,
+  cast: Cast,
+  from?: Tail,
+) => {
+  let child = spawn(eid, argv, cwd, env)
+  Deno.writeTextFileSync(pidFile(eid), String(child.pid))
+  let code: number | null = null
+  let gone = false
+  child.status.then((s) => {
+    code = s.code
+    gone = true
+  })
+  let run: Run = {
+    pid: child.pid,
+    exit: () => gone,
+    code: () => code,
+    why: null,
+    done: Promise.resolve(),
+  }
+  running.set(eid, run)
+  run.done = follow(eid, ad, cast, from)
+  return run.done
 }
 
 // ---- stop ----
@@ -555,6 +599,97 @@ let departed = async (eid: string, pid: number, ms: number) => {
     if (Date.now() >= deadline) return false
     await sleep(poll())
   }
+}
+
+// ---- input ----
+
+// POST /sessions/:eid/input. Say more to a session that has gone quiet:
+// resume its provider thread with `text`. Refused unless the session is
+// SETTLED (an active one is still talking, and both CLIs resume a thread
+// only once it's idle) and has a provider thread to resume. The human's
+// line and the reply land in the SAME log — seq just continues — and the
+// existing tailer closes the session again when the continuation ends.
+export let input = (eid: string, text: string, cast: Cast) => {
+  let body = text.trim()
+  if (!body) return bad('empty input')
+  let row = db.prepare('select * from session where eid = ?').get(eid) as
+    | Row
+    | undefined
+  if (!row) return bad(`no such session: ${eid}`, 404)
+  if (sessionActive.includes(String(row.status))) {
+    return bad(`session is ${row.status} — wait for it to settle`)
+  }
+  if (!row.provider_session_id) {
+    return bad('session has no provider thread to resume')
+  }
+  let ad = adapters[String(row.provider)]
+  if (!ad) return bad(`no adapter for provider ${row.provider}`)
+  if (!row.cwd) return bad('session has no worktree to resume in')
+
+  // The human's line joins the log as a `say` — same file, next seq.
+  let path = logFile(eid)
+  Deno.mkdirSync(logsDir(), { recursive: true })
+  Deno.writeTextFileSync(
+    path,
+    `${JSON.stringify({ type: 'session.input', text: body })}\n`,
+    { append: true },
+  )
+  // Follow the continuation from the END of what's there now: the settled
+  // run's terminal event stays behind us — never re-drained, never counted
+  // twice, and its `ended` never poisons the new turn.
+  let lines = Deno.readTextFileSync(path).split('\n')
+  if (lines.at(-1) == '') lines.pop()
+  let from: Tail = {
+    at: Deno.statSync(path).size,
+    seq: lines.length,
+    ended: false,
+    errs: [],
+  }
+
+  // Back to running, every trace of the last ending cleared — the tailer
+  // derives a fresh one (stop_requested_at too, or a clean resume would
+  // inherit the old 'interrupted').
+  stamp(eid, {
+    status: 'running',
+    exit_code: null,
+    error: null,
+    stop_reason: null,
+    stop_requested_at: null,
+    finished_at: null,
+  }, cast)
+
+  let argv = ad.resume(
+    {
+      instruction: body,
+      session_id: String(row.id),
+      model: String(row.model),
+      effort: row.effort ? String(row.effort) : undefined,
+    },
+    String(row.provider_session_id),
+    body,
+  )
+  let done = track(
+    eid,
+    ad,
+    argv,
+    String(row.cwd),
+    {
+      PATH: Deno.env.get('PATH') ?? '',
+      HOME: Deno.env.get('HOME') ?? '',
+      TERM: Deno.env.get('TERM') ?? 'dumb',
+      TASKS_SESSION: String(row.id),
+    },
+    cast,
+    from,
+  ).catch((e) => {
+    running.delete(eid)
+    stamp(eid, {
+      status: 'failed',
+      error: String(e).slice(0, 2000),
+      finished_at: now(),
+    }, cast)
+  })
+  return { eid, done }
 }
 
 // ---- boot ----
