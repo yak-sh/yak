@@ -28,9 +28,10 @@ let file = Deno.env.get('DB_PATH') ??
 // A canvas is an entity with no component (yet) — its geometry lives in `pin`.
 let schema = `
   create table if not exists entity (
-    eid        text primary key,
-    num        integer not null unique,
-    created_at text not null
+    eid         text primary key,
+    num         integer not null unique,
+    created_at  text not null,
+    modified_at text
   );
   create table if not exists canvas (
     eid text primary key references entity(eid)
@@ -151,11 +152,13 @@ let schema = `
 // Insert an entity spine row: the eid arrives (or is minted) as a UUID, the
 // num is minted HERE — one global counter, safe inside a transaction.
 // No kind: an entity is what its components make it.
-let spine = (db: DatabaseSync, eid: string) =>
-  db.prepare(`
-    insert or ignore into entity (eid, num, created_at)
-    values (?, (select coalesce(max(num), 0) + 1 from entity), ?)
-  `).run(eid, new Date().toISOString())
+let spine = (db: DatabaseSync, eid: string) => {
+  let now = new Date().toISOString()
+  return db.prepare(`
+    insert or ignore into entity (eid, num, created_at, modified_at)
+    values (?, (select coalesce(max(num), 0) + 1 from entity), ?, ?)
+  `).run(eid, now, now)
+}
 
 // Mint a bare entity; components hang off the returned eid.
 let ent = (db: DatabaseSync) => {
@@ -277,6 +280,12 @@ export let open = () => {
   addCol('task', 'project_eid', 'project_eid text references entity(eid)')
   addCol('task', 'domain', 'domain text')
   addCol('session', 'cwd', 'cwd text')
+  // modified_at is server-stamped on every apply() touch; rows from
+  // before the column (or from direct writers) read as their creation.
+  addCol('entity', 'modified_at', 'modified_at text')
+  db.exec(
+    'update entity set modified_at = created_at where modified_at is null',
+  )
   // The FTS mirror follows doc by trigger from here on. Anything older,
   // any out-of-band writer, or shadow-table damage (overlapping watcher
   // restarts have managed it) shows up here as a failed integrity check
@@ -332,6 +341,7 @@ let AIMED: [string, string][] = [
 export let apply = (db: DatabaseSync, changes: Change[]): Change[] => {
   let dead = db.prepare('select 1 from tombstone where eid = ?')
   let extra: Change[] = []
+  let touched = new Set<string>()
   // A bounced claim is worth remembering: noted here mid-transaction,
   // written AFTER the rollback (an audit row can't ride the batch it
   // condemns) as a conflict entity — display strings, not references,
@@ -342,6 +352,7 @@ export let apply = (db: DatabaseSync, changes: Change[]): Change[] => {
     for (let { eid, name, comp } of changes) {
       let cols = cmps[name]
       if (!cols) continue
+      touched.add(eid)
       // A deleted entity stays deleted: the tombstone voids every late or
       // replayed change for its eid — an edit racing a delete loses
       // deterministically, and nothing can resurrect the id.
@@ -453,6 +464,12 @@ export let apply = (db: DatabaseSync, changes: Change[]): Change[] => {
         console.warn(`sync: change for ${name} ${eid} dropped —`, e)
       }
     }
+    // Every touched entity carries when it last changed — server-stamped
+    // (modified_at is not in comps, so the wire can never fake it).
+    // Deleted eids just miss; their rows are gone.
+    let stamp = db.prepare('update entity set modified_at = ? where eid = ?')
+    let now = new Date().toISOString()
+    for (let eid of touched) stamp.run(now, eid)
     db.exec('commit')
     return [...changes, ...extra]
   } catch (e) {

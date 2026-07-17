@@ -41,7 +41,7 @@ export let rows = ({ changes }: { changes: Change[] }) => {
     let row = out.get(eid) ??
       { eid, num: 0, kind: 'entity', comps: {} }
     if (name == 'entity') row.num = Number(comp.num ?? 0)
-    else row.comps[name] = comp
+    row.comps[name] = comp // entity rides too: created_at/modified_at
     out.set(eid, row)
   }
   for (let r of out.values()) r.kind = kindOf(r.comps)

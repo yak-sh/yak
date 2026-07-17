@@ -107,6 +107,21 @@ Deno.test('spine mints once, num is monotonic', () => {
   assertEquals(Number(comp(x, 'entity')?.num), num(x)) // touch ≠ re-mint
 })
 
+Deno.test('modified_at: server-stamped on every touch, never wire-set', () => {
+  let t = uid()
+  apply(db, [{ eid: t, name: 'doc', comp: { title: 'aging' } }])
+  let born = comp(t, 'entity')?.modified_at
+  assertEquals(typeof born, 'string')
+  apply(db, [{
+    eid: t,
+    name: 'entity',
+    comp: { modified_at: 'FAKE' }, // spine has no writable columns
+  }])
+  assertEquals(comp(t, 'entity')?.modified_at == 'FAKE', false)
+  apply(db, [{ eid: t, name: 'doc', comp: { title: 'aged' } }])
+  assertEquals(String(comp(t, 'entity')?.modified_at) >= String(born), true)
+})
+
 Deno.test('fts: search finds, follows edits, forgets the dead', () => {
   let t = uid(), c = uid()
   apply(db, [

@@ -282,6 +282,12 @@ as ~240px for visibility.`,
         return {
           camera: idOf(r),
           client: String(c.client_eid),
+          // WHO this viewport is: the client's browser, and when the
+          // camera last moved — a live human reads recent, a ghost stale.
+          agent: String(
+            byEid.get(String(c.client_eid))?.comps.client?.user_agent ?? '?',
+          ),
+          moved_at: r.comps.entity?.modified_at ?? null,
           canvas: String(c.canvas_eid),
           zoom: c.zoom,
           viewport: { x0: c.x - hw, y0: c.y - hh, x1: c.x + hw, y1: c.y + hh },
@@ -300,6 +306,7 @@ as ~240px for visibility.`,
           .map((v) => v.camera)
         return {
           card: idOf(r),
+          moved_at: r.comps.entity?.modified_at ?? null,
           eid: r.eid,
           target: title(c.target_eid),
           view: c.view,
