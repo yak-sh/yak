@@ -1,3 +1,4 @@
+import { useState } from 'preact/hooks'
 import { type Ent } from '../../types.ts'
 import {
   boardTasks,
@@ -7,9 +8,10 @@ import {
   ent,
   mutate,
   statuses,
+  uuid,
 } from '../../live.ts'
 import { adopt, parseQuery } from '../../query.ts'
-import { block } from '../ui.tsx'
+import { block, focus } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
 import { dragData, View } from '../View.tsx'
 
@@ -18,8 +20,10 @@ let Frame = block('div', 'Board', {
   ColName: 'div',
   Count: 'span',
   Item: 'div',
+  Add: 'div',
+  New: 'input',
 })
-let { Col, ColName, Count, Item } = Frame
+let { Col, ColName, Count, Item, Add, New } = Frame
 
 // A board as kanban over its saved QUERY (board.query, query.ts grammar):
 // membership is never stored, a task is here because it matches. Columns
@@ -30,6 +34,9 @@ let { Col, ColName, Count, Item } = Frame
 // the board it lands on; dragged out to the canvas it spawns a Task card
 // (the standard drag payload — Canvas owns that drop).
 export let Board = ({ e }: { e: Ent }) => {
+  // Which column's quick-create box is open ('' = none). One at a time:
+  // the box is a keyboard, and there's one keyboard.
+  let [adding, setAdding] = useState('')
   let tasks: Ent[]
   try {
     tasks = boardTasks(e)
@@ -114,6 +121,29 @@ export let Board = ({ e }: { e: Ent }) => {
     })
   }
 
+  // Quick-create: a task born INTO the column it was typed in — status
+  // from the column, plus the query's scalar equalities (adopt(), the
+  // drop's own path), so a task minted here MATCHES the board that made
+  // it. Its priority is the drop's arithmetic for landing at the foot:
+  // after the last row, or 0 in an empty column — nobody else's value
+  // moves. The column and the order win over the query's pins, exactly as
+  // they do on a drop.
+  let create = (status: string, list: Ent[], title: string) => {
+    let eid = uuid()
+    mutate(
+      { eid, name: 'doc', comp: { title, body: '' } },
+      {
+        eid,
+        name: 'task',
+        comp: {
+          ...adopt(parseQuery(String(e.board?.query ?? '')), 'task'),
+          status,
+          priority: (list.at(-1)?.task?.priority ?? -1) + 1,
+        },
+      },
+    )
+  }
+
   return (
     <Frame>
       {statuses.map((s) => {
@@ -140,6 +170,32 @@ export let Board = ({ e }: { e: Ent }) => {
                 <View eid={k.eid} view='Task.Row' />
               </Item>
             ))}
+            {
+              /* The column's foot: type a title, Enter files it and clears
+                for the next one — filing a list is one uninterrupted
+                keyboard — Escape (or clicking away) closes the box. */
+            }
+            {!folded.has(s) && (adding == s
+              ? (
+                <New
+                  elRef={focus}
+                  placeholder='title…'
+                  onKeyDown={(ev: KeyboardEvent) => {
+                    let t = ev.currentTarget as HTMLInputElement
+                    let title = t.value.trim()
+                    if (ev.key == 'Enter' && title) {
+                      create(s, list, title)
+                      t.value = ''
+                    } else if (ev.key == 'Escape') setAdding('')
+                  }}
+                  onBlur={() => setAdding('')}
+                />
+              )
+              : (
+                <Add onClick={() => setAdding(s)} title={`new ${s} task`}>
+                  +
+                </Add>
+              ))}
           </Col>
         )
       })}

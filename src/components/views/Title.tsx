@@ -1,8 +1,7 @@
 import { type Ent } from '../../types.ts'
-import { gated } from '../../live.ts'
 import { block } from '../ui.tsx'
-import { Dot } from '../Dot.tsx'
 import { Edit } from '../Edit.tsx'
+import { Pip } from './Task.tsx'
 import { View } from '../View.tsx'
 
 let Frame = block('div', 'CardTitle', { Text: 'span' })
@@ -11,11 +10,12 @@ let { Text } = Frame
 // The Card.Title view: what an entity shows in a card's titlebar — the
 // entity IS the card. Tasks lead with their status dot, then the id, then
 // the title; boards and pages with id + name; anything else id + kind,
-// dimmed.
+// dimmed. The task's dot is its status CONTROL (Task.tsx Pip) — a card
+// carries one dot, and that dot is where status is edited.
 export let TaskTitle = ({ e }: { e: Ent }) => (
   <Frame>
     <View eid={e.eid} view='Id' />
-    <Dot status={e.task!.status} gated={gated(e)} />
+    <Pip e={e} />
     <Text>
       <Edit eid={e.eid} comp='doc' prop='title' />
     </Text>

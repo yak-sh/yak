@@ -616,6 +616,35 @@ html {
   transform-origin: calc(var(--half-gap) + 1px + 0.45rem / 2) 50%;
   transform: rotate(90deg);
 }
+/* The quick-create row at each column's foot: a dim `+` that stays out of
+   the way until the column is hovered, and the box it opens into. */
+.Board_Add {
+  color: var(--dim);
+  cursor: pointer;
+  user-select: none;
+  padding: 0 var(--half-gap);
+  border-radius: var(--radius);
+  line-height: 1.6;
+}
+.Board_Col:hover .Board_Add {
+  background: var(--soft);
+}
+.Board_Add:hover {
+  color: var(--text);
+}
+.Board_New {
+  font: inherit;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: var(--half-gap);
+  min-width: 0; /* grid child: never widen the column to fit the box */
+  outline: none;
+}
+.Board_New::placeholder {
+  color: var(--dim);
+}
 .Board_Item {
   cursor: grab;
   min-width: 0; /* grid child: allow shrinking so the row's title can ellipsize */
@@ -730,11 +759,24 @@ html {
 .Prio-3 {
   opacity: 0.65;
 }
-/* The domain facet chip (Eng, Legal, Ops, …). */
+/* The domain facet chip (Eng, Legal, Ops, …) — a click opens its box. */
 .Task_Domain {
   white-space: nowrap;
   font-size: 11px;
   color: var(--muted);
+  cursor: pointer;
+}
+/* An unset field still shows: a ghost chip is the only way to say "this
+   field exists, and it's empty" — the empty body's min-height trick, in
+   a chip. Quiet until pointed at. */
+.Task_Domain-empty,
+.Task_Caret-empty {
+  color: var(--dim);
+  opacity: 0.6;
+}
+.Task_Domain-empty:hover,
+.Task_Caret-empty:hover {
+  opacity: 1;
 }
 /* The task's project, named and linked. */
 .Task_Project {
@@ -745,7 +787,44 @@ html {
 }
 .Task_Project:hover {
   text-decoration: underline;
-  color: var(--fg);
+  color: var(--text);
+}
+/* The picker's handle beside the project link — the link owns the click,
+   so the caret owns the picker. */
+.Task_Caret {
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--dim);
+  cursor: pointer;
+}
+.Task_Caret:hover {
+  color: var(--text);
+}
+/* The status pip is the status control: it cycles. */
+.Task_Pip {
+  cursor: pointer;
+}
+/* The Prio badge as a control. */
+.Task_Chip {
+  cursor: pointer;
+}
+/* A field's editor stands exactly where its chip stood — chip-sized,
+   chip-voiced, wearing the same accent seam [contenteditable] wears, so
+   an open editor reads as an open editor everywhere in the app. */
+.Task_Field,
+.Task_Pick {
+  font: inherit;
+  font-size: 11px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 0 3px;
+  min-width: 0;
+  outline: none;
+}
+.Task_Field-num {
+  width: 4.5rem; /* the spinners are the stepper — leave them room */
 }
 /* The card-context meta line — the board row's grammar on the full card:
    prio · domain · 💬 · ⚑, under the titlebar, above the body. */
@@ -768,11 +847,13 @@ html {
   color: var(--purple);
 }
 /* Head chips gather on the right: the FIRST one present takes the auto
-   margin, everything after it (id included) sits flush. */
-.Task_Head :is(.Task_Claim, .Task_Project, .Task_Domain, .Prio) {
+   margin, everything after it (id included) sits flush. A chip's editor
+   stands in the chip's place, so it joins both lists — opening one must
+   not restack the head. */
+.Task_Head :is(.Task_Claim, .Task_Project, .Task_Caret, .Task_Domain, .Prio, .Task_Field, .Task_Pick) {
   margin-left: auto;
 }
-.Task_Head :is(.Task_Claim, .Task_Project, .Task_Domain, .Prio) ~ :is(.Task_Project, .Task_Domain, .Prio, .Id) {
+.Task_Head :is(.Task_Claim, .Task_Project, .Task_Caret, .Task_Domain, .Prio, .Task_Field, .Task_Pick) ~ :is(.Task_Project, .Task_Caret, .Task_Domain, .Prio, .Task_Field, .Task_Pick, .Id) {
   margin-left: 0;
 }
 .Task_Body {

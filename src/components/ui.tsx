@@ -31,6 +31,13 @@ export let el = (tag: string, base: string) =>
     ].filter(Boolean).join(' '),
   }, children)
 
+// Take the keyboard on mount: <Field elRef={focus} />. The `autofocus`
+// attribute can't do this job — the document's autofocus-processed flag
+// fires once per page, so only the FIRST editor a page ever opened would
+// take focus. Module-level (not an inline arrow) so preact sees one
+// stable ref and calls it on mount, not on every render.
+export let focus = (n: unknown) => (n as HTMLElement | null)?.focus()
+
 // A whole element family hung on its Block: block('section', 'Card',
 // { Tabs: 'header', Scroll: 'div' }) renders section.Card, and carries
 // <C.Tabs> → header.Card_Tabs — the key IS the element name, the value its

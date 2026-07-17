@@ -177,6 +177,23 @@ export let rows = (): Row[] =>
     comps: r as Record<string, Record<string, unknown>>,
   }))
 
+// The domains in use, distinct and sorted — what the domain picker
+// suggests. domain is free text by convention (types.ts): the vocabulary
+// is whatever the graph already says, never a table to keep in step.
+export let domains = computed(() =>
+  [...new Set(Object.values(cache.value).flatMap((r) => r.task?.domain || []))]
+    .sort()
+)
+
+// Every project, oldest first — what the project picker lists. A project
+// is a doc + project tag and its name IS its doc.title (types.ts), so
+// there's nothing to resolve but the entity.
+export let projects = (): Ent[] =>
+  Object.entries(cache.value)
+    .filter(([, r]) => r.project)
+    .map(([eid]) => ent(eid))
+    .sort((a, b) => a.num - b.num)
+
 // Everything said ABOUT an entity, oldest first — comments are entities
 // whose comment.target_eid points here.
 export let commentsOn = (eid: string): Ent[] =>
