@@ -10,6 +10,7 @@ import {
   pinned,
   send,
   sock,
+  toFront,
   toPlane,
   topZ,
   uuid,
@@ -85,6 +86,7 @@ export let Canvas = ({ eid }: { eid: string }) => {
 
   let latch = (pin: HTMLElement) => {
     unlatch()
+    if (pin.dataset.eid) toFront(pin.dataset.eid) // framing raises, too
     frame(pin)
     latched.current = pin
     ro.current ??= new ResizeObserver(() => {

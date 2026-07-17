@@ -1,4 +1,4 @@
-import { camera, ent, mutate, topZ } from '../live.ts'
+import { camera, ent, mutate, toFront } from '../live.ts'
 import { idOf, type Pinned } from '../types.ts'
 import { block, el } from './ui.tsx'
 import { applicable } from './registry.ts'
@@ -46,6 +46,7 @@ let { Tabs, X, Scroll } = Frame
 export let Card = ({ p }: { p: Pinned }) => {
   let down = (e: PointerEvent & { currentTarget: HTMLDivElement }) => {
     if (!(e.target instanceof Element)) return
+    toFront(p.eid) // ANY touch raises the card — the drag gate is below
     if (
       e.target.closest('button, a, input, [contenteditable="plaintext-only"]')
     ) {
@@ -56,8 +57,6 @@ export let Card = ({ p }: { p: Pinned }) => {
     let from = { x: p.x, y: p.y }
     let sx = e.clientX
     let sy = e.clientY
-    let top = topZ(p.canvas_eid)
-    if (p.z != top) mutate({ eid: p.eid, name: 'pin', comp: { z: top + 1 } })
     // A click is not a drag: capturing the pointer retargets the derived
     // mouse events (a title's dblclick would never fire), so the drag — and
     // the capture — only start once the pointer has really moved.
@@ -163,10 +162,12 @@ export let Card = ({ p }: { p: Pinned }) => {
   return (
     <Pin
       mod={p.h ? 'sized' : false}
+      data-eid={p.eid}
       style={`left:${p.x}px;top:${p.y}px;z-index:${p.z};` +
         (p.w ? `width:${p.w}px;` : '') +
         (p.h ? `height:${p.h}px;` : '')}
       onPointerDown={down}
+      onWheel={() => toFront(p.eid)}
       // The CARD is the right-click target — "open here" (make this the
       // root card) and "open in new tab" for its target. Links, inputs,
       // and selectable text keep the browser's own menu.

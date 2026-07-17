@@ -255,6 +255,15 @@ export let topZ = (canvas: string) =>
       .map((r) => r.pin!.z),
   )
 
+// Any interaction pulls a card to the front. Reads the pin fresh from the
+// cache, so a burst of events (a scroll's worth of wheels) raises once.
+export let toFront = (pin: string) => {
+  let p = cache.value[pin]?.pin
+  if (!p) return
+  let top = topZ(p.canvas_eid)
+  if (p.z != top) mutate({ eid: pin, name: 'pin', comp: { z: top + 1 } })
+}
+
 // Screen px → plane coords, through the camera over the given canvas rect.
 export let toPlane = (clientX: number, clientY: number, rect: DOMRect) => {
   let { x, y, zoom, w, h } = camera.value
