@@ -271,11 +271,10 @@
   anchor-scope: --tab;
 }
 .Tab + .Tab {
-  margin-left: calc(1px - var(--gap)); /* row gap → 1px, so hover fills don't fuse */
+  margin-left: calc(-1 * var(--gap)); /* cancel the row gap — gapless chips */
 }
 .Tab:hover {
-  color: var(--muted);
-  background: var(--soft);
+  color: var(--muted); /* hover speaks through the glyph alone — no fill */
 }
 .Tab-on {
   color: var(--text);
