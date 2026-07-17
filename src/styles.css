@@ -293,6 +293,9 @@
    then one scroller that owns the padding — the scrollbar rides the border. */
 .Card {
   flex: 1;
+  min-width: 0; /* the PIN sizes the card — wide content scrolls inside
+  (flex min-width:auto would push the card past its pin,
+  stranding the resize handles and fooling zoom-to-fit) */
   display: flex;
   flex-direction: column;
   cursor: default;
