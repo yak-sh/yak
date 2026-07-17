@@ -881,8 +881,9 @@ html {
    prio · domain · 💬 · ⚑, under the titlebar, above the body. */
 .Task_Meta {
   display: flex;
+  flex-wrap: wrap; /* a narrow card wraps the chips; nothing overflows */
   align-items: baseline;
-  gap: var(--half-gap);
+  gap: 2px var(--half-gap);
   font-size: 11px;
   color: var(--dim);
   margin-bottom: var(--half-gap);
