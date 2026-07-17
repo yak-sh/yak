@@ -957,6 +957,25 @@ html {
   color: var(--dim);
   margin-bottom: var(--half-gap);
 }
+/* The meta line wears the W-3639 mockup's chip grammar: every field a
+   bordered rounded chip, quiet color naming the field — domain blue,
+   project purple, prio its rank color, claim fleet purple. */
+.Show_Meta :is(.Show_Domain, .Show_Project, .Show_Claim, .Prio, .Show_Comments) {
+  padding: 1px 7px;
+  border: 1px solid var(--border2);
+  border-radius: 4px;
+}
+.Show_Meta .Prio {
+  background: transparent;
+  font-size: 11px;
+  font-weight: 400;
+}
+.Show_Meta .Show_Domain {
+  color: var(--blue);
+}
+.Show_Meta .Show_Project {
+  color: var(--purple);
+}
 .Show_Comments {
   white-space: nowrap;
 }
