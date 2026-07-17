@@ -19,11 +19,12 @@ let Frame = block('div', 'Board', {
   Col: 'div',
   ColName: 'div',
   Count: 'span',
+  Scroll: 'div',
   Item: 'div',
   Add: 'div',
   New: 'input',
 })
-let { Col, ColName, Count, Item, Add, New } = Frame
+let { Col, ColName, Count, Scroll, Item, Add, New } = Frame
 
 // A board as kanban over its saved QUERY (board.query, query.ts grammar):
 // membership is never stored, a task is here because it matches. Columns
@@ -124,10 +125,9 @@ export let Board = ({ e }: { e: Ent }) => {
   // Quick-create: a task born INTO the column it was typed in — status
   // from the column, plus the query's scalar equalities (adopt(), the
   // drop's own path), so a task minted here MATCHES the board that made
-  // it. Its priority is the drop's arithmetic for landing at the foot:
-  // after the last row, or 0 in an empty column — nobody else's value
-  // moves. The column and the order win over the query's pins, exactly as
-  // they do on a drop.
+  // it. The box lives in the HEADER, so the task lands at the TOP where
+  // the typist is looking (priority before the first row) — nobody
+  // else's value moves; drag it down when it isn't the most urgent.
   let create = (status: string, list: Ent[], title: string) => {
     let eid = uuid()
     mutate(
@@ -138,7 +138,7 @@ export let Board = ({ e }: { e: Ent }) => {
         comp: {
           ...adopt(parseQuery(String(e.board?.query ?? '')), 'task'),
           status,
-          priority: (list.at(-1)?.task?.priority ?? -1) + 1,
+          priority: (list[0]?.task?.priority ?? 1) - 1,
         },
       },
     )
@@ -152,6 +152,9 @@ export let Board = ({ e }: { e: Ent }) => {
           <Col
             key={s}
             mod={folded.has(s) && 'folded'}
+            // the drop target cancels dragover ITSELF — leaning on an
+            // ancestor's cancel is how fullscreen boards lost their drops
+            onDragOver={(ev: DragEvent) => ev.preventDefault()}
             onDrop={(ev: DragEvent & { currentTarget: HTMLElement }) =>
               drop(ev, s)}
           >
@@ -159,43 +162,47 @@ export let Board = ({ e }: { e: Ent }) => {
               <Dot status={s} />
               {s}
               <Count>{list.length}</Count>
-            </ColName>
-            {!folded.has(s) && list.map((k) => (
-              <Item
-                key={k.eid}
-                draggable
-                data-eid={k.eid}
-                onDragStart={(ev: DragEvent) => dragData(ev, k.eid, 'Task')}
-              >
-                <View eid={k.eid} view='Task.Row' />
-              </Item>
-            ))}
-            {
-              /* The column's foot: type a title, Enter files it and clears
-                for the next one — filing a list is one uninterrupted
-                keyboard — Escape (or clicking away) closes the box. */
-            }
-            {!folded.has(s) && (adding == s
-              ? (
-                <New
-                  elRef={focus}
-                  placeholder='title…'
-                  onKeyDown={(ev: KeyboardEvent) => {
-                    let t = ev.currentTarget as HTMLInputElement
-                    let title = t.value.trim()
-                    if (ev.key == 'Enter' && title) {
-                      create(s, list, title)
-                      t.value = ''
-                    } else if (ev.key == 'Escape') setAdding('')
-                  }}
-                  onBlur={() => setAdding('')}
-                />
-              )
-              : (
+              {!folded.has(s) && adding != s && (
                 <Add onClick={() => setAdding(s)} title={`new ${s} task`}>
                   +
                 </Add>
-              ))}
+              )}
+            </ColName>
+            {
+              /* Under the header, above the rows: type a title, Enter
+                files it at the top and clears for the next one — filing
+                a list is one uninterrupted keyboard — Escape (or
+                clicking away) closes the box. */
+            }
+            {!folded.has(s) && adding == s && (
+              <New
+                elRef={focus}
+                placeholder='title…'
+                onKeyDown={(ev: KeyboardEvent) => {
+                  let t = ev.currentTarget as HTMLInputElement
+                  let title = t.value.trim()
+                  if (ev.key == 'Enter' && title) {
+                    create(s, list, title)
+                    t.value = ''
+                  } else if (ev.key == 'Escape') setAdding('')
+                }}
+                onBlur={() => setAdding('')}
+              />
+            )}
+            {!folded.has(s) && (
+              <Scroll>
+                {list.map((k) => (
+                  <Item
+                    key={k.eid}
+                    draggable
+                    data-eid={k.eid}
+                    onDragStart={(ev: DragEvent) => dragData(ev, k.eid, 'Task')}
+                  >
+                    <View eid={k.eid} view='Task.Row' />
+                  </Item>
+                ))}
+              </Scroll>
+            )}
           </Col>
         )
       })}
