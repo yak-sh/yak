@@ -1,7 +1,7 @@
 // The browser half: one entity cache, one socket, one identity, one camera.
 // The cache is the client's whole world — a snapshot fills it, ws patches
 // keep it current, and every component renders straight out of it.
-import { signal } from '@preact/signals'
+import { computed, signal } from '@preact/signals'
 import { type Change, type Dep, type Ent, type Pinned } from './types.ts'
 
 // A cache row: the spine plus whichever components the entity carries.
@@ -142,6 +142,17 @@ export let commentsOn = (eid: string): Ent[] =>
     .filter(([, r]) => r.comment?.target_eid == eid)
     .map(([id]) => ent(id))
     .sort((a, b) => a.num - b.num)
+
+// Comment tallies for every entity in ONE cache pass — a board of
+// hundreds of rows reads this map instead of each scanning the cache.
+export let commentCount = computed(() => {
+  let n: Record<string, number> = {}
+  for (let r of Object.values(cache.value)) {
+    let t = r.comment?.target_eid
+    if (t) n[String(t)] = (n[String(t)] ?? 0) + 1
+  }
+  return n
+})
 
 // The root canvas (first canvas-tagged entity) and its pinned cards.
 export let rootCanvas = () =>

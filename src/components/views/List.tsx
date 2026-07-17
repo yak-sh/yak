@@ -1,6 +1,7 @@
-import { type Ent } from '../../types.ts'
+import { type Ent, idOf } from '../../types.ts'
 import { pinned } from '../../live.ts'
 import { block } from '../ui.tsx'
+import { menu } from '../nav.tsx'
 import { View } from '../View.tsx'
 
 let Frame = block('div', 'List', { Row: 'div' })
@@ -21,10 +22,23 @@ export let List = ({ e }: { e: Ent }) => (
 )
 
 // The default list line: title (or kind) + the linking id chip. Tasks
-// override with Task.Row via the registry.
+// override with Task.Row via the registry. Right-click for the entity's
+// verbs, same as any card.
 let Line = block('div', 'ListItem', { Title: 'span' })
 export let ListItem = ({ e }: { e: Ent }) => (
-  <Line>
+  <Line
+    onContextMenu={(ev: MouseEvent) => {
+      if (ev.target instanceof Element && ev.target.closest('a')) return
+      ev.preventDefault()
+      ev.stopPropagation()
+      menu.value = {
+        x: ev.clientX,
+        y: ev.clientY,
+        href: `/${idOf(e)}`,
+        eid: e.eid,
+      }
+    }}
+  >
     <Line.Title>{e.doc?.title || e.kind}</Line.Title>
     <View eid={e.eid} view='Id' />
   </Line>

@@ -35,8 +35,16 @@
   --done: var(--accent);
 }
 
-:where(html) {
-  overscroll-behavior: none; /* chrome consults the root, not just body */
+/* Overscroll gestures (swipe-back) die ONLY while a canvas is on screen —
+   a two-finger pan is camera movement there, never history. Prose/board
+   roots keep the browser's native gestures. Chrome consults the root,
+   not just body, hence html. */
+:where(html):has(.Canvas) {
+  overscroll-behavior: none;
+}
+
+:where(body):has(.Canvas) {
+  overscroll-behavior: none; /* no swipe-navigate, no rubberband */
 }
 
 :where(body) {
@@ -44,7 +52,6 @@
   height: 100dvh;
   display: flex;
   flex-direction: column;
-  overscroll-behavior: none; /* no swipe-navigate, no rubberband */
   font: 13px/1.5 ui-monospace, monospace;
   background: var(--bg);
   color: var(--text);
@@ -512,30 +519,41 @@
   min-width: 0; /* grid child: allow shrinking so the row's title can ellipsize */
 }
 
-/* The board's summary line for a task: one row, plain spans, no editors —
+/* The board's card for a task, Trello-shaped: dot + wrapping title, then
+   a meta line (prio · domain · 💬 · ⚑ · id). Plain spans, no editors —
    hundreds of these must render without the browser noticing. */
 .TaskRow {
-  display: flex;
-  align-items: center;
-  gap: var(--half-gap);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px var(--half-gap);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--card);
-  padding: calc(var(--half-gap) / 2) var(--half-gap);
+  padding: var(--half-gap);
+}
+.TaskRow > .Dot {
+  align-self: start;
+  margin-top: calc((1lh - 0.55rem) / 2); /* pinned to the title's first line */
 }
 .TaskRow_Title {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 0; /* wraps freely — a board card reads, it doesn't truncate */
+}
+.TaskRow_Meta {
+  grid-column: 2;
+  display: flex;
+  align-items: baseline;
+  gap: var(--half-gap);
+  font-size: 11px;
+  color: var(--dim);
+}
+.TaskRow_Meta .Id {
+  margin-left: auto;
+}
+.TaskRow_Comments {
   white-space: nowrap;
 }
 .TaskRow_Claim {
   color: var(--purple);
-  font-size: 11px;
-}
-.TaskRow .Prio {
-  flex: none;
 }
 
 .Task {
