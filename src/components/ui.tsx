@@ -1,4 +1,5 @@
 import { type ComponentChildren, h } from 'preact'
+import { signal } from '@preact/signals'
 
 // The one place that speaks our CSS naming (Block, Block_Element,
 // Block-modifier). el('span', 'Dot') bakes the class into a component; its
@@ -54,3 +55,28 @@ export let block = <K extends string>(
         .map(([k, t]) => [k, el(t, `${base}_${k}`)]),
     ) as Record<K, ReturnType<typeof el>>,
   )
+
+// Relative time for humans — '5 minutes ago' — off a minute tick, so an
+// open card doesn't fossilize at the age it rendered. Pair with
+// title={pretty(iso)} for the full stamp on hover.
+let tick = signal(Date.now())
+if (globalThis.document) setInterval(() => (tick.value = Date.now()), 60_000)
+let SIZES: [Intl.RelativeTimeFormatUnit, number][] = [
+  ['year', 31_536_000],
+  ['month', 2_592_000],
+  ['week', 604_800],
+  ['day', 86_400],
+  ['hour', 3_600],
+  ['minute', 60],
+]
+let rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
+export let ago = (iso?: string | null) => {
+  if (!iso) return ''
+  let s = (tick.value - Date.parse(iso)) / 1000
+  for (let [unit, size] of SIZES) {
+    if (Math.abs(s) >= size) return rtf.format(Math.round(-s / size), unit)
+  }
+  return 'just now'
+}
+export let pretty = (iso?: string | null) =>
+  iso ? new Date(iso).toLocaleString() : ''

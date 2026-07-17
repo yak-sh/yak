@@ -1,16 +1,17 @@
 import { useRef } from 'preact/hooks'
 import snarkdown from 'snarkdown'
 import { clientId, commentsOn, ent, mutate, uuid } from '../live.ts'
-import { block } from './ui.tsx'
+import { ago, block, pretty } from './ui.tsx'
 import { idOf } from '../types.ts'
 
 let Frame = block('div', 'Comments', {
   Item: 'div',
   Who: 'span',
+  When: 'span',
   Body: 'div',
   New: 'textarea',
 })
-let { Item, Who, Body, New } = Frame
+let { Item, Who, When, Body, New } = Frame
 
 // Who said it: sessions by their id, browsers by a short client handle,
 // anything else by its entity id. Pure — the TUI names authors with it too.
@@ -55,6 +56,7 @@ export let Comments = ({ eid }: { eid: string }) => {
       {commentsOn(eid).map((c) => (
         <Item key={c.eid}>
           <Who>{author(c.comment!.author_eid)}</Who>
+          <When title={pretty(c.created_at)}>{ago(c.created_at)}</When>
           <Body
             dangerouslySetInnerHTML={{ __html: snarkdown(c.doc?.body ?? '') }}
           />

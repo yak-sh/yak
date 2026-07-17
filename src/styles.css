@@ -502,6 +502,10 @@ html {
   border-left: 2px solid var(--border2);
   padding-left: var(--half-gap);
 }
+.Comments_When {
+  color: var(--dim);
+  font-size: 11px;
+}
 .Comments_Who {
   font-size: 11px;
   color: var(--blue);

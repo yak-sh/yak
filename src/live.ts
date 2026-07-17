@@ -11,7 +11,7 @@ import { matchQuery, parseQuery } from './query.ts'
 // and through ent() below — with zero edits.
 type Comps =
   & { entity?: { eid: string; num: number; created_at: string } }
-  & Omit<Ent, 'eid' | 'num' | 'kind' | 'refs' | 'kids'>
+  & Omit<Ent, 'eid' | 'num' | 'created_at' | 'kind' | 'refs' | 'kids'>
 
 export let cache = signal<Record<string, Comps>>({})
 export let deps = signal<Dep[]>([])
@@ -145,6 +145,7 @@ export let ent = (eid: string): Ent => {
     ...comps, // whatever components the entity carries, verbatim
     eid,
     num: entity?.num ?? 0,
+    created_at: entity?.created_at,
     kind: kindOf(comps), // derived — the display convention, not data
     refs: deps.value
       .filter((d) => d.parent == eid && d.type != 'contains')
