@@ -9,7 +9,7 @@ let { Text } = Frame
 
 // The Card.Title view: what an entity shows in a card's titlebar — the
 // entity IS the card. Tasks lead with their status dot, then the id, then
-// the title; projects and pages with id + name; anything else id + kind,
+// the title; boards and pages with id + name; anything else id + kind,
 // dimmed.
 export let TaskTitle = ({ e }: { e: Ent }) => (
   <Frame>
@@ -21,7 +21,7 @@ export let TaskTitle = ({ e }: { e: Ent }) => (
   </Frame>
 )
 
-export let ProjectTitle = ({ e }: { e: Ent }) => (
+export let BoardTitle = ({ e }: { e: Ent }) => (
   <Frame>
     <View eid={e.eid} view='Id' />
     <Text>
@@ -45,6 +45,15 @@ export let WebTitle = ({ e }: { e: Ent }) => {
     </Frame>
   )
 }
+
+export let DocTitle = ({ e }: { e: Ent }) => (
+  <Frame>
+    <View eid={e.eid} view='Id' />
+    <Text>
+      <Edit eid={e.eid} comp='doc' prop='title' />
+    </Text>
+  </Frame>
+)
 
 export let AnyTitle = ({ e }: { e: Ent }) => (
   <Frame mod='dim'>

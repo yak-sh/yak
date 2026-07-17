@@ -3,6 +3,7 @@
 // keep it current, and every component renders straight out of it.
 import { signal } from '@preact/signals'
 import {
+  type BoardTag,
   type Camera,
   type CardComp,
   type Change,
@@ -12,16 +13,16 @@ import {
   type Ent,
   type Pin,
   type Pinned,
-  type Proj,
   type Task,
   type Web,
 } from './types.ts'
 
 type Comps = {
-  entity?: { eid: string; num: number; kind: string; created_at: string }
+  entity?: { eid: string; num: number; created_at: string }
   doc?: Doc
   task?: Task
-  project?: Proj
+  canvas?: { eid: string }
+  board?: BoardTag
   web?: Web
   card?: CardComp
   pin?: Pin
@@ -45,6 +46,7 @@ export let config = {
 
 // The column sort: priority first (lower sorts higher), num as tiebreak.
 export { statuses } from './types.ts'
+import { kindOf } from './types.ts'
 export let byPriority = (a: Ent, b: Ent) =>
   (a.task!.priority - b.task!.priority) || (a.num - b.num)
 
@@ -129,10 +131,11 @@ export let ent = (eid: string): Ent => {
   return {
     eid,
     num: r.entity?.num ?? 0,
-    kind: r.entity?.kind ?? 'entity',
+    kind: kindOf(r), // derived — the display convention, not data
     doc: r.doc,
     task: r.task,
-    project: r.project,
+    canvas: r.canvas,
+    board: r.board,
     web: r.web,
     card: r.card,
     pin: r.pin,
@@ -147,11 +150,12 @@ export let ent = (eid: string): Ent => {
   }
 }
 
-// The root canvas (first canvas entity) and the cards pinned to a canvas.
+// The root canvas (first canvas-tagged entity) and its pinned cards.
 export let rootCanvas = () =>
   Object.entries(cache.value)
-    .filter(([, r]) => r.entity?.kind == 'canvas')
-    .sort(([, a], [, b]) => a.entity!.num - b.entity!.num)[0]?.[0]
+    .filter(([, r]) => r.canvas)
+    .sort(([, a], [, b]) => (a.entity?.num ?? 0) - (b.entity?.num ?? 0))[0]
+    ?.[0]
 
 export let pinned = (canvas: string): Pinned[] =>
   Object.entries(cache.value)

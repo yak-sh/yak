@@ -6,7 +6,7 @@
 //   .doc.title=Hello    the explicit spelling, for collisions (pin/camera
 //                       geometry) or clarity
 // Values that look like numbers become numbers.
-import { type Change, comps, type Dep, statuses } from './types.ts'
+import { type Change, comps, type Dep, kindOf, statuses } from './types.ts'
 
 export let host = () => Deno.env.get('TASKS_HOST') ?? '127.0.0.1:5173'
 
@@ -23,19 +23,18 @@ export let snapshot = async () => {
   return res.json() as Promise<{ changes: Change[]; deps: Dep[] }>
 }
 
-// The graph as rows: one per entity, components merged in.
+// The graph as rows: one per entity, components merged in; kind derived.
 export let rows = ({ changes }: { changes: Change[] }) => {
   let out = new Map<string, Row>()
   for (let { eid, name, comp } of changes) {
     if (!comp) continue
     let row = out.get(eid) ??
       { eid, num: 0, kind: 'entity', comps: {} }
-    if (name == 'entity') {
-      row.num = Number(comp.num ?? 0)
-      row.kind = String(comp.kind ?? 'entity')
-    } else row.comps[name] = comp
+    if (name == 'entity') row.num = Number(comp.num ?? 0)
+    else row.comps[name] = comp
     out.set(eid, row)
   }
+  for (let r of out.values()) r.kind = kindOf(r.comps)
   return [...out.values()]
 }
 
@@ -107,6 +106,6 @@ export let byBoard = (a: Row, b: Row) =>
 
 export let idOf = (r: Row) =>
   `${
-    ({ task: 'T', project: 'P' } as Record<string, string>)[r.kind] ??
+    ({ task: 'T', board: 'B' } as Record<string, string>)[r.kind] ??
       r.kind[0].toUpperCase()
   }-${r.num}`

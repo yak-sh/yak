@@ -1,4 +1,4 @@
-// The TUI app: browse the first project's board with vim keys. Everything
+// The TUI app: browse the first board with vim keys. Everything
 // below this file is shared with the web — same cache, same registry, same
 // mode signal. Only Board is overridden (columns become a nested list);
 // Task, Dot, Id, Dependency and Debug.ListItem render through the very same
@@ -14,7 +14,7 @@ import {
   send,
   statuses,
 } from '../live.ts'
-import { type Renderer, resolve, View } from '../components/View.tsx'
+import { has, type Renderer, resolve, View } from '../components/View.tsx'
 import { idOf } from '../components/views/Id.tsx'
 import { Dot } from '../components/Dot.tsx'
 import { clipboard } from './paint.ts'
@@ -25,10 +25,10 @@ export let quit = signal(false)
 let msg = signal('')
 let buf = signal('') // the : command line
 
-// The first project is the board we browse — v0 has exactly one.
-let projEid = () =>
+// The first board is the one we browse — v0 has exactly one.
+let boardEid = () =>
   Object.entries(cache.value)
-    .filter(([, r]) => r.project)
+    .filter(([, r]) => r.board)
     .sort(([, a], [, b]) => (a.entity?.num ?? 0) - (b.entity?.num ?? 0))[0]
     ?.[0]
 
@@ -36,7 +36,7 @@ let rows = (e: Ent, status: string) =>
   e.kids.filter((k) => k.task?.status == status).sort(byPriority)
 
 export let selected = () => {
-  let p = projEid()
+  let p = boardEid()
   if (!p) return undefined
   let list = rows(ent(p), statuses[sel.value.col])
   return list[Math.min(sel.value.row, list.length - 1)]?.eid
@@ -127,7 +127,7 @@ let yank = () => {
 // Vertically the board reads as ONE list: j past the bottom of a column
 // continues into the next column's first row, k mirrors it back up.
 let vert = (d: number) => {
-  let p = projEid()
+  let p = boardEid()
   if (!p) return
   let e = ent(p)
   let flat = statuses.flatMap((s, col) =>
@@ -188,9 +188,11 @@ let TuiTask = ({ e }: { e: Ent }) => (
   </div>
 )
 
+// Same scores as the shared entries they shadow — a tie goes to the
+// override because platform layers are consulted first.
 export let overrides: Renderer[] = [
-  { view: 'Board', match: (e) => !!e.project, Render: TuiBoard },
-  { view: 'Task', match: (e) => !!e.task, Render: TuiTask },
+  { view: 'Board', match: has('doc', 'board'), Render: TuiBoard },
+  { view: 'Task', match: has('doc', 'task'), Render: TuiTask },
 ]
 
 let commands: Record<string, (args: string[]) => string | void> = {
@@ -271,11 +273,11 @@ let TStatus = () => (
 // The screen: the board when the trail is empty, else the entered entity
 // through its first applicable view. The title doubles as the breadcrumb.
 export let App = () => {
-  let p = projEid()
+  let p = boardEid()
   let s = selected()
   let here = trail.value.at(-1)
   let crumbs = [
-    p ? ent(p).doc?.title ?? 'untitled' : 'no project',
+    p ? ent(p).doc?.title ?? 'untitled' : 'no board',
     ...trail.value.map((eid) => idOf(ent(eid))),
   ]
   return (

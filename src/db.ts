@@ -1,5 +1,5 @@
 // The fleet entity graph, in one SQLite file. Star ECS: `entity` holds the
-// shared primary key (`eid`); component tables (`task`, `project`, `card`, …)
+// shared primary key (`eid`); component tables (`task`, `board`, `card`, …)
 // hang off it by that same id; `dependency` rows are typed eid↔eid edges that
 // read as sentences. This module owns the file, the seed, and the two wire
 // operations: apply (patch batches in) and snapshot (the whole graph out).
@@ -23,8 +23,10 @@ let schema = `
   create table if not exists entity (
     eid        text primary key,
     num        integer not null unique,
-    kind       text not null,
     created_at text not null
+  );
+  create table if not exists canvas (
+    eid text primary key references entity(eid)
   );
   create table if not exists doc (
     eid   text primary key references entity(eid),
@@ -36,7 +38,7 @@ let schema = `
     status text not null default 'open',
     priority real not null default 0
   );
-  create table if not exists project (
+  create table if not exists board (
     eid text primary key references entity(eid)
   );
   create table if not exists web (
@@ -88,16 +90,17 @@ let schema = `
 
 // Insert an entity spine row: the eid arrives (or is minted) as a UUID, the
 // num is minted HERE — one global counter, safe inside a transaction.
-let spine = (db: DatabaseSync, eid: string, kind: string) =>
+// No kind: an entity is what its components make it.
+let spine = (db: DatabaseSync, eid: string) =>
   db.prepare(`
-    insert or ignore into entity (eid, num, kind, created_at)
-    values (?, (select coalesce(max(num), 0) + 1 from entity), ?, ?)
-  `).run(eid, kind, new Date().toISOString())
+    insert or ignore into entity (eid, num, created_at)
+    values (?, (select coalesce(max(num), 0) + 1 from entity), ?)
+  `).run(eid, new Date().toISOString())
 
-// Mint a bare entity of a kind; components hang off the returned eid.
-let ent = (db: DatabaseSync, kind: string) => {
+// Mint a bare entity; components hang off the returned eid.
+let ent = (db: DatabaseSync) => {
   let eid = crypto.randomUUID()
-  spine(db, eid, kind)
+  spine(db, eid)
   return eid
 }
 
@@ -106,22 +109,22 @@ let doc = (db: DatabaseSync, eid: string, title: string, body = '') =>
     .run(eid, title, body)
 
 let addTask = (db: DatabaseSync, title: string, status: string, body = '') => {
-  let eid = ent(db, 'task')
+  let eid = ent(db)
   doc(db, eid, title, body)
   db.prepare('insert into task (eid, status) values (?, ?)').run(eid, status)
   return eid
 }
 
-let addProject = (db: DatabaseSync, title: string) => {
-  let eid = ent(db, 'project')
+let addBoard = (db: DatabaseSync, title: string) => {
+  let eid = ent(db)
   doc(db, eid, title)
-  db.prepare('insert into project (eid) values (?)').run(eid)
+  db.prepare('insert into board (eid) values (?)').run(eid)
   return eid
 }
 
 // A card views one entity through one lens; pinning places it on a canvas.
 let addCard = (db: DatabaseSync, target: string, view: string) => {
-  let eid = ent(db, 'card')
+  let eid = ent(db)
   db.prepare('insert into card (eid, target_eid, view) values (?, ?, ?)')
     .run(eid, target, view)
   return eid
@@ -145,8 +148,8 @@ let link = (db: DatabaseSync, parent: string, type: string, child: string) =>
     'insert into dependency (parent_eid, type, child_eid) values (?, ?, ?)',
   ).run(parent, type, child)
 
-// A handful of neutral demo rows — a project containing tasks, one edge of
-// each type, and a root canvas showing the project as a Board plus one task
+// A handful of neutral demo rows — a board containing tasks, one edge of
+// each type, and a root canvas showing it as a Board plus one task
 // card. No fleet data in the repo.
 let seed = (db: DatabaseSync) => {
   let schema = addTask(
@@ -177,56 +180,23 @@ let seed = (db: DatabaseSync) => {
   link(db, view, 'contains', keys) // the view work decomposes into shortcuts
   link(db, readme, 'reads', schema) // read the schema before writing docs
 
-  let proj = addProject(db, 'Walking skeleton')
-  for (let t of [schema, view, keys, readme]) link(db, proj, 'contains', t)
+  let board = addBoard(db, 'Walking skeleton')
+  for (let t of [schema, view, keys, readme]) link(db, board, 'contains', t)
 
-  let canvas = ent(db, 'canvas')
-  pin(db, canvas, addCard(db, proj, 'Board'), 0, 0, 640, 0)
+  let canvas = ent(db)
+  db.prepare('insert into canvas (eid) values (?)').run(canvas)
+  pin(db, canvas, addCard(db, board, 'Board'), 0, 0, 640, 0)
   pin(db, canvas, addCard(db, view, 'Task'), 664, 0, 320, 0)
 }
 
-// Open the file, plant the schema, seed once if the graph is empty. Returns a
-// live handle; the process holds it open for the server's lifetime.
-// Additive migrations: `create if not exists` won't grow an existing table,
-// so new columns are altered in when missing.
-let migrate = (db: DatabaseSync) => {
-  let has = (table: string, col: string) =>
-    (db.prepare(
-      'select count(*) as n from pragma_table_info(?) where name = ?',
-    ).get(table, col) as { n: number }).n
-  if (!has('pin', 'z')) {
-    db.exec('alter table pin add column z integer not null default 0')
-  }
-  if (!has('task', 'priority')) {
-    db.exec('alter table task add column priority real not null default 0')
-  }
-  // title/body moved to doc — a task is a doc with task-management added,
-  // a project a doc with board-ness; anything else can carry a doc too.
-  if (has('task', 'title')) {
-    db.exec(`
-      insert or ignore into doc (eid, title, body)
-        select eid, title, body from task;
-      alter table task drop column title;
-      alter table task drop column body;
-    `)
-  }
-  if (has('project', 'title')) {
-    db.exec(`
-      insert or ignore into doc (eid, title, body)
-        select eid, title, '' from project;
-      alter table project drop column title;
-    `)
-  }
-  if (!has('web', 'frozen_at')) {
-    db.exec('alter table web add column frozen_at text')
-  }
-}
-
+// Open the file, plant the schema, seed once if the graph is empty.
+// Returns a live handle; the process holds it open for the server's
+// lifetime. No migrations yet — until the v1 data moves in, schema
+// changes mean delete the file and reseed.
 export let open = () => {
   Deno.mkdirSync(dirname(file), { recursive: true })
   let db = new DatabaseSync(file)
   db.exec(schema)
-  migrate(db)
   let { n } = db.prepare('select count(*) as n from task').get() as {
     n: number
   }
@@ -237,9 +207,10 @@ export let open = () => {
 // The one live handle — the server shares it for the process lifetime.
 export let db = open()
 
-// The sync allowlist: the shared vocabulary plus the spine's one writable
-// column. Order matters — deletes run it REVERSED so dependents go first.
-let cmps: Record<string, string[]> = { entity: ['kind'], ...comps }
+// The sync allowlist: the shared vocabulary plus the spine (which has no
+// writable columns — num and created_at are server-owned, kind doesn't
+// exist). Order matters — deletes run it REVERSED so dependents go first.
+let cmps: Record<string, string[]> = { entity: [], ...comps }
 
 // Apply a batch atomically. Unknown component names are ignored (a newer
 // client speaking to an older server shouldn't wedge the socket). num and
@@ -275,11 +246,7 @@ export let apply = (db: DatabaseSync, changes: Change[]) => {
         continue
       }
       if (name == 'entity') {
-        spine(db, eid, String(comp.kind ?? 'entity'))
-        if ('kind' in comp) {
-          db.prepare('update entity set kind = ? where eid = ?')
-            .run(String(comp.kind), eid)
-        }
+        spine(db, eid) // a bare touch mints the spine; nothing to patch
         continue
       }
       let sent = cols.filter((c) => c in comp)
@@ -300,7 +267,7 @@ export let apply = (db: DatabaseSync, changes: Change[]) => {
       // way, loudly in the log.
       db.exec('savepoint change')
       try {
-        spine(db, eid, name)
+        spine(db, eid)
         if (sent.length) {
           db.prepare(
             `insert into ${name} (eid${sent.map((c) => `, ${c}`).join('')})

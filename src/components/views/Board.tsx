@@ -6,7 +6,7 @@ import { dragData, View } from '../View.tsx'
 let Frame = block('div', 'Board', { Col: 'div', ColName: 'div', Item: 'div' })
 let { Col, ColName, Item } = Frame
 
-// A project as kanban: columns derived from task status, ordered by
+// A board as kanban: columns derived from task status, ordered by
 // priority. Every task row is draggable — dropped on another column (or
 // another spot in its own) it patches status + priority, where priority is
 // the midpoint of its new neighbours at the drop point; dragged out to the

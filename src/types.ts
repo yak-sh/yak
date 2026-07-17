@@ -10,7 +10,8 @@
 export let comps: Record<string, string[]> = {
   doc: ['title', 'body'],
   task: ['status', 'priority'],
-  project: [],
+  board: [],
+  canvas: [],
   web: ['url'], // frozen_at is server-stamped, never writable over the wire
   card: ['target_eid', 'view'],
   pin: ['canvas_eid', 'x', 'y', 'w', 'h', 'z'],
@@ -21,13 +22,30 @@ export let comps: Record<string, string[]> = {
 // The status vocabulary, in board-column order.
 export let statuses = ['open', 'wip', 'done']
 
+// kind is DERIVED — an entity is what its components make it, and really
+// the beholder decides (renderers match on components, scored by
+// specificity). This order is only the display/id convention: the most
+// specific component an entity carries names it.
+export let kindOrder = [
+  'task',
+  'board',
+  'canvas',
+  'web',
+  'card',
+  'client',
+  'camera',
+  'doc',
+]
+export let kindOf = (has: Record<string, unknown>) =>
+  kindOrder.find((k) => has[k]) ?? 'entity'
+
 // The edge vocabulary — every edge reads as a sentence, parent first:
 // parent requires child (hard gate) · parent contains child (decomposition,
 // children roll up) · parent reads child (read-first, never gates).
 export type Edge = 'requires' | 'contains' | 'reads'
 
 // The written face of an entity — title and markdown body. Anything can
-// carry one: tasks and projects do; notes, comments, and future kinds get
+// carry one: tasks and boards do; notes, comments, and future kinds get
 // rendering/editing/files for free by carrying it too.
 export type Doc = { eid: string; title: string; body: string }
 
@@ -38,7 +56,7 @@ export type Task = {
   priority: number // board order within a status column; lower sorts first
 }
 
-export type Proj = { eid: string } // a tag: "this doc fronts a board"
+export type BoardTag = { eid: string } // a tag: "this doc fronts a board"
 // An external page. The URL is what was pasted; the rendered thing is the
 // server's frozen archive of it (one self-contained HTML file on disk),
 // stamped frozen_at when ready — frozen_at is server-owned, never wire-set.
@@ -83,14 +101,16 @@ export type Dep = { parent: string; type: Edge; child: string }
 export type Ref = { type: Edge; child: string }
 
 // The bundle a renderer pattern-matches on: the entity plus whichever
-// components it carries, its edge sentences, and the entities it contains.
+// components it carries, its edge sentences, and the entities it
+// contains. kind is derived (kindOf) — display convention, not data.
 export type Ent = {
   eid: string
   num: number
   kind: string
   doc?: Doc
   task?: Task
-  project?: Proj
+  canvas?: { eid: string }
+  board?: BoardTag
   web?: Web
   card?: CardComp
   pin?: Pin

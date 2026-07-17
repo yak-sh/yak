@@ -93,7 +93,6 @@ filters must ALL match. ${GRAMMAR}`,
       let grouped = patches(parseAll(params))
       let eid = crypto.randomUUID()
       let changes: Change[] = [
-        { eid, name: 'entity', comp: { kind: 'task' } },
         { eid, name: 'doc', comp: { title, body: body ?? '', ...grouped.doc } },
         {
           eid,

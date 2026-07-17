@@ -73,8 +73,6 @@ let create = async (args: string[]) => {
   let task = { status: 'open', ...grouped.task }
   let eid = crypto.randomUUID()
   let changes: Change[] = [
-    // kind is stated, not inherited from whichever comp lands first
-    { eid, name: 'entity', comp: { kind: 'task' } },
     { eid, name: 'doc', comp: doc },
     { eid, name: 'task', comp: task },
     ...Object.entries(grouped)

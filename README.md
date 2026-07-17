@@ -5,7 +5,7 @@ modelled as a **star ECS** graph, rendered by a no-build Preact app.
 
 - **`entity`** — the spine. Every thing (task, comment, design doc, persona…) is
   an entity with a shared primary key (`eid`), a `kind`, and a `created_at`.
-- **Component tables** hang off that id: `task`, `project`, `card`, `pin`,
+- **Component tables** hang off that id: `task`, `board`, `card`, `pin`,
   `client`, `camera` so far; more kinds slot in without touching the spine.
 - **`dependency`** — typed `eid ↔ eid` edges, so anything relates to anything:
   - `requires` — hard gate (the parent waits on the child),
@@ -21,7 +21,7 @@ sqlite-vector embeddings, typed short ids (T-123 / C-123).
 entity(eid uuid pk, num server-minted, kind, created_at)
 doc(eid pk→entity.eid, title, body)      -- the written face; anything can carry one
 task(eid pk→doc carrier, status, priority) -- a task = doc + task-management
-project(eid pk→entity)                     -- a tag: this doc fronts a board
+board(eid pk→entity)                       -- a tag: this doc fronts a kanban
 card(eid pk→entity, target_eid→entity, view)
 pin(eid pk→card, canvas_eid→entity, x, y, w, h)
 client(eid pk→entity, user_agent, ip)
