@@ -3,7 +3,20 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#232a2e" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Tasks" />
+    <meta name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent" />
     <title>Tasks</title>
+    <!-- the app bg, inline: no white flash before styles.css lands, and
+         the PWA splash (manifest background_color) matches seamlessly -->
+    <style>
+    html {
+      background: #232a2e;
+    }
+    </style>
+    <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
     <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />

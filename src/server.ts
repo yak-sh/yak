@@ -23,6 +23,7 @@ let mime: Record<string, string> = {
   png: 'image/png',
   ico: 'image/x-icon',
   svg: 'image/svg+xml',
+  webmanifest: 'application/manifest+json',
 }
 
 // Serve a file from under a root, refusing path escapes. TS/TSX comes back
