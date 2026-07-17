@@ -47,10 +47,18 @@ Deno.test('new: a task, inheriting where you stand', () => {
   assertEquals(comps('new Ship it', P).task, { status: 'open', project_eid: P })
   assertEquals(comps('new Ship it', T).task, { status: 'open', project_eid: P })
   assertEquals(comps('new Ship it').task, { status: 'open' }) // no context
+  // the spec grammar tokenizes, so runs of spaces normalize to one
   assertEquals(
     run('new  Two  words ', ctx(B)).changes![0].comp!.title,
-    'Two  words',
+    'Two words',
   )
+  // …and setters in the line win over what the context hands down
+  assertEquals(comps('new P2 .domain=Ops Ship it', B).task, {
+    status: 'open',
+    project_eid: P,
+    domain: 'Ops',
+    priority: 2,
+  })
   // One client-minted eid names the whole new entity.
   let cs = run('new Ship it', ctx(B)).changes!
   assertEquals(UUID.test(cs[0].eid), true)

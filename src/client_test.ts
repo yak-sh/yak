@@ -13,6 +13,7 @@ import {
   patches,
   rows,
   sessionFor,
+  spec,
   taskChanges,
 } from './client.ts'
 import { matchQuery, parseQuery } from './query.ts'
@@ -188,4 +189,20 @@ Deno.test('contextDigest: claimed set with gates, or open board', () => {
   let fresh = contextDigest(snap, 'sess-nobody')
   assertEquals(fresh.includes('nothing claimed'), true)
   assertEquals(fresh.includes('T-3'), true) // open unclaimed work suggested
+})
+
+Deno.test('spec: a typed task — leading P, params anywhere, body below', () => {
+  let s = spec('P1 .domain=Eng Build a thing blah blah\nline two\nline three')
+  assertEquals(s.title, 'Build a thing blah blah')
+  assertEquals(s.body, 'line two\nline three')
+  assertEquals(s.grouped.task, { priority: 1, domain: 'Eng' })
+  // P mid-title is a WORD — only a leading P is a setter
+  assertEquals(spec('Fix the P2 endpoint').title, 'Fix the P2 endpoint')
+  assertEquals(spec('Fix the P2 endpoint').grouped.task, undefined)
+  // params still parse after words; fractional P too
+  assertEquals(spec('Ship it .status=wip').grouped.task, { status: 'wip' })
+  assertEquals(spec('p0.5 Urgent').grouped.task?.priority, 0.5)
+  // a malformed dot-word stays a word — mid-typing is not an error
+  assertEquals(spec('touch .env file').title, 'touch .env file')
+  assertEquals(spec('').title, '')
 })

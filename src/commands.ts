@@ -23,6 +23,7 @@ import {
   param,
   patches,
   type Row,
+  spec,
   taskChanges,
 } from './client.ts'
 import { adopt, parseQuery } from './query.ts'
@@ -82,11 +83,17 @@ let inherit = (ctx: Ctx): Record<string, unknown> => {
 }
 
 export let verbs: Record<string, Verb> = {
+  // :new speaks the spec grammar (client.ts): 'P1 .domain=Eng Ship it'
+  // — typed setters win over what the context hands down.
   new: (rest, ctx) => {
-    let title = rest.trim()
+    let { title, body, grouped } = spec(rest)
     if (!title) throw new Error('new: needs a title')
     return {
-      changes: taskChanges(uuid(), { doc: { title }, task: inherit(ctx) }),
+      changes: taskChanges(uuid(), {
+        ...grouped,
+        doc: { title, body, ...grouped.doc },
+        task: { ...inherit(ctx), ...grouped.task },
+      }),
       msg: `new: ${title}`,
     }
   },

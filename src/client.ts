@@ -100,6 +100,44 @@ export let patches = (params: Param[]) => {
   return out
 }
 
+// A task, TYPED: 'P1 .domain=Eng Build a thing\nnotes…' — the first line
+// is setters + title, every later line is body. Dot-params parse
+// anywhere in the line (their syntax can't be prose); the P1 shorthand
+// only parses while it LEADS, so a title like 'Fix the P2 endpoint'
+// keeps its words. One parser for every door that takes a typed task —
+// the board's quick-add, :new, whatever comes next. A malformed
+// dot-param stays a word rather than throwing: mid-typing is not an
+// error, and Enter files what the preview showed.
+export let spec = (text: string) => {
+  let [line, ...rest] = text.split('\n')
+  let words: string[] = []
+  let ps: Param[] = []
+  let leading = true
+  for (let w of line.trim().split(/\s+/).filter(Boolean)) {
+    let p = leading && w.match(/^[Pp](\d+(\.\d+)?)$/)
+    if (p) {
+      ps.push({ comp: 'task', prop: 'priority', value: Number(p[1]) })
+      continue
+    }
+    if (w.startsWith('.')) {
+      try {
+        let d = param(w)
+        if (d) {
+          ps.push(d)
+          continue
+        }
+      } catch { /* not a real prop: a word after all */ }
+    }
+    leading = false
+    words.push(w)
+  }
+  return {
+    title: words.join(' '),
+    body: rest.join('\n').trim(),
+    grouped: patches(ps),
+  }
+}
+
 // The standard task-create batch: a doc face, workflow state, then any
 // other grouped components verbatim. Callers put title/body into
 // grouped.doc first.

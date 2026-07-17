@@ -643,9 +643,27 @@ html {
   padding: var(--half-gap);
   min-width: 0; /* grid child: never widen the column to fit the box */
   outline: none;
+  /* one row that GROWS (ui.tsx grow sets the height) — never a panel */
+  resize: none;
+  overflow: hidden;
+  line-height: 1.4;
 }
 .Board_New::placeholder {
   color: var(--dim);
+}
+/* The parse, shown live above the box: what Enter will actually file. */
+.Board_Chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--half-gap);
+  align-items: center;
+  font-size: 11px;
+}
+.Board_Chip {
+  color: var(--dim);
+  background: var(--soft);
+  border-radius: var(--radius);
+  padding: 0 var(--half-gap);
 }
 .Board_Item {
   cursor: grab;

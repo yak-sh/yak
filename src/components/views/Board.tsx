@@ -10,9 +10,11 @@ import {
   statuses,
   uuid,
 } from '../../live.ts'
+import { spec, taskChanges } from '../../client.ts'
 import { adopt, parseQuery } from '../../query.ts'
-import { block, focus } from '../ui.tsx'
+import { block, focus, grow } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
+import { Prio } from '../Prio.tsx'
 import { dragData, View } from '../View.tsx'
 
 let Frame = block('div', 'Board', {
@@ -22,9 +24,11 @@ let Frame = block('div', 'Board', {
   Scroll: 'div',
   Item: 'div',
   Add: 'div',
-  New: 'input',
+  New: 'textarea',
+  Chips: 'div',
+  Chip: 'span',
 })
-let { Col, ColName, Count, Scroll, Item, Add, New } = Frame
+let { Col, ColName, Count, Scroll, Item, Add, New, Chips, Chip } = Frame
 
 // A board as kanban over its saved QUERY (board.query, query.ts grammar):
 // membership is never stored, a task is here because it matches. Columns
@@ -34,6 +38,62 @@ let { Col, ColName, Count, Scroll, Item, Add, New } = Frame
 // whatever scalar equalities the query demands, so a foreign task JOINS
 // the board it lands on; dragged out to the canvas it spawns a Task card
 // (the standard drag payload — Canvas owns that drop).
+// The quick-add box, under the header above the rows: ONE growing row —
+// Shift+Enter starts the body and the box follows (ui.tsx grow) — with
+// the parse shown live as chips while you type, so 'P1 .domain=Eng Ship
+// it' announces what Enter will file. Enter files and clears for the
+// next title (filing a list is one uninterrupted keyboard); Escape or
+// clicking away closes. Uncontrolled on purpose: the DOM owns the text,
+// state only mirrors it for the chips.
+let arm = (n: unknown) => {
+  focus(n)
+  grow(n as EventTarget)
+}
+let QuickAdd = (
+  { file, close }: { file: (text: string) => boolean; close: () => void },
+) => {
+  let [text, setText] = useState('')
+  let { body, grouped } = spec(text)
+  let p = grouped.task?.priority
+  let chips = Object.entries(grouped).flatMap(([comp, props]) =>
+    Object.entries(props)
+      .filter(([prop]) => comp != 'task' || prop != 'priority')
+      .map(([prop, v]) => `${prop}=${v}`)
+  )
+  return (
+    <>
+      {(p != null || chips.length > 0 || !!body) && (
+        <Chips>
+          {p != null && <Prio p={Number(p)} />}
+          {chips.map((x) => <Chip key={x}>{x}</Chip>)}
+          {!!body && <Chip mod='body'>+ body</Chip>}
+        </Chips>
+      )}
+      <New
+        elRef={arm}
+        rows={1}
+        placeholder='P1 .domain=Eng title…'
+        onInput={(ev: InputEvent) => {
+          setText((ev.currentTarget as HTMLTextAreaElement).value)
+          grow(ev.currentTarget)
+        }}
+        onKeyDown={(ev: KeyboardEvent) => {
+          let t = ev.currentTarget as HTMLTextAreaElement
+          if (ev.key == 'Enter' && !ev.shiftKey) {
+            ev.preventDefault()
+            if (file(t.value)) {
+              t.value = ''
+              setText('')
+              grow(t)
+            }
+          } else if (ev.key == 'Escape') close()
+        }}
+        onBlur={close}
+      />
+    </>
+  )
+}
+
 export let Board = ({ e }: { e: Ent }) => {
   // Which column's quick-create box is open ('' = none). One at a time:
   // the box is a keyboard, and there's one keyboard.
@@ -122,26 +182,26 @@ export let Board = ({ e }: { e: Ent }) => {
     })
   }
 
-  // Quick-create: a task born INTO the column it was typed in — status
-  // from the column, plus the query's scalar equalities (adopt(), the
-  // drop's own path), so a task minted here MATCHES the board that made
-  // it. The box lives in the HEADER, so the task lands at the TOP where
-  // the typist is looking (priority before the first row) — nobody
-  // else's value moves; drag it down when it isn't the most urgent.
-  let create = (status: string, list: Ent[], title: string) => {
-    let eid = uuid()
-    mutate(
-      { eid, name: 'doc', comp: { title, body: '' } },
-      {
-        eid,
-        name: 'task',
-        comp: {
-          ...adopt(parseQuery(String(e.board?.query ?? '')), 'task'),
-          status,
-          priority: (list[0]?.task?.priority ?? 1) - 1,
-        },
+  // Quick-create: a task born INTO the column it was typed in. The line
+  // is PARSED, not just taken (client.ts spec): 'P1 .domain=Eng Ship it'
+  // sets priority and domain, Shift+Enter lines become the body. The
+  // column's status and the query's scalar equalities (adopt(), the
+  // drop's own path) ride along, but what you TYPED wins over the auto
+  // top-landing priority. Lands at the top where the typist is looking.
+  let create = (status: string, list: Ent[], text: string) => {
+    let { title, body, grouped } = spec(text)
+    if (!title) return false
+    mutate(...taskChanges(uuid(), {
+      ...grouped,
+      doc: { title, body, ...grouped.doc },
+      task: {
+        ...adopt(parseQuery(String(e.board?.query ?? '')), 'task'),
+        priority: (list[0]?.task?.priority ?? 1) - 1,
+        ...grouped.task,
+        status,
       },
-    )
+    }))
+    return true
   }
 
   return (
@@ -168,25 +228,10 @@ export let Board = ({ e }: { e: Ent }) => {
                 </Add>
               )}
             </ColName>
-            {
-              /* Under the header, above the rows: type a title, Enter
-                files it at the top and clears for the next one — filing
-                a list is one uninterrupted keyboard — Escape (or
-                clicking away) closes the box. */
-            }
             {!folded.has(s) && adding == s && (
-              <New
-                elRef={focus}
-                placeholder='title…'
-                onKeyDown={(ev: KeyboardEvent) => {
-                  let t = ev.currentTarget as HTMLInputElement
-                  let title = t.value.trim()
-                  if (ev.key == 'Enter' && title) {
-                    create(s, list, title)
-                    t.value = ''
-                  } else if (ev.key == 'Escape') setAdding('')
-                }}
-                onBlur={() => setAdding('')}
+              <QuickAdd
+                file={(text) => create(s, list, text)}
+                close={() => setAdding('')}
               />
             )}
             {!folded.has(s) && (

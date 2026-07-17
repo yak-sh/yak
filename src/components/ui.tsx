@@ -38,6 +38,18 @@ export let el = (tag: string, base: string) =>
 // stable ref and calls it on mount, not on every render.
 export let focus = (n: unknown) => (n as HTMLElement | null)?.focus()
 
+// One-row inputs that GROW: a textarea sized to its content, so
+// Shift+Enter adds a line and the box follows — most inputs here are
+// one line that OCCASIONALLY isn't, not a resizable panel. Wire as
+// onInput (and call once on mount via elRef when prefilled). CSS
+// field-sizing would do this without JS, but iOS hasn't got it.
+export let grow = (n: EventTarget | null) => {
+  let t = n as HTMLTextAreaElement | null
+  if (!t) return
+  t.style.height = 'auto'
+  t.style.height = `${t.scrollHeight}px`
+}
+
 // A whole element family hung on its Block: block('section', 'Card',
 // { Tabs: 'header', Scroll: 'div' }) renders section.Card, and carries
 // <C.Tabs> → header.Card_Tabs — the key IS the element name, the value its
