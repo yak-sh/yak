@@ -98,11 +98,10 @@ html {
   field-sizing: content;
 }
 
-/* Retro always-visible scrollbars — thin, square, 2-tone (the harness look). */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--border2) var(--surface);
-}
+/* Retro always-visible scrollbars — thin, square, 2-tone (the harness
+   look). NO scrollbar-width/scrollbar-color: setting those makes Chrome
+   ignore the ::-webkit-scrollbar styling below and paint its auto-hide
+   overlay bars instead — the opposite of retro. */
 *::-webkit-scrollbar {
   width: 5px;
   height: 5px;
@@ -113,6 +112,7 @@ html {
 }
 *::-webkit-scrollbar-thumb {
   background: var(--border2);
+  border: 1px solid var(--bg); /* a seam of floor around the thumb */
 }
 *::-webkit-scrollbar-thumb:hover {
   background: var(--accent);
@@ -177,8 +177,9 @@ html {
 /* Overflowing columns spill past the board's own padding box, which
    eats its right padding — and a trailing margin doesn't count as
    scrollable overflow either. A spacer ITEM does: the row gap before it
-   becomes the board's right padding at full scroll. */
-.App_Body > .Board::after {
+   becomes the board's right padding at full scroll. (Card-hosted boards
+   overflow their Card_Scroll the same way.) */
+.Board::after {
   content: '';
   flex: 0 0 1px;
 }
@@ -533,6 +534,16 @@ html {
 .Card:has(> .Card_Scroll > .Board) {
   background: var(--bg); /* app-bg well — reads almost transparent */
 }
+/* A card-hosted board scrolls exactly like fullscreen: the card scroller
+   owns x + snap, each COLUMN owns its own y. */
+.Card_Scroll:has(> .Board) {
+  display: flex;
+  overflow-y: hidden;
+}
+.Card_Scroll > .Board {
+  flex: 1;
+  min-width: 0;
+}
 .Board {
   display: flex;
   gap: var(--gap);
@@ -883,7 +894,6 @@ html {
 }
 .Task_Body {
   margin: var(--half-gap) 0 0;
-  color: var(--muted);
   cursor: text; /* double-click edits the markdown source */
 }
 .Task_Body-bare {
