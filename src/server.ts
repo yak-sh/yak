@@ -7,8 +7,10 @@
 // views all come back where they were.
 import { transform } from 'sucrase'
 import { parseHTML } from 'linkedom'
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { type Change } from './types.ts'
 import { apply, db, snapshot } from './db.ts'
+import { mcpServer } from './mcp.ts'
 
 let src = new URL('.', import.meta.url).pathname
 
@@ -202,6 +204,45 @@ let serveFrozen = async (eid: string) => {
   }
 }
 
+// MCP mounted on THIS server — one port, one process, no extra auth
+// surface. Stateless: every POST is one JSON-RPC message answered by a
+// fresh in-memory server (cheap), so dev-server restarts can never
+// strand an agent session — and no node-shim layers to wedge. Tools
+// reach the graph in-process: same apply(), same allowlist, and writes
+// broadcast to every live client.
+let mcp = async (req: Request) => {
+  try {
+    let body = await req.json()
+    if (Array.isArray(body)) return new Response('no batches', { status: 400 })
+    if (body.id == null) return new Response(null, { status: 202 }) // notification
+    let [mine, theirs] = InMemoryTransport.createLinkedPair()
+    let server = mcpServer({
+      // deno-lint-ignore require-await
+      read: async () => snapshot(db),
+      // deno-lint-ignore require-await
+      write: async (changes) => {
+        apply(db, changes)
+        cast(changes)
+      },
+    })
+    await server.connect(theirs)
+    let reply = new Promise((resolve) => mine.onmessage = resolve)
+    await mine.start()
+    await mine.send(body)
+    let out = await Promise.race([
+      reply,
+      new Promise((_, no) =>
+        setTimeout(() => no(new Error('mcp timeout')), 60_000)
+      ),
+    ])
+    await server.close()
+    return Response.json(out)
+  } catch (e) {
+    console.warn('mcp request failed —', e)
+    return new Response('mcp error', { status: 500 })
+  }
+}
+
 // Explicit Deno.serve, not a `deno serve` default export: --watch restarts
 // only complete gracefully once the old isolate drains, which a live
 // listener + websockets never guarantee — reusePort lets the new isolate
@@ -213,6 +254,7 @@ Deno.serve(
     let path = url.pathname
     if (path == '/ws') return ws(req)
     if (path == '/snapshot') return Response.json(snapshot(db))
+    if (path == '/mcp' && req.method == 'POST') return mcp(req)
     // HTTP writes (the CLI and MCP server): same apply, same allowlist,
     // same broadcast — an HTTP client is just a client without a socket.
     if (path == '/apply' && req.method == 'POST') {

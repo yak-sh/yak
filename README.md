@@ -77,6 +77,30 @@ deno task seed   # bootstrap ~/.tasks/tasks.db (optional; dev does it)
 deno task check  # deno fmt --check + lint + type-check
 ```
 
+## CLI
+
+`deno task install` puts a global `task` on PATH (`deno install -g`). Dot-params
+route by prop through the component vocabulary — `.title=` can only mean
+`doc.title`, so it routes bare; the few collisions (pin/camera geometry) take
+the explicit `.comp.prop=` spelling. The same grammar filters and creates:
+
+```sh
+task tui                          # the terminal UI
+task list .status=open            # filter with dot-params
+task new .title="Hello, world!"   # bare words become the title too
+task set T-3 .status=done .priority=1
+task show T-3                     # one entity, whole, as JSON
+```
+
+## MCP
+
+The dev server IS an MCP server: point an agent at `http://host:5173/mcp`
+(Streamable HTTP, stateless — restarts can't strand a session, no auth on the
+tailnet) and it gets self-documenting `task_list` / `task_new` / `task_update` /
+`task_show` tools speaking the same dot-param grammar. `deno task mcp` serves
+the identical registry over stdio for clients that launch a process. Agent
+writes broadcast live to every canvas and TUI.
+
 ## Stack
 
 - **Deno 2.9** — runtime, task runner, type-checker.

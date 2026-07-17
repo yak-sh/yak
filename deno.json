@@ -4,6 +4,7 @@
     "dev": "deno run -A --unstable-net --watch src/server.ts",
     "tui": "sh -c 'while :; do deno run -A src/tui/main.tsx && break; [ $? -eq 42 ] || break; done'",
     "install": "deno install -g -f --name task -A --config deno.json src/cli.ts",
+    "mcp": "deno run -A src/mcp.ts",
     "seed": "deno run -A src/db.ts"
   },
   "fmt": {
@@ -21,6 +22,8 @@
     "@preact/signals-core": "npm:@preact/signals-core@^1.14.0",
     "snarkdown": "npm:snarkdown@^2.0.0",
     "linkedom": "npm:linkedom@^0.18.12",
+    "@modelcontextprotocol/sdk": "npm:@modelcontextprotocol/sdk@^1.12.0",
+    "zod": "npm:zod@^3.24.0",
     "sucrase": "npm:sucrase@^3.35.0"
   },
   "compilerOptions": {
