@@ -63,7 +63,7 @@ let registry: Renderer[] = [
   { view: 'Card.Title', match: has('doc'), Render: DocTitle },
   { view: 'Card.Title', match: () => true, Render: AnyTitle },
   {
-    view: 'MD',
+    view: 'Markdown',
     match: has('doc'),
     Render: Md,
     file: { ext: 'md', mime: 'text/markdown', text: mdText },
@@ -99,7 +99,7 @@ let all = () => (overrides.length ? [...overrides, ...registry] : registry)
 // entity iff some renderer serves it; Debug's catch-all means every card
 // gets a Debug tab. Views not listed here (Id, Dependency) are internal —
 // reachable only by explicit name.
-let tabs = ['Task', 'Board', 'Doc', 'Web', 'MD', 'JSON', 'Debug']
+let tabs = ['Task', 'Board', 'Doc', 'Web', 'Markdown', 'JSON', 'Debug']
 
 export let applicable = (e: Ent) =>
   tabs.filter((v) => all().some((r) => r.view == v && score(r, e) > 0))

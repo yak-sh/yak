@@ -112,14 +112,14 @@ let endEdit = () => {
   mode.value = 'normal'
 }
 
-// Yank the current entity through its MD file form (the same registry
+// Yank the current entity through its Markdown file form (the same registry
 // forms that power drag-to-desktop on the web; non-tasks fall back to
 // JSON). OSC 52 rides the tty, so the copy lands even over ssh.
 let yank = () => {
   let eid = trail.value.at(-1) ?? selected()
   if (!eid) return
   let e = ent(eid)
-  let f = resolve(e, 'MD').file!
+  let f = resolve(e, 'Markdown').file!
   clipboard(f.text(e))
   msg.value = `yanked ${idOf(e)}.${f.ext}`
 }

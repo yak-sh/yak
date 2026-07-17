@@ -3,8 +3,8 @@ import { ent } from '../../live.ts'
 import { el } from '../ui.tsx'
 import { idOf } from './Id.tsx'
 
-// A doc as markdown with frontmatter — the file a dragged MD tab drops on
-// the desktop, shown raw by the MD view. Any entity with a doc qualifies;
+// A doc as markdown with frontmatter — the file a dragged Markdown tab drops on
+// the desktop, shown raw by the Markdown view. Any entity with a doc qualifies;
 // workflow lines (status) appear only where the entity carries them.
 export let mdText = (e: Ent) => {
   let refs = e.refs
