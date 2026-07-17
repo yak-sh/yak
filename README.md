@@ -20,7 +20,8 @@ sqlite-vector embeddings, typed short ids (T-123 / C-123).
 ```sql
 entity(eid uuid pk, num server-minted, created_at)  -- no kind: components decide
 doc(eid pk→entity.eid, title, body)      -- the written face; anything can carry one
-task(eid pk→doc carrier, status, priority) -- a task = doc + task-management
+task(eid pk→doc carrier, status, priority, project_eid→entity)
+project(eid pk→entity)                     -- a tag: this doc fronts a project
 board(eid pk→entity)                       -- a tag: this doc fronts a kanban
 card(eid pk→entity, target_eid→entity, view)
 pin(eid pk→card, canvas_eid→entity, x, y, w, h)

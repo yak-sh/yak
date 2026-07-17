@@ -9,7 +9,8 @@
 // explicit .comp.prop spelling.
 export let comps: Record<string, string[]> = {
   doc: ['title', 'body'],
-  task: ['status', 'priority'],
+  task: ['status', 'priority', 'project_eid'],
+  project: [],
   board: [],
   canvas: [],
   web: ['url'], // frozen_at is server-stamped, never writable over the wire
@@ -31,6 +32,7 @@ export let statuses = ['open', 'wip', 'done']
 // specific component an entity carries names it.
 export let kindOrder = [
   'task',
+  'project',
   'board',
   'canvas',
   'web',
@@ -60,7 +62,12 @@ export type Task = {
   eid: string
   status: string
   priority: number // board order within a status column; lower sorts first
+  project_eid?: string | null // the project (venture) this task belongs to
 }
+
+// A tag: "this doc fronts a project" (a venture, a workstream). Its name
+// is its doc.title — one naming mechanism, no drift.
+export type ProjectTag = { eid: string }
 
 export type BoardTag = { eid: string } // a tag: "this doc fronts a board"
 // An external page. The URL is what was pasted; the rendered thing is the
@@ -134,6 +141,7 @@ export type Ent = {
   kind: string
   doc?: Doc
   task?: Task
+  project?: ProjectTag
   canvas?: { eid: string }
   board?: BoardTag
   web?: Web

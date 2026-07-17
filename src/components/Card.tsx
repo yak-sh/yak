@@ -160,9 +160,9 @@ export let Card = ({ p }: { p: Pinned }) => {
                 mutate({ eid: p.eid, name: 'card', comp: { view: v } })}
               key={v}
               aria-label={v}
+              data-tip={v}
             >
               <Icon name={icons[v]} />
-              <span class='Tab_Tip'>{v}</span>
             </Tab>
           ))}
           <X

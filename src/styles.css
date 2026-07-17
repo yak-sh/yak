@@ -215,7 +215,6 @@
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  overflow: hidden;
   box-shadow: 0 2px 10px rgb(0 0 0 / 0.25);
 }
 .Card_Tabs {
@@ -225,6 +224,9 @@
   margin: 0;
   padding: var(--half-gap);
   background: var(--surface);
+  /* the card no longer clips (tab tooltips must escape it), so the
+     chrome rounds its own corners against the card border */
+  border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;
   border-bottom: 1px solid var(--border);
   cursor: grab;
   user-select: none;
@@ -271,14 +273,13 @@
    to its chip — position: fixed lifts it out of the card's overflow clip,
    and anchor-scope keeps every tooltip on its own tab. */
 .Tab {
+  position: relative; /* the tooltip hangs off the chip itself */
   color: var(--dim);
   background: none;
   border: 1px solid transparent;
   border-radius: calc(var(--radius) - 2px);
   padding: 3px 4px;
   cursor: pointer;
-  anchor-name: --tab;
-  anchor-scope: --tab;
 }
 .Tab + .Tab {
   margin-left: calc(-1 * var(--gap)); /* cancel the row gap — gapless chips */
@@ -294,11 +295,18 @@
 .Icon {
   display: block;
 }
-.Tab_Tip {
-  position: fixed;
-  position-anchor: --tab;
-  bottom: calc(anchor(top) + 4px);
-  justify-self: anchor-center;
+/* The view name, as a ::before born from [data-tip]. No anchor():
+   Chrome won't resolve anchors inside a transformed ancestor, and every
+   card lives in the scaled plane — so the chip itself is the containing
+   block (position: relative) and the card no longer clips. Scales with
+   the canvas, works in every engine. */
+.Tab::before {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  translate: -50%;
+  white-space: nowrap;
   font: 11px ui-monospace, monospace;
   color: var(--text);
   background: var(--surface);
@@ -309,15 +317,10 @@
   opacity: 0;
   transition: opacity 0.1s;
 }
-.Tab:hover .Tab_Tip,
-.Tab:focus-visible .Tab_Tip {
+.Tab:hover::before,
+.Tab:focus-visible::before {
   opacity: 1;
   transition-delay: 0.3s; /* linger before naming; vanish instantly */
-}
-@supports not (anchor-name: --a) {
-  .Tab_Tip {
-    display: none; /* no anchor positioning → icons stand alone */
-  }
 }
 
 /* The comment rail — quiet, left-ruled, under any entity's view. The
@@ -372,6 +375,7 @@
   overflow: auto;
   padding: var(--gap);
   --bleed: var(--gap);
+  border-radius: 0 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px);
 }
 
 /* A board is a well: the hosting card drops to the chrome surface so the
@@ -410,7 +414,7 @@
 }
 .Task_Head {
   display: flex;
-  align-items: center;
+  align-items: first baseline; /* id/claim ride the title's FIRST line */
   gap: var(--half-gap);
 }
 .Task_Title {
@@ -424,6 +428,19 @@
 }
 .Task_Head .Id {
   margin-left: auto;
+}
+.Task_Prio,
+.Debug_Prio {
+  font-size: 11px;
+  color: var(--dim);
+  white-space: nowrap;
+}
+.Task_Head .Task_Claim + .Task_Prio,
+.Task_Head .Task_Prio {
+  margin-left: auto;
+}
+.Task_Head .Task_Prio ~ .Id {
+  margin-left: 0;
 }
 /* The session lease badge — who's working this, in fleet purple. */
 .Task_Claim,
@@ -627,10 +644,13 @@
 .Debug_Key {
   color: var(--dim);
   font-size: 11px;
-  justify-self: end; /* keys hug the value column — one aligned seam */
 }
 .Debug_Comp {
   color: var(--orange);
+}
+.Debug_Val-nil {
+  color: var(--dim);
+  font-style: italic;
 }
 .Debug_Val {
   color: var(--text);

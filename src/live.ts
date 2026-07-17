@@ -15,6 +15,7 @@ import {
   type Ent,
   type Pin,
   type Pinned,
+  type ProjectTag,
   type Session,
   type Task,
   type Web,
@@ -24,6 +25,7 @@ type Comps = {
   entity?: { eid: string; num: number; created_at: string }
   doc?: Doc
   task?: Task
+  project?: ProjectTag
   canvas?: { eid: string }
   board?: BoardTag
   web?: Web
@@ -140,6 +142,7 @@ export let ent = (eid: string): Ent => {
     kind: kindOf(r), // derived — the display convention, not data
     doc: r.doc,
     task: r.task,
+    project: r.project,
     canvas: r.canvas,
     board: r.board,
     web: r.web,

@@ -19,10 +19,22 @@ let Frame = block('div', 'Debug', {
   Title: 'span',
   Status: 'span',
   Claim: 'span',
+  Prio: 'span',
   Kids: 'div',
 })
-let { Props: Grid, Key, Comp, Val, Item, Kind, Title, Status, Claim, Kids } =
-  Frame
+let {
+  Props: Grid,
+  Key,
+  Comp,
+  Val,
+  Item,
+  Kind,
+  Title,
+  Status,
+  Claim,
+  Prio,
+  Kids,
+} = Frame
 
 // The comps an entity actually carries, minus the spine — the raw payload.
 let comps = (e: Ent) => {
@@ -41,13 +53,16 @@ let shape = (v: unknown) =>
     ? 'id'
     : false
 
+// null and '' still get a row — debug hides nothing, including absence.
 let Row = ({ comp, k, v }: { comp?: string; k: string; v: unknown }) => (
   <>
     <Key>
       {comp && <Comp>{comp}.</Comp>}
       {k}
     </Key>
-    <Val mod={shape(v)}>{String(v)}</Val>
+    {v == null || v === ''
+      ? <Val mod='nil'>{v === '' ? '""' : 'null'}</Val>
+      : <Val mod={shape(v)}>{String(v)}</Val>}
   </>
 )
 
@@ -89,6 +104,7 @@ export let DebugTaskItem = ({ e }: { e: Ent }) => (
     <Kind>{e.kind}</Kind>
     <Title>{e.doc?.title}</Title>
     {e.claim && <Claim>⚑ {ent(e.claim.session_eid).session?.id}</Claim>}
+    <Prio>p{e.task!.priority}</Prio>
     <Status mod={e.task!.status}>{e.task!.status}</Status>
   </Item>
 )

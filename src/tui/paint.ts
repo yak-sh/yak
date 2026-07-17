@@ -44,6 +44,8 @@ let sheet: Record<string, Style> = {
   Task_Claim: { fg: '#d699b6' },
   Debug_Claim: { fg: '#d699b6' },
   Comments_Who: { fg: '#7fbbb3' },
+  Task_Prio: { fg: '#7a8478' },
+  Debug_Prio: { fg: '#7a8478' },
   TComment: { fg: '#9da9a0' },
   Dependency: { fg: '#9da9a0' },
   'Dependency_Type-requires': { fg: '#e67e80' },

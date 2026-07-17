@@ -38,6 +38,9 @@ let schema = `
     status text not null default 'open',
     priority real not null default 0
   );
+  create table if not exists project (
+    eid text primary key references entity(eid)
+  );
   create table if not exists board (
     eid text primary key references entity(eid)
   );
@@ -129,6 +132,13 @@ let addTask = (db: DatabaseSync, title: string, status: string, body = '') => {
   return eid
 }
 
+let addProject = (db: DatabaseSync, title: string) => {
+  let eid = ent(db)
+  doc(db, eid, title)
+  db.prepare('insert into project (eid) values (?)').run(eid)
+  return eid
+}
+
 let addBoard = (db: DatabaseSync, title: string) => {
   let eid = ent(db)
   doc(db, eid, title)
@@ -197,6 +207,9 @@ let seed = (db: DatabaseSync) => {
   let board = addBoard(db, 'Walking skeleton')
   for (let t of [schema, view, keys, readme]) link(db, board, 'contains', t)
 
+  let proj = addProject(db, 'Demo project')
+  db.prepare('update task set project_eid = ?').run(proj)
+
   let canvas = ent(db)
   db.prepare('insert into canvas (eid) values (?)').run(canvas)
   pin(db, canvas, addCard(db, board, 'Board'), 0, 0, 640, 0)
@@ -205,12 +218,19 @@ let seed = (db: DatabaseSync) => {
 
 // Open the file, plant the schema, seed once if the graph is empty.
 // Returns a live handle; the process holds it open for the server's
-// lifetime. No migrations yet — until the v1 data moves in, schema
-// changes mean delete the file and reseed.
+// lifetime. No real migrations: NEW columns are added in place (additive,
+// no data moves); anything shapier still means export/reseed.
 export let open = () => {
   Deno.mkdirSync(dirname(file), { recursive: true })
   let db = new DatabaseSync(file)
   db.exec(schema)
+  let cols = db.prepare("select name from pragma_table_info('task')")
+    .all() as { name: string }[]
+  if (!cols.some((c) => c.name == 'project_eid')) {
+    db.exec(
+      'alter table task add column project_eid text references entity(eid)',
+    )
+  }
   let { n } = db.prepare('select count(*) as n from task').get() as {
     n: number
   }

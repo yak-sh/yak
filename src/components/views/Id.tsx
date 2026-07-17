@@ -1,7 +1,12 @@
 import { type Ent } from '../../types.ts'
 import { el } from '../ui.tsx'
 
-let prefix: Record<string, string> = { task: 'T', board: 'B', session: 'S' }
+let prefix: Record<string, string> = {
+  task: 'T',
+  project: 'P',
+  board: 'B',
+  session: 'S',
+}
 
 // The universal id, as text — also the filename stem for dragged-out files.
 export let idOf = (e: Ent) =>

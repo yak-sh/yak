@@ -106,7 +106,10 @@ export let byBoard = (a: Row, b: Row) =>
 
 export let idOf = (r: Row) =>
   `${
-    ({ task: 'T', board: 'B', session: 'S' } as Record<string, string>)[
+    ({ task: 'T', project: 'P', board: 'B', session: 'S' } as Record<
+      string,
+      string
+    >)[
       r.kind
     ] ?? r.kind[0].toUpperCase()
   }-${r.num}`
