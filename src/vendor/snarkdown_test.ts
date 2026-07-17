@@ -10,6 +10,10 @@ let cases: [string, string][] = [
   ['a __very__ good _point_', 'a <strong>very</strong> good <em>point</em>'],
   ['_foo_bar_', '<em>foo_bar</em>'],
   ['**bold** and *em*', '<strong>bold</strong> and <em>em</em>'],
+  // a blank line is a PARAGRAPH break (css grows br.p); two trailing
+  // spaces stay a tight <br />
+  ['one\n\ntwo', 'one<br class=p>two'],
+  ['one  \ntwo', 'one<br />two'],
 ]
 
 Deno.test('snarkdown: intra-word underscores stay literal', () => {

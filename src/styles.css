@@ -80,6 +80,16 @@ html {
   color: var(--purple);
 }
 
+/* Markdown paragraphs. snarkdown (patched, see vendor/) renders a blank
+   line as ONE <br class=p>; this margin is what makes it a paragraph
+   instead of a wall of text. A plain <br> (two-space hard break) stays
+   tight. content:'' + display:block is the standard br-spacing trick. */
+:where(br.p) {
+  content: '';
+  display: block;
+  margin-top: 0.6em;
+}
+
 :where(body) {
   margin: 0;
   height: 100dvh;
