@@ -22,6 +22,7 @@ export let comps: Record<string, string[]> = {
   claim: ['session_eid'], // claimed_at is server-stamped
   conflict: [], // server-minted audit rows — nothing is wire-writable
   comment: ['target_eid', 'author_eid'],
+  alias: ['slug'],
 }
 
 // The status vocabulary, in board-column order.
@@ -44,6 +45,7 @@ export let kindOrder = [
   'claim',
   'conflict',
   'comment',
+  'alias',
   'doc',
 ]
 export let kindOf = (has: Record<string, unknown>) =>
@@ -153,6 +155,10 @@ export type Conflict = {
   at?: string
 }
 
+// A stable external name for an entity — a slug from a previous system, a
+// human handle. find() resolves it like any id; unique graph-wide.
+export type Alias = { eid: string; slug: string }
+
 export type Dep = { parent: string; type: Edge; child: string }
 
 // An outgoing edge, verb + child — the Dependency view resolves the name.
@@ -179,6 +185,7 @@ export type Ent = {
   claim?: Claim
   conflict?: Conflict
   comment?: Comment
+  alias?: Alias
   refs: Ref[]
   kids: Ent[]
 }

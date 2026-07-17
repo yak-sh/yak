@@ -122,7 +122,9 @@ export let taskChanges = (
 // Resolve 'T-3' / a bare num / an eid to a row.
 export let find = (all: Row[], id: string) => {
   let m = id.match(/^[A-Za-z]+-(\d+)$/) ?? id.match(/^(\d+)$/)
-  return m ? all.find((r) => r.num == +m![1]) : all.find((r) => r.eid == id)
+  if (m) return all.find((r) => r.num == +m![1])
+  return all.find((r) => r.eid == id) ??
+    all.find((r) => r.comps.alias?.slug == id)
 }
 
 // The board sort: status column order, then priority, then num.

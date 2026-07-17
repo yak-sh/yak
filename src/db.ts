@@ -101,6 +101,10 @@ let schema = `
     target_eid text not null references entity(eid),
     author_eid text
   );
+  create table if not exists alias (
+    eid  text primary key references entity(eid),
+    slug text not null unique
+  );
   create table if not exists tombstone (
     eid        text primary key,
     deleted_at text not null
