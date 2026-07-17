@@ -5,16 +5,28 @@
     "tui": "sh -c 'while :; do deno run -A src/tui/main.tsx && break; [ $? -eq 42 ] || break; done'",
     "install": "deno install -g -f --name task -A --config deno.json src/cli.ts",
     "mcp": "deno run -A --unstable-worker-options src/mcp.ts",
-    "seed": "deno run -A src/db.ts"
+    "seed": "deno run -A src/db.ts",
+    "test": "deno test -A src"
   },
   "fmt": {
     "semiColons": false,
     "singleQuote": true,
-    "exclude": ["src/vendor"]
+    "exclude": [
+      "src/vendor"
+    ]
   },
   "lint": {
-    "rules": { "tags": ["recommended"], "exclude": ["prefer-const"] },
-    "exclude": ["src/vendor"]
+    "rules": {
+      "tags": [
+        "recommended"
+      ],
+      "exclude": [
+        "prefer-const"
+      ]
+    },
+    "exclude": [
+      "src/vendor"
+    ]
   },
   "imports": {
     "preact": "npm:preact@^10.29.1",
@@ -27,7 +39,12 @@
     "sucrase": "npm:sucrase@^3.35.0"
   },
   "compilerOptions": {
-    "lib": ["dom", "dom.asynciterable", "dom.iterable", "deno.ns"],
+    "lib": [
+      "dom",
+      "dom.asynciterable",
+      "dom.iterable",
+      "deno.ns"
+    ],
     "jsx": "react-jsx",
     "jsxImportSource": "preact"
   }

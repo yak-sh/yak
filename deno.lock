@@ -1,6 +1,8 @@
 {
   "version": "5",
   "specifiers": {
+    "jsr:@std/assert@*": "1.0.19",
+    "jsr:@std/internal@^1.0.12": "1.0.14",
     "npm:@modelcontextprotocol/sdk@^1.12.0": "1.29.0_zod@3.25.76",
     "npm:@preact/signals-core@^1.14.0": "1.14.4",
     "npm:@preact/signals@^2.9.0": "2.9.4_preact@10.29.7",
@@ -9,6 +11,17 @@
     "npm:snarkdown@2": "2.0.0",
     "npm:sucrase@^3.35.0": "3.35.1",
     "npm:zod@^3.24.0": "3.25.76"
+  },
+  "jsr": {
+    "@std/assert@1.0.19": {
+      "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
+      "dependencies": [
+        "jsr:@std/internal"
+      ]
+    },
+    "@std/internal@1.0.14": {
+      "integrity": "291516b3d4c35024d6ffbc0a9df5bf4c64116e05b50012cf846710152d2ffdf7"
+    }
   },
   "npm": {
     "@hono/node-server@1.19.14_hono@4.12.30": {

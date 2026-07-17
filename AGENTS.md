@@ -108,7 +108,10 @@ a row, not a dependency).
 
 - Run: `deno task dev` (port 5173), `deno task tui`, `task` CLI
   (`deno task install`), MCP at `POST /mcp`.
-- Gate: `deno task check` (fmt + lint + typecheck) must be green.
+- Gate: `deno task check` (fmt + lint + typecheck) AND `deno task test` must be
+  green. Tests live beside their subject as `*_test.ts` — pure seams only (apply
+  semantics, dot-params, change builders, scoring); the interactive layers are
+  verified by probes (below), not mocks.
 - **Verify end-to-end before done** — the holdco standard. Recipes that work
   headless: screenshot
   `google-chrome --headless=new --screenshot=x.png
