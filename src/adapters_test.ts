@@ -89,9 +89,12 @@ Deno.test('codex: each agent_message overwrites final_text; usage closes', () =>
   )
 })
 
-Deno.test('providers: every adapter, allowlists only — no argv', () => {
+Deno.test('providers: every adapter but fake, allowlists only — no argv', () => {
   let ps = providers()
-  assertEquals(ps.map((p) => p.name), Object.keys(adapters))
+  assertEquals(
+    ps.map((p) => p.name),
+    Object.keys(adapters).filter((n) => n != 'fake'),
+  )
   assertEquals(
     ps.map((p) => Object.keys(p)),
     ps.map(() => [

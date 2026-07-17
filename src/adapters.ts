@@ -38,12 +38,16 @@ export type Adapter = {
 // two allowlists a Run form offers, and nothing else — argv (and the
 // paths in it) is this side's business. Derived, so a new provider needs
 // no second edit.
+// fake is a test rig, not an offer — it stays callable (tests, API smoke
+// runs) but never shows up in a Run form.
 export let providers = () =>
-  Object.entries(adapters).map(([name, a]) => ({
-    name,
-    models: a.models,
-    efforts: a.efforts,
-  }))
+  Object.entries(adapters)
+    .filter(([name]) => name != 'fake')
+    .map(([name, a]) => ({
+      name,
+      models: a.models,
+      efforts: a.efforts,
+    }))
 
 // The fake provider ships in this repo: run it by absolute path — script
 // AND binary. Deno.execPath() is the deno running this server, so the
