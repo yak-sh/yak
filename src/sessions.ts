@@ -10,11 +10,13 @@
 //    <eid>.stderr.log, unordered diagnostics served alongside; we never
 //    interleave it into the log's seqs and invent a causality we didn't
 //    observe.
-// 2. THE CHILD OUTLIVES US. It's spawned through setsid, in its own session
-//    and process group, so the dev watcher restarting this process (which
-//    it does on every server-file edit) neither kills it nor loses it: the
-//    pidfile and the log file are enough to adopt it back at boot. Nothing
-//    here reaps children.
+// 2. THE CHILD OUTLIVES US. A setsid sh wrapper backgrounds the agent into
+//    its OWN process group and is itself the only pid the runtime tracks —
+//    so the dev watcher restarting this process (which it does on every
+//    server-file edit) can kill nothing but the wrapper: the pidfile and
+//    the log file are enough to adopt the agent back at boot, and the
+//    wrapper's code file carries the exit status when it lived to see it.
+//    Nothing here reaps children.
 // 3. ONE WRITER. Every summary column goes through stamp(): row first, then
 //    the full session comp down the same cast() path apply()'s return
 //    takes — server-constructed, post-commit, so every cache hears the
@@ -34,6 +36,7 @@ let home = (d: string) => `${Deno.env.get('HOME')}/.tasks/${d}`
 let logFile = (eid: string) => `${logsDir()}/${eid}.jsonl`
 let errFile = (eid: string) => `${logsDir()}/${eid}.stderr.log`
 let pidFile = (eid: string) => `${logsDir()}/${eid}.pid`
+let codeFile = (eid: string) => `${logsDir()}/${eid}.code`
 
 let poll = () => Number(Deno.env.get('POLL_MS') ?? 300)
 let grace = () => Number(Deno.env.get('STOP_GRACE_MS') ?? 5000)
@@ -122,6 +125,15 @@ let drain = (eid: string, ad: Adapter, t: Tail, cast: Cast) => {
       t.errs.push(`line ${t.seq}: malformed`)
       continue
     }
+    // A resumption re-OPENS the log: input() appends this marker before
+    // spawning the continuation, so a terminal event behind it was a
+    // previous run's ending, not this one's. The live tail never re-reads
+    // a settled run — but recover() drains whole files, and must not
+    // flag the shape resume writes by design.
+    if ((e as { type?: unknown }).type == 'session.input') {
+      t.ended = false
+      continue
+    }
     // The terminal event is the last word: an agent that keeps talking
     // after it doesn't get to rewrite its own ending, but the noise is
     // diagnosed rather than swallowed.
@@ -171,7 +183,7 @@ let follow = async (eid: string, ad: Adapter, cast: Cast, from?: Tail) => {
     if (last) break
     await sleep(poll())
   }
-  finish(eid, t, run, cast)
+  await finish(eid, t, run, cast)
 }
 
 // The ending, derived rather than announced: a clean exit that reached the
@@ -179,11 +191,21 @@ let follow = async (eid: string, ad: Adapter, cast: Cast, from?: Tail) => {
 // way to complete. A stop we asked for and then OBSERVED is interrupted —
 // stop() never stamps that itself, because a signal sent is not a process
 // ended.
-let finish = (eid: string, t: Tail, run: Run, cast: Cast) => {
+let finish = async (eid: string, t: Tail, run: Run, cast: Cast) => {
   let row = db.prepare('select stop_requested_at from session where eid = ?')
     .get(eid) as { stop_requested_at: string | null } | undefined
   if (!row) return // deleted mid-run
+  // The wrapper reports a beat AFTER the child vanishes (wait, then the
+  // echo into the code file) — give it that beat before calling the code
+  // unknowable. No pidfile means no wrapper ever reported for duty
+  // (a recovered corpse): nothing to wait for.
   let code = run.code()
+  if (code == null && pids(eid)) {
+    for (let end = Date.now() + 1000; code == null && Date.now() < end;) {
+      await sleep(50)
+      code = run.code()
+    }
+  }
   let ok = t.ended && !t.errs.length && (code ?? 0) == 0
   stamp(eid, {
     status: row.stop_requested_at ? 'interrupted' : ok ? 'completed' : 'failed',
@@ -194,9 +216,11 @@ let finish = (eid: string, t: Tail, run: Run, cast: Cast) => {
     ...(t.errs.length ? { error: diagnosis(t) } : {}),
   }, cast)
   running.delete(eid)
-  try {
-    Deno.removeSync(pidFile(eid)) // terminal: nothing left to adopt
-  } catch { /* never written, or already gone */ }
+  for (let f of [pidFile(eid), codeFile(eid)]) {
+    try {
+      Deno.removeSync(f) // terminal: nothing left to adopt or report
+    } catch { /* never written, or already gone */ }
+  }
 }
 
 // ---- reading the log back ----
@@ -273,10 +297,25 @@ let alive = async (pid: number) =>
     stderr: 'null',
   }).output()).success
 
-let pidOf = (eid: string) => {
+// The pidfile holds "group child" (older files, one number meaning both):
+// the CHILD is watched for aliveness, the GROUP is what stop() signals.
+let pids = (eid: string) => {
   try {
-    let n = Number(Deno.readTextFileSync(pidFile(eid)).trim())
-    return n > 0 ? n : null
+    let ns = Deno.readTextFileSync(pidFile(eid)).trim().split(/\s+/)
+      .map(Number).filter((n) => n > 0)
+    return ns.length ? { group: ns[0], child: ns[ns.length - 1] } : null
+  } catch {
+    return null
+  }
+}
+let pidOf = (eid: string) => pids(eid)?.child ?? null
+
+// The exit code the wrapper reported — null while running, and null
+// forever when the wrapper died before reporting (a reload took it).
+let codeOf = (eid: string) => {
+  try {
+    let n = Number(Deno.readTextFileSync(codeFile(eid)).trim())
+    return Number.isFinite(n) ? n : null
   } catch {
     return null
   }
@@ -313,21 +352,35 @@ let spawn = (
     args: [
       'sh',
       '-c',
-      'exec "$@" >> "$TASKS_LOG" 2>> "$TASKS_ERR"',
+      // The wrapper is a firebreak: the runtime tracks (and, on a --watch
+      // reload, KILLS — unref is no shield, a reload took two live agents
+      // on 2026-07-17) only this sh, by exact pid; the backgrounded agent
+      // shares its process GROUP (dash has no job control headless) and
+      // survives. The trap — armed strictly AFTER the spawn, or the agent
+      // would inherit the signals as ignored — keeps the wrapper alive
+      // through stop()'s group TERM so it still reports the exit. The
+      // pidfile carries "$$ $!": group to signal, child to watch. A
+      // missing code file means the wrapper died unreporting (a SIGKILL,
+      // or a reload that signals harder).
+      '"$@" >> "$TASKS_LOG" 2>> "$TASKS_ERR" & trap "" INT TERM; ' +
+      'echo "$$ $!" > "$TASKS_PID"; wait $!; echo $? > "$TASKS_CODE"',
       'sh',
       ...argv,
     ],
     cwd,
     clearEnv: true,
-    env: { ...env, TASKS_LOG: logFile(eid), TASKS_ERR: errFile(eid) },
+    env: {
+      ...env,
+      TASKS_LOG: logFile(eid),
+      TASKS_ERR: errFile(eid),
+      TASKS_PID: pidFile(eid),
+      TASKS_CODE: codeFile(eid),
+    },
     stdin: 'null',
     stdout: 'null',
     stderr: 'null',
   }).spawn()
-  // unref, or Deno kills the child on --watch reload (setsid is no shield —
-  // the runtime signals the exact pid it tracks). status still resolves
-  // while we live; after a reload the pidfile is how we find it again.
-  child.unref()
+  child.unref() // don't hold the event loop open for the wrapper
   return child
 }
 
@@ -541,19 +594,24 @@ let track = (
   cast: Cast,
   from?: Tail,
 ) => {
-  let child = spawn(eid, argv, cwd, env)
-  Deno.writeTextFileSync(pidFile(eid), String(child.pid))
-  let code: number | null = null
-  let gone = false
-  child.status.then((s) => {
-    code = s.code
-    gone = true
-  })
+  try {
+    Deno.removeSync(codeFile(eid)) // a resume must not read the last ending
+  } catch { /* first run */ }
+  spawn(eid, argv, cwd, env)
+  // The AGENT is the pidfile, not the wrapper: sh writes it first thing
+  // and its own death (a --watch reload kills the tracked pid) says
+  // nothing about the run. Until the file appears the child is unborn —
+  // and a wrapper that never writes one is stillborn, given a grace.
+  let born = Date.now()
   let run: Run = {
-    pid: child.pid,
-    exit: () => gone,
-    code: () => code,
-    why: null,
+    pid: 0,
+    exit: async () => {
+      run.pid ||= pidOf(eid) ?? 0
+      if (!run.pid) return Date.now() - born > 10_000
+      return !(await alive(run.pid))
+    },
+    code: () => codeOf(eid),
+    why: 'exit unobserved: the wrapper died before reporting',
     done: Promise.resolve(),
   }
   running.set(eid, run)
@@ -581,7 +639,7 @@ export let stop = async (eid: string, cast: Cast) => {
   `).run(now(), eid).changes
   if (!hit) return bad('already stopping')
   castRow(eid, cast)
-  let pid = running.get(eid)?.pid ?? pidOf(eid)
+  let pid = running.get(eid)?.pid || pidOf(eid) // run.pid is 0 pre-birth
   if (!pid) {
     stamp(eid, {
       status: 'lost',
@@ -590,9 +648,10 @@ export let stop = async (eid: string, cast: Cast) => {
     }, cast)
     return { ok: true }
   }
+  let grp = pids(eid)?.group ?? pid
   let signal = (sig: Deno.Signal) => {
     try {
-      Deno.kill(-pid, sig) // the GROUP: an agent's own children go too
+      Deno.kill(-grp, sig) // the GROUP: an agent's own children go too
     } catch { /* already gone — the wait below is the truth */ }
   }
   signal('SIGTERM')
@@ -741,7 +800,7 @@ export let recover = (cast: Cast) => {
     let run: Run = {
       pid: pid ?? 0,
       exit: () => pid == null ? true : alive(pid).then((a) => !a),
-      code: () => null, // never ours to read: we didn't spawn it
+      code: () => codeOf(eid), // the wrapper's report survives restarts
       why: 'exit unobserved: the child outlived the server',
       done: Promise.resolve(),
     }

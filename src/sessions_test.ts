@@ -224,6 +224,22 @@ Deno.test('bad lines are diagnosed, and the ending is the FIRST one', async () =
   assertMatch(String(s.error), /line 5: output after the terminal event/)
 })
 
+Deno.test('boot: a resumed log re-opens at its input marker', async () => {
+  let eid = plant([
+    INIT,
+    RESULT,
+    '{"type":"session.input","text":"more"}',
+    '{"type":"result","final_text":"second","usage":{"output_tokens":9}}',
+  ])
+  recover(cast)
+  await running.get(eid)!.done
+  let s = row(eid)!
+  assertEquals(s.status, 'completed')
+  assertEquals(s.final_text, 'second') // the SECOND run's ending lands
+  assertEquals(s.latest_seq, 4)
+  assertEquals(s.error, null) // resume's shape is not a violation
+})
+
 Deno.test('boot: a live child is adopted, its file followed from where it is', async () => {
   let eid = plant([INIT])
   // A stand-in for the agent: detached, in its own group, with a pidfile —
