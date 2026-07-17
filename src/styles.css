@@ -255,20 +255,23 @@
   color: var(--red);
 }
 
-/* View tabs read as CONTROLS, the title as TEXT: chips, tightly grouped
-   (the title's flex gap separates the two clusters), the active one lit.
-   The chip carries the emphasis — no bold, so switching doesn't jitter. */
+/* View tabs read as CONTROLS, the title as TEXT: icon chips, gapless
+   (their padding is the spacing; the title's flex gap separates the two
+   clusters), the active one lit. The view NAME lives in a tooltip anchored
+   to its chip — position: fixed lifts it out of the card's overflow clip,
+   and anchor-scope keeps every tooltip on its own tab. */
 .Tab {
-  font: 11px ui-monospace, monospace;
   color: var(--dim);
   background: none;
   border: 1px solid transparent;
   border-radius: calc(var(--radius) - 2px);
-  padding: 1px 5px;
+  padding: 3px 4px;
   cursor: pointer;
+  anchor-name: --tab;
+  anchor-scope: --tab;
 }
 .Tab + .Tab {
-  margin-left: calc(2px - var(--half-gap)); /* chips hug each other */
+  margin-left: calc(-1 * var(--gap)); /* cancel the row gap — gapless chips */
 }
 .Tab:hover {
   color: var(--muted);
@@ -278,6 +281,34 @@
   color: var(--text);
   background: var(--soft);
   border-color: var(--border2);
+}
+.Icon {
+  display: block;
+}
+.Tab_Tip {
+  position: fixed;
+  position-anchor: --tab;
+  top: calc(anchor(bottom) + 4px);
+  justify-self: anchor-center;
+  font: 11px ui-monospace, monospace;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: calc(var(--radius) - 2px);
+  padding: 1px 6px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.Tab:hover .Tab_Tip,
+.Tab:focus-visible .Tab_Tip {
+  opacity: 1;
+  transition-delay: 0.3s; /* linger before naming; vanish instantly */
+}
+@supports not (anchor-name: --a) {
+  .Tab_Tip {
+    display: none; /* no anchor positioning → icons stand alone */
+  }
 }
 
 /* The one scrolling element — padding scrolls away WITH the content. */

@@ -2,6 +2,18 @@ import { applyLocal, camera, ent, mutate, send, topZ } from '../live.ts'
 import { type Pinned } from '../types.ts'
 import { block, el } from './ui.tsx'
 import { applicable, dragData, View } from './View.tsx'
+import { Icon } from './icons.tsx'
+
+// Each tab view wears an icon; the name moves into an anchored tooltip.
+let icons: Record<string, string> = {
+  Task: 'square-check',
+  Board: 'kanban',
+  Doc: 'file-text',
+  Web: 'globe',
+  MD: 'hash',
+  JSON: 'braces',
+  Debug: 'search',
+}
 
 let Pin = el('div', 'Pin')
 let Tab = el('button', 'Tab')
@@ -147,8 +159,10 @@ export let Card = ({ p }: { p: Pinned }) => {
                 v != p.view &&
                 mutate({ eid: p.eid, name: 'card', comp: { view: v } })}
               key={v}
+              aria-label={v}
             >
-              {v}
+              <Icon name={icons[v]} />
+              <span class='Tab_Tip'>{v}</span>
             </Tab>
           ))}
           <X

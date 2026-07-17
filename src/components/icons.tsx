@@ -1,0 +1,75 @@
+import { type JSX } from 'preact'
+
+// The icon library: hand-vendored Lucide glyphs (lucide.dev, ISC), 24×24
+// stroke paths recolored by currentColor. Small and curated on purpose —
+// adding an icon is adding a row here, not adding a dependency.
+let glyphs: Record<string, JSX.Element> = {
+  'square-check': (
+    <>
+      <rect x='3' y='3' width='18' height='18' rx='2' />
+      <path d='m9 12 2 2 4-4' />
+    </>
+  ),
+  kanban: (
+    <>
+      <path d='M6 5v11' />
+      <path d='M12 5v6' />
+      <path d='M18 5v14' />
+    </>
+  ),
+  'file-text': (
+    <>
+      <path d='M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z' />
+      <path d='M14 2v4a2 2 0 0 0 2 2h4' />
+      <path d='M10 9H8' />
+      <path d='M16 13H8' />
+      <path d='M16 17H8' />
+    </>
+  ),
+  globe: (
+    <>
+      <circle cx='12' cy='12' r='10' />
+      <path d='M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20' />
+      <path d='M2 12h20' />
+    </>
+  ),
+  hash: (
+    <>
+      <line x1='4' x2='20' y1='9' y2='9' />
+      <line x1='4' x2='20' y1='15' y2='15' />
+      <line x1='10' x2='8' y1='3' y2='21' />
+      <line x1='16' x2='14' y1='3' y2='21' />
+    </>
+  ),
+  braces: (
+    <>
+      <path d='M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5c0 1.1.9 2 2 2h1' />
+      <path d='M16 21h1a2 2 0 0 0 2-2v-5c0-1.1.9-2 2-2a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1' />
+    </>
+  ),
+  search: (
+    <>
+      <circle cx='11' cy='11' r='8' />
+      <path d='m21 21-4.3-4.3' />
+    </>
+  ),
+}
+
+export let Icon = (
+  { name, size = 14 }: { name: string; size?: number },
+) => (
+  <svg
+    class='Icon'
+    width={size}
+    height={size}
+    viewBox='0 0 24 24'
+    fill='none'
+    stroke='currentColor'
+    stroke-width='2'
+    stroke-linecap='round'
+    stroke-linejoin='round'
+    aria-hidden='true'
+  >
+    {glyphs[name] ?? glyphs['file-text']}
+  </svg>
+)
