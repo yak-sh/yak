@@ -15,6 +15,7 @@ export let icons: Record<string, string> = {
   Board: 'kanban',
   Doc: 'file-text',
   Web: 'globe',
+  Session: 'bot',
   Markdown: 'hash',
   JSON: 'braces',
   Debug: 'search',

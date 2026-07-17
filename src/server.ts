@@ -7,6 +7,7 @@
 // views all come back where they were.
 import { transform } from 'sucrase'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+import { providers } from './adapters.ts'
 import { type Change } from './types.ts'
 import { apply, db, search, snapshot } from './db.ts'
 import { freeze, serveFrozen } from './freeze.ts'
@@ -248,6 +249,9 @@ Deno.serve(
         return new Response(String(e), { status: 400 })
       })
     }
+    // The adapter table, for a browser that must offer what a start
+    // request will be checked against (adapters.ts is server-only).
+    if (path == '/providers') return Response.json(providers())
     // Managed sessions: spawn one on a task, ask it to stop, read its log.
     // The handlers stay thin — the lifecycle lives in sessions.ts.
     if (path == '/sessions/start' && req.method == 'POST') {

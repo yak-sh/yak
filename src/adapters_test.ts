@@ -2,7 +2,7 @@
 // pasted from a live probe of the CLI it mimics (trimmed, same shape).
 // If a vendor changes dialect, these say exactly which reader went deaf.
 import { assertEquals } from '@std/assert'
-import { adapters } from './adapters.ts'
+import { adapters, providers } from './adapters.ts'
 
 let { claude, codex } = adapters
 
@@ -86,6 +86,29 @@ Deno.test('codex: each agent_message overwrites final_text; usage closes', () =>
     codex.terminal({ type: 'turn.failed', error: { message: 'boom' } })
       ?.error,
     'boom',
+  )
+})
+
+Deno.test('providers: every adapter, allowlists only — no argv', () => {
+  let ps = providers()
+  assertEquals(ps.map((p) => p.name), Object.keys(adapters))
+  assertEquals(
+    ps.map((p) => Object.keys(p)),
+    ps.map(() => [
+      'name',
+      'models',
+      'efforts',
+    ]),
+  )
+  // the browser offers exactly what a start request is checked against
+  assertEquals(
+    ps.find((p) => p.name == 'claude')?.models,
+    adapters.claude.models,
+  )
+  assertEquals(ps.find((p) => p.name == 'claude')?.efforts, [])
+  assertEquals(
+    ps.find((p) => p.name == 'codex')?.efforts,
+    adapters.codex.efforts,
   )
 })
 

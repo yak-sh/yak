@@ -28,7 +28,7 @@ export let config = {
   secure: loc?.protocol == 'https:',
   reload: () => loc?.reload(),
 }
-let base = () => `http${config.secure ? 's' : ''}://${config.host}`
+export let base = () => `http${config.secure ? 's' : ''}://${config.host}`
 
 // The column sort: priority first (lower sorts higher), num as tiebreak.
 export { statuses } from './types.ts'

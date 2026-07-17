@@ -34,6 +34,17 @@ export type Adapter = {
   terminal: (e: Event) => Summary | null
 }
 
+// The table as a browser may see it (GET /providers): the names and the
+// two allowlists a Run form offers, and nothing else — argv (and the
+// paths in it) is this side's business. Derived, so a new provider needs
+// no second edit.
+export let providers = () =>
+  Object.entries(adapters).map(([name, a]) => ({
+    name,
+    models: a.models,
+    efforts: a.efforts,
+  }))
+
 // The fake provider ships in this repo: run it by absolute path — script
 // AND binary. Deno.execPath() is the deno running this server, so the
 // child never depends on the service manager's PATH carrying one.

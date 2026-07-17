@@ -846,6 +846,31 @@ html {
   --dot: var(--red); /* open requires deps: blocked in fact, not in status */
 }
 
+/* A session's lifecycle wears the same pip: still going burns warm, the
+   endings settle — completed green, everything else a fault colour. An
+   external session (no lifecycle at all) keeps the dim default. */
+.Dot-starting {
+  --dot: var(--open);
+}
+.Dot-running {
+  --dot: var(--wip);
+}
+.Dot-stopping {
+  --dot: var(--orange);
+}
+.Dot-completed {
+  --dot: var(--done);
+}
+.Dot-failed {
+  --dot: var(--red);
+}
+.Dot-interrupted {
+  --dot: var(--orange);
+}
+.Dot-lost {
+  --dot: var(--purple);
+}
+
 /* The search palette: `/` in normal mode. A fixed veil (click to
    dismiss) holding one raised box — input on top, ranked hits under. */
 .Search {
@@ -1082,4 +1107,184 @@ html {
 }
 .Debug_More {
   color: var(--dim);
+}
+
+/* A session: summary head, the agent's answer, then the log tail — a
+   terminal-flavoured block, so the log is monospace and never wraps
+   (a line clips; the file is the whole truth). */
+.Session {
+  display: grid;
+  gap: var(--half-gap);
+  min-width: 0;
+}
+.Session_Head {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+}
+.Session_Status {
+  font-weight: 600;
+}
+.Session_Model,
+.Session_Seq,
+.Session_Type {
+  color: var(--dim);
+  font-size: 11px;
+}
+.Session_Head .Id {
+  margin-left: auto;
+}
+.Session_Stop {
+  font: inherit;
+  font-size: 11px;
+  color: var(--red);
+  background: none;
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  padding: 0 var(--half-gap);
+  min-height: var(--tap);
+  cursor: pointer;
+}
+.Session_Stop:hover {
+  border-color: var(--red);
+}
+.Session_Facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 2px var(--gap);
+  align-items: baseline;
+  font-size: 12px;
+}
+.Session_Key {
+  color: var(--dim);
+  font-size: 11px;
+}
+.Session_Val {
+  overflow-wrap: anywhere;
+}
+.Session_Fault {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.Session_Fault-error {
+  color: var(--red);
+}
+.Session_Log {
+  display: grid;
+  gap: 1px;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--half-gap);
+  max-height: 24lh;
+  overflow: auto;
+}
+.Session_Line {
+  display: flex;
+  gap: var(--half-gap);
+  min-width: 0;
+}
+.Session_Seq {
+  flex: none;
+  text-align: right;
+  min-width: 2.5ch;
+}
+.Session_Type {
+  flex: none;
+  color: var(--blue);
+}
+.Session_Say {
+  color: var(--muted);
+  /* one line per event, whatever the agent's own newlines say: nowrap
+     collapses them to spaces, and the clip is honest — the file is the
+     whole truth, this is its tail. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.Session_Say-raw {
+  color: var(--orange); /* not JSON: the bytes as the provider wrote them */
+}
+.Session_Err {
+  margin: 0;
+  padding: var(--half-gap);
+  font-size: 11px;
+  color: var(--dim); /* unordered diagnostics, dim beside the ordered log */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 12lh;
+  overflow: auto;
+}
+
+/* A session as a list line — the task row's grammar, one line. */
+.SessionRow {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  font-size: 12px;
+}
+.SessionRow_Model {
+  color: var(--dim);
+  font-size: 11px;
+}
+.SessionRow .Id {
+  margin-left: auto;
+}
+
+/* The Run door: the task verb's little form, placed where the menu was. */
+.Run {
+  position: fixed;
+  z-index: 200;
+  display: grid;
+  gap: var(--half-gap);
+  min-width: 12rem;
+  padding: var(--gap);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 30px color-mix(in srgb, #000 45%, transparent);
+}
+.Run_Row {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+}
+.Run_Name {
+  color: var(--dim);
+  font-size: 11px;
+  min-width: 4rem;
+}
+.Run select {
+  flex: 1;
+  font: inherit;
+  font-size: 12px;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  min-height: var(--tap);
+}
+.Run_Go {
+  font: inherit;
+  color: var(--accent);
+  background: none;
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  padding: var(--half-gap);
+  min-height: var(--tap);
+  cursor: pointer;
+}
+.Run_Go:hover {
+  border-color: var(--accent);
+}
+.Run_Error {
+  margin: 0;
+  color: var(--red);
+  font-size: 11px;
+  max-width: 20rem;
+  overflow-wrap: anywhere;
 }

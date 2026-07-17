@@ -20,6 +20,8 @@ import { Debug, DebugAnyItem, DebugTaskItem } from './views/Debug.tsx'
 import { Json } from './views/Json.tsx'
 import { Md, mdText } from './views/Md.tsx'
 import { Web } from './views/Web.tsx'
+import { Session, SessionRow } from './views/Session.tsx'
+import { openRun } from './Run.tsx'
 
 // Convenience re-exports: View.tsx is the front door, registry.ts the
 // engine room — importers of either get the same bindings.
@@ -42,11 +44,13 @@ define([
   },
   { view: 'List', match: has('canvas'), Render: List },
   { view: 'List.Item', match: has('doc', 'task'), Render: TaskRow },
+  { view: 'List.Item', match: has('session'), Render: SessionRow },
   { view: 'List.Item', match: () => true, Render: ListItem },
   { view: 'Task', match: has('doc', 'task'), Render: Task, Card: TaskCard },
   { view: 'Board', match: has('doc', 'board'), Render: Board },
   { view: 'Task.Row', match: has('doc', 'task'), Render: TaskRow },
   { view: 'Web', match: has('web'), Render: Web },
+  { view: 'Session', match: has('session'), Render: Session },
   { view: 'Doc', match: has('doc'), Render: DocView, Card: DocCard },
   { view: 'Card.Title', match: has('doc', 'task'), Render: TaskTitle },
   { view: 'Card.Title', match: has('doc', 'board'), Render: BoardTitle },
@@ -81,14 +85,16 @@ define([
   'Board',
   'Doc',
   'Web',
+  'Session',
   'Markdown',
   'JSON',
   'Debug',
 ])
 
 // The context-menu verbs, contributed per component (union — see
-// registry.ts). A task offers its status moves, a live claim offers
-// release, and anything at all can be deleted (the red row at the end).
+// registry.ts). A task offers its status moves and a session to run on
+// it, a live claim offers release, and anything at all can be deleted
+// (the red row at the end).
 defineActions([
   {
     match: has('task'),
@@ -102,6 +108,7 @@ defineActions([
         ...(s != 'wip' ? [move('start', 'wip')] : []),
         ...(s != 'done' ? [move('done', 'done')] : []),
         ...(s != 'open' ? [move('reopen', 'open')] : []),
+        { label: 'run session…', run: () => openRun(e.eid) },
       ]
     },
   },

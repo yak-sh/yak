@@ -33,6 +33,11 @@ export let comps: Record<string, string[]> = {
 // The status vocabulary, in board-column order.
 export let statuses = ['open', 'wip', 'done']
 
+// A managed session is still going in exactly these statuses; every other
+// one is an ending (see Session below). One list: the server decides what
+// may be stopped by it, the browser decides what to keep polling by it.
+export let sessionActive = ['starting', 'running', 'stopping']
+
 // kind is DERIVED — an entity is what its components make it, and really
 // the beholder decides (renderers match on components, scored by
 // specificity). This order is only the display/id convention: the most

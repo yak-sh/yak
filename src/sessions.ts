@@ -22,7 +22,7 @@
 import { basename, dirname } from 'node:path'
 import { type Adapter, adapters, type Event, type Summary } from './adapters.ts'
 import { apply, db } from './db.ts'
-import { type Change } from './types.ts'
+import { type Change, sessionActive } from './types.ts'
 
 type Cast = (changes: Change[]) => void
 type Row = Record<string, unknown>
@@ -42,7 +42,6 @@ let now = () => new Date().toISOString()
 
 // A line past this is a runaway, not an event: diagnosed, never parsed.
 let MAX_LINE = 1_000_000
-let ACTIVE = ['starting', 'running', 'stopping']
 
 // ---- the one writer ----
 
@@ -506,7 +505,7 @@ export let stop = async (eid: string, cast: Cast) => {
     .get(eid) as { origin: string; status: string | null } | undefined
   if (!row) return bad(`no such session: ${eid}`, 404)
   if (row.origin != 'managed') return bad('not a managed session')
-  if (!ACTIVE.includes(String(row.status))) {
+  if (!sessionActive.includes(String(row.status))) {
     return bad(`session is ${row.status ?? 'external'}`)
   }
   // The guard IS the CAS: two stops race, one writes.

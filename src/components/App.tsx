@@ -4,6 +4,7 @@ import { applicable } from './registry.ts'
 import { icons } from './Card.tsx'
 import { Icon } from './icons.tsx'
 import { Menu, menu, navigate, route, screenTarget } from './nav.tsx'
+import { Run, run } from './Run.tsx'
 import { Status } from './Status.tsx'
 import { View } from './View.tsx'
 
@@ -31,6 +32,7 @@ export let App = () => {
     <Frame
       onPointerDown={() => {
         if (menu.value) menu.value = null
+        if (run.value) run.value = null // a press outside is a cancel
       }}
     >
       <Bar>
@@ -53,6 +55,7 @@ export let App = () => {
         <View eid={e.eid} view={view} context='Card' />
       </Body>
       <Menu />
+      <Run />
       <Status />
     </Frame>
   )
