@@ -482,6 +482,12 @@
   white-space: pre-wrap; /* multiline sources keep their newlines */
 }
 
+/* In a task head the dot marks the FIRST line, not the block: pinned to
+   the top, then centered within one line-box (1lh) by hand. */
+.Task_Head .Dot {
+  align-self: start;
+  margin-top: calc((1lh - 0.55rem) / 2);
+}
 .Dot {
   --dot: var(--dim);
   flex: none;
