@@ -486,7 +486,7 @@ export let Canvas = ({ eid }: { eid: string }) => {
         if (e.target.closest('a, button, input, [contenteditable]')) return
         let row = e.target.closest('.Board_Item') as HTMLElement | null
         if (!row?.dataset.eid) return
-        spawnAt([], row.dataset.eid, 'Task', 0, e.clientX, e.clientY)
+        spawnAt([], row.dataset.eid, 'Show', 0, e.clientX, e.clientY)
       }}
     >
       <Plane

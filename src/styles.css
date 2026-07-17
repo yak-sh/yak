@@ -135,7 +135,7 @@ html {
 /* The mono keepers: ids, chips, badges, edge verbs, timestamps, code,
    and every command/inspector/log surface. Prose everywhere else is
    var(--font) via body. :where keeps this overridable. */
-:where(code, pre, kbd, .Id, .Prio, .Task_Domain, .Task_Project, .Task_Claim, .Prop_Hand, .Dependency_Type, .Relate_Verb, .Stamp, .Comments_When, .Comments_Who, .Board_ColName, .Board_Count, .Board_Chips, .Status, .Search_Box input, .Search_Id, .Debug, .Debug_Claim, .SessionRow, .Session_Facts, .Session_Status, .Session_Model, .Session_Line, .Session_Tool, .Session_Exec, .Session_Turn, .Session_Err) {
+:where(code, pre, kbd, .Id, .Prio, .Show_Domain, .Show_Project, .Show_Claim, .Prop_Hand, .Dependency_Type, .Relate_Verb, .Stamp, .Comments_When, .Comments_Who, .Board_ColName, .Board_Count, .Board_Chips, .Status, .Search_Box input, .Search_Id, .Debug, .Debug_Claim, .SessionRow, .Session_Facts, .Session_Status, .Session_Model, .Session_Line, .Session_Tool, .Session_Exec, .Session_Turn, .Session_Err) {
   font-family: var(--mono);
 }
 
@@ -824,18 +824,18 @@ html {
   color: var(--blue);
 }
 
-.Task {
+.Show {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--card);
   padding: var(--half-gap);
 }
-.Task_Head {
+.Show_Head {
   display: flex;
   align-items: first baseline; /* id/claim ride the title's FIRST line */
   gap: var(--half-gap);
 }
-.Task_Title {
+.Show_Title {
   font-weight: 600;
 }
 /* The universal id chip (T-7, P-2, …) — a real link now: never wraps,
@@ -850,7 +850,7 @@ html {
   text-decoration: underline;
   color: var(--muted);
 }
-.Task_Head .Id {
+.Show_Head .Id {
   margin-left: auto;
 }
 .Debug_Prio {
@@ -880,7 +880,7 @@ html {
   opacity: 0.65;
 }
 /* The domain facet chip (Eng, Legal, Ops, …) — a click opens its box. */
-.Task_Domain {
+.Show_Domain {
   white-space: nowrap;
   font-size: 11px;
   color: var(--muted);
@@ -889,50 +889,50 @@ html {
 /* An unset field still shows: a ghost chip is the only way to say "this
    field exists, and it's empty" — the empty body's min-height trick, in
    a chip. Quiet until pointed at. */
-.Task_Domain-empty,
-.Task_Caret-empty {
+.Show_Domain-empty,
+.Show_Caret-empty {
   color: var(--dim);
   opacity: 0.6;
 }
-.Task_Domain-empty:hover,
-.Task_Caret-empty:hover {
+.Show_Domain-empty:hover,
+.Show_Caret-empty:hover {
   opacity: 1;
 }
 /* The task's project, named and linked. */
-.Task_Project {
+.Show_Project {
   white-space: nowrap;
   font-size: 11px;
   color: var(--muted);
   text-decoration: none;
 }
-.Task_Project:hover {
+.Show_Project:hover {
   text-decoration: underline;
   color: var(--text);
 }
 /* The picker's handle beside the project link — the link owns the click,
    so the caret owns the picker. */
-.Task_Caret {
+.Show_Caret {
   white-space: nowrap;
   font-size: 11px;
   color: var(--dim);
   cursor: pointer;
 }
-.Task_Caret:hover {
+.Show_Caret:hover {
   color: var(--text);
 }
 /* The status pip is the status control: it cycles. */
-.Task_Pip {
+.Show_Pip {
   cursor: pointer;
 }
 /* The Prio badge as a control. */
-.Task_Chip {
+.Show_Chip {
   cursor: pointer;
 }
 /* A field's editor stands exactly where its chip stood — chip-sized,
    chip-voiced, wearing the same accent seam [contenteditable] wears, so
    an open editor reads as an open editor everywhere in the app. */
-.Task_Field,
-.Task_Pick {
+.Show_Field,
+.Show_Pick {
   font: inherit;
   font-size: 11px;
   color: var(--text);
@@ -943,12 +943,12 @@ html {
   min-width: 0;
   outline: none;
 }
-.Task_Field-num {
+.Show_Field-num {
   width: 4.5rem; /* the spinners are the stepper — leave them room */
 }
 /* The card-context meta line — the board row's grammar on the full card:
    prio · domain · 💬 · ⚑, under the titlebar, above the body. */
-.Task_Meta {
+.Show_Meta {
   display: flex;
   flex-wrap: wrap; /* a narrow card wraps the chips; nothing overflows */
   align-items: baseline;
@@ -957,11 +957,11 @@ html {
   color: var(--dim);
   margin-bottom: var(--half-gap);
 }
-.Task_Comments {
+.Show_Comments {
   white-space: nowrap;
 }
 /* The session lease badge — who's working this, in fleet purple. */
-.Task_Claim,
+.Show_Claim,
 .Debug_Claim {
   white-space: nowrap;
   font-size: 11px;
@@ -971,10 +971,10 @@ html {
    margin, everything after it (id included) sits flush. Every field is a
    .Prop wrapper now, and an editor stands in its Prop's place — opening
    one never restacks the head. */
-.Task_Head :is(.Task_Claim, .Prop) {
+.Show_Head :is(.Show_Claim, .Prop) {
   margin-left: auto;
 }
-.Task_Head :is(.Task_Claim, .Prop) ~ :is(.Prop, .Id) {
+.Show_Head :is(.Show_Claim, .Prop) ~ :is(.Prop, .Id) {
   margin-left: 0;
 }
 /* The ▾ beside a link-faced Prop — the face owns navigation, the hand
@@ -1071,7 +1071,7 @@ html {
   color: var(--dim);
   font-style: italic;
 }
-.Task_Runs {
+.Show_Runs {
   display: grid;
   gap: 2px;
   margin-top: var(--half-gap);
@@ -1086,30 +1086,30 @@ html {
   color: var(--dim);
   white-space: nowrap;
 }
-.Task_Body {
+.Show_Body {
   margin: var(--half-gap) 0 0;
   cursor: text; /* double-click edits the markdown source */
 }
-.Task_Body-bare {
+.Show_Body-bare {
   margin: 0; /* card context: the titlebar is the head, no gap to bridge */
 }
 /* An empty body still takes a line, so the double-click has a target. */
-.Task_Body:empty {
+.Show_Body:empty {
   min-height: 1lh;
 }
 /* Markdown innards: tight spacing, our palette. */
-.Task_Body :is(p, ul, ol, pre, blockquote) {
+.Show_Body :is(p, ul, ol, pre, blockquote) {
   margin: 0 0 var(--half-gap);
 }
-.Task_Body > :last-child {
+.Show_Body > :last-child {
   margin-bottom: 0;
 }
-.Task_Body code {
+.Show_Body code {
   background: var(--soft);
   padding: 0 3px;
   border-radius: 3px;
 }
-.Task_Body blockquote {
+.Show_Body blockquote {
   border-left: 2px solid var(--border2);
   padding-left: var(--half-gap);
 }
@@ -1128,7 +1128,7 @@ html {
 
 /* In a task head the dot marks the FIRST line, not the block: pinned to
    the top, then centered within one line-box (1lh) by hand. */
-.Task_Head .Dot {
+.Show_Head .Dot {
   align-self: start;
   margin-top: calc((1lh - 0.55rem) / 2);
 }

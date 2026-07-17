@@ -11,9 +11,8 @@ import { menu } from './nav.tsx'
 export let icons: Record<string, string> = {
   Canvas: 'map',
   List: 'list',
-  Task: 'square-check',
+  Show: 'file-text',
   Board: 'kanban',
-  Doc: 'file-text',
   Web: 'globe',
   Session: 'bot',
   Markdown: 'hash',

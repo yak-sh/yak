@@ -20,7 +20,11 @@ import { type Ent } from '../types.ts'
 // a card body, where the titlebar (the Card.Title view) already shows
 // the head — and a FILE form: how this view of this entity serializes
 // when its tab is dragged to the desktop.
-export type Render = (p: { e: Ent; [x: string]: unknown }) => JSX.Element
+// null is a first-class render: a section view with nothing to say
+// renders nothing (the Show stack relies on it).
+export type Render = (
+  p: { e: Ent; [x: string]: unknown },
+) => JSX.Element | null
 export type Renderer = {
   view: string
   match: (e: Ent) => number | boolean

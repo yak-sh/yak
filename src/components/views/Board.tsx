@@ -234,7 +234,7 @@ export let Board = ({ e }: { e: Ent }) => {
                     key={k.eid}
                     draggable
                     data-eid={k.eid}
-                    onDragStart={(ev: DragEvent) => dragData(ev, k.eid, 'Task')}
+                    onDragStart={(ev: DragEvent) => dragData(ev, k.eid, 'Show')}
                   >
                     <View eid={k.eid} view='Task.Row' />
                   </Item>

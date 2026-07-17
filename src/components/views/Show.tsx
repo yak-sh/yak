@@ -20,7 +20,16 @@ import { Prop } from '../editors.tsx'
 import { Relate } from './Relate.tsx'
 import { View } from '../View.tsx'
 
-let Frame = block('div', 'Task', {
+// The lego box. A SECTION is an internal view ('Body', 'Meta',
+// 'Dependencies', 'Runs', 'Comments' — registered in View.tsx like 'Id'
+// and 'Dependency'): matched per entity through the registry door, and
+// each renders NOTHING when its data is absent. Show is the one generic
+// full view — it just stacks the sections — so there is no Task-vs-Doc
+// split to keep in sync: a bare doc simply has fewer sections with
+// something to say. Specializing a section for an entity shape is a
+// higher-scoring registry entry, not an edit here.
+
+let Frame = block('div', 'Show', {
   Head: 'div',
   Title: 'span',
   Body: 'p',
@@ -34,11 +43,11 @@ let Frame = block('div', 'Task', {
 let {
   Head,
   Title,
-  Body,
+  Body: BodyEl,
   Claim,
   Domain,
   Project,
-  Meta,
+  Meta: MetaEl,
   Comments: Talk,
   Runs: RunsEl,
 } = Frame
@@ -61,14 +70,14 @@ export let Pip = ({ e }: { e: Ent }) => {
     <Dot
       status={s}
       gated={g}
-      class='Task_Pip'
+      class='Show_Pip'
       title={`${g ? 'blocked · ' : ''}→ ${next}`}
       onClick={() => set(e, 'status', next)}
     />
   )
 }
 
-// The head's fields, all through the registry door (editors.tsx Prop):
+// The task fields, all through the registry door (editors.tsx Prop):
 // the faces stay the board grammar's chips — Prio badge, domain chip,
 // project link — while the registry supplies each type's editor from the
 // vocabulary (number box, domain well, project search). The project's
@@ -80,7 +89,7 @@ let Rank = ({ e }: { e: Ent }) => (
     prop='priority'
     editable
     name='priority'
-    show={(v) => <Prio p={Number(v ?? 0)} class='Task_Chip' />}
+    show={(v) => <Prio p={Number(v ?? 0)} class='Show_Chip' />}
   />
 )
 
@@ -111,16 +120,19 @@ let Home = ({ e }: { e: Ent }) => (
   />
 )
 
+// ---- the sections ----
+
 // The body is markdown: rendered as HTML (md.ts; our own data, so no
 // sanitizer between us and ourselves), double-click swaps in the raw
 // source through the same <Edit>, and the blur that commits swaps the
 // rendered view back. An empty body keeps a line of height to give the
 // double-click somewhere to land.
-export let TaskBody = ({ e, mod }: { e: Ent; mod?: string }) => {
+export let Body = ({ e, mod }: { e: Ent; mod?: string }) => {
   let [src, setSrc] = useState(false)
+  if (!e.doc) return null
   return src
     ? (
-      <Body mod={mod}>
+      <BodyEl mod={mod}>
         <Edit
           eid={e.eid}
           comp='doc'
@@ -129,10 +141,10 @@ export let TaskBody = ({ e, mod }: { e: Ent; mod?: string }) => {
           open
           onClose={() => setSrc(false)}
         />
-      </Body>
+      </BodyEl>
     )
     : (
-      <Body
+      <BodyEl
         mod={mod}
         onDblClick={() => setSrc(true)}
         dangerouslySetInnerHTML={{ __html: md(e.doc?.body ?? '') }}
@@ -140,43 +152,18 @@ export let TaskBody = ({ e, mod }: { e: Ent; mod?: string }) => {
     )
 }
 
-// A single task: head, body, then its edges as Dependency sentences.
-// Every field in the head is the field's editor — status cycles on the
-// pip, prio/domain/project swap in a control where the chip stood.
-export let Task = ({ e }: { e: Ent }) => (
-  <Frame>
-    <Head>
-      <Pip e={e} />
-      <Title>
-        <Edit eid={e.eid} comp='doc' prop='title' />
-      </Title>
-      {e.claim && <Claim>⚑ {ent(e.claim.session_eid).session?.id}</Claim>}
-      <Home e={e} />
-      <Facet e={e} />
-      <Rank e={e} />
-      <Stamp e={e} />
-      <View eid={e.eid} view='Id' />
-    </Head>
-    <TaskBody e={e} />
-    <Edges e={e} />
-    <Relate e={e} />
-    <Runs e={e} />
-    <Comments eid={e.eid} />
-  </Frame>
-)
-
-// The reversed sentences: how each edge above reads from down here.
-let up: Record<string, string> = {
+// The reversed sentences: how each edge below reads from the child's side.
+export let up: Record<string, string> = {
   contains: 'part of',
   requires: 'required by',
   reads: 'read by',
 }
 
-// Every edge sentence a task speaks, top-down: what holds it (reversed —
-// 'part of X', 'required by Y'), then what it holds — its contains
+// Every edge sentence an entity speaks, top-down: what holds it (reversed
+// — 'part of X', 'required by Y'), then what it holds — its contains
 // children (ent() splits those out of refs into kids, so they'd
 // otherwise only show as board tallies) and its requires/reads.
-let Edges = ({ e }: { e: Ent }) => (
+export let Dependencies = ({ e }: { e: Ent }) => (
   <>
     {parents(e.eid).map((d) => (
       <View
@@ -196,10 +183,10 @@ let Edges = ({ e }: { e: Ent }) => (
   </>
 )
 
-// The task's sessions: every run that named this task (backlinks via
+// The entity's sessions: every run that named it (backlinks via
 // session.requested_task_eid) plus the claim's holder — one row each, so
 // a task is the door to the agents that worked it.
-let Runs = ({ e }: { e: Ent }) => {
+export let Runs = ({ e }: { e: Ent }) => {
   let ids = new Set(
     backlinks(e.eid)
       .filter((b) => b.via == 'session.requested_task_eid')
@@ -214,26 +201,71 @@ let Runs = ({ e }: { e: Ent }) => {
   )
 }
 
-// The same view in card context: the task IS the card, its head lives in
-// the titlebar (Card.Title, where the dot edits status) — here a meta
-// line (the board row's grammar: prio · domain · 💬 · ⚑), every field of
-// it the same editor the full head carries, then the innards.
-export let TaskCard = ({ e }: { e: Ent }) => {
+// The meta line (card context — the titlebar carries title and pip): the
+// board row's grammar, prio · project · domain · 💬 · ⚑ · age, every
+// field the same editor the full head carries. Only the task fields need
+// a task; the rest speak for any entity.
+export let Meta = ({ e }: { e: Ent }) => {
   let talk = commentCount.value[e.eid]
+  if (!e.task && !talk && !e.claim) return null
   return (
-    <>
-      <Meta>
-        <Rank e={e} />
-        <Home e={e} />
-        <Facet e={e} />
-        {talk && <Talk>💬 {talk}</Talk>}
-        {e.claim && <Claim>⚑ {ent(e.claim.session_eid).session?.id}</Claim>}
-        <Stamp e={e} />
-      </Meta>
-      <TaskBody e={e} mod='bare' />
-      <Edges e={e} />
-      <Relate e={e} />
-      <Comments eid={e.eid} />
-    </>
+    <MetaEl>
+      {e.task && (
+        <>
+          <Rank e={e} />
+          <Home e={e} />
+          <Facet e={e} />
+        </>
+      )}
+      {talk && <Talk>💬 {talk}</Talk>}
+      {e.claim && <Claim>⚑ {ent(e.claim.session_eid).session?.id}</Claim>}
+      <Stamp e={e} />
+    </MetaEl>
   )
 }
+
+// Comments already speaks eid — a thin adapter gives it the section
+// signature so it registers like the rest.
+export let Talkback = ({ e }: { e: Ent }) => <Comments eid={e.eid} />
+
+// ---- the one generic full view: stack the sections ----
+
+// The section stack, walked by both contexts — change the order here,
+// every doc-carrying entity follows.
+let stack = ['Dependencies', 'Relate', 'Runs', 'Comments']
+
+// Root context carries the head (pip + editable title + fields + id),
+// then the stack.
+export let Show = ({ e }: { e: Ent }) => (
+  <Frame>
+    <Head>
+      {e.task && <Pip e={e} />}
+      <Title>
+        <Edit eid={e.eid} comp='doc' prop='title' />
+      </Title>
+      {e.claim && <Claim>⚑ {ent(e.claim.session_eid).session?.id}</Claim>}
+      {e.task && (
+        <>
+          <Home e={e} />
+          <Facet e={e} />
+          <Rank e={e} />
+        </>
+      )}
+      <Stamp e={e} />
+      <View eid={e.eid} view='Id' />
+    </Head>
+    <View eid={e.eid} view='Body' />
+    {stack.map((v) => <View key={v} eid={e.eid} view={v} />)}
+  </Frame>
+)
+
+// Card context: the titlebar is the head — the meta line stands in.
+export let ShowCard = ({ e }: { e: Ent }) => (
+  <>
+    <View eid={e.eid} view='Meta' />
+    <View eid={e.eid} view='Body' mod='bare' />
+    {stack.map((v) => <View key={v} eid={e.eid} view={v} />)}
+  </>
+)
+
+export { Relate }

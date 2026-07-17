@@ -1,7 +1,16 @@
 import { idOf } from '../types.ts'
 import { ent, mutate } from '../live.ts'
 import { type Action, define, defineActions, has, resolve } from './registry.ts'
-import { Task, TaskCard } from './views/Task.tsx'
+import {
+  Body,
+  Dependencies,
+  Meta,
+  Relate,
+  Runs,
+  Show,
+  ShowCard,
+  Talkback,
+} from './views/Show.tsx'
 import {
   AnyTitle,
   BoardTitle,
@@ -10,7 +19,6 @@ import {
   TaskTitle,
   WebTitle,
 } from './views/Title.tsx'
-import { DocCard, DocView } from './views/Doc.tsx'
 import { Board } from './views/Board.tsx'
 import { TaskRow } from './views/TaskRow.tsx'
 import { List, ListItem } from './views/List.tsx'
@@ -47,12 +55,21 @@ define([
   { view: 'List.Item', match: has('doc', 'task'), Render: TaskRow },
   { view: 'List.Item', match: has('session'), Render: SessionRow },
   { view: 'List.Item', match: () => true, Render: ListItem },
-  { view: 'Task', match: has('doc', 'task'), Render: Task, Card: TaskCard },
+  { view: 'Show', match: has('doc'), Render: Show, Card: ShowCard },
   { view: 'Board', match: has('doc', 'board'), Render: Board },
   { view: 'Task.Row', match: has('doc', 'task'), Render: TaskRow },
   { view: 'Web', match: has('web'), Render: Web },
   { view: 'Session', match: has('session'), Render: Session },
-  { view: 'Doc', match: has('doc'), Render: DocView, Card: DocCard },
+  // The sections — Show's legos, internal views like Id and Dependency.
+  // Catch-all matchers on purpose: each renders nothing when its data is
+  // absent, and a specialized look for an entity shape is a higher-
+  // scoring entry above these, never an edit to Show.
+  { view: 'Body', match: () => true, Render: Body },
+  { view: 'Meta', match: () => true, Render: Meta },
+  { view: 'Dependencies', match: () => true, Render: Dependencies },
+  { view: 'Relate', match: () => true, Render: Relate },
+  { view: 'Runs', match: () => true, Render: Runs },
+  { view: 'Comments', match: () => true, Render: Talkback },
   { view: 'Card.Title', match: has('doc', 'task'), Render: TaskTitle },
   { view: 'Card.Title', match: has('doc', 'board'), Render: BoardTitle },
   { view: 'Card.Title', match: has('web'), Render: WebTitle },
@@ -83,9 +100,8 @@ define([
 ], [
   'Canvas',
   'List',
-  'Task',
+  'Show',
   'Board',
-  'Doc',
   'Web',
   'Session',
   'Markdown',

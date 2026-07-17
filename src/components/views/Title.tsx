@@ -1,7 +1,7 @@
 import { type Ent } from '../../types.ts'
 import { block } from '../ui.tsx'
 import { Edit } from '../Edit.tsx'
-import { Pip } from './Task.tsx'
+import { Pip } from './Show.tsx'
 import { Dot } from '../Dot.tsx'
 import { View } from '../View.tsx'
 
@@ -11,7 +11,7 @@ let { Text } = Frame
 // The Card.Title view: what an entity shows in a card's titlebar — the
 // entity IS the card. Everything reads dot → title → id chip, then the
 // tabs push off to the right. The task's dot is its status CONTROL
-// (Task.tsx Pip) — a card carries one dot, and that dot is where status
+// (Show.tsx Pip) — a card carries one dot, and that dot is where status
 // is edited; a session's dot just says how the run is doing.
 export let TaskTitle = ({ e }: { e: Ent }) => (
   <Frame>

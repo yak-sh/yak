@@ -1,5 +1,6 @@
 import { comps as vocab, type Ent } from '../../types.ts'
 import { backlinks, ent, parents } from '../../live.ts'
+import { up } from './Show.tsx'
 import { block } from '../ui.tsx'
 import { Prop } from '../editors.tsx'
 import { View } from '../View.tsx'
@@ -126,11 +127,7 @@ export let Debug = ({ e }: { e: Ent }) => {
           eid={d.parent}
           view='Dependency'
           type={d.type}
-          label={{
-            contains: 'part of',
-            requires: 'required by',
-            reads: 'read by',
-          }[d.type] ?? d.type}
+          label={up[d.type] ?? d.type}
         />
       ))}
       {e.refs.map((r) => (
