@@ -117,6 +117,18 @@ a row, not a dependency).
   wrapper loop to relaunch it — don't "fix" that exit code.
 - Git: work in a worktree, merge with `--ff-only`, focused commits.
 
+## Backups
+
+`~/.tasks` is itself a git repo, pushed to a PRIVATE remote
+(github.com/jeffpeterson/tasks-data — data never enters THIS repo). `bin/backup`
+runs hourly from cron: it snapshots the live db atomically
+(`VACUUM INTO snap/tasks.db` + integrity_check — the live `tasks.db` is
+gitignored and must never commit, a commit could catch it mid-transaction), then
+commits and pushes everything else (frozen/, future images/md) as plain files.
+Restore = clone, copy `snap/tasks.db` → `tasks.db`, start the server. If blobs
+ever outgrow git, the planned escape hatch is restic → R2 (encrypted, deduped,
+retention) — see the holdco board.
+
 ## Style
 
 - Deno + TypeScript, `let` everywhere (no `const` ceremony), no classes, no

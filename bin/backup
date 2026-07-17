@@ -1,0 +1,45 @@
+#!/bin/sh
+# Back up the tasks data dir (~/.tasks or $TASKS_DATA) as a git commit.
+#
+# The data dir IS a git repo: files (frozen/, images, md) commit as
+# themselves; the LIVE SQLite db never commits — a commit could catch it
+# mid-transaction — so each run snapshots it atomically (VACUUM INTO) to
+# snap/tasks.db and history holds that. Restore = clone, copy
+# snap/tasks.db → tasks.db, start the server.
+#
+# Cron-safe: explicit PATH, no interactivity, exits 0 on "nothing new".
+# Push is best-effort only when an origin exists — a missing remote makes
+# this a local-history-only backup, not an error.
+set -eu
+export PATH="$HOME/.deno/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin"
+
+data="${TASKS_DATA:-$HOME/.tasks}"
+cd "$data"
+
+[ -d .git ] || { echo "backup: $data is not a git repo (git init it first)" >&2; exit 1; }
+
+# Plain output regardless of any ~/.sqliterc (box modes break the checks).
+sq() { sqlite3 -batch -init /dev/null -noheader -list "$@"; }
+
+mkdir -p snap
+rm -f snap/tasks.db # VACUUM INTO refuses to overwrite
+sq tasks.db "VACUUM INTO 'snap/tasks.db'"
+sq snap/tasks.db "pragma integrity_check;" | grep -qx ok || {
+  echo "backup: snapshot failed integrity_check" >&2
+  exit 1
+}
+
+git add -A
+if git diff --cached --quiet; then
+  echo "backup: nothing new"
+  exit 0
+fi
+
+n=$(sq snap/tasks.db 'select count(*) from entity')
+git -c user.name=backup -c user.email=backup@yak.sh \
+  commit -qm "backup: $(date -u +%Y-%m-%dT%H:%M:%SZ) — $n entities"
+
+if git remote get-url origin >/dev/null 2>&1; then
+  git push -q origin HEAD || echo "backup: push failed (kept locally)" >&2
+fi
+echo "backup: committed $n entities"
