@@ -6,8 +6,13 @@ import { Dot } from '../Dot.tsx'
 import { Edit } from '../Edit.tsx'
 import { View } from '../View.tsx'
 
-let Frame = block('div', 'Task', { Head: 'div', Title: 'span', Body: 'p' })
-let { Head, Title, Body } = Frame
+let Frame = block('div', 'Task', {
+  Head: 'div',
+  Title: 'span',
+  Body: 'p',
+  Claim: 'span',
+})
+let { Head, Title, Body, Claim } = Frame
 
 // The body is markdown: rendered as HTML (snarkdown; our own data, so no
 // sanitizer between us and ourselves), double-click swaps in the raw
@@ -46,6 +51,7 @@ export let Task = ({ e }: { e: Ent }) => (
       <Title>
         <Edit eid={e.eid} comp='doc' prop='title' />
       </Title>
+      {e.claim && <Claim>⚑ {e.claim.session}</Claim>}
       <View eid={e.eid} view='Id' />
     </Head>
     <TaskBody e={e} />

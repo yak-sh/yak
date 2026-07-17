@@ -41,7 +41,7 @@ values become numbers. Statuses: ${statuses.join(', ')}.`
 let line = (r: Row) =>
   `${idOf(r)}  ${String(r.comps.task?.status ?? r.kind).padEnd(7)} ${
     r.comps.doc?.title ?? ''
-  }`
+  }${r.comps.claim ? `  ⚑ ${r.comps.claim.session}` : ''}`
 
 let parseAll = (params: string[]) =>
   params.map((p) => {
@@ -123,6 +123,38 @@ ${GRAMMAR}`,
           .map(([name, comp]) => ({ eid: row.eid, name, comp })),
       )
       return text(`updated ${idOf(row)}`)
+    },
+  )
+
+  server.tool(
+    'task_claim',
+    `Claim a task for your session — a lease telling other agents who is
+working it (⚑ in listings). Pass a STABLE identifier for yourself
+(session id or agent name) and reuse it for the whole session. Fails if
+another session holds the lease; task_release drops it when you finish
+or hand off.`,
+    { id: z.string(), session: z.string() },
+    async ({ id, session }: { id: string; session: string }) => {
+      let row = find(rows(await io.read()), id)
+      if (!row) return text(`no entity: ${id}`)
+      try {
+        await io.write([{ eid: row.eid, name: 'claim', comp: { session } }])
+      } catch (e) {
+        return text(`claim failed: ${(e as Error).message}`)
+      }
+      return text(`claimed ${idOf(row)} for ${session}`)
+    },
+  )
+
+  server.tool(
+    'task_release',
+    'Drop the claim on a task (yours or a stale one), freeing it for other sessions.',
+    { id: z.string() },
+    async ({ id }: { id: string }) => {
+      let row = find(rows(await io.read()), id)
+      if (!row) return text(`no entity: ${id}`)
+      await io.write([{ eid: row.eid, name: 'claim', comp: null }])
+      return text(`released ${idOf(row)}`)
     },
   )
 

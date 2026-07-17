@@ -363,6 +363,19 @@
 .Task_Head .Id {
   margin-left: auto;
 }
+/* The session lease badge — who's working this, in fleet purple. */
+.Task_Claim,
+.Debug_Claim {
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--purple);
+}
+.Task_Head .Task_Claim {
+  margin-left: auto;
+}
+.Task_Head .Task_Claim + .Id {
+  margin-left: 0;
+}
 .Task_Body {
   margin: var(--half-gap) 0 0;
   color: var(--muted);

@@ -18,7 +18,7 @@ sqlite-vector embeddings, typed short ids (T-123 / C-123).
 ## Schema sketch
 
 ```sql
-entity(eid uuid pk, num server-minted, kind, created_at)
+entity(eid uuid pk, num server-minted, created_at)  -- no kind: components decide
 doc(eid pk→entity.eid, title, body)      -- the written face; anything can carry one
 task(eid pk→doc carrier, status, priority) -- a task = doc + task-management
 board(eid pk→entity)                       -- a tag: this doc fronts a kanban
@@ -26,6 +26,7 @@ card(eid pk→entity, target_eid→entity, view)
 pin(eid pk→card, canvas_eid→entity, x, y, w, h)
 client(eid pk→entity, user_agent, ip)
 camera(eid pk→entity, client_eid→entity, canvas_eid→entity, x, y, zoom, w, h)
+claim(eid pk→entity, session, claimed_at)  -- a session's lease: who works this
 dependency(parent_eid→entity, type ∈ requires|contains|reads, child_eid→entity)
 ```
 
@@ -90,6 +91,8 @@ task list .status=open            # filter with dot-params
 task new .title="Hello, world!"   # bare words become the title too
 task set T-3 .status=done .priority=1
 task show T-3                     # one entity, whole, as JSON
+task claim T-3 my-session         # lease it ($TASKS_SESSION works too)
+task release T-3                  # hand it back
 ```
 
 ## MCP
@@ -97,9 +100,11 @@ task show T-3                     # one entity, whole, as JSON
 The dev server IS an MCP server: point an agent at `http://host:5173/mcp`
 (Streamable HTTP, stateless — restarts can't strand a session, no auth on the
 tailnet) and it gets self-documenting `task_list` / `task_new` / `task_update` /
-`task_show` tools speaking the same dot-param grammar. `deno task mcp` serves
-the identical registry over stdio for clients that launch a process. Agent
-writes broadcast live to every canvas and TUI.
+`task_show` / `task_claim` / `task_release` tools speaking the same dot-param
+grammar. Claims are leases: the server refuses to hand a held lease to another
+session, so agents can pick work without stepping on each other. `deno task mcp`
+serves the identical registry over stdio for clients that launch a process.
+Agent writes broadcast live to every canvas and TUI.
 
 ## Stack
 

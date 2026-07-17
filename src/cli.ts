@@ -29,6 +29,8 @@ let usage = `task — the entity graph, from a shell
   task new .title="..." [...]    create a task (bare words become the title)
   task set <id> .prop=value ...  patch an entity (id: T-3, 3, or an eid)
   task show <id>                 print one entity as JSON
+  task claim <id> [session]      lease a task for a session ($TASKS_SESSION)
+  task release <id>              drop the lease
 
 dot-params route by prop (.title= → doc.title); where a prop lives in
 several components (pin/camera x,y,w,h) spell it out: .pin.x=12
@@ -56,10 +58,11 @@ let list = async (args: string[]) => {
     .sort(byBoard)
   for (let r of hits) {
     let t = r.comps.task ?? {}
+    let flag = r.comps.claim ? `  \u2691 ${r.comps.claim.session}` : ''
     console.log(
       `${idOf(r).padEnd(6)} ${String(t.status ?? '').padEnd(5)} ${
         String(r.comps.doc?.title ?? '')
-      }`,
+      }${flag}`,
     )
   }
   if (!hits.length) console.error('(no matches)')
@@ -97,6 +100,30 @@ let set = async (args: string[]) => {
   console.log(`${idOf(row)} updated`)
 }
 
+// A claim is a session's lease on a task — other agents see who holds
+// it, and the server refuses to hand a held lease to someone else.
+let claim = async (args: string[]) => {
+  let [id, sess] = args
+  let session = sess ?? Deno.env.get('TASKS_SESSION')
+  if (!id) throw new Error('task claim <id> [session]')
+  if (!session) {
+    throw new Error('task claim <id> <session> (or set TASKS_SESSION)')
+  }
+  let row = find(rows(await snapshot()), id)
+  if (!row) throw new Error(`no entity: ${id}`)
+  await send([{ eid: row.eid, name: 'claim', comp: { session } }])
+  console.log(`${idOf(row)} claimed by ${session}`)
+}
+
+let release = async (args: string[]) => {
+  let [id] = args
+  if (!id) throw new Error('task release <id>')
+  let row = find(rows(await snapshot()), id)
+  if (!row) throw new Error(`no entity: ${id}`)
+  await send([{ eid: row.eid, name: 'claim', comp: null }])
+  console.log(`${idOf(row)} released`)
+}
+
 let show = async (args: string[]) => {
   let [id] = args
   if (!id) throw new Error('task show <id>')
@@ -127,6 +154,8 @@ try {
   else if (cmd == 'new') await create(rest)
   else if (cmd == 'set') await set(rest)
   else if (cmd == 'show') await show(rest)
+  else if (cmd == 'claim') await claim(rest)
+  else if (cmd == 'release') await release(rest)
   else {
     console.log(usage.trim())
     if (cmd && cmd != 'help' && cmd != '--help') Deno.exit(2)

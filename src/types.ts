@@ -17,6 +17,7 @@ export let comps: Record<string, string[]> = {
   pin: ['canvas_eid', 'x', 'y', 'w', 'h', 'z'],
   client: ['user_agent'], // ip is server-stamped too
   camera: ['client_eid', 'canvas_eid', 'x', 'y', 'zoom', 'w', 'h'],
+  claim: ['session'], // claimed_at is server-stamped
 }
 
 // The status vocabulary, in board-column order.
@@ -34,6 +35,7 @@ export let kindOrder = [
   'card',
   'client',
   'camera',
+  'claim',
   'doc',
 ]
 export let kindOf = (has: Record<string, unknown>) =>
@@ -95,6 +97,12 @@ export type Camera = {
   h: number
 }
 
+// A session's lease on an entity: `session` is the claimant's own stable
+// identifier (an agent session id, an operator name). One claim per
+// entity; taking one over another session's is a CONFLICT the server
+// rejects — release first (comp: null), then claim.
+export type Claim = { eid: string; session: string; claimed_at?: string }
+
 export type Dep = { parent: string; type: Edge; child: string }
 
 // An outgoing edge, verb + child — the Dependency view resolves the name.
@@ -116,6 +124,7 @@ export type Ent = {
   pin?: Pin
   client?: Client
   camera?: Camera
+  claim?: Claim
   refs: Ref[]
   kids: Ent[]
 }

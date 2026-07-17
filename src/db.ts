@@ -76,6 +76,11 @@ let schema = `
     h    real not null default 0,
     unique (client_eid, canvas_eid)
   );
+  create table if not exists claim (
+    eid        text primary key references entity(eid),
+    session    text not null,
+    claimed_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  );
   create table if not exists tombstone (
     eid        text primary key,
     deleted_at text not null
@@ -226,6 +231,17 @@ export let apply = (db: DatabaseSync, changes: Change[]) => {
       // replayed change for its eid — an edit racing a delete loses
       // deterministically, and nothing can resurrect the id.
       if (dead.get(eid)) continue
+      // A claim is a LEASE, not a patch: taking one over another session's
+      // claim fails the whole batch loudly — release, then claim. The same
+      // session re-claiming is a no-op refresh. apply() runs serially on
+      // the one db handle, so check-then-write here IS the atomic take.
+      if (name == 'claim' && comp) {
+        let cur = db.prepare('select session from claim where eid = ?')
+          .get(eid) as { session: string } | undefined
+        if (cur && cur.session != comp.session) {
+          throw new Error(`${eid} already claimed by ${cur.session}`)
+        }
+      }
       if (comp == null) {
         if (name == 'entity') {
           // Reverse declaration order so dependents go before what they

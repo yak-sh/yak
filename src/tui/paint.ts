@@ -41,6 +41,8 @@ let sheet: Record<string, Style> = {
   Id: { fg: '#7a8478' },
   Task_Title: { bold: true },
   Task_Body: { fg: '#9da9a0' },
+  Task_Claim: { fg: '#d699b6' },
+  Debug_Claim: { fg: '#d699b6' },
   Dependency: { fg: '#9da9a0' },
   'Dependency_Type-requires': { fg: '#e67e80' },
   'Dependency_Type-reads': { fg: '#7fbbb3' },

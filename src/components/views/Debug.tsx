@@ -17,9 +17,11 @@ let Frame = block('div', 'Debug', {
   Kind: 'span',
   Title: 'span',
   Status: 'span',
+  Claim: 'span',
   Kids: 'div',
 })
-let { Props: Grid, Key, Comp, Val, Item, Kind, Title, Status, Kids } = Frame
+let { Props: Grid, Key, Comp, Val, Item, Kind, Title, Status, Claim, Kids } =
+  Frame
 
 // The comps an entity actually carries, minus the spine — the raw payload.
 let comps = (e: Ent) => {
@@ -85,6 +87,7 @@ export let DebugTaskItem = ({ e }: { e: Ent }) => (
     <View eid={e.eid} view='Id' />
     <Kind>{e.kind}</Kind>
     <Title>{e.doc?.title}</Title>
+    {e.claim && <Claim>⚑ {e.claim.session}</Claim>}
     <Status mod={e.task!.status}>{e.task!.status}</Status>
   </Item>
 )

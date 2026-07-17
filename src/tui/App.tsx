@@ -175,6 +175,7 @@ let TuiTask = ({ e }: { e: Ent }) => (
     <div class='Task_Head'>
       <Dot status={e.task!.status} />
       <span class='Task_Title'>{e.doc?.title}</span>
+      {e.claim && <span class='Task_Claim'>⚑ {e.claim.session}</span>}
       <View eid={e.eid} view='Id' />
     </div>
     {e.doc?.body && (

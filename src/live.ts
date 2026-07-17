@@ -7,6 +7,7 @@ import {
   type Camera,
   type CardComp,
   type Change,
+  type Claim,
   type Client,
   type Dep,
   type Doc,
@@ -28,6 +29,7 @@ type Comps = {
   pin?: Pin
   client?: Client
   camera?: Camera
+  claim?: Claim
 }
 
 export let cache = signal<Record<string, Comps>>({})
@@ -141,6 +143,7 @@ export let ent = (eid: string): Ent => {
     pin: r.pin,
     client: r.client,
     camera: r.camera,
+    claim: r.claim,
     refs: deps.value
       .filter((d) => d.parent == eid && d.type != 'contains')
       .map((d) => ({ type: d.type, child: d.child })),
