@@ -696,6 +696,10 @@ html {
 .TaskRow_Deps {
   white-space: nowrap;
 }
+/* the done share of a tally: struck and faded, the open count stands */
+.TaskRow_Done {
+  opacity: 0.55;
+}
 .TaskRow_Deps-requires {
   color: var(--red);
 }

@@ -1,5 +1,5 @@
 import { type Ent, idOf } from '../../types.ts'
-import { commentCount, gated } from '../../live.ts'
+import { commentCount, ent, gated } from '../../live.ts'
 import { Dot } from '../Dot.tsx'
 import { Prio } from '../Prio.tsx'
 import { block } from '../ui.tsx'
@@ -13,8 +13,9 @@ let Frame = block('div', 'TaskRow', {
   Comments: 'span',
   Claim: 'span',
   Deps: 'span',
+  Done: 's',
 })
-let { Title, Meta, Domain, Comments, Claim, Deps } = Frame
+let { Title, Meta, Domain, Comments, Claim, Deps, Done } = Frame
 
 // A task as a small board card, Trello-shaped: wrapping title beside its
 // dot, then one meta line — priority, domain, edge tallies ("2 requires",
@@ -24,10 +25,28 @@ let { Title, Meta, Domain, Comments, Claim, Deps } = Frame
 // canvas for the full Task card.
 export let TaskRow = ({ e }: { e: Ent }) => {
   let talk = commentCount.value[e.eid]
-  let edges: [string, number][] = [
-    ['requires', e.refs.filter((r) => r.type == 'requires').length],
-    ['contains', e.kids.length],
-    ['reads', e.refs.filter((r) => r.type == 'reads').length],
+  // Each tally reads as a sentence, verb first — "requires ~2~ 1": two
+  // blockers already done (struck), one still open. A child that isn't
+  // a task can't be done, so it counts as open. gated() tells the same
+  // story on the dot: only OPEN requires burn red.
+  let split = (kids: Ent[]): [number, number] => {
+    let done = kids.filter((k) => k.task?.status == 'done').length
+    return [kids.length - done, done]
+  }
+  let edges: [string, number, number][] = [
+    [
+      'requires',
+      ...split(
+        e.refs.filter((r) => r.type == 'requires').map((r) => ent(r.child)),
+      ),
+    ],
+    ['contains', ...split(e.kids)],
+    [
+      'reads',
+      ...split(
+        e.refs.filter((r) => r.type == 'reads').map((r) => ent(r.child)),
+      ),
+    ],
   ]
   return (
     <Frame
@@ -51,7 +70,20 @@ export let TaskRow = ({ e }: { e: Ent }) => {
       <Meta>
         <Prio p={e.task!.priority} />
         {e.task!.domain && <Domain>{e.task!.domain}</Domain>}
-        {edges.map(([t, n]) => n > 0 && <Deps key={t} mod={t}>{n} {t}</Deps>)}
+        {edges.map(([t, open, done]) =>
+          (open > 0 || done > 0) && (
+            <Deps key={t} mod={t}>
+              {t}
+              {done > 0 && (
+                <>
+                  {' '}
+                  <Done>{done}</Done>
+                </>
+              )}
+              {open > 0 && ` ${open}`}
+            </Deps>
+          )
+        )}
         {talk && <Comments>💬 {talk}</Comments>}
         {e.claim && <Claim>⚑</Claim>}
         <View eid={e.eid} view='Id' />
