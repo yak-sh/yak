@@ -70,6 +70,12 @@ html {
   background: var(--surface);
 }
 
+/* Anchors default to OUR blue, not the UA's — :where keeps specificity
+   at zero so any component rule still wins. */
+:where(a) {
+  color: var(--blue);
+}
+
 :where(body) {
   margin: 0;
   height: 100dvh;
@@ -914,9 +920,6 @@ html {
   background: var(--soft);
   padding: 0 3px;
   border-radius: 3px;
-}
-.Task_Body a {
-  color: var(--blue);
 }
 .Task_Body blockquote {
   border-left: 2px solid var(--border2);
