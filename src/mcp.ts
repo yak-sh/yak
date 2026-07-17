@@ -114,6 +114,15 @@ let BUS = `Pass your stable session id and the reply also carries anything
 you haven't seen — comments on your claimed tasks, messages aimed at your
 session (a comment ON S-31 is a message TO that agent).`
 
+// The one habit tool-arg strings breed: form-filling. Agents who write
+// beautiful .md FILES compress a body ARG into one run-on paragraph —
+// so the schema itself pushes back, on every door a body enters by.
+let DOC = `A body is a full markdown DOCUMENT, written like a file you'd
+commit: short paragraphs, bullet lists for anything enumerable (schemas,
+steps, options), ## headings when it has parts, fenced code for code.
+Never one run-on paragraph.`
+let body = () => z.string().describe(DOC)
+
 // Any *_eid dot-param value may be a human id (T-3, P-19) — resolve it to
 // the eid so callers never do the num→eid lookup dance themselves.
 let resolveIds = (all: Row[], ps: Param[]) =>
@@ -191,12 +200,12 @@ each item's params). *_eid param values accept human ids (.project_eid=
 P-19). ${GRAMMAR} ${BUS}`,
     {
       title: z.string().optional(),
-      body: z.string().optional(),
+      body: body().optional(),
       status: z.enum(['open', 'wip', 'done']).optional(),
       params: z.array(z.string()).optional(),
       tasks: z.array(z.object({
         title: z.string(),
-        body: z.string().optional(),
+        body: body().optional(),
         status: z.enum(['open', 'wip', 'done']).optional(),
         params: z.array(z.string()).optional(),
       })).optional(),
@@ -245,7 +254,7 @@ P-19). ${GRAMMAR} ${BUS}`,
     'task_update',
     `Patch an entity by id (T-3, bare num, or eid) with dot-params, e.g.
 [".status=done"] or [".body=notes..."]. Only the named props change.
-*_eid values accept human ids. ${GRAMMAR} ${BUS}`,
+*_eid values accept human ids. ${DOC} ${GRAMMAR} ${BUS}`,
     {
       id: z.string(),
       params: z.array(z.string()).min(1),
@@ -323,7 +332,7 @@ other sessions. ${BUS}`,
     `Comment on ANY entity (tasks, boards, docs, frozen pages — anything
 with an id). Body is markdown. Pass the same stable session identifier
 you claim with, for attribution.`,
-    { id: z.string(), body: z.string(), session: z.string() },
+    { id: z.string(), body: body(), session: z.string() },
     async (
       { id, body, session }: { id: string; body: string; session: string },
     ) => {
