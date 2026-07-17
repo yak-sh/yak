@@ -49,6 +49,12 @@
   color: var(--text);
 }
 
+/* Every textarea sizes itself to what's typed — no manual rows, no
+   resize grip needed. */
+:where(textarea) {
+  field-sizing: content;
+}
+
 /* Retro always-visible scrollbars — thin, square, 2-tone (the harness look). */
 * {
   scrollbar-width: thin;
