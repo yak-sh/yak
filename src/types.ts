@@ -30,6 +30,20 @@ export let comps: Record<string, string[]> = {
   alias: ['slug'],
 }
 
+// The eid minter. Both sides of the wire mint them (clients name their own
+// entities), so it must work on both: crypto.randomUUID is gated to secure
+// contexts and this page is served over plain http on the tailnet, while
+// getRandomValues is gated nowhere.
+export let uuid = () => {
+  let b = crypto.getRandomValues(new Uint8Array(16))
+  b[6] = (b[6] & 0x0f) | 0x40
+  b[8] = (b[8] & 0x3f) | 0x80
+  let h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('')
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${
+    h.slice(16, 20)
+  }-${h.slice(20)}`
+}
+
 // The status vocabulary, in board-column order.
 export let statuses = ['open', 'wip', 'done']
 

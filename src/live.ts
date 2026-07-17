@@ -3,6 +3,7 @@
 // keep it current, and every component renders straight out of it.
 import { computed, signal } from '@preact/signals'
 import { type Change, type Dep, type Ent, type Pinned } from './types.ts'
+import { type Row } from './client.ts'
 import { matchQuery, parseQuery } from './query.ts'
 
 // A cache row: the spine plus whichever components the entity carries.
@@ -31,8 +32,8 @@ export let config = {
 export let base = () => `http${config.secure ? 's' : ''}://${config.host}`
 
 // The column sort: priority first (lower sorts higher), num as tiebreak.
-export { statuses } from './types.ts'
-import { kindOf } from './types.ts'
+export { statuses, uuid } from './types.ts'
+import { kindOf, uuid } from './types.ts'
 export let byPriority = (a: Ent, b: Ent) =>
   (a.task!.priority - b.task!.priority) || (a.num - b.num)
 
@@ -165,6 +166,17 @@ export let boardTasks = (e: Ent): Ent[] => {
     .map(([eid]) => ent(eid))
 }
 
+// The cache as client Rows — the shape the headless half's helpers speak
+// (find, the change builders, the command line's Ctx), so an id lookup or
+// a claim batch is written once and serves the CLI, the web and the TUI.
+export let rows = (): Row[] =>
+  Object.entries(cache.value).map(([eid, r]) => ({
+    eid,
+    num: r.entity?.num ?? 0,
+    kind: kindOf(r),
+    comps: r as Record<string, Record<string, unknown>>,
+  }))
+
 // Everything said ABOUT an entity, oldest first — comments are entities
 // whose comment.target_eid points here.
 export let commentsOn = (eid: string): Ent[] =>
@@ -228,19 +240,6 @@ export let myCamera = (client: string, canvas: string) =>
   Object.values(cache.value).find((r) =>
     r.camera?.client_eid == client && r.camera?.canvas_eid == canvas
   )?.camera
-
-// crypto.randomUUID is gated to secure contexts, and this page is reached
-// over plain http on the tailnet — so mint v4 uuids from getRandomValues,
-// which isn't gated.
-export let uuid = () => {
-  let b = crypto.getRandomValues(new Uint8Array(16))
-  b[6] = (b[6] & 0x0f) | 0x40
-  b[8] = (b[8] & 0x3f) | 0x80
-  let h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('')
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${
-    h.slice(16, 20)
-  }-${h.slice(20)}`
-}
 
 // Who this browser is: a client entity, its uuid minted into localStorage on
 // first visit. The db rows appear when the camera first persists.

@@ -14,6 +14,7 @@ import {
   kindOf,
   type Snapshot,
   statuses,
+  uuid,
 } from './types.ts'
 import { idOf } from './types.ts'
 import { routeProp } from './query.ts'
@@ -132,7 +133,7 @@ export let byBoard = (a: Row, b: Row) =>
 // plus the change that creates it when it's new.
 export let sessionFor = (all: Row[], session: string, cwd?: string) => {
   let s = all.find((r) => r.comps.session && r.comps.session.id == session)
-  let eid = s?.eid ?? crypto.randomUUID()
+  let eid = s?.eid ?? uuid()
   let changes: Change[] = s
     ? (cwd && s.comps.session.cwd != cwd
       ? [{ eid, name: 'session', comp: { cwd } }]
@@ -164,7 +165,7 @@ export let commentChanges = (
   session?: string,
 ): Change[] => {
   let s = session ? sessionFor(all, session) : undefined
-  let eid = crypto.randomUUID()
+  let eid = uuid()
   return [
     ...(s?.changes ?? []),
     { eid, name: 'doc', comp: { title: '', body } },

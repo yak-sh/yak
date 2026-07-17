@@ -14,9 +14,12 @@ import {
   ent,
   gated,
   mode,
+  mutate,
+  rows as graph,
   send,
   statuses,
 } from '../live.ts'
+import { type Ctx, run, type Verb } from '../commands.ts'
 import { has, type Renderer, resolve } from '../components/registry.ts'
 import { View } from '../components/View.tsx'
 import { author } from '../components/Comments.tsx'
@@ -211,20 +214,27 @@ export let overrides: Renderer[] = [
   { view: 'Task', match: has('doc', 'task'), Render: TuiTask },
 ]
 
-let commands: Record<string, (args: string[]) => string | void> = {
-  q: () => {
-    quit.value = true
-  },
-  quit: () => {
-    quit.value = true
-  },
+// The command context here: the entity you're IN (the trail's head), or
+// the row the cursor is on at the board — the same "what you're looking
+// at" rule the web reads off its URL.
+let ctx = (): Ctx => ({ eid: trail.value.at(-1) ?? selected(), rows: graph() })
+
+// Quitting is the one verb a browser has no answer for; the rest of the
+// language is shared (commands.ts).
+let bye: Verb = () => {
+  quit.value = true
+  return {}
 }
 
-let run = (line: string) => {
-  let [name, ...args] = line.trim().split(/\s+/)
-  if (!name) return
-  let c = commands[name]
-  msg.value = c ? c(args) ?? '' : `not a command: ${name}`
+let exec = (line: string) => {
+  try {
+    let r = run(line, ctx(), { q: bye, quit: bye })
+    if (r.changes?.length) mutate(...r.changes)
+    if (r.go) trail.value = [...trail.value, r.go]
+    msg.value = r.msg ?? ''
+  } catch (e) {
+    msg.value = e instanceof Error ? e.message : String(e)
+  }
 }
 
 // Raw stdin, one key at a time. Normal mode is vim; : opens the command
@@ -237,7 +247,7 @@ export let key = (k: string) => {
   }
   if (mode.value == 'command') {
     if (k == '\r') {
-      run(buf.value)
+      exec(buf.value)
       buf.value = ''
       mode.value = 'normal'
     } else if (k == '\x1b') {
