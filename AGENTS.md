@@ -69,11 +69,13 @@ The URL is the root card: `/` is the root canvas, `/T-123` any entity
 fullscreened, `?v=` its view — the App bar is that card's titlebar (title +
 tabs), and the server serves index.html for any extensionless path. The
 universal Id chip (`views/Id.tsx`) is the universal LINK, a real anchor:
-cmd/middle-click and the native menu do new-tab; plain click (and tap)
-navigates in place; right-click opens the small custom menu whose "open
-here" is the deliberate in-place root change (`components/nav.tsx` owns
-route/navigate/menu, all guarded for the TUI). A canvas offers a `List` view —
-the mobile door — whose rows resolve through `List.Item`.
+cmd/middle-click and the browser's own context menu do the new-tab forms; plain
+click (and tap) navigates in place. The custom menu ("open here" = the
+deliberate in-place root change, plus "open in new tab") belongs to the CARD —
+right-click its pin anywhere that isn't a link, input, or editable text
+(`components/nav.tsx` owns route/navigate/menu, all guarded for the TUI). A
+canvas offers a `List` view — the mobile door — whose rows resolve through
+`List.Item`.
 
 ## Map
 

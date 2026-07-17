@@ -1,9 +1,10 @@
 import { applyLocal, camera, ent, mutate, send, topZ } from '../live.ts'
-import { type Pinned } from '../types.ts'
+import { idOf, type Pinned } from '../types.ts'
 import { block, el } from './ui.tsx'
 import { applicable } from './registry.ts'
 import { dragData, View } from './View.tsx'
 import { Icon } from './icons.tsx'
+import { menu } from './nav.tsx'
 
 // Each tab view wears an icon; the name moves into an anchored tooltip.
 // Exported: the fullscreen Screen bar (App.tsx) draws the same tabs.
@@ -149,6 +150,22 @@ export let Card = ({ p }: { p: Pinned }) => {
         (p.w ? `width:${p.w}px;` : '') +
         (p.h ? `height:${p.h}px;` : '')}
       onPointerDown={down}
+      // The CARD is the right-click target — "open here" (make this the
+      // root card) and "open in new tab" for its target. Links, inputs,
+      // and selectable text keep the browser's own menu.
+      onContextMenu={(ev: MouseEvent) => {
+        if (
+          ev.target instanceof Element &&
+          ev.target.closest('a, input, textarea, [contenteditable]')
+        ) return
+        ev.preventDefault()
+        ev.stopPropagation()
+        menu.value = {
+          x: ev.clientX,
+          y: ev.clientY,
+          href: `/${idOf(ent(p.target_eid))}`,
+        }
+      }}
     >
       <Frame>
         <Tabs>
