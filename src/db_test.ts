@@ -3,7 +3,7 @@
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, db, open, snapshot } = await import('./db.ts')
 let { assertEquals, assertMatch, assertThrows } = await import(
-  'jsr:@std/assert'
+  '@std/assert'
 )
 
 let fresh = () => open() // each test file shares one :memory: handle; use eids per test

@@ -11,13 +11,12 @@ import {
   matches,
   param,
   patches,
-  type Row,
   rows,
   sessionFor,
   taskChanges,
 } from './client.ts'
-import { type Change, idOf, kindOf, type Snapshot } from './types.ts'
-import { assertEquals, assertThrows } from 'jsr:@std/assert'
+import { idOf, kindOf, type Snapshot } from './types.ts'
+import { assertEquals, assertThrows } from '@std/assert'
 
 // A tiny graph: one board-ordered pair of tasks, a session, a claim.
 let S = 'aaaaaaaa-0000-4000-8000-000000000001'

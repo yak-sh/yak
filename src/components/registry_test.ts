@@ -2,7 +2,7 @@
 // registration order, platform overrides beat the shared list on ties.
 import { applicable, define, extend, has, resolve } from './registry.ts'
 import { type Ent } from '../types.ts'
-import { assertEquals } from 'jsr:@std/assert'
+import { assertEquals } from '@std/assert'
 
 let R = (view: string, match: (e: Ent) => number | boolean, tag: string) => // deno-lint-ignore no-explicit-any
 ({ view, match, Render: (() => tag) as any })
