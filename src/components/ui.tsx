@@ -58,7 +58,7 @@ export let block = <K extends string>(
 
 // Relative time for humans — '5 minutes ago' — off a minute tick, so an
 // open card doesn't fossilize at the age it rendered. Pair with
-// title={pretty(iso)} for the full stamp on hover.
+// data-tip={pretty(iso)} for the full stamp on hover.
 let tick = signal(Date.now())
 if (globalThis.document) setInterval(() => (tick.value = Date.now()), 60_000)
 let SIZES: [Intl.RelativeTimeFormatUnit, number][] = [
@@ -93,9 +93,11 @@ export let Stamp = (
   let edited = e.modified_at && e.modified_at != e.created_at
   return (
     <StampEl>
-      <span title={pretty(e.created_at)}>{ago(e.created_at)}</span>
+      <span data-tip={pretty(e.created_at)}>{ago(e.created_at)}</span>
       {edited && (
-        <span title={pretty(e.modified_at)}>· edited {ago(e.modified_at)}</span>
+        <span data-tip={pretty(e.modified_at)}>
+          · edited {ago(e.modified_at)}
+        </span>
       )}
     </StampEl>
   )

@@ -433,11 +433,9 @@ html {
 
 /* View tabs read as CONTROLS, the title as TEXT: icon chips, gapless
    (their padding is the spacing; the title's flex gap separates the two
-   clusters), the active one lit. The view NAME lives in a tooltip anchored
-   to its chip — position: fixed lifts it out of the card's overflow clip,
-   and anchor-scope keeps every tooltip on its own tab. */
+   clusters), the active one lit. The view NAME rides the house data-tip
+   tooltip below. */
 .Tab {
-  position: relative; /* the tooltip hangs off the chip itself */
   color: var(--dim);
   background: none;
   border: 1px solid transparent;
@@ -463,12 +461,15 @@ html {
 .Icon {
   display: block;
 }
-/* The view name, as a ::before born from [data-tip]. No anchor():
-   Chrome won't resolve anchors inside a transformed ancestor, and every
-   card lives in the scaled plane — so the chip itself is the containing
-   block (position: relative) and the card no longer clips. Scales with
-   the canvas, works in every engine. */
-.Tab::before {
+/* The house tooltip: any element wearing data-tip grows a ::before that
+   says it. No anchor(): Chrome won't resolve anchors inside a transformed
+   ancestor, and every card lives in the scaled plane — so the host itself
+   is the containing block (position: relative) and the card doesn't clip.
+   Scales with the canvas, works in every engine. */
+[data-tip] {
+  position: relative; /* the tooltip hangs off its host */
+}
+[data-tip]::before {
   content: attr(data-tip);
   position: absolute;
   bottom: calc(100% + 4px);
@@ -484,9 +485,10 @@ html {
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.1s;
+  z-index: 1; /* over siblings that come later in the flow */
 }
-.Tab:hover::before,
-.Tab:focus-visible::before {
+[data-tip]:hover::before,
+[data-tip]:focus-visible::before {
   opacity: 1;
   transition-delay: 0.3s; /* linger before naming; vanish instantly */
 }

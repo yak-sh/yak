@@ -56,7 +56,7 @@ export let Comments = ({ eid }: { eid: string }) => {
       {commentsOn(eid).map((c) => (
         <Item key={c.eid}>
           <Who>{author(c.comment!.author_eid)}</Who>
-          <When title={pretty(c.created_at)}>{ago(c.created_at)}</When>
+          <When data-tip={pretty(c.created_at)}>{ago(c.created_at)}</When>
           <Body
             dangerouslySetInnerHTML={{ __html: snarkdown(c.doc?.body ?? '') }}
           />
