@@ -7,7 +7,7 @@ import { onPaint, root } from './dom.ts' // installs globalThis.document — fir
 import { render } from 'preact'
 import { effect } from '@preact/signals'
 import { boot, config } from '../live.ts'
-import { extend } from '../components/View.tsx'
+import { extend } from '../components/registry.ts'
 import { App, key, overrides, quit, sel, trail } from './App.tsx'
 import { paint } from './paint.ts'
 

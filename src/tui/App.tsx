@@ -15,7 +15,8 @@ import {
   send,
   statuses,
 } from '../live.ts'
-import { has, type Renderer, resolve, View } from '../components/View.tsx'
+import { has, type Renderer, resolve } from '../components/registry.ts'
+import { View } from '../components/View.tsx'
 import { author } from '../components/Comments.tsx'
 import { Dot } from '../components/Dot.tsx'
 import { clipboard } from './paint.ts'

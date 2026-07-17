@@ -1,7 +1,8 @@
 import { applyLocal, camera, ent, mutate, send, topZ } from '../live.ts'
 import { type Pinned } from '../types.ts'
 import { block, el } from './ui.tsx'
-import { applicable, dragData, View } from './View.tsx'
+import { applicable } from './registry.ts'
+import { dragData, View } from './View.tsx'
 import { Icon } from './icons.tsx'
 
 // Each tab view wears an icon; the name moves into an anchored tooltip.

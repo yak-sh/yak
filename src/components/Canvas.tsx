@@ -17,7 +17,7 @@ import {
 import { type Change } from '../types.ts'
 import { pasted } from '../paste.ts'
 import { block } from './ui.tsx'
-import { applicable } from './View.tsx'
+import { applicable } from './registry.ts'
 import { Card } from './Card.tsx'
 
 let Frame = block('div', 'Canvas', { Plane: 'div' })

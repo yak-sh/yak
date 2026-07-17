@@ -1,6 +1,6 @@
-import { type JSX } from 'preact'
-import { type Ent, idOf } from '../types.ts'
+import { idOf } from '../types.ts'
 import { ent } from '../live.ts'
+import { define, has, resolve } from './registry.ts'
 import { Task, TaskCard } from './views/Task.tsx'
 import {
   AnyTitle,
@@ -18,40 +18,17 @@ import { Json } from './views/Json.tsx'
 import { Md, mdText } from './views/Md.tsx'
 import { Web } from './views/Web.tsx'
 
-// The vocabulary: a VIEW is a string — a named way of looking at an entity
-// ('Task', 'Debug', 'Id', …). It's what a card stores and what a tab picks.
-// A RENDERER is a component registered for one view + an entity matcher.
-// There is no kind — an entity is what its components make it, and the
-// most SPECIFIC renderer wins: match returns a score (has('doc','task')
-// scores 2, so Task beats the plain Doc renderer's 1 on task entities);
-// booleans still work as the weakest tier (true = 0.5, the catch-alls).
-// Ties go to registration order. Proper queries come later; this is the
-// simple thing that works.
-// A renderer may also carry a CARD variant — the same view rendering as a
-// card body, where the titlebar (the Card.Title view) already shows the
-// head — and a FILE form: how this view of this entity serializes when its
-// tab is dragged to the desktop.
-type Render = (p: { e: Ent; [x: string]: unknown }) => JSX.Element
-export type Renderer = {
-  view: string
-  match: (e: Ent) => number | boolean
-  Render: Render
-  Card?: Render
-  file?: { ext: string; mime: string; text: (e: Ent) => string }
-}
+// Convenience re-exports: View.tsx is the front door, registry.ts the
+// engine room — importers of either get the same bindings.
+export { applicable, extend, has, type Renderer, resolve } from './registry.ts'
 
-// Score a match: the count of components it claimed, 0.5 for a bare true.
-let score = (r: Renderer, e: Ent) => {
-  let m = r.match(e)
-  return m === true ? 0.5 : Number(m)
-}
-
-// The standard matcher: all named components present → their count.
-export let has = (...names: (keyof Ent & string)[]) => (e: Ent) =>
-  names.every((n) => !!e[n]) ? names.length : 0
-
-// Fixed and curated — extended only by editing this file, never at runtime.
-let registry: Renderer[] = [
+// The CURATED registry — every view the app can render, one list, in
+// priority order (a score tie goes to the earlier entry). The machinery
+// lives in registry.ts, so this file is exactly: the list, the View
+// component, and the drag payload. Adding a view = a file under views/,
+// an entry here, and — if it should appear as a card tab — a name in the
+// tabs list plus an icon in Card.tsx.
+define([
   { view: 'Task', match: has('doc', 'task'), Render: Task, Card: TaskCard },
   { view: 'Board', match: has('doc', 'board'), Render: Board },
   { view: 'Web', match: has('web'), Render: Web },
@@ -82,49 +59,7 @@ let registry: Renderer[] = [
   { view: 'Debug.ListItem', match: () => true, Render: DebugAnyItem },
   { view: 'Id', match: () => true, Render: Id },
   { view: 'Dependency', match: () => true, Render: Dependency },
-]
-
-// Platform overlays: another render target (the TUI) prepends its own
-// renderers at boot — same views, same contract, consulted before the
-// shared registry, so first-match-wins doubles as the override mechanism.
-// Still curated: called once from an entry point, never at runtime.
-let overrides: Renderer[] = []
-export let extend = (rs: Renderer[]) => {
-  overrides = [...rs, ...overrides]
-}
-let all = () => (overrides.length ? [...overrides, ...registry] : registry)
-
-// The views that may appear as card tabs, in tab order. A view tabs for an
-// entity iff some renderer serves it; Debug's catch-all means every card
-// gets a Debug tab. Views not listed here (Id, Dependency) are internal —
-// reachable only by explicit name.
-let tabs = ['Task', 'Board', 'Doc', 'Web', 'Markdown', 'JSON', 'Debug']
-
-export let applicable = (e: Ent) =>
-  tabs.filter((v) => all().some((r) => r.view == v && score(r, e) > 0))
-
-// The renderer serving a view of an entity: the highest-scoring match in
-// the pool (the named view's renderers, or every tab view for the default
-// look), earliest registration breaking ties. An unservable ask falls
-// back to the JSON catch-all.
-let best = (e: Ent, pool: Renderer[]) => {
-  let top: Renderer | undefined
-  let max = 0
-  for (let r of pool) {
-    let s = score(r, e)
-    if (s > max) {
-      max = s
-      top = r
-    }
-  }
-  return top
-}
-
-export let resolve = (e: Ent, view?: string) =>
-  best(
-    e,
-    all().filter((r) => view ? r.view == view : tabs.includes(r.view)),
-  ) ?? registry.find((r) => r.view == 'JSON')!
+], ['Task', 'Board', 'Doc', 'Web', 'Markdown', 'JSON', 'Debug'])
 
 // The one front door: render an entity (straight out of the live cache)
 // through a view. context='Card' prefers the renderer's card variant.

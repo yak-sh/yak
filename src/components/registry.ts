@@ -1,0 +1,89 @@
+import { type JSX } from 'preact'
+import { type Ent } from '../types.ts'
+
+// The renderer registry MACHINERY — no view imports, so anything (a view
+// module, the TUI, a future plugin) can import matchers and types from
+// here without a cycle. The curated list itself lives in View.tsx, which
+// calls define() once at module scope.
+//
+// The vocabulary: a VIEW is a string — a named way of looking at an
+// entity ('Task', 'Debug', 'Id', …). It's what a card stores and what a
+// tab picks. A RENDERER is a component registered for one view + an
+// entity matcher. There is no kind — an entity is what its components
+// make it, and the most SPECIFIC renderer wins: match returns a score
+// (has('doc','task') scores 2, so Task beats the plain Doc renderer's 1
+// on task entities); booleans still work as the weakest tier (true =
+// 0.5, the catch-alls). Ties go to registration order. Proper queries
+// come later; this is the simple thing that works.
+//
+// A renderer may also carry a CARD variant — the same view rendering as
+// a card body, where the titlebar (the Card.Title view) already shows
+// the head — and a FILE form: how this view of this entity serializes
+// when its tab is dragged to the desktop.
+export type Render = (p: { e: Ent; [x: string]: unknown }) => JSX.Element
+export type Renderer = {
+  view: string
+  match: (e: Ent) => number | boolean
+  Render: Render
+  Card?: Render
+  file?: { ext: string; mime: string; text: (e: Ent) => string }
+}
+
+// The standard matcher: all named components present → their count.
+export let has = (...names: (keyof Ent & string)[]) => (e: Ent) =>
+  names.every((n) => !!e[n]) ? names.length : 0
+
+// Score a match: the count of components it claimed, 0.5 for a bare true.
+let score = (r: Renderer, e: Ent) => {
+  let m = r.match(e)
+  return m === true ? 0.5 : Number(m)
+}
+
+// The shared list and the tab order — set once by View.tsx.
+let registry: Renderer[] = []
+let tabs: string[] = []
+export let define = (rs: Renderer[], tabViews: string[]) => {
+  registry = rs
+  tabs = tabViews
+}
+
+// Platform overlays: another render target (the TUI) — or one day a
+// plugin — prepends its own renderers at boot: same views, same
+// contract, consulted before the shared registry, so a tie in score goes
+// to the override. Still curated: called from entry points, never at
+// runtime.
+let overrides: Renderer[] = []
+export let extend = (rs: Renderer[]) => {
+  overrides = [...rs, ...overrides]
+}
+let all = () => (overrides.length ? [...overrides, ...registry] : registry)
+
+// The views that may appear as card tabs, in tab order. A view tabs for
+// an entity iff some renderer serves it; Debug's catch-all means every
+// card gets a Debug tab. Views not listed (Id, Dependency) are internal —
+// reachable only by explicit name.
+export let applicable = (e: Ent) =>
+  tabs.filter((v) => all().some((r) => r.view == v && score(r, e) > 0))
+
+// The renderer serving a view of an entity: the highest-scoring match in
+// the pool (the named view's renderers, or every tab view for the
+// default look), earliest registration breaking ties. An unservable ask
+// falls back to the JSON catch-all.
+let best = (e: Ent, pool: Renderer[]) => {
+  let top: Renderer | undefined
+  let max = 0
+  for (let r of pool) {
+    let s = score(r, e)
+    if (s > max) {
+      max = s
+      top = r
+    }
+  }
+  return top
+}
+
+export let resolve = (e: Ent, view?: string) =>
+  best(
+    e,
+    all().filter((r) => view ? r.view == view : tabs.includes(r.view)),
+  ) ?? registry.find((r) => r.view == 'JSON')!
