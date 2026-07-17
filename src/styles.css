@@ -255,20 +255,29 @@
   color: var(--red);
 }
 
+/* View tabs read as CONTROLS, the title as TEXT: chips, tightly grouped
+   (the title's flex gap separates the two clusters), the active one lit.
+   The chip carries the emphasis — no bold, so switching doesn't jitter. */
 .Tab {
-  font: 12px ui-monospace, monospace;
+  font: 11px ui-monospace, monospace;
   color: var(--dim);
   background: none;
-  border: 0;
-  padding: 0;
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius) - 2px);
+  padding: 1px 5px;
   cursor: pointer;
+}
+.Tab + .Tab {
+  margin-left: calc(2px - var(--half-gap)); /* chips hug each other */
 }
 .Tab:hover {
   color: var(--muted);
+  background: var(--soft);
 }
 .Tab-on {
   color: var(--text);
-  font-weight: 700;
+  background: var(--soft);
+  border-color: var(--border2);
 }
 
 /* The one scrolling element — padding scrolls away WITH the content. */
