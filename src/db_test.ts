@@ -53,6 +53,36 @@ Deno.test('server-owned columns never ride the wire', () => {
   assertEquals(comp(t, 'web')?.frozen_at, null)
 })
 
+Deno.test('repo is a tag on a project: wire-writable, never the kind', () => {
+  let p = uid()
+  apply(db, [
+    { eid: p, name: 'doc', comp: { title: 'a venture' } },
+    { eid: p, name: 'project', comp: {} },
+    { eid: p, name: 'repo', comp: { path: '/tmp/x', base_branch: 'trunk' } },
+  ])
+  assertEquals(comp(p, 'repo')?.path, '/tmp/x')
+  assertEquals(comp(p, 'repo')?.base_branch, 'trunk')
+  assertEquals(search(db, 'venture')[0]?.kind, 'project') // repo doesn't name it
+})
+
+Deno.test('session lifecycle columns are server-owned', () => {
+  let s = uid()
+  apply(db, [{
+    eid: s,
+    name: 'session',
+    comp: {
+      id: 'sess-owned',
+      cwd: '/tmp',
+      status: 'running',
+      origin: 'managed',
+    },
+  }])
+  assertEquals(comp(s, 'session')?.cwd, '/tmp') // wire-writable
+  assertEquals(comp(s, 'session')?.status, null) // lifecycle: server only
+  assertEquals(comp(s, 'session')?.origin, 'external') // the default holds
+  assertEquals(comp(s, 'session')?.latest_seq, 0)
+})
+
 Deno.test('claim is a lease: conflict throws + audits, same session refreshes', () => {
   let task = uid(), a = uid(), b = uid()
   apply(db, [

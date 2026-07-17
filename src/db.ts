@@ -49,6 +49,11 @@ let schema = `
   create table if not exists project (
     eid text primary key references entity(eid)
   );
+  create table if not exists repo (
+    eid  text primary key references entity(eid),
+    path text not null,
+    base_branch text not null default 'main'
+  );
   create table if not exists board (
     eid text primary key references entity(eid)
   );
@@ -281,6 +286,34 @@ export let open = () => {
   addCol('task', 'domain', 'domain text')
   addCol('session', 'cwd', 'cwd text')
   addCol('session', 'acked_at', 'acked_at text')
+  // The managed-session lifecycle (src/sessions.ts): what we spawned, what
+  // it's doing, how it ended. Server-owned — none of it is in comps.session,
+  // so the wire can't write it; it rides OUT in the snapshot like any row.
+  // Listed once, planted in place; each ddl leads with its column name.
+  for (
+    let ddl of [
+      `origin text not null default 'external'`,
+      'provider text',
+      'model text',
+      'effort text',
+      'persona_eid text',
+      'requested_task_eid text',
+      'branch text',
+      'base_revision text',
+      'status text',
+      'provider_session_id text',
+      'serving_model text',
+      'latest_seq integer not null default 0',
+      'started_at text',
+      'stop_requested_at text',
+      'finished_at text',
+      'exit_code integer',
+      'stop_reason text',
+      'final_text text',
+      'usage_json text',
+      'error text',
+    ]
+  ) addCol('session', ddl.split(' ')[0], ddl)
   // A board is a saved filter over tasks (query.ts grammar), not an edge
   // list — membership can't drift when it isn't stored.
   addCol('board', 'query', 'query text')

@@ -11,6 +11,7 @@ export let comps: Record<string, string[]> = {
   doc: ['title', 'body'],
   task: ['status', 'priority', 'project_eid', 'domain'],
   project: [],
+  repo: ['path', 'base_branch'], // the project's checkout — see Repo
   board: ['query'], // filter over tasks (src/query.ts grammar); '' = all
   canvas: [],
   web: ['url'], // frozen_at is server-stamped, never writable over the wire
@@ -91,6 +92,14 @@ export type Task = {
 // is its doc.title — one naming mechanism, no drift.
 export type ProjectTag = { eid: string }
 
+// Where a project's code lives: a checkout on this box and the branch a
+// session's worktree grows from. A tag like project — it never names an
+// entity alone (doc+project+repo is still a project), so it stays out of
+// kindOrder. Wire-writable, because the owner points a project at a
+// checkout from the UI or the CLI like any other data; spawning only
+// READS it, so a browser can never hand the server a path to run in.
+export type Repo = { eid: string; path: string; base_branch: string }
+
 // A board is a saved filter over tasks: `query` speaks the query.ts
 // grammar ('.project_eid=…&.status=open,wip'); empty/null means every task.
 export type BoardTag = { eid: string; query?: string | null }
@@ -143,13 +152,41 @@ export type Fold = {
 }
 
 // An agent session, reified: `id` is its external identity (a Claude
-// session id, an operator name). For now that's all it carries; when we
-// start SPAWNING sessions it grows model, persona, provider, ….
+// session id, an operator name), `cwd` where it runs, `acked_at` its own
+// comms-bus cursor — the three things a session may say about itself.
+//
+// Everything below is the LIFECYCLE of a session we spawned (origin
+// 'managed'; an 'external' session just announces itself and carries
+// none of it). Those columns are server-owned — absent from comps.session,
+// so no client can fake a status, a branch, or a final answer, same as
+// frozen_at/claimed_at. They ride the snapshot (it selects whole rows), so
+// the live cache gets the summary for free. latest_seq is the line count
+// of the log FILE, which is the durable log (src/sessions.ts).
 export type Session = {
   eid: string
   id: string
   cwd?: string | null
   acked_at?: string | null
+  origin?: string // 'external' (announced) | 'managed' (we spawned it)
+  provider?: string | null // adapters.ts key
+  model?: string | null
+  effort?: string | null
+  persona_eid?: string | null
+  requested_task_eid?: string | null // provenance: what it was started on
+  branch?: string | null
+  base_revision?: string | null
+  status?: string | null // starting|running|stopping|completed|failed|interrupted|lost
+  provider_session_id?: string | null // the provider's own id, from its init event
+  serving_model?: string | null // what the provider says it's actually serving
+  latest_seq?: number // lines of log so far
+  started_at?: string | null
+  stop_requested_at?: string | null
+  finished_at?: string | null
+  exit_code?: number | null // null when the child outlived us — unknowable
+  stop_reason?: string | null
+  final_text?: string | null
+  usage_json?: string | null
+  error?: string | null // diagnostics: malformed frames, spawn failures
 }
 
 // A session's lease on an entity — claims point at the session ENTITY.
@@ -210,6 +247,7 @@ export type Ent = {
   doc?: Doc
   task?: Task
   project?: ProjectTag
+  repo?: Repo
   canvas?: { eid: string }
   board?: BoardTag
   web?: Web
