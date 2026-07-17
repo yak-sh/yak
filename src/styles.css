@@ -162,7 +162,9 @@ html {
   margin: 0 auto;
 }
 .App_Body > .Board {
-  padding: var(--gap);
+  /* top padding rides INSIDE the columns (the sticky title carries it),
+     so rows scroll clear to the top edge instead of clipping mid-air */
+  padding: 0 var(--gap) var(--gap);
   /* Fullscreen, the board fills the floor and each COLUMN scrolls
      itself. One scroller per axis is what buys touch axis-locking: a
      vertical finger flings the column (native momentum, no snap physics
@@ -174,6 +176,23 @@ html {
 .App_Body > .Board > .Board_Col {
   overflow-y: auto;
   overscroll-behavior-y: contain; /* the column owns its own bounce */
+}
+/* Overflowing columns spill past the board's own padding box, which
+   eats its right padding — and a trailing margin doesn't count as
+   scrollable overflow either. A spacer ITEM does: the row gap before it
+   becomes the board's right padding at full scroll. */
+.App_Body > .Board::after {
+  content: '';
+  flex: 0 0 1px;
+}
+/* The column title holds the top while its rows scroll away beneath —
+   it wears the floor color and the board's old top padding. */
+.App_Body > .Board .Board_ColName {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg);
+  padding-top: var(--gap);
 }
 
 /* The link context menu: "open here" is the deliberate root change. */
@@ -549,7 +568,13 @@ html {
 .App_Body,
 .Card_Scroll {
   scroll-snap-type: x mandatory;
-  scroll-padding-left: var(--gap);
+  scroll-padding-inline: var(--gap);
+}
+/* Mandatory snap only rests on snap points, and the padded right edge
+   isn't one — so the LAST column also offers its end, making the far
+   edge (padding showing) a legal stop. */
+.Board_Col:last-child {
+  scroll-snap-align: start end;
 }
 .Board_ColName {
   font-size: 11px;
@@ -560,6 +585,8 @@ html {
   gap: var(--half-gap);
   user-select: none; /* the double-click folds, it doesn't select */
   cursor: default;
+  /* the title dot sits over the ROWS' dots: their border + padding */
+  padding-left: calc(var(--half-gap) + 1px);
 }
 .Board_ColName .Dot {
   width: 0.45rem;
@@ -580,7 +607,8 @@ html {
 }
 .Board_Col-folded .Board_ColName {
   width: max-content;
-  transform-origin: calc(0.45rem / 2) 50%;
+  /* pivot on the DOT's center — now sitting past the title inset */
+  transform-origin: calc(var(--half-gap) + 1px + 0.45rem / 2) 50%;
   transform: rotate(90deg);
 }
 .Board_Item {
