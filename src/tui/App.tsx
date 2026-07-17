@@ -290,6 +290,12 @@ export let App = () => {
   let p = boardEid()
   let s = selected()
   let here = trail.value.at(-1)
+  // The trail persists across runs; entities don't have to. Drop any
+  // entries the graph no longer knows (deleted while we were away).
+  if (here && !cache.value[here]) {
+    trail.value = trail.value.filter((eid) => cache.value[eid])
+    here = trail.value.at(-1)
+  }
   let crumbs = [
     p ? ent(p).doc?.title ?? 'untitled' : 'no board',
     ...trail.value.map((eid) => idOf(ent(eid))),
