@@ -27,6 +27,7 @@
   --blue: #7fbbb3;
   --yellow: #dbbc7f;
   --soft: color-mix(in srgb, var(--text) 6%, transparent);
+  --bleed: 0px; /* the content inset a full-bleed strip must escape */
 
   /* status colours — dots and status text consume these */
   --open: var(--blue);
@@ -340,15 +341,22 @@
 .Comments_Body p {
   margin: 0;
 }
+/* The input is a full-bleed footer: negative margins walk back whatever
+   inset the container declared (--bleed), so its top rule runs border to
+   border; side padding puts the caret back on the content line. */
 .Comments_New {
   font: inherit;
   color: var(--text);
   background: var(--surface);
   border: 0;
   border-top: 1px solid var(--border);
-  padding: var(--half-gap);
+  padding: var(--half-gap) var(--bleed);
+  margin: 0 calc(-1 * var(--bleed)) calc(-1 * var(--bleed));
   resize: none;
   outline: none;
+}
+.Task .Comments_New {
+  border-radius: 0 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px);
 }
 .Comments_New::placeholder {
   color: var(--dim);
@@ -363,6 +371,7 @@
   min-height: 0;
   overflow: auto;
   padding: var(--gap);
+  --bleed: var(--gap);
 }
 
 /* A board is a well: the hosting card drops to the chrome surface so the
@@ -397,6 +406,7 @@
   border-radius: var(--radius);
   background: var(--card);
   padding: var(--half-gap);
+  --bleed: var(--half-gap);
 }
 .Task_Head {
   display: flex;
