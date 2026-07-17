@@ -36,6 +36,7 @@ let usage = `task — the entity graph, from a shell
   task claim <id> [session]      lease a task for a session ($TASKS_SESSION)
   task release <id>              drop the lease
   task comment <id> <text...>    say something about ANY entity
+  task backup                    snapshot the db + commit/push the data dir
 
 dot-params route by prop (.title= → doc.title); where a prop lives in
 several components (pin/camera x,y,w,h) spell it out: .pin.x=12
@@ -143,6 +144,18 @@ let show = async (args: string[]) => {
   console.log(JSON.stringify({ ...row, comments }, null, 2))
 }
 
+// Backup is bin/backup (a data-dir git commit) — the CLI is its front
+// door so 'task backup' works wherever the CLI is installed.
+let backup = async () => {
+  let script = new URL('../bin/backup', import.meta.url).pathname
+  let { code } = await new Deno.Command(script, {
+    stdin: 'null',
+    stdout: 'inherit',
+    stderr: 'inherit',
+  }).output()
+  if (code) Deno.exit(code)
+}
+
 let tui = async () => {
   // The same be-reborn loop as `deno task tui`, so a global install hot
   // reloads too. The TUI source lives next to this module.
@@ -167,6 +180,7 @@ try {
   else if (cmd == 'show') await show(rest)
   else if (cmd == 'claim') await claim(rest)
   else if (cmd == 'comment') await comment(rest)
+  else if (cmd == 'backup') await backup()
   else if (cmd == 'release') await release(rest)
   else {
     console.log(usage.trim())

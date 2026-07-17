@@ -1,10 +1,10 @@
 {
   "tasks": {
     "check": "deno fmt --check . && deno lint . && deno check src/",
-    "dev": "deno run -A --unstable-net --watch src/server.ts",
+    "dev": "deno run -A --unstable-net --unstable-worker-options --watch src/server.ts",
     "tui": "sh -c 'while :; do deno run -A src/tui/main.tsx && break; [ $? -eq 42 ] || break; done'",
     "install": "deno install -g -f --name task -A --config deno.json src/cli.ts",
-    "mcp": "deno run -A src/mcp.ts",
+    "mcp": "deno run -A --unstable-worker-options src/mcp.ts",
     "seed": "deno run -A src/db.ts"
   },
   "fmt": {

@@ -175,6 +175,307 @@ you claim with, for attribution.`,
     },
   )
 
+  // ---- the generic graph surface: the UI is data, so this IS UI control ----
+
+  server.tool(
+    'graph_query',
+    `The WHOLE graph, not just tasks: every entity as {id, kind, eid,
+comps}, dot-param filtered. Cards, pins (positions), cameras (what each
+client is looking at), sessions, comments — all live here. ${GRAMMAR}`,
+    { filters: z.array(z.string()).optional(), kind: z.string().optional() },
+    async ({ filters = [], kind }: { filters?: string[]; kind?: string }) => {
+      let ps = parseAll(filters)
+      let hits = rows(await io.read())
+        .filter((r) => !kind || r.kind == kind)
+        .filter((r) => matches(r, ps))
+      return text(JSON.stringify(
+        hits.map((r) => ({
+          id: idOf(r),
+          kind: r.kind,
+          eid: r.eid,
+          comps: r.comps,
+        })),
+        null,
+        2,
+      ))
+    },
+  )
+
+  server.tool(
+    'graph_apply',
+    `Raw wire access: apply a batch of changes atomically. A change is
+{eid, name, comp} — comp is a PATCH (omitted columns untouched), comp:
+null deletes the component, {name:'entity', comp:null} deletes the
+entity. Mint uuids for new entities. Same allowlist and claim-lease
+rules as every other client; writes broadcast live to all screens.
+${GRAMMAR}`,
+    {
+      changes: z.array(z.object({
+        eid: z.string(),
+        name: z.string(),
+        comp: z.record(z.unknown()).nullable(),
+      })).min(1),
+    },
+    async ({ changes }: { changes: Change[] }) => {
+      try {
+        await io.write(changes)
+      } catch (e) {
+        return text(`apply failed: ${(e as Error).message}`)
+      }
+      return text(`applied ${changes.length} change(s)`)
+    },
+  )
+
+  server.tool(
+    'ui_state',
+    `What's on screen right now: every client's camera (viewport rect in
+plane coords) and every pinned card (position, size, view, target),
+with which viewports can see it. Card heights of 0 are auto — treated
+as ~240px for visibility.`,
+    {},
+    async () => {
+      let all = rows(await io.read())
+      let byEid = new Map(all.map((r) => [r.eid, r]))
+      let title = (eid: string) => {
+        let t = byEid.get(eid)
+        return t ? `${idOf(t)} ${t.comps.doc?.title ?? t.kind}` : eid
+      }
+      let cams = all.filter((r) => r.comps.camera).map((r) => {
+        let c = r.comps.camera as Record<string, number>
+        let hw = (Number(c.w) || 0) / 2 / (Number(c.zoom) || 1)
+        let hh = (Number(c.h) || 0) / 2 / (Number(c.zoom) || 1)
+        return {
+          camera: idOf(r),
+          client: String(c.client_eid),
+          canvas: String(c.canvas_eid),
+          zoom: c.zoom,
+          viewport: { x0: c.x - hw, y0: c.y - hh, x1: c.x + hw, y1: c.y + hh },
+        }
+      })
+      let cards = all.filter((r) => r.comps.card && r.comps.pin).map((r) => {
+        let p = r.comps.pin as Record<string, number>
+        let c = r.comps.card as Record<string, string>
+        let h = Number(p.h) || 240
+        let seen = cams
+          .filter((v) =>
+            String(p.canvas_eid) == v.canvas &&
+            p.x < v.viewport.x1 && p.x + Number(p.w) > v.viewport.x0 &&
+            p.y < v.viewport.y1 && Number(p.y) + h > v.viewport.y0
+          )
+          .map((v) => v.camera)
+        return {
+          card: idOf(r),
+          eid: r.eid,
+          target: title(c.target_eid),
+          view: c.view,
+          x: p.x,
+          y: p.y,
+          w: p.w,
+          h: p.h,
+          z: p.z,
+          visible_in: seen,
+        }
+      })
+      return text(JSON.stringify({ cameras: cams, cards }, null, 2))
+    },
+  )
+
+  server.tool(
+    'card_open',
+    `Open a card on the canvas: target entity through a view, at x/y
+(plane coords) — omitted position lands at the center of the newest
+viewport. Returns the card id (close it with card_close, move it with
+card_move).`,
+    {
+      target: z.string(),
+      view: z.string().optional(),
+      x: z.number().optional(),
+      y: z.number().optional(),
+    },
+    async (
+      { target, view, x, y }: {
+        target: string
+        view?: string
+        x?: number
+        y?: number
+      },
+    ) => {
+      let all = rows(await io.read())
+      let row = find(all, target)
+      if (!row) return text(`no entity: ${target}`)
+      let canvas = all.find((r) => r.kind == 'canvas')
+      if (!canvas) return text('no canvas')
+      if (x == null || y == null) {
+        let cam = all.filter((r) => r.comps.camera?.canvas_eid == canvas.eid)
+          .sort((a, b) => b.num - a.num)[0]?.comps.camera as
+            | Record<string, number>
+            | undefined
+        x ??= (cam ? Number(cam.x) : 0) - 160
+        y ??= (cam ? Number(cam.y) : 0) - 100
+      }
+      let z = Math.max(
+        0,
+        ...all.filter((r) => r.comps.pin).map((r) =>
+          Number(r.comps.pin.z) || 0
+        ),
+      ) + 1
+      let views: Record<string, string> = {
+        task: 'Task',
+        board: 'Board',
+        web: 'Web',
+        doc: 'Doc',
+        project: 'Doc',
+      }
+      let eid = crypto.randomUUID()
+      await io.write([
+        {
+          eid,
+          name: 'card',
+          comp: {
+            target_eid: row.eid,
+            view: view ?? views[row.kind] ?? 'JSON',
+          },
+        },
+        {
+          eid,
+          name: 'pin',
+          comp: { canvas_eid: canvas.eid, x, y, w: 320, h: 0, z },
+        },
+      ])
+      let made = rows(await io.read()).find((r) => r.eid == eid)
+      return text(`opened ${made ? idOf(made) : eid} at ${x},${y}`)
+    },
+  )
+
+  server.tool(
+    'card_move',
+    'Move/resize a card: any of x, y (plane coords), w, h (px; h 0 = auto).',
+    {
+      id: z.string(),
+      x: z.number().optional(),
+      y: z.number().optional(),
+      w: z.number().optional(),
+      h: z.number().optional(),
+    },
+    async (
+      { id, x, y, w, h }: {
+        id: string
+        x?: number
+        y?: number
+        w?: number
+        h?: number
+      },
+    ) => {
+      let row = find(rows(await io.read()), id)
+      if (!row?.comps.pin) return text(`no pinned card: ${id}`)
+      let comp = Object.fromEntries(
+        Object.entries({ x, y, w, h }).filter(([, v]) => v != null),
+      )
+      if (!Object.keys(comp).length) return text('nothing to change')
+      await io.write([{ eid: row.eid, name: 'pin', comp }])
+      return text(`moved ${idOf(row)}`)
+    },
+  )
+
+  server.tool(
+    'card_close',
+    'Close a card (deletes the card entity, never its target).',
+    { id: z.string() },
+    async ({ id }: { id: string }) => {
+      let row = find(rows(await io.read()), id)
+      if (!row?.comps.card) return text(`no card: ${id}`)
+      await io.write([{ eid: row.eid, name: 'entity', comp: null }])
+      return text(`closed ${idOf(row)}`)
+    },
+  )
+
+  server.tool(
+    'code_run',
+    `Code mode: run JS against the graph in a sandboxed worker (no fs, no
+net, no env — its ONLY capability is the graph). In scope: graph
+({changes, deps, rows} — rows is [{eid, num, kind, comps}]), apply(
+...changes) to QUEUE writes, log(...) for debug output. The script's
+return value comes back to you. Queued changes apply atomically after
+the script finishes — unless dry_run, which returns the batch without
+applying (preview a layout before committing it). Example — grid the
+cards: const pins = graph.rows.filter(r => r.comps.pin); pins.forEach(
+(p, i) => apply({eid: p.eid, name: 'pin', comp: {x: (i%4)*360, y:
+Math.floor(i/4)*280}})); return pins.length`,
+    {
+      js: z.string(),
+      dry_run: z.boolean().optional(),
+      timeout_ms: z.number().max(30_000).optional(),
+    },
+    async (
+      { js, dry_run, timeout_ms }: {
+        js: string
+        dry_run?: boolean
+        timeout_ms?: number
+      },
+    ) => {
+      let snapshot = await io.read()
+      let worker = new Worker(new URL('./sandbox.ts', import.meta.url), {
+        type: 'module',
+        deno: { permissions: 'none' },
+      } as WorkerOptions)
+      type Out = {
+        ok: boolean
+        result?: unknown
+        error?: string
+        batch: Change[]
+        logs: string[]
+      }
+      let out: Out
+      try {
+        out = await new Promise<Out>((resolve, reject) => {
+          let t = setTimeout(
+            () => reject(new Error('code timed out')),
+            timeout_ms ?? 10_000,
+          )
+          worker.onmessage = (m) => {
+            clearTimeout(t)
+            resolve(m.data as Out)
+          }
+          worker.onerror = (e) => {
+            clearTimeout(t)
+            reject(new Error(e.message))
+          }
+          worker.postMessage({ js, snapshot })
+        })
+      } catch (e) {
+        return text(`code failed: ${(e as Error).message}`)
+      } finally {
+        worker.terminate()
+      }
+      if (!out.ok) {
+        return text(
+          `code threw: ${out.error}\nlogs:\n${out.logs.join('\n')}`,
+        )
+      }
+      let applied = ''
+      if (out.batch.length && !dry_run) {
+        try {
+          await io.write(out.batch)
+          applied = `applied ${out.batch.length} change(s)`
+        } catch (e) {
+          applied = `batch REJECTED: ${(e as Error).message}`
+        }
+      } else if (out.batch.length) {
+        applied = `dry run — ${out.batch.length} change(s) NOT applied`
+      }
+      return text(JSON.stringify(
+        {
+          result: out.result,
+          logs: out.logs,
+          status: applied || 'no changes queued',
+          ...(dry_run ? { batch: out.batch } : {}),
+        },
+        null,
+        2,
+      ))
+    },
+  )
+
   server.tool(
     'task_show',
     `One entity, whole: spine, every component, its comments, as JSON.
