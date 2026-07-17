@@ -21,6 +21,7 @@ import {
   suggest,
 } from '../commands.ts'
 import { navigate, screenTarget } from './nav.tsx'
+import { drop, peek, save } from './drafts.ts'
 import { load, providers } from './Run.tsx'
 import { Tray } from './Tray.tsx'
 import { block } from './ui.tsx'
@@ -232,19 +233,34 @@ export let Status = () => {
     }
   }, [])
 
-  // The command line grabs focus the moment it appears.
+  // The command line grabs focus the moment it appears — and if a draft
+  // outlived a swap, the late-mounting input catches up to the line.
   useEffect(() => {
-    if (mode.value == 'command') input.current?.focus()
+    if (mode.value != 'command') return
+    let i = input.current
+    if (!i) return
+    if (i.value != line) i.value = line
+    i.focus()
   })
 
   // The typed line, mirrored for the ghost and the hints (the DOM input
   // stays the owner); which hint is picked (0 = the best match).
   let [line, setLine] = useState('')
   let [pick, setPick] = useState(0)
+  // A half-typed : line survives any reload — restore it and reopen the
+  // command line; running or Escaping the line is what spends the draft.
+  useEffect(() => {
+    let d = peek('cmd')
+    if (d?.v) {
+      setLine(d.v)
+      mode.value = 'command'
+    }
+  }, [])
   let hints = mode.value == 'command' ? suggest(line, all) : []
   let [, pre, verb, rest] = line.match(/^(\s*)(\S+)(.*)$/s) ?? []
   let put = (v: string) => {
     if (input.current) input.current.value = v
+    v ? save('cmd', v) : drop('cmd')
     setLine(v)
     setPick(0)
   }
@@ -305,7 +321,9 @@ export let Status = () => {
                 elRef={input}
                 onKeyDown={cmdKey}
                 onInput={(e: InputEvent) => {
-                  setLine((e.currentTarget as HTMLInputElement).value)
+                  let v = (e.currentTarget as HTMLInputElement).value
+                  v ? save('cmd', v) : drop('cmd')
+                  setLine(v)
                   setPick(0)
                 }}
               />

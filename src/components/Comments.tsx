@@ -1,7 +1,8 @@
-import { useRef, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { md } from '../md.ts'
 import { base, clientId, commentsOn, ent, mutate, uuid } from '../live.ts'
 import { ago, block, pretty } from './ui.tsx'
+import { drop, focused, peek, save } from './drafts.ts'
 import { idOf, nick, sessionActive } from '../types.ts'
 
 let Frame = block('div', 'Comments', {
@@ -34,6 +35,20 @@ export let author = (eid?: string | null) => {
 // agent on its next tool call, so the comment alone is delivery.
 export let Comments = ({ eid }: { eid: string }) => {
   let box = useRef<HTMLTextAreaElement>(null)
+  let dkey = `${eid}.comment`
+  // A draft outlives blur on purpose — abandon the box, come back, the
+  // words are still there. Only posting spends it. If this box was the
+  // one being typed in when a hot swap hit, it takes the caret back.
+  useEffect(() => {
+    let d = peek(dkey)
+    if (!d || !box.current) return
+    box.current.value = d.v
+    if (focused(dkey)) {
+      box.current.focus()
+      let c = d.caret ?? d.v.length
+      box.current.setSelectionRange(c, c)
+    }
+  }, [])
   let s = ent(eid).session
   let settled = !!s && s.origin == 'managed' && !!s.provider_session_id &&
     !sessionActive.includes(String(s.status))
@@ -63,6 +78,7 @@ export let Comments = ({ eid }: { eid: string }) => {
       }).catch(() => {})
     }
     box.current!.value = ''
+    drop(dkey)
   }
 
   let key = (e: KeyboardEvent) => {
@@ -87,6 +103,10 @@ export let Comments = ({ eid }: { eid: string }) => {
       <New
         elRef={box}
         rows={1}
+        onInput={(e: InputEvent) => {
+          let t = e.currentTarget as HTMLTextAreaElement
+          save(dkey, t.value, t.selectionStart ?? undefined)
+        }}
         placeholder={settled && send
           ? `send to ${who}…`
           : s && !settled

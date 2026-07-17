@@ -353,3 +353,7 @@ export let camera = signal({ x: 0, y: 0, zoom: 1, w: 0, h: 0 })
 // (space, 0, …) only fire in normal mode; the statusbar owns transitions.
 // visual is derived: a live selection outside a text input.
 export let mode = signal<'normal' | 'insert' | 'command' | 'visual'>('normal')
+
+// Whether the search palette is up. Shell state so a hot swap of the
+// component graph can't shut it mid-search (Search.tsx owns the rest).
+export let searchOpen = signal(false)

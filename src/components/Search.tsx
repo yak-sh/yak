@@ -1,15 +1,17 @@
-import { signal } from '@preact/signals'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { type Hit, idOf, uuid } from '../types.ts'
-import { mutate } from '../live.ts'
+import { mutate, searchOpen } from '../live.ts'
 import { navigate } from './nav.tsx'
+import { drop, peek, save } from './drafts.ts'
 import { block } from './ui.tsx'
 import { Icon } from './icons.tsx'
 
 // `/` in normal mode opens the palette (Canvas owns the hotkey and the
 // spawn); Escape closes it. Search runs server-side (FTS5 over every
 // doc) — the palette is just an input, a ranked list, and j/k-ish keys.
-export let searchOpen = signal(false)
+// searchOpen lives in the shell (live.ts) so a hot swap can't shut the
+// palette; the query itself is a draft, reseeded on remount.
+export { searchOpen }
 
 let Frame = block('div', 'Search', {
   Box: 'div',
@@ -38,12 +40,19 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
   let seq = useRef(0)
 
   useEffect(() => {
-    if (searchOpen.value) box.current?.focus()
+    if (!searchOpen.value || !box.current) return
+    let d = peek('search') // a swap remounted us mid-search: pick it back up
+    if (d?.v && !box.current.value) {
+      box.current.value = d.v
+      seek(d.v)
+    }
+    box.current.focus()
   }, [searchOpen.value])
   if (!searchOpen.value) return null
 
   let close = () => {
     searchOpen.value = false
+    drop('search')
     setHits([])
     setSel(0)
   }
@@ -106,8 +115,11 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
           <input
             ref={box}
             placeholder='search the graph… (* = prefix, .status=done .modified_at=today filter, ⌘⏎ = board)'
-            onInput={(e: InputEvent) =>
-              seek((e.currentTarget as HTMLInputElement).value)}
+            onInput={(e: InputEvent) => {
+              let v = (e.currentTarget as HTMLInputElement).value
+              v ? save('search', v) : drop('search')
+              seek(v)
+            }}
             onKeyDown={key}
           />
         </Line>
