@@ -27,8 +27,8 @@ let Frame = block('div', 'Run', {
 let { Row, Name, Go, Error: Fault } = Frame
 
 // The table, fetched once per page: it changes when the server changes.
-let providers = signal<Provider[]>([])
-let load = async () => {
+export let providers = signal<Provider[]>([])
+export let load = async () => {
   try {
     providers.value = await (await fetch(`${base()}/providers`)).json()
   } catch { /* no table, no form — the verb simply does nothing yet */ }

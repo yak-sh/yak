@@ -40,6 +40,7 @@ export type Ctx = {
 export type Result = {
   changes?: Change[]
   go?: string // an eid to open — the platform picks the form (url, trail)
+  spawn?: string // a task eid to start an agent on — platforms that can, do
   msg?: string
 }
 
@@ -110,6 +111,41 @@ export let commands: Record<string, Command> = {
     args: '[T-42]',
     about: 'reopen the task — or go to T-42',
     run: (rest, ctx) => rest.trim() ? go(rest.trim(), ctx) : reopen(rest, ctx),
+  },
+  // :fix is capture-to-agent in one line: a bare id runs an agent on
+  // that task; anything else is a spec line that FILES the task first
+  // (a fix with no project routes to the repo-bearing one when the
+  // graph has exactly one — the spawn needs a checkout). The spawn is
+  // an INTENT like go: this module never touches the wire.
+  fix: {
+    args: 'T-42 | the toolbar clips at small widths',
+    about: 'run a fix agent — on T-42, or on a task filed from your words',
+    run: (rest, ctx) => {
+      let text = rest.trim()
+      if (!text) throw new Error('fix: name a task or describe the nit')
+      if (/^[A-Za-z]+-\d+$/.test(text)) {
+        let r = find(ctx.rows, text)
+        if (!r?.comps.task) throw new Error(`no such task: ${text}`)
+        return { spawn: r.eid, msg: `${idOf(r)} → agent` }
+      }
+      let { title, body, grouped } = spec(text)
+      if (!title) throw new Error('fix: needs a title')
+      let task = { ...inherit(ctx), ...grouped.task }
+      if (!task.project_eid) {
+        let repos = ctx.rows.filter((r) => r.comps.repo && r.comps.project)
+        if (repos.length == 1) task.project_eid = repos[0].eid
+      }
+      let eid = uuid()
+      return {
+        changes: taskChanges(eid, {
+          ...grouped,
+          doc: { title, body, ...grouped.doc },
+          task,
+        }),
+        spawn: eid,
+        msg: `fix: ${title}`,
+      }
+    },
   },
   done: { args: '', about: 'move the focused task to done', run: move('done') },
   wip: { args: '', about: 'move the focused task to wip', run: move('wip') },

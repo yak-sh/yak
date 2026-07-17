@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { signal } from '@preact/signals'
-import { camera, ent, mode, mutate, rows } from '../live.ts'
+import { base, camera, ent, mode, mutate, rows } from '../live.ts'
 import { idOf } from '../types.ts'
 import {
   type Command,
@@ -11,6 +11,7 @@ import {
   suggest,
 } from '../commands.ts'
 import { navigate, screenTarget } from './nav.tsx'
+import { load, providers } from './Run.tsx'
 import { block } from './ui.tsx'
 
 let Frame = block('footer', 'Status', {
@@ -65,15 +66,50 @@ let local: Record<string, Command> = {
 }
 let all = { ...commands, ...local }
 
+// The spawn intent (:fix): defaults are the server's table — first
+// provider, its first model, medium effort when offered — the same list
+// the Run form reads. A freshly minted task rides the ws; the beat
+// before POSTing lets it land before the server looks it up (the same
+// grace paste.ts gives a freeze). The bar narrates as answers arrive.
+let launch = (task: string) => {
+  setTimeout(async () => {
+    try {
+      if (!providers.value.length) await load()
+      let p = providers.value[0]
+      if (!p) throw new Error('no providers')
+      let res = await fetch(`${base()}/sessions/start`, {
+        method: 'POST',
+        body: JSON.stringify({
+          task_eid: task,
+          provider: p.name,
+          model: p.models[0],
+          ...(p.efforts.length
+            ? { effort: p.efforts.includes('medium') ? 'medium' : p.efforts[0] }
+            : {}),
+        }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      let { eid } = await res.json()
+      // one more beat: the session mint is casting back to our cache
+      setTimeout(() => {
+        msg.value = `${idOf(ent(task))} → ${idOf(ent(eid))} running`
+      }, 300)
+    } catch (e) {
+      msg.value = `fix: ${e instanceof Error ? e.message : String(e)}`
+    }
+  }, 350)
+}
+
 // Run a line and spend its intent: writes go out through mutate like every
-// other view, `go` is a real navigation, and a throw lands in the bar
-// rather than a toast — the message is about the line you just typed, so
-// it belongs where you typed it.
+// other view, `go` is a real navigation, spawn starts an agent, and a
+// throw lands in the bar rather than a toast — the message is about the
+// line you just typed, so it belongs where you typed it.
 let exec = (line: string) => {
   try {
     let r = run(line, ctx(), local)
     if (r.changes?.length) mutate(...r.changes)
     if (r.go) navigate(`/${idOf(ent(r.go))}`)
+    if (r.spawn) launch(r.spawn)
     msg.value = r.msg ?? ''
   } catch (e) {
     msg.value = e instanceof Error ? e.message : String(e)

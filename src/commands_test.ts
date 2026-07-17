@@ -18,6 +18,7 @@ let snap: Snapshot = {
     { eid: P, name: 'entity', comp: { eid: P, num: 2, created_at: '' } },
     { eid: P, name: 'doc', comp: { title: 'Proj', body: '' } },
     { eid: P, name: 'project', comp: {} },
+    { eid: P, name: 'repo', comp: { path: '/x', base_branch: 'main' } },
     { eid: B, name: 'entity', comp: { eid: B, num: 3, created_at: '' } },
     { eid: B, name: 'doc', comp: { title: 'Board', body: '' } },
     { eid: B, name: 'board', comp: { query: `.project_eid=${P}&.domain=Eng` } },
@@ -64,6 +65,30 @@ Deno.test('new: a task, inheriting where you stand', () => {
   assertEquals(UUID.test(cs[0].eid), true)
   assertEquals(cs.every((c) => c.eid == cs[0].eid), true)
   assertThrows(() => run('new', ctx(B)), Error, 'needs a title')
+})
+
+Deno.test('fix: a bare id spawns, words file a task first', () => {
+  // an existing task: nothing to mint, just the spawn intent
+  let r = run('fix T-4', ctx())
+  assertEquals(r.changes, undefined)
+  assertEquals(r.spawn, T)
+  // words: a task is filed and the mint IS the spawn target — with no
+  // context, the sole repo-bearing project routes it (the spawn needs
+  // a checkout)
+  let f = run('fix the toolbar clips', ctx())
+  assertEquals(f.spawn, f.changes![0].eid)
+  assertEquals(
+    Object.fromEntries(f.changes!.map((c) => [c.name, c.comp])).task,
+    { status: 'open', project_eid: P },
+  )
+  // standing somewhere still wins over the repo route
+  assertEquals(comps('fix Ship it', B).task, {
+    status: 'open',
+    project_eid: P,
+    domain: 'Eng',
+  })
+  assertThrows(() => run('fix', ctx()), Error, 'name a task')
+  assertThrows(() => run('fix T-99', ctx()), Error, 'no such task')
 })
 
 Deno.test('status moves land on the focused task', () => {
