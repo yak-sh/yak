@@ -70,10 +70,14 @@ html {
   background: var(--surface);
 }
 
-/* Anchors default to OUR blue, not the UA's — :where keeps specificity
+/* Anchors default to OUR blue, visited ones OUR purple — the old web
+   courtesy, still handy and mostly neglected. :where keeps specificity
    at zero so any component rule still wins. */
 :where(a) {
   color: var(--blue);
+}
+:where(a):visited {
+  color: var(--purple);
 }
 
 :where(body) {
