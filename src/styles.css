@@ -188,13 +188,16 @@ html {
   flex: 0 0 1px;
 }
 /* The column title holds the top while its rows scroll away beneath —
-   a slim band, floor-colored, a few px of symmetric padding. */
+   a slim band, floor-colored, a few px of symmetric padding. The
+   negative margin eats the grid gap below it, so the first row sits the
+   same few px away as the top edge. */
 .App_Body > .Board .Board_ColName {
   position: sticky;
   top: 0;
   z-index: 1;
   background: var(--bg);
   padding-block: 4px;
+  margin-bottom: calc(-1 * var(--half-gap));
 }
 
 /* The link context menu: "open here" is the deliberate root change. */
