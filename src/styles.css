@@ -403,6 +403,7 @@
 }
 .Board_Item {
   cursor: grab;
+  min-width: 0; /* grid child: allow shrinking so the row's title can ellipsize */
 }
 
 /* The board's summary line for a task: one row, plain spans, no editors —
