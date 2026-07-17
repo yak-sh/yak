@@ -20,18 +20,34 @@ globalThis.addEventListener?.('popstate', () => {
 
 export let navigate = (to: string) => {
   if (!his) return
+  peek.value = null // a real root change dismisses any floating peek
   his.pushState(null, '', to)
   route.value = to
 }
 
+// A peeked entity: desktop's answer to clicking a link — a popover card
+// at the pointer instead of a fullscreen root swap (Peek.tsx renders it).
+export let peek = signal<{ eid: string; x: number; y: number } | null>(null)
+
+// One opener for every entity click: a fine pointer peeks, a coarse one
+// navigates — fullscreen IS the phone's right answer. navigate() stays
+// the deliberate root change (:open, "open here", direct urls).
+export let openAt = (eid: string, ev: MouseEvent) => {
+  if (globalThis.matchMedia?.('(pointer: fine)').matches) {
+    peek.value = { eid, x: ev.clientX, y: ev.clientY }
+  } else navigate(`/${idOf(ent(eid))}`)
+}
+
 // The plain-click half of an in-app anchor: modifiers, middle-click and
 // the native context menu keep their new-tab forms; a bare click (tap
-// included) navigates in place.
-export let follow = (href: string) => (ev: MouseEvent) => {
+// included) opens in place — peeked when the caller knows its entity,
+// navigated when all it has is an href.
+export let follow = (href: string, eid?: string) => (ev: MouseEvent) => {
   if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.button != 0) return
   ev.preventDefault()
   ev.stopPropagation()
-  navigate(href)
+  if (eid) openAt(eid, ev)
+  else navigate(href)
 }
 
 // The whole internal-link contract, spreadable onto any anchor: a real
@@ -41,7 +57,7 @@ export let linkProps = (e: Ent) => {
   let href = `/${idOf(e)}`
   return {
     href,
-    onClick: follow(href),
+    onClick: follow(href, e.eid),
     draggable: true,
     onDragStart: (ev: DragEvent) => dragData(ev, e.eid, resolve(e).view),
   }

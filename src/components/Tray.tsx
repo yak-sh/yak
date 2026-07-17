@@ -1,12 +1,12 @@
 import { useEffect, useRef } from 'preact/hooks'
 import { signal } from '@preact/signals'
 import { cache, clientId, ent, mutate, pinned, topZ, uuid } from '../live.ts'
-import { idOf, sessionActive } from '../types.ts'
+import { sessionActive } from '../types.ts'
 import { block } from './ui.tsx'
 import { Dot } from './Dot.tsx'
 import { Icon } from './icons.tsx'
 import { icons } from './Card.tsx'
-import { navigate } from './nav.tsx'
+import { openAt } from './nav.tsx'
 import { dragData, View } from './View.tsx'
 
 // The Tray ("the Shelf"): the statusbar's right end. The strip — one
@@ -170,7 +170,7 @@ export let Tray = () => {
                   // no pin in the payload: a live row isn't shelved, so
                   // dropping it on the canvas SPAWNS a session card
                   onDragStart={(e: DragEvent) => dragData(e, eid, 'Session')}
-                  onClick={() => navigate('/' + idOf(ent(eid)))}
+                  onClick={(e: MouseEvent) => openAt(eid, e)}
                 >
                   <View eid={eid} view='List.Item' />
                   {

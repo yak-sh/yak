@@ -4,6 +4,7 @@ import { applicable } from './registry.ts'
 import { icons } from './Card.tsx'
 import { Icon } from './icons.tsx'
 import { Menu, menu, navigate, route, screenTarget } from './nav.tsx'
+import { Peek } from './Peek.tsx'
 import { Run, run } from './Run.tsx'
 import { Status } from './Status.tsx'
 import { View } from './View.tsx'
@@ -58,6 +59,7 @@ export let App = () => {
         <View eid={e.eid} view={view} context='Card' />
       </Body>
       <Menu />
+      <Peek />
       <Run />
       <Status />
     </Frame>

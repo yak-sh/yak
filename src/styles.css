@@ -1957,3 +1957,36 @@ html {
 .Tray_Strip .Icon {
   color: var(--muted);
 }
+
+/* The Peek: a link's popover card on desktop — placed above the click by
+   overlay place(), clamped to the viewport. Card-shaped on purpose: what
+   pins to the canvas is what you were already looking at. */
+.Peek {
+  position: fixed;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  width: max-content;
+  min-width: 340px;
+  max-width: min(560px, calc(100vw - 2 * var(--gap)));
+  max-height: min(60vh, 640px);
+  background: var(--card);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.35);
+  overflow: hidden;
+}
+.Peek_Head {
+  display: flex;
+  align-items: first baseline;
+  gap: var(--half-gap);
+  padding: 4px var(--half-gap);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.Peek_Body {
+  padding: var(--half-gap);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
