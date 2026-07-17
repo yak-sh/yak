@@ -100,6 +100,9 @@ a row, not a dependency).
 - **The watcher's `graph` list in server.ts must cover every server import**, or
   edits to a server file merely reload clients against a stale process.
 - Deleting an entity tombstones it; late patches for that eid are void.
+- Bounced claims are audited: apply() records each rejection as a server-minted
+  `conflict` entity (loser/holder as strings — the loser's session row may die
+  in the same rollback). `graph_query kind=conflict` is the contention report.
 
 ## Working here
 

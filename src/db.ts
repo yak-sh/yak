@@ -88,6 +88,13 @@ let schema = `
     session_eid text not null references entity(eid),
     claimed_at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
+  create table if not exists conflict (
+    eid        text primary key references entity(eid),
+    target_eid text not null,
+    loser      text not null,
+    holder     text not null,
+    at         text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  );
   create table if not exists comment (
     eid        text primary key references entity(eid),
     target_eid text not null references entity(eid),
@@ -251,6 +258,11 @@ let cmps: Record<string, string[]> = { entity: [], ...comps }
 // created_at are server-owned — never writable over the wire.
 export let apply = (db: DatabaseSync, changes: Change[]) => {
   let dead = db.prepare('select 1 from tombstone where eid = ?')
+  // A bounced claim is worth remembering: noted here mid-transaction,
+  // written AFTER the rollback (an audit row can't ride the batch it
+  // condemns) as a conflict entity — display strings, not references,
+  // because the loser's session row may die in that same rollback.
+  let bounced: { target: string; loser: string; holder: string } | null = null
   db.exec('begin')
   try {
     for (let { eid, name, comp } of changes) {
@@ -271,6 +283,13 @@ export let apply = (db: DatabaseSync, changes: Change[]) => {
           where c.eid = ?
         `).get(eid) as { session_eid: string; id: string | null } | undefined
         if (cur && cur.session_eid != comp.session_eid) {
+          let loser = db.prepare('select id from session where eid = ?')
+            .get(String(comp.session_eid)) as { id: string } | undefined
+          bounced = {
+            target: eid,
+            loser: loser?.id ?? String(comp.session_eid),
+            holder: cur.id ?? cur.session_eid,
+          }
           throw new Error(
             `${eid} already claimed by ${cur.id ?? cur.session_eid}`,
           )
@@ -337,6 +356,21 @@ export let apply = (db: DatabaseSync, changes: Change[]) => {
     db.exec('commit')
   } catch (e) {
     db.exec('rollback')
+    if (bounced) {
+      try {
+        db.exec('begin')
+        let ceid = crypto.randomUUID()
+        spine(db, ceid)
+        db.prepare(
+          `insert into conflict (eid, target_eid, loser, holder)
+           values (?, ?, ?, ?)`,
+        ).run(ceid, bounced.target, bounced.loser, bounced.holder)
+        db.exec('commit')
+      } catch (audit) {
+        db.exec('rollback')
+        console.warn('conflict audit failed —', audit) // never mask the claim error
+      }
+    }
     throw e
   }
 }

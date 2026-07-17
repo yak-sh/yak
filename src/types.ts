@@ -20,6 +20,7 @@ export let comps: Record<string, string[]> = {
   camera: ['client_eid', 'canvas_eid', 'x', 'y', 'zoom', 'w', 'h'],
   session: ['id'],
   claim: ['session_eid'], // claimed_at is server-stamped
+  conflict: [], // server-minted audit rows — nothing is wire-writable
   comment: ['target_eid', 'author_eid'],
 }
 
@@ -41,6 +42,7 @@ export let kindOrder = [
   'camera',
   'session',
   'claim',
+  'conflict',
   'comment',
   'doc',
 ]
@@ -138,6 +140,19 @@ export type Comment = {
   author_eid?: string | null
 }
 
+// A claim that BOUNCED, kept as an entity: who tried (loser), who held
+// (holder) — resolved to session-id strings at rejection time, because
+// the loser's session entity may have been minted in the very batch
+// that rolled back. Server-minted only; audit contention with
+// graph_query kind=conflict.
+export type Conflict = {
+  eid: string
+  target_eid: string
+  loser: string
+  holder: string
+  at?: string
+}
+
 export type Dep = { parent: string; type: Edge; child: string }
 
 // An outgoing edge, verb + child — the Dependency view resolves the name.
@@ -162,6 +177,7 @@ export type Ent = {
   camera?: Camera
   session?: Session
   claim?: Claim
+  conflict?: Conflict
   comment?: Comment
   refs: Ref[]
   kids: Ent[]
