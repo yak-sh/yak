@@ -1,6 +1,12 @@
-import { useState } from 'preact/hooks'
 import { type Ent } from '../../types.ts'
-import { byPriority, ent, mutate, statuses } from '../../live.ts'
+import {
+  byPriority,
+  cache,
+  clientId,
+  ent,
+  mutate,
+  statuses,
+} from '../../live.ts'
 import { block } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
 import { dragData, View } from '../View.tsx'
@@ -20,9 +26,38 @@ let { Col, ColName, Count, Item } = Frame
 // canvas it spawns a Task card (the standard drag payload — Canvas owns
 // that drop).
 export let Board = ({ e }: { e: Ent }) => {
-  // Double-click a column name to fold the column to just its header —
-  // per-view state, each card of the same board folds independently.
-  let [folded, setFolded] = useState<Record<string, boolean>>({})
+  // Double-click a column name to fold the column to a vertical header.
+  // Folds are graph state like camera — a `fold` entity per (client,
+  // board), so they persist, sync across this client's tabs, and agents
+  // can see them. The TUI has no client identity; it just never folds.
+  let me = (() => {
+    try {
+      return clientId()
+    } catch {
+      return null
+    }
+  })()
+  let row = me
+    ? Object.entries(cache.value).find(([, c]) =>
+      c.fold?.client_eid == me && c.fold.board_eid == e.eid
+    )
+    : null
+  let folded = new Set(
+    String(row?.[1].fold?.statuses ?? '').split(',').filter(Boolean),
+  )
+  let fold = (s: string) => {
+    if (!me) return
+    folded.has(s) ? folded.delete(s) : folded.add(s)
+    mutate({
+      eid: row?.[0] ?? crypto.randomUUID(),
+      name: 'fold',
+      comp: {
+        client_eid: me,
+        board_eid: e.eid,
+        statuses: [...folded].join(','),
+      },
+    })
+  }
   let drop = (
     ev: DragEvent & { currentTarget: HTMLElement },
     status: string,
@@ -64,18 +99,16 @@ export let Board = ({ e }: { e: Ent }) => {
         return (
           <Col
             key={s}
-            mod={folded[s] && 'folded'}
+            mod={folded.has(s) && 'folded'}
             onDrop={(ev: DragEvent & { currentTarget: HTMLElement }) =>
               drop(ev, s)}
           >
-            <ColName
-              onDblClick={() => setFolded({ ...folded, [s]: !folded[s] })}
-            >
+            <ColName onDblClick={() => fold(s)}>
               <Dot status={s} />
               {s}
               <Count>{list.length}</Count>
             </ColName>
-            {!folded[s] && list.map((k) => (
+            {!folded.has(s) && list.map((k) => (
               <Item
                 key={k.eid}
                 draggable

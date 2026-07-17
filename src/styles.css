@@ -414,10 +414,19 @@
   margin-left: auto;
   color: var(--dim);
 }
-/* A folded column hugs its header; the count carries the story. */
+/* A folded column is one dot-wide lane: the header pivots 90° AROUND THE
+   DOT — the dot holds its spot, the name and count swing down under it.
+   (The dot's center sits at half the dot width from the header's left,
+   halfway up the line — that point is the transform origin.) */
 .Board_Col-folded {
   flex: 0 0 auto;
-  min-width: 5.5rem;
+  width: 1.25rem;
+  min-width: 0;
+}
+.Board_Col-folded .Board_ColName {
+  width: max-content;
+  transform-origin: calc(0.45rem / 2) 50%;
+  transform: rotate(90deg);
 }
 .Board_Item {
   cursor: grab;

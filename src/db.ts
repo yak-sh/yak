@@ -86,6 +86,13 @@ let schema = `
     h    real not null default 0,
     unique (client_eid, canvas_eid)
   );
+  create table if not exists fold (
+    eid        text primary key references entity(eid),
+    client_eid text not null references entity(eid),
+    board_eid  text not null references entity(eid),
+    statuses   text not null default '',
+    unique (client_eid, board_eid)
+  );
   create table if not exists session (
     eid text primary key references entity(eid),
     id  text not null unique,
@@ -313,6 +320,8 @@ let AIMED: [string, string][] = [
   ['pin', 'canvas_eid'],
   ['camera', 'client_eid'],
   ['camera', 'canvas_eid'],
+  ['fold', 'client_eid'],
+  ['fold', 'board_eid'],
 ]
 
 // Apply a batch atomically. Unknown component names are ignored (a newer

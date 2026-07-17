@@ -18,6 +18,7 @@ export let comps: Record<string, string[]> = {
   pin: ['canvas_eid', 'x', 'y', 'w', 'h', 'z'],
   client: ['user_agent'], // ip is server-stamped too
   camera: ['client_eid', 'canvas_eid', 'x', 'y', 'zoom', 'w', 'h'],
+  fold: ['client_eid', 'board_eid', 'statuses'],
   session: ['id', 'cwd'],
   claim: ['session_eid'], // claimed_at is server-stamped
   conflict: [], // server-minted audit rows — nothing is wire-writable
@@ -41,6 +42,7 @@ export let kindOrder = [
   'card',
   'client',
   'camera',
+  'fold',
   'session',
   'claim',
   'conflict',
@@ -125,6 +127,16 @@ export type Camera = {
   h: number
 }
 
+// A client's folded columns on one board — per-client UI state IN the
+// graph (like camera), so it syncs across tabs and agents can see it.
+// statuses is a comma-joined list of folded column names.
+export type Fold = {
+  eid: string
+  client_eid: string
+  board_eid: string
+  statuses: string
+}
+
 // An agent session, reified: `id` is its external identity (a Claude
 // session id, an operator name). For now that's all it carries; when we
 // start SPAWNING sessions it grows model, persona, provider, ….
@@ -195,6 +207,7 @@ export type Ent = {
   pin?: Pin
   client?: Client
   camera?: Camera
+  fold?: Fold
   session?: Session
   claim?: Claim
   conflict?: Conflict
