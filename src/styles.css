@@ -118,13 +118,7 @@
   display: flex;
   align-items: center;
   gap: var(--gap);
-  /* viewport-fit=cover + black-translucent draw us under the phone's
-     clock — the bar's padding absorbs the notch, its background fills
-     it (sides too, for the landscape notch). */
-  padding: calc(var(--half-gap) + env(safe-area-inset-top, 0px))
-    calc(var(--gap) + env(safe-area-inset-right, 0px))
-    var(--half-gap)
-    calc(var(--half-gap) + env(safe-area-inset-left, 0px));
+  padding: var(--half-gap) var(--gap) var(--half-gap) var(--half-gap);
   border-bottom: 1px solid var(--border);
   background: var(--surface);
 }
@@ -531,7 +525,7 @@
 .App_Body,
 .Card_Scroll {
   scroll-snap-type: x mandatory;
-  scroll-padding-left: calc(var(--gap) + env(safe-area-inset-left, 0px));
+  scroll-padding-left: var(--gap);
 }
 .Board_ColName {
   font-size: 11px;
@@ -889,14 +883,19 @@
   display: flex;
   align-items: center;
   gap: var(--half-gap);
-  /* Flush with the glass: the TEXT stays at its usual height and the
-     bar's background runs on to the physical bottom edge — bottom
-     padding = the home-indicator inset (0 off-phone). The text then
-     rides above the corner radius, so no horizontal dodge is needed. */
-  padding: 2px var(--gap) max(2px, env(safe-area-inset-bottom, 0px));
+  padding: 2px var(--gap);
   background: var(--surface);
   border-top: 1px solid var(--border);
   font-size: 12px;
+}
+/* The bar sits flush against the glass on phones, which puts its ends
+   under the screen's rounded corners — slide the TEXT in past the arc
+   (env() is no help here: keeping the flush viewport means no
+   viewport-fit=cover, so the insets read 0). */
+@media (pointer: coarse) {
+  .Status {
+    padding-inline: calc(var(--gap) + 1.25rem);
+  }
 }
 .Status_Mode {
   color: var(--dim);
