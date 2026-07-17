@@ -287,7 +287,7 @@
 .Tab_Tip {
   position: fixed;
   position-anchor: --tab;
-  top: calc(anchor(bottom) + 4px);
+  bottom: calc(anchor(top) + 4px);
   justify-self: anchor-center;
   font: 11px ui-monospace, monospace;
   color: var(--text);
