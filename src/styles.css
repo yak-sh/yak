@@ -365,6 +365,11 @@
   padding: var(--gap);
 }
 
+/* A board is a well: the hosting card drops to the chrome surface so the
+   task cards on it sit raised at the normal card color. */
+.Card:has(> .Card_Scroll > .Board) {
+  background: var(--surface);
+}
 .Board {
   display: flex;
   gap: var(--gap);
@@ -390,7 +395,7 @@
 .Task {
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: var(--surface);
+  background: var(--card);
   padding: var(--half-gap);
 }
 .Task_Head {
