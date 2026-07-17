@@ -451,6 +451,16 @@ export let Canvas = ({ eid }: { eid: string }) => {
       onWheel={wheel}
       onDragOver={(e: DragEvent) => e.preventDefault()}
       onDrop={drop}
+      // Double-click a board row: the task leaps out as its own card at
+      // the mouse — the click-shaped twin of dragging the row out. Links
+      // and buttons inside the row keep their own double-clicks.
+      onDblClick={(e: MouseEvent) => {
+        if (!(e.target instanceof Element)) return
+        if (e.target.closest('a, button, input, [contenteditable]')) return
+        let row = e.target.closest('.Board_Item') as HTMLElement | null
+        if (!row?.dataset.eid) return
+        spawnAt([], row.dataset.eid, 'Task', 420, e.clientX, e.clientY)
+      }}
     >
       <Plane
         mod={glide.value && 'glide'}
