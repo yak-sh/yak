@@ -213,6 +213,15 @@ Deno.serve(
     let path = url.pathname
     if (path == '/ws') return ws(req)
     if (path == '/snapshot') return Response.json(snapshot(db))
+    // HTTP writes (the CLI and MCP server): same apply, same allowlist,
+    // same broadcast — an HTTP client is just a client without a socket.
+    if (path == '/apply' && req.method == 'POST') {
+      return req.json().then((changes: Change[]) => {
+        apply(db, changes)
+        cast(changes)
+        return Response.json({ ok: true })
+      }).catch((e) => new Response(String(e), { status: 400 }))
+    }
     if (path == '/freeze') return freeze(url.searchParams.get('eid') ?? '')
     if (path.startsWith('/frozen/')) {
       return serveFrozen(path.slice(8).replace(/\.html$/, ''))

@@ -22,6 +22,8 @@ let task = (title: string, body = '', status = 'open'): Pasted => {
   let eid = uuid()
   return {
     changes: [
+      // kind is stated, not inherited from whichever comp lands first
+      { eid, name: 'entity', comp: { kind: 'task' } },
       { eid, name: 'doc', comp: { eid, title, body } },
       { eid, name: 'task', comp: { eid, status } },
     ],
@@ -45,12 +47,16 @@ let json = (text: string): Pasted | null => {
   )
   if (names.length) {
     let eid = uuid()
+    let kind = names.includes('task') ? 'task' : names[0]
     return {
-      changes: names.map((n) => ({
-        eid,
-        name: n,
-        comp: { ...(o[n] as object), eid },
-      })),
+      changes: [
+        { eid, name: 'entity', comp: { kind } },
+        ...names.map((n) => ({
+          eid,
+          name: n,
+          comp: { ...(o[n] as object), eid },
+        })),
+      ],
       target: eid,
     }
   }

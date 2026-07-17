@@ -9,7 +9,7 @@
 // `num` is the server-minted human number (T-7 in the UI, one global counter).
 import { DatabaseSync } from 'node:sqlite'
 import { dirname } from 'node:path'
-import { type Change, type Dep, type Snapshot } from './types.ts'
+import { type Change, comps, type Dep, type Snapshot } from './types.ts'
 
 // The db lives outside the repo (this is open source): a home-dir dotpath by
 // default, overridable with DB_PATH.
@@ -237,18 +237,9 @@ export let open = () => {
 // The one live handle — the server shares it for the process lifetime.
 export let db = open()
 
-// The component tables the sync layer may write, with their writable columns.
-let cmps: Record<string, string[]> = {
-  entity: ['kind'],
-  doc: ['title', 'body'],
-  task: ['status', 'priority'],
-  project: [],
-  web: ['url'],
-  card: ['target_eid', 'view'],
-  pin: ['canvas_eid', 'x', 'y', 'w', 'h', 'z'],
-  client: ['user_agent'], // ip is server-stamped, never writable over the wire
-  camera: ['client_eid', 'canvas_eid', 'x', 'y', 'zoom', 'w', 'h'],
-}
+// The sync allowlist: the shared vocabulary plus the spine's one writable
+// column. Order matters — deletes run it REVERSED so dependents go first.
+let cmps: Record<string, string[]> = { entity: ['kind'], ...comps }
 
 // Apply a batch atomically. Unknown component names are ignored (a newer
 // client speaking to an older server shouldn't wedge the socket). num and

@@ -1,5 +1,25 @@
 // Shared FE/BE vocabulary: entity components, edges, and the sync unit.
-// No imports, no runtime code — safe on both sides of the wire.
+// No imports; the only runtime here is the vocabulary itself — safe on
+// both sides of the wire.
+
+// The component tables and their wire-writable columns — THE one list.
+// The db derives its allowlist (and delete order) from it; the CLI and
+// MCP route dot-params (.title= → doc) through it; a prop unique to one
+// component routes bare, a collision (pin/camera geometry) needs the
+// explicit .comp.prop spelling.
+export let comps: Record<string, string[]> = {
+  doc: ['title', 'body'],
+  task: ['status', 'priority'],
+  project: [],
+  web: ['url'], // frozen_at is server-stamped, never writable over the wire
+  card: ['target_eid', 'view'],
+  pin: ['canvas_eid', 'x', 'y', 'w', 'h', 'z'],
+  client: ['user_agent'], // ip is server-stamped too
+  camera: ['client_eid', 'canvas_eid', 'x', 'y', 'zoom', 'w', 'h'],
+}
+
+// The status vocabulary, in board-column order.
+export let statuses = ['open', 'wip', 'done']
 
 // The edge vocabulary — every edge reads as a sentence, parent first:
 // parent requires child (hard gate) · parent contains child (decomposition,

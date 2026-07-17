@@ -43,9 +43,8 @@ export let config = {
   reload: () => loc?.reload(),
 }
 
-// The status vocabulary in board-column order, and the column sort:
-// priority first (lower sorts higher), num as the tiebreak.
-export let statuses = ['open', 'wip', 'done']
+// The column sort: priority first (lower sorts higher), num as tiebreak.
+export { statuses } from './types.ts'
 export let byPriority = (a: Ent, b: Ent) =>
   (a.task!.priority - b.task!.priority) || (a.num - b.num)
 

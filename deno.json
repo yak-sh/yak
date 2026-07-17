@@ -3,6 +3,7 @@
     "check": "deno fmt --check . && deno lint . && deno check src/",
     "dev": "deno run -A --unstable-net --watch src/server.ts",
     "tui": "sh -c 'while :; do deno run -A src/tui/main.tsx && break; [ $? -eq 42 ] || break; done'",
+    "install": "deno install -g -f --name task -A --config deno.json src/cli.ts",
     "seed": "deno run -A src/db.ts"
   },
   "fmt": {
