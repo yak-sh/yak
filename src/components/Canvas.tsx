@@ -104,10 +104,20 @@ export let Canvas = ({ eid }: { eid: string }) => {
 
   // Debounced save that remembers WHICH props moved across a burst, so an
   // interleaved pan + zoom doesn't drop the zoom from the final patch.
+  // Settling also snaps: the plane translate lands on whole screen px (and
+  // a pinch that ends within a hair of 1 lands on exactly 1), so a resting
+  // canvas renders on the pixel grid. Never mid-gesture — rounding a live
+  // pan or pinch reads as jitter, worst when zoomed in.
   let queue = (...props: (keyof typeof camera.value)[]) => {
     for (let p of props) dirty.current.add(p)
     if (timer.current) clearTimeout(timer.current)
     timer.current = setTimeout(() => {
+      let { x, y, zoom, w, h } = camera.value
+      if (dirty.current.has('zoom') && Math.abs(zoom - 1) < 0.02) zoom = 1
+      x = (w / 2 - Math.round(w / 2 - x * zoom)) / zoom
+      y = (h / 2 - Math.round(h / 2 - y * zoom)) / zoom
+      camera.value = { ...camera.value, x, y, zoom }
+      dirty.current.add('x').add('y')
       save(Object.fromEntries(
         [...dirty.current].map((p) => [p, camera.value[p as 'x']]),
       ))
