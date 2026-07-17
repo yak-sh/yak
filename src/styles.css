@@ -377,7 +377,7 @@
 /* A board is a well: the hosting card drops to the chrome surface so the
    task cards on it sit raised at the normal card color. */
 .Card:has(> .Card_Scroll > .Board) {
-  background: var(--surface);
+  background: var(--bg); /* app-bg well — reads almost transparent */
 }
 .Board {
   display: flex;
