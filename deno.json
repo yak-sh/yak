@@ -6,7 +6,8 @@
     "install": "deno install -g -f --name task -A --config deno.json src/cli.ts",
     "mcp": "deno run -A --unstable-worker-options src/mcp.ts",
     "seed": "deno run -A src/db.ts",
-    "test": "deno test -A src"
+    "test": "deno test -A src",
+    "bench": "deno bench -A src"
   },
   "fmt": {
     "semiColons": false,
