@@ -11,6 +11,12 @@
   --radius: 6px;
   --tap: 0px; /* touch-target floor — grows under a coarse pointer */
 
+  /* Prose reads proportional; mono stays where mono MEANS something —
+     ids, chips, verbs, timestamps, code, command surfaces (the keeper
+     list rides with the base rules below). */
+  --font: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
   --bg: #232a2e; /* app background */
   --surface: #2d353b; /* panels / card chrome */
   --card: #343f44; /* raised card body */
@@ -85,7 +91,7 @@ html {
    body hugs its box), headings barely louder than text (a card is not a
    document), retro-minimal tables. */
 :where(p) {
-  margin: 0.6em 0;
+  margin: var(--gap) 0;
 }
 :where(p:first-child, h1:first-child, h2:first-child, h3:first-child) {
   margin-top: 0;
@@ -126,12 +132,19 @@ html {
   color: var(--muted);
 }
 
+/* The mono keepers: ids, chips, badges, edge verbs, timestamps, code,
+   and every command/inspector/log surface. Prose everywhere else is
+   var(--font) via body. :where keeps this overridable. */
+:where(code, pre, kbd, .Id, .Prio, .Task_Domain, .Task_Project, .Task_Claim, .Prop_Hand, .Dependency_Type, .Relate_Verb, .Stamp, .Comments_When, .Comments_Who, .Board_ColName, .Board_Count, .Board_Chips, .Status, .Search_Box input, .Search_Id, .Debug, .Debug_Claim, .SessionRow, .Session_Facts, .Session_Status, .Session_Model, .Session_Line, .Session_Tool, .Session_Exec, .Session_Turn, .Session_Err) {
+  font-family: var(--mono);
+}
+
 :where(body) {
   margin: 0;
   height: 100dvh;
   display: flex;
   flex-direction: column;
-  font: 13px/1.5 ui-monospace, monospace;
+  font: 13px/1.5 var(--font);
   /* Surface, not --bg: the phone's notch band takes its color from BODY
      (observed on-device; the html background never shows there). The
      app's dark floor lives on .App instead — same pixels everywhere
@@ -470,7 +483,7 @@ html {
 /* The card's remove button — deletes the card entity, not its target.
    Padded well past the glyph: a close button earns its hit area. */
 .Card_X {
-  font: 14px/1 ui-monospace, monospace;
+  font: 14px/1 var(--mono);
   color: var(--dim);
   background: none;
   border: 0;
@@ -538,7 +551,7 @@ html {
   left: 0;
   z-index: 200;
   white-space: nowrap;
-  font: 11px ui-monospace, monospace;
+  font: 11px var(--mono);
   color: var(--text);
   background: var(--surface);
   border: 1px solid var(--border2);
