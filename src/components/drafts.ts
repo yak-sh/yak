@@ -8,7 +8,7 @@
 // else's business. Saving also names the key the focus heir, so after
 // a swap the editor that was being typed in takes the caret back.
 
-type Draft = { v: string; caret?: number; t: number }
+type Draft = { v: string; caret?: number }
 
 // Deno (the TUI, tests) has no sessionStorage; a Map stands in.
 let mem = new Map<string, string>()
@@ -19,24 +19,19 @@ let store: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> =
     removeItem: (k: string) => void mem.delete(k),
   }
 
-// A stale draft resurrecting old words is worse than a lost one.
-let TTL = 15 * 60_000
+// Drafts never expire: they're the user's words, and losing work is
+// always worse than resurfacing it. Only commit or revert spends one.
 
 export let save = (key: string, v: string, caret?: number) => {
-  store.setItem(`draft:${key}`, JSON.stringify({ v, caret, t: Date.now() }))
+  store.setItem(`draft:${key}`, JSON.stringify({ v, caret }))
   store.setItem('draft:focus', key)
 }
 
-export let peek = (key: string, now = Date.now()): Draft | null => {
+export let peek = (key: string): Draft | null => {
   let raw = store.getItem(`draft:${key}`)
   if (!raw) return null
   try {
-    let d = JSON.parse(raw) as Draft
-    if (now - d.t > TTL) {
-      drop(key)
-      return null
-    }
-    return d
+    return JSON.parse(raw) as Draft
   } catch {
     return null
   }

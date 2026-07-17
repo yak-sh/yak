@@ -14,9 +14,9 @@ Deno.test('drafts: save/peek/drop round-trip; focus follows the pen', () => {
   assert(!focused('b'), 'dropping the focused key clears the heir')
 })
 
-Deno.test('drafts: a stale draft is dead, not restored', () => {
+Deno.test('drafts: never expire — only commit or revert spends one', () => {
   save('old', 'yesterday')
-  assertEquals(peek('old', Date.now() + 16 * 60_000), null)
-  assertEquals(peek('old'), null, 'staleness also reaps the record')
+  assertEquals(peek('old')?.v, 'yesterday')
   drop('old')
+  assertEquals(peek('old'), null)
 })
