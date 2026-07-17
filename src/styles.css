@@ -188,13 +188,14 @@ html {
   flex: 0 0 1px;
 }
 /* The column title holds the top while its rows scroll away beneath —
-   it wears the floor color and the board's old top padding. */
+   it wears the floor color and the board's old top padding, mirrored
+   below so the stuck band reads vertically centered. */
 .App_Body > .Board .Board_ColName {
   position: sticky;
   top: 0;
   z-index: 1;
   background: var(--bg);
-  padding-top: var(--gap);
+  padding-block: var(--gap);
 }
 
 /* The link context menu: "open here" is the deliberate root change. */
