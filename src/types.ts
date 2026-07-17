@@ -80,6 +80,14 @@ export let comps: Record<string, Record<string, PropType>> = {
   alias: { slug: 'text' },
 }
 
+// Server-stamped columns with graph-typed values — never wire-writable
+// (cols() reads `comps` alone, so these never join the apply allowlist),
+// but part of the SCHEMA: backlinks and any reader of associations take
+// the union, so an edge the server wrote still reads as an edge.
+export let stamped: Record<string, Record<string, PropType>> = {
+  session: { requested_task_eid: { eid: '' }, persona_eid: { eid: '' } },
+}
+
 // A component's wire-writable column names — what most consumers of the
 // old flat list actually want.
 export let cols = (comp: string) => Object.keys(comps[comp] ?? {})

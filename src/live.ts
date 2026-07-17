@@ -8,6 +8,7 @@ import {
   type Dep,
   type Ent,
   type Pinned,
+  stamped,
 } from './types.ts'
 import { type Row } from './client.ts'
 import { matchQuery, parseQuery } from './query.ts'
@@ -264,16 +265,18 @@ export let pinned = (canvas: string): Pinned[] =>
     }))
     .sort((a, b) => (a.z - b.z) || (a.eid < b.eid ? -1 : 1))
 
-// Who points HERE, and via what: every eid-typed prop in the vocabulary
-// scanned over the cache. The vocabulary IS the schema, so a new
-// association shows up in backlinks with no second edit — this is how a
-// task finds its sessions (session.requested_task_eid) and Debug lists
-// whatever holds a reference to the entity on screen.
-let eidProps = Object.entries(vocab).flatMap(([c, props]) =>
-  Object.entries(props)
-    .filter(([, t]) => typeof t == 'object' && 'eid' in t)
-    .map(([p]) => [c, p] as [string, string])
-)
+// Who points HERE, and via what: every eid-typed prop in the SCHEMA —
+// the wire-writable vocabulary UNION the server-stamped columns (a
+// session's requested_task_eid is an edge even though no client may
+// write it) — scanned over the cache. A new association shows up in
+// backlinks with no second edit: this is how a task finds its sessions
+// and Debug lists whatever holds a reference to the entity on screen.
+let eidProps = [...new Set([...Object.keys(vocab), ...Object.keys(stamped)])]
+  .flatMap((c) =>
+    Object.entries({ ...vocab[c], ...stamped[c] })
+      .filter(([, t]) => typeof t == 'object' && 'eid' in t)
+      .map(([p]) => [c, p] as [string, string])
+  )
 export let backlinks = (eid: string) =>
   Object.entries(cache.value).flatMap(([from, r]) =>
     eidProps

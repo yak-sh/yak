@@ -1,6 +1,6 @@
 // The cache derivations: what the field pickers read out of the live
 // world. Pure functions of the cache signal — no DOM, no socket.
-import { cache, domains, projects } from './live.ts'
+import { backlinks, cache, domains, projects } from './live.ts'
 import { assertEquals } from '@std/assert'
 
 // A cache of task/project rows: `['T', 'Ops']` is a task in domain Ops
@@ -39,4 +39,28 @@ Deno.test('domains: nothing to say about an empty graph', () => {
 Deno.test('projects: project rows only, oldest first, named by doc', () => {
   fill([['T', 'Ops'], ['P', 'Sol'], ['P', 'Fable']])
   assertEquals(projects().map((p) => p.doc?.title), ['Sol', 'Fable'])
+})
+
+// Backlinks read the SCHEMA — wire vocabulary plus server-stamped columns
+// (a session's requested_task_eid is an edge no client may write).
+Deno.test('backlinks: stamped associations count', () => {
+  cache.value = {
+    t1: {
+      entity: { eid: 't1', num: 1, created_at: '' },
+      task: { eid: 't1', status: 'open', priority: 1, domain: null },
+    },
+    s1: {
+      entity: { eid: 's1', num: 2, created_at: '' },
+      session: { eid: 's1', id: 'x', requested_task_eid: 't1' },
+    },
+    c1: {
+      entity: { eid: 'c1', num: 3, created_at: '' },
+      claim: { eid: 'c1', session_eid: 's1' },
+    },
+  }
+  assertEquals(backlinks('t1'), [{
+    from: 's1',
+    via: 'session.requested_task_eid',
+  }])
+  assertEquals(backlinks('s1'), [{ from: 'c1', via: 'claim.session_eid' }])
 })
