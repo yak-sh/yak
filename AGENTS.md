@@ -99,7 +99,20 @@ a row, not a dependency).
   not stack pollers that all fire reload together.
 - **The watcher's `graph` list in server.ts must cover every server import**, or
   edits to a server file merely reload clients against a stale process.
-- Deleting an entity tombstones it; late patches for that eid are void.
+- Deleting an entity tombstones it; late patches for that eid are void. Death
+  CASCADES to entities that exist about the dead one (cards viewing it, comments
+  aimed at it, pins/cameras on a dead canvas or client) and detaches soft refs
+  (claims by a dead session, tasks of a dead project). apply() returns the input
+  batch plus a synthesized entity-null per casualty — always cast the RETURN, or
+  client caches keep ghosts.
+- There is NO 'blocked' status. Blocked is a fact about edges — an open
+  `requires` dep turns the Dot red (`gated()` in live.ts); resolve the blocker
+  or drop the edge.
+- Full-text search is FTS5 over `doc` (external-content, trigger-synced —
+  out-of-band doc writes are healed by the boot-time integrity check + rebuild
+  in open()). One surface, four doors: `/search?q=`, `task search`, MCP
+  `search`, `/` in the web UI. User words are quoted into terms (trailing `*` =
+  prefix); snippets mark hits with \x01…\x02 — never HTML.
 - Bounced claims are audited: apply() records each rejection as a server-minted
   `conflict` entity (loser/holder as strings — the loser's session row may die
   in the same rollback). `graph_query kind=conflict` is the contention report.

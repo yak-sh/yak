@@ -23,6 +23,7 @@ import {
   param,
   patches,
   rows,
+  search,
   send,
   sessionFor,
   snapshot,
@@ -36,6 +37,7 @@ let usage = `task — the entity graph, from a shell
   task new .title="..." [...]    create a task (bare words become the title)
   task set <id> .prop=value ...  patch an entity (id: T-3, 3, or an eid)
   task show <id>                 print one entity as JSON
+  task search <words...>         full-text search (trailing * = prefix)
   task claim <id> [session]      lease a task for a session ($TASKS_SESSION)
   task release <id>              drop the lease
   task comment <id> <text...>    say something about ANY entity
@@ -100,6 +102,21 @@ let set = async (args: string[]) => {
       .map(([name, comp]) => ({ eid: row.eid, name, comp })),
   )
   console.log(`${idOf(row)} updated`)
+}
+
+// Full-text search — every doc in the graph, ranked, matches bracketed.
+let seek = async (args: string[]) => {
+  let q = args.join(' ')
+  if (!q) throw new Error('task search <words...> (trailing * = prefix)')
+  let hits = await search(q)
+  if (!hits.length) return console.log('(no hits)')
+  for (let h of hits) {
+    let aim = h.open_eid != h.eid ? ` → on ${h.open_eid}` : ''
+    let snip = h.snip.replaceAll('\x01', '[').replaceAll('\x02', ']')
+    console.log(
+      `${idOf(h)} ${h.kind}: ${h.title || '(untitled)'}${aim} — ${snip}`,
+    )
+  }
 }
 
 // A claim is a session's lease on a task — other agents see who holds
@@ -238,6 +255,7 @@ try {
   else if (cmd == 'new') await create(rest)
   else if (cmd == 'set') await set(rest)
   else if (cmd == 'show') await show(rest)
+  else if (cmd == 'search') await seek(rest)
   else if (cmd == 'claim') await claim(rest)
   else if (cmd == 'comment') await comment(rest)
   else if (cmd == 'backup') await backup()

@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks'
 import snarkdown from 'snarkdown'
 import { type Ent } from '../../types.ts'
-import { ent } from '../../live.ts'
+import { ent, gated } from '../../live.ts'
 import { block } from '../ui.tsx'
 import { Comments } from '../Comments.tsx'
 import { Dot } from '../Dot.tsx'
@@ -51,7 +51,7 @@ export let TaskBody = ({ e, mod }: { e: Ent; mod?: string }) => {
 export let Task = ({ e }: { e: Ent }) => (
   <Frame>
     <Head>
-      <Dot status={e.task!.status} />
+      <Dot status={e.task!.status} gated={gated(e)} />
       <Title>
         <Edit eid={e.eid} comp='doc' prop='title' />
       </Title>

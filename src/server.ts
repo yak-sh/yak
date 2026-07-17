@@ -8,7 +8,7 @@
 import { transform } from 'sucrase'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { type Change } from './types.ts'
-import { apply, db, snapshot } from './db.ts'
+import { apply, db, search, snapshot } from './db.ts'
 import { freeze, serveFrozen } from './freeze.ts'
 import { mcpServer } from './mcp.ts'
 
@@ -79,14 +79,20 @@ let ws = (req: Request) => {
   socket.onopen = () => clients.add(socket)
   socket.onclose = () => clients.delete(socket)
   socket.onmessage = (m) => {
+    let sent = JSON.parse(String(m.data)) as Change[]
+    let extra: Change[]
     try {
-      apply(db, JSON.parse(String(m.data)) as Change[])
+      extra = apply(db, sent).slice(sent.length)
     } catch (e) {
       console.error('sync: bad batch dropped —', e)
       return
     }
+    // Peers get the batch as sent; cascade extras go to EVERYONE — the
+    // sender's optimistic cache only removed what it asked to remove.
     for (let c of clients) {
-      if (c != socket && c.readyState == WebSocket.OPEN) c.send(m.data)
+      if (c.readyState != WebSocket.OPEN) continue
+      if (c != socket) c.send(m.data)
+      if (extra.length) c.send(JSON.stringify(extra))
     }
   }
   return response
@@ -109,9 +115,10 @@ let mcp = async (req: Request) => {
       read: async () => snapshot(db),
       // deno-lint-ignore require-await
       write: async (changes) => {
-        apply(db, changes)
-        cast(changes)
+        cast(apply(db, changes))
       },
+      // deno-lint-ignore require-await
+      find: async (q, limit) => search(db, q, limit),
     })
     await server.connect(theirs)
     let reply = new Promise((resolve) => mine.onmessage = resolve)
@@ -142,13 +149,19 @@ Deno.serve(
     let path = url.pathname
     if (path == '/ws') return ws(req)
     if (path == '/snapshot') return Response.json(snapshot(db))
+    if (path == '/search') {
+      return Response.json(search(
+        db,
+        url.searchParams.get('q') ?? '',
+        Number(url.searchParams.get('limit') ?? 20),
+      ))
+    }
     if (path == '/mcp' && req.method == 'POST') return mcp(req)
     // HTTP writes (the CLI and MCP server): same apply, same allowlist,
     // same broadcast — an HTTP client is just a client without a socket.
     if (path == '/apply' && req.method == 'POST') {
       return req.json().then((changes: Change[]) => {
-        apply(db, changes)
-        cast(changes)
+        cast(apply(db, changes))
         return Response.json({ ok: true })
       }).catch((e) => new Response(String(e), { status: 400 }))
     }

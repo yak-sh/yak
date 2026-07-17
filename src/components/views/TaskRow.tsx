@@ -1,4 +1,5 @@
 import { type Ent } from '../../types.ts'
+import { gated } from '../../live.ts'
 import { Dot } from '../Dot.tsx'
 import { Prio } from '../Prio.tsx'
 import { block } from '../ui.tsx'
@@ -17,7 +18,7 @@ let { Title, Claim, Id } = Frame
 // full Task card; the drag wiring lives on Board_Item.
 export let TaskRow = ({ e }: { e: Ent }) => (
   <Frame>
-    <Dot status={e.task!.status} />
+    <Dot status={e.task!.status} gated={gated(e)} />
     <Title>{e.doc?.title}</Title>
     {e.claim && <Claim>⚑</Claim>}
     <Prio p={e.task!.priority} />

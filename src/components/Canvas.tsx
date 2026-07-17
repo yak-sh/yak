@@ -19,6 +19,7 @@ import { pasted } from '../paste.ts'
 import { block } from './ui.tsx'
 import { applicable } from './registry.ts'
 import { Card } from './Card.tsx'
+import { Search, searchOpen } from './Search.tsx'
 
 let Frame = block('div', 'Canvas', { Plane: 'div' })
 let { Plane } = Frame
@@ -186,6 +187,11 @@ export let Canvas = ({ eid }: { eid: string }) => {
         unlatch()
         camera.value = { ...camera.value, zoom: 1 }
         queue('zoom')
+        return
+      }
+      if (e.key == '/') {
+        e.preventDefault()
+        searchOpen.value = true
         return
       }
       if (e.key != ' ') return
@@ -443,6 +449,19 @@ export let Canvas = ({ eid }: { eid: string }) => {
       >
         {pinned(eid).map((p) => <Card key={p.eid} p={p} />)}
       </Plane>
+      <Search
+        open={(target) => {
+          let box = el.current!.getBoundingClientRect()
+          spawnAt(
+            [],
+            target,
+            undefined,
+            420,
+            box.left + box.width / 2,
+            box.top + box.height / 3,
+          )
+        }}
+      />
     </Frame>
   )
 }

@@ -9,7 +9,14 @@
 // `num` is the server-minted human number (T-7 in the UI, one global counter).
 import { DatabaseSync } from 'node:sqlite'
 import { dirname } from 'node:path'
-import { type Change, comps, type Dep, type Snapshot } from './types.ts'
+import {
+  type Change,
+  comps,
+  type Dep,
+  type Hit,
+  kindOrder,
+  type Snapshot,
+} from './types.ts'
 
 // The db lives outside the repo (this is open source): a home-dir dotpath by
 // default, overridable with DB_PATH.
@@ -115,6 +122,23 @@ let schema = `
     child_eid  text not null references entity(eid),
     primary key (parent_eid, type, child_eid)
   );
+  create virtual table if not exists doc_fts using fts5(
+    title, body, content='doc', content_rowid='rowid'
+  );
+  create trigger if not exists doc_fts_ai after insert on doc begin
+    insert into doc_fts (rowid, title, body)
+    values (new.rowid, new.title, new.body);
+  end;
+  create trigger if not exists doc_fts_ad after delete on doc begin
+    insert into doc_fts (doc_fts, rowid, title, body)
+    values ('delete', old.rowid, old.title, old.body);
+  end;
+  create trigger if not exists doc_fts_au after update on doc begin
+    insert into doc_fts (doc_fts, rowid, title, body)
+    values ('delete', old.rowid, old.title, old.body);
+    insert into doc_fts (rowid, title, body)
+    values (new.rowid, new.title, new.body);
+  end;
 `
 
 // Insert an entity spine row: the eid arrives (or is minted) as a UUID, the
@@ -246,6 +270,24 @@ export let open = () => {
   addCol('task', 'project_eid', 'project_eid text references entity(eid)')
   addCol('task', 'domain', 'domain text')
   addCol('session', 'cwd', 'cwd text')
+  // The FTS mirror follows doc by trigger from here on. Anything older,
+  // any out-of-band writer, or shadow-table damage (overlapping watcher
+  // restarts have managed it) shows up here as a failed integrity check
+  // or a count drift — one rebuild pass over the content table heals
+  // both, and at this scale it costs milliseconds on boot.
+  let count = (t: string) =>
+    (db.prepare(`select count(*) as n from ${t}`).get() as { n: number }).n
+  let sound = () => {
+    try {
+      db.exec(
+        `insert into doc_fts (doc_fts, rank) values ('integrity-check', 1)`,
+      )
+      return count('doc_fts') == count('doc')
+    } catch {
+      return false
+    }
+  }
+  if (!sound()) db.exec(`insert into doc_fts (doc_fts) values ('rebuild')`)
   let { n } = db.prepare('select count(*) as n from task').get() as {
     n: number
   }
@@ -261,11 +303,26 @@ export let db = open()
 // exist). Order matters — deletes run it REVERSED so dependents go first.
 let cmps: Record<string, string[]> = { entity: [], ...comps }
 
+// Components whose ROW EXISTENCE hangs on another entity: when that
+// entity dies, the row's whole entity dies with it. Soft references
+// (a claim's session, a task's project) are NOT here — they let go
+// instead of dying.
+let AIMED: [string, string][] = [
+  ['card', 'target_eid'],
+  ['comment', 'target_eid'],
+  ['pin', 'canvas_eid'],
+  ['camera', 'client_eid'],
+  ['camera', 'canvas_eid'],
+]
+
 // Apply a batch atomically. Unknown component names are ignored (a newer
 // client speaking to an older server shouldn't wedge the socket). num and
-// created_at are server-owned — never writable over the wire.
-export let apply = (db: DatabaseSync, changes: Change[]) => {
+// created_at are server-owned — never writable over the wire. Returns the
+// EFFECTIVE batch: the input plus a synthesized entity-null for every
+// cascade victim, so casting the return keeps every client cache honest.
+export let apply = (db: DatabaseSync, changes: Change[]): Change[] => {
   let dead = db.prepare('select 1 from tombstone where eid = ?')
+  let extra: Change[] = []
   // A bounced claim is worth remembering: noted here mid-transaction,
   // written AFTER the rollback (an audit row can't ride the batch it
   // condemns) as a conflict entity — display strings, not references,
@@ -304,22 +361,48 @@ export let apply = (db: DatabaseSync, changes: Change[]) => {
         }
       }
       if (comp == null) {
-        if (name == 'entity') {
-          // Reverse declaration order so dependents go before what they
-          // reference (pin → card must delete pin first).
+        if (name != 'entity') {
+          db.prepare(`delete from ${name} where eid = ?`).run(eid)
+          continue
+        }
+        // Death spreads to entities that exist ABOUT the dead one — cards
+        // viewing it, comments aimed at it, pins and cameras on a dead
+        // canvas or client. The worklist walks that closure first; then
+        // soft references let go (claims by a dead session, tasks of a
+        // dead project); then every component row goes in reverse
+        // declaration order (dependents before their referents), and only
+        // then the spines — a spine can't drop while any row still aims
+        // at it. Every casualty is tombstoned: nothing resurrects.
+        let doomed = [eid]
+        for (let i = 0; i < doomed.length; i++) {
+          for (let [t, col] of AIMED) {
+            let rows = db.prepare(`select eid from ${t} where ${col} = ?`)
+              .all(doomed[i]) as { eid: string }[]
+            for (let r of rows) {
+              if (!doomed.includes(r.eid)) doomed.push(r.eid)
+            }
+          }
+        }
+        for (let d of doomed) {
+          db.prepare('delete from claim where session_eid = ?').run(d)
+          db.prepare('update task set project_eid = null where project_eid = ?')
+            .run(d)
           for (let t of Object.keys(cmps).toReversed()) {
             if (t != 'entity') {
-              db.prepare(`delete from ${t} where eid = ?`).run(eid)
+              db.prepare(`delete from ${t} where eid = ?`).run(d)
             }
           }
           db.prepare(
             'delete from dependency where parent_eid = ? or child_eid = ?',
-          ).run(eid, eid)
+          ).run(d, d)
+        }
+        for (let d of doomed) {
           db.prepare(
             'insert or ignore into tombstone (eid, deleted_at) values (?, ?)',
-          ).run(eid, new Date().toISOString())
+          ).run(d, new Date().toISOString())
+          db.prepare('delete from entity where eid = ?').run(d)
+          if (d != eid) extra.push({ eid: d, name: 'entity', comp: null })
         }
-        db.prepare(`delete from ${name} where eid = ?`).run(eid)
         continue
       }
       if (name == 'entity') {
@@ -362,6 +445,7 @@ export let apply = (db: DatabaseSync, changes: Change[]) => {
       }
     }
     db.exec('commit')
+    return [...changes, ...extra]
   } catch (e) {
     db.exec('rollback')
     if (bounced) {
@@ -381,6 +465,43 @@ export let apply = (db: DatabaseSync, changes: Change[]) => {
     }
     throw e
   }
+}
+
+// Full-text search over every doc — tasks, boards, projects, comments all
+// carry one. User words are quoted into FTS terms (AND semantics; a
+// trailing * keeps prefix search) so raw operator syntax can't error.
+// Title hits outweigh body hits; snippets mark matches with \x01…\x02 so
+// renderers can highlight without trusting HTML. A comment hit points
+// open_eid at its target — you open the conversation, not the aside.
+export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
+  let match = q.trim().split(/\s+/)
+    .map((t) => {
+      let prefix = t.endsWith('*')
+      let word = (prefix ? t.slice(0, -1) : t).replaceAll('"', '')
+      return word && `"${word}"${prefix ? '*' : ''}`
+    })
+    .filter(Boolean).join(' ')
+  if (!match) return []
+  let rows = db.prepare(`
+    select d.eid, d.title,
+      snippet(doc_fts, 1, char(1), char(2), '…', 10) as snip,
+      e.num
+    from doc_fts
+    join doc d on d.rowid = doc_fts.rowid
+    join entity e on e.eid = d.eid
+    where doc_fts match ?
+    order by bm25(doc_fts, 4.0, 1.0) limit ?
+  `).all(match, limit) as (Omit<Hit, 'kind' | 'open_eid'>)[]
+  let is = kindOrder.map((k) =>
+    [k, db.prepare(`select 1 from ${k} where eid = ?`)] as const
+  )
+  let aim = db.prepare('select target_eid from comment where eid = ?')
+  return rows.map((r) => {
+    let kind = is.find(([, s]) => s.get(r.eid))?.[0] ?? 'entity'
+    let target = (aim.get(r.eid) as { target_eid: string } | undefined)
+      ?.target_eid
+    return { ...r, kind, open_eid: target ?? r.eid }
+  })
 }
 
 // The whole graph as one batch (plus edges) — what a fresh client cache eats.

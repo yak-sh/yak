@@ -1,10 +1,17 @@
+import { useState } from 'preact/hooks'
 import { type Ent } from '../../types.ts'
 import { byPriority, ent, mutate, statuses } from '../../live.ts'
 import { block } from '../ui.tsx'
+import { Dot } from '../Dot.tsx'
 import { dragData, View } from '../View.tsx'
 
-let Frame = block('div', 'Board', { Col: 'div', ColName: 'div', Item: 'div' })
-let { Col, ColName, Item } = Frame
+let Frame = block('div', 'Board', {
+  Col: 'div',
+  ColName: 'div',
+  Count: 'span',
+  Item: 'div',
+})
+let { Col, ColName, Count, Item } = Frame
 
 // A board as kanban: columns derived from task status, ordered by
 // priority. Every task row is draggable — dropped on another column (or
@@ -13,6 +20,9 @@ let { Col, ColName, Item } = Frame
 // canvas it spawns a Task card (the standard drag payload — Canvas owns
 // that drop).
 export let Board = ({ e }: { e: Ent }) => {
+  // Double-click a column name to fold the column to just its header —
+  // per-view state, each card of the same board folds independently.
+  let [folded, setFolded] = useState<Record<string, boolean>>({})
   let drop = (
     ev: DragEvent & { currentTarget: HTMLElement },
     status: string,
@@ -49,15 +59,23 @@ export let Board = ({ e }: { e: Ent }) => {
 
   return (
     <Frame>
-      {statuses.map((s) => (
-        <Col
-          key={s}
-          onDrop={(ev: DragEvent & { currentTarget: HTMLElement }) =>
-            drop(ev, s)}
-        >
-          <ColName>{s}</ColName>
-          {e.kids.filter((k) => k.task?.status == s).sort(byPriority).map(
-            (k) => (
+      {statuses.map((s) => {
+        let list = e.kids.filter((k) => k.task?.status == s).sort(byPriority)
+        return (
+          <Col
+            key={s}
+            mod={folded[s] && 'folded'}
+            onDrop={(ev: DragEvent & { currentTarget: HTMLElement }) =>
+              drop(ev, s)}
+          >
+            <ColName
+              onDblClick={() => setFolded({ ...folded, [s]: !folded[s] })}
+            >
+              <Dot status={s} />
+              {s}
+              <Count>{list.length}</Count>
+            </ColName>
+            {!folded[s] && list.map((k) => (
               <Item
                 key={k.eid}
                 draggable
@@ -66,10 +84,10 @@ export let Board = ({ e }: { e: Ent }) => {
               >
                 <View eid={k.eid} view='Task.Row' />
               </Item>
-            ),
-          )}
-        </Col>
-      ))}
+            ))}
+          </Col>
+        )
+      })}
     </Frame>
   )
 }

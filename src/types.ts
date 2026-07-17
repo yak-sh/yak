@@ -161,6 +161,18 @@ export type Conflict = {
 // human handle. find() resolves it like any id; unique graph-wide.
 export type Alias = { eid: string; slug: string }
 
+// A full-text search hit. snip marks matches with \x01…\x02 (renderers
+// highlight without trusting HTML); open_eid is what to OPEN — the entity
+// itself, or a comment's target.
+export type Hit = {
+  eid: string
+  num: number
+  kind: string
+  title: string
+  snip: string
+  open_eid: string
+}
+
 export type Dep = { parent: string; type: Edge; child: string }
 
 // An outgoing edge, verb + child — the Dependency view resolves the name.

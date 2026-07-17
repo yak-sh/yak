@@ -11,7 +11,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
-import { type Change, comps, type Dep, statuses } from './types.ts'
+import { type Change, comps, type Dep, type Hit, statuses } from './types.ts'
 import {
   byBoard,
   claimant,
@@ -25,6 +25,7 @@ import {
   patches,
   type Row,
   rows,
+  search,
   send,
   snapshot,
   taskChanges,
@@ -34,6 +35,7 @@ import {
 export type IO = {
   read: () => Promise<{ changes: Change[]; deps: Dep[] }>
   write: (changes: Change[]) => Promise<void>
+  find: (q: string, limit?: number) => Promise<Hit[]>
 }
 
 let GRAMMAR = `Dot-params: '.prop=value' routes by prop through the component
@@ -62,6 +64,26 @@ let text = (s: string) => ({ content: [{ type: 'text' as const, text: s }] })
 
 export let mcpServer = (io: IO) => {
   let server = new McpServer({ name: 'tasks', version: '0.1.0' })
+
+  server.tool(
+    'search',
+    `Full-text search (FTS5) across every doc in the graph — task titles
+and bodies, boards, projects, comments. Words AND together; a trailing *
+prefix-matches. Returns ranked hits as 'id kind title — snippet'; a
+comment hit names the entity it targets. Use this FIRST when looking for
+existing work — cheaper and better-ranked than paging graph_query.`,
+    { q: z.string(), limit: z.number().optional() },
+    async ({ q, limit }: { q: string; limit?: number }) => {
+      let hits = await io.find(q, limit ?? 20)
+      return text(
+        hits.map((h) =>
+          `${idOf(h)} ${h.kind}: ${h.title || '(untitled)'}` +
+          `${h.open_eid != h.eid ? ` → on ${h.open_eid}` : ''}` +
+          ` — ${h.snip.replaceAll('\x01', '[').replaceAll('\x02', ']')}`
+        ).join('\n') || '(no hits)',
+      )
+    },
+  )
 
   server.tool(
     'task_list',
@@ -508,6 +530,6 @@ id: T-3, bare num, or eid.`,
 
 // stdio entry: same tools, reaching the graph over HTTP like any client.
 if (import.meta.main) {
-  await mcpServer({ read: snapshot, write: send })
+  await mcpServer({ read: snapshot, write: send, find: search })
     .connect(new StdioServerTransport())
 }

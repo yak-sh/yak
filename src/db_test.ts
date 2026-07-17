@@ -1,7 +1,7 @@
 // apply()/snapshot() semantics against an in-memory db — the wire's
 // contract: patches, creates, deletes, tombstones, and the claim lease.
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, db, open, snapshot } = await import('./db.ts')
+let { apply, db, open, search, snapshot } = await import('./db.ts')
 let { assertEquals, assertMatch, assertThrows } = await import(
   '@std/assert'
 )
@@ -105,6 +105,56 @@ Deno.test('spine mints once, num is monotonic', () => {
   assertEquals(num(y), num(x) + 1)
   apply(db, [{ eid: x, name: 'doc', comp: { title: 't' } }])
   assertEquals(Number(comp(x, 'entity')?.num), num(x)) // touch ≠ re-mint
+})
+
+Deno.test('fts: search finds, follows edits, forgets the dead', () => {
+  let t = uid(), c = uid()
+  apply(db, [
+    { eid: t, name: 'doc', comp: { title: 'Xylophone repair', body: 'tune' } },
+    { eid: t, name: 'task', comp: { status: 'open' } },
+  ])
+  assertEquals(search(db, 'xylophone')[0]?.eid, t)
+  assertEquals(search(db, 'xylo*')[0]?.kind, 'task') // prefix + derived kind
+  apply(db, [{ eid: t, name: 'doc', comp: { title: 'Glockenspiel repair' } }])
+  assertEquals(search(db, 'xylophone').length, 0) // the edit moved the index
+  // a comment hit opens its TARGET, not itself
+  apply(db, [
+    { eid: c, name: 'doc', comp: { title: '', body: 'the quincunx angle' } },
+    { eid: c, name: 'comment', comp: { target_eid: t } },
+  ])
+  assertEquals(search(db, 'quincunx')[0]?.open_eid, t)
+  apply(db, [{ eid: t, name: 'entity', comp: null }])
+  assertEquals(search(db, 'glockenspiel').length, 0) // tombstoned = unfindable
+  assertEquals(search(db, 'quincunx').length, 0) // the comment died with it
+  assertEquals(search(db, '"broken (syntax'), []) // user words, not operators
+})
+
+Deno.test('entity delete cascades to aimed entities, detaches soft refs', () => {
+  let p = uid(), t = uid(), t2 = uid(), card = uid(), note = uid()
+  apply(db, [
+    { eid: p, name: 'doc', comp: { title: 'proj' } },
+    { eid: p, name: 'project', comp: {} },
+    { eid: t, name: 'doc', comp: { title: 'doomed' } },
+    { eid: t, name: 'task', comp: { status: 'open', project_eid: p } },
+    { eid: t2, name: 'doc', comp: { title: 'survivor' } },
+    { eid: t2, name: 'task', comp: { status: 'open', project_eid: p } },
+    { eid: card, name: 'card', comp: { target_eid: t, view: 'Task' } },
+    { eid: note, name: 'doc', comp: { title: '', body: 'aimed at doomed' } },
+    { eid: note, name: 'comment', comp: { target_eid: t } },
+  ])
+  let out = apply(db, [{ eid: t, name: 'entity', comp: null }])
+  // the cascade rides the returned batch, so every cache hears about it
+  for (let victim of [card, note]) {
+    assertEquals(
+      out.some((c) => c.eid == victim && c.name == 'entity' && !c.comp),
+      true,
+    )
+    assertEquals(comp(victim, 'doc') ?? comp(victim, 'card'), undefined)
+  }
+  // deleting the project detaches its surviving tasks, kills nothing
+  apply(db, [{ eid: p, name: 'entity', comp: null }])
+  assertEquals(comp(t2, 'task')?.project_eid, null)
+  assertEquals(comp(t2, 'doc')?.title, 'survivor')
 })
 
 Deno.test('open() is idempotent and additive on live files', () => {

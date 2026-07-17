@@ -31,6 +31,14 @@ import { kindOf } from './types.ts'
 export let byPriority = (a: Ent, b: Ent) =>
   (a.task!.priority - b.task!.priority) || (a.num - b.num)
 
+// Gated = any `requires` edge whose child is a not-done task. Blocked is
+// this FACT about the edges — there is no 'blocked' status to maintain.
+export let gated = (e: Ent) =>
+  e.refs.some((r) => {
+    let c = ent(r.child)
+    return r.type == 'requires' && c.task && c.task.status != 'done'
+  })
+
 // Land a batch in the cache with the same patch semantics the db uses:
 // comps merge per-column, comp: null deletes the component, entity: null
 // deletes the entity and every edge touching it.

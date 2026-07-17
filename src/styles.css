@@ -400,6 +400,24 @@
   font-size: 11px;
   text-transform: uppercase;
   color: var(--dim);
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  user-select: none; /* the double-click folds, it doesn't select */
+  cursor: default;
+}
+.Board_ColName .Dot {
+  width: 0.45rem;
+  height: 0.45rem;
+}
+.Board_Count {
+  margin-left: auto;
+  color: var(--dim);
+}
+/* A folded column hugs its header; the count carries the story. */
+.Board_Col-folded {
+  flex: 0 0 auto;
+  min-width: 5.5rem;
 }
 .Board_Item {
   cursor: grab;
@@ -574,6 +592,74 @@
 }
 .Dot-done {
   --dot: var(--done);
+}
+.Dot-gated {
+  --dot: var(--red); /* open requires deps: blocked in fact, not in status */
+}
+
+/* The search palette: `/` in normal mode. A fixed veil (click to
+   dismiss) holding one raised box — input on top, ranked hits under. */
+.Search {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: color-mix(in srgb, var(--bg) 45%, transparent);
+}
+.Search_Box {
+  width: min(600px, 92vw);
+  margin: 12vh auto 0;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px color-mix(in srgb, #000 45%, transparent);
+  overflow: hidden;
+}
+.Search_Box input {
+  width: 100%;
+  padding: var(--half-gap) var(--gap);
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  outline: 0;
+  border-bottom: 1px solid var(--border);
+}
+.Search_Hit {
+  padding: var(--half-gap) var(--gap);
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0 var(--half-gap);
+}
+.Search_Hit-sel {
+  background: var(--soft);
+}
+.Search_Title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.Search_Id {
+  font-size: 11px;
+  color: var(--dim);
+  white-space: nowrap;
+}
+.Search_Snip {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.Search_Snip mark {
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+  color: var(--text);
+  border-radius: 2px;
+}
+.Search_Box:has(input:placeholder-shown) .Search_Hit {
+  display: none; /* an empty query lists nothing */
 }
 
 .Dependency {

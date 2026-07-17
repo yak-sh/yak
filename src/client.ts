@@ -10,6 +10,7 @@ import {
   type Change,
   comps,
   type Dep,
+  type Hit,
   kindOf,
   type Snapshot,
   statuses,
@@ -45,6 +46,15 @@ export let rows = ({ changes }: { changes: Change[] }) => {
   }
   for (let r of out.values()) r.kind = kindOf(r.comps)
   return [...out.values()]
+}
+
+// Full-text search, server-side (FTS5) — the graph's docs, ranked.
+export let search = async (q: string, limit = 20) => {
+  let res = await fetch(
+    `http://${host()}/search?q=${encodeURIComponent(q)}&limit=${limit}`,
+  )
+  if (!res.ok) throw new Error(`server said ${res.status}`)
+  return res.json() as Promise<Hit[]>
 }
 
 export let send = async (changes: Change[]) => {
