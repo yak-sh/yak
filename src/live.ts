@@ -2,41 +2,14 @@
 // The cache is the client's whole world — a snapshot fills it, ws patches
 // keep it current, and every component renders straight out of it.
 import { signal } from '@preact/signals'
-import {
-  type BoardTag,
-  type Camera,
-  type CardComp,
-  type Change,
-  type Claim,
-  type Client,
-  type Comment,
-  type Dep,
-  type Doc,
-  type Ent,
-  type Pin,
-  type Pinned,
-  type ProjectTag,
-  type Session,
-  type Task,
-  type Web,
-} from './types.ts'
+import { type Change, type Dep, type Ent, type Pinned } from './types.ts'
 
-type Comps = {
-  entity?: { eid: string; num: number; created_at: string }
-  doc?: Doc
-  task?: Task
-  project?: ProjectTag
-  canvas?: { eid: string }
-  board?: BoardTag
-  web?: Web
-  card?: CardComp
-  pin?: Pin
-  client?: Client
-  camera?: Camera
-  session?: Session
-  claim?: Claim
-  comment?: Comment
-}
+// A cache row: the spine plus whichever components the entity carries.
+// Derived from Ent so a new component (types.ts) threads through here —
+// and through ent() below — with zero edits.
+type Comps =
+  & { entity?: { eid: string; num: number; created_at: string } }
+  & Omit<Ent, 'eid' | 'num' | 'kind' | 'refs' | 'kids'>
 
 export let cache = signal<Record<string, Comps>>({})
 export let deps = signal<Dep[]>([])
@@ -135,24 +108,12 @@ export let boot = async () => {
 // outgoing edge sentences, contained children (recursive — graphs stay
 // small; a view reads as deep as it wants).
 export let ent = (eid: string): Ent => {
-  let r = cache.value[eid] ?? {}
+  let { entity, ...comps } = cache.value[eid] ?? {}
   return {
+    ...comps, // whatever components the entity carries, verbatim
     eid,
-    num: r.entity?.num ?? 0,
-    kind: kindOf(r), // derived — the display convention, not data
-    doc: r.doc,
-    task: r.task,
-    project: r.project,
-    canvas: r.canvas,
-    board: r.board,
-    web: r.web,
-    card: r.card,
-    pin: r.pin,
-    client: r.client,
-    camera: r.camera,
-    session: r.session,
-    claim: r.claim,
-    comment: r.comment,
+    num: entity?.num ?? 0,
+    kind: kindOf(comps), // derived — the display convention, not data
     refs: deps.value
       .filter((d) => d.parent == eid && d.type != 'contains')
       .map((d) => ({ type: d.type, child: d.child })),

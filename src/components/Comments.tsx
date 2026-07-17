@@ -2,7 +2,7 @@ import { useRef } from 'preact/hooks'
 import snarkdown from 'snarkdown'
 import { clientId, commentsOn, ent, mutate, uuid } from '../live.ts'
 import { block } from './ui.tsx'
-import { idOf } from './views/Id.tsx'
+import { idOf } from '../types.ts'
 
 let Frame = block('div', 'Comments', {
   Item: 'div',

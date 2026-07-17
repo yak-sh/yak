@@ -1,7 +1,7 @@
 import { type Ent } from '../../types.ts'
 import { ent } from '../../live.ts'
 import { el } from '../ui.tsx'
-import { idOf } from './Id.tsx'
+import { idOf } from '../../types.ts'
 
 // A doc as markdown with frontmatter — the file a dragged Markdown tab drops on
 // the desktop, shown raw by the Markdown view. Any entity with a doc qualifies;

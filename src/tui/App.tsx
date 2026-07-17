@@ -4,7 +4,7 @@
 // Task, Dot, Id, Dependency and Debug.ListItem render through the very same
 // components the browser uses, painted as lines instead of CSS.
 import { signal } from '@preact/signals'
-import { type Ent } from '../types.ts'
+import { type Ent, idOf } from '../types.ts'
 import {
   applyLocal,
   byPriority,
@@ -17,7 +17,6 @@ import {
 } from '../live.ts'
 import { has, type Renderer, resolve, View } from '../components/View.tsx'
 import { author } from '../components/Comments.tsx'
-import { idOf } from '../components/views/Id.tsx'
 import { Dot } from '../components/Dot.tsx'
 import { clipboard } from './paint.ts'
 import { Md } from './md.tsx'

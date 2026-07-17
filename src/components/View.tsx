@@ -1,7 +1,6 @@
 import { type JSX } from 'preact'
-import { type Ent } from '../types.ts'
+import { type Ent, idOf } from '../types.ts'
 import { ent } from '../live.ts'
-import { idOf } from './views/Id.tsx'
 import { Task, TaskCard } from './views/Task.tsx'
 import {
   AnyTitle,

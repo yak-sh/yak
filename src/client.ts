@@ -7,6 +7,7 @@
 //                       geometry) or clarity
 // Values that look like numbers become numbers.
 import { type Change, comps, type Dep, kindOf, statuses } from './types.ts'
+export { idOf } from './types.ts'
 
 export let host = () => Deno.env.get('TASKS_HOST') ?? '127.0.0.1:5173'
 
@@ -103,16 +104,6 @@ export let byBoard = (a: Row, b: Row) =>
     statuses.indexOf(String(b.comps.task?.status))) ||
   (Number(a.comps.task?.priority ?? 0) - Number(b.comps.task?.priority ?? 0)) ||
   (a.num - b.num)
-
-export let idOf = (r: Row) =>
-  `${
-    ({ task: 'T', project: 'P', board: 'B', session: 'S' } as Record<
-      string,
-      string
-    >)[
-      r.kind
-    ] ?? r.kind[0].toUpperCase()
-  }-${r.num}`
 
 // Find-or-mint the session entity for an external session id: its eid
 // plus the change that creates it when it's new.

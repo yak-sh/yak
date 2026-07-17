@@ -47,6 +47,17 @@ export let kindOrder = [
 export let kindOf = (has: Record<string, unknown>) =>
   kindOrder.find((k) => has[k]) ?? 'entity'
 
+// The human id: prefix-num (T-7, P-2). Curated prefixes for the kinds
+// people type daily; everything else leads with its capitalized initial.
+export let prefix: Record<string, string> = {
+  task: 'T',
+  project: 'P',
+  board: 'B',
+  session: 'S',
+}
+export let idOf = (e: { kind: string; num: number }) =>
+  `${prefix[e.kind] ?? e.kind[0].toUpperCase()}-${e.num}`
+
 // The edge vocabulary — every edge reads as a sentence, parent first:
 // parent requires child (hard gate) · parent contains child (decomposition,
 // children roll up) · parent reads child (read-first, never gates).
