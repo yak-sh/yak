@@ -81,6 +81,24 @@ export let ago = (iso?: string | null) => {
 export let pretty = (iso?: string | null) =>
   iso ? new Date(iso).toLocaleString() : ''
 
+// Copy text from a click handler. navigator.clipboard is gated to secure
+// contexts and the tailnet page is plain http (the uuid() story again) —
+// so fall back to the selection dance when the modern door is shut.
+export let copy = (text: string) => {
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).catch(() => {})
+    return
+  }
+  let t = document.createElement('textarea')
+  t.value = text
+  t.style.position = 'fixed'
+  t.style.opacity = '0'
+  document.body.appendChild(t)
+  t.select()
+  document.execCommand('copy')
+  t.remove()
+}
+
 let StampEl = el('span', 'Stamp')
 
 // An entity's age, said the human way: 'created 5 minutes ago', plus

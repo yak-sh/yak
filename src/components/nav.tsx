@@ -1,5 +1,5 @@
 import { signal } from '@preact/signals'
-import { block } from './ui.tsx'
+import { block, copy } from './ui.tsx'
 import { cache, ent, rootCanvas } from '../live.ts'
 import { actionsFor, applicable } from './registry.ts'
 import { type Ent, idOf } from '../types.ts'
@@ -104,6 +104,24 @@ export let Menu = () => {
         }}
       >
         open in new tab
+      </Item>
+      <Item
+        type='button'
+        onClick={() => {
+          copy(location.origin + m.href)
+          close()
+        }}
+      >
+        copy link
+      </Item>
+      <Item
+        type='button'
+        onClick={() => {
+          copy(idOf(ent(m.eid)))
+          close()
+        }}
+      >
+        copy id
       </Item>
       {acts.map((a, i) => (
         <Item
