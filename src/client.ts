@@ -134,12 +134,14 @@ export let byBoard = (a: Row, b: Row) =>
 
 // Find-or-mint the session entity for an external session id: its eid
 // plus the change that creates it when it's new.
-export let sessionFor = (all: Row[], session: string) => {
+export let sessionFor = (all: Row[], session: string, cwd?: string) => {
   let s = all.find((r) => r.comps.session && r.comps.session.id == session)
   let eid = s?.eid ?? crypto.randomUUID()
   let changes: Change[] = s
-    ? []
-    : [{ eid, name: 'session', comp: { id: session } }]
+    ? (cwd && s.comps.session.cwd != cwd
+      ? [{ eid, name: 'session', comp: { cwd } }]
+      : [])
+    : [{ eid, name: 'session', comp: { id: session, ...(cwd ? { cwd } : {}) } }]
   return { eid, changes }
 }
 
@@ -148,8 +150,9 @@ export let claimChanges = (
   all: Row[],
   target: string,
   session: string,
+  cwd?: string,
 ): Change[] => {
-  let s = sessionFor(all, session)
+  let s = sessionFor(all, session, cwd)
   return [
     ...s.changes,
     { eid: target, name: 'claim', comp: { session_eid: s.eid } },
@@ -222,6 +225,27 @@ export let contextDigest = (snap: Snapshot, session: string) => {
     `claim: task claim <id> ${session} · comment: task comment <id> "…" · release when done or handing off`,
   )
   return lines.slice(0, 20).join('\n')
+}
+
+// The lapse batch: a session ended — release every claim it holds, and
+// on tasks it did NOT finish, leave a comment saying so (the simple
+// audit: no timers, no heartbeats, just "ended before done" on the
+// record). Finished work releases silently.
+export let lapseChanges = (all: Row[], session: string): Change[] => {
+  let sess = all.find((r) =>
+    r.comps.session && String(r.comps.session.id) == session
+  )
+  if (!sess) return []
+  let held = all.filter((r) => r.comps.claim?.session_eid == sess.eid)
+  return held.flatMap((r) => [
+    ...(String(r.comps.task?.status) == 'done' ? [] : commentChanges(
+      all,
+      r.eid,
+      '⚑ lease lapsed: session `' + session + '` ended before this was done',
+      session,
+    ).slice(-2)), // the session exists — skip the mint, keep doc + comment
+    { eid: r.eid, name: 'claim', comp: null },
+  ])
 }
 
 // The claimant's session id, resolved through the claim's session entity.

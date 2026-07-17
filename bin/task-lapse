@@ -1,0 +1,5 @@
+#!/bin/sh
+# SessionEnd hook: release this session's claims; note unfinished work.
+dir="$(cd "$(dirname "$0")/.." && pwd)"
+export PATH="$HOME/.deno/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin"
+exec deno run --allow-net --allow-env --config "$dir/deno.json" "$dir/src/cli.ts" lapse --hook

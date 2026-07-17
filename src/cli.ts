@@ -17,12 +17,14 @@ import {
   find,
   host,
   idOf,
+  lapseChanges,
   matches,
   type Param,
   param,
   patches,
   rows,
   send,
+  sessionFor,
   snapshot,
   taskChanges,
 } from './client.ts'
@@ -39,6 +41,7 @@ let usage = `task — the entity graph, from a shell
   task comment <id> <text...>    say something about ANY entity
   task backup                    snapshot the db + commit/push the data dir
   task context [session]         this session's working set ($TASKS_SESSION)
+  task lapse [session]           session over: release claims, note unfinished
 
 dot-params route by prop (.title= → doc.title); where a prop lives in
 several components (pin/camera x,y,w,h) spell it out: .pin.x=12
@@ -111,7 +114,7 @@ let claim = async (args: string[]) => {
   let all = rows(await snapshot())
   let row = find(all, id)
   if (!row) throw new Error(`no entity: ${id}`)
-  await send(claimChanges(all, row.eid, session))
+  await send(claimChanges(all, row.eid, session, Deno.cwd()))
   console.log(`${idOf(row)} claimed by ${session}`)
 }
 
@@ -158,7 +161,12 @@ let context = async (args: string[]) => {
     try {
       let body = JSON.parse(await new Response(Deno.stdin.readable).text())
       sid ??= String(body.session_id ?? '')
-      if (sid) console.log(contextDigest(await snapshot(), sid))
+      if (!sid) return
+      let snap = await snapshot()
+      // Reify the session on arrival: id + worktree, before any claim.
+      let s = sessionFor(rows(snap), sid, String(body.cwd ?? '') || undefined)
+      if (s.changes.length) await send(s.changes)
+      console.log(contextDigest(snap, sid))
     } catch {
       // silent: offline server or malformed stdin — the session goes on
     }
@@ -166,6 +174,34 @@ let context = async (args: string[]) => {
   }
   if (!sid) throw new Error('task context <session> (or set TASKS_SESSION)')
   console.log(contextDigest(await snapshot(), sid))
+}
+
+// SessionEnd's mirror of context: drop everything the session holds.
+// --hook mode (stdin JSON, silent failure) wires it to the lifecycle.
+let lapse = async (args: string[]) => {
+  let hook = args.includes('--hook')
+  let sid = args.find((a) => !a.startsWith('--')) ??
+    Deno.env.get('TASKS_SESSION')
+  try {
+    if (hook && !sid) {
+      let body = JSON.parse(await new Response(Deno.stdin.readable).text())
+      sid = String(body.session_id ?? '')
+    }
+    if (!sid) {
+      if (hook) return
+      throw new Error('task lapse <session> (or set TASKS_SESSION)')
+    }
+    let changes = lapseChanges(rows(await snapshot()), sid)
+    if (changes.length) await send(changes)
+    if (!hook) {
+      console.log(
+        `released ${changes.filter((c) => c.name == 'claim').length} claim(s)`,
+      )
+    }
+  } catch (e) {
+    if (!hook) throw e
+    // hooks never fail loudly — a dead server just means no lapse today
+  }
 }
 
 // Backup is bin/backup (a data-dir git commit) — the CLI is its front
@@ -206,6 +242,7 @@ try {
   else if (cmd == 'comment') await comment(rest)
   else if (cmd == 'backup') await backup()
   else if (cmd == 'context') await context(rest)
+  else if (cmd == 'lapse') await lapse(rest)
   else if (cmd == 'release') await release(rest)
   else {
     console.log(usage.trim())

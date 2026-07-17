@@ -81,7 +81,8 @@ let schema = `
   );
   create table if not exists session (
     eid text primary key references entity(eid),
-    id  text not null unique
+    id  text not null unique,
+    cwd text
   );
   create table if not exists claim (
     eid         text primary key references entity(eid),
@@ -231,13 +232,15 @@ export let open = () => {
   Deno.mkdirSync(dirname(file), { recursive: true })
   let db = new DatabaseSync(file)
   db.exec(schema)
-  let cols = db.prepare("select name from pragma_table_info('task')")
-    .all() as { name: string }[]
-  if (!cols.some((c) => c.name == 'project_eid')) {
-    db.exec(
-      'alter table task add column project_eid text references entity(eid)',
-    )
+  let addCol = (table: string, col: string, ddl: string) => {
+    let cols = db.prepare(`select name from pragma_table_info('${table}')`)
+      .all() as { name: string }[]
+    if (!cols.some((c) => c.name == col)) {
+      db.exec(`alter table ${table} add column ${ddl}`)
+    }
   }
+  addCol('task', 'project_eid', 'project_eid text references entity(eid)')
+  addCol('session', 'cwd', 'cwd text')
   let { n } = db.prepare('select count(*) as n from task').get() as {
     n: number
   }

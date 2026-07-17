@@ -18,7 +18,7 @@ export let comps: Record<string, string[]> = {
   pin: ['canvas_eid', 'x', 'y', 'w', 'h', 'z'],
   client: ['user_agent'], // ip is server-stamped too
   camera: ['client_eid', 'canvas_eid', 'x', 'y', 'zoom', 'w', 'h'],
-  session: ['id'],
+  session: ['id', 'cwd'],
   claim: ['session_eid'], // claimed_at is server-stamped
   conflict: [], // server-minted audit rows — nothing is wire-writable
   comment: ['target_eid', 'author_eid'],
@@ -124,7 +124,7 @@ export type Camera = {
 // An agent session, reified: `id` is its external identity (a Claude
 // session id, an operator name). For now that's all it carries; when we
 // start SPAWNING sessions it grows model, persona, provider, ….
-export type Session = { eid: string; id: string }
+export type Session = { eid: string; id: string; cwd?: string | null }
 
 // A session's lease on an entity — claims point at the session ENTITY.
 // One claim per entity; taking one over another session's is a CONFLICT
