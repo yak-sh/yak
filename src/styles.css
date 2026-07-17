@@ -162,9 +162,10 @@ html {
   margin: 0 auto;
 }
 .App_Body > .Board {
-  /* top padding rides INSIDE the columns (the sticky title carries it),
-     so rows scroll clear to the top edge instead of clipping mid-air */
-  padding: 0 var(--gap) var(--gap);
+  /* vertical padding rides INSIDE the columns (title carries the top,
+     column padding the bottom), so rows scroll clear to both edges
+     instead of clipping mid-air */
+  padding: 0 var(--gap);
   /* Fullscreen, the board fills the floor and each COLUMN scrolls
      itself. One scroller per axis is what buys touch axis-locking: a
      vertical finger flings the column (native momentum, no snap physics
@@ -176,6 +177,7 @@ html {
 .App_Body > .Board > .Board_Col {
   overflow-y: auto;
   overscroll-behavior-y: contain; /* the column owns its own bounce */
+  padding-bottom: var(--gap); /* the board's old bottom padding, inside */
 }
 /* Overflowing columns spill past the board's own padding box, which
    eats its right padding — and a trailing margin doesn't count as
