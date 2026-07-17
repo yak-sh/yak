@@ -98,7 +98,7 @@ export let adapters: Record<string, Adapter> = {
       'claude-fable-5',
       'claude-opus-4-8',
       'claude-sonnet-5',
-      'claude-haiku-4-5-20251001',
+      'claude-haiku-4-5',
     ],
     efforts: [],
     argv: (j) => [
@@ -138,7 +138,8 @@ export let adapters: Record<string, Adapter> = {
   // agent_message as it lands (drain merges every pass; the last one
   // standing is the final text) and turn.completed closes with usage.
   codex: {
-    models: ['gpt-5.6-sol'],
+    // The celestial line, all probed live against the CLI.
+    models: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'],
     efforts: ['low', 'medium', 'high', 'xhigh'],
     argv: (j) => [
       'codex',
