@@ -46,6 +46,7 @@ export let Card = ({ p }: { p: Pinned }) => {
   let down = (e: PointerEvent & { currentTarget: HTMLDivElement }) => {
     if (!(e.target instanceof Element)) return
     toFront(p.eid) // ANY touch raises the card — the drag gate is below
+    if (e.button != 0) return // right/middle click is a menu, never a drag
     if (
       e.target.closest('button, a, input, [contenteditable="plaintext-only"]')
     ) {
@@ -103,6 +104,7 @@ export let Card = ({ p }: { p: Pinned }) => {
     d: string,
   ) => {
     e.stopPropagation()
+    if (e.button != 0) return
     let grip = e.currentTarget
     let card = grip.parentElement!.querySelector('.Card') as HTMLElement
     let base = {

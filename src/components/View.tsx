@@ -130,7 +130,7 @@ defineActions([
         ...(s != 'wip' ? [move('start', 'wip')] : []),
         ...(s != 'done' ? [move('done', 'done')] : []),
         ...(s != 'open' ? [move('reopen', 'open')] : []),
-        { label: 'run session…', run: () => openRun(e.eid) },
+        { label: 'run agent…', run: () => openRun(e.eid) },
       ]
     },
   },
