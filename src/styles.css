@@ -600,6 +600,23 @@ html {
 .Comments_New::placeholder {
   color: var(--dim);
 }
+/* The delivery switch a session composer grows: armed, posting also
+   resumes the session — the button wears the accent to say so. */
+.Comments_Send {
+  justify-self: start;
+  font: inherit;
+  font-size: 11px;
+  color: var(--dim);
+  background: none;
+  border: 1px solid var(--border2);
+  border-radius: 4px;
+  padding: 1px 7px;
+  cursor: pointer;
+}
+.Comments_Send-on {
+  color: var(--accent);
+  border-color: var(--accent);
+}
 .Comments_New:focus {
   border-color: var(--accent);
 }
@@ -1680,26 +1697,6 @@ html {
   overflow: auto;
 }
 /* The reply box: a sunken box at the pane's foot, the comment rail's twin. */
-.Session_Input {
-  font: inherit;
-  color: var(--text);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: calc(var(--radius) - 2px);
-  padding: var(--half-gap);
-  resize: none;
-  outline: none;
-}
-.Session_Input::placeholder {
-  color: var(--dim);
-}
-.Session_Input:focus {
-  border-color: var(--accent);
-}
-.Session_Input:disabled {
-  opacity: 0.6;
-}
-
 /* A session as a list line — the task row's grammar, one line. */
 .SessionRow {
   display: flex;

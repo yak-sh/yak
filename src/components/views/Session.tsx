@@ -1,14 +1,16 @@
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useState } from 'preact/hooks'
 import { md } from '../../md.ts'
 import { type Ent, type LogRow, sessionActive } from '../../types.ts'
 import { base } from '../../live.ts'
 import { block, Stamp } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
+import { Comments } from '../Comments.tsx'
 import { View } from '../View.tsx'
 
 // An agent session, watched: the lifecycle summary (server-owned columns,
 // riding the snapshot like any component — so the head re-renders itself
-// off the cache as the run moves), then its log, then a box to say more.
+// off the cache as the run moves), then its log, then the comment rail
+// (Comments.tsx), which doubles as the way to talk TO the agent.
 //
 // The log is the FILE (src/sessions.ts): we read it back over
 // /sessions/:eid/logs, where each line already carries its renderer `row`
@@ -42,7 +44,6 @@ let Frame = block('div', 'Session', {
   Exec: 'div',
   Turn: 'div',
   Oops: 'div',
-  Input: 'textarea',
   Err: 'pre',
 })
 let {
@@ -70,7 +71,6 @@ let {
   Exec,
   Turn,
   Oops,
-  Input,
   Err,
 } = Frame
 
@@ -186,52 +186,6 @@ let useLog = (eid: string, live: boolean) => {
   return log
 }
 
-// Say more to a settled session: resume it with a line. Enter sends and
-// clears optimistically, Shift+Enter is a newline; while the run is live
-// the box is disabled (v1 types only into a settled session). A refused
-// input's reason lands inline — the server said why, so we show it.
-let Reply = ({ eid, live }: { eid: string; live: boolean }) => {
-  let box = useRef<HTMLTextAreaElement>(null)
-  let [err, setErr] = useState('')
-
-  let send = async () => {
-    let text = box.current!.value.trim()
-    if (!text) return
-    box.current!.value = ''
-    setErr('')
-    try {
-      let r = await fetch(`${base()}/sessions/${eid}/input`, {
-        method: 'POST',
-        body: JSON.stringify({ text }),
-      })
-      if (!r.ok) setErr((await r.text()) || 'input refused')
-    } catch (e) {
-      setErr(String(e))
-    }
-  }
-
-  let key = (e: KeyboardEvent) => {
-    if (e.key == 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      send()
-    }
-    if (e.key == 'Escape') box.current!.blur()
-  }
-
-  return (
-    <>
-      <Input
-        elRef={box}
-        rows={1}
-        disabled={live}
-        placeholder={live ? 'running…' : 'reply…'}
-        onKeyDown={key}
-      />
-      {err && <Fault mod='error'>{err}</Fault>}
-    </>
-  )
-}
-
 export let Session = ({ e }: { e: Ent }) => {
   let s = e.session!
   let status = s.status ?? ''
@@ -285,7 +239,11 @@ export let Session = ({ e }: { e: Ent }) => {
       </Log>
       {/* stderr: unordered diagnostics, never inside the log's seqs */}
       {log.stderr && <Err>{log.stderr}</Err>}
-      {s.origin == 'managed' && <Reply eid={e.eid} live={live} />}
+      {
+        /* the one composer: comment about it, or arm → session to say TO
+          it (Comments.tsx knows which sessions can take words) */
+      }
+      <Comments eid={e.eid} />
     </Frame>
   )
 }
