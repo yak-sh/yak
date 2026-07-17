@@ -8,7 +8,6 @@ import {
   mutate,
   myCamera,
   pinned,
-  send,
   sock,
   toFront,
   toPlane,
@@ -99,32 +98,41 @@ export let Canvas = ({ eid }: { eid: string }) => {
     ro.current.observe(pin)
   }
 
-  // Comps travel as patches — send only the props that moved.
+  // Comps travel as patches — send only the props that moved. Through
+  // mutate, not bare send: OUR cache must hear the save too, or a
+  // back-navigation remounts from a camera this client never told itself
+  // about — the spot you left is the spot you get back.
   let save = (comp: Record<string, number | string>) => {
-    if (cam.current) send({ eid: cam.current, name: 'camera', comp })
+    if (cam.current) mutate({ eid: cam.current, name: 'camera', comp })
   }
 
-  // Debounced save that remembers WHICH props moved across a burst, so an
+  // The settle: snap to the pixel grid and persist whichever props moved.
+  // Snapping here, never mid-gesture — rounding a live pan or pinch reads
+  // as jitter, worst when zoomed in. Called by the debounce below, by
+  // unmount, and by pagehide — a pending save must not die with the view
+  // (the link-click and the refresh both used to eat the last gesture).
+  let flush = () => {
+    if (!dirty.current.size) return
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = null
+    let { x, y, zoom, w, h } = camera.value
+    if (dirty.current.has('zoom') && Math.abs(zoom - 1) < 0.02) zoom = 1
+    x = (w / 2 - Math.round(w / 2 - x * zoom)) / zoom
+    y = (h / 2 - Math.round(h / 2 - y * zoom)) / zoom
+    camera.value = { ...camera.value, x, y, zoom }
+    dirty.current.add('x').add('y')
+    save(Object.fromEntries(
+      [...dirty.current].map((p) => [p, camera.value[p as 'x']]),
+    ))
+    dirty.current.clear()
+  }
+
+  // Debounced flush that remembers WHICH props moved across a burst, so an
   // interleaved pan + zoom doesn't drop the zoom from the final patch.
-  // Settling also snaps: the plane translate lands on whole screen px (and
-  // a pinch that ends within a hair of 1 lands on exactly 1), so a resting
-  // canvas renders on the pixel grid. Never mid-gesture — rounding a live
-  // pan or pinch reads as jitter, worst when zoomed in.
   let queue = (...props: (keyof typeof camera.value)[]) => {
     for (let p of props) dirty.current.add(p)
     if (timer.current) clearTimeout(timer.current)
-    timer.current = setTimeout(() => {
-      let { x, y, zoom, w, h } = camera.value
-      if (dirty.current.has('zoom') && Math.abs(zoom - 1) < 0.02) zoom = 1
-      x = (w / 2 - Math.round(w / 2 - x * zoom)) / zoom
-      y = (h / 2 - Math.round(h / 2 - y * zoom)) / zoom
-      camera.value = { ...camera.value, x, y, zoom }
-      dirty.current.add('x').add('y')
-      save(Object.fromEntries(
-        [...dirty.current].map((p) => [p, camera.value[p as 'x']]),
-      ))
-      dirty.current.clear()
-    }, 400)
+    timer.current = setTimeout(flush, 400)
   }
 
   // Layout effect, not effect: the camera must be measured and restored
@@ -237,12 +245,17 @@ export let Canvas = ({ eid }: { eid: string }) => {
       spawnAt(spec.changes, spec.target, spec.view, spec.w ?? 320, x, y)
     }
     addEventListener('paste', paste)
+    // The refresh path: flush the pending camera save while the socket
+    // can still speak. Best effort — pagehide is the last reliable word.
+    addEventListener('pagehide', flush)
     return () => {
       unlatch()
+      flush() // a navigation inside the app must not eat the last gesture
       s.removeEventListener('message', hear)
       removeEventListener('resize', resize)
       removeEventListener('keydown', key)
       removeEventListener('paste', paste)
+      removeEventListener('pagehide', flush)
     }
   }, [eid])
 
