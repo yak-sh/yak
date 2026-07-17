@@ -18,7 +18,7 @@ export let icons: Record<string, string> = {
   Session: 'bot',
   Markdown: 'hash',
   JSON: 'braces',
-  Debug: 'search',
+  Debug: 'bug',
 }
 
 let Pin = el('div', 'Pin')
