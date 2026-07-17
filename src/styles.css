@@ -46,6 +46,13 @@
   overscroll-behavior: none; /* no swipe-navigate, no rubberband */
 }
 
+:where(html, body) {
+  /* The ROOT never rubberbands vertically (touches that start on chrome
+     would bounce the whole page); horizontal stays native — swipe-back
+     lives on, except where the Canvas rules above kill it. */
+  overscroll-behavior-y: none;
+}
+
 :where(body) {
   margin: 0;
   height: 100dvh;
@@ -112,6 +119,9 @@
   display: flex;
   flex-direction: column;
   overflow: auto;
+  /* THIS scroller owns the rubberband: hitting its edge never chains a
+     bounce up to the page. */
+  overscroll-behavior: contain;
 }
 /* Prose-shaped roots read as a page column; a board or canvas takes the
    whole floor. */
@@ -119,6 +129,8 @@
   padding: var(--gap);
   max-width: 52rem;
   width: 100%;
+  box-sizing: border-box; /* width:100% INCLUDES the padding — content-box
+  made every list/prose page 2 gaps wider than the phone */
   margin: 0 auto;
 }
 .App_Body > .Board {
