@@ -62,6 +62,14 @@
   overscroll-behavior-y: none;
 }
 
+html {
+  /* The phone's notch band (and any overscroll reveal) shows the ROOT
+     background — paint it titlebar-surface so the bar reads as running
+     under the clock to the glass. Loads after the inline #232a2e splash
+     matcher in index.html, deliberately: splash seam first, then this. */
+  background: var(--surface);
+}
+
 :where(body) {
   margin: 0;
   height: 100dvh;
