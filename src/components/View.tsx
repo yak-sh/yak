@@ -11,6 +11,7 @@ import {
 } from './views/Title.tsx'
 import { DocCard, DocView } from './views/Doc.tsx'
 import { Board } from './views/Board.tsx'
+import { TaskRow } from './views/TaskRow.tsx'
 import { Id } from './views/Id.tsx'
 import { Dependency } from './views/Dependency.tsx'
 import { Debug, DebugAnyItem, DebugTaskItem } from './views/Debug.tsx'
@@ -31,6 +32,7 @@ export { applicable, extend, has, type Renderer, resolve } from './registry.ts'
 define([
   { view: 'Task', match: has('doc', 'task'), Render: Task, Card: TaskCard },
   { view: 'Board', match: has('doc', 'board'), Render: Board },
+  { view: 'Task.Row', match: has('doc', 'task'), Render: TaskRow },
   { view: 'Web', match: has('web'), Render: Web },
   { view: 'Doc', match: has('doc'), Render: DocView, Card: DocCard },
   { view: 'Card.Title', match: has('doc', 'task'), Render: TaskTitle },

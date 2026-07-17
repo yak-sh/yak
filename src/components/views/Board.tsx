@@ -64,7 +64,7 @@ export let Board = ({ e }: { e: Ent }) => {
                 data-eid={k.eid}
                 onDragStart={(ev: DragEvent) => dragData(ev, k.eid, 'Task')}
               >
-                <View eid={k.eid} />
+                <View eid={k.eid} view='Task.Row' />
               </Item>
             ),
           )}

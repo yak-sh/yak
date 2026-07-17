@@ -405,6 +405,35 @@
   cursor: grab;
 }
 
+/* The board's summary line for a task: one row, plain spans, no editors —
+   hundreds of these must render without the browser noticing. */
+.TaskRow {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  padding: calc(var(--half-gap) / 2) var(--half-gap);
+}
+.TaskRow_Title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.TaskRow_Claim {
+  color: var(--purple);
+  font-size: 11px;
+}
+.TaskRow_Prio,
+.TaskRow_Id {
+  font-size: 11px;
+  color: var(--dim);
+  white-space: nowrap;
+}
+
 .Task {
   border: 1px solid var(--border);
   border-radius: var(--radius);
