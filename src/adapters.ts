@@ -33,8 +33,9 @@ export type Adapter = {
   terminal: (e: Event) => Summary | null
 }
 
-// The fake provider ships in this repo: `deno run` it by absolute path, so
-// the child's minimal env (no cwd-relative anything) still finds it.
+// The fake provider ships in this repo: run it by absolute path — script
+// AND binary. Deno.execPath() is the deno running this server, so the
+// child never depends on the service manager's PATH carrying one.
 let fake = new URL('./fake-provider.ts', import.meta.url).pathname
 
 export let adapters: Record<string, Adapter> = {
@@ -42,7 +43,7 @@ export let adapters: Record<string, Adapter> = {
     models: ['fake-fast', 'fake-slow'],
     efforts: ['low', 'medium', 'high'],
     argv: (j) => [
-      'deno',
+      Deno.execPath(),
       'run',
       '--quiet',
       fake,
