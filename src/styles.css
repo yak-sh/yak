@@ -343,10 +343,10 @@
 .Comments_New {
   font: inherit;
   color: var(--text);
-  background: none;
+  background: var(--surface);
   border: 0;
-  border-left: 2px solid transparent;
-  padding: 0 0 0 var(--half-gap);
+  border-top: 1px solid var(--border);
+  padding: var(--half-gap);
   resize: none;
   outline: none;
 }
@@ -354,7 +354,7 @@
   color: var(--dim);
 }
 .Comments_New:focus {
-  border-left-color: var(--accent);
+  border-top-color: var(--accent);
 }
 
 /* The one scrolling element — padding scrolls away WITH the content. */
