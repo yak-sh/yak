@@ -1251,8 +1251,8 @@ html {
 }
 
 .Dependency {
-  display: inline-block;
-  margin: var(--half-gap) var(--half-gap) 0 0;
+  display: block; /* one edge sentence per line, a list you can scan */
+  margin: var(--half-gap) 0 0;
   font-size: 12px;
   color: var(--muted);
 }
