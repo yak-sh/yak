@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks'
 import snarkdown from 'snarkdown'
 import { type Ent } from '../../types.ts'
+import { ent } from '../../live.ts'
 import { block } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
 import { Edit } from '../Edit.tsx'
@@ -51,7 +52,7 @@ export let Task = ({ e }: { e: Ent }) => (
       <Title>
         <Edit eid={e.eid} comp='doc' prop='title' />
       </Title>
-      {e.claim && <Claim>⚑ {e.claim.session}</Claim>}
+      {e.claim && <Claim>⚑ {ent(e.claim.session_eid).session?.id}</Claim>}
       <View eid={e.eid} view='Id' />
     </Head>
     <TaskBody e={e} />

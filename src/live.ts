@@ -14,6 +14,7 @@ import {
   type Ent,
   type Pin,
   type Pinned,
+  type Session,
   type Task,
   type Web,
 } from './types.ts'
@@ -29,6 +30,7 @@ type Comps = {
   pin?: Pin
   client?: Client
   camera?: Camera
+  session?: Session
   claim?: Claim
 }
 
@@ -143,6 +145,7 @@ export let ent = (eid: string): Ent => {
     pin: r.pin,
     client: r.client,
     camera: r.camera,
+    session: r.session,
     claim: r.claim,
     refs: deps.value
       .filter((d) => d.parent == eid && d.type != 'contains')

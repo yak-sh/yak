@@ -76,10 +76,14 @@ let schema = `
     h    real not null default 0,
     unique (client_eid, canvas_eid)
   );
+  create table if not exists session (
+    eid text primary key references entity(eid),
+    id  text not null unique
+  );
   create table if not exists claim (
-    eid        text primary key references entity(eid),
-    session    text not null,
-    claimed_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    eid         text primary key references entity(eid),
+    session_eid text not null references entity(eid),
+    claimed_at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
   create table if not exists tombstone (
     eid        text primary key,
@@ -236,10 +240,15 @@ export let apply = (db: DatabaseSync, changes: Change[]) => {
       // session re-claiming is a no-op refresh. apply() runs serially on
       // the one db handle, so check-then-write here IS the atomic take.
       if (name == 'claim' && comp) {
-        let cur = db.prepare('select session from claim where eid = ?')
-          .get(eid) as { session: string } | undefined
-        if (cur && cur.session != comp.session) {
-          throw new Error(`${eid} already claimed by ${cur.session}`)
+        let cur = db.prepare(`
+          select c.session_eid, s.id from claim c
+          left join session s on s.eid = c.session_eid
+          where c.eid = ?
+        `).get(eid) as { session_eid: string; id: string | null } | undefined
+        if (cur && cur.session_eid != comp.session_eid) {
+          throw new Error(
+            `${eid} already claimed by ${cur.id ?? cur.session_eid}`,
+          )
         }
       }
       if (comp == null) {

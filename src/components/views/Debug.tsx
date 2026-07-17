@@ -1,4 +1,5 @@
 import { type Ent } from '../../types.ts'
+import { ent } from '../../live.ts'
 import { block } from '../ui.tsx'
 import { View } from '../View.tsx'
 
@@ -87,7 +88,7 @@ export let DebugTaskItem = ({ e }: { e: Ent }) => (
     <View eid={e.eid} view='Id' />
     <Kind>{e.kind}</Kind>
     <Title>{e.doc?.title}</Title>
-    {e.claim && <Claim>⚑ {e.claim.session}</Claim>}
+    {e.claim && <Claim>⚑ {ent(e.claim.session_eid).session?.id}</Claim>}
     <Status mod={e.task!.status}>{e.task!.status}</Status>
   </Item>
 )

@@ -26,7 +26,8 @@ card(eid pk→entity, target_eid→entity, view)
 pin(eid pk→card, canvas_eid→entity, x, y, w, h)
 client(eid pk→entity, user_agent, ip)
 camera(eid pk→entity, client_eid→entity, canvas_eid→entity, x, y, zoom, w, h)
-claim(eid pk→entity, session, claimed_at)  -- a session's lease: who works this
+session(eid pk→entity, id unique)  -- an agent session; grows model/persona/provider
+claim(eid pk→entity, session_eid→entity, claimed_at)  -- a session's lease
 dependency(parent_eid→entity, type ∈ requires|contains|reads, child_eid→entity)
 ```
 

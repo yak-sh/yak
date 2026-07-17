@@ -17,7 +17,8 @@ export let comps: Record<string, string[]> = {
   pin: ['canvas_eid', 'x', 'y', 'w', 'h', 'z'],
   client: ['user_agent'], // ip is server-stamped too
   camera: ['client_eid', 'canvas_eid', 'x', 'y', 'zoom', 'w', 'h'],
-  claim: ['session'], // claimed_at is server-stamped
+  session: ['id'],
+  claim: ['session_eid'], // claimed_at is server-stamped
 }
 
 // The status vocabulary, in board-column order.
@@ -35,6 +36,7 @@ export let kindOrder = [
   'card',
   'client',
   'camera',
+  'session',
   'claim',
   'doc',
 ]
@@ -97,11 +99,15 @@ export type Camera = {
   h: number
 }
 
-// A session's lease on an entity: `session` is the claimant's own stable
-// identifier (an agent session id, an operator name). One claim per
-// entity; taking one over another session's is a CONFLICT the server
-// rejects — release first (comp: null), then claim.
-export type Claim = { eid: string; session: string; claimed_at?: string }
+// An agent session, reified: `id` is its external identity (a Claude
+// session id, an operator name). For now that's all it carries; when we
+// start SPAWNING sessions it grows model, persona, provider, ….
+export type Session = { eid: string; id: string }
+
+// A session's lease on an entity — claims point at the session ENTITY.
+// One claim per entity; taking one over another session's is a CONFLICT
+// the server rejects — release first (comp: null), then claim.
+export type Claim = { eid: string; session_eid: string; claimed_at?: string }
 
 export type Dep = { parent: string; type: Edge; child: string }
 
@@ -124,6 +130,7 @@ export type Ent = {
   pin?: Pin
   client?: Client
   camera?: Camera
+  session?: Session
   claim?: Claim
   refs: Ref[]
   kids: Ent[]

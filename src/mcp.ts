@@ -14,6 +14,8 @@ import { z } from 'zod'
 import { type Change, comps, type Dep, statuses } from './types.ts'
 import {
   byBoard,
+  claimant,
+  claimChanges,
   find,
   idOf,
   param,
@@ -38,10 +40,12 @@ vocabulary (${
 few collisions (pin/camera x,y,w,h) use '.comp.prop=x'. Numeric-looking
 values become numbers. Statuses: ${statuses.join(', ')}.`
 
-let line = (r: Row) =>
-  `${idOf(r)}  ${String(r.comps.task?.status ?? r.kind).padEnd(7)} ${
+let line = (all: Row[], r: Row) => {
+  let who = claimant(all, r)
+  return `${idOf(r)}  ${String(r.comps.task?.status ?? r.kind).padEnd(7)} ${
     r.comps.doc?.title ?? ''
-  }${r.comps.claim ? `  ⚑ ${r.comps.claim.session}` : ''}`
+  }${who ? `  ⚑ ${who}` : ''}`
+}
 
 let parseAll = (params: string[]) =>
   params.map((p) => {
@@ -62,13 +66,16 @@ filters must ALL match. ${GRAMMAR}`,
     { filters: z.array(z.string()).optional() },
     async ({ filters = [] }: { filters?: string[] }) => {
       let ps = parseAll(filters)
-      let hits = rows(await io.read())
+      let all = rows(await io.read())
+      let hits = all
         .filter((r) => r.comps.task)
         .filter((r) =>
           ps.every((p) => String(r.comps[p.comp]?.[p.prop]) == String(p.value))
         )
         .sort(byBoard)
-      return text(hits.map(line).join('\n') || '(no matches)')
+      return text(
+        hits.map((r) => line(all, r)).join('\n') || '(no matches)',
+      )
     },
   )
 
@@ -135,10 +142,11 @@ another session holds the lease; task_release drops it when you finish
 or hand off.`,
     { id: z.string(), session: z.string() },
     async ({ id, session }: { id: string; session: string }) => {
-      let row = find(rows(await io.read()), id)
+      let all = rows(await io.read())
+      let row = find(all, id)
       if (!row) return text(`no entity: ${id}`)
       try {
-        await io.write([{ eid: row.eid, name: 'claim', comp: { session } }])
+        await io.write(claimChanges(all, row.eid, session))
       } catch (e) {
         return text(`claim failed: ${(e as Error).message}`)
       }

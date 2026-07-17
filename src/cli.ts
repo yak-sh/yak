@@ -11,6 +11,8 @@
 import { type Change } from './types.ts'
 import {
   byBoard,
+  claimant,
+  claimChanges,
   find,
   host,
   idOf,
@@ -58,7 +60,8 @@ let list = async (args: string[]) => {
     .sort(byBoard)
   for (let r of hits) {
     let t = r.comps.task ?? {}
-    let flag = r.comps.claim ? `  \u2691 ${r.comps.claim.session}` : ''
+    let who = claimant(all, r)
+    let flag = who ? `  \u2691 ${who}` : ''
     console.log(
       `${idOf(r).padEnd(6)} ${String(t.status ?? '').padEnd(5)} ${
         String(r.comps.doc?.title ?? '')
@@ -109,9 +112,10 @@ let claim = async (args: string[]) => {
   if (!session) {
     throw new Error('task claim <id> <session> (or set TASKS_SESSION)')
   }
-  let row = find(rows(await snapshot()), id)
+  let all = rows(await snapshot())
+  let row = find(all, id)
   if (!row) throw new Error(`no entity: ${id}`)
-  await send([{ eid: row.eid, name: 'claim', comp: { session } }])
+  await send(claimChanges(all, row.eid, session))
   console.log(`${idOf(row)} claimed by ${session}`)
 }
 

@@ -106,6 +106,30 @@ export let byBoard = (a: Row, b: Row) =>
 
 export let idOf = (r: Row) =>
   `${
-    ({ task: 'T', board: 'B' } as Record<string, string>)[r.kind] ??
-      r.kind[0].toUpperCase()
+    ({ task: 'T', board: 'B', session: 'S' } as Record<string, string>)[
+      r.kind
+    ] ?? r.kind[0].toUpperCase()
   }-${r.num}`
+
+// Find-or-mint the session entity for an external session id, plus the
+// claim pointing at it — one batch, atomic on the server.
+export let claimChanges = (
+  all: Row[],
+  target: string,
+  session: string,
+): Change[] => {
+  let s = all.find((r) => r.comps.session && r.comps.session.id == session)
+  let seid = s?.eid ?? crypto.randomUUID()
+  return [
+    ...(s ? [] : [{ eid: seid, name: 'session', comp: { id: session } }]),
+    { eid: target, name: 'claim', comp: { session_eid: seid } },
+  ]
+}
+
+// The claimant's session id, resolved through the claim's session entity.
+export let claimant = (all: Row[], r: Row) => {
+  let seid = r.comps.claim?.session_eid
+  if (!seid) return undefined
+  let s = all.find((x) => x.eid == seid)
+  return String(s?.comps.session?.id ?? seid)
+}
