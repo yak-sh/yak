@@ -88,6 +88,8 @@ the mobile door — whose rows resolve through `List.Item`.
 | `src/types.ts`    | THE vocabulary: comps, statuses, kindOrder/kindOf, prefix/idOf, all types |
 | `src/db.ts`       | SQLite schema, seed, `apply()` (patches in), `snapshot()` (graph out)     |
 | `src/server.ts`   | Deno.serve: static+sucrase, /ws sync, /apply, /mcp mount, watcher         |
+| `src/sessions.ts` | managed sessions: spawn/stop/adopt a detached agent, tail its log file    |
+| `src/adapters.ts` | the provider table: argv, model/effort allowlists, init/terminal readers  |
 | `src/freeze.ts`   | URL → monolith archive → scrub() → CSP-served, server-only                |
 | `src/client.ts`   | headless HTTP client: rows(), dot-params, find, change builders           |
 | `src/query.ts`    | the FILTER grammar (ops/lists/ranges) — boards, CLI + MCP filters         |
@@ -108,7 +110,14 @@ the mobile door — whose rows resolve through `List.Item`.
 - **This repo is open source.** Never commit the db, fleet data, secrets, or
   anything from `~/code/holdco/.env`.
 - **Server-stamped columns never ride the wire** — that's what keeps `frozen_at`
-  (archive exists) and `claimed_at` honest.
+  (archive exists), `claimed_at`, and every managed-session lifecycle column
+  (status, exit_code, final_text, …) honest.
+- **A managed session's stdout FILE is its durable log**
+  (`~/.tasks/logs/<eid>.jsonl`, line number = seq): no log table, no ingester,
+  nothing to drift. The server tails it and casts SUMMARY patches; the file is
+  what a client reads back. And the child is DETACHED (setsid, its own process
+  group) precisely so the watcher's restart can't reap it — the restart
+  re-adopts it from its pidfile. Never add reaping.
 - **Frozen pages must render from their own bytes.** Self-containment is
   enforced at freeze time (scrub removes every external ref); the CSP at serve
   time is defense-in-depth, not the mechanism.

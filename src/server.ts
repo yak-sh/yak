@@ -11,6 +11,7 @@ import { type Change } from './types.ts'
 import { apply, db, search, snapshot } from './db.ts'
 import { freeze, serveFrozen } from './freeze.ts'
 import { mcpServer } from './mcp.ts'
+import { logs, recover, start, stop } from './sessions.ts'
 
 let src = new URL('.', import.meta.url).pathname
 
@@ -166,6 +167,29 @@ Deno.serve(
         return Response.json({ ok: true })
       }).catch((e) => new Response(String(e), { status: 400 }))
     }
+    // Managed sessions: spawn one on a task, ask it to stop, read its log.
+    // The handlers stay thin — the lifecycle lives in sessions.ts.
+    if (path == '/sessions/start' && req.method == 'POST') {
+      return req.json()
+        .then((body) => start(body, cast))
+        .then((r) =>
+          'error' in r
+            ? new Response(r.error, { status: r.status })
+            : Response.json({ eid: r.eid })
+        )
+        .catch((e) => new Response(String(e), { status: 400 }))
+    }
+    let session = path.match(/^\/sessions\/([0-9a-f-]{36})\/(stop|logs)$/)
+    if (session) {
+      let [, eid, verb] = session
+      if (verb == 'logs') return Response.json(logs(eid, url.searchParams))
+      if (req.method != 'POST') return new Response('no', { status: 405 })
+      return stop(eid, cast).then((r) =>
+        'error' in r
+          ? new Response(r.error, { status: r.status })
+          : Response.json(r)
+      )
+    }
     if (path == '/freeze') {
       return freeze(url.searchParams.get('eid') ?? '', cast)
     }
@@ -177,6 +201,12 @@ Deno.serve(
     return file(src.slice(0, -1), path.includes('.') ? path : '/index.html')
   },
 )
+
+// Managed children are detached (setsid) and this process restarts on every
+// server-file edit — so booting means picking them back up: adopt the ones
+// still alive, finalize the ones that died while we were away. Nothing here
+// reaps a child; the watcher below must never learn how.
+recover(cast)
 
 // Watch src/ and tell every client to reload (debounced — editors fire
 // several events per save). The server itself restarts via --watch, whose
@@ -195,6 +225,8 @@ let graph = [
   'freeze.ts',
   'mcp.ts',
   'client.ts',
+  'sessions.ts',
+  'adapters.ts',
 ]
 let watch = async () => {
   let timer: ReturnType<typeof setTimeout> | null = null
