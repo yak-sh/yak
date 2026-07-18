@@ -9,7 +9,7 @@
 // `fake` ships in-repo for tests; `claude` and `codex` shell the installed
 // CLIs (subscription auth rides HOME — no keys in argv, no keys in env).
 // Event shapes below are copied from live probes of both CLIs, not docs.
-import { type LogRow, type Session } from './types.ts'
+import { kilo, type LogRow, type Session } from './types.ts'
 
 // One parsed log line. Adapters own the dialect; anything they don't
 // recognize is just log, not summary.
@@ -59,6 +59,29 @@ let preview = (v: unknown): string => {
   let s = (typeof v == 'string' ? v : JSON.stringify(v) ?? '')
     .replace(/\s+/g, ' ').trim()
   return s.length > 140 ? `${s.slice(0, 140)}…` : s
+}
+
+// The one argument a human would ask about — a tool chip should say
+// "the file", "the pattern", "the url", not a JSON blob. The order is
+// specificity: the first present field wins; unknown shapes keep the
+// JSON preview.
+let gist = (input: unknown): string => {
+  let o = input as Record<string, unknown> | null
+  for (
+    const k of [
+      'command',
+      'file_path',
+      'pattern',
+      'url',
+      'query',
+      'description',
+      'prompt',
+      'skill',
+    ]
+  ) {
+    if (o && typeof o[k] == 'string' && o[k]) return preview(o[k])
+  }
+  return preview(input)
 }
 
 // The table as a browser may see it (GET /providers): the names and the
@@ -237,10 +260,20 @@ export let adapters: Record<string, Adapter> = {
           }
         }
         if (b.type == 'tool_use') {
+          // Bash is a command, and says so: the command plus the model's
+          // own description of what it's for.
+          if (b.name == 'Bash') {
+            let i = b.input as { command?: unknown; description?: unknown }
+            return {
+              kind: 'exec',
+              command: String(i?.command ?? ''),
+              ...(i?.description ? { desc: String(i.description) } : {}),
+            }
+          }
           return {
             kind: 'tool',
             name: String(b.name ?? ''),
-            detail: preview(b.input),
+            detail: gist(b.input),
           }
         }
         if (b.type == 'tool_result') {
@@ -258,7 +291,53 @@ export let adapters: Record<string, Adapter> = {
             usage: e.usage ? JSON.stringify(e.usage) : undefined,
           }
       }
-      return null // system, rate_limit_event, hook chatter
+      // Housekeeping, said small (shapes from live probes). thinking_tokens
+      // streams a growing estimate — the view squeezes the run to its last
+      // frame, so the text is just the current count.
+      if (e.type == 'system') {
+        let sub = String(e.subtype ?? '')
+        if (sub == 'thinking_tokens') {
+          return {
+            kind: 'sys',
+            tag: 'thinking',
+            text: kilo(Number(e.estimated_tokens ?? 0)),
+          }
+        }
+        if (sub == 'hook_started' || sub == 'hook_response') {
+          return {
+            kind: 'sys',
+            tag: 'hook',
+            text: `${e.hook_name ?? ''}${sub == 'hook_response' ? ' ✓' : ''}`,
+          }
+        }
+        if (sub == 'task_started' || sub == 'task_notification') {
+          return {
+            kind: 'sys',
+            tag: sub == 'task_started' ? 'spawn' : 'notify',
+            text: String(e.description ?? ''),
+          }
+        }
+        if (sub == 'background_tasks_changed') {
+          let n = Array.isArray(e.tasks) ? e.tasks.length : 0
+          return {
+            kind: 'sys',
+            tag: 'tasks',
+            text: n ? `${n} in the background` : 'background idle',
+          }
+        }
+        return { kind: 'sys', tag: sub || 'system' }
+      }
+      if (e.type == 'rate_limit_event') {
+        let i = e.rate_limit_info as
+          | { status?: unknown; rateLimitType?: unknown }
+          | undefined
+        return {
+          kind: 'sys',
+          tag: 'rate',
+          text: `${i?.rateLimitType ?? ''} ${i?.status ?? ''}`.trim(),
+        }
+      }
+      return null
     },
   },
 
@@ -342,7 +421,7 @@ export let adapters: Record<string, Adapter> = {
             kind: 'tool',
             name: `${it.server ?? ''}.${it.tool ?? ''}`,
             ok: it.status != 'failed',
-            detail: preview(it.arguments),
+            detail: gist(it.arguments),
             ...(it.error?.message ? { error: String(it.error.message) } : {}),
           }
         }

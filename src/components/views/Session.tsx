@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { md } from '../../md.ts'
-import { type Ent, type LogRow, sessionActive } from '../../types.ts'
+import { type Ent, kilo, type LogRow, sessionActive } from '../../types.ts'
 import { base } from '../../live.ts'
 import { block, Stamp } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
@@ -42,10 +42,15 @@ let Frame = block('div', 'Session', {
   ToolDetail: 'span',
   ToolErr: 'span',
   Exec: 'div',
+  ExecDesc: 'span',
   Turn: 'div',
   Oops: 'div',
   Err: 'pre',
   Json: 'pre',
+  Sys: 'div',
+  SysTag: 'span',
+  SysText: 'span',
+  SysCount: 'span',
 })
 let {
   Head,
@@ -70,14 +75,38 @@ let {
   ToolDetail,
   ToolErr,
   Exec,
+  ExecDesc,
   Turn,
   Oops,
   Err,
   Json,
+  Sys,
+  SysTag,
+  SysText,
+  SysCount,
 } = Frame
 
-type Entry = { seq: number; line: string; row?: LogRow }
+type Entry = { seq: number; line: string; row?: LogRow; n?: number }
 type Log = { entries: Entry[]; stderr?: string }
+
+// A run of same-tag sys frames is one fact told many times (the
+// thinking-token stream grows an estimate frame by frame): keep the
+// LAST of the run — its text is the current count — and remember how
+// many frames it speaks for. Distinct texts (a hook start, a task
+// notification) never squeeze: each is its own news.
+let squeeze = (entries: Entry[]) => {
+  let out: Entry[] = []
+  for (let x of entries) {
+    let p = out.at(-1)
+    if (
+      x.row?.kind == 'sys' && p?.row?.kind == 'sys' &&
+      x.row.tag == p.row.tag &&
+      (x.row.tag == 'thinking' || x.row.text == p.row.text)
+    ) out[out.length - 1] = { ...x, n: (p.n ?? 1) + 1 }
+    else out.push(x)
+  }
+  return out
+}
 
 // ISO in the db; a local clock is what a human reads.
 let when = (t?: string | null) => t ? new Date(t).toLocaleString() : null
@@ -93,15 +122,17 @@ let Fact = ({ k, v }: { k: string; v?: string | null }) =>
     )
     : null
 
-// Usage, said the compact way — the numbers a turn actually spent.
+// Usage, said the compact way: ↑ everything sent up (input plus both
+// cache lanes), ↓ what came back.
 let usage = (json?: string) => {
   if (!json) return ''
   try {
     let u = JSON.parse(json) as Record<string, number>
-    return [
-      u.input_tokens != null && `${u.input_tokens} in`,
-      u.output_tokens != null && `${u.output_tokens} out`,
-    ].filter(Boolean).join(' · ')
+    let up = (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) +
+      (u.cache_creation_input_tokens ?? 0)
+    let down = u.output_tokens ?? 0
+    return [up > 0 && `↑ ${kilo(up)}`, down > 0 && `↓ ${kilo(down)}`]
+      .filter(Boolean).join('  ')
   } catch {
     return ''
   }
@@ -150,12 +181,21 @@ let Body = ({ x }: { x: Entry }) => {
         <Exec>
           {r.command}
           {r.exit != null && r.exit != 0 && ` · exit ${r.exit}`}
+          {r.desc && <ExecDesc>{r.desc}</ExecDesc>}
         </Exec>
       )
     case 'turn':
       return <Turn>{usage(r.usage)}</Turn>
     case 'error':
       return <Oops>{r.text}</Oops>
+    case 'sys':
+      return (
+        <Sys>
+          <SysTag>{r.tag}</SysTag>
+          {r.text && <SysText>{r.text}</SysText>}
+          {(x.n ?? 1) > 1 && <SysCount>×{x.n}</SysCount>}
+        </Sys>
+      )
   }
 }
 
@@ -301,7 +341,7 @@ export let Session = ({ e }: { e: Ent }) => {
       {s.error && <Fault mod='error'>{s.error}</Fault>}
       {s.stop_reason && <Fault>{s.stop_reason}</Fault>}
       <Log>
-        {log.entries.map((x) => <Row key={x.seq} x={x} />)}
+        {squeeze(log.entries).map((x) => <Row key={x.seq} x={x} />)}
       </Log>
       {/* stderr: unordered diagnostics, never inside the log's seqs */}
       {log.stderr && <Err>{log.stderr}</Err>}

@@ -1704,12 +1704,18 @@ html {
   color: var(--red);
   overflow-wrap: anywhere;
 }
-/* A shell command it ran — monospace, its nonzero exit spelled out. */
+/* A shell command it ran — monospace, its nonzero exit spelled out,
+   the model's own description of what it's for dim beside it. */
 .Session_Exec {
   color: var(--muted);
   font-family: ui-monospace, monospace;
   font-size: 11px;
   overflow-wrap: anywhere;
+}
+.Session_ExecDesc {
+  font-family: var(--font);
+  color: var(--dim);
+  margin-left: var(--half-gap);
 }
 /* A turn closing: a thin dim divider carrying its usage. */
 .Session_Turn {
@@ -1717,6 +1723,30 @@ html {
   padding-top: var(--half-gap);
   color: var(--dim);
   font-size: 11px;
+}
+/* Provider housekeeping: one dim chip line — the tag names the family,
+   the text the gist, ×N how many frames it speaks for. */
+.Session_Sys {
+  display: flex;
+  gap: var(--half-gap);
+  align-items: baseline;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.Session_SysTag {
+  flex: none;
+  color: var(--blue);
+}
+.Session_SysText {
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.Session_SysCount {
+  flex: none;
+  color: var(--dim);
 }
 /* The run itself went wrong. */
 .Session_Oops {

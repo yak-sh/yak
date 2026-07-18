@@ -119,9 +119,12 @@ export let sessionActive = ['starting', 'running', 'stopping']
 //   say    what the agent (or the human, resuming) actually said
 //   reason the model thinking out loud — dim, skippable
 //   tool   a tool call as a chip: name + ok/✗, its detail, its error
-//   exec   a shell command it ran
+//   exec   a shell command it ran — desc says what for, in its own words
 //   turn   a turn closing, with usage — a thin divider, not content
 //   error  the run itself went wrong
+//   sys    provider housekeeping worth a dim chip: the tag names the
+//          family (thinking, hook, task, …), the text carries the gist.
+//          A view may squeeze a run of same-tag frames into one line.
 export type LogRow =
   | { kind: 'say'; role: 'agent' | 'user'; text: string }
   | { kind: 'reason'; text: string }
@@ -132,9 +135,18 @@ export type LogRow =
     ok?: boolean
     error?: string
   }
-  | { kind: 'exec'; command: string; exit?: number }
+  | { kind: 'exec'; command: string; desc?: string; exit?: number }
   | { kind: 'turn'; usage?: string }
   | { kind: 'error'; text: string }
+  | { kind: 'sys'; tag: string; text?: string }
+
+// Token counts the way a human reads them: 831, 12k, 1.2M.
+export let kilo = (n: number): string =>
+  n < 1000
+    ? String(n)
+    : n < 1e6
+    ? `${+(n / 1e3).toFixed(n < 10_000 ? 1 : 0)}k`
+    : `${+(n / 1e6).toFixed(1)}M`
 
 // kind is DERIVED — an entity is what its components make it, and really
 // the beholder decides (renderers match on components, scored by

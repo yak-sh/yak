@@ -164,6 +164,7 @@ Deno.test('claude row: thinking dims, text says, tools chip, result closes', () 
     claude.row(say('assistant', [{ type: 'text', text: 'OK' }])),
     { kind: 'say', role: 'agent', text: 'OK' },
   )
+  // a tool chip's detail is the argument a human would ask about
   assertEquals(
     claude.row(say('assistant', [{
       type: 'tool_use',
@@ -171,7 +172,17 @@ Deno.test('claude row: thinking dims, text says, tools chip, result closes', () 
       name: 'ToolSearch',
       input: { query: 'x' },
     }])),
-    { kind: 'tool', name: 'ToolSearch', detail: '{"query":"x"}' },
+    { kind: 'tool', name: 'ToolSearch', detail: 'x' },
+  )
+  // Bash is a command and says so: the command plus its description
+  assertEquals(
+    claude.row(say('assistant', [{
+      type: 'tool_use',
+      id: 'toolu_2',
+      name: 'Bash',
+      input: { command: 'ls -la', description: 'List files' },
+    }])),
+    { kind: 'exec', command: 'ls -la', desc: 'List files' },
   )
   // a user tool_result is its own line — its own chip, ok/✗ from is_error
   assertEquals(
@@ -205,8 +216,36 @@ Deno.test('claude row: thinking dims, text says, tools chip, result closes', () 
     }),
     { kind: 'error', text: 'result: error_during_execution' },
   )
-  // system chatter, and the mint-time init, are not worth a row
-  assertEquals(claude.row({ type: 'system', subtype: 'init' }), null)
+  // system chatter earns a dim chip, not silence — and not a dump
+  assertEquals(claude.row({ type: 'system', subtype: 'init' }), {
+    kind: 'sys',
+    tag: 'init',
+  })
+  assertEquals(
+    claude.row({
+      type: 'system',
+      subtype: 'thinking_tokens',
+      estimated_tokens: 12345,
+      estimated_tokens_delta: 100,
+    }),
+    { kind: 'sys', tag: 'thinking', text: '12k' },
+  )
+  assertEquals(
+    claude.row({
+      type: 'system',
+      subtype: 'task_notification',
+      task_id: 'b1',
+      description: 'Probe finished',
+    }),
+    { kind: 'sys', tag: 'notify', text: 'Probe finished' },
+  )
+  assertEquals(
+    claude.row({
+      type: 'rate_limit_event',
+      rate_limit_info: { status: 'allowed', rateLimitType: 'five_hour' },
+    }),
+    { kind: 'sys', tag: 'rate', text: 'five_hour allowed' },
+  )
 })
 
 Deno.test('codex row: only item.completed narrates; turns divide', () => {
