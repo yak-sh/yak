@@ -25,7 +25,11 @@ export let Peek = () => {
     if (!p) return
     done.current = false
     let el = root.current!
-    place(el, new DOMRect(p.x - 8, p.y - 8, 16, 16), 'above')
+    let anchor = new DOMRect(p.x - 8, p.y - 8, 16, 16)
+    let put = () => place(el, anchor, 'above')
+    put()
+    let ro = new ResizeObserver(put)
+    ro.observe(el)
     let away = (ev: PointerEvent) => {
       if (ev.target instanceof Node && !el.contains(ev.target)) {
         peek.value = null
@@ -42,6 +46,7 @@ export let Peek = () => {
     addEventListener('pointerdown', away)
     addEventListener('keydown', key, true)
     return () => {
+      ro.disconnect()
       removeEventListener('pointerdown', away)
       removeEventListener('keydown', key, true)
     }
