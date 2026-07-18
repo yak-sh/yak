@@ -1423,14 +1423,28 @@ html {
   color: var(--muted);
 }
 
-/* An external page's frozen archive, framed in a card. Fills whatever
-   height the card was given; unsized cards fall back to the min. */
+/* An external page's frozen archive, framed in a card. The page brings
+   its own scrollbar, so the hosting scroller yields: no padding, no
+   scrolling — the iframe fills the card edge to edge and scrolls
+   itself. */
 .Web {
   width: 100%;
   height: 100%;
   min-height: 420px;
   border: 0;
   background: #fff;
+}
+.Card_Scroll:has(> .Web) {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.Card_Scroll > .Web {
+  /* the basis holds unsized cards at the old floor; a shorter sized pin
+     shrinks the frame to fit instead of clipping it */
+  flex: 1 1 420px;
+  min-height: 0;
 }
 .WebWait {
   display: flex;
