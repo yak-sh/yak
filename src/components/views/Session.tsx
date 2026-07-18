@@ -91,9 +91,10 @@ type Log = { entries: Entry[]; stderr?: string }
 
 // A run of same-tag sys frames is one fact told many times (the
 // thinking-token stream grows an estimate frame by frame): keep the
-// LAST of the run — its text is the current count — and remember how
-// many frames it speaks for. Distinct texts (a hook start, a task
-// notification) never squeeze: each is its own news.
+// LAST of the run — its text is the current count, carried forward when
+// the newest frame has none — and remember how many frames it speaks
+// for. Distinct texts (a hook start, a task notification) never
+// squeeze: each is its own news.
 let squeeze = (entries: Entry[]) => {
   let out: Entry[] = []
   for (let x of entries) {
@@ -102,8 +103,13 @@ let squeeze = (entries: Entry[]) => {
       x.row?.kind == 'sys' && p?.row?.kind == 'sys' &&
       x.row.tag == p.row.tag &&
       (x.row.tag == 'thinking' || x.row.text == p.row.text)
-    ) out[out.length - 1] = { ...x, n: (p.n ?? 1) + 1 }
-    else out.push(x)
+    ) {
+      out[out.length - 1] = {
+        ...x,
+        row: x.row.text ? x.row : p.row,
+        n: (p.n ?? 1) + 1,
+      }
+    } else out.push(x)
   }
   return out
 }

@@ -134,7 +134,7 @@ Deno.test('a fake session runs end to end', async () => {
   assertEquals(s.origin, 'managed')
   assertEquals(s.provider_session_id, s.id) // the child was told who it is
   assertEquals(s.serving_model, 'fake-fast')
-  assertEquals(s.latest_seq, 4)
+  assertEquals(s.latest_seq, 5) // the prompt line, then the child's four
   assertEquals(s.requested_task_eid, t)
   assertMatch(String(s.final_text), /^done: /)
   assertEquals(JSON.parse(String(s.usage_json)).output_tokens, 34)
@@ -145,11 +145,18 @@ Deno.test('a fake session runs end to end', async () => {
   // The summary rode the wire as whole session comps, never as raw log.
   assert(heard.some((c) => c.name == 'session' && c.comp?.status == 'running'))
 
+  // Line 1 is what we SENT — the instruction, readable back as a user say.
+  let first = logs(r.eid, new URLSearchParams('after=0&limit=1')).entries[0]
+  assertEquals(first.seq, 1)
+  assertEquals(JSON.parse(first.line).type, 'session.prompt')
+  assertMatch(JSON.parse(first.line).text, /T-\d+/)
+  assertEquals(first.row?.kind, 'say')
+
   // The log reads back from the file, bounded, line number = seq.
-  let page = logs(r.eid, new URLSearchParams('after=1&limit=2'))
-  assertEquals(page.entries.map((e) => e.seq), [2, 3])
+  let page = logs(r.eid, new URLSearchParams('after=2&limit=2'))
+  assertEquals(page.entries.map((e) => e.seq), [3, 4])
   assertEquals(JSON.parse(page.entries[0].line).type, 'message')
-  assertEquals(logs(r.eid, new URLSearchParams('tail=1')).entries[0].seq, 4)
+  assertEquals(logs(r.eid, new URLSearchParams('tail=1')).entries[0].seq, 5)
   assertEquals(logs(r.eid, new URLSearchParams('after=99')).entries, [])
   assertMatch(String(page.stderr), /stderr noise/) // diagnostics, unordered
 })

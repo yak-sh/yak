@@ -125,6 +125,9 @@ let drain = (eid: string, ad: Adapter, t: Tail, cast: Cast) => {
       t.errs.push(`line ${t.seq}: malformed`)
       continue
     }
+    // The prompt line is ours — launch() writes what it sent as line 1,
+    // context for a debugger, not provider output.
+    if ((e as { type?: unknown }).type == 'session.prompt') continue
     // A resumption re-OPENS the log: input() appends this marker before
     // spawning the continuation, so a terminal event behind it was a
     // previous run's ending, not this one's. The live tail never re-reads
@@ -239,7 +242,10 @@ let rowOf = (line: string, ad: Adapter | undefined) => {
   } catch {
     return undefined
   }
-  if (e && typeof e == 'object' && e.type == 'session.input') {
+  if (
+    e && typeof e == 'object' &&
+    (e.type == 'session.input' || e.type == 'session.prompt')
+  ) {
     return { kind: 'say', role: 'user', text: String(e.text ?? '') } as const
   }
   return ad?.row(e) ?? undefined
@@ -548,6 +554,13 @@ let launch = async (eid: string, ad: Adapter, j: Launch, cast: Cast) => {
   try {
     Deno.mkdirSync(dirname(j.tree), { recursive: true })
     Deno.mkdirSync(logsDir(), { recursive: true })
+    // What we SENT is line 1: argv carries the instruction to the
+    // provider, but a debugger reads the file — the prompt belongs in it.
+    Deno.writeTextFileSync(
+      logFile(eid),
+      `${JSON.stringify({ type: 'session.prompt', text: j.instruction })}\n`,
+      { append: true },
+    )
     await git(j.repo.path, [
       'worktree',
       'add',

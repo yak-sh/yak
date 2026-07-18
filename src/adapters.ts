@@ -57,6 +57,8 @@ type Block = {
 // dim detail on a chip, so it stays small on the wire and on one line.
 let preview = (v: unknown): string => {
   let s = (typeof v == 'string' ? v : JSON.stringify(v) ?? '')
+    // deno-lint-ignore no-control-regex
+    .replace(/\x1b\[[0-9;]*[A-Za-z]|\x1b./g, '') // ANSI paints garble chips
     .replace(/\s+/g, ' ').trim()
   return s.length > 140 ? `${s.slice(0, 140)}…` : s
 }
@@ -250,7 +252,12 @@ export let adapters: Record<string, Adapter> = {
         }
         if (!b) return null
         if (b.type == 'thinking') {
-          return { kind: 'reason', text: String(b.thinking ?? '') }
+          // Visible-thinking-off leaves an empty block: fold it into the
+          // thinking-token run instead of printing a blank line.
+          let text = String(b.thinking ?? '')
+          return text.trim()
+            ? { kind: 'reason', text }
+            : { kind: 'sys', tag: 'thinking' }
         }
         if (b.type == 'text') {
           return {
