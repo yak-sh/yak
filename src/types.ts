@@ -235,7 +235,11 @@ export let nick = (model?: string | null) => {
 // children roll up) · parent reads child (read-first, never gates) ·
 // parent about child (subject reference — a task about a session, a note
 // about anything; never gates).
-export type Edge = 'requires' | 'contains' | 'reads' | 'about'
+// The LIST is the source of truth: db.ts bakes it into the dependency
+// table's check constraint (and rebuilds a live table whose baked list
+// has fallen behind), so a new verb here is a new verb everywhere.
+export let edges = ['requires', 'contains', 'reads', 'about'] as const
+export type Edge = (typeof edges)[number]
 
 // The written face of an entity — title and markdown body. Anything can
 // carry one: tasks and boards do; notes, comments, and future kinds get

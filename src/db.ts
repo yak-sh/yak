@@ -13,6 +13,7 @@ import {
   type Change,
   comps,
   type Dep,
+  edges,
   type Hit,
   kindOrder,
   sessionActive,
@@ -25,6 +26,19 @@ import { matchQuery, parseQuery, TEXT } from './query.ts'
 // default, overridable with DB_PATH.
 let file = Deno.env.get('DB_PATH') ??
   `${Deno.env.get('HOME')}/.tasks/tasks.db`
+
+// The edge table's check derives from the vocabulary (types.ts `edges`),
+// so a new verb there is a new verb here with no second edit. Named apart
+// from `schema` because open() also needs it to REBUILD a live table
+// whose baked check has fallen behind — a check can't be widened in place.
+let depDdl = `create table if not exists dependency (
+    parent_eid text not null references entity(eid),
+    type       text not null check (type in (${
+  edges.map((e) => `'${e}'`).join(',')
+})),
+    child_eid  text not null references entity(eid),
+    primary key (parent_eid, type, child_eid)
+  )`
 
 // The star: an entity spine plus one component table per kind, plus the edge
 // table. `if not exists` makes this idempotent — safe to run every boot.
@@ -157,12 +171,7 @@ let schema = `
     eid        text primary key,
     deleted_at text not null
   );
-  create table if not exists dependency (
-    parent_eid text not null references entity(eid),
-    type       text not null check (type in ('requires','contains','reads')),
-    child_eid  text not null references entity(eid),
-    primary key (parent_eid, type, child_eid)
-  );
+  ${depDdl};
   -- Log data, not graph: no eid, no components, so snapshot() (which walks
   -- the comps vocabulary) never carries it. telemetry.ts owns the rows.
   create table if not exists tool_call (
@@ -361,6 +370,21 @@ export let open = () => {
   // A board is a saved filter over tasks (query.ts grammar), not an edge
   // list — membership can't drift when it isn't stored.
   addCol('board', 'query', 'query text')
+  // A live table's check constraint is frozen at create; when the edge
+  // vocabulary outgrows the baked list (the 'about' verb shipped without
+  // this once — every about edge bounced off the old check), rebuild the
+  // table around the current one, rows copied whole.
+  let dep = db.prepare(
+    `select sql from sqlite_master where type = 'table' and name = 'dependency'`,
+  ).get() as { sql: string } | undefined
+  if (dep && edges.some((e) => !dep.sql.includes(`'${e}'`))) {
+    db.exec('begin')
+    db.exec('alter table dependency rename to dependency_stale')
+    db.exec(depDdl)
+    db.exec('insert into dependency select * from dependency_stale')
+    db.exec('drop table dependency_stale')
+    db.exec('commit')
+  }
   // modified_at is server-stamped on every apply() touch; rows from
   // before the column (or from direct writers) read as their creation.
   addCol('entity', 'modified_at', 'modified_at text')

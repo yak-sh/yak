@@ -254,6 +254,25 @@ Deno.test('edges: link once, unlink by the same sentence', () => {
   assertEquals(edges(), [])
 })
 
+// Every verb in the vocabulary must clear the table's baked check — the
+// 'about' verb once shipped in types.ts alone and every about edge
+// bounced off the constraint silently.
+Deno.test('edges: every vocabulary verb round-trips', async () => {
+  let { edges } = await import('./types.ts')
+  for (let type of edges) {
+    let p = uid(), c = uid()
+    apply(db, [
+      { eid: p, name: 'doc', comp: { title: `parent ${type}` } },
+      { eid: c, name: 'doc', comp: { title: `child ${type}` } },
+      { eid: p, name: 'dependency', comp: { type, child_eid: c } },
+    ])
+    assertEquals(
+      snapshot(db).deps.filter((d) => d.parent == p),
+      [{ parent: p, type, child: c }],
+    )
+  }
+})
+
 Deno.test('edges: bad type and missing endpoint drop alone, loudly', () => {
   let p = uid(), c = uid()
   apply(db, [
