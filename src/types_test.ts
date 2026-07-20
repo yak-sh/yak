@@ -1,4 +1,4 @@
-import { nick } from './types.ts'
+import { nick, settled } from './types.ts'
 import { assertEquals } from '@std/assert'
 
 Deno.test('nick: the model word, vendor and versions dropped', () => {
@@ -10,4 +10,13 @@ Deno.test('nick: the model word, vendor and versions dropped', () => {
   assertEquals(nick(''), null)
   assertEquals(nick(null), null)
   assertEquals(nick('claude-3'), null) // nothing left to call it
+})
+
+Deno.test('settled: done or cancelled, nothing else', () => {
+  assertEquals(settled('done'), true)
+  assertEquals(settled('cancelled'), true)
+  assertEquals(settled('open'), false)
+  assertEquals(settled('wip'), false)
+  assertEquals(settled(null), false)
+  assertEquals(settled(undefined), false)
 })

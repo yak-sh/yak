@@ -1,6 +1,14 @@
 // The cache derivations: what the field pickers read out of the live
 // world. Pure functions of the cache signal — no DOM, no socket.
-import { backlinks, cache, domains, projects } from './live.ts'
+import {
+  backlinks,
+  cache,
+  deps,
+  domains,
+  ent,
+  gated,
+  projects,
+} from './live.ts'
 import { assertEquals } from '@std/assert'
 
 // A cache of task/project rows: `['T', 'Ops']` is a task in domain Ops
@@ -63,4 +71,23 @@ Deno.test('backlinks: stamped associations count', () => {
     via: 'session.requested_task_eid',
   }])
   assertEquals(backlinks('s1'), [{ from: 'c1', via: 'claim.session_eid' }])
+})
+
+// gated() burns red only for an open `requires` child — a cancelled one
+// settles the gate exactly like done, same as an unmet blocker changing
+// its mind rather than finishing.
+Deno.test('gated: a cancelled requires child releases the gate', () => {
+  let mk = (status: string) => ({
+    entity: { eid: `x`, num: 0, created_at: '' },
+    task: { eid: 'x', status, priority: 1 },
+  })
+  cache.value = { parent: mk('open'), blocker: mk('open') }
+  deps.value = [{ parent: 'parent', type: 'requires', child: 'blocker' }]
+  assertEquals(gated(ent('parent')), true)
+
+  cache.value = { parent: mk('open'), blocker: mk('cancelled') }
+  assertEquals(gated(ent('parent')), false)
+
+  cache.value = { parent: mk('open'), blocker: mk('done') }
+  assertEquals(gated(ent('parent')), false)
 })

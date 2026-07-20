@@ -130,6 +130,7 @@ defineActions([
         ...(s != 'wip' ? [move('start', 'wip')] : []),
         ...(s != 'done' ? [move('done', 'done')] : []),
         ...(s != 'open' ? [move('reopen', 'open')] : []),
+        ...(s != 'cancelled' ? [move('cancel', 'cancelled')] : []),
         { label: 'run agent…', run: () => openRun(e.eid) },
       ]
     },

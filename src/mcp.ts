@@ -262,12 +262,12 @@ P-19). ${GRAMMAR} ${BUS}`,
     {
       title: z.string().optional(),
       body: body().optional(),
-      status: z.enum(['open', 'wip', 'done']).optional(),
+      status: z.enum(['open', 'wip', 'done', 'cancelled']).optional(),
       params: z.array(z.string()).optional(),
       tasks: z.array(z.object({
         title: z.string(),
         body: body().optional(),
-        status: z.enum(['open', 'wip', 'done']).optional(),
+        status: z.enum(['open', 'wip', 'done', 'cancelled']).optional(),
         params: z.array(z.string()).optional(),
       })).optional(),
       session: z.string().optional(),
@@ -320,7 +320,9 @@ P-19). ${GRAMMAR} ${BUS}`,
     'task_update',
     `Patch an entity by id (T-3, bare num, or eid) with dot-params, e.g.
 [".status=done"] or [".body=notes..."]. Only the named props change.
-*_eid values accept human ids. ${DOC} ${GRAMMAR} ${BUS}`,
+*_eid values accept human ids. Cancelling (".status=cancelled") calls off
+work without pretending it finished — follow it with task_comment saying
+why. ${DOC} ${GRAMMAR} ${BUS}`,
     {
       id: z.string(),
       params: z.array(z.string()).min(1),

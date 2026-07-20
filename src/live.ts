@@ -8,6 +8,7 @@ import {
   type Dep,
   type Ent,
   type Pinned,
+  settled,
   stamped,
 } from './types.ts'
 import { type Row } from './client.ts'
@@ -57,17 +58,20 @@ export let config: {
 export let base = () => `http${config.secure ? 's' : ''}://${config.host}`
 
 // The column sort: priority first (lower sorts higher), num as tiebreak.
-export { statuses, uuid } from './types.ts'
+export { settled, statuses, uuid } from './types.ts'
 import { kindOf, uuid } from './types.ts'
 export let byPriority = (a: Ent, b: Ent) =>
   (a.task!.priority - b.task!.priority) || (a.num - b.num)
 
-// Gated = any `requires` edge whose child is a not-done task. Blocked is
-// this FACT about the edges — there is no 'blocked' status to maintain.
+// Gated = any `requires` edge whose child is an unsettled task. Blocked is
+// this FACT about the edges — there is no 'blocked' status to maintain. A
+// cancelled blocker settles the gate too: it either releases the parent or
+// the parent's own status is the thing that needs rethinking, and the red
+// dot can't tell which.
 export let gated = (e: Ent) =>
   e.refs.some((r) => {
     let c = ent(r.child)
-    return r.type == 'requires' && c.task && c.task.status != 'done'
+    return r.type == 'requires' && c.task && !settled(c.task.status)
   })
 
 // Land a batch in the cache with the same patch semantics the db uses:

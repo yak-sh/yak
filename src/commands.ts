@@ -149,6 +149,11 @@ export let commands: Record<string, Command> = {
   },
   done: { args: '', about: 'move the focused task to done', run: move('done') },
   wip: { args: '', about: 'move the focused task to wip', run: move('wip') },
+  cancel: {
+    args: '',
+    about: 'move the focused task to cancelled',
+    run: move('cancelled'),
+  },
   claim: {
     args: '[session]',
     about: 'lease the focused entity',

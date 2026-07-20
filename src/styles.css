@@ -39,6 +39,7 @@
   --open: var(--blue);
   --wip: var(--yellow);
   --done: var(--accent);
+  --cancelled: var(--dim); /* settled, but not a success — stays muted */
 }
 
 /* Fat fingers get fat targets: every control that declares the --tap
@@ -1240,6 +1241,9 @@ html {
 .Dot-done {
   --dot: var(--done);
 }
+.Dot-cancelled {
+  --dot: var(--cancelled);
+}
 .Dot-gated {
   --dot: var(--red); /* open requires deps: blocked in fact, not in status */
 }
@@ -1589,6 +1593,9 @@ html {
 }
 .Debug_Status-done {
   color: var(--done);
+}
+.Debug_Status-cancelled {
+  color: var(--cancelled);
 }
 .Debug_More {
   color: var(--dim);

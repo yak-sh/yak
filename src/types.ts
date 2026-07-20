@@ -22,8 +22,17 @@ export type PropType =
   | { eid: string }
   | { text: string }
 
-// The status vocabulary, in board-column order.
-export let statuses = ['open', 'wip', 'done']
+// The status vocabulary, in board-column order. 'cancelled' is authored,
+// not derived — nobody can derive "we changed our minds" — and not
+// deletion: deletion tombstones mistakes, cancellation preserves a
+// decision about real work, trail intact.
+export let statuses = ['open', 'wip', 'done', 'cancelled']
+
+// Settled = no longer open work, whether it finished or was called off.
+// Gating, board defaults, and lease-lapse audits all key off this
+// instead of 'done' alone, so a cancelled blocker releases its gate too.
+export let settled = (status?: string | null) =>
+  status == 'done' || status == 'cancelled'
 
 // The component tables, their wire-writable columns AND what each column
 // is — THE one list, now with a type dimension. The db derives its

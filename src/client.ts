@@ -12,6 +12,7 @@ import {
   type Dep,
   type Hit,
   kindOf,
+  settled,
   type Snapshot,
   statuses,
   uuid,
@@ -289,7 +290,7 @@ export let contextDigest = (snap: Snapshot, session: string) => {
     for (let d of snap.deps.filter((d) => d.parent == r.eid)) {
       let c = byEid.get(d.child)
       if (!c || d.type == 'reads') continue
-      if (String(c.comps.task?.status) == 'done') continue
+      if (settled(String(c.comps.task?.status))) continue
       let who = claimant(all, c)
       lines.push(
         `    ${d.type} → ${idOf(c)} (${c.comps.task?.status ?? c.kind}${
@@ -303,7 +304,7 @@ export let contextDigest = (snap: Snapshot, session: string) => {
     mine.slice(0, 4).forEach(show)
   } else {
     lines.push('nothing claimed. open work, board order:')
-    all.filter((r) => r.comps.task && r.comps.task.status != 'done')
+    all.filter((r) => r.comps.task && !settled(String(r.comps.task.status)))
       .filter((r) => !r.comps.claim)
       .sort(byBoard).slice(0, 5).forEach(show)
   }
@@ -376,7 +377,7 @@ export let lapseChanges = (all: Row[], session: string): Change[] => {
   if (!sess) return []
   let held = all.filter((r) => r.comps.claim?.session_eid == sess.eid)
   return held.flatMap((r) => [
-    ...(String(r.comps.task?.status) == 'done' ? [] : commentChanges(
+    ...(settled(String(r.comps.task?.status)) ? [] : commentChanges(
       all,
       r.eid,
       '⚑ lease lapsed: session `' + session + '` ended before this was done',

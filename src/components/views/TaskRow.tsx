@@ -1,5 +1,5 @@
 import { type Ent, idOf } from '../../types.ts'
-import { commentCount, ent, gated } from '../../live.ts'
+import { commentCount, ent, gated, settled } from '../../live.ts'
 import { Dot } from '../Dot.tsx'
 import { Prio } from '../Prio.tsx'
 import { block } from '../ui.tsx'
@@ -27,11 +27,12 @@ let { Title, Meta, Domain, Comments, Claim, Assignee, Deps, Done } = Frame
 export let TaskRow = ({ e }: { e: Ent }) => {
   let talk = commentCount.value[e.eid]
   // Each tally reads as a sentence, verb first — "requires ~2~ 1": two
-  // blockers already done (struck), one still open. A child that isn't
-  // a task can't be done, so it counts as open. gated() tells the same
-  // story on the dot: only OPEN requires burn red.
+  // blockers already settled (struck — done or cancelled), one still
+  // open. A child that isn't a task can't be settled, so it counts as
+  // open. gated() tells the same story on the dot: only an open requires
+  // burns red.
   let split = (kids: Ent[]): [number, number] => {
-    let done = kids.filter((k) => k.task?.status == 'done').length
+    let done = kids.filter((k) => settled(k.task?.status)).length
     return [kids.length - done, done]
   }
   let edges: [string, number, number][] = [

@@ -9,6 +9,7 @@ import {
   gated,
   mutate,
   parents,
+  settled,
   statuses,
 } from '../../live.ts'
 import { linkProps } from '../nav.tsx'
@@ -248,7 +249,7 @@ export let Tasks = ({ e }: { e: Ent }) => {
   let ids = backlinks(e.eid)
     .filter((b) => b.via == 'task.project_eid')
     .map((b) => ent(b.from))
-    .filter((t) => t.task && t.task.status != 'done')
+    .filter((t) => t.task && !settled(t.task.status))
     .sort((a, b) =>
       statuses.indexOf(a.task!.status) - statuses.indexOf(b.task!.status) ||
       a.task!.priority - b.task!.priority

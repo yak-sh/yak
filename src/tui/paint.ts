@@ -39,6 +39,7 @@ let sheet: Record<string, Style> = {
   'Dot-open': { fg: '#7fbbb3' },
   'Dot-wip': { fg: '#dbbc7f' },
   'Dot-done': { fg: '#a7c080' },
+  'Dot-cancelled': { fg: '#7a8478' },
   Id: { fg: '#7a8478' },
   Task_Title: { bold: true },
   Task_Body: { fg: '#9da9a0' },
@@ -60,6 +61,7 @@ let sheet: Record<string, Style> = {
   'Debug_Status-open': { fg: '#7fbbb3' },
   'Debug_Status-wip': { fg: '#dbbc7f' },
   'Debug_Status-done': { fg: '#a7c080' },
+  'Debug_Status-cancelled': { fg: '#7a8478' },
   Debug_Kids: { indent: 2 },
   Debug_More: { fg: '#7a8478' },
 
