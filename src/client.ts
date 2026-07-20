@@ -301,11 +301,64 @@ export let commentChanges = (
   ]
 }
 
+// The LATELY tier: what the graph did today and this week, hot-ranked,
+// so every session boots already knowing (T-3722 — the memory system's
+// delivery half). Work-session docs — a session wearing a doc, the
+// wake-brief pattern — lead today's list with their first body line; the
+// rest are id + title, pointers a reader expands on demand. Memory index
+// lines close it: recognition only, never a recall bump (index listings
+// must not flatten the decay signal). Older than a week is search's job.
+let DAY = 86_400_000
+let firstLine = (s: unknown) =>
+  String(s ?? '').split('\n').map((l) => l.trim()).find(Boolean) ?? ''
+let snip = (s: string, n = 72) => s.length > n ? `${s.slice(0, n)}…` : s
+let lately = (all: Row[], now: number, budget: number) => {
+  if (budget < 4) return [] // claimed work ate the room — it wins
+  let age = (r: Row) => {
+    let t = Date.parse(String(r.comps.entity?.modified_at ?? ''))
+    return Number.isNaN(t) ? Infinity : now - t
+  }
+  let fresh = all
+    .filter((r) => r.comps.doc?.title && !r.comps.comment && age(r) < 7 * DAY)
+    .sort((a, b) => hot(b.comps, now) - hot(a.comps, now))
+  if (!fresh.length) return []
+  let briefs = fresh.filter((r) => r.comps.session && age(r) < DAY).slice(0, 2)
+  let today = fresh.filter((r) =>
+    !r.comps.session && !r.comps.memory && age(r) < DAY
+  ).slice(0, 4)
+  let week = fresh.filter((r) =>
+    !briefs.includes(r) && !r.comps.memory && age(r) >= DAY
+  ).slice(0, 4)
+  let mems = fresh.filter((r) => r.comps.memory).slice(0, 3)
+  let title = (r: Row) => String(r.comps.doc?.title ?? '')
+  let lines = ['lately:']
+  for (let r of briefs) {
+    lines.push(
+      `  ${idOf(r)} ${snip(`${title(r)} · ${firstLine(r.comps.doc?.body)}`)}`,
+    )
+  }
+  for (let r of today) lines.push(`  ${idOf(r)} ${snip(title(r))}`)
+  if (week.length) {
+    lines.push('  this week:')
+    for (let r of week) lines.push(`    ${idOf(r)} ${snip(title(r))}`)
+  }
+  if (mems.length) {
+    lines.push('  memory:')
+    for (let r of mems) lines.push(`    ${idOf(r)} ${snip(title(r))}`)
+  }
+  return lines.slice(0, budget)
+}
+
 // The injection-loop digest: what a session sees at start — its claimed
 // work (with unresolved gates and who holds them), or the top of the open
-// board when it holds nothing. ≤20 lines by construction: the tracker
-// stays out of the way, it just makes the working set impossible to lose.
-export let contextDigest = (snap: Snapshot, session: string) => {
+// board when it holds nothing, then the lately tier. ≤35 lines by
+// construction: the tracker stays out of the way, it just makes the
+// working set — and the recent past — impossible to lose.
+export let contextDigest = (
+  snap: Snapshot,
+  session: string,
+  now = Date.now(),
+) => {
   let all = rows(snap)
   let byEid = new Map(all.map((r) => [r.eid, r]))
   let sess = all.find((r) =>
@@ -342,10 +395,11 @@ export let contextDigest = (snap: Snapshot, session: string) => {
       .filter((r) => !r.comps.claim)
       .sort(byBoard).slice(0, 5).forEach(show)
   }
+  lines.push(...lately(all, now, 34 - lines.length))
   lines.push(
     `claim: task claim <id> ${session} · comment: task comment <id> "…" · release when done or handing off`,
   )
-  return lines.slice(0, 20).join('\n')
+  return lines.slice(0, 35).join('\n')
 }
 
 // The comms bus, read side: what happened that this session hasn't seen —

@@ -2,6 +2,7 @@
 // world. Pure functions of the cache signal — no DOM, no socket.
 import {
   backlinks,
+  byWarmth,
   cache,
   deps,
   domains,
@@ -9,6 +10,7 @@ import {
   gated,
   projects,
 } from './live.ts'
+import { type Ent } from './types.ts'
 import { assertEquals } from '@std/assert'
 
 // A cache of task/project rows: `['T', 'Ops']` is a task in domain Ops
@@ -71,6 +73,24 @@ Deno.test('backlinks: stamped associations count', () => {
     via: 'session.requested_task_eid',
   }])
   assertEquals(backlinks('s1'), [{ from: 'c1', via: 'claim.session_eid' }])
+})
+
+// byWarmth: the .order=hot board sort — a well-recalled old thing
+// outranks a merely new one, and the unrecalled fade on their own.
+Deno.test('byWarmth: recalled-often beats merely-new beats faded', () => {
+  let NOW = Date.parse('2026-07-20T12:00:00Z')
+  let iso = (d: number) => new Date(NOW - d * 86_400_000).toISOString()
+  let old = {
+    num: 1,
+    modified_at: iso(5),
+    recall: { eid: 'o', count: 40, first_at: iso(60), last_at: iso(0.2) },
+  } as unknown as Ent
+  let fresh = { num: 2, modified_at: iso(0.5) } as unknown as Ent
+  let faded = { num: 3, modified_at: iso(6) } as unknown as Ent
+  assertEquals(
+    [faded, fresh, old].sort(byWarmth(NOW)).map((e) => e.num),
+    [1, 2, 3],
+  )
 })
 
 // gated() burns red only for an open `requires` child — a cancelled one

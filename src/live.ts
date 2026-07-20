@@ -12,7 +12,7 @@ import {
   stamped,
 } from './types.ts'
 import { type Row } from './client.ts'
-import { matchQuery, parseQuery } from './query.ts'
+import { hot, matchQuery, parseQuery } from './query.ts'
 
 // A cache row: the spine plus whichever components the entity carries.
 // Derived from Ent so a new component (types.ts) threads through here —
@@ -62,6 +62,17 @@ export { settled, statuses, uuid } from './types.ts'
 import { kindOf, uuid } from './types.ts'
 export let byPriority = (a: Ent, b: Ent) =>
   (a.task!.priority - b.task!.priority) || (a.num - b.num)
+
+// An Ent's warmth — the cache-side face of query.ts hot(), for boards
+// that say .order=hot. The Ent flattens the spine, so re-nest what the
+// scorer reads; ties break to the newer num, like byPriority.
+export let warmth = (e: Ent, now: number) =>
+  hot({
+    recall: e.recall as Record<string, unknown> | undefined,
+    entity: { modified_at: e.modified_at, created_at: e.created_at },
+  }, now)
+export let byWarmth = (now: number) => (a: Ent, b: Ent) =>
+  (warmth(b, now) - warmth(a, now)) || (b.num - a.num)
 
 // Gated = any `requires` edge whose child is an unsettled task. Blocked is
 // this FACT about the edges — there is no 'blocked' status to maintain. A

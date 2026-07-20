@@ -3,6 +3,7 @@ import { type Ent } from '../../types.ts'
 import {
   boardTasks,
   byPriority,
+  byWarmth,
   cache,
   clientId,
   ent,
@@ -11,7 +12,7 @@ import {
   uuid,
 } from '../../live.ts'
 import { spec, taskChanges } from '../../client.ts'
-import { adopt, parseQuery } from '../../query.ts'
+import { adopt, orderOf, parseQuery } from '../../query.ts'
 import { block, focus } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
 import { Prio } from '../Prio.tsx'
@@ -91,6 +92,16 @@ export let Board = ({ e }: { e: Ent }) => {
   // Which column's quick-create box is open ('' = none). One at a time:
   // the box is a keyboard, and there's one keyboard.
   let [adding, setAdding] = useState('')
+  // A board that says .order=hot ranks its columns by warmth, not
+  // priority — the Front page: attention IS the ordering. Drag-drop
+  // still writes priorities (adopt semantics unchanged); the ranking is
+  // read-time only, like everything hot().
+  let order = byPriority
+  try {
+    if (orderOf(parseQuery(String(e.board?.query ?? ''))) == 'hot') {
+      order = byWarmth(Date.now())
+    }
+  } catch { /* boardTasks below surfaces the bad query */ }
   let tasks: Ent[]
   try {
     tasks = boardTasks(e)
@@ -200,7 +211,7 @@ export let Board = ({ e }: { e: Ent }) => {
   return (
     <Frame>
       {statuses.map((s) => {
-        let list = tasks.filter((k) => k.task?.status == s).sort(byPriority)
+        let list = tasks.filter((k) => k.task?.status == s).sort(order)
         return (
           <Col
             key={s}

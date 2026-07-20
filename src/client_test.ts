@@ -236,6 +236,86 @@ Deno.test('contextDigest: claimed set with gates, or open board', () => {
   let fresh = contextDigest(snap, 'sess-nobody')
   assertEquals(fresh.includes('nothing claimed'), true)
   assertEquals(fresh.includes('T-3'), true) // open unclaimed work suggested
+  // the shared fixture carries no modified_at — nothing is recent, so the
+  // lately tier says nothing at all
+  assertEquals(d.includes('lately:'), false)
+})
+
+// The lately tier against a fixed clock: work-session briefs lead with
+// their first body line, today and this-week tier by age, memories close
+// as index lines, and anything older than a week (or any comment) never
+// appears.
+Deno.test('contextDigest: lately — briefs lead, tiers hold, old is silent', () => {
+  let NOW = Date.parse('2026-07-20T12:00:00Z')
+  let ago = (h: number) => new Date(NOW - h * 3_600_000).toISOString()
+  let num = 30
+  let mk = (
+    eid: string,
+    mod: string,
+    parts: Record<string, Record<string, unknown>>,
+  ) => [
+    {
+      eid,
+      name: 'entity',
+      comp: { eid, num: num++, created_at: mod, modified_at: mod },
+    },
+    ...Object.entries(parts).map(([name, comp]) => ({ eid, name, comp })),
+  ]
+  let eid = (i: number) => `bbbbbbbb-0000-4000-8000-00000000000${i}`
+  let late: Snapshot = {
+    changes: [
+      ...mk(eid(1), ago(2), {
+        session: { id: 'ws-brief' },
+        doc: { title: 'Work session', body: 'landed: everything\nmore below' },
+      }),
+      ...mk(eid(2), ago(1), {
+        doc: { title: 'Fresh task', body: '' },
+        task: { status: 'done', priority: 0 },
+      }),
+      // done, deliberately: an open unclaimed task would ALSO surface in
+      // the open-work suggestions above lately, and this test reads line
+      // order
+      ...mk(eid(3), ago(70), {
+        doc: { title: 'Midweek task', body: '' },
+        task: { status: 'done', priority: 1 },
+      }),
+      ...mk(eid(4), ago(30), {
+        doc: { title: 'A kept fact', body: 'the fact' },
+        memory: { type: 'project' },
+      }),
+      ...mk(eid(5), ago(3), {
+        doc: { title: 'Noise', body: '' },
+        comment: { target_eid: eid(2) },
+      }),
+      ...mk(eid(6), ago(24 * 30), {
+        doc: { title: 'Ancient history', body: '' },
+        task: { status: 'done', priority: 0 },
+      }),
+    ],
+    deps: [],
+  }
+  let d = contextDigest(late, 'sess-nobody', NOW)
+  let lines = d.split('\n')
+  assertEquals(lines.length <= 35, true)
+  assertEquals(d.includes('lately:'), true)
+  // the brief leads, wearing its first body line
+  let brief = lines.findIndex((l) => l.includes('Work session'))
+  assertEquals(lines[brief].includes('landed: everything'), true)
+  assertEquals(brief < lines.findIndex((l) => l.includes('Fresh task')), true)
+  // tiers: midweek under its header, memory as an index line
+  assertEquals(
+    lines.indexOf('  this week:') <
+      lines.findIndex((l) => l.includes('Midweek task')),
+    true,
+  )
+  assertEquals(
+    lines.indexOf('  memory:') <
+      lines.findIndex((l) => l.includes('A kept fact')),
+    true,
+  )
+  // silence: comments and the older-than-a-week
+  assertEquals(d.includes('Noise'), false)
+  assertEquals(d.includes('Ancient history'), false)
 })
 
 Deno.test('spec: a typed task — leading P, params anywhere, body below', () => {
