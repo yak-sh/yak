@@ -11,7 +11,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { providers } from './adapters.ts'
 import { type Change } from './types.ts'
 import { apply, db, search, snapshot, touch } from './db.ts'
-import { dispatch, on, trace } from './effects.ts'
+import { dispatch, on, relay, trace } from './effects.ts'
 import { freeze, serveFrozen, store } from './freeze.ts'
 import { mcpServer } from './mcp.ts'
 import {
@@ -337,7 +337,10 @@ Deno.serve(
 // session resumes it; a deleted session's process dies with its row.
 // A future plugin contributes rows here the same way it would renderers.
 on('session', { created: spawned(cast), removed: deleted })
-on('stop_request', { created: stopped(cast) })
+on('stop_request', {
+  created: stopped(cast),
+  sweep: { pending: 'acted_at is null' },
+})
 on('comment', { created: commented(cast) })
 
 // Managed children are detached (setsid) and this process restarts on every
@@ -345,6 +348,16 @@ on('comment', { created: commented(cast) })
 // still alive, finalize the ones that died while we were away. Nothing here
 // reaps a child; the watcher below must never learn how.
 recover(cast)
+
+// Then the outbox relay: intents that committed but never fired their
+// effect (a crash in the post-commit gap) re-fire now — strictly AFTER
+// recover(), so a re-driven stop finds the adopted pid to signal.
+relay((comp, pending) =>
+  db.prepare(`select * from ${comp} where ${pending}`).all() as Record<
+    string,
+    unknown
+  >[]
+)
 
 // Watch src/ and tell every client what a save means (debounced — editors
 // fire several events per save):

@@ -686,13 +686,23 @@ export let stopped =
         stop_reason,
         finished_at: now(),
       }, cast)
-    // The guard IS the CAS: two stops race, one writes.
+    // The guard IS the CAS: two stops race, one WRITES the status. A
+    // missed CAS means either the target settled on its own after the
+    // request committed — nothing to stop IS acted (the sweep's replay
+    // case) — or it's still 'stopping': a stop was recorded whose signal
+    // may never have left (another request mid-drive, or a crash between
+    // CAS and kill). Fall through and signal again; a TERM at a dying
+    // group is a no-op, and acted_at then says the signals were truly
+    // sent, not merely intended.
     let hit = db.prepare(`
       update session set status = 'stopping', stop_requested_at = ?
       where eid = ? and status in ('starting', 'running')
     `).run(now(), target).changes
-    if (!hit) return acted() // already stopping: the first request drives
-    castRow(target, cast)
+    if (!hit) {
+      let s = db.prepare('select status from session where eid = ?')
+        .get(target) as { status: string | null } | undefined
+      if (!sessionActive.includes(String(s?.status))) return acted()
+    } else castRow(target, cast)
     let pid = running.get(target)?.pid || pidOf(target) // run.pid is 0 pre-birth
     if (!pid) {
       lost('no pid: the child was never spawned or its pidfile is gone')

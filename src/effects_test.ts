@@ -5,7 +5,7 @@
 // the env points it at :memory:.
 import { assert, assertEquals } from '@std/assert'
 import { type Change } from './types.ts'
-import { dispatch, on, trace } from './effects.ts'
+import { dispatch, on, relay, trace } from './effects.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, db } = await import('./db.ts')
@@ -86,4 +86,40 @@ Deno.test('async handler results ride the dispatch promise', async () => {
   })
   await write([{ eid: uid(), name: 'doc', comp: { title: 'later' } }]).done
   assert(landed)
+})
+
+Deno.test('relay: pending rows re-fire created; sweepless effects sit out', async () => {
+  let fired: string[] = []
+  on('fold', {
+    created: (eid) => fired.push(`fold ${eid}`),
+    sweep: { pending: 'acked is null' },
+  })
+  on('shelf', { created: (eid) => fired.push(`shelf ${eid}`) }) // no sweep
+  let asked: string[] = []
+  let out = await relay((comp, pending) => {
+    asked.push(`${comp} where ${pending}`)
+    return comp == 'fold' ? [{ eid: 'f-1' }, { eid: 'f-2' }] : []
+  })
+  assertEquals(fired, ['fold f-1', 'fold f-2'])
+  assertEquals(asked, ['fold where acked is null']) // one fetch per sweep
+  assertEquals(out.length, 2)
+})
+
+Deno.test('relay: a throwing handler is reported, the rest still fire', async () => {
+  let fired: string[] = []
+  on('camera', {
+    created: (eid) => {
+      if (eid == 'bad') throw new Error('boom')
+      fired.push(eid)
+    },
+    sweep: { pending: 'x is null' },
+  })
+  let oops: string[] = []
+  await relay(
+    (comp) => (comp == 'camera' ? [{ eid: 'bad' }, { eid: 'good' }] : []),
+    (comp, e) => oops.push(`${comp}: ${e}`),
+  )
+  assertEquals(fired, ['good'])
+  assertEquals(oops.length, 1)
+  assert(oops[0].includes('boom'))
 })

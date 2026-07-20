@@ -11,7 +11,7 @@
 // at :memory: and the temp dirs.
 import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
 import { type Change } from './types.ts'
-import { dispatch, on, trace } from './effects.ts'
+import { dispatch, on, relay, trace } from './effects.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let tmp = Deno.makeTempDirSync({ prefix: 'tasks-sessions-' })
@@ -34,8 +34,22 @@ let row = (eid: string) =>
 
 // The same curated list server.ts registers — the tests drive the wire.
 on('session', { created: spawned(cast), removed: deleted })
-on('stop_request', { created: stopped(cast) })
+on('stop_request', {
+  created: stopped(cast),
+  sweep: { pending: 'acted_at is null' },
+})
 on('comment', { created: commented(cast) })
+
+// The relay's row fetch, as server.ts performs it at boot.
+let pending = (comp: string, cond: string) =>
+  db.prepare(`select * from ${comp} where ${cond}`).all() as Record<
+    string,
+    unknown
+  >[]
+let acted = (sr: string) =>
+  (db.prepare('select acted_at from stop_request where eid = ?').get(sr) as {
+    acted_at: string | null
+  }).acted_at
 
 // A graph write as the server performs it: apply, cast, dispatch. The
 // returned promise is every effect the batch set off — a whole run, when
@@ -288,6 +302,45 @@ Deno.test('stop: a stop_request signals the group, the ending is OBSERVED', asyn
     Error,
     'stop_request refused',
   )
+})
+
+Deno.test('sweep: an unacted stop_request re-fires at boot and kills', async () => {
+  let { t } = seed('delay:9000')
+  let { eid, done } = begin(t)
+  await until(() => row(eid)?.status == 'running', 'the init event')
+  // The crash window, reproduced: the request COMMITS (the rule passes —
+  // the target is running) but its effect never fires.
+  let sr = uid()
+  cast(apply(db, [
+    { eid: sr, name: 'stop_request', comp: { target_eid: eid } },
+  ]))
+  assertEquals(acted(sr), null)
+  // Boot: the relay finds it and drives the stop to an observed ending.
+  assertEquals((await relay(pending)).length, 1)
+  let s = row(eid)!
+  assertEquals(s.status, 'interrupted')
+  assertEquals(s.exit_code, 143)
+  assert(acted(sr))
+  await done
+  // A second pass finds nothing pending — acted requests never re-fire.
+  assertEquals((await relay(pending)).length, 0)
+})
+
+Deno.test('sweep: a target that settled on its own is acted, not errored', async () => {
+  let { t } = seed('delay:500')
+  let { eid, done } = begin(t)
+  await until(() => row(eid)?.status == 'running', 'the init event')
+  let sr = uid()
+  cast(apply(db, [
+    { eid: sr, name: 'stop_request', comp: { target_eid: eid } },
+  ]))
+  await done // the child finishes on its own; the request outlives the run
+  assertEquals(row(eid)!.status, 'completed')
+  await relay(pending)
+  assert(acted(sr)) // nothing to stop IS acted
+  let s = row(eid)!
+  assertEquals(s.status, 'completed') // never re-stamped, never 'lost'
+  assertEquals(s.exit_code, 0)
 })
 
 Deno.test('the rule refuses sessions that are not ours to end', () => {
