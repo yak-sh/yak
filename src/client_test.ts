@@ -6,6 +6,7 @@ import {
   claimChanges,
   commentChanges,
   contextDigest,
+  derefParams,
   find,
   hookClaim,
   lapseChanges,
@@ -62,6 +63,7 @@ let CASES: [string, { comp: string; prop: string; value: unknown } | RegExp][] =
     ['.domain=Eng', { comp: 'task', prop: 'domain', value: 'Eng' }],
     ['.priority=1.5', { comp: 'task', prop: 'priority', value: 1.5 }],
     ['.pin.x=12', { comp: 'pin', prop: 'x', value: 12 }],
+    ['.assignee=jeff', { comp: 'task', prop: 'assignee_eid', value: 'jeff' }],
     ['.x=12', /ambiguous/],
     ['.nope=1', /unknown prop/],
     ['.doc.nope=1', /no such prop/],
@@ -398,4 +400,15 @@ Deno.test('recallIndex: warmest first, index lines only, filtered', () => {
   assertMatch(lines[0], /confirmed 2026-07-19/)
   assertEquals(lines[0].includes('today'), false) // bodies stay home
   assertEquals(recallIndex(mems, parseQuery('.type=project'), NOW).length, 1)
+})
+
+Deno.test('derefParams: reference values resolve at the door', () => {
+  let one = (s: string) => derefParams(all, [param(s)!])[0].value
+  assertEquals(one('.assignee=old-board-slug'), T2) // alias slug
+  assertEquals(one('.assignee=T-2'), T1) // human id
+  assertEquals(one('.assignee=3'), T2) // bare num
+  assertEquals(one(`.assignee=${T1}`), T1) // an eid passes through
+  assertEquals(one('.assignee='), '') // a clear stays a clear
+  assertEquals(one('.title=jeff'), 'jeff') // not a reference
+  assertThrows(() => one('.assignee=ghost'), Error, 'no entity')
 })

@@ -385,6 +385,30 @@ Deno.test('search: terms and filters mix in one line', () => {
   assertEquals(eids('.status=done .modified_at>=today').includes(b), false)
 })
 
+Deno.test('search: reference sugar + paths screen the hits', () => {
+  let u = uid(), t = uid(), t2 = uid()
+  apply(db, [
+    { eid: u, name: 'doc', comp: { title: 'Jeff Peterson' } },
+    { eid: u, name: 'person', comp: {} },
+    { eid: u, name: 'alias', comp: { slug: 'jeffp' } },
+    { eid: t, name: 'doc', comp: { title: 'Wurlitzer tuning' } },
+    { eid: t, name: 'task', comp: { status: 'open', assignee_eid: u } },
+    { eid: t2, name: 'doc', comp: { title: 'Wurlitzer restringing' } },
+    { eid: t2, name: 'task', comp: { status: 'open' } },
+  ])
+  let eids = (q: string) => search(db, q).map((h) => h.eid)
+  // the value resolves server-side: alias slug or human num, like find()
+  assertEquals(eids('wurlitzer .assignee=jeffp'), [t])
+  let num = comp(u, 'entity')?.num
+  assertEquals(eids(`wurlitzer .assignee=U-${num}`), [t])
+  assertEquals(eids('wurlitzer .assignee=ghost'), []) // a miss matches nothing
+  // a path pred walks the reference into the assignee's doc
+  assertEquals(eids('wurlitzer .assignee.title~=peterson'), [t])
+  assertEquals(eids('wurlitzer .assignee.title~=nobody'), [])
+  // filters alone still list — sugar included
+  assertEquals(eids('.assignee=jeffp'), [t])
+})
+
 // ---- memory + recall: the decay model's storage half ----
 
 Deno.test('memory: writable face rides in, confirmation never does', () => {

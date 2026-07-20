@@ -31,6 +31,14 @@
 //
 // Unqualified props route by component, same rule as writes; `.task.status`
 // is the explicit spelling. `.num` and friends route to the entity spine.
+//
+// References go sugar-free: `.assignee=jeff` — a prop with no column of
+// its own, where exactly one component carries `prop_eid`, routes to
+// that reference; the VALUE resolves like any id (alias, T-3, raw eid)
+// at whichever door or evaluator holds the graph (resolveRefs). And a
+// dotted first segment that names a COMPONENT is the explicit spelling
+// (`.pin.x=12`); any other first segment is a PATH — `.assignee.title~=j`
+// dereferences the eid column and predicates the target's prop. Depth 1.
 import { comps } from './types.ts'
 
 export type Pred = {
@@ -38,6 +46,9 @@ export type Pred = {
   prop: string
   op: string
   value: string
+  // A path predicate's far side: deref `comp.prop` (an _eid column),
+  // then test the TARGET's `at.comp[at.prop]` against op/value.
+  at?: { comp: string; prop: string }
 }
 
 // ---- time phrases ----
@@ -155,16 +166,32 @@ let routes: Record<string, readonly string[]> = {
 }
 
 // Route a bare prop to its component; ambiguity is an error that names
-// the candidates rather than a guess.
-export let routeProp = (prop: string): string => {
-  let hits = Object.entries(routes)
-    .filter(([, cols]) => cols.includes(prop))
-    .map(([name]) => name)
-  if (hits.length == 1) return hits[0]
-  if (!hits.length) throw new Error(`unknown prop: .${prop}`)
-  throw new Error(
-    `.${prop} is ambiguous (${hits.join(', ')}) — use .${hits[0]}.${prop}`,
-  )
+// the candidates rather than a guess. The sugar rule rides here: a prop
+// with no column of its own, where exactly ONE component carries
+// `prop_eid`, routes to that reference — so `.assignee=jeff` IS
+// `.assignee_eid=jeff`, and every ref column gets the short form free.
+export let route = (prop: string): { comp: string; prop: string } => {
+  let hits = (p: string) =>
+    Object.entries(routes)
+      .filter(([, cols]) => cols.includes(p))
+      .map(([name]) => name)
+  let own = hits(prop)
+  if (own.length == 1) return { comp: own[0], prop }
+  if (own.length > 1) {
+    throw new Error(
+      `.${prop} is ambiguous (${own.join(', ')}) — use .${own[0]}.${prop}`,
+    )
+  }
+  let ref = hits(`${prop}_eid`)
+  if (ref.length == 1) return { comp: ref[0], prop: `${prop}_eid` }
+  if (ref.length > 1) {
+    throw new Error(
+      `.${prop} is ambiguous (${
+        ref.join(', ')
+      } all carry ${prop}_eid) — use .comp.${prop}_eid`,
+    )
+  }
+  throw new Error(`unknown prop: .${prop}`)
 }
 
 // One token — '.priority<=1', '.domain=Ops,Eng' — to a Pred; null if the
@@ -197,10 +224,20 @@ export let pred = (token: string): Pred | null => {
   if (a == 'order' && !b && op == '=') {
     return { comp: '', prop: 'order', op: ORDER, value }
   }
-  if (b && !routes[a]?.includes(b)) throw new Error(`no such prop: .${a}.${b}`)
-  return b
-    ? { comp: a, prop: b, op: OPS[op], value }
-    : { comp: routeProp(a), prop: a, op: OPS[op], value }
+  if (b) {
+    // The collision rule: a first segment naming a COMPONENT is the
+    // explicit spelling (.pin.x); anything else walks a reference.
+    if (routes[a]) {
+      if (!routes[a].includes(b)) throw new Error(`no such prop: .${a}.${b}`)
+      return { comp: a, prop: b, op: OPS[op], value }
+    }
+    let r = route(a)
+    if (!r.prop.endsWith('_eid')) {
+      throw new Error(`.${a} is not a reference — paths walk _eid columns`)
+    }
+    return { ...r, op: OPS[op], value, at: route(b) }
+  }
+  return { ...route(a), op: OPS[op], value }
 }
 
 // A bare word: contains over the doc, title or body. comp/prop are for
@@ -313,9 +350,37 @@ let test = (v: unknown, p: Pred): boolean => {
   }
 }
 
+// The sugar's other half: a board-stored query carries values as typed
+// ('jeff', 'T-3') — the door resolvers never saw it, so whoever EVALUATES
+// resolves, against whatever graph they hold. Only reference columns with
+// equality-shaped ops resolve; each part of an any-of list resolves
+// alone; a miss stays as typed and matches nothing, because a board
+// mid-render is no place to throw.
+let UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+export let resolveRefs = (
+  preds: Pred[],
+  lookup: (id: string) => string | undefined,
+): Pred[] =>
+  preds.map((p) => {
+    let target = p.at ? p.at.prop : p.prop
+    if (!target.endsWith('_eid') || (p.op != '' && p.op != '!')) return p
+    if (!p.value || /\.\./.test(p.value)) return p
+    let value = p.value.split(',')
+      .map((part) => !part || UUID.test(part) ? part : lookup(part) ?? part)
+      .join(',')
+    return value == p.value ? p : { ...p, value }
+  })
+
 // Does an entity satisfy every pred? A TEXT pred reads the doc itself —
-// one pred, either column.
-export let matchQuery = (c: Comps, preds: Pred[]) =>
+// one pred, either column. A path pred dereferences through `ent` (the
+// evaluator's graph); no ent, no ref, or no target reads as an absent
+// value — so `.assignee.title=x` misses and `!=x` holds, same as any
+// null column.
+export let matchQuery = (
+  c: Comps,
+  preds: Pred[],
+  ent?: (eid: string) => Comps | undefined,
+) =>
   preds.every((p) => {
     if (p.op == ORDER) return true
     if (p.op == TEXT) {
@@ -325,6 +390,11 @@ export let matchQuery = (c: Comps, preds: Pred[]) =>
         String(d.title ?? '').toLowerCase().includes(needle) ||
         String(d.body ?? '').toLowerCase().includes(needle)
       )
+    }
+    if (p.at) {
+      let ref = c[p.comp]?.[p.prop]
+      let t = ref ? ent?.(String(ref)) : undefined
+      return test(t?.[p.at.comp]?.[p.at.prop], p)
     }
     return test(c[p.comp]?.[p.prop], p)
   })

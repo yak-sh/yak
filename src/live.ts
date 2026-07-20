@@ -12,7 +12,7 @@ import {
   stamped,
 } from './types.ts'
 import { type Row } from './client.ts'
-import { hot, matchQuery, parseQuery } from './query.ts'
+import { hot, matchQuery, parseQuery, resolveRefs } from './query.ts'
 
 // A cache row: the spine plus whichever components the entity carries.
 // Derived from Ent so a new component (types.ts) threads through here —
@@ -205,10 +205,22 @@ export let ent = (eid: string): Ent => {
 // Membership is never stored — a task is on a board because it matches,
 // so it appears the moment it's born and leaves the moment it stops
 // matching. Throws on a malformed query; the Board view shows the error.
+// The stored query may carry sugar values ('.assignee=jeff') and path
+// preds ('.assignee.title~=j') — the cache is the graph they resolve
+// and deref against.
+let findEid = (id: string): string | undefined => {
+  let num = id.match(/^[A-Za-z]+-(\d+)$/)?.[1] ?? id.match(/^(\d+)$/)?.[1]
+  for (let [eid, r] of Object.entries(cache.value)) {
+    if (num ? r.entity?.num == +num : r.alias?.slug == id) return eid
+  }
+}
 export let boardTasks = (e: Ent): Ent[] => {
-  let preds = parseQuery(String(e.board?.query ?? ''))
+  let preds = resolveRefs(
+    parseQuery(String(e.board?.query ?? '')),
+    findEid,
+  )
   return Object.entries(cache.value)
-    .filter(([, r]) => r.task && matchQuery(r, preds))
+    .filter(([, r]) => r.task && matchQuery(r, preds, (t) => cache.value[t]))
     .map(([eid]) => ent(eid))
 }
 

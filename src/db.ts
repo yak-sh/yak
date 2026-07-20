@@ -20,7 +20,7 @@ import {
   type Snapshot,
 } from './types.ts'
 import { type Trace } from './effects.ts'
-import { matchQuery, parseQuery, TEXT } from './query.ts'
+import { matchQuery, parseQuery, resolveRefs, TEXT } from './query.ts'
 
 // The db lives outside the repo (this is open source): a home-dir dotpath by
 // default, overridable with DB_PATH.
@@ -893,6 +893,16 @@ export let touch = (
 // the rest screen each hit against its components, and a line of ONLY
 // filters is a listing, newest touched first. A malformed filter throws;
 // the doors show the message.
+// Resolve a sugar value server-side: an alias slug, or a prefix-num /
+// bare num against the spine — the db's half of client.ts find().
+export let findEid = (db: DatabaseSync, id: string): string | undefined => {
+  let num = id.match(/^[A-Za-z]+-(\d+)$/)?.[1] ?? id.match(/^(\d+)$/)?.[1]
+  let hit = num
+    ? db.prepare('select eid from entity where num = ?').get(Number(num))
+    : db.prepare('select eid from alias where slug = ?').get(id)
+  return (hit as { eid: string } | undefined)?.eid
+}
+
 export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
   let preds = parseQuery(q)
   let filters = preds.filter((p) => p.op != TEXT)
@@ -926,20 +936,28 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
       order by e.modified_at desc limit ?
     `).all(limit * 10) as (Omit<Hit, 'kind' | 'open_eid'>)[]
   if (filters.length) {
+    // Sugar values in the filters ('.assignee=jeff') resolve against the
+    // db — alias slug or human num, same forms find() speaks.
+    filters = resolveRefs(filters, (id) => findEid(db, id))
     // Each hit's components, only the ones the filters actually read —
-    // matchQuery sees the same shape a live cache row has.
+    // matchQuery sees the same shape a live cache row has. A path pred
+    // reads its TARGET through the same fetcher (compsOf doubles as the
+    // ent argument), so `.assignee.title~=j` walks one row further.
+    let names = [
+      ...new Set(filters.flatMap((p) => p.at ? [p.comp, p.at.comp] : [p.comp])),
+    ]
     let get = new Map(
-      [...new Set(filters.map((p) => p.comp))].map((
-        c,
-      ) => [c, db.prepare(`select * from ${c} where eid = ?`)]),
+      names.map((c) => [c, db.prepare(`select * from ${c} where eid = ?`)]),
     )
-    rows = rows.filter((r) => {
+    let compsOf = (eid: string) => {
       let comps: Record<string, Record<string, unknown> | undefined> = {}
       for (let [c, s] of get) {
-        comps[c] = s.get(r.eid) as Record<string, unknown> | undefined
+        comps[c] = s.get(eid) as Record<string, unknown> | undefined
       }
-      return matchQuery(comps, filters)
-    }).slice(0, limit)
+      return comps
+    }
+    rows = rows.filter((r) => matchQuery(compsOf(r.eid), filters, compsOf))
+      .slice(0, limit)
   }
   let is = kindOrder.map((k) =>
     [k, db.prepare(`select 1 from ${k} where eid = ?`)] as const

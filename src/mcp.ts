@@ -26,6 +26,7 @@ import {
   claimChanges,
   commentChanges,
   contextDigest,
+  derefParams,
   find,
   history,
   historyLine,
@@ -34,7 +35,6 @@ import {
   type JournalEntry,
   memoryChanges,
   notices,
-  type Param,
   param,
   patches,
   recallIndex,
@@ -46,7 +46,14 @@ import {
   spawnChanges,
   taskChanges,
 } from './client.ts'
-import { hot, matchQuery, orderOf, parseQuery, pred } from './query.ts'
+import {
+  hot,
+  matchQuery,
+  orderOf,
+  parseQuery,
+  pred,
+  resolveRefs,
+} from './query.ts'
 
 // How the tools reach the graph — in-process on the server, HTTP here.
 export type IO = {
@@ -90,7 +97,9 @@ vocabulary (${
     }`
   ).join('; ')
 }). A prop unique to one component routes bare ('.title=x' → doc); for the
-few collisions (pin/camera x,y,w,h) use '.comp.prop=x'. Numeric-looking
+few collisions (pin/camera x,y,w,h) use '.comp.prop=x'. References go
+sugar-free: '.assignee=jeff' routes to task.assignee_eid, and any *_eid
+value may be an alias, a human id (T-3, P-19), or an eid. Numeric-looking
 values become numbers. Statuses: ${statuses.join(', ')}.`
 
 let FILTERS = `Filters add operators to that routing: '.priority<=1',
@@ -100,8 +109,12 @@ end), '.status!=done', '.title~=flux' (contains), '.domain=' (absent),
 '2026-07-04', this|last|next week|month|year, '5 minutes ago', 'in 2
 days' — a phrase is a RANGE: = within it, >= from its start, <= to its
 end ('.modified_at>="1 hour ago"'; glue with - where quoting is hard).
-Bare words are text terms (doc contains). Boards persist these same
-queries (board.query).`
+Reference filters take the same sugar ('.assignee=jeff', '.project=P-19'),
+and a DOTTED path walks one reference: '.assignee.title~=jeff',
+'.project.path~=tasks' — a first segment naming a component stays the
+explicit spelling ('.pin.x=12'), anything else dereferences. Bare words
+are text terms (doc contains). Boards persist these same queries
+(board.query).`
 
 // One log entry, said small: the renderer row when the line carries one
 // (adapters normalized it), else the raw line — either way one bounded
@@ -178,16 +191,9 @@ markdown documents (paragraphs, lists, headings). Rewrite via task_update
 ".body=".`
     : ''
 
-// Any *_eid dot-param value may be a human id (T-3, P-19) — resolve it to
-// the eid so callers never do the num→eid lookup dance themselves.
-let resolveIds = (all: Row[], ps: Param[]) =>
-  ps.map((p) => {
-    if (!p.prop.endsWith('_eid') || typeof p.value != 'string') return p
-    if (!/^[A-Za-z]+-\d+$/.test(p.value)) return p
-    let hit = find(all, p.value)
-    if (!hit) throw new Error(`no entity: ${p.value} (.${p.prop})`)
-    return { ...p, value: hit.eid }
-  })
+// Any *_eid dot-param value may be a human id (T-3, P-19) or an alias
+// (jeff) — client.ts derefParams resolves them at the door, and a miss
+// throws here rather than failing an FK later.
 
 export let mcpServer = (io: IO) => {
   // Server instructions ride the initialize handshake and land in the
@@ -243,12 +249,16 @@ filters must ALL match. ${FILTERS} ${BUS}`,
     async (
       { filters = [], session }: { filters?: string[]; session?: string },
     ) => {
-      let ps = parseFilters(filters)
       let now = Date.now()
       let all = rows(await io.read())
+      let ps = resolveRefs(
+        parseFilters(filters),
+        (id) => find(all, id)?.eid,
+      )
+      let byEid = new Map(all.map((r) => [r.eid, r.comps]))
       let hits = all
         .filter((r) => r.comps.task)
-        .filter((r) => matchQuery(r.comps, ps))
+        .filter((r) => matchQuery(r.comps, ps, (e) => byEid.get(e)))
         .sort(
           orderOf(ps) == 'hot'
             ? (a, b) => hot(b.comps, now) - hot(a.comps, now)
@@ -302,7 +312,7 @@ P-19). ${GRAMMAR} ${BUS}`,
       }
       let minted: string[] = []
       let changes = want.flatMap((t) => {
-        let grouped = patches(resolveIds(all, parseAll(t.params ?? [])))
+        let grouped = patches(derefParams(all, parseAll(t.params ?? [])))
         grouped.doc = { title: t.title, body: t.body ?? '', ...grouped.doc }
         if (t.status) grouped.task = { status: t.status, ...grouped.task }
         let eid = crypto.randomUUID()
@@ -346,7 +356,7 @@ why. ${DOC} ${GRAMMAR} ${BUS}`,
       let all = rows(await io.read())
       let row = find(all, id)
       if (!row) return err(`no entity: ${id}`)
-      let grouped = patches(resolveIds(all, parseAll(params)))
+      let grouped = patches(derefParams(all, parseAll(params)))
       await io.write(
         Object.entries(grouped)
           .map(([name, comp]) => ({ eid: row.eid, name, comp })),
@@ -644,7 +654,10 @@ stability — recalled often and spread out decays slowest. ${BUS}`,
       }
       let preds
       try {
-        preds = parseQuery(query ?? '')
+        preds = resolveRefs(
+          parseQuery(query ?? ''),
+          (id) => find(all, id)?.eid,
+        )
         if (type) {
           let p = pred(`.type=${type}`)
           if (p) preds.push(p)
@@ -666,11 +679,16 @@ comps}, dot-param filtered. Cards, pins (positions), cameras (what each
 client is looking at), sessions, comments — all live here. ${GRAMMAR} ${FILTERS}`,
     { filters: z.array(z.string()).optional(), kind: z.string().optional() },
     async ({ filters = [], kind }: { filters?: string[]; kind?: string }) => {
-      let ps = parseFilters(filters)
       let now = Date.now()
-      let hits = rows(await io.read())
+      let all = rows(await io.read())
+      let ps = resolveRefs(
+        parseFilters(filters),
+        (id) => find(all, id)?.eid,
+      )
+      let byEid = new Map(all.map((r) => [r.eid, r.comps]))
+      let hits = all
         .filter((r) => !kind || r.kind == kind)
-        .filter((r) => matchQuery(r.comps, ps))
+        .filter((r) => matchQuery(r.comps, ps, (e) => byEid.get(e)))
       if (orderOf(ps) == 'hot') {
         hits.sort((a, b) => hot(b.comps, now) - hot(a.comps, now))
       }
@@ -707,14 +725,19 @@ client; writes broadcast live to all screens. ${GRAMMAR}`,
     },
     async ({ changes }: { changes: Change[] }) => {
       try {
-        // Human ids resolve before the wire sees them — a T-num in eid or
-        // any *_eid column means an EXISTING entity, so a miss is an error
-        // here, never a silent mint.
-        let human = /^[A-Za-z]+-\d+$/
+        // Human ids and ALIASES resolve before the wire sees them — a
+        // non-uuid in eid or any *_eid column means an EXISTING entity
+        // (T-3, jeff), so a miss is an error here, never a silent mint
+        // or an FK failure later. A fresh entity's eid is a uuid the
+        // caller minted, which passes untouched.
+        let uuid36 =
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+        let named = (v: unknown): v is string =>
+          typeof v == 'string' && !!v && !uuid36.test(v)
         let needs = changes.some((c) =>
-          human.test(c.eid) ||
+          named(c.eid) ||
           Object.entries(c.comp ?? {}).some(([k, v]) =>
-            k.endsWith('_eid') && typeof v == 'string' && human.test(v)
+            k.endsWith('_eid') && named(v)
           )
         )
         if (needs) {
@@ -726,16 +749,11 @@ client; writes broadcast live to all screens. ${GRAMMAR}`,
           }
           changes = changes.map((c) => ({
             ...c,
-            eid: human.test(c.eid) ? resolve(c.eid) : c.eid,
+            eid: named(c.eid) ? resolve(c.eid) : c.eid,
             comp: c.comp == null ? c.comp : Object.fromEntries(
               Object.entries(c.comp).map((
                 [k, v],
-              ) => [
-                k,
-                k.endsWith('_eid') && typeof v == 'string' && human.test(v)
-                  ? resolve(v)
-                  : v,
-              ]),
+              ) => [k, k.endsWith('_eid') && named(v) ? resolve(v) : v]),
             ),
           }))
         }

@@ -14,6 +14,7 @@ import {
   claimChanges,
   commentChanges,
   contextDigest,
+  derefParams,
   find,
   history,
   historyLine,
@@ -33,7 +34,7 @@ import {
   spawnChanges,
   taskChanges,
 } from './client.ts'
-import { matchQuery, pred } from './query.ts'
+import { matchQuery, pred, resolveRefs } from './query.ts'
 import { type Snapshot } from './types.ts'
 // `import type` (not the repo's usual inline `{ type X }`): telemetry.ts
 // reaches for node:sqlite, and the CLI has no business loading a db driver.
@@ -77,11 +78,15 @@ let split = (args: string[]) => {
 let list = async (args: string[]) => {
   // Filters speak the query grammar — operators, lists, ranges
   // ('.priority<=1', '.domain=Ops,Eng'); bare words are ignored.
-  let preds = args.map(pred).filter((p) => p != null)
   let all = rows(await snapshot())
+  let preds = resolveRefs(
+    args.map(pred).filter((p) => p != null),
+    (id) => find(all, id)?.eid,
+  )
+  let byEid = new Map(all.map((r) => [r.eid, r.comps]))
   let hits = all
     .filter((r) => r.comps.task)
-    .filter((r) => matchQuery(r.comps, preds))
+    .filter((r) => matchQuery(r.comps, preds, (e) => byEid.get(e)))
     .sort(byBoard)
   for (let r of hits) {
     let t = r.comps.task ?? {}
@@ -98,7 +103,9 @@ let list = async (args: string[]) => {
 
 let create = async (args: string[]) => {
   let { params, words } = split(args)
-  let grouped = patches(params)
+  // Reference values (.project=bindery, .assignee=jeff) resolve at the
+  // door — same rule as the MCP tools.
+  let grouped = patches(derefParams(rows(await snapshot()), params))
   grouped.doc = { title: words.join(' '), ...grouped.doc }
   if (!grouped.doc.title) throw new Error('a task needs a .title')
   let eid = crypto.randomUUID()
@@ -111,10 +118,11 @@ let set = async (args: string[]) => {
   let { params, words } = split(args)
   let [id] = words
   if (!id || !params.length) throw new Error('task set <id> .prop=value ...')
-  let row = find(rows(await snapshot()), id)
+  let all = rows(await snapshot())
+  let row = find(all, id)
   if (!row) throw new Error(`no entity: ${id}`)
   await send(
-    Object.entries(patches(params))
+    Object.entries(patches(derefParams(all, params)))
       .map(([name, comp]) => ({ eid: row.eid, name, comp })),
   )
   console.log(`${idOf(row)} updated`)

@@ -18,7 +18,7 @@ import {
   uuid,
 } from './types.ts'
 import { idOf } from './types.ts'
-import { hot, matchQuery, type Pred, routeProp } from './query.ts'
+import { hot, matchQuery, type Pred, route } from './query.ts'
 export { idOf }
 
 export let host = () => Deno.env.get('TASKS_HOST') ?? '127.0.0.1:5173'
@@ -111,7 +111,10 @@ export type Param = { comp: string; prop: string; value: unknown }
 let coerce = (v: string): unknown => /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : v
 
 // '.title=Hello' | '.doc.title=Hello' → {comp, prop, value}; null if the
-// argument isn't a dot-param at all (a bare word).
+// argument isn't a dot-param at all (a bare word). Bare props ride
+// query.ts route(), so the reference sugar holds for writes too:
+// '.assignee=jeff' patches task.assignee_eid (derefParams turns the
+// value into an eid at the door).
 export let param = (arg: string): Param | null => {
   let m = arg.match(/^\.([A-Za-z_]+)(?:\.([A-Za-z_]+))?=(.*)$/s)
   if (!m) return null
@@ -123,8 +126,27 @@ export let param = (arg: string): Param | null => {
     }
     return { comp: a, prop: b, value }
   }
-  return { comp: routeProp(a), prop: a, value }
+  return { ...route(a), value }
 }
+
+// Reference values at a door: uuids pass through, '' clears, anything
+// else must resolve — an alias (jeff), a human id (T-3), a bare num — or
+// the door throws, never a silent FK failure later. One resolver for
+// every write door (CLI, MCP task_new/update, graph_apply values).
+let UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+export let deref = (all: Row[], v: string, where = '') => {
+  if (!v || UUID.test(v)) return v
+  let hit = find(all, v)
+  if (!hit) throw new Error(`no entity: ${v}${where}`)
+  return hit.eid
+}
+export let derefParams = (all: Row[], ps: Param[]) =>
+  ps.map((p) =>
+    p.prop.endsWith('_eid') &&
+      (typeof p.value == 'string' || typeof p.value == 'number')
+      ? { ...p, value: deref(all, String(p.value), ` (.${p.prop})`) }
+      : p
+  )
 
 // Group routed params into per-component patches.
 export let patches = (params: Param[]) => {

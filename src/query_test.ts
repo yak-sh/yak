@@ -6,6 +6,8 @@ import {
   orderOf,
   parseQuery,
   pred,
+  resolveRefs,
+  route,
   span,
 } from './query.ts'
 import { assert, assertEquals, assertThrows } from '@std/assert'
@@ -250,4 +252,72 @@ Deno.test('server-stamped recall columns filter without being writable', () => {
     matchQuery({ recall: { count: 1 } }, parseQuery('.count>=2')),
     false,
   )
+})
+
+// ---- reference sugar + path predicates ----
+
+Deno.test('sugar: .assignee is .assignee_eid', () => {
+  assertEquals(pred('.assignee=u1'), {
+    comp: 'task',
+    prop: 'assignee_eid',
+    op: '',
+    value: 'u1',
+  })
+  assert(hit('.assignee=u1', { assignee_eid: 'u1' }))
+  assert(!hit('.assignee=u1', { assignee_eid: 'u2' }))
+})
+
+Deno.test('sugar: misses and collisions stay loud', () => {
+  assertThrows(() => route('hovercraft'), Error, 'unknown prop')
+  // camera, fold and shelf all carry client_eid — no guessing
+  assertThrows(() => route('client'), Error, 'ambiguous')
+  assertThrows(() => route('target_eid'), Error, 'ambiguous')
+})
+
+Deno.test('paths: a component first segment stays the explicit spelling', () => {
+  assertEquals(pred('.pin.x=12'), {
+    comp: 'pin',
+    prop: 'x',
+    op: '',
+    value: '12',
+  })
+})
+
+Deno.test('paths: .assignee.title walks the reference', () => {
+  assertEquals(pred('.assignee.title~=jeff'), {
+    comp: 'task',
+    prop: 'assignee_eid',
+    op: '~',
+    value: 'jeff',
+    at: { comp: 'doc', prop: 'title' },
+  })
+  assertThrows(() => pred('.status.title=x'), Error, 'not a reference')
+  assertThrows(() => pred('.assignee.eels=x'), Error, 'unknown prop')
+})
+
+Deno.test('paths: the pred tests the TARGET through ent', () => {
+  let world: Record<string, Record<string, Record<string, unknown>>> = {
+    u1: { doc: { title: 'Jeff Peterson' } },
+  }
+  let ent = (e: string) => world[e]
+  let ps = parseQuery('.assignee.title~=jeff')
+  assert(matchQuery(row({ assignee_eid: 'u1' }), ps, ent))
+  assert(!matchQuery(row({ assignee_eid: 'ghost' }), ps, ent))
+  assert(!matchQuery(row({}), ps, ent)) // absent ref: '=' shapes miss
+  assert(matchQuery(row({}), parseQuery('.assignee.title!=jeff'), ent))
+})
+
+Deno.test('resolveRefs: values resolve at match time, misses stay put', () => {
+  let eids: Record<string, string> = {
+    jeff: '11111111-1111-4111-8111-111111111111',
+    'T-3': '22222222-2222-4222-8222-222222222222',
+  }
+  let r = (q: string) => resolveRefs(parseQuery(q), (id) => eids[id])
+  assertEquals(r('.assignee=jeff')[0].value, eids.jeff)
+  assertEquals(r('.assignee!=jeff')[0].value, eids.jeff)
+  assertEquals(r('.assignee=jeff,T-3')[0].value, `${eids.jeff},${eids['T-3']}`)
+  assertEquals(r(`.assignee=${eids.jeff}`)[0].value, eids.jeff) // already an eid
+  assertEquals(r('.assignee=ghost')[0].value, 'ghost') // a miss matches nothing
+  assertEquals(r('.assignee=')[0].value, '') // absence test, untouched
+  assertEquals(r('.title~=jeff')[0].value, 'jeff') // not a reference
 })

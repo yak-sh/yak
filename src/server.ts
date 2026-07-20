@@ -9,7 +9,7 @@
 import { transform } from 'sucrase'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { providers } from './adapters.ts'
-import { type Change } from './types.ts'
+import { type Change, idOf } from './types.ts'
 import { apply, db, journalOf, search, snapshot, touch } from './db.ts'
 import { dispatch, on, relay, trace } from './effects.ts'
 import { freeze, serveFrozen, store } from './freeze.ts'
@@ -24,6 +24,8 @@ import {
 } from './sessions.ts'
 import { outcome, recent, record, toolCall } from './telemetry.ts'
 import { stamp } from './hot.ts'
+import { find, type Row, rows } from './client.ts'
+import { hot, matchQuery, orderOf, parseQuery, resolveRefs } from './query.ts'
 
 // The hot-swap generation: bumped by the watcher on every client-code or
 // css change, stamped into every served module's relative imports so a
@@ -270,6 +272,65 @@ Deno.serve(
           url.searchParams.get('q') ?? '',
           Number(url.searchParams.get('limit') ?? 20),
         ))
+      } catch (e) {
+        return new Response(String((e as Error).message ?? e), { status: 400 })
+      }
+    }
+    if (path == '/query') {
+      // The graph over plain GET: the query string IS the filter line —
+      // the same grammar boards and task_list speak — and hits come back
+      // graph_query-shaped. `kind=` screens by derived kind; `backlinks=1`
+      // adds who points at each hit (eid columns + edges). A malformed
+      // filter is the typist's news, not a server error.
+      try {
+        let segs = url.search.slice(1).split('&').filter(Boolean)
+          .map(decodeURIComponent)
+        let backs = segs.includes('backlinks=1')
+        let kind = segs.find((s) => s.startsWith('kind='))?.slice(5)
+        segs = segs.filter((s) => s != 'backlinks=1' && !s.startsWith('kind='))
+        let snap = snapshot(db)
+        let all = rows(snap)
+        let ps = resolveRefs(
+          parseQuery(segs.join('&')),
+          (id) => find(all, id)?.eid,
+        )
+        let byEid = new Map(all.map((r) => [r.eid, r.comps]))
+        let now = Date.now()
+        let hits = all
+          .filter((r) => !kind || r.kind == kind)
+          .filter((r) => matchQuery(r.comps, ps, (e) => byEid.get(e)))
+        if (orderOf(ps) == 'hot') {
+          hits.sort((a, b) => hot(b.comps, now) - hot(a.comps, now))
+        }
+        let back = new Map<string, { from: string; via: string }[]>()
+        if (backs) {
+          let wanted = new Set(hits.map((r) => r.eid))
+          let add = (to: unknown, from: Row, via: string) => {
+            if (typeof to != 'string' || !wanted.has(to)) return
+            let list = back.get(to) ?? []
+            list.push({ from: idOf(from), via })
+            back.set(to, list)
+          }
+          for (let r of all) {
+            for (let [c, comp] of Object.entries(r.comps)) {
+              for (let [p, v] of Object.entries(comp)) {
+                if (p.endsWith('_eid')) add(v, r, `${c}.${p}`)
+              }
+            }
+          }
+          let rowOf = new Map(all.map((r) => [r.eid, r]))
+          for (let d of snap.deps) {
+            let from = rowOf.get(d.parent)
+            if (from) add(d.child, from, d.type)
+          }
+        }
+        return Response.json(hits.map((r) => ({
+          id: idOf(r),
+          kind: r.kind,
+          eid: r.eid,
+          comps: r.comps,
+          ...(backs ? { backlinks: back.get(r.eid) ?? [] } : {}),
+        })))
       } catch (e) {
         return new Response(String((e as Error).message ?? e), { status: 400 })
       }
