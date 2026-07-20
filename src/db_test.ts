@@ -1,7 +1,9 @@
 // apply()/snapshot() semantics against an in-memory db — the wire's
 // contract: patches, creates, deletes, tombstones, and the claim lease.
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, db, open, search, snapshot, touch } = await import('./db.ts')
+let { apply, db, journalOf, open, search, snapshot, touch } = await import(
+  './db.ts'
+)
 let { assertEquals, assertMatch, assertThrows } = await import(
   '@std/assert'
 )
@@ -400,4 +402,112 @@ Deno.test('touch confirm stamps the memory; death takes the recall row', () => {
   apply(db, [{ eid: m, name: 'entity', comp: null }])
   assertEquals(comp(m, 'recall'), undefined)
   assertEquals(touch(db, [m]), []) // tombstoned: no spine, no touch
+})
+
+// ---- the journal: the wire's record ----
+
+let journalCount = () =>
+  (db.prepare('select count(*) as n from journal').get() as { n: number }).n
+
+Deno.test('journal: one row per batch, attributed; a rollback leaves none', () => {
+  let t = uid(), before = journalCount()
+  apply(
+    db,
+    [{ eid: t, name: 'doc', comp: { title: 'recorded' } }],
+    undefined,
+    'tester',
+  )
+  assertEquals(journalCount(), before + 1)
+  let row = db.prepare('select actor, batch from journal order by rowid desc')
+    .get() as { actor: string; batch: string }
+  assertEquals(row.actor, 'tester')
+  assertMatch(row.batch, /recorded/) // the batch as applied, spine included
+  // A bounced claim rolls the whole batch back — no journal row either
+  // (the conflict audit is its own transaction and deliberately unjournaled).
+  let s1 = uid(), s2 = uid()
+  apply(db, [
+    { eid: s1, name: 'session', comp: { id: `s1-${s1}` } },
+    { eid: s2, name: 'session', comp: { id: `s2-${s2}` } },
+    { eid: t, name: 'claim', comp: { session_eid: s1 } },
+  ])
+  let held = journalCount()
+  assertThrows(() =>
+    apply(db, [{ eid: t, name: 'claim', comp: { session_eid: s2 } }])
+  )
+  assertEquals(journalCount(), held)
+})
+
+Deno.test('journal: cascade casualties ride the record', () => {
+  let a = uid(), c = uid()
+  apply(db, [
+    { eid: a, name: 'doc', comp: { title: 'doomed' } },
+    { eid: c, name: 'doc', comp: { title: '' } },
+    { eid: c, name: 'comment', comp: { target_eid: a } },
+  ])
+  apply(db, [{ eid: a, name: 'entity', comp: null }])
+  let last = JSON.parse(
+    (db.prepare('select batch from journal order by rowid desc').get() as {
+      batch: string
+    }).batch,
+  ) as { eid: string; name: string; comp: unknown }[]
+  assertEquals(
+    last.some((x) => x.eid == c && x.name == 'entity' && x.comp == null),
+    true,
+  )
+})
+
+Deno.test('journal: a reason becomes a comment, old → new, authored', () => {
+  let t = uid(), s = uid(), sid = `reasoner-${s}`
+  apply(db, [
+    { eid: s, name: 'session', comp: { id: sid } },
+    { eid: t, name: 'doc', comp: { title: 'reasoned' } },
+    { eid: t, name: 'task', comp: { status: 'open' } },
+  ])
+  apply(
+    db,
+    [
+      { eid: t, name: 'task', comp: { status: 'done' } },
+      { eid: t, name: 'journal', comp: { reason: 'proof landed' } },
+    ],
+    undefined,
+    sid,
+  )
+  let cm = snapshot(db).changes.find((c) =>
+    c.name == 'comment' && c.comp?.target_eid == t
+  )
+  assertEquals(cm?.comp?.author_eid, s)
+  let body = comp(String(cm?.eid), 'doc')?.body
+  assertEquals(body, 'status: open → done — proof landed')
+  // the pseudo-change never lands: not in the journal, not a table
+  let last = (db.prepare('select batch from journal order by rowid desc')
+    .get() as { batch: string }).batch
+  assertEquals(last.includes('"journal"'), false)
+})
+
+Deno.test('journal: recording failure never breaks the write', () => {
+  db.exec('alter table journal rename to journal_hidden')
+  let t = uid()
+  try {
+    apply(db, [{ eid: t, name: 'doc', comp: { title: 'still lands' } }])
+  } finally {
+    db.exec('alter table journal_hidden rename to journal')
+  }
+  assertEquals(comp(t, 'doc')?.title, 'still lands')
+})
+
+Deno.test('journalOf: newest first, cut to the eid', () => {
+  let t = uid(), other = uid()
+  apply(db, [
+    { eid: t, name: 'doc', comp: { title: 'v1' } },
+    { eid: other, name: 'doc', comp: { title: 'noise' } },
+  ])
+  apply(db, [{ eid: t, name: 'doc', comp: { title: 'v2' } }])
+  let past = journalOf(db, t)
+  assertEquals(past.length, 2)
+  assertEquals(past[0].changes, [{
+    eid: t,
+    name: 'doc',
+    comp: { title: 'v2' },
+  }])
+  assertEquals(past.every((e) => e.changes.every((c) => c.eid == t)), true)
 })

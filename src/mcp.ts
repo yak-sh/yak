@@ -27,8 +27,11 @@ import {
   commentChanges,
   contextDigest,
   find,
+  history,
+  historyLine,
   host,
   idOf,
+  type JournalEntry,
   memoryChanges,
   notices,
   type Param,
@@ -48,7 +51,9 @@ import { hot, matchQuery, orderOf, parseQuery, pred } from './query.ts'
 // How the tools reach the graph — in-process on the server, HTTP here.
 export type IO = {
   read: () => Promise<{ changes: Change[]; deps: Dep[] }>
-  write: (changes: Change[]) => Promise<void>
+  // `actor` is journal attribution — the calling session's id, when the
+  // tool knows it. Never auth.
+  write: (changes: Change[], actor?: string) => Promise<void>
   find: (q: string, limit?: number) => Promise<Hit[]>
   // Land an HTML page in the frozen store for an existing web entity.
   upload: (eid: string, html: string) => Promise<void>
@@ -61,6 +66,9 @@ export type IO = {
     entries: { seq: number; line: string; row?: unknown }[]
     stderr?: string
   }>
+  // An entity's slice of the journal (db.ts journalOf in-process; GET
+  // /journal over stdio) — the wire's write record, newest first.
+  history: (eid: string, limit?: number) => Promise<JournalEntry[]>
 }
 
 // A prop's type, said inline where it isn't obvious: enums spell their
@@ -200,7 +208,7 @@ comments, and the comms bus.`,
     if (!session) return text(out)
     let n = notices(await io.read(), session)
     if (!n.lines.length) return text(out)
-    await io.write(n.ack)
+    await io.write(n.ack, session)
     return text(`${out}\n\n— while you were away —\n${n.lines.join('\n')}`)
   }
 
@@ -301,7 +309,7 @@ P-19). ${GRAMMAR} ${BUS}`,
         minted.push(eid)
         return taskChanges(eid, grouped)
       })
-      await io.write(changes)
+      await io.write(changes, session)
       let after = rows(await io.read())
       let ids = minted.map((eid) => {
         let made = after.find((r) => r.eid == eid)
@@ -342,6 +350,7 @@ why. ${DOC} ${GRAMMAR} ${BUS}`,
       await io.write(
         Object.entries(grouped)
           .map(([name, comp]) => ({ eid: row.eid, name, comp })),
+        session,
       )
       return bus(`updated ${idOf(row)}${wall(grouped.doc?.body)}`, session)
     },
@@ -372,7 +381,7 @@ or hand off.`,
       let row = find(all, id)
       if (!row) return err(`no entity: ${id}`)
       try {
-        await io.write(claimChanges(all, row.eid, session))
+        await io.write(claimChanges(all, row.eid, session), session)
       } catch (e) {
         return {
           ...await bus(`claim failed: ${(e as Error).message}`, session),
@@ -391,7 +400,7 @@ other sessions. ${BUS}`,
     async ({ id, session }: { id: string; session?: string }) => {
       let row = find(rows(await io.read()), id)
       if (!row) return err(`no entity: ${id}`)
-      await io.write([{ eid: row.eid, name: 'claim', comp: null }])
+      await io.write([{ eid: row.eid, name: 'claim', comp: null }], session)
       return bus(`released ${idOf(row)}`, session)
     },
   )
@@ -430,7 +439,7 @@ on the bus. Providers/models: the server's /providers table. ${BUS}`,
       } catch (e) {
         return err((e as Error).message)
       }
-      await io.write(made.changes)
+      await io.write(made.changes, session)
       let after = find(rows(await io.read()), made.eid)
       return bus(
         `spawned ${after ? idOf(after) : made.eid} onto ${id}`,
@@ -480,6 +489,33 @@ running or settled; stderr rides along when the child wrote any. ${BUS}`,
   )
 
   server.tool(
+    'history',
+    `An entity's write history from the journal, newest first: when · who
+· what changed (comp{cols} for patches, -comp for removals, † for the
+entity's death). The journal records every applied batch — blame and
+diffs without a version table. id: T-3, S-12, or eid. ${BUS}`,
+    {
+      id: z.string(),
+      limit: z.number().optional(),
+      session: z.string().optional(),
+    },
+    async (
+      { id, limit, session }: {
+        id: string
+        limit?: number
+        session?: string
+      },
+    ) => {
+      let all = rows(await io.read())
+      let row = find(all, id)
+      if (!row) return err(`no entity: ${id}`)
+      let entries = await io.history(row.eid, limit)
+      if (!entries.length) return bus(`${idOf(row)}: no history`, session)
+      return bus(entries.map(historyLine).join('\n'), session)
+    },
+  )
+
+  server.tool(
     'task_comment',
     `Comment on ANY entity (tasks, boards, docs, frozen pages — anything
 with an id). Body is markdown. Pass the same stable session identifier
@@ -491,7 +527,7 @@ you claim with, for attribution.`,
       let all = rows(await io.read())
       let row = find(all, id)
       if (!row) return err(`no entity: ${id}`)
-      await io.write(commentChanges(all, row.eid, body, session))
+      await io.write(commentChanges(all, row.eid, body, session), session)
       return bus(`commented on ${idOf(row)}${wall(body)}`, session)
     },
   )
@@ -540,7 +576,7 @@ confirm what you reuse, and it decays slower. ${BUS}`,
           })
         }
         if (type) patch.push({ eid: row.eid, name: 'memory', comp: { type } })
-        if (patch.length) await io.write(patch)
+        if (patch.length) await io.write(patch, session)
         await io.touch([row.eid], true)
         return bus(`confirmed ${idOf(row)}${wall(body)}`, session)
       }
@@ -553,7 +589,7 @@ confirm what you reuse, and it decays slower. ${BUS}`,
       } catch (e) {
         return err((e as Error).message)
       }
-      await io.write(made.changes)
+      await io.write(made.changes, session)
       let after = find(rows(await io.read()), made.eid)
       return bus(
         `saved ${after ? idOf(after) : made.eid}${wall(body)}`,
@@ -1048,5 +1084,6 @@ if (import.meta.main) {
       if (!res.ok) throw new Error(`server said ${res.status}`)
       return res.json()
     },
+    history: (eid, limit) => history(eid, limit),
   }).connect(new StdioServerTransport())
 }

@@ -10,7 +10,7 @@ import { transform } from 'sucrase'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { providers } from './adapters.ts'
 import { type Change } from './types.ts'
-import { apply, db, search, snapshot, touch } from './db.ts'
+import { apply, db, journalOf, search, snapshot, touch } from './db.ts'
 import { dispatch, on, relay, trace } from './effects.ts'
 import { freeze, serveFrozen, store } from './freeze.ts'
 import { mcpServer } from './mcp.ts'
@@ -157,9 +157,9 @@ let mcp = async (req: Request) => {
       // deno-lint-ignore require-await
       read: async () => snapshot(db),
       // deno-lint-ignore require-await
-      write: async (changes) => {
+      write: async (changes, actor) => {
         let t = trace()
-        let out = apply(db, changes, t)
+        let out = apply(db, changes, t, actor)
         cast(out)
         effect(out, t)
       },
@@ -178,6 +178,8 @@ let mcp = async (req: Request) => {
       },
       // deno-lint-ignore require-await
       logs: async (eid, q) => logs(eid, q),
+      // deno-lint-ignore require-await
+      history: async (eid, limit) => journalOf(db, eid, limit),
     })
     await server.connect(theirs)
     let reply = new Promise((resolve) => mine.onmessage = resolve)
@@ -295,7 +297,9 @@ Deno.serve(
         })
       return req.json().then((changes: Change[]) => {
         let t = trace()
-        let out = apply(db, changes, t)
+        // Attribution is an honesty header, not auth: the CLI names its
+        // session, anonymous posts journal as null.
+        let out = apply(db, changes, t, req.headers.get('x-actor'))
         cast(out)
         effect(out, t)
         note(true)
@@ -314,6 +318,15 @@ Deno.serve(
     // because logs are log data, not graph.
     let session = path.match(/^\/sessions\/([0-9a-f-]{36})\/logs$/)
     if (session) return Response.json(logs(session[1], url.searchParams))
+    // The wire's record, per entity: journal rows that touched the eid,
+    // newest first. Raw eids only — id resolution is a client concern.
+    if (path == '/journal') {
+      return Response.json(journalOf(
+        db,
+        url.searchParams.get('eid') ?? '',
+        Number(url.searchParams.get('limit') ?? 50) || 50,
+      ))
+    }
     if (path == '/freeze') {
       return freeze(url.searchParams.get('eid') ?? '', cast)
     }

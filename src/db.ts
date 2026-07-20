@@ -175,6 +175,17 @@ let schema = `
     deleted_at text not null
   );
   ${depDdl};
+  -- Log data, not graph (like tool_call below): the journal is the record
+  -- OF the wire, never part of it — one row per applied batch, written
+  -- inside apply()'s transaction. No eid of its own, never in snapshot(),
+  -- never in a client cache; read it per-entity via journalOf(). The
+  -- symmetry: telemetry records READS, the journal records WRITES.
+  create table if not exists journal (
+    ts    text not null
+          default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    actor text,
+    batch text not null
+  );
   -- Log data, not graph: no eid, no components, so snapshot() (which walks
   -- the comps vocabulary) never carries it. telemetry.ts owns the rows.
   create table if not exists tool_call (
@@ -461,11 +472,17 @@ let AIMED: [string, string][] = [
 // changes) and which existing rows it deleted. Pure bookkeeping — no
 // effect ever runs in here; RULES (the claim lease, the stop_request
 // gate) do, because rejecting a batch is part of what a commit means.
+//
+// `actor` is who's writing, when the door knows (a session id, a client
+// eid) — journaled, never trusted for anything else. No auth system:
+// record what's knowable, null the rest.
 export let apply = (
   db: DatabaseSync,
   changes: Change[],
   t?: Trace,
+  actor?: string | null,
 ): Change[] => {
+  changes = reasons(db, changes, actor)
   let dead = db.prepare('select 1 from tombstone where eid = ?')
   let extra: Change[] = []
   let touched = new Set<string>()
@@ -688,6 +705,21 @@ export let apply = (
       let row = born.get(eid) as Change['comp'] | undefined
       if (row) extra.push({ eid, name: 'entity', comp: row })
     }
+    // The wire's record: one row per batch, inside the transaction — the
+    // batch as APPLIED (reasons rewritten into comments, cascades and
+    // births synthesized), so the record includes what the rules did, not
+    // just what was asked. Recording never throws: a journal that can't
+    // write must not break the write it records.
+    try {
+      if (changes.length || extra.length) {
+        db.prepare('insert into journal (actor, batch) values (?, ?)').run(
+          actor ?? null,
+          JSON.stringify([...changes, ...extra]),
+        )
+      }
+    } catch (e) {
+      console.warn('journal skipped —', e)
+    }
     db.exec('commit')
     return [...changes, ...extra]
   } catch (e) {
@@ -710,6 +742,80 @@ export let apply = (
     throw e
   }
 }
+
+// A batch may carry a REASON: a `journal` pseudo-change whose eid names
+// the entity it explains. It never lands as a row — this pre-pass
+// rewrites it into a comment on that entity ("status: open → done —
+// <reason>"), summarizing what the SAME batch changes there, old values
+// read before any write. Human words join the trail; the journal row
+// stays mechanical. (v1's PATCH-with-reason dual-write, reborn.) A
+// reason on a delete still comments — aimed at the tombstone, it is how
+// "why was this removed" survives the removal.
+let reasons = (
+  db: DatabaseSync,
+  changes: Change[],
+  actor?: string | null,
+): Change[] => {
+  if (!changes.some((c) => c.name == 'journal')) return changes
+  let out = changes.filter((c) => c.name != 'journal')
+  let author = actor
+    ? (db.prepare('select eid from session where id = ?').get(actor) as
+      | { eid: string }
+      | undefined)?.eid ?? null
+    : null
+  for (let r of changes) {
+    if (r.name != 'journal' || !r.comp?.reason) continue
+    let summary: string[] = []
+    for (let c of out) {
+      if (c.eid != r.eid || !c.comp || !cmps[c.name]?.length) continue
+      for (let col of cmps[c.name]) {
+        if (!(col in c.comp)) continue
+        let old = (db.prepare(`select ${col} as v from ${c.name} where eid = ?`)
+          .get(c.eid) as { v: unknown } | undefined)?.v
+        summary.push(`${col}: ${old ?? '∅'} → ${c.comp[col] ?? '∅'}`)
+      }
+    }
+    let ceid = crypto.randomUUID()
+    let body = summary.length
+      ? `${summary.join(', ')} — ${String(r.comp.reason)}`
+      : String(r.comp.reason)
+    out.push(
+      { eid: ceid, name: 'doc', comp: { title: '', body } },
+      {
+        eid: ceid,
+        name: 'comment',
+        comp: { target_eid: r.eid, author_eid: author },
+      },
+    )
+  }
+  return out
+}
+
+// A single entity's history, newest first: the journal rows that touched
+// the eid, each cut down to its changes. The batch is JSON and json_each
+// does the walking — v0 reads are fine at this scale; a seek index
+// arrives with the lazy-partition work (T-3683) if logs outgrow it.
+export type JournalEntry = {
+  ts: string
+  actor: string | null
+  changes: Change[]
+}
+export let journalOf = (
+  db: DatabaseSync,
+  eid: string,
+  limit = 50,
+): JournalEntry[] =>
+  (db.prepare(`
+    select distinct j.rowid, j.ts, j.actor, j.batch
+    from journal j, json_each(j.batch) je
+    where json_extract(je.value, '$.eid') = ?
+    order by j.rowid desc limit ?
+  `).all(eid, limit) as { ts: string; actor: string | null; batch: string }[])
+    .map((r) => ({
+      ts: r.ts,
+      actor: r.actor,
+      changes: (JSON.parse(r.batch) as Change[]).filter((c) => c.eid == eid),
+    }))
 
 // A recall touch — the server-minted aggregate behind ranked retrieval
 // (query.ts hot()). Bumps count and last_at; first_at never moves. It

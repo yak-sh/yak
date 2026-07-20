@@ -15,6 +15,8 @@ import {
   commentChanges,
   contextDigest,
   find,
+  history,
+  historyLine,
   hookClaim,
   host,
   idOf,
@@ -44,6 +46,7 @@ let usage = `task — the entity graph, from a shell
   task new .title="..." [...]    create a task (bare words become the title)
   task set <id> .prop=value ...  patch an entity (id: T-3, 3, or an eid)
   task show <id>                 print one entity as JSON
+  task history <id> [-n N]       the entity's write history (the journal)
   task search <words...>         full-text search (trailing * = prefix)
   task claim <id> [session]      lease a task for a session ($TASKS_SESSION)
   task release <id>              drop the lease
@@ -206,6 +209,21 @@ let show = async (args: string[]) => {
   console.log(JSON.stringify({ ...row, comments }, null, 2))
 }
 
+// The entity's write history — the journal, one line per touching batch:
+// when · who · what changed. Blame without a version table.
+let past = async (args: string[]) => {
+  let n = Number(args.find((a) => a.startsWith('-n'))?.slice(2) ?? 0) ||
+    Number(args[args.indexOf('-n') + 1] ?? 0) || 50
+  let id = args.find((a) => !a.startsWith('-'))
+  if (!id) throw new Error('task history <id> [-n N]')
+  let all = rows(await snapshot())
+  let row = find(all, id)
+  if (!row) throw new Error(`no entity: ${id}`)
+  let entries = await history(row.eid, n)
+  if (!entries.length) return console.log(`${idOf(row)}: no history`)
+  for (let e of entries) console.log(historyLine(e))
+}
+
 // The injection loop's front door. Plain: print the digest for a session
 // id. --hook: SessionStart mode — session_id arrives as hook JSON on
 // stdin, and NOTHING may fail loudly (a hook must never wedge a session;
@@ -340,6 +358,7 @@ try {
   else if (cmd == 'new') await create(rest)
   else if (cmd == 'set') await set(rest)
   else if (cmd == 'show') await show(rest)
+  else if (cmd == 'history') await past(rest)
   else if (cmd == 'search') await seek(rest)
   else if (cmd == 'claim') await claim(rest)
   else if (cmd == 'spawn') await spawn(rest)

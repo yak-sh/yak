@@ -60,13 +60,47 @@ export let search = async (q: string, limit = 20) => {
   return res.json() as Promise<Hit[]>
 }
 
-export let send = async (changes: Change[]) => {
+// Writes carry WHO when the caller knows: the x-actor header lands in
+// the server's journal (attribution, never auth). The CLI's standing
+// identity is $TASKS_SESSION — hooks and spawned agents get their writes
+// attributed without asking.
+export let send = async (
+  changes: Change[],
+  actor = Deno.env.get('TASKS_SESSION'),
+) => {
   let res = await fetch(`http://${host()}/apply`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      ...(actor ? { 'x-actor': actor } : {}),
+    },
     body: JSON.stringify(changes),
   })
   if (!res.ok) throw new Error(`apply failed: ${await res.text()}`)
+}
+
+// An entity's slice of the journal — the wire's record, newest first.
+export type JournalEntry = {
+  ts: string
+  actor: string | null
+  changes: Change[]
+}
+export let history = async (eid: string, limit = 50) => {
+  let res = await fetch(`http://${host()}/journal?eid=${eid}&limit=${limit}`)
+  if (!res.ok) throw new Error(`server said ${res.status}`)
+  return res.json() as Promise<JournalEntry[]>
+}
+
+// One journal entry as a line: when · who · what. The patch is said
+// compactly — comp{cols} for writes, -comp for removals, † for the
+// entity's death — enough to scan a trail without reading JSON.
+export let historyLine = (e: JournalEntry) => {
+  let what = e.changes.map((c) =>
+    c.comp == null
+      ? c.name == 'entity' ? '†' : `-${c.name}`
+      : `${c.name}{${Object.keys(c.comp).filter((k) => k != 'eid').join(' ')}}`
+  ).join(' · ')
+  return `${e.ts}  ${(e.actor ?? 'unknown').slice(0, 24).padEnd(24)} ${what}`
 }
 
 // ---- dot-params (the WRITE grammar: values are literal; the filter
