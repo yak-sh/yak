@@ -1,5 +1,10 @@
 // Managed sessions: spawn an agent on a task, in its own git worktree, and
-// keep its session row honest while it runs. Server-only.
+// keep its session row honest while it runs. Server-only. Everything here
+// enters through the GRAPH, not routes: a session created carrying a
+// provider is the spawn request, a stop_request is the brake, a comment
+// aimed at a settled session resumes it, a deleted session takes its
+// process with it. server.ts registers those handlers on the effects
+// registry (effects.ts); the only HTTP left is reading the log back.
 //
 // Three ideas hold the whole thing up:
 //
@@ -24,7 +29,7 @@
 //    truth exactly once and none of it ever rode the wire inbound.
 import { basename, dirname } from 'node:path'
 import { type Adapter, adapters, type Event, type Summary } from './adapters.ts'
-import { apply, db } from './db.ts'
+import { db } from './db.ts'
 import { type Change, sessionActive } from './types.ts'
 
 type Cast = (changes: Change[]) => void
@@ -49,24 +54,31 @@ let MAX_LINE = 1_000_000
 
 // ---- the one writer ----
 
-let castRow = (eid: string, cast: Cast) => {
-  let row = db.prepare('select * from session where eid = ?').get(eid) as
+let castRow = (eid: string, cast: Cast, table = 'session') => {
+  let row = db.prepare(`select * from ${table} where eid = ?`).get(eid) as
     | Row
     | undefined
-  if (row) cast([{ eid, name: 'session', comp: row }])
+  if (row) cast([{ eid, name: table, comp: row }])
 }
 
-// Update summary columns and tell everyone. A deleted session updates
+// Update summary columns and tell everyone. A deleted row updates
 // nothing and says nothing — the tombstone wins, as everywhere else.
-let stamp = (eid: string, patch: Summary, cast: Cast) => {
+// Almost always the session row; a stop_request's acted_at goes through
+// the same door.
+let stamp = (
+  eid: string,
+  patch: Summary | Row,
+  cast: Cast,
+  table = 'session',
+) => {
   let cols = Object.keys(patch)
   if (!cols.length) return
   let vals = cols.map((c) => (patch as Row)[c] as string | number | null)
   db.prepare(
-    `update session set ${cols.map((c) => `${c} = ?`).join(', ')}
+    `update ${table} set ${cols.map((c) => `${c} = ?`).join(', ')}
      where eid = ?`,
   ).run(...vals, eid)
-  castRow(eid, cast)
+  castRow(eid, cast, table)
 }
 
 // ---- following the file ----
@@ -394,19 +406,7 @@ let spawn = (
   return child
 }
 
-// ---- start ----
-
-export type StartInput = {
-  task_eid?: string
-  provider?: string
-  model?: string
-  effort?: string
-  persona_eid?: string
-  canvas_eid?: string
-  position?: { x?: number; y?: number; w?: number }
-}
-
-let bad = (error: string, status = 400) => ({ error, status })
+// ---- the spawn effect ----
 
 // The standing contract every managed spawn carries — the default
 // persona, replaced wholesale once a session names a real one. Repo-
@@ -427,119 +427,91 @@ let CONTRACT = `House rules for this run:
 - File discoveries as new tasks linked to yours instead of silently
   widening scope.`
 
-// POST /sessions/start. The session (and its card, if it was started onto
-// a canvas) is minted and broadcast BEFORE any filesystem or process work,
-// so the run is visible from its first moment and every way it can fail is
-// a failed Session on the board rather than a toast nobody kept.
-export let start = (input: StartInput, cast: Cast) => {
-  let ad = adapters[String(input.provider)]
-  if (!ad) return bad(`unknown provider: ${input.provider}`)
-  let model = String(input.model)
-  if (!ad.models.includes(model)) return bad(`unknown model: ${input.model}`)
-  if (input.effort && !ad.efforts.includes(input.effort)) {
-    return bad(`unknown effort: ${input.effort}`)
-  }
-  let task = db.prepare(`
-    select t.project_eid, e.num, d.title, d.body from task t
-    join entity e on e.eid = t.eid
-    left join doc d on d.eid = t.eid
-    where t.eid = ?
-  `).get(String(input.task_eid)) as
-    | { project_eid: string | null; num: number; title: string; body: string }
-    | undefined
-  if (!task) return bad(`no such task: ${input.task_eid}`)
-  // The workspace comes from the GRAPH, never the request: the task's
-  // project says which checkout, and that's the only path we'll run in.
-  let repo = task.project_eid
-    ? db.prepare('select path, base_branch from repo where eid = ?')
-      .get(task.project_eid) as
-        | { path: string; base_branch: string }
-        | undefined
-    : undefined
-  if (!repo) return bad("the task's project has no repo — set repo.path first")
-  if (
-    input.canvas_eid &&
-    !db.prepare('select 1 from entity where eid = ?').get(input.canvas_eid)
-  ) return bad(`no such canvas: ${input.canvas_eid}`)
-  let persona = input.persona_eid
-    ? db.prepare('select body from doc where eid = ?').get(input.persona_eid) as
-      | { body: string }
+// created(session) carrying a provider — the spawn request, arrived over
+// the wire like any other data (its card and pin, if it was started onto
+// a canvas, rode the same batch: the client minted them). The session is
+// already committed and broadcast, so every way this can fail is a failed
+// Session on the board rather than a toast nobody kept: validation stamps
+// `failed` with the reason, and only a request the graph can honor
+// reaches launch(). A session created WITHOUT a provider is an external
+// one announcing itself — no effect.
+export let spawned =
+  (cast: Cast) => (eid: string, comp: Record<string, unknown>) => {
+    if (!comp.provider) return
+    let fail = (error: string) =>
+      stamp(eid, {
+        origin: 'managed',
+        status: 'failed',
+        error,
+        finished_at: now(),
+      }, cast)
+    // The committed row is the request — the patch already landed.
+    let row = db.prepare('select * from session where eid = ?').get(eid) as
+      | Row
       | undefined
-    : undefined
-
-  let eid = crypto.randomUUID()
-  let id = crypto.randomUUID()
-  let born = apply(db, [
-    { eid, name: 'session', comp: { id } },
-    ...(input.canvas_eid ? card(eid, input.canvas_eid, input.position) : []),
-  ])
-  cast(born)
-  let num = Number(
-    born.find((c) => c.eid == eid && c.name == 'entity')?.comp?.num,
-  )
-  let sid = `S-${num}`
-  let tree = `${worktreesDir()}/${basename(repo.path)}/${sid}`
-  stamp(eid, {
-    origin: 'managed',
-    status: 'starting',
-    provider: String(input.provider),
-    model,
-    effort: input.effort ?? null,
-    persona_eid: input.persona_eid ?? null,
-    requested_task_eid: String(input.task_eid),
-    branch: `session/${sid}`,
-    cwd: tree,
-    started_at: now(),
-  }, cast)
-  let instruction = [
-    persona?.body ?? CONTRACT,
-    `T-${task.num}: ${task.title}`,
-    task.body,
-  ].filter(Boolean).join('\n\n')
-  // The fs and the child are the SLOW half: hand back the session now, let
-  // it fail (visibly) on its own time. `done` is the whole run, for callers
-  // that want to await it (tests) — the route doesn't.
-  let done = launch(eid, ad, {
-    instruction,
-    session_id: id,
-    task: `T-${task.num}`,
-    repo,
-    tree,
-    branch: `session/${sid}`,
-    model,
-    effort: input.effort,
-  }, cast)
-  return { eid, done }
-}
-
-// The card+pin a canvas start lands: the same two changes the browser
-// builds when it spawns a card, minted here so the session shows up where
-// it was asked for.
-let card = (
-  target: string,
-  canvas_eid: string,
-  at: StartInput['position'],
-): Change[] => {
-  let eid = crypto.randomUUID()
-  let { z } = db.prepare(
-    'select coalesce(max(z), 0) + 1 as z from pin where canvas_eid = ?',
-  ).get(canvas_eid) as { z: number }
-  return [
-    { eid, name: 'card', comp: { target_eid: target, view: 'Session' } },
-    {
-      eid,
-      name: 'pin',
-      comp: {
-        canvas_eid,
-        x: Math.round(at?.x ?? 0),
-        y: Math.round(at?.y ?? 0),
-        w: Math.round(at?.w ?? 420),
-        h: 0,
-        z,
-      },
-    },
-  ]
-}
+    if (!row) return // deleted in its own batch: the tombstone wins
+    let ad = adapters[String(row.provider)]
+    if (!ad) return fail(`unknown provider: ${row.provider}`)
+    let model = String(row.model)
+    if (!ad.models.includes(model)) return fail(`unknown model: ${row.model}`)
+    if (row.effort && !ad.efforts.includes(String(row.effort))) {
+      return fail(`unknown effort: ${row.effort}`)
+    }
+    let task = db.prepare(`
+      select t.project_eid, e.num, d.title, d.body from task t
+      join entity e on e.eid = t.eid
+      left join doc d on d.eid = t.eid
+      where t.eid = ?
+    `).get(String(row.requested_task_eid)) as
+      | { project_eid: string | null; num: number; title: string; body: string }
+      | undefined
+    if (!task) return fail(`no such task: ${row.requested_task_eid}`)
+    // The workspace comes from the GRAPH, never the request: the task's
+    // project says which checkout, and that's the only path we'll run in.
+    let repo = task.project_eid
+      ? db.prepare('select path, base_branch from repo where eid = ?')
+        .get(task.project_eid) as
+          | { path: string; base_branch: string }
+          | undefined
+      : undefined
+    if (!repo) {
+      return fail("the task's project has no repo — set repo.path first")
+    }
+    let persona = row.persona_eid
+      ? db.prepare('select body from doc where eid = ?').get(
+        String(row.persona_eid),
+      ) as { body: string } | undefined
+      : undefined
+    let { num } = db.prepare('select num from entity where eid = ?')
+      .get(eid) as { num: number }
+    let sid = `S-${num}`
+    let tree = `${worktreesDir()}/${basename(repo.path)}/${sid}`
+    stamp(eid, {
+      origin: 'managed',
+      status: 'starting',
+      branch: `session/${sid}`,
+      cwd: tree,
+      started_at: now(),
+    }, cast)
+    let instruction = [
+      persona?.body ?? CONTRACT,
+      `T-${task.num}: ${task.title}`,
+      task.body,
+    ].filter(Boolean).join('\n\n')
+    // The fs and the child are the SLOW half — the returned promise is
+    // the whole run, riding the dispatch for callers that await it
+    // (tests); the wire never does.
+    return launch(eid, ad, {
+      instruction,
+      session_id: String(row.id),
+      task: `T-${task.num}`,
+      repo,
+      tree,
+      branch: `session/${sid}`,
+      model,
+      effort: row.effort ? String(row.effort) : undefined,
+    }, cast)
+  }
 
 type Launch = {
   instruction: string
@@ -636,56 +608,54 @@ let track = (
   return run.done
 }
 
-// ---- stop ----
+// ---- the stop effect ----
 
-// POST /sessions/:eid/stop. Ask the process group to go, escalate once,
-// and let the tailer stamp the ending when it SEES the exit — a session
-// we can't watch die is `lost`, said plainly, not assumed dead.
-export let stop = async (eid: string, cast: Cast) => {
-  let row = db.prepare('select origin, status from session where eid = ?')
-    .get(eid) as { origin: string; status: string | null } | undefined
-  if (!row) return bad(`no such session: ${eid}`, 404)
-  if (row.origin != 'managed') return bad('not a managed session')
-  if (!sessionActive.includes(String(row.status))) {
-    return bad(`session is ${row.status ?? 'external'}`)
-  }
-  // The guard IS the CAS: two stops race, one writes.
-  let hit = db.prepare(`
-    update session set status = 'stopping', stop_requested_at = ?
-    where eid = ? and status in ('starting', 'running')
-  `).run(now(), eid).changes
-  if (!hit) return bad('already stopping')
-  castRow(eid, cast)
-  let pid = running.get(eid)?.pid || pidOf(eid) // run.pid is 0 pre-birth
-  if (!pid) {
-    stamp(eid, {
-      status: 'lost',
-      stop_reason: 'no pid: the child was never spawned or its pidfile is gone',
-      finished_at: now(),
-    }, cast)
-    return { ok: true }
-  }
-  let grp = pids(eid)?.group ?? pid
-  let signal = (sig: Deno.Signal) => {
-    try {
-      Deno.kill(-grp, sig) // the GROUP: an agent's own children go too
-    } catch { /* already gone — the wait below is the truth */ }
-  }
-  signal('SIGTERM')
-  if (!await departed(eid, pid, grace())) {
-    signal('SIGKILL')
-    if (!await departed(eid, pid, grace())) {
-      stamp(eid, {
+// created(stop_request) — the brake, pulled as data. apply()'s rule
+// already guaranteed the target is an ACTIVE managed session, so this
+// half only acts: CAS to 'stopping' (two requests race, one writes), ask
+// the process group to go, escalate once, and let the tailer stamp the
+// ending when it SEES the exit — a session we can't watch die is `lost`,
+// said plainly, not assumed dead. The request itself is stamped acted_at
+// and stays as audit, like conflict.
+export let stopped =
+  (cast: Cast) => async (eid: string, comp: Record<string, unknown>) => {
+    let target = String(comp.target_eid)
+    let acted = () => stamp(eid, { acted_at: now() }, cast, 'stop_request')
+    let lost = (stop_reason: string) =>
+      stamp(target, {
         status: 'lost',
-        stop_reason: `pid ${pid} outlived SIGKILL`,
+        stop_reason,
         finished_at: now(),
       }, cast)
-      return { ok: true }
+    // The guard IS the CAS: two stops race, one writes.
+    let hit = db.prepare(`
+      update session set status = 'stopping', stop_requested_at = ?
+      where eid = ? and status in ('starting', 'running')
+    `).run(now(), target).changes
+    if (!hit) return acted() // already stopping: the first request drives
+    castRow(target, cast)
+    let pid = running.get(target)?.pid || pidOf(target) // run.pid is 0 pre-birth
+    if (!pid) {
+      lost('no pid: the child was never spawned or its pidfile is gone')
+      return acted()
     }
+    let grp = pids(target)?.group ?? pid
+    let signal = (sig: Deno.Signal) => {
+      try {
+        Deno.kill(-grp, sig) // the GROUP: an agent's own children go too
+      } catch { /* already gone — the wait below is the truth */ }
+    }
+    signal('SIGTERM')
+    if (!await departed(target, pid, grace())) {
+      signal('SIGKILL')
+      if (!await departed(target, pid, grace())) {
+        lost(`pid ${pid} outlived SIGKILL`)
+        return acted()
+      }
+    }
+    await running.get(target)?.done // the tailer stamps the ending
+    acted()
   }
-  await running.get(eid)?.done // the tailer stamps the ending
-  return { ok: true }
-}
 
 // Wait (bounded) for a pid to be gone — through its own run when we have
 // one, since a direct child is a zombie until Deno reaps it.
@@ -699,95 +669,122 @@ let departed = async (eid: string, pid: number, ms: number) => {
   }
 }
 
-// ---- input ----
+// ---- the input effect ----
 
-// POST /sessions/:eid/input. Say more to a session that has gone quiet:
-// resume its provider thread with `text`. Refused unless the session is
-// SETTLED (an active one is still talking, and both CLIs resume a thread
-// only once it's idle) and has a provider thread to resume. The human's
-// line and the reply land in the SAME log — seq just continues — and the
-// existing tailer closes the session again when the continuation ends.
-export let input = (eid: string, text: string, cast: Cast) => {
-  let body = text.trim()
-  if (!body) return bad('empty input')
-  let row = db.prepare('select * from session where eid = ?').get(eid) as
-    | Row
-    | undefined
-  if (!row) return bad(`no such session: ${eid}`, 404)
-  if (sessionActive.includes(String(row.status))) {
-    return bad(`session is ${row.status} — wait for it to settle`)
-  }
-  if (!row.provider_session_id) {
-    return bad('session has no provider thread to resume')
-  }
-  let ad = adapters[String(row.provider)]
-  if (!ad) return bad(`no adapter for provider ${row.provider}`)
-  if (!row.cwd) return bad('session has no worktree to resume in')
+// created(comment) — commenting on a session IS messaging that agent (the
+// comms bus already says so): aimed at a SETTLED managed session, the
+// comment resumes its provider thread with the comment's body. An ACTIVE
+// session takes no stdin — the bus hands it the comment on its next tool
+// call, so the comment alone is delivery, and nothing happens here. A
+// session's own comments never resume it (an agent must not wake itself
+// by talking). The human's line and the reply land in the SAME log — seq
+// just continues — and the existing tailer closes the session again when
+// the continuation ends.
+export let commented =
+  (cast: Cast) => (ceid: string, comp: Record<string, unknown>) => {
+    let eid = String(comp.target_eid)
+    if (comp.author_eid == eid) return // the session talking about itself
+    let row = db.prepare('select * from session where eid = ?').get(eid) as
+      | Row
+      | undefined
+    if (!row || row.origin != 'managed') return // not aimed at a spawn
+    if (sessionActive.includes(String(row.status))) return // the bus delivers
+    if (!row.provider_session_id || !row.cwd) return // nothing to resume
+    let ad = adapters[String(row.provider)]
+    if (!ad) return
+    let body = String(
+      (db.prepare('select body from doc where eid = ?').get(ceid) as
+        | { body: string }
+        | undefined)?.body ?? '',
+    ).trim()
+    if (!body) return // a bare comment says nothing to say
 
-  // The human's line joins the log as a `say` — same file, next seq.
-  let path = logFile(eid)
-  Deno.mkdirSync(logsDir(), { recursive: true })
-  Deno.writeTextFileSync(
-    path,
-    `${JSON.stringify({ type: 'session.input', text: body })}\n`,
-    { append: true },
-  )
-  // Follow the continuation from the END of what's there now: the settled
-  // run's terminal event stays behind us — never re-drained, never counted
-  // twice, and its `ended` never poisons the new turn.
-  let lines = Deno.readTextFileSync(path).split('\n')
-  if (lines.at(-1) == '') lines.pop()
-  let from: Tail = {
-    at: Deno.statSync(path).size,
-    seq: lines.length,
-    ended: false,
-    errs: [],
-  }
+    // The human's line joins the log as a `say` — same file, next seq.
+    let path = logFile(eid)
+    Deno.mkdirSync(logsDir(), { recursive: true })
+    Deno.writeTextFileSync(
+      path,
+      `${JSON.stringify({ type: 'session.input', text: body })}\n`,
+      { append: true },
+    )
+    // Follow the continuation from the END of what's there now: the settled
+    // run's terminal event stays behind us — never re-drained, never counted
+    // twice, and its `ended` never poisons the new turn.
+    let lines = Deno.readTextFileSync(path).split('\n')
+    if (lines.at(-1) == '') lines.pop()
+    let from: Tail = {
+      at: Deno.statSync(path).size,
+      seq: lines.length,
+      ended: false,
+      errs: [],
+    }
 
-  // Back to running, every trace of the last ending cleared — the tailer
-  // derives a fresh one (stop_requested_at too, or a clean resume would
-  // inherit the old 'interrupted').
-  stamp(eid, {
-    status: 'running',
-    exit_code: null,
-    error: null,
-    stop_reason: null,
-    stop_requested_at: null,
-    finished_at: null,
-  }, cast)
-
-  let argv = ad.resume(
-    {
-      instruction: body,
-      session_id: String(row.id),
-      model: String(row.model),
-      effort: row.effort ? String(row.effort) : undefined,
-    },
-    String(row.provider_session_id),
-    body,
-  )
-  let done = track(
-    eid,
-    ad,
-    argv,
-    String(row.cwd),
-    {
-      PATH: Deno.env.get('PATH') ?? '',
-      HOME: Deno.env.get('HOME') ?? '',
-      TERM: Deno.env.get('TERM') ?? 'dumb',
-      TASKS_SESSION: String(row.id),
-    },
-    cast,
-    from,
-  ).catch((e) => {
-    running.delete(eid)
+    // Back to running, every trace of the last ending cleared — the tailer
+    // derives a fresh one (stop_requested_at too, or a clean resume would
+    // inherit the old 'interrupted').
     stamp(eid, {
-      status: 'failed',
-      error: String(e).slice(0, 2000),
-      finished_at: now(),
+      status: 'running',
+      exit_code: null,
+      error: null,
+      stop_reason: null,
+      stop_requested_at: null,
+      finished_at: null,
     }, cast)
-  })
-  return { eid, done }
+
+    let argv = ad.resume(
+      {
+        instruction: body,
+        session_id: String(row.id),
+        model: String(row.model),
+        effort: row.effort ? String(row.effort) : undefined,
+      },
+      String(row.provider_session_id),
+      body,
+    )
+    return track(
+      eid,
+      ad,
+      argv,
+      String(row.cwd),
+      {
+        PATH: Deno.env.get('PATH') ?? '',
+        HOME: Deno.env.get('HOME') ?? '',
+        TERM: Deno.env.get('TERM') ?? 'dumb',
+        TASKS_SESSION: String(row.id),
+      },
+      cast,
+      from,
+    ).catch((e) => {
+      running.delete(eid)
+      stamp(eid, {
+        status: 'failed',
+        error: String(e).slice(0, 2000),
+        finished_at: now(),
+      }, cast)
+    })
+  }
+
+// ---- the delete effect ----
+
+// removed(session) — the row is gone (tombstoned), so the process goes
+// with it: nobody is watching a dead entity's agent, and stamp() on a
+// deleted session says nothing anyway. SIGKILL, no grace — there is no
+// ending left to derive. The log file stays on disk (a debugger may still
+// want it); the pid and code files are torn up so boot never adopts a
+// ghost.
+export let deleted = (eid: string) => {
+  let grp = pids(eid)?.group ?? running.get(eid)?.pid
+  if (grp) {
+    try {
+      Deno.kill(-grp, 'SIGKILL')
+    } catch { /* already gone */ }
+  }
+  running.delete(eid)
+  for (let f of [pidFile(eid), codeFile(eid)]) {
+    try {
+      Deno.removeSync(f)
+    } catch { /* never written, or already gone */ }
+  }
 }
 
 // ---- boot ----

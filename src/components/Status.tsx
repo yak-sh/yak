@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { signal } from '@preact/signals'
 import {
-  base,
   camera,
   clientId,
   ent,
@@ -123,36 +122,35 @@ let scene = (task: string): Change[] => {
 
 // The spawn intent (:fix): defaults are the server's table — first
 // provider, its first model, medium effort when offered — the same list
-// the Run form reads. A freshly minted task rides the ws; the beat
-// before POSTing lets it land before the server looks it up (the same
-// grace paste.ts gives a freeze). The bar narrates as answers arrive.
-let launch = (task: string) => {
-  setTimeout(async () => {
-    try {
-      if (!providers.value.length) await load()
-      let p = providers.value[0]
-      if (!p) throw new Error('no providers')
-      let res = await fetch(`${base()}/sessions/start`, {
-        method: 'POST',
-        body: JSON.stringify({
-          task_eid: task,
-          provider: p.name,
-          model: p.models[0],
-          ...(p.efforts.length
-            ? { effort: p.efforts.includes('medium') ? 'medium' : p.efforts[0] }
-            : {}),
-        }),
-      })
-      if (!res.ok) throw new Error(await res.text())
-      let { eid } = await res.json()
-      // one more beat: the session mint is casting back to our cache
-      setTimeout(() => {
-        msg.value = `${idOf(ent(task))} → ${idOf(ent(eid))} running`
-      }, 300)
-    } catch (e) {
-      msg.value = `fix: ${e instanceof Error ? e.message : String(e)}`
-    }
-  }, 350)
+// the Run form reads. The session is one graph write on the same socket
+// the task just rode, so ordering is free; the beat before naming it
+// lets the server-minted num cast back. The bar narrates as answers
+// arrive; anything the graph can't honor lands as a failed Session.
+let launch = async (task: string) => {
+  try {
+    if (!providers.value.length) await load()
+    let p = providers.value[0]
+    if (!p) throw new Error('no providers')
+    let eid = uuid()
+    mutate({
+      eid,
+      name: 'session',
+      comp: {
+        id: uuid(),
+        provider: p.name,
+        model: p.models[0],
+        ...(p.efforts.length
+          ? { effort: p.efforts.includes('medium') ? 'medium' : p.efforts[0] }
+          : {}),
+        requested_task_eid: task,
+      },
+    })
+    setTimeout(() => {
+      msg.value = `${idOf(ent(task))} → ${idOf(ent(eid))} running`
+    }, 300)
+  } catch (e) {
+    msg.value = `fix: ${e instanceof Error ? e.message : String(e)}`
+  }
 }
 
 // Run a line and spend its intent: writes go out through mutate like every

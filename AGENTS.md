@@ -47,10 +47,16 @@ A `Change` is `{eid, name, comp}` — a PATCH: omitted columns untouched,
 resurrect the eid). A batch is a flat array; db.ts `apply()` runs it atomically.
 Clients mint eids (uuid v4); the spine + num appear on first touch. Browser tabs
 sync over `/ws`; headless clients POST `/apply`; both broadcast to everyone
-else. Special apply rules (the claim lease check) live in `apply()` and hold for
-every entry path. Edges use name `dependency`: a triple has no row key, so the
-comp names the whole sentence — `{type, child_eid}` links eid→child, the same
-sentence with `gone: true` unlinks; both endpoints must exist.
+else. Special apply RULES (the claim lease check, the stop_request gate) live in
+`apply()` — in-transaction, able to reject the batch — and hold for every entry
+path. EFFECTS are the other half (src/effects.ts): post-commit observers,
+registered in server.ts, that DO things about committed data — a session created
+with a provider spawns an agent, a stop_request signals it, a deleted session's
+process dies with its row. At-most-once, reconciled at boot; a failing effect is
+telemetry, never a broken batch. Edges use name `dependency`: a triple has no
+row key, so the comp names the whole sentence — `{type, child_eid}` links
+eid→child, the same sentence with `gone: true` unlinks; both endpoints must
+exist.
 
 ## Rendering (web + TUI, one registry)
 
@@ -93,6 +99,7 @@ the mobile door — whose rows resolve through `List.Item`.
 | `src/types.ts`     | THE vocabulary: comps, statuses, kindOrder/kindOf, prefix/idOf, all types  |
 | `src/db.ts`        | SQLite schema, seed, `apply()` (patches in), `snapshot()` (graph out)      |
 | `src/server.ts`    | Deno.serve: static+sucrase, /ws sync, /apply, /mcp mount, watcher          |
+| `src/effects.ts`   | post-commit effect registry: created/changed/removed hooks per component   |
 | `src/sessions.ts`  | managed sessions: spawn/stop/adopt a detached agent, tail its log file     |
 | `src/adapters.ts`  | the provider table: argv, model/effort allowlists, init/terminal readers   |
 | `src/freeze.ts`    | URL → monolith archive → scrub() → CSP-served, server-only                 |
@@ -117,7 +124,13 @@ the mobile door — whose rows resolve through `List.Item`.
   anything from `~/code/holdco/.env`.
 - **Server-stamped columns never ride the wire** — that's what keeps `frozen_at`
   (archive exists), `claimed_at`, and every managed-session lifecycle column
-  (status, exit_code, final_text, …) honest.
+  (status, exit_code, final_text, …) honest. A session's REQUEST columns
+  (provider, model, effort, requested_task_eid, persona_eid) are the
+  wire-writable exception on purpose: creating a session with them IS the spawn
+  request, validated by the created(session) effect — every failure is a failed
+  Session on the board, never a 400. Stop is a `stop_request` entity; input is a
+  comment aimed at the session. No session lifecycle routes exist; `/logs` and
+  `/providers` are the only HTTP.
 - **A managed session's stdout FILE is its durable log**
   (`~/.tasks/logs/<eid>.jsonl`, line number = seq): no log table, no ingester,
   nothing to drift. The server tails it and casts SUMMARY patches; the file is

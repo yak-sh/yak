@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { md } from '../../md.ts'
 import { type Ent, kilo, type LogRow, sessionActive } from '../../types.ts'
-import { base } from '../../live.ts'
+import { base, mutate, uuid } from '../../live.ts'
 import { block, Stamp } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
 import { Comments } from '../Comments.tsx'
@@ -325,8 +325,13 @@ export let Session = ({ e }: { e: Ent }) => {
           <Stop
             type='button'
             onClick={() =>
-              fetch(`${base()}/sessions/${e.eid}/stop`, { method: 'POST' })
-                .catch(() => {})}
+              // The brake is data: a stop_request entity aimed here — the
+              // server's effect signals the group and stamps the ending.
+              mutate({
+                eid: uuid(),
+                name: 'stop_request',
+                comp: { target_eid: e.eid },
+              })}
           >
             ■ stop
           </Stop>

@@ -73,9 +73,27 @@ export let comps: Record<string, Record<string, PropType>> = {
   shelf: { client_eid: { eid: 'client' } }, // binds a client to their tray canvas
   // acked_at is the session's OWN "seen up to here" cursor for the
   // while-you-were-away digest — wire-writable because forging it only
-  // deafens yourself.
-  session: { id: 'text', cwd: 'text', acked_at: 'text' },
+  // deafens yourself. The REQUEST columns (provider, model, effort, the
+  // task and persona) are wire-writable too: a session created carrying a
+  // provider IS a spawn request — the server's created(session) effect
+  // validates and launches it, and everything it learns (status, branch,
+  // exit…) stays server-stamped.
+  session: {
+    id: 'text',
+    cwd: 'text',
+    acked_at: 'text',
+    provider: 'text',
+    model: 'text',
+    effort: 'text',
+    requested_task_eid: { eid: '' },
+    persona_eid: { eid: '' },
+  },
   claim: { session_eid: { eid: 'session' } }, // claimed_at server-stamped
+  // The brake, pulled as data: creating one asks the server to stop the
+  // session it targets. Valid only against an ACTIVE managed session
+  // (apply() refuses the rest); acted_at is server-stamped and the row
+  // stays as audit, like conflict.
+  stop_request: { target_eid: { eid: 'session' } },
   conflict: {}, // server-minted audit rows — nothing is wire-writable
   comment: { target_eid: { eid: '' }, author_eid: { eid: '' } },
   alias: { slug: 'text' },
@@ -85,9 +103,9 @@ export let comps: Record<string, Record<string, PropType>> = {
 // (cols() reads `comps` alone, so these never join the apply allowlist),
 // but part of the SCHEMA: backlinks and any reader of associations take
 // the union, so an edge the server wrote still reads as an edge.
-export let stamped: Record<string, Record<string, PropType>> = {
-  session: { requested_task_eid: { eid: '' }, persona_eid: { eid: '' } },
-}
+// Empty today (the session request columns moved into comps when spawning
+// became a wire write); the mechanism stays for the next stamped edge.
+export let stamped: Record<string, Record<string, PropType>> = {}
 
 // A component's wire-writable column names — what most consumers of the
 // old flat list actually want.
@@ -164,6 +182,7 @@ export let kindOrder = [
   'fold',
   'session',
   'claim',
+  'stop_request',
   'conflict',
   'comment',
   'alias',
@@ -324,6 +343,11 @@ export type Session = {
 // the server rejects — release first (comp: null), then claim.
 export type Claim = { eid: string; session_eid: string; claimed_at?: string }
 
+// A request to stop the session it targets — the graph-native stop
+// button. Created over the wire, acted on by the server's effect, kept
+// as audit; acted_at is stamped when the signals have been sent.
+export type StopRequest = { eid: string; target_eid: string; acted_at?: string }
+
 // A comment is a doc AIMED at something — and since target_eid is any
 // entity, ANYTHING is commentable: tasks, boards, frozen pages, other
 // comments. author_eid points at a session or client entity (or null).
@@ -391,6 +415,7 @@ export type Ent = {
   shelf?: Shelf
   session?: Session
   claim?: Claim
+  stop_request?: StopRequest
   conflict?: Conflict
   comment?: Comment
   alias?: Alias

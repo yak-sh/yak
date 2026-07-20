@@ -11,9 +11,17 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { providers } from './adapters.ts'
 import { type Change } from './types.ts'
 import { apply, db, search, snapshot } from './db.ts'
+import { dispatch, on, trace } from './effects.ts'
 import { freeze, serveFrozen, store } from './freeze.ts'
 import { mcpServer } from './mcp.ts'
-import { input, logs, recover, start, stop } from './sessions.ts'
+import {
+  commented,
+  deleted,
+  logs,
+  recover,
+  spawned,
+  stopped,
+} from './sessions.ts'
 import { outcome, recent, record, toolCall } from './telemetry.ts'
 import { stamp } from './hot.ts'
 
@@ -85,19 +93,35 @@ let cast = (changes: Change[], except?: WebSocket) => {
     if (c != except && c.readyState == WebSocket.OPEN) c.send(msg)
   }
 }
+
+// The effect half of a write, run AFTER the casts: a slow or failing
+// handler can never hold the wire, and a failure is telemetry, not a
+// broken batch (effects.ts owns the doctrine).
+let effect = (out: Change[], t: ReturnType<typeof trace>) => {
+  dispatch(out, t, (comp, e) =>
+    record(db, {
+      source: 'http',
+      name: `effect:${comp}`,
+      ok: false,
+      error: String(e),
+    }))
+}
+
 let ws = (req: Request) => {
   let { socket, response } = Deno.upgradeWebSocket(req)
   socket.onopen = () => clients.add(socket)
   socket.onclose = () => clients.delete(socket)
   socket.onmessage = (m) => {
     let sent = JSON.parse(String(m.data)) as Change[]
-    let extra: Change[]
+    let out: Change[]
+    let t = trace()
     try {
-      extra = apply(db, sent).slice(sent.length)
+      out = apply(db, sent, t)
     } catch (e) {
       console.error('sync: bad batch dropped —', e)
       return
     }
+    let extra = out.slice(sent.length)
     // Peers get the batch as sent; cascade extras go to EVERYONE — the
     // sender's optimistic cache only removed what it asked to remove.
     for (let c of clients) {
@@ -105,6 +129,7 @@ let ws = (req: Request) => {
       if (c != socket) c.send(m.data)
       if (extra.length) c.send(JSON.stringify(extra))
     }
+    effect(out, t)
   }
   return response
 }
@@ -133,7 +158,10 @@ let mcp = async (req: Request) => {
       read: async () => snapshot(db),
       // deno-lint-ignore require-await
       write: async (changes) => {
-        cast(apply(db, changes))
+        let t = trace()
+        let out = apply(db, changes, t)
+        cast(out)
+        effect(out, t)
       },
       // deno-lint-ignore require-await
       find: async (q, limit) => search(db, q, limit),
@@ -257,7 +285,10 @@ Deno.serve(
           error,
         })
       return req.json().then((changes: Change[]) => {
-        cast(apply(db, changes))
+        let t = trace()
+        let out = apply(db, changes, t)
+        cast(out)
+        effect(out, t)
         note(true)
         return Response.json({ ok: true })
       }).catch((e) => {
@@ -265,42 +296,15 @@ Deno.serve(
         return new Response(String(e), { status: 400 })
       })
     }
-    // The adapter table, for a browser that must offer what a start
+    // The adapter table, for a browser that must offer what a spawn
     // request will be checked against (adapters.ts is server-only).
     if (path == '/providers') return Response.json(providers())
-    // Managed sessions: spawn one on a task, ask it to stop, read its log.
-    // The handlers stay thin — the lifecycle lives in sessions.ts.
-    if (path == '/sessions/start' && req.method == 'POST') {
-      return req.json()
-        .then((body) => start(body, cast))
-        .then((r) =>
-          'error' in r
-            ? new Response(r.error, { status: r.status })
-            : Response.json({ eid: r.eid })
-        )
-        .catch((e) => new Response(String(e), { status: 400 }))
-    }
-    let session = path.match(/^\/sessions\/([0-9a-f-]{36})\/(stop|logs|input)$/)
-    if (session) {
-      let [, eid, verb] = session
-      if (verb == 'logs') return Response.json(logs(eid, url.searchParams))
-      if (req.method != 'POST') return new Response('no', { status: 405 })
-      if (verb == 'input') {
-        return req.json()
-          .then((b) => input(eid, String(b.text ?? ''), cast))
-          .then((r) =>
-            'error' in r
-              ? new Response(r.error, { status: r.status })
-              : Response.json({ eid: r.eid })
-          )
-          .catch((e) => new Response(String(e), { status: 400 }))
-      }
-      return stop(eid, cast).then((r) =>
-        'error' in r
-          ? new Response(r.error, { status: r.status })
-          : Response.json(r)
-      )
-    }
+    // Managed sessions are DRIVEN through the graph (create a session
+    // with a provider, create a stop_request, comment at a settled one —
+    // the effects below); the log file is the one thing still read here,
+    // because logs are log data, not graph.
+    let session = path.match(/^\/sessions\/([0-9a-f-]{36})\/logs$/)
+    if (session) return Response.json(logs(session[1], url.searchParams))
     if (path == '/freeze') {
       return freeze(url.searchParams.get('eid') ?? '', cast)
     }
@@ -317,6 +321,15 @@ Deno.serve(
     return file(src.slice(0, -1), path.includes('.') ? path : '/index.html')
   },
 )
+
+// The curated effects — the graph's post-commit levers, one list, like
+// View.tsx's renderer list. A session created with a provider is a spawn
+// request; a stop_request is the brake; a comment at a settled managed
+// session resumes it; a deleted session's process dies with its row.
+// A future plugin contributes rows here the same way it would renderers.
+on('session', { created: spawned(cast), removed: deleted })
+on('stop_request', { created: stopped(cast) })
+on('comment', { created: commented(cast) })
 
 // Managed children are detached (setsid) and this process restarts on every
 // server-file edit — so booting means picking them back up: adopt the ones
@@ -343,6 +356,7 @@ recover(cast)
 let graph = [
   'server.ts',
   'db.ts',
+  'effects.ts',
   'types.ts',
   'query.ts',
   'freeze.ts',

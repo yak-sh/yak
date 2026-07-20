@@ -1,0 +1,89 @@
+// The effect registry against a :memory: graph: created vs changed
+// (column-scoped) vs removed, told apart by the Trace apply() fills in;
+// handler isolation (a throw reaches oops and the rest still fire, the
+// dispatch promise always resolves). db.ts comes in dynamically, AFTER
+// the env points it at :memory:.
+import { assert, assertEquals } from '@std/assert'
+import { type Change } from './types.ts'
+import { dispatch, on, trace } from './effects.ts'
+
+Deno.env.set('DB_PATH', ':memory:')
+let { apply, db } = await import('./db.ts')
+
+let uid = () => crypto.randomUUID()
+
+// Apply and dispatch in one breath — what every server door does.
+let write = (changes: Change[]) => {
+  let t = trace()
+  return { done: dispatch(apply(db, changes, t), t), t }
+}
+
+let seen: string[] = []
+on('web', {
+  created: (eid) => seen.push(`created ${eid}`),
+  changed: {
+    url: (eid) => seen.push(`url ${eid}`),
+    frozen_at: (eid) => seen.push(`frozen ${eid}`),
+  },
+  removed: (eid) => seen.push(`removed ${eid}`),
+})
+on('alias', {
+  created: () => {
+    throw new Error('boom')
+  },
+})
+on('alias', { created: () => seen.push('alias survived') })
+
+Deno.test('created fires on birth, changed on patches, by column', async () => {
+  seen = []
+  let eid = uid()
+  await write([{ eid, name: 'web', comp: { url: 'http://a' } }]).done
+  assertEquals(seen, [`created ${eid}`]) // a birth is not a change
+  await write([{ eid, name: 'web', comp: { url: 'http://b' } }]).done
+  assertEquals(seen.at(-1), `url ${eid}`)
+  // a patch not carrying the scoped column fires nothing
+  seen = []
+  await write([{ eid, name: 'doc', comp: { title: 'x' } }]).done
+  assertEquals(seen, [])
+})
+
+Deno.test('removed fires for a comp delete and for an entity death', async () => {
+  seen = []
+  let solo = uid()
+  await write([{ eid: solo, name: 'web', comp: { url: 'http://c' } }]).done
+  await write([{ eid: solo, name: 'web', comp: null }]).done
+  assertEquals(seen.at(-1), `removed ${solo}`)
+  // deleting a comp that never existed says nothing
+  seen = []
+  await write([{ eid: uid(), name: 'web', comp: null }]).done
+  assertEquals(seen, [])
+  // an entity death removes every comp row it carried
+  let whole = uid()
+  await write([{ eid: whole, name: 'web', comp: { url: 'http://d' } }]).done
+  seen = []
+  await write([{ eid: whole, name: 'entity', comp: null }]).done
+  assertEquals(seen, [`removed ${whole}`])
+})
+
+Deno.test('a throwing handler reaches oops; the rest still fire', async () => {
+  seen = []
+  let oops: string[] = []
+  let t = trace()
+  let out = apply(db, [{ eid: uid(), name: 'alias', comp: { slug: uid() } }], t)
+  await dispatch(out, t, (comp, e) => oops.push(`${comp}: ${e}`))
+  assertEquals(seen, ['alias survived'])
+  assertEquals(oops.length, 1)
+  assert(oops[0].includes('boom'))
+})
+
+Deno.test('async handler results ride the dispatch promise', async () => {
+  let landed = false
+  on('doc', {
+    created: async () => {
+      await new Promise((go) => setTimeout(go, 10))
+      landed = true
+    },
+  })
+  await write([{ eid: uid(), name: 'doc', comp: { title: 'later' } }]).done
+  assert(landed)
+})

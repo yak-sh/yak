@@ -1,19 +1,21 @@
 import { useEffect, useState } from 'preact/hooks'
 import { signal } from '@preact/signals'
-import { base, ent, toPlane } from '../live.ts'
+import { base, ent, mutate, toPlane, topZ, uuid } from '../live.ts'
 import { block } from './ui.tsx'
 import { menu, navigate, screenTarget } from './nav.tsx'
 
-// The Run door: a task's "run session…" verb opens this over the point the
-// menu stood on — provider, model, effort — and POSTs /sessions/start.
+// The Run door: a task's "run session…" verb opens this over the point
+// the menu stood on — provider, model, effort — and writes ONE batch: a
+// session carrying the request columns (the server's created(session)
+// effect validates and launches it), plus its card and pin when we're
+// over a canvas, minted here like any other card the browser spawns.
 // The choices are the SERVER's table (GET /providers): adapters.ts is
-// server-only, and a start is checked against the same allowlists there,
-// so the form can only offer what will be accepted.
+// server-only, so the form can only offer what will be accepted — and
+// anything that still can't be honored (a task with no repo) comes back
+// as a failed Session on the board, not a toast nobody kept.
 //
-// Started over a canvas, the server mints the session's card itself (it
-// gets canvas_eid + where we asked) — one writer for the card, and the
-// session lands under the cursor. Anywhere else there's nothing to pin, so
-// we navigate to the session instead.
+// Off a canvas (or on the List door, which has no plane) there's nothing
+// to pin, so we navigate to the session instead.
 
 type Provider = { name: string; models: string[]; efforts: string[] }
 type Ask = { eid: string; x: number; y: number }
@@ -22,9 +24,8 @@ let Frame = block('div', 'Run', {
   Row: 'label',
   Name: 'span',
   Go: 'button',
-  Error: 'p',
 })
-let { Row, Name, Go, Error: Fault } = Frame
+let { Row, Name, Go } = Frame
 
 // The table, fetched once per page: it changes when the server changes.
 export let providers = signal<Provider[]>([])
@@ -50,17 +51,13 @@ let spot = (a: Ask) => {
   let box = document.querySelector('.Canvas')?.getBoundingClientRect()
   if (!t || !box || !ent(t.eid).canvas) return null
   let at = toPlane(a.x, a.y, box)
-  return {
-    canvas_eid: t.eid,
-    position: { x: Math.round(at.x), y: Math.round(at.y), w: 420 },
-  }
+  return { canvas_eid: t.eid, x: Math.round(at.x), y: Math.round(at.y) }
 }
 
 let Form = ({ a }: { a: Ask }) => {
   let [name, setName] = useState('')
   let [model, setModel] = useState('')
   let [effort, setEffort] = useState('')
-  let [error, setError] = useState('')
   useEffect(() => {
     if (!providers.value.length) load()
   }, [])
@@ -73,23 +70,45 @@ let Form = ({ a }: { a: Ask }) => {
   let m = p?.models.includes(model) ? model : p?.models[0]
   let ef = p?.efforts.includes(effort) ? effort : p?.efforts[0]
 
-  let go = async () => {
+  let go = () => {
     if (!p) return
     let at = spot(a)
-    let res = await fetch(`${base()}/sessions/start`, {
-      method: 'POST',
-      body: JSON.stringify({
-        task_eid: a.eid,
-        provider: p.name,
-        model: m,
-        ...(ef ? { effort: ef } : {}),
-        ...at,
-      }),
-    })
-    // The server says why in plain text (no repo, unknown model, …) —
-    // show it here rather than lose it to a toast nobody kept.
-    if (!res.ok) return setError(await res.text())
-    let { eid } = await res.json()
+    let eid = uuid()
+    let card = uuid()
+    mutate(
+      {
+        eid,
+        name: 'session',
+        comp: {
+          id: uuid(),
+          provider: p.name,
+          model: m,
+          ...(ef ? { effort: ef } : {}),
+          requested_task_eid: a.eid,
+        },
+      },
+      ...(at
+        ? [
+          {
+            eid: card,
+            name: 'card',
+            comp: { target_eid: eid, view: 'Session' },
+          },
+          {
+            eid: card,
+            name: 'pin',
+            comp: {
+              canvas_eid: at.canvas_eid,
+              x: at.x,
+              y: at.y,
+              w: 420,
+              h: 0,
+              z: topZ(at.canvas_eid) + 1,
+            },
+          },
+        ]
+        : []),
+    )
     run.value = null
     if (!at) navigate(`/${eid}`)
   }
@@ -132,7 +151,6 @@ let Form = ({ a }: { a: Ask }) => {
           </select>
         </Row>
       )}
-      {error && <Fault>{error}</Fault>}
       <Go type='button' disabled={!p} onClick={go}>▶ start</Go>
     </Frame>
   )

@@ -15,8 +15,10 @@ import {
   type Dep,
   type Hit,
   kindOrder,
+  sessionActive,
   type Snapshot,
 } from './types.ts'
+import { type Trace } from './effects.ts'
 import { matchQuery, parseQuery, TEXT } from './query.ts'
 
 // The db lives outside the repo (this is open source): a home-dir dotpath by
@@ -114,6 +116,11 @@ let schema = `
     eid         text primary key references entity(eid),
     session_eid text not null references entity(eid),
     claimed_at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  );
+  create table if not exists stop_request (
+    eid        text primary key references entity(eid),
+    target_eid text not null references entity(eid),
+    acted_at   text
   );
   create table if not exists conflict (
     eid        text primary key references entity(eid),
@@ -305,9 +312,12 @@ export let open = () => {
   addCol('task', 'domain', 'domain text')
   addCol('session', 'cwd', 'cwd text')
   addCol('session', 'acked_at', 'acked_at text')
-  // The managed-session lifecycle (src/sessions.ts): what we spawned, what
-  // it's doing, how it ended. Server-owned — none of it is in comps.session,
-  // so the wire can't write it; it rides OUT in the snapshot like any row.
+  // The managed-session lifecycle (src/sessions.ts): what was asked for,
+  // what it's doing, how it ended. The REQUEST columns (provider, model,
+  // effort, persona_eid, requested_task_eid) are wire-writable — creating
+  // a session with them IS the spawn request; the rest is server-owned
+  // (absent from comps.session, so the wire can't write it) and rides OUT
+  // in the snapshot like any row.
   // Listed once, planted in place; each ddl leads with its column name.
   for (
     let ddl of [
@@ -387,6 +397,7 @@ let cmps: Record<string, string[]> = {
 let AIMED: [string, string][] = [
   ['card', 'target_eid'],
   ['comment', 'target_eid'],
+  ['stop_request', 'target_eid'],
   ['pin', 'canvas_eid'],
   ['camera', 'client_eid'],
   ['camera', 'canvas_eid'],
@@ -401,11 +412,23 @@ let AIMED: [string, string][] = [
 // cascade victim and the minted spine of every entity BORN here (num is
 // server-owned, so no cache — the sender's included — knows it otherwise),
 // so casting the return keeps every client cache honest.
-export let apply = (db: DatabaseSync, changes: Change[]): Change[] => {
+//
+// `t` (effects.ts Trace) is an out-param for the effect dispatcher: which
+// comp rows this batch INSERTED (a create and a patch look identical as
+// changes) and which existing rows it deleted. Pure bookkeeping — no
+// effect ever runs in here; RULES (the claim lease, the stop_request
+// gate) do, because rejecting a batch is part of what a commit means.
+export let apply = (
+  db: DatabaseSync,
+  changes: Change[],
+  t?: Trace,
+): Change[] => {
   let dead = db.prepare('select 1 from tombstone where eid = ?')
   let extra: Change[] = []
   let touched = new Set<string>()
   let minted = new Set<string>()
+  let took = (eid: string, name: string) =>
+    t?.removed.set(eid, [...(t.removed.get(eid) ?? []), name])
   // A bounced claim is worth remembering: noted here mid-transaction,
   // written AFTER the rollback (an audit row can't ride the batch it
   // condemns) as a conflict entity — display strings, not references,
@@ -486,9 +509,33 @@ export let apply = (db: DatabaseSync, changes: Change[]): Change[] => {
           )
         }
       }
+      // A stop_request is a lever, not a note: it may only be pulled on a
+      // managed session that is still going — anything else is refused
+      // loudly, like a bounced claim. (The stop itself is an EFFECT,
+      // post-commit; this gate is the rule half.)
+      if (name == 'stop_request' && comp?.target_eid) {
+        let s = db.prepare('select origin, status from session where eid = ?')
+          .get(String(comp.target_eid)) as
+            | { origin: string; status: string | null }
+            | undefined
+        if (
+          !s || s.origin != 'managed' ||
+          !sessionActive.includes(String(s.status))
+        ) {
+          throw new Error(
+            `stop_request refused: session is ${
+              s ? s.status ?? 'external' : 'gone'
+            }`,
+          )
+        }
+      }
       if (comp == null) {
         if (name != 'entity') {
-          db.prepare(`delete from ${name} where eid = ?`).run(eid)
+          if (
+            db.prepare(`delete from ${name} where eid = ?`).run(eid).changes
+          ) {
+            took(eid, name)
+          }
           continue
         }
         // Death spreads to entities that exist ABOUT the dead one — cards
@@ -510,12 +557,16 @@ export let apply = (db: DatabaseSync, changes: Change[]): Change[] => {
           }
         }
         for (let d of doomed) {
+          // Soft references let go without a wire change or a removed
+          // hook — the claim's own entity lives on, only its lease ends.
           db.prepare('delete from claim where session_eid = ?').run(d)
           db.prepare('update task set project_eid = null where project_eid = ?')
             .run(d)
-          for (let t of Object.keys(cmps).toReversed()) {
-            if (t != 'entity') {
-              db.prepare(`delete from ${t} where eid = ?`).run(d)
+          for (let c of Object.keys(cmps).toReversed()) {
+            if (c != 'entity') {
+              if (db.prepare(`delete from ${c} where eid = ?`).run(d).changes) {
+                took(d, c)
+              }
             }
           }
           db.prepare(
@@ -560,9 +611,13 @@ export let apply = (db: DatabaseSync, changes: Change[]): Change[] => {
             `insert into ${name} (eid${sent.map((c) => `, ${c}`).join('')})
              values (?${', ?'.repeat(sent.length)})`,
           ).run(eid, ...vals)
+          t?.created.add(`${name} ${eid}`)
         } else {
           // A bare {} touch: create with defaults if possible, else no-op.
-          db.prepare(`insert or ignore into ${name} (eid) values (?)`).run(eid)
+          let made = db.prepare(
+            `insert or ignore into ${name} (eid) values (?)`,
+          ).run(eid).changes
+          if (made) t?.created.add(`${name} ${eid}`)
         }
         db.exec('release change')
       } catch (e) {

@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useRef } from 'preact/hooks'
 import { md } from '../md.ts'
-import { base, clientId, commentsOn, ent, mutate, uuid } from '../live.ts'
+import { clientId, commentsOn, ent, mutate, uuid } from '../live.ts'
 import { ago, block, pretty } from './ui.tsx'
 import { drop, focused, peek, save } from './drafts.ts'
 import { idOf, nick, sessionActive } from '../types.ts'
@@ -11,9 +11,8 @@ let Frame = block('div', 'Comments', {
   When: 'span',
   Body: 'div',
   New: 'textarea',
-  Send: 'button',
 })
-let { Item, Who, When, Body, New, Send } = Frame
+let { Item, Who, When, Body, New } = Frame
 
 // Who said it: sessions by their id, browsers by a short client handle,
 // anything else by its entity id. Pure — the TUI names authors with it too.
@@ -28,11 +27,11 @@ export let author = (eid?: string | null) => {
 // component aiming at the target — Enter posts (Shift+Enter for a
 // newline), and the author is this browser's client entity.
 //
-// On a session it's ALSO the way to talk to the agent — one box, an
-// armed "→ session" switch deciding whether the words are about it or
-// to it. A settled managed session resumes (POST input) when armed; an
-// active one takes no stdin, but the bus already hands comments to the
-// agent on its next tool call, so the comment alone is delivery.
+// On a session the comment IS the way to talk to the agent — no side
+// channel: the server's created(comment) effect resumes a settled
+// managed session with the words, and an active one hears them on its
+// next tool call through the bus. To leave a note ABOUT the run without
+// waking it, comment on its task instead.
 export let Comments = ({ eid }: { eid: string }) => {
   let box = useRef<HTMLTextAreaElement>(null)
   let dkey = `${eid}.comment`
@@ -52,7 +51,6 @@ export let Comments = ({ eid }: { eid: string }) => {
   let s = ent(eid).session
   let settled = !!s && s.origin == 'managed' && !!s.provider_session_id &&
     !sessionActive.includes(String(s.status))
-  let [send, setSend] = useState(true)
   // Who you're addressing: the persona's name when the session has one,
   // else the model's nick — never the raw session id.
   let who = s &&
@@ -71,12 +69,6 @@ export let Comments = ({ eid }: { eid: string }) => {
         comp: { target_eid: eid, author_eid: clientId() },
       },
     )
-    if (settled && send) {
-      fetch(`${base()}/sessions/${eid}/input`, {
-        method: 'POST',
-        body: JSON.stringify({ text: body }),
-      }).catch(() => {})
-    }
     box.current!.value = ''
     drop(dkey)
   }
@@ -107,25 +99,13 @@ export let Comments = ({ eid }: { eid: string }) => {
           let t = e.currentTarget as HTMLTextAreaElement
           save(dkey, t.value, t.selectionStart ?? undefined)
         }}
-        placeholder={settled && send
-          ? `send to ${who}…`
+        placeholder={settled
+          ? `send to ${who}… (resumes the session)`
           : s && !settled
           ? 'comment… (the agent hears it on its next tool call)'
           : 'comment…'}
         onKeyDown={key}
       />
-      {settled && (
-        <Send
-          type='button'
-          mod={send && 'on'}
-          data-tip={send
-            ? 'armed: posting also resumes the session'
-            : 'off: the comment is about the session, not to it'}
-          onClick={() => setSend(!send)}
-        >
-          → session
-        </Send>
-      )}
     </Frame>
   )
 }
