@@ -250,10 +250,10 @@ These hold everywhere in this repo, whoever — or whatever — writes the code:
 - Hot reload: client-file edits broadcast `reload`; server-graph edits restart
   the process (websockets close, clients poll back). The TUI exits 42 to ask its
   wrapper loop to relaunch it — don't "fix" that exit code.
-- Git: **worktree-only** — never edit the main checkout directly. Every
-  agent (interactive sessions included) works in its OWN worktree and
-  lands work with `git merge --ff-only`; focused commits. One writer per
-  worktree: two agents sharing an index stomp each other's staging.
+- Git: **worktree-only** — never edit the main checkout directly. Every agent
+  (interactive sessions included) works in its OWN worktree and lands work with
+  `git merge --ff-only`; focused commits. One writer per worktree: two agents
+  sharing an index stomp each other's staging.
 
 ## Backups
 
