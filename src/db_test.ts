@@ -235,6 +235,21 @@ Deno.test('entity delete cascades to aimed entities, detaches soft refs', () => 
   assertEquals(comp(t2, 'doc')?.title, 'survivor')
 })
 
+Deno.test('assignee: whose plate round-trips, a dead assignee detaches', () => {
+  let who = uid(), t = uid()
+  apply(db, [
+    { eid: who, name: 'doc', comp: { title: 'Jeff' } },
+    { eid: who, name: 'person', comp: {} },
+    { eid: t, name: 'doc', comp: { title: 'chore' } },
+    { eid: t, name: 'task', comp: { status: 'open', assignee_eid: who } },
+  ])
+  assertEquals(comp(t, 'task')?.assignee_eid, who)
+  // the person dies; the task stays, unassigned — soft ref, never cascade
+  apply(db, [{ eid: who, name: 'entity', comp: null }])
+  assertEquals(comp(t, 'task')?.assignee_eid, null)
+  assertEquals(comp(t, 'doc')?.title, 'chore')
+})
+
 Deno.test('edges: link once, unlink by the same sentence', () => {
   let p = uid(), c = uid()
   apply(db, [

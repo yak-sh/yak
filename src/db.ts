@@ -66,6 +66,9 @@ let schema = `
   create table if not exists project (
     eid text primary key references entity(eid)
   );
+  create table if not exists person (
+    eid text primary key references entity(eid)
+  );
   create table if not exists repo (
     eid  text primary key references entity(eid),
     path text not null,
@@ -333,6 +336,7 @@ export let open = () => {
     }
   }
   addCol('task', 'project_eid', 'project_eid text references entity(eid)')
+  addCol('task', 'assignee_eid', 'assignee_eid text references entity(eid)')
   addCol('task', 'domain', 'domain text')
   addCol('session', 'cwd', 'cwd text')
   addCol('session', 'acked_at', 'acked_at text')
@@ -601,6 +605,9 @@ export let apply = (
           db.prepare('delete from claim where session_eid = ?').run(d)
           db.prepare('update task set project_eid = null where project_eid = ?')
             .run(d)
+          db.prepare(
+            'update task set assignee_eid = null where assignee_eid = ?',
+          ).run(d)
           for (let c of Object.keys(cmps).toReversed()) {
             if (c != 'entity') {
               if (db.prepare(`delete from ${c} where eid = ?`).run(d).changes) {

@@ -39,6 +39,10 @@ export let comps: Record<string, Record<string, PropType>> = {
     status: { enum: statuses },
     priority: 'number',
     project_eid: { eid: 'project' },
+    // Whose PLATE this is — durable routing to any entity (a person, a
+    // project standing in for its operator). Orthogonal to claim, which
+    // is who holds it NOW; a dead assignee detaches, never takes the task.
+    assignee_eid: { eid: '' },
     domain: { text: 'domains' }, // free text; the graph suggests
   },
   project: {},
@@ -97,6 +101,11 @@ export let comps: Record<string, Record<string, PropType>> = {
   conflict: {}, // server-minted audit rows — nothing is wire-writable
   comment: { target_eid: { eid: '' }, author_eid: { eid: '' } },
   alias: { slug: 'text' },
+  // A durable identity — the owner, an operator. The doc carries the
+  // name, an alias the handle (jeff), and tasks point at it through
+  // assignee_eid; sessions stay what they are (one run), a person is who
+  // they run FOR.
+  person: {},
   // A distilled fact worth keeping — content rides the doc (title = the
   // index line, body = the fact), provenance rides source_eid. The scope
   // column is scope_eid, NOT project_eid: bare '.project_eid' must keep
@@ -203,6 +212,7 @@ export let kindOrder = [
   'comment',
   'alias',
   'memory',
+  'person',
   'doc',
 ]
 export let kindOf = (has: Record<string, unknown>) =>
@@ -216,6 +226,7 @@ export let prefix: Record<string, string> = {
   board: 'B',
   session: 'S',
   memory: 'M',
+  person: 'U', // U-ser: P is the projects'
 }
 export let idOf = (e: { kind: string; num: number }) =>
   `${prefix[e.kind] ?? e.kind[0].toUpperCase()}-${e.num}`
@@ -252,6 +263,7 @@ export type Task = {
   status: string
   priority: number // board order within a status column; lower sorts first
   project_eid?: string | null // the project (venture) this task belongs to
+  assignee_eid?: string | null // whose plate — durable; claim is who's on it now
   domain?: string | null // cross-project facet (Eng, Legal, Ops, …) — free
   // text by convention; a picker derives its options from distinct values
 }
@@ -450,6 +462,7 @@ export type Ent = {
   doc?: Doc
   task?: Task
   project?: ProjectTag
+  person?: { eid: string }
   repo?: Repo
   canvas?: { eid: string }
   board?: BoardTag

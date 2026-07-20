@@ -37,6 +37,7 @@ let Frame = block('div', 'Show', {
   Claim: 'span',
   Domain: 'span',
   Project: 'a',
+  Assignee: 'a',
   Meta: 'div',
   Comments: 'span',
   Runs: 'div',
@@ -50,6 +51,7 @@ let {
   Claim,
   Domain,
   Project,
+  Assignee,
   Meta: MetaEl,
   Comments: Talk,
   Runs: RunsEl,
@@ -106,6 +108,25 @@ let Facet = ({ e }: { e: Ent }) => (
     editable
     name='domain'
     show={(v) => (v ? <Domain>{String(v)}</Domain> : null)}
+  />
+)
+
+// Whose plate: the assignee face is a LINK to the person (or the project
+// standing in for its operator) — same grammar as Home, the ▾ handle
+// owns the editor. Claim (⚑, who's on it NOW) renders separately.
+let Plate = ({ e }: { e: Ent }) => (
+  <Prop
+    eid={e.eid}
+    comp='task'
+    prop='assignee_eid'
+    editable
+    handle
+    name='assignee'
+    show={(v) => {
+      if (!v) return null
+      let a = ent(String(v))
+      return <Assignee {...linkProps(a)}>{a.doc?.title ?? a.kind}</Assignee>
+    }}
   />
 )
 
@@ -254,6 +275,7 @@ export let Meta = ({ e, id }: { e: Ent; id?: boolean }) => {
         <>
           <Rank e={e} />
           <Home e={e} />
+          <Plate e={e} />
           <Facet e={e} />
         </>
       )}

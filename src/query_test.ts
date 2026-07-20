@@ -90,6 +90,19 @@ Deno.test('query: adopt pins down scalar equalities only', () => {
   assertEquals(adopt(preds, 'task'), { project_eid: 'p1', priority: 2 })
   assertEquals(adopt(preds, 'doc'), {})
   assertEquals(adopt(parseQuery(''), 'task'), {})
+  // assignee rides the same generality: a board of Jeff's plate adopts
+  assertEquals(
+    adopt(parseQuery('.assignee_eid=u1&.status=open'), 'task'),
+    { assignee_eid: 'u1', status: 'open' },
+  )
+})
+
+Deno.test('query: assignee_eid routes bare and filters', () => {
+  let p = pred('.assignee_eid=u1')!
+  assertEquals([p.comp, p.prop, p.op], ['task', 'assignee_eid', ''])
+  assert(matchQuery(row({ status: 'open', assignee_eid: 'u1' }), [p]))
+  assert(!matchQuery(row({ status: 'open', assignee_eid: 'u2' }), [p]))
+  assert(!matchQuery(row({ status: 'open' }), [p]))
 })
 
 Deno.test('query: pred routes and normalizes ops', () => {

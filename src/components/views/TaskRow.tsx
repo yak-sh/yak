@@ -12,10 +12,11 @@ let Frame = block('div', 'TaskRow', {
   Domain: 'span',
   Comments: 'span',
   Claim: 'span',
+  Assignee: 'span',
   Deps: 'span',
   Done: 's',
 })
-let { Title, Meta, Domain, Comments, Claim, Deps, Done } = Frame
+let { Title, Meta, Domain, Comments, Claim, Assignee, Deps, Done } = Frame
 
 // A task as a small board card, Trello-shaped: wrapping title beside its
 // dot, then one meta line — priority, domain, edge tallies ("2 requires",
@@ -85,6 +86,9 @@ export let TaskRow = ({ e }: { e: Ent }) => {
           )
         )}
         {talk && <Comments>💬 {talk}</Comments>}
+        {e.task!.assignee_eid && (
+          <Assignee>{ent(e.task!.assignee_eid).doc?.title}</Assignee>
+        )}
         {e.claim && <Claim>⚑</Claim>}
         <View eid={e.eid} view='Id' />
       </Meta>
