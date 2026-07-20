@@ -10,13 +10,14 @@
 //    <eid>.stderr.log, unordered diagnostics served alongside; we never
 //    interleave it into the log's seqs and invent a causality we didn't
 //    observe.
-// 2. THE CHILD OUTLIVES US. A setsid sh wrapper backgrounds the agent into
-//    its OWN process group and is itself the only pid the runtime tracks —
-//    so the dev watcher restarting this process (which it does on every
-//    server-file edit) can kill nothing but the wrapper: the pidfile and
-//    the log file are enough to adopt the agent back at boot, and the
-//    wrapper's code file carries the exit status when it lived to see it.
-//    Nothing here reaps children.
+// 2. THE CHILD OUTLIVES US. The pid the runtime tracks is a launcher
+//    that backgrounds a setsid sh wrapper and exits at birth — so the dev
+//    watcher restarting this process (which it does on every server-file
+//    edit, and which KILLS tracked pids) finds nothing left to kill. The
+//    orphaned wrapper runs the agent in its own session and group,
+//    outlives every reload, and reports the exit code when the agent
+//    goes; the pidfile and the log file are enough to adopt the agent
+//    back at boot. Nothing here reaps children.
 // 3. ONE WRITER. Every summary column goes through stamp(): row first, then
 //    the full session comp down the same cast() path apply()'s return
 //    takes — server-constructed, post-commit, so every cache hears the
@@ -292,9 +293,9 @@ let errTail = (eid: string) => {
 
 // ---- spawning ----
 
-// The child outlives this process (setsid detaches it, --watch restarts
-// us), so after a restart it isn't our child any more and waitpid is out
-// of reach: `kill -0` is the only liveness we have. The signal goes to the
+// The agent is never our child (the launcher exits at birth; setsid
+// detaches the rest), so waitpid is out of reach from the first moment:
+// `kill -0` is the only liveness we have. The signal goes to the
 // process GROUP (-pid) — an agent's own children die with it.
 let alive = async (pid: number) =>
   (await new Deno.Command('kill', {
@@ -317,7 +318,7 @@ let pids = (eid: string) => {
 let pidOf = (eid: string) => pids(eid)?.child ?? null
 
 // The exit code the wrapper reported — null while running, and null
-// forever when the wrapper died before reporting (a reload took it).
+// forever when the wrapper died before reporting (a SIGKILL took it).
 let codeOf = (eid: string) => {
   try {
     let n = Number(Deno.readTextFileSync(codeFile(eid)).trim())
@@ -342,34 +343,37 @@ let git = async (cwd: string, args: string[]) => {
   return new TextDecoder().decode(out.stdout).trim()
 }
 
-// setsid puts the child in a NEW session and process group; it execs in
-// place (it only forks when it's already a group leader, which a spawned
-// child isn't), so our direct child IS the agent — same pid as the
-// pidfile, and its exit code is ours to read while we live. sh does the
-// redirection Deno.Command can't: stdout and stderr straight into the
+// Two layers, one job each. The LAUNCHER — our direct child, the only pid
+// the runtime tracks — backgrounds the wrapper and exits at birth: a
+// --watch reload KILLS tracked pids (unref is no shield, a reload took
+// two live agents on 2026-07-17), so the only safe pid to hand it is a
+// dead one. The WRAPPER, orphaned to init: setsid puts it in a NEW
+// session and process group (it execs in place — a backgrounded child is
+// no group leader), so its `$$` is the group stop() signals, and no
+// reload can reach it — it always lives to report the exit code. sh does
+// the redirection Deno.Command can't: stdout and stderr straight into the
 // files, no pipe for us to pump and nothing to lose when we restart.
+let WRAPPER = '"$@" >> "$TASKS_LOG" 2>> "$TASKS_ERR" & trap "" INT TERM; ' +
+  'echo "$$ $!" > "$TASKS_PID"; wait $!; echo $? > "$TASKS_CODE"'
+
 let spawn = (
   eid: string,
   argv: string[],
   cwd: string,
   env: Record<string, string>,
 ) => {
-  let child = new Deno.Command('setsid', {
+  let child = new Deno.Command('sh', {
     args: [
-      'sh',
       '-c',
-      // The wrapper is a firebreak: the runtime tracks (and, on a --watch
-      // reload, KILLS — unref is no shield, a reload took two live agents
-      // on 2026-07-17) only this sh, by exact pid; the backgrounded agent
-      // shares its process GROUP (dash has no job control headless) and
-      // survives. The trap — armed strictly AFTER the spawn, or the agent
-      // would inherit the signals as ignored — keeps the wrapper alive
-      // through stop()'s group TERM so it still reports the exit. The
-      // pidfile carries "$$ $!": group to signal, child to watch. A
-      // missing code file means the wrapper died unreporting (a SIGKILL,
-      // or a reload that signals harder).
-      '"$@" >> "$TASKS_LOG" 2>> "$TASKS_ERR" & trap "" INT TERM; ' +
-      'echo "$$ $!" > "$TASKS_PID"; wait $!; echo $? > "$TASKS_CODE"',
+      // The wrapper's script rides inside single quotes (it contains only
+      // double ones): agent first, then the trap — armed strictly AFTER
+      // the fork, or the agent would inherit INT/TERM as ignored — which
+      // keeps the wrapper alive through stop()'s group TERM so it still
+      // reports the exit. The pidfile carries "$$ $!": group to signal,
+      // child to watch. A missing code file means the wrapper died
+      // unreporting (stop()'s SIGKILL escalation takes the whole group,
+      // wrapper included).
+      `setsid sh -c '${WRAPPER}' sh "$@" &`,
       'sh',
       ...argv,
     ],
@@ -386,7 +390,7 @@ let spawn = (
     stdout: 'null',
     stderr: 'null',
   }).spawn()
-  child.unref() // don't hold the event loop open for the wrapper
+  child.unref() // don't hold the event loop open for the launcher's exit
   return child
 }
 
@@ -611,8 +615,8 @@ let track = (
     Deno.removeSync(codeFile(eid)) // a resume must not read the last ending
   } catch { /* first run */ }
   spawn(eid, argv, cwd, env)
-  // The AGENT is the pidfile, not the wrapper: sh writes it first thing
-  // and its own death (a --watch reload kills the tracked pid) says
+  // The AGENT is the pidfile, not the launcher: the wrapper writes it
+  // first thing, and the launcher's death (at birth, by design) says
   // nothing about the run. Until the file appears the child is unborn —
   // and a wrapper that never writes one is stillborn, given a grace.
   let born = Date.now()

@@ -122,10 +122,12 @@ the mobile door — whose rows resolve through `List.Item`.
   (`~/.tasks/logs/<eid>.jsonl`, line number = seq): no log table, no ingester,
   nothing to drift. The server tails it and casts SUMMARY patches; the file is
   what a client reads back. And the agent is DETACHED behind a sh wrapper
-  firebreak: the wrapper is the only pid the runtime tracks (deno --watch KILLS
-  tracked pids on reload — unref is no shield, proven live), the agent is
-  backgrounded into the wrapper's process group, and the wrapper traps INT/TERM
-  — armed strictly AFTER the fork, or the agent inherits the ignore — then waits
+  firebreak: the pid the runtime tracks is a launcher that backgrounds the
+  setsid wrapper and exits at birth (deno --watch KILLS tracked pids on reload —
+  unref is no shield, proven live — so the only safe tracked pid is a dead one);
+  the agent is backgrounded into the orphaned wrapper's process group, and the
+  wrapper — unknown to the runtime, so no reload can take it — traps INT/TERM —
+  armed strictly AFTER the fork, or the agent inherits the ignore — then waits
   and reports the exit code. The restart re-adopts the run from its pidfile.
   Never add reaping. And a child inherits the SERVER's PATH: the service unit
   must carry the provider CLIs' dirs (claude, codex, deno) — a missing one is
