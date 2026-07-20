@@ -1964,17 +1964,6 @@ html {
 }
 /* inline editors: the value's own metrics, a dashed seam saying 'live' */
 .Prop_Num,
-.Prop_Free {
-  font: inherit;
-  color: var(--text);
-  background: none;
-  border: 0;
-  outline: none;
-  border-bottom: 1px dashed var(--accent);
-  padding: 0;
-  min-width: 0;
-  width: 10ch;
-}
 
 /* An entity's age line — dim, small, out of the way. */
 .Stamp {

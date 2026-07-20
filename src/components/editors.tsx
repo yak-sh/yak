@@ -60,9 +60,8 @@ let Frame = block('span', 'Prop', {
   Row: 'span',
   Find: 'input',
   Num: 'input',
-  Free: 'input',
 })
-let { Val, Hand, Pop, Tab, Row, Find, Num, Free } = Frame
+let { Val, Hand, Pop, Tab, Row, Find, Num } = Frame
 
 // ---- the stock editors ----
 
@@ -108,35 +107,38 @@ let EnumEdit = ({ ...p }: EditorProps) => {
   )
 }
 
-// {text: well}: free text whose datalist is whatever the graph already
-// says (the named well). Empty commits null — clearing a facet is an
-// edit.
+// {text: well}: free text with the graph's suggestions — the same popout
+// search list the eid editor wears (one look for every picker; datalist
+// was the browser's own UI, styled by nobody). The difference from a
+// reference: the QUERY is a candidate — Enter commits what's typed, and
+// an unheard-of value shows as the top row, so new domains stay mintable.
+// The 'none' row clears, as everywhere.
 let WellEdit = ({ ...p }: EditorProps) => {
   let t = p.t as { text: string }
-  let list = `well-${t.text}-${p.eid}-${p.prop}`
+  let [q, setQ] = useState('')
+  let all = wells[t.text]?.() ?? []
+  let typed = q.trim()
+  let hits = all
+    .filter((x) => !typed || x.toLowerCase().includes(typed.toLowerCase()))
+    .slice(0, 8)
   return (
-    <>
-      <Free
+    <Pop mod='list'>
+      <Find
         elRef={focus}
-        value={String(p.value ?? '')}
-        list={list}
+        placeholder={String(p.value ?? 'search…')}
+        onInput={(ev: InputEvent) =>
+          setQ((ev.currentTarget as HTMLInputElement).value)}
         onKeyDown={(ev: KeyboardEvent) => {
-          let el = ev.currentTarget as HTMLInputElement
-          if (ev.key == 'Enter') el.blur()
-          else if (ev.key == 'Escape') {
-            el.value = String(p.value ?? '')
-            el.blur()
-          }
-        }}
-        onBlur={(ev: FocusEvent) => {
-          let text = (ev.currentTarget as HTMLInputElement).value.trim()
-          text != String(p.value ?? '') ? set(p, text || null) : p.done()
+          if (ev.key == 'Escape') p.done()
+          if (ev.key == 'Enter') typed ? set(p, typed) : p.done()
         }}
       />
-      <datalist id={list}>
-        {(wells[t.text]?.() ?? []).map((x) => <option key={x} value={x} />)}
-      </datalist>
-    </>
+      <Row mod='none' onClick={() => set(p, null)}>none</Row>
+      {typed && !all.includes(typed) && (
+        <Row onClick={() => set(p, typed)}>“{typed}”</Row>
+      )}
+      {hits.map((x) => <Row key={x} onClick={() => set(p, x)}>{x}</Row>)}
+    </Pop>
   )
 }
 
@@ -203,7 +205,7 @@ defineEditors([
   },
   {
     match: (t) => typeof t == 'object' && 'text' in t,
-    mode: 'inline',
+    mode: 'popout',
     Edit: WellEdit,
   },
   {
