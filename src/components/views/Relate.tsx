@@ -15,7 +15,7 @@ let Frame = block('span', 'Relate', {
 })
 let { Verb, Anchor, Pop, Find, Row, New } = Frame
 
-// The five sentences a task grows an edge by — parent-first, the same
+// The sentences a task grows an edge by — parent-first, the same
 // grammar Dependency renders. out: this task is the parent.
 let verbs = [
   { label: 'requires', type: 'requires', out: true },
@@ -23,6 +23,7 @@ let verbs = [
   { label: 'contains', type: 'contains', out: true },
   { label: 'part of', type: 'contains', out: false },
   { label: 'reads', type: 'reads', out: true },
+  { label: 'about', type: 'about', out: true },
 ] as const
 type V = (typeof verbs)[number]
 

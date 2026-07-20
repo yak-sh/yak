@@ -162,6 +162,7 @@ export let up: Record<string, string> = {
   contains: 'part of',
   requires: 'required by',
   reads: 'read by',
+  about: 'subject of',
 }
 
 // Every edge sentence an entity speaks, top-down: what holds it (reversed

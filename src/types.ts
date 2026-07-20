@@ -214,8 +214,10 @@ export let nick = (model?: string | null) => {
 
 // The edge vocabulary — every edge reads as a sentence, parent first:
 // parent requires child (hard gate) · parent contains child (decomposition,
-// children roll up) · parent reads child (read-first, never gates).
-export type Edge = 'requires' | 'contains' | 'reads'
+// children roll up) · parent reads child (read-first, never gates) ·
+// parent about child (subject reference — a task about a session, a note
+// about anything; never gates).
+export type Edge = 'requires' | 'contains' | 'reads' | 'about'
 
 // The written face of an entity — title and markdown body. Anything can
 // carry one: tasks and boards do; notes, comments, and future kinds get

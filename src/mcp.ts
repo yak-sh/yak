@@ -402,7 +402,7 @@ client is looking at), sessions, comments — all live here. ${GRAMMAR} ${FILTER
 null deletes the component, {name:'entity', comp:null} deletes the
 entity. Mint uuids for new entities. eid and *_eid comp values accept
 human ids (T-3, P-19) for EXISTING entities. Edges: name 'dependency',
-comp {type: requires|contains|reads, child_eid} links eid→child; add
+comp {type: requires|contains|reads|about, child_eid} links eid→child; add
 gone: true to unlink (a triple has no row key, so the comp names the
 whole edge). Same allowlist and claim-lease rules as every other
 client; writes broadcast live to all screens. ${GRAMMAR}`,
