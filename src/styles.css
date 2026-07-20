@@ -864,12 +864,10 @@ html {
   color: var(--blue);
 }
 
-.Show {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--card);
-  padding: var(--half-gap);
-}
+/* The document face sits borderless on the floor — the card frame
+   belongs to windows (canvas cards), not to the page you're reading.
+   Only root Show renders div.Show; card context is ShowCard, a fragment
+   inside the Card's own chrome. */
 /* The document face (root Show): a real h1 owns the title at the
    column's measure — it wraps, never truncates. The pip pins to the
    FIRST line (the proven head trick); the named view-timeline is what
@@ -1964,9 +1962,7 @@ html {
 }
 /* inline editors: the value's own metrics, a dashed seam saying 'live' */
 .Prop_Num,
-
-/* An entity's age line — dim, small, out of the way. */
-.Stamp {
+/* An entity's age line — dim, small, out of the way. */ .Stamp {
   color: var(--dim);
   font-size: 11px;
   display: inline-flex;
