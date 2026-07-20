@@ -31,7 +31,7 @@ import { View } from '../View.tsx'
 // higher-scoring registry entry, not an edit here.
 
 let Frame = block('div', 'Show', {
-  Head: 'div',
+  Heading: 'h1',
   Title: 'span',
   Body: 'p',
   Claim: 'span',
@@ -44,7 +44,7 @@ let Frame = block('div', 'Show', {
   Tasks: 'div',
 })
 let {
-  Head,
+  Heading,
   Title,
   Body: BodyEl,
   Claim,
@@ -240,13 +240,14 @@ export let Tasks = ({ e }: { e: Ent }) => {
   )
 }
 
-// The meta line (card context — the titlebar carries title and pip): the
-// board row's grammar, prio · project · domain · 💬 · ⚑ · age, every
-// field the same editor the full head carries. Only the task fields need
-// a task; the rest speak for any entity.
-export let Meta = ({ e }: { e: Ent }) => {
+// The meta line — the board row's grammar, prio · project · domain · 💬
+// · ⚑ · age, every field the same editor everywhere. In card context the
+// titlebar carries title, pip, and id, so an empty line renders nothing;
+// the document face (root Show) passes `id` and always gets the row —
+// its id chip lives here, under the h1.
+export let Meta = ({ e, id }: { e: Ent; id?: boolean }) => {
   let talk = commentCount.value[e.eid]
-  if (!e.task && !talk && !e.claim) return null
+  if (!id && !e.task && !talk && !e.claim) return null
   return (
     <MetaEl>
       {e.task && (
@@ -259,6 +260,7 @@ export let Meta = ({ e }: { e: Ent }) => {
       {talk && <Talk>💬 {talk}</Talk>}
       {e.claim && <Claim>⚑ {ent(e.claim.session_eid).session?.id}</Claim>}
       <Stamp e={e} />
+      {id && <View eid={e.eid} view='Id' />}
     </MetaEl>
   )
 }
@@ -273,26 +275,20 @@ export let Talkback = ({ e }: { e: Ent }) => <Comments eid={e.eid} />
 // every doc-carrying entity follows.
 let stack = ['Dependencies', 'Relate', 'Boards', 'Tasks', 'Runs', 'Comments']
 
-// Root context carries the head (pip + editable title + fields + id),
-// then the stack.
+// Root context is the DOCUMENT face: a real h1 owns the title at the
+// column's measure — it wraps, never truncates — with the pip riding its
+// first line and the meta chips in a quiet row beneath (id included; the
+// App bar's compact title stays hidden until this h1 scrolls away — the
+// view-timeline in styles.css).
 export let Show = ({ e }: { e: Ent }) => (
   <Frame>
-    <Head>
+    <Heading>
       {e.task && <Pip e={e} />}
       <Title>
         <Edit eid={e.eid} comp='doc' prop='title' />
       </Title>
-      {e.claim && <Claim>⚑ {ent(e.claim.session_eid).session?.id}</Claim>}
-      {e.task && (
-        <>
-          <Home e={e} />
-          <Facet e={e} />
-          <Rank e={e} />
-        </>
-      )}
-      <Stamp e={e} />
-      <View eid={e.eid} view='Id' />
-    </Head>
+    </Heading>
+    <View eid={e.eid} view='Meta' id />
     <View eid={e.eid} view='Body' />
     {stack.map((v) => <View key={v} eid={e.eid} view={v} />)}
   </Frame>

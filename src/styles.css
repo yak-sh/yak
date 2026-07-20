@@ -193,6 +193,9 @@ html {
   display: flex;
   flex-direction: column;
   background: var(--bg); /* the dark floor body used to carry */
+  /* Lift the document h1's view-timeline over the bar/body split, so the
+     bar's compact title can listen (.CardTitle_Text below). */
+  timeline-scope: --doc-title;
 }
 /* The page is a fullscreen card; this bar is its titlebar — brand,
    Card.Title, view tabs, same grammar as any pinned card's chrome. */
@@ -475,6 +478,26 @@ html {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+/* The App bar's compact title defers to the document h1: hidden while
+   the h1 is on screen, fading in as it scrolls out (the h1 names the
+   --doc-title view-timeline; timeline-scope on .App carries it across
+   the bar/body split). No h1 on screen — a session, a board, another
+   tab, or a browser without scroll-driven animations (the 0s animation
+   finishes instantly) — and the title simply shows. The timeline/range
+   lines must FOLLOW the shorthand: `animation:` resets both. */
+.App_Bar .CardTitle_Text {
+  animation: BarTitleReveal linear both;
+  animation-timeline: --doc-title;
+  animation-range: exit;
+}
+@keyframes BarTitleReveal {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 .CardTitle-dim {
   color: var(--dim);
@@ -847,13 +870,30 @@ html {
   background: var(--card);
   padding: var(--half-gap);
 }
-.Show_Head {
+/* The document face (root Show): a real h1 owns the title at the
+   column's measure — it wraps, never truncates. The pip pins to the
+   FIRST line (the proven head trick); the named view-timeline is what
+   the App bar's compact title listens to. */
+.Show_Heading {
   display: flex;
-  align-items: first baseline; /* id/claim ride the title's FIRST line */
   gap: var(--half-gap);
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 650;
+  line-height: 1.15;
+  view-timeline: --doc-title block;
+}
+.Show_Heading .Dot {
+  align-self: start;
+  margin-top: calc((1lh - 0.55rem) / 2);
 }
 .Show_Title {
-  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+.Show_Heading + .Show_Meta {
+  margin-top: var(--half-gap);
 }
 /* The universal id chip (T-7, P-2, …) — a real link now: never wraps,
    underlines only on hover, keeps its dim voice. */
@@ -867,8 +907,8 @@ html {
   text-decoration: underline;
   color: var(--muted);
 }
-.Show_Head .Id {
-  margin-left: auto;
+.Show_Meta .Id {
+  margin-left: auto; /* the id keeps the row's right edge, as in a titlebar */
 }
 .Debug_Prio {
   font-size: 11px;
@@ -1003,16 +1043,6 @@ html {
   font-size: 11px;
   color: var(--purple);
 }
-/* Head chips gather on the right: the FIRST one present takes the auto
-   margin, everything after it (id included) sits flush. Every field is a
-   .Prop wrapper now, and an editor stands in its Prop's place — opening
-   one never restacks the head. */
-.Show_Head :is(.Show_Claim, .Prop) {
-  margin-left: auto;
-}
-.Show_Head :is(.Show_Claim, .Prop) ~ :is(.Prop, .Id) {
-  margin-left: 0;
-}
 /* The ▾ beside a link-faced Prop — the face owns navigation, the hand
    owns the editor. Ghost when the field is empty. */
 .Prop_Hand {
@@ -1139,6 +1169,27 @@ html {
 .Show_Body :is(p, ul, ol, pre, blockquote) {
   margin: 0 0 var(--half-gap);
 }
+/* Body headings step DOWN from the document h1 — a ## section may never
+   out-shout the title above it. */
+.Show_Body :is(h1, h2, h3, h4, h5, h6) {
+  margin: var(--gap) 0 var(--half-gap);
+  line-height: 1.25;
+}
+.Show_Body h1 {
+  font-size: 1.35rem;
+}
+.Show_Body h2 {
+  font-size: 1.2rem;
+}
+.Show_Body h3 {
+  font-size: 1.05rem;
+}
+.Show_Body :is(h4, h5, h6) {
+  font-size: 1rem;
+}
+.Show_Body > :first-child {
+  margin-top: 0;
+}
 .Show_Body > :last-child {
   margin-bottom: 0;
 }
@@ -1164,12 +1215,6 @@ html {
   white-space: pre-wrap; /* multiline sources keep their newlines */
 }
 
-/* In a task head the dot marks the FIRST line, not the block: pinned to
-   the top, then centered within one line-box (1lh) by hand. */
-.Show_Head .Dot {
-  align-self: start;
-  margin-top: calc((1lh - 0.55rem) / 2);
-}
 .Dot {
   --dot: var(--dim);
   flex: none;
