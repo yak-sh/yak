@@ -228,6 +228,42 @@ Deno.test('a child that exits nonzero failed, whatever it said', async () => {
   assertEquals(row(eid)?.exit_code, 3)
 })
 
+// The settle broadcast: whoever holds the task hears the ending on the
+// bus, because the ending IS a comment on the task, authored by the
+// session — cast like any wire write, exactly once per settle.
+let settleComments = (task: string, author: string) =>
+  (db.prepare(
+    `select d.body from comment c join doc d on d.eid = c.eid
+     where c.target_eid = ? and c.author_eid = ?`,
+  ).all(task, author) as { body: string }[]).map((c) => c.body)
+
+Deno.test('a settled session says so on its task', async () => {
+  let { t } = seed()
+  heard = []
+  let { eid, done } = begin(t)
+  await done
+  assertEquals(row(eid)?.status, 'completed')
+  let said = settleComments(t, eid)
+  assertEquals(said.length, 1)
+  assertMatch(said[0], /^S-\d+ completed · exit 0\n/)
+  assertMatch(said[0], /done: /) // the final text's gist rides along
+  // The comment rode the CAST — clients heard graph data, not a stamp.
+  assert(
+    heard.some((c) => c.name == 'comment' && c.comp?.target_eid == t),
+  )
+})
+
+Deno.test('a failed spawn tells the task too — and only once', async () => {
+  let { t } = seed()
+  let { eid, done } = begin(t, { model: 'no-such-model' })
+  await done
+  assertEquals(row(eid)?.status, 'failed')
+  let said = settleComments(t, eid)
+  assertEquals(said.length, 1)
+  assertMatch(said[0], /^S-\d+ failed\n/)
+  assertMatch(said[0], /unknown model/)
+})
+
 Deno.test('stop: a stop_request signals the group, the ending is OBSERVED', async () => {
   let { t } = seed('delay:9000')
   let { eid, done } = begin(t)

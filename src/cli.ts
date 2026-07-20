@@ -15,6 +15,7 @@ import {
   commentChanges,
   contextDigest,
   find,
+  hookClaim,
   host,
   idOf,
   lapseChanges,
@@ -27,6 +28,7 @@ import {
   send,
   sessionFor,
   snapshot,
+  spawnChanges,
   taskChanges,
 } from './client.ts'
 import { matchQuery, pred } from './query.ts'
@@ -45,6 +47,8 @@ let usage = `task — the entity graph, from a shell
   task search <words...>         full-text search (trailing * = prefix)
   task claim <id> [session]      lease a task for a session ($TASKS_SESSION)
   task release <id>              drop the lease
+  task spawn <id> --provider=X --model=Y [--effort=Z] [--persona=P-9]
+                                 dispatch a managed agent onto a task
   task comment <id> <text...>    say something about ANY entity
   task backup                    snapshot the db + commit/push the data dir
   task context [session]         this session's working set ($TASKS_SESSION)
@@ -144,6 +148,33 @@ let claim = async (args: string[]) => {
   console.log(`${idOf(row)} claimed by ${session}`)
 }
 
+// Dispatch a managed agent onto a task — one wire write; the server's
+// created(session) effect does the rest, and any failure is a failed
+// Session on the board (task show <S-id> reads it back).
+let spawn = async (args: string[]) => {
+  let flag = (n: string) =>
+    args.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3)
+  let [id] = args.filter((a) => !a.startsWith('--'))
+  let provider = flag('provider')
+  let model = flag('model')
+  if (!id || !provider || !model) {
+    throw new Error(
+      'task spawn <id> --provider=X --model=Y [--effort=Z] [--persona=P-9]',
+    )
+  }
+  let all = rows(await snapshot())
+  let made = spawnChanges(all, {
+    task: id,
+    provider,
+    model,
+    effort: flag('effort'),
+    persona: flag('persona'),
+  })
+  await send(made.changes)
+  let after = rows(await snapshot()).find((r) => r.eid == made.eid)
+  console.log(`${after ? idOf(after) : made.eid} spawned onto ${id}`)
+}
+
 let release = async (args: string[]) => {
   let [id] = args
   if (!id) throw new Error('task release <id>')
@@ -201,8 +232,18 @@ let context = async (args: string[]) => {
       if (!sid) return
       let snap = await snapshot()
       // Reify the session on arrival: id + worktree, before any claim.
-      let s = sessionFor(rows(snap), sid, String(body.cwd ?? '') || undefined)
+      let cwd = String(body.cwd ?? '') || undefined
+      let s = sessionFor(rows(snap), sid, cwd)
       if (s.changes.length) await send(s.changes)
+      // A managed spawn boots already holding its lease: the launcher
+      // passes TASKS_TASK, and an unclaimed task claims quietly here —
+      // no prompt discipline required. A held lease stays held (the
+      // server would bounce a steal anyway); the digest names the holder.
+      let hc = hookClaim(rows(snap), Deno.env.get('TASKS_TASK'), sid, cwd)
+      if (hc.length) {
+        await send(hc)
+        snap = await snapshot() // the digest should show the claim it made
+      }
       await tell(snap, sid)
     } catch {
       // silent: offline server or malformed stdin — the session goes on
@@ -301,6 +342,7 @@ try {
   else if (cmd == 'show') await show(rest)
   else if (cmd == 'search') await seek(rest)
   else if (cmd == 'claim') await claim(rest)
+  else if (cmd == 'spawn') await spawn(rest)
   else if (cmd == 'comment') await comment(rest)
   else if (cmd == 'backup') await backup()
   else if (cmd == 'context') await context(rest)

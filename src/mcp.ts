@@ -40,6 +40,7 @@ import {
   search,
   send,
   snapshot,
+  spawnChanges,
   taskChanges,
 } from './client.ts'
 import { hot, matchQuery, orderOf, parseQuery, pred } from './query.ts'
@@ -54,6 +55,12 @@ export type IO = {
   // Bump recall aggregates (server-stamped — recall never rides the
   // apply wire); confirm also stamps memory.last_confirmed_at.
   touch: (eids: string[], confirm?: boolean) => Promise<void>
+  // A session's log tail (sessions.ts logs() in-process; the HTTP route
+  // over stdio) — entries carry the renderer row when the line has one.
+  logs: (eid: string, q: URLSearchParams) => Promise<{
+    entries: { seq: number; line: string; row?: unknown }[]
+    stderr?: string
+  }>
 }
 
 // A prop's type, said inline where it isn't obvious: enums spell their
@@ -87,6 +94,31 @@ days' — a phrase is a RANGE: = within it, >= from its start, <= to its
 end ('.modified_at>="1 hour ago"'; glue with - where quoting is hard).
 Bare words are text terms (doc contains). Boards persist these same
 queries (board.query).`
+
+// One log entry, said small: the renderer row when the line carries one
+// (adapters normalized it), else the raw line — either way one bounded
+// line per seq, so a peek stays a glance.
+let peekLine = (e: { seq: number; line: string; row?: unknown }) => {
+  let r = e.row as Record<string, unknown> | undefined
+  let clip = (s: unknown) =>
+    String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, 200)
+  let said = !r
+    ? clip(e.line)
+    : r.kind == 'say'
+    ? `${r.role}: ${clip(r.text)}`
+    : r.kind == 'reason'
+    ? `… ${clip(r.text)}`
+    : r.kind == 'exec'
+    ? `$ ${clip(r.command)}`
+    : r.kind == 'tool'
+    ? `[${r.name}] ${clip(r.error ?? r.detail ?? '')}`
+    : r.kind == 'turn'
+    ? '— turn —'
+    : r.kind == 'error'
+    ? `ERROR ${clip(r.text)}`
+    : `(${clip((r as { tag?: unknown }).tag ?? r.kind)})`
+  return `${String(e.seq).padStart(4)}  ${said}`
+}
 
 let line = (all: Row[], r: Row) => {
   let who = claimant(all, r)
@@ -359,6 +391,89 @@ other sessions. ${BUS}`,
       if (!row) return err(`no entity: ${id}`)
       await io.write([{ eid: row.eid, name: 'claim', comp: null }])
       return bus(`released ${idOf(row)}`, session)
+    },
+  )
+
+  server.tool(
+    'task_spawn',
+    `Dispatch a managed agent onto a task: mints a session entity carrying
+the request — the server validates and launches it in its own git
+worktree, and every way that can fail is a failed Session on the board
+(never an error here). Returns the S-id: session_peek checks on it,
+task_comment at the SETTLED session says more to it, and when the run
+settles the server comments the outcome on the task, so holders hear it
+on the bus. Providers/models: the server's /providers table. ${BUS}`,
+    {
+      id: z.string(),
+      provider: z.string(),
+      model: z.string(),
+      effort: z.string().optional(),
+      persona: z.string().optional(),
+      session: z.string().optional(),
+    },
+    async (
+      { id, provider, model, effort, persona, session }: {
+        id: string
+        provider: string
+        model: string
+        effort?: string
+        persona?: string
+        session?: string
+      },
+    ) => {
+      let all = rows(await io.read())
+      let made
+      try {
+        made = spawnChanges(all, { task: id, provider, model, effort, persona })
+      } catch (e) {
+        return err((e as Error).message)
+      }
+      await io.write(made.changes)
+      let after = find(rows(await io.read()), made.eid)
+      return bus(
+        `spawned ${after ? idOf(after) : made.eid} onto ${id}`,
+        session,
+      )
+    },
+  )
+
+  server.tool(
+    'session_peek',
+    `Check in on a session (S-12): status, provider/model, seq, timing,
+error — then the last lines of its log as rendered rows (what it said,
+ran, called). tail picks how many lines (default 20, cap 500). Works
+running or settled; stderr rides along when the child wrote any. ${BUS}`,
+    {
+      id: z.string(),
+      tail: z.number().optional(),
+      session: z.string().optional(),
+    },
+    async (
+      { id, tail, session }: { id: string; tail?: number; session?: string },
+    ) => {
+      let all = rows(await io.read())
+      let row = find(all, id)
+      if (!row?.comps.session) return err(`no session: ${id}`)
+      let s = row.comps.session
+      let head = [
+        `${idOf(row)} ${s.status ?? 'external'}`,
+        `${s.provider ?? '?'} ${s.serving_model ?? s.model ?? ''}`.trim(),
+        `seq ${s.latest_seq ?? 0}`,
+        ...(s.started_at ? [`started ${s.started_at}`] : []),
+        ...(s.finished_at ? [`finished ${s.finished_at}`] : []),
+        ...(s.exit_code == null ? [] : [`exit ${s.exit_code}`]),
+        ...(s.error ? [`error: ${String(s.error).slice(0, 200)}`] : []),
+      ].join(' · ')
+      let out = await io.logs(
+        row.eid,
+        new URLSearchParams({ tail: String(tail ?? 20) }),
+      )
+      let lines = out.entries.map(peekLine)
+      return bus(
+        [head, ...lines, ...(out.stderr ? [`stderr:\n${out.stderr}`] : [])]
+          .join('\n'),
+        session,
+      )
     },
   )
 
@@ -926,5 +1041,10 @@ if (import.meta.main) {
     // stdio transport reads memories without warming them. The in-process
     // mount (/mcp, the fleet's door) is where recall counts.
     touch: async () => {},
+    logs: async (eid, q) => {
+      let res = await fetch(`http://${host()}/sessions/${eid}/logs?${q}`)
+      if (!res.ok) throw new Error(`server said ${res.status}`)
+      return res.json()
+    },
   }).connect(new StdioServerTransport())
 }

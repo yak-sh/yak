@@ -176,6 +176,8 @@ let mcp = async (req: Request) => {
         let out = touch(db, eids, confirm)
         if (out.length) cast(out)
       },
+      // deno-lint-ignore require-await
+      logs: async (eid, q) => logs(eid, q),
     })
     await server.connect(theirs)
     let reply = new Promise((resolve) => mine.onmessage = resolve)

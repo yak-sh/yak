@@ -29,7 +29,8 @@
 //    truth exactly once and none of it ever rode the wire inbound.
 import { basename, dirname } from 'node:path'
 import { type Adapter, adapters, type Event, type Summary } from './adapters.ts'
-import { db } from './db.ts'
+import { apply, db } from './db.ts'
+import { dispatch, trace } from './effects.ts'
 import { type Change, sessionActive } from './types.ts'
 
 type Cast = (changes: Change[]) => void
@@ -73,12 +74,70 @@ let stamp = (
 ) => {
   let cols = Object.keys(patch)
   if (!cols.length) return
+  // The settle broadcast hangs off the ONE WRITER: lifecycle columns
+  // never cross apply(), so the effects dispatcher cannot see this
+  // transition — the writer that stamps an ending is the only observer
+  // there is. Prior status read first, so a re-stamp of the same ending
+  // never says it twice.
+  let ending = table == 'session' && SETTLED.includes(String(patch.status))
+  let was = ending
+    ? (db.prepare('select status from session where eid = ?').get(eid) as
+      | { status: string | null }
+      | undefined)?.status
+    : null
   let vals = cols.map((c) => (patch as Row)[c] as string | number | null)
   db.prepare(
     `update ${table} set ${cols.map((c) => `${c} = ?`).join(', ')}
      where eid = ?`,
   ).run(...vals, eid)
   castRow(eid, cast, table)
+  if (ending && was != patch.status) settled(eid, String(patch.status), cast)
+}
+
+// A managed session is over in exactly these statuses — the moment one
+// lands, whoever asked for the work deserves to hear it.
+let SETTLED = ['completed', 'failed', 'interrupted', 'lost']
+
+// The outcome, said on the TASK as an ordinary comment authored by the
+// session: holders and watchers hear it on their next tool call (the
+// comms bus), and the task's trail keeps the record. Graph data, so it
+// rides apply()+cast+dispatch like any wire write — telling must never
+// break the ending it reports, so a refusal is a warning, not a throw.
+let settled = (eid: string, status: string, cast: Cast) => {
+  let row = db.prepare('select * from session where eid = ?').get(eid) as
+    | Row
+    | undefined
+  if (!row || row.origin != 'managed' || !row.requested_task_eid) return
+  let task = String(row.requested_task_eid)
+  if (!db.prepare('select 1 from task where eid = ?').get(task)) return
+  let { num } = db.prepare('select num from entity where eid = ?').get(eid) as {
+    num: number
+  }
+  let gist = String(row.final_text ?? '').replace(/\s+/g, ' ').trim()
+    .slice(0, 240)
+  let body = [
+    `S-${num} ${status}${
+      row.exit_code == null ? '' : ` · exit ${row.exit_code}`
+    }`,
+    ...(row.error ? [`error: ${String(row.error).slice(0, 240)}`] : []),
+    ...(gist ? [gist] : []),
+  ].join('\n')
+  let cid = crypto.randomUUID()
+  try {
+    let t = trace()
+    let out = apply(db, [
+      { eid: cid, name: 'doc', comp: { title: '', body } },
+      {
+        eid: cid,
+        name: 'comment',
+        comp: { target_eid: task, author_eid: eid },
+      },
+    ], t)
+    cast(out)
+    dispatch(out, t, (comp, e) => console.warn(`settle effect ${comp} —`, e))
+  } catch (e) {
+    console.warn('settle comment dropped —', e)
+  }
 }
 
 // ---- following the file ----

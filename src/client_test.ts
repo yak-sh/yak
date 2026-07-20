@@ -7,6 +7,7 @@ import {
   commentChanges,
   contextDigest,
   find,
+  hookClaim,
   lapseChanges,
   memoryChanges,
   notices,
@@ -15,6 +16,7 @@ import {
   recallIndex,
   rows,
   sessionFor,
+  spawnChanges,
   spec,
   taskChanges,
 } from './client.ts'
@@ -157,6 +159,49 @@ Deno.test('sessionFor: reuse, mint, cwd refresh', () => {
 Deno.test('claimChanges points at the session entity', () => {
   let cs = claimChanges(all, T2, 'sess-x')
   assertEquals(cs, [{ eid: T2, name: 'claim', comp: { session_eid: S } }])
+})
+
+Deno.test('spawnChanges: one session change carrying the request', () => {
+  let made = spawnChanges(all, {
+    task: 'T-3', // human id resolves
+    provider: 'claude',
+    model: 'claude-fable-5',
+    effort: 'high',
+    persona: 'old-board-slug', // aliases resolve too
+  })
+  assertEquals(made.changes.length, 1)
+  let c = made.changes[0]
+  assertEquals(c.name, 'session')
+  assertEquals(c.comp?.provider, 'claude')
+  assertEquals(c.comp?.model, 'claude-fable-5')
+  assertEquals(c.comp?.effort, 'high')
+  assertEquals(c.comp?.requested_task_eid, T2)
+  assertEquals(c.comp?.persona_eid, T2)
+  assertMatch(String(c.comp?.id), /^[0-9a-f-]{36}$/)
+  assertThrows(() =>
+    spawnChanges(all, { task: 'T-99', provider: 'x', model: 'y' })
+  )
+  // an id that is not a TASK is refused — a spawn needs work to do
+  assertThrows(() =>
+    spawnChanges(all, { task: 'S-1', provider: 'x', model: 'y' })
+  )
+  assertThrows(() =>
+    spawnChanges(all, {
+      task: 'T-3',
+      provider: 'x',
+      model: 'y',
+      persona: 'nope',
+    })
+  )
+})
+
+Deno.test('hookClaim: an unclaimed task claims, anything else is quiet', () => {
+  assertEquals(hookClaim(all, 'T-3', 'sess-x', '/w'), [
+    { eid: T2, name: 'claim', comp: { session_eid: S } },
+  ])
+  assertEquals(hookClaim(all, 'T-2', 'sess-x'), []) // already held
+  assertEquals(hookClaim(all, 'T-99', 'sess-x'), []) // no such task
+  assertEquals(hookClaim(all, undefined, 'sess-x'), []) // no TASKS_TASK
 })
 
 Deno.test('commentChanges: doc + aim, attributed or anon', () => {

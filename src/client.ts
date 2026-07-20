@@ -194,6 +194,57 @@ export let claimChanges = (
   ]
 }
 
+// The spawn batch: one session entity carrying the request columns —
+// the server's created(session) effect validates and launches it, and
+// every way it can fail lands as a failed Session on the board, not an
+// error here. The task (and persona) resolve through find(), so human
+// ids work everywhere.
+export let spawnChanges = (
+  all: Row[],
+  s: {
+    task: string
+    provider: string
+    model: string
+    effort?: string
+    persona?: string
+  },
+) => {
+  let task = find(all, s.task)
+  if (!task?.comps.task) throw new Error(`no task: ${s.task}`)
+  let persona = s.persona ? find(all, s.persona) : undefined
+  if (s.persona && !persona) throw new Error(`no entity: ${s.persona}`)
+  let eid = uuid()
+  let changes: Change[] = [{
+    eid,
+    name: 'session',
+    comp: {
+      id: uuid(),
+      provider: s.provider,
+      model: s.model,
+      ...(s.effort ? { effort: s.effort } : {}),
+      requested_task_eid: task.eid,
+      ...(persona ? { persona_eid: persona.eid } : {}),
+    },
+  }]
+  return { eid, changes }
+}
+
+// The hook's auto-claim: a managed spawn boots already holding its lease
+// (the launcher passes TASKS_TASK). Only an unclaimed task claims — a
+// held lease is news for the digest, never a fight. [] when there is
+// nothing to do.
+export let hookClaim = (
+  all: Row[],
+  want: string | undefined,
+  session: string,
+  cwd?: string,
+): Change[] => {
+  if (!want) return []
+  let task = find(all, want)
+  if (!task?.comps.task || task.comps.claim) return []
+  return claimChanges(all, task.eid, session, cwd)
+}
+
 // A comment: a doc aimed at the target, attributed to a session when
 // one is named.
 export let commentChanges = (
