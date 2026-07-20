@@ -143,11 +143,15 @@ export let span = (s: string, now = Date.now()): Span | null => {
 type Comps = Record<string, Record<string, unknown> | undefined>
 
 // The routing table: every component's columns, plus the spine's.
+// Server-stamped columns join HERE, not in comps — filterable ('.count>=5')
+// without ever joining the write allowlist (cols() reads comps alone).
 let routes: Record<string, readonly string[]> = {
   ...Object.fromEntries(
     Object.entries(comps).map(([name, props]) => [name, Object.keys(props)]),
   ),
   entity: ['num', 'created_at', 'modified_at'],
+  memory: [...Object.keys(comps.memory), 'last_confirmed_at'],
+  recall: ['count', 'first_at', 'last_at'],
 }
 
 // Route a bare prop to its component; ambiguity is an error that names
@@ -175,6 +179,13 @@ let OPS: Record<string, string> = {
   '>=': '>=',
 }
 
+// '.order=hot' is a RANKING, not a filter: matchQuery lets it through,
+// adopt() ignores it, and orderOf() hands the value to whoever sorts.
+// One value today; the grammar grows values here, not mechanisms.
+export let ORDER = 'order'
+
+export let orderOf = (preds: Pred[]) => preds.find((p) => p.op == ORDER)?.value
+
 export let pred = (token: string): Pred | null => {
   let m = token.match(
     /^\.([A-Za-z_]+)(?:\.([A-Za-z_]+))?(!=|~=|<=|>=|<|>|=)(.*)$/s,
@@ -183,6 +194,9 @@ export let pred = (token: string): Pred | null => {
   let [, a, b, op, value] = m
   // a quoted value is the escape hatch for spaces where whitespace splits
   value = value.replace(/^"(.*)"$/s, '$1')
+  if (a == 'order' && !b && op == '=') {
+    return { comp: '', prop: 'order', op: ORDER, value }
+  }
   if (b && !routes[a]?.includes(b)) throw new Error(`no such prop: .${a}.${b}`)
   return b
     ? { comp: a, prop: b, op: OPS[op], value }
@@ -303,6 +317,7 @@ let test = (v: unknown, p: Pred): boolean => {
 // one pred, either column.
 export let matchQuery = (c: Comps, preds: Pred[]) =>
   preds.every((p) => {
+    if (p.op == ORDER) return true
     if (p.op == TEXT) {
       let d = c.doc as { title?: string; body?: string } | undefined
       let needle = p.value.toLowerCase()
@@ -313,6 +328,36 @@ export let matchQuery = (c: Comps, preds: Pred[]) =>
     }
     return test(c[p.comp]?.[p.prop], p)
   })
+
+// The warmth of an entity, on (0,1] — the rank behind '.order=hot'.
+// Recall aggregates (count, first_at, last_at) are the whole model:
+// every recall earns a day of STABILITY, and spacing multiplies it —
+// the same count spread over months buys more durability than an
+// afternoon of cramming (mean interval, in weeks, is the multiplier).
+// The score decays exponentially past last_at against that stability,
+// so top-of-mind-for-hours / recallable-for-days / rings-a-bell-for-
+// months fall out of one curve. No recall row yet: the entity's own
+// modified_at counts as a single touch — new things start hot and fade
+// unless used. The clock rides in as a parameter (tests fix it), and no
+// stored score exists anywhere to sweep.
+let DAY = 86_400_000
+export let hot = (c: Comps, now: number): number => {
+  let r = c.recall
+  let count = Number(r?.count ?? 0)
+  let last = Date.parse(String(r?.last_at ?? ''))
+  if (!count || Number.isNaN(last)) {
+    count = 1
+    last = Date.parse(
+      String(c.entity?.modified_at ?? c.entity?.created_at ?? ''),
+    )
+    if (Number.isNaN(last)) return 0
+  }
+  let first = Date.parse(String(r?.first_at ?? ''))
+  if (Number.isNaN(first)) first = last
+  let mean = count > 1 ? Math.max(0, last - first) / (count - 1) : 0
+  let stability = DAY * count * (1 + mean / (7 * DAY))
+  return Math.exp(-Math.max(0, now - last) / stability)
+}
 
 // The values a row must carry to satisfy the query's scalar equalities on
 // one component — what a board drop patches, so a dropped task JOINS the

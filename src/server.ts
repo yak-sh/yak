@@ -10,7 +10,7 @@ import { transform } from 'sucrase'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { providers } from './adapters.ts'
 import { type Change } from './types.ts'
-import { apply, db, search, snapshot } from './db.ts'
+import { apply, db, search, snapshot, touch } from './db.ts'
 import { dispatch, on, trace } from './effects.ts'
 import { freeze, serveFrozen, store } from './freeze.ts'
 import { mcpServer } from './mcp.ts'
@@ -168,6 +168,13 @@ let mcp = async (req: Request) => {
       upload: async (eid, html) => {
         let res = await store(eid, html, cast)
         if (!res.ok) throw new Error(await res.text())
+      },
+      // The one writer of recall stats: stamp, then cast, so every
+      // cache hears the new warmth (the apply wire refuses these rows).
+      // deno-lint-ignore require-await
+      touch: async (eids, confirm) => {
+        let out = touch(db, eids, confirm)
+        if (out.length) cast(out)
       },
     })
     await server.connect(theirs)

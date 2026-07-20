@@ -1,7 +1,7 @@
 // apply()/snapshot() semantics against an in-memory db — the wire's
 // contract: patches, creates, deletes, tombstones, and the claim lease.
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, db, open, search, snapshot } = await import('./db.ts')
+let { apply, db, open, search, snapshot, touch } = await import('./db.ts')
 let { assertEquals, assertMatch, assertThrows } = await import(
   '@std/assert'
 )
@@ -302,4 +302,68 @@ Deno.test('search: terms and filters mix in one line', () => {
   // filters alone are a listing, newest touched first
   assertEquals(eids('.status=done .modified_at>=today').includes(a), true)
   assertEquals(eids('.status=done .modified_at>=today').includes(b), false)
+})
+
+// ---- memory + recall: the decay model's storage half ----
+
+Deno.test('memory: writable face rides in, confirmation never does', () => {
+  let m = uid(), s = uid(), p = uid()
+  apply(db, [
+    { eid: s, name: 'session', comp: { id: `sess-${s}` } },
+    { eid: p, name: 'doc', comp: { title: 'a venture' } },
+    { eid: p, name: 'project', comp: {} },
+    { eid: m, name: 'doc', comp: { title: 'zebu index line', body: 'fact' } },
+    {
+      eid: m,
+      name: 'memory',
+      comp: {
+        type: 'feedback',
+        source_eid: s,
+        scope_eid: p,
+        last_confirmed_at: 'FAKE',
+      },
+    },
+  ])
+  let row = comp(m, 'memory')
+  assertEquals(row?.type, 'feedback')
+  assertEquals(row?.source_eid, s)
+  assertEquals(row?.scope_eid, p)
+  assertEquals(row?.last_confirmed_at, null) // server-owned
+  assertEquals(search(db, 'zebu')[0]?.kind, 'memory') // memory names it
+})
+
+Deno.test('recall never rides the wire; touch() is the one writer', () => {
+  let m = uid()
+  apply(db, [{ eid: m, name: 'doc', comp: { title: 'warm' } }])
+  // a forged create drops (nothing writable, not-nulls refuse the touch)
+  apply(db, [
+    {
+      eid: m,
+      name: 'recall',
+      comp: { count: 99, first_at: 'x', last_at: 'y' },
+    },
+  ])
+  assertEquals(comp(m, 'recall'), undefined)
+  let [first] = touch(db, [m])
+  assertEquals(comp(m, 'recall')?.count, 1)
+  touch(db, [m])
+  let r = comp(m, 'recall')
+  assertEquals(r?.count, 2)
+  assertEquals(r?.first_at, first.comp?.first_at) // first_at never moves
+  apply(db, [{ eid: m, name: 'recall', comp: { count: 99 } }]) // forged patch
+  assertEquals(comp(m, 'recall')?.count, 2)
+})
+
+Deno.test('touch confirm stamps the memory; death takes the recall row', () => {
+  let m = uid()
+  apply(db, [
+    { eid: m, name: 'doc', comp: { title: 'confirmable' } },
+    { eid: m, name: 'memory', comp: { type: 'user' } },
+  ])
+  let out = touch(db, [m], true)
+  assertEquals(out.map((c) => c.name), ['recall', 'memory'])
+  assertMatch(String(comp(m, 'memory')?.last_confirmed_at), /^\d{4}-/)
+  apply(db, [{ eid: m, name: 'entity', comp: null }])
+  assertEquals(comp(m, 'recall'), undefined)
+  assertEquals(touch(db, [m]), []) // tombstoned: no spine, no touch
 })

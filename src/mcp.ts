@@ -29,10 +29,12 @@ import {
   find,
   host,
   idOf,
+  memoryChanges,
   notices,
   type Param,
   param,
   patches,
+  recallIndex,
   type Row,
   rows,
   search,
@@ -40,7 +42,7 @@ import {
   snapshot,
   taskChanges,
 } from './client.ts'
-import { matchQuery, pred } from './query.ts'
+import { hot, matchQuery, orderOf, parseQuery, pred } from './query.ts'
 
 // How the tools reach the graph — in-process on the server, HTTP here.
 export type IO = {
@@ -49,6 +51,9 @@ export type IO = {
   find: (q: string, limit?: number) => Promise<Hit[]>
   // Land an HTML page in the frozen store for an existing web entity.
   upload: (eid: string, html: string) => Promise<void>
+  // Bump recall aggregates (server-stamped — recall never rides the
+  // apply wire); confirm also stamps memory.last_confirmed_at.
+  touch: (eids: string[], confirm?: boolean) => Promise<void>
 }
 
 // A prop's type, said inline where it isn't obvious: enums spell their
@@ -199,11 +204,16 @@ filters must ALL match. ${FILTERS} ${BUS}`,
       { filters = [], session }: { filters?: string[]; session?: string },
     ) => {
       let ps = parseFilters(filters)
+      let now = Date.now()
       let all = rows(await io.read())
       let hits = all
         .filter((r) => r.comps.task)
         .filter((r) => matchQuery(r.comps, ps))
-        .sort(byBoard)
+        .sort(
+          orderOf(ps) == 'hot'
+            ? (a, b) => hot(b.comps, now) - hot(a.comps, now)
+            : byBoard,
+        )
       return bus(
         hits.map((r) => line(all, r)).join('\n') || '(no matches)',
         session,
@@ -369,6 +379,131 @@ you claim with, for attribution.`,
     },
   )
 
+  server.tool(
+    'memory_save',
+    `Save a memory — one distilled fact the whole fleet can recall.
+Content is a doc: title is the INDEX LINE (recall shows it first),
+body the fact. ${DOC} type: user (who the owner is) | feedback (how
+to work, with the why) | project (ongoing state) | reference (a
+pointer). scope names the project it belongs to (P-19). Passing id
+instead CONFIRMS an existing memory: patches whatever props ride
+along, stamps last_confirmed_at, and counts as a strong recall —
+confirm what you reuse, and it decays slower. ${BUS}`,
+    {
+      title: z.string().optional(),
+      body: body().optional(),
+      type: z.enum(['user', 'feedback', 'project', 'reference']).optional(),
+      scope: z.string().optional(),
+      id: z.string().optional(),
+      session: z.string(),
+    },
+    async (
+      { title, body, type, scope, id, session }: {
+        title?: string
+        body?: string
+        type?: string
+        scope?: string
+        id?: string
+        session: string
+      },
+    ) => {
+      let all = rows(await io.read())
+      if (id) {
+        let row = find(all, id)
+        if (!row?.comps.memory) return err(`no memory: ${id}`)
+        let patch: Change[] = []
+        if (title != null || body != null) {
+          patch.push({
+            eid: row.eid,
+            name: 'doc',
+            comp: {
+              ...(title != null ? { title } : {}),
+              ...(body != null ? { body } : {}),
+            },
+          })
+        }
+        if (type) patch.push({ eid: row.eid, name: 'memory', comp: { type } })
+        if (patch.length) await io.write(patch)
+        await io.touch([row.eid], true)
+        return bus(`confirmed ${idOf(row)}${wall(body)}`, session)
+      }
+      if (!title) {
+        return err('a new memory needs a title (or pass id to confirm one)')
+      }
+      let made
+      try {
+        made = memoryChanges(all, { title, body, type, scope, session })
+      } catch (e) {
+        return err((e as Error).message)
+      }
+      await io.write(made.changes)
+      let after = find(rows(await io.read()), made.eid)
+      return bus(
+        `saved ${after ? idOf(after) : made.eid}${wall(body)}`,
+        session,
+      )
+    },
+  )
+
+  server.tool(
+    'memory_recall',
+    `Recall memories, warmest first. The default reply is the INDEX —
+'M-7 0.84 feedback: title · 3× · confirmed 2026-07-01' — no bodies.
+Pass ids: [M-7, …] to read full bodies: THAT is the activation that
+bumps a memory's recall stats (listing never does), so expand only
+what you actually use. query mixes text terms with dot-param filters
+('.type=feedback', '.scope_eid=P-19', '.count>=3',
+'.last_confirmed_at<"last month"'); rank is recency vs earned
+stability — recalled often and spread out decays slowest. ${BUS}`,
+    {
+      query: z.string().optional(),
+      type: z.enum(['user', 'feedback', 'project', 'reference']).optional(),
+      ids: z.array(z.string()).optional(),
+      limit: z.number().optional(),
+      session: z.string().optional(),
+    },
+    async (
+      { query, type, ids, limit, session }: {
+        query?: string
+        type?: string
+        ids?: string[]
+        limit?: number
+        session?: string
+      },
+    ) => {
+      let all = rows(await io.read())
+      if (ids?.length) {
+        let hits: Row[] = []
+        for (let id of ids) {
+          let row = find(all, id)
+          if (!row?.comps.memory) return err(`no memory: ${id}`)
+          hits.push(row)
+        }
+        await io.touch(hits.map((r) => r.eid))
+        return bus(
+          hits.map((r) =>
+            `${idOf(r)} ${r.comps.memory.type}: ${r.comps.doc?.title ?? ''}\n${
+              r.comps.doc?.body ?? ''
+            }`
+          ).join('\n\n'),
+          session,
+        )
+      }
+      let preds
+      try {
+        preds = parseQuery(query ?? '')
+        if (type) {
+          let p = pred(`.type=${type}`)
+          if (p) preds.push(p)
+        }
+      } catch (e) {
+        return err((e as Error).message)
+      }
+      let lines = recallIndex(all, preds, Date.now(), limit ?? 20)
+      return bus(lines.join('\n') || '(no memories)', session)
+    },
+  )
+
   // ---- the generic graph surface: the UI is data, so this IS UI control ----
 
   server.tool(
@@ -379,9 +514,13 @@ client is looking at), sessions, comments — all live here. ${GRAMMAR} ${FILTER
     { filters: z.array(z.string()).optional(), kind: z.string().optional() },
     async ({ filters = [], kind }: { filters?: string[]; kind?: string }) => {
       let ps = parseFilters(filters)
+      let now = Date.now()
       let hits = rows(await io.read())
         .filter((r) => !kind || r.kind == kind)
         .filter((r) => matchQuery(r.comps, ps))
+      if (orderOf(ps) == 'hot') {
+        hits.sort((a, b) => hot(b.comps, now) - hot(a.comps, now))
+      }
       return text(JSON.stringify(
         hits.map((r) => ({
           id: idOf(r),
@@ -782,5 +921,10 @@ if (import.meta.main) {
       })
       if (!res.ok) throw new Error(`server said ${res.status}`)
     },
+    // Recall stats are server-stamped and the apply wire refuses them by
+    // design — over HTTP there is no honest way to bump one, so the
+    // stdio transport reads memories without warming them. The in-process
+    // mount (/mcp, the fleet's door) is where recall counts.
+    touch: async () => {},
   }).connect(new StdioServerTransport())
 }

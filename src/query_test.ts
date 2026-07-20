@@ -1,6 +1,14 @@
 // The filter grammar: one parser for boards, CLI and MCP.
-import { adopt, matchQuery, parseQuery, pred, span } from './query.ts'
-import { assertEquals, assertThrows } from '@std/assert'
+import {
+  adopt,
+  hot,
+  matchQuery,
+  orderOf,
+  parseQuery,
+  pred,
+  span,
+} from './query.ts'
+import { assert, assertEquals, assertThrows } from '@std/assert'
 
 // A task-shaped entity to filter against.
 let row = (
@@ -181,4 +189,52 @@ Deno.test('mixed line: & segments keep their spaces, space-dot splits', () => {
     '1 hour ago', // quotes shield the phrase from the whitespace split
   )
   assertEquals(parseQuery('.env')[0].op, 'text') // opless dot-word = a term
+})
+
+// ---- hot: the decay rank behind '.order=hot' ----
+
+let T0 = Date.parse('2026-07-20T12:00:00Z')
+let H = 3_600_000
+let D = 24 * H
+let ago = (ms: number) => new Date(T0 - ms).toISOString()
+let warm = (count: number, firstAgo: number, lastAgo: number) =>
+  hot({ recall: { count, first_at: ago(firstAgo), last_at: ago(lastAgo) } }, T0)
+
+Deno.test('hot: hours top of mind, days recallable, months rings a bell', () => {
+  assert(warm(1, 2 * H, 2 * H) > 0.9) // just touched
+  assert(warm(1, 5 * D, 5 * D) < 0.05) // one touch, days ago: faded
+  assert(warm(20, 200 * D, 7 * D) > 0.6) // a habit stays warm across weeks
+})
+
+Deno.test('hot: recalled often decays slower than recalled once', () => {
+  assert(warm(10, 30 * D, 5 * D) > warm(1, 5 * D, 5 * D))
+})
+
+Deno.test('hot: spaced recalls outlast crammed ones at equal count', () => {
+  assert(warm(10, 90 * D, 10 * D) > warm(10, 10 * D + H, 10 * D))
+})
+
+Deno.test('hot: no recalls yet — modified_at counts as a single touch', () => {
+  assert(hot({ entity: { modified_at: ago(H) } }, T0) > 0.9)
+  assert(hot({ entity: { modified_at: ago(10 * D) } }, T0) < 0.01)
+  assertEquals(hot({}, T0), 0)
+})
+
+Deno.test('.order=hot is a ranking, not a filter', () => {
+  let ps = parseQuery('.order=hot&.status=open')
+  assertEquals(orderOf(ps), 'hot')
+  assertEquals(matchQuery(row({}), ps), true) // never screens
+  assertEquals(adopt(ps, 'task'), { status: 'open' }) // never adopts
+  assertEquals(orderOf(parseQuery('.status=open')), undefined)
+})
+
+Deno.test('server-stamped recall columns filter without being writable', () => {
+  assertEquals(
+    matchQuery({ recall: { count: 3 } }, parseQuery('.count>=2')),
+    true,
+  )
+  assertEquals(
+    matchQuery({ recall: { count: 1 } }, parseQuery('.count>=2')),
+    false,
+  )
 })

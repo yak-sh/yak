@@ -8,9 +8,11 @@ import {
   contextDigest,
   find,
   lapseChanges,
+  memoryChanges,
   notices,
   param,
   patches,
+  recallIndex,
   rows,
   sessionFor,
   spec,
@@ -18,7 +20,7 @@ import {
 } from './client.ts'
 import { matchQuery, parseQuery } from './query.ts'
 import { idOf, kindOf, type Snapshot } from './types.ts'
-import { assertEquals, assertThrows } from '@std/assert'
+import { assertEquals, assertMatch, assertThrows } from '@std/assert'
 
 // A tiny graph: one board-ordered pair of tasks, a session, a claim.
 let S = 'aaaaaaaa-0000-4000-8000-000000000001'
@@ -205,4 +207,70 @@ Deno.test('spec: a typed task — leading P, params anywhere, body below', () =>
   // a malformed dot-word stays a word — mid-typing is not an error
   assertEquals(spec('touch .env file').title, 'touch .env file')
   assertEquals(spec('').title, '')
+})
+
+// ---- the memory doors' pure halves ----
+
+Deno.test('memoryChanges: doc face + memory comp, sourced and scoped', () => {
+  let { changes } = memoryChanges(all, {
+    title: 'Prefers terse tests',
+    type: 'feedback',
+    scope: 'T-3',
+    session: 'sess-x',
+  })
+  assertEquals(changes.length, 2) // the session exists: nothing minted
+  assertEquals(changes[0].comp?.title, 'Prefers terse tests')
+  assertEquals(changes[1].name, 'memory')
+  assertEquals(changes[1].comp?.source_eid, S)
+  assertEquals(changes[1].comp?.scope_eid, T2)
+  assertThrows(() =>
+    memoryChanges(all, { title: 'x', scope: 'P-99', session: 'sess-x' })
+  )
+})
+
+Deno.test('memoryChanges: an unknown session is minted alongside', () => {
+  let { changes } = memoryChanges(all, { title: 'x', session: 'newcomer' })
+  assertEquals(changes.length, 3)
+  assertEquals(changes[0].name, 'session')
+  assertEquals(changes[2].comp?.source_eid, changes[0].eid)
+})
+
+Deno.test('recallIndex: warmest first, index lines only, filtered', () => {
+  let M1 = 'aaaaaaaa-0000-4000-8000-000000000011'
+  let M2 = 'aaaaaaaa-0000-4000-8000-000000000012'
+  let NOW = Date.parse('2026-07-20T12:00:00Z')
+  let D = 86_400_000
+  let at = (ago: number) => new Date(NOW - ago).toISOString()
+  let mems = rows({
+    changes: [
+      { eid: M1, name: 'entity', comp: { eid: M1, num: 11, created_at: '' } },
+      { eid: M1, name: 'doc', comp: { title: 'cold fact', body: 'long ago' } },
+      { eid: M1, name: 'memory', comp: { type: 'project' } },
+      {
+        eid: M1,
+        name: 'recall',
+        comp: { count: 1, first_at: at(60 * D), last_at: at(60 * D) },
+      },
+      { eid: M2, name: 'entity', comp: { eid: M2, num: 12, created_at: '' } },
+      { eid: M2, name: 'doc', comp: { title: 'warm fact', body: 'today' } },
+      {
+        eid: M2,
+        name: 'memory',
+        comp: { type: 'feedback', last_confirmed_at: at(D) },
+      },
+      {
+        eid: M2,
+        name: 'recall',
+        comp: { count: 5, first_at: at(30 * D), last_at: at(2 * 3_600_000) },
+      },
+    ],
+  })
+  let lines = recallIndex(mems, parseQuery(''), NOW)
+  assertEquals(lines.length, 2)
+  assertMatch(lines[0], /^M-12 /) // the warm one leads
+  assertMatch(lines[0], /warm fact/)
+  assertMatch(lines[0], /5×/)
+  assertMatch(lines[0], /confirmed 2026-07-19/)
+  assertEquals(lines[0].includes('today'), false) // bodies stay home
+  assertEquals(recallIndex(mems, parseQuery('.type=project'), NOW).length, 1)
 })

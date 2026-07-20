@@ -17,7 +17,7 @@ import {
   uuid,
 } from './types.ts'
 import { idOf } from './types.ts'
-import { routeProp } from './query.ts'
+import { hot, matchQuery, type Pred, routeProp } from './query.ts'
 export { idOf }
 
 export let host = () => Deno.env.get('TASKS_HOST') ?? '127.0.0.1:5173'
@@ -334,6 +334,64 @@ export let lapseChanges = (all: Row[], session: string): Change[] => {
     { eid: r.eid, name: 'claim', comp: null },
   ])
 }
+
+// The memory-save batch: a doc face (title = index line, body = the
+// fact) plus the memory comp, sourced to the calling session (minted if
+// new, like a claim's) and scoped to a project when one is named.
+export let memoryChanges = (
+  all: Row[],
+  m: {
+    title: string
+    body?: string
+    type?: string
+    scope?: string
+    session: string
+  },
+) => {
+  let scope = m.scope ? find(all, m.scope) : undefined
+  if (m.scope && !scope) throw new Error(`no entity: ${m.scope}`)
+  let s = sessionFor(all, m.session)
+  let eid = uuid()
+  let changes: Change[] = [
+    ...s.changes,
+    { eid, name: 'doc', comp: { title: m.title, body: m.body ?? '' } },
+    {
+      eid,
+      name: 'memory',
+      comp: {
+        type: m.type ?? 'project',
+        source_eid: s.eid,
+        scope_eid: scope?.eid ?? null,
+      },
+    },
+  ]
+  return { eid, changes }
+}
+
+// The recall INDEX: memories screened by preds, warmest first — one
+// line each, no bodies. Expansion (and the recall bump that rides it)
+// stays behind the ids door: recognition is not retrieval.
+export let recallIndex = (
+  all: Row[],
+  preds: Pred[],
+  now: number,
+  limit = 20,
+) =>
+  all.filter((r) => r.comps.memory)
+    .filter((r) => matchQuery(r.comps, preds))
+    .map((r) => ({ r, score: hot(r.comps, now) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map(({ r, score }) => {
+      let m = r.comps.memory
+      let n = Number(r.comps.recall?.count ?? 0)
+      let seen = m.last_confirmed_at
+        ? ` · confirmed ${String(m.last_confirmed_at).slice(0, 10)}`
+        : ''
+      return `${idOf(r)} ${score.toFixed(2)} ${m.type}: ${
+        r.comps.doc?.title ?? ''
+      }${n ? ` · ${n}×` : ''}${seen}`
+    })
 
 // The claimant's session id, resolved through the claim's session entity.
 export let claimant = (all: Row[], r: Row) => {

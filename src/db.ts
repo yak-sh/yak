@@ -138,6 +138,21 @@ let schema = `
     eid  text primary key references entity(eid),
     slug text not null unique
   );
+  create table if not exists memory (
+    eid         text primary key references entity(eid),
+    type        text not null default 'project',
+    source_eid  text,
+    scope_eid   text,
+    last_confirmed_at text
+  );
+  -- recall's not-null columns have no defaults ON PURPOSE: they refuse
+  -- even apply()'s bare {} touch, so touch() below stays the one writer.
+  create table if not exists recall (
+    eid      text primary key references entity(eid),
+    count    integer not null default 1,
+    first_at text not null,
+    last_at  text not null
+  );
   create table if not exists tombstone (
     eid        text primary key,
     deleted_at text not null
@@ -663,6 +678,50 @@ export let apply = (
     }
     throw e
   }
+}
+
+// A recall touch — the server-minted aggregate behind ranked retrieval
+// (query.ts hot()). Bumps count and last_at; first_at never moves. It
+// deliberately does NOT stamp modified_at: reading is not editing, and
+// recency-in-search must not feed back on itself. `confirm` also stamps
+// memory.last_confirmed_at — an explicit re-confirmation is the
+// strongest touch there is. Skips eids with no live spine (tombstoned
+// or unknown). Returns the fresh rows as cast-able changes so every
+// cache hears the new warmth.
+export let touch = (
+  db: DatabaseSync,
+  eids: string[],
+  confirm = false,
+): Change[] => {
+  let now = new Date().toISOString()
+  let out: Change[] = []
+  for (let eid of eids) {
+    if (!db.prepare('select 1 from entity where eid = ?').get(eid)) continue
+    db.prepare(`
+      insert into recall (eid, first_at, last_at) values (?, ?, ?)
+      on conflict (eid) do update
+      set count = count + 1, last_at = excluded.last_at
+    `).run(eid, now, now)
+    out.push({
+      eid,
+      name: 'recall',
+      comp: db.prepare('select * from recall where eid = ?')
+        .get(eid) as Change['comp'],
+    })
+    if (
+      confirm &&
+      db.prepare('update memory set last_confirmed_at = ? where eid = ?')
+        .run(now, eid).changes
+    ) {
+      out.push({
+        eid,
+        name: 'memory',
+        comp: db.prepare('select * from memory where eid = ?')
+          .get(eid) as Change['comp'],
+      })
+    }
+  }
+  return out
 }
 
 // Full-text search over every doc — tasks, boards, projects, comments all

@@ -97,6 +97,22 @@ export let comps: Record<string, Record<string, PropType>> = {
   conflict: {}, // server-minted audit rows — nothing is wire-writable
   comment: { target_eid: { eid: '' }, author_eid: { eid: '' } },
   alias: { slug: 'text' },
+  // A distilled fact worth keeping — content rides the doc (title = the
+  // index line, body = the fact), provenance rides source_eid. The scope
+  // column is scope_eid, NOT project_eid: bare '.project_eid' must keep
+  // routing to task (live board queries depend on it), and a collision
+  // would make it ambiguous. last_confirmed_at is server-stamped by the
+  // confirm door, never wire-set.
+  memory: {
+    type: { enum: ['user', 'feedback', 'project', 'reference'] },
+    source_eid: { eid: 'session' },
+    scope_eid: { eid: 'project' },
+  },
+  // Server-minted recall aggregates — count·first_at·last_at is the
+  // decay model's whole memory (query.ts hot() derives rank at read).
+  // Nothing is wire-writable; db.ts touch() is the one writer. Keyed by
+  // eid like any comp, so ANY entity can grow warm — rank is graph-wide.
+  recall: {},
 }
 
 // Server-stamped columns with graph-typed values — never wire-writable
@@ -186,6 +202,7 @@ export let kindOrder = [
   'conflict',
   'comment',
   'alias',
+  'memory',
   'doc',
 ]
 export let kindOf = (has: Record<string, unknown>) =>
@@ -198,6 +215,7 @@ export let prefix: Record<string, string> = {
   project: 'P',
   board: 'B',
   session: 'S',
+  memory: 'M',
 }
 export let idOf = (e: { kind: string; num: number }) =>
   `${prefix[e.kind] ?? e.kind[0].toUpperCase()}-${e.num}`
@@ -376,6 +394,29 @@ export type Conflict = {
 // human handle. find() resolves it like any id; unique graph-wide.
 export type Alias = { eid: string; slug: string }
 
+// A distilled fact the fleet keeps: content in the doc, provenance in
+// source_eid (the session that learned it), scope in scope_eid (the
+// project it belongs to). last_confirmed_at is the last explicit
+// re-confirmation — server-stamped, like every recall statistic.
+export type Memory = {
+  eid: string
+  type: string // user | feedback | project | reference
+  source_eid?: string | null
+  scope_eid?: string | null
+  last_confirmed_at?: string | null
+}
+
+// Recall aggregates, server-minted on every activation (db.ts touch()).
+// Three numbers are the whole model: query.ts hot() derives stability
+// (count and spacing) and decays against last_at at read time — no
+// stored score anywhere, nothing to sweep.
+export type Recall = {
+  eid: string
+  count: number
+  first_at: string
+  last_at: string
+}
+
 // A full-text search hit. snip marks matches with \x01…\x02 (renderers
 // highlight without trusting HTML); open_eid is what to OPEN — the entity
 // itself, or a comment's target.
@@ -421,6 +462,8 @@ export type Ent = {
   conflict?: Conflict
   comment?: Comment
   alias?: Alias
+  memory?: Memory
+  recall?: Recall
   refs: Ref[]
   kids: Ent[]
 }
