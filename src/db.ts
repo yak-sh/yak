@@ -617,14 +617,32 @@ export let apply = (
           }
         }
         for (let d of doomed) {
-          // Soft references let go without a wire change or a removed
-          // hook — the claim's own entity lives on, only its lease ends.
+          // Soft references let go — and the wire HEARS them let go, or
+          // every client cache keeps a ghost (a lease whose holder died,
+          // a task pointing at a gone project or assignee) until reload.
+          // Each release is synthesized into the returned batch and, for
+          // claims, the Trace — so removed(claim) hooks fire like any
+          // deliberate release. A casualty's own entity-null already
+          // says everything, so only SURVIVORS get a change.
+          let freed = db.prepare('select eid from claim where session_eid = ?')
+            .all(d) as { eid: string }[]
           db.prepare('delete from claim where session_eid = ?').run(d)
-          db.prepare('update task set project_eid = null where project_eid = ?')
-            .run(d)
-          db.prepare(
-            'update task set assignee_eid = null where assignee_eid = ?',
-          ).run(d)
+          for (let { eid: held } of freed) {
+            if (doomed.includes(held)) continue
+            took(held, 'claim')
+            touched.add(held)
+            extra.push({ eid: held, name: 'claim', comp: null })
+          }
+          for (let col of ['project_eid', 'assignee_eid']) {
+            let homed = db.prepare(`select eid from task where ${col} = ?`)
+              .all(d) as { eid: string }[]
+            db.prepare(`update task set ${col} = null where ${col} = ?`).run(d)
+            for (let { eid: orphan } of homed) {
+              if (doomed.includes(orphan)) continue
+              touched.add(orphan)
+              extra.push({ eid: orphan, name: 'task', comp: { [col]: null } })
+            }
+          }
           for (let c of Object.keys(cmps).toReversed()) {
             if (c != 'entity') {
               if (db.prepare(`delete from ${c} where eid = ?`).run(d).changes) {

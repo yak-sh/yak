@@ -237,6 +237,51 @@ Deno.test('entity delete cascades to aimed entities, detaches soft refs', () => 
   assertEquals(comp(t2, 'doc')?.title, 'survivor')
 })
 
+// Every soft-detach rides the RETURN — a cache that misses one keeps a
+// ghost (a lease with no holder, a task homed to a gone project) until
+// reload. Casualties are excluded: their entity-null says everything.
+Deno.test('death broadcasts its soft-detaches: no ghost claims', async () => {
+  let { trace } = await import('./effects.ts')
+  let s = uid(), t = uid(), p = uid(), t2 = uid(), who = uid(), t3 = uid()
+  apply(db, [
+    { eid: s, name: 'session', comp: { id: 'sess-ghost' } },
+    { eid: t, name: 'doc', comp: { title: 'leased' } },
+    { eid: t, name: 'claim', comp: { session_eid: s } },
+    { eid: p, name: 'doc', comp: { title: 'home' } },
+    { eid: p, name: 'project', comp: {} },
+    { eid: t2, name: 'doc', comp: { title: 'homed' } },
+    { eid: t2, name: 'task', comp: { status: 'open', project_eid: p } },
+    { eid: who, name: 'doc', comp: { title: 'holder' } },
+    { eid: who, name: 'person', comp: {} },
+    { eid: t3, name: 'doc', comp: { title: 'plated' } },
+    { eid: t3, name: 'task', comp: { status: 'open', assignee_eid: who } },
+  ])
+  // dead session: the freed lease rides the return AND the Trace
+  let tr = trace()
+  let out = apply(db, [{ eid: s, name: 'entity', comp: null }], tr)
+  assertEquals(
+    out.some((c) => c.eid == t && c.name == 'claim' && c.comp == null),
+    true,
+  )
+  assertEquals(tr.removed.get(t)?.includes('claim'), true)
+  // dead project: the surviving task's detach is a patch on the wire
+  out = apply(db, [{ eid: p, name: 'entity', comp: null }])
+  assertEquals(
+    out.some((c) =>
+      c.eid == t2 && c.name == 'task' && c.comp?.project_eid === null
+    ),
+    true,
+  )
+  // dead assignee: same
+  out = apply(db, [{ eid: who, name: 'entity', comp: null }])
+  assertEquals(
+    out.some((c) =>
+      c.eid == t3 && c.name == 'task' && c.comp?.assignee_eid === null
+    ),
+    true,
+  )
+})
+
 Deno.test('assignee: whose plate round-trips, a dead assignee detaches', () => {
   let who = uid(), t = uid()
   apply(db, [
