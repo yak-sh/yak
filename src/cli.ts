@@ -37,7 +37,7 @@ import {
   taskChanges,
 } from './client.ts'
 import { matchQuery, pred, resolveRefs } from './query.ts'
-import { type Snapshot } from './types.ts'
+import { type Edge, edges, type Snapshot } from './types.ts'
 // `import type` (not the repo's usual inline `{ type X }`): telemetry.ts
 // reaches for node:sqlite, and the CLI has no business loading a db driver.
 import type { Log } from './telemetry.ts'
@@ -57,6 +57,8 @@ let usage = `task — the entity graph, from a shell
                                  defaults: your session's own, then the table
                                  dispatch a managed agent onto a task
   task comment <id> <text...>    say something about ANY entity
+  task dep <id> <type> <child> [--gone]   link (or --gone unlink) an edge:
+                                 requires | contains | reads | about
   task backup                    snapshot the db + commit/push the data dir
   task context [session]         this session's working set ($TASKS_SESSION)
   task lapse [session]           session over: release claims, note unfinished
@@ -216,6 +218,30 @@ let release = async (args: string[]) => {
   if (!row) throw new Error(`no entity: ${id}`)
   await send([{ eid: row.eid, name: 'claim', comp: null }])
   console.log(`${idOf(row)} released`)
+}
+
+// An edge is a sentence — "<id> requires <child>" — and the comp names the
+// whole triple, so link and unlink are the same Change with gone flipped.
+let dep = async (args: string[]) => {
+  let gone = args.includes('--gone')
+  let [id, type, childId] = args.filter((a) => a != '--gone')
+  if (!id || !type || !childId) {
+    throw new Error('task dep <id> <type> <child> [--gone]')
+  }
+  if (!edges.includes(type as Edge)) {
+    throw new Error(`edge type is one of: ${edges.join(', ')}`)
+  }
+  let all = rows(await snapshot())
+  let row = find(all, id)
+  let child = find(all, childId)
+  if (!row) throw new Error(`no entity: ${id}`)
+  if (!child) throw new Error(`no entity: ${childId}`)
+  await send([{
+    eid: row.eid,
+    name: 'dependency',
+    comp: { type, child_eid: child.eid, ...(gone ? { gone: true } : {}) },
+  }])
+  console.log(`${idOf(row)} ${type} ${idOf(child)}${gone ? ' — unlinked' : ''}`)
 }
 
 // Comments attach to anything; attribution rides $TASKS_SESSION when set.
@@ -444,6 +470,7 @@ try {
   else if (cmd == 'claim') await claim(rest)
   else if (cmd == 'spawn') await spawn(rest)
   else if (cmd == 'comment') await comment(rest)
+  else if (cmd == 'dep') await dep(rest)
   else if (cmd == 'backup') await backup()
   else if (cmd == 'context') await context(rest)
   else if (cmd == 'lapse') await lapse(rest)
