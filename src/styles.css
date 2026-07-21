@@ -2070,6 +2070,9 @@ html {
   min-width: 12rem;
 }
 .Prop_Tab {
+  display: inline-flex; /* a status tab seats its dot beside the word */
+  align-items: center;
+  gap: calc(var(--half-gap) / 2);
   font: inherit;
   background: none;
   border: 0;

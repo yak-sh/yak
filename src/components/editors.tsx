@@ -1,8 +1,9 @@
 import { type JSX } from 'preact'
 import { useRef, useState } from 'preact/hooks'
-import { comps, type PropType } from '../types.ts'
+import { comps, type PropType, statuses } from '../types.ts'
 import { cache, domains, ent, mutate } from '../live.ts'
 import { block, focus } from './ui.tsx'
+import { Dot } from './Dot.tsx'
 import { Edit } from './Edit.tsx'
 import { Overlay } from './overlay.tsx'
 
@@ -88,7 +89,9 @@ let NumEdit = ({ ...p }: EditorProps) => (
 )
 
 // enum: the values ARE the control — a row of tabs above the value,
-// current one marked. Small closed sets only ever need one press.
+// current one marked. Small closed sets only ever need one press. The
+// status set answers the pip that opened it in the same paint: each
+// choice wears its own dot.
 let EnumEdit = ({ ...p }: EditorProps) => {
   let t = p.t as { enum: string[] }
   return (
@@ -100,6 +103,7 @@ let EnumEdit = ({ ...p }: EditorProps) => {
           mod={v == p.value && 'on'}
           onClick={() => v == p.value ? p.done() : set(p, v)}
         >
+          {t.enum == statuses && <Dot status={v} />}
           {v}
         </Tab>
       ))}
