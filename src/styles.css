@@ -1472,6 +1472,20 @@ html {
   text-decoration: underline;
   color: var(--fg);
 }
+/* the pip rides the sentence inline, sized to its 12px line */
+.Dependency .Dot {
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+}
+/* a settled dependency no longer binds: struck, TaskRow_Done's fade */
+.Dependency_Name-settled {
+  text-decoration: line-through;
+  opacity: 0.55;
+}
+.Dependency_Name-settled:hover {
+  text-decoration: line-through underline;
+}
 .Dependency_Type-requires {
   color: var(--red);
 }

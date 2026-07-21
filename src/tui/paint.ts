@@ -40,6 +40,7 @@ let sheet: Record<string, Style> = {
   'Dot-wip': { fg: '#dbbc7f' },
   'Dot-done': { fg: '#d699b6' },
   'Dot-cancelled': { fg: '#7a8478' },
+  'Dot-gated': { fg: '#e67e80' }, // open requires deps: blocked in fact
   Id: { fg: '#7a8478' },
   Task_Title: { bold: true },
   Task_Body: { fg: '#9da9a0' },
@@ -53,6 +54,7 @@ let sheet: Record<string, Style> = {
   'Dependency_Type-requires': { fg: '#e67e80' },
   'Dependency_Type-reads': { fg: '#7fbbb3' },
   'Dependency_Type-contains': { fg: '#dbbc7f' },
+  'Dependency_Name-settled': { strike: true },
   Debug_Kind: { fg: '#7a8478' },
   Debug_Comp: { fg: '#e69875' },
   Debug_Key: { fg: '#7a8478' },
