@@ -685,3 +685,23 @@ Deno.test('journalOf: newest first, cut to the eid', () => {
   }])
   assertEquals(past.every((e) => e.changes.every((c) => c.eid == t)), true)
 })
+
+Deno.test('num is monotonic: a grave keeps its number off the market', () => {
+  let a = uid(), b = uid()
+  apply(db, [{ eid: a, name: 'doc', comp: { title: 'first' } }])
+  apply(db, [{ eid: b, name: 'doc', comp: { title: 'last' } }])
+  let num = (eid: string) =>
+    (db.prepare('select num from entity where eid = ?').get(eid) as {
+      num: number
+    })?.num
+  let high = num(b)
+  apply(db, [{ eid: b, name: 'entity', comp: null }])
+  let c = uid()
+  apply(db, [{ eid: c, name: 'doc', comp: { title: 'after the grave' } }])
+  assertEquals(num(c) > high, true)
+  // and the tombstone remembers who it buried
+  let grave = db.prepare('select num from tombstone where eid = ?').get(b) as {
+    num: number
+  }
+  assertEquals(grave.num, high)
+})

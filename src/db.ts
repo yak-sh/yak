@@ -173,6 +173,7 @@ let schema = `
   );
   create table if not exists tombstone (
     eid        text primary key,
+    num        integer,
     deleted_at text not null
   );
   ${depDdl};
@@ -221,12 +222,15 @@ let schema = `
 
 // Insert an entity spine row: the eid arrives (or is minted) as a UUID, the
 // num is minted HERE — one global counter, safe inside a transaction.
+// The max spans the graves too: nums are monotonic forever, or a deleted
+// T-3889's number is reborn on a stranger and every old reference lies.
 // No kind: an entity is what its components make it.
 let spine = (db: DatabaseSync, eid: string) => {
   let now = new Date().toISOString()
   return db.prepare(`
     insert or ignore into entity (eid, num, created_at, modified_at)
-    values (?, (select coalesce(max(num), 0) + 1 from entity), ?, ?)
+    values (?, (select coalesce(max(num), 0) + 1 from
+      (select num from entity union all select num from tombstone)), ?, ?)
   `).run(eid, now, now)
 }
 
@@ -407,6 +411,9 @@ export let open = () => {
   // modified_at is server-stamped on every apply() touch; rows from
   // before the column (or from direct writers) read as their creation.
   addCol('entity', 'modified_at', 'modified_at text')
+  // Nums already recycled before this column existed stay unknowable —
+  // monotonic from here on; old graves just don't raise the high-water.
+  addCol('tombstone', 'num', 'num integer')
   db.exec(
     'update entity set modified_at = created_at where modified_at is null',
   )
@@ -657,8 +664,11 @@ export let apply = (
         }
         for (let d of doomed) {
           db.prepare(
-            'insert or ignore into tombstone (eid, deleted_at) values (?, ?)',
-          ).run(d, new Date().toISOString())
+            // The num rides into the grave: a dead entity keeps its name
+            // answerable, and the allocator's high-water mark survives it.
+            `insert or ignore into tombstone (eid, num, deleted_at)
+             values (?, (select num from entity where eid = ?), ?)`,
+          ).run(d, d, new Date().toISOString())
           db.prepare('delete from entity where eid = ?').run(d)
           if (d != eid) extra.push({ eid: d, name: 'entity', comp: null })
         }
