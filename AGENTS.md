@@ -232,6 +232,9 @@ These hold everywhere in this repo, whoever — or whatever — writes the code:
   drive hovers/keys/clicks over CDP (`--remote-debugging-port`); TUI via
   `tmux new-session -d` + `send-keys` + `capture-pane -p` (`-e` keeps ANSI).
   Clean up any entities a probe creates (delete = `{name:'entity', comp:null}`).
+  Probe servers must pick UNIQUE ports: the server binds `reusePort`, so two
+  probes on one port silently round-robin — one agent's stale modules fed
+  another's browser mid-verification (observed twice, 2026-07-20/21).
 - **The injection loop**: `.claude/settings.json` runs `bin/task-context` on
   SessionStart — agent sessions in this repo boot into their claimed work
   (`task context` / MCP `task_context`, same digest). The hook must NEVER fail

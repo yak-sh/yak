@@ -310,10 +310,13 @@ export let kindOrder = [
   'stop_request',
   'conflict',
   'comment',
-  'alias',
   'memory',
   'person',
   'doc',
+  // A slug is a handle, not an identity — alias names an entity only
+  // when nothing else does (Jeff is a person who HAS an alias, not an
+  // alias; the same held the Vocabulary doc hostage as A-3xxx).
+  'alias',
 ]
 export let kindOf = (has: Record<string, unknown>) =>
   kindOrder.find((k) => has[k]) ?? 'entity'
