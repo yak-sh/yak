@@ -219,7 +219,9 @@ export let Canvas = ({ eid }: { eid: string }) => {
 
     // Normal-mode hotkeys: 0 resets zoom; <space> over a card glides the
     // camera to frame it and latches on — the camera follows shape changes
-    // until a manual move lets go.
+    // until a manual move lets go. Over the background, the target is the
+    // top of the stack: every interaction raises, so highest z IS the
+    // last card focused.
     let key = (e: KeyboardEvent) => {
       if (mode.value != 'normal' || e.repeat) return
       if (
@@ -238,7 +240,10 @@ export let Canvas = ({ eid }: { eid: string }) => {
         return
       }
       if (e.key != ' ') return
-      let pin = document.querySelector<HTMLElement>('.Pin:hover')
+      let top = pinned(eid).at(-1)
+      let pin = document.querySelector<HTMLElement>('.Pin:hover') ??
+        (top &&
+          document.querySelector<HTMLElement>(`.Pin[data-eid="${top.eid}"]`))
       if (!pin) return
       e.preventDefault()
       latch(pin)
