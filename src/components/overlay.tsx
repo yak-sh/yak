@@ -19,8 +19,8 @@ let MARGIN = 6 // keep this many px off every viewport edge
 let GAP = 4 // between the trigger and the overlay
 
 // Place a fixed element centered on the anchor rect's chosen edge, clamped
-// horizontally into the viewport and flipped to the other side when the
-// asked-for side has no room. Shared by <Overlay> and the tooltip.
+// into the viewport and flipped when only the other side has room. Shared
+// by <Overlay> and the tooltip.
 export let place = (
   el: HTMLElement,
   rect: DOMRect,
@@ -32,9 +32,10 @@ export let place = (
   left = Math.max(MARGIN, Math.min(left, innerWidth - w - MARGIN))
   let above = rect.top - h - GAP
   let below = rect.bottom + GAP
-  let top = side == 'above'
-    ? (above >= MARGIN ? above : below)
-    : (below + h <= innerHeight - MARGIN ? below : above)
+  let fits = (top: number) => top >= MARGIN && top + h <= innerHeight - MARGIN
+  let [first, second] = side == 'above' ? [above, below] : [below, above]
+  let top = fits(first) ? first : fits(second) ? second : first
+  top = Math.max(MARGIN, Math.min(top, innerHeight - h - MARGIN))
   el.style.left = `${Math.round(left)}px`
   el.style.top = `${Math.round(top)}px`
 }
