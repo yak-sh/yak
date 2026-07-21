@@ -1327,6 +1327,8 @@ html {
 .Search_Hit {
   padding: var(--half-gap) var(--gap);
   cursor: pointer;
+  color: inherit; /* an anchor now — no link blue, no visited purple */
+  text-decoration: none;
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 0 var(--half-gap);

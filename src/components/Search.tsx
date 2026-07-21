@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { type Hit, idOf, uuid } from '../types.ts'
-import { mutate, searchOpen } from '../live.ts'
+import { ent, mutate, searchOpen } from '../live.ts'
 import { navigate } from './nav.tsx'
 import { drop, peek, save } from './drafts.ts'
 import { block } from './ui.tsx'
@@ -16,7 +16,7 @@ export { searchOpen }
 let Frame = block('div', 'Search', {
   Box: 'div',
   Line: 'div',
-  Hit: 'div',
+  Hit: 'a',
   Title: 'span',
   Id: 'span',
   Snip: 'div',
@@ -108,6 +108,10 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
   return (
     <Frame
       onMouseDown={(e: MouseEvent) => e.target == e.currentTarget && close()}
+      // The canvas beneath pans on pointerdown WITH pointer capture —
+      // a captured pointerup retargets to the canvas, so no click ever
+      // reaches a hit. The veil owns its pointers (Menu does the same).
+      onPointerDown={(e: PointerEvent) => e.stopPropagation()}
     >
       <Box>
         <Line>
@@ -124,12 +128,22 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
           />
         </Line>
         {err && <Snip>{err}</Snip>}
+        {
+          /* Each hit is a real anchor: cmd/middle-click and the native
+            menu do the new-tab forms; a plain click keeps the palette's
+            own open — a card spawned on the canvas. */
+        }
         {hits.map((h, i) => (
           <Row
             key={h.eid}
+            href={`/${idOf(h.open_eid == h.eid ? h : ent(h.open_eid))}`}
             mod={i == sel ? 'sel' : undefined}
             onMouseEnter={() => setSel(i)}
-            onClick={() => pick(h)}
+            onClick={(e: MouseEvent) => {
+              if (e.metaKey || e.ctrlKey || e.shiftKey || e.button != 0) return
+              e.preventDefault()
+              pick(h)
+            }}
           >
             <Title>{h.title || '(untitled)'}</Title>
             <Id>{idOf(h)}</Id>
