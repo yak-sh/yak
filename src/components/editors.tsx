@@ -6,6 +6,7 @@ import { block, focus } from './ui.tsx'
 import { Dot } from './Dot.tsx'
 import { Edit } from './Edit.tsx'
 import { Overlay } from './overlay.tsx'
+import { useComplete } from './Complete.tsx'
 
 // The editor registry — the renderer registry's sibling. The typed
 // vocabulary (types.ts comps) is the DETECTION layer: a PropType picks
@@ -61,8 +62,9 @@ let Frame = block('span', 'Prop', {
   Row: 'span',
   Find: 'input',
   Num: 'input',
+  Query: 'span',
 })
-let { Val, Hand, Pop, Tab, Row, Find, Num } = Frame
+let { Val, Hand, Pop, Tab, Row, Find, Num, Query } = Frame
 
 // ---- the stock editors ----
 
@@ -87,6 +89,45 @@ let NumEdit = ({ ...p }: EditorProps) => (
     }}
   />
 )
+
+// query: a filter line that knows its own vocabulary — the palette's
+// completion dropdown under a plain input (Complete.tsx, same grammar
+// teacher everywhere). Controlled, because the dropdown rerenders while
+// you type; Enter commits (when the dropdown isn't eating it), Escape
+// reverts, blur commits like NumEdit — but empty is a VALUE here ('' =
+// every task), so only no-change skips the write.
+let QueryEdit = ({ ...p }: EditorProps) => {
+  let [v, setV] = useState(String(p.value ?? ''))
+  let c = useComplete()
+  return (
+    <Query>
+      <Find
+        elRef={focus}
+        value={v}
+        onInput={(ev: InputEvent) => {
+          let el = ev.currentTarget as HTMLInputElement
+          setV(el.value)
+          c.track(el)
+        }}
+        onKeyDown={(ev: KeyboardEvent) => {
+          if (c.key(ev)) return
+          let el = ev.currentTarget as HTMLInputElement
+          if (ev.key == 'Enter') el.blur()
+          else if (ev.key == 'Escape') {
+            setV(String(p.value ?? ''))
+            el.value = String(p.value ?? '')
+            el.blur()
+          }
+        }}
+        onBlur={(ev: FocusEvent) => {
+          let text = (ev.currentTarget as HTMLInputElement).value.trim()
+          text != String(p.value ?? '') ? set(p, text) : p.done()
+        }}
+      />
+      {c.list}
+    </Query>
+  )
+}
 
 // enum: the values ARE the control — a row of tabs above the value,
 // current one marked. Small closed sets only ever need one press. The
@@ -202,6 +243,7 @@ defineEditors([
     ),
   },
   { match: (t) => t == 'number', mode: 'inline', Edit: NumEdit },
+  { match: (t) => t == 'query', mode: 'inline', Edit: QueryEdit },
   {
     match: (t) => typeof t == 'object' && 'enum' in t,
     mode: 'popout',

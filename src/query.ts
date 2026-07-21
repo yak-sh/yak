@@ -39,7 +39,7 @@
 // dotted first segment that names a COMPONENT is the explicit spelling
 // (`.pin.x=12`); any other first segment is a PATH — `.assignee.title~=j`
 // dereferences the eid column and predicates the target's prop. Depth 1.
-import { comps } from './types.ts'
+import { comps, type PropType, stamped } from './types.ts'
 
 export type Pred = {
   comp: string
@@ -154,15 +154,19 @@ export let span = (s: string, now = Date.now()): Span | null => {
 type Comps = Record<string, Record<string, unknown> | undefined>
 
 // The routing table: every component's columns, plus the spine's.
-// Server-stamped columns join HERE, not in comps — filterable ('.count>=5')
-// without ever joining the write allowlist (cols() reads comps alone).
+// Server-stamped columns join HERE from the `stamped` declaration, not
+// comps — filterable ('.count>=5') without ever joining the write
+// allowlist (cols() reads comps alone). Three stamped comps today, not
+// all of them: stamped.session's status would make bare `.status`
+// ambiguous with task's, so widening is a routing question (does the
+// wire-writable column win a tie?), not a list edit.
 let routes: Record<string, readonly string[]> = {
   ...Object.fromEntries(
     Object.entries(comps).map(([name, props]) => [name, Object.keys(props)]),
   ),
-  entity: ['num', 'created_at', 'modified_at'],
-  memory: [...Object.keys(comps.memory), 'last_confirmed_at'],
-  recall: ['count', 'first_at', 'last_at'],
+  entity: Object.keys(stamped.entity),
+  memory: [...Object.keys(comps.memory), ...Object.keys(stamped.memory)],
+  recall: Object.keys(stamped.recall),
 }
 
 // Route a bare prop to its component; ambiguity is an error that names
@@ -445,4 +449,186 @@ export let adopt = (preds: Pred[], comp: string) => {
     out[p.prop] = /^-?\d+(\.\d+)?$/.test(p.value) ? Number(p.value) : p.value
   }
   return out
+}
+
+// ---- completion ----
+
+// The vocabulary teaching at the point of typing: complete() takes the
+// dot-token under the caret and returns candidates, each labeled with
+// where it comes from — its comp, '· stamped' when filterable but
+// server-owned, the op's meaning, the enum's prop. Pure over the routing
+// table plus the caller's parameters (wells are the browser's suggestion
+// lists, passed in), so one function serves the palette, the query
+// editor, and every filter bar, and a table test can pin each segment.
+export type Cand = { text: string; kind: string }
+
+// op → its one-word meaning: the time doc's words (a phrase names a
+// range, the op picks its edge), which read fine for scalars too.
+let OP_WORDS: [string, string][] = [
+  ['=', 'equals'],
+  ['!=', 'not'],
+  ['~=', 'contains'],
+  ['<', 'before'],
+  ['<=', 'until'],
+  ['>', 'after'],
+  ['>=', 'since'],
+]
+
+// a taste of the time grammar for *_at columns — hyphen-glued so a
+// candidate stays one token in a whitespace-split line
+let TIMES = [
+  'today',
+  'yesterday',
+  'this-week',
+  'last-week',
+  'this-month',
+  '1-hour-ago',
+  '7-days-ago',
+]
+
+let starts = (s: string, pre: string) =>
+  s.toLowerCase().startsWith(pre.toLowerCase())
+
+// a column's label: its comp, marked when it's filterable but never
+// wire-writable (in routes via `stamped`, absent from comps)
+let mark = (c: string, p: string) => comps[c]?.[p] ? c : `${c} · stamped`
+
+let typeOf = (comp: string, prop: string): PropType | undefined =>
+  comp
+    ? comps[comp]?.[prop] ?? stamped[comp]?.[prop]
+    : Object.values(comps).find((m) => prop in m)?.[prop]
+
+let tryRoute = (p: string) => {
+  try {
+    return route(p)
+  } catch {
+    return null
+  }
+}
+
+// every '.prop' route() accepts bare: unique columns plus the _eid sugar
+// names (.assignee for assignee_eid — shared refs too, route()'s any-of)
+let bares = (): Cand[] => {
+  let owners = new Map<string, string[]>()
+  for (let [c, cols] of Object.entries(routes)) {
+    for (let p of cols) owners.set(p, [...owners.get(p) ?? [], c])
+  }
+  let out: Cand[] = []
+  for (let [p, cs] of owners) {
+    if (cs.length == 1) out.push({ text: `.${p}`, kind: mark(cs[0], p) })
+    if (p.endsWith('_eid') && !owners.has(p.slice(0, -4))) {
+      out.push({
+        text: `.${p.slice(0, -4)}`,
+        kind: cs.length == 1 ? `${cs[0]} · ref` : 'ref',
+      })
+    }
+  }
+  return out.sort((a, b) => a.text.localeCompare(b.text))
+}
+
+// after a complete prop: the operators, plus the range skeleton
+let opsFor = (base: string): Cand[] => [
+  ...OP_WORDS.map(([op, kind]) => ({ text: base + op, kind })),
+  { text: base + '=..', kind: 'range' },
+]
+
+// which column a token's base names — the same resolution pred() does,
+// silent instead of thrown (mid-keystroke is no place to error)
+let aim = (a: string, b?: string): { comp: string; prop: string } | null => {
+  try {
+    if (!b) return route(a)
+    if (routes[a]) return routes[a].includes(b) ? { comp: a, prop: b } : null
+    let r = route(a)
+    return r.prop.endsWith('_eid') ? route(b) : null
+  } catch {
+    return null
+  }
+}
+
+// value candidates for one column: enums spell themselves, wells are the
+// caller's lists, *_at columns get the time grammar. Only the last
+// comma-part completes — any-of lists finish one part at a time.
+let values = (
+  base: string,
+  op: string,
+  at: { comp: string; prop: string },
+  value: string,
+  wells?: Record<string, string[]>,
+): Cand[] => {
+  let cut = value.lastIndexOf(',') + 1
+  let tail = value.slice(0, cut), pre = value.slice(cut)
+  let t = typeOf(at.comp, at.prop)
+  let list: [string, string][] = t && typeof t == 'object' && 'enum' in t
+    ? t.enum.map((v) => [v, at.prop] as [string, string])
+    : t && typeof t == 'object' && 'text' in t
+    ? (wells?.[t.text] ?? []).map((v) => [v, t.text] as [string, string])
+    : t == 'bool'
+    ? [['1', 'true'], ['0', 'false']] as [string, string][]
+    : at.prop.endsWith('_at')
+    ? TIMES.map((v) => [v, 'time'] as [string, string])
+    : []
+  return list.filter(([v]) => starts(v, pre) && v != pre)
+    .map(([v, kind]) => ({ text: base + op + tail + v, kind }))
+}
+
+export let complete = (
+  token: string,
+  wells?: Record<string, string[]>,
+): Cand[] => {
+  // a half-typed op ('.p!', '.p~') wants its '='
+  let half = token.match(/^(\.[A-Za-z_]+(?:\.[A-Za-z_]+)?)([!~])$/)
+  if (half) {
+    return OP_WORDS.filter(([op]) => op.startsWith(half[2]))
+      .map(([op, kind]) => ({ text: half[1] + op, kind }))
+  }
+
+  // value position: an op is present — complete the value by its type
+  let m = token.match(
+    /^\.([A-Za-z_]+)(?:\.([A-Za-z_]+))?(!=|~=|<=|>=|<|>|=)(.*)$/s,
+  )
+  if (m) {
+    let [, a, b, op, value] = m
+    if (a == ORDER && !b) {
+      return starts('hot', value) && value != 'hot'
+        ? [{ text: '.order=hot', kind: 'rank' }]
+        : []
+    }
+    let at = aim(a, b)
+    return at ? values(`.${a}` + (b ? `.${b}` : ''), op, at, value, wells) : []
+  }
+
+  // second segment: the explicit spelling lists the comp's columns; a
+  // path lists the far side — any bare-routable prop of the TARGET
+  let seg = token.match(/^\.([A-Za-z_]+)\.([A-Za-z_]*)$/)
+  if (seg) {
+    let [, a, pre] = seg
+    if (routes[a]) {
+      return [
+        ...routes[a].includes(pre) ? opsFor(`.${a}.${pre}`) : [],
+        ...routes[a].filter((p) => starts(p, pre) && p != pre).toSorted()
+          .map((p) => ({ text: `.${a}.${p}`, kind: mark(a, p) })),
+      ]
+    }
+    if (!tryRoute(a)?.prop.endsWith('_eid')) return []
+    return [
+      ...pre && tryRoute(pre) ? opsFor(`.${a}.${pre}`) : [],
+      ...bares()
+        .filter((c) => starts(c.text.slice(1), pre) && c.text.slice(1) != pre)
+        .map((c) => ({ text: `.${a}${c.text}`, kind: c.kind })),
+    ]
+  }
+
+  // first segment: an exact prop offers its ops; then comps, then props
+  let first = token.match(/^\.([A-Za-z_]*)$/)
+  if (!first) return []
+  let pre = first[1]
+  return [
+    ...pre && tryRoute(pre) ? opsFor(`.${pre}`) : [],
+    ...Object.keys(routes).filter((c) => starts(c, pre)).toSorted()
+      .map((c) => ({ text: `.${c}.`, kind: 'comp' })),
+    ...bares().filter((c) =>
+      starts(c.text.slice(1), pre) && c.text.slice(1) != pre
+    ),
+    ...starts(ORDER, pre) ? [{ text: '.order=hot', kind: 'rank' }] : [],
+  ]
 }

@@ -7,6 +7,8 @@
 //   'text'            one line (sometimes more)
 //   'body'            long markdown
 //   'number' 'bool'   what they say
+//   'query'           a line of the filter grammar (query.ts) — text
+//                     whose editor knows the vocabulary
 //   {enum: [...]}     a closed set — the values ARE the doc
 //   {eid: 'project',  an association; the name says which component the
 //    death: …}        target carries ('' = any entity), the death word
@@ -35,6 +37,7 @@ export type PropType =
   | 'body'
   | 'number'
   | 'bool'
+  | 'query'
   | { enum: string[] }
   | { eid: string; death: Death }
   | { text: string }
@@ -73,7 +76,7 @@ export let comps: Record<string, Record<string, PropType>> = {
   },
   project: {},
   repo: { path: 'text', base_branch: 'text' }, // the project's checkout
-  board: { query: 'text' }, // filter over tasks (query.ts grammar); '' = all
+  board: { query: 'query' }, // saved filter (query.ts grammar); '' = all
   canvas: {},
   web: { url: 'text' }, // frozen_at is server-stamped, never wire-writable
   card: { target_eid: { eid: '', death: 'cascade' }, view: 'text' },

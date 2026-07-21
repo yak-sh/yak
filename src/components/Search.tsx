@@ -5,6 +5,7 @@ import { navigate } from './nav.tsx'
 import { drop, peek, save } from './drafts.ts'
 import { block } from './ui.tsx'
 import { Icon } from './icons.tsx'
+import { useComplete } from './Complete.tsx'
 
 // `/` in normal mode opens the palette (Canvas owns the hotkey and the
 // spawn); Escape closes it. Search runs server-side (FTS5 over every
@@ -38,6 +39,7 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
   let [sel, setSel] = useState(0)
   let box = useRef<HTMLInputElement>(null)
   let seq = useRef(0)
+  let c = useComplete() // the dot-grammar's dropdown, under the input
 
   useEffect(() => {
     if (!searchOpen.value || !box.current) return
@@ -88,6 +90,7 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
     navigate(`/${eid}`)
   }
   let key = (e: KeyboardEvent) => {
+    if (c.key(e)) return // the dropdown eats its keys (Escape included)
     if (e.key == 'Escape') return close()
     if (e.key == 'Enter') {
       if (e.metaKey || e.ctrlKey) {
@@ -120,12 +123,14 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
             ref={box}
             placeholder='search the graph… (* = prefix, .status=done .modified_at=today filter, ⌘⏎ = board)'
             onInput={(e: InputEvent) => {
-              let v = (e.currentTarget as HTMLInputElement).value
-              v ? save('search', v) : drop('search')
-              seek(v)
+              let el = e.currentTarget as HTMLInputElement
+              el.value ? save('search', el.value) : drop('search')
+              seek(el.value)
+              c.track(el)
             }}
             onKeyDown={key}
           />
+          {c.list}
         </Line>
         {err && <Snip>{err}</Snip>}
         {

@@ -230,11 +230,16 @@ html {
 }
 /* Prose-shaped roots read as a page column; a board or canvas takes the
    whole floor. */
-.App_Body > :not(.Canvas, .Board) {
+.App_Body > :not(.Canvas, .Board, .Filter) {
   padding: var(--gap);
   max-width: 52rem;
   width: 100%;
   margin: 0 auto;
+}
+/* A fullscreen board's filter bar rides the board's own gutter. */
+.App_Body > .Filter {
+  padding: var(--half-gap) var(--gap) 0;
+  margin-bottom: 0;
 }
 .App_Body > .Board {
   /* vertical padding rides INSIDE the columns (the header band carries
@@ -1325,6 +1330,7 @@ html {
   overflow: hidden;
 }
 .Search_Line {
+  position: relative; /* the completion dropdown anchors under this line */
   display: flex;
   align-items: center;
   gap: var(--half-gap);
@@ -1379,6 +1385,69 @@ html {
 }
 .Search_Box:has(input:placeholder-shown) .Search_Hit {
   display: none; /* an empty query lists nothing */
+}
+
+/* The completion dropdown (Complete.tsx): the grammar's own candidates
+   under whatever input is teaching — the palette line, a filter bar,
+   the query editor. Anchors to its positioned host, raised like a Pop. */
+.Complete {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 30;
+  min-width: min(18rem, 80vw);
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2px;
+  box-shadow: 0 8px 30px color-mix(in srgb, #000 45%, transparent);
+}
+.Complete_Row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--gap);
+  padding: 2px var(--half-gap);
+  border-radius: var(--radius);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.Complete_Row-sel {
+  background: var(--soft);
+}
+.Complete_Text {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.Complete_Kind {
+  color: var(--dim);
+  font-size: 11px;
+}
+
+/* The ephemeral filter bar (Filter.tsx): one quiet line atop a board or
+   list. No chrome until it speaks — a dim placeholder, ink when typed. */
+.Filter {
+  position: relative; /* seats the completion dropdown */
+  margin-bottom: var(--half-gap);
+}
+.Filter input {
+  width: 100%;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: none;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  outline: 0;
+  padding: 2px 0;
+}
+.Filter input::placeholder {
+  color: var(--dim);
+}
+.Filter input:focus {
+  border-bottom-color: var(--border);
 }
 
 .Dependency {
@@ -2110,6 +2179,14 @@ html {
   border-bottom: 1px solid var(--border);
   outline: none;
   padding: 2px var(--half-gap);
+}
+.Prop_Query {
+  position: relative; /* seats the completion dropdown (Complete.tsx) */
+  display: inline-flex;
+  min-width: min(24rem, 60vw); /* a query is a line, not a word */
+}
+.Prop_Query > .Prop_Find {
+  flex: 1;
 }
 /* inline editors: the value's own metrics, a dashed seam saying 'live' */
 .Prop_Num,

@@ -1,6 +1,7 @@
 // The filter grammar: one parser for boards, CLI and MCP.
 import {
   adopt,
+  complete,
   hot,
   matchQuery,
   orderOf,
@@ -346,4 +347,93 @@ Deno.test('resolveRefs: values resolve at match time, misses stay put', () => {
   assertEquals(r('.assignee=ghost')[0].value, 'ghost') // a miss matches nothing
   assertEquals(r('.assignee=')[0].value, '') // absence test, untouched
   assertEquals(r('.title~=jeff')[0].value, 'jeff') // not a reference
+})
+
+// ---- completion ----
+
+// candidates as text → kind, so a case asserts membership without
+// freezing the whole vocabulary into the test
+let cand = (token: string, wells?: Record<string, string[]>) =>
+  Object.fromEntries(complete(token, wells).map((c) => [c.text, c.kind]))
+
+let has: [string, string, string, string][] = [
+  ['comp name', '.', '.task.', 'comp'],
+  ['bare prop', '.', '.status', 'task'],
+  ['doc prop', '.', '.title', 'doc'],
+  ['spine is stamped', '.', '.num', 'entity · stamped'],
+  ['recall bare + stamped', '.', '.count', 'recall · stamped'],
+  ['ref sugar', '.', '.assignee', 'task · ref'],
+  ['shared ref sugar', '.', '.actor', 'ref'],
+  ['prefix keeps the comp', '.mem', '.memory.', 'comp'],
+  ['comp columns', '.memory.', '.memory.type', 'memory'],
+  [
+    'stamped column, dimmed',
+    '.memory.',
+    '.memory.last_confirmed_at',
+    'memory · stamped',
+  ],
+  ['recall columns', '.recall.', '.recall.count', 'recall · stamped'],
+  ['explicit spelling for collisions', '.pin.', '.pin.x', 'pin'],
+  ['ops after a prop', '.status', '.status=', 'equals'],
+  ['negation op', '.status', '.status!=', 'not'],
+  ['contains op', '.title', '.title~=', 'contains'],
+  ['range skeleton', '.priority', '.priority=..', 'range'],
+  ['half-typed op', '.status!', '.status!=', 'not'],
+  ['enum values', '.status=', '.status=open', 'status'],
+  ['enum by prefix', '.status=o', '.status=open', 'status'],
+  ['enum after a comma', '.status=open,w', '.status=open,wip', 'status'],
+  [
+    'enum on the explicit spelling',
+    '.task.status=',
+    '.task.status=open',
+    'status',
+  ],
+  ['path far side', '.assignee.', '.assignee.title', 'doc'],
+  ['path far side, any comp', '.assignee.', '.assignee.status', 'task'],
+  ['path value', '.assignee.status=', '.assignee.status=open', 'status'],
+  ['time phrases on _at', '.modified_at=', '.modified_at=today', 'time'],
+  ['rank value', '.orde', '.order=hot', 'rank'],
+  ['rank value completes', '.order=h', '.order=hot', 'rank'],
+]
+for (let [name, token, text, kind] of has) {
+  Deno.test(`complete: ${name}`, () => assertEquals(cand(token)[text], kind))
+}
+
+Deno.test('complete: prefixes filter', () => {
+  let c = cand('.mem')
+  assertEquals(c['.status'], undefined)
+  assertEquals(c['.task.'], undefined)
+})
+
+Deno.test('complete: ambiguous columns only via the explicit spelling', () => {
+  assertEquals(cand('.')['.x'], undefined) // pin/camera collide
+  assertEquals(cand('.pin.')['.pin.x'], 'pin')
+})
+
+Deno.test("complete: wells are the caller's lists", () => {
+  assertEquals(
+    cand('.domain=', { domains: ['Eng', 'Ops'] })['.domain=Eng'],
+    'domains',
+  )
+  assertEquals(complete('.domain='), []) // pure: no lists passed, none invented
+})
+
+Deno.test('complete: unknowns and non-tokens teach nothing', () => {
+  assertEquals(complete('.hovercraft.'), [])
+  assertEquals(complete('.hovercraft=x'), [])
+  assertEquals(complete('sandwich'), [])
+  assertEquals(complete('.status=open'), []) // the typed value is the value
+})
+
+// ---- the filter bar's seam ----
+
+// An ephemeral bar ANDs by concatenation: matchQuery is every(), so the
+// merged pred list IS the intersection — nothing new to evaluate.
+Deno.test('filter bar: extra preds AND into a saved query', () => {
+  let both = [...parseQuery('.status=open'), ...parseQuery('.domain=Ops')]
+  assert(matchQuery(row({}), both))
+  assert(!matchQuery(row({ domain: 'Eng' }), both))
+  assert(!matchQuery(row({ status: 'done' }), both))
+  // a half-typed bar line throws like any query — the bar catches, inert
+  assertThrows(() => parseQuery('.hovercraf=x'), Error, 'unknown prop')
 })

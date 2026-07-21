@@ -244,6 +244,16 @@ export let boardAll = (e: Ent): Ent[] => {
     .map(([eid]) => ent(eid))
 }
 
+// The ephemeral filter's evaluator: a bar's line parsed and ref-resolved
+// ONCE, returned as a per-row test — Board and the Lists AND it into
+// whatever they already show. Throws like a saved query does; the bar
+// catches (mid-keystroke is no place to error) where a board would show.
+export let sieve = (line: string): (eid: string) => boolean => {
+  let preds = resolveRefs(parseQuery(line), findEid)
+  return (eid) =>
+    matchQuery(cache.value[eid] ?? {}, preds, (t) => cache.value[t])
+}
+
 // The cache as client Rows — the shape the headless half's helpers speak
 // (find, the change builders, the command line's Ctx), so an id lookup or
 // a claim batch is written once and serves the CLI, the web and the TUI.
