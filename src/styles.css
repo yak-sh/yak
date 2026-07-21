@@ -1008,7 +1008,7 @@ html {
 .Show_Caret:hover {
   color: var(--text);
 }
-/* The status pip is the status control: it cycles. */
+/* The status pip is the status control: it opens the status picker. */
 .Show_Pip {
   cursor: pointer;
 }

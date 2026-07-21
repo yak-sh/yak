@@ -1,13 +1,12 @@
-import { useState } from 'preact/hooks'
+import { useRef, useState } from 'preact/hooks'
 import { md } from '../../md.ts'
-import { type Ent } from '../../types.ts'
+import { comps, type Ent } from '../../types.ts'
 import {
   backlinks,
   boardsOver,
   commentCount,
   ent,
   gated,
-  mutate,
   parents,
   settled,
   statuses,
@@ -18,7 +17,8 @@ import { Comments } from '../Comments.tsx'
 import { Dot } from '../Dot.tsx'
 import { Prio } from '../Prio.tsx'
 import { Edit } from '../Edit.tsx'
-import { Prop } from '../editors.tsx'
+import { editorFor, Prop } from '../editors.tsx'
+import { Overlay } from '../overlay.tsx'
 import { Relate } from './Relate.tsx'
 import { View } from '../View.tsx'
 
@@ -60,28 +60,39 @@ let {
   Tasks: TasksEl,
 } = Frame
 
-// The pip commits through this one write: a single column, patched in
-// place, down the normal mutate() path.
-let set = (e: Ent, prop: string, v: unknown) =>
-  mutate({ eid: e.eid, name: 'task', comp: { [prop]: v } })
-
-// The status pip IS the status control: a click cycles it through the
-// board's column order (open → wip → done → open). A cycle, not a menu —
-// three statuses in a fixed order is a shorter reach than any popup, and
-// the task's verbs (right-click) still offer the direct moves for jumping
-// straight to one.
+// The status pip IS the status control: a click anchors the vocabulary's
+// enum editor on the dot — every status one press away, and a slip is a
+// closed menu, not a written status (the old cycle wrote on every click).
+// The registry supplies the picker exactly as Prop would; only the face
+// differs — a bare Dot, so the heading and titlebar flex rows keep their
+// dot untouched by Prop's value chrome.
 export let Pip = ({ e }: { e: Ent }) => {
-  let s = e.task!.status
-  let g = gated(e)
-  let next = statuses[(statuses.indexOf(s) + 1) % statuses.length]
+  let [open, setOpen] = useState(false)
+  let anchor = useRef<HTMLElement>(null)
+  let t = comps.task.status
+  let ed = editorFor(t)!
   return (
-    <Dot
-      status={s}
-      gated={g}
-      class='Show_Pip'
-      title={`${g ? 'blocked · ' : ''}→ ${next}`}
-      onClick={() => set(e, 'status', next)}
-    />
+    <>
+      <Dot
+        elRef={anchor}
+        status={e.task!.status}
+        gated={gated(e)}
+        class='Show_Pip'
+        onClick={() => setOpen((was) => !was)}
+      />
+      {open && (
+        <Overlay anchor={anchor} side='below'>
+          <ed.Edit
+            eid={e.eid}
+            comp='task'
+            prop='status'
+            t={t}
+            value={e.task!.status}
+            done={() => setOpen(false)}
+          />
+        </Overlay>
+      )}
+    </>
   )
 }
 
