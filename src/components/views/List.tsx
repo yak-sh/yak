@@ -1,5 +1,6 @@
 import { type Ent, idOf } from '../../types.ts'
-import { pinned } from '../../live.ts'
+import { boardAll, byWarmth, pinned } from '../../live.ts'
+import { orderOf, parseQuery } from '../../query.ts'
 import { block } from '../ui.tsx'
 import { menu } from '../nav.tsx'
 import { View } from '../View.tsx'
@@ -20,6 +21,36 @@ export let List = ({ e }: { e: Ent }) => (
       ))}
   </Frame>
 )
+
+// A board as a linear FEED — its query run over the whole graph, not
+// just tasks (that's the Board face's job). The Front page (.order=hot)
+// reads as the graph-wide feed: warm first; any other board lists by
+// recency. Capped loudly — a "+N more" row, never silent truncation.
+let CAP = 100
+let byModified = (a: Ent, b: Ent) =>
+  String(b.modified_at ?? '').localeCompare(String(a.modified_at ?? '')) ||
+  (b.num - a.num)
+export let BoardList = ({ e }: { e: Ent }) => {
+  let rows: Ent[]
+  let hot = false
+  try {
+    hot = orderOf(parseQuery(String(e.board?.query ?? ''))) == 'hot'
+    rows = boardAll(e).toSorted(hot ? byWarmth(Date.now()) : byModified)
+  } catch {
+    return <Frame /> // a bad query already shows itself on the Board face
+  }
+  let more = rows.length - CAP
+  return (
+    <Frame>
+      {rows.slice(0, CAP).map((t) => (
+        <Row key={t.eid}>
+          <View eid={t.eid} view='List.Item' />
+        </Row>
+      ))}
+      {more > 0 && <Row mod='more'>+{more} more</Row>}
+    </Frame>
+  )
+}
 
 // The default list line: title (or kind) + the linking id chip. Tasks
 // override with Task.Row via the registry. Right-click for the entity's

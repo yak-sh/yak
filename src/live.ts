@@ -224,6 +224,26 @@ export let boardTasks = (e: Ent): Ent[] => {
     .map(([eid]) => ent(eid))
 }
 
+// The same query over the WHOLE graph — the board's List face. No task
+// gate: sessions, memories, docs, web, people — anything that matches.
+// Chrome stays out (a camera's modified_at churns with every pan and
+// would drown any hot feed; cards/folds/shelves/clients are presence,
+// not content), comments surface through their targets (the lately
+// digest's rule), and a board is not news to itself.
+let CHROME = new Set(['card', 'camera', 'fold', 'shelf', 'client', 'comment'])
+export let boardAll = (e: Ent): Ent[] => {
+  let preds = resolveRefs(
+    parseQuery(String(e.board?.query ?? '')),
+    findEid,
+  )
+  return Object.entries(cache.value)
+    .filter(([eid, r]) =>
+      eid != e.eid && !CHROME.has(kindOf(r)) &&
+      matchQuery(r, preds, (t) => cache.value[t])
+    )
+    .map(([eid]) => ent(eid))
+}
+
 // The cache as client Rows — the shape the headless half's helpers speak
 // (find, the change builders, the command line's Ctx), so an id lookup or
 // a claim batch is written once and serves the CLI, the web and the TUI.

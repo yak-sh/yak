@@ -23,7 +23,7 @@ import {
 } from './views/Title.tsx'
 import { Board } from './views/Board.tsx'
 import { TaskRow } from './views/TaskRow.tsx'
-import { List, ListItem } from './views/List.tsx'
+import { BoardList, List, ListItem } from './views/List.tsx'
 import { Canvas } from './Canvas.tsx'
 import { Id } from './views/Id.tsx'
 import { Dependency } from './views/Dependency.tsx'
@@ -54,6 +54,7 @@ define([
     Render: ({ e }) => <Canvas eid={e.eid} />,
   },
   { view: 'List', match: has('canvas'), Render: List },
+  { view: 'List', match: has('board'), Render: BoardList },
   { view: 'List.Item', match: has('doc', 'task'), Render: TaskRow },
   { view: 'List.Item', match: has('session'), Render: SessionRow },
   { view: 'List.Item', match: () => true, Render: ListItem },

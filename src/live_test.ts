@@ -111,3 +111,59 @@ Deno.test('gated: a cancelled requires child releases the gate', () => {
   cache.value = { parent: mk('open'), blocker: mk('done') }
   assertEquals(gated(ent('parent')), false)
 })
+
+// boardAll: the board's List face — the query over the WHOLE graph.
+// Kind-agnostic matching, chrome and comments and the board itself out.
+Deno.test('boardAll: whole-graph match, chrome/comments/self excluded', async () => {
+  let { boardAll } = await import('./live.ts')
+  let spine = (eid: string, num: number) => ({ eid, num, created_at: '' })
+  cache.value = {
+    board: {
+      entity: spine('board', 1),
+      doc: { eid: 'board', title: 'Front page', body: '' },
+      board: { eid: 'board', query: '.order=hot' },
+    },
+    task: {
+      entity: spine('task', 2),
+      doc: { eid: 'task', title: 'a task', body: '' },
+      task: { eid: 'task', status: 'open', priority: 1 },
+    },
+    sesh: {
+      entity: spine('sesh', 3),
+      doc: { eid: 'sesh', title: 'a brief', body: '' },
+      session: { eid: 'sesh', id: 's' },
+    },
+    mem: {
+      entity: spine('mem', 4),
+      doc: { eid: 'mem', title: 'a fact', body: '' },
+      memory: { eid: 'mem', type: 'project' },
+    },
+    cam: {
+      entity: spine('cam', 5),
+      camera: {
+        eid: 'cam',
+        client_eid: 'x',
+        canvas_eid: 'y',
+        x: 0,
+        y: 0,
+        zoom: 1,
+        w: 0,
+        h: 0,
+      },
+    },
+    note: {
+      entity: spine('note', 6),
+      doc: { eid: 'note', title: 'aimed words', body: '' },
+      comment: { eid: 'note', target_eid: 'task' },
+    },
+  }
+  deps.value = []
+  let board = ent('board')
+  assertEquals(
+    boardAll(board).map((e) => e.eid).toSorted(),
+    ['mem', 'sesh', 'task'], // every kind rides; chrome, comment, self do not
+  )
+  // preds still screen: a task-shaped query matches only tasks
+  cache.value.board.board!.query = '.status=open'
+  assertEquals(boardAll(ent('board')).map((e) => e.eid), ['task'])
+})
