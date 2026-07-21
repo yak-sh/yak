@@ -14,6 +14,7 @@ import {
   kindOf,
   settled,
   type Snapshot,
+  stamped,
   statuses,
   uuid,
 } from './types.ts'
@@ -690,7 +691,10 @@ export let showMd = (snap: Snapshot, all: Row[], row: Row) => {
   for (let [comp, props] of Object.entries(comps)) {
     // doc is the document below; a claim reads better as its holder line
     if (comp == 'doc' || comp == 'claim' || !row.comps[comp]) continue
-    for (let prop of Object.keys(props)) {
+    // Stamped columns render too — the OUTCOME (acted_at, to_addr,
+    // frozen_at) is the half a reader came for; only the wire refuses
+    // them, not the page.
+    for (let prop of Object.keys({ ...props, ...stamped[comp] })) {
       let v = row.comps[comp][prop]
       if (v == null || v === '') continue
       let key = prop.endsWith('_eid') ? prop.slice(0, -4) : prop
