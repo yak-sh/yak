@@ -36,9 +36,11 @@
   --soft: color-mix(in srgb, var(--text) 6%, transparent);
 
   /* status colours — dots and status text consume these */
-  --open: var(--blue);
+  /* GitHub's reading (owner call, 2026-07-21): green = open (alive, go),
+     purple = done (landed). wip stays amber, cancelled stays muted. */
+  --open: var(--accent);
   --wip: var(--yellow);
-  --done: var(--accent);
+  --done: var(--purple);
   --cancelled: var(--dim); /* settled, but not a success — stays muted */
 }
 
