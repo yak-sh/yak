@@ -35,7 +35,7 @@ let Frame = block('div', 'Show', {
   Heading: 'h1',
   Title: 'span',
   Body: 'p',
-  Claim: 'span',
+  Claim: 'a',
   Domain: 'span',
   Project: 'a',
   Assignee: 'a',
@@ -281,7 +281,11 @@ export let Meta = ({ e, id }: { e: Ent; id?: boolean }) => {
         </>
       )}
       {talk && <Talk>💬 {talk}</Talk>}
-      {e.claim && <Claim>⚑ {ent(e.claim.session_eid).session?.id}</Claim>}
+      {e.claim && (
+        <Claim {...linkProps(ent(e.claim.session_eid))}>
+          ⚑ {ent(e.claim.session_eid).session?.id}
+        </Claim>
+      )}
       <Stamp e={e} />
       {id && <View eid={e.eid} view='Id' />}
     </MetaEl>

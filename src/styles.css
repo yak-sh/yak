@@ -1062,6 +1062,13 @@ html {
   font-size: 11px;
   color: var(--purple);
 }
+/* The badge links to the claiming session; underline on hover says so. */
+.Show_Claim {
+  text-decoration: none;
+}
+.Show_Claim:hover {
+  text-decoration: underline;
+}
 /* The ▾ beside a link-faced Prop — the face owns navigation, the hand
    owns the editor. Ghost when the field is empty. */
 .Prop_Hand {
