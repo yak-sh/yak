@@ -12,6 +12,7 @@ import { dirname } from 'node:path'
 import {
   type Change,
   comps,
+  deaths,
   type Dep,
   edges,
   type Hit,
@@ -447,20 +448,13 @@ let cmps: Record<string, string[]> = {
   ),
 }
 
-// Components whose ROW EXISTENCE hangs on another entity: when that
-// entity dies, the row's whole entity dies with it. Soft references
-// (a claim's session, a task's project) are NOT here — they let go
-// instead of dying.
-let AIMED: [string, string][] = [
-  ['card', 'target_eid'],
-  ['comment', 'target_eid'],
-  ['stop_request', 'target_eid'],
-  ['pin', 'canvas_eid'],
-  ['camera', 'client_eid'],
-  ['camera', 'canvas_eid'],
-  ['fold', 'client_eid'],
-  ['fold', 'board_eid'],
-]
+// The reaper's worklists, derived from the death word each reference
+// declares in the vocabulary (types.ts Death says what each word means).
+// No hand-kept list: a new reference picks its word where it's declared,
+// and the cascade below already honors it.
+let AIMED = deaths('cascade')
+let DETACHED = deaths('detach')
+let RELEASED = deaths('release')
 
 // Apply a batch atomically. Unknown component names are ignored (a newer
 // client speaking to an older server shouldn't wedge the socket). num and
@@ -623,27 +617,24 @@ export let apply = (
           // Soft references let go — and the wire HEARS them let go, or
           // every client cache keeps a ghost (a lease whose holder died,
           // a task pointing at a gone project or assignee) until reload.
-          // Each release is synthesized into the returned batch and, for
-          // claims, the Trace — so removed(claim) hooks fire like any
-          // deliberate release. A casualty's own entity-null already
-          // says everything, so only SURVIVORS get a change.
-          let freed = db.prepare('select eid from claim where session_eid = ?')
-            .all(d) as { eid: string }[]
-          db.prepare('delete from claim where session_eid = ?').run(d)
-          for (let { eid: held } of freed) {
-            if (doomed.includes(held)) continue
-            took(held, 'claim')
-            touched.add(held)
-            extra.push({ eid: held, name: 'claim', comp: null })
+          // 'release' rows die whole (the claim vanishes, the claimed
+          // entity survives) — each one synthesized into the returned
+          // batch and the Trace, so removed(claim) hooks fire like any
+          // deliberate release. 'detach' columns just null. A casualty's
+          // own entity-null already says everything, so only SURVIVORS
+          // get a change.
+          for (let [t, col] of RELEASED) {
+            let freed = db.prepare(`select eid from ${t} where ${col} = ?`)
+              .all(d) as { eid: string }[]
+            db.prepare(`delete from ${t} where ${col} = ?`).run(d)
+            for (let { eid: held } of freed) {
+              if (doomed.includes(held)) continue
+              took(held, t)
+              touched.add(held)
+              extra.push({ eid: held, name: t, comp: null })
+            }
           }
-          for (
-            let [t, col] of [
-              ['task', 'project_eid'],
-              ['task', 'assignee_eid'],
-              ['client', 'actor_eid'],
-              ['session', 'actor_eid'],
-            ]
-          ) {
+          for (let [t, col] of DETACHED) {
             let homed = db.prepare(`select eid from ${t} where ${col} = ?`)
               .all(d) as { eid: string }[]
             db.prepare(`update ${t} set ${col} = null where ${col} = ?`).run(d)
@@ -769,6 +760,32 @@ export let apply = (
     }
     throw e
   }
+}
+
+// The Vocabulary doc — the schema, written INTO the graph it describes.
+// Alias-keyed upsert (slug `vocabulary`), regenerated every boot with a
+// body the caller rendered from the live structures (schema.ts), the
+// FTS-heal pattern for documentation: stale by at most one restart. A
+// no-op when the body already matches, so a quiet boot journals nothing.
+// Anyone may edit the doc between boots; the next boot writes it back —
+// server-minted, like every stamped column.
+export let vocabularyDoc = (db: DatabaseSync, body: string): void => {
+  let cur = db.prepare(`
+    select a.eid, d.body from alias a
+    left join doc d on d.eid = a.eid
+    where a.slug = 'vocabulary'
+  `).get() as { eid: string; body: string | null } | undefined
+  if (cur?.body == body) return
+  let eid = cur?.eid ?? crypto.randomUUID()
+  apply(
+    db,
+    [
+      { eid, name: 'doc', comp: { title: 'Vocabulary', body } },
+      { eid, name: 'alias', comp: { slug: 'vocabulary' } },
+    ],
+    undefined,
+    'server',
+  )
 }
 
 // A batch may carry a REASON: a `journal` pseudo-change whose eid names

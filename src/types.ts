@@ -8,18 +8,35 @@
 //   'body'            long markdown
 //   'number' 'bool'   what they say
 //   {enum: [...]}     a closed set — the values ARE the doc
-//   {eid: 'project'}  an association; the name says which component the
-//                     target carries ('' = any entity)
+//   {eid: 'project',  an association; the name says which component the
+//    death: …}        target carries ('' = any entity), the death word
+//                     what the reference means when the target dies
 //   {text: 'domains'} open text, suggestions from a named WELL the
 //                     browser registers (the schema stays declarative —
 //                     it can't reach a live cache from here)
+
+// Every reference declares what the reaper does when its TARGET dies —
+// db.ts derives the cascade from these words, so a reference without one
+// doesn't typecheck and an undeclared behavior can't exist:
+//   'cascade'  the row's whole entity dies with the target (a card
+//              viewing it, a comment aimed at it)
+//   'detach'   the column lets go — set null, and the wire hears it
+//              (a task's dead project or assignee)
+//   'release'  the ROW dies but its entity lives — for tag comps whose
+//              existence is the reference (a claim: the lease vanishes,
+//              the claimed task survives)
+//   'keep'     the reference stands as history — the target's tombstone
+//              is the only mark (a comment's dead author, a memory's
+//              dead source session)
+export type Death = 'cascade' | 'detach' | 'release' | 'keep'
+
 export type PropType =
   | 'text'
   | 'body'
   | 'number'
   | 'bool'
   | { enum: string[] }
-  | { eid: string }
+  | { eid: string; death: Death }
   | { text: string }
 
 // The status vocabulary, in board-column order. 'cancelled' is authored,
@@ -47,11 +64,11 @@ export let comps: Record<string, Record<string, PropType>> = {
   task: {
     status: { enum: statuses },
     priority: 'number',
-    project_eid: { eid: 'project' },
+    project_eid: { eid: 'project', death: 'detach' },
     // Whose PLATE this is — durable routing to any entity (a person, a
     // project standing in for its operator). Orthogonal to claim, which
     // is who holds it NOW; a dead assignee detaches, never takes the task.
-    assignee_eid: { eid: '' },
+    assignee_eid: { eid: '', death: 'detach' },
     domain: { text: 'domains' }, // free text; the graph suggests
   },
   project: {},
@@ -59,9 +76,9 @@ export let comps: Record<string, Record<string, PropType>> = {
   board: { query: 'text' }, // filter over tasks (query.ts grammar); '' = all
   canvas: {},
   web: { url: 'text' }, // frozen_at is server-stamped, never wire-writable
-  card: { target_eid: { eid: '' }, view: 'text' },
+  card: { target_eid: { eid: '', death: 'cascade' }, view: 'text' },
   pin: {
-    canvas_eid: { eid: '' },
+    canvas_eid: { eid: '', death: 'cascade' },
     x: 'number',
     y: 'number',
     w: 'number',
@@ -75,10 +92,10 @@ export let comps: Record<string, Record<string, PropType>> = {
   // stays on the instrument; identity is one hop away, and the hop is
   // queryable (.author.actor=jeff). An assertion, not authentication —
   // forging it only garbles your own attribution, like acked_at.
-  client: { user_agent: 'text', actor_eid: { eid: '' } }, // ip is server-stamped too
+  client: { user_agent: 'text', actor_eid: { eid: '', death: 'detach' } }, // ip is server-stamped too
   camera: {
-    client_eid: { eid: 'client' },
-    canvas_eid: { eid: '' },
+    client_eid: { eid: 'client', death: 'cascade' },
+    canvas_eid: { eid: '', death: 'cascade' },
     x: 'number',
     y: 'number',
     zoom: 'number',
@@ -86,11 +103,15 @@ export let comps: Record<string, Record<string, PropType>> = {
     h: 'number',
   },
   fold: {
-    client_eid: { eid: 'client' },
-    board_eid: { eid: 'board' },
+    client_eid: { eid: 'client', death: 'cascade' },
+    board_eid: { eid: 'board', death: 'cascade' },
     statuses: 'text',
   },
-  shelf: { client_eid: { eid: 'client' } }, // binds a client to their tray canvas
+  // Binds a client to their tray canvas. 'release' on purpose: a dead
+  // client's shelf sheds the tag, the canvas (and whatever it holds)
+  // survives as a plain canvas — the binding was the client's, the
+  // contents aren't.
+  shelf: { client_eid: { eid: 'client', death: 'release' } },
   // acked_at is the session's OWN "seen up to here" cursor for the
   // while-you-were-away digest — wire-writable because forging it only
   // deafens yourself. The REQUEST columns (provider, model, effort, the
@@ -105,18 +126,26 @@ export let comps: Record<string, Record<string, PropType>> = {
     provider: 'text',
     model: 'text',
     effort: 'text',
-    requested_task_eid: { eid: '' },
-    persona_eid: { eid: '' },
-    actor_eid: { eid: '' }, // who this run acts for — see client above
+    requested_task_eid: { eid: '', death: 'detach' },
+    persona_eid: { eid: '', death: 'detach' },
+    actor_eid: { eid: '', death: 'detach' }, // who this run acts for — see client above
   },
-  claim: { session_eid: { eid: 'session' } }, // claimed_at server-stamped
+  // 'release' is the claim's word exactly: when the session dies the
+  // LEASE vanishes (row deleted, claim-null on the wire) but the claimed
+  // entity — somebody's task — survives, freed. claimed_at server-stamped.
+  claim: { session_eid: { eid: 'session', death: 'release' } },
   // The brake, pulled as data: creating one asks the server to stop the
   // session it targets. Valid only against an ACTIVE managed session
   // (apply() refuses the rest); acted_at is server-stamped and the row
   // stays as audit, like conflict.
-  stop_request: { target_eid: { eid: 'session' } },
+  stop_request: { target_eid: { eid: 'session', death: 'cascade' } },
   conflict: {}, // server-minted audit rows — nothing is wire-writable
-  comment: { target_eid: { eid: '' }, author_eid: { eid: '' } },
+  comment: {
+    target_eid: { eid: '', death: 'cascade' },
+    // A byline survives its instrument: the words remain attributed to a
+    // session that ended long ago — history, not a dangle.
+    author_eid: { eid: '', death: 'keep' },
+  },
   alias: { slug: 'text' },
   // A durable identity — the owner, an operator. The doc carries the
   // name, an alias the handle (jeff), and tasks point at it through
@@ -131,8 +160,10 @@ export let comps: Record<string, Record<string, PropType>> = {
   // confirm door, never wire-set.
   memory: {
     type: { enum: ['user', 'feedback', 'project', 'reference'] },
-    source_eid: { eid: 'session' },
-    scope_eid: { eid: 'project' },
+    // Provenance and scope are history — a fact outlives the session
+    // that learned it and the project it was learned for.
+    source_eid: { eid: 'session', death: 'keep' },
+    scope_eid: { eid: 'project', death: 'keep' },
   },
   // Server-minted recall aggregates — count·first_at·last_at is the
   // decay model's whole memory (query.ts hot() derives rank at read).
@@ -141,17 +172,69 @@ export let comps: Record<string, Record<string, PropType>> = {
   recall: {},
 }
 
-// Server-stamped columns with graph-typed values — never wire-writable
-// (cols() reads `comps` alone, so these never join the apply allowlist),
-// but part of the SCHEMA: backlinks and any reader of associations take
-// the union, so an edge the server wrote still reads as an edge.
-// Empty today (the session request columns moved into comps when spawning
-// became a wire write); the mechanism stays for the next stamped edge.
-export let stamped: Record<string, Record<string, PropType>> = {}
+// Server-stamped columns — never wire-writable (cols() reads `comps`
+// alone, so these never join the apply allowlist), but part of the
+// SCHEMA: backlinks and any reader of associations take the union, so an
+// edge the server wrote still reads as an edge, and the Schema view can
+// say what every column is. The values here DECLARE; the stamping itself
+// lives in server code (db.ts, sessions.ts, freeze.ts), each write beside
+// its why.
+export let stamped: Record<string, Record<string, PropType>> = {
+  entity: { num: 'number', created_at: 'text', modified_at: 'text' },
+  web: { frozen_at: 'text' }, // the freeze finished (freeze.ts)
+  client: { ip: 'text' },
+  claim: { claimed_at: 'text' },
+  stop_request: { acted_at: 'text' }, // signals sent — the relay's sweep key
+  memory: { last_confirmed_at: 'text' },
+  recall: { count: 'number', first_at: 'text', last_at: 'text' },
+  // Audit rows outlive everything they mention: loser/holder are display
+  // strings by design (db.ts says why), and the target reference stands
+  // even after the target dies — contention history keeps its subject.
+  conflict: {
+    target_eid: { eid: '', death: 'keep' },
+    loser: 'text',
+    holder: 'text',
+    at: 'text',
+  },
+  // The managed-session lifecycle (sessions.ts owns every write; the
+  // wire-writable REQUEST columns live in comps.session above).
+  session: {
+    origin: { enum: ['external', 'managed'] },
+    branch: 'text',
+    base_revision: 'text',
+    status: 'text', // starting|running|stopping, then how it ended
+    provider_session_id: 'text',
+    serving_model: 'text',
+    latest_seq: 'number',
+    started_at: 'text',
+    stop_requested_at: 'text',
+    finished_at: 'text',
+    exit_code: 'number',
+    stop_reason: 'text',
+    final_text: 'body',
+    usage_json: 'text',
+    error: 'text',
+  },
+}
 
 // A component's wire-writable column names — what most consumers of the
 // old flat list actually want.
 export let cols = (comp: string) => Object.keys(comps[comp] ?? {})
+
+// The reaper's worklists, derived: every wire-writable reference wearing
+// the given death word, as (comp, column) pairs. db.ts walks these when
+// an entity dies — the declarations above ARE the cascade, so a new
+// reference can't dodge the reaper by forgetting a hand-kept list.
+// (`stamped` refs stay out on purpose: server-owned rows die by server
+// code, not by the wire's cascade.)
+export let deaths = (word: Death): [string, string][] =>
+  Object.entries(comps).flatMap(([name, props]) =>
+    Object.entries(props).flatMap(([col, t]) =>
+      typeof t == 'object' && 'eid' in t && t.death == word
+        ? [[name, col] as [string, string]]
+        : []
+    )
+  )
 
 // The eid minter. Both sides of the wire mint them (clients name their own
 // entities), so it must work on both: crypto.randomUUID is gated to secure

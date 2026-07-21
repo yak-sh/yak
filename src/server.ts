@@ -10,8 +10,17 @@ import { transform } from 'sucrase'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { providers } from './adapters.ts'
 import { type Change, idOf } from './types.ts'
-import { apply, db, journalOf, search, snapshot, touch } from './db.ts'
-import { dispatch, on, relay, trace } from './effects.ts'
+import {
+  apply,
+  db,
+  journalOf,
+  search,
+  snapshot,
+  touch,
+  vocabularyDoc,
+} from './db.ts'
+import { dispatch, docs, on, relay, trace } from './effects.ts'
+import { vocabularyMd } from './schema.ts'
 import { freeze, serveFrozen, store } from './freeze.ts'
 import { mcpServer } from './mcp.ts'
 import {
@@ -413,12 +422,21 @@ Deno.serve(
 // request; a stop_request is the brake; a comment at a settled managed
 // session resumes it; a deleted session's process dies with its row.
 // A future plugin contributes rows here the same way it would renderers.
-on('session', { created: spawned(cast), removed: deleted })
+on('session', {
+  created: spawned(cast),
+  removed: deleted,
+  doc: 'a session created with a provider is a spawn request — validate, ' +
+    'launch the agent; a deleted session kills its process',
+})
 on('stop_request', {
   created: stopped(cast),
   sweep: { pending: 'acted_at is null' },
+  doc: 'the brake: signal the targeted session to stop, stamp acted_at',
 })
-on('comment', { created: commented(cast) })
+on('comment', {
+  created: commented(cast),
+  doc: 'a comment at a settled managed session resumes that agent',
+})
 
 // Managed children are detached (setsid) and this process restarts on every
 // server-file edit — so booting means picking them back up: adopt the ones
@@ -441,6 +459,11 @@ relay((comp, pending) =>
 // server's resume window stays open (sessions.ts tidy says why).
 tidy(cast)
 
+// The Vocabulary doc: the schema written into the graph, regenerated
+// from the live structures now that the effects registry is full. After
+// the registrations above, or the doc would ship an empty Effects list.
+vocabularyDoc(db, vocabularyMd(docs()))
+
 // Watch src/ and tell every client what a save means (debounced — editors
 // fire several events per save):
 //   {hmr: gen}  component/logic edit — re-import the graph under ?v=gen
@@ -461,6 +484,7 @@ let graph = [
   'server.ts',
   'db.ts',
   'effects.ts',
+  'schema.ts',
   'types.ts',
   'query.ts',
   'freeze.ts',

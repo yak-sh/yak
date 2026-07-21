@@ -1,9 +1,10 @@
 // apply()/snapshot() semantics against an in-memory db — the wire's
 // contract: patches, creates, deletes, tombstones, and the claim lease.
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, db, journalOf, open, search, snapshot, touch } = await import(
-  './db.ts'
-)
+let { apply, db, journalOf, open, search, snapshot, touch, vocabularyDoc } =
+  await import(
+    './db.ts'
+  )
 let { assertEquals, assertMatch, assertThrows } = await import(
   '@std/assert'
 )
@@ -323,6 +324,82 @@ Deno.test('actor: instruments say who they act for; a dead actor detaches both',
   )
   assertEquals(comp(c, 'client')?.actor_eid, null)
   assertEquals(comp(s, 'session')?.actor_eid, null)
+})
+
+// The death words made real by derivation (types.ts deaths → db.ts):
+// what a session was started on lets go when the task or persona dies —
+// the T-3685 gap, closed by declaring the words.
+Deno.test('detach: a dead task or persona lets its sessions go', () => {
+  let task = uid(), muse = uid(), s = uid()
+  apply(db, [
+    { eid: task, name: 'doc', comp: { title: 'requested' } },
+    { eid: task, name: 'task', comp: { status: 'open' } },
+    { eid: muse, name: 'doc', comp: { title: 'muse' } },
+    {
+      eid: s,
+      name: 'session',
+      comp: { id: `dw-${s}`, requested_task_eid: task, persona_eid: muse },
+    },
+  ])
+  let out = apply(db, [{ eid: task, name: 'entity', comp: null }])
+  assertEquals(comp(s, 'session')?.requested_task_eid, null)
+  // and the wire hears the release — no ghost provenance in any cache
+  assertEquals(
+    out.some((x) =>
+      x.eid == s && x.name == 'session' && x.comp?.requested_task_eid === null
+    ),
+    true,
+  )
+  apply(db, [{ eid: muse, name: 'entity', comp: null }])
+  assertEquals(comp(s, 'session')?.persona_eid, null)
+})
+
+Deno.test('release: a dead client sheds its shelf, the canvas survives', () => {
+  let c = uid(), canvas = uid()
+  apply(db, [
+    { eid: c, name: 'client', comp: { user_agent: 'probe' } },
+    { eid: canvas, name: 'canvas', comp: {} },
+    { eid: canvas, name: 'shelf', comp: { client_eid: c } },
+  ])
+  let out = apply(db, [{ eid: c, name: 'entity', comp: null }])
+  assertEquals(comp(canvas, 'shelf'), undefined) // the binding was the client's
+  assertEquals(comp(canvas, 'canvas') != null, true) // the contents aren't
+  assertEquals(
+    out.some((x) => x.eid == canvas && x.name == 'shelf' && x.comp == null),
+    true,
+  )
+})
+
+Deno.test('keep: a dead author leaves the byline standing', () => {
+  let who = uid(), target = uid(), c = uid()
+  apply(db, [
+    { eid: target, name: 'doc', comp: { title: 'subject' } },
+    { eid: who, name: 'session', comp: { id: `bye-${who}` } },
+    { eid: c, name: 'doc', comp: { title: '', body: 'said once' } },
+    { eid: c, name: 'comment', comp: { target_eid: target, author_eid: who } },
+  ])
+  apply(db, [{ eid: who, name: 'entity', comp: null }])
+  // history, not a dangle: the words stay attributed to the dead session
+  assertEquals(comp(c, 'comment')?.author_eid, who)
+  assertEquals(comp(c, 'doc')?.body, 'said once')
+})
+
+Deno.test('vocabulary doc: alias-keyed, regenerated in place, never duplicated', () => {
+  vocabularyDoc(db, '# v1')
+  let vocab = () =>
+    snapshot(db).changes.filter((x) =>
+      x.name == 'alias' && x.comp?.slug == 'vocabulary'
+    )
+  assertEquals(vocab().length, 1)
+  let eid = vocab()[0].eid
+  assertEquals(comp(eid, 'doc')?.body, '# v1')
+  let n = journalOf(db, eid).length
+  vocabularyDoc(db, '# v1') // same body: a no-op, nothing journaled
+  assertEquals(journalOf(db, eid).length, n)
+  vocabularyDoc(db, '# v2') // new body: same entity, rewritten
+  assertEquals(vocab().length, 1)
+  assertEquals(vocab()[0].eid, eid)
+  assertEquals(comp(eid, 'doc')?.body, '# v2')
 })
 
 Deno.test('edges: link once, unlink by the same sentence', () => {

@@ -1653,6 +1653,83 @@ html {
   color: var(--dim);
 }
 
+/* Schema: the vocabulary rendered live — one section per component, a
+   two-column grid of its columns, death words as colored chips keyed to
+   what they DO (cascade kills → red family, detach lets go → blue,
+   release frees → green, keep remembers → dim). */
+.Schema {
+  display: grid;
+  gap: var(--gap);
+  padding: var(--gap);
+  max-width: 42rem;
+  font-size: 12px;
+  font-family: var(--mono);
+}
+.Schema_Lede {
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.Schema_Comp {
+  display: grid;
+  gap: 2px;
+}
+.Schema_Name {
+  margin: 0;
+  font-size: 12px;
+  color: var(--orange);
+}
+.Schema_Head {
+  margin: var(--half-gap) 0 0;
+  font-size: 12px;
+  color: var(--orange);
+}
+.Schema_Cols {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 2px var(--gap);
+  align-items: baseline;
+}
+.Schema_Col {
+  color: var(--text);
+}
+.Schema_Type {
+  color: var(--muted);
+}
+.Schema_Col-stamped,
+.Schema_Type-stamped {
+  color: var(--dim);
+}
+.Schema_Tag,
+.Schema_Line {
+  margin: 0;
+  color: var(--muted);
+}
+.Schema_Tag {
+  font-style: italic;
+  color: var(--dim);
+}
+.Schema_Death {
+  margin-left: var(--half-gap);
+  padding: 0 4px;
+  border-radius: var(--radius);
+  background: var(--soft);
+  font-size: 11px;
+}
+.Schema_Death-cascade {
+  color: var(--red);
+}
+.Schema_Death-detach {
+  color: var(--blue);
+}
+.Schema_Death-release {
+  color: var(--accent);
+}
+.Schema_Death-keep {
+  color: var(--dim);
+}
+
 /* A session: summary head, the agent's answer, then the log tail — a
    terminal-flavoured block, so the log is monospace and never wraps
    (a line clips; the file is the whole truth). */

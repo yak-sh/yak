@@ -5,7 +5,7 @@
 // the env points it at :memory:.
 import { assert, assertEquals } from '@std/assert'
 import { type Change } from './types.ts'
-import { dispatch, on, relay, trace } from './effects.ts'
+import { dispatch, docs, on, relay, trace } from './effects.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, db } = await import('./db.ts')
@@ -122,4 +122,19 @@ Deno.test('relay: a throwing handler is reported, the rest still fire', async ()
   assertEquals(fired, ['good'])
   assertEquals(oops.length, 1)
   assert(oops[0].includes('boom'))
+})
+
+Deno.test('docs: the registry read back — hooks, sweep, one-liner', () => {
+  on('memory', {
+    created: () => {},
+    changed: { type: () => {} },
+    sweep: { pending: 'last_confirmed_at is null' },
+    doc: 'a made-up lever, for the doc',
+  })
+  let d = docs().find((x) => x.comp == 'memory')!
+  assertEquals(d.hooks, ['created', 'changed(type)'])
+  assertEquals(d.sweep, 'last_confirmed_at is null')
+  assertEquals(d.doc, 'a made-up lever, for the doc')
+  // an undocumented registration still appears — hiding is not an option
+  assertEquals(docs().find((x) => x.comp == 'web')?.doc, undefined)
 })

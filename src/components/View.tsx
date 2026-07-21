@@ -28,6 +28,7 @@ import { Canvas } from './Canvas.tsx'
 import { Id } from './views/Id.tsx'
 import { Dependency } from './views/Dependency.tsx'
 import { Debug, DebugAnyItem, DebugTaskItem } from './views/Debug.tsx'
+import { Schema } from './views/Schema.tsx'
 import { Json } from './views/Json.tsx'
 import { Md, mdText } from './views/Md.tsx'
 import { Web } from './views/Web.tsx'
@@ -97,6 +98,15 @@ define([
       text: (e) => JSON.stringify(e, null, 2),
     },
   },
+  // The live schema — its tab appears only on the boot-written
+  // Vocabulary doc (alias `vocabulary`), whose Show face is the same
+  // content as generated markdown; any card can still ask for the view
+  // by name.
+  {
+    view: 'Schema',
+    match: (e) => e.alias?.slug == 'vocabulary',
+    Render: Schema,
+  },
   { view: 'Debug', match: () => true, Render: Debug },
   { view: 'Debug.ListItem', match: has('task'), Render: DebugTaskItem },
   { view: 'Debug.ListItem', match: () => true, Render: DebugAnyItem },
@@ -111,6 +121,7 @@ define([
   'Session',
   'Markdown',
   'JSON',
+  'Schema',
   'Debug',
 ])
 

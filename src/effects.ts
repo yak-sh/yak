@@ -39,12 +39,33 @@ export type Effect = {
   // hands every pending row back through it. Declaring a sweep is a
   // promise that created() is idempotent: delivery becomes at-least-once.
   sweep?: { pending: string }
+  // The registration's one-liner — what the lever DOES, said where it's
+  // registered. docs() reads these into the Vocabulary doc, so the only
+  // way to document an effect is to register it.
+  doc?: string
 }
 
 let registry: Record<string, Effect[]> = {}
 export let on = (comp: string, e: Effect) => {
   ;(registry[comp] ??= []).push(e)
 }
+
+// The registry, read back as documentation: which hooks each effect
+// wears, its sweep predicate, its one-liner. Introspection, not a second
+// list — an unregistered effect can't appear, a registered one can't hide.
+export let docs = () =>
+  Object.entries(registry).flatMap(([comp, es]) =>
+    es.map((e) => ({
+      comp,
+      hooks: [
+        ...(e.created ? ['created'] : []),
+        ...Object.keys(e.changed ?? {}).map((c) => `changed(${c})`),
+        ...(e.removed ? ['removed'] : []),
+      ],
+      sweep: e.sweep?.pending,
+      doc: e.doc,
+    }))
+  )
 
 // What apply() learned that the wire doesn't say: which comp rows the
 // batch inserted, and which rows its deletes took (keyed by eid). Hand a
