@@ -595,6 +595,8 @@ html {
   border-left: 2px solid var(--border2);
   padding-left: var(--half-gap);
 }
+/* Both are links now — the name to its author, the age to the comment —
+   in their old dress: underline only on hover says so. */
 .Comments_When {
   color: var(--dim);
   font-size: 11px;
@@ -603,6 +605,14 @@ html {
 .Comments_Who {
   font-size: 11px;
   color: var(--blue);
+}
+.Comments_Who,
+.Comments_When {
+  text-decoration: none;
+}
+.Comments_Who:hover,
+.Comments_When:hover {
+  text-decoration: underline;
 }
 .Comments_Body {
   color: var(--muted);

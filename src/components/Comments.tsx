@@ -4,11 +4,12 @@ import { clientId, commentsOn, ent, mutate, uuid } from '../live.ts'
 import { ago, block, pretty } from './ui.tsx'
 import { drop, focused, peek, save } from './drafts.ts'
 import { idOf, nick, sessionActive } from '../types.ts'
+import { linkProps } from './nav.tsx'
 
 let Frame = block('div', 'Comments', {
   Item: 'div',
-  Who: 'span',
-  When: 'span',
+  Who: 'a',
+  When: 'a',
   Body: 'div',
   New: 'textarea',
 })
@@ -85,8 +86,20 @@ export let Comments = ({ eid }: { eid: string }) => {
     <Frame>
       {commentsOn(eid).map((c) => (
         <Item key={c.eid}>
-          <Who>{author(c.comment!.author_eid)}</Who>
-          <When data-tip={pretty(c.created_at)}>{ago(c.created_at)}</When>
+          {
+            /* The name links to whoever said it; the age to the comment
+              itself — both wear the internal-link contract. */
+          }
+          <Who
+            {...(c.comment!.author_eid
+              ? linkProps(ent(c.comment!.author_eid))
+              : {})}
+          >
+            {author(c.comment!.author_eid)}
+          </Who>
+          <When data-tip={pretty(c.created_at)} {...linkProps(c)}>
+            {ago(c.created_at)}
+          </When>
           <Body
             dangerouslySetInnerHTML={{ __html: md(c.doc?.body ?? '') }}
           />
