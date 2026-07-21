@@ -49,7 +49,12 @@ Deno.test('death words: every reference declares, the sets hold', () => {
   )
   assertEquals(
     words('keep'),
-    new Set(['comment.author_eid', 'memory.source_eid', 'memory.scope_eid']),
+    new Set([
+      'comment.author_eid',
+      'memory.source_eid',
+      'memory.scope_eid',
+      'send_request.target_eid',
+    ]),
   )
 })
 

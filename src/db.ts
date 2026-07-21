@@ -141,6 +141,22 @@ let schema = `
     target_eid text not null references entity(eid),
     acted_at   text
   );
+  -- Outbound mail. "to"/"from" are SQL keywords — quoted here and by the
+  -- generic builders in apply(), which quote every column so the
+  -- vocabulary never bends to SQL's reserved words.
+  create table if not exists send_request (
+    eid        text primary key references entity(eid),
+    "to"       text not null,
+    "from"     text,
+    target_eid text references entity(eid),
+    acted_at   text,
+    error      text,
+    to_addr    text
+  );
+  create table if not exists email (
+    eid     text primary key references entity(eid),
+    address text not null
+  );
   create table if not exists conflict (
     eid        text primary key references entity(eid),
     target_eid text not null,
@@ -687,7 +703,7 @@ export let apply = (
       // would demand). An existing row implies an existing spine.
       let hit = sent.length
         ? db.prepare(
-          `update ${name} set ${sent.map((c) => `${c} = ?`).join(', ')}
+          `update ${name} set ${sent.map((c) => `"${c}" = ?`).join(', ')}
            where eid = ?`,
         ).run(...vals, eid).changes
         : 0
@@ -702,7 +718,7 @@ export let apply = (
         if (spine(db, eid).changes) minted.add(eid)
         if (sent.length) {
           db.prepare(
-            `insert into ${name} (eid${sent.map((c) => `, ${c}`).join('')})
+            `insert into ${name} (eid${sent.map((c) => `, "${c}"`).join('')})
              values (?${', ?'.repeat(sent.length)})`,
           ).run(eid, ...vals)
           t?.created.add(`${name} ${eid}`)

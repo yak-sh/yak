@@ -145,6 +145,19 @@ export let comps: Record<string, Record<string, PropType>> = {
   // (apply() refuses the rest); acted_at is server-stamped and the row
   // stays as audit, like conflict.
   stop_request: { target_eid: { eid: 'session', death: 'cascade' } },
+  // Outbound mail, asked for as data: creating one requests delivery (the
+  // mailer effect sends and stamps the outcome — acted_at/error/to_addr,
+  // all server-side; the row stays as the audit envelope). Subject rides
+  // doc.title, the body doc.body — a mail is a document that travels.
+  // `to` is a raw address (has an @) or a graph reference — alias slug,
+  // human id, eid — resolved against the address book at delivery.
+  send_request: {
+    to: 'text',
+    from: 'text',
+    // What the mail is ABOUT. A sent mail is history — its subject's
+    // death doesn't unsend it (the byline rule, comment.author_eid).
+    target_eid: { eid: '', death: 'keep' },
+  },
   conflict: {}, // server-minted audit rows — nothing is wire-writable
   comment: {
     target_eid: { eid: '', death: 'cascade' },
@@ -158,6 +171,11 @@ export let comps: Record<string, Record<string, PropType>> = {
   // assignee_eid; sessions stay what they are (one run), a person is who
   // they run FOR.
   person: {},
+  // An address is a FACET, not a person-column: any entity may wear one —
+  // a person, a project (its operator's inbox), someday a webhook source.
+  // The whole address book is this comp; send-resolution is one rule:
+  // reference → the entity's email.address, absent = a stamped error.
+  email: { address: 'text' },
   // A distilled fact worth keeping — content rides the doc (title = the
   // index line, body = the fact), provenance rides source_eid. The scope
   // column is scope_eid, NOT project_eid: bare '.project_eid' must keep
@@ -191,6 +209,11 @@ export let stamped: Record<string, Record<string, PropType>> = {
   client: { ip: 'text' },
   claim: { claimed_at: 'text' },
   stop_request: { acted_at: 'text' }, // signals sent — the relay's sweep key
+  // Delivery outcome (mail.ts): acted_at = the effect ran, error = how it
+  // went wrong, to_addr = the RESOLVED envelope address — denormalized on
+  // purpose, so later edits to the address book never rewrite what a
+  // delivery actually used.
+  send_request: { acted_at: 'text', error: 'text', to_addr: 'text' },
   memory: { last_confirmed_at: 'text' },
   recall: { count: 'number', first_at: 'text', last_at: 'text' },
   // Audit rows outlive everything they mention: loser/holder are display
@@ -314,11 +337,16 @@ export let kindOrder = [
   'session',
   'claim',
   'stop_request',
+  'send_request',
   'conflict',
   'comment',
   'memory',
   'person',
   'doc',
+  // An address is a facet like a handle: it names an entity only when
+  // nothing else does (a bare address-book entry), same reasoning as
+  // alias below — an addressed person stays a person.
+  'email',
   // A slug is a handle, not an identity — alias names an entity only
   // when nothing else does (Jeff is a person who HAS an alias, not an
   // alias; the same held the Vocabulary doc hostage as A-3xxx).
@@ -336,6 +364,8 @@ export let prefix: Record<string, string> = {
   session: 'S',
   memory: 'M',
   person: 'U', // U-ser: P is the projects'
+  send_request: 'E', // E-mail: S is the sessions'
+  email: 'A', // A-ddress: E is the mails'
 }
 export let idOf = (e: { kind: string; num: number }) =>
   `${prefix[e.kind] ?? e.kind[0].toUpperCase()}-${e.num}`
@@ -496,6 +526,21 @@ export type Claim = { eid: string; session_eid: string; claimed_at?: string }
 // as audit; acted_at is stamped when the signals have been sent.
 export type StopRequest = { eid: string; target_eid: string; acted_at?: string }
 
+// An entity's mail address — the address-book facet, one comp for all.
+export type Email = { eid: string; address: string }
+
+// Outbound mail: the request columns are the ask, the stamped trio the
+// receipt. to_addr is the envelope copy — what delivery resolved and used.
+export type SendRequest = {
+  eid: string
+  to: string
+  from?: string | null
+  target_eid?: string | null
+  acted_at?: string | null
+  error?: string | null
+  to_addr?: string | null
+}
+
 // A comment is a doc AIMED at something — and since target_eid is any
 // entity, ANYTHING is commentable: tasks, boards, frozen pages, other
 // comments. author_eid points at a session or client entity (or null).
@@ -589,6 +634,8 @@ export type Ent = {
   session?: Session
   claim?: Claim
   stop_request?: StopRequest
+  send_request?: SendRequest
+  email?: Email
   conflict?: Conflict
   comment?: Comment
   alias?: Alias

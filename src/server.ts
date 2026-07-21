@@ -22,6 +22,7 @@ import {
 import { dispatch, docs, on, relay, trace } from './effects.ts'
 import { vocabularyMd } from './schema.ts'
 import { freeze, serveFrozen, store } from './freeze.ts'
+import { fanout, FANOUT_PENDING, mailed } from './mail.ts'
 import { mcpServer } from './mcp.ts'
 import {
   commented,
@@ -439,6 +440,18 @@ on('stop_request', {
 on('comment', {
   created: commented(cast),
   doc: 'a comment at a settled managed session resumes that agent',
+})
+on('send_request', {
+  created: mailed(cast),
+  sweep: { pending: 'acted_at is null' },
+  doc: 'deliver the mail through $TASKS_MAIL_CMD — resolve the address ' +
+    'book reference, stamp acted_at/error/to_addr (the envelope copy)',
+})
+on('comment', {
+  created: fanout(cast),
+  sweep: { pending: FANOUT_PENDING },
+  doc: "a comment on an addressed project's task fans out as a " +
+    'send_request to that project (the about edge is the receipt)',
 })
 
 // Managed children are detached (setsid) and this process restarts on every
