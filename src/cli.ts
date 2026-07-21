@@ -315,17 +315,22 @@ let context = async (args: string[]) => {
           comp: { provider: 'claude', model },
         }])
       }
-      // Announce the actor when it's derivable: a graph with exactly one
-      // person can only be acting for that person. More than one and the
-      // session stays unattributed — identity is asserted, never guessed.
+      // Announce the actor when it's derivable — and for a SESSION that
+      // means the OPERATOR, never a person: a client is a person's hands,
+      // but a session's words are the operator's, made FOR the person
+      // (owner call, 2026-07-21). Derivation: cwd → repo → project — the
+      // session speaks as the venture it works in. No matching repo, no
+      // guess; identity is asserted, never inferred from who's watching.
       let mine = rows(snap).find((r) => r.eid == s.eid)?.comps.session
       if (!mine?.actor_eid) {
-        let people = rows(snap).filter((r) => r.comps.person)
-        if (people.length == 1) {
+        let here = rows(snap).find((r) =>
+          r.comps.repo?.path && cwd?.startsWith(String(r.comps.repo.path))
+        )
+        if (here) {
           await send([{
             eid: s.eid,
             name: 'session',
-            comp: { actor_eid: people[0].eid },
+            comp: { actor_eid: here.eid },
           }])
         }
       }
