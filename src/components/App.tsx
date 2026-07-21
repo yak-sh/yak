@@ -1,5 +1,6 @@
 import { ent } from '../live.ts'
 import { block, el } from './ui.tsx'
+import { filterable, FilterInput } from './Filter.tsx'
 import { applicable } from './registry.ts'
 import { icons } from './Card.tsx'
 import { Icon } from './icons.tsx'
@@ -44,6 +45,7 @@ export let App = () => {
       <Bar>
         <Brand href='/'>Tasks</Brand>
         <View eid={e.eid} view='Card.Title' />
+        {filterable.has(view) && <FilterInput eid={e.eid} />}
         {tabs.map((v) => (
           <Tab
             type='button'

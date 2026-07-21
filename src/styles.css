@@ -230,16 +230,11 @@ html {
 }
 /* Prose-shaped roots read as a page column; a board or canvas takes the
    whole floor. */
-.App_Body > :not(.Canvas, .Board, .Filter) {
+.App_Body > :not(.Canvas, .Board) {
   padding: var(--gap);
   max-width: 52rem;
   width: 100%;
   margin: 0 auto;
-}
-/* A fullscreen board's filter bar rides the board's own gutter. */
-.App_Body > .Filter {
-  padding: var(--half-gap) var(--gap) 0;
-  margin-bottom: 0;
 }
 .App_Body > .Board {
   /* vertical padding rides INSIDE the columns (the header band carries
@@ -480,9 +475,13 @@ html {
 }
 
 /* The titlebar's identity slot, filled by the Card.Title view — the entity
-   IS the card. Flexes to push tabs/id/× right; long titles ellipsize. */
+   IS the card. Reads id → dot → title; flexes to push filter/tabs/×
+   right, and long titles ellipsize. */
 .CardTitle {
-  flex: 1;
+  /* basis AUTO, not 0: the title's natural width is its claim on the
+     bar, so the shrink phase (weighted by basis) taxes the filter's
+     14em first — a squeezed bar keeps the NAME and folds the glance */
+  flex: 1 1 auto;
   min-width: 0;
   display: flex;
   align-items: center;
@@ -1426,22 +1425,31 @@ html {
   font-size: 11px;
 }
 
-/* The ephemeral filter bar (Filter.tsx): one quiet line atop a board or
-   list. No chrome until it speaks — a dim placeholder, ink when typed. */
+/* The ephemeral filter (Filter.tsx): a quiet slot in the titlebar,
+   right-aligned before the tabs — the title flexes, this holds its
+   ground. No chrome until it speaks — a dim placeholder, ink when
+   typed. */
 .Filter {
   position: relative; /* seats the completion dropdown */
-  margin-bottom: var(--half-gap);
+  /* shrinks 8× faster than the title and all the way to nothing: on a
+     narrow card the NAME wins the bar, the glance folds away */
+  flex: 0 8 14em;
+  min-width: 0;
+  overflow: hidden;
 }
 .Filter input {
   width: 100%;
   font: inherit;
   font-size: 12px;
+  font-weight: 400; /* the titlebar is bold; the glance is not */
   color: var(--text);
   background: none;
   border: 0;
   border-bottom: 1px solid transparent;
   outline: 0;
   padding: 2px 0;
+  cursor: text;
+  user-select: text; /* .Card_Tabs turns selection off; typing needs it */
 }
 .Filter input::placeholder {
   color: var(--dim);

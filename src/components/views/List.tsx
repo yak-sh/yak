@@ -3,24 +3,30 @@ import { boardAll, byWarmth, pinned } from '../../live.ts'
 import { orderOf, parseQuery } from '../../query.ts'
 import { block } from '../ui.tsx'
 import { menu } from '../nav.tsx'
-import { useFilter } from '../Filter.tsx'
-import { View } from '../View.tsx'
+import { passOf } from '../Filter.tsx'
+import { dragData, View } from '../View.tsx'
 
 let Frame = block('div', 'List', { Row: 'div' })
 let { Row } = Frame
 
 // A canvas as a linear list — every pinned card's target, one summary row
 // each, id chips linking through. The mobile answer to a spatial plane.
+// Rows are native draggables: dropped on a canvas they carry their PIN,
+// so the existing card relocates there (the row IS that card, listed).
 export let List = ({ e }: { e: Ent }) => {
-  let f = useFilter()
+  let pass = passOf(e.eid)
   return (
     <Frame>
-      {f.bar}
       {pinned(e.eid)
         .toSorted((a, b) => b.z - a.z)
-        .filter((p) => f.pass(p.target_eid))
+        .filter((p) => pass(p.target_eid))
         .map((p) => (
-          <Row key={p.eid}>
+          <Row
+            key={p.eid}
+            draggable
+            onDragStart={(ev: DragEvent) =>
+              dragData(ev, p.target_eid, p.view, p.w, p.eid)}
+          >
             <View eid={p.target_eid} view='List.Item' />
           </Row>
         ))}
@@ -37,12 +43,12 @@ let byModified = (a: Ent, b: Ent) =>
   String(b.modified_at ?? '').localeCompare(String(a.modified_at ?? '')) ||
   (b.num - a.num)
 export let BoardList = ({ e }: { e: Ent }) => {
-  let f = useFilter()
+  let pass = passOf(e.eid)
   let rows: Ent[]
   let hot = false
   try {
     hot = orderOf(parseQuery(String(e.board?.query ?? ''))) == 'hot'
-    rows = boardAll(e).filter((t) => f.pass(t.eid))
+    rows = boardAll(e).filter((t) => pass(t.eid))
       .toSorted(hot ? byWarmth(Date.now()) : byModified)
   } catch {
     return <Frame /> // a bad query already shows itself on the Board face
@@ -50,9 +56,13 @@ export let BoardList = ({ e }: { e: Ent }) => {
   let more = rows.length - CAP
   return (
     <Frame>
-      {f.bar}
       {rows.slice(0, CAP).map((t) => (
-        <Row key={t.eid}>
+        // a feed row dragged onto a canvas spawns the entity as a card
+        <Row
+          key={t.eid}
+          draggable
+          onDragStart={(ev: DragEvent) => dragData(ev, t.eid, 'Show')}
+        >
           <View eid={t.eid} view='List.Item' />
         </Row>
       ))}

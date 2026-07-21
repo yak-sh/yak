@@ -1,32 +1,53 @@
-// The ephemeral filter — a slim line atop a board or list that ANDs into
-// the view's own query only while it's typed. Never stored: board.query
-// is the saved filter, this is the glance. Same grammar as everywhere
-// (query.ts), same completion dropdown as the palette; a line that
-// doesn't parse yet filters nothing — inert, because a bar mid-keystroke
-// is no place to throw. Escape clears; blurring empty leaves nothing.
-import { useState } from 'preact/hooks'
+// The ephemeral filter — typed in the titlebar, felt in the face. It ANDs
+// into the view's own query only while it's typed, never stored:
+// board.query is the saved filter, this is the glance. Same grammar as
+// everywhere (query.ts), same completion dropdown as the palette; a line
+// that doesn't parse yet filters nothing — inert, because a bar
+// mid-keystroke is no place to throw. Escape clears; blurring empty
+// leaves nothing. The input (FilterInput, rendered by the card chrome)
+// and the rows it screens (passOf, read by the face) live in different
+// subtrees, so a module-held signal per TARGET is the wire between them
+// — keyed by the viewed entity, switching tabs (Board ⇄ List) keeps the
+// glance.
+import { type Signal, signal } from '@preact/signals'
 import { sieve } from '../live.ts'
 import { block } from './ui.tsx'
 import { useComplete } from './Complete.tsx'
 
 let Frame = block('div', 'Filter', {})
 
-export let useFilter = () => {
-  let [line, setLine] = useState('')
-  let c = useComplete()
-  let pass: (eid: string) => boolean
+let lines = new Map<string, Signal<string>>()
+let lineOf = (eid: string) => {
+  let s = lines.get(eid)
+  if (!s) lines.set(eid, s = signal(''))
+  return s
+}
+
+// the faces that listen — the titlebar consults this to decide whether
+// the current view earns the input or just the spacer
+export let filterable = new Set(['Board', 'List'])
+
+// the face's half: the current pass predicate for this entity's rows
+export let passOf = (eid: string): (eid: string) => boolean => {
   try {
-    pass = sieve(line)
+    return sieve(lineOf(eid).value)
   } catch {
-    pass = () => true // half a token yet — show everything
+    return () => true // half a token yet — show everything
   }
-  let bar = (
+}
+
+// the titlebar's half: the input + its completion dropdown
+export let FilterInput = ({ eid }: { eid: string }) => {
+  let c = useComplete()
+  let line = lineOf(eid)
+  return (
     <Frame>
       <input
         placeholder='filter…'
+        value={line.value}
         onInput={(e: InputEvent) => {
           let el = e.currentTarget as HTMLInputElement
-          setLine(el.value)
+          line.value = el.value
           c.track(el)
         }}
         onKeyDown={(e: KeyboardEvent) => {
@@ -35,7 +56,7 @@ export let useFilter = () => {
             let el = e.currentTarget as HTMLInputElement
             if (el.value) e.stopPropagation() // consumed by the clear
             el.value = ''
-            setLine('')
+            line.value = ''
             el.blur()
           }
         }}
@@ -44,5 +65,4 @@ export let useFilter = () => {
       {c.list}
     </Frame>
   )
-  return { pass, bar }
 }

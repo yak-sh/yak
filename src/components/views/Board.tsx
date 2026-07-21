@@ -16,7 +16,7 @@ import { adopt, orderOf, parseQuery } from '../../query.ts'
 import { block, focus } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
 import { Prio } from '../Prio.tsx'
-import { useFilter } from '../Filter.tsx'
+import { passOf } from '../Filter.tsx'
 import { dragData, View } from '../View.tsx'
 
 let Frame = block('div', 'Board', {
@@ -103,13 +103,14 @@ export let Board = ({ e }: { e: Ent }) => {
       order = byWarmth(Date.now())
     }
   } catch { /* boardTasks below surfaces the bad query */ }
-  // The ephemeral filter ANDs into the saved query at read time only —
-  // drops and quick-adds still adopt from board.query alone, so a bar
-  // never leaks into what a filed task carries.
-  let f = useFilter()
+  // The ephemeral filter (typed in the titlebar) ANDs into the saved
+  // query at read time only — drops and quick-adds still adopt from
+  // board.query alone, so a glance never leaks into what a filed task
+  // carries.
+  let pass = passOf(e.eid)
   let tasks: Ent[]
   try {
-    tasks = boardTasks(e).filter((k) => f.pass(k.eid))
+    tasks = boardTasks(e).filter((k) => pass(k.eid))
   } catch (err) {
     return (
       <Frame>
@@ -214,56 +215,52 @@ export let Board = ({ e }: { e: Ent }) => {
   }
 
   return (
-    <>
-      {f.bar}
-      <Frame>
-        {statuses.map((s) => {
-          let list = tasks.filter((k) => k.task?.status == s).sort(order)
-          return (
-            <Col
-              key={s}
-              mod={folded.has(s) && 'folded'}
-              // the drop target cancels dragover ITSELF — leaning on an
-              // ancestor's cancel is how fullscreen boards lost their drops
-              onDragOver={(ev: DragEvent) => ev.preventDefault()}
-              onDrop={(ev: DragEvent & { currentTarget: HTMLElement }) =>
-                drop(ev, s)}
-            >
-              <ColName onDblClick={() => fold(s)}>
-                <Dot status={s} />
-                {s}
-                <Count>{list.length}</Count>
-                {!folded.has(s) && adding != s && (
-                  <Add onClick={() => setAdding(s)} title={`new ${s} task`}>
-                    +
-                  </Add>
-                )}
-              </ColName>
-              {!folded.has(s) && adding == s && (
-                <QuickAdd
-                  file={(text) => create(s, list, text)}
-                  close={() => setAdding('')}
-                />
+    <Frame>
+      {statuses.map((s) => {
+        let list = tasks.filter((k) => k.task?.status == s).sort(order)
+        return (
+          <Col
+            key={s}
+            mod={folded.has(s) && 'folded'}
+            // the drop target cancels dragover ITSELF — leaning on an
+            // ancestor's cancel is how fullscreen boards lost their drops
+            onDragOver={(ev: DragEvent) => ev.preventDefault()}
+            onDrop={(ev: DragEvent & { currentTarget: HTMLElement }) =>
+              drop(ev, s)}
+          >
+            <ColName onDblClick={() => fold(s)}>
+              <Dot status={s} />
+              {s}
+              <Count>{list.length}</Count>
+              {!folded.has(s) && adding != s && (
+                <Add onClick={() => setAdding(s)} title={`new ${s} task`}>
+                  +
+                </Add>
               )}
-              {!folded.has(s) && (
-                <Scroll>
-                  {list.map((k) => (
-                    <Item
-                      key={k.eid}
-                      draggable
-                      data-eid={k.eid}
-                      onDragStart={(ev: DragEvent) =>
-                        dragData(ev, k.eid, 'Show')}
-                    >
-                      <View eid={k.eid} view='Task.Row' />
-                    </Item>
-                  ))}
-                </Scroll>
-              )}
-            </Col>
-          )
-        })}
-      </Frame>
-    </>
+            </ColName>
+            {!folded.has(s) && adding == s && (
+              <QuickAdd
+                file={(text) => create(s, list, text)}
+                close={() => setAdding('')}
+              />
+            )}
+            {!folded.has(s) && (
+              <Scroll>
+                {list.map((k) => (
+                  <Item
+                    key={k.eid}
+                    draggable
+                    data-eid={k.eid}
+                    onDragStart={(ev: DragEvent) => dragData(ev, k.eid, 'Show')}
+                  >
+                    <View eid={k.eid} view='Task.Row' />
+                  </Item>
+                ))}
+              </Scroll>
+            )}
+          </Col>
+        )
+      })}
+    </Frame>
   )
 }

@@ -3,6 +3,7 @@ import { idOf, type Pinned } from '../types.ts'
 import { block, el } from './ui.tsx'
 import { applicable } from './registry.ts'
 import { dragData, View } from './View.tsx'
+import { filterable, FilterInput } from './Filter.tsx'
 import { Icon } from './icons.tsx'
 import { menu } from './nav.tsx'
 import { overTray, shelf, shelfMint } from './Tray.tsx'
@@ -207,6 +208,7 @@ export let Card = ({ p }: { p: Pinned }) => {
       <Frame>
         <Tabs>
           <View eid={p.target_eid} view='Card.Title' />
+          {filterable.has(p.view) && <FilterInput eid={p.target_eid} />}
           {applicable(ent(p.target_eid)).map((v) => (
             <Tab
               type='button'
