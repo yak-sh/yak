@@ -1108,7 +1108,10 @@ backrefs in), its comments, as JSON. id: T-3, bare num, or eid. ${BUS}`,
       if (!row) return err(`no entity: ${id}`)
       let comments = all.filter((r) => r.comps.comment?.target_eid == row.eid)
       let edges = edgesOf(snap, all, row.eid)
-      return bus(JSON.stringify({ ...row, ...edges, comments }, null, 2), session)
+      return bus(
+        JSON.stringify({ ...row, ...edges, comments }, null, 2),
+        session,
+      )
     },
   )
 
