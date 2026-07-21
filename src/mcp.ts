@@ -27,6 +27,7 @@ import {
   commentChanges,
   contextDigest,
   derefParams,
+  edgesOf,
   find,
   history,
   historyLine,
@@ -1097,15 +1098,17 @@ Math.floor(i/4)*280}})); return pins.length`,
 
   server.tool(
     'task_show',
-    `One entity, whole: spine, every component, its comments, as JSON.
-id: T-3, bare num, or eid. ${BUS}`,
+    `One entity, whole: spine, every component, its edges (refs out,
+backrefs in), its comments, as JSON. id: T-3, bare num, or eid. ${BUS}`,
     { id: z.string(), session: z.string().optional() },
     async ({ id, session }: { id: string; session?: string }) => {
-      let all = rows(await io.read())
+      let snap = await io.read()
+      let all = rows(snap)
       let row = find(all, id)
       if (!row) return err(`no entity: ${id}`)
       let comments = all.filter((r) => r.comps.comment?.target_eid == row.eid)
-      return bus(JSON.stringify({ ...row, comments }, null, 2), session)
+      let edges = edgesOf(snap, all, row.eid)
+      return bus(JSON.stringify({ ...row, ...edges, comments }, null, 2), session)
     },
   )
 

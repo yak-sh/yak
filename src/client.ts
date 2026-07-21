@@ -646,6 +646,22 @@ export let recallIndex = (
     })
 
 // The claimant's session id, resolved through the claim's session entity.
+// The entity's sentences, both directions, ids humanized — "whole" is a
+// lie without them (an edge is data about the entity that lives in no
+// component row, so rows() alone can never surface it).
+export let edgesOf = (snap: Snapshot, all: Row[], eid: string) => {
+  let name = (e: string) => {
+    let r = all.find((x) => x.eid == e)
+    return r ? idOf(r) : e
+  }
+  return {
+    refs: snap.deps.filter((d) => d.parent == eid)
+      .map((d) => ({ type: d.type, child: name(d.child) })),
+    backrefs: snap.deps.filter((d) => d.child == eid)
+      .map((d) => ({ type: d.type, parent: name(d.parent) })),
+  }
+}
+
 export let claimant = (all: Row[], r: Row) => {
   let seid = r.comps.claim?.session_eid
   if (!seid) return undefined

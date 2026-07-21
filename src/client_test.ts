@@ -7,6 +7,7 @@ import {
   commentChanges,
   contextDigest,
   derefParams,
+  edgesOf,
   find,
   hookClaim,
   lapseChanges,
@@ -524,4 +525,14 @@ Deno.test('derefParams: reference values resolve at the door', () => {
   assertEquals(one('.assignee='), '') // a clear stays a clear
   assertEquals(one('.title=jeff'), 'jeff') // not a reference
   assertThrows(() => one('.assignee=ghost'), Error, 'no entity')
+})
+
+Deno.test('edgesOf: both directions, ids humanized', () => {
+  let all = rows(snap)
+  let out = edgesOf(snap, all, T1)
+  assertEquals(out.refs, [{ type: 'requires', child: 'T-3' }])
+  assertEquals(out.backrefs, [])
+  let back = edgesOf(snap, all, T2)
+  assertEquals(back.refs, [])
+  assertEquals(back.backrefs, [{ type: 'requires', parent: 'T-2' }])
 })

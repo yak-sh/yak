@@ -15,6 +15,7 @@ import {
   commentChanges,
   contextDigest,
   derefParams,
+  edgesOf,
   find,
   history,
   historyLine,
@@ -259,11 +260,13 @@ let comment = async (args: string[]) => {
 let show = async (args: string[]) => {
   let [id] = args
   if (!id) throw new Error('task show <id>')
-  let all = rows(await snapshot())
+  let snap = await snapshot()
+  let all = rows(snap)
   let row = find(all, id)
   if (!row) throw new Error(`no entity: ${id}`)
   let comments = all.filter((r) => r.comps.comment?.target_eid == row.eid)
-  console.log(JSON.stringify({ ...row, comments }, null, 2))
+  let edges = edgesOf(snap, all, row.eid)
+  console.log(JSON.stringify({ ...row, ...edges, comments }, null, 2))
 }
 
 // The entity's write history — the journal, one line per touching batch:
