@@ -107,6 +107,7 @@ export let Comments = ({ eid }: { eid: string }) => {
       ))}
       <New
         elRef={box}
+        data-eid={eid}
         rows={1}
         onInput={(e: InputEvent) => {
           let t = e.currentTarget as HTMLTextAreaElement

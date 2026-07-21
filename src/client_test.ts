@@ -14,10 +14,12 @@ import {
   notices,
   param,
   patches,
+  reasoned,
   recallIndex,
   rows,
   sessionFor,
   spawnChanges,
+  spawnDefaults,
   spec,
   taskChanges,
 } from './client.ts'
@@ -226,8 +228,57 @@ Deno.test('lapseChanges: unfinished gets the trail, done goes quiet', () => {
   done.changes.find((c) => c.eid == T1 && c.name == 'task')!.comp!.status =
     'done'
   let quiet = lapseChanges(rows(done), 'sess-x')
-  assertEquals(quiet, [{ eid: T1, name: 'claim', comp: null }])
+  // finished work releases without a comment — only the brief rides along
+  // (fixture S is docless and held a claim, so it earns the stub)
+  assertEquals(quiet.filter((c) => c.name == 'comment'), [])
+  assertEquals(quiet[0], { eid: T1, name: 'claim', comp: null })
   assertEquals(lapseChanges(all, 'sess-unknown'), [])
+})
+
+Deno.test('lapse brief: a docless working session gets the stub', () => {
+  let AT = Date.UTC(2026, 6, 20)
+  let doc = lapseChanges(all, 'sess-x', AT)
+    .find((c) => c.name == 'doc' && c.eid == S)
+  assertEquals(doc?.comp?.title, 'Work session 2026-07-20')
+  assertMatch(String(doc?.comp?.body), /- T-2 \(wip\) First/)
+  // a session that already wrote its brief keeps it
+  let named = structuredClone(snap)
+  named.changes.push({ eid: S, name: 'doc', comp: { title: 'Mine', body: '' } })
+  assertEquals(
+    lapseChanges(rows(named), 'sess-x', AT)
+      .some((c) => c.name == 'doc' && c.eid == S),
+    false,
+  )
+  // an idle session — no claims, no comments — leaves nothing behind
+  let idle = structuredClone(snap)
+  idle.changes = idle.changes.filter((c) => c.name != 'claim')
+  assertEquals(lapseChanges(rows(idle), 'sess-x', AT), [])
+})
+
+Deno.test('spawnDefaults: the caller session lends its provider/model', () => {
+  let mine = structuredClone(snap)
+  mine.changes.find((c) => c.eid == S && c.name == 'session')!.comp = {
+    id: 'sess-x',
+    provider: 'claude',
+    model: 'opus',
+  }
+  assertEquals(spawnDefaults(rows(mine), 'sess-x'), {
+    provider: 'claude',
+    model: 'opus',
+  })
+  // a row with neither, an unknown session, no session: all default to none
+  let none = { provider: undefined, model: undefined }
+  assertEquals(spawnDefaults(all, 'sess-x'), none)
+  assertEquals(spawnDefaults(all, 'sess-unknown'), none)
+  assertEquals(spawnDefaults(all), none)
+})
+
+Deno.test('reasoned: the journal pseudo-change, one shape everywhere', () => {
+  assertEquals(reasoned(T1, 'why not'), {
+    eid: T1,
+    name: 'journal',
+    comp: { reason: 'why not' },
+  })
 })
 
 Deno.test('contextDigest: claimed set with gates, or open board', () => {

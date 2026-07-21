@@ -140,6 +140,54 @@ let settled = (eid: string, status: string, cast: Cast) => {
   }
 }
 
+// Finished worktrees earn their removal AT BOOT, not at settle: a settled
+// session is exactly what comment-resume targets, so sweeping the moment
+// it completes would race the say-more flow — the sweep waits for the
+// next restart instead, which bounds accumulation without shrinking the
+// resume window a live server offers. Only a COMPLETED session whose
+// branch is fully merged into the base and whose tree is clean goes;
+// anything failed, interrupted, dirty, or unmerged stays for inspection.
+export let tidy = async (cast: Cast) => {
+  let rows = db.prepare(
+    `select * from session
+     where origin = 'managed' and status = 'completed' and cwd is not null`,
+  ).all() as Row[]
+  for (let row of rows) await cleanup(row, cast)
+}
+
+// One worktree, considered and (maybe) removed. Every refusal is a
+// warning, never a throw. The row sheds cwd and branch afterwards — a
+// later comment-resume then refuses plainly ("no worktree to resume in")
+// instead of spawning into a directory that no longer exists; merged
+// work wants a fresh spawn.
+let cleanup = async (row: Row, cast: Cast) => {
+  try {
+    let tree = String(row.cwd ?? '')
+    let branch = String(row.branch ?? '')
+    if (!tree || !branch) return
+    let repo = db.prepare(
+      `select r.path, r.base_branch from repo r
+       join task t on t.project_eid = r.eid where t.eid = ?`,
+    ).get(String(row.requested_task_eid)) as
+      | { path: string; base_branch: string }
+      | undefined
+    if (!repo) return
+    if (await git(tree, ['status', '--porcelain'])) return // dirty: keep
+    // merged? --is-ancestor exits nonzero when not — git() throws, we keep
+    await git(repo.path, [
+      'merge-base',
+      '--is-ancestor',
+      branch,
+      repo.base_branch,
+    ])
+    await git(repo.path, ['worktree', 'remove', tree])
+    await git(repo.path, ['branch', '-d', branch])
+    stamp(String(row.eid), { cwd: null, branch: null }, cast)
+  } catch (e) {
+    console.warn('worktree cleanup skipped —', e)
+  }
+}
+
 // ---- following the file ----
 
 // Where a tailer is in the file and what it has learned. `at` is a BYTE

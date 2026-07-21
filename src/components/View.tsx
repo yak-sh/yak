@@ -127,11 +127,26 @@ defineActions([
         label,
         run: () => mutate({ eid: e.eid, name: 'task', comp: { status } }),
       })
+      // Cancelling wants a why: after the write, the cursor lands in the
+      // entity's comment box — a nudge toward the convention, never a
+      // gate (guarded: the TUI has no document).
+      let cancel: Action = {
+        label: 'cancel',
+        run: () => {
+          mutate({ eid: e.eid, name: 'task', comp: { status: 'cancelled' } })
+          if (typeof document != 'undefined') {
+            setTimeout(() =>
+              document.querySelector<HTMLElement>(
+                `.Comments_New[data-eid="${e.eid}"]`,
+              )?.focus(), 0)
+          }
+        },
+      }
       return [
         ...(s != 'wip' ? [move('start', 'wip')] : []),
         ...(s != 'done' ? [move('done', 'done')] : []),
         ...(s != 'open' ? [move('reopen', 'open')] : []),
-        ...(s != 'cancelled' ? [move('cancel', 'cancelled')] : []),
+        ...(s != 'cancelled' ? [cancel] : []),
         { label: 'run agent…', run: () => openRun(e.eid) },
       ]
     },

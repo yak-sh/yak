@@ -26,12 +26,14 @@ import {
   type Param,
   param,
   patches,
+  reasoned,
   rows,
   search,
   send,
   sessionFor,
   snapshot,
   spawnChanges,
+  spawnDefaults,
   taskChanges,
 } from './client.ts'
 import { matchQuery, pred, resolveRefs } from './query.ts'
@@ -45,13 +47,14 @@ let usage = `task — the entity graph, from a shell
   task tui                       open the terminal UI
   task list [.prop=value ...]    list tasks (any dot-param filters)
   task new .title="..." [...]    create a task (bare words become the title)
-  task set <id> .prop=value ...  patch an entity (id: T-3, 3, or an eid)
+  task set <id> .prop=value ... [--reason=why]   patch; the reason comments
   task show <id>                 print one entity as JSON
   task history <id> [-n N]       the entity's write history (the journal)
   task search <words...>         full-text search (trailing * = prefix)
   task claim <id> [session]      lease a task for a session ($TASKS_SESSION)
   task release <id>              drop the lease
-  task spawn <id> --provider=X --model=Y [--effort=Z] [--persona=P-9]
+  task spawn <id> [--provider=X] [--model=Y] [--effort] [--persona]
+                                 defaults: your session's own, then the table
                                  dispatch a managed agent onto a task
   task comment <id> <text...>    say something about ANY entity
   task backup                    snapshot the db + commit/push the data dir
@@ -115,16 +118,20 @@ let create = async (args: string[]) => {
 }
 
 let set = async (args: string[]) => {
-  let { params, words } = split(args)
+  // --reason=... rides the batch as the journal pseudo-change: the why
+  // becomes an old→new comment on the entity (cancellations especially).
+  let reason = args.find((a) => a.startsWith('--reason='))?.slice(9)
+  let { params, words } = split(args.filter((a) => !a.startsWith('--reason=')))
   let [id] = words
   if (!id || !params.length) throw new Error('task set <id> .prop=value ...')
   let all = rows(await snapshot())
   let row = find(all, id)
   if (!row) throw new Error(`no entity: ${id}`)
-  await send(
-    Object.entries(patches(derefParams(all, params)))
+  await send([
+    ...Object.entries(patches(derefParams(all, params)))
       .map(([name, comp]) => ({ eid: row.eid, name, comp })),
-  )
+    ...(reason ? [reasoned(row.eid, reason)] : []),
+  ])
   console.log(`${idOf(row)} updated`)
 }
 
@@ -166,14 +173,26 @@ let spawn = async (args: string[]) => {
   let flag = (n: string) =>
     args.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3)
   let [id] = args.filter((a) => !a.startsWith('--'))
-  let provider = flag('provider')
-  let model = flag('model')
-  if (!id || !provider || !model) {
+  if (!id) {
     throw new Error(
-      'task spawn <id> --provider=X --model=Y [--effort=Z] [--persona=P-9]',
+      'task spawn <id> [--provider=X] [--model=Y] [--effort=Z] [--persona=P-9]',
     )
   }
   let all = rows(await snapshot())
+  // Unnamed provider/model inherit: the calling session's own (a spawn
+  // begets its own kind), then the provider table's first entry.
+  let mine = spawnDefaults(all, Deno.env.get('TASKS_SESSION') ?? undefined)
+  let provider = flag('provider') ?? mine.provider
+  let model = flag('model') ?? (flag('provider') ? undefined : mine.model)
+  if (!provider || !model) {
+    let table = await (await fetch(`http://${host()}/providers`)).json() as {
+      name: string
+      models: string[]
+    }[]
+    provider ??= table[0]?.name
+    model ??= table.find((p) => p.name == provider)?.models[0]
+    if (!provider || !model) throw new Error('no provider to default to')
+  }
   let made = spawnChanges(all, {
     task: id,
     provider,
@@ -236,6 +255,23 @@ let past = async (args: string[]) => {
 // id. --hook: SessionStart mode — session_id arrives as hook JSON on
 // stdin, and NOTHING may fail loudly (a hook must never wedge a session;
 // no server just means no context today).
+// The serving model, read from a Claude Code transcript's tail — the
+// newest assistant event names it. Absent file, empty file, or foreign
+// shape all mean "don't know": announce nothing.
+let modelOf = (path: string) => {
+  try {
+    if (!path) return
+    let lines = Deno.readTextFileSync(path).trim().split('\n')
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (!lines[i].includes('"model"')) continue
+      let m = (JSON.parse(lines[i]) as {
+        message?: { model?: unknown }
+      }).message?.model
+      if (typeof m == 'string' && m) return m
+    }
+  } catch { /* no transcript is no announcement */ }
+}
+
 let context = async (args: string[]) => {
   let hook = args.includes('--hook')
   let sid = args.find((a) => !a.startsWith('--')) ??
@@ -261,6 +297,20 @@ let context = async (args: string[]) => {
       let cwd = String(body.cwd ?? '') || undefined
       let s = sessionFor(rows(snap), sid, cwd)
       if (s.changes.length) await send(s.changes)
+      // The hook payload names no model (session_id, transcript_path,
+      // cwd, hook_event_name, source) — but the transcript does: its
+      // last assistant line carries message.model. Announce it, so an
+      // external session's spawns can inherit and the board can say
+      // what's serving. A fresh transcript has no assistant line yet —
+      // then there's simply nothing to announce.
+      let model = modelOf(String(body.transcript_path ?? ''))
+      if (model) {
+        await send([{
+          eid: s.eid,
+          name: 'session',
+          comp: { provider: 'claude', model },
+        }])
+      }
       // A managed spawn boots already holding its lease: the launcher
       // passes TASKS_TASK, and an unclaimed task claims quietly here —
       // no prompt discipline required. A held lease stays held (the

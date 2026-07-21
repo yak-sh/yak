@@ -21,6 +21,7 @@ import {
   recover,
   spawned,
   stopped,
+  tidy,
 } from './sessions.ts'
 import { outcome, recent, record, toolCall } from './telemetry.ts'
 import { stamp } from './hot.ts'
@@ -182,6 +183,8 @@ let mcp = async (req: Request) => {
       logs: async (eid, q) => logs(eid, q),
       // deno-lint-ignore require-await
       history: async (eid, limit) => journalOf(db, eid, limit),
+      // deno-lint-ignore require-await
+      providers: async () => providers(),
     })
     await server.connect(theirs)
     let reply = new Promise((resolve) => mine.onmessage = resolve)
@@ -432,6 +435,11 @@ relay((comp, pending) =>
     unknown
   >[]
 )
+
+// Last, the worktree sweep: completed sessions whose merged, clean trees
+// outlived their usefulness let go — at boot, never at settle, so a live
+// server's resume window stays open (sessions.ts tidy says why).
+tidy(cast)
 
 // Watch src/ and tell every client what a save means (debounced — editors
 // fire several events per save):

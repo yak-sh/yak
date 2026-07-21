@@ -251,6 +251,30 @@ export let claimChanges = (
   ]
 }
 
+// A reason, as a change: the journal pseudo-change apply() rewrites into
+// an old→new comment on the entity it names. Ride it in the same batch
+// as the change it explains.
+export let reasoned = (eid: string, reason: string): Change => ({
+  eid,
+  name: 'journal',
+  comp: { reason },
+})
+
+// What a spawn inherits when the caller doesn't say: the CALLING
+// session's own provider and model — a managed caller always has both,
+// an external one has whatever it announced. The provider-table default
+// lives at the doors (they can reach /providers; this builder can't).
+export let spawnDefaults = (all: Row[], session?: string) => {
+  let s = session
+    ? all.find((r) => r.comps.session && String(r.comps.session.id) == session)
+      ?.comps.session
+    : undefined
+  return {
+    provider: s?.provider ? String(s.provider) : undefined,
+    model: s?.model ? String(s.model) : undefined,
+  }
+}
+
 // The spawn batch: one session entity carrying the request columns —
 // the server's created(session) effect validates and launches it, and
 // every way it can fail lands as a failed Session on the board, not an
@@ -480,21 +504,54 @@ export let notices = (snap: Snapshot, session: string) => {
 // on tasks it did NOT finish, leave a comment saying so (the simple
 // audit: no timers, no heartbeats, just "ended before done" on the
 // record). Finished work releases silently.
-export let lapseChanges = (all: Row[], session: string): Change[] => {
+export let lapseChanges = (
+  all: Row[],
+  session: string,
+  now = Date.now(),
+): Change[] => {
   let sess = all.find((r) =>
     r.comps.session && String(r.comps.session.id) == session
   )
   if (!sess) return []
   let held = all.filter((r) => r.comps.claim?.session_eid == sess.eid)
-  return held.flatMap((r) => [
-    ...(settled(String(r.comps.task?.status)) ? [] : commentChanges(
-      all,
-      r.eid,
-      '⚑ lease lapsed: session `' + session + '` ended before this was done',
-      session,
-    ).slice(-2)), // the session exists — skip the mint, keep doc + comment
-    { eid: r.eid, name: 'claim', comp: null },
-  ])
+  return [
+    ...held.flatMap((r): Change[] => [
+      ...(settled(String(r.comps.task?.status)) ? [] : commentChanges(
+        all,
+        r.eid,
+        '⚑ lease lapsed: session `' + session + '` ended before this was done',
+        session,
+      ).slice(-2)), // the session exists — skip the mint, keep doc + comment
+      { eid: r.eid, name: 'claim', comp: null },
+    ]),
+    ...brief(all, sess, held, now),
+  ]
+}
+
+// No working session leaves the graph nameless: a session that held
+// claims or authored comments but never wrote its wake-brief gets a
+// skeleton doc at lapse — claimed tasks and their end states, a stub the
+// agent or owner enriches later (the work-session pattern, T-3705).
+let brief = (all: Row[], sess: Row, held: Row[], now: number): Change[] => {
+  if (sess.comps.doc) return []
+  let authored = all.some((r) => r.comps.comment?.author_eid == sess.eid)
+  if (!held.length && !authored) return []
+  let lines = held.map((r) =>
+    `- ${idOf(r)} (${r.comps.task?.status ?? '?'}) ${r.comps.doc?.title ?? ''}`
+  )
+  let day = new Date(now).toISOString().slice(0, 10)
+  return [{
+    eid: sess.eid,
+    name: 'doc',
+    comp: {
+      title: `Work session ${day}`,
+      body: [
+        'Auto-written at lapse — a stub, enrich me. Ended holding:',
+        '',
+        ...(lines.length ? lines : ['- (no claims — comments only)']),
+      ].join('\n'),
+    },
+  }]
 }
 
 // The memory-save batch: a doc face (title = index line, body = the

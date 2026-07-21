@@ -22,6 +22,7 @@ import {
   find,
   param,
   patches,
+  reasoned,
   type Row,
   spec,
   taskChanges,
@@ -150,9 +151,22 @@ export let commands: Record<string, Command> = {
   done: { args: '', about: 'move the focused task to done', run: move('done') },
   wip: { args: '', about: 'move the focused task to wip', run: move('wip') },
   cancel: {
-    args: '',
-    about: 'move the focused task to cancelled',
-    run: move('cancelled'),
+    args: '[reason]',
+    about: 'call off the focused task; the words become the why',
+    run: (rest, ctx) => {
+      let r = here(ctx)
+      if (!r.comps.task) throw new Error(`${idOf(r)} is not a task`)
+      let reason = rest.trim()
+      return {
+        changes: [
+          { eid: r.eid, name: 'task', comp: { status: 'cancelled' } },
+          // the why rides the batch — apply() turns it into the
+          // old→new comment the convention asks for
+          ...(reason ? [reasoned(r.eid, reason)] : []),
+        ],
+        msg: `${idOf(r)} → cancelled${reason ? ` — ${reason}` : ''}`,
+      }
+    },
   },
   claim: {
     args: '[session]',

@@ -21,8 +21,17 @@ Deno.env.set('POLL_MS', '10') // tests wait on facts, never on the clock
 Deno.env.set('STOP_GRACE_MS', '1000')
 
 let { apply, db } = await import('./db.ts')
-let { commented, deleted, logs, logsDir, recover, running, spawned, stopped } =
-  await import('./sessions.ts')
+let {
+  commented,
+  deleted,
+  logs,
+  logsDir,
+  recover,
+  running,
+  spawned,
+  stopped,
+  tidy,
+} = await import('./sessions.ts')
 
 let uid = () => crypto.randomUUID()
 let heard: Change[] = []
@@ -528,4 +537,48 @@ Deno.test('a session commenting on itself never resumes it', async () => {
   await write(say(eid, 'note to self', eid)) // the author IS the session
   assertEquals(row(eid)?.status, 'completed')
   assertEquals(row(eid)?.latest_seq, before) // the log never heard it
+})
+
+// A bare git call inside a session's worktree — the test playing owner.
+let inTree = (cwd: string, ...args: string[]) =>
+  new Deno.Command('git', { args, cwd, stdout: 'null', stderr: 'null' })
+    .outputSync()
+
+Deno.test('tidy: a merged clean tree goes at boot, unmerged work stays', async () => {
+  let a = begin(seed().t)
+  await a.done
+  let b = begin(seed().t)
+  await b.done
+  let treeA = String(row(a.eid)!.cwd), branchA = String(row(a.eid)!.branch)
+  let treeB = String(row(b.eid)!.cwd)
+  // b runs ahead of main: a commit on its branch that never merged
+  Deno.writeTextFileSync(`${treeB}/ahead.txt`, 'unmerged')
+  inTree(treeB, 'add', '-A')
+  inTree(treeB, 'commit', '-m', 'ahead')
+  heard = []
+  await tidy(cast)
+  // a: its branch tip IS the base tip, tree clean — worktree and branch go,
+  // the row sheds both, and the shed rides the cast
+  assertThrows(() => Deno.statSync(treeA))
+  assertEquals(row(a.eid)?.cwd, null)
+  assertEquals(row(a.eid)?.branch, null)
+  assertEquals(
+    inTree(scratch, 'rev-parse', '--verify', branchA).success,
+    false,
+  )
+  assert(heard.some((c) => c.eid == a.eid && c.name == 'session'))
+  // b: kept, untouched — main does not contain its commit
+  assert(Deno.statSync(treeB).isDirectory)
+  assert(row(b.eid)?.cwd)
+  assert(row(b.eid)?.branch)
+})
+
+Deno.test('tidy: a dirty tree stays, whatever its branch says', async () => {
+  let { eid, done } = begin(seed().t)
+  await done
+  let tree = String(row(eid)!.cwd)
+  Deno.writeTextFileSync(`${tree}/scratch.txt`, 'uncommitted')
+  await tidy(cast)
+  assert(Deno.statSync(tree).isDirectory)
+  assert(row(eid)?.cwd)
 })

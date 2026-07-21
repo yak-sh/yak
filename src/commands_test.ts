@@ -102,6 +102,19 @@ Deno.test('status moves land on the focused task', () => {
   assertThrows(() => run('done', ctx()), Error, 'nothing focused')
 })
 
+Deno.test('cancel: trailing words ride as the reason', () => {
+  assertEquals(run('cancel', ctx(T)).changes, [
+    { eid: T, name: 'task', comp: { status: 'cancelled' } },
+  ])
+  let why = run('cancel superseded by T-9', ctx(T))
+  assertEquals(why.changes, [
+    { eid: T, name: 'task', comp: { status: 'cancelled' } },
+    { eid: T, name: 'journal', comp: { reason: 'superseded by T-9' } },
+  ])
+  assertEquals(why.msg, 'T-4 → cancelled — superseded by T-9')
+  assertThrows(() => run('cancel', ctx(B)), Error, 'B-3 is not a task')
+})
+
 Deno.test('open: an argument navigates, none is the status move', () => {
   assertEquals(run('open T-4', ctx()).go, T) // no focus needed to navigate
   assertEquals(run('open 4', ctx()).go, T) // bare num

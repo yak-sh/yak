@@ -37,6 +37,7 @@ import {
   notices,
   param,
   patches,
+  reasoned,
   recallIndex,
   type Row,
   rows,
@@ -44,6 +45,7 @@ import {
   send,
   snapshot,
   spawnChanges,
+  spawnDefaults,
   taskChanges,
 } from './client.ts'
 import {
@@ -76,6 +78,10 @@ export type IO = {
   // An entity's slice of the journal (db.ts journalOf in-process; GET
   // /journal over stdio) — the wire's write record, newest first.
   history: (eid: string, limit?: number) => Promise<JournalEntry[]>
+  // The provider table (adapters in-process; GET /providers over stdio)
+  // — task_spawn's last-resort default when neither the caller nor the
+  // args name one.
+  providers: () => Promise<{ name: string; models: string[] }[]>
 }
 
 // A prop's type, said inline where it isn't obvious: enums spell their
@@ -344,12 +350,17 @@ why. ${DOC} ${GRAMMAR} ${BUS}`,
     {
       id: z.string(),
       params: z.array(z.string()).min(1),
+      // Why, in human words: rides the batch as the journal pseudo-change
+      // and lands as an old→new comment on the entity. Cancellations
+      // should always carry one.
+      reason: z.string().optional(),
       session: z.string().optional(),
     },
     async (
-      { id, params, session }: {
+      { id, params, reason, session }: {
         id: string
         params: string[]
+        reason?: string
         session?: string
       },
     ) => {
@@ -357,11 +368,11 @@ why. ${DOC} ${GRAMMAR} ${BUS}`,
       let row = find(all, id)
       if (!row) return err(`no entity: ${id}`)
       let grouped = patches(derefParams(all, parseAll(params)))
-      await io.write(
-        Object.entries(grouped)
+      await io.write([
+        ...Object.entries(grouped)
           .map(([name, comp]) => ({ eid: row.eid, name, comp })),
-        session,
-      )
+        ...(reason ? [reasoned(row.eid, reason)] : []),
+      ], session)
       return bus(`updated ${idOf(row)}${wall(grouped.doc?.body)}`, session)
     },
   )
@@ -423,11 +434,12 @@ worktree, and every way that can fail is a failed Session on the board
 (never an error here). Returns the S-id: session_peek checks on it,
 task_comment at the SETTLED session says more to it, and when the run
 settles the server comments the outcome on the task, so holders hear it
-on the bus. Providers/models: the server's /providers table. ${BUS}`,
+on the bus. provider/model default to YOUR session's own (pass the same
+session id you claim with), then the provider table's first entry. ${BUS}`,
     {
       id: z.string(),
-      provider: z.string(),
-      model: z.string(),
+      provider: z.string().optional(),
+      model: z.string().optional(),
       effort: z.string().optional(),
       persona: z.string().optional(),
       session: z.string().optional(),
@@ -435,14 +447,26 @@ on the bus. Providers/models: the server's /providers table. ${BUS}`,
     async (
       { id, provider, model, effort, persona, session }: {
         id: string
-        provider: string
-        model: string
+        provider?: string
+        model?: string
         effort?: string
         persona?: string
         session?: string
       },
     ) => {
       let all = rows(await io.read())
+      // A spawn begets its own kind: unnamed provider/model inherit the
+      // CALLER's (its session row), then the provider table's first entry.
+      // A caller's model never rides a different explicit provider.
+      let mine = spawnDefaults(all, session)
+      provider ??= mine.provider
+      model ??= provider == mine.provider ? mine.model : undefined
+      if (!provider || !model) {
+        let table = await io.providers()
+        provider ??= table[0]?.name
+        model ??= table.find((p) => p.name == provider)?.models[0]
+        if (!provider || !model) return err('no provider to default to')
+      }
       let made
       try {
         made = spawnChanges(all, { task: id, provider, model, effort, persona })
@@ -1103,5 +1127,10 @@ if (import.meta.main) {
       return res.json()
     },
     history: (eid, limit) => history(eid, limit),
+    providers: async () => {
+      let res = await fetch(`http://${host()}/providers`)
+      if (!res.ok) throw new Error(`server said ${res.status}`)
+      return res.json()
+    },
   }).connect(new StdioServerTransport())
 }
