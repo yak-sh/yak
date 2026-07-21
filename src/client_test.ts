@@ -19,6 +19,7 @@ import {
   recallIndex,
   rows,
   sessionFor,
+  showMd,
   spawnChanges,
   spawnDefaults,
   spec,
@@ -535,4 +536,39 @@ Deno.test('edgesOf: both directions, ids humanized', () => {
   let back = edgesOf(snap, all, T2)
   assertEquals(back.refs, [])
   assertEquals(back.backrefs, [{ type: 'requires', parent: 'T-2' }])
+})
+
+Deno.test('showMd: frontmatter, edge sentences, claim holder, body', () => {
+  let md = showMd(snap, all, by(T1))
+  assertMatch(md, /^---\nid: T-2\nkind: task\n/)
+  assertMatch(md, /status: wip/)
+  assertMatch(md, /claim: sess-x/) // the holder's session id, not an eid
+  assertMatch(md, /requires:\n {2}- T-3 \(open\) — Second/)
+  assertMatch(md, /# First/)
+  assertEquals(md.includes('aaaaaaaa'), false) // no uuid reaches the reader
+  let back = showMd(snap, all, by(T2))
+  assertMatch(back, /referenced by:\n {2}- T-2 \(wip\) — First · requires this/)
+})
+
+Deno.test('showMd: comments ride as a section, oldest first', () => {
+  let C = 'aaaaaaaa-0000-4000-8000-000000000009'
+  let snap2: Snapshot = {
+    changes: [
+      ...snap.changes,
+      { eid: C, name: 'entity', comp: { eid: C, num: 9, created_at: '2t' } },
+      { eid: C, name: 'doc', comp: { title: '', body: 'a remark' } },
+      { eid: C, name: 'comment', comp: { target_eid: T1, author_eid: S } },
+    ],
+    deps: snap.deps,
+  }
+  let all2 = rows(snap2)
+  let md = showMd(snap2, all2, all2.find((r) => r.eid == T1)!)
+  assertMatch(md, /## Comments\n\n— 2t · S-1 — sess-x\n\na remark/)
+})
+
+Deno.test('grammar: the teaching text derives from the vocabulary', async () => {
+  let { GRAMMAR, FILTERS } = await import('./grammar.ts')
+  assertMatch(GRAMMAR, /status\(open\|wip\|done\|cancelled\)/)
+  assertMatch(GRAMMAR, /Statuses: open, wip, done, cancelled/)
+  assertMatch(FILTERS, /time phrases/i)
 })

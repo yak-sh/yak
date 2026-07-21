@@ -32,43 +32,108 @@ import {
   search,
   send,
   sessionFor,
+  showMd,
   snapshot,
   spawnChanges,
   spawnDefaults,
   taskChanges,
 } from './client.ts'
 import { matchQuery, pred, resolveRefs } from './query.ts'
+import { FILTERS, GRAMMAR } from './grammar.ts'
 import { type Edge, edges, type Snapshot } from './types.ts'
 // `import type` (not the repo's usual inline `{ type X }`): telemetry.ts
 // reaches for node:sqlite, and the CLI has no business loading a db driver.
 import type { Log } from './telemetry.ts'
 
+// Every verb: usage, blurb, worked examples. `task help` derives all its
+// faces from this table plus grammar.ts, so what the CLI teaches and what
+// it accepts are the same text — extend the table, every door updates.
+let VERBS: [usage: string, blurb: string, examples: string[]][] = [
+  ['tui', 'open the terminal UI', []],
+  ['list [filters...] [--json]', 'list tasks (filter grammar)', [
+    'task list .status=open .priority<=1',
+    'task list .project=harness .modified_at>="1 week ago"',
+    'task list .assignee=jeff --json',
+  ]],
+  ['new .title="..." [...]', 'create a task (bare words become the title)', [
+    'task new P1 .project=holdco Fix the flux capacitor',
+    'task new .title="Write the digest" .body="Details..." .domain=Eng',
+  ]],
+  ['set <id> .prop=value ... [--reason=why]', 'patch; the reason comments', [
+    'task set T-3 .status=done --reason="verified end-to-end"',
+    'task set T-3 .assignee=jeff .priority=1',
+  ]],
+  ['show <id> [--json]', 'one entity as a document (--json for scripts)', [
+    'task show T-3',
+    'task show T-3 --json',
+  ]],
+  ['history <id> [-n N] [--json]', "the entity's write history (journal)", [
+    'task history T-3 -n 10',
+  ]],
+  ['search <words...> [--json]', 'full-text search (trailing * = prefix)', [
+    'task search flux capac*',
+    'task search .project=holdco deploy',
+  ]],
+  ['claim <id> [session]', 'lease a task for a session ($TASKS_SESSION)', [
+    'task claim T-3 my-session-id',
+  ]],
+  ['release <id>', 'drop the lease', ['task release T-3']],
+  [
+    'spawn <id> [--provider=X] [--model=Y] [--effort=Z] [--persona=P-9]',
+    "dispatch a managed agent onto a task (defaults: your session's own)",
+    ['task spawn T-3', 'task spawn T-3 --provider=codex --model=gpt-5.4'],
+  ],
+  ['comment <id> <text...>', 'say something about ANY entity', [
+    'task comment T-3 "blocked on the schema call"',
+    'task comment S-31 "status?"   # commenting on a session IS messaging it',
+  ]],
+  [
+    'dep <id> <type> <child> [--gone]',
+    'link (--gone unlinks) an edge: requires | contains | reads | about',
+    ['task dep T-3 requires T-9', 'task dep T-3 requires T-9 --gone'],
+  ],
+  ['backup', 'snapshot the db + commit/push the data dir', []],
+  ['context [session]', "this session's working set ($TASKS_SESSION)", []],
+  ['lapse [session]', 'session over: release claims, note unfinished', []],
+  ['telemetry [--errors] [--since=ISO] [-n N]', 'tool calls + crashes', [
+    'task telemetry --errors -n 20',
+  ]],
+  ['help [verb|grammar]', 'this text; grammar = filters + dot-params', [
+    'task help list',
+    'task help grammar',
+  ]],
+]
+
 let usage = `task — the entity graph, from a shell
 
-  task tui                       open the terminal UI
-  task list [.prop=value ...]    list tasks (any dot-param filters)
-  task new .title="..." [...]    create a task (bare words become the title)
-  task set <id> .prop=value ... [--reason=why]   patch; the reason comments
-  task show <id>                 print one entity as JSON
-  task history <id> [-n N]       the entity's write history (the journal)
-  task search <words...>         full-text search (trailing * = prefix)
-  task claim <id> [session]      lease a task for a session ($TASKS_SESSION)
-  task release <id>              drop the lease
-  task spawn <id> [--provider=X] [--model=Y] [--effort] [--persona]
-                                 defaults: your session's own, then the table
-                                 dispatch a managed agent onto a task
-  task comment <id> <text...>    say something about ANY entity
-  task dep <id> <type> <child> [--gone]   link (or --gone unlink) an edge:
-                                 requires | contains | reads | about
-  task backup                    snapshot the db + commit/push the data dir
-  task context [session]         this session's working set ($TASKS_SESSION)
-  task lapse [session]           session over: release claims, note unfinished
-  task telemetry [--errors]      tool calls + crashes, newest first
-    [--since=ISO] [-n N]
+${
+  VERBS.map(([u, b]) =>
+    u.length > 29
+      ? `  task ${u}\n${' '.repeat(38)}${b}`
+      : `  task ${u.padEnd(29)}  ${b}`
+  ).join('\n')
+}
 
 dot-params route by prop (.title= → doc.title); where a prop lives in
 several components (pin/camera x,y,w,h) spell it out: .pin.x=12
+'task help grammar' spells the whole filter grammar; 'task help <verb>'
+shows examples.
 `
+
+let help = (args: string[]) => {
+  let [topic] = args
+  if (!topic) return console.log(usage.trim())
+  if (topic == 'grammar') {
+    return console.log(`${GRAMMAR}\n\n${FILTERS}`)
+  }
+  let hit = VERBS.find(([u]) => u.split(' ')[0] == topic)
+  if (!hit) throw new Error(`no such verb: ${topic} (task help lists them)`)
+  let [u, b, examples] = hit
+  console.log(`task ${u}\n  ${b}`)
+  if (examples.length) {
+    console.log(`\n${examples.map((e) => `  ${e}`).join('\n')}`)
+  }
+}
 
 let split = (args: string[]) => {
   let params: Param[] = []
@@ -84,9 +149,10 @@ let split = (args: string[]) => {
 let list = async (args: string[]) => {
   // Filters speak the query grammar — operators, lists, ranges
   // ('.priority<=1', '.domain=Ops,Eng'); bare words are ignored.
+  let json = args.includes('--json')
   let all = rows(await snapshot())
   let preds = resolveRefs(
-    args.map(pred).filter((p) => p != null),
+    args.filter((a) => a != '--json').map(pred).filter((p) => p != null),
     (id) => find(all, id)?.eid,
   )
   let byEid = new Map(all.map((r) => [r.eid, r.comps]))
@@ -94,6 +160,7 @@ let list = async (args: string[]) => {
     .filter((r) => r.comps.task)
     .filter((r) => matchQuery(r.comps, preds, (e) => byEid.get(e)))
     .sort(byBoard)
+  if (json) return console.log(JSON.stringify(hits, null, 2))
   for (let r of hits) {
     let t = r.comps.task ?? {}
     let who = claimant(all, r)
@@ -140,9 +207,11 @@ let set = async (args: string[]) => {
 
 // Full-text search — every doc in the graph, ranked, matches bracketed.
 let seek = async (args: string[]) => {
-  let q = args.join(' ')
+  let json = args.includes('--json')
+  let q = args.filter((a) => a != '--json').join(' ')
   if (!q) throw new Error('task search <words...> (trailing * = prefix)')
   let hits = await search(q)
+  if (json) return console.log(JSON.stringify(hits, null, 2))
   if (!hits.length) return console.log('(no hits)')
   for (let h of hits) {
     let aim = h.open_eid != h.eid ? ` → on ${h.open_eid}` : ''
@@ -259,20 +328,26 @@ let comment = async (args: string[]) => {
 }
 
 let show = async (args: string[]) => {
-  let [id] = args
-  if (!id) throw new Error('task show <id>')
+  let json = args.includes('--json')
+  let [id] = args.filter((a) => a != '--json')
+  if (!id) throw new Error('task show <id> [--json]')
   let snap = await snapshot()
   let all = rows(snap)
   let row = find(all, id)
   if (!row) throw new Error(`no entity: ${id}`)
-  let comments = all.filter((r) => r.comps.comment?.target_eid == row.eid)
-  let edges = edgesOf(snap, all, row.eid)
-  console.log(JSON.stringify({ ...row, ...edges, comments }, null, 2))
+  if (json) {
+    // The machine shape, unchanged forever: scripts parse this.
+    let comments = all.filter((r) => r.comps.comment?.target_eid == row.eid)
+    let edges = edgesOf(snap, all, row.eid)
+    console.log(JSON.stringify({ ...row, ...edges, comments }, null, 2))
+  } else console.log(showMd(snap, all, row))
 }
 
 // The entity's write history — the journal, one line per touching batch:
 // when · who · what changed. Blame without a version table.
 let past = async (args: string[]) => {
+  let json = args.includes('--json')
+  args = args.filter((a) => a != '--json')
   let n = Number(args.find((a) => a.startsWith('-n'))?.slice(2) ?? 0) ||
     Number(args[args.indexOf('-n') + 1] ?? 0) || 50
   let id = args.find((a) => !a.startsWith('-'))
@@ -281,6 +356,7 @@ let past = async (args: string[]) => {
   let row = find(all, id)
   if (!row) throw new Error(`no entity: ${id}`)
   let entries = await history(row.eid, n)
+  if (json) return console.log(JSON.stringify(entries, null, 2))
   if (!entries.length) return console.log(`${idOf(row)}: no history`)
   for (let e of entries) console.log(historyLine(e))
 }
@@ -480,9 +556,10 @@ try {
   else if (cmd == 'lapse') await lapse(rest)
   else if (cmd == 'release') await release(rest)
   else if (cmd == 'telemetry') await telemetry(rest)
+  else if (cmd == 'help' || cmd == '--help') help(rest)
   else {
     console.log(usage.trim())
-    if (cmd && cmd != 'help' && cmd != '--help') Deno.exit(2)
+    if (cmd) Deno.exit(2)
   }
 } catch (e) {
   console.error(`task: ${(e as Error).message} (server: ${host()})`)

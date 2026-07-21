@@ -666,6 +666,82 @@ export let edgesOf = (snap: Snapshot, all: Row[], eid: string) => {
   }
 }
 
+// One entity as a reading document: frontmatter carries the data (scalar
+// props walked straight off the vocabulary — a new column appears here
+// with no edit), edges read as sentences, the doc body IS the body, and
+// comments follow as a section. Every eid resolves to its human id +
+// title, because nobody reads uuids. `task show`'s default face; --json
+// keeps the machine shape.
+export let showMd = (snap: Snapshot, all: Row[], row: Row) => {
+  let byEid = new Map(all.map((r) => [r.eid, r]))
+  let clip = (s: unknown, n = 64) => {
+    let t = String(s ?? '').replace(/\s+/g, ' ').trim()
+    return t.length > n ? t.slice(0, n - 1) + '…' : t
+  }
+  // "T-3695 (open) — title" — the way an edge endpoint reads anywhere.
+  let said = (eid: unknown) => {
+    let r = byEid.get(String(eid))
+    if (!r) return String(eid)
+    let st = r.comps.task?.status
+    let title = clip(r.comps.doc?.title ?? r.comps.session?.id ?? '')
+    return `${idOf(r)}${st ? ` (${st})` : ''}${title ? ` — ${title}` : ''}`
+  }
+  let fm = [`id: ${idOf(row)}`, `kind: ${row.kind}`]
+  for (let [comp, props] of Object.entries(comps)) {
+    // doc is the document below; a claim reads better as its holder line
+    if (comp == 'doc' || comp == 'claim' || !row.comps[comp]) continue
+    for (let prop of Object.keys(props)) {
+      let v = row.comps[comp][prop]
+      if (v == null || v === '') continue
+      let key = prop.endsWith('_eid') ? prop.slice(0, -4) : prop
+      let owners = Object.keys(comps).filter((c) => prop in comps[c])
+      if (owners.length > 1) key = `${comp}.${key}`
+      fm.push(`${key}: ${prop.endsWith('_eid') ? said(v) : v}`)
+    }
+  }
+  let held = claimant(all, row)
+  if (held) fm.push(`claim: ${held}`)
+  let ent = row.comps.entity ?? {}
+  if (ent.created_at) fm.push(`created: ${ent.created_at}`)
+  if (ent.modified_at && ent.modified_at != ent.created_at) {
+    fm.push(`modified: ${ent.modified_at}`)
+  }
+  // Edges as sentences, grouped by verb; the far side says its state.
+  let refs = snap.deps.filter((d) => d.parent == row.eid)
+  let backs = snap.deps.filter((d) => d.child == row.eid)
+  for (let type of [...new Set(refs.map((d) => d.type))]) {
+    fm.push(`${type}:`)
+    for (let d of refs.filter((r) => r.type == type)) {
+      fm.push(`  - ${said(d.child)}`)
+    }
+  }
+  if (backs.length) {
+    fm.push('referenced by:')
+    for (let d of backs) fm.push(`  - ${said(d.parent)} · ${d.type} this`)
+  }
+  let out = ['---', ...fm, '---']
+  let title = String(row.comps.doc?.title ?? '')
+  let body = String(row.comps.doc?.body ?? '')
+  if (title) out.push('', `# ${title}`)
+  if (body) out.push('', body)
+  let comments = all
+    .filter((r) => r.comps.comment?.target_eid == row.eid)
+    .sort((a, b) =>
+      String(a.comps.entity?.created_at ?? '')
+        .localeCompare(String(b.comps.entity?.created_at ?? ''))
+    )
+  if (comments.length) {
+    out.push('', '## Comments')
+    for (let c of comments) {
+      let author = c.comps.comment?.author_eid
+      let by = author ? ` · ${said(author)}` : ''
+      out.push('', `— ${c.comps.entity?.created_at ?? ''}${by}`, '')
+      out.push(String(c.comps.doc?.body ?? ''))
+    }
+  }
+  return out.join('\n')
+}
+
 export let claimant = (all: Row[], r: Row) => {
   let seid = r.comps.claim?.session_eid
   if (!seid) return undefined
