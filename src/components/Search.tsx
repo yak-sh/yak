@@ -152,7 +152,7 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
           >
             <Title>{h.title || '(untitled)'}</Title>
             <Id>{idOf(h)}</Id>
-            <Snip>{marked(h.snip)}</Snip>
+            <Snip>{marked(h.snip)}{h.retired && ' · retired'}</Snip>
           </Row>
         ))}
       </Box>

@@ -147,8 +147,9 @@ let seek = async (args: string[]) => {
   for (let h of hits) {
     let aim = h.open_eid != h.eid ? ` → on ${h.open_eid}` : ''
     let snip = h.snip.replaceAll('\x01', '[').replaceAll('\x02', ']')
+    let sunk = h.retired ? ' · retired' : ''
     console.log(
-      `${idOf(h)} ${h.kind}: ${h.title || '(untitled)'}${aim} — ${snip}`,
+      `${idOf(h)} ${h.kind}: ${h.title || '(untitled)'}${aim} — ${snip}${sunk}`,
     )
   }
 }

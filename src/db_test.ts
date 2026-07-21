@@ -705,3 +705,24 @@ Deno.test('num is monotonic: a grave keeps its number off the market', () => {
   }
   assertEquals(grave.num, high)
 })
+
+Deno.test('search: retired-project hits sink to the tail, flagged', () => {
+  let p = uid(), sunk = uid(), live = uid()
+  apply(db, [
+    { eid: p, name: 'doc', comp: { title: 'Quagga venture' } },
+    { eid: p, name: 'project', comp: { retired_at: '2026-07-21' } },
+    { eid: sunk, name: 'doc', comp: { title: 'Quagga sunk chore' } },
+    { eid: sunk, name: 'task', comp: { status: 'open', project_eid: p } },
+    { eid: live, name: 'doc', comp: { title: 'Quagga live chore' } },
+    { eid: live, name: 'task', comp: { status: 'open' } },
+  ])
+  let hits = search(db, 'quagga')
+  assertEquals(hits[0].eid, live) // the only live hit leads
+  assertEquals(hits[0].retired, undefined)
+  // the retired project and its task queue behind, each flagged
+  assertEquals(hits.slice(1).map((h) => h.retired), [true, true])
+  assertEquals(new Set(hits.slice(1).map((h) => h.eid)), new Set([p, sunk]))
+  // unretiring floats them back
+  apply(db, [{ eid: p, name: 'project', comp: { retired_at: null } }])
+  assertEquals(search(db, 'quagga').every((h) => !h.retired), true)
+})

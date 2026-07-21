@@ -170,6 +170,28 @@ defineActions([
     }],
   },
   {
+    // Retiring stamps the moment; unretiring clears it. Everything filed
+    // under the project stays — it just stops coming up first.
+    match: has('project'),
+    acts: (e) => [
+      e.project!.retired_at
+        ? {
+          label: 'unretire',
+          run: () =>
+            mutate({ eid: e.eid, name: 'project', comp: { retired_at: null } }),
+        }
+        : {
+          label: 'retire',
+          run: () =>
+            mutate({
+              eid: e.eid,
+              name: 'project',
+              comp: { retired_at: new Date().toISOString() },
+            }),
+        },
+    ],
+  },
+  {
     match: () => true,
     acts: (e) => [{
       label: 'delete',

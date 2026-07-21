@@ -438,6 +438,26 @@ export let hot = (c: Comps, now: number): number => {
   return Math.exp(-Math.max(0, now - last) / stability)
 }
 
+// Retirement is a damper, not an eraser: a retired project — and every
+// task filed under it — keeps its whole recall curve but sinks beneath
+// live work wherever warmth ranks (.order=hot, the digest). The lookup
+// is the same comps fetcher matchQuery's path preds ride, so every
+// caller already holds one.
+export let SUNK = 0.1
+export let sunk = (
+  c: Comps,
+  ent?: (eid: string) => Comps | undefined,
+): boolean => {
+  if (c.project?.retired_at) return true
+  let p = c.task?.project_eid
+  return !!(p && ent?.(String(p))?.project?.retired_at)
+}
+export let warm = (
+  c: Comps,
+  now: number,
+  ent?: (eid: string) => Comps | undefined,
+) => hot(c, now) * (sunk(c, ent) ? SUNK : 1)
+
 // The values a row must carry to satisfy the query's scalar equalities on
 // one component — what a board drop patches, so a dropped task JOINS the
 // board it landed on. Lists, ranges and comparisons pin nothing down.

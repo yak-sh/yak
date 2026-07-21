@@ -35,7 +35,7 @@ import {
 import { outcome, recent, record, toolCall } from './telemetry.ts'
 import { stamp } from './hot.ts'
 import { find, type Row, rows } from './client.ts'
-import { hot, matchQuery, orderOf, parseQuery, resolveRefs } from './query.ts'
+import { matchQuery, orderOf, parseQuery, resolveRefs, warm } from './query.ts'
 
 // The hot-swap generation: bumped by the watcher on every client-code or
 // css change, stamped into every served module's relative imports so a
@@ -312,7 +312,10 @@ Deno.serve(
           .filter((r) => !kind || r.kind == kind)
           .filter((r) => matchQuery(r.comps, ps, (e) => byEid.get(e)))
         if (orderOf(ps) == 'hot') {
-          hits.sort((a, b) => hot(b.comps, now) - hot(a.comps, now))
+          hits.sort((a, b) =>
+            warm(b.comps, now, (e) => byEid.get(e)) -
+            warm(a.comps, now, (e) => byEid.get(e))
+          )
         }
         let back = new Map<string, { from: string; via: string }[]>()
         if (backs) {

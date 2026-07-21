@@ -50,12 +50,12 @@ import {
   taskChanges,
 } from './client.ts'
 import {
-  hot,
   matchQuery,
   orderOf,
   parseQuery,
   pred,
   resolveRefs,
+  warm,
 } from './query.ts'
 
 // How the tools reach the graph — in-process on the server, HTTP here.
@@ -117,9 +117,9 @@ end), '.status!=done', '.title~=flux' (contains), '.domain=' (absent),
 days' — a phrase is a RANGE: = within it, >= from its start, <= to its
 end ('.modified_at>="1 hour ago"'; glue with - where quoting is hard).
 Reference filters take the same sugar ('.assignee=jeff', '.project=P-19'),
-and a DOTTED path walks one reference: '.assignee.title~=jeff',
-'.project.path~=tasks' — a first segment naming a component stays the
-explicit spelling ('.pin.x=12'), anything else dereferences. Bare words
+and a DOTTED path walks one reference: '.assignee.title~=jeff' — but a
+first segment naming a component stays the explicit spelling ('.pin.x=12',
+'.project.retired_at=' — absent means live), it never dereferences. Bare words
 are text terms (doc contains). Boards persist these same queries
 (board.query).`
 
@@ -242,7 +242,8 @@ paging graph_query.`,
         hits.map((h) =>
           `${idOf(h)} ${h.kind}: ${h.title || '(untitled)'}` +
           `${h.open_eid != h.eid ? ` → on ${h.open_eid}` : ''}` +
-          ` — ${h.snip.replaceAll('\x01', '[').replaceAll('\x02', ']')}`
+          ` — ${h.snip.replaceAll('\x01', '[').replaceAll('\x02', ']')}` +
+          `${h.retired ? ' · retired' : ''}`
         ).join('\n') || '(no hits)',
       )
     },
@@ -268,7 +269,9 @@ filters must ALL match. ${FILTERS} ${BUS}`,
         .filter((r) => matchQuery(r.comps, ps, (e) => byEid.get(e)))
         .sort(
           orderOf(ps) == 'hot'
-            ? (a, b) => hot(b.comps, now) - hot(a.comps, now)
+            ? (a, b) =>
+              warm(b.comps, now, (e) => byEid.get(e)) -
+              warm(a.comps, now, (e) => byEid.get(e))
             : byBoard,
         )
       return bus(
@@ -724,7 +727,10 @@ client is looking at), sessions, comments — all live here. ${GRAMMAR} ${FILTER
         .filter((r) => !kind || r.kind == kind)
         .filter((r) => matchQuery(r.comps, ps, (e) => byEid.get(e)))
       if (orderOf(ps) == 'hot') {
-        hits.sort((a, b) => hot(b.comps, now) - hot(a.comps, now))
+        hits.sort((a, b) =>
+          warm(b.comps, now, (e) => byEid.get(e)) -
+          warm(a.comps, now, (e) => byEid.get(e))
+        )
       }
       return text(JSON.stringify(
         hits.map((r) => ({

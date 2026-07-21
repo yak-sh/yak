@@ -21,7 +21,11 @@ Deno.test('schema(): stamped marked, death words carried, tags empty', () => {
   )
   assertEquals(rows.claim.find((c) => c.col == 'claimed_at')?.stamped, true)
   assertEquals(rows.entity.every((c) => c.stamped), true) // spine: all server's
-  assertEquals(rows.project, []) // a tag — the row is the statement
+  assertEquals(rows.canvas, []) // a tag — the row is the statement
+  // project outgrew tag-hood: retirement rides the comp, wire-writable
+  assertEquals(rows.project, [
+    { col: 'retired_at', type: 'text', stamped: false },
+  ])
   // wire-writable and stamped columns of one comp land in one place
   let session = rows.session.map((c) => c.col)
   assert(session.includes('provider') && session.includes('exit_code'))

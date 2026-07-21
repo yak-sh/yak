@@ -74,7 +74,10 @@ export let comps: Record<string, Record<string, PropType>> = {
     assignee_eid: { eid: '', death: 'detach' },
     domain: { text: 'domains' }, // free text; the graph suggests
   },
-  project: {},
+  // retired_at: the project is over, not erased. Wire-writable — stamping
+  // it IS the retirement (like acked_at, no effect needed); everything
+  // filed under it stays referenceable but sinks (search, .order=hot).
+  project: { retired_at: 'text' },
   repo: { path: 'text', base_branch: 'text' }, // the project's checkout
   board: { query: 'query' }, // saved filter (query.ts grammar); '' = all
   canvas: {},
@@ -375,8 +378,9 @@ export type Task = {
 }
 
 // A tag: "this doc fronts a project" (a venture, a workstream). Its name
-// is its doc.title — one naming mechanism, no drift.
-export type ProjectTag = { eid: string }
+// is its doc.title — one naming mechanism, no drift. retired_at set means
+// the venture is over — kept, referenceable, sunk in every ranking.
+export type ProjectTag = { eid: string; retired_at?: string | null }
 
 // Where a project's code lives: a checkout on this box and the branch a
 // session's worktree grows from. A tag like project — it never names an
@@ -551,6 +555,7 @@ export type Hit = {
   title: string
   snip: string
   open_eid: string
+  retired?: boolean // its project is over — the hit sank to the tail
 }
 
 export type Dep = { parent: string; type: Edge; child: string }

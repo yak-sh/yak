@@ -18,7 +18,7 @@ import {
   uuid,
 } from './types.ts'
 import { idOf } from './types.ts'
-import { hot, matchQuery, type Pred, route } from './query.ts'
+import { hot, matchQuery, type Pred, route, warm } from './query.ts'
 export { idOf }
 
 export let host = () => Deno.env.get('TASKS_HOST') ?? '127.0.0.1:5173'
@@ -397,9 +397,13 @@ let lately = (all: Row[], now: number, budget: number) => {
     let t = Date.parse(String(r.comps.entity?.modified_at ?? ''))
     return Number.isNaN(t) ? Infinity : now - t
   }
+  let byEid = new Map(all.map((r) => [r.eid, r.comps]))
   let fresh = all
     .filter((r) => r.comps.doc?.title && !r.comps.comment && age(r) < 7 * DAY)
-    .sort((a, b) => hot(b.comps, now) - hot(a.comps, now))
+    .sort((a, b) =>
+      warm(b.comps, now, (e) => byEid.get(e)) -
+      warm(a.comps, now, (e) => byEid.get(e))
+    )
   if (!fresh.length) return []
   let briefs = fresh.filter((r) => r.comps.session && age(r) < DAY).slice(0, 2)
   let today = fresh.filter((r) =>

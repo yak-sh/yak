@@ -65,7 +65,8 @@ let schema = `
     priority real not null default 0
   );
   create table if not exists project (
-    eid text primary key references entity(eid)
+    eid text primary key references entity(eid),
+    retired_at text
   );
   create table if not exists person (
     eid text primary key references entity(eid)
@@ -393,6 +394,7 @@ export let open = () => {
   // A board is a saved filter over tasks (query.ts grammar), not an edge
   // list — membership can't drift when it isn't stored.
   addCol('board', 'query', 'query text')
+  addCol('project', 'retired_at', 'retired_at text')
   // A live table's check constraint is frozen at create; when the edge
   // vocabulary outgrows the baked list (the 'about' verb shipped without
   // this once — every about edge bounced off the old check), rebuild the
@@ -964,14 +966,14 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
         - 2.0 / (1 + julianday('now') - julianday(e.modified_at)) limit ?
     `).all(match, filters.length ? limit * 10 : limit) as (Omit<
       Hit,
-      'kind' | 'open_eid'
+      'kind' | 'open_eid' | 'retired'
     >)[]
     : db.prepare(`
       select d.eid, d.title, '' as snip, e.num
       from doc d
       join entity e on e.eid = d.eid
       order by e.modified_at desc limit ?
-    `).all(limit * 10) as (Omit<Hit, 'kind' | 'open_eid'>)[]
+    `).all(limit * 10) as (Omit<Hit, 'kind' | 'open_eid' | 'retired'>)[]
   if (filters.length) {
     // Sugar values in the filters ('.assignee=jeff') resolve against the
     // db — alias slug or human num, same forms find() speaks.
@@ -1000,12 +1002,28 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
     [k, db.prepare(`select 1 from ${k} where eid = ?`)] as const
   )
   let aim = db.prepare('select target_eid from comment where eid = ?')
-  return rows.map((r) => {
+  // Retirement sinks a hit, never hides it: a hit that IS a retired
+  // project, or a task filed under one, keeps its rank order among the
+  // sunk — they all queue behind the last live hit, flagged for the
+  // renderers to mark.
+  let sank = db.prepare(`
+    select 1 from project p
+    left join task t on t.eid = ?1
+    where p.retired_at is not null
+      and p.eid in (?1, t.project_eid)
+  `)
+  let hits = rows.map((r) => {
     let kind = is.find(([, s]) => s.get(r.eid))?.[0] ?? 'entity'
     let target = (aim.get(r.eid) as { target_eid: string } | undefined)
       ?.target_eid
-    return { ...r, kind, open_eid: target ?? r.eid }
+    return {
+      ...r,
+      kind,
+      open_eid: target ?? r.eid,
+      ...(sank.get(r.eid) ? { retired: true } : {}),
+    }
   })
+  return [...hits.filter((h) => !h.retired), ...hits.filter((h) => h.retired)]
 }
 
 // The whole graph as one batch (plus edges) — what a fresh client cache eats.

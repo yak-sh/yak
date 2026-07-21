@@ -941,6 +941,14 @@ html {
   text-decoration: underline;
   color: var(--muted);
 }
+/* a retired project's chip: present, struck, half there */
+.Id-retired {
+  text-decoration: line-through;
+  opacity: 0.55;
+}
+.Id-retired:hover {
+  text-decoration: line-through underline;
+}
 .Show_Meta .Id {
   margin-left: auto; /* the id keeps the row's right edge, as in a titlebar */
 }

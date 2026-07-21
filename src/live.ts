@@ -12,7 +12,7 @@ import {
   stamped,
 } from './types.ts'
 import { type Row } from './client.ts'
-import { hot, matchQuery, parseQuery, resolveRefs } from './query.ts'
+import { matchQuery, parseQuery, resolveRefs, warm } from './query.ts'
 
 // A cache row: the spine plus whichever components the entity carries.
 // Derived from Ent so a new component (types.ts) threads through here —
@@ -63,14 +63,21 @@ import { kindOf, uuid } from './types.ts'
 export let byPriority = (a: Ent, b: Ent) =>
   (a.task!.priority - b.task!.priority) || (a.num - b.num)
 
-// An Ent's warmth — the cache-side face of query.ts hot(), for boards
+// An Ent's warmth — the cache-side face of query.ts warm(), for boards
 // that say .order=hot. The Ent flattens the spine, so re-nest what the
-// scorer reads; ties break to the newer num, like byPriority.
+// scorer reads (project/task ride along so retirement can sink it);
+// ties break to the newer num, like byPriority.
 export let warmth = (e: Ent, now: number) =>
-  hot({
-    recall: e.recall as Record<string, unknown> | undefined,
-    entity: { modified_at: e.modified_at, created_at: e.created_at },
-  }, now)
+  warm(
+    {
+      recall: e.recall as Record<string, unknown> | undefined,
+      entity: { modified_at: e.modified_at, created_at: e.created_at },
+      project: e.project as Record<string, unknown> | undefined,
+      task: e.task as unknown as Record<string, unknown> | undefined,
+    },
+    now,
+    (eid) => cache.value[eid],
+  )
 export let byWarmth = (now: number) => (a: Ent, b: Ent) =>
   (warmth(b, now) - warmth(a, now)) || (b.num - a.num)
 
