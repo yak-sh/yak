@@ -178,10 +178,12 @@ let spawn = async (args: string[]) => {
       'task spawn <id> [--provider=X] [--model=Y] [--effort=Z] [--persona=P-9]',
     )
   }
-  let all = rows(await snapshot())
+  let snap = await snapshot()
+  let all = rows(snap)
   // Unnamed provider/model inherit: the calling session's own (a spawn
   // begets its own kind), then the provider table's first entry.
-  let mine = spawnDefaults(all, Deno.env.get('TASKS_SESSION') ?? undefined)
+  let by = Deno.env.get('TASKS_SESSION') ?? undefined
+  let mine = spawnDefaults(all, by)
   let provider = flag('provider') ?? mine.provider
   let model = flag('model') ?? (flag('provider') ? undefined : mine.model)
   if (!provider || !model) {
@@ -199,6 +201,8 @@ let spawn = async (args: string[]) => {
     model,
     effort: flag('effort'),
     persona: flag('persona'),
+    by,
+    deps: snap.deps,
   })
   await send(made.changes)
   let after = rows(await snapshot()).find((r) => r.eid == made.eid)
@@ -310,6 +314,20 @@ let context = async (args: string[]) => {
           name: 'session',
           comp: { provider: 'claude', model },
         }])
+      }
+      // Announce the actor when it's derivable: a graph with exactly one
+      // person can only be acting for that person. More than one and the
+      // session stays unattributed — identity is asserted, never guessed.
+      let mine = rows(snap).find((r) => r.eid == s.eid)?.comps.session
+      if (!mine?.actor_eid) {
+        let people = rows(snap).filter((r) => r.comps.person)
+        if (people.length == 1) {
+          await send([{
+            eid: s.eid,
+            name: 'session',
+            comp: { actor_eid: people[0].eid },
+          }])
+        }
       }
       // A managed spawn boots already holding its lease: the launcher
       // passes TASKS_TASK, and an unclaimed task claims quietly here —

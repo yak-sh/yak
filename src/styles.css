@@ -136,7 +136,7 @@ html {
 /* The mono keepers: ids, chips, badges, edge verbs, timestamps, code,
    and every command/inspector/log surface. Prose everywhere else is
    var(--font) via body. :where keeps this overridable. */
-:where(code, pre, kbd, .Id, .Prio, .Show_Domain, .Show_Project, .Show_Assignee, .Show_Claim, .Prop_Hand, .Dependency_Type, .Relate_Verb, .Stamp, .Comments_When, .Comments_Who, .Board_ColName, .Board_Count, .Board_Chips, .Status, .Search_Box input, .Search_Id, .Debug, .Debug_Claim, .SessionRow, .Session_Facts, .Session_Status, .Session_Model, .Session_Tool, .Session_Exec, .Session_Turn, .Session_Err, .TaskRow_Assignee) {
+:where(code, pre, kbd, .Id, .Prio, .Show_Domain, .Show_Project, .Show_Assignee, .Show_Claim, .Prop_Hand, .Dependency_Type, .Relate_Verb, .Stamp, .Comments_When, .Comments_Who, .Comments_Via, .Board_ColName, .Board_Count, .Board_Chips, .Status, .Search_Box input, .Search_Id, .Debug, .Debug_Claim, .SessionRow, .Session_Facts, .Session_Status, .Session_Model, .Session_Tool, .Session_Exec, .Session_Turn, .Session_Err, .TaskRow_Assignee) {
   font-family: var(--mono);
 }
 
@@ -613,11 +613,19 @@ html {
   font-size: 11px;
   color: var(--blue);
 }
+/* The instrument, dimmed behind its actor: "Jeff · via S-3704". */
+.Comments_Via {
+  color: var(--dim);
+  font-size: 11px;
+  margin-left: var(--half-gap);
+}
 .Comments_Who,
+.Comments_Via,
 .Comments_When {
   text-decoration: none;
 }
 .Comments_Who:hover,
+.Comments_Via:hover,
 .Comments_When:hover {
   text-decoration: underline;
 }
@@ -1504,6 +1512,24 @@ html {
 }
 .Status_Msg {
   color: var(--muted);
+}
+/* "you are …?" — the bar asks once, each candidate a quiet button. */
+.Status_You {
+  color: var(--dim);
+  display: flex;
+  align-items: baseline;
+  gap: var(--half-gap);
+}
+.Status_Person {
+  font: inherit;
+  color: var(--blue);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.Status_Person:hover {
+  text-decoration: underline;
 }
 
 /* An external page's frozen archive, framed in a card. The page brings

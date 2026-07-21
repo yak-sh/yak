@@ -126,7 +126,18 @@ export let param = (arg: string): Param | null => {
     }
     return { comp: a, prop: b, value }
   }
-  return { ...route(a), value }
+  let r = route(a)
+  // route()'s any-of ('' comp) serves FILTERS; a write must aim at one
+  // component, so demand the explicit spelling.
+  if (!r.comp) {
+    let owners = Object.keys(comps).filter((c) => r.prop in comps[c])
+    throw new Error(
+      `.${a} is ambiguous for writes (${
+        owners.join(', ')
+      }) — use .comp.${r.prop}`,
+    )
+  }
+  return { ...r, value }
 }
 
 // Reference values at a door: uuids pass through, '' clears, anything
@@ -288,12 +299,33 @@ export let spawnChanges = (
     model: string
     effort?: string
     persona?: string
+    by?: string
+    deps?: Dep[]
   },
 ) => {
   let task = find(all, s.task)
   if (!task?.comps.task) throw new Error(`no task: ${s.task}`)
   let persona = s.persona ? find(all, s.persona) : undefined
   if (s.persona && !persona) throw new Error(`no entity: ${s.persona}`)
+  // Behalf is a CHOICE, not plumbing: wearing a persona owned by an
+  // operator means acting AS that operator, so the spawn's actor is the
+  // persona's owner; otherwise the child inherits the caller's actor —
+  // delegation doesn't launder identity. Ownership is an edge in either
+  // spelling (persona about owner, or owner contains persona) to an
+  // entity that IS an actor (person or project).
+  let owner = persona &&
+    (s.deps ?? []).map((d) =>
+      d.type == 'about' && d.parent == persona.eid
+        ? d.child
+        : d.type == 'contains' && d.child == persona.eid
+        ? d.parent
+        : undefined
+    ).map((eid) => eid ? find(all, eid) : undefined)
+      .find((r) => r?.comps.person || r?.comps.project)
+  let caller = s.by
+    ? all.find((r) => String(r.comps.session?.id) == s.by)?.comps.session
+    : undefined
+  let actor = owner?.eid ?? caller?.actor_eid
   let eid = uuid()
   let changes: Change[] = [{
     eid,
@@ -305,6 +337,7 @@ export let spawnChanges = (
       ...(s.effort ? { effort: s.effort } : {}),
       requested_task_eid: task.eid,
       ...(persona ? { persona_eid: persona.eid } : {}),
+      ...(actor ? { actor_eid: actor } : {}),
     },
   }]
   return { eid, changes }

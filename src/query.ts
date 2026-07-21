@@ -184,13 +184,11 @@ export let route = (prop: string): { comp: string; prop: string } => {
   }
   let ref = hits(`${prop}_eid`)
   if (ref.length == 1) return { comp: ref[0], prop: `${prop}_eid` }
-  if (ref.length > 1) {
-    throw new Error(
-      `.${prop} is ambiguous (${
-        ref.join(', ')
-      } all carry ${prop}_eid) — use .comp.${prop}_eid`,
-    )
-  }
+  // Several comps sharing a ref name (actor_eid on client AND session)
+  // stay one CONCEPT: comp '' means any-of, and matchQuery scans every
+  // comp for the prop. Writes can't aim at "any" — param() rejects the
+  // bare form and asks for the explicit spelling.
+  if (ref.length > 1) return { comp: '', prop: `${prop}_eid` }
   throw new Error(`unknown prop: .${prop}`)
 }
 
@@ -392,12 +390,19 @@ export let matchQuery = (
       )
     }
     if (p.at) {
-      let ref = c[p.comp]?.[p.prop]
+      let ref = read(c, p.comp, p.prop)
       let t = ref ? ent?.(String(ref)) : undefined
-      return test(t?.[p.at.comp]?.[p.at.prop], p)
+      return test(t && read(t, p.at.comp, p.at.prop), p)
     }
-    return test(c[p.comp]?.[p.prop], p)
+    return test(read(c, p.comp, p.prop), p)
   })
+
+// One column read, honoring route()'s any-of: comp '' means the prop is
+// a shared ref name (actor_eid), so take the first value any comp holds
+// — an entity carries at most one of the sharing comps in practice.
+let read = (c: Comps, comp: string, prop: string) =>
+  comp ? c[comp]?.[prop] : Object.values(c).map((v) => v?.[prop])
+    .find((v) => v != null)
 
 // The warmth of an entity, on (0,1] — the rank behind '.order=hot'.
 // Recall aggregates (count, first_at, last_at) are the whole model:

@@ -68,7 +68,14 @@ export let comps: Record<string, Record<string, PropType>> = {
     h: 'number',
     z: 'number',
   },
-  client: { user_agent: 'text' }, // ip is server-stamped too
+  // actor_eid is the identity CHAIN: a client is one browser's presence,
+  // a session one agent's run — instruments, not identities — and the
+  // actor is who the instrument acts for (a person, or a project standing
+  // in for its operator; {eid: ''} because the pool is shared). Authorship
+  // stays on the instrument; identity is one hop away, and the hop is
+  // queryable (.author.actor=jeff). An assertion, not authentication —
+  // forging it only garbles your own attribution, like acked_at.
+  client: { user_agent: 'text', actor_eid: { eid: '' } }, // ip is server-stamped too
   camera: {
     client_eid: { eid: 'client' },
     canvas_eid: { eid: '' },
@@ -100,6 +107,7 @@ export let comps: Record<string, Record<string, PropType>> = {
     effort: 'text',
     requested_task_eid: { eid: '' },
     persona_eid: { eid: '' },
+    actor_eid: { eid: '' }, // who this run acts for — see client above
   },
   claim: { session_eid: { eid: 'session' } }, // claimed_at server-stamped
   // The brake, pulled as data: creating one asks the server to stop the
@@ -313,6 +321,7 @@ export type Client = {
   eid: string
   user_agent: string
   ip: string
+  actor_eid?: string | null // who this browser acts for (comps comment)
 }
 
 // A camera joins a client to a canvas: per-client pan/zoom, one row per
@@ -366,6 +375,7 @@ export type Session = {
   model?: string | null
   effort?: string | null
   persona_eid?: string | null
+  actor_eid?: string | null // who this run acts for (comps comment)
   requested_task_eid?: string | null // provenance: what it was started on
   branch?: string | null
   base_revision?: string | null

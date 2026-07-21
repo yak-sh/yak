@@ -454,7 +454,8 @@ session id you claim with), then the provider table's first entry. ${BUS}`,
         session?: string
       },
     ) => {
-      let all = rows(await io.read())
+      let snap = await io.read()
+      let all = rows(snap)
       // A spawn begets its own kind: unnamed provider/model inherit the
       // CALLER's (its session row), then the provider table's first entry.
       // A caller's model never rides a different explicit provider.
@@ -469,7 +470,15 @@ session id you claim with), then the provider table's first entry. ${BUS}`,
       }
       let made
       try {
-        made = spawnChanges(all, { task: id, provider, model, effort, persona })
+        made = spawnChanges(all, {
+          task: id,
+          provider,
+          model,
+          effort,
+          persona,
+          by: session,
+          deps: snap.deps,
+        })
       } catch (e) {
         return err((e as Error).message)
       }

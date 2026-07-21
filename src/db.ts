@@ -382,6 +382,9 @@ export let open = () => {
       'error text',
     ]
   ) addCol('session', ddl.split(' ')[0], ddl)
+  // The identity chain (types.ts): instruments point at who they act for.
+  addCol('client', 'actor_eid', 'actor_eid text references entity(eid)')
+  addCol('session', 'actor_eid', 'actor_eid text references entity(eid)')
   // A board is a saved filter over tasks (query.ts grammar), not an edge
   // list — membership can't drift when it isn't stored.
   addCol('board', 'query', 'query text')
@@ -633,14 +636,21 @@ export let apply = (
             touched.add(held)
             extra.push({ eid: held, name: 'claim', comp: null })
           }
-          for (let col of ['project_eid', 'assignee_eid']) {
-            let homed = db.prepare(`select eid from task where ${col} = ?`)
+          for (
+            let [t, col] of [
+              ['task', 'project_eid'],
+              ['task', 'assignee_eid'],
+              ['client', 'actor_eid'],
+              ['session', 'actor_eid'],
+            ]
+          ) {
+            let homed = db.prepare(`select eid from ${t} where ${col} = ?`)
               .all(d) as { eid: string }[]
-            db.prepare(`update task set ${col} = null where ${col} = ?`).run(d)
+            db.prepare(`update ${t} set ${col} = null where ${col} = ?`).run(d)
             for (let { eid: orphan } of homed) {
               if (doomed.includes(orphan)) continue
               touched.add(orphan)
-              extra.push({ eid: orphan, name: 'task', comp: { [col]: null } })
+              extra.push({ eid: orphan, name: t, comp: { [col]: null } })
             }
           }
           for (let c of Object.keys(cmps).toReversed()) {

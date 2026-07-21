@@ -297,6 +297,34 @@ Deno.test('assignee: whose plate round-trips, a dead assignee detaches', () => {
   assertEquals(comp(t, 'doc')?.title, 'chore')
 })
 
+Deno.test('actor: instruments say who they act for; a dead actor detaches both', () => {
+  let jeff = uid(), c = uid(), s = uid()
+  apply(db, [
+    { eid: jeff, name: 'doc', comp: { title: 'Jeff' } },
+    { eid: jeff, name: 'person', comp: {} },
+    { eid: c, name: 'client', comp: { user_agent: 'probe', actor_eid: jeff } },
+    { eid: s, name: 'session', comp: { id: 'sess-for', actor_eid: jeff } },
+  ])
+  assertEquals(comp(c, 'client')?.actor_eid, jeff)
+  assertEquals(comp(s, 'session')?.actor_eid, jeff)
+  // the actor dies; instruments survive unattributed, and the wire hears it
+  let out = apply(db, [{ eid: jeff, name: 'entity', comp: null }])
+  assertEquals(
+    out.some((x) =>
+      x.eid == c && x.name == 'client' && x.comp?.actor_eid === null
+    ),
+    true,
+  )
+  assertEquals(
+    out.some((x) =>
+      x.eid == s && x.name == 'session' && x.comp?.actor_eid === null
+    ),
+    true,
+  )
+  assertEquals(comp(c, 'client')?.actor_eid, null)
+  assertEquals(comp(s, 'session')?.actor_eid, null)
+})
+
 Deno.test('edges: link once, unlink by the same sentence', () => {
   let p = uid(), c = uid()
   apply(db, [

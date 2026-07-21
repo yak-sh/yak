@@ -39,6 +39,8 @@ let Frame = block('footer', 'Status', {
   Name: 'b',
   Args: 'span',
   About: 'span',
+  You: 'span',
+  Person: 'button',
 })
 let {
   Mode,
@@ -54,6 +56,8 @@ let {
   Name,
   Args,
   About,
+  You,
+  Person,
 } = Frame
 
 let msg = signal('')
@@ -170,6 +174,37 @@ let exec = (line: string) => {
   } catch (e) {
     msg.value = e instanceof Error ? e.message : String(e)
   }
+}
+
+// The identity chain's web end: who this browser acts for. A lone person
+// binds on sight (Canvas); with CANDIDATES the bar asks — "you are …?" —
+// and one click asserts it. An assertion, not a login: a wrong answer
+// only garbles your own bylines, and the client card's actor row (any
+// prop editor) can always change it. Bound or personless, the bar stays
+// quiet.
+let WhoAmI = () => {
+  let me = ent(clientId())
+  if (!me.client || me.client.actor_eid) return null
+  let people = rows().filter((r) => r.comps.person)
+  if (people.length < 2) return null
+  return (
+    <You>
+      you are {people.map((p) => (
+        <Person
+          key={p.eid}
+          onClick={() =>
+            mutate({
+              eid: me.eid,
+              name: 'client',
+              comp: { actor_eid: p.eid },
+            })}
+        >
+          {String(p.comps.doc?.title ?? '') || idOf(p)}
+        </Person>
+      ))}
+      ?
+    </You>
+  )
 }
 
 // The vim statusbar: NORMAL / -- INSERT -- / a live : command line. It owns
@@ -360,6 +395,7 @@ export let Status = () => {
           </>
         )}
       {/* the bar's right end is the Tray: live runs + the shelf */}
+      <WhoAmI />
       <Tray />
     </Frame>
   )

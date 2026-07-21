@@ -267,11 +267,23 @@ Deno.test('sugar: .assignee is .assignee_eid', () => {
   assert(!hit('.assignee=u1', { assignee_eid: 'u2' }))
 })
 
-Deno.test('sugar: misses and collisions stay loud', () => {
+Deno.test('sugar: misses and own-column collisions stay loud', () => {
   assertThrows(() => route('hovercraft'), Error, 'unknown prop')
-  // camera, fold and shelf all carry client_eid — no guessing
-  assertThrows(() => route('client'), Error, 'ambiguous')
   assertThrows(() => route('target_eid'), Error, 'ambiguous')
+})
+
+Deno.test('sugar: a ref name several comps share is any-of', () => {
+  // actor_eid lives on client AND session — one concept, so the bare
+  // form filters across both comps; writes must name one (client.ts).
+  assertEquals(route('actor'), { comp: '', prop: 'actor_eid' })
+  assertEquals(route('client'), { comp: '', prop: 'client_eid' })
+  let ps = parseQuery('.actor=u1')
+  assert(matchQuery({ client: { actor_eid: 'u1' } }, ps))
+  assert(matchQuery({ session: { id: 's', actor_eid: 'u1' } }, ps))
+  assert(!matchQuery({ session: { id: 's', actor_eid: 'u2' } }, ps))
+  assert(!matchQuery({ session: { id: 's' } }, ps))
+  // adopt() pins only comp-named equalities — any-of pins nothing
+  assertEquals(adopt(ps, 'client'), {})
 })
 
 Deno.test('paths: a component first segment stays the explicit spelling', () => {
@@ -305,6 +317,20 @@ Deno.test('paths: the pred tests the TARGET through ent', () => {
   assert(!matchQuery(row({ assignee_eid: 'ghost' }), ps, ent))
   assert(!matchQuery(row({}), ps, ent)) // absent ref: '=' shapes miss
   assert(matchQuery(row({}), parseQuery('.assignee.title!=jeff'), ent))
+})
+
+Deno.test('paths: .author.actor walks comment → instrument → actor', () => {
+  let world: Record<string, Record<string, Record<string, unknown>>> = {
+    c1: { client: { actor_eid: 'jeff' } },
+    s1: { session: { id: 'x', actor_eid: 'jeff' } },
+    s2: { session: { id: 'y' } },
+  }
+  let ent = (e: string) => world[e]
+  let ps = parseQuery('.author.actor=jeff')
+  assert(matchQuery({ comment: { author_eid: 'c1' } }, ps, ent))
+  assert(matchQuery({ comment: { author_eid: 's1' } }, ps, ent))
+  assert(!matchQuery({ comment: { author_eid: 's2' } }, ps, ent))
+  assert(!matchQuery({ comment: {} }, ps, ent))
 })
 
 Deno.test('resolveRefs: values resolve at match time, misses stay put', () => {

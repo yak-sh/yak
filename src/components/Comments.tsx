@@ -9,11 +9,12 @@ import { linkProps } from './nav.tsx'
 let Frame = block('div', 'Comments', {
   Item: 'div',
   Who: 'a',
+  Via: 'a',
   When: 'a',
   Body: 'div',
   New: 'textarea',
 })
-let { Item, Who, When, Body, New } = Frame
+let { Item, Who, Via, When, Body, New } = Frame
 
 // Who said it: sessions by their id, browsers by a short client handle,
 // anything else by its entity id. Pure — the TUI names authors with it too.
@@ -84,27 +85,33 @@ export let Comments = ({ eid }: { eid: string }) => {
 
   return (
     <Frame>
-      {commentsOn(eid).map((c) => (
-        <Item key={c.eid}>
-          {
-            /* The name links to whoever said it; the age to the comment
+      {commentsOn(eid).map((c) => {
+        // The author is the INSTRUMENT (client or session); when its row
+        // says who it acts for, the actor leads the byline and the
+        // instrument dims behind a "via" — both still links.
+        let by = c.comment!.author_eid
+        let a = by ? ent(by) : undefined
+        let actor = a?.session?.actor_eid ?? a?.client?.actor_eid
+        let who = actor ? ent(String(actor)) : undefined
+        return (
+          <Item key={c.eid}>
+            {
+              /* The name links to whoever said it; the age to the comment
               itself — both wear the internal-link contract. */
-          }
-          <Who
-            {...(c.comment!.author_eid
-              ? linkProps(ent(c.comment!.author_eid))
-              : {})}
-          >
-            {author(c.comment!.author_eid)}
-          </Who>
-          <When data-tip={pretty(c.created_at)} {...linkProps(c)}>
-            {ago(c.created_at)}
-          </When>
-          <Body
-            dangerouslySetInnerHTML={{ __html: md(c.doc?.body ?? '') }}
-          />
-        </Item>
-      ))}
+            }
+            <Who {...((who ?? a) ? linkProps(who ?? a!) : {})}>
+              {who ? who.doc?.title || idOf(who) : author(by)}
+            </Who>
+            {who && <Via {...linkProps(a!)}>· via {author(by)}</Via>}
+            <When data-tip={pretty(c.created_at)} {...linkProps(c)}>
+              {ago(c.created_at)}
+            </When>
+            <Body
+              dangerouslySetInnerHTML={{ __html: md(c.doc?.body ?? '') }}
+            />
+          </Item>
+        )
+      })}
       <New
         elRef={box}
         data-eid={eid}

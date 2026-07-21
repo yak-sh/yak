@@ -177,6 +177,22 @@ export let Canvas = ({ eid }: { eid: string }) => {
       )
     }
 
+    // A graph with exactly one person can only be that person's browser —
+    // bind the client to them on sight. Any other census (none, many)
+    // leaves the choice to the status row: identity is an assertion, and
+    // with candidates the user does the asserting.
+    if (!cache.value[id]?.client?.actor_eid) {
+      let people = Object.keys(cache.value)
+        .filter((k) => cache.value[k].person)
+      if (people.length == 1) {
+        mutate({
+          eid: id,
+          name: 'client',
+          comp: { eid: id, actor_eid: people[0] },
+        })
+      }
+    }
+
     // Another tab moving this camera moves ours too — but only the MOVE
     // (x/y/zoom). w/h are THIS tab's viewport; letting another tab's size
     // leak in skews frame-to-fit and centering (the row's w/h is just the

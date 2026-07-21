@@ -66,6 +66,13 @@ let CASES: [string, { comp: string; prop: string; value: unknown } | RegExp][] =
     ['.priority=1.5', { comp: 'task', prop: 'priority', value: 1.5 }],
     ['.pin.x=12', { comp: 'pin', prop: 'x', value: 12 }],
     ['.assignee=jeff', { comp: 'task', prop: 'assignee_eid', value: 'jeff' }],
+    // a shared ref name filters as any-of, but a WRITE must aim
+    ['.actor=jeff', /ambiguous for writes/],
+    ['.session.actor_eid=jeff', {
+      comp: 'session',
+      prop: 'actor_eid',
+      value: 'jeff',
+    }],
     ['.x=12', /ambiguous/],
     ['.nope=1', /unknown prop/],
     ['.doc.nope=1', /no such prop/],
@@ -197,6 +204,61 @@ Deno.test('spawnChanges: one session change carrying the request', () => {
       persona: 'nope',
     })
   )
+})
+
+Deno.test('spawnChanges: the actor chain — inherit the caller, persona owner wins', () => {
+  let J = 'aaaaaaaa-0000-4000-8000-000000000021' // person
+  let O = 'aaaaaaaa-0000-4000-8000-000000000022' // operator project
+  let P = 'aaaaaaaa-0000-4000-8000-000000000023' // persona O contains
+  let Q = 'aaaaaaaa-0000-4000-8000-000000000024' // persona about O
+  let R = 'aaaaaaaa-0000-4000-8000-000000000025' // unowned persona
+  let W = 'aaaaaaaa-0000-4000-8000-000000000026' // caller session
+  let T = 'aaaaaaaa-0000-4000-8000-000000000027' // task
+  let g: Snapshot = {
+    changes: [
+      { eid: J, name: 'entity', comp: { eid: J, num: 21, created_at: '' } },
+      { eid: J, name: 'doc', comp: { title: 'Jeff', body: '' } },
+      { eid: J, name: 'person', comp: {} },
+      { eid: O, name: 'entity', comp: { eid: O, num: 22, created_at: '' } },
+      { eid: O, name: 'doc', comp: { title: 'Ops', body: '' } },
+      { eid: O, name: 'project', comp: {} },
+      { eid: P, name: 'entity', comp: { eid: P, num: 23, created_at: '' } },
+      { eid: P, name: 'doc', comp: { title: 'Envoy', body: '' } },
+      { eid: Q, name: 'entity', comp: { eid: Q, num: 24, created_at: '' } },
+      { eid: Q, name: 'doc', comp: { title: 'Herald', body: '' } },
+      { eid: R, name: 'entity', comp: { eid: R, num: 25, created_at: '' } },
+      { eid: R, name: 'doc', comp: { title: 'Drifter', body: '' } },
+      { eid: W, name: 'entity', comp: { eid: W, num: 26, created_at: '' } },
+      { eid: W, name: 'session', comp: { id: 'sess-w', actor_eid: J } },
+      { eid: T, name: 'entity', comp: { eid: T, num: 27, created_at: '' } },
+      { eid: T, name: 'doc', comp: { title: 'work', body: '' } },
+      { eid: T, name: 'task', comp: { status: 'open', priority: 0 } },
+    ],
+    deps: [
+      { parent: O, type: 'contains', child: P },
+      { parent: Q, type: 'about', child: O },
+    ],
+  }
+  let world = rows(g)
+  let spawn = (o: Record<string, unknown> = {}) =>
+    spawnChanges(world, {
+      task: 'T-27',
+      provider: 'x',
+      model: 'y',
+      by: 'sess-w',
+      deps: g.deps,
+      ...o,
+    }).changes[0].comp
+  // no persona: the child works for whoever the caller works for
+  assertEquals(spawn()?.actor_eid, J)
+  // a persona owned by an operator: the spawn acts AS the operator,
+  // whichever way the ownership edge is spelled
+  assertEquals(spawn({ persona: P })?.actor_eid, O)
+  assertEquals(spawn({ persona: Q })?.actor_eid, O)
+  // an unowned persona changes nothing — inheritance still holds
+  assertEquals(spawn({ persona: R })?.actor_eid, J)
+  // no caller, no owner: the spawn stays unattributed
+  assertEquals('actor_eid' in (spawn({ by: undefined }) ?? {}), false)
 })
 
 Deno.test('hookClaim: an unclaimed task claims, anything else is quiet', () => {
