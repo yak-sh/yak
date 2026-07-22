@@ -1,3 +1,4 @@
+import { Fragment } from 'preact'
 import { comps as vocab, type Ent } from '../../types.ts'
 import { backlinks, ent, parents } from '../../live.ts'
 import { up } from './Show.tsx'
@@ -112,7 +113,7 @@ let AllProps = ({ e }: { e: Ent }) => (
         // as its chip + name. Derived, so read-only and dim-keyed.
         ...(k.endsWith('_eid') && v
           ? [
-            <>
+            <Fragment key={`${name}.${k}.assoc`}>
               <Key mod='drv'>
                 <Comp>{name}.</Comp>
                 {k.slice(0, -4)}
@@ -123,7 +124,7 @@ let AllProps = ({ e }: { e: Ent }) => (
                     '',
                 )}
               </Val>
-            </>,
+            </Fragment>,
           ]
           : []),
       ])
