@@ -24,6 +24,7 @@ import {
   host,
   idOf,
   lapseChanges,
+  memoryChanges,
   notices,
   type Param,
   param,
@@ -101,6 +102,13 @@ let VERBS: [usage: string, blurb: string, examples: string[]][] = [
     'sync [--commit]',
     "materialize personas into each project repo's .tasks/",
     ['task sync', 'task sync --commit'],
+  ],
+  [
+    'remember <title...> [--body=…] [--type=feedback|project] [--scope=P-9]',
+    'save a memory: the title is the index line, the body the lesson',
+    [
+      'task remember "pipe a gate, lose its exit code" --type=feedback --scope=P-19',
+    ],
   ],
   [
     'context [session|P-9]',
@@ -572,6 +580,29 @@ let context = async (args: string[]) => {
   await tell(snap, sid)
 }
 
+// Save a memory: doc + memory comp, source-attributed to the calling
+// session — the CLI face of MCP memory_save, so headless agents (the
+// scribe first) have the door too.
+let remember = async (args: string[]) => {
+  let flag = (n: string) =>
+    args.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3)
+  let title = args.filter((a) => !a.startsWith('--')).join(' ').trim()
+  if (!title) throw new Error('task remember <title...> (the index line)')
+  let session = Deno.env.get('TASKS_SESSION')
+  if (!session) throw new Error('remember: set TASKS_SESSION (attribution)')
+  let all = rows(await snapshot())
+  let made = memoryChanges(all, {
+    title,
+    body: flag('body'),
+    type: flag('type'),
+    scope: flag('scope'),
+    session,
+  })
+  await send(made.changes)
+  let after = rows(await snapshot()).find((r) => r.eid == made.eid)
+  console.log(`${after ? idOf(after) : made.eid} remembered`)
+}
+
 // SessionEnd's mirror of context: drop everything the session holds.
 // --hook mode (stdin JSON, silent failure) wires it to the lifecycle.
 let lapse = async (args: string[]) => {
@@ -715,6 +746,7 @@ try {
   else if (cmd == 'comment') await comment(rest)
   else if (cmd == 'dep') await dep(rest)
   else if (cmd == 'backup') await backup()
+  else if (cmd == 'remember') await remember(rest)
   else if (cmd == 'context') await context(rest)
   else if (cmd == 'lapse') await lapse(rest)
   else if (cmd == 'sync') await sync(rest)

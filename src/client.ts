@@ -726,7 +726,7 @@ export let lapseChanges = (
 // end-state holdings and the standing invitation the scribe (T-4001)
 // will one day answer. A hand-written brief is never clobbered: the
 // stub's first line is the marker, and only stubs get rewritten.
-let STUB = 'Auto-written at lapse'
+export let STUB = 'Auto-written at lapse' // the scribe's queue marker
 let brief = (
   all: Row[],
   sess: Row,

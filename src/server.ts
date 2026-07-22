@@ -25,6 +25,7 @@ import { vocabularyMd } from './schema.ts'
 import { freeze, serveFrozen, store } from './freeze.ts'
 import { fanout, FANOUT_PENDING, mailed } from './mail.ts'
 import { fleetApi, inboundSweep } from './inbound.ts'
+import { scribeSweep } from './scribe.ts'
 import { mcpServer } from './mcp.ts'
 import { filesFor, syncFiles } from './persona.ts'
 import {
@@ -540,6 +541,13 @@ if (fleetApi()) {
   )
 }
 
+// The scribe (scribe.ts): when lapse stubs wait, spawn the desk — a
+// session wearing the scribe persona writes the briefs and memories.
+// Ten-minute tick; the sweep's own throttle keeps it to one desk an
+// hour. Graduates to a `system` entity under T-3906 with the others.
+scribeSweep(cast)
+setInterval(() => scribeSweep(cast), 10 * 60_000)
+
 // Last, the worktree sweep: completed sessions whose merged, clean trees
 // outlived their usefulness let go — at boot, never at settle, so a live
 // server's resume window stays open (sessions.ts tidy says why).
@@ -583,6 +591,7 @@ let graph = [
   'mail.ts',
   'persona.ts',
   'inbound.ts',
+  'scribe.ts',
 ]
 let shellish = (p: string) =>
   p.endsWith('/main.tsx') || p.endsWith('/live.ts') ||
