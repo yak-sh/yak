@@ -261,25 +261,25 @@ These hold everywhere in this repo, whoever — or whatever — writes the code:
   timers, ending the session IS the wrap. Continuity is SELF-AUTHORED: wrap
   captures the transcript's last assistant message — the closing summary the
   operator already wrote — as the session doc (a hand-written doc is never
-  clobbered), and the next digest opens with `previously:` — the newest brief by
-  the same operator (`session.actor_eid`). Only a session that captured nothing
-  gets the ledger STUB, which queues the scribe's sweep — an enrichment, never
-  the continuity path; `:scribe S-31` summons the desk deliberately for a
-  marathon a final message can't cover. SessionStart also reifies the session
-  entity (id + cwd, the worktree it ran in). The hooks are the global CLI, no
-  repo-local shims — any repo gets the loop by carrying the same two settings
-  lines.
+  clobbered), and the next digest opens with `## previously` — the newest brief
+  by the same operator (`session.actor_eid`). Only a session that captured
+  nothing gets the ledger STUB, which queues the scribe's sweep — an
+  enrichment, never the continuity path; `:scribe S-31` summons the desk
+  deliberately for a marathon a final message can't cover. SessionStart also
+  reifies the session entity (id + cwd, the worktree it ran in). The hooks are
+  the global CLI, no repo-local shims — any repo gets the loop by carrying the
+  same two settings lines.
 - **The graph IS your memory** (harness auto-memory is disabled — there are no
   local memory files; do not create any). Recall arrives at boot: the context
-  digest's `lately` block (today/this week, hot-ranked) plus the `memory:` lines
-  (M-* entities). Deliberate recall is `memory_recall` / `task search`. To
-  remember something durably, write the graph: a lesson or correction →
-  `memory_save` (type feedback/project, scoped to the project entity); the
-  session's own story → its session doc (S-*, the work-session pattern — S-3678
-  is the exemplar); anything task-shaped → a task with the context in its body.
-  Reading a memory's body bumps its recall — use, and the graph remembers that
-  you used it; disuse decays. Facts need no filing at all: every write is
-  already journal-attributed (`task history`).
+  digest's `lately` block (today/this week, hot-ranked) plus the `### memory`
+  index lines (M-* entities). Deliberate recall is `memory_recall` / `task
+  search`. To remember something durably, write the graph: a lesson or
+  correction → `memory_save` (type feedback/project, scoped to the project
+  entity); the session's own story → its session doc (S-*, the work-session
+  pattern — S-3678 is the exemplar); anything task-shaped → a task with the
+  context in its body. Reading a memory's body bumps its recall — use, and the
+  graph remembers that you used it; disuse decays. Facts need no filing at all:
+  every write is already journal-attributed (`task history`).
 - The MCP surface has two tiers: task_* sugar and the generic tier
   (graph_query/graph_apply/ui_state/card_*/code_run). The generic tier is
   possible because the UI is data — cards/pins/cameras are entities; keep it
@@ -413,7 +413,7 @@ Owner direction (2026-07-20) on delegation in ~/code/tasks:
 
 Recall a body by id (memory_recall / task show).
 
-- M-4457 0.94 feedback: code style (Ruby/Rails) — the class-macro idiom
+- M-4457 0.93 feedback: code style (Ruby/Rails) — the class-macro idiom
 - M-4064 0.60 project: identity is faceted; personas differ by emphasis, not content · 1×
 - M-4065 0.60 project: federation discipline: one home graph per entity, intents across boundaries, no consensus · 1×
 - M-4066 0.60 feedback: agents take warm paths, not right paths — adoption is won structurally · 1×
