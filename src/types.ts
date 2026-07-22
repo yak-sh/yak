@@ -171,6 +171,16 @@ export let comps: Record<string, Record<string, PropType>> = {
   // assignee_eid; sessions stay what they are (one run), a person is who
   // they run FOR.
   person: {},
+  // A voice a session can wear: the doc is its irreducible core text,
+  // and its TIERS are edges — persona `contains` X preloads X's whole
+  // body, persona `reads` X carries only X's index line; everything else
+  // in scope stays searchable. home_eid is its home project (the
+  // project's baseline persona is the one the project `contains`);
+  // null = fleet-shared (graybeard reviews every venture). NOT
+  // project_eid, same reason as memory.scope_eid: bare '.project_eid'
+  // must keep routing to task. Worn ≠ speaking-for: persona_eid names
+  // the voice, actor_eid who it acts for.
+  persona: { home_eid: { eid: 'project', death: 'detach' } },
   // An address is a FACET, not a person-column: any entity may wear one —
   // a person, a project (its operator's inbox), someday a webhook source.
   // The whole address book is this comp; send-resolution is one rule:
@@ -342,6 +352,7 @@ export let kindOrder = [
   'comment',
   'memory',
   'person',
+  'persona',
   'doc',
   // An address is a facet like a handle: it names an entity only when
   // nothing else does (a bare address-book entry), same reasoning as
@@ -366,6 +377,7 @@ export let prefix: Record<string, string> = {
   person: 'U', // U-ser: P is the projects'
   mail: 'E', // E-mail: S is the sessions'
   email: 'A', // A-ddress: E is the mails'
+  persona: 'N', // N for the name it wears: P is the projects'
 }
 export let idOf = (e: { kind: string; num: number }) =>
   `${prefix[e.kind] ?? e.kind[0].toUpperCase()}-${e.num}`
@@ -567,6 +579,10 @@ export type Conflict = {
 // human handle. find() resolves it like any id; unique graph-wide.
 export type Alias = { eid: string; slug: string }
 
+// A wearable voice: core text in the doc, tiers in the edges, home in
+// home_eid (null = fleet-shared).
+export type Persona = { eid: string; home_eid?: string | null }
+
 // A distilled fact the fleet keeps: content in the doc, provenance in
 // source_eid (the session that learned it), scope in scope_eid (the
 // project it belongs to). last_confirmed_at is the last explicit
@@ -640,6 +656,7 @@ export type Ent = {
   comment?: Comment
   alias?: Alias
   memory?: Memory
+  persona?: Persona
   recall?: Recall
   refs: Ref[]
   kids: Ent[]

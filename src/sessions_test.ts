@@ -243,6 +243,29 @@ Deno.test('a fake session runs end to end', async () => {
   assertMatch(String(page.stderr), /stderr noise/) // diagnostics, unordered
 })
 
+Deno.test('a worn persona rides the prompt whole — tiers and all', async () => {
+  let { t } = seed()
+  let per = uid(), mem = uid()
+  apply(db, [
+    { eid: per, name: 'doc', comp: { title: 'probe', body: 'Be terse.' } },
+    { eid: per, name: 'persona', comp: {} },
+    { eid: mem, name: 'doc', comp: { title: 'lesson', body: 'Front door.' } },
+    {
+      eid: per,
+      name: 'dependency',
+      comp: { type: 'contains', child_eid: mem },
+    },
+  ])
+  let { eid, done } = begin(t, { persona_eid: per })
+  await done
+  let first = logs(eid, new URLSearchParams('after=0&limit=1')).entries[0]
+  let text = JSON.parse(first.line).text
+  assertMatch(text, /Be terse\./)
+  assertMatch(text, /## Preloaded/)
+  assertMatch(text, /Front door\./)
+  assert(!text.includes('House rules')) // the persona replaces CONTRACT
+})
+
 Deno.test('a child that exits nonzero failed, whatever it said', async () => {
   let { t } = seed('fail:3')
   let { eid, done } = begin(t)

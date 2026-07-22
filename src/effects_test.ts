@@ -65,6 +65,24 @@ Deno.test('removed fires for a comp delete and for an entity death', async () =>
   assertEquals(seen, [`removed ${whole}`])
 })
 
+Deno.test('an edge fires dependency handlers, spoken or unsaid', async () => {
+  let heard: unknown[] = []
+  on('dependency', { created: (eid, comp) => heard.push([eid, comp]) })
+  let a = uid(), b = uid()
+  await write([
+    { eid: a, name: 'doc', comp: { title: 'a' } },
+    { eid: b, name: 'doc', comp: { title: 'b' } },
+  ]).done
+  heard = []
+  let comp = { type: 'reads', child_eid: b }
+  await write([{ eid: a, name: 'dependency', comp }]).done
+  assertEquals(heard, [[a, comp]])
+  // unlinking is the same sentence with gone — the handler hears it too
+  let gone = { ...comp, gone: true }
+  await write([{ eid: a, name: 'dependency', comp: gone }]).done
+  assertEquals(heard.at(-1), [a, gone])
+})
+
 Deno.test('a throwing handler reaches oops; the rest still fire', async () => {
   seen = []
   let oops: string[] = []

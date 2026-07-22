@@ -22,6 +22,7 @@ import {
   WebTitle,
 } from './views/Title.tsx'
 import { Board } from './views/Board.tsx'
+import { Persona } from './views/Persona.tsx'
 import { TaskRow } from './views/TaskRow.tsx'
 import { BoardList, List, ListItem } from './views/List.tsx'
 import { Canvas } from './Canvas.tsx'
@@ -61,6 +62,7 @@ define([
   { view: 'List.Item', match: () => true, Render: ListItem },
   { view: 'Show', match: has('doc'), Render: Show, Card: ShowCard },
   { view: 'Board', match: has('doc', 'board'), Render: Board },
+  { view: 'Persona', match: has('doc', 'persona'), Render: Persona },
   { view: 'Task.Row', match: has('doc', 'task'), Render: TaskRow },
   { view: 'Web', match: has('web'), Render: Web },
   { view: 'Session', match: has('session'), Render: Session },
@@ -116,6 +118,7 @@ define([
   'Canvas',
   'List',
   'Board',
+  'Persona',
   'Show',
   'Web',
   'Session',

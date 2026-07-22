@@ -25,6 +25,7 @@ import { vocabularyMd } from './schema.ts'
 import { freeze, serveFrozen, store } from './freeze.ts'
 import { fanout, FANOUT_PENDING, mailed } from './mail.ts'
 import { mcpServer } from './mcp.ts'
+import { filesFor, syncFiles } from './persona.ts'
 import {
   commented,
   deleted,
@@ -456,6 +457,55 @@ on('comment', {
   sweep: { pending: FANOUT_PENDING },
   doc: "a comment on an addressed project's task fans out as a " +
     'mail to that project (the about edge is the receipt)',
+})
+
+// Personas follow the graph into each repo's .tasks/ files: any change
+// that could reshape one — a persona born or rehomed, a tier edge
+// spoken or unsaid, a doc edit on a persona or a tiered member —
+// re-renders the fleet (write-if-changed, debounced so a batch lands
+// once). Never commits: `task sync --commit` is the deliberate move,
+// and a failed write is a warning, never a broken batch.
+let syncing: ReturnType<typeof setTimeout> | undefined
+let syncSoon = () => {
+  clearTimeout(syncing)
+  syncing = setTimeout(() => {
+    try {
+      let snap = snapshot(db)
+      let { failed } = syncFiles(filesFor(rows(snap), snap.deps, Date.now()))
+      for (let f of failed) console.warn('persona sync —', f)
+    } catch (e) {
+      console.warn('persona sync —', e)
+    }
+  }, 250)
+}
+// Is this eid a persona, or on some persona's tier? The gate that keeps
+// ordinary doc edits and edges from re-rendering the fleet.
+let personaish = (...eids: (string | undefined)[]) =>
+  eids.some((e) =>
+    e && db.prepare(
+      `select 1 from persona where eid = :e
+       union select 1 from dependency d
+         join persona p on p.eid = d.parent_eid where d.child_eid = :e`,
+    ).get({ e })
+  )
+on('persona', {
+  created: syncSoon,
+  changed: { project_eid: syncSoon },
+  removed: syncSoon,
+  doc: "materialize personas into their projects' .tasks/ files " +
+    '(write-if-changed; task sync --commit is the deliberate commit)',
+})
+on('dependency', {
+  created: (eid, comp) =>
+    personaish(eid, comp.child_eid as string) && syncSoon(),
+  doc: 'a tier edge (or baseline flip) at a persona re-renders its files',
+})
+on('doc', {
+  changed: {
+    title: (eid) => personaish(eid) && syncSoon(),
+    body: (eid) => personaish(eid) && syncSoon(),
+  },
+  doc: 'a doc edit on a persona or a tiered memory re-renders its files',
 })
 
 // Managed children are detached (setsid) and this process restarts on every

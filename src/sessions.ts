@@ -29,8 +29,10 @@
 //    truth exactly once and none of it ever rode the wire inbound.
 import { basename, dirname } from 'node:path'
 import { type Adapter, adapters, type Event, type Summary } from './adapters.ts'
-import { apply, db } from './db.ts'
+import { apply, db, snapshot } from './db.ts'
 import { dispatch, trace } from './effects.ts'
+import { rows } from './client.ts'
+import { materialize } from './persona.ts'
 import { type Change, sessionActive } from './types.ts'
 
 type Cast = (changes: Change[]) => void
@@ -584,11 +586,16 @@ export let spawned =
     if (!repo) {
       return fail("the task's project has no repo — set repo.path first")
     }
-    let persona = row.persona_eid
-      ? db.prepare('select body from doc where eid = ?').get(
-        String(row.persona_eid),
-      ) as { body: string } | undefined
-      : undefined
+    // The worn persona rides whole — core text plus its tiers, rendered
+    // by materialize() so the spawn's prompt and the repo's .tasks files
+    // say the same thing. A docless persona_eid falls back to CONTRACT.
+    let worn: string | undefined
+    if (row.persona_eid) {
+      let snap = snapshot(db)
+      let all = rows(snap)
+      let p = all.find((r) => r.eid == String(row.persona_eid) && r.comps.doc)
+      if (p) worn = materialize(all, snap.deps, p, Date.now())
+    }
     let { num } = db.prepare('select num from entity where eid = ?')
       .get(eid) as { num: number }
     let sid = `S-${num}`
@@ -601,7 +608,7 @@ export let spawned =
       started_at: now(),
     }, cast)
     let instruction = [
-      persona?.body ?? CONTRACT,
+      worn ?? CONTRACT,
       `T-${task.num}: ${task.title}`,
       task.body,
     ].filter(Boolean).join('\n\n')

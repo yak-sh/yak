@@ -325,6 +325,46 @@ html {
   white-space: nowrap;
 }
 
+/* The persona editor: three tier sections, rows drag between them. */
+.Persona {
+  display: grid;
+  gap: var(--gap);
+  align-content: start;
+}
+.Persona_Sec {
+  display: grid;
+  gap: var(--half-gap);
+  align-content: start;
+  border: 1px dashed var(--border2);
+  border-radius: var(--radius);
+  padding: var(--half-gap);
+}
+.Persona_SecName {
+  display: flex;
+  align-items: baseline;
+  gap: var(--half-gap);
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--dim);
+}
+.Persona_Count {
+  color: var(--dim);
+}
+.Persona_Row {
+  min-width: 0;
+}
+.Persona_Empty {
+  color: var(--dim);
+  font-size: 12px;
+  padding: var(--half-gap);
+}
+.Persona_Lint {
+  color: var(--yellow);
+  font-size: 12px;
+}
+
 /* The canvas: a pannable, zoomable dot-grid of pinned cards. The camera is a
    transform on the plane; the grid tracks it via background-position/size. */
 .Canvas {

@@ -46,6 +46,7 @@ import { type Edge, edges, type Snapshot } from './types.ts'
 // reaches for node:sqlite, and the CLI has no business loading a db driver.
 import type { Log } from './telemetry.ts'
 import type { JournalEntry } from './client.ts'
+import { filesFor, syncFiles } from './persona.ts'
 
 // Every verb: usage, blurb, worked examples. `task help` derives all its
 // faces from this table plus grammar.ts, so what the CLI teaches and what
@@ -95,6 +96,11 @@ let VERBS: [usage: string, blurb: string, examples: string[]][] = [
     ['task dep T-3 requires T-9', 'task dep T-3 requires T-9 --gone'],
   ],
   ['backup', 'snapshot the db + commit/push the data dir', []],
+  [
+    'sync [--commit]',
+    "materialize personas into each project repo's .tasks/",
+    ['task sync', 'task sync --commit'],
+  ],
   ['context [session]', "this session's working set ($TASKS_SESSION)", []],
   ['lapse [session]', 'session over: release claims, note unfinished', []],
   ['telemetry [--errors] [--since=ISO] [-n N]', 'tool calls + crashes', [
@@ -521,6 +527,49 @@ let telemetry = async (args: string[]) => {
 
 // Backup is bin/backup (a data-dir git commit) — the CLI is its front
 // door so 'task backup' works wherever the CLI is installed.
+// Materialize every persona into its project repo's .tasks/ — write
+// only what changed, and only --commit makes commits (paths-only, so a
+// working repo's staged index is never swept up). The server's effect
+// keeps files fresh on graph changes; this verb is the explicit door —
+// first sync of a new repo, or the committed story until the
+// permission-gated actuator (T-3926) owns it.
+let sync = async (args: string[]) => {
+  let snap = await snapshot()
+  let files = filesFor(rows(snap), snap.deps, Date.now())
+  if (!files.length) {
+    return console.log('no personas with a homed repo — nothing to write')
+  }
+  let { written, failed } = syncFiles(files)
+  for (let p of written) console.log(`wrote ${p}`)
+  for (let f of failed) console.error(`failed ${f}`)
+  if (!written.length && !failed.length) console.log('all fresh')
+  if (!args.includes('--commit')) return
+  let roots = [...new Set(written.map((p) => p.split('/.tasks/')[0]))]
+  for (let root of roots) {
+    let run = async (...a: string[]) =>
+      await new Deno.Command('git', {
+        args: ['-C', root, ...a],
+        stdout: 'null',
+        stderr: 'piped',
+      }).output()
+    await run('add', '.tasks')
+    let { success, stderr } = await run(
+      'commit',
+      '-m',
+      'personas: materialize',
+      '--',
+      '.tasks',
+    )
+    console.log(
+      success
+        ? `committed ${root}`
+        : `commit failed ${root}: ${
+          new TextDecoder().decode(stderr).trim().slice(-160)
+        }`,
+    )
+  }
+}
+
 let backup = async () => {
   let script = new URL('../bin/backup', import.meta.url).pathname
   let { code } = await new Deno.Command(script, {
@@ -562,6 +611,7 @@ try {
   else if (cmd == 'backup') await backup()
   else if (cmd == 'context') await context(rest)
   else if (cmd == 'lapse') await lapse(rest)
+  else if (cmd == 'sync') await sync(rest)
   else if (cmd == 'release') await release(rest)
   else if (cmd == 'telemetry') await telemetry(rest)
   else if (cmd == 'help' || cmd == '--help') help(rest)

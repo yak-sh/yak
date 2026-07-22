@@ -15,6 +15,7 @@ export let icons: Record<string, string> = {
   List: 'list',
   Show: 'file-text',
   Board: 'kanban',
+  Persona: 'drama',
   Web: 'globe',
   Session: 'bot',
   Markdown: 'hash',

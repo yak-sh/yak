@@ -71,6 +71,10 @@ let schema = `
   create table if not exists person (
     eid text primary key references entity(eid)
   );
+  create table if not exists persona (
+    eid text primary key references entity(eid),
+    home_eid text references entity(eid)
+  );
   create table if not exists repo (
     eid  text primary key references entity(eid),
     path text not null,
