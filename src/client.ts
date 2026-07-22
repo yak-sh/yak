@@ -495,6 +495,21 @@ export let commentChanges = (
 export let unreadMail = (r: Row) =>
   !!r.comps.mail?.message_id && !r.comps.mail.read_at
 
+// The inbox — ONE scoping truth: the digest's unread count and the bare
+// `task mail` view agree by construction. Unread, aimed at the scope
+// when one stands; no scope sees the fleet's whole pile.
+export let inboxMail = (scope?: string) => (r: Row) =>
+  unreadMail(r) && (!scope || r.comps.mail?.target_eid == scope)
+
+// The project you stand in: the repo-wearing entity whose path prefixes
+// the cwd — every caller-aware door derives its scope this same way.
+export let repoAt = (all: Row[], cwd?: string) =>
+  cwd
+    ? all.find((r) =>
+      r.comps.repo?.path && cwd.startsWith(String(r.comps.repo.path))
+    )
+    : undefined
+
 // When a mail happened, for sorting and ages: arrival for inbound, the
 // entity's birth for outbound.
 export let mailAt = (r: Row) =>
@@ -699,11 +714,7 @@ export let contextDigest = (
     r.comps.session && String(r.comps.session.id) == session
   )
   let cwd = String(sess?.comps.session?.cwd ?? '')
-  scope ??= cwd
-    ? all.find((r) =>
-      r.comps.repo?.path && cwd.startsWith(String(r.comps.repo.path))
-    )?.eid
-    : undefined
+  scope ??= repoAt(all, cwd)?.eid
   let here = scope ? byEid.get(scope) : undefined
   let mine = sess
     ? all.filter((r) => r.comps.claim?.session_eid == sess.eid)
@@ -748,11 +759,8 @@ export let contextDigest = (
     local.sort(byBoard).slice(0, 5).forEach(show)
   }
   // Unread mail rides one line — the door teaches itself (adoption is
-  // structural): a count scoped like everything else, mail aimed at the
-  // project you stand in; unscoped sees the fleet's whole pile.
-  let unread = all.filter((r) =>
-    unreadMail(r) && (!scope || r.comps.mail?.target_eid == scope)
-  )
+  // structural): the inbox predicate, scoped like everything else.
+  let unread = all.filter(inboxMail(scope))
   if (unread.length) {
     lines.push(`## mail — ${unread.length} unread (task mail)`)
   }

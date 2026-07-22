@@ -10,6 +10,7 @@ import {
   edgesOf,
   find,
   hookClaim,
+  inboxMail,
   inflate,
   ledger,
   mailAt,
@@ -21,6 +22,7 @@ import {
   patches,
   recallIndex,
   replyChanges,
+  repoAt,
   reSubject,
   rows,
   sessionFor,
@@ -431,6 +433,12 @@ Deno.test('unreadMail + digest: unread counts, read/outbound stay quiet', () => 
   assertEquals(is(M1), true)
   assertEquals(is(M2), false) // read
   assertEquals(is(M3), false) // outbound is born read
+  // the inbox predicate is the ONE scoping truth: scoped sees only mail
+  // aimed at the scope, a foreign scope hears nothing, unscoped sees all
+  let inbox = (scope?: string) => all.filter(inboxMail(scope)).map((r) => r.eid)
+  assertEquals(inbox(P), [M1])
+  assertEquals(inbox(T2), [])
+  assertEquals(inbox(), [M1])
   assertMatch(contextDigest(g, 'sess-x'), /## mail — 1 unread \(task mail\)/)
   assertMatch(
     contextDigest(g, 'sess-x', Date.now(), P),
@@ -441,6 +449,21 @@ Deno.test('unreadMail + digest: unread counts, read/outbound stay quiet', () => 
   let other = contextDigest(g, 'sess-x', Date.now(), T2)
   assertEquals(other.includes('## mail'), false)
   assertEquals(contextDigest(snap, 'sess-x').includes('## mail'), false)
+})
+
+// One derivation for every caller-aware door: the repo whose path
+// prefixes the cwd is the project you stand in.
+Deno.test('repoAt: path prefix names the project you stand in', () => {
+  let R = 'aaaaaaaa-0000-4000-8000-000000000031'
+  let g = rows({
+    changes: [
+      { eid: R, name: 'entity', comp: { eid: R, num: 31, created_at: '' } },
+      { eid: R, name: 'repo', comp: { path: '/code/app' } },
+    ],
+  })
+  assertEquals(repoAt(g, '/code/app/deep/dir')?.eid, R)
+  assertEquals(repoAt(g, '/elsewhere'), undefined)
+  assertEquals(repoAt(g), undefined)
 })
 
 // The mail builders: `to` stays as typed (delivery resolves), a reply

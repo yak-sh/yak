@@ -23,6 +23,7 @@ import {
   hookClaim,
   host,
   idOf,
+  inboxMail,
   inflate,
   mailAt,
   mailChanges,
@@ -33,6 +34,7 @@ import {
   param,
   patches,
   replyChanges,
+  repoAt,
   rows,
   search,
   send,
@@ -98,7 +100,7 @@ let VERBS: [usage: string, blurb: string, examples: string[]][] = [
   ]],
   [
     'mail [filters|show|send|reply|search|files]',
-    'fleet mail: bare = unread inbox; task mail --help spells the family',
+    'fleet mail: bare = your unread inbox; task mail --help spells the family',
     [
       'task mail',
       'task mail show E-9',
@@ -315,8 +317,8 @@ let seek = async (args: string[]) => {
 // and event comments never surface here) ----
 
 let MAIL_USAGE = `task mail — fleet mail in the graph
-  task mail [filters...]            unread inbound, newest last
-  task mail --all | --sent          everything / outbound only
+  task mail [filters...]            your unread inbox, newest last
+  task mail --all | --sent          the fleet's mail / outbound only
   task mail show <id>               the mail + its thread; marks it read
   task mail send <to> <subj...> --body=@f|@- [--from=...]  (@- = piped stdin)
   task mail reply <id> [text... | --body=@f|@-]
@@ -346,9 +348,10 @@ let mailBody = async (flags: string[], words: string[]) => {
   return b ?? words.join(' ')
 }
 
-// The inbox: unread inbound bare, --all/--sent widen, dot-params screen
-// (the one filter grammar). A word that isn't a filter teaches the verb
-// family instead of guessing.
+// The inbox: YOUR unread bare — the digest's own predicate, scoped to
+// the project you stand in — --all/--sent widen to the fleet, dot-params
+// screen (the one filter grammar). A word that isn't a filter teaches
+// the verb family instead of guessing.
 let mailList = async (args: string[]) => {
   let json = args.includes('--json')
   let every = args.includes('--all'), sent = args.includes('--sent')
@@ -361,11 +364,10 @@ let mailList = async (args: string[]) => {
   let all = rows(await snapshot())
   let resolved = resolveRefs(preds, (id) => find(all, id)?.eid)
   let byEid = new Map(all.map((r) => [r.eid, r.comps]))
+  let inbox = inboxMail(repoAt(all, Deno.cwd())?.eid)
   let hits = all
     .filter((r) => r.comps.mail)
-    .filter((r) =>
-      sent ? !r.comps.mail.message_id : every ? true : unreadMail(r)
-    )
+    .filter((r) => sent ? !r.comps.mail.message_id : every ? true : inbox(r))
     .filter((r) => matchQuery(r.comps, resolved, (e) => byEid.get(e)))
     .sort((a, b) => mailAt(a).localeCompare(mailAt(b)))
   if (json) return console.log(JSON.stringify(hits, null, 2))
@@ -815,9 +817,7 @@ let context = async (args: string[]) => {
       // guess; identity is asserted, never inferred from who's watching.
       let mine = rows(snap).find((r) => r.eid == s.eid)?.comps.session
       if (!mine?.actor_eid) {
-        let here = rows(snap).find((r) =>
-          r.comps.repo?.path && cwd?.startsWith(String(r.comps.repo.path))
-        )
+        let here = repoAt(rows(snap), cwd)
         if (here) {
           await send([{
             eid: s.eid,
@@ -837,10 +837,7 @@ let context = async (args: string[]) => {
       }
       // The cwd names the scope directly — the reified session row may
       // not have landed in this snap yet.
-      let at = rows(snap).find((r) =>
-        r.comps.repo?.path && cwd?.startsWith(String(r.comps.repo.path))
-      )
-      await tell(snap, sid, at?.eid)
+      await tell(snap, sid, repoAt(rows(snap), cwd)?.eid)
     } catch {
       // silent: offline server or malformed stdin — the session goes on
     }
@@ -856,9 +853,7 @@ let context = async (args: string[]) => {
     return console.log(contextDigest(snap, undefined, Date.now(), named.eid))
   }
   if (!sid) {
-    let at = all.find((r) =>
-      r.comps.repo?.path && Deno.cwd().startsWith(String(r.comps.repo.path))
-    )
+    let at = repoAt(all, Deno.cwd())
     return console.log(contextDigest(snap, undefined, Date.now(), at?.eid))
   }
   await tell(snap, sid)
