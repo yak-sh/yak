@@ -318,27 +318,32 @@ let MAIL_USAGE = `task mail — fleet mail in the graph
   task mail [filters...]            unread inbound, newest last
   task mail --all | --sent          everything / outbound only
   task mail show <id>               the mail + its thread; marks it read
-  task mail send <to> <subj...> [--body=@f | stdin] [--from=...]
-  task mail reply <id> [text... | --body=@f | stdin]
+  task mail send <to> <subj...> --body=@f|@- [--from=...]  (@- = piped stdin)
+  task mail reply <id> [text... | --body=@f|@-]
   task mail search <words...>       full-text search, mail only
   task mail files <id> [--out DIR]  download attachments
 <to> is a raw address or a graph reference (alias, P-9, eid) — the
 address book resolves at delivery. Filters speak the query grammar:
   task mail --all .from~=stripe .verified=0`
 
-// The body, by preference: --body= (@file reads the file — the safe door
-// for long prose), trailing words (a reply's), then piped stdin.
+// The body, by preference: --body= (@file reads the file — the safe
+// door for long prose; @- reads piped stdin), then a reply's trailing
+// words. stdin is never read implicitly: a harness holding the pipe
+// open but silent would hang the send forever (observed live, T-5854)
+// and no guard can tell that pipe from a slow one — so @- is the
+// deliberate ask, and a missing body fails fast instead of blocking.
 let mailBody = async (flags: string[], words: string[]) => {
   let b = flags.find((a) => a.startsWith('--body='))?.slice(7)
+  if (b == '@-') {
+    if (Deno.stdin.isTerminal()) {
+      throw new Error('--body=@-: stdin is a TTY — pipe the body in')
+    }
+    return (await new Response(Deno.stdin.readable).text()).trim()
+  }
   if (b?.startsWith('@')) {
     b = String(inflate({ comp: 'doc', prop: 'body', value: b }).value)
   }
-  if (b != null) return b
-  if (words.length) return words.join(' ')
-  if (!Deno.stdin.isTerminal()) {
-    return (await new Response(Deno.stdin.readable).text()).trim()
-  }
-  return ''
+  return b ?? words.join(' ')
 }
 
 // The inbox: unread inbound bare, --all/--sent widen, dot-params screen
@@ -425,7 +430,11 @@ let mailSend = async (args: string[]) => {
     throw new Error(`task mail send <to> <subject...>\n\n${MAIL_USAGE}`)
   }
   let body = await mailBody(flags, [])
-  if (!body) throw new Error('a mail needs a body: --body=@file, or pipe stdin')
+  if (!body) {
+    throw new Error(
+      'a mail needs a body: --body=@file, or --body=@- with piped stdin',
+    )
+  }
   let made = mailChanges({
     to,
     subject: subj.join(' '),
@@ -447,7 +456,9 @@ let mailReply = async (args: string[]) => {
   if (!row?.comps.mail) throw new Error(`not a mail: ${id}`)
   let body = await mailBody(flags, text)
   if (!body) {
-    throw new Error('a reply needs words: text, --body=@file, or stdin')
+    throw new Error(
+      'a reply needs words: text, --body=@file, or --body=@- with stdin',
+    )
   }
   let made = replyChanges(
     row,
