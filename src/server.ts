@@ -24,6 +24,7 @@ import { dispatch, docs, on, relay, trace } from './effects.ts'
 import { vocabularyMd } from './schema.ts'
 import { freeze, serveFrozen, store } from './freeze.ts'
 import { fanout, FANOUT_PENDING, mailed } from './mail.ts'
+import { native } from './mailer.ts'
 import { knocked } from './knock.ts'
 import { fleetApi, fleetRaw, inboundSweep, mailIdOf } from './inbound.ts'
 import { scribeSweep } from './scribe.ts'
@@ -528,8 +529,9 @@ on('mail', {
   // message_id marks INBOUND — a record of arrival the sweep must never
   // hand to delivery (mailed() guards the live path the same way).
   sweep: { pending: 'acted_at is null and message_id is null' },
-  doc: 'deliver the mail through $TASKS_MAIL_CMD — resolve the address ' +
-    'book reference, stamp acted_at/error/to_addr (the envelope copy)',
+  doc: 'deliver the mail — $TASKS_MAIL_CMD when set, else the native ' +
+    'Cloudflare sender — resolve the address book reference, stamp ' +
+    'acted_at/error/to_addr (the envelope copy) and sent_id (native)',
 })
 on('comment', {
   created: fanout(cast),
@@ -616,6 +618,17 @@ if (fleetApi()) {
   )
 }
 
+// Which outbound door is armed — said once at boot, so an env flip is
+// verifiable from the journal (per-mail outcomes stamp on the row).
+console.log(
+  Deno.env.get('TASKS_MAIL_CMD')
+    ? 'mailer: $TASKS_MAIL_CMD'
+    : native()
+    ? 'mailer: native (Cloudflare Email Sending)'
+    : 'mailer dormant — set TASKS_MAIL_CMD, or CLOUDFLARE_EMAIL_TOKEN + ' +
+      'HOLDCO_CF_ACCOUNT_ID',
+)
+
 // The scribe (scribe.ts): when wrap stubs wait, spawn the desk — a
 // session wearing the scribe persona writes the briefs and memories.
 // Ten-minute tick; the sweep's own throttle keeps it to one desk an
@@ -684,6 +697,7 @@ let graph = [
   'adapters.ts',
   'telemetry.ts',
   'mail.ts',
+  'mailer.ts',
   'persona.ts',
   'inbound.ts',
   'scribe.ts',

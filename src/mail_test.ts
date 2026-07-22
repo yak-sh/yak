@@ -1,12 +1,27 @@
 // The mail seam: address-book resolution, the delivery stamp, the
 // comment relay's mint/guards, and the sweep predicate — against an
 // in-memory db and a capture-script mailer (no network, no real mail).
+// The native path runs against a captured fetch; creds here are dummies.
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, db, open } = await import('./db.ts')
 let { addressOf, FANOUT_PENDING, fanout, mailed, rfcId } = await import(
   './mail.ts'
 )
+let { canon, payload } = await import('./mailer.ts')
 let { assertEquals, assertMatch, assertThrows } = await import('@std/assert')
+
+// Hermetic: the host's own mailer env must never reach these tests.
+for (
+  let k of [
+    'TASKS_MAIL_CMD',
+    'TASKS_MAIL_FROM',
+    'CLOUDFLARE_EMAIL_TOKEN',
+    'HOLDCO_CF_ACCOUNT_ID',
+    'CLOUDFLARE_API_BASE',
+    'FLEET_MAIL_API_URL',
+    'FLEET_MAIL_API_TOKEN',
+  ]
+) Deno.env.delete(k)
 
 open()
 let uid = () => crypto.randomUUID()
@@ -125,11 +140,17 @@ Deno.test('stamped trio never rides the wire', () => {
     {
       eid: m,
       name: 'mail',
-      comp: { to: 'x@y.test', acted_at: 'forged', to_addr: 'forged@x' },
+      comp: {
+        to: 'x@y.test',
+        acted_at: 'forged',
+        to_addr: 'forged@x',
+        sent_id: 'forged@send',
+      },
     },
   ])
   assertEquals(row(m).acted_at, null)
   assertEquals(row(m).to_addr, null)
+  assertEquals(row(m).sent_id, null)
 })
 
 // The relay fixture: an addressed project, its task, and a commenter.
@@ -313,6 +334,178 @@ Deno.test('mailed: reply_to_eid resolves to --in-reply-to at delivery', async ()
   assertEquals(last.includes('--in-reply-to'), false)
   assertEquals(row(dark).error, null)
   Deno.env.delete('TASKS_MAIL_CMD')
+})
+
+Deno.test('canon: bot.yak.sh sheds underscores; other domains pass', () => {
+  assertEquals(canon('cafe_car@bot.yak.sh'), 'cafecar@bot.yak.sh')
+  assertEquals(canon('Ops@Bot.Yak.Sh'), 'ops@bot.yak.sh')
+  assertEquals(canon('under_score@gmail.com'), 'under_score@gmail.com')
+})
+
+Deno.test('payload: the bin/email shape, threading headers on mid', () => {
+  let p = payload({
+    from: 'ops@bot.yak.sh',
+    to: 'jeff@yak.sh',
+    subject: 'subj',
+    body: 'text',
+  })
+  assertEquals(p.from, { address: 'ops@bot.yak.sh', name: 'ops' })
+  assertEquals(p.to, ['jeff@yak.sh'])
+  assertEquals(p.reply_to, 'ops@bot.yak.sh')
+  assertEquals(p.subject, 'subj')
+  assertEquals(p.text, 'text')
+  assertEquals(p.headers, undefined)
+  let r = payload({
+    from: 'a@b.c',
+    to: 'x@y.z',
+    subject: 'Re: subj',
+    body: 'b',
+    mid: 'orig@y.z',
+  })
+  assertEquals(r.headers, {
+    'In-Reply-To': '<orig@y.z>',
+    References: '<orig@y.z>',
+  })
+})
+
+// The captured fetch: the native path's stub/capture seam — no request
+// leaves the process, and a test reads back exactly what would have.
+let netStub = (respond: (url: string) => unknown) => {
+  let hits: { url: string; auth?: string; body: Record<string, unknown> }[] = []
+  let real = globalThis.fetch
+  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+    let headers = (init?.headers ?? {}) as Record<string, string>
+    hits.push({
+      url: String(input),
+      auth: headers.authorization,
+      body: JSON.parse(String(init?.body)),
+    })
+    return Promise.resolve(
+      new Response(JSON.stringify(respond(String(input))), { status: 200 }),
+    )
+  }) as typeof fetch
+  return { hits, restore: () => globalThis.fetch = real }
+}
+
+let nativeEnv = () => {
+  Deno.env.set('CLOUDFLARE_EMAIL_TOKEN', 'dummy-token')
+  Deno.env.set('HOLDCO_CF_ACCOUNT_ID', 'acct-1')
+}
+let nativeEnvOff = () => {
+  for (
+    let k of [
+      'CLOUDFLARE_EMAIL_TOKEN',
+      'HOLDCO_CF_ACCOUNT_ID',
+      'TASKS_MAIL_FROM',
+      'FLEET_MAIL_API_URL',
+      'FLEET_MAIL_API_TOKEN',
+    ]
+  ) Deno.env.delete(k)
+}
+
+Deno.test('mailed: native send stamps sent_id, threads, logs dir=out', async () => {
+  nativeEnv()
+  Deno.env.set('TASKS_MAIL_FROM', 'holdco@bot.yak.sh')
+  Deno.env.set('FLEET_MAIL_API_URL', 'http://fleet.test')
+  Deno.env.set('FLEET_MAIL_API_TOKEN', 'dummy-fleet')
+  let { hits, restore } = netStub((url) =>
+    url.includes('/email/sending/send')
+      ? { success: true, result: { message_id: '<cf-1@send>' } }
+      : { ok: true }
+  )
+  try {
+    let orig = uid()
+    apply(db, [
+      { eid: orig, name: 'doc', comp: { title: 'q', body: 'asked' } },
+      { eid: orig, name: 'mail', comp: { to: 'us@x.test' } },
+    ])
+    db.prepare('update mail set message_id = ? where eid = ?')
+      .run('msg:9:<orig@y.test>', orig)
+    let m = uid()
+    apply(db, [
+      { eid: m, name: 'doc', comp: { title: 'Re: q', body: 'answered' } },
+      {
+        eid: m,
+        name: 'mail',
+        comp: { to: 'cafe_car@bot.yak.sh', reply_to_eid: orig },
+      },
+    ])
+    await mailed(cast)(m, {})
+    let r = row(m)
+    assertEquals(r.error, null)
+    assertEquals(r.sent_id, 'cf-1@send') // brackets shed
+    assertEquals(r.to_addr, 'cafecar@bot.yak.sh') // canon at resolution
+    assertEquals(hits.length, 2)
+    assertMatch(hits[0].url, /accounts\/acct-1\/email\/sending\/send$/)
+    assertEquals(hits[0].auth, 'Bearer dummy-token')
+    assertEquals(hits[0].body.from, {
+      address: 'holdco@bot.yak.sh',
+      name: 'holdco',
+    })
+    assertEquals(hits[0].body.to, ['cafecar@bot.yak.sh'])
+    assertEquals(hits[0].body.headers, {
+      'In-Reply-To': '<orig@y.test>',
+      References: '<orig@y.test>',
+    })
+    // the best-effort out-log rode to the fleet store, bin/email's row
+    assertEquals(hits[1].url, 'http://fleet.test/messages')
+    assertEquals(hits[1].auth, 'Bearer dummy-fleet')
+    assertEquals(hits[1].body.dir, 'out')
+    assertEquals(hits[1].body.msg_id, 'cf-1@send')
+    assertMatch(String(hits[1].body.id), /^out:\d+:cf-1@send$/)
+  } finally {
+    restore()
+    nativeEnvOff()
+  }
+})
+
+Deno.test('mailed: native failure and a missing from stamp errors', async () => {
+  nativeEnv()
+  let { restore } = netStub(() => ({ success: false, errors: ['nope'] }))
+  try {
+    let m = uid()
+    apply(db, [
+      { eid: m, name: 'doc', comp: { title: 's', body: 'b' } },
+      { eid: m, name: 'mail', comp: { to: 'x@y.test', from: 'a@b.test' } },
+    ])
+    await mailed(cast)(m, {})
+    assertMatch(String(row(m).error), /send failed \(HTTP 200\)/)
+    assertMatch(String(row(m).acted_at), /T/) // ran, failed — no retry storm
+    assertEquals(row(m).sent_id, null)
+    // no row.from and no TASKS_MAIL_FROM: stamped, never guessed
+    let bare = uid()
+    apply(db, [
+      { eid: bare, name: 'doc', comp: { title: 's', body: 'b' } },
+      { eid: bare, name: 'mail', comp: { to: 'x@y.test' } },
+    ])
+    await mailed(cast)(bare, {})
+    assertMatch(String(row(bare).error), /no from address/)
+  } finally {
+    restore()
+    nativeEnvOff()
+  }
+})
+
+Deno.test('mailed: $TASKS_MAIL_CMD wins over the native env', async () => {
+  nativeEnv()
+  let dir = Deno.makeTempDirSync()
+  Deno.env.set('TASKS_MAIL_CMD', mailer(dir))
+  let { hits, restore } = netStub(() => ({ success: true }))
+  try {
+    let m = uid()
+    apply(db, [
+      { eid: m, name: 'doc', comp: { title: 'seam', body: 'held' } },
+      { eid: m, name: 'mail', comp: { to: 'x@y.test' } },
+    ])
+    await mailed(cast)(m, {})
+    assertEquals(mails(dir).length, 1) // the override delivered
+    assertEquals(hits.length, 0) // nothing touched the network path
+    assertEquals(row(m).error, null)
+  } finally {
+    restore()
+    Deno.env.delete('TASKS_MAIL_CMD')
+    nativeEnvOff()
+  }
 })
 
 Deno.test('mailed: concurrent fires deliver once (the boot-sweep race)', async () => {

@@ -1,14 +1,17 @@
 // Outbound mail: the mail intent's effect and the comment relay.
 // A mail is a mail asked for as data — created (or re-driven by
-// the boot sweep), the effect here resolves the address, delivers through
-// $TASKS_MAIL_CMD, and stamps the outcome server-side: acted_at (the
-// effect ran), error (how it went wrong), to_addr (the RESOLVED envelope
-// address — denormalized so later address-book edits never rewrite what a
-// delivery actually used). The comment relay mints mails for
-// comments on an addressed project's tasks — the graph's replacement for
-// holdco's delivery.js. SERVER-ONLY (imports db).
+// the boot sweep), the effect here resolves the address, delivers —
+// natively via Cloudflare Email Sending (mailer.ts), or through
+// $TASKS_MAIL_CMD when that's set (the override/test seam) — and stamps
+// the outcome server-side: acted_at (the effect ran), error (how it went
+// wrong), to_addr (the RESOLVED envelope address — denormalized so later
+// address-book edits never rewrite what a delivery actually used),
+// sent_id (the Message-ID the native send was assigned). The comment
+// relay mints mails for comments on an addressed project's tasks — the
+// graph's replacement for holdco's delivery.js. SERVER-ONLY (imports db).
 import { apply, db } from './db.ts'
 import { dispatch, trace } from './effects.ts'
+import { canon, type Letter, logOut, native, send } from './mailer.ts'
 import { type Change } from './types.ts'
 
 type Cast = (changes: Change[]) => void
@@ -83,9 +86,12 @@ let threadId = (eid: string) => {
   return mid ? String(mid) : undefined
 }
 
-// created(mail): deliver and stamp. $TASKS_MAIL_CMD is the mailer
-// — argv `--to <addr> [--from <addr>] [--in-reply-to <mid>] <subject>`,
-// body on stdin, exit 0 = sent (holdco's bin/email speaks exactly this).
+// created(mail): deliver and stamp. $TASKS_MAIL_CMD, when set, is the
+// mailer — argv `--to <addr> [--from <addr>] [--in-reply-to <mid>]
+// <subject>`, body on stdin, exit 0 = sent (holdco's bin/email speaks
+// exactly this) — the override/test seam. Otherwise the native sender
+// (mailer.ts) speaks Cloudflare Email Sending directly and sent_id
+// stamps the Message-ID it was assigned.
 // acted_at stamps on EVERY outcome, success or not: the sweep key means
 // "the effect ran", error says how it went, and a human retries by
 // minting a fresh request — an automatic retry storm helps no one.
@@ -116,52 +122,91 @@ export let mailed =
     }
     let to: string
     try {
-      to = addressOf(String(row.to))
+      to = canon(addressOf(String(row.to)))
     } catch (e) {
       return done({ acted_at: now(), error: (e as Error).message })
     }
+    let mid = row.reply_to_eid ? threadId(String(row.reply_to_eid)) : undefined
     let cmd = Deno.env.get('TASKS_MAIL_CMD')
-    if (!cmd) {
+    if (cmd) {
+      let [bin, ...pre] = cmd.split(/\s+/)
+      let args = [
+        ...pre,
+        '--to',
+        to,
+        ...(row.from ? ['--from', String(row.from)] : []),
+        ...(mid ? ['--in-reply-to', mid] : []),
+        String(doc?.title ?? ''),
+      ]
+      try {
+        let child = new Deno.Command(bin, {
+          args,
+          stdin: 'piped',
+          stdout: 'null',
+          stderr: 'piped',
+        }).spawn()
+        let w = child.stdin.getWriter()
+        await w.write(new TextEncoder().encode(String(doc?.body ?? '')))
+        await w.close()
+        let out = await child.output()
+        let err = new TextDecoder().decode(out.stderr).trim().slice(-240)
+        done({
+          acted_at: now(),
+          to_addr: to,
+          ...(out.success ? {} : { error: `exit ${out.code}: ${err || '?'}` }),
+        })
+      } catch (e) {
+        done({
+          acted_at: now(),
+          to_addr: to,
+          error: String((e as Error).message).slice(0, 240),
+        })
+      }
+      return
+    }
+    if (!native()) {
       return done({
         acted_at: now(),
         to_addr: to,
-        error: 'no mailer configured (set TASKS_MAIL_CMD)',
+        error: 'no mailer configured (set TASKS_MAIL_CMD, or ' +
+          'CLOUDFLARE_EMAIL_TOKEN + HOLDCO_CF_ACCOUNT_ID for the native ' +
+          'sender)',
       })
     }
-    let mid = row.reply_to_eid ? threadId(String(row.reply_to_eid)) : undefined
-    let [bin, ...pre] = cmd.split(/\s+/)
-    let args = [
-      ...pre,
-      '--to',
-      to,
-      ...(row.from ? ['--from', String(row.from)] : []),
-      ...(mid ? ['--in-reply-to', mid] : []),
-      String(doc?.title ?? ''),
-    ]
-    try {
-      let child = new Deno.Command(bin, {
-        args,
-        stdin: 'piped',
-        stdout: 'null',
-        stderr: 'piped',
-      }).spawn()
-      let w = child.stdin.getWriter()
-      await w.write(new TextEncoder().encode(String(doc?.body ?? '')))
-      await w.close()
-      let out = await child.output()
-      let err = new TextDecoder().decode(out.stderr).trim().slice(-240)
-      done({
+    // The native door needs a concrete sender: the row's own from, or
+    // the fleet default the service env names ($TASKS_MAIL_FROM — what
+    // bin/email defaulted for the relay's unsigned mail).
+    let from = String(row.from ?? '') || Deno.env.get('TASKS_MAIL_FROM') || ''
+    if (!from) {
+      return done({
         acted_at: now(),
         to_addr: to,
-        ...(out.success ? {} : { error: `exit ${out.code}: ${err || '?'}` }),
+        error: 'no from address (set mail.from or TASKS_MAIL_FROM)',
       })
+    }
+    let letter: Letter = {
+      from,
+      to,
+      subject: String(doc?.title ?? ''),
+      body: String(doc?.body ?? ''),
+      mid,
+    }
+    let id: string | undefined
+    try {
+      id = await send(letter)
     } catch (e) {
-      done({
+      return done({
         acted_at: now(),
         to_addr: to,
         error: String((e as Error).message).slice(0, 240),
       })
     }
+    done({ acted_at: now(), to_addr: to, ...(id ? { sent_id: id } : {}) })
+    // Sent is sent — the store log is provenance for external readers,
+    // and its failure is telemetry, never a failed send.
+    await logOut(letter, id).catch((e) =>
+      console.warn('fleet-mail out-log —', e)
+    )
   }
 
 // created(comment): a comment on an ADDRESSED project's task fans out as
