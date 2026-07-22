@@ -41,6 +41,26 @@ let depDdl = `create table if not exists dependency (
     primary key (parent_eid, type, child_eid)
   )`
 
+// Outbound mail. "to"/"from" are SQL keywords — quoted here and by the
+// generic builders in apply(), which quote every column so the vocabulary
+// never bends to SQL's reserved words. target_eid deliberately wears NO
+// FK: it is a death-'keep' column (types.ts) and tombstoning deletes the
+// spine row, so a reference to entity(eid) would veto the delete. Named
+// apart from `schema` because open() must REBUILD a live table that
+// shipped with that FK baked in — a constraint can't be dropped in place.
+let mailDdl = `create table if not exists mail (
+    eid         text primary key references entity(eid),
+    "to"        text not null,
+    "from"      text,
+    target_eid  text,
+    acted_at    text,
+    error       text,
+    to_addr     text,
+    message_id  text,
+    received_at text,
+    verified    integer
+  )`
+
 // The star: an entity spine plus one component table per kind, plus the edge
 // table. `if not exists` makes this idempotent — safe to run every boot.
 // A canvas is an entity with no component (yet) — its geometry lives in `pin`.
@@ -155,18 +175,7 @@ let schema = `
     delivery   text,
     error      text
   );
-  -- Outbound mail. "to"/"from" are SQL keywords — quoted here and by the
-  -- generic builders in apply(), which quote every column so the
-  -- vocabulary never bends to SQL's reserved words.
-  create table if not exists mail (
-    eid        text primary key references entity(eid),
-    "to"       text not null,
-    "from"     text,
-    target_eid text references entity(eid),
-    acted_at   text,
-    error      text,
-    to_addr    text
-  );
+  ${mailDdl};
   -- Inbound webhook deliveries, derived from the edge's raw request
   -- spool (inbound.ts). Every column is server-stamped; the wire can
   -- only aim docs and comments at a hook, never write one.
@@ -391,6 +400,32 @@ let seed = (db: DatabaseSync) => {
   pin(db, canvas, addCard(db, view, 'Task'), 664, 0, 320, 0)
 }
 
+// A baked constraint can't be changed in place: rebuild the table around
+// its current ddl, rows copied whole (column ORDER must match — additive
+// columns always append, so a ddl listing them in shipping order does).
+let ddlOf = (db: DatabaseSync, name: string) =>
+  (db.prepare(
+    `select sql from sqlite_master where type = 'table' and name = ?`,
+  ).get(name) as { sql: string } | undefined)?.sql
+let rebuild = (db: DatabaseSync, name: string, ddl: string) => {
+  db.exec('begin')
+  db.exec(`alter table ${name} rename to ${name}_stale`)
+  db.exec(ddl)
+  db.exec(`insert into ${name} select * from ${name}_stale`)
+  db.exec(`drop table ${name}_stale`)
+  db.exec('commit')
+}
+
+// mail.target_eid shipped wearing an FK to entity(eid) — but it's a
+// death-'keep' column, and tombstoning deletes the spine row, so the
+// kept reference vetoed the whole delete batch (T-4593). Rebuild around
+// the FK-free ddl; no-ops once healed. Exported as the migration's seam.
+export let mendMail = (db: DatabaseSync) => {
+  if (ddlOf(db, 'mail')?.includes('target_eid text references')) {
+    rebuild(db, 'mail', mailDdl)
+  }
+}
+
 // Open the file, plant the schema, seed once if the graph is empty.
 // Returns a live handle; the process holds it open for the server's
 // lifetime. No real migrations: NEW columns are added in place (additive,
@@ -465,17 +500,11 @@ export let open = () => {
   // vocabulary outgrows the baked list (the 'about' verb shipped without
   // this once — every about edge bounced off the old check), rebuild the
   // table around the current one, rows copied whole.
-  let dep = db.prepare(
-    `select sql from sqlite_master where type = 'table' and name = 'dependency'`,
-  ).get() as { sql: string } | undefined
-  if (dep && edges.some((e) => !dep.sql.includes(`'${e}'`))) {
-    db.exec('begin')
-    db.exec('alter table dependency rename to dependency_stale')
-    db.exec(depDdl)
-    db.exec('insert into dependency select * from dependency_stale')
-    db.exec('drop table dependency_stale')
-    db.exec('commit')
+  let dep = ddlOf(db, 'dependency')
+  if (dep && edges.some((e) => !dep.includes(`'${e}'`))) {
+    rebuild(db, 'dependency', depDdl)
   }
+  mendMail(db)
   // A mail was briefly a 'send_request' (the intent idiom over-applied —
   // the artifact deserved its name). Adopt the old table's rows once;
   // `create if not exists mail` above already made the empty successor,

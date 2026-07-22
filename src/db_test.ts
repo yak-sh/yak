@@ -1,10 +1,19 @@
 // apply()/snapshot() semantics against an in-memory db — the wire's
 // contract: patches, creates, deletes, tombstones, and the claim lease.
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, db, journalOf, open, search, snapshot, touch, vocabularyDoc } =
-  await import(
-    './db.ts'
-  )
+let {
+  apply,
+  db,
+  journalOf,
+  mendMail,
+  open,
+  search,
+  snapshot,
+  touch,
+  vocabularyDoc,
+} = await import(
+  './db.ts'
+)
 let { assertEquals, assertMatch, assertThrows } = await import(
   '@std/assert'
 )
@@ -251,6 +260,54 @@ Deno.test('entity delete cascades to aimed entities, detaches soft refs', () => 
   apply(db, [{ eid: p, name: 'entity', comp: null }])
   assertEquals(comp(t2, 'task')?.project_eid, null)
   assertEquals(comp(t2, 'doc')?.title, 'survivor')
+})
+
+// mail.target_eid is death-'keep' (a sent mail is history — its subject's
+// death doesn't unsend it), so deleting the subject must succeed and the
+// mail row must keep pointing at the grave.
+Deno.test('mail survives its subject: death keeps the reference', () => {
+  let t = uid(), m = uid()
+  apply(db, [
+    { eid: t, name: 'doc', comp: { title: 'subject' } },
+    { eid: m, name: 'doc', comp: { title: 'sent word' } },
+    { eid: m, name: 'mail', comp: { to: 'jeff', target_eid: t } },
+  ])
+  apply(db, [{ eid: t, name: 'entity', comp: null }])
+  assertEquals(comp(t, 'doc'), undefined) // the subject is gone
+  assertEquals(comp(m, 'mail')?.target_eid, t) // history stands
+})
+
+// The FK-era mail table vetoed that delete (T-4593); open() heals a live
+// db through mendMail — rebuild once, then never again.
+Deno.test('mendMail: rebuilds the FK-era table, no-ops when healed', () => {
+  let d = fresh()
+  // regress mail to the shape live dbs shipped with (FK on target_eid)
+  d.exec('drop table mail')
+  d.exec(`create table mail (
+    eid        text primary key references entity(eid),
+    "to"       text not null,
+    "from"     text,
+    target_eid text references entity(eid),
+    acted_at   text,
+    error      text,
+    to_addr    text,
+    message_id text, received_at text, verified integer)`)
+  let t = uid(), m = uid()
+  apply(d, [
+    { eid: t, name: 'doc', comp: { title: 'subject' } },
+    { eid: m, name: 'mail', comp: { to: 'jeff', target_eid: t } },
+  ])
+  assertThrows(() => apply(d, [{ eid: t, name: 'entity', comp: null }])) // the bug
+  mendMail(d)
+  apply(d, [{ eid: t, name: 'entity', comp: null }]) // healed
+  let row = () => d.prepare('select target_eid from mail where eid = ?').get(m)
+  assertEquals(row(), { target_eid: t }) // rows copied whole, ref kept
+  let ddl = () =>
+    d.prepare(`select sql from sqlite_master where name = 'mail'`).get()
+  let healed = ddl()
+  mendMail(d) // already-fixed db: a no-op
+  assertEquals(ddl(), healed)
+  assertEquals(row(), { target_eid: t })
 })
 
 // Every soft-detach rides the RETURN — a cache that misses one keeps a
