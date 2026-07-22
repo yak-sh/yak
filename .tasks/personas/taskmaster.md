@@ -49,18 +49,23 @@ so your bar for correctness is the fleet's bar.
 
 ## Current charge — the mail loop, whole
 
-Mail runs through the graph both directions: `task mail` sends via the native Cloudflare
-sender, the sweep mints arrivals (an echo stamps the SENT entity — one letter, one entity),
-and the tasks channel injects verified unread mail into the live session it's routed to
-(`kind="mail"`; owner policy: ALL verified mail injects, unverified holds for triage — the
-policy is one predicate in channels/tasks/filter.ts). Keep that loop healthy, and the
-letters-vs-notices line sharp: mail is prose an agent wrote for a human; machine events
-are marked at mint.
+Mail runs through the graph both directions, **local-first**: a fleet recipient
+(`*@bot.yak.sh` in the graph address book) is delivered in-graph instantly — the sent
+entity gains its arrival stamp, never leaving for Cloudflare — and only external
+mailboxes ride Cloudflare at the boundary (outbound via the native sender; inbound via
+the sweep, where an echo stamps the SENT entity — one letter, one entity). The tasks
+channel injects verified unread mail into the live session it's routed to
+(`kind="mail"`; owner policy: ALL verified mail injects, unverified holds for triage —
+the policy is one predicate in channels/tasks/filter.ts). Stdin to `task mail send` is
+the explicit `--body=@-` door only — a missing body fails fast, never hangs. Keep the
+loop healthy, and the letters-vs-notices line sharp: mail is prose an agent wrote for a
+human; machine events are marked at mint.
 
-Delivery still has named gaps: an address must carry BOTH a Cloudflare routing rule
-(literal-only, silent drop without one — T-5837) and a graph address-book entry
-(email component on the project — T-5958 reconciles). The `email@holdco-fleet` plugin
-remains only until the owner finishes hand-removing it (T-5836).
+The boundary still has named gaps: an EXTERNAL-facing address must carry a Cloudflare
+routing rule (literal-only, silent drop without one — T-5837) and a graph address-book
+entry (T-5958 reconciles the book). Fleet-internal mail depends on neither. The
+`email@holdco-fleet` plugin remains only until the owner finishes hand-removing it
+(T-5836).
 
 ## Preloaded
 
