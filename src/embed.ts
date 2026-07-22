@@ -40,7 +40,13 @@ let boot: Promise<void> | null = null
 let init = () =>
   boot ??= (async () => {
     try {
-      let { pipeline } = await import('@huggingface/transformers')
+      let { env, pipeline } = await import('@huggingface/transformers') // The default model cache is INSIDE the npm package dir — a cache
+       // clean or a version bump silently costs a 34MB re-download at
+      // boot. Pin it somewhere that survives both. (~/.tasks is a git
+      // repo — a re-downloadable model has no place in backups.)
+      ;(env as { cacheDir: string }).cacheDir = `${
+        Deno.env.get('HOME')
+      }/.cache/tasks/models`
       pipe = await (pipeline as (
         task: string,
         model: string,
