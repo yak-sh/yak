@@ -1727,6 +1727,10 @@ html {
   font-size: 12px;
   white-space: pre;
 }
+/* prose lines run long; the raw-file view wraps instead of scrolling */
+.Md {
+  white-space: pre-wrap;
+}
 
 /* A graph id in rendered prose (md.ts data-ref anchors): said in the
    link blue, monospaced like the Id chip, underlined only under the

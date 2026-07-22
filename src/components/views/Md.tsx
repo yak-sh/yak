@@ -1,12 +1,29 @@
-import { type Ent } from '../../types.ts'
-import { ent } from '../../live.ts'
+import { type Ent, idOf, kindOf } from '../../types.ts'
+import { cache, deps, ent } from '../../live.ts'
 import { el } from '../ui.tsx'
-import { idOf } from '../../types.ts'
+import { materialize } from '../../persona.ts'
+import type { Row } from '../../client.ts'
 
 // A doc as markdown with frontmatter — the file a dragged Markdown tab drops on
 // the desktop, shown raw by the Markdown view. Any entity with a doc qualifies;
 // workflow lines (status) appear only where the entity carries them.
+// A PERSONA's file is its materialization — the same bytes sync writes to
+// .tasks/ (header, core text, preloaded bodies, index) — so what you see
+// raw is exactly what a spawned session reads.
+let asRows = (): Row[] =>
+  Object.entries(cache.value).map(([eid, c]) => ({
+    eid,
+    num: Number(c.entity?.num ?? 0),
+    kind: kindOf(c),
+    comps: c as unknown as Row['comps'],
+  }))
+
 export let mdText = (e: Ent) => {
+  if (e.persona) {
+    let all = asRows()
+    let p = all.find((r) => r.eid == e.eid)
+    if (p) return materialize(all, deps.value, p, Date.now())
+  }
   let refs = e.refs
     .map((r) => `${r.type}: ${idOf(ent(r.child))}`)
     .join('\n')
