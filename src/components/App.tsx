@@ -1,4 +1,5 @@
 import { ent } from '../live.ts'
+import { Admin } from './Admin.tsx'
 import { block, el } from './ui.tsx'
 import { filterable, FilterInput } from './Filter.tsx'
 import { applicable } from './registry.ts'
@@ -24,6 +25,27 @@ let Tab = el('button', 'Tab')
 // bar's title text sleeps until that h1 scrolls away). The vim statusbar
 // keeps the floor.
 export let App = () => {
+  // The census rides beside the canvas: /admin* swaps the body wholesale;
+  // the bar keeps only the brand (the sidebar is the navigation there).
+  if (route.value.startsWith('/admin')) {
+    return (
+      <Frame
+        onPointerDown={() => {
+          if (menu.value) menu.value = null
+        }}
+      >
+        <Bar>
+          <Brand href='/'>Tasks</Brand>
+        </Bar>
+        <Body mod='admin'>
+          <Admin />
+        </Body>
+        <Menu />
+        <Peek />
+        <Status />
+      </Frame>
+    )
+  }
   let t = screenTarget()
   if (!t) return <Frame />
   let e = ent(t.eid)
@@ -58,6 +80,14 @@ export let App = () => {
             <Icon name={icons[v]} />
           </Tab>
         ))}
+        <Tab
+          type='button'
+          aria-label='Admin'
+          data-tip='Admin'
+          onClick={() => navigate('/admin')}
+        >
+          <Icon name='table' />
+        </Tab>
       </Bar>
       <Body>
         <View eid={e.eid} view={view} />
