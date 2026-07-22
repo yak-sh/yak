@@ -16,6 +16,7 @@ import {
   mailAt,
   mailChanges,
   mailLine,
+  me,
   memoryChanges,
   notices,
   param,
@@ -173,11 +174,29 @@ Deno.test('taskChanges: defaults + grouped comps ride along', () => {
   assertEquals(cs[1].comp?.status, 'open')
 })
 
-Deno.test('sessionFor: reuse, mint, cwd refresh', () => {
+Deno.test('sessionFor: reuse, mint, cwd + pid refresh', () => {
   assertEquals(sessionFor(all, 'sess-x').changes, []) // known, same cwd
   assertEquals(sessionFor(all, 'sess-x', '/elsewhere').changes.length, 1) // cwd moved
-  let minted = sessionFor(all, 'sess-new', '/w2')
-  assertEquals(minted.changes[0].comp, { id: 'sess-new', cwd: '/w2' })
+  let minted = sessionFor(all, 'sess-new', '/w2', 4242)
+  assertEquals(minted.changes[0].comp, {
+    id: 'sess-new',
+    cwd: '/w2',
+    pid: 4242,
+  })
+  // an unstamped row gains its pid; a re-run with the same pid is silent
+  assertEquals(sessionFor(all, 'sess-x', '/w', 4242).changes, [
+    { eid: S, name: 'session', comp: { pid: 4242 } },
+  ])
+})
+
+Deno.test('me: the rotating CLAUDE_CODE_SESSION_ID outranks TASKS_SESSION', () => {
+  let env = (vals: Record<string, string>) => (k: string) => vals[k]
+  assertEquals(
+    me(env({ CLAUDE_CODE_SESSION_ID: 'rotating', TASKS_SESSION: 'stale' })),
+    'rotating',
+  )
+  assertEquals(me(env({ TASKS_SESSION: 'launcher' })), 'launcher') // non-claude spawns
+  assertEquals(me(env({})), undefined)
 })
 
 Deno.test('claimChanges points at the session entity', () => {

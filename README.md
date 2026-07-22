@@ -100,7 +100,7 @@ task list .status=open            # filter with dot-params
 task new .title="Hello, world!"   # bare words become the title too
 task set T-3 .status=done .priority=1
 task show T-3                     # one entity, whole, as JSON
-task claim T-3 my-session         # lease it ($TASKS_SESSION works too)
+task claim T-3 my-session         # lease it (defaults to your session id)
 task release T-3                  # hand it back
 ```
 

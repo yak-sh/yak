@@ -62,14 +62,20 @@ export let search = async (q: string, limit = 20) => {
   return res.json() as Promise<Hit[]>
 }
 
+// The CLI's standing identity: Claude's own session id first —
+// CLAUDE_CODE_SESSION_ID rotates on /clear, so it always names the session
+// actually speaking — then the launcher's TASKS_SESSION (managed non-claude
+// spawns: codex/fake, whose harness sets no id of its own). The env lookup
+// is injectable so the precedence is testable without mutating the process.
+export let me = (
+  env: (k: string) => string | undefined = (k) => Deno.env.get(k),
+) => env('CLAUDE_CODE_SESSION_ID') ?? env('TASKS_SESSION')
+
 // Writes carry WHO when the caller knows: the x-actor header lands in
 // the server's journal (attribution, never auth). The CLI's standing
-// identity is $TASKS_SESSION — hooks and spawned agents get their writes
+// identity is me() — hooks and spawned agents get their writes
 // attributed without asking.
-export let send = async (
-  changes: Change[],
-  actor = Deno.env.get('TASKS_SESSION'),
-) => {
+export let send = async (changes: Change[], actor = me()) => {
   let res = await fetch(`http://${host()}/apply`, {
     method: 'POST',
     headers: {
@@ -348,15 +354,24 @@ export let byBoard = (a: Row, b: Row) =>
   (a.num - b.num)
 
 // Find-or-mint the session entity for an external session id: its eid
-// plus the change that creates it when it's new.
-export let sessionFor = (all: Row[], session: string, cwd?: string) => {
+// plus the change that creates or refreshes it. cwd is where it runs; pid
+// is the claude process it runs IN (the SessionStart hook walks /proc for
+// it) — the anchor that lets the channel plugin follow a /clear rotation,
+// when a NEW session id reifies under the same process.
+export let sessionFor = (
+  all: Row[],
+  session: string,
+  cwd?: string,
+  pid?: number,
+) => {
   let s = all.find((r) => r.comps.session && r.comps.session.id == session)
   let eid = s?.eid ?? uuid()
-  let changes: Change[] = s
-    ? (cwd && s.comps.session.cwd != cwd
-      ? [{ eid, name: 'session', comp: { cwd } }]
-      : [])
-    : [{ eid, name: 'session', comp: { id: session, ...(cwd ? { cwd } : {}) } }]
+  let comp: Record<string, unknown> = s ? {} : { id: session }
+  if (cwd && s?.comps.session.cwd != cwd) comp.cwd = cwd
+  if (pid && s?.comps.session.pid != pid) comp.pid = pid
+  let changes: Change[] = Object.keys(comp).length
+    ? [{ eid, name: 'session', comp }]
+    : []
   return { eid, changes }
 }
 

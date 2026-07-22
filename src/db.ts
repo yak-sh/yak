@@ -448,6 +448,7 @@ export let open = () => {
   addCol('task', 'assignee_eid', 'assignee_eid text references entity(eid)')
   addCol('task', 'domain', 'domain text')
   addCol('session', 'cwd', 'cwd text')
+  addCol('session', 'pid', 'pid integer')
   addCol('session', 'acked_at', 'acked_at text')
   // The managed-session lifecycle (src/sessions.ts): what was asked for,
   // what it's doing, how it ended. The REQUEST columns (provider, model,

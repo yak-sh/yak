@@ -28,6 +28,7 @@ import {
   mailAt,
   mailChanges,
   mailLine,
+  me,
   memoryChanges,
   notices,
   type Param,
@@ -56,6 +57,7 @@ import { type Edge, edges, type Snapshot } from './types.ts'
 // reaches for node:sqlite, and the CLI has no business loading a db driver.
 import type { Log } from './telemetry.ts'
 import type { JournalEntry } from './client.ts'
+import { claudePid } from './proc.ts'
 import { filesFor, syncFiles } from './persona.ts'
 import { commands, focusOf, run as runCommand } from './commands.ts'
 
@@ -108,7 +110,7 @@ let VERBS: [usage: string, blurb: string, examples: string[]][] = [
       'task mail reply E-9 "on it — landing today"',
     ],
   ],
-  ['claim <id> [session]', 'lease a task for a session ($TASKS_SESSION)', [
+  ['claim <id> [session]', 'lease a task (default: your own session id)', [
     'task claim T-3 my-session-id',
   ]],
   ['release <id>', 'drop the lease', ['task release T-3']],
@@ -283,14 +285,7 @@ let set = async (args: string[]) => {
   await send([
     ...Object.entries(patches(derefParams(all, params)))
       .map(([name, comp]) => ({ eid: row.eid, name, comp })),
-    ...(say
-      ? commentChanges(
-        all,
-        row.eid,
-        say,
-        Deno.env.get('TASKS_SESSION') ?? undefined,
-      )
-      : []),
+    ...(say ? commentChanges(all, row.eid, say, me()) : []),
   ])
   console.log(`${idOf(row)} updated`)
 }
@@ -537,10 +532,10 @@ let mail = (args: string[]) => {
 // it, and the server refuses to hand a held lease to someone else.
 let claim = async (args: string[]) => {
   let [id, sess] = args
-  let session = sess ?? Deno.env.get('TASKS_SESSION')
+  let session = sess ?? me()
   if (!id) throw new Error('task claim <id> [session]')
   if (!session) {
-    throw new Error('task claim <id> <session> (or set TASKS_SESSION)')
+    throw new Error('task claim <id> <session> (or run under a session)')
   }
   let all = rows(await snapshot())
   let row = find(all, id)
@@ -566,7 +561,7 @@ let launch = async (
   let all = rows(snap)
   // Unnamed provider/model inherit: the calling session's own (a spawn
   // begets its own kind), then the provider table's first entry.
-  let by = Deno.env.get('TASKS_SESSION') ?? undefined
+  let by = me()
   let mine = spawnDefaults(all, by)
   let provider = flags.provider ?? mine.provider
   let model = flags.model ?? (flags.provider ? undefined : mine.model)
@@ -627,7 +622,7 @@ let colon = async (focus: string | undefined, argv: string[]) => {
   if (name && !commands[name]) {
     throw new Error(`not a command: :${name} — 'task help :' lists them all`)
   }
-  let session = Deno.env.get('TASKS_SESSION') ?? undefined
+  let session = me()
   let all = rows(await snapshot())
   let eid: string | undefined
   if (focus) {
@@ -678,7 +673,7 @@ let dep = async (args: string[]) => {
   console.log(`${idOf(row)} ${type} ${idOf(child)}${gone ? ' — unlinked' : ''}`)
 }
 
-// Comments attach to anything; attribution rides $TASKS_SESSION when set.
+// Comments attach to anything; attribution rides the session env (me()).
 let comment = async (args: string[]) => {
   let [id, ...words] = args
   let body = words.join(' ')
@@ -686,7 +681,7 @@ let comment = async (args: string[]) => {
   let all = rows(await snapshot())
   let row = find(all, id)
   if (!row) throw new Error(`no entity: ${id}`)
-  await send(commentChanges(all, row.eid, body, Deno.env.get('TASKS_SESSION')))
+  await send(commentChanges(all, row.eid, body, me()))
   console.log(`commented on ${idOf(row)}`)
 }
 
@@ -771,8 +766,7 @@ let finalText = (path: string) => {
 
 let context = async (args: string[]) => {
   let hook = args.includes('--hook')
-  let sid = args.find((a) => !a.startsWith('--')) ??
-    Deno.env.get('TASKS_SESSION')
+  let sid = args.find((a) => !a.startsWith('--')) ?? me()
   // The digest plus the comms bus: unseen comments ride along, and the
   // session's ack cursor advances exactly when they're printed.
   let tell = async (snap: Snapshot, sid: string, scope?: string) => {
@@ -791,9 +785,12 @@ let context = async (args: string[]) => {
       sid ??= String(body.session_id ?? '')
       if (!sid) return
       let snap = await snapshot()
-      // Reify the session on arrival: id + worktree, before any claim.
+      // Reify the session on arrival: id + worktree + the claude process
+      // pid (the /proc walk), before any claim. The pid is what lets the
+      // channel plugin follow a /clear — the NEW session id reifies under
+      // the SAME process.
       let cwd = String(body.cwd ?? '') || undefined
-      let s = sessionFor(rows(snap), sid, cwd)
+      let s = sessionFor(rows(snap), sid, cwd, claudePid())
       if (s.changes.length) await send(s.changes)
       // The hook payload names no model (session_id, transcript_path,
       // cwd, hook_event_name, source) — but the transcript does: its
@@ -867,8 +864,8 @@ let remember = async (args: string[]) => {
     args.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3)
   let title = args.filter((a) => !a.startsWith('--')).join(' ').trim()
   if (!title) throw new Error('task remember <title...> (the index line)')
-  let session = Deno.env.get('TASKS_SESSION')
-  if (!session) throw new Error('remember: set TASKS_SESSION (attribution)')
+  let session = me()
+  if (!session) throw new Error('remember: no session identity (attribution)')
   let all = rows(await snapshot())
   let body = flag('body')
   if (body?.startsWith('@')) {
@@ -892,12 +889,11 @@ let remember = async (args: string[]) => {
 // --hook mode (stdin JSON, silent failure) wires it to the lifecycle.
 let wrap = async (args: string[]) => {
   let hook = args.includes('--hook')
-  let sid = args.find((a) => !a.startsWith('--')) ??
-    Deno.env.get('TASKS_SESSION')
+  let sid = args.find((a) => !a.startsWith('--')) ?? me()
   try {
-    // Hook stdin always gets read: even when TASKS_SESSION names the
-    // session, the payload carries the transcript whose last assistant
-    // turn IS the brief (continuity is self-authored — T-4469).
+    // Hook stdin always gets read: even when the env names the session,
+    // the payload carries the transcript whose last assistant turn IS the
+    // brief (continuity is self-authored — T-4469).
     let final: string | undefined
     if (hook) {
       try {
@@ -908,7 +904,7 @@ let wrap = async (args: string[]) => {
     }
     if (!sid) {
       if (hook) return
-      throw new Error('task wrap <session> (or set TASKS_SESSION)')
+      throw new Error('task wrap <session> (or run under a session)')
     }
     // The ledger is a bonus, never a blocker: a journal fetch that fails
     // still wraps the session cleanly, just without its day retold.
@@ -1016,11 +1012,12 @@ let backup = async () => {
 
 // An interactive session, fleet-wired: permissions skipped and the tasks
 // channel active, so a comment on the session's entity or a knock at its
-// door drops straight into the running transcript. One minted
-// TASKS_SESSION is the whole binding — the SessionStart hook reifies the
-// entity under it, every tool claims and comments as it, and the channel
-// plugin filters the /ws broadcast for it. (claude's own session_id
-// would drift across /clear and --continue; the minted id holds.)
+// door drops straight into the running transcript. Identity is Claude's
+// own session id (CLAUDE_CODE_SESSION_ID — /clear rotates it, and the
+// rotation IS the point: one S-* per life). The SessionStart hook reifies
+// the entity under it and stamps the claude process pid; the channel
+// plugin binds by that pid, so service follows each rotation. Nothing to
+// mint here — the env passes through unchanged.
 let CHANNEL = 'plugin:tasks@tasks-fleet'
 let interactive = async (args: string[]) => {
   // Allowlisted in root's managed settings → clean launch; otherwise the
@@ -1039,10 +1036,7 @@ let interactive = async (args: string[]) => {
       ...(listed ? [] : ['--dangerously-load-development-channels', CHANNEL]),
       ...args,
     ],
-    env: {
-      TASKS_SESSION: Deno.env.get('TASKS_SESSION') ?? crypto.randomUUID(),
-      TASKS_HOST: host(),
-    },
+    env: { TASKS_HOST: host() },
     stdin: 'inherit',
     stdout: 'inherit',
     stderr: 'inherit',

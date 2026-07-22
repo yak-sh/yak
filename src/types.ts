@@ -128,6 +128,11 @@ export let comps: Record<string, Record<string, PropType>> = {
   session: {
     id: 'text',
     cwd: 'text',
+    // The claude process this session runs in — the SessionStart hook walks
+    // /proc and stamps it, and the channel plugin binds by it (a /clear
+    // reifies a NEW session id under the SAME pid; service follows).
+    // Wire-writable like acked_at: forging it only misroutes your own mail.
+    pid: 'number',
     acked_at: 'text',
     provider: 'text',
     model: 'text',
@@ -570,6 +575,7 @@ export type Session = {
   eid: string
   id: string
   cwd?: string | null
+  pid?: number | null // the claude process it runs in (hook-stamped)
   acked_at?: string | null
   origin?: string // 'external' (announced) | 'managed' (we spawned it)
   provider?: string | null // adapters.ts key
