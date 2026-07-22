@@ -77,6 +77,23 @@ Deno.test('materialize: a bare persona is just header + core', () => {
   assertStringIncludes(md, 'Review sternly.')
 })
 
+Deno.test('materialize: frontmatter stays at byte 0, header rides after it', () => {
+  let fm = row({
+    doc: {
+      title: 'operator',
+      body: '---\nname: operator\ntools: Read, Grep\n---\n\nYou run the fleet.',
+    },
+    persona: { home_eid: null },
+  })
+  let md = materialize([fm], [], fm, NOW)
+  // frontmatter opens the file, so a native harness parses name/tools
+  assert(md.startsWith('---\n'))
+  // the generated header rides after the frontmatter close, never before it
+  let fmEnd = md.indexOf('\n---', 3) + '\n---'.length
+  assert(md.indexOf('GENERATED') > fmEnd)
+  assertStringIncludes(md, 'You run the fleet.')
+})
+
 Deno.test('materialize: dead or docless tier members drop silently', () => {
   let ghost: Dep = { parent: persona.eid, type: 'contains', child: 'gone' }
   let bare = row({ web: { url: 'http://x' } })

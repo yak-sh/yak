@@ -72,9 +72,16 @@ export let materialize = (
 ) => {
   let pre = tier(all, deps, p.eid, 'contains', now)
   let idx = tier(all, deps, p.eid, 'reads', now)
+  let body = String(p.comps.doc?.body ?? '').trim()
+  let header = d.header(idOf(p), String(p.comps.doc?.title ?? 'persona'))
+  // Native harnesses need YAML frontmatter at byte 0, so when the body opens
+  // with a --- block the header rides just after it, never before.
+  let fm = body.match(/^---\n[\s\S]*?\n---(?:\n|$)/)
+  let lead = fm
+    ? `${fm[0].trimEnd()}\n\n${header}\n\n${body.slice(fm[0].length).trim()}`
+    : `${header}\n\n${body}`
   let parts = [
-    d.header(idOf(p), String(p.comps.doc?.title ?? 'persona')),
-    String(p.comps.doc?.body ?? '').trim(),
+    lead,
     ...(pre.length
       ? [
         d.preloaded,
