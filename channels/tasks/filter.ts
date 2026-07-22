@@ -139,6 +139,10 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
     }
 
     if (c.name == 'knock') {
+      // The resolver's stamp re-broadcasts the full row with acted_at
+      // set (a server-only column, absent at mint) — that's the receipt
+      // of a knock already delivered, not a second nudge.
+      if (c.comp.acted_at != null) continue
       let recipient = str(c.comp.to_eid)
       if (recipient != ctx.sessionEid && recipient != ctx.actorEid) continue
       let at = str(c.comp.target_eid)

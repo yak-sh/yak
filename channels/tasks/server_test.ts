@@ -111,6 +111,16 @@ Deno.test('a knock aimed at neither the session nor its actor is ignored', () =>
   assertEquals(channelEvents(batch, ctx()), [])
 })
 
+Deno.test("the resolver's stamp re-broadcast is a receipt, not a nudge", () => {
+  let batch = [ch('k1', 'knock', {
+    to_eid: 'sess',
+    target_eid: 't9',
+    acted_at: 1234,
+    delivery: 'cast S-1',
+  })]
+  assertEquals(channelEvents(batch, ctx()), [])
+})
+
 // --- identity ----------------------------------------------------------------
 
 Deno.test('learn + humanId derive a human id from spine and components', () => {
