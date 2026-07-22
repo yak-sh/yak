@@ -1,8 +1,11 @@
 // Outbound mail: the mail intent's effect and the comment relay.
 // A mail is a mail asked for as data — created (or re-driven by
-// the boot sweep), the effect here resolves the address, delivers —
-// natively via Cloudflare Email Sending (mailer.ts), or through
-// $TASKS_MAIL_CMD when that's set (the override/test seam) — and stamps
+// the boot sweep), the effect here resolves the address and delivers
+// LOCAL-FIRST: a fleet recipient (a bot.yak.sh address the graph
+// address book knows) is stamped delivered in place, never leaving the
+// graph; only the boundary — external mailboxes — rides Cloudflare
+// Email Sending (mailer.ts), or $TASKS_MAIL_CMD when that's set (the
+// override/test seam). Either way the effect stamps
 // the outcome server-side: acted_at (the effect ran), error (how it went
 // wrong), to_addr (the RESOLVED envelope address — denormalized so later
 // address-book edits never rewrite what a delivery actually used),
@@ -63,6 +66,21 @@ export let addressOf = (to: string): string => {
   return e.address
 }
 
+// The address book, reversed and strict — which fleet entity wears this
+// address? Only bot.yak.sh addresses count as fleet: an external
+// mailbox in the book (the owner's own, a customer's) must still ride
+// Cloudflare to reach its inbox. Both spellings are checked, resolved
+// and canon'd, so a book entry Cloudflare would bounce (underscores)
+// still delivers at home. No triage fallback (that's routeTo's, an
+// inbound concern) — absence means "not fleet".
+let homeOf = (addr: string, to: string): string | null => {
+  if (!/@bot\.yak\.sh$/i.test(to)) return null
+  let hit = (a: string) =>
+    (db.prepare('select eid from email where address = ? collate nocase')
+      .get(a) as { eid: string } | undefined)?.eid
+  return hit(to) ?? hit(addr) ?? null
+}
+
 // A stored message id to the RFC Message-ID a mail client threads on:
 // the fleet store wraps ids (`msg:<ts>:<rfc-id>`, `out:` for outbound) —
 // unwrap those, pass a raw id through, and shed the angle brackets the
@@ -120,11 +138,39 @@ export let mailed =
       flying.delete(eid)
       stamp(eid, patch, cast)
     }
-    let to: string
+    let addr: string
     try {
-      to = canon(addressOf(String(row.to)))
+      addr = addressOf(String(row.to))
     } catch (e) {
       return done({ acted_at: now(), error: (e as Error).message })
+    }
+    let to = canon(addr)
+    // The concrete sender: the row's own from, or the fleet default the
+    // service env names ($TASKS_MAIL_FROM, holdco@bot.yak.sh for the
+    // relay's unsigned mail). The native door requires one; local
+    // delivery stamps it only as attribution when the row has none.
+    let from = String(row.from ?? '') || Deno.env.get('TASKS_MAIL_FROM') || ''
+    // Local-first: a fleet recipient never leaves the graph — the sent
+    // entity IS the delivery, gaining its inbound half right here.
+    // message_id doubles as the never-send mark (inbound.ts), so a
+    // locally-delivered letter can never also ride Cloudflare; verified
+    // because apply() authenticated the author; acted_at still records
+    // when delivery happened. The full-row broadcast rings the
+    // recipient's channel exactly like the sweep's arrival stamp
+    // (channels/tasks/filter.ts injects on received_at). And the
+    // arrive() precedent holds: a relay mail keeps aiming at its task —
+    // only a bare letter aims at the recipient's inbox entity.
+    let home = homeOf(addr, to)
+    if (home) {
+      return done({
+        acted_at: now(),
+        to_addr: to,
+        message_id: `local:${Date.now()}:${eid}`,
+        received_at: now(),
+        verified: 1,
+        ...(row.target_eid ? {} : { target_eid: home }),
+        ...(row.from || !from ? {} : { from }),
+      })
     }
     let mid = row.reply_to_eid ? threadId(String(row.reply_to_eid)) : undefined
     let cmd = Deno.env.get('TASKS_MAIL_CMD')
@@ -173,10 +219,6 @@ export let mailed =
           'sender)',
       })
     }
-    // The native door needs a concrete sender: the row's own from, or
-    // the fleet default the service env names ($TASKS_MAIL_FROM,
-    // holdco@bot.yak.sh for the relay's unsigned mail).
-    let from = String(row.from ?? '') || Deno.env.get('TASKS_MAIL_FROM') || ''
     if (!from) {
       return done({
         acted_at: now(),

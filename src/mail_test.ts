@@ -8,6 +8,7 @@ let { addressOf, FANOUT_PENDING, fanout, mailed, rfcId } = await import(
   './mail.ts'
 )
 let { canon, payload } = await import('./mailer.ts')
+let { channelEvents } = await import('../channels/tasks/filter.ts')
 let { assertEquals, assertMatch, assertThrows } = await import('@std/assert')
 
 // Hermetic: the host's own mailer env must never reach these tests.
@@ -506,6 +507,114 @@ Deno.test('mailed: $TASKS_MAIL_CMD wins over the native env', async () => {
     Deno.env.delete('TASKS_MAIL_CMD')
     nativeEnvOff()
   }
+})
+
+// --- local-first delivery: a fleet recipient never leaves the graph ---------
+
+Deno.test('mailed: a fleet recipient delivers locally — no send, no out-log', async () => {
+  nativeEnv()
+  Deno.env.set('TASKS_MAIL_FROM', 'holdco@bot.yak.sh')
+  Deno.env.set('FLEET_MAIL_API_URL', 'http://fleet.test')
+  Deno.env.set('FLEET_MAIL_API_TOKEN', 'dummy-fleet')
+  let dir = Deno.makeTempDirSync()
+  Deno.env.set('TASKS_MAIL_CMD', mailer(dir))
+  let { hits, restore } = netStub(() => ({ success: true }))
+  try {
+    let ops = somebody('ops', 'ops@bot.yak.sh')
+    let m = uid()
+    apply(db, [
+      { eid: m, name: 'doc', comp: { title: 'ping', body: 'hi there' } },
+      { eid: m, name: 'mail', comp: { to: 'ops' } },
+    ])
+    let got: Parameters<typeof channelEvents>[0] = []
+    await mailed((cs) => got.push(...cs))(m, {})
+    let r = row(m)
+    assertEquals(r.error, null)
+    assertEquals(r.to_addr, 'ops@bot.yak.sh')
+    assertMatch(String(r.message_id), /^local:\d+:/) // the never-send mark
+    assertMatch(String(r.received_at), /T/) // arrived
+    assertMatch(String(r.acted_at), /T/) // delivered, and when
+    assertEquals(Number(r.verified), 1) // apply() authenticated the author
+    assertEquals(r.target_eid, ops) // aimed at the recipient's inbox
+    assertEquals(r.from, 'holdco@bot.yak.sh') // attribution defaulted
+    assertEquals(r.sent_id, null) // nothing was ever sent
+    assertEquals(mails(dir).length, 0) // the override seam never fired
+    assertEquals(hits.length, 0) // no Cloudflare send, no D1 out-log
+    // a sweep replay never re-delivers: acted_at, and the never-send mark
+    await mailed(cast)(m, {})
+    assertEquals(hits.length, 0)
+    // the full-row stamp broadcast IS the arrival the channel injects
+    let evs = channelEvents(got, {
+      sessionEid: 'sess',
+      homeEid: ops,
+      idOf: () => 'E-1',
+    })
+    assertEquals(evs.length, 1)
+    assertEquals(evs[0].meta.kind, 'mail')
+    assertEquals(evs[0].meta.auth, 'VERIFIED')
+  } finally {
+    restore()
+    Deno.env.delete('TASKS_MAIL_CMD')
+    nativeEnvOff()
+  }
+})
+
+Deno.test('mailed: a book entry Cloudflare would bounce still lands at home', async () => {
+  nativeEnv()
+  let { hits, restore } = netStub(() => ({ success: true }))
+  try {
+    let p = somebody('under_bot', 'under_score@bot.yak.sh')
+    let m = uid()
+    apply(db, [
+      { eid: m, name: 'doc', comp: { title: 's', body: 'b' } },
+      {
+        eid: m,
+        name: 'mail',
+        comp: { to: 'under_score@bot.yak.sh', from: 'a@bot.yak.sh' },
+      },
+    ])
+    await mailed(cast)(m, {})
+    let r = row(m)
+    assertEquals(r.error, null)
+    assertEquals(r.target_eid, p) // the pre-canon spelling found the book
+    assertEquals(r.from, 'a@bot.yak.sh') // a stamped from stays
+    assertEquals(hits.length, 0)
+  } finally {
+    restore()
+    nativeEnvOff()
+  }
+})
+
+Deno.test('mailed: local delivery keeps a relay mail aimed at its task', async () => {
+  let t = uid()
+  somebody('relayed', 'relayed@bot.yak.sh')
+  apply(db, [
+    { eid: t, name: 'doc', comp: { title: 'the work' } },
+    { eid: t, name: 'task', comp: { status: 'open' } },
+  ])
+  let m = uid()
+  apply(db, [
+    { eid: m, name: 'doc', comp: { title: '[T] the work', body: 'a note' } },
+    { eid: m, name: 'mail', comp: { to: 'relayed', target_eid: t } },
+  ])
+  await mailed(cast)(m, {})
+  assertEquals(row(m).target_eid, t) // the arrive() precedent holds
+  assertMatch(String(row(m).message_id), /^local:/)
+})
+
+Deno.test('mailed: an external address in the book still rides the boundary', async () => {
+  let dir = Deno.makeTempDirSync()
+  Deno.env.set('TASKS_MAIL_CMD', mailer(dir))
+  somebody('owner', 'owner@ext.test')
+  let m = uid()
+  apply(db, [
+    { eid: m, name: 'doc', comp: { title: 'to the owner', body: 'words' } },
+    { eid: m, name: 'mail', comp: { to: 'owner' } },
+  ])
+  await mailed(cast)(m, {})
+  assertEquals(mails(dir).length, 1) // delivered outward, not locally
+  assertEquals(row(m).message_id, null)
+  Deno.env.delete('TASKS_MAIL_CMD')
 })
 
 Deno.test('mailed: concurrent fires deliver once (the boot-sweep race)', async () => {
