@@ -25,9 +25,12 @@ let age = (r: Row, now: number, col: string) => {
 }
 
 // The queue: session docs still wearing the lapse marker, dust settled.
-export let stubs = (all: Row[], now: number) =>
+// The desk's own sessions are exempt — a scribe's lapse leaves a stub
+// too, and scribing the scribe would spawn a desk an hour forever.
+export let stubs = (all: Row[], now: number, deskEid?: string) =>
   all.filter((r) =>
     r.comps.session && String(r.comps.doc?.body ?? '').startsWith(STUB) &&
+    !(deskEid && r.comps.session.requested_task_eid == deskEid) &&
     age(r, now, 'modified_at') > QUIET
   )
 
@@ -44,8 +47,8 @@ export let deskFree = (all: Row[], desk: Row, now: number) =>
 // missing-desk case logs once at the sweep so a half-seeded graph says
 // so instead of silently never scribing).
 export let scribeSpawn = (all: Row[], deps: Dep[], now: number) => {
-  if (!stubs(all, now).length) return null
   let desk = find(all, 'scribe-desk')
+  if (!stubs(all, now, desk?.eid).length) return null
   if (!desk?.comps.task) throw new Error('no scribe-desk task in the graph')
   if (!find(all, 'scribe')?.comps.persona) {
     throw new Error('no scribe persona in the graph')

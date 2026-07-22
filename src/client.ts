@@ -80,6 +80,22 @@ export let send = async (
   if (!res.ok) throw new Error(`apply failed: ${await res.text()}`)
 }
 
+// A value starting with @ is a FILE read by the tool itself — the safe
+// door for long bodies. Shell substitution offers the same and fails
+// silently ($(cat) in a zsh pipeline reads nothing, and an empty value
+// CLEARS the column — this wiped four session briefs, 2026-07-22); a
+// missing file here is a loud error instead. Literal leading @: @@.
+export let inflate = (p: Param): Param => {
+  let v = p.value
+  if (typeof v != 'string' || !v.startsWith('@')) return p
+  if (v.startsWith('@@')) return { ...p, value: v.slice(1) }
+  try {
+    return { ...p, value: Deno.readTextFileSync(v.slice(1)) }
+  } catch {
+    throw new Error(`.${p.prop}=@: no such file: ${v.slice(1)}`)
+  }
+}
+
 // An entity's slice of the journal — the wire's record, newest first.
 export type JournalEntry = {
   ts: string

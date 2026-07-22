@@ -117,3 +117,29 @@ Deno.test('scribeSpawn: haiku wearing the scribe persona, or nothing, or a shout
     'no scribe-desk',
   )
 })
+
+Deno.test('the desk never scribes itself: its own lapse stubs are exempt', () => {
+  let ours = rows(graph(
+    mk(S2, 5, ago(120), {
+      doc: { title: 'scribe shift', body: `${STUB} — a stub` },
+      session: { id: 'sc-old', requested_task_eid: DESK, status: 'completed' },
+    }),
+  ))
+  assertEquals(stubs(ours, NOW, DESK).map((r) => r.eid), [S1])
+  // with S1 gone, the desk stub alone spawns nothing
+  let alone: Snapshot = {
+    changes: [
+      ...graph().changes.filter((c) => c.eid != S1),
+      ...mk(S2, 5, ago(120), {
+        doc: { title: 'scribe shift', body: `${STUB} — a stub` },
+        session: {
+          id: 'sc-old',
+          requested_task_eid: DESK,
+          status: 'completed',
+        },
+      }),
+    ],
+    deps: [],
+  }
+  assertEquals(scribeSpawn(rows(alone), alone.deps, NOW), null)
+})

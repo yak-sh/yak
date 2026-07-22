@@ -23,6 +23,7 @@ import {
   hookClaim,
   host,
   idOf,
+  inflate,
   lapseChanges,
   memoryChanges,
   notices,
@@ -189,7 +190,7 @@ let split = (args: string[]) => {
   let words: string[] = []
   for (let a of args) {
     let p = param(a)
-    if (p) params.push(p)
+    if (p) params.push(inflate(p))
     else words.push(a)
   }
   return { params, words }
@@ -591,9 +592,13 @@ let remember = async (args: string[]) => {
   let session = Deno.env.get('TASKS_SESSION')
   if (!session) throw new Error('remember: set TASKS_SESSION (attribution)')
   let all = rows(await snapshot())
+  let body = flag('body')
+  if (body?.startsWith('@')) {
+    body = String(inflate({ comp: 'doc', prop: 'body', value: body }).value)
+  }
   let made = memoryChanges(all, {
     title,
-    body: flag('body'),
+    body,
     type: flag('type'),
     scope: flag('scope'),
     session,

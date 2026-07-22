@@ -10,6 +10,7 @@ import {
   edgesOf,
   find,
   hookClaim,
+  inflate,
   lapseChanges,
   ledger,
   memoryChanges,
@@ -776,4 +777,15 @@ Deno.test('contextDigest: scope — local work, local+principle memory, cwd deri
   // no scope: the fleet view, both works suggested
   let f = contextDigest(g, undefined, NOW)
   assertEquals(f.includes('A work') && f.includes('B work'), true)
+})
+
+Deno.test('inflate: @ reads the file loudly, @@ is a literal, plain rides', () => {
+  let f = Deno.makeTempFileSync()
+  Deno.writeTextFileSync(f, 'the whole brief\n')
+  let p = (value: string) => ({ comp: 'doc', prop: 'body', value })
+  assertEquals(inflate(p(`@${f}`)).value, 'the whole brief\n')
+  assertEquals(inflate(p('@@handle')).value, '@handle')
+  assertEquals(inflate(p('plain')).value, 'plain')
+  assertThrows(() => inflate(p('@/no/such/file')), Error, 'no such file')
+  Deno.removeSync(f)
 })
