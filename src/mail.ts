@@ -88,8 +88,8 @@ let threadId = (eid: string) => {
 
 // created(mail): deliver and stamp. $TASKS_MAIL_CMD, when set, is the
 // mailer — argv `--to <addr> [--from <addr>] [--in-reply-to <mid>]
-// <subject>`, body on stdin, exit 0 = sent (holdco's bin/email speaks
-// exactly this) — the override/test seam. Otherwise the native sender
+// <subject>`, body on stdin, exit 0 = sent (the retired bin/email's
+// contract) — the override/test seam. Otherwise the native sender
 // (mailer.ts) speaks Cloudflare Email Sending directly and sent_id
 // stamps the Message-ID it was assigned.
 // acted_at stamps on EVERY outcome, success or not: the sweep key means
@@ -174,8 +174,8 @@ export let mailed =
       })
     }
     // The native door needs a concrete sender: the row's own from, or
-    // the fleet default the service env names ($TASKS_MAIL_FROM — what
-    // bin/email defaulted for the relay's unsigned mail).
+    // the fleet default the service env names ($TASKS_MAIL_FROM,
+    // holdco@bot.yak.sh for the relay's unsigned mail).
     let from = String(row.from ?? '') || Deno.env.get('TASKS_MAIL_FROM') || ''
     if (!from) {
       return done({

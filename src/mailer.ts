@@ -1,7 +1,7 @@
 // The native sender: the server speaks Cloudflare Email Sending
-// directly (bin/email's send path, folded in), so retiring that CLI
-// costs delivery nothing. Config is env only — CLOUDFLARE_EMAIL_TOKEN +
-// HOLDCO_CF_ACCOUNT_ID arrive via the service drop-in; secrets never
+// directly (the retired bin/email's send path, folded in). Config is
+// env only — CLOUDFLARE_EMAIL_TOKEN + HOLDCO_CF_ACCOUNT_ID arrive via
+// the service drop-in; secrets never
 // enter this repo (it's open source). CLOUDFLARE_API_BASE re-aims a
 // probe at a capture server; the default is the API itself. mail.ts
 // picks the door: $TASKS_MAIL_CMD wins when set (the override/test
@@ -40,7 +40,7 @@ export let native = () => {
 let base = () =>
   Deno.env.get('CLOUDFLARE_API_BASE') ?? 'https://api.cloudflare.com/client/v4'
 
-// A letter → the Email Sending payload, bin/email's exact shape: the
+// A letter → the Email Sending payload: the
 // display name is the local-part, reply_to echoes the sender, and the
 // threading headers carry the bracketed Message-ID. Pure — the tested
 // seam.
@@ -87,7 +87,7 @@ export let send = async (l: Letter) => {
 }
 
 // The out-log: a native send is POSTed to the fleet-mail store as a
-// dir=out row (the bin/email idiom), so the inbox Worker and any
+// dir=out row, so the inbox Worker and any
 // external reader keep whole-history threading. Best-effort by design —
 // the caller warns on failure, never fails the send — and dormant
 // without the inbound sweep's own env pair.

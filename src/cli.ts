@@ -466,7 +466,7 @@ let mailReply = async (args: string[]) => {
 
 // Attachments, through the server's proxy (the worker's token lives
 // there, never here — the CLI only ever talks to its own server).
-// Default DIR is bin/email's: ./mail-attachments/<message-id>/.
+// Default DIR: ./mail-attachments/<message-id>/.
 let mailFiles = async (args: string[]) => {
   let out: string | undefined
   let rest: string[] = []
