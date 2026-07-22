@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "PATH=\"$HOME/.deno/bin:$PATH\" task lapse --hook || true"
+            "command": "PATH=\"$HOME/.deno/bin:$PATH\" task wrap --hook || true"
           }
         ]
       }

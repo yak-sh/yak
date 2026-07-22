@@ -51,7 +51,7 @@ let graph = (extra: Snapshot['changes'] = []): Snapshot => ({
   deps: [],
 })
 
-Deno.test('stubs: the marker is the queue, fresh lapses wait', () => {
+Deno.test('stubs: the marker is the queue, fresh wraps wait', () => {
   let all = rows(graph())
   assertEquals(stubs(all, NOW).map((r) => r.eid), [S1])
   // a five-minute-old stub is still settling; a rewritten doc is done
@@ -118,7 +118,7 @@ Deno.test('scribeSpawn: haiku wearing the scribe persona, or nothing, or a shout
   )
 })
 
-Deno.test('the desk never scribes itself: its own lapse stubs are exempt', () => {
+Deno.test('the desk never scribes itself: its own wrap stubs are exempt', () => {
   let ours = rows(graph(
     mk(S2, 5, ago(120), {
       doc: { title: 'scribe shift', body: `${STUB} — a stub` },

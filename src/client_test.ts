@@ -11,7 +11,6 @@ import {
   find,
   hookClaim,
   inflate,
-  lapseChanges,
   ledger,
   memoryChanges,
   notices,
@@ -25,6 +24,7 @@ import {
   spawnDefaults,
   spec,
   taskChanges,
+  wrapChanges,
 } from './client.ts'
 import { matchQuery, parseQuery } from './query.ts'
 import { idOf, kindOf, type Snapshot } from './types.ts'
@@ -285,24 +285,24 @@ Deno.test('claimant resolves through the session entity', () => {
   assertEquals(claimant(all, by(T2)), undefined)
 })
 
-Deno.test('lapseChanges: unfinished gets the trail, done goes quiet', () => {
-  let cs = lapseChanges(all, 'sess-x') // T1 is wip → comment + release
+Deno.test('wrapChanges: unfinished gets the trail, done goes quiet', () => {
+  let cs = wrapChanges(all, 'sess-x') // T1 is wip → comment + release
   assertEquals(cs.filter((c) => c.name == 'claim').length, 1)
   assertEquals(cs.filter((c) => c.name == 'comment').length, 1)
   let done = structuredClone(snap)
   done.changes.find((c) => c.eid == T1 && c.name == 'task')!.comp!.status =
     'done'
-  let quiet = lapseChanges(rows(done), 'sess-x')
+  let quiet = wrapChanges(rows(done), 'sess-x')
   // finished work releases without a comment — only the brief rides along
   // (fixture S is docless and held a claim, so it earns the stub)
   assertEquals(quiet.filter((c) => c.name == 'comment'), [])
   assertEquals(quiet[0], { eid: T1, name: 'claim', comp: null })
-  assertEquals(lapseChanges(all, 'sess-unknown'), [])
+  assertEquals(wrapChanges(all, 'sess-unknown'), [])
 })
 
-Deno.test('lapse brief: a docless working session gets the stub', () => {
+Deno.test('wrap brief: a docless working session gets the stub', () => {
   let AT = Date.UTC(2026, 6, 20)
-  let doc = lapseChanges(all, 'sess-x', AT)
+  let doc = wrapChanges(all, 'sess-x', AT)
     .find((c) => c.name == 'doc' && c.eid == S)
   assertEquals(doc?.comp?.title, 'Work session 2026-07-20')
   assertMatch(String(doc?.comp?.body), /- T-2 \(wip\) First/)
@@ -310,14 +310,14 @@ Deno.test('lapse brief: a docless working session gets the stub', () => {
   let named = structuredClone(snap)
   named.changes.push({ eid: S, name: 'doc', comp: { title: 'Mine', body: '' } })
   assertEquals(
-    lapseChanges(rows(named), 'sess-x', AT)
+    wrapChanges(rows(named), 'sess-x', AT)
       .some((c) => c.name == 'doc' && c.eid == S),
     false,
   )
   // an idle session — no claims, no comments — leaves nothing behind
   let idle = structuredClone(snap)
   idle.changes = idle.changes.filter((c) => c.name != 'claim')
-  assertEquals(lapseChanges(rows(idle), 'sess-x', AT), [])
+  assertEquals(wrapChanges(rows(idle), 'sess-x', AT), [])
 })
 
 Deno.test('spawnDefaults: the caller session lends its provider/model', () => {
@@ -629,12 +629,12 @@ Deno.test('ledger: the day as lived, oldest first, ids humanized', () => {
   assertEquals(ledger([], all), [])
 })
 
-Deno.test('lapse: the stub carries the ledger; a hand-written brief is never clobbered', () => {
+Deno.test('wrap: the stub carries the ledger; a hand-written brief is never clobbered', () => {
   let AT = Date.UTC(2026, 6, 20)
-  let doc = lapseChanges(all, 'sess-x', AT, DAY)
+  let doc = wrapChanges(all, 'sess-x', AT, DAY)
     .find((c) => c.name == 'doc' && c.eid == S)
   let body = String(doc?.comp?.body)
-  assertMatch(body, /^Auto-written at lapse/)
+  assertMatch(body, /^Auto-written at wrap/)
   assertMatch(body, /## Ledger/)
   assertMatch(body, /⚑ claimed T-2/)
   assertMatch(body, /## Ended holding/)
@@ -645,10 +645,10 @@ Deno.test('lapse: the stub carries the ledger; a hand-written brief is never clo
     name: 'doc',
     comp: {
       title: 'Work session 2026-07-19',
-      body: 'Auto-written at lapse — old stub',
+      body: 'Auto-written at wrap — old stub',
     },
   })
-  let re = lapseChanges(rows(stubbed), 'sess-x', AT, DAY)
+  let re = wrapChanges(rows(stubbed), 'sess-x', AT, DAY)
     .find((c) => c.name == 'doc' && c.eid == S)
   assertEquals(re?.comp?.title, 'Work session 2026-07-19')
   assertMatch(String(re?.comp?.body), /## Ledger/)
@@ -659,7 +659,7 @@ Deno.test('lapse: the stub carries the ledger; a hand-written brief is never clo
     comp: { title: 'My day', body: 'I did things, thoughtfully.' },
   })
   assertEquals(
-    lapseChanges(rows(prose), 'sess-x', AT, DAY)
+    wrapChanges(rows(prose), 'sess-x', AT, DAY)
       .some((c) => c.name == 'doc' && c.eid == S),
     false,
   )

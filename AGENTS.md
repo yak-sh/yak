@@ -249,9 +249,9 @@ These hold everywhere in this repo, whoever — or whatever — writes the code:
   SessionStart — agent sessions boot into their claimed work (`task context` /
   MCP `task_context`, same digest). The hook must NEVER fail loudly; a dead
   server (or an uninstalled CLI — hence the `|| true`) means no digest, not a
-  broken session. SessionEnd mirrors it: `task lapse --hook` releases the
+  broken session. SessionEnd mirrors it: `task wrap --hook` releases the
   session's claims, commenting on anything not done ("lease lapsed") — no
-  timers, ending the session IS the lapse. SessionStart also reifies the session
+  timers, ending the session IS the wrap. SessionStart also reifies the session
   entity (id + cwd, the worktree it ran in). The hooks are the global CLI, no
   repo-local shims — any repo gets the loop by carrying the same two settings
   lines.

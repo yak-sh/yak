@@ -401,7 +401,7 @@ Deno.serve(
     let session = path.match(/^\/sessions\/([0-9a-f-]{36})\/logs$/)
     if (session) return Response.json(logs(session[1], url.searchParams))
     // The wire's record, per entity (?eid=) or per actor (?actor= — a
-    // session's whole day, for the lapse ledger). Newest first. Raw eids
+    // session's whole day, for the wrap ledger). Newest first. Raw eids
     // only — id resolution is a client concern.
     if (path == '/journal') {
       let actor = url.searchParams.get('actor')
@@ -549,7 +549,7 @@ if (fleetApi()) {
   )
 }
 
-// The scribe (scribe.ts): when lapse stubs wait, spawn the desk — a
+// The scribe (scribe.ts): when wrap stubs wait, spawn the desk — a
 // session wearing the scribe persona writes the briefs and memories.
 // Ten-minute tick; the sweep's own throttle keeps it to one desk an
 // hour. Graduates to a `system` entity under T-3906 with the others.

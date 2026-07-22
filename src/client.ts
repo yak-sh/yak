@@ -698,11 +698,11 @@ export let notices = (snap: Snapshot, session: string) => {
   return { lines, ack }
 }
 
-// The lapse batch: a session ended — release every claim it holds, and
+// The wrap batch: a session ended — release every claim it holds, and
 // on tasks it did NOT finish, leave a comment saying so (the simple
 // audit: no timers, no heartbeats, just "ended before done" on the
 // record). Finished work releases silently.
-export let lapseChanges = (
+export let wrapChanges = (
   all: Row[],
   session: string,
   now = Date.now(),
@@ -727,13 +727,13 @@ export let lapseChanges = (
   ]
 }
 
-// No working session leaves the graph nameless: at lapse the session doc
+// No working session leaves the graph nameless: at wrap the session doc
 // gets the mechanical LEDGER — the journal's own account of the day
 // (claims, statuses with their reason comments, mints, edges) — plus the
 // end-state holdings and the standing invitation the scribe (T-4001)
 // will one day answer. A hand-written brief is never clobbered: the
 // stub's first line is the marker, and only stubs get rewritten.
-export let STUB = 'Auto-written at lapse' // the scribe's queue marker
+export let STUB = 'Auto-written at wrap' // the scribe's queue marker
 let brief = (
   all: Row[],
   sess: Row,

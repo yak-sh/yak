@@ -24,7 +24,6 @@ import {
   host,
   idOf,
   inflate,
-  lapseChanges,
   memoryChanges,
   notices,
   type Param,
@@ -39,6 +38,7 @@ import {
   spawnChanges,
   spawnDefaults,
   taskChanges,
+  wrapChanges,
 } from './client.ts'
 import { matchQuery, pred, resolveRefs } from './query.ts'
 import { FILTERS, GRAMMAR } from './grammar.ts'
@@ -120,7 +120,7 @@ let VERBS: [usage: string, blurb: string, examples: string[]][] = [
     'the boot digest, scoped to the repo you stand in; bare = preview',
     ['task context', 'task context P-20', 'task context my-session-id'],
   ],
-  ['lapse [session]', 'session over: release claims, note unfinished', []],
+  ['wrap [session]', 'session over: release claims, note unfinished', []],
   ['telemetry [--errors] [--since=ISO] [-n N]', 'tool calls + crashes', [
     'task telemetry --errors -n 20',
   ]],
@@ -621,7 +621,7 @@ let remember = async (args: string[]) => {
 
 // SessionEnd's mirror of context: drop everything the session holds.
 // --hook mode (stdin JSON, silent failure) wires it to the lifecycle.
-let lapse = async (args: string[]) => {
+let wrap = async (args: string[]) => {
   let hook = args.includes('--hook')
   let sid = args.find((a) => !a.startsWith('--')) ??
     Deno.env.get('TASKS_SESSION')
@@ -632,15 +632,15 @@ let lapse = async (args: string[]) => {
     }
     if (!sid) {
       if (hook) return
-      throw new Error('task lapse <session> (or set TASKS_SESSION)')
+      throw new Error('task wrap <session> (or set TASKS_SESSION)')
     }
     // The ledger is a bonus, never a blocker: a journal fetch that fails
-    // still lapses the session cleanly, just without its day retold.
+    // still wraps the session cleanly, just without its day retold.
     let entries: JournalEntry[] = []
     try {
       entries = await historyBy(sid)
     } catch { /* no journal, no ledger */ }
-    let changes = lapseChanges(rows(await snapshot()), sid, Date.now(), entries)
+    let changes = wrapChanges(rows(await snapshot()), sid, Date.now(), entries)
     if (changes.length) await send(changes)
     if (!hook) {
       console.log(
@@ -649,7 +649,7 @@ let lapse = async (args: string[]) => {
     }
   } catch (e) {
     if (!hook) throw e
-    // hooks never fail loudly — a dead server just means no lapse today
+    // hooks never fail loudly — a dead server just means no wrap today
   }
 }
 
@@ -764,7 +764,7 @@ try {
   else if (cmd == 'backup') await backup()
   else if (cmd == 'remember') await remember(rest)
   else if (cmd == 'context') await context(rest)
-  else if (cmd == 'lapse') await lapse(rest)
+  else if (cmd == 'wrap') await wrap(rest)
   else if (cmd == 'sync') await sync(rest)
   else if (cmd == 'release') await release(rest)
   else if (cmd == 'telemetry') await telemetry(rest)

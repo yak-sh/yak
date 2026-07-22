@@ -892,7 +892,7 @@ export let journalOf = (
     }))
 
 // The same record cut by WHO instead of what: every batch an actor
-// wrote, whole (no per-eid filtering — a lapse ledger wants the batch's
+// wrote, whole (no per-eid filtering — a wrap ledger wants the batch's
 // full sentence). Newest first, like journalOf.
 export let journalBy = (
   db: DatabaseSync,

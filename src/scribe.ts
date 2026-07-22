@@ -1,4 +1,4 @@
-// The scribe's TRIGGER (T-4001): lapse leaves stub session docs, and
+// The scribe's TRIGGER (T-4001): wrap leaves stub session docs, and
 // the stub marker line IS the queue — rewriting the doc removes it, so
 // done-ness lives in the doc and nowhere else. This module only decides
 // WHEN to spawn the desk; the judgment (narrative, memories) is a
@@ -14,7 +14,7 @@ import { find, type Row, rows, spawnChanges, STUB } from './client.ts'
 
 type Cast = (changes: Change[]) => void
 
-// Freshly-lapsed stubs get a quiet quarter hour (a resumed session may
+// Freshly-wrapped stubs get a quiet quarter hour (a resumed session may
 // still enrich its own doc); one desk an hour is the cost throttle.
 let QUIET = 15 * 60_000
 let THROTTLE = 60 * 60_000
@@ -24,8 +24,8 @@ let age = (r: Row, now: number, col: string) => {
   return Number.isNaN(t) ? Infinity : now - t
 }
 
-// The queue: session docs still wearing the lapse marker, dust settled.
-// The desk's own sessions are exempt — a scribe's lapse leaves a stub
+// The queue: session docs still wearing the wrap marker, dust settled.
+// The desk's own sessions are exempt — a scribe's wrap leaves a stub
 // too, and scribing the scribe would spawn a desk an hour forever.
 export let stubs = (all: Row[], now: number, deskEid?: string) =>
   all.filter((r) =>
