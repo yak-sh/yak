@@ -16,12 +16,13 @@ let Frame = block('div', 'Comments', {
 })
 let { Item, Who, Via, When, Body, New } = Frame
 
-// Who said it: sessions by their id, browsers by a short client handle,
-// anything else by its entity id. Pure — the TUI names authors with it too.
+// Who said it: browsers by a short client handle, anything else by its
+// chip id (S-31, never the raw session uuid). Pure — the TUI names
+// authors with it too.
 export let author = (eid?: string | null) => {
   if (!eid) return 'anon'
   let a = ent(eid)
-  return a.session?.id ?? (a.client ? `web-${a.num}` : idOf(a))
+  return a.client ? `web-${a.num}` : idOf(a)
 }
 
 // The comment rail under any entity: everything said about it, oldest
