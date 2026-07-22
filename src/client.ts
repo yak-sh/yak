@@ -813,6 +813,40 @@ let brief = (
   }]
 }
 
+// The dupe hint: after a create, ask the server what the graph already
+// says like this (GET /similar — embed.ts). One line naming the
+// neighbors above the floor, or '' — and '' on EVERY failure: a box
+// without the embedder still creates, silently. The floor is empirical:
+// re-worded twins land ≥0.86; mere topic-mates sit in the 0.7s.
+export let similarHint = async (
+  text: string,
+  self?: string,
+  floor = 0.86,
+) => {
+  try {
+    let res = await fetch(
+      `http://${host()}/similar?q=${
+        encodeURIComponent(text.slice(0, 2000))
+      }&limit=4&floor=${floor}`,
+    )
+    if (!res.ok) return ''
+    let hits = await res.json() as {
+      eid: string
+      id: string
+      title: string
+      score: number
+    }[]
+    let close = hits.filter((h) => h.eid != self)
+    if (!close.length) return ''
+    return `similar already in the graph: ${
+      close.map((h) => `${h.id} “${h.title}” (${h.score.toFixed(2)})`)
+        .join(' · ')
+    } — possible duplicate; compare before keeping both`
+  } catch {
+    return '' // no server, no embedder, no hint — never a failed create
+  }
+}
+
 // The scribe's desk, pinned: a cheap model wearing the scribe persona on
 // the standing task — the same spawn whether the sweep or :scribe
 // summons it.

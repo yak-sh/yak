@@ -34,6 +34,7 @@ import {
   send,
   sessionFor,
   showMd,
+  similarHint,
   snapshot,
   spawnChanges,
   spawnDefaults,
@@ -244,6 +245,11 @@ let create = async (args: string[]) => {
   await send(taskChanges(eid, grouped))
   let made = rows(await snapshot()).find((r) => r.eid == eid)
   console.log(`${made ? idOf(made) : eid} created`)
+  let hint = await similarHint(
+    `${grouped.doc.title}\n${grouped.doc.body ?? ''}`,
+    eid,
+  )
+  if (hint) console.log(hint)
 }
 
 let set = async (args: string[]) => {
@@ -646,6 +652,8 @@ let remember = async (args: string[]) => {
   await send(made.changes)
   let after = rows(await snapshot()).find((r) => r.eid == made.eid)
   console.log(`${after ? idOf(after) : made.eid} remembered`)
+  let hint = await similarHint(`${title}\n${body ?? ''}`, made.eid)
+  if (hint) console.log(hint)
 }
 
 // SessionEnd's mirror of context: drop everything the session holds.

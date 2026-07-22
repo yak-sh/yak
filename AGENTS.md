@@ -113,6 +113,7 @@ the mobile door — whose rows resolve through `List.Item`.
 | `src/inbound.ts`   | the pull sweep: fleet-mail messages and hook spool → mail/hook entities    |
 | `src/persona.ts`   | personas materialized: doc + tier edges → one markdown voice, .tasks files |
 | `src/scribe.ts`    | the scribe's trigger: stub-marker queue → spawn the desk wearing the voice |
+| `src/embed.ts`     | semantic vectors beside FTS: local embedder, sweep, /similar, dupe hint    |
 | `src/telemetry.ts` | the `tool_call` log: record/recent + the /mcp body classifier              |
 | `src/sandbox.ts`   | code mode's worker: permissionless, graph-only, postMessage SDK            |
 | `src/live.ts`      | browser/TUI half: cache signal, socket, applyLocal/mutate, ent()           |

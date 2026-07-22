@@ -30,6 +30,7 @@
     ]
   },
   "imports": {
+    "@huggingface/transformers": "npm:@huggingface/transformers@^3",
     "preact": "npm:preact@^10.29.1",
     "@preact/signals": "npm:@preact/signals@^2.9.0",
     "@preact/signals-core": "npm:@preact/signals-core@^1.14.0",

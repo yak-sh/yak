@@ -27,6 +27,7 @@ import { fanout, FANOUT_PENDING, mailed } from './mail.ts'
 import { knocked } from './knock.ts'
 import { fleetApi, inboundSweep } from './inbound.ts'
 import { scribeSweep } from './scribe.ts'
+import { embedSweep, similarTo } from './embed.ts'
 import { mcpServer } from './mcp.ts'
 import { filesFor, syncFiles } from './persona.ts'
 import {
@@ -277,7 +278,7 @@ let clientError = async (req: Request) => {
 // bind alongside the dying one, and only the options object can carry it.
 Deno.serve(
   { port: Number(Deno.env.get('PORT') ?? 5173), reusePort: true },
-  (req) => {
+  async (req) => {
     let url = new URL(req.url)
     let path = url.pathname
     if (path == '/ws') return ws(req)
@@ -293,6 +294,29 @@ Deno.serve(
       } catch (e) {
         return new Response(String((e as Error).message ?? e), { status: 400 })
       }
+    }
+    if (path == '/similar') {
+      // Semantic neighbors of arbitrary text — the dupe hint's door.
+      // 503 = this box has no embedder; callers show nothing, not errors.
+      let q = url.searchParams.get('q') ?? ''
+      if (!q.trim()) return new Response('q required', { status: 400 })
+      let hits = await similarTo(
+        db,
+        q,
+        Number(url.searchParams.get('limit') ?? 8),
+        Number(url.searchParams.get('floor') ?? 0),
+      )
+      if (!hits) return new Response('no embedder here', { status: 503 })
+      let byEid = new Map(rows(snapshot(db)).map((r) => [r.eid, r]))
+      return Response.json(hits.map((h) => {
+        let r = byEid.get(h.eid)
+        return {
+          ...h,
+          id: r ? idOf(r) : h.eid,
+          kind: r?.kind ?? 'entity',
+          title: String(r?.comps.doc?.title ?? ''),
+        }
+      }))
     }
     if (path == '/query') {
       // The graph over plain GET: the query string IS the filter line —
@@ -556,6 +580,26 @@ if (fleetApi()) {
 scribeSweep(cast)
 setInterval(() => scribeSweep(cast), 10 * 60_000)
 
+// Embeddings (embed.ts): every non-comment doc keeps a semantic vector,
+// refreshed a few seconds after its text moves — that's what lets a
+// create reply say "this already exists" while the ink is still wet.
+// Boot sweeps the backfill; the interval catches anything the debounce
+// dropped. A box without the model sweeps zero rows, forever, silently.
+embedSweep(db)
+setInterval(() => embedSweep(db), 10 * 60_000)
+let embedSoon = (() => {
+  let t: ReturnType<typeof setTimeout> | undefined
+  return () => {
+    clearTimeout(t)
+    t = setTimeout(() => embedSweep(db), 3_000)
+  }
+})()
+on('doc', {
+  created: embedSoon,
+  changed: { title: embedSoon, body: embedSoon },
+  doc: 'docs keep a semantic vector — the embed sweep refreshes what moved',
+})
+
 // Last, the worktree sweep: completed sessions whose merged, clean trees
 // outlived their usefulness let go — at boot, never at settle, so a live
 // server's resume window stays open (sessions.ts tidy says why).
@@ -601,6 +645,7 @@ let graph = [
   'inbound.ts',
   'scribe.ts',
   'knock.ts',
+  'embed.ts',
 ]
 let shellish = (p: string) =>
   p.endsWith('/main.tsx') || p.endsWith('/live.ts') ||

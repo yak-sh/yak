@@ -36,6 +36,7 @@ import {
   rows,
   search,
   send,
+  similarHint,
   snapshot,
   spawnChanges,
   spawnDefaults,
@@ -318,8 +319,16 @@ P-19). ${GRAMMAR} ${BUS}`,
         let made = after.find((r) => r.eid == eid)
         return made ? idOf(made) : eid
       })
+      // A single create earns the dupe check; a batch is a deliberate
+      // plan, not a probe — hinting on each would drown the reply.
+      let dupe = want.length == 1
+        ? await similarHint(
+          `${want[0].title}\n${want[0].body ?? ''}`,
+          minted[0],
+        )
+        : ''
       return bus(
-        `created ${ids.join(', ')}${
+        `created ${ids.join(', ')}${dupe ? `\n${dupe}` : ''}${
           wall(want.find((t) => wall(t.body))?.body)
         }`,
         session,
@@ -693,8 +702,11 @@ confirm what you reuse, and it decays slower. ${BUS}`,
       }
       await io.write(made.changes, session)
       let after = find(rows(await io.read()), made.eid)
+      let dupe = await similarHint(`${title}\n${body ?? ''}`, made.eid)
       return bus(
-        `saved ${after ? idOf(after) : made.eid}${wall(body)}`,
+        `saved ${after ? idOf(after) : made.eid}${dupe ? `\n${dupe}` : ''}${
+          wall(body)
+        }`,
         session,
       )
     },
