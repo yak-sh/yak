@@ -221,6 +221,70 @@ Deno.test('the sweep: mints once, stamps back, and dir=out never lands', async (
   assertEquals(notified.length, 2)
 })
 
+// One letter, one entity: the echo of our own send stamps arrival ON
+// the sent mail — unread for the recipient — never a twin, never a
+// silent skip (T-5882).
+Deno.test('the sweep: an echo arrives on the sent entity, once', async () => {
+  let letter = uid()
+  apply(db, [
+    { eid: letter, name: 'doc', comp: { title: 'to the fleet' } },
+    { eid: letter, name: 'mail', comp: { to: 'venture@bot.test' } },
+  ])
+  db.prepare('update mail set sent_id = ?, acted_at = ? where eid = ?')
+    .run('echo-1@bot.test', '2025-07-08T18:39:00.000Z', letter)
+  let echo = msg({
+    id: 'msg:1752000000001:echo-1@bot.test',
+    from: 'bounces@cf-bounce.bot.test',
+    from_header: '"holdco" <holdco@bot.test>',
+  })
+  let before = mailCount()
+  let { api } = fakeApi([echo], null)
+  await inboundSweep(cast, api)
+  assertEquals(mailCount(), before + 1) // the stamp, not a twin
+  let row = mailRow(letter)
+  assertEquals(row.message_id, 'msg:1752000000001:echo-1@bot.test')
+  assertEquals(row.received_at, '2025-07-08T18:40:00.000Z')
+  assertEquals(row.verified, 1)
+  assertEquals(row.target_eid, operator) // routed like a fresh mint
+  assertEquals(row.from, 'holdco@bot.test') // the header, not the envelope
+  assertEquals(row.read_at, null) // unread for the recipient
+  // re-sweep: arrival is already recorded — idempotent, still no twin
+  await inboundSweep(cast, api)
+  assertEquals(mailCount(), before + 1)
+  // a duplicate delivery (same rfc id, a new store key) records nothing
+  await inboundSweep(
+    cast,
+    fakeApi([msg({
+      id: 'msg:1752000000002:echo-1@bot.test',
+      received_at: '2025-07-08T19:00:00.000Z',
+    })], null).api,
+  )
+  assertEquals(mailRow(letter).message_id, 'msg:1752000000001:echo-1@bot.test')
+  assertEquals(mailCount(), before + 1)
+})
+
+Deno.test('the echo keeps an aimed target and a stamped from', async () => {
+  let letter = uid()
+  apply(db, [
+    { eid: letter, name: 'doc', comp: { title: 'relay' } },
+    {
+      eid: letter,
+      name: 'mail',
+      comp: { to: 'venture@bot.test', from: 'me@bot.test', target_eid: holdco },
+    },
+  ])
+  db.prepare('update mail set sent_id = ? where eid = ?')
+    .run('echo-2@bot.test', letter)
+  await inboundSweep(
+    cast,
+    fakeApi([msg({ id: 'msg:1752000000003:echo-2@bot.test' })], null).api,
+  )
+  let row = mailRow(letter)
+  assertEquals(row.message_id, 'msg:1752000000003:echo-2@bot.test')
+  assertEquals(row.target_eid, holdco) // the relay still aims at its task
+  assertEquals(row.from, 'me@bot.test')
+})
+
 Deno.test('no spool yet: requests 404s into null, silently nothing', async () => {
   let before = mailCount()
   let { api, processed } = fakeApi([], null)

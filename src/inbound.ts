@@ -11,6 +11,7 @@
 // (imports db).
 import { apply, db } from './db.ts'
 import { dispatch, trace } from './effects.ts'
+import { rfcId } from './mail.ts'
 import { type Change, uuid } from './types.ts'
 
 type Cast = (changes: Change[]) => void
@@ -167,6 +168,10 @@ export let author = (m: FleetMsg) => {
   return angled?.[1] ?? (/^\S+@\S+$/.test(h) ? h : m.from ?? null)
 }
 
+// When a message arrived: the store's ISO copy, else its epoch ts.
+let arrivedAt = (m: FleetMsg) =>
+  m.received_at ?? new Date(m.ts ?? Date.now()).toISOString()
+
 // One fleet message → the two halves of a mail entity: the wire batch
 // (doc + mail, what apply() may write) and the stamp (inbound
 // provenance, server-owned — message_id doubles as the never-send mark,
@@ -191,7 +196,7 @@ export let mailChanges = (m: FleetMsg, target: string | null) => {
   ]
   let stamp: Row = {
     message_id: m.id,
-    received_at: m.received_at ?? new Date(m.ts ?? Date.now()).toISOString(),
+    received_at: arrivedAt(m),
     verified: m.verified ? 1 : 0,
   }
   return { eid, wire, stamp }
@@ -283,6 +288,40 @@ let mint = (
   dispatch(out, t, (c, e) => console.warn(`inbound effect ${c} —`, e))
 }
 
+// An echo coming home: our own letter re-entering through the store —
+// the RFC id in the store key is the sent_id a graph mail already
+// wears. That letter EXISTS; minting again forks it into twins (one
+// letter, one entity), and skipping silently loses the arrival — which
+// is exactly what makes it UNREAD for the recipient (message_id set,
+// read_at empty; T-5882). So the one entity gains its inbound half:
+// arrival provenance, plus routing/author only where the send left them
+// empty — a relay mail keeps aiming at its task, a stamped from stays.
+// True = this message is an echo, handled; already-stamped means a
+// duplicate delivery, recorded once and never twice.
+let arrive = (m: FleetMsg, cast: Cast): boolean => {
+  let r = db.prepare(
+    'select eid, message_id, target_eid, "from" author from mail where sent_id = ?',
+  ).get(rfcId(m.id)) as
+    | {
+      eid: string
+      message_id: string | null
+      target_eid: string | null
+      author: string | null
+    }
+    | undefined
+  if (!r) return false
+  if (!r.message_id) {
+    stamp('mail', r.eid, {
+      message_id: m.id,
+      received_at: arrivedAt(m),
+      verified: m.verified ? 1 : 0,
+      ...(r.target_eid ? {} : { target_eid: routeTo(m.to) }),
+      ...(r.author ? {} : { from: author(m) }),
+    }, cast)
+  }
+  return true
+}
+
 // The sweep: pull unnotified messages and unprocessed requests, mint
 // what's new (idempotent on the provenance keys), stamp the spool back
 // so it drains. Ids already minted still stamp back — that heals the
@@ -294,7 +333,7 @@ let sweep = async (cast: Cast, api: FleetApi) => {
     for (let m of await api.messages()) {
       if (m.dir && m.dir != 'in') continue // only arrival mints
       if (!db.prepare('select 1 from mail where message_id = ?').get(m.id)) {
-        mint(mailChanges(m, routeTo(m.to)), 'mail', cast)
+        if (!arrive(m, cast)) mint(mailChanges(m, routeTo(m.to)), 'mail', cast)
       }
       done.push(m.id)
     }
