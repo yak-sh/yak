@@ -20,10 +20,12 @@ import { type Change, idOf, uuid } from './types.ts'
 import {
   claimChanges,
   commentChanges,
+  DESK,
   find,
   param,
   patches,
   type Row,
+  spawnChanges,
   spec,
   taskChanges,
 } from './client.ts'
@@ -216,6 +218,42 @@ export let commands: Record<string, Command> = {
           ...(words ? commentChanges(ctx.rows, r.eid, words, ctx.session) : []),
         ],
         msg: `${idOf(r)} → knock ${to ? first : 'project'}`,
+      }
+    },
+  },
+  // :scribe summons the desk for the sessions a final message can't
+  // cover — a marathon spanning many tasks and ideas. The ask is a
+  // comment on the standing desk task (the desk boots claiming it, so
+  // the bus serves the ask); the spawn is the same pinned desk the
+  // sweep uses. A desk already at work just gets the ask queued.
+  scribe: {
+    args: '[S-31]',
+    about: "have the scribe write that session's brief",
+    run: (rest, ctx) => {
+      let name = rest.trim().split(/\s+/).filter(Boolean)[0]
+      let target = name ? find(ctx.rows, name) : here(ctx)
+      if (!target?.comps.session) {
+        throw new Error('scribe: name a session (:scribe S-31)')
+      }
+      let desk = find(ctx.rows, DESK.task)
+      if (!desk?.comps.task) throw new Error('no scribe-desk task in the graph')
+      let busy = ctx.rows.some((r) =>
+        r.comps.session?.requested_task_eid == desk.eid &&
+        ['starting', 'running'].includes(String(r.comps.session.status))
+      )
+      return {
+        changes: [
+          ...commentChanges(
+            ctx.rows,
+            desk.eid,
+            `brief ${idOf(target)} — write its session doc`,
+            ctx.session,
+          ),
+          ...(busy ? [] : spawnChanges(ctx.rows, DESK).changes),
+        ],
+        msg: busy
+          ? `${idOf(target)} → scribe (desk busy, ask queued)`
+          : `${idOf(target)} → scribe`,
       }
     },
   },

@@ -501,6 +501,30 @@ let modelOf = (path: string) => {
   } catch { /* no transcript is no announcement */ }
 }
 
+// The session's closing words, read the same way: the last assistant
+// turn's text blocks. The operator already wrote its own summary — wrap
+// captures it as the session brief instead of asking anyone to retell.
+let finalText = (path: string) => {
+  try {
+    if (!path) return
+    let lines = Deno.readTextFileSync(path).trim().split('\n')
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (!lines[i].includes('"assistant"')) continue
+      let m = JSON.parse(lines[i]) as {
+        type?: unknown
+        message?: { content?: { type?: unknown; text?: unknown }[] }
+      }
+      if (m.type != 'assistant') continue
+      let text = (m.message?.content ?? [])
+        .filter((c) => c.type == 'text' && typeof c.text == 'string')
+        .map((c) => String(c.text).trim())
+        .filter(Boolean)
+        .join('\n\n')
+      if (text) return text
+    }
+  } catch { /* no transcript is no brief */ }
+}
+
 let context = async (args: string[]) => {
   let hook = args.includes('--hook')
   let sid = args.find((a) => !a.startsWith('--')) ??
@@ -631,9 +655,16 @@ let wrap = async (args: string[]) => {
   let sid = args.find((a) => !a.startsWith('--')) ??
     Deno.env.get('TASKS_SESSION')
   try {
-    if (hook && !sid) {
-      let body = JSON.parse(await new Response(Deno.stdin.readable).text())
-      sid = String(body.session_id ?? '')
+    // Hook stdin always gets read: even when TASKS_SESSION names the
+    // session, the payload carries the transcript whose last assistant
+    // turn IS the brief (continuity is self-authored — T-4469).
+    let final: string | undefined
+    if (hook) {
+      try {
+        let body = JSON.parse(await new Response(Deno.stdin.readable).text())
+        sid ??= String(body.session_id ?? '')
+        final = finalText(String(body.transcript_path ?? ''))
+      } catch { /* a bad payload costs the brief, never the wrap */ }
     }
     if (!sid) {
       if (hook) return
@@ -645,7 +676,13 @@ let wrap = async (args: string[]) => {
     try {
       entries = await historyBy(sid)
     } catch { /* no journal, no ledger */ }
-    let changes = wrapChanges(rows(await snapshot()), sid, Date.now(), entries)
+    let changes = wrapChanges(
+      rows(await snapshot()),
+      sid,
+      Date.now(),
+      entries,
+      final,
+    )
     if (changes.length) await send(changes)
     if (!hook) {
       console.log(

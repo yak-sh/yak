@@ -251,7 +251,14 @@ These hold everywhere in this repo, whoever — or whatever — writes the code:
   server (or an uninstalled CLI — hence the `|| true`) means no digest, not a
   broken session. SessionEnd mirrors it: `task wrap --hook` releases the
   session's claims, commenting on anything not done ("lease lapsed") — no
-  timers, ending the session IS the wrap. SessionStart also reifies the session
+  timers, ending the session IS the wrap. Continuity is SELF-AUTHORED: wrap
+  captures the transcript's last assistant message — the closing summary the
+  operator already wrote — as the session doc (a hand-written doc is never
+  clobbered), and the next digest opens with `previously:` — the newest brief by
+  the same operator (`session.actor_eid`). Only a session that captured nothing
+  gets the ledger STUB, which queues the scribe's sweep — an enrichment, never
+  the continuity path; `:scribe S-31` summons the desk deliberately for a
+  marathon a final message can't cover. SessionStart also reifies the session
   entity (id + cwd, the worktree it ran in). The hooks are the global CLI, no
   repo-local shims — any repo gets the loop by carrying the same two settings
   lines.

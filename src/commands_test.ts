@@ -16,6 +16,8 @@ let S = 'aaaaaaaa-0000-4000-8000-000000000001' // session sess-x
 let P = 'aaaaaaaa-0000-4000-8000-000000000002' // project P-2
 let B = 'aaaaaaaa-0000-4000-8000-000000000003' // board over P
 let T = 'aaaaaaaa-0000-4000-8000-000000000004' // an open task on P
+let D = 'aaaaaaaa-0000-4000-8000-000000000005' // the scribe desk task
+let N = 'aaaaaaaa-0000-4000-8000-000000000006' // the scribe persona
 let UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-/
 
 let snap: Snapshot = {
@@ -36,6 +38,14 @@ let snap: Snapshot = {
       name: 'task',
       comp: { status: 'open', priority: 0, project_eid: P },
     },
+    { eid: D, name: 'entity', comp: { eid: D, num: 5, created_at: '' } },
+    { eid: D, name: 'doc', comp: { title: 'Scribe desk', body: '' } },
+    { eid: D, name: 'task', comp: { status: 'open', priority: 3 } },
+    { eid: D, name: 'alias', comp: { slug: 'scribe-desk' } },
+    { eid: N, name: 'entity', comp: { eid: N, num: 6, created_at: '' } },
+    { eid: N, name: 'doc', comp: { title: 'scribe', body: '' } },
+    { eid: N, name: 'persona', comp: {} },
+    { eid: N, name: 'alias', comp: { slug: 'scribe' } },
   ],
   deps: [],
 }
@@ -232,4 +242,42 @@ Deno.test('knock: recipient resolves, words ride as plain comment, project defau
   assertEquals(p.changes![0].comp, { target_eid: T, to_eid: P })
   // a doc with no project and no name: nowhere to aim
   assertThrows(() => run('knock', ctx(B)), Error, 'name a recipient')
+})
+
+Deno.test('scribe: summon the desk onto a session brief', () => {
+  let out = run('scribe S-1', ctx())
+  // the ask is a comment on the desk task…
+  let comment = out.changes!.find((c) => c.name == 'comment')
+  assertEquals(comment?.comp?.target_eid, D)
+  // …and the pinned desk spawn rides the same batch
+  let spawn = out.changes!.find((c) => c.name == 'session' && c.comp?.provider)
+  assertEquals(spawn?.comp?.model, 'claude-haiku-4-5')
+  assertEquals(spawn?.comp?.requested_task_eid, D)
+  assertEquals(out.msg, 'S-1 → scribe')
+  // a focused session needs no argument
+  assertEquals(run('scribe', ctx(S)).msg, 'S-1 → scribe')
+  // anything that isn't a session: say so
+  assertThrows(() => run('scribe', ctx(T)), Error, 'name a session')
+})
+
+Deno.test('scribe: a busy desk queues the ask without a second spawn', () => {
+  let W = 'aaaaaaaa-0000-4000-8000-000000000007'
+  let busy = rows({
+    changes: [
+      ...snap.changes,
+      { eid: W, name: 'entity', comp: { eid: W, num: 7, created_at: '' } },
+      {
+        eid: W,
+        name: 'session',
+        comp: { requested_task_eid: D, status: 'running' },
+      },
+    ],
+  })
+  let out = run('scribe S-1', { rows: busy })
+  assertEquals(
+    out.changes!.some((c) => c.name == 'session' && c.comp?.provider),
+    false,
+  )
+  assertEquals(out.changes!.some((c) => c.name == 'comment'), true)
+  assertEquals(out.msg, 'S-1 → scribe (desk busy, ask queued)')
 })

@@ -10,7 +10,7 @@
 import { apply, db, snapshot } from './db.ts'
 import { dispatch, trace } from './effects.ts'
 import { type Change, type Dep } from './types.ts'
-import { find, type Row, rows, spawnChanges, STUB } from './client.ts'
+import { DESK, find, type Row, rows, spawnChanges, STUB } from './client.ts'
 
 type Cast = (changes: Change[]) => void
 
@@ -47,20 +47,14 @@ export let deskFree = (all: Row[], desk: Row, now: number) =>
 // missing-desk case logs once at the sweep so a half-seeded graph says
 // so instead of silently never scribing).
 export let scribeSpawn = (all: Row[], deps: Dep[], now: number) => {
-  let desk = find(all, 'scribe-desk')
+  let desk = find(all, DESK.task)
   if (!stubs(all, now, desk?.eid).length) return null
   if (!desk?.comps.task) throw new Error('no scribe-desk task in the graph')
-  if (!find(all, 'scribe')?.comps.persona) {
+  if (!find(all, DESK.persona)?.comps.persona) {
     throw new Error('no scribe persona in the graph')
   }
   if (!deskFree(all, desk, now)) return null
-  return spawnChanges(all, {
-    task: 'scribe-desk',
-    provider: 'claude',
-    model: 'claude-haiku-4-5',
-    persona: 'scribe',
-    deps,
-  }).changes
+  return spawnChanges(all, { ...DESK, deps }).changes
 }
 
 // The interval-safe door, mirroring inbound: never two sweeps in

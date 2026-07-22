@@ -23,6 +23,7 @@ import {
   spawnChanges,
   spawnDefaults,
   spec,
+  STUB,
   taskChanges,
   wrapChanges,
 } from './client.ts'
@@ -308,7 +309,11 @@ Deno.test('wrap brief: a docless working session gets the stub', () => {
   assertMatch(String(doc?.comp?.body), /- T-2 \(wip\) First/)
   // a session that already wrote its brief keeps it
   let named = structuredClone(snap)
-  named.changes.push({ eid: S, name: 'doc', comp: { title: 'Mine', body: '' } })
+  named.changes.push({
+    eid: S,
+    name: 'doc',
+    comp: { title: 'Mine', body: 'my own words' },
+  })
   assertEquals(
     wrapChanges(rows(named), 'sess-x', AT)
       .some((c) => c.name == 'doc' && c.eid == S),
@@ -318,6 +323,30 @@ Deno.test('wrap brief: a docless working session gets the stub', () => {
   let idle = structuredClone(snap)
   idle.changes = idle.changes.filter((c) => c.name != 'claim')
   assertEquals(wrapChanges(rows(idle), 'sess-x', AT), [])
+})
+
+Deno.test('wrap brief: the final message IS the brief when captured', () => {
+  let AT = Date.UTC(2026, 6, 20)
+  let doc = wrapChanges(all, 'sess-x', AT, [], 'Shipped the thing.\n\nNext: x')
+    .find((c) => c.name == 'doc' && c.eid == S)
+  assertEquals(doc?.comp?.body, 'Shipped the thing.\n\nNext: x')
+  assertEquals(doc?.comp?.title, 'Work session 2026-07-20')
+  // a hand-written doc outranks the captured final message
+  let named = structuredClone(snap)
+  named.changes.push({
+    eid: S,
+    name: 'doc',
+    comp: { title: 'Mine', body: 'my own words' },
+  })
+  assertEquals(
+    wrapChanges(rows(named), 'sess-x', AT, [], 'captured')
+      .some((c) => c.name == 'doc' && c.eid == S),
+    false,
+  )
+  // an idle session's final message is not worth a brief
+  let idle = structuredClone(snap)
+  idle.changes = idle.changes.filter((c) => c.name != 'claim')
+  assertEquals(wrapChanges(rows(idle), 'sess-x', AT, [], 'captured'), [])
 })
 
 Deno.test('spawnDefaults: the caller session lends its provider/model', () => {
@@ -779,4 +808,71 @@ Deno.test('inflate: @ reads the file loudly, @@ is a literal, plain rides', () =
   assertEquals(inflate(p('plain')).value, 'plain')
   assertThrows(() => inflate(p('@/no/such/file')), Error, 'no such file')
   Deno.removeSync(f)
+})
+
+Deno.test("contextDigest: previously — the same operator's last brief", () => {
+  let NOW = Date.parse('2026-07-20T12:00:00Z')
+  let ago = (h: number) => new Date(NOW - h * 3_600_000).toISOString()
+  let num = 50
+  let mk = (
+    eid: string,
+    mod: string,
+    parts: Record<string, Record<string, unknown>>,
+  ) => [
+    {
+      eid,
+      name: 'entity',
+      comp: { eid, num: num++, created_at: mod, modified_at: mod },
+    },
+    ...Object.entries(parts).map(([name, comp]) => ({ eid, name, comp })),
+  ]
+  let eid = (i: number) => `cccccccc-0000-4000-8000-00000000000${i}`
+  let OP = eid(9)
+  let late: Snapshot = {
+    changes: [
+      ...mk(eid(1), ago(20), {
+        session: { id: 'ws-old', actor_eid: OP },
+        doc: {
+          title: 'Work session',
+          body: 'landed: everything\nnext: polish',
+        },
+      }),
+      ...mk(eid(2), ago(30), {
+        session: { id: 'ws-older', actor_eid: OP },
+        doc: { title: 'Older', body: 'stale' },
+      }),
+      ...mk(eid(3), ago(4), {
+        session: { id: 'ws-other', actor_eid: eid(8) },
+        doc: { title: 'Other op', body: 'not yours' },
+      }),
+      ...mk(eid(4), ago(0), { session: { id: 'ws-new', actor_eid: OP } }),
+    ],
+    deps: [],
+  }
+  let d = contextDigest(late, 'ws-new', NOW)
+  assertMatch(d, /previously — S-50 Work session:/)
+  assertEquals(d.includes('landed: everything'), true)
+  // the newest same-operator brief wins — never another op's, never older
+  assertEquals(d.includes('previously — S-52'), false)
+  assertEquals(d.includes('stale'), false)
+  // the tied session is not double-listed in lately's briefs
+  assertEquals(
+    d.split('\n').filter((l) => l.includes('Work session')).length,
+    1,
+  )
+  // a stubbed doc is no brief — final_text stands in
+  let stubbed = structuredClone(late)
+  stubbed.changes.find((c) => c.eid == eid(1) && c.name == 'doc')!.comp!.body =
+    `${STUB} — a stub, enrich me.`
+  stubbed.changes.find((c) => c.eid == eid(1) && c.name == 'session')!.comp!
+    .final_text = 'the closing words'
+  assertEquals(
+    contextDigest(stubbed, 'ws-new', NOW).includes('the closing words'),
+    true,
+  )
+  // no operator in common: no previously line
+  assertEquals(
+    contextDigest(late, 'ws-other', NOW).includes('previously'),
+    false,
+  )
 })

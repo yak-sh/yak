@@ -507,7 +507,20 @@ let belongs = (r: Row, scope?: string) => {
   if (r.comps.project) return r.eid == scope
   return true
 }
-let lately = (all: Row[], now: number, budget: number, scope?: string) => {
+// A session's brief: the doc body wrap captured or the operator wrote —
+// a stub isn't one — falling back to the managed row's final_text.
+let briefOf = (r: Row) => {
+  let b = String(r.comps.doc?.body ?? '')
+  if (b && !b.startsWith(STUB)) return b
+  return String(r.comps.session?.final_text ?? '')
+}
+let lately = (
+  all: Row[],
+  now: number,
+  budget: number,
+  scope?: string,
+  skip?: string,
+) => {
   if (budget < 4) return [] // claimed work ate the room — it wins
   let age = (r: Row) => {
     let t = Date.parse(String(r.comps.entity?.modified_at ?? ''))
@@ -522,7 +535,9 @@ let lately = (all: Row[], now: number, budget: number, scope?: string) => {
       warm(a.comps, now, (e) => byEid.get(e))
     )
   if (!fresh.length) return []
-  let briefs = fresh.filter((r) => r.comps.session && age(r) < DAY).slice(0, 2)
+  let briefs = fresh
+    .filter((r) => r.comps.session && age(r) < DAY && r.eid != skip)
+    .slice(0, 2)
   let today = fresh.filter((r) =>
     !r.comps.session && !r.comps.memory && age(r) < DAY
   ).slice(0, 4)
@@ -620,7 +635,31 @@ export let contextDigest = (
     )
     local.sort(byBoard).slice(0, 5).forEach(show)
   }
-  lines.push(...lately(all, now, 34 - lines.length, scope))
+  // The thread from last time: the newest brief by the SAME operator —
+  // the final message wrap captured, or a hand-written doc, never a
+  // stub — so a session wakes knowing where its predecessor left off.
+  let actor = String(sess?.comps.session?.actor_eid ?? '') || scope
+  let prev = actor
+    ? all
+      .filter((r) =>
+        r.comps.session && r.eid != sess?.eid &&
+        r.comps.session.actor_eid == actor && briefOf(r)
+      )
+      .sort((a, b) =>
+        String(b.comps.entity?.modified_at ?? '')
+          .localeCompare(String(a.comps.entity?.modified_at ?? ''))
+      )[0]
+    : undefined
+  if (prev) {
+    lines.push(
+      `previously — ${idOf(prev)} ${
+        snip(String(prev.comps.doc?.title ?? ''))
+      }:`,
+    )
+    let told = briefOf(prev).split('\n').map((l) => l.trim()).filter(Boolean)
+    for (let l of told.slice(0, 4)) lines.push(`  ${snip(l, 96)}`)
+  }
+  lines.push(...lately(all, now, 34 - lines.length, scope, prev?.eid))
   lines.push(
     `claim: task claim <id> ${
       session ?? '<session>'
@@ -707,6 +746,7 @@ export let wrapChanges = (
   session: string,
   now = Date.now(),
   entries: JournalEntry[] = [],
+  final?: string,
 ): Change[] => {
   let sess = all.find((r) =>
     r.comps.session && String(r.comps.session.id) == session
@@ -723,16 +763,16 @@ export let wrapChanges = (
       ).slice(-2)), // the session exists — skip the mint, keep doc + comment
       { eid: r.eid, name: 'claim', comp: null },
     ]),
-    ...brief(all, sess, held, now, entries),
+    ...brief(all, sess, held, now, entries, final),
   ]
 }
 
-// No working session leaves the graph nameless: at wrap the session doc
-// gets the mechanical LEDGER — the journal's own account of the day
-// (claims, statuses with their reason comments, mints, edges) — plus the
-// end-state holdings and the standing invitation the scribe (T-4001)
-// will one day answer. A hand-written brief is never clobbered: the
-// stub's first line is the marker, and only stubs get rewritten.
+// Continuity is SELF-AUTHORED (T-4469): the session's final message —
+// the closing summary the operator already wrote — IS the brief for most
+// sessions, captured into the session doc at wrap. A hand-written doc is
+// never clobbered. Only when nothing was captured does the mechanical
+// LEDGER stub ride instead — the standing invitation the scribe's sweep
+// answers; continuity never depends on it.
 export let STUB = 'Auto-written at wrap' // the scribe's queue marker
 let brief = (
   all: Row[],
@@ -740,21 +780,26 @@ let brief = (
   held: Row[],
   now: number,
   entries: JournalEntry[],
+  final?: string,
 ): Change[] => {
   let body = String(sess.comps.doc?.body ?? '')
-  if (sess.comps.doc && !body.startsWith(STUB)) return []
+  if (sess.comps.doc && body && !body.startsWith(STUB)) return []
   let authored = all.some((r) => r.comps.comment?.author_eid == sess.eid)
   if (!held.length && !authored && !entries.length) return []
+  let day = new Date(now).toISOString().slice(0, 10)
+  let title = String(sess.comps.doc?.title || `Work session ${day}`)
+  if (final) {
+    return [{ eid: sess.eid, name: 'doc', comp: { title, body: final } }]
+  }
   let holding = held.map((r) =>
     `- ${idOf(r)} (${r.comps.task?.status ?? '?'}) ${r.comps.doc?.title ?? ''}`
   )
   let told = ledger(entries, all)
-  let day = new Date(now).toISOString().slice(0, 10)
   return [{
     eid: sess.eid,
     name: 'doc',
     comp: {
-      title: String(sess.comps.doc?.title ?? `Work session ${day}`),
+      title,
       body: [
         `${STUB} — a stub, enrich me. The ledger is the journal's account;`,
         'the narrative is yours to add.',
@@ -766,6 +811,16 @@ let brief = (
       ].join('\n'),
     },
   }]
+}
+
+// The scribe's desk, pinned: a cheap model wearing the scribe persona on
+// the standing task — the same spawn whether the sweep or :scribe
+// summons it.
+export let DESK = {
+  task: 'scribe-desk',
+  provider: 'claude',
+  model: 'claude-haiku-4-5',
+  persona: 'scribe',
 }
 
 // The memory-save batch: a doc face (title = index line, body = the
