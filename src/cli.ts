@@ -55,6 +55,11 @@ import { commands, focusOf, run as runCommand } from './commands.ts'
 // it accepts are the same text — extend the table, every door updates.
 let VERBS: [usage: string, blurb: string, examples: string[]][] = [
   ['tui', 'open the terminal UI', []],
+  [
+    'claude [claude args...]',
+    'interactive claude, fleet-wired: skip-permissions + the tasks channel',
+    ['task claude', 'task claude --continue'],
+  ],
   ['list [filters...] [--json]', 'list tasks (filter grammar)', [
     'task list .status=open .priority<=1',
     'task list .project=harness .modified_at>="1 week ago"',
@@ -732,6 +737,42 @@ let backup = async () => {
   if (code) Deno.exit(code)
 }
 
+// An interactive session, fleet-wired: permissions skipped and the tasks
+// channel active, so a comment on the session's entity or a knock at its
+// door drops straight into the running transcript. One minted
+// TASKS_SESSION is the whole binding — the SessionStart hook reifies the
+// entity under it, every tool claims and comments as it, and the channel
+// plugin filters the /ws broadcast for it. (claude's own session_id
+// would drift across /clear and --continue; the minted id holds.)
+let CHANNEL = 'plugin:tasks@tasks-fleet'
+let interactive = async (args: string[]) => {
+  // Allowlisted in root's managed settings → clean launch; otherwise the
+  // dev-load flag activates the channel behind a press-Enter dialog —
+  // fine at a keyboard, which is the only place this verb runs.
+  let listed = false
+  try {
+    listed = Deno.readTextFileSync('/etc/claude-code/managed-settings.json')
+      .includes('"tasks-fleet"')
+  } catch { /* no managed settings — dev-load below */ }
+  let { code } = await new Deno.Command('claude', {
+    args: [
+      '--dangerously-skip-permissions',
+      '--channels',
+      CHANNEL,
+      ...(listed ? [] : ['--dangerously-load-development-channels', CHANNEL]),
+      ...args,
+    ],
+    env: {
+      TASKS_SESSION: Deno.env.get('TASKS_SESSION') ?? crypto.randomUUID(),
+      TASKS_HOST: host(),
+    },
+    stdin: 'inherit',
+    stdout: 'inherit',
+    stderr: 'inherit',
+  }).output()
+  Deno.exit(code)
+}
+
 let tui = async () => {
   // The same be-reborn loop as `deno task tui`, so a global install hot
   // reloads too. The TUI source lives next to this module.
@@ -751,6 +792,7 @@ let [cmd, ...rest] = Deno.args
 try {
   if (cmd?.startsWith(':')) await colon(undefined, [cmd, ...rest])
   else if (cmd == 'tui') await tui()
+  else if (cmd == 'claude') await interactive(rest)
   else if (cmd == 'list' || cmd == 'ls') await list(rest)
   else if (cmd == 'new') await create(rest)
   else if (cmd == 'set') await set(rest)

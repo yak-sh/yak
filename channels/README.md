@@ -94,10 +94,22 @@ The `.mcp.json` command uses an **absolute path** to `channels/tasks/server.ts`
 (mirroring the email channel's mechanism). Adjust it if this repo lives
 somewhere other than `/home/yaks/code/tasks`.
 
-## Nothing enables this automatically
+## The interactive door: `task claude`
 
-This channel is inert until an owner wires it up: the plugin ships, but no
-spawn, operator loop, or launcher passes `TASKS_SESSION` or `--channels` on its
-own. Wiring it into session spawns (so a managed session boots with its own
-`TASKS_SESSION` and the channel active) is a **deliberate owner move**, not a
-side effect of this code landing.
+`task claude [args...]` launches an interactive session fleet-wired: it mints a
+`TASKS_SESSION` (reused if already exported), passes
+`--dangerously-skip-permissions` and `--channels plugin:tasks@tasks-fleet`, and
+— when root's managed settings don't allowlist `tasks-fleet` — adds the dev-load
+flag, accepting its press-Enter dialog (a keyboard is present; that's the only
+place the verb runs). One-time setup, already scripted by the verb's docs:
+`claude plugin marketplace add <repo>/channels/marketplace` +
+`claude plugin install tasks@tasks-fleet`. To go dialog-free, add
+`{ "marketplace": "tasks-fleet", "plugin": "tasks" }` to `allowedChannelPlugins`
+in `/etc/claude-code/managed-settings.json` (root-owned; the list is exclusive —
+keep the email entry).
+
+## Managed spawns stay unwired
+
+No spawn or launcher passes `--channels` on its own. Wiring the channel into
+managed sessions (so a spawned agent boots with the channel active) is a
+**deliberate owner move**, not a side effect of this code landing.
