@@ -103,9 +103,9 @@ let VERBS: [usage: string, blurb: string, examples: string[]][] = [
     ['task sync', 'task sync --commit'],
   ],
   [
-    'context [session]',
-    'the boot digest ($TASKS_SESSION); bare = preview, nothing acked',
-    ['task context', 'task context my-session-id'],
+    'context [session|P-9]',
+    'the boot digest, scoped to the repo you stand in; bare = preview',
+    ['task context', 'task context P-20', 'task context my-session-id'],
   ],
   ['lapse [session]', 'session over: release claims, note unfinished', []],
   ['telemetry [--errors] [--since=ISO] [-n N]', 'tool calls + crashes', [
@@ -482,8 +482,8 @@ let context = async (args: string[]) => {
     Deno.env.get('TASKS_SESSION')
   // The digest plus the comms bus: unseen comments ride along, and the
   // session's ack cursor advances exactly when they're printed.
-  let tell = async (snap: Snapshot, sid: string) => {
-    let out = contextDigest(snap, sid)
+  let tell = async (snap: Snapshot, sid: string, scope?: string) => {
+    let out = contextDigest(snap, sid, Date.now(), scope)
     let n = notices(snap, sid)
     if (n.lines.length) {
       await send(n.ack)
@@ -543,16 +543,33 @@ let context = async (args: string[]) => {
         await send(hc)
         snap = await snapshot() // the digest should show the claim it made
       }
-      await tell(snap, sid)
+      // The cwd names the scope directly — the reified session row may
+      // not have landed in this snap yet.
+      let at = rows(snap).find((r) =>
+        r.comps.repo?.path && cwd?.startsWith(String(r.comps.repo.path))
+      )
+      await tell(snap, sid, at?.eid)
     } catch {
       // silent: offline server or malformed stdin — the session goes on
     }
     return
   }
-  // Bare = the preview: what a fresh session would boot with. Read-only
-  // — no session is reified, no bus cursor moves.
-  if (!sid) return console.log(contextDigest(await snapshot()))
-  await tell(await snapshot(), sid)
+  // Bare = the preview: what a fresh session would boot with, scoped to
+  // the repo you stand in — or to a named project (task context P-20).
+  // Read-only — no session is reified, no bus cursor moves.
+  let snap = await snapshot()
+  let all = rows(snap)
+  let named = sid ? find(all, sid) : undefined
+  if (named?.comps.project) {
+    return console.log(contextDigest(snap, undefined, Date.now(), named.eid))
+  }
+  if (!sid) {
+    let at = all.find((r) =>
+      r.comps.repo?.path && Deno.cwd().startsWith(String(r.comps.repo.path))
+    )
+    return console.log(contextDigest(snap, undefined, Date.now(), at?.eid))
+  }
+  await tell(snap, sid)
 }
 
 // SessionEnd's mirror of context: drop everything the session holds.

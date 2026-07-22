@@ -703,3 +703,77 @@ Deno.test('contextDigest: sessionless is the preview — headed as one, claim li
   assertEquals(d.includes('task claim <id> <session>'), true)
   assertEquals(d.includes('nothing claimed'), true)
 })
+
+// The project-aware digest: scope narrows suggestions and lately to the
+// project you stand in; unscoped memories and your claims always ride.
+Deno.test('contextDigest: scope — local work, local+principle memory, cwd derives', () => {
+  let NOW = Date.parse('2026-07-20T12:00:00Z')
+  let hour = new Date(NOW - 3_600_000).toISOString()
+  let id = (n: number) =>
+    `bbbbbbbb-0000-4000-8000-${String(n).padStart(12, '0')}`
+  let [PA, PB, TA, TB, MA, MB, MF, SC] = [1, 2, 3, 4, 5, 6, 7, 8].map(id)
+  let mk = (
+    eid: string,
+    num: number,
+    parts: Record<string, Record<string, unknown>>,
+  ) => [
+    {
+      eid,
+      name: 'entity',
+      comp: { eid, num, created_at: '', modified_at: hour },
+    },
+    ...Object.entries(parts).map(([name, comp]) => ({ eid, name, comp })),
+  ]
+  let g: Snapshot = {
+    changes: [
+      ...mk(PA, 1, {
+        doc: { title: 'Alpha' },
+        project: {},
+        repo: { path: '/repo/a' },
+      }),
+      ...mk(PB, 2, {
+        doc: { title: 'Beta' },
+        project: {},
+        repo: { path: '/repo/b' },
+      }),
+      ...mk(TA, 3, {
+        doc: { title: 'A work' },
+        task: { status: 'open', priority: 1, project_eid: PA },
+      }),
+      ...mk(TB, 4, {
+        doc: { title: 'B work' },
+        task: { status: 'open', priority: 1, project_eid: PB },
+      }),
+      ...mk(MA, 5, {
+        doc: { title: 'A lesson' },
+        memory: { type: 'project', scope_eid: PA },
+      }),
+      ...mk(MB, 6, {
+        doc: { title: 'B lesson' },
+        memory: { type: 'project', scope_eid: PB },
+      }),
+      ...mk(MF, 7, {
+        doc: { title: 'A principle' },
+        memory: { type: 'feedback' },
+      }),
+      ...mk(SC, 8, { session: { id: 'sess-in-a', cwd: '/repo/a/deep' } }),
+    ],
+    deps: [],
+  }
+  // explicit scope: Alpha's digest names itself, suggests only its work
+  let d = contextDigest(g, undefined, NOW, PA)
+  assertEquals(d.includes('· P-1 Alpha'), true)
+  assertEquals(d.includes('open work here'), true)
+  assertEquals(d.includes('A work'), true)
+  assertEquals(d.includes('B work'), false)
+  assertEquals(d.includes('A lesson'), true)
+  assertEquals(d.includes('A principle'), true) // unscoped memory rides
+  assertEquals(d.includes('B lesson'), false)
+  // a session's own cwd derives the same scope
+  let s = contextDigest(g, 'sess-in-a', NOW)
+  assertEquals(s.includes('· P-1 Alpha'), true)
+  assertEquals(s.includes('B work'), false)
+  // no scope: the fleet view, both works suggested
+  let f = contextDigest(g, undefined, NOW)
+  assertEquals(f.includes('A work') && f.includes('B work'), true)
+})

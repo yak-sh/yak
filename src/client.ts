@@ -486,7 +486,21 @@ let DAY = 86_400_000
 let firstLine = (s: unknown) =>
   String(s ?? '').split('\n').map((l) => l.trim()).find(Boolean) ?? ''
 let snip = (s: string, n = 72) => s.length > n ? `${s.slice(0, n)}…` : s
-let lately = (all: Row[], now: number, budget: number) => {
+// A scope narrows lately to what BELONGS to the project: its tasks, its
+// memories (unscoped memories are principles — they always ride), its
+// personas. What can't be classified stays — hiding the unclassifiable
+// would make the digest lie by omission.
+let belongs = (r: Row, scope?: string) => {
+  if (!scope) return true
+  if (r.comps.task) return r.comps.task.project_eid == scope
+  if (r.comps.memory) {
+    return !r.comps.memory.scope_eid || r.comps.memory.scope_eid == scope
+  }
+  if (r.comps.persona) return r.comps.persona.home_eid == scope
+  if (r.comps.project) return r.eid == scope
+  return true
+}
+let lately = (all: Row[], now: number, budget: number, scope?: string) => {
   if (budget < 4) return [] // claimed work ate the room — it wins
   let age = (r: Row) => {
     let t = Date.parse(String(r.comps.entity?.modified_at ?? ''))
@@ -495,6 +509,7 @@ let lately = (all: Row[], now: number, budget: number) => {
   let byEid = new Map(all.map((r) => [r.eid, r.comps]))
   let fresh = all
     .filter((r) => r.comps.doc?.title && !r.comps.comment && age(r) < 7 * DAY)
+    .filter((r) => belongs(r, scope))
     .sort((a, b) =>
       warm(b.comps, now, (e) => byEid.get(e)) -
       warm(a.comps, now, (e) => byEid.get(e))
@@ -533,21 +548,36 @@ let lately = (all: Row[], now: number, budget: number) => {
 // construction: the tracker stays out of the way, it just makes the
 // working set — and the recent past — impossible to lose.
 // No session = the PREVIEW: the digest a fresh session would boot with
-// (open work, lately, memory — nothing claimed, nothing acked).
+// (open work, lately, memory — nothing claimed, nothing acked). The
+// digest is PROJECT-AWARE: scope comes in explicitly (the hook's cwd, a
+// preview's project arg) or derives from the session row's own cwd —
+// suggestions and lately narrow to the project you're standing in;
+// your claims and unscoped memories ride regardless.
 export let contextDigest = (
   snap: Snapshot,
   session?: string,
   now = Date.now(),
+  scope?: string,
 ) => {
   let all = rows(snap)
   let byEid = new Map(all.map((r) => [r.eid, r]))
   let sess = all.find((r) =>
     r.comps.session && String(r.comps.session.id) == session
   )
+  let cwd = String(sess?.comps.session?.cwd ?? '')
+  scope ??= cwd
+    ? all.find((r) =>
+      r.comps.repo?.path && cwd.startsWith(String(r.comps.repo.path))
+    )?.eid
+    : undefined
+  let here = scope ? byEid.get(scope) : undefined
   let mine = sess
     ? all.filter((r) => r.comps.claim?.session_eid == sess.eid)
     : []
-  let lines = [session ? `tasks · session ${session}` : 'tasks · a preview']
+  let lines = [
+    (session ? `tasks · session ${session}` : 'tasks · a preview') +
+    (here ? ` · ${idOf(here)} ${here.comps.doc?.title ?? ''}` : ''),
+  ]
   let show = (r: Row) => {
     lines.push(
       `  ${idOf(r)} ${String(r.comps.task?.status ?? r.kind).padEnd(5)} ${
@@ -570,12 +600,20 @@ export let contextDigest = (
     lines.push('claimed by you:')
     mine.slice(0, 4).forEach(show)
   } else {
-    lines.push('nothing claimed. open work, board order:')
-    all.filter((r) => r.comps.task && !settled(String(r.comps.task.status)))
+    // Suggestions are local when a scope stands (a fleet's worth of
+    // open work is task list's job) — an idle project falls back to
+    // the fleet rather than suggesting nothing.
+    let open = all
+      .filter((r) => r.comps.task && !settled(String(r.comps.task.status)))
       .filter((r) => !r.comps.claim)
-      .sort(byBoard).slice(0, 5).forEach(show)
+    let local = scope ? open.filter((r) => belongs(r, scope)) : open
+    if (!local.length) local = open
+    lines.push(
+      `nothing claimed. open work${here ? ' here' : ''}, board order:`,
+    )
+    local.sort(byBoard).slice(0, 5).forEach(show)
   }
-  lines.push(...lately(all, now, 34 - lines.length))
+  lines.push(...lately(all, now, 34 - lines.length, scope))
   lines.push(
     `claim: task claim <id> ${
       session ?? '<session>'
