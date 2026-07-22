@@ -102,7 +102,11 @@ let VERBS: [usage: string, blurb: string, examples: string[]][] = [
     "materialize personas into each project repo's .tasks/",
     ['task sync', 'task sync --commit'],
   ],
-  ['context [session]', "this session's working set ($TASKS_SESSION)", []],
+  [
+    'context [session]',
+    'the boot digest ($TASKS_SESSION); bare = preview, nothing acked',
+    ['task context', 'task context my-session-id'],
+  ],
   ['lapse [session]', 'session over: release claims, note unfinished', []],
   ['telemetry [--errors] [--since=ISO] [-n N]', 'tool calls + crashes', [
     'task telemetry --errors -n 20',
@@ -545,7 +549,9 @@ let context = async (args: string[]) => {
     }
     return
   }
-  if (!sid) throw new Error('task context <session> (or set TASKS_SESSION)')
+  // Bare = the preview: what a fresh session would boot with. Read-only
+  // — no session is reified, no bus cursor moves.
+  if (!sid) return console.log(contextDigest(await snapshot()))
   await tell(await snapshot(), sid)
 }
 

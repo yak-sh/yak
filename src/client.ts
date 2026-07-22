@@ -532,9 +532,11 @@ let lately = (all: Row[], now: number, budget: number) => {
 // board when it holds nothing, then the lately tier. ≤35 lines by
 // construction: the tracker stays out of the way, it just makes the
 // working set — and the recent past — impossible to lose.
+// No session = the PREVIEW: the digest a fresh session would boot with
+// (open work, lately, memory — nothing claimed, nothing acked).
 export let contextDigest = (
   snap: Snapshot,
-  session: string,
+  session?: string,
   now = Date.now(),
 ) => {
   let all = rows(snap)
@@ -545,7 +547,7 @@ export let contextDigest = (
   let mine = sess
     ? all.filter((r) => r.comps.claim?.session_eid == sess.eid)
     : []
-  let lines = [`tasks · session ${session}`]
+  let lines = [session ? `tasks · session ${session}` : 'tasks · a preview']
   let show = (r: Row) => {
     lines.push(
       `  ${idOf(r)} ${String(r.comps.task?.status ?? r.kind).padEnd(5)} ${
@@ -575,7 +577,9 @@ export let contextDigest = (
   }
   lines.push(...lately(all, now, 34 - lines.length))
   lines.push(
-    `claim: task claim <id> ${session} · comment: task comment <id> "…" · release when done or handing off`,
+    `claim: task claim <id> ${
+      session ?? '<session>'
+    } · comment: task comment <id> "…" · release when done or handing off`,
   )
   return lines.slice(0, 35).join('\n')
 }

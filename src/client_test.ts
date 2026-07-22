@@ -696,3 +696,10 @@ Deno.test('notices: bylines walk the actor chain', () => {
   let [line] = notices(s, 'sess-x').lines
   assertMatch(line, /Task Graph · via S-82/) // operator, not session id
 })
+
+Deno.test('contextDigest: sessionless is the preview — headed as one, claim line templated', () => {
+  let d = contextDigest(snap)
+  assertEquals(d.startsWith('tasks · a preview'), true)
+  assertEquals(d.includes('task claim <id> <session>'), true)
+  assertEquals(d.includes('nothing claimed'), true)
+})
