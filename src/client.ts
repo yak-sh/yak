@@ -488,6 +488,12 @@ export let commentChanges = (
   ]
 }
 
+// Unread mail: it ARRIVED (message_id is the inbound mark) and the
+// reader's own read_at is still empty. Outbound rows carry no message_id,
+// so they never count — sent mail is born read.
+export let unreadMail = (r: Row) =>
+  !!r.comps.mail?.message_id && !r.comps.mail.read_at
+
 // The LATELY tier: what the graph did today and this week, hot-ranked,
 // so every session boots already knowing (T-3722 — the memory system's
 // delivery half). Work-session docs — a session wearing a doc, the
@@ -643,6 +649,15 @@ export let contextDigest = (
       `nothing claimed. open work${here ? ' here' : ''}, board order:`,
     )
     local.sort(byBoard).slice(0, 5).forEach(show)
+  }
+  // Unread mail rides one line — the door teaches itself (adoption is
+  // structural): a count scoped like everything else, mail aimed at the
+  // project you stand in; unscoped sees the fleet's whole pile.
+  let unread = all.filter((r) =>
+    unreadMail(r) && (!scope || r.comps.mail?.target_eid == scope)
+  )
+  if (unread.length) {
+    lines.push(`## mail — ${unread.length} unread (task mail)`)
   }
   // The thread from last time: the newest brief by the SAME operator —
   // the final message wrap captured, or a hand-written doc, never a

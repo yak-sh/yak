@@ -172,6 +172,10 @@ export let comps: Record<string, Record<string, PropType>> = {
     // RFC Message-ID at delivery (mail.ts). History like target_eid: a
     // reply outlives the mail it answered.
     reply_to_eid: { eid: 'mail', death: 'keep' },
+    // The reader's own "seen" mark — wire-writable like session.acked_at:
+    // forging it only deafens yourself. Unread derives: message_id set
+    // (it arrived) and this still empty; outbound is born read.
+    read_at: 'text',
   },
   conflict: {}, // server-minted audit rows — nothing is wire-writable
   // A webhook delivery, derived from the edge's raw request spool
@@ -630,6 +634,7 @@ export type Mail = {
   received_at?: string | null
   verified?: number | null
   sent_id?: string | null
+  read_at?: string | null
 }
 
 // A webhook delivery, pulled apart from the edge's raw request spool —

@@ -296,6 +296,7 @@ Deno.test('mendMail: rebuilds the FK-era table, no-ops when healed', () => {
   // so the stale table always matches the rebuild ddl's shipping order.
   d.exec('alter table mail add column reply_to_eid text')
   d.exec('alter table mail add column sent_id text')
+  d.exec('alter table mail add column read_at text')
   let t = uid(), m = uid()
   apply(d, [
     { eid: t, name: 'doc', comp: { title: 'subject' } },

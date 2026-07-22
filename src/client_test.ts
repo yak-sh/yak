@@ -25,6 +25,7 @@ import {
   spec,
   STUB,
   taskChanges,
+  unreadMail,
   wrapChanges,
 } from './client.ts'
 import { matchQuery, parseQuery } from './query.ts'
@@ -383,6 +384,57 @@ Deno.test('contextDigest: claimed set with gates, or open board', () => {
   // the shared fixture carries no modified_at — nothing is recent, so the
   // lately tier says nothing at all
   assertEquals(d.includes('## lately'), false)
+})
+
+// Read state derives, never stored: arrived-and-unmarked is unread,
+// outbound never counts, and the digest says the count in one line —
+// scoped to mail aimed at the project, all of it when unscoped.
+Deno.test('unreadMail + digest: unread counts, read/outbound stay quiet', () => {
+  let M1 = 'aaaaaaaa-0000-4000-8000-000000000021' // inbound, unread
+  let M2 = 'aaaaaaaa-0000-4000-8000-000000000022' // inbound, read
+  let M3 = 'aaaaaaaa-0000-4000-8000-000000000023' // outbound
+  let P = 'aaaaaaaa-0000-4000-8000-000000000024' // a project scope
+  let mk = (eid: string, num: number, mail: Record<string, unknown>) => [
+    { eid, name: 'entity', comp: { eid, num, created_at: '' } },
+    { eid, name: 'doc', comp: { title: `mail ${num}`, body: '' } },
+    { eid, name: 'mail', comp: mail },
+  ]
+  let g: Snapshot = {
+    changes: [
+      ...snap.changes,
+      { eid: P, name: 'entity', comp: { eid: P, num: 24, created_at: '' } },
+      { eid: P, name: 'doc', comp: { title: 'Venture', body: '' } },
+      { eid: P, name: 'project', comp: {} },
+      ...mk(M1, 21, {
+        to: 'v@x.test',
+        message_id: 'msg:1:<a@x>',
+        target_eid: P,
+      }),
+      ...mk(M2, 22, {
+        to: 'v@x.test',
+        message_id: 'msg:2:<b@x>',
+        read_at: '2026-07-22T00:00:00Z',
+        target_eid: P,
+      }),
+      ...mk(M3, 23, { to: 'them@y.test' }),
+    ],
+    deps: snap.deps,
+  }
+  let all = rows(g)
+  let is = (eid: string) => unreadMail(all.find((r) => r.eid == eid)!)
+  assertEquals(is(M1), true)
+  assertEquals(is(M2), false) // read
+  assertEquals(is(M3), false) // outbound is born read
+  assertMatch(contextDigest(g, 'sess-x'), /## mail — 1 unread \(task mail\)/)
+  assertMatch(
+    contextDigest(g, 'sess-x', Date.now(), P),
+    /## mail — 1 unread/,
+  )
+  // a scope the mail isn't aimed at hears nothing; nor does a graph
+  // whose only mail is read or outbound
+  let other = contextDigest(g, 'sess-x', Date.now(), T2)
+  assertEquals(other.includes('## mail'), false)
+  assertEquals(contextDigest(snap, 'sess-x').includes('## mail'), false)
 })
 
 // The lately tier against a fixed clock: work-session briefs lead with
