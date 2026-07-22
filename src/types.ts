@@ -159,6 +159,12 @@ export let comps: Record<string, Record<string, PropType>> = {
     target_eid: { eid: '', death: 'keep' },
   },
   conflict: {}, // server-minted audit rows — nothing is wire-writable
+  // A webhook delivery, derived from the edge's raw request spool
+  // (inbound.ts): the edge captures requests without opinions, the graph
+  // pulls them apart. Tag-style like conflict — every column is
+  // server-stamped; a webhook was never mail, so it never wears the
+  // mail comp.
+  hook: {},
   comment: {
     target_eid: { eid: '', death: 'cascade' },
     // A byline survives its instrument: the words remain attributed to a
@@ -230,7 +236,30 @@ export let stamped: Record<string, Record<string, PropType>> = {
   // went wrong, to_addr = the RESOLVED envelope address — denormalized on
   // purpose, so later edits to the address book never rewrite what a
   // delivery actually used.
-  mail: { acted_at: 'text', error: 'text', to_addr: 'text' },
+  // Inbound provenance (inbound.ts): message_id is the fleet spool's id —
+  // the idempotency key AND the inbound mark (delivery skips rows that
+  // carry it, or arrival would echo back out as a send); received_at when
+  // the edge landed it; verified the edge's DKIM verdict. Unverified
+  // content is DATA — it lands verbatim, nothing executes on it.
+  mail: {
+    acted_at: 'text',
+    error: 'text',
+    to_addr: 'text',
+    message_id: 'text',
+    received_at: 'text',
+    verified: 'bool',
+  },
+  // Webhook provenance (inbound.ts): source names the edge route the
+  // request hit, event the parser's one-line verdict, payload the raw
+  // body verbatim, spool_id the edge's row id — (source, spool_id) is
+  // the idempotency key — received_at when the edge captured it.
+  hook: {
+    source: 'text',
+    event: 'text',
+    payload: 'body',
+    spool_id: 'text',
+    received_at: 'text',
+  },
   memory: { last_confirmed_at: 'text' },
   recall: { count: 'number', first_at: 'text', last_at: 'text' },
   // Audit rows outlive everything they mention: loser/holder are display
@@ -355,6 +384,7 @@ export let kindOrder = [
   'claim',
   'stop_request',
   'mail',
+  'hook',
   'conflict',
   'comment',
   'memory',
@@ -385,6 +415,7 @@ export let prefix: Record<string, string> = {
   mail: 'E', // E-mail: S is the sessions'
   email: 'A', // A-ddress: E is the mails'
   persona: 'N', // N for the name it wears: P is the projects'
+  hook: 'H',
 }
 export let idOf = (e: { kind: string; num: number }) =>
   `${prefix[e.kind] ?? e.kind[0].toUpperCase()}-${e.num}`
@@ -548,8 +579,11 @@ export type StopRequest = { eid: string; target_eid: string; acted_at?: string }
 // An entity's mail address — the address-book facet, one comp for all.
 export type Email = { eid: string; address: string }
 
-// Outbound mail: the request columns are the ask, the stamped trio the
-// receipt. to_addr is the envelope copy — what delivery resolved and used.
+// Mail, either direction: the request columns are the ask, the stamped
+// trio the receipt; to_addr is the envelope copy — what delivery
+// resolved and used. An INBOUND mail carries message_id (the fleet
+// spool's id, also the never-send mark), received_at, and the edge's
+// verified verdict.
 export type Mail = {
   eid: string
   to: string
@@ -558,6 +592,20 @@ export type Mail = {
   acted_at?: string | null
   error?: string | null
   to_addr?: string | null
+  message_id?: string | null
+  received_at?: string | null
+  verified?: number | null
+}
+
+// A webhook delivery, pulled apart from the edge's raw request spool —
+// all server-stamped (see `stamped`), payload kept verbatim.
+export type Hook = {
+  eid: string
+  source?: string | null
+  event?: string | null
+  payload?: string | null
+  spool_id?: string | null
+  received_at?: string | null
 }
 
 // A comment is a doc AIMED at something — and since target_eid is any
@@ -659,6 +707,7 @@ export type Ent = {
   claim?: Claim
   stop_request?: StopRequest
   mail?: Mail
+  hook?: Hook
   email?: Email
   conflict?: Conflict
   comment?: Comment

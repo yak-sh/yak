@@ -24,6 +24,7 @@ import { dispatch, docs, on, relay, trace } from './effects.ts'
 import { vocabularyMd } from './schema.ts'
 import { freeze, serveFrozen, store } from './freeze.ts'
 import { fanout, FANOUT_PENDING, mailed } from './mail.ts'
+import { fleetApi, inboundSweep } from './inbound.ts'
 import { mcpServer } from './mcp.ts'
 import { filesFor, syncFiles } from './persona.ts'
 import {
@@ -448,7 +449,9 @@ on('comment', {
 })
 on('mail', {
   created: mailed(cast),
-  sweep: { pending: 'acted_at is null' },
+  // message_id marks INBOUND — a record of arrival the sweep must never
+  // hand to delivery (mailed() guards the live path the same way).
+  sweep: { pending: 'acted_at is null and message_id is null' },
   doc: 'deliver the mail through $TASKS_MAIL_CMD — resolve the address ' +
     'book reference, stamp acted_at/error/to_addr (the envelope copy)',
 })
@@ -524,6 +527,19 @@ relay((comp, pending) =>
   >[]
 )
 
+// Inbound rides the pull (inbound.ts): the fleet-mail sweep, on an
+// interval like the log tailer — it graduates to a `system` entity under
+// T-3906. Boot sweeps too (idempotency makes it free); unconfigured is
+// dormancy, said once, never an error.
+if (fleetApi()) {
+  inboundSweep(cast)
+  setInterval(() => inboundSweep(cast), 60_000)
+} else {
+  console.log(
+    'inbound sweep dormant — set FLEET_MAIL_API_URL and FLEET_MAIL_API_TOKEN',
+  )
+}
+
 // Last, the worktree sweep: completed sessions whose merged, clean trees
 // outlived their usefulness let go — at boot, never at settle, so a live
 // server's resume window stays open (sessions.ts tidy says why).
@@ -564,6 +580,9 @@ let graph = [
   'sessions.ts',
   'adapters.ts',
   'telemetry.ts',
+  'mail.ts',
+  'persona.ts',
+  'inbound.ts',
 ]
 let shellish = (p: string) =>
   p.endsWith('/main.tsx') || p.endsWith('/live.ts') ||

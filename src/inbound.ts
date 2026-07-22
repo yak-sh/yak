@@ -1,0 +1,284 @@
+// Inbound rides the pull: the fleet-mail sweep. The edge (Cloudflare
+// inbox-worker) can't reach this box — the tailnet perimeter means WE
+// pull. Two streams, one sweep: parsed email from GET /messages mints
+// `mail` entities; raw captured requests from GET /requests are pulled
+// apart here into `hook` entities (derived, not raw — a chatty source
+// must not flood the graph with eager rows; provenance keeps the
+// pointer back). Minted ids are stamped back (notified / processed) so
+// the edge's spool drains — `read` is the OWNER's fact, never stamped
+// here. Everything lands as DATA: unverified mail arrives verbatim with
+// its verdict on the row; nothing executes on content. SERVER-ONLY
+// (imports db).
+import { apply, db } from './db.ts'
+import { dispatch, trace } from './effects.ts'
+import { type Change, uuid } from './types.ts'
+
+type Cast = (changes: Change[]) => void
+type Row = Record<string, string | number | null>
+
+// One inbound message, as the fleet-mail API says it — the KV-era
+// archive dialect (rowToJson in holdco services/inbox-worker): from/to/
+// text rather than the column names, verified a BOOLEAN, received_at
+// already ISO.
+export type FleetMsg = {
+  id: string
+  ts?: number | null
+  received_at?: string | null
+  dir?: string | null
+  from?: string | null
+  from_header?: string | null
+  to?: string | null
+  subject?: string | null
+  text?: string | null
+  verified?: boolean | null
+}
+
+// One raw captured request from the edge's spool (the requests-spool
+// branch): no edge opinion — method/path/headers/body/sig verdict,
+// captured as received. headers is a JSON object, stringified.
+export type SpoolReq = {
+  id: string
+  ts?: number | null
+  source?: string | null
+  method?: string | null
+  path?: string | null
+  headers?: string | null
+  body?: string | null
+  sig_ok?: number | null
+}
+
+// The API surface the sweep needs — injectable, so tests hand in
+// fixtures and never touch the network. requests() answers null when
+// the spool doesn't exist yet (the endpoint 404s until the owner
+// deploys it): absent = "nothing to pull", never an error.
+export type FleetApi = {
+  messages: () => Promise<FleetMsg[]>
+  notified: (ids: string[]) => Promise<void>
+  requests: () => Promise<SpoolReq[] | null>
+  processed: (ids: string[]) => Promise<void>
+}
+
+// Env → client, or null = dormant (no url/token configured — the sweep
+// never errors over absence; server.ts says so once at boot).
+export let fleetApi = (): FleetApi | null => {
+  let url = Deno.env.get('FLEET_MAIL_API_URL')?.replace(/\/+$/, '')
+  let token = Deno.env.get('FLEET_MAIL_API_TOKEN')
+  if (!url || !token) return null
+  let call = async (method: string, path: string, body?: unknown) => {
+    let res = await fetch(`${url}${path}`, {
+      method,
+      headers: {
+        authorization: `Bearer ${token}`,
+        ...(body ? { 'content-type': 'application/json' } : {}),
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    })
+    if (res.status == 404) {
+      await res.body?.cancel()
+      return null
+    }
+    if (!res.ok) {
+      throw new Error(`${method} ${path}: ${res.status} ${await res.text()}`)
+    }
+    return await res.json()
+  }
+  return {
+    // The KV-era aliases are the stable contract: unnotified=1 narrows
+    // to rows never swept, .dir=in keeps outbound archive rows out.
+    // Rows arrive ascending ts, 100/page — the next sweep gets the rest.
+    messages: async () =>
+      (await call('GET', '/messages?unnotified=1&.dir=in&limit=100')) ?? [],
+    notified: async (ids) => {
+      await call('POST', '/messages/notified', { ids })
+    },
+    requests: (): Promise<SpoolReq[] | null> =>
+      call('GET', '/requests?unprocessed=1&limit=100'),
+    processed: async (ids) => {
+      await call('POST', '/requests/processed', { ids })
+    },
+  }
+}
+
+// The address book, reversed: which entity wears this address? Unmatched
+// inbound aims at the holdco project (P-20) — the operator's triage
+// pile — resolved by name each sweep, so a db without it (tests, a
+// fresh install) just leaves the mail unrouted.
+export let routeTo = (addr: string | null | undefined): string | null => {
+  let hit = addr
+    ? (db.prepare('select eid from email where address = ? collate nocase')
+      .get(String(addr)) as { eid: string } | undefined)
+    : undefined
+  if (hit) return hit.eid
+  let fallback = db.prepare(
+    'select e.eid from entity e join project p on p.eid = e.eid where e.num = 20',
+  ).get() as { eid: string } | undefined
+  return fallback?.eid ?? null
+}
+
+// One fleet message → the two halves of a mail entity: the wire batch
+// (doc + mail, what apply() may write) and the stamp (inbound
+// provenance, server-owned — message_id doubles as the never-send mark,
+// so it lands BEFORE any effect can mistake arrival for an ask).
+export let mailChanges = (m: FleetMsg, target: string | null) => {
+  let eid = uuid()
+  let wire: Change[] = [
+    {
+      eid,
+      name: 'doc',
+      comp: { title: m.subject || '(no subject)', body: m.text ?? '' },
+    },
+    {
+      eid,
+      name: 'mail',
+      comp: {
+        to: m.to ?? '',
+        from: m.from ?? m.from_header ?? null,
+        ...(target ? { target_eid: target } : {}),
+      },
+    },
+  ]
+  let stamp: Row = {
+    message_id: m.id,
+    received_at: m.received_at ?? new Date(m.ts ?? Date.now()).toISOString(),
+    verified: m.verified ? 1 : 0,
+  }
+  return { eid, wire, stamp }
+}
+
+// A captured request's headers, case-insensitively.
+let hdr = (r: SpoolReq, name: string): string | null => {
+  try {
+    let h = JSON.parse(String(r.headers ?? '{}')) as Record<string, string>
+    let k = Object.keys(h).find((k) => k.toLowerCase() == name)
+    return k ? h[k] : null
+  } catch {
+    return null
+  }
+}
+
+// The event word a request carries, best first: the sender's own header
+// (github says x-github-event), a JSON body's event/type/action, else
+// the route itself. A source nobody wrote a parser for still lands
+// whole — adding a webhook source never touches the edge OR this sweep.
+let eventOf = (r: SpoolReq): string => {
+  let named = hdr(r, 'x-github-event') ?? hdr(r, 'x-event-key')
+  if (named) return named
+  try {
+    let b = JSON.parse(String(r.body ?? '')) as Record<string, unknown>
+    for (let k of ['event', 'type', 'action']) {
+      if (typeof b[k] == 'string' && b[k]) return b[k] as string
+    }
+  } catch { /* not JSON — the route names it */ }
+  return `${r.method ?? 'POST'} ${r.path ?? '/'}`.trim()
+}
+
+// One spool request → a hook entity: doc + hook tag on the wire, the
+// whole derivation stamped ((source, spool_id) is the idempotency key,
+// payload verbatim), and an `about` edge aiming it at the triage
+// project — routing by source graduates when a source needs it.
+export let hookChanges = (r: SpoolReq, target: string | null) => {
+  let eid = uuid()
+  let source = r.source || 'unknown'
+  let event = eventOf(r)
+  let wire: Change[] = [
+    { eid, name: 'doc', comp: { title: `${source}: ${event}`, body: '' } },
+    { eid, name: 'hook', comp: {} },
+    ...(target
+      ? [
+        {
+          eid,
+          name: 'dependency',
+          comp: { type: 'about', child_eid: target },
+        } satisfies Change,
+      ]
+      : []),
+  ]
+  let stamp: Row = {
+    source,
+    event,
+    payload: r.body ?? null,
+    spool_id: r.id,
+    received_at: new Date(r.ts ?? Date.now()).toISOString(),
+  }
+  return { eid, wire, stamp }
+}
+
+// The one writer for inbound stamps — server-owned columns never cross
+// apply(), so the stamp broadcasts its own full row (the mail.ts
+// idiom) or client caches hold a mail that never says where it came from.
+let stamp = (table: string, eid: string, patch: Row, cast: Cast) => {
+  let cols = Object.keys(patch)
+  db.prepare(
+    `update ${table} set ${cols.map((c) => `"${c}" = ?`).join(', ')}
+     where eid = ?`,
+  ).run(...cols.map((c) => patch[c]), eid)
+  let row = db.prepare(`select * from ${table} where eid = ?`).get(eid)
+  if (row) cast([{ eid, name: table, comp: row as Record<string, unknown> }])
+}
+
+// Mint one derived entity: apply the wire half, stamp provenance BEFORE
+// dispatch (mailed() must find the inbound mark, not a deliverable), then
+// let effects see the batch like any other door's.
+let mint = (
+  { eid, wire, stamp: s }: { eid: string; wire: Change[]; stamp: Row },
+  table: string,
+  cast: Cast,
+) => {
+  let t = trace()
+  let out = apply(db, wire, t)
+  cast(out)
+  stamp(table, eid, s, cast)
+  dispatch(out, t, (c, e) => console.warn(`inbound effect ${c} —`, e))
+}
+
+// The sweep: pull unnotified messages and unprocessed requests, mint
+// what's new (idempotent on the provenance keys), stamp the spool back
+// so it drains. Ids already minted still stamp back — that heals the
+// crash gap between a mint and its notified. Each stream fails alone:
+// a mail hiccup must not silence hooks, and vice versa.
+let sweep = async (cast: Cast, api: FleetApi) => {
+  try {
+    let done: string[] = []
+    for (let m of await api.messages()) {
+      if (m.dir && m.dir != 'in') continue // only arrival mints
+      if (!db.prepare('select 1 from mail where message_id = ?').get(m.id)) {
+        mint(mailChanges(m, routeTo(m.to)), 'mail', cast)
+      }
+      done.push(m.id)
+    }
+    if (done.length) await api.notified(done)
+  } catch (e) {
+    console.warn('inbound sweep (mail) —', e)
+  }
+  try {
+    let reqs = await api.requests() // null: no spool yet — nothing to pull
+    if (reqs) {
+      let done: string[] = []
+      for (let r of reqs) {
+        if (
+          !db.prepare('select 1 from hook where source = ? and spool_id = ?')
+            .get(r.source || 'unknown', r.id)
+        ) {
+          mint(hookChanges(r, routeTo(null)), 'hook', cast)
+        }
+        done.push(r.id)
+      }
+      if (done.length) await api.processed(done)
+    }
+  } catch (e) {
+    console.warn('inbound sweep (hooks) —', e)
+  }
+}
+
+// The interval-safe door: dormant without config, and never two sweeps
+// in flight (a slow pull must not stack on its own tail).
+let sweeping = false
+export let inboundSweep = async (cast: Cast, api = fleetApi()) => {
+  if (!api || sweeping) return
+  sweeping = true
+  try {
+    await sweep(cast, api)
+  } finally {
+    sweeping = false
+  }
+}

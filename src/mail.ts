@@ -78,6 +78,10 @@ export let mailed =
       eid,
     ) as Row | undefined
     if (!row || row.acted_at) return // gone, or a sweep replaying a done one
+    // Inbound mail is a RECORD of arrival, never an ask to send — the
+    // message_id mark (inbound.ts stamps it) is what keeps what arrived
+    // from echoing back out. The boot sweep's predicate screens it too.
+    if (row.message_id) return
     if (flying.has(eid)) return // a concurrent fire is already delivering
     flying.add(eid)
     let doc = db.prepare('select title, body from doc where eid = ?').get(

@@ -157,6 +157,17 @@ let schema = `
     error      text,
     to_addr    text
   );
+  -- Inbound webhook deliveries, derived from the edge's raw request
+  -- spool (inbound.ts). Every column is server-stamped; the wire can
+  -- only aim docs and comments at a hook, never write one.
+  create table if not exists hook (
+    eid         text primary key references entity(eid),
+    source      text,
+    event       text,
+    payload     text,
+    spool_id    text,
+    received_at text
+  );
   create table if not exists email (
     eid     text primary key references entity(eid),
     address text not null
@@ -413,6 +424,12 @@ export let open = () => {
   // The event mark: apply() stamps it on the comments reasons() mints —
   // see stamped.comment in types.ts for why it splits the streams.
   addCol('comment', 'event', 'event integer')
+  // Inbound provenance (inbound.ts): the fleet sweep's idempotency key
+  // (and the never-send mark), arrival time, and the edge's DKIM verdict
+  // — see stamped.mail in types.ts.
+  addCol('mail', 'message_id', 'message_id text')
+  addCol('mail', 'received_at', 'received_at text')
+  addCol('mail', 'verified', 'verified integer')
   addCol('session', 'actor_eid', 'actor_eid text references entity(eid)')
   // A board is a saved filter over tasks (query.ts grammar), not an edge
   // list — membership can't drift when it isn't stored.
