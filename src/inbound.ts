@@ -146,6 +146,16 @@ export let routeTo = (addr: string | null | undefined): string | null => {
   return fallback?.eid ?? null
 }
 
+// The From: HEADER names the author; the envelope from is SMTP plumbing
+// (Cloudflare Email Sending stamps bounces@cf-bounce.… on every internal
+// mail). The entity's from must be the author, or every reply aims at
+// the bounce sink. Header shapes: `"name" <addr>` or a bare address.
+export let author = (m: FleetMsg) => {
+  let h = String(m.from_header ?? '').trim()
+  let angled = /<([^<>\s]+@[^<>\s]+)>/.exec(h)
+  return angled?.[1] ?? (/^\S+@\S+$/.test(h) ? h : m.from ?? null)
+}
+
 // One fleet message → the two halves of a mail entity: the wire batch
 // (doc + mail, what apply() may write) and the stamp (inbound
 // provenance, server-owned — message_id doubles as the never-send mark,
@@ -163,7 +173,7 @@ export let mailChanges = (m: FleetMsg, target: string | null) => {
       name: 'mail',
       comp: {
         to: m.to ?? '',
-        from: m.from ?? m.from_header ?? null,
+        from: author(m),
         ...(target ? { target_eid: target } : {}),
       },
     },

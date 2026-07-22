@@ -6,8 +6,15 @@ import type { Change } from './types.ts'
 import type { FleetMsg, SpoolReq } from './inbound.ts'
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, db, open } = await import('./db.ts')
-let { fleetRaw, hookChanges, inboundSweep, mailChanges, mailIdOf, routeTo } =
-  await import('./inbound.ts')
+let {
+  author,
+  fleetRaw,
+  hookChanges,
+  inboundSweep,
+  mailChanges,
+  mailIdOf,
+  routeTo,
+} = await import('./inbound.ts')
 let { mailed } = await import('./mail.ts')
 let { assertEquals, assertMatch } = await import('@std/assert')
 
@@ -64,6 +71,39 @@ Deno.test('routeTo: the address book reversed, case-blind, P-20 the rest', () =>
   assertEquals(routeTo('VENTURE@bot.test'), operator)
   assertEquals(routeTo('stranger@x.test'), holdco)
   assertEquals(routeTo(null), holdco)
+})
+
+Deno.test('author: the From header wins over the envelope', () => {
+  // Cloudflare Email Sending's envelope — the header names the author
+  assertEquals(
+    author(msg({
+      from: 'bounces@cf-bounce.bot.test',
+      from_header: '"holdco" <holdco@bot.test>',
+    })),
+    'holdco@bot.test',
+  )
+  assertEquals(
+    author(msg({ from_header: 'plain@bot.test' })),
+    'plain@bot.test',
+  )
+  // no header (or an unparseable one) → the envelope still names someone
+  assertEquals(author(msg()), 'sender@x.test')
+  assertEquals(author(msg({ from_header: 'not an address' })), 'sender@x.test')
+  assertEquals(author(msg({ from: null })), null)
+})
+
+Deno.test('mailChanges: from is the author, not the envelope', () => {
+  let { wire } = mailChanges(
+    msg({
+      from: 'bounces@cf-bounce.bot.test',
+      from_header: '"holdco" <holdco@bot.test>',
+    }),
+    null,
+  )
+  assertEquals(
+    wire.find((c) => c.name == 'mail')!.comp!.from,
+    'holdco@bot.test',
+  )
 })
 
 Deno.test('mailChanges: subject and body land verbatim, provenance stamps', () => {
