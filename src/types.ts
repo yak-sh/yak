@@ -225,13 +225,6 @@ export let stamped: Record<string, Record<string, PropType>> = {
   client: { ip: 'text' },
   claim: { claimed_at: 'text' },
   stop_request: { acted_at: 'text' }, // signals sent — the relay's sweep key
-  // The event mark: apply()'s reasons() pre-pass minted this comment
-  // from a batch's journal reason — machinery speaking, not prose.
-  // Stamped keyed by the mint itself (db.ts), so the wire can neither
-  // dress prose as an event nor strip the mark; readers split the
-  // streams on it — mail's fanout emails prose only, the UI chips
-  // events (T-4059).
-  comment: { event: 'bool' },
   // Delivery outcome (mail.ts): acted_at = the effect ran, error = how it
   // went wrong, to_addr = the RESOLVED envelope address — denormalized on
   // purpose, so later edits to the address book never rewrite what a
@@ -615,7 +608,6 @@ export type Comment = {
   eid: string
   target_eid: string
   author_eid?: string | null
-  event?: number | null // server-stamped: reasons() minted this (see stamped)
 }
 
 // A claim that BOUNCED, kept as an entity: who tried (loser), who held

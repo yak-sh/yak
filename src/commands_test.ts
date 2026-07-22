@@ -112,15 +112,17 @@ Deno.test('status moves land on the focused task', () => {
   assertThrows(() => run('done', ctx()), Error, 'nothing focused')
 })
 
-Deno.test('cancel: trailing words ride as the reason', () => {
+Deno.test('cancel: trailing words become a plain comment, same batch', () => {
   assertEquals(run('cancel', ctx(T)).changes, [
     { eid: T, name: 'task', comp: { status: 'cancelled' } },
   ])
-  let why = run('cancel superseded by T-9', ctx(T))
-  assertEquals(why.changes, [
-    { eid: T, name: 'task', comp: { status: 'cancelled' } },
-    { eid: T, name: 'journal', comp: { reason: 'superseded by T-9' } },
-  ])
+  let why = run('cancel superseded by T-9', ctx(T, 'sess-x'))
+  let [move, doc, comment] = why.changes!
+  assertEquals(move, { eid: T, name: 'task', comp: { status: 'cancelled' } })
+  assertEquals(doc.comp?.body, 'superseded by T-9')
+  assertEquals(comment.name, 'comment')
+  assertEquals(comment.comp?.target_eid, T)
+  assertEquals(comment.comp?.author_eid, S) // ctx.session resolves to its row
   assertEquals(why.msg, 'T-4 → cancelled — superseded by T-9')
   assertThrows(() => run('cancel', ctx(B)), Error, 'B-3 is not a task')
 })

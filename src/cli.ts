@@ -30,7 +30,6 @@ import {
   type Param,
   param,
   patches,
-  reasoned,
   rows,
   search,
   send,
@@ -65,10 +64,15 @@ let VERBS: [usage: string, blurb: string, examples: string[]][] = [
     'task new P1 .project=holdco Fix the flux capacitor',
     'task new .title="Write the digest" .body="Details..." .domain=Eng',
   ]],
-  ['set <id> .prop=value ... [--reason=why]', 'patch; the reason comments', [
-    'task set T-3 .status=done --reason="verified end-to-end"',
-    'task set T-3 .assignee=jeff .priority=1',
-  ]],
+  [
+    'set <id> .prop=value ... [--comment=words]',
+    'patch any entity; --comment says why, as plain commentary, same batch',
+    [
+      'task set T-3 .status=done --comment="verified end-to-end"',
+      'task set T-3 .assignee=jeff .priority=1',
+      'task set S-12 ".body=@brief.md"   # @ = the CLI reads the file itself',
+    ],
+  ],
   ['show <id> [--json]', 'one entity as a document (--json for scripts)', [
     'task show T-3',
     'task show T-3 --json',
@@ -238,10 +242,10 @@ let create = async (args: string[]) => {
 }
 
 let set = async (args: string[]) => {
-  // --reason=... rides the batch as the journal pseudo-change: the why
-  // becomes an old→new comment on the entity (cancellations especially).
-  let reason = args.find((a) => a.startsWith('--reason='))?.slice(9)
-  let { params, words } = split(args.filter((a) => !a.startsWith('--reason=')))
+  // --comment=... rides the same atomic batch as plain commentary — the
+  // change itself is the journal's to record, never a comment's.
+  let say = args.find((a) => a.startsWith('--comment='))?.slice(10)
+  let { params, words } = split(args.filter((a) => !a.startsWith('--comment=')))
   let [id] = words
   if (!id || !params.length) throw new Error('task set <id> .prop=value ...')
   let all = rows(await snapshot())
@@ -250,7 +254,14 @@ let set = async (args: string[]) => {
   await send([
     ...Object.entries(patches(derefParams(all, params)))
       .map(([name, comp]) => ({ eid: row.eid, name, comp })),
-    ...(reason ? [reasoned(row.eid, reason)] : []),
+    ...(say
+      ? commentChanges(
+        all,
+        row.eid,
+        say,
+        Deno.env.get('TASKS_SESSION') ?? undefined,
+      )
+      : []),
   ])
   console.log(`${idOf(row)} updated`)
 }

@@ -19,10 +19,10 @@
 import { type Change, idOf, uuid } from './types.ts'
 import {
   claimChanges,
+  commentChanges,
   find,
   param,
   patches,
-  reasoned,
   type Row,
   spec,
   taskChanges,
@@ -169,7 +169,7 @@ export let commands: Record<string, Command> = {
   wip: { args: '', about: 'move the focused task to wip', run: move('wip') },
   cancel: {
     args: '[reason]',
-    about: 'call off the focused task; the words become the why',
+    about: 'call off the focused task; the words become a comment',
     run: (rest, ctx) => {
       let r = here(ctx)
       if (!r.comps.task) throw new Error(`${idOf(r)} is not a task`)
@@ -177,9 +177,11 @@ export let commands: Record<string, Command> = {
       return {
         changes: [
           { eid: r.eid, name: 'task', comp: { status: 'cancelled' } },
-          // the why rides the batch — apply() turns it into the
-          // old→new comment the convention asks for
-          ...(reason ? [reasoned(r.eid, reason)] : []),
+          // the why rides the same atomic batch — as plain commentary,
+          // never a machine trail (the journal records the change)
+          ...(reason
+            ? commentChanges(ctx.rows, r.eid, reason, ctx.session)
+            : []),
         ],
         msg: `${idOf(r)} → cancelled${reason ? ` — ${reason}` : ''}`,
       }

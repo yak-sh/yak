@@ -421,9 +421,12 @@ export let open = () => {
   ) addCol('session', ddl.split(' ')[0], ddl)
   // The identity chain (types.ts): instruments point at who they act for.
   addCol('client', 'actor_eid', 'actor_eid text references entity(eid)')
-  // The event mark: apply() stamps it on the comments reasons() mints —
-  // see stamped.comment in types.ts for why it splits the streams.
-  addCol('comment', 'event', 'event integer')
+  // Comments are commentary, never an event log: the event column (a
+  // two-day experiment in machine-minted status trails) drops on sight —
+  // the journal was always the record of change.
+  try {
+    db.exec('alter table comment drop column event')
+  } catch { /* already gone */ }
   // Inbound provenance (inbound.ts): the fleet sweep's idempotency key
   // (and the never-send mark), arrival time, and the edge's DKIM verdict
   // — see stamped.mail in types.ts.
@@ -541,8 +544,6 @@ export let apply = (
   t?: Trace,
   actor?: string | null,
 ): Change[] => {
-  let events = new Set<string>()
-  changes = reasons(db, changes, actor, events)
   let dead = db.prepare('select 1 from tombstone where eid = ?')
   let extra: Change[] = []
   let touched = new Set<string>()
@@ -774,13 +775,6 @@ export let apply = (
         console.warn(`sync: change for ${name} ${eid} dropped —`, e)
       }
     }
-    // A reasons()-minted comment is an EVENT — machinery speaking, not
-    // prose. The mark is stamped here keyed by the mint set, never by
-    // what a batch claims (event is not in comps, so the write loop
-    // filtered the wire's copy): a client can neither dress its prose as
-    // an event nor strip the mark from one.
-    let evt = db.prepare('update comment set event = 1 where eid = ?')
-    for (let eid of events) evt.run(eid)
     // Every touched entity carries when it last changed — server-stamped
     // (modified_at is not in comps, so the wire can never fake it).
     // Deleted eids just miss; their rows are gone.
@@ -859,58 +853,6 @@ export let vocabularyDoc = (db: DatabaseSync, body: string): void => {
     undefined,
     'server',
   )
-}
-
-// A batch may carry a REASON: a `journal` pseudo-change whose eid names
-// the entity it explains. It never lands as a row — this pre-pass
-// rewrites it into a comment on that entity ("status: open → done —
-// <reason>"), summarizing what the SAME batch changes there, old values
-// read before any write. Human words join the trail; the journal row
-// stays mechanical. (v1's PATCH-with-reason dual-write, reborn.) A
-// reason on a delete still comments — aimed at the tombstone, it is how
-// "why was this removed" survives the removal.
-let reasons = (
-  db: DatabaseSync,
-  changes: Change[],
-  actor?: string | null,
-  events?: Set<string>,
-): Change[] => {
-  if (!changes.some((c) => c.name == 'journal')) return changes
-  let out = changes.filter((c) => c.name != 'journal')
-  let author = actor
-    ? (db.prepare('select eid from session where id = ?').get(actor) as
-      | { eid: string }
-      | undefined)?.eid ?? null
-    : null
-  for (let r of changes) {
-    if (r.name != 'journal' || !r.comp?.reason) continue
-    let summary: string[] = []
-    for (let c of out) {
-      if (c.eid != r.eid || !c.comp || !cmps[c.name]?.length) continue
-      for (let col of cmps[c.name]) {
-        if (!(col in c.comp)) continue
-        let old = (db.prepare(`select ${col} as v from ${c.name} where eid = ?`)
-          .get(c.eid) as { v: unknown } | undefined)?.v
-        summary.push(`${col}: ${old ?? '∅'} → ${c.comp[col] ?? '∅'}`)
-      }
-    }
-    let ceid = crypto.randomUUID()
-    let body = summary.length
-      ? `${summary.join(', ')} — ${String(r.comp.reason)}`
-      : String(r.comp.reason)
-    // event rides the change so caches and the journal see the mark the
-    // stamp will land; the write loop filters it (stamped, not wire).
-    out.push(
-      { eid: ceid, name: 'doc', comp: { title: '', body } },
-      {
-        eid: ceid,
-        name: 'comment',
-        comp: { target_eid: r.eid, author_eid: author, event: 1 },
-      },
-    )
-    events?.add(ceid)
-  }
-  return out
 }
 
 // A single entity's history, newest first: the journal rows that touched

@@ -31,7 +31,6 @@ import {
   notices,
   param,
   patches,
-  reasoned,
   recallIndex,
   type Row,
   rows,
@@ -338,17 +337,17 @@ why. ${DOC} ${GRAMMAR} ${BUS}`,
     {
       id: z.string(),
       params: z.array(z.string()).min(1),
-      // Why, in human words: rides the batch as the journal pseudo-change
-      // and lands as an old→new comment on the entity. Cancellations
-      // should always carry one.
-      reason: z.string().optional(),
+      // Why, in human words: lands as a PLAIN comment on the entity in
+      // the same atomic batch — commentary, never a change trail (the
+      // journal records the change). Cancellations should carry one.
+      comment: z.string().optional(),
       session: z.string().optional(),
     },
     async (
-      { id, params, reason, session }: {
+      { id, params, comment, session }: {
         id: string
         params: string[]
-        reason?: string
+        comment?: string
         session?: string
       },
     ) => {
@@ -359,7 +358,7 @@ why. ${DOC} ${GRAMMAR} ${BUS}`,
       await io.write([
         ...Object.entries(grouped)
           .map(([name, comp]) => ({ eid: row.eid, name, comp })),
-        ...(reason ? [reasoned(row.eid, reason)] : []),
+        ...(comment ? commentChanges(all, row.eid, comment, session) : []),
       ], session)
       return bus(`updated ${idOf(row)}${wall(grouped.doc?.body)}`, session)
     },

@@ -373,15 +373,6 @@ export let claimChanges = (
   ]
 }
 
-// A reason, as a change: the journal pseudo-change apply() rewrites into
-// an old→new comment on the entity it names. Ride it in the same batch
-// as the change it explains.
-export let reasoned = (eid: string, reason: string): Change => ({
-  eid,
-  name: 'journal',
-  comp: { reason },
-})
-
 // What a spawn inherits when the caller doesn't say: the CALLING
 // session's own provider and model — a managed caller always has both,
 // an external one has whatever it announced. The provider-table default

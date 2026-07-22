@@ -17,7 +17,6 @@ import {
   notices,
   param,
   patches,
-  reasoned,
   recallIndex,
   rows,
   sessionFor,
@@ -337,14 +336,6 @@ Deno.test('spawnDefaults: the caller session lends its provider/model', () => {
   assertEquals(spawnDefaults(all, 'sess-x'), none)
   assertEquals(spawnDefaults(all, 'sess-unknown'), none)
   assertEquals(spawnDefaults(all), none)
-})
-
-Deno.test('reasoned: the journal pseudo-change, one shape everywhere', () => {
-  assertEquals(reasoned(T1, 'why not'), {
-    eid: T1,
-    name: 'journal',
-    comp: { reason: 'why not' },
-  })
 })
 
 Deno.test('contextDigest: claimed set with gates, or open board', () => {

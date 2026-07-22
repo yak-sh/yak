@@ -630,32 +630,31 @@ Deno.test('journal: cascade casualties ride the record', () => {
   )
 })
 
-Deno.test('journal: a reason becomes a comment, old → new, authored', () => {
-  let t = uid(), s = uid(), sid = `reasoner-${s}`
+Deno.test('a change and its commentary land in one atomic batch', () => {
+  let t = uid(), s = uid(), c = uid()
   apply(db, [
-    { eid: s, name: 'session', comp: { id: sid } },
-    { eid: t, name: 'doc', comp: { title: 'reasoned' } },
+    { eid: s, name: 'session', comp: { id: `talker-${s}` } },
+    { eid: t, name: 'doc', comp: { title: 'commented' } },
     { eid: t, name: 'task', comp: { status: 'open' } },
   ])
-  apply(
-    db,
-    [
-      { eid: t, name: 'task', comp: { status: 'done' } },
-      { eid: t, name: 'journal', comp: { reason: 'proof landed' } },
-    ],
-    undefined,
-    sid,
-  )
-  let cm = snapshot(db).changes.find((c) =>
-    c.name == 'comment' && c.comp?.target_eid == t
-  )
-  assertEquals(cm?.comp?.author_eid, s)
-  let body = comp(String(cm?.eid), 'doc')?.body
-  assertEquals(body, 'status: open → done — proof landed')
-  // the pseudo-change never lands: not in the journal, not a table
-  let last = (db.prepare('select batch from journal order by rowid desc')
-    .get() as { batch: string }).batch
-  assertEquals(last.includes('"journal"'), false)
+  // the v1 gap, closed: status move + plain comment, same transaction
+  apply(db, [
+    { eid: t, name: 'task', comp: { status: 'done' } },
+    { eid: c, name: 'doc', comp: { title: '', body: 'proof landed' } },
+    { eid: c, name: 'comment', comp: { target_eid: t, author_eid: s } },
+  ])
+  assertEquals(comp(t, 'task')?.status, 'done')
+  assertEquals(comp(c, 'doc')?.body, 'proof landed')
+  assertEquals(comp(c, 'comment')?.author_eid, s)
+  // the old journal pseudo-change is dead vocabulary: it mints nothing
+  let before = db.prepare('select count(*) n from comment').get() as {
+    n: number
+  }
+  apply(db, [{ eid: t, name: 'journal', comp: { reason: 'ghost' } }])
+  let after = db.prepare('select count(*) n from comment').get() as {
+    n: number
+  }
+  assertEquals(after.n, before.n)
 })
 
 Deno.test('journal: recording failure never breaks the write', () => {
