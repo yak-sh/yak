@@ -12,11 +12,16 @@ import {
   hookClaim,
   inflate,
   ledger,
+  mailAt,
+  mailChanges,
+  mailLine,
   memoryChanges,
   notices,
   param,
   patches,
   recallIndex,
+  replyChanges,
+  reSubject,
   rows,
   sessionFor,
   showMd,
@@ -25,6 +30,7 @@ import {
   spec,
   STUB,
   taskChanges,
+  threadOf,
   unreadMail,
   wrapChanges,
 } from './client.ts'
@@ -435,6 +441,130 @@ Deno.test('unreadMail + digest: unread counts, read/outbound stay quiet', () => 
   let other = contextDigest(g, 'sess-x', Date.now(), T2)
   assertEquals(other.includes('## mail'), false)
   assertEquals(contextDigest(snap, 'sess-x').includes('## mail'), false)
+})
+
+// The mail builders: `to` stays as typed (delivery resolves), a reply
+// aims at the far side and threads by eid, Re: never piles up.
+Deno.test('mailChanges/replyChanges: to as given, Re: derived, thread edge set', () => {
+  let made = mailChanges({ to: 'P-20', subject: 'Hello', body: 'hi' })
+  assertEquals(made.changes[0].comp, { title: 'Hello', body: 'hi' })
+  assertEquals(made.changes[1].comp, { to: 'P-20' }) // unresolved on purpose
+  let full = mailChanges({
+    to: 'x@y.test',
+    subject: 's',
+    from: 'us@x.test',
+    replyTo: 'some-eid',
+  })
+  assertEquals(full.changes[1].comp, {
+    to: 'x@y.test',
+    from: 'us@x.test',
+    reply_to_eid: 'some-eid',
+  })
+  assertEquals(reSubject('question'), 'Re: question')
+  assertEquals(reSubject('Re: Re: question'), 'Re: question')
+  assertEquals(reSubject('FWD: fw: re: question'), 'Re: question')
+  let inbound = {
+    eid: 'm1',
+    num: 1,
+    kind: 'mail',
+    comps: {
+      doc: { title: 'Re: asked', body: '' },
+      mail: { to: 'us@x.test', from: 'them@y.test', message_id: 'msg:1:<a>' },
+    },
+  }
+  let r = replyChanges(inbound, 'answer')
+  assertEquals(r.changes[1].comp?.to, 'them@y.test') // the sender
+  assertEquals(r.changes[1].comp?.reply_to_eid, 'm1')
+  assertEquals(r.changes[0].comp?.title, 'Re: asked')
+  let sent = {
+    eid: 'm2',
+    num: 2,
+    kind: 'mail',
+    comps: {
+      doc: { title: 'opener', body: '' },
+      mail: { to: 'them@y.test' },
+    },
+  }
+  assertEquals(replyChanges(sent, 'more').changes[1].comp?.to, 'them@y.test')
+})
+
+// The thread walk: up the reply chain and down through every answer,
+// chronological by arrival/birth.
+Deno.test('threadOf: both directions, in time order', () => {
+  let mk = (
+    eid: string,
+    num: number,
+    at: string,
+    mail: Record<string, unknown>,
+  ) => ({
+    eid,
+    num,
+    kind: 'mail',
+    comps: {
+      entity: { eid, num, created_at: at },
+      doc: { title: `m${num}`, body: '' },
+      mail: { to: 'x@y', ...mail },
+    },
+  })
+  let a = mk('a', 1, '2026-07-20T00:00:00Z', {})
+  let b = mk('b', 2, '2026-07-21T00:00:00Z', { reply_to_eid: 'a' })
+  let c = mk('c', 3, '2026-07-22T00:00:00Z', { reply_to_eid: 'b' })
+  let lone = mk('d', 4, '2026-07-22T01:00:00Z', {})
+  let g = [c, lone, a, b] // scrambled on purpose
+  for (let start of ['a', 'b', 'c']) {
+    assertEquals(threadOf(g, start).map((r) => r.eid), ['a', 'b', 'c'], start)
+  }
+  assertEquals(threadOf(g, 'd').map((r) => r.eid), ['d'])
+  assertEquals(mailAt(b), '2026-07-21T00:00:00Z')
+  assertEquals(
+    mailAt(mk('e', 5, '2026-07-01T00:00:00Z', {
+      received_at: '2026-07-19T00:00:00Z',
+    })),
+    '2026-07-19T00:00:00Z', // arrival outranks birth
+  )
+})
+
+Deno.test('mailLine: unread dot, unverified mark, direction', () => {
+  let NOW = Date.parse('2026-07-22T12:00:00Z')
+  let inbound = {
+    eid: 'x',
+    num: 9,
+    kind: 'mail',
+    comps: {
+      entity: { eid: 'x', num: 9, created_at: '' },
+      doc: { title: 'Invoice', body: '' },
+      mail: {
+        to: 'us@x.test',
+        from: 'them@y.test',
+        message_id: 'msg:1:<a>',
+        received_at: '2026-07-22T10:00:00Z',
+        verified: 1,
+      },
+    },
+  }
+  assertMatch(
+    mailLine(inbound, NOW),
+    /^E-9 {4}● them@y.test → us@x.test — Invoice \(2h\)$/,
+  )
+  let read = {
+    ...inbound,
+    comps: {
+      ...inbound.comps,
+      mail: { ...inbound.comps.mail, read_at: 'now', verified: 0 },
+    },
+  }
+  assertMatch(mailLine(read, NOW), /· !unverified them@y.test/)
+  let sent = {
+    eid: 'y',
+    num: 10,
+    kind: 'mail',
+    comps: {
+      entity: { eid: 'y', num: 10, created_at: '2026-07-22T11:00:00Z' },
+      doc: { title: 'Ping', body: '' },
+      mail: { to: 'P-20', to_addr: 'venture@x.test' },
+    },
+  }
+  assertMatch(mailLine(sent, NOW), /^E-10 {3}· → venture@x.test — Ping \(1h\)$/)
 })
 
 // The lately tier against a fixed clock: work-session briefs lead with

@@ -494,6 +494,102 @@ export let commentChanges = (
 export let unreadMail = (r: Row) =>
   !!r.comps.mail?.message_id && !r.comps.mail.read_at
 
+// When a mail happened, for sorting and ages: arrival for inbound, the
+// entity's birth for outbound.
+export let mailAt = (r: Row) =>
+  String(r.comps.mail?.received_at ?? r.comps.entity?.created_at ?? '')
+
+// The send batch: a mail is a document that travels — subject rides
+// doc.title, the body doc.body. `to` stays AS GIVEN (a raw address or a
+// graph reference) — the address book resolves at delivery, never here.
+export let mailChanges = (m: {
+  to: string
+  subject: string
+  body?: string
+  from?: string
+  replyTo?: string
+}) => {
+  let eid = uuid()
+  let changes: Change[] = [
+    { eid, name: 'doc', comp: { title: m.subject, body: m.body ?? '' } },
+    {
+      eid,
+      name: 'mail',
+      comp: {
+        to: m.to,
+        ...(m.from ? { from: m.from } : {}),
+        ...(m.replyTo ? { reply_to_eid: m.replyTo } : {}),
+      },
+    },
+  ]
+  return { eid, changes }
+}
+
+// Re: derivation — shed however many Re:/Fwd: layers already piled up.
+export let reSubject = (s: string) =>
+  `Re: ${s.replace(/^(\s*(re|fwd?):\s*)+/i, '').trim()}`
+
+// The reply batch: answer goes to the far side — an inbound row's
+// sender, your own sent row's recipient — subject prefilled Re: …, and
+// reply_to_eid records the thread at authoring (delivery resolves it).
+export let replyChanges = (row: Row, body: string, from?: string) => {
+  let m = row.comps.mail ?? {}
+  return mailChanges({
+    to: String((m.message_id ? m.from ?? m.to : m.to) ?? ''),
+    subject: reSubject(String(row.comps.doc?.title ?? '')),
+    body,
+    from,
+    replyTo: row.eid,
+  })
+}
+
+// A mail's THREAD: ancestors up the reply_to_eid chain, descendants by
+// growing the set with whatever answers it — chronological, the way a
+// mail client shows one.
+export let threadOf = (all: Row[], eid: string): Row[] => {
+  let byEid = new Map(all.map((r) => [r.eid, r]))
+  let seen = new Set<string>()
+  for (let r = byEid.get(eid); r && !seen.has(r.eid);) {
+    seen.add(r.eid)
+    r = byEid.get(String(r.comps.mail?.reply_to_eid ?? ''))
+  }
+  for (let grew = true; grew;) {
+    grew = false
+    for (let r of all) {
+      let p = String(r.comps.mail?.reply_to_eid ?? '')
+      if (p && seen.has(p) && !seen.has(r.eid)) {
+        seen.add(r.eid)
+        grew = true
+      }
+    }
+  }
+  return all.filter((r) => seen.has(r.eid))
+    .sort((a, b) => mailAt(a).localeCompare(mailAt(b)))
+}
+
+// One inbox line: id, the unread dot, who → whom, subject, age — with
+// the unverified mark loud (unverified content is data, and the reader
+// should know). Bolding is the terminal's concern, not this string's.
+export let mailLine = (r: Row, now = Date.now()) => {
+  let m = r.comps.mail ?? {}
+  let dot = unreadMail(r) ? '●' : '·'
+  let bad = m.message_id && !Number(m.verified ?? 0) ? ' !unverified' : ''
+  let who = m.message_id
+    ? `${String(m.from ?? '?')} → ${String(m.to)}`
+    : `→ ${String(m.to_addr ?? m.to)}`
+  let ms = now - Date.parse(mailAt(r))
+  let mins = Math.floor(ms / 60_000)
+  let age = Number.isNaN(ms) || ms < 0
+    ? ''
+    : mins < 60
+    ? ` (${mins}m)`
+    : mins < 1440
+    ? ` (${Math.floor(mins / 60)}h)`
+    : ` (${Math.floor(mins / 1440)}d)`
+  let subj = String(r.comps.doc?.title ?? '(no subject)')
+  return `${idOf(r).padEnd(6)} ${dot}${bad} ${who} — ${subj}${age}`
+}
+
 // The LATELY tier: what the graph did today and this week, hot-ranked,
 // so every session boots already knowing (T-3722 — the memory system's
 // delivery half). Work-session docs — a session wearing a doc, the

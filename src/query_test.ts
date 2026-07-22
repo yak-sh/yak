@@ -258,6 +258,19 @@ Deno.test('server-stamped recall columns filter without being writable', () => {
   )
 })
 
+Deno.test('mail arrival columns route bare and filter (the mail door)', () => {
+  assertEquals(pred('.verified=0'), {
+    comp: 'mail',
+    prop: 'verified',
+    op: '',
+    value: '0',
+  })
+  assertEquals(route('message_id'), { comp: 'mail', prop: 'message_id' })
+  let ps = parseQuery('.verified=0')
+  assert(matchQuery({ mail: { to: 'x', verified: 0 } }, ps))
+  assert(!matchQuery({ mail: { to: 'x', verified: 1 } }, ps))
+})
+
 // ---- reference sugar + path predicates ----
 
 Deno.test('sugar: .assignee is .assignee_eid', () => {

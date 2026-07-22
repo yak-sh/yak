@@ -24,11 +24,15 @@ import {
   host,
   idOf,
   inflate,
+  mailAt,
+  mailChanges,
+  mailLine,
   memoryChanges,
   notices,
   type Param,
   param,
   patches,
+  replyChanges,
   rows,
   search,
   send,
@@ -39,6 +43,8 @@ import {
   spawnChanges,
   spawnDefaults,
   taskChanges,
+  threadOf,
+  unreadMail,
   wrapChanges,
 } from './client.ts'
 import { matchQuery, pred, resolveRefs } from './query.ts'
@@ -90,6 +96,16 @@ let VERBS: [usage: string, blurb: string, examples: string[]][] = [
     'task search flux capac*',
     'task search .project=holdco deploy',
   ]],
+  [
+    'mail [filters|show|send|reply|search]',
+    'fleet mail: bare = unread inbox; task mail --help spells the family',
+    [
+      'task mail',
+      'task mail show E-9',
+      'task mail send jeff Subject words --body=@draft.md',
+      'task mail reply E-9 "on it — landing today"',
+    ],
+  ],
   ['claim <id> [session]', 'lease a task for a session ($TASKS_SESSION)', [
     'task claim T-3 my-session-id',
   ]],
@@ -293,6 +309,186 @@ let seek = async (args: string[]) => {
       `${idOf(h)} ${h.kind}: ${h.title || '(untitled)'}${aim} — ${snip}${sunk}`,
     )
   }
+}
+
+// ---- task mail: the mail door (letters only — mail-comp wearers; hooks
+// and event comments never surface here) ----
+
+let MAIL_USAGE = `task mail — fleet mail in the graph
+  task mail [filters...]            unread inbound, newest last
+  task mail --all | --sent          everything / outbound only
+  task mail show <id>               the mail + its thread; marks it read
+  task mail send <to> <subj...> [--body=@f | stdin] [--from=...]
+  task mail reply <id> [text... | --body=@f | stdin]
+  task mail search <words...>       full-text search, mail only
+  task mail files <id>              attachments (not yet — T-4642)
+<to> is a raw address or a graph reference (alias, P-9, eid) — the
+address book resolves at delivery. Filters speak the query grammar:
+  task mail --all .from~=stripe .verified=0`
+
+// The body, by preference: --body= (@file reads the file — the safe door
+// for long prose), trailing words (a reply's), then piped stdin.
+let mailBody = async (flags: string[], words: string[]) => {
+  let b = flags.find((a) => a.startsWith('--body='))?.slice(7)
+  if (b?.startsWith('@')) {
+    b = String(inflate({ comp: 'doc', prop: 'body', value: b }).value)
+  }
+  if (b != null) return b
+  if (words.length) return words.join(' ')
+  if (!Deno.stdin.isTerminal()) {
+    return (await new Response(Deno.stdin.readable).text()).trim()
+  }
+  return ''
+}
+
+// The inbox: unread inbound bare, --all/--sent widen, dot-params screen
+// (the one filter grammar). A word that isn't a filter teaches the verb
+// family instead of guessing.
+let mailList = async (args: string[]) => {
+  let json = args.includes('--json')
+  let every = args.includes('--all'), sent = args.includes('--sent')
+  let preds = args.filter((a) => !['--json', '--all', '--sent'].includes(a))
+    .map((a) => {
+      let p = pred(a)
+      if (!p) throw new Error(`not a mail filter: ${a}\n\n${MAIL_USAGE}`)
+      return p
+    })
+  let all = rows(await snapshot())
+  let resolved = resolveRefs(preds, (id) => find(all, id)?.eid)
+  let byEid = new Map(all.map((r) => [r.eid, r.comps]))
+  let hits = all
+    .filter((r) => r.comps.mail)
+    .filter((r) =>
+      sent ? !r.comps.mail.message_id : every ? true : unreadMail(r)
+    )
+    .filter((r) => matchQuery(r.comps, resolved, (e) => byEid.get(e)))
+    .sort((a, b) => mailAt(a).localeCompare(mailAt(b)))
+  if (json) return console.log(JSON.stringify(hits, null, 2))
+  if (!hits.length) {
+    return console.error(
+      sent
+        ? '(nothing sent)'
+        : every
+        ? '(no mail)'
+        : '(no unread mail — task mail --all sees everything)',
+    )
+  }
+  let bold = Deno.stdout.isTerminal()
+  for (let r of hits) {
+    let line = mailLine(r)
+    console.log(bold && unreadMail(r) ? `\x1b[1m${line}\x1b[0m` : line)
+  }
+}
+
+// One mail whole, its thread beneath — and reading IS the mark: the
+// reader's own read_at stamps by a normal wire patch. Nothing else
+// auto-reads.
+let mailShow = async (args: string[]) => {
+  let json = args.includes('--json')
+  let [id] = args.filter((a) => a != '--json')
+  if (!id) throw new Error(`task mail show <id>\n\n${MAIL_USAGE}`)
+  let snap = await snapshot()
+  let all = rows(snap)
+  let row = find(all, id)
+  if (!row?.comps.mail) throw new Error(`not a mail: ${id}`)
+  let thread = threadOf(all, row.eid)
+  if (json) {
+    console.log(JSON.stringify(
+      { ...row, thread: thread.map((t) => idOf(t)) },
+      null,
+      2,
+    ))
+  } else {
+    console.log(showMd(snap, all, row))
+    if (thread.length > 1) {
+      console.log('\n## Thread')
+      for (let t of thread) {
+        console.log(`${t.eid == row.eid ? '▶' : ' '} ${mailLine(t)}`)
+      }
+    }
+  }
+  if (!row.comps.mail.read_at) {
+    await send([{
+      eid: row.eid,
+      name: 'mail',
+      comp: { read_at: new Date().toISOString() },
+    }])
+  }
+}
+
+// Minting doc+mail IS the send request — the server's effect delivers
+// and stamps the receipt; task show <E-id> reads it back.
+let mailSend = async (args: string[]) => {
+  let flags = args.filter((a) => a.startsWith('--'))
+  let [to, ...subj] = args.filter((a) => !a.startsWith('--'))
+  if (!to || !subj.length) {
+    throw new Error(`task mail send <to> <subject...>\n\n${MAIL_USAGE}`)
+  }
+  let body = await mailBody(flags, [])
+  if (!body) throw new Error('a mail needs a body: --body=@file, or pipe stdin')
+  let made = mailChanges({
+    to,
+    subject: subj.join(' '),
+    body,
+    from: flags.find((a) => a.startsWith('--from='))?.slice(7),
+  })
+  await send(made.changes)
+  let after = rows(await snapshot()).find((r) => r.eid == made.eid)
+  let eid = after ? idOf(after) : made.eid
+  console.log(`${eid} → ${to} — task show ${eid} for the delivery receipt`)
+}
+
+let mailReply = async (args: string[]) => {
+  let flags = args.filter((a) => a.startsWith('--'))
+  let [id, ...text] = args.filter((a) => !a.startsWith('--'))
+  if (!id) throw new Error(`task mail reply <id> [text...]\n\n${MAIL_USAGE}`)
+  let all = rows(await snapshot())
+  let row = find(all, id)
+  if (!row?.comps.mail) throw new Error(`not a mail: ${id}`)
+  let body = await mailBody(flags, text)
+  if (!body) {
+    throw new Error('a reply needs words: text, --body=@file, or stdin')
+  }
+  let made = replyChanges(
+    row,
+    body,
+    flags.find((a) => a.startsWith('--from='))?.slice(7),
+  )
+  await send(made.changes)
+  let after = rows(await snapshot()).find((r) => r.eid == made.eid)
+  let eid = after ? idOf(after) : made.eid
+  console.log(
+    `${eid} → ${made.changes[1].comp?.to} (re: ${
+      idOf(row)
+    }) — task show ${eid} for the receipt`,
+  )
+}
+
+// FTS, screened to mail — the one search surface, one more door.
+let mailSeek = async (args: string[]) => {
+  let q = args.join(' ')
+  if (!q) throw new Error(`task mail search <words...>\n\n${MAIL_USAGE}`)
+  let hits = (await search(q)).filter((h) => h.kind == 'mail')
+  if (!hits.length) return console.log('(no hits)')
+  for (let h of hits) {
+    let snip = h.snip.replaceAll('\x01', '[').replaceAll('\x02', ']')
+    console.log(`${idOf(h)} ${h.title || '(no subject)'} — ${snip}`)
+  }
+}
+
+let mail = (args: string[]) => {
+  let [sub, ...rest] = args
+  if (sub == 'show') return mailShow(rest)
+  if (sub == 'send') return mailSend(rest)
+  if (sub == 'reply') return mailReply(rest)
+  if (sub == 'search') return mailSeek(rest)
+  if (sub == 'files') {
+    throw new Error(
+      'attachments arrive with T-4642 — until then: bin/email attachments',
+    )
+  }
+  if (sub == 'help' || sub == '--help') return console.log(MAIL_USAGE)
+  return mailList(args)
 }
 
 // A claim is a session's lease on a task — other agents see who holds
@@ -845,6 +1041,7 @@ try {
   else if (cmd == 'show') await show(rest)
   else if (cmd == 'history') await past(rest)
   else if (cmd == 'search') await seek(rest)
+  else if (cmd == 'mail') await mail(rest)
   else if (cmd == 'claim') await claim(rest)
   else if (cmd == 'spawn') await spawn(rest)
   else if (cmd == 'comment') await comment(rest)

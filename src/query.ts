@@ -156,10 +156,12 @@ type Comps = Record<string, Record<string, unknown> | undefined>
 // The routing table: every component's columns, plus the spine's.
 // Server-stamped columns join HERE from the `stamped` declaration, not
 // comps — filterable ('.count>=5') without ever joining the write
-// allowlist (cols() reads comps alone). Three stamped comps today, not
+// allowlist (cols() reads comps alone). Four stamped comps today, not
 // all of them: stamped.session's status would make bare `.status`
 // ambiguous with task's, so widening is a routing question (does the
-// wire-writable column win a tie?), not a list edit.
+// wire-writable column win a tie?), not a list edit. Mail joined for the
+// mail door — its filters live on arrival columns ('.verified=0',
+// '.received_at>=today').
 let routes: Record<string, readonly string[]> = {
   ...Object.fromEntries(
     Object.entries(comps).map(([name, props]) => [name, Object.keys(props)]),
@@ -167,6 +169,7 @@ let routes: Record<string, readonly string[]> = {
   entity: Object.keys(stamped.entity),
   memory: [...Object.keys(comps.memory), ...Object.keys(stamped.memory)],
   recall: Object.keys(stamped.recall),
+  mail: [...Object.keys(comps.mail), ...Object.keys(stamped.mail)],
 }
 
 // Route a bare prop to its component; ambiguity is an error that names
