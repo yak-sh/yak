@@ -47,6 +47,7 @@ import { type Edge, edges, type Snapshot } from './types.ts'
 import type { Log } from './telemetry.ts'
 import type { JournalEntry } from './client.ts'
 import { filesFor, syncFiles } from './persona.ts'
+import { commands, focusOf, run as runCommand } from './commands.ts'
 
 // Every verb: usage, blurb, worked examples. `task help` derives all its
 // faces from this table plus grammar.ts, so what the CLI teaches and what
@@ -106,9 +107,20 @@ let VERBS: [usage: string, blurb: string, examples: string[]][] = [
   ['telemetry [--errors] [--since=ISO] [-n N]', 'tool calls + crashes', [
     'task telemetry --errors -n 20',
   ]],
-  ['help [verb|grammar]', 'this text; grammar = filters + dot-params', [
+  [
+    ':<command> … | <id> :<command> …',
+    "the web bar's `:` vocabulary — same table, same words (task help :)",
+    [
+      'task :fix T-42',
+      'task :new P1 ship the fix',
+      'task T-42 :done',
+      'task :done   # your claim is the focus',
+    ],
+  ],
+  ['help [verb|grammar|:]', 'this text; grammar = filters + dot-params', [
     'task help list',
     'task help grammar',
+    'task help :fix',
   ]],
 ]
 
@@ -133,6 +145,23 @@ let help = (args: string[]) => {
   if (!topic) return console.log(usage.trim())
   if (topic == 'grammar') {
     return console.log(`${GRAMMAR}\n\n${FILTERS}`)
+  }
+  // The `:` vocabulary teaches from its own table — the one the web bar
+  // and TUI run — so the shell can never describe a command it doesn't
+  // share. `task help :` is the menu, `task help :fix` one entry.
+  if (topic.startsWith(':')) {
+    let name = topic.slice(1)
+    let show = name ? { [name]: commands[name] } : commands
+    if (name && !commands[name]) {
+      throw new Error(`not a command: ${name} (task help : lists them)`)
+    }
+    return console.log(
+      Object.entries(show)
+        .map(([n, c]) =>
+          `task :${`${n} ${c.args}`.trim().padEnd(34)} ${c.about}`
+        )
+        .join('\n'),
+    )
   }
   let hit = VERBS.find(([u]) => u.split(' ')[0] == topic)
   if (!hit) throw new Error(`no such verb: ${topic} (task help lists them)`)
@@ -249,24 +278,25 @@ let claim = async (args: string[]) => {
 
 // Dispatch a managed agent onto a task — one wire write; the server's
 // created(session) effect does the rest, and any failure is a failed
-// Session on the board (task show <S-id> reads it back).
-let spawn = async (args: string[]) => {
-  let flag = (n: string) =>
-    args.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3)
-  let [id] = args.filter((a) => !a.startsWith('--'))
-  if (!id) {
-    throw new Error(
-      'task spawn <id> [--provider=X] [--model=Y] [--effort=Z] [--persona=P-9]',
-    )
-  }
+// Session on the board (task show <S-id> reads it back). Reads the graph
+// fresh so a task the caller just filed (:fix) is visible.
+let launch = async (
+  id: string,
+  flags: {
+    provider?: string
+    model?: string
+    effort?: string
+    persona?: string
+  },
+) => {
   let snap = await snapshot()
   let all = rows(snap)
   // Unnamed provider/model inherit: the calling session's own (a spawn
   // begets its own kind), then the provider table's first entry.
   let by = Deno.env.get('TASKS_SESSION') ?? undefined
   let mine = spawnDefaults(all, by)
-  let provider = flag('provider') ?? mine.provider
-  let model = flag('model') ?? (flag('provider') ? undefined : mine.model)
+  let provider = flags.provider ?? mine.provider
+  let model = flags.model ?? (flags.provider ? undefined : mine.model)
   if (!provider || !model) {
     let table = await (await fetch(`http://${host()}/providers`)).json() as {
       name: string
@@ -280,14 +310,66 @@ let spawn = async (args: string[]) => {
     task: id,
     provider,
     model,
-    effort: flag('effort'),
-    persona: flag('persona'),
+    effort: flags.effort,
+    persona: flags.persona,
     by,
     deps: snap.deps,
   })
   await send(made.changes)
   let after = rows(await snapshot()).find((r) => r.eid == made.eid)
-  console.log(`${after ? idOf(after) : made.eid} spawned onto ${id}`)
+  let onto = find(all, id)
+  console.log(
+    `${after ? idOf(after) : made.eid} spawned onto ${onto ? idOf(onto) : id}`,
+  )
+}
+
+let spawn = async (args: string[]) => {
+  let flag = (n: string) =>
+    args.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3)
+  let [id] = args.filter((a) => !a.startsWith('--'))
+  if (!id) {
+    throw new Error(
+      'task spawn <id> [--provider=X] [--model=Y] [--effort=Z] [--persona=P-9]',
+    )
+  }
+  await launch(id, {
+    provider: flag('provider'),
+    model: flag('model'),
+    effort: flag('effort'),
+    persona: flag('persona'),
+  })
+}
+
+// The palette's `:` line, spoken from the shell — the same commands.ts
+// table the web bar and the TUI run, so the owner and every agent share
+// one vocabulary. "Where you stand" translates: lead with an id
+// (`task T-42 :done`), or your session's single claim is the focus
+// (`task :done`). The intent is spent the CLI way: changes ride send(),
+// a spawn launches exactly like `task spawn`, go prints the URL.
+let colon = async (focus: string | undefined, argv: string[]) => {
+  let line = argv.join(' ').replace(/^:/, '')
+  // Teach at the point of failure — an agent that guesses a verb gets
+  // the menu, not a shrug.
+  let name = line.trim().split(/\s/)[0]
+  if (name && !commands[name]) {
+    throw new Error(`not a command: :${name} — 'task help :' lists them all`)
+  }
+  let session = Deno.env.get('TASKS_SESSION') ?? undefined
+  let all = rows(await snapshot())
+  let eid: string | undefined
+  if (focus) {
+    let r = find(all, focus)
+    if (!r) throw new Error(`no entity: ${focus}`)
+    eid = r.eid
+  } else eid = focusOf(all, session)
+  let out = runCommand(line, { eid, rows: all, session })
+  if (out.changes?.length) await send(out.changes)
+  if (out.msg) console.log(out.msg)
+  if (out.spawn) await launch(out.spawn, {})
+  if (out.go) {
+    let r = all.find((x) => x.eid == out.go)
+    console.log(`http://${host()}/${r ? idOf(r) : out.go}`)
+  }
 }
 
 let release = async (args: string[]) => {
@@ -597,7 +679,8 @@ let tui = async () => {
 
 let [cmd, ...rest] = Deno.args
 try {
-  if (cmd == 'tui') await tui()
+  if (cmd?.startsWith(':')) await colon(undefined, [cmd, ...rest])
+  else if (cmd == 'tui') await tui()
   else if (cmd == 'list' || cmd == 'ls') await list(rest)
   else if (cmd == 'new') await create(rest)
   else if (cmd == 'set') await set(rest)
@@ -615,6 +698,8 @@ try {
   else if (cmd == 'release') await release(rest)
   else if (cmd == 'telemetry') await telemetry(rest)
   else if (cmd == 'help' || cmd == '--help') help(rest)
+  // `task T-42 :done` — an id ahead of a colon line names the focus.
+  else if (rest[0]?.startsWith(':')) await colon(cmd, rest)
   else {
     console.log(usage.trim())
     if (cmd) Deno.exit(2)

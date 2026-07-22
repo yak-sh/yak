@@ -47,6 +47,17 @@ export type Result = {
 
 export type Verb = (rest: string, ctx: Ctx) => Result
 
+// Where a HEADLESS caller stands: its session's single claim. The shell
+// door resolves focus through this — one lease is an unambiguous
+// "here"; none or several mean the line must lead with an id.
+export let focusOf = (rows: Row[], session?: string): string | undefined => {
+  if (!session) return undefined
+  let me = rows.find((r) => String(r.comps.session?.id ?? '') == session)
+  if (!me) return undefined
+  let mine = rows.filter((r) => r.comps.claim?.session_eid == me.eid)
+  return mine.length == 1 ? mine[0].eid : undefined
+}
+
 let here = (ctx: Ctx): Row => {
   let r = ctx.rows.find((x) => x.eid == ctx.eid)
   if (!r) throw new Error('nothing focused')

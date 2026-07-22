@@ -1,6 +1,13 @@
 // The : command line's pure half: every verb, the :open disambiguation,
 // and what a bad line says. No wire, no DOM — a Ctx is just data.
-import { type Command, commands, ghost, run, suggest } from './commands.ts'
+import {
+  type Command,
+  commands,
+  focusOf,
+  ghost,
+  run,
+  suggest,
+} from './commands.ts'
 import { rows } from './client.ts'
 import { type Snapshot } from './types.ts'
 import { assertEquals, assertThrows } from '@std/assert'
@@ -187,4 +194,23 @@ Deno.test('ghost: verb remainder, then unconsumed example args', () => {
   assertEquals(g('done'), '') // no args to offer
   assertEquals(g('zzz'), '')
   assertEquals(g(''), '')
+})
+
+Deno.test('focusOf: one claim is "here"; none, several, or no session is not', () => {
+  let claimed = (eids: string[]) =>
+    rows({
+      changes: [
+        ...snap.changes,
+        ...eids.map((eid) => ({
+          eid,
+          name: 'claim',
+          comp: { session_eid: S },
+        })),
+      ],
+    })
+  assertEquals(focusOf(claimed([T]), 'sess-x'), T)
+  assertEquals(focusOf(claimed([]), 'sess-x'), undefined)
+  assertEquals(focusOf(claimed([T, B]), 'sess-x'), undefined)
+  assertEquals(focusOf(claimed([T]), 'sess-unknown'), undefined)
+  assertEquals(focusOf(claimed([T]), undefined), undefined)
 })

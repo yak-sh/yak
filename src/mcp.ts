@@ -50,6 +50,7 @@ import {
   resolveRefs,
   warm,
 } from './query.ts'
+import { commands, focusOf, run as runCommand } from './commands.ts'
 
 // How the tools reach the graph — in-process on the server, HTTP here.
 export type IO = {
@@ -450,6 +451,78 @@ session id you claim with), then the provider table's first entry. ${BUS}`,
         `spawned ${after ? idOf(after) : made.eid} onto ${id}`,
         session,
       )
+    },
+  )
+
+  server.tool(
+    'command',
+    `Run a \`:\` command line — the SAME vocabulary the owner types into
+the web bar and TUI, one language across every door. Focus ("where you
+stand") is \`on\` when given, else your session's single claimed entity.
+Writes land, :fix spawns an agent (your session's provider defaults),
+:open returns the entity's URL. The vocabulary:
+${
+      Object.entries(commands)
+        .map(([n, c]) => `  :${`${n} ${c.args}`.trim()} — ${c.about}`)
+        .join('\n')
+    } ${BUS}`,
+    {
+      line: z.string(),
+      on: z.string().optional(),
+      session: z.string().optional(),
+    },
+    async (
+      { line, on, session }: { line: string; on?: string; session?: string },
+    ) => {
+      let all = rows(await io.read())
+      let eid: string | undefined
+      if (on) {
+        let r = find(all, on)
+        if (!r) return err(`no entity: ${on}`)
+        eid = r.eid
+      } else eid = focusOf(all, session)
+      let out
+      try {
+        out = runCommand(line.replace(/^:/, ''), { eid, rows: all, session })
+      } catch (e) {
+        return err((e as Error).message)
+      }
+      if (out.changes?.length) await io.write(out.changes, session)
+      let said = out.msg ? [out.msg] : []
+      if (out.spawn) {
+        // A spawn on defaults — a fresh read sees the task the line may
+        // have just filed; task_spawn is the door for overrides.
+        let snap = await io.read()
+        let now = rows(snap)
+        let mine = spawnDefaults(now, session)
+        let { provider, model } = mine
+        if (!provider || !model) {
+          let table = await io.providers()
+          provider ??= table[0]?.name
+          model ??= table.find((p) => p.name == provider)?.models[0]
+          if (!provider || !model) return err('no provider to default to')
+        }
+        let made = spawnChanges(now, {
+          task: out.spawn,
+          provider,
+          model,
+          by: session,
+          deps: snap.deps,
+        })
+        await io.write(made.changes, session)
+        let after = find(rows(await io.read()), made.eid)
+        let onto = find(now, out.spawn)
+        said.push(
+          `spawned ${after ? idOf(after) : made.eid} onto ${
+            onto ? idOf(onto) : out.spawn
+          }`,
+        )
+      }
+      if (out.go) {
+        let r = all.find((x) => x.eid == out.go)
+        said.push(`http://${host()}/${r ? idOf(r) : out.go}`)
+      }
+      return bus(said.join('\n') || 'ok', session)
     },
   )
 
