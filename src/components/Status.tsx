@@ -119,7 +119,9 @@ let scene = (task: string): Change[] => {
     {
       eid: c,
       name: 'comment',
-      comp: { target_eid: task, author_eid: clientId() },
+      // event: the command's context capture, not words anyone typed
+      // (M-4062) — never mailed.
+      comp: { target_eid: task, author_eid: clientId(), event: 1 },
     },
   ]
 }

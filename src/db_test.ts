@@ -37,6 +37,19 @@ Deno.test('entity delete tombstones; nothing resurrects the eid', () => {
   assertEquals(comp(t, 'doc'), undefined)
 })
 
+Deno.test('comment.event: the machine mark rides the wire, absent by default', () => {
+  let t = uid(), c = uid(), plain = uid()
+  apply(db, [
+    { eid: t, name: 'doc', comp: { title: 'work' } },
+    { eid: c, name: 'doc', comp: { title: '', body: 'S-1 failed' } },
+    { eid: c, name: 'comment', comp: { target_eid: t, event: 1 } },
+    { eid: plain, name: 'doc', comp: { title: '', body: 'words' } },
+    { eid: plain, name: 'comment', comp: { target_eid: t } },
+  ])
+  assertEquals(comp(c, 'comment')?.event, 1)
+  assertEquals(comp(plain, 'comment')?.event, null)
+})
+
 Deno.test('unknown component names are ignored, batch survives', () => {
   let t = uid()
   apply(db, [

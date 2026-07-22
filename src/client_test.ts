@@ -278,7 +278,10 @@ Deno.test('commentChanges: doc + aim, attributed or anon', () => {
   let cs = commentChanges(all, T1, 'hi', 'sess-x')
   assertEquals(cs.length, 2)
   assertEquals(cs[1].comp?.author_eid, S)
+  assertEquals(cs[1].comp?.event, undefined) // authored words: no mark
   assertEquals(commentChanges(all, T1, 'hi')[1].comp?.author_eid, null)
+  // machinery speaking wears the mark (M-4062)
+  assertEquals(commentChanges(all, T1, 'hi', 'sess-x', true)[1].comp?.event, 1)
 })
 
 Deno.test('claimant resolves through the session entity', () => {
@@ -290,6 +293,8 @@ Deno.test('wrapChanges: unfinished gets the trail, done goes quiet', () => {
   let cs = wrapChanges(all, 'sess-x') // T1 is wip → comment + release
   assertEquals(cs.filter((c) => c.name == 'claim').length, 1)
   assertEquals(cs.filter((c) => c.name == 'comment').length, 1)
+  // the lapse notice is machinery, not the agent — marked, never mailed
+  assertEquals(cs.find((c) => c.name == 'comment')?.comp?.event, 1)
   let done = structuredClone(snap)
   done.changes.find((c) => c.eid == T1 && c.name == 'task')!.comp!.status =
     'done'

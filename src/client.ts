@@ -462,12 +462,14 @@ export let hookClaim = (
 }
 
 // A comment: a doc aimed at the target, attributed to a session when
-// one is named.
+// one is named. `event` marks machinery speaking (M-4062) — a notice a
+// command emits, not words an agent typed — so the mail relay skips it.
 export let commentChanges = (
   all: Row[],
   target: string,
   body: string,
   session?: string,
+  event?: boolean,
 ): Change[] => {
   let s = session ? sessionFor(all, session) : undefined
   let eid = uuid()
@@ -477,7 +479,11 @@ export let commentChanges = (
     {
       eid,
       name: 'comment',
-      comp: { target_eid: target, author_eid: s?.eid ?? null },
+      comp: {
+        target_eid: target,
+        author_eid: s?.eid ?? null,
+        ...(event ? { event: 1 } : {}),
+      },
     },
   ]
 }
@@ -763,6 +769,7 @@ export let wrapChanges = (
         r.eid,
         '⚑ lease lapsed: session `' + session + '` ended before this was done',
         session,
+        true, // machinery speaking, not the agent — never mailed
       ).slice(-2)), // the session exists — skip the mint, keep doc + comment
       { eid: r.eid, name: 'claim', comp: null },
     ]),

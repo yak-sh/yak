@@ -254,6 +254,7 @@ export let commands: Record<string, Command> = {
             desk.eid,
             `brief ${idOf(target)} — write its session doc`,
             ctx.session,
+            true, // the command's phrasing, not the caller's — never mailed
           ),
           ...(busy ? [] : spawnChanges(ctx.rows, DESK).changes),
         ],

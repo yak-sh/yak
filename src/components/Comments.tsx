@@ -94,7 +94,9 @@ export let Comments = ({ eid }: { eid: string }) => {
         let actor = a?.session?.actor_eid ?? a?.client?.actor_eid
         let who = actor ? ent(String(actor)) : undefined
         return (
-          <Item key={c.eid}>
+          /* An event is machinery speaking (M-4062) — a chip, not a
+             bubble: the -event modifier shrinks and dims the row. */
+          <Item key={c.eid} mod={c.comment!.event ? 'event' : undefined}>
             {
               /* The name links to whoever said it; the age to the comment
               itself — both wear the internal-link contract. */

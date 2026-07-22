@@ -132,7 +132,9 @@ let settled = (eid: string, status: string, cast: Cast) => {
       {
         eid: cid,
         name: 'comment',
-        comp: { target_eid: task, author_eid: eid },
+        // event: the server speaking, not the agent (M-4062) — the bus
+        // delivers it, the mail relay must not.
+        comp: { target_eid: task, author_eid: eid, event: 1 },
       },
     ], t)
     cast(out)

@@ -181,6 +181,11 @@ export let comps: Record<string, Record<string, PropType>> = {
     // A byline survives its instrument: the words remain attributed to a
     // session that ended long ago — history, not a dangle.
     author_eid: { eid: '', death: 'keep' },
+    // Emitted, not authored (M-4062): machinery marks its comments at
+    // mint — a settle notice, a lease lapse. Events never ride the mail
+    // relay and render as chips, not bubbles; the comms bus still
+    // delivers them.
+    event: 'bool',
   },
   alias: { slug: 'text' },
   // A durable identity — the owner, an operator. The doc carries the
@@ -634,6 +639,7 @@ export type Comment = {
   eid: string
   target_eid: string
   author_eid?: string | null
+  event?: number | null
 }
 
 // A claim that BOUNCED, kept as an entity: who tried (loser), who held

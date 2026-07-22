@@ -192,7 +192,8 @@ let schema = `
   create table if not exists comment (
     eid        text primary key references entity(eid),
     target_eid text not null references entity(eid),
-    author_eid text
+    author_eid text,
+    event      integer
   );
   create table if not exists alias (
     eid  text primary key references entity(eid),
@@ -443,12 +444,12 @@ export let open = () => {
   ) addCol('session', ddl.split(' ')[0], ddl)
   // The identity chain (types.ts): instruments point at who they act for.
   addCol('client', 'actor_eid', 'actor_eid text references entity(eid)')
-  // Comments are commentary, never an event log: the event column (a
-  // two-day experiment in machine-minted status trails) drops on sight —
-  // the journal was always the record of change.
-  try {
-    db.exec('alter table comment drop column event')
-  } catch { /* already gone */ }
+  // The event mark (M-4062): machinery's comments — settle notices,
+  // lease lapses — are stamped at mint so the mail relay can tell
+  // emitted from authored. Not the old status-trail experiment (that
+  // column was dropped); the journal still records change, this marks
+  // the SPEAKER.
+  addCol('comment', 'event', 'event integer')
   // Inbound provenance (inbound.ts): the fleet sweep's idempotency key
   // (and the never-send mark), arrival time, and the edge's DKIM verdict
   // — see stamped.mail in types.ts.
