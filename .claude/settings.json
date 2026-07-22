@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/bin/task-context"
+            "command": "PATH=\"$HOME/.deno/bin:$PATH\" task context --hook || true"
           }
         ]
       }
@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/bin/task-lapse"
+            "command": "PATH=\"$HOME/.deno/bin:$PATH\" task lapse --hook || true"
           }
         ]
       }

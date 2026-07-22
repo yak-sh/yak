@@ -1,7 +1,0 @@
-#!/bin/sh
-# SessionStart hook: print this session's task context for injection.
-# Claude Code pipes hook JSON (with session_id) on stdin; --hook mode
-# reads it and never fails loudly — no server just means no digest.
-dir="$(cd "$(dirname "$0")/.." && pwd)"
-export PATH="$HOME/.deno/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin"
-exec deno run --allow-net --allow-env --config "$dir/deno.json" "$dir/src/cli.ts" context --hook

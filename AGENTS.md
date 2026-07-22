@@ -239,14 +239,16 @@ These hold everywhere in this repo, whoever — or whatever — writes the code:
   Probe servers must pick UNIQUE ports: the server binds `reusePort`, so two
   probes on one port silently round-robin — one agent's stale modules fed
   another's browser mid-verification (observed twice, 2026-07-20/21).
-- **The injection loop**: `.claude/settings.json` runs `bin/task-context` on
-  SessionStart — agent sessions in this repo boot into their claimed work
-  (`task context` / MCP `task_context`, same digest). The hook must NEVER fail
-  loudly; a dead server means no digest, not a broken session. SessionEnd
-  mirrors it: `bin/task-lapse` releases the session's claims, commenting on
-  anything not done ("lease lapsed") — no timers, ending the session IS the
-  lapse. SessionStart also reifies the session entity (id + cwd, the worktree it
-  ran in).
+- **The injection loop**: `.claude/settings.json` runs `task context --hook` on
+  SessionStart — agent sessions boot into their claimed work (`task context` /
+  MCP `task_context`, same digest). The hook must NEVER fail loudly; a dead
+  server (or an uninstalled CLI — hence the `|| true`) means no digest, not a
+  broken session. SessionEnd mirrors it: `task lapse --hook` releases the
+  session's claims, commenting on anything not done ("lease lapsed") — no
+  timers, ending the session IS the lapse. SessionStart also reifies the session
+  entity (id + cwd, the worktree it ran in). The hooks are the global CLI, no
+  repo-local shims — any repo gets the loop by carrying the same two settings
+  lines.
 - **The graph IS your memory** (harness auto-memory is disabled — there are no
   local memory files; do not create any). Recall arrives at boot: the context
   digest's `lately` block (today/this week, hot-ranked) plus the `memory:` lines
