@@ -973,7 +973,8 @@ export let touch = (
 // over body hits) with recency — what you touched today is what you're
 // looking for — matching the house recall bias. Snippets mark matches
 // with \x01…\x02 so renderers can highlight without trusting HTML. A comment hit points
-// open_eid at its target — you open the conversation, not the aside.
+// open_eid at its target — you open the conversation, not the aside —
+// and wears the target's title (the aside has none of its own).
 // A search line mixes FTS terms with dot-param filters (query.ts —
 // 'runner .status=done .modified_at=today'): the TEXT preds drive FTS,
 // the rest screen each hit against its components, and a line of ONLY
@@ -1048,7 +1049,11 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
   let is = kindOrder.map((k) =>
     [k, db.prepare(`select 1 from ${k} where eid = ?`)] as const
   )
-  let aim = db.prepare('select target_eid from comment where eid = ?')
+  let aim = db.prepare(`
+    select c.target_eid, d.title from comment c
+    left join doc d on d.eid = c.target_eid
+    where c.eid = ?
+  `)
   // Retirement sinks a hit, never hides it: a hit that IS a retired
   // project, or a task filed under one, keeps its rank order among the
   // sunk — they all queue behind the last live hit, flagged for the
@@ -1061,12 +1066,14 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
   `)
   let hits = rows.map((r) => {
     let kind = is.find(([, s]) => s.get(r.eid))?.[0] ?? 'entity'
-    let target = (aim.get(r.eid) as { target_eid: string } | undefined)
-      ?.target_eid
+    let at = aim.get(r.eid) as
+      | { target_eid: string; title: string | null }
+      | undefined
     return {
       ...r,
+      title: r.title || at?.title || '',
       kind,
-      open_eid: target ?? r.eid,
+      open_eid: at?.target_eid ?? r.eid,
       ...(sank.get(r.eid) ? { retired: true } : {}),
     }
   })

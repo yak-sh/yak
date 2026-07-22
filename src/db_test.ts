@@ -204,6 +204,8 @@ Deno.test('fts: search finds, follows edits, forgets the dead', () => {
     { eid: c, name: 'comment', comp: { target_eid: t } },
   ])
   assertEquals(search(db, 'quincunx')[0]?.open_eid, t)
+  // …and wears the target's title — the aside has none of its own
+  assertEquals(search(db, 'quincunx')[0]?.title, 'Glockenspiel repair')
   apply(db, [{ eid: t, name: 'entity', comp: null }])
   assertEquals(search(db, 'glockenspiel').length, 0) // tombstoned = unfindable
   assertEquals(search(db, 'quincunx').length, 0) // the comment died with it
