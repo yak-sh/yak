@@ -39,17 +39,19 @@ let byWarm = (now: number) => (a: Row, b: Row) =>
   hot(b.comps, now) - hot(a.comps, now)
 
 // One index line — the memory_recall rendering, tolerant of non-memory
-// targets (any doc can ride the index tier).
-export let indexLine = (r: Row, now: number) => {
+// targets (any doc can ride the index tier). Warmth ORDERS the index but
+// never prints: a score in the line re-materializes every persona file
+// on every decay tick, and that churn buries the real diffs.
+export let indexLine = (r: Row, _now: number) => {
   let m = r.comps.memory
   let n = Number(r.comps.recall?.count ?? 0)
   let head = m ? `${m.type}: ` : ''
   let seen = m?.last_confirmed_at
     ? ` · confirmed ${String(m.last_confirmed_at).slice(0, 10)}`
     : ''
-  return `- ${idOf(r)} ${hot(r.comps, now).toFixed(2)} ${head}${
-    r.comps.doc?.title ?? ''
-  }${n ? ` · ${n}×` : ''}${seen}`
+  return `- ${idOf(r)} ${head}${r.comps.doc?.title ?? ''}${
+    n ? ` · ${n}×` : ''
+  }${seen}`
 }
 
 // The persona's tier members, resolved and warm-first. Dead or docless

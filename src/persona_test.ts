@@ -124,12 +124,15 @@ Deno.test('materialize: a dialect reframes without touching content', () => {
   assert(!md.includes('GENERATED'))
 })
 
-Deno.test('indexLine: id, warmth, type, count, confirmed date', () => {
+Deno.test('indexLine: id, type, count, confirmed date — never warmth', () => {
   let line = indexLine(indexed, NOW)
-  assertStringIncludes(line, `- M-${indexed.num} `)
-  assertStringIncludes(line, 'feedback: delegation discipline')
+  assertStringIncludes(
+    line,
+    `- M-${indexed.num} feedback: delegation discipline`,
+  )
   assertStringIncludes(line, '· 4×')
   assertStringIncludes(line, `confirmed ${day(3).slice(0, 10)}`)
+  assert(!/\d\.\d\d/.test(line)) // a printed score churns every materialize
 })
 
 Deno.test('baselineOf: the persona its project contains', () => {
