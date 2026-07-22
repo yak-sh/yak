@@ -414,10 +414,10 @@ Owner direction (2026-07-20) on delegation in ~/code/tasks:
 
 Recall a body by id (memory_recall / task show).
 
-- M-4457 0.89 feedback: code style (Ruby/Rails) — the class-macro idiom · 1×
-- M-4062 0.86 feedback: letters vs notices: email is for prose agents wrote; machine events are marked at mint
-- M-4064 0.51 project: identity is faceted; personas differ by emphasis, not content · 1×
-- M-4065 0.51 project: federation discipline: one home graph per entity, intents across boundaries, no consensus · 1×
-- M-4066 0.51 feedback: agents take warm paths, not right paths — adoption is won structurally · 1×
-- M-4061 0.50 project: vocabulary naming: artifacts get artifact names, pure acts keep _request
-- M-4063 0.50 project: reference at authoring, resolve at delivery, record the served form
+- M-4457 feedback: code style (Ruby/Rails) — the class-macro idiom · 1×
+- M-4062 feedback: letters vs notices: email is for prose agents wrote; machine events are marked at mint
+- M-4064 project: identity is faceted; personas differ by emphasis, not content · 1×
+- M-4065 project: federation discipline: one home graph per entity, intents across boundaries, no consensus · 1×
+- M-4066 feedback: agents take warm paths, not right paths — adoption is won structurally · 1×
+- M-4061 project: vocabulary naming: artifacts get artifact names, pure acts keep _request
+- M-4063 project: reference at authoring, resolve at delivery, record the served form
