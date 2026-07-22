@@ -130,11 +130,17 @@ export let commands: Record<string, Command> = {
   // graph has exactly one — the spawn needs a checkout). The spawn is
   // an INTENT like go: this module never touches the wire.
   fix: {
-    args: 'T-42 | the toolbar clips at small widths',
-    about: 'run a fix agent — on T-42, or on a task filed from your words',
+    args: '[T-42 | the toolbar clips at small widths]',
+    about: 'run a fix agent — here, on T-42, or on a task your words file',
     run: (rest, ctx) => {
       let text = rest.trim()
-      if (!text) throw new Error('fix: name a task or describe the nit')
+      // Bare :fix means HERE — said on a task's card (or in its
+      // comments, once those run commands), the target is understood.
+      if (!text) {
+        let r = here(ctx)
+        if (!r.comps.task) throw new Error(`${idOf(r)} is not a task`)
+        return { spawn: r.eid, msg: `${idOf(r)} → agent` }
+      }
       if (/^[A-Za-z]+-\d+$/.test(text)) {
         let r = find(ctx.rows, text)
         if (!r?.comps.task) throw new Error(`no such task: ${text}`)

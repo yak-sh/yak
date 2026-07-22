@@ -94,7 +94,10 @@ Deno.test('fix: a bare id spawns, words file a task first', () => {
     project_eid: P,
     domain: 'Eng',
   })
-  assertThrows(() => run('fix', ctx()), Error, 'name a task')
+  // bare :fix means HERE — the focused task is the target
+  assertEquals(run('fix', ctx(T)), { spawn: T, msg: 'T-4 → agent' })
+  assertThrows(() => run('fix', ctx(B)), Error, 'B-3 is not a task')
+  assertThrows(() => run('fix', ctx()), Error, 'nothing focused')
   assertThrows(() => run('fix T-99', ctx()), Error, 'no such task')
 })
 
