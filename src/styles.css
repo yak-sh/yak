@@ -1402,6 +1402,27 @@ html {
   border: 0;
   outline: 0;
 }
+/* The board chip mid-flight: the veil stops catching pointers so the
+   drop hit-tests through to the canvas, and fades to show the target. */
+.Search-drag {
+  pointer-events: none;
+  opacity: 0.15;
+}
+.Search_Board {
+  display: flex;
+  align-items: center;
+  padding: var(--half-gap);
+  margin-right: var(--half-gap);
+  color: var(--dim);
+  background: none;
+  border: 0;
+  border-radius: var(--radius);
+  cursor: grab;
+}
+.Search_Board:hover {
+  color: var(--text);
+  background: var(--soft);
+}
 .Search_Hit {
   padding: var(--half-gap) var(--gap);
   cursor: pointer;

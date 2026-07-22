@@ -19,12 +19,13 @@ export { searchOpen }
 let Frame = block('div', 'Search', {
   Box: 'div',
   Line: 'div',
+  Board: 'button',
   Hit: 'a',
   Title: 'span',
   Id: 'span',
   Snip: 'div',
 })
-let { Box, Line, Hit: Row, Title, Id, Snip } = Frame
+let { Box, Line, Board, Hit: Row, Title, Id, Snip } = Frame
 
 // Matches arrive marked \x01…\x02 — rendered as <mark> WITHOUT parsing
 // any HTML out of the data.
@@ -39,6 +40,8 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
   let [hits, setHits] = useState<Hit[]>([])
   let [err, setErr] = useState('')
   let [sel, setSel] = useState(0)
+  let [q, setQ] = useState('')
+  let [drag, setDrag] = useState(false)
   let box = useRef<HTMLInputElement>(null)
   let seq = useRef(0)
   let c = useComplete() // the dot-grammar's dropdown, under the input
@@ -48,6 +51,7 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
     let d = peek('search') // a swap remounted us mid-search: pick it back up
     if (d?.v && !box.current.value) {
       box.current.value = d.v
+      setQ(d.v)
       seek(d.v)
     }
     box.current.focus()
@@ -59,6 +63,8 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
     drop('search')
     setHits([])
     setSel(0)
+    setQ('')
+    setDrag(false)
   }
   let seek = async (q: string) => {
     let mine = ++seq.current
@@ -78,10 +84,11 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
     open(h.open_eid)
     close()
   }
-  // ⌘/Ctrl+Enter: the search BECOMES a board — the line is already a
-  // query (terms are text preds, query.ts), so the board saves it
-  // verbatim and stays live. Named by the line; retitle it in place.
-  let board = (q: string) => {
+  let href = (h: Hit) => `/${idOf(h.open_eid == h.eid ? h : ent(h.open_eid))}`
+  // The board chip's click: the search BECOMES a board — the line is
+  // already a query (terms are text preds, query.ts), so the board saves
+  // it verbatim and stays live. Named by the line; retitle it in place.
+  let board = () => {
     if (!q.trim()) return
     let eid = uuid()
     mutate(
@@ -95,8 +102,11 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
     if (c.key(e)) return // the dropdown eats its keys (Escape included)
     if (e.key == 'Escape') return close()
     if (e.key == 'Enter') {
+      // ⌘/Ctrl+Enter is cmd-click on the selected hit: a new tab, the
+      // palette left standing — same as cmd-clicking the row anchor.
       if (e.metaKey || e.ctrlKey) {
-        return board((e.currentTarget as HTMLInputElement).value)
+        if (hits[sel]) globalThis.open?.(href(hits[sel]))
+        return
       }
       if (hits[sel]) pick(hits[sel])
       return
@@ -112,6 +122,7 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
 
   return (
     <Frame
+      mod={drag && 'drag'}
       onMouseDown={(e: MouseEvent) => e.target == e.currentTarget && close()}
       // The veil owns its pointers — a press here must not fall through
       // to the shell beneath (Menu does the same).
@@ -122,15 +133,49 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
           <Icon name='search' />
           <input
             ref={box}
-            placeholder='search the graph… (* = prefix, .status=done .modified_at=today filter, ⌘⏎ = board)'
+            placeholder='search the graph… (* = prefix, .status=done .modified_at=today filter, ⌘⏎ = new tab)'
             onInput={(e: InputEvent) => {
               let el = e.currentTarget as HTMLInputElement
               el.value ? save('search', el.value) : drop('search')
+              setQ(el.value)
               seek(el.value)
               c.track(el)
             }}
             onKeyDown={key}
           />
+          {
+            /* The board chip: the line is a live query, and this is its
+              handle. Click saves it as a board and opens it; dragging it
+              onto the canvas drops the SPEC — a text/plain paste payload
+              the canvas already knows how to mint (paste.ts json()). While
+              the chip flies, the veil goes pointer-transparent so the drop
+              hit-tests through to the canvas beneath; a landed drop closes
+              the palette, a cancelled one restores it. */
+          }
+          {!!q.trim() && (
+            <Board
+              type='button'
+              draggable
+              data-tip='save as board — or drag onto the canvas'
+              onClick={board}
+              onDragStart={(ev: DragEvent) => {
+                ev.dataTransfer?.setData(
+                  'text/plain',
+                  JSON.stringify({
+                    doc: { title: q.trim(), body: '' },
+                    board: { query: q.trim() },
+                  }),
+                )
+                setDrag(true)
+              }}
+              onDragEnd={(ev: DragEvent) => {
+                if (ev.dataTransfer?.dropEffect != 'none') close()
+                else setDrag(false)
+              }}
+            >
+              <Icon name='kanban' />
+            </Board>
+          )}
           {c.list}
         </Line>
         {err && <Snip>{err}</Snip>}
@@ -142,7 +187,7 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
         {hits.map((h, i) => (
           <Row
             key={h.eid}
-            href={`/${idOf(h.open_eid == h.eid ? h : ent(h.open_eid))}`}
+            href={href(h)}
             mod={i == sel ? 'sel' : undefined}
             onMouseEnter={() => setSel(i)}
             onClick={(e: MouseEvent) => {
