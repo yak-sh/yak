@@ -127,10 +127,12 @@ export let commands: Record<string, Command> = {
     run: (rest, ctx) => rest.trim() ? go(rest.trim(), ctx) : reopen(rest, ctx),
   },
   // :fix is capture-to-agent in one line: a bare id runs an agent on
-  // that task; anything else is a spec line that FILES the task first
-  // (a fix with no project routes to the repo-bearing one when the
-  // graph has exactly one — the spawn needs a checkout). The spawn is
-  // an INTENT like go: this module never touches the wire.
+  // that task; anything else is a spec line that FILES the task first.
+  // A fix without a named task is a fix for the TOOL you're typing into
+  // — whatever card you're looking at — so it routes to the deployment's
+  // own project (alias `home`; the sole repo-bearing project when no
+  // alias stands). Explicit .project= always wins. The spawn is an
+  // INTENT like go: this module never touches the wire.
   fix: {
     args: '[T-42 | the toolbar clips at small widths]',
     about: 'run a fix agent — here, on T-42, or on a task your words file',
@@ -150,10 +152,14 @@ export let commands: Record<string, Command> = {
       }
       let { title, body, grouped } = spec(text)
       if (!title) throw new Error('fix: needs a title')
-      let task = { ...inherit(ctx), ...grouped.task }
+      let task = { ...grouped.task }
       if (!task.project_eid) {
-        let repos = ctx.rows.filter((r) => r.comps.repo && r.comps.project)
-        if (repos.length == 1) task.project_eid = repos[0].eid
+        let home = find(ctx.rows, 'home')
+        if (home?.comps.project) task.project_eid = home.eid
+        else {
+          let repos = ctx.rows.filter((r) => r.comps.repo && r.comps.project)
+          if (repos.length == 1) task.project_eid = repos[0].eid
+        }
       }
       let eid = uuid()
       return {

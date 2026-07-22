@@ -98,12 +98,32 @@ Deno.test('fix: a bare id spawns, words file a task first', () => {
     Object.fromEntries(f.changes!.map((c) => [c.name, c.comp])).task,
     { status: 'open', project_eid: P },
   )
-  // standing somewhere still wins over the repo route
+  // a worded fix is about the TOOL, not where you stand: the board's
+  // context does NOT ride along (its domain stays out), and with many
+  // repo projects the `home` alias names the deployment's own
   assertEquals(comps('fix Ship it', B).task, {
     status: 'open',
     project_eid: P,
-    domain: 'Eng',
   })
+  let H = 'aaaaaaaa-0000-4000-8000-000000000008'
+  let many = rows({
+    changes: [
+      ...snap.changes,
+      { eid: H, name: 'entity', comp: { eid: H, num: 8, created_at: '' } },
+      { eid: H, name: 'doc', comp: { title: 'Tool', body: '' } },
+      { eid: H, name: 'project', comp: {} },
+      { eid: H, name: 'repo', comp: { path: '/tool', base_branch: 'main' } },
+      { eid: H, name: 'alias', comp: { slug: 'home' } },
+    ],
+  })
+  let routed = run('fix Ship it', { rows: many, eid: B }).changes!
+  assertEquals(
+    routed.find((c) => c.name == 'task')!.comp!.project_eid,
+    H, // home wins over the focused board's project
+  )
+  // …but a typed .project= always outranks home
+  let told = run(`fix .project=${P} Ship it`, { rows: many }).changes!
+  assertEquals(told.find((c) => c.name == 'task')!.comp!.project_eid, P)
   // bare :fix means HERE — the focused task is the target
   assertEquals(run('fix', ctx(T)), { spawn: T, msg: 'T-4 → agent' })
   assertThrows(() => run('fix', ctx(B)), Error, 'B-3 is not a task')
