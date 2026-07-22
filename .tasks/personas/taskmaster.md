@@ -152,6 +152,6 @@ Four causes drive agents to shell over tools: warm-path bias (any loading fricti
 Recall a body by id (memory_recall / task show).
 
 - M-4491 0.96 feedback: glean — the owner's named research operation · 2×
-- M-4415 0.89 feedback: long CLI values ride the @file door — shell substitution starves and empty clears
-- M-4416 0.89 feedback: a session worktree must never own a global install
-- M-4496 0.89 feedback: generated repo artifacts live in the repo (committed), not ~/
+- M-4415 0.88 feedback: long CLI values ride the @file door — shell substitution starves and empty clears
+- M-4416 0.88 feedback: a session worktree must never own a global install
+- M-4496 0.88 feedback: generated repo artifacts live in the repo (committed), not ~/
