@@ -95,7 +95,7 @@ let AllProps = ({ e }: { e: Ent }) => (
     <Row k='eid' v={e.eid} />
     <Row k='num' v={e.num} />
     {comps(e).flatMap(([name, comp]) =>
-      Object.entries(comp).map(([k, v]) =>
+      Object.entries(comp).flatMap(([k, v]) => [
         k in (vocab[name] ?? {})
           ? (
             <>
@@ -106,8 +106,27 @@ let AllProps = ({ e }: { e: Ent }) => (
               <Prop eid={e.eid} comp={name} prop={k} editable />
             </>
           )
-          : <Row key={`${name}.${k}`} comp={name} k={k} v={v} />
-      )
+          : <Row key={`${name}.${k}`} comp={name} k={k} v={v} />,
+        // The Rails idiom, reified: assignee_eid is the COLUMN (uuid,
+        // above); assignee is the ASSOCIATION — the entity itself, said
+        // as its chip + name. Derived, so read-only and dim-keyed.
+        ...(k.endsWith('_eid') && v
+          ? [
+            <>
+              <Key mod='drv'>
+                <Comp>{name}.</Comp>
+                {k.slice(0, -4)}
+              </Key>
+              <Val mod='ent'>
+                <View eid={String(v)} view='Id' /> {String(
+                  ent(String(v)).doc?.title ?? ent(String(v)).session?.id ??
+                    '',
+                )}
+              </Val>
+            </>,
+          ]
+          : []),
+      ])
     )}
   </Grid>
 )

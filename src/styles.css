@@ -1735,6 +1735,15 @@ html {
   color: var(--dim);
   font-size: 11px;
 }
+/* The association row (assignee beside assignee_eid): derived, not
+   data — the key italicizes to say so; the value is a live chip. */
+.Debug_Key-drv {
+  font-style: italic;
+}
+.Debug_Val-ent {
+  color: var(--muted, var(--text));
+  font-size: 12px;
+}
 .Debug_Status {
   font-size: 11px;
 }
