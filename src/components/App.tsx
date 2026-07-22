@@ -1,13 +1,17 @@
-import { ent } from '../live.ts'
+import { useEffect } from 'preact/hooks'
+import { idOf } from '../types.ts'
+import { ent, mode } from '../live.ts'
 import { Admin } from './Admin.tsx'
 import { block, el } from './ui.tsx'
 import { filterable, FilterInput } from './Filter.tsx'
 import { applicable } from './registry.ts'
 import { icons } from './Card.tsx'
+import { spawnHit } from './Canvas.tsx'
 import { Icon } from './icons.tsx'
 import { Menu, menu, navigate, route, screenTarget } from './nav.tsx'
 import { Peek } from './Peek.tsx'
 import { Run, run } from './Run.tsx'
+import { Search, searchOpen } from './Search.tsx'
 import { Status } from './Status.tsx'
 import { View } from './View.tsx'
 import { tips } from './overlay.tsx'
@@ -25,6 +29,26 @@ let Tab = el('button', 'Tab')
 // bar's title text sleeps until that h1 scrolls away). The vim statusbar
 // keeps the floor.
 export let App = () => {
+  // `/` raises the search palette over ANY root — canvas, doc, board,
+  // admin. The shell owns the hotkey and the one <Search> mount so a
+  // fullscreened card can search; what a pick does is the open callback:
+  // a canvas root spawns the hit as a card, everything else navigates —
+  // the hit opens as the root, default view.
+  useEffect(() => {
+    let key = (e: KeyboardEvent) => {
+      if (mode.value != 'normal' || e.repeat || e.key != '/') return
+      if (
+        e.target instanceof HTMLElement &&
+        e.target.matches('input, textarea, select, [contenteditable]')
+      ) return
+      e.preventDefault()
+      searchOpen.value = true
+    }
+    addEventListener('keydown', key)
+    return () => removeEventListener('keydown', key)
+  }, [])
+  let goto = (t: string) => navigate(`/${idOf(ent(t))}`)
+
   // The census rides beside the canvas: /admin* swaps the body wholesale;
   // the bar keeps only the brand (the sidebar is the navigation there).
   if (route.value.startsWith('/admin')) {
@@ -42,6 +66,7 @@ export let App = () => {
         </Body>
         <Menu />
         <Peek />
+        <Search open={goto} />
         <Status />
       </Frame>
     )
@@ -95,6 +120,7 @@ export let App = () => {
       <Menu />
       <Peek />
       <Run />
+      <Search open={view == 'Canvas' ? (h) => spawnHit(e.eid, h) : goto} />
       <Status />
     </Frame>
   )

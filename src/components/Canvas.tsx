@@ -20,7 +20,6 @@ import { pasted } from '../paste.ts'
 import { block } from './ui.tsx'
 import { resolve } from './registry.ts'
 import { Card } from './Card.tsx'
-import { Search, searchOpen } from './Search.tsx'
 
 let Frame = block('div', 'Canvas', { Plane: 'div' })
 let { Plane } = Frame
@@ -28,6 +27,36 @@ let { Plane } = Frame
 // One zoom range for every camera move — pinch and frame-to-fit alike.
 let ZOOM_MIN = 0.1
 let ZOOM_MAX = 4
+
+// Where the search palette drops its pick: a card at the viewport
+// centre, a third of the way down — computed from the camera alone, so
+// the shell (App owns the palette) never reaches into a mounted canvas.
+export let spawnHit = (canvas: string, target: string) => {
+  let { x, y, zoom, h } = camera.value
+  let card = uuid()
+  mutate(
+    {
+      eid: card,
+      name: 'card',
+      comp: { eid: card, target_eid: target, view: resolve(ent(target)).view },
+    },
+    {
+      eid: card,
+      name: 'pin',
+      comp: {
+        eid: card,
+        canvas_eid: canvas,
+        // half a nominal card wide, titlebar under the point — the same
+        // landing spawnAt gives a centered drop.
+        x: Math.round(x - 240),
+        y: Math.round(y - h / 6 / zoom - 15),
+        w: 0,
+        h: 0,
+        z: topZ(canvas) + 1,
+      },
+    },
+  )
+}
 
 // The pannable, zoomable plane of pinned cards. The camera is a per-client,
 // per-canvas entity (canvases nest — a client has one camera per canvas it
@@ -232,11 +261,6 @@ export let Canvas = ({ eid }: { eid: string }) => {
         unlatch()
         camera.value = { ...camera.value, zoom: 1 }
         queue('zoom')
-        return
-      }
-      if (e.key == '/') {
-        e.preventDefault()
-        searchOpen.value = true
         return
       }
       if (e.key != ' ') return
@@ -535,19 +559,6 @@ export let Canvas = ({ eid }: { eid: string }) => {
       >
         {pinned(eid).map((p) => <Card key={p.eid} p={p} />)}
       </Plane>
-      <Search
-        open={(target) => {
-          let box = el.current!.getBoundingClientRect()
-          spawnAt(
-            [],
-            target,
-            undefined,
-            0,
-            box.left + box.width / 2,
-            box.top + box.height / 3,
-          )
-        }}
-      />
     </Frame>
   )
 }

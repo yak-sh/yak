@@ -7,11 +7,13 @@ import { block } from './ui.tsx'
 import { Icon } from './icons.tsx'
 import { useComplete } from './Complete.tsx'
 
-// `/` in normal mode opens the palette (Canvas owns the hotkey and the
-// spawn); Escape closes it. Search runs server-side (FTS5 over every
-// doc) — the palette is just an input, a ranked list, and j/k-ish keys.
-// searchOpen lives in the shell (live.ts) so a hot swap can't shut the
-// palette; the query itself is a draft, reseeded on remount.
+// `/` in normal mode opens the palette (the App shell owns the hotkey
+// and the mount, so any root can search; the `open` callback decides
+// what a pick does); Escape closes it. Search runs server-side (FTS5
+// over every doc) — the palette is just an input, a ranked list, and
+// j/k-ish keys. searchOpen lives in the shell (live.ts) so a hot swap
+// can't shut the palette; the query itself is a draft, reseeded on
+// remount.
 export { searchOpen }
 
 let Frame = block('div', 'Search', {
@@ -111,9 +113,8 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
   return (
     <Frame
       onMouseDown={(e: MouseEvent) => e.target == e.currentTarget && close()}
-      // The canvas beneath pans on pointerdown WITH pointer capture —
-      // a captured pointerup retargets to the canvas, so no click ever
-      // reaches a hit. The veil owns its pointers (Menu does the same).
+      // The veil owns its pointers — a press here must not fall through
+      // to the shell beneath (Menu does the same).
       onPointerDown={(e: PointerEvent) => e.stopPropagation()}
     >
       <Box>
