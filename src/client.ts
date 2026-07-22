@@ -816,12 +816,15 @@ let brief = (
 // The dupe hint: after a create, ask the server what the graph already
 // says like this (GET /similar — embed.ts). One line naming the
 // neighbors above the floor, or '' — and '' on EVERY failure: a box
-// without the embedder still creates, silently. The floor is empirical:
-// re-worded twins land ≥0.86; mere topic-mates sit in the 0.7s.
+// without the embedder still creates, silently. The floor is empirical
+// (measured on the live graph, 2026-07-22): an exact copy scores 1.0, a
+// reworded twin ~0.83, a close sibling ~0.81, a same-domain different
+// fact ~0.68 — 0.78 catches the twins (with margin for terser rewordings) and admits the odd sibling worth
+// a look, while topic-mates stay out.
 export let similarHint = async (
   text: string,
   self?: string,
-  floor = 0.86,
+  floor = 0.78,
 ) => {
   try {
     let res = await fetch(
