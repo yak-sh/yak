@@ -10,3 +10,6 @@ node_modules/
 
 # agent worktrees parked inside the repo
 .claude/worktrees/
+
+# Operator scratch — wake-brief note-to-self (re-injected post-clear), not a tracked artifact
+.operate/

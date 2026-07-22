@@ -1,4 +1,8 @@
 {
+  "enabledPlugins": {
+    "email@holdco-fleet": true
+  },
+  "fallbackModel": ["claude-sonnet-5", "claude-haiku-4-5"],
   "hooks": {
     "SessionStart": [
       {
@@ -19,6 +23,21 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/self-clear-stop.sh"
+          }
+        ]
+      }
     ]
+  },
+  "permissions": {
+    "deny": ["AskUserQuestion"],
+    "defaultMode": "bypassPermissions"
   }
 }

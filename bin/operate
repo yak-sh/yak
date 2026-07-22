@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+#
+# operate — git-style dispatcher for this venture's operator toolbelt.
+#
+# `operate <tool> [args]` execs bin/operate-<tool> from this same dir; each tool
+# is a standalone executable (bash+jq here) that runs with no holdco repo on the
+# box. Built-ins (help / version / sync) live in the dispatcher so a repo that has
+# operate can always list, hash, and refresh its tools even if a copy is missing.
+#
+#   operate help       list every operate-* tool (line-3 summary) + built-ins
+#   operate version    per-tool short sha256 — eyeball drift against the source
+#   operate sync       copy any differing operate* from sync.source into bin/
+#   operate <tool> --help   the tool's own header block
+#
+# Config: operate.json at the repo root (git-tracked, non-secret; every key
+# optional). See operate.json for the schema.
+set -uo pipefail
+
+DIR="$(cd "$(dirname "$0")" && pwd)"
+JQ="$(command -v jq 2>/dev/null || true)"
+CONFIG="${OPERATE_CONFIG:-$DIR/../operate.json}"
+cfg() { [ -n "$JQ" ] && [ -f "$CONFIG" ] && "$JQ" -r ".$1 // empty" "$CONFIG" 2>/dev/null || true; }
+untilde() { case "$1" in "~/"*) printf '%s' "$HOME/${1#\~/}" ;; *) printf '%s' "$1" ;; esac; }
+
+# Line 3 of every tool is "# operate-<name> — <one-line summary>"; harvest it.
+summary() { sed -n '3s/^# *//p' "$1" 2>/dev/null; }
+
+usage() {
+	echo "usage: operate <tool> [args]"
+	echo
+	echo "tools:"
+	local t n
+	for t in "$DIR"/operate-*; do
+		[ -x "$t" ] || continue
+		n="${t##*/operate-}"
+		printf '  %-12s %s\n' "$n" "$(summary "$t")"
+	done
+	echo
+	echo "built-ins:"
+	printf '  %-12s %s\n' "help" "this listing"
+	printf '  %-12s %s\n' "version" "per-tool short sha256 (drift check)"
+	printf '  %-12s %s\n' "sync" "refresh operate-* from sync.source"
+	echo
+	echo "run 'operate <tool> --help' for detail."
+}
+
+cmd="${1:-help}"
+[ $# -gt 0 ] && shift
+
+case "$cmd" in
+help | -h | --help)
+	usage
+	;;
+version)
+	for t in "$DIR"/operate "$DIR"/operate-*; do
+		[ -f "$t" ] || continue
+		printf '  %-18s %s\n' "${t##*/}" "$(sha256sum "$t" 2>/dev/null | cut -c1-12)"
+	done
+	;;
+sync)
+	src="$(untilde "$(cfg sync.source)")"
+	if [ -z "$src" ] || [ ! -d "$src" ]; then
+		echo "operate sync: no sync source configured (sync.source in operate.json) — nothing to do."
+		exit 0
+	fi
+	changed=0
+	for s in "$src"/operate "$src"/operate-*; do
+		[ -f "$s" ] || continue
+		b="${s##*/}"; d="$DIR/$b"
+		if [ ! -f "$d" ] || ! cmp -s "$s" "$d"; then
+			cp "$s" "$d" && chmod +x "$d" && { echo "  synced $b"; changed=1; }
+		fi
+	done
+	if [ "$changed" = 0 ]; then
+		echo "operate sync: already up to date."
+	else
+		echo "operate sync: copied the above — commit them in this pass."
+	fi
+	;;
+*)
+	tool="$DIR/operate-$cmd"
+	if [ -x "$tool" ]; then exec "$tool" "$@"; fi
+	echo "operate: unknown tool '$cmd'" >&2
+	echo >&2
+	usage >&2
+	exit 2
+	;;
+esac
