@@ -1,4 +1,3 @@
-import { idOf } from '../types.ts'
 import { ent, mutate } from '../live.ts'
 import { type Action, define, defineActions, has, resolve } from './registry.ts'
 import {
@@ -42,8 +41,10 @@ export { applicable, extend, has, type Renderer, resolve } from './registry.ts'
 
 // The CURATED registry — every view the app can render, one list, in
 // priority order (a score tie goes to the earlier entry). The machinery
-// lives in registry.ts, so this file is exactly: the list, the View
-// component, and the drag payload. Adding a view = a file under views/,
+// lives in registry.ts, so this file is exactly: the list and the View
+// component (the drag payload lives in drag.ts — views import it, so it
+// must never live here where the whole list would ride along). Adding a
+// view = a file under views/,
 // an entry here, and — if it should appear as a card tab — a name in the
 // tabs list plus an icon in Card.tsx.
 define([
@@ -219,48 +220,4 @@ export let View = (
   let r = resolve(e, view)
   let R = (context == 'Card' ? r.Card : undefined) ?? r.Render
   return <R e={e} {...rest} />
-}
-
-let b64 = (t: string) =>
-  btoa(
-    Array.from(new TextEncoder().encode(t), (b) => String.fromCharCode(b))
-      .join(''),
-  )
-
-// Arm a dragstart with the standard payload: the spawn card (for a canvas
-// drop — target + view + width, plus where in the dragged element the grab
-// happened, so the spawned card lands where the ghost was dropped), and,
-// when the view's renderer has a file form, the serialized file (for a
-// desktop drop) plus text for editors. `pin` rides only for an EXISTING
-// card being relocated (a Tray row dragged out): its presence says MOVE
-// this pin, not clone a new card — tab drags omit it, so they still clone.
-export let dragData = (
-  ev: DragEvent,
-  eid: string,
-  view: string,
-  w = 0,
-  pin?: string,
-) => {
-  if (!ev.dataTransfer || !(ev.currentTarget instanceof HTMLElement)) return
-  let e = ent(eid)
-  let box = ev.currentTarget.getBoundingClientRect()
-  ev.dataTransfer.setData(
-    'application/x-tasks-card',
-    JSON.stringify({
-      target_eid: eid,
-      view,
-      w,
-      ox: ev.clientX - box.left,
-      oy: ev.clientY - box.top,
-      ...(pin ? { pin } : {}),
-    }),
-  )
-  let f = resolve(e, view).file
-  if (!f) return
-  let text = f.text(e)
-  ev.dataTransfer.setData('text/plain', text)
-  ev.dataTransfer.setData(
-    'DownloadURL',
-    `${f.mime}:${idOf(e)}.${f.ext}:data:${f.mime};base64,${b64(text)}`,
-  )
 }

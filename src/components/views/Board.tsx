@@ -17,7 +17,8 @@ import { block, focus } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
 import { Prio } from '../Prio.tsx'
 import { passOf } from '../Filter.tsx'
-import { dragData, View } from '../View.tsx'
+import { dragData } from '../drag.ts'
+import { View } from '../View.tsx'
 
 let Frame = block('div', 'Board', {
   Col: 'div',

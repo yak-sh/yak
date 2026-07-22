@@ -7,7 +7,8 @@ import { Dot } from './Dot.tsx'
 import { Icon } from './icons.tsx'
 import { icons } from './Card.tsx'
 import { openAt } from './nav.tsx'
-import { dragData, View } from './View.tsx'
+import { dragData } from './drag.ts'
+import { View } from './View.tsx'
 
 // The Tray ("the Shelf"): the statusbar's right end. The strip — one
 // status dot per LIVE session, one view icon per shelved card — lives IN

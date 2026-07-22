@@ -3,7 +3,7 @@ import { block, copy } from './ui.tsx'
 import { cache, ent, rootCanvas } from '../live.ts'
 import { actionsFor, resolve } from './registry.ts'
 import { type Ent, idOf } from '../types.ts'
-import { dragData } from './View.tsx'
+import { dragData } from './drag.ts'
 
 // The URL is the root card: `/` shows the root canvas, `/T-123` (or any
 // id form) shows that entity fullscreened, `?v=List` picks its view.

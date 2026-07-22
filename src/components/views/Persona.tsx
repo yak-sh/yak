@@ -1,7 +1,8 @@
 import { type Change, type Ent } from '../../types.ts'
 import { byWarmth, cache, deps, ent, mutate } from '../../live.ts'
 import { block } from '../ui.tsx'
-import { dragData, View } from '../View.tsx'
+import { dragData } from '../drag.ts'
+import { View } from '../View.tsx'
 
 let Frame = block('div', 'Persona', {
   Sec: 'div',

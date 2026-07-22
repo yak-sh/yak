@@ -5,7 +5,8 @@ import { orderOf, parseQuery } from '../../query.ts'
 import { block } from '../ui.tsx'
 import { menu } from '../nav.tsx'
 import { passOf } from '../Filter.tsx'
-import { dragData, View } from '../View.tsx'
+import { dragData } from '../drag.ts'
+import { View } from '../View.tsx'
 
 let Frame = block('div', 'List', { Row: 'div' })
 let { Row } = Frame
