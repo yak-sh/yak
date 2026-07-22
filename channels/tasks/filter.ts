@@ -5,7 +5,7 @@
 //
 // A `Change` is the wire unit `{eid, name, comp}` — a component PATCH. The /ws
 // endpoint rebroadcasts every applied batch to every client, so this channel is
-// just another client that reads, never writes: it watches the stream for two
+// just another client that reads, never writes: it watches the stream for three
 // things aimed at ITS session and turns each into one channel event.
 
 import { type Change, idOf, kindOf } from '../../src/types.ts'
@@ -19,12 +19,18 @@ export type Event = { content: string; meta: Record<string, string> }
 
 // What channelEvents needs to know about the world beyond one batch: which
 // session entity it serves, that session's actor (a knock may be aimed at
-// either), and how to turn an eid into a human id (T-7, S-31) — null when the
-// eid isn't known yet.
+// either), its home project (where its mail lands), how to turn an eid into a
+// human id (T-7, S-31) — null when the eid isn't known yet — and a letter's
+// words from the cache (the arrival stamp is a bare mail row). `seen` is the
+// mail eids already delivered this run: any later full-row stamp re-broadcast
+// (the mail.ts idiom casts whole rows) must not ring twice.
 export type Ctx = {
   sessionEid: string
   actorEid?: string | null
+  homeEid?: string | null
   idOf: (eid: string) => string | null
+  docOf?: (eid: string) => { title: string; body: string } | null
+  seen?: Set<string>
 }
 
 let str = (v: unknown) => (typeof v == 'string' ? v : '')
@@ -48,7 +54,14 @@ export let cleanAttr = (s: string) =>
 // from the boot snapshot and kept fresh by every broadcast (num rides in on
 // first touch, a component patch adds/removes its name). humanId derives the id
 // the same way the UI does — kindOf over the present components, then idOf.
-export type Row = { num: number; comps: Set<string> }
+// Mail-wearers also keep their doc: the arrival stamp is a bare mail row (a
+// mint casts its doc a frame earlier; an echo's doc landed with the original
+// send or the boot snapshot), so a letter's words must come from memory.
+export type Row = {
+  num: number
+  comps: Set<string>
+  doc?: { title: string; body: string }
+}
 export type Index = Map<string, Row>
 
 export let learn = (index: Index, changes: Change[]) => {
@@ -70,7 +83,22 @@ export let learn = (index: Index, changes: Change[]) => {
     else row.comps.add(c.name)
     index.set(c.eid, row)
   }
+  // Second pass, so a mint's doc is cached whichever side of its mail comp it
+  // rides in the batch. A doc change is a PATCH — merge only what it carries.
+  for (let c of changes) {
+    if (c.name != 'doc' || !c.comp) continue
+    let row = index.get(c.eid)
+    if (!row?.comps.has('mail')) continue
+    let doc = row.doc ?? { title: '', body: '' }
+    if ('title' in c.comp) doc.title = str(c.comp.title)
+    if ('body' in c.comp) doc.body = str(c.comp.body)
+    row.doc = doc
+  }
 }
+
+// eid → the cached doc of a mail-wearer, or null — the Ctx.docOf the live
+// server wires in.
+export let docOf = (index: Index, eid: string) => index.get(eid)?.doc ?? null
 
 // eid → human id (T-7), or null when the spine's num hasn't been seen yet.
 export let humanId = (index: Index, eid: string): string | null => {
@@ -88,14 +116,28 @@ export let humanId = (index: Index, eid: string): string | null => {
 export let findSession = (
   changes: Change[],
   sessionId: string,
-): { eid: string; actorEid?: string } | undefined => {
+): { eid: string; actorEid?: string; personaEid?: string } | undefined => {
   for (let c of changes) {
     if (c.name != 'session' || !c.comp) continue
     if (str(c.comp.id) != sessionId) continue
     let actor = str(c.comp.actor_eid)
-    return { eid: c.eid, actorEid: actor || undefined }
+    let persona = str(c.comp.persona_eid)
+    return {
+      eid: c.eid,
+      actorEid: actor || undefined,
+      personaEid: persona || undefined,
+    }
   }
 }
+
+// The injection policy (owner, 2026-07-22): ALL verified unread mail aimed at
+// this session's home project injects; unverified never does — it stays in the
+// store/graph for deliberate triage. Narrowing later is one line here.
+export let injects = (
+  m: Record<string, unknown>,
+  homeEid?: string | null,
+): boolean =>
+  !!m.verified && !m.read_at && !!homeEid && str(m.target_eid) == homeEid
 
 // The two edges of the doc a component's body rides on, indexed by eid within
 // the batch — a comment's words and a knock's note both land as a `doc` change
@@ -115,7 +157,7 @@ let words = (doc?: { title: string; body: string }) =>
 
 // The filter + format, pure. Given one broadcast batch and the session context,
 // return the channel events to emit — in batch order, so delivery is
-// deterministic. Two things are aimed at a session:
+// deterministic. Three things are aimed at a session:
 //
 //   1. a `comment` whose target_eid is this session's eid — someone messaging
 //      the session — but ONLY at mint, when the batch also carries the doc that
@@ -123,6 +165,7 @@ let words = (doc?: { title: string; body: string }) =>
 //   2. a `knock` (types.ts): to_eid is the recipient — this session or its
 //      actor — and target_eid is what to look at; the words ride as a plain
 //      comment on the TARGET in the same batch (the :knock contract).
+//   3. a `mail` arrival for the session's home project — see the branch.
 export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
   let docs = docsIn(changes)
   let out: Event[] = []
@@ -151,6 +194,34 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
       let head = atId ? `knock: look at ${atId}` : 'knock'
       let content = note ? `${head} — ${note}` : head
       out.push({ content, meta: { kind: 'knock' } })
+      continue
+    }
+
+    if (c.name == 'mail') {
+      // The sweep's stamp broadcast is the arrival: received_at is a
+      // server-only column, so only the full-row stamp carries it (knock's
+      // acted_at trick, inverted — here the stamp IS the news). The mint's
+      // wire frames never wear it, and `seen` keeps any later full-row
+      // re-broadcast from ringing twice.
+      if (c.comp.received_at == null) continue
+      if (!injects(c.comp, ctx.homeEid)) continue
+      if (ctx.seen?.has(c.eid)) continue
+      ctx.seen?.add(c.eid)
+      let id = ctx.idOf(c.eid)
+      let doc = docs.get(c.eid) ?? ctx.docOf?.(c.eid)
+      let from = cleanAttr(str(c.comp.from)) || 'unknown'
+      let subj = cleanAttr(doc?.title ?? '')
+      let ref = id ?? c.eid
+      let content = cleanBody(doc?.body ?? '') ||
+        `mail ${ref} from ${from}${subj && `: ${subj}`} — task mail show ${ref}`
+      let meta: Record<string, string> = {
+        kind: 'mail',
+        from,
+        auth: c.comp.verified ? 'VERIFIED' : 'UNVERIFIED',
+      }
+      if (subj) meta.subj = subj
+      if (id) meta.id = id
+      out.push({ content, meta })
     }
   }
   return out

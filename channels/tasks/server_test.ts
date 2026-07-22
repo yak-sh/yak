@@ -8,6 +8,7 @@ import {
   cleanAttr,
   cleanBody,
   type Ctx,
+  docOf,
   findSession,
   humanId,
   type Index,
@@ -22,12 +23,16 @@ let ch = (
 
 // A stub id book — the socket-fed index is exercised separately (learn tests).
 let idOf = (eid: string): string | null =>
-  ({ s1: 'S-1', t9: 'T-9', p1: 'P-1' } as Record<string, string>)[eid] ?? null
+  ({ s1: 'S-1', t9: 'T-9', p1: 'P-1', m1: 'E-5' } as Record<string, string>)[
+    eid
+  ] ?? null
 
 let ctx = (over: Partial<Ctx> = {}): Ctx => ({
   sessionEid: 'sess',
   actorEid: 'actor',
+  homeEid: 'home',
   idOf,
+  seen: new Set(),
   ...over,
 })
 
@@ -121,6 +126,109 @@ Deno.test("the resolver's stamp re-broadcast is a receipt, not a nudge", () => {
   assertEquals(channelEvents(batch, ctx()), [])
 })
 
+// --- mail --------------------------------------------------------------------
+// The arrival signal is the sweep's full-row stamp broadcast: a bare `mail`
+// change carrying received_at (server-only, never on a wire patch). The doc
+// rides an EARLIER frame (a mint) or the boot snapshot (an echo), so the words
+// come from ctx.docOf.
+
+let stamp = (over: Record<string, unknown> = {}) =>
+  ch('m1', 'mail', {
+    to: 'taskmaster@bot.yak.sh',
+    from: 'jeff@yak.sh',
+    target_eid: 'home',
+    message_id: 'msg:1:x',
+    received_at: '2026-07-22T00:00:00Z',
+    verified: 1,
+    read_at: null,
+    ...over,
+  })
+
+let letter = () => ({ title: 'hello', body: 'a letter' })
+
+Deno.test('a verified unread mail for the home project injects', () => {
+  let out = channelEvents([stamp()], ctx({ docOf: () => letter() }))
+  assertEquals(out, [{
+    content: 'a letter',
+    meta: {
+      kind: 'mail',
+      from: 'jeff@yak.sh',
+      auth: 'VERIFIED',
+      subj: 'hello',
+      id: 'E-5',
+    },
+  }])
+})
+
+Deno.test('unverified mail never injects — it waits for triage', () => {
+  let out = channelEvents([stamp({ verified: 0 })], ctx({ docOf: letter }))
+  assertEquals(out, [])
+})
+
+Deno.test('mail already read is not re-announced', () => {
+  let batch = [stamp({ read_at: '2026-07-22T01:00:00Z' })]
+  assertEquals(channelEvents(batch, ctx({ docOf: letter })), [])
+})
+
+Deno.test("mail aimed at another project isn't this session's", () => {
+  let batch = [stamp({ target_eid: 'elsewhere' })]
+  assertEquals(channelEvents(batch, ctx({ docOf: letter })), [])
+})
+
+Deno.test('no resolved home project, no mail delivery', () => {
+  let batch = [stamp()]
+  assertEquals(channelEvents(batch, ctx({ homeEid: null, docOf: letter })), [])
+})
+
+Deno.test("a mint's wire frame (no received_at) is not the arrival", () => {
+  let batch = [
+    ch('m1', 'doc', { title: 'hello', body: 'a letter' }),
+    ch('m1', 'mail', { to: 'x@y', from: 'jeff@yak.sh', target_eid: 'home' }),
+  ]
+  assertEquals(channelEvents(batch, ctx()), [])
+})
+
+Deno.test('an echo arrival with no doc anywhere falls back to a pointer', () => {
+  let out = channelEvents([stamp()], ctx())
+  assertEquals(out[0].content, 'mail E-5 from jeff@yak.sh — task mail show E-5')
+  assertEquals(out[0].meta, {
+    kind: 'mail',
+    from: 'jeff@yak.sh',
+    auth: 'VERIFIED',
+    id: 'E-5',
+  })
+})
+
+Deno.test('a full-row re-broadcast does not ring twice', () => {
+  let c = ctx({ docOf: letter })
+  assertEquals(channelEvents([stamp()], c).length, 1)
+  assertEquals(channelEvents([stamp()], c), [])
+})
+
+Deno.test("learn caches a mail's doc for the stamp frame that follows", () => {
+  let idx: Index = new Map()
+  learn(idx, [
+    ch('m1', 'entity', { num: 5 }),
+    // doc BEFORE mail in the same batch — the second pass still catches it.
+    ch('m1', 'doc', { title: 'hello', body: 'a letter' }),
+    ch('m1', 'mail', { to: 'x@y', from: 'jeff@yak.sh', target_eid: 'home' }),
+  ])
+  assertEquals(docOf(idx, 'm1'), { title: 'hello', body: 'a letter' })
+  let out = channelEvents([stamp()], ctx({ docOf: (e) => docOf(idx, e) }))
+  assertEquals(out[0].content, 'a letter')
+})
+
+Deno.test('a doc patch on a cached mail merges only what it carries', () => {
+  let idx: Index = new Map()
+  learn(idx, [
+    ch('m1', 'doc', { title: 'hello', body: 'a letter' }),
+    ch('m1', 'mail', { to: 'x@y' }),
+  ])
+  learn(idx, [ch('m1', 'doc', { body: 'edited' })])
+  assertEquals(docOf(idx, 'm1'), { title: 'hello', body: 'edited' })
+  assertEquals(docOf(idx, 'ghost'), null)
+})
+
 // --- identity ----------------------------------------------------------------
 
 Deno.test('learn + humanId derive a human id from spine and components', () => {
@@ -154,9 +262,13 @@ Deno.test('learn drops a component when its patch clears it', () => {
 Deno.test('findSession resolves the served session by its id', () => {
   let batch = [
     ch('e9', 'session', { id: 'other', actor_eid: 'x' }),
-    ch('e1', 'session', { id: 'wanted', actor_eid: 'p1' }),
+    ch('e1', 'session', { id: 'wanted', actor_eid: 'p1', persona_eid: 'n1' }),
   ]
-  assertEquals(findSession(batch, 'wanted'), { eid: 'e1', actorEid: 'p1' })
+  assertEquals(findSession(batch, 'wanted'), {
+    eid: 'e1',
+    actorEid: 'p1',
+    personaEid: 'n1',
+  })
   assertEquals(findSession(batch, 'missing'), undefined)
 })
 
