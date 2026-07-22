@@ -13,7 +13,10 @@
     "semiColons": false,
     "singleQuote": true,
     "exclude": [
-      "src/vendor"
+      "src/vendor",
+      ".tasks",
+      "AGENTS.md",
+      "CLAUDE.md"
     ]
   },
   "lint": {
