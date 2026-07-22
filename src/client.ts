@@ -614,8 +614,25 @@ export let notices = (snap: Snapshot, session: string) => {
       )
     )
   if (!unseen.length) return { lines: [] as string[], ack: [] as Change[] }
-  let who = (eid: unknown) =>
-    String(byEid.get(String(eid))?.comps.session?.id ?? 'someone')
+  // The byline walks the actor chain (comment → author → actor): a
+  // session speaks as its operator "via S-n", a client as its person —
+  // 'someone' only when the chain truly ends in the dark.
+  let name = (r?: Row) =>
+    String(
+      r?.comps.alias?.slug ?? r?.comps.doc?.title ?? r?.comps.session?.id ??
+        '',
+    )
+  let who = (eid: unknown) => {
+    let r = byEid.get(String(eid))
+    if (!r) return 'someone'
+    let actor = byEid.get(
+      String(r.comps.session?.actor_eid ?? r.comps.client?.actor_eid ?? ''),
+    )
+    if (r.comps.session) {
+      return actor ? `${name(actor)} · via ${idOf(r)}` : name(r) || 'someone'
+    }
+    return name(actor) || name(r) || 'someone'
+  }
   let lines = unseen.slice(0, 20).map((r) => {
     let c = r.comps.comment
     let target = byEid.get(String(c.target_eid))

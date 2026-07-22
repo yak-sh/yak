@@ -224,7 +224,11 @@ These hold everywhere in this repo, whoever — or whatever — writes the code:
 - Gate: `deno task check` (fmt + lint + typecheck) AND `deno task test` must be
   green. Tests live beside their subject as `*_test.ts` — pure seams only (apply
   semantics, dot-params, change builders, scoring); the interactive layers are
-  verified by probes (below), not mocks.
+  verified by probes (below), not mocks. **Piping a gate eats its exit code**
+  (`check | tail` exits as tail; `;` after it un-guards the `&&` chain) — echo
+  `${pipestatus[1]}` and READ it before acting on the result. This has let a
+  lint failure ride to main and removed a worktree under an unmerged branch
+  (both 2026-07-22) — the trap earns its ink.
 - **Verify end-to-end before done** — the holdco standard. Recipes that work
   headless: screenshot
   `google-chrome --headless=new --screenshot=x.png
