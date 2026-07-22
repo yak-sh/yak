@@ -11,6 +11,7 @@ import {
   find,
   hookClaim,
   lapseChanges,
+  ledger,
   memoryChanges,
   notices,
   param,
@@ -571,4 +572,103 @@ Deno.test('grammar: the teaching text derives from the vocabulary', async () => 
   assertMatch(GRAMMAR, /status\(open\|wip\|done\|cancelled\)/)
   assertMatch(GRAMMAR, /Statuses: open, wip, done, cancelled/)
   assertMatch(FILTERS, /time phrases/i)
+})
+
+// A day's journal slice, oldest events last (the server serves newest
+// first): mint a task, claim it, comment on it, link it, finish it.
+let DAY: import('./client.ts').JournalEntry[] = [
+  {
+    ts: '2026-07-20T18:00:00Z',
+    actor: 'sess-x',
+    changes: [
+      { eid: T1, name: 'task', comp: { status: 'done' } },
+      {
+        eid: 'c-1',
+        name: 'doc',
+        comp: { title: '', body: 'status: wip → done — verified\nmore' },
+      },
+      { eid: 'c-1', name: 'comment', comp: { target_eid: T1 } },
+      { eid: 'c-1', name: 'entity', comp: { num: 9, created_at: '' } },
+    ],
+  },
+  {
+    ts: '2026-07-20T12:00:00Z',
+    actor: 'sess-x',
+    changes: [
+      {
+        eid: T1,
+        name: 'dependency',
+        comp: { type: 'requires', child_eid: T2 },
+      },
+    ],
+  },
+  {
+    ts: '2026-07-20T10:00:00Z',
+    actor: 'sess-x',
+    changes: [{ eid: T1, name: 'claim', comp: { session_eid: S } }],
+  },
+  {
+    ts: '2026-07-20T09:00:00Z',
+    actor: 'sess-x',
+    changes: [
+      { eid: T1, name: 'doc', comp: { title: 'First', body: '' } },
+      { eid: T1, name: 'task', comp: { status: 'open' } },
+      { eid: T1, name: 'entity', comp: { num: 2, created_at: '' } },
+    ],
+  },
+]
+
+Deno.test('ledger: the day as lived, oldest first, ids humanized', () => {
+  let lines = ledger(DAY, all)
+  assertEquals(
+    lines[0],
+    '2026-07-20T09:00:00Z → 2026-07-20T18:00:00Z · 4 batch(es)',
+  )
+  let text = lines.join('\n')
+  assertMatch(text, /\+ minted task T-2 First/)
+  assertMatch(text, /⚑ claimed T-2 First/)
+  assertMatch(text, /∴ linked T-2 First requires T-3 Second/)
+  assertMatch(text, /→ T-2 First status → done/)
+  assertMatch(text, /💬 on T-2 First: status: wip → done — verified/) // first line only
+  // order: mint before claim before link before finish
+  let at = (re: RegExp) => lines.findIndex((l) => re.test(l))
+  assertEquals(at(/minted/) < at(/claimed/), true)
+  assertEquals(at(/claimed/) < at(/linked/), true)
+  assertEquals(ledger([], all), [])
+})
+
+Deno.test('lapse: the stub carries the ledger; a hand-written brief is never clobbered', () => {
+  let AT = Date.UTC(2026, 6, 20)
+  let doc = lapseChanges(all, 'sess-x', AT, DAY)
+    .find((c) => c.name == 'doc' && c.eid == S)
+  let body = String(doc?.comp?.body)
+  assertMatch(body, /^Auto-written at lapse/)
+  assertMatch(body, /## Ledger/)
+  assertMatch(body, /⚑ claimed T-2/)
+  assertMatch(body, /## Ended holding/)
+  // an existing STUB refreshes (keeps its title), a prose brief stays
+  let stubbed = structuredClone(snap)
+  stubbed.changes.push({
+    eid: S,
+    name: 'doc',
+    comp: {
+      title: 'Work session 2026-07-19',
+      body: 'Auto-written at lapse — old stub',
+    },
+  })
+  let re = lapseChanges(rows(stubbed), 'sess-x', AT, DAY)
+    .find((c) => c.name == 'doc' && c.eid == S)
+  assertEquals(re?.comp?.title, 'Work session 2026-07-19')
+  assertMatch(String(re?.comp?.body), /## Ledger/)
+  let prose = structuredClone(snap)
+  prose.changes.push({
+    eid: S,
+    name: 'doc',
+    comp: { title: 'My day', body: 'I did things, thoughtfully.' },
+  })
+  assertEquals(
+    lapseChanges(rows(prose), 'sess-x', AT, DAY)
+      .some((c) => c.name == 'doc' && c.eid == S),
+    false,
+  )
 })

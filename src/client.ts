@@ -92,6 +92,100 @@ export let history = async (eid: string, limit = 50) => {
   return res.json() as Promise<JournalEntry[]>
 }
 
+export let historyBy = async (actor: string, limit = 500) => {
+  let res = await fetch(
+    `http://${host()}/journal?actor=${
+      encodeURIComponent(actor)
+    }&limit=${limit}`,
+  )
+  if (!res.ok) throw new Error(`server said ${res.status}`)
+  return res.json() as Promise<JournalEntry[]>
+}
+
+// The session's day, told from the wire's own record — no model, no
+// recollection, just the journal grouped into sentences. Pure: entries
+// arrive newest-first (as the server serves them), `all` only humanizes
+// ids; a dead endpoint falls back to a short eid rather than lying.
+export let ledger = (entries: JournalEntry[], all: Row[]): string[] => {
+  if (!entries.length) return []
+  let byEid = new Map(all.map((r) => [r.eid, r]))
+  let cut = (s: unknown, n = 72) => {
+    let t = String(s ?? '').split('\n')[0].trim()
+    return t.length > n ? t.slice(0, n - 1) + '…' : t
+  }
+  let name = (eid: unknown) => {
+    let r = byEid.get(String(eid))
+    return r
+      ? `${idOf(r)} ${cut(r.comps.doc?.title ?? r.comps.session?.id ?? '', 48)}`
+        .trim()
+      : String(eid).slice(0, 8)
+  }
+  let lines: string[] = []
+  for (let e of [...entries].reverse()) { // oldest first: the day as lived
+    let minted = new Set(
+      e.changes.filter((c) => c.name == 'entity' && c.comp?.num != null)
+        .map((c) => c.eid),
+    )
+    let seen = new Set<string>() // eids already said this batch
+    for (let c of e.changes) {
+      if (c.name == 'entity' && c.comp == null) {
+        lines.push(`- × deleted ${name(c.eid)}`)
+        seen.add(c.eid)
+      }
+    }
+    for (let eid of minted) {
+      if (seen.has(eid)) continue
+      let comps = Object.fromEntries(
+        e.changes.filter((c) => c.eid == eid && c.comp).map(
+          (c) => [c.name, c.comp!],
+        ),
+      )
+      if (comps.comment) {
+        let first = cut(comps.doc?.body)
+        lines.push(
+          `- 💬 on ${name(comps.comment.target_eid)}${
+            first ? `: ${first}` : ''
+          }`,
+        )
+      } else {
+        lines.push(
+          `- + minted ${kindOf(comps)} ${name(eid)}`,
+        )
+      }
+      seen.add(eid)
+    }
+    for (let c of e.changes) {
+      if (seen.has(c.eid) && c.name != 'dependency') continue
+      if (c.name == 'claim') {
+        lines.push(
+          c.comp == null
+            ? `- ⚐ released ${name(c.eid)}`
+            : `- ⚑ claimed ${name(c.eid)}`,
+        )
+        seen.add(c.eid)
+      } else if (c.name == 'task' && c.comp && 'status' in c.comp) {
+        // a same-batch reason comment (the journal pseudo-change's twin)
+        // already tells the story as its own 💬 line
+        lines.push(`- → ${name(c.eid)} status → ${c.comp.status}`)
+        seen.add(c.eid)
+      } else if (c.name == 'dependency' && c.comp) {
+        let verb = c.comp.gone ? 'unlinked' : 'linked'
+        lines.push(
+          `- ∴ ${verb} ${name(c.eid)} ${c.comp.type} ${name(c.comp.child_eid)}`,
+        )
+      } else if (c.comp && c.name != 'entity' && c.name != 'journal') {
+        let cols = Object.keys(c.comp).filter((k) => k != 'eid').join(' ')
+        lines.push(`- · ${c.name}{${cols}} on ${name(c.eid)}`)
+        seen.add(c.eid)
+      }
+    }
+  }
+  let span = `${entries[entries.length - 1].ts} → ${
+    entries[0].ts
+  } · ${entries.length} batch(es)`
+  return [span, '', ...lines]
+}
+
 // One journal entry as a line: when · who · what. The patch is said
 // compactly — comp{cols} for writes, -comp for removals, † for the
 // entity's death — enough to scan a trail without reading JSON.
@@ -546,6 +640,7 @@ export let lapseChanges = (
   all: Row[],
   session: string,
   now = Date.now(),
+  entries: JournalEntry[] = [],
 ): Change[] => {
   let sess = all.find((r) =>
     r.comps.session && String(r.comps.session.id) == session
@@ -562,31 +657,46 @@ export let lapseChanges = (
       ).slice(-2)), // the session exists — skip the mint, keep doc + comment
       { eid: r.eid, name: 'claim', comp: null },
     ]),
-    ...brief(all, sess, held, now),
+    ...brief(all, sess, held, now, entries),
   ]
 }
 
-// No working session leaves the graph nameless: a session that held
-// claims or authored comments but never wrote its wake-brief gets a
-// skeleton doc at lapse — claimed tasks and their end states, a stub the
-// agent or owner enriches later (the work-session pattern, T-3705).
-let brief = (all: Row[], sess: Row, held: Row[], now: number): Change[] => {
-  if (sess.comps.doc) return []
+// No working session leaves the graph nameless: at lapse the session doc
+// gets the mechanical LEDGER — the journal's own account of the day
+// (claims, statuses with their reason comments, mints, edges) — plus the
+// end-state holdings and the standing invitation the scribe (T-4001)
+// will one day answer. A hand-written brief is never clobbered: the
+// stub's first line is the marker, and only stubs get rewritten.
+let STUB = 'Auto-written at lapse'
+let brief = (
+  all: Row[],
+  sess: Row,
+  held: Row[],
+  now: number,
+  entries: JournalEntry[],
+): Change[] => {
+  let body = String(sess.comps.doc?.body ?? '')
+  if (sess.comps.doc && !body.startsWith(STUB)) return []
   let authored = all.some((r) => r.comps.comment?.author_eid == sess.eid)
-  if (!held.length && !authored) return []
-  let lines = held.map((r) =>
+  if (!held.length && !authored && !entries.length) return []
+  let holding = held.map((r) =>
     `- ${idOf(r)} (${r.comps.task?.status ?? '?'}) ${r.comps.doc?.title ?? ''}`
   )
+  let told = ledger(entries, all)
   let day = new Date(now).toISOString().slice(0, 10)
   return [{
     eid: sess.eid,
     name: 'doc',
     comp: {
-      title: `Work session ${day}`,
+      title: String(sess.comps.doc?.title ?? `Work session ${day}`),
       body: [
-        'Auto-written at lapse — a stub, enrich me. Ended holding:',
+        `${STUB} — a stub, enrich me. The ledger is the journal's account;`,
+        'the narrative is yours to add.',
+        ...(told.length ? ['', '## Ledger', '', ...told] : []),
         '',
-        ...(lines.length ? lines : ['- (no claims — comments only)']),
+        '## Ended holding',
+        '',
+        ...(holding.length ? holding : ['- (no claims — comments only)']),
       ].join('\n'),
     },
   }]

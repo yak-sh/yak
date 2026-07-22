@@ -13,6 +13,7 @@ import { type Change, idOf } from './types.ts'
 import {
   apply,
   db,
+  journalBy,
   journalOf,
   search,
   snapshot,
@@ -395,14 +396,17 @@ Deno.serve(
     // because logs are log data, not graph.
     let session = path.match(/^\/sessions\/([0-9a-f-]{36})\/logs$/)
     if (session) return Response.json(logs(session[1], url.searchParams))
-    // The wire's record, per entity: journal rows that touched the eid,
-    // newest first. Raw eids only — id resolution is a client concern.
+    // The wire's record, per entity (?eid=) or per actor (?actor= — a
+    // session's whole day, for the lapse ledger). Newest first. Raw eids
+    // only — id resolution is a client concern.
     if (path == '/journal') {
-      return Response.json(journalOf(
-        db,
-        url.searchParams.get('eid') ?? '',
-        Number(url.searchParams.get('limit') ?? 50) || 50,
-      ))
+      let actor = url.searchParams.get('actor')
+      let limit = Number(url.searchParams.get('limit') ?? 50) || 50
+      return Response.json(
+        actor
+          ? journalBy(db, actor, limit)
+          : journalOf(db, url.searchParams.get('eid') ?? '', limit),
+      )
     }
     if (path == '/freeze') {
       return freeze(url.searchParams.get('eid') ?? '', cast)

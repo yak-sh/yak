@@ -18,6 +18,7 @@ import {
   edgesOf,
   find,
   history,
+  historyBy,
   historyLine,
   hookClaim,
   host,
@@ -44,6 +45,7 @@ import { type Edge, edges, type Snapshot } from './types.ts'
 // `import type` (not the repo's usual inline `{ type X }`): telemetry.ts
 // reaches for node:sqlite, and the CLI has no business loading a db driver.
 import type { Log } from './telemetry.ts'
+import type { JournalEntry } from './client.ts'
 
 // Every verb: usage, blurb, worked examples. `task help` derives all its
 // faces from this table plus grammar.ts, so what the CLI teaches and what
@@ -474,7 +476,13 @@ let lapse = async (args: string[]) => {
       if (hook) return
       throw new Error('task lapse <session> (or set TASKS_SESSION)')
     }
-    let changes = lapseChanges(rows(await snapshot()), sid)
+    // The ledger is a bonus, never a blocker: a journal fetch that fails
+    // still lapses the session cleanly, just without its day retold.
+    let entries: JournalEntry[] = []
+    try {
+      entries = await historyBy(sid)
+    } catch { /* no journal, no ledger */ }
+    let changes = lapseChanges(rows(await snapshot()), sid, Date.now(), entries)
     if (changes.length) await send(changes)
     if (!hook) {
       console.log(

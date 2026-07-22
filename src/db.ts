@@ -890,6 +890,24 @@ export let journalOf = (
       changes: (JSON.parse(r.batch) as Change[]).filter((c) => c.eid == eid),
     }))
 
+// The same record cut by WHO instead of what: every batch an actor
+// wrote, whole (no per-eid filtering — a lapse ledger wants the batch's
+// full sentence). Newest first, like journalOf.
+export let journalBy = (
+  db: DatabaseSync,
+  actor: string,
+  limit = 500,
+): JournalEntry[] =>
+  (db.prepare(`
+    select ts, actor, batch from journal
+    where actor = ? order by rowid desc limit ?
+  `).all(actor, limit) as { ts: string; actor: string | null; batch: string }[])
+    .map((r) => ({
+      ts: r.ts,
+      actor: r.actor,
+      changes: JSON.parse(r.batch) as Change[],
+    }))
+
 // A recall touch — the server-minted aggregate behind ranked retrieval
 // (query.ts hot()). Bumps count and last_at; first_at never moves. It
 // deliberately does NOT stamp modified_at: reading is not editing, and
