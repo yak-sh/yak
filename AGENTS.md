@@ -105,8 +105,14 @@ the mobile door — whose rows resolve through `List.Item`.
 | `src/freeze.ts`    | URL → monolith archive → scrub() → CSP-served, server-only                 |
 | `src/client.ts`    | headless HTTP client: rows(), dot-params, find, change builders            |
 | `src/query.ts`     | the FILTER grammar (ops/lists/ranges/time/text) — boards, CLI, MCP, search |
+| `src/grammar.ts`   | GRAMMAR + FILTERS texts, derived from comps — CLI and MCP teach one page   |
+| `src/commands.ts`  | the `:` verb table — one vocabulary: palette, TUI, CLI colon, MCP command  |
 | `src/cli.ts`       | the `task` CLI (thin verbs over client.ts)                                 |
 | `src/mcp.ts`       | MCP tool registry (io-agnostic; served in-process at /mcp and over stdio)  |
+| `src/mail.ts`      | outbound mail: addressOf, mailed() delivery, the prose-only fanout + sweep |
+| `src/inbound.ts`   | the pull sweep: fleet-mail messages and hook spool → mail/hook entities    |
+| `src/persona.ts`   | personas materialized: doc + tier edges → one markdown voice, .tasks files |
+| `src/scribe.ts`    | the scribe's trigger: stub-marker queue → spawn the desk wearing the voice |
 | `src/telemetry.ts` | the `tool_call` log: record/recent + the /mcp body classifier              |
 | `src/sandbox.ts`   | code mode's worker: permissionless, graph-only, postMessage SDK            |
 | `src/live.ts`      | browser/TUI half: cache signal, socket, applyLocal/mutate, ent()           |
