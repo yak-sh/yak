@@ -82,20 +82,23 @@ export let fleetApi = (): FleetApi | null => {
     }
     return await res.json()
   }
+  // The Worker binds one SQL variable per id, and D1's SQLite caps a
+  // statement at 100 — a full sweep's stamp-back must arrive in bites.
+  let stamp = async (path: string, ids: string[]) => {
+    for (let i = 0; i < ids.length; i += 50) {
+      await call('POST', path, { ids: ids.slice(i, i + 50) })
+    }
+  }
   return {
     // The KV-era aliases are the stable contract: unnotified=1 narrows
     // to rows never swept, .dir=in keeps outbound archive rows out.
     // Rows arrive ascending ts, 100/page — the next sweep gets the rest.
     messages: async () =>
       (await call('GET', '/messages?unnotified=1&.dir=in&limit=100')) ?? [],
-    notified: async (ids) => {
-      await call('POST', '/messages/notified', { ids })
-    },
+    notified: (ids) => stamp('/messages/notified', ids),
     requests: (): Promise<SpoolReq[] | null> =>
       call('GET', '/requests?unprocessed=1&limit=100'),
-    processed: async (ids) => {
-      await call('POST', '/requests/processed', { ids })
-    },
+    processed: (ids) => stamp('/requests/processed', ids),
   }
 }
 

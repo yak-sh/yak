@@ -212,3 +212,23 @@ Deno.test('inbound mail never delivers: arrival is a record, not an ask', async 
   assertEquals(pending.some((p) => p.eid == eid), false)
   Deno.env.delete('TASKS_MAIL_CMD')
 })
+
+Deno.test('stamp-back arrives in bites: D1 binds one variable per id', async () => {
+  Deno.env.set('FLEET_MAIL_API_URL', 'http://edge.test')
+  Deno.env.set('FLEET_MAIL_API_TOKEN', 't')
+  let { fleetApi } = await import('./inbound.ts')
+  let batches: string[][] = []
+  let real = globalThis.fetch
+  globalThis.fetch = (_url, init) => {
+    batches.push(JSON.parse(String(init?.body)).ids)
+    return Promise.resolve(new Response('{}'))
+  }
+  try {
+    await fleetApi()!.notified(Array.from({ length: 120 }, (_, i) => `m${i}`))
+  } finally {
+    globalThis.fetch = real
+    Deno.env.delete('FLEET_MAIL_API_URL')
+    Deno.env.delete('FLEET_MAIL_API_TOKEN')
+  }
+  assertEquals(batches.map((b) => b.length), [50, 50, 20])
+})
