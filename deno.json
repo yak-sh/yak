@@ -15,6 +15,7 @@
     "exclude": [
       "src/vendor",
       ".tasks",
+      ".claude/agents",
       "AGENTS.md",
       "CLAUDE.md"
     ]
