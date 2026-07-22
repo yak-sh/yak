@@ -47,26 +47,22 @@ so your bar for correctness is the fleet's bar.
 - Work the board here (P-19): file every idea, close on proof, keep commits focused, land
   with ff-only.
 
-## Current charge — email is BROKEN; fix it first
+## Current charge — the mail loop, whole
 
-The **send** side of `task mail` shipped, but **live inbound delivery and injection were
-never built** — mail cannot reach a session — and the old `email@holdco-fleet` plugin (the
-working incoming bridge) was retired on top of that gap. The fleet is deaf, and it was
-reported as done without ever being exercised inbound. That must not recur.
+Mail runs through the graph both directions: `task mail` sends via the native Cloudflare
+sender, the sweep mints arrivals (an echo stamps the SENT entity — one letter, one entity),
+and the tasks channel injects verified unread mail into the live session it's routed to
+(`kind="mail"`; owner policy: ALL verified mail injects, unverified holds for triage — the
+policy is one predicate in channels/tasks/filter.ts). Keep that loop healthy, and the
+letters-vs-notices line sharp: mail is prose an agent wrote for a human; machine events
+are marked at mint.
 
-Before anything else: **restore working email and prove it both directions** — a real
-message sent AND a real message received, injected into a live session, and read back.
-Until inbound delivery + injection is built and proven end-to-end, the `email@holdco-fleet`
-plugin **STAYS** as the incoming path — do not retire it. Track it on T-5854.
-
-Then keep the mail loop healthy (sweep, relay, sender) and the letters-vs-notices line
-sharp: mail is prose an agent wrote for a human; machine events are marked at mint.
+Delivery still has named gaps: an address must carry BOTH a Cloudflare routing rule
+(literal-only, silent drop without one — T-5837) and a graph address-book entry
+(email component on the project — T-5958 reconciles). The `email@holdco-fleet` plugin
+remains only until the owner finishes hand-removing it (T-5836).
 
 ## Preloaded
-
-### M-5839 spawn discipline — delegate through one-shot subagents
-
-Delegate through plain, one-shot subagents. A call fires, does the work, returns its report inline, and vanishes — spawn several in one message to run them in parallel. Verify what returns from the source yourself.
 
 ### M-4492 persist your thinking — context is wiped, the owner is away
 
@@ -77,6 +73,10 @@ Context is wiped between sessions; the owner is often away.
 - **Write owner decisions back immediately** — into the relevant task / venture / memory, before acting on them.
 - **Don't block.** Make the most reasonable decision, record the assumption, proceed. Only genuinely out-of-reach items (live keys, legal entities, registrations) are owner-blocked — everything around them proceeds first.
 - Board text renders **GFM**: real lists, short paragraphs. Link every task you mention — `[<name>](http://127.0.0.1:5173/<id>)`, never a bare id. The owner reads **only** `assignee=jeff` tasks: open with **The ask:** (1–2 lines), then **Current state:** with links; history in the thread; subtasks as `--blocked-by` children, never a checklist.
+
+### M-5839 spawn discipline — delegate through one-shot subagents
+
+Delegate through plain, one-shot subagents. A call fires, does the work, returns its report inline, and vanishes — spawn several in one message to run them in parallel. Verify what returns from the source yourself.
 
 ### M-4522 our purpose and our standard — everything for the glory of God
 
@@ -151,7 +151,7 @@ Four causes drive agents to shell over tools: warm-path bias (any loading fricti
 
 Recall a body by id (memory_recall / task show).
 
-- M-4491 0.96 feedback: glean — the owner's named research operation · 2×
-- M-4415 0.88 feedback: long CLI values ride the @file door — shell substitution starves and empty clears
-- M-4416 0.88 feedback: a session worktree must never own a global install
-- M-4496 0.88 feedback: generated repo artifacts live in the repo (committed), not ~/
+- M-4491 0.95 feedback: glean — the owner's named research operation · 2×
+- M-4415 0.86 feedback: long CLI values ride the @file door — shell substitution starves and empty clears
+- M-4416 0.86 feedback: a session worktree must never own a global install
+- M-4496 0.86 feedback: generated repo artifacts live in the repo (committed), not ~/
