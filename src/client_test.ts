@@ -672,3 +672,27 @@ Deno.test('lapse: the stub carries the ledger; a hand-written brief is never clo
     false,
   )
 })
+
+Deno.test('notices: bylines walk the actor chain', () => {
+  let B = 'aaaaaaaa-0000-4000-8000-000000000010'
+  let P = 'aaaaaaaa-0000-4000-8000-000000000011' // the operator project
+  let mk = (eid: string, author: string) => [
+    { eid, name: 'entity', comp: { eid, num: 91, created_at: '2026-01-02' } },
+    { eid, name: 'doc', comp: { title: '', body: 'from the operator' } },
+    { eid, name: 'comment', comp: { target_eid: T1, author_eid: author } },
+  ]
+  let s: Snapshot = {
+    changes: [
+      ...snap.changes,
+      { eid: P, name: 'entity', comp: { eid: P, num: 81, created_at: '' } },
+      { eid: P, name: 'doc', comp: { title: 'Task Graph', body: '' } },
+      { eid: P, name: 'project', comp: {} },
+      { eid: B, name: 'entity', comp: { eid: B, num: 82, created_at: '' } },
+      { eid: B, name: 'session', comp: { id: 'sess-b', actor_eid: P } },
+      ...mk('c-9', B),
+    ],
+    deps: snap.deps,
+  }
+  let [line] = notices(s, 'sess-x').lines
+  assertMatch(line, /Task Graph · via S-82/) // operator, not session id
+})
