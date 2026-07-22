@@ -6,10 +6,10 @@
         "run",
         "--allow-net",
         "--allow-env",
+        "--allow-read=/proc",
         "/home/yaks/code/tasks/channels/tasks/server.ts"
       ],
       "env": {
-        "TASKS_SESSION": "${TASKS_SESSION:-}",
         "TASKS_HOST": "${TASKS_HOST:-127.0.0.1:5173}"
       }
     }

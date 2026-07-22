@@ -33,12 +33,22 @@ the session already has (`task_comment` on the author or the named entity).
   (`deno test -A channels/tasks/`).
 - `marketplace/` — the plugin layout (see Enablement).
 
+## Identity — the session follows the process
+
+The plugin serves the session entity whose `session.pid` equals its own nearest
+`claude` /proc ancestor — the pid the SessionStart hook stamps at reify.
+`/clear` reifies a NEW session entity under the same process, and service
+follows it: comments aimed at the old S-\* stop injecting, by design (a comment
+on a session stays on THAT session). The spawn-time `CLAUDE_CODE_SESSION_ID`
+(set by Claude Code for MCP subprocesses, never updated past boot) is a boot
+fast-path hint only — it also covers a session whose pid never got stamped.
+Neither clue → a harmless no-op (connects, delivers nothing).
+
 ## Env
 
-| Var             | Meaning                                                                                                                                                                                                       |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TASKS_SESSION` | **required to deliver** — the session id string this plugin serves (the id the SessionStart hook reifies the session entity under). Unset → the server runs as a harmless no-op (connects, delivers nothing). |
-| `TASKS_HOST`    | tasks server host:port (default `127.0.0.1:5173`).                                                                                                                                                            |
+| Var          | Meaning                                            |
+| ------------ | -------------------------------------------------- |
+| `TASKS_HOST` | tasks server host:port (default `127.0.0.1:5173`). |
 
 ## Enablement — the allowlist gotcha (proven for the email channel)
 
@@ -96,8 +106,7 @@ somewhere other than `/home/yaks/code/tasks`.
 
 ## The interactive door: `task claude`
 
-`task claude [args...]` launches an interactive session fleet-wired: it mints a
-`TASKS_SESSION` (reused if already exported), passes
+`task claude [args...]` launches an interactive session fleet-wired: it passes
 `--dangerously-skip-permissions` and `--channels plugin:tasks@tasks-fleet`, and
 — when root's managed settings don't allowlist `tasks-fleet` — adds the dev-load
 flag, accepting its press-Enter dialog (a keyboard is present; that's the only

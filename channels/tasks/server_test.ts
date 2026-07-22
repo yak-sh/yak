@@ -259,17 +259,57 @@ Deno.test('learn drops a component when its patch clears it', () => {
   assertEquals(humanId(idx, 'e1'), 'E-7') // no components → kind 'entity', capitalized initial
 })
 
-Deno.test('findSession resolves the served session by its id', () => {
+Deno.test('findSession resolves by the claude pid', () => {
   let batch = [
-    ch('e9', 'session', { id: 'other', actor_eid: 'x' }),
-    ch('e1', 'session', { id: 'wanted', actor_eid: 'p1', persona_eid: 'n1' }),
+    ch('e9', 'session', { id: 'other', pid: 111, actor_eid: 'x' }),
+    ch('e1', 'session', {
+      id: 'mine',
+      pid: 4242,
+      actor_eid: 'p1',
+      persona_eid: 'n1',
+    }),
   ]
-  assertEquals(findSession(batch, 'wanted'), {
+  assertEquals(findSession(batch, { pid: 4242 }), {
     eid: 'e1',
     actorEid: 'p1',
     personaEid: 'n1',
   })
-  assertEquals(findSession(batch, 'missing'), undefined)
+  assertEquals(findSession(batch, { pid: 999 }), undefined)
+})
+
+Deno.test('findSession: the LAST same-pid session wins — /clear rotates forward', () => {
+  let batch = [
+    ch('old', 'session', { id: 'before-clear', pid: 4242 }),
+    ch('new', 'session', { id: 'after-clear', pid: 4242 }),
+  ]
+  assertEquals(findSession(batch, { pid: 4242 })?.eid, 'new')
+})
+
+Deno.test('findSession: a pid match outranks the boot id hint', () => {
+  let batch = [
+    ch('hinted', 'session', { id: 'boot-id' }),
+    ch('mine', 'session', { id: 'rotated-id', pid: 4242 }),
+  ]
+  assertEquals(findSession(batch, { pid: 4242, id: 'boot-id' })?.eid, 'mine')
+})
+
+Deno.test('findSession falls back to the boot id when no pid stamp exists', () => {
+  let batch = [ch('e1', 'session', { id: 'boot-id', actor_eid: 'p1' })]
+  assertEquals(findSession(batch, { pid: 4242, id: 'boot-id' }), {
+    eid: 'e1',
+    actorEid: 'p1',
+    personaEid: undefined,
+  })
+  assertEquals(findSession(batch, { id: 'missing' }), undefined)
+})
+
+Deno.test('findSession: a patch on the resolved eid keeps the actor fresh', () => {
+  let batch = [ch('e1', 'session', { actor_eid: 'p1' })]
+  assertEquals(findSession(batch, { pid: 4242, eid: 'e1' }), {
+    eid: 'e1',
+    actorEid: 'p1',
+    personaEid: undefined,
+  })
 })
 
 // --- sanitization ------------------------------------------------------------

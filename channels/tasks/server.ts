@@ -11,9 +11,12 @@
 // Replies go through the task CLI/MCP the session already has. It holds no
 // credential — /snapshot and /ws are the local server's own, unauthed surface.
 //
-// Identity: TASKS_SESSION is the session id string it serves; the matching
-// session ENTITY (and its actor) is resolved from /snapshot at boot and re-
-// resolved off the stream, since the SessionStart hook may mint the row later.
+// Identity: the claude PROCESS this plugin runs under. The session entity
+// wearing session.pid == our claude ancestor is the one served — resolved
+// from /snapshot at boot, re-resolved off the stream, and FOLLOWED when a
+// /clear reifies a new session under the same pid. The spawn-time
+// CLAUDE_CODE_SESSION_ID is a boot fast-path hint only (an MCP subprocess
+// keeps the env it was spawned with; /clear rotates the session, not us).
 // Reference: holdco services/email-channel (the proven channel shape).
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
@@ -29,19 +32,27 @@ import {
   type Index,
   learn,
 } from './filter.ts'
+import { claudePid } from '../../src/proc.ts'
 
 // --- config ------------------------------------------------------------------
 
 let HOST = (Deno.env.get('TASKS_HOST') || '127.0.0.1:5173').trim()
-let RAW_SESSION = (Deno.env.get('TASKS_SESSION') || '').trim()
 
-// UNBOUND — a manual `claude` whose plugin config left TASKS_SESSION unset (its
-// `${TASKS_SESSION:-}` expands to '', or an older config passes the literal
-// through). Serve as a harmless no-op: connect so the launch shows no failed
-// MCP, but never open the socket. A session receives TASKS_SESSION via its
-// launcher (the same id the SessionStart hook reifies the entity under).
-let BOUND = RAW_SESSION != '' && !RAW_SESSION.includes('${')
-let SESSION = BOUND ? RAW_SESSION : undefined
+// Identity, two clues at boot:
+// - PID: the nearest claude ancestor (the /proc walk). THE durable binding —
+//   the SessionStart hook stamps session.pid at reify, and when /clear
+//   reifies a NEW session under the same process, service follows it.
+// - HINT: the spawn-time session id (Claude Code sets CLAUDE_CODE_SESSION_ID
+//   for MCP subprocesses but never updates the copy past boot). A fast-path
+//   that resolves the entity before its pid stamp lands, and the only clue
+//   for a session whose pid never got stamped — never trusted to re-resolve.
+let PID = claudePid()
+let HINT = (Deno.env.get('CLAUDE_CODE_SESSION_ID') || '').trim() || undefined
+
+// UNBOUND — neither clue: not under a claude process and no spawn-time id.
+// Serve as a harmless no-op: connect so the launch shows no failed MCP, but
+// never open the socket.
+let BOUND = PID != null || HINT != null
 
 // --- last-resort safety net --------------------------------------------------
 // A channel must keep serving through a stray rejection — never let one crash
@@ -74,12 +85,12 @@ let homes = new Map<string, string>()
 // mail.ts idiom casts whole rows) must not ring twice.
 let delivered = new Set<string>()
 
-// Re-resolve the served session from a batch (boot snapshot or a later mint),
-// and keep the actor fresh — id is stable, so this is safe to run every batch.
-// The home project — where the session's mail lands (mail.target_eid, routed
-// by the address book) — is the persona's home when the session wears one,
-// else the actor itself when the actor IS a project (an interactive session's
-// actor is the venture it works in).
+// Re-resolve the served session from a batch (boot snapshot, a later mint,
+// or the post-/clear reify), and keep the actor fresh. The home project —
+// where the session's mail lands (mail.target_eid, routed by the address
+// book) — is the persona's home when the session wears one, else the actor
+// itself when the actor IS a project (an interactive session's actor is the
+// venture it works in).
 let resolve = (changes: Change[]) => {
   for (let c of changes) {
     if (c.name != 'persona') continue
@@ -87,9 +98,26 @@ let resolve = (changes: Change[]) => {
     if (home === null || c.comp == null) homes.delete(c.eid)
     else if (typeof home == 'string' && home) homes.set(c.eid, home)
   }
-  let s = findSession(changes, SESSION!)
-  if (s) {
-    sessionEid = s.eid
+  let s = findSession(changes, {
+    pid: PID,
+    eid: sessionEid,
+    id: sessionEid ? undefined : HINT,
+  })
+  if (s && s.eid != sessionEid) {
+    // A rotation only ever moves FORWARD: after a /clear both the old and
+    // the new rows wear our pid, but the reified row is newer — its num is
+    // higher (learn() has already seen every spine in this batch, and a
+    // snapshot lists rows in insertion order).
+    let cur = sessionEid ? index.get(sessionEid)?.num ?? 0 : -1
+    if ((index.get(s.eid)?.num ?? 0) > cur) {
+      if (sessionEid) {
+        err(`session rotated → ${humanId(index, s.eid) ?? s.eid}`)
+      }
+      sessionEid = s.eid
+      actorEid = s.actorEid
+      personaEid = s.personaEid
+    }
+  } else if (s) {
     if (s.actorEid) actorEid = s.actorEid
     if (s.personaEid) personaEid = s.personaEid
   }
@@ -189,9 +217,15 @@ let connect = () => {
   socket = new WebSocket(`ws://${HOST}/ws`)
   socket.onopen = () => {
     backoff = 500
-    err(`connected — serving ${SESSION}`)
+    err(`connected — pid ${PID ?? '-'}, boot id ${HINT ?? '-'}`)
     sync()
-      .then(() => err(`home project: ${homeEid ?? 'unresolved — no mail'}`))
+      .then(() =>
+        err(
+          `serving ${
+            sessionEid ? humanId(index, sessionEid) ?? sessionEid : 'nobody yet'
+          } — home project: ${homeEid ?? 'unresolved — no mail'}`,
+        )
+      )
       .catch((e) => err(`snapshot sync failed: ${e}`))
   }
   socket.onmessage = (m) => onBatch(String(m.data))
@@ -218,12 +252,12 @@ let start = () => {
   started = true
   if (!BOUND) {
     err(
-      'TASKS_SESSION unset — IDLE, no session bound, nothing will be delivered. ' +
-        'Launch with TASKS_SESSION=<session id> (the id the SessionStart hook reifies).',
+      'no claude ancestor and no CLAUDE_CODE_SESSION_ID — IDLE, no session ' +
+        'bound, nothing will be delivered.',
     )
     return
   }
-  err(`initialized — listening on ${HOST} for ${SESSION}`)
+  err(`initialized — listening on ${HOST} (pid ${PID ?? '-'})`)
   // Warm the index and resolve identity before the first frame; the socket
   // re-syncs on open, so a slow boot fetch never loses events.
   sync().catch((e) => err(`initial snapshot failed: ${e}`))
@@ -237,7 +271,7 @@ mcp.setRequestHandler(
 mcp.oninitialized = () => start()
 
 await mcp.connect(new StdioServerTransport())
-err(`serving ${SESSION ?? '(unbound)'} (awaiting initialize)`)
+err(`pid ${PID ?? '-'}, boot id ${HINT ?? '-'} (awaiting initialize)`)
 
 // Fallback for a client that doesn't signal initialized — start anyway after a
 // window long enough to clear the handshake.

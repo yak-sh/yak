@@ -109,24 +109,34 @@ export let humanId = (index: Index, eid: string): string | null => {
   return idOf({ kind: kindOf(has), num: row.num })
 }
 
-// Find the session entity whose session.id equals the id this plugin serves,
-// within one batch — the boot snapshot resolves it, or a later SessionStart
-// mint does. Returns the eid plus the actor it runs for (both may arrive in the
-// same or a later session patch).
+// Find the served session within one batch. Identity is the claude PROCESS:
+// a session change carrying `pid` == ours is the session — and the LAST such
+// change wins, because a /clear reifies a NEW entity under the same pid (it
+// broadcasts after, and sits after, any trace of the row it replaces), so
+// service follows the rotation. The weaker clues never rotate: a change on
+// the already-resolved eid keeps actor/persona fresh, and the spawn-time id
+// is the boot fast-path (an MCP subprocess's env id is frozen at spawn — it
+// can't be trusted to name the session past boot).
 export let findSession = (
   changes: Change[],
-  sessionId: string,
+  by: { pid?: number; eid?: string; id?: string },
 ): { eid: string; actorEid?: string; personaEid?: string } | undefined => {
+  let hit: Change | undefined
+  let weak: Change | undefined
   for (let c of changes) {
     if (c.name != 'session' || !c.comp) continue
-    if (str(c.comp.id) != sessionId) continue
-    let actor = str(c.comp.actor_eid)
-    let persona = str(c.comp.persona_eid)
-    return {
-      eid: c.eid,
-      actorEid: actor || undefined,
-      personaEid: persona || undefined,
-    }
+    if (by.pid != null && c.comp.pid == by.pid) hit = c
+    else if (
+      (by.eid != null && c.eid == by.eid) ||
+      (by.id != null && str(c.comp.id) == by.id)
+    ) weak = c
+  }
+  let c = hit ?? weak
+  if (!c?.comp) return
+  return {
+    eid: c.eid,
+    actorEid: str(c.comp.actor_eid) || undefined,
+    personaEid: str(c.comp.persona_eid) || undefined,
   }
 }
 
