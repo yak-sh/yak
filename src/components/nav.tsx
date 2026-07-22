@@ -67,12 +67,15 @@ globalThis.document?.addEventListener?.('click', (ev: MouseEvent) => {
 
 // The whole internal-link contract, spreadable onto any anchor: a real
 // href (new-tab forms and the native menu stay native), plain click
-// follows in place, and dragging it onto the canvas makes a card.
+// follows in place, double click is the deliberate fullscreen (follow
+// with only the href navigates — the same root change as "open here"),
+// and dragging it onto the canvas makes a card.
 export let linkProps = (e: Ent) => {
   let href = `/${idOf(e)}`
   return {
     href,
     onClick: follow(href, e.eid),
+    onDblClick: follow(href),
     draggable: true,
     onDragStart: (ev: DragEvent) => dragData(ev, e.eid, resolve(e).view),
   }
