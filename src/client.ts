@@ -546,20 +546,20 @@ let lately = (
   ).slice(0, 4)
   let mems = fresh.filter((r) => r.comps.memory).slice(0, 3)
   let title = (r: Row) => String(r.comps.doc?.title ?? '')
-  let lines = ['lately:']
+  let lines = ['## lately']
   for (let r of briefs) {
     lines.push(
-      `  ${idOf(r)} ${snip(`${title(r)} · ${firstLine(r.comps.doc?.body)}`)}`,
+      `- ${idOf(r)} ${snip(`${title(r)} · ${firstLine(r.comps.doc?.body)}`)}`,
     )
   }
-  for (let r of today) lines.push(`  ${idOf(r)} ${snip(title(r))}`)
+  for (let r of today) lines.push(`- ${idOf(r)} ${snip(title(r))}`)
   if (week.length) {
-    lines.push('  this week:')
-    for (let r of week) lines.push(`    ${idOf(r)} ${snip(title(r))}`)
+    lines.push('### this week')
+    for (let r of week) lines.push(`- ${idOf(r)} ${snip(title(r))}`)
   }
   if (mems.length) {
-    lines.push('  memory:')
-    for (let r of mems) lines.push(`    ${idOf(r)} ${snip(title(r))}`)
+    lines.push('### memory')
+    for (let r of mems) lines.push(`- ${idOf(r)} ${snip(title(r))}`)
   }
   return lines.slice(0, budget)
 }
@@ -569,6 +569,9 @@ let lately = (
 // board when it holds nothing, then the lately tier. ≤35 lines by
 // construction: the tracker stays out of the way, it just makes the
 // working set — and the recent past — impossible to lose.
+// The digest is MARKDOWN, like every body in the graph — and dense on
+// purpose: headings and lists interrupt paragraphs (CommonMark), so no
+// blank line ever spends a budget line.
 // No session = the PREVIEW: the digest a fresh session would boot with
 // (open work, lately, memory — nothing claimed, nothing acked). The
 // digest is PROJECT-AWARE: scope comes in explicitly (the hook's cwd, a
@@ -597,12 +600,12 @@ export let contextDigest = (
     ? all.filter((r) => r.comps.claim?.session_eid == sess.eid)
     : []
   let lines = [
-    (session ? `tasks · session ${session}` : 'tasks · a preview') +
+    '# ' + (session ? `tasks · session ${session}` : 'tasks · a preview') +
     (here ? ` · ${idOf(here)} ${here.comps.doc?.title ?? ''}` : ''),
   ]
   let show = (r: Row) => {
     lines.push(
-      `  ${idOf(r)} ${String(r.comps.task?.status ?? r.kind).padEnd(5)} ${
+      `- ${idOf(r)} ${r.comps.task?.status ?? r.kind} — ${
         r.comps.doc?.title ?? ''
       }`,
     )
@@ -612,7 +615,7 @@ export let contextDigest = (
       if (settled(String(c.comps.task?.status))) continue
       let who = claimant(all, c)
       lines.push(
-        `    ${d.type} → ${idOf(c)} (${c.comps.task?.status ?? c.kind}${
+        `  - ${d.type} → ${idOf(c)} (${c.comps.task?.status ?? c.kind}${
           who ? `, ⚑ ${who}` : ''
         })`,
       )
@@ -652,18 +655,18 @@ export let contextDigest = (
     : undefined
   if (prev) {
     lines.push(
-      `previously — ${idOf(prev)} ${
+      `## previously — ${idOf(prev)} ${
         snip(String(prev.comps.doc?.title ?? ''))
-      }:`,
+      }`,
     )
     let told = briefOf(prev).split('\n').map((l) => l.trim()).filter(Boolean)
-    for (let l of told.slice(0, 4)) lines.push(`  ${snip(l, 96)}`)
+    for (let l of told.slice(0, 4)) lines.push(`> ${snip(l, 96)}`)
   }
   lines.push(...lately(all, now, 34 - lines.length, scope, prev?.eid))
   lines.push(
-    `claim: task claim <id> ${
+    `claim: \`task claim <id> ${
       session ?? '<session>'
-    } · comment: task comment <id> "…" · release when done or handing off`,
+    }\` · comment: \`task comment <id> "…"\` · release when done or handing off`,
   )
   return lines.slice(0, 35).join('\n')
 }

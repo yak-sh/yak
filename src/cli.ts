@@ -542,7 +542,8 @@ let context = async (args: string[]) => {
     let n = notices(snap, sid)
     if (n.lines.length) {
       await send(n.ack)
-      out += '\n— while you were away —\n' + n.lines.join('\n')
+      out += '\n## while you were away\n' +
+        n.lines.map((l) => `- ${l}`).join('\n')
     }
     console.log(out)
   }

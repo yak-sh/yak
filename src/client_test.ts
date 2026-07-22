@@ -371,13 +371,13 @@ Deno.test('contextDigest: claimed set with gates, or open board', () => {
   let d = contextDigest(snap, 'sess-x')
   assertEquals(d.split('\n').length <= 20, true)
   assertEquals(d.includes('T-2'), true)
-  assertEquals(d.includes('requires → T-3 (open)'), true)
+  assertEquals(d.includes('  - requires → T-3 (open)'), true)
   let fresh = contextDigest(snap, 'sess-nobody')
   assertEquals(fresh.includes('nothing claimed'), true)
   assertEquals(fresh.includes('T-3'), true) // open unclaimed work suggested
   // the shared fixture carries no modified_at — nothing is recent, so the
   // lately tier says nothing at all
-  assertEquals(d.includes('lately:'), false)
+  assertEquals(d.includes('## lately'), false)
 })
 
 // The lately tier against a fixed clock: work-session briefs lead with
@@ -436,19 +436,19 @@ Deno.test('contextDigest: lately — briefs lead, tiers hold, old is silent', ()
   let d = contextDigest(late, 'sess-nobody', NOW)
   let lines = d.split('\n')
   assertEquals(lines.length <= 35, true)
-  assertEquals(d.includes('lately:'), true)
+  assertEquals(d.includes('## lately'), true)
   // the brief leads, wearing its first body line
   let brief = lines.findIndex((l) => l.includes('Work session'))
   assertEquals(lines[brief].includes('landed: everything'), true)
   assertEquals(brief < lines.findIndex((l) => l.includes('Fresh task')), true)
   // tiers: midweek under its header, memory as an index line
   assertEquals(
-    lines.indexOf('  this week:') <
+    lines.indexOf('### this week') <
       lines.findIndex((l) => l.includes('Midweek task')),
     true,
   )
   assertEquals(
-    lines.indexOf('  memory:') <
+    lines.indexOf('### memory') <
       lines.findIndex((l) => l.includes('A kept fact')),
     true,
   )
@@ -720,7 +720,7 @@ Deno.test('notices: bylines walk the actor chain', () => {
 
 Deno.test('contextDigest: sessionless is the preview — headed as one, claim line templated', () => {
   let d = contextDigest(snap)
-  assertEquals(d.startsWith('tasks · a preview'), true)
+  assertEquals(d.startsWith('# tasks · a preview'), true)
   assertEquals(d.includes('task claim <id> <session>'), true)
   assertEquals(d.includes('nothing claimed'), true)
 })
@@ -850,7 +850,7 @@ Deno.test("contextDigest: previously — the same operator's last brief", () => 
     deps: [],
   }
   let d = contextDigest(late, 'ws-new', NOW)
-  assertMatch(d, /previously — S-50 Work session:/)
+  assertMatch(d, /## previously — S-50 Work session/)
   assertEquals(d.includes('landed: everything'), true)
   // the newest same-operator brief wins — never another op's, never older
   assertEquals(d.includes('previously — S-52'), false)

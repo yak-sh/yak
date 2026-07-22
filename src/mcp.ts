@@ -206,7 +206,11 @@ comments, and the comms bus.`,
     let n = notices(await io.read(), session)
     if (!n.lines.length) return text(out)
     await io.write(n.ack, session)
-    return text(`${out}\n\n— while you were away —\n${n.lines.join('\n')}`)
+    return text(
+      `${out}\n\n## while you were away\n${
+        n.lines.map((l) => `- ${l}`).join('\n')
+      }`,
+    )
   }
 
   server.tool(
