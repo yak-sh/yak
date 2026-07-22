@@ -329,6 +329,14 @@ seams wider or leakier, that's the wrong direction.
 
 ## Preloaded
 
+### M-4474 document new fleet tooling in a memory so the fleet discovers it
+
+When you build or discover new fleet tooling — a CLI verb, an MCP tool, a hook, a workflow, a colon-command — write a memory for it immediately (reference or feedback, unscoped so it rides every operator's `task context` digest).
+
+Tooling nobody memorializes is invisible: the next operator learns it by accident, or the owner has to tell them. A one-line index in the digest is how the fleet finds out **passively** — put the knowledge where the need arises.
+
+Applies to what you ship AND to what you notice someone else shipped.
+
 ### M-4454 code style (JS/TS) — the ten rules
 
 Normative for all fleet code (source: `docs/STYLE.md`, the owner's DNA). JS-flavored; carry the same values into any language's native idiom.
@@ -343,14 +351,6 @@ Normative for all fleet code (source: `docs/STYLE.md`, the owner's DNA). JS-flav
 8. **Names: short, lowercase, evocative** (`ok`, `walk`, `beget`, `tap`, `when`), 2–8 chars; the call site reads like a sentence. No verb-prefix ceremony (`createContext`→`context`); named imports so call sites read bare. Prefix/namespace only to *disambiguate*, never as ceremony. No `Manager`/`Factory`/`Impl`; variants get a suffix (`map`/`mapObj`), not an options bag.
 9. **Don't build the speculative layer.** An abstraction earns its place by removing code from callers, not adding indirection. Leave a visible stub or a comment saying why the layer is absent.
 10. **Build a vocabulary, then compose it.** A file reads top-to-bottom as later exports made of earlier ones (`export let inc = add(1)`). Complexity comes from composition, never a long phased body. Primitives are protocol-extensible. A module tops ~600 lines; grow a system as many small files, never a monolith.
-
-### M-4474 document new fleet tooling in a memory so the fleet discovers it
-
-When you build or discover new fleet tooling — a CLI verb, an MCP tool, a hook, a workflow, a colon-command — write a memory for it immediately (reference or feedback, unscoped so it rides every operator's `task context` digest).
-
-Tooling nobody memorializes is invisible: the next operator learns it by accident, or the owner has to tell them. A one-line index in the digest is how the fleet finds out **passively** — put the knowledge where the need arises.
-
-Applies to what you ship AND to what you notice someone else shipped.
 
 ### M-4455 code style (JS/TS) — module shape, the whole app, testing
 
@@ -413,8 +413,8 @@ Owner direction (2026-07-20) on delegation in ~/code/tasks:
 
 Recall a body by id (memory_recall / task show).
 
-- M-4062 1.00 feedback: letters vs notices: email is for prose agents wrote; machine events are marked at mint
-- M-4457 0.92 feedback: code style (Ruby/Rails) — the class-macro idiom
+- M-4062 0.99 feedback: letters vs notices: email is for prose agents wrote; machine events are marked at mint
+- M-4457 0.91 feedback: code style (Ruby/Rails) — the class-macro idiom
 - M-4064 0.59 project: identity is faceted; personas differ by emphasis, not content · 1×
 - M-4065 0.59 project: federation discipline: one home graph per entity, intents across boundaries, no consensus · 1×
 - M-4066 0.59 feedback: agents take warm paths, not right paths — adoption is won structurally · 1×
