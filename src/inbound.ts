@@ -58,12 +58,23 @@ export type FleetApi = {
   processed: (ids: string[]) => Promise<void>
 }
 
-// Env → client, or null = dormant (no url/token configured — the sweep
-// never errors over absence; server.ts says so once at boot).
+// The theft guard: the store's notified stamp is first-writer-wins, so
+// a probe server on a scratch db (DB_PATH set) that inherits live creds
+// STEALS delivery — messages mint into a throwaway db and the live
+// server never sees them (it happened; T-3839). Probes will always
+// inherit env, so the sweep is the part that refuses: default-deny on
+// any non-default db, FLEET_MAIL_SWEEP=1 the deliberate opt-in. The
+// live service sets neither. Pure over env, so the gate itself tests.
+export let mayStamp = (env = (k: string) => Deno.env.get(k)): boolean =>
+  !env('DB_PATH') || env('FLEET_MAIL_SWEEP') == '1'
+
+// Env → client, or null = dormant (no url/token configured, or a
+// non-live db refusing to stamp — the sweep never errors over absence;
+// server.ts says which once at boot).
 export let fleetApi = (): FleetApi | null => {
   let url = Deno.env.get('FLEET_MAIL_API_URL')?.replace(/\/+$/, '')
   let token = Deno.env.get('FLEET_MAIL_API_TOKEN')
-  if (!url || !token) return null
+  if (!url || !token || !mayStamp()) return null
   let call = async (method: string, path: string, body?: unknown) => {
     let res = await fetch(`${url}${path}`, {
       method,

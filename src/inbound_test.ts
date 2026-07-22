@@ -13,6 +13,7 @@ let {
   inboundSweep,
   mailChanges,
   mailIdOf,
+  mayStamp,
   routeTo,
 } = await import('./inbound.ts')
 let { mailed } = await import('./mail.ts')
@@ -252,9 +253,41 @@ Deno.test('inbound mail never delivers: arrival is a record, not an ask', async 
   Deno.env.delete('TASKS_MAIL_CMD')
 })
 
+// The theft guard, pure: env in, verdict out. The live service (no
+// DB_PATH) sweeps; any scratch db refuses even with creds inherited;
+// only the explicit opt-in arms it (T-3839).
+Deno.test('mayStamp: a scratch db refuses to stamp; the opt-in arms it', () => {
+  let env = (vars: Record<string, string>) => (k: string) => vars[k]
+  assertEquals(mayStamp(env({})), true)
+  assertEquals(mayStamp(env({ DB_PATH: '/tmp/probe.db' })), false)
+  assertEquals(mayStamp(env({ DB_PATH: ':memory:' })), false)
+  assertEquals(
+    mayStamp(env({ DB_PATH: '/tmp/probe.db', FLEET_MAIL_SWEEP: '1' })),
+    true,
+  )
+  assertEquals(
+    mayStamp(env({ DB_PATH: '/tmp/probe.db', FLEET_MAIL_SWEEP: '0' })),
+    false,
+  )
+})
+
+Deno.test('fleetApi: creds alone never arm a non-live db', async () => {
+  Deno.env.set('FLEET_MAIL_API_URL', 'http://edge.test')
+  Deno.env.set('FLEET_MAIL_API_TOKEN', 't')
+  let { fleetApi } = await import('./inbound.ts')
+  try {
+    // DB_PATH=:memory: rides this whole file — the guard holds the door
+    assertEquals(fleetApi(), null)
+  } finally {
+    Deno.env.delete('FLEET_MAIL_API_URL')
+    Deno.env.delete('FLEET_MAIL_API_TOKEN')
+  }
+})
+
 Deno.test('stamp-back arrives in bites: D1 binds one variable per id', async () => {
   Deno.env.set('FLEET_MAIL_API_URL', 'http://edge.test')
   Deno.env.set('FLEET_MAIL_API_TOKEN', 't')
+  Deno.env.set('FLEET_MAIL_SWEEP', '1') // scratch db: the guard needs the opt-in
   let { fleetApi } = await import('./inbound.ts')
   let batches: string[][] = []
   let real = globalThis.fetch
@@ -268,6 +301,7 @@ Deno.test('stamp-back arrives in bites: D1 binds one variable per id', async () 
     globalThis.fetch = real
     Deno.env.delete('FLEET_MAIL_API_URL')
     Deno.env.delete('FLEET_MAIL_API_TOKEN')
+    Deno.env.delete('FLEET_MAIL_SWEEP')
   }
   assertEquals(batches.map((b) => b.length), [50, 50, 20])
 })

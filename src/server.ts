@@ -26,7 +26,13 @@ import { freeze, serveFrozen, store } from './freeze.ts'
 import { fanout, FANOUT_PENDING, mailed } from './mail.ts'
 import { native } from './mailer.ts'
 import { knocked } from './knock.ts'
-import { fleetApi, fleetRaw, inboundSweep, mailIdOf } from './inbound.ts'
+import {
+  fleetApi,
+  fleetRaw,
+  inboundSweep,
+  mailIdOf,
+  mayStamp,
+} from './inbound.ts'
 import { scribeSweep } from './scribe.ts'
 import { embedSweep, similarTo } from './embed.ts'
 import { mcpServer } from './mcp.ts'
@@ -608,13 +614,17 @@ relay((comp, pending) =>
 // Inbound rides the pull (inbound.ts): the fleet-mail sweep, on an
 // interval like the log tailer — it graduates to a `system` entity under
 // T-3906. Boot sweeps too (idempotency makes it free); unconfigured is
-// dormancy, said once, never an error.
+// dormancy, said once, never an error — and a non-live db is REFUSAL
+// (mayStamp), or a probe inheriting live creds steals delivery.
 if (fleetApi()) {
   inboundSweep(cast)
   setInterval(() => inboundSweep(cast), 60_000)
 } else {
   console.log(
-    'inbound sweep dormant — set FLEET_MAIL_API_URL and FLEET_MAIL_API_TOKEN',
+    mayStamp()
+      ? 'inbound sweep dormant — set FLEET_MAIL_API_URL and FLEET_MAIL_API_TOKEN'
+      : 'inbound sweep dormant — non-live db (DB_PATH set); ' +
+        'FLEET_MAIL_SWEEP=1 opts in',
   )
 }
 
