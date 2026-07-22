@@ -102,6 +102,34 @@ export let fleetApi = (): FleetApi | null => {
   }
 }
 
+// The attachments proxy's lookup: a client names the MAIL ENTITY (E-9,
+// a bare num, an eid); the worker's R2 store speaks message_id. The two
+// misses stay distinct so the route can teach — null = no mail at all,
+// a null message_id = a row that never came through the spool (outbound
+// and relay mail carry no attachments).
+export let mailIdOf = (ref: string): { message_id: string | null } | null => {
+  let m = ref.match(/^[A-Za-z]+-(\d+)$/) ?? ref.match(/^(\d+)$/)
+  let row = m
+    ? db.prepare(
+      `select m.message_id from mail m
+       join entity e on e.eid = m.eid where e.num = ?`,
+    ).get(+m[1])
+    : db.prepare('select message_id from mail where eid = ?').get(ref)
+  return (row ?? null) as { message_id: string | null } | null
+}
+
+// One raw GET against the fleet-mail API — the Bearer token attaches
+// HERE and travels no further (M-4524: clients talk to this server,
+// never the worker). Null = dormant, same absence the sweep honors.
+export let fleetRaw = (path: string): Promise<Response> | null => {
+  let url = Deno.env.get('FLEET_MAIL_API_URL')?.replace(/\/+$/, '')
+  let token = Deno.env.get('FLEET_MAIL_API_TOKEN')
+  if (!url || !token) return null
+  return fetch(`${url}${path}`, {
+    headers: { authorization: `Bearer ${token}` },
+  })
+}
+
 // The address book, reversed: which entity wears this address? Unmatched
 // inbound aims at the holdco project (P-20) — the operator's triage
 // pile — resolved by name each sweep, so a db without it (tests, a

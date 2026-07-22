@@ -25,7 +25,7 @@ import { vocabularyMd } from './schema.ts'
 import { freeze, serveFrozen, store } from './freeze.ts'
 import { fanout, FANOUT_PENDING, mailed } from './mail.ts'
 import { knocked } from './knock.ts'
-import { fleetApi, inboundSweep } from './inbound.ts'
+import { fleetApi, fleetRaw, inboundSweep, mailIdOf } from './inbound.ts'
 import { scribeSweep } from './scribe.ts'
 import { embedSweep, similarTo } from './embed.ts'
 import { mcpServer } from './mcp.ts'
@@ -418,6 +418,49 @@ Deno.serve(
     // The adapter table, for a browser that must offer what a spawn
     // request will be checked against (adapters.ts is server-only).
     if (path == '/providers') return Response.json(providers())
+    // Mail attachments, proxied read-only: the fleet-mail worker holds
+    // them in R2 behind a token that stays in THIS process — clients
+    // name the mail ENTITY; the spool's message_id is server business.
+    // /mail/:id/files lists ({message_id, files}); …/files/:name streams
+    // the bytes. Each miss says which link broke, so the CLI teaches at
+    // failure time instead of shrugging.
+    let files = path.match(/^\/mail\/([^/]+)\/files(?:\/(.+))?$/)
+    if (files) {
+      let ref = decodeURIComponent(files[1])
+      let row = mailIdOf(ref)
+      if (!row) return new Response(`not a mail: ${ref}`, { status: 404 })
+      if (!row.message_id) {
+        return new Response(
+          `${ref} has no spool row (outbound/relay mail carries no attachments)`,
+          { status: 404 },
+        )
+      }
+      let name = files[2] ? decodeURIComponent(files[2]) : undefined
+      let up = fleetRaw(
+        `/messages/${encodeURIComponent(row.message_id)}/attachments` +
+          (name ? `/${encodeURIComponent(name)}` : ''),
+      )
+      if (!up) {
+        return new Response(
+          'fleet-mail API not configured on this server (FLEET_MAIL_API_URL / FLEET_MAIL_API_TOKEN)',
+          { status: 503 },
+        )
+      }
+      let res = await up
+      if (!res.ok) return new Response(await res.text(), { status: res.status })
+      if (name) {
+        return new Response(res.body, {
+          headers: {
+            'content-type': res.headers.get('content-type') ??
+              'application/octet-stream',
+          },
+        })
+      }
+      return Response.json({
+        message_id: row.message_id,
+        files: await res.json(),
+      })
+    }
     // Managed sessions are DRIVEN through the graph (create a session
     // with a provider, create a stop_request, comment at a settled one —
     // the effects below); the log file is the one thing still read here,

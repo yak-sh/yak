@@ -6,9 +6,8 @@ import type { Change } from './types.ts'
 import type { FleetMsg, SpoolReq } from './inbound.ts'
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, db, open } = await import('./db.ts')
-let { hookChanges, inboundSweep, mailChanges, routeTo } = await import(
-  './inbound.ts'
-)
+let { fleetRaw, hookChanges, inboundSweep, mailChanges, mailIdOf, routeTo } =
+  await import('./inbound.ts')
 let { mailed } = await import('./mail.ts')
 let { assertEquals, assertMatch } = await import('@std/assert')
 
@@ -231,4 +230,29 @@ Deno.test('stamp-back arrives in bites: D1 binds one variable per id', async () 
     Deno.env.delete('FLEET_MAIL_API_TOKEN')
   }
   assertEquals(batches.map((b) => b.length), [50, 50, 20])
+})
+
+Deno.test('mailIdOf: E-num, bare num, and eid all land; the misses differ', () => {
+  let { eid } = db.prepare(
+    'select eid from mail where message_id is not null',
+  ).get() as { eid: string }
+  let { num } = db.prepare('select num from entity where eid = ?').get(eid) as {
+    num: number
+  }
+  assertEquals(mailIdOf(eid)?.message_id, 'msg:1752000000000:abc')
+  assertEquals(mailIdOf(`E-${num}`)?.message_id, 'msg:1752000000000:abc')
+  assertEquals(mailIdOf(String(num))?.message_id, 'msg:1752000000000:abc')
+  assertEquals(mailIdOf('nope-not-here'), null) // no mail at all
+  let out = uid() // an outbound row: mail, but no spool provenance
+  apply(db, [
+    { eid: out, name: 'doc', comp: { title: 'sent' } },
+    { eid: out, name: 'mail', comp: { to: 'x@y.test' } },
+  ])
+  assertEquals(mailIdOf(out)?.message_id, null) // a mail, never spooled
+})
+
+Deno.test('fleetRaw: dormant without config — the token never has a default', () => {
+  Deno.env.delete('FLEET_MAIL_API_URL')
+  Deno.env.delete('FLEET_MAIL_API_TOKEN')
+  assertEquals(fleetRaw('/messages/x/attachments'), null)
 })

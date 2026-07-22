@@ -97,7 +97,7 @@ let VERBS: [usage: string, blurb: string, examples: string[]][] = [
     'task search .project=holdco deploy',
   ]],
   [
-    'mail [filters|show|send|reply|search]',
+    'mail [filters|show|send|reply|search|files]',
     'fleet mail: bare = unread inbox; task mail --help spells the family',
     [
       'task mail',
@@ -321,7 +321,7 @@ let MAIL_USAGE = `task mail — fleet mail in the graph
   task mail send <to> <subj...> [--body=@f | stdin] [--from=...]
   task mail reply <id> [text... | --body=@f | stdin]
   task mail search <words...>       full-text search, mail only
-  task mail files <id>              attachments (not yet — T-4642)
+  task mail files <id> [--out DIR]  download attachments
 <to> is a raw address or a graph reference (alias, P-9, eid) — the
 address book resolves at delivery. Filters speak the query grammar:
   task mail --all .from~=stripe .verified=0`
@@ -464,6 +464,39 @@ let mailReply = async (args: string[]) => {
   )
 }
 
+// Attachments, through the server's proxy (the worker's token lives
+// there, never here — the CLI only ever talks to its own server).
+// Default DIR is bin/email's: ./mail-attachments/<message-id>/.
+let mailFiles = async (args: string[]) => {
+  let out: string | undefined
+  let rest: string[] = []
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] == '--out') out = args[++i]
+    else if (args[i].startsWith('--out=')) out = args[i].slice(6)
+    else rest.push(args[i])
+  }
+  let [id] = rest
+  if (!id) throw new Error(`task mail files <id> [--out DIR]\n\n${MAIL_USAGE}`)
+  let door = `http://${host()}/mail/${encodeURIComponent(id)}/files`
+  let res = await fetch(door)
+  if (!res.ok) throw new Error(await res.text())
+  let { message_id, files } = await res.json() as {
+    message_id: string
+    files: { name: string; size: number }[]
+  }
+  if (!files.length) return console.log(`no attachments for ${id}`)
+  out ??= `mail-attachments/${message_id.replace(/[^\w.-]/g, '_')}`
+  Deno.mkdirSync(out, { recursive: true })
+  for (let f of files) {
+    let r = await fetch(`${door}/${encodeURIComponent(f.name)}`)
+    if (!r.ok) throw new Error(`${f.name}: ${await r.text()}`)
+    // R2 keys can't hide a directory in a NAME — but never trust one.
+    let path = `${Deno.realPathSync(out)}/${f.name.replaceAll('/', '_')}`
+    await Deno.writeFile(path, new Uint8Array(await r.arrayBuffer()))
+    console.log(path)
+  }
+}
+
 // FTS, screened to mail — the one search surface, one more door.
 let mailSeek = async (args: string[]) => {
   let q = args.join(' ')
@@ -482,11 +515,7 @@ let mail = (args: string[]) => {
   if (sub == 'send') return mailSend(rest)
   if (sub == 'reply') return mailReply(rest)
   if (sub == 'search') return mailSeek(rest)
-  if (sub == 'files') {
-    throw new Error(
-      'attachments arrive with T-4642 — until then: bin/email attachments',
-    )
-  }
+  if (sub == 'files') return mailFiles(rest)
   if (sub == 'help' || sub == '--help') return console.log(MAIL_USAGE)
   return mailList(args)
 }
