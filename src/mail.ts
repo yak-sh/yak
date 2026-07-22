@@ -60,12 +60,35 @@ export let addressOf = (to: string): string => {
   return e.address
 }
 
+// A stored message id to the RFC Message-ID a mail client threads on:
+// the fleet store wraps ids (`msg:<ts>:<rfc-id>`, `out:` for outbound) —
+// unwrap those, pass a raw id through, and shed the angle brackets the
+// mailer re-adds in the header.
+export let rfcId = (stored: string) =>
+  (stored.match(/^(?:msg|out):\d+:(.+)$/)?.[1] ?? stored)
+    .replace(/[<>]/g, '').trim()
+
+// Threading resolves at delivery (reference at authoring — the row's
+// reply_to_eid names the mail being answered; what the WORLD needs is
+// that mail's Message-ID): inbound rows carry it in message_id (store-
+// wrapped), our own sent rows in sent_id. Nothing resolvable = deliver
+// unthreaded — the reply_to_eid edge still records the intent in the
+// graph, and a lost thread is not a lost letter.
+let threadId = (eid: string) => {
+  let r = db.prepare('select message_id, sent_id from mail where eid = ?')
+    .get(eid) as
+      | { message_id: string | null; sent_id: string | null }
+      | undefined
+  let mid = r?.message_id ? rfcId(String(r.message_id)) : r?.sent_id
+  return mid ? String(mid) : undefined
+}
+
 // created(mail): deliver and stamp. $TASKS_MAIL_CMD is the mailer
-// — argv `--to <addr> [--from <addr>] <subject>`, body on stdin, exit 0 =
-// sent (holdco's bin/email speaks exactly this). acted_at stamps on
-// EVERY outcome, success or not: the sweep key means "the effect ran",
-// error says how it went, and a human retries by minting a fresh request
-// — an automatic retry storm helps no one.
+// — argv `--to <addr> [--from <addr>] [--in-reply-to <mid>] <subject>`,
+// body on stdin, exit 0 = sent (holdco's bin/email speaks exactly this).
+// acted_at stamps on EVERY outcome, success or not: the sweep key means
+// "the effect ran", error says how it went, and a human retries by
+// minting a fresh request — an automatic retry storm helps no one.
 // In-flight guard: the boot sweep can catch a mail the comment
 // sweep JUST minted (dispatched, not yet stamped — delivery is async) and
 // fire it twice. acted_at must stay the crash-gap key, so the dedup for
@@ -105,12 +128,14 @@ export let mailed =
         error: 'no mailer configured (set TASKS_MAIL_CMD)',
       })
     }
+    let mid = row.reply_to_eid ? threadId(String(row.reply_to_eid)) : undefined
     let [bin, ...pre] = cmd.split(/\s+/)
     let args = [
       ...pre,
       '--to',
       to,
       ...(row.from ? ['--from', String(row.from)] : []),
+      ...(mid ? ['--in-reply-to', mid] : []),
       String(doc?.title ?? ''),
     ]
     try {

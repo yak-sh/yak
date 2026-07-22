@@ -57,6 +57,7 @@ Deno.test('death words: every reference declares, the sets hold', () => {
       'memory.source_eid',
       'memory.scope_eid',
       'mail.target_eid',
+      'mail.reply_to_eid',
     ]),
   )
 })

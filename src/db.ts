@@ -58,7 +58,9 @@ let mailDdl = `create table if not exists mail (
     to_addr     text,
     message_id  text,
     received_at text,
-    verified    integer
+    verified    integer,
+    reply_to_eid text,
+    sent_id     text
   )`
 
 // The star: an entity spine plus one component table per kind, plus the edge
@@ -491,6 +493,11 @@ export let open = () => {
   addCol('mail', 'message_id', 'message_id text')
   addCol('mail', 'received_at', 'received_at text')
   addCol('mail', 'verified', 'verified integer')
+  // Threading (mail.ts): the mail this one answers — no FK, like
+  // target_eid (death 'keep' + tombstoned spines veto FK'd deletes,
+  // T-4593). sent_id is the sender-assigned Message-ID, server-stamped.
+  addCol('mail', 'reply_to_eid', 'reply_to_eid text')
+  addCol('mail', 'sent_id', 'sent_id text')
   addCol('session', 'actor_eid', 'actor_eid text references entity(eid)')
   // A board is a saved filter over tasks (query.ts grammar), not an edge
   // list — membership can't drift when it isn't stored.

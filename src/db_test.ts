@@ -292,6 +292,10 @@ Deno.test('mendMail: rebuilds the FK-era table, no-ops when healed', () => {
     error      text,
     to_addr    text,
     message_id text, received_at text, verified integer)`)
+  // open() appends the post-FK-era columns (addCol) BEFORE mendMail runs,
+  // so the stale table always matches the rebuild ddl's shipping order.
+  d.exec('alter table mail add column reply_to_eid text')
+  d.exec('alter table mail add column sent_id text')
   let t = uid(), m = uid()
   apply(d, [
     { eid: t, name: 'doc', comp: { title: 'subject' } },

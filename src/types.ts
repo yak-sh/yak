@@ -168,6 +168,10 @@ export let comps: Record<string, Record<string, PropType>> = {
     // What the mail is ABOUT. A sent mail is history — its subject's
     // death doesn't unsend it (the byline rule, comment.author_eid).
     target_eid: { eid: '', death: 'keep' },
+    // The mail this one ANSWERS — reference at authoring, resolved to an
+    // RFC Message-ID at delivery (mail.ts). History like target_eid: a
+    // reply outlives the mail it answered.
+    reply_to_eid: { eid: 'mail', death: 'keep' },
   },
   conflict: {}, // server-minted audit rows — nothing is wire-writable
   // A webhook delivery, derived from the edge's raw request spool
@@ -261,6 +265,11 @@ export let stamped: Record<string, Record<string, PropType>> = {
     message_id: 'text',
     received_at: 'text',
     verified: 'bool',
+    // The Message-ID the SENDER assigned to an outbound mail — stamped by
+    // the delivery effect when it can know one (the native sender; a
+    // $TASKS_MAIL_CMD mailer's output names none), so replies-to-replies
+    // thread: reply_to_eid resolves to message_id (inbound) or this.
+    sent_id: 'text',
   },
   // Webhook provenance (inbound.ts): source names the edge route the
   // request hit, event the parser's one-line verdict, payload the raw
@@ -613,12 +622,14 @@ export type Mail = {
   to: string
   from?: string | null
   target_eid?: string | null
+  reply_to_eid?: string | null
   acted_at?: string | null
   error?: string | null
   to_addr?: string | null
   message_id?: string | null
   received_at?: string | null
   verified?: number | null
+  sent_id?: string | null
 }
 
 // A webhook delivery, pulled apart from the edge's raw request spool —

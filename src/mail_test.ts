@@ -3,7 +3,9 @@
 // in-memory db and a capture-script mailer (no network, no real mail).
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, db, open } = await import('./db.ts')
-let { addressOf, FANOUT_PENDING, fanout, mailed } = await import('./mail.ts')
+let { addressOf, FANOUT_PENDING, fanout, mailed, rfcId } = await import(
+  './mail.ts'
+)
 let { assertEquals, assertMatch, assertThrows } = await import('@std/assert')
 
 open()
@@ -241,6 +243,76 @@ Deno.test('the sweep predicate finds unreceipted recent comments only', () => {
   assertEquals(eids.includes(missed), true)
   assertEquals(eids.includes(fresh), false)
   assertEquals(eids.includes(old), false)
+})
+
+Deno.test('rfcId: store wrappers unwrap, raw ids pass, brackets shed', () => {
+  assertEquals(rfcId('msg:123:<abc@x>'), 'abc@x')
+  assertEquals(rfcId('out:456:def@y'), 'def@y')
+  assertEquals(rfcId('<ghi@z>'), 'ghi@z')
+  assertEquals(rfcId('jkl@w'), 'jkl@w')
+})
+
+// The threading seam end-to-end: a reply names its subject by eid, and
+// delivery resolves that to --in-reply-to — the inbound row's unwrapped
+// store id, or an outbound row's sent_id.
+Deno.test('mailed: reply_to_eid resolves to --in-reply-to at delivery', async () => {
+  let dir = Deno.makeTempDirSync()
+  Deno.env.set('TASKS_MAIL_CMD', mailer(dir))
+  let orig = uid()
+  apply(db, [
+    { eid: orig, name: 'doc', comp: { title: 'question', body: 'asked' } },
+    { eid: orig, name: 'mail', comp: { to: 'us@x.test', from: 'them@y.test' } },
+  ])
+  // inbound provenance is server-stamped (the inbound.ts idiom)
+  db.prepare('update mail set message_id = ? where eid = ?')
+    .run('msg:123:<orig-id@y.test>', orig)
+  let reply = uid()
+  apply(db, [
+    { eid: reply, name: 'doc', comp: { title: 'Re: question', body: 'a' } },
+    {
+      eid: reply,
+      name: 'mail',
+      comp: { to: 'them@y.test', reply_to_eid: orig },
+    },
+  ])
+  await mailed(cast)(reply, {})
+  assertMatch(
+    mails(dir).at(-1)!,
+    /--in-reply-to orig-id@y.test Re: question/,
+  )
+  // replying to our OWN sent mail threads through sent_id
+  let sent = uid()
+  apply(db, [
+    { eid: sent, name: 'doc', comp: { title: 'opener', body: 'b' } },
+    { eid: sent, name: 'mail', comp: { to: 'them@y.test' } },
+  ])
+  await mailed(cast)(sent, {})
+  db.prepare('update mail set sent_id = ? where eid = ?')
+    .run('cf-abc@sender', sent)
+  let follow = uid()
+  apply(db, [
+    { eid: follow, name: 'doc', comp: { title: 'Re: opener', body: 'c' } },
+    {
+      eid: follow,
+      name: 'mail',
+      comp: { to: 'them@y.test', reply_to_eid: sent },
+    },
+  ])
+  await mailed(cast)(follow, {})
+  assertMatch(mails(dir).at(-1)!, /--in-reply-to cf-abc@sender Re: opener/)
+  // no id resolvable: delivered unthreaded, never an error
+  let dark = uid()
+  apply(db, [
+    { eid: dark, name: 'doc', comp: { title: 'unthreadable', body: 'd' } },
+    { eid: dark, name: 'mail', comp: { to: 'x@y.test', reply_to_eid: sent } },
+  ])
+  db.prepare('update mail set sent_id = null where eid = ?').run(sent)
+  await mailed(cast)(dark, {})
+  let last = mails(dir).at(-1)!
+  assertMatch(last, /unthreadable/)
+  assertEquals(last.includes('--in-reply-to'), false)
+  assertEquals(row(dark).error, null)
+  Deno.env.delete('TASKS_MAIL_CMD')
 })
 
 Deno.test('mailed: concurrent fires deliver once (the boot-sweep race)', async () => {
