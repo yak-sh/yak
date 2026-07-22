@@ -1,12 +1,12 @@
 {
   "tasks": {
-    "check": "deno fmt --check . && deno lint . && deno check src/",
+    "check": "deno fmt --check . && deno lint . && deno check src/ channels/",
     "dev": "deno run -A --unstable-net --unstable-worker-options --watch src/server.ts",
     "tui": "sh -c 'while :; do deno run -A src/tui/main.tsx && break; [ $? -eq 42 ] || break; done'",
     "install": "sh -c 'cd \"$(git worktree list --porcelain | head -1 | cut -c 10-)\" && deno install -g -f --name task -A --config deno.json src/cli.ts'",
     "mcp": "deno run -A --unstable-worker-options src/mcp.ts",
     "seed": "deno run -A src/db.ts",
-    "test": "deno test -A src",
+    "test": "deno test -A src channels",
     "bench": "deno bench -A src"
   },
   "fmt": {

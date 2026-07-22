@@ -113,18 +113,6 @@ let docsIn = (changes: Change[]) => {
 let words = (doc?: { title: string; body: string }) =>
   doc ? cleanBody(doc.body || doc.title) : ''
 
-// A knock points its recipient at one entity: the first *_eid in the comp that
-// ISN'T the recipient (to_eid/target_eid may name the recipient itself). null
-// when the knock only names its recipient.
-let lookAt = (comp: Record<string, unknown>, recipient: string) => {
-  for (let [k, v] of Object.entries(comp)) {
-    if (!k.endsWith('_eid')) continue
-    let s = str(v)
-    if (s && s != recipient) return s
-  }
-  return null
-}
-
 // The filter + format, pure. Given one broadcast batch and the session context,
 // return the channel events to emit — in batch order, so delivery is
 // deterministic. Two things are aimed at a session:
@@ -132,8 +120,9 @@ let lookAt = (comp: Record<string, unknown>, recipient: string) => {
 //   1. a `comment` whose target_eid is this session's eid — someone messaging
 //      the session — but ONLY at mint, when the batch also carries the doc that
 //      holds the words (a bodiless later patch is skipped).
-//   2. a `knock` (built in a parallel worktree; matched generically) whose
-//      recipient — to_eid or target_eid — is this session's eid or its actor's.
+//   2. a `knock` (types.ts): to_eid is the recipient — this session or its
+//      actor — and target_eid is what to look at; the words ride as a plain
+//      comment on the TARGET in the same batch (the :knock contract).
 export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
   let docs = docsIn(changes)
   let out: Event[] = []
@@ -150,12 +139,11 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
     }
 
     if (c.name == 'knock') {
-      let recipient = str(c.comp.to_eid) || str(c.comp.target_eid)
+      let recipient = str(c.comp.to_eid)
       if (recipient != ctx.sessionEid && recipient != ctx.actorEid) continue
-      let at = lookAt(c.comp, recipient)
+      let at = str(c.comp.target_eid)
       let atId = at ? ctx.idOf(at) ?? at : null
-      let note = words(docs.get(c.eid)) ||
-        firstComment(changes, docs, ctx.sessionEid, ctx.actorEid)
+      let note = commentOn(changes, docs, at)
       let head = atId ? `knock: look at ${atId}` : 'knock'
       let content = note ? `${head} — ${note}` : head
       out.push({ content, meta: { kind: 'knock' } })
@@ -164,18 +152,16 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
   return out
 }
 
-// The words riding a knock: a comment in the same batch aimed at the recipient.
-// A knock is a nudge; the accompanying comment carries what to say.
-let firstComment = (
+// The words riding a knock: a comment in the same batch aimed at the knock's
+// TARGET. A knock is a nudge; the accompanying comment carries what to say.
+let commentOn = (
   changes: Change[],
   docs: Map<string, { title: string; body: string }>,
-  sessionEid: string,
-  actorEid?: string | null,
+  target: string,
 ) => {
   for (let c of changes) {
     if (c.name != 'comment' || !c.comp) continue
-    let target = str(c.comp.target_eid)
-    if (target != sessionEid && target != actorEid) continue
+    if (str(c.comp.target_eid) != target) continue
     let w = words(docs.get(c.eid))
     if (w) return w
   }

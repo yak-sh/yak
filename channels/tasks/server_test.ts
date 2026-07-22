@@ -87,24 +87,23 @@ Deno.test('a knock at the session actor is delivered too', () => {
 })
 
 Deno.test('a knock naming only its recipient has no look-at target', () => {
-  let batch = [ch('k1', 'knock', { target_eid: 'sess' })]
+  let batch = [ch('k1', 'knock', { to_eid: 'sess' })]
   assertEquals(channelEvents(batch, ctx()), [
     { content: 'knock', meta: { kind: 'knock' } },
   ])
 })
 
-Deno.test('a knock carries the words of a comment riding the same batch', () => {
+Deno.test('a knock carries the words of the comment on its TARGET', () => {
   let batch = [
     ch('k1', 'knock', { to_eid: 'sess', target_eid: 't9' }),
     ch('c1', 'doc', { title: '', body: 'take a look' }),
-    ch('c1', 'comment', { target_eid: 'sess', author_eid: 's1' }),
+    ch('c1', 'comment', { target_eid: 't9', author_eid: 's1' }),
   ]
   let out = channelEvents(batch, ctx())
-  assertEquals(out.length, 2) // the knock, and the comment on its own
-  assertEquals(out[0], {
+  assertEquals(out, [{
     content: 'knock: look at T-9 — take a look',
     meta: { kind: 'knock' },
-  })
+  }])
 })
 
 Deno.test('a knock aimed at neither the session nor its actor is ignored', () => {
