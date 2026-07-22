@@ -74,6 +74,7 @@ let sheet: Record<string, Style> = {
   Md_S: { strike: true },
   Md_Code: { fg: '#e69875' },
   Md_A: { fg: '#7fbbb3', underline: true },
+  Md_Ref: { fg: '#7fbbb3', bold: true },
   Md_H: { bold: true, fg: '#a7c080' },
   Md_Q: { fg: '#9da9a0', italic: true },
   Md_Fence: { fg: '#7a8478' },

@@ -50,6 +50,21 @@ export let follow = (href: string, eid?: string) => (ev: MouseEvent) => {
   else navigate(href)
 }
 
+// Markdown-rendered ids (md.ts data-ref anchors) come from innerHTML, so
+// no component owns their clicks — one delegated listener gives every
+// T-123 in any body the same in-app open as an Id chip. The id resolves
+// against the live cache at click time; a ref the cache can't name (an
+// unloaded or dead entity) falls through to its href, the honest 404.
+globalThis.document?.addEventListener?.('click', (ev: MouseEvent) => {
+  let a = (ev.target as Element | null)?.closest?.('a[data-ref]')
+  if (!a) return
+  let id = a.getAttribute('data-ref')!
+  let m = id.match(/^[A-Za-z]+-(\d+)$/)
+  let hit = m &&
+    Object.entries(cache.value).find(([, c]) => c.entity?.num == Number(m![1]))
+  if (hit) follow(`/${id}`, hit[0])(ev)
+})
+
 // The whole internal-link contract, spreadable onto any anchor: a real
 // href (new-tab forms and the native menu stay native), plain click
 // follows in place, and dragging it onto the canvas makes a card.
