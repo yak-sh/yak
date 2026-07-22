@@ -20,6 +20,7 @@ import {
 } from './types.ts'
 import { idOf } from './types.ts'
 import { hot, matchQuery, type Pred, route, warm } from './query.ts'
+import { unmime } from './rfc2047.ts'
 export { idOf }
 
 export let host = () => Deno.env.get('TASKS_HOST') ?? '127.0.0.1:5173'
@@ -586,7 +587,7 @@ export let mailLine = (r: Row, now = Date.now()) => {
     : mins < 1440
     ? ` (${Math.floor(mins / 60)}h)`
     : ` (${Math.floor(mins / 1440)}d)`
-  let subj = String(r.comps.doc?.title ?? '(no subject)')
+  let subj = unmime(String(r.comps.doc?.title ?? '(no subject)'))
   return `${idOf(r).padEnd(6)} ${dot}${bad} ${who} — ${subj}${age}`
 }
 
@@ -1073,7 +1074,9 @@ export let showMd = (snap: Snapshot, all: Row[], row: Row) => {
     let r = byEid.get(String(eid))
     if (!r) return String(eid)
     let st = r.comps.task?.status
-    let title = clip(r.comps.doc?.title ?? r.comps.session?.id ?? '')
+    let t = r.comps.doc?.title ?? r.comps.session?.id ?? ''
+    // a mail's stored subject may be an encoded-word — decode to read
+    let title = clip(r.comps.mail ? unmime(String(t)) : t)
     return `${idOf(r)}${st ? ` (${st})` : ''}${title ? ` — ${title}` : ''}`
   }
   let fm = [`id: ${idOf(row)}`, `kind: ${row.kind}`]
@@ -1114,6 +1117,7 @@ export let showMd = (snap: Snapshot, all: Row[], row: Row) => {
   }
   let out = ['---', ...fm, '---']
   let title = String(row.comps.doc?.title ?? '')
+  if (row.comps.mail) title = unmime(title) // display; stored as received
   let body = String(row.comps.doc?.body ?? '')
   if (title) out.push('', `# ${title}`)
   if (body) out.push('', body)

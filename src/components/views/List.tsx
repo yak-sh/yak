@@ -1,4 +1,5 @@
 import { type Ent, idOf } from '../../types.ts'
+import { unmime } from '../../rfc2047.ts'
 import { boardAll, byWarmth, pinned } from '../../live.ts'
 import { orderOf, parseQuery } from '../../query.ts'
 import { block } from '../ui.tsx'
@@ -89,7 +90,10 @@ export let ListItem = ({ e }: { e: Ent }) => (
       }
     }}
   >
-    <Line.Title>{e.doc?.title || e.kind}</Line.Title>
+    {/* a mail's stored subject may be an encoded-word — decode to read */}
+    <Line.Title>
+      {(e.mail ? unmime(e.doc?.title ?? '') : e.doc?.title) || e.kind}
+    </Line.Title>
     <View eid={e.eid} view='Id' />
   </Line>
 )

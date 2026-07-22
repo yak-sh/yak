@@ -565,6 +565,15 @@ Deno.test('mailLine: unread dot, unverified mark, direction', () => {
     },
   }
   assertMatch(mailLine(sent, NOW), /^E-10 {3}· → venture@x.test — Ping \(1h\)$/)
+  // a stored encoded-word subject renders decoded (rfc2047_test has the table)
+  let encoded = {
+    ...inbound,
+    comps: {
+      ...inbound.comps,
+      doc: { title: '=?UTF-8?Q?Re=3A_caf=C3=A9?=', body: '' },
+    },
+  }
+  assertMatch(mailLine(encoded, NOW), /— Re: café \(2h\)$/)
 })
 
 // The lately tier against a fixed clock: work-session briefs lead with
