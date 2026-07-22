@@ -8,9 +8,5 @@
 # npm droppings — this project has no node_modules
 node_modules/
 
-# this repo is open source — materialized personas are fleet data (other,
-# private repos commit their .tasks/; this one must not)
-.tasks/
-
 # agent worktrees parked inside the repo
 .claude/worktrees/

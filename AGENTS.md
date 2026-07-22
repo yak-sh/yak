@@ -5,11 +5,10 @@ TUI, a CLI, and an MCP server, all speaking the same wire. This file is for any
 agent working here without prior context. README.md explains the product; this
 explains how to change it safely.
 
-**Wear the voice first.** On fleet boxes `.tasks/AGENTS.md` is the materialized
-baseline persona (N-4053) — the working voice plus the preloaded code-style
-rules. Read it before writing a line here. It is generated fleet data,
-gitignored in this open-source repo (private venture repos commit theirs);
-without it, `docs/STYLE.md` carries the style.
+**Wear the voice first.** `.tasks/AGENTS.md` is the materialized baseline
+persona (N-4053) — the working voice plus the preloaded code-style rules. Read
+it before writing a line here. It is generated FROM the graph (`task sync`);
+edit the persona and its memories there, never the file.
 
 ## The one idea
 
