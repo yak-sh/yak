@@ -142,8 +142,18 @@ export let mailed =
 // mint idempotent, and the boot sweep's predicate reads it back. Mail
 // authored by the project's own operator stays home (the self-echo
 // guard delivery.js had).
+//
+// PROSE ONLY: email is reserved for words an agent actually wrote.
+// Event comments (comment.event — reasons()-minted status trails) never
+// mail: claimants hear them on the comms bus, and automated notification
+// is its own future concept (T-3690), not an inbox flood. Read from the
+// row, not the dispatched comp — the sweep and the live path then agree,
+// and the wire's copy of `event` was never trustworthy anyway.
 export let fanout =
   (cast: Cast) => (eid: string, comp: Record<string, unknown>) => {
+    if (
+      db.prepare('select 1 from comment where eid = ? and event = 1').get(eid)
+    ) return
     let target = String(comp.target_eid ?? '')
     let t = db.prepare('select project_eid from task where eid = ?').get(
       target,
@@ -207,16 +217,19 @@ export let fanout =
     }
   }
 
-// The fanout sweep's pending predicate: recent comments with no
-// mail receipt. Over-approximates on purpose — the handler
-// re-checks project/address/self-echo — and the one-day horizon bounds
-// the backfill when a project FIRST gains an address (older comments are
-// history, not undelivered mail).
+// The fanout sweep's pending predicate: recent PROSE comments with no
+// mail receipt. Over-approximates on purpose — the handler re-checks
+// project/address/self-echo — but events are screened here too, so the
+// sweep never even enumerates them. The one-HOUR horizon bounds the
+// backfill when a project FIRST gains an address: older comments are
+// history, not undelivered mail, and a day of it arriving at once is a
+// mail bomb, not a catch-up.
 export let FANOUT_PENDING = `
-  not exists (
+  comment.event is null
+  and not exists (
     select 1 from dependency d join mail s on s.eid = d.parent_eid
     where d.type = 'about' and d.child_eid = comment.eid)
   and exists (
     select 1 from entity e where e.eid = comment.eid
-    and e.created_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 day'))
+    and e.created_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour'))
 `.trim()

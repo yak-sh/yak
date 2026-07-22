@@ -209,11 +209,48 @@ Deno.test('the sweep predicate finds unreceipted recent comments only', () => {
   let fresh = comment(task)
   fanout(cast)(fresh, { target_eid: task }) // receipted
   let missed = comment(task) // committed, effect never fired
+  // past the horizon: history when the address arrived, not undelivered mail
+  let old = comment(task)
+  db.prepare(`
+    update entity set created_at = strftime('%Y-%m-%dT%H:%M:%fZ','now','-2 hours')
+    where eid = ?
+  `).run(old)
   let pending = db.prepare(`select eid from comment where ${FANOUT_PENDING}`)
     .all() as { eid: string }[]
   let eids = pending.map((p) => p.eid)
   assertEquals(eids.includes(missed), true)
   assertEquals(eids.includes(fresh), false)
+  assertEquals(eids.includes(old), false)
+})
+
+Deno.test('events never mail: stamped at mint, screened everywhere, unforgeable', () => {
+  let { task } = fixture()
+  // a batch with a reason: reasons() rewrites it into an EVENT comment
+  let out = apply(db, [
+    { eid: task, name: 'task', comp: { status: 'done' } },
+    { eid: task, name: 'journal', comp: { reason: 'shipped' } },
+  ])
+  let minted = out.find((c) => c.name == 'comment')!
+  assertEquals(minted.comp?.event, 1) // the cast batch carries the mark…
+  let stampedRow = db.prepare('select event from comment where eid = ?').get(
+    minted.eid,
+  ) as { event: number | null }
+  assertEquals(stampedRow.event, 1) // …and the row holds the stamp
+  fanout(cast)(minted.eid, minted.comp!)
+  assertEquals(mintedFor(minted.eid).length, 0) // the live path stays home
+  let pending = (db.prepare(`select eid from comment where ${FANOUT_PENDING}`)
+    .all() as { eid: string }[]).map((p) => p.eid)
+  assertEquals(pending.includes(minted.eid), false) // the sweep won't either
+  // prose dressed as an event over the wire never earns the stamp
+  let forged = uid()
+  apply(db, [
+    { eid: forged, name: 'doc', comp: { title: '', body: 'prose' } },
+    { eid: forged, name: 'comment', comp: { target_eid: task, event: 1 } },
+  ])
+  let f = db.prepare('select event from comment where eid = ?').get(forged) as {
+    event: number | null
+  }
+  assertEquals(f.event, null)
 })
 
 Deno.test('mailed: concurrent fires deliver once (the boot-sweep race)', async () => {
