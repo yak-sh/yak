@@ -243,6 +243,17 @@ These hold everywhere in this repo, whoever — or whatever — writes the code:
   anything not done ("lease lapsed") — no timers, ending the session IS the
   lapse. SessionStart also reifies the session entity (id + cwd, the worktree it
   ran in).
+- **The graph IS your memory** (harness auto-memory is disabled — there are no
+  local memory files; do not create any). Recall arrives at boot: the context
+  digest's `lately` block (today/this week, hot-ranked) plus the `memory:` lines
+  (M-* entities). Deliberate recall is `memory_recall` / `task search`. To
+  remember something durably, write the graph: a lesson or correction →
+  `memory_save` (type feedback/project, scoped to the project entity); the
+  session's own story → its session doc (S-*, the work-session pattern — S-3678
+  is the exemplar); anything task-shaped → a task with the context in its body.
+  Reading a memory's body bumps its recall — use, and the graph remembers that
+  you used it; disuse decays. Facts need no filing at all: every write is
+  already journal-attributed (`task history`).
 - The MCP surface has two tiers: task_* sugar and the generic tier
   (graph_query/graph_apply/ui_state/card_*/code_run). The generic tier is
   possible because the UI is data — cards/pins/cameras are entities; keep it
