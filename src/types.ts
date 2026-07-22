@@ -151,7 +151,7 @@ export let comps: Record<string, Record<string, PropType>> = {
   // doc.title, the body doc.body — a mail is a document that travels.
   // `to` is a raw address (has an @) or a graph reference — alias slug,
   // human id, eid — resolved against the address book at delivery.
-  send_request: {
+  mail: {
     to: 'text',
     from: 'text',
     // What the mail is ABOUT. A sent mail is history — its subject's
@@ -213,7 +213,7 @@ export let stamped: Record<string, Record<string, PropType>> = {
   // went wrong, to_addr = the RESOLVED envelope address — denormalized on
   // purpose, so later edits to the address book never rewrite what a
   // delivery actually used.
-  send_request: { acted_at: 'text', error: 'text', to_addr: 'text' },
+  mail: { acted_at: 'text', error: 'text', to_addr: 'text' },
   memory: { last_confirmed_at: 'text' },
   recall: { count: 'number', first_at: 'text', last_at: 'text' },
   // Audit rows outlive everything they mention: loser/holder are display
@@ -337,7 +337,7 @@ export let kindOrder = [
   'session',
   'claim',
   'stop_request',
-  'send_request',
+  'mail',
   'conflict',
   'comment',
   'memory',
@@ -364,7 +364,7 @@ export let prefix: Record<string, string> = {
   session: 'S',
   memory: 'M',
   person: 'U', // U-ser: P is the projects'
-  send_request: 'E', // E-mail: S is the sessions'
+  mail: 'E', // E-mail: S is the sessions'
   email: 'A', // A-ddress: E is the mails'
 }
 export let idOf = (e: { kind: string; num: number }) =>
@@ -531,7 +531,7 @@ export type Email = { eid: string; address: string }
 
 // Outbound mail: the request columns are the ask, the stamped trio the
 // receipt. to_addr is the envelope copy — what delivery resolved and used.
-export type SendRequest = {
+export type Mail = {
   eid: string
   to: string
   from?: string | null
@@ -634,7 +634,7 @@ export type Ent = {
   session?: Session
   claim?: Claim
   stop_request?: StopRequest
-  send_request?: SendRequest
+  mail?: Mail
   email?: Email
   conflict?: Conflict
   comment?: Comment

@@ -144,7 +144,7 @@ let schema = `
   -- Outbound mail. "to"/"from" are SQL keywords — quoted here and by the
   -- generic builders in apply(), which quote every column so the
   -- vocabulary never bends to SQL's reserved words.
-  create table if not exists send_request (
+  create table if not exists mail (
     eid        text primary key references entity(eid),
     "to"       text not null,
     "from"     text,
@@ -424,6 +424,19 @@ export let open = () => {
     db.exec(depDdl)
     db.exec('insert into dependency select * from dependency_stale')
     db.exec('drop table dependency_stale')
+    db.exec('commit')
+  }
+  // A mail was briefly a 'send_request' (the intent idiom over-applied —
+  // the artifact deserved its name). Adopt the old table's rows once;
+  // `create if not exists mail` above already made the empty successor,
+  // so copy across and drop the stale name.
+  let sr = db.prepare(
+    `select 1 from sqlite_master where type = 'table' and name = 'send_request'`,
+  ).get()
+  if (sr) {
+    db.exec('begin')
+    db.exec('insert into mail select * from send_request')
+    db.exec('drop table send_request')
     db.exec('commit')
   }
   // modified_at is server-stamped on every apply() touch; rows from

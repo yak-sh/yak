@@ -445,7 +445,7 @@ on('comment', {
   created: commented(cast),
   doc: 'a comment at a settled managed session resumes that agent',
 })
-on('send_request', {
+on('mail', {
   created: mailed(cast),
   sweep: { pending: 'acted_at is null' },
   doc: 'deliver the mail through $TASKS_MAIL_CMD — resolve the address ' +
@@ -455,7 +455,7 @@ on('comment', {
   created: fanout(cast),
   sweep: { pending: FANOUT_PENDING },
   doc: "a comment on an addressed project's task fans out as a " +
-    'send_request to that project (the about edge is the receipt)',
+    'mail to that project (the about edge is the receipt)',
 })
 
 // Managed children are detached (setsid) and this process restarts on every

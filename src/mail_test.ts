@@ -12,7 +12,7 @@ let sent: { eid: string; name: string; comp: unknown }[] = []
 let cast = (cs: typeof sent) => sent.push(...cs)
 
 let row = (eid: string) =>
-  db.prepare('select * from send_request where eid = ?').get(eid) as Record<
+  db.prepare('select * from mail where eid = ?').get(eid) as Record<
     string,
     string | null
   >
@@ -70,7 +70,7 @@ Deno.test('mailed: delivers, stamps the receipt, sweep replay is a no-op', async
   let m = uid()
   apply(db, [
     { eid: m, name: 'doc', comp: { title: 'hello', body: 'the body' } },
-    { eid: m, name: 'send_request', comp: { to: 'op' } },
+    { eid: m, name: 'mail', comp: { to: 'op' } },
   ])
   await mailed(cast)(m, {})
   let r = row(m)
@@ -93,7 +93,7 @@ Deno.test('mailed: failure and misconfiguration stamp errors, visibly', async ()
   let m = uid()
   apply(db, [
     { eid: m, name: 'doc', comp: { title: 's', body: 'b' } },
-    { eid: m, name: 'send_request', comp: { to: 'x@y.test' } },
+    { eid: m, name: 'mail', comp: { to: 'x@y.test' } },
   ])
   await mailed(cast)(m, {})
   assertMatch(String(row(m).error), /exit 1: boom/)
@@ -101,7 +101,7 @@ Deno.test('mailed: failure and misconfiguration stamp errors, visibly', async ()
   let noAddr = uid()
   apply(db, [
     { eid: noAddr, name: 'doc', comp: { title: 's', body: 'b' } },
-    { eid: noAddr, name: 'send_request', comp: { to: 'addressless' } },
+    { eid: noAddr, name: 'mail', comp: { to: 'addressless' } },
   ])
   await mailed(cast)(noAddr, {})
   assertMatch(String(row(noAddr).error), /no address on file/)
@@ -110,7 +110,7 @@ Deno.test('mailed: failure and misconfiguration stamp errors, visibly', async ()
   let bare = uid()
   apply(db, [
     { eid: bare, name: 'doc', comp: { title: 's', body: 'b' } },
-    { eid: bare, name: 'send_request', comp: { to: 'x@y.test' } },
+    { eid: bare, name: 'mail', comp: { to: 'x@y.test' } },
   ])
   await mailed(cast)(bare, {})
   assertMatch(String(row(bare).error), /no mailer configured/)
@@ -122,7 +122,7 @@ Deno.test('stamped trio never rides the wire', () => {
     { eid: m, name: 'doc', comp: { title: 's', body: 'b' } },
     {
       eid: m,
-      name: 'send_request',
+      name: 'mail',
       comp: { to: 'x@y.test', acted_at: 'forged', to_addr: 'forged@x' },
     },
   ])
@@ -156,7 +156,7 @@ let comment = (target: string, author?: string) => {
 }
 let mintedFor = (c: string) =>
   db.prepare(`
-    select s.* from dependency d join send_request s on s.eid = d.parent_eid
+    select s.* from dependency d join mail s on s.eid = d.parent_eid
     where d.type = 'about' and d.child_eid = ?
   `).all(c) as Record<string, string>[]
 
@@ -222,7 +222,7 @@ Deno.test('mailed: concurrent fires deliver once (the boot-sweep race)', async (
   let m = uid()
   apply(db, [
     { eid: m, name: 'doc', comp: { title: 'once', body: 'only' } },
-    { eid: m, name: 'send_request', comp: { to: 'x@y.test' } },
+    { eid: m, name: 'mail', comp: { to: 'x@y.test' } },
   ])
   // dispatch and sweep racing: both fire before either stamps
   await Promise.all([mailed(cast)(m, {}), mailed(cast)(m, {})])

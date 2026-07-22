@@ -1,10 +1,10 @@
-// Outbound mail: the send_request intent's effect and the comment relay.
-// A send_request is a mail asked for as data — created (or re-driven by
+// Outbound mail: the mail intent's effect and the comment relay.
+// A mail is a mail asked for as data — created (or re-driven by
 // the boot sweep), the effect here resolves the address, delivers through
 // $TASKS_MAIL_CMD, and stamps the outcome server-side: acted_at (the
 // effect ran), error (how it went wrong), to_addr (the RESOLVED envelope
 // address — denormalized so later address-book edits never rewrite what a
-// delivery actually used). The comment relay mints send_requests for
+// delivery actually used). The comment relay mints mails for
 // comments on an addressed project's tasks — the graph's replacement for
 // holdco's delivery.js. SERVER-ONLY (imports db).
 import { apply, db } from './db.ts'
@@ -22,12 +22,12 @@ let now = () => new Date().toISOString()
 let stamp = (eid: string, patch: Row, cast: Cast) => {
   let cols = Object.keys(patch)
   db.prepare(
-    `update send_request set ${cols.map((c) => `"${c}" = ?`).join(', ')}
+    `update mail set ${cols.map((c) => `"${c}" = ?`).join(', ')}
      where eid = ?`,
   ).run(...cols.map((c) => patch[c]), eid)
-  let row = db.prepare('select * from send_request where eid = ?').get(eid)
+  let row = db.prepare('select * from mail where eid = ?').get(eid)
   if (row) {
-    cast([{ eid, name: 'send_request', comp: row as Record<string, unknown> }])
+    cast([{ eid, name: 'mail', comp: row as Record<string, unknown> }])
   }
 }
 
@@ -60,13 +60,13 @@ export let addressOf = (to: string): string => {
   return e.address
 }
 
-// created(send_request): deliver and stamp. $TASKS_MAIL_CMD is the mailer
+// created(mail): deliver and stamp. $TASKS_MAIL_CMD is the mailer
 // — argv `--to <addr> [--from <addr>] <subject>`, body on stdin, exit 0 =
 // sent (holdco's bin/email speaks exactly this). acted_at stamps on
 // EVERY outcome, success or not: the sweep key means "the effect ran",
 // error says how it went, and a human retries by minting a fresh request
 // — an automatic retry storm helps no one.
-// In-flight guard: the boot sweep can catch a send_request the comment
+// In-flight guard: the boot sweep can catch a mail the comment
 // sweep JUST minted (dispatched, not yet stamped — delivery is async) and
 // fire it twice. acted_at must stay the crash-gap key, so the dedup for
 // the in-process race lives here, not in the row.
@@ -74,7 +74,7 @@ let flying = new Set<string>()
 
 export let mailed =
   (cast: Cast) => async (eid: string, _comp: Record<string, unknown>) => {
-    let row = db.prepare('select * from send_request where eid = ?').get(
+    let row = db.prepare('select * from mail where eid = ?').get(
       eid,
     ) as Row | undefined
     if (!row || row.acted_at) return // gone, or a sweep replaying a done one
@@ -136,7 +136,7 @@ export let mailed =
   }
 
 // created(comment): a comment on an ADDRESSED project's task fans out as
-// a send_request — to the project REFERENCE, not a raw address, so the
+// a mail — to the project REFERENCE, not a raw address, so the
 // resolution path (and its audit trail) is exercised on every relay. The
 // about edge from the mail to the comment is the receipt: it makes the
 // mint idempotent, and the boot sweep's predicate reads it back. Mail
@@ -164,7 +164,7 @@ export let fanout =
     }
     if (
       db.prepare(`
-      select 1 from dependency d join send_request s on s.eid = d.parent_eid
+      select 1 from dependency d join mail s on s.eid = d.parent_eid
       where d.type = 'about' and d.child_eid = ?
     `).get(eid)
     ) return
@@ -191,7 +191,7 @@ export let fanout =
         },
         {
           eid: sid,
-          name: 'send_request',
+          name: 'mail',
           comp: { to: t.project_eid, target_eid: target },
         },
         {
@@ -208,13 +208,13 @@ export let fanout =
   }
 
 // The fanout sweep's pending predicate: recent comments with no
-// send_request receipt. Over-approximates on purpose — the handler
+// mail receipt. Over-approximates on purpose — the handler
 // re-checks project/address/self-echo — and the one-day horizon bounds
 // the backfill when a project FIRST gains an address (older comments are
 // history, not undelivered mail).
 export let FANOUT_PENDING = `
   not exists (
-    select 1 from dependency d join send_request s on s.eid = d.parent_eid
+    select 1 from dependency d join mail s on s.eid = d.parent_eid
     where d.type = 'about' and d.child_eid = comment.eid)
   and exists (
     select 1 from entity e where e.eid = comment.eid
