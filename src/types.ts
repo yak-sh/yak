@@ -145,6 +145,17 @@ export let comps: Record<string, Record<string, PropType>> = {
   // (apply() refuses the rest); acted_at is server-stamped and the row
   // stays as audit, like conflict.
   stop_request: { target_eid: { eid: 'session', death: 'cascade' } },
+  // A knock: bring THIS entity to THAT actor's attention, NOW. The
+  // artifact of an attention ask (always minted, GC-able later — the
+  // record is what makes delivery debuggable); words ride as a plain
+  // comment on the target in the same batch, never in the knock. The
+  // resolver effect (knock.ts) walks the ladder — running session hears
+  // the cast (the channel plugin), a project with nobody running spawns
+  // onto the target, a person gets mail — and stamps what it did.
+  knock: {
+    target_eid: { eid: '', death: 'cascade' }, // what to look at
+    to_eid: { eid: '', death: 'cascade' }, // who should look
+  },
   // Outbound mail, asked for as data: creating one requests delivery (the
   // mailer effect sends and stamps the outcome — acted_at/error/to_addr,
   // all server-side; the row stays as the audit envelope). Subject rides
@@ -225,6 +236,10 @@ export let stamped: Record<string, Record<string, PropType>> = {
   client: { ip: 'text' },
   claim: { claimed_at: 'text' },
   stop_request: { acted_at: 'text' }, // signals sent — the relay's sweep key
+  // Delivery outcome (knock.ts): acted_at = the resolver ran, delivery =
+  // what it did (cast S-9 / spawned S-9 / mailed U-2 / held), error = why
+  // it couldn't.
+  knock: { acted_at: 'text', delivery: 'text', error: 'text' },
   // Delivery outcome (mail.ts): acted_at = the effect ran, error = how it
   // went wrong, to_addr = the RESOLVED envelope address — denormalized on
   // purpose, so later edits to the address book never rewrite what a
@@ -376,6 +391,7 @@ export let kindOrder = [
   'session',
   'claim',
   'stop_request',
+  'knock',
   'mail',
   'hook',
   'conflict',
@@ -409,6 +425,7 @@ export let prefix: Record<string, string> = {
   email: 'A', // A-ddress: E is the mails'
   persona: 'N', // N for the name it wears: P is the projects'
   hook: 'H',
+  knock: 'K',
 }
 export let idOf = (e: { kind: string; num: number }) =>
   `${prefix[e.kind] ?? e.kind[0].toUpperCase()}-${e.num}`
@@ -577,6 +594,15 @@ export type Email = { eid: string; address: string }
 // resolved and used. An INBOUND mail carries message_id (the fleet
 // spool's id, also the never-send mark), received_at, and the edge's
 // verified verdict.
+export type Knock = {
+  eid: string
+  target_eid: string
+  to_eid: string
+  acted_at?: string | null
+  delivery?: string | null
+  error?: string | null
+}
+
 export type Mail = {
   eid: string
   to: string
@@ -698,6 +724,7 @@ export type Ent = {
   session?: Session
   claim?: Claim
   stop_request?: StopRequest
+  knock?: Knock
   mail?: Mail
   hook?: Hook
   email?: Email

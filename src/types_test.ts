@@ -25,6 +25,8 @@ Deno.test('death words: every reference declares, the sets hold', () => {
       'card.target_eid',
       'comment.target_eid',
       'stop_request.target_eid',
+      'knock.target_eid',
+      'knock.to_eid',
       'pin.canvas_eid',
       'camera.client_eid',
       'camera.canvas_eid',

@@ -187,6 +187,38 @@ export let commands: Record<string, Command> = {
       }
     },
   },
+  // :knock is the attention lever: bring the focused entity to someone's
+  // attention NOW. The recipient is the first word when it names an
+  // entity (alias, id); with none, a task's own project is asked. The
+  // rest of the words ride as a plain comment on the target — the knock
+  // artifact itself never carries prose. Delivery is the server's
+  // ladder (knock.ts); the stamp on the K-entity says what happened.
+  knock: {
+    args: 'homelab need the key today',
+    about: "someone's attention, now — on the focused entity",
+    run: (rest, ctx) => {
+      let r = here(ctx)
+      let [first, ...more] = rest.trim().split(/\s+/).filter(Boolean)
+      let to = first ? find(ctx.rows, first) : undefined
+      let words = (to ? more : [first, ...more]).filter(Boolean).join(' ')
+      let toEid = to?.eid ?? (r.comps.task?.project_eid as string | undefined)
+      if (!toEid) {
+        throw new Error('knock: name a recipient (:knock homelab …)')
+      }
+      let k = uuid()
+      return {
+        changes: [
+          {
+            eid: k,
+            name: 'knock',
+            comp: { target_eid: r.eid, to_eid: toEid },
+          },
+          ...(words ? commentChanges(ctx.rows, r.eid, words, ctx.session) : []),
+        ],
+        msg: `${idOf(r)} → knock ${to ? first : 'project'}`,
+      }
+    },
+  },
   claim: {
     args: '[session]',
     about: 'lease the focused entity',

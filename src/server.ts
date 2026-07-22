@@ -24,6 +24,7 @@ import { dispatch, docs, on, relay, trace } from './effects.ts'
 import { vocabularyMd } from './schema.ts'
 import { freeze, serveFrozen, store } from './freeze.ts'
 import { fanout, FANOUT_PENDING, mailed } from './mail.ts'
+import { knocked } from './knock.ts'
 import { fleetApi, inboundSweep } from './inbound.ts'
 import { scribeSweep } from './scribe.ts'
 import { mcpServer } from './mcp.ts'
@@ -448,6 +449,13 @@ on('comment', {
   created: commented(cast),
   doc: 'a comment at a settled managed session resumes that agent',
 })
+on('knock', {
+  created: knocked(cast),
+  sweep: { pending: 'acted_at is null' },
+  doc: 'attention, resolved: cast to whoever is awake for the recipient, ' +
+    'spawn a project operator onto the target, or mail an addressed ' +
+    'person — stamp delivery/error either way',
+})
 on('mail', {
   created: mailed(cast),
   // message_id marks INBOUND — a record of arrival the sweep must never
@@ -592,6 +600,7 @@ let graph = [
   'persona.ts',
   'inbound.ts',
   'scribe.ts',
+  'knock.ts',
 ]
 let shellish = (p: string) =>
   p.endsWith('/main.tsx') || p.endsWith('/live.ts') ||

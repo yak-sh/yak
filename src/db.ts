@@ -145,6 +145,16 @@ let schema = `
     target_eid text not null references entity(eid),
     acted_at   text
   );
+  -- A knock: bring target to to's attention now (knock.ts resolves;
+  -- acted_at/delivery/error are its server-stamped audit).
+  create table if not exists knock (
+    eid        text primary key references entity(eid),
+    target_eid text not null references entity(eid),
+    to_eid     text not null references entity(eid),
+    acted_at   text,
+    delivery   text,
+    error      text
+  );
   -- Outbound mail. "to"/"from" are SQL keywords — quoted here and by the
   -- generic builders in apply(), which quote every column so the
   -- vocabulary never bends to SQL's reserved words.

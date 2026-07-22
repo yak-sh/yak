@@ -219,3 +219,17 @@ Deno.test('focusOf: one claim is "here"; none, several, or no session is not', (
   assertEquals(focusOf(claimed([T]), 'sess-unknown'), undefined)
   assertEquals(focusOf(claimed([T]), undefined), undefined)
 })
+
+Deno.test('knock: recipient resolves, words ride as plain comment, project defaults', () => {
+  let k = run('knock B-3 need it today', ctx(T, 'sess-x'))
+  let [knock, doc, comment] = k.changes!
+  assertEquals(knock.name, 'knock')
+  assertEquals(knock.comp, { target_eid: T, to_eid: B })
+  assertEquals(doc.comp?.body, 'need it today')
+  assertEquals(comment.comp?.target_eid, T)
+  // no recipient word: a task asks its own project
+  let p = run('knock', ctx(T))
+  assertEquals(p.changes![0].comp, { target_eid: T, to_eid: P })
+  // a doc with no project and no name: nowhere to aim
+  assertThrows(() => run('knock', ctx(B)), Error, 'name a recipient')
+})
