@@ -18,6 +18,7 @@ let B = 'aaaaaaaa-0000-4000-8000-000000000003' // board over P
 let T = 'aaaaaaaa-0000-4000-8000-000000000004' // an open task on P
 let D = 'aaaaaaaa-0000-4000-8000-000000000005' // the scribe desk task
 let N = 'aaaaaaaa-0000-4000-8000-000000000006' // the scribe persona
+let M = 'aaaaaaaa-0000-4000-8000-000000000007' // an inbound mail E-7
 let UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-/
 
 let snap: Snapshot = {
@@ -46,6 +47,18 @@ let snap: Snapshot = {
     { eid: N, name: 'doc', comp: { title: 'scribe', body: '' } },
     { eid: N, name: 'persona', comp: {} },
     { eid: N, name: 'alias', comp: { slug: 'scribe' } },
+    { eid: M, name: 'entity', comp: { eid: M, num: 7, created_at: '' } },
+    { eid: M, name: 'doc', comp: { title: 'Hello there', body: 'hi' } },
+    {
+      eid: M,
+      name: 'mail',
+      comp: {
+        to: 'tasks@yak.sh',
+        from: 'jeff@yak.sh',
+        message_id: '<m1@yak.sh>',
+        verified: 1,
+      },
+    },
   ],
   deps: [],
 }
@@ -262,6 +275,42 @@ Deno.test('knock: recipient resolves, words ride as plain comment, project defau
   assertEquals(p.changes![0].comp, { target_eid: T, to_eid: P })
   // a doc with no project and no name: nowhere to aim
   assertThrows(() => run('knock', ctx(B)), Error, 'name a recipient')
+})
+
+Deno.test('mail: to, subject, -- body — one letter, minted whole', () => {
+  let r = run('mail jeff Lunch plans -- noon at the taco place?', ctx())
+  let [doc, mail] = r.changes!
+  assertEquals(doc.comp, {
+    title: 'Lunch plans',
+    body: 'noon at the taco place?',
+  })
+  assertEquals(mail.name, 'mail')
+  assertEquals(mail.comp, { to: 'jeff' }) // as given: delivery resolves
+  assertEquals(doc.eid, mail.eid)
+  assertEquals(UUID.test(doc.eid), true)
+  assertEquals(r.msg, 'mail → jeff — Lunch plans')
+  assertThrows(() => run('mail jeff no fold', ctx()), Error, '-- body')
+  assertThrows(() => run('mail jeff -- body', ctx()), Error, '-- body')
+  assertThrows(() => run('mail', ctx()), Error, '-- body')
+})
+
+Deno.test('reply: answers the named mail — or the focused one', () => {
+  let r = run('reply E-7 on it — landing today', ctx())
+  let [doc, mail] = r.changes!
+  assertEquals(doc.comp, {
+    title: 'Re: Hello there',
+    body: 'on it — landing today',
+  })
+  // the far side: an inbound row answers its sender, threaded at authoring
+  assertEquals(mail.comp, { to: 'jeff@yak.sh', reply_to_eid: M })
+  assertEquals(r.msg, 'E-7 ← reply → jeff@yak.sh')
+  // standing on the mail, every word is the page
+  let f = run('reply on it', ctx(M))
+  assertEquals(f.changes![0].comp?.body, 'on it')
+  assertEquals(f.changes![1].comp?.reply_to_eid, M)
+  assertThrows(() => run('reply E-7', ctx()), Error, 'needs words')
+  assertThrows(() => run('reply on it', ctx(T)), Error, 'T-4 is not a mail')
+  assertThrows(() => run('reply on it', ctx()), Error, 'nothing focused')
 })
 
 Deno.test('scribe: summon the desk onto a session brief', () => {

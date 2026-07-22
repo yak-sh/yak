@@ -22,8 +22,10 @@ import {
   commentChanges,
   DESK,
   find,
+  mailChanges,
   param,
   patches,
+  replyChanges,
   type Row,
   spawnChanges,
   spec,
@@ -224,6 +226,51 @@ export let commands: Record<string, Command> = {
           ...(words ? commentChanges(ctx.rows, r.eid, words, ctx.session) : []),
         ],
         msg: `${idOf(r)} → knock ${to ? first : 'project'}`,
+      }
+    },
+  },
+  // :mail is the letter in one line — to, subject, then `--` folds the
+  // envelope open into the page. Minting doc+mail IS the send request
+  // (the mailer effect delivers and stamps the receipt); the verb mints
+  // PROSE only — machinery speaks through event comments, never mail.
+  // `to` stays as given: raw address or graph reference, the address
+  // book resolves at delivery.
+  mail: {
+    args: 'jeff subject… -- body…',
+    about: 'send a letter: to, subject, -- body',
+    run: (rest) => {
+      let [, head, body] = rest.match(/^([\s\S]*?)\s+--\s+([\s\S]+)$/) ?? []
+      let [to, ...subj] = (head ?? '').trim().split(/\s+/).filter(Boolean)
+      if (!to || !subj.length || !body?.trim()) {
+        throw new Error(
+          'mail: to, subject, then -- body (:mail jeff lunch? -- noon?)',
+        )
+      }
+      let subject = subj.join(' ')
+      return {
+        changes: mailChanges({ to, subject, body: body.trim() }).changes,
+        msg: `mail → ${to} — ${subject}`,
+      }
+    },
+  },
+  // :reply answers a mail where you stand — or the E-id the line leads
+  // with. The words are the whole page, verbatim; replyChanges aims at
+  // the far side and records the thread at authoring (reply_to_eid),
+  // delivery resolves it to a Message-ID.
+  reply: {
+    args: '[E-9] the answer…',
+    about: 'answer the mail — Re: threads at delivery',
+    run: (rest, ctx) => {
+      let [, first, more] = rest.trim().match(/^(\S+)\s*([\s\S]*)$/) ?? []
+      let named = first ? find(ctx.rows, first) : undefined
+      let row = named?.comps.mail ? named : here(ctx)
+      if (!row.comps.mail) throw new Error(`${idOf(row)} is not a mail`)
+      let body = (row == named ? more : rest).trim()
+      if (!body) throw new Error('reply: needs words (:reply E-9 on it)')
+      let made = replyChanges(row, body)
+      return {
+        changes: made.changes,
+        msg: `${idOf(row)} ← reply → ${made.changes[1].comp?.to}`,
       }
     },
   },
