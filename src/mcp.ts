@@ -134,6 +134,31 @@ let text = (s: string) => ({ content: [{ type: 'text' as const, text: s }] })
 // telemetry) count it as one, instead of a success that reads like an apology.
 let err = (s: string) => ({ ...text(s), isError: true as const })
 
+// A query is a LIST door; one entity's whole doc is task_show's job.
+// Any long text value in list results is cut mid-sentence with a loud
+// marker — how much was withheld and which door reads it whole — so a
+// preview can never pass for the text. graph_query's full: true opts
+// out for the caller who wants bytes.
+export let CUT = 500
+export let elide = (r: Row) =>
+  Object.fromEntries(
+    Object.entries(r.comps).map(([name, comp]) => [
+      name,
+      Object.fromEntries(
+        Object.entries(comp).map(([k, v]) => [
+          k,
+          typeof v == 'string' && v.length > CUT
+            ? `${v.slice(0, CUT)} […ELIDED ${
+              v.length - CUT
+            } of ${v.length} chars — task_show ${
+              idOf(r)
+            } reads it whole, or full: true]`
+            : v,
+        ]),
+      ),
+    ]),
+  )
+
 let BUS = `Pass your stable session id and the reply also carries anything
 you haven't seen — comments on your claimed tasks, messages aimed at your
 session (a comment ON S-31 is a message TO that agent).`
@@ -744,9 +769,22 @@ stability — recalled often and spread out decays slowest. ${BUS}`,
     'graph_query',
     `The WHOLE graph, not just tasks: every entity as {id, kind, eid,
 comps}, dot-param filtered. Cards, pins (positions), cameras (what each
-client is looking at), sessions, comments — all live here. ${GRAMMAR} ${FILTERS}`,
-    { filters: z.array(z.string()).optional(), kind: z.string().optional() },
-    async ({ filters = [], kind }: { filters?: string[]; kind?: string }) => {
+client is looking at), sessions, comments — all live here. A query is a
+LIST door: long text values (persona bodies, mail, final_text) are cut
+at ${CUT} chars with a marker naming the rest — task_show reads one
+entity whole; full: true returns every byte. ${GRAMMAR} ${FILTERS}`,
+    {
+      filters: z.array(z.string()).optional(),
+      kind: z.string().optional(),
+      full: z.boolean().optional(),
+    },
+    async (
+      { filters = [], kind, full }: {
+        filters?: string[]
+        kind?: string
+        full?: boolean
+      },
+    ) => {
       let now = Date.now()
       let all = rows(await io.read())
       let ps = resolveRefs(
@@ -768,7 +806,7 @@ client is looking at), sessions, comments — all live here. ${GRAMMAR} ${FILTER
           id: idOf(r),
           kind: r.kind,
           eid: r.eid,
-          comps: r.comps,
+          comps: full ? r.comps : elide(r),
         })),
         null,
         2,
