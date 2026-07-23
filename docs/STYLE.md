@@ -56,7 +56,7 @@ thorough; a paragraph is almost always the wrong size.
   properties as the variant mechanism — a variant re-points a var, never
   re-declares rules. Zero-specificity `:where()` for defaults any component rule
   may override.
-- Everything renders through the registry (`View.tsx`): renderers match on
+- Everything renders through the registry (`Entity.tsx`): renderers match on
   components, most specific wins, and **null is a first-class render** — a
   section with nothing to say renders nothing. Specialize by adding a
   higher-scoring entry, not by editing the generic one.

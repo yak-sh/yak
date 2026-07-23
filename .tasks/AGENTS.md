@@ -66,37 +66,68 @@ exist.
 
 ## Rendering (web + TUI, one registry)
 
-`components/registry.ts` is the machinery: a **Renderer** =
-`{view, match,
-Render}` where `match(e)` returns a score — `has('doc','task')`
-counts matched components, `true` = 0.5 for catch-alls; highest score wins the
-view, ties go to registration order. `components/View.tsx` is the curated list +
-the `<View eid view/>` front door. The TUI boots by `extend()`ing overrides
-(same views, painted as terminal lines) — that's also the seam a future renderer
-plugin would use. registry.ts imports no views, so anything may import matchers
-from it without cycles.
+Three DOORS, keyed by what the call site KNOWS — no door ever guesses.
+`<Entity eid view/>` renders an entity through a view; `<Prop eid comp prop
+editable/>` renders one typed value (the dotted path is a static `comps`
+lookup, so the PropType is guaranteed); `<Val value/>` renders an untyped
+value by constructor and shape checks only, never prose sniffing.
 
-**To add a view**: component file under `components/views/`, entry in View.tsx's
-`define()` list; to make it a card tab, add its name to the tabs array there and
-an icon row in `Card.tsx` + `components/icons.tsx` (vendored Lucide paths — add
-a row, not a dependency).
+`components/registry.ts` is the machinery: a **Renderer** = `{view, match,
+Render}` where `match(e)` returns a score — `has('doc','task')` counts matched
+components, `true` = 0.5 for catch-alls; highest score wins, ties go to
+registration order. A view NAME is a dotted path — container qualifiers left,
+ROLE rightmost (`Board.List.Tile`): `resolve()` strips the leftmost qualifier
+until some renderer matches (`Board.List.Tile` → `List.Tile` → `Tile`), an
+alias map healing old stored names at every level (card.view is live data). A
+short registration serves every longer ask; a long one specializes one
+surround. The roles, by content completeness: `Inline` (identify it in
+flowing text — chip + dot + truncated title), `Tile` (summarize it as a
+compact block; the tile is its own link), `Full` (the whole entity — the card
+frame asks `Card.Full` and falls through), `Title` (head only, the frame
+shows the rest), `Cell` (one prop in a grid). Entity kinds NEVER appear in
+view names — matchers own shape. Format views (`Markdown`, `JSON`, `Debug`,
+`Schema`) stay explicit leaves with `file` forms, asked by name.
+
+`components/Entity.tsx` is the curated `define()` list + the front door. The
+prop registry (`components/editors.tsx`) is its sibling for values: one entry
+per PropType kind owns both faces — `show` (a time reads as relative words, a
+url as a link, an eid as its target's title) and `Edit` (the control),
+composed at registration through the two layout idioms `inline()`/`popout()`.
+The TUI boots by `extend()`ing overrides (same views, painted as terminal
+lines) — that's also the seam a future renderer plugin would use. registry.ts
+imports no views, so anything may import matchers from it without cycles.
+
+**To add a view**: component file under `components/views/`, entry in
+Entity.tsx's `define()` list; to make it a card tab, add its name to the tabs
+array there and an icon row in `Card.tsx` + `components/icons.tsx` (vendored
+Lucide paths — add a row, not a dependency).
 
 ## Navigation (web)
 
 The URL is the root card: `/` is the root canvas, `/T-123` any entity
 fullscreened, `?v=` its view — the App bar is that card's titlebar (title +
-tabs), and the server serves index.html for any extensionless path. The
-universal Id chip (`views/Id.tsx`) is the universal LINK, a real anchor:
-cmd/middle-click and the browser's own context menu do the new-tab forms; plain
-click (and tap) navigates in place. The custom menu ("open here" = the
-deliberate in-place root change, plus "open in new tab") belongs to the CARD —
-right-click its pin anywhere that isn't a link, input, or editable text
-(`components/nav.tsx` owns route/navigate/menu, all guarded for the TUI). Below
-navigation the menu lists the entity's VERBS, contributed per component with
-UNION semantics (registry `defineActions`/`actionsFor`, curated in View.tsx like
-the renderers): a task offers its status moves, a claim its release, anything
-its delete. Adding a verb = one contributor row. A canvas offers a `List` view —
-the mobile door — whose rows resolve through `List.Tile`.
+tabs), and the server serves index.html for any extensionless path. Links ride
+the href STACK (`components/ui.tsx`: `el`/`Surround`/`anchor`): `href` on any
+el renders a real anchor when no ancestor link surrounds it (the original tag
+joins the class list so styles still bind); the SAME href inside that link
+drops; a DIFFERENT one keeps its tag and demotes to a JS link (`role='link'`
++ `follow`). Tiles link themselves this way — the whole Tile is the anchor,
+served by the browser's own context menu. The `Chip` (ui.tsx) is the dumb id
+atom; `views/Inline.tsx` dresses it as the Inline role wearing the whole
+internal-link contract (`nav.tsx` `linkProps`): plain click peeks/navigates,
+cmd/middle-click and the native menu do the new-tab forms, dragging makes a
+card. An editable `Prop`'s press demotes inside a linked surround the same
+way — an edit-click never rides the anchor around it, and a click landing on
+a link inside the face belongs to that link. The custom menu ("open here" =
+the deliberate in-place root change, plus "open in new tab") belongs to the
+CARD — right-click its pin anywhere that isn't a link, input, or editable
+text (`components/nav.tsx` owns route/navigate/menu, all guarded for the
+TUI). Below navigation the menu lists the entity's VERBS, contributed per
+component with UNION semantics (registry `defineActions`/`actionsFor`,
+curated in Entity.tsx like the renderers): a task offers its status moves, a
+claim its release, anything its delete. Adding a verb = one contributor row.
+A canvas offers a `List` view — the mobile door — whose rows resolve through
+`List.Tile`.
 
 ## Map
 
@@ -125,7 +156,7 @@ the mobile door — whose rows resolve through `List.Tile`.
 | `src/sandbox.ts`   | code mode's worker: permissionless, graph-only, postMessage SDK            |
 | `src/live.ts`      | browser/TUI half: cache signal, socket, applyLocal/mutate, ent()           |
 | `src/paste.ts`     | clipboard/drop text → entity spec (ids, URLs, JSON, plain text)            |
-| `src/components/`  | web UI: registry.ts + View.tsx, nav.tsx (routing), Canvas, Card, Edit, …   |
+| `src/components/`  | web UI: registry.ts + Entity.tsx, nav.tsx (routing), Canvas, Card, Edit, … |
 | `src/tui/`         | fake DOM (dom.ts), ANSI painter (paint.ts), Md, App (vim keys), main       |
 | `src/vendor/`      | preact/signals/snarkdown as plain ESM — no node_modules                    |
 
