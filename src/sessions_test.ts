@@ -310,6 +310,35 @@ Deno.test('a failed spawn tells the task too — and only once', async () => {
   assertMatch(said[0], /unknown model/)
 })
 
+Deno.test('a settling session releases its leases — a live one keeps its own', async () => {
+  let { t } = seed()
+  let { t: kept } = seed()
+  let eid = plant([INIT]) // died before its terminal event → failed
+  let live = uid()
+  apply(db, [
+    { eid: live, name: 'session', comp: { id: uid() } },
+    { eid: t, name: 'claim', comp: { session_eid: eid } },
+    { eid: kept, name: 'claim', comp: { session_eid: live } },
+  ])
+  heard = []
+  recover(cast)
+  await running.get(eid)!.done
+  assertEquals(row(eid)?.status, 'failed')
+  // The dead session's lease is gone and the lapse is on the task's
+  // trail — the same words task wrap leaves for an interactive end.
+  assertEquals(
+    db.prepare('select 1 from claim where eid = ?').get(t),
+    undefined,
+  )
+  let said = settleComments(t, eid)
+  assertEquals(said.length, 1)
+  assertMatch(said[0], /lease lapsed/)
+  // The release rode the CAST — no client cache keeps the ghost claim.
+  assert(heard.some((c) => c.eid == t && c.name == 'claim' && c.comp == null))
+  // The bystander's lease is not ours to lapse.
+  assert(db.prepare('select 1 from claim where eid = ?').get(kept))
+})
+
 Deno.test('stop: a stop_request signals the group, the ending is OBSERVED', async () => {
   let { t } = seed('delay:9000')
   let { eid, done } = begin(t)

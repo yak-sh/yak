@@ -936,10 +936,27 @@ export let notices = (snap: Snapshot, session: string) => {
   return { lines, ack }
 }
 
-// The wrap batch: a session ended — release every claim it holds, and
-// on tasks it did NOT finish, leave a comment saying so (the simple
-// audit: no timers, no heartbeats, just "ended before done" on the
-// record). Finished work releases silently.
+// The one release truth: a session ended — every claim it holds drops,
+// and tasks it did NOT finish get a comment saying so (the simple audit:
+// no timers, no heartbeats, just "ended before done" on the record).
+// Finished work releases silently. Interactive wraps (task wrap) and the
+// server's managed-session settle both speak through this.
+export let lapseChanges = (all: Row[], sess: Row): Change[] => {
+  let id = String(sess.comps.session?.id ?? '')
+  return all.filter((r) => r.comps.claim?.session_eid == sess.eid)
+    .flatMap((r): Change[] => [
+      ...(settled(String(r.comps.task?.status)) ? [] : commentChanges(
+        all,
+        r.eid,
+        '⚑ lease lapsed: session `' + id + '` ended before this was done',
+        id,
+        true, // machinery speaking, not the agent — never mailed
+      ).slice(-2)), // the session exists — skip the mint, keep doc + comment
+      { eid: r.eid, name: 'claim', comp: null },
+    ])
+}
+
+// The wrap batch: the release above, plus the session's brief.
 export let wrapChanges = (
   all: Row[],
   session: string,
@@ -953,16 +970,7 @@ export let wrapChanges = (
   if (!sess) return []
   let held = all.filter((r) => r.comps.claim?.session_eid == sess.eid)
   return [
-    ...held.flatMap((r): Change[] => [
-      ...(settled(String(r.comps.task?.status)) ? [] : commentChanges(
-        all,
-        r.eid,
-        '⚑ lease lapsed: session `' + session + '` ended before this was done',
-        session,
-        true, // machinery speaking, not the agent — never mailed
-      ).slice(-2)), // the session exists — skip the mint, keep doc + comment
-      { eid: r.eid, name: 'claim', comp: null },
-    ]),
+    ...lapseChanges(all, sess),
     ...brief(all, sess, held, now, entries, final),
   ]
 }

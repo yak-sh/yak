@@ -31,7 +31,7 @@ import { basename, dirname } from 'node:path'
 import { type Adapter, adapters, type Event, type Summary } from './adapters.ts'
 import { apply, db, snapshot } from './db.ts'
 import { dispatch, trace } from './effects.ts'
-import { rows } from './client.ts'
+import { lapseChanges, rows } from './client.ts'
 import { materialize } from './persona.ts'
 import { type Change, sessionActive } from './types.ts'
 
@@ -101,33 +101,39 @@ let stamp = (
 let SETTLED = ['completed', 'failed', 'interrupted', 'lost']
 
 // The outcome, said on the TASK as an ordinary comment authored by the
-// session: holders and watchers hear it on their next tool call (the
-// comms bus), and the task's trail keeps the record. Graph data, so it
-// rides apply()+cast+dispatch like any wire write — telling must never
-// break the ending it reports, so a refusal is a warning, not a throw.
+// session — and the session's leases released with it, the same batch
+// task wrap builds for an interactive end (lapseChanges, the one release
+// truth): a dead session's claim must not outlive it and lock its task
+// against every successor. Holders and watchers hear it on their next
+// tool call (the comms bus), and the task's trail keeps the record.
+// Graph data, so it rides apply()+cast+dispatch like any wire write —
+// a direct db stamp would skip the journal and leave every client cache
+// holding a ghost claim. Telling must never break the ending it reports,
+// so a refusal is a warning, not a throw.
 let settled = (eid: string, status: string, cast: Cast) => {
   let row = db.prepare('select * from session where eid = ?').get(eid) as
     | Row
     | undefined
-  if (!row || row.origin != 'managed' || !row.requested_task_eid) return
-  let task = String(row.requested_task_eid)
-  if (!db.prepare('select 1 from task where eid = ?').get(task)) return
-  let { num } = db.prepare('select num from entity where eid = ?').get(eid) as {
-    num: number
-  }
-  let gist = String(row.final_text ?? '').replace(/\s+/g, ' ').trim()
-    .slice(0, 240)
-  let body = [
-    `S-${num} ${status}${
-      row.exit_code == null ? '' : ` · exit ${row.exit_code}`
-    }`,
-    ...(row.error ? [`error: ${String(row.error).slice(0, 240)}`] : []),
-    ...(gist ? [gist] : []),
-  ].join('\n')
-  let cid = crypto.randomUUID()
-  try {
-    let t = trace()
-    let out = apply(db, [
+  if (!row || row.origin != 'managed') return
+  let all = rows(snapshot(db))
+  let sess = all.find((r) => r.eid == eid)
+  let changes: Change[] = sess ? lapseChanges(all, sess) : []
+  let task = String(row.requested_task_eid ?? '')
+  if (task && db.prepare('select 1 from task where eid = ?').get(task)) {
+    let { num } = db.prepare('select num from entity where eid = ?').get(
+      eid,
+    ) as { num: number }
+    let gist = String(row.final_text ?? '').replace(/\s+/g, ' ').trim()
+      .slice(0, 240)
+    let body = [
+      `S-${num} ${status}${
+        row.exit_code == null ? '' : ` · exit ${row.exit_code}`
+      }`,
+      ...(row.error ? [`error: ${String(row.error).slice(0, 240)}`] : []),
+      ...(gist ? [gist] : []),
+    ].join('\n')
+    let cid = crypto.randomUUID()
+    changes.push(
       { eid: cid, name: 'doc', comp: { title: '', body } },
       {
         eid: cid,
@@ -136,11 +142,16 @@ let settled = (eid: string, status: string, cast: Cast) => {
         // delivers it, the mail relay must not.
         comp: { target_eid: task, author_eid: eid, event: 1 },
       },
-    ], t)
+    )
+  }
+  if (!changes.length) return
+  try {
+    let t = trace()
+    let out = apply(db, changes, t)
     cast(out)
     dispatch(out, t, (comp, e) => console.warn(`settle effect ${comp} —`, e))
   } catch (e) {
-    console.warn('settle comment dropped —', e)
+    console.warn('settle batch dropped —', e)
   }
 }
 
