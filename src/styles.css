@@ -316,6 +316,9 @@ html {
   border-radius: var(--radius);
   background: var(--card);
   padding: var(--half-gap);
+  /* the tile IS a link; it must not read as one word-by-word */
+  color: inherit;
+  text-decoration: none;
 }
 .ListTile_Title {
   flex: 1;
@@ -901,6 +904,9 @@ html {
   border-radius: var(--radius);
   background: var(--card);
   padding: var(--half-gap);
+  /* the tile IS a link; it must not read as one word-by-word */
+  color: inherit;
+  text-decoration: none;
 }
 .TaskTile > .Dot {
   align-self: start;
@@ -2180,6 +2186,9 @@ a[data-ref]:hover {
   align-items: center;
   gap: var(--half-gap);
   font-size: 12px;
+  /* the tile IS a link; it must not read as one word-by-word */
+  color: inherit;
+  text-decoration: none;
 }
 .SessionRow_Model {
   color: var(--dim);
