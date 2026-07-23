@@ -83,6 +83,11 @@ Deno.test('new: a task, inheriting where you stand', () => {
     run('new  Two  words ', ctx(B)).changes![0].comp!.title,
     'Two words',
   )
+  // a newline (shift+enter's door) makes line 2 on the body
+  assertEquals(comps('new Ship it\nwhy and how', B).doc, {
+    title: 'Ship it',
+    body: 'why and how',
+  })
   // …and setters in the line win over what the context hands down
   assertEquals(comps('new P2 .domain=Ops Ship it', B).task, {
     status: 'open',

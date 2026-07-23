@@ -1609,14 +1609,21 @@ html {
 .Status_Colon {
   color: var(--text);
   margin-right: calc(-1 * var(--half-gap)); /* the line hugs the colon */
+  align-self: start; /* a grown line keeps the colon on its first row */
 }
 .Status_Line {
   flex: 1;
   position: relative;
   display: flex;
 }
+/* A textarea so shift+Enter can hold a newline (line 2 on becomes the
+   task body). The in-flow ghost below is what SIZES the line — its copy
+   of the text wraps and grows the bar in any browser — so the textarea
+   just fills the space. Its wrapping rules must match the ghost's
+   glyph-for-glyph, or the caret drifts off the painted copy. */
 .Status_Cmd {
-  flex: 1;
+  position: absolute;
+  inset: 0;
   font: inherit;
   color: transparent; /* the ghost's copy paints the glyphs */
   caret-color: var(--text);
@@ -1624,21 +1631,24 @@ html {
   border: 0;
   outline: none;
   padding: 0;
-  position: relative; /* above the ghost */
+  resize: none;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
 }
 .Status_Cmd::selection {
   color: var(--text); /* selected glyphs paint here, over the copy */
 }
 /* The line's paint layer: a copy of the typed text (the verb colored once
    it names a command) places the faded completion exactly past the caret;
-   the transparent input above keeps the caret and the selection. */
+   the transparent textarea above keeps the caret and the selection. */
 .Status_Ghost {
-  position: absolute;
-  inset: 0;
+  flex: 1;
+  min-height: 1lh; /* an empty line still holds the caret's row */
   pointer-events: none;
   color: var(--dim);
-  white-space: pre;
-  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
 }
 .Status_Was {
   color: var(--text);

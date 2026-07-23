@@ -29,7 +29,7 @@ let Frame = block('footer', 'Status', {
   Mode: 'span',
   Colon: 'span',
   Line: 'span',
-  Cmd: 'input',
+  Cmd: 'textarea',
   Ghost: 'span',
   Was: 'i',
   Verb: 'span',
@@ -213,7 +213,7 @@ let WhoAmI = () => {
 // the mode transitions — : opens the command line, i enters insert, Escape
 // always returns to normal (and blurs whatever was being typed in).
 export let Status = () => {
-  let input = useRef<HTMLInputElement>(null)
+  let input = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     let key = (e: KeyboardEvent) => {
@@ -300,8 +300,12 @@ export let Status = () => {
     setPick(0)
   }
 
-  let cmdKey = (e: KeyboardEvent & { currentTarget: HTMLInputElement }) => {
-    if (e.key == 'Enter') {
+  let cmdKey = (e: KeyboardEvent & { currentTarget: HTMLTextAreaElement }) => {
+    // shift+Enter is the textarea's own newline — spec() reads line 2 on
+    // as the body, so a : line can file a task with prose attached.
+    let multi = e.currentTarget.value.includes('\n')
+    if (e.key == 'Enter' && !e.shiftKey) {
+      e.preventDefault()
       last.value = e.currentTarget.value.trim() || last.value
       exec(e.currentTarget.value)
       put('')
@@ -314,12 +318,12 @@ export let Status = () => {
       e.preventDefault()
       let name = hints[pick]?.[0]
       if (name) put(`${name} `)
-    } else if (e.key == 'ArrowUp') {
+    } else if (e.key == 'ArrowUp' && !multi) {
       e.preventDefault() // the caret would jump home instead
       // empty line: recall. Otherwise walk the list, away from the bar.
       if (!e.currentTarget.value) put(last.value)
       else setPick((p) => Math.min(p + 1, hints.length - 1))
-    } else if (e.key == 'ArrowDown') {
+    } else if (e.key == 'ArrowDown' && !multi) {
       e.preventDefault()
       setPick((p) => Math.max(p - 1, 0))
     }
@@ -356,7 +360,7 @@ export let Status = () => {
                 elRef={input}
                 onKeyDown={cmdKey}
                 onInput={(e: InputEvent) => {
-                  let v = (e.currentTarget as HTMLInputElement).value
+                  let v = (e.currentTarget as HTMLTextAreaElement).value
                   v ? save('cmd', v) : drop('cmd')
                   setLine(v)
                   setPick(0)
