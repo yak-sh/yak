@@ -154,15 +154,23 @@ subscription; shrink its query per-view later.
 
 **Ladder:**
 
-- **Stage 1** — `sub`/`unsub` frames + registry + `filtered` gate;
-  `evalQuery(db,
-  q)` factored from `/query` (`server.ts:345-355`); own-comp-eq
-  maintenance only; logs as the first lazy partition; **first subscriber = the
-  channel plugin** converted to two subscriptions, `filter.ts` deleted (T-4459's
-  "only file that dies"). Verify end-to-end.
+- **Stage 1 (LANDED, `71d8ecf`)** — `sub`/`unsub` frames + registry + `filtered`
+  gate; `evalQuery(db, q)` factored from `/query`; own-comp-eq maintenance only;
+  client `subMembers` + evict; proven end-to-end by a both-doors probe
+  (`scripts/subs_probe.ts`). The channel-plugin conversion was scoped OUT:
+  `channels/tasks/filter.ts` grew past its two filter shapes and now also ships
+  identity resolution (`learn`/`findSession`/`humanId`, following `/clear`
+  pid-rotation) and mail routing/injection — none replaced by own-comp subs, so
+  flipping the plugin to a `filtered` socket would regress mail, author-id
+  rendering, and rotation-follow. T-4459's "filter.ts is the only file that
+  dies" was optimistic; the conversion moves to stage 2 (T-6843) behind
+  server-side id resolution. The mechanism is nonetheless proven against a real
+  subscriber, satisfying "never retire the old door first."
 - **Stage 2** — boards/lists subscribe; cache union + refcount; path-target
   index; `doc.body` lazy (subsumes T-6788); boot conversion; inverted
-  `comp→subIds` index when K grows.
+  `comp→subIds` index when K grows; server-side identity resolution → the
+  channel plugin becomes a dumb subscription and `filter.ts` finally dies
+  (T-6843); logs as the first entity-shaped lazy partition (needs T-3684).
 - **Stage 3** — telemetry/conflicts/embeddings/frozen bytes lazy; federation
   rung 3 (a peer is a subscribing client); IndexedDB delta (T-6823).
 
@@ -231,10 +239,12 @@ decision that serves both epics.
    subscriptions hear MCP/HTTP writes.
 4. Client (`live.ts`): handle `{sub,…}` frames — `applyLocal` + `subMembers` +
    evict on `drop`; add `subscribe`/`unsubscribe`.
-5. Convert `channels/tasks/` to two subscriptions; delete `filter.ts`.
+5. ~~Convert `channels/tasks/` to two subscriptions; delete `filter.ts`.~~ Moved
+   to stage 2 (T-6843): `filter.ts` also carries identity resolution + mail
+   routing that own-comp subs don't replace.
 6. Verify (unique probe port): subscribe `.comment.target_eid=<S>`, comment on S
    via MCP, assert exactly one matching frame and NOT the rest of the graph;
    reassign target, assert a `drop`; clean up probe entities.
 
-Nothing retires `/snapshot` or the full rebroadcast until the subscription path
-is proven against a real client.
+Steps 1–4 + 6 shipped in `71d8ecf`. Nothing retires `/snapshot` or the full
+rebroadcast until the subscription path is proven against a real client.
