@@ -45,6 +45,11 @@ let loc = (globalThis as {
 export let config: {
   host: string
   secure: boolean
+  // This tab's client eid, ridden on the /ws URL so its writes journal a
+  // resolved actor (T-6669). The browser sets it (clientId); the TUI
+  // leaves it unset — localStorage is a browser thing — and its writes
+  // resolve to the box owner.
+  client?: string
   reload: () => void
   swap?: (gen: number) => void
   css?: (gen: number) => void
@@ -148,7 +153,11 @@ let ws: WebSocket | null = null
 let polling = false
 export let sock = () => {
   if (ws && ws.readyState <= WebSocket.OPEN) return ws
-  ws = new WebSocket(`ws${config.secure ? 's' : ''}://${config.host}/ws`)
+  ws = new WebSocket(
+    `ws${config.secure ? 's' : ''}://${config.host}/ws${
+      config.client ? `?client=${config.client}` : ''
+    }`,
+  )
   ws.onmessage = (m) => {
     let data = JSON.parse(String(m.data))
     if (Array.isArray(data)) applyLocal(data)

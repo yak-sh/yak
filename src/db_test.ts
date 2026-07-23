@@ -725,18 +725,26 @@ Deno.test('touch confirm stamps the memory; death takes the recall row', () => {
 let journalCount = () =>
   (db.prepare('select count(*) as n from journal').get() as { n: number }).n
 
-Deno.test('journal: one row per batch, attributed; a rollback leaves none', () => {
-  let t = uid(), before = journalCount()
+Deno.test('journal: one row per batch, resolved to the writing actor; a rollback leaves none', () => {
+  // The door names a writer (a session id); the journal keeps the ACTOR it
+  // resolves to — never the raw label it used to store (T-6669).
+  let who = uid(), s = uid(), t = uid()
+  apply(db, [
+    { eid: who, name: 'doc', comp: { title: 'operator' } },
+    { eid: who, name: 'project', comp: {} },
+    { eid: s, name: 'session', comp: { id: `jw-${s}`, actor_eid: who } },
+  ])
+  let before = journalCount()
   apply(
     db,
     [{ eid: t, name: 'doc', comp: { title: 'recorded' } }],
     undefined,
-    'tester',
+    `jw-${s}`,
   )
   assertEquals(journalCount(), before + 1)
   let row = db.prepare('select actor, batch from journal order by rowid desc')
     .get() as { actor: string; batch: string }
-  assertEquals(row.actor, 'tester')
+  assertEquals(row.actor, who) // the writer's session resolved to its actor
   assertMatch(row.batch, /recorded/) // the batch as applied, spine included
   // A bounced claim rolls the whole batch back — no journal row either
   // (the conflict audit is its own transaction and deliberately unjournaled).
@@ -751,6 +759,46 @@ Deno.test('journal: one row per batch, attributed; a rollback leaves none', () =
     apply(db, [{ eid: t, name: 'claim', comp: { session_eid: s2 } }])
   )
   assertEquals(journalCount(), held)
+})
+
+Deno.test('actor fill: a session that ran in a repo resolves to its venture', () => {
+  // Shore up actors (T-6669): a session with a cwd but no actor gets one
+  // from where it stands — cwd → repo → project — server-side, so the
+  // writing identity is never blank however the session was reified. The
+  // fill rides the return so caches hear it.
+  let proj = uid(), s = uid()
+  apply(db, [
+    { eid: proj, name: 'doc', comp: { title: 'Venture' } },
+    { eid: proj, name: 'project', comp: {} },
+    { eid: proj, name: 'repo', comp: { path: '/srv/venture-abc' } },
+  ])
+  let out = apply(db, [
+    {
+      eid: s,
+      name: 'session',
+      comp: { id: `v-${s}`, cwd: '/srv/venture-abc/wt/a' },
+    },
+  ])
+  assertEquals(comp(s, 'session')?.actor_eid, proj) // stamped from cwd → repo
+  assertEquals(
+    out.some((x) =>
+      x.eid == s && x.name == 'session' && x.comp?.actor_eid == proj
+    ),
+    true,
+  )
+  // Wire-writable: a session that NAMES its actor keeps it, no override.
+  let s2 = uid(), who = uid()
+  apply(db, [{ eid: who, name: 'doc', comp: { title: 'chosen' } }, {
+    eid: who,
+    name: 'project',
+    comp: {},
+  }])
+  apply(db, [{
+    eid: s2,
+    name: 'session',
+    comp: { id: `v2-${s2}`, cwd: '/srv/venture-abc/wt/b', actor_eid: who },
+  }])
+  assertEquals(comp(s2, 'session')?.actor_eid, who) // named actor untouched
 })
 
 Deno.test('journal: cascade casualties ride the record', () => {

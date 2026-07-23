@@ -624,6 +624,56 @@ let refused = (
   )
 }
 
+// The box owner: the lone `person`, the actor a context-less write falls
+// back to (one person today — Jeff). With several people it goes DARK
+// rather than guess — the only case a write still resolves blank, and one
+// worth surfacing. Same rule T-3758 binds a browser's "you are" by.
+let ownerActor = (db: DatabaseSync): string | null => {
+  let people = db.prepare('select eid from person').all() as { eid: string }[]
+  return people.length == 1 ? people[0].eid : null
+}
+
+// The venture a path stands in: the repo whose path prefixes the cwd —
+// the cwd → repo → project rule every operator-scoped door already shares
+// (client.ts repoAt is its cache-side twin).
+let ventureAt = (db: DatabaseSync, cwd?: string | null): string | null => {
+  if (!cwd) return null
+  let repos = db.prepare('select eid, path from repo').all() as {
+    eid: string
+    path: string
+  }[]
+  return repos.find((r) => cwd.startsWith(r.path))?.eid ?? null
+}
+
+// The actor a write acts FOR, resolved from the writer the door named — a
+// session id (the CLI's x-actor, a reified agent), a client eid (a browser
+// tab), or nothing. A session speaks as its own actor, else the venture it
+// stands in; a client as its person; a nameless write as the box owner.
+// Never the raw label the journal used to keep — the audit trail is actor
+// eids, each resolvable to a name.
+export let writerActor = (
+  db: DatabaseSync,
+  writer?: string | null,
+): string | null => {
+  if (writer) {
+    let s = db.prepare('select cwd, actor_eid from session where id = ?')
+      .get(writer) as
+        | { cwd: string | null; actor_eid: string | null }
+        | undefined
+    if (s) return s.actor_eid ?? ventureAt(db, s.cwd) ?? ownerActor(db)
+    let c = db.prepare('select actor_eid from client where eid = ?')
+      .get(writer) as { actor_eid: string | null } | undefined
+    if (c) return c.actor_eid ?? ownerActor(db)
+    // A writer naming an actor entity (person or project) directly stands
+    // for itself — the CLI's own operator eid, or a hand-set x-actor.
+    let a = db.prepare(
+      'select eid from person where eid = ? union select eid from project where eid = ?',
+    ).get(writer, writer) as { eid: string } | undefined
+    if (a) return writer
+  }
+  return ownerActor(db)
+}
+
 // Apply a batch atomically. Unknown component names are ignored (a newer
 // client speaking to an older server shouldn't wedge the socket). num and
 // created_at are server-owned — never writable over the wire. Returns the
@@ -638,14 +688,17 @@ let refused = (
 // effect ever runs in here; RULES (the claim lease, the stop_request
 // gate) do, because rejecting a batch is part of what a commit means.
 //
-// `actor` is who's writing, when the door knows (a session id, a client
-// eid) — journaled, never trusted for anything else. No auth system:
-// record what's knowable, null the rest.
+// `writer` is who's writing, when the door knows (a session id, a client
+// eid) — resolved to the actor it acts for (writerActor) and journaled,
+// never trusted for auth. A session that lands here without an actor gets
+// one stamped from its venture or the box owner (T-6669): the writing
+// identity is never blank, and the journal keeps a resolvable actor eid,
+// not a raw label.
 export let apply = (
   db: DatabaseSync,
   changes: Change[],
   t?: Trace,
-  actor?: string | null,
+  writer?: string | null,
 ): Change[] => {
   let dead = db.prepare('select 1 from tombstone where eid = ?')
   let extra: Change[] = []
@@ -899,6 +952,28 @@ export let apply = (
     let stamp = db.prepare('update entity set modified_at = ? where eid = ?')
     let now = new Date().toISOString()
     for (let eid of touched) stamp.run(now, eid)
+    // A session that RAN somewhere but names no actor gets one from where
+    // it stands — the writing identity is never blank (T-6669). Resolved
+    // from the session row's CURRENT cwd (not a client's stale snapshot,
+    // the bug that left real sessions blank when cwd and reify split across
+    // batches): the venture whose repo holds the cwd, else the box owner.
+    // actor_eid stays wire-writable — a batch that named an actor keeps it;
+    // the server only fills the gap, and only for a session with a cwd (a
+    // real run, never an abstract fixture), so the fill heals old blanks on
+    // their next touch. It rides the return so caches hear it.
+    let fill = db.prepare('update session set actor_eid = ? where eid = ?')
+    let has = db.prepare('select cwd, actor_eid from session where eid = ?')
+    for (let eid of touched) {
+      let s = has.get(eid) as
+        | { cwd: string | null; actor_eid: string | null }
+        | undefined
+      if (!s || s.actor_eid || !s.cwd) continue
+      let a = ventureAt(db, s.cwd) ?? ownerActor(db)
+      if (a) {
+        fill.run(a, eid)
+        extra.push({ eid, name: 'session', comp: { actor_eid: a } })
+      }
+    }
     // Births ride the return AFTER stamping, so the spine arrives final.
     // A mint rolled back by its savepoint (or deleted later in the batch)
     // has no row — the select is the guard.
@@ -917,7 +992,7 @@ export let apply = (
     try {
       if (changes.length || extra.length) {
         db.prepare('insert into journal (actor, batch) values (?, ?)').run(
-          actor ?? null,
+          writerActor(db, writer),
           JSON.stringify([...changes, ...extra]),
         )
       }

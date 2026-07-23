@@ -135,6 +135,11 @@ let effect = (out: Change[], t: ReturnType<typeof trace>) => {
 
 let ws = (req: Request) => {
   let { socket, response } = Deno.upgradeWebSocket(req)
+  // The tab names itself once, at connect: ?client=<eid> is the writer for
+  // every batch on this socket, so a browser write journals a resolved
+  // actor instead of nothing (T-6669). A tab that names none resolves to
+  // the box owner like any anonymous write.
+  let writer = new URL(req.url).searchParams.get('client')
   socket.onopen = () => clients.add(socket)
   socket.onclose = () => clients.delete(socket)
   socket.onmessage = (m) => {
@@ -142,7 +147,7 @@ let ws = (req: Request) => {
     let out: Change[]
     let t = trace()
     try {
-      out = apply(db, sent, t)
+      out = apply(db, sent, t, writer)
     } catch (e) {
       console.error('sync: bad batch dropped —', e)
       return
@@ -411,7 +416,8 @@ Deno.serve(
       return req.json().then((changes: Change[]) => {
         let t = trace()
         // Attribution is an honesty header, not auth: the CLI names its
-        // session, anonymous posts journal as null.
+        // session in x-actor, apply resolves it to the actor it acts for,
+        // and an anonymous post falls back to the box owner.
         let out = apply(db, changes, t, req.headers.get('x-actor'))
         cast(out)
         effect(out, t)

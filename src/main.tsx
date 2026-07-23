@@ -30,7 +30,9 @@ addEventListener('unhandledrejection', (e) => {
   report(String(e.reason?.message ?? e.reason), e.reason?.stack)
 })
 
-// Fill the cache, open the socket, render everything from it.
+// Name this tab to the socket before it opens, so its writes journal a
+// resolved actor (T-6669). Fill the cache, open the socket, render.
+config.client = clientId()
 await boot()
 
 // The grandfather door: tasks-v1 linked '?task=<slug>', and those slugs

@@ -877,23 +877,10 @@ let context = async (args: string[]) => {
           comp: { provider: 'claude', model },
         }])
       }
-      // Announce the actor when it's derivable — and for a SESSION that
-      // means the OPERATOR, never a person: a client is a person's hands,
-      // but a session's words are the operator's, made FOR the person
-      // (owner call, 2026-07-21). Derivation: cwd → repo → project — the
-      // session speaks as the venture it works in. No matching repo, no
-      // guess; identity is asserted, never inferred from who's watching.
-      let mine = rows(snap).find((r) => r.eid == s.eid)?.comps.session
-      if (!mine?.actor_eid) {
-        let here = repoAt(rows(snap), cwd)
-        if (here) {
-          await send([{
-            eid: s.eid,
-            name: 'session',
-            comp: { actor_eid: here.eid },
-          }])
-        }
-      }
+      // The session's actor is no longer announced here: apply() stamps it
+      // from the reify batch's cwd (cwd → repo → project, falling back to
+      // the box owner) — for a SESSION that means the OPERATOR, never a
+      // watching person, and never blank (T-6669). One home, every door.
       // A managed spawn boots already holding its lease: the launcher
       // passes TASKS_TASK, and an unclaimed task claims quietly here —
       // no prompt discipline required. A held lease stays held (the
