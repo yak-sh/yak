@@ -37,7 +37,7 @@ export let native = () => {
   return token && account ? { token, account } : null
 }
 
-let base = () =>
+export let base = () =>
   Deno.env.get('CLOUDFLARE_API_BASE') ?? 'https://api.cloudflare.com/client/v4'
 
 // A letter → the Email Sending payload: the

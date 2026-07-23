@@ -51,6 +51,13 @@ import {
   wrapChanges,
 } from './client.ts'
 import { matchQuery, noFilter, pred, resolveRefs } from './query.ts'
+import {
+  bookOf,
+  diagnose,
+  liveRules,
+  type Rules,
+  STATIC_RULES,
+} from './doctor.ts'
 import { FILTERS, GRAMMAR } from './grammar.ts'
 import { type Edge, edges, type Snapshot } from './types.ts'
 // `import type` (not the repo's usual inline `{ type X }`): telemetry.ts
@@ -101,7 +108,7 @@ let VERBS: [usage: string, blurb: string, examples: string[]][] = [
     'task search .project=holdco deploy',
   ]],
   [
-    'mail [filters|show|send|reply|search|files]',
+    'mail [filters|show|send|reply|search|files|doctor]',
     'fleet mail: bare = your unread inbox; task mail --help spells the family',
     [
       'task mail',
@@ -267,7 +274,9 @@ let create = async (args: string[]) => {
   let stray = words.find((w) => /^--[\w-]+=/.test(w))
   if (stray) {
     throw new Error(
-      `task new uses dot-params, not --flags — did you mean ${stray.replace(/^--/, '.')}? (got ${stray.split('=')[0]}=…)`,
+      `task new uses dot-params, not --flags — did you mean ${
+        stray.replace(/^--/, '.')
+      }? (got ${stray.split('=')[0]}=…)`,
     )
   }
   // Reference values (.project=bindery, .assignee=jeff) resolve at the
@@ -333,6 +342,7 @@ let MAIL_USAGE = `task mail — fleet mail in the graph
   task mail reply <id> [text... | --body=@f|@-]
   task mail search <words...>       full-text search, mail only
   task mail files <id> [--out DIR]  download attachments
+  task mail doctor                  every book address vs the CF rules
 <to> is a raw address or a graph reference (alias, P-9, eid) — the
 address book resolves at delivery. Filters speak the query grammar:
   task mail --all .from~=stripe .verified=0`
@@ -519,6 +529,38 @@ let mailFiles = async (args: string[]) => {
   }
 }
 
+// The doctor: every book address must be Cloudflare-deliverable. Live
+// rules when a token can read them; the checked-in snapshot (loudly
+// non-authoritative) when none can — and a token that fails to read is
+// its own loud line, never a silent degrade. Exit 1 on any gap: the
+// disease is sends that report success while mail vanishes (ufos@).
+let mailDoctor = async () => {
+  let book = bookOf(rows(await snapshot()))
+  let rules: Rules | null = null
+  try {
+    rules = await liveRules()
+  } catch (e) {
+    console.error(`⚠ live rule read failed — ${(e as Error).message}`)
+  }
+  if (!rules) {
+    rules = STATIC_RULES
+    console.error(
+      '⚠ STATIC rule snapshot (src/doctor.ts) — NOT authoritative, it can\n' +
+        '  drift from Cloudflare silently; set CLOUDFLARE_ROUTING_READ_TOKEN\n' +
+        '  (Email Routing read on the yak.sh zone) for the live check',
+    )
+  }
+  let bots = book.filter((e) => /@bot\.yak\.sh$/i.test(e.address))
+  let bad = diagnose(book, rules)
+  for (let f of bad) console.log(`✗ ${f.address} (${f.owner}) — ${f.problem}`)
+  console.log(
+    `${bots.length - bad.length}/${bots.length} bot.yak.sh addresses ` +
+      `deliverable (${book.length} in the book; rules: ` +
+      `${rules.live ? 'live' : 'static'})`,
+  )
+  if (bad.length) Deno.exit(1)
+}
+
 // FTS, screened to mail — the one search surface, one more door.
 let mailSeek = async (args: string[]) => {
   let q = args.join(' ')
@@ -538,6 +580,7 @@ let mail = (args: string[]) => {
   if (sub == 'reply') return mailReply(rest)
   if (sub == 'search') return mailSeek(rest)
   if (sub == 'files') return mailFiles(rest)
+  if (sub == 'doctor') return mailDoctor()
   if (sub == 'help' || sub == '--help') return console.log(MAIL_USAGE)
   return mailList(args)
 }
@@ -1078,9 +1121,11 @@ try {
   if (cmd?.startsWith(':')) await colon(undefined, [cmd, ...rest])
   // `<verb> --help` shows the verb's help, not the verb run with a stray flag.
   // mail owns its own richer --help (see mail()), so let it through.
-  else if (cmd && cmd != 'mail' && (rest.includes('--help') || rest.includes('-h')))
+  else if (
+    cmd && cmd != 'mail' && (rest.includes('--help') || rest.includes('-h'))
+  ) {
     help([cmd])
-  else if (cmd == 'tui') await tui()
+  } else if (cmd == 'tui') await tui()
   else if (cmd == 'claude') await interactive(rest)
   else if (cmd == 'list' || cmd == 'ls') await list(rest)
   else if (cmd == 'new') await create(rest)
