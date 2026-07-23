@@ -1880,6 +1880,67 @@ a[data-ref]:hover {
 .Debug_More {
   color: var(--dim);
 }
+/* The per-component remove × — one on each group's first key, a quiet
+   glyph that warms to danger on hover. A deliberate click: it deletes the
+   whole component from the entity. */
+.Debug_Rm {
+  font: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  color: var(--dim);
+  padding: 0 var(--half-gap);
+  border-radius: var(--radius);
+}
+.Debug_Rm:hover {
+  color: var(--red);
+}
+/* The add-comp picker: a quiet trigger over a scrolling column of the
+   comps this entity lacks. Mirrors the Prop popover's list, but seated in
+   the flow (no overlay) — Debug is a page, not a card. */
+.Debug_Add {
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+}
+.Debug_AddBtn {
+  font: inherit;
+  font-size: 11px;
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  color: var(--dim);
+  cursor: pointer;
+  padding: 2px var(--half-gap);
+}
+.Debug_AddBtn:hover {
+  color: var(--text);
+  border-color: var(--dim);
+}
+.Debug_AddList {
+  display: grid;
+  gap: 1px;
+  max-height: 16rem;
+  overflow-y: auto;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2px;
+}
+.Debug_AddItem {
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: var(--radius);
+  color: var(--orange);
+  cursor: pointer;
+  padding: 2px var(--half-gap);
+}
+.Debug_AddItem:hover {
+  background: var(--soft);
+}
 
 /* Schema: the vocabulary rendered live — one section per component, a
    two-column grid of its columns, death words as colored chips keyed to
