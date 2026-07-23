@@ -7,7 +7,7 @@ import { type Ent } from '../types.ts'
 // calls define() once at module scope.
 //
 // The vocabulary: a VIEW is a string — a named way of looking at an
-// entity ('Task', 'Debug', 'Id', …). It's what a card stores and what a
+// entity ('Full', 'Debug', 'Inline', …). It's what a card stores and what a
 // tab picks. A RENDERER is a component registered for one view + an
 // entity matcher. There is no kind — an entity is what its components
 // make it, and the most SPECIFIC renderer wins: match returns a score
@@ -80,7 +80,7 @@ let all = () => (overrides.length ? [...overrides, ...registry] : registry)
 
 // The views that may appear as card tabs, in tab order. A view tabs for
 // an entity iff some renderer serves it; Debug's catch-all means every
-// card gets a Debug tab. Views not listed (Id, Dependency) are internal —
+// card gets a Debug tab. Views not listed (Inline, Dependency) are internal —
 // reachable only by explicit name.
 export let applicable = (e: Ent) =>
   tabs.filter((v) => all().some((r) => r.view == v && score(r, e) > 0))
@@ -110,6 +110,7 @@ let json = () => registry.find((r) => r.view == 'JSON')!
 // ask (Card.Show), so the heal must apply after a strip too.
 export let alias: Record<string, string> = {
   'Show': 'Full',
+  'Id': 'Inline',
   'List.Item': 'List.Tile',
   'Task.Row': 'Board.List.Tile',
   'Debug.ListItem': 'Debug.Tile',

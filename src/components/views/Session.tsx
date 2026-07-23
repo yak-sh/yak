@@ -5,6 +5,7 @@ import { base, mutate, uuid } from '../../live.ts'
 import { block, Stamp } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
 import { Comments } from '../Comments.tsx'
+import { Id } from './Inline.tsx'
 import { View } from '../View.tsx'
 
 // An agent session, watched: the lifecycle summary (server-owned columns,
@@ -320,7 +321,9 @@ export let Session = ({ e }: { e: Ent }) => {
             {s.effort && ` · ${s.effort}`}
           </Model>
         )}
-        {s.requested_task_eid && <View eid={s.requested_task_eid} view='Id' />}
+        {s.requested_task_eid && (
+          <View eid={s.requested_task_eid} view='Inline' />
+        )}
         {live && (
           <Stop
             type='button'
@@ -376,7 +379,7 @@ export let SessionRow = ({ e }: { e: Ent }) => {
       <Dot status={s.status ?? ''} />
       <RowLine.Status>{s.status ?? s.id}</RowLine.Status>
       {s.provider && <RowLine.Model>{s.provider} · {s.model}</RowLine.Model>}
-      <View eid={e.eid} view='Id' />
+      <Id e={e} />
     </RowLine>
   )
 }

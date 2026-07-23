@@ -19,6 +19,7 @@ import { Prio } from '../Prio.tsx'
 import { Edit } from '../Edit.tsx'
 import { editorFor, Prop } from '../editors.tsx'
 import { Relate } from './Relate.tsx'
+import { Id } from './Inline.tsx'
 import { View } from '../View.tsx'
 
 // The lego box. A SECTION is an internal view ('Body', 'Meta',
@@ -298,7 +299,7 @@ export let Meta = ({ e, id }: { e: Ent; id?: boolean }) => {
         </Claim>
       )}
       <Stamp e={e} />
-      {id && <View eid={e.eid} view='Id' />}
+      {id && <Id e={e} />}
     </MetaEl>
   )
 }

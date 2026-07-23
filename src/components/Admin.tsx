@@ -11,7 +11,7 @@ import { block } from './ui.tsx'
 import { adminRoute, type Col, columnsFor, groupedKinds } from './admin.ts'
 import { FilterInput, passOf } from './Filter.tsx'
 import { Dot } from './Dot.tsx'
-import { Id } from './views/Id.tsx'
+import { Id } from './views/Inline.tsx'
 import { View } from './View.tsx'
 import { follow, navigate, route } from './nav.tsx'
 

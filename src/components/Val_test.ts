@@ -25,11 +25,11 @@ Deno.test('Val dispatches by shape', () => {
   let u = vn(Val({ value: new URL('https://x.dev/') }))
   assertEquals(u.type, 'a')
   assertEquals(u.props.href, 'https://x.dev/')
-  // an id-shaped string resolves through the cache to the Id view
+  // an id-shaped string resolves through the cache to its Inline
   let id = vn(Val({ value: 'T-5' }))
   assertEquals(id.type, View)
   assertEquals(id.props.eid, 'abc')
-  assertEquals(id.props.view, 'Id')
+  assertEquals(id.props.view, 'Inline')
   // an id that resolves to nothing, and plain prose, stay unclaimed
   assertEquals(faceFor('T-99'), undefined)
   assertEquals(faceFor('2026-01-01T00:00:00Z'), undefined)

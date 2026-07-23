@@ -4,7 +4,7 @@ import { Dot } from '../Dot.tsx'
 import { Prio } from '../Prio.tsx'
 import { block } from '../ui.tsx'
 import { menu } from '../nav.tsx'
-import { View } from '../View.tsx'
+import { Id } from './Inline.tsx'
 
 let Frame = block('div', 'TaskRow', {
   Title: 'span',
@@ -91,7 +91,7 @@ export let TaskRow = ({ e }: { e: Ent }) => {
           <Assignee>{ent(e.task!.assignee_eid).doc?.title}</Assignee>
         )}
         {e.claim && <Claim>⚑</Claim>}
-        <View eid={e.eid} view='Id' />
+        <Id e={e} />
       </Meta>
     </Frame>
   )

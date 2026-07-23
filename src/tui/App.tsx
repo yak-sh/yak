@@ -24,6 +24,7 @@ import { has, type Renderer, resolve } from '../components/registry.ts'
 import { View } from '../components/View.tsx'
 import { author } from '../components/Comments.tsx'
 import { Dot } from '../components/Dot.tsx'
+import { Id } from '../components/views/Inline.tsx'
 import { clipboard } from './paint.ts'
 import { Md } from './md.tsx'
 
@@ -188,7 +189,7 @@ let TuiTask = ({ e }: { e: Ent }) => (
           ⚑ {ent(e.claim.session_eid).session?.id}
         </span>
       )}
-      <View eid={e.eid} view='Id' />
+      <Id e={e} />
     </div>
     {e.doc?.body && (
       <p class='Task_Body'>

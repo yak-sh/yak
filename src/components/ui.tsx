@@ -96,6 +96,14 @@ export let block = <K extends string>(
     ) as Record<K, ReturnType<typeof el>>,
   )
 
+// The id chip atom: one T-123 token, paint only (the `.Id` block). A span,
+// not an anchor — a caller that wants it to LINK spreads href + handlers and
+// the el stack promotes it to <a>; inside a surrounding link it stays a span
+// (nested <a> is the parser trap the Surround stack exists to dodge). ui.tsx
+// knows no entities, so idOf / retired / linkProps stay with the smart
+// callers (views/Inline.tsx Id).
+export let Chip = el('span', 'Id')
+
 // Relative time for humans — '5 minutes ago' — off a minute tick, so an
 // open card doesn't fossilize at the age it rendered. Pair with
 // data-tip={pretty(iso)} for the full stamp on hover.

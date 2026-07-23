@@ -1000,6 +1000,39 @@ html {
 .Show_Meta .Id {
   margin-left: auto; /* the id keeps the row's right edge, as in a titlebar */
 }
+/* An entity said in flowing content (the Inline role): chip (+dot) + title,
+   one anchor. The title gives out first — ellipsis, never a wrap and never
+   a JS measure. */
+.Inline {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4em;
+  max-width: 100%;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+.Inline .Dot {
+  align-self: center;
+}
+.Inline_Title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.Inline:hover .Inline_Title {
+  text-decoration: underline;
+  color: var(--fg);
+}
+/* a settled task no longer binds: struck, TaskRow_Done's fade */
+.Inline_Title-settled {
+  text-decoration: line-through;
+  opacity: 0.55;
+}
+.Inline:hover .Inline_Title-settled {
+  text-decoration: line-through underline;
+}
 .Debug_Prio {
   font-size: 11px;
   color: var(--dim);
@@ -1544,27 +1577,10 @@ html {
 .Dependency_Type {
   font-size: 11px;
 }
-.Dependency_Name {
-  color: inherit;
-  text-decoration: none;
-}
-.Dependency_Name:hover {
-  text-decoration: underline;
-  color: var(--fg);
-}
 /* the pip rides the sentence inline, sized to its 13px line */
 .Dependency .Dot {
-  display: inline-block;
   width: 0.45rem;
   height: 0.45rem;
-}
-/* a settled dependency no longer binds: struck, TaskRow_Done's fade */
-.Dependency_Name-settled {
-  text-decoration: line-through;
-  opacity: 0.55;
-}
-.Dependency_Name-settled:hover {
-  text-decoration: line-through underline;
 }
 .Dependency_Type-requires {
   color: var(--red);
@@ -1951,6 +1967,7 @@ a[data-ref]:hover {
   display: flex;
   align-items: center;
   gap: var(--half-gap);
+  min-width: 0; /* the head must shrink, or the Inline can never truncate */
 }
 .Session_Status {
   font-weight: 600;
@@ -1961,8 +1978,10 @@ a[data-ref]:hover {
   color: var(--dim);
   font-size: 11px;
 }
-.Session_Head .Id {
+/* the task it runs keeps the head's right edge, truncating first */
+.Session_Head > .Inline {
   margin-left: auto;
+  overflow: hidden;
 }
 .Session_Stop {
   font: inherit;

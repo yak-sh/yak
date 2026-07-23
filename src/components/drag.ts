@@ -1,6 +1,6 @@
 // The drag payload, view-free. This lives OUTSIDE View.tsx so nav.tsx
 // (which every view imports for linkProps) never pulls the curated view
-// list into a cycle: views/Id.tsx → nav.tsx → View.tsx → views/Id.tsx
+// list into a cycle: views/Inline.tsx → nav.tsx → View.tsx → views/Inline.tsx
 // was a TDZ time bomb — whichever module entered the cycle first left
 // View.tsx's top-level define() list reading an uninitialized view
 // binding under hot-swap re-evaluation. dragData needs only the cache

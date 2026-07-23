@@ -3,7 +3,7 @@ import { block } from '../ui.tsx'
 import { Edit } from '../Edit.tsx'
 import { Pip } from './Show.tsx'
 import { Dot } from '../Dot.tsx'
-import { View } from '../View.tsx'
+import { Id } from './Inline.tsx'
 
 let Frame = block('div', 'CardTitle', { Text: 'span' })
 let { Text } = Frame
@@ -17,7 +17,7 @@ let { Text } = Frame
 // dot just says how the run is doing.
 export let TaskTitle = ({ e }: { e: Ent }) => (
   <Frame>
-    <View eid={e.eid} view='Id' />
+    <Id e={e} />
     <Pip e={e} />
     <Text>
       <Edit eid={e.eid} comp='doc' prop='title' />
@@ -27,7 +27,7 @@ export let TaskTitle = ({ e }: { e: Ent }) => (
 
 export let BoardTitle = ({ e }: { e: Ent }) => (
   <Frame>
-    <View eid={e.eid} view='Id' />
+    <Id e={e} />
     <Text>
       <Edit eid={e.eid} comp='doc' prop='title' />
     </Text>
@@ -44,7 +44,7 @@ export let WebTitle = ({ e }: { e: Ent }) => {
   // The freeze stamps the page <title> onto the entity as a doc.
   return (
     <Frame>
-      <View eid={e.eid} view='Id' />
+      <Id e={e} />
       <Text>{e.doc?.title ?? host}</Text>
     </Frame>
   )
@@ -52,7 +52,7 @@ export let WebTitle = ({ e }: { e: Ent }) => {
 
 export let DocTitle = ({ e }: { e: Ent }) => (
   <Frame>
-    <View eid={e.eid} view='Id' />
+    <Id e={e} />
     <Text>
       <Edit eid={e.eid} comp='doc' prop='title' />
     </Text>
@@ -63,7 +63,7 @@ export let SessionTitle = ({ e }: { e: Ent }) => {
   let s = e.session!
   return (
     <Frame>
-      <View eid={e.eid} view='Id' />
+      <Id e={e} />
       <Dot status={s.status ?? ''} />
       <Text>
         {s.provider
@@ -76,7 +76,7 @@ export let SessionTitle = ({ e }: { e: Ent }) => {
 
 export let AnyTitle = ({ e }: { e: Ent }) => (
   <Frame mod='dim'>
-    <View eid={e.eid} view='Id' />
+    <Id e={e} />
     <Text>{e.kind}</Text>
   </Frame>
 )

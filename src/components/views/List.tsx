@@ -6,6 +6,7 @@ import { block } from '../ui.tsx'
 import { menu } from '../nav.tsx'
 import { passOf } from '../Filter.tsx'
 import { dragData } from '../drag.ts'
+import { Id } from './Inline.tsx'
 import { View } from '../View.tsx'
 
 let Frame = block('div', 'List', { Row: 'div' })
@@ -95,6 +96,6 @@ export let ListItem = ({ e }: { e: Ent }) => (
     <Line.Title>
       {(e.mail ? unmime(e.doc?.title ?? '') : e.doc?.title) || e.kind}
     </Line.Title>
-    <View eid={e.eid} view='Id' />
+    <Id e={e} />
   </Line>
 )

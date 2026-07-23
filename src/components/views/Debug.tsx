@@ -4,6 +4,7 @@ import { backlinks, ent, parents } from '../../live.ts'
 import { up } from './Show.tsx'
 import { block } from '../ui.tsx'
 import { Prop } from '../editors.tsx'
+import { Id } from './Inline.tsx'
 import { View } from '../View.tsx'
 
 // The Debug view: one full inspector for the entity itself — EVERY prop,
@@ -119,7 +120,7 @@ let AllProps = ({ e }: { e: Ent }) => (
                 {k.slice(0, -4)}
               </Key>
               <Val mod='ent'>
-                <View eid={String(v)} view='Id' /> {String(
+                <Id e={ent(String(v))} /> {String(
                   ent(String(v)).doc?.title ?? ent(String(v)).session?.id ??
                     '',
                 )}
@@ -176,7 +177,7 @@ export let Debug = ({ e }: { e: Ent }) => {
 
 export let DebugTaskItem = ({ e }: { e: Ent }) => (
   <Item>
-    <View eid={e.eid} view='Id' />
+    <Id e={e} />
     <Kind>{e.kind}</Kind>
     <Title>{e.doc?.title}</Title>
     {e.claim && <Claim>⚑ {ent(e.claim.session_eid).session?.id}</Claim>}
@@ -187,7 +188,7 @@ export let DebugTaskItem = ({ e }: { e: Ent }) => (
 
 export let DebugAnyItem = ({ e }: { e: Ent }) => (
   <Item>
-    <View eid={e.eid} view='Id' />
+    <Id e={e} />
     <Kind>{e.kind}</Kind>
     {e.doc?.title && <Title>{e.doc.title}</Title>}
   </Item>

@@ -25,7 +25,7 @@ import { Persona } from './views/Persona.tsx'
 import { TaskRow } from './views/TaskRow.tsx'
 import { BoardList, List, ListItem } from './views/List.tsx'
 import { Canvas } from './Canvas.tsx'
-import { Id } from './views/Id.tsx'
+import { Inline, TaskInline } from './views/Inline.tsx'
 import { Dependency } from './views/Dependency.tsx'
 import { Debug, DebugAnyItem, DebugTaskItem } from './views/Debug.tsx'
 import { Schema } from './views/Schema.tsx'
@@ -67,7 +67,7 @@ define([
   { view: 'Persona', match: has('doc', 'persona'), Render: Persona },
   { view: 'Web', match: has('web'), Render: Web },
   { view: 'Session', match: has('session'), Render: Session },
-  // The sections — Full's legos, internal views like Id and Dependency.
+  // The sections — Full's legos, internal views like Inline and Dependency.
   // Catch-all matchers on purpose: each renders nothing when its data is
   // absent, and a specialized look for an entity shape is a higher-
   // scoring entry above these, never an edit to Full.
@@ -113,7 +113,8 @@ define([
   { view: 'Debug', match: () => true, Render: Debug },
   { view: 'Debug.Tile', match: has('task'), Render: DebugTaskItem },
   { view: 'Debug.Tile', match: () => true, Render: DebugAnyItem },
-  { view: 'Id', match: () => true, Render: Id },
+  { view: 'Inline', match: has('doc', 'task'), Render: TaskInline },
+  { view: 'Inline', match: () => true, Render: Inline },
   { view: 'Dependency', match: () => true, Render: Dependency },
 ], [
   'Canvas',

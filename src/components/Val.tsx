@@ -26,7 +26,7 @@ export let faces: Face[] = [
   { match: (v) => v instanceof URL, show: (v) => UrlVal(String(v)) },
   {
     match: (v) => typeof v == 'string' && ID.test(v) && !!findEid(v),
-    show: (v) => <View eid={findEid(String(v))!} view='Id' />,
+    show: (v) => <View eid={findEid(String(v))!} view='Inline' />,
   },
 ]
 

@@ -55,7 +55,7 @@ let sheet: Record<string, Style> = {
   'Dependency_Type-requires': { fg: '#e67e80' },
   'Dependency_Type-reads': { fg: '#7fbbb3' },
   'Dependency_Type-contains': { fg: '#dbbc7f' },
-  'Dependency_Name-settled': { strike: true },
+  'Inline_Title-settled': { strike: true },
   Debug_Kind: { fg: '#7a8478' },
   Debug_Comp: { fg: '#e69875' },
   Debug_Key: { fg: '#7a8478' },
