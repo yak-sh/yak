@@ -1,8 +1,8 @@
 import { type ComponentChildren, type JSX } from 'preact'
-import { useRef, useState } from 'preact/hooks'
+import { useContext, useRef, useState } from 'preact/hooks'
 import { comps, type PropType, statuses } from '../types.ts'
 import { cache, domains, ent, mutate } from '../live.ts'
-import { ago, block, focus, pretty } from './ui.tsx'
+import { ago, block, focus, pretty, Surround } from './ui.tsx'
 import { Dot } from './Dot.tsx'
 import { Edit } from './Edit.tsx'
 import { Overlay } from './overlay.tsx'
@@ -76,7 +76,6 @@ let set = (p: EditorProps, v: unknown) => {
 
 let Frame = block('span', 'Prop', {
   Val: 'span',
-  Hand: 'button',
   Pop: 'span',
   Tab: 'button',
   Row: 'span',
@@ -84,7 +83,7 @@ let Frame = block('span', 'Prop', {
   Num: 'input',
   Query: 'span',
 })
-let { Val, Hand, Pop, Tab, Row, Find, Num, Query } = Frame
+let { Val, Pop, Tab, Row, Find, Num, Query } = Frame
 
 // ---- the stock editors ----
 
@@ -263,8 +262,8 @@ let titled = (v: unknown) =>
 export let TimeVal = (v: unknown) =>
   v ? <span data-tip={pretty(String(v))}>{ago(String(v))}</span> : null
 
-// A url reads as a link OUT. Navigation is the face's own click, so an
-// editable url rides Prop's ▾ handle like any link face.
+// A url reads as a link OUT. Navigation is the face's own click — the
+// press leaves an anchor's clicks to the anchor, like any link face.
 export let UrlVal = (v: unknown) =>
   v ? <a href={String(v)} target='_blank' rel='noopener'>{String(v)}</a> : null
 
@@ -317,23 +316,21 @@ defineWells({ domains: () => domains.value })
 // entry's wrapper owns the layout, Prop only hands it the anchor and the
 // face. Callers may dress the value: `show` paints a custom face (a
 // badge, a chip, a link) while the registry still owns the editing;
-// `name` is the ghost label when empty; `handle` moves the press to a ▾
-// beside the face — for faces that are links, whose own click must stay
-// navigation.
+// `name` is the ghost label when empty. A face that is itself a LINK
+// keeps its own click — the press ignores clicks landing on an anchor
+// inside the face.
 export let Prop = (
-  { eid, comp, prop, editable, name, show: paint, handle }: {
+  { eid, comp, prop, editable, name, show: paint }: {
     eid: string
     comp: string
     prop: string
     editable?: boolean
     name?: string
     show?: (v: unknown) => JSX.Element | null
-    handle?: boolean
   },
 ) => {
   let [editing, setEditing] = useState(false)
-  // What the popout control anchors on — the value or its handle,
-  // whichever is showing (both wear this ref; only one renders at a time).
+  // What the popout control anchors on — the value's own element.
   let anchor = useRef<HTMLElement>(null)
   let t = comps[comp]?.[prop]
   let e = ent(eid) as unknown as Record<
@@ -358,28 +355,25 @@ export let Prop = (
     : t == 'bool'
     ? () => set(ep, value ? 0 : 1)
     : () => setEditing((was) => !was)
+  // The press, resolved by the link stack (the ▾ handle this replaced was
+  // the same collision): a click that lands on a link INSIDE the face
+  // belongs to that link, and inside a linked surround the press demotes
+  // the way nested links do — the edit-click must never ride the anchor
+  // around it.
+  let outer = useContext(Surround).href
+  let open = press && ((ev: MouseEvent) => {
+    let hit = (ev.target as Element).closest?.('a, [role=link]')
+    if (hit && anchor.current?.contains(hit)) return
+    if (outer) {
+      ev.preventDefault()
+      ev.stopPropagation()
+    }
+    press()
+  })
   let shown = (
-    <>
-      {(face || !handle) && (
-        <Val
-          elRef={anchor}
-          mod={!face && 'nil'}
-          onClick={handle ? undefined : press}
-        >
-          {face || (paint && editor ? `+ ${name ?? prop}` : '—')}
-        </Val>
-      )}
-      {handle && editor && (
-        <Hand
-          elRef={anchor}
-          mod={!face && 'empty'}
-          type='button'
-          onClick={press}
-        >
-          {face ? '▾' : `+ ${name ?? prop}`}
-        </Hand>
-      )}
-    </>
+    <Val elRef={anchor} mod={!face && 'nil'} onClick={open}>
+      {face || (paint && editor ? `+ ${name ?? prop}` : '—')}
+    </Val>
   )
   return (
     <Frame mod={editor && 'live'}>

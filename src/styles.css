@@ -138,7 +138,7 @@ html {
 /* The mono keepers: ids, chips, badges, edge verbs, timestamps, code,
    and every command/inspector/log surface. Prose everywhere else is
    var(--font) via body. :where keeps this overridable. */
-:where(code, pre, kbd, .Id, .Prio, .Show_Domain, .Show_Project, .Show_Assignee, .Show_Claim, .Prop_Hand, .Dependency_Type, .Relate_Verb, .Stamp, .Comments_When, .Comments_Who, .Comments_Via, .Board_ColName, .Board_Count, .Board_Chips, .Status, .Search_Box input, .Search_Id, .Debug, .Debug_Claim, .SessionRow, .Session_Facts, .Session_Status, .Session_Model, .Session_Tool, .Session_Exec, .Session_Turn, .Session_Err, .TaskRow_Assignee) {
+:where(code, pre, kbd, .Id, .Prio, .Show_Domain, .Show_Project, .Show_Assignee, .Show_Claim, .Dependency_Type, .Relate_Verb, .Stamp, .Comments_When, .Comments_Who, .Comments_Via, .Board_ColName, .Board_Count, .Board_Chips, .Status, .Search_Box input, .Search_Id, .Debug, .Debug_Claim, .SessionRow, .Session_Facts, .Session_Status, .Session_Model, .Session_Tool, .Session_Exec, .Session_Turn, .Session_Err, .TaskRow_Assignee) {
   font-family: var(--mono);
 }
 
@@ -1178,27 +1178,6 @@ html {
 }
 .Show_Claim:hover {
   text-decoration: underline;
-}
-/* The ▾ beside a link-faced Prop — the face owns navigation, the hand
-   owns the editor. Ghost when the field is empty. */
-.Prop_Hand {
-  white-space: nowrap;
-  font-size: 11px;
-  font-family: inherit;
-  color: var(--dim);
-  cursor: pointer;
-  background: none;
-  border: 0;
-  padding: 0;
-}
-.Prop_Hand:hover {
-  color: var(--text);
-}
-.Prop_Hand-empty {
-  opacity: 0.6;
-}
-.Prop_Hand-empty:hover {
-  opacity: 1;
 }
 /* Grow an edge by finishing its sentence: dim verb chips, then a search
    whose list OVERLAYS (absolute pop) — nothing below it moves. */

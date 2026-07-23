@@ -100,8 +100,8 @@ export let Pip = ({ e }: { e: Ent }) => {
 // The task fields, all through the registry door (editors.tsx Prop):
 // the faces stay the board grammar's chips — Prio badge, domain chip,
 // project link — while the registry supplies each type's editor from the
-// vocabulary (number box, domain well, project search). The project's
-// face is a LINK, so its press rides the ▾ handle beside it.
+// vocabulary (number box, domain well, project search). A LINK face
+// keeps its own click; the press takes the rest of the value.
 let Rank = ({ e }: { e: Ent }) => (
   <Prop
     eid={e.eid}
@@ -125,15 +125,14 @@ let Facet = ({ e }: { e: Ent }) => (
 )
 
 // Whose plate: the assignee face is a LINK to the person (or the project
-// standing in for its operator) — same grammar as Home, the ▾ handle
-// owns the editor. Claim (⚑, who's on it NOW) renders separately.
+// standing in for its operator) — same grammar as Home. Claim (⚑, who's
+// on it NOW) renders separately.
 let Plate = ({ e }: { e: Ent }) => (
   <Prop
     eid={e.eid}
     comp='task'
     prop='assignee_eid'
     editable
-    handle
     name='assignee'
     show={(v) => {
       if (!v) return null
@@ -149,7 +148,6 @@ let Home = ({ e }: { e: Ent }) => (
     comp='task'
     prop='project_eid'
     editable
-    handle
     name='project'
     show={(v) => {
       if (!v) return null
