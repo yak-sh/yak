@@ -266,17 +266,31 @@ let list = async (args: string[]) => {
   if (!hits.length) console.error('(no matches)')
 }
 
+// task new uses dot-params, not --flags. A stray --flag in the title is the
+// #1 filing mistake — agents type `task new "Title --project P-30 --body ..."`,
+// the whole string lands in the title, and the task files unrouted. Catch both
+// the glued `--project=P-30` and the space-separated `--project P-30` (whose
+// value sits in the *next* token, so no single token holds an `=`), and suggest
+// the dot form with that value.
+export let strayFlag = (
+  words: string[],
+): { got: string; suggest: string } | null => {
+  let i = words.findIndex((w) => /^--[\w-]+(=|$)/.test(w))
+  if (i < 0) return null
+  let raw = words[i]
+  let eq = raw.indexOf('=')
+  let [flag, val] = eq >= 0
+    ? [raw.slice(0, eq), raw.slice(eq + 1)]
+    : [raw, words[i + 1]]
+  return { got: raw, suggest: `${flag.replace(/^--/, '.')}=${val ?? '…'}` }
+}
+
 let create = async (args: string[]) => {
   let { params, words } = split(args)
-  // task new uses dot-params, not --flags. A stray --key=value would
-  // otherwise land silently in the title (and pollute every digest), so
-  // catch the mistyped param loudly and suggest the dot form.
-  let stray = words.find((w) => /^--[\w-]+=/.test(w))
+  let stray = strayFlag(words)
   if (stray) {
     throw new Error(
-      `task new uses dot-params, not --flags — did you mean ${
-        stray.replace(/^--/, '.')
-      }? (got ${stray.split('=')[0]}=…)`,
+      `task new uses dot-params, not --flags — did you mean ${stray.suggest}? (got ${stray.got})`,
     )
   }
   // Reference values (.project=bindery, .assignee=jeff) resolve at the
@@ -1116,43 +1130,47 @@ let tui = async () => {
   }
 }
 
-let [cmd, ...rest] = Deno.args
-try {
-  if (cmd?.startsWith(':')) await colon(undefined, [cmd, ...rest])
-  // `<verb> --help` shows the verb's help, not the verb run with a stray flag.
-  // mail owns its own richer --help (see mail()), so let it through.
-  else if (
-    cmd && cmd != 'mail' && (rest.includes('--help') || rest.includes('-h'))
-  ) {
-    help([cmd])
-  } else if (cmd == 'tui') await tui()
-  else if (cmd == 'claude') await interactive(rest)
-  else if (cmd == 'list' || cmd == 'ls') await list(rest)
-  else if (cmd == 'new') await create(rest)
-  else if (cmd == 'set') await set(rest)
-  else if (cmd == 'show') await show(rest)
-  else if (cmd == 'history') await past(rest)
-  else if (cmd == 'search') await seek(rest)
-  else if (cmd == 'mail') await mail(rest)
-  else if (cmd == 'claim') await claim(rest)
-  else if (cmd == 'spawn') await spawn(rest)
-  else if (cmd == 'comment') await comment(rest)
-  else if (cmd == 'dep') await dep(rest)
-  else if (cmd == 'backup') await backup()
-  else if (cmd == 'remember') await remember(rest)
-  else if (cmd == 'context') await context(rest)
-  else if (cmd == 'wrap') await wrap(rest)
-  else if (cmd == 'sync') await sync(rest)
-  else if (cmd == 'release') await release(rest)
-  else if (cmd == 'telemetry') await telemetry(rest)
-  else if (cmd == 'help' || cmd == '--help') help(rest)
-  // `task T-42 :done` — an id ahead of a colon line names the focus.
-  else if (rest[0]?.startsWith(':')) await colon(cmd, rest)
-  else {
-    console.log(usage.trim())
-    if (cmd) Deno.exit(2)
+// Only run the CLI when invoked as the program — importing this module (e.g.
+// from tests) must not dispatch a command or call Deno.exit.
+if (import.meta.main) {
+  let [cmd, ...rest] = Deno.args
+  try {
+    if (cmd?.startsWith(':')) await colon(undefined, [cmd, ...rest])
+    // `<verb> --help` shows the verb's help, not the verb run with a stray flag.
+    // mail owns its own richer --help (see mail()), so let it through.
+    else if (
+      cmd && cmd != 'mail' && (rest.includes('--help') || rest.includes('-h'))
+    ) {
+      help([cmd])
+    } else if (cmd == 'tui') await tui()
+    else if (cmd == 'claude') await interactive(rest)
+    else if (cmd == 'list' || cmd == 'ls') await list(rest)
+    else if (cmd == 'new') await create(rest)
+    else if (cmd == 'set') await set(rest)
+    else if (cmd == 'show') await show(rest)
+    else if (cmd == 'history') await past(rest)
+    else if (cmd == 'search') await seek(rest)
+    else if (cmd == 'mail') await mail(rest)
+    else if (cmd == 'claim') await claim(rest)
+    else if (cmd == 'spawn') await spawn(rest)
+    else if (cmd == 'comment') await comment(rest)
+    else if (cmd == 'dep') await dep(rest)
+    else if (cmd == 'backup') await backup()
+    else if (cmd == 'remember') await remember(rest)
+    else if (cmd == 'context') await context(rest)
+    else if (cmd == 'wrap') await wrap(rest)
+    else if (cmd == 'sync') await sync(rest)
+    else if (cmd == 'release') await release(rest)
+    else if (cmd == 'telemetry') await telemetry(rest)
+    else if (cmd == 'help' || cmd == '--help') help(rest)
+    // `task T-42 :done` — an id ahead of a colon line names the focus.
+    else if (rest[0]?.startsWith(':')) await colon(cmd, rest)
+    else {
+      console.log(usage.trim())
+      if (cmd) Deno.exit(2)
+    }
+  } catch (e) {
+    console.error(`task: ${(e as Error).message} (server: ${host()})`)
+    Deno.exit(1)
   }
-} catch (e) {
-  console.error(`task: ${(e as Error).message} (server: ${host()})`)
-  Deno.exit(1)
 }
