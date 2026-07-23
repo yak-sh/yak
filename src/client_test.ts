@@ -1114,3 +1114,71 @@ Deno.test("contextDigest: previously — the same operator's last brief", () => 
     false,
   )
 })
+
+Deno.test('contextDigest: unheard — comments after a past session stopped listening', () => {
+  let NOW = Date.parse('2026-07-20T12:00:00Z')
+  let ago = (h: number) => new Date(NOW - h * 3_600_000).toISOString()
+  let num = 70
+  let mk = (
+    eid: string,
+    at: string,
+    parts: Record<string, Record<string, unknown>>,
+  ) => [
+    {
+      eid,
+      name: 'entity',
+      comp: { eid, num: num++, created_at: at, modified_at: at },
+    },
+    ...Object.entries(parts).map(([name, comp]) => ({ eid, name, comp })),
+  ]
+  let eid = (i: number) => `dddddddd-0000-4000-8000-0000000000${10 + i}`
+  let OP = eid(0)
+  let OTHER = eid(1) // a foreign author
+  let note = (eid: string, target: string, at: string, extra = {}) =>
+    mk(eid, at, {
+      doc: { title: '', body: 'words' },
+      comment: { target_eid: target, author_eid: OTHER, ...extra },
+    })
+  let base = [
+    ...mk(eid(2), ago(0), { session: { id: 'u-new', actor_eid: OP } }),
+    ...mk(eid(1), ago(50), { session: { id: 'u-other', actor_eid: OTHER } }),
+    // wrapped 20h ago, last ack 21h ago
+    ...mk(eid(3), ago(20), {
+      session: { id: 'u-old', actor_eid: OP, acked_at: ago(21) },
+    }),
+    // never acked: birth is the cutoff
+    ...mk(eid(4), ago(30), { session: { id: 'u-older', actor_eid: OP } }),
+    // beyond the week: out of "recent"
+    ...mk(eid(5), ago(24 * 8), { session: { id: 'u-stale', actor_eid: OP } }),
+  ]
+  let g = (extra: Snapshot['changes']): Snapshot => ({
+    changes: [...base, ...extra],
+    deps: [],
+  })
+  // one session, two unheard: after the ack, foreign, not events
+  let one = g([
+    ...note(eid(6), eid(3), ago(10)),
+    ...note(eid(7), eid(3), ago(5)),
+    ...note(eid(8), eid(3), ago(22)), // before the ack: was served
+    ...note(eid(9), eid(3), ago(4), { event: 'status' }), // machinery
+    ...note(eid(10), eid(3), ago(3), { author_eid: eid(2) }), // own actor
+    ...note(eid(11), eid(1), ago(2)), // another actor's session
+    ...note(eid(12), eid(5), ago(1)), // too old a session
+  ])
+  let d = contextDigest(one, 'u-new', NOW)
+  assertMatch(d, /## unheard — S-72 got 2 comments after it wrapped/)
+  // two sessions aggregate on the one line, newest first; birth cuts off
+  // the never-acked one
+  let two = g([
+    ...note(eid(6), eid(3), ago(10)),
+    ...note(eid(7), eid(4), ago(8)),
+    ...note(eid(8), eid(4), ago(31)), // before u-older existed: void
+  ])
+  assertMatch(
+    contextDigest(two, 'u-new', NOW),
+    /## unheard — comments after they wrapped: S-72 ×1, S-73 ×1/,
+  )
+  // nothing unheard, or no session at all: no line
+  assertEquals(contextDigest(g([]), 'u-new', NOW).includes('unheard'), false)
+  assertEquals(contextDigest(one, undefined, NOW).includes('unheard'), false)
+})

@@ -653,6 +653,58 @@ let briefOf = (r: Row) => {
   if (b && !b.startsWith(STUB)) return b
   return String(r.comps.session?.final_text ?? '')
 }
+// Comments that landed on the actor's recent past sessions AFTER those
+// sessions stopped listening — one digest line of history, never
+// injected as conversation (a dead session's cursor stays frozen: it
+// documents what that session never saw). "Recent" bounds the sweep to
+// the actor's other sessions touched this week, newest five; "unseen"
+// is the bus cursor's own definition — created after the session's
+// last ack, or after its birth if it never acked. Machine events and
+// the actor's own words don't count.
+let unheard = (all: Row[], sess: Row | undefined, now: number) => {
+  let actor = String(sess?.comps.session?.actor_eid ?? '')
+  if (!actor) return []
+  let byEid = new Map(all.map((r) => [r.eid, r]))
+  let ours = (eid: unknown) =>
+    String(eid) == actor ||
+    byEid.get(String(eid))?.comps.session?.actor_eid == actor
+  let recent = all
+    .filter((r) =>
+      r.comps.session && r.eid != sess?.eid &&
+      r.comps.session.actor_eid == actor &&
+      now - Date.parse(String(r.comps.entity?.modified_at ?? '')) < 7 * DAY
+    )
+    .sort((a, b) =>
+      String(b.comps.entity?.modified_at ?? '')
+        .localeCompare(String(a.comps.entity?.modified_at ?? ''))
+    )
+    .slice(0, 5)
+  let got = recent
+    .map((s) => {
+      let cutoff = String(
+        s.comps.session?.acked_at ?? s.comps.entity?.created_at ?? '',
+      )
+      let n = all.filter((r) => {
+        let c = r.comps.comment
+        return c && c.target_eid == s.eid && !c.event &&
+          !ours(c.author_eid) &&
+          String(r.comps.entity?.created_at ?? '') > cutoff
+      }).length
+      return [s, n] as const
+    })
+    .filter(([, n]) => n > 0)
+  if (!got.length) return []
+  if (got.length == 1) {
+    let [s, n] = got[0]
+    return [
+      `## unheard — ${idOf(s)} got ${n} comment${
+        n > 1 ? 's' : ''
+      } after it wrapped (task show)`,
+    ]
+  }
+  let ids = got.map(([s, n]) => `${idOf(s)} ×${n}`).join(', ')
+  return [`## unheard — comments after they wrapped: ${ids} (task show)`]
+}
 let lately = (
   all: Row[],
   now: number,
@@ -779,6 +831,9 @@ export let contextDigest = (
   if (unread.length) {
     lines.push(`## mail — ${unread.length} unread (task mail)`)
   }
+  // What your past selves were told after they stopped listening —
+  // history on one line, never re-injected as live conversation.
+  lines.push(...unheard(all, sess, now))
   // The thread from last time: the newest brief by the SAME operator —
   // the final message wrap captured, or a hand-written doc, never a
   // stub — so a session wakes knowing where its predecessor left off.
