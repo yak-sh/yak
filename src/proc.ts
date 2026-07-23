@@ -3,7 +3,9 @@
 // claude), but the depth is nobody's contract — so the walk climbs comm by
 // comm to the nearest matching ancestor. Linux-only by nature; anywhere
 // /proc is missing (or unreadable) every lookup resolves to undefined and
-// callers fall back to their env hints.
+// callers fall back to their env hints. Deno gates /proc behind FULL trust:
+// even an unscoped --allow-read gets NotCapable ("requires all access",
+// proven live) — a caller that wants the walk must run with --allow-all.
 
 let read = (p: string) => {
   try {

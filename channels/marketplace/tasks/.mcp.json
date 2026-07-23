@@ -4,9 +4,7 @@
       "command": "deno",
       "args": [
         "run",
-        "--allow-net",
-        "--allow-env",
-        "--allow-read=/proc",
+        "--allow-all",
         "/home/yaks/code/tasks/channels/tasks/server.ts"
       ],
       "env": {
