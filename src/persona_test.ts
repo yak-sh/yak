@@ -10,6 +10,7 @@ import {
   commonOf,
   DIALECT,
   filesFor,
+  homeReads,
   indexLine,
   materialize,
   syncFiles,
@@ -149,6 +150,34 @@ Deno.test('commonOf: the persona its project contains', () => {
   assertEquals(commonOf(all, [edge(proj, 'contains', base)], proj.eid), base)
   // no contains edge → no common persona, however many call it home
   assertEquals(commonOf(all, [], proj.eid), undefined)
+})
+
+Deno.test('homeReads: specialists derive project→persona reads from home_eid', () => {
+  let proj = row({ project: {}, doc: { title: 'Holdco' } })
+  let base = row({ doc: { title: 'base' }, persona: { home_eid: proj.eid } })
+  let spec = row({
+    doc: { title: 'reviewer' },
+    persona: { home_eid: proj.eid },
+  })
+  let fleet = row({ doc: { title: 'graybeard' }, persona: { home_eid: null } })
+  let all = [proj, base, spec, fleet]
+  // base is the common persona (contains), so only the specialist derives an
+  // edge; a homeless fleet persona is nobody's specialist.
+  assertEquals(homeReads(all, [edge(proj, 'contains', base)]), [
+    { parent: proj.eid, type: 'reads', child: spec.eid },
+  ])
+})
+
+Deno.test('homeReads: a stored edge from home is left alone (no double sentence)', () => {
+  let proj = row({ project: {}, doc: { title: 'Holdco' } })
+  let spec = row({
+    doc: { title: 'reviewer' },
+    persona: { home_eid: proj.eid },
+  })
+  // whether the stored edge is the common `contains` or a hand-made `reads`,
+  // the derivation must not add a duplicate — home_eid stays the one truth.
+  assertEquals(homeReads([proj, spec], [edge(proj, 'reads', spec)]), [])
+  assertEquals(homeReads([proj, spec], [edge(proj, 'contains', spec)]), [])
 })
 
 Deno.test('filesFor: common → AGENTS.md, others → personas/<slug>.md, fleet → nowhere', () => {

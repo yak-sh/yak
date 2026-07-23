@@ -112,6 +112,26 @@ export let commonOf = (all: Row[], deps: Dep[], projectEid: string) =>
     )
   )
 
+// A project's SPECIALIST personas, surfaced as edges. `home_eid` is the
+// one truth for ownership (commonOf and filesFor derive from it); these
+// project→persona `reads` edges are DERIVED from it — never stored — so a
+// specialist shows on its project's card and navigates, and the two facts
+// can't drift (a home is a fact, like a board is a query: membership is
+// computed, not an edge list). The common persona already rides `contains`
+// so it's skipped, as is any persona already carrying a stored edge from
+// its home (no double sentence). snapshot() folds these into `deps`.
+export let homeReads = (all: Row[], deps: Dep[]): Dep[] =>
+  all.flatMap((r) => {
+    let home = r.comps.persona?.home_eid
+    return home &&
+        !deps.some((d) =>
+          d.parent == home && d.child == r.eid &&
+          (d.type == 'contains' || d.type == 'reads')
+        )
+      ? [{ parent: String(home), type: 'reads' as const, child: r.eid }]
+      : []
+  })
+
 // Every file materialization owes the fleet: for each project with a
 // checkout, the common persona (if any) as .tasks/AGENTS.md and each
 // other home persona as .tasks/personas/<slug>.md. Fleet-shared

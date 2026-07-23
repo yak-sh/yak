@@ -21,6 +21,8 @@ import {
   type Snapshot,
 } from './types.ts'
 import { type Trace } from './effects.ts'
+import { rows } from './client.ts'
+import { homeReads } from './persona.ts'
 import { matchQuery, parseQuery, resolveRefs, TEXT } from './query.ts'
 
 // The db lives outside the repo (this is open source): a home-dir dotpath by
@@ -1367,7 +1369,10 @@ export let snapshot = (db: DatabaseSync): Snapshot => {
   let deps = db.prepare(
     'select parent_eid as parent, type, child_eid as child from dependency',
   ).all() as Dep[]
-  return { changes, deps }
+  // A project's specialist personas ride derived `reads` edges (homeReads):
+  // home_eid is the one truth, so these compute here on the graph-out door
+  // and can never drift from ownership — nothing to store, nothing to sync.
+  return { changes, deps: [...deps, ...homeReads(rows({ changes }), deps)] }
 }
 
 // `deno task seed` (or a direct run) bootstraps the file without the server.
