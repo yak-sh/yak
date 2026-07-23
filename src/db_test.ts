@@ -163,6 +163,71 @@ Deno.test('a failing claim voids its whole batch', () => {
   assertEquals(comp(c, 'doc'), undefined) // rolled back with the claim
 })
 
+Deno.test('an FK refusal fails the whole batch loudly, naming the column', () => {
+  let s = uid(), ghost = uid(), rider = uid()
+  let err = assertThrows(
+    () =>
+      apply(db, [
+        { eid: rider, name: 'doc', comp: { title: 'rides along' } },
+        { eid: s, name: 'session', comp: { id: 'sess-fk', actor_eid: ghost } },
+      ]),
+    Error,
+    'actor_eid',
+  )
+  assertMatch(err.message, /no such entity/)
+  assertEquals(comp(s, 'session'), undefined) // the row never landed
+  assertEquals(comp(s, 'entity'), undefined) // no zombie spine either
+  assertEquals(comp(rider, 'doc'), undefined) // the whole batch rolled back
+})
+
+Deno.test('a comment aimed at a ghost refuses the same way', () => {
+  let c = uid()
+  assertThrows(
+    () =>
+      apply(db, [
+        { eid: c, name: 'doc', comp: { title: '', body: 'into the void' } },
+        { eid: c, name: 'comment', comp: { target_eid: uid() } },
+      ]),
+    Error,
+    'target_eid',
+  )
+  assertEquals(comp(c, 'doc'), undefined)
+})
+
+Deno.test('one batch creates referent then referrer: both land', () => {
+  let who = uid(), s = uid()
+  apply(db, [
+    { eid: who, name: 'doc', comp: { title: 'an actor' } },
+    { eid: s, name: 'session', comp: { id: 'sess-pair', actor_eid: who } },
+  ])
+  assertEquals(comp(s, 'session')?.actor_eid, who)
+})
+
+Deno.test('a tombstoned referent refuses and says so', () => {
+  let t = uid(), s = uid()
+  apply(db, [{ eid: t, name: 'doc', comp: { title: 'brief' } }])
+  apply(db, [{ eid: t, name: 'entity', comp: null }])
+  assertThrows(
+    () =>
+      apply(db, [
+        { eid: s, name: 'session', comp: { id: 'sess-grave', actor_eid: t } },
+      ]),
+    Error,
+    'tombstoned',
+  )
+})
+
+Deno.test('an FK refusal on the patch path bounces too', () => {
+  let s = uid()
+  apply(db, [{ eid: s, name: 'session', comp: { id: 'sess-patch' } }])
+  assertThrows(
+    () => apply(db, [{ eid: s, name: 'session', comp: { actor_eid: uid() } }]),
+    Error,
+    'actor_eid',
+  )
+  assertEquals(comp(s, 'session')?.actor_eid, null) // untouched
+})
+
 Deno.test('spine mints once, num is monotonic', () => {
   let x = uid(), y = uid()
   apply(db, [{ eid: x, name: 'entity', comp: {} }])

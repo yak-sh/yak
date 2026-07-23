@@ -583,6 +583,47 @@ let AIMED = deaths('cascade')
 let DETACHED = deaths('detach')
 let RELEASED = deaths('release')
 
+// An FK bounce (errcode 787, SQLITE_CONSTRAINT_FOREIGNKEY) is a REFUSAL,
+// not a race: the change aimed an eid column at an entity with no live
+// row — tombstoned, or never minted. SQLite's own message names nothing,
+// so decode it: walk the table's declared FKs and point at each sent
+// value whose referent is missing. Returns null for any other error —
+// those keep their own semantics. In-batch referent-first creates never
+// land here: the referent's spine is already in the transaction when the
+// referrer inserts. Death's cascades and detaches never land here either
+// — they delete dependents first and null soft refs server-side.
+let refused = (
+  db: DatabaseSync,
+  name: string,
+  eid: string,
+  comp: Record<string, unknown>,
+  e: unknown,
+) => {
+  if ((e as { errcode?: number })?.errcode != 787) return null
+  let given: Record<string, unknown> = { eid, ...comp }
+  let bad = (db.prepare(
+    `select "from" as col, "table" as t, coalesce("to", 'eid') as pk
+     from pragma_foreign_key_list(?)`,
+  ).all(name) as { col: string; t: string; pk: string }[])
+    .filter((f) =>
+      given[f.col] != null &&
+      !db.prepare(`select 1 from ${f.t} where ${f.pk} = ?`).get(
+        given[f.col] as string,
+      )
+    )
+    .map((f) =>
+      `${f.col} → ${given[f.col]} (${
+        db.prepare('select 1 from tombstone where eid = ?')
+            .get(given[f.col] as string)
+          ? 'tombstoned'
+          : `no such ${f.t}`
+      })`
+    )
+  return new Error(
+    `${name} ${eid} refused: ${bad.join(', ') || 'foreign key violation'}`,
+  )
+}
+
 // Apply a batch atomically. Unknown component names are ignored (a newer
 // client speaking to an older server shouldn't wedge the socket). num and
 // created_at are server-owned — never writable over the wire. Returns the
@@ -630,8 +671,9 @@ export let apply = (
         if (!comp || dead.get(eid) || dead.get(String(comp.child_eid))) {
           continue
         }
-        // Both spines checked HERE (fk enforcement is a pragma nobody
-        // set): an edge may only join entities that exist.
+        // Both spines checked HERE for the friendlier message (node:sqlite
+        // enforces FKs by default, but its bounce names no column): an
+        // edge may only join entities that exist.
         let spines = db.prepare(
           'select count(*) as n from entity where eid in (?, ?)',
         ).get(eid, String(comp.child_eid)) as { n: number }
@@ -801,19 +843,28 @@ export let apply = (
       let sent = cols.filter((c) => c in comp)
       let vals = sent.map((c) => comp[c] as string | number | null)
       // Update first (a patch can't re-satisfy not-null columns an insert
-      // would demand). An existing row implies an existing spine.
-      let hit = sent.length
-        ? db.prepare(
-          `update ${name} set ${sent.map((c) => `"${c}" = ?`).join(', ')}
-           where eid = ?`,
-        ).run(...vals, eid).changes
-        : 0
+      // would demand). An existing row implies an existing spine. An FK
+      // bounce here fails the batch with its offender named — the outer
+      // catch rolls everything back, like the claim lease.
+      let hit: number | bigint = 0
+      if (sent.length) {
+        try {
+          hit = db.prepare(
+            `update ${name} set ${sent.map((c) => `"${c}" = ?`).join(', ')}
+             where eid = ?`,
+          ).run(...vals, eid).changes
+        } catch (e) {
+          throw refused(db, name, eid, comp, e) ?? e
+        }
+      }
       if (hit) continue
       // No row: this change CREATES — spine + comp together, in a savepoint.
       // A partial patch whose row is gone is an edit racing a delete: the
       // delete wins, the change rolls back to nothing (no zombie spine) and
       // the rest of the batch survives. A malformed create fails the same
-      // way, loudly in the log.
+      // way, loudly in the log — except an FK refusal (a reference to a
+      // tombstoned or never-minted entity), which fails the whole BATCH
+      // loudly: "applied N change(s)" must mean the rows landed.
       db.exec('savepoint change')
       try {
         if (spine(db, eid).changes) minted.add(eid)
@@ -832,8 +883,13 @@ export let apply = (
         }
         db.exec('release change')
       } catch (e) {
+        // Decode BEFORE the rollback: the savepoint holds the freshly
+        // minted spine, so the entity's own eid can't read as a false
+        // offender — only truly dangling references do.
+        let fk = refused(db, name, eid, comp, e)
         db.exec('rollback to change')
         db.exec('release change')
+        if (fk) throw fk // the outer catch rolls the whole batch back
         console.warn(`sync: change for ${name} ${eid} dropped —`, e)
       }
     }
