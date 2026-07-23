@@ -101,10 +101,10 @@ export let materialize = (
   return parts.filter(Boolean).join('\n\n') + '\n'
 }
 
-// A project's BASELINE persona — the one the project `contains` (an
+// A project's COMMON persona — the one the project `contains` (an
 // edge, so the marker is graph-data the editor can move). Among its
-// other personas the baseline is what lands as .tasks/AGENTS.md.
-export let baselineOf = (all: Row[], deps: Dep[], projectEid: string) =>
+// other personas the common one is what lands as .tasks/AGENTS.md.
+export let commonOf = (all: Row[], deps: Dep[], projectEid: string) =>
   all.find((r) =>
     r.comps.persona?.home_eid == projectEid &&
     deps.some((d) =>
@@ -113,14 +113,14 @@ export let baselineOf = (all: Row[], deps: Dep[], projectEid: string) =>
   )
 
 // Every file materialization owes the fleet: for each project with a
-// checkout, the baseline persona (if any) as .tasks/AGENTS.md and each
+// checkout, the common persona (if any) as .tasks/AGENTS.md and each
 // other home persona as .tasks/personas/<slug>.md. Fleet-shared
 // personas (no home) ride spawns only — they are nobody's file.
 export let filesFor = (all: Row[], deps: Dep[], now: number) => {
   let out: { path: string; body: string }[] = []
   for (let proj of all.filter((r) => r.comps.project && r.comps.repo?.path)) {
     let root = `${proj.comps.repo.path}/.tasks`
-    let base = baselineOf(all, deps, proj.eid)
+    let base = commonOf(all, deps, proj.eid)
     if (base) {
       out.push({
         path: `${root}/AGENTS.md`,

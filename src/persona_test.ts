@@ -7,7 +7,7 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { type Dep, type Edge, kindOf } from './types.ts'
 import { type Row } from './client.ts'
 import {
-  baselineOf,
+  commonOf,
   DIALECT,
   filesFor,
   indexLine,
@@ -135,7 +135,7 @@ Deno.test('indexLine: id, type, count, confirmed date — never warmth', () => {
   assert(!/\d\.\d\d/.test(line)) // a printed score churns every materialize
 })
 
-Deno.test('baselineOf: the persona its project contains', () => {
+Deno.test('commonOf: the persona its project contains', () => {
   let proj = row({ project: {}, doc: { title: 'Holdco' } })
   let base = row({
     doc: { title: 'base', body: 'b' },
@@ -146,12 +146,12 @@ Deno.test('baselineOf: the persona its project contains', () => {
     persona: { home_eid: proj.eid },
   })
   let all = [proj, base, other]
-  assertEquals(baselineOf(all, [edge(proj, 'contains', base)], proj.eid), base)
-  // no contains edge → no baseline, however many personas call it home
-  assertEquals(baselineOf(all, [], proj.eid), undefined)
+  assertEquals(commonOf(all, [edge(proj, 'contains', base)], proj.eid), base)
+  // no contains edge → no common persona, however many call it home
+  assertEquals(commonOf(all, [], proj.eid), undefined)
 })
 
-Deno.test('filesFor: baseline → AGENTS.md, others → personas/<slug>.md, fleet → nowhere', () => {
+Deno.test('filesFor: common → AGENTS.md, others → personas/<slug>.md, fleet → nowhere', () => {
   let proj = row({
     project: {},
     doc: { title: 'Holdco' },

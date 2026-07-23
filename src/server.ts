@@ -591,7 +591,7 @@ on('persona', {
 on('dependency', {
   created: (eid, comp) =>
     personaish(eid, comp.child_eid as string) && syncSoon(),
-  doc: 'a tier edge (or baseline flip) at a persona re-renders its files',
+  doc: 'a tier edge (or common flip) at a persona re-renders its files',
 })
 on('doc', {
   changed: {

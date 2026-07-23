@@ -216,7 +216,7 @@ export let comps: Record<string, Record<string, PropType>> = {
   // and its TIERS are edges — persona `contains` X preloads X's whole
   // body, persona `reads` X carries only X's index line; everything else
   // in scope stays searchable. home_eid is its home project (the
-  // project's baseline persona is the one the project `contains`);
+  // project's common persona is the one the project `contains`);
   // null = fleet-shared (graybeard reviews every venture). NOT
   // project_eid, same reason as memory.scope_eid: bare '.project_eid'
   // must keep routing to task. Worn ≠ speaking-for: persona_eid names
