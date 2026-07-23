@@ -13,11 +13,14 @@ import { type Change, idOf } from './types.ts'
 import {
   apply,
   db,
+  delta,
+  epoch,
   journalBy,
   journalOf,
   search,
   snapshot,
   touch,
+  vocabHash,
   vocabularyDoc,
 } from './db.ts'
 import { dispatch, docs, on, relay, trace } from './effects.ts'
@@ -295,6 +298,18 @@ Deno.serve(
     let path = url.pathname
     if (path == '/ws') return ws(req)
     if (path == '/snapshot') return Response.json(snapshot(db))
+    if (path == '/delta') {
+      // The returning client's catch-up: changes since its cursor. A cursor
+      // is only valid against the epoch and vocabulary that issued it — a
+      // mismatch means the journal was reset (restore) or the shape moved,
+      // so 409 tells the client to full-resnapshot rather than serve a
+      // misleading delta.
+      let p = url.searchParams
+      if (p.get('epoch') != epoch || p.get('vocab') != vocabHash) {
+        return new Response('stale', { status: 409 })
+      }
+      return Response.json(delta(db, Number(p.get('since') ?? 0)))
+    }
     if (path == '/search') {
       // a malformed filter is the typist's news, not a server error
       try {

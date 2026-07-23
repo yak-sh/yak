@@ -9,6 +9,7 @@
 // `num` is the server-minted human number (T-7 in the UI, one global counter).
 import { DatabaseSync } from 'node:sqlite'
 import { dirname } from 'node:path'
+import { createHash } from 'node:crypto'
 import {
   type Change,
   comps,
@@ -1180,6 +1181,89 @@ export let journalBy = (
       changes: JSON.parse(r.batch) as Change[],
     }))
 
+// The journal replayed as a delta: every batch since `since` (an EXCLUSIVE
+// rowid cursor) concatenated in apply order. A client holding the graph up
+// to `since` lands exactly what changed — cascade tombstones, freed claims,
+// detaches and births all ride, because the journal keeps the batch AS
+// APPLIED (apply() above), the same content the live /ws broadcast carries.
+// The one thing apply() leaves out of the journal is provenance (created/
+// updated are the actor column's twins, dropped at ~line 1078); delta
+// re-derives it from each row's ts+actor, which ARE the when+who — lossless,
+// no journal bloat. `cursor` is the max rowid seen (or `since` when the
+// window is empty), the client's next since. Shared by IndexedDB catch-up
+// (a temporal cut) and query subscriptions (a spatial cut) — one journal
+// reader, two doors (T-6823/T-3683).
+export let delta = (
+  db: DatabaseSync,
+  since: number,
+): { changes: Change[]; cursor: number } => {
+  let log = db.prepare(
+    `select rowid, ts, actor, batch from journal
+     where rowid > ? order by rowid`,
+  ).all(since) as {
+    rowid: number
+    ts: string
+    actor: string | null
+    batch: string
+  }[]
+  let changes: Change[] = []
+  let cursor = since
+  for (let r of log) {
+    cursor = r.rowid
+    let batch = JSON.parse(r.batch) as Change[]
+    for (let c of batch) changes.push(c)
+    // Sort the batch's eids the way apply() did to stamp provenance: a
+    // birth is a server-minted spine (an `entity` change carrying num — a
+    // delete is `entity`/comp:null instead), the dead are those deletes and
+    // cascade tombstones, and everything else is a touch. Edge changes touch
+    // BOTH endpoints, like apply(). A wire batch that named its own author/
+    // editor already rides in `changes` above; its `by` survives applyLocal's
+    // column-merge, so the synth only fills the `at` the journal dropped.
+    let born = new Set<string>()
+    let dead = new Set<string>()
+    let touched = new Set<string>()
+    let saidCreated = new Set<string>()
+    let saidUpdated = new Set<string>()
+    for (let c of batch) {
+      if (c.name == 'entity') (c.comp ? born : dead).add(c.eid)
+      else if (c.name == 'dependency') {
+        touched.add(c.eid)
+        if (c.comp) touched.add(String(c.comp.child_eid))
+      } else {
+        touched.add(c.eid)
+        if (c.name == 'created') saidCreated.add(c.eid)
+        if (c.name == 'updated') saidUpdated.add(c.eid)
+      }
+    }
+    // created: one per birth, mirroring apply()'s stamp for every `minted`
+    // eid — the row's ts+actor is its provenance.
+    for (let eid of born) {
+      changes.push({
+        eid,
+        name: 'created',
+        comp: saidCreated.has(eid)
+          ? { eid, at: r.ts }
+          : { eid, at: r.ts, by: r.actor },
+      })
+    }
+    // updated: every distinct touched eid NOT born here and NOT dead —
+    // apply() skips births (created covers them) and the dead (a tombstone
+    // takes no edits). Appending per row in rowid order makes the LAST write
+    // win under column-merge: "updated is the last edit."
+    for (let eid of touched) {
+      if (born.has(eid) || dead.has(eid)) continue
+      changes.push({
+        eid,
+        name: 'updated',
+        comp: saidUpdated.has(eid)
+          ? { eid, at: r.ts }
+          : { eid, at: r.ts, by: r.actor },
+      })
+    }
+  }
+  return { changes, cursor }
+}
+
 // A recall touch — the server-minted aggregate behind ranked retrieval
 // (query.ts hot()). Bumps count and last_at; first_at never moves. It
 // deliberately does NOT stamp updated (it bypasses apply()'s touch set):
@@ -1345,11 +1429,29 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
   return [...hits.filter((h) => !h.retired), ...hits.filter((h) => h.retired)]
 }
 
+// Cursor invalidation stamps a delta client checks before trusting its
+// `since`. `epoch` is minted once at process start: a db restore/reseed
+// restarts the journal rowids, so a fresh epoch forces every stale cursor to
+// full-resnapshot. `vocabHash` fingerprints the component vocabulary — a
+// shape change (new component, renamed column) shifts it, so a delta derived
+// against the old shape is refused and the client reseeds. `comps` is
+// insertion-ordered, so its JSON (and the hash) is stable across boots of
+// the same code.
+export let epoch = crypto.randomUUID()
+export let vocabHash = createHash('sha1')
+  .update(JSON.stringify(comps)).digest('hex').slice(0, 16)
+
 // The whole graph as one batch (plus edges) — what a fresh client cache eats.
 // entity === eid: only identity (eid, num) rides in the spine comp now —
 // provenance travels as `created`/`updated` (T-6670), the dormant spine
 // timestamp columns stay OUT of the wire. apply() never lets num back IN.
+// `cursor` is the journal rowid this snapshot is current as of — a returning
+// client resumes its delta from here (T-6823). Read FIRST, before walking
+// the tables: apply() is atomic and the server single-threaded, so nothing
+// commits between max(rowid) and the rows the loop sees.
 export let snapshot = (db: DatabaseSync): Snapshot => {
+  let cursor = (db.prepare('select max(rowid) as m from journal')
+    .get() as { m: number | null }).m ?? 0
   let changes: Change[] = []
   for (
     let name of [
@@ -1372,7 +1474,13 @@ export let snapshot = (db: DatabaseSync): Snapshot => {
   // A project's specialist personas ride derived `reads` edges (homeReads):
   // home_eid is the one truth, so these compute here on the graph-out door
   // and can never drift from ownership — nothing to store, nothing to sync.
-  return { changes, deps: [...deps, ...homeReads(rows({ changes }), deps)] }
+  return {
+    changes,
+    deps: [...deps, ...homeReads(rows({ changes }), deps)],
+    cursor,
+    epoch,
+    vocabHash,
+  }
 }
 
 // `deno task seed` (or a direct run) bootstraps the file without the server.

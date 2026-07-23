@@ -4,6 +4,7 @@ Deno.env.set('DB_PATH', ':memory:')
 let {
   apply,
   db,
+  delta,
   journalOf,
   mendMail,
   open,
@@ -942,4 +943,150 @@ Deno.test('search: retired-project hits sink to the tail, flagged', () => {
   // unretiring floats them back
   apply(db, [{ eid: p, name: 'project', comp: { retired_at: null } }])
   assertEquals(search(db, 'quagga').every((h) => !h.retired), true)
+})
+
+// Land changes into a plain {cache, deps} the same way live.ts applyLocal
+// does — column-merge, comp:null drops the component, entity:null drops the
+// entity and every edge touching it, dependency names its whole triple. A
+// local twin (not the signal-backed applyLocal, which needs the browser) so
+// the delta round-trip can assert on the net cache + deps.
+type Wire = { eid: string; name: string; comp: Record<string, unknown> | null }
+type Bag = {
+  cache: Record<string, Record<string, Record<string, unknown>>>
+  deps: { parent: string; type: string; child: string }[]
+}
+let land = (b: Bag, changes: Wire[]) => {
+  for (let { eid, name, comp } of changes) {
+    if (name == 'entity' && comp == null) {
+      delete b.cache[eid]
+      b.deps = b.deps.filter((d) => d.parent != eid && d.child != eid)
+      continue
+    }
+    if (name == 'dependency') {
+      if (!comp) continue
+      let d = {
+        parent: eid,
+        type: String(comp.type),
+        child: String(comp.child_eid),
+      }
+      let same = (x: typeof d) =>
+        x.parent == d.parent && x.type == d.type && x.child == d.child
+      b.deps = comp.gone
+        ? b.deps.filter((x) => !same(x))
+        : b.deps.some(same)
+        ? b.deps
+        : [...b.deps, d]
+      continue
+    }
+    let row = b.cache[eid] ?? (b.cache[eid] = {})
+    if (comp == null) delete row[name]
+    else row[name] = { ...(row[name] ?? {}), ...comp }
+  }
+}
+let fromSnap = (s: ReturnType<typeof snapshot>): Bag => {
+  let b: Bag = { cache: {}, deps: s.deps.map((d) => ({ ...d })) }
+  land(b, s.changes)
+  return b
+}
+// created/updated `at` is re-derived on replay from the journal row's ts,
+// a separate clock read from apply()'s stamp — the same instant, ms noise
+// apart. So compare provenance by presence + author (`by`), not the ms; and
+// sort deps, which the two paths emit in different orders.
+let calm = (b: Bag) => {
+  let cache: Bag['cache'] = {}
+  for (let [eid, comps] of Object.entries(b.cache)) {
+    let c: Record<string, Record<string, unknown>> = {}
+    for (let [name, comp] of Object.entries(comps)) {
+      c[name] = name == 'created' || name == 'updated'
+        ? { ...comp, at: typeof comp.at == 'string' ? 'ISO' : comp.at }
+        : comp
+    }
+    cache[eid] = c
+  }
+  let deps = [...b.deps].sort((x, y) =>
+    JSON.stringify(x).localeCompare(JSON.stringify(y))
+  )
+  return { cache, deps }
+}
+
+Deno.test('delta: snapshot@C0 + delta(C0) matches the live broadcast stream, cascade and all', () => {
+  let c0 = snapshot(db).cursor ?? 0
+  let base = snapshot(db) // the whole graph at C0
+
+  // A scripted sequence past C0 that ends in a CASCADING delete: a task, a
+  // comment aimed at it, a claim on it, a `requires` edge into it — then the
+  // task dies, tombstoning the comment + claim and dropping the edge.
+  let t = uid(), other = uid(), cm = uid(), s = uid()
+  let script = [
+    [
+      { eid: t, name: 'doc', comp: { title: 'doomed', body: 'v1' } },
+      { eid: t, name: 'task', comp: { status: 'open' } },
+    ],
+    [{ eid: s, name: 'session', comp: { id: `d-${s}` } }],
+    [
+      { eid: cm, name: 'doc', comp: { title: '', body: 're: doomed' } },
+      { eid: cm, name: 'comment', comp: { target_eid: t } },
+    ],
+    [{ eid: t, name: 'claim', comp: { session_eid: s } }],
+    [
+      { eid: other, name: 'doc', comp: { title: 'blocker' } },
+      { eid: other, name: 'task', comp: { status: 'open' } },
+      {
+        eid: other,
+        name: 'dependency',
+        comp: { type: 'requires', child_eid: t },
+      },
+    ],
+    [{ eid: t, name: 'doc', comp: { title: 'doomed', body: 'v2 edit' } }],
+    [{ eid: other, name: 'task', comp: { status: 'wip' } }], // survivor re-touched
+    [{ eid: t, name: 'entity', comp: null }], // cascade
+  ] as Wire[][]
+
+  // A live client's cache = snapshot@C0, then each batch's RETURN landed as
+  // /ws broadcasts it (apply() returns [...changes, ...extra] — the tombstones
+  // and provenance stamps included). This is the reference delta must match: a
+  // returning delta client IS a catching-up live client, and the journal is
+  // exactly what those broadcasts carried.
+  let live: Bag = { cache: {}, deps: base.deps.map((x) => ({ ...x })) }
+  land(live, base.changes)
+  for (let batch of script) land(live, apply(db, batch))
+
+  let full = snapshot(db) // the authoritative graph at Cn
+  let d = delta(db, c0)
+
+  // Reconstruct from the delta: hydrate the C0 snapshot, then replay the
+  // delta stream (deps ride in it as dependency changes — no separate deps
+  // array, unlike /snapshot).
+  let recon: Bag = { cache: {}, deps: base.deps.map((x) => ({ ...x })) }
+  land(recon, base.changes)
+  land(recon, d.changes)
+
+  // The whole cache + deps, modulo provenance `at` (re-derived from a separate
+  // clock read). Equality here proves BOTH cascade fidelity (every tombstone,
+  // detach and birth carried) AND provenance equivalence (created/updated
+  // present with the same author the stamp used) in one shot.
+  assertEquals(d.cursor, full.cursor) // the window ends where the graph is
+  assertEquals(calm(recon), calm(live))
+
+  // And it agrees with the authoritative snapshot on population and edges —
+  // the parts a full-row snapshot and a patch stream share (snapshot fills
+  // schema-default columns a patch omits, so only entity-set + deps compare).
+  assertEquals(
+    new Set(Object.keys(recon.cache)),
+    new Set(Object.keys(fromSnap(full).cache)),
+  )
+  assertEquals(calm(recon).deps, calm(fromSnap(full)).deps)
+
+  // The cascade genuinely happened: the doomed task, its comment and claim
+  // are gone, and the edge into it with them.
+  assertEquals(full.changes.some((c) => c.eid == t), false)
+  assertEquals(full.changes.some((c) => c.eid == cm), false)
+  assertEquals(recon.cache[t], undefined)
+  assertEquals(recon.cache[cm], undefined)
+  assertEquals(recon.deps.some((x) => x.child == t || x.parent == t), false)
+  // and the survivor carries re-derived provenance: created at birth, plus an
+  // updated (it was re-touched after birth) — both synthesized from the
+  // journal, absent from it.
+  assertEquals(typeof recon.cache[other].created?.at, 'string')
+  assertEquals(typeof recon.cache[other].updated?.at, 'string')
 })

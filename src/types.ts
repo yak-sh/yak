@@ -822,4 +822,16 @@ export type Change = {
 
 // The whole graph in one gulp — a batch that fills an empty cache, plus the
 // edges (edges aren't components; they ride alongside).
-export type Snapshot = { changes: Change[]; deps: Dep[] }
+// `cursor` = the journal rowid this snapshot is current as of (a returning
+// client's next delta `since`); `epoch`/`vocabHash` = the server-boot and
+// vocabulary stamps a delta is validated against (db.ts). OPTIONAL so the
+// addition stays additive: snapshot() always fills all five, but the many
+// consumers that only read `changes`/`deps` (and build a bare {changes, deps}
+// to feed notices/edgesOf/digests) stay valid Snapshots untouched.
+export type Snapshot = {
+  changes: Change[]
+  deps: Dep[]
+  cursor?: number
+  epoch?: string
+  vocabHash?: string
+}
