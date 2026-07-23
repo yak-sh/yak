@@ -1,0 +1,681 @@
+#!/usr/bin/env -S deno run --allow-net --allow-run --allow-read --allow-write --allow-env
+// perf — a headless CDP frame profiler for the canvas + boards.
+//
+// The fleet's "verify end-to-end" turned on RENDERING: it drives the real
+// app in headless Chrome, records a devtools trace, and localizes the
+// main-thread cost that drops frames. Two scenarios:
+//   1. canvas pan   — a real mouse drag; per-frame scripting + long tasks.
+//                     A transform-only pan should show ~zero per-frame
+//                     script; it FLAGS if pointer-move drives reconciliation.
+//   2. board render — first render localized into script / layout / paint
+//                     (the ~500ms the owner reports), then scroll health.
+//
+// Self-contained: it spins its OWN server on a unique port with a scratch
+// DB_PATH, seeds it, profiles, and tears everything down — the live db is
+// NEVER touched. `--url http://host:port` skips the server to profile an
+// already-running app ad hoc (whatever db that server holds).
+//
+// HONEST CAVEAT: headless measures MAIN-THREAD cost faithfully — where
+// dropped frames originate — but NOT real-GPU presentation on the owner's
+// hardware. A "frame" here is one top-level main-thread task chunk inside
+// the fenced window; p95 of those is the main-thread frame budget, not the
+// compositor's presented cadence. Read the script/layout/paint split and
+// the long-task stacks as the truth; treat absolute fps as indicative.
+//
+// Exits non-zero when a threshold is blown, so it can gate CI or alert from
+// cron. A periodic version that files regressions onto the board is a noted
+// follow-up (T-6772 territory).
+//
+//   bin/perf                 # seed a scratch app, run both scenarios
+//   bin/perf --url URL        # profile a running server instead
+//   bin/perf --keep           # leave chrome + server up for inspection
+
+import { uuid } from '../src/types.ts'
+
+// ---- thresholds (a blown one fails the run) ----
+let FRAME_MS = 16.7 // a 60fps budget
+let LONG_MS = 50 // the long-task bar
+let PAN_SCRIPT_MS = 4 // per-frame script a transform-only pan may spend
+let TTFR_MS = 1000 // board time-to-first-render ceiling
+let SCROLL_P95_MS = 33 // board scroll main-thread p95
+
+let root = new URL('..', import.meta.url).pathname
+
+// ---- tiny CDP client over a Deno WebSocket ----
+// send(method, params) -> result; on(method, fn) for events. One id space,
+// one message pump; trace events accumulate as they stream in.
+let cdp = (ws: WebSocket) => {
+  let id = 0
+  let waiting = new Map<number, (v: unknown) => void>()
+  let fail = new Map<number, (e: Error) => void>()
+  let listeners = new Map<string, ((p: Record<string, unknown>) => void)[]>()
+  ws.addEventListener('message', (m) => {
+    let msg = JSON.parse(m.data as string)
+    if (msg.id != null && waiting.has(msg.id)) {
+      msg.error
+        ? fail.get(msg.id)!(new Error(JSON.stringify(msg.error)))
+        : waiting.get(msg.id)!(msg.result)
+      waiting.delete(msg.id)
+      fail.delete(msg.id)
+    } else if (msg.method) {
+      for (let fn of listeners.get(msg.method) ?? []) fn(msg.params)
+    }
+  })
+  let send = (method: string, params: Record<string, unknown> = {}) =>
+    new Promise<Record<string, unknown>>((res, rej) => {
+      let n = ++id
+      waiting.set(n, res as (v: unknown) => void)
+      fail.set(n, rej)
+      ws.send(JSON.stringify({ id: n, method, params }))
+    })
+  let on = (method: string, fn: (p: Record<string, unknown>) => void) =>
+    listeners.set(method, [...(listeners.get(method) ?? []), fn])
+  return { send, on }
+}
+
+let open = (url: string) =>
+  new Promise<WebSocket>((res, rej) => {
+    let ws = new WebSocket(url)
+    ws.addEventListener('open', () => res(ws))
+    ws.addEventListener('error', () => rej(new Error(`ws failed: ${url}`)))
+  })
+
+let sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+// Poll a thunk until it returns truthy or the deadline passes.
+let until = async <T>(fn: () => Promise<T>, ms = 15000): Promise<T> => {
+  let end = Date.now() + ms
+  for (;;) {
+    let v = await fn()
+    if (v) return v
+    if (Date.now() > end) throw new Error('timed out')
+    await sleep(100)
+  }
+}
+
+// ---- chrome: launch headless, hand back a driven page + a trace buffer ----
+let TRACE_CATS = [
+  'toplevel',
+  'devtools.timeline',
+  'disabled-by-default-devtools.timeline',
+  'disabled-by-default-devtools.timeline.frame',
+  'disabled-by-default-devtools.timeline.stack',
+  'blink.user_timing',
+  'loading',
+  'v8',
+  'v8.execute',
+]
+
+type Ev = {
+  pid: number
+  tid: number
+  ts: number
+  ph: string
+  name: string
+  cat: string
+  dur?: number
+  args?: Record<string, unknown>
+}
+
+let chrome = async (port: number, profile: string) => {
+  let bin = ['google-chrome', 'google-chrome-stable', 'chromium']
+    .find((b) => {
+      try {
+        return new Deno.Command(b, { args: ['--version'] }).outputSync().success
+      } catch {
+        return false
+      }
+    })
+  if (!bin) throw new Error('no chrome on PATH')
+  let cmd = new Deno.Command(bin, {
+    args: [
+      '--headless=new',
+      `--remote-debugging-port=${port}`,
+      `--user-data-dir=${profile}`,
+      '--no-first-run',
+      '--no-sandbox',
+      '--window-size=1440,900',
+      '--force-device-scale-factor=1',
+      'about:blank',
+    ],
+    stdout: 'null',
+    stderr: 'null',
+  }).spawn()
+
+  // The page target's ws url — chrome needs a moment to open the port.
+  let wsUrl = await until(async () => {
+    try {
+      let ts = await (await fetch(`http://127.0.0.1:${port}/json`)).json()
+      let t = ts.find((t: { type: string }) => t.type == 'page')
+      return (t?.webSocketDebuggerUrl ?? '') as string
+    } catch {
+      return ''
+    }
+  })
+  let ws = await open(wsUrl)
+  let c = cdp(ws)
+  await c.send('Page.enable')
+  await c.send('Runtime.enable')
+
+  let buf: Ev[] = []
+  c.on('Tracing.dataCollected', (p) => {
+    for (let e of p.value as Ev[]) buf.push(e)
+  })
+  let done = () =>
+    new Promise<void>((res) => c.on('Tracing.tracingComplete', () => res()))
+
+  let go = async (path: string) => {
+    await c.send('Page.navigate', { url: `${base}${path}` })
+    await until(async () => {
+      let r = await c.send('Runtime.evaluate', {
+        expression: 'document.readyState',
+        returnByValue: true,
+      })
+      return (r.result as { value: string }).value == 'complete'
+    })
+  }
+  let evalIn = async <T>(expr: string): Promise<T> => {
+    let r = await c.send('Runtime.evaluate', {
+      expression: expr,
+      returnByValue: true,
+      awaitPromise: true,
+    })
+    return (r.result as { value: T }).value
+  }
+  let mark = (name: string) => evalIn(`performance.mark(${JSON.stringify(name)})`)
+  let trace = async (fn: () => Promise<void>) => {
+    buf.length = 0
+    await c.send('Tracing.start', {
+      transferMode: 'ReportEvents',
+      traceConfig: {
+        recordMode: 'recordAsMuchAsPossible',
+        includedCategories: TRACE_CATS,
+      },
+    })
+    await fn()
+    let ended = done()
+    await c.send('Tracing.end')
+    await ended
+    return buf.slice()
+  }
+  let mouse = (
+    type: string,
+    x: number,
+    y: number,
+    extra: Record<string, unknown> = {},
+  ) => c.send('Input.dispatchMouseEvent', { type, x, y, ...extra })
+
+  let kill = () => {
+    try {
+      ws.close()
+    } catch { /* already gone */ }
+    try {
+      cmd.kill('SIGKILL')
+    } catch { /* already gone */ }
+  }
+  return { evalIn, mark, trace, mouse, go, kill }
+}
+
+// `base` is filled once we know where the app lives (own server or --url).
+let base = ''
+
+// ---- trace parsing: self-time tree, category buckets, windows ----
+let CLASS: Record<string, string> = {}
+let put = (bucket: string, ...names: string[]) =>
+  names.forEach((n) => (CLASS[n] = bucket))
+put(
+  'script',
+  'EvaluateScript',
+  'v8.evaluateModule',
+  'FunctionCall',
+  'EventDispatch',
+  'TimerFire',
+  'FireAnimationFrame',
+  'RunMicrotasks',
+  'V8.Execute',
+  'MajorGC',
+  'MinorGC',
+  'GCEvent',
+  'ProfileCall',
+)
+put(
+  'layout',
+  'Layout',
+  'UpdateLayoutTree',
+  'RecalculateStyles',
+  'InvalidateLayout',
+  'ScheduleStyleRecalculation',
+  'HitTest',
+  'Layerize',
+)
+put(
+  'paint',
+  'Paint',
+  'PrePaint',
+  'PaintImage',
+  'UpdateLayer',
+  'UpdateLayerTree',
+  'CompositeLayers',
+  'Composite',
+  'DecodeImage',
+  'RasterTask',
+)
+let bucket = (name: string) => CLASS[name] ?? 'other'
+
+// The renderer main thread: the tid carrying CrRendererMain with the most
+// events (our page, not some background renderer).
+let mainTid = (evs: Ev[]) => {
+  let named = evs.filter((e) =>
+    e.ph == 'M' && e.name == 'thread_name' &&
+    (e.args as { name?: string })?.name == 'CrRendererMain'
+  )
+  let count = (tid: number) => evs.filter((e) => e.tid == tid).length
+  return named.map((e) => e.tid).sort((a, b) => count(b) - count(a))[0]
+}
+
+// A trace mark's absolute ts (µs), latest wins — navigations reuse names.
+let markTs = (evs: Ev[], name: string) =>
+  evs.filter((e) => e.name == name).map((e) => e.ts).sort((a, b) => b - a)[0]
+
+type Node = Ev & { self: number; kids: Node[] }
+
+// Complete (X) events on one thread, nested by containment into a forest;
+// self = dur minus the dur of direct children. A stack of open parents,
+// popped as each new event starts past their end.
+let forest = (evs: Ev[], tid: number, lo: number, hi: number): Node[] => {
+  let xs = evs
+    .filter((e) =>
+      e.tid == tid && e.ph == 'X' && e.dur != null &&
+      e.ts >= lo && e.ts <= hi
+    )
+    .sort((a, b) => a.ts - b.ts || b.dur! - a.dur!)
+    .map((e) => ({ ...e, self: e.dur!, kids: [] as Node[] }))
+  let roots: Node[] = []
+  let stack: Node[] = []
+  for (let n of xs) {
+    while (stack.length && stack.at(-1)!.ts + stack.at(-1)!.dur! <= n.ts) {
+      stack.pop()
+    }
+    let top = stack.at(-1)
+    if (top && top.ts + top.dur! >= n.ts + n.dur!) {
+      top.self -= n.dur!
+      top.kids.push(n)
+    } else roots.push(n)
+    stack.push(n)
+  }
+  return roots
+}
+
+let walk = (nodes: Node[], fn: (n: Node) => void) => {
+  for (let n of nodes) {
+    fn(n)
+    walk(n.kids, fn)
+  }
+}
+
+// Self-time (ms) per bucket across a forest.
+let split = (roots: Node[]) => {
+  let ms = { script: 0, layout: 0, paint: 0, other: 0 } as Record<
+    string,
+    number
+  >
+  walk(roots, (n) => (ms[bucket(n.name)] += n.self / 1000))
+  return ms
+}
+
+let p95 = (xs: number[]) => {
+  if (!xs.length) return 0
+  let s = [...xs].sort((a, b) => a - b)
+  return s[Math.min(s.length - 1, Math.floor(s.length * 0.95))]
+}
+let sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0)
+let ms1 = (n: number) => n.toFixed(1)
+
+// The frames of a window: each top-level task's total ms and its split.
+type Frame = { ms: number; script: number; layout: number; paint: number }
+let frames = (roots: Node[]): Frame[] =>
+  roots.map((r) => {
+    let s = split([r])
+    return {
+      ms: r.dur! / 1000,
+      script: s.script,
+      layout: s.layout,
+      paint: s.paint,
+    }
+  })
+
+// A long task's likely culprit: the script events under it, grouped by
+// function, heaviest self-time first, with a couple of stack frames.
+let culprit = (root: Node) => {
+  let by = new Map<string, number>()
+  let stackOf: string[] = []
+  walk([root], (n) => {
+    if (bucket(n.name) != 'script') return
+    let d = n.args?.data as
+      | { functionName?: string; url?: string; stackTrace?: unknown[] }
+      | undefined
+    let key = d?.functionName
+      ? `${d.functionName} ${short(d.url)}`
+      : n.name
+    by.set(key, (by.get(key) ?? 0) + n.self / 1000)
+    if (!stackOf.length && Array.isArray(d?.stackTrace)) {
+      stackOf = (d!.stackTrace as { functionName?: string; url?: string }[])
+        .slice(0, 4)
+        .map((f) => `${f.functionName || '(anon)'} ${short(f.url)}`)
+    }
+  })
+  let top = [...by.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
+    .map(([k, v]) => `${k} ${ms1(v)}ms`)
+  return { top, stack: stackOf }
+}
+let short = (u?: string) =>
+  u ? u.replace(/^https?:\/\/[^/]+/, '').slice(0, 48) : ''
+
+// ---- report a window of frames ----
+let health = (title: string, evs: Ev[], lo: number, hi: number) => {
+  let tid = mainTid(evs)
+  let roots = forest(evs, tid, lo, hi)
+  let fs = frames(roots)
+  let times = fs.map((f) => f.ms)
+  let long = roots.filter((r) => r.dur! / 1000 > LONG_MS)
+  let over = times.filter((t) => t > FRAME_MS).length
+  let scriptPer = fs.length ? sum(fs.map((f) => f.script)) / fs.length : 0
+  let out = [
+    `  ${title}`,
+    `    main-thread tasks: ${fs.length} · p95 ${ms1(p95(times))}ms · ` +
+    `max ${ms1(Math.max(0, ...times))}ms · over ${FRAME_MS}ms: ${over}`,
+    `    script/frame: ${ms1(scriptPer)}ms · long tasks (>${LONG_MS}ms): ` +
+    long.length,
+  ]
+  for (let t of long.slice(0, 3)) {
+    let c = culprit(t)
+    out.push(`      ⚠ ${ms1(t.dur! / 1000)}ms task — ${c.top.join(' · ')}`)
+    if (c.stack.length) out.push(`        ↳ ${c.stack.join(' ← ')}`)
+  }
+  return { lines: out, p95: p95(times), over, long: long.length, scriptPer }
+}
+
+// ---- scenario 1: canvas pan ----
+let panScenario = async (
+  page: Awaited<ReturnType<typeof chrome>>,
+) => {
+  await page.go('/')
+  await sleep(400) // let the canvas settle before we measure
+  // A point on empty canvas — never inside a .Pin, or the drag is a card grab.
+  let pt = await page.evalIn<string>(
+    `(()=>{for(let y=innerHeight-60;y>80;y-=40)` +
+      `for(let x=60;x<innerWidth-60;x+=80){` +
+      `let el=document.elementFromPoint(x,y);` +
+      `if(el&&!el.closest('.Pin')&&el.closest('.Canvas'))` +
+      `return JSON.stringify({x,y})}return ''})()`,
+  )
+  if (!pt) throw new Error('no empty canvas point to grab')
+  let { x, y } = JSON.parse(pt)
+  let evs = await page.trace(async () => {
+    await page.mark('pan-start')
+    await page.mouse('mousePressed', x, y, { button: 'left', clickCount: 1 })
+    for (let i = 1; i <= 30; i++) {
+      // a steady leftward drag with a little vertical wander
+      await page.mouse('mouseMoved', x - i * 12, y - Math.round(i * 3), {
+        button: 'left',
+        buttons: 1,
+      })
+      await sleep(16)
+    }
+    await page.mouse('mouseReleased', x - 360, y - 90, { button: 'left' })
+    await page.mark('pan-end')
+    await sleep(150)
+  })
+  let lo = markTs(evs, 'pan-start')
+  let hi = markTs(evs, 'pan-end')
+  let h = health('30-move drag', evs, lo, hi)
+  let flag = h.scriptPer > PAN_SCRIPT_MS
+    ? `    FLAG: pointer-move spends ${ms1(h.scriptPer)}ms script/frame — ` +
+      `pan is re-rendering, not transform-only`
+    : `    ✓ pan is transform-cheap (${ms1(h.scriptPer)}ms script/frame)`
+  let pass = h.p95 <= FRAME_MS && h.long == 0 && h.scriptPer <= PAN_SCRIPT_MS
+  return {
+    title: 'SCENARIO 1 — canvas pan',
+    lines: [...h.lines, flag],
+    pass,
+  }
+}
+
+// ---- scenario 2: board first render + scroll ----
+let boardScenario = async (
+  page: Awaited<ReturnType<typeof chrome>>,
+  board: string,
+) => {
+  let evs = await page.trace(async () => {
+    // ?v=Board forces the kanban face — the heavy tile render (List is a
+    // capped feed); this is the render the owner's ~500ms lives in.
+    await page.go(`/${board}?v=Board`)
+    // first render is done when the tiles exist — mark it in the trace
+    await until(() =>
+      page.evalIn<number>(`document.querySelectorAll('.Board_Item').length`)
+    )
+    await page.mark('board-ready')
+    await sleep(100)
+  })
+  let tid = mainTid(evs)
+  let nav = markTs(evs, 'navigationStart') ??
+    Math.min(...evs.filter((e) => e.tid == tid && e.ph == 'X').map((e) => e.ts))
+  let fcp = markTs(evs, 'firstContentfulPaint')
+  let ready = markTs(evs, 'board-ready')
+  let ttfr = fcp ? (fcp - nav) / 1000 : (ready - nav) / 1000
+  let first = split(forest(evs, tid, nav, ready))
+  let tiles = await page.evalIn<number>(
+    `document.querySelectorAll('.Board_Item').length`,
+  )
+  let render = [
+    `  first render — ${tiles} tiles`,
+    `    time-to-first-render: ${ms1(ttfr)}ms` +
+    (fcp ? ' (nav→FCP)' : ' (nav→tiles; no FCP mark)'),
+    `    localized: script ${ms1(first.script)}ms · layout ${
+      ms1(first.layout)
+    }ms · paint ${ms1(first.paint)}ms · other ${ms1(first.other)}ms`,
+  ]
+
+  // scroll: wheel over a column's scroller
+  let sp = await page.evalIn<string>(
+    `(()=>{let s=document.querySelector('.Board_Scroll');if(!s)return '';` +
+      `let r=s.getBoundingClientRect();` +
+      `return JSON.stringify({x:r.x+r.width/2,y:r.y+r.height/2})})()`,
+  )
+  let scroll = { p95: 0, over: 0, long: 0, scriptPer: 0, lines: [] as string[] }
+  if (sp) {
+    let { x, y } = JSON.parse(sp)
+    let sevs = await page.trace(async () => {
+      await page.mark('scroll-start')
+      for (let i = 0; i < 20; i++) {
+        await page.mouse('mouseWheel', x, y, { deltaX: 0, deltaY: 120 })
+        await sleep(16)
+      }
+      await page.mark('scroll-end')
+      await sleep(150)
+    })
+    scroll = health(
+      '20-step scroll',
+      sevs,
+      markTs(sevs, 'scroll-start'),
+      markTs(sevs, 'scroll-end'),
+    )
+  }
+  let pass = ttfr <= TTFR_MS && scroll.p95 <= SCROLL_P95_MS
+  return {
+    title: 'SCENARIO 2 — board first render + scroll',
+    lines: [...render, '', ...scroll.lines],
+    pass,
+  }
+}
+
+// ---- the scratch app: seed a server we own, or reuse --url ----
+let apply = async (changes: unknown[]) => {
+  let r = await fetch(`${base}/apply`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(changes),
+  })
+  if (!r.ok) throw new Error(`apply failed: ${await r.text()}`)
+}
+
+let seed = async () => {
+  // 200 tasks across the four columns for a heavy board; a board over the
+  // lot; ~40 cards pinned on the root canvas for a heavy pan.
+  let statuses = ['open', 'wip', 'done', 'cancelled']
+  let tasks: string[] = []
+  let batch: unknown[] = []
+  for (let i = 0; i < 200; i++) {
+    let eid = uuid()
+    tasks.push(eid)
+    batch.push(
+      {
+        eid,
+        name: 'doc',
+        comp: {
+          title: `Perf task ${i} — a representative row with some words`,
+          body: `Body ${i}. Enough prose to make a tile render like a real one.`,
+        },
+      },
+      {
+        eid,
+        name: 'task',
+        comp: { status: statuses[i % 4], priority: i },
+      },
+    )
+  }
+  let board = uuid()
+  batch.push(
+    { eid: board, name: 'doc', comp: { title: 'Perf board' } },
+    { eid: board, name: 'board', comp: { query: '' } },
+  )
+  await apply(batch)
+
+  // the seeded root canvas: pin cards onto it in a grid
+  let snap = await (await fetch(`${base}/snapshot`)).json()
+  let canvasEid = (snap.changes as { eid: string; name: string }[])
+    .find((c) => c.name == 'canvas')?.eid
+  if (!canvasEid) throw new Error('no root canvas in the seed')
+  let cards: unknown[] = []
+  for (let i = 0; i < 40; i++) {
+    let eid = uuid()
+    cards.push(
+      {
+        eid,
+        name: 'card',
+        comp: { target_eid: tasks[i], view: 'Full' },
+      },
+      {
+        eid,
+        name: 'pin',
+        comp: {
+          eid,
+          canvas_eid: canvasEid,
+          x: (i % 8) * 360,
+          y: Math.floor(i / 8) * 300,
+          w: 320,
+          h: 0,
+          z: i + 1,
+        },
+      },
+    )
+  }
+  await apply(cards)
+
+  // the board's human id for its URL
+  let snap2 = await (await fetch(`${base}/snapshot`)).json()
+  let num = (snap2.changes as { eid: string; name: string; comp: { num: number } }[])
+    .find((c) => c.eid == board && c.name == 'entity')?.comp.num
+  return `B-${num}`
+}
+
+let server = async (port: number, dbPath: string) => {
+  let cmd = new Deno.Command('deno', {
+    args: [
+      'run',
+      '-A',
+      '--unstable-net',
+      '--unstable-worker-options',
+      `${root}src/server.ts`,
+    ],
+    env: { ...Deno.env.toObject(), PORT: String(port), DB_PATH: dbPath },
+    stdout: 'null',
+    stderr: 'null',
+  }).spawn()
+  await until(async () => {
+    try {
+      return (await fetch(`http://127.0.0.1:${port}/snapshot`)).ok
+    } catch {
+      return false
+    }
+  })
+  return cmd
+}
+
+// ---- main ----
+let main = async () => {
+  let args = Deno.args
+  let keep = args.includes('--keep')
+  let urlArg = args[args.indexOf('--url') + 1]
+  let own = !args.includes('--url')
+
+  let scratch = await Deno.makeTempDir({ prefix: 'perf-' })
+  let cdpPort = 9200 + Math.floor(Math.random() * 700)
+  let srvPort = 8300 + Math.floor(Math.random() * 700)
+  let srv: Deno.ChildProcess | undefined
+  let board = 'B-5' // the seed's own board, if we reuse a --url server
+
+  if (own) {
+    base = `http://127.0.0.1:${srvPort}`
+    srv = await server(srvPort, `${scratch}/tasks.db`)
+    board = await seed()
+  } else {
+    base = urlArg.replace(/\/$/, '')
+    // reuse the largest board on that server
+    let snap = await (await fetch(`${base}/snapshot`)).json()
+    let boards = (snap.changes as { eid: string; name: string; comp: Record<string, unknown> }[])
+      .filter((c) => c.name == 'board')
+    let nums = new Map(
+      (snap.changes as { eid: string; name: string; comp: { num: number } }[])
+        .filter((c) => c.name == 'entity').map((c) => [c.eid, c.comp.num]),
+    )
+    if (boards[0]) board = `B-${nums.get(boards[0].eid)}`
+  }
+
+  let page = await chrome(cdpPort, `${scratch}/chrome`)
+  try {
+    let pan = await panScenario(page)
+    let brd = await boardScenario(page, board)
+    let report = [
+      '',
+      `perf — ${base}  (headless main-thread; not GPU presentation)`,
+      '',
+      pan.title,
+      ...pan.lines,
+      '',
+      brd.title,
+      ...brd.lines,
+      '',
+      `result: pan ${pan.pass ? 'PASS' : 'FAIL'} · board ${
+        brd.pass ? 'PASS' : 'FAIL'
+      }`,
+      '',
+    ]
+    console.log(report.join('\n'))
+    if (!keep) {
+      page.kill()
+      srv?.kill('SIGKILL')
+      await Deno.remove(scratch, { recursive: true }).catch(() => {})
+    } else {
+      console.log(`kept: chrome :${cdpPort} · server ${base} · ${scratch}`)
+    }
+    Deno.exit(pan.pass && brd.pass ? 0 : 1)
+  } catch (e) {
+    page.kill()
+    srv?.kill('SIGKILL')
+    await Deno.remove(scratch, { recursive: true }).catch(() => {})
+    throw e
+  }
+}
+
+await main()
