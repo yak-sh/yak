@@ -1,136 +1,112 @@
-# Tasks v2 — the fleet entity graph
+# Tasks — the fleet entity graph
 
-v2 of the holdco task board. One SQLite file is the fleet's memory substrate,
-modelled as a **star ECS** graph, rendered by a no-build Preact app.
+One SQLite file is the holdco fleet's shared memory: tasks, projects, boards,
+docs, comments, agent sessions, mail, memories — one graph, worked by humans and
+agents through the same doors. A web canvas, a terminal UI, a `task` CLI, and an
+MCP server all speak one wire; every change is an entity patch, every list a
+query.
 
-- **`entity`** — the spine. Every thing (task, comment, design doc, persona…) is
-  an entity with a shared primary key (`eid`), a `kind`, and a `created_at`.
-- **Component tables** hang off that id: `task`, `board`, `card`, `pin`,
-  `client`, `camera` so far; more kinds slot in without touching the spine.
-- **`dependency`** — typed `eid ↔ eid` edges, so anything relates to anything:
-  - `requires` — hard gate (the parent waits on the child),
-  - `contains` — decomposition (children roll up to the parent),
-  - `reads` — read-first, never gates.
+## The model
 
-Not yet here (follows the migration plan): v1 data, auth, the API surface,
-sqlite-vector embeddings, typed short ids (T-123 / C-123).
+Everything is an **entity** — a client-minted uuid plus a server-minted number —
+that carries **components**, one row per component table under the same id.
+There is no `kind` column: an entity _is_ what its components make it, and
+`kindOf()` derives a display name with a typed short id (`T-123` task, `P-19`
+project, `S-31` session, `M-40` memory, `E-9` mail…).
 
-## Schema sketch
+- a **task** is `doc` (title/body) + `task` (status/priority/project/assignee)
+- a **board** is `doc` + `board(query)` — a saved filter over tasks, never a
+  stored list: a task is on a board because it matches, so membership can't
+  drift
+- a **comment** is `doc` + `comment(target_eid)` — aimed at ANY entity;
+  commenting on a session IS messaging that agent
+- a **session** is an agent run, reified; a **claim** is its lease on a task —
+  the server refuses to hand a held lease to another session
+- mail, memories, personas, people, webhook deliveries are entities too — one
+  vocabulary (`comps` in `src/types.ts`) that every door derives from
 
-```sql
-entity(eid uuid pk, num server-minted, created_at)  -- no kind: components decide
-doc(eid pk→entity.eid, title, body)      -- the written face; anything can carry one
-task(eid pk→doc carrier, status, priority, project_eid→entity)
-project(eid pk→entity)                     -- a tag: this doc fronts a project
-board(eid pk→entity)                       -- a tag: this doc fronts a kanban
-card(eid pk→entity, target_eid→entity, view)
-pin(eid pk→card, canvas_eid→entity, x, y, w, h)
-client(eid pk→entity, user_agent, ip)
-camera(eid pk→entity, client_eid→entity, canvas_eid→entity, x, y, zoom, w, h)
-session(eid pk→entity, id unique)  -- an agent session; grows model/persona/provider
-claim(eid pk→entity, session_eid→entity, claimed_at)  -- a session's lease
-comment(eid pk→entity, target_eid→entity, author_eid)  -- a doc aimed at ANYTHING
-dependency(parent_eid→entity, type ∈ requires|contains|reads, child_eid→entity)
-```
+**Edges** are typed sentences between entities: `requires` (hard gate),
+`contains` (decomposition), `reads` (read-first), `about` (subject reference).
 
-`src/db.ts` owns the file. By default it lives at `~/.tasks/tasks.db` — outside
-the repo; set `DB_PATH` to move it. It plants the schema on first boot
-(`create if not exists`) and seeds a handful of neutral demo tasks with one edge
-of each type.
+The wire is a flat batch of patches — `{eid, name, comp}`: omitted columns
+untouched, `comp: null` deletes the component, `{name:'entity', comp:null}`
+tombstones the entity. Browser tabs sync over `/ws`; headless clients POST
+`/apply`; both broadcast to everyone else.
 
-## Hacking
+Beside the graph sit FTS5 full-text search over every doc and local semantic
+embeddings — one index behind `/` in the web UI, `task search`, MCP `search`,
+and `/search` + `/similar` over HTTP.
 
-`AGENTS.md` is the contributor guide — the data model in one page, the file map,
-the invariants, and the recipes (add a component, add a view, verify headless).
-Start there; every file also opens with a paragraph saying what it owns.
+## The doors
 
-## How it runs
+- **Web canvas** — `http://localhost:5173`. The URL is the root card: `/T-123`
+  fullscreens any entity, `?v=` picks its view. Cards, pins, and cameras are
+  entities themselves, so the UI state is graph data like everything else.
+- **TUI** — `task tui`: the same app painted as ANSI lines on a fake DOM, vim
+  keys, another live client — edits made in a browser appear on the next frame.
+- **CLI** — `deno task install` puts a global `task` on PATH. Dot-params route
+  by prop through the component vocabulary (`.title=` can only mean
+  `doc.title`); the same grammar filters and writes:
 
-No bundler, no framework. `src/server.ts` is a `deno serve` module that does
-everything:
+  ```sh
+  task list .status=open .priority<=1
+  task new P1 .project=holdco Fix the flux capacitor
+  task set T-3 .status=done --comment="verified end-to-end"
+  task claim T-3 && task release T-3
+  task mail                      # your unread fleet inbox
+  task search flux capac*
+  task help grammar              # the whole filter grammar
+  ```
 
-- serves `src/` as-is — `index.html`, `styles.css`, icons;
-- translates `.ts`/`.tsx` to JS per request (sucrase: strip types, compile JSX)
-  — no type-checking at serve time, `deno task check` is the type gate;
-- bare imports (`preact`, `@preact/signals`) resolve through the import map in
-  `index.html` to the vendored ESM in `src/vendor/`;
-- `/snapshot` hands a new client the whole graph; the `/ws` socket carries flat
-  component-patch batches both ways and rebroadcasts to everyone else;
-- a `src/` watcher tells clients to reload — and since all state lives in the db
-  (camera, pins, views) and localStorage (identity), a reload comes back exactly
-  where you were. `--watch` restarts the server for its own modules.
+- **MCP** — the server IS an MCP server: `POST /mcp` (Streamable HTTP,
+  stateless), or `deno task mcp` over stdio. Two tiers: `task_*` sugar
+  (list/new/update/show/claim/release/comment/context…) and the generic tier —
+  `graph_query` / `graph_apply` (the raw wire), `ui_state` / `card_*` (the UI is
+  data), `search` / `memory_*`, and `code_run`: agent-written JS in a
+  permissionless sandboxed worker whose only capability is the graph.
+- **Mail** — a mail is an entity whose `doc` carries subject and body; creating
+  it requests delivery. Local-first: a fleet recipient is delivered in-graph
+  instantly, and only external mailboxes ride the Cloudflare edge. `task mail`
+  is the inbox; unread verified mail flows into live sessions through the
+  channel plugin.
+- **Channel plugin** (`channels/`) — a Claude Code channel that pushes comments
+  and knocks aimed at a session INTO its running transcript, fed by the same
+  `/ws` broadcast every browser hears. `task claude` launches an interactive
+  session fleet-wired; `channels/README.md` has the mechanism and enablement.
+- **HTTP** — `/snapshot` (the whole graph in one gulp), `/apply`, `/ws`,
+  `/search`, `/similar`, `/query`, `/journal` (write history), `/telemetry`.
 
-The browser fills an entity cache from the snapshot (`src/live.ts`), renders
-everything from it, and keeps it current from the socket. Local edits land in
-the cache first (instant), then go out as patches.
+## Agents in the graph
 
-## The TUI
-
-The same app renders in a terminal: `src/tui/` swaps the document for a
-just-enough fake DOM (the undom trick), paints it as ANSI lines, and feeds raw
-keys to the same vim mode machine. Everything below the paint layer is shared —
-cache, socket, signals, and the view registry; the TUI prepends its own
-renderers (a Board becomes a nested list) and every other view renders through
-the exact components the browser uses. It's another live client: edits made in a
-browser appear on the next frame.
-
-```sh
-deno task tui    # vim keys: j/k/h/l browse, : commands, q quits
-```
+A session is an entity from boot: the repo's SessionStart hook runs
+`task context --hook`, which reifies the session and injects its claimed work as
+the boot digest; SessionEnd runs `task wrap --hook` — claims released, the
+closing summary kept as the session's brief. Sessions also spawn FROM the graph
+(`task spawn T-3 --provider=codex`): creating a session entity carrying a
+provider IS the spawn request, and everything the run learns — status, branch,
+exit code, final text — is server-stamped onto the row. Memories
+(`task remember`, MCP `memory_save`) let a lesson outlive the session that
+learned it; recall decays with disuse and use bumps it.
 
 ## Run
 
 ```sh
-deno task dev    # http://localhost:5173
-deno task tui    # browse the board in the terminal (needs dev running)
-deno task seed   # bootstrap ~/.tasks/tasks.db (optional; dev does it)
-deno task check  # deno fmt --check + lint + type-check
+deno task dev      # server + web on http://localhost:5173
+deno task tui      # the terminal UI (needs dev running)
+deno task install  # global `task` CLI
+deno task check    # fmt + lint + typecheck
+deno task test     # the suite
 ```
 
-## CLI
+The db lives at `~/.tasks/tasks.db` — outside the repo; set `DB_PATH` to move
+it. First boot plants the schema. No bundler, no node_modules: the server serves
+`src/` as-is, translating TS/JSX per request (sucrase), and the browser resolves
+preact/signals/marked to vendored ESM through the import map in `index.html`.
+There is no auth — the server is built to live on a private tailnet.
 
-`deno task install` puts a global `task` on PATH (`deno install -g`). Dot-params
-route by prop through the component vocabulary — `.title=` can only mean
-`doc.title`, so it routes bare; the few collisions (pin/camera geometry) take
-the explicit `.comp.prop=` spelling. The same grammar filters and creates:
+## Pointers
 
-```sh
-task tui                          # the terminal UI
-task list .status=open            # filter with dot-params
-task new .title="Hello, world!"   # bare words become the title too
-task set T-3 .status=done .priority=1
-task show T-3                     # one entity, whole, as JSON
-task claim T-3 my-session         # lease it (defaults to your session id)
-task release T-3                  # hand it back
-```
-
-## MCP
-
-The dev server IS an MCP server: point an agent at `http://host:5173/mcp`
-(Streamable HTTP, stateless — restarts can't strand a session, no auth on the
-tailnet) and it gets self-documenting `task_list` / `task_new` / `task_update` /
-`task_show` / `task_claim` / `task_release` / `task_comment` tools speaking the
-same dot-param grammar. Claims are leases: the server refuses to hand a held
-lease to another session, so agents can pick work without stepping on each
-other. `task_context` boots an agent session into its claimed work (the repo's
-SessionStart hook injects the same digest — the tracker IS the session's working
-memory). Beyond tasks sits the generic tier: `graph_query` / `graph_apply` (the
-raw wire), `ui_state` (every viewport and card — the UI is data, so reading the
-UI is a graph read), `card_open` / `card_move` / `card_close`, and **code
-mode**: `code_run` executes agent-written JS in a sandboxed worker (Deno
-`permissions: 'none'` — no fs/net/env; its only capability is the graph over
-postMessage). Scripts read a snapshot, queue changes, and the batch applies
-atomically — `dry_run` returns it unapplied, so a layout can be previewed before
-it moves anyone's cards. `deno task mcp` serves the identical registry over
-stdio for clients that launch a process. Agent writes broadcast live to every
-canvas and TUI.
-
-## Stack
-
-- **Deno 2.9** — runtime, task runner, type-checker.
-- **Preact + signals** — vendored as plain ESM in `src/vendor/`, no
-  node_modules.
-- **sucrase** — TS/JSX translation at serve time (server-side dependency, cached
-  by Deno).
-- **SQLite via `node:sqlite`** (`DatabaseSync`) — Deno's built-in driver, no
-  external dependency.
+- `CLAUDE.md` — the contributor guide: the data model in one page, the file map,
+  the invariants, the recipes. Start there to change anything.
+- `docs/STYLE.md` — normative style for every line here.
+- `channels/README.md` — the channel plugin: mechanism, identity, enablement.
