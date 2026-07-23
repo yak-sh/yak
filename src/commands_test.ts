@@ -116,6 +116,11 @@ Deno.test('fix: a bare id spawns, words file a task first', () => {
     Object.fromEntries(f.changes!.map((c) => [c.name, c.comp])).task,
     { status: 'open', project_eid: P },
   )
+  // shift+enter's ask: line 2 on rides as the filed task's body
+  assertEquals(comps('fix the bar clips\nrepro: shrink the window').doc, {
+    title: 'the bar clips',
+    body: 'repro: shrink the window',
+  })
   // a worded fix is about the TOOL, not where you stand: the board's
   // context does NOT ride along (its domain stays out), and with many
   // repo projects the `home` alias names the deployment's own
