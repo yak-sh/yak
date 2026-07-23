@@ -18,7 +18,7 @@ pressure cut cadence or model, never the lights.
 - **The graph itself** — one SQLite store fronted by the `task` CLI (`~/.deno/bin/task`),
   the MCP `tasks` server, a web canvas, and a TUI. Entities + components + edges; every
   change is an entity patch, every list a query.
-- **The fleet's shared mind** — the baseline persona and the shared principle chunks are
+- **The fleet's shared mind** — the common persona and the shared principle chunks are
   the fleet's cold-start memory. Keep them **true as the code changes**: a stale chunk is
   a fleet-wide bug every operator wakes into. Ship new fleet tooling with a memory so
   operators discover it passively.
