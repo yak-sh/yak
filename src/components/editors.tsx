@@ -310,7 +310,7 @@ defineWells({ domains: () => domains.value })
 
 // ---- the door ----
 
-// <Prop eid comp prop editable/> — the <View> of values: the registry
+// <Prop eid comp prop editable/> — the <Entity> of values: the registry
 // supplies the type's face (an eid reads as its target's title, a time
 // as relative words) and, editable, the control a click opens — the
 // entry's wrapper owns the layout, Prop only hands it the anchor and the

@@ -15,7 +15,7 @@
 //   fail.
 //
 // The registry is curated where it's registered (server.ts, beside the
-// renderer list in View.tsx) — a handler is one row there, and a future
+// renderer list in Entity.tsx) — a handler is one row there, and a future
 // plugin contributes rows the same way. Dispatch walks apply()'s
 // RETURNED batch (which already carries the synthesized cascade
 // deletions), told apart by the Trace apply() filled in: a create and a

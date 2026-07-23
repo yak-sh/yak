@@ -3,7 +3,7 @@ import { ent, mutate, toPlane, topZ, uuid } from '../live.ts'
 import { block } from './ui.tsx'
 import { peek, screenTarget } from './nav.tsx'
 import { resolve } from './registry.ts'
-import { View } from './View.tsx'
+import { Entity } from './Entity.tsx'
 import { place } from './overlay.tsx'
 
 // The Peek: what a clicked link opens on desktop — a temporary card in a
@@ -97,10 +97,10 @@ export let Peek = () => {
   return (
     <Frame elRef={root} onPointerDown={adopt}>
       <Head>
-        <View eid={p.eid} view='Card.Title' />
+        <Entity eid={p.eid} view='Card.Title' />
       </Head>
       <Body>
-        <View eid={p.eid} view={`Card.${resolve(e).view}`} />
+        <Entity eid={p.eid} view={`Card.${resolve(e).view}`} />
       </Body>
     </Frame>
   )

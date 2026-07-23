@@ -2,7 +2,7 @@ import { type Change, type Ent } from '../../types.ts'
 import { byWarmth, cache, deps, ent, mutate } from '../../live.ts'
 import { block } from '../ui.tsx'
 import { dragData } from '../drag.ts'
-import { View } from '../View.tsx'
+import { Entity } from '../Entity.tsx'
 
 let Frame = block('div', 'Persona', {
   Sec: 'div',
@@ -106,7 +106,7 @@ export let Persona = ({ e }: { e: Ent }) => {
               draggable
               onDragStart={(ev: DragEvent) => dragData(ev, r.eid, 'Full')}
             >
-              <View eid={r.eid} view='List.Tile' />
+              <Entity eid={r.eid} view='List.Tile' />
             </Row>
           ))}
           {!rows(t).length && <Empty>drop here — {hint}</Empty>}

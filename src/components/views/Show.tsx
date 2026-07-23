@@ -20,10 +20,10 @@ import { Edit } from '../Edit.tsx'
 import { editorFor, Prop } from '../editors.tsx'
 import { Relate } from './Relate.tsx'
 import { Id } from './Inline.tsx'
-import { View } from '../View.tsx'
+import { Entity } from '../Entity.tsx'
 
 // The lego box. A SECTION is an internal view ('Body', 'Meta',
-// 'Dependencies', 'Runs', 'Comments' — registered in View.tsx like 'Id'
+// 'Dependencies', 'Runs', 'Comments' — registered in Entity.tsx like 'Id'
 // and 'Dependency'): matched per entity through the registry door, and
 // each renders NOTHING when its data is absent. Show serves the Full
 // role — the one generic whole-entity view, just stacking the sections —
@@ -204,7 +204,7 @@ export let up: Record<string, string> = {
 export let Dependencies = ({ e }: { e: Ent }) => (
   <>
     {parents(e.eid).map((d) => (
-      <View
+      <Entity
         key={d.parent + d.type}
         eid={d.parent}
         view='Dependency'
@@ -213,10 +213,10 @@ export let Dependencies = ({ e }: { e: Ent }) => (
       />
     ))}
     {e.kids.map((k) => (
-      <View key={k.eid} eid={k.eid} view='Dependency' type='contains' />
+      <Entity key={k.eid} eid={k.eid} view='Dependency' type='contains' />
     ))}
     {e.refs.map((r) => (
-      <View key={r.child} eid={r.child} view='Dependency' type={r.type} />
+      <Entity key={r.child} eid={r.child} view='Dependency' type={r.type} />
     ))}
   </>
 )
@@ -234,7 +234,7 @@ export let Runs = ({ e }: { e: Ent }) => {
   if (!ids.size) return null
   return (
     <RunsEl>
-      {[...ids].map((s) => <View key={s} eid={s} view='List.Tile' />)}
+      {[...ids].map((s) => <Entity key={s} eid={s} view='List.Tile' />)}
     </RunsEl>
   )
 }
@@ -247,7 +247,7 @@ export let Boards = ({ e }: { e: Ent }) => {
   if (!ids.length) return null
   return (
     <BoardsEl>
-      {ids.map((b) => <View key={b} eid={b} view='List.Tile' />)}
+      {ids.map((b) => <Entity key={b} eid={b} view='List.Tile' />)}
     </BoardsEl>
   )
 }
@@ -267,7 +267,7 @@ export let Tasks = ({ e }: { e: Ent }) => {
   if (!ids.length) return null
   return (
     <TasksEl>
-      {ids.map((t) => <View key={t.eid} eid={t.eid} view='List.Tile' />)}
+      {ids.map((t) => <Entity key={t.eid} eid={t.eid} view='List.Tile' />)}
     </TasksEl>
   )
 }
@@ -325,9 +325,9 @@ export let Show = ({ e }: { e: Ent }) => (
         <Edit eid={e.eid} comp='doc' prop='title' />
       </Title>
     </Heading>
-    <View eid={e.eid} view='Meta' id />
-    <View eid={e.eid} view='Body' />
-    {stack.map((v) => <View key={v} eid={e.eid} view={v} />)}
+    <Entity eid={e.eid} view='Meta' id />
+    <Entity eid={e.eid} view='Body' />
+    {stack.map((v) => <Entity key={v} eid={e.eid} view={v} />)}
   </Frame>
 )
 
@@ -335,9 +335,9 @@ export let Show = ({ e }: { e: Ent }) => (
 // stands in.
 export let ShowCard = ({ e }: { e: Ent }) => (
   <>
-    <View eid={e.eid} view='Meta' />
-    <View eid={e.eid} view='Body' mod='bare' />
-    {stack.map((v) => <View key={v} eid={e.eid} view={v} />)}
+    <Entity eid={e.eid} view='Meta' />
+    <Entity eid={e.eid} view='Body' mod='bare' />
+    {stack.map((v) => <Entity key={v} eid={e.eid} view={v} />)}
   </>
 )
 

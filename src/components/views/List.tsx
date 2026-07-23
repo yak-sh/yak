@@ -7,7 +7,7 @@ import { menu } from '../nav.tsx'
 import { passOf } from '../Filter.tsx'
 import { dragData } from '../drag.ts'
 import { Id } from './Inline.tsx'
-import { View } from '../View.tsx'
+import { Entity } from '../Entity.tsx'
 
 let Frame = block('div', 'List', { Row: 'div' })
 let { Row } = Frame
@@ -30,7 +30,7 @@ export let List = ({ e }: { e: Ent }) => {
             onDragStart={(ev: DragEvent) =>
               dragData(ev, p.target_eid, p.view, p.w, p.eid)}
           >
-            <View eid={p.target_eid} view='List.Tile' />
+            <Entity eid={p.target_eid} view='List.Tile' />
           </Row>
         ))}
     </Frame>
@@ -66,7 +66,7 @@ export let BoardList = ({ e }: { e: Ent }) => {
           draggable
           onDragStart={(ev: DragEvent) => dragData(ev, t.eid, 'Full')}
         >
-          <View eid={t.eid} view='List.Tile' />
+          <Entity eid={t.eid} view='List.Tile' />
         </Row>
       ))}
       {more > 0 && <Row mod='more'>+{more} more</Row>}

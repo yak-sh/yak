@@ -5,7 +5,7 @@ import { up } from './Show.tsx'
 import { block } from '../ui.tsx'
 import { Prop } from '../editors.tsx'
 import { Id } from './Inline.tsx'
-import { View } from '../View.tsx'
+import { Entity } from '../Entity.tsx'
 
 // The Debug view: one full inspector for the entity itself — EVERY prop,
 // nothing hidden — with contained children as one linked Debug.Tile row
@@ -140,10 +140,10 @@ export let Debug = ({ e }: { e: Ent }) => {
   let links = backlinks(e.eid)
   return (
     <Frame>
-      <View eid={e.eid} view='Debug.Tile' />
+      <Entity eid={e.eid} view='Debug.Tile' />
       <AllProps e={e} />
       {parents(e.eid).map((d) => (
-        <View
+        <Entity
           key={d.parent + d.type}
           eid={d.parent}
           view='Dependency'
@@ -152,12 +152,12 @@ export let Debug = ({ e }: { e: Ent }) => {
         />
       ))}
       {e.refs.map((r) => (
-        <View key={r.child} eid={r.child} view='Dependency' type={r.type} />
+        <Entity key={r.child} eid={r.child} view='Dependency' type={r.type} />
       ))}
       {e.kids.length > 0 && (
         <Kids>
           {e.kids.map((k) => (
-            <View key={k.eid} eid={k.eid} view='Debug.Tile' />
+            <Entity key={k.eid} eid={k.eid} view='Debug.Tile' />
           ))}
         </Kids>
       )}
@@ -166,7 +166,7 @@ export let Debug = ({ e }: { e: Ent }) => {
           {links.map((b) => (
             <Linked key={b.from + b.via}>
               <Via>← {b.via}</Via>
-              <View eid={b.from} view='Debug.Tile' />
+              <Entity eid={b.from} view='Debug.Tile' />
             </Linked>
           ))}
         </Kids>

@@ -21,7 +21,7 @@ import {
 } from '../live.ts'
 import { type Command, commands, type Ctx, run } from '../commands.ts'
 import { has, type Renderer, resolve } from '../components/registry.ts'
-import { View } from '../components/View.tsx'
+import { Entity } from '../components/Entity.tsx'
 import { author } from '../components/Comments.tsx'
 import { Dot } from '../components/Dot.tsx'
 import { Id } from '../components/views/Inline.tsx'
@@ -166,7 +166,7 @@ let TuiBoard = ({ e }: { e: Ent }) => (
               ? 'TRow TRow-on'
               : 'TRow'}
           >
-            <View eid={k.eid} view='Debug.Tile' />
+            <Entity eid={k.eid} view='Debug.Tile' />
           </div>
         ))}
       </div>
@@ -197,7 +197,7 @@ let TuiTask = ({ e }: { e: Ent }) => (
       </p>
     )}
     {e.refs.map((r) => (
-      <View key={r.child} eid={r.child} view='Dependency' type={r.type} />
+      <Entity key={r.child} eid={r.child} view='Dependency' type={r.type} />
     ))}
     {commentsOn(e.eid).map((c) => (
       <div class='TComment'>
@@ -341,12 +341,12 @@ export let App = () => {
   return (
     <div class='TApp'>
       <div class='TTitle'>{['tasks', ...crumbs].join(' · ')}</div>
-      {here ? <View eid={here} /> : p && (
+      {here ? <Entity eid={here} /> : p && (
         <>
-          <View eid={p} view='Board' />
+          <Entity eid={p} view='Board' />
           {s && (
             <div class='TDetail'>
-              <View eid={s} view='Task' />
+              <Entity eid={s} view='Task' />
             </div>
           )}
         </>

@@ -6,7 +6,7 @@ import { block, Stamp } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
 import { Comments } from '../Comments.tsx'
 import { Id } from './Inline.tsx'
-import { View } from '../View.tsx'
+import { Entity } from '../Entity.tsx'
 
 // An agent session, watched: the lifecycle summary (server-owned columns,
 // riding the snapshot like any component — so the head re-renders itself
@@ -322,7 +322,7 @@ export let Session = ({ e }: { e: Ent }) => {
           </Model>
         )}
         {s.requested_task_eid && (
-          <View eid={s.requested_task_eid} view='Inline' />
+          <Entity eid={s.requested_task_eid} view='Inline' />
         )}
         {live && (
           <Stop

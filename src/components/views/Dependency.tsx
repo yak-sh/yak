@@ -1,6 +1,6 @@
 import { type Ent } from '../../types.ts'
 import { block } from '../ui.tsx'
-import { View } from '../View.tsx'
+import { Entity } from '../Entity.tsx'
 
 let Sentence = block('span', 'Dependency', { Type: 'span' })
 let { Type } = Sentence
@@ -18,6 +18,6 @@ export let Dependency = (
   <Sentence>
     {typeof type == 'string' && (
       <Type mod={type}>{typeof label == 'string' ? label : type}</Type>
-    )} <View eid={e.eid} view='Inline' />
+    )} <Entity eid={e.eid} view='Inline' />
   </Sentence>
 )

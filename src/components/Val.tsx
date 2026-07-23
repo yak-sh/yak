@@ -1,10 +1,10 @@
 import { type JSX } from 'preact'
 import { findEid } from '../live.ts'
 import { TimeVal, UrlVal } from './editors.tsx'
-import { View } from './View.tsx'
+import { Entity } from './Entity.tsx'
 
 // <Val value/> — the untyped door, beside <Prop> (a typed value through
-// comps) and <View> (an entity through a view). For values with no comps
+// comps) and <Entity> (an entity through a view). For values with no comps
 // path to say what they are: a matcher may check a CONSTRUCTOR (Date,
 // URL) or a distinctive SHAPE (the id grammar, resolved against the live
 // cache) — never date-parse or url-parse arbitrary prose. The list is
@@ -26,7 +26,7 @@ export let faces: Face[] = [
   { match: (v) => v instanceof URL, show: (v) => UrlVal(String(v)) },
   {
     match: (v) => typeof v == 'string' && ID.test(v) && !!findEid(v),
-    show: (v) => <View eid={findEid(String(v))!} view='Inline' />,
+    show: (v) => <Entity eid={findEid(String(v))!} view='Inline' />,
   },
 ]
 

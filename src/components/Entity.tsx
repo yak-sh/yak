@@ -35,13 +35,13 @@ import { Web } from './views/Web.tsx'
 import { Session, SessionRow } from './views/Session.tsx'
 import { openRun } from './Run.tsx'
 
-// Convenience re-exports: View.tsx is the front door, registry.ts the
+// Convenience re-exports: Entity.tsx is the front door, registry.ts the
 // engine room — importers of either get the same bindings.
 export { applicable, extend, has, type Renderer, resolve } from './registry.ts'
 
 // The CURATED registry — every view the app can render, one list, in
 // priority order (a score tie goes to the earlier entry). The machinery
-// lives in registry.ts, so this file is exactly: the list and the View
+// lives in registry.ts, so this file is exactly: the list and the Entity
 // component (the drag payload lives in drag.ts — views import it, so it
 // must never live here where the whole list would ride along). Adding a
 // view = a file under views/,
@@ -208,7 +208,7 @@ defineActions([
 
 // The one front door: render an entity (straight out of the live cache)
 // through a view. Extra props flow through to the renderer.
-export let View = (
+export let Entity = (
   { eid, view, ...rest }: {
     eid: string
     view?: string

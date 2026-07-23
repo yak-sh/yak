@@ -13,7 +13,7 @@ import { Peek } from './Peek.tsx'
 import { Run, run } from './Run.tsx'
 import { Search, searchOpen } from './Search.tsx'
 import { Status } from './Status.tsx'
-import { View } from './View.tsx'
+import { Entity } from './Entity.tsx'
 import { tips } from './overlay.tsx'
 
 tips() // mount the one delegated [data-tip] tooltip (idempotent)
@@ -91,7 +91,7 @@ export let App = () => {
     >
       <Bar>
         <Brand href='/'>Tasks</Brand>
-        <View eid={e.eid} view='Card.Title' />
+        <Entity eid={e.eid} view='Card.Title' />
         {filterable.has(view) && <FilterInput eid={e.eid} />}
         {tabs.map((v) => (
           <Tab
@@ -115,7 +115,7 @@ export let App = () => {
         </Tab>
       </Bar>
       <Body>
-        <View eid={e.eid} view={view} />
+        <Entity eid={e.eid} view={view} />
       </Body>
       <Menu />
       <Peek />

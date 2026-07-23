@@ -3,7 +3,7 @@ import { idOf, type Pinned } from '../types.ts'
 import { block, el } from './ui.tsx'
 import { applicable } from './registry.ts'
 import { dragData } from './drag.ts'
-import { View } from './View.tsx'
+import { Entity } from './Entity.tsx'
 import { filterable, FilterInput } from './Filter.tsx'
 import { Icon } from './icons.tsx'
 import { menu } from './nav.tsx'
@@ -209,7 +209,7 @@ export let Card = ({ p }: { p: Pinned }) => {
     >
       <Frame>
         <Tabs>
-          <View eid={p.target_eid} view='Card.Title' />
+          <Entity eid={p.target_eid} view='Card.Title' />
           {filterable.has(p.view) && <FilterInput eid={p.target_eid} />}
           {applicable(ent(p.target_eid)).map((v) => (
             <Tab
@@ -240,7 +240,7 @@ export let Card = ({ p }: { p: Pinned }) => {
               face (Card.Full) serves it, anything else walks to the plain
               role — the titlebar above already shows the head. */
           }
-          <View eid={p.target_eid} view={`Card.${p.view}`} />
+          <Entity eid={p.target_eid} view={`Card.${p.view}`} />
         </Scroll>
       </Frame>
       {handles.map((d) => (

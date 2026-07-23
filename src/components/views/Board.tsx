@@ -18,7 +18,7 @@ import { Dot } from '../Dot.tsx'
 import { Prio } from '../Prio.tsx'
 import { passOf } from '../Filter.tsx'
 import { dragData } from '../drag.ts'
-import { View } from '../View.tsx'
+import { Entity } from '../Entity.tsx'
 
 let Frame = block('div', 'Board', {
   Col: 'div',
@@ -254,7 +254,7 @@ export let Board = ({ e }: { e: Ent }) => {
                     data-eid={k.eid}
                     onDragStart={(ev: DragEvent) => dragData(ev, k.eid, 'Full')}
                   >
-                    <View eid={k.eid} view='Board.List.Tile' />
+                    <Entity eid={k.eid} view='Board.List.Tile' />
                   </Item>
                 ))}
               </Scroll>

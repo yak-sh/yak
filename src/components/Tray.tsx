@@ -8,7 +8,7 @@ import { Icon } from './icons.tsx'
 import { icons } from './Card.tsx'
 import { openAt } from './nav.tsx'
 import { dragData } from './drag.ts'
-import { View } from './View.tsx'
+import { Entity } from './Entity.tsx'
 
 // The Tray ("the Shelf"): the statusbar's right end. The strip — one
 // status dot per LIVE session, one view icon per shelved card — lives IN
@@ -173,7 +173,7 @@ export let Tray = () => {
                   onDragStart={(e: DragEvent) => dragData(e, eid, 'Session')}
                   onClick={(e: MouseEvent) => openAt(eid, e)}
                 >
-                  <View eid={eid} view='List.Tile' />
+                  <Entity eid={eid} view='List.Tile' />
                   {
                     /* only a settled run dismisses — a live one wants your
                       eyes (stop it from its own view) */
@@ -204,7 +204,7 @@ export let Tray = () => {
                   onDragStart={(e: DragEvent) =>
                     dragData(e, p.target_eid, p.view, p.w, p.eid)}
                 >
-                  <View eid={p.target_eid} view='List.Tile' />
+                  <Entity eid={p.target_eid} view='List.Tile' />
                   <X
                     type='button'
                     aria-label='remove'

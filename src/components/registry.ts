@@ -3,7 +3,7 @@ import { type Ent } from '../types.ts'
 
 // The renderer registry MACHINERY — no view imports, so anything (a view
 // module, the TUI, a future plugin) can import matchers and types from
-// here without a cycle. The curated list itself lives in View.tsx, which
+// here without a cycle. The curated list itself lives in Entity.tsx, which
 // calls define() once at module scope.
 //
 // The vocabulary: a VIEW is a string — a named way of looking at an
@@ -43,7 +43,7 @@ let score = (r: Renderer, e: Ent) => {
   return m === true ? 0.5 : Number(m)
 }
 
-// The shared list and the tab order — set once by View.tsx.
+// The shared list and the tab order — set once by Entity.tsx.
 let registry: Renderer[] = []
 let tabs: string[] = []
 export let define = (rs: Renderer[], tabViews: string[]) => {

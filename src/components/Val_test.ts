@@ -2,7 +2,7 @@
 // never a date-parse of prose. Unclaimed values fall back to String.
 import { assertEquals } from '@std/assert'
 import { faceFor, Val } from './Val.tsx'
-import { View } from './View.tsx'
+import { Entity } from './Entity.tsx'
 import { cache } from '../live.ts'
 
 // deno-lint-ignore no-explicit-any
@@ -27,7 +27,7 @@ Deno.test('Val dispatches by shape', () => {
   assertEquals(u.props.href, 'https://x.dev/')
   // an id-shaped string resolves through the cache to its Inline
   let id = vn(Val({ value: 'T-5' }))
-  assertEquals(id.type, View)
+  assertEquals(id.type, Entity)
   assertEquals(id.props.eid, 'abc')
   assertEquals(id.props.view, 'Inline')
   // an id that resolves to nothing, and plain prose, stay unclaimed

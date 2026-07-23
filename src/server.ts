@@ -504,7 +504,7 @@ Deno.serve(
 )
 
 // The curated effects — the graph's post-commit levers, one list, like
-// View.tsx's renderer list. A session created with a provider is a spawn
+// Entity.tsx's renderer list. A session created with a provider is a spawn
 // request; a stop_request is the brake; a comment at a settled managed
 // session resumes it; a deleted session's process dies with its row.
 // A future plugin contributes rows here the same way it would renderers.

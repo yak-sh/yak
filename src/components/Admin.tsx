@@ -12,7 +12,7 @@ import { adminRoute, type Col, columnsFor, groupedKinds } from './admin.ts'
 import { FilterInput, passOf } from './Filter.tsx'
 import { Dot } from './Dot.tsx'
 import { Id } from './views/Inline.tsx'
-import { View } from './View.tsx'
+import { Entity } from './Entity.tsx'
 import { follow, navigate, route } from './nav.tsx'
 
 let Frame = block('div', 'Admin', {
@@ -144,7 +144,7 @@ let Index = ({ kind }: { kind: string }) => {
           <Grid>
             {shown.map((e) => (
               <div key={e.eid}>
-                <View eid={e.eid} view='List.Tile' />
+                <Entity eid={e.eid} view='List.Tile' />
               </div>
             ))}
           </Grid>
