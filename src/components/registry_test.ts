@@ -2,6 +2,7 @@
 // registration order, platform overrides beat the shared list on ties.
 import {
   actionsFor,
+  alias,
   applicable,
   define,
   defineActions,
@@ -21,6 +22,9 @@ define([
   R('Card.Title', has('doc', 'task'), 'task-title'),
   R('Card.Title', has('doc'), 'doc-title'),
   R('Card.Title', () => true, 'any-title'),
+  R('List.Tile', has('doc', 'task'), 'list-tile'),
+  R('Tile', has('doc', 'task'), 'task-tile'),
+  R('Tile', has('doc'), 'doc-tile'),
   R('JSON', () => true, 'json'),
 ], ['Task', 'Doc', 'JSON'])
 
@@ -59,6 +63,28 @@ Deno.test('resolution', () => {
     (resolve(ent({}), 'Card.Title').Render as unknown as () => string)(),
     'any-title',
   )
+})
+
+let tag = (comps: Record<string, unknown>, view: string) =>
+  (resolve(ent(comps), view).Render as unknown as () => string)()
+
+Deno.test('suffix walk: qualifiers fall leftward', () => {
+  let task = { doc: {}, task: {} }
+  // exact match wins over its own suffix
+  assertEquals(tag(task, 'List.Tile'), 'list-tile')
+  // A.B.C → B.C → C; the first matching level ends the walk, so
+  // List.Tile (place) beats the equally-matching bare Tile (shape)
+  assertEquals(tag(task, 'Board.List.Tile'), 'list-tile')
+  // no match at a level → keep walking (doc-only misses List.Tile)
+  assertEquals(tag({ doc: {} }, 'Board.List.Tile'), 'doc-tile')
+  // component specificity still breaks ties within a level
+  assertEquals(tag(task, 'Kanban.Tile'), 'task-tile')
+  // a name unknown at every level still falls back to JSON
+  assertEquals(resolve(ent(task), 'Nope.Nada').view, 'JSON')
+  // alias heals an old stored name BEFORE the walk
+  alias['Show'] = 'Board.List.Tile'
+  assertEquals(tag(task, 'Show'), 'list-tile')
+  delete alias['Show']
 })
 
 Deno.test('tabs = views with a live matcher', () => {

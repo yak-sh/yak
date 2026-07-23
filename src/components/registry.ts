@@ -102,8 +102,26 @@ let best = (e: Ent, pool: Renderer[]) => {
   return top
 }
 
-export let resolve = (e: Ent, view?: string) =>
-  best(
-    e,
-    all().filter((r) => view ? r.view == view : tabs.includes(r.view)),
-  ) ?? registry.find((r) => r.view == 'JSON')!
+let json = () => registry.find((r) => r.view == 'JSON')!
+
+// Old stored view names → current, consulted before the walk. card.view
+// is live data and old ?v= URLs linger, so a renamed view must keep
+// resolving instead of falling to JSON. Empty until a rename ships.
+export let alias: Record<string, string> = {}
+
+// A dotted view name is container qualifiers left, ROLE rightmost
+// (Board.List.Tile). The walk tries the full name, then strips the
+// leftmost qualifier until some renderer matches (List.Tile, then Tile)
+// — place beats shape — with component scores breaking ties within a
+// level as usual. A short registration serves every longer ask; a long
+// one specializes one surround.
+export let resolve = (e: Ent, view?: string): Renderer => {
+  if (!view) {
+    return best(e, all().filter((r) => tabs.includes(r.view))) ?? json()
+  }
+  for (let v = alias[view] ?? view; v; v = v.replace(/^[^.]+\.?/, '')) {
+    let r = best(e, all().filter((x) => x.view == v))
+    if (r) return r
+  }
+  return json()
+}
