@@ -245,6 +245,19 @@ export let comps: Record<string, Record<string, PropType>> = {
   // Nothing is wire-writable; db.ts touch() is the one writer. Keyed by
   // eid like any comp, so ANY entity can grow warm — rank is graph-wide.
   recall: {},
+  // Provenance, when+who paired (T-6670): `created` set once at first
+  // write, `updated` the LAST edit — ABSENT until the first real
+  // modification (absence = never edited, so there's no 'mostly-null'
+  // problem, and the Stamp's edited-check is component presence). `at` is
+  // server-stamped/frozen (in `stamped` below, like the spine timestamps
+  // it replaced); `by` is wire-writable — the server defaults it to the
+  // writing instrument's actor (db.ts writerActor), and the wire may
+  // override it (an agent stamping Jeff as the author). `by` is death
+  // 'keep' — provenance is history, an author outlives the actor's
+  // tombstone (like comment.author_eid). NOT in kindOrder: a facet every
+  // entity wears, never its identity (like recall).
+  created: { by: { eid: '', death: 'keep' } },
+  updated: { by: { eid: '', death: 'keep' } },
 }
 
 // Server-stamped columns — never wire-writable (cols() reads `comps`
@@ -255,7 +268,14 @@ export let comps: Record<string, Record<string, PropType>> = {
 // lives in server code (db.ts, sessions.ts, freeze.ts), each write beside
 // its why.
 export let stamped: Record<string, Record<string, PropType>> = {
-  entity: { num: 'number', created_at: 'time', modified_at: 'time' },
+  // entity === eid: the spine keeps only identity now — created_at /
+  // modified_at moved into the `created`/`updated` components (T-6670).
+  // (The db columns linger, dormant, until the reader-drop follow-up.)
+  entity: { num: 'number' },
+  // The frozen `at` twin of each provenance component's wire-writable
+  // `by` (comps above) — stamped in apply(), never on the wire.
+  created: { at: 'time' },
+  updated: { at: 'time' },
   web: { frozen_at: 'time' }, // the freeze finished (freeze.ts)
   client: { ip: 'text' },
   claim: { claimed_at: 'time' },
@@ -714,6 +734,13 @@ export type Recall = {
   last_at: string
 }
 
+// Provenance, paired when+who (T-6670). `at` is server-frozen; `by` is
+// the actor — wire-writable, server-defaulted to the writing instrument's
+// actor. `created` is set once; `updated` is the last edit and is absent
+// until the first modification after birth (absence = never edited).
+export type Created = { eid: string; at?: string; by?: string | null }
+export type Updated = { eid: string; at?: string; by?: string | null }
+
 // A full-text search hit. snip marks matches with \x01…\x02 (renderers
 // highlight without trusting HTML); open_eid is what to OPEN — the entity
 // itself, or a comment's target.
@@ -738,8 +765,6 @@ export type Ref = { type: Edge; child: string }
 export type Ent = {
   eid: string
   num: number
-  created_at?: string // server-stamped, when the cache carries them
-  modified_at?: string
   kind: string
   doc?: Doc
   task?: Task
@@ -768,6 +793,8 @@ export type Ent = {
   memory?: Memory
   persona?: Persona
   recall?: Recall
+  created?: Created
+  updated?: Updated
   refs: Ref[]
   kids: Ent[]
 }

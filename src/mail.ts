@@ -340,6 +340,6 @@ export let FANOUT_PENDING = `
     select 1 from dependency d join mail s on s.eid = d.parent_eid
     where d.type = 'about' and d.child_eid = comment.eid)
   and exists (
-    select 1 from entity e where e.eid = comment.eid
-    and e.created_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour'))
+    select 1 from created cr where cr.eid = comment.eid
+    and cr.at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour'))
 `.trim()

@@ -150,21 +150,22 @@ export let copy = (text: string) => {
 let StampEl = el('span', 'Stamp')
 
 // An entity's age, said the human way: 'created 5 minutes ago', plus
-// 'edited …' only when modified_at actually moved past its birth. Full
-// stamps ride the tooltips. Drop it in any view's meta line.
+// 'edited …' whenever an `updated` component is present — its very
+// presence IS the edited signal (T-6670: absent until the first real
+// modification), so no value-compare. Full stamps ride the tooltips.
+// Drop it in any view's meta line.
 export let Stamp = (
-  { e }: { e: { created_at?: string; modified_at?: string } },
+  { e }: {
+    e: { created?: { at?: string }; updated?: { at?: string } }
+  },
 ) => {
-  if (!e.created_at) return null
-  let edited = e.modified_at && e.modified_at != e.created_at
+  let born = e.created?.at
+  if (!born) return null
+  let edited = e.updated?.at
   return (
     <StampEl>
-      <span data-tip={pretty(e.created_at)}>{ago(e.created_at)}</span>
-      {edited && (
-        <span data-tip={pretty(e.modified_at)}>
-          · edited {ago(e.modified_at)}
-        </span>
-      )}
+      <span data-tip={pretty(born)}>{ago(born)}</span>
+      {edited && <span data-tip={pretty(edited)}>· edited {ago(edited)}</span>}
     </StampEl>
   )
 }

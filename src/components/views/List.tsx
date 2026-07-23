@@ -41,8 +41,9 @@ export let List = ({ e }: { e: Ent }) => {
 // reads as the graph-wide feed: warm first; any other board lists by
 // recency. Capped loudly — a "+N more" row, never silent truncation.
 let CAP = 100
+let touchedAt = (e: Ent) => e.updated?.at ?? e.created?.at ?? ''
 let byModified = (a: Ent, b: Ent) =>
-  String(b.modified_at ?? '').localeCompare(String(a.modified_at ?? '')) ||
+  String(touchedAt(b)).localeCompare(String(touchedAt(a))) ||
   (b.num - a.num)
 export let BoardList = ({ e }: { e: Ent }) => {
   let pass = passOf(e.eid)

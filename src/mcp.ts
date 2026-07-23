@@ -219,7 +219,7 @@ comments, and the comms bus.`,
     `Full-text search (FTS5) across every doc in the graph — task titles
 and bodies, boards, projects, comments. Words AND together; a trailing *
 prefix-matches. Dot-param filters mix into the same line ('runner
-.status=done .modified_at=today') and screen the hits; filters alone
+.status=done .updated.at=today') and screen the hits; filters alone
 list matching entities, newest first. Returns ranked hits as 'id kind
 title — snippet'; a comment hit names the entity it targets. Use this
 FIRST when looking for existing work — cheaper and better-ranked than
@@ -916,7 +916,7 @@ as ~240px for visibility.`,
           agent: String(
             byEid.get(String(c.client_eid))?.comps.client?.user_agent ?? '?',
           ),
-          moved_at: r.comps.entity?.modified_at ?? null,
+          moved_at: r.comps.updated?.at ?? r.comps.created?.at ?? null,
           canvas: String(c.canvas_eid),
           zoom: c.zoom,
           viewport: { x0: c.x - hw, y0: c.y - hh, x1: c.x + hw, y1: c.y + hh },
@@ -935,7 +935,7 @@ as ~240px for visibility.`,
           .map((v) => v.camera)
         return {
           card: idOf(r),
-          moved_at: r.comps.entity?.modified_at ?? null,
+          moved_at: r.comps.updated?.at ?? r.comps.created?.at ?? null,
           eid: r.eid,
           target: title(c.target_eid),
           view: c.view,
@@ -978,11 +978,11 @@ card id (close it with card_close, move it with card_move).`,
       if (!canvas) return text('no canvas')
       if (x == null || y == null) {
         // The LIVELIEST viewport, not the newest-minted: a camera moves
-        // whenever its human pans, so modified_at names who's looking.
+        // whenever its human pans, so updated.at names who's looking.
         let cam = all.filter((r) => r.comps.camera?.canvas_eid == canvas.eid)
           .sort((a, b) =>
-            String(b.comps.entity?.modified_at ?? '').localeCompare(
-              String(a.comps.entity?.modified_at ?? ''),
+            String(b.comps.updated?.at ?? '').localeCompare(
+              String(a.comps.updated?.at ?? ''),
             )
           )[0]?.comps.camera as
             | Record<string, number>

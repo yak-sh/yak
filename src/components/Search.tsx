@@ -133,7 +133,7 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
           <Icon name='search' />
           <input
             ref={box}
-            placeholder='search the graph… (* = prefix, .status=done .modified_at=today filter, ⌘⏎ = new tab)'
+            placeholder='search the graph… (* = prefix, .status=done .updated.at=today filter, ⌘⏎ = new tab)'
             onInput={(e: InputEvent) => {
               let el = e.currentTarget as HTMLInputElement
               el.value ? save('search', el.value) : drop('search')

@@ -80,7 +80,7 @@ let VERBS: [usage: string, blurb: string, examples: string[]][] = [
   ],
   ['list [filters...] [--json]', 'list tasks (filter grammar)', [
     'task list .status=open .priority<=1',
-    'task list .project=harness .modified_at>="1 week ago"',
+    'task list .project=harness .updated.at>="1 week ago"',
     'task list .assignee=jeff --json',
   ]],
   ['new .title="..." [...]', 'create a task (bare words become the title)', [

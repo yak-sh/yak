@@ -19,7 +19,7 @@ let NOW = Date.parse('2026-07-22T00:00:00Z')
 let day = (n: number) => new Date(NOW - n * 86_400_000).toISOString()
 
 // A tiny graph: rows by name, edges as sentences. Recency becomes
-// warmth via entity.modified_at (hot()'s fallback), so ordering is
+// warmth via created.at (hot()'s last-touch fallback), so ordering is
 // testable without recall rows.
 let n = 0
 let row = (comps: Row['comps'], daysOld = 0): Row => {
@@ -28,7 +28,7 @@ let row = (comps: Row['comps'], daysOld = 0): Row => {
     eid: `e${num}`,
     num,
     kind: kindOf(comps),
-    comps: { entity: { num, modified_at: day(daysOld) }, ...comps },
+    comps: { entity: { num }, created: { at: day(daysOld) }, ...comps },
   }
 }
 let doc = (title: string, body: string, daysOld = 0) =>

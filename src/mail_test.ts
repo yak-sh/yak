@@ -256,7 +256,7 @@ Deno.test('the sweep predicate finds unreceipted recent comments only', () => {
   // past the horizon: history when the address arrived, not undelivered mail
   let old = comment(task)
   db.prepare(`
-    update entity set created_at = strftime('%Y-%m-%dT%H:%M:%fZ','now','-2 hours')
+    update created set at = strftime('%Y-%m-%dT%H:%M:%fZ','now','-2 hours')
     where eid = ?
   `).run(old)
   let pending = db.prepare(`select eid from comment where ${FANOUT_PENDING}`)

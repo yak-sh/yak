@@ -11,7 +11,7 @@ let vn = (x: unknown) => x as any
 Deno.test('Val dispatches by shape', () => {
   cache.value = {
     abc: {
-      entity: { eid: 'abc', num: 5, created_at: '2026-01-01T00:00:00Z' },
+      entity: { eid: 'abc', num: 5 },
       doc: { eid: 'abc', title: 'Hello', body: '' },
       task: { eid: 'abc', status: 'open', priority: 0 },
     },

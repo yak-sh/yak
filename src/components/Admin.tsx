@@ -71,7 +71,9 @@ let CellVal = ({ e, col }: { e: Ent; col: Col }) => {
     return <span>{String(e.doc?.title ?? '')}</span>
   }
   if (col.key == 'modified') {
-    return <span>{String(e.modified_at ?? '').slice(0, 16)}</span>
+    return (
+      <span>{String(e.updated?.at ?? e.created?.at ?? '').slice(0, 16)}</span>
+    )
   }
   let v = (e as unknown as Record<string, Record<string, unknown>>)[col.comp!]
     ?.[col.prop!]
@@ -95,7 +97,7 @@ let CellVal = ({ e, col }: { e: Ent; col: Col }) => {
 let sortVal = (e: Ent, col: Col): string | number => {
   if (col.key == 'id') return e.num
   if (col.key == 'title') return String(e.doc?.title ?? '')
-  if (col.key == 'modified') return String(e.modified_at ?? '')
+  if (col.key == 'modified') return String(e.updated?.at ?? e.created?.at ?? '')
   let v = (e as unknown as Record<string, Record<string, unknown>>)[col.comp!]
     ?.[col.prop!]
   return typeof v == 'number' ? v : String(v ?? '')

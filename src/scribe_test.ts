@@ -17,11 +17,8 @@ let mk = (
   mod: string,
   parts: Record<string, Record<string, unknown>>,
 ) => [
-  {
-    eid,
-    name: 'entity',
-    comp: { eid, num, created_at: mod, modified_at: mod },
-  },
+  { eid, name: 'entity', comp: { eid, num } },
+  { eid, name: 'created', comp: { at: mod } },
   ...Object.entries(parts).map(([name, comp]) => ({ eid, name, comp })),
 ]
 

@@ -5,7 +5,7 @@
 // value forms.)
 //
 //   .status=open&.priority<=1&.domain=Ops,Eng
-//   runner exit .status=done .modified_at=today     (search-style mix)
+//   runner exit .status=done .updated.at=today      (search-style mix)
 //
 //   .prop=v          equals (string-compared, like everything on the wire)
 //   .prop=a,b,c      any of
@@ -26,11 +26,12 @@
 // minute|hour|day|week|month|year, "5 minutes ago", "in 2 days" ('-'/'_'
 // glue words where quoting is awkward: 1-hour-ago). A phrase names a
 // RANGE and the op picks its edge: = within, >= from its start, <= until
-// its end, > strictly after, < strictly before. So .modified_at=today is
-// midnight-to-midnight, .modified_at>="1 hour ago" is the last hour.
+// its end, > strictly after, < strictly before. So .updated.at=today is
+// midnight-to-midnight, .updated.at>="1 hour ago" is the last hour.
 //
 // Unqualified props route by component, same rule as writes; `.task.status`
-// is the explicit spelling. `.num` and friends route to the entity spine.
+// is the explicit spelling. `.num` routes to the entity spine; `at`/`by`
+// are shared by created+updated, so spell those out (`.created.at`).
 //
 // References go sugar-free: `.assignee=jeff` — a prop with no column of
 // its own, where exactly one component carries `prop_eid`, routes to
@@ -170,6 +171,11 @@ let routes: Record<string, readonly string[]> = {
   memory: [...Object.keys(comps.memory), ...Object.keys(stamped.memory)],
   recall: Object.keys(stamped.recall),
   mail: [...Object.keys(comps.mail), ...Object.keys(stamped.mail)],
+  // Provenance carries a wire-writable `by` and a stamped `at` (T-6670);
+  // both share those names, so bare `.at`/`.by` are ambiguous — spell out
+  // `.created.at`, `.updated.by`, the pin/camera precedent.
+  created: [...Object.keys(comps.created), ...Object.keys(stamped.created)],
+  updated: [...Object.keys(comps.updated), ...Object.keys(stamped.updated)],
 }
 
 // The dot-param shape, sketched — the tail of every strict rejection
@@ -385,13 +391,23 @@ let test = (v: unknown, p: Pred): boolean => {
 // alone; a miss stays as typed and matches nothing, because a board
 // mid-render is no place to throw.
 let UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+// Is (comp, prop) an entity reference? The _eid suffix is the fast path
+// (and the only signal for the any-of comp ''), else the vocabulary's
+// PropType — so a differently-named ref like created.by still resolves its
+// sugar value ('.created.by=jeff').
+let isRef = (comp: string, prop: string) => {
+  if (prop.endsWith('_eid')) return true
+  let t = comps[comp]?.[prop] ?? stamped[comp]?.[prop]
+  return typeof t == 'object' && 'eid' in t
+}
 export let resolveRefs = (
   preds: Pred[],
   lookup: (id: string) => string | undefined,
 ): Pred[] =>
   preds.map((p) => {
     let target = p.at ? p.at.prop : p.prop
-    if (!target.endsWith('_eid') || (p.op != '' && p.op != '!')) return p
+    let comp = p.at ? p.at.comp : p.comp
+    if (!isRef(comp, target) || (p.op != '' && p.op != '!')) return p
     if (!p.value || /\.\./.test(p.value)) return p
     let value = p.value.split(',')
       .map((part) => !part || UUID.test(part) ? part : lookup(part) ?? part)
@@ -441,8 +457,9 @@ let read = (c: Comps, comp: string, prop: string) =>
 // afternoon of cramming (mean interval, in weeks, is the multiplier).
 // The score decays exponentially past last_at against that stability,
 // so top-of-mind-for-hours / recallable-for-days / rings-a-bell-for-
-// months fall out of one curve. No recall row yet: the entity's own
-// modified_at counts as a single touch — new things start hot and fade
+// months fall out of one curve. No recall row yet: the entity's own last
+// touch (updated.at, else created.at) counts as a single touch — new
+// things start hot and fade
 // unless used. The clock rides in as a parameter (tests fix it), and no
 // stored score exists anywhere to sweep.
 let DAY = 86_400_000
@@ -453,7 +470,7 @@ export let hot = (c: Comps, now: number): number => {
   if (!count || Number.isNaN(last)) {
     count = 1
     last = Date.parse(
-      String(c.entity?.modified_at ?? c.entity?.created_at ?? ''),
+      String(c.updated?.at ?? c.created?.at ?? ''),
     )
     if (Number.isNaN(last)) return 0
   }
@@ -610,7 +627,7 @@ let values = (
     ? (wells?.[t.text] ?? []).map((v) => [v, t.text] as [string, string])
     : t == 'bool'
     ? [['1', 'true'], ['0', 'false']] as [string, string][]
-    : at.prop.endsWith('_at')
+    : t == 'time'
     ? TIMES.map((v) => [v, 'time'] as [string, string])
     : []
   return list.filter(([v]) => starts(v, pre) && v != pre)

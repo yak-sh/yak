@@ -19,8 +19,14 @@ type Cast = (changes: Change[]) => void
 let QUIET = 15 * 60_000
 let THROTTLE = 60 * 60_000
 
-let age = (r: Row, now: number, col: string) => {
-  let t = Date.parse(String(r.comps.entity?.[col] ?? ''))
+// Milliseconds since an entity's birth ('created') or its last touch
+// ('updated', which falls back to birth) — off the provenance components
+// (T-6670).
+let age = (r: Row, now: number, comp: 'created' | 'updated') => {
+  let at = comp == 'updated'
+    ? r.comps.updated?.at ?? r.comps.created?.at
+    : r.comps.created?.at
+  let t = Date.parse(String(at ?? ''))
   return Number.isNaN(t) ? Infinity : now - t
 }
 
@@ -31,7 +37,7 @@ export let stubs = (all: Row[], now: number, deskEid?: string) =>
   all.filter((r) =>
     r.comps.session && String(r.comps.doc?.body ?? '').startsWith(STUB) &&
     !(deskEid && r.comps.session.requested_task_eid == deskEid) &&
-    age(r, now, 'modified_at') > QUIET
+    age(r, now, 'updated') > QUIET
   )
 
 // One scribe at a time, and not more than hourly — a desk session still
@@ -40,7 +46,7 @@ export let deskFree = (all: Row[], desk: Row, now: number) =>
   !all.some((r) =>
     r.comps.session?.requested_task_eid == desk.eid &&
     (['starting', 'running'].includes(String(r.comps.session.status)) ||
-      age(r, now, 'created_at') < THROTTLE)
+      age(r, now, 'created') < THROTTLE)
   )
 
 // The spawn, or the reason there isn't one (null = nothing to do; the

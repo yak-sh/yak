@@ -226,6 +226,22 @@ let schema = `
     first_at text not null,
     last_at  text not null
   );
+  -- Provenance, paired when+who (types.ts, T-6670): "at" is server-frozen
+  -- (default now on insert, overwritten by apply()'s stamp); "by" is the
+  -- actor eid — wire-writable, NO FK (death 'keep', like comment.author_eid:
+  -- a tombstoned spine would veto an FK'd reference). "by" is quoted because
+  -- BY is a SQLite keyword. created is set once at birth; updated appears
+  -- on the first edit after it.
+  create table if not exists created (
+    eid text primary key references entity(eid),
+    at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    "by" text
+  );
+  create table if not exists updated (
+    eid text primary key references entity(eid),
+    at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    "by" text
+  );
   create table if not exists tombstone (
     eid        text primary key,
     num        integer,
@@ -559,6 +575,21 @@ export let open = () => {
     n: number
   }
   if (!n) seed(db)
+  // Provenance components (T-6670): the timestamps moved off the spine into
+  // created/updated. Backfill once from the old columns — created.at is
+  // birth, updated.at the last edit (only where it MOVED past birth, else
+  // the entity was never edited and stays updated-absent). "by" is unknown
+  // for pre-provenance rows (no guessed backfill). Runs AFTER seed so the
+  // demo entities (direct inserts, not apply) get provenance too; insert-
+  // or-ignore keeps it a boot no-op once healed. TODO(T-6670): drop
+  // entity.created_at / modified_at and their spine/apply stamps once every
+  // reader is proven on the components — kept live meanwhile as the
+  // migration's rollback source.
+  db.exec(`insert or ignore into created (eid, at, "by")
+    select eid, created_at, null from entity`)
+  db.exec(`insert or ignore into updated (eid, at, "by")
+    select eid, modified_at, null from entity
+    where modified_at is not null and modified_at <> created_at`)
   return db
 }
 
@@ -704,6 +735,10 @@ export let apply = (
   let extra: Change[] = []
   let touched = new Set<string>()
   let minted = new Set<string>()
+  // Whose provenance `by` the WIRE named this batch — the server keeps it
+  // and only defaults the gap (created.by at birth, updated.by on a touch).
+  let saidCreator = new Set<string>()
+  let saidEditor = new Set<string>()
   let took = (eid: string, name: string) =>
     t?.removed.set(eid, [...(t.removed.get(eid) ?? []), name])
   // A bounced claim is worth remembering: noted here mid-transaction,
@@ -760,6 +795,12 @@ export let apply = (
       let cols = cmps[name]
       if (!cols) continue
       touched.add(eid)
+      // The wire naming an author/editor (created.by / updated.by) — noted
+      // so the server-default below leaves that value alone.
+      if (comp && 'by' in comp) {
+        if (name == 'created') saidCreator.add(eid)
+        if (name == 'updated') saidEditor.add(eid)
+      }
       // A deleted entity stays deleted: the tombstone voids every late or
       // replayed change for its eid — an edit racing a delete loses
       // deterministically, and nothing can resurrect the id.
@@ -948,7 +989,9 @@ export let apply = (
     }
     // Every touched entity carries when it last changed — server-stamped
     // (modified_at is not in comps, so the wire can never fake it).
-    // Deleted eids just miss; their rows are gone.
+    // Deleted eids just miss; their rows are gone. TODO(T-6670): the
+    // `updated` component below is the reader-facing home now; this spine
+    // stamp stays as the migration's rollback source until it's dropped.
     let stamp = db.prepare('update entity set modified_at = ? where eid = ?')
     let now = new Date().toISOString()
     for (let eid of touched) stamp.run(now, eid)
@@ -974,12 +1017,46 @@ export let apply = (
         extra.push({ eid, name: 'session', comp: { actor_eid: a } })
       }
     }
+    // Provenance components (T-6670): who + when, paired. `created` is set
+    // once at birth — `by` the author (the wire's, else the writing actor);
+    // `updated` is the LAST edit, absent until the first touch after birth.
+    // `at` is server-frozen; the wire's `by` (saidCreator/saidEditor) is
+    // kept, the gap defaulted to the actor. Both ride the return so caches
+    // hear them, like the session fill above.
+    let actor = writerActor(db, writer)
+    // An entity minted then deleted in the same batch (or rolled back by its
+    // savepoint) has no spine — the guard, like the births select below.
+    let alive = db.prepare('select 1 from entity where eid = ?')
+    let cAt = db.prepare('update created set at = ? where eid = ?')
+    let cNew = db.prepare(
+      'insert or ignore into created (eid, at, "by") values (?, ?, ?)',
+    )
+    let cRow = db.prepare('select eid, at, "by" from created where eid = ?')
+    for (let eid of minted) {
+      if (!alive.get(eid)) continue
+      if (saidCreator.has(eid)) cAt.run(now, eid) // wire named the author
+      else cNew.run(eid, now, actor)
+      let row = cRow.get(eid) as Change['comp'] | undefined
+      if (row) extra.push({ eid, name: 'created', comp: row })
+    }
+    let uSet = db.prepare(
+      `insert into updated (eid, at, "by") values (?, ?, ?)
+       on conflict(eid) do update set at = excluded.at, "by" = excluded."by"`,
+    )
+    let uAt = db.prepare('update updated set at = ? where eid = ?')
+    let uRow = db.prepare('select eid, at, "by" from updated where eid = ?')
+    for (let eid of touched) {
+      if (minted.has(eid) || !alive.get(eid)) continue // birth writes created
+      if (saidEditor.has(eid)) uAt.run(now, eid) // wire named the editor
+      else uSet.run(eid, now, actor)
+      let row = uRow.get(eid) as Change['comp'] | undefined
+      if (row) extra.push({ eid, name: 'updated', comp: row })
+    }
     // Births ride the return AFTER stamping, so the spine arrives final.
     // A mint rolled back by its savepoint (or deleted later in the batch)
-    // has no row — the select is the guard.
-    let born = db.prepare(
-      'select eid, num, created_at, modified_at from entity where eid = ?',
-    )
+    // has no row — the select is the guard. entity === eid: only identity
+    // rides now (T-6670), the timestamps travel as their components above.
+    let born = db.prepare('select eid, num from entity where eid = ?')
     for (let eid of minted) {
       let row = born.get(eid) as Change['comp'] | undefined
       if (row) extra.push({ eid, name: 'entity', comp: row })
@@ -987,13 +1064,22 @@ export let apply = (
     // The wire's record: one row per batch, inside the transaction — the
     // batch as APPLIED (reasons rewritten into comments, cascades and
     // births synthesized), so the record includes what the rules did, not
-    // just what was asked. Recording never throws: a journal that can't
-    // write must not break the write it records.
+    // just what was asked. The provenance stamps are LEFT OUT: created/
+    // updated are the actor column's twins (T-6670), so logging them would
+    // just echo the ts + actor the journal already keeps (modified_at, the
+    // column they replaced, was never journaled either). Recording never
+    // throws: a journal that can't write must not break the write it records.
     try {
-      if (changes.length || extra.length) {
+      // Only the server-STAMPED provenance (extra) is dropped; a wire
+      // authorship write rides in `changes` and stays audited.
+      let logged = [
+        ...changes,
+        ...extra.filter((c) => c.name != 'created' && c.name != 'updated'),
+      ]
+      if (logged.length) {
         db.prepare('insert into journal (actor, batch) values (?, ?)').run(
-          writerActor(db, writer),
-          JSON.stringify([...changes, ...extra]),
+          actor, // the resolved writing actor (T-6669), same as the by-default
+          JSON.stringify(logged),
         )
       }
     } catch (e) {
@@ -1094,8 +1180,9 @@ export let journalBy = (
 
 // A recall touch — the server-minted aggregate behind ranked retrieval
 // (query.ts hot()). Bumps count and last_at; first_at never moves. It
-// deliberately does NOT stamp modified_at: reading is not editing, and
-// recency-in-search must not feed back on itself. `confirm` also stamps
+// deliberately does NOT stamp updated (it bypasses apply()'s touch set):
+// reading is not editing, and recency-in-search must not feed back on
+// itself. `confirm` also stamps
 // memory.last_confirmed_at — an explicit re-confirmation is the
 // strongest touch there is. Skips eids with no live spine (tombstoned
 // or unknown). Returns the fresh rows as cast-able changes so every
@@ -1147,7 +1234,7 @@ export let touch = (
 // open_eid at its target — you open the conversation, not the aside —
 // and wears the target's title (the aside has none of its own).
 // A search line mixes FTS terms with dot-param filters (query.ts —
-// 'runner .status=done .modified_at=today'): the TEXT preds drive FTS,
+// 'runner .status=done .updated.at=today'): the TEXT preds drive FTS,
 // the rest screen each hit against its components, and a line of ONLY
 // filters is a listing, newest touched first. A malformed filter throws;
 // the doors show the message.
@@ -1180,9 +1267,12 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
       from doc_fts
       join doc d on d.rowid = doc_fts.rowid
       join entity e on e.eid = d.eid
+      left join updated up on up.eid = e.eid
+      left join created cr on cr.eid = e.eid
       where doc_fts match ?
       order by bm25(doc_fts, 8.0, 1.0)
-        - 2.0 / (1 + julianday('now') - julianday(e.modified_at)) limit ?
+        - 2.0 / (1 + julianday('now') - julianday(coalesce(up.at, cr.at)))
+        limit ?
     `).all(match, filters.length ? limit * 10 : limit) as (Omit<
       Hit,
       'kind' | 'open_eid' | 'retired'
@@ -1191,7 +1281,9 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
       select d.eid, d.title, '' as snip, e.num
       from doc d
       join entity e on e.eid = d.eid
-      order by e.modified_at desc limit ?
+      left join updated up on up.eid = e.eid
+      left join created cr on cr.eid = e.eid
+      order by coalesce(up.at, cr.at) desc limit ?
     `).all(limit * 10) as (Omit<Hit, 'kind' | 'open_eid' | 'retired'>)[]
   if (filters.length) {
     // Sugar values in the filters ('.assignee=jeff') resolve against the
@@ -1252,7 +1344,9 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
 }
 
 // The whole graph as one batch (plus edges) — what a fresh client cache eats.
-// Entity comps carry num/created_at OUT; apply() never lets them back IN.
+// entity === eid: only identity (eid, num) rides in the spine comp now —
+// provenance travels as `created`/`updated` (T-6670), the dormant spine
+// timestamp columns stay OUT of the wire. apply() never lets num back IN.
 export let snapshot = (db: DatabaseSync): Snapshot => {
   let changes: Change[] = []
   for (
@@ -1261,11 +1355,11 @@ export let snapshot = (db: DatabaseSync): Snapshot => {
       ...Object.keys(cmps).filter((n) => n != 'entity'),
     ]
   ) {
+    let sql = name == 'entity'
+      ? 'select eid, num from entity'
+      : `select * from ${name}`
     for (
-      let row of db.prepare(`select * from ${name}`).all() as Record<
-        string,
-        unknown
-      >[]
+      let row of db.prepare(sql).all() as Record<string, unknown>[]
     ) {
       changes.push({ eid: row.eid as string, name, comp: row })
     }

@@ -45,19 +45,10 @@ let {
 } = Frame
 
 // The comps an entity actually carries, minus the spine — the raw payload.
-// created_at/modified_at are spine too: leaving a bare STRING in the rest
-// makes Object.entries spell it out per character (created_at.0 = '2'…).
+// Provenance (created/updated) rides in `rest` now like any component, so
+// Debug renders each as its own key→value row (T-6670).
 let comps = (e: Ent) => {
-  let {
-    eid: _e,
-    num: _n,
-    kind: _k,
-    refs: _r,
-    kids: _kids,
-    created_at: _c,
-    modified_at: _m,
-    ...rest
-  } = e
+  let { eid: _e, num: _n, kind: _k, refs: _r, kids: _kids, ...rest } = e
   return Object.entries(rest).filter(([, v]) => v) as [
     string,
     Record<string, unknown>,

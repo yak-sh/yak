@@ -106,8 +106,8 @@ export let Comments = ({ eid }: { eid: string }) => {
               {who ? who.doc?.title || idOf(who) : author(by)}
             </Who>
             {who && <Via {...linkProps(a!)}>· via {author(by)}</Via>}
-            <When data-tip={pretty(c.created_at)} {...linkProps(c)}>
-              {ago(c.created_at)}
+            <When data-tip={pretty(c.created?.at)} {...linkProps(c)}>
+              {ago(c.created?.at)}
             </When>
             <Body
               dangerouslySetInnerHTML={{ __html: md(c.doc?.body ?? '') }}

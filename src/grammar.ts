@@ -37,7 +37,9 @@ end), '.status!=done', '.title~=flux' (contains), '.domain=' (absent),
 '.num=1,2,3'. Timestamp columns take time phrases — today, yesterday,
 '2026-07-04', this|last|next week|month|year, '5 minutes ago', 'in 2
 days' — a phrase is a RANGE: = within it, >= from its start, <= to its
-end ('.modified_at>="1 hour ago"'; glue with - where quoting is hard).
+end ('.updated.at>="1 hour ago"'; glue with - where quoting is hard).
+Provenance shares column names, so spell out the component: '.created.at',
+'.updated.at', '.created.by=jeff' (who authored), '.updated.by!=jeff'.
 Reference filters take the same sugar ('.assignee=jeff', '.project=P-19'),
 and a DOTTED path walks one reference: '.assignee.title~=jeff' — but a
 first segment naming a component stays the explicit spelling ('.pin.x=12',

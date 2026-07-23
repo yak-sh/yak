@@ -46,12 +46,19 @@ export let rows = ({ changes }: { changes: Change[] }) => {
     let row = out.get(eid) ??
       { eid, num: 0, kind: 'entity', comps: {} }
     if (name == 'entity') row.num = Number(comp.num ?? 0)
-    row.comps[name] = comp // entity rides too: created_at/modified_at
+    row.comps[name] = comp // entity rides too (eid, num); provenance is created/updated
     out.set(eid, row)
   }
   for (let r of out.values()) r.kind = kindOf(r.comps)
   return [...out.values()]
 }
+
+// An entity's birth and its last touch, off the provenance components
+// (T-6670): created.at is the birth; updated.at — absent until the first
+// edit — else the birth is the last touch. '' when the component is absent.
+export let bornAt = (r: Row) => String(r.comps.created?.at ?? '')
+export let editedAt = (r: Row) =>
+  String(r.comps.updated?.at ?? r.comps.created?.at ?? '')
 
 // Full-text search, server-side (FTS5) — the graph's docs, ranked.
 export let search = async (q: string, limit = 20) => {
@@ -528,7 +535,7 @@ export let repoAt = (all: Row[], cwd?: string) =>
 // When a mail happened, for sorting and ages: arrival for inbound, the
 // entity's birth for outbound.
 export let mailAt = (r: Row) =>
-  String(r.comps.mail?.received_at ?? r.comps.entity?.created_at ?? '')
+  String(r.comps.mail?.received_at ?? '') || bornAt(r)
 
 // The send batch: a mail is a document that travels — subject rides
 // doc.title, the body doc.body. `to` stays AS GIVEN (a raw address or a
@@ -672,23 +679,18 @@ let unheard = (all: Row[], sess: Row | undefined, now: number) => {
     .filter((r) =>
       r.comps.session && r.eid != sess?.eid &&
       r.comps.session.actor_eid == actor &&
-      now - Date.parse(String(r.comps.entity?.modified_at ?? '')) < 7 * DAY
+      now - Date.parse(editedAt(r)) < 7 * DAY
     )
-    .sort((a, b) =>
-      String(b.comps.entity?.modified_at ?? '')
-        .localeCompare(String(a.comps.entity?.modified_at ?? ''))
-    )
+    .sort((a, b) => editedAt(b).localeCompare(editedAt(a)))
     .slice(0, 5)
   let got = recent
     .map((s) => {
-      let cutoff = String(
-        s.comps.session?.acked_at ?? s.comps.entity?.created_at ?? '',
-      )
+      let cutoff = String(s.comps.session?.acked_at ?? '') || bornAt(s)
       let n = all.filter((r) => {
         let c = r.comps.comment
         return c && c.target_eid == s.eid && !c.event &&
           !ours(c.author_eid) &&
-          String(r.comps.entity?.created_at ?? '') > cutoff
+          bornAt(r) > cutoff
       }).length
       return [s, n] as const
     })
@@ -714,7 +716,7 @@ let lately = (
 ) => {
   if (budget < 4) return [] // claimed work ate the room — it wins
   let age = (r: Row) => {
-    let t = Date.parse(String(r.comps.entity?.modified_at ?? ''))
+    let t = Date.parse(editedAt(r))
     return Number.isNaN(t) ? Infinity : now - t
   }
   let byEid = new Map(all.map((r) => [r.eid, r.comps]))
@@ -844,10 +846,7 @@ export let contextDigest = (
         r.comps.session && r.eid != sess?.eid &&
         r.comps.session.actor_eid == actor && briefOf(r)
       )
-      .sort((a, b) =>
-        String(b.comps.entity?.modified_at ?? '')
-          .localeCompare(String(a.comps.entity?.modified_at ?? ''))
-      )[0]
+      .sort((a, b) => editedAt(b).localeCompare(editedAt(a)))[0]
     : undefined
   if (prev) {
     lines.push(
@@ -878,9 +877,7 @@ export let notices = (snap: Snapshot, session: string) => {
     r.comps.session && String(r.comps.session.id) == session
   )
   if (!sess) return { lines: [] as string[], ack: [] as Change[] }
-  let cutoff = String(
-    sess.comps.session.acked_at ?? sess.comps.entity?.created_at ?? '',
-  )
+  let cutoff = String(sess.comps.session.acked_at ?? '') || bornAt(sess)
   let mine = new Set(
     all.filter((r) => r.comps.claim?.session_eid == sess.eid)
       .map((r) => r.eid),
@@ -893,13 +890,9 @@ export let notices = (snap: Snapshot, session: string) => {
       if (!mine.has(String(c.target_eid)) && String(c.target_eid) != sess.eid) {
         return false
       }
-      return String(r.comps.entity?.created_at ?? '') > cutoff
+      return bornAt(r) > cutoff
     })
-    .sort((a, b) =>
-      String(a.comps.entity?.created_at).localeCompare(
-        String(b.comps.entity?.created_at),
-      )
-    )
+    .sort((a, b) => bornAt(a).localeCompare(bornAt(b)))
   if (!unseen.length) return { lines: [] as string[], ack: [] as Change[] }
   // The byline walks the actor chain (comment → author → actor): a
   // session speaks as its operator "via S-n", a client as its person —
@@ -1183,11 +1176,10 @@ export let showMd = (snap: Snapshot, all: Row[], row: Row) => {
   }
   let held = claimant(all, row)
   if (held) fm.push(`claim: ${held}`)
-  let ent = row.comps.entity ?? {}
-  if (ent.created_at) fm.push(`created: ${ent.created_at}`)
-  if (ent.modified_at && ent.modified_at != ent.created_at) {
-    fm.push(`modified: ${ent.modified_at}`)
-  }
+  let born = bornAt(row)
+  if (born) fm.push(`created: ${born}`)
+  let edited = row.comps.updated?.at // absent until the first edit (T-6670)
+  if (edited) fm.push(`modified: ${edited}`)
   // Edges as sentences, grouped by verb; the far side says its state.
   let refs = snap.deps.filter((d) => d.parent == row.eid)
   let backs = snap.deps.filter((d) => d.child == row.eid)
@@ -1209,16 +1201,13 @@ export let showMd = (snap: Snapshot, all: Row[], row: Row) => {
   if (body) out.push('', body)
   let comments = all
     .filter((r) => r.comps.comment?.target_eid == row.eid)
-    .sort((a, b) =>
-      String(a.comps.entity?.created_at ?? '')
-        .localeCompare(String(b.comps.entity?.created_at ?? ''))
-    )
+    .sort((a, b) => bornAt(a).localeCompare(bornAt(b)))
   if (comments.length) {
     out.push('', '## Comments')
     for (let c of comments) {
       let author = c.comps.comment?.author_eid
       let by = author ? ` · ${said(author)}` : ''
-      out.push('', `— ${c.comps.entity?.created_at ?? ''}${by}`, '')
+      out.push('', `— ${bornAt(c)}${by}`, '')
       out.push(String(c.comps.doc?.body ?? ''))
     }
   }

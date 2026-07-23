@@ -26,7 +26,7 @@ Deno.test('pasted: doc+board JSON mints a board', () => {
 })
 
 Deno.test('pasted: a known id targets the existing entity', () => {
-  cache.value = { e1: { entity: { eid: 'e1', num: 7, created_at: '' } } }
+  cache.value = { e1: { entity: { eid: 'e1', num: 7 } } }
   assertEquals(pasted('T-7'), { changes: [], target: 'e1' })
   assertEquals(pasted('T-8'), null)
 })

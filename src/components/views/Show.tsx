@@ -124,6 +124,21 @@ let Facet = ({ e }: { e: Ent }) => (
   />
 )
 
+// Who authored this — the created.by actor (T-6670), the authority signal
+// (owner ask vs agent filing). The registry walk renders the actor's
+// Inline chip; absent (pre-provenance) it renders nothing.
+let By = ({ e }: { e: Ent }) =>
+  e.created?.by
+    ? (
+      <Prop
+        eid={e.eid}
+        comp='created'
+        prop='by'
+        show={(v) => (v ? <Id e={ent(String(v))} /> : null)}
+      />
+    )
+    : null
+
 // Whose plate: the assignee face is a LINK to the person (or the project
 // standing in for its operator) — same grammar as Home. Claim (⚑, who's
 // on it NOW) renders separately.
@@ -296,6 +311,7 @@ export let Meta = ({ e, id }: { e: Ent; id?: boolean }) => {
           ⚑ {ent(e.claim.session_eid).session?.id}
         </Claim>
       )}
+      <By e={e} />
       <Stamp e={e} />
       {id && <Id e={e} />}
     </MetaEl>

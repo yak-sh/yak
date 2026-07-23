@@ -41,10 +41,10 @@ let wordsFor = (target: string): string => {
   let r = db.prepare(
     `select d.body from comment c
      join doc d on d.eid = c.eid
-     join entity e on e.eid = c.eid
+     join created cr on cr.eid = c.eid
      where c.target_eid = ?
-     and e.created_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 minute')
-     order by e.created_at desc limit 1`,
+     and cr.at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 minute')
+     order by cr.at desc limit 1`,
   ).get(target) as { body: string } | undefined
   return String(r?.body ?? '')
 }

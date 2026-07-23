@@ -121,7 +121,8 @@ Deno.test('notices: unseen comments on claimed tasks + messages to the session',
     at: string,
     body: string,
   ) => [
-    { eid, name: 'entity', comp: { eid, num: 90, created_at: at } },
+    { eid, name: 'entity', comp: { eid, num: 90 } },
+    { eid, name: 'created', comp: { at } },
     { eid, name: 'doc', comp: { title: '', body } },
     { eid, name: 'comment', comp: { target_eid: target, author_eid: author } },
   ]
@@ -543,7 +544,8 @@ Deno.test('threadOf: both directions, in time order', () => {
     num,
     kind: 'mail',
     comps: {
-      entity: { eid, num, created_at: at },
+      entity: { eid, num },
+      created: { eid, at },
       doc: { title: `m${num}`, body: '' },
       mail: { to: 'x@y', ...mail },
     },
@@ -601,7 +603,8 @@ Deno.test('mailLine: unread dot, unverified mark, direction', () => {
     num: 10,
     kind: 'mail',
     comps: {
-      entity: { eid: 'y', num: 10, created_at: '2026-07-22T11:00:00Z' },
+      entity: { eid: 'y', num: 10 },
+      created: { eid: 'y', at: '2026-07-22T11:00:00Z' },
       doc: { title: 'Ping', body: '' },
       mail: { to: 'P-20', to_addr: 'venture@x.test' },
     },
@@ -631,11 +634,8 @@ Deno.test('contextDigest: lately — briefs lead, tiers hold, old is silent', ()
     mod: string,
     parts: Record<string, Record<string, unknown>>,
   ) => [
-    {
-      eid,
-      name: 'entity',
-      comp: { eid, num: num++, created_at: mod, modified_at: mod },
-    },
+    { eid, name: 'entity', comp: { eid, num: num++ } },
+    { eid, name: 'created', comp: { at: mod } },
     ...Object.entries(parts).map(([name, comp]) => ({ eid, name, comp })),
   ]
   let eid = (i: number) => `bbbbbbbb-0000-4000-8000-00000000000${i}`
@@ -815,7 +815,8 @@ Deno.test('showMd: comments ride as a section, oldest first', () => {
   let snap2: Snapshot = {
     changes: [
       ...snap.changes,
-      { eid: C, name: 'entity', comp: { eid: C, num: 9, created_at: '2t' } },
+      { eid: C, name: 'entity', comp: { eid: C, num: 9 } },
+      { eid: C, name: 'created', comp: { at: '2t' } },
       { eid: C, name: 'doc', comp: { title: '', body: 'a remark' } },
       { eid: C, name: 'comment', comp: { target_eid: T1, author_eid: S } },
     ],
@@ -936,7 +937,8 @@ Deno.test('notices: bylines walk the actor chain', () => {
   let B = 'aaaaaaaa-0000-4000-8000-000000000010'
   let P = 'aaaaaaaa-0000-4000-8000-000000000011' // the operator project
   let mk = (eid: string, author: string) => [
-    { eid, name: 'entity', comp: { eid, num: 91, created_at: '2026-01-02' } },
+    { eid, name: 'entity', comp: { eid, num: 91 } },
+    { eid, name: 'created', comp: { at: '2026-01-02' } },
     { eid, name: 'doc', comp: { title: '', body: 'from the operator' } },
     { eid, name: 'comment', comp: { target_eid: T1, author_eid: author } },
   ]
@@ -976,11 +978,8 @@ Deno.test('contextDigest: scope — local work, local+principle memory, cwd deri
     num: number,
     parts: Record<string, Record<string, unknown>>,
   ) => [
-    {
-      eid,
-      name: 'entity',
-      comp: { eid, num, created_at: '', modified_at: hour },
-    },
+    { eid, name: 'entity', comp: { eid, num } },
+    { eid, name: 'created', comp: { at: hour } },
     ...Object.entries(parts).map(([name, comp]) => ({ eid, name, comp })),
   ]
   let g: Snapshot = {
@@ -1057,11 +1056,8 @@ Deno.test("contextDigest: previously — the same operator's last brief", () => 
     mod: string,
     parts: Record<string, Record<string, unknown>>,
   ) => [
-    {
-      eid,
-      name: 'entity',
-      comp: { eid, num: num++, created_at: mod, modified_at: mod },
-    },
+    { eid, name: 'entity', comp: { eid, num: num++ } },
+    { eid, name: 'created', comp: { at: mod } },
     ...Object.entries(parts).map(([name, comp]) => ({ eid, name, comp })),
   ]
   let eid = (i: number) => `cccccccc-0000-4000-8000-00000000000${i}`
@@ -1124,11 +1120,8 @@ Deno.test('contextDigest: unheard — comments after a past session stopped list
     at: string,
     parts: Record<string, Record<string, unknown>>,
   ) => [
-    {
-      eid,
-      name: 'entity',
-      comp: { eid, num: num++, created_at: at, modified_at: at },
-    },
+    { eid, name: 'entity', comp: { eid, num: num++ } },
+    { eid, name: 'created', comp: { at } },
     ...Object.entries(parts).map(([name, comp]) => ({ eid, name, comp })),
   ]
   let eid = (i: number) => `dddddddd-0000-4000-8000-0000000000${10 + i}`

@@ -18,18 +18,8 @@ import { matchQuery, parseQuery, resolveRefs, warm } from './query.ts'
 // Derived from Ent so a new component (types.ts) threads through here —
 // and through ent() below — with zero edits.
 type Comps =
-  & {
-    entity?: {
-      eid: string
-      num: number
-      created_at: string
-      modified_at?: string
-    }
-  }
-  & Omit<
-    Ent,
-    'eid' | 'num' | 'created_at' | 'modified_at' | 'kind' | 'refs' | 'kids'
-  >
+  & { entity?: { eid: string; num: number } }
+  & Omit<Ent, 'eid' | 'num' | 'kind' | 'refs' | 'kids'>
 
 export let cache = signal<Record<string, Comps>>({})
 export let deps = signal<Dep[]>([])
@@ -76,7 +66,8 @@ export let warmth = (e: Ent, now: number) =>
   warm(
     {
       recall: e.recall as Record<string, unknown> | undefined,
-      entity: { modified_at: e.modified_at, created_at: e.created_at },
+      updated: e.updated as Record<string, unknown> | undefined,
+      created: e.created as Record<string, unknown> | undefined,
       project: e.project as Record<string, unknown> | undefined,
       task: e.task as unknown as Record<string, unknown> | undefined,
     },
@@ -202,11 +193,10 @@ export let boot = async () => {
 export let ent = (eid: string): Ent => {
   let { entity, ...comps } = cache.value[eid] ?? {}
   return {
-    ...comps, // whatever components the entity carries, verbatim
+    ...comps, // whatever components the entity carries, verbatim —
+    // created/updated (provenance) ride here like any other component now
     eid,
     num: entity?.num ?? 0,
-    created_at: entity?.created_at,
-    modified_at: entity?.modified_at,
     kind: kindOf(comps), // derived — the display convention, not data
     refs: deps.value
       .filter((d) => d.parent == eid && d.type != 'contains')
@@ -242,7 +232,7 @@ export let boardTasks = (e: Ent): Ent[] => {
 
 // The same query over the WHOLE graph — the board's List face. No task
 // gate: sessions, memories, docs, web, people — anything that matches.
-// Chrome stays out (a camera's modified_at churns with every pan and
+// Chrome stays out (a camera's updated.at churns with every pan and
 // would drown any hot feed; cards/folds/shelves/clients are presence,
 // not content), comments surface through their targets (the lately
 // digest's rule), and a board is not news to itself.

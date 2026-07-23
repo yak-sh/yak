@@ -22,7 +22,9 @@ let row = (
   task: Record<string, unknown>,
   extra: Record<string, unknown> = {},
 ) => ({
-  entity: { num: 7, created_at: '2026-07-01', modified_at: '2026-07-16' },
+  entity: { num: 7 },
+  created: { at: '2026-07-01' },
+  updated: { at: '2026-07-16' },
   doc: { title: 'Fix the flux capacitor', body: '' },
   task: {
     status: 'open',
@@ -54,7 +56,7 @@ let cases: [string, string, Record<string, unknown>, boolean][] = [
   ['range inclusive hi', '.priority=1..3', { priority: 3 }, true],
   ['range exclusive hi', '.priority=1...3', { priority: 3 }, false],
   ['range miss', '.priority=2..3', {}, false],
-  ['date range', '.created_at=2026-06-01..2026-08-01', {}, true],
+  ['date range', '.created.at=2026-06-01..2026-08-01', {}, true],
   ['contains', '.title~=flux', {}, true],
   ['contains is case-blind', '.title~=FLUX', {}, true],
   ['contains miss', '.title~=warp', {}, false],
@@ -163,8 +165,10 @@ Deno.test('span: not phrases', () => {
 
 // Time preds: the row value is ISO, the filter value a phrase; the op
 // picks the edge of the range the phrase names.
-let when = (modified_at: string) => ({
-  entity: { num: 7, created_at: '2026-07-01T00:00:00Z', modified_at },
+let when = (updatedAt: string) => ({
+  entity: { num: 7 },
+  created: { at: '2026-07-01T00:00:00Z' },
+  updated: { at: updatedAt },
   task: { status: 'open' },
 })
 // matchQuery evaluates phrases on the REAL clock, so the fixtures do too.
@@ -174,16 +178,16 @@ let mid = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12)
 let old = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 5, 12)
   .toISOString()
 Deno.test('time: = is within the range', () => {
-  assertEquals(matchQuery(when(mid), parseQuery('.modified_at=today')), true)
-  assertEquals(matchQuery(when(old), parseQuery('.modified_at=today')), false)
-  assertEquals(matchQuery(when(old), parseQuery('.modified_at!=today')), true)
+  assertEquals(matchQuery(when(mid), parseQuery('.updated.at=today')), true)
+  assertEquals(matchQuery(when(old), parseQuery('.updated.at=today')), false)
+  assertEquals(matchQuery(when(old), parseQuery('.updated.at!=today')), true)
 })
 Deno.test('time: >= takes the start, <= the end', () => {
-  assertEquals(matchQuery(when(mid), parseQuery('.modified_at>=today')), true)
-  assertEquals(matchQuery(when(old), parseQuery('.modified_at>=today')), false)
-  assertEquals(matchQuery(when(old), parseQuery('.modified_at<=today')), true)
-  assertEquals(matchQuery(when(mid), parseQuery('.modified_at<today')), false)
-  assertEquals(matchQuery(when(old), parseQuery('.modified_at<today')), true)
+  assertEquals(matchQuery(when(mid), parseQuery('.updated.at>=today')), true)
+  assertEquals(matchQuery(when(old), parseQuery('.updated.at>=today')), false)
+  assertEquals(matchQuery(when(old), parseQuery('.updated.at<=today')), true)
+  assertEquals(matchQuery(when(mid), parseQuery('.updated.at<today')), false)
+  assertEquals(matchQuery(when(old), parseQuery('.updated.at<today')), true)
 })
 Deno.test('time: a string row named today stays a string', () => {
   let c = { task: { status: 'open', domain: 'today' } }
@@ -205,7 +209,7 @@ Deno.test('mixed line: & segments keep their spaces, space-dot splits', () => {
   assertEquals(hit('.title~=the flux'), true) // the old grammar survives
   assertEquals(parseQuery('a .status=done b').length, 3)
   assertEquals(
-    parseQuery('.modified_at>="1 hour ago"')[0].value,
+    parseQuery('.updated.at>="1 hour ago"')[0].value,
     '1 hour ago', // quotes shield the phrase from the whitespace split
   )
   assertEquals(parseQuery('.env')[0].op, 'text') // opless dot-word = a term
@@ -234,9 +238,9 @@ Deno.test('hot: spaced recalls outlast crammed ones at equal count', () => {
   assert(warm(10, 90 * D, 10 * D) > warm(10, 10 * D + H, 10 * D))
 })
 
-Deno.test('hot: no recalls yet — modified_at counts as a single touch', () => {
-  assert(hot({ entity: { modified_at: ago(H) } }, T0) > 0.9)
-  assert(hot({ entity: { modified_at: ago(10 * D) } }, T0) < 0.01)
+Deno.test('hot: no recalls yet — the last touch counts as a single touch', () => {
+  assert(hot({ created: { at: ago(H) } }, T0) > 0.9)
+  assert(hot({ created: { at: ago(10 * D) } }, T0) < 0.01)
   assertEquals(hot({}, T0), 0)
 })
 
@@ -427,7 +431,7 @@ let has: [string, string, string, string][] = [
   ['path far side', '.assignee.', '.assignee.title', 'doc'],
   ['path far side, any comp', '.assignee.', '.assignee.status', 'task'],
   ['path value', '.assignee.status=', '.assignee.status=open', 'status'],
-  ['time phrases on _at', '.modified_at=', '.modified_at=today', 'time'],
+  ['time phrases on _at', '.updated.at=', '.updated.at=today', 'time'],
   ['rank value', '.orde', '.order=hot', 'rank'],
   ['rank value completes', '.order=h', '.order=hot', 'rank'],
 ]
@@ -488,11 +492,11 @@ Deno.test('sunk: own stamp, or the project the task is filed under', () => {
 })
 
 Deno.test('warm: retirement damps the rank, never zeroes it', () => {
-  let c = { entity: { modified_at: ago(H) }, project: { retired_at: 'x' } }
+  let c = { created: { at: ago(H) }, project: { retired_at: 'x' } }
   assert(rank(c, T0) > 0) // sunk, not erased
   assertEquals(rank(c, T0), hot(c, T0) * SUNK)
   // fresh-but-retired sinks beneath merely-idle live work
-  assert(rank(c, T0) < hot({ entity: { modified_at: ago(2 * D) } }, T0))
+  assert(rank(c, T0) < hot({ created: { at: ago(2 * D) } }, T0))
 })
 
 Deno.test('.project.retired_at is the explicit spelling, and = means live', () => {

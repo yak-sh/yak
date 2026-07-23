@@ -56,15 +56,15 @@ Deno.test('projects: project rows only, oldest first, named by doc', () => {
 Deno.test('backlinks: stamped associations count', () => {
   cache.value = {
     t1: {
-      entity: { eid: 't1', num: 1, created_at: '' },
+      entity: { eid: 't1', num: 1 },
       task: { eid: 't1', status: 'open', priority: 1, domain: null },
     },
     s1: {
-      entity: { eid: 's1', num: 2, created_at: '' },
+      entity: { eid: 's1', num: 2 },
       session: { eid: 's1', id: 'x', requested_task_eid: 't1' },
     },
     c1: {
-      entity: { eid: 'c1', num: 3, created_at: '' },
+      entity: { eid: 'c1', num: 3 },
       claim: { eid: 'c1', session_eid: 's1' },
     },
   }
@@ -82,11 +82,11 @@ Deno.test('byWarmth: recalled-often beats merely-new beats faded', () => {
   let iso = (d: number) => new Date(NOW - d * 86_400_000).toISOString()
   let old = {
     num: 1,
-    modified_at: iso(5),
+    created: { at: iso(5) },
     recall: { eid: 'o', count: 40, first_at: iso(60), last_at: iso(0.2) },
   } as unknown as Ent
-  let fresh = { num: 2, modified_at: iso(0.5) } as unknown as Ent
-  let faded = { num: 3, modified_at: iso(6) } as unknown as Ent
+  let fresh = { num: 2, created: { at: iso(0.5) } } as unknown as Ent
+  let faded = { num: 3, created: { at: iso(6) } } as unknown as Ent
   assertEquals(
     [faded, fresh, old].sort(byWarmth(NOW)).map((e) => e.num),
     [1, 2, 3],

@@ -256,19 +256,47 @@ Deno.test('a birth rides the return: the minted spine, once', () => {
   assertEquals(brief.some((c) => c.name == 'entity' && c.comp), false)
 })
 
-Deno.test('modified_at: server-stamped on every touch, never wire-set', () => {
+Deno.test('provenance: created once at birth, updated absent until edited', () => {
   let t = uid()
   apply(db, [{ eid: t, name: 'doc', comp: { title: 'aging' } }])
-  let born = comp(t, 'entity')?.modified_at
-  assertEquals(typeof born, 'string')
-  apply(db, [{
-    eid: t,
-    name: 'entity',
-    comp: { modified_at: 'FAKE' }, // spine has no writable columns
-  }])
-  assertEquals(comp(t, 'entity')?.modified_at == 'FAKE', false)
+  let bornAt = comp(t, 'created')?.at
+  assertEquals(typeof bornAt, 'string')
+  // updated is ABSENT until the first real modification (T-6670)
+  assertEquals(comp(t, 'updated'), undefined)
+  // the wire can't fake the frozen `at` — it's out of the writable set
+  apply(db, [{ eid: t, name: 'created', comp: { at: 'FAKE' } }])
+  assertEquals(comp(t, 'created')?.at, bornAt) // unchanged
+  // an edit stamps updated, at ≥ birth
   apply(db, [{ eid: t, name: 'doc', comp: { title: 'aged' } }])
-  assertEquals(String(comp(t, 'entity')?.modified_at) >= String(born), true)
+  let editedAt = comp(t, 'updated')?.at
+  assertEquals(typeof editedAt, 'string')
+  assertEquals(String(editedAt) >= String(bornAt), true)
+  assertEquals(comp(t, 'created')?.at, bornAt) // created.at still frozen
+})
+
+Deno.test('provenance: created.by defaults to the writer actor; the wire overrides', () => {
+  // A fresh :memory: graph so the lone person IS the box owner writerActor
+  // falls back to (the shared db may already hold several).
+  let d = fresh()
+  let at = (eid: string, name: string) =>
+    snapshot(d).changes.find((c) => c.eid == eid && c.name == name)?.comp
+  let jeff = uid(), amy = uid()
+  apply(d, [
+    { eid: jeff, name: 'person', comp: {} },
+    { eid: amy, name: 'doc', comp: { title: 'Amy' } },
+  ])
+  // default: no writer named → the box owner authors
+  let t = uid()
+  apply(d, [{ eid: t, name: 'doc', comp: { title: 'filed' } }])
+  assertEquals(at(t, 'created')?.by, jeff)
+  // override: the batch names the author explicitly
+  let u = uid()
+  apply(d, [
+    { eid: u, name: 'doc', comp: { title: 'by hand' } },
+    { eid: u, name: 'created', comp: { by: amy } },
+  ])
+  assertEquals(at(u, 'created')?.by, amy)
+  assertEquals(typeof at(u, 'created')?.at, 'string') // at still stamped
 })
 
 Deno.test('fts: search finds, follows edits, forgets the dead', () => {
@@ -625,11 +653,11 @@ Deno.test('search: terms and filters mix in one line', () => {
   let eids = (q: string) => search(db, q).map((h) => h.eid)
   assertEquals(eids('quokka').length, 2)
   assertEquals(eids('quokka .status=done'), [a])
-  assertEquals(eids('quokka .status=open .modified_at=today'), [b])
-  assertEquals(eids('quokka .modified_at=yesterday'), [])
+  assertEquals(eids('quokka .status=open .created.at=today'), [b])
+  assertEquals(eids('quokka .created.at=yesterday'), [])
   // filters alone are a listing, newest touched first
-  assertEquals(eids('.status=done .modified_at>=today').includes(a), true)
-  assertEquals(eids('.status=done .modified_at>=today').includes(b), false)
+  assertEquals(eids('.status=done .created.at>=today').includes(a), true)
+  assertEquals(eids('.status=done .created.at>=today').includes(b), false)
 })
 
 Deno.test('search: reference sugar + paths screen the hits', () => {
