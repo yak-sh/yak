@@ -349,17 +349,16 @@ export let Prop = (
   let ep: EditorProps = { eid, comp, prop, t: t!, value, done }
   // bool never enters an edit mode: the value IS the toggle. For popout
   // editors the same click closes an open control — the value is the
-  // handle both ways.
+  // press target both ways.
   let press = !editor
     ? undefined
     : t == 'bool'
     ? () => set(ep, value ? 0 : 1)
     : () => setEditing((was) => !was)
-  // The press, resolved by the link stack (the ▾ handle this replaced was
-  // the same collision): a click that lands on a link INSIDE the face
-  // belongs to that link, and inside a linked surround the press demotes
-  // the way nested links do — the edit-click must never ride the anchor
-  // around it.
+  // The press, resolved by the link stack: a click that lands on a link
+  // INSIDE the face belongs to that link, and inside a linked surround
+  // the press demotes the way nested links do — an edit-click never
+  // rides the anchor around it.
   let outer = useContext(Surround).href
   let open = press && ((ev: MouseEvent) => {
     let hit = (ev.target as Element).closest?.('a, [role=link]')

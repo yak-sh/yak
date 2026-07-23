@@ -11,7 +11,7 @@ import { Entity } from '../Entity.tsx'
 // nothing hidden — with contained children as one linked Debug.Tile row
 // each (a board full of tasks stays a list, not an explosion). The per-kind
 // dispatch lives in Debug.Tile: tasks get the status row, everything
-// else the generic one; the inspector's own head is its ListItem too.
+// else the generic one; the inspector's own head is its ListTile too.
 
 let Frame = block('div', 'Debug', {
   Props: 'div',

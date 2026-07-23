@@ -333,7 +333,7 @@ export let Show = ({ e }: { e: Ent }) => (
 
 // The card face (Card.Full): the titlebar is the head — the meta line
 // stands in.
-export let ShowCard = ({ e }: { e: Ent }) => (
+export let CardFull = ({ e }: { e: Ent }) => (
   <>
     <Entity eid={e.eid} view='Meta' />
     <Entity eid={e.eid} view='Body' mod='bare' />

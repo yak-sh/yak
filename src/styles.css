@@ -138,7 +138,7 @@ html {
 /* The mono keepers: ids, chips, badges, edge verbs, timestamps, code,
    and every command/inspector/log surface. Prose everywhere else is
    var(--font) via body. :where keeps this overridable. */
-:where(code, pre, kbd, .Id, .Prio, .Show_Domain, .Show_Project, .Show_Assignee, .Show_Claim, .Dependency_Type, .Relate_Verb, .Stamp, .Comments_When, .Comments_Who, .Comments_Via, .Board_ColName, .Board_Count, .Board_Chips, .Status, .Search_Box input, .Search_Id, .Debug, .Debug_Claim, .SessionRow, .Session_Facts, .Session_Status, .Session_Model, .Session_Tool, .Session_Exec, .Session_Turn, .Session_Err, .TaskRow_Assignee) {
+:where(code, pre, kbd, .Id, .Prio, .Show_Domain, .Show_Project, .Show_Assignee, .Show_Claim, .Dependency_Type, .Relate_Verb, .Stamp, .Comments_When, .Comments_Who, .Comments_Via, .Board_ColName, .Board_Count, .Board_Chips, .Status, .Search_Box input, .Search_Id, .Debug, .Debug_Claim, .SessionRow, .Session_Facts, .Session_Status, .Session_Model, .Session_Tool, .Session_Exec, .Session_Turn, .Session_Err, .TaskTile_Assignee) {
   font-family: var(--mono);
 }
 
@@ -308,7 +308,7 @@ html {
   font-size: 11px;
   padding: 0 var(--half-gap);
 }
-.ListItem {
+.ListTile {
   display: flex;
   align-items: center;
   gap: var(--half-gap);
@@ -317,7 +317,7 @@ html {
   background: var(--card);
   padding: var(--half-gap);
 }
-.ListItem_Title {
+.ListTile_Title {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -893,7 +893,7 @@ html {
 /* The board's card for a task, Trello-shaped: dot + wrapping title, then
    a meta line (prio · domain · 💬 · ⚑ · id). Plain spans, no editors —
    hundreds of these must render without the browser noticing. */
-.TaskRow {
+.TaskTile {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 2px var(--half-gap);
@@ -902,14 +902,14 @@ html {
   background: var(--card);
   padding: var(--half-gap);
 }
-.TaskRow > .Dot {
+.TaskTile > .Dot {
   align-self: start;
   margin-top: calc((1lh - 0.55rem) / 2); /* pinned to the title's first line */
 }
-.TaskRow_Title {
+.TaskTile_Title {
   min-width: 0; /* wraps freely — a board card reads, it doesn't truncate */
 }
-.TaskRow_Meta {
+.TaskTile_Meta {
   grid-column: 2;
   display: flex;
   align-items: baseline;
@@ -917,41 +917,41 @@ html {
   font-size: 11px;
   color: var(--dim);
 }
-.TaskRow_Meta .Id {
+.TaskTile_Meta .Id {
   margin-left: auto;
 }
-.TaskRow_Comments {
+.TaskTile_Comments {
   white-space: nowrap;
 }
-.TaskRow_Claim {
+.TaskTile_Claim {
   color: var(--purple);
 }
 /* Whose plate, said quietly beside the ⚑ — same weight as the claim. */
-.TaskRow_Assignee {
+.TaskTile_Assignee {
   color: var(--orange);
 }
 /* Edge tallies wear their edge colors, dimmed to meta-line volume. */
-.TaskRow_Deps {
+.TaskTile_Deps {
   white-space: nowrap;
 }
 /* the done share of a tally: struck and faded, the open count stands */
-.TaskRow_Done {
+.TaskTile_Done {
   opacity: 0.55;
 }
-.TaskRow_Deps-requires {
+.TaskTile_Deps-requires {
   color: var(--red);
 }
-.TaskRow_Deps-contains {
+.TaskTile_Deps-contains {
   color: var(--yellow);
 }
-.TaskRow_Deps-reads {
+.TaskTile_Deps-reads {
   color: var(--blue);
 }
 
 /* The document face sits borderless on the floor — the card frame
    belongs to windows (canvas cards), not to the page you're reading.
    Only the root Full face renders div.Show; the card face (Card.Full)
-   is ShowCard, a fragment inside the Card's own chrome. */
+   is CardFull, a fragment inside the Card's own chrome. */
 /* The document face (root Show): a real h1 owns the title at the
    column's measure — it wraps, never truncates. The pip pins to the
    FIRST line (the proven head trick); the named view-timeline is what
@@ -1025,7 +1025,7 @@ html {
   text-decoration: underline;
   color: var(--fg);
 }
-/* a settled task no longer binds: struck, TaskRow_Done's fade */
+/* a settled task no longer binds: struck, TaskTile_Done's fade */
 .Inline_Title-settled {
   text-decoration: line-through;
   opacity: 0.55;
@@ -1779,7 +1779,7 @@ a[data-ref]:hover {
   text-decoration: underline;
 }
 
-/* Debug: one full inspector; children are one linked ListItem row each. */
+/* Debug: one full inspector; children are one linked ListTile row each. */
 .Debug {
   display: grid;
   gap: var(--half-gap);

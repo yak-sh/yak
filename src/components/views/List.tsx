@@ -76,9 +76,9 @@ export let BoardList = ({ e }: { e: Ent }) => {
 // The default list line: title (or kind) + the id chip. The whole tile
 // is the LINK — href on the el, the anchor promotion does the rest — so
 // the browser's own context menu serves it; the verbs menu belongs to
-// the card. Tasks override List.Tile via the registry (TaskRow).
-let Line = block('div', 'ListItem', { Title: 'span' })
-export let ListItem = ({ e }: { e: Ent }) => (
+// the card. Tasks override List.Tile via the registry (TaskTile).
+let Line = block('div', 'ListTile', { Title: 'span' })
+export let ListTile = ({ e }: { e: Ent }) => (
   <Line href={`/${idOf(e)}`}>
     {/* a mail's stored subject may be an encoded-word — decode to read */}
     <Line.Title>

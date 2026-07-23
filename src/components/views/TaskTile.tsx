@@ -5,7 +5,7 @@ import { Prio } from '../Prio.tsx'
 import { block } from '../ui.tsx'
 import { Id } from './Inline.tsx'
 
-let Frame = block('div', 'TaskRow', {
+let Frame = block('div', 'TaskTile', {
   Title: 'span',
   Meta: 'div',
   Domain: 'span',
@@ -24,7 +24,7 @@ let { Title, Meta, Domain, Comments, Claim, Assignee, Deps, Done } = Frame
 // browser noticing. The whole tile is the LINK — href on the el, so the
 // browser's own context menu serves it; the verbs menu belongs to the
 // card. Drag out to the canvas for the full Task card.
-export let TaskRow = ({ e }: { e: Ent }) => {
+export let TaskTile = ({ e }: { e: Ent }) => {
   let talk = commentCount.value[e.eid]
   // Each tally reads as a sentence, verb first — "requires ~2~ 1": two
   // blockers already settled (struck — done or cancelled), one still

@@ -1,8 +1,9 @@
 // The TUI app: browse the first board with vim keys. Everything
 // below this file is shared with the web — same cache, same registry, same
-// mode signal. Only Board is overridden (columns become a nested list);
-// Task, Dot, Id, Dependency and Debug.Tile render through the very same
-// components the browser uses, painted as lines instead of CSS.
+// mode signal. Only Board and the task Full are overridden (columns become
+// a nested list, the body reads as raw markdown); Dot, Id, Dependency and
+// Debug.Tile render through the very same components the browser uses,
+// painted as lines instead of CSS.
 import { signal } from '@preact/signals'
 import { type Ent, idOf } from '../types.ts'
 import {
@@ -174,10 +175,10 @@ let TuiBoard = ({ e }: { e: Ent }) => (
   </div>
 )
 
-// The web Task renders its body as markdown through innerHTML, which the
+// The web Full renders its body as markdown through innerHTML, which the
 // fake DOM ignores — here the raw source IS the readable form (that's
-// markdown's whole point), so the TUI overrides Task with a plain-text
-// twin.
+// markdown's whole point), so the TUI overrides a task's Full with a
+// plain-text twin.
 let TuiTask = ({ e }: { e: Ent }) => (
   <div class='Task'>
     <div class='Task_Head'>
@@ -212,7 +213,7 @@ let TuiTask = ({ e }: { e: Ent }) => (
 // override because platform layers are consulted first.
 export let overrides: Renderer[] = [
   { view: 'Board', match: has('doc', 'board'), Render: TuiBoard },
-  { view: 'Task', match: has('doc', 'task'), Render: TuiTask },
+  { view: 'Full', match: has('doc', 'task'), Render: TuiTask },
 ]
 
 // The command context here: the entity you're IN (the trail's head), or
@@ -346,7 +347,7 @@ export let App = () => {
           <Entity eid={p} view='Board' />
           {s && (
             <div class='TDetail'>
-              <Entity eid={s} view='Task' />
+              <Entity eid={s} view='Full' />
             </div>
           )}
         </>

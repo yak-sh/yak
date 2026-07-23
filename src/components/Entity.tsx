@@ -3,12 +3,12 @@ import { type Action, define, defineActions, has, resolve } from './registry.ts'
 import {
   Boards,
   Body,
+  CardFull,
   Dependencies,
   Meta,
   Relate,
   Runs,
   Show,
-  ShowCard,
   Talkback,
   Tasks,
 } from './views/Show.tsx'
@@ -22,8 +22,8 @@ import {
 } from './views/Title.tsx'
 import { Board } from './views/Board.tsx'
 import { Persona } from './views/Persona.tsx'
-import { TaskRow } from './views/TaskRow.tsx'
-import { BoardList, List, ListItem } from './views/List.tsx'
+import { TaskTile } from './views/TaskTile.tsx'
+import { BoardList, List, ListTile } from './views/List.tsx'
 import { Canvas } from './Canvas.tsx'
 import { Inline, TaskInline } from './views/Inline.tsx'
 import { Dependency } from './views/Dependency.tsx'
@@ -58,11 +58,11 @@ define([
   },
   { view: 'List', match: has('canvas'), Render: List },
   { view: 'List', match: has('board'), Render: BoardList },
-  { view: 'List.Tile', match: has('doc', 'task'), Render: TaskRow },
+  { view: 'List.Tile', match: has('doc', 'task'), Render: TaskTile },
   { view: 'List.Tile', match: has('session'), Render: SessionRow },
-  { view: 'List.Tile', match: () => true, Render: ListItem },
+  { view: 'List.Tile', match: () => true, Render: ListTile },
   { view: 'Full', match: has('doc'), Render: Show },
-  { view: 'Card.Full', match: has('doc'), Render: ShowCard },
+  { view: 'Card.Full', match: has('doc'), Render: CardFull },
   { view: 'Board', match: has('doc', 'board'), Render: Board },
   { view: 'Persona', match: has('doc', 'persona'), Render: Persona },
   { view: 'Web', match: has('web'), Render: Web },
