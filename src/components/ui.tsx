@@ -110,9 +110,9 @@ let SIZES: [Intl.RelativeTimeFormatUnit, number][] = [
   ['minute', 60],
 ]
 let rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
-export let ago = (iso?: string | null) => {
+export let ago = (iso?: string | null, now = tick.value) => {
   if (!iso) return ''
-  let s = (tick.value - Date.parse(iso)) / 1000
+  let s = (now - Date.parse(iso)) / 1000
   for (let [unit, size] of SIZES) {
     if (Math.abs(s) >= size) return rtf.format(Math.round(-s / size), unit)
   }

@@ -18,7 +18,6 @@ import { Dot } from '../Dot.tsx'
 import { Prio } from '../Prio.tsx'
 import { Edit } from '../Edit.tsx'
 import { editorFor, Prop } from '../editors.tsx'
-import { Overlay } from '../overlay.tsx'
 import { Relate } from './Relate.tsx'
 import { View } from '../View.tsx'
 
@@ -63,9 +62,10 @@ let {
 // The status pip IS the status control: a click anchors the vocabulary's
 // enum editor on the dot — every status one press away, and a slip is a
 // closed menu, not a written status (the old cycle wrote on every click).
-// The registry supplies the picker exactly as Prop would; only the face
-// differs — a bare Dot, so the heading and titlebar flex rows keep their
-// dot untouched by Prop's value chrome.
+// The registry supplies the picker exactly as Prop would — its popout
+// wrapper owns the anchor dance; only the face differs — a bare Dot
+// (kept out of the editor's hands), so the heading and titlebar flex
+// rows keep their dot untouched by Prop's value chrome.
 export let Pip = ({ e }: { e: Ent }) => {
   let [open, setOpen] = useState(false)
   let anchor = useRef<HTMLElement>(null)
@@ -81,16 +81,16 @@ export let Pip = ({ e }: { e: Ent }) => {
         onClick={() => setOpen((was) => !was)}
       />
       {open && (
-        <Overlay anchor={anchor} side='below'>
-          <ed.Edit
-            eid={e.eid}
-            comp='task'
-            prop='status'
-            t={t}
-            value={e.task!.status}
-            done={() => setOpen(false)}
-          />
-        </Overlay>
+        <ed.Edit
+          eid={e.eid}
+          comp='task'
+          prop='status'
+          t={t}
+          value={e.task!.status}
+          done={() => setOpen(false)}
+          anchor={anchor}
+          side='below'
+        />
       )}
     </>
   )

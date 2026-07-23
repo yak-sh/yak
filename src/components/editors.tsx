@@ -1,25 +1,18 @@
-import { type JSX } from 'preact'
+import { type ComponentChildren, type JSX } from 'preact'
 import { useRef, useState } from 'preact/hooks'
 import { comps, type PropType, statuses } from '../types.ts'
 import { cache, domains, ent, mutate } from '../live.ts'
-import { block, focus } from './ui.tsx'
+import { ago, block, focus, pretty } from './ui.tsx'
 import { Dot } from './Dot.tsx'
 import { Edit } from './Edit.tsx'
 import { Overlay } from './overlay.tsx'
 import { useComplete } from './Complete.tsx'
 
-// The editor registry — the renderer registry's sibling. The typed
-// vocabulary (types.ts comps) is the DETECTION layer: a PropType picks
-// its control here, so views render props and they become editable with
-// the right control without naming one. Two presentation modes, declared
-// per editor:
-//
-//   inline — the control takes the value's place at the value's own
-//            metrics (the Edit.tsx discipline: same font, no swap, zero
-//            pixels move entering edit)
-//   popout — the value keeps rendering; the control anchors ABOVE it
-//            (nothing in the flow can jump, because the control was
-//            never in the flow)
+// The PROP registry — the renderer registry's sibling. The typed
+// vocabulary (types.ts comps) is the DETECTION layer: one entry per
+// PropType kind owns both faces of knowing what a value is — `show`
+// (the display) and `Edit` (the control) — so views render props and
+// they become editable with the right control without naming one.
 //
 // Defaults are curated at the bottom; defineEditors prepends, so a later
 // registration outranks the stock one — the registry is defaults, not a
@@ -33,15 +26,42 @@ export type EditorProps = {
   value: unknown
   done: () => void
 }
+// What the layout wrappers add: the element the control anchors on and
+// the face it may keep rendering (popout) or replace (inline).
+export type EditProps = EditorProps & {
+  anchor: { current: HTMLElement | null }
+  face?: ComponentChildren
+  side?: 'above' | 'below'
+}
 export type Editor = {
   match: (t: PropType) => boolean
-  mode: 'inline' | 'popout'
-  Edit: (p: EditorProps) => JSX.Element
+  show?: (value: unknown, t: PropType) => JSX.Element | null
+  Edit: (p: EditProps) => JSX.Element
 }
 
 let editors: Editor[] = []
 export let defineEditors = (list: Editor[]) => editors.unshift(...list)
 export let editorFor = (t: PropType) => editors.find((e) => e.match(t))
+
+// The two layout idioms, composed at registration — a third is a new
+// audited wrapper here, never ad-hoc in an editor body:
+//   inline(E) — the control takes the face's place at the value's own
+//               metrics (the Edit.tsx discipline: same font, no swap,
+//               zero pixels move entering edit)
+//   popout(E) — the face keeps rendering; the control anchors beside it
+//               (nothing in the flow can jump, because the control was
+//               never in the flow)
+export let inline = (E: (p: EditorProps) => JSX.Element) => (p: EditProps) => (
+  <E {...p} />
+)
+export let popout = (E: (p: EditorProps) => JSX.Element) => (p: EditProps) => (
+  <>
+    {p.face}
+    <Overlay anchor={p.anchor} side={p.side ?? 'above'}>
+      <E {...p} />
+    </Overlay>
+  </>
+)
 
 // Named suggestion WELLS: the schema says {text: 'domains'} and stays
 // declarative; the browser registers what that name means here.
@@ -227,50 +247,79 @@ let candidates = (target: string) =>
     )
     .sort((a, b) => b.num - a.num)
 
+// ---- the stock faces ----
+
+// Most types show as their own text; empty shows nothing, so Prop can
+// paint the ghost. A fragment, because a face is an element.
+let plain = (v: unknown) => v == null || v === '' ? null : <>{String(v)}</>
+
+// An association reads as a NAME — the target's title, never its uuid.
+let titled = (v: unknown) =>
+  v == null || v === '' ? null : <>{ent(String(v)).doc?.title ?? String(v)}</>
+
+// A timestamp reads as relative words off the minute tick, full stamp on
+// hover — the Stamp idiom (ui.tsx ago/pretty), one value at a time.
+// Exported for <Val>: a bare Date wears the same face.
+export let TimeVal = (v: unknown) =>
+  v ? <span data-tip={pretty(String(v))}>{ago(String(v))}</span> : null
+
+// A url reads as a link OUT. Navigation is the face's own click, so an
+// editable url rides Prop's ▾ handle like any link face.
+export let UrlVal = (v: unknown) =>
+  v ? <a href={String(v)} target='_blank' rel='noopener'>{String(v)}</a> : null
+
+// Every text-shaped type edits as the one inline text control; body gets
+// the multiline door.
+let TextEdit = (p: EditorProps) => (
+  <Edit
+    eid={p.eid}
+    comp={p.comp}
+    prop={p.prop}
+    multi={p.t == 'body'}
+    open
+    onClose={p.done}
+  />
+)
+
 defineEditors([
   {
     match: (t) => t == 'text' || t == 'body',
-    mode: 'inline',
-    Edit: (p) => (
-      <Edit
-        eid={p.eid}
-        comp={p.comp}
-        prop={p.prop}
-        multi={p.t == 'body'}
-        open
-        onClose={p.done}
-      />
-    ),
+    show: plain,
+    Edit: inline(TextEdit),
   },
-  { match: (t) => t == 'number', mode: 'inline', Edit: NumEdit },
-  { match: (t) => t == 'query', mode: 'inline', Edit: QueryEdit },
+  { match: (t) => t == 'time', show: TimeVal, Edit: inline(TextEdit) },
+  { match: (t) => t == 'url', show: UrlVal, Edit: inline(TextEdit) },
+  { match: (t) => t == 'number', show: plain, Edit: inline(NumEdit) },
+  { match: (t) => t == 'query', show: plain, Edit: inline(QueryEdit) },
   {
     match: (t) => typeof t == 'object' && 'enum' in t,
-    mode: 'popout',
-    Edit: EnumEdit,
+    show: plain,
+    Edit: popout(EnumEdit),
   },
   {
     match: (t) => typeof t == 'object' && 'text' in t,
-    mode: 'popout',
-    Edit: WellEdit,
+    show: plain,
+    Edit: popout(WellEdit),
   },
   {
     match: (t) => typeof t == 'object' && 'eid' in t,
-    mode: 'popout',
-    Edit: EidEdit,
+    show: titled,
+    Edit: popout(EidEdit),
   },
 ])
 defineWells({ domains: () => domains.value })
 
 // ---- the door ----
 
-// <Prop eid comp prop editable/> — the <View> of values: renders the
-// prop; editable, a click opens the type's editor. An eid value shows
-// its target's title (the association reads as a name, not a uuid).
-// Callers may dress the value: `show` paints a custom face (a badge, a
-// chip, a link) while the registry still owns the editing; `name` is the
-// ghost label when empty; `handle` moves the press to a ▾ beside the
-// face — for faces that are links, whose own click must stay navigation.
+// <Prop eid comp prop editable/> — the <View> of values: the registry
+// supplies the type's face (an eid reads as its target's title, a time
+// as relative words) and, editable, the control a click opens — the
+// entry's wrapper owns the layout, Prop only hands it the anchor and the
+// face. Callers may dress the value: `show` paints a custom face (a
+// badge, a chip, a link) while the registry still owns the editing;
+// `name` is the ghost label when empty; `handle` moves the press to a ▾
+// beside the face — for faces that are links, whose own click must stay
+// navigation.
 export let Prop = (
   { eid, comp, prop, editable, name, show: paint, handle }: {
     eid: string
@@ -283,7 +332,7 @@ export let Prop = (
   },
 ) => {
   let [editing, setEditing] = useState(false)
-  // The face the popout control anchors ABOVE — the value or its handle,
+  // What the popout control anchors on — the value or its handle,
   // whichever is showing (both wear this ref; only one renders at a time).
   let anchor = useRef<HTMLElement>(null)
   let t = comps[comp]?.[prop]
@@ -292,13 +341,13 @@ export let Prop = (
     Record<string, unknown> | undefined
   >
   let value = e[comp]?.[prop]
-  let editor = t && editable ? editorFor(t) : undefined
-  let text = value == null || value === ''
-    ? ''
-    : typeof t == 'object' && 'eid' in t
-    ? ent(String(value)).doc?.title ?? String(value)
-    : String(value)
-  let face = paint ? paint(value) : (text || null)
+  let entry = t ? editorFor(t) : undefined
+  let editor = editable ? entry : undefined
+  // The face, through the registry; plain is the net under types no
+  // entry claims (bool, a prop outside the vocabulary).
+  let face = paint ? paint(value) : entry?.show ? entry.show(value, t!) : (
+    plain(value)
+  )
   let done = () => setEditing(false)
   let ep: EditorProps = { eid, comp, prop, t: t!, value, done }
   // bool never enters an edit mode: the value IS the toggle. For popout
@@ -309,15 +358,8 @@ export let Prop = (
     : t == 'bool'
     ? () => set(ep, value ? 0 : 1)
     : () => setEditing((was) => !was)
-  if (editing && editor?.mode == 'inline') {
-    return (
-      <Frame>
-        <editor.Edit {...ep} />
-      </Frame>
-    )
-  }
-  return (
-    <Frame mod={editor && 'live'}>
+  let shown = (
+    <>
       {(face || !handle) && (
         <Val
           elRef={anchor}
@@ -337,11 +379,13 @@ export let Prop = (
           {face ? '▾' : `+ ${name ?? prop}`}
         </Hand>
       )}
-      {editing && editor?.mode == 'popout' && (
-        <Overlay anchor={anchor} side='above'>
-          <editor.Edit {...ep} />
-        </Overlay>
-      )}
+    </>
+  )
+  return (
+    <Frame mod={editor && 'live'}>
+      {editing && editor
+        ? <editor.Edit {...ep} anchor={anchor} face={shown} />
+        : shown}
     </Frame>
   )
 }
