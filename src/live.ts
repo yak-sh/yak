@@ -215,7 +215,7 @@ export let ent = (eid: string): Ent => {
 // The stored query may carry sugar values ('.assignee=jeff') and path
 // preds ('.assignee.title~=j') — the cache is the graph they resolve
 // and deref against.
-let findEid = (id: string): string | undefined => {
+export let findEid = (id: string): string | undefined => {
   let num = id.match(/^[A-Za-z]+-(\d+)$/)?.[1] ?? id.match(/^(\d+)$/)?.[1]
   for (let [eid, r] of Object.entries(cache.value)) {
     if (num ? r.entity?.num == +num : r.alias?.slug == id) return eid
