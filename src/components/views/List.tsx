@@ -3,7 +3,6 @@ import { unmime } from '../../rfc2047.ts'
 import { boardAll, byWarmth, pinned } from '../../live.ts'
 import { orderOf, parseQuery } from '../../query.ts'
 import { block } from '../ui.tsx'
-import { menu } from '../nav.tsx'
 import { passOf } from '../Filter.tsx'
 import { dragData } from '../drag.ts'
 import { Id } from './Inline.tsx'
@@ -74,24 +73,13 @@ export let BoardList = ({ e }: { e: Ent }) => {
   )
 }
 
-// The default list line: title (or kind) + the linking id chip. Tasks
-// override List.Tile via the registry (TaskRow). Right-click for the
-// entity's verbs, same as any card.
+// The default list line: title (or kind) + the id chip. The whole tile
+// is the LINK — href on the el, the anchor promotion does the rest — so
+// the browser's own context menu serves it; the verbs menu belongs to
+// the card. Tasks override List.Tile via the registry (TaskRow).
 let Line = block('div', 'ListItem', { Title: 'span' })
 export let ListItem = ({ e }: { e: Ent }) => (
-  <Line
-    onContextMenu={(ev: MouseEvent) => {
-      if (ev.target instanceof Element && ev.target.closest('a')) return
-      ev.preventDefault()
-      ev.stopPropagation()
-      menu.value = {
-        x: ev.clientX,
-        y: ev.clientY,
-        href: `/${idOf(e)}`,
-        eid: e.eid,
-      }
-    }}
-  >
+  <Line href={`/${idOf(e)}`}>
     {/* a mail's stored subject may be an encoded-word — decode to read */}
     <Line.Title>
       {(e.mail ? unmime(e.doc?.title ?? '') : e.doc?.title) || e.kind}

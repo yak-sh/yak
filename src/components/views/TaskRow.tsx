@@ -3,7 +3,6 @@ import { commentCount, ent, gated, settled } from '../../live.ts'
 import { Dot } from '../Dot.tsx'
 import { Prio } from '../Prio.tsx'
 import { block } from '../ui.tsx'
-import { menu } from '../nav.tsx'
 import { Id } from './Inline.tsx'
 
 let Frame = block('div', 'TaskRow', {
@@ -20,10 +19,11 @@ let { Title, Meta, Domain, Comments, Claim, Assignee, Deps, Done } = Frame
 
 // A task as a small board card, Trello-shaped: wrapping title beside its
 // dot, then one meta line — priority, domain, edge tallies ("2 requires",
-// edge-colored), comment tally, claim flag, linking id. Plain spans only
+// edge-colored), comment tally, claim flag, id. Plain spans only
 // (no editors, no markdown): hundreds of these must render without the
-// browser noticing. Right-click for the task's verbs; drag out to the
-// canvas for the full Task card.
+// browser noticing. The whole tile is the LINK — href on the el, so the
+// browser's own context menu serves it; the verbs menu belongs to the
+// card. Drag out to the canvas for the full Task card.
 export let TaskRow = ({ e }: { e: Ent }) => {
   let talk = commentCount.value[e.eid]
   // Each tally reads as a sentence, verb first — "requires ~2~ 1": two
@@ -51,22 +51,7 @@ export let TaskRow = ({ e }: { e: Ent }) => {
     ],
   ]
   return (
-    <Frame
-      onContextMenu={(ev: MouseEvent) => {
-        if (
-          ev.target instanceof Element &&
-          ev.target.closest('a, input, textarea, [contenteditable]')
-        ) return
-        ev.preventDefault()
-        ev.stopPropagation()
-        menu.value = {
-          x: ev.clientX,
-          y: ev.clientY,
-          href: `/${idOf(e)}`,
-          eid: e.eid,
-        }
-      }}
-    >
+    <Frame href={`/${idOf(e)}`}>
       <Dot status={e.task!.status} gated={gated(e)} />
       <Title>{e.doc?.title}</Title>
       <Meta>
