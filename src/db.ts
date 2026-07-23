@@ -400,7 +400,7 @@ let seed = (db: DatabaseSync) => {
   let canvas = ent(db)
   db.prepare('insert into canvas (eid) values (?)').run(canvas)
   pin(db, canvas, addCard(db, board, 'Board'), 0, 0, 640, 0)
-  pin(db, canvas, addCard(db, view, 'Task'), 664, 0, 320, 0)
+  pin(db, canvas, addCard(db, view, 'Full'), 664, 0, 320, 0)
 }
 
 // A baked constraint can't be changed in place: rebuild the table around

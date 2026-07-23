@@ -100,7 +100,7 @@ export let Peek = () => {
         <View eid={p.eid} view='Card.Title' />
       </Head>
       <Body>
-        <View eid={p.eid} view={resolve(e).view} context='Card' />
+        <View eid={p.eid} view={`Card.${resolve(e).view}`} />
       </Body>
     </Frame>
   )

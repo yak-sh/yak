@@ -1,7 +1,7 @@
 // The TUI app: browse the first board with vim keys. Everything
 // below this file is shared with the web — same cache, same registry, same
 // mode signal. Only Board is overridden (columns become a nested list);
-// Task, Dot, Id, Dependency and Debug.ListItem render through the very same
+// Task, Dot, Id, Dependency and Debug.Tile render through the very same
 // components the browser uses, painted as lines instead of CSS.
 import { signal } from '@preact/signals'
 import { type Ent, idOf } from '../types.ts'
@@ -151,7 +151,7 @@ let vert = (d: number) => {
 }
 
 // The Board override: columns as a nested list, the selection inverted.
-// Each row is the same Debug.ListItem the web's inspector uses.
+// Each row is the same Debug.Tile the web's inspector uses.
 let TuiBoard = ({ e }: { e: Ent }) => (
   <div class='TBoard'>
     {statuses.map((s, ci) => (
@@ -165,7 +165,7 @@ let TuiBoard = ({ e }: { e: Ent }) => (
               ? 'TRow TRow-on'
               : 'TRow'}
           >
-            <View eid={k.eid} view='Debug.ListItem' />
+            <View eid={k.eid} view='Debug.Tile' />
           </div>
         ))}
       </div>

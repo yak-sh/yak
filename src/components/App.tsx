@@ -25,9 +25,9 @@ let Tab = el('button', 'Tab')
 // The URL names the root: `/` = the root canvas, `/T-123` = that entity
 // fullscreened, `?v=` picks the view. The bar is chrome — brand, the
 // compact Card.Title, the view tabs — and the body renders the ROOT face
-// (no context: a doc-carrier gets the document h1 from Show, and the
-// bar's title text sleeps until that h1 scrolls away). The vim statusbar
-// keeps the floor.
+// (the unqualified ask: a doc-carrier gets the document h1 from Full,
+// and the bar's title text sleeps until that h1 scrolls away). The vim
+// statusbar keeps the floor.
 export let App = () => {
   // `/` raises the search palette over ANY root — canvas, doc, board,
   // admin. The shell owns the hotkey and the one <Search> mount so a

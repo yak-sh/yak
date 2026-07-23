@@ -14,7 +14,7 @@ import { overTray, shelf, shelfMint } from './Tray.tsx'
 export let icons: Record<string, string> = {
   Canvas: 'map',
   List: 'list',
-  Show: 'file-text',
+  Full: 'file-text',
   Board: 'kanban',
   Persona: 'drama',
   Web: 'globe',
@@ -235,7 +235,12 @@ export let Card = ({ p }: { p: Pinned }) => {
           </X>
         </Tabs>
         <Scroll>
-          <View eid={p.target_eid} view={p.view} context='Card' />
+          {
+            /* The frame's ask wears the Card qualifier: a view with a card
+              face (Card.Full) serves it, anything else walks to the plain
+              role — the titlebar above already shows the head. */
+          }
+          <View eid={p.target_eid} view={`Card.${p.view}`} />
         </Scroll>
       </Frame>
       {handles.map((d) => (

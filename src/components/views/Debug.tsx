@@ -7,9 +7,9 @@ import { Prop } from '../editors.tsx'
 import { View } from '../View.tsx'
 
 // The Debug view: one full inspector for the entity itself — EVERY prop,
-// nothing hidden — with contained children as one linked Debug.ListItem row
+// nothing hidden — with contained children as one linked Debug.Tile row
 // each (a board full of tasks stays a list, not an explosion). The per-kind
-// dispatch lives in Debug.ListItem: tasks get the status row, everything
+// dispatch lives in Debug.Tile: tasks get the status row, everything
 // else the generic one; the inspector's own head is its ListItem too.
 
 let Frame = block('div', 'Debug', {
@@ -139,7 +139,7 @@ export let Debug = ({ e }: { e: Ent }) => {
   let links = backlinks(e.eid)
   return (
     <Frame>
-      <View eid={e.eid} view='Debug.ListItem' />
+      <View eid={e.eid} view='Debug.Tile' />
       <AllProps e={e} />
       {parents(e.eid).map((d) => (
         <View
@@ -156,7 +156,7 @@ export let Debug = ({ e }: { e: Ent }) => {
       {e.kids.length > 0 && (
         <Kids>
           {e.kids.map((k) => (
-            <View key={k.eid} eid={k.eid} view='Debug.ListItem' />
+            <View key={k.eid} eid={k.eid} view='Debug.Tile' />
           ))}
         </Kids>
       )}
@@ -165,7 +165,7 @@ export let Debug = ({ e }: { e: Ent }) => {
           {links.map((b) => (
             <Linked key={b.from + b.via}>
               <Via>← {b.via}</Via>
-              <View eid={b.from} view='Debug.ListItem' />
+              <View eid={b.from} view='Debug.Tile' />
             </Linked>
           ))}
         </Kids>

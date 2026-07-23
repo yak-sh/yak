@@ -173,7 +173,7 @@ export let Tray = () => {
                   onDragStart={(e: DragEvent) => dragData(e, eid, 'Session')}
                   onClick={(e: MouseEvent) => openAt(eid, e)}
                 >
-                  <View eid={eid} view='List.Item' />
+                  <View eid={eid} view='List.Tile' />
                   {
                     /* only a settled run dismisses — a live one wants your
                       eyes (stop it from its own view) */
@@ -204,7 +204,7 @@ export let Tray = () => {
                   onDragStart={(e: DragEvent) =>
                     dragData(e, p.target_eid, p.view, p.w, p.eid)}
                 >
-                  <View eid={p.target_eid} view='List.Item' />
+                  <View eid={p.target_eid} view='List.Tile' />
                   <X
                     type='button'
                     aria-label='remove'

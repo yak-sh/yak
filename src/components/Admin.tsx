@@ -144,7 +144,7 @@ let Index = ({ kind }: { kind: string }) => {
           <Grid>
             {shown.map((e) => (
               <div key={e.eid}>
-                <View eid={e.eid} view='List.Item' />
+                <View eid={e.eid} view='List.Tile' />
               </div>
             ))}
           </Grid>

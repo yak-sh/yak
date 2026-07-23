@@ -252,9 +252,9 @@ export let Board = ({ e }: { e: Ent }) => {
                     key={k.eid}
                     draggable
                     data-eid={k.eid}
-                    onDragStart={(ev: DragEvent) => dragData(ev, k.eid, 'Show')}
+                    onDragStart={(ev: DragEvent) => dragData(ev, k.eid, 'Full')}
                   >
-                    <View eid={k.eid} view='Task.Row' />
+                    <View eid={k.eid} view='Board.List.Tile' />
                   </Item>
                 ))}
               </Scroll>

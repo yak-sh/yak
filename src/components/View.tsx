@@ -58,19 +58,19 @@ define([
   },
   { view: 'List', match: has('canvas'), Render: List },
   { view: 'List', match: has('board'), Render: BoardList },
-  { view: 'List.Item', match: has('doc', 'task'), Render: TaskRow },
-  { view: 'List.Item', match: has('session'), Render: SessionRow },
-  { view: 'List.Item', match: () => true, Render: ListItem },
-  { view: 'Show', match: has('doc'), Render: Show, Card: ShowCard },
+  { view: 'List.Tile', match: has('doc', 'task'), Render: TaskRow },
+  { view: 'List.Tile', match: has('session'), Render: SessionRow },
+  { view: 'List.Tile', match: () => true, Render: ListItem },
+  { view: 'Full', match: has('doc'), Render: Show },
+  { view: 'Card.Full', match: has('doc'), Render: ShowCard },
   { view: 'Board', match: has('doc', 'board'), Render: Board },
   { view: 'Persona', match: has('doc', 'persona'), Render: Persona },
-  { view: 'Task.Row', match: has('doc', 'task'), Render: TaskRow },
   { view: 'Web', match: has('web'), Render: Web },
   { view: 'Session', match: has('session'), Render: Session },
-  // The sections — Show's legos, internal views like Id and Dependency.
+  // The sections — Full's legos, internal views like Id and Dependency.
   // Catch-all matchers on purpose: each renders nothing when its data is
   // absent, and a specialized look for an entity shape is a higher-
-  // scoring entry above these, never an edit to Show.
+  // scoring entry above these, never an edit to Full.
   { view: 'Body', match: () => true, Render: Body },
   { view: 'Meta', match: () => true, Render: Meta },
   { view: 'Dependencies', match: () => true, Render: Dependencies },
@@ -111,8 +111,8 @@ define([
     Render: Schema,
   },
   { view: 'Debug', match: () => true, Render: Debug },
-  { view: 'Debug.ListItem', match: has('task'), Render: DebugTaskItem },
-  { view: 'Debug.ListItem', match: () => true, Render: DebugAnyItem },
+  { view: 'Debug.Tile', match: has('task'), Render: DebugTaskItem },
+  { view: 'Debug.Tile', match: () => true, Render: DebugAnyItem },
   { view: 'Id', match: () => true, Render: Id },
   { view: 'Dependency', match: () => true, Render: Dependency },
 ], [
@@ -120,7 +120,7 @@ define([
   'List',
   'Board',
   'Persona',
-  'Show',
+  'Full',
   'Web',
   'Session',
   'Markdown',
@@ -206,18 +206,15 @@ defineActions([
 ])
 
 // The one front door: render an entity (straight out of the live cache)
-// through a view. context='Card' prefers the renderer's card variant.
-// Extra props flow through to the renderer.
+// through a view. Extra props flow through to the renderer.
 export let View = (
-  { eid, view, context, ...rest }: {
+  { eid, view, ...rest }: {
     eid: string
     view?: string
-    context?: 'Card'
     [x: string]: unknown
   },
 ) => {
   let e = ent(eid)
   let r = resolve(e, view)
-  let R = (context == 'Card' ? r.Card : undefined) ?? r.Render
-  return <R e={e} {...rest} />
+  return <r.Render e={e} {...rest} />
 }

@@ -998,11 +998,11 @@ card id (close it with card_close, move it with card_move).`,
         ),
       ) + 1
       let views: Record<string, string> = {
-        task: 'Show',
+        task: 'Full',
         board: 'Board',
         web: 'Web',
-        doc: 'Show',
-        project: 'Show',
+        doc: 'Full',
+        project: 'Full',
       }
       let eid = crypto.randomUUID()
       await io.write([

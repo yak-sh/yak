@@ -96,7 +96,7 @@ navigation the menu lists the entity's VERBS, contributed per component with
 UNION semantics (registry `defineActions`/`actionsFor`, curated in View.tsx like
 the renderers): a task offers its status moves, a claim its release, anything
 its delete. Adding a verb = one contributor row. A canvas offers a `List` view —
-the mobile door — whose rows resolve through `List.Item`.
+the mobile door — whose rows resolve through `List.Tile`.
 
 ## Map
 

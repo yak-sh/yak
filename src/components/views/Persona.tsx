@@ -104,9 +104,9 @@ export let Persona = ({ e }: { e: Ent }) => {
             <Row
               key={r.eid}
               draggable
-              onDragStart={(ev: DragEvent) => dragData(ev, r.eid, 'Show')}
+              onDragStart={(ev: DragEvent) => dragData(ev, r.eid, 'Full')}
             >
-              <View eid={r.eid} view='List.Item' />
+              <View eid={r.eid} view='List.Tile' />
             </Row>
           ))}
           {!rows(t).length && <Empty>drop here — {hint}</Empty>}

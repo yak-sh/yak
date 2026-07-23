@@ -81,10 +81,13 @@ Deno.test('suffix walk: qualifiers fall leftward', () => {
   assertEquals(tag(task, 'Kanban.Tile'), 'task-tile')
   // a name unknown at every level still falls back to JSON
   assertEquals(resolve(ent(task), 'Nope.Nada').view, 'JSON')
-  // alias heals an old stored name BEFORE the walk
+  // alias heals an old stored name at ANY level: bare, and after a strip
+  // (the card frame prefixes its ask, so Card.Show must land on the heal)
+  let was = alias['Show']
   alias['Show'] = 'Board.List.Tile'
   assertEquals(tag(task, 'Show'), 'list-tile')
-  delete alias['Show']
+  assertEquals(tag(task, 'Card.Show'), 'list-tile')
+  alias['Show'] = was
 })
 
 Deno.test('tabs = views with a live matcher', () => {

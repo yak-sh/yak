@@ -950,8 +950,8 @@ html {
 
 /* The document face sits borderless on the floor — the card frame
    belongs to windows (canvas cards), not to the page you're reading.
-   Only root Show renders div.Show; card context is ShowCard, a fragment
-   inside the Card's own chrome. */
+   Only the root Full face renders div.Show; the card face (Card.Full)
+   is ShowCard, a fragment inside the Card's own chrome. */
 /* The document face (root Show): a real h1 owns the title at the
    column's measure — it wraps, never truncates. The pip pins to the
    FIRST line (the proven head trick); the named view-timeline is what
@@ -2392,7 +2392,7 @@ a[data-ref]:hover {
 .Tray_Row:hover {
   background: var(--soft);
 }
-/* The summary row (a List.Item) takes the width; the ✕ stays a thumbnail. */
+/* The summary row (a List.Tile) takes the width; the ✕ stays a thumbnail. */
 .Tray_Row > :first-child {
   flex: 1;
   min-width: 0;

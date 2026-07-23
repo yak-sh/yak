@@ -29,7 +29,7 @@ export let List = ({ e }: { e: Ent }) => {
             onDragStart={(ev: DragEvent) =>
               dragData(ev, p.target_eid, p.view, p.w, p.eid)}
           >
-            <View eid={p.target_eid} view='List.Item' />
+            <View eid={p.target_eid} view='List.Tile' />
           </Row>
         ))}
     </Frame>
@@ -63,9 +63,9 @@ export let BoardList = ({ e }: { e: Ent }) => {
         <Row
           key={t.eid}
           draggable
-          onDragStart={(ev: DragEvent) => dragData(ev, t.eid, 'Show')}
+          onDragStart={(ev: DragEvent) => dragData(ev, t.eid, 'Full')}
         >
-          <View eid={t.eid} view='List.Item' />
+          <View eid={t.eid} view='List.Tile' />
         </Row>
       ))}
       {more > 0 && <Row mod='more'>+{more} more</Row>}
@@ -74,8 +74,8 @@ export let BoardList = ({ e }: { e: Ent }) => {
 }
 
 // The default list line: title (or kind) + the linking id chip. Tasks
-// override with Task.Row via the registry. Right-click for the entity's
-// verbs, same as any card.
+// override List.Tile via the registry (TaskRow). Right-click for the
+// entity's verbs, same as any card.
 let Line = block('div', 'ListItem', { Title: 'span' })
 export let ListItem = ({ e }: { e: Ent }) => (
   <Line

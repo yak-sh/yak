@@ -25,11 +25,11 @@ import { View } from '../View.tsx'
 // The lego box. A SECTION is an internal view ('Body', 'Meta',
 // 'Dependencies', 'Runs', 'Comments' — registered in View.tsx like 'Id'
 // and 'Dependency'): matched per entity through the registry door, and
-// each renders NOTHING when its data is absent. Show is the one generic
-// full view — it just stacks the sections — so there is no Task-vs-Doc
-// split to keep in sync: a bare doc simply has fewer sections with
-// something to say. Specializing a section for an entity shape is a
-// higher-scoring registry entry, not an edit here.
+// each renders NOTHING when its data is absent. Show serves the Full
+// role — the one generic whole-entity view, just stacking the sections —
+// so there is no Task-vs-Doc split to keep in sync: a bare doc simply
+// has fewer sections with something to say. Specializing a section for
+// an entity shape is a higher-scoring registry entry, not an edit here.
 
 let Frame = block('div', 'Show', {
   Heading: 'h1',
@@ -235,7 +235,7 @@ export let Runs = ({ e }: { e: Ent }) => {
   if (!ids.size) return null
   return (
     <RunsEl>
-      {[...ids].map((s) => <View key={s} eid={s} view='List.Item' />)}
+      {[...ids].map((s) => <View key={s} eid={s} view='List.Tile' />)}
     </RunsEl>
   )
 }
@@ -248,7 +248,7 @@ export let Boards = ({ e }: { e: Ent }) => {
   if (!ids.length) return null
   return (
     <BoardsEl>
-      {ids.map((b) => <View key={b} eid={b} view='List.Item' />)}
+      {ids.map((b) => <View key={b} eid={b} view='List.Tile' />)}
     </BoardsEl>
   )
 }
@@ -268,15 +268,15 @@ export let Tasks = ({ e }: { e: Ent }) => {
   if (!ids.length) return null
   return (
     <TasksEl>
-      {ids.map((t) => <View key={t.eid} eid={t.eid} view='List.Item' />)}
+      {ids.map((t) => <View key={t.eid} eid={t.eid} view='List.Tile' />)}
     </TasksEl>
   )
 }
 
 // The meta line — the board row's grammar, prio · project · domain · 💬
-// · ⚑ · age, every field the same editor everywhere. In card context the
+// · ⚑ · age, every field the same editor everywhere. In a card frame the
 // titlebar carries title, pip, and id, so an empty line renders nothing;
-// the document face (root Show) passes `id` and always gets the row —
+// the document face (root Full) passes `id` and always gets the row —
 // its id chip lives here, under the h1.
 export let Meta = ({ e, id }: { e: Ent; id?: boolean }) => {
   let talk = commentCount.value[e.eid]
@@ -307,13 +307,13 @@ export let Meta = ({ e, id }: { e: Ent; id?: boolean }) => {
 // signature so it registers like the rest.
 export let Talkback = ({ e }: { e: Ent }) => <Comments eid={e.eid} />
 
-// ---- the one generic full view: stack the sections ----
+// ---- the one generic Full view: stack the sections ----
 
-// The section stack, walked by both contexts — change the order here,
+// The section stack, walked by both faces — change the order here,
 // every doc-carrying entity follows.
 let stack = ['Dependencies', 'Relate', 'Boards', 'Tasks', 'Runs', 'Comments']
 
-// Root context is the DOCUMENT face: a real h1 owns the title at the
+// The root Full face is the DOCUMENT: a real h1 owns the title at the
 // column's measure — it wraps, never truncates — with the pip riding its
 // first line and the meta chips in a quiet row beneath (id included; the
 // App bar's compact title stays hidden until this h1 scrolls away — the
@@ -332,7 +332,8 @@ export let Show = ({ e }: { e: Ent }) => (
   </Frame>
 )
 
-// Card context: the titlebar is the head — the meta line stands in.
+// The card face (Card.Full): the titlebar is the head — the meta line
+// stands in.
 export let ShowCard = ({ e }: { e: Ent }) => (
   <>
     <View eid={e.eid} view='Meta' />

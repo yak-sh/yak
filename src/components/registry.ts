@@ -16,12 +16,13 @@ import { type Ent } from '../types.ts'
 // 0.5, the catch-alls). Ties go to registration order. Proper queries
 // come later; this is the simple thing that works.
 //
-// A renderer may also carry a CARD variant — the same view rendering as
-// a card body, where the titlebar (the Card.Title view) already shows
-// the head — and a FILE form: how this view of this entity serializes
-// when its tab is dragged to the desktop.
+// A renderer may also carry a FILE form: how this view of this entity
+// serializes when its tab is dragged to the desktop. A card-framed look
+// is not a variant field — it's a registration under a Card.* name
+// (Card.Full, Card.Title): the frame asks with the qualifier and the
+// walk falls to the plain role when no card face exists.
 // null is a first-class render: a section view with nothing to say
-// renders nothing (the Show stack relies on it).
+// renders nothing (the Full stack relies on it).
 export type Render = (
   p: { e: Ent; [x: string]: unknown },
 ) => JSX.Element | null
@@ -29,7 +30,6 @@ export type Renderer = {
   view: string
   match: (e: Ent) => number | boolean
   Render: Render
-  Card?: Render
   file?: { ext: string; mime: string; text: (e: Ent) => string }
 }
 
@@ -104,10 +104,16 @@ let best = (e: Ent, pool: Renderer[]) => {
 
 let json = () => registry.find((r) => r.view == 'JSON')!
 
-// Old stored view names → current, consulted before the walk. card.view
-// is live data and old ?v= URLs linger, so a renamed view must keep
-// resolving instead of falling to JSON. Empty until a rename ships.
-export let alias: Record<string, string> = {}
+// Old stored view names → current, consulted at every walk level.
+// card.view is live data and old ?v= URLs linger, so a renamed view must
+// keep resolving instead of falling to JSON — and the frame prefixes its
+// ask (Card.Show), so the heal must apply after a strip too.
+export let alias: Record<string, string> = {
+  'Show': 'Full',
+  'List.Item': 'List.Tile',
+  'Task.Row': 'Board.List.Tile',
+  'Debug.ListItem': 'Debug.Tile',
+}
 
 // A dotted view name is container qualifiers left, ROLE rightmost
 // (Board.List.Tile). The walk tries the full name, then strips the
@@ -119,7 +125,8 @@ export let resolve = (e: Ent, view?: string): Renderer => {
   if (!view) {
     return best(e, all().filter((r) => tabs.includes(r.view))) ?? json()
   }
-  for (let v = alias[view] ?? view; v; v = v.replace(/^[^.]+\.?/, '')) {
+  for (let v = view; v; v = v.replace(/^[^.]+\.?/, '')) {
+    v = alias[v] ?? v
     let r = best(e, all().filter((x) => x.view == v))
     if (r) return r
   }
