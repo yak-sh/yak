@@ -1826,7 +1826,13 @@ a[data-ref]:hover {
 }
 .Debug_Val {
   color: var(--text);
+}
+/* The inspector shows stored bytes: a multiline value (a doc body, a
+   final_text) keeps its newlines, and unbroken tokens break anywhere. */
+.Debug_Val,
+.Debug_Props .Prop_Val {
   overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 .Debug_Val-num {
   color: var(--purple);
