@@ -15,14 +15,18 @@ let his = (globalThis as { history?: History }).history
 
 export let route = signal(loc ? loc.pathname + loc.search : '/')
 globalThis.addEventListener?.('popstate', () => {
+  let was = screenTarget()?.eid
   route.value = loc!.pathname + loc!.search
+  track(was)
 })
 
 export let navigate = (to: string) => {
   if (!his) return
   peek.value = null // a real root change dismisses any floating peek
+  let was = screenTarget()?.eid
   his.pushState(null, '', to)
   route.value = to
+  track(was)
 }
 
 // A peeked entity: desktop's answer to clicking a link — a popover card
@@ -97,6 +101,21 @@ export let screenTarget = () => {
   let hit = Object.entries(cache.value)
     .find(([, r]) => r.entity?.num == +m![1])
   return hit ? { eid: hit[0], view } : null
+}
+
+// The trail: roots passed through in place, oldest first — the App bar
+// wears the last few as breadcrumbs (the TUI keeps its own). Both route
+// writers above call track() with where they WERE: landing somewhere
+// already on the trail (a crumb click, the back button) cuts back to it,
+// so the trail never loops and never holds the present. The root canvas
+// never rides — the brand is that crumb.
+export let trail = signal<string[]>([])
+let track = (was?: string) => {
+  let now = screenTarget()?.eid
+  if (!now || now == was) return
+  let i = trail.value.indexOf(now)
+  if (i >= 0) trail.value = trail.value.slice(0, i)
+  else if (was && was != rootCanvas()) trail.value = [...trail.value, was]
 }
 
 // The card's context menu: navigation first ("open here" is the

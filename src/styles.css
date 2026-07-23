@@ -218,6 +218,18 @@ html {
   padding: 2px 6px;
   border-right: 1px solid var(--border);
 }
+/* The bar's breadcrumbs (nav.tsx trail): the last few roots as bare
+   chips, one tight group between brand and title, a › handing off to
+   the current title's own chip. */
+.App_Trail {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+}
+.App_Trail::after {
+  content: '›';
+  color: var(--dim);
+}
 .App_Body {
   flex: 1;
   min-height: 0;

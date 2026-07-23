@@ -1,14 +1,22 @@
 import { useEffect } from 'preact/hooks'
 import { idOf } from '../types.ts'
-import { ent, mode } from '../live.ts'
+import { cache, ent, mode } from '../live.ts'
 import { Admin } from './Admin.tsx'
-import { block, el } from './ui.tsx'
+import { block, Chip, el } from './ui.tsx'
 import { filterable, FilterInput } from './Filter.tsx'
 import { applicable } from './registry.ts'
 import { icons } from './Card.tsx'
 import { spawnHit } from './Canvas.tsx'
 import { Icon } from './icons.tsx'
-import { Menu, menu, navigate, route, screenTarget } from './nav.tsx'
+import {
+  follow,
+  Menu,
+  menu,
+  navigate,
+  route,
+  screenTarget,
+  trail,
+} from './nav.tsx'
 import { Peek } from './Peek.tsx'
 import { Run, run } from './Run.tsx'
 import { Search, searchOpen } from './Search.tsx'
@@ -18,9 +26,41 @@ import { tips } from './overlay.tsx'
 
 tips() // mount the one delegated [data-tip] tooltip (idempotent)
 
-let Frame = block('main', 'App', { Bar: 'header', Brand: 'a', Body: 'div' })
-let { Bar, Brand, Body } = Frame
+let Frame = block('main', 'App', {
+  Bar: 'header',
+  Brand: 'a',
+  Trail: 'nav',
+  Body: 'div',
+})
+let { Bar, Brand, Trail, Body } = Frame
 let Tab = el('button', 'Tab')
+
+// The trail's last few, worn as breadcrumbs between brand and title —
+// bare chips (the titlebar surround says the title; the tooltip carries
+// it), each a real anchor whose plain click is the deliberate in-place
+// return. Dead entities just drop out.
+let Crumbs = () => {
+  let eids = trail.value.filter((eid) => cache.value[eid]).slice(-3)
+  if (!eids.length) return null
+  return (
+    <Trail>
+      {eids.map((eid) => {
+        let e = ent(eid)
+        let href = `/${idOf(e)}`
+        return (
+          <Chip
+            key={eid}
+            href={href}
+            data-tip={e.doc?.title}
+            onClick={follow(href)}
+          >
+            {idOf(e)}
+          </Chip>
+        )
+      })}
+    </Trail>
+  )
+}
 
 // The URL names the root: `/` = the root canvas, `/T-123` = that entity
 // fullscreened, `?v=` picks the view. The bar is chrome — brand, the
@@ -91,6 +131,7 @@ export let App = () => {
     >
       <Bar>
         <Brand href='/'>Tasks</Brand>
+        <Crumbs />
         <Entity eid={e.eid} view='Card.Title' />
         {filterable.has(view) && <FilterInput eid={e.eid} />}
         {tabs.map((v) => (
