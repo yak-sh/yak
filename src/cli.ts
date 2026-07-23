@@ -1067,6 +1067,10 @@ let tui = async () => {
 let [cmd, ...rest] = Deno.args
 try {
   if (cmd?.startsWith(':')) await colon(undefined, [cmd, ...rest])
+  // `<verb> --help` shows the verb's help, not the verb run with a stray flag.
+  // mail owns its own richer --help (see mail()), so let it through.
+  else if (cmd && cmd != 'mail' && (rest.includes('--help') || rest.includes('-h')))
+    help([cmd])
   else if (cmd == 'tui') await tui()
   else if (cmd == 'claude') await interactive(rest)
   else if (cmd == 'list' || cmd == 'ls') await list(rest)
