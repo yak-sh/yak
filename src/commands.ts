@@ -392,7 +392,9 @@ export let ghost = (line: string, all: Record<string, Command>): string => {
   let cmd = all[name]
   if (!cmd?.args) return ''
   let typed = (rest ?? '').split(/\s+/).filter(Boolean).length
-  let left = cmd.args.split(/\s+/).slice(typed)
+  // A bracketed group ([T-42 | words…]) is ONE slot: the bracket names
+  // what a single argument may be, so one typed word consumes it whole.
+  let left = (cmd.args.match(/\[[^\]]*\]|\S+/g) ?? []).slice(typed)
   if (!left.length) return ''
   return (/\s$/.test(line) ? '' : ' ') + left.join(' ')
 }

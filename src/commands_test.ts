@@ -239,6 +239,8 @@ Deno.test('ghost: verb remainder, then unconsumed example args', () => {
   assertEquals(g('open T-4'), '') // the slot is being consumed
   assertEquals(g('se'), 't')
   assertEquals(g('set .status=done '), '…') // one slot down, one to go
+  assertEquals(g('fix'), ' [T-42 | the toolbar clips at small widths]')
+  assertEquals(g('fix T-4'), '') // the bracket group is ONE slot
   assertEquals(g('done'), '') // no args to offer
   assertEquals(g('zzz'), '')
   assertEquals(g(''), '')
