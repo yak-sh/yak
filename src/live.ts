@@ -152,6 +152,7 @@ export let sock = () => {
   ws.onmessage = (m) => {
     let data = JSON.parse(String(m.data))
     if (Array.isArray(data)) applyLocal(data)
+    else if (typeof data?.sub == 'string') onSub(data)
     else if (data == 'reload') config.reload()
     else if (data?.hmr) config.swap ? config.swap(data.hmr) : config.reload()
     else if (data?.css) config.css?.(data.css)
@@ -176,6 +177,65 @@ export let send = (...changes: unknown[]) => {
   let msg = JSON.stringify(changes)
   if (s.readyState == WebSocket.OPEN) s.send(msg)
   else s.addEventListener('open', () => s.send(msg), { once: true })
+}
+
+// Query subscriptions (T-3683), the client half. The cache becomes a UNION of
+// subscription result sets: `subMembers` refcounts which eids each sub holds,
+// so an eid that leaves EVERY subscription is evicted — the one new cache
+// mechanic (design §4). A legacy full-broadcast client never subscribes, so
+// this map stays empty and nothing is ever evicted; boot and applyLocal are
+// untouched. Stage 1 only ADDS this capability (boards/boot convert in stage 2).
+let subMembers = new Map<string, Set<string>>()
+
+// A subscription frame: land its changes like any batch (adds + updates flow
+// through the unchanged applyLocal), then track membership. A death rides in
+// `changes` as an entity-null (gone for everyone — applyLocal already removed
+// it); a `drop` eid left THIS query but still exists (gone for this query
+// only). Either way it leaves the sub's set, and an eid now in no set is
+// evicted from the cache.
+let onSub = (f: { sub: string; changes: Change[]; drop?: string[] }) => {
+  applyLocal(f.changes)
+  let mine = subMembers.get(f.sub) ?? new Set<string>()
+  subMembers.set(f.sub, mine)
+  let leaving: string[] = f.drop ? [...f.drop] : []
+  for (let c of f.changes) {
+    if (c.name == 'entity' && c.comp == null) {
+      mine.delete(c.eid)
+      leaving.push(c.eid)
+    } else mine.add(c.eid)
+  }
+  for (let eid of f.drop ?? []) mine.delete(eid)
+  evict(leaving)
+}
+
+// Drop from the cache any eid held by no remaining subscription — a death
+// already removed itself via applyLocal (harmless to revisit), a drop is the
+// live "you no longer see this" that only this layer expresses.
+let evict = (eids: string[]) => {
+  let held = (eid: string) => [...subMembers.values()].some((s) => s.has(eid))
+  let next = { ...cache.value }
+  let changed = false
+  for (let eid of eids) {
+    if (!held(eid) && next[eid]) {
+      delete next[eid]
+      changed = true
+    }
+  }
+  if (changed) cache.value = next
+}
+
+// A control frame is an OBJECT (design §1), distinct from the array batches
+// send() ships — a subscribe/replace or an unsubscribe.
+let control = (frame: object) => {
+  let s = sock()
+  let msg = JSON.stringify(frame)
+  if (s.readyState == WebSocket.OPEN) s.send(msg)
+  else s.addEventListener('open', () => s.send(msg), { once: true })
+}
+export let subscribe = (sub: string, q: string) => control({ sub, q })
+export let unsubscribe = (sub: string) => {
+  subMembers.delete(sub)
+  control({ unsub: sub })
 }
 
 // Fill the cache and open the socket — main.tsx awaits this before render.

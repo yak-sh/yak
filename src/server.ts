@@ -12,8 +12,10 @@ import { providers } from './adapters.ts'
 import { type Change, idOf } from './types.ts'
 import {
   apply,
+  cursorOf,
   db,
   delta,
+  eager,
   epoch,
   journalBy,
   journalOf,
@@ -23,6 +25,7 @@ import {
   vocabHash,
   vocabularyDoc,
 } from './db.ts'
+import { spread, type Step, step } from './subs.ts'
 import { dispatch, docs, on, relay, trace } from './effects.ts'
 import { vocabularyMd } from './schema.ts'
 import { freeze, serveFrozen, store } from './freeze.ts'
@@ -52,7 +55,14 @@ import {
 import { outcome, recent, record, toolCall } from './telemetry.ts'
 import { stamp } from './hot.ts'
 import { find, type Row, rows } from './client.ts'
-import { matchQuery, orderOf, parseQuery, resolveRefs, warm } from './query.ts'
+import {
+  matchQuery,
+  orderOf,
+  parseQuery,
+  type Pred,
+  resolveRefs,
+  warm,
+} from './query.ts'
 
 // The hot-swap generation: bumped by the watcher on every client-code or
 // css change, stamped into every served module's relative imports so a
@@ -116,11 +126,116 @@ let file = async (root: string, path: string) => {
 // the server applies them and rebroadcasts to every other client. Non-array
 // frames are control messages ('reload', from the watcher).
 let clients = new Set<WebSocket>()
+
+// Query subscriptions (T-3683), the whole registry. A Sub is a socket's saved
+// query + the eids currently in its set; `subs` maps each socket to its named
+// subscriptions, `filtered` holds every socket that ever subscribed. The
+// migration switch is one boolean: a socket stays in the legacy full
+// rebroadcast until its first control frame flips it into `filtered`, after
+// which it hears ONLY its subscription frames (design §1/§6). onclose drops
+// both — GC-free, per-socket.
+type Sub = { preds: Pred[]; members: Set<string> }
+let subs = new Map<WebSocket, Map<string, Sub>>()
+let filtered = new Set<WebSocket>()
+
+// The query pipeline shared by /query and a subscription's initial set: the
+// current graph parsed, ref-resolved, matched. `hits` are every row matching
+// the preds; `preds`/`all`/`byEid`/`snap` ride out for whoever ranks or
+// backlinks on top (design §10.2).
+let evalQuery = (q: string) => {
+  let snap = snapshot(db)
+  let all = rows(snap)
+  let preds = resolveRefs(parseQuery(q), (id) => find(all, id)?.eid)
+  let byEid = new Map(all.map((r) => [r.eid, r.comps]))
+  let hits = all.filter((r) => matchQuery(r.comps, preds, (e) => byEid.get(e)))
+  return { snap, all, preds, byEid, hits }
+}
+
+// Fold a committed batch into every subscription (design §2), synchronously —
+// no await between apply and these frames, so snapshot-then-updates stays
+// gapless. Per touched eid × sub: one eager keyed read (batch-cached), then
+// the §2 transition — ADD queues full comps, UPDATE queues the batch's own
+// patches, REMOVE pushes a drop, a death forwards entity-null. Stage 1 tests
+// own-comp equality preds; path/time preds still evaluate (matchQuery derefs
+// through the same eager read) but their far-side changes aren't indexed yet,
+// so a path-pred sub only re-checks members a batch actually touched — the
+// staged gap (design §2), not a silent wrong answer.
+let maintain = (batch: Change[]) => {
+  if (!subs.size) return
+  let cur = cursorOf(db)
+  let gone = new Set(
+    batch.filter((c) => c.name == 'entity' && c.comp == null).map((c) => c.eid),
+  )
+  let touched = [...new Set(batch.map((c) => c.eid))]
+  let reads = new Map<string, Record<string, Record<string, unknown>>>()
+  let comps = (eid: string) => {
+    let hit = reads.get(eid)
+    if (!hit) reads.set(eid, hit = eager(db, eid))
+    return hit
+  }
+  let patch = new Map<string, Change[]>()
+  for (let c of batch) patch.set(c.eid, [...(patch.get(c.eid) ?? []), c])
+  for (let [sock, map] of subs) {
+    if (sock.readyState != WebSocket.OPEN) continue
+    for (let [id, sub] of map) {
+      let changes: Change[] = []
+      let drop: string[] = []
+      for (let eid of touched) {
+        let c = gone.has(eid) ? {} : comps(eid)
+        let alive = !gone.has(eid) && !!c.entity
+        let hit = alive && matchQuery(c, sub.preds, comps)
+        let s: Step = step(sub.members, eid, alive, hit)
+        if (s == 'add') changes.push(...spread(eid, c))
+        else if (s == 'update') changes.push(...(patch.get(eid) ?? []))
+        else if (s == 'remove') drop.push(eid)
+        else if (s == 'dead') changes.push({ eid, name: 'entity', comp: null })
+      }
+      if (changes.length || drop.length) {
+        sock.send(JSON.stringify({ sub: id, changes, drop, cursor: cur }))
+      }
+    }
+  }
+}
+
+// A socket's control frame (design §1): `{sub, q}` subscribes or replaces (the
+// initial frame is the query's current matches as one batch, and seeds the
+// member set); `{unsub}` forgets one. Any control frame flips the socket into
+// `filtered` — the migration switch — so it leaves the legacy rebroadcast even
+// if the query is malformed (it then simply hears nothing, its own news).
+let control = (
+  sock: WebSocket,
+  f: { sub?: string; q?: string; unsub?: string },
+) => {
+  filtered.add(sock)
+  let map = subs.get(sock) ?? new Map<string, Sub>()
+  subs.set(sock, map)
+  if (typeof f.unsub == 'string') return void map.delete(f.unsub)
+  if (typeof f.sub != 'string') return
+  try {
+    let { preds, hits } = evalQuery(f.q ?? '')
+    map.set(f.sub, { preds, members: new Set(hits.map((r) => r.eid)) })
+    let changes = hits.flatMap((r) => spread(r.eid, r.comps))
+    sock.send(
+      JSON.stringify({ sub: f.sub, changes, drop: [], cursor: cursorOf(db) }),
+    )
+  } catch (e) {
+    console.warn('sub: bad query —', e)
+  }
+}
+
+// Broadcast a committed batch to every LEGACY client (subscription sockets
+// hear only their own frames, via maintain), then fold it into subscriptions.
+// The one door every non-/ws write path (MCP, /apply, effects, touch, freeze)
+// reaches subscribers through.
 let cast = (changes: Change[], except?: WebSocket) => {
   let msg = JSON.stringify(changes)
   for (let c of clients) {
-    if (c != except && c.readyState == WebSocket.OPEN) c.send(msg)
+    if (c == except || c.readyState != WebSocket.OPEN || filtered.has(c)) {
+      continue
+    }
+    c.send(msg)
   }
+  maintain(changes)
 }
 
 // The effect half of a write, run AFTER the casts: a slow or failing
@@ -144,9 +259,17 @@ let ws = (req: Request) => {
   // the box owner like any anonymous write.
   let writer = new URL(req.url).searchParams.get('client')
   socket.onopen = () => clients.add(socket)
-  socket.onclose = () => clients.delete(socket)
+  socket.onclose = () => {
+    clients.delete(socket)
+    subs.delete(socket)
+    filtered.delete(socket)
+  }
   socket.onmessage = (m) => {
-    let sent = JSON.parse(String(m.data)) as Change[]
+    let frame = JSON.parse(String(m.data))
+    // Object frames are subscription control (design §1), structurally
+    // disjoint from the array batches — nothing existing changes.
+    if (!Array.isArray(frame)) return control(socket, frame)
+    let sent = frame as Change[]
     let out: Change[]
     let t = trace()
     try {
@@ -158,11 +281,13 @@ let ws = (req: Request) => {
     let extra = out.slice(sent.length)
     // Peers get the batch as sent; cascade extras go to EVERYONE — the
     // sender's optimistic cache only removed what it asked to remove.
+    // Subscription sockets are skipped here and served by maintain() instead.
     for (let c of clients) {
-      if (c.readyState != WebSocket.OPEN) continue
+      if (c.readyState != WebSocket.OPEN || filtered.has(c)) continue
       if (c != socket) c.send(m.data)
       if (extra.length) c.send(JSON.stringify(extra))
     }
+    maintain(out)
     effect(out, t)
   }
   return response
@@ -357,18 +482,12 @@ Deno.serve(
         let backs = segs.includes('backlinks=1')
         let kind = segs.find((s) => s.startsWith('kind='))?.slice(5)
         segs = segs.filter((s) => s != 'backlinks=1' && !s.startsWith('kind='))
-        let snap = snapshot(db)
-        let all = rows(snap)
-        let ps = resolveRefs(
-          parseQuery(segs.join('&')),
-          (id) => find(all, id)?.eid,
-        )
-        let byEid = new Map(all.map((r) => [r.eid, r.comps]))
+        // One pipeline with the subscription initial-set (evalQuery); kind,
+        // hot-ranking and backlinks layer on top of its matches.
+        let { snap, all, preds, byEid, hits } = evalQuery(segs.join('&'))
         let now = Date.now()
-        let hits = all
-          .filter((r) => !kind || r.kind == kind)
-          .filter((r) => matchQuery(r.comps, ps, (e) => byEid.get(e)))
-        if (orderOf(ps) == 'hot') {
+        hits = kind ? hits.filter((r) => r.kind == kind) : hits
+        if (orderOf(preds) == 'hot') {
           hits.sort((a, b) =>
             warm(b.comps, now, (e) => byEid.get(e)) -
             warm(a.comps, now, (e) => byEid.get(e))
@@ -720,6 +839,7 @@ let graph = [
   'schema.ts',
   'types.ts',
   'query.ts',
+  'subs.ts',
   'freeze.ts',
   'hot.ts',
   'mcp.ts',

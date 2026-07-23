@@ -1,0 +1,184 @@
+// End-to-end probe for query subscriptions (T-6828). Spawns a scratch server
+// (unique port, throwaway DB_PATH — never the live db), then proves BOTH doors:
+//   A. legacy — a socket that never subscribes still hears full broadcasts.
+//   B. subscription — a `.comment.target_eid=<S>` socket hears exactly its
+//      matches (add via HTTP/cast AND via /ws), not unrelated writes, gets a
+//      `drop` when a member re-points away, and an entity-null when a member
+//      dies. Cleans up every entity it mints.
+// Run: deno run -A --unstable-net --unstable-worker-options scripts/subs_probe.ts
+
+let PORT = 5319
+let DB = await Deno.makeTempFile({ suffix: '.db' })
+let uuid = () => crypto.randomUUID()
+let ok = (label: string, cond: boolean) =>
+  console.log(`${cond ? 'PASS' : 'FAIL'}  ${label}`) || (pass = pass && cond)
+let pass = true
+
+let server = new Deno.Command('deno', {
+  args: [
+    'run',
+    '-A',
+    '--unstable-net',
+    '--unstable-worker-options',
+    'src/server.ts',
+  ],
+  env: { ...Deno.env.toObject(), PORT: String(PORT), DB_PATH: DB },
+  stdout: 'null',
+  stderr: 'null',
+}).spawn()
+
+let base = `http://127.0.0.1:${PORT}`
+// Wait for the server to answer /snapshot.
+for (let i = 0; i < 100; i++) {
+  try {
+    if ((await fetch(`${base}/snapshot`)).ok) break
+  } catch { /* still booting */ }
+  await new Promise((r) => setTimeout(r, 100))
+}
+
+// A socket with a frame queue + an awaitable "next non-array-or-any frame".
+let open = async () => {
+  let s = new WebSocket(`ws://127.0.0.1:${PORT}/ws`)
+  let frames: unknown[] = []
+  let wake: (() => void) | null = null
+  s.onmessage = (m) => {
+    frames.push(JSON.parse(String(m.data)))
+    wake?.()
+  }
+  await new Promise((r) => (s.onopen = () => r(null)))
+  // Wait up to `ms` for a frame matching `pick`, returning it (or null).
+  let want = async (
+    pick: (f: unknown) => boolean,
+    ms = 800,
+  ): Promise<unknown> => {
+    let deadline = Date.now() + ms
+    for (;;) {
+      let hit = frames.find(pick)
+      if (hit) return hit
+      if (Date.now() > deadline) return null
+      await new Promise<void>((r) => {
+        wake = r
+        setTimeout(r, deadline - Date.now())
+      })
+    }
+  }
+  return { s, frames, want }
+}
+
+let send = (s: WebSocket, v: unknown) => s.send(JSON.stringify(v))
+let apply = (changes: unknown[]) =>
+  fetch(`${base}/apply`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(changes),
+  })
+
+let isArr = (f: unknown) => Array.isArray(f)
+let subFrame = (id: string) => (f: unknown) =>
+  !!f && typeof f == 'object' && (f as { sub?: string }).sub == id
+
+try {
+  // ---- Door A: legacy full rebroadcast, untouched -------------------------
+  let a = await open()
+  let b = await open() // b never subscribes — stays a legacy client
+  let mark = uuid()
+  send(a.s, [{ eid: mark, name: 'doc', comp: { title: 'legacy-probe' } }])
+  let heard = await b.want((f) =>
+    isArr(f) && (f as { eid: string }[]).some((c) => c.eid == mark)
+  )
+  ok('A: a non-subscribing socket still hears an arbitrary write', !!heard)
+
+  // ---- Door B: subscription filtering -------------------------------------
+  // A target entity S, then a socket subscribing comments aimed at it.
+  let S = uuid()
+  await apply([{ eid: S, name: 'doc', comp: { title: 'target-S' } }])
+  let c = await open()
+  send(c.s, { sub: 'b1', q: `.comment.target_eid=${S}` })
+  let init = await c.want(subFrame('b1'))
+  ok('B: subscribe returns an initial {sub} frame', !!init)
+
+  // A legacy socket to confirm the legacy door keeps working alongside subs.
+  let d = await open()
+
+  // Add a member via the HTTP/cast path (proves MCP/HTTP writes reach subs).
+  let cm = uuid()
+  await apply([
+    { eid: cm, name: 'doc', comp: { title: '', body: 'hello S' } },
+    { eid: cm, name: 'comment', comp: { target_eid: S } },
+  ])
+  let addF = await c.want((f) =>
+    subFrame('b1')(f) &&
+    (f as { changes: { eid: string }[] }).changes.some((x) => x.eid == cm)
+  ) as { changes: { eid: string; name: string }[]; drop: string[] } | null
+  ok('B: a matching comment (via HTTP/cast) arrives as a {sub} frame', !!addF)
+  ok(
+    'B: the add frame carries the comment full comps (doc + comment)',
+    !!addF && addF.changes.some((x) => x.name == 'comment') &&
+      addF.changes.some((x) => x.name == 'doc'),
+  )
+  ok(
+    'B: the legacy socket also heard the comment (both doors coexist)',
+    !!(await d.want((f) =>
+      isArr(f) && (f as { eid: string }[]).some((x) => x.eid == cm)
+    )),
+  )
+
+  // An unrelated write over /ws — the subscriber must NOT receive it.
+  let noise = uuid()
+  c.frames.length = 0
+  send(d.s, [{ eid: noise, name: 'doc', comp: { title: 'unrelated' } }])
+  let leaked = await c.want((f) =>
+    subFrame('b1')(f) &&
+      (f as { changes: { eid: string }[] }).changes.some((x) =>
+        x.eid == noise
+      ) ||
+    (isArr(f) && (f as { eid: string }[]).some((x) => x.eid == noise)), 1000)
+  ok('B: an unrelated write does NOT reach the subscriber', !leaked)
+
+  // Re-point the comment at a DIFFERENT entity — it leaves the query but
+  // still exists (target_eid FKs to a live spine, so the new aim must exist).
+  let S2 = uuid()
+  await apply([{ eid: S2, name: 'doc', comp: { title: 'target-S2' } }])
+  c.frames.length = 0
+  await apply([{ eid: cm, name: 'comment', comp: { target_eid: S2 } }])
+  let dropF = await c.want((f) =>
+    subFrame('b1')(f) &&
+    (f as { drop: string[] }).drop.includes(cm)
+  )
+  ok('B: re-pointing a member away sends a `drop` for it', !!dropF)
+
+  // Re-point back (re-add), then delete it — the death reaches the subscriber
+  // as an entity-null inside `changes`.
+  await apply([{ eid: cm, name: 'comment', comp: { target_eid: S } }])
+  await c.want((f) =>
+    subFrame('b1')(f) &&
+    (f as { changes: { eid: string }[] }).changes.some((x) => x.eid == cm)
+  )
+  c.frames.length = 0
+  await apply([{ eid: cm, name: 'entity', comp: null }])
+  let deathF = await c.want((f) =>
+    subFrame('b1')(f) &&
+    (f as { changes: { eid: string; name: string; comp: unknown }[] }).changes
+      .some((x) => x.eid == cm && x.name == 'entity' && x.comp == null)
+  )
+  ok('B: deleting a member forwards an entity-null to the subscriber', !!deathF)
+
+  // ---- cleanup ------------------------------------------------------------
+  await apply([
+    { eid: S, name: 'entity', comp: null },
+    { eid: S2, name: 'entity', comp: null },
+    { eid: mark, name: 'entity', comp: null },
+    { eid: noise, name: 'entity', comp: null },
+  ])
+  for (let x of [a, b, c, d]) x.s.close()
+} finally {
+  server.kill('SIGTERM')
+  await server.status
+  await Deno.remove(DB).catch(() => {})
+  await Deno.remove(DB + '-journal').catch(() => {})
+  await Deno.remove(DB + '-wal').catch(() => {})
+  await Deno.remove(DB + '-shm').catch(() => {})
+}
+
+console.log(pass ? '\nALL PASS' : '\nSOME FAILED')
+Deno.exit(pass ? 0 : 1)

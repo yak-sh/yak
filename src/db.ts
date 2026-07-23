@@ -1441,6 +1441,35 @@ export let epoch = crypto.randomUUID()
 export let vocabHash = createHash('sha1')
   .update(JSON.stringify(comps)).digest('hex').slice(0, 16)
 
+// The journal's current rowid — the cursor a snapshot, a delta, or a live
+// subscription frame is current as of (T-6823/T-3683). A client stamps its
+// next `since` from it; a subscription rides it on every pushed frame so a
+// client can bridge to the catch-up delta. 0 on an empty journal.
+export let cursorOf = (db: DatabaseSync): number =>
+  (db.prepare('select max(rowid) as m from journal')
+    .get() as { m: number | null }).m ?? 0
+
+// One entity's current components, keyed read — what subscription maintenance
+// tests a touched eid against (design §2). Shaped like a snapshot row's comps
+// (eid→comp, entity as {eid,num}); a missing spine returns {} (tombstoned or
+// never minted), which reads as "not alive" to the matcher.
+export let eager = (
+  db: DatabaseSync,
+  eid: string,
+): Record<string, Record<string, unknown>> => {
+  let spine = db.prepare('select eid, num from entity where eid = ?')
+    .get(eid) as Record<string, unknown> | undefined
+  if (!spine) return {}
+  let out: Record<string, Record<string, unknown>> = { entity: spine }
+  for (let name of Object.keys(cmps)) {
+    if (name == 'entity') continue
+    let row = db.prepare(`select * from ${name} where eid = ?`)
+      .get(eid) as Record<string, unknown> | undefined
+    if (row) out[name] = row
+  }
+  return out
+}
+
 // The whole graph as one batch (plus edges) — what a fresh client cache eats.
 // entity === eid: only identity (eid, num) rides in the spine comp now —
 // provenance travels as `created`/`updated` (T-6670), the dormant spine
@@ -1450,8 +1479,7 @@ export let vocabHash = createHash('sha1')
 // the tables: apply() is atomic and the server single-threaded, so nothing
 // commits between max(rowid) and the rows the loop sees.
 export let snapshot = (db: DatabaseSync): Snapshot => {
-  let cursor = (db.prepare('select max(rowid) as m from journal')
-    .get() as { m: number | null }).m ?? 0
+  let cursor = cursorOf(db)
   let changes: Change[] = []
   for (
     let name of [
