@@ -261,6 +261,15 @@ let list = async (args: string[]) => {
 
 let create = async (args: string[]) => {
   let { params, words } = split(args)
+  // task new uses dot-params, not --flags. A stray --key=value would
+  // otherwise land silently in the title (and pollute every digest), so
+  // catch the mistyped param loudly and suggest the dot form.
+  let stray = words.find((w) => /^--[\w-]+=/.test(w))
+  if (stray) {
+    throw new Error(
+      `task new uses dot-params, not --flags — did you mean ${stray.replace(/^--/, '.')}? (got ${stray.split('=')[0]}=…)`,
+    )
+  }
   // Reference values (.project=bindery, .assignee=jeff) resolve at the
   // door — same rule as the MCP tools.
   let grouped = patches(derefParams(rows(await snapshot()), params))
