@@ -172,6 +172,11 @@ let routes: Record<string, readonly string[]> = {
   mail: [...Object.keys(comps.mail), ...Object.keys(stamped.mail)],
 }
 
+// The dot-param shape, sketched — the tail of every strict rejection
+// (FILTERS in grammar.ts spells the operators).
+let SKETCH =
+  'filters are dot-params: .status=open, .priority<=1, .project=P-19, .title~=word, …'
+
 // Route a bare prop to its component; ambiguity is an error that names
 // the candidates rather than a guess. The sugar rule rides here: a prop
 // with no column of its own, where exactly ONE component carries
@@ -196,7 +201,16 @@ export let route = (prop: string): { comp: string; prop: string } => {
   // comp for the prop. Writes can't aim at "any" — param() rejects the
   // bare form and asks for the explicit spelling.
   if (ref.length > 1) return { comp: '', prop: `${prop}_eid` }
-  throw new Error(`unknown prop: .${prop}`)
+  // The rejection is the teaching moment: agents keep reaching for kind
+  // and eid as filter props — name what the asker meant, one line each.
+  // (.id needs no branch: session.id owns it, so it routes.)
+  throw new Error(
+    prop == 'kind'
+      ? "kind is graph_query's kind parameter, not a filter prop"
+      : prop == 'eid'
+      ? 'address entities by id directly (T-3, E-9) — filters match component props'
+      : `unknown prop: .${prop} — ${SKETCH}`,
+  )
 }
 
 // One token — '.priority<=1', '.domain=Ops,Eng' — to a Pred; null if the
@@ -252,7 +266,7 @@ export let pred = (token: string): Pred | null => {
 export let noFilter = (f: string) =>
   `not a filter: ${f} — ${
     f.startsWith('kind=') ? "kind is graph_query's kind parameter; " : ''
-  }filters are dot-params: .status=open, .priority<=1, .project=P-19, .title~=word, …`
+  }${SKETCH}`
 
 // A bare word: contains over the doc, title or body. comp/prop are for
 // show — matchQuery treats TEXT specially (one pred, two columns).

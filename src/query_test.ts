@@ -248,6 +248,15 @@ Deno.test('noFilter teaches the door a stray predicate belongs to', () => {
   assert(!m.includes('\n')) // one line — it rides tool errors verbatim
   assert(!noFilter('sessions').includes('graph_query')) // kind= only
   assert(noFilter('sessions').includes('dot-params'))
+  // the dot forms reject at route() — one seam, every door inherits
+  assertThrows(() => route('kind'), Error, "graph_query's kind parameter")
+  assertThrows(() => route('eid'), Error, '(T-3, E-9)')
+  assertEquals(route('id'), { comp: 'session', prop: 'id' }) // no near-miss
+  assertThrows(
+    () => parseQuery('.hovercraft=eels'),
+    Error,
+    'unknown prop: .hovercraft — filters are dot-params',
+  )
 })
 
 Deno.test('.order=hot is a ranking, not a filter', () => {
