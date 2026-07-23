@@ -112,6 +112,26 @@ Deno.test('gated: a cancelled requires child releases the gate', () => {
   assertEquals(gated(ent('parent')), false)
 })
 
+// ent(): edges partition into refs (non-contains, {type, child}) and kids
+// (contains, resolved), preserving deps order per parent — the indexed
+// scan (T-6772) must stay byte-identical to the old double-filter.
+Deno.test('ent: refs and kids partition edges, order preserved', () => {
+  let sp = (eid: string) => ({
+    entity: { eid, num: 0, created_at: '' },
+    task: { eid, status: 'open', priority: 1, domain: null },
+  })
+  cache.value = { p: sp('p'), a: sp('a'), b: sp('b'), c: sp('c') }
+  deps.value = [
+    { parent: 'p', type: 'contains', child: 'b' },
+    { parent: 'p', type: 'requires', child: 'a' },
+    { parent: 'p', type: 'contains', child: 'c' },
+    { parent: 'other', type: 'requires', child: 'a' },
+  ]
+  let e = ent('p')
+  assertEquals(e.refs, [{ type: 'requires', child: 'a' }])
+  assertEquals(e.kids.map((k) => k.eid), ['b', 'c'])
+})
+
 // boardAll: the board's List face — the query over the WHOLE graph.
 // Kind-agnostic matching, chrome and comments and the board itself out.
 Deno.test('boardAll: whole-graph match, chrome/comments/self excluded', async () => {

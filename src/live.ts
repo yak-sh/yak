@@ -187,22 +187,40 @@ export let boot = async () => {
   sock()
 }
 
+// Edges grouped by parent, one pass over deps. ent() partitions its own
+// slice into refs/kids instead of rescanning all 751 edges twice per call —
+// without this the initial canvas (hundreds of ents × the edge list, called
+// recursively) spent its whole render budget here (T-6772). A computed off
+// the deps signal, so it rebuilds only when deps changes; applyLocal always
+// assigns a fresh array, so the memo invalidates. Insertion order is
+// preserved per parent, keeping refs/kids order identical to the old scan.
+let byParent = computed(() => {
+  let m = new Map<string, Dep[]>()
+  for (let d of deps.value) {
+    let mine = m.get(d.parent)
+    if (mine) mine.push(d)
+    else m.set(d.parent, [d])
+  }
+  return m
+})
+
 // The whole entity, assembled for a renderer: spine, components present,
 // outgoing edge sentences, contained children (recursive — graphs stay
 // small; a view reads as deep as it wants).
 export let ent = (eid: string): Ent => {
   let { entity, ...comps } = cache.value[eid] ?? {}
+  let mine = byParent.value.get(eid) ?? []
   return {
     ...comps, // whatever components the entity carries, verbatim —
     // created/updated (provenance) ride here like any other component now
     eid,
     num: entity?.num ?? 0,
     kind: kindOf(comps), // derived — the display convention, not data
-    refs: deps.value
-      .filter((d) => d.parent == eid && d.type != 'contains')
+    refs: mine
+      .filter((d) => d.type != 'contains')
       .map((d) => ({ type: d.type, child: d.child })),
-    kids: deps.value
-      .filter((d) => d.parent == eid && d.type == 'contains')
+    kids: mine
+      .filter((d) => d.type == 'contains')
       .map((d) => ent(d.child)),
   }
 }
