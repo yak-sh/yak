@@ -24,7 +24,7 @@ Deno.test('schema(): stamped marked, death words carried, tags empty', () => {
   assertEquals(rows.canvas, []) // a tag — the row is the statement
   // project outgrew tag-hood: retirement rides the comp, wire-writable
   assertEquals(rows.project, [
-    { col: 'retired_at', type: 'text', stamped: false },
+    { col: 'retired_at', type: 'time', stamped: false },
   ])
   // wire-writable and stamped columns of one comp land in one place
   let session = rows.session.map((c) => c.col)
@@ -39,7 +39,7 @@ Deno.test('vocabularyMd: components, death words, effects — all present', () =
   }])
   assert(md.includes('### task'))
   assert(md.includes('`project_eid` → project (detach)'))
-  assert(md.includes('`claimed_at` text ⚙'))
+  assert(md.includes('`claimed_at` time ⚙'))
   assert(md.includes('- parent requires child'))
   assert(md.includes('open → wip → done → cancelled'))
   assert(md.includes('**session** created, removed — spawns the agent'))

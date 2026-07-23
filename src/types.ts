@@ -9,6 +9,10 @@
 //   'number' 'bool'   what they say
 //   'query'           a line of the filter grammar (query.ts) — text
 //                     whose editor knows the vocabulary
+//   'time'            an ISO timestamp — a text column whose face is
+//                     relative words (full stamp on hover)
+//   'url'             an address out on the web — a text column whose
+//                     face is a link
 //   {enum: [...]}     a closed set — the values ARE the doc
 //   {eid: 'project',  an association; the name says which component the
 //    death: …}        target carries ('' = any entity), the death word
@@ -38,6 +42,8 @@ export type PropType =
   | 'number'
   | 'bool'
   | 'query'
+  | 'time'
+  | 'url'
   | { enum: string[] }
   | { eid: string; death: Death }
   | { text: string }
@@ -77,11 +83,11 @@ export let comps: Record<string, Record<string, PropType>> = {
   // retired_at: the project is over, not erased. Wire-writable — stamping
   // it IS the retirement (like acked_at, no effect needed); everything
   // filed under it stays referenceable but sinks (search, .order=hot).
-  project: { retired_at: 'text' },
+  project: { retired_at: 'time' },
   repo: { path: 'text', base_branch: 'text' }, // the project's checkout
   board: { query: 'query' }, // saved filter (query.ts grammar); '' = all
   canvas: {},
-  web: { url: 'text' }, // frozen_at is server-stamped, never wire-writable
+  web: { url: 'url' }, // frozen_at is server-stamped, never wire-writable
   card: { target_eid: { eid: '', death: 'cascade' }, view: 'text' },
   pin: {
     canvas_eid: { eid: '', death: 'cascade' },
@@ -133,7 +139,7 @@ export let comps: Record<string, Record<string, PropType>> = {
     // reifies a NEW session id under the SAME pid; service follows).
     // Wire-writable like acked_at: forging it only misroutes your own mail.
     pid: 'number',
-    acked_at: 'text',
+    acked_at: 'time',
     provider: 'text',
     model: 'text',
     effort: 'text',
@@ -180,7 +186,7 @@ export let comps: Record<string, Record<string, PropType>> = {
     // The reader's own "seen" mark — wire-writable like session.acked_at:
     // forging it only deafens yourself. Unread derives: message_id set
     // (it arrived) and this still empty; outbound is born read.
-    read_at: 'text',
+    read_at: 'time',
   },
   conflict: {}, // server-minted audit rows — nothing is wire-writable
   // A webhook delivery, derived from the edge's raw request spool
@@ -249,15 +255,15 @@ export let comps: Record<string, Record<string, PropType>> = {
 // lives in server code (db.ts, sessions.ts, freeze.ts), each write beside
 // its why.
 export let stamped: Record<string, Record<string, PropType>> = {
-  entity: { num: 'number', created_at: 'text', modified_at: 'text' },
-  web: { frozen_at: 'text' }, // the freeze finished (freeze.ts)
+  entity: { num: 'number', created_at: 'time', modified_at: 'time' },
+  web: { frozen_at: 'time' }, // the freeze finished (freeze.ts)
   client: { ip: 'text' },
-  claim: { claimed_at: 'text' },
-  stop_request: { acted_at: 'text' }, // signals sent — the relay's sweep key
+  claim: { claimed_at: 'time' },
+  stop_request: { acted_at: 'time' }, // signals sent — the relay's sweep key
   // Delivery outcome (knock.ts): acted_at = the resolver ran, delivery =
   // what it did (cast S-9 / spawned S-9 / mailed U-2 / held), error = why
   // it couldn't.
-  knock: { acted_at: 'text', delivery: 'text', error: 'text' },
+  knock: { acted_at: 'time', delivery: 'text', error: 'text' },
   // Delivery outcome (mail.ts): acted_at = the effect ran, error = how it
   // went wrong, to_addr = the RESOLVED envelope address — denormalized on
   // purpose, so later edits to the address book never rewrite what a
@@ -268,11 +274,11 @@ export let stamped: Record<string, Record<string, PropType>> = {
   // the edge landed it; verified the edge's DKIM verdict. Unverified
   // content is DATA — it lands verbatim, nothing executes on it.
   mail: {
-    acted_at: 'text',
+    acted_at: 'time',
     error: 'text',
     to_addr: 'text',
     message_id: 'text',
-    received_at: 'text',
+    received_at: 'time',
     verified: 'bool',
     // The Message-ID the SENDER assigned to an outbound mail — stamped by
     // the delivery effect when it can know one (the native sender; a
@@ -289,10 +295,10 @@ export let stamped: Record<string, Record<string, PropType>> = {
     event: 'text',
     payload: 'body',
     spool_id: 'text',
-    received_at: 'text',
+    received_at: 'time',
   },
-  memory: { last_confirmed_at: 'text' },
-  recall: { count: 'number', first_at: 'text', last_at: 'text' },
+  memory: { last_confirmed_at: 'time' },
+  recall: { count: 'number', first_at: 'time', last_at: 'time' },
   // Audit rows outlive everything they mention: loser/holder are display
   // strings by design (db.ts says why), and the target reference stands
   // even after the target dies — contention history keeps its subject.
@@ -300,7 +306,7 @@ export let stamped: Record<string, Record<string, PropType>> = {
     target_eid: { eid: '', death: 'keep' },
     loser: 'text',
     holder: 'text',
-    at: 'text',
+    at: 'time',
   },
   // The managed-session lifecycle (sessions.ts owns every write; the
   // wire-writable REQUEST columns live in comps.session above).
@@ -312,9 +318,9 @@ export let stamped: Record<string, Record<string, PropType>> = {
     provider_session_id: 'text',
     serving_model: 'text',
     latest_seq: 'number',
-    started_at: 'text',
-    stop_requested_at: 'text',
-    finished_at: 'text',
+    started_at: 'time',
+    stop_requested_at: 'time',
+    finished_at: 'time',
     exit_code: 'number',
     stop_reason: 'text',
     final_text: 'body',
