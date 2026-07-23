@@ -4,6 +4,7 @@ import {
   complete,
   hot,
   matchQuery,
+  noFilter,
   orderOf,
   parseQuery,
   pred,
@@ -237,6 +238,16 @@ Deno.test('hot: no recalls yet — modified_at counts as a single touch', () => 
   assert(hot({ entity: { modified_at: ago(H) } }, T0) > 0.9)
   assert(hot({ entity: { modified_at: ago(10 * D) } }, T0) < 0.01)
   assertEquals(hot({}, T0), 0)
+})
+
+Deno.test('noFilter teaches the door a stray predicate belongs to', () => {
+  let m = noFilter('kind=session')
+  assert(m.startsWith('not a filter: kind=session'))
+  assert(m.includes("graph_query's kind parameter"))
+  assert(m.includes('.status=open')) // the dot-param shape, sketched
+  assert(!m.includes('\n')) // one line — it rides tool errors verbatim
+  assert(!noFilter('sessions').includes('graph_query')) // kind= only
+  assert(noFilter('sessions').includes('dot-params'))
 })
 
 Deno.test('.order=hot is a ranking, not a filter', () => {

@@ -44,6 +44,7 @@ import {
 } from './client.ts'
 import {
   matchQuery,
+  noFilter,
   orderOf,
   parseQuery,
   pred,
@@ -125,7 +126,7 @@ let parseAll = (params: string[]) =>
 let parseFilters = (filters: string[]) =>
   filters.map((f) => {
     let hit = pred(f)
-    if (!hit) throw new Error(`not a filter: ${f}`)
+    if (!hit) throw new Error(noFilter(f))
     return hit
   })
 

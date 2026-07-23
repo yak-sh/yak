@@ -50,7 +50,7 @@ import {
   unreadMail,
   wrapChanges,
 } from './client.ts'
-import { matchQuery, pred, resolveRefs } from './query.ts'
+import { matchQuery, noFilter, pred, resolveRefs } from './query.ts'
 import { FILTERS, GRAMMAR } from './grammar.ts'
 import { type Edge, edges, type Snapshot } from './types.ts'
 // `import type` (not the repo's usual inline `{ type X }`): telemetry.ts
@@ -228,11 +228,16 @@ let split = (args: string[]) => {
 
 let list = async (args: string[]) => {
   // Filters speak the query grammar — operators, lists, ranges
-  // ('.priority<=1', '.domain=Ops,Eng'); bare words are ignored.
+  // ('.priority<=1', '.domain=Ops,Eng'). A word that isn't a filter
+  // teaches instead of silently listing everything.
   let json = args.includes('--json')
   let all = rows(await snapshot())
   let preds = resolveRefs(
-    args.filter((a) => a != '--json').map(pred).filter((p) => p != null),
+    args.filter((a) => a != '--json').map((a) => {
+      let p = pred(a)
+      if (!p) throw new Error(`${noFilter(a)} (task help grammar)`)
+      return p
+    }),
     (id) => find(all, id)?.eid,
   )
   let byEid = new Map(all.map((r) => [r.eid, r.comps]))

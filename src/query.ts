@@ -245,6 +245,15 @@ export let pred = (token: string): Pred | null => {
   return { ...route(a), op: OPS[op], value }
 }
 
+// The rejection every strict door throws when pred() shrugs: the error
+// is the teaching moment, so it names where a stray predicate lives —
+// kind= is graph_query's parameter, not a filter — and sketches the
+// dot-param shape (FILTERS in grammar.ts spells the operators).
+export let noFilter = (f: string) =>
+  `not a filter: ${f} — ${
+    f.startsWith('kind=') ? "kind is graph_query's kind parameter; " : ''
+  }filters are dot-params: .status=open, .priority<=1, .project=P-19, .title~=word, …`
+
 // A bare word: contains over the doc, title or body. comp/prop are for
 // show — matchQuery treats TEXT specially (one pred, two columns).
 export let TEXT = 'text'
