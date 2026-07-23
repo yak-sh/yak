@@ -267,7 +267,13 @@ These hold everywhere in this repo, whoever — or whatever — writes the code:
   nothing gets the ledger STUB, which queues the scribe's sweep — an
   enrichment, never the continuity path; `:scribe S-31` summons the desk
   deliberately for a marathon a final message can't cover. SessionStart also
-  reifies the session entity (id + cwd, the worktree it ran in). The hooks are
+  reifies the session entity under **Claude's own session id**
+  (`CLAUDE_CODE_SESSION_ID` — it rotates on `/clear`: the old S-\* wraps,
+  a new one reifies, one brief per life; identity across clears is the
+  ACTOR), plus cwd (the worktree it ran in) and the claude process `pid`
+  (the /proc walk, src/proc.ts) that the channel plugin follows across
+  rotations. `TASKS_SESSION` survives only as the launcher fallback for
+  managed non-claude spawns. The hooks are
   the global CLI, no repo-local shims — any repo gets the loop by carrying the
   same two settings lines.
 - **The graph IS your memory** (harness auto-memory is disabled — there are no
