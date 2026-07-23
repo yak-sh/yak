@@ -1,5 +1,5 @@
 import { signal } from '@preact/signals'
-import { block, copy } from './ui.tsx'
+import { block, copy, setFollow } from './ui.tsx'
 import { cache, ent, rootCanvas } from '../live.ts'
 import { actionsFor, resolve } from './registry.ts'
 import { type Ent, idOf } from '../types.ts'
@@ -49,6 +49,7 @@ export let follow = (href: string, eid?: string) => (ev: MouseEvent) => {
   if (eid) openAt(eid, ev)
   else navigate(href)
 }
+setFollow(follow) // el()'s demoted links click through here (see ui.tsx)
 
 // Markdown-rendered ids (md.ts data-ref anchors) come from innerHTML, so
 // no component owns their clicks — one delegated listener gives every
