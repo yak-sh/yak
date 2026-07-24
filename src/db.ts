@@ -501,6 +501,9 @@ export let open = () => {
   addCol('session', 'cwd', 'cwd text')
   addCol('session', 'pid', 'pid integer')
   addCol('session', 'acked_at', 'acked_at text')
+  // Self-reported at SessionStart (types.ts): what kind of session, how it booted.
+  addCol('session', 'agent_type', 'agent_type text')
+  addCol('session', 'source', 'source text')
   // The managed-session lifecycle (src/sessions.ts): what was asked for,
   // what it's doing, how it ended. The REQUEST columns (provider, model,
   // effort, persona_eid, requested_task_eid) are wire-writable — creating

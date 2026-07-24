@@ -140,6 +140,12 @@ export let comps: Record<string, Record<string, PropType>> = {
     // Wire-writable like acked_at: forging it only misroutes your own mail.
     pid: 'number',
     acked_at: 'time',
+    // What KIND of session this is, self-reported at SessionStart: `agent_type`
+    // is set when launched `claude --agent <name>`; `source` is the boot mode
+    // (startup|resume|clear|compact|fork). Wire-writable like id/cwd/pid —
+    // a forged value only mislabels your own row.
+    agent_type: 'text',
+    source: 'text',
     provider: 'text',
     model: 'text',
     effort: 'text',
@@ -623,6 +629,8 @@ export type Session = {
   cwd?: string | null
   pid?: number | null // the claude process it runs in (hook-stamped)
   acked_at?: string | null
+  agent_type?: string | null // set when launched `claude --agent <name>`
+  source?: string | null // boot mode: startup|resume|clear|compact|fork
   origin?: string // 'external' (announced) | 'managed' (we spawned it)
   provider?: string | null // adapters.ts key
   model?: string | null

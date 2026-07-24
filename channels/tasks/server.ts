@@ -76,6 +76,12 @@ let sessionEid: string | undefined
 let actorEid: string | undefined
 let personaEid: string | undefined
 let homeEid: string | undefined
+// The operator/specialist marks (T-7006), tracked across broadcasts like the
+// actor: origin is server-stamped 'managed' on a spawn (arrives in a later
+// patch), requested_task_eid rides the reify. A specialist gets no project
+// mail — only direct address. A change carrying neither leaves them as-is.
+let origin: string | undefined
+let requestedTaskEid: string | undefined
 
 // persona eid → its home project, learned from every persona change (personas
 // are few), so the served session's home resolves even when the persona row
@@ -133,10 +139,16 @@ let resolve = (changes: Change[]) => {
       sessionEid = s.eid
       actorEid = s.actorEid
       personaEid = s.personaEid
+      // A rotation is a fresh identity — reset the marks to what it declares
+      // (a /clear reify may drop requested_task_eid, becoming an operator).
+      origin = s.origin
+      requestedTaskEid = s.requestedTaskEid
     }
   } else if (s) {
     if (s.actorEid) actorEid = s.actorEid
     if (s.personaEid) personaEid = s.personaEid
+    if (s.origin) origin = s.origin
+    if (s.requestedTaskEid) requestedTaskEid = s.requestedTaskEid
   }
   homeEid = (personaEid ? homes.get(personaEid) : undefined) ??
     (actorEid && index.get(actorEid)?.comps.has('project')
@@ -229,6 +241,8 @@ let feed = (changes: Change[]) => {
       idOf: (eid) => humanId(index, eid),
       docOf: (eid) => docOf(index, eid),
       done: (eid) => doneOf(index, eid),
+      // The operator loop gets project mail; a specialist does not (T-7006).
+      operator: origin != 'managed' && !requestedTaskEid,
       seen: delivered,
     })
   ) flush(e)

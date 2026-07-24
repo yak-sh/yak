@@ -371,12 +371,19 @@ export let sessionFor = (
   session: string,
   cwd?: string,
   pid?: number,
+  self?: { agent_type?: string; source?: string },
 ) => {
   let s = all.find((r) => r.comps.session && r.comps.session.id == session)
   let eid = s?.eid ?? uuid()
   let comp: Record<string, unknown> = s ? {} : { id: session }
   if (cwd && s?.comps.session.cwd != cwd) comp.cwd = cwd
   if (pid && s?.comps.session.pid != pid) comp.pid = pid
+  if (self?.agent_type && s?.comps.session.agent_type != self.agent_type) {
+    comp.agent_type = self.agent_type
+  }
+  if (self?.source && s?.comps.session.source != self.source) {
+    comp.source = self.source
+  }
   let changes: Change[] = Object.keys(comp).length
     ? [{ eid, name: 'session', comp }]
     : []
@@ -512,6 +519,15 @@ export let commentChanges = (
   ]
 }
 
+// The operator loop is the session that TRIAGES a project — the interactive
+// door that RECEIVES its project mail. A SPECIALIST does not: a wire-spawned
+// managed run (origin server-stamped 'managed') or any session started ON a
+// task (requested_task_eid, the wire belt-and-suspenders) hears only what's
+// aimed at it directly (its own session, its claimed tasks). No session known
+// = a preview/bare view: treat as the operator so mail still shows (T-7006).
+export let isOperator = (s?: Record<string, unknown>) =>
+  !s || (String(s.origin ?? '') != 'managed' && !s.requested_task_eid)
+
 // The notification lifecycle (T-7006), read as pure Row-predicates over
 // the stamp components: presence is the fact, absence the earlier state.
 // Only `archived` hides an item from the inbox — no automated path can
@@ -527,6 +543,9 @@ export type Reader = {
   session?: string
   actor?: string
   scope?: string
+  // Whether this reader is the project's operator loop — a specialist (false)
+  // gets no project mail, only direct address (isOperator, T-7006).
+  operator?: boolean
   claims?: Set<string>
 }
 
@@ -548,7 +567,9 @@ export let addressed = (who: Reader) => (r: Row): boolean => {
   }
   let m = r.comps.mail
   if (m) {
-    return !!m.message_id &&
+    // Project mail reaches only the operator loop, never a specialist —
+    // direct address (comment/knock above) is always delivered (T-7006).
+    return who.operator !== false && !!m.message_id &&
       (!who.scope || String(m.target_eid) == who.scope)
   }
   return false
@@ -582,6 +603,7 @@ export let readerFor = (
       cwd ?? String(sess?.comps.session?.cwd ?? ''),
       scope,
     ),
+    operator: isOperator(sess?.comps.session),
     claims: new Set(
       all.filter((r) => sess && r.comps.claim?.session_eid == sess.eid)
         .map((r) => r.eid),
@@ -599,8 +621,12 @@ export let unreadMail = (r: Row) => !!r.comps.mail?.message_id && isUnread(r)
 // The mail inbox — ONE scoping truth: the digest's unread count and the
 // bare `task mail` view agree by construction. Unread, not archived, aimed
 // at the scope when one stands; no scope sees the fleet's whole pile.
-export let inboxMail = (scope?: string) => (r: Row) =>
-  unreadMail(r) && inInbox(r) && (!scope || r.comps.mail?.target_eid == scope)
+// A specialist (operator == false) is excluded from PROJECT mail — it hears
+// only direct address (isOperator, T-7006). Default operator == true keeps the
+// preview digest and the bare `task mail` view showing mail.
+export let inboxMail = (scope?: string, operator = true) => (r: Row) =>
+  operator && unreadMail(r) && inInbox(r) &&
+  (!scope || r.comps.mail?.target_eid == scope)
 
 // The project you stand in: the repo-wearing entity whose path prefixes
 // the cwd. LONGEST prefix wins, so a repo nested inside another claims a
@@ -979,7 +1005,7 @@ export let contextDigest = (
   }
   // Unread mail rides one line — the door teaches itself (adoption is
   // structural): the inbox predicate, scoped like everything else.
-  let unread = all.filter(inboxMail(scope))
+  let unread = all.filter(inboxMail(scope, isOperator(sess?.comps.session)))
   if (unread.length) {
     lines.push(`## mail — ${unread.length} unread (task mail)`)
   }

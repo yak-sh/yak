@@ -27,6 +27,7 @@ import {
   inboxItem,
   inboxMail,
   inflate,
+  isOperator,
   isUnread,
   mailAt,
   mailChanges,
@@ -411,7 +412,11 @@ let mailList = async (args: string[]) => {
   let all = rows(await snapshot())
   let resolved = resolveRefs(preds, (id) => find(all, id)?.eid)
   let byEid = new Map(all.map((r) => [r.eid, r.comps]))
-  let inbox = inboxMail(repoAt(all, Deno.cwd())?.eid)
+  let sess = all.find((r) => String(r.comps.session?.id ?? '') == me())
+  let inbox = inboxMail(
+    repoAt(all, Deno.cwd())?.eid,
+    isOperator(sess?.comps.session),
+  )
   let hits = all
     .filter((r) => r.comps.mail)
     .filter((r) => sent ? !r.comps.mail.message_id : every ? true : inbox(r))
@@ -942,7 +947,14 @@ let context = async (args: string[]) => {
       // channel plugin follow a /clear — the NEW session id reifies under
       // the SAME process.
       let cwd = String(body.cwd ?? '') || undefined
-      let s = sessionFor(rows(snap), sid, cwd, claudePid())
+      // Two more self-reports the payload carries: `agent_type` (set when
+      // launched `claude --agent <name>`) and `source` (startup|resume|clear|
+      // compact|fork) — recorded so the board can name what kind of session
+      // this is and the operator/specialist split can key off it (T-7006).
+      let s = sessionFor(rows(snap), sid, cwd, claudePid(), {
+        agent_type: String(body.agent_type ?? '') || undefined,
+        source: String(body.source ?? '') || undefined,
+      })
       if (s.changes.length) await send(s.changes)
       // The hook payload names no model (session_id, transcript_path,
       // cwd, hook_event_name, source) — but the transcript does: its

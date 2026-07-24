@@ -38,6 +38,10 @@ export type Ctx = {
   // re-rings across a reconnect (the old ephemeral read_at guard, made
   // restart-proof).
   done?: (eid: string) => boolean
+  // Whether the served session is the project's operator loop — a specialist
+  // (false) gets no project mail, only direct address (client.ts isOperator,
+  // T-7006). Absent = true (an unresolved session errs toward delivery).
+  operator?: boolean
   seen?: Set<string>
 }
 
@@ -136,7 +140,15 @@ export let humanId = (index: Index, eid: string): string | null => {
 export let findSession = (
   changes: Change[],
   by: { pid?: number; eid?: string; id?: string },
-): { eid: string; actorEid?: string; personaEid?: string } | undefined => {
+):
+  | {
+    eid: string
+    actorEid?: string
+    personaEid?: string
+    origin?: string
+    requestedTaskEid?: string
+  }
+  | undefined => {
   let hit: Change | undefined
   let weak: Change | undefined
   for (let c of changes) {
@@ -153,6 +165,11 @@ export let findSession = (
     eid: c.eid,
     actorEid: str(c.comp.actor_eid) || undefined,
     personaEid: str(c.comp.persona_eid) || undefined,
+    // The operator/specialist marks (T-7006): origin is server-stamped
+    // 'managed' on a spawn, requested_task_eid rides the reify — a change
+    // that carries neither leaves the last-known value in place (server.ts).
+    origin: str(c.comp.origin) || undefined,
+    requestedTaskEid: str(c.comp.requested_task_eid) || undefined,
   }
 }
 
@@ -162,11 +179,18 @@ export let findSession = (
 // `opened`/`archived` stamps (T-7006) read off the index — replacing the old
 // mail.read_at column so a letter already opened or archived never re-rings.
 // Narrowing later is one line here.
+// `operator` gates PROJECT mail to the operator loop: a specialist (a managed
+// spawn, or a session started on a task) hears only direct address, never the
+// project's mail (client.ts isOperator, T-7006). Default true — an unresolved
+// session errs toward delivery, and comments/knocks reach it regardless.
 export let injects = (
   m: Record<string, unknown>,
   homeEid?: string | null,
   done?: boolean,
-): boolean => !!m.verified && !done && !!homeEid && str(m.target_eid) == homeEid
+  operator = true,
+): boolean =>
+  operator && !!m.verified && !done && !!homeEid &&
+  str(m.target_eid) == homeEid
 
 // The two edges of the doc a component's body rides on, indexed by eid within
 // the batch — a comment's words and a knock's note both land as a `doc` change
@@ -244,7 +268,9 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
       // wire frames never wear it, and `seen` keeps any later full-row
       // re-broadcast from ringing twice.
       if (c.comp.received_at == null) continue
-      if (!injects(c.comp, ctx.homeEid, ctx.done?.(c.eid))) continue
+      if (
+        !injects(c.comp, ctx.homeEid, ctx.done?.(c.eid), ctx.operator !== false)
+      ) continue
       if (ctx.seen?.has(c.eid)) continue
       ctx.seen?.add(c.eid)
       let id = ctx.idOf(c.eid)

@@ -13,6 +13,7 @@ import {
   inboxItem,
   inboxMail,
   inflate,
+  isOperator,
   isUnread,
   ledger,
   mailAt,
@@ -517,7 +518,13 @@ Deno.test('inbox: the four sources, archived hides, opened marks read', () => {
     ],
   })
   let who = readerFor(g, 'me', '/w', P)
-  assertEquals(who, { session: Sx, actor: A, scope: P, claims: new Set([TC]) })
+  assertEquals(who, {
+    session: Sx,
+    actor: A,
+    scope: P,
+    operator: true,
+    claims: new Set([TC]),
+  })
   // all four sources arrive; a comment aimed elsewhere and an archived one don't
   let inbox = g.filter(inboxItem(who)).map((r) => r.eid).sort()
   assertEquals(inbox, [c1, c2, kn, ml, cR].sort())
@@ -525,6 +532,90 @@ Deno.test('inbox: the four sources, archived hides, opened marks read', () => {
   let unread = g.filter(inboxItem(who)).filter(isUnread).map((r) => r.eid)
     .sort()
   assertEquals(unread, [c1, c2, kn, ml].sort())
+})
+
+// The operator/specialist split (T-7006): only the operator loop receives a
+// project's mail. A specialist — a managed spawn (origin) or a session started
+// on a task (requested_task_eid) — hears only direct address, never project
+// mail. No session known = operator (the preview/bare view still shows mail).
+Deno.test('isOperator: managed or task-started is a specialist, else operator', () => {
+  assertEquals(isOperator(undefined), true) // no session → preview
+  assertEquals(isOperator({}), true) // bare external session
+  assertEquals(isOperator({ origin: 'external' }), true)
+  assertEquals(isOperator({ origin: 'managed' }), false) // wire-spawned
+  assertEquals(isOperator({ requested_task_eid: 'T' }), false) // started on a task
+})
+
+Deno.test('project mail reaches the operator, not a specialist; direct address always', () => {
+  let Op = 'aaaaaaaa-0000-4000-8000-000000000201' // operator session
+  let Sp = 'aaaaaaaa-0000-4000-8000-000000000202' // specialist (managed)
+  let P = 'aaaaaaaa-0000-4000-8000-000000000203' //  the project
+  let ml = 'aaaaaaaa-0000-4000-8000-000000000204' // mail → project (arrived)
+  let cm = 'aaaaaaaa-0000-4000-8000-000000000205' // comment → specialist itself
+  let g = rows({
+    changes: [
+      { eid: Op, name: 'entity', comp: { eid: Op, num: 201, created_at: '' } },
+      { eid: Op, name: 'session', comp: { id: 'op', actor_eid: P, cwd: '/w' } },
+      { eid: Sp, name: 'entity', comp: { eid: Sp, num: 202, created_at: '' } },
+      {
+        eid: Sp,
+        name: 'session',
+        // a managed spawn: origin stamped, started on a task
+        comp: {
+          id: 'sp',
+          actor_eid: P,
+          cwd: '/w',
+          origin: 'managed',
+          requested_task_eid: 'aaaaaaaa-0000-4000-8000-000000000299',
+        },
+      },
+      { eid: P, name: 'entity', comp: { eid: P, num: 203, created_at: '' } },
+      { eid: P, name: 'project', comp: {} },
+      {
+        eid: ml,
+        name: 'mail',
+        comp: { to: 'm@x', message_id: 'm:1', target_eid: P },
+      },
+      { eid: cm, name: 'comment', comp: { target_eid: Sp } }, // aimed at the specialist
+    ],
+  })
+  let inbox = (id: string) =>
+    g.filter(inboxItem(readerFor(g, id, '/w', P))).map((r) => r.eid).sort()
+  // the operator gets the project's mail; the specialist does not
+  assertEquals(inbox('op'), [ml])
+  // the specialist still gets the comment aimed at its OWN session — direct
+  // address is always delivered, only project mail is gated
+  assertEquals(inbox('sp'), [cm])
+  // the mail-only door agrees: gated when the reader is a specialist
+  assertEquals(g.filter(inboxMail(P, false)).map((r) => r.eid), [])
+  assertEquals(g.filter(inboxMail(P, true)).map((r) => r.eid), [ml])
+})
+
+Deno.test('sessionFor: agent_type + source round-trip, refresh only on change', () => {
+  let self = { agent_type: 'reviewer', source: 'startup' }
+  let minted = sessionFor(all, 'sess-new', '/w2', 4242, self)
+  assertEquals(minted.changes[0].comp, {
+    id: 'sess-new',
+    cwd: '/w2',
+    pid: 4242,
+    agent_type: 'reviewer',
+    source: 'startup',
+  })
+  // a known session already wearing the same agent_type is silent for it;
+  // only the still-absent source patches.
+  let g = rows({
+    changes: [
+      { eid: S, name: 'entity', comp: { eid: S, num: 1, created_at: '' } },
+      {
+        eid: S,
+        name: 'session',
+        comp: { id: 'sess-x', cwd: '/w', agent_type: 'reviewer' },
+      },
+    ],
+  })
+  assertEquals(sessionFor(g, 'sess-x', '/w', undefined, self).changes, [
+    { eid: S, name: 'session', comp: { source: 'startup' } },
+  ])
 })
 
 // One derivation for every caller-aware door: the repo whose path

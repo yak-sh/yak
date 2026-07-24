@@ -196,6 +196,20 @@ Deno.test('mail already opened/archived is not re-announced', () => {
   assertEquals(channelEvents(batch, seen), [])
 })
 
+Deno.test('a specialist session gets no project mail (T-7006)', () => {
+  // operator == false marks a managed spawn / task-started session — project
+  // mail is gated, though direct address still reaches it (comment tests).
+  assertEquals(
+    channelEvents([stamp()], ctx({ docOf: letter, operator: false })),
+    [],
+  )
+  // the operator loop (default) still hears it
+  assertEquals(
+    channelEvents([stamp()], ctx({ docOf: letter, operator: true })).length,
+    1,
+  )
+})
+
 Deno.test("mail aimed at another project isn't this session's", () => {
   let batch = [stamp({ target_eid: 'elsewhere' })]
   assertEquals(channelEvents(batch, ctx({ docOf: letter })), [])
@@ -299,6 +313,8 @@ Deno.test('findSession resolves by the claude pid', () => {
     eid: 'e1',
     actorEid: 'p1',
     personaEid: 'n1',
+    origin: undefined,
+    requestedTaskEid: undefined,
   })
   assertEquals(findSession(batch, { pid: 999 }), undefined)
 })
@@ -325,6 +341,8 @@ Deno.test('findSession falls back to the boot id when no pid stamp exists', () =
     eid: 'e1',
     actorEid: 'p1',
     personaEid: undefined,
+    origin: undefined,
+    requestedTaskEid: undefined,
   })
   assertEquals(findSession(batch, { id: 'missing' }), undefined)
 })
@@ -335,7 +353,21 @@ Deno.test('findSession: a patch on the resolved eid keeps the actor fresh', () =
     eid: 'e1',
     actorEid: 'p1',
     personaEid: undefined,
+    origin: undefined,
+    requestedTaskEid: undefined,
   })
+})
+
+Deno.test('findSession reads the operator/specialist marks off the reify', () => {
+  let batch = [ch('e1', 'session', {
+    id: 'sp',
+    pid: 4242,
+    origin: 'managed',
+    requested_task_eid: 't7',
+  })]
+  let s = findSession(batch, { pid: 4242 })
+  assertEquals(s?.origin, 'managed')
+  assertEquals(s?.requestedTaskEid, 't7')
 })
 
 // --- sanitization ------------------------------------------------------------
