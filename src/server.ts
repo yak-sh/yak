@@ -251,6 +251,32 @@ let effect = (out: Change[], t: ReturnType<typeof trace>) => {
     }))
 }
 
+// A booting socket's catch-up handshake (T-6829): the client declares the
+// cursor+epoch+vocab it holds; the server replays the journal since it — or a
+// full reset if the cursor is void (first visit) or its epoch/vocab moved (a
+// db restore's fresh rowids, a vocabulary change) — and only THEN adds the
+// socket to the live broadcast, so every later commit reaches it AFTER its
+// catch-up, in journal order. Synchronous end to end: no await between the
+// delta read and the add, so no commit interleaves (the gapless property,
+// same as maintain()). This ONE ordered channel replaces the old two-channel
+// boot (live over /ws, catch-up over HTTP /delta) whose reorder the client
+// used to buffer around — the wire preserves order at the source now. HTTP
+// /delta and /snapshot stay for one-shot clients (CLI, headless) with no
+// live stream. A commit ≤ H is already in the delta; one after the add
+// broadcasts live — no gap, no non-idempotent dup.
+let join = (
+  sock: WebSocket,
+  f: { since?: number; epoch?: string; vocab?: string },
+) => {
+  if (f.since == null || f.epoch != epoch || f.vocab != vocabHash) {
+    sock.send(JSON.stringify({ reset: true, snapshot: snapshot(db) }))
+  } else {
+    let d = delta(db, f.since)
+    sock.send(JSON.stringify({ catchup: d.changes, cursor: d.cursor }))
+  }
+  clients.add(sock)
+}
+
 let ws = (req: Request) => {
   let { socket, response } = Deno.upgradeWebSocket(req)
   // The tab names itself once, at connect: ?client=<eid> is the writer for
@@ -258,7 +284,9 @@ let ws = (req: Request) => {
   // actor instead of nothing (T-6669). A tab that names none resolves to
   // the box owner like any anonymous write.
   let writer = new URL(req.url).searchParams.get('client')
-  socket.onopen = () => clients.add(socket)
+  // No implicit join: a fresh socket is in NO broadcast set until it declares
+  // itself — {since} joins the live `clients` (via join()), {sub} sets
+  // `filtered` (via control()). A socket that declares neither hears nothing.
   socket.onclose = () => {
     clients.delete(socket)
     subs.delete(socket)
@@ -266,9 +294,13 @@ let ws = (req: Request) => {
   }
   socket.onmessage = (m) => {
     let frame = JSON.parse(String(m.data))
-    // Object frames are subscription control (design §1), structurally
-    // disjoint from the array batches — nothing existing changes.
-    if (!Array.isArray(frame)) return control(socket, frame)
+    // Object frames are control (design §1), structurally disjoint from the
+    // array batches: {since} is the catch-up handshake, everything else
+    // ({sub}/{unsub}) is subscriptions — nothing existing changes.
+    if (!Array.isArray(frame)) {
+      if ('since' in frame) return join(socket, frame)
+      return control(socket, frame)
+    }
     let sent = frame as Change[]
     let out: Change[]
     let t = trace()
