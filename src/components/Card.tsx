@@ -89,12 +89,18 @@ export let Card = ({ p }: { p: Pinned }) => {
       dy = (e.clientY - sy) / z
       el.style.transform = `translate(${dx}px, ${dy}px)`
     }
-    let up = () => {
-      el.removeEventListener('pointermove', move)
-      el.removeEventListener('pointerup', up)
-      if (!dragging) return
+    // A dead gesture (pointercancel — touch-scroll takeover, etc.) snaps
+    // the card back and patches nothing; only a pointerup commits.
+    let quit = () => {
+      removeEventListener('pointermove', move)
+      removeEventListener('pointerup', up)
+      removeEventListener('pointercancel', quit)
       el.style.transform = ''
       el.style.willChange = ''
+    }
+    let up = () => {
+      quit()
+      if (!dragging) return
       // Dropped over the Tray: the card leaves the canvas for the shelf
       // (minted on first use) rather than settling at a new x/y.
       if (overTray(px, py)) {
@@ -112,8 +118,13 @@ export let Card = ({ p }: { p: Pinned }) => {
         comp: { x: Math.round(from.x + dx), y: Math.round(from.y + dy) },
       })
     }
-    el.addEventListener('pointermove', move)
-    el.addEventListener('pointerup', up)
+    // The listeners ride the WINDOW: until the capture engages, moves only
+    // reach the element under the cursor, and a fast flick outruns the pin
+    // before its first pointermove — the card wedges mid-drag. The window
+    // can't be outrun.
+    addEventListener('pointermove', move)
+    addEventListener('pointerup', up)
+    addEventListener('pointercancel', quit)
   }
 
   // Drag a side or corner to size the card; west/north edges move the pin
