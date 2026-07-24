@@ -18,16 +18,16 @@
 // already known, so it skips the init and just narrates on — the same
 // script a resume argv drives (see adapters.ts).
 //
-// Run: deno run --quiet fake-provider.ts --session S --model M [--effort E] "…"
+// Run: deno run --quiet fake-provider.ts --session S --model M [--effort E] -- "…"
 let arg = (flag: string) => {
   let i = Deno.args.indexOf(flag)
   return i < 0 ? undefined : Deno.args[i + 1]
 }
-let instruction = Deno.args.filter((a) => !a.startsWith('--'))
-  .filter((a) =>
-    ![arg('--session'), arg('--model'), arg('--effort')].includes(a)
-  )
-  .join(' ')
+// The instruction rides after -- (the end-of-options separator every adapter
+// uses so dash-leading content can't parse as a flag). Everything before it
+// is flags; everything after is the prompt, verbatim.
+let end = Deno.args.indexOf('--')
+let instruction = (end < 0 ? [] : Deno.args.slice(end + 1)).join(' ')
 
 let says = (d: string) => instruction.includes(d)
 let num = (d: string, fallback: number) =>

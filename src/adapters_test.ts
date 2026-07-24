@@ -152,7 +152,7 @@ Deno.test('trouble: unknown provider/model/effort each name the valid ones', () 
   )
 })
 
-Deno.test('argv: no secrets, instruction rides last', () => {
+Deno.test('argv: no secrets, instruction rides last behind --', () => {
   let j = {
     instruction: 'do the thing',
     session_id: 'sid',
@@ -160,10 +160,30 @@ Deno.test('argv: no secrets, instruction rides last', () => {
     effort: undefined,
   }
   assertEquals(claude.argv(j).at(-1), 'do the thing')
+  assertEquals(claude.argv(j).at(-2), '--') // end-of-options guards the prompt
   assertEquals(claude.argv(j).includes('--session-id'), true)
   let c = codex.argv({ ...j, model: 'gpt-5.6-sol', effort: 'high' })
   assertEquals(c.at(-1), 'do the thing')
+  assertEquals(c.at(-2), '--')
   assertEquals(c.includes('model_reasoning_effort=high'), true)
+})
+
+// The bug that started it: a persona's --- frontmatter (or any dash-leading
+// instruction) must ride as a positional, never parse as a flag — -- sits
+// immediately before it in every provider's argv.
+Deno.test('argv: a dash-leading instruction stays a positional', () => {
+  let j = {
+    instruction: '---\ntitle: coder\n---\ndo it',
+    session_id: 'sid',
+    model: 'haiku',
+    effort: undefined,
+  }
+  let c = claude.argv(j)
+  assertEquals(c.at(-1), j.instruction)
+  assertEquals(c.at(-2), '--')
+  let x = codex.argv({ ...j, model: 'gpt-5.6-sol' })
+  assertEquals(x.at(-1), j.instruction)
+  assertEquals(x.at(-2), '--')
 })
 
 Deno.test('resume: an existing thread, the new prompt last', () => {
@@ -176,17 +196,18 @@ Deno.test('resume: an existing thread, the new prompt last', () => {
   // claude: --resume names the thread; --session-id (which MINTS one) is gone
   let c = claude.resume(j, 'prov-123', 'and then?')
   assertEquals(c.at(-1), 'and then?')
+  assertEquals(c.at(-2), '--') // the prompt rides behind end-of-options
   assertEquals(c.includes('--resume'), true)
   assertEquals(c[c.indexOf('--resume') + 1], 'prov-123')
   assertEquals(c.includes('--session-id'), false)
-  // codex: `exec resume <id> <prompt>`, the posture flags kept
+  // codex: `exec resume -- <id> <prompt>`, the posture flags kept
   let x = codex.resume(
     { ...j, model: 'gpt-5.6-sol', effort: 'high' },
     'th-9',
     'go on',
   )
   assertEquals(x.slice(0, 3), ['codex', 'exec', 'resume'])
-  assertEquals(x.slice(-2), ['th-9', 'go on'])
+  assertEquals(x.slice(-3), ['--', 'th-9', 'go on'])
   assertEquals(x.includes('--dangerously-bypass-approvals-and-sandbox'), true)
   assertEquals(x.includes('model_reasoning_effort=high'), true)
 })

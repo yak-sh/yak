@@ -155,6 +155,7 @@ export let adapters: Record<string, Adapter> = {
       '--model',
       j.model,
       ...(j.effort ? ['--effort', j.effort] : []),
+      '--', // the instruction rides after --, the contract the real CLIs need
       j.instruction,
     ],
     // Resume: same script, minus the fresh session id (the thread already
@@ -171,6 +172,7 @@ export let adapters: Record<string, Adapter> = {
       j.model,
       ...(j.effort ? ['--effort', j.effort] : []),
       '--resume',
+      '--',
       text,
     ],
     init: (e) =>
@@ -249,6 +251,11 @@ export let adapters: Record<string, Adapter> = {
       j.model,
       '--permission-mode',
       'bypassPermissions', // it owns its worktree; nobody is at the prompt
+      // -- ends options: the instruction is a positional, so content that
+      // opens with a dash (a persona's --- frontmatter, a task title like
+      // "-x fix…") would otherwise parse as an unknown flag and exit 1
+      // before any API call. Everything after -- is positional, always.
+      '--',
       j.instruction,
     ],
     // Resume: --resume <id> takes the place of --session-id (the CLI won't
@@ -266,6 +273,7 @@ export let adapters: Record<string, Adapter> = {
       j.model,
       '--permission-mode',
       'bypassPermissions',
+      '--', // the prompt is a positional — same flag-parse guard as argv
       text,
     ],
     init: (e) =>
@@ -425,11 +433,15 @@ export let adapters: Record<string, Adapter> = {
       '-m',
       j.model,
       ...(j.effort ? ['-c', `model_reasoning_effort=${j.effort}`] : []),
+      // -- ends options: same flag-parse guard as claude (clap rejects a
+      // dash-leading positional as an unknown argument otherwise).
+      '--',
       j.instruction,
     ],
     // Resume: `exec resume <id> <prompt>` — the same posture flags as exec,
     // the id and the new prompt as the two positionals (options first, then
-    // SESSION_ID then PROMPT, per `codex exec resume --help`).
+    // SESSION_ID then PROMPT, per `codex exec resume --help`). -- guards the
+    // dash-leading prompt just as argv guards the instruction.
     resume: (j, sid, text) => [
       'codex',
       'exec',
@@ -439,6 +451,7 @@ export let adapters: Record<string, Adapter> = {
       '-m',
       j.model,
       ...(j.effort ? ['-c', `model_reasoning_effort=${j.effort}`] : []),
+      '--',
       sid,
       text,
     ],
