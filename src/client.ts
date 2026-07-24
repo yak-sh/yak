@@ -628,6 +628,30 @@ export let inboxMail = (scope?: string, operator = true) => (r: Row) =>
   operator && unreadMail(r) && inInbox(r) &&
   (!scope || r.comps.mail?.target_eid == scope)
 
+// The sweep's mail door (T-7010): the digest's `## mail` count IS a
+// notification — it tells the operator "N unread" — so stamp `notified` on each
+// letter it counts, the SAME inbox filter resolved through the SAME scope as
+// contextDigest, so exactly what was surfaced is stamped. The channel plugin
+// reads `notified` and won't re-ring a letter the digest already announced.
+// Drain-proof: `notified` never hides mail (still NOT opened == unread, still in
+// the inbox); idempotent — only the un-notified are stamped, and the write is
+// insert-or-ignore besides. The caller applies these when it serves the digest.
+export let mailNotified = (
+  snap: Snapshot,
+  session?: string,
+  scope?: string,
+): Change[] => {
+  let all = rows(snap)
+  let sess = all.find((r) =>
+    r.comps.session && String(r.comps.session.id) == session
+  )
+  scope = scopeFor(all, sess, String(sess?.comps.session?.cwd ?? ''), scope)
+  return all
+    .filter(inboxMail(scope, isOperator(sess?.comps.session)))
+    .filter((r) => !r.comps.notified)
+    .map((r): Change => ({ eid: r.eid, name: 'notified', comp: {} }))
+}
+
 // The project you stand in: the repo-wearing entity whose path prefixes
 // the cwd. LONGEST prefix wins, so a repo nested inside another claims a
 // cwd under it — first-match would have handed it to whichever registered
@@ -1057,6 +1081,11 @@ export let contextDigest = (
 // itself (commenting on S-31 is how you message that agent). "Seen" is
 // the session's own acked_at cursor; the returned ack change advances it,
 // and the caller applies it exactly when the lines are actually shown.
+// Serving a line also STAMPS `notified` on that comment (T-7010) — this is
+// a delivery door, so the channel plugin won't re-inject what the sweep
+// already told; the stamp rides `ack`, applied in the same breath. Drain-
+// proof: `notified` never hides a comment, and the acked_at cursor stays
+// the gate (per-item read-state is T-7011).
 export let notices = (snap: Snapshot, session: string) => {
   let all = rows(snap)
   let sess = all.find((r) =>
@@ -1099,7 +1128,8 @@ export let notices = (snap: Snapshot, session: string) => {
     }
     return name(actor) || name(r) || 'someone'
   }
-  let lines = unseen.slice(0, 20).map((r) => {
+  let served = unseen.slice(0, 20)
+  let lines = served.map((r) => {
     let c = r.comps.comment
     let target = byEid.get(String(c.target_eid))
     let at = target && target.eid != sess.eid ? `${idOf(target)} ` : ''
@@ -1107,11 +1137,19 @@ export let notices = (snap: Snapshot, session: string) => {
     return `${at}💬 ${who(c.author_eid)}: ${body}`
   })
   if (unseen.length > 20) lines.push(`…and ${unseen.length - 20} more`)
-  let ack: Change[] = [{
-    eid: sess.eid,
-    name: 'session',
-    comp: { acked_at: new Date().toISOString() },
-  }]
+  // The ack cursor plus a `notified` stamp per SERVED comment (the overflow
+  // isn't told, so it isn't stamped) — bare presence, server-clocked. Skip the
+  // already-notified so the batch stays lean; the write is idempotent anyway.
+  let ack: Change[] = [
+    {
+      eid: sess.eid,
+      name: 'session',
+      comp: { acked_at: new Date().toISOString() },
+    },
+    ...served
+      .filter((r) => !r.comps.notified)
+      .map((r): Change => ({ eid: r.eid, name: 'notified', comp: {} })),
+  ]
   return { lines, ack }
 }
 

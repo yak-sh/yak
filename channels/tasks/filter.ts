@@ -10,12 +10,18 @@
 
 import { type Change, idOf, kindOf } from '../../src/types.ts'
 
-// A rendered channel event: the notification params shape server.js emits
-// verbatim — `{content, meta}` under method notifications/claude/channel. The
-// MCP server's name ("tasks") becomes the source= attribute; meta carries the
-// rest (kind, from). Attacker-controlled strings live in meta/content, never
-// built into a forged attribute.
-export type Event = { content: string; meta: Record<string, string> }
+// A rendered channel event: `{content, meta}` is the notification params shape
+// server.js emits under method notifications/claude/channel. The MCP server's
+// name ("tasks") becomes the source= attribute; meta carries the rest (kind,
+// from). Attacker-controlled strings live in meta/content, never built into a
+// forged attribute. `eid` is the entity this event notifies about — the plugin
+// stamps `notified` on it (its own delivery record) and it is stripped before
+// the wire, never reaching the client.
+export type Event = {
+  content: string
+  meta: Record<string, string>
+  eid: string
+}
 
 // What channelEvents needs to know about the world beyond one batch: which
 // session entity it serves, that session's actor (a knock may be aimed at
@@ -23,9 +29,9 @@ export type Event = { content: string; meta: Record<string, string> }
 // CLAIMED (a comment on any of them is a message to the claimant — the sweep's
 // `mine` in client.ts notices()), how to turn an eid into a human id (T-7, S-31)
 // — null when the eid isn't known yet — and a letter's words from the cache (the
-// arrival stamp is a bare mail row). `seen` is the mail eids already delivered
-// this run: any later full-row stamp re-broadcast (the mail.ts idiom casts whole
-// rows) must not ring twice.
+// arrival stamp is a bare mail row). `notified` is the durable dedup: an entity
+// already told (this plugin's own inject stamp, or the sweep) never re-rings,
+// even across a reconnect.
 export type Ctx = {
   sessionEid: string
   actorEid?: string | null
@@ -38,11 +44,15 @@ export type Ctx = {
   // re-rings across a reconnect (the old ephemeral read_at guard, made
   // restart-proof).
   done?: (eid: string) => boolean
+  // The durable dedup (T-7010): true once an entity wears `notified`, read off
+  // the index — so anything this plugin (or the sweep) already told the operator
+  // is not re-injected, even across a reconnect. Replaces the old ephemeral
+  // `seen`/`delivered` set; `inject-needed == NOT notified`.
+  notified?: (eid: string) => boolean
   // Whether the served session is the project's operator loop — a specialist
   // (false) gets no project mail, only direct address (client.ts isOperator,
   // T-7006). Absent = true (an unresolved session errs toward delivery).
   operator?: boolean
-  seen?: Set<string>
 }
 
 let str = (v: unknown) => (typeof v == 'string' ? v : '')
@@ -119,6 +129,13 @@ export let doneOf = (index: Index, eid: string) => {
   let comps = index.get(eid)?.comps
   return !!comps && (comps.has('opened') || comps.has('archived'))
 }
+
+// eid → notified (T-7010): it already wears `notified` — told, whether by this
+// plugin's own inject stamp or the bus/digest sweep. learn() keeps the comp set
+// fresh from every broadcast, so this is restart-proof dedup — the Ctx.notified
+// the live server wires in. Orthogonal to done: told, not dealt-with.
+export let notifiedOf = (index: Index, eid: string) =>
+  !!index.get(eid)?.comps.has('notified')
 
 // eid → human id (T-7), or null when the spine's num hasn't been seen yet.
 export let humanId = (index: Index, eid: string): string | null => {
@@ -233,6 +250,7 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
       if (!mine) continue
       let content = words(docs.get(c.eid))
       if (!content) continue // bodiless mint or a later comp-only patch
+      if (ctx.notified?.(c.eid)) continue // already told (this plugin or sweep)
       let from = ctx.idOf(str(c.comp.author_eid)) ?? 'unknown'
       let meta: Record<string, string> = {
         kind: 'comment',
@@ -241,7 +259,7 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
       // On a claimed TASK (not the session), name the target so the operator
       // knows which one — the sweep line prefixes the same id.
       if (at != ctx.sessionEid) meta.on = cleanAttr(ctx.idOf(at) ?? at)
-      out.push({ content, meta })
+      out.push({ content, meta, eid: c.eid })
       continue
     }
 
@@ -252,12 +270,13 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
       if (c.comp.acted_at != null) continue
       let recipient = str(c.comp.to_eid)
       if (recipient != ctx.sessionEid && recipient != ctx.actorEid) continue
+      if (ctx.notified?.(c.eid)) continue // already told (this plugin or sweep)
       let at = str(c.comp.target_eid)
       let atId = at ? ctx.idOf(at) ?? at : null
       let note = commentOn(changes, docs, at)
       let head = atId ? `knock: look at ${atId}` : 'knock'
       let content = note ? `${head} — ${note}` : head
-      out.push({ content, meta: { kind: 'knock' } })
+      out.push({ content, meta: { kind: 'knock' }, eid: c.eid })
       continue
     }
 
@@ -265,14 +284,13 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
       // The sweep's stamp broadcast is the arrival: received_at is a
       // server-only column, so only the full-row stamp carries it (knock's
       // acted_at trick, inverted — here the stamp IS the news). The mint's
-      // wire frames never wear it, and `seen` keeps any later full-row
-      // re-broadcast from ringing twice.
+      // wire frames never wear it, and `notified` keeps any later full-row
+      // re-broadcast — or a reconnect — from ringing twice.
       if (c.comp.received_at == null) continue
       if (
         !injects(c.comp, ctx.homeEid, ctx.done?.(c.eid), ctx.operator !== false)
       ) continue
-      if (ctx.seen?.has(c.eid)) continue
-      ctx.seen?.add(c.eid)
+      if (ctx.notified?.(c.eid)) continue
       let id = ctx.idOf(c.eid)
       let doc = docs.get(c.eid) ?? ctx.docOf?.(c.eid)
       let from = cleanAttr(str(c.comp.from)) || 'unknown'
@@ -287,7 +305,7 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
       }
       if (subj) meta.subj = subj
       if (id) meta.id = id
-      out.push({ content, meta })
+      out.push({ content, meta, eid: c.eid })
     }
   }
   return out

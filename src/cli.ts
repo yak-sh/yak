@@ -32,6 +32,7 @@ import {
   mailAt,
   mailChanges,
   mailLine,
+  mailNotified,
   me,
   memoryChanges,
   notices,
@@ -928,6 +929,10 @@ let context = async (args: string[]) => {
   // session's ack cursor advances exactly when they're printed.
   let tell = async (snap: Snapshot, sid: string, scope?: string) => {
     let out = contextDigest(snap, sid, Date.now(), scope)
+    // The digest's mail line is a notification door — stamp `notified` on the
+    // letters it surfaces so the channel plugin won't re-ring them (T-7010).
+    let mailStamps = mailNotified(snap, sid, scope)
+    if (mailStamps.length) await send(mailStamps)
     let n = notices(snap, sid)
     if (n.lines.length) {
       await send(n.ack)

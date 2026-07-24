@@ -6,10 +6,13 @@
 // its session entity, a knock at its door, a letter arriving for its home
 // project — with no polling of the comms bus.
 //
-// It is a READ-ONLY listener: it opens the tasks server's /ws sync socket (the
-// same broadcast every browser tab hears) and emits; it never writes the graph.
-// Replies go through the task CLI/MCP the session already has. It holds no
-// credential — /snapshot and /ws are the local server's own, unauthed surface.
+// It writes ONLY its own delivery stamps, never graph content: it opens the
+// tasks server's /ws sync socket (the same broadcast every browser tab hears)
+// and emits, and POSTs a bare `notified` stamp to /apply for each item it
+// injects (T-7010) — the durable dedup that keeps a reconnect from re-ringing.
+// It never writes a reply, an edit, or any content; those go through the task
+// CLI/MCP the session already has. It holds no credential — /snapshot, /ws, and
+// /apply are the local server's own, unauthed surface.
 //
 // Identity: the claude PROCESS this plugin runs under. The session entity
 // wearing session.pid == our claude ancestor is the one served — resolved
@@ -32,6 +35,7 @@ import {
   humanId,
   type Index,
   learn,
+  notifiedOf,
 } from './filter.ts'
 import { claudePid } from '../../src/proc.ts'
 
@@ -94,10 +98,6 @@ let homes = new Map<string, string>()
 // filter the same way notices()'s `mine` does. Release/detach (comp or
 // session_eid null) or a tombstone drops the eid.
 let claims = new Map<string, string>()
-
-// Mail already delivered this run — a later full-row stamp re-broadcast (the
-// mail.ts idiom casts whole rows) must not ring twice.
-let delivered = new Set<string>()
 
 // Re-resolve the served session from a batch (boot snapshot, a later mint,
 // or the post-/clear reify), and keep the actor fresh. The home project —
@@ -211,10 +211,30 @@ let mcp = new Server(
 // whole session (proven in email-channel). The listen loop only starts on
 // oninitialized, so no batch is processed before then.
 
-let flush = (e: Event) => {
+// eid names the entity to stamp `notified` — the plugin's business, not the
+// client's — so it is stripped here, never riding the notification params.
+let flush = ({ eid: _eid, ...ev }: Event) => {
   mcp
-    .notification({ method: 'notifications/claude/channel', params: e })
+    .notification({ method: 'notifications/claude/channel', params: ev })
     .catch((e: unknown) => err(`failed to deliver to Claude: ${e}`))
+}
+
+// The channel's ONE write: stamp `notified` on what it just delivered — a bare
+// presence the server's stampedPresence loop clocks (T-7010). Not graph content
+// (a reply, an edit); the plugin recording its own delivery, the way
+// knocked()/mailed() stamp their outcomes. /apply is the local server's own
+// unauthed surface, same as /snapshot and /ws.
+let markNotified = async (changes: Change[]) => {
+  try {
+    let res = await fetch(`http://${HOST}/apply`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(changes),
+    })
+    await res.body?.cancel()
+  } catch (e) {
+    err(`notified stamp failed: ${e}`)
+  }
 }
 
 // --- the stream --------------------------------------------------------------
@@ -232,20 +252,30 @@ let feed = (changes: Change[]) => {
   if (!sessionEid) return // our session isn't in the graph yet
   let claimedEids = new Set<string>()
   for (let [eid, s] of claims) if (s == sessionEid) claimedEids.add(eid)
-  for (
-    let e of channelEvents(changes, {
-      sessionEid,
-      actorEid,
-      homeEid,
-      claimedEids,
-      idOf: (eid) => humanId(index, eid),
-      docOf: (eid) => docOf(index, eid),
-      done: (eid) => doneOf(index, eid),
-      // The operator loop gets project mail; a specialist does not (T-7006).
-      operator: origin != 'managed' && !requestedTaskEid,
-      seen: delivered,
-    })
-  ) flush(e)
+  let events = channelEvents(changes, {
+    sessionEid,
+    actorEid,
+    homeEid,
+    claimedEids,
+    idOf: (eid) => humanId(index, eid),
+    docOf: (eid) => docOf(index, eid),
+    done: (eid) => doneOf(index, eid),
+    notified: (eid) => notifiedOf(index, eid),
+    // The operator loop gets project mail; a specialist does not (T-7006).
+    operator: origin != 'managed' && !requestedTaskEid,
+  })
+  let stamps: Change[] = []
+  for (let e of events) {
+    flush(e)
+    // Record our own delivery, durably: stamp `notified` on what we injected so
+    // a reconnect — or the same letter re-broadcast — never re-rings it. Mark
+    // the index optimistically NOW so a re-broadcast inside the POST's
+    // round-trip gap is already deduped; learn() confirms it when the write
+    // echoes back. The write itself is idempotent (insert-or-ignore).
+    index.get(e.eid)?.comps.add('notified')
+    stamps.push({ eid: e.eid, name: 'notified', comp: {} })
+  }
+  if (stamps.length) markNotified(stamps)
 }
 
 // One /ws frame. Array batches are live sync patches — feed them. Object frames

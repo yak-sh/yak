@@ -27,6 +27,7 @@ import {
   host,
   idOf,
   type JournalEntry,
+  mailNotified,
   memoryChanges,
   notices,
   param,
@@ -386,7 +387,12 @@ board if you hold nothing. Call this FIRST each session, with the same
 stable session identifier you claim with.`,
     { session: z.string() },
     async ({ session }: { session: string }) => {
-      return bus(contextDigest(await io.read(), session), session)
+      let snap = await io.read()
+      // The digest's mail line is a notification door — stamp `notified` on the
+      // letters it surfaces so the channel plugin won't re-ring them (T-7010).
+      let stamps = mailNotified(snap, session)
+      if (stamps.length) await io.write(stamps, session)
+      return bus(contextDigest(snap, session), session)
     },
   )
 

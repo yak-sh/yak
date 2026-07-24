@@ -32,7 +32,6 @@ let ctx = (over: Partial<Ctx> = {}): Ctx => ({
   actorEid: 'actor',
   homeEid: 'home',
   idOf,
-  seen: new Set(),
   ...over,
 })
 
@@ -44,7 +43,7 @@ Deno.test('a comment on the session emits with its words and author id', () => {
     ch('c1', 'comment', { target_eid: 'sess', author_eid: 's1' }),
   ]
   assertEquals(channelEvents(batch, ctx()), [
-    { content: 'ping', meta: { kind: 'comment', from: 'S-1' } },
+    { content: 'ping', meta: { kind: 'comment', from: 'S-1' }, eid: 'c1' },
   ])
 })
 
@@ -70,6 +69,7 @@ Deno.test('a comment on a CLAIMED task is delivered, naming the task', () => {
     {
       content: 'take a look',
       meta: { kind: 'comment', from: 'S-1', on: 'T-9' },
+      eid: 'c1',
     },
   ])
 })
@@ -107,7 +107,7 @@ Deno.test('a comment falls back to its title when the body is empty', () => {
 Deno.test('a knock at the session names its target as a human id', () => {
   let batch = [ch('k1', 'knock', { to_eid: 'sess', target_eid: 't9' })]
   assertEquals(channelEvents(batch, ctx()), [
-    { content: 'knock: look at T-9', meta: { kind: 'knock' } },
+    { content: 'knock: look at T-9', meta: { kind: 'knock' }, eid: 'k1' },
   ])
 })
 
@@ -119,7 +119,7 @@ Deno.test('a knock at the session actor is delivered too', () => {
 Deno.test('a knock naming only its recipient has no look-at target', () => {
   let batch = [ch('k1', 'knock', { to_eid: 'sess' })]
   assertEquals(channelEvents(batch, ctx()), [
-    { content: 'knock', meta: { kind: 'knock' } },
+    { content: 'knock', meta: { kind: 'knock' }, eid: 'k1' },
   ])
 })
 
@@ -133,6 +133,7 @@ Deno.test('a knock carries the words of the comment on its TARGET', () => {
   assertEquals(out, [{
     content: 'knock: look at T-9 — take a look',
     meta: { kind: 'knock' },
+    eid: 'k1',
   }])
 })
 
@@ -182,6 +183,7 @@ Deno.test('a verified unread mail for the home project injects', () => {
       subj: 'hello',
       id: 'E-5',
     },
+    eid: 'm1',
   }])
 })
 
@@ -192,8 +194,8 @@ Deno.test('unverified mail never injects — it waits for triage', () => {
 
 Deno.test('mail already opened/archived is not re-announced', () => {
   let batch = [stamp()]
-  let seen = ctx({ docOf: letter, done: () => true })
-  assertEquals(channelEvents(batch, seen), [])
+  let dealt = ctx({ docOf: letter, done: () => true })
+  assertEquals(channelEvents(batch, dealt), [])
 })
 
 Deno.test('a specialist session gets no project mail (T-7006)', () => {
@@ -231,6 +233,7 @@ Deno.test("a mint's wire frame (no received_at) is not the arrival", () => {
 Deno.test('an echo arrival with no doc anywhere falls back to a pointer', () => {
   let out = channelEvents([stamp()], ctx())
   assertEquals(out[0].content, 'mail E-5 from jeff@yak.sh — task mail show E-5')
+  assertEquals(out[0].eid, 'm1')
   assertEquals(out[0].meta, {
     kind: 'mail',
     from: 'jeff@yak.sh',
@@ -239,9 +242,15 @@ Deno.test('an echo arrival with no doc anywhere falls back to a pointer', () => 
   })
 })
 
-Deno.test('a full-row re-broadcast does not ring twice', () => {
-  let c = ctx({ docOf: letter })
-  assertEquals(channelEvents([stamp()], c).length, 1)
+Deno.test('an already-notified item is not re-injected (durable dedup)', () => {
+  // The plugin stamps `notified` after each inject and reads it back through
+  // ctx.notified — so a re-broadcast (or a reconnect that re-syncs the same
+  // arrival) never rings twice. Comments and knocks dedup the same way.
+  let told = new Set<string>()
+  let c = ctx({ docOf: letter, notified: (e) => told.has(e) })
+  let first = channelEvents([stamp()], c)
+  assertEquals(first.length, 1)
+  told.add(first[0].eid) // the plugin's post-inject stamp
   assertEquals(channelEvents([stamp()], c), [])
 })
 

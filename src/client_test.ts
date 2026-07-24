@@ -153,6 +153,26 @@ Deno.test('notices: unseen comments on claimed tasks + messages to the session',
   assertEquals(n.lines[1].includes('sess-b: ping'), true)
   assertEquals(n.ack[0].name, 'session')
   assertEquals(typeof n.ack[0].comp?.acked_at, 'string')
+  // serving a comment stamps `notified` on it (T-7010): the sweep is a
+  // delivery door, so the channel plugin won't re-inject what it already told.
+  let told = n.ack.filter((c) => c.name == 'notified').map((c) => c.eid).sort()
+  assertEquals(told, ['c-1', 'c-2'])
+  assertEquals(
+    n.ack.every((c) => c.name == 'notified' ? c.comp != null : true),
+    true,
+  )
+  // a comment already `notified` isn't re-stamped — the batch stays lean
+  // (the write is idempotent besides).
+  let pre: Snapshot = {
+    changes: [...busSnap.changes, { eid: 'c-1', name: 'notified', comp: {} }],
+    deps: snap.deps,
+  }
+  assertEquals(
+    notices(pre, 'sess-x').ack.filter((c) => c.name == 'notified').map((c) =>
+      c.eid
+    ),
+    ['c-2'],
+  )
   // the cursor silences what was served
   let acked: Snapshot = {
     changes: busSnap.changes.map((c) =>
@@ -493,6 +513,7 @@ Deno.test('inbox: the four sources, archived hides, opened marks read', () => {
   let cO = 'aaaaaaaa-0000-4000-8000-000000000115' // comment aimed elsewhere
   let cA = 'aaaaaaaa-0000-4000-8000-000000000116' // to session, archived
   let cR = 'aaaaaaaa-0000-4000-8000-000000000117' // to session, opened
+  let cN = 'aaaaaaaa-0000-4000-8000-000000000118' // to session, notified only
   let g = rows({
     changes: [
       { eid: Sx, name: 'entity', comp: { eid: Sx, num: 101, created_at: '' } },
@@ -515,6 +536,8 @@ Deno.test('inbox: the four sources, archived hides, opened marks read', () => {
       { eid: cA, name: 'archived', comp: { at: 'now' } },
       { eid: cR, name: 'comment', comp: { target_eid: Sx } },
       { eid: cR, name: 'opened', comp: { at: 'now' } },
+      { eid: cN, name: 'comment', comp: { target_eid: Sx } },
+      { eid: cN, name: 'notified', comp: { at: 'now' } }, // told, not dealt with
     ],
   })
   let who = readerFor(g, 'me', '/w', P)
@@ -525,13 +548,15 @@ Deno.test('inbox: the four sources, archived hides, opened marks read', () => {
     operator: true,
     claims: new Set([TC]),
   })
-  // all four sources arrive; a comment aimed elsewhere and an archived one don't
+  // all four sources arrive; a comment aimed elsewhere and an archived one
+  // don't. `notified` (cN) does NOT hide — being told keeps it in the inbox.
   let inbox = g.filter(inboxItem(who)).map((r) => r.eid).sort()
-  assertEquals(inbox, [c1, c2, kn, ml, cR].sort())
-  // unread within: the opened one counts as read; the rest are unread
+  assertEquals(inbox, [c1, c2, kn, ml, cR, cN].sort())
+  // unread within: the opened one counts as read; a `notified`-only item is
+  // still unread (told != opened); the rest are unread
   let unread = g.filter(inboxItem(who)).filter(isUnread).map((r) => r.eid)
     .sort()
-  assertEquals(unread, [c1, c2, kn, ml].sort())
+  assertEquals(unread, [c1, c2, kn, ml, cN].sort())
 })
 
 // The operator/specialist split (T-7006): only the operator loop receives a
