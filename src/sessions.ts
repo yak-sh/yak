@@ -155,13 +155,12 @@ let settled = (eid: string, status: string, cast: Cast) => {
   }
 }
 
-// Finished worktrees earn their removal AT BOOT, not at settle: a settled
-// session is exactly what comment-resume targets, so sweeping the moment
-// it completes would race the say-more flow — the sweep waits for the
-// next restart instead, which bounds accumulation without shrinking the
-// resume window a live server offers. Only a COMPLETED session whose
-// branch is fully merged into the base and whose tree is clean goes;
-// anything failed, interrupted, dirty, or unmerged stays for inspection.
+// Finished worktrees earn their removal AT BOOT, not at settle — which
+// bounds accumulation without racing a settle still stamping. Only a
+// COMPLETED session whose branch is fully merged into the base and whose
+// tree is clean goes; anything failed, interrupted, dirty, or unmerged
+// stays for inspection. Removal never closes the resume window: a later
+// comment regrows the tree at the same path (regrow, below).
 export let tidy = async (cast: Cast) => {
   let rows = db.prepare(
     `select * from session
@@ -170,22 +169,26 @@ export let tidy = async (cast: Cast) => {
   for (let row of rows) await cleanup(row, cast)
 }
 
+// The checkout a session runs in comes from the GRAPH: its task's project
+// names the repo. The sweep and the regrow read it the same way.
+let repoOf = (row: Row) =>
+  db.prepare(
+    `select r.path, r.base_branch from repo r
+     join task t on t.project_eid = r.eid where t.eid = ?`,
+  ).get(String(row.requested_task_eid)) as
+    | { path: string; base_branch: string }
+    | undefined
+
 // One worktree, considered and (maybe) removed. Every refusal is a
 // warning, never a throw. The row sheds cwd and branch afterwards — a
-// later comment-resume then refuses plainly ("no worktree to resume in")
-// instead of spawning into a directory that no longer exists; merged
-// work wants a fresh spawn.
+// later comment-resume sees the shed and regrows instead of spawning
+// into a directory that no longer exists.
 let cleanup = async (row: Row, cast: Cast) => {
   try {
     let tree = String(row.cwd ?? '')
     let branch = String(row.branch ?? '')
     if (!tree || !branch) return
-    let repo = db.prepare(
-      `select r.path, r.base_branch from repo r
-       join task t on t.project_eid = r.eid where t.eid = ?`,
-    ).get(String(row.requested_task_eid)) as
-      | { path: string; base_branch: string }
-      | undefined
+    let repo = repoOf(row)
     if (!repo) return
     if (await git(tree, ['status', '--porcelain'])) return // dirty: keep
     // merged? --is-ancestor exits nonzero when not — git() throws, we keep
@@ -201,6 +204,30 @@ let cleanup = async (row: Row, cast: Cast) => {
   } catch (e) {
     console.warn('worktree cleanup skipped —', e)
   }
+}
+
+// The sweep's inverse: the same deterministic path and branch the spawn
+// chose, recreated from the base. The provider keys its thread by cwd, so
+// only the SAME path lets a resume find it; the merged work is already in
+// the base, so the continuation starts where the base is now. Throws are
+// the caller's to say — a resume that can't regrow refuses out loud.
+let regrow = async (row: Row) => {
+  let repo = repoOf(row)
+  if (!repo) throw new Error("the task's project has no repo")
+  let { num } = db.prepare('select num from entity where eid = ?')
+    .get(String(row.eid)) as { num: number }
+  let sid = `S-${num}`
+  let tree = `${worktreesDir()}/${basename(repo.path)}/${sid}`
+  Deno.mkdirSync(dirname(tree), { recursive: true })
+  await git(repo.path, [
+    'worktree',
+    'add',
+    tree,
+    '-b',
+    `session/${sid}`,
+    repo.base_branch,
+  ])
+  return { cwd: tree, branch: `session/${sid}` }
 }
 
 // ---- following the file ----
@@ -812,33 +839,75 @@ let departed = async (eid: string, pid: number, ms: number) => {
 
 // ---- the input effect ----
 
+// The plain refusal: a machine-event comment on the session saying why
+// the words didn't wake it, so the sender learns on their next glance.
+// event marks the server speaking (M-4062) — the bus delivers it, the
+// mail relay must not, and the resume gate never wakes on it. Telling
+// must never throw out of the effect.
+let refuse = (eid: string, why: string, cast: Cast) => {
+  try {
+    let cid = crypto.randomUUID()
+    let t = trace()
+    let out = apply(db, [
+      {
+        eid: cid,
+        name: 'doc',
+        comp: { title: '', body: `can't resume — ${why}` },
+      },
+      { eid: cid, name: 'comment', comp: { target_eid: eid, event: 1 } },
+    ], t)
+    cast(out)
+    dispatch(out, t, (comp, e) => console.warn(`resume refusal ${comp} —`, e))
+  } catch (e) {
+    console.warn('resume refusal dropped —', e)
+  }
+}
+
 // created(comment) — commenting on a session IS messaging that agent (the
 // comms bus already says so): aimed at a SETTLED managed session, the
 // comment resumes its provider thread with the comment's body. An ACTIVE
 // session takes no stdin — the bus hands it the comment on its next tool
 // call, so the comment alone is delivery, and nothing happens here. A
 // session's own comments never resume it (an agent must not wake itself
-// by talking). The human's line and the reply land in the SAME log — seq
-// just continues — and the existing tailer closes the session again when
-// the continuation ends.
+// by talking), and machine events carry news, never words to wake on —
+// which is also what keeps refuse()'s own reply out of this gate. Words
+// that CAN'T wake the session get a refusal said on the session, never a
+// silent drop: a swallowed message reads as delivered. The human's line
+// and the reply land in the SAME log — seq just continues — and the
+// existing tailer closes the session again when the continuation ends.
 export let commented =
-  (cast: Cast) => (ceid: string, comp: Record<string, unknown>) => {
+  (cast: Cast) => async (ceid: string, comp: Record<string, unknown>) => {
     let eid = String(comp.target_eid)
     if (comp.author_eid == eid) return // the session talking about itself
+    if (comp.event) return // the server speaking, not someone to answer
     let row = db.prepare('select * from session where eid = ?').get(eid) as
       | Row
       | undefined
     if (!row || row.origin != 'managed') return // not aimed at a spawn
     if (sessionActive.includes(String(row.status))) return // the bus delivers
-    if (!row.provider_session_id || !row.cwd) return // nothing to resume
-    let ad = adapters[String(row.provider)]
-    if (!ad) return
     let body = String(
       (db.prepare('select body from doc where eid = ?').get(ceid) as
         | { body: string }
         | undefined)?.body ?? '',
     ).trim()
     if (!body) return // a bare comment says nothing to say
+    if (!row.provider_session_id) {
+      return refuse(eid, 'the run never announced a provider thread', cast)
+    }
+    let ad = adapters[String(row.provider)]
+    if (!ad) return refuse(eid, `no adapter for '${row.provider}'`, cast)
+    // A swept worktree is no reason to stay quiet: tidy only removes
+    // MERGED trees, and the provider's thread outlives them — regrow at
+    // the same path and carry on.
+    if (!row.cwd) {
+      try {
+        let back = await regrow(row)
+        stamp(eid, back, cast)
+        row = { ...row, ...back }
+      } catch (e) {
+        return refuse(eid, `no worktree to resume in (${e})`, cast)
+      }
+    }
 
     // The human's line joins the log as a `say` — same file, next seq.
     let path = logFile(eid)

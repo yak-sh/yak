@@ -117,17 +117,29 @@ let begin = (task: string, extra: Record<string, unknown> = {}) => {
 }
 
 // A comment aimed at a session — the input path.
-let say = (target: string, body: string, author = uid()) => {
+let say = (
+  target: string,
+  body: string,
+  author = uid(),
+  event: number | null = null,
+) => {
   let c = uid()
   return [
     { eid: c, name: 'doc', comp: { title: '', body } },
     {
       eid: c,
       name: 'comment',
-      comp: { target_eid: target, author_eid: author },
+      comp: { target_eid: target, author_eid: author, event },
     },
   ]
 }
+
+// What the server said back on a session — refusals are event comments.
+let refusals = (target: string) =>
+  (db.prepare(
+    `select d.body from comment c join doc d on d.eid = c.eid
+     where c.target_eid = ? and c.event = 1`,
+  ).all(target) as { body: string }[]).map((c) => c.body)
 
 // A session row + log file exactly as a dead child would have left them.
 let plant = (lines: string[], provider = 'fake') => {
@@ -543,12 +555,21 @@ Deno.test('a comment resumes nothing it should not', async () => {
     .run('sid-1', active)
   await write(say(active, 'hi'))
   assertEquals(row(active)?.status, 'running') // untouched
-  // settled but never announced a provider thread: nothing to resume
+  assertEquals(refusals(active), []) // delivery, not a failure to say
+  // settled but never announced a provider thread: refused OUT LOUD
   let bare = plant([INIT])
   db.prepare("update session set status = 'completed' where eid = ?")
     .run(bare)
   await write(say(bare, 'hi'))
   assertEquals(row(bare)?.status, 'completed')
+  assertMatch(refusals(bare)[0], /never announced a provider thread/)
+  // a machine event is news, not words to wake on — no resume, no refusal
+  let evented = plant([INIT])
+  db.prepare("update session set status = 'completed' where eid = ?")
+    .run(evented)
+  await write(say(evented, 'S-1 completed · exit 0', uid(), 1))
+  assertEquals(row(evented)?.status, 'completed')
+  assertEquals(refusals(evented).length, 1) // only the event we wrote
 })
 
 Deno.test('a comment at a settled session joins the log and resumes it', async () => {
@@ -633,4 +654,27 @@ Deno.test('tidy: a dirty tree stays, whatever its branch says', async () => {
   await tidy(cast)
   assert(Deno.statSync(tree).isDirectory)
   assert(row(eid)?.cwd)
+})
+
+Deno.test('a comment after the sweep regrows the worktree and resumes', async () => {
+  let { p, t } = seed()
+  let { eid, done } = begin(t)
+  await done
+  let tree = String(row(eid)!.cwd), branch = String(row(eid)!.branch)
+  await tidy(cast) // merged and clean: swept, the row shed cwd and branch
+  assertEquals(row(eid)?.cwd, null)
+  let resumed = write(say(eid, 'one more thing'))
+  await until(() => row(eid)?.status == 'running', 'the regrown resume')
+  assertEquals(row(eid)?.cwd, tree) // the SAME path — the thread lives there
+  assertEquals(row(eid)?.branch, branch)
+  assert(Deno.statSync(tree).isDirectory)
+  await resumed
+  assertEquals(row(eid)?.status, 'completed') // the continuation settled
+  assertEquals(refusals(eid), [])
+  // and when the graph can't place a tree, the refusal is said
+  db.prepare('update session set cwd = null where eid = ?').run(eid)
+  db.prepare('delete from repo where eid = ?').run(p)
+  await write(say(eid, 'hello?'))
+  assertEquals(row(eid)?.status, 'completed')
+  assertMatch(refusals(eid)[0], /no worktree to resume in/)
 })
