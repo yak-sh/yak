@@ -325,14 +325,16 @@ Deno.test('spawnChanges: one session change carrying the request', () => {
   )
 })
 
-Deno.test('spawnChanges: the actor chain — inherit the caller, persona owner wins', () => {
+Deno.test("spawnChanges: the actor chain — owner, then the task's project, then the caller", () => {
   let J = 'aaaaaaaa-0000-4000-8000-000000000021' // person
   let O = 'aaaaaaaa-0000-4000-8000-000000000022' // operator project
   let P = 'aaaaaaaa-0000-4000-8000-000000000023' // persona O contains
   let Q = 'aaaaaaaa-0000-4000-8000-000000000024' // persona about O
   let R = 'aaaaaaaa-0000-4000-8000-000000000025' // unowned persona
   let W = 'aaaaaaaa-0000-4000-8000-000000000026' // caller session
-  let T = 'aaaaaaaa-0000-4000-8000-000000000027' // task
+  let T = 'aaaaaaaa-0000-4000-8000-000000000027' // projectless task
+  let V = 'aaaaaaaa-0000-4000-8000-000000000028' // another project
+  let U = 'aaaaaaaa-0000-4000-8000-000000000029' // task of V
   let g: Snapshot = {
     changes: [
       { eid: J, name: 'entity', comp: { eid: J, num: 21, created_at: '' } },
@@ -352,6 +354,20 @@ Deno.test('spawnChanges: the actor chain — inherit the caller, persona owner w
       { eid: T, name: 'entity', comp: { eid: T, num: 27, created_at: '' } },
       { eid: T, name: 'doc', comp: { title: 'work', body: '' } },
       { eid: T, name: 'task', comp: { status: 'open', priority: 0 } },
+      { eid: V, name: 'entity', comp: { eid: V, num: 28, created_at: '' } },
+      { eid: V, name: 'doc', comp: { title: 'Video', body: '' } },
+      { eid: V, name: 'project', comp: {} },
+      { eid: U, name: 'entity', comp: { eid: U, num: 29, created_at: '' } },
+      { eid: U, name: 'doc', comp: { title: 'cut', body: '' } },
+      {
+        eid: U,
+        name: 'task',
+        comp: {
+          status: 'open',
+          priority: 0,
+          project_eid: V,
+        },
+      },
     ],
     deps: [
       { parent: O, type: 'contains', child: P },
@@ -368,7 +384,7 @@ Deno.test('spawnChanges: the actor chain — inherit the caller, persona owner w
       deps: g.deps,
       ...o,
     }).changes[0].comp
-  // no persona: the child works for whoever the caller works for
+  // a projectless task: the child works for whoever the caller works for
   assertEquals(spawn()?.actor_eid, J)
   // a persona owned by an operator: the spawn acts AS the operator,
   // whichever way the ownership edge is spelled
@@ -376,7 +392,11 @@ Deno.test('spawnChanges: the actor chain — inherit the caller, persona owner w
   assertEquals(spawn({ persona: Q })?.actor_eid, O)
   // an unowned persona changes nothing — inheritance still holds
   assertEquals(spawn({ persona: R })?.actor_eid, J)
-  // no caller, no owner: the spawn stays unattributed
+  // a task WITH a project: the run acts for the project, not the person
+  // who pressed spawn (T-7081) — a persona's owner still outranks it
+  assertEquals(spawn({ task: 'T-29' })?.actor_eid, V)
+  assertEquals(spawn({ task: 'T-29', persona: P })?.actor_eid, O)
+  // no caller, no owner, no project: the spawn stays unattributed
   assertEquals('actor_eid' in (spawn({ by: undefined }) ?? {}), false)
 })
 

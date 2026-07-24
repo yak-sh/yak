@@ -619,6 +619,10 @@ export let spawned =
       branch: `session/${sid}`,
       cwd: tree,
       started_at: now(),
+      // A request that named no actor acts for the task's project — the
+      // cwd fill can't place a worktree, and its owner fallback would
+      // credit the agent's words to a person (T-7081).
+      ...(row.actor_eid ? {} : { actor_eid: task.project_eid }),
     }, cast)
     let instruction = [
       worn ?? CONTRACT,

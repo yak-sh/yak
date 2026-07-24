@@ -442,10 +442,13 @@ export let spawnChanges = (
   if (s.persona && !persona) throw new Error(`no entity: ${s.persona}`)
   // Behalf is a CHOICE, not plumbing: wearing a persona owned by an
   // operator means acting AS that operator, so the spawn's actor is the
-  // persona's owner; otherwise the child inherits the caller's actor —
-  // delegation doesn't launder identity. Ownership is an edge in either
-  // spelling (persona about owner, or owner contains persona) to an
-  // entity that IS an actor (person or project).
+  // persona's owner. Otherwise the run acts FOR the project whose task
+  // it works — the agent wrote the words, so the byline names the
+  // project, never the person who happened to press spawn (T-7081). The
+  // caller's actor is only the last resort, for a projectless task.
+  // Ownership is an edge in either spelling (persona about owner, or
+  // owner contains persona) to an entity that IS an actor (person or
+  // project).
   let owner = persona &&
     (s.deps ?? []).map((d) =>
       d.type == 'about' && d.parent == persona.eid
@@ -458,7 +461,7 @@ export let spawnChanges = (
   let caller = s.by
     ? all.find((r) => String(r.comps.session?.id) == s.by)?.comps.session
     : undefined
-  let actor = owner?.eid ?? caller?.actor_eid
+  let actor = owner?.eid ?? task.comps.task.project_eid ?? caller?.actor_eid
   let eid = uuid()
   let changes: Change[] = [{
     eid,
