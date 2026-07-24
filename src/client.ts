@@ -12,6 +12,9 @@ import {
   type Dep,
   type Hit,
   kindOf,
+  priErr,
+  prio,
+  prioTag,
   settled,
   type Snapshot,
   stamped,
@@ -245,25 +248,37 @@ export let param = (arg: string): Param | null => {
   let m = arg.match(/^\.([A-Za-z_]+)(?:\.([A-Za-z_]+))?=(.*)$/s)
   if (!m) return null
   let [, a, b, raw] = m
-  let value = coerce(raw)
+  let p: Param
   if (b) {
     if (!(b in (comps[a] ?? {}))) {
       throw new Error(`no such prop: .${a}.${b}`)
     }
-    return { comp: a, prop: b, value }
+    p = { comp: a, prop: b, value: coerce(raw) }
+  } else {
+    let r = route(a)
+    // route()'s any-of ('' comp) serves FILTERS; a write must aim at one
+    // component, so demand the explicit spelling.
+    if (!r.comp) {
+      let owners = Object.keys(comps).filter((c) => r.prop in comps[c])
+      throw new Error(
+        `.${a} is ambiguous for writes (${
+          owners.join(', ')
+        }) — use .comp.${r.prop}`,
+      )
+    }
+    p = { ...r, value: coerce(raw) }
   }
-  let r = route(a)
-  // route()'s any-of ('' comp) serves FILTERS; a write must aim at one
-  // component, so demand the explicit spelling.
-  if (!r.comp) {
-    let owners = Object.keys(comps).filter((c) => r.prop in comps[c])
-    throw new Error(
-      `.${a} is ambiguous for writes (${
-        owners.join(', ')
-      }) — use .comp.${r.prop}`,
-    )
+  // priority is the one number column operators spell P<n>: coerce already
+  // turned a plain '2'/'1.5' into a number (the board's fractional slots
+  // pass straight through), so a STRING here is either the P<n> spelling or
+  // garbage — strip the P, and reject the rest LOUDLY rather than storing it
+  // (the literal 'P2' in the graph was this door with no such step, T-7053).
+  if (p.comp == 'task' && p.prop == 'priority' && typeof p.value == 'string') {
+    let n = prio(p.value)
+    if (n == null) throw new Error(priErr(p.value))
+    p.value = n
   }
-  return { ...r, value }
+  return p
 }
 
 // Reference values at a door: uuids pass through, '' clears, anything
@@ -1402,7 +1417,13 @@ export let showMd = (snap: Snapshot, all: Row[], row: Row) => {
       let key = prop.endsWith('_eid') ? prop.slice(0, -4) : prop
       let owners = Object.keys(comps).filter((c) => prop in comps[c])
       if (owners.length > 1) key = `${comp}.${key}`
-      fm.push(`${key}: ${prop.endsWith('_eid') ? said(v) : v}`)
+      // priority reads P<n> everywhere (T-7143); a ref reads as its id+title.
+      let face = comp == 'task' && prop == 'priority'
+        ? prioTag(v)
+        : prop.endsWith('_eid')
+        ? said(v)
+        : v
+      fm.push(`${key}: ${face}`)
     }
   }
   let held = claimant(all, row)

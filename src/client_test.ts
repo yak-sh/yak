@@ -84,6 +84,14 @@ let CASES: [string, { comp: string; prop: string; value: unknown } | RegExp][] =
     ['.status=done', { comp: 'task', prop: 'status', value: 'done' }],
     ['.domain=Eng', { comp: 'task', prop: 'domain', value: 'Eng' }],
     ['.priority=1.5', { comp: 'task', prop: 'priority', value: 1.5 }],
+    // priority speaks P<n> at the write door too (T-6741/T-7143): 'P2' and
+    // '2' both store the integer 2; garbage is a loud error, not bad data.
+    ['.priority=P2', { comp: 'task', prop: 'priority', value: 2 }],
+    ['.priority=2', { comp: 'task', prop: 'priority', value: 2 }],
+    ['.priority=P0', { comp: 'task', prop: 'priority', value: 0 }],
+    ['.task.priority=P1', { comp: 'task', prop: 'priority', value: 1 }],
+    ['.priority=banana', /priority is a number/],
+    ['.priority=P', /priority is a number/],
     ['.pin.x=12', { comp: 'pin', prop: 'x', value: 12 }],
     ['.assignee=jeff', { comp: 'task', prop: 'assignee_eid', value: 'jeff' }],
     // a shared ref name filters as any-of, but a WRITE must aim

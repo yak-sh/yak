@@ -3,8 +3,25 @@
 // and the space-separated `--project P` forms — the latter is what agents
 // actually type, and the bug that let it through polluted the owner board.
 import { assertEquals, assertMatch } from '@std/assert'
-import { strayFlag, subagentDigest } from './cli.ts'
+import { leadPrio, strayFlag, subagentDigest } from './cli.ts'
 import type { Snapshot } from './types.ts'
+
+// `task new P1 …` honors the documented shorthand (T-6741): a LEADING
+// P<n> becomes priority, a bare word stays title, and a mid-title P keeps
+// its words.
+Deno.test('leadPrio: a leading P<n> is priority, else it is a title word', () => {
+  assertEquals(leadPrio(['P1', 'Fix', 'it']), {
+    words: ['Fix', 'it'],
+    priority: 1,
+  })
+  assertEquals(leadPrio(['p2', 'Ship']), { words: ['Ship'], priority: 2 })
+  // no leading P: every word is title, no priority
+  assertEquals(leadPrio(['Fix', 'the', 'P2', 'bug']), {
+    words: ['Fix', 'the', 'P2', 'bug'],
+  })
+  // a bare leading digit is a title word, never priority
+  assertEquals(leadPrio(['3', 'reasons']), { words: ['3', 'reasons'] })
+})
 
 Deno.test('strayFlag: clean title has no stray flag', () => {
   assertEquals(strayFlag(['Fix', 'the', 'login', 'bug']), null)

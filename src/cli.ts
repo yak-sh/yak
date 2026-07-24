@@ -67,7 +67,7 @@ import {
   STATIC_RULES,
 } from './doctor.ts'
 import { FILTERS, GRAMMAR } from './grammar.ts'
-import { type Edge, edges, type Snapshot } from './types.ts'
+import { type Edge, edges, prio, type Snapshot } from './types.ts'
 // `import type` (not the repo's usual inline `{ type X }`): telemetry.ts
 // reaches for node:sqlite, and the CLI has no business loading a db driver.
 import type { Log } from './telemetry.ts'
@@ -289,6 +289,18 @@ let list = async (args: string[]) => {
 // the glued `--project=P-30` and the space-separated `--project P-30` (whose
 // value sits in the *next* token, so no single token holds an `=`), and suggest
 // the dot form with that value.
+// The `task new` priority shorthand (T-6741): a LEADING P<n> is the
+// priority the help advertises, pulled off the title words — P-prefixed
+// only (a bare leading digit stays a title word) and only while it LEADS,
+// so 'Fix the P2 bug' keeps every word. Returns the remaining title words
+// and the priority when one led.
+export let leadPrio = (
+  words: string[],
+): { words: string[]; priority?: number } =>
+  words[0]?.match(/^[Pp]\d+$/)
+    ? { words: words.slice(1), priority: prio(words[0])! }
+    : { words }
+
 export let strayFlag = (
   words: string[],
 ): { got: string; suggest: string } | null => {
@@ -313,7 +325,11 @@ let create = async (args: string[]) => {
   // Reference values (.project=bindery, .assignee=jeff) resolve at the
   // door — same rule as the MCP tools.
   let grouped = patches(derefParams(rows(await snapshot()), params))
-  grouped.doc = { title: words.join(' '), ...grouped.doc }
+  // A leading P<n> sets priority (the documented shorthand); an explicit
+  // .priority= wins the value, but the leading token still leaves the title.
+  let { words: title, priority } = leadPrio(words)
+  if (priority != null) grouped.task = { priority, ...grouped.task }
+  grouped.doc = { title: title.join(' '), ...grouped.doc }
   if (!grouped.doc.title) throw new Error('a task needs a .title')
   let eid = crypto.randomUUID()
   await send(taskChanges(eid, grouped))

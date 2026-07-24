@@ -40,7 +40,7 @@
 // dotted first segment that names a COMPONENT is the explicit spelling
 // (`.pin.x=12`); any other first segment is a PATH — `.assignee.title~=j`
 // dereferences the eid column and predicates the target's prop. Depth 1.
-import { comps, type PropType, stamped } from './types.ts'
+import { comps, priErr, prio, type PropType, stamped } from './types.ts'
 
 export type Pred = {
   comp: string
@@ -238,6 +238,19 @@ export let ORDER = 'order'
 
 export let orderOf = (preds: Pred[]) => preds.find((p) => p.op == ORDER)?.value
 
+// Normalize a priority FILTER value: strip the P from every numeric token
+// so P<n> matches the stored number, across all the value forms — a list
+// ('P0,P1'), a range ('P0..P2'), a lone 'P1' — while ',' and '.' separators
+// (and empty, the absent form) pass untouched. A token that isn't P<n>/<n>
+// is a LOUD error (priErr), never the silent no-match that read the board
+// as empty (T-7143).
+let prioValue = (v: string): string =>
+  v.replace(/[^,.]+/g, (tok) => {
+    let n = prio(tok)
+    if (n == null) throw new Error(priErr(tok))
+    return String(n)
+  })
+
 export let pred = (token: string): Pred | null => {
   let m = token.match(
     /^\.([A-Za-z_]+)(?:\.([A-Za-z_]+))?(!=|~=|<=|>=|<|>|=)(.*)$/s,
@@ -249,20 +262,31 @@ export let pred = (token: string): Pred | null => {
   if (a == 'order' && !b && op == '=') {
     return { comp: '', prop: 'order', op: ORDER, value }
   }
+  let p: Pred
   if (b) {
     // The collision rule: a first segment naming a COMPONENT is the
     // explicit spelling (.pin.x); anything else walks a reference.
     if (routes[a]) {
       if (!routes[a].includes(b)) throw new Error(`no such prop: .${a}.${b}`)
-      return { comp: a, prop: b, op: OPS[op], value }
+      p = { comp: a, prop: b, op: OPS[op], value }
+    } else {
+      let r = route(a)
+      if (!r.prop.endsWith('_eid')) {
+        throw new Error(`.${a} is not a reference — paths walk _eid columns`)
+      }
+      p = { ...r, op: OPS[op], value, at: route(b) }
     }
-    let r = route(a)
-    if (!r.prop.endsWith('_eid')) {
-      throw new Error(`.${a} is not a reference — paths walk _eid columns`)
-    }
-    return { ...r, op: OPS[op], value, at: route(b) }
+  } else {
+    p = { ...route(a), op: OPS[op], value }
   }
-  return { ...route(a), op: OPS[op], value }
+  // priority speaks P<n> at the filter too, the form the tool itself prints
+  // (T-7143) — normalize the compared value (the path's far side when one
+  // stands, else the pred's own). '~=' contains stays literal.
+  let tgt = p.at ?? p
+  if (tgt.comp == 'task' && tgt.prop == 'priority' && p.op != '~') {
+    p.value = prioValue(p.value)
+  }
+  return p
 }
 
 // The rejection every strict door throws when pred() shrugs: the error

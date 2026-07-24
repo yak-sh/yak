@@ -50,6 +50,11 @@ let cases: [string, string, Record<string, unknown>, boolean][] = [
   ['negation', '.status!=done', {}, true],
   ['lte', '.priority<=1', {}, true],
   ['lte boundary out', '.priority<=1', { priority: 1.5 }, false],
+  // priority speaks P<n> at the filter — the form the tool itself prints
+  ['priority P<n> equals', '.priority=P1', {}, true],
+  ['priority P<n> lte', '.priority<=P1', {}, true],
+  ['priority P<n> range', '.priority=P1..P3', {}, true],
+  ['priority P<n> list', '.priority=P0,P1', {}, true],
   ['lt strict', '.priority<1', {}, false],
   ['gte', '.priority>=1', {}, true],
   ['range inclusive', '.priority=1..3', {}, true],
@@ -124,6 +129,21 @@ Deno.test('query: pred routes and normalizes ops', () => {
   assertEquals(pred('.priority<=1')?.op, '<=')
   assertEquals(pred('.title~=x')?.op, '~')
   assertEquals(pred('not a param'), null)
+})
+
+// The T-7143 core: priority normalizes P<n> to the stored number across
+// every value form, and a genuinely unparseable value is a LOUD error —
+// never the silent (no-matches)/exit-0 read of an empty board.
+Deno.test('query: priority speaks P<n>, rejects garbage loudly', () => {
+  assertEquals(pred('.priority=P2')?.value, '2')
+  assertEquals(pred('.priority<=P1')?.value, '1')
+  assertEquals(pred('.priority=P0,P1')?.value, '0,1')
+  assertEquals(pred('.priority=P0..P2')?.value, '0..2')
+  assertEquals(pred('.priority=2')?.value, '2') // the bare form still works
+  assertThrows(() => pred('.priority=banana'), Error, 'priority is a number')
+  assertThrows(() => pred('.priority=P'), Error, 'priority is a number')
+  // and it throws through the whole-query parser, not just the token
+  assertThrows(() => parseQuery('.priority=banana'), Error, 'priority is')
 })
 
 // ---- time phrases ----
