@@ -9,8 +9,10 @@
 // subtrees, so a module-held signal per TARGET is the wire between them
 // — keyed by the viewed entity, switching tabs (Board ⇄ List) keeps the
 // glance.
+import { useEffect, useRef } from 'preact/hooks'
 import { type Signal, signal } from '@preact/signals'
 import { sieve } from '../live.ts'
+import { useDraft } from './drafts.ts'
 import { block } from './ui.tsx'
 import { useComplete } from './Complete.tsx'
 
@@ -36,18 +38,31 @@ export let passOf = (eid: string): (eid: string) => boolean => {
   }
 }
 
-// the titlebar's half: the input + its completion dropdown
+// the titlebar's half: the input + its completion dropdown. Uncontrolled
+// so the draft can reseed the caret without a controlled re-render
+// clobbering it; the line SIGNAL stays the wire to passOf, mirrored on
+// every keystroke. A draft keyed by the viewed entity survives a hot
+// swap (which mints a fresh lines Map) or reload; absent a draft, a live
+// glance from this session — the signal outlives a card remount, the DOM
+// input doesn't — is reflected back on mount.
 export let FilterInput = ({ eid }: { eid: string }) => {
   let c = useComplete()
   let line = lineOf(eid)
+  let box = useRef<HTMLInputElement>(null)
+  let { sync, spend } = useDraft(`filter:${eid}`, box, (v) => line.value = v)
+  useEffect(() => {
+    if (box.current && !box.current.value && line.value) {
+      box.current.value = line.value
+    }
+  }, [])
   return (
     <Frame>
       <input
+        ref={box}
         placeholder='filter…'
-        value={line.value}
         onInput={(e: InputEvent) => {
           let el = e.currentTarget as HTMLInputElement
-          line.value = el.value
+          sync(el) // saves the draft and mirrors into the line signal
           c.track(el)
         }}
         onKeyDown={(e: KeyboardEvent) => {
@@ -57,6 +72,7 @@ export let FilterInput = ({ eid }: { eid: string }) => {
             if (el.value) e.stopPropagation() // consumed by the clear
             el.value = ''
             line.value = ''
+            spend()
             el.blur()
           }
         }}

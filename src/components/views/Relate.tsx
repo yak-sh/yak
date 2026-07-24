@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import { type Ent, uuid } from '../../types.ts'
 import { cache, ent, mutate } from '../../live.ts'
 import { spec, taskChanges } from '../../client.ts'
+import { peek, useDraft } from '../drafts.ts'
 import { block } from '../ui.tsx'
 import { Overlay } from '../overlay.tsx'
 
@@ -34,7 +35,13 @@ type V = (typeof verbs)[number]
 // apply, inheriting the host's project and domain. The list overlays —
 // nothing below it moves.
 export let Relate = ({ e }: { e: Ent }) => {
-  let [verb, setVerb] = useState<V | null>(null)
+  // On mount, a verb whose line was left half-typed reopens itself — a
+  // new task or edge the last mount never filed resurfaces, caret and all
+  // (drafts.ts). Keyed by (host, verb) so the sentence resumes exact.
+  let dk = (v: V) => `relate:${e.eid}:${v.label}`
+  let [verb, setVerb] = useState<V | null>(() =>
+    verbs.find((v) => peek(dk(v))) ?? null
+  )
   let [q, setQ] = useState('')
   let [pick, setPick] = useState(0)
   // The Find input doubles as the picker's anchor; focus it when a verb
@@ -43,6 +50,7 @@ export let Relate = ({ e }: { e: Ent }) => {
   useEffect(() => {
     if (verb) find.current?.focus()
   }, [verb])
+  let { sync, spend } = useDraft(verb ? dk(verb) : '', find, setQ)
   let close = () => {
     setVerb(null)
     setQ('')
@@ -77,6 +85,7 @@ export let Relate = ({ e }: { e: Ent }) => {
       }
   let link = (other: string) => {
     if (verb) mutate(edge(verb, other))
+    spend()
     close()
   }
   let create = () => {
@@ -95,10 +104,14 @@ export let Relate = ({ e }: { e: Ent }) => {
       }),
       edge(verb, id),
     )
+    spend()
     close()
   }
   let key = (ev: KeyboardEvent) => {
-    if (ev.key == 'Escape') return close()
+    if (ev.key == 'Escape') {
+      spend()
+      return close()
+    }
     if (ev.key == 'Enter') {
       ev.preventDefault()
       return hits[pick] ? link(hits[pick].eid) : create()
@@ -137,7 +150,7 @@ export let Relate = ({ e }: { e: Ent }) => {
           elRef={find}
           placeholder='task…'
           onInput={(ev: InputEvent) => {
-            setQ((ev.currentTarget as HTMLInputElement).value)
+            sync(ev.currentTarget as HTMLInputElement)
             setPick(0)
           }}
           onKeyDown={key}

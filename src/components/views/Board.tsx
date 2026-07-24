@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { type Ent } from '../../types.ts'
 import {
   boardTasks,
@@ -13,7 +13,8 @@ import {
 } from '../../live.ts'
 import { spec, taskChanges } from '../../client.ts'
 import { adopt, orderOf, parseQuery } from '../../query.ts'
-import { block, focus } from '../ui.tsx'
+import { peek, useDraft } from '../drafts.ts'
+import { block } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
 import { Prio } from '../Prio.tsx'
 import { passOf } from '../Filter.tsx'
@@ -46,12 +47,23 @@ let { Col, ColName, Count, Scroll, Item, Add, New, Chips, Chip } = Frame
 // with the parse shown live as chips while you type, so 'P1 .domain=Eng
 // Ship it' announces what Enter will file. Enter files and clears for
 // the next title (filing a list is one uninterrupted keyboard); Escape
-// or clicking away closes. Uncontrolled on purpose: the DOM owns the
-// text, state only mirrors it for the chips.
+// closes. Uncontrolled on purpose: the DOM owns the text, state only
+// mirrors it for the chips. dkey persists the line per (board, column) —
+// a hot swap or reload that unmounts this box (adding resets) is caught
+// by Board reopening the column from the draft, so a half-typed task is
+// never lost. Blur closes the box but KEEPS the draft (Board resurfaces
+// it); only filing or Escape spends it.
 let QuickAdd = (
-  { file, close }: { file: (text: string) => boolean; close: () => void },
+  { dkey, file, close }: {
+    dkey: string
+    file: (text: string) => boolean
+    close: () => void
+  },
 ) => {
   let [text, setText] = useState('')
+  let box = useRef<HTMLTextAreaElement>(null)
+  let { sync, spend } = useDraft(dkey, box, setText)
+  useEffect(() => void box.current?.focus(), [])
   let { body, grouped } = spec(text)
   let p = grouped.task?.priority
   let chips = Object.entries(grouped).flatMap(([comp, props]) =>
@@ -69,11 +81,11 @@ let QuickAdd = (
         </Chips>
       )}
       <New
-        elRef={focus}
+        elRef={box}
         rows={1}
         placeholder='P1 .domain=Eng title…'
         onInput={(ev: InputEvent) =>
-          setText((ev.currentTarget as HTMLTextAreaElement).value)}
+          sync(ev.currentTarget as HTMLTextAreaElement)}
         onKeyDown={(ev: KeyboardEvent) => {
           let t = ev.currentTarget as HTMLTextAreaElement
           if (ev.key == 'Enter' && !ev.shiftKey) {
@@ -81,8 +93,12 @@ let QuickAdd = (
             if (file(t.value)) {
               t.value = ''
               setText('')
+              spend()
             }
-          } else if (ev.key == 'Escape') close()
+          } else if (ev.key == 'Escape') {
+            spend()
+            close()
+          }
         }}
         onBlur={close}
       />
@@ -90,10 +106,19 @@ let QuickAdd = (
   )
 }
 
+// The quick-add draft key for one column — stable across remounts, so a
+// swap or reload reseeds the exact box that was being typed in.
+let addKey = (eid: string, status: string) => `new:${eid}:${status}`
+
 export let Board = ({ e }: { e: Ent }) => {
   // Which column's quick-create box is open ('' = none). One at a time:
-  // the box is a keyboard, and there's one keyboard.
-  let [adding, setAdding] = useState('')
+  // the box is a keyboard, and there's one keyboard. On mount, a column
+  // with a live draft reopens itself — a half-typed task the last mount
+  // (hot swap, reload, closed card) never got to file resurfaces where it
+  // was left, caret and all.
+  let [adding, setAdding] = useState(() =>
+    statuses.find((s) => peek(addKey(e.eid, s))) ?? ''
+  )
   // A board that says .order=hot ranks its columns by warmth, not
   // priority — the Front page: attention IS the ordering. Drag-drop
   // still writes priorities (adopt semantics unchanged); the ranking is
@@ -241,6 +266,7 @@ export let Board = ({ e }: { e: Ent }) => {
             </ColName>
             {!folded.has(s) && adding == s && (
               <QuickAdd
+                dkey={addKey(e.eid, s)}
                 file={(text) => create(s, list, text)}
                 close={() => setAdding('')}
               />
