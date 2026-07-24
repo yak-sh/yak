@@ -31,9 +31,13 @@ export let Peek = () => {
     let ro = new ResizeObserver(put)
     ro.observe(el)
     let away = (ev: PointerEvent) => {
-      if (ev.target instanceof Node && !el.contains(ev.target)) {
-        peek.value = null
-      }
+      // popout editors portal into a body-mounted .Overlay (overlay.tsx),
+      // so containment can't see them — pressing one is USING the peek,
+      // and dismissing here would unmount the control before its click.
+      if (
+        ev.target instanceof Element && !el.contains(ev.target) &&
+        !ev.target.closest('.Overlay')
+      ) peek.value = null
     }
     let key = (ev: KeyboardEvent) => {
       let typing = ev.target instanceof HTMLElement &&
