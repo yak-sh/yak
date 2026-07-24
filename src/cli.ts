@@ -180,8 +180,18 @@ let VERBS: [usage: string, blurb: string, examples: string[]][] = [
     'task telemetry --errors -n 20',
   ]],
   [
+    'wake <who> <when...> [target]',
+    'a knock on a timer: the row outlives every process, so it still lands',
+    [
+      'task wake S-31 in 60m',
+      'task wake homelab "9am tomorrow" T-42',
+      'task wake jeff after 8 hours',
+    ],
+  ],
+  [
     ':<command> … | <id> :<command> …',
-    "the web bar's `:` vocabulary — same table, same words (task help :)",
+    "the web bar's `:` vocabulary — same table, same words (task help :); " +
+    'the colon is optional for a verb no CLI name of its own claims',
     [
       'task :fix T-42',
       'task :new P1 ship the fix',
@@ -1425,6 +1435,11 @@ if (import.meta.main) {
     else if (cmd == 'help' || cmd == '--help') help(rest)
     // `task T-42 :done` — an id ahead of a colon line names the focus.
     else if (rest[0]?.startsWith(':')) await colon(cmd, rest)
+    // Anything left that the shared table knows is that verb, colon
+    // optional: `task wake homelab in 60m` is `task :wake …`. The verbs
+    // above win the name — this is the tail of the chain, so a CLI verb
+    // never loses its own spelling to the palette's.
+    else if (cmd && commands[cmd]) await colon(undefined, [cmd, ...rest])
     else {
       console.log(usage.trim())
       if (cmd) Deno.exit(2)

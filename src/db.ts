@@ -182,6 +182,18 @@ let schema = `
     delivery   text,
     error      text
   );
+  -- A wake: mint that knock at 'at' (absolute, resolved at mint).
+  -- wake.ts arms one timer at the earliest unacted row and reconciles
+  -- at boot; acted_at/error are its receipt. target_eid is nullable —
+  -- absent means the wake is its own subject.
+  create table if not exists wake (
+    eid        text primary key references entity(eid),
+    at         text not null,
+    to_eid     text not null references entity(eid),
+    target_eid text references entity(eid),
+    acted_at   text,
+    error      text
+  );
   ${mailDdl};
   -- Inbound webhook deliveries, derived from the edge's raw request
   -- spool (inbound.ts). Every column is server-stamped; the wire can

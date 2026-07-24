@@ -289,6 +289,30 @@ Deno.test('knock: recipient resolves, words ride as plain comment, project defau
   assertThrows(() => run('knock', ctx(B)), Error, 'name a recipient')
 })
 
+Deno.test('wake: who, when, and a trailing id is what to look at', () => {
+  let r = run('wake B-3 in 60m T-4', ctx(P, 'sess-x'))
+  let [doc, wake] = r.changes!
+  assertEquals(doc.comp?.title, 'wake B-3 in 60m T-4')
+  assertEquals(wake.name, 'wake')
+  assertEquals(wake.comp?.to_eid, B)
+  assertEquals(wake.comp?.target_eid, T) // the trailing id wins the subject
+  // the phrase resolves HERE, at mint — an hour out, within the second
+  let at = Date.parse(String(wake.comp?.at))
+  assertEquals(Math.abs(at - (Date.now() + 3_600_000)) < 1000, true)
+  // no trailing id: where you stand is what to look at
+  assertEquals(
+    run('wake B-3 9am tomorrow', ctx(T)).changes![1].comp?.target_eid,
+    T,
+  )
+  // …and standing nowhere, the wake is its own subject
+  assertEquals(
+    run('wake B-3 8pm', ctx()).changes![1].comp?.target_eid,
+    undefined,
+  )
+  assertThrows(() => run('wake', ctx(T)), Error, 'name who to wake')
+  assertThrows(() => run('wake B-3 whenever', ctx(T)), Error, 'when is')
+})
+
 Deno.test('mail: to, subject, -- body — one letter, minted whole', () => {
   let r = run('mail jeff Lunch plans -- noon at the taco place?', ctx())
   let [doc, mail] = r.changes!

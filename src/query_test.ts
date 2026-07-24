@@ -3,6 +3,7 @@ import {
   adopt,
   complete,
   hot,
+  instant,
   matchQuery,
   noFilter,
   orderOf,
@@ -172,16 +173,66 @@ let spans: [string, number, number][] = [
   ['in 2 hours', NOW, NOW + 7_200_000],
   ['1-hour-ago', NOW - 3_600_000, NOW], // glue for quoteless boxes
   ['1_hour_ago', NOW - 3_600_000, NOW],
+  // short units — what a hand types
+  ['in 60m', NOW, NOW + 3_600_000],
+  ['after 8h', NOW, NOW + 8 * 3_600_000],
+  ['after 8 hours', NOW, NOW + 8 * 3_600_000],
+  ['in 2d', NOW, NOW + 2 * 86_400_000],
+  ['30 mins ago', NOW - 1_800_000, NOW],
+  // clock times: an hour named alone spans its hour, a minute its minute
+  ['9am', at(2026, 6, 15, 9), at(2026, 6, 15, 10)],
+  ['8pm', at(2026, 6, 15, 20), at(2026, 6, 15, 21)],
+  ['12am', at(2026, 6, 15, 0), at(2026, 6, 15, 1)],
+  ['12pm', at(2026, 6, 15, 12), at(2026, 6, 15, 13)],
+  ['9:30am', at(2026, 6, 15, 9, 30), at(2026, 6, 15, 9, 31)],
+  ['14:00', at(2026, 6, 15, 14), at(2026, 6, 15, 14, 1)],
+  ['noon', at(2026, 6, 15, 12), at(2026, 6, 15, 12, 1)],
+  // …on today, unless a day word leads or trails
+  ['9am tomorrow', at(2026, 6, 16, 9), at(2026, 6, 16, 10)],
+  ['tomorrow 9am', at(2026, 6, 16, 9), at(2026, 6, 16, 10)],
+  ['9am yesterday', at(2026, 6, 14, 9), at(2026, 6, 14, 10)],
+  // an ISO stamp is that moment, its precision wide
+  ['2026-07-25T09:00', at(2026, 6, 25, 9), at(2026, 6, 25, 9, 1)],
 ]
 for (let [phrase, start, end] of spans) {
   Deno.test(`span: ${phrase}`, () =>
     assertEquals(span(phrase, NOW), { start, end }))
 }
+Deno.test('span: a zoned stamp keeps its own zone', () =>
+  assertEquals(span('2026-07-25T09:00:00.000Z', NOW), {
+    start: Date.parse('2026-07-25T09:00:00.000Z'),
+    end: Date.parse('2026-07-25T09:00:00.000Z') + 1000,
+  }))
 Deno.test('span: not phrases', () => {
-  for (let s of ['Ops', 'open', '1..3', 'a,b', '', 'todayish']) {
+  for (let s of ['Ops', 'open', '1..3', 'a,b', '', 'todayish', '25:00']) {
     assertEquals(span(s, NOW), null)
   }
 })
+
+// One moment, for the callers that schedule rather than filter (a wake):
+// the range's start, except the forward phrases that begin at now.
+let moments: [string, number][] = [
+  ['in 60m', NOW + 3_600_000],
+  ['after 8 hours', NOW + 8 * 3_600_000],
+  ['in 2 days', NOW + 2 * 86_400_000],
+  ['9am', at(2026, 6, 15, 9)],
+  ['8pm', at(2026, 6, 15, 20)],
+  ['9am tomorrow', at(2026, 6, 16, 9)],
+  ['tomorrow', at(2026, 6, 16)],
+  ['2026-07-25T09:00', at(2026, 6, 25, 9)],
+  ['5 minutes ago', NOW - 300_000], // a past ask is past, not rolled
+  ['now', NOW],
+]
+for (let [phrase, moment] of moments) {
+  Deno.test(`instant: ${phrase}`, () =>
+    assertEquals(instant(phrase, NOW), moment))
+}
+Deno.test('instant: an ISO stamp resolves to itself', () => {
+  let iso = new Date(at(2026, 6, 25, 9)).toISOString()
+  assertEquals(instant(iso, NOW), at(2026, 6, 25, 9))
+})
+Deno.test('instant: nonsense is null, never a guess', () =>
+  assertEquals(instant('whenever', NOW), null))
 
 // Time preds: the row value is ISO, the filter value a phrase; the op
 // picks the edge of the range the phrase names.

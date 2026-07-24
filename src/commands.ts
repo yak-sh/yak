@@ -31,7 +31,7 @@ import {
   spec,
   taskChanges,
 } from './client.ts'
-import { adopt, parseQuery } from './query.ts'
+import { adopt, instant, parseQuery } from './query.ts'
 
 // Where the typist is standing: the focused entity (the web's root card,
 // the TUI's trail head), the graph to resolve names against, and the
@@ -226,6 +226,54 @@ export let commands: Record<string, Command> = {
           ...(words ? commentChanges(ctx.rows, r.eid, words, ctx.session) : []),
         ],
         msg: `${idOf(r)} → knock ${to ? first : 'project'}`,
+      }
+    },
+  },
+  // :wake is :knock with a clock: the same sentence, said later. First
+  // word is who; the rest is WHEN ('in 60m', 'after 8 hours', '9am
+  // tomorrow', an ISO stamp) — unless its last word names an entity,
+  // which is what to look at (else: where you stand). The phrase
+  // resolves HERE, at mint, and the line says the moment it landed on,
+  // so a time already past is visible rather than a silent knock now.
+  wake: {
+    args: 'homelab in 60m T-42',
+    about: 'a knock on a timer — wake someone at a time',
+    run: (rest, ctx) => {
+      let words = rest.trim().split(/\s+/).filter(Boolean)
+      let to = words[0] ? find(ctx.rows, words[0]) : undefined
+      if (!to) throw new Error('wake: name who to wake (:wake homelab in 60m)')
+      let more = words.slice(1)
+      let last = more.length > 1
+        ? find(ctx.rows, more[more.length - 1])
+        : undefined
+      if (last) more = more.slice(0, -1)
+      let when = more.join(' ')
+      let at = instant(when)
+      if (at == null) {
+        throw new Error(
+          `wake: when is "${when}"? (in 60m, 9am tomorrow, 2026-07-25T09:00)`,
+        )
+      }
+      let about = last ?? ctx.rows.find((x) => x.eid == ctx.eid)
+      let w = uuid()
+      return {
+        changes: [
+          // The doc is what the knock will show when the wake is its own
+          // subject — the ask, in the asker's words.
+          { eid: w, name: 'doc', comp: { title: `wake ${rest.trim()}` } },
+          {
+            eid: w,
+            name: 'wake',
+            comp: {
+              at: new Date(at).toISOString(),
+              to_eid: to.eid,
+              ...(about ? { target_eid: about.eid } : {}),
+            },
+          },
+        ],
+        msg: `wake ${idOf(to)}${about ? ` → ${idOf(about)}` : ''} at ${
+          new Date(at).toString().slice(0, 21)
+        }`,
       }
     },
   },

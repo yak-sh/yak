@@ -23,11 +23,15 @@
 //
 // When the ROW value is an ISO timestamp, the filter value may be a time
 // PHRASE (see span): today, yesterday, tomorrow, now, this|last|next
-// minute|hour|day|week|month|year, "5 minutes ago", "in 2 days" ('-'/'_'
-// glue words where quoting is awkward: 1-hour-ago). A phrase names a
+// minute|hour|day|week|month|year, "5 minutes ago", "in 2 days" (short
+// units too: in 60m, after 8h), a clock time on today or a named day
+// (9am, 9:30pm, 14:00, noon, "9am tomorrow"), a date, or a full stamp
+// (2026-07-25T09:00) — with '-'/'_' glue where quoting is awkward:
+// 1-hour-ago. A phrase names a
 // RANGE and the op picks its edge: = within, >= from its start, <= until
 // its end, > strictly after, < strictly before. So .updated.at=today is
 // midnight-to-midnight, .updated.at>="1 hour ago" is the last hour.
+// Schedulers want one moment instead — that's instant(), below span.
 //
 // Unqualified props route by component, same rule as writes; `.task.status`
 // is the explicit spelling. `.num` routes to the entity spine; `at`/`by`
@@ -63,20 +67,69 @@ let UNIT_MS: Record<string, number> = {
   week: 604_800_000,
 }
 
+// The unit a word names — the short forms are what a hand types (`in 60m`,
+// `after 8h`); 'm' is minutes and 'mo' is months, the calendar convention.
+let unit = (w: string): string | undefined =>
+  ({
+    m: 'minute',
+    min: 'minute',
+    mins: 'minute',
+    h: 'hour',
+    hr: 'hour',
+    hrs: 'hour',
+    d: 'day',
+    w: 'week',
+    mo: 'month',
+    y: 'year',
+  })[w] ??
+    (/^(minute|hour|day|week|month|year)s?$/.test(w)
+      ? w.replace(/s$/, '')
+      : undefined)
+
+// A clock time — 9am, 9:30pm, 14:00, noon — as hours+minutes, plus how
+// precisely it was said (an hour named alone spans its hour, the way a
+// bare date spans its day).
+let clock = (s: string): { h: number; m: number; exact: boolean } | null => {
+  if (s == 'noon') return { h: 12, m: 0, exact: true }
+  if (s == 'midnight') return { h: 0, m: 0, exact: true }
+  let m = s.match(/^(\d{1,2})(?::(\d{2}))?(am|pm)$/)
+  if (m) {
+    return {
+      h: +m[1] % 12 + (m[3] == 'pm' ? 12 : 0),
+      m: +(m[2] ?? 0),
+      exact: m[2] != null,
+    }
+  }
+  m = s.match(/^(\d{1,2}):(\d{2})$/)
+  return m && +m[1] < 24 ? { h: +m[1], m: +m[2], exact: true } : null
+}
+
 // A phrase to the [start, end) range it names, or null when it isn't one.
 // Calendar units (month, year) shift by calendar, not by a fake constant;
 // day boundaries are the EVALUATOR's midnight — the browser filters in the
 // viewer's day, the server in its own.
 export let span = (s: string, now = Date.now()): Span | null => {
   let raw = s.trim().toLowerCase()
-  // a plain date is that day, in the evaluator's zone — matched BEFORE
-  // the word-glue pass, whose job is '1-hour-ago', not date hyphens
-  let iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  // a plain date is that day; a date with a time is that moment (its
+  // precision wide) — both matched BEFORE the word-glue pass, whose job
+  // is '1-hour-ago', not date hyphens
+  let iso = raw.match(
+    /^(\d{4})-(\d{2})-(\d{2})(?:[t ](\d{2}):(\d{2})(?::(\d{2}))?(\.\d+)?(z|[+-]\d{2}:?\d{2})?)?$/,
+  )
   if (iso) {
-    return {
-      start: +new Date(+iso[1], +iso[2] - 1, +iso[3]),
-      end: +new Date(+iso[1], +iso[2] - 1, +iso[3] + 1),
+    let [, y, mo, dd, hh, mi, ss, , zone] = iso
+    if (!hh) {
+      return {
+        start: +new Date(+y, +mo - 1, +dd),
+        end: +new Date(+y, +mo - 1, +dd + 1),
+      }
     }
+    // a named zone is the string's own business — Date parses it; without
+    // one the moment is the evaluator's, like every other day boundary
+    let start = zone
+      ? Date.parse(s.trim())
+      : +new Date(+y, +mo - 1, +dd, +hh, +mi, +(ss ?? 0))
+    return { start, end: start + (ss ? 1000 : 60_000) }
   }
   let t = raw.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ')
   let d = new Date(now)
@@ -137,17 +190,49 @@ export let span = (s: string, now = Date.now()): Span | null => {
     let start = Math.floor(now / w) * w + at * w
     return { start, end: start + w }
   }
-  m = t.match(/^(\d+) (minute|hour|day|week|month|year)s? ago$/)
-  if (m) {
-    let n = Number(m[1]), u = m[2]
+  m = t.match(/^(\d+) ?([a-z]+) ago$/)
+  if (m && unit(m[2])) {
+    let n = Number(m[1]), u = unit(m[2])!
     return { start: UNIT_MS[u] ? now - n * UNIT_MS[u] : shift(-n, u), end: now }
   }
-  m = t.match(/^in (\d+) (minute|hour|day|week|month|year)s?$/)
-  if (m) {
-    let n = Number(m[1]), u = m[2]
+  // 'in 2 days' / 'after 8h' — the same forward range, whichever word
+  // the caller reaches for
+  m = t.match(/^(?:in|after) (\d+) ?([a-z]+)$/)
+  if (m && unit(m[2])) {
+    let n = Number(m[1]), u = unit(m[2])!
     return { start: now, end: UNIT_MS[u] ? now + n * UNIT_MS[u] : shift(n, u) }
   }
+  // A clock time, on today unless a day word rides along ('9am tomorrow',
+  // 'tomorrow 9am'). Today's, never the next occurrence: a filter reads
+  // '.updated.at>=9am' as this morning, and a wake echoes the absolute
+  // moment it resolved to, so a time already past is visible, not silent.
+  let ws = t.split(' ')
+  let off: Record<string, number> = { yesterday: -1, today: 0, tomorrow: 1 }
+  let day = off[ws[0]] ?? off[ws.at(-1)!] // the word may lead or trail
+  let c = clock(
+    (day == null ? ws : off[ws[0]] == null ? ws.slice(0, -1) : ws.slice(1))
+      .join(''), // '9 pm' is '9pm'; a lone 'noon' passes through
+  )
+  if (c) {
+    let start = +new Date(
+      d.getFullYear(),
+      d.getMonth(),
+      d.getDate() + (day ?? 0),
+      c.h,
+      c.m,
+    )
+    return { start, end: start + (c.exact ? 60_000 : 3_600_000) }
+  }
   return null
+}
+
+// The single moment a phrase names — a wake wants an instant where a
+// filter wants a range. It is the range's START ('9am', 'tomorrow', an
+// ISO stamp), except for the forward-looking phrases that begin at now
+// ('in 60m', 'after 8 hours'): those name their END.
+export let instant = (s: string, now = Date.now()): number | null => {
+  let sp = span(s, now)
+  return sp ? (sp.start == now ? sp.end : sp.start) : null
 }
 
 // What a pred evaluates against: an entity's components, merged — the

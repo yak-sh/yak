@@ -36,7 +36,9 @@ export let FILTERS = `Filters add operators to that routing: '.priority<=1',
 end), '.status!=done', '.title~=flux' (contains), '.domain=' (absent),
 '.num=1,2,3'. Timestamp columns take time phrases — today, yesterday,
 '2026-07-04', this|last|next week|month|year, '5 minutes ago', 'in 2
-days' — a phrase is a RANGE: = within it, >= from its start, <= to its
+days' (or 'in 60m' / 'after 8h'), clock times — 9am, 9:30pm, 14:00, noon,
+'9am tomorrow' — and a full stamp, '2026-07-25T09:00'. A phrase is a
+RANGE: = within it, >= from its start, <= to its
 end ('.updated.at>="1 hour ago"'; glue with - where quoting is hard).
 Provenance shares column names, so spell out the component: '.created.at',
 '.updated.at', '.created.by=jeff' (who authored), '.updated.by!=jeff'.

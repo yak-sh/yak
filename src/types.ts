@@ -198,6 +198,21 @@ export let comps: Record<string, Record<string, PropType>> = {
     target_eid: { eid: '', death: 'cascade' }, // what to look at
     to_eid: { eid: '', death: 'cascade' }, // who should look
   },
+  // A wake is a knock with a clock: the same sentence, said LATER. `at`
+  // is absolute — the caller writes a phrase ('in 60m', '9am tomorrow')
+  // and it resolves once, at mint (query.ts instant), because a row that
+  // still holds a phrase would mean something different every time it is
+  // read. The server keeps one timer at the earliest pending wake and
+  // reconciles at boot, so an hour of downtime delays a wake instead of
+  // eating it (wake.ts) — then mints the knock and lets that ladder
+  // deliver. No repeats: `every` waits for something that needs it.
+  wake: {
+    at: 'time',
+    to_eid: { eid: '', death: 'cascade' }, // who to wake
+    // What to look at on waking — absent means the wake itself, so the
+    // words in its doc are what arrives.
+    target_eid: { eid: '', death: 'cascade' },
+  },
   // Outbound mail, asked for as data: creating one requests delivery (the
   // mailer effect sends and stamps the outcome — acted_at/error/to_addr,
   // all server-side; the row stays as the audit envelope). Subject rides
@@ -340,6 +355,10 @@ export let stamped: Record<string, Record<string, PropType>> = {
   // what it did (cast S-9 / spawned S-9 / mailed U-2 / held), error = why
   // it couldn't.
   knock: { acted_at: 'time', delivery: 'text', error: 'text' },
+  // The wake's own receipt (wake.ts): acted_at = the timer fired and the
+  // knock was minted (also the pending mark — a stamped wake never fires
+  // again), error = why it couldn't (an unreadable `at`, a dead door).
+  wake: { acted_at: 'time', error: 'text' },
   // Delivery outcome (mail.ts): acted_at = the effect ran, error = how it
   // went wrong, to_addr = the RESOLVED envelope address — denormalized on
   // purpose, so later edits to the address book never rewrite what a
@@ -497,6 +516,7 @@ export let kindOrder = [
   'claim',
   'stop_request',
   'knock',
+  'wake',
   'mail',
   'hook',
   'conflict',
@@ -531,6 +551,7 @@ export let prefix: Record<string, string> = {
   persona: 'N', // N for the name it wears: P is the projects'
   hook: 'H',
   knock: 'K',
+  wake: 'W',
 }
 export let idOf = (e: { kind: string; num: number }) =>
   `${prefix[e.kind] ?? e.kind[0].toUpperCase()}-${e.num}`
@@ -711,6 +732,18 @@ export type Knock = {
   error?: string | null
 }
 
+// A knock waiting on the clock: `at` absolute (resolved at mint), the
+// stamps its receipt — acted_at once the knock is minted, error when the
+// timer could not read the hour or the knock would not mint.
+export type Wake = {
+  eid: string
+  at: string
+  to_eid: string
+  target_eid?: string | null
+  acted_at?: string | null
+  error?: string | null
+}
+
 export type Mail = {
   eid: string
   to: string
@@ -848,6 +881,7 @@ export type Ent = {
   claim?: Claim
   stop_request?: StopRequest
   knock?: Knock
+  wake?: Wake
   mail?: Mail
   hook?: Hook
   email?: Email

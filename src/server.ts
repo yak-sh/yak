@@ -32,6 +32,7 @@ import { freeze, serveFrozen, store } from './freeze.ts'
 import { fanout, FANOUT_PENDING, mailed } from './mail.ts'
 import { native } from './mailer.ts'
 import { knocked } from './knock.ts'
+import { waking } from './wake.ts'
 import {
   fleetApi,
   fleetRaw,
@@ -702,6 +703,17 @@ on('knock', {
     'spawn a project operator onto the target, or mail an addressed ' +
     'person — stamp delivery/error either way',
 })
+on('wake', {
+  created: waking(cast),
+  changed: { at: waking(cast) }, // a moved hour re-arms the timer
+  // Not an outbox retry but the RECONCILE: boot hands back every wake
+  // still owed, so an hour that passed while the server was down fires
+  // now instead of vanishing.
+  sweep: { pending: 'acted_at is null' },
+  doc: 'the timed knock: hold until `at`, then mint the knock and let ' +
+    'the ladder deliver — one timer, re-armed at the earliest pending ' +
+    'wake and reconciled at boot',
+})
 on('mail', {
   created: mailed(cast),
   // message_id marks INBOUND — a record of arrival the sweep must never
@@ -887,6 +899,7 @@ let graph = [
   'inbound.ts',
   'scribe.ts',
   'knock.ts',
+  'wake.ts',
   'embed.ts',
 ]
 let shellish = (p: string) =>
