@@ -19,7 +19,7 @@ import {
   uuid,
 } from './types.ts'
 import { idOf } from './types.ts'
-import { hot, matchQuery, type Pred, route, warm } from './query.ts'
+import { hot, matchQuery, type Pred, route } from './query.ts'
 import { unmime } from './rfc2047.ts'
 export { idOf }
 
@@ -657,16 +657,9 @@ export let mailLine = (r: Row, now = Date.now()) => {
   return `${idOf(r).padEnd(6)} ${dot}${bad} ${who} — ${subj}${age}`
 }
 
-// The LATELY tier: what the graph did today and this week, hot-ranked,
-// so every session boots already knowing (T-3722 — the memory system's
-// delivery half). Work-session docs — a session wearing a doc, the
-// wake-brief pattern — lead today's list with their first body line; the
-// rest are id + title, pointers a reader expands on demand. Memory index
-// lines close it: recognition only, never a recall bump (index listings
-// must not flatten the decay signal). Older than a week is search's job.
+// The digest's own week window and title clipper, shared by the tail
+// tiers below (pulse, onMine, unheard). Older than a week is search's job.
 let DAY = 86_400_000
-let firstLine = (s: unknown) =>
-  String(s ?? '').split('\n').map((l) => l.trim()).find(Boolean) ?? ''
 let snip = (s: string, n = 72) => s.length > n ? `${s.slice(0, n)}…` : s
 // A scope narrows lately to what BELONGS to the project: its tasks, its
 // memories (unscoped memories are principles — they always ride), its
@@ -751,21 +744,31 @@ let pulse = (all: Row[], now: number, budget: number, scope?: string) => {
       age(r) < 7 * DAY
     )
     : all.filter((r) => r.comps.task && !settled(String(r.comps.task.status)))
-        .filter((r) => age(r) < 7 * DAY)
+      .filter((r) => age(r) < 7 * DAY)
   let hits = mine
     .sort((a, b) => editedAt(b).localeCompare(editedAt(a)))
     .slice(0, Math.min(budget - 1, scope ? 6 : 3))
   if (!hits.length) return []
-  return [scope ? '## lately' : '## fleet — nowhere placed', ...hits.map((r) =>
-    `- ${idOf(r)} ${r.comps.task?.status} — ${snip(String(r.comps.doc?.title ?? ''))}`
-  )]
+  return [
+    scope ? '## lately' : '## fleet — nowhere placed',
+    ...hits.map((r) =>
+      `- ${idOf(r)} ${r.comps.task?.status} — ${
+        snip(String(r.comps.doc?.title ?? ''))
+      }`
+    ),
+  ]
 }
 
 // SESSION layer — comments that landed on YOUR claimed tasks, the message a
 // missed instant push would have carried. Recognition only: it never moves
 // the bus cursor (that stays the sweep's one job) and it never shows in a
 // bare preview, since a preview holds no claims to hear about.
-let onMine = (all: Row[], sess: Row | undefined, now: number, budget: number) => {
+let onMine = (
+  all: Row[],
+  sess: Row | undefined,
+  now: number,
+  budget: number,
+) => {
   if (!sess || budget < 1) return []
   let mine = new Set(
     all.filter((r) => r.comps.claim?.session_eid == sess.eid).map((r) => r.eid),
@@ -788,13 +791,16 @@ let onMine = (all: Row[], sess: Row | undefined, now: number, budget: number) =>
     .sort((a, b) => bornAt(b).localeCompare(bornAt(a)))
     .slice(0, budget)
   if (!hits.length) return []
-  return ['## on your tasks', ...hits.map((r) => {
-    let c = r.comps.comment
-    let body = String(r.comps.doc?.body ?? '').split('\n')[0].slice(0, 96)
-    return `- ${idOf(byEid.get(String(c.target_eid))!)} 💬 ${
-      name(c.author_eid)
-    }: ${body}`
-  })]
+  return [
+    '## on your tasks',
+    ...hits.map((r) => {
+      let c = r.comps.comment
+      let body = String(r.comps.doc?.body ?? '').split('\n')[0].slice(0, 96)
+      return `- ${idOf(byEid.get(String(c.target_eid))!)} 💬 ${
+        name(c.author_eid)
+      }: ${body}`
+    }),
+  ]
 }
 
 // PROJECT layer — the fleet's shared mind, surfaced: the warmest UNSCOPED
@@ -805,7 +811,12 @@ let onMine = (all: Row[], sess: Row | undefined, now: number, budget: number) =>
 // deliberate expansion (memory_recall), never this listing.
 let fleetMemory = (all: Row[], now: number, budget: number) => {
   if (budget < 3) return []
-  let global: Pred[] = [{ comp: 'memory', prop: 'scope_eid', op: '', value: '' }]
+  let global: Pred[] = [{
+    comp: 'memory',
+    prop: 'scope_eid',
+    op: '',
+    value: '',
+  }]
   let mems = recallIndex(all, global, now, budget - 1)
   if (!mems.length) return []
   return [
@@ -816,18 +827,21 @@ let fleetMemory = (all: Row[], now: number, budget: number) => {
 
 // The injection-loop digest: what a session sees at start — its claimed
 // work (with unresolved gates and who holds them), or the top of the open
-// board when it holds nothing, then the lately tier. ≤35 lines by
-// construction: the tracker stays out of the way, it just makes the
-// working set — and the recent past — impossible to lose.
+// board when it holds nothing, then the three tail tiers (below). ≤48
+// lines by construction: the tracker stays out of the way, it just makes
+// the working set — and the recent past — impossible to lose.
 // The digest is MARKDOWN, like every body in the graph — and dense on
 // purpose: headings and lists interrupt paragraphs (CommonMark), so no
 // blank line ever spends a budget line.
 // No session = the PREVIEW: the digest a fresh session would boot with
-// (open work, lately, memory — nothing claimed, nothing acked). The
-// digest is PROJECT-AWARE: scope comes in explicitly (the hook's cwd, a
-// preview's project arg) or derives from the session row's own cwd —
-// suggestions and lately narrow to the project you're standing in;
-// your claims and unscoped memories ride regardless.
+// (open work, the project pulse, fleet memory — nothing claimed, nothing
+// acked). Two LAYERS: a PROJECT layer (a pure function of scope — open
+// work, pulse, fleet memory, mail) and a SESSION layer that adds to it
+// (your claims replace the suggestions, onMine, previously, unheard). So a
+// bare `task context` in a repo shows exactly the project layer its
+// operator sees, minus the session extras — parity by construction.
+// Scope resolves via scopeFor: an explicit arg, else the cwd's repo, else
+// the worn persona's home, else the actor-as-project (client.ts scopeFor).
 export let contextDigest = (
   snap: Snapshot,
   session?: string,
@@ -840,7 +854,7 @@ export let contextDigest = (
     r.comps.session && String(r.comps.session.id) == session
   )
   let cwd = String(sess?.comps.session?.cwd ?? '')
-  scope ??= repoAt(all, cwd)?.eid
+  scope = scopeFor(all, sess, cwd, scope)
   let here = scope ? byEid.get(scope) : undefined
   let mine = sess
     ? all.filter((r) => r.comps.claim?.session_eid == sess.eid)
@@ -914,13 +928,23 @@ export let contextDigest = (
     let told = briefOf(prev).split('\n').map((l) => l.trim()).filter(Boolean)
     for (let l of told.slice(0, 4)) lines.push(`> ${snip(l, 96)}`)
   }
-  lines.push(...lately(all, now, 34 - lines.length, scope, prev?.eid))
+  // The tail, three tiers drawing on the room the 48-line cap leaves:
+  // onMine (SESSION layer — comments on your claimed tasks, the backstop
+  // under a missed instant push), then the PROJECT pulse (what moved in
+  // your scope), then the fleet's shared memory. onMine and fleetMemory
+  // are capped small so the cap always leaves pulse and fleetMemory more
+  // room than their own tiny caps need — that headroom is what makes the
+  // project layer render identically with or without a session (parity).
+  let room = () => 48 - lines.length
+  lines.push(...onMine(all, sess, now, Math.min(4, room())))
+  lines.push(...pulse(all, now, room(), scope))
+  lines.push(...fleetMemory(all, now, Math.min(6, room())))
   lines.push(
     `claim: \`task claim <id> ${
       session ?? '<session>'
     }\` · comment: \`task comment <id> "…"\` · release when done or handing off`,
   )
-  return lines.slice(0, 35).join('\n')
+  return lines.slice(0, 48).join('\n')
 }
 
 // The comms bus, read side: what happened that this session hasn't seen —

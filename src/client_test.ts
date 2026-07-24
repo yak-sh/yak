@@ -26,6 +26,7 @@ import {
   repoAt,
   reSubject,
   rows,
+  scopeFor,
   sessionFor,
   showMd,
   spawnChanges,
@@ -486,6 +487,69 @@ Deno.test('repoAt: path prefix names the project you stand in', () => {
   assertEquals(repoAt(g), undefined)
 })
 
+// Nested repos: the LONGEST path prefix wins, so an inner repo claims a cwd
+// under it rather than the outer one that also prefixes it.
+Deno.test('repoAt: longest prefix wins for nested repos', () => {
+  let out = 'aaaaaaaa-0000-4000-8000-000000000032'
+  let inn = 'aaaaaaaa-0000-4000-8000-000000000033'
+  let g = rows({
+    changes: [
+      { eid: out, name: 'entity', comp: { eid: out, num: 32, created_at: '' } },
+      { eid: out, name: 'repo', comp: { path: '/code' } },
+      { eid: inn, name: 'entity', comp: { eid: inn, num: 33, created_at: '' } },
+      { eid: inn, name: 'repo', comp: { path: '/code/app' } },
+    ],
+  })
+  assertEquals(repoAt(g, '/code/app/x')?.eid, inn)
+  assertEquals(repoAt(g, '/code/other')?.eid, out)
+})
+
+// One resolution for every caller-aware door, in falling priority: an
+// explicit arg, the cwd's repo (longest prefix), the worn persona's home,
+// the actor when it stands for a project, else undefined.
+Deno.test('scopeFor: arg > cwd-repo > persona-home > actor-project > none', () => {
+  let id = (n: number) =>
+    `eeeeeeee-0000-4000-8000-${String(n).padStart(12, '0')}`
+  let [P, Q, R, PER, SESS] = [1, 2, 3, 4, 5].map(id)
+  let g = rows({
+    changes: [
+      { eid: P, name: 'entity', comp: { eid: P, num: 1, created_at: '' } },
+      { eid: P, name: 'project', comp: {} },
+      { eid: P, name: 'repo', comp: { path: '/code/p' } },
+      { eid: Q, name: 'entity', comp: { eid: Q, num: 2, created_at: '' } },
+      { eid: Q, name: 'project', comp: {} }, // persona's home
+      { eid: R, name: 'entity', comp: { eid: R, num: 3, created_at: '' } },
+      { eid: R, name: 'project', comp: {} }, // the actor, standing for a project
+      { eid: PER, name: 'entity', comp: { eid: PER, num: 4, created_at: '' } },
+      { eid: PER, name: 'persona', comp: { home_eid: Q } },
+      {
+        eid: SESS,
+        name: 'entity',
+        comp: { eid: SESS, num: 5, created_at: '' },
+      },
+      {
+        eid: SESS,
+        name: 'session',
+        comp: { id: 's', persona_eid: PER, actor_eid: R },
+      },
+    ],
+  })
+  let sess = g.find((r) => r.eid == SESS)
+  // arg wins over everything the session could resolve
+  assertEquals(scopeFor(g, sess, '/code/p/deep', 'ARG'), 'ARG')
+  // no arg: the cwd's repo (P), longest-prefix
+  assertEquals(scopeFor(g, sess, '/code/p/deep'), P)
+  // cwd places nothing: the worn persona's home (Q)
+  assertEquals(scopeFor(g, sess, '/nowhere'), Q)
+  // no persona: the actor, since it IS a project (R)
+  let noPer = { ...sess!, comps: { session: { id: 's', actor_eid: R } } }
+  assertEquals(scopeFor(g, noPer, '/nowhere'), R)
+  // nothing places it: undefined
+  let bare = { ...sess!, comps: { session: { id: 's' } } }
+  assertEquals(scopeFor(g, bare, '/nowhere'), undefined)
+  assertEquals(scopeFor(g, undefined, ''), undefined)
+})
+
 // The mail builders: `to` stays as typed (delivery resolves), a reply
 // aims at the far side and threads by eid, Re: never piles up.
 Deno.test('mailChanges/replyChanges: to as given, Re: derived, thread edge set', () => {
@@ -621,11 +685,13 @@ Deno.test('mailLine: unread dot, unverified mark, direction', () => {
   assertMatch(mailLine(encoded, NOW), /— Re: café \(2h\)$/)
 })
 
-// The lately tier against a fixed clock: work-session briefs lead with
-// their first body line, today and this-week tier by age, memories close
-// as index lines, and anything older than a week (or any comment) never
-// appears.
-Deno.test('contextDigest: lately — briefs lead, tiers hold, old is silent', () => {
+// The project pulse against a fixed clock: tasks in the scope you stand in
+// that MOVED this week, newest first — and NOTHING else. A foreign project's
+// task, a mail letter, a work-session brief, a board: none are pulse
+// material (the CrayonBloom bleed, pinned — the old belongs() catch-all let
+// mail/session/board docs ride into every project's tier). Older than a week
+// is silent too.
+Deno.test('contextDigest: pulse — scoped tasks that moved, no foreign bleed', () => {
   let NOW = Date.parse('2026-07-20T12:00:00Z')
   let ago = (h: number) => new Date(NOW - h * 3_600_000).toISOString()
   let num = 30
@@ -639,60 +705,59 @@ Deno.test('contextDigest: lately — briefs lead, tiers hold, old is silent', ()
     ...Object.entries(parts).map(([name, comp]) => ({ eid, name, comp })),
   ]
   let eid = (i: number) => `bbbbbbbb-0000-4000-8000-00000000000${i}`
+  let P = eid(9) // the project we stand in
+  let PF = eid(8) // a foreign project
   let late: Snapshot = {
     changes: [
+      ...mk(P, ago(1), { doc: { title: 'Ours' }, project: {} }),
+      ...mk(PF, ago(1), { doc: { title: 'Theirs' }, project: {} }),
       ...mk(eid(1), ago(2), {
-        session: { id: 'ws-brief' },
-        doc: { title: 'Work session', body: 'landed: everything\nmore below' },
+        doc: { title: 'Ours moved', body: '' },
+        task: { status: 'wip', priority: 0, project_eid: P },
       }),
+      // foreign-project task: must NOT bleed into our pulse
       ...mk(eid(2), ago(1), {
-        doc: { title: 'Fresh task', body: '' },
-        task: { status: 'done', priority: 0 },
+        doc: { title: 'Foreign task', body: '' },
+        task: { status: 'wip', priority: 0, project_eid: PF },
       }),
-      // done, deliberately: an open unclaimed task would ALSO surface in
-      // the open-work suggestions above lately, and this test reads line
-      // order
-      ...mk(eid(3), ago(70), {
-        doc: { title: 'Midweek task', body: '' },
-        task: { status: 'done', priority: 1 },
+      // a mail letter — doc but no task comp: never pulse material
+      ...mk(eid(3), ago(1), {
+        doc: { title: 'A letter', body: '' },
+        mail: { to: 'v@x.test', message_id: 'm:1:<a@x>' },
       }),
-      ...mk(eid(4), ago(30), {
-        doc: { title: 'A kept fact', body: 'the fact' },
-        memory: { type: 'project' },
+      // a foreign session brief: scoped by nothing, must stay out
+      ...mk(eid(4), ago(1), {
+        session: { id: 'ws-brief' },
+        doc: { title: 'Work session', body: 'landed it' },
       }),
-      ...mk(eid(5), ago(3), {
-        doc: { title: 'Noise', body: '' },
-        comment: { target_eid: eid(2) },
+      // a board: a saved query, not pulse material
+      ...mk(eid(5), ago(1), {
+        doc: { title: 'A board' },
+        board: { query: '' },
       }),
-      ...mk(eid(6), ago(24 * 30), {
-        doc: { title: 'Ancient history', body: '' },
-        task: { status: 'done', priority: 0 },
+      // our project, but the touch is older than a week: silent. Claimed,
+      // so the open-work suggestions skip it too — its absence is the
+      // pulse's age gate alone, nothing else.
+      ...mk(eid(6), ago(24 * 9), {
+        doc: { title: 'Ours stale', body: '' },
+        task: { status: 'wip', priority: 1, project_eid: P },
+        claim: { session_eid: eid(7) },
       }),
     ],
     deps: [],
   }
-  let d = contextDigest(late, 'sess-nobody', NOW)
+  let d = contextDigest(late, undefined, NOW, P)
   let lines = d.split('\n')
-  assertEquals(lines.length <= 35, true)
+  assertEquals(lines.length <= 48, true)
   assertEquals(d.includes('## lately'), true)
-  // the brief leads, wearing its first body line
-  let brief = lines.findIndex((l) => l.includes('Work session'))
-  assertEquals(lines[brief].includes('landed: everything'), true)
-  assertEquals(brief < lines.findIndex((l) => l.includes('Fresh task')), true)
-  // tiers: midweek under its header, memory as an index line
-  assertEquals(
-    lines.indexOf('### this week') <
-      lines.findIndex((l) => l.includes('Midweek task')),
-    true,
-  )
-  assertEquals(
-    lines.indexOf('### memory') <
-      lines.findIndex((l) => l.includes('A kept fact')),
-    true,
-  )
-  // silence: comments and the older-than-a-week
-  assertEquals(d.includes('Noise'), false)
-  assertEquals(d.includes('Ancient history'), false)
+  assertEquals(d.includes('Ours moved'), true)
+  // the bleed, pinned shut: no foreign task, mail, brief, or board
+  assertEquals(d.includes('Foreign task'), false)
+  assertEquals(d.includes('A letter'), false)
+  assertEquals(d.includes('Work session'), false)
+  assertEquals(d.includes('A board'), false)
+  // older than a week is silent
+  assertEquals(d.includes('Ours stale'), false)
 })
 
 Deno.test('spec: a typed task — leading P, params anywhere, body below', () => {
@@ -965,9 +1030,11 @@ Deno.test('contextDigest: sessionless is the preview — headed as one, claim li
   assertEquals(d.includes('nothing claimed'), true)
 })
 
-// The project-aware digest: scope narrows suggestions and lately to the
-// project you stand in; unscoped memories and your claims always ride.
-Deno.test('contextDigest: scope — local work, local+principle memory, cwd derives', () => {
+// The project-aware digest: scope narrows suggestions and the pulse to the
+// project you stand in; the fleet-memory front page is UNSCOPED principles
+// only (a project's own scoped lessons live behind memory_recall now), and
+// your claims always ride.
+Deno.test('contextDigest: scope — local work, principle memory, cwd derives', () => {
   let NOW = Date.parse('2026-07-20T12:00:00Z')
   let hour = new Date(NOW - 3_600_000).toISOString()
   let id = (n: number) =>
@@ -1024,8 +1091,8 @@ Deno.test('contextDigest: scope — local work, local+principle memory, cwd deri
   assertEquals(d.includes('open work here'), true)
   assertEquals(d.includes('A work'), true)
   assertEquals(d.includes('B work'), false)
-  assertEquals(d.includes('A lesson'), true)
   assertEquals(d.includes('A principle'), true) // unscoped memory rides
+  assertEquals(d.includes('A lesson'), false) // a scoped lesson no longer does
   assertEquals(d.includes('B lesson'), false)
   // a session's own cwd derives the same scope
   let s = contextDigest(g, 'sess-in-a', NOW)
@@ -1034,6 +1101,129 @@ Deno.test('contextDigest: scope — local work, local+principle memory, cwd deri
   // no scope: the fleet view, both works suggested
   let f = contextDigest(g, undefined, NOW)
   assertEquals(f.includes('A work') && f.includes('B work'), true)
+})
+
+// The lines of one section: its heading and the bullet rows under it. Lets
+// the parity test compare a project-layer tier across two digests without
+// the session-layer noise (or the trailing claim boilerplate) between them.
+let section = (d: string, head: string) => {
+  let ls = d.split('\n')
+  let i = ls.findIndex((l) => l.startsWith(head))
+  if (i < 0) return []
+  let out = [ls[i]]
+  for (let j = i + 1; j < ls.length && ls[j].startsWith('- '); j++) {
+    out.push(ls[j])
+  }
+  return out
+}
+
+// The fleet-memory front page: only UNSCOPED memories (a scoped lesson
+// lives behind memory_recall), warmest first. Recognition only — the
+// digest is a pure string, so listing a memory never bumps its recall
+// (two identical calls, no state touched).
+Deno.test('contextDigest: from the fleet — unscoped only, warmth order, no bump', () => {
+  let NOW = Date.parse('2026-07-20T12:00:00Z')
+  let ago = (h: number) => new Date(NOW - h * 3_600_000).toISOString()
+  let id = (n: number) =>
+    `ffffffff-0000-4000-8000-${String(n).padStart(12, '0')}`
+  let [P, MW, MC, MS] = [1, 2, 3, 4].map(id)
+  let mk = (
+    eid: string,
+    num: number,
+    at: string,
+    parts: Record<string, Record<string, unknown>>,
+  ) => [
+    { eid, name: 'entity', comp: { eid, num } },
+    { eid, name: 'created', comp: { at } },
+    ...Object.entries(parts).map(([name, comp]) => ({ eid, name, comp })),
+  ]
+  let g: Snapshot = {
+    changes: [
+      ...mk(P, 1, ago(1), { doc: { title: 'Proj' }, project: {} }),
+      ...mk(MW, 2, ago(1), { // warm: touched an hour ago
+        doc: { title: 'Warm principle' },
+        memory: { type: 'feedback' },
+      }),
+      ...mk(MC, 3, ago(100), { // cool: touched days ago
+        doc: { title: 'Cool principle' },
+        memory: { type: 'feedback' },
+      }),
+      ...mk(MS, 4, ago(1), { // scoped: never on the front page
+        doc: { title: 'Scoped lesson' },
+        memory: { type: 'project', scope_eid: P },
+      }),
+    ],
+    deps: [],
+  }
+  let d = contextDigest(g, undefined, NOW, P)
+  let fleet = section(d, '## from the fleet').join('\n')
+  assertEquals(fleet.includes('Warm principle'), true)
+  assertEquals(fleet.includes('Cool principle'), true)
+  assertEquals(fleet.includes('Scoped lesson'), false) // scoped stays off
+  // warmest first
+  assertEquals(
+    fleet.indexOf('Warm principle') < fleet.indexOf('Cool principle'),
+    true,
+  )
+  // recognition only: a pure string, no side effect — identical twice
+  assertEquals(contextDigest(g, undefined, NOW, P), d)
+})
+
+// Preview parity, the owner's hard requirement: the PROJECT-layer tiers
+// (pulse, from the fleet) render byte-identical whether a session rode in
+// or not — so `task context` in a repo shows exactly what that project's
+// operator sees, minus the session extras. By construction: those tiers
+// are pure functions of scope, and the cap leaves them room to spare.
+Deno.test('contextDigest: preview parity — project layer matches with/without a session', () => {
+  let NOW = Date.parse('2026-07-20T12:00:00Z')
+  let ago = (h: number) => new Date(NOW - h * 3_600_000).toISOString()
+  let id = (n: number) =>
+    `abababab-0000-4000-8000-${String(n).padStart(12, '0')}`
+  let [P, T1p, T2p, M1p, SESS] = [1, 2, 3, 4, 5].map(id)
+  let mk = (
+    eid: string,
+    num: number,
+    at: string,
+    parts: Record<string, Record<string, unknown>>,
+  ) => [
+    { eid, name: 'entity', comp: { eid, num } },
+    { eid, name: 'created', comp: { at } },
+    ...Object.entries(parts).map(([name, comp]) => ({ eid, name, comp })),
+  ]
+  let g: Snapshot = {
+    changes: [
+      ...mk(P, 1, ago(1), { doc: { title: 'Proj' }, project: {} }),
+      ...mk(T1p, 2, ago(2), {
+        doc: { title: 'First move' },
+        task: { status: 'wip', priority: 0, project_eid: P },
+      }),
+      ...mk(T2p, 3, ago(5), {
+        doc: { title: 'Second move' },
+        task: { status: 'open', priority: 1, project_eid: P },
+      }),
+      ...mk(M1p, 4, ago(1), {
+        doc: { title: 'A principle' },
+        memory: { type: 'feedback' },
+      }),
+      // a session that CLAIMS a project task — its digest gains the session
+      // layer (claimed-by-you, onMine); the project layer must not shift.
+      ...mk(SESS, 5, ago(0), { session: { id: 'sess-p' } }),
+      { eid: T1p, name: 'claim', comp: { session_eid: SESS } },
+    ],
+    deps: [],
+  }
+  let preview = contextDigest(g, undefined, NOW, P)
+  let session = contextDigest(g, 'sess-p', NOW, P)
+  // the session digest genuinely carries more (its claim), proving the
+  // two aren't trivially equal
+  assertEquals(session.includes('claimed by you'), true)
+  assertEquals(preview.includes('claimed by you'), false)
+  // yet the project-layer tiers are byte-identical
+  assertEquals(section(preview, '## lately'), section(session, '## lately'))
+  assertEquals(
+    section(preview, '## from the fleet'),
+    section(session, '## from the fleet'),
+  )
 })
 
 Deno.test('inflate: @ reads the file loudly, @@ is a literal, plain rides', () => {
