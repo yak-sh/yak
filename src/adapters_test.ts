@@ -1,8 +1,8 @@
 // The adapter readers against REAL captured events — each fixture line is
 // pasted from a live probe of the CLI it mimics (trimmed, same shape).
 // If a vendor changes dialect, these say exactly which reader went deaf.
-import { assertEquals } from '@std/assert'
-import { adapters, providers } from './adapters.ts'
+import { assertEquals, assertMatch } from '@std/assert'
+import { adapters, providers, trouble } from './adapters.ts'
 
 let { claude, codex } = adapters
 
@@ -112,6 +112,36 @@ Deno.test('providers: every adapter but fake, allowlists only — no argv', () =
   assertEquals(
     ps.find((p) => p.name == 'codex')?.efforts,
     adapters.codex.efforts,
+  )
+})
+
+Deno.test('claude: short aliases and pinned ids both validate; opus-5 offered', () => {
+  // the CLI resolves the alias to the latest; the pinned id keeps its version
+  assertEquals(trouble({ provider: 'claude', model: 'opus' }), null)
+  assertEquals(trouble({ provider: 'claude', model: 'sonnet' }), null)
+  assertEquals(trouble({ provider: 'claude', model: 'claude-opus-5' }), null)
+  assertEquals(trouble({ provider: 'claude', model: 'claude-opus-4-8' }), null)
+  // the new model is in the menu, not just the allowlist
+  assertEquals(claude.models.includes('claude-opus-5'), true)
+})
+
+Deno.test('trouble: unknown provider/model/effort each name the valid ones', () => {
+  assertMatch(
+    trouble({ provider: 'oracle', model: 'x' })!,
+    /unknown provider: oracle — have .*claude/,
+  )
+  assertMatch(
+    trouble({ provider: 'claude', model: 'gpt-9' })!,
+    /unknown model: gpt-9 — claude has .*opus/,
+  )
+  assertMatch(
+    trouble({ provider: 'codex', model: 'gpt-5.6-sol', effort: 'heroic' })!,
+    /unknown effort: heroic — codex has .*high/,
+  )
+  // a good codex request (effort in the allowlist) passes clean
+  assertEquals(
+    trouble({ provider: 'codex', model: 'gpt-5.6-sol', effort: 'high' }),
+    null,
   )
 })
 

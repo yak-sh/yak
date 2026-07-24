@@ -12,6 +12,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import { type Change, type Dep, type Hit, uuid } from './types.ts'
+import { trouble } from './adapters.ts'
 import { FILTERS, GRAMMAR } from './grammar.ts'
 import {
   byBoard,
@@ -475,6 +476,12 @@ session id you claim with), then the provider table's first entry. ${BUS}`,
         model ??= table.find((p) => p.name == provider)?.models[0]
         if (!provider || !model) return err('no provider to default to')
       }
+      // Pre-flight the allowlist here, at the tool boundary: a bad model is
+      // a clear error to the caller, not a doomed husk on the board (the
+      // raw wire still husks — that contract is the created(session)
+      // effect's, for graph_apply).
+      let bad = trouble({ provider, model, effort })
+      if (bad) return err(bad)
       let made
       try {
         made = spawnChanges(all, {

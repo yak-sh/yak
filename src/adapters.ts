@@ -101,6 +101,35 @@ export let providers = () =>
       efforts: a.efforts,
     }))
 
+// A start request weighed against a provider's allowlists — the friendly
+// gate the sugar tool answers BEFORE it mints a session, so a bad model is
+// a clear error to the caller (naming the valid ones), never a doomed husk
+// on the board. Null means it will launch. The created(session) effect
+// re-checks in-transaction for the raw wire; this is the early door.
+export let trouble = (
+  { provider, model, effort }: {
+    provider?: string
+    model?: string
+    effort?: string
+  },
+): string | null => {
+  let ad = adapters[String(provider)]
+  if (!ad) {
+    return `unknown provider: ${provider} — have ${
+      providers().map((p) => p.name).join(', ')
+    }`
+  }
+  if (!model || !ad.models.includes(model)) {
+    return `unknown model: ${model} — ${provider} has ${ad.models.join(', ')}`
+  }
+  if (effort && !ad.efforts.includes(effort)) {
+    return `unknown effort: ${effort} — ${provider} has ${
+      ad.efforts.join(', ') || 'none'
+    }`
+  }
+  return null
+}
+
 // The fake provider ships in this repo: run it by absolute path — script
 // AND binary. Deno.execPath() is the deno running this server, so the
 // child never depends on the service manager's PATH carrying one.
@@ -177,10 +206,19 @@ export let adapters: Record<string, Adapter> = {
   // --session-id hands the CLI OUR session uuid, so the provider's id and
   // ours are the same string — correlation for free.
   claude: {
-    // Full ids, not aliases — the version is part of the offer (an alias
-    // silently moves when Anthropic ships). Probed live against the CLI.
+    // Pinned full ids ARE the offer — the version is part of it, so a
+    // pinned id can't silently move when Anthropic ships. But the CLI
+    // natively resolves the short aliases (`opus`→latest opus, and so on),
+    // so we accept those too: ergonomics for a caller who just wants "the
+    // current opus" and lets the CLI pin the version at launch. Probed live
+    // against the CLI.
     models: [
+      'opus',
+      'sonnet',
+      'haiku',
+      'fable',
       'claude-fable-5',
+      'claude-opus-5',
       'claude-opus-4-8',
       'claude-sonnet-5',
       'claude-haiku-4-5',
