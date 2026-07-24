@@ -744,7 +744,7 @@ let ventureAt = (db: DatabaseSync, cwd?: string | null): string | null => {
 }
 
 // The actor a write acts FOR, resolved from the writer the door named — a
-// session id (the CLI's x-actor, a reified agent), a client eid (a browser
+// session id (the CLI's x-via, a reified agent), a client eid (a browser
 // tab), or nothing. A session speaks as its own actor, else the venture it
 // stands in; a client as its person; a nameless write as the box owner.
 // Never the raw label the journal used to keep — the audit trail is actor
@@ -763,7 +763,7 @@ export let writerActor = (
       .get(writer) as { actor_eid: string | null } | undefined
     if (c) return c.actor_eid ?? ownerActor(db)
     // A writer naming an actor entity (person or project) directly stands
-    // for itself — the CLI's own operator eid, or a hand-set x-actor.
+    // for itself — the CLI's own operator eid, or a hand-set x-via.
     let a = db.prepare(
       'select eid from person where eid = ? union select eid from project where eid = ?',
     ).get(writer, writer) as { eid: string } | undefined

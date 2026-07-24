@@ -83,16 +83,17 @@ export let me = (
   env('CLAUDE_CODE_SESSION_ID') ?? env('TASKS_SESSION') ??
     env('CODEX_THREAD_ID')
 
-// Writes carry WHO when the caller knows: the x-actor header lands in
-// the server's journal (attribution, never auth). The CLI's standing
+// Writes carry WHO SPOKE when the caller knows: the x-via header names
+// the instrument — a session id or client eid the server resolves to the
+// actor it acts for (attribution, never auth). The CLI's standing
 // identity is me() — hooks and spawned agents get their writes
 // attributed without asking.
-export let send = async (changes: Change[], actor = me()) => {
+export let send = async (changes: Change[], via = me()) => {
   let res = await fetch(`http://${host()}/apply`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      ...(actor ? { 'x-actor': actor } : {}),
+      ...(via ? { 'x-via': via } : {}),
     },
     body: JSON.stringify(changes),
   })
