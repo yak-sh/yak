@@ -127,14 +127,28 @@ let resolve = (changes: Change[]) => {
       : undefined)
 }
 
+// The cursor/epoch/vocab the last snapshot handed us — declared on socket open
+// as the {since} handshake so the server replays the gap and JOINS us to the
+// live broadcast. A fresh socket that declares neither {since} nor {sub} is in
+// NO broadcast set and hears nothing (T-6829) — declaring {since} is how this
+// read-only listener stays live.
+let held: { cursor?: number; epoch?: string; vocabHash?: string } = {}
+
+// Fold a snapshot into our state: remember its cursor/epoch/vocab (for the next
+// {since}), warm the index, resolve identity. No emit — a snapshot is current
+// state, not new deltas; replaying it would ring historical mail.
+let absorb = (snap: Snapshot) => {
+  held = { cursor: snap.cursor, epoch: snap.epoch, vocabHash: snap.vocabHash }
+  learn(index, snap.changes)
+  resolve(snap.changes)
+}
+
 // One authed-free GET of the whole graph — warms the index and resolves the
 // session. Run at boot and on every (re)connect, since the graph may have moved
 // while the socket was down.
 let sync = async () => {
   let res = await fetch(`http://${HOST}/snapshot`)
-  let snap = (await res.json()) as Snapshot
-  learn(index, snap.changes)
-  resolve(snap.changes)
+  absorb((await res.json()) as Snapshot)
 }
 
 // --- MCP server --------------------------------------------------------------
@@ -180,15 +194,10 @@ let flush = (e: Event) => {
 // emit whatever it aims at this session. Control frames (the watcher's 'reload')
 // are non-arrays — ignored.
 
-let onBatch = (data: string) => {
-  let batch: unknown
-  try {
-    batch = JSON.parse(data)
-  } catch {
-    return
-  }
-  if (!Array.isArray(batch)) return
-  let changes = batch as Change[]
+// Learn from an applied batch, keep identity fresh, and emit whatever it aims
+// at this session. Shared by live array frames and the {catchup} reply — mail
+// that landed in the fetch→join gap must still inject.
+let feed = (changes: Change[]) => {
   learn(index, changes)
   resolve(changes)
   if (!sessionEid) return // our session isn't in the graph yet
@@ -202,6 +211,26 @@ let onBatch = (data: string) => {
       seen: delivered,
     })
   ) flush(e)
+}
+
+// One /ws frame. Array batches are live sync patches — feed them. Object frames
+// are the {since}-handshake replies (T-6829): {catchup} is the journal since
+// the cursor we declared (feed it, so gap mail still injects); {reset} means our
+// cursor/epoch/vocab was stale (first join or a db restore) and the server sent
+// a whole snapshot instead — absorb it (join() already added us to the
+// broadcast, so no re-declare). The watcher's 'reload' and other control frames
+// carry no data for us — ignored.
+let onBatch = (data: string) => {
+  let frame: unknown
+  try {
+    frame = JSON.parse(data)
+  } catch {
+    return
+  }
+  if (Array.isArray(frame)) return feed(frame as Change[])
+  let f = frame as { catchup?: Change[]; reset?: boolean; snapshot?: Snapshot }
+  if (f?.catchup !== undefined) return feed(f.catchup)
+  if (f?.reset && f.snapshot) absorb(f.snapshot)
 }
 
 // One reconnect loop, never stacked (the repo's one-poller invariant): a single
@@ -218,14 +247,22 @@ let connect = () => {
   socket.onopen = () => {
     backoff = 500
     err(`connected — pid ${PID ?? '-'}, boot id ${HINT ?? '-'}`)
+    // Sync first so the cursor is known, THEN declare {since} — the server
+    // replays the snapshot→join gap as {catchup} and only then joins us to the
+    // broadcast, so no live write is missed and none arrives before catch-up.
     sync()
-      .then(() =>
+      .then(() => {
+        socket?.send(JSON.stringify({
+          since: held.cursor ?? 0,
+          epoch: held.epoch,
+          vocab: held.vocabHash,
+        }))
         err(
           `serving ${
             sessionEid ? humanId(index, sessionEid) ?? sessionEid : 'nobody yet'
           } — home project: ${homeEid ?? 'unresolved — no mail'}`,
         )
-      )
+      })
       .catch((e) => err(`snapshot sync failed: ${e}`))
   }
   socket.onmessage = (m) => onBatch(String(m.data))

@@ -1,6 +1,7 @@
 // The cache derivations: what the field pickers read out of the live
 // world. Pure functions of the cache signal — no DOM, no socket.
 import {
+  applyLocal,
   backlinks,
   byWarmth,
   cache,
@@ -130,6 +131,81 @@ Deno.test('ent: refs and kids partition edges, order preserved', () => {
   let e = ent('p')
   assertEquals(e.refs, [{ type: 'requires', child: 'a' }])
   assertEquals(e.kids.map((k) => k.eid), ['b', 'c'])
+})
+
+// applyLocal returns the keys it touched, the map the IDB persist tail
+// writes (T-6823). A component merge/delete touches its eid; a dependency
+// change names its edge; an entity death touches the eid AND every edge it
+// swept from deps — the cascade the shadow must drop too.
+Deno.test('applyLocal: reports touched eids and edges', () => {
+  let sp = (eid: string) => ({
+    entity: { eid, num: 0 },
+    task: { eid, status: 'open', priority: 1, domain: null },
+  })
+  cache.value = { a: sp('a'), b: sp('b') }
+  deps.value = []
+  // a component merge and a component delete each touch their eid
+  let t1 = applyLocal([
+    { eid: 'a', name: 'task', comp: { status: 'done' } },
+    { eid: 'b', name: 'task', comp: null },
+  ])
+  assertEquals(t1.eids.toSorted(), ['a', 'b'])
+  assertEquals(t1.edges, [])
+  // an edge add names its whole triple
+  let t2 = applyLocal([
+    {
+      eid: 'a',
+      name: 'dependency',
+      comp: { type: 'requires', child_eid: 'b' },
+    },
+  ])
+  assertEquals(t2.eids, [])
+  assertEquals(t2.edges, [{ parent: 'a', type: 'requires', child: 'b' }])
+  assertEquals(deps.value.length, 1)
+})
+
+// The cascade: deleting an entity reports the eid plus every edge that
+// touched it — as parent OR child — so persist() deletes the same rows the
+// signal filtered out (else a hydrate re-reads ghost edges).
+Deno.test('applyLocal: entity death sweeps its edges into the report', () => {
+  let sp = (eid: string) => ({ entity: { eid, num: 0 } })
+  cache.value = { p: sp('p'), a: sp('a'), b: sp('b') }
+  deps.value = [
+    { parent: 'p', type: 'contains', child: 'a' }, // a as child of dead p
+    { parent: 'b', type: 'requires', child: 'p' }, // p as child, b survives
+    { parent: 'a', type: 'requires', child: 'b' }, // untouched by p's death
+  ]
+  let t = applyLocal([{ eid: 'p', name: 'entity', comp: null }])
+  assertEquals(t.eids, ['p'])
+  assertEquals(t.edges.toSorted((x, y) => (x.parent < y.parent ? -1 : 1)), [
+    { parent: 'b', type: 'requires', child: 'p' },
+    { parent: 'p', type: 'contains', child: 'a' },
+  ])
+  // the signal kept only the edge that never touched p
+  assertEquals(deps.value, [{ parent: 'a', type: 'requires', child: 'b' }])
+  assertEquals(cache.value.p, undefined)
+})
+
+// The WS one-channel boot closes the live-vs-catch-up reorder (T-6829): the
+// server sends the catch-up BEFORE joining the socket to the broadcast, so a
+// live frame always ARRIVES after it. The client just applies frames in
+// arrival order — the socket handler is applyLocal(catchup) then applyLocal
+// (live) — and a shared column ends at the newer (live) value. No buffer.
+Deno.test('catch-up then live batch apply in arrival order', () => {
+  cache.value = {
+    x: {
+      entity: { eid: 'x', num: 1 },
+      task: { eid: 'x', status: 'open', priority: 1, domain: null },
+    },
+  }
+  deps.value = []
+  // the catch-up frame (older) arrives first over the one channel
+  applyLocal([{ eid: 'x', name: 'task', comp: { status: 'wip' } }])
+  assertEquals(cache.value.x.task!.status, 'wip')
+  // then the live frame (newer) — same column, and it wins because it lands
+  // after the catch-up the server already sent
+  applyLocal([{ eid: 'x', name: 'task', comp: { status: 'done' } }])
+  assertEquals(cache.value.x.task!.status, 'done')
 })
 
 // boardAll: the board's List face — the query over the WHOLE graph.
