@@ -1,8 +1,10 @@
-import { useRef, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { md } from '../../md.ts'
 import { comps, type Ent } from '../../types.ts'
+import { FLOOR, textOf } from '../../embed.ts'
 import {
   backlinks,
+  base,
   boardsOver,
   commentCount,
   ent,
@@ -44,6 +46,9 @@ let Frame = block('div', 'Show', {
   Runs: 'div',
   Boards: 'div',
   Tasks: 'div',
+  Similar: 'div',
+  Kin: 'span',
+  Score: 'span',
 })
 let {
   Heading,
@@ -58,6 +63,9 @@ let {
   Runs: RunsEl,
   Boards: BoardsEl,
   Tasks: TasksEl,
+  Similar: SimilarEl,
+  Kin,
+  Score,
 } = Frame
 
 // The status pip IS the status control: a click anchors the vocabulary's
@@ -287,6 +295,44 @@ export let Tasks = ({ e }: { e: Ent }) => {
   )
 }
 
+// Semantic kin — the dupe hint's other door (GET /similar, embed.ts):
+// what the graph already says like this doc, above the twin floor,
+// score-stamped. Vectors are derived data the server holds, so this
+// section asks over HTTP per doc text; a box without the embedder
+// (503), a dead server, or a bare doc all render nothing — never an
+// error. Each row is the Dependency sentence — similarity read as a
+// derived edge — with the cosine riding as a quiet stamp.
+export let Similar = ({ e }: { e: Ent }) => {
+  let [kin, setKin] = useState<{ eid: string; score: number }[]>([])
+  let seq = useRef(0)
+  let text = textOf(e.doc?.title, e.doc?.body)
+  useEffect(() => {
+    let mine = ++seq.current // a newer text owns the list
+    let got = (hits: { eid: string; score: number }[]) => {
+      if (mine == seq.current) setKin(hits.filter((h) => h.eid != e.eid))
+    }
+    if (!text) return got([])
+    fetch(
+      `${base()}/similar?q=${encodeURIComponent(text)}&limit=5&floor=${FLOOR}`,
+    ).then((r) => (r.ok ? r.json() : []))
+      .then(got, () => got([]))
+  }, [text, e.eid])
+  // A neighbor can die between sweeps — the cache, not the vector
+  // table, says who still exists.
+  let live = kin.filter((h) => ent(h.eid).num)
+  if (!live.length) return null
+  return (
+    <SimilarEl>
+      {live.map((h) => (
+        <Kin key={h.eid}>
+          <Entity eid={h.eid} view='Dependency' type='similar' />{' '}
+          <Score>{h.score.toFixed(2)}</Score>
+        </Kin>
+      ))}
+    </SimilarEl>
+  )
+}
+
 // The meta line — the board row's grammar, prio · project · domain · 💬
 // · ⚑ · age, every field the same editor everywhere. In a card frame the
 // titlebar carries title, pip, and id, so an empty line renders nothing;
@@ -326,7 +372,15 @@ export let Talkback = ({ e }: { e: Ent }) => <Comments eid={e.eid} />
 
 // The section stack, walked by both faces — change the order here,
 // every doc-carrying entity follows.
-let stack = ['Dependencies', 'Relate', 'Boards', 'Tasks', 'Runs', 'Comments']
+let stack = [
+  'Dependencies',
+  'Relate',
+  'Boards',
+  'Tasks',
+  'Runs',
+  'Similar',
+  'Comments',
+]
 
 // The root Full face is the DOCUMENT: a real h1 owns the title at the
 // column's measure — it wraps, never truncates — with the pip riding its

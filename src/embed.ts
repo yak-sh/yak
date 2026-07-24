@@ -119,6 +119,14 @@ export let embedSweep = async (db: DatabaseSync) => {
   return n
 }
 
+// The twin floor, measured on the live graph (2026-07-22): an exact
+// copy scores 1.0, a reworded twin ~0.83, a close sibling ~0.81, a
+// same-domain different fact ~0.68 — 0.78 catches the twins (with
+// margin for terser rewordings) and admits the odd sibling worth a
+// look, while topic-mates stay out. Every similar door shares it: the
+// dupe hint (client.ts) and the doc view's Similar section.
+export let FLOOR = 0.78
+
 // Nearest stored vectors to a query vector — normalized both sides, so
 // cosine is a dot product. Brute force over every row of the model's
 // vintage; floor screens the noise before the caller ever sees it.

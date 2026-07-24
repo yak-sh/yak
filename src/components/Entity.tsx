@@ -9,6 +9,7 @@ import {
   Relate,
   Runs,
   Show,
+  Similar,
   Talkback,
   Tasks,
 } from './views/Show.tsx'
@@ -78,6 +79,7 @@ define([
   { view: 'Boards', match: () => true, Render: Boards },
   { view: 'Tasks', match: () => true, Render: Tasks },
   { view: 'Runs', match: () => true, Render: Runs },
+  { view: 'Similar', match: () => true, Render: Similar },
   { view: 'Comments', match: () => true, Render: Talkback },
   { view: 'Card.Title', match: has('doc', 'task'), Render: TaskTitle },
   { view: 'Card.Title', match: has('doc', 'board'), Render: BoardTitle },

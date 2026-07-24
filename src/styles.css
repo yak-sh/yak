@@ -1272,10 +1272,21 @@ html {
 }
 .Show_Runs,
 .Show_Boards,
-.Show_Tasks {
+.Show_Tasks,
+.Show_Similar {
   display: grid;
   gap: 2px;
   margin-top: var(--half-gap);
+}
+.Show_Score {
+  font-size: 11px;
+  color: var(--dim);
+}
+/* in a kin row the edge sentence flows inline — the score rides it;
+   the grid's gap owns the spacing, not the sentence's own margin */
+.Show_Kin .Dependency {
+  display: inline;
+  margin: 0;
 }
 .Debug_Linked {
   display: flex;
@@ -1587,6 +1598,10 @@ html {
 }
 .Dependency_Type-contains {
   color: var(--yellow);
+}
+/* similarity is a derived edge — quieter than the authored ones */
+.Dependency_Type-similar {
+  color: var(--dim);
 }
 
 /* The vim statusbar: NORMAL / -- INSERT -- / the : command line. */
