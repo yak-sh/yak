@@ -957,6 +957,31 @@ let fleetMemory = (all: Row[], now: number, budget: number) => {
   ]
 }
 
+// One claimed task, rendered for the digest: its line plus the unresolved
+// gates beneath it (each with the status and who holds it). Shared by the
+// operator digest's "claimed by you" list and the subagent hook's lone task
+// block (cli.ts) — one renderer, so both doors read identically.
+export let taskBlock = (all: Row[], deps: Dep[], r: Row): string[] => {
+  let byEid = new Map(all.map((x) => [x.eid, x]))
+  let out = [
+    `- ${idOf(r)} ${r.comps.task?.status ?? r.kind} — ${
+      r.comps.doc?.title ?? ''
+    }`,
+  ]
+  for (let d of deps.filter((d) => d.parent == r.eid)) {
+    let c = byEid.get(d.child)
+    if (!c || d.type == 'reads') continue
+    if (settled(String(c.comps.task?.status))) continue
+    let who = claimant(all, c)
+    out.push(
+      `  - ${d.type} → ${idOf(c)} (${c.comps.task?.status ?? c.kind}${
+        who ? `, ⚑ ${who}` : ''
+      })`,
+    )
+  }
+  return out
+}
+
 // The injection-loop digest: what a session sees at start — its claimed
 // work (with unresolved gates and who holds them), or the top of the open
 // board when it holds nothing, then the three tail tiers (below). ≤48
@@ -995,24 +1020,7 @@ export let contextDigest = (
     '# ' + (session ? `tasks · session ${session}` : 'tasks · a preview') +
     (here ? ` · ${idOf(here)} ${here.comps.doc?.title ?? ''}` : ''),
   ]
-  let show = (r: Row) => {
-    lines.push(
-      `- ${idOf(r)} ${r.comps.task?.status ?? r.kind} — ${
-        r.comps.doc?.title ?? ''
-      }`,
-    )
-    for (let d of snap.deps.filter((d) => d.parent == r.eid)) {
-      let c = byEid.get(d.child)
-      if (!c || d.type == 'reads') continue
-      if (settled(String(c.comps.task?.status))) continue
-      let who = claimant(all, c)
-      lines.push(
-        `  - ${d.type} → ${idOf(c)} (${c.comps.task?.status ?? c.kind}${
-          who ? `, ⚑ ${who}` : ''
-        })`,
-      )
-    }
-  }
+  let show = (r: Row) => lines.push(...taskBlock(all, snap.deps, r))
   if (mine.length) {
     lines.push('claimed by you:')
     mine.slice(0, 4).forEach(show)

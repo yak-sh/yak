@@ -37,6 +37,7 @@ import {
   spawnDefaults,
   spec,
   STUB,
+  taskBlock,
   taskChanges,
   threadOf,
   unreadMail,
@@ -518,6 +519,16 @@ Deno.test('contextDigest: claimed set with gates, or open board', () => {
   // the shared fixture carries no modified_at — nothing is recent, so the
   // lately tier says nothing at all
   assertEquals(d.includes('## lately'), false)
+})
+
+// taskBlock renders one task the way the digest's "claimed by you" does —
+// the task line plus its unresolved gates. Extracted so the subagent hook
+// shares the exact renderer.
+Deno.test('taskBlock: task line + unresolved gate, who holds it', () => {
+  let b = taskBlock(all, snap.deps, by(T1))
+  assertEquals(b[0], '- T-2 wip — First')
+  assertEquals(b[1], '  - requires → T-3 (open)')
+  assertEquals(b.length, 2)
 })
 
 // Read state derives, never stored: arrived-and-unmarked is unread,

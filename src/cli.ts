@@ -52,6 +52,7 @@ import {
   snapshot,
   spawnChanges,
   spawnDefaults,
+  taskBlock,
   taskChanges,
   threadOf,
   unreadMail,
@@ -922,8 +923,37 @@ let finalText = (path: string) => {
   } catch { /* no transcript is no brief */ }
 }
 
+// Subagent mode's output: a delegated Task-tool child is NOT the operator
+// loop, so it triages nothing — no mail, no pulse, no fleet, no bus sweep.
+// It sees ONLY its own task (the managed TASKS_TASK, else whatever its
+// reified session already claims), rendered by the shared taskBlock so the
+// door reads identically to the operator digest's "claimed by you". No task
+// = a one-line identity note, nothing else.
+export let subagentDigest = (
+  snap: Snapshot,
+  sid: string,
+  agentType?: string,
+) => {
+  let all = rows(snap)
+  let sess = all.find((r) =>
+    r.comps.session && String(r.comps.session.id) == sid
+  )
+  let want = Deno.env.get('TASKS_TASK')
+  let task = want ? find(all, want) : undefined
+  if (!task && sess) {
+    task = all.find((r) => r.comps.claim?.session_eid == sess.eid)
+  }
+  let head = `# subagent${agentType ? ` ${agentType}` : ''} · ${sid}`
+  return task ? taskBlock(all, snap.deps, task).join('\n') : head
+}
+
 let context = async (args: string[]) => {
   let hook = args.includes('--hook')
+  // Subagent mode: explicit --subagent (debug override), or the payload's
+  // SubagentStart event, or a Bash-shelled `task` inside a Task-tool child
+  // (CLAUDE_CODE_CHILD_SESSION). Operator mode (SessionStart / bare) is
+  // unchanged. The hook branch confirms the event from stdin below.
+  let sub = args.includes('--subagent')
   let sid = args.find((a) => !a.startsWith('--')) ?? me()
   // The digest plus the comms bus: unseen comments ride along, and the
   // session's ack cursor advances exactly when they're printed.
@@ -944,6 +974,30 @@ let context = async (args: string[]) => {
   if (hook) {
     try {
       let body = JSON.parse(await new Response(Deno.stdin.readable).text())
+      // The payload disambiguates the two hooks wired to this one line:
+      // SubagentStart → subagent mode; SessionStart (anything else) →
+      // the operator digest below, untouched.
+      if (sub || body.hook_event_name == 'SubagentStart') {
+        // Reify the CHILD under its OWN id — `agent_id`, the subagent's
+        // unique key (its `session_id` is the PARENT operator's). Its own
+        // id means its own bus cursor, so a subagent can never drain the
+        // operator's unseen comments. Then emit its lone task block, if any.
+        let subId = String(body.agent_id ?? body.session_id ?? '')
+        if (!subId) return
+        let snap = await snapshot()
+        let cwd = String(body.cwd ?? '') || undefined
+        let agentType = String(body.agent_type ?? '') || undefined
+        let s = sessionFor(rows(snap), subId, cwd, undefined, {
+          agent_type: agentType,
+          source: String(body.source ?? '') || undefined,
+        })
+        if (s.changes.length) {
+          await send(s.changes)
+          snap = await snapshot() // the block should see the reify
+        }
+        console.log(subagentDigest(snap, subId, agentType))
+        return
+      }
       sid ??= String(body.session_id ?? '')
       if (!sid) return
       let snap = await snapshot()
@@ -995,6 +1049,19 @@ let context = async (args: string[]) => {
       // silent: offline server or malformed stdin — the session goes on
     }
     return
+  }
+  // A manual `task context` shelled from inside a Task-tool child carries
+  // CLAUDE_CODE_CHILD_SESSION — same subagent output (task block only), no
+  // reify (no payload here) and no digest. --subagent forces it too.
+  if ((sub || Deno.env.get('CLAUDE_CODE_CHILD_SESSION') == '1') && sid) {
+    let snap = await snapshot()
+    let sess = rows(snap).find((r) =>
+      r.comps.session && String(r.comps.session.id) == sid
+    )
+    let agentType = sess?.comps.session?.agent_type
+    return console.log(
+      subagentDigest(snap, sid, agentType ? String(agentType) : undefined),
+    )
   }
   // Bare = the preview: what a fresh session would boot with, scoped to
   // the repo you stand in — or to a named project (task context P-20).
