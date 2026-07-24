@@ -1116,7 +1116,17 @@ let context = async (args: string[]) => {
   // JSON. An existing session stays a pure read: refreshing cwd/pid from
   // whoever happens to preview it would corrupt the row.
   if (!all.some((r) => r.comps.session && String(r.comps.session.id) == sid)) {
-    let s = sessionFor(all, sid, Deno.cwd(), claudePid())
+    // The pid is THIS process's claude, so it may only be stamped when
+    // the sid names THIS process's conversation. A subagent is a tool
+    // call INSIDE the operator's claude (CLAUDE_CODE_CHILD_SESSION=1,
+    // and its CLAUDE_CODE_SESSION_ID is the operator's) — a child that
+    // mints its own id would otherwise hang a second row on the
+    // operator's process, and a pid with two rows is an ambiguous door
+    // (T-7279, T-7288). A child session has no process of its own to
+    // claim; the SubagentStart hook already stamps none.
+    let own = !Deno.env.get('CLAUDE_CODE_CHILD_SESSION') &&
+      Deno.env.get('CLAUDE_CODE_SESSION_ID') == sid
+    let s = sessionFor(all, sid, Deno.cwd(), own ? claudePid() : undefined)
     await send(s.changes)
     snap = await snapshot()
   }

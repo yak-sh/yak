@@ -98,6 +98,55 @@ Deno.test('an addressed person: the knock rides mail, words and all', () => {
   assertEquals(m.body, 'need this today')
 })
 
+// A live process whose /proc comm is `claude` — comm is the name exec'd,
+// so a symlink to this very deno is enough (door_test.ts says more).
+let fakeClaude = async () => {
+  let dir = Deno.makeTempDirSync({ prefix: 'tasks-knock-' })
+  Deno.symlinkSync(Deno.execPath(), `${dir}/claude`)
+  let c = new Deno.Command(`${dir}/claude`, {
+    args: ['eval', 'await new Promise(() => {})'],
+    stdout: 'null',
+    stderr: 'null',
+  }).spawn()
+  for (let i = 0; i < 200; i++) {
+    try {
+      if (Deno.readTextFileSync(`/proc/${c.pid}/comm`).trim() == 'claude') break
+    } catch { /* not exec'd yet */ }
+    await new Promise((r) => setTimeout(r, 10))
+  }
+  return c
+}
+
+Deno.test('an operator is a door: external claude hears it, its child does not', async () => {
+  let c = await fakeClaude()
+  // The operator: plain `claude` in a terminal, so origin 'external' —
+  // the case the old `origin = 'managed'` test shut out entirely.
+  let op = uid()
+  apply(db, [{
+    eid: op,
+    name: 'session',
+    comp: { id: 'op-2', actor_eid: project, pid: c.pid },
+  }])
+  // A subagent it spawned, reified LATER (so it sorts first) — a tool
+  // call inside the operator's process, which is why it never claims the
+  // pid and never takes the operator's knock.
+  apply(db, [{
+    eid: uid(),
+    name: 'session',
+    comp: { id: 'kid-1', actor_eid: project },
+  }])
+  let k = knock(task, project)
+  let { num } = db.prepare('select num from entity where eid = ?').get(op) as {
+    num: number
+  }
+  assertEquals(krow(k).delivery, `cast S-${num}`)
+  assertEquals(krow(k).error, null)
+  c.kill('SIGKILL')
+  await c.status
+  // the door shuts with the process: the ladder descends again
+  assertMatch(String(krow(knock(task, project)).delivery), /^spawned S-\d+$/)
+})
+
 Deno.test('no door: the artifact says why nobody heard', () => {
   let stray = uid()
   apply(db, [{ eid: stray, name: 'doc', comp: { title: 'nobody' } }])

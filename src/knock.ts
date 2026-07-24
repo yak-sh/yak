@@ -6,6 +6,7 @@
 // knock commits. Words never live in the knock — they ride as a plain
 // comment on the target in the same batch. SERVER-ONLY (imports db).
 import { apply, db, snapshot } from './db.ts'
+import { listening } from './door.ts'
 import { dispatch, trace } from './effects.ts'
 import { type Change, idOf, uuid } from './types.ts'
 import { rows, spawnChanges } from './client.ts'
@@ -49,15 +50,17 @@ let wordsFor = (target: string): string => {
   return String(r?.body ?? '')
 }
 
-// Who is awake for an actor: a managed session wearing that actor_eid
-// (or the session itself), still starting/running.
+// Who is awake for an identity: a session wearing that actor_eid (or the
+// session itself) with somebody listening (door.ts — liveness, never
+// origin). Newest first, because that is the order the doors close in: a
+// /clear leaves the old row behind and the higher num is the live one.
 let awake = (to: string): { eid: string; num: number } | undefined =>
-  db.prepare(
+  (db.prepare(
     `select s.eid, e.num from session s join entity e on e.eid = s.eid
-     where (s.eid = ? or s.actor_eid = ?)
-     and s.origin = 'managed' and s.status in ('starting', 'running')
-     limit 1`,
-  ).get(to, to) as { eid: string; num: number } | undefined
+     where s.eid = ? or s.actor_eid = ?
+     order by e.num desc`,
+  ).all(to, to) as { eid: string; num: number }[])
+    .find((s) => listening(s.eid))
 
 // The ladder. Every rung stamps; a knock with no door is an error, not
 // a silence — the artifact must say why nobody heard it.
@@ -69,7 +72,7 @@ export let knocked =
       stamp(eid, { acted_at: now(), delivery }, cast)
     let fail = (error: string) => stamp(eid, { acted_at: now(), error }, cast)
     try {
-      // 1: someone with that identity is awake — the cast already
+      // 1: someone with that identity is listening — the cast already
       // delivered (channel plugin / comms bus); the stamp names them.
       let up = awake(to)
       if (up) return done(`cast S-${up.num}`)

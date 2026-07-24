@@ -877,6 +877,8 @@ let graph = [
   'mcp.ts',
   'client.ts',
   'sessions.ts',
+  'door.ts',
+  'proc.ts',
   'adapters.ts',
   'telemetry.ts',
   'mail.ts',

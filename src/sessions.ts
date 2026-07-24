@@ -33,6 +33,7 @@
 import { basename, dirname } from 'node:path'
 import { type Adapter, adapters, type Event, type Summary } from './adapters.ts'
 import { apply, db, snapshot } from './db.ts'
+import { listening } from './door.ts'
 import { dispatch, trace } from './effects.ts'
 import { lapseChanges, rows } from './client.ts'
 import { materialize } from './persona.ts'
@@ -906,10 +907,14 @@ let refuse = (eid: string, why: string, cast: Cast) => {
 }
 
 // created(comment) — commenting on a session IS messaging that agent (the
-// comms bus already says so): aimed at a SETTLED managed session, the
-// comment resumes its provider thread with the comment's body. An ACTIVE
-// session takes no stdin — the bus hands it the comment on its next tool
-// call, so the comment alone is delivery, and nothing happens here. A
+// comms bus already says so): aimed at a session nobody is listening to,
+// the comment resumes its provider thread with the comment's body. A
+// session with someone home takes no stdin — its channel plugin (or the
+// bus, on its next tool call) hands the comment over, so the comment
+// alone is delivery and nothing happens here. Which one it is is a
+// question of LIVENESS, never of origin (door.ts): an operator runs plain
+// `claude` and reifies as 'external', and gating on origin left every
+// operator's session unresumable and every knock at one unheard. A
 // session's own comments never resume it (an agent must not wake itself
 // by talking), and machine events carry news, never words to wake on —
 // which is also what keeps refuse()'s own reply out of this gate. Words
@@ -925,8 +930,8 @@ export let commented =
     let row = db.prepare('select * from session where eid = ?').get(eid) as
       | Row
       | undefined
-    if (!row || row.origin != 'managed') return // not aimed at a spawn
-    if (sessionActive.includes(String(row.status))) return // the bus delivers
+    if (!row) return // not aimed at a session
+    if (listening(eid)) return // somebody is home — the cast is delivery
     let body = String(
       (db.prepare('select body from doc where eid = ?').get(ceid) as
         | { body: string }
