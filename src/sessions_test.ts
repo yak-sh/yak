@@ -273,7 +273,7 @@ Deno.test('a worn persona rides the prompt whole — tiers and all', async () =>
   let first = logs(eid, new URLSearchParams('after=0&limit=1')).entries[0]
   let text = JSON.parse(first.line).text
   assertMatch(text, /Be terse\./)
-  assertMatch(text, /## Preloaded/)
+  assertMatch(text, /---\n\n# D-\d+ lesson/)
   assertMatch(text, /Front door\./)
   assert(!text.includes('House rules')) // the persona replaces CONTRACT
 })

@@ -24,15 +24,16 @@ let BASE = 'http://127.0.0.1:5173'
 // and sync renders one persona into N provider files.
 export type Dialect = {
   header: (id: string, title: string) => string
-  preloaded: string
+  rule: string
   index: string
 }
 export let DIALECT: Dialect = {
   header: (id, title) =>
     `<!-- GENERATED from ${id} (${title}) — edit in the graph (${BASE}/${id}, memory_save), never here: the
 next sync overwrites hand edits. -->`,
-  preloaded: '## Preloaded',
-  index: '## Index\n\nRecall a body by id (memory_recall / task show).',
+  rule: '---',
+  index:
+    '## Memory Index\n\n*Recall a body by id (memory_recall / task show).*',
 }
 
 let byWarm = (now: number) => (a: Row, b: Row) =>
@@ -64,7 +65,11 @@ let tier = (all: Row[], deps: Dep[], eid: string, type: string, now: number) =>
 
 // The whole persona as one markdown document: header naming the edit
 // path, the core text, preloaded bodies (warmest first — the budgeted
-// auto-tier hangs off this ordering later), then the index.
+// auto-tier hangs off this ordering later), then the index. Each
+// preloaded body is its own little document — a rule before it, an H1
+// title over it — so a body may use ## freely. Rules ride as their own
+// parts: the \n\n join blank-lines every --- and no text line above can
+// read it as a setext underline.
 export let materialize = (
   all: Row[],
   deps: Dep[],
@@ -84,18 +89,17 @@ export let materialize = (
     : `${header}\n\n${body}`
   let parts = [
     lead,
-    ...(pre.length
-      ? [
-        d.preloaded,
-        ...pre.map((r) =>
-          `### ${idOf(r)} ${r.comps.doc?.title ?? ''}\n\n${
-            String(r.comps.doc?.body ?? '').trim()
-          }`
-        ),
-      ]
-      : []),
+    ...pre.flatMap((r) => [
+      d.rule,
+      `# ${idOf(r)} ${r.comps.doc?.title ?? ''}\n\n${
+        String(r.comps.doc?.body ?? '').trim()
+      }`,
+    ]),
     ...(idx.length
-      ? [`${d.index}\n\n${idx.map((r) => indexLine(r, now)).join('\n')}`]
+      ? [
+        d.rule,
+        `${d.index}\n\n${idx.map((r) => indexLine(r, now)).join('\n')}`,
+      ]
       : []),
   ]
   return parts.filter(Boolean).join('\n\n') + '\n'
