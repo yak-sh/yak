@@ -204,7 +204,12 @@ export let comps: Record<string, Record<string, PropType>> = {
   comment: {
     target_eid: { eid: '', death: 'cascade' },
     // A byline survives its instrument: the words remain attributed to a
-    // session that ended long ago — history, not a dangle.
+    // session that ended long ago — history, not a dangle. Not redundant
+    // with created.by (T-7017): author_eid names the INSTRUMENT (a
+    // session, a client), created.by the actor it acts for — the comms
+    // bus self-filter and the resume gate need per-session identity
+    // (fleetmates share an actor), and the byline walks author → actor
+    // ("jeff · via S-31").
     author_eid: { eid: '', death: 'keep' },
     // Emitted, not authored (M-4062): machinery marks its comments at
     // mint — a settle notice, a lease lapse. Events never ride the mail
