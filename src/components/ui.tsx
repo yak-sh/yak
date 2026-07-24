@@ -33,11 +33,11 @@ export let anchor = (
     ? { tag, demote: href }
     : { tag: 'a', cls: tag, href }
 
-// Demoted links click through nav's follow(), but nav.tsx builds on ui.tsx
+// Demoted links click through nav's contract, but nav.tsx builds on ui.tsx
 // at module init (block, copy) — importing back would let module load order
 // decide whether the cycle lands in TDZ. The dumb layer stays app-import-
 // free: nav.tsx fills this slot at its own module init.
-let follow = (_href: string) => (_: MouseEvent) => {}
+let follow = (_href: string): Record<string, unknown> => ({})
 export let setFollow = (f: typeof follow) => (follow = f)
 
 export let el = (tag: string, base: string) =>
@@ -58,7 +58,7 @@ export let el = (tag: string, base: string) =>
     // The demoted form loses native new-tab clicks and the browser link
     // menu — acceptable for nested controls.
     ...(a.demote &&
-      { role: 'link', tabIndex: 0, onClick: follow(a.demote) }),
+      { role: 'link', tabIndex: 0, ...follow(a.demote) }),
     ref: elRef,
     class: [
       base,

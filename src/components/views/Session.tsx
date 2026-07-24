@@ -1,13 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { md } from '../../md.ts'
-import {
-  type Ent,
-  idOf,
-  kilo,
-  type LogRow,
-  sessionActive,
-} from '../../types.ts'
+import { type Ent, kilo, type LogRow, sessionActive } from '../../types.ts'
 import { base, mutate, uuid } from '../../live.ts'
+import { clickProps } from '../nav.tsx'
 import { block, Stamp } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
 import { Comments } from '../Comments.tsx'
@@ -375,14 +370,14 @@ export let Session = ({ e }: { e: Ent }) => {
 }
 
 // A session in a list: the dot carries the status, the way a task row's
-// does — plus what it's running. The whole tile is the LINK (href on the
-// el); the chip inside keeps its own peek.
+// does — plus what it's running. The whole tile is the LINK (clickProps
+// on the el: click peeks, double click navigates).
 let RowLine = block('div', 'SessionRow', { Status: 'span', Model: 'span' })
 
 export let SessionRow = ({ e }: { e: Ent }) => {
   let s = e.session!
   return (
-    <RowLine href={`/${idOf(e)}`}>
+    <RowLine {...clickProps(e)}>
       <Dot status={s.status ?? ''} />
       <RowLine.Status>{s.status ?? s.id}</RowLine.Status>
       {s.provider && <RowLine.Model>{s.provider} · {s.model}</RowLine.Model>}

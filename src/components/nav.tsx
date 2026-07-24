@@ -42,6 +42,15 @@ export let openAt = (eid: string, ev: MouseEvent) => {
   } else navigate(`/${idOf(ent(eid))}`)
 }
 
+// An id in the wild — T-num, bare num, or raw eid — resolved against the
+// live cache; undefined when unloaded or dead.
+export let eidOf = (id: string) => {
+  let m = id.match(/^[A-Za-z]+-(\d+)$/) ?? id.match(/^(\d+)$/)
+  if (!m) return cache.value[id] ? id : undefined
+  return Object.entries(cache.value)
+    .find(([, r]) => r.entity?.num == +m![1])?.[0]
+}
+
 // The plain-click half of an in-app anchor: modifiers, middle-click and
 // the native context menu keep their new-tab forms; a bare click (tap
 // included) opens in place — peeked when the caller knows its entity,
@@ -53,7 +62,14 @@ export let follow = (href: string, eid?: string) => (ev: MouseEvent) => {
   if (eid) openAt(eid, ev)
   else navigate(href)
 }
-setFollow(follow) // el()'s demoted links click through here (see ui.tsx)
+
+// el()'s demoted links (see ui.tsx) know only an href — resolve the
+// entity at click time so they peek like any chip; double click stays
+// the deliberate navigate.
+setFollow((href) => ({
+  onClick: (ev: MouseEvent) => follow(href, eidOf(href.slice(1)))(ev),
+  onDblClick: follow(href),
+}))
 
 // Markdown-rendered ids (md.ts data-ref anchors) come from innerHTML, so
 // no component owns their clicks — one delegated listener gives every
@@ -64,27 +80,31 @@ globalThis.document?.addEventListener?.('click', (ev: MouseEvent) => {
   let a = (ev.target as Element | null)?.closest?.('a[data-ref]')
   if (!a) return
   let id = a.getAttribute('data-ref')!
-  let m = id.match(/^[A-Za-z]+-(\d+)$/)
-  let hit = m &&
-    Object.entries(cache.value).find(([, c]) => c.entity?.num == Number(m![1]))
-  if (hit) follow(`/${id}`, hit[0])(ev)
+  let eid = eidOf(id)
+  if (eid) follow(`/${id}`, eid)(ev)
 })
 
-// The whole internal-link contract, spreadable onto any anchor: a real
-// href (new-tab forms and the native menu stay native), plain click
-// follows in place, double click is the deliberate fullscreen (follow
-// with only the href navigates — the same root change as "open here"),
-// and dragging it onto the canvas makes a card.
-export let linkProps = (e: Ent) => {
+// The click half of the internal-link contract: a real href (new-tab
+// forms and the native menu stay native), plain click follows in place,
+// double click is the deliberate fullscreen (follow with only the href
+// navigates — the same root change as "open here"). For tiles whose
+// wrapper already owns the drag (a board Item, a List Row).
+export let clickProps = (e: Ent) => {
   let href = `/${idOf(e)}`
   return {
     href,
     onClick: follow(href, e.eid),
     onDblClick: follow(href),
-    draggable: true,
-    onDragStart: (ev: DragEvent) => dragData(ev, e.eid, resolve(e).view),
   }
 }
+
+// The whole contract, spreadable onto any anchor: the clicks above plus
+// dragging it onto the canvas makes a card.
+export let linkProps = (e: Ent) => ({
+  ...clickProps(e),
+  draggable: true,
+  onDragStart: (ev: DragEvent) => dragData(ev, e.eid, resolve(e).view),
+})
 
 // Resolve the route to {eid, view}: bare `/` means the root canvas; an
 // id is T-num / bare num / eid, looked up in the live cache.
@@ -92,15 +112,8 @@ export let screenTarget = () => {
   let url = new URL(route.value, 'http://x')
   let id = decodeURIComponent(url.pathname.slice(1))
   let view = url.searchParams.get('v') ?? undefined
-  if (!id) {
-    let eid = rootCanvas()
-    return eid ? { eid, view } : null
-  }
-  let m = id.match(/^[A-Za-z]+-(\d+)$/) ?? id.match(/^(\d+)$/)
-  if (!m) return cache.value[id] ? { eid: id, view } : null
-  let hit = Object.entries(cache.value)
-    .find(([, r]) => r.entity?.num == +m![1])
-  return hit ? { eid: hit[0], view } : null
+  let eid = id ? eidOf(id) : rootCanvas()
+  return eid ? { eid, view } : null
 }
 
 // The trail: roots passed through in place, oldest first — the App bar

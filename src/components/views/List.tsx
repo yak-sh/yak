@@ -1,9 +1,9 @@
-import { type Ent, idOf } from '../../types.ts'
+import { type Ent } from '../../types.ts'
 import { unmime } from '../../rfc2047.ts'
 import { boardAll, byWarmth, pinned } from '../../live.ts'
 import { orderOf, parseQuery } from '../../query.ts'
 import { block } from '../ui.tsx'
-import { menuAt } from '../nav.tsx'
+import { clickProps, menuAt } from '../nav.tsx'
 import { passOf } from '../Filter.tsx'
 import { dragData } from '../drag.ts'
 import { Id } from './Inline.tsx'
@@ -76,12 +76,13 @@ export let BoardList = ({ e }: { e: Ent }) => {
 }
 
 // The default list line: title (or kind) + the id chip. The whole tile
-// is the LINK — href on the el, the anchor promotion does the rest — and
-// right-click serves the app menu (menuAt): navigation plus the entity's
-// verbs. Tasks override List.Tile via the registry (TaskTile).
+// is the LINK — clickProps on the el: click peeks, double click
+// navigates — and right-click serves the app menu (menuAt): navigation
+// plus the entity's verbs. Tasks override List.Tile via the registry
+// (TaskTile).
 let Line = block('div', 'ListTile', { Title: 'span' })
 export let ListTile = ({ e }: { e: Ent }) => (
-  <Line href={`/${idOf(e)}`} onContextMenu={menuAt(e)}>
+  <Line {...clickProps(e)} onContextMenu={menuAt(e)}>
     {/* a mail's stored subject may be an encoded-word — decode to read */}
     <Line.Title>
       {(e.mail ? unmime(e.doc?.title ?? '') : e.doc?.title) || e.kind}
