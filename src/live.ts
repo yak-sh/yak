@@ -9,18 +9,15 @@ import {
   type Ent,
   type Pinned,
   settled,
-  type Snapshot,
   stamped,
 } from './types.ts'
 import { type Row } from './client.ts'
 import { matchQuery, parseQuery, resolveRefs, warm } from './query.ts'
-import * as idb from './idb.ts'
 
 // A cache row: the spine plus whichever components the entity carries.
 // Derived from Ent so a new component (types.ts) threads through here —
-// and through ent() below — with zero edits. Exported so idb.ts persists
-// and hydrates the exact shape the signal holds (T-6823).
-export type Comps =
+// and through ent() below — with zero edits.
+type Comps =
   & { entity?: { eid: string; num: number } }
   & Omit<Ent, 'eid' | 'num' | 'kind' | 'refs' | 'kids'>
 
@@ -91,32 +88,14 @@ export let gated = (e: Ent) =>
     return r.type == 'requires' && c.task && !settled(c.task.status)
   })
 
-// Which door boot took, plus a cache peek — exposed for eyes (a CDP probe,
-// the console) to verify properties invisible from the DOM (the reload win,
-// live-only columns that never touch IDB). Not load-bearing.
-let mark = (path: string) => ((globalThis as { __boot?: string }).__boot = path)
-;(globalThis as { __peek?: (eid: string) => unknown }).__peek = (eid) =>
-  cache.value[eid]
-
 // Land a batch in the cache with the same patch semantics the db uses:
 // comps merge per-column, comp: null deletes the component, entity: null
-// deletes the entity and every edge touching it. Returns the eids and edges
-// it touched (an entity death touches the eid AND every edge it swept) so the
-// persist tail — and boot's explicit delta write — mirror exactly those keys
-// into IDB, no diff of the whole cache.
+// deletes the entity and every edge touching it.
 export let applyLocal = (changes: Change[]) => {
   let next = { ...cache.value }
-  let eids = new Set<string>()
-  let edges: Dep[] = []
   for (let { eid, name, comp } of changes) {
     if (name == 'entity' && comp == null) {
       delete next[eid]
-      eids.add(eid)
-      // The cascade: every edge touching the dead eid leaves deps too —
-      // record them so the IDB shadow drops the same rows the signal does.
-      for (let d of deps.value) {
-        if (d.parent == eid || d.child == eid) edges.push(d)
-      }
       deps.value = deps.value.filter((d) => d.parent != eid && d.child != eid)
       continue
     }
@@ -129,7 +108,6 @@ export let applyLocal = (changes: Change[]) => {
         type: comp.type as Dep['type'],
         child: String(comp.child_eid),
       }
-      edges.push(d)
       let same = (x: Dep) =>
         x.parent == d.parent && x.type == d.type && x.child == d.child
       deps.value = comp.gone
@@ -143,23 +121,9 @@ export let applyLocal = (changes: Change[]) => {
     if (comp == null) delete row[name]
     else row[name] = { ...(row[name] as object), ...comp }
     next[eid] = row as Comps
-    eids.add(eid)
   }
   cache.value = next
-  // Live-frame IDB persist is deferred: multi-writer drop-op race — boot-only
-  // for now (T-6823/T-6829). Live frames update the signal only; IDB is
-  // written solely at boot, through idb's forward-only guarded commit. The
-  // returned touched keys feed that boot write (the delta persist below); a
-  // sole-writer leader (2.2/T-6883) is where this tail persists live frames.
-  return { eids: [...eids], edges }
 }
-
-// The cursor/epoch/vocab this tab holds — sent on socket open as the {since}
-// catch-up handshake (below). The catch-up rides the SAME ordered socket as
-// live frames now, so the server (single-threaded) sends it BEFORE joining
-// this socket to the broadcast: catch-up then live, in journal order, no
-// client-side reordering to undo (T-6829). seedFrom/boot set it.
-let held: idb.Meta = {}
 
 // Land a local edit: cache first (instant render), then the wire.
 export let mutate = (...changes: Change[]) => {
@@ -168,14 +132,9 @@ export let mutate = (...changes: Change[]) => {
 }
 
 // One socket per tab, lazily opened; sends queue behind the handshake.
-// On OPEN it declares the cursor it holds — `{since, epoch, vocab}` — and the
-// server replays the journal since it (catch-up), or a full reset if the
-// cursor is void, BEFORE adding this socket to the live broadcast. So the
-// server-side ordering is catch-up then live, on one channel, and the client
-// just applies frames as they arrive — array batches are sync patches; the
-// catch-up/reset objects fill the cache; the rest is the file watcher
-// ({hmr}/{css} hot-swap through the config doors, 'reload' means the swap
-// boundary itself changed).
+// Array frames are sync batches; the rest is the server's file watcher:
+// {hmr}/{css} hot-swap through the config doors, 'reload' means the swap
+// boundary itself changed.
 // A dropped socket means the server restarted — poll until it's back, then
 // reload for a fresh snapshot (state lives in the db, so nothing is lost).
 // One poller, ever: while the server is down every send() mints another
@@ -190,19 +149,9 @@ export let sock = () => {
       config.client ? `?client=${config.client}` : ''
     }`,
   )
-  // The catch-up handshake: send the held cursor first, so every later live
-  // frame the server broadcasts arrives AFTER the catch-up it just sent.
-  ws.onopen = () =>
-    ws!.send(JSON.stringify({
-      since: held.cursor ?? 0,
-      epoch: held.epoch,
-      vocab: held.vocabHash,
-    }))
   ws.onmessage = (m) => {
     let data = JSON.parse(String(m.data))
     if (Array.isArray(data)) applyLocal(data)
-    else if (data?.catchup !== undefined) onCatchup(data)
-    else if (data?.reset) onReset(data)
     else if (typeof data?.sub == 'string') onSub(data)
     else if (data == 'reload') config.reload()
     else if (data?.hmr) config.swap ? config.swap(data.hmr) : config.reload()
@@ -289,79 +238,13 @@ export let unsubscribe = (sub: string) => {
   control({ unsub: sub })
 }
 
-// Fetch the whole graph, fill the signals, seed IDB — the first-visit path
-// and the 409 fallback share it (a stale cursor just means "do what a new
-// visitor does"). Replace the cache wholesale (clear then apply), stamp the
-// held cursor, and seed IDB — seed() is a `full` forward-only commit that
-// wins across a changed epoch and clears the stale rows in the same txn.
-let seedFrom = (snap: Snapshot) => {
-  cache.value = {}
+// Fill the cache and open the socket — main.tsx awaits this before render.
+// (Changes landing between the fetch and the open are missed; fine for now.)
+export let boot = async () => {
+  let snap = await (await fetch(`${base()}/snapshot`)).json()
   deps.value = snap.deps
   applyLocal(snap.changes)
-  held = { cursor: snap.cursor, epoch: snap.epoch, vocabHash: snap.vocabHash }
-  return idb.seed(
-    cache.value,
-    deps.value,
-    snap.cursor ?? 0,
-    snap.epoch ?? '',
-    snap.vocabHash ?? '',
-  )
-}
-
-// First-visit / no-IDB fill: the whole graph over HTTP (the TUI and a fresh
-// browser have nothing to hydrate, and a full snapshot can't reorder — it is
-// a complete prefix). The socket's {since} handshake that follows just joins
-// the broadcast and closes the fetch→open gap with a tiny catch-up.
-let fromSnapshot = async () =>
-  seedFrom(await (await fetch(`${base()}/snapshot`)).json())
-
-// The catch-up frame, over the socket: the journal since the cursor we sent.
-// It arrives BEFORE any live frame (the server sends it before joining this
-// socket to the broadcast), so applying it in arrival order is already the
-// right order — no buffering. Persist the touched keys + new cursor in one
-// forward-only guarded commit against the epoch we hydrated under (a peer tab
-// already ahead is never regressed; IDB never advances past unstored change).
-let onCatchup = (d: { catchup: Change[]; cursor: number }) => {
-  let { eids, edges } = applyLocal(d.catchup)
-  idb.persist(eids, edges, cache.value, deps.value, {
-    epoch: held.epoch ?? '',
-    vocabHash: held.vocabHash ?? '',
-    cursor: d.cursor,
-  })
-}
-
-// The reset frame, the socket's equivalent of the HTTP 409 + first-visit: the
-// held cursor was void or its epoch/vocab moved (db restore, shape change), so
-// the server sent a whole snapshot — reseed from it.
-let onReset = (d: { snapshot: Snapshot }) => {
-  mark('reset')
-  seedFrom(d.snapshot)
-}
-
-// Fill the cache and open the socket — main.tsx awaits this before render.
-// First visit / no IDB: fetch the whole snapshot over HTTP, seed, render;
-// the socket then joins and catches the fetch→open gap. Returning visit:
-// hydrate from IDB (local, fast) and render immediately; the socket sends
-// {since:C} and the catch-up rides back on that SAME ordered channel ahead of
-// any live frame — no HTTP /delta, no reorder to undo. Either way sock() is
-// opened with `held` already set, so its onopen handshake declares the right
-// cursor.
-// [2.2 — T-6883: sock() ownership moves to the leader tab; here every tab
-//  opens its own — intentional per-tab redundancy for slice 2.1.]
-export let boot = async () => {
-  let m = await idb.meta()
-  if (m.cursor === undefined) {
-    mark('snapshot')
-    await fromSnapshot() // sets held from the snapshot
-    sock()
-  } else {
-    mark('hydrate+delta')
-    let { ents, deps: d } = await idb.hydrate()
-    cache.value = ents
-    deps.value = d
-    held = m // send this cursor on socket open; the catch-up rides back
-    sock()
-  }
+  sock()
 }
 
 // Edges grouped by parent, one pass over deps. ent() partitions its own
