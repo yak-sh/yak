@@ -715,3 +715,56 @@ Deno.test('a comment after the sweep regrows the worktree and resumes', async ()
   assertEquals(row(eid)?.status, 'completed')
   assertMatch(refusals(eid)[0], /no worktree to resume in/)
 })
+
+Deno.test('T-7279: comment on external session respects liveness, not origin', async () => {
+  // A live claude process (the operator case)
+  let dir = Deno.makeTempDirSync({ prefix: 'tasks-probe-' })
+  Deno.symlinkSync(Deno.execPath(), `${dir}/claude`)
+  let c = new Deno.Command(`${dir}/claude`, {
+    args: ['eval', 'await new Promise(() => {})'],
+    stdout: 'null',
+    stderr: 'null',
+  }).spawn()
+  for (let i = 0; i < 200; i++) {
+    try {
+      if (Deno.readTextFileSync(`/proc/${c.pid}/comm`).trim() == 'claude') break
+    } catch { /* not exec'd yet */ }
+    await new Promise((r) => setTimeout(r, 10))
+  }
+
+  // An external session (operator's terminal) with a live claude process
+  let live = uid()
+  apply(db, [
+    { eid: live, name: 'session', comp: { id: uid() } },
+  ])
+  db.prepare(
+    `update session set origin = 'external', status = 'completed', provider = 'fake',
+     provider_session_id = 'op-thread', pid = ? where eid = ?`,
+  ).run(c.pid, live)
+
+  // The session can use the scratch repo we already have
+  db.prepare('update session set cwd = ? where eid = ?').run(scratch, live)
+
+  heard = []
+  // Comment on the live external session: should NOT respawn, channel delivers
+  await write(say(live, 'still here?'))
+  assertEquals(row(live)?.status, 'completed', 'live external: no respawn')
+  assertEquals(
+    refusals(live).length,
+    0,
+    'live external: no refusal, channel delivered',
+  )
+
+  // Kill the process: the door closes
+  c.kill('SIGKILL')
+  await c.status
+
+  heard = []
+  // Comment on the dead external session: SHOULD respawn
+  let resumed = write(say(live, 'anyone there?'))
+  // The effect flips status to running and appends to the log
+  assertEquals(row(live)?.status, 'running', 'dead external: respawned')
+  await until(() => row(live)?.status == 'completed', 'the resumed run settles')
+  assertEquals(refusals(live).length, 0, 'dead external: no refusals, resumed')
+  await resumed
+})
