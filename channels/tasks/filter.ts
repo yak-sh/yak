@@ -19,15 +19,18 @@ export type Event = { content: string; meta: Record<string, string> }
 
 // What channelEvents needs to know about the world beyond one batch: which
 // session entity it serves, that session's actor (a knock may be aimed at
-// either), its home project (where its mail lands), how to turn an eid into a
-// human id (T-7, S-31) — null when the eid isn't known yet — and a letter's
-// words from the cache (the arrival stamp is a bare mail row). `seen` is the
-// mail eids already delivered this run: any later full-row stamp re-broadcast
-// (the mail.ts idiom casts whole rows) must not ring twice.
+// either), its home project (where its mail lands), the eids of the tasks it has
+// CLAIMED (a comment on any of them is a message to the claimant — the sweep's
+// `mine` in client.ts notices()), how to turn an eid into a human id (T-7, S-31)
+// — null when the eid isn't known yet — and a letter's words from the cache (the
+// arrival stamp is a bare mail row). `seen` is the mail eids already delivered
+// this run: any later full-row stamp re-broadcast (the mail.ts idiom casts whole
+// rows) must not ring twice.
 export type Ctx = {
   sessionEid: string
   actorEid?: string | null
   homeEid?: string | null
+  claimedEids?: Set<string>
   idOf: (eid: string) => string | null
   docOf?: (eid: string) => { title: string; body: string } | null
   seen?: Set<string>
@@ -169,9 +172,11 @@ let words = (doc?: { title: string; body: string }) =>
 // return the channel events to emit — in batch order, so delivery is
 // deterministic. Three things are aimed at a session:
 //
-//   1. a `comment` whose target_eid is this session's eid — someone messaging
-//      the session — but ONLY at mint, when the batch also carries the doc that
-//      holds the words (a bodiless later patch is skipped).
+//   1. a `comment` whose target_eid is this session's eid OR one of its CLAIMED
+//      tasks (commenting on a task you hold IS messaging you — the comms bus
+//      rule) — but ONLY at mint, when the batch also carries the doc that holds
+//      the words (a bodiless later patch is skipped). A comment on a claimed
+//      task names that task in `on=` so the operator knows which one.
 //   2. a `knock` (types.ts): to_eid is the recipient — this session or its
 //      actor — and target_eid is what to look at; the words ride as a plain
 //      comment on the TARGET in the same batch (the :knock contract).
@@ -183,11 +188,20 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
     if (!c.comp) continue
 
     if (c.name == 'comment') {
-      if (str(c.comp.target_eid) != ctx.sessionEid) continue
+      let at = str(c.comp.target_eid)
+      let mine = at == ctx.sessionEid || !!ctx.claimedEids?.has(at)
+      if (!mine) continue
       let content = words(docs.get(c.eid))
       if (!content) continue // bodiless mint or a later comp-only patch
       let from = ctx.idOf(str(c.comp.author_eid)) ?? 'unknown'
-      out.push({ content, meta: { kind: 'comment', from: cleanAttr(from) } })
+      let meta: Record<string, string> = {
+        kind: 'comment',
+        from: cleanAttr(from),
+      }
+      // On a claimed TASK (not the session), name the target so the operator
+      // knows which one — the sweep line prefixes the same id.
+      if (at != ctx.sessionEid) meta.on = cleanAttr(ctx.idOf(at) ?? at)
+      out.push({ content, meta })
       continue
     }
 

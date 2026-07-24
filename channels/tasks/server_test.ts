@@ -61,6 +61,31 @@ Deno.test('a comment aimed elsewhere is ignored', () => {
   assertEquals(channelEvents(batch, ctx()), [])
 })
 
+Deno.test('a comment on a CLAIMED task is delivered, naming the task', () => {
+  let batch = [
+    ch('c1', 'doc', { title: '', body: 'take a look' }),
+    ch('c1', 'comment', { target_eid: 't9', author_eid: 's1' }),
+  ]
+  assertEquals(channelEvents(batch, ctx({ claimedEids: new Set(['t9']) })), [
+    {
+      content: 'take a look',
+      meta: { kind: 'comment', from: 'S-1', on: 'T-9' },
+    },
+  ])
+})
+
+Deno.test('a comment on an UNCLAIMED task is dropped', () => {
+  let batch = [
+    ch('c1', 'doc', { title: '', body: 'not for you' }),
+    ch('c1', 'comment', { target_eid: 't9', author_eid: 's1' }),
+  ]
+  // The session holds a different task, so t9 is foreign.
+  assertEquals(
+    channelEvents(batch, ctx({ claimedEids: new Set(['other']) })),
+    [],
+  )
+})
+
 Deno.test('an unresolvable author renders as unknown', () => {
   let batch = [
     ch('c1', 'doc', { title: '', body: 'hey' }),

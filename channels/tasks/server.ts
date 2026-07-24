@@ -81,6 +81,13 @@ let homeEid: string | undefined
 // streamed before the session mint.
 let homes = new Map<string, string>()
 
+// entity eid → the session holding its claim, learned from every claim change
+// (a claim lives ON the claimed entity's row). A comment on a task this session
+// claims is a message to it, so the served session's claimed-task eids feed the
+// filter the same way notices()'s `mine` does. Release/detach (comp or
+// session_eid null) or a tombstone drops the eid.
+let claims = new Map<string, string>()
+
 // Mail already delivered this run — a later full-row stamp re-broadcast (the
 // mail.ts idiom casts whole rows) must not ring twice.
 let delivered = new Set<string>()
@@ -93,10 +100,19 @@ let delivered = new Set<string>()
 // venture it works in).
 let resolve = (changes: Change[]) => {
   for (let c of changes) {
+    if (c.name == 'entity' && c.comp == null) claims.delete(c.eid) // tombstone
     if (c.name != 'persona') continue
     let home = c.comp && 'home_eid' in c.comp ? c.comp.home_eid : undefined
     if (home === null || c.comp == null) homes.delete(c.eid)
     else if (typeof home == 'string' && home) homes.set(c.eid, home)
+  }
+  for (let c of changes) {
+    if (c.name != 'claim') continue
+    // A patch that doesn't touch session_eid (e.g. the claimed_at stamp) leaves
+    // the holder as it was — merge, don't clobber.
+    let s = c.comp && 'session_eid' in c.comp ? c.comp.session_eid : undefined
+    if (c.comp == null || s === null) claims.delete(c.eid)
+    else if (typeof s == 'string' && s) claims.set(c.eid, s)
   }
   let s = findSession(changes, {
     pid: PID,
@@ -201,11 +217,14 @@ let feed = (changes: Change[]) => {
   learn(index, changes)
   resolve(changes)
   if (!sessionEid) return // our session isn't in the graph yet
+  let claimedEids = new Set<string>()
+  for (let [eid, s] of claims) if (s == sessionEid) claimedEids.add(eid)
   for (
     let e of channelEvents(changes, {
       sessionEid,
       actorEid,
       homeEid,
+      claimedEids,
       idOf: (eid) => humanId(index, eid),
       docOf: (eid) => docOf(index, eid),
       seen: delivered,
