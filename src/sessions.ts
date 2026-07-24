@@ -15,13 +15,16 @@
 //    <eid>.stderr.log, unordered diagnostics served alongside; we never
 //    interleave it into the log's seqs and invent a causality we didn't
 //    observe.
-// 2. THE CHILD OUTLIVES US. The pid the runtime tracks is a launcher
-//    that backgrounds a setsid sh wrapper and exits at birth — so the dev
-//    watcher restarting this process (which it does on every server-file
-//    edit, and which KILLS tracked pids) finds nothing left to kill. The
-//    orphaned wrapper runs the agent in its own session and group,
-//    outlives every reload, and reports the exit code when the agent
-//    goes; the pidfile and the log file are enough to adopt the agent
+// 2. THE CHILD OUTLIVES US — two escapes deep. The pid the runtime tracks
+//    is a launcher that backgrounds a setsid sh wrapper and exits at birth,
+//    so the dev watcher restarting this process (every server-file edit,
+//    and it KILLS tracked pids) finds nothing left to kill. And the wrapper
+//    runs inside its OWN systemd user scope (user-<uid>.slice), OUT of
+//    tasksd's cgroup — else a full unit restart mass-kills that cgroup and
+//    takes every agent with it, which no KillMode prevents (T-7127). The
+//    orphaned wrapper runs the agent in its own session and group, outlives
+//    every reload AND every restart, and reports the exit code when the
+//    agent goes; the pidfile and the log file are enough to adopt the agent
 //    back at boot. Nothing here reaps children.
 // 3. ONE WRITER. Every summary column goes through stamp(): row first, then
 //    the full session comp down the same cast() path apply()'s return
@@ -504,18 +507,36 @@ let git = async (cwd: string, args: string[]) => {
   return new TextDecoder().decode(out.stdout).trim()
 }
 
-// Two layers, one job each. The LAUNCHER — our direct child, the only pid
-// the runtime tracks — backgrounds the wrapper and exits at birth: a
-// --watch reload KILLS tracked pids (unref is no shield, a reload took
-// two live agents on 2026-07-17), so the only safe pid to hand it is a
-// dead one. The WRAPPER, orphaned to init: setsid puts it in a NEW
-// session and process group (it execs in place — a backgrounded child is
-// no group leader), so its `$$` is the group stop() signals, and no
-// reload can reach it — it always lives to report the exit code. sh does
-// the redirection Deno.Command can't: stdout and stderr straight into the
-// files, no pipe for us to pump and nothing to lose when we restart.
+// The firebreak script, run inside the scope by `setsid sh <this file>`:
+// agent first, then the trap — armed strictly AFTER the fork, or the agent
+// would inherit INT/TERM as ignored — which keeps the wrapper alive through
+// stop()'s group TERM so it still reports the exit. setsid makes the wrapper
+// a NEW session/group leader, so its `$$` is the group stop() signals; the
+// pidfile carries "$$ $!" (group to signal, child to watch). A missing code
+// file means the wrapper died unreporting (stop()'s SIGKILL escalation takes
+// the whole group). It rides a FILE, not `sh -c '<script>'`, because
+// systemd-run applies systemd's OWN $-expansion to the command it launches
+// and `$$` is systemd's escape for a literal `$` — a bare path carries no
+// metacharacter for it to shred.
 let WRAPPER = '"$@" >> "$TASKS_LOG" 2>> "$TASKS_ERR" & trap "" INT TERM; ' +
   'echo "$$ $!" > "$TASKS_PID"; wait $!; echo $? > "$TASKS_CODE"'
+
+// The uid that owns this server — derived, never hardcoded: the per-session
+// scope lands in THIS user's slice.
+let uid = () => Deno.uid() ?? 0
+
+// The coordinates systemd-run needs to reach the --user manager's bus and
+// register a scope under user-<uid>.slice. Linger (loginctl enable-linger)
+// keeps that manager alive across the owner's logout, so an escaped agent's
+// slice never tears down under it; the bus exists iff user@<uid> is active,
+// so a missing one makes systemd-run fail loudly into the err file.
+let userBus = () => ({
+  XDG_RUNTIME_DIR: `/run/user/${uid()}`,
+  DBUS_SESSION_BUS_ADDRESS: `unix:path=/run/user/${uid()}/bus`,
+})
+
+// The one fixed helper on disk — same bytes every spawn (see WRAPPER).
+let wrapperFile = () => `${logsDir()}/wrapper.sh`
 
 let spawn = (
   eid: string,
@@ -523,18 +544,31 @@ let spawn = (
   cwd: string,
   env: Record<string, string>,
 ) => {
+  Deno.mkdirSync(logsDir(), { recursive: true })
+  Deno.writeTextFileSync(wrapperFile(), WRAPPER)
   let child = new Deno.Command('sh', {
     args: [
       '-c',
-      // The wrapper's script rides inside single quotes (it contains only
-      // double ones): agent first, then the trap — armed strictly AFTER
-      // the fork, or the agent would inherit INT/TERM as ignored — which
-      // keeps the wrapper alive through stop()'s group TERM so it still
-      // reports the exit. The pidfile carries "$$ $!": group to signal,
-      // child to watch. A missing code file means the wrapper died
-      // unreporting (stop()'s SIGKILL escalation takes the whole group,
-      // wrapper included).
-      `setsid sh -c '${WRAPPER}' sh "$@" &`,
+      // The LAUNCHER — our direct child, the only pid the runtime tracks —
+      // backgrounds the rest and exits at birth: a --watch reload KILLS
+      // tracked pids (unref is no shield, a reload took two live agents on
+      // 2026-07-17), so the only safe pid to hand it is a dead one. Then two
+      // escapes: setsid orphans the wrapper into its own session/group (no
+      // reload can reach it), and systemd-run --user --scope lifts the whole
+      // thing OUT of tasksd's cgroup into its OWN scope in user-<uid>.slice —
+      // a unit restart mass-kills the service cgroup and no KillMode opts out
+      // (T-7127), so the cgroup escape is what survives a full restart. The
+      // scope's unit name is the eid: unique per spawn (respawning a live name
+      // fails "already loaded"), --collect frees a settled one so a resume
+      // reclaims it. systemd-run stays in tasksd's cgroup and dies at restart
+      // — harmless, the agent is already in the scope; its OWN stderr (a
+      // missing user bus complains here) joins the err file, so an unreachable
+      // manager surfaces as a failed session, the same as a missing CLI's
+      // exit 127. `sh <file>` gives systemd a metacharacter-free command line
+      // (WRAPPER above); inside it, the file's `$@` is the agent argv and sh
+      // does the log/err redirection Deno.Command can't.
+      `systemd-run --user --scope --collect --unit="task-${eid}" ` +
+      `setsid sh "$WRAPPER_SH" "$@" 2>> "$TASKS_ERR" &`,
       'sh',
       ...argv,
     ],
@@ -542,6 +576,8 @@ let spawn = (
     clearEnv: true,
     env: {
       ...env,
+      ...userBus(),
+      WRAPPER_SH: wrapperFile(),
       TASKS_LOG: logFile(eid),
       TASKS_ERR: errFile(eid),
       TASKS_PID: pidFile(eid),
