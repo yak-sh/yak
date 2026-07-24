@@ -300,6 +300,70 @@ Deno.test('provenance: created.by defaults to the writer actor; the wire overrid
   assertEquals(typeof at(u, 'created')?.at, 'string') // at still stamped
 })
 
+Deno.test('lifecycle stamps: bare presence server-stamps {at,by}; the wire sets neither', () => {
+  // Fresh graph so the lone person IS the box-owner writerActor default.
+  let d = fresh()
+  let stamp = (eid: string, name: string) =>
+    snapshot(d).changes.find((c) => c.eid == eid && c.name == name)?.comp
+  let jeff = uid()
+  apply(d, [{ eid: jeff, name: 'person', comp: {} }])
+  let t = uid()
+  apply(d, [{ eid: t, name: 'doc', comp: { title: 'a letter' } }])
+
+  // A bare {} presence write: absent before, then the server freezes at + by.
+  assertEquals(stamp(t, 'opened'), undefined)
+  let out = apply(d, [{ eid: t, name: 'opened', comp: {} }])
+  let at1 = stamp(t, 'opened')?.at
+  assertEquals(typeof at1, 'string')
+  assertEquals(stamp(t, 'opened')?.by, jeff) // the writing actor
+  // …and the stamp rides back on apply()'s RETURN (the echo follows the bare
+  // wire write, like created's), or optimistic caches show a blank stamp.
+  let rode = out.findLast((c) => c.eid == t && c.name == 'opened')
+  assertEquals(rode?.comp?.at, at1)
+  assertEquals(rode?.comp?.by, jeff)
+
+  // Monotonic: a re-write never moves at/by (insert-or-ignore + by-is-null).
+  apply(d, [{ eid: t, name: 'opened', comp: {} }])
+  assertEquals(stamp(t, 'opened')?.at, at1)
+
+  // The wire can set NEITHER at nor by — both live in `stamped`, out of comps,
+  // so the allowlist never lets them through. A forged batch is ignored.
+  let u = uid()
+  apply(d, [{ eid: u, name: 'doc', comp: { title: 'forge' } }])
+  apply(d, [{ eid: u, name: 'archived', comp: { at: 'FAKE', by: 'evil' } }])
+  assertMatch(String(stamp(u, 'archived')?.at), /^\d{4}-/) // server ISO, not FAKE
+  assertEquals(stamp(u, 'archived')?.by, jeff) // not 'evil'
+})
+
+Deno.test('lifecycle stamps: one-list — snapshot, showMd, and GRAMMAR pick them up with no extra edits', async () => {
+  let { rows, showMd } = await import('./client.ts')
+  let { GRAMMAR } = await import('./grammar.ts')
+  let d = fresh()
+  let jeff = uid()
+  apply(d, [{ eid: jeff, name: 'person', comp: {} }])
+  let t = uid()
+  apply(d, [{ eid: t, name: 'doc', comp: { title: 'a letter' } }])
+  apply(d, [{ eid: t, name: 'opened', comp: {} }])
+  let snap = snapshot(d)
+  // cache shape: snapshot carries the tag comp with its stamped at
+  let carried = snap.changes.find((c) => c.eid == t && c.name == 'opened')
+  assertEquals(typeof carried?.comp?.at, 'string')
+  // showMd: the stamped outcome renders, derived from comps + stamped
+  let all = rows(snap)
+  let row = all.find((r) => r.eid == t)!
+  assertMatch(showMd(snap, all, row), /opened\.by: /)
+  // MCP/CLI grammar teaches each as a tag comp
+  for (let n of ['notified', 'opened', 'archived']) {
+    assertMatch(GRAMMAR, new RegExp(`${n}: \\(tag\\)`))
+  }
+  // The stampedPresence derive is {at,by}-shaped ONLY: `conflict` is also an
+  // empty wire comp with a stamped `at`, but it has no `by` column and is a
+  // server-minted audit — a bare wire write of it must drop quietly, NOT
+  // reach the by-fill loop and throw "no such column: by" on the live entity.
+  apply(d, [{ eid: t, name: 'conflict', comp: {} }]) // dropped, no throw
+  assertEquals(snapshot(d).changes.find((c) => c.name == 'conflict'), undefined)
+})
+
 Deno.test('fts: search finds, follows edits, forgets the dead', () => {
   let t = uid(), c = uid()
   apply(db, [

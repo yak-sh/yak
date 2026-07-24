@@ -1,25 +1,25 @@
 # Inbox lifecycle — stamp components for everything that reaches an operator
 
-Status: design (no code). Grounds: T-3690 (the inbox concept), M-4062
-(letters vs notices). Reviewers: owner decisions flagged at the end.
+Status: design (no code). Grounds: T-3690 (the inbox concept), M-4062 (letters
+vs notices). Reviewers: owner decisions flagged at the end.
 
 ## The problem
 
 Today "read state" lives on exactly one kind of entity — `mail.read_at`
-(`src/types.ts:189`). Everything else that reaches an operator's attention has
-a *different* mechanism, or none:
+(`src/types.ts:189`). Everything else that reaches an operator's attention has a
+_different_ mechanism, or none:
 
 - **comments aimed at a session** (messaging an agent) and **comments on a
   claimed task** ride the comms bus, whose whole memory is one cursor per
-  session — `session.acked_at`, advanced by `notices()`
-  (`src/client.ts:955`). The cursor is a high-water mark: once it moves past a
-  line, that line is gone. A subagent that calls one task tool advances the
-  cursor and **drains** items the operator never saw.
-- **knocks** (`knock`, `src/types.ts:166`) stamp only *delivery* provenance
+  session — `session.acked_at`, advanced by `notices()` (`src/client.ts:955`).
+  The cursor is a high-water mark: once it moves past a line, that line is gone.
+  A subagent that calls one task tool advances the cursor and **drains** items
+  the operator never saw.
+- **knocks** (`knock`, `src/types.ts:166`) stamp only _delivery_ provenance
   (`acted_at`/`delivery`), never whether the recipient has since dealt with
   them.
 - **mail** has `read_at`, but nothing analogous to "archived" — the inbox is
-  "arrived and unread" (`unreadMail`, `src/client.ts:517`), so a *read* letter
+  "arrived and unread" (`unreadMail`, `src/client.ts:517`), so a _read_ letter
   silently leaves the inbox with no deliberate act.
 
 The owner's charge: generalize read-state into one **notification lifecycle**
@@ -34,30 +34,30 @@ pending ──notified──▶ notified ──opened──▶ opened ──arch
 
 Each arrow is a stamp component landing on the notification entity. The stamps
 are **monotonic and independent** — an item can be `opened` without ever having
-been `notified` (the operator found it before the channel fired), and
-`archived` without `opened` (a deliberate "I don't need to read this"). Presence
-is the fact; absence is the earlier state.
+been `notified` (the operator found it before the channel fired), and `archived`
+without `opened` (a deliberate "I don't need to read this"). Presence is the
+fact; absence is the earlier state.
 
 The three derived predicates — **and this is the correctness core**:
 
-| inbox membership | predicate                     | who reads it |
-| ---------------- | ----------------------------- | ------------ |
-| **in the inbox** | NOT `archived`                | the inbox view / badge count |
-| **unread**       | NOT `opened`                  | unread weight, the digest's count |
-| **needs inject** | NOT `notified`                | the channel plugin, the bus/digest sweep |
+| inbox membership | predicate      | who reads it                             |
+| ---------------- | -------------- | ---------------------------------------- |
+| **in the inbox** | NOT `archived` | the inbox view / badge count             |
+| **unread**       | NOT `opened`   | unread weight, the digest's count        |
+| **needs inject** | NOT `notified` | the channel plugin, the bus/digest sweep |
 
 **Only `archived` removes an item from the inbox.** `notified` and `opened`
 never hide anything. This is what makes the inbox **drain-proof**: no automated
 path — a subagent, a sweep, a background job — can make the operator lose an
 item, because the only state that hides an item is a deliberate operator act
-(`archived`). This retires the `acked_at`-cursor drain problem structurally
-(see "The comms bus", below).
+(`archived`). This retires the `acked_at`-cursor drain problem structurally (see
+"The comms bus", below).
 
 ## The three new components
 
 Same shape as `created`/`updated` (`src/types.ts:259-260`, `270-278`): a
 component whose **presence** records that a lifecycle moment happened, carrying
-a single server-frozen `at`. The wire writes the presence (the *act*); the
+a single server-frozen `at`. The wire writes the presence (the _act_); the
 server stamps the honest time.
 
 ```ts
@@ -93,11 +93,13 @@ one small, generic addition. Walk the two halves:
   ```
 
   A wire batch `{eid, name:'opened', comp:{}}` reaches `apply()`'s bare-`{}`
-  branch (`src/db.ts:974-980`), which does `insert or ignore into opened (eid)
-  values (?)` — and the default stamps `at`. Because `at` is not in `comps`, the
-  wire can never send it (the allowlist `cols()` reads `comps` alone), so it is
-  honest by construction — the same guarantee that keeps `frozen_at`/`claimed_at`
-  honest (`docs/STYLE.md`, "Server-stamped columns").
+  branch (`src/db.ts:974-980`), which does
+  `insert or ignore into opened (eid)
+  values (?)` — and the default stamps
+  `at`. Because `at` is not in `comps`, the wire can never send it (the
+  allowlist `cols()` reads `comps` alone), so it is honest by construction — the
+  same guarantee that keeps `frozen_at`/`claimed_at` honest (`docs/STYLE.md`,
+  "Server-stamped columns").
 
 - **The stamped row must ride the return**, or optimistic caches show the
   component present with a blank `at` until the next snapshot. `apply()` already
@@ -110,11 +112,11 @@ one small, generic addition. Walk the two halves:
 
 Decision per component:
 
-| component  | who writes presence            | why |
-| ---------- | ------------------------------ | --- |
+| component  | who writes presence            | why                                                 |
+| ---------- | ------------------------------ | --------------------------------------------------- |
 | `notified` | a delivery path (see below)    | "told" is an act of the machinery, not the operator |
-| `opened`   | client, on the operator's read | `task <inbox> show`, the inbox view click |
-| `archived` | client, on the operator's act  | a deliberate archive gesture |
+| `opened`   | client, on the operator's read | `task <inbox> show`, the inbox view click           |
+| `archived` | client, on the operator's act  | a deliberate archive gesture                        |
 
 All three are **client-requested, server-stamped** — none is a pure server
 stamp, because each records an act with an actor whose identity the journal
@@ -124,8 +126,8 @@ already captures (see next).
 
 The owner floated "archived.at? idk — by/why?". **Recommend `{at}` alone.**
 Provenance already lives in the journal: every write is actor-attributed
-(`src/db.ts:1083`, the `journal` row carries the resolved actor), so *who*
-archived and *when the batch ran* are both recoverable via `task history <id>`.
+(`src/db.ts:1083`, the `journal` row carries the resolved actor), so _who_
+archived and _when the batch ran_ are both recoverable via `task history <id>`.
 Adding `archived.by` would duplicate what `created`/`updated` only carry because
 "who last edited" isn't otherwise cheap to query — but an archive is a single
 discrete event the journal records exactly once. A `why` belongs in a comment on
@@ -141,27 +143,28 @@ address is already in the graph; the inbox is a query over it (T-3690: "board
 machinery, not a new store" — membership can't drift). For a reader who is a
 session `S` acting for actor `A`, standing in project `P`:
 
-| source            | "addressed to me" predicate | where it lives today |
-| ----------------- | --------------------------- | -------------------- |
-| comment → session | `comment.target_eid == S`   | `notices()` `src/client.ts:971` |
-| comment → claimed | `comment.target_eid ∈ my claims` | `notices()` `mine` set |
-| knock → me        | `knock.to_eid ∈ {S, A}`     | `knocked()` `src/knock.ts:54` (`awake`) |
-| mail → project    | `mail.target_eid == P` and `mail.message_id` set (it arrived) | `inboxMail()` `src/client.ts:523` |
+| source            | "addressed to me" predicate                                   | where it lives today                    |
+| ----------------- | ------------------------------------------------------------- | --------------------------------------- |
+| comment → session | `comment.target_eid == S`                                     | `notices()` `src/client.ts:971`         |
+| comment → claimed | `comment.target_eid ∈ my claims`                              | `notices()` `mine` set                  |
+| knock → me        | `knock.to_eid ∈ {S, A}`                                       | `knocked()` `src/knock.ts:54` (`awake`) |
+| mail → project    | `mail.target_eid == P` and `mail.message_id` set (it arrived) | `inboxMail()` `src/client.ts:523`       |
 
-The inbox is: **those, filtered `NOT archived`.** Unread within it is `NOT
+The inbox is: **those, filtered `NOT archived`.** Unread within it is
+`NOT
 opened`. Both are pure `Row`-predicates over `r.comps`, exactly like the
 existing `unreadMail`/`inboxMail`, so the same one door serves the digest count,
 the TUI list, and the web view.
 
 Note `event` comments (`comment.event`, `src/types.ts:207`, M-4062): machine
-notices (settle, lease-lapse) *are* inbox items — they reach attention — but
+notices (settle, lease-lapse) _are_ inbox items — they reach attention — but
 they never ride the mail relay (`fanout` skips them, `src/mail.ts:268`). The
 lifecycle stamps apply to them the same way; the letters-vs-notices split is
-about the *delivery channel*, not the inbox.
+about the _delivery channel_, not the inbox.
 
 ## `notified` — one stamp, two (three) doors
 
-`notified` is written wherever the operator is *told*. The doors:
+`notified` is written wherever the operator is _told_. The doors:
 
 1. **Instant inject** — the channel plugin (`channels/tasks/filter.ts`
    `channelEvents`) casts a comment/knock/mail into the running session's
@@ -179,21 +182,21 @@ snapshot still shows as unread. With `notified` on the entity, the plugin reads
 **The tension the owner must resolve (open question 1).** The channel plugin is
 **read-only by strict invariant** — "It is a READ-ONLY listener… it never writes
 the graph… holds no credential" (`channels/tasks/server.ts:10-12`). For the
-plugin to *set* `notified` at instant-inject time, it must write. Options:
+plugin to _set_ `notified` at instant-inject time, it must write. Options:
 
 - **(a) Plugin stays read-only; the SERVER stamps `notified` when it casts to a
   channel.** But the server doesn't model per-session channel subscription — the
-  filtering (which session hears which mail) lives *in the plugin*
-  (`filter.ts` `channelEvents`, `injects`). The server would have to learn what
-  the plugin knows. Rejected: pushes channel policy server-side, widening a seam
-  the repo keeps narrow (`CLAUDE.md`, "Plugins").
+  filtering (which session hears which mail) lives _in the plugin_ (`filter.ts`
+  `channelEvents`, `injects`). The server would have to learn what the plugin
+  knows. Rejected: pushes channel policy server-side, widening a seam the repo
+  keeps narrow (`CLAUDE.md`, "Plugins").
 - **(b) The plugin gains one narrow write: stamp `notified` on inject.** It
   already POSTs nothing today but the local server's `/apply` is unauthed on the
-  tailnet (same surface `/snapshot` and `/ws` ride). A single-purpose
-  `notified` write is not "replies go through the graph" — it's the plugin
-  recording its own delivery, the way `knocked()`/`mailed()` stamp their own
-  outcomes. **Recommended**, with the invariant reworded from "never writes" to
-  "writes only its own delivery stamps, never graph content."
+  tailnet (same surface `/snapshot` and `/ws` ride). A single-purpose `notified`
+  write is not "replies go through the graph" — it's the plugin recording its
+  own delivery, the way `knocked()`/`mailed()` stamp their own outcomes.
+  **Recommended**, with the invariant reworded from "never writes" to "writes
+  only its own delivery stamps, never graph content."
 - **(c) `notified` is stamped only by the sweep doors** (`notices()`,
   `contextDigest()`), never at instant-inject; the plugin keeps an in-process
   dedup for the live session and re-rings across restarts are accepted as rare
@@ -209,24 +212,25 @@ so even a double-write or a forged one is harmless.
 
 `session.acked_at` (`src/types.ts:142`, `notices()` `src/client.ts:955`) is a
 per-session cursor: "seen up to here." Its failure mode is the drain — a
-subagent sharing… *not* the operator's session (see the SubagentStart section)
+subagent sharing… _not_ the operator's session (see the SubagentStart section)
 advancing a shared cursor. Per-item stamps fix this: each comment is
-individually `opened`/`archived`, so nothing a *different* reader does can hide
-an item from *this* one.
+individually `opened`/`archived`, so nothing a _different_ reader does can hide
+an item from _this_ one.
 
 **Recommendation — coexist, with per-item as the truth:**
 
 - **Per-item `notified`/`opened` become the read-state for comments-to-session
   and comments-on-claimed-tasks.** `notices()` selects unseen by `NOT notified`
-  (or `NOT opened`) on the *comment* entity, not by the session cursor. Serving a
-  line stamps `notified` on that comment; the operator reading it stamps
+  (or `NOT opened`) on the _comment_ entity, not by the session cursor. Serving
+  a line stamps `notified` on that comment; the operator reading it stamps
   `opened`.
 - **`acked_at` stays as a coarse fallback cursor** — it is wire-writable and
   self-forging-only-hurts-yourself (`src/types.ts:128`), and the existing
-  `unheard` digest tier (`src/client.ts:693`) reads it to reconstruct "comments a
-  past session never saw." Keep it working; stop making it the *gate*. Removing
-  it outright is a larger change (touches `unheard`, the digest, `context()`'s
-  ack-on-print `src/cli.ts:847`) and isn't required by this design.
+  `unheard` digest tier (`src/client.ts:693`) reads it to reconstruct "comments
+  a past session never saw." Keep it working; stop making it the _gate_.
+  Removing it outright is a larger change (touches `unheard`, the digest,
+  `context()`'s ack-on-print `src/cli.ts:847`) and isn't required by this
+  design.
 
 The migration path: introduce the stamps, switch `notices()`'s unseen filter to
 per-item, leave `acked_at` advancing as it does (harmless once it no longer
@@ -237,9 +241,8 @@ gates). A later task can drop the cursor if the per-item path proves complete.
 - **`task <inbox>`** — the inbox list: items addressed to the caller's session
   and scope, `NOT archived`, unread weighted. Generalizes today's `task mail`.
 - **`task <inbox> show <id>`** — reading IS the mark: stamp `opened` (a normal
-  wire patch), the way `mailShow` stamps `read_at` today
-  (`src/cli.ts:450-456`). That call site becomes: write `opened` instead of
-  `mail.read_at`.
+  wire patch), the way `mailShow` stamps `read_at` today (`src/cli.ts:450-456`).
+  That call site becomes: write `opened` instead of `mail.read_at`.
 - **`task <inbox> archive <id>`** — the deliberate hide: stamp `archived`. The
   only verb that removes from the inbox.
 
@@ -248,7 +251,7 @@ Naming (M-4061 — artifacts get artifact names, pure acts keep `_request`; and
 notification**, not requests aimed at another actor, so past-participle names
 (`notified`/`opened`/`archived`) are right — they read like `created`/`updated`,
 not like `stop_request`/`knock`. `mail` keeps its own name; a mail is an inbox
-item that *also* wears the lifecycle stamps, never renamed to "notification."
+item that _also_ wears the lifecycle stamps, never renamed to "notification."
 
 ## The SessionStart signal — who gets project mail
 
@@ -268,8 +271,8 @@ session with id/cwd/pid/model but drops two payload fields it already receives:
   the board can show what kind of session this is.
 
 Add to `comps.session`: `agent_type: 'text'`, `source: 'text'` — wire-writable
-like the other session self-reports (`id`/`cwd`/`pid`), since a forged value only
-mislabels your own row.
+like the other session self-reports (`id`/`cwd`/`pid`), since a forged value
+only mislabels your own row.
 
 ### Layer 2 — the operator-vs-specialist predicate
 
@@ -285,8 +288,8 @@ mislabels your own row.
   auto-claims — the hook reads `TASKS_TASK` and calls `hookClaim`
   (`src/cli.ts:888`). So the naïve "SessionStart == operator" split does **not**
   hold; a managed specialist is also a SessionStart firing.
-- An **interactive operator** session reifies via `sessionFor` with no
-  `origin`, no `requested_task_eid`, no `agent_type`.
+- An **interactive operator** session reifies via `sessionFor` with no `origin`,
+  no `requested_task_eid`, no `agent_type`.
 
 **The predicate for "this session is the project's operator loop (gets project
 mail)":**
@@ -299,12 +302,12 @@ is the belt-and-suspenders wire mark. A session matching neither is an operator.
 
 **Where it applies:** mail routing today is scope-based and origin-blind —
 `inboxMail(scope)` (`src/client.ts:523`) and the channel plugin's `injects`
-(`filter.ts:149`, `homeEid`) deliver project mail to *any* session whose home is
-the project, including a managed specialist. Add the predicate: a session that is
-a specialist (`origin == 'managed'` or `requested_task_eid` set) does **not**
-receive project mail — neither the digest's `## mail` line nor the channel inject.
-It still receives comments aimed at its own session entity and its claimed tasks
-(direct address, always delivered).
+(`filter.ts:149`, `homeEid`) deliver project mail to _any_ session whose home is
+the project, including a managed specialist. Add the predicate: a session that
+is a specialist (`origin == 'managed'` or `requested_task_eid` set) does **not**
+receive project mail — neither the digest's `## mail` line nor the channel
+inject. It still receives comments aimed at its own session entity and its
+claimed tasks (direct address, always delivered).
 
 ## The SubagentStart signal — mode auto-detected from the payload
 
@@ -339,16 +342,18 @@ verb, two behaviors — no second entry point to keep in sync.
 
 ### The subagent path
 
-1. **Reify under the subagent's OWN identity** — `sessionFor(rows, subId, cwd,
-   pid)` with a fresh session id, so it gets its own bus cursor and can never
-   touch the operator's `acked_at`. Stamp `cwd`, `agent_type`, `source`, and any
-   parent/actor link the payload provides. Reuses `sessionFor`
-   (`src/client.ts:368`) and the same `send(s.changes)` path as the operator
-   branch (`src/cli.ts:864-865`).
-2. **Skip almost all output** — no mail, no `## lately`/pulse, no `## from the
-   fleet`, no `## previously`, no `notices()` bus sweep. A subagent does not
-   triage the project. Concretely: do **not** call the operator branch's
-   `tell()`; do not call `notices()`.
+1. **Reify under the subagent's OWN identity** —
+   `sessionFor(rows, subId, cwd,
+   pid)` with a fresh session id, so it gets
+   its own bus cursor and can never touch the operator's `acked_at`. Stamp
+   `cwd`, `agent_type`, `source`, and any parent/actor link the payload
+   provides. Reuses `sessionFor` (`src/client.ts:368`) and the same
+   `send(s.changes)` path as the operator branch (`src/cli.ts:864-865`).
+2. **Skip almost all output** — no mail, no `## lately`/pulse, no
+   `## from the
+   fleet`, no `## previously`, no `notices()` bus sweep. A
+   subagent does not triage the project. Concretely: do **not** call the
+   operator branch's `tell()`; do not call `notices()`.
 3. **Emit the task block only if it has a task** — `TASKS_TASK` set (managed) or
    the reified session already holds a claim. Then print just that task's block,
    the way `contextDigest`'s `show()` renders "claimed by you"
@@ -357,10 +362,9 @@ verb, two behaviors — no second entry point to keep in sync.
    one-line identity note (`# subagent <agent_type> · <id>`), nothing else.
 
 A `SubagentStart`-reified session is **inherently a specialist** — it never
-matches the operator predicate (no `origin: managed`, but the `--subagent`
-reify can stamp `agent_type`, and it holds a task via claim not project
-ownership), so it is already excluded from project mail by Layer 2. The two
-mechanisms agree.
+matches the operator predicate (no `origin: managed`, but the `--subagent` reify
+can stamp `agent_type`, and it holds a task via claim not project ownership), so
+it is already excluded from project mail by Layer 2. The two mechanisms agree.
 
 ### Payload fields — certain vs. needs empirical check
 
@@ -369,19 +373,19 @@ mechanisms agree.
 (`startup|resume|clear|compact|fork`). `SubagentStop` exists.
 
 **Needs empirical check on THIS harness version (open question 2):** the web
-evidence (anthropics/claude-code issues #14859 "add a SubagentStart hook",
-#7881 "SubagentStop can't identify which subagent — shared session IDs", #16424
+evidence (anthropics/claude-code issues #14859 "add a SubagentStart hook", #7881
+"SubagentStop can't identify which subagent — shared session IDs", #16424
 "expose agent context in hook payloads") indicates that (a) `SubagentStart` is
 recent / partly a feature-request area, and (b) **subagent hook events have
-historically shared the *parent's* `session_id`**, with `agent_id` /
+historically shared the _parent's_ `session_id`**, with `agent_id` /
 `agent_type` / `agent_transcript_path` being the newer per-subagent
 disambiguators. So:
 
 - If the subagent shares the parent's `session_id`, the reify **key must be
   `agent_id`, not `session_id`** — reifying under a shared id would collide with
-  the operator's own session. Design the `--subagent` reify to prefer
-  `agent_id` (fall back to a minted id) and to record the parent `session_id` as
-  the link/attribution.
+  the operator's own session. Design the `--subagent` reify to prefer `agent_id`
+  (fall back to a minted id) and to record the parent `session_id` as the
+  link/attribution.
 - If `SubagentStart` doesn't fire at all on this version, the mechanism degrades
   safely: no subagent session is reified, delegation briefs keep asking for it
   manually (today's state), and **mail-routing correctness is unaffected** —
@@ -400,15 +404,18 @@ The db is live owner data; every step is additive with an `alter table` /
 `create table if not exists` guard (`src/db.ts open()`, `:459-469`;
 `docs/STYLE.md`, "Migrations are additive, in place").
 
-1. **Add the three tables** in `schema` (`create table if not exists notified /
-   opened / archived`), each `eid pk references entity(eid)` + `at text not null
-   default (strftime now)`. New tables need no `addCol` guard —
-   `create table if not exists` is the guard.
+1. **Add the three tables** in `schema`
+   (`create table if not exists notified /
+   opened / archived`), each
+   `eid pk references entity(eid)` +
+   `at text not null
+   default (strftime now)`. New tables need no `addCol`
+   guard — `create table if not exists` is the guard.
 2. **Add the six vocab entries** — `comps.{notified,opened,archived} = {}` and
    `stamped.{notified,opened,archived} = { at: 'time' }` — plus the `Ent` fields
    (`notified?: {eid; at?}` …). The db sync allowlist, delete order, Debug view,
-   `showMd`, and MCP pick them up with zero further edits (the one-list
-   promise, `CLAUDE.md`).
+   `showMd`, and MCP pick them up with zero further edits (the one-list promise,
+   `CLAUDE.md`).
 3. **Add `apply()`'s stamped-presence return loop** (~6 lines beside
    created/updated) so `at` rides back on the wire.
 4. **Add `comps.session.agent_type` / `source`** (`text`) and the
@@ -438,8 +445,8 @@ The db is live owner data; every step is additive with an `alter table` /
    subagent hook must never fail loudly any more than the operator one does
    (`CLAUDE.md`, "The injection loop").
 
-Order matters: 1-3 land the mechanism; 5 backfills before 6 flips the readers, so
-no letter flickers unread mid-migration.
+Order matters: 1-3 land the mechanism; 5 backfills before 6 flips the readers,
+so no letter flickers unread mid-migration.
 
 ## What this does NOT do
 
@@ -459,11 +466,11 @@ no letter flickers unread mid-migration.
    (c, sweep-only stamping, plugin re-rings across restarts) keeps the plugin
    pure but drops the durable-dedup win. Which invariant do you want?
 
-2. **SubagentStart reify key — `agent_id` vs `session_id`.** The design must
-   pin one real payload before building (subagent events may share the parent's
+2. **SubagentStart reify key — `agent_id` vs `session_id`.** The design must pin
+   one real payload before building (subagent events may share the parent's
    `session_id`; `agent_id` may be the only distinct key, and `SubagentStart`
-   may not fire on the current version). Approve capturing a live payload as step
-   0, and confirm: if `SubagentStart` is absent, is "delegation briefs keep
+   may not fire on the current version). Approve capturing a live payload as
+   step 0, and confirm: if `SubagentStart` is absent, is "delegation briefs keep
    reifying manually" an acceptable interim (mail-routing is correct either
    way)?
 
@@ -475,5 +482,5 @@ no letter flickers unread mid-migration.
 4. **`archived` shape — confirm `{at}` only.** Recommended minimal; provenance
    lives in the journal. Say the word if a future "archived by X" view wants
    `archived.by` now rather than as a later one-line add.
-</content>
-</invoke>
+   </content>
+   </invoke>

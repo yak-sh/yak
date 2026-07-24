@@ -258,6 +258,17 @@ export let comps: Record<string, Record<string, PropType>> = {
   // entity wears, never its identity (like recall).
   created: { by: { eid: '', death: 'keep' } },
   updated: { by: { eid: '', death: 'keep' } },
+  // Notification lifecycle — the inbox's read-state, denormalized into the
+  // same register as created/updated (T-7006). Each is a PRESENCE stamp: the
+  // wire writes the bare component to REQUEST the act, the server freezes the
+  // clock (`at`) and the actor (`by`) — both in `stamped` below, so the wire
+  // can set NEITHER. Monotonic and independent: an item can be `opened`
+  // without `notified`, `archived` without `opened`. Only `archived` hides an
+  // item from the inbox, which is what makes it drain-proof. NOT in kindOrder:
+  // facets any entity wears (a comment, a knock, a mail), never its identity.
+  notified: {}, // the operator has been told (inject or sweep) — never hides
+  opened: {}, //   the operator has looked — NOT opened == unread; never hides
+  archived: {}, // the operator is done — the ONE stamp that hides an item
 }
 
 // Server-stamped columns — never wire-writable (cols() reads `comps`
@@ -276,6 +287,15 @@ export let stamped: Record<string, Record<string, PropType>> = {
   // `by` (comps above) — stamped in apply(), never on the wire.
   created: { at: 'time' },
   updated: { at: 'time' },
+  // The frozen twins of the notification-lifecycle presence comps (above):
+  // `at` when the moment happened (default-stamped, then frozen in apply()),
+  // `by` the resolved writing actor — the SAME actor resolution + death 'keep'
+  // as created/updated's `by`, but server-only (in stamped, not comps), so the
+  // whole stamp is honest by construction. The bare-{} presence write rides
+  // apply()'s stampedPresence loop, which re-reads {at,by} onto the return.
+  notified: { at: 'time', by: { eid: '', death: 'keep' } },
+  opened: { at: 'time', by: { eid: '', death: 'keep' } },
+  archived: { at: 'time', by: { eid: '', death: 'keep' } },
   web: { frozen_at: 'time' }, // the freeze finished (freeze.ts)
   client: { ip: 'text' },
   claim: { claimed_at: 'time' },
@@ -741,6 +761,12 @@ export type Recall = {
 export type Created = { eid: string; at?: string; by?: string | null }
 export type Updated = { eid: string; at?: string; by?: string | null }
 
+// Notification-lifecycle stamps (T-7006): presence records the moment, `at`
+// and `by` server-frozen. Same shape as Created/Updated; absence is the
+// earlier state (no `opened` row == unread). The inbox reads these as pure
+// Row-predicates, like unreadMail today.
+export type Stamp = { eid: string; at?: string; by?: string | null }
+
 // A full-text search hit. snip marks matches with \x01…\x02 (renderers
 // highlight without trusting HTML); open_eid is what to OPEN — the entity
 // itself, or a comment's target.
@@ -795,6 +821,9 @@ export type Ent = {
   recall?: Recall
   created?: Created
   updated?: Updated
+  notified?: Stamp
+  opened?: Stamp
+  archived?: Stamp
   refs: Ref[]
   kids: Ent[]
 }

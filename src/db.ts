@@ -20,6 +20,7 @@ import {
   kindOrder,
   sessionActive,
   type Snapshot,
+  stamped,
 } from './types.ts'
 import { type Trace } from './effects.ts'
 import { rows } from './client.ts'
@@ -241,6 +242,27 @@ let schema = `
     "by" text
   );
   create table if not exists updated (
+    eid text primary key references entity(eid),
+    at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    "by" text
+  );
+  -- Notification lifecycle (T-7006): presence IS the fact. Same shape as
+  -- created/updated — "at" default-stamped then frozen, "by" the writing
+  -- actor (no FK, death 'keep', like created.by). Both server-only (out of
+  -- comps): the wire writes a bare row, apply()'s stampedPresence loop fills
+  -- "by" and rides {at,by} back. "create table if not exists" IS the guard
+  -- (additive; the db is live owner data).
+  create table if not exists notified (
+    eid text primary key references entity(eid),
+    at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    "by" text
+  );
+  create table if not exists opened (
+    eid text primary key references entity(eid),
+    at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    "by" text
+  );
+  create table if not exists archived (
     eid text primary key references entity(eid),
     at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
     "by" text
@@ -608,6 +630,17 @@ let cmps: Record<string, string[]> = {
     Object.entries(comps).map(([name, props]) => [name, Object.keys(props)]),
   ),
 }
+
+// The notification-lifecycle stamps (notified/opened/archived): a
+// client-requested, server-stamped act — an EMPTY wire comp (presence IS the
+// signal) whose `stamped` twin is the {at, by} pair. Derived, not hand-listed
+// — a new stamp of this shape joins with zero edits. The `at && by` shape is
+// the whole discriminator: `recall` (empty comp, but stamped {count…}, no at)
+// and `conflict` (empty comp, stamped {…,at}, but no by — a server-minted
+// audit, never wire-created) both stay out. apply()'s loop freezes {at,by}.
+let stampedPresence = Object.keys(comps).filter(
+  (c) => !Object.keys(comps[c]).length && stamped[c]?.at && stamped[c]?.by,
+)
 
 // The reaper's worklists, derived from the death word each reference
 // declares in the vocabulary (types.ts Death says what each word means).
@@ -1055,6 +1088,23 @@ export let apply = (
       let row = uRow.get(eid) as Change['comp'] | undefined
       if (row) extra.push({ eid, name: 'updated', comp: row })
     }
+    // Notification-lifecycle stamps (notified/opened/archived): the wire
+    // wrote a bare presence, and the main loop's insert already stamped `at`
+    // from the column default — the wire can touch NEITHER at nor by (both
+    // out of comps). Fill `by` from the writing actor, once (`by is null`
+    // keeps it monotonic like `at`), then re-read so the frozen {at,by} rides
+    // the return — else an optimistic cache shows the comp with a blank stamp.
+    // The created/updated re-read, generalized to one small loop.
+    for (let { eid, name, comp } of changes) {
+      if (comp == null || !stampedPresence.includes(name) || !alive.get(eid)) {
+        continue
+      }
+      db.prepare(`update ${name} set "by" = ? where eid = ? and "by" is null`)
+        .run(actor, eid)
+      let row = db.prepare(`select eid, at, "by" from ${name} where eid = ?`)
+        .get(eid) as Change['comp'] | undefined
+      if (row) extra.push({ eid, name, comp: row })
+    }
     // Births ride the return AFTER stamping, so the spine arrives final.
     // A mint rolled back by its savepoint (or deleted later in the batch)
     // has no row — the select is the guard. entity === eid: only identity
@@ -1067,18 +1117,20 @@ export let apply = (
     // The wire's record: one row per batch, inside the transaction — the
     // batch as APPLIED (reasons rewritten into comments, cascades and
     // births synthesized), so the record includes what the rules did, not
-    // just what was asked. The provenance stamps are LEFT OUT: created/
-    // updated are the actor column's twins (T-6670), so logging them would
-    // just echo the ts + actor the journal already keeps (modified_at, the
-    // column they replaced, was never journaled either). Recording never
-    // throws: a journal that can't write must not break the write it records.
+    // just what was asked. The server-stamped echoes are LEFT OUT: created/
+    // updated are the actor column's twins (T-6670), and the notification
+    // stamps (stampedPresence) their siblings — logging them would just echo
+    // the ts + actor the journal already keeps (modified_at, the column they
+    // replaced, was never journaled either). Recording never throws: a
+    // journal that can't write must not break the write it records.
     try {
-      // Only the server-STAMPED provenance (extra) is dropped; a wire
-      // authorship write rides in `changes` and stays audited.
-      let logged = [
-        ...changes,
-        ...extra.filter((c) => c.name != 'created' && c.name != 'updated'),
-      ]
+      // Only the server-STAMPED provenance echoes (extra) are dropped —
+      // created/updated and the notification stamps (stampedPresence) just
+      // repeat the ts + actor the journal row already keeps. The wire's own
+      // write (the bare presence, an authorship `by`) rides in `changes` and
+      // stays audited.
+      let echoed = new Set(['created', 'updated', ...stampedPresence])
+      let logged = [...changes, ...extra.filter((c) => !echoed.has(c.name))]
       if (logged.length) {
         db.prepare('insert into journal (actor, batch) values (?, ?)').run(
           actor, // the resolved writing actor (T-6669), same as the by-default
