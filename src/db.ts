@@ -470,6 +470,16 @@ export let mendMail = (db: DatabaseSync) => {
   }
 }
 
+// The read→opened migration (T-7006): seed `opened` from every letter the
+// old mail.read_at column already marked read. `insert or ignore` on the pk
+// is idempotent, so a re-boot never moves an existing stamp; read_at stays
+// dormant as the rollback source until a later task drops it.
+export let backfillOpened = (db: DatabaseSync) =>
+  db.exec(
+    `insert or ignore into opened (eid, at)
+       select eid, read_at from mail where read_at is not null`,
+  )
+
 // Open the file, plant the schema, seed once if the graph is empty.
 // Returns a live handle; the process holds it open for the server's
 // lifetime. No real migrations: NEW columns are added in place (additive,
@@ -542,6 +552,10 @@ export let open = () => {
   addCol('mail', 'reply_to_eid', 'reply_to_eid text')
   addCol('mail', 'sent_id', 'sent_id text')
   addCol('mail', 'read_at', 'read_at text')
+  // Read-state moved from mail.read_at to the `opened` stamp (T-7006): seed
+  // it once BEFORE the readers flip to `NOT opened`, so no mail flickers
+  // unread mid-migration.
+  backfillOpened(db)
   addCol('session', 'actor_eid', 'actor_eid text references entity(eid)')
   // A board is a saved filter over tasks (query.ts grammar), not an edge
   // list — membership can't drift when it isn't stored.

@@ -26,6 +26,7 @@ import type { Change, Snapshot } from '../../src/types.ts'
 import {
   channelEvents,
   docOf,
+  doneOf,
   type Event,
   findSession,
   humanId,
@@ -227,6 +228,7 @@ let feed = (changes: Change[]) => {
       claimedEids,
       idOf: (eid) => humanId(index, eid),
       docOf: (eid) => docOf(index, eid),
+      done: (eid) => doneOf(index, eid),
       seen: delivered,
     })
   ) flush(e)

@@ -10,8 +10,10 @@ import {
   edgesOf,
   find,
   hookClaim,
+  inboxItem,
   inboxMail,
   inflate,
+  isUnread,
   ledger,
   mailAt,
   mailChanges,
@@ -21,6 +23,7 @@ import {
   notices,
   param,
   patches,
+  readerFor,
   recallIndex,
   replyChanges,
   repoAt,
@@ -442,9 +445,10 @@ Deno.test('unreadMail + digest: unread counts, read/outbound stay quiet', () => 
       ...mk(M2, 22, {
         to: 'v@x.test',
         message_id: 'msg:2:<b@x>',
-        read_at: '2026-07-22T00:00:00Z',
         target_eid: P,
       }),
+      // read-state now rides the `opened` stamp (T-7006), not mail.read_at
+      { eid: M2, name: 'opened', comp: { at: '2026-07-22T00:00:00Z' } },
       ...mk(M3, 23, { to: 'them@y.test' }),
     ],
     deps: snap.deps,
@@ -470,6 +474,57 @@ Deno.test('unreadMail + digest: unread counts, read/outbound stay quiet', () => 
   let other = contextDigest(g, 'sess-x', Date.now(), T2)
   assertEquals(other.includes('## mail'), false)
   assertEquals(contextDigest(snap, 'sess-x').includes('## mail'), false)
+})
+
+// The inbox generalizes the mail predicates over all four addressed-to-me
+// sources (T-7006): comment→session, comment→claimed, knock→actor,
+// mail→project. Membership is NOT archived; unread is NOT opened. Only
+// `archived` hides — the inbox is drain-proof.
+Deno.test('inbox: the four sources, archived hides, opened marks read', () => {
+  let Sx = 'aaaaaaaa-0000-4000-8000-000000000101' // my session
+  let A = 'aaaaaaaa-0000-4000-8000-000000000102' //  my actor
+  let P = 'aaaaaaaa-0000-4000-8000-000000000103' //  my project
+  let TC = 'aaaaaaaa-0000-4000-8000-000000000104' // a task I claim
+  let c1 = 'aaaaaaaa-0000-4000-8000-000000000111' // comment → session
+  let c2 = 'aaaaaaaa-0000-4000-8000-000000000112' // comment → claimed task
+  let kn = 'aaaaaaaa-0000-4000-8000-000000000113' // knock → actor
+  let ml = 'aaaaaaaa-0000-4000-8000-000000000114' // mail → project (arrived)
+  let cO = 'aaaaaaaa-0000-4000-8000-000000000115' // comment aimed elsewhere
+  let cA = 'aaaaaaaa-0000-4000-8000-000000000116' // to session, archived
+  let cR = 'aaaaaaaa-0000-4000-8000-000000000117' // to session, opened
+  let g = rows({
+    changes: [
+      { eid: Sx, name: 'entity', comp: { eid: Sx, num: 101, created_at: '' } },
+      { eid: Sx, name: 'session', comp: { id: 'me', actor_eid: A, cwd: '/w' } },
+      { eid: P, name: 'entity', comp: { eid: P, num: 103, created_at: '' } },
+      { eid: P, name: 'project', comp: {} },
+      { eid: TC, name: 'entity', comp: { eid: TC, num: 104, created_at: '' } },
+      { eid: TC, name: 'task', comp: { status: 'open' } },
+      { eid: TC, name: 'claim', comp: { session_eid: Sx } },
+      { eid: c1, name: 'comment', comp: { target_eid: Sx } },
+      { eid: c2, name: 'comment', comp: { target_eid: TC } },
+      { eid: kn, name: 'knock', comp: { to_eid: A, target_eid: TC } },
+      {
+        eid: ml,
+        name: 'mail',
+        comp: { to: 'm@x', message_id: 'm:1', target_eid: P },
+      },
+      { eid: cO, name: 'comment', comp: { target_eid: P } }, // not addressed to me
+      { eid: cA, name: 'comment', comp: { target_eid: Sx } },
+      { eid: cA, name: 'archived', comp: { at: 'now' } },
+      { eid: cR, name: 'comment', comp: { target_eid: Sx } },
+      { eid: cR, name: 'opened', comp: { at: 'now' } },
+    ],
+  })
+  let who = readerFor(g, 'me', '/w', P)
+  assertEquals(who, { session: Sx, actor: A, scope: P, claims: new Set([TC]) })
+  // all four sources arrive; a comment aimed elsewhere and an archived one don't
+  let inbox = g.filter(inboxItem(who)).map((r) => r.eid).sort()
+  assertEquals(inbox, [c1, c2, kn, ml, cR].sort())
+  // unread within: the opened one counts as read; the rest are unread
+  let unread = g.filter(inboxItem(who)).filter(isUnread).map((r) => r.eid)
+    .sort()
+  assertEquals(unread, [c1, c2, kn, ml].sort())
 })
 
 // One derivation for every caller-aware door: the repo whose path
@@ -658,7 +713,8 @@ Deno.test('mailLine: unread dot, unverified mark, direction', () => {
     ...inbound,
     comps: {
       ...inbound.comps,
-      mail: { ...inbound.comps.mail, read_at: 'now', verified: 0 },
+      mail: { ...inbound.comps.mail, verified: 0 },
+      opened: { eid: 'x', at: 'now' }, // read-state rides the stamp (T-7006)
     },
   }
   assertMatch(mailLine(read, NOW), /· !unverified them@y.test/)

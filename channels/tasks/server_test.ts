@@ -190,9 +190,10 @@ Deno.test('unverified mail never injects — it waits for triage', () => {
   assertEquals(out, [])
 })
 
-Deno.test('mail already read is not re-announced', () => {
-  let batch = [stamp({ read_at: '2026-07-22T01:00:00Z' })]
-  assertEquals(channelEvents(batch, ctx({ docOf: letter })), [])
+Deno.test('mail already opened/archived is not re-announced', () => {
+  let batch = [stamp()]
+  let seen = ctx({ docOf: letter, done: () => true })
+  assertEquals(channelEvents(batch, seen), [])
 })
 
 Deno.test("mail aimed at another project isn't this session's", () => {

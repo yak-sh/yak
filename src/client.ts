@@ -512,17 +512,95 @@ export let commentChanges = (
   ]
 }
 
-// Unread mail: it ARRIVED (message_id is the inbound mark) and the
-// reader's own read_at is still empty. Outbound rows carry no message_id,
-// so they never count — sent mail is born read.
-export let unreadMail = (r: Row) =>
-  !!r.comps.mail?.message_id && !r.comps.mail.read_at
+// The notification lifecycle (T-7006), read as pure Row-predicates over
+// the stamp components: presence is the fact, absence the earlier state.
+// Only `archived` hides an item from the inbox — no automated path can
+// drain it; `opened` only marks it read. So the one hiding stamp is a
+// deliberate operator act, and the inbox is drain-proof by construction.
+export let inInbox = (r: Row) => !r.comps.archived
+export let isUnread = (r: Row) => !r.comps.opened
 
-// The inbox — ONE scoping truth: the digest's unread count and the bare
-// `task mail` view agree by construction. Unread, aimed at the scope
-// when one stands; no scope sees the fleet's whole pile.
+// Who an inbox reads FOR: the session S acting for actor A, standing in
+// project P, holding the eids it CLAIMS. Every "addressed to me" test
+// below is a pure fact about the graph, so membership can't drift.
+export type Reader = {
+  session?: string
+  actor?: string
+  scope?: string
+  claims?: Set<string>
+}
+
+// Addressed to this reader — the four doors an item reaches attention
+// through: a comment aimed at the session or a task it claims, a knock
+// aimed at the session or its actor, or project mail that ARRIVED
+// (message_id is the inbound mark; sent mail carries none). One predicate,
+// so the digest, the TUI, and the web read the SAME inbox.
+export let addressed = (who: Reader) => (r: Row): boolean => {
+  let c = r.comps.comment
+  if (c) {
+    let t = String(c.target_eid ?? '')
+    return t == who.session || !!who.claims?.has(t)
+  }
+  let k = r.comps.knock
+  if (k) {
+    let t = String(k.to_eid ?? '')
+    return !!t && (t == who.session || t == who.actor)
+  }
+  let m = r.comps.mail
+  if (m) {
+    return !!m.message_id &&
+      (!who.scope || String(m.target_eid) == who.scope)
+  }
+  return false
+}
+
+// The inbox: addressed to me and NOT archived. Unread within it is
+// isUnread (NOT opened) — the two derived predicates the design names.
+export let inboxItem = (who: Reader) => {
+  let to = addressed(who)
+  return (r: Row) => to(r) && inInbox(r)
+}
+
+// The reader an inbox reads for, resolved from the graph in one place:
+// the session named, the actor it acts for, the project it stands in, and
+// the eids it claims — everything addressed() needs.
+export let readerFor = (
+  all: Row[],
+  session?: string,
+  cwd?: string,
+  scope?: string,
+): Reader => {
+  let sess = session
+    ? all.find((r) => r.comps.session && String(r.comps.session.id) == session)
+    : undefined
+  return {
+    session: sess?.eid,
+    actor: String(sess?.comps.session?.actor_eid ?? '') || undefined,
+    scope: scopeFor(
+      all,
+      sess,
+      cwd ?? String(sess?.comps.session?.cwd ?? ''),
+      scope,
+    ),
+    claims: new Set(
+      all.filter((r) => sess && r.comps.claim?.session_eid == sess.eid)
+        .map((r) => r.eid),
+    ),
+  }
+}
+
+// Unread mail: it ARRIVED (message_id is the inbound mark) and the reader
+// hasn't opened it. Outbound rows carry no message_id, so they never count
+// — sent mail is born read. Read-state now rides the `opened` stamp
+// (T-7006); mail.read_at lingers dormant as the rollback source until a
+// later task drops it.
+export let unreadMail = (r: Row) => !!r.comps.mail?.message_id && isUnread(r)
+
+// The mail inbox — ONE scoping truth: the digest's unread count and the
+// bare `task mail` view agree by construction. Unread, not archived, aimed
+// at the scope when one stands; no scope sees the fleet's whole pile.
 export let inboxMail = (scope?: string) => (r: Row) =>
-  unreadMail(r) && (!scope || r.comps.mail?.target_eid == scope)
+  unreadMail(r) && inInbox(r) && (!scope || r.comps.mail?.target_eid == scope)
 
 // The project you stand in: the repo-wearing entity whose path prefixes
 // the cwd. LONGEST prefix wins, so a repo nested inside another claims a

@@ -3,6 +3,7 @@
 Deno.env.set('DB_PATH', ':memory:')
 let {
   apply,
+  backfillOpened,
   db,
   delta,
   journalOf,
@@ -362,6 +363,35 @@ Deno.test('lifecycle stamps: one-list — snapshot, showMd, and GRAMMAR pick the
   // reach the by-fill loop and throw "no such column: by" on the live entity.
   apply(d, [{ eid: t, name: 'conflict', comp: {} }]) // dropped, no throw
   assertEquals(snapshot(d).changes.find((c) => c.name == 'conflict'), undefined)
+})
+
+// The read→opened migration (T-7006): the backfill seeds `opened` from
+// every already-read letter, so no mail flickers unread when the readers
+// flip to NOT opened. Insert-or-ignore on the pk makes it a no-op on
+// re-boot; read_at lingers dormant as the rollback source.
+Deno.test('backfill: mail.read_at seeds opened, idempotently', () => {
+  let d = fresh()
+  let m = uid()
+  // a legacy read letter: read_at set the OLD way, no `opened` stamp yet
+  apply(d, [
+    { eid: m, name: 'doc', comp: { title: 'old letter' } },
+    {
+      eid: m,
+      name: 'mail',
+      comp: { to: 'jeff', read_at: '2026-07-01T00:00:00Z' },
+    },
+  ])
+  let openedAt = () =>
+    (d.prepare('select at from opened where eid = ?').get(m) as
+      | { at: string }
+      | undefined)?.at
+  assertEquals(openedAt(), undefined) // the wire write of read_at made no stamp
+  backfillOpened(d)
+  assertEquals(openedAt(), '2026-07-01T00:00:00Z') // read_at → opened.at
+  // idempotent: a re-run never moves an existing stamp
+  d.prepare('update opened set at = ? where eid = ?').run('MOVED', m)
+  backfillOpened(d)
+  assertEquals(openedAt(), 'MOVED')
 })
 
 Deno.test('fts: search finds, follows edits, forgets the dead', () => {

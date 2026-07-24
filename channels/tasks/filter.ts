@@ -33,6 +33,11 @@ export type Ctx = {
   claimedEids?: Set<string>
   idOf: (eid: string) => string | null
   docOf?: (eid: string) => { title: string; body: string } | null
+  // The durable read-state (T-7006): true once a mail wears `opened` or
+  // `archived`, read off the index — so a letter already dealt with never
+  // re-rings across a reconnect (the old ephemeral read_at guard, made
+  // restart-proof).
+  done?: (eid: string) => boolean
   seen?: Set<string>
 }
 
@@ -103,6 +108,14 @@ export let learn = (index: Index, changes: Change[]) => {
 // server wires in.
 export let docOf = (index: Index, eid: string) => index.get(eid)?.doc ?? null
 
+// eid → done (T-7006): it wears `opened` or `archived`. learn() keeps the
+// comp set fresh from every broadcast, so this is restart-proof dedup —
+// the Ctx.done the live server wires in.
+export let doneOf = (index: Index, eid: string) => {
+  let comps = index.get(eid)?.comps
+  return !!comps && (comps.has('opened') || comps.has('archived'))
+}
+
 // eid → human id (T-7), or null when the spine's num hasn't been seen yet.
 export let humanId = (index: Index, eid: string): string | null => {
   let row = index.get(eid)
@@ -145,12 +158,15 @@ export let findSession = (
 
 // The injection policy (owner, 2026-07-22): ALL verified unread mail aimed at
 // this session's home project injects; unverified never does — it stays in the
-// store/graph for deliberate triage. Narrowing later is one line here.
+// store/graph for deliberate triage. `done` is the durable read-state — the
+// `opened`/`archived` stamps (T-7006) read off the index — replacing the old
+// mail.read_at column so a letter already opened or archived never re-rings.
+// Narrowing later is one line here.
 export let injects = (
   m: Record<string, unknown>,
   homeEid?: string | null,
-): boolean =>
-  !!m.verified && !m.read_at && !!homeEid && str(m.target_eid) == homeEid
+  done?: boolean,
+): boolean => !!m.verified && !done && !!homeEid && str(m.target_eid) == homeEid
 
 // The two edges of the doc a component's body rides on, indexed by eid within
 // the batch — a comment's words and a knock's note both land as a `doc` change
@@ -228,7 +244,7 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
       // wire frames never wear it, and `seen` keeps any later full-row
       // re-broadcast from ringing twice.
       if (c.comp.received_at == null) continue
-      if (!injects(c.comp, ctx.homeEid)) continue
+      if (!injects(c.comp, ctx.homeEid, ctx.done?.(c.eid))) continue
       if (ctx.seen?.has(c.eid)) continue
       ctx.seen?.add(c.eid)
       let id = ctx.idOf(c.eid)

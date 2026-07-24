@@ -9,6 +9,7 @@
 // collisions use the explicit .comp.prop spelling. TASKS_HOST points at a
 // non-default server.
 import {
+  bornAt,
   byBoard,
   claimant,
   claimChanges,
@@ -23,8 +24,10 @@ import {
   hookClaim,
   host,
   idOf,
+  inboxItem,
   inboxMail,
   inflate,
+  isUnread,
   mailAt,
   mailChanges,
   mailLine,
@@ -34,8 +37,10 @@ import {
   type Param,
   param,
   patches,
+  readerFor,
   replyChanges,
   repoAt,
+  type Row,
   rows,
   search,
   send,
@@ -115,6 +120,15 @@ let VERBS: [usage: string, blurb: string, examples: string[]][] = [
       'task mail show E-9',
       'task mail send jeff Subject words --body=@draft.md',
       'task mail reply E-9 "on it — landing today"',
+    ],
+  ],
+  [
+    'inbox [show <id> | archive <id>]',
+    'everything addressed to you (comments, knocks, mail); archive to hide',
+    [
+      'task inbox',
+      'task inbox show E-9   # marks it opened',
+      'task inbox archive E-9',
     ],
   ],
   ['claim <id> [session]', 'lease a task (default: your own session id)', [
@@ -421,7 +435,7 @@ let mailList = async (args: string[]) => {
 }
 
 // One mail whole, its thread beneath — and reading IS the mark: the
-// reader's own read_at stamps by a normal wire patch. Nothing else
+// `opened` stamp (T-7006) lands by a normal wire patch. Nothing else
 // auto-reads.
 let mailShow = async (args: string[]) => {
   let json = args.includes('--json')
@@ -447,12 +461,8 @@ let mailShow = async (args: string[]) => {
       }
     }
   }
-  if (!row.comps.mail.read_at) {
-    await send([{
-      eid: row.eid,
-      name: 'mail',
-      comp: { read_at: new Date().toISOString() },
-    }])
+  if (!row.comps.opened) {
+    await send([{ eid: row.eid, name: 'opened', comp: {} }])
   }
 }
 
@@ -597,6 +607,77 @@ let mail = (args: string[]) => {
   if (sub == 'doctor') return mailDoctor()
   if (sub == 'help' || sub == '--help') return console.log(MAIL_USAGE)
   return mailList(args)
+}
+
+// ---- task inbox: everything addressed to you — comments on your session
+// and claimed tasks, knocks at your door, project mail — filtered to what
+// you haven't archived (T-7006). `show` marks an item opened (reading IS
+// the mark); `archive` is the ONE act that hides. Generalizes `task mail`.
+let INBOX_USAGE = `task inbox — your notification inbox in the graph
+  task inbox [--json]              everything addressed to you, unread first
+  task inbox show <id> [--json]    the item whole; marks it opened
+  task inbox archive <id>          hide it — the one act that removes it`
+
+let inboxLine = (r: Row) => {
+  let dot = isUnread(r) ? '●' : '·'
+  let body = String(r.comps.doc?.body ?? r.comps.doc?.title ?? '')
+    .split('\n')[0].slice(0, 80)
+  return `${dot} ${idOf(r)} ${r.kind}${body ? ` — ${body}` : ''}`
+}
+
+// The inbox list: addressed to me, NOT archived, unread weighted (unread
+// first, then oldest→newest so the freshest sits at the bottom, like mail).
+let inboxList = async (args: string[]) => {
+  let json = args.includes('--json')
+  let all = rows(await snapshot())
+  let who = readerFor(all, me(), Deno.cwd())
+  let items = all.filter(inboxItem(who)).sort((a, b) =>
+    (isUnread(b) ? 1 : 0) - (isUnread(a) ? 1 : 0) ||
+    bornAt(a).localeCompare(bornAt(b))
+  )
+  if (json) return console.log(JSON.stringify(items, null, 2))
+  if (!items.length) return console.error('(inbox empty)')
+  let bold = Deno.stdout.isTerminal()
+  for (let r of items) {
+    let line = inboxLine(r)
+    console.log(bold && isUnread(r) ? `\x1b[1m${line}\x1b[0m` : line)
+  }
+}
+
+// Reading IS the mark: render the item whole, then stamp `opened` (a bare
+// wire write; the server freezes the clock) — the way mailShow stamps.
+let inboxShow = async (args: string[]) => {
+  let json = args.includes('--json')
+  let [id] = args.filter((a) => a != '--json')
+  if (!id) throw new Error(`task inbox show <id>\n\n${INBOX_USAGE}`)
+  let snap = await snapshot()
+  let all = rows(snap)
+  let row = find(all, id)
+  if (!row) throw new Error(`no such entity: ${id}`)
+  if (json) console.log(JSON.stringify(row, null, 2))
+  else console.log(showMd(snap, all, row))
+  if (!row.comps.opened) {
+    await send([{ eid: row.eid, name: 'opened', comp: {} }])
+  }
+}
+
+// The one verb that hides: stamp `archived`, removing the item from the
+// inbox predicate. Deliberate — no sweep or subagent can do this for you.
+let inboxArchive = async (args: string[]) => {
+  let [id] = args
+  if (!id) throw new Error(`task inbox archive <id>\n\n${INBOX_USAGE}`)
+  let row = find(rows(await snapshot()), id)
+  if (!row) throw new Error(`no such entity: ${id}`)
+  await send([{ eid: row.eid, name: 'archived', comp: {} }])
+  console.log(`archived ${idOf(row)}`)
+}
+
+let inbox = (args: string[]) => {
+  let [sub, ...rest] = args
+  if (sub == 'show') return inboxShow(rest)
+  if (sub == 'archive') return inboxArchive(rest)
+  if (sub == 'help' || sub == '--help') return console.log(INBOX_USAGE)
+  return inboxList(args)
 }
 
 // A claim is a session's lease on a task — other agents see who holds
@@ -1124,9 +1205,10 @@ if (import.meta.main) {
   try {
     if (cmd?.startsWith(':')) await colon(undefined, [cmd, ...rest])
     // `<verb> --help` shows the verb's help, not the verb run with a stray flag.
-    // mail owns its own richer --help (see mail()), so let it through.
+    // mail/inbox own their own richer --help, so let them through.
     else if (
-      cmd && cmd != 'mail' && (rest.includes('--help') || rest.includes('-h'))
+      cmd && cmd != 'mail' && cmd != 'inbox' &&
+      (rest.includes('--help') || rest.includes('-h'))
     ) {
       help([cmd])
     } else if (cmd == 'tui') await tui()
@@ -1138,6 +1220,7 @@ if (import.meta.main) {
     else if (cmd == 'history') await past(rest)
     else if (cmd == 'search') await seek(rest)
     else if (cmd == 'mail') await mail(rest)
+    else if (cmd == 'inbox') await inbox(rest)
     else if (cmd == 'claim') await claim(rest)
     else if (cmd == 'spawn') await spawn(rest)
     else if (cmd == 'comment') await comment(rest)
