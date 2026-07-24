@@ -45,7 +45,11 @@ let persona = row({
   persona: { home_eid: null },
 })
 let warm = doc('fresh lesson', 'Use the front door.', 1)
-let cold = doc('old lesson', 'Mind the gap.', 60)
+let cold = doc(
+  'old lesson',
+  'Mind the gap.\n\n## Trust tiers\n\nAsk before crossing.',
+  60,
+)
 let indexed = row({
   doc: { title: 'delegation discipline', body: 'Worktrees only.' },
   memory: { type: 'feedback', last_confirmed_at: day(3) },
@@ -62,19 +66,25 @@ Deno.test('materialize: header, core, tiers in warmth order', () => {
   let md = materialize(all, deps, persona, NOW)
   assertStringIncludes(md, `GENERATED from N-${persona.num}`)
   assertStringIncludes(md, 'Review sternly.')
-  // preloaded bodies ride whole, warm before cold
-  assertStringIncludes(md, '## Preloaded')
+  // preloaded bodies ride whole — each its own document under an H1
+  // title behind a rule, warm before cold, no tier label
+  assert(!md.includes('## Preloaded'))
+  assertStringIncludes(md, `\n\n---\n\n# D-${warm.num} fresh lesson\n\n`)
   assert(md.indexOf('Use the front door.') < md.indexOf('Mind the gap.'))
+  assertStringIncludes(
+    md,
+    'Mind the gap.\n\n## Trust tiers\n\nAsk before crossing.',
+  )
   // the index carries lines, not bodies
-  assertStringIncludes(md, '## Index')
+  assertStringIncludes(md, '---\n\n## Memory Index\n\n*Recall a body by id')
   assertStringIncludes(md, 'delegation discipline')
   assert(!md.includes('Worktrees only.'))
 })
 
 Deno.test('materialize: a bare persona is just header + core', () => {
   let md = materialize([persona], [], persona, NOW)
-  assert(!md.includes('## Preloaded'))
-  assert(!md.includes('## Index'))
+  assert(!md.includes('---'))
+  assert(!md.includes('## Memory Index'))
   assertStringIncludes(md, 'Review sternly.')
 })
 
@@ -86,13 +96,15 @@ Deno.test('materialize: frontmatter stays at byte 0, header rides after it', () 
     },
     persona: { home_eid: null },
   })
-  let md = materialize([fm], [], fm, NOW)
+  // a preloaded memory's separator rule must not read as frontmatter
+  let md = materialize([fm, warm], [edge(fm, 'contains', warm)], fm, NOW)
   // frontmatter opens the file, so a native harness parses name/tools
   assert(md.startsWith('---\n'))
   // the generated header rides after the frontmatter close, never before it
   let fmEnd = md.indexOf('\n---', 3) + '\n---'.length
   assert(md.indexOf('GENERATED') > fmEnd)
   assertStringIncludes(md, 'You run the fleet.')
+  assert(md.indexOf('Use the front door.') > md.indexOf('You run the fleet.'))
 })
 
 Deno.test('materialize: dead or docless tier members drop silently', () => {
@@ -104,7 +116,21 @@ Deno.test('materialize: dead or docless tier members drop silently', () => {
     persona,
     NOW,
   )
-  assert(!md.includes('## Preloaded'))
+  assert(!md.includes('---'))
+})
+
+Deno.test('materialize: every rule is blank-lined — no setext underline', () => {
+  // a body ending in a text line must not become an H2 when the next
+  // memory's rule lands under it (--- under text is a setext underline)
+  let all = [persona, warm, cold, indexed]
+  let deps = [
+    edge(persona, 'contains', warm),
+    edge(persona, 'contains', cold),
+    edge(persona, 'reads', indexed),
+  ]
+  let md = materialize(all, deps, persona, NOW)
+  assert(!/[^\n]\n---/.test(md))
+  assert(!/---\n[^\n]/.test(md))
 })
 
 Deno.test('materialize: a dialect reframes without touching content', () => {
@@ -116,13 +142,14 @@ Deno.test('materialize: a dialect reframes without touching content', () => {
     {
       ...DIALECT,
       header: (id) => `# hat: ${id}`,
-      preloaded: '## Loaded',
+      rule: '***',
     },
   )
   assertStringIncludes(md, `# hat: N-${persona.num}`)
-  assertStringIncludes(md, '## Loaded')
+  assertStringIncludes(md, '\n\n***\n\n')
   assertStringIncludes(md, 'Use the front door.')
   assert(!md.includes('GENERATED'))
+  assert(!md.includes('---'))
 })
 
 Deno.test('indexLine: id, type, count, confirmed date — never warmth', () => {
