@@ -40,6 +40,43 @@ export let place = (
   el.style.top = `${Math.round(top)}px`
 }
 
+// Corner placement for point-anchored popovers (the context menu, the Run
+// form): left edge at the point — right edge for align 'right' — top just
+// below it, flipped above when below has no room, clamped like place().
+export let placeAt = (
+  el: HTMLElement,
+  x: number,
+  y: number,
+  align?: 'right',
+) => {
+  let w = el.offsetWidth
+  let h = el.offsetHeight
+  let left = align == 'right' ? x - w : x
+  left = Math.max(MARGIN, Math.min(left, innerWidth - w - MARGIN))
+  let fits = (top: number) => top >= MARGIN && top + h <= innerHeight - MARGIN
+  let top = fits(y) ? y : fits(y - h) ? y - h : y
+  top = Math.max(MARGIN, Math.min(top, innerHeight - h - MARGIN))
+  el.style.left = `${Math.round(left)}px`
+  el.style.top = `${Math.round(top)}px`
+}
+
+// The hook form: place after mount, re-place when the box RESIZES — a
+// popover's height isn't known until it renders, and the Run form grows
+// again when the provider table lands.
+export let usePlaceAt = (
+  ref: { current: HTMLElement | null },
+  at: { x: number; y: number; align?: 'right' } | null,
+) =>
+  useLayoutEffect(() => {
+    let el = ref.current
+    if (!el || !at) return
+    let put = () => placeAt(el, at.x, at.y, at.align)
+    put()
+    let ro = new ResizeObserver(put)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [at])
+
 // <Overlay anchor={ref} side>{…}</Overlay> — renders its children into a
 // fixed host on document.body, positioned on the anchor's live rect. The
 // anchor is a REF (not an element): the child that owns it may mount in the

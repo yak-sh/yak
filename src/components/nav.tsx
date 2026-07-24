@@ -1,5 +1,7 @@
 import { signal } from '@preact/signals'
+import { useRef } from 'preact/hooks'
 import { block, copy, setFollow } from './ui.tsx'
+import { usePlaceAt } from './overlay.tsx'
 import { cache, ent, rootCanvas } from '../live.ts'
 import { actionsFor, resolve } from './registry.ts'
 import { type Ent, idOf } from '../types.ts'
@@ -154,6 +156,8 @@ let { Item } = Frame
 
 export let Menu = () => {
   let m = menu.value
+  let root = useRef<HTMLDivElement>(null)
+  usePlaceAt(root, m)
   if (!m) return null
   let close = () => {
     menu.value = null
@@ -161,9 +165,7 @@ export let Menu = () => {
   let acts = actionsFor(ent(m.eid))
   return (
     <Frame
-      style={(m.align == 'right'
-        ? `right:${innerWidth - m.x}px`
-        : `left:${m.x}px`) + `;top:${m.y}px`}
+      elRef={root}
       onPointerDown={(e: Event) => e.stopPropagation()}
     >
       <Item

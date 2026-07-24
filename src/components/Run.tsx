@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { signal } from '@preact/signals'
 import { base, ent, mutate, toPlane, topZ, uuid } from '../live.ts'
 import { block } from './ui.tsx'
 import { menu, navigate, screenTarget } from './nav.tsx'
+import { usePlaceAt } from './overlay.tsx'
 
 // The Run door: a task's "run session…" verb opens this over the point
 // the menu stood on — model, effort; the provider is never asked, it is
@@ -71,6 +72,8 @@ let spot = (a: Ask) => {
 let Form = ({ a }: { a: Ask }) => {
   let [model, setModel] = useState('')
   let [effort, setEffort] = useState('')
+  let root = useRef<HTMLDivElement>(null)
+  usePlaceAt(root, a)
   useEffect(() => {
     if (!providers.value.length) load()
   }, [])
@@ -127,7 +130,7 @@ let Form = ({ a }: { a: Ask }) => {
 
   return (
     <Frame
-      style={`left:${a.x}px;top:${a.y}px`}
+      elRef={root}
       onPointerDown={(e: Event) => e.stopPropagation()}
     >
       <Row>
