@@ -9,7 +9,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "PATH=\"$HOME/.deno/bin:$PATH\" task context --hook || true"
+            "command": "PATH=\"$HOME/.deno/bin:$PATH\" task session context --hook || true"
           }
         ]
       }
@@ -19,7 +19,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "PATH=\"$HOME/.deno/bin:$PATH\" task context --hook || true"
+            "command": "PATH=\"$HOME/.deno/bin:$PATH\" task session context --hook || true"
           }
         ]
       }
@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "PATH=\"$HOME/.deno/bin:$PATH\" task wrap --hook || true"
+            "command": "PATH=\"$HOME/.deno/bin:$PATH\" task session wrap --hook || true"
           }
         ]
       }

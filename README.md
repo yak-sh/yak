@@ -79,9 +79,11 @@ and `/search` + `/similar` over HTTP.
 ## Agents in the graph
 
 A session is an entity from boot: the repo's SessionStart hook runs
-`task context --hook`, which reifies the session and injects its claimed work as
-the boot digest; SessionEnd runs `task wrap --hook` — claims released, the
-closing summary kept as the session's brief. Sessions also spawn FROM the graph
+`task session context --hook`, which reifies the session and injects its claimed
+work as the boot digest, led by the session's own meta as frontmatter;
+SessionEnd runs `task session wrap --hook` — claims released, the closing
+summary kept as the session's brief (`task session brief` writes one
+deliberately). Sessions also spawn FROM the graph
 (`task spawn T-3 --provider=codex`): creating a session entity carrying a
 provider IS the spawn request, and everything the run learns — status, branch,
 exit code, final text — is server-stamped onto the row. Memories

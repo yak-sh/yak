@@ -47,6 +47,7 @@ import {
   search,
   send,
   sessionFor,
+  sessionMeta,
   showMd,
   similarHint,
   snapshot,
@@ -166,11 +167,15 @@ let VERBS: [usage: string, blurb: string, examples: string[]][] = [
     ],
   ],
   [
-    'context [session|P-9]',
-    'the boot digest, scoped to the repo you stand in; bare = preview',
-    ['task context', 'task context P-20', 'task context my-session-id'],
+    'session <context|wrap|brief> …',
+    'the session lifecycle: boot digest, wrap, self-authored brief',
+    [
+      'task session context             # your digest (bare = preview)',
+      'task session context my-sess-id  # a raw sid reifies, by hand',
+      'task session brief --body=@-     # your narrative → the session doc',
+      'task session wrap',
+    ],
   ],
-  ['wrap [session]', 'session over: release claims, note unfinished', []],
   ['telemetry [--errors] [--since=ISO] [-n N]', 'tool calls + crashes', [
     'task telemetry --errors -n 20',
   ]],
@@ -395,12 +400,13 @@ address book resolves at delivery. Filters speak the query grammar:
   task mail --all .from~=stripe .verified=0`
 
 // The body, by preference: --body= (@file reads the file — the safe
-// door for long prose; @- reads piped stdin), then a reply's trailing
-// words. stdin is never read implicitly: a harness holding the pipe
-// open but silent would hang the send forever (observed live, T-5854)
-// and no guard can tell that pipe from a slow one — so @- is the
-// deliberate ask, and a missing body fails fast instead of blocking.
-let mailBody = async (flags: string[], words: string[]) => {
+// door for long prose; @- reads piped stdin), then the trailing words.
+// stdin is never read implicitly: a harness holding the pipe open but
+// silent would hang the send forever (observed live, T-5854) and no
+// guard can tell that pipe from a slow one — so @- is the deliberate
+// ask, and a missing body fails fast instead of blocking. Shared by
+// mail send/reply and the session brief — one body door, every verb.
+let bodyOf = async (flags: string[], words: string[]) => {
   let b = flags.find((a) => a.startsWith('--body='))?.slice(7)
   if (b == '@-') {
     if (Deno.stdin.isTerminal()) {
@@ -497,7 +503,7 @@ let mailSend = async (args: string[]) => {
   if (!to || !subj.length) {
     throw new Error(`task mail send <to> <subject...>\n\n${MAIL_USAGE}`)
   }
-  let body = await mailBody(flags, [])
+  let body = await bodyOf(flags, [])
   if (!body) {
     throw new Error(
       'a mail needs a body: --body=@file, or --body=@- with piped stdin',
@@ -522,7 +528,7 @@ let mailReply = async (args: string[]) => {
   let all = rows(await snapshot())
   let row = find(all, id)
   if (!row?.comps.mail) throw new Error(`not a mail: ${id}`)
-  let body = await mailBody(flags, text)
+  let body = await bodyOf(flags, text)
   if (!body) {
     throw new Error(
       'a reply needs words: text, --body=@file, or --body=@- with stdin',
@@ -972,9 +978,13 @@ let context = async (args: string[]) => {
   let sub = args.includes('--subagent')
   let sid = args.find((a) => !a.startsWith('--')) ?? me()
   // The digest plus the comms bus: unseen comments ride along, and the
-  // session's ack cursor advances exactly when they're printed.
+  // session's ack cursor advances exactly when they're printed. A reified
+  // session's own meta leads as frontmatter (T-4554) — the S-num is how
+  // the agent addresses its own session doc.
   let tell = async (snap: Snapshot, sid: string, scope?: string) => {
+    let fm = sessionMeta(rows(snap), sid)
     let out = contextDigest(snap, sid, Date.now(), scope)
+    if (fm) out = `${fm}\n${out}`
     // The digest's mail line is a notification door — stamp `notified` on the
     // letters it surfaces so the channel plugin won't re-ring them (T-7010).
     let mailStamps = mailNotified(snap, sid, scope)
@@ -1054,10 +1064,10 @@ let context = async (args: string[]) => {
       // no prompt discipline required. A held lease stays held (the
       // server would bounce a steal anyway); the digest names the holder.
       let hc = hookClaim(rows(snap), Deno.env.get('TASKS_TASK'), sid, cwd)
-      if (hc.length) {
-        await send(hc)
-        snap = await snapshot() // the digest should show the claim it made
-      }
+      if (hc.length) await send(hc)
+      // One fresh read after the writes: the digest — and its frontmatter,
+      // which needs the row a first boot just reified — sees this very boot.
+      if (s.changes.length || model || hc.length) snap = await snapshot()
       // The cwd names the scope directly — the reified session row may
       // not have landed in this snap yet.
       await tell(snap, sid, repoAt(rows(snap), cwd)?.eid)
@@ -1091,6 +1101,24 @@ let context = async (args: string[]) => {
   if (!sid) {
     let at = repoAt(all, Deno.cwd())
     return console.log(contextDigest(snap, undefined, Date.now(), at?.eid))
+  }
+  // S-12 (or its eid) names the session ENTITY; the id string inside it
+  // is the identity every tool speaks. Anything else that resolves is a
+  // mistake — and a ref-shaped miss (T-99) is a typo, never a new
+  // session's name.
+  if (named?.comps.session) {
+    return await tell(snap, String(named.comps.session.id))
+  }
+  if (named) throw new Error(`${sid} is a ${named.kind}, not a session`)
+  if (/^[A-Za-z]+-\d+$/.test(sid)) throw new Error(`no entity: ${sid}`)
+  // A raw sid REIFIES (T-4554): a hand-made session — codex, a foreign
+  // harness — gets its entity and digest without simulating the hook's
+  // JSON. An existing session stays a pure read: refreshing cwd/pid from
+  // whoever happens to preview it would corrupt the row.
+  if (!all.some((r) => r.comps.session && String(r.comps.session.id) == sid)) {
+    let s = sessionFor(all, sid, Deno.cwd(), claudePid())
+    await send(s.changes)
+    snap = await snapshot()
   }
   await tell(snap, sid)
 }
@@ -1168,6 +1196,57 @@ let wrap = async (args: string[]) => {
     if (!hook) throw e
     // hooks never fail loudly — a dead server just means no wrap today
   }
+}
+
+// The self-authored brief (T-4554): write YOUR session doc's body — the
+// narrative wrap preserves (a non-stub body is never clobbered) and the
+// next digest quotes as `## previously`. Body doors match mail's:
+// trailing words, --body=@file, --body=@- (piped stdin). Another
+// session's doc is task set's job (task set S-12 .body=@brief.md).
+let sessionBrief = async (args: string[]) => {
+  let flags = args.filter((a) => a.startsWith('--'))
+  let words = args.filter((a) => !a.startsWith('--'))
+  let sid = me()
+  if (!sid) throw new Error('session brief: run under a session (no identity)')
+  let body = await bodyOf(flags, words)
+  if (!body) {
+    throw new Error(
+      'a brief needs words: text, --body=@file, or --body=@- with stdin',
+    )
+  }
+  let all = rows(await snapshot())
+  let sess = all.find((r) =>
+    r.comps.session && String(r.comps.session.id) == sid
+  )
+  if (!sess) {
+    throw new Error(`no session entity for ${sid} — task session context first`)
+  }
+  // Keep a hand-set title; name a nameless one the way wrap would.
+  let day = new Date().toISOString().slice(0, 10)
+  let title = String(sess.comps.doc?.title || `Work session ${day}`)
+  await send([{ eid: sess.eid, name: 'doc', comp: { title, body } }])
+  console.log(`${idOf(sess)} brief written`)
+}
+
+// Session-lifecycle verbs live here — root `task context` / `task wrap`
+// stay as quiet aliases: hook lines in the wild call them (T-4554).
+let SESSION_USAGE = `task session — the lifecycle of the session you are
+  task session context [sid] [--hook]   reify + digest (the SessionStart
+                                        hook); a raw sid mints the entity
+  task session wrap [sid] [--hook]      over: release claims, capture the
+                                        brief (the SessionEnd hook)
+  task session brief [text... | --body=@f|@-]
+                                        write your own brief (survives wrap)`
+
+let session = (args: string[]) => {
+  let [sub, ...rest] = args
+  if (sub == 'context') return context(rest)
+  if (sub == 'wrap') return wrap(rest)
+  if (sub == 'brief') return sessionBrief(rest)
+  if (!sub || sub == 'help' || sub == '--help') {
+    return console.log(SESSION_USAGE)
+  }
+  throw new Error(`not a session verb: ${sub}\n\n${SESSION_USAGE}`)
 }
 
 // What the tools have been doing: MCP calls, HTTP writes and browser
@@ -1305,9 +1384,9 @@ if (import.meta.main) {
   try {
     if (cmd?.startsWith(':')) await colon(undefined, [cmd, ...rest])
     // `<verb> --help` shows the verb's help, not the verb run with a stray flag.
-    // mail/inbox own their own richer --help, so let them through.
+    // mail/inbox/session own their own richer --help, so let them through.
     else if (
-      cmd && cmd != 'mail' && cmd != 'inbox' &&
+      cmd && cmd != 'mail' && cmd != 'inbox' && cmd != 'session' &&
       (rest.includes('--help') || rest.includes('-h'))
     ) {
       help([cmd])
@@ -1321,6 +1400,7 @@ if (import.meta.main) {
     else if (cmd == 'search') await seek(rest)
     else if (cmd == 'mail') await mail(rest)
     else if (cmd == 'inbox') await inbox(rest)
+    else if (cmd == 'session') await session(rest)
     else if (cmd == 'claim') await claim(rest)
     else if (cmd == 'spawn') await spawn(rest)
     else if (cmd == 'comment') await comment(rest)

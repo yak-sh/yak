@@ -32,6 +32,7 @@ import {
   rows,
   scopeFor,
   sessionFor,
+  sessionMeta,
   showMd,
   spawnChanges,
   spawnDefaults,
@@ -527,6 +528,54 @@ Deno.test('contextDigest: claimed set with gates, or open board', () => {
   // the shared fixture carries no modified_at — nothing is recent, so the
   // lately tier says nothing at all
   assertEquals(d.includes('## lately'), false)
+})
+
+// The digest's frontmatter lead (T-4554): a reified session's own meta —
+// S-num first, so an agent can address its own session doc. Only what's
+// known prints; an unknown sid prints nothing at all.
+Deno.test('sessionMeta: the YAML lead — known fields only, or nothing', () => {
+  let S2 = 'aaaaaaaa-0000-4000-8000-000000000021'
+  let PN = 'aaaaaaaa-0000-4000-8000-000000000022'
+  let g = rows({
+    changes: [
+      { eid: S2, name: 'entity', comp: { eid: S2, num: 21, created_at: '' } },
+      {
+        eid: S2,
+        name: 'session',
+        comp: {
+          id: 'sess-m',
+          cwd: '/w',
+          provider: 'claude',
+          model: 'opus',
+          effort: 'high',
+          persona_eid: PN,
+        },
+      },
+      { eid: PN, name: 'entity', comp: { eid: PN, num: 22, created_at: '' } },
+      { eid: PN, name: 'doc', comp: { title: 'Scribe', body: '' } },
+      { eid: PN, name: 'persona', comp: {} },
+    ],
+  })
+  assertEquals(
+    sessionMeta(g, 'sess-m'),
+    [
+      '---',
+      'session: S-21',
+      'sid: sess-m',
+      'provider: claude',
+      'model: opus',
+      'effort: high',
+      'cwd: /w',
+      'persona: N-22 Scribe',
+      '---',
+    ].join('\n'),
+  )
+  // the shared fixture's session carries only id + cwd — no empty lines ride
+  assertEquals(
+    sessionMeta(all, 'sess-x'),
+    '---\nsession: S-1\nsid: sess-x\ncwd: /w\n---',
+  )
+  assertEquals(sessionMeta(all, 'sess-nobody'), '')
 })
 
 // taskBlock renders one task the way the digest's "claimed by you" does —

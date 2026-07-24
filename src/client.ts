@@ -997,6 +997,38 @@ export let taskBlock = (all: Row[], deps: Dep[], r: Row): string[] => {
   return out
 }
 
+// The session's own meta as YAML frontmatter — the digest's lead once a
+// session is reified (T-4554): an agent that reads its S-num by default
+// can address its own session doc (write a brief, hear its comments)
+// without a lookup dance. Only what's known prints; no session, no block.
+export let sessionMeta = (all: Row[], sid: string) => {
+  let sess = all.find((r) =>
+    r.comps.session && String(r.comps.session.id) == sid
+  )
+  if (!sess) return ''
+  let s = sess.comps.session
+  let persona = s.persona_eid
+    ? all.find((r) => r.eid == s.persona_eid)
+    : undefined
+  let meta: [string, unknown][] = [
+    ['session', idOf(sess)],
+    ['sid', sid],
+    ['provider', s.provider],
+    ['model', s.model],
+    ['effort', s.effort],
+    ['cwd', s.cwd],
+    [
+      'persona',
+      persona && `${idOf(persona)} ${persona.comps.doc?.title ?? ''}`.trim(),
+    ],
+  ]
+  return [
+    '---',
+    ...meta.filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`),
+    '---',
+  ].join('\n')
+}
+
 // The injection-loop digest: what a session sees at start — its claimed
 // work (with unresolved gates and who holds them), or the top of the open
 // board when it holds nothing, then the three tail tiers (below). ≤48
