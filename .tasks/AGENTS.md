@@ -148,17 +148,27 @@ the mobile door — whose rows resolve through `List.Item`.
 - **A managed session's stdout FILE is its durable log**
   (`~/.tasks/logs/<eid>.jsonl`, line number = seq): no log table, no ingester,
   nothing to drift. The server tails it and casts SUMMARY patches; the file is
-  what a client reads back. And the agent is DETACHED behind a sh wrapper
-  firebreak: the pid the runtime tracks is a launcher that backgrounds the
-  setsid wrapper and exits at birth (deno --watch KILLS tracked pids on reload —
-  unref is no shield, proven live — so the only safe tracked pid is a dead one);
-  the agent is backgrounded into the orphaned wrapper's process group, and the
-  wrapper — unknown to the runtime, so no reload can take it — traps INT/TERM —
-  armed strictly AFTER the fork, or the agent inherits the ignore — then waits
-  and reports the exit code. The restart re-adopts the run from its pidfile.
-  Never add reaping. And a child inherits the SERVER's PATH: the service unit
-  must carry the provider CLIs' dirs (claude, codex, deno) — a missing one is
-  exit 127 with the stderr tail in the session row, not a mystery.
+  what a client reads back. And the agent is DETACHED on TWO axes — out of the
+  runtime's tracked-pid set AND out of the unit's cgroup. The pid the runtime
+  tracks is a launcher that backgrounds the setsid wrapper and exits at birth
+  (deno --watch KILLS tracked pids on reload — unref is no shield, proven live —
+  so the only safe tracked pid is a dead one); the agent is backgrounded into
+  the orphaned wrapper's process group, and the wrapper — unknown to the runtime,
+  so no reload can take it — traps INT/TERM — armed strictly AFTER the fork, or
+  the agent inherits the ignore — then waits and reports the exit code. But
+  setsid alone can't leave `tasksd.service`'s cgroup, and systemd MASS-KILLS a
+  unit's cgroup on every restart (no KillMode opts out — T-7127) — so the wrapper
+  is launched by `systemd-run --user --scope --collect --unit=task-<eid>` (uid
+  derived, not hardcoded; needs XDG_RUNTIME_DIR + DBUS_SESSION_BUS_ADDRESS for
+  the user bus, and `enable-linger` keeps that manager up). That lands the agent
+  in its own `task-<eid>.scope` under `user-<uid>.slice`, which a full unit
+  restart never touches; systemd-run runs the wrapper as a FILE (`sh <file>`)
+  because systemd's own $-expansion of the command would shred the wrapper's
+  `$`. The restart re-adopts the run from its pidfile. Never add reaping. And a
+  child inherits the SERVER's PATH: the service unit must carry the provider
+  CLIs' dirs (claude, codex, deno) — a missing one is exit 127 with the stderr
+  tail in the session row, not a mystery; likewise a missing user bus is a failed
+  Session with systemd-run's complaint in the row, not a hang.
 - **Frozen pages must render from their own bytes.** Self-containment is
   enforced at freeze time (scrub removes every external ref); the CSP at serve
   time is defense-in-depth, not the mechanism.
@@ -253,11 +263,16 @@ These hold everywhere in this repo, whoever — or whatever — writes the code:
   Probe servers must pick UNIQUE ports: the server binds `reusePort`, so two
   probes on one port silently round-robin — one agent's stale modules fed
   another's browser mid-verification (observed twice, 2026-07-20/21).
-- **The injection loop**: `.claude/settings.json` runs `task context --hook` on
-  SessionStart — agent sessions boot into their claimed work (`task context` /
-  MCP `task_context`, same digest). The hook must NEVER fail loudly; a dead
-  server (or an uninstalled CLI — hence the `|| true`) means no digest, not a
-  broken session. SessionEnd mirrors it: `task wrap --hook` releases the
+- **The injection loop**: `.claude/settings.json` runs
+  `task session context --hook` on SessionStart — agent sessions boot into
+  their claimed work (`task context` / MCP `task_context`, same digest), led by
+  the session's own meta as YAML frontmatter: the S-num is how an agent
+  addresses its own session doc, and `task session brief` (stdin/--body) writes
+  the narrative wrap preserves. Root `task context` / `task wrap` stay as
+  aliases for hook lines in other repos. The hook must NEVER fail loudly; a
+  dead server (or an uninstalled CLI — hence the `|| true`) means no digest,
+  not a broken session. SessionEnd mirrors it: `task session wrap --hook`
+  releases the
   session's claims, commenting on anything not done ("lease lapsed") — no
   timers, ending the session IS the wrap. Continuity is SELF-AUTHORED: wrap
   captures the transcript's last assistant message — the closing summary the
@@ -336,6 +351,17 @@ seams wider or leakier, that's the wrong direction.
 
 ## Preloaded
 
+### M-3715 delegation discipline
+
+Delegation in the fleet, so that if our system breaks the work still continues on the floor and the board stays the truth about who is doing what:
+
+- **Worktree-only, one writer per worktree.** Every agent — harness spawns and the coordinator's own session — works in its own git worktree and lands via `git merge --ff-only`; use the Agent tool's `isolation: "worktree"` for spawns. Never let two agents share an index.
+- **Harness spawns are the default and must integrate fully.** Every spawn brief directs the agent to reify a session entity, claim its task under that identity, comment progress and completion (with sha), and release when done. The task body carries the full spec — the prompt is delivery, the task is the record.
+- **Internal spawns** (wire-created sessions, `task spawn`) are for codex/other providers and well-specified cold-context work; at parity with the harness since T-3698 (auto-claim, session_peek, settle→bus). The harness remains the reliability floor.
+- **Communication flows through the graph**, not harness-native channels, wherever possible: comment on a session to steer it, comment on the task for the record; the comms bus delivers on the next tool call. Harness push notifications remain the wake channel until the graph grows one.
+
+Every Agent-tool spawn gets `isolation: worktree` + the claim-discipline paragraph in its brief; prefer task bodies over prompt-only specs.
+
 ### M-4474 document new fleet tooling in a memory so the fleet discovers it
 
 When you build or discover new fleet tooling — a CLI verb, an MCP tool, a hook, a workflow, a colon-command — write a memory for it immediately (reference or feedback, unscoped so it rides every operator's `task context` digest).
@@ -404,26 +430,14 @@ Normative for all fleet code (source: `docs/STYLE.md`, the owner's DNA). JS-flav
 9. **Don't build the speculative layer.** An abstraction earns its place by removing code from callers, not adding indirection. Leave a visible stub or a comment saying why the layer is absent.
 10. **Build a vocabulary, then compose it.** A file reads top-to-bottom as later exports made of earlier ones (`export let inc = add(1)`). Complexity comes from composition, never a long phased body. Primitives are protocol-extensible. A module tops ~600 lines; grow a system as many small files, never a monolith.
 
-### M-3715 delegation discipline
-
-Owner direction (2026-07-20) on delegation in ~/code/tasks:
-
-- **Worktree-only, one writer per worktree.** Every agent — harness spawns and the coordinator's own session — works in its own git worktree, lands via `git merge --ff-only`. Use the Agent tool's `isolation: "worktree"` for spawns; never let two agents share an index (the h1/domain-editor serialization was this lesson).
-- **Harness spawns are the default and must integrate fully**: every spawn brief directs the agent to reify a session entity, claim its task under that identity, comment progress and completion (with sha), and release when done. The task body carries the full spec — the prompt is delivery, the task is the record.
-- **Internal spawns** (wire-created sessions, `task spawn`) are for codex/other providers and well-specified cold-context work; at parity since T-3698 (auto-claim, session_peek, settle→bus). The harness is the reliability floor.
-- **Communication flows through the graph, not harness-native channels**, wherever possible: comment on a session to steer it, comment on the task for the record; the comms bus delivers on the next tool call. Harness push notifications remain the wake channel until the graph grows one.
-
-**Why:** if our system breaks, work continues on the floor; full integration means the board is always the truth about who is doing what.
-**How to apply:** every Agent-tool spawn gets isolation worktree + the claim-discipline paragraph in its brief; prefer task bodies over prompt-only specs. Current thread: M-3714.
-
 ## Index
 
 Recall a body by id (memory_recall / task show).
 
+- M-4066 feedback: agents take warm paths, not right paths — adoption is won structurally · 2×
+- M-4061 project: vocabulary naming: artifacts get artifact names, pure acts keep _request · 1×
+- M-4062 feedback: letters vs notices: email is for prose agents wrote; machine events are marked at mint · 1×
 - M-4457 feedback: code style (Ruby/Rails) — the class-macro idiom · 1×
-- M-4062 feedback: letters vs notices: email is for prose agents wrote; machine events are marked at mint
 - M-4064 project: identity is faceted; personas differ by emphasis, not content · 1×
 - M-4065 project: federation discipline: one home graph per entity, intents across boundaries, no consensus · 1×
-- M-4066 feedback: agents take warm paths, not right paths — adoption is won structurally · 1×
-- M-4061 project: vocabulary naming: artifacts get artifact names, pure acts keep _request
 - M-4063 project: reference at authoring, resolve at delivery, record the served form
