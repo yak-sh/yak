@@ -254,6 +254,37 @@ Deno.test('an already-notified item is not re-injected (durable dedup)', () => {
   assertEquals(channelEvents([stamp()], c), [])
 })
 
+Deno.test('a catch-up replay pushes a notified gap item anyway (T-7167)', () => {
+  // The idle-operator case: the digest/bus stamped `notified` while the channel
+  // was down, so the live gate would skip it — but the {since} catch-up replay
+  // is exactly the push that idle operator never got, so it must fire. Holds for
+  // mail, comments, and knocks.
+  let told = () => true // everything already notified by the sweep
+  assertEquals(
+    channelEvents([stamp()], ctx({ docOf: letter, notified: told })).length,
+    0,
+    'live frame: notified suppresses',
+  )
+  assertEquals(
+    channelEvents(
+      [stamp()],
+      ctx({ docOf: letter, notified: told, catchup: true }),
+    )
+      .length,
+    1,
+    'catch-up: notified lifts',
+  )
+  let cmt: Change[] = [
+    ch('c9', 'comment', { target_eid: 'sess', author_eid: 's1' }),
+    ch('c9', 'doc', { title: '', body: 'gap message' }),
+  ]
+  assertEquals(channelEvents(cmt, ctx({ notified: told })), [])
+  assertEquals(
+    channelEvents(cmt, ctx({ notified: told, catchup: true }))[0].content,
+    'gap message',
+  )
+})
+
 Deno.test("learn caches a mail's doc for the stamp frame that follows", () => {
   let idx: Index = new Map()
   learn(idx, [

@@ -22,6 +22,7 @@
 // keeps the env it was spawned with; /clear rotates the session, not us).
 // Reference: holdco services/email-channel (the proven channel shape).
 
+import process from 'node:process'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
@@ -245,8 +246,10 @@ let markNotified = async (changes: Change[]) => {
 
 // Learn from an applied batch, keep identity fresh, and emit whatever it aims
 // at this session. Shared by live array frames and the {catchup} reply — mail
-// that landed in the fetch→join gap must still inject.
-let feed = (changes: Change[]) => {
+// that landed in the fetch→join gap must still inject. `catchup` lifts the
+// `notified` dedup for the replay (T-7167): a gap item the digest/bus stamped
+// while we were down never got the PUSH the idle operator is owed.
+let feed = (changes: Change[], catchup = false) => {
   learn(index, changes)
   resolve(changes)
   if (!sessionEid) return // our session isn't in the graph yet
@@ -261,6 +264,9 @@ let feed = (changes: Change[]) => {
     docOf: (eid) => docOf(index, eid),
     done: (eid) => doneOf(index, eid),
     notified: (eid) => notifiedOf(index, eid),
+    // A {since} catch-up replay pushes gap items even if already `notified`
+    // (T-7167) — the digest/bus may have stamped them while we were down.
+    catchup,
     // The operator loop gets project mail; a specialist does not (T-7006).
     operator: origin != 'managed' && !requestedTaskEid,
   })
@@ -294,7 +300,7 @@ let onBatch = (data: string) => {
   }
   if (Array.isArray(frame)) return feed(frame as Change[])
   let f = frame as { catchup?: Change[]; reset?: boolean; snapshot?: Snapshot }
-  if (f?.catchup !== undefined) return feed(f.catchup)
+  if (f?.catchup !== undefined) return feed(f.catchup, true)
   if (f?.reset && f.snapshot) absorb(f.snapshot)
 }
 
@@ -379,7 +385,13 @@ err(`pid ${PID ?? '-'}, boot id ${HINT ?? '-'} (awaiting initialize)`)
 // window long enough to clear the handshake.
 let fallback = setTimeout(start, 10_000)
 
-// Clean shutdown when Claude Code closes the MCP connection (stdin EOF).
+// Clean shutdown when Claude Code closes the MCP connection (stdin EOF) or the
+// parent dies (the pipe breaks). Observe stdin PASSIVELY, via the node
+// `process.stdin` 'end'/'close' events the MCP transport's own reader already
+// drives — NEVER by grabbing `Deno.stdin.readable.getReader()`, which locks the
+// stream into a SECOND consumer competing with the transport and (proven) never
+// resolves its `closed` on EOF anyway. This mirrors the email channel exactly,
+// the one that stays persistent under Claude (T-7167).
 let down = false
 let shutdown = () => {
   if (down) return
@@ -391,6 +403,7 @@ let shutdown = () => {
   err('shutting down')
   setTimeout(() => Deno.exit(0), 100)
 }
-Deno.stdin.readable.getReader().closed.then(shutdown).catch(shutdown)
+process.stdin.on('end', shutdown)
+process.stdin.on('close', shutdown)
 Deno.addSignalListener('SIGTERM', shutdown)
 Deno.addSignalListener('SIGINT', shutdown)

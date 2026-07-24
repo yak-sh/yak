@@ -49,6 +49,15 @@ export type Ctx = {
   // is not re-injected, even across a reconnect. Replaces the old ephemeral
   // `seen`/`delivered` set; `inject-needed == NOT notified`.
   notified?: (eid: string) => boolean
+  // The {since} catch-up replay (T-7167): on a freshly-(re)connected socket the
+  // server replays the gap as {catchup}, and those items must push even if
+  // `notified` is already set — the digest/bus may have stamped it while the
+  // channel was down, but that stamp dedups a live RE-broadcast, not the one
+  // push the idle operator never got. So the notified gate holds for live frames
+  // and lifts for catch-up. Bounded to the small snapshot→join window, so no
+  // backlog flood; `done`/`injects`/`operator` still gate (correctness, not
+  // dedup). Absent = live frame.
+  catchup?: boolean
   // Whether the served session is the project's operator loop — a specialist
   // (false) gets no project mail, only direct address (client.ts isOperator,
   // T-7006). Absent = true (an unresolved session errs toward delivery).
@@ -250,7 +259,8 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
       if (!mine) continue
       let content = words(docs.get(c.eid))
       if (!content) continue // bodiless mint or a later comp-only patch
-      if (ctx.notified?.(c.eid)) continue // already told (this plugin or sweep)
+      // already told (this plugin or sweep) — but a catch-up replay pushes anyway
+      if (!ctx.catchup && ctx.notified?.(c.eid)) continue
       let from = ctx.idOf(str(c.comp.author_eid)) ?? 'unknown'
       let meta: Record<string, string> = {
         kind: 'comment',
@@ -270,7 +280,8 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
       if (c.comp.acted_at != null) continue
       let recipient = str(c.comp.to_eid)
       if (recipient != ctx.sessionEid && recipient != ctx.actorEid) continue
-      if (ctx.notified?.(c.eid)) continue // already told (this plugin or sweep)
+      // already told (this plugin or sweep) — but a catch-up replay pushes anyway
+      if (!ctx.catchup && ctx.notified?.(c.eid)) continue
       let at = str(c.comp.target_eid)
       let atId = at ? ctx.idOf(at) ?? at : null
       let note = commentOn(changes, docs, at)
@@ -290,7 +301,8 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
       if (
         !injects(c.comp, ctx.homeEid, ctx.done?.(c.eid), ctx.operator !== false)
       ) continue
-      if (ctx.notified?.(c.eid)) continue
+      // already told (this plugin or sweep) — but a catch-up replay pushes anyway
+      if (!ctx.catchup && ctx.notified?.(c.eid)) continue
       let id = ctx.idOf(c.eid)
       let doc = docs.get(c.eid) ?? ctx.docOf?.(c.eid)
       let from = cleanAttr(str(c.comp.from)) || 'unknown'

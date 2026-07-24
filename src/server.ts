@@ -790,7 +790,7 @@ relay((comp, pending) =>
 // (mayStamp), or a probe inheriting live creds steals delivery.
 if (fleetApi()) {
   inboundSweep(cast)
-  setInterval(() => inboundSweep(cast), 60_000)
+  setInterval(() => inboundSweep(cast), 10_000)
 } else {
   console.log(
     mayStamp()
