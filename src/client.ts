@@ -524,13 +524,42 @@ export let inboxMail = (scope?: string) => (r: Row) =>
   unreadMail(r) && (!scope || r.comps.mail?.target_eid == scope)
 
 // The project you stand in: the repo-wearing entity whose path prefixes
-// the cwd — every caller-aware door derives its scope this same way.
-export let repoAt = (all: Row[], cwd?: string) =>
-  cwd
-    ? all.find((r) =>
-      r.comps.repo?.path && cwd.startsWith(String(r.comps.repo.path))
-    )
-    : undefined
+// the cwd. LONGEST prefix wins, so a repo nested inside another claims a
+// cwd under it — first-match would have handed it to whichever registered
+// first. Every caller-aware door derives its scope from here.
+export let repoAt = (all: Row[], cwd?: string) => {
+  if (!cwd) return undefined
+  let best: Row | undefined
+  let len = -1
+  for (let r of all) {
+    let p = String(r.comps.repo?.path ?? '')
+    if (p && cwd.startsWith(p) && p.length > len) (best = r), (len = p.length)
+  }
+  return best
+}
+
+// The project a caller stands in, resolved by falling priority: an explicit
+// scope, the repo whose path prefixes the cwd, the home of the persona the
+// session WEARS (identity, not filesystem — a session in a scratch worktree
+// still belongs to its operator's project), then the actor when it IS a
+// project. Undefined only when nothing places it — then the digest shows a
+// hard-capped fleet peek, never a flood.
+export let scopeFor = (
+  all: Row[],
+  sess?: Row,
+  cwd?: string,
+  arg?: string,
+): string | undefined => {
+  if (arg) return arg
+  let byPath = repoAt(all, cwd)?.eid
+  if (byPath) return byPath
+  let byEid = new Map(all.map((r) => [r.eid, r]))
+  let worn = byEid.get(String(sess?.comps.session?.persona_eid ?? ''))
+  let home = String(worn?.comps.persona?.home_eid ?? '')
+  if (home && byEid.get(home)?.comps.project) return home
+  let actor = byEid.get(String(sess?.comps.session?.actor_eid ?? ''))
+  return actor?.comps.project ? actor.eid : undefined
+}
 
 // When a mail happened, for sorting and ages: arrival for inbound, the
 // entity's birth for outbound.
@@ -707,54 +736,82 @@ let unheard = (all: Row[], sess: Row | undefined, now: number) => {
   let ids = got.map(([s, n]) => `${idOf(s)} ×${n}`).join(', ')
   return [`## unheard — comments after they wrapped: ${ids} (task show)`]
 }
-let lately = (
-  all: Row[],
-  now: number,
-  budget: number,
-  scope?: string,
-  skip?: string,
-) => {
-  if (budget < 4) return [] // claimed work ate the room — it wins
-  let age = (r: Row) => {
-    let t = Date.parse(editedAt(r))
-    return Number.isNaN(t) ? Infinity : now - t
-  }
-  let byEid = new Map(all.map((r) => [r.eid, r.comps]))
-  let fresh = all
-    .filter((r) => r.comps.doc?.title && !r.comps.comment && age(r) < 7 * DAY)
-    .filter((r) => belongs(r, scope))
-    .sort((a, b) =>
-      warm(b.comps, now, (e) => byEid.get(e)) -
-      warm(a.comps, now, (e) => byEid.get(e))
+// PROJECT layer — the pulse: tasks that MOVED in the scope you stand in,
+// newest touch first, selected by task.project_eid so no foreign entity
+// rides in on a catch-all. This reads the same with or without a session,
+// which is what lets a bare `task context` in a repo show exactly what that
+// project's operator sees. Empty scope means an unplaceable caller: a small
+// fleet peek (the hottest open work), never the whole board.
+let pulse = (all: Row[], now: number, budget: number, scope?: string) => {
+  if (budget < 2) return []
+  let age = (r: Row) => now - Date.parse(editedAt(r))
+  let mine = scope
+    ? all.filter((r) =>
+      r.comps.task && String(r.comps.task.project_eid) == scope &&
+      age(r) < 7 * DAY
     )
-  if (!fresh.length) return []
-  let briefs = fresh
-    .filter((r) => r.comps.session && age(r) < DAY && r.eid != skip)
-    .slice(0, 2)
-  let today = fresh.filter((r) =>
-    !r.comps.session && !r.comps.memory && age(r) < DAY
-  ).slice(0, 4)
-  let week = fresh.filter((r) =>
-    !briefs.includes(r) && !r.comps.memory && age(r) >= DAY
-  ).slice(0, 4)
-  let mems = fresh.filter((r) => r.comps.memory).slice(0, 3)
-  let title = (r: Row) => String(r.comps.doc?.title ?? '')
-  let lines = ['## lately']
-  for (let r of briefs) {
-    lines.push(
-      `- ${idOf(r)} ${snip(`${title(r)} · ${firstLine(r.comps.doc?.body)}`)}`,
+    : all.filter((r) => r.comps.task && !settled(String(r.comps.task.status)))
+        .filter((r) => age(r) < 7 * DAY)
+  let hits = mine
+    .sort((a, b) => editedAt(b).localeCompare(editedAt(a)))
+    .slice(0, Math.min(budget - 1, scope ? 6 : 3))
+  if (!hits.length) return []
+  return [scope ? '## lately' : '## fleet — nowhere placed', ...hits.map((r) =>
+    `- ${idOf(r)} ${r.comps.task?.status} — ${snip(String(r.comps.doc?.title ?? ''))}`
+  )]
+}
+
+// SESSION layer — comments that landed on YOUR claimed tasks, the message a
+// missed instant push would have carried. Recognition only: it never moves
+// the bus cursor (that stays the sweep's one job) and it never shows in a
+// bare preview, since a preview holds no claims to hear about.
+let onMine = (all: Row[], sess: Row | undefined, now: number, budget: number) => {
+  if (!sess || budget < 1) return []
+  let mine = new Set(
+    all.filter((r) => r.comps.claim?.session_eid == sess.eid).map((r) => r.eid),
+  )
+  if (!mine.size) return []
+  let byEid = new Map(all.map((r) => [r.eid, r]))
+  let name = (eid: unknown) => {
+    let r = byEid.get(String(eid))
+    return String(
+      r?.comps.alias?.slug ?? r?.comps.doc?.title ?? r?.comps.session?.id ??
+        'someone',
     )
   }
-  for (let r of today) lines.push(`- ${idOf(r)} ${snip(title(r))}`)
-  if (week.length) {
-    lines.push('### this week')
-    for (let r of week) lines.push(`- ${idOf(r)} ${snip(title(r))}`)
-  }
-  if (mems.length) {
-    lines.push('### memory')
-    for (let r of mems) lines.push(`- ${idOf(r)} ${snip(title(r))}`)
-  }
-  return lines.slice(0, budget)
+  let hits = all
+    .filter((r) => {
+      let c = r.comps.comment
+      return c && !c.event && c.author_eid != sess.eid &&
+        mine.has(String(c.target_eid)) && now - Date.parse(bornAt(r)) < 7 * DAY
+    })
+    .sort((a, b) => bornAt(b).localeCompare(bornAt(a)))
+    .slice(0, budget)
+  if (!hits.length) return []
+  return ['## on your tasks', ...hits.map((r) => {
+    let c = r.comps.comment
+    let body = String(r.comps.doc?.body ?? '').split('\n')[0].slice(0, 96)
+    return `- ${idOf(byEid.get(String(c.target_eid))!)} 💬 ${
+      name(c.author_eid)
+    }: ${body}`
+  })]
+}
+
+// PROJECT layer — the fleet's shared mind, surfaced: the warmest UNSCOPED
+// memories (scoped ones ride their own project), listed for recognition
+// under a standing directive to read and adopt. recallIndex ranks and
+// formats; a `scope_eid=` (empty = absent) pred keeps it to the principles
+// every operator shares. Recognition, not retrieval — the recall bump rides
+// deliberate expansion (memory_recall), never this listing.
+let fleetMemory = (all: Row[], now: number, budget: number) => {
+  if (budget < 3) return []
+  let global: Pred[] = [{ comp: 'memory', prop: 'scope_eid', op: '', value: '' }]
+  let mems = recallIndex(all, global, now, budget - 1)
+  if (!mems.length) return []
+  return [
+    '## from the fleet — read any that fit (memory_recall <id>), adopt what helps',
+    ...mems.map((l) => `- ${l}`),
+  ]
 }
 
 // The injection-loop digest: what a session sees at start — its claimed
