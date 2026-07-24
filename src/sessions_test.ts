@@ -541,6 +541,43 @@ Deno.test('boot: a live child is adopted, its file followed from where it is', a
   assertEquals(row(eid)?.status, 'completed')
 })
 
+Deno.test('a tail tick that only moves the counter stays off the wire', async () => {
+  let eid = plant([INIT])
+  let child = new Deno.Command('setsid', {
+    args: ['sleep', '9'],
+    stdout: 'null',
+    stderr: 'null',
+  }).spawn()
+  Deno.writeTextFileSync(`${logsDir()}/${eid}.pid`, String(child.pid))
+  recover(cast)
+  let done = running.get(eid)!.done
+  await until(
+    () => row(eid)?.provider_session_id == 'sid-1',
+    'the adopted init',
+  )
+
+  // Chatter that changes no summary column: the row counts it, the wire
+  // stays silent — a run's whole transcript must not re-render every
+  // client per poll tick (T-7063).
+  heard = []
+  let f = Deno.openSync(log(eid), { append: true, write: true })
+  f.writeSync(new TextEncoder().encode(
+    '{"type":"message","text":"a"}\n{"type":"message","text":"b"}\n',
+  ))
+  await until(() => row(eid)?.latest_seq == 3, 'the counted lines')
+  assertEquals(heard.filter((c) => c.name == 'session'), [])
+
+  // The terminal event is news — it rides the wire, counter and all.
+  f.writeSync(new TextEncoder().encode(`${RESULT}\n`))
+  f.close()
+  await until(() => row(eid)?.final_text == 'first', 'the terminal event')
+  assert(heard.some((c) => c.name == 'session' && c.comp?.latest_seq == 4))
+
+  child.kill('SIGKILL')
+  await child.status
+  await done
+})
+
 Deno.test('boot: a session whose provider is gone fails loudly', () => {
   let eid = plant([INIT], 'oracle')
   recover(cast)

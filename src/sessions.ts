@@ -82,21 +82,27 @@ let stamp = (
   // The settle broadcast hangs off the ONE WRITER: lifecycle columns
   // never cross apply(), so the effects dispatcher cannot see this
   // transition — the writer that stamps an ending is the only observer
-  // there is. Prior status read first, so a re-stamp of the same ending
+  // there is. Prior row read first, so a re-stamp of the same ending
   // never says it twice.
+  let was = db.prepare(`select * from ${table} where eid = ?`).get(eid) as
+    | Row
+    | undefined
   let ending = table == 'session' && SETTLED.includes(String(patch.status))
-  let was = ending
-    ? (db.prepare('select status from session where eid = ?').get(eid) as
-      | { status: string | null }
-      | undefined)?.status
-    : null
   let vals = cols.map((c) => (patch as Row)[c] as string | number | null)
   db.prepare(
     `update ${table} set ${cols.map((c) => `${c} = ?`).join(', ')}
      where eid = ?`,
   ).run(...vals, eid)
-  castRow(eid, cast, table)
-  if (ending && was != patch.status) settled(eid, String(patch.status), cast)
+  // A busy agent's tail advances latest_seq every poll tick; a cast per
+  // tick makes every client re-render the world for a counter nobody
+  // shows, and a long run freezes every open canvas (T-7063). Only a
+  // column whose value actually moved is worth telling everyone.
+  if (cols.some((c) => c != 'latest_seq' && (patch as Row)[c] != was?.[c])) {
+    castRow(eid, cast, table)
+  }
+  if (ending && was?.status != patch.status) {
+    settled(eid, String(patch.status), cast)
+  }
 }
 
 // A managed session is over in exactly these statuses — the moment one
