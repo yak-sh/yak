@@ -173,18 +173,79 @@ Deno.test('notices: unseen comments on claimed tasks + messages to the session',
     ),
     ['c-2'],
   )
-  // the cursor silences what was served
+  // per-item `notified` — not the cursor — silences a served comment: stamp
+  // both heard comments and neither is re-served.
+  let seen: Snapshot = {
+    changes: [
+      ...busSnap.changes,
+      { eid: 'c-1', name: 'notified', comp: {} },
+      { eid: 'c-2', name: 'notified', comp: {} },
+    ],
+    deps: snap.deps,
+  }
+  assertEquals(notices(seen, 'sess-x').lines.length, 0)
+  // the acked_at cursor no longer gates: a cursor past both comments does NOT
+  // hide them — only the per-item stamp does (drain-proof, see below).
   let acked: Snapshot = {
     changes: busSnap.changes.map((c) =>
       c.eid == S && c.name == 'session'
-        ? { ...c, comp: { ...c.comp, acked_at: '2026-01-03' } }
+        ? { ...c, comp: { ...c.comp, acked_at: '2099-01-01' } }
         : c
     ),
     deps: snap.deps,
   }
-  assertEquals(notices(acked, 'sess-x').lines.length, 0)
+  assertEquals(notices(acked, 'sess-x').lines.length, 2)
   // unknown session: silent, no ack
   assertEquals(notices(busSnap, 'sess-nobody'), { lines: [], ack: [] })
+})
+
+// Drain-proof: one reader serving a comment advances the shared `acked_at`
+// cursor, but selection reads the PER-ITEM stamp — so a second, un-notified
+// comment the cursor would have swept past is still served. This is the exact
+// failure the cursor had (a subagent's ack blinding the operator to a sibling
+// comment) and the reason per-item is the truth.
+Deno.test('notices: per-item stamp is drain-proof (a served ack cannot hide a sibling)', () => {
+  let B = 'aaaaaaaa-0000-4000-8000-000000000030'
+  let mk = (eid: string, at: string, body: string) => [
+    { eid, name: 'entity', comp: { eid, num: 90 } },
+    { eid, name: 'created', comp: { at } },
+    { eid, name: 'doc', comp: { title: '', body } },
+    { eid, name: 'comment', comp: { target_eid: S, author_eid: B } },
+  ]
+  let g: Snapshot = {
+    changes: [
+      ...snap.changes,
+      { eid: B, name: 'entity', comp: { eid: B, num: 30, created_at: '' } },
+      { eid: B, name: 'session', comp: { id: 'sess-b' } },
+      ...mk('m-1', '2026-01-02', 'first ping'),
+      ...mk('m-2', '2026-01-03', 'second ping'),
+    ],
+    deps: snap.deps,
+  }
+  // fresh: both un-notified, both served
+  assertEquals(notices(g, 'sess-x').lines.length, 2)
+  // one reader served m-1: it stamped `notified` on m-1 AND advanced the
+  // shared cursor past BOTH (acked_at = now). The old cursor gate would now
+  // hide m-2 (born before the cursor); per-item keeps it — m-2 is un-notified.
+  let drained: Snapshot = {
+    changes: [
+      ...g.changes.map((c) =>
+        c.eid == S && c.name == 'session'
+          ? { ...c, comp: { ...c.comp, acked_at: '2099-01-01' } }
+          : c
+      ),
+      { eid: 'm-1', name: 'notified', comp: {} },
+    ],
+    deps: snap.deps,
+  }
+  let n = notices(drained, 'sess-x')
+  assertEquals(n.lines.length, 1)
+  assertEquals(n.lines[0].includes('second ping'), true)
+  // and serving it only stamps the sibling, never re-stamps m-1
+  assertEquals(
+    n.ack.filter((c) => c.name == 'notified').map((c) => c.eid),
+    ['m-2'],
+  )
 })
 
 Deno.test('rows filter through the query grammar + byBoard', () => {

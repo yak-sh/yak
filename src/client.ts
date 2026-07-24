@@ -1079,20 +1079,18 @@ export let contextDigest = (
 // The comms bus, read side: what happened that this session hasn't seen —
 // comments on tasks it CLAIMS plus comments aimed at the session entity
 // itself (commenting on S-31 is how you message that agent). "Seen" is
-// the session's own acked_at cursor; the returned ack change advances it,
-// and the caller applies it exactly when the lines are actually shown.
-// Serving a line also STAMPS `notified` on that comment (T-7010) — this is
-// a delivery door, so the channel plugin won't re-inject what the sweep
-// already told; the stamp rides `ack`, applied in the same breath. Drain-
-// proof: `notified` never hides a comment, and the acked_at cursor stays
-// the gate (per-item read-state is T-7011).
+// PER-ITEM: a comment is unseen while it is NOT `notified` (T-7011); serving
+// a line stamps `notified` on that comment, so the NEXT sweep skips it. This
+// is drain-proof — selection is per-comment, so nothing a DIFFERENT reader
+// does can hide a comment from this one (a shared cursor could). The ack
+// batch still advances `acked_at` too (harmless, kept as a coarse fallback
+// that `unheard` reads to reconstruct a dead session's misses).
 export let notices = (snap: Snapshot, session: string) => {
   let all = rows(snap)
   let sess = all.find((r) =>
     r.comps.session && String(r.comps.session.id) == session
   )
   if (!sess) return { lines: [] as string[], ack: [] as Change[] }
-  let cutoff = String(sess.comps.session.acked_at ?? '') || bornAt(sess)
   let mine = new Set(
     all.filter((r) => r.comps.claim?.session_eid == sess.eid)
       .map((r) => r.eid),
@@ -1105,7 +1103,7 @@ export let notices = (snap: Snapshot, session: string) => {
       if (!mine.has(String(c.target_eid)) && String(c.target_eid) != sess.eid) {
         return false
       }
-      return bornAt(r) > cutoff
+      return !r.comps.notified
     })
     .sort((a, b) => bornAt(a).localeCompare(bornAt(b)))
   if (!unseen.length) return { lines: [] as string[], ack: [] as Change[] }
@@ -1137,9 +1135,10 @@ export let notices = (snap: Snapshot, session: string) => {
     return `${at}💬 ${who(c.author_eid)}: ${body}`
   })
   if (unseen.length > 20) lines.push(`…and ${unseen.length - 20} more`)
-  // The ack cursor plus a `notified` stamp per SERVED comment (the overflow
-  // isn't told, so it isn't stamped) — bare presence, server-clocked. Skip the
-  // already-notified so the batch stays lean; the write is idempotent anyway.
+  // A `notified` stamp per SERVED comment is the read-state that gates the
+  // next sweep (the overflow isn't told, so it isn't stamped) — bare presence,
+  // server-clocked, filtered to the un-notified so the batch stays lean. The
+  // `acked_at` advance rides along as the coarse fallback cursor.
   let ack: Change[] = [
     {
       eid: sess.eid,
