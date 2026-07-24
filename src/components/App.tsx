@@ -154,6 +154,33 @@ export let App = () => {
         >
           <Icon name='table' />
         </Tab>
+        {
+          /* The root card's dropdown: the same menu a card's right-click
+            serves, hung from the bar's far edge. Pointerdown must not
+            bubble — the Frame's close-on-press would eat the toggle. */
+        }
+        <Tab
+          type='button'
+          aria-label='Menu'
+          data-tip='menu'
+          onPointerDown={(ev: Event) => ev.stopPropagation()}
+          onClick={(ev: MouseEvent & { currentTarget: HTMLElement }) => {
+            if (menu.value) {
+              menu.value = null
+              return
+            }
+            let r = ev.currentTarget.getBoundingClientRect()
+            menu.value = {
+              x: r.right,
+              y: r.bottom,
+              href: `/${idOf(e)}`,
+              eid: e.eid,
+              align: 'right',
+            }
+          }}
+        >
+          <Icon name='ellipsis-vertical' />
+        </Tab>
       </Bar>
       <Body>
         <Entity eid={e.eid} view={view} />

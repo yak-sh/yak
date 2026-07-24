@@ -112,6 +112,13 @@ let glyphs: Record<string, JSX.Element> = {
       <circle cx='17.5' cy='17.5' r='3.5' />
     </>
   ),
+  'ellipsis-vertical': (
+    <>
+      <circle cx='12' cy='12' r='1' />
+      <circle cx='12' cy='5' r='1' />
+      <circle cx='12' cy='19' r='1' />
+    </>
+  ),
   bot: (
     <>
       <path d='M12 8V4H8' />

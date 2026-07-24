@@ -1,6 +1,7 @@
 import { type Ent, idOf } from '../../types.ts'
 import { commentCount, ent, gated, settled } from '../../live.ts'
 import { Dot } from '../Dot.tsx'
+import { menuAt } from '../nav.tsx'
 import { Prio } from '../Prio.tsx'
 import { block } from '../ui.tsx'
 import { Id } from './Inline.tsx'
@@ -21,9 +22,9 @@ let { Title, Meta, Domain, Comments, Claim, Assignee, Deps, Done } = Frame
 // dot, then one meta line — priority, domain, edge tallies ("2 requires",
 // edge-colored), comment tally, claim flag, id. Plain spans only
 // (no editors, no markdown): hundreds of these must render without the
-// browser noticing. The whole tile is the LINK — href on the el, so the
-// browser's own context menu serves it; the verbs menu belongs to the
-// card. Drag out to the canvas for the full Task card.
+// browser noticing. The whole tile is the LINK — href on the el — and
+// right-click serves the app menu (menuAt), so the verbs are one click
+// from any board. Drag out to the canvas for the full Task card.
 export let TaskTile = ({ e }: { e: Ent }) => {
   let talk = commentCount.value[e.eid]
   // Each tally reads as a sentence, verb first — "requires ~2~ 1": two
@@ -51,7 +52,7 @@ export let TaskTile = ({ e }: { e: Ent }) => {
     ],
   ]
   return (
-    <Frame href={`/${idOf(e)}`}>
+    <Frame href={`/${idOf(e)}`} onContextMenu={menuAt(e)}>
       <Dot status={e.task!.status} gated={gated(e)} />
       <Title>{e.doc?.title}</Title>
       <Meta>

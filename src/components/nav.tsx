@@ -118,13 +118,23 @@ let track = (was?: string) => {
   else if (was && was != rootCanvas()) trail.value = [...trail.value, was]
 }
 
-// The card's context menu: navigation first ("open here" is the
+// The entity context menu: navigation first ("open here" is the
 // deliberate in-place root change; new tab beside it), then whatever
 // verbs the entity's components contribute (registry actionsFor —
-// a task offers its status moves, a claim its release, …).
+// a task offers its status moves, a claim its release, …). align
+// 'right' hangs the menu leftward from x — the titlebar dropdown
+// anchors at the screen's far edge.
 export let menu = signal<
-  { x: number; y: number; href: string; eid: string } | null
+  { x: number; y: number; href: string; eid: string; align?: 'right' } | null
 >(null)
+
+// Right-click serving the app menu instead of the browser's — for faces
+// that are themselves links (tiles) so the native menu never fires.
+export let menuAt = (e: Ent) => (ev: MouseEvent) => {
+  ev.preventDefault()
+  ev.stopPropagation()
+  menu.value = { x: ev.clientX, y: ev.clientY, href: `/${idOf(e)}`, eid: e.eid }
+}
 
 let Frame = block('div', 'Menu', { Item: 'button' })
 let { Item } = Frame
@@ -138,7 +148,9 @@ export let Menu = () => {
   let acts = actionsFor(ent(m.eid))
   return (
     <Frame
-      style={`left:${m.x}px;top:${m.y}px`}
+      style={(m.align == 'right'
+        ? `right:${innerWidth - m.x}px`
+        : `left:${m.x}px`) + `;top:${m.y}px`}
       onPointerDown={(e: Event) => e.stopPropagation()}
     >
       <Item
