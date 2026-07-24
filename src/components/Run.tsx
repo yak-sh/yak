@@ -5,7 +5,8 @@ import { block } from './ui.tsx'
 import { menu, navigate, screenTarget } from './nav.tsx'
 
 // The Run door: a task's "run session…" verb opens this over the point
-// the menu stood on — provider, model, effort — and writes ONE batch: a
+// the menu stood on — model, effort; the provider is never asked, it is
+// the pick's own — and writes ONE batch: a
 // session carrying the request columns (the server's created(session)
 // effect validates and launches it), plus its card and pin when we're
 // over a canvas, minted here like any other card the browser spawns.
@@ -17,8 +18,21 @@ import { menu, navigate, screenTarget } from './nav.tsx'
 // Off a canvas (or on the List door, which has no plane) there's nothing
 // to pin, so we navigate to the session instead.
 
-type Provider = { name: string; models: string[]; efforts: string[] }
+type Provider = {
+  name: string
+  models: string[]
+  efforts: string[]
+  labels: Record<string, string>
+}
 type Ask = { eid: string; x: number; y: number }
+
+// The offers: every provider's labeled models, flattened — the form
+// shows models, not providers. When two providers offer the same model,
+// the first keeps it (the whole heuristic, for now).
+export let offers = (ps: Provider[]) =>
+  ps.flatMap((p) =>
+    Object.entries(p.labels).map(([model, label]) => ({ model, label, p }))
+  ).filter((o, i, all) => all.findIndex((x) => x.model == o.model) == i)
 
 let Frame = block('div', 'Run', {
   Row: 'label',
@@ -55,23 +69,21 @@ let spot = (a: Ask) => {
 }
 
 let Form = ({ a }: { a: Ask }) => {
-  let [name, setName] = useState('')
   let [model, setModel] = useState('')
   let [effort, setEffort] = useState('')
   useEffect(() => {
     if (!providers.value.length) load()
   }, [])
 
-  // Every choice is DERIVED from the one above it, never stored beside it:
-  // picking a provider whose models the current pick isn't among falls
-  // back to its first, with nothing to keep in sync.
-  let ps = providers.value
-  let p = ps.find((x) => x.name == name) ?? ps[0]
-  let m = p?.models.includes(model) ? model : p?.models[0]
-  let ef = p?.efforts.includes(effort) ? effort : p?.efforts[0]
+  // Every choice is DERIVED, never stored beside the menu: a pick the
+  // menu no longer offers falls back to its first entry, and effort to
+  // the picked provider's first, with nothing to keep in sync.
+  let ms = offers(providers.value)
+  let m = ms.find((x) => x.model == model) ?? ms[0]
+  let ef = m?.p.efforts.includes(effort) ? effort : m?.p.efforts[0]
 
   let go = () => {
-    if (!p) return
+    if (!m) return
     let at = spot(a)
     let eid = uuid()
     let card = uuid()
@@ -81,8 +93,8 @@ let Form = ({ a }: { a: Ask }) => {
         name: 'session',
         comp: {
           id: uuid(),
-          provider: p.name,
-          model: m,
+          provider: m.p.name,
+          model: m.model,
           ...(ef ? { effort: ef } : {}),
           requested_task_eid: a.eid,
         },
@@ -119,27 +131,19 @@ let Form = ({ a }: { a: Ask }) => {
       onPointerDown={(e: Event) => e.stopPropagation()}
     >
       <Row>
-        <Name>provider</Name>
-        <select
-          value={p?.name}
-          onChange={(e: Event) =>
-            setName((e.target as HTMLSelectElement).value)}
-        >
-          {ps.map((x) => <option key={x.name} value={x.name}>{x.name}</option>)}
-        </select>
-      </Row>
-      <Row>
         <Name>model</Name>
         <select
-          value={m}
+          value={m?.model}
           onChange={(e: Event) =>
             setModel((e.target as HTMLSelectElement).value)}
         >
-          {p?.models.map((x) => <option key={x} value={x}>{x}</option>)}
+          {ms.map((x) => (
+            <option key={x.model} value={x.model}>{x.label}</option>
+          ))}
         </select>
       </Row>
       {/* effort is a provider's own axis — claude has none, so no row */}
-      {!!p?.efforts.length && (
+      {!!m?.p.efforts.length && (
         <Row>
           <Name>effort</Name>
           <select
@@ -147,11 +151,11 @@ let Form = ({ a }: { a: Ask }) => {
             onChange={(e: Event) =>
               setEffort((e.target as HTMLSelectElement).value)}
           >
-            {p.efforts.map((x) => <option key={x} value={x}>{x}</option>)}
+            {m.p.efforts.map((x) => <option key={x} value={x}>{x}</option>)}
           </select>
         </Row>
       )}
-      <Go type='button' disabled={!p} onClick={go}>▶ start</Go>
+      <Go type='button' disabled={!m} onClick={go}>▶ start</Go>
     </Frame>
   )
 }

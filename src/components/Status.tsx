@@ -21,7 +21,7 @@ import {
 } from '../commands.ts'
 import { navigate, screenTarget } from './nav.tsx'
 import { drop, peek, save } from './drafts.ts'
-import { load, providers } from './Run.tsx'
+import { load, offers, providers } from './Run.tsx'
 import { Tray } from './Tray.tsx'
 import { block } from './ui.tsx'
 
@@ -126,27 +126,29 @@ let scene = (task: string): Change[] => {
   ]
 }
 
-// The spawn intent (:fix): defaults are the server's table — first
-// provider, its first model, medium effort when offered — the same list
-// the Run form reads. The session is one graph write on the same socket
+// The spawn intent (:fix): defaults are the first offer, medium effort
+// when its provider has the axis — the same list the Run form shows.
+// The session is one graph write on the same socket
 // the task just rode, so ordering is free; the beat before naming it
 // lets the server-minted num cast back. The bar narrates as answers
 // arrive; anything the graph can't honor lands as a failed Session.
 let launch = async (task: string) => {
   try {
     if (!providers.value.length) await load()
-    let p = providers.value[0]
-    if (!p) throw new Error('no providers')
+    let m = offers(providers.value)[0]
+    if (!m) throw new Error('no providers')
     let eid = uuid()
     mutate({
       eid,
       name: 'session',
       comp: {
         id: uuid(),
-        provider: p.name,
-        model: p.models[0],
-        ...(p.efforts.length
-          ? { effort: p.efforts.includes('medium') ? 'medium' : p.efforts[0] }
+        provider: m.p.name,
+        model: m.model,
+        ...(m.p.efforts.length
+          ? {
+            effort: m.p.efforts.includes('medium') ? 'medium' : m.p.efforts[0],
+          }
           : {}),
         requested_task_eid: task,
       },

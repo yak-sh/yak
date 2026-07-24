@@ -101,6 +101,7 @@ Deno.test('providers: every adapter but fake, allowlists only — no argv', () =
       'name',
       'models',
       'efforts',
+      'labels',
     ]),
   )
   // the browser offers exactly what a start request is checked against
@@ -108,6 +109,12 @@ Deno.test('providers: every adapter but fake, allowlists only — no argv', () =
     ps.find((p) => p.name == 'claude')?.models,
     adapters.claude.models,
   )
+  // every friendly-named offer fronts an allowlisted model
+  for (let p of ps) {
+    for (let m of Object.keys(p.labels)) {
+      assertEquals(p.models.includes(m), true)
+    }
+  }
   assertEquals(ps.find((p) => p.name == 'claude')?.efforts, [])
   assertEquals(
     ps.find((p) => p.name == 'codex')?.efforts,
@@ -121,8 +128,8 @@ Deno.test('claude: short aliases and pinned ids both validate; opus-5 offered', 
   assertEquals(trouble({ provider: 'claude', model: 'sonnet' }), null)
   assertEquals(trouble({ provider: 'claude', model: 'claude-opus-5' }), null)
   assertEquals(trouble({ provider: 'claude', model: 'claude-opus-4-8' }), null)
-  // the new model is in the menu, not just the allowlist
-  assertEquals(claude.models.includes('claude-opus-5'), true)
+  // the new model is on the menu with its friendly name, not just allowed
+  assertEquals(claude.labels['claude-opus-5'], 'Opus 5')
 })
 
 Deno.test('trouble: unknown provider/model/effort each name the valid ones', () => {

@@ -29,6 +29,10 @@ export type Job = {
 export type Adapter = {
   models: string[]
   efforts: string[]
+  // The spawn menu: offered model → friendly name. A subset of models —
+  // short aliases stay accepted but unoffered, so a form never shows the
+  // same model twice.
+  labels: Record<string, string>
   argv: (job: Job) => string[]
   // Resume a settled thread with more to say: the same flags as argv, but
   // pointed at an existing provider session and carrying the new prompt.
@@ -86,8 +90,8 @@ let gist = (input: unknown): string => {
   return preview(input)
 }
 
-// The table as a browser may see it (GET /providers): the names and the
-// two allowlists a Run form offers, and nothing else — argv (and the
+// The table as a browser may see it (GET /providers): the names, the
+// two allowlists, and the friendly-named menu — nothing else; argv (and the
 // paths in it) is this side's business. Derived, so a new provider needs
 // no second edit.
 // fake is a test rig, not an offer — it stays callable (tests, API smoke
@@ -99,6 +103,7 @@ export let providers = () =>
       name,
       models: a.models,
       efforts: a.efforts,
+      labels: a.labels,
     }))
 
 // A start request weighed against a provider's allowlists — the friendly
@@ -139,6 +144,7 @@ export let adapters: Record<string, Adapter> = {
   fake: {
     models: ['fake-fast', 'fake-slow'],
     efforts: ['low', 'medium', 'high'],
+    labels: { 'fake-fast': 'Fake Fast', 'fake-slow': 'Fake Slow' },
     argv: (j) => [
       Deno.execPath(),
       'run',
@@ -224,6 +230,13 @@ export let adapters: Record<string, Adapter> = {
       'claude-haiku-4-5',
     ],
     efforts: [],
+    labels: {
+      'claude-fable-5': 'Fable 5',
+      'claude-opus-5': 'Opus 5',
+      'claude-opus-4-8': 'Opus 4.8',
+      'claude-sonnet-5': 'Sonnet 5',
+      'claude-haiku-4-5': 'Haiku 4.5',
+    },
     argv: (j) => [
       'claude',
       '-p',
@@ -394,6 +407,11 @@ export let adapters: Record<string, Adapter> = {
     // The celestial line, all probed live against the CLI.
     models: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'],
     efforts: ['low', 'medium', 'high', 'xhigh'],
+    labels: {
+      'gpt-5.6-sol': 'GPT-5.6 Sol',
+      'gpt-5.6-terra': 'GPT-5.6 Terra',
+      'gpt-5.6-luna': 'GPT-5.6 Luna',
+    },
     argv: (j) => [
       'codex',
       'exec',
