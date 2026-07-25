@@ -273,6 +273,20 @@ let docsIn = (changes: Change[]) => {
 let words = (doc?: { title: string; body: string }) =>
   doc ? cleanBody(doc.body || doc.title) : ''
 
+// When an entity was born, from the `created` stamps in the batch. A live
+// frame doesn't need this — everything in it is now — but a resume sweep
+// reads a whole snapshot, where a target may carry a year of comments, and
+// only the ones written in the knock's own minute rode with it.
+let bornIn = (changes: Change[]) => {
+  let born = new Map<string, number>()
+  for (let c of changes) {
+    if (c.name != 'created' || !c.comp) continue
+    let t = Date.parse(str(c.comp.at))
+    if (t) born.set(c.eid, t)
+  }
+  return born
+}
+
 // The filter + format, pure. Given one broadcast batch and the session context,
 // return the channel events to emit — in batch order, so delivery is
 // deterministic. Three things are aimed at a session:
@@ -288,6 +302,9 @@ let words = (doc?: { title: string; body: string }) =>
 //   3. a `mail` arrival for the session's home project — see the branch.
 export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
   let docs = docsIn(changes)
+  // Only the resume sweep needs birthdays (commentOn) — a live batch is one
+  // moment, so everything in it rode together.
+  let born = ctx.mode == 'resume' ? bornIn(changes) : undefined
   let out: Event[] = []
   // Already told: our own deliveries always, the fleet's `notified` stamp
   // except on a catch-up replay (see Ctx.mode).
@@ -331,7 +348,13 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
       if (told(c.eid)) continue
       let at = str(c.comp.target_eid)
       let atId = at ? ctx.idOf(at) ?? at : null
-      let note = commentOn(changes, docs, at)
+      let when = Date.parse(str(c.comp.acted_at))
+      let note = commentOn(
+        changes,
+        docs,
+        at,
+        born && when ? { born, at: when } : undefined,
+      )
       let head = atId ? `knock: look at ${atId}` : 'knock'
       let content = note ? `${head} — ${note}` : head
       out.push({ content, meta: { kind: 'knock' }, eid: c.eid })
@@ -371,16 +394,29 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
 
 // The words riding a knock: a comment in the same batch aimed at the knock's
 // TARGET. A knock is a nudge; the accompanying comment carries what to say.
+// `near` is the resume sweep's clock: a snapshot is not a batch, so the words
+// are picked by TIME instead — the newest comment on the target born in the
+// knock's own minute, the window knock.ts's wordsFor() uses. None in that
+// window means the knock arrives bare rather than wearing someone else's
+// words.
 let commentOn = (
   changes: Change[],
   docs: Map<string, { title: string; body: string }>,
   target: string,
+  near?: { born: Map<string, number>; at: number },
 ) => {
+  let best = ''
+  let bestAt = 0
   for (let c of changes) {
     if (c.name != 'comment' || !c.comp) continue
     if (str(c.comp.target_eid) != target) continue
     let w = words(docs.get(c.eid))
-    if (w) return w
+    if (!w) continue
+    if (!near) return w
+    let t = near.born.get(c.eid) ?? 0
+    if (!t || t > near.at || near.at - t > 60_000 || t <= bestAt) continue
+    best = w
+    bestAt = t
   }
-  return ''
+  return best
 }

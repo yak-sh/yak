@@ -321,6 +321,36 @@ Deno.test('a resume sweep rings the knock the disconnect ate (T-7302)', () => {
   ])
 })
 
+Deno.test('a resume sweep carries the words that rode THAT knock', () => {
+  // A snapshot holds every comment ever aimed at the target, so the words are
+  // picked by time — the knock's own minute — not by scan order.
+  let born = (eid: string, at: string) => ch(eid, 'created', { eid, at })
+  let batch: Change[] = [
+    ch('old', 'comment', { target_eid: 't9', author_eid: 's1' }),
+    ch('old', 'doc', { title: '', body: 'last tuesday' }),
+    born('old', '2026-07-20T00:00:00Z'),
+    cast(),
+    born('k7', '2026-07-25T00:17:58Z'),
+    ch('new', 'comment', { target_eid: 't9', author_eid: 's1' }),
+    ch('new', 'doc', { title: '', body: 'the wake words' }),
+    born('new', '2026-07-25T00:17:57.900Z'),
+  ]
+  assertEquals(
+    channelEvents(batch, ctx({ mode: 'resume' }))[0].content,
+    'knock: look at T-9 — the wake words',
+  )
+  // Nothing in the window (a wake mints no comment at all) → bare nudge.
+  assertEquals(
+    channelEvents(
+      [cast(), born('k7', '2026-07-25T00:17:58Z')],
+      ctx({
+        mode: 'resume',
+      }),
+    )[0].content,
+    'knock: look at T-9',
+  )
+})
+
 Deno.test('a resume sweep leaves a delivered knock alone', () => {
   // `notified` is the bound: the stamp was made good, so the row is history.
   assertEquals(
