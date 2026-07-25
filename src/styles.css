@@ -6,6 +6,7 @@
    the scrollbar touches the card border and padding scrolls with content. */
 
 :root {
+  color-scheme: dark; /* native widgets/scrollbars match the palette */
   --gap: 0.75rem;
   --half-gap: calc(var(--gap) / 2);
   --radius: 6px;
@@ -42,6 +43,34 @@
   --wip: var(--yellow);
   --done: var(--purple);
   --cancelled: var(--dim); /* settled, but not a success — stays muted */
+}
+
+/* A light system asks, Everforest light (medium) answers: the SAME vars
+   re-pointed at the mirror palette — every rule below stays untouched.
+   Each value sits at the dark one's position (bg_dim/bg0/bg1, grey2/
+   grey0, fg, the six accents); borders step up to bg3/bg4 because light
+   bg2 IS bg_dim — a border the same color as the floor isn't one. */
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+
+    --bg: #efebd4;
+    --surface: #fdf6e3;
+    --card: #f4f0d9;
+    --border: #e6e2cc;
+    --border2: #e0dcc7;
+
+    --text: #5c6a72;
+    --muted: #829181;
+    --dim: #a6b0a0;
+
+    --accent: #8da101;
+    --red: #f85552;
+    --orange: #f57d26;
+    --purple: #df69ba;
+    --blue: #3a94c5;
+    --yellow: #dfa000;
+  }
 }
 
 /* Fat fingers get fat targets: every control that declares the --tap
