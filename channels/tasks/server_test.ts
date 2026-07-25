@@ -23,9 +23,10 @@ let ch = (
 
 // A stub id book — the socket-fed index is exercised separately (learn tests).
 let idOf = (eid: string): string | null =>
-  ({ s1: 'S-1', t9: 'T-9', p1: 'P-1', m1: 'E-5' } as Record<string, string>)[
-    eid
-  ] ?? null
+  ({ sess: 'S-31', s1: 'S-1', t9: 'T-9', p1: 'P-1', m1: 'E-5' } as Record<
+    string,
+    string
+  >)[eid] ?? null
 
 let ctx = (over: Partial<Ctx> = {}): Ctx => ({
   sessionEid: 'sess',
@@ -268,7 +269,7 @@ Deno.test('a catch-up replay pushes a notified gap item anyway (T-7167)', () => 
   assertEquals(
     channelEvents(
       [stamp()],
-      ctx({ docOf: letter, notified: told, catchup: true }),
+      ctx({ docOf: letter, notified: told, mode: 'catchup' }),
     )
       .length,
     1,
@@ -280,9 +281,74 @@ Deno.test('a catch-up replay pushes a notified gap item anyway (T-7167)', () => 
   ]
   assertEquals(channelEvents(cmt, ctx({ notified: told })), [])
   assertEquals(
-    channelEvents(cmt, ctx({ notified: told, catchup: true }))[0].content,
+    channelEvents(cmt, ctx({ notified: told, mode: 'catchup' }))[0].content,
     'gap message',
   )
+})
+
+Deno.test('what THIS run injected is never re-rung, even by a catch-up', () => {
+  // Our own delivery memory outranks every mode: the `notified` write can be
+  // lost (the server is down exactly when gaps happen), so the plugin keeps
+  // its own record of what it said.
+  let mine = new Set(['m1'])
+  assertEquals(
+    channelEvents(
+      [stamp()],
+      ctx({ docOf: letter, sent: (e) => mine.has(e), mode: 'catchup' }),
+    ),
+    [],
+  )
+})
+
+// --- the reconnect sweep (T-7302) --------------------------------------------
+// A knock that commits while the socket is down is INSIDE the snapshot the
+// reconnect fetches, so no {since} window replays it. The resume pass reads
+// state instead: the ladder stamped `cast S-31` — this session — and nothing
+// ever stamped `notified`, so the stamp is a claim nobody made good.
+
+let cast = (over: Record<string, unknown> = {}) =>
+  ch('k7', 'knock', {
+    to_eid: 'sess',
+    target_eid: 't9',
+    acted_at: '2026-07-25T00:17:58Z',
+    delivery: 'cast S-31',
+    ...over,
+  })
+
+Deno.test('a resume sweep rings the knock the disconnect ate (T-7302)', () => {
+  assertEquals(channelEvents([cast()], ctx({ mode: 'resume' })), [
+    { content: 'knock: look at T-9', meta: { kind: 'knock' }, eid: 'k7' },
+  ])
+})
+
+Deno.test('a resume sweep leaves a delivered knock alone', () => {
+  // `notified` is the bound: the stamp was made good, so the row is history.
+  assertEquals(
+    channelEvents([cast()], ctx({ mode: 'resume', notified: () => true })),
+    [],
+  )
+  // …and so is a knock the ladder resolved some OTHER way (spawn, mail) or
+  // cast to a different session on this actor.
+  assertEquals(
+    channelEvents(
+      [cast({ delivery: 'spawned S-99' })],
+      ctx({
+        mode: 'resume',
+      }),
+    ),
+    [],
+  )
+  assertEquals(
+    channelEvents([cast({ delivery: 'cast S-99' })], ctx({ mode: 'resume' })),
+    [],
+  )
+})
+
+Deno.test('a live re-broadcast of that same stamp is still a receipt', () => {
+  // Only the resume sweep reads a `cast S-me` stamp as a missed delivery;
+  // live, the resolver's own re-broadcast must stay silent.
+  assertEquals(channelEvents([cast()], ctx()), [])
+  assertEquals(channelEvents([cast()], ctx({ mode: 'catchup' })), [])
 })
 
 Deno.test("learn caches a mail's doc for the stamp frame that follows", () => {

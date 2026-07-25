@@ -50,15 +50,26 @@ export type Ctx = {
   // is not re-injected, even across a reconnect. Replaces the old ephemeral
   // `seen`/`delivered` set; `inject-needed == NOT notified`.
   notified?: (eid: string) => boolean
-  // The {since} catch-up replay (T-7167): on a freshly-(re)connected socket the
-  // server replays the gap as {catchup}, and those items must push even if
-  // `notified` is already set — the digest/bus may have stamped it while the
-  // channel was down, but that stamp dedups a live RE-broadcast, not the one
-  // push the idle operator never got. So the notified gate holds for live frames
-  // and lifts for catch-up. Bounded to the small snapshot→join window, so no
-  // backlog flood; `done`/`injects`/`operator` still gate (correctness, not
-  // dedup). Absent = live frame.
-  catchup?: boolean
+  // What THIS run injected — the plugin's own delivery memory, the one gate
+  // no mode lifts. `notified` is the fleet's stamp (the bus writes it too,
+  // and our own write is lost if the server is down when we try); this is
+  // ours, so a replay can never re-ring what we already said.
+  sent?: (eid: string) => boolean
+  // Which pass this is; absent = a live frame.
+  // - `catchup`: the {since} journal replay on a freshly-(re)connected
+  //   socket (T-7167). It pushes past `notified`, because the digest/bus may
+  //   have stamped a gap item while the channel was down and that stamp
+  //   dedups a live RE-broadcast, not the one push an idle operator never
+  //   got. Bounded to the snapshot→join window, so no backlog flood.
+  // - `resume`: the reconnect sweep over a whole snapshot (T-7302). The
+  //   disconnect→snapshot gap is INSIDE the snapshot, so no {since} window
+  //   can replay it — the channel reconciles against state instead, and
+  //   `notified` is what bounds it to what nobody has told this session yet.
+  //   It also lets a knock the ladder already stamped `cast S-me` through:
+  //   see the knock branch.
+  // Either way `done`/`injects`/`operator` still gate — correctness, not
+  // dedup.
+  mode?: 'catchup' | 'resume'
   // Whether the served session is the project's operator loop — a specialist
   // (false) gets no project mail, only direct address (client.ts isOperator,
   // T-7006). Absent = true (an unresolved session errs toward delivery).
@@ -237,6 +248,15 @@ export let injects = (
   operator && !!m.verified && !done && !!homeEid &&
   str(m.target_eid) == homeEid
 
+// A knock the ladder stamped as OURS: `delivery: cast S-31` names the very
+// session this channel serves (knock.ts writes `cast S-${num}` when the door
+// answered). Paired with the `notified` gate it is the whole test for "the
+// stamp says delivered and nobody delivered it".
+let lost = (c: Change, ctx: Ctx) => {
+  let me = ctx.idOf(ctx.sessionEid)
+  return !!me && str(c.comp?.delivery) == `cast ${me}`
+}
+
 // The two edges of the doc a component's body rides on, indexed by eid within
 // the batch — a comment's words and a knock's note both land as a `doc` change
 // beside their own component (mint-time). Bodiless means the doc isn't here.
@@ -269,6 +289,10 @@ let words = (doc?: { title: string; body: string }) =>
 export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
   let docs = docsIn(changes)
   let out: Event[] = []
+  // Already told: our own deliveries always, the fleet's `notified` stamp
+  // except on a catch-up replay (see Ctx.mode).
+  let told = (eid: string) =>
+    !!ctx.sent?.(eid) || (ctx.mode != 'catchup' && !!ctx.notified?.(eid))
   for (let c of changes) {
     if (!c.comp) continue
 
@@ -278,8 +302,7 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
       if (!mine) continue
       let content = words(docs.get(c.eid))
       if (!content) continue // bodiless mint or a later comp-only patch
-      // already told (this plugin or sweep) — but a catch-up replay pushes anyway
-      if (!ctx.catchup && ctx.notified?.(c.eid)) continue
+      if (told(c.eid)) continue
       let from = ctx.idOf(str(c.comp.author_eid)) ?? 'unknown'
       let meta: Record<string, string> = {
         kind: 'comment',
@@ -295,12 +318,17 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
     if (c.name == 'knock') {
       // The resolver's stamp re-broadcasts the full row with acted_at
       // set (a server-only column, absent at mint) — that's the receipt
-      // of a knock already delivered, not a second nudge.
-      if (c.comp.acted_at != null) continue
+      // of a knock already delivered, not a second nudge. On a RESUME
+      // sweep it is the opposite: `delivery: cast S-me` is the ladder
+      // CLAIMING this channel took it, and an un-`notified` row proves the
+      // claim false — that knock is exactly what a disconnect ate
+      // (T-7302), so ring it and make the stamp true.
+      if (c.comp.acted_at != null && !(ctx.mode == 'resume' && lost(c, ctx))) {
+        continue
+      }
       let recipient = str(c.comp.to_eid)
       if (recipient != ctx.sessionEid && recipient != ctx.actorEid) continue
-      // already told (this plugin or sweep) — but a catch-up replay pushes anyway
-      if (!ctx.catchup && ctx.notified?.(c.eid)) continue
+      if (told(c.eid)) continue
       let at = str(c.comp.target_eid)
       let atId = at ? ctx.idOf(at) ?? at : null
       let note = commentOn(changes, docs, at)
@@ -320,8 +348,7 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
       if (
         !injects(c.comp, ctx.homeEid, ctx.done?.(c.eid), ctx.operator !== false)
       ) continue
-      // already told (this plugin or sweep) — but a catch-up replay pushes anyway
-      if (!ctx.catchup && ctx.notified?.(c.eid)) continue
+      if (told(c.eid)) continue
       let id = ctx.idOf(c.eid)
       let doc = docs.get(c.eid) ?? ctx.docOf?.(c.eid)
       let from = cleanAttr(str(c.comp.from)) || 'unknown'

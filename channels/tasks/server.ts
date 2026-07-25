@@ -169,12 +169,21 @@ let resolve = (changes: Change[]) => {
 let held: { cursor?: number; epoch?: string; vocabHash?: string } = {}
 
 // Fold a snapshot into our state: remember its cursor/epoch/vocab (for the next
-// {since}), warm the index, resolve identity. No emit — a snapshot is current
-// state, not new deltas; replaying it would ring historical mail.
+// {since}), warm the index, resolve identity.
+//
+// The FIRST snapshot is state, not news — a session that just booted hears its
+// backlog from the digest, and ringing history would be noise. A LATER one
+// means we were AWAY, and the gap it hides is the bug T-7302 names: whatever
+// committed while the socket was down is INSIDE this snapshot, so the {since}
+// handshake below (whose cursor comes from this very snapshot, and whose epoch
+// a server restart invalidates anyway) can never replay it. So a re-sync
+// RESUMES: the same filter over the snapshot, bounded by `notified` to what
+// nobody has told this session yet.
+let synced = false
 let absorb = (snap: Snapshot) => {
   held = { cursor: snap.cursor, epoch: snap.epoch, vocabHash: snap.vocabHash }
-  learn(index, snap.changes)
-  resolve(snap.changes)
+  feed(snap.changes, synced ? 'resume' : undefined)
+  synced = true
 }
 
 // One authed-free GET of the whole graph — warms the index and resolves the
@@ -248,12 +257,16 @@ let markNotified = async (changes: Change[]) => {
 // emit whatever it aims at this session. Control frames (the watcher's 'reload')
 // are non-arrays — ignored.
 
-// Learn from an applied batch, keep identity fresh, and emit whatever it aims
-// at this session. Shared by live array frames and the {catchup} reply — mail
-// that landed in the fetch→join gap must still inject. `catchup` lifts the
-// `notified` dedup for the replay (T-7167): a gap item the digest/bus stamped
-// while we were down never got the PUSH the idle operator is owed.
-let feed = (changes: Change[], catchup = false) => {
+// Everything this run injected — our own delivery memory, kept because the
+// durable `notified` stamp is written over the wire and a server that is
+// down (exactly when a gap happens) eats that write.
+let sent = new Set<string>()
+
+// Learn from a batch of changes, keep identity fresh, and emit whatever it
+// aims at this session. Three passes share it: live frames, the {catchup}
+// journal replay, and the reconnect `resume` sweep over a snapshot — the
+// modes differ only in how they dedup (filter.ts Ctx.mode).
+let feed = (changes: Change[], mode?: 'catchup' | 'resume') => {
   learn(index, changes)
   resolve(changes)
   if (!sessionEid) return // our session isn't in the graph yet
@@ -268,9 +281,8 @@ let feed = (changes: Change[], catchup = false) => {
     docOf: (eid) => docOf(index, eid),
     done: (eid) => doneOf(index, eid),
     notified: (eid) => notifiedOf(index, eid),
-    // A {since} catch-up replay pushes gap items even if already `notified`
-    // (T-7167) — the digest/bus may have stamped them while we were down.
-    catchup,
+    sent: (eid) => sent.has(eid),
+    mode,
     // The operator loop gets project mail; a specialist does not (T-7006).
     operator: origin != 'managed' && !requestedTaskEid,
   })
@@ -283,6 +295,7 @@ let feed = (changes: Change[], catchup = false) => {
     // round-trip gap is already deduped; learn() confirms it when the write
     // echoes back. The write itself is idempotent (insert-or-ignore).
     index.get(e.eid)?.comps.add('notified')
+    sent.add(e.eid)
     stamps.push({ eid: e.eid, name: 'notified', comp: {} })
   }
   if (stamps.length) markNotified(stamps)
@@ -304,7 +317,7 @@ let onBatch = (data: string) => {
   }
   if (Array.isArray(frame)) return feed(frame as Change[])
   let f = frame as { catchup?: Change[]; reset?: boolean; snapshot?: Snapshot }
-  if (f?.catchup !== undefined) return feed(f.catchup, true)
+  if (f?.catchup !== undefined) return feed(f.catchup, 'catchup')
   if (f?.reset && f.snapshot) absorb(f.snapshot)
 }
 
