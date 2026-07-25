@@ -2577,14 +2577,19 @@ a[data-ref]:hover {
   box-shadow: 0 6px 24px rgb(0 0 0 / 0.35);
   overflow: hidden;
 }
+/* A titlebar like a card's: the title flexes, the view tabs cluster
+   right (the shared .Tab chips assume the --gap row), and the whole
+   head is the drag-to-pin handle. */
 .Peek_Head {
   display: flex;
-  align-items: first baseline;
-  gap: var(--half-gap);
+  align-items: center;
+  gap: var(--gap);
   padding: 4px var(--half-gap);
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   font-size: 12px;
+  cursor: grab;
+  user-select: none;
 }
 .Peek_Body {
   padding: var(--half-gap);

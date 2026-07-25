@@ -1,29 +1,32 @@
 import { useLayoutEffect, useRef } from 'preact/hooks'
-import { ent, mutate, toPlane, topZ, uuid } from '../live.ts'
-import { block } from './ui.tsx'
-import { peek, screenTarget } from './nav.tsx'
-import { resolve } from './registry.ts'
+import { ent } from '../live.ts'
+import { block, el } from './ui.tsx'
+import { peek } from './nav.tsx'
+import { applicable, resolve } from './registry.ts'
+import { dragData } from './drag.ts'
 import { Entity } from './Entity.tsx'
+import { icons } from './Card.tsx'
+import { Icon } from './icons.tsx'
 import { place } from './overlay.tsx'
 
 // The Peek: what a clicked link opens on desktop — a temporary card in a
 // popover just above the pointer, clamped to the viewport (overlay.tsx
-// place). Reading is free; the first pointerdown INSIDE adopts the card
-// onto the canvas right where the popover floats — and closing waits for
-// that click to finish, so the interaction that pinned it still lands.
-// Esc, q, or a click anywhere else dismisses it unpinned.
+// place). Reading AND clicking are free; the head is a titlebar — view
+// tabs like a card's, and the drag handle. Dragging it onto the canvas
+// PINS the peek (the standard card payload; Canvas owns the drop), and a
+// landed drop closes it — the card it became is on the canvas now. Esc,
+// q, or a click anywhere else dismisses it unpinned.
 
 let Frame = block('div', 'Peek', { Head: 'div', Body: 'div' })
 let { Head, Body } = Frame
+let Tab = el('button', 'Tab')
 
 export let Peek = () => {
   let p = peek.value
   let root = useRef<HTMLDivElement>(null)
-  let done = useRef(false)
 
   useLayoutEffect(() => {
     if (!p) return
-    done.current = false
     let el = root.current!
     let anchor = new DOMRect(p.x - 8, p.y - 8, 16, 16)
     let put = () => place(el, anchor, 'above')
@@ -58,53 +61,46 @@ export let Peek = () => {
 
   if (!p) return null
   let e = ent(p.eid)
+  let tabs = applicable(e)
+  let view = p.view && tabs.includes(p.view) ? p.view : resolve(e).view
 
-  // The first interaction adopts: a card+pin minted where the popover
-  // floats, top of the stack. A root with no canvas has nowhere to pin,
-  // so the peek just stays a peek there.
-  let adopt = () => {
-    if (done.current) return
-    let t = screenTarget()
-    let box = document.querySelector('.Canvas')?.getBoundingClientRect()
-    if (!t || !box || !ent(t.eid).canvas) return
-    done.current = true
-    let r = root.current!.getBoundingClientRect()
-    let at = toPlane(r.left, r.top, box)
-    let card = uuid()
-    mutate(
-      {
-        eid: card,
-        name: 'card',
-        comp: { eid: card, target_eid: p!.eid, view: resolve(e).view },
-      },
-      {
-        eid: card,
-        name: 'pin',
-        comp: {
-          eid: card,
-          canvas_eid: t.eid,
-          x: Math.round(at.x),
-          y: Math.round(at.y),
-          w: 0,
-          h: 0,
-          z: topZ(t.eid) + 1,
-        },
-      },
-    )
-    // the click that pinned us finishes in the popover, then it yields
-    // to the real card underneath
-    addEventListener('pointerup', () => {
-      setTimeout(() => (peek.value = null), 60)
-    }, { once: true })
+  // Every drag out of the head ends here (dragend bubbles): a landed
+  // drop means the peek lives on the canvas now, so it closes; a
+  // cancelled drag keeps it floating.
+  let flown = (ev: DragEvent) => {
+    if (ev.dataTransfer?.dropEffect != 'none') peek.value = null
   }
 
   return (
-    <Frame elRef={root} onPointerDown={adopt}>
-      <Head>
+    <Frame elRef={root}>
+      <Head
+        draggable
+        onDragStart={(ev: DragEvent) => dragData(ev, p!.eid, view)}
+        onDragEnd={flown}
+      >
         <Entity eid={p.eid} view='Card.Title' />
+        {tabs.map((v) => (
+          <Tab
+            type='button'
+            mod={v == view && 'on'}
+            draggable
+            // a tab flies its OWN view: stop the head's dragstart from
+            // overwriting the payload with the current one
+            onDragStart={(ev: DragEvent) => {
+              ev.stopPropagation()
+              dragData(ev, p!.eid, v)
+            }}
+            onClick={() => v != view && (peek.value = { ...p!, view: v })}
+            key={v}
+            aria-label={v}
+            data-tip={v}
+          >
+            <Icon name={icons[v]} />
+          </Tab>
+        ))}
       </Head>
       <Body>
-        <Entity eid={p.eid} view={`Card.${resolve(e).view}`} />
+        <Entity eid={p.eid} view={`Card.${view}`} />
       </Body>
     </Frame>
   )

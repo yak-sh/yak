@@ -33,7 +33,10 @@ export let navigate = (to: string) => {
 
 // A peeked entity: desktop's answer to clicking a link — a popover card
 // at the pointer instead of a fullscreen root swap (Peek.tsx renders it).
-export let peek = signal<{ eid: string; x: number; y: number } | null>(null)
+// view is the peek's own tab choice; unset means the entity's default.
+export let peek = signal<
+  { eid: string; x: number; y: number; view?: string } | null
+>(null)
 
 // One opener for every entity click: a fine pointer peeks, a coarse one
 // navigates — fullscreen IS the phone's right answer. navigate() stays
