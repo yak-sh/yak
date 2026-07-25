@@ -398,8 +398,7 @@ export let SessionRow = ({ e }: { e: Ent }) => {
   return (
     <RowLine {...clickProps(e)}>
       <Dot status={s.status ?? ''} />
-      <RowLine.Status>{s.status ?? s.id}</RowLine.Status>
-      {s.provider && <RowLine.Model>{s.provider} · {s.model}</RowLine.Model>}
+      {s.model && <RowLine.Model>{s.model}</RowLine.Model>}
       <Id e={e} />
     </RowLine>
   )
