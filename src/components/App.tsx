@@ -35,6 +35,31 @@ let Frame = block('main', 'App', {
 let { Bar, Brand, Trail, Body } = Frame
 let Tab = el('button', 'Tab')
 
+// The URL named nothing the cache can resolve — a typo'd id, a dead
+// entity, a foreign graph's number. The 404 face keeps the whole shell
+// (brand, `/` search, the : statusbar): a dead link offers the doors,
+// never a blank wall.
+let LostFrame = block('section', 'Lost', { Code: 'p', Id: 'code', Hint: 'p' })
+let { Code, Id, Hint } = LostFrame
+let Lost = () => {
+  let path = new URL(route.value, 'http://x').pathname
+  return (
+    <LostFrame>
+      <Code>404</Code>
+      <p>
+        <Id>{decodeURIComponent(path)}</Id>{' '}
+        names nothing here — a mistyped id, or an entity that's gone.
+      </p>
+      <Hint>
+        press <kbd>/</kbd> to search, or{' '}
+        <a href='/' onClick={follow('/')}>
+          head home
+        </a>
+      </Hint>
+    </LostFrame>
+  )
+}
+
 // The trail's last few, worn as breadcrumbs between brand and title —
 // bare chips (the titlebar surround says the title; the tooltip carries
 // it), each a real anchor whose plain click is the deliberate in-place
@@ -112,7 +137,26 @@ export let App = () => {
     )
   }
   let t = screenTarget()
-  if (!t) return <Frame />
+  if (!t) {
+    return (
+      <Frame
+        onPointerDown={() => {
+          if (menu.value) menu.value = null
+        }}
+      >
+        <Bar>
+          <Brand href='/'>Tasks</Brand>
+        </Bar>
+        <Body>
+          <Lost />
+        </Body>
+        <Menu />
+        <Peek />
+        <Search open={goto} />
+        <Status />
+      </Frame>
+    )
+  }
   let e = ent(t.eid)
   let tabs = applicable(e)
   let view = t.view && tabs.includes(t.view) ? t.view : tabs[0]

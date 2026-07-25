@@ -271,6 +271,25 @@ html {
   flex: 0 0 1px;
 }
 
+/* The 404 face (App.tsx Lost): the URL named nothing the cache can
+   resolve. Rides the prose column; the shell around it stays whole. */
+.Lost_Code {
+  font-size: 2.5rem;
+  font-weight: 600;
+  color: var(--dim);
+  /* the drop from the bar lives here: the prose-column rule (App_Body's
+     :not) outguns .Lost's own margin, but can't reach inside it */
+  margin: 15vh 0 0;
+}
+.Lost_Hint {
+  color: var(--dim);
+}
+.Lost_Hint kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
 /* The link context menu: "open here" is the deliberate root change. */
 .Menu {
   position: fixed;
