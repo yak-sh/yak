@@ -1683,8 +1683,13 @@ html {
   white-space: pre-wrap;
   overflow-wrap: break-word;
 }
+/* Selection must paint its OWN block: the UA default highlight is gone the
+   moment an author ::selection rule exists, and text-on-nothing over an
+   identical ghost copy is invisible. Opaque accent hides the ghost's
+   glyphs under the run; dark text reads on it — vim's Visual block. */
 .Status_Cmd::selection {
-  color: var(--text); /* selected glyphs paint here, over the copy */
+  color: var(--bg);
+  background: var(--accent);
 }
 /* The line's paint layer: a copy of the typed text (the verb colored once
    it names a command) places the faded completion exactly past the caret;
