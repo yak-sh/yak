@@ -51,6 +51,50 @@ let errFile = (eid: string) => `${logsDir()}/${eid}.stderr.log`
 let pidFile = (eid: string) => `${logsDir()}/${eid}.pid`
 let codeFile = (eid: string) => `${logsDir()}/${eid}.code`
 
+// Claude Code's own transcript for a session — the path its SessionStart
+// hook reported. It arrives over the WIRE like any other self-report, so
+// it is a reference, not a capability: only Claude's project store is
+// readable through it, or an unauthed /logs would become a file-read
+// oracle for whatever a forged row named.
+let transcriptOf = (eid: string) => {
+  let p = String(
+    (db.prepare('select transcript from session where eid = ?').get(eid) as
+      | { transcript: string | null }
+      | undefined)?.transcript ?? '',
+  )
+  let store = `${Deno.env.get('HOME')}/.claude/projects/`
+  return p.startsWith(store) && p.endsWith('.jsonl') && !p.includes('..')
+    ? p
+    : undefined
+}
+
+// The dialect a session's log speaks. A managed run was ASKED for a
+// provider, so it says which; anything carrying a transcript is Claude
+// Code by construction — nothing else writes one. Derived rather than
+// stamped, because `provider` is a spawn REQUEST column: a session
+// created wearing one is an ask to launch an agent (spawned(), below),
+// so writing it onto an operator's reify would turn every terminal into
+// a failed spawn.
+let dialectOf = (eid: string) => {
+  let s = db.prepare('select provider, transcript from session where eid = ?')
+    .get(eid) as { provider: string | null; transcript: string | null } | null
+  return adapters[String(s?.provider)] ??
+    (s?.transcript ? adapters.claude : undefined)
+}
+
+// The file that IS a session's log. Whoever owns the PROCESS owns its
+// stdout: a run we spawned writes ours, and everything else — an
+// operator's terminal claude — keeps Claude Code's transcript, which
+// `claude --resume` appends to, so one file is the whole story either
+// way. Origin is exactly the right question here (unlike liveness,
+// door.ts): it names who forked the process.
+let logOf = (eid: string) =>
+  (db.prepare('select origin from session where eid = ?').get(eid) as
+      | { origin: string }
+      | undefined)?.origin == 'managed'
+    ? logFile(eid)
+    : transcriptOf(eid) ?? logFile(eid)
+
 let poll = () => Number(Deno.env.get('POLL_MS') ?? 300)
 let grace = () => Number(Deno.env.get('STOP_GRACE_MS') ?? 5000)
 let sleep = (ms: number) => new Promise((go) => setTimeout(go, ms))
@@ -398,6 +442,62 @@ let finish = async (eid: string, t: Tail, run: Run, cast: Cast) => {
   }
 }
 
+// ---- watching a session we did not spawn ----
+
+// An operator's `claude` is not our child: we never forked it, so there
+// is no stdout to own and no exit code to report — and that difference is
+// SAID (started_at/finished_at move, exit_code stays null forever) rather
+// than faked. What such a session does have is Claude Code's transcript,
+// its durable log, read per request by logs() below.
+//
+// So watching is a heartbeat, not a tail: the one thing a client cannot
+// work out for itself is WHEN THE DOOR SHUT (nobody but this process can
+// ask /proc), plus how much has happened. latest_seq rides free — stamp()
+// keeps a bare counter move off the wire (T-7063), so the only broadcast
+// in a whole session's life is the one that ends it.
+let watching = new Set<string>()
+
+// Re-armed by the graph, never by a timer: every claude announces itself
+// by stamping session.pid at SessionStart — including the `claude
+// --resume` a comment spawns (probed live), which is how a woken session
+// starts being followed again without this code knowing it was woken.
+export let watched = (cast: Cast) => (eid: string, comp: Row) => {
+  if (!comp.pid || watching.has(eid)) return
+  if (!transcriptOf(eid)) return // nothing of its own to follow
+  watching.add(eid)
+  let was = db.prepare('select started_at from session where eid = ?').get(
+    eid,
+  ) as { started_at: string | null } | undefined
+  stamp(eid, {
+    ...(was?.started_at ? {} : { started_at: now() }),
+    finished_at: null, // the door is open again
+  }, cast)
+  // Detached on purpose: this is a heartbeat that outlives the batch, not
+  // a job the batch is waiting on — a caller awaiting the dispatch would
+  // wait as long as the operator stays logged in.
+  trail(eid, cast)
+    .catch((e) => console.warn('session watch stopped —', e))
+    .finally(() => watching.delete(eid))
+}
+
+// Follow the transcript for as long as somebody is home. Lines are
+// COUNTED, not parsed: an external session's summary is nobody's to
+// derive — the provider never wrote us a terminal event, and inventing
+// one from a conversation would be a guess.
+let trail = async (eid: string, cast: Cast) => {
+  let t: Tail = { at: 0, seq: 0, ended: false, errs: [] }
+  for (;;) {
+    let shut = !listening(eid)
+    t.seq += readLines(logOf(eid), t).length
+    stamp(eid, {
+      latest_seq: t.seq,
+      ...(shut ? { finished_at: now() } : {}),
+    }, cast)
+    if (shut) return
+    await sleep(poll())
+  }
+}
+
 // ---- reading the log back ----
 
 let clip = (s: string) => s.length > 64_000 ? `${s.slice(0, 64_000)}…` : s
@@ -432,11 +532,9 @@ let rowOf = (line: string, ad: Adapter | undefined) => {
 export let logs = (eid: string, q: URLSearchParams) => {
   let text = ''
   try {
-    text = Deno.readTextFileSync(logFile(eid))
+    text = Deno.readTextFileSync(logOf(eid))
   } catch { /* no log yet: an empty log is not an error */ }
-  let provider = (db.prepare('select provider from session where eid = ?')
-    .get(eid) as { provider: string | null } | undefined)?.provider
-  let ad = adapters[String(provider)]
+  let ad = dialectOf(eid)
   let lines = text.split('\n')
   if (lines.at(-1) == '') lines.pop() // the trailing newline isn't a line
   let limit = Math.min(Math.max(Number(q.get('limit') ?? 100) || 100, 1), 500)
@@ -751,15 +849,9 @@ let launch = async (eid: string, ad: Adapter, j: Launch, cast: Cast) => {
       { base_revision: await git(j.tree, ['rev-parse', 'HEAD']) },
       cast,
     )
-    // A minimal env by allowlist: the child gets what a program needs to
-    // run, plus its own coordinates. Nothing of this server's environment
-    // rides along by accident.
     await track(eid, ad, ad.argv(j), j.tree, {
-      PATH: Deno.env.get('PATH') ?? '',
-      HOME: Deno.env.get('HOME') ?? '',
-      TERM: Deno.env.get('TERM') ?? 'dumb',
+      ...childEnv(j.session_id),
       TASKS_TASK: j.task,
-      TASKS_SESSION: j.session_id,
     }, cast)
   } catch (e) {
     running.delete(eid)
@@ -770,6 +862,20 @@ let launch = async (eid: string, ad: Adapter, j: Launch, cast: Cast) => {
     }, cast)
   }
 }
+
+// A minimal env by allowlist: what a program needs to run, plus its own
+// coordinates. Nothing of this server's environment rides along by
+// accident — TASKS_HOST does, because a child reports its life through
+// the `task` CLI, and it must report to the graph that spawned it.
+let childEnv = (session: string) => ({
+  PATH: Deno.env.get('PATH') ?? '',
+  HOME: Deno.env.get('HOME') ?? '',
+  TERM: Deno.env.get('TERM') ?? 'dumb',
+  TASKS_SESSION: session,
+  ...(Deno.env.get('TASKS_HOST')
+    ? { TASKS_HOST: Deno.env.get('TASKS_HOST')! }
+    : {}),
+})
 
 // Spawn a detached child, record its pid, and follow its output into the
 // row until it exits. The seam a fresh launch and a resume share — the only
@@ -938,11 +1044,41 @@ export let commented =
         | undefined)?.body ?? '',
     ).trim()
     if (!body) return // a bare comment says nothing to say
-    if (!row.provider_session_id) {
+    // The thread to resume. A managed run announced one in its init
+    // event; an external claude never had to — `session.id` IS its
+    // thread, the id the CLI minted and `--resume` takes back.
+    let thread = String(row.provider_session_id ?? '') ||
+      (row.origin == 'managed' ? '' : String(row.id ?? ''))
+    if (!thread) {
       return refuse(eid, 'the run never announced a provider thread', cast)
     }
-    let ad = adapters[String(row.provider)]
+    let ad = dialectOf(eid)
     if (!ad) return refuse(eid, `no adapter for '${row.provider}'`, cast)
+    let job = {
+      instruction: body,
+      session_id: String(row.id),
+      model: row.model ? String(row.model) : '',
+      effort: row.effort ? String(row.effort) : undefined,
+    }
+    // A session we did not fork has no stdin and no log of ours to append
+    // to. Waking it is a `claude --resume` in the cwd it recorded, and
+    // that run writes the words AND the answer into the same transcript
+    // the watcher follows — so the conversation simply continues where
+    // the operator left it. Nothing derives an ending here: the courier
+    // is not the session. Re-arming the watch isn't ours either — the
+    // resumed process stamps its own pid at SessionStart, and watched()
+    // hangs off that. Its raw stream and stderr land beside the log.
+    if (row.origin != 'managed') {
+      if (!row.cwd) return refuse(eid, 'the session recorded no cwd', cast)
+      Deno.mkdirSync(logsDir(), { recursive: true })
+      spawn(
+        eid,
+        ad.resume(job, thread, body),
+        String(row.cwd),
+        childEnv(job.session_id),
+      )
+      return
+    }
     // A swept worktree is no reason to stay quiet: tidy only removes
     // MERGED trees, and the provider's thread outlives them — regrow at
     // the same path and carry on.
@@ -988,27 +1124,12 @@ export let commented =
       finished_at: null,
     }, cast)
 
-    let argv = ad.resume(
-      {
-        instruction: body,
-        session_id: String(row.id),
-        model: String(row.model),
-        effort: row.effort ? String(row.effort) : undefined,
-      },
-      String(row.provider_session_id),
-      body,
-    )
     return track(
       eid,
       ad,
-      argv,
+      ad.resume(job, thread, body),
       String(row.cwd),
-      {
-        PATH: Deno.env.get('PATH') ?? '',
-        HOME: Deno.env.get('HOME') ?? '',
-        TERM: Deno.env.get('TERM') ?? 'dumb',
-        TASKS_SESSION: String(row.id),
-      },
+      childEnv(job.session_id),
       cast,
       from,
     ).catch((e) => {
@@ -1078,5 +1199,15 @@ export let recover = (cast: Cast) => {
     running.set(eid, run)
     run.done = follow(eid, ad, cast)
   }
+  // The other half of boot: sessions we never spawned but were watching.
+  // A restart drops every trail, and an operator's terminal doesn't
+  // re-announce itself for us — so ask the door directly, and stamp the
+  // ending of anyone who left while we were away.
+  for (
+    let s of db.prepare(`
+      select eid, pid from session
+      where origin != 'managed' and pid is not null and finished_at is null
+    `).all() as { eid: string; pid: number }[]
+  ) watched(cast)(s.eid, s)
   return rows.map((r) => r.eid)
 }

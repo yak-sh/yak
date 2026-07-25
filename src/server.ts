@@ -52,6 +52,7 @@ import {
   spawned,
   stopped,
   tidy,
+  watched,
 } from './sessions.ts'
 import { outcome, recent, record, toolCall } from './telemetry.ts'
 import { stamp } from './hot.ts'
@@ -686,6 +687,13 @@ on('session', {
   removed: deleted,
   doc: 'a session created with a provider is a spawn request — validate, ' +
     'launch the agent; a deleted session kills its process',
+})
+on('session', {
+  created: watched(cast),
+  changed: { pid: watched(cast) },
+  doc: 'a session that announced a claude process gets watched: follow its ' +
+    'transcript, and say when the door shuts (we never forked it, so there ' +
+    'is no exit code to report)',
 })
 on('stop_request', {
   created: stopped(cast),

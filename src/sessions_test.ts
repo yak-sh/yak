@@ -10,6 +10,7 @@
 // db.ts and sessions.ts come in dynamically, AFTER the env below points them
 // at :memory: and the temp dirs.
 import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
+import { existsSync } from 'node:fs'
 import { type Change } from './types.ts'
 import { dispatch, on, relay, trace } from './effects.ts'
 
@@ -31,6 +32,7 @@ let {
   spawned,
   stopped,
   tidy,
+  watched,
 } = await import('./sessions.ts')
 
 let uid = () => crypto.randomUUID()
@@ -716,55 +718,96 @@ Deno.test('a comment after the sweep regrows the worktree and resumes', async ()
   assertMatch(refusals(eid)[0], /no worktree to resume in/)
 })
 
-Deno.test('T-7279: comment on external session respects liveness, not origin', async () => {
-  // A live claude process (the operator case)
-  let dir = Deno.makeTempDirSync({ prefix: 'tasks-probe-' })
+// A live process whose /proc comm is `claude` — comm is the name exec'd,
+// so a symlink to this very deno is enough (door_test.ts says more).
+let fakeClaude = async () => {
+  let dir = Deno.makeTempDirSync({ prefix: 'tasks-ext-' })
   Deno.symlinkSync(Deno.execPath(), `${dir}/claude`)
   let c = new Deno.Command(`${dir}/claude`, {
     args: ['eval', 'await new Promise(() => {})'],
     stdout: 'null',
     stderr: 'null',
   }).spawn()
-  for (let i = 0; i < 200; i++) {
-    try {
-      if (Deno.readTextFileSync(`/proc/${c.pid}/comm`).trim() == 'claude') break
-    } catch { /* not exec'd yet */ }
-    await new Promise((r) => setTimeout(r, 10))
-  }
-
-  // An external session (operator's terminal) with a live claude process
-  let live = uid()
-  apply(db, [
-    { eid: live, name: 'session', comp: { id: uid() } },
-  ])
-  db.prepare(
-    `update session set origin = 'external', status = 'completed', provider = 'fake',
-     provider_session_id = 'op-thread', pid = ? where eid = ?`,
-  ).run(c.pid, live)
-
-  // The session can use the scratch repo we already have
-  db.prepare('update session set cwd = ? where eid = ?').run(scratch, live)
-
-  heard = []
-  // Comment on the live external session: should NOT respawn, channel delivers
-  await write(say(live, 'still here?'))
-  assertEquals(row(live)?.status, 'completed', 'live external: no respawn')
-  assertEquals(
-    refusals(live).length,
-    0,
-    'live external: no refusal, channel delivered',
+  await until(
+    () => {
+      try {
+        return Deno.readTextFileSync(`/proc/${c.pid}/comm`).trim() == 'claude'
+      } catch {
+        return false
+      }
+    },
+    'the fake claude to exec',
   )
+  return c
+}
 
-  // Kill the process: the door closes
+// An operator's session as the SessionStart hook reifies one: an id, a
+// cwd, the claude pid, and the transcript Claude Code keeps. The
+// transcript must live in Claude's own project store or the server won't
+// read it (sessions.ts transcriptOf), so the fixture writes one there.
+let store = `${Deno.env.get('HOME')}/.claude/projects/tasks-test`
+try {
+  Deno.removeSync(store, { recursive: true }) // a run leaves only its own
+} catch { /* never made */ }
+let announce = (pid: number, lines: string[], transcript = '') => {
+  let eid = uid()
+  Deno.mkdirSync(store, { recursive: true })
+  let path = transcript || `${store}/${uid()}.jsonl`
+  if (!transcript) {
+    Deno.writeTextFileSync(path, lines.map((l) => `${l}\n`).join(''))
+  }
+  apply(db, [{
+    eid,
+    name: 'session',
+    comp: { id: uid(), cwd: scratch, pid, provider: 'fake', transcript: path },
+  }])
+  return { eid, path }
+}
+
+let SAID = '{"type":"message","role":"assistant","text":"hello from a tty"}'
+
+Deno.test("an external session's log is its transcript, and only Claude's store is readable", async () => {
+  let c = await fakeClaude()
+  let { eid } = announce(c.pid, [SAID])
+  assertEquals(logs(eid, new URLSearchParams()).entries[0].row, {
+    kind: 'say',
+    role: 'agent',
+    text: 'hello from a tty',
+  })
+  // A row naming a file outside Claude's store reads nothing: the path
+  // rides the wire, so it is a reference, never a capability.
+  let sneak = announce(c.pid, [], `${logsDir()}/../../etc/hostname`)
+  assertEquals(logs(sneak.eid, new URLSearchParams()).entries, [])
   c.kill('SIGKILL')
   await c.status
+})
 
-  heard = []
-  // Comment on the dead external session: SHOULD respawn
-  let resumed = write(say(live, 'anyone there?'))
-  // The effect flips status to running and appends to the log
-  assertEquals(row(live)?.status, 'running', 'dead external: respawned')
-  await until(() => row(live)?.status == 'completed', 'the resumed run settles')
-  assertEquals(refusals(live).length, 0, 'dead external: no refusals, resumed')
-  await resumed
+Deno.test('a session we never forked is watched by its door, not its exit code', async () => {
+  let c = await fakeClaude()
+  let { eid } = announce(c.pid, [SAID])
+  watched(cast)(eid, { pid: c.pid })
+  await until(() => !!row(eid)?.started_at, 'the watch to start')
+  assertEquals(row(eid)?.finished_at, null) // still at the keyboard
+  assertEquals(row(eid)?.latest_seq, 1)
+  c.kill('SIGKILL')
+  await c.status
+  await until(() => !!row(eid)?.finished_at, 'the door to shut')
+  // The irreducible difference, said rather than faked.
+  assertEquals(row(eid)?.exit_code, null)
+  assertEquals(row(eid)?.status, null)
+})
+
+Deno.test('a comment wakes an external session only when nobody is home', async () => {
+  let c = await fakeClaude()
+  let { eid } = announce(c.pid, [SAID])
+  await write(say(eid, 'still there?'))
+  assertEquals(refusals(eid), []) // its channel delivered — nothing to do
+  assertEquals(existsSync(log(eid)), false) // and nothing was spawned
+  c.kill('SIGKILL')
+  await c.status
+  // Dead: the words go back in by the door the CLI left open — the
+  // session's own id IS the thread `--resume` takes.
+  await write(say(eid, 'anyone there?'))
+  await until(() => existsSync(log(eid)), 'the resumed run to start')
+  assertEquals(refusals(eid), [])
 })

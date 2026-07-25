@@ -18,7 +18,11 @@ export type Event = Record<string, unknown>
 // A patch of session summary columns — what an event teaches us.
 export type Summary = Partial<Session>
 
-// The job an adapter turns into a command line.
+// The job an adapter turns into a command line. A spawn always names a
+// model (validated against the allowlist before launch); a RESUME may
+// not — an external session only knows what it was serving if its
+// transcript said so — and an unnamed model means "whatever the thread
+// is already on", not a flag reading `null`.
 export type Job = {
   instruction: string
   session_id: string
@@ -269,8 +273,7 @@ export let adapters: Record<string, Adapter> = {
       '--output-format',
       'stream-json',
       '--verbose',
-      '--model',
-      j.model,
+      ...(j.model ? ['--model', j.model] : []),
       '--permission-mode',
       'bypassPermissions',
       '--', // the prompt is a positional — same flag-parse guard as argv
@@ -448,8 +451,7 @@ export let adapters: Record<string, Adapter> = {
       'resume',
       '--json',
       '--dangerously-bypass-approvals-and-sandbox',
-      '-m',
-      j.model,
+      ...(j.model ? ['-m', j.model] : []),
       ...(j.effort ? ['-c', `model_reasoning_effort=${j.effort}`] : []),
       '--',
       sid,

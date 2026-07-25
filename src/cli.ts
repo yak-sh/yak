@@ -1042,22 +1042,30 @@ let context = async (args: string[]) => {
       // channel plugin follow a /clear — the NEW session id reifies under
       // the SAME process.
       let cwd = String(body.cwd ?? '') || undefined
-      // Two more self-reports the payload carries: `agent_type` (set when
-      // launched `claude --agent <name>`) and `source` (startup|resume|clear|
-      // compact|fork) — recorded so the board can name what kind of session
-      // this is and the operator/specialist split can key off it (T-7006).
+      // The rest of the self-report the payload carries: `agent_type`
+      // (set when launched `claude --agent <name>`), `source`
+      // (startup|resume|clear|compact|fork), and `transcript_path` — the
+      // JSONL Claude Code keeps of this very conversation, which IS this
+      // session's durable log (sessions.ts). `provider` is NOT among
+      // them: it is a spawn REQUEST column, and a session created
+      // carrying one is a spawn ask — reifying with it would make every
+      // operator's terminal a failed spawn. The transcript is the
+      // dialect's evidence anyway; nothing but Claude Code writes one.
+      let transcript = String(body.transcript_path ?? '') || undefined
       let s = sessionFor(rows(snap), sid, cwd, claudePid(), {
         agent_type: String(body.agent_type ?? '') || undefined,
         source: String(body.source ?? '') || undefined,
+        transcript,
       })
       if (s.changes.length) await send(s.changes)
       // The hook payload names no model (session_id, transcript_path,
       // cwd, hook_event_name, source) — but the transcript does: its
       // last assistant line carries message.model. Announce it, so an
       // external session's spawns can inherit and the board can say
-      // what's serving. A fresh transcript has no assistant line yet —
-      // then there's simply nothing to announce.
-      let model = modelOf(String(body.transcript_path ?? ''))
+      // what's serving. A PATCH, never the create, for the reason above.
+      // A fresh transcript has no assistant line yet — then there's
+      // simply nothing to announce.
+      let model = modelOf(transcript ?? '')
       if (model) {
         await send([{
           eid: s.eid,

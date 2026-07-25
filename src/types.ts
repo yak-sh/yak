@@ -164,6 +164,14 @@ export let comps: Record<string, Record<string, PropType>> = {
     // reifies a NEW session id under the SAME pid; service follows).
     // Wire-writable like acked_at: forging it only misroutes your own mail.
     pid: 'number',
+    // Claude Code's own transcript JSONL — the SessionStart payload names
+    // it, and it is an EXTERNAL session's durable log the way
+    // ~/.tasks/logs/<eid>.jsonl is a managed run's (`claude --resume`
+    // appends to it, so it stays the whole story). Wire-writable like the
+    // rest of this block, and therefore a REFERENCE, not a capability:
+    // the server reads it only under Claude's own project store
+    // (sessions.ts transcriptOf).
+    transcript: 'text',
     acked_at: 'time',
     // What KIND of session this is, self-reported at SessionStart: `agent_type`
     // is set when launched `claude --agent <name>`; `source` is the boot mode
@@ -679,6 +687,7 @@ export type Session = {
   id: string
   cwd?: string | null
   pid?: number | null // the claude process it runs in (hook-stamped)
+  transcript?: string | null // Claude Code's own JSONL — an external log
   acked_at?: string | null
   agent_type?: string | null // set when launched `claude --agent <name>`
   source?: string | null // boot mode: startup|resume|clear|compact|fork

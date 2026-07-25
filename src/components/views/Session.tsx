@@ -302,7 +302,11 @@ let useTail = (live: boolean, seq?: number) => {
 export let Session = ({ e }: { e: Ent }) => {
   let s = e.session!
   let status = s.status ?? ''
-  let live = sessionActive.includes(status)
+  // A session we spawned says it's going in its status; one that only
+  // announced itself has no status to say it with — it is going while it
+  // has a claude process and the server hasn't seen that door shut
+  // (sessions.ts watched()).
+  let live = sessionActive.includes(status) || (!!s.pid && !s.finished_at)
   let log = useLog(e.eid, live)
   let frame = useTail(live, log.entries.at(-1)?.seq)
   // The Final block IS the last agent say — don't print it twice. Only a
@@ -325,7 +329,12 @@ export let Session = ({ e }: { e: Ent }) => {
         {s.requested_task_eid && (
           <Entity eid={s.requested_task_eid} view='Inline' />
         )}
-        {live && (
+        {
+          /* No brake on a process we never forked — apply() refuses a
+            stop_request at anything but a managed run, and the button
+            shouldn't offer what the graph will bounce. */
+        }
+        {live && s.origin == 'managed' && (
           <Stop
             type='button'
             onClick={() =>
@@ -345,6 +354,16 @@ export let Session = ({ e }: { e: Ent }) => {
         <Fact k='id' v={s.id} />
         <Fact k='branch' v={s.branch} />
         <Fact k='cwd' v={s.cwd} />
+        {
+          /* The one irreducible difference, said rather than left blank:
+            a session we watch is a pid, not a child — so no exit code. */
+        }
+        {s.origin != 'managed' && (
+          <Fact
+            k='pid'
+            v={s.pid ? `${s.pid}` : null}
+          />
+        )}
         <Fact k='started' v={when(s.started_at)} />
         <Fact k='finished' v={when(s.finished_at)} />
       </Facts>

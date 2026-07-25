@@ -386,18 +386,15 @@ export let sessionFor = (
   session: string,
   cwd?: string,
   pid?: number,
-  self?: { agent_type?: string; source?: string },
+  self?: { agent_type?: string; source?: string; transcript?: string },
 ) => {
   let s = all.find((r) => r.comps.session && r.comps.session.id == session)
   let eid = s?.eid ?? uuid()
   let comp: Record<string, unknown> = s ? {} : { id: session }
   if (cwd && s?.comps.session.cwd != cwd) comp.cwd = cwd
   if (pid && s?.comps.session.pid != pid) comp.pid = pid
-  if (self?.agent_type && s?.comps.session.agent_type != self.agent_type) {
-    comp.agent_type = self.agent_type
-  }
-  if (self?.source && s?.comps.session.source != self.source) {
-    comp.source = self.source
+  for (let k of ['agent_type', 'source', 'transcript'] as const) {
+    if (self?.[k] && s?.comps.session[k] != self[k]) comp[k] = self[k]
   }
   let changes: Change[] = Object.keys(comp).length
     ? [{ eid, name: 'session', comp }]
