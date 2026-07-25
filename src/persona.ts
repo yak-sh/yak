@@ -7,7 +7,8 @@
 // there when a repo adopts them — the flip is the owner's move, never
 // ours). materialize() and filesFor() are pure over rows+deps so the
 // CLI verb, the server effect, and the tests render the same bytes;
-// only syncFiles() touches the filesystem.
+// only syncFiles() touches the filesystem, and it stops at the write —
+// committing what it wrote is git.ts's job, at the callers.
 import { type Dep, idOf } from './types.ts'
 import { type Row } from './client.ts'
 import { hot } from './query.ts'

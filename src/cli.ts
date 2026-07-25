@@ -75,6 +75,7 @@ import type { Log } from './telemetry.ts'
 import type { JournalEntry } from './client.ts'
 import { claudePid } from './proc.ts'
 import { filesFor, syncFiles } from './persona.ts'
+import { commit } from './git.ts'
 import { commands, focusOf, run as runCommand } from './commands.ts'
 
 // Every verb: usage, blurb, worked examples. `task help` derives all its
@@ -155,9 +156,9 @@ let VERBS: [usage: string, blurb: string, examples: string[]][] = [
   ],
   ['backup', 'snapshot the db + commit/push the data dir', []],
   [
-    'sync [--commit]',
-    "materialize personas into each project repo's .tasks/",
-    ['task sync', 'task sync --commit'],
+    'sync [--no-commit]',
+    "materialize personas into each project repo's .tasks/ (and commit)",
+    ['task sync', 'task sync --no-commit'],
   ],
   [
     'remember <title...> [--body=…] [--type=feedback|project] [--scope=P-9]',
@@ -1304,11 +1305,12 @@ let telemetry = async (args: string[]) => {
 // Backup is bin/backup (a data-dir git commit) — the CLI is its front
 // door so 'task backup' works wherever the CLI is installed.
 // Materialize every persona into its project repo's .tasks/ — write
-// only what changed, and only --commit makes commits (paths-only, so a
-// working repo's staged index is never swept up). The server's effect
-// keeps files fresh on graph changes; this verb is the explicit door —
-// first sync of a new repo, or the committed story until the
-// permission-gated actuator (T-3926) owns it.
+// only what changed, then commit the paths git already tracks (git.ts
+// keeps that safe; --no-commit stops at the write, for a look before
+// anything lands). The server's effect keeps files fresh on graph
+// changes; this verb is the explicit door — the first sync of a new
+// repo, or the committed story until the permission-gated actuator
+// (T-3926) owns it.
 let sync = async (args: string[]) => {
   let snap = await snapshot()
   let files = filesFor(rows(snap), snap.deps, Date.now())
@@ -1319,31 +1321,13 @@ let sync = async (args: string[]) => {
   for (let p of written) console.log(`wrote ${p}`)
   for (let f of failed) console.error(`failed ${f}`)
   if (!written.length && !failed.length) console.log('all fresh')
-  if (!args.includes('--commit')) return
-  let roots = [...new Set(written.map((p) => p.split('/.tasks/')[0]))]
-  for (let root of roots) {
-    let run = async (...a: string[]) =>
-      await new Deno.Command('git', {
-        args: ['-C', root, ...a],
-        stdout: 'null',
-        stderr: 'piped',
-      }).output()
-    await run('add', '.tasks')
-    let { success, stderr } = await run(
-      'commit',
-      '-m',
-      'personas: materialize',
-      '--',
-      '.tasks',
-    )
-    console.log(
-      success
-        ? `committed ${root}`
-        : `commit failed ${root}: ${
-          new TextDecoder().decode(stderr).trim().slice(-160)
-        }`,
-    )
-  }
+  if (args.includes('--no-commit')) return
+  // Every path, not just this run's writes: a file left dirty by an
+  // earlier sync (or adopted with `git add` since) lands here too.
+  let done = await commit(files.map((f) => f.path), 'personas: materialize')
+  for (let root of done.committed) console.log(`committed ${root}`)
+  for (let p of done.untracked) console.log(`untracked ${p} — git add to adopt`)
+  for (let f of done.failed) console.error(`commit failed ${f}`)
 }
 
 let backup = async () => {

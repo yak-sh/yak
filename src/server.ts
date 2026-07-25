@@ -44,6 +44,7 @@ import { scribeSweep } from './scribe.ts'
 import { embedSweep, similarTo } from './embed.ts'
 import { mcpServer } from './mcp.ts'
 import { filesFor, syncFiles } from './persona.ts'
+import { commit } from './git.ts'
 import {
   commented,
   deleted,
@@ -742,16 +743,31 @@ on('comment', {
 // that could reshape one — a persona born or rehomed, a tier edge
 // spoken or unsaid, a doc edit on a persona or a tiered member —
 // re-renders the fleet (write-if-changed, debounced so a batch lands
-// once). Never commits: `task sync --commit` is the deliberate move,
-// and a failed write is a warning, never a broken batch.
+// once) and commits what it wrote, so a persona edit doesn't leave every
+// venture repo dirty. A failed write or commit is a warning, never a
+// broken batch.
+//
+// This lands in the PRIMARY checkout, which an operator may be using
+// right now — so what's safe here and what isn't: the pathspec commit
+// leaves the index alone, so staged work survives (git.ts), and only
+// tracked files are committed, so nothing new appears in their tree.
+// What it does do is advance the branch under them: a worktree's pending
+// `push origin HEAD:main` stops being fast-forward and needs a rebase.
+// That's the trade we take knowingly — one small commit per persona
+// edit, so the rebase is always trivial.
 let syncing: ReturnType<typeof setTimeout> | undefined
 let syncSoon = () => {
   clearTimeout(syncing)
-  syncing = setTimeout(() => {
+  syncing = setTimeout(async () => {
     try {
       let snap = snapshot(db)
-      let { failed } = syncFiles(filesFor(rows(snap), snap.deps, Date.now()))
-      for (let f of failed) console.warn('persona sync —', f)
+      let files = filesFor(rows(snap), snap.deps, Date.now())
+      for (let f of syncFiles(files).failed) console.warn('persona sync —', f)
+      // Every projection path, not just this tick's writes: a file some
+      // earlier tick left dirty (untracked then, adopted since) is dirt
+      // this tick can clear. commit() ignores whatever matches HEAD.
+      let done = await commit(files.map((f) => f.path), 'personas: materialize')
+      for (let f of done.failed) console.warn('persona commit —', f)
     } catch (e) {
       console.warn('persona sync —', e)
     }
@@ -904,6 +920,7 @@ let graph = [
   'mail.ts',
   'mailer.ts',
   'persona.ts',
+  'git.ts',
   'inbound.ts',
   'scribe.ts',
   'knock.ts',
