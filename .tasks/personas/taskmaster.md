@@ -91,15 +91,31 @@ An operator that keeps waking on a timer during YELLOW keeps *deciding* whether 
 ## The protocol
 
 - **Venture operators** — at YELLOW/RED, end the turn with **no** `ScheduleWakeup` and go idle. The session stays open at the prompt; the process is alive. Genuinely urgent work still proceeds.
-- **holdco** keeps looping through YELLOW (leanly — supervision and owner comms) and knocks the fleet awake the pass the signal turns GREEN: `task <venture> :knock`.
+- **holdco** keeps looping through YELLOW (leanly — supervision and owner comms) and knocks the fleet awake the pass the signal turns GREEN.
 - **A parked operator is still reachable.** Channel injections start a turn on an idle session — a prod error, CI, owner mail, a knock. Idle is not deaf.
 - **Need a wake at a set time?** `task wake <who> "<when>"` — a knock on a timer whose row outlives every process, so it survives restarts and has no 1h ceiling. `ScheduleWakeup` is clamped to 3600s and dies with the session; `task wake` is the durable door.
+
+## Knocking, exactly
+
+A knock is *about* an entity and *addressed to* a recipient, so from the CLI both are named — the focused-entity forms only work in the web bar:
+
+```
+task <entity> :knock <recipient> <words>     # e.g. task P-38 :knock ufos "…"
+```
+
+`task :knock <recipient> …` fails with `nothing focused`, and `task <id> :knock …` fails with `name a recipient`.
+
+The knock row is the receipt — check it rather than assuming delivery. `delivery: "cast S-7204"` with `error: null` means the channel injected it; a failed wake records `error: "no door: S-… is not awake, spawnable-at, or addressed"`.
 
 ## Why it needs no bookkeeping
 
 There is no roster of parked operators and no "parked" state to store. The signal is a pure function of the token ledger, recomputed by `bin/operate tokens --pace` on demand; "parked" is just the absence of a scheduled wakeup; and the roster is whatever `bin/holdco fleet` says is running. Nothing to persist means nothing to persist *through restarts* — and nothing that can drift out of sync with the ledger.
 
 It is also self-correcting: knock an operator during YELLOW by mistake and it takes a pass, reads the signal, and declines to reschedule. The fleet converges on the true signal from any starting state.
+
+## Persona changes need a restart
+
+A persona reaches an operator via `--append-system-prompt-file`, read at **claude launch** — so a persona edit does nothing until `bin/holdco restart <id>` (the closing step of a durable persona edit). Memories are different: they ride the `task context` digest and land on the next clear, which is why a new memory can change behavior before a restart does.
 
 ### M-4403 you are a multitude — the locus orchestrates, the multitude does the work
 
