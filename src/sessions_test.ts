@@ -629,7 +629,10 @@ Deno.test('a comment at a settled session joins the log and resumes it', async (
   let page = logs(eid, new URLSearchParams(`after=${before}&limit=1`))
   assertEquals(page.entries[0].seq, before + 1)
   assertEquals(JSON.parse(page.entries[0].line).type, 'session.input')
-  assertEquals(page.entries[0].row, {
+  // the writer stamps its clock; the transcript shows when it landed
+  let { at, ...said } = page.entries[0].row as { at?: string }
+  assert(at && !Number.isNaN(Date.parse(at)))
+  assertEquals(said, {
     kind: 'say',
     role: 'user',
     text: 'and one more thing',

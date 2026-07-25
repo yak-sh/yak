@@ -1,4 +1,4 @@
-import { type Ent } from '../../types.ts'
+import { type Ent, friendly } from '../../types.ts'
 import { block } from '../ui.tsx'
 import { Edit } from '../Edit.tsx'
 import { Pip } from './Show.tsx'
@@ -66,9 +66,7 @@ export let SessionTitle = ({ e }: { e: Ent }) => {
       <Id e={e} />
       <Dot status={s.status ?? ''} />
       <Text>
-        {s.provider
-          ? `${s.provider} · ${s.serving_model || s.model}`
-          : 'session'}
+        {friendly(s.serving_model || s.model) ?? 'session'}
       </Text>
     </Frame>
   )

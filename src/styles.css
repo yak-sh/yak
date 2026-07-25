@@ -167,7 +167,7 @@ html {
 /* The mono keepers: ids, chips, badges, edge verbs, timestamps, code,
    and every command/inspector/log surface. Prose everywhere else is
    var(--font) via body. :where keeps this overridable. */
-:where(code, pre, kbd, .Id, .Prio, .Show_Domain, .Show_Project, .Show_Assignee, .Show_Claim, .Dependency_Type, .Relate_Verb, .Stamp, .Comments_When, .Comments_Who, .Comments_Via, .Board_ColName, .Board_Count, .Board_Chips, .Status, .Search_Box input, .Search_Id, .Debug, .Debug_Claim, .SessionRow, .Session_Facts, .Session_Status, .Session_Model, .Session_Tool, .Session_Exec, .Session_Turn, .Session_Err, .TaskTile_Assignee) {
+:where(code, pre, kbd, .Id, .Prio, .Show_Domain, .Show_Project, .Show_Assignee, .Show_Claim, .Dependency_Type, .Relate_Verb, .Stamp, .Comments_When, .Comments_Who, .Comments_Via, .Board_ColName, .Board_Count, .Board_Chips, .Status, .Search_Box input, .Search_Id, .Debug, .Debug_Claim, .SessionRow, .Session_Facts, .Session_Status, .Session_Model, .Session_Tool, .Session_Exec, .Session_Turn, .Session_When, .Session_Err, .TaskTile_Assignee) {
   font-family: var(--mono);
 }
 
@@ -2188,6 +2188,13 @@ a[data-ref]:hover {
 }
 .Session_Seq:hover {
   color: var(--accent);
+}
+/* When the message landed — dim, kept at the line's right edge (the
+   transcript face beside it takes the slack). */
+.Session_When {
+  flex: none;
+  font-size: 11px;
+  color: var(--dim);
 }
 /* A line the adapter gave no row: its bare type, as the old dump showed. */
 .Session_Type {

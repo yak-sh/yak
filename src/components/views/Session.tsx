@@ -1,9 +1,15 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { md } from '../../md.ts'
-import { type Ent, kilo, type LogRow, sessionActive } from '../../types.ts'
+import {
+  type Ent,
+  friendly,
+  kilo,
+  type LogRow,
+  sessionActive,
+} from '../../types.ts'
 import { base, mutate, uuid } from '../../live.ts'
 import { clickProps } from '../nav.tsx'
-import { block, Stamp } from '../ui.tsx'
+import { block, pretty, Stamp } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
 import { Comments } from '../Comments.tsx'
 import { Id } from './Inline.tsx'
@@ -34,6 +40,7 @@ let Frame = block('div', 'Session', {
   Log: 'div',
   Line: 'div',
   Seq: 'span',
+  When: 'time',
   Type: 'span',
   Raw: 'span',
   Agent: 'div',
@@ -67,6 +74,7 @@ let {
   Log,
   Line,
   Seq,
+  When,
   Type,
   Raw,
   Agent,
@@ -118,6 +126,15 @@ let squeeze = (entries: Entry[]) => {
 
 // ISO in the db; a local clock is what a human reads.
 let when = (t?: string | null) => t ? new Date(t).toLocaleString() : null
+
+// A message's clock, worn small: the time of day says enough in a
+// transcript — the full stamp rides the tooltip. 24h, the console way.
+let clock = (t: string) =>
+  new Date(t).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
 
 // A named fact, present only when there IS one — absence says enough.
 let Fact = ({ k, v }: { k: string; v?: string | null }) =>
@@ -208,7 +225,8 @@ let Body = ({ x }: { x: Entry }) => {
 }
 
 // The raw event, pretty when it parses — the whole line, nothing elided.
-let pretty = (line: string) => {
+// (ui's `pretty` is the locale timestamp; the suffix keeps them apart.)
+let prettyJson = (line: string) => {
   try {
     return JSON.stringify(JSON.parse(line), null, 2)
   } catch {
@@ -223,6 +241,7 @@ let pretty = (line: string) => {
 // JSON the provider actually wrote.
 let Row = ({ x }: { x: Entry }) => {
   let [open, setOpen] = useState(false)
+  let at = x.row?.kind == 'say' ? x.row.at : undefined
   return (
     <Line>
       <Seq
@@ -232,7 +251,8 @@ let Row = ({ x }: { x: Entry }) => {
         {x.seq}
       </Seq>
       <Body x={x} />
-      {open && <Json>{pretty(x.line)}</Json>}
+      {at && <When data-tip={pretty(at)}>{clock(at)}</When>}
+      {open && <Json>{prettyJson(x.line)}</Json>}
     </Line>
   )
 }
@@ -320,9 +340,9 @@ export let Session = ({ e }: { e: Ent }) => {
       <Head>
         <Dot status={status} />
         <Status mod={status}>{status || 'external'}</Status>
-        {s.provider && (
+        {(s.serving_model || s.model) && (
           <Model>
-            {s.provider} · {s.serving_model || s.model}
+            {friendly(s.serving_model || s.model)}
             {s.effort && ` · ${s.effort}`}
           </Model>
         )}
@@ -398,7 +418,7 @@ export let SessionRow = ({ e }: { e: Ent }) => {
   return (
     <RowLine {...clickProps(e)}>
       <Dot status={s.status ?? ''} />
-      {s.model && <RowLine.Model>{s.model}</RowLine.Model>}
+      {s.model && <RowLine.Model>{friendly(s.model)}</RowLine.Model>}
       <Id e={e} />
     </RowLine>
   )

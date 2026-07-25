@@ -222,6 +222,14 @@ Deno.test('claude row: thinking dims, text says, tools chip, result closes', () 
     claude.row(say('assistant', [{ type: 'text', text: 'OK' }])),
     { kind: 'say', role: 'agent', text: 'OK' },
   )
+  // the event's clock rides the say — the transcript shows when it landed
+  assertEquals(
+    claude.row({
+      ...say('assistant', [{ type: 'text', text: 'OK' }]),
+      timestamp: '2026-07-25T19:50:31.529Z',
+    }),
+    { kind: 'say', role: 'agent', text: 'OK', at: '2026-07-25T19:50:31.529Z' },
+  )
   // a tool chip's detail is the argument a human would ask about
   assertEquals(
     claude.row(say('assistant', [{

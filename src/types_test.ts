@@ -1,4 +1,13 @@
-import { cols, deaths, nick, prio, prioTag, settled, stamped } from './types.ts'
+import {
+  cols,
+  deaths,
+  friendly,
+  nick,
+  prio,
+  prioTag,
+  settled,
+  stamped,
+} from './types.ts'
 import { assertEquals } from '@std/assert'
 
 // The one priority normalizer every door shares (T-6741/T-7143): P<n>/<n>
@@ -33,6 +42,17 @@ Deno.test('nick: the model word, vendor and versions dropped', () => {
   assertEquals(nick(''), null)
   assertEquals(nick(null), null)
   assertEquals(nick('claude-3'), null) // nothing left to call it
+})
+
+Deno.test('friendly: the display face — caps back, dots back, pins off', () => {
+  assertEquals(friendly('claude-opus-4-8'), 'Opus 4.8')
+  assertEquals(friendly('claude-fable-5'), 'Fable 5')
+  assertEquals(friendly('claude-haiku-4-5-20251001'), 'Haiku 4.5')
+  assertEquals(friendly('opus'), 'Opus') // a short alias stays a word
+  assertEquals(friendly('gpt-5.6-sol'), 'GPT 5.6 Sol')
+  assertEquals(friendly('fake-fast'), 'Fake Fast')
+  assertEquals(friendly(''), null)
+  assertEquals(friendly(null), null)
 })
 
 // Pin the derivation to what db.ts's hand-kept AIMED and soft-detach

@@ -474,7 +474,8 @@ export let sessionActive = ['starting', 'running', 'stopping']
 // same six shapes whatever provider wrote it. Adapters own the dialects
 // (adapters.ts, server-only) and normalize each event down to one of these
 // before it reaches a browser, so the Session view never learns a vendor:
-//   say    what the agent (or the human, resuming) actually said
+//   say    what the agent (or the human, resuming) actually said — `at`
+//          is its clock, when the dialect (or our own writer) carries one
 //   reason the model thinking out loud — dim, skippable
 //   tool   a tool call as a chip: name + ok/✗, its detail, its error
 //   exec   a shell command it ran — desc says what for, in its own words
@@ -484,7 +485,7 @@ export let sessionActive = ['starting', 'running', 'stopping']
 //          family (thinking, hook, task, …), the text carries the gist.
 //          A view may squeeze a run of same-tag frames into one line.
 export type LogRow =
-  | { kind: 'say'; role: 'agent' | 'user'; text: string }
+  | { kind: 'say'; role: 'agent' | 'user'; text: string; at?: string }
   | { kind: 'reason'; text: string }
   | {
     kind: 'tool'
@@ -572,6 +573,23 @@ export let nick = (model?: string | null) => {
   let words = (model ?? '').split('-')
     .filter((w) => w && !/\d/.test(w) && w != 'claude' && w != 'gpt')
   return words.join('-') || null
+}
+
+// A model id worn friendly — nick's display face: the vendor prefix and
+// date pin drop, version digits regain their dots, words their caps.
+// 'claude-opus-4-8' → 'Opus 4.8', 'gpt-5.6-sol' → 'GPT 5.6 Sol'.
+export let friendly = (model?: string | null) => {
+  let words: string[] = []
+  for (
+    let w of (model ?? '').replace(/-\d{8}$/, '').split('-').filter(Boolean)
+  ) {
+    if (/^[\d.]+$/.test(w) && /\d$/.test(words.at(-1) ?? '')) {
+      words[words.length - 1] += `.${w}`
+    } else if (w != 'claude') {
+      words.push(w == 'gpt' ? 'GPT' : w[0].toUpperCase() + w.slice(1))
+    }
+  }
+  return words.join(' ') || null
 }
 
 // The edge vocabulary — every edge reads as a sentence, parent first:

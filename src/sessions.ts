@@ -37,7 +37,7 @@ import { listening } from './door.ts'
 import { dispatch, trace } from './effects.ts'
 import { lapseChanges, rows } from './client.ts'
 import { materialize } from './persona.ts'
-import { type Change, sessionActive } from './types.ts'
+import { type Change, type LogRow, sessionActive } from './types.ts'
 
 type Cast = (changes: Change[]) => void
 type Row = Record<string, unknown>
@@ -507,7 +507,7 @@ let clip = (s: string) => s.length > 64_000 ? `${s.slice(0, 64_000)}…` : s
 // dialect dispatch), everything else goes through the session's adapter.
 // A line that isn't JSON, or that the adapter doesn't recognize, carries no
 // row — the client renders it as its bare type, as before.
-let rowOf = (line: string, ad: Adapter | undefined) => {
+let rowOf = (line: string, ad: Adapter | undefined): LogRow | undefined => {
   let e: Event
   try {
     e = JSON.parse(line)
@@ -518,7 +518,12 @@ let rowOf = (line: string, ad: Adapter | undefined) => {
     e && typeof e == 'object' &&
     (e.type == 'session.input' || e.type == 'session.prompt')
   ) {
-    return { kind: 'say', role: 'user', text: String(e.text ?? '') } as const
+    return {
+      kind: 'say',
+      role: 'user',
+      text: String(e.text ?? ''),
+      ...(e.timestamp ? { at: String(e.timestamp) } : {}),
+    }
   }
   return ad?.row(e) ?? undefined
 }
@@ -833,7 +838,13 @@ let launch = async (eid: string, ad: Adapter, j: Launch, cast: Cast) => {
     // provider, but a debugger reads the file — the prompt belongs in it.
     Deno.writeTextFileSync(
       logFile(eid),
-      `${JSON.stringify({ type: 'session.prompt', text: j.instruction })}\n`,
+      `${
+        JSON.stringify({
+          type: 'session.prompt',
+          text: j.instruction,
+          timestamp: new Date().toISOString(),
+        })
+      }\n`,
       { append: true },
     )
     await git(j.repo.path, [
@@ -1097,7 +1108,13 @@ export let commented =
     Deno.mkdirSync(logsDir(), { recursive: true })
     Deno.writeTextFileSync(
       path,
-      `${JSON.stringify({ type: 'session.input', text: body })}\n`,
+      `${
+        JSON.stringify({
+          type: 'session.input',
+          text: body,
+          timestamp: new Date().toISOString(),
+        })
+      }\n`,
       { append: true },
     )
     // Follow the continuation from the END of what's there now: the settled

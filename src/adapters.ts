@@ -94,6 +94,11 @@ let gist = (input: unknown): string => {
   return preview(input)
 }
 
+// The event's clock, when the dialect carries one — a say wears it so the
+// transcript can show when each message landed. Spread, so a dialect
+// without clocks (codex, fake) adds nothing.
+let at = (e: Event) => e.timestamp ? { at: String(e.timestamp) } : {}
+
 // The table as a browser may see it (GET /providers): the names, the
 // two allowlists, and the friendly-named menu — nothing else; argv (and the
 // paths in it) is this side's business. Derived, so a new provider needs
@@ -310,6 +315,7 @@ export let adapters: Record<string, Adapter> = {
             kind: 'say',
             role: e.type == 'user' ? 'user' : 'agent',
             text: b,
+            ...at(e),
           }
         }
         if (!b) return null
@@ -326,6 +332,7 @@ export let adapters: Record<string, Adapter> = {
             kind: 'say',
             role: e.type == 'user' ? 'user' : 'agent',
             text: String(b.text ?? ''),
+            ...at(e),
           }
         }
         if (b.type == 'tool_use') {
