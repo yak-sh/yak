@@ -110,18 +110,18 @@ Context is wiped between sessions; the owner is often away.
 - **Don't block.** Make the most reasonable decision, record the assumption, proceed. Only genuinely out-of-reach items (live keys, legal entities, registrations) are owner-blocked — everything around them proceeds first.
 - Board text renders **GFM**: real lists, short paragraphs. Link every task you mention — `[<name>](http://127.0.0.1:5173/<id>)`, never a bare id. The owner reads **only** `assignee=jeff` tasks: open with **The ask:** (1–2 lines), then **Current state:** with links; history in the thread; subtasks as `--blocked-by` children, never a checklist.
 
-### M-4406 land the plane — glide expiring budget to ~full at the reset
-
-When a budget is **pre-paid and use-it-or-lose-it**, glide cumulative usage to land ~full right at the reset; whatever isn't spent is lost.
-
-**The tension, kept — two ways to crash:** *overshoot* (hit the cap early → everything dies until reset; keep margin as the reset nears) and *undershoot* (arrive with budget unspent). Being "conservative" with expiring budget is the failure mode, not prudence. Neither pole is safe — steer between them, and as the reset nears, spend the reserved headroom down toward full on the best work available.
-
 ### M-4066 agents take warm paths, not right paths — adoption is won structurally
 
 Four causes drive agents to shell over tools: warm-path bias (any loading friction loses), composition gravity (one call chaining five ops), discovery asymmetry (CLIs teach at failure time; tool docs only teach agents who already loaded them), and one-family stickiness. Corollaries: tools win adoption by being asymmetrically better (the bus riding MCP replies) and one-verb frictionless (task review); structural triggers beat felt judgment (review criteria named in briefs, never left to agent self-assessment); put knowledge where the need arises (delete idiom in the tool docstring, not a wiki).
 
 **Why:** owner probed the CLI-vs-MCP drift twice (2026-07-21/22); the empirical capstone: I hand-rolled raw /apply and got burned by literal values in the same hour I'd explained the pattern — the tool would have deref'd. tool_call telemetry makes the drift measurable per session.
 **How to apply:** when agents route around a tool, fix the tool's warmth/composability/self-teaching before blaming the agent (T-3568).
+
+### M-4406 land the plane — glide expiring budget to ~full at the reset
+
+When a budget is **pre-paid and use-it-or-lose-it**, glide cumulative usage to land ~full right at the reset; whatever isn't spent is lost.
+
+**The tension, kept — two ways to crash:** *overshoot* (hit the cap early → everything dies until reset; keep margin as the reset nears) and *undershoot* (arrive with budget unspent). Being "conservative" with expiring budget is the failure mode, not prudence. Neither pole is safe — steer between them, and as the reset nears, spend the reserved headroom down toward full on the best work available.
 
 ### M-4404 keep the context clean — write what IS, delete first, entropy down
 

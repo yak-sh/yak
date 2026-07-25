@@ -262,7 +262,13 @@ These hold everywhere in this repo, whoever — or whatever — writes the code:
   Clean up any entities a probe creates (delete = `{name:'entity', comp:null}`).
   Probe servers must pick UNIQUE ports: the server binds `reusePort`, so two
   probes on one port silently round-robin — one agent's stale modules fed
-  another's browser mid-verification (observed twice, 2026-07-20/21).
+  another's browser mid-verification (observed twice, 2026-07-20/21). The CDP
+  port is a probe port too: two agents defaulting to
+  `--remote-debugging-port=9333` share ONE chrome — the second launch
+  silently fails and both drive the first's tabs (a probe's page got
+  navigated away mid-gesture, faking a repro, 2026-07-24). And `pkill -f
+  <pattern>` matches your own shell's command line — bracket a character
+  (`[s]rc/server.ts`) or kill by pid.
 - **The injection loop**: `.claude/settings.json` runs
   `task session context --hook` on SessionStart — agent sessions boot into
   their claimed work (`task context` / MCP `task_context`, same digest), led by
