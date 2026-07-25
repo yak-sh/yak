@@ -14,10 +14,13 @@
 // CLI/MCP the session already has. It holds no credential — /snapshot, /ws, and
 // /apply are the local server's own, unauthed surface.
 //
-// Identity: the claude PROCESS this plugin runs under. The session entity
-// wearing session.pid == our claude ancestor is the one served — resolved
-// from /snapshot at boot, re-resolved off the stream, and FOLLOWED when a
-// /clear reifies a new session under the same pid. The spawn-time
+// Identity: the claude PROCESS this plugin runs under. The seat rule is
+// src/served.ts — the NEWEST session entity wearing session.pid == our
+// claude ancestor — derived fresh from the index on every batch, so a
+// /clear rotates service forward and any correction rotates it back. The
+// server-side door (src/door.ts) derives the same seat from the same
+// graph: when those two disagreed, a knock stamped `cast S-…` for a
+// session that never heard it (T-7288). The spawn-time
 // CLAUDE_CODE_SESSION_ID is a boot fast-path hint only (an MCP subprocess
 // keeps the env it was spawned with; /clear rotates the session, not us).
 // Reference: holdco services/email-channel (the proven channel shape).
@@ -49,9 +52,10 @@ let HOST = (Deno.env.get('TASKS_HOST') || '127.0.0.1:5173').trim()
 //   the SessionStart hook stamps session.pid at reify, and when /clear
 //   reifies a NEW session under the same process, service follows it.
 // - HINT: the spawn-time session id (Claude Code sets CLAUDE_CODE_SESSION_ID
-//   for MCP subprocesses but never updates the copy past boot). A fast-path
-//   that resolves the entity before its pid stamp lands, and the only clue
-//   for a session whose pid never got stamped — never trusted to re-resolve.
+//   for MCP subprocesses but never updates the copy past boot). The fallback
+//   whenever no row wears our pid: it resolves the entity before the pid
+//   stamp lands, and is the only clue for a session that never got one. A
+//   pid seat always outranks it, so it can never hold service back.
 let PID = claudePid()
 let HINT = (Deno.env.get('CLAUDE_CODE_SESSION_ID') || '').trim() || undefined
 
@@ -81,10 +85,10 @@ let sessionEid: string | undefined
 let actorEid: string | undefined
 let personaEid: string | undefined
 let homeEid: string | undefined
-// The operator/specialist marks (T-7006), tracked across broadcasts like the
+// The operator/specialist marks (T-7006), read off the served row like the
 // actor: origin is server-stamped 'managed' on a spawn (arrives in a later
 // patch), requested_task_eid rides the reify. A specialist gets no project
-// mail — only direct address. A change carrying neither leaves them as-is.
+// mail — only direct address.
 let origin: string | undefined
 let requestedTaskEid: string | undefined
 
@@ -100,8 +104,8 @@ let homes = new Map<string, string>()
 // session_eid null) or a tombstone drops the eid.
 let claims = new Map<string, string>()
 
-// Re-resolve the served session from a batch (boot snapshot, a later mint,
-// or the post-/clear reify), and keep the actor fresh. The home project —
+// Fold a batch into what identity is made of — persona homes, claim
+// holders — and re-derive the session we serve. The home project —
 // where the session's mail lands (mail.target_eid, routed by the address
 // book) — is the persona's home when the session wears one, else the actor
 // itself when the actor IS a project (an interactive session's actor is the
@@ -122,34 +126,34 @@ let resolve = (changes: Change[]) => {
     if (c.comp == null || s === null) claims.delete(c.eid)
     else if (typeof s == 'string' && s) claims.set(c.eid, s)
   }
-  let s = findSession(changes, {
-    pid: PID,
-    eid: sessionEid,
-    id: sessionEid ? undefined : HINT,
-  })
-  if (s && s.eid != sessionEid) {
-    // A rotation only ever moves FORWARD: after a /clear both the old and
-    // the new rows wear our pid, but the reified row is newer — its num is
-    // higher (learn() has already seen every spine in this batch, and a
-    // snapshot lists rows in insertion order).
-    let cur = sessionEid ? index.get(sessionEid)?.num ?? 0 : -1
-    if ((index.get(s.eid)?.num ?? 0) > cur) {
+  // Identity is DERIVED from the index (which learn() just merged this
+  // batch into), so nothing here is remembered across batches — a rotation
+  // in either direction is simply the next derivation. Most broadcasts
+  // touch no session at all; skip the index walk for those.
+  if (
+    changes.some((c) =>
+      c.name == 'session' || (c.name == 'entity' && c.comp == null)
+    )
+  ) {
+    let s = findSession(index, { pid: PID, id: HINT })
+    if (s?.eid != sessionEid) {
+      // Losing the seat entirely (our row tombstoned) is a rotation too:
+      // serve nobody rather than a session nothing renders for.
       if (sessionEid) {
-        err(`session rotated → ${humanId(index, s.eid) ?? s.eid}`)
+        err(
+          `session rotated → ${s ? humanId(index, s.eid) ?? s.eid : 'nobody'}`,
+        )
       }
-      sessionEid = s.eid
-      actorEid = s.actorEid
-      personaEid = s.personaEid
-      // A rotation is a fresh identity — reset the marks to what it declares
-      // (a /clear reify may drop requested_task_eid, becoming an operator).
-      origin = s.origin
-      requestedTaskEid = s.requestedTaskEid
+      sessionEid = s?.eid
     }
-  } else if (s) {
-    if (s.actorEid) actorEid = s.actorEid
-    if (s.personaEid) personaEid = s.personaEid
-    if (s.origin) origin = s.origin
-    if (s.requestedTaskEid) requestedTaskEid = s.requestedTaskEid
+    // The marks come off the merged row, so a patch that carries none
+    // leaves them as they were and a rotation adopts what the new row
+    // declares (a /clear reify may drop requested_task_eid, becoming an
+    // operator).
+    actorEid = s?.actorEid
+    personaEid = s?.personaEid
+    origin = s?.origin
+    requestedTaskEid = s?.requestedTaskEid
   }
   homeEid = (personaEid ? homes.get(personaEid) : undefined) ??
     (actorEid && index.get(actorEid)?.comps.has('project')

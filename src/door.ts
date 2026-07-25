@@ -7,22 +7,24 @@
 // whether anybody is home. SERVER-ONLY (imports db).
 import { db } from './db.ts'
 import { commOf } from './proc.ts'
+import { type Seat, served } from './served.ts'
 import { sessionActive } from './types.ts'
 
 type Door = { eid: string; pid: number | null; status: string | null }
 
-// The session a claude process's channel plugin serves: the NEWEST row
-// wearing that pid. A pid names a PROCESS, not a session — a /clear
-// reifies a new entity under the same one, and several rows can end up
-// sharing a pid — and the plugin only ever rotates FORWARD, to the higher
-// num (channels/tasks/server.ts). So an older row on a live pid is a
-// ghost: nothing sent to it renders anywhere, and calling it awake would
-// silence the fallback that would have reached someone.
-let served = (pid: number) =>
-  (db.prepare(
-    `select s.eid from session s join entity e on e.eid = s.eid
-     where s.pid = ? order by e.num desc limit 1`,
-  ).get(pid) as { eid: string } | undefined)?.eid
+// The session a claude process's channel plugin serves — served.ts's rule,
+// asked of the rows this db holds. An older row on a live pid is a ghost:
+// nothing sent to it renders anywhere, and calling it awake would silence
+// the fallback that would have reached someone. The plugin derives the
+// same seat from its own stream index, so the two can't drift (T-7288).
+let seat = (pid: number) =>
+  served(
+    db.prepare(
+      `select s.eid, e.num, s.pid from session s join entity e on e.eid = s.eid
+       where s.pid = ?`,
+    ).all(pid) as Seat[],
+    pid,
+  )?.eid
 
 // Someone is home when either ear is open: a session we spawned is heard
 // through its log tail while it's still going, and a session that got the
@@ -36,5 +38,5 @@ export let listening = (eid: string) => {
   ).get(eid) as Door | undefined
   if (!s) return false
   return sessionActive.includes(String(s.status)) ||
-    (!!s.pid && commOf(s.pid) == 'claude' && served(s.pid) == s.eid)
+    (!!s.pid && commOf(s.pid) == 'claude' && seat(s.pid) == s.eid)
 }

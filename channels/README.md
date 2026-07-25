@@ -36,13 +36,20 @@ the session already has (`task_comment` on the author or the named entity).
 ## Identity — the session follows the process
 
 The plugin serves the session entity whose `session.pid` equals its own nearest
-`claude` /proc ancestor — the pid the SessionStart hook stamps at reify.
-`/clear` reifies a NEW session entity under the same process, and service
-follows it: comments aimed at the old S-\* stop injecting, by design (a comment
-on a session stays on THAT session). The spawn-time `CLAUDE_CODE_SESSION_ID`
-(set by Claude Code for MCP subprocesses, never updated past boot) is a boot
-fast-path hint only — it also covers a session whose pid never got stamped.
-Neither clue → a harmless no-op (connects, delivers nothing).
+`claude` /proc ancestor — the pid the SessionStart hook stamps at reify. The
+seat rule is `src/served.ts`: of the rows wearing that pid, the NEWEST wins, and
+the plugin derives it fresh from its stream index on every batch. So `/clear`
+(which reifies a NEW session entity under the same process) rotates service
+forward — comments aimed at the old S-\* stop injecting, by design — and any
+correction to a row rotates it back. `src/door.ts` derives the same seat from
+the same graph, which is what makes a knock's `delivery: cast S-…` stamp mean
+delivery (T-7288). A subagent is a tool call inside its operator's process and
+reifies wearing no pid, so it never takes the operator's seat.
+
+The spawn-time `CLAUDE_CODE_SESSION_ID` (set by Claude Code for MCP
+subprocesses, never updated past boot) is the fallback whenever no row wears the
+pid — it covers a session whose pid never got stamped. Neither clue → a harmless
+no-op (connects, delivers nothing).
 
 ## Env
 

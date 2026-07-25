@@ -339,75 +339,169 @@ Deno.test('learn drops a component when its patch clears it', () => {
   assertEquals(humanId(idx, 'e1'), 'E-7') // no components → kind 'entity', capitalized initial
 })
 
+// The seat: whom this process serves. Identity is derived from the INDEX,
+// so each fact below is "learn these batches, then ask" — the same rule
+// src/door.ts asks server-side (served.ts).
+let sessions = (...batches: Change[][]) => {
+  let idx: Index = new Map()
+  for (let b of batches) learn(idx, b)
+  return idx
+}
+
 Deno.test('findSession resolves by the claude pid', () => {
-  let batch = [
+  let idx = sessions([
+    ch('e9', 'entity', { num: 9 }),
     ch('e9', 'session', { id: 'other', pid: 111, actor_eid: 'x' }),
+    ch('e1', 'entity', { num: 1 }),
     ch('e1', 'session', {
       id: 'mine',
       pid: 4242,
       actor_eid: 'p1',
       persona_eid: 'n1',
     }),
-  ]
-  assertEquals(findSession(batch, { pid: 4242 }), {
+  ])
+  assertEquals(findSession(idx, { pid: 4242 }), {
     eid: 'e1',
+    id: 'mine',
+    pid: 4242,
     actorEid: 'p1',
     personaEid: 'n1',
-    origin: undefined,
-    requestedTaskEid: undefined,
   })
-  assertEquals(findSession(batch, { pid: 999 }), undefined)
+  assertEquals(findSession(idx, { pid: 999 }), undefined)
 })
 
-Deno.test('findSession: the LAST same-pid session wins — /clear rotates forward', () => {
-  let batch = [
-    ch('old', 'session', { id: 'before-clear', pid: 4242 }),
-    ch('new', 'session', { id: 'after-clear', pid: 4242 }),
-  ]
-  assertEquals(findSession(batch, { pid: 4242 })?.eid, 'new')
+Deno.test('findSession: the NEWEST row on the pid wins — /clear rotates forward', () => {
+  let idx = sessions(
+    [
+      ch('old', 'entity', { num: 10 }),
+      ch('old', 'session', {
+        id: 'before-clear',
+        pid: 4242,
+      }),
+    ],
+    [
+      ch('new', 'entity', { num: 11 }),
+      ch('new', 'session', {
+        id: 'after-clear',
+        pid: 4242,
+      }),
+    ],
+  )
+  assertEquals(findSession(idx, { pid: 4242 })?.eid, 'new')
+})
+
+Deno.test('a subagent reifying takes no seat — a child wears no pid (T-7288)', () => {
+  // The subagent runs INSIDE the operator's claude and mints its own id, so
+  // its row is NEWER than the operator's; only the missing pid keeps the
+  // operator's channel from following it into a session nothing renders for.
+  let idx = sessions(
+    [
+      ch('op', 'entity', { num: 10 }),
+      ch('op', 'session', {
+        id: 'operator',
+        pid: 4242,
+      }),
+    ],
+    [
+      ch('kid', 'entity', { num: 11 }),
+      ch('kid', 'session', {
+        id: 'agent-T7279-aada990f',
+      }),
+    ],
+  )
+  assertEquals(findSession(idx, { pid: 4242 })?.eid, 'op')
+})
+
+Deno.test('clearing a ghost row rotates service BACK to the live session', () => {
+  // The live-db case (T-7288): a child row reified before the fix wears the
+  // operator's pid and outranks it. The old forward-only rule could never
+  // leave it; a derived seat follows the repair on the next batch.
+  let idx = sessions(
+    [
+      ch('op', 'entity', { num: 10 }),
+      ch('op', 'session', {
+        id: 'operator',
+        pid: 4242,
+      }),
+    ],
+    [
+      ch('ghost', 'entity', { num: 11 }),
+      ch('ghost', 'session', {
+        id: 'ghost',
+        pid: 4242,
+      }),
+    ],
+  )
+  assertEquals(findSession(idx, { pid: 4242 })?.eid, 'ghost')
+  learn(idx, [ch('ghost', 'session', { pid: null })])
+  assertEquals(findSession(idx, { pid: 4242 })?.eid, 'op')
 })
 
 Deno.test('findSession: a pid match outranks the boot id hint', () => {
-  let batch = [
+  let idx = sessions([
+    ch('hinted', 'entity', { num: 1 }),
     ch('hinted', 'session', { id: 'boot-id' }),
+    ch('mine', 'entity', { num: 2 }),
     ch('mine', 'session', { id: 'rotated-id', pid: 4242 }),
-  ]
-  assertEquals(findSession(batch, { pid: 4242, id: 'boot-id' })?.eid, 'mine')
+  ])
+  assertEquals(findSession(idx, { pid: 4242, id: 'boot-id' })?.eid, 'mine')
 })
 
 Deno.test('findSession falls back to the boot id when no pid stamp exists', () => {
-  let batch = [ch('e1', 'session', { id: 'boot-id', actor_eid: 'p1' })]
-  assertEquals(findSession(batch, { pid: 4242, id: 'boot-id' }), {
+  let idx = sessions([
+    ch('e1', 'entity', { num: 1 }),
+    ch('e1', 'session', { id: 'boot-id', actor_eid: 'p1' }),
+  ])
+  assertEquals(findSession(idx, { pid: 4242, id: 'boot-id' }), {
     eid: 'e1',
+    id: 'boot-id',
     actorEid: 'p1',
-    personaEid: undefined,
-    origin: undefined,
-    requestedTaskEid: undefined,
   })
-  assertEquals(findSession(batch, { id: 'missing' }), undefined)
+  assertEquals(findSession(idx, { id: 'missing' }), undefined)
 })
 
-Deno.test('findSession: a patch on the resolved eid keeps the actor fresh', () => {
-  let batch = [ch('e1', 'session', { actor_eid: 'p1' })]
-  assertEquals(findSession(batch, { pid: 4242, eid: 'e1' }), {
-    eid: 'e1',
-    actorEid: 'p1',
-    personaEid: undefined,
-    origin: undefined,
-    requestedTaskEid: undefined,
-  })
+Deno.test('a session patch merges — a later frame never blanks the actor', () => {
+  let idx = sessions(
+    [
+      ch('e1', 'entity', { num: 1 }),
+      ch('e1', 'session', {
+        id: 'mine',
+        pid: 4242,
+        actor_eid: 'p1',
+      }),
+    ],
+    [ch('e1', 'session', { acked_at: 'now' })],
+  )
+  assertEquals(findSession(idx, { pid: 4242 })?.actorEid, 'p1')
 })
 
 Deno.test('findSession reads the operator/specialist marks off the reify', () => {
-  let batch = [ch('e1', 'session', {
-    id: 'sp',
-    pid: 4242,
-    origin: 'managed',
-    requested_task_eid: 't7',
-  })]
-  let s = findSession(batch, { pid: 4242 })
+  let idx = sessions([
+    ch('e1', 'entity', { num: 1 }),
+    ch('e1', 'session', {
+      id: 'sp',
+      pid: 4242,
+      origin: 'managed',
+      requested_task_eid: 't7',
+    }),
+  ])
+  let s = findSession(idx, { pid: 4242 })
   assertEquals(s?.origin, 'managed')
   assertEquals(s?.requestedTaskEid, 't7')
+})
+
+Deno.test('a tombstoned session leaves no seat behind', () => {
+  let idx = sessions(
+    [
+      ch('e1', 'entity', { num: 1 }),
+      ch('e1', 'session', {
+        id: 'mine',
+        pid: 4242,
+      }),
+    ],
+    [ch('e1', 'entity', null)],
+  )
+  assertEquals(findSession(idx, { pid: 4242 }), undefined)
 })
 
 // --- sanitization ------------------------------------------------------------

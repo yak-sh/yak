@@ -75,6 +75,18 @@ Deno.test('a live claude answers, a dead one does not — and only the newest ro
   assertEquals(listening(after), false)
 })
 
+Deno.test("a subagent reifying does not take its operator's door (T-7288)", async () => {
+  let c = await fakeClaude()
+  let op = session({ pid: c.pid })
+  // A subagent is a tool call inside the operator's claude: its row is
+  // newer, and wears no pid because a child has no process of its own.
+  let kid = session({})
+  assertEquals(listening(op), true)
+  assertEquals(listening(kid), false)
+  c.kill('SIGKILL')
+  await c.status
+})
+
 Deno.test('a live pid that is not a claude is not a door', () => {
   assertEquals(listening(session({ pid: Deno.pid })), false) // this is deno
 })

@@ -914,6 +914,7 @@ let graph = [
   'client.ts',
   'sessions.ts',
   'door.ts',
+  'served.ts',
   'proc.ts',
   'adapters.ts',
   'telemetry.ts',

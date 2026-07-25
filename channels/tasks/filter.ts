@@ -9,6 +9,7 @@
 // things aimed at ITS session and turns each into one channel event.
 
 import { type Change, idOf, kindOf } from '../../src/types.ts'
+import { type Seat, served } from '../../src/served.ts'
 
 // A rendered channel event: `{content, meta}` is the notification params shape
 // server.js emits under method notifications/claude/channel. The MCP server's
@@ -92,8 +93,35 @@ export type Row = {
   num: number
   comps: Set<string>
   doc?: { title: string; body: string }
+  // A session row's own fields, MERGED across patches — identity is read
+  // off the index, not off one batch, so a patch that carries only
+  // `acked_at` can't blank the actor and a rotation can't strand a stale
+  // one. `pid` is the seat (findSession, below); the rest route delivery.
+  sess?: Sess
+}
+export type Sess = {
+  id?: string
+  pid?: number
+  actorEid?: string
+  personaEid?: string
+  origin?: string
+  requestedTaskEid?: string
 }
 export type Index = Map<string, Row>
+
+// Merge one session patch into the row's remembered fields: a column the
+// patch omits keeps its value, an explicit null clears it.
+let remember = (row: Row, comp: Record<string, unknown>) => {
+  let s = row.sess ?? (row.sess = {})
+  if ('id' in comp) s.id = str(comp.id) || undefined
+  if ('pid' in comp) s.pid = typeof comp.pid == 'number' ? comp.pid : undefined
+  if ('actor_eid' in comp) s.actorEid = str(comp.actor_eid) || undefined
+  if ('persona_eid' in comp) s.personaEid = str(comp.persona_eid) || undefined
+  if ('origin' in comp) s.origin = str(comp.origin) || undefined
+  if ('requested_task_eid' in comp) {
+    s.requestedTaskEid = str(comp.requested_task_eid) || undefined
+  }
+}
 
 export let learn = (index: Index, changes: Change[]) => {
   for (let c of changes) {
@@ -112,6 +140,10 @@ export let learn = (index: Index, changes: Change[]) => {
     let row = index.get(c.eid) ?? { num: 0, comps: new Set<string>() }
     if (c.comp == null) row.comps.delete(c.name)
     else row.comps.add(c.name)
+    if (c.name == 'session') {
+      if (c.comp == null) row.sess = undefined
+      else remember(row, c.comp)
+    }
     index.set(c.eid, row)
   }
   // Second pass, so a mint's doc is cached whichever side of its mail comp it
@@ -155,48 +187,35 @@ export let humanId = (index: Index, eid: string): string | null => {
   return idOf({ kind: kindOf(has), num: row.num })
 }
 
-// Find the served session within one batch. Identity is the claude PROCESS:
-// a session change carrying `pid` == ours is the session — and the LAST such
-// change wins, because a /clear reifies a NEW entity under the same pid (it
-// broadcasts after, and sits after, any trace of the row it replaces), so
-// service follows the rotation. The weaker clues never rotate: a change on
-// the already-resolved eid keeps actor/persona fresh, and the spawn-time id
-// is the boot fast-path (an MCP subprocess's env id is frozen at spawn — it
-// can't be trusted to name the session past boot).
+// The session THIS process serves, derived from the whole index — the
+// shared seat rule (src/served.ts): the newest row wearing our pid, the
+// same question the server-side door asks of the same graph, so the two
+// cannot disagree about who hears a knock (T-7288).
+//
+// DERIVED, never ratcheted: the old rule moved forward only, to a higher
+// num, which followed a /clear correctly but could never move BACK — so a
+// row that stopped being a seat (a subagent's row that wrongly wore this
+// pid, until its pid is cleared) kept the channel bound to a session
+// nothing renders for. A subagent reifies with no pid at all now (cli.ts),
+// and a correction to any row re-derives here on the next batch.
+//
+// `id` is the boot hint: an MCP subprocess's spawn-time
+// CLAUDE_CODE_SESSION_ID names the conversation until a pid stamp lands,
+// and is the only clue for a session whose pid never got stamped. A pid
+// seat always outranks it.
 export let findSession = (
-  changes: Change[],
-  by: { pid?: number; eid?: string; id?: string },
-):
-  | {
-    eid: string
-    actorEid?: string
-    personaEid?: string
-    origin?: string
-    requestedTaskEid?: string
+  index: Index,
+  by: { pid?: number; id?: string },
+): ({ eid: string } & Sess) | undefined => {
+  let seats: Seat[] = []
+  let hinted: ({ eid: string } & Sess) | undefined
+  for (let [eid, row] of index) {
+    if (!row.sess) continue
+    seats.push({ eid, num: row.num, pid: row.sess.pid })
+    if (by.id && row.sess.id == by.id) hinted = { eid, ...row.sess }
   }
-  | undefined => {
-  let hit: Change | undefined
-  let weak: Change | undefined
-  for (let c of changes) {
-    if (c.name != 'session' || !c.comp) continue
-    if (by.pid != null && c.comp.pid == by.pid) hit = c
-    else if (
-      (by.eid != null && c.eid == by.eid) ||
-      (by.id != null && str(c.comp.id) == by.id)
-    ) weak = c
-  }
-  let c = hit ?? weak
-  if (!c?.comp) return
-  return {
-    eid: c.eid,
-    actorEid: str(c.comp.actor_eid) || undefined,
-    personaEid: str(c.comp.persona_eid) || undefined,
-    // The operator/specialist marks (T-7006): origin is server-stamped
-    // 'managed' on a spawn, requested_task_eid rides the reify — a change
-    // that carries neither leaves the last-known value in place (server.ts).
-    origin: str(c.comp.origin) || undefined,
-    requestedTaskEid: str(c.comp.requested_task_eid) || undefined,
-  }
+  let seat = served(seats, by.pid)
+  return seat ? { eid: seat.eid, ...index.get(seat.eid)?.sess } : hinted
 }
 
 // The injection policy (owner, 2026-07-22): ALL verified unread mail aimed at
