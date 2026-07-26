@@ -3,6 +3,7 @@
 // when no door opens — against an in-memory db, no processes (the spawn
 // rung asserts the minted session request, never a launch).
 import { type Change } from './types.ts'
+import { fakeClaude } from './door_fake.ts'
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, db, open } = await import('./db.ts')
 let { knocked } = await import('./knock.ts')
@@ -97,25 +98,6 @@ Deno.test('an addressed person: the knock rides mail, words and all', () => {
   assertMatch(m.title, /^knock: T-\d+/)
   assertEquals(m.body, 'need this today')
 })
-
-// A live process whose /proc comm is `claude` — comm is the name exec'd,
-// so a symlink to this very deno is enough (door_test.ts says more).
-let fakeClaude = async () => {
-  let dir = Deno.makeTempDirSync({ prefix: 'tasks-knock-' })
-  Deno.symlinkSync(Deno.execPath(), `${dir}/claude`)
-  let c = new Deno.Command(`${dir}/claude`, {
-    args: ['eval', 'setInterval(() => {}, 1000)'],
-    stdout: 'null',
-    stderr: 'null',
-  }).spawn()
-  for (let i = 0; i < 200; i++) {
-    try {
-      if (Deno.readTextFileSync(`/proc/${c.pid}/comm`).trim() == 'claude') break
-    } catch { /* not exec'd yet */ }
-    await new Promise((r) => setTimeout(r, 10))
-  }
-  return c
-}
 
 Deno.test('an operator is a door: external claude hears it, its child does not', async () => {
   let c = await fakeClaude()

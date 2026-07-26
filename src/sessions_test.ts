@@ -13,6 +13,7 @@ import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
 import { existsSync } from 'node:fs'
 import { type Change } from './types.ts'
 import { dispatch, on, relay, trace } from './effects.ts'
+import { fakeClaude } from './door_fake.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let tmp = Deno.makeTempDirSync({ prefix: 'tasks-sessions-' })
@@ -793,32 +794,6 @@ Deno.test('a comment after the sweep regrows the worktree and resumes', async ()
   assertEquals(row(eid)?.status, 'completed')
   assertMatch(refusals(eid)[0], /no worktree to resume in/)
 })
-
-// A live process whose /proc comm is `claude` — comm is the name exec'd,
-// so a symlink to this very deno is enough (door_test.ts says more). It
-// stays up on a TIMER, not a pending promise: an unresolvable top-level
-// await leaves the event loop empty and deno exits at once ("Top-level
-// await promise never resolved"), which raced every door assertion here.
-let fakeClaude = async () => {
-  let dir = Deno.makeTempDirSync({ prefix: 'tasks-ext-' })
-  Deno.symlinkSync(Deno.execPath(), `${dir}/claude`)
-  let c = new Deno.Command(`${dir}/claude`, {
-    args: ['eval', 'setInterval(() => {}, 1000)'],
-    stdout: 'null',
-    stderr: 'null',
-  }).spawn()
-  await until(
-    () => {
-      try {
-        return Deno.readTextFileSync(`/proc/${c.pid}/comm`).trim() == 'claude'
-      } catch {
-        return false
-      }
-    },
-    'the fake claude to exec',
-  )
-  return c
-}
 
 // An operator's session as the SessionStart hook reifies one: an id, a
 // cwd, the claude pid, and the transcript Claude Code keeps. The

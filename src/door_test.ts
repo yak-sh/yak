@@ -3,6 +3,7 @@
 // which is the whole point, since the bug this fixes was a predicate that
 // never asked the process anything.
 import { assertEquals } from '@std/assert'
+import { fakeClaude } from './door_fake.ts'
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, db, open } = await import('./db.ts')
 let { listening } = await import('./door.ts')
@@ -26,27 +27,6 @@ let session = (
     ).run(...cols.map((c) => own[c] as string), eid)
   }
   return eid
-}
-
-// A live process whose /proc comm is `claude`: comm comes from the name
-// exec'd, so a symlink is enough — no build, no fixture binary. A TIMER
-// keeps it up: an unresolvable top-level await leaves the event loop empty
-// and deno exits at once, which raced every assertion about its door.
-let fakeClaude = async () => {
-  let dir = Deno.makeTempDirSync({ prefix: 'tasks-door-' })
-  Deno.symlinkSync(Deno.execPath(), `${dir}/claude`)
-  let c = new Deno.Command(`${dir}/claude`, {
-    args: ['eval', 'setInterval(() => {}, 1000)'],
-    stdout: 'null',
-    stderr: 'null',
-  }).spawn()
-  for (let i = 0; i < 200; i++) {
-    try {
-      if (Deno.readTextFileSync(`/proc/${c.pid}/comm`).trim() == 'claude') break
-    } catch { /* not exec'd yet */ }
-    await new Promise((r) => setTimeout(r, 10))
-  }
-  return c
 }
 
 Deno.test('a managed run is heard through its tail until it settles', () => {
