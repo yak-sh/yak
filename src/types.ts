@@ -952,6 +952,10 @@ export type Change = {
   comp: Record<string, unknown> | null
 }
 
+// A committed legacy-broadcast batch. The cursor makes the frame a complete
+// IndexedDB checkpoint: a sole writer can land changes + cursor atomically.
+export type Live = { live: Change[]; cursor: number }
+
 // The whole graph in one gulp — a batch that fills an empty cache, plus the
 // edges (edges aren't components; they ride alongside).
 // `cursor` = the journal rowid this snapshot is current as of (a returning

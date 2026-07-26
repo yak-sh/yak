@@ -9,17 +9,11 @@
 // the epoch/vocabHash a delta is validated against, plus the forward-compat
 // `scope` seam (T-3683 partial caches).
 //
-// Writes are BOOT-ONLY and FORWARD-ONLY this slice (2.1). Because every tab
-// is its own writer (no leader yet — 2.2/T-6883), persisting on every live
-// frame would let a throttled background tab clobber a fresher record while
-// another tab has already advanced the shared cursor past the fix — a
-// drop-op race IndexedDB's transactions do NOT prevent (they stop
-// corruption, not stale logical overwrites). So IDB is written only at boot,
-// through a compare-and-swap: read the stored cursor first and commit only if
-// this result supersedes it (`ahead` below). IDB therefore only ever holds a
-// consistent values@C paired with cursor=C. The persist() seam stays for
-// 2.2's leader (a sole writer can safely persist live frames) and a later
-// incremental optimization.
+// The Web-Lock leader is the sole live writer (T-6883). Without that layer,
+// writes stay boot-only: persisting per-tab live frames would let a throttled
+// tab clobber newer values after a peer advanced the shared cursor. Every
+// commit remains forward-only, so disabling leadership cleanly restores the
+// multi-writer 2.1 behavior.
 import { type Comps } from './live.ts'
 import { type Dep } from './types.ts'
 
@@ -115,27 +109,43 @@ let ask = <T>(r: IDBRequest<T>, fb: T): Promise<T> =>
     r.onerror = () => resolve(fb)
   })
 
-// Read the whole cache back — getAll on each store, no cross-store join
-// (the whole Comps rides in one `ents` value). Keys pair with values for
-// ents (both come back in key order) so the Record the signal wants rebuilds
-// directly. Empty on any failure or a missing db → boot treats it as a first
-// visit.
+// Read cache + cursor in ONE transaction. A follower opens BroadcastChannel
+// before this read; a leader write is therefore either wholly visible here,
+// or waits behind this transaction and arrives as a buffered channel frame.
+// Splitting meta from rows would admit values@D with cursor=C.
 export let hydrate = async (): Promise<{
   ents: Record<string, Comps>
   deps: Dep[]
+  meta: Meta
 }> => {
-  let empty = { ents: {}, deps: [] as Dep[] }
+  let empty = { ents: {}, deps: [] as Dep[], meta: {} }
   let db = await open()
   if (!db) return empty
   try {
-    let tx = db.transaction([ENTS, DEPS], 'readonly')
+    let tx = db.transaction([ENTS, DEPS, META], 'readonly')
     let es = tx.objectStore(ENTS)
-    let keys = await ask(es.getAllKeys(), [] as IDBValidKey[])
-    let vals = await ask(es.getAll(), [] as Comps[])
-    let deps = await ask(tx.objectStore(DEPS).getAll(), [] as Dep[])
+    let ms = tx.objectStore(META)
+    // Issue every request before yielding; an IDB transaction auto-closes
+    // when its request queue empties.
+    let keys = ask(es.getAllKeys(), [] as IDBValidKey[])
+    let vals = ask(es.getAll(), [] as Comps[])
+    let ds = ask(tx.objectStore(DEPS).getAll(), [] as Dep[])
+    let names = ['cursor', 'epoch', 'vocabHash', 'schemaVersion', 'scope']
+    let meta = names.map((name) => ask(ms.get(name), undefined))
+    let [ks, vs, deps, mv] = await Promise.all([
+      keys,
+      vals,
+      ds,
+      Promise.all(meta),
+    ])
     let ents: Record<string, Comps> = {}
-    keys.forEach((k, i) => ents[String(k)] = vals[i])
-    return { ents, deps }
+    ks.forEach((k, i) => ents[String(k)] = vs[i])
+    let out: Meta = {}
+    let record = out as Record<string, unknown>
+    names.forEach((name, i) => {
+      if (mv[i] !== undefined) record[name] = mv[i]
+    })
+    return { ents, deps, meta: out }
   } catch {
     return empty
   }
@@ -226,8 +236,7 @@ export let seed = (
 // The delta write: patch exactly the touched eids and edges, advancing the
 // cursor in the same atomic commit. A same-epoch `patch`, forward-only. A
 // touched eid gone from the cache was deleted (tombstone/cascade) → delete
-// its row; an edge gone from `deps` likewise. The seam a leader (2.2) will
-// call on live frames; this slice calls it once, from the returning boot.
+// its row; an edge gone from `deps` likewise.
 export let persist = (
   eids: string[],
   edges: Dep[],

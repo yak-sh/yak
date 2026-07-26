@@ -5,11 +5,11 @@ import {
   camera,
   clientId,
   ent,
+  hear,
   mode,
   mutate,
   myCamera,
   pinned,
-  sock,
   toFront,
   toPlane,
   topZ,
@@ -226,18 +226,14 @@ export let Canvas = ({ eid }: { eid: string }) => {
     // (x/y/zoom). w/h are THIS tab's viewport; letting another tab's size
     // leak in skews frame-to-fit and centering (the row's w/h is just the
     // last writer's, for agents' rough sense of what the human sees).
-    let s = sock()
-    let hear = (m: MessageEvent) => {
-      let batch = JSON.parse(String(m.data))
-      if (!Array.isArray(batch)) return
+    let unhear = hear((batch) => {
       for (let c of batch) {
         if (c.eid == cam.current && c.name == 'camera' && c.comp) {
           let { x, y, zoom } = { ...camera.value, ...c.comp }
           camera.value = { ...camera.value, x, y, zoom }
         }
       }
-    }
-    s.addEventListener('message', hear)
+    })
 
     let resize = () => {
       let { w, h } = size()
@@ -297,7 +293,7 @@ export let Canvas = ({ eid }: { eid: string }) => {
     return () => {
       unlatch()
       flush() // a navigation inside the app must not eat the last gesture
-      s.removeEventListener('message', hear)
+      unhear()
       removeEventListener('resize', resize)
       removeEventListener('keydown', key)
       removeEventListener('paste', paste)

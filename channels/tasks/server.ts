@@ -259,10 +259,9 @@ let markNotified = async (changes: Change[]) => {
 }
 
 // --- the stream --------------------------------------------------------------
-// Each /ws frame is a JSON Change[] batch — every applied write, rebroadcast to
-// every client (server.ts cast()). Learn from it, keep identity fresh, then
-// emit whatever it aims at this session. Control frames (the watcher's 'reload')
-// are non-arrays — ignored.
+// Each /ws live frame carries the committed Change[] plus its journal cursor.
+// Learn from it, keep identity fresh, then emit whatever it aims at this
+// session. Watcher control frames carry neither and are ignored.
 
 // Everything this run injected — our own delivery memory, kept because the
 // durable `notified` stamp is written over the wire and a server that is
@@ -308,13 +307,9 @@ let feed = (changes: Change[], mode?: 'catchup' | 'resume') => {
   if (stamps.length) markNotified(stamps)
 }
 
-// One /ws frame. Array batches are live sync patches — feed them. Object frames
-// are the {since}-handshake replies (T-6829): {catchup} is the journal since
-// the cursor we declared (feed it, so gap mail still injects); {reset} means our
-// cursor/epoch/vocab was stale (first join or a db restore) and the server sent
-// a whole snapshot instead — absorb it (join() already added us to the
-// broadcast, so no re-declare). The watcher's 'reload' and other control frames
-// carry no data for us — ignored.
+// One /ws frame. `{live}` is a committed sync patch. The {since}-handshake
+// replies are `{catchup}` (feed it, so gap mail still injects) or `{reset}`
+// (absorb its whole snapshot). Watcher control frames carry none of these.
 let onBatch = (data: string) => {
   let frame: unknown
   try {
@@ -322,8 +317,16 @@ let onBatch = (data: string) => {
   } catch {
     return
   }
+  // Rolling deploys may leave this process briefly attached to the previous
+  // server generation, whose legacy live frame was the bare batch.
   if (Array.isArray(frame)) return feed(frame as Change[])
-  let f = frame as { catchup?: Change[]; reset?: boolean; snapshot?: Snapshot }
+  let f = frame as {
+    live?: Change[]
+    catchup?: Change[]
+    reset?: boolean
+    snapshot?: Snapshot
+  }
+  if (f?.live) return feed(f.live)
   if (f?.catchup !== undefined) return feed(f.catchup, 'catchup')
   if (f?.reset && f.snapshot) absorb(f.snapshot)
 }

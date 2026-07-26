@@ -7,6 +7,7 @@ import {
   comps as vocab,
   type Dep,
   type Ent,
+  type Live,
   type Pinned,
   settled,
   type Snapshot,
@@ -16,6 +17,7 @@ import { type Row } from './client.ts'
 import { matchQuery, parseQuery, resolveRefs, warm } from './query.ts'
 import { normalizeChanges } from './props.ts'
 import * as idb from './idb.ts'
+import { topology } from './leader.ts'
 
 // A cache row: the spine plus whichever components the entity carries.
 // Derived from Ent so a new component (types.ts) threads through here —
@@ -45,6 +47,8 @@ export let config: {
   // leaves it unset — localStorage is a browser thing — and its writes
   // resolve to the box owner.
   client?: string
+  // One switch restores 2.1's per-tab socket + boot-only IDB writes.
+  shared: boolean
   reload: () => void
   swap?: (gen: number) => void
   css?: (gen: number) => void
@@ -53,6 +57,7 @@ export let config: {
   // Behind an https front door the page's scheme must carry through to
   // the socket and fetches — a hardcoded http:// is mixed content there.
   secure: loc?.protocol == 'https:',
+  shared: true,
   reload: () => loc?.reload(),
 }
 export let base = () => `http${config.secure ? 's' : ''}://${config.host}`
@@ -148,20 +153,27 @@ export let applyLocal = (changes: Change[]) => {
     eids.add(eid)
   }
   cache.value = next
-  // Live-frame IDB persist is deferred: multi-writer drop-op race — boot-only
-  // for now (T-6823/T-6829). Live frames update the signal only; IDB is
-  // written solely at boot, through idb's forward-only guarded commit. The
-  // returned touched keys feed that boot write (the delta persist below); a
-  // sole-writer leader (2.2/T-6883) is where this tail persists live frames.
+  // The touched keys feed either the boot catch-up write, or the Web-Lock
+  // leader's live persist. Followers and 2.1 fallback tabs never persist a
+  // live frame.
   return { eids: [...eids], edges }
 }
 
-// The cursor/epoch/vocab this tab holds — sent on socket open as the {since}
-// catch-up handshake (below). The catch-up rides the SAME ordered socket as
-// live frames now, so the server (single-threaded) sends it BEFORE joining
-// this socket to the broadcast: catch-up then live, in journal order, no
-// client-side reordering to undo (T-6829). seedFrom/boot set it.
+// The cursor/epoch/vocab this tab holds. A promoted follower opens its socket
+// from this cursor; the server replays the handoff gap before joining it to
+// live broadcast.
 let held: idb.Meta = {}
+
+// Consumers that care about canonical live edits subscribe here. WebSocket is
+// an implementation detail now that follower tabs have none.
+let listeners = new Set<(changes: Change[]) => void>()
+export let hear = (fn: (changes: Change[]) => void) => {
+  listeners.add(fn)
+  return () => listeners.delete(fn)
+}
+let tell = (changes: Change[]) => {
+  for (let fn of listeners) fn(changes)
+}
 
 // Land a local edit: cache first (instant render), then the wire.
 export let mutate = (...changes: Change[]) => {
@@ -171,51 +183,56 @@ export let mutate = (...changes: Change[]) => {
   send(...parsed)
 }
 
-// One socket per tab, lazily opened; sends queue behind the handshake.
-// On OPEN it declares the cursor it holds — `{since, epoch, vocab}` — and the
-// server replays the journal since it (catch-up), or a full reset if the
-// cursor is void, BEFORE adding this socket to the live broadcast. So the
-// server-side ordering is catch-up then live, on one channel, and the client
-// just applies frames as they arrive — array batches are sync patches; the
-// catch-up/reset objects fill the cache; the rest is the file watcher
-// ({hmr}/{css} hot-swap through the config doors, 'reload' means the swap
-// boundary itself changed).
-// A dropped socket means the server restarted — poll until it's back, then
-// reload for a fresh snapshot (state lives in the db, so nothing is lost).
-// One poller, ever: while the server is down every send() mints another
-// doomed socket, and without the guard each one would stack another
-// interval — all firing reload together when the server returns.
+type Catchup = { catchup: Change[]; cursor: number }
+type Reset = { reset?: boolean; snapshot: Snapshot; error?: string }
+type Sub = { sub: string; changes: Change[]; drop?: string[]; cursor?: number }
+type Hot = 'reload' | { hmr: number } | { css: number }
+
+let owner: ReturnType<typeof topology<unknown>> | null = null
 let ws: WebSocket | null = null
 let polling = false
-export let sock = () => {
+let serial = Promise.resolve()
+
+let hot = (data: unknown): data is Hot => {
+  if (data == 'reload') return true
+  if (!data || typeof data != 'object') return false
+  return 'hmr' in data || 'css' in data
+}
+
+// One physical socket. Only the lock holder calls this in shared mode; the
+// fallback calls it per tab. Incoming JSON is parsed once here, serialized
+// through IDB, then fanned as structured-clone data.
+let connect = () => {
   if (ws && ws.readyState <= WebSocket.OPEN) return ws
-  ws = new WebSocket(
+  let socket = new WebSocket(
     `ws${config.secure ? 's' : ''}://${config.host}/ws${
       config.client ? `?client=${config.client}` : ''
     }`,
   )
+  ws = socket
   // The catch-up handshake: send the held cursor first, so every later live
   // frame the server broadcasts arrives AFTER the catch-up it just sent.
-  ws.onopen = () =>
-    ws!.send(JSON.stringify({
+  socket.onopen = () =>
+    socket.send(JSON.stringify({
       since: held.cursor ?? 0,
       epoch: held.epoch,
       vocab: held.vocabHash,
     }))
-  ws.onmessage = (m) => {
-    let data = JSON.parse(String(m.data))
-    if (Array.isArray(data)) applyLocal(data)
-    else if (data?.error) {
-      problem.value = String(data.error)
-      if (data.snapshot) onReset(data)
-    } else if (data?.catchup !== undefined) onCatchup(data)
-    else if (data?.reset) onReset(data)
-    else if (typeof data?.sub == 'string') onSub(data)
-    else if (data == 'reload') config.reload()
-    else if (data?.hmr) config.swap ? config.swap(data.hmr) : config.reload()
-    else if (data?.css) config.css?.(data.css)
+  socket.onmessage = (m) => {
+    let data = JSON.parse(String(m.data)) as unknown
+    serial = serial.then(async () => {
+      // Reload must leave the leader before its own page disappears.
+      let share = owner
+      let leader = share?.isLeader() ?? false
+      if (leader && hot(data)) share?.fan(data)
+      await land(data, leader ? 'leader' : 'solo')
+      if (leader && !hot(data)) share?.fan(data)
+    }).catch((e) => {
+      problem.value = String(e)
+    })
   }
-  ws.onclose = () => {
+  socket.onclose = () => {
+    if (ws == socket) ws = null
     if (polling) return
     polling = true
     let poll = setInterval(async () => {
@@ -223,19 +240,23 @@ export let sock = () => {
         await fetch(`${base()}/snapshot`, { method: 'HEAD' })
         clearInterval(poll)
         polling = false
-        config.reload()
+        owner?.fan('reload')
+        setTimeout(config.reload)
       } catch { /* still down */ }
     }, 500)
   }
-  return ws
+  return socket
 }
 
-export let send = (...changes: unknown[]) => {
-  let s = sock()
-  let msg = JSON.stringify(changes)
+let wire = (frame: unknown) => {
+  let s = connect()
+  let msg = JSON.stringify(frame)
   if (s.readyState == WebSocket.OPEN) s.send(msg)
   else s.addEventListener('open', () => s.send(msg), { once: true })
 }
+
+let route = (frame: unknown) => owner ? owner.route(frame) : wire(frame)
+export let send = (...changes: unknown[]) => route(changes)
 
 // Query subscriptions (T-3683), the client half. The cache becomes a UNION of
 // subscription result sets: `subMembers` refcounts which eids each sub holds,
@@ -251,8 +272,8 @@ let subMembers = new Map<string, Set<string>>()
 // it); a `drop` eid left THIS query but still exists (gone for this query
 // only). Either way it leaves the sub's set, and an eid now in no set is
 // evicted from the cache.
-let onSub = (f: { sub: string; changes: Change[]; drop?: string[] }) => {
-  applyLocal(f.changes)
+let onSub = (f: Sub) => {
+  let touched = applyLocal(f.changes)
   let mine = subMembers.get(f.sub) ?? new Set<string>()
   subMembers.set(f.sub, mine)
   let leaving: string[] = f.drop ? [...f.drop] : []
@@ -264,6 +285,10 @@ let onSub = (f: { sub: string; changes: Change[]; drop?: string[] }) => {
   }
   for (let eid of f.drop ?? []) mine.delete(eid)
   evict(leaving)
+  return {
+    eids: [...new Set([...touched.eids, ...(f.drop ?? [])])],
+    edges: touched.edges,
+  }
 }
 
 // Drop from the cache any eid held by no remaining subscription — a death
@@ -285,10 +310,7 @@ let evict = (eids: string[]) => {
 // A control frame is an OBJECT (design §1), distinct from the array batches
 // send() ships — a subscribe/replace or an unsubscribe.
 let control = (frame: object) => {
-  let s = sock()
-  let msg = JSON.stringify(frame)
-  if (s.readyState == WebSocket.OPEN) s.send(msg)
-  else s.addEventListener('open', () => s.send(msg), { once: true })
+  route(frame)
 }
 export let subscribe = (sub: string, q: string) => control({ sub, q })
 export let unsubscribe = (sub: string) => {
@@ -301,75 +323,164 @@ export let unsubscribe = (sub: string) => {
 // visitor does"). Replace the cache wholesale (clear then apply), stamp the
 // held cursor, and seed IDB — seed() is a `full` forward-only commit that
 // wins across a changed epoch and clears the stale rows in the same txn.
-let seedFrom = (snap: Snapshot) => {
+let seedFrom = (snap: Snapshot, write = true) => {
   cache.value = {}
   deps.value = snap.deps
   applyLocal(snap.changes)
   held = { cursor: snap.cursor, epoch: snap.epoch, vocabHash: snap.vocabHash }
-  return idb.seed(
-    cache.value,
-    deps.value,
-    snap.cursor ?? 0,
-    snap.epoch ?? '',
-    snap.vocabHash ?? '',
-  )
+  if (write) {
+    return idb.seed(
+      cache.value,
+      deps.value,
+      snap.cursor ?? 0,
+      snap.epoch ?? '',
+      snap.vocabHash ?? '',
+    )
+  }
+  return Promise.resolve(false)
 }
 
 // First-visit / no-IDB fill: the whole graph over HTTP (the TUI and a fresh
 // browser have nothing to hydrate, and a full snapshot can't reorder — it is
 // a complete prefix). The socket's {since} handshake that follows just joins
 // the broadcast and closes the fetch→open gap with a tiny catch-up.
-let fromSnapshot = async () =>
-  seedFrom(await (await fetch(`${base()}/snapshot`)).json())
+let fromSnapshot = async (write = true) =>
+  seedFrom(await (await fetch(`${base()}/snapshot`)).json(), write)
 
-// The catch-up frame, over the socket: the journal since the cursor we sent.
-// It arrives BEFORE any live frame (the server sends it before joining this
-// socket to the broadcast), so applying it in arrival order is already the
-// right order — no buffering. Persist the touched keys + new cursor in one
-// forward-only guarded commit against the epoch we hydrated under (a peer tab
-// already ahead is never regressed; IDB never advances past unstored change).
-let onCatchup = (d: { catchup: Change[]; cursor: number }) => {
-  let { eids, edges } = applyLocal(d.catchup)
-  idb.persist(eids, edges, cache.value, deps.value, {
+let persist = (
+  touched: { eids: string[]; edges: Dep[] },
+  cursor: number,
+) =>
+  idb.persist(touched.eids, touched.edges, cache.value, deps.value, {
     epoch: held.epoch ?? '',
     vocabHash: held.vocabHash ?? '',
-    cursor: d.cursor,
+    cursor,
   })
-}
 
-// The reset frame, the socket's equivalent of the HTTP 409 + first-visit: the
-// held cursor was void or its epoch/vocab moved (db restore, shape change), so
-// the server sent a whole snapshot — reseed from it.
-let onReset = (d: { snapshot: Snapshot }) => {
-  mark('reset')
-  seedFrom(d.snapshot)
-}
+type Land = 'leader' | 'follower' | 'solo'
 
-// Fill the cache and open the socket — main.tsx awaits this before render.
-// First visit / no IDB: fetch the whole snapshot over HTTP, seed, render;
-// the socket then joins and catches the fetch→open gap. Returning visit:
-// hydrate from IDB (local, fast) and render immediately; the socket sends
-// {since:C} and the catch-up rides back on that SAME ordered channel ahead of
-// any live frame — no HTTP /delta, no reorder to undo. Either way sock() is
-// opened with `held` already set, so its onopen handshake declares the right
-// cursor.
-// [2.2 — T-6883: sock() ownership moves to the leader tab; here every tab
-//  opens its own — intentional per-tab redundancy for slice 2.1.]
-export let boot = async () => {
-  let m = await idb.meta()
-  if (m.cursor === undefined) {
-    mark('snapshot')
-    await fromSnapshot() // sets held from the snapshot
-    sock()
-  } else {
-    mark('hydrate+delta')
-    let { ents, deps: d } = await idb.hydrate()
-    cache.value = ents
-    deps.value = d
-    held = m // send this cursor on socket open; the catch-up rides back
-    sock()
+// Every incoming shape has one landing door. A leader durably lands a
+// cursor-stamped live frame before fan-out; followers land only in memory.
+// Catch-up/reset still persist in solo mode — the 2.1 boot write.
+let land = async (data: unknown, mode: Land) => {
+  if (Array.isArray(data)) {
+    applyLocal(data as Change[])
+    tell(data as Change[])
+    return
+  }
+  if (hot(data)) {
+    if (data == 'reload') setTimeout(config.reload)
+    else if ('hmr' in data) {
+      config.swap ? config.swap(data.hmr) : config.reload()
+    } else config.css?.(data.css)
+    return
+  }
+  if (!data || typeof data != 'object') return
+  let frame = data as Partial<Live & Catchup & Reset & Sub>
+  if (frame.error) problem.value = String(frame.error)
+  if (frame.live) {
+    let touched = applyLocal(frame.live)
+    if (frame.cursor !== undefined) {
+      held = { ...held, cursor: frame.cursor }
+      if (mode == 'leader') await persist(touched, frame.cursor)
+    }
+    tell(frame.live)
+  } else if (frame.catchup !== undefined) {
+    let touched = applyLocal(frame.catchup)
+    if (frame.cursor !== undefined) {
+      held = { ...held, cursor: frame.cursor }
+      if (mode != 'follower') await persist(touched, frame.cursor)
+    }
+  } else if (frame.snapshot) {
+    mark('reset')
+    await seedFrom(frame.snapshot, mode != 'follower')
+  } else if (typeof frame.sub == 'string') {
+    let touched = onSub(frame as Sub)
+    if (frame.cursor !== undefined) {
+      held = { ...held, cursor: frame.cursor }
+      if (mode == 'leader') await persist(touched, frame.cursor)
+    }
   }
 }
+
+let local = async (write: boolean) => {
+  let stored = await idb.hydrate()
+  if (stored.meta.cursor === undefined) {
+    mark('snapshot')
+    await fromSnapshot(write)
+  } else {
+    mark('hydrate+delta')
+    cache.value = stored.ents
+    deps.value = stored.deps
+    held = stored.meta
+  }
+}
+
+let booted = false
+let once = async (write: boolean) => {
+  if (booted) return
+  await local(write)
+  booted = true
+}
+
+let canShare = () => {
+  let nav = (globalThis as { navigator?: Navigator }).navigator
+  return config.shared && !!config.client && !!nav?.locks &&
+    typeof globalThis.BroadcastChannel != 'undefined'
+}
+
+// Open BroadcastChannel + queue for the lock before touching IDB. Thus a
+// follower cannot miss a leader frame during hydration. The gate's fallback
+// is exactly slice 2.1: boot locally and open this tab's socket.
+export let boot = async () => {
+  if (!canShare()) {
+    await once(true)
+    connect()
+    return
+  }
+  let nav = (globalThis as { navigator: Navigator }).navigator
+  let bus = new BroadcastChannel('tasks-sync')
+  let channel: import('./leader.ts').Channel<unknown> = {
+    onmessage: null,
+    postMessage: (message) => bus.postMessage(message),
+  }
+  bus.onmessage = ({ data }) => channel.onmessage?.({ data })
+  owner = topology(
+    {
+      request: (name, hold) => nav.locks.request(name, hold),
+    },
+    channel,
+    {
+      lead: async () => {
+        await once(true)
+        connect()
+      },
+      follow: () => once(false),
+      solo: async () => {
+        await once(true)
+        connect()
+      },
+      receive: (frame) => {
+        serial = serial.then(() => land(frame, 'follower'))
+      },
+      send: wire,
+    },
+  )
+  await owner.start()
+}
+;(globalThis as {
+  __sync?: () => {
+    shared: boolean
+    leader: boolean
+    socket: number | null
+    cursor?: number
+  }
+}).__sync = () => ({
+  shared: !!owner && !owner.isSolo(),
+  leader: owner?.isLeader() ?? false,
+  socket: ws?.readyState ?? null,
+  cursor: held.cursor,
+})
 
 // Edges grouped by parent, one pass over deps. ent() partitions its own
 // slice into refs/kids instead of rescanning all 751 edges twice per call —

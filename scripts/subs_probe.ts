@@ -36,8 +36,9 @@ for (let i = 0; i < 100; i++) {
   await new Promise((r) => setTimeout(r, 100))
 }
 
-// A socket with a frame queue + an awaitable "next non-array-or-any frame".
+// A joined socket with a frame queue + an awaitable matching frame.
 let open = async () => {
+  let held = await (await fetch(`${base}/snapshot`)).json()
   let s = new WebSocket(`ws://127.0.0.1:${PORT}/ws`)
   let frames: unknown[] = []
   let wake: (() => void) | null = null
@@ -62,6 +63,12 @@ let open = async () => {
       })
     }
   }
+  send(s, {
+    since: held.cursor,
+    epoch: held.epoch,
+    vocab: held.vocabHash,
+  })
+  await want((f) => !!f && typeof f == 'object' && 'catchup' in f)
   return { s, frames, want }
 }
 
@@ -73,7 +80,10 @@ let apply = (changes: unknown[]) =>
     body: JSON.stringify(changes),
   })
 
-let isArr = (f: unknown) => Array.isArray(f)
+let live = (f: unknown) =>
+  f && typeof f == 'object' && Array.isArray((f as { live?: unknown }).live)
+    ? (f as { live: { eid: string }[] }).live
+    : null
 let subFrame = (id: string) => (f: unknown) =>
   !!f && typeof f == 'object' && (f as { sub?: string }).sub == id
 
@@ -83,9 +93,7 @@ try {
   let b = await open() // b never subscribes — stays a legacy client
   let mark = uuid()
   send(a.s, [{ eid: mark, name: 'doc', comp: { title: 'legacy-probe' } }])
-  let heard = await b.want((f) =>
-    isArr(f) && (f as { eid: string }[]).some((c) => c.eid == mark)
-  )
+  let heard = await b.want((f) => !!live(f)?.some((c) => c.eid == mark))
   ok('A: a non-subscribing socket still hears an arbitrary write', !!heard)
 
   // ---- Door B: subscription filtering -------------------------------------
@@ -118,9 +126,7 @@ try {
   )
   ok(
     'B: the legacy socket also heard the comment (both doors coexist)',
-    !!(await d.want((f) =>
-      isArr(f) && (f as { eid: string }[]).some((x) => x.eid == cm)
-    )),
+    !!(await d.want((f) => !!live(f)?.some((x) => x.eid == cm))),
   )
 
   // An unrelated write over /ws — the subscriber must NOT receive it.
@@ -132,7 +138,7 @@ try {
       (f as { changes: { eid: string }[] }).changes.some((x) =>
         x.eid == noise
       ) ||
-    (isArr(f) && (f as { eid: string }[]).some((x) => x.eid == noise)), 1000)
+    !!live(f)?.some((x) => x.eid == noise), 1000)
   ok('B: an unrelated write does NOT reach the subscriber', !leaked)
 
   // Re-point the comment at a DIFFERENT entity — it leaves the query but

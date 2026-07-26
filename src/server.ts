@@ -232,7 +232,7 @@ let control = (
 // The one door every non-/ws write path (MCP, /apply, effects, touch, freeze)
 // reaches subscribers through.
 let cast = (changes: Change[], except?: WebSocket) => {
-  let msg = JSON.stringify(changes)
+  let msg = JSON.stringify({ live: changes, cursor: cursorOf(db) })
   for (let c of clients) {
     if (c == except || c.readyState != WebSocket.OPEN || filtered.has(c)) {
       continue
@@ -321,7 +321,7 @@ let ws = (req: Request) => {
     // The sender hears the canonical patch too: its optimistic spelling may
     // differ from storage (`P02`, `today`, a human reference). Applying the
     // same patch twice is harmless; omitting it leaves the sender divergent.
-    let msg = JSON.stringify(out)
+    let msg = JSON.stringify({ live: out, cursor: cursorOf(db) })
     for (let c of clients) {
       if (c.readyState != WebSocket.OPEN || filtered.has(c)) continue
       c.send(msg)
