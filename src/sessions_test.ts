@@ -24,6 +24,7 @@ Deno.env.set('STOP_GRACE_MS', '1000')
 
 let { apply, db } = await import('./db.ts')
 let {
+  childPath,
   commented,
   deleted,
   logs,
@@ -173,6 +174,21 @@ let until = async (fact: () => boolean, what = 'it') => {
 let INIT = '{"type":"init","session_id":"sid-1","model":"fake-fast"}'
 let RESULT =
   '{"type":"result","final_text":"first","usage":{"output_tokens":7}}'
+
+Deno.test('child PATH leads with the task CLI and preserves the service', () => {
+  let bin = '/home/agent/.deno/bin'
+  assertEquals(
+    childPath('/home/agent', '/usr/bin:/opt/bin'),
+    `${bin}:/usr/bin:/opt/bin`,
+  )
+  assertEquals(childPath('/home/agent', `${bin}:/usr/bin`), `${bin}:/usr/bin`)
+  assertEquals(
+    childPath('/home/agent', `/usr/bin:${bin}:${bin}`),
+    `${bin}:/usr/bin`,
+  )
+  assertEquals(childPath('/home/agent', ''), bin)
+  assertEquals(childPath('', '/usr/bin'), '/usr/bin')
+})
 
 Deno.test('a spawn the graph cannot honor is a failed session, not a 400', async () => {
   let { t } = seed()

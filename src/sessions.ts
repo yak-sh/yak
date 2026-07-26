@@ -951,8 +951,18 @@ let launch = async (eid: string, ad: Adapter, j: Launch, cast: Cast) => {
 // coordinates. Nothing of this server's environment rides along by
 // accident — TASKS_HOST does, because a child reports its life through
 // the `task` CLI, and it must report to the graph that spawned it.
+export let childPath = (home: string, path: string) => {
+  if (!home) return path
+  let bin = `${home}/.deno/bin`
+  let rest = path.split(':').filter((part) => part != bin).join(':')
+  return rest ? `${bin}:${rest}` : bin
+}
+
 let childEnv = (session: string) => ({
-  PATH: Deno.env.get('PATH') ?? '',
+  PATH: childPath(
+    Deno.env.get('HOME') ?? '',
+    Deno.env.get('PATH') ?? '',
+  ),
   HOME: Deno.env.get('HOME') ?? '',
   TERM: Deno.env.get('TERM') ?? 'dumb',
   TASKS_SESSION: session,
