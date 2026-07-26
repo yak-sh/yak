@@ -34,6 +34,10 @@ export let offers = (ps: Provider[]) =>
   ps.flatMap((p) =>
     Object.entries(p.labels).map(([model, label]) => ({ model, label, p }))
   ).filter((o, i, all) => all.findIndex((x) => x.model == o.model) == i)
+    .sort((a, b) =>
+      Number(b.model == 'gpt-5.6-sol') -
+      Number(a.model == 'gpt-5.6-sol')
+    )
 
 let Frame = block('div', 'Run', {
   Row: 'label',
