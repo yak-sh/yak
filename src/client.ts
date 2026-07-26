@@ -286,7 +286,7 @@ export let param = (arg: string): Param | null => {
 // Reference values at a door: uuids pass through, '' clears, anything
 // else must resolve — an alias (jeff), a human id (T-3), a bare num — or
 // the door throws, never a silent FK failure later. One resolver for
-// every write door (CLI, MCP task_new/update, graph_apply values).
+// every write door (CLI, MCP task_new/update/command, graph_apply).
 let UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export let deref = (all: Row[], v: string, where = '') => {
   if (!v || UUID.test(v)) return v
@@ -294,12 +294,31 @@ export let deref = (all: Row[], v: string, where = '') => {
   if (!hit) throw new Error(`no entity: ${v}${where}`)
   return hit.eid
 }
+let derefProp = (all: Row[], prop: string, value: unknown) =>
+  prop.endsWith('_eid') &&
+    (typeof value == 'string' || typeof value == 'number')
+    ? deref(all, String(value), ` (.${prop})`)
+    : value
 export let derefParams = (all: Row[], ps: Param[]) =>
-  ps.map((p) =>
-    p.prop.endsWith('_eid') &&
-      (typeof p.value == 'string' || typeof p.value == 'number')
-      ? { ...p, value: deref(all, String(p.value), ` (.${p.prop})`) }
-      : p
+  ps.map((p) => ({ ...p, value: derefProp(all, p.prop, p.value) }))
+export let derefChanges = (all: Row[], changes: Change[]) =>
+  changes.map((c) => ({
+    ...c,
+    eid: deref(all, c.eid, ' (eid)'),
+    comp: c.comp == null ? c.comp : Object.fromEntries(
+      Object.entries(c.comp)
+        .map(([prop, value]) => [prop, derefProp(all, prop, value)]),
+    ),
+  }))
+let named = (v: unknown) =>
+  typeof v == 'number' ||
+  (typeof v == 'string' && !!v && !UUID.test(v))
+export let needsDeref = (changes: Change[]) =>
+  changes.some((c) =>
+    named(c.eid) ||
+    Object.entries(c.comp ?? {}).some(([prop, value]) =>
+      prop.endsWith('_eid') && named(value)
+    )
   )
 
 // Group routed params into per-component patches.

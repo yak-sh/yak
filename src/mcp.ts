@@ -20,6 +20,7 @@ import {
   claimChanges,
   commentChanges,
   contextDigest,
+  derefChanges,
   derefParams,
   edgesOf,
   find,
@@ -30,6 +31,7 @@ import {
   type JournalEntry,
   mailNotified,
   memoryChanges,
+  needsDeref,
   notices,
   param,
   patches,
@@ -188,6 +190,16 @@ markdown documents (paragraphs, lists, headings). Rewrite via task_update
 // Any *_eid dot-param value may be a human id (T-3, P-19) or an alias
 // (jeff) — client.ts derefParams resolves them at the door, and a miss
 // throws here rather than failing an FK later.
+
+export let commandOut = (
+  all: Row[],
+  line: string,
+  eid?: string,
+  session?: string,
+) => {
+  let out = runCommand(line.replace(/^:/, ''), { eid, rows: all, session })
+  return out.changes ? { ...out, changes: derefChanges(all, out.changes) } : out
+}
 
 export let mcpServer = (io: IO) => {
   // Server instructions ride the initialize handshake and land in the
@@ -534,7 +546,7 @@ ${
       } else eid = focusOf(all, session)
       let out
       try {
-        out = runCommand(line.replace(/^:/, ''), { eid, rows: all, session })
+        out = commandOut(all, line, eid, session)
       } catch (e) {
         return err((e as Error).message)
       }
@@ -868,37 +880,8 @@ client; writes broadcast live to all screens. ${GRAMMAR}`,
     },
     async ({ changes }: { changes: Change[] }) => {
       try {
-        // Human ids and ALIASES resolve before the wire sees them — a
-        // non-uuid in eid or any *_eid column means an EXISTING entity
-        // (T-3, jeff), so a miss is an error here, never a silent mint
-        // or an FK failure later. A fresh entity's eid is a uuid the
-        // caller minted, which passes untouched.
-        let uuid36 =
-          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-        let named = (v: unknown): v is string =>
-          typeof v == 'string' && !!v && !uuid36.test(v)
-        let needs = changes.some((c) =>
-          named(c.eid) ||
-          Object.entries(c.comp ?? {}).some(([k, v]) =>
-            k.endsWith('_eid') && named(v)
-          )
-        )
-        if (needs) {
-          let all = rows(await io.read())
-          let resolve = (v: string) => {
-            let hit = find(all, v)
-            if (!hit) throw new Error(`no entity: ${v}`)
-            return hit.eid
-          }
-          changes = changes.map((c) => ({
-            ...c,
-            eid: named(c.eid) ? resolve(c.eid) : c.eid,
-            comp: c.comp == null ? c.comp : Object.fromEntries(
-              Object.entries(c.comp).map((
-                [k, v],
-              ) => [k, k.endsWith('_eid') && named(v) ? resolve(v) : v]),
-            ),
-          }))
+        if (needsDeref(changes)) {
+          changes = derefChanges(rows(await io.read()), changes)
         }
         await io.write(changes)
       } catch (e) {
