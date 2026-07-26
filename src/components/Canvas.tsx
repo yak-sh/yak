@@ -317,13 +317,18 @@ export let Canvas = ({ eid }: { eid: string }) => {
         y: from.y - (e.clientY - sy) / from.zoom,
       }
     }
-    let up = () => {
+    let quit = () => {
       elem.removeEventListener('pointermove', move)
       elem.removeEventListener('pointerup', up)
+      elem.removeEventListener('pointercancel', quit)
+    }
+    let up = () => {
+      quit()
       queue('x', 'y')
     }
     elem.addEventListener('pointermove', move)
     elem.addEventListener('pointerup', up)
+    elem.addEventListener('pointercancel', quit)
   }
 
   // Can anything between the wheel target and the canvas still consume this
