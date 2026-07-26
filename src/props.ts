@@ -1,6 +1,6 @@
 // Typed scalar parsing and formatting. PropType declares the language;
 // this module gives every declaration one canonical stored and shown value.
-import { comps, type PropType, stamped } from './types.ts'
+import { type Change, comps, edges, type PropType, stamped } from './types.ts'
 import { instant } from './time.ts'
 
 export type PropContext = {
@@ -151,3 +151,62 @@ export let formatProp = (
   }
   return String(parsed)
 }
+
+let ref = (name: string): Prop => ({
+  comp: 'entity',
+  prop: name,
+  name,
+  type: { eid: '', death: 'keep' },
+})
+let dep: Record<string, Prop> = {
+  type: {
+    comp: 'dependency',
+    prop: 'type',
+    name: 'dependency.type',
+    type: { enum: [...edges] },
+  },
+  child_eid: ref('child_eid'),
+  gone: {
+    comp: 'dependency',
+    prop: 'gone',
+    name: 'dependency.gone',
+    type: 'bool',
+  },
+}
+
+let requiredRef = (
+  p: Prop,
+  value: unknown,
+  ctx: PropContext,
+): string => {
+  let parsed = parseProp(p, value, ctx)
+  if (parsed == null) return fail(p, 'a human id / alias / UUID', value)
+  return String(parsed)
+}
+
+// A batch gets one value language before any writer observes it. Unknown
+// components and server-owned columns stay untouched for the db allowlist;
+// every declared scalar and dependency word leaves in canonical form.
+export let normalizeChanges = (
+  changes: Change[],
+  ctx: PropContext = {},
+): Change[] =>
+  changes.map((change) => {
+    let eid = requiredRef(ref('eid'), change.eid, ctx)
+    if (change.comp == null) return { ...change, eid }
+    let props = change.name == 'dependency' ? dep : undefined
+    let comp = Object.fromEntries(
+      Object.entries(change.comp).map(([name, value]) => {
+        let p = props?.[name] ??
+          (name in (comps[change.name] ?? {})
+            ? propAt(change.name, name)
+            : undefined)
+        if (!p) return [name, value]
+        if (change.name == 'dependency' && name == 'child_eid') {
+          return [name, requiredRef(p, value, ctx)]
+        }
+        return [name, parseProp(p, value, ctx)]
+      }),
+    )
+    return { ...change, eid, comp }
+  })

@@ -26,6 +26,7 @@ import { type Trace } from './effects.ts'
 import { ancestorAt, rows } from './client.ts'
 import { homeReads } from './persona.ts'
 import { matchQuery, parseQuery, resolveRefs, TEXT } from './query.ts'
+import { normalizeChanges } from './props.ts'
 
 // The db lives outside the repo (this is open source): a home-dir dotpath by
 // default, overridable with DB_PATH.
@@ -698,6 +699,18 @@ let bound = (
     ? Number(value)
     : value as string | number | null
 
+let ident = (db: DatabaseSync, id: string): string | undefined => {
+  let m = id.match(/^[A-Za-z]+-(\d+)$/) ?? id.match(/^(\d+)$/)
+  if (m) {
+    return (db.prepare('select eid from entity where num = ?').get(+m[1]) as
+      | { eid: string }
+      | undefined)?.eid
+  }
+  return (db.prepare('select eid from alias where slug = ?').get(id) as
+    | { eid: string }
+    | undefined)?.eid
+}
+
 // The notification-lifecycle stamps (notified/opened/archived): a
 // client-requested, server-stamped act — an EMPTY wire comp (presence IS the
 // signal) whose `stamped` twin is the {at, by, via} stamp. Derived, not
@@ -923,6 +936,10 @@ export let apply = (
   t?: Trace,
   writer?: string | null,
 ): Change[] => {
+  changes = normalizeChanges(changes, {
+    now: Date.now(),
+    resolve: (id) => ident(db, id),
+  })
   let dead = db.prepare('select 1 from tombstone where eid = ?')
   let extra: Change[] = []
   let touched = new Set<string>()

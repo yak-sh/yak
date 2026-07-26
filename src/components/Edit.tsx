@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'preact/hooks'
-import { ent, mode, mutate } from '../live.ts'
+import { ent, mode, mutate, problem } from '../live.ts'
 import { drop, peek, save } from './drafts.ts'
 import { el } from './ui.tsx'
 
@@ -80,8 +80,14 @@ export let Edit = (
     mode.value = 'normal'
     let was = t.dataset.was ?? ''
     let text = (t.textContent ?? '').trim()
-    if (text && text != was) mutate({ eid, name: comp, comp: { [prop]: text } })
-    else if (t.firstChild instanceof Text) t.firstChild.data = was
+    if (text && text != was) {
+      try {
+        mutate({ eid, name: comp, comp: { [prop]: text } })
+      } catch (e) {
+        problem.value = e instanceof Error ? e.message : String(e)
+        if (t.firstChild instanceof Text) t.firstChild.data = was
+      }
+    } else if (t.firstChild instanceof Text) t.firstChild.data = was
     onClose?.()
   }
 

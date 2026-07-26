@@ -80,7 +80,7 @@ Deno.test('an edge fires dependency handlers, spoken or unsaid', async () => {
   // unlinking is the same sentence with gone — the handler hears it too
   let gone = { ...comp, gone: true }
   await write([{ eid: a, name: 'dependency', comp: gone }]).done
-  assertEquals(heard.at(-1), [a, gone])
+  assertEquals(heard.at(-1), [a, { ...comp, gone: 1 }])
 })
 
 Deno.test('a throwing handler reaches oops; the rest still fire', async () => {

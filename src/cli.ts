@@ -69,7 +69,7 @@ import {
   STATIC_RULES,
 } from './doctor.ts'
 import { FILTERS, GRAMMAR } from './grammar.ts'
-import { type Edge, edges, prio, type Snapshot } from './types.ts'
+import { type Edge, edges, type Snapshot } from './types.ts'
 // `import type` (not the repo's usual inline `{ type X }`): telemetry.ts
 // reaches for node:sqlite, and the CLI has no business loading a db driver.
 import type { Log } from './telemetry.ts'
@@ -415,8 +415,11 @@ let list = async (args: string[]) => {
 export let leadPrio = (
   words: string[],
 ): { words: string[]; priority?: number } =>
-  words[0]?.match(/^[Pp]\d+$/)
-    ? { words: words.slice(1), priority: prio(words[0])! }
+  words[0]?.match(/^[Pp][+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i)
+    ? {
+      words: words.slice(1),
+      priority: Number(param(`.priority=${words[0]}`)!.value),
+    }
     : { words }
 
 export let strayFlag = (

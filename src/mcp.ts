@@ -31,7 +31,6 @@ import {
   type JournalEntry,
   mailNotified,
   memoryChanges,
-  needsDeref,
   notices,
   param,
   patches,
@@ -881,9 +880,6 @@ client; writes broadcast live to all screens. ${GRAMMAR}`,
     },
     async ({ changes }: { changes: Change[] }) => {
       try {
-        if (needsDeref(changes)) {
-          changes = derefChanges(rows(await io.read()), changes)
-        }
         await io.write(changes)
       } catch (e) {
         return err(`apply failed: ${(e as Error).message}`)

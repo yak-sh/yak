@@ -1,6 +1,12 @@
 // The scalar language: each PropType has one stored value and one face.
 import { assertEquals, assertThrows } from '@std/assert'
-import { formatProp, parseProp, type Prop, propAt } from './props.ts'
+import {
+  formatProp,
+  normalizeChanges,
+  parseProp,
+  type Prop,
+  propAt,
+} from './props.ts'
 import { type PropType } from './types.ts'
 
 let p = (name: string, type: PropType): Prop => ({
@@ -144,4 +150,37 @@ Deno.test('propAt: types and unambiguous error names come from schema', () => {
   })
   assertEquals(propAt('created', 'at')?.name, 'created.at')
   assertEquals(propAt('task', 'missing'), undefined)
+})
+
+Deno.test('normalizeChanges: component values, ids, and edges canonicalize', () => {
+  let parent = 'aaaaaaaa-0000-4000-8000-000000000001'
+  let child = 'aaaaaaaa-0000-4000-8000-000000000002'
+  let ids: Record<string, string> = { parent, 'T-2': child, 2: child }
+  let resolve = (id: string) => ids[id]
+  assertEquals(
+    normalizeChanges([
+      {
+        eid: 'parent',
+        name: 'task',
+        comp: { status: 'WIP', priority: 'P02', assignee_eid: '2' },
+      },
+      {
+        eid: 'parent',
+        name: 'dependency',
+        comp: { type: 'REQUIRES', child_eid: 'T-2', gone: 'no' },
+      },
+    ], { resolve }),
+    [
+      {
+        eid: parent,
+        name: 'task',
+        comp: { status: 'wip', priority: 2, assignee_eid: child },
+      },
+      {
+        eid: parent,
+        name: 'dependency',
+        comp: { type: 'requires', child_eid: child, gone: 0 },
+      },
+    ],
+  )
 })

@@ -311,18 +311,19 @@ let ws = (req: Request) => {
       out = apply(db, sent, t, writer)
     } catch (e) {
       console.error('sync: bad batch dropped —', e)
+      socket.send(JSON.stringify({
+        error: e instanceof Error ? e.message : String(e),
+        snapshot: snapshot(db),
+      }))
       return
     }
-    let extra = out.slice(sent.length)
-    // Peers get the EFFECTIVE batch in one frame, so a write and its
-    // server-stamped provenance are one sentence on live, catch-up, and
-    // snapshot paths. The sender already landed its optimistic input and only
-    // needs the extras. Subscription sockets are served by maintain().
+    // The sender hears the canonical patch too: its optimistic spelling may
+    // differ from storage (`P02`, `today`, a human reference). Applying the
+    // same patch twice is harmless; omitting it leaves the sender divergent.
     let msg = JSON.stringify(out)
     for (let c of clients) {
       if (c.readyState != WebSocket.OPEN || filtered.has(c)) continue
-      if (c != socket) c.send(msg)
-      else if (extra.length) c.send(JSON.stringify(extra))
+      c.send(msg)
     }
     maintain(out)
     effect(out, t)
@@ -601,7 +602,7 @@ Deno.serve(
         cast(out)
         effect(out, t)
         note(true)
-        return Response.json({ ok: true })
+        return Response.json({ ok: true, changes: out })
       }).catch((e) => {
         note(false, String(e))
         return new Response(String(e), { status: 400 })

@@ -7,6 +7,7 @@ import {
   mode,
   mutate,
   pinned,
+  problem,
   rows,
   uuid,
 } from '../live.ts'
@@ -399,7 +400,9 @@ export let Status = () => {
                 ? '-- VISUAL --'
                 : 'NORMAL'}
             </Mode>
-            {msg.value && <Msg>{msg.value}</Msg>}
+            {(msg.value || problem.value) && (
+              <Msg>{msg.value || problem.value}</Msg>
+            )}
           </>
         )}
       {/* the bar's right end is the Tray: live runs + the shelf */}

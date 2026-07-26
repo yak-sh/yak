@@ -1,17 +1,18 @@
 // The wake's timer, against an in-memory db: what is owed fires now and
 // mints the knock, what isn't waits, a phrase written straight to the
-// wire lands absolute, and nothing fires twice. The boot reconcile is
+// wire lands absolute at apply, and nothing fires twice. The boot reconcile is
 // the same call (arm) the effects sweep makes, which is the whole point
 // — a wake owed while the process was gone is just an overdue row.
 import { type Change } from './types.ts'
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, db, open } = await import('./db.ts')
 let { arm } = await import('./wake.ts')
-let { assertEquals, assertMatch } = await import('@std/assert')
+let { assertEquals, assertMatch, assertThrows } = await import('@std/assert')
 
 open()
 let uid = () => crypto.randomUUID()
 let sent: Change[] = []
+let landed: Change[] = []
 let cast = (cs: Change[]) => sent.push(...cs)
 
 let wrow = (eid: string) =>
@@ -34,7 +35,7 @@ let jeff = (() => {
 
 let wake = (at: string, target?: string) => {
   let eid = uid()
-  apply(db, [{
+  landed = apply(db, [{
     eid,
     name: 'wake',
     comp: { at, to_eid: jeff, ...(target ? { target_eid: target } : {}) },
@@ -80,17 +81,22 @@ Deno.test('a phrase off the raw wire lands absolute, at MINT', () => {
       }).at,
     ),
   )
-  assertEquals(wrow(w).at, new Date(mint + 7_200_000).toISOString())
+  let at = String(wrow(w).at)
+  assertEquals(Math.abs(Date.parse(at) - mint - 7_200_000) < 1000, true)
   assertEquals(wrow(w).acted_at, null) // two hours out, so it waits
   assertEquals(
-    sent.some((c) => c.name == 'wake' && c.eid == w && c.comp?.at),
-    true, // the resolution is broadcast, not just written
+    landed.some((c) => c.name == 'wake' && c.eid == w && c.comp?.at == at),
+    true, // apply returns the canonical patch for the sender and peers
   )
 })
 
-Deno.test('an unreadable hour says so instead of waiting forever', () => {
-  let w = wake('whenever')
-  arm(cast)
-  assertMatch(String(wrow(w).error), /unreadable at: whenever/)
-  assertMatch(String(wrow(w).acted_at), /^\d{4}-/)
+Deno.test('an unreadable hour is refused before it can wait forever', () => {
+  let before = db.prepare('select count(*) as n from wake').get() as {
+    n: number
+  }
+  assertThrows(() => wake('whenever'), Error, 'wake.at is a time')
+  let after = db.prepare('select count(*) as n from wake').get() as {
+    n: number
+  }
+  assertEquals(after.n, before.n)
 })

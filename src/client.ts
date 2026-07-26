@@ -12,8 +12,6 @@ import {
   type Dep,
   type Hit,
   kindOf,
-  priErr,
-  prio,
   prioTag,
   settled,
   type Snapshot,
@@ -22,6 +20,7 @@ import {
   uuid,
 } from './types.ts'
 import { idOf } from './types.ts'
+import { parseProp, propAt } from './props.ts'
 import { hot, matchQuery, type Pred, route } from './query.ts'
 import { FLOOR } from './embed.ts'
 import { request } from './http.ts'
@@ -239,8 +238,6 @@ export let historyLine = (e: JournalEntry) => {
 
 export type Param = { comp: string; prop: string; value: unknown }
 
-let coerce = (v: string): unknown => /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : v
-
 // '.title=Hello' | '.doc.title=Hello' → {comp, prop, value}; null if the
 // argument isn't a dot-param at all (a bare word). Bare props ride
 // query.ts route(), so the reference sugar holds for writes too:
@@ -255,7 +252,7 @@ export let param = (arg: string): Param | null => {
     if (!(b in (comps[a] ?? {}))) {
       throw new Error(`no such prop: .${a}.${b}`)
     }
-    p = { comp: a, prop: b, value: coerce(raw) }
+    p = { comp: a, prop: b, value: raw }
   } else {
     let r = route(a)
     // route()'s any-of ('' comp) serves FILTERS; a write must aim at one
@@ -268,17 +265,11 @@ export let param = (arg: string): Param | null => {
         }) — use .comp.${r.prop}`,
       )
     }
-    p = { ...r, value: coerce(raw) }
+    p = { ...r, value: raw }
   }
-  // priority is the one number column operators spell P<n>: coerce already
-  // turned a plain '2'/'1.5' into a number (the board's fractional slots
-  // pass straight through), so a STRING here is either the P<n> spelling or
-  // garbage — strip the P, and reject the rest LOUDLY rather than storing it
-  // (the literal 'P2' in the graph was this door with no such step, T-7053).
-  if (p.comp == 'task' && p.prop == 'priority' && typeof p.value == 'string') {
-    let n = prio(p.value)
-    if (n == null) throw new Error(priErr(p.value))
-    p.value = n
+  let declared = propAt(p.comp, p.prop)!
+  if (!(typeof declared.type == 'object' && 'eid' in declared.type)) {
+    p.value = parseProp(declared, raw)
   }
   return p
 }
@@ -300,7 +291,15 @@ let derefProp = (all: Row[], prop: string, value: unknown) =>
     ? deref(all, String(value), ` (.${prop})`)
     : value
 export let derefParams = (all: Row[], ps: Param[]) =>
-  ps.map((p) => ({ ...p, value: derefProp(all, p.prop, p.value) }))
+  ps.map((p) => {
+    let declared = propAt(p.comp, p.prop)!
+    let value = typeof declared.type == 'object' && 'eid' in declared.type
+      ? parseProp(declared, p.value, {
+        resolve: (id) => find(all, id)?.eid,
+      })
+      : p.value
+    return { ...p, value }
+  })
 export let derefChanges = (all: Row[], changes: Change[]) =>
   changes.map((c) => ({
     ...c,
@@ -344,9 +343,10 @@ export let spec = (text: string) => {
   let ps: Param[] = []
   let leading = true
   for (let w of line.trim().split(/\s+/).filter(Boolean)) {
-    let p = leading && w.match(/^[Pp](\d+(\.\d+)?)$/)
-    if (p) {
-      ps.push({ comp: 'task', prop: 'priority', value: Number(p[1]) })
+    let priority = leading &&
+      /^[Pp][+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(w)
+    if (priority) {
+      ps.push(param(`.priority=${w}`)!)
       continue
     }
     if (w.startsWith('.')) {

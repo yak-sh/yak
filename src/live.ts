@@ -14,6 +14,7 @@ import {
 } from './types.ts'
 import { type Row } from './client.ts'
 import { matchQuery, parseQuery, resolveRefs, warm } from './query.ts'
+import { normalizeChanges } from './props.ts'
 import * as idb from './idb.ts'
 
 // A cache row: the spine plus whichever components the entity carries.
@@ -26,6 +27,7 @@ export type Comps =
 
 export let cache = signal<Record<string, Comps>>({})
 export let deps = signal<Dep[]>([])
+export let problem = signal('')
 
 // Where the server lives and what a code reload means. The browser answers
 // both from its location; other hosts (the TUI) configure these before
@@ -163,8 +165,10 @@ let held: idb.Meta = {}
 
 // Land a local edit: cache first (instant render), then the wire.
 export let mutate = (...changes: Change[]) => {
-  applyLocal(changes)
-  send(...changes)
+  problem.value = ''
+  let parsed = normalizeChanges(changes, { resolve: findEid })
+  applyLocal(parsed)
+  send(...parsed)
 }
 
 // One socket per tab, lazily opened; sends queue behind the handshake.
@@ -201,7 +205,10 @@ export let sock = () => {
   ws.onmessage = (m) => {
     let data = JSON.parse(String(m.data))
     if (Array.isArray(data)) applyLocal(data)
-    else if (data?.catchup !== undefined) onCatchup(data)
+    else if (data?.error) {
+      problem.value = String(data.error)
+      if (data.snapshot) onReset(data)
+    } else if (data?.catchup !== undefined) onCatchup(data)
     else if (data?.reset) onReset(data)
     else if (typeof data?.sub == 'string') onSub(data)
     else if (data == 'reload') config.reload()

@@ -84,7 +84,14 @@ let CASES: [string, { comp: string; prop: string; value: unknown } | RegExp][] =
   [
     ['.title=Hi', { comp: 'doc', prop: 'title', value: 'Hi' }],
     ['.status=done', { comp: 'task', prop: 'status', value: 'done' }],
+    ['.status=WIP', { comp: 'task', prop: 'status', value: 'wip' }],
     ['.domain=Eng', { comp: 'task', prop: 'domain', value: 'Eng' }],
+    ['.operator=YES', { comp: 'session', prop: 'operator', value: 1 }],
+    ['.project.retired_at=2026-07-01T00:00:00Z', {
+      comp: 'project',
+      prop: 'retired_at',
+      value: '2026-07-01T00:00:00.000Z',
+    }],
     ['.priority=1.5', { comp: 'task', prop: 'priority', value: 1.5 }],
     // priority speaks P<n> at the write door too (T-6741/T-7143): 'P2' and
     // '2' both store the integer 2; garbage is a loud error, not bad data.
@@ -114,9 +121,9 @@ Deno.test('dot-param routing', () => {
     } else assertEquals(param(arg), want, arg)
   }
   assertEquals(param('bare word'), null)
-  assertEquals(patches([param('.title=a')!, param('.status=b')!]), {
+  assertEquals(patches([param('.title=a')!, param('.status=wip')!]), {
     doc: { title: 'a' },
-    task: { status: 'b' },
+    task: { status: 'wip' },
   })
 })
 
@@ -1229,9 +1236,13 @@ Deno.test('derefParams: reference values resolve at the door', () => {
   assertEquals(one('.assignee=T-2'), T1) // human id
   assertEquals(one('.assignee=3'), T2) // bare num
   assertEquals(one(`.assignee=${T1}`), T1) // an eid passes through
-  assertEquals(one('.assignee='), '') // a clear stays a clear
+  assertEquals(one('.assignee='), null) // an optional scalar clear is null
   assertEquals(one('.title=jeff'), 'jeff') // not a reference
-  assertThrows(() => one('.assignee=ghost'), Error, 'no entity')
+  assertThrows(
+    () => one('.assignee=ghost'),
+    Error,
+    'assignee_eid is a human id / alias / UUID',
+  )
 })
 
 Deno.test('derefParams: project references accept P-nums and eids', () => {

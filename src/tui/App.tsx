@@ -16,6 +16,7 @@ import {
   gated,
   mode,
   mutate,
+  problem,
   rows as graph,
   send,
   statuses,
@@ -313,7 +314,9 @@ let TStatus = () => {
                 ? '-- INSERT --'
                 : mode.value.toUpperCase()}
             </span>
-            {msg.value && <span class='TStatus_Msg'>{msg.value}</span>}
+            {(msg.value || problem.value) && (
+              <span class='TStatus_Msg'>{msg.value || problem.value}</span>
+            )}
             <span class='TStatus_Hint'>
               j/k browse · l in · h out · i edit · y yank · : cmd · q quit
             </span>

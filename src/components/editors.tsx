@@ -1,7 +1,7 @@
 import { type ComponentChildren, type JSX } from 'preact'
 import { useContext, useRef, useState } from 'preact/hooks'
 import { comps, type PropType, statuses } from '../types.ts'
-import { cache, domains, ent, mutate } from '../live.ts'
+import { cache, domains, ent, mutate, problem } from '../live.ts'
 import { ago, block, focus, pretty, Surround } from './ui.tsx'
 import { Dot } from './Dot.tsx'
 import { Edit } from './Edit.tsx'
@@ -70,7 +70,11 @@ export let defineWells = (w: typeof wells) => Object.assign(wells, w)
 
 // One write path for every editor: a single column, patched in place.
 let set = (p: EditorProps, v: unknown) => {
-  mutate({ eid: p.eid, name: p.comp, comp: { [p.prop]: v } })
+  try {
+    mutate({ eid: p.eid, name: p.comp, comp: { [p.prop]: v } })
+  } catch (e) {
+    problem.value = e instanceof Error ? e.message : String(e)
+  }
   p.done()
 }
 
@@ -103,8 +107,7 @@ let NumEdit = ({ ...p }: EditorProps) => (
     }}
     onBlur={(ev: FocusEvent) => {
       let text = (ev.currentTarget as HTMLInputElement).value.trim()
-      let v = Number(text)
-      text && isFinite(v) && v != p.value ? set(p, v) : p.done()
+      text != String(p.value ?? '') ? set(p, text) : p.done()
     }}
   />
 )
@@ -288,7 +291,11 @@ defineEditors([
   },
   { match: (t) => t == 'time', show: TimeVal, Edit: inline(TextEdit) },
   { match: (t) => t == 'url', show: UrlVal, Edit: inline(TextEdit) },
-  { match: (t) => t == 'number', show: plain, Edit: inline(NumEdit) },
+  {
+    match: (t) => t == 'number' || t == 'priority',
+    show: plain,
+    Edit: inline(NumEdit),
+  },
   { match: (t) => t == 'query', show: plain, Edit: inline(QueryEdit) },
   {
     match: (t) => typeof t == 'object' && 'enum' in t,

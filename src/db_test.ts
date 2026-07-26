@@ -131,6 +131,134 @@ Deno.test('declared booleans bind as SQLite integers', () => {
   assertEquals(comp(s, 'session')?.operator, 1)
 })
 
+Deno.test('apply canonicalizes every scalar and reference spelling', () => {
+  let target = uid(), subject = uid()
+  apply(db, [
+    { eid: target, name: 'doc', comp: { title: 'Target' } },
+    { eid: target, name: 'person', comp: {} },
+    { eid: target, name: 'alias', comp: { slug: 'typed-target' } },
+    { eid: subject, name: 'doc', comp: { title: 'Subject' } },
+    { eid: subject, name: 'task', comp: { status: 'open', priority: 0 } },
+    { eid: subject, name: 'session', comp: { id: `typed-${subject}` } },
+    { eid: subject, name: 'project', comp: {} },
+    { eid: subject, name: 'board', comp: { query: '' } },
+    { eid: subject, name: 'web', comp: { url: '' } },
+    { eid: subject, name: 'alias', comp: { slug: 'typed-subject' } },
+  ])
+  let out = apply(db, [
+    {
+      eid: 'typed-subject',
+      name: 'task',
+      comp: {
+        status: 'WIP',
+        priority: 'P02',
+        assignee_eid: 'typed-target',
+        domain: 'Eng',
+      },
+    },
+    {
+      eid: 'typed-subject',
+      name: 'session',
+      comp: { pid: '06e2', operator: 'YES' },
+    },
+    {
+      eid: 'typed-subject',
+      name: 'project',
+      comp: { retired_at: '2026-07-01T00:00:00Z' },
+    },
+    {
+      eid: 'typed-subject',
+      name: 'board',
+      comp: { query: '.status=open' },
+    },
+    {
+      eid: 'typed-subject',
+      name: 'web',
+      comp: { url: 'https://example.test' },
+    },
+  ])
+  assertEquals(out.slice(0, 5), [
+    {
+      eid: subject,
+      name: 'task',
+      comp: {
+        status: 'wip',
+        priority: 2,
+        assignee_eid: target,
+        domain: 'Eng',
+      },
+    },
+    {
+      eid: subject,
+      name: 'session',
+      comp: { pid: 600, operator: 1 },
+    },
+    {
+      eid: subject,
+      name: 'project',
+      comp: { retired_at: '2026-07-01T00:00:00.000Z' },
+    },
+    {
+      eid: subject,
+      name: 'board',
+      comp: { query: '.status=open' },
+    },
+    {
+      eid: subject,
+      name: 'web',
+      comp: { url: 'https://example.test' },
+    },
+  ])
+  assertEquals(comp(subject, 'task')?.priority, 2)
+  assertEquals(comp(subject, 'session')?.operator, 1)
+  let logged = (db.prepare(
+    'select batch from journal order by rowid desc',
+  ).get() as { batch: string }).batch
+  assertEquals(logged.includes('P02'), false)
+  assertEquals(logged.includes('2026-07-01T00:00:00.000Z'), true)
+
+  let num = Number(comp(target, 'entity')?.num)
+  let [edge] = apply(db, [{
+    eid: 'typed-subject',
+    name: 'dependency',
+    comp: { type: 'ABOUT', child_eid: String(num), gone: 'no' },
+  }])
+  assertEquals(edge, {
+    eid: subject,
+    name: 'dependency',
+    comp: { type: 'about', child_eid: target, gone: 0 },
+  })
+})
+
+Deno.test('typed rejection rolls back; optional empty scalars clear', () => {
+  let s = uid()
+  apply(db, [{
+    eid: s,
+    name: 'session',
+    comp: { id: `typed-empty-${s}`, pid: 7, operator: 1 },
+  }])
+  apply(db, [{
+    eid: s,
+    name: 'session',
+    comp: { pid: '', operator: '' },
+  }])
+  assertEquals(comp(s, 'session')?.pid, null)
+  assertEquals(comp(s, 'session')?.operator, null)
+
+  let before = journalCount()
+  assertThrows(
+    () =>
+      apply(db, [
+        { eid: s, name: 'doc', comp: { title: 'must roll back' } },
+        { eid: s, name: 'session', comp: { operator: 'maybe' } },
+      ]),
+    Error,
+    'operator is a boolean',
+  )
+  assertEquals(comp(s, 'doc'), undefined)
+  assertEquals(journalCount(), before)
+})
+
 Deno.test('unknown component names are ignored, batch survives', () => {
   let t = uid()
   apply(db, [
@@ -703,7 +831,7 @@ Deno.test('backfill: mail.read_at seeds opened, idempotently', () => {
       | undefined)?.at
   assertEquals(openedAt(), undefined) // the wire write of read_at made no stamp
   backfillOpened(d)
-  assertEquals(openedAt(), '2026-07-01T00:00:00Z') // read_at → opened.at
+  assertEquals(openedAt(), '2026-07-01T00:00:00.000Z') // canonical read_at
   // idempotent: a re-run never moves an existing stamp
   d.prepare('update opened set at = ? where eid = ?').run('MOVED', m)
   backfillOpened(d)
@@ -1049,12 +1177,23 @@ Deno.test('edges: every vocabulary verb round-trips', async () => {
   }
 })
 
-Deno.test('edges: bad type and missing endpoint drop alone, loudly', () => {
+Deno.test('edges: a bad type rejects its batch; a missing endpoint drops', () => {
   let p = uid(), c = uid()
   apply(db, [
     { eid: p, name: 'doc', comp: { title: 'solid' } },
     { eid: c, name: 'doc', comp: { title: 'other' } },
-    { eid: p, name: 'dependency', comp: { type: 'blocks', child_eid: c } },
+  ])
+  assertThrows(
+    () =>
+      apply(db, [
+        { eid: p, name: 'dependency', comp: { type: 'blocks', child_eid: c } },
+        { eid: p, name: 'doc', comp: { body: 'rolled back' } },
+      ]),
+    Error,
+    'dependency.type is one of',
+  )
+  assertEquals(comp(p, 'doc')?.body, '')
+  apply(db, [
     { eid: p, name: 'dependency', comp: { type: 'reads', child_eid: uid() } },
     { eid: p, name: 'doc', comp: { body: 'survives' } }, // batch lives on
   ])
