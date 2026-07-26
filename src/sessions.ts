@@ -169,6 +169,29 @@ let stamp = (
   }
 }
 
+let locked = (e: unknown) =>
+  e instanceof Error &&
+  /database(?: table)? is locked/i.test(e.message)
+
+// Followers are background observers sharing SQLite with watcher children and
+// backup probes. Retry only their lock contention, yielding so every other
+// server door stays open; the closure keeps a parsed patch intact between
+// attempts.
+let followWrite = async (eid: string, write: () => void) => {
+  let warned = false
+  for (;;) {
+    try {
+      write()
+      return
+    } catch (e) {
+      if (!locked(e)) throw e
+      if (!warned) console.warn(`session ${eid} follower waiting —`, e)
+      warned = true
+      await sleep(poll())
+    }
+  }
+}
+
 // A managed session is over in exactly these statuses — the moment one
 // lands, whoever asked for the work deserves to hear it.
 let SETTLED = ['completed', 'failed', 'interrupted', 'lost']
@@ -353,7 +376,7 @@ let readLines = (path: string, t: Tail) => {
 // One pass over the new lines: count them, ask the adapter what they mean,
 // stamp what we learned. Everything the adapter doesn't recognize is just
 // log — it lives in the file, not in the summary.
-let drain = (eid: string, ad: Adapter, t: Tail, cast: Cast) => {
+let drain = async (eid: string, ad: Adapter, t: Tail, cast: Cast) => {
   let lines = readLines(logFile(eid), t)
   if (!lines.length) return
   let patch: Summary = {}
@@ -401,7 +424,7 @@ let drain = (eid: string, ad: Adapter, t: Tail, cast: Cast) => {
   }
   patch.latest_seq = t.seq
   if (t.errs.length) patch.error = diagnosis(t)
-  stamp(eid, patch, cast)
+  await followWrite(eid, () => stamp(eid, patch, cast))
 }
 
 let diagnosis = (t: Tail) => t.errs.join('; ').slice(0, 2000)
@@ -428,11 +451,20 @@ let follow = async (eid: string, ad: Adapter, cast: Cast, from?: Tail) => {
   let t: Tail = from ?? { at: 0, seq: 0, ended: false, errs: [] }
   for (;;) {
     let last = await run.exit()
-    drain(eid, ad, t, cast)
+    await drain(eid, ad, t, cast)
     if (last) break
     await sleep(poll())
   }
   await finish(eid, t, run, cast)
+}
+
+// Recovery does not await its followers. Observe every promise at birth, but
+// return the original: launch and resume still need a failure to reject into
+// their lifecycle handlers.
+let following = (eid: string, ad: Adapter, cast: Cast, from?: Tail) => {
+  let done = follow(eid, ad, cast, from)
+  done.catch((e) => console.warn(`session ${eid} follower stopped —`, e))
+  return done
 }
 
 // The ending, derived rather than announced: a clean exit that reached the
@@ -466,14 +498,19 @@ let finish = async (eid: string, t: Tail, run: Run, cast: Cast) => {
       Deno.removeSync(f) // terminal: nothing left to adopt or report
     } catch { /* never written, or already gone */ }
   }
-  stamp(eid, {
-    status: row.stop_requested_at ? 'interrupted' : ok ? 'completed' : 'failed',
-    exit_code: code,
-    stop_reason: code == null ? run.why : null,
-    finished_at: now(),
-    latest_seq: t.seq,
-    ...(t.errs.length ? { error: diagnosis(t) } : {}),
-  }, cast)
+  await followWrite(eid, () =>
+    stamp(eid, {
+      status: row.stop_requested_at
+        ? 'interrupted'
+        : ok
+        ? 'completed'
+        : 'failed',
+      exit_code: code,
+      stop_reason: code == null ? run.why : null,
+      finished_at: now(),
+      latest_seq: t.seq,
+      ...(t.errs.length ? { error: diagnosis(t) } : {}),
+    }, cast))
 }
 
 // ---- watching a session we did not spawn ----
@@ -526,21 +563,25 @@ export let watched = (cast: Cast) => (eid: string, comp: Row) => {
   // Ask the PROCESS, not the transcript or message door. A provider may have
   // a growing transcript without a delivery channel, as interactive Codex
   // does; a pid that no longer serves this row has left.
-  if (!present(eid)) {
-    if (!was.finished_at) stamp(eid, { finished_at: lastHeard(eid) }, cast)
-    return
-  }
+  let open = present(eid)
+  if (!open && was.finished_at) return
   watching.add(eid)
-  stamp(eid, {
-    ...(was.started_at ? {} : { started_at: now() }),
-    finished_at: null, // the door is open again
-  }, cast)
-  // Detached on purpose: this is a heartbeat that outlives the batch, not
-  // a job the batch is waiting on — a caller awaiting the dispatch would
-  // wait as long as the operator stays logged in.
-  trail(eid, cast)
+  let done = open
+    ? watch(eid, was, cast)
+    : followWrite(eid, () => stamp(eid, { finished_at: lastHeard(eid) }, cast))
+  // Detached on purpose: a heartbeat outlives the batch that armed it.
+  done
     .catch((e) => console.warn('session watch stopped —', e))
     .finally(() => watching.delete(eid))
+}
+
+let watch = async (eid: string, was: Watch, cast: Cast) => {
+  await followWrite(eid, () =>
+    stamp(eid, {
+      ...(was.started_at ? {} : { started_at: now() }),
+      finished_at: null, // the door is open again
+    }, cast))
+  await trail(eid, cast)
 }
 
 // Sit beside the provider process, counting whatever log there is. Lines are
@@ -553,10 +594,11 @@ let trail = async (eid: string, cast: Cast) => {
   for (;;) {
     let shut = !present(eid)
     t.seq += readLines(logOf(eid), t).length
-    stamp(eid, {
-      latest_seq: t.seq,
-      ...(shut ? { finished_at: now() } : {}),
-    }, cast)
+    await followWrite(eid, () =>
+      stamp(eid, {
+        latest_seq: t.seq,
+        ...(shut ? { finished_at: now() } : {}),
+      }, cast))
     if (shut) return
     await sleep(poll())
   }
@@ -1008,7 +1050,7 @@ let track = (
     done: Promise.resolve(),
   }
   running.set(eid, run)
-  run.done = follow(eid, ad, cast, from)
+  run.done = following(eid, ad, cast, from)
   return run.done
 }
 
@@ -1348,7 +1390,7 @@ export let recover = (cast: Cast) => {
       done: Promise.resolve(),
     }
     running.set(eid, run)
-    run.done = follow(eid, ad, cast)
+    run.done = following(eid, ad, cast)
   }
   // The other half of boot: sessions we never spawned but were watching.
   // A restart drops every trail, and an operator's terminal doesn't
