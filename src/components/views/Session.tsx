@@ -7,11 +7,11 @@ import {
   type LogRow,
   sessionActive,
 } from '../../types.ts'
-import { base, ent, jobOf, mutate, uuid } from '../../live.ts'
+import { base, commentsOn, ent, jobOf, mutate, uuid } from '../../live.ts'
 import { clickProps } from '../nav.tsx'
 import { ago, block, pretty, Stamp } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
-import { Comments } from '../Comments.tsx'
+import { Composer, Note } from '../Comments.tsx'
 import { Id } from './Inline.tsx'
 import { Entity } from '../Entity.tsx'
 
@@ -19,8 +19,8 @@ import { Entity } from '../Entity.tsx'
 // (status, model, stop) over the lifecycle summary (server-owned columns,
 // riding the snapshot like any component — so the bar re-renders itself
 // off the cache as the run moves), the facts behind a disclosure, then
-// the log, then the comment rail (Comments.tsx), which doubles as the
-// way to talk TO the agent.
+// the log with the session's comments woven in by time, then the pinned
+// composer (Comments.tsx), which is the way to talk TO the agent.
 //
 // The log is the FILE (src/sessions.ts): we read it back over
 // /sessions/:eid/logs, where each line already carries its renderer `row`
@@ -69,6 +69,8 @@ let Frame = block('div', 'Session', {
   SysTag: 'span',
   SysText: 'span',
   SysCount: 'span',
+  Unsent: 'div',
+  Foot: 'div',
 })
 let {
   Head,
@@ -107,6 +109,8 @@ let {
   SysTag,
   SysText,
   SysCount,
+  Unsent,
+  Foot,
 } = Frame
 
 type Entry = { seq: number; line: string; row?: LogRow; n?: number }
@@ -144,6 +148,24 @@ let when = (t?: string | null) => t ? new Date(t).toLocaleString() : null
 let span = (ms: number) => {
   let s = Math.round(ms / 1000)
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`
+}
+
+// Weave the heard comments into the log by time: only says wear a
+// clock, so each line carries the last one seen forward, and a comment
+// slots in after everything said before it. Comments the log can't
+// place yet (no timestamped line reached) flush before the first one
+// that can; leftovers land at the end.
+let weave = (rows: Entry[], cs: Ent[]) => {
+  let out: (Entry | Ent)[] = []
+  let i = 0, t = ''
+  for (let x of rows) {
+    if (x.row?.kind == 'say' && x.row.at) t = x.row.at
+    while (i < cs.length && t && String(cs[i].created?.at ?? '') <= t) {
+      out.push(cs[i++])
+    }
+    out.push(x)
+  }
+  return [...out, ...cs.slice(i)]
 }
 
 // The tail thinks out loud: what the run is doing right now, read off
@@ -392,6 +414,24 @@ export let Session = ({ e }: { e: Ent }) => {
     s.cwd,
     s.started_at && `started ${ago(s.started_at)}`,
   ].filter(Boolean).join(' · ') || 'session'
+  // A comment joins the thread once the session has HEARD it: a managed
+  // resume prints the words as its own `session.input` line (the log IS
+  // the delivery — the comment would double it, so it hides), and the
+  // bus cursor (`acked_at`) covers what a live run was served. An event
+  // comment is machinery narrating and the session's own note is the
+  // agent speaking — both already part of the story. Anything else is
+  // still in flight: it waits under the log until the agent takes it.
+  let inputs = new Set(
+    log.entries.flatMap((x) =>
+      x.row?.kind == 'say' && x.row.role == 'user' ? [x.row.text] : []
+    ),
+  )
+  let cs = commentsOn(e.eid).filter((c) => !inputs.has(c.doc?.body ?? ''))
+  let heard = (c: Ent) =>
+    !!c.comment!.event || c.comment!.author_eid == e.eid ||
+    (!!s.acked_at && String(c.created?.at ?? '') <= s.acked_at)
+  let thread = weave(rows, cs.filter(heard))
+  let unsent = cs.filter((c) => !heard(c))
   return (
     <Frame elRef={frame}>
       <Head>
@@ -456,17 +496,26 @@ export let Session = ({ e }: { e: Ent }) => {
         {s.error && <Fault mod='error'>{s.error}</Fault>}
         {s.stop_reason && <Fault>{s.stop_reason}</Fault>}
         <Log>
-          {rows.map((x) => <Row key={x.seq} x={x} />)}
+          {thread.map((x) =>
+            'seq' in x ? <Row key={x.seq} x={x} /> : <Note key={x.eid} c={x} />
+          )}
           {live && <Think>✳ {doing(rows.at(-1)?.row)}</Think>}
         </Log>
         {/* stderr: unordered diagnostics, never inside the log's seqs */}
         {log.stderr && <Err>{log.stderr}</Err>}
-        {
-          /* the one composer: comment about it, or arm → session to say TO
-          it (Comments.tsx knows which sessions can take words) */
-        }
-        <Comments eid={e.eid} />
+        {unsent.length > 0 && (
+          <Unsent>
+            {unsent.map((c) => <Note key={c.eid} c={c} />)}
+          </Unsent>
+        )}
       </Panel>
+      {
+        /* the one composer, pinned like the bar: comment about it, or say
+          TO it (Comments.tsx knows which sessions can take words) */
+      }
+      <Foot>
+        <Composer eid={e.eid} />
+      </Foot>
     </Frame>
   )
 }

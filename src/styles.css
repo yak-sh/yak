@@ -2101,10 +2101,13 @@ a[data-ref]:hover {
 .App_Body > .Session {
   padding: 0;
 }
+/* bar / body / composer: the body takes the slack, so the foot hugs the
+   bottom even when the log is short — and pins there when it isn't. */
 .Session {
   display: grid;
   gap: 0;
-  align-content: start;
+  grid-template-rows: auto 1fr auto;
+  min-height: 100%;
   min-width: 0;
 }
 .Session_Head {
@@ -2122,8 +2125,26 @@ a[data-ref]:hover {
 .Session_Body {
   display: grid;
   gap: var(--gap);
+  align-content: start;
   min-width: 0;
   padding: var(--half-gap) var(--gap) var(--gap);
+}
+/* Said but not yet heard — waiting under the log for the agent's next
+   tool call (or resume) to take it into the thread. */
+.Session_Unsent {
+  display: grid;
+  gap: var(--half-gap);
+  opacity: 0.75;
+}
+/* The composer, pinned like the bar. */
+.Session_Foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: grid;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: var(--half-gap) var(--gap);
 }
 .Session_Status {
   font-weight: 600;
