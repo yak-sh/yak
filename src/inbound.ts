@@ -12,6 +12,7 @@
 import { apply, db } from './db.ts'
 import { dispatch, trace } from './effects.ts'
 import { rfcId } from './mail.ts'
+import { canon } from './mailer.ts'
 import { type Change, uuid } from './types.ts'
 
 type Cast = (changes: Change[]) => void
@@ -159,6 +160,14 @@ export let routeTo = (addr: string | null | undefined): string | null => {
   return fallback?.eid ?? null
 }
 
+// A hook's first route segment names the venture's fleet inbox. The
+// address canonicalizer makes cafe_car and CafeCar meet cafecar while
+// the reversed address book remains the one venture registry.
+export let hookTo = (path: string | null | undefined): string | null => {
+  let venture = /^\/hook\/([^/?#]+)/.exec(path ?? '')?.[1]
+  return routeTo(venture ? canon(`${venture}@bot.yak.sh`) : null)
+}
+
 // The From: HEADER names the author; the envelope from is SMTP plumbing
 // (Cloudflare Email Sending stamps bounces@cf-bounce.… on every internal
 // mail). The entity's from must be the author, or every reply aims at
@@ -252,8 +261,8 @@ let eventOf = (r: SpoolReq): string => {
 
 // One spool request → a hook entity: doc + hook tag on the wire, the
 // whole derivation stamped ((source, spool_id) is the idempotency key,
-// payload verbatim), and an `about` edge aiming it at the triage
-// project — routing by source graduates when a source needs it.
+// payload verbatim), and an `about` edge aiming it at the venture
+// named by the request path (or the triage project when it names none).
 export let hookChanges = (r: SpoolReq, target: string | null) => {
   let eid = uuid()
   let source = r.source || 'unknown'
@@ -375,7 +384,7 @@ let sweep = async (cast: Cast, api: FleetApi) => {
           !db.prepare('select 1 from hook where source = ? and spool_id = ?')
             .get(r.source || 'unknown', r.id)
         ) {
-          mint(hookChanges(r, routeTo(null)), 'hook', cast)
+          mint(hookChanges(r, hookTo(r.path)), 'hook', cast)
         }
         done.push(r.id)
       }

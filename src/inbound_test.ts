@@ -10,6 +10,7 @@ let {
   author,
   fleetRaw,
   hookChanges,
+  hookTo,
   inboundSweep,
   mailChanges,
   mailIdOf,
@@ -52,6 +53,19 @@ let operator = (() => {
   return eid
 })()
 
+let venture = (title: string, address: string) => {
+  let eid = uid()
+  apply(db, [
+    { eid, name: 'doc', comp: { title } },
+    { eid, name: 'project', comp: {} },
+    { eid, name: 'email', comp: { address } },
+  ])
+  return eid
+}
+
+let cafecar = venture('CafeCar', 'cafecar@bot.yak.sh')
+let homelab = venture('Homelab', 'homelab@bot.yak.sh')
+
 // The archive dialect, as rowToJson speaks it: from/to/text, boolean
 // verified, ISO received_at riding beside the epoch ts.
 let msg = (over: Partial<FleetMsg> = {}): FleetMsg => ({
@@ -72,6 +86,14 @@ Deno.test('routeTo: the address book reversed, case-blind, P-20 the rest', () =>
   assertEquals(routeTo('VENTURE@bot.test'), operator)
   assertEquals(routeTo('stranger@x.test'), holdco)
   assertEquals(routeTo(null), holdco)
+})
+
+Deno.test('hookTo: the venture path routes, variants converge, misses fall back', () => {
+  assertEquals(hookTo('/hook/Cafe_Car/posthog'), cafecar)
+  assertEquals(hookTo('/hook/homelab/github'), homelab)
+  assertEquals(hookTo('/hook/stranger/posthog'), holdco)
+  assertEquals(hookTo('/hook'), holdco)
+  assertEquals(hookTo(null), holdco)
 })
 
 Deno.test('author: the From header wins over the envelope', () => {
@@ -193,7 +215,12 @@ let mailCount = () =>
 Deno.test('the sweep: mints once, stamps back, and dir=out never lands', async () => {
   let { api, notified, processed } = fakeApi(
     [msg(), msg({ id: 'out:1:x', dir: 'out' })],
-    [{ id: 'r9', source: 'github', body: '{"action":"ping"}' }],
+    [{
+      id: 'r9',
+      source: 'github',
+      path: '/hook/cafecar/github',
+      body: '{"action":"ping"}',
+    }],
   )
   await inboundSweep(cast, api)
   assertEquals(mailCount(), 1) // the outbound archive row stayed out
@@ -211,6 +238,11 @@ Deno.test('the sweep: mints once, stamps back, and dir=out never lands', async (
   >[]
   assertEquals(hooks.length, 1)
   assertEquals(hooks[0].source, 'github')
+  let aimed = db.prepare(
+    `select child_eid from dependency
+     where parent_eid = ? and type = 'about'`,
+  ).get(hooks[0].eid) as { child_eid: string }
+  assertEquals(aimed.child_eid, cafecar)
   // sweep again: idempotent on the provenance keys, stamps still answer
   await inboundSweep(cast, api)
   assertEquals(mailCount(), 1)
