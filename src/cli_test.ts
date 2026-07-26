@@ -2,8 +2,9 @@
 // CLI grammar is dot-params. The guard must catch both the glued `--project=P`
 // and the space-separated `--project P` forms — the latter is what agents
 // actually type, and the bug that let it through polluted the owner board.
-import { assertEquals, assertMatch } from '@std/assert'
+import { assertEquals, assertMatch, assertRejects } from '@std/assert'
 import {
+  bodyOf,
   codexArgs,
   finalText,
   hookDialect,
@@ -33,6 +34,45 @@ let cli = (...args: string[]) =>
   }).output()
 
 let text = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
+
+Deno.test('bodyOf: only explicit stdin spellings read the pipe', async () => {
+  let cases: [string[], string[], string, number][] = [
+    [['--body=-'], [], 'piped', 1],
+    [['--body=@-'], [], 'piped', 1],
+    [['--body=literal'], [], 'literal', 0],
+    [[], ['word', 'body'], 'word body', 0],
+  ]
+  for (let [flags, words, want, reads] of cases) {
+    let read = 0
+    let got = await bodyOf(flags, words, {
+      terminal: () => false,
+      read: () => {
+        read++
+        return Promise.resolve(' piped\n')
+      },
+    })
+    assertEquals({ flags, got, read }, { flags, got: want, read: reads })
+  }
+})
+
+Deno.test('bodyOf: both stdin spellings refuse a TTY', async () => {
+  for (let b of ['-', '@-']) {
+    let read = 0
+    await assertRejects(
+      () =>
+        bodyOf([`--body=${b}`], [], {
+          terminal: () => true,
+          read: () => {
+            read++
+            return Promise.resolve('piped')
+          },
+        }),
+      Error,
+      `--body=${b}: stdin is a TTY`,
+    )
+    assertEquals(read, 0)
+  }
+})
 
 Deno.test('codexArgs: full access and lifecycle lead, caller args keep order', () => {
   assertEquals(codexArgs(['resume', '--last']), [

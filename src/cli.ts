@@ -501,8 +501,8 @@ let MAIL_USAGE = `task mail — fleet mail in the graph
   task mail [filters...]            your unread inbox, newest last
   task mail --all | --sent          the fleet's mail / outbound only
   task mail show <id>               the mail + its thread; marks it read
-  task mail send <to> <subj...> --body=@f|@- [--from=...]  (@- = piped stdin)
-  task mail reply <id> [text... | --body=@f|@-]
+  task mail send <to> <subj...> --body=@f|-|@- [--from=...]  (-/@- = stdin)
+  task mail reply <id> [text... | --body=@f|-|@-]
   task mail search <words...>       full-text search, mail only
   task mail files <id> [--out DIR]  download attachments
   task mail doctor                  every book address vs the CF rules
@@ -511,19 +511,33 @@ address book resolves at delivery. Filters speak the query grammar:
   task mail --all .from~=stripe .verified=0`
 
 // The body, by preference: --body= (@file reads the file — the safe
-// door for long prose; @- reads piped stdin), then the trailing words.
+// door for long prose; - and @- read piped stdin), then trailing words.
 // stdin is never read implicitly: a harness holding the pipe open but
 // silent would hang the send forever (observed live, T-5854) and no
-// guard can tell that pipe from a slow one — so @- is the deliberate
+// guard can tell that pipe from a slow one — so - or @- is the deliberate
 // ask, and a missing body fails fast instead of blocking. Shared by
 // mail send/reply and the session brief — one body door, every verb.
-let bodyOf = async (flags: string[], words: string[]) => {
+type Input = {
+  terminal: () => boolean
+  read: () => Promise<string>
+}
+
+let input: Input = {
+  terminal: () => Deno.stdin.isTerminal(),
+  read: () => new Response(Deno.stdin.readable).text(),
+}
+
+export let bodyOf = async (
+  flags: string[],
+  words: string[],
+  stdin = input,
+) => {
   let b = flags.find((a) => a.startsWith('--body='))?.slice(7)
-  if (b == '@-') {
-    if (Deno.stdin.isTerminal()) {
-      throw new Error('--body=@-: stdin is a TTY — pipe the body in')
+  if (b == '-' || b == '@-') {
+    if (stdin.terminal()) {
+      throw new Error(`--body=${b}: stdin is a TTY — pipe the body in`)
     }
-    return (await new Response(Deno.stdin.readable).text()).trim()
+    return (await stdin.read()).trim()
   }
   if (b?.startsWith('@')) {
     b = String(inflate({ comp: 'doc', prop: 'body', value: b }).value)
@@ -617,7 +631,7 @@ let mailSend = async (args: string[]) => {
   let body = await bodyOf(flags, [])
   if (!body) {
     throw new Error(
-      'a mail needs a body: --body=@file, or --body=@- with piped stdin',
+      'a mail needs a body: --body=@file, or --body=- with piped stdin',
     )
   }
   let made = mailChanges({
@@ -642,7 +656,7 @@ let mailReply = async (args: string[]) => {
   let body = await bodyOf(flags, text)
   if (!body) {
     throw new Error(
-      'a reply needs words: text, --body=@file, or --body=@- with stdin',
+      'a reply needs words: text, --body=@file, or --body=- with stdin',
     )
   }
   let made = replyChanges(
@@ -1349,7 +1363,7 @@ let wrap = async (args: string[]) => {
 // The self-authored brief (T-4554): write YOUR session doc's body — the
 // narrative wrap preserves (a non-stub body is never clobbered) and the
 // next digest quotes as `## previously`. Body doors match mail's:
-// trailing words, --body=@file, --body=@- (piped stdin). Another
+// trailing words, --body=@file, --body=- or @- (piped stdin). Another
 // session's doc is task set's job (task set S-12 .body=@brief.md).
 let sessionBrief = async (args: string[]) => {
   let flags = args.filter((a) => a.startsWith('--'))
@@ -1359,7 +1373,7 @@ let sessionBrief = async (args: string[]) => {
   let body = await bodyOf(flags, words)
   if (!body) {
     throw new Error(
-      'a brief needs words: text, --body=@file, or --body=@- with stdin',
+      'a brief needs words: text, --body=@file, or --body=- with stdin',
     )
   }
   let all = rows(await snapshot())
@@ -1383,7 +1397,7 @@ let SESSION_USAGE = `task session — the lifecycle of the session you are
                                         hook); a raw sid mints the entity
   task session wrap [sid] [--hook]      over: release claims, capture the
                                         brief (the SessionEnd hook)
-  task session brief [text... | --body=@f|@-]
+  task session brief [text... | --body=@f|-|@-]
                                         write your own brief (survives wrap)`
 
 let session = (args: string[]) => {
