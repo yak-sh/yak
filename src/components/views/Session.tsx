@@ -1,11 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { md } from '../../md.ts'
 import {
+  awake,
   type Ent,
   friendly,
   kilo,
   type LogRow,
-  sessionActive,
+  standing,
 } from '../../types.ts'
 import { base, commentsOn, ent, jobOf, mutate, uuid } from '../../live.ts'
 import { clickProps } from '../nav.tsx'
@@ -393,12 +394,12 @@ let useTail = (seq?: number) => {
 
 export let Session = ({ e }: { e: Ent }) => {
   let s = e.session!
-  let status = s.status ?? ''
-  // A session we spawned says it's going in its status; one that only
-  // announced itself has no status to say it with — it is going while it
-  // has a claude process and the server hasn't seen that door shut
-  // (sessions.ts watched()).
-  let live = sessionActive.includes(status) || (!!s.pid && !s.finished_at)
+  // One predicate for every surface (types.ts): a session we spawned says
+  // it's going in its status, one that only announced itself is going while
+  // its door is open. `standing` is that answer as a word, so an external
+  // run's pip and label read `running` instead of a blank lifecycle.
+  let live = awake(s)
+  let status = standing(s)
   let log = useLog(e.eid, live)
   let frame = useTail(log.entries.at(-1)?.seq)
   // The Final block IS the last agent say — don't print it twice. Only a
@@ -535,7 +536,7 @@ export let SessionRow = ({ e }: { e: Ent }) => {
   let job = jobOf(e)
   return (
     <RowLine {...clickProps(e)}>
-      <Dot status={s.status ?? ''} />
+      <Dot status={standing(s)} />
       {s.model && <RowLine.Model>{friendly(s.model)}</RowLine.Model>}
       {job && <RowLine.Task>{ent(job).doc?.title}</RowLine.Task>}
       <Id e={e} />

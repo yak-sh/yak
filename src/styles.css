@@ -1439,8 +1439,9 @@ html {
 
 /* A session's lifecycle wears the same pip: the bar fills as the run
    does — starting empty, running half, every ending full (completed
-   green, the rest a fault colour). An external session (no lifecycle
-   at all) keeps the full dim default. */
+   green, the rest a fault colour). An external session has no lifecycle
+   to wear: while its door is open it borrows `running` (types.ts
+   `standing`), and once it shuts it keeps the full dim default. */
 .Dot-starting {
   --dot: var(--open);
   --fill: 0%;

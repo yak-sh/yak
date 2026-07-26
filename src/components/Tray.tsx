@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'preact/hooks'
 import { signal } from '@preact/signals'
-import { cache, clientId, ent, mutate, pinned, topZ, uuid } from '../live.ts'
-import { sessionActive } from '../types.ts'
+import { cache, clientId, mutate, pinned, topZ, uuid } from '../live.ts'
+import { awake, type Session, standing } from '../types.ts'
 import { block } from './ui.tsx'
 import { Dot } from './Dot.tsx'
 import { Icon } from './icons.tsx'
@@ -35,7 +35,7 @@ export let overTray = (x: number, y: number) => {
     .some((r) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom)
 }
 
-// A managed run stays worth showing for a while after it ends.
+// A run stays worth showing for a while after it ends.
 let RECENT = 6 * 60 * 60 * 1000
 
 // Dismissed rows — "seen", per browser. The ✕ on a settled row lands its
@@ -49,20 +49,20 @@ let dismiss = (eid: string) => {
   localStorage.setItem('tasks-tray-seen', JSON.stringify(seen.value))
 }
 
-// LIVE: sessions still running, plus managed ones that finished recently
-// and haven't been dismissed — the digest a human wants without opening
-// every session.
+// Worth a slot: somebody is home (awake — the operator's own terminal
+// counts, which is the point of asking the door and never the origin), or
+// it settled recently and nobody has dismissed it.
+let shown = (eid: string, s: Session) =>
+  awake(s) ||
+  (!!s.finished_at && Date.now() - Date.parse(s.finished_at) < RECENT &&
+    !seen.value.includes(eid))
+
+// LIVE: the digest a human wants without opening every session.
 let live = () =>
   Object.entries(cache.value)
-    .filter(([eid, r]) => {
-      let s = r.session
-      if (!s) return false
-      if (sessionActive.includes(s.status ?? '')) return true
-      return s.origin == 'managed' && !!s.finished_at &&
-        Date.now() - Date.parse(s.finished_at) < RECENT &&
-        !seen.value.includes(eid)
-    })
-    .map(([eid]) => eid)
+    .flatMap(([eid, r]) =>
+      r.session && shown(eid, r.session) ? [[eid, r.session] as const] : []
+    )
 
 // This client's shelf canvas, if it's been born — the canvas tagged with a
 // shelf pointing back at us. null until the first drop mints one.
@@ -148,9 +148,7 @@ export let Tray = () => {
         aria-label={expanded.value ? 'close tray' : 'open tray'}
         onClick={() => toggle(!expanded.value)}
       >
-        {ls.map((eid) => (
-          <Dot key={eid} status={ent(eid).session?.status ?? ''} />
-        ))}
+        {ls.map(([eid, s]) => <Dot key={eid} status={standing(s)} />)}
         {ps.map((p) => (
           <Icon
             key={p.eid}
@@ -164,7 +162,7 @@ export let Tray = () => {
           {ls.length > 0 && (
             <Group>
               <Label>live</Label>
-              {ls.map((eid) => (
+              {ls.map(([eid, s]) => (
                 <Row
                   key={eid}
                   draggable
@@ -178,7 +176,7 @@ export let Tray = () => {
                     /* only a settled run dismisses — a live one wants your
                       eyes (stop it from its own view) */
                   }
-                  {!sessionActive.includes(ent(eid).session?.status ?? '') && (
+                  {!awake(s) && (
                     <X
                       type='button'
                       aria-label='dismiss'

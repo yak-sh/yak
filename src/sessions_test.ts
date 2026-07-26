@@ -795,12 +795,15 @@ Deno.test('a comment after the sweep regrows the worktree and resumes', async ()
 })
 
 // A live process whose /proc comm is `claude` — comm is the name exec'd,
-// so a symlink to this very deno is enough (door_test.ts says more).
+// so a symlink to this very deno is enough (door_test.ts says more). It
+// stays up on a TIMER, not a pending promise: an unresolvable top-level
+// await leaves the event loop empty and deno exits at once ("Top-level
+// await promise never resolved"), which raced every door assertion here.
 let fakeClaude = async () => {
   let dir = Deno.makeTempDirSync({ prefix: 'tasks-ext-' })
   Deno.symlinkSync(Deno.execPath(), `${dir}/claude`)
   let c = new Deno.Command(`${dir}/claude`, {
-    args: ['eval', 'await new Promise(() => {})'],
+    args: ['eval', 'setInterval(() => {}, 1000)'],
     stdout: 'null',
     stderr: 'null',
   }).spawn()
@@ -821,21 +824,30 @@ let fakeClaude = async () => {
 // cwd, the claude pid, and the transcript Claude Code keeps. The
 // transcript must live in Claude's own project store or the server won't
 // read it (sessions.ts transcriptOf), so the fixture writes one there.
+// Called with no lines it reports NO transcript — the operator whose hook
+// never named one (most of them, on the owner's graph): nothing to follow,
+// and a door all the same.
 let store = `${Deno.env.get('HOME')}/.claude/projects/tasks-test`
 try {
   Deno.removeSync(store, { recursive: true }) // a run leaves only its own
 } catch { /* never made */ }
-let announce = (pid: number, lines: string[], transcript = '') => {
+let announce = (pid: number, lines?: string[], transcript = '') => {
   let eid = uid()
   Deno.mkdirSync(store, { recursive: true })
-  let path = transcript || `${store}/${uid()}.jsonl`
-  if (!transcript) {
+  let path = transcript || (lines ? `${store}/${uid()}.jsonl` : '')
+  if (lines && !transcript) {
     Deno.writeTextFileSync(path, lines.map((l) => `${l}\n`).join(''))
   }
   apply(db, [{
     eid,
     name: 'session',
-    comp: { id: uid(), cwd: scratch, pid, provider: 'fake', transcript: path },
+    comp: {
+      id: uid(),
+      cwd: scratch,
+      pid,
+      provider: 'fake',
+      ...(path ? { transcript: path } : {}),
+    },
   }])
   return { eid, path }
 }
@@ -871,6 +883,41 @@ Deno.test('a session we never forked is watched by its door, not its exit code',
   // The irreducible difference, said rather than faked.
   assertEquals(row(eid)?.exit_code, null)
   assertEquals(row(eid)?.status, null)
+})
+
+// The bug the tray wore (T-7461): watching asked the TRANSCRIPT whether to
+// bother, so a session that never reported one was never asked about and
+// never stamped — forever pid-and-no-finished_at, indistinguishable from a
+// live operator. Following and liveness are two questions; only the door
+// answers the second.
+Deno.test('a transcript-less session is watched by its door too', async () => {
+  let c = await fakeClaude()
+  let { eid } = announce(c.pid)
+  watched(cast)(eid, { pid: c.pid })
+  await until(() => !!row(eid)?.started_at, 'the watch to start')
+  assertEquals(row(eid)?.finished_at, null) // still at the keyboard
+  assertEquals(row(eid)?.latest_seq, 0) // nothing to count, and that's fine
+  c.kill('SIGKILL')
+  await c.status
+  await until(() => !!row(eid)?.finished_at, 'the door to shut')
+})
+
+// A pid outlives its process and gets reused, so a row whose pid is no
+// longer a claude serving IT is a ghost: end it and arm no heartbeat. The
+// ending is the last time we HEARD from it, not the moment we noticed —
+// a restart that stamped now() would parade every ghost through the tray's
+// "finished recently" digest.
+Deno.test('a ghost row ends when it was last heard from, unwatched', async () => {
+  let c = await fakeClaude()
+  let { eid } = announce(c.pid)
+  c.kill('SIGKILL')
+  await c.status
+  watched(cast)(eid, { pid: c.pid })
+  let born = db.prepare('select at from created where eid = ?').get(eid) as {
+    at: string
+  }
+  assertEquals(row(eid)?.finished_at, born.at)
+  assertEquals(row(eid)?.started_at, null) // no watch began, so none is told
 })
 
 Deno.test('a comment wakes an external session only when nobody is home', async () => {

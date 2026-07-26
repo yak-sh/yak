@@ -1,12 +1,15 @@
 import {
+  awake,
   cols,
   deaths,
   friendly,
   nick,
   prio,
   prioTag,
+  type Session,
   settled,
   stamped,
+  standing,
 } from './types.ts'
 import { assertEquals } from '@std/assert'
 
@@ -130,4 +133,28 @@ Deno.test('settled: done or cancelled, nothing else', () => {
   assertEquals(settled('wip'), false)
   assertEquals(settled(null), false)
   assertEquals(settled(undefined), false)
+})
+
+// The client's half of door.ts `listening()` — one predicate every surface
+// shares (T-7461). Origin never enters it: an operator's own terminal is a
+// session somebody is home in, and a managed row that ended is not.
+let sess = (x: Partial<Session>): Session => ({ eid: 'e', id: 'i', ...x })
+
+Deno.test('awake: a status says it, else an open door does', () => {
+  assertEquals(awake(sess({ status: 'starting' })), true)
+  assertEquals(awake(sess({ status: 'running' })), true)
+  assertEquals(awake(sess({ status: 'stopping' })), true)
+  // An ending stamps finished_at in the same breath as the status
+  // (sessions.ts stamp()), so the two clauses never fight over a run.
+  assertEquals(awake(sess({ status: 'completed', finished_at: 'x' })), false)
+  assertEquals(awake(sess({ pid: 9 })), true) // an operator at the keyboard
+  assertEquals(awake(sess({ pid: 9, finished_at: 'x' })), false) // a ghost
+  assertEquals(awake(sess({})), false) // no pid, no run: no door
+})
+
+Deno.test('standing: an external session borrows the word from its door', () => {
+  assertEquals(standing(sess({ status: 'completed' })), 'completed')
+  assertEquals(standing(sess({ pid: 9 })), 'running')
+  assertEquals(standing(sess({ pid: 9, finished_at: 'x' })), '') // dim again
+  assertEquals(standing(sess({})), '')
 })

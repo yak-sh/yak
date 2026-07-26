@@ -462,8 +462,9 @@ let finish = async (eid: string, t: Tail, run: Run, cast: Cast) => {
 // An operator's `claude` is not our child: we never forked it, so there
 // is no stdout to own and no exit code to report — and that difference is
 // SAID (started_at/finished_at move, exit_code stays null forever) rather
-// than faked. What such a session does have is Claude Code's transcript,
-// its durable log, read per request by logs() below.
+// than faked. What such a session often has is Claude Code's transcript,
+// its durable log, read per request by logs() below — a session that never
+// reported one is watched all the same, it just has nothing to count.
 //
 // So watching is a heartbeat, not a tail: the one thing a client cannot
 // work out for itself is WHEN THE DOOR SHUT (nobody but this process can
@@ -472,19 +473,52 @@ let finish = async (eid: string, t: Tail, run: Run, cast: Cast) => {
 // in a whole session's life is the one that ends it.
 let watching = new Set<string>()
 
+type Watch = {
+  origin: string
+  started_at: string | null
+  finished_at: string | null
+}
+
+// The last time a session was heard from: its own clock, or the graph's —
+// every entity carries when it was made and when it was last touched, and
+// ISO strings compare as they sort. This is the ending to stamp on a door
+// found ALREADY shut, where now() would be a lie (and would parade a
+// week-old ghost through the tray's "finished recently" digest at every
+// restart). A door we watch shutting gets now(), which is the truth.
+let lastHeard = (eid: string) =>
+  (db.prepare(`
+    select max(
+      coalesce(s.started_at, ''), coalesce(u.at, ''), coalesce(c.at, '')
+    ) as at
+    from session s
+    left join updated u on u.eid = s.eid
+    left join created c on c.eid = s.eid
+    where s.eid = ?
+  `).get(eid) as { at: string } | undefined)?.at || now()
+
 // Re-armed by the graph, never by a timer: every claude announces itself
 // by stamping session.pid at SessionStart — including the `claude
 // --resume` a comment spawns (probed live), which is how a woken session
 // starts being followed again without this code knowing it was woken.
 export let watched = (cast: Cast) => (eid: string, comp: Row) => {
   if (!comp.pid || watching.has(eid)) return
-  if (!transcriptOf(eid)) return // nothing of its own to follow
+  let was = db.prepare(
+    'select origin, started_at, finished_at from session where eid = ?',
+  ).get(eid) as Watch | undefined
+  if (!was || was.origin == 'managed') return // follow() owns our children
+  // Ask the DOOR, not the transcript. Whether we can FOLLOW a session (it
+  // wrote a transcript) and whether anybody is home (door.ts) are two
+  // questions, and conflating them left most external sessions unfinished
+  // forever — no client could tell a live operator from a ghost (T-7461).
+  // A pid that is no longer a claude serving this row has left; say so and
+  // stop, whether or not there was ever anything to tail.
+  if (!listening(eid)) {
+    if (!was.finished_at) stamp(eid, { finished_at: lastHeard(eid) }, cast)
+    return
+  }
   watching.add(eid)
-  let was = db.prepare('select started_at from session where eid = ?').get(
-    eid,
-  ) as { started_at: string | null } | undefined
   stamp(eid, {
-    ...(was?.started_at ? {} : { started_at: now() }),
+    ...(was.started_at ? {} : { started_at: now() }),
     finished_at: null, // the door is open again
   }, cast)
   // Detached on purpose: this is a heartbeat that outlives the batch, not
@@ -495,10 +529,11 @@ export let watched = (cast: Cast) => (eid: string, comp: Row) => {
     .finally(() => watching.delete(eid))
 }
 
-// Follow the transcript for as long as somebody is home. Lines are
-// COUNTED, not parsed: an external session's summary is nobody's to
-// derive — the provider never wrote us a terminal event, and inventing
-// one from a conversation would be a guess.
+// Sit at the door for as long as somebody is home, counting whatever log
+// there is. Lines are COUNTED, not parsed: an external session's summary
+// is nobody's to derive — the provider never wrote us a terminal event,
+// and inventing one from a conversation would be a guess. No transcript
+// means nothing to count, never a reason to stop asking after the door.
 let trail = async (eid: string, cast: Cast) => {
   let t: Tail = { at: 0, seq: 0, ended: false, errs: [] }
   for (;;) {

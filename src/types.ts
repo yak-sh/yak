@@ -732,6 +732,21 @@ export type Session = {
   error?: string | null // diagnostics: malformed frames, spawn failures
 }
 
+// Is anybody home? The client's half of door.ts `listening()`, from
+// wire-visible columns alone: a session we spawned says it in its status,
+// and one that only announced itself is awake while it holds a claude
+// process the server hasn't watched shut (sessions.ts watched() stamps
+// finished_at the moment that door closes). Origin never enters it —
+// origin says who STARTED a session, never whether anybody is home, and
+// asking it here is what hid every operator's terminal from the tray.
+export let awake = (s: Session) =>
+  sessionActive.includes(String(s.status)) || (!!s.pid && !s.finished_at)
+
+// The word a session's pip and label wear. A session we spawned has a
+// lifecycle to say it with; an external one has none, so its liveness IS
+// its status — a live one is running, a settled one keeps the dim default.
+export let standing = (s: Session) => s.status || (awake(s) ? 'running' : '')
+
 // A session's lease on an entity — claims point at the session ENTITY.
 // One claim per entity; taking one over another session's is a CONFLICT
 // the server rejects — release first (comp: null), then claim.

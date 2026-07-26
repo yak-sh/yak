@@ -104,7 +104,7 @@ let fakeClaude = async () => {
   let dir = Deno.makeTempDirSync({ prefix: 'tasks-knock-' })
   Deno.symlinkSync(Deno.execPath(), `${dir}/claude`)
   let c = new Deno.Command(`${dir}/claude`, {
-    args: ['eval', 'await new Promise(() => {})'],
+    args: ['eval', 'setInterval(() => {}, 1000)'],
     stdout: 'null',
     stderr: 'null',
   }).spawn()

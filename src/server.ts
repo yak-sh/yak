@@ -697,9 +697,9 @@ on('session', {
 on('session', {
   created: watched(cast),
   changed: { pid: watched(cast) },
-  doc: 'a session that announced a claude process gets watched: follow its ' +
-    'transcript, and say when the door shuts (we never forked it, so there ' +
-    'is no exit code to report)',
+  doc: 'a session that announced a claude process gets watched: say when ' +
+    'the door shuts, counting its transcript if it wrote one (we never ' +
+    'forked it, so there is no exit code to report)',
 })
 on('stop_request', {
   created: stopped(cast),

@@ -29,12 +29,14 @@ let session = (
 }
 
 // A live process whose /proc comm is `claude`: comm comes from the name
-// exec'd, so a symlink is enough — no build, no fixture binary.
+// exec'd, so a symlink is enough — no build, no fixture binary. A TIMER
+// keeps it up: an unresolvable top-level await leaves the event loop empty
+// and deno exits at once, which raced every assertion about its door.
 let fakeClaude = async () => {
   let dir = Deno.makeTempDirSync({ prefix: 'tasks-door-' })
   Deno.symlinkSync(Deno.execPath(), `${dir}/claude`)
   let c = new Deno.Command(`${dir}/claude`, {
-    args: ['eval', 'await new Promise(() => {})'],
+    args: ['eval', 'setInterval(() => {}, 1000)'],
     stdout: 'null',
     stderr: 'null',
   }).spawn()
