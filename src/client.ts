@@ -129,11 +129,9 @@ export let history = async (eid: string, limit = 50) => {
   return res.json() as Promise<JournalEntry[]>
 }
 
-export let historyBy = async (actor: string, limit = 500) => {
+export let historyBy = async (via: string, limit = 500) => {
   let res = await fetch(
-    `http://${host()}/journal?actor=${
-      encodeURIComponent(actor)
-    }&limit=${limit}`,
+    `http://${host()}/journal?via=${encodeURIComponent(via)}&limit=${limit}`,
   )
   if (!res.ok) throw new Error(`server said ${res.status}`)
   return res.json() as Promise<JournalEntry[]>

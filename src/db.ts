@@ -1449,18 +1449,18 @@ export let journalOf = (
       changes: (JSON.parse(r.batch) as Change[]).filter((c) => c.eid == eid),
     }))
 
-// The same record cut by WHO instead of what: every batch an actor
-// wrote, whole (no per-eid filtering — a wrap ledger wants the batch's
-// full sentence). Newest first, like journalOf.
+// The same record cut by instrument instead of what: every batch a session
+// or client wrote, whole (no per-eid filtering — a wrap ledger wants the
+// batch's full sentence). Newest first, like journalOf.
 export let journalBy = (
   db: DatabaseSync,
-  actor: string,
+  via: string,
   limit = 500,
 ): JournalEntry[] =>
   (db.prepare(`
     select ts, actor, via, batch from journal
-    where actor = ? order by rowid desc limit ?
-  `).all(actor, limit) as {
+    where via = ? order by rowid desc limit ?
+  `).all(via, limit) as {
     ts: string
     actor: string | null
     via: string | null

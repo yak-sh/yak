@@ -7,6 +7,7 @@ let {
   backfillVia,
   db,
   delta,
+  journalBy,
   journalOf,
   mendMail,
   open,
@@ -1225,6 +1226,32 @@ Deno.test('journal: one row per batch, resolved to the writing actor; a rollback
     apply(db, [{ eid: t, name: 'claim', comp: { session_eid: s2 } }])
   )
   assertEquals(journalCount(), held)
+})
+
+Deno.test('journalBy: cuts the ledger by session, not its resolved actor', () => {
+  let actor = uid(), one = uid(), two = uid(), first = uid(), second = uid()
+  apply(db, [
+    { eid: actor, name: 'person', comp: {} },
+    { eid: one, name: 'session', comp: { id: `one-${one}`, actor_eid: actor } },
+    { eid: two, name: 'session', comp: { id: `two-${two}`, actor_eid: actor } },
+  ])
+  apply(
+    db,
+    [{ eid: first, name: 'doc', comp: { title: 'first session' } }],
+    undefined,
+    `one-${one}`,
+  )
+  apply(
+    db,
+    [{ eid: second, name: 'doc', comp: { title: 'second session' } }],
+    undefined,
+    `two-${two}`,
+  )
+  let rows = journalBy(db, one)
+  assertEquals(rows.length, 1)
+  assertEquals(rows[0].actor, actor)
+  assertEquals(rows[0].via, one)
+  assertEquals(rows[0].changes[0].eid, first)
 })
 
 Deno.test('actor fill: a session that ran in a repo resolves to its venture', () => {
