@@ -842,6 +842,22 @@ Deno.test('tidy: a dirty tree stays, whatever its branch says', async () => {
   assert(row(eid)?.cwd)
 })
 
+Deno.test('tidy: an absent tree is reconciled once', async () => {
+  let { eid, done } = begin(seed().t)
+  await done
+  let tree = String(row(eid)!.cwd)
+  Deno.removeSync(tree, { recursive: true })
+  heard = []
+  await tidy(cast)
+  await tidy(cast)
+  assertEquals(row(eid)?.cwd, null)
+  assertEquals(row(eid)?.branch, null)
+  assertEquals(
+    heard.filter((c) => c.eid == eid && c.name == 'session').length,
+    1,
+  )
+})
+
 Deno.test('a comment after the sweep regrows the worktree and resumes', async () => {
   let { p, t } = seed()
   let { eid, done } = begin(t)

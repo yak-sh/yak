@@ -295,6 +295,13 @@ let cleanup = async (row: Row, cast: Cast) => {
     let tree = String(row.cwd ?? '')
     let branch = String(row.branch ?? '')
     if (!tree || !branch) return
+    try {
+      Deno.statSync(tree)
+    } catch (e) {
+      if (!(e instanceof Deno.errors.NotFound)) throw e
+      stamp(String(row.eid), { cwd: null, branch: null }, cast)
+      return
+    }
     let repo = repoOf(row)
     if (!repo) return
     if (await git(tree, ['status', '--porcelain'])) return // dirty: keep
