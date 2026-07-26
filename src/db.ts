@@ -1154,10 +1154,12 @@ export let apply = (
       let echoed = new Set(['created', 'updated', ...stampedPresence])
       let logged = [...changes, ...extra.filter((c) => !echoed.has(c.name))]
       if (logged.length) {
-        db.prepare('insert into journal (actor, batch) values (?, ?)').run(
-          actor, // the resolved writing actor (T-6669), same as the by-default
-          JSON.stringify(logged),
-        )
+        db.prepare('insert into journal (ts, actor, batch) values (?, ?, ?)')
+          .run(
+            now,
+            actor, // the resolved writing actor (T-6669), same as the by-default
+            JSON.stringify(logged),
+          )
       }
     } catch (e) {
       console.warn('journal skipped —', e)

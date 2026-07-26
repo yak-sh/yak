@@ -1097,25 +1097,12 @@ let fromSnap = (s: ReturnType<typeof snapshot>): Bag => {
   land(b, s.changes)
   return b
 }
-// created/updated `at` is re-derived on replay from the journal row's ts,
-// a separate clock read from apply()'s stamp — the same instant, ms noise
-// apart. So compare provenance by presence + author (`by`), not the ms; and
-// sort deps, which the two paths emit in different orders.
+// The two paths emit deps in different orders.
 let calm = (b: Bag) => {
-  let cache: Bag['cache'] = {}
-  for (let [eid, comps] of Object.entries(b.cache)) {
-    let c: Record<string, Record<string, unknown>> = {}
-    for (let [name, comp] of Object.entries(comps)) {
-      c[name] = name == 'created' || name == 'updated'
-        ? { ...comp, at: typeof comp.at == 'string' ? 'ISO' : comp.at }
-        : comp
-    }
-    cache[eid] = c
-  }
   let deps = [...b.deps].sort((x, y) =>
     JSON.stringify(x).localeCompare(JSON.stringify(y))
   )
-  return { cache, deps }
+  return { cache: b.cache, deps }
 }
 
 Deno.test('delta: snapshot@C0 + delta(C0) matches the live broadcast stream, cascade and all', () => {
@@ -1170,10 +1157,9 @@ Deno.test('delta: snapshot@C0 + delta(C0) matches the live broadcast stream, cas
   land(recon, base.changes)
   land(recon, d.changes)
 
-  // The whole cache + deps, modulo provenance `at` (re-derived from a separate
-  // clock read). Equality here proves BOTH cascade fidelity (every tombstone,
-  // detach and birth carried) AND provenance equivalence (created/updated
-  // present with the same author the stamp used) in one shot.
+  // Equality here proves BOTH cascade fidelity (every tombstone, detach and
+  // birth carried) AND exact provenance (created/updated carry the same stamp
+  // and author) in one shot.
   assertEquals(d.cursor, full.cursor) // the window ends where the graph is
   assertEquals(calm(recon), calm(live))
 
