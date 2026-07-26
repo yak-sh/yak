@@ -65,7 +65,8 @@ let mailDdl = `create table if not exists mail (
     verified    integer,
     reply_to_eid text,
     sent_id     text,
-    read_at     text
+    read_at     text,
+    in_reply_to text
   )`
 
 // The star: an entity spine plus one component table per kind, plus the edge
@@ -570,6 +571,7 @@ export let open = () => {
   addCol('mail', 'reply_to_eid', 'reply_to_eid text')
   addCol('mail', 'sent_id', 'sent_id text')
   addCol('mail', 'read_at', 'read_at text')
+  addCol('mail', 'in_reply_to', 'in_reply_to text')
   // Read-state moved from mail.read_at to the `opened` stamp (T-7006): seed
   // it once BEFORE the readers flip to `NOT opened`, so no mail flickers
   // unread mid-migration.

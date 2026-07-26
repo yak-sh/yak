@@ -32,6 +32,7 @@ export type FleetMsg = {
   subject?: string | null
   text?: string | null
   verified?: boolean | null
+  in_reply_to?: string | null
 }
 
 // One raw captured request from the edge's spool (the requests-spool
@@ -172,12 +173,30 @@ export let author = (m: FleetMsg) => {
 let arrivedAt = (m: FleetMsg) =>
   m.received_at ?? new Date(m.ts ?? Date.now()).toISOString()
 
+// An inbound RFC reference names the mail it answers, not its graph eid.
+// Match either the sender id on our outbound row or the unwrapped store id
+// on an earlier inbound row; absence keeps the header without inventing an
+// edge.
+let replyOf = (mid: string | null | undefined): string | null => {
+  if (!mid) return null
+  let ref = rfcId(mid)
+  let suffix = `%:${ref.replace(/[\\%_]/g, '\\$&')}`
+  let row = db.prepare(
+    `select eid from mail
+     where sent_id = ? or message_id = ?
+        or message_id like ? escape '\\'
+     limit 1`,
+  ).get(ref, ref, suffix) as { eid: string } | undefined
+  return row?.eid ?? null
+}
+
 // One fleet message → the two halves of a mail entity: the wire batch
 // (doc + mail, what apply() may write) and the stamp (inbound
 // provenance, server-owned — message_id doubles as the never-send mark,
 // so it lands BEFORE any effect can mistake arrival for an ask).
 export let mailChanges = (m: FleetMsg, target: string | null) => {
   let eid = uuid()
+  let reply = replyOf(m.in_reply_to)
   let wire: Change[] = [
     {
       eid,
@@ -191,6 +210,7 @@ export let mailChanges = (m: FleetMsg, target: string | null) => {
         to: m.to ?? '',
         from: author(m),
         ...(target ? { target_eid: target } : {}),
+        ...(reply ? { reply_to_eid: reply } : {}),
       },
     },
   ]
@@ -198,6 +218,7 @@ export let mailChanges = (m: FleetMsg, target: string | null) => {
     message_id: m.id,
     received_at: arrivedAt(m),
     verified: m.verified ? 1 : 0,
+    in_reply_to: m.in_reply_to ?? null,
   }
   return { eid, wire, stamp }
 }
@@ -300,12 +321,14 @@ let mint = (
 // duplicate delivery, recorded once and never twice.
 let arrive = (m: FleetMsg, cast: Cast): boolean => {
   let r = db.prepare(
-    'select eid, message_id, target_eid, "from" author from mail where sent_id = ?',
+    `select eid, message_id, target_eid, reply_to_eid, "from" author
+     from mail where sent_id = ?`,
   ).get(rfcId(m.id)) as
     | {
       eid: string
       message_id: string | null
       target_eid: string | null
+      reply_to_eid: string | null
       author: string | null
     }
     | undefined
@@ -315,7 +338,9 @@ let arrive = (m: FleetMsg, cast: Cast): boolean => {
       message_id: m.id,
       received_at: arrivedAt(m),
       verified: m.verified ? 1 : 0,
+      in_reply_to: m.in_reply_to ?? null,
       ...(r.target_eid ? {} : { target_eid: routeTo(m.to) }),
+      ...(r.reply_to_eid ? {} : { reply_to_eid: replyOf(m.in_reply_to) }),
       ...(r.author ? {} : { from: author(m) }),
     }, cast)
   }

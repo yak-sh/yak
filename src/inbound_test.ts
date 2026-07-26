@@ -394,3 +394,41 @@ Deno.test('fleetRaw: dormant without config — the token never has a default', 
   Deno.env.delete('FLEET_MAIL_API_TOKEN')
   assertEquals(fleetRaw('/messages/x/attachments'), null)
 })
+
+Deno.test('the sweep preserves In-Reply-To and links its graph mail', async () => {
+  let orig = uid()
+  apply(db, [
+    { eid: orig, name: 'doc', comp: { title: 'opener' } },
+    { eid: orig, name: 'mail', comp: { to: 'sender@x.test' } },
+  ])
+  db.prepare('update mail set sent_id = ? where eid = ?')
+    .run('opener@bot.test', orig)
+  let reply = msg({
+    id: 'msg:1752000000010:reply@x.test',
+    in_reply_to: 'opener@bot.test',
+  })
+
+  await inboundSweep(cast, fakeApi([reply], null).api)
+
+  let row = db.prepare('select * from mail where message_id = ?')
+    .get(reply.id) as Record<string, string | null>
+  assertEquals(row.in_reply_to, 'opener@bot.test')
+  assertEquals(row.reply_to_eid, orig)
+})
+
+Deno.test('mailChanges links an earlier inbound RFC id when present', () => {
+  let orig = uid()
+  apply(db, [
+    { eid: orig, name: 'doc', comp: { title: 'first arrival' } },
+    { eid: orig, name: 'mail', comp: { to: 'venture@bot.test' } },
+  ])
+  db.prepare('update mail set message_id = ? where eid = ?')
+    .run('msg:1752000000020:first@x.test', orig)
+  let { wire, stamp } = mailChanges(
+    msg({ in_reply_to: 'first@x.test' }),
+    operator,
+  )
+  let mail = wire.find((c) => c.name == 'mail')!.comp!
+  assertEquals(mail.reply_to_eid, orig)
+  assertEquals(stamp.in_reply_to, 'first@x.test')
+})

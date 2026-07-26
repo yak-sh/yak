@@ -389,6 +389,9 @@ export let stamped: Record<string, Record<string, PropType>> = {
     // $TASKS_MAIL_CMD mailer's output names none), so replies-to-replies
     // thread: reply_to_eid resolves to message_id (inbound) or this.
     sent_id: 'text',
+    // The inbound RFC header, preserved even when its named mail has not
+    // reached this graph. inbound.ts derives reply_to_eid when it has.
+    in_reply_to: 'text',
   },
   // Webhook provenance (inbound.ts): source names the edge route the
   // request hit, event the parser's one-line verdict, payload the raw
@@ -802,6 +805,7 @@ export type Mail = {
   verified?: number | null
   sent_id?: string | null
   read_at?: string | null
+  in_reply_to?: string | null
 }
 
 // A webhook delivery, pulled apart from the edge's raw request spool —
