@@ -313,7 +313,9 @@ export let Similar = ({ e }: { e: Ent }) => {
     }
     if (!text) return got([])
     fetch(
-      `${base()}/similar?q=${encodeURIComponent(text)}&limit=5&floor=${FLOOR}`,
+      `${base()}/similar?q=${
+        encodeURIComponent(text)
+      }&eid=${e.eid}&limit=5&floor=${FLOOR}`,
     ).then((r) => (r.ok ? r.json() : []))
       .then(got, () => got([]))
   }, [text, e.eid])

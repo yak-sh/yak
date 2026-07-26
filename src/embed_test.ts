@@ -3,7 +3,9 @@
 // itself never loads here — a test suite that downloads 30MB isn't one.
 Deno.env.set('DB_PATH', ':memory:')
 let { db } = await import('./db.ts')
-let { hash, similar, stale, textOf } = await import('./embed.ts')
+let { hash, similar, similarTo, stale, stored, textOf } = await import(
+  './embed.ts'
+)
 let { assertEquals } = await import('@std/assert')
 
 let uid = (): string => crypto.randomUUID()
@@ -59,6 +61,27 @@ Deno.test('stale: comments and empty docs never owe', () => {
   let owed = stale(db).map((r) => r.eid)
   assertEquals(owed.includes(c), false)
   assertEquals(owed.includes(e), false)
+})
+
+Deno.test('stored: exact text reuses a doc vector; edits and misses do not', () => {
+  let eid = uid()
+  let text = 'already embedded'
+  doc(eid, text)
+  put(eid, text, vec(3, 4))
+  assertEquals([...stored(db, eid, text)!], [...vec(3, 4)])
+  assertEquals(stored(db, eid, 'edited'), null)
+  assertEquals(stored(db, uid(), text), null)
+  db.prepare("update embedding set model = 'older' where eid = ?").run(eid)
+  assertEquals(stored(db, eid, text), null)
+})
+
+Deno.test('similarTo: a matching doc row needs no embedder', async () => {
+  let eid = uid()
+  let text = 'stored query'
+  doc(eid, text)
+  put(eid, text, vec(1, 0))
+  let hits = await similarTo(db, text, 99, 0, eid)
+  assertEquals(hits?.some((h) => h.eid == eid), true)
 })
 
 Deno.test('similar: dot-ranked, floored, limited', () => {

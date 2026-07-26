@@ -9,7 +9,7 @@
 import { transform } from 'sucrase'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { providers } from './adapters.ts'
-import { type Change, idOf } from './types.ts'
+import { type Change, idOf, kindOf } from './types.ts'
 import {
   apply,
   cursorOf,
@@ -492,16 +492,18 @@ Deno.serve(
         q,
         Number(url.searchParams.get('limit') ?? 8),
         Number(url.searchParams.get('floor') ?? 0),
+        url.searchParams.get('eid') ?? undefined,
       )
       if (!hits) return new Response('no embedder here', { status: 503 })
-      let byEid = new Map(rows(snapshot(db)).map((r) => [r.eid, r]))
       return Response.json(hits.map((h) => {
-        let r = byEid.get(h.eid)
+        let comps = eager(db, h.eid)
+        let entity = comps.entity
+        let kind = kindOf(comps)
         return {
           ...h,
-          id: r ? idOf(r) : h.eid,
-          kind: r?.kind ?? 'entity',
-          title: String(r?.comps.doc?.title ?? ''),
+          id: entity ? idOf({ kind, num: Number(entity.num) }) : h.eid,
+          kind,
+          title: String(comps.doc?.title ?? ''),
         }
       }))
     }

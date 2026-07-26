@@ -150,14 +150,30 @@ export let similar = (
   return hits.sort((a, b) => b.score - a.score).slice(0, limit)
 }
 
+// A doc's row is reusable only while it names this model and exact text.
+// A stale sweep row must never answer for freshly edited prose.
+export let stored = (
+  db: DatabaseSync,
+  eid: string,
+  text: string,
+): Float32Array | null => {
+  let row = db.prepare(
+    'select vec from embedding where eid = ? and model = ? and hash = ?',
+  ).get(eid, MODEL, hash(text)) as { vec: Uint8Array } | undefined
+  return row ? new Float32Array(row.vec.slice().buffer) : null
+}
+
 // The whole door: text in, neighbors out — null when there is no
-// embedder to ask (the caller shows nothing, never an error).
+// embedder to ask (the caller shows nothing, never an error). A doc can
+// name its stored vector; arbitrary text still visits the embedder.
 export let similarTo = async (
   db: DatabaseSync,
   text: string,
   limit = 8,
   floor = 0,
+  eid?: string,
 ) => {
-  let vec = await embed(text)
+  let vec = eid ? stored(db, eid, text) : null
+  vec ??= await embed(text)
   return vec ? similar(db, vec, limit, floor) : null
 }
