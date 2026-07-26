@@ -15,17 +15,37 @@ let {
   search,
   snapshot,
   touch,
+  vocabHashOf,
   vocabularyDoc,
 } = await import(
   './db.ts'
 )
-let { assertEquals, assertMatch, assertThrows } = await import(
+let { assertEquals, assertMatch, assertNotEquals, assertThrows } = await import(
   '@std/assert'
 )
 let { comps } = await import('./types.ts')
 
 let fresh = () => open() // each test file shares one :memory: handle; use eids per test
 let uid = () => crypto.randomUUID()
+
+let vocab = (props: Record<string, import('./types.ts').PropType>) => ({
+  note: props,
+})
+
+Deno.test('vocabHash: stamped readable declarations invalidate a cache', () => {
+  let writable = vocab({ body: 'body' })
+  assertNotEquals(
+    vocabHashOf(writable, {}),
+    vocabHashOf(writable, vocab({ at: 'time' })),
+  )
+})
+
+Deno.test('vocabHash: writable declarations still invalidate a cache', () => {
+  assertNotEquals(
+    vocabHashOf(vocab({ body: 'body' }), {}),
+    vocabHashOf(vocab({ title: 'text' }), {}),
+  )
+})
 
 let comp = (eid: string, name: string) =>
   snapshot(db).changes.find((c) => c.eid == eid && c.name == name)?.comp

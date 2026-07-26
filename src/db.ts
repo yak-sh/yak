@@ -1761,14 +1761,20 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
 // Cursor invalidation stamps a delta client checks before trusting its
 // `since`. `epoch` is minted once at process start: a db restore/reseed
 // restarts the journal rowids, so a fresh epoch forces every stale cursor to
-// full-resnapshot. `vocabHash` fingerprints the component vocabulary — a
-// shape change (new component, renamed column) shifts it, so a delta derived
-// against the old shape is refused and the client reseeds. `comps` is
-// insertion-ordered, so its JSON (and the hash) is stable across boots of
-// the same code.
+// full-resnapshot. `vocabHash` fingerprints graph-out's writable and stamped
+// declarations — a shape change (new component, renamed column) shifts it,
+// so a delta derived against the old shape is refused and the client reseeds.
+// Both declarations are insertion-ordered, so their JSON (and the hash) is
+// stable across boots of the same code.
 export let epoch = crypto.randomUUID()
-export let vocabHash = createHash('sha1')
-  .update(JSON.stringify(comps)).digest('hex').slice(0, 16)
+export let vocabHashOf = (
+  writable: Record<string, Record<string, unknown>>,
+  stamped: Record<string, Record<string, unknown>>,
+) =>
+  createHash('sha1')
+    .update(JSON.stringify({ writable, stamped })).digest('hex').slice(0, 16)
+
+export let vocabHash = vocabHashOf(comps, stamped)
 
 // The journal's current rowid — the cursor a snapshot, a delta, or a live
 // subscription frame is current as of (T-6823/T-3683). A client stamps its
