@@ -26,6 +26,14 @@ let transcript = (...events: unknown[]) => {
   }
 }
 
+let cli = (...args: string[]) =>
+  new Deno.Command(Deno.execPath(), {
+    args: ['run', '-A', new URL('./cli.ts', import.meta.url).pathname, ...args],
+    env: { TASKS_HOST: '127.0.0.1:1' },
+  }).output()
+
+let text = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
+
 Deno.test('codexArgs: full access and lifecycle lead, caller args keep order', () => {
   assertEquals(codexArgs(['resume', '--last']), [
     '--dangerously-bypass-approvals-and-sandbox',
@@ -98,14 +106,46 @@ Deno.test('hookDialect: Codex payload and Claude transcript name the provider', 
 })
 
 Deno.test('task codex is discoverable with its own help', async () => {
-  let cli = new URL('./cli.ts', import.meta.url).pathname
-  let out = await new Deno.Command(Deno.execPath(), {
-    args: ['run', '-A', cli, 'codex', '--help'],
-  }).output()
+  let out = await cli('codex', '--help')
   assertEquals(out.code, 0)
   assertMatch(
-    new TextDecoder().decode(out.stdout),
+    text(out.stdout),
     /task codex \[codex args\.\.\.\][\s\S]*task codex resume --last/,
+  )
+})
+
+Deno.test('task wrap help documents the legacy alias', async () => {
+  let out = await cli('wrap', '--help')
+  assertEquals(out.code, 0)
+  assertMatch(
+    text(out.stdout),
+    /task wrap \[sid\] \[--hook\][\s\S]*task session wrap/,
+  )
+})
+
+Deno.test('task session wrap help never runs the hook verb', async () => {
+  let out = await cli('session', 'wrap', '--help')
+  assertEquals(out.code, 0)
+  assertMatch(text(out.stdout), /task session wrap \[sid\] \[--hook\]/)
+})
+
+Deno.test('task wrap rejects body before touching the session', async () => {
+  let out = await cli('wrap', 'test-session', '--body=@brief.md')
+  assertEquals(out.code, 1)
+  assertEquals(text(out.stdout), '')
+  assertMatch(
+    text(out.stderr),
+    /wrap takes no --body.+task session brief --body=…/,
+  )
+})
+
+Deno.test('task verbs reject unknown flags before their effects', async () => {
+  let out = await cli('release', 'T-1', '--wat')
+  assertEquals(out.code, 1)
+  assertEquals(text(out.stdout), '')
+  assertMatch(
+    text(out.stderr),
+    /release does not take --wat/,
   )
 })
 

@@ -81,7 +81,9 @@ import { commands, focusOf, run as runCommand } from './commands.ts'
 // Every verb: usage, blurb, worked examples. `task help` derives all its
 // faces from this table plus grammar.ts, so what the CLI teaches and what
 // it accepts are the same text — extend the table, every door updates.
-let VERBS: [usage: string, blurb: string, examples: string[]][] = [
+type Verb = [usage: string, blurb: string, examples: string[]]
+
+let VERBS: Verb[] = [
   ['tui', 'open the terminal UI', []],
   [
     'claude [claude args...]',
@@ -212,6 +214,30 @@ let VERBS: [usage: string, blurb: string, examples: string[]][] = [
   ]],
 ]
 
+// Aliases stay out of the menu, but their own help must admit and explain
+// them. New callers should learn the canonical spellings.
+let ALIASES: Verb[] = [
+  [
+    'ls [filters...] [--json]',
+    'legacy alias for task list',
+    ['task list .status=open'],
+  ],
+  [
+    'context [sid] [--hook]',
+    'legacy alias for task session context',
+    ['task session context'],
+  ],
+  [
+    'wrap [sid] [--hook]',
+    'legacy alias for task session wrap',
+    ['task session wrap'],
+  ],
+]
+
+let cliVerbs = new Set(
+  [...VERBS, ...ALIASES].map(([u]) => u.split(' ')[0]),
+)
+
 let usage = `task — the entity graph, from a shell
 
 ${
@@ -251,13 +277,82 @@ let help = (args: string[]) => {
         .join('\n'),
     )
   }
-  let hit = VERBS.find(([u]) => u.split(' ')[0] == topic)
+  let hit = [...VERBS, ...ALIASES].find(([u]) => u.split(' ')[0] == topic)
   if (!hit) throw new Error(`no such verb: ${topic} (task help lists them)`)
   let [u, b, examples] = hit
   console.log(`task ${u}\n  ${b}`)
   if (examples.length) {
     console.log(`\n${examples.map((e) => `  ${e}`).join('\n')}`)
   }
+}
+
+// A selected verb owns every option-shaped arg before it can touch the
+// graph. Passthrough launchers and `task new` stay out: claude/codex own
+// their flags, while new has its more useful --flag → .param correction.
+let options: Record<string, RegExp[]> = {
+  list: [/^--json$/],
+  ls: [/^--json$/],
+  set: [/^--comment=.*$/],
+  show: [/^--json$/],
+  history: [/^--json$/, /^-n\d*$/],
+  search: [/^--json$/],
+  mail: [/^--json$/, /^--all$/, /^--sent$/],
+  'mail show': [/^--json$/],
+  'mail send': [/^--body=.*$/, /^--from=.*$/],
+  'mail reply': [/^--body=.*$/, /^--from=.*$/],
+  'mail files': [/^--out(?:=.*)?$/],
+  inbox: [/^--json$/],
+  'inbox show': [/^--json$/],
+  'session context': [/^--hook$/, /^--subagent$/],
+  'session wrap': [/^--hook$/],
+  'session brief': [/^--body=.*$/],
+  spawn: [
+    /^--provider=.*$/,
+    /^--model=.*$/,
+    /^--effort=.*$/,
+    /^--persona=.*$/,
+  ],
+  dep: [/^--gone$/],
+  remember: [/^--body=.*$/, /^--type=.*$/, /^--scope=.*$/],
+  context: [/^--hook$/, /^--subagent$/],
+  wrap: [/^--hook$/],
+  sync: [/^--no-commit$/],
+  telemetry: [/^--errors$/, /^--since=.*$/, /^-n\d*$/],
+}
+
+let leaf = (cmd: string | undefined, args: string[]) => {
+  if (!cmd) return
+  let subs: Record<string, string[]> = {
+    mail: ['show', 'send', 'reply', 'search', 'files', 'doctor'],
+    inbox: ['show', 'archive'],
+    session: ['context', 'wrap', 'brief'],
+  }
+  let sub = args[0]
+  return subs[cmd]?.includes(sub) ? `${cmd} ${sub}` : cmd
+}
+
+let option = (arg: string) =>
+  arg != '--' && (arg.startsWith('--') || /^-[A-Za-z]/.test(arg))
+
+let optionName = (arg: string) =>
+  arg.startsWith('--') ? arg.split('=')[0] : arg.slice(0, 2)
+
+let rejectOptions = (verb: string | undefined, args: string[]) => {
+  if (
+    !verb || ['claude', 'codex', 'new'].includes(verb) ||
+    verb.startsWith(':') || (commands[verb] && !cliVerbs.has(verb)) ||
+    args[0]?.startsWith(':')
+  ) return
+  let allow = options[verb] ?? []
+  let bad = args.find((a) => option(a) && !allow.some((p) => p.test(a)))
+  if (!bad) return
+  let name = optionName(bad)
+  if ((verb == 'wrap' || verb == 'session wrap') && name == '--body') {
+    throw new Error(
+      "wrap takes no --body — did you mean 'task session brief --body=…'?",
+    )
+  }
+  throw new Error(`${verb} does not take ${name}`)
 }
 
 let split = (args: string[]) => {
@@ -1293,6 +1388,12 @@ let SESSION_USAGE = `task session — the lifecycle of the session you are
 
 let session = (args: string[]) => {
   let [sub, ...rest] = args
+  if (
+    ['context', 'wrap', 'brief'].includes(sub) &&
+    (rest.includes('--help') || rest.includes('-h'))
+  ) {
+    return console.log(SESSION_USAGE)
+  }
   if (sub == 'context') return context(rest)
   if (sub == 'wrap') return wrap(rest)
   if (sub == 'brief') return sessionBrief(rest)
@@ -1433,6 +1534,8 @@ let tui = async () => {
 if (import.meta.main) {
   let [cmd, ...rest] = Deno.args
   try {
+    let asksHelp = rest.includes('--help') || rest.includes('-h')
+    if (!asksHelp) rejectOptions(leaf(cmd, rest), rest)
     if (cmd?.startsWith(':')) await colon(undefined, [cmd, ...rest])
     // `<verb> --help` shows the verb's help, not the verb run with a stray flag.
     // mail/inbox/session own their own richer --help, so let them through.
