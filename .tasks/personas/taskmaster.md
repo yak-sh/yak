@@ -78,7 +78,7 @@ human; machine events are marked at mint.
 
 The boundary still has named gaps: an EXTERNAL-facing address must carry a Cloudflare
 routing rule (literal-only, silent drop without one — T-5837) and a graph address-book
-entry (T-5958 reconciles the book). Fleet-internal mail depends on neither. The
+entry (T-5958 reconciles the book). Fleet-internal mail depends on neither.
 
 ---
 
