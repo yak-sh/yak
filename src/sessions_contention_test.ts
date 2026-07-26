@@ -57,6 +57,23 @@ let locker = async (ms: number) => {
   return child
 }
 
+Deno.test('a graph mutation waits out a handoff writer', async () => {
+  let child = await locker(80)
+  let eid = uid()
+  let began = Date.now()
+  try {
+    apply(db, [{ eid, name: 'doc', comp: { title: 'waited' } }])
+  } finally {
+    assertEquals((await child.status).success, true)
+  }
+  assert(Date.now() - began >= 40)
+  assertEquals(
+    db.prepare('select title from doc where eid = ?').get(eid),
+    { title: 'waited' },
+  )
+  apply(db, [{ eid, name: 'entity', comp: null }])
+})
+
 Deno.test('a failed follower is observed without hiding its rejection', async () => {
   let eid = plant()
   let warned: unknown[][] = []
@@ -79,6 +96,7 @@ Deno.test('a failed follower is observed without hiding its rejection', async ()
 
 Deno.test('a follower waits out a brief SQLite lock', async () => {
   let eid = plant()
+  db.exec('pragma busy_timeout = 10')
   let child = await locker(80)
   let began = Date.now()
   let warned: unknown[][] = []
@@ -89,6 +107,7 @@ Deno.test('a follower waits out a brief SQLite lock', async () => {
     await running.get(eid)!.done
   } finally {
     console.warn = warn
+    db.exec('pragma busy_timeout = 5000')
     assertEquals((await child.status).success, true)
   }
   assert(Date.now() - began >= 40)

@@ -582,6 +582,10 @@ export let healStored = (db: DatabaseSync) => {
 export let open = (path = file) => {
   Deno.mkdirSync(dirname(path), { recursive: true })
   let db = new DatabaseSync(path)
+  // Listener handoff overlaps two server processes. SQLite serializes their
+  // brief boot/write collision; waiting keeps a mutation on its accepting
+  // process instead of making the caller guess whether to replay it.
+  db.exec('pragma busy_timeout = 5000')
   db.exec(schema)
   let addCol = (table: string, col: string, ddl: string) => {
     let cols = db.prepare(`select name from pragma_table_info('${table}')`)
@@ -1039,7 +1043,10 @@ export let apply = (
   // condemns) as a conflict entity — display strings, not references,
   // because the loser's session row may die in that same rollback.
   let bounced: { target: string; loser: string; holder: string } | null = null
-  db.exec('begin')
+  // This is a write transaction from birth. Taking its reserved lock before
+  // the validation reads lets busy_timeout wait for a handoff peer; upgrading
+  // a deferred read transaction can fail immediately to avoid a deadlock.
+  db.exec('begin immediate')
   try {
     // Mint spines in first-touch order before writing components. A typed
     // reference may then precede its target component without pre-minting that
