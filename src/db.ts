@@ -26,7 +26,7 @@ import { type Trace } from './effects.ts'
 import { ancestorAt, rows } from './client.ts'
 import { homeReads } from './persona.ts'
 import { matchQuery, parseQuery, resolveRefs, TEXT } from './query.ts'
-import { normalizeChanges } from './props.ts'
+import { normalizeChanges, parseProp, propAt } from './props.ts'
 
 // The db lives outside the repo (this is open source): a home-dir dotpath by
 // default, overridable with DB_PATH.
@@ -513,13 +513,75 @@ export let backfillVia = (db: DatabaseSync) =>
      )`,
   )
 
+let sqlName = (name: string) => `"${name.replaceAll('"', '""')}"`
+
+// Stored values pass through the same language as incoming values. Invalid
+// cells stay visible for a deliberate repair; guessing would erase evidence.
+export let healStored = (db: DatabaseSync) => {
+  let fixes: {
+    table: string
+    col: string
+    eid: string
+    value: string | number | null
+  }[] = []
+  let invalid = 0
+  let tables = [...new Set([...Object.keys(comps), ...Object.keys(stamped)])]
+  for (let table of tables) {
+    let declared = { ...comps[table], ...stamped[table] }
+    let info = db.prepare(
+      'select name, "notnull" as required from pragma_table_info(?)',
+    ).all(table) as { name: string; required: number }[]
+    for (let [col] of Object.entries(declared)) {
+      let required = info.find((c) => c.name == col)?.required
+      let prop = propAt(table, col)
+      if (!prop || required == null) {
+        throw new Error(`declared column missing: ${table}.${col}`)
+      }
+      let rows = db.prepare(
+        `select eid, ${sqlName(col)} as value from ${sqlName(table)}
+         where ${sqlName(col)} is not null`,
+      ).all() as { eid: string; value: unknown }[]
+      for (let { eid, value } of rows) {
+        try {
+          let parsed = parseProp(prop, value)
+          if (parsed == null && required) {
+            throw new Error(`${prop.name} is required — got '${value}'`)
+          }
+          if (!Object.is(parsed, value)) {
+            fixes.push({ table, col, eid, value: parsed })
+          }
+        } catch (e) {
+          invalid++
+          console.warn(`heal: ${eid} ${(e as Error).message}`)
+        }
+      }
+    }
+  }
+  if (!fixes.length) return { changed: 0, invalid }
+  db.exec('begin')
+  try {
+    for (let fix of fixes) {
+      db.prepare(
+        `update ${sqlName(fix.table)} set ${
+          sqlName(fix.col)
+        } = ? where eid = ?`,
+      ).run(fix.value, fix.eid)
+    }
+    db.exec('commit')
+  } catch (e) {
+    db.exec('rollback')
+    throw e
+  }
+  return { changed: fixes.length, invalid }
+}
+
 // Open the file, plant the schema, seed once if the graph is empty.
 // Returns a live handle; the process holds it open for the server's
 // lifetime. No real migrations: NEW columns are added in place (additive,
 // no data moves); anything shapier still means export/reseed.
-export let open = () => {
-  Deno.mkdirSync(dirname(file), { recursive: true })
-  let db = new DatabaseSync(file)
+export let open = (path = file) => {
+  Deno.mkdirSync(dirname(path), { recursive: true })
+  let db = new DatabaseSync(path)
   db.exec(schema)
   let addCol = (table: string, col: string, ddl: string) => {
     let cols = db.prepare(`select name from pragma_table_info('${table}')`)
@@ -674,6 +736,7 @@ export let open = () => {
   db.exec(`insert or ignore into updated (eid, at, "by")
     select eid, modified_at, null from entity
     where modified_at is not null and modified_at <> created_at`)
+  healStored(db)
   return db
 }
 
@@ -705,7 +768,6 @@ let readable: Record<string, string[]> = Object.fromEntries(
   ]),
 )
 
-let sqlName = (name: string) => `"${name.replaceAll('"', '""')}"`
 let select = (name: string) =>
   `select ${readable[name].map(sqlName).join(', ')} from ${sqlName(name)}`
 

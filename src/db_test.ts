@@ -1261,6 +1261,105 @@ Deno.test('open() is idempotent and additive on live files', () => {
   assertMatch(String(fresh().prepare('select 1 as ok').get()?.ok), /1/)
 })
 
+Deno.test('open heals canonical stored values once and preserves failures', () => {
+  let root = Deno.makeTempDirSync({ prefix: 'tasks-heal-' })
+  let path = `${root}/tasks.db`
+  let legacy = open(path)
+  let project = uid(), task = uid(), bad = uid(), session = uid()
+  apply(legacy, [
+    { eid: project, name: 'project', comp: {} },
+    {
+      eid: task,
+      name: 'task',
+      comp: { status: 'open', priority: 2, project_eid: project },
+    },
+    { eid: bad, name: 'task', comp: { status: 'open' } },
+    {
+      eid: session,
+      name: 'session',
+      comp: { id: 'legacy-session', operator: 1 },
+    },
+  ])
+  legacy.prepare(`update session set pid = '' where eid = ?`).run(session)
+  legacy.prepare(`update created set at = ? where eid = ?`)
+    .run('2026-07-26T12:34:56Z', task)
+  legacy.prepare(`update task set status = 'gone' where eid = ?`).run(bad)
+  legacy.prepare(`update project set retired_at = 'never' where eid = ?`)
+    .run(project)
+  let stable = legacy.prepare(
+    `select quote(status) as status, typeof(status) as status_type,
+            quote(priority) as priority, typeof(priority) as priority_type,
+            quote(project_eid) as project_eid,
+            typeof(project_eid) as project_eid_type
+     from task where eid = ?`,
+  ).get(task)
+  legacy.close()
+
+  let warnings: string[] = []
+  let warn = console.warn
+  console.warn = (...parts) => warnings.push(parts.join(' '))
+  try {
+    let first = open(path)
+    assertEquals(
+      first.prepare('select pid, operator from session where eid = ?')
+        .get(session),
+      { pid: null, operator: 1 },
+    )
+    assertEquals(
+      first.prepare(
+        'select at from created where eid = ?',
+      ).get(task),
+      { at: '2026-07-26T12:34:56.000Z' },
+    )
+    assertEquals(
+      first.prepare(
+        `select quote(status) as status, typeof(status) as status_type,
+                quote(priority) as priority,
+                typeof(priority) as priority_type,
+                quote(project_eid) as project_eid,
+                typeof(project_eid) as project_eid_type
+         from task where eid = ?`,
+      ).get(task),
+      stable,
+    )
+    assertEquals(
+      first.prepare('select status from task where eid = ?').get(bad),
+      { status: 'gone' },
+    )
+    assertEquals(
+      first.prepare('select retired_at from project where eid = ?')
+        .get(project),
+      { retired_at: 'never' },
+    )
+    first.close()
+
+    let before = Deno.readFileSync(path)
+    let second = open(path)
+    assertEquals(
+      second.prepare(
+        `select status, priority, project_eid from task where eid = ?`,
+      ).get(task),
+      { status: 'open', priority: 2, project_eid: project },
+    )
+    second.close()
+    assertEquals(Deno.readFileSync(path), before)
+  } finally {
+    console.warn = warn
+    Deno.removeSync(root, { recursive: true })
+  }
+  assertEquals(
+    warnings.filter((w) =>
+      w.includes(`${bad} task.status is one of open, wip, done`)
+    ).length,
+    2,
+  )
+  assertEquals(
+    warnings.filter((w) => w.includes(`${project} retired_at is a time`))
+      .length,
+    2,
+  )
+})
+
 Deno.test('search: terms and filters mix in one line', () => {
   let a = uid(), b = uid()
   apply(db, [
