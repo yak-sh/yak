@@ -209,9 +209,9 @@ let maintain = (batch: Change[]) => {
 
 // A socket's control frame (design §1): `{sub, q}` subscribes or replaces (the
 // initial frame is the query's current matches as one batch, and seeds the
-// member set); `{unsub}` forgets one. A non-shadow subscribe flips the socket
-// into `filtered`; a shadow subscribe keeps the legacy stream beside its
-// result frames.
+// member set, marked `replace` for the client); `{unsub}` forgets one. A
+// non-shadow subscribe flips the socket into `filtered`; a shadow subscribe
+// keeps the legacy stream beside its result frames.
 let control = (
   sock: WebSocket,
   f: { sub?: string; q?: string; unsub?: string; shadow?: boolean },
@@ -236,6 +236,7 @@ let control = (
         sub: f.sub,
         changes,
         drop: [],
+        replace: true,
         cursor: cursorOf(db),
         shadow: !!f.shadow,
       }),

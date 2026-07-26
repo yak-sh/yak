@@ -193,10 +193,11 @@ export let mutate = (...changes: Change[]) => {
 
 type Catchup = { catchup: Change[]; cursor: number }
 type Reset = { reset?: boolean; snapshot: Snapshot; error?: string }
-type Sub = {
+export type Sub = {
   sub: string
   changes: Change[]
   drop?: string[]
+  replace?: boolean
   cursor?: number
   shadow?: boolean
 }
@@ -288,12 +289,14 @@ let shadows = new Set<string>()
 // `changes` as an entity-null (gone for everyone — applyLocal already removed
 // it); a `drop` eid left THIS query but still exists (gone for this query
 // only). Either way it leaves the sub's set, and an eid now in no set is
-// evicted from the cache.
-let onSub = (f: Sub) => {
+// evicted from the cache. A control reply replaces the prior set wholesale;
+// maintenance frames patch it.
+export let landSub = (f: Sub) => {
   let touched = applyLocal(f.changes)
-  let mine = subMembers.get(f.sub) ?? new Set<string>()
+  let old = subMembers.get(f.sub) ?? new Set<string>()
+  let mine = f.replace ? new Set<string>() : old
   subMembers.set(f.sub, mine)
-  let leaving: string[] = f.drop ? [...f.drop] : []
+  let leaving: string[] = f.replace ? [...old] : [...(f.drop ?? [])]
   for (let c of f.changes) {
     if (c.name == 'entity' && c.comp == null) {
       mine.delete(c.eid)
@@ -301,6 +304,7 @@ let onSub = (f: Sub) => {
     } else mine.add(c.eid)
   }
   for (let eid of f.drop ?? []) mine.delete(eid)
+  if (f.replace) leaving = leaving.filter((eid) => !mine.has(eid))
   if (!f.shadow && !shadows.has(f.sub)) evict(leaving)
   subVersion.value++
   return {
@@ -335,9 +339,14 @@ let shadow = (sub: string, q: string) => {
   shadows.add(sub)
   control({ sub, q, shadow: true })
 }
-export let unsubscribe = (sub: string) => {
+let forget = (sub: string) => {
   shadows.delete(sub)
   subMembers.delete(sub)
+  agreement?.checked.delete(sub)
+  subVersion.value++
+}
+export let unsubscribe = (sub: string) => {
+  forget(sub)
   control({ unsub: sub })
 }
 
@@ -402,29 +411,37 @@ export let assertAgree = (
 
 let boardUses = new Map<string, { n: number; q: string }>()
 
-// One logical board subscription per process. Several cards may show the same
-// board; the last unmount closes the shared wire name.
+let ownBoard = (sub: string, q: string) =>
+  owner ? owner.use(sub, q) : shadow(sub, q)
+let dropBoard = (sub: string) => owner ? owner.drop(sub) : unsubscribe(sub)
+
+// Several views in one tab share one ownership entry. Cross-tab references
+// reduce in leader.ts before the one logical board name reaches the socket.
 export let boardSub = (e: Ent) => {
   let sub = `board:${e.eid}`
   let q = String(e.board?.query ?? '')
   let use = boardUses.get(sub)
-  if (use) {
-    use.n++
-    if (use.q != q) {
-      use.q = q
-      shadow(sub, q)
-    }
-  } else {
+  if (use) use.n++
+  else {
     boardUses.set(sub, { n: 1, q })
-    shadow(sub, q)
+    ownBoard(sub, q)
   }
   return () => {
     let held = boardUses.get(sub)
     if (!held || --held.n > 0) return
     boardUses.delete(sub)
-    agreement?.checked.delete(sub)
-    unsubscribe(sub)
+    dropBoard(sub)
   }
+}
+
+// Query edits replace the installed name without tearing down its ownership.
+export let boardQuery = (e: Ent) => {
+  let sub = `board:${e.eid}`
+  let q = String(e.board?.query ?? '')
+  let use = boardUses.get(sub)
+  if (!use || use.q == q) return
+  use.q = q
+  ownBoard(sub, q)
 }
 
 // Fetch the whole graph, fill the signals, seed IDB — the first-visit path
@@ -505,7 +522,7 @@ let land = async (data: unknown, mode: Land) => {
     mark('reset')
     await seedFrom(frame.snapshot, mode != 'follower')
   } else if (typeof frame.sub == 'string') {
-    let touched = onSub(frame as Sub)
+    let touched = landSub(frame as Sub)
     if (frame.cursor !== undefined) {
       held = { ...held, cursor: frame.cursor }
       if (mode == 'leader') await persist(touched, frame.cursor)
@@ -574,8 +591,15 @@ export let boot = async () => {
         serial = serial.then(() => land(frame, 'follower'))
       },
       send: wire,
+      subscribe: (sub, q) => {
+        shadows.add(sub)
+        wire({ sub, q, shadow: true })
+      },
+      unsubscribe: (sub) => wire({ unsub: sub }),
+      forget,
     },
   )
+  addEventListener('pagehide', owner.leave)
   await owner.start()
 }
 ;(globalThis as {

@@ -15,8 +15,10 @@ import {
   domains,
   ent,
   gated,
+  landSub,
   pinned,
   projects,
+  subEids,
   subscriptionChecks,
   topZ,
 } from './live.ts'
@@ -78,6 +80,25 @@ Deno.test('agreement diagnostics opt in through the named browser probe', () => 
   assertEquals(agreementProbe('?v=Board&probe=subscriptions'), true)
   assertEquals(agreementProbe('?probe=other'), false)
   assertEquals(agreementProbe(''), false)
+})
+
+Deno.test('a replacement frame forgets the prior query set', () => {
+  let change = (eid: string) => [
+    { eid, name: 'entity', comp: { eid, num: 1 } },
+  ]
+  landSub({
+    sub: 'board:replace',
+    changes: change('old'),
+    replace: true,
+    shadow: true,
+  })
+  landSub({
+    sub: 'board:replace',
+    changes: change('new'),
+    replace: true,
+    shadow: true,
+  })
+  assertEquals([...(subEids('board:replace') ?? [])], ['new'])
 })
 
 Deno.test('domains: distinct, sorted, absent ones skipped', () => {

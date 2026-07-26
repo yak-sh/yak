@@ -211,3 +211,83 @@ Deno.test('a failed lock cleanly restores the solo path', async () => {
   peer.route('write')
   assertEquals(calls, ['solo', 'write'])
 })
+
+Deno.test('one board name lives until its final tab owner leaves', async () => {
+  let lock = locks()
+  let channel = channels<string>()
+  let leases = [deferred(), deferred()]
+  let calls = [[], []] as string[][]
+  let io = (i: number) => ({
+    lead: () => Promise.resolve(),
+    follow: () => Promise.resolve(),
+    solo: () => Promise.resolve(),
+    receive: () => {},
+    send: () => {},
+    subscribe: (name: string, q: string) => calls[i].push(`sub:${name}:${q}`),
+    unsubscribe: (name: string) => calls[i].push(`unsub:${name}`),
+  })
+  let a = topology(lock, channel(), io(0), () => 'a', () => leases[0].promise)
+  let b = topology(lock, channel(), io(1), () => 'b', () => leases[1].promise)
+  await Promise.all([a.start(), b.start()])
+
+  a.use('board:x', '.status=open')
+  b.use('board:x', '.status=open')
+  a.drop('board:x')
+  assertEquals(calls[0], [
+    'sub:board:x:.status=open',
+    'sub:board:x:.status=open',
+  ])
+
+  b.use('board:x', '.status=done')
+  b.drop('board:x')
+  assertEquals(calls[0], [
+    'sub:board:x:.status=open',
+    'sub:board:x:.status=open',
+    'sub:board:x:.status=done',
+    'unsub:board:x',
+  ])
+
+  a.leave()
+  b.leave()
+  leases[0].resolve()
+  leases[1].resolve()
+})
+
+Deno.test('a promoted follower replays the live ownership reduction', async () => {
+  let lock = locks()
+  let channel = channels<string>()
+  let leases = [deferred(), deferred()]
+  let calls = [[], []] as string[][]
+  let io = (i: number) => ({
+    lead: () => {
+      calls[i].push('lead')
+      return Promise.resolve()
+    },
+    follow: () => {
+      calls[i].push('follow')
+      return Promise.resolve()
+    },
+    solo: () => Promise.resolve(),
+    receive: () => {},
+    send: () => {},
+    subscribe: (name: string, q: string) => calls[i].push(`sub:${name}:${q}`),
+    unsubscribe: () => {},
+  })
+  let a = topology(lock, channel(), io(0), () => 'a', () => leases[0].promise)
+  let b = topology(lock, channel(), io(1), () => 'b', () => leases[1].promise)
+  await Promise.all([a.start(), b.start()])
+  a.use('board:x', '.status=open')
+  b.use('board:x', '.status=open')
+
+  a.leave()
+  leases[0].resolve()
+  await tick()
+  assertEquals(calls[1], [
+    'follow',
+    'lead',
+    'sub:board:x:.status=open',
+  ])
+
+  b.leave()
+  leases[1].resolve()
+})
