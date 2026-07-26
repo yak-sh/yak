@@ -727,16 +727,49 @@ let refused = (
   )
 }
 
-let projectRefused = (db: DatabaseSync, eid: string) => {
+type Ref = {
+  name: string
+  col: string
+  target: string
+}
+
+let refs = Object.entries(comps).flatMap(([name, props]) =>
+  Object.entries(props).flatMap(([col, type]) =>
+    typeof type == 'object' && 'eid' in type && type.eid
+      ? [{ name, col, target: type.eid }]
+      : []
+  )
+)
+
+let refRefused = (
+  db: DatabaseSync,
+  ref: Ref,
+  eid?: string,
+  target?: string,
+) => {
+  let to = ref.target || 'entity'
+  let args: string[] = []
+  if (eid) args.push(eid)
+  if (target) args.push(target)
   let bad = db.prepare(`
-    select t.project_eid from task t
-    left join project p on p.eid = t.project_eid
-    where t.eid = ? and t.project_eid is not null and p.eid is null
-  `).get(eid) as { project_eid: string } | undefined
-  return bad &&
-    new Error(
-      `task ${eid} refused: project_eid → ${bad.project_eid} (no such project)`,
-    )
+    select r.eid, r."${ref.col}" as target
+    from ${ref.name} r
+    left join ${to} t on t.eid = r."${ref.col}"
+    where r."${ref.col}" is not null and t.eid is null
+      ${eid ? 'and r.eid = ?' : ''}
+      ${target ? `and r."${ref.col}" = ?` : ''}
+    limit 1
+  `).get(...args) as
+    | { eid: string; target: string }
+    | undefined
+  if (!bad) return null
+  let gone = db.prepare('select 1 from tombstone where eid = ?')
+    .get(bad.target)
+  return new Error(
+    `${ref.name} ${bad.eid} refused: ${ref.col} → ${bad.target} (${
+      gone ? 'tombstoned' : `no such ${to}`
+    })`,
+  )
 }
 
 // The box owner: the lone `person`, the actor a context-less write falls
@@ -848,10 +881,8 @@ export let apply = (
   let extra: Change[] = []
   let touched = new Set<string>()
   let minted = new Set<string>()
-  let projects = new Set(
-    changes.filter((c) => c.name == 'project' && c.comp).map((c) => c.eid),
-  )
-  let projectRefs = new Set<string>()
+  let refWrites = new Map<string, [Ref, string]>()
+  let targetDrops = new Map<string, [Ref, string]>()
   // Whose provenance `by` the WIRE named this batch — the server keeps it
   // and only defaults the gap (created.by at birth, updated.by on a touch).
   let saidCreator = new Set<string>()
@@ -865,6 +896,21 @@ export let apply = (
   let bounced: { target: string; loser: string; holder: string } | null = null
   db.exec('begin')
   try {
+    // Mint spines in first-touch order before writing components. A typed
+    // reference may then precede its target component without pre-minting that
+    // target out of order. An entity-null still voids every later touch.
+    let killed = new Set<string>()
+    for (let { eid, name, comp } of changes) {
+      if (name == 'entity' && comp == null) {
+        killed.add(eid)
+        continue
+      }
+      if (
+        comp == null || name == 'dependency' || !cmps[name] ||
+        killed.has(eid) || dead.get(eid)
+      ) continue
+      if (spine(db, eid).changes) minted.add(eid)
+    }
     for (let { eid, name, comp } of changes) {
       // An edge is a TRIPLE, not a row keyed by eid: the comp names the
       // whole (parent=eid, type, child_eid) sentence, so linking is
@@ -922,16 +968,15 @@ export let apply = (
       // replayed change for its eid — an edit racing a delete loses
       // deterministically, and nothing can resurrect the id.
       if (dead.get(eid)) continue
-      if (name == 'task' && comp?.project_eid != null) {
-        projectRefs.add(eid)
-        // The component contract reads the batch's final state, so a task
-        // may precede the project it names without reordering other births.
-        let project = String(comp.project_eid)
-        if (
-          projects.has(project) && !dead.get(project) &&
-          spine(db, project).changes
-        ) {
-          minted.add(project)
+      for (let ref of refs) {
+        if (ref.name == name && comp?.[ref.col] != null) {
+          refWrites.set(`${name}\0${eid}\0${ref.col}`, [ref, eid])
+        }
+        if (ref.target == name && comp == null) {
+          targetDrops.set(`${name}\0${eid}\0${ref.name}\0${ref.col}`, [
+            ref,
+            eid,
+          ])
         }
       }
       // A claim is a LEASE, not a patch: taking one over another session's
@@ -1112,8 +1157,12 @@ export let apply = (
         throw refusal ?? e // the outer catch rolls the whole batch back
       }
     }
-    for (let eid of projectRefs) {
-      let refusal = projectRefused(db, eid)
+    for (let [ref, eid] of refWrites.values()) {
+      let refusal = refRefused(db, ref, eid)
+      if (refusal) throw refusal
+    }
+    for (let [ref, target] of targetDrops.values()) {
+      let refusal = refRefused(db, ref, undefined, target)
       if (refusal) throw refusal
     }
     // Every touched entity carries when it last changed — server-stamped

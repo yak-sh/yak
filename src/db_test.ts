@@ -19,12 +19,68 @@ let {
 let { assertEquals, assertMatch, assertThrows } = await import(
   '@std/assert'
 )
+let { comps } = await import('./types.ts')
 
 let fresh = () => open() // each test file shares one :memory: handle; use eids per test
 let uid = () => crypto.randomUUID()
 
 let comp = (eid: string, name: string) =>
   snapshot(db).changes.find((c) => c.eid == eid && c.name == name)?.comp
+
+let tag = (
+  db: ReturnType<typeof fresh>,
+  name: string,
+  value: Record<string, unknown> = {},
+) => {
+  let eid = uid()
+  apply(db, [{ eid, name, comp: value }])
+  return eid
+}
+
+type Local = ReturnType<typeof fresh>
+type Props = Record<string, unknown>
+
+let contract = (
+  name: string,
+  col: string,
+  target: string,
+  rest: Props | ((db: Local) => Props) = {},
+  before?: (db: Local, eid: string) => void,
+) => ({
+  name,
+  col,
+  target,
+  rest: typeof rest == 'function' ? rest : () => rest,
+  before,
+})
+
+let contracts = [
+  contract('task', 'project_eid', 'project', { status: 'open' }),
+  contract('camera', 'client_eid', 'client', (d) => ({
+    canvas_eid: tag(d, 'canvas'),
+  })),
+  contract('fold', 'client_eid', 'client', (d) => ({
+    board_eid: tag(d, 'board'),
+  })),
+  contract('fold', 'board_eid', 'board', (d) => ({
+    client_eid: tag(d, 'client'),
+  })),
+  contract('shelf', 'client_eid', 'client'),
+  contract(
+    'claim',
+    'session_eid',
+    'session',
+    {},
+    (d, eid) => apply(d, [{ eid, name: 'doc', comp: { title: 'claimed' } }]),
+  ),
+  contract('stop_request', 'target_eid', 'session'),
+  contract('mail', 'reply_to_eid', 'mail', {
+    to: 'operator@example.test',
+  }),
+  contract('persona', 'home_eid', 'project'),
+  contract('memory', 'source_eid', 'session', { type: 'reference' }),
+  contract('memory', 'scope_eid', 'project', { type: 'project' }),
+]
 
 Deno.test('create + patch + column clear', () => {
   let t = uid()
@@ -277,6 +333,101 @@ Deno.test('task project_eid accepts projects created anywhere in its batch', () 
   ])
   assertEquals(comp(a, 'task')?.project_eid, before)
   assertEquals(comp(b, 'task')?.project_eid, after)
+})
+
+Deno.test('typed eid contracts are the complete vocabulary set', () => {
+  let declared = Object.entries(comps).flatMap(([name, props]) =>
+    Object.entries(props).flatMap(([col, type]) =>
+      typeof type == 'object' && 'eid' in type && type.eid
+        ? [`${name}.${col}:${type.eid}`]
+        : []
+    )
+  ).sort()
+  assertEquals(
+    declared,
+    contracts.map((c) => `${c.name}.${c.col}:${c.target}`).sort(),
+  )
+})
+
+Deno.test('every typed eid rejects a target missing its component', () => {
+  for (let c of contracts) {
+    let local = fresh()
+    let wrong = tag(local, 'doc', { title: 'wrong kind' })
+    let source = uid()
+    c.before?.(local, source)
+    let err = assertThrows(
+      () =>
+        apply(local, [{
+          eid: source,
+          name: c.name,
+          comp: { ...c.rest(local), [c.col]: wrong },
+        }]),
+      Error,
+      c.name == 'stop_request' ? 'gone' : c.col,
+    )
+    if (c.name != 'stop_request') {
+      assertMatch(err.message, new RegExp(`no such ${c.target}`))
+    }
+    assertEquals(
+      snapshot(local).changes.some((change) =>
+        change.eid == source && change.name == c.name
+      ),
+      false,
+    )
+    local.close()
+  }
+})
+
+Deno.test('typed refs may precede their targets without reordering births', () => {
+  let local = fresh()
+  let memory = uid(), middle = uid(), session = uid()
+  apply(local, [
+    {
+      eid: memory,
+      name: 'memory',
+      comp: { type: 'reference', source_eid: session },
+    },
+    { eid: middle, name: 'doc', comp: { title: 'middle' } },
+    { eid: session, name: 'session', comp: { id: `session-${session}` } },
+  ])
+  let num = (eid: string) =>
+    Number(
+      snapshot(local).changes.find((c) => c.eid == eid && c.name == 'entity')
+        ?.comp?.num,
+    )
+  assertEquals(num(memory) < num(middle), true)
+  assertEquals(num(middle) < num(session), true)
+  local.close()
+})
+
+Deno.test('a target component cannot leave typed references dangling', () => {
+  let local = fresh()
+  let project = tag(local, 'project')
+  let task = uid(), rider = uid()
+  apply(local, [{
+    eid: task,
+    name: 'task',
+    comp: { status: 'open', project_eid: project },
+  }])
+  assertThrows(
+    () =>
+      apply(local, [
+        { eid: rider, name: 'doc', comp: { title: 'rides along' } },
+        { eid: project, name: 'project', comp: null },
+      ]),
+    Error,
+    'project_eid',
+  )
+  let changes = snapshot(local).changes
+  assertEquals(
+    changes.some((c) => c.eid == project && c.name == 'project'),
+    true,
+  )
+  assertEquals(
+    changes.some((c) => c.eid == rider && c.name == 'doc'),
+    false,
+  )
+  local.close()
 })
 
 Deno.test('a NOT NULL refusal fails the whole batch', () => {
