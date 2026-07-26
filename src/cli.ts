@@ -546,7 +546,9 @@ let set = async (args: string[]) => {
   let say = args.find((a) => a.startsWith('--comment='))?.slice(10)
   let { params, words } = split(args.filter((a) => !a.startsWith('--comment=')))
   let [id] = words
-  if (!id || !params.length) throw new Error('task set <id> .prop=value ...')
+  if (!id || words.length != 1 || !params.length) {
+    throw new Error('task set <id> .prop=value ...')
+  }
   let all = rows(await snapshot())
   let row = find(all, id)
   if (!row) throw new Error(`no entity: ${id}`)
@@ -1041,8 +1043,9 @@ let release = async (args: string[]) => {
 // whole triple, so link and unlink are the same Change with gone flipped.
 let dep = async (args: string[]) => {
   let gone = args.includes('--gone')
-  let [id, type, childId] = args.filter((a) => a != '--gone')
-  if (!id || !type || !childId) {
+  let words = args.filter((a) => a != '--gone')
+  let [id, type, childId] = words
+  if (!id || !type || !childId || words.length != 3) {
     throw new Error('task dep <id> <type> <child> [--gone]')
   }
   if (!edges.includes(type as Edge)) {

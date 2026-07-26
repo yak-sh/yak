@@ -335,6 +335,23 @@ Deno.test('task verbs reject unknown flags before their effects', async () => {
   )
 })
 
+Deno.test('task set rejects surplus positional arguments', async () => {
+  let out = await cli('set', 'T-1', '.status=open', 'surplus')
+  assertEquals(out.code, 1)
+  assertEquals(text(out.stdout), '')
+  assertMatch(text(out.stderr), /task set <id> \.prop=value \.\.\./)
+})
+
+Deno.test('task dep rejects surplus positional arguments', async () => {
+  let out = await cli('dep', 'T-1', 'requires', 'T-2', 'surplus')
+  assertEquals(out.code, 1)
+  assertEquals(text(out.stdout), '')
+  assertMatch(
+    text(out.stderr),
+    /task dep <id> <type> <child> \[--gone\]/,
+  )
+})
+
 Deno.test('Codex hooks inject sessions, delegate children, and wrap at exit', () => {
   let path = new URL('../.codex/hooks.json', import.meta.url)
   let config = JSON.parse(Deno.readTextFileSync(path)) as {
