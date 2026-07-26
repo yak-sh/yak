@@ -772,9 +772,10 @@ let admitted = (change: Change): Change | undefined => {
   let cols = change.name == 'dependency' ? edgeCols : cmps[change.name]
   if (!cols) return
   if (change.comp == null) return change
-  let comp = Object.fromEntries(
-    Object.entries(change.comp).filter(([name]) => cols.includes(name)),
-  )
+  let sent = Object.entries(change.comp)
+  let kept = sent.filter(([name]) => cols.includes(name))
+  if (sent.length && !kept.length) return
+  let comp = Object.fromEntries(kept)
   return { ...change, comp }
 }
 

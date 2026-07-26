@@ -336,6 +336,27 @@ Deno.test('server-owned columns never ride persistence or effective batches', ()
   )
 })
 
+Deno.test('a write emptied by projection is wholly ignored', () => {
+  let t = uid()
+  let before = (db.prepare('select count(*) as n from journal').get() as {
+    n: number
+  }).n
+  assertEquals(
+    apply(db, [{
+      eid: t,
+      name: 'web',
+      comp: { frozen_at: 'FAKE' },
+    }]),
+    [],
+  )
+  assertEquals(comp(t, 'entity'), undefined)
+  assertEquals(comp(t, 'web'), undefined)
+  assertEquals(
+    (db.prepare('select count(*) as n from journal').get() as { n: number }).n,
+    before,
+  )
+})
+
 Deno.test('repo is a tag on a project: wire-writable, never the kind', () => {
   let p = uid()
   apply(db, [
@@ -823,7 +844,9 @@ Deno.test('lifecycle stamps: bare presence server-stamps provenance; the wire ca
   // The wire can set none of the stamp — all live in `stamped`, out of comps.
   let u = uid()
   apply(d, [{ eid: u, name: 'doc', comp: { title: 'forge' } }])
-  apply(
+  apply(d, [{ eid: u, name: 'archived', comp: {} }], undefined, client)
+  let archived = stamp(u, 'archived')
+  let forged = apply(
     d,
     [{
       eid: u,
@@ -833,9 +856,9 @@ Deno.test('lifecycle stamps: bare presence server-stamps provenance; the wire ca
     undefined,
     client,
   )
-  assertMatch(String(stamp(u, 'archived')?.at), /^\d{4}-/) // server ISO, not FAKE
-  assertEquals(stamp(u, 'archived')?.by, jeff) // not 'evil'
-  assertEquals(stamp(u, 'archived')?.via, client)
+  assertEquals(forged, [])
+  assertMatch(String(archived?.at), /^\d{4}-/)
+  assertEquals(stamp(u, 'archived'), archived)
 })
 
 Deno.test('lifecycle stamps: one-list — snapshot, showMd, and GRAMMAR pick them up with no extra edits', async () => {
