@@ -37,11 +37,12 @@
   --soft: color-mix(in srgb, var(--text) 6%, transparent);
 
   /* status colours — dots and status text consume these */
-  /* GitHub's reading (owner call, 2026-07-21): green = open (alive, go),
-     purple = done (landed). wip stays amber, cancelled stays muted. */
-  --open: var(--accent);
+  /* the signal bar (owner call, T-7416): the pip is a vertical bar and
+     FILL tells the story — open empty, wip half, done full. Open wears
+     blue, done green (back); wip stays amber, cancelled stays muted. */
+  --open: var(--blue);
   --wip: var(--yellow);
-  --done: var(--purple);
+  --done: var(--accent);
   --cancelled: var(--dim); /* settled, but not a success — stays muted */
 }
 
@@ -869,8 +870,8 @@ html {
   padding-left: calc(var(--half-gap) + 1px);
 }
 .Board_ColName .Dot {
-  width: 0.45rem;
-  height: 0.45rem;
+  width: 0.25rem;
+  height: 0.56rem;
 }
 .Board_Count {
   margin-left: auto;
@@ -888,7 +889,7 @@ html {
 .Board_Col-folded .Board_ColName {
   width: max-content;
   /* pivot on the DOT's center — now sitting past the title inset */
-  transform-origin: calc(var(--half-gap) + 1px + 0.45rem / 2) 50%;
+  transform-origin: calc(var(--half-gap) + 1px + 0.25rem / 2) 50%;
   transform: rotate(90deg);
 }
 /* Quick-create: a dim `+` riding the column header (after the count),
@@ -970,7 +971,7 @@ html {
 }
 .TaskTile > .Dot {
   align-self: start;
-  margin-top: calc((1lh - 0.55rem) / 2); /* pinned to the title's first line */
+  margin-top: calc((1lh - 0.68rem) / 2); /* pinned to the title's first line */
 }
 .TaskTile_Title {
   min-width: 0; /* wraps freely — a board card reads, it doesn't truncate */
@@ -1033,7 +1034,7 @@ html {
 }
 .Show_Heading .Dot {
   align-self: start;
-  margin-top: calc((1lh - 0.55rem) / 2);
+  margin-top: calc((1lh - 0.68rem) / 2);
 }
 .Show_Title {
   flex: 1;
@@ -1409,39 +1410,48 @@ html {
 
 .Dot {
   --dot: var(--dim);
+  --fill: 100%; /* how much of the bar has landed, bottom-up */
   flex: none;
-  width: 0.55rem;
-  height: 0.55rem;
-  border-radius: 50%;
-  background: var(--dot);
+  width: 0.3rem;
+  height: 0.68rem;
+  border-radius: 0.12rem;
+  border: 1px solid var(--dot);
+  background: linear-gradient(to top, var(--dot) var(--fill), transparent 0);
 }
 .Dot-open {
   --dot: var(--open);
+  --fill: 0%;
 }
 .Dot-wip {
   --dot: var(--wip);
+  --fill: 50%;
 }
 .Dot-done {
   --dot: var(--done);
 }
 .Dot-cancelled {
   --dot: var(--cancelled);
+  --fill: 0%;
 }
 .Dot-gated {
   --dot: var(--red); /* open requires deps: blocked in fact, not in status */
 }
 
-/* A session's lifecycle wears the same pip: still going burns warm, the
-   endings settle — completed green, everything else a fault colour. An
-   external session (no lifecycle at all) keeps the dim default. */
+/* A session's lifecycle wears the same pip: the bar fills as the run
+   does — starting empty, running half, every ending full (completed
+   green, the rest a fault colour). An external session (no lifecycle
+   at all) keeps the full dim default. */
 .Dot-starting {
   --dot: var(--open);
+  --fill: 0%;
 }
 .Dot-running {
   --dot: var(--wip);
+  --fill: 50%;
 }
 .Dot-stopping {
   --dot: var(--orange);
+  --fill: 50%;
 }
 .Dot-completed {
   --dot: var(--done);
@@ -1635,8 +1645,8 @@ html {
 }
 /* the pip rides the sentence inline, sized to its 13px line */
 .Dependency .Dot {
-  width: 0.45rem;
-  height: 0.45rem;
+  width: 0.25rem;
+  height: 0.56rem;
 }
 .Dependency_Type-requires {
   color: var(--red);

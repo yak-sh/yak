@@ -34,12 +34,14 @@ let sheet: Record<string, Style> = {
   TStatus_Msg: { fg: '#9da9a0' },
   TStatus_Hint: { fg: '#7a8478' },
 
-  // shared views, styled by the same class names the web uses
-  Dot: { glyph: '●', fg: '#7a8478' },
-  'Dot-open': { fg: '#a7c080' }, // green = open, purple = done (GitHub's read)
-  'Dot-wip': { fg: '#dbbc7f' },
-  'Dot-done': { fg: '#d699b6' },
-  'Dot-cancelled': { fg: '#7a8478' },
+  // shared views, styled by the same class names the web uses. The web's
+  // signal bar speaks sparkline here: the pip fills bottom-up as the work
+  // does — open empty (blue), wip half (amber), done full (green).
+  Dot: { glyph: '█', fg: '#7a8478' },
+  'Dot-open': { glyph: '▁', fg: '#7fbbb3' },
+  'Dot-wip': { glyph: '▄', fg: '#dbbc7f' },
+  'Dot-done': { fg: '#a7c080' },
+  'Dot-cancelled': { glyph: '▁', fg: '#7a8478' },
   'Dot-gated': { fg: '#e67e80' }, // open requires deps: blocked in fact
   Id: { fg: '#7a8478' },
   'Id-retired': { fg: '#7a8478', dim: true, strike: true },
@@ -61,9 +63,9 @@ let sheet: Record<string, Style> = {
   Debug_Key: { fg: '#7a8478' },
   'Debug_Val-num': { fg: '#d699b6' },
   'Debug_Val-id': { fg: '#7a8478' },
-  'Debug_Status-open': { fg: '#a7c080' },
+  'Debug_Status-open': { fg: '#7fbbb3' },
   'Debug_Status-wip': { fg: '#dbbc7f' },
-  'Debug_Status-done': { fg: '#d699b6' },
+  'Debug_Status-done': { fg: '#a7c080' },
   'Debug_Status-cancelled': { fg: '#7a8478' },
   Debug_Kids: { indent: 2 },
   Debug_More: { fg: '#7a8478' },
