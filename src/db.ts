@@ -243,7 +243,8 @@ let schema = `
     first_at text not null,
     last_at  text not null
   );
-  -- Provenance, paired when+who (types.ts, T-6670): "at" is server-frozen
+  -- Provenance, paired when+who+how (types.ts, T-6670/T-7113): "at" is
+  -- server-frozen
   -- (default now on insert, overwritten by apply()'s stamp); "by" is the
   -- actor eid — wire-writable, NO FK (death 'keep', like comment.author_eid:
   -- a tombstoned spine would veto an FK'd reference). "by" is quoted because
@@ -252,33 +253,37 @@ let schema = `
   create table if not exists created (
     eid text primary key references entity(eid),
     at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-    "by" text
+    "by" text,
+    via text
   );
   create table if not exists updated (
     eid text primary key references entity(eid),
     at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-    "by" text
+    "by" text,
+    via text
   );
   -- Notification lifecycle (T-7006): presence IS the fact. Same shape as
   -- created/updated — "at" default-stamped then frozen, "by" the writing
-  -- actor (no FK, death 'keep', like created.by). Both server-only (out of
-  -- comps): the wire writes a bare row, apply()'s stampedPresence loop fills
-  -- "by" and rides {at,by} back. "create table if not exists" IS the guard
-  -- (additive; the db is live owner data).
+  -- actor and "via" its instrument (no FKs; provenance outlives them). All
+  -- are server-only (out of comps): the wire writes a bare row and apply()'s
+  -- stampedPresence loop fills and returns the stamp.
   create table if not exists notified (
     eid text primary key references entity(eid),
     at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-    "by" text
+    "by" text,
+    via text
   );
   create table if not exists opened (
     eid text primary key references entity(eid),
     at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-    "by" text
+    "by" text,
+    via text
   );
   create table if not exists archived (
     eid text primary key references entity(eid),
     at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-    "by" text
+    "by" text,
+    via text
   );
   create table if not exists tombstone (
     eid        text primary key,
@@ -295,6 +300,7 @@ let schema = `
     ts    text not null
           default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
     actor text,
+    via   text,
     batch text not null
   );
   -- Log data, not graph: no eid, no components, so snapshot() (which walks
@@ -493,6 +499,19 @@ export let backfillOpened = (db: DatabaseSync) =>
        select eid, read_at from mail where read_at is not null`,
   )
 
+// Lift the old comment-only instrument into the universal register once.
+// comment.author_eid stays as the rollback source until T-7113 retires it.
+export let backfillVia = (db: DatabaseSync) =>
+  db.exec(
+    `update created set via = (
+       select author_eid from comment where comment.eid = created.eid
+     )
+     where via is null and exists (
+       select 1 from comment
+       where comment.eid = created.eid and author_eid is not null
+     )`,
+  )
+
 // Open the file, plant the schema, seed once if the graph is empty.
 // Returns a live handle; the process holds it open for the server's
 // lifetime. No real migrations: NEW columns are added in place (additive,
@@ -520,6 +539,11 @@ export let open = () => {
   addCol('session', 'agent_type', 'agent_type text')
   addCol('session', 'source', 'source text')
   addCol('session', 'operator', 'operator integer')
+  for (let table of ['created', 'updated', 'notified', 'opened', 'archived']) {
+    addCol(table, 'via', 'via text')
+  }
+  addCol('journal', 'via', 'via text')
+  backfillVia(db)
   // The managed-session lifecycle (src/sessions.ts): what was asked for,
   // what it's doing, how it ended. The REQUEST columns (provider, model,
   // effort, persona_eid, requested_task_eid) are wire-writable — creating
@@ -676,13 +700,15 @@ let bound = (
 
 // The notification-lifecycle stamps (notified/opened/archived): a
 // client-requested, server-stamped act — an EMPTY wire comp (presence IS the
-// signal) whose `stamped` twin is the {at, by} pair. Derived, not hand-listed
-// — a new stamp of this shape joins with zero edits. The `at && by` shape is
+// signal) whose `stamped` twin is the {at, by, via} stamp. Derived, not
+// hand-listed — a new stamp of this shape joins with zero edits. That shape is
 // the whole discriminator: `recall` (empty comp, but stamped {count…}, no at)
 // and `conflict` (empty comp, stamped {…,at}, but no by — a server-minted
-// audit, never wire-created) both stay out. apply()'s loop freezes {at,by}.
+// audit, never wire-created) both stay out.
 let stampedPresence = Object.keys(comps).filter(
-  (c) => !Object.keys(comps[c]).length && stamped[c]?.at && stamped[c]?.by,
+  (c) =>
+    !Object.keys(comps[c]).length && stamped[c]?.at && stamped[c]?.by &&
+    stamped[c]?.via,
 )
 
 // The reaper's worklists, derived from the death word each reference
@@ -835,8 +861,10 @@ export let writerActor = (
   writer?: string | null,
 ): string | null => {
   if (writer) {
-    let s = db.prepare('select cwd, actor_eid from session where id = ?')
-      .get(writer) as
+    let s = db.prepare(
+      'select cwd, actor_eid from session where id = ? or eid = ?',
+    )
+      .get(writer, writer) as
         | { cwd: string | null; actor_eid: string | null }
         | undefined
     if (s) return s.actor_eid ?? ventureAt(db, s.cwd) ?? ownerActor(db)
@@ -851,6 +879,22 @@ export let writerActor = (
     if (a) return writer
   }
   return ownerActor(db)
+}
+
+// The instrument stopped one step before writerActor's principal: a session
+// label or eid resolves to that session, a client eid to that client. Direct
+// actor writes have no reified instrument.
+export let writerVia = (
+  db: DatabaseSync,
+  writer?: string | null,
+): string | null => {
+  if (!writer) return null
+  let s = db.prepare('select eid from session where id = ? or eid = ?')
+    .get(writer, writer) as { eid: string } | undefined
+  if (s) return s.eid
+  let c = db.prepare('select eid from client where eid = ?')
+    .get(writer) as { eid: string } | undefined
+  return c?.eid ?? null
 }
 
 // Apply a batch atomically. Unknown component names are ignored (a newer
@@ -883,6 +927,7 @@ export let apply = (
   let extra: Change[] = []
   let touched = new Set<string>()
   let minted = new Set<string>()
+  let createdComps = new Set<string>()
   let refWrites = new Map<string, [Ref, string]>()
   let targetDrops = new Map<string, [Ref, string]>()
   // Whose provenance `by` the WIRE named this batch — the server keeps it
@@ -1141,13 +1186,17 @@ export let apply = (
             `insert into ${name} (eid${sent.map((c) => `, "${c}"`).join('')})
              values (?${', ?'.repeat(sent.length)})`,
           ).run(eid, ...vals)
+          createdComps.add(`${name} ${eid}`)
           t?.created.add(`${name} ${eid}`)
         } else {
           // A bare {} touch: create with defaults if possible, else no-op.
           let made = db.prepare(
             `insert or ignore into ${name} (eid) values (?)`,
           ).run(eid).changes
-          if (made) t?.created.add(`${name} ${eid}`)
+          if (made) {
+            createdComps.add(`${name} ${eid}`)
+            t?.created.add(`${name} ${eid}`)
+          }
         }
         db.exec('release change')
       } catch (e) {
@@ -1204,48 +1253,57 @@ export let apply = (
     // kept, the gap defaulted to the actor. Both ride the return so caches
     // hear them, like the session fill above.
     let actor = writerActor(db, writer)
+    let via = writerVia(db, writer)
     // An entity minted then deleted in the same batch (or rolled back by its
     // savepoint) has no spine — the guard, like the births select below.
     let alive = db.prepare('select 1 from entity where eid = ?')
-    let cAt = db.prepare('update created set at = ? where eid = ?')
     let cNew = db.prepare(
-      'insert or ignore into created (eid, at, "by") values (?, ?, ?)',
+      'insert or ignore into created (eid, at, "by", via) values (?, ?, ?, ?)',
     )
-    let cRow = db.prepare('select eid, at, "by" from created where eid = ?')
+    let cVia = db.prepare('update created set at = ?, via = ? where eid = ?')
+    let cRow = db.prepare(
+      'select eid, at, "by", via from created where eid = ?',
+    )
     for (let eid of minted) {
       if (!alive.get(eid)) continue
-      if (saidCreator.has(eid)) cAt.run(now, eid) // wire named the author
-      else cNew.run(eid, now, actor)
+      if (saidCreator.has(eid)) cVia.run(now, via, eid)
+      else cNew.run(eid, now, actor, via)
       let row = cRow.get(eid) as Change['comp'] | undefined
       if (row) extra.push({ eid, name: 'created', comp: row })
     }
     let uSet = db.prepare(
-      `insert into updated (eid, at, "by") values (?, ?, ?)
-       on conflict(eid) do update set at = excluded.at, "by" = excluded."by"`,
+      `insert into updated (eid, at, "by", via) values (?, ?, ?, ?)
+       on conflict(eid) do update set at = excluded.at, "by" = excluded."by",
+       via = excluded.via`,
     )
-    let uAt = db.prepare('update updated set at = ? where eid = ?')
-    let uRow = db.prepare('select eid, at, "by" from updated where eid = ?')
+    let uAt = db.prepare('update updated set at = ?, via = ? where eid = ?')
+    let uRow = db.prepare(
+      'select eid, at, "by", via from updated where eid = ?',
+    )
     for (let eid of touched) {
       if (minted.has(eid) || !alive.get(eid)) continue // birth writes created
-      if (saidEditor.has(eid)) uAt.run(now, eid) // wire named the editor
-      else uSet.run(eid, now, actor)
+      if (saidEditor.has(eid)) uAt.run(now, via, eid)
+      else uSet.run(eid, now, actor, via)
       let row = uRow.get(eid) as Change['comp'] | undefined
       if (row) extra.push({ eid, name: 'updated', comp: row })
     }
     // Notification-lifecycle stamps (notified/opened/archived): the wire
     // wrote a bare presence, and the main loop's insert already stamped `at`
-    // from the column default — the wire can touch NEITHER at nor by (both
-    // out of comps). Fill `by` from the writing actor, once (`by is null`
-    // keeps it monotonic like `at`), then re-read so the frozen {at,by} rides
-    // the return — else an optimistic cache shows the comp with a blank stamp.
+    // from the column default — the wire can touch none of the stamp. Fill
+    // actor + instrument only on insert, then re-read the frozen row so an
+    // optimistic cache never keeps a blank stamp.
     // The created/updated re-read, generalized to one small loop.
     for (let { eid, name, comp } of changes) {
       if (comp == null || !stampedPresence.includes(name) || !alive.get(eid)) {
         continue
       }
-      db.prepare(`update ${name} set "by" = ? where eid = ? and "by" is null`)
-        .run(actor, eid)
-      let row = db.prepare(`select eid, at, "by" from ${name} where eid = ?`)
+      if (createdComps.has(`${name} ${eid}`)) {
+        db.prepare(`update ${name} set "by" = ?, via = ? where eid = ?`)
+          .run(actor, via, eid)
+      }
+      let row = db.prepare(
+        `select eid, at, "by", via from ${name} where eid = ?`,
+      )
         .get(eid) as Change['comp'] | undefined
       if (row) extra.push({ eid, name, comp: row })
     }
@@ -1262,24 +1320,25 @@ export let apply = (
     // batch as APPLIED (reasons rewritten into comments, cascades and
     // births synthesized), so the record includes what the rules did, not
     // just what was asked. The server-stamped echoes are LEFT OUT: created/
-    // updated are the actor column's twins (T-6670), and the notification
-    // stamps (stampedPresence) their siblings — logging them would just echo
-    // the ts + actor the journal already keeps (modified_at, the column they
-    // replaced, was never journaled either). Recording never throws: a
-    // journal that can't write must not break the write it records.
+    // updated and the notification stamps repeat the journal's provenance
+    // envelope. Recording never throws: a broken journal must not break the
+    // write it records.
     try {
       // Only the server-STAMPED provenance echoes (extra) are dropped —
       // created/updated and the notification stamps (stampedPresence) just
-      // repeat the ts + actor the journal row already keeps. The wire's own
+      // repeat the ts + actor + via the journal row keeps. The wire's own
       // write (the bare presence, an authorship `by`) rides in `changes` and
       // stays audited.
       let echoed = new Set(['created', 'updated', ...stampedPresence])
       let logged = [...changes, ...extra.filter((c) => !echoed.has(c.name))]
       if (logged.length) {
-        db.prepare('insert into journal (ts, actor, batch) values (?, ?, ?)')
+        db.prepare(
+          'insert into journal (ts, actor, via, batch) values (?, ?, ?, ?)',
+        )
           .run(
             now,
             actor, // the resolved writing actor (T-6669), same as the by-default
+            via,
             JSON.stringify(logged),
           )
       }
@@ -1347,8 +1406,9 @@ export let record = (
   writer?: string | null,
 ) => {
   try {
-    db.prepare('insert into journal (actor, batch) values (?, ?)').run(
+    db.prepare('insert into journal (actor, via, batch) values (?, ?, ?)').run(
       writerActor(db, writer),
+      writerVia(db, writer),
       JSON.stringify(changes),
     )
   } catch (e) {
@@ -1363,6 +1423,7 @@ export let record = (
 export type JournalEntry = {
   ts: string
   actor: string | null
+  via: string | null
   changes: Change[]
 }
 export let journalOf = (
@@ -1371,14 +1432,20 @@ export let journalOf = (
   limit = 50,
 ): JournalEntry[] =>
   (db.prepare(`
-    select distinct j.rowid, j.ts, j.actor, j.batch
+    select distinct j.rowid, j.ts, j.actor, j.via, j.batch
     from journal j, json_each(j.batch) je
     where json_extract(je.value, '$.eid') = ?
     order by j.rowid desc limit ?
-  `).all(eid, limit) as { ts: string; actor: string | null; batch: string }[])
+  `).all(eid, limit) as {
+    ts: string
+    actor: string | null
+    via: string | null
+    batch: string
+  }[])
     .map((r) => ({
       ts: r.ts,
       actor: r.actor,
+      via: r.via,
       changes: (JSON.parse(r.batch) as Change[]).filter((c) => c.eid == eid),
     }))
 
@@ -1391,12 +1458,18 @@ export let journalBy = (
   limit = 500,
 ): JournalEntry[] =>
   (db.prepare(`
-    select ts, actor, batch from journal
+    select ts, actor, via, batch from journal
     where actor = ? order by rowid desc limit ?
-  `).all(actor, limit) as { ts: string; actor: string | null; batch: string }[])
+  `).all(actor, limit) as {
+    ts: string
+    actor: string | null
+    via: string | null
+    batch: string
+  }[])
     .map((r) => ({
       ts: r.ts,
       actor: r.actor,
+      via: r.via,
       changes: JSON.parse(r.batch) as Change[],
     }))
 
@@ -1406,9 +1479,9 @@ export let journalBy = (
 // detaches and births all ride, because the journal keeps the batch AS
 // APPLIED (apply() above), the same content the live /ws broadcast carries.
 // The one thing apply() leaves out of the journal is provenance (created/
-// updated are the actor column's twins, dropped at ~line 1078); delta
-// re-derives it from each row's ts+actor, which ARE the when+who — lossless,
-// no journal bloat. `cursor` is the max rowid seen (or `since` when the
+// updated are the envelope's twins); delta re-derives it from each row's
+// ts+actor+via, which ARE the when+who+how — lossless, no journal bloat.
+// `cursor` is the max rowid seen (or `since` when the
 // window is empty), the client's next since. Shared by IndexedDB catch-up
 // (a temporal cut) and query subscriptions (a spatial cut) — one journal
 // reader, two doors (T-6823/T-3683).
@@ -1417,12 +1490,13 @@ export let delta = (
   since: number,
 ): { changes: Change[]; cursor: number } => {
   let log = db.prepare(
-    `select rowid, ts, actor, batch from journal
+    `select rowid, ts, actor, via, batch from journal
      where rowid > ? order by rowid`,
   ).all(since) as {
     rowid: number
     ts: string
     actor: string | null
+    via: string | null
     batch: string
   }[]
   let changes: Change[] = []
@@ -1455,14 +1529,14 @@ export let delta = (
       }
     }
     // created: one per birth, mirroring apply()'s stamp for every `minted`
-    // eid — the row's ts+actor is its provenance.
+    // eid — the row's ts+actor+via is its provenance.
     for (let eid of born) {
       changes.push({
         eid,
         name: 'created',
         comp: saidCreated.has(eid)
-          ? { eid, at: r.ts }
-          : { eid, at: r.ts, by: r.actor },
+          ? { eid, at: r.ts, via: r.via }
+          : { eid, at: r.ts, by: r.actor, via: r.via },
       })
     }
     // updated: every distinct touched eid NOT born here and NOT dead —
@@ -1475,8 +1549,8 @@ export let delta = (
         eid,
         name: 'updated',
         comp: saidUpdated.has(eid)
-          ? { eid, at: r.ts }
-          : { eid, at: r.ts, by: r.actor },
+          ? { eid, at: r.ts, via: r.via }
+          : { eid, at: r.ts, by: r.actor, via: r.via },
       })
     }
   }

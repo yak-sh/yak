@@ -314,13 +314,15 @@ let ws = (req: Request) => {
       return
     }
     let extra = out.slice(sent.length)
-    // Peers get the batch as sent; cascade extras go to EVERYONE — the
-    // sender's optimistic cache only removed what it asked to remove.
-    // Subscription sockets are skipped here and served by maintain() instead.
+    // Peers get the EFFECTIVE batch in one frame, so a write and its
+    // server-stamped provenance are one sentence on live, catch-up, and
+    // snapshot paths. The sender already landed its optimistic input and only
+    // needs the extras. Subscription sockets are served by maintain().
+    let msg = JSON.stringify(out)
     for (let c of clients) {
       if (c.readyState != WebSocket.OPEN || filtered.has(c)) continue
-      if (c != socket) c.send(m.data)
-      if (extra.length) c.send(JSON.stringify(extra))
+      if (c != socket) c.send(msg)
+      else if (extra.length) c.send(JSON.stringify(extra))
     }
     maintain(out)
     effect(out, t)

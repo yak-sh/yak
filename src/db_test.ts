@@ -4,6 +4,7 @@ Deno.env.set('DB_PATH', ':memory:')
 let {
   apply,
   backfillOpened,
+  backfillVia,
   db,
   delta,
   journalOf,
@@ -558,45 +559,96 @@ Deno.test('provenance: created.by defaults to the writer actor; the wire overrid
   let u = uid()
   apply(d, [
     { eid: u, name: 'doc', comp: { title: 'by hand' } },
-    { eid: u, name: 'created', comp: { by: amy } },
+    { eid: u, name: 'created', comp: { by: amy, via: 'FAKE' } },
   ])
   assertEquals(at(u, 'created')?.by, amy)
   assertEquals(typeof at(u, 'created')?.at, 'string') // at still stamped
+  assertEquals(at(u, 'created')?.via, null) // via is never wire-writable
 })
 
-Deno.test('lifecycle stamps: bare presence server-stamps {at,by}; the wire sets neither', () => {
+Deno.test('provenance: via resolves session ids and eids, never direct actors', () => {
+  let d = fresh()
+  let actor = uid(), session = uid(), sid = uid()
+  apply(d, [
+    { eid: actor, name: 'project', comp: {} },
+    {
+      eid: session,
+      name: 'session',
+      comp: { id: sid, actor_eid: actor },
+    },
+  ])
+  let stamp = (eid: string) =>
+    snapshot(d).changes.find((c) => c.eid == eid && c.name == 'created')?.comp
+  for (let writer of [sid, session]) {
+    let eid = uid()
+    apply(d, [{ eid, name: 'doc', comp: { title: 'said' } }], undefined, writer)
+    assertEquals(stamp(eid)?.by, actor)
+    assertEquals(stamp(eid)?.via, session)
+  }
+  let direct = uid()
+  apply(
+    d,
+    [{ eid: direct, name: 'doc', comp: { title: 'direct' } }],
+    undefined,
+    actor,
+  )
+  assertEquals(stamp(direct)?.by, actor)
+  assertEquals(stamp(direct)?.via, null)
+})
+
+Deno.test('lifecycle stamps: bare presence server-stamps provenance; the wire cannot', () => {
   // Fresh graph so the lone person IS the box-owner writerActor default.
   let d = fresh()
   let stamp = (eid: string, name: string) =>
     snapshot(d).changes.find((c) => c.eid == eid && c.name == name)?.comp
-  let jeff = uid()
-  apply(d, [{ eid: jeff, name: 'person', comp: {} }])
+  let jeff = uid(), client = uid()
+  apply(d, [
+    { eid: jeff, name: 'person', comp: {} },
+    { eid: client, name: 'client', comp: { actor_eid: jeff } },
+  ])
   let t = uid()
   apply(d, [{ eid: t, name: 'doc', comp: { title: 'a letter' } }])
 
-  // A bare {} presence write: absent before, then the server freezes at + by.
+  // A bare {} presence write: absent before, then the server freezes the stamp.
   assertEquals(stamp(t, 'opened'), undefined)
-  let out = apply(d, [{ eid: t, name: 'opened', comp: {} }])
+  let out = apply(
+    d,
+    [{ eid: t, name: 'opened', comp: {} }],
+    undefined,
+    client,
+  )
   let at1 = stamp(t, 'opened')?.at
   assertEquals(typeof at1, 'string')
   assertEquals(stamp(t, 'opened')?.by, jeff) // the writing actor
+  assertEquals(stamp(t, 'opened')?.via, client) // its instrument
   // …and the stamp rides back on apply()'s RETURN (the echo follows the bare
   // wire write, like created's), or optimistic caches show a blank stamp.
   let rode = out.findLast((c) => c.eid == t && c.name == 'opened')
   assertEquals(rode?.comp?.at, at1)
   assertEquals(rode?.comp?.by, jeff)
+  assertEquals(rode?.comp?.via, client)
 
   // Monotonic: a re-write never moves at/by (insert-or-ignore + by-is-null).
   apply(d, [{ eid: t, name: 'opened', comp: {} }])
   assertEquals(stamp(t, 'opened')?.at, at1)
+  assertEquals(stamp(t, 'opened')?.via, client)
 
-  // The wire can set NEITHER at nor by — both live in `stamped`, out of comps,
-  // so the allowlist never lets them through. A forged batch is ignored.
+  // The wire can set none of the stamp — all live in `stamped`, out of comps.
   let u = uid()
   apply(d, [{ eid: u, name: 'doc', comp: { title: 'forge' } }])
-  apply(d, [{ eid: u, name: 'archived', comp: { at: 'FAKE', by: 'evil' } }])
+  apply(
+    d,
+    [{
+      eid: u,
+      name: 'archived',
+      comp: { at: 'FAKE', by: 'evil', via: 'FAKE' },
+    }],
+    undefined,
+    client,
+  )
   assertMatch(String(stamp(u, 'archived')?.at), /^\d{4}-/) // server ISO, not FAKE
   assertEquals(stamp(u, 'archived')?.by, jeff) // not 'evil'
+  assertEquals(stamp(u, 'archived')?.via, client)
 })
 
 Deno.test('lifecycle stamps: one-list — snapshot, showMd, and GRAMMAR pick them up with no extra edits', async () => {
@@ -655,6 +707,33 @@ Deno.test('backfill: mail.read_at seeds opened, idempotently', () => {
   d.prepare('update opened set at = ? where eid = ?').run('MOVED', m)
   backfillOpened(d)
   assertEquals(openedAt(), 'MOVED')
+})
+
+Deno.test('backfill: comment instruments move into created.via', () => {
+  let d = fresh()
+  let target = uid(), author = uid(), comment = uid()
+  apply(d, [
+    { eid: target, name: 'doc', comp: { title: 'target' } },
+    { eid: author, name: 'session', comp: { id: uid() } },
+    { eid: comment, name: 'doc', comp: { title: '', body: 'old words' } },
+    {
+      eid: comment,
+      name: 'comment',
+      comp: { target_eid: target, author_eid: author },
+    },
+  ])
+  d.prepare('update created set via = null where eid = ?').run(comment)
+  backfillVia(d)
+  let via = snapshot(d).changes.find((c) =>
+    c.eid == comment && c.name == 'created'
+  )?.comp?.via
+  assertEquals(via, author)
+  backfillVia(d)
+  assertEquals(
+    snapshot(d).changes.find((c) => c.eid == comment && c.name == 'created')
+      ?.comp?.via,
+    author,
+  )
 })
 
 Deno.test('fts: search finds, follows edits, forgets the dead', () => {

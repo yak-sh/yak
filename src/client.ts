@@ -120,6 +120,7 @@ export let inflate = (p: Param): Param => {
 export type JournalEntry = {
   ts: string
   actor: string | null
+  via?: string | null
   changes: Change[]
 }
 export let history = async (eid: string, limit = 50) => {

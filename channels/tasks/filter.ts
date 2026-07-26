@@ -287,6 +287,23 @@ let docsIn = (changes: Change[]) => {
 let words = (doc?: { title: string; body: string }) =>
   doc ? cleanBody(doc.body || doc.title) : ''
 
+let createdIn = (changes: Change[]) => {
+  let made = new Map<string, Record<string, unknown>>()
+  for (let c of changes) {
+    if (c.name == 'created' && c.comp) made.set(c.eid, c.comp)
+  }
+  return made
+}
+
+let byline = (
+  stamp: Record<string, unknown> | undefined,
+  idOf: Ctx['idOf'],
+) => {
+  let by = idOf(str(stamp?.by))
+  let via = idOf(str(stamp?.via))
+  return by && via && by != via ? `${by} · via ${via}` : by ?? via ?? 'unknown'
+}
+
 // When an entity was born, from the `created` stamps in the batch. A live
 // frame doesn't need this — everything in it is now — but a resume sweep
 // reads a whole snapshot, where a target may carry a year of comments, and
@@ -316,6 +333,7 @@ let bornIn = (changes: Change[]) => {
 //   3. a `mail` arrival for the session's home project — see the branch.
 export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
   let docs = docsIn(changes)
+  let created = createdIn(changes)
   // Only the resume sweep needs birthdays (commentOn) — a live batch is one
   // moment, so everything in it rode together.
   let born = ctx.mode == 'resume' ? bornIn(changes) : undefined
@@ -334,7 +352,7 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
       let content = words(docs.get(c.eid))
       if (!content) continue // bodiless mint or a later comp-only patch
       if (told(c.eid)) continue
-      let from = ctx.idOf(str(c.comp.author_eid)) ?? 'unknown'
+      let from = byline(created.get(c.eid), ctx.idOf)
       let meta: Record<string, string> = {
         kind: 'comment',
         from: cleanAttr(from),

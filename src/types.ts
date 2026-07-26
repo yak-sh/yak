@@ -307,15 +307,16 @@ export let comps: Record<string, Record<string, PropType>> = {
   // Nothing is wire-writable; db.ts touch() is the one writer. Keyed by
   // eid like any comp, so ANY entity can grow warm — rank is graph-wide.
   recall: {},
-  // Provenance, when+who paired (T-6670): `created` set once at first
+  // Provenance, when+who+how paired (T-6670/T-7113): `created` set once at
   // write, `updated` the LAST edit — ABSENT until the first real
   // modification (absence = never edited, so there's no 'mostly-null'
   // problem, and the Stamp's edited-check is component presence). `at` is
   // server-stamped/frozen (in `stamped` below, like the spine timestamps
   // it replaced); `by` is wire-writable — the server defaults it to the
   // writing instrument's actor (db.ts writerActor), and the wire may
-  // override it (an agent stamping Jeff as the author). `by` is death
-  // 'keep' — provenance is history, an author outlives the actor's
+  // override it (an agent stamping Jeff as the author). `via` is the
+  // server-stamped instrument: claiming another instrument is only spoofing.
+  // Both are death 'keep' — provenance outlives the actor's or instrument's
   // tombstone (like comment.author_eid). NOT in kindOrder: a facet every
   // entity wears, never its identity (like recall).
   created: { by: { eid: '', death: 'keep' } },
@@ -345,19 +346,31 @@ export let stamped: Record<string, Record<string, PropType>> = {
   // modified_at moved into the `created`/`updated` components (T-6670).
   // (The db columns linger, dormant, until the reader-drop follow-up.)
   entity: { num: 'number' },
-  // The frozen `at` twin of each provenance component's wire-writable
-  // `by` (comps above) — stamped in apply(), never on the wire.
-  created: { at: 'time' },
-  updated: { at: 'time' },
+  // The frozen twins of each provenance component's wire-writable `by`
+  // (comps above) — stamped in apply(), never on the wire.
+  created: { at: 'time', via: { eid: '', death: 'keep' } },
+  updated: { at: 'time', via: { eid: '', death: 'keep' } },
   // The frozen twins of the notification-lifecycle presence comps (above):
   // `at` when the moment happened (default-stamped, then frozen in apply()),
-  // `by` the resolved writing actor — the SAME actor resolution + death 'keep'
-  // as created/updated's `by`, but server-only (in stamped, not comps), so the
-  // whole stamp is honest by construction. The bare-{} presence write rides
-  // apply()'s stampedPresence loop, which re-reads {at,by} onto the return.
-  notified: { at: 'time', by: { eid: '', death: 'keep' } },
-  opened: { at: 'time', by: { eid: '', death: 'keep' } },
-  archived: { at: 'time', by: { eid: '', death: 'keep' } },
+  // `by` the resolved writing actor and `via` its instrument — the SAME
+  // resolutions + death 'keep' as created/updated, but server-only (in
+  // stamped, not comps). The bare-{} presence write rides apply()'s
+  // stampedPresence loop, which re-reads the whole stamp onto the return.
+  notified: {
+    at: 'time',
+    by: { eid: '', death: 'keep' },
+    via: { eid: '', death: 'keep' },
+  },
+  opened: {
+    at: 'time',
+    by: { eid: '', death: 'keep' },
+    via: { eid: '', death: 'keep' },
+  },
+  archived: {
+    at: 'time',
+    by: { eid: '', death: 'keep' },
+    via: { eid: '', death: 'keep' },
+  },
   web: { frozen_at: 'time' }, // the freeze finished (freeze.ts)
   client: { ip: 'text' },
   claim: { claimed_at: 'time' },
@@ -875,18 +888,23 @@ export type Recall = {
   last_at: string
 }
 
-// Provenance, paired when+who (T-6670). `at` is server-frozen; `by` is
-// the actor — wire-writable, server-defaulted to the writing instrument's
-// actor. `created` is set once; `updated` is the last edit and is absent
+// Provenance, paired when+who+how (T-6670/T-7113). `at` is server-frozen,
+// `by` the actor (wire-writable for attribution), and `via` the server-stamped
+// instrument. `created` is set once; `updated` is the last edit and is absent
 // until the first modification after birth (absence = never edited).
-export type Created = { eid: string; at?: string; by?: string | null }
-export type Updated = { eid: string; at?: string; by?: string | null }
+export type Created = {
+  eid: string
+  at?: string
+  by?: string | null
+  via?: string | null
+}
+export type Updated = Created
 
-// Notification-lifecycle stamps (T-7006): presence records the moment, `at`
-// and `by` server-frozen. Same shape as Created/Updated; absence is the
+// Notification-lifecycle stamps (T-7006): presence records the moment; the
+// whole stamp is server-frozen. Same shape as Created/Updated; absence is the
 // earlier state (no `opened` row == unread). The inbox reads these as pure
 // Row-predicates, like unreadMail today.
-export type Stamp = { eid: string; at?: string; by?: string | null }
+export type Stamp = Created
 
 // A full-text search hit. snip marks matches with \x01…\x02 (renderers
 // highlight without trusting HTML); open_eid is what to OPEN — the entity

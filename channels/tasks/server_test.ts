@@ -16,6 +16,9 @@ import {
   printRun,
 } from './filter.ts'
 
+Deno.env.set('DB_PATH', ':memory:')
+let { apply, delta, open, snapshot } = await import('../../src/db.ts')
+
 let ch = (
   eid: string,
   name: string,
@@ -24,10 +27,26 @@ let ch = (
 
 // A stub id book — the socket-fed index is exercised separately (learn tests).
 let idOf = (eid: string): string | null =>
-  ({ sess: 'S-31', s1: 'S-1', t9: 'T-9', p1: 'P-1', m1: 'E-5' } as Record<
+  ({
+    sess: 'S-31',
+    s1: 'S-1',
+    t9: 'T-9',
+    p1: 'P-1',
+    m1: 'E-5',
+  } as Record<
     string,
     string
   >)[eid] ?? null
+
+let comment = (
+  eid: string,
+  target_eid: string,
+  by = 'p1',
+  via = 's1',
+): Change[] => [
+  ch(eid, 'comment', { target_eid }),
+  ch(eid, 'created', { by, via }),
+]
 
 let ctx = (over: Partial<Ctx> = {}): Ctx => ({
   sessionEid: 'sess',
@@ -39,25 +58,30 @@ let ctx = (over: Partial<Ctx> = {}): Ctx => ({
 
 // --- comments ----------------------------------------------------------------
 
-Deno.test('a comment on the session emits with its words and author id', () => {
+Deno.test('a comment on the session emits with its actor and instrument', () => {
   let batch = [
     ch('c1', 'doc', { title: '', body: 'ping' }),
-    ch('c1', 'comment', { target_eid: 'sess', author_eid: 's1' }),
+    ...comment('c1', 'sess'),
   ]
-  assertEquals(channelEvents(batch, ctx()), [
-    { content: 'ping', meta: { kind: 'comment', from: 'S-1' }, eid: 'c1' },
-  ])
+  let expected = [{
+    content: 'ping',
+    meta: { kind: 'comment', from: 'P-1 · via S-1' },
+    eid: 'c1',
+  }]
+  for (let mode of [undefined, 'catchup', 'resume'] as const) {
+    assertEquals(channelEvents(batch, ctx({ mode })), expected)
+  }
 })
 
 Deno.test('a comment mint with no doc in the batch is skipped (bodiless)', () => {
-  let batch = [ch('c1', 'comment', { target_eid: 'sess', author_eid: 's1' })]
+  let batch = comment('c1', 'sess')
   assertEquals(channelEvents(batch, ctx()), [])
 })
 
 Deno.test('a comment aimed elsewhere is ignored', () => {
   let batch = [
     ch('c1', 'doc', { title: '', body: 'ping' }),
-    ch('c1', 'comment', { target_eid: 'other', author_eid: 's1' }),
+    ...comment('c1', 'other'),
   ]
   assertEquals(channelEvents(batch, ctx()), [])
 })
@@ -65,12 +89,12 @@ Deno.test('a comment aimed elsewhere is ignored', () => {
 Deno.test('a comment on a CLAIMED task is delivered, naming the task', () => {
   let batch = [
     ch('c1', 'doc', { title: '', body: 'take a look' }),
-    ch('c1', 'comment', { target_eid: 't9', author_eid: 's1' }),
+    ...comment('c1', 't9'),
   ]
   assertEquals(channelEvents(batch, ctx({ claimedEids: new Set(['t9']) })), [
     {
       content: 'take a look',
-      meta: { kind: 'comment', from: 'S-1', on: 'T-9' },
+      meta: { kind: 'comment', from: 'P-1 · via S-1', on: 'T-9' },
       eid: 'c1',
     },
   ])
@@ -79,7 +103,7 @@ Deno.test('a comment on a CLAIMED task is delivered, naming the task', () => {
 Deno.test('a comment on an UNCLAIMED task is dropped', () => {
   let batch = [
     ch('c1', 'doc', { title: '', body: 'not for you' }),
-    ch('c1', 'comment', { target_eid: 't9', author_eid: 's1' }),
+    ...comment('c1', 't9'),
   ]
   // The session holds a different task, so t9 is foreign.
   assertEquals(
@@ -88,10 +112,10 @@ Deno.test('a comment on an UNCLAIMED task is dropped', () => {
   )
 })
 
-Deno.test('an unresolvable author renders as unknown', () => {
+Deno.test('unresolvable provenance renders as unknown', () => {
   let batch = [
     ch('c1', 'doc', { title: '', body: 'hey' }),
-    ch('c1', 'comment', { target_eid: 'sess', author_eid: 'zzz' }),
+    ...comment('c1', 'sess', 'zzz', 'xxx'),
   ]
   assertEquals(channelEvents(batch, ctx())[0].meta.from, 'unknown')
 })
@@ -99,7 +123,7 @@ Deno.test('an unresolvable author renders as unknown', () => {
 Deno.test('a comment falls back to its title when the body is empty', () => {
   let batch = [
     ch('c1', 'doc', { title: 'subject only', body: '' }),
-    ch('c1', 'comment', { target_eid: 'sess', author_eid: 's1' }),
+    ...comment('c1', 'sess'),
   ]
   assertEquals(channelEvents(batch, ctx())[0].content, 'subject only')
 })
@@ -129,7 +153,7 @@ Deno.test('a knock carries the words of the comment on its TARGET', () => {
   let batch = [
     ch('k1', 'knock', { to_eid: 'sess', target_eid: 't9' }),
     ch('c1', 'doc', { title: '', body: 'take a look' }),
-    ch('c1', 'comment', { target_eid: 't9', author_eid: 's1' }),
+    ...comment('c1', 't9'),
   ]
   let out = channelEvents(batch, ctx())
   assertEquals(out, [{
@@ -277,13 +301,63 @@ Deno.test('a catch-up replay pushes a notified gap item anyway (T-7167)', () => 
     'catch-up: notified lifts',
   )
   let cmt: Change[] = [
-    ch('c9', 'comment', { target_eid: 'sess', author_eid: 's1' }),
+    ...comment('c9', 'sess'),
     ch('c9', 'doc', { title: '', body: 'gap message' }),
   ]
   assertEquals(channelEvents(cmt, ctx({ notified: told })), [])
   assertEquals(
     channelEvents(cmt, ctx({ notified: told, mode: 'catchup' }))[0].content,
     'gap message',
+  )
+})
+
+Deno.test('a catch-up comment keeps its actor and instrument byline', () => {
+  let db = open()
+  let actor = crypto.randomUUID()
+  let writer = crypto.randomUUID()
+  let target = crypto.randomUUID()
+  let writerId = crypto.randomUUID()
+  apply(db, [
+    { eid: actor, name: 'doc', comp: { title: 'Operator' } },
+    { eid: actor, name: 'project', comp: {} },
+    {
+      eid: writer,
+      name: 'session',
+      comp: { id: writerId, actor_eid: actor },
+    },
+    { eid: target, name: 'session', comp: { id: crypto.randomUUID() } },
+  ])
+  let base = snapshot(db)
+  let eid = crypto.randomUUID()
+  apply(
+    db,
+    [
+      { eid, name: 'doc', comp: { title: '', body: 'inside the gap' } },
+      { eid, name: 'comment', comp: { target_eid: target } },
+    ],
+    undefined,
+    writerId,
+  )
+
+  let replay = delta(db, base.cursor ?? 0).changes
+  let index: Index = new Map()
+  learn(index, base.changes)
+  learn(index, replay)
+  let human = (eid: string) => humanId(index, eid)
+  assertEquals(
+    channelEvents(replay, {
+      sessionEid: target,
+      idOf: human,
+      mode: 'catchup',
+    }),
+    [{
+      content: 'inside the gap',
+      meta: {
+        kind: 'comment',
+        from: `${human(actor)} · via ${human(writer)}`,
+      },
+      eid,
+    }],
   )
 })
 
@@ -327,12 +401,12 @@ Deno.test('a resume sweep carries the words that rode THAT knock', () => {
   // picked by time — the knock's own minute — not by scan order.
   let born = (eid: string, at: string) => ch(eid, 'created', { eid, at })
   let batch: Change[] = [
-    ch('old', 'comment', { target_eid: 't9', author_eid: 's1' }),
+    ch('old', 'comment', { target_eid: 't9' }),
     ch('old', 'doc', { title: '', body: 'last tuesday' }),
     born('old', '2026-07-20T00:00:00Z'),
     cast(),
     born('k7', '2026-07-25T00:17:58Z'),
-    ch('new', 'comment', { target_eid: 't9', author_eid: 's1' }),
+    ch('new', 'comment', { target_eid: 't9' }),
     ch('new', 'doc', { title: '', body: 'the wake words' }),
     born('new', '2026-07-25T00:17:57.900Z'),
   ]
