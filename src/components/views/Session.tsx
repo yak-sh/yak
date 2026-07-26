@@ -9,7 +9,7 @@ import {
 } from '../../types.ts'
 import { base, ent, jobOf, mutate, uuid } from '../../live.ts'
 import { clickProps } from '../nav.tsx'
-import { block, pretty, Stamp } from '../ui.tsx'
+import { ago, block, pretty, Stamp } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
 import { Comments } from '../Comments.tsx'
 import { Id } from './Inline.tsx'
@@ -140,8 +140,8 @@ let squeeze = (entries: Entry[]) => {
 // ISO in the db; a local clock is what a human reads.
 let when = (t?: string | null) => t ? new Date(t).toLocaleString() : null
 
-// A message's clock, worn small: the time of day says enough in a
-// transcript — the full stamp rides the tooltip. 24h, the console way.
+// The facts line's clock: the time of day says enough for "started" —
+// messages wear the house timestamp (ago + pretty tooltip) instead.
 let clock = (t: string) =>
   new Date(t).toLocaleTimeString([], {
     hour: '2-digit',
@@ -285,7 +285,7 @@ let Row = ({ x }: { x: Entry }) => {
         {x.seq}
       </Seq>
       <Body x={x} />
-      {at && <When data-tip={pretty(at)}>{clock(at)}</When>}
+      {at && <When data-tip={pretty(at)}>{ago(at)}</When>}
       {open && <Json>{prettyJson(x.line)}</Json>}
     </Line>
   )
