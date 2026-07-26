@@ -57,6 +57,7 @@ import {
 } from './sessions.ts'
 import { outcome, recent, record, toolCall } from './telemetry.ts'
 import { stamp } from './hot.ts'
+import { serverFile } from './reload.ts'
 import { find, type Row, rows } from './client.ts'
 import {
   matchQuery,
@@ -450,13 +451,15 @@ let clientError = async (req: Request) => {
   return new Response(null, { status: 204 })
 }
 
-// Explicit Deno.serve, not a `deno serve` default export: --watch restarts
-// only complete gracefully once the old isolate drains, which a live
-// listener + websockets never guarantee — reusePort lets the new isolate
-// bind alongside the dying one, and only the options object can carry it.
-Deno.serve(
+// The handoff supervisor starts the successor before asking this process to
+// drain. reusePort makes those listeners overlap; shutdown() keeps every
+// request on the process that accepted it until its response is complete.
+let booted: () => void = () => {}
+let boot = new Promise<void>((resolve) => booted = resolve)
+let http = Deno.serve(
   { port: Number(Deno.env.get('PORT') ?? 5173), reusePort: true },
   async (req) => {
+    await boot
     let url = new URL(req.url)
     let path = url.pathname
     if (path == '/ws') return ws(req)
@@ -908,43 +911,8 @@ vocabularyDoc(db, vocabularyMd(docs()))
 //   {css: gen}  css-only edit — re-fetch the stylesheet, nothing else
 //   'reload'    a SHELL file (main.tsx, live.ts, index.html, vendor/) —
 //               the swap boundary itself moved; only a real reload applies
-// The server itself restarts via --watch, whose scope is its own module
-// graph — but a graceful restart only completes once THIS isolate's event
-// loop drains, and open websockets hold it forever (the new isolate then
-// dies on AddrInUse). So when a server-graph file changes, close every
-// socket and stop watching: the isolate settles, the port frees, the
-// restart binds. Clients reload-poll their way back.
-// `graph` is everything the SERVER imports (transitively) — a change to
-// these needs a process restart, not a client swap. Keep in sync with the
-// imports above (mcp.ts pulls client.ts in; db.ts pulls query.ts).
-let graph = [
-  'server.ts',
-  'db.ts',
-  'effects.ts',
-  'schema.ts',
-  'types.ts',
-  'query.ts',
-  'subs.ts',
-  'freeze.ts',
-  'hot.ts',
-  'mcp.ts',
-  'client.ts',
-  'sessions.ts',
-  'door.ts',
-  'served.ts',
-  'proc.ts',
-  'adapters.ts',
-  'telemetry.ts',
-  'mail.ts',
-  'mailer.ts',
-  'persona.ts',
-  'git.ts',
-  'inbound.ts',
-  'scribe.ts',
-  'knock.ts',
-  'wake.ts',
-  'embed.ts',
-]
+// The supervisor owns server-graph restarts. This watcher closes websockets
+// promptly so browser clients poll toward the successor; HTTP keeps draining.
 let shellish = (p: string) =>
   p.endsWith('/main.tsx') || p.endsWith('/live.ts') ||
   p.endsWith('/index.html') || p.includes('/vendor/')
@@ -952,7 +920,7 @@ let watch = async () => {
   let timer: ReturnType<typeof setTimeout> | null = null
   let batch = new Set<string>()
   for await (let e of Deno.watchFs(src)) {
-    if (e.paths.some((p) => graph.some((g) => p.endsWith(`/${g}`)))) {
+    if (e.paths.some(serverFile)) {
       for (let c of clients) c.close()
       return
     }
@@ -973,3 +941,24 @@ let watch = async () => {
   }
 }
 watch()
+
+let ready = async () => {
+  let port = Number(Deno.env.get('TASKS_READY_PORT'))
+  if (!port) return
+  using conn = await Deno.connect({ hostname: '127.0.0.1', port })
+  await conn.write(new Uint8Array([1]))
+}
+
+let draining = false
+let drain = async () => {
+  if (draining) return
+  draining = true
+  for (let c of clients) c.close(1012, 'server restart')
+  await http.shutdown()
+  Deno.exit(0)
+}
+
+Deno.addSignalListener('SIGINT', drain)
+Deno.addSignalListener('SIGTERM', drain)
+booted()
+await ready()
