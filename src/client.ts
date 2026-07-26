@@ -12,7 +12,6 @@ import {
   type Dep,
   type Hit,
   kindOf,
-  prioTag,
   settled,
   type Snapshot,
   stamped,
@@ -20,7 +19,7 @@ import {
   uuid,
 } from './types.ts'
 import { idOf } from './types.ts'
-import { parseProp, propAt } from './props.ts'
+import { formatProp, parseProp, propAt } from './props.ts'
 import { hot, matchQuery, type Pred, route } from './query.ts'
 import { FLOOR } from './embed.ts'
 import { request } from './http.ts'
@@ -1512,15 +1511,9 @@ export let showMd = (snap: Snapshot, all: Row[], row: Row) => {
     for (let prop of Object.keys({ ...props, ...stamped[comp] })) {
       let v = row.comps[comp][prop]
       if (v == null || v === '') continue
-      let key = prop.endsWith('_eid') ? prop.slice(0, -4) : prop
-      let owners = Object.keys(comps).filter((c) => prop in comps[c])
-      if (owners.length > 1) key = `${comp}.${key}`
-      // priority reads P<n> everywhere (T-7143); a ref reads as its id+title.
-      let face = comp == 'task' && prop == 'priority'
-        ? prioTag(v)
-        : prop.endsWith('_eid')
-        ? said(v)
-        : v
+      let p = propAt(comp, prop)!
+      let key = p.name.replace(/_eid$/, '')
+      let face = formatProp(p, v, { describe: said })
       fm.push(`${key}: ${face}`)
     }
   }

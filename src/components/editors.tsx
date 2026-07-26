@@ -1,6 +1,7 @@
 import { type ComponentChildren, type JSX } from 'preact'
 import { useContext, useRef, useState } from 'preact/hooks'
-import { comps, type PropType, statuses } from '../types.ts'
+import { formatProp, propAt } from '../props.ts'
+import { comps, idOf, type PropType, statuses } from '../types.ts'
 import { cache, domains, ent, mutate, problem } from '../live.ts'
 import { ago, block, focus, pretty, Surround } from './ui.tsx'
 import { Dot } from './Dot.tsx'
@@ -35,7 +36,7 @@ export type EditProps = EditorProps & {
 }
 export type Editor = {
   match: (t: PropType) => boolean
-  show?: (value: unknown, t: PropType) => JSX.Element | null
+  show?: (value: string | null, t: PropType) => JSX.Element | null
   Edit: (p: EditProps) => JSX.Element
 }
 
@@ -255,9 +256,9 @@ let candidates = (target: string) =>
 // paint the ghost. A fragment, because a face is an element.
 let plain = (v: unknown) => v == null || v === '' ? null : <>{String(v)}</>
 
-// An association reads as a NAME — the target's title, never its uuid.
-let titled = (v: unknown) =>
-  v == null || v === '' ? null : <>{ent(String(v)).doc?.title ?? String(v)}</>
+// Association text is already described by formatProp; the registry only
+// supplies its wrapper.
+let titled = (v: unknown) => plain(v)
 
 // A timestamp reads as relative words off the minute tick, full stamp on
 // hover — the Stamp idiom (ui.tsx ago/pretty), one value at a time.
@@ -333,7 +334,7 @@ export let Prop = (
     prop: string
     editable?: boolean
     name?: string
-    show?: (v: unknown) => JSX.Element | null
+    show?: (face: string | null, value: unknown) => JSX.Element | null
   },
 ) => {
   let [editing, setEditing] = useState(false)
@@ -345,13 +346,30 @@ export let Prop = (
     Record<string, unknown> | undefined
   >
   let value = e[comp]?.[prop]
+  let p = propAt(comp, prop)
+  let faceValue = p
+    ? formatProp(p, value, {
+      describe: (eid) => {
+        if (!cache.value[eid]) return
+        let target = ent(eid)
+        let title = target.doc?.title
+        return `${idOf(target)}${title ? ` — ${title}` : ''}`
+      },
+    })
+    : value == null
+    ? null
+    : String(value)
   let entry = t ? editorFor(t) : undefined
   let editor = editable ? entry : undefined
   // The face, through the registry; plain is the net under types no
   // entry claims (bool, a prop outside the vocabulary).
-  let face = paint ? paint(value) : entry?.show ? entry.show(value, t!) : (
-    plain(value)
-  )
+  let face = paint
+    ? paint(faceValue, value)
+    : entry?.show
+    ? entry.show(faceValue, t!)
+    : (
+      plain(faceValue)
+    )
   let done = () => setEditing(false)
   let ep: EditorProps = { eid, comp, prop, t: t!, value, done }
   // bool never enters an edit mode: the value IS the toggle. For popout

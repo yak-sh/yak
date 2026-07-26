@@ -2,11 +2,26 @@
 // show says the value the human way. Pure VNode inspection — no DOM.
 import { assertEquals } from '@std/assert'
 import { editorFor } from './editors.tsx'
+import { Prio } from './Prio.tsx'
 import { ago, pretty } from './ui.tsx'
-import { cache } from '../live.ts'
+import { cache, ent } from '../live.ts'
+import { formatProp, type Prop } from '../props.ts'
+import { idOf } from '../types.ts'
 import { type PropType } from '../types.ts'
 
-let show = (t: PropType, v: unknown) => editorFor(t)!.show!(v, t)
+let prop = (type: PropType): Prop => ({
+  comp: 'test',
+  prop: 'value',
+  name: 'value',
+  type,
+})
+let describe = (eid: string) => {
+  if (!cache.value[eid]) return
+  let e = ent(eid)
+  return `${idOf(e)}${e.doc?.title ? ` — ${e.doc.title}` : ''}`
+}
+let show = (t: PropType, v: unknown) =>
+  editorFor(t)!.show!(formatProp(prop(t), v, { describe }), t)
 // deno-lint-ignore no-explicit-any
 let vn = (x: unknown) => x as any
 
@@ -31,16 +46,23 @@ Deno.test('the type picks its face', () => {
   assertEquals(show('url', null), null)
 })
 
-Deno.test('an eid face reads as its target title', () => {
+Deno.test('formatted scalars feed browser faces and badges', () => {
+  let badge = vn(Prio({ p: 'p02' }))
+  assertEquals(badge.props.children, 'P2')
+  assertEquals(formatProp(prop('bool'), 'YES'), 'true')
+  assertEquals(formatProp(prop('number'), '+01.0'), '1')
+})
+
+Deno.test('an eid face reads as its target id and title', () => {
+  let eid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   cache.value = {
-    abc: {
-      entity: { eid: 'abc', num: 5 },
-      doc: { eid: 'abc', title: 'Hello', body: '' },
+    [eid]: {
+      entity: { eid, num: 5 },
+      doc: { eid, title: 'Hello', body: '' },
     },
   }
   let t: PropType = { eid: '', death: 'keep' }
-  assertEquals(vn(show(t, 'abc')).props.children, 'Hello')
-  assertEquals(vn(show(t, 'nope')).props.children, 'nope') // unknown: raw
+  assertEquals(vn(show(t, eid)).props.children, 'D-5 — Hello')
   assertEquals(show(t, null), null)
   cache.value = {}
 })

@@ -5,6 +5,7 @@
 // Debug.Tile render through the very same components the browser uses,
 // painted as lines instead of CSS.
 import { signal } from '@preact/signals'
+import { formatProp, propAt } from '../props.ts'
 import { type Ent, idOf } from '../types.ts'
 import {
   applyLocal,
@@ -34,6 +35,7 @@ export let sel = signal({ col: 0, row: 0 })
 export let quit = signal(false)
 let msg = signal('')
 let buf = signal('') // the : command line
+let priority = propAt('task', 'priority')!
 
 // The first board is the one we browse — v0 has exactly one.
 let boardEid = () =>
@@ -185,7 +187,7 @@ let TuiTask = ({ e }: { e: Ent }) => (
     <div class='Task_Head'>
       <Dot status={e.task!.status} gated={gated(e)} />
       <span class='Task_Title'>{e.doc?.title}</span>
-      <span class='Task_Prio'>P{e.task!.priority}</span>
+      <span class='Task_Prio'>{formatProp(priority, e.task!.priority)}</span>
       {e.claim && (
         <span class='Task_Claim'>
           ⚑ {author(e.claim.session_eid)}

@@ -1,5 +1,6 @@
 import { Fragment } from 'preact'
 import { useState } from 'preact/hooks'
+import { formatProp, propAt } from '../../props.ts'
 import { comps as vocab, type Ent } from '../../types.ts'
 import { backlinks, ent, mutate, parents } from '../../live.ts'
 import { up } from './Show.tsx'
@@ -14,6 +15,7 @@ import { author } from '../Comments.tsx'
 // Deno is the seam: undefined in the browser bundle, set in the TUI's Deno
 // process.
 let browser = typeof Deno == 'undefined'
+let priority = propAt('task', 'priority')!
 
 // The Debug view: one full inspector for the entity itself — EVERY prop,
 // nothing hidden — with contained children as one linked Debug.Tile row
@@ -249,7 +251,7 @@ export let DebugTaskItem = ({ e }: { e: Ent }) => (
     <Kind>{e.kind}</Kind>
     <Title>{e.doc?.title}</Title>
     {e.claim && <Claim>⚑ {author(e.claim.session_eid)}</Claim>}
-    <Prio>p{e.task!.priority}</Prio>
+    <Prio>{formatProp(priority, e.task!.priority)}</Prio>
     <Status mod={e.task!.status}>{e.task!.status}</Status>
   </Item>
 )

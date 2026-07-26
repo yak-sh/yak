@@ -29,16 +29,19 @@ vocabulary (${
 few collisions (pin/camera x,y,w,h) use '.comp.prop=x'. References go
 sugar-free: '.assignee=jeff' routes to task.assignee_eid, and any *_eid
 value may be an alias, a human id (T-3, P-19), or an eid. Numeric-looking
-values become numbers. Statuses: ${statuses.join(', ')}.`
+text stays text; typed scalars parse by their grammar ('.pin.x=01',
+'.verified=yes', '.priority=p02'). Statuses: ${statuses.join(', ')}.`
 
-export let FILTERS = `Filters add operators to that routing: '.priority<=1',
-'.domain=Ops,Eng' (any of), '.priority=1..3' (range; 1...3 excludes the
-end), '.status!=done', '.title~=flux' (contains), '.domain=' (absent),
-'.num=1,2,3'. Timestamp columns take time phrases — today, yesterday,
-'2026-07-04', this|last|next week|month|year, '5 minutes ago', 'in 2
-days' (or 'in 60m' / 'after 8h'), clock times — 9am, 9:30pm, 14:00, noon,
-'9am tomorrow' — and a full stamp, '2026-07-25T09:00'. A phrase is a
-RANGE: = within it, >= from its start, <= to its
+export let FILTERS = `Filters add operators to that routing: '.priority<=P1',
+'.domain=Ops,Eng' (any of), '.priority=P1..P3' (range; P1...P3 excludes
+the end), '.status!=done', '.title~=flux' (literal contains), '.domain='
+(absent), '.verified=yes', '.num=01,2,3'. Each scalar/list/range atom
+parses through the property's type; invalid enum, boolean, number, and
+priority values fail loudly. Timestamp columns take time phrases — today,
+yesterday, '2026-07-04', this|last|next week|month|year, '5 minutes ago',
+'in 2 days' (or 'in 60m' / 'after 8h'), clock times — 9am, 9:30pm,
+14:00, noon, '9am tomorrow' — and a full stamp, '2026-07-25T09:00'. A
+phrase is a RANGE: = within it, >= from its start, <= to its
 end ('.updated.at>="1 hour ago"'; glue with - where quoting is hard).
 Provenance shares column names, so spell out the component: '.created.at',
 '.updated.at', '.created.by=jeff' (who authored), '.updated.by!=jeff'.

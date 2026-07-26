@@ -1270,13 +1270,21 @@ Deno.test('edgesOf: both directions, ids humanized', () => {
 })
 
 Deno.test('showMd: frontmatter, edge sentences, claim holder, body', () => {
-  let md = showMd(snap, all, by(T1))
+  let row = by(T1)
+  let typed = {
+    ...row,
+    comps: { ...row.comps, mail: { verified: 1 } },
+  }
+  let md = showMd(snap, all, typed)
   assertMatch(md, /^---\nid: T-2\nkind: task\n/)
   assertMatch(md, /status: wip/)
+  assertMatch(md, /priority: P0/)
+  assertMatch(md, /verified: true/)
   assertMatch(md, /claim: sess-x/) // the holder's session id, not an eid
   assertMatch(md, /requires:\n {2}- T-3 \(open\) — Second/)
   assertMatch(md, /# First/)
   assertEquals(md.includes('aaaaaaaa'), false) // no uuid reaches the reader
+  assertEquals(JSON.parse(JSON.stringify(typed)).comps.mail.verified, 1)
   let back = showMd(snap, all, by(T2))
   assertMatch(back, /referenced by:\n {2}- T-2 \(wip\) — First · requires this/)
 })
@@ -1302,6 +1310,7 @@ Deno.test('grammar: the teaching text derives from the vocabulary', async () => 
   let { GRAMMAR, FILTERS } = await import('./grammar.ts')
   assertMatch(GRAMMAR, /status\(open\|wip\|done\|cancelled\)/)
   assertMatch(GRAMMAR, /Statuses: open, wip, done, cancelled/)
+  assertMatch(GRAMMAR, /typed scalars parse by their grammar/)
   assertMatch(FILTERS, /time phrases/i)
 })
 

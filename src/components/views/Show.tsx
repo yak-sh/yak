@@ -117,7 +117,7 @@ let Rank = ({ e }: { e: Ent }) => (
     prop='priority'
     editable
     name='priority'
-    show={(v) => <Prio p={Number(v ?? 0)} class='Show_Chip' />}
+    show={(_, v) => <Prio p={v} class='Show_Chip' />}
   />
 )
 
@@ -128,7 +128,7 @@ let Facet = ({ e }: { e: Ent }) => (
     prop='domain'
     editable
     name='domain'
-    show={(v) => (v ? <Domain>{String(v)}</Domain> : null)}
+    show={(face) => (face ? <Domain>{face}</Domain> : null)}
   />
 )
 
@@ -142,7 +142,11 @@ let By = ({ e }: { e: Ent }) =>
         eid={e.eid}
         comp='created'
         prop='by'
-        show={(v) => (v ? <Id e={ent(String(v))} /> : null)}
+        show={(face, v) => {
+          if (!face || !v) return null
+          let a = ent(String(v))
+          return <Assignee {...linkProps(a)}>{face}</Assignee>
+        }}
       />
     )
     : null
@@ -157,10 +161,10 @@ let Plate = ({ e }: { e: Ent }) => (
     prop='assignee_eid'
     editable
     name='assignee'
-    show={(v) => {
-      if (!v) return null
+    show={(face, v) => {
+      if (!face || !v) return null
       let a = ent(String(v))
-      return <Assignee {...linkProps(a)}>{a.doc?.title ?? a.kind}</Assignee>
+      return <Assignee {...linkProps(a)}>{face}</Assignee>
     }}
   />
 )
@@ -172,10 +176,10 @@ let Home = ({ e }: { e: Ent }) => (
     prop='project_eid'
     editable
     name='project'
-    show={(v) => {
-      if (!v) return null
+    show={(face, v) => {
+      if (!face || !v) return null
       let p = ent(String(v))
-      return <Project {...linkProps(p)}>{p.doc?.title ?? p.kind}</Project>
+      return <Project {...linkProps(p)}>{face}</Project>
     }}
   />
 )

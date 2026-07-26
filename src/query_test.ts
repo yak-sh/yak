@@ -131,19 +131,34 @@ Deno.test('query: pred routes and normalizes ops', () => {
   assertEquals(pred('not a param'), null)
 })
 
-// The T-7143 core: priority normalizes P<n> to the stored number across
-// every value form, and a genuinely unparseable value is a LOUD error —
-// never the silent (no-matches)/exit-0 read of an empty board.
-Deno.test('query: priority speaks P<n>, rejects garbage loudly', () => {
-  assertEquals(pred('.priority=P2')?.value, '2')
-  assertEquals(pred('.priority<=P1')?.value, '1')
-  assertEquals(pred('.priority=P0,P1')?.value, '0,1')
-  assertEquals(pred('.priority=P0..P2')?.value, '0..2')
-  assertEquals(pred('.priority=2')?.value, '2') // the bare form still works
-  assertThrows(() => pred('.priority=banana'), Error, 'priority is a number')
-  assertThrows(() => pred('.priority=P'), Error, 'priority is a number')
-  // and it throws through the whole-query parser, not just the token
-  assertThrows(() => parseQuery('.priority=banana'), Error, 'priority is')
+Deno.test('query: typed atoms canonicalize or reject as one matrix', () => {
+  let accepted = [
+    ['.status=OPEN', 'open'],
+    ['.verified=YES,no', '1,0'],
+    ['.pin.x=+01.0', '1'],
+    ['.priority=p02', '2'],
+    ['.priority=P0,P1.5', '0,1.5'],
+    ['.priority=P0..P2', '0..2'],
+    ['.assignee.status=WIP', 'wip'],
+    ['.assignee.priority=P02', '2'],
+    ['.updated.at=today', 'today'],
+    ['.title~=01', '01'],
+    ['.verified=', ''],
+  ]
+  for (let [query, value] of accepted) {
+    assertEquals(pred(query)?.value, value, query)
+  }
+
+  let rejected = [
+    ['.status=gone', 'status is one of'],
+    ['.verified=maybe', 'verified is a boolean'],
+    ['.pin.x=plenty', 'pin.x is a finite decimal'],
+    ['.priority=P', 'priority is a finite number'],
+    ['.assignee.status=gone', 'status is one of'],
+  ]
+  for (let [query, message] of rejected) {
+    assertThrows(() => parseQuery(query), Error, message, query)
+  }
 })
 
 // ---- time phrases ----
@@ -446,14 +461,15 @@ Deno.test('paths: .author.actor walks comment → instrument → actor', () => {
 
 Deno.test('resolveRefs: values resolve at match time, misses stay put', () => {
   let eids: Record<string, string> = {
-    jeff: '11111111-1111-4111-8111-111111111111',
+    jeff: 'ABCDEFAB-1111-4111-8111-111111111111',
     'T-3': '22222222-2222-4222-8222-222222222222',
   }
   let r = (q: string) => resolveRefs(parseQuery(q), (id) => eids[id])
-  assertEquals(r('.assignee=jeff')[0].value, eids.jeff)
-  assertEquals(r('.assignee!=jeff')[0].value, eids.jeff)
-  assertEquals(r('.assignee=jeff,T-3')[0].value, `${eids.jeff},${eids['T-3']}`)
-  assertEquals(r(`.assignee=${eids.jeff}`)[0].value, eids.jeff) // already an eid
+  let jeff = eids.jeff.toLowerCase()
+  assertEquals(r('.assignee=jeff')[0].value, jeff)
+  assertEquals(r('.assignee!=jeff')[0].value, jeff)
+  assertEquals(r('.assignee=jeff,T-3')[0].value, `${jeff},${eids['T-3']}`)
+  assertEquals(r(`.assignee=${eids.jeff}`)[0].value, jeff) // already an eid
   assertEquals(r('.assignee=ghost')[0].value, 'ghost') // a miss matches nothing
   assertEquals(r('.assignee=')[0].value, '') // absence test, untouched
   assertEquals(r('.title~=jeff')[0].value, 'jeff') // not a reference

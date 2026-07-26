@@ -4,37 +4,12 @@ import {
   deaths,
   friendly,
   nick,
-  prio,
-  prioTag,
   type Session,
   settled,
   stamped,
   standing,
 } from './types.ts'
 import { assertEquals } from '@std/assert'
-
-// The one priority normalizer every door shares (T-6741/T-7143): P<n>/<n>
-// → the integer, garbage → null (each door turns null into its own loud
-// error). Integer-only — a fractional slot is the board's, never a human's.
-Deno.test('prio: P<n>/<n> to the integer, garbage to null', () => {
-  assertEquals(prio('P0'), 0)
-  assertEquals(prio('p1'), 1)
-  assertEquals(prio('P2'), 2)
-  assertEquals(prio('2'), 2)
-  assertEquals(prio(2), 2)
-  assertEquals(prio('banana'), null)
-  assertEquals(prio('P'), null) // a P with no digit is not a priority
-  assertEquals(prio('1.5'), null) // fractions aren't a human spelling
-  assertEquals(prio(''), null)
-  assertEquals(prio(null), null)
-})
-
-// One face shown everywhere priority renders — robust to a pre-heal string.
-Deno.test('prioTag: the P<n> face, pre-heal-string proof', () => {
-  assertEquals(prioTag(2), 'P2')
-  assertEquals(prioTag('P2'), 'P2') // never 'PP2'
-  assertEquals(prioTag(1.5), 'P1.5') // a board slot keeps its number
-})
 
 Deno.test('nick: the model word, vendor and versions dropped', () => {
   assertEquals(nick('claude-fable-5'), 'fable')

@@ -62,31 +62,6 @@ export let statuses = ['open', 'wip', 'done', 'cancelled']
 export let settled = (status?: string | null) =>
   status == 'done' || status == 'cancelled'
 
-// priority is a NUMBER — board order within a status column, lower first
-// (task.priority; the board mints midpoints like 1.5 to slot between two
-// rows) — but operators read and WRITE it as P<n>. One normalizer at every
-// door that takes a human spelling (write, filter, the `task new`
-// shorthand) so the three never diverge (T-6741, T-7143): 'P2'/'p2'/'2' →
-// 2, 'banana'/'P' → null, which each door turns into a loud error. The bare
-// 'P2' STRING that reached the graph (T-7053) was a write door with no
-// normalizer. Integer-only on purpose: a fractional slot is the board's to
-// mint, never a human's to type.
-export let prio = (v: unknown): number | null => {
-  let m = String(v ?? '').match(/^[Pp]?(\d+)$/)
-  return m ? Number(m[1]) : null
-}
-
-// The one message every priority door throws on garbage — it names the
-// grammar instead of the silent no-match (T-7143), the loud-rejection habit
-// .kind=/.venture= already keep.
-export let priErr = (got: string) =>
-  `priority is a number, spelled P<n> or <n> (P0, P1, 2) — got '${got}'`
-
-// priority's operator face: the column sorts as the number, but every door
-// that SHOWS one shows P<n> (task show, web, TUI). Robust to a pre-heal
-// string ('P2' → 'P2', never 'PP2') and to a fractional slot (1.5 → P1.5).
-export let prioTag = (v: unknown) => `P${prio(v) ?? v}`
-
 // The component tables, their wire-writable columns AND what each column
 // is — THE one list, now with a type dimension. The db derives its
 // allowlist (and delete order) from the keys (cols()); the CLI and MCP

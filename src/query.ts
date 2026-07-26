@@ -44,7 +44,8 @@
 // dotted first segment that names a COMPONENT is the explicit spelling
 // (`.pin.x=12`); any other first segment is a PATH — `.assignee.title~=j`
 // dereferences the eid column and predicates the target's prop. Depth 1.
-import { comps, priErr, prio, type PropType, stamped } from './types.ts'
+import { parseProp, type Prop, propAt } from './props.ts'
+import { comps, stamped } from './types.ts'
 import { type Span, span } from './time.ts'
 
 export type Pred = {
@@ -145,18 +146,54 @@ export let ORDER = 'order'
 
 export let orderOf = (preds: Pred[]) => preds.find((p) => p.op == ORDER)?.value
 
-// Normalize a priority FILTER value: strip the P from every numeric token
-// so P<n> matches the stored number, across all the value forms — a list
-// ('P0,P1'), a range ('P0..P2'), a lone 'P1' — while ',' and '.' separators
-// (and empty, the absent form) pass untouched. A token that isn't P<n>/<n>
-// is a LOUD error (priErr), never the silent no-match that read the board
-// as empty (T-7143).
-let prioValue = (v: string): string =>
-  v.replace(/[^,.]+/g, (tok) => {
-    let n = prio(tok)
-    if (n == null) throw new Error(priErr(tok))
-    return String(n)
-  })
+// Shared-reference sugar has no one owning component, but its type is still
+// known: every routed column ends in _eid. All other aims come straight from
+// the vocabulary, including a path's far side.
+let typed = (comp: string, prop: string): Prop | undefined =>
+  propAt(comp, prop) ??
+    (!comp && prop.endsWith('_eid')
+      ? {
+        comp,
+        prop,
+        name: prop,
+        type: { eid: '', death: 'keep' },
+      }
+      : undefined)
+
+let kind = (p: Prop) =>
+  typeof p.type == 'string'
+    ? p.type
+    : 'enum' in p.type
+    ? 'enum'
+    : 'eid' in p.type
+    ? 'eid'
+    : 'text'
+
+// Time phrases stay authored: a saved `today` must advance tomorrow. span()
+// validates that language without freezing it; every other scalar becomes its
+// canonical comparison string through the same parser writes use.
+let atom = (p: Prop, value: string): string => {
+  if (!value) return value
+  if (kind(p) == 'time' && span(value)) return value
+  if (kind(p) == 'eid') {
+    try {
+      return String(parseProp(p, value))
+    } catch {
+      return value // aliases need the evaluator's graph
+    }
+  }
+  return String(parseProp(p, value))
+}
+
+let range = (p: Prop, value: string): string => {
+  let m = value.match(/^(.*?)\.\.(\.?)(.*)$/s)
+  if (!m) return atom(p, value)
+  let [, lo, excl, hi] = m
+  return `${atom(p, lo)}..${excl ? '.' : ''}${atom(p, hi)}`
+}
+
+let typedValue = (p: Prop, value: string): string =>
+  value.split(',').map((v) => range(p, v)).join(',')
 
 export let pred = (token: string): Pred | null => {
   let m = token.match(
@@ -186,12 +223,13 @@ export let pred = (token: string): Pred | null => {
   } else {
     p = { ...route(a), op: OPS[op], value }
   }
-  // priority speaks P<n> at the filter too, the form the tool itself prints
-  // (T-7143) — normalize the compared value (the path's far side when one
-  // stands, else the pred's own). '~=' contains stays literal.
+  // Contains is deliberately literal. Absence has no scalar atom. Every
+  // other form parses each scalar/list/range atom against the near or far
+  // property's type before a row is scanned.
   let tgt = p.at ?? p
-  if (tgt.comp == 'task' && tgt.prop == 'priority' && p.op != '~') {
-    p.value = prioValue(p.value)
+  let type = typed(tgt.comp, tgt.prop)
+  if (type && p.op != '~' && p.value != '') {
+    p.value = typedValue(type, p.value)
   }
   return p
 }
@@ -268,11 +306,10 @@ let eq = (v: unknown, value: string): boolean => {
   return String(v) == value
 }
 
-// A timestamp row against a time phrase: the phrase names a range, the op
+// A timestamp against a time phrase: the phrase names a range, the op
 // picks its edge — = within, >= from the start, <= until the end, > and <
-// strictly outside. Only fires when the ROW is ISO (a domain literally
-// named 'today' stays a string).
-let ISO = /^\d{4}-\d{2}-\d{2}T/
+// strictly outside. Only time-typed columns take this road (a domain
+// literally named 'today' stays text).
 let inTime = (v: string, p: Pred, s: Span): boolean => {
   let t = Date.parse(v)
   switch (p.op) {
@@ -292,7 +329,14 @@ let inTime = (v: string, p: Pred, s: Span): boolean => {
 }
 
 let test = (v: unknown, p: Pred): boolean => {
-  if (p.op != '~' && typeof v == 'string' && ISO.test(v)) {
+  let target = p.at ?? p
+  let type = typed(target.comp, target.prop)
+  if (p.op != '~' && type && kind(type) == 'time' && typeof v == 'string') {
+    let spans = p.value.split(',').map((value) => span(value))
+    if (spans.every((s) => s)) {
+      let hit = spans.some((s) => inTime(v, { ...p, op: '' }, s!))
+      if (p.op == '' || p.op == '!') return p.op == '' ? hit : !hit
+    }
     let s = span(p.value)
     if (s) return inTime(v, p, s)
   }
@@ -321,7 +365,6 @@ let test = (v: unknown, p: Pred): boolean => {
 // equality-shaped ops resolve; each part of an any-of list resolves
 // alone; a miss stays as typed and matches nothing, because a board
 // mid-render is no place to throw.
-let UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 // Is (comp, prop) an entity reference? The _eid suffix is the fast path
 // (and the only signal for the any-of comp ''), else the vocabulary's
 // PropType — so a differently-named ref like created.by still resolves its
@@ -340,8 +383,17 @@ export let resolveRefs = (
     let comp = p.at ? p.at.comp : p.comp
     if (!isRef(comp, target) || (p.op != '' && p.op != '!')) return p
     if (!p.value || /\.\./.test(p.value)) return p
+    let type = typed(comp, target)
+    if (!type) return p
     let value = p.value.split(',')
-      .map((part) => !part || UUID.test(part) ? part : lookup(part) ?? part)
+      .map((part) => {
+        if (!part) return part
+        try {
+          return String(parseProp(type, part, { resolve: lookup }))
+        } catch {
+          return part // a live saved query may name an entity not here yet
+        }
+      })
       .join(',')
     return value == p.value ? p : { ...p, value }
   })
@@ -487,10 +539,7 @@ let starts = (s: string, pre: string) =>
 // wire-writable (in routes via `stamped`, absent from comps)
 let mark = (c: string, p: string) => comps[c]?.[p] ? c : `${c} · stamped`
 
-let typeOf = (comp: string, prop: string): PropType | undefined =>
-  comp
-    ? comps[comp]?.[prop] ?? stamped[comp]?.[prop]
-    : Object.values(comps).find((m) => prop in m)?.[prop]
+let typeOf = (comp: string, prop: string) => typed(comp, prop)?.type
 
 let tryRoute = (p: string) => {
   try {
