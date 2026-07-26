@@ -717,6 +717,18 @@ let refused = (
   )
 }
 
+let projectRefused = (db: DatabaseSync, eid: string) => {
+  let bad = db.prepare(`
+    select t.project_eid from task t
+    left join project p on p.eid = t.project_eid
+    where t.eid = ? and t.project_eid is not null and p.eid is null
+  `).get(eid) as { project_eid: string } | undefined
+  return bad &&
+    new Error(
+      `task ${eid} refused: project_eid → ${bad.project_eid} (no such project)`,
+    )
+}
+
 // The box owner: the lone `person`, the actor a context-less write falls
 // back to (one person today — Jeff). With several people it goes DARK
 // rather than guess — the only case a write still resolves blank, and one
@@ -797,6 +809,10 @@ export let apply = (
   let extra: Change[] = []
   let touched = new Set<string>()
   let minted = new Set<string>()
+  let projects = new Set(
+    changes.filter((c) => c.name == 'project' && c.comp).map((c) => c.eid),
+  )
+  let projectRefs = new Set<string>()
   // Whose provenance `by` the WIRE named this batch — the server keeps it
   // and only defaults the gap (created.by at birth, updated.by on a touch).
   let saidCreator = new Set<string>()
@@ -867,6 +883,18 @@ export let apply = (
       // replayed change for its eid — an edit racing a delete loses
       // deterministically, and nothing can resurrect the id.
       if (dead.get(eid)) continue
+      if (name == 'task' && comp?.project_eid != null) {
+        projectRefs.add(eid)
+        // The component contract reads the batch's final state, so a task
+        // may precede the project it names without reordering other births.
+        let project = String(comp.project_eid)
+        if (
+          projects.has(project) && !dead.get(project) &&
+          spine(db, project).changes
+        ) {
+          minted.add(project)
+        }
+      }
       // A claim is a LEASE, not a patch: taking one over another session's
       // claim fails the whole batch loudly — release, then claim. The same
       // session re-claiming is a no-op refresh. apply() runs serially on
@@ -1044,6 +1072,10 @@ export let apply = (
         db.exec('release change')
         throw refusal ?? e // the outer catch rolls the whole batch back
       }
+    }
+    for (let eid of projectRefs) {
+      let refusal = projectRefused(db, eid)
+      if (refusal) throw refusal
     }
     // Every touched entity carries when it last changed — server-stamped
     // (modified_at is not in comps, so the wire can never fake it).

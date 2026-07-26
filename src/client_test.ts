@@ -1182,6 +1182,20 @@ Deno.test('derefParams: reference values resolve at the door', () => {
   assertThrows(() => one('.assignee=ghost'), Error, 'no entity')
 })
 
+Deno.test('derefParams: project references accept P-nums and eids', () => {
+  let p = 'aaaaaaaa-0000-4000-8000-000000000004'
+  let graph = rows({
+    changes: [
+      ...snap.changes,
+      { eid: p, name: 'entity', comp: { eid: p, num: 4 } },
+      { eid: p, name: 'project', comp: {} },
+    ],
+  })
+  let one = (s: string) => derefParams(graph, [param(s)!])[0].value
+  assertEquals(one('.project=P-4'), p)
+  assertEquals(one(`.project=${p}`), p)
+})
+
 Deno.test('edgesOf: both directions, ids humanized', () => {
   let all = rows(snap)
   let out = edgesOf(snap, all, T1)

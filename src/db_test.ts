@@ -182,6 +182,91 @@ Deno.test('an FK refusal fails the whole batch loudly, naming the column', () =>
   assertEquals(comp(rider, 'doc'), undefined) // the whole batch rolled back
 })
 
+Deno.test('task project_eid requires a project and fails atomically', () => {
+  let bare = uid(), task = uid(), rider = uid()
+  apply(db, [{ eid: bare, name: 'doc', comp: { title: 'not a project' } }])
+  let err = assertThrows(
+    () =>
+      apply(db, [
+        { eid: rider, name: 'doc', comp: { title: 'rides along' } },
+        {
+          eid: task,
+          name: 'task',
+          comp: { status: 'open', project_eid: bare },
+        },
+      ]),
+    Error,
+    task,
+  )
+  assertMatch(err.message, new RegExp(`project_eid.*${bare}`))
+  assertEquals(comp(task, 'entity'), undefined)
+  assertEquals(comp(rider, 'doc'), undefined)
+
+  let project = uid(), existing = uid(), patchRider = uid()
+  apply(db, [
+    { eid: project, name: 'project', comp: {} },
+    {
+      eid: existing,
+      name: 'task',
+      comp: { status: 'open', project_eid: project },
+    },
+  ])
+  assertThrows(() =>
+    apply(db, [
+      { eid: patchRider, name: 'doc', comp: { title: 'also rides' } },
+      { eid: existing, name: 'task', comp: { project_eid: bare } },
+    ])
+  )
+  assertEquals(comp(existing, 'task')?.project_eid, project)
+  assertEquals(comp(patchRider, 'doc'), undefined)
+
+  let ghost = uid()
+  assertThrows(
+    () =>
+      apply(db, [{
+        eid: uid(),
+        name: 'task',
+        comp: { status: 'open', project_eid: ghost },
+      }]),
+    Error,
+    'project_eid',
+  )
+})
+
+Deno.test('a later project does not reorder unrelated births', () => {
+  let first = uid(), later = uid()
+  apply(db, [
+    { eid: first, name: 'doc', comp: { title: 'first' } },
+    { eid: later, name: 'project', comp: {} },
+  ])
+  assertEquals(
+    Number(comp(first, 'entity')?.num) < Number(comp(later, 'entity')?.num),
+    true,
+  )
+})
+
+Deno.test('task project_eid accepts projects created anywhere in its batch', () => {
+  let before = uid(), after = uid(), a = uid(), b = uid()
+  apply(db, [
+    { eid: before, name: 'project', comp: {} },
+    {
+      eid: a,
+      name: 'task',
+      comp: { status: 'open', project_eid: before },
+    },
+  ])
+  apply(db, [
+    {
+      eid: b,
+      name: 'task',
+      comp: { status: 'open', project_eid: after },
+    },
+    { eid: after, name: 'project', comp: {} },
+  ])
+  assertEquals(comp(a, 'task')?.project_eid, before)
+  assertEquals(comp(b, 'task')?.project_eid, after)
+})
+
 Deno.test('a NOT NULL refusal fails the whole batch', () => {
   let s = uid(), rider = uid()
   assertThrows(
