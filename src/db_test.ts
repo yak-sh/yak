@@ -7,6 +7,7 @@ let {
   backfillVia,
   db,
   delta,
+  eager,
   journalBy,
   journalOf,
   mendMail,
@@ -117,6 +118,26 @@ Deno.test('comment.event: the machine mark rides the wire, absent by default', (
   ])
   assertEquals(comp(c, 'comment')?.event, 1)
   assertEquals(comp(plain, 'comment')?.event, null)
+})
+
+Deno.test('graph-out carries declared columns only', () => {
+  let d = fresh()
+  let eid = uid()
+  d.exec('alter table web add column dormant text')
+  apply(d, [{ eid, name: 'web', comp: { url: 'https://example.test' } }])
+  d.prepare(
+    'update web set frozen_at = ?, dormant = ? where eid = ?',
+  ).run('2026-07-26T00:00:00Z', 'migration input', eid)
+  let expected = {
+    eid,
+    url: 'https://example.test',
+    frozen_at: '2026-07-26T00:00:00Z',
+  }
+  let snap = snapshot(d).changes.find((c) => c.eid == eid && c.name == 'web')
+    ?.comp
+  assertEquals(snap, expected)
+  assertEquals(eager(d, eid).web, expected)
+  d.close()
 })
 
 Deno.test('declared booleans bind as SQLite integers', () => {

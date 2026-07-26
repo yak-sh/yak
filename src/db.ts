@@ -690,6 +690,25 @@ let cmps: Record<string, string[]> = {
   ),
 }
 
+// Graph-out is the declared readable vocabulary, never the table's migration
+// history. `comps` admits writes; `stamped` adds server-owned reads.
+let readable: Record<string, string[]> = Object.fromEntries(
+  Object.keys(cmps).map((name) => [
+    name,
+    [
+      'eid',
+      ...new Set([
+        ...(cmps[name] ?? []),
+        ...Object.keys(stamped[name] ?? {}),
+      ]),
+    ],
+  ]),
+)
+
+let sqlName = (name: string) => `"${name.replaceAll('"', '""')}"`
+let select = (name: string) =>
+  `select ${readable[name].map(sqlName).join(', ')} from ${sqlName(name)}`
+
 let bound = (
   name: string,
   col: string,
@@ -1767,13 +1786,13 @@ export let eager = (
   db: DatabaseSync,
   eid: string,
 ): Record<string, Record<string, unknown>> => {
-  let spine = db.prepare('select eid, num from entity where eid = ?')
+  let spine = db.prepare(`${select('entity')} where eid = ?`)
     .get(eid) as Record<string, unknown> | undefined
   if (!spine) return {}
   let out: Record<string, Record<string, unknown>> = { entity: spine }
-  for (let name of Object.keys(cmps)) {
+  for (let name of Object.keys(readable)) {
     if (name == 'entity') continue
-    let row = db.prepare(`select * from ${name} where eid = ?`)
+    let row = db.prepare(`${select(name)} where eid = ?`)
       .get(eid) as Record<string, unknown> | undefined
     if (row) out[name] = row
   }
@@ -1791,17 +1810,9 @@ export let eager = (
 export let snapshot = (db: DatabaseSync): Snapshot => {
   let cursor = cursorOf(db)
   let changes: Change[] = []
-  for (
-    let name of [
-      'entity',
-      ...Object.keys(cmps).filter((n) => n != 'entity'),
-    ]
-  ) {
-    let sql = name == 'entity'
-      ? 'select eid, num from entity'
-      : `select * from ${name}`
+  for (let name of Object.keys(readable)) {
     for (
-      let row of db.prepare(sql).all() as Record<string, unknown>[]
+      let row of db.prepare(select(name)).all() as Record<string, unknown>[]
     ) {
       changes.push({ eid: row.eid as string, name, comp: row })
     }
