@@ -544,6 +544,20 @@ export let backlinks = (eid: string) =>
       .map(([c, p]) => ({ from, via: `${c}.${p}` }))
   )
 
+// The task a session is ON: the newest task it holds a claim over (a
+// claim lives on the claimed entity, pointing back at the session), else
+// its managed request — the claim is the live lease, the request the
+// birth spec that outlives release. Null between jobs.
+export let jobOf = (e: Ent): string | null =>
+  Object.entries(cache.value)
+    .filter(([, r]) => r.task && r.claim?.session_eid == e.eid)
+    .toSorted(([, a], [, b]) =>
+      String(b.claim?.claimed_at ?? '').localeCompare(
+        String(a.claim?.claimed_at ?? ''),
+      )
+    )[0]?.[0] ??
+    e.session?.requested_task_eid ?? null
+
 // The edges that hold an entity FROM ABOVE — every dependency whose child
 // is this eid. refs/kids read downward; this is the climb back up, how a
 // task names the parents that contain or require it.

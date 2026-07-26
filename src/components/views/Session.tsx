@@ -7,7 +7,7 @@ import {
   type LogRow,
   sessionActive,
 } from '../../types.ts'
-import { base, mutate, uuid } from '../../live.ts'
+import { base, ent, jobOf, mutate, uuid } from '../../live.ts'
 import { clickProps } from '../nav.tsx'
 import { block, pretty, Stamp } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
@@ -437,16 +437,23 @@ export let Session = ({ e }: { e: Ent }) => {
 }
 
 // A session in a list: the dot carries the status, the way a task row's
-// does — plus what it's running. The whole tile is the LINK (clickProps
-// on the el: click peeks, double click navigates).
-let RowLine = block('div', 'SessionRow', { Status: 'span', Model: 'span' })
+// does — plus what it's running and the task it's ON (jobOf: the claim
+// is the truth, the managed request the fallback). The whole tile is the
+// LINK (clickProps on the el: click peeks, double click navigates).
+let RowLine = block('div', 'SessionRow', {
+  Status: 'span',
+  Model: 'span',
+  Task: 'span',
+})
 
 export let SessionRow = ({ e }: { e: Ent }) => {
   let s = e.session!
+  let job = jobOf(e)
   return (
     <RowLine {...clickProps(e)}>
       <Dot status={s.status ?? ''} />
       {s.model && <RowLine.Model>{friendly(s.model)}</RowLine.Model>}
+      {job && <RowLine.Task>{ent(job).doc?.title}</RowLine.Task>}
       <Id e={e} />
     </RowLine>
   )

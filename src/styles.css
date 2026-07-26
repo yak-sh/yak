@@ -2348,6 +2348,14 @@ a[data-ref]:hover {
   color: var(--dim);
   font-size: 11px;
 }
+/* the job title takes the slack and yields with an ellipsis */
+.SessionRow_Task {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .SessionRow .Id {
   margin-left: auto;
 }
@@ -2513,7 +2521,7 @@ a[data-ref]:hover {
   bottom: calc(100% + var(--half-gap));
   z-index: 20;
   width: max-content;
-  max-width: min(22rem, calc(100vw - 2 * var(--gap)));
+  max-width: min(33rem, calc(100vw - 2 * var(--gap)));
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
