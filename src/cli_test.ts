@@ -3,8 +3,136 @@
 // and the space-separated `--project P` forms — the latter is what agents
 // actually type, and the bug that let it through polluted the owner board.
 import { assertEquals, assertMatch } from '@std/assert'
-import { leadPrio, strayFlag, subagentDigest } from './cli.ts'
+import {
+  codexArgs,
+  finalText,
+  hookDialect,
+  leadPrio,
+  strayFlag,
+  subagentDigest,
+} from './cli.ts'
 import type { Snapshot } from './types.ts'
+
+let transcript = (...events: unknown[]) => {
+  let path = Deno.makeTempFileSync()
+  try {
+    Deno.writeTextFileSync(
+      path,
+      events.map((e) => JSON.stringify(e)).join('\n'),
+    )
+    return finalText(path)
+  } finally {
+    Deno.removeSync(path)
+  }
+}
+
+Deno.test('codexArgs: full access and lifecycle lead, caller args keep order', () => {
+  assertEquals(codexArgs(['resume', '--last']), [
+    '--dangerously-bypass-approvals-and-sandbox',
+    '--dangerously-bypass-hook-trust',
+    'resume',
+    '--last',
+  ])
+})
+
+Deno.test('finalText: Claude and Codex transcripts yield the closing answer', () => {
+  assertEquals(
+    transcript({
+      type: 'assistant',
+      message: { content: [{ type: 'text', text: 'Claude closes' }] },
+    }),
+    'Claude closes',
+  )
+  assertEquals(
+    transcript(
+      {
+        type: 'event_msg',
+        payload: {
+          type: 'agent_message',
+          message: 'Codex commentary',
+          phase: 'commentary',
+        },
+      },
+      {
+        type: 'event_msg',
+        payload: {
+          type: 'agent_message',
+          message: 'Codex closes',
+          phase: 'final_answer',
+        },
+      },
+    ),
+    'Codex closes',
+  )
+})
+
+Deno.test('hookDialect: Codex payload and Claude transcript name the provider', () => {
+  let path = Deno.makeTempFileSync()
+  try {
+    Deno.writeTextFileSync(
+      path,
+      JSON.stringify({
+        type: 'assistant',
+        message: { model: 'claude-opus-5' },
+      }),
+    )
+    assertEquals(hookDialect({ transcript_path: path }), {
+      provider: 'claude',
+      model: 'claude-opus-5',
+      transcript: path,
+    })
+    assertEquals(
+      hookDialect({
+        model: 'gpt-5.6-sol',
+        transcript_path: '/unstable/codex.jsonl',
+      }),
+      {
+        provider: 'codex',
+        model: 'gpt-5.6-sol',
+        transcript: undefined,
+      },
+    )
+  } finally {
+    Deno.removeSync(path)
+  }
+})
+
+Deno.test('task codex is discoverable with its own help', async () => {
+  let cli = new URL('./cli.ts', import.meta.url).pathname
+  let out = await new Deno.Command(Deno.execPath(), {
+    args: ['run', '-A', cli, 'codex', '--help'],
+  }).output()
+  assertEquals(out.code, 0)
+  assertMatch(
+    new TextDecoder().decode(out.stdout),
+    /task codex \[codex args\.\.\.\][\s\S]*task codex resume --last/,
+  )
+})
+
+Deno.test('Codex hooks inject sessions, delegate children, and wrap at exit', () => {
+  let path = new URL('../.codex/hooks.json', import.meta.url)
+  let config = JSON.parse(Deno.readTextFileSync(path)) as {
+    hooks: Record<string, { hooks: { command: string; timeout?: number }[] }[]>
+  }
+  assertEquals(Object.keys(config.hooks), [
+    'SessionStart',
+    'SubagentStart',
+    'SessionEnd',
+  ])
+  assertMatch(
+    config.hooks.SessionStart[0].hooks[0].command,
+    /task session context --hook/,
+  )
+  assertMatch(
+    config.hooks.SubagentStart[0].hooks[0].command,
+    /task session context --hook/,
+  )
+  assertMatch(
+    config.hooks.SessionEnd[0].hooks[0].command,
+    /task session wrap --hook/,
+  )
+  assertEquals(config.hooks.SessionEnd[0].hooks[0].timeout, 3)
+})
 
 // `task new P1 …` honors the documented shorthand (T-6741): a LEADING
 // P<n> becomes priority, a bare word stays title, and a mid-title P keeps

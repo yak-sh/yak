@@ -73,14 +73,15 @@ export let search = async (q: string, limit = 20) => {
   return res.json() as Promise<Hit[]>
 }
 
-// The CLI's standing identity: Claude's own session id first —
-// CLAUDE_CODE_SESSION_ID rotates on /clear, so it always names the session
-// actually speaking — then the launcher's TASKS_SESSION (managed non-claude
-// spawns: codex/fake, whose harness sets no id of its own). The env lookup
-// is injectable so the precedence is testable without mutating the process.
+// The CLI's standing identity: a provider's own thread id for an external
+// session, but the launcher's TASKS_SESSION for a managed non-Claude spawn —
+// that id already owns the task lease. The env lookup is injectable so the
+// precedence is testable without mutating the process.
 export let me = (
   env: (k: string) => string | undefined = (k) => Deno.env.get(k),
-) => env('CLAUDE_CODE_SESSION_ID') ?? env('TASKS_SESSION')
+) =>
+  env('CLAUDE_CODE_SESSION_ID') ?? env('TASKS_SESSION') ??
+    env('CODEX_THREAD_ID')
 
 // Writes carry WHO when the caller knows: the x-actor header lands in
 // the server's journal (attribution, never auth). The CLI's standing

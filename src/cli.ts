@@ -88,6 +88,11 @@ let VERBS: [usage: string, blurb: string, examples: string[]][] = [
     'interactive claude, fleet-wired: skip-permissions + the tasks channel',
     ['task claude', 'task claude --continue'],
   ],
+  [
+    'codex [codex args...]',
+    'interactive codex, fleet-wired: full access + the tasks lifecycle',
+    ['task codex', 'task codex resume --last'],
+  ],
   ['list [filters...] [--json]', 'list tasks (filter grammar)', [
     'task list .status=open .priority<=1',
     'task list .project=harness .updated.at>="1 week ago"',
@@ -932,14 +937,42 @@ let modelOf = (path: string) => {
   } catch { /* no transcript is no announcement */ }
 }
 
-// The session's closing words, read the same way: the last assistant
-// turn's text blocks. The operator already wrote its own summary — wrap
-// captures it as the session brief instead of asking anyone to retell.
-let finalText = (path: string) => {
+// Codex announces its model in the hook payload. Claude's payload does not,
+// so its transcript remains the evidence for both provider and model.
+export let hookDialect = (body: Record<string, unknown>) => {
+  let codexModel = String(body.model ?? '')
+  let provider = codexModel ? 'codex' : 'claude'
+  let transcript = provider == 'claude'
+    ? String(body.transcript_path ?? '') || undefined
+    : undefined
+  return {
+    provider,
+    model: codexModel || modelOf(transcript ?? ''),
+    transcript,
+  }
+}
+
+// The session's closing words from either provider's transcript. The
+// operator already wrote its own summary — wrap captures it as the
+// session brief instead of asking anyone to retell.
+export let finalText = (path: string) => {
   try {
     if (!path) return
     let lines = Deno.readTextFileSync(path).trim().split('\n')
     for (let i = lines.length - 1; i >= 0; i--) {
+      if (lines[i].includes('"agent_message"')) {
+        let e = JSON.parse(lines[i]) as {
+          type?: unknown
+          payload?: { type?: unknown; message?: unknown; phase?: unknown }
+        }
+        if (
+          e.type == 'event_msg' && e.payload?.type == 'agent_message' &&
+          e.payload.phase == 'final_answer' &&
+          typeof e.payload.message == 'string'
+        ) {
+          return e.payload.message
+        }
+      }
       if (!lines[i].includes('"assistant"')) continue
       let m = JSON.parse(lines[i]) as {
         type?: unknown
@@ -1038,40 +1071,34 @@ let context = async (args: string[]) => {
       sid ??= String(body.session_id ?? '')
       if (!sid) return
       let snap = await snapshot()
-      // Reify the session on arrival: id + worktree + the claude process
-      // pid (the /proc walk), before any claim. The pid is what lets the
-      // channel plugin follow a /clear — the NEW session id reifies under
-      // the SAME process.
+      // Codex names its model in the hook payload; Claude names it only
+      // after its transcript has an assistant turn. The provider decides
+      // which transcript and process fields are meaningful.
+      let { model, provider, transcript } = hookDialect(body)
       let cwd = String(body.cwd ?? '') || undefined
-      // The rest of the self-report the payload carries: `agent_type`
-      // (set when launched `claude --agent <name>`), `source`
-      // (startup|resume|clear|compact|fork), and `transcript_path` — the
-      // JSONL Claude Code keeps of this very conversation, which IS this
-      // session's durable log (sessions.ts). `provider` is NOT among
-      // them: it is a spawn REQUEST column, and a session created
-      // carrying one is a spawn ask — reifying with it would make every
-      // operator's terminal a failed spawn. The transcript is the
-      // dialect's evidence anyway; nothing but Claude Code writes one.
-      let transcript = String(body.transcript_path ?? '') || undefined
-      let s = sessionFor(rows(snap), sid, cwd, claudePid(), {
-        agent_type: String(body.agent_type ?? '') || undefined,
-        source: String(body.source ?? '') || undefined,
-        transcript,
-      })
+      // Claude's transcript is also an external session's durable log;
+      // Codex's rollout is not stored because its format is not stable.
+      // `provider` stays out of this CREATE: a new session carrying one is
+      // a managed spawn request. It lands as a patch below.
+      let s = sessionFor(
+        rows(snap),
+        sid,
+        cwd,
+        provider == 'claude' ? claudePid() : undefined,
+        {
+          agent_type: String(body.agent_type ?? '') || undefined,
+          source: String(body.source ?? '') || undefined,
+          transcript,
+        },
+      )
       if (s.changes.length) await send(s.changes)
-      // The hook payload names no model (session_id, transcript_path,
-      // cwd, hook_event_name, source) — but the transcript does: its
-      // last assistant line carries message.model. Announce it, so an
-      // external session's spawns can inherit and the board can say
-      // what's serving. A PATCH, never the create, for the reason above.
-      // A fresh transcript has no assistant line yet — then there's
-      // simply nothing to announce.
-      let model = modelOf(transcript ?? '')
+      // Announce the provider after the create so this external session
+      // cannot be mistaken for a spawn request.
       if (model) {
         await send([{
           eid: s.eid,
           name: 'session',
-          comp: { provider: 'claude', model },
+          comp: { provider, model },
         }])
       }
       // The session's actor is no longer announced here: apply() stamps it
@@ -1348,8 +1375,19 @@ let backup = async () => {
 // the entity under it and stamps the claude process pid; the channel
 // plugin binds by that pid, so service follows each rotation. Nothing to
 // mint here — the env passes through unchanged.
+let terminal = async (command: string, args: string[]) => {
+  let { code } = await new Deno.Command(command, {
+    args,
+    env: { TASKS_HOST: host() },
+    stdin: 'inherit',
+    stdout: 'inherit',
+    stderr: 'inherit',
+  }).output()
+  Deno.exit(code)
+}
+
 let CHANNEL = 'plugin:tasks@tasks-fleet'
-let interactive = async (args: string[]) => {
+let claude = async (args: string[]) => {
   // Allowlisted in root's managed settings → clean launch; otherwise the
   // dev-load flag activates the channel behind a press-Enter dialog —
   // fine at a keyboard, which is the only place this verb runs.
@@ -1358,21 +1396,25 @@ let interactive = async (args: string[]) => {
     listed = Deno.readTextFileSync('/etc/claude-code/managed-settings.json')
       .includes('"tasks-fleet"')
   } catch { /* no managed settings — dev-load below */ }
-  let { code } = await new Deno.Command('claude', {
-    args: [
-      '--dangerously-skip-permissions',
-      '--channels',
-      CHANNEL,
-      ...(listed ? [] : ['--dangerously-load-development-channels', CHANNEL]),
-      ...args,
-    ],
-    env: { TASKS_HOST: host() },
-    stdin: 'inherit',
-    stdout: 'inherit',
-    stderr: 'inherit',
-  }).output()
-  Deno.exit(code)
+  await terminal('claude', [
+    '--dangerously-skip-permissions',
+    '--channels',
+    CHANNEL,
+    ...(listed ? [] : ['--dangerously-load-development-channels', CHANNEL]),
+    ...args,
+  ])
 }
+
+// The Codex twin: full access matches the interactive Claude posture;
+// project hooks bind its thread to the graph at start and wrap it
+// at exit. Every other Codex argument stays in the caller's order.
+export let codexArgs = (args: string[]) => [
+  '--dangerously-bypass-approvals-and-sandbox',
+  '--dangerously-bypass-hook-trust',
+  ...args,
+]
+
+let codex = (args: string[]) => terminal('codex', codexArgs(args))
 
 let tui = async () => {
   // The same be-reborn loop as `deno task tui`, so a global install hot
@@ -1403,7 +1445,8 @@ if (import.meta.main) {
     ) {
       help([cmd])
     } else if (cmd == 'tui') await tui()
-    else if (cmd == 'claude') await interactive(rest)
+    else if (cmd == 'claude') await claude(rest)
+    else if (cmd == 'codex') await codex(rest)
     else if (cmd == 'list' || cmd == 'ls') await list(rest)
     else if (cmd == 'new') await create(rest)
     else if (cmd == 'set') await set(rest)

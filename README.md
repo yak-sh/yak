@@ -53,6 +53,8 @@ and `/search` + `/similar` over HTTP.
   task new P1 .project=holdco Fix the flux capacitor
   task set T-3 .status=done --comment="verified end-to-end"
   task claim T-3 && task release T-3
+  task claude                   # interactive Claude, fleet-wired
+  task codex                    # interactive Codex, fleet-wired
   task mail                      # your unread fleet inbox
   task search flux capac*
   task help grammar              # the whole filter grammar
@@ -83,7 +85,8 @@ A session is an entity from boot: the repo's SessionStart hook runs
 work as the boot digest, led by the session's own meta as frontmatter;
 SessionEnd runs `task session wrap --hook` — claims released, the closing
 summary kept as the session's brief (`task session brief` writes one
-deliberately). Sessions also spawn FROM the graph
+deliberately). Claude and Codex share those commands through their native
+lifecycle hook files. Sessions also spawn FROM the graph
 (`task spawn T-3 --provider=codex`): creating a session entity carrying a
 provider IS the spawn request, and everything the run learns — status, branch,
 exit code, final text — is server-stamped onto the row. Memories

@@ -286,13 +286,21 @@ Deno.test('sessionFor: reuse, mint, cwd + pid refresh', () => {
   ])
 })
 
-Deno.test('me: the rotating CLAUDE_CODE_SESSION_ID outranks TASKS_SESSION', () => {
+Deno.test('me: provider ids name external sessions; launchers name managed ones', () => {
   let env = (vals: Record<string, string>) => (k: string) => vals[k]
   assertEquals(
-    me(env({ CLAUDE_CODE_SESSION_ID: 'rotating', TASKS_SESSION: 'stale' })),
+    me(env({
+      CLAUDE_CODE_SESSION_ID: 'rotating',
+      TASKS_SESSION: 'stale',
+      CODEX_THREAD_ID: 'codex',
+    })),
     'rotating',
   )
-  assertEquals(me(env({ TASKS_SESSION: 'launcher' })), 'launcher') // non-claude spawns
+  assertEquals(
+    me(env({ TASKS_SESSION: 'launcher', CODEX_THREAD_ID: 'codex' })),
+    'launcher',
+  )
+  assertEquals(me(env({ CODEX_THREAD_ID: 'codex' })), 'codex')
   assertEquals(me(env({})), undefined)
 })
 

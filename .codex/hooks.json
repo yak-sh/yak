@@ -1,0 +1,36 @@
+{
+  "description": "Bind Codex sessions to the tasks graph.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "PATH=\"$HOME/.deno/bin:$PATH\" task session context --hook || true"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "PATH=\"$HOME/.deno/bin:$PATH\" task session context --hook || true"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "PATH=\"$HOME/.deno/bin:$PATH\" task session wrap --hook || true",
+            "timeout": 3
+          }
+        ]
+      }
+    ]
+  }
+}
