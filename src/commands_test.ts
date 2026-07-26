@@ -356,7 +356,7 @@ Deno.test('scribe: summon the desk onto a session brief', () => {
   assertEquals(comment?.comp?.target_eid, D)
   // …and the pinned desk spawn rides the same batch
   let spawn = out.changes!.find((c) => c.name == 'session' && c.comp?.provider)
-  assertEquals(spawn?.comp?.model, 'claude-haiku-4-5')
+  assertEquals(spawn?.comp?.model, 'haiku')
   assertEquals(spawn?.comp?.requested_task_eid, D)
   assertEquals(out.msg, 'S-1 → scribe')
   // a focused session needs no argument

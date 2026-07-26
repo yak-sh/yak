@@ -94,7 +94,7 @@ Deno.test('scribeSpawn: haiku wearing the scribe persona, or nothing, or a shout
   let changes = scribeSpawn(rows(g), g.deps, NOW)!
   let sess = changes.find((c) => c.name == 'session')!.comp!
   assertEquals(sess.provider, 'claude')
-  assertEquals(sess.model, 'claude-haiku-4-5')
+  assertEquals(sess.model, 'haiku')
   assertEquals(sess.persona_eid, PERSONA)
   assertEquals(sess.requested_task_eid, DESK)
   // no stubs = no spawn, quietly

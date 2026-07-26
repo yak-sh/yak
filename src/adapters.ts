@@ -241,12 +241,16 @@ export let adapters: Record<string, Adapter> = {
       'claude-haiku-4-5',
     ],
     efforts: [],
+    // The MENU is aliases only, and its first entry is the house default
+    // (offers()[0] — what :fix launches and the Run form preselects). A
+    // pinned id stays requestable from the allowlist above; it just isn't
+    // an offer, because a menu of pins needs an edit every release and
+    // this one never does.
     labels: {
-      'claude-fable-5': 'Fable 5',
-      'claude-opus-5': 'Opus 5',
-      'claude-opus-4-8': 'Opus 4.8',
-      'claude-sonnet-5': 'Sonnet 5',
-      'claude-haiku-4-5': 'Haiku 4.5',
+      opus: 'Opus',
+      fable: 'Fable',
+      sonnet: 'Sonnet',
+      haiku: 'Haiku',
     },
     argv: (j) => [
       'claude',

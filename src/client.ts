@@ -1326,13 +1326,14 @@ export let similarHint = async (
   }
 }
 
-// The scribe's desk, pinned: a cheap model wearing the scribe persona on
-// the standing task — the same spawn whether the sweep or :scribe
-// summons it.
+// The scribe's desk: the cheap model wearing the scribe persona on the
+// standing task — the same spawn whether the sweep or :scribe summons it.
+// The alias, not a pin: what the desk wants is whatever the cheap one is
+// now, and the CLI resolves that at launch.
 export let DESK = {
   task: 'scribe-desk',
   provider: 'claude',
-  model: 'claude-haiku-4-5',
+  model: 'haiku',
   persona: 'scribe',
 }
 

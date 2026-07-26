@@ -128,8 +128,10 @@ Deno.test('claude: short aliases and pinned ids both validate; opus-5 offered', 
   assertEquals(trouble({ provider: 'claude', model: 'sonnet' }), null)
   assertEquals(trouble({ provider: 'claude', model: 'claude-opus-5' }), null)
   assertEquals(trouble({ provider: 'claude', model: 'claude-opus-4-8' }), null)
-  // the new model is on the menu with its friendly name, not just allowed
-  assertEquals(claude.labels['claude-opus-5'], 'Opus 5')
+  // the MENU is aliases only — a pin is allowed, never offered — and its
+  // first entry is the house default every door reads as offers()[0]
+  assertEquals(Object.keys(claude.labels), ['opus', 'fable', 'sonnet', 'haiku'])
+  assertEquals(claude.models[0], 'opus')
 })
 
 Deno.test('trouble: unknown provider/model/effort each name the valid ones', () => {
