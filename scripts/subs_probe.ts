@@ -6,14 +6,26 @@
 //      matches (add via HTTP/cast AND via /ws), not unrelated writes, gets a
 //      `drop` when a member re-points away, and an entity-null when a member
 //      dies. Cleans up every entity it mints.
+//   C. shadow — a board subscription keeps the complete live stream while its
+//      parallel set maintains every own-component operator.
 // Run: deno run -A --unstable-net --unstable-worker-options scripts/subs_probe.ts
 
-let PORT = 5319
+let port = () => {
+  let asked = Number(Deno.env.get('PORT'))
+  if (asked) return asked
+  let listener = Deno.listen({ hostname: '127.0.0.1', port: 0 })
+  let found = (listener.addr as Deno.NetAddr).port
+  listener.close()
+  return found
+}
+let PORT = port()
 let DB = await Deno.makeTempFile({ suffix: '.db' })
 let uuid = () => crypto.randomUUID()
-let ok = (label: string, cond: boolean) =>
-  console.log(`${cond ? 'PASS' : 'FAIL'}  ${label}`) || (pass = pass && cond)
 let pass = true
+let ok = (label: string, cond: boolean) => {
+  console.log(`${cond ? 'PASS' : 'FAIL'}  ${label}`)
+  pass = pass && cond
+}
 
 let server = new Deno.Command('deno', {
   args: [
@@ -192,6 +204,95 @@ try {
   )
   ok('B: deleting a member forwards an entity-null to the subscriber', !!deathF)
 
+  // ---- Door C: shadow agreement beside the complete stream ----------------
+  let shadow = await open(true)
+  let sub = 'board:probe'
+  let matrix: [
+    string,
+    string,
+    Record<string, unknown>,
+    Record<string, unknown>,
+  ][] = [
+    ['equality', '.status=open', { status: 'open' }, { status: 'done' }],
+    ['list', '.domain=Ops,Eng', { domain: 'Ops' }, { domain: 'Web' }],
+    ['range', '.priority=1..3', { priority: 3 }, { priority: 4 }],
+    ['inequality', '.status!=done', { status: 'open' }, { status: 'done' }],
+    ['contains', '.title~=flux', { title: 'Flux gate' }, {
+      title: 'Warp gate',
+    }],
+  ]
+  let shadowEids: string[] = []
+  for (let [name, q, inside, outside] of matrix) {
+    shadow.frames.length = 0
+    send(shadow.s, { sub, q, shadow: true })
+    ok(`C: ${name} shadow opens`, !!(await shadow.want(subFrame(sub))))
+
+    let eid = uuid()
+    shadowEids.push(eid)
+    shadow.frames.length = 0
+    await apply([
+      {
+        eid,
+        name: 'doc',
+        comp: { title: String(inside.title ?? name), body: '' },
+      },
+      {
+        eid,
+        name: 'task',
+        comp: {
+          status: String(inside.status ?? 'open'),
+          priority: Number(inside.priority ?? 1),
+          domain: inside.domain == null ? null : String(inside.domain),
+        },
+      },
+    ])
+    ok(
+      `C: ${name} add rides the shadow set`,
+      !!(await shadow.want((f) =>
+        subFrame(sub)(f) &&
+        (f as { changes: { eid: string }[] }).changes.some((x) => x.eid == eid)
+      )),
+    )
+    ok(
+      `C: ${name} add also rides the complete stream`,
+      !!(await shadow.want((f) => !!live(f)?.some((x) => x.eid == eid))),
+    )
+
+    shadow.frames.length = 0
+    let comp = q.includes('title') ? 'doc' : 'task'
+    await apply([{ eid, name: comp, comp: outside }])
+    ok(
+      `C: ${name} moving out sends a drop`,
+      !!(await shadow.want((f) =>
+        subFrame(sub)(f) && (f as { drop: string[] }).drop.includes(eid)
+      )),
+    )
+    ok(
+      `C: ${name} drop still rides the complete stream`,
+      !!(await shadow.want((f) => !!live(f)?.some((x) => x.eid == eid))),
+    )
+
+    shadow.frames.length = 0
+    await apply([{ eid, name: comp, comp: inside }])
+    ok(
+      `C: ${name} moving back re-adds`,
+      !!(await shadow.want((f) =>
+        subFrame(sub)(f) &&
+        (f as { changes: { eid: string }[] }).changes.some((x) => x.eid == eid)
+      )),
+    )
+  }
+
+  send(shadow.s, { unsub: sub })
+  let after = uuid()
+  shadowEids.push(after)
+  shadow.frames.length = 0
+  await apply([{ eid: after, name: 'doc', comp: { title: 'after shadow' } }])
+  ok(
+    'C: closing a shadow keeps the socket on the complete stream',
+    !!(await shadow.want((f) => !!live(f)?.some((x) => x.eid == after))),
+  )
+
   // ---- cleanup ------------------------------------------------------------
   await apply([
     { eid: S, name: 'entity', comp: null },
@@ -199,8 +300,9 @@ try {
     { eid: mark, name: 'entity', comp: null },
     { eid: castMark, name: 'entity', comp: null },
     { eid: noise, name: 'entity', comp: null },
+    ...shadowEids.map((eid) => ({ eid, name: 'entity', comp: null })),
   ])
-  for (let x of [a, b, next, c, d]) x.s.close()
+  for (let x of [a, b, next, c, d, shadow]) x.s.close()
 } finally {
   server.kill('SIGTERM')
   await server.status

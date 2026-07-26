@@ -3,6 +3,7 @@
 import {
   applyLocal,
   backlinks,
+  boardPost,
   byWarmth,
   cache,
   commentCount,
@@ -267,6 +268,28 @@ Deno.test('boardAll: whole-graph match, chrome/comments/self excluded', async ()
       doc: { eid: 'note', title: 'aimed words', body: '' },
       comment: { eid: 'note', target_eid: 'task' },
     },
+    card: {
+      entity: spine('card', 7),
+      card: { eid: 'card', target_eid: 'task', view: 'Full' },
+    },
+    fold: {
+      entity: spine('fold', 8),
+      fold: {
+        eid: 'fold',
+        client_eid: 'client',
+        board_eid: 'board',
+        statuses: 'done',
+      },
+    },
+    shelf: {
+      entity: spine('shelf', 9),
+      canvas: { eid: 'shelf' },
+      shelf: { eid: 'shelf', client_eid: 'client' },
+    },
+    client: {
+      entity: spine('client', 10),
+      client: { eid: 'client', user_agent: 'probe', ip: '' },
+    },
   }
   deps.value = []
   let board = ent('board')
@@ -274,6 +297,11 @@ Deno.test('boardAll: whole-graph match, chrome/comments/self excluded', async ()
     boardAll(board).map((e) => e.eid).toSorted(),
     ['mem', 'sesh', 'task'], // every kind rides; chrome, comment, self do not
   )
+  assertEquals(
+    boardPost(board, false, Object.keys(cache.value)).toSorted(),
+    ['mem', 'sesh', 'task'],
+  )
+  assertEquals(boardPost(board, true, Object.keys(cache.value)), ['task'])
   // preds still screen: a task-shaped query matches only tasks
   cache.value.board.board!.query = '.status=open'
   assertEquals(boardAll(ent('board')).map((e) => e.eid), ['task'])

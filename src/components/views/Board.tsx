@@ -14,6 +14,7 @@ import {
 import { spec, taskChanges } from '../../client.ts'
 import { adopt, orderOf, parseQuery } from '../../query.ts'
 import { peek, useDraft } from '../drafts.ts'
+import { useBoardSub } from '../subscriptions.ts'
 import { block } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
 import { Prio } from '../Prio.tsx'
@@ -111,6 +112,7 @@ let QuickAdd = (
 let addKey = (eid: string, status: string) => `new:${eid}:${status}`
 
 export let Board = ({ e }: { e: Ent }) => {
+  useBoardSub(e)
   // Which column's quick-create box is open ('' = none). One at a time:
   // the box is a keyboard, and there's one keyboard. On mount, a column
   // with a live draft reopens itself — a half-typed task the last mount

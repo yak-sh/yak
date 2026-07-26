@@ -5,6 +5,7 @@
 // Debug.Tile render through the very same components the browser uses,
 // painted as lines instead of CSS.
 import { signal } from '@preact/signals'
+import { useBoardSub } from '../components/subscriptions.ts'
 import { formatProp, propAt } from '../props.ts'
 import { type Ent, idOf } from '../types.ts'
 import {
@@ -332,6 +333,7 @@ let TStatus = () => {
 // through its first applicable view. The title doubles as the breadcrumb.
 export let App = () => {
   let p = boardEid()
+  useBoardSub(p ? ent(p) : undefined)
   let s = selected()
   let here = trail.value.at(-1)
   // The trail persists across runs; entities don't have to. Drop any

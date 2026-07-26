@@ -1,7 +1,8 @@
 // The subscription seam, proven without a socket: the §2 membership transition
 // and the comps→Changes spread. Run: deno test src/subs_test.ts
 import { assertEquals } from '@std/assert'
-import { spread, type Step, step } from './subs.ts'
+import { matchQuery, parseQuery } from './query.ts'
+import { diff, gaps, spread, type Step, step } from './subs.ts'
 
 // One step, reading the verb AND the resulting membership — the Set is the
 // bookkeeping, so a test asserts both.
@@ -44,4 +45,52 @@ Deno.test('spread turns comps into a Change batch, entity riding too', () => {
       { eid: 'e1', name: 'doc', comp: { title: 'hi' } },
     ],
   )
+})
+
+Deno.test('agreement gaps are only paths and moving time', () => {
+  let cases: [string, string[]][] = [
+    ['.status=open', []],
+    ['.domain=Ops,Eng', []],
+    ['.priority=1..3', []],
+    ['.status!=done', []],
+    ['.title~=flux', []],
+    ['.created.at=2026-07-01', []],
+    ['.order=hot', []],
+    ['.assignee.title~=jeff', ['path']],
+    ['.updated.at=today', ['moving-time']],
+    ['.updated.at>="1 hour ago"', ['moving-time']],
+  ]
+  for (let [q, want] of cases) assertEquals(gaps(parseQuery(q)), want, q)
+})
+
+Deno.test('agreement diff names both sides once and in order', () => {
+  assertEquals(diff(['c', 'a', 'c'], ['b', 'c']), {
+    scanOnly: ['a'],
+    subOnly: ['b'],
+  })
+})
+
+// The server's touched-row protocol uses this exact match → step seam. Each
+// supported operator moves one member out, then back in.
+Deno.test('own-component operators maintain subscription membership', () => {
+  let cases: [string, Record<string, unknown>, Record<string, unknown>][] = [
+    ['.status=open', { status: 'open' }, { status: 'done' }],
+    ['.domain=Ops,Eng', { domain: 'Ops' }, { domain: 'Web' }],
+    ['.priority=1..3', { priority: 3 }, { priority: 4 }],
+    ['.status!=done', { status: 'open' }, { status: 'done' }],
+    ['.priority>=2', { priority: 2 }, { priority: 1 }],
+    ['.title~=flux', { title: 'Flux gate' }, { title: 'Warp gate' }],
+  ]
+  for (let [q, inside, outside] of cases) {
+    let members = new Set<string>()
+    let matches = (v: Record<string, unknown>) =>
+      matchQuery(
+        q.includes('title') ? { doc: v } : { task: v },
+        parseQuery(q),
+      )
+    assertEquals(step(members, 'e1', true, matches(inside)), 'add', q)
+    assertEquals(step(members, 'e1', true, matches(outside)), 'remove', q)
+    assertEquals(step(members, 'e1', true, matches(inside)), 'add', q)
+    assertEquals([...members], ['e1'], q)
+  }
 })

@@ -6,6 +6,7 @@ import { block } from '../ui.tsx'
 import { clickProps, menuAt } from '../nav.tsx'
 import { passOf } from '../Filter.tsx'
 import { dragData } from '../drag.ts'
+import { useBoardSub } from '../subscriptions.ts'
 import { Id } from './Inline.tsx'
 import { Entity } from '../Entity.tsx'
 
@@ -47,6 +48,7 @@ let byModified = (a: Ent, b: Ent) =>
   String(touchedAt(b)).localeCompare(String(touchedAt(a))) ||
   (b.num - a.num)
 export let BoardList = ({ e }: { e: Ent }) => {
+  useBoardSub(e)
   let pass = passOf(e.eid)
   let rows: Ent[]
   let hot = false

@@ -135,12 +135,10 @@ let envelopes = new Set<WebSocket>()
 
 // Query subscriptions (T-3683), the whole registry. A Sub is a socket's saved
 // query + the eids currently in its set; `subs` maps each socket to its named
-// subscriptions, `filtered` holds every socket that ever subscribed. The
-// migration switch is one boolean: a socket stays in the legacy full
-// rebroadcast until its first control frame flips it into `filtered`, after
-// which it hears ONLY its subscription frames (design §1/§6). onclose drops
-// both — GC-free, per-socket.
-type Sub = { preds: Pred[]; members: Set<string> }
+// subscriptions, `filtered` holds every socket that opened a non-shadow sub.
+// Shadow subs hear both streams for prove-before-flip; the later migration
+// switch is still one boolean. onclose drops both — GC-free, per-socket.
+type Sub = { preds: Pred[]; members: Set<string>; shadow: boolean }
 let subs = new Map<WebSocket, Map<string, Sub>>()
 let filtered = new Set<WebSocket>()
 
@@ -197,7 +195,13 @@ let maintain = (batch: Change[]) => {
         else if (s == 'dead') changes.push({ eid, name: 'entity', comp: null })
       }
       if (changes.length || drop.length) {
-        sock.send(JSON.stringify({ sub: id, changes, drop, cursor: cur }))
+        sock.send(JSON.stringify({
+          sub: id,
+          changes,
+          drop,
+          cursor: cur,
+          shadow: sub.shadow,
+        }))
       }
     }
   }
@@ -205,24 +209,36 @@ let maintain = (batch: Change[]) => {
 
 // A socket's control frame (design §1): `{sub, q}` subscribes or replaces (the
 // initial frame is the query's current matches as one batch, and seeds the
-// member set); `{unsub}` forgets one. Any control frame flips the socket into
-// `filtered` — the migration switch — so it leaves the legacy rebroadcast even
-// if the query is malformed (it then simply hears nothing, its own news).
+// member set); `{unsub}` forgets one. A non-shadow subscribe flips the socket
+// into `filtered`; a shadow subscribe keeps the legacy stream beside its
+// result frames.
 let control = (
   sock: WebSocket,
-  f: { sub?: string; q?: string; unsub?: string },
+  f: { sub?: string; q?: string; unsub?: string; shadow?: boolean },
 ) => {
-  filtered.add(sock)
+  // A shadow subscription proves its set beside the complete stream. It must
+  // not flip the socket into partial-cache delivery before stage 2c.
+  if (typeof f.sub == 'string' && !f.shadow) filtered.add(sock)
   let map = subs.get(sock) ?? new Map<string, Sub>()
   subs.set(sock, map)
   if (typeof f.unsub == 'string') return void map.delete(f.unsub)
   if (typeof f.sub != 'string') return
   try {
     let { preds, hits } = evalQuery(f.q ?? '')
-    map.set(f.sub, { preds, members: new Set(hits.map((r) => r.eid)) })
+    map.set(f.sub, {
+      preds,
+      members: new Set(hits.map((r) => r.eid)),
+      shadow: !!f.shadow,
+    })
     let changes = hits.flatMap((r) => spread(r.eid, r.comps))
     sock.send(
-      JSON.stringify({ sub: f.sub, changes, drop: [], cursor: cursorOf(db) }),
+      JSON.stringify({
+        sub: f.sub,
+        changes,
+        drop: [],
+        cursor: cursorOf(db),
+        shadow: !!f.shadow,
+      }),
     )
   } catch (e) {
     console.warn('sub: bad query —', e)

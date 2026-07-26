@@ -19,6 +19,7 @@ import { normalizeChanges } from './props.ts'
 import * as idb from './idb.ts'
 import { topology } from './leader.ts'
 import { liveChanges } from './wire.ts'
+import { diff, gaps } from './subs.ts'
 
 // A cache row: the spine plus whichever components the entity carries.
 // Derived from Ent so a new component (types.ts) threads through here —
@@ -186,7 +187,13 @@ export let mutate = (...changes: Change[]) => {
 
 type Catchup = { catchup: Change[]; cursor: number }
 type Reset = { reset?: boolean; snapshot: Snapshot; error?: string }
-type Sub = { sub: string; changes: Change[]; drop?: string[]; cursor?: number }
+type Sub = {
+  sub: string
+  changes: Change[]
+  drop?: string[]
+  cursor?: number
+  shadow?: boolean
+}
 type Hot = 'reload' | { hmr: number } | { css: number }
 
 let owner: ReturnType<typeof topology<unknown>> | null = null
@@ -264,9 +271,12 @@ export let send = (...changes: unknown[]) => route(changes)
 // subscription result sets: `subMembers` refcounts which eids each sub holds,
 // so an eid that leaves EVERY subscription is evicted — the one new cache
 // mechanic (design §4). A legacy full-broadcast client never subscribes, so
-// this map stays empty and nothing is ever evicted; boot and applyLocal are
-// untouched. Stage 1 only ADDS this capability (boards/boot convert in stage 2).
+// this map stays empty and nothing is ever evicted. A shadow sub tracks the set
+// without eviction while the complete stream remains the cache owner.
 let subMembers = new Map<string, Set<string>>()
+let subVersion = signal(0)
+let shadows = new Set<string>()
+let shadowQueries = new Map<string, string>()
 
 // A subscription frame: land its changes like any batch (adds + updates flow
 // through the unchanged applyLocal), then track membership. A death rides in
@@ -286,7 +296,8 @@ let onSub = (f: Sub) => {
     } else mine.add(c.eid)
   }
   for (let eid of f.drop ?? []) mine.delete(eid)
-  evict(leaving)
+  if (!f.shadow && !shadows.has(f.sub)) evict(leaving)
+  subVersion.value++
   return {
     eids: [...new Set([...touched.eids, ...(f.drop ?? [])])],
     edges: touched.edges,
@@ -315,9 +326,92 @@ let control = (frame: object) => {
   route(frame)
 }
 export let subscribe = (sub: string, q: string) => control({ sub, q })
+let shadow = (sub: string, q: string) => {
+  shadows.add(sub)
+  shadowQueries.set(sub, q)
+  control({ sub, q, shadow: true })
+}
 export let unsubscribe = (sub: string) => {
+  shadows.delete(sub)
+  shadowQueries.delete(sub)
   subMembers.delete(sub)
   control({ unsub: sub })
+}
+
+// The subscription result is separate from the cache: undefined means the
+// initial frame has not landed; an empty Set is a ready, empty result.
+export let subEids = (sub: string): Set<string> | undefined => {
+  subVersion.value
+  let found = subMembers.get(sub)
+  return found && new Set(found)
+}
+
+let checked = new Map<string, string>()
+let checks = { agreements: 0, divergences: 0, annotated: 0 }
+;(globalThis as { __subscriptions?: () => typeof checks }).__subscriptions =
+  () => ({ ...checks })
+
+// Compare after adjacent full/sub frames have both had a turn. The scan stays
+// the caller's render source; this is only a diagnostic and probe counter.
+export let assertAgree = (
+  sub: string,
+  q: string,
+  scan: Iterable<string>,
+  members: Iterable<string>,
+) => {
+  let expected = [...new Set(scan)].sort()
+  let received = [...new Set(members)].sort()
+  let signature = JSON.stringify([q, expected, received])
+  if (checked.get(sub) == signature) return
+  checked.set(sub, signature)
+  setTimeout(() => {
+    if (shadowQueries.get(sub) != q || checked.get(sub) != signature) return
+    checks.agreements++
+    let d = diff(expected, received)
+    if (!d.scanOnly.length && !d.subOnly.length) return
+    checks.divergences++
+    let unsupported = gaps(parseQuery(q))
+    let note = {
+      sub,
+      query: q,
+      scanOnly: d.scanOnly,
+      subOnly: d.subOnly,
+      unsupported,
+    }
+    if (unsupported.length) {
+      checks.annotated++
+      console.warn('subscription agreement deferred —', note)
+    } else {
+      console.assert(false, 'subscription divergence', note)
+    }
+  }, 20)
+}
+
+let boardUses = new Map<string, { n: number; q: string }>()
+
+// One logical board subscription per process. Several cards may show the same
+// board; the last unmount closes the shared wire name.
+export let boardSub = (e: Ent) => {
+  let sub = `board:${e.eid}`
+  let q = String(e.board?.query ?? '')
+  let use = boardUses.get(sub)
+  if (use) {
+    use.n++
+    if (use.q != q) {
+      use.q = q
+      shadow(sub, q)
+    }
+  } else {
+    boardUses.set(sub, { n: 1, q })
+    shadow(sub, q)
+  }
+  return () => {
+    let held = boardUses.get(sub)
+    if (!held || --held.n > 0) return
+    boardUses.delete(sub)
+    checked.delete(sub)
+    unsubscribe(sub)
+  }
 }
 
 // Fetch the whole graph, fill the signals, seed IDB — the first-visit path
@@ -536,16 +630,6 @@ export let findEid = (id: string): string | undefined => {
     if (num ? r.entity?.num == +num : r.alias?.slug == id) return eid
   }
 }
-export let boardTasks = (e: Ent): Ent[] => {
-  let preds = resolveRefs(
-    parseQuery(String(e.board?.query ?? '')),
-    findEid,
-  )
-  return Object.entries(cache.value)
-    .filter(([, r]) => r.task && matchQuery(r, preds, (t) => cache.value[t]))
-    .map(([eid]) => ent(eid))
-}
-
 // The same query over the WHOLE graph — the board's List face. No task
 // gate: sessions, memories, docs, web, people — anything that matches.
 // Chrome stays out (a camera's updated.at churns with every pan and
@@ -553,18 +637,41 @@ export let boardTasks = (e: Ent): Ent[] => {
 // not content), comments surface through their targets (the lately
 // digest's rule), and a board is not news to itself.
 let CHROME = new Set(['card', 'camera', 'fold', 'shelf', 'client', 'comment'])
-export let boardAll = (e: Ent): Ent[] => {
+let chrome = (r: Comps) => [...CHROME].some((name) => r[name as keyof Comps])
+export let boardPost = (
+  e: Ent,
+  tasks: boolean,
+  eids: Iterable<string>,
+): string[] =>
+  [...eids].filter((eid) => {
+    let r = cache.value[eid]
+    // Facets are the truth: a shelf is also a canvas, so kindOf cannot name
+    // the chrome component that keeps it out of the feed.
+    return !!r && (tasks ? !!r.task : eid != e.eid && !chrome(r))
+  })
+
+let boardScan = (e: Ent, tasks: boolean): Ent[] => {
+  let q = String(e.board?.query ?? '')
   let preds = resolveRefs(
-    parseQuery(String(e.board?.query ?? '')),
+    parseQuery(q),
     findEid,
   )
-  return Object.entries(cache.value)
-    .filter(([eid, r]) =>
-      eid != e.eid && !CHROME.has(kindOf(r)) &&
-      matchQuery(r, preds, (t) => cache.value[t])
+  let hits = boardPost(e, tasks, Object.keys(cache.value))
+    .filter((eid) => matchQuery(cache.value[eid], preds, (t) => cache.value[t]))
+  let members = subEids(`board:${e.eid}`)
+  if (members) {
+    assertAgree(
+      `board:${e.eid}`,
+      q,
+      hits,
+      boardPost(e, tasks, members),
     )
-    .map(([eid]) => ent(eid))
+  }
+  return hits.map(ent)
 }
+
+export let boardTasks = (e: Ent): Ent[] => boardScan(e, true)
+export let boardAll = (e: Ent): Ent[] => boardScan(e, false)
 
 // The ephemeral filter's evaluator: a bar's line parsed and ref-resolved
 // ONCE, returned as a per-row test — Board and the Lists AND it into

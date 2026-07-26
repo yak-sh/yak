@@ -10,6 +10,9 @@
 // as cheap as an add: no client can say that today because no client knows
 // another's query — centralizing the matcher on the server is what makes it
 // expressible (design §2).
+import { propAt } from './props.ts'
+import { type Pred } from './query.ts'
+import { span } from './time.ts'
 import { type Change } from './types.ts'
 
 // The five outcomes of testing one touched eid against one subscription
@@ -46,3 +49,35 @@ export let spread = (
     name,
     comp: comp as Change['comp'],
   }))
+
+// Agreement is hard while membership depends only on the row being changed.
+// Paths need the far-side change index; moving time needs a clock sweep.
+export type Gap = 'path' | 'moving-time'
+
+let atoms = (value: string) =>
+  value.split(',').flatMap((v) => {
+    let m = v.match(/^(.*?)\.\.(?:\.?)(.*)$/s)
+    return m ? [m[1], m[2]] : [v]
+  }).filter(Boolean)
+
+let fixed = (value: string) => /^\d{4}-\d{2}-\d{2}(?:[t ].*)?$/i.test(value)
+
+let moving = (p: Pred) => {
+  let target = p.at ?? p
+  if (propAt(target.comp, target.prop)?.type != 'time') return false
+  return atoms(p.value).some((v) => !fixed(v) && !!span(v))
+}
+
+export let gaps = (preds: Pred[]): Gap[] => [
+  ...preds.some((p) => !!p.at) ? ['path' as Gap] : [],
+  ...preds.some(moving) ? ['moving-time' as Gap] : [],
+]
+
+export type Diff = { scanOnly: string[]; subOnly: string[] }
+export let diff = (scan: Iterable<string>, sub: Iterable<string>): Diff => {
+  let a = new Set(scan), b = new Set(sub)
+  return {
+    scanOnly: [...a].filter((eid) => !b.has(eid)).sort(),
+    subOnly: [...b].filter((eid) => !a.has(eid)).sort(),
+  }
+}
