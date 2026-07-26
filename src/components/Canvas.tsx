@@ -28,6 +28,26 @@ let { Plane } = Frame
 let ZOOM_MIN = 0.1
 let ZOOM_MAX = 4
 
+export let panEvents = (
+  elem: EventTarget,
+  move: (e: PointerEvent) => void,
+  settle: () => void,
+) => {
+  let moving = (e: Event) => move(e as PointerEvent)
+  let quit = () => {
+    elem.removeEventListener('pointermove', moving)
+    elem.removeEventListener('pointerup', up)
+    elem.removeEventListener('pointercancel', quit)
+  }
+  let up = () => {
+    quit()
+    settle()
+  }
+  elem.addEventListener('pointermove', moving)
+  elem.addEventListener('pointerup', up)
+  elem.addEventListener('pointercancel', quit)
+}
+
 // Where the search palette drops its pick: a card at the viewport
 // centre, a third of the way down — computed from the camera alone, so
 // the shell (App owns the palette) never reaches into a mounted canvas.
@@ -317,18 +337,7 @@ export let Canvas = ({ eid }: { eid: string }) => {
         y: from.y - (e.clientY - sy) / from.zoom,
       }
     }
-    let quit = () => {
-      elem.removeEventListener('pointermove', move)
-      elem.removeEventListener('pointerup', up)
-      elem.removeEventListener('pointercancel', quit)
-    }
-    let up = () => {
-      quit()
-      queue('x', 'y')
-    }
-    elem.addEventListener('pointermove', move)
-    elem.addEventListener('pointerup', up)
-    elem.addEventListener('pointercancel', quit)
+    panEvents(elem, move, () => queue('x', 'y'))
   }
 
   // Can anything between the wheel target and the canvas still consume this
