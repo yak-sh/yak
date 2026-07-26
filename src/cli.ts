@@ -942,9 +942,7 @@ let modelOf = (path: string) => {
 export let hookDialect = (body: Record<string, unknown>) => {
   let codexModel = String(body.model ?? '')
   let provider = codexModel ? 'codex' : 'claude'
-  let transcript = provider == 'claude'
-    ? String(body.transcript_path ?? '') || undefined
-    : undefined
+  let transcript = String(body.transcript_path ?? '') || undefined
   return {
     provider,
     model: codexModel || modelOf(transcript ?? ''),
@@ -1076,8 +1074,7 @@ let context = async (args: string[]) => {
       // which transcript and process fields are meaningful.
       let { model, provider, transcript } = hookDialect(body)
       let cwd = String(body.cwd ?? '') || undefined
-      // Claude's transcript is also an external session's durable log;
-      // Codex's rollout is not stored because its format is not stable.
+      // The provider's transcript is the external session's durable log.
       // `provider` stays out of this CREATE: a new session carrying one is
       // a managed spawn request. It lands as a patch below.
       let s = sessionFor(

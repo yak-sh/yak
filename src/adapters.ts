@@ -10,6 +10,7 @@
 // CLIs (subscription auth rides HOME — no keys in argv, no keys in env).
 // Event shapes below are copied from live probes of both CLIs, not docs.
 import { kilo, type LogRow, type Session } from './types.ts'
+import { codexTranscript } from './transcripts.ts'
 
 // One parsed log line. Adapters own the dialect; anything they don't
 // recognize is just log, not summary.
@@ -48,6 +49,9 @@ export type Adapter = {
   // ONLY place a vendor's shape is known; the browser reads LogRow, never a
   // provider's JSON.
   row: (e: Event) => LogRow | null
+  // Interactive CLIs may persist a different dialect than the managed command
+  // prints. Absent means row() already speaks both, as Claude's does.
+  transcript?: (e: Event) => LogRow | null
 }
 
 // A claude message content block, as much of it as row() reads.
@@ -493,6 +497,7 @@ export let adapters: Record<string, Adapter> = {
           ),
         }
         : null,
+    transcript: codexTranscript,
     // Only item.COMPLETED narrates — item.started would double every row.
     // A tool call arrives whole (server.tool, its status, its error); a
     // command carries its own exit. turn.completed is the usage divider.

@@ -512,7 +512,7 @@ export let open = () => {
   addCol('task', 'domain', 'domain text')
   addCol('session', 'cwd', 'cwd text')
   addCol('session', 'pid', 'pid integer')
-  // Claude Code's own transcript JSONL — an external session's log file.
+  // A provider-owned transcript JSONL — an external session's log file.
   addCol('session', 'transcript', 'transcript text')
   addCol('session', 'acked_at', 'acked_at text')
   // Self-reported at SessionStart (types.ts): what kind of session, how it booted.

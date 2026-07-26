@@ -89,7 +89,7 @@ Deno.test('hookDialect: Codex payload and Claude transcript name the provider', 
       {
         provider: 'codex',
         model: 'gpt-5.6-sol',
-        transcript: undefined,
+        transcript: '/unstable/codex.jsonl',
       },
     )
   } finally {

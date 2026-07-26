@@ -51,49 +51,64 @@ let errFile = (eid: string) => `${logsDir()}/${eid}.stderr.log`
 let pidFile = (eid: string) => `${logsDir()}/${eid}.pid`
 let codeFile = (eid: string) => `${logsDir()}/${eid}.code`
 
-// Claude Code's own transcript for a session — the path its SessionStart
-// hook reported. It arrives over the WIRE like any other self-report, so
-// it is a reference, not a capability: only Claude's project store is
-// readable through it, or an unauthed /logs would become a file-read
-// oracle for whatever a forged row named.
+// A terminal provider's own transcript — the path its SessionStart hook
+// reported. It arrives over the WIRE like any other self-report, so it is a
+// reference, not a capability: only the providers' canonical stores are
+// readable through it, or an unauthed /logs would become a file-read oracle.
+let transcriptStores = (): Record<string, string> => ({
+  claude: `${Deno.env.get('HOME')}/.claude/projects`,
+  codex: `${Deno.env.get('HOME')}/.codex/sessions`,
+})
+
+let confined = (path: string, store: string) => {
+  try {
+    let root = `${Deno.realPathSync(store)}/`
+    let file = Deno.realPathSync(path)
+    return file.startsWith(root) && file.endsWith('.jsonl') ? file : undefined
+  } catch {
+    return undefined
+  }
+}
+
 let transcriptOf = (eid: string) => {
-  let p = String(
-    (db.prepare('select transcript from session where eid = ?').get(eid) as
-      | { transcript: string | null }
-      | undefined)?.transcript ?? '',
-  )
-  let store = `${Deno.env.get('HOME')}/.claude/projects/`
-  return p.startsWith(store) && p.endsWith('.jsonl') && !p.includes('..')
-    ? p
-    : undefined
+  let s = db.prepare(
+    'select provider, transcript from session where eid = ?',
+  ).get(eid) as
+    | { provider: string | null; transcript: string | null }
+    | undefined
+  if (!s?.transcript) return
+  let stores = transcriptStores()
+  let providers = stores[String(s.provider)]
+    ? [String(s.provider)]
+    : Object.keys(stores)
+  for (let provider of providers) {
+    let path = confined(s.transcript, stores[provider])
+    if (path) return { path, provider }
+  }
 }
 
 // The dialect a session's log speaks. A managed run was ASKED for a
-// provider, so it says which; anything carrying a transcript is Claude
-// Code by construction — nothing else writes one. Derived rather than
-// stamped, because `provider` is a spawn REQUEST column: a session
-// created wearing one is an ask to launch an agent (spawned(), below),
-// so writing it onto an operator's reify would turn every terminal into
-// a failed spawn.
+// provider, so it says which; an older external session can instead be
+// identified by the confined store carrying its transcript. Derived rather
+// than stamped, because `provider` on CREATE is a spawn request.
 let dialectOf = (eid: string) => {
   let s = db.prepare('select provider, transcript from session where eid = ?')
     .get(eid) as { provider: string | null; transcript: string | null } | null
   return adapters[String(s?.provider)] ??
-    (s?.transcript ? adapters.claude : undefined)
+    adapters[transcriptOf(eid)?.provider ?? '']
 }
 
 // The file that IS a session's log. Whoever owns the PROCESS owns its
 // stdout: a run we spawned writes ours, and everything else — an
-// operator's terminal claude — keeps Claude Code's transcript, which
-// `claude --resume` appends to, so one file is the whole story either
-// way. Origin is exactly the right question here (unlike liveness,
-// door.ts): it names who forked the process.
+// operator's terminal — keeps the provider's transcript, so one file is the
+// whole story either way. Origin is exactly the right question here (unlike
+// liveness, door.ts): it names who forked the process.
 let logOf = (eid: string) =>
   (db.prepare('select origin from session where eid = ?').get(eid) as
       | { origin: string }
       | undefined)?.origin == 'managed'
     ? logFile(eid)
-    : transcriptOf(eid) ?? logFile(eid)
+    : transcriptOf(eid)?.path ?? logFile(eid)
 
 let poll = () => Number(Deno.env.get('POLL_MS') ?? 300)
 let grace = () => Number(Deno.env.get('STOP_GRACE_MS') ?? 5000)
@@ -557,7 +572,10 @@ let clip = (s: string) => s.length > 64_000 ? `${s.slice(0, 64_000)}…` : s
 // dialect dispatch), everything else goes through the session's adapter.
 // A line that isn't JSON, or that the adapter doesn't recognize, carries no
 // row — the client renders it as its bare type, as before.
-let rowOf = (line: string, ad: Adapter | undefined): LogRow | undefined => {
+let rowOf = (
+  line: string,
+  read: Adapter['row'] | undefined,
+): LogRow | undefined => {
   let e: Event
   try {
     e = JSON.parse(line)
@@ -575,7 +593,14 @@ let rowOf = (line: string, ad: Adapter | undefined): LogRow | undefined => {
       ...(e.timestamp ? { at: String(e.timestamp) } : {}),
     }
   }
-  return ad?.row(e) ?? undefined
+  return read?.(e) ?? undefined
+}
+
+let readerOf = (eid: string) => {
+  let origin = (db.prepare('select origin from session where eid = ?')
+    .get(eid) as { origin: string | null } | undefined)?.origin
+  let ad = dialectOf(eid)
+  return origin == 'managed' ? ad?.row : ad?.transcript ?? ad?.row
 }
 
 // The log, WHOLE by default — a reader asking for a session's log wants
@@ -592,7 +617,7 @@ export let logs = (eid: string, q: URLSearchParams) => {
   try {
     text = Deno.readTextFileSync(logOf(eid))
   } catch { /* no log yet: an empty log is not an error */ }
-  let ad = dialectOf(eid)
+  let read = readerOf(eid)
   let lines = text.split('\n')
   if (lines.at(-1) == '') lines.pop() // the trailing newline isn't a line
   let limit = Math.max(0, Number(q.get('limit')) || 0)
@@ -602,7 +627,7 @@ export let logs = (eid: string, q: URLSearchParams) => {
     : Math.max(0, Number(q.get('after')) || 0)
   let entries = lines.slice(from, limit > 0 ? from + limit : undefined)
     .map((line, i) => {
-      let row = rowOf(line, ad)
+      let row = rowOf(line, read)
       return { seq: from + i + 1, line: clip(line), ...(row ? { row } : {}) }
     })
   let err = errTail(eid)

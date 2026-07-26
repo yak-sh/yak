@@ -795,19 +795,29 @@ Deno.test('a comment after the sweep regrows the worktree and resumes', async ()
   assertMatch(refusals(eid)[0], /no worktree to resume in/)
 })
 
-// An operator's session as the SessionStart hook reifies one: an id, a
-// cwd, the claude pid, and the transcript Claude Code keeps. The
-// transcript must live in Claude's own project store or the server won't
-// read it (sessions.ts transcriptOf), so the fixture writes one there.
+// An operator's session as the SessionStart hook reifies one: an id, a cwd,
+// a process pid, and the transcript its provider keeps. The transcript must
+// live in that provider's store, so the fixture writes one there.
 // Called with no lines it reports NO transcript — the operator whose hook
 // never named one (most of them, on the owner's graph): nothing to follow,
 // and a door all the same.
-let store = `${Deno.env.get('HOME')}/.claude/projects/tasks-test`
-try {
-  Deno.removeSync(store, { recursive: true }) // a run leaves only its own
-} catch { /* never made */ }
-let announce = (pid: number, lines?: string[], transcript = '') => {
+let stores = {
+  claude: `${Deno.env.get('HOME')}/.claude/projects/tasks-test`,
+  codex: `${Deno.env.get('HOME')}/.codex/sessions/tasks-test`,
+}
+for (let store of Object.values(stores)) {
+  try {
+    Deno.removeSync(store, { recursive: true })
+  } catch { /* never made */ }
+}
+let announce = (
+  pid: number,
+  lines?: string[],
+  transcript = '',
+  provider = 'claude',
+) => {
   let eid = uid()
+  let store = stores[provider as keyof typeof stores] ?? stores.claude
   Deno.mkdirSync(store, { recursive: true })
   let path = transcript || (lines ? `${store}/${uid()}.jsonl` : '')
   if (lines && !transcript) {
@@ -820,27 +830,59 @@ let announce = (pid: number, lines?: string[], transcript = '') => {
       id: uid(),
       cwd: scratch,
       pid,
-      provider: 'fake',
+      provider,
       ...(path ? { transcript: path } : {}),
     },
   }])
   return { eid, path }
 }
 
-let SAID = '{"type":"message","role":"assistant","text":"hello from a tty"}'
+let SAID = JSON.stringify({
+  type: 'assistant',
+  message: { content: [{ type: 'text', text: 'hello from a tty' }] },
+})
 
-Deno.test("an external session's log is its transcript, and only Claude's store is readable", async () => {
+Deno.test("external session logs read each provider's confined transcript", async () => {
   let c = await fakeClaude()
-  let { eid } = announce(c.pid, [SAID])
+  let { eid, path } = announce(c.pid, [SAID])
   assertEquals(logs(eid, new URLSearchParams()).entries[0].row, {
     kind: 'say',
     role: 'agent',
     text: 'hello from a tty',
   })
-  // A row naming a file outside Claude's store reads nothing: the path
-  // rides the wire, so it is a reference, never a capability.
+  // Older Claude rows predate provider stamping; their store still names
+  // the dialect. A contradictory provider cannot cross into another store.
+  db.prepare('update session set provider = null where eid = ?').run(eid)
+  assertEquals(logs(eid, new URLSearchParams()).entries.length, 1)
+  let crossed = announce(c.pid, [], path, 'codex')
+  assertEquals(logs(crossed.eid, new URLSearchParams()).entries, [])
+  let codex = announce(
+    c.pid,
+    [JSON.stringify({
+      timestamp: '2026-07-26T12:00:00Z',
+      type: 'event_msg',
+      payload: { type: 'user_message', message: 'hello Codex' },
+    })],
+    '',
+    'codex',
+  )
+  assertEquals(logs(codex.eid, new URLSearchParams()).entries[0].row, {
+    kind: 'say',
+    role: 'user',
+    text: 'hello Codex',
+    at: '2026-07-26T12:00:00Z',
+  })
+  // A transcript is a reference, never a capability: traversal and a
+  // symlink out of either provider's store both read nothing.
   let sneak = announce(c.pid, [], `${logsDir()}/../../etc/hostname`)
   assertEquals(logs(sneak.eid, new URLSearchParams()).entries, [])
+  let outside = Deno.makeTempFileSync({ suffix: '.jsonl' })
+  let link = `${stores.codex}/escape.jsonl`
+  Deno.symlinkSync(outside, link)
+  let escaped = announce(c.pid, [], link, 'codex')
+  assertEquals(logs(escaped.eid, new URLSearchParams()).entries, [])
+  Deno.removeSync(link)
+  Deno.removeSync(outside)
   c.kill('SIGKILL')
   await c.status
 })
@@ -897,7 +939,7 @@ Deno.test('a ghost row ends when it was last heard from, unwatched', async () =>
 
 Deno.test('a comment wakes an external session only when nobody is home', async () => {
   let c = await fakeClaude()
-  let { eid } = announce(c.pid, [SAID])
+  let { eid } = announce(c.pid, [SAID], '', 'fake')
   await write(say(eid, 'still there?'))
   assertEquals(refusals(eid), []) // its channel delivered — nothing to do
   assertEquals(existsSync(log(eid)), false) // and nothing was spawned
