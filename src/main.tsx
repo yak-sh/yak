@@ -1,5 +1,5 @@
 import { render } from 'preact'
-import { boot, cache, clientId, config, ent } from './live.ts'
+import { agreementProbe, boot, cache, clientId, config, ent } from './live.ts'
 import { idOf } from './types.ts'
 import { route } from './components/nav.tsx'
 import { App } from './components/App.tsx'
@@ -33,6 +33,7 @@ addEventListener('unhandledrejection', (e) => {
 // Name this tab to the socket before it opens, so its writes journal a
 // resolved actor (T-6669). Fill the cache, open the socket, render.
 config.client = clientId()
+config.agreement = agreementProbe(location.search)
 await boot()
 
 // The grandfather door: tasks-v1 linked '?task=<slug>', and those slugs

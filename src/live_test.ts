@@ -1,6 +1,7 @@
 // The cache derivations: what the field pickers read out of the live
 // world. Pure functions of the cache signal — no DOM, no socket.
 import {
+  agreementProbe,
   applyLocal,
   assertAgree,
   backlinks,
@@ -70,6 +71,13 @@ Deno.test('agreement diagnostics are inert until explicitly enabled', () => {
     (globalThis as { __subscriptions?: unknown }).__subscriptions,
     undefined,
   )
+})
+
+Deno.test('agreement diagnostics opt in through the named browser probe', () => {
+  assertEquals(agreementProbe('?probe=subscriptions'), true)
+  assertEquals(agreementProbe('?v=Board&probe=subscriptions'), true)
+  assertEquals(agreementProbe('?probe=other'), false)
+  assertEquals(agreementProbe(''), false)
 })
 
 Deno.test('domains: distinct, sorted, absent ones skipped', () => {

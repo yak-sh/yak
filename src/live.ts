@@ -66,6 +66,8 @@ export let config: {
   agreement: false,
   reload: () => loc?.reload(),
 }
+export let agreementProbe = (search: string) =>
+  new URLSearchParams(search).get('probe') == 'subscriptions'
 export let base = () => `http${config.secure ? 's' : ''}://${config.host}`
 
 // The column sort: priority first (lower sorts higher), num as tiebreak.
