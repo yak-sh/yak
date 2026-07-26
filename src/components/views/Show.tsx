@@ -15,7 +15,7 @@ import {
 } from '../../live.ts'
 import { linkProps } from '../nav.tsx'
 import { block, Stamp } from '../ui.tsx'
-import { Comments } from '../Comments.tsx'
+import { author, Comments } from '../Comments.tsx'
 import { Dot } from '../Dot.tsx'
 import { Prio } from '../Prio.tsx'
 import { Edit } from '../Edit.tsx'
@@ -354,7 +354,7 @@ export let Meta = ({ e, id }: { e: Ent; id?: boolean }) => {
       {talk && <Talk>💬 {talk}</Talk>}
       {e.claim && (
         <Claim {...linkProps(ent(e.claim.session_eid))}>
-          ⚑ {ent(e.claim.session_eid).session?.id}
+          ⚑ {author(e.claim.session_eid)}
         </Claim>
       )}
       <By e={e} />

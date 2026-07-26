@@ -7,6 +7,7 @@ import { block } from '../ui.tsx'
 import { Prop } from '../editors.tsx'
 import { Id } from './Inline.tsx'
 import { Entity } from '../Entity.tsx'
+import { author } from '../Comments.tsx'
 
 // Adding/removing comps is a browser power tool — the TUI paints Debug as
 // static lines with no live events, so the controls stay web-only. typeof
@@ -145,9 +146,7 @@ let cells = (e: Ent, name: string, comp: Record<string, unknown>) => {
               {k.slice(0, -4)}
             </Key>
             <Val mod='ent'>
-              <Id e={ent(String(v))} /> {String(
-                ent(String(v)).doc?.title ?? ent(String(v)).session?.id ?? '',
-              )}
+              <Id e={ent(String(v))} /> {ent(String(v)).doc?.title ?? ''}
             </Val>
           </Fragment>,
         ]
@@ -249,7 +248,7 @@ export let DebugTaskItem = ({ e }: { e: Ent }) => (
     <Id e={e} />
     <Kind>{e.kind}</Kind>
     <Title>{e.doc?.title}</Title>
-    {e.claim && <Claim>⚑ {ent(e.claim.session_eid).session?.id}</Claim>}
+    {e.claim && <Claim>⚑ {author(e.claim.session_eid)}</Claim>}
     <Prio>p{e.task!.priority}</Prio>
     <Status mod={e.task!.status}>{e.task!.status}</Status>
   </Item>
