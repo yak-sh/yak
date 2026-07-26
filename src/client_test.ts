@@ -22,6 +22,7 @@ import {
   me,
   memoryChanges,
   notices,
+  observerDigest,
   param,
   patches,
   readerFor,
@@ -538,6 +539,20 @@ Deno.test('contextDigest: claimed set with gates, or open board', () => {
   assertEquals(d.includes('## lately'), false)
 })
 
+Deno.test('contextDigest: an observation target sees no claimable work', () => {
+  let target = structuredClone(snap)
+  target.changes.find((c) => c.eid == S && c.name == 'session')!.comp = {
+    id: 'sess-x',
+    operator: 0,
+    origin: 'external',
+  }
+  let out = contextDigest(target, 'sess-x')
+  assertEquals(out, observerDigest('sess-x'))
+  for (let mark of ['T-2', 'claim:', '## mail', 'from the fleet']) {
+    assertEquals(out.includes(mark), false)
+  }
+})
+
 // The digest's frontmatter lead (T-4554): a reified session's own meta —
 // S-num first, so an agent can address its own session doc. Only what's
 // known prints; an unknown sid prints nothing at all.
@@ -724,6 +739,7 @@ Deno.test('isOperator: managed or task-started is a specialist, else operator', 
   assertEquals(isOperator(undefined), true) // no session → preview
   assertEquals(isOperator({}), true) // bare external session
   assertEquals(isOperator({ origin: 'external' }), true)
+  assertEquals(isOperator({ origin: 'external', operator: false }), false)
   assertEquals(isOperator({ origin: 'managed' }), false) // wire-spawned
   assertEquals(isOperator({ requested_task_eid: 'T' }), false) // started on a task
 })
@@ -773,8 +789,8 @@ Deno.test('project mail reaches the operator, not a specialist; direct address a
   assertEquals(g.filter(inboxMail(P, true)).map((r) => r.eid), [ml])
 })
 
-Deno.test('sessionFor: agent_type + source round-trip, refresh only on change', () => {
-  let self = { agent_type: 'reviewer', source: 'startup' }
+Deno.test('sessionFor: hook identity round-trips and refreshes only on change', () => {
+  let self = { agent_type: 'reviewer', source: 'startup', operator: false }
   let minted = sessionFor(all, 'sess-new', '/w2', 4242, self)
   assertEquals(minted.changes[0].comp, {
     id: 'sess-new',
@@ -782,6 +798,7 @@ Deno.test('sessionFor: agent_type + source round-trip, refresh only on change', 
     pid: 4242,
     agent_type: 'reviewer',
     source: 'startup',
+    operator: 0,
   })
   // a known session already wearing the same agent_type is silent for it;
   // only the still-absent source patches.
@@ -791,7 +808,12 @@ Deno.test('sessionFor: agent_type + source round-trip, refresh only on change', 
       {
         eid: S,
         name: 'session',
-        comp: { id: 'sess-x', cwd: '/w', agent_type: 'reviewer' },
+        comp: {
+          id: 'sess-x',
+          cwd: '/w',
+          agent_type: 'reviewer',
+          operator: false,
+        },
       },
     ],
   })

@@ -53,7 +53,8 @@ and `/search` + `/similar` over HTTP.
   task new P1 .project=holdco Fix the flux capacitor
   task set T-3 .status=done --comment="verified end-to-end"
   task claim T-3 && task release T-3
-  task claude                   # interactive Claude, fleet-wired
+  task claude                   # addressable, observation-only Claude
+  task claude --operator        # operator with the fleet work digest
   task codex                    # interactive Codex, fleet-wired
   task mail                      # your unread fleet inbox
   task search flux capac*
@@ -73,23 +74,25 @@ and `/search` + `/similar` over HTTP.
   channel plugin.
 - **Channel plugin** (`channels/`) — a Claude Code channel that pushes comments
   and knocks aimed at a session INTO its running transcript, fed by the same
-  `/ws` broadcast every browser hears. `task claude` launches an interactive
-  session fleet-wired; `channels/README.md` has the mechanism and enablement.
+  `/ws` broadcast every browser hears. `task claude` launches an addressable
+  observation target; `--operator` opts it into the fleet work digest.
+  `channels/README.md` has the mechanism and enablement.
 - **HTTP** — `/snapshot` (the whole graph in one gulp), `/apply`, `/ws`,
   `/search`, `/similar`, `/query`, `/journal` (write history), `/telemetry`.
 
 ## Agents in the graph
 
 A session is an entity from boot: the repo's SessionStart hook runs
-`task session context --hook`, which reifies the session and injects its claimed
-work as the boot digest, led by the session's own meta as frontmatter;
-SessionEnd runs `task session wrap --hook` — claims released, the closing
-summary kept as the session's brief (`task session brief` writes one
-deliberately). Claude and Codex share those commands through their native
-lifecycle hook files. Sessions also spawn FROM the graph
-(`task spawn T-3 --provider=codex`): creating a session entity carrying a
-provider IS the spawn request, and everything the run learns — status, branch,
-exit code, final text — is server-stamped onto the row. Memories
+`task session context --hook`, which reifies every session. Intentional
+operators launched with `task claude --operator` receive their claimed work as
+the boot digest, led by the session's own meta as frontmatter; observation
+targets receive no board or claimable work. SessionEnd runs
+`task session wrap --hook` — claims released, the closing summary kept as the
+session's brief (`task session brief` writes one deliberately). Claude and Codex
+share those commands through their native lifecycle hook files. Sessions also
+spawn FROM the graph (`task spawn T-3 --provider=codex`): creating a session
+entity carrying a provider IS the spawn request, and everything the run learns —
+status, branch, exit code, final text — is server-stamped onto the row. Memories
 (`task remember`, MCP `memory_save`) let a lesson outlive the session that
 learned it; recall decays with disuse and use bumps it.
 

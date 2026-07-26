@@ -51,11 +51,10 @@ mode="${OP_MODE:-$(cfg run.mode)}";        mode="${mode:-long-loop}"
 remote_name="${OP_REMOTE_NAME:-$name Operator}"
 work="${OP_WORK:-Continue $name operation.}"
 
-# Assemble the operator invocation. Launched via `task claude`, which adds
-# --dangerously-skip-permissions, the tasks channel, and one bound TASKS_SESSION
-# that the SessionStart hook, the MCP tools, and the channel all share. Email is
-# in the graph now — no email channel. We pass persona, model, effort,
-# --remote-control, and the /loop standing-work prompt through.
+# Assemble the operator invocation. `--operator` opts this intentional worker
+# into the SessionStart digest; `task claude` adds skip-permissions and the
+# tasks channel. Email is in the graph now — no email channel. We pass persona,
+# model, effort, --remote-control, and the /loop standing-work prompt through.
 args=()
 [ "${OP_REMOTE:-1}" != 0 ] && args+=( --remote-control "$remote_name" )
 args+=( --model "$model" --effort "$effort" --append-system-prompt-file "$PERSONA" )
@@ -73,10 +72,10 @@ else
 fi
 
 if [ "${DRY_RUN:-0}" = 1 ] || [ "${HOLDCO_DEBUG:-0}" = 1 ]; then
-	printf 'task claude'
+	printf 'task claude --operator'
 	for a in "${args[@]}"; do printf ' %q' "$a"; done
 	printf '\n'
 	exit 0
 fi
 
-exec task claude "${args[@]}"
+exec task claude --operator "${args[@]}"

@@ -36,6 +36,7 @@ import {
   me,
   memoryChanges,
   notices,
+  observerDigest,
   type Param,
   param,
   patches,
@@ -73,7 +74,7 @@ import { type Edge, edges, prio, type Snapshot } from './types.ts'
 // reaches for node:sqlite, and the CLI has no business loading a db driver.
 import type { Log } from './telemetry.ts'
 import type { JournalEntry } from './client.ts'
-import { agentPid, claudePid } from './proc.ts'
+import { agentPid, claudePid, parentOf } from './proc.ts'
 import { filesFor, syncFiles } from './persona.ts'
 import { commit } from './git.ts'
 import { commands, focusOf, run as runCommand } from './commands.ts'
@@ -86,9 +87,9 @@ type Verb = [usage: string, blurb: string, examples: string[]]
 let VERBS: Verb[] = [
   ['tui', 'open the terminal UI', []],
   [
-    'claude [claude args...]',
-    'interactive claude, fleet-wired: skip-permissions + the tasks channel',
-    ['task claude', 'task claude --continue'],
+    'claude [--operator] [claude args...]',
+    'interactive claude: observer by default, --operator injects fleet work',
+    ['task claude', 'task claude --operator --continue'],
   ],
   [
     'codex [codex args...]',
@@ -1120,12 +1121,35 @@ export let subagentDigest = (
   return task ? taskBlock(all, snap.deps, task).join('\n') : head
 }
 
+// Operator capability belongs to the Claude process launched by `task
+// claude --operator`, not every child it may shell. The launcher's pid scopes
+// the inherited env marker to that one direct child.
+export let operatorHook = (
+  pid = agentPid('claude'),
+  get = (name: string) => Deno.env.get(name),
+  parent = parentOf,
+) => {
+  let marker = Number(get('TASKS_OPERATOR'))
+  return !!marker && !!pid && parent(pid) == marker
+}
+
+export let workHook = (
+  provider: string,
+  saved?: Record<string, unknown>,
+  pid = agentPid(provider),
+  get = (name: string) => Deno.env.get(name),
+  parent = parentOf,
+) => {
+  if (provider != 'claude' || saved?.origin == 'managed') return true
+  return saved?.operator == true || operatorHook(pid, get, parent)
+}
+
 let context = async (args: string[]) => {
   let hook = args.includes('--hook')
   // Subagent mode: explicit --subagent (debug override), or the payload's
   // SubagentStart event, or a Bash-shelled `task` inside a Task-tool child
-  // (CLAUDE_CODE_CHILD_SESSION). Operator mode (SessionStart / bare) is
-  // unchanged. The hook branch confirms the event from stdin below.
+  // (CLAUDE_CODE_CHILD_SESSION). The hook branch confirms the event from
+  // stdin below; SessionStart later selects operator or observer mode.
   let sub = args.includes('--subagent')
   let sid = args.find((a) => !a.startsWith('--')) ?? me()
   // The digest plus the comms bus: unseen comments ride along, and the
@@ -1153,7 +1177,7 @@ let context = async (args: string[]) => {
       let body = JSON.parse(await new Response(Deno.stdin.readable).text())
       // The payload disambiguates the two hooks wired to this one line:
       // SubagentStart → subagent mode; SessionStart (anything else) →
-      // the operator digest below, untouched.
+      // the external-session gate below.
       if (sub || body.hook_event_name == 'SubagentStart') {
         // Reify the CHILD under its OWN id — `agent_id`, the subagent's
         // unique key (its `session_id` is the PARENT operator's). Its own
@@ -1183,18 +1207,34 @@ let context = async (args: string[]) => {
       // which transcript and process fields are meaningful.
       let { model, provider, transcript } = hookDialect(body)
       let cwd = String(body.cwd ?? '') || undefined
+      let all = rows(snap)
+      let prior = all.find((r) =>
+        r.comps.session && String(r.comps.session.id) == sid
+      )
+      let pid = agentPid(provider)
+      let work = workHook(
+        provider,
+        prior?.comps.session,
+        pid,
+      )
       // The provider's transcript is the external session's durable log.
       // `provider` stays out of this CREATE: a new session carrying one is
       // a managed spawn request. It lands as a patch below.
       let s = sessionFor(
-        rows(snap),
+        all,
         sid,
         cwd,
-        agentPid(provider),
+        pid,
         {
           agent_type: String(body.agent_type ?? '') || undefined,
           source: String(body.source ?? '') || undefined,
           transcript,
+          // Managed work already has TASKS_TASK. This column distinguishes
+          // only external Claude operators from observation targets.
+          operator: provider == 'claude' &&
+              prior?.comps.session?.origin != 'managed'
+            ? work
+            : undefined,
         },
       )
       if (s.changes.length) await send(s.changes)
@@ -1211,6 +1251,10 @@ let context = async (args: string[]) => {
       // from the reify batch's cwd (cwd → repo → project, falling back to
       // the box owner) — for a SESSION that means the OPERATOR, never a
       // watching person, and never blank (T-6669). One home, every door.
+      if (!work) {
+        console.log(observerDigest(sid))
+        return
+      }
       // A managed spawn boots already holding its lease: the launcher
       // passes TASKS_TASK, and an unclaimed task claims quietly here —
       // no prompt discipline required. A held lease stays held (the
@@ -1485,12 +1529,15 @@ let backup = async () => {
 // own session id (CLAUDE_CODE_SESSION_ID — /clear rotates it, and the
 // rotation IS the point: one S-* per life). The SessionStart hook reifies
 // the entity under it and stamps the claude process pid; the channel
-// plugin binds by that pid, so service follows each rotation. Nothing to
-// mint here — the env passes through unchanged.
-let terminal = async (command: string, args: string[]) => {
+// plugin binds by that pid, so service follows each rotation.
+let terminal = async (
+  command: string,
+  args: string[],
+  env: Record<string, string> = {},
+) => {
   let { code } = await new Deno.Command(command, {
     args,
-    env: { TASKS_HOST: host() },
+    env: { TASKS_HOST: host(), ...env },
     stdin: 'inherit',
     stdout: 'inherit',
     stderr: 'inherit',
@@ -1499,6 +1546,33 @@ let terminal = async (command: string, args: string[]) => {
 }
 
 let CHANNEL = 'plugin:tasks@tasks-fleet'
+export let claudeLaunch = (
+  args: string[],
+  listed: boolean,
+  pid = Deno.pid,
+) => {
+  let end = args.indexOf('--')
+  if (end < 0) end = args.length
+  let operator = args.slice(0, end).includes('--operator')
+  let pass = args.filter((a, i) => a != '--operator' || i >= end)
+  return {
+    args: [
+      '--dangerously-skip-permissions',
+      '--channels',
+      CHANNEL,
+      ...(listed ? [] : ['--dangerously-load-development-channels', CHANNEL]),
+      ...pass,
+    ],
+    // A nested interactive launch is a new session, never the caller's managed
+    // task or Task-tool child. Empty values actively clear inherited hints.
+    env: {
+      TASKS_OPERATOR: operator ? String(pid) : '',
+      TASKS_TASK: '',
+      CLAUDE_CODE_CHILD_SESSION: '',
+    },
+  }
+}
+
 let claude = async (args: string[]) => {
   // Allowlisted in root's managed settings → clean launch; otherwise the
   // dev-load flag activates the channel behind a press-Enter dialog —
@@ -1508,13 +1582,8 @@ let claude = async (args: string[]) => {
     listed = Deno.readTextFileSync('/etc/claude-code/managed-settings.json')
       .includes('"tasks-fleet"')
   } catch { /* no managed settings — dev-load below */ }
-  await terminal('claude', [
-    '--dangerously-skip-permissions',
-    '--channels',
-    CHANNEL,
-    ...(listed ? [] : ['--dangerously-load-development-channels', CHANNEL]),
-    ...args,
-  ])
+  let launch = claudeLaunch(args, listed)
+  await terminal('claude', launch.args, launch.env)
 }
 
 // The Codex twin: full access matches the interactive Claude posture;

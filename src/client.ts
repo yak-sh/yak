@@ -407,7 +407,12 @@ export let sessionFor = (
   session: string,
   cwd?: string,
   pid?: number,
-  self?: { agent_type?: string; source?: string; transcript?: string },
+  self?: {
+    agent_type?: string
+    source?: string
+    transcript?: string
+    operator?: boolean
+  },
 ) => {
   let s = all.find((r) => r.comps.session && r.comps.session.id == session)
   let eid = s?.eid ?? uuid()
@@ -416,6 +421,13 @@ export let sessionFor = (
   if (pid && s?.comps.session.pid != pid) comp.pid = pid
   for (let k of ['agent_type', 'source', 'transcript'] as const) {
     if (self?.[k] && s?.comps.session[k] != self[k]) comp[k] = self[k]
+  }
+  if (
+    self?.operator != undefined &&
+    (s?.comps.session.operator == null ||
+      !!s.comps.session.operator != self.operator)
+  ) {
+    comp.operator = Number(self.operator)
   }
   let changes: Change[] = Object.keys(comp).length
     ? [{ eid, name: 'session', comp }]
@@ -562,7 +574,9 @@ export let commentChanges = (
 // aimed at it directly (its own session, its claimed tasks). No session known
 // = a preview/bare view: treat as the operator so mail still shows (T-7006).
 export let isOperator = (s?: Record<string, unknown>) =>
-  !s || (String(s.origin ?? '') != 'managed' && !s.requested_task_eid)
+  !s ||
+  (s.operator != false && String(s.origin ?? '') != 'managed' &&
+    !s.requested_task_eid)
 
 // The notification lifecycle (T-7006), read as pure Row-predicates over
 // the stamp components: presence is the fact, absence the earlier state.
@@ -1064,6 +1078,11 @@ export let sessionMeta = (all: Row[], sid: string) => {
 // operator sees, minus the session extras — parity by construction.
 // Scope resolves via scopeFor: an explicit arg, else the cwd's repo, else
 // the worn persona's home, else the actor-as-project (client.ts scopeFor).
+export let observerDigest = (sid: string) =>
+  `# observer · session ${sid}\n` +
+  'You are an observation-only target. Do not inspect, claim, modify, or ' +
+  'commit repository work.'
+
 export let contextDigest = (
   snap: Snapshot,
   session?: string,
@@ -1075,6 +1094,12 @@ export let contextDigest = (
   let sess = all.find((r) =>
     r.comps.session && String(r.comps.session.id) == session
   )
+  if (
+    sess?.comps.session?.operator == false &&
+    String(sess.comps.session.origin ?? '') != 'managed'
+  ) {
+    return observerDigest(String(session))
+  }
   let cwd = String(sess?.comps.session?.cwd ?? '')
   scope = scopeFor(all, sess, cwd, scope)
   let here = scope ? byEid.get(scope) : undefined

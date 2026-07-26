@@ -5,13 +5,17 @@
 import { assertEquals, assertMatch, assertRejects } from '@std/assert'
 import {
   bodyOf,
+  claudeLaunch,
   codexArgs,
   finalText,
   hookDialect,
   leadPrio,
+  operatorHook,
   strayFlag,
   subagentDigest,
+  workHook,
 } from './cli.ts'
+import { observerDigest } from './client.ts'
 import type { Snapshot } from './types.ts'
 
 let transcript = (...events: unknown[]) => {
@@ -152,6 +156,82 @@ Deno.test('task codex is discoverable with its own help', async () => {
     text(out.stdout),
     /task codex \[codex args\.\.\.\][\s\S]*task codex resume --last/,
   )
+})
+
+Deno.test('task claude scopes operator capability and strips its local flag', () => {
+  let launch = claudeLaunch(
+    ['--model', 'opus', '--operator', '--continue'],
+    true,
+    42,
+  )
+  assertEquals(launch, {
+    args: [
+      '--dangerously-skip-permissions',
+      '--channels',
+      'plugin:tasks@tasks-fleet',
+      '--model',
+      'opus',
+      '--continue',
+    ],
+    env: {
+      TASKS_OPERATOR: '42',
+      TASKS_TASK: '',
+      CLAUDE_CODE_CHILD_SESSION: '',
+    },
+  })
+
+  let observer = claudeLaunch(['--continue'], true, 42)
+  assertEquals(observer.env, {
+    TASKS_OPERATOR: '',
+    TASKS_TASK: '',
+    CLAUDE_CODE_CHILD_SESSION: '',
+  })
+  assertEquals(
+    claudeLaunch(['--', '--operator'], true, 42).args.slice(-2),
+    ['--', '--operator'],
+  )
+})
+
+Deno.test('an unmarked Claude hook observes; explicit work paths may claim', () => {
+  let env = (vars: Record<string, string>) => (name: string) => vars[name]
+  let parent = (_pid: number) => 42
+  assertEquals(workHook('claude', undefined, 7, env({}), parent), false)
+  assertEquals(
+    workHook('claude', undefined, 7, env({ TASKS_OPERATOR: '42' }), parent),
+    true,
+  )
+  assertEquals(
+    workHook('claude', undefined, 7, env({ TASKS_OPERATOR: '99' }), parent),
+    false,
+  )
+  assertEquals(
+    workHook('claude', undefined, 7, env({ TASKS_TASK: 'T-2' }), parent),
+    false,
+  )
+  assertEquals(workHook('claude', { operator: true }, 7, env({}), parent), true)
+  assertEquals(
+    workHook('claude', { operator: false }, 7, env({}), parent),
+    false,
+  )
+  assertEquals(
+    workHook('claude', { origin: 'managed' }, 7, env({}), parent),
+    true,
+  )
+  assertEquals(workHook('codex', undefined, 7, env({}), parent), true)
+  assertEquals(operatorHook(7, env({ TASKS_OPERATOR: '42' }), parent), true)
+
+  let out = observerDigest('probe-1')
+  assertMatch(out, /observation-only target/)
+  for (let mark of ['T-2', 'claim:', '## mail', 'from the fleet']) {
+    assertEquals(out.includes(mark), false)
+  }
+})
+
+Deno.test('the canonical operator launcher opts into work injection', () => {
+  let path = new URL('../bin/operate-run', import.meta.url)
+  let script = Deno.readTextFileSync(path)
+  assertMatch(script, /exec task claude --operator "\$\{args\[@\]\}"/)
+  assertMatch(script, /printf 'task claude --operator'/)
 })
 
 Deno.test('task wrap help documents the legacy alias', async () => {
