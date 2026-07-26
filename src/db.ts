@@ -663,6 +663,15 @@ let cmps: Record<string, string[]> = {
   ),
 }
 
+let bound = (
+  name: string,
+  col: string,
+  value: unknown,
+): string | number | null =>
+  comps[name]?.[col] == 'bool' && typeof value == 'boolean'
+    ? Number(value)
+    : value as string | number | null
+
 // The notification-lifecycle stamps (notified/opened/archived): a
 // client-requested, server-stamped act — an EMPTY wire comp (presence IS the
 // signal) whose `stamped` twin is the {at, by} pair. Derived, not hand-listed
@@ -1055,7 +1064,7 @@ export let apply = (
         continue
       }
       let sent = cols.filter((c) => c in comp)
-      let vals = sent.map((c) => comp[c] as string | number | null)
+      let vals = sent.map((c) => bound(name, c, comp[c]))
       // Update first (a patch can't re-satisfy not-null columns an insert
       // would demand). An existing row implies an existing spine. An FK
       // bounce here fails the batch with its offender named — the outer

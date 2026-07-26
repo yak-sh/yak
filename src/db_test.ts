@@ -61,6 +61,18 @@ Deno.test('comment.event: the machine mark rides the wire, absent by default', (
   assertEquals(comp(plain, 'comment')?.event, null)
 })
 
+Deno.test('declared booleans bind as SQLite integers', () => {
+  let s = uid()
+  apply(db, [{
+    eid: s,
+    name: 'session',
+    comp: { id: uid(), operator: false },
+  }])
+  assertEquals(comp(s, 'session')?.operator, 0)
+  apply(db, [{ eid: s, name: 'session', comp: { operator: true } }])
+  assertEquals(comp(s, 'session')?.operator, 1)
+})
+
 Deno.test('unknown component names are ignored, batch survives', () => {
   let t = uid()
   apply(db, [
