@@ -26,6 +26,11 @@ export let parentOf = (pid: number): number | undefined => {
 
 export let commOf = (pid: number) => read(`/proc/${pid}/comm`).trim()
 
+// The argv a pid was launched with — cmdline is NUL-separated with a
+// trailing NUL, which would otherwise read as one empty final arg.
+export let argsOf = (pid: number) =>
+  read(`/proc/${pid}/cmdline`).split('\0').filter((a) => a != '')
+
 // The nearest ancestor (self included) with this comm, or undefined when
 // the walk tops out at init.
 export let ancestor = (comm: string, pid = Deno.pid): number | undefined => {

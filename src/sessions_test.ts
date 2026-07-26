@@ -143,6 +143,10 @@ let refusals = (target: string) =>
      where c.target_eid = ? and c.event = 1`,
   ).all(target) as { body: string }[]).map((c) => c.body)
 
+// The delivery ledger: a comment wears `notified` once some ear took it.
+let told = (eid: string) =>
+  !!db.prepare('select 1 from notified where eid = ?').get(eid)
+
 // A session row + log file exactly as a dead child would have left them.
 let plant = (lines: string[], provider = 'fake') => {
   let eid = uid()
@@ -658,6 +662,69 @@ Deno.test('a session commenting on itself never resumes it', async () => {
   await write(say(eid, 'note to self', eid)) // the author IS the session
   assertEquals(row(eid)?.status, 'completed')
   assertEquals(row(eid)?.latest_seq, before) // the log never heard it
+})
+
+Deno.test('words said mid-turn wait, and the settle delivers them', async () => {
+  let { t } = seed()
+  let { eid, done } = begin(t)
+  await done
+  // The resume dawdles (delay: the fake reads stage directions), long
+  // enough for more words to land while the door says busy.
+  let resumed = write(say(eid, 'delay:200 keep going'))
+  assertEquals(row(eid)?.status, 'running')
+  let while1 = say(eid, 'also: rename it')
+  let while2 = say(eid, 'and: green gate')
+  await write(while1)
+  await write(while2)
+  // Mid-turn nobody took them: the effect stayed out, nothing stamped —
+  // owed, not lost.
+  assertEquals(told(while1[1].eid), false)
+  assertEquals(row(eid)?.status, 'running')
+  await resumed
+  // The settle flushed the backlog as one more resume: both delivered,
+  // both stamped, and the session settles clean again.
+  await until(
+    () =>
+      told(while1[1].eid) && told(while2[1].eid) &&
+      row(eid)?.status == 'completed',
+    'the settle flush to deliver',
+  )
+  let events = Deno.readTextFileSync(log(eid)).split('\n').filter(Boolean)
+    .map((l) => JSON.parse(l) as { type: string; text?: string })
+  // Each message joined the log as its own say, in the order it was said…
+  assertEquals(
+    events.filter((e) => e.type == 'session.input').map((e) => e.text),
+    ['delay:200 keep going', 'also: rename it', 'and: green gate'],
+  )
+  // …and ONE continuation carried both (the fake echoes its instruction).
+  assert(
+    events.some((e) => e.text == 'working: also: rename it\n\nand: green gate'),
+  )
+})
+
+Deno.test('a failed run stays down, but the next word carries the backlog', async () => {
+  let { t } = seed()
+  let { eid, done } = begin(t)
+  await done
+  let crashed = write(say(eid, 'delay:200 fail:3 then crash'))
+  assertEquals(row(eid)?.status, 'running')
+  let missed = say(eid, 'you okay?')
+  await write(missed) // mid-turn: owed
+  await crashed
+  assertEquals(row(eid)?.status, 'failed') // no flush — a broken run stays down
+  assertEquals(told(missed[1].eid), false)
+  await write(say(eid, 'wake up'))
+  await until(() => row(eid)?.status == 'completed', 'the woken run to settle')
+  assertEquals(told(missed[1].eid), true) // the wake carried the backlog
+})
+
+Deno.test('refused words stay owed, never marked told', async () => {
+  let bare = plant([INIT])
+  db.prepare("update session set status = 'completed' where eid = ?").run(bare)
+  let s = say(bare, 'hello?')
+  await write(s)
+  assertMatch(refusals(bare)[0], /never announced a provider thread/)
+  assertEquals(told(s[1].eid), false)
 })
 
 // A bare git call inside a session's worktree — the test playing owner.

@@ -198,14 +198,25 @@ let settled = (eid: string, status: string, cast: Cast) => {
       },
     )
   }
-  if (!changes.length) return
-  try {
-    let t = trace()
-    let out = apply(db, changes, t)
-    cast(out)
-    dispatch(out, t, (comp, e) => console.warn(`settle effect ${comp} —`, e))
-  } catch (e) {
-    console.warn('settle batch dropped —', e)
+  if (changes.length) {
+    try {
+      let t = trace()
+      let out = apply(db, changes, t)
+      cast(out)
+      dispatch(out, t, (comp, e) => console.warn(`settle effect ${comp} —`, e))
+    } catch (e) {
+      console.warn('settle batch dropped —', e)
+    }
+  }
+  // Words that landed mid-turn were nobody's to take: created(comment)
+  // rightly stays out of a busy session, the bus only serves a tool call,
+  // and a print-mode claude renders no channel (T-7420) — so the settle
+  // is the reconciliation point: a clean ending flushes the unheard
+  // backlog as a resume. Failed/interrupted/lost stay down — a stop must
+  // stick and a broken run must not flap — and the next comment still
+  // wakes them.
+  if (status == 'completed') {
+    resume(eid, cast).catch((e) => console.warn('settle resume —', e))
   }
 }
 
@@ -426,6 +437,16 @@ let finish = async (eid: string, t: Tail, run: Run, cast: Cast) => {
     }
   }
   let ok = t.ended && !t.errs.length && (code ?? 0) == 0
+  // Bookkeeping BEFORE the ending is said: stamp() fires settled(), whose
+  // unheard flush may wake the session right back up — and the new run's
+  // `running` entry and pidfile must not be swept by this one's epilogue.
+  // (launch() and resume() already delete-then-stamp on failure.)
+  running.delete(eid)
+  for (let f of [pidFile(eid), codeFile(eid)]) {
+    try {
+      Deno.removeSync(f) // terminal: nothing left to adopt or report
+    } catch { /* never written, or already gone */ }
+  }
   stamp(eid, {
     status: row.stop_requested_at ? 'interrupted' : ok ? 'completed' : 'failed',
     exit_code: code,
@@ -434,12 +455,6 @@ let finish = async (eid: string, t: Tail, run: Run, cast: Cast) => {
     latest_seq: t.seq,
     ...(t.errs.length ? { error: diagnosis(t) } : {}),
   }, cast)
-  running.delete(eid)
-  for (let f of [pidFile(eid), codeFile(eid)]) {
-    try {
-      Deno.removeSync(f) // terminal: nothing left to adopt or report
-    } catch { /* never written, or already gone */ }
-  }
 }
 
 // ---- watching a session we did not spawn ----
@@ -1026,140 +1041,185 @@ let refuse = (eid: string, why: string, cast: Cast) => {
   }
 }
 
-// created(comment) — commenting on a session IS messaging that agent (the
-// comms bus already says so): aimed at a session nobody is listening to,
-// the comment resumes its provider thread with the comment's body. A
-// session with someone home takes no stdin — its channel plugin (or the
-// bus, on its next tool call) hands the comment over, so the comment
-// alone is delivery and nothing happens here. Which one it is is a
-// question of LIVENESS, never of origin (door.ts): an operator runs plain
-// `claude` and reifies as 'external', and gating on origin left every
-// operator's session unresumable and every knock at one unheard. A
-// session's own comments never resume it (an agent must not wake itself
-// by talking), and machine events carry news, never words to wake on —
-// which is also what keeps refuse()'s own reply out of this gate. Words
-// that CAN'T wake the session get a refusal said on the session, never a
-// silent drop: a swallowed message reads as delivered. The human's line
-// and the reply land in the SAME log — seq just continues — and the
-// existing tailer closes the session again when the continuation ends.
-export let commented =
-  (cast: Cast) => async (ceid: string, comp: Record<string, unknown>) => {
-    let eid = String(comp.target_eid)
-    if (comp.author_eid == eid) return // the session talking about itself
-    if (comp.event) return // the server speaking, not someone to answer
-    let row = db.prepare('select * from session where eid = ?').get(eid) as
-      | Row
-      | undefined
-    if (!row) return // not aimed at a session
-    if (listening(eid)) return // somebody is home — the cast is delivery
-    let body = String(
-      (db.prepare('select body from doc where eid = ?').get(ceid) as
-        | { body: string }
-        | undefined)?.body ?? '',
-    ).trim()
-    if (!body) return // a bare comment says nothing to say
-    // The thread to resume. A managed run announced one in its init
-    // event; an external claude never had to — `session.id` IS its
-    // thread, the id the CLI minted and `--resume` takes back.
-    let thread = String(row.provider_session_id ?? '') ||
-      (row.origin == 'managed' ? '' : String(row.id ?? ''))
-    if (!thread) {
-      return refuse(eid, 'the run never announced a provider thread', cast)
-    }
-    let ad = dialectOf(eid)
-    if (!ad) return refuse(eid, `no adapter for '${row.provider}'`, cast)
-    let job = {
-      instruction: body,
-      session_id: String(row.id),
-      model: row.model ? String(row.model) : '',
-      effort: row.effort ? String(row.effort) : undefined,
-    }
-    // A session we did not fork has no stdin and no log of ours to append
-    // to. Waking it is a `claude --resume` in the cwd it recorded, and
-    // that run writes the words AND the answer into the same transcript
-    // the watcher follows — so the conversation simply continues where
-    // the operator left it. Nothing derives an ending here: the courier
-    // is not the session. Re-arming the watch isn't ours either — the
-    // resumed process stamps its own pid at SessionStart, and watched()
-    // hangs off that. Its raw stream and stderr land beside the log.
-    if (row.origin != 'managed') {
-      if (!row.cwd) return refuse(eid, 'the session recorded no cwd', cast)
-      Deno.mkdirSync(logsDir(), { recursive: true })
-      spawn(
-        eid,
-        ad.resume(job, thread, body),
-        String(row.cwd),
-        childEnv(job.session_id),
-      )
-      return
-    }
-    // A swept worktree is no reason to stay quiet: tidy only removes
-    // MERGED trees, and the provider's thread outlives them — regrow at
-    // the same path and carry on.
-    if (!row.cwd) {
-      try {
-        let back = await regrow(row)
-        stamp(eid, back, cast)
-        row = { ...row, ...back }
-      } catch (e) {
-        return refuse(eid, `no worktree to resume in (${e})`, cast)
-      }
-    }
+// The words a session is owed: comments aimed at it that no ear ever took
+// — not `notified` (the delivery ledger the channel plugin, the bus, and
+// resume() below all stamp for their own deliveries, T-7010), not machine
+// events, not its own voice, not bodiless. Oldest first, so a woken
+// session reads its backlog in the order it was said.
+let unheard = (eid: string) =>
+  db.prepare(
+    `select c.eid, d.body from comment c
+     join doc d on d.eid = c.eid
+     join created b on b.eid = c.eid
+     left join notified n on n.eid = c.eid
+     where c.target_eid = ? and n.eid is null and c.event is null
+       and c.author_eid is not ? and trim(d.body) != ''
+     order by b.at`,
+  ).all(eid, eid) as { eid: string; body: string }[]
 
-    // The human's line joins the log as a `say` — same file, next seq.
-    let path = logFile(eid)
+// The delivery record: `notified` on exactly what resume() handed the
+// thread, applied and cast like any graph write — so the bus never
+// re-serves those words and every cache (the UI's pending-vs-sent) hears
+// they landed. Failing to record must not unsay what was delivered.
+let told = (msgs: { eid: string }[], cast: Cast) => {
+  try {
+    cast(apply(
+      db,
+      msgs.map((m) => ({ eid: m.eid, name: 'notified', comp: {} })),
+      trace(),
+    ))
+  } catch (e) {
+    console.warn('delivery stamp dropped —', e)
+  }
+}
+
+// Resume a session with everything it is owed — the deliverer of last
+// resort beside the channel plugin (interactive push) and the comms bus
+// (next tool call). Gathers the unheard backlog, continues the provider
+// thread with it as ONE turn, and stamps `notified` on exactly
+// what it handed over — only after every gate has passed, so refused
+// words stay owed rather than marked told. Words that CAN'T wake the
+// session get a refusal said on the session, never a silent drop: a
+// swallowed message reads as delivered. The lines and the reply land in
+// the SAME log — seq just continues — and the existing tailer closes the
+// session again when the continuation ends.
+let resume = async (eid: string, cast: Cast) => {
+  let row = db.prepare('select * from session where eid = ?').get(eid) as
+    | Row
+    | undefined
+  if (!row) return
+  if (listening(eid)) return // somebody is home — the cast is delivery
+  let msgs = unheard(eid)
+  if (!msgs.length) return // nothing owed
+  let body = msgs.map((m) => m.body).join('\n\n')
+  // The thread to resume. A managed run announced one in its init
+  // event; an external claude never had to — `session.id` IS its
+  // thread, the id the CLI minted and `--resume` takes back.
+  let thread = String(row.provider_session_id ?? '') ||
+    (row.origin == 'managed' ? '' : String(row.id ?? ''))
+  if (!thread) {
+    return refuse(eid, 'the run never announced a provider thread', cast)
+  }
+  let ad = dialectOf(eid)
+  if (!ad) return refuse(eid, `no adapter for '${row.provider}'`, cast)
+  let job = {
+    instruction: body,
+    session_id: String(row.id),
+    model: row.model ? String(row.model) : '',
+    effort: row.effort ? String(row.effort) : undefined,
+  }
+  // A session we did not fork has no stdin and no log of ours to append
+  // to. Waking it is a `claude --resume` in the cwd it recorded, and
+  // that run writes the words AND the answer into the same transcript
+  // the watcher follows — so the conversation simply continues where
+  // the operator left it. Nothing derives an ending here: the courier
+  // is not the session. Re-arming the watch isn't ours either — the
+  // resumed process stamps its own pid at SessionStart, and watched()
+  // hangs off that. Its raw stream and stderr land beside the log.
+  if (row.origin != 'managed') {
+    if (!row.cwd) return refuse(eid, 'the session recorded no cwd', cast)
+    told(msgs, cast)
     Deno.mkdirSync(logsDir(), { recursive: true })
-    Deno.writeTextFileSync(
-      path,
-      `${
-        JSON.stringify({
-          type: 'session.input',
-          text: body,
-          timestamp: new Date().toISOString(),
-        })
-      }\n`,
-      { append: true },
-    )
-    // Follow the continuation from the END of what's there now: the settled
-    // run's terminal event stays behind us — never re-drained, never counted
-    // twice, and its `ended` never poisons the new turn.
-    let lines = Deno.readTextFileSync(path).split('\n')
-    if (lines.at(-1) == '') lines.pop()
-    let from: Tail = {
-      at: Deno.statSync(path).size,
-      seq: lines.length,
-      ended: false,
-      errs: [],
-    }
-
-    // Back to running, every trace of the last ending cleared — the tailer
-    // derives a fresh one (stop_requested_at too, or a clean resume would
-    // inherit the old 'interrupted').
-    stamp(eid, {
-      status: 'running',
-      exit_code: null,
-      error: null,
-      stop_reason: null,
-      stop_requested_at: null,
-      finished_at: null,
-    }, cast)
-
-    return track(
+    spawn(
       eid,
-      ad,
       ad.resume(job, thread, body),
       String(row.cwd),
       childEnv(job.session_id),
-      cast,
-      from,
-    ).catch((e) => {
-      running.delete(eid)
-      stamp(eid, {
-        status: 'failed',
-        error: String(e).slice(0, 2000),
-        finished_at: now(),
-      }, cast)
-    })
+    )
+    return
+  }
+  // A swept worktree is no reason to stay quiet: tidy only removes
+  // MERGED trees, and the provider's thread outlives them — regrow at
+  // the same path and carry on.
+  if (!row.cwd) {
+    try {
+      let back = await regrow(row)
+      stamp(eid, back, cast)
+      row = { ...row, ...back }
+    } catch (e) {
+      return refuse(eid, `no worktree to resume in (${e})`, cast)
+    }
+  }
+  told(msgs, cast)
+
+  // Each message joins the log as its own `say` — same file, seq just
+  // continues — so the transcript shows the words as they were said.
+  let path = logFile(eid)
+  Deno.mkdirSync(logsDir(), { recursive: true })
+  Deno.writeTextFileSync(
+    path,
+    msgs.map((m) =>
+      `${
+        JSON.stringify({
+          type: 'session.input',
+          text: m.body,
+          timestamp: new Date().toISOString(),
+        })
+      }\n`
+    ).join(''),
+    { append: true },
+  )
+  // Follow the continuation from the END of what's there now: the settled
+  // run's terminal event stays behind us — never re-drained, never counted
+  // twice, and its `ended` never poisons the new turn.
+  let lines = Deno.readTextFileSync(path).split('\n')
+  if (lines.at(-1) == '') lines.pop()
+  let from: Tail = {
+    at: Deno.statSync(path).size,
+    seq: lines.length,
+    ended: false,
+    errs: [],
+  }
+
+  // Back to running, every trace of the last ending cleared — the tailer
+  // derives a fresh one (stop_requested_at too, or a clean resume would
+  // inherit the old 'interrupted').
+  stamp(eid, {
+    status: 'running',
+    exit_code: null,
+    error: null,
+    stop_reason: null,
+    stop_requested_at: null,
+    finished_at: null,
+  }, cast)
+
+  return track(
+    eid,
+    ad,
+    ad.resume(job, thread, body),
+    String(row.cwd),
+    childEnv(job.session_id),
+    cast,
+    from,
+  ).catch((e) => {
+    running.delete(eid)
+    stamp(eid, {
+      status: 'failed',
+      error: String(e).slice(0, 2000),
+      finished_at: now(),
+    }, cast)
+  })
+}
+
+// created(comment) — commenting on a session IS messaging that agent (the
+// comms bus already says so). With someone home the cast alone is
+// delivery — an interactive session's channel injects it, a busy managed
+// run's next tool call serves it off the bus — and nothing happens here;
+// a session nobody is listening to is woken with its backlog. Which one
+// it is is a question of LIVENESS, never of origin (door.ts): an operator
+// runs plain `claude` and reifies as 'external', and gating on origin
+// left every operator's session unresumable and every knock at one
+// unheard. A session's own comments never resume it (an agent must not
+// wake itself by talking), and machine events carry news, never words to
+// wake on — which is also what keeps refuse()'s own reply out of this
+// gate.
+export let commented =
+  (cast: Cast) => (_ceid: string, comp: Record<string, unknown>) => {
+    let eid = String(comp.target_eid)
+    if (comp.author_eid == eid) return // the session talking about itself
+    if (comp.event) return // the server speaking, not someone to answer
+    if (!db.prepare('select 1 from session where eid = ?').get(eid)) return
+    return resume(eid, cast)
   }
 
 // ---- the delete effect ----

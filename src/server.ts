@@ -708,7 +708,8 @@ on('stop_request', {
 })
 on('comment', {
   created: commented(cast),
-  doc: 'a comment at a settled managed session resumes that agent',
+  doc: 'a comment at a settled session resumes that agent with its ' +
+    'unheard backlog',
 })
 on('knock', {
   created: knocked(cast),

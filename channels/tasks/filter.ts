@@ -198,6 +198,20 @@ export let humanId = (index: Index, eid: string): string | null => {
   return idOf({ kind: kindOf(has), num: row.num })
 }
 
+// A print-mode claude (`-p`/`--print` — every managed spawn and every
+// comment-resume courier) renders NO channel events: the run is one turn
+// and the process ends with it, so a notification injected mid-turn goes
+// nowhere (proven live: five -p runs, zero channel events in the
+// transcript — T-7420). Serving one is worse than serving nobody: each
+// emit stamps `notified`, which silences the comms bus — the ear a -p
+// agent DOES have, on its next tool call. Only flags before `--` count;
+// after it, everything is the prompt.
+export let printRun = (args: string[]) => {
+  let end = args.indexOf('--')
+  return args.slice(0, end < 0 ? undefined : end)
+    .some((a) => a == '-p' || a == '--print')
+}
+
 // The session THIS process serves, derived from the whole index — the
 // shared seat rule (src/served.ts): the newest row wearing our pid, the
 // same question the server-side door asks of the same graph, so the two

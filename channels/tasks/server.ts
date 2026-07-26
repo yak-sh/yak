@@ -40,8 +40,9 @@ import {
   type Index,
   learn,
   notifiedOf,
+  printRun,
 } from './filter.ts'
-import { claudePid } from '../../src/proc.ts'
+import { argsOf, claudePid } from '../../src/proc.ts'
 
 // --- config ------------------------------------------------------------------
 
@@ -63,6 +64,12 @@ let HINT = (Deno.env.get('CLAUDE_CODE_SESSION_ID') || '').trim() || undefined
 // Serve as a harmless no-op: connect so the launch shows no failed MCP, but
 // never open the socket.
 let BOUND = PID != null || HINT != null
+
+// A print-mode claude renders no channel events, and stamping `notified`
+// for injections nobody sees deafens the bus (filter.ts printRun, T-7420)
+// — same no-op posture as UNBOUND. Without /proc there is no argv to read,
+// so the check fails open toward serving, as the walk itself does.
+let PRINT = PID != null && printRun(argsOf(PID))
 
 // --- last-resort safety net --------------------------------------------------
 // A channel must keep serving through a stray rejection — never let one crash
@@ -379,6 +386,13 @@ let start = () => {
     err(
       'no claude ancestor and no CLAUDE_CODE_SESSION_ID — IDLE, no session ' +
         'bound, nothing will be delivered.',
+    )
+    return
+  }
+  if (PRINT) {
+    err(
+      'print-mode claude ancestor — channel events cannot render; IDLE ' +
+        '(the comms bus and the settle flush deliver instead).',
     )
     return
   }

@@ -13,6 +13,7 @@ import {
   humanId,
   type Index,
   learn,
+  printRun,
 } from './filter.ts'
 
 let ch = (
@@ -608,4 +609,15 @@ Deno.test('cleanAttr collapses newlines and drops tag-breaking chars', () => {
 
 Deno.test('cleanBody strips control bytes but keeps newlines and tabs', () => {
   assertEquals(cleanBody('line1\n\tline2\x00\x07'), 'line1\n\tline2')
+})
+
+// --- print mode ---------------------------------------------------------------
+
+Deno.test('a print-mode claude is known by its flags, never its prompt', () => {
+  assertEquals(printRun(['claude', '-p', '--model', 'x', '--', 'fix it']), true)
+  assertEquals(printRun(['claude', '--print']), true)
+  assertEquals(printRun(['claude', '--dangerously-skip-permissions']), false)
+  // dash-leading words after `--` are the prompt, not flags
+  assertEquals(printRun(['claude', '--', 'try -p or --print later']), false)
+  assertEquals(printRun([]), false)
 })
