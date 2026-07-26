@@ -1400,9 +1400,9 @@ export let DESK = {
   persona: 'scribe',
 }
 
-// The memory-save batch: a doc face (title = index line, body = the
-// fact) plus the memory comp, sourced to the calling session (minted if
-// new, like a claim's) and scoped to a project when one is named.
+// The memory-save batch: a doc face (title = index line, body = the fact)
+// plus the memory comp, scoped to a project when one is named. The calling
+// session is minted if new so the door can stamp it in created.via.
 export let memoryChanges = (
   all: Row[],
   m: {
@@ -1425,7 +1425,6 @@ export let memoryChanges = (
       name: 'memory',
       comp: {
         type: m.type ?? 'project',
-        source_eid: s.eid,
         scope_eid: scope?.eid ?? null,
       },
     },

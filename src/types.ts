@@ -33,8 +33,7 @@
 //              existence is the reference (a claim: the lease vanishes,
 //              the claimed task survives)
 //   'keep'     the reference stands as history — the target's tombstone
-//              is the only mark (dead provenance, a memory's dead source
-//              session)
+//              is the only mark (dead provenance)
 export type Death = 'cascade' | 'detach' | 'release' | 'keep'
 
 export type PropType =
@@ -258,16 +257,14 @@ export let comps: Record<string, Record<string, PropType>> = {
   // reference → the entity's email.address, absent = a stamped error.
   email: { address: 'text' },
   // A distilled fact worth keeping — content rides the doc (title = the
-  // index line, body = the fact), provenance rides source_eid. The scope
-  // column is scope_eid, NOT project_eid: bare '.project_eid' must keep
-  // routing to task (live board queries depend on it), and a collision
-  // would make it ambiguous. last_confirmed_at is server-stamped by the
-  // confirm door, never wire-set.
+  // index line, body = the fact), provenance the universal created stamp.
+  // The scope column is scope_eid, NOT project_eid: bare '.project_eid'
+  // must keep routing to task (live board queries depend on it), and a
+  // collision would make it ambiguous. last_confirmed_at is server-stamped
+  // by the confirm door, never wire-set.
   memory: {
     type: { enum: ['user', 'feedback', 'project', 'reference'] },
-    // Provenance and scope are history — a fact outlives the session
-    // that learned it and the project it was learned for.
-    source_eid: { eid: 'session', death: 'keep' },
+    // Scope is history — a fact outlives the project it was learned for.
     scope_eid: { eid: 'project', death: 'keep' },
   },
   // Server-minted recall aggregates — count·first_at·last_at is the
@@ -833,13 +830,12 @@ export type Alias = { eid: string; slug: string }
 export type Persona = { eid: string; home_eid?: string | null }
 
 // A distilled fact the fleet keeps: content in the doc, provenance in
-// source_eid (the session that learned it), scope in scope_eid (the
-// project it belongs to). last_confirmed_at is the last explicit
-// re-confirmation — server-stamped, like every recall statistic.
+// created, scope in scope_eid (the project it belongs to).
+// last_confirmed_at is the last explicit re-confirmation — server-stamped,
+// like every recall statistic.
 export type Memory = {
   eid: string
   type: string // user | feedback | project | reference
-  source_eid?: string | null
   scope_eid?: string | null
   last_confirmed_at?: string | null
 }

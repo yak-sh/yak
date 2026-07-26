@@ -1333,9 +1333,9 @@ let context = async (args: string[]) => {
   await tell(snap, sid)
 }
 
-// Save a memory: doc + memory comp, source-attributed to the calling
-// session — the CLI face of MCP memory_save, so headless agents (the
-// scribe first) have the door too.
+// Save a memory: doc + memory comp, stamped via the calling session — the
+// CLI face of MCP memory_save, so headless agents (the scribe first) have
+// the door too.
 let remember = async (args: string[]) => {
   let flag = (n: string) =>
     args.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3)

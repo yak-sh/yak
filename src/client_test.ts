@@ -1175,7 +1175,7 @@ Deno.test('spec: a typed task — leading P, params anywhere, body below', () =>
 
 // ---- the memory doors' pure halves ----
 
-Deno.test('memoryChanges: doc face + memory comp, sourced and scoped', () => {
+Deno.test('memoryChanges: doc face + memory comp, session writer and scope', () => {
   let { changes } = memoryChanges(all, {
     title: 'Prefers terse tests',
     type: 'feedback',
@@ -1185,8 +1185,10 @@ Deno.test('memoryChanges: doc face + memory comp, sourced and scoped', () => {
   assertEquals(changes.length, 2) // the session exists: nothing minted
   assertEquals(changes[0].comp?.title, 'Prefers terse tests')
   assertEquals(changes[1].name, 'memory')
-  assertEquals(changes[1].comp?.source_eid, S)
-  assertEquals(changes[1].comp?.scope_eid, T2)
+  assertEquals(changes[1].comp, {
+    type: 'feedback',
+    scope_eid: T2,
+  })
   assertThrows(() =>
     memoryChanges(all, { title: 'x', scope: 'P-99', session: 'sess-x' })
   )
@@ -1196,7 +1198,7 @@ Deno.test('memoryChanges: an unknown session is minted alongside', () => {
   let { changes } = memoryChanges(all, { title: 'x', session: 'newcomer' })
   assertEquals(changes.length, 3)
   assertEquals(changes[0].name, 'session')
-  assertEquals(changes[2].comp?.source_eid, changes[0].eid)
+  assertEquals(changes[2].comp, { type: 'project', scope_eid: null })
 })
 
 Deno.test('recallIndex: warmest first, index lines only, filtered', () => {

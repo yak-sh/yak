@@ -500,8 +500,8 @@ export let backfillOpened = (db: DatabaseSync) =>
        select eid, read_at from mail where read_at is not null`,
   )
 
-// Lift the old comment-only instrument into the universal register once.
-// The dormant column is migration input only; it never rides the wire.
+// Lift component-specific instruments into the universal register once.
+// The dormant columns are migration input only; they never ride the wire.
 export let backfillVia = (db: DatabaseSync) =>
   db.exec(
     `update created set via = (
@@ -510,6 +510,13 @@ export let backfillVia = (db: DatabaseSync) =>
      where via is null and exists (
        select 1 from comment
        where comment.eid = created.eid and author_eid is not null
+     );
+     update created set via = (
+       select source_eid from memory where memory.eid = created.eid
+     )
+     where via is null and exists (
+       select 1 from memory
+       where memory.eid = created.eid and source_eid is not null
      )`,
   )
 

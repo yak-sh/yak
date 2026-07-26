@@ -101,7 +101,6 @@ let contracts = [
     to: 'operator@example.test',
   }),
   contract('persona', 'home_eid', 'project'),
-  contract('memory', 'source_eid', 'session', { type: 'reference' }),
   contract('memory', 'scope_eid', 'project', { type: 'project' }),
 ]
 
@@ -569,15 +568,15 @@ Deno.test('every typed eid rejects a target missing its component', () => {
 
 Deno.test('typed refs may precede their targets without reordering births', () => {
   let local = fresh()
-  let memory = uid(), middle = uid(), session = uid()
+  let memory = uid(), middle = uid(), project = uid()
   apply(local, [
     {
       eid: memory,
       name: 'memory',
-      comp: { type: 'reference', source_eid: session },
+      comp: { type: 'reference', scope_eid: project },
     },
     { eid: middle, name: 'doc', comp: { title: 'middle' } },
-    { eid: session, name: 'session', comp: { id: `session-${session}` } },
+    { eid: project, name: 'project', comp: {} },
   ])
   let num = (eid: string) =>
     Number(
@@ -585,7 +584,7 @@ Deno.test('typed refs may precede their targets without reordering births', () =
         ?.comp?.num,
     )
   assertEquals(num(memory) < num(middle), true)
-  assertEquals(num(middle) < num(session), true)
+  assertEquals(num(middle) < num(project), true)
   local.close()
 })
 
@@ -934,6 +933,42 @@ Deno.test('backfill: comment instruments move into created.via', () => {
     snapshot(d).changes.find((c) => c.eid == comment && c.name == 'created')
       ?.comp?.via,
     author,
+  )
+})
+
+Deno.test('backfill: memory instruments move into created.via', () => {
+  let d = fresh()
+  let source = uid(), memory = uid()
+  apply(d, [
+    { eid: source, name: 'session', comp: { id: uid() } },
+    { eid: memory, name: 'doc', comp: { title: 'old fact' } },
+    { eid: memory, name: 'memory', comp: { type: 'reference' } },
+  ])
+  d.prepare('update memory set source_eid = ? where eid = ?')
+    .run(source, memory)
+  d.prepare('update created set via = null where eid = ?').run(memory)
+  assertEquals(
+    snapshot(d).changes.find((c) => c.eid == memory && c.name == 'memory')
+      ?.comp,
+    {
+      eid: memory,
+      type: 'reference',
+      scope_eid: null,
+      last_confirmed_at: null,
+    },
+  )
+  backfillVia(d)
+  let via = snapshot(d).changes.find((c) =>
+    c.eid == memory && c.name == 'created'
+  )?.comp?.via
+  assertEquals(via, source)
+  d.prepare('update memory set source_eid = ? where eid = ?')
+    .run(uid(), memory)
+  backfillVia(d)
+  assertEquals(
+    snapshot(d).changes.find((c) => c.eid == memory && c.name == 'created')
+      ?.comp?.via,
+    source,
   )
 })
 
@@ -1442,29 +1477,46 @@ Deno.test('search: reference sugar + paths screen the hits', () => {
 
 // ---- memory + recall: the decay model's storage half ----
 
-Deno.test('memory: writable face rides in, confirmation never does', () => {
+Deno.test('memory: scope rides in, provenance and confirmation are stamped', () => {
   let m = uid(), s = uid(), p = uid()
   apply(db, [
-    { eid: s, name: 'session', comp: { id: `sess-${s}` } },
     { eid: p, name: 'doc', comp: { title: 'a venture' } },
     { eid: p, name: 'project', comp: {} },
-    { eid: m, name: 'doc', comp: { title: 'zebu index line', body: 'fact' } },
-    {
-      eid: m,
-      name: 'memory',
-      comp: {
-        type: 'feedback',
-        source_eid: s,
-        scope_eid: p,
-        last_confirmed_at: 'FAKE',
-      },
-    },
   ])
+  apply(
+    db,
+    [
+      { eid: s, name: 'session', comp: { id: `sess-${s}` } },
+      { eid: m, name: 'doc', comp: { title: 'zebu index line', body: 'fact' } },
+      {
+        eid: m,
+        name: 'memory',
+        comp: {
+          type: 'feedback',
+          source_eid: s,
+          scope_eid: p,
+          last_confirmed_at: 'FAKE',
+        },
+      },
+    ],
+    undefined,
+    `sess-${s}`,
+  )
   let row = comp(m, 'memory')
   assertEquals(row?.type, 'feedback')
-  assertEquals(row?.source_eid, s)
   assertEquals(row?.scope_eid, p)
   assertEquals(row?.last_confirmed_at, null) // server-owned
+  assertEquals(
+    (db.prepare('select source_eid from memory where eid = ?').get(m) as {
+      source_eid: string | null
+    }).source_eid,
+    null,
+  ) // retired: the wire cannot write the dormant source
+  assertEquals(
+    snapshot(db).changes.find((c) => c.eid == m && c.name == 'created')
+      ?.comp?.via,
+    s,
+  )
   assertEquals(search(db, 'zebu')[0]?.kind, 'memory') // memory names it
 })
 
