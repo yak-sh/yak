@@ -45,6 +45,8 @@ let sheet: Record<string, Style> = {
   'Dot-gated': { fg: '#e67e80' }, // open requires deps: blocked in fact
   Id: { fg: '#7a8478' },
   'Id-retired': { fg: '#7a8478', dim: true, strike: true },
+  MemoryType: { fg: '#a7c080' },
+  Stamp: { fg: '#7a8478', dim: true },
   Task_Title: { bold: true },
   Task_Body: { fg: '#9da9a0' },
   Task_Claim: { fg: '#d699b6' },

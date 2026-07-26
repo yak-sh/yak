@@ -388,6 +388,15 @@ html {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.MemoryType {
+  flex: none;
+  color: var(--accent);
+  background: var(--soft);
+  border-radius: var(--radius);
+  padding: 0 var(--half-gap);
+  font-family: var(--mono);
+  font-size: 11px;
+}
 
 /* The persona editor: three tier sections, rows drag between them. */
 .Persona {

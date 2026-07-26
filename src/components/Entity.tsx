@@ -23,6 +23,7 @@ import {
 } from './views/Title.tsx'
 import { Board } from './views/Board.tsx'
 import { Persona } from './views/Persona.tsx'
+import { MemoryTile } from './views/Memory.tsx'
 import { TaskTile } from './views/TaskTile.tsx'
 import { BoardList, List, ListTile } from './views/List.tsx'
 import { Canvas } from './Canvas.tsx'
@@ -60,6 +61,7 @@ define([
   },
   { view: 'List', match: has('canvas'), Render: List },
   { view: 'List', match: has('board'), Render: BoardList },
+  { view: 'List.Tile', match: has('doc', 'memory'), Render: MemoryTile },
   { view: 'List.Tile', match: has('doc', 'task'), Render: TaskTile },
   { view: 'List.Tile', match: has('session'), Render: SessionRow },
   { view: 'List.Tile', match: () => true, Render: ListTile },
