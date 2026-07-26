@@ -952,7 +952,7 @@ export type Change = {
   comp: Record<string, unknown> | null
 }
 
-// A committed legacy-broadcast batch. The cursor makes the frame a complete
+// A negotiated committed batch. The cursor makes the frame a complete
 // IndexedDB checkpoint: a sole writer can land changes + cursor atomically.
 export type Live = { live: Change[]; cursor: number }
 

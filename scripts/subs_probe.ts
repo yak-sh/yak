@@ -1,6 +1,7 @@
 // End-to-end probe for query subscriptions (T-6828). Spawns a scratch server
 // (unique port, throwaway DB_PATH — never the live db), then proves BOTH doors:
-//   A. legacy — a socket that never subscribes still hears full broadcasts.
+//   A. legacy — an unadvertised socket gets bare arrays while an advertised
+//      socket gets cursor envelopes; both still hear full broadcasts.
 //   B. subscription — a `.comment.target_eid=<S>` socket hears exactly its
 //      matches (add via HTTP/cast AND via /ws), not unrelated writes, gets a
 //      `drop` when a member re-points away, and an entity-null when a member
@@ -37,7 +38,7 @@ for (let i = 0; i < 100; i++) {
 }
 
 // A joined socket with a frame queue + an awaitable matching frame.
-let open = async () => {
+let open = async (envelope = false) => {
   let held = await (await fetch(`${base}/snapshot`)).json()
   let s = new WebSocket(`ws://127.0.0.1:${PORT}/ws`)
   let frames: unknown[] = []
@@ -67,6 +68,7 @@ let open = async () => {
     since: held.cursor,
     epoch: held.epoch,
     vocab: held.vocabHash,
+    ...(envelope ? { live: 1 } : {}),
   })
   await want((f) => !!f && typeof f == 'object' && 'catchup' in f)
   return { s, frames, want }
@@ -81,7 +83,8 @@ let apply = (changes: unknown[]) =>
   })
 
 let live = (f: unknown) =>
-  f && typeof f == 'object' && Array.isArray((f as { live?: unknown }).live)
+  Array.isArray(f) ? f as { eid: string }[] : f && typeof f == 'object' &&
+      Array.isArray((f as { live?: unknown }).live)
     ? (f as { live: { eid: string }[] }).live
     : null
 let subFrame = (id: string) => (f: unknown) =>
@@ -91,10 +94,30 @@ try {
   // ---- Door A: legacy full rebroadcast, untouched -------------------------
   let a = await open()
   let b = await open() // b never subscribes — stays a legacy client
+  let next = await open(true)
+  let shapes = async (origin: string, eid: string) => {
+    let heard = await b.want((f) => !!live(f)?.some((c) => c.eid == eid))
+    let framed = await next.want((f) => !!live(f)?.some((c) => c.eid == eid))
+    ok(
+      `A: ${origin} sends an unadvertised socket a bare Change[]`,
+      Array.isArray(heard),
+    )
+    ok(
+      `A: ${origin} sends an advertised socket a {live, cursor} envelope`,
+      !!framed && !Array.isArray(framed) &&
+        typeof (framed as { cursor?: unknown }).cursor == 'number',
+    )
+  }
   let mark = uuid()
   send(a.s, [{ eid: mark, name: 'doc', comp: { title: 'legacy-probe' } }])
-  let heard = await b.want((f) => !!live(f)?.some((c) => c.eid == mark))
-  ok('A: a non-subscribing socket still hears an arbitrary write', !!heard)
+  await shapes('a WS write', mark)
+  let castMark = uuid()
+  await apply([{
+    eid: castMark,
+    name: 'doc',
+    comp: { title: 'cast-probe' },
+  }])
+  await shapes('the cast path', castMark)
 
   // ---- Door B: subscription filtering -------------------------------------
   // A target entity S, then a socket subscribing comments aimed at it.
@@ -174,9 +197,10 @@ try {
     { eid: S, name: 'entity', comp: null },
     { eid: S2, name: 'entity', comp: null },
     { eid: mark, name: 'entity', comp: null },
+    { eid: castMark, name: 'entity', comp: null },
     { eid: noise, name: 'entity', comp: null },
   ])
-  for (let x of [a, b, c, d]) x.s.close()
+  for (let x of [a, b, next, c, d]) x.s.close()
 } finally {
   server.kill('SIGTERM')
   await server.status

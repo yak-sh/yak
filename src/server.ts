@@ -67,6 +67,7 @@ import {
   resolveRefs,
   warm,
 } from './query.ts'
+import { liveFrame } from './wire.ts'
 
 // The hot-swap generation: bumped by the watcher on every client-code or
 // css change, stamped into every served module's relative imports so a
@@ -130,6 +131,7 @@ let file = async (root: string, path: string) => {
 // the server applies them and rebroadcasts to every other client. Non-array
 // frames are control messages ('reload', from the watcher).
 let clients = new Set<WebSocket>()
+let envelopes = new Set<WebSocket>()
 
 // Query subscriptions (T-3683), the whole registry. A Sub is a socket's saved
 // query + the eids currently in its set; `subs` maps each socket to its named
@@ -227,18 +229,27 @@ let control = (
   }
 }
 
-// Broadcast a committed batch to every LEGACY client (subscription sockets
-// hear only their own frames, via maintain), then fold it into subscriptions.
-// The one door every non-/ws write path (MCP, /apply, effects, touch, freeze)
-// reaches subscribers through.
-let cast = (changes: Change[], except?: WebSocket) => {
-  let msg = JSON.stringify({ live: changes, cursor: cursorOf(db) })
+// Send one committed batch in the shape each socket negotiated: long-lived
+// old clients keep their bare arrays while new browser leaders get the cursor
+// needed for an atomic IDB checkpoint.
+let sendLive = (changes: Change[], except?: WebSocket) => {
+  let cursor = cursorOf(db)
+  let bare = JSON.stringify(liveFrame(changes, cursor, false))
+  let framed = JSON.stringify(liveFrame(changes, cursor, true))
   for (let c of clients) {
     if (c == except || c.readyState != WebSocket.OPEN || filtered.has(c)) {
       continue
     }
-    c.send(msg)
+    c.send(envelopes.has(c) ? framed : bare)
   }
+}
+
+// Broadcast a committed batch to every full-graph client (subscription
+// sockets hear only their own frames, via maintain), then fold it into subs.
+// The one door every non-/ws write path (MCP, /apply, effects, touch, freeze)
+// reaches subscribers through.
+let cast = (changes: Change[], except?: WebSocket) => {
+  sendLive(changes, except)
   maintain(changes)
 }
 
@@ -270,8 +281,10 @@ let effect = (out: Change[], t: ReturnType<typeof trace>) => {
 // broadcasts live — no gap, no non-idempotent dup.
 let join = (
   sock: WebSocket,
-  f: { since?: number; epoch?: string; vocab?: string },
+  f: { since?: number; epoch?: string; vocab?: string; live?: number },
 ) => {
+  if (f.live == 1) envelopes.add(sock)
+  else envelopes.delete(sock)
   if (f.since == null || f.epoch != epoch || f.vocab != vocabHash) {
     sock.send(JSON.stringify({ reset: true, snapshot: snapshot(db) }))
   } else {
@@ -293,6 +306,7 @@ let ws = (req: Request) => {
   // `filtered` (via control()). A socket that declares neither hears nothing.
   socket.onclose = () => {
     clients.delete(socket)
+    envelopes.delete(socket)
     subs.delete(socket)
     filtered.delete(socket)
   }
@@ -321,11 +335,7 @@ let ws = (req: Request) => {
     // The sender hears the canonical patch too: its optimistic spelling may
     // differ from storage (`P02`, `today`, a human reference). Applying the
     // same patch twice is harmless; omitting it leaves the sender divergent.
-    let msg = JSON.stringify({ live: out, cursor: cursorOf(db) })
-    for (let c of clients) {
-      if (c.readyState != WebSocket.OPEN || filtered.has(c)) continue
-      c.send(msg)
-    }
+    sendLive(out)
     maintain(out)
     effect(out, t)
   }

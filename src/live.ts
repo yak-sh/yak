@@ -18,6 +18,7 @@ import { matchQuery, parseQuery, resolveRefs, warm } from './query.ts'
 import { normalizeChanges } from './props.ts'
 import * as idb from './idb.ts'
 import { topology } from './leader.ts'
+import { liveChanges } from './wire.ts'
 
 // A cache row: the spine plus whichever components the entity carries.
 // Derived from Ent so a new component (types.ts) threads through here —
@@ -217,6 +218,7 @@ let connect = () => {
       since: held.cursor ?? 0,
       epoch: held.epoch,
       vocab: held.vocabHash,
+      live: 1,
     }))
   socket.onmessage = (m) => {
     let data = JSON.parse(String(m.data)) as unknown
@@ -363,11 +365,6 @@ type Land = 'leader' | 'follower' | 'solo'
 // cursor-stamped live frame before fan-out; followers land only in memory.
 // Catch-up/reset still persist in solo mode — the 2.1 boot write.
 let land = async (data: unknown, mode: Land) => {
-  if (Array.isArray(data)) {
-    applyLocal(data as Change[])
-    tell(data as Change[])
-    return
-  }
   if (hot(data)) {
     if (data == 'reload') setTimeout(config.reload)
     else if ('hmr' in data) {
@@ -375,17 +372,23 @@ let land = async (data: unknown, mode: Land) => {
     } else config.css?.(data.css)
     return
   }
+  let changes = liveChanges(data)
+  if (changes) {
+    let touched = applyLocal(changes)
+    let cursor = Array.isArray(data)
+      ? undefined
+      : (data as Partial<Live>).cursor
+    if (cursor !== undefined) {
+      held = { ...held, cursor }
+      if (mode == 'leader') await persist(touched, cursor)
+    }
+    tell(changes)
+    return
+  }
   if (!data || typeof data != 'object') return
   let frame = data as Partial<Live & Catchup & Reset & Sub>
   if (frame.error) problem.value = String(frame.error)
-  if (frame.live) {
-    let touched = applyLocal(frame.live)
-    if (frame.cursor !== undefined) {
-      held = { ...held, cursor: frame.cursor }
-      if (mode == 'leader') await persist(touched, frame.cursor)
-    }
-    tell(frame.live)
-  } else if (frame.catchup !== undefined) {
+  if (frame.catchup !== undefined) {
     let touched = applyLocal(frame.catchup)
     if (frame.cursor !== undefined) {
       held = { ...held, cursor: frame.cursor }

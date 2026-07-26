@@ -43,6 +43,7 @@ import {
   printRun,
 } from './filter.ts'
 import { argsOf, claudePid } from '../../src/proc.ts'
+import { liveChanges } from '../../src/wire.ts'
 
 // --- config ------------------------------------------------------------------
 
@@ -317,16 +318,15 @@ let onBatch = (data: string) => {
   } catch {
     return
   }
-  // Rolling deploys may leave this process briefly attached to the previous
-  // server generation, whose legacy live frame was the bare batch.
-  if (Array.isArray(frame)) return feed(frame as Change[])
+  // Rolling deploys overlap both generations: the new decoder accepts the old
+  // bare batch and the negotiated cursor envelope.
+  let live = liveChanges(frame)
+  if (live) return feed(live)
   let f = frame as {
-    live?: Change[]
     catchup?: Change[]
     reset?: boolean
     snapshot?: Snapshot
   }
-  if (f?.live) return feed(f.live)
   if (f?.catchup !== undefined) return feed(f.catchup, 'catchup')
   if (f?.reset && f.snapshot) absorb(f.snapshot)
 }
