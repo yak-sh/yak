@@ -445,18 +445,11 @@ Deno.test('paths: the pred tests the TARGET through ent', () => {
   assert(matchQuery(row({}), parseQuery('.assignee.title!=jeff'), ent))
 })
 
-Deno.test('paths: .author.actor walks comment → instrument → actor', () => {
-  let world: Record<string, Record<string, Record<string, unknown>>> = {
-    c1: { client: { actor_eid: 'jeff' } },
-    s1: { session: { id: 'x', actor_eid: 'jeff' } },
-    s2: { session: { id: 'y' } },
-  }
-  let ent = (e: string) => world[e]
-  let ps = parseQuery('.author.actor=jeff')
-  assert(matchQuery({ comment: { author_eid: 'c1' } }, ps, ent))
-  assert(matchQuery({ comment: { author_eid: 's1' } }, ps, ent))
-  assert(!matchQuery({ comment: { author_eid: 's2' } }, ps, ent))
-  assert(!matchQuery({ comment: {} }, ps, ent))
+Deno.test('provenance: .created.via filters by instrument', () => {
+  let ps = parseQuery('.created.via=s1')
+  assert(matchQuery({ created: { via: 's1' } }, ps))
+  assert(!matchQuery({ created: { via: 's2' } }, ps))
+  assert(!matchQuery({ created: {} }, ps))
 })
 
 Deno.test('resolveRefs: values resolve at match time, misses stay put', () => {

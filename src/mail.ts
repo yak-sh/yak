@@ -256,7 +256,7 @@ export let mailed =
 // resolution path (and its audit trail) is exercised on every relay. The
 // about edge from the mail to the comment is the receipt: it makes the
 // mint idempotent, and the boot sweep's predicate reads it back. Mail
-// authored by the project's own operator stays home (the self-echo
+// written by the project's own operator stays home (the self-echo
 // guard delivery.js had).
 //
 // PROSE ONLY: email is reserved for words an agent actually wrote.
@@ -274,16 +274,10 @@ export let fanout =
     if (
       !db.prepare('select 1 from email where eid = ?').get(t.project_eid)
     ) return
-    let author = String(comp.author_eid ?? '')
-    if (author) {
-      let actor = (db.prepare(
-        'select actor_eid from session where eid = ?',
-      ).get(author) ??
-        db.prepare('select actor_eid from client where eid = ?').get(
-          author,
-        )) as { actor_eid: string | null } | undefined
-      if (String(actor?.actor_eid ?? '') == t.project_eid) return
-    }
+    let actor = db.prepare('select "by" from created where eid = ?').get(
+      eid,
+    ) as { by: string | null } | undefined
+    if (String(actor?.by ?? '') == t.project_eid) return
     if (
       db.prepare(`
       select 1 from dependency d join mail s on s.eid = d.parent_eid

@@ -137,28 +137,37 @@ Deno.test('find: T-num, bare num, eid, alias slug', () => {
 
 Deno.test('notices: unseen comments on claimed tasks + messages to the session', () => {
   let B = 'aaaaaaaa-0000-4000-8000-000000000010' // another session
+  let P = 'aaaaaaaa-0000-4000-8000-000000000011' // their shared actor
   let mk = (
     eid: string,
     target: string,
-    author: string,
+    via: string,
     at: string,
     body: string,
   ) => [
     { eid, name: 'entity', comp: { eid, num: 90 } },
-    { eid, name: 'created', comp: { at } },
+    { eid, name: 'created', comp: { at, by: P, via } },
     { eid, name: 'doc', comp: { title: '', body } },
-    { eid, name: 'comment', comp: { target_eid: target, author_eid: author } },
+    { eid, name: 'comment', comp: { target_eid: target } },
   ]
   let busSnap: Snapshot = {
     changes: [
       ...snap.changes,
+      { eid: P, name: 'entity', comp: { eid: P, num: 81 } },
+      { eid: P, name: 'doc', comp: { title: 'Task Graph', body: '' } },
+      { eid: P, name: 'project', comp: {} },
+      {
+        eid: S,
+        name: 'session',
+        comp: { id: 'sess-x', cwd: '/w', actor_eid: P },
+      },
       { eid: B, name: 'entity', comp: { eid: B, num: 80, created_at: '' } },
-      { eid: B, name: 'session', comp: { id: 'sess-b' } },
+      { eid: B, name: 'session', comp: { id: 'sess-b', actor_eid: P } },
       // on the claimed task, after the cutoff: heard
       ...mk('c-1', T1, B, '2026-01-02', 'heads up'),
       // aimed at the session itself: heard (a message TO sess-x)
       ...mk('c-2', S, B, '2026-01-03', 'ping'),
-      // authored by the listener: never echoed back
+      // spoken via the listener: never echoed back
       ...mk('c-3', T1, S, '2026-01-04', 'my own note'),
       // on an unclaimed task: not ours to hear
       ...mk('c-4', T2, B, '2026-01-05', 'elsewhere'),
@@ -168,7 +177,7 @@ Deno.test('notices: unseen comments on claimed tasks + messages to the session',
   let n = notices(busSnap, 'sess-x')
   assertEquals(n.lines.length, 2)
   assertEquals(n.lines[0].includes('heads up'), true)
-  assertEquals(n.lines[1].includes('sess-b: ping'), true)
+  assertEquals(n.lines[1].includes('Task Graph · via S-80: ping'), true)
   assertEquals(n.ack[0].name, 'session')
   assertEquals(typeof n.ack[0].comp?.acked_at, 'string')
   // serving a comment stamps `notified` on it (T-7010): the sweep is a
@@ -226,9 +235,9 @@ Deno.test('notices: per-item stamp is drain-proof (a served ack cannot hide a si
   let B = 'aaaaaaaa-0000-4000-8000-000000000030'
   let mk = (eid: string, at: string, body: string) => [
     { eid, name: 'entity', comp: { eid, num: 90 } },
-    { eid, name: 'created', comp: { at } },
+    { eid, name: 'created', comp: { at, via: B } },
     { eid, name: 'doc', comp: { title: '', body } },
-    { eid, name: 'comment', comp: { target_eid: S, author_eid: B } },
+    { eid, name: 'comment', comp: { target_eid: S } },
   ]
   let g: Snapshot = {
     changes: [
@@ -435,12 +444,12 @@ Deno.test('hookClaim: an unclaimed task claims, anything else is quiet', () => {
   assertEquals(hookClaim(all, undefined, 'sess-x'), []) // no TASKS_TASK
 })
 
-Deno.test('commentChanges: doc + aim, attributed or anon', () => {
+Deno.test('commentChanges: doc + aim, session reified for server stamping', () => {
   let cs = commentChanges(all, T1, 'hi', 'sess-x')
   assertEquals(cs.length, 2)
-  assertEquals(cs[1].comp?.author_eid, S)
+  assertEquals(cs[1].comp, { target_eid: T1 })
   assertEquals(cs[1].comp?.event, undefined) // authored words: no mark
-  assertEquals(commentChanges(all, T1, 'hi')[1].comp?.author_eid, null)
+  assertEquals(commentChanges(all, T1, 'hi')[1].comp, { target_eid: T1 })
   // machinery speaking wears the mark (M-4062)
   assertEquals(commentChanges(all, T1, 'hi', 'sess-x', true)[1].comp?.event, 1)
 })
@@ -1295,9 +1304,9 @@ Deno.test('showMd: comments ride as a section, oldest first', () => {
     changes: [
       ...snap.changes,
       { eid: C, name: 'entity', comp: { eid: C, num: 9 } },
-      { eid: C, name: 'created', comp: { at: '2t' } },
+      { eid: C, name: 'created', comp: { at: '2t', via: S } },
       { eid: C, name: 'doc', comp: { title: '', body: 'a remark' } },
-      { eid: C, name: 'comment', comp: { target_eid: T1, author_eid: S } },
+      { eid: C, name: 'comment', comp: { target_eid: T1 } },
     ],
     deps: snap.deps,
   }
@@ -1413,14 +1422,14 @@ Deno.test('wrap: the stub carries the ledger; a hand-written brief is never clob
   )
 })
 
-Deno.test('notices: bylines walk the actor chain', () => {
+Deno.test('notices: bylines read actor and instrument from the stamp', () => {
   let B = 'aaaaaaaa-0000-4000-8000-000000000010'
   let P = 'aaaaaaaa-0000-4000-8000-000000000011' // the operator project
-  let mk = (eid: string, author: string) => [
+  let mk = (eid: string, actor: string, via: string) => [
     { eid, name: 'entity', comp: { eid, num: 91 } },
-    { eid, name: 'created', comp: { at: '2026-01-02' } },
+    { eid, name: 'created', comp: { at: '2026-01-02', by: actor, via } },
     { eid, name: 'doc', comp: { title: '', body: 'from the operator' } },
-    { eid, name: 'comment', comp: { target_eid: T1, author_eid: author } },
+    { eid, name: 'comment', comp: { target_eid: T1 } },
   ]
   let s: Snapshot = {
     changes: [
@@ -1430,7 +1439,7 @@ Deno.test('notices: bylines walk the actor chain', () => {
       { eid: P, name: 'project', comp: {} },
       { eid: B, name: 'entity', comp: { eid: B, num: 82, created_at: '' } },
       { eid: B, name: 'session', comp: { id: 'sess-b', actor_eid: P } },
-      ...mk('c-9', B),
+      ...mk('c-9', P, B),
     ],
     deps: snap.deps,
   }
@@ -1724,18 +1733,28 @@ Deno.test('contextDigest: unheard — comments after a past session stopped list
     eid: string,
     at: string,
     parts: Record<string, Record<string, unknown>>,
-  ) => [
-    { eid, name: 'entity', comp: { eid, num: num++ } },
-    { eid, name: 'created', comp: { at } },
-    ...Object.entries(parts).map(([name, comp]) => ({ eid, name, comp })),
-  ]
+  ) => {
+    let { created = {}, ...comps } = parts
+    return [
+      { eid, name: 'entity', comp: { eid, num: num++ } },
+      { eid, name: 'created', comp: { at, ...created } },
+      ...Object.entries(comps).map(([name, comp]) => ({ eid, name, comp })),
+    ]
+  }
   let eid = (i: number) => `dddddddd-0000-4000-8000-0000000000${10 + i}`
   let OP = eid(0)
-  let OTHER = eid(1) // a foreign author
-  let note = (eid: string, target: string, at: string, extra = {}) =>
+  let OTHER = eid(1) // a foreign actor
+  let note = (
+    eid: string,
+    target: string,
+    at: string,
+    by = OTHER,
+    event?: string,
+  ) =>
     mk(eid, at, {
+      created: { by },
       doc: { title: '', body: 'words' },
-      comment: { target_eid: target, author_eid: OTHER, ...extra },
+      comment: { target_eid: target, ...(event ? { event } : {}) },
     })
   let base = [
     ...mk(eid(2), ago(0), { session: { id: 'u-new', actor_eid: OP } }),
@@ -1758,8 +1777,8 @@ Deno.test('contextDigest: unheard — comments after a past session stopped list
     ...note(eid(6), eid(3), ago(10)),
     ...note(eid(7), eid(3), ago(5)),
     ...note(eid(8), eid(3), ago(22)), // before the ack: was served
-    ...note(eid(9), eid(3), ago(4), { event: 'status' }), // machinery
-    ...note(eid(10), eid(3), ago(3), { author_eid: eid(2) }), // own actor
+    ...note(eid(9), eid(3), ago(4), OTHER, 'status'), // machinery
+    ...note(eid(10), eid(3), ago(3), OP), // own actor
     ...note(eid(11), eid(1), ago(2)), // another actor's session
     ...note(eid(12), eid(5), ago(1)), // too old a session
   ])

@@ -36,7 +36,7 @@ import { Md, mdText } from './views/Md.tsx'
 import { Web } from './views/Web.tsx'
 import { Session, SessionRow } from './views/Session.tsx'
 import { openRun } from './Run.tsx'
-import { author } from './Comments.tsx'
+import { viaName } from './Comments.tsx'
 
 // Convenience re-exports: Entity.tsx is the front door, registry.ts the
 // engine room — importers of either get the same bindings.
@@ -175,7 +175,7 @@ defineActions([
   {
     match: has('claim'),
     acts: (e) => [{
-      label: `release ${author(e.claim!.session_eid)}`,
+      label: `release ${viaName(e.claim!.session_eid)}`,
       run: () => mutate({ eid: e.eid, name: 'claim', comp: null }),
     }],
   },

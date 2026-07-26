@@ -593,9 +593,8 @@ let http = Deno.serve(
       return req.json().then((changes: Change[]) => {
         let t = trace()
         // Attribution is an honesty header, not auth: the CLI names its
-        // session in x-via (the instrument — a principal writing directly
-        // is its own instrument), apply resolves it to the actor it acts
-        // for, and an anonymous post falls back to the box owner.
+        // session in x-via (the instrument), apply resolves it to the actor
+        // it acts for, and an anonymous post falls back to the box owner.
         let out = apply(
           db,
           changes,

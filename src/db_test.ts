@@ -892,6 +892,19 @@ Deno.test('backfill: comment instruments move into created.via', () => {
       comp: { target_eid: target, author_eid: author },
     },
   ])
+  assertEquals(
+    (d.prepare('select author_eid from comment where eid = ?').get(comment) as {
+      author_eid: string | null
+    }).author_eid,
+    null,
+  ) // retired: the wire cannot write the dormant source
+  d.prepare('update comment set author_eid = ? where eid = ?')
+    .run(author, comment)
+  assertEquals(
+    snapshot(d).changes.find((c) => c.eid == comment && c.name == 'comment')
+      ?.comp,
+    { eid: comment, target_eid: target, event: null },
+  ) // dormant migration input never rides graph-out
   d.prepare('update created set via = null where eid = ?').run(comment)
   backfillVia(d)
   let via = snapshot(d).changes.find((c) =>
@@ -1148,17 +1161,24 @@ Deno.test('release: a dead client sheds its shelf, the canvas survives', () => {
   )
 })
 
-Deno.test('keep: a dead author leaves the byline standing', () => {
+Deno.test('keep: a dead instrument leaves the provenance standing', () => {
   let who = uid(), target = uid(), c = uid()
   apply(db, [
     { eid: target, name: 'doc', comp: { title: 'subject' } },
     { eid: who, name: 'session', comp: { id: `bye-${who}` } },
-    { eid: c, name: 'doc', comp: { title: '', body: 'said once' } },
-    { eid: c, name: 'comment', comp: { target_eid: target, author_eid: who } },
   ])
+  apply(
+    db,
+    [
+      { eid: c, name: 'doc', comp: { title: '', body: 'said once' } },
+      { eid: c, name: 'comment', comp: { target_eid: target } },
+    ],
+    undefined,
+    who,
+  )
   apply(db, [{ eid: who, name: 'entity', comp: null }])
   // history, not a dangle: the words stay attributed to the dead session
-  assertEquals(comp(c, 'comment')?.author_eid, who)
+  assertEquals(comp(c, 'created')?.via, who)
   assertEquals(comp(c, 'doc')?.body, 'said once')
 })
 
@@ -1635,14 +1655,19 @@ Deno.test('a change and its commentary land in one atomic batch', () => {
     { eid: t, name: 'task', comp: { status: 'open' } },
   ])
   // the v1 gap, closed: status move + plain comment, same transaction
-  apply(db, [
-    { eid: t, name: 'task', comp: { status: 'done' } },
-    { eid: c, name: 'doc', comp: { title: '', body: 'proof landed' } },
-    { eid: c, name: 'comment', comp: { target_eid: t, author_eid: s } },
-  ])
+  apply(
+    db,
+    [
+      { eid: t, name: 'task', comp: { status: 'done' } },
+      { eid: c, name: 'doc', comp: { title: '', body: 'proof landed' } },
+      { eid: c, name: 'comment', comp: { target_eid: t } },
+    ],
+    undefined,
+    s,
+  )
   assertEquals(comp(t, 'task')?.status, 'done')
   assertEquals(comp(c, 'doc')?.body, 'proof landed')
-  assertEquals(comp(c, 'comment')?.author_eid, s)
+  assertEquals(comp(c, 'created')?.via, s)
   // the old journal pseudo-change is dead vocabulary: it mints nothing
   let before = db.prepare('select count(*) n from comment').get() as {
     n: number

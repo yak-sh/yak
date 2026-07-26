@@ -196,7 +196,7 @@ let followWrite = async (eid: string, write: () => void) => {
 // lands, whoever asked for the work deserves to hear it.
 let SETTLED = ['completed', 'failed', 'interrupted', 'lost']
 
-// The outcome, said as ordinary comments authored by the session: one on
+// The outcome, said as ordinary comments via the session: one on
 // the task for its trail, one on the spawning session so its caller hears
 // directly. created.via is that server-stamped instrument; created.by is
 // the actor it spoke for. One body means the two doors cannot disagree.
@@ -234,7 +234,7 @@ let report = (eid: string, status: string, row: Row): Change[] => {
         name: 'comment',
         // event: the server speaking, not the agent (M-4062) — the bus
         // delivers it, the mail relay must not.
-        comp: { target_eid: target, author_eid: eid, event: 1 },
+        comp: { target_eid: target, event: 1 },
       },
     ]
   })
@@ -259,7 +259,7 @@ let settled = (eid: string, status: string, cast: Cast) => {
   if (changes.length) {
     try {
       let t = trace()
-      let out = apply(db, changes, t)
+      let out = apply(db, changes, t, eid)
       cast(out)
       dispatch(out, t, (comp, e) => console.warn(`settle effect ${comp} —`, e))
     } catch (e) {
@@ -1189,7 +1189,7 @@ let unheard = (eid: string) =>
      join created b on b.eid = c.eid
      left join notified n on n.eid = c.eid
      where c.target_eid = ? and n.eid is null and c.event is null
-       and c.author_eid is not ? and trim(d.body) != ''
+       and b.via is not ? and trim(d.body) != ''
      order by b.at`,
   ).all(eid, eid) as { eid: string; body: string }[]
 
@@ -1350,9 +1350,12 @@ let resume = async (eid: string, cast: Cast) => {
 // wake on — which is also what keeps refuse()'s own reply out of this
 // gate.
 export let commented =
-  (cast: Cast) => (_ceid: string, comp: Record<string, unknown>) => {
+  (cast: Cast) => (ceid: string, comp: Record<string, unknown>) => {
     let eid = String(comp.target_eid)
-    if (comp.author_eid == eid) return // the session talking about itself
+    let stamp = db.prepare('select via from created where eid = ?').get(
+      ceid,
+    ) as { via: string | null } | undefined
+    if (stamp?.via == eid) return // the session talking about itself
     if (comp.event) return // the server speaking, not someone to answer
     if (!db.prepare('select 1 from session where eid = ?').get(eid)) return
     return resume(eid, cast)

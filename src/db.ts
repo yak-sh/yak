@@ -247,8 +247,8 @@ let schema = `
   -- Provenance, paired when+who+how (types.ts, T-6670/T-7113): "at" is
   -- server-frozen
   -- (default now on insert, overwritten by apply()'s stamp); "by" is the
-  -- actor eid — wire-writable, NO FK (death 'keep', like comment.author_eid:
-  -- a tombstoned spine would veto an FK'd reference). "by" is quoted because
+  -- actor eid — wire-writable, NO FK (death 'keep': a tombstoned spine
+  -- would veto an FK'd reference). "by" is quoted because
   -- BY is a SQLite keyword. created is set once at birth; updated appears
   -- on the first edit after it.
   create table if not exists created (
@@ -501,7 +501,7 @@ export let backfillOpened = (db: DatabaseSync) =>
   )
 
 // Lift the old comment-only instrument into the universal register once.
-// comment.author_eid stays as the rollback source until T-7113 retires it.
+// The dormant column is migration input only; it never rides the wire.
 export let backfillVia = (db: DatabaseSync) =>
   db.exec(
     `update created set via = (
@@ -610,7 +610,6 @@ export let open = (path = file) => {
     addCol(table, 'via', 'via text')
   }
   addCol('journal', 'via', 'via text')
-  backfillVia(db)
   // The managed-session lifecycle (src/sessions.ts): what was asked for,
   // what it's doing, how it ended. The REQUEST columns (provider, model,
   // effort, persona_eid, requested_task_eid) are wire-writable — creating
@@ -740,6 +739,7 @@ export let open = (path = file) => {
   db.exec(`insert or ignore into updated (eid, at, "by")
     select eid, modified_at, null from entity
     where modified_at is not null and modified_at <> created_at`)
+  backfillVia(db)
   healStored(db)
   return db
 }

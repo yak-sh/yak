@@ -175,7 +175,7 @@ Deno.test('cancel: trailing words become a plain comment, same batch', () => {
   assertEquals(doc.comp?.body, 'superseded by T-9')
   assertEquals(comment.name, 'comment')
   assertEquals(comment.comp?.target_eid, T)
-  assertEquals(comment.comp?.author_eid, S) // ctx.session resolves to its row
+  assertEquals(comment.comp, { target_eid: T })
   assertEquals(why.msg, 'T-4 → cancelled — superseded by T-9')
   assertThrows(() => run('cancel', ctx(B)), Error, 'B-3 is not a task')
 })

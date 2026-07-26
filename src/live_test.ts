@@ -57,7 +57,7 @@ Deno.test('projects: project rows only, oldest first, named by doc', () => {
 
 Deno.test('commentCount: events are not conversation', () => {
   let comment = (eid: string, target_eid: string, event?: number) => ({
-    comment: { eid, target_eid, author_eid: null, event },
+    comment: { eid, target_eid, event },
   })
   cache.value = {
     prose: comment('prose', 'talk'),

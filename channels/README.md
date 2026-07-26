@@ -11,15 +11,15 @@ the tasks server's `/ws` sync socket (the same broadcast every browser tab
 hears) and emits the two things aimed at ITS session:
 
 - **`comment`** — a comment whose `target_eid` is this session's entity (someone
-  messaging the session). Rendered `kind="comment" from="<author id>"`, content
-  = the comment's words. Only mint-time comments (the batch also carries the doc
+  messaging the session). Rendered `kind="comment" from="<byline>"`, content =
+  the comment's words. Only mint-time comments (the batch also carries the doc
   that holds the words) are emitted; a bodiless later patch is skipped.
 - **`knock`** — a nudge whose recipient (`to_eid`/`target_eid`) is this
   session's entity or its actor. Rendered `kind="knock"`, content =
   `knock: look at <target id> — <words riding the batch>`.
 
 It writes NOTHING to the graph. Replies go through the normal `task` CLI / MCP
-the session already has (`task_comment` on the author or the named entity).
+the session already has (`task_comment` on the sender or the named entity).
 
 ## Files
 

@@ -129,7 +129,6 @@ let begin = (
 let say = (
   target: string,
   body: string,
-  author = uid(),
   event: number | null = null,
 ) => {
   let c = uid()
@@ -138,7 +137,7 @@ let say = (
     {
       eid: c,
       name: 'comment',
-      comp: { target_eid: target, author_eid: author, event },
+      comp: { target_eid: target, event },
     },
   ]
 }
@@ -321,13 +320,14 @@ Deno.test('a child that exits nonzero failed, whatever it said', async () => {
 })
 
 // The settle broadcast: whoever holds the task hears the ending on the
-// bus, because the ending IS a comment on the task, authored by the
+// bus, because the ending IS a comment on the task, via the
 // session — cast like any wire write, exactly once per settle.
-let settleComments = (task: string, author: string) =>
+let settleComments = (task: string, via: string) =>
   (db.prepare(
     `select d.body from comment c join doc d on d.eid = c.eid
-     where c.target_eid = ? and c.author_eid = ?`,
-  ).all(task, author) as { body: string }[]).map((c) => c.body)
+     join created b on b.eid = c.eid
+     where c.target_eid = ? and b.via = ?`,
+  ).all(task, via) as { body: string }[]).map((c) => c.body)
 
 Deno.test('a settled session says so on its task', async () => {
   let { t } = seed()
@@ -734,7 +734,7 @@ Deno.test('a comment resumes nothing it should not', async () => {
   let evented = plant([INIT])
   db.prepare("update session set status = 'completed' where eid = ?")
     .run(evented)
-  await write(say(evented, 'S-1 completed · exit 0', uid(), 1))
+  await write(say(evented, 'S-1 completed · exit 0', 1))
   assertEquals(row(evented)?.status, 'completed')
   assertEquals(refusals(evented).length, 1) // only the event we wrote
 })
@@ -777,7 +777,7 @@ Deno.test('a session commenting on itself never resumes it', async () => {
   let { eid, done } = begin(t)
   await done
   let before = row(eid)!.latest_seq as number
-  await write(say(eid, 'note to self', eid)) // the author IS the session
+  await write(say(eid, 'note to self'), eid) // the instrument IS the session
   assertEquals(row(eid)?.status, 'completed')
   assertEquals(row(eid)?.latest_seq, before) // the log never heard it
 })

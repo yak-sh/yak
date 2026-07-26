@@ -1,6 +1,6 @@
 import { useRef } from 'preact/hooks'
 import { md } from '../md.ts'
-import { clientId, commentsOn, ent, mutate, uuid } from '../live.ts'
+import { commentsOn, ent, mutate, uuid } from '../live.ts'
 import { ago, block, pretty } from './ui.tsx'
 import { useDraft } from './drafts.ts'
 import { type Ent, idOf, nick, sessionActive } from '../types.ts'
@@ -16,24 +16,32 @@ let Frame = block('div', 'Comments', {
 })
 let { Item, Who, Via, When, Body, New } = Frame
 
-// Who said it: browsers by a short client handle, anything else by its
-// chip id (S-31, never the raw session uuid). Pure — the TUI names
-// authors with it too.
-export let author = (eid?: string | null) => {
+// An instrument's face: browsers by a short client handle, anything else
+// by its chip id (S-31, never the raw session uuid).
+export let viaName = (eid?: string | null) => {
   if (!eid) return 'anon'
   let a = ent(eid)
   return a.client ? `web-${a.num}` : idOf(a)
 }
 
+// The universal stamp's human face: actor first, instrument after via.
+export let byline = (c: Ent) => {
+  let actor = c.created?.by ? ent(String(c.created.by)) : undefined
+  let instrument = c.created?.via ? ent(String(c.created.via)) : undefined
+  let by = actor ? actor.doc?.title || idOf(actor) : ''
+  let via = instrument ? viaName(instrument.eid) : ''
+  return by && via && actor?.eid != instrument?.eid
+    ? `${by} · via ${via}`
+    : by || via || 'anon'
+}
+
 // One comment, anywhere it renders — the rail here, the session thread
-// inline. The author is the INSTRUMENT (client or session); when its row
-// says who it acts for, the actor leads the byline and the instrument
-// dims behind a "via" — both still links.
+// inline. The stamp names actor and instrument directly; the actor leads
+// and the instrument dims behind a "via" — both still links.
 export let Note = ({ c }: { c: Ent }) => {
-  let by = c.comment!.author_eid
-  let a = by ? ent(by) : undefined
-  let actor = a?.session?.actor_eid ?? a?.client?.actor_eid
-  let who = actor ? ent(String(actor)) : undefined
+  let actor = c.created?.by ? ent(String(c.created.by)) : undefined
+  let instrument = c.created?.via ? ent(String(c.created.via)) : undefined
+  let who = actor ?? instrument
   return (
     /* An event is machinery speaking (M-4062) — a chip, not a
        bubble: the -event modifier shrinks and dims the row. */
@@ -42,10 +50,14 @@ export let Note = ({ c }: { c: Ent }) => {
         /* The name links to whoever said it; the age to the comment
         itself — both wear the internal-link contract. */
       }
-      <Who {...((who ?? a) ? linkProps(who ?? a!) : {})}>
-        {who ? who.doc?.title || idOf(who) : author(by)}
+      <Who {...(who ? linkProps(who) : {})}>
+        {actor ? actor.doc?.title || idOf(actor) : viaName(instrument?.eid)}
       </Who>
-      {who && <Via {...linkProps(a!)}>· via {author(by)}</Via>}
+      {actor && instrument && actor.eid != instrument.eid && (
+        <Via {...linkProps(instrument)}>
+          · via {viaName(instrument.eid)}
+        </Via>
+      )}
       <When data-tip={pretty(c.created?.at)} {...linkProps(c)}>
         {ago(c.created?.at)}
       </When>
@@ -57,7 +69,7 @@ export let Note = ({ c }: { c: Ent }) => {
 }
 
 // The box that says more — Enter posts (Shift+Enter for a newline), and
-// the author is this browser's client entity.
+// the instrument is this browser's client entity.
 //
 // On a session the comment IS the way to talk to the agent — no side
 // channel: the server's created(comment) effect resumes a settled
@@ -96,7 +108,7 @@ export let Composer = ({ eid }: { eid: string }) => {
       {
         eid: c,
         name: 'comment',
-        comp: { target_eid: eid, author_eid: clientId() },
+        comp: { target_eid: eid },
       },
     )
     box.current!.value = ''

@@ -539,9 +539,9 @@ export let hookClaim = (
   return claimChanges(all, task.eid, session, cwd)
 }
 
-// A comment: a doc aimed at the target, attributed to a session when
-// one is named. `event` marks machinery speaking (M-4062) — a notice a
-// command emits, not words an agent typed — so the mail relay skips it.
+// A comment: a doc aimed at the target. The session reification lets the
+// server stamp its instrument; `event` marks machinery speaking (M-4062)
+// so the mail relay skips it.
 export let commentChanges = (
   all: Row[],
   target: string,
@@ -559,7 +559,6 @@ export let commentChanges = (
       name: 'comment',
       comp: {
         target_eid: target,
-        author_eid: s?.eid ?? null,
         ...(event ? { event: 1 } : {}),
       },
     },
@@ -893,10 +892,6 @@ let briefOf = (r: Row) => {
 let unheard = (all: Row[], sess: Row | undefined, now: number) => {
   let actor = String(sess?.comps.session?.actor_eid ?? '')
   if (!actor) return []
-  let byEid = new Map(all.map((r) => [r.eid, r]))
-  let ours = (eid: unknown) =>
-    String(eid) == actor ||
-    byEid.get(String(eid))?.comps.session?.actor_eid == actor
   let recent = all
     .filter((r) =>
       r.comps.session && r.eid != sess?.eid &&
@@ -911,7 +906,7 @@ let unheard = (all: Row[], sess: Row | undefined, now: number) => {
       let n = all.filter((r) => {
         let c = r.comps.comment
         return c && c.target_eid == s.eid && !c.event &&
-          !ours(c.author_eid) &&
+          r.comps.created?.by != actor &&
           bornAt(r) > cutoff
       }).length
       return [s, n] as const
@@ -985,7 +980,7 @@ let onMine = (
   let hits = all
     .filter((r) => {
       let c = r.comps.comment
-      return c && !c.event && c.author_eid != sess.eid &&
+      return c && !c.event && r.comps.created?.via != sess.eid &&
         mine.has(String(c.target_eid)) && now - Date.parse(bornAt(r)) < 7 * DAY
     })
     .sort((a, b) => bornAt(b).localeCompare(bornAt(a)))
@@ -997,7 +992,7 @@ let onMine = (
       let c = r.comps.comment
       let body = String(r.comps.doc?.body ?? '').split('\n')[0].slice(0, 96)
       return `- ${idOf(byEid.get(String(c.target_eid))!)} 💬 ${
-        name(c.author_eid)
+        name(r.comps.created?.by ?? r.comps.created?.via)
       }: ${body}`
     }),
   ]
@@ -1221,7 +1216,7 @@ export let notices = (snap: Snapshot, session: string) => {
   let unseen = all
     .filter((r) => {
       let c = r.comps.comment
-      if (!c || c.author_eid == sess.eid) return false
+      if (!c || r.comps.created?.via == sess.eid) return false
       if (!mine.has(String(c.target_eid)) && String(c.target_eid) != sess.eid) {
         return false
       }
@@ -1229,24 +1224,23 @@ export let notices = (snap: Snapshot, session: string) => {
     })
     .sort((a, b) => bornAt(a).localeCompare(bornAt(b)))
   if (!unseen.length) return { lines: [] as string[], ack: [] as Change[] }
-  // The byline walks the actor chain (comment → author → actor): a
-  // session speaks as its operator "via S-n", a client as its person —
-  // 'someone' only when the chain truly ends in the dark.
+  // The stamp already names both levels: actor first, instrument after via.
+  // 'someone' only when both ends are dark.
   let name = (r?: Row) =>
     String(
       r?.comps.alias?.slug ?? r?.comps.doc?.title ?? r?.comps.session?.id ??
         '',
     )
-  let who = (eid: unknown) => {
-    let r = byEid.get(String(eid))
-    if (!r) return 'someone'
-    let actor = byEid.get(
-      String(r.comps.session?.actor_eid ?? r.comps.client?.actor_eid ?? ''),
-    )
-    if (r.comps.session) {
-      return actor ? `${name(actor)} · via ${idOf(r)}` : name(r) || 'someone'
-    }
-    return name(actor) || name(r) || 'someone'
+  let who = (stamp?: Record<string, unknown>) => {
+    let actor = byEid.get(String(stamp?.by ?? ''))
+    let instrument = byEid.get(String(stamp?.via ?? ''))
+    let by = name(actor)
+    let via = instrument
+      ? instrument.comps.client ? `web-${instrument.num}` : idOf(instrument)
+      : ''
+    return by && via && actor?.eid != instrument?.eid
+      ? `${by} · via ${via}`
+      : by || via || 'someone'
   }
   let served = unseen.slice(0, 20)
   let lines = served.map((r) => {
@@ -1254,7 +1248,7 @@ export let notices = (snap: Snapshot, session: string) => {
     let target = byEid.get(String(c.target_eid))
     let at = target && target.eid != sess.eid ? `${idOf(target)} ` : ''
     let body = String(r.comps.doc?.body ?? '').split('\n')[0].slice(0, 120)
-    return `${at}💬 ${who(c.author_eid)}: ${body}`
+    return `${at}💬 ${who(r.comps.created)}: ${body}`
   })
   if (unseen.length > 20) lines.push(`…and ${unseen.length - 20} more`)
   // A `notified` stamp per SERVED comment is the read-state that gates the
@@ -1330,8 +1324,10 @@ let brief = (
 ): Change[] => {
   let body = String(sess.comps.doc?.body ?? '')
   if (sess.comps.doc && body && !body.startsWith(STUB)) return []
-  let authored = all.some((r) => r.comps.comment?.author_eid == sess.eid)
-  if (!held.length && !authored && !entries.length) return []
+  let spoke = all.some((r) =>
+    r.comps.comment && r.comps.created?.via == sess.eid
+  )
+  if (!held.length && !spoke && !entries.length) return []
   let day = new Date(now).toISOString().slice(0, 10)
   let title = String(sess.comps.doc?.title || `Work session ${day}`)
   if (final) {
@@ -1548,9 +1544,16 @@ export let showMd = (snap: Snapshot, all: Row[], row: Row) => {
   if (comments.length) {
     out.push('', '## Comments')
     for (let c of comments) {
-      let author = c.comps.comment?.author_eid
-      let by = author ? ` · ${said(author)}` : ''
-      out.push('', `— ${bornAt(c)}${by}`, '')
+      let actor = c.comps.created?.by
+      let instrument = c.comps.created?.via
+      let by = actor ? said(actor) : ''
+      let via = instrument ? said(instrument) : ''
+      let who = by && via && actor != instrument
+        ? ` · ${by} · via ${via}`
+        : by || via
+        ? ` · ${by || via}`
+        : ''
+      out.push('', `— ${bornAt(c)}${who}`, '')
       out.push(String(c.comps.doc?.body ?? ''))
     }
   }

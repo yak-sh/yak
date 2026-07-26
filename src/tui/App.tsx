@@ -25,7 +25,7 @@ import {
 import { type Command, commands, type Ctx, run } from '../commands.ts'
 import { has, type Renderer, resolve } from '../components/registry.ts'
 import { Entity } from '../components/Entity.tsx'
-import { author } from '../components/Comments.tsx'
+import { byline, viaName } from '../components/Comments.tsx'
 import { Dot } from '../components/Dot.tsx'
 import { Id } from '../components/views/Inline.tsx'
 import { clipboard } from './paint.ts'
@@ -190,7 +190,7 @@ let TuiTask = ({ e }: { e: Ent }) => (
       <span class='Task_Prio'>{formatProp(priority, e.task!.priority)}</span>
       {e.claim && (
         <span class='Task_Claim'>
-          ⚑ {author(e.claim.session_eid)}
+          ⚑ {viaName(e.claim.session_eid)}
         </span>
       )}
       <Id e={e} />
@@ -205,7 +205,7 @@ let TuiTask = ({ e }: { e: Ent }) => (
     ))}
     {commentsOn(e.eid).map((c) => (
       <div class='TComment'>
-        <span class='Comments_Who'>{author(c.comment!.author_eid)}</span>{' '}
+        <span class='Comments_Who'>{byline(c)}</span>{' '}
         <Md text={c.doc?.body ?? ''} />
       </div>
     ))}

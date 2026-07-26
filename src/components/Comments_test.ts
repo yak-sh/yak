@@ -2,9 +2,9 @@
 // handles.
 import { assertEquals } from '@std/assert'
 import { cache, ent } from '../live.ts'
-import { author, prompt } from './Comments.tsx'
+import { byline, prompt, viaName } from './Comments.tsx'
 
-Deno.test('author names a session by its chip id, never its harness uuid', () => {
+Deno.test('viaName names a session by its chip id, never its harness uuid', () => {
   cache.value = {
     session: {
       entity: { eid: 'session', num: 31 },
@@ -15,9 +15,9 @@ Deno.test('author names a session by its chip id, never its harness uuid', () =>
       client: { eid: 'client', user_agent: '', ip: '' },
     },
   }
-  assertEquals(author('session'), 'S-31')
-  assertEquals(author('client'), 'web-7')
-  assertEquals(author(), 'anon')
+  assertEquals(viaName('session'), 'S-31')
+  assertEquals(viaName('client'), 'web-7')
+  assertEquals(viaName(), 'anon')
   cache.value = {}
 })
 
@@ -36,5 +36,26 @@ Deno.test('composer names an unnamed session by its chip id', () => {
     },
   }
   assertEquals(prompt(ent('session')), 'send to S-31… (resumes the session)')
+  cache.value = {}
+})
+
+Deno.test('byline reads actor and instrument from the created stamp', () => {
+  cache.value = {
+    actor: {
+      entity: { eid: 'actor', num: 2 },
+      doc: { eid: 'actor', title: 'jeff', body: '' },
+      person: { eid: 'actor' },
+    },
+    session: {
+      entity: { eid: 'session', num: 31 },
+      session: { eid: 'session', id: 'raw-session-uuid' },
+    },
+    comment: {
+      entity: { eid: 'comment', num: 9 },
+      created: { eid: 'comment', at: '', by: 'actor', via: 'session' },
+      comment: { eid: 'comment', target_eid: 'target' },
+    },
+  }
+  assertEquals(byline(ent('comment')), 'jeff · via S-31')
   cache.value = {}
 })

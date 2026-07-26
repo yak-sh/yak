@@ -166,16 +166,17 @@ let fixture = () => {
   ])
   return { proj, task }
 }
-let comment = (target: string, author?: string) => {
+let comment = (target: string, writer?: string) => {
   let c = uid()
-  apply(db, [
-    { eid: c, name: 'doc', comp: { title: '', body: 'a note' } },
-    {
-      eid: c,
-      name: 'comment',
-      comp: { target_eid: target, ...(author ? { author_eid: author } : {}) },
-    },
-  ])
+  apply(
+    db,
+    [
+      { eid: c, name: 'doc', comp: { title: '', body: 'a note' } },
+      { eid: c, name: 'comment', comp: { target_eid: target } },
+    ],
+    undefined,
+    writer,
+  )
   return c
 }
 let mintedFor = (c: string) =>
@@ -234,7 +235,7 @@ Deno.test('fanout: self-echo and the unaddressed stay home', () => {
     comp: { id: `op-${sess}`, actor_eid: proj },
   }])
   let mine = comment(task, sess)
-  fanout(cast)(mine, { target_eid: task, author_eid: sess })
+  fanout(cast)(mine, { target_eid: task })
   assertEquals(mintedFor(mine).length, 0) // the operator's own words
   let bare = uid(), t2 = uid()
   apply(db, [

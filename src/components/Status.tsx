@@ -88,7 +88,7 @@ let all = { ...commands, ...local }
 // comment on the task: the url, the root entity, the camera, and the
 // cards in view — enough for a fix agent to find the pixel the words
 // point at. Each platform attaches its own scene (a TUI would say its
-// screen); this is the web's. The author is this browser's client
+// screen); this is the web's. The instrument is this browser's client
 // entity, whose row carries the full user agent for anyone who digs.
 let scene = (task: string): Change[] => {
   let root = screenTarget()?.eid
@@ -122,7 +122,7 @@ let scene = (task: string): Change[] => {
       name: 'comment',
       // event: the command's context capture, not words anyone typed
       // (M-4062) — never mailed.
-      comp: { target_eid: task, author_eid: clientId(), event: 1 },
+      comp: { target_eid: task, event: 1 },
     },
   ]
 }

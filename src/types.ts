@@ -33,8 +33,8 @@
 //              existence is the reference (a claim: the lease vanishes,
 //              the claimed task survives)
 //   'keep'     the reference stands as history — the target's tombstone
-//              is the only mark (a comment's dead author, a memory's
-//              dead source session)
+//              is the only mark (dead provenance, a memory's dead source
+//              session)
 export type Death = 'cascade' | 'detach' | 'release' | 'keep'
 
 export type PropType =
@@ -102,10 +102,11 @@ export let comps: Record<string, Record<string, PropType>> = {
   // actor_eid is the identity CHAIN: a client is one browser's presence,
   // a session one agent's run — instruments, not identities — and the
   // actor is who the instrument acts for (a person, or a project standing
-  // in for its operator; {eid: ''} because the pool is shared). Authorship
-  // stays on the instrument; identity is one hop away, and the hop is
-  // queryable (.author.actor=jeff). An assertion, not authentication —
-  // forging it only garbles your own attribution, like acked_at.
+  // in for its operator; {eid: ''} because the pool is shared). The
+  // universal provenance stamp keeps both levels directly queryable
+  // (`.created.by=jeff`, `.created.via=S-31`). An assertion, not
+  // authentication — forging it only garbles your own attribution, like
+  // acked_at.
   client: { user_agent: 'text', actor_eid: { eid: '', death: 'detach' } }, // ip is server-stamped too
   camera: {
     client_eid: { eid: 'client', death: 'cascade' },
@@ -209,7 +210,7 @@ export let comps: Record<string, Record<string, PropType>> = {
     to: 'text',
     from: 'text',
     // What the mail is ABOUT. A sent mail is history — its subject's
-    // death doesn't unsend it (the byline rule, comment.author_eid).
+    // death doesn't unsend it (the provenance byline rule).
     target_eid: { eid: '', death: 'keep' },
     // The mail this one ANSWERS — reference at authoring, resolved to an
     // RFC Message-ID at delivery (mail.ts). History like target_eid: a
@@ -229,14 +230,6 @@ export let comps: Record<string, Record<string, PropType>> = {
   hook: {},
   comment: {
     target_eid: { eid: '', death: 'cascade' },
-    // A byline survives its instrument: the words remain attributed to a
-    // session that ended long ago — history, not a dangle. Not redundant
-    // with created.by (T-7017): author_eid names the INSTRUMENT (a
-    // session, a client), created.by the actor it acts for — the comms
-    // bus self-filter and the resume gate need per-session identity
-    // (fleetmates share an actor), and the byline walks author → actor
-    // ("jeff · via S-31").
-    author_eid: { eid: '', death: 'keep' },
     // Emitted, not authored (M-4062): machinery marks its comments at
     // mint — a settle notice, a lease lapse. Events never ride the mail
     // relay and render as chips, not bubbles; the comms bus still
@@ -292,8 +285,8 @@ export let comps: Record<string, Record<string, PropType>> = {
   // override it (an agent stamping Jeff as the author). `via` is the
   // server-stamped instrument: claiming another instrument is only spoofing.
   // Both are death 'keep' — provenance outlives the actor's or instrument's
-  // tombstone (like comment.author_eid). NOT in kindOrder: a facet every
-  // entity wears, never its identity (like recall).
+  // tombstone. NOT in kindOrder: a facet every entity wears, never its
+  // identity (like recall).
   created: { by: { eid: '', death: 'keep' } },
   updated: { by: { eid: '', death: 'keep' } },
   // Notification lifecycle — the inbox's read-state, denormalized into the
@@ -811,11 +804,10 @@ export type Hook = {
 
 // A comment is a doc AIMED at something — and since target_eid is any
 // entity, ANYTHING is commentable: tasks, boards, frozen pages, other
-// comments. author_eid points at a session or client entity (or null).
+// comments. Its actor and instrument ride the universal created stamp.
 export type Comment = {
   eid: string
   target_eid: string
-  author_eid?: string | null
   event?: number | null
 }
 

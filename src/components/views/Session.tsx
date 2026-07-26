@@ -429,7 +429,7 @@ export let Session = ({ e }: { e: Ent }) => {
   )
   let cs = commentsOn(e.eid).filter((c) => !inputs.has(c.doc?.body ?? ''))
   let heard = (c: Ent) =>
-    !!c.comment!.event || c.comment!.author_eid == e.eid ||
+    !!c.comment!.event || c.created?.via == e.eid ||
     (!!s.acked_at && String(c.created?.at ?? '') <= s.acked_at)
   let thread = weave(rows, cs.filter(heard))
   let unsent = cs.filter((c) => !heard(c))
