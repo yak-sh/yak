@@ -40,6 +40,7 @@ import {
   type Param,
   param,
   patches,
+  query,
   readerFor,
   replyChanges,
   repoAt,
@@ -309,6 +310,23 @@ let help = (args: string[]) => {
   if (examples.length) {
     console.log(`\n${examples.map((e) => `  ${e}`).join('\n')}`)
   }
+}
+
+export let claimedDigest = (mine: Row[]) =>
+  mine
+    .slice(0, 4)
+    .flatMap((r) => taskBlock(mine, [], r))
+    .join('\n')
+
+let bare = async () => {
+  console.log(usage.trim())
+  let session = me()
+  if (!session) return
+  let [sess] = await query([`.session.id=${session}`], 'session')
+  if (!sess) return
+  let mine = await query([`.claim.session_eid=${sess.eid}`], 'task')
+  let digest = claimedDigest(mine)
+  if (digest) console.log(`\n${digest}`)
 }
 
 // A selected verb owns every option-shaped arg before it can touch the
@@ -1740,6 +1758,7 @@ if (import.meta.main) {
     else if (cmd == 'release') await release(rest)
     else if (cmd == 'telemetry') await telemetry(rest)
     else if (cmd == 'help' || cmd == '--help') help(rest)
+    else if (!cmd) await bare()
     // `task T-42 :done` — an id ahead of a colon line names the focus.
     else if (rest[0]?.startsWith(':')) await colon(cmd, rest)
     // Anything left that the shared table knows is that verb, colon
@@ -1749,7 +1768,7 @@ if (import.meta.main) {
     else if (cmd && commands[cmd]) await colon(undefined, [cmd, ...rest])
     else {
       console.log(usage.trim())
-      if (cmd) Deno.exit(2)
+      Deno.exit(2)
     }
   } catch (e) {
     console.error(`task: ${(e as Error).message} (server: ${host()})`)

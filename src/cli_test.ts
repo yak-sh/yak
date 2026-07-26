@@ -10,6 +10,7 @@ import {
 } from '@std/assert'
 import {
   bodyOf,
+  claimedDigest,
   claudeLaunch,
   codexArgs,
   finalText,
@@ -22,7 +23,7 @@ import {
   subjectUsage,
   workHook,
 } from './cli.ts'
-import { observerDigest } from './client.ts'
+import { observerDigest, type Row, rows } from './client.ts'
 import type { Snapshot } from './types.ts'
 
 let transcript = (...events: unknown[]) => {
@@ -42,6 +43,13 @@ let cli = (...args: string[]) =>
   new Deno.Command(Deno.execPath(), {
     args: ['run', '-A', new URL('./cli.ts', import.meta.url).pathname, ...args],
     env: { TASKS_HOST: '127.0.0.1:1' },
+  }).output()
+
+let bareCli = (env: Record<string, string>) =>
+  new Deno.Command(Deno.execPath(), {
+    args: ['run', '-A', new URL('./cli.ts', import.meta.url).pathname],
+    clearEnv: true,
+    env,
   }).output()
 
 let text = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
@@ -448,6 +456,50 @@ let sub: Snapshot = {
   deps: [],
 }
 
+let N = 'bbbbbbbb-0000-4000-8000-000000000003'
+let O = 'bbbbbbbb-0000-4000-8000-000000000004'
+let graph: Snapshot = {
+  changes: [
+    ...sub.changes,
+    { eid: N, name: 'entity', comp: { eid: N, num: 3, created_at: '' } },
+    { eid: N, name: 'session', comp: { id: 'idle-1' } },
+    { eid: O, name: 'entity', comp: { eid: O, num: 4, created_at: '' } },
+    { eid: O, name: 'doc', comp: { title: 'Open board task', body: '' } },
+    { eid: O, name: 'task', comp: { status: 'open', priority: 1 } },
+  ],
+  deps: [],
+}
+
+let graphServer = () => {
+  let seen: string[] = []
+  let all = rows(graph)
+  let wire = (r: Row) => ({ eid: r.eid, kind: r.kind, comps: r.comps })
+  let server = Deno.serve({
+    hostname: '127.0.0.1',
+    port: 0,
+    onListen: () => {},
+  }, (req) => {
+    let url = new URL(req.url)
+    let line = decodeURIComponent(`${url.pathname}${url.search}`)
+    seen.push(line)
+    if (url.pathname == '/snapshot') return Response.json(graph)
+    let sid = line.match(/\.session\.id=([^&]+)/)?.[1]
+    if (sid) {
+      return Response.json(
+        all.filter((r) => String(r.comps.session?.id) == sid).map(wire),
+      )
+    }
+    let holder = line.match(/\.claim\.session_eid=([^&]+)/)?.[1]
+    return Response.json(
+      holder
+        ? all.filter((r) => r.comps.claim?.session_eid == holder).map(wire)
+        : all.map(wire),
+    )
+  })
+  let port = (server.addr as Deno.NetAddr).port
+  return { server, seen, host: `127.0.0.1:${port}` }
+}
+
 Deno.test('subagentDigest: a held claim renders that task block, nothing else', () => {
   let out = subagentDigest(sub, 'sub-1', 'general')
   assertEquals(out, '- T-2 wip — Child work')
@@ -479,4 +531,49 @@ Deno.test('subagentDigest: no task = a one-line identity note', () => {
     '# subagent general · nobody',
   )
   assertMatch(subagentDigest(sub, 'nobody'), /^# subagent · nobody$/)
+})
+
+Deno.test('claimedDigest: only this session lease, never the open board', () => {
+  let mine = rows(sub).filter((r) => r.comps.claim)
+  assertEquals(claimedDigest(mine), '- T-2 wip — Child work')
+  assertEquals(claimedDigest([]), '')
+})
+
+Deno.test('bare task prints usage without a session or server read', async () => {
+  let { server, seen, host } = graphServer()
+  try {
+    let out = await bareCli({ TASKS_HOST: host })
+    assertEquals(out.code, 0)
+    assertMatch(text(out.stdout), /^task — the entity graph/)
+    assertEquals(seen, [])
+  } finally {
+    await server.shutdown()
+  }
+})
+
+Deno.test('bare task appends the current claimed task digest', async () => {
+  let { server, seen, host } = graphServer()
+  try {
+    let out = await bareCli({ TASKS_HOST: host, TASKS_SESSION: 'sub-1' })
+    assertEquals(out.code, 0)
+    assertMatch(text(out.stdout), /task —[\s\S]*- T-2 wip — Child work/)
+    assertEquals(seen, [
+      '/query?kind=session&.session.id=sub-1',
+      `/query?kind=task&.claim.session_eid=${S}`,
+    ])
+  } finally {
+    await server.shutdown()
+  }
+})
+
+Deno.test('bare task never reads or prints the open board', async () => {
+  let { server, seen, host } = graphServer()
+  try {
+    let out = await bareCli({ TASKS_HOST: host, TASKS_SESSION: 'idle-1' })
+    assertEquals(out.code, 0)
+    assertEquals(text(out.stdout).includes('Open board task'), false)
+    assertEquals(seen.includes('/snapshot'), false)
+  } finally {
+    await server.shutdown()
+  }
 })

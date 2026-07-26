@@ -1,7 +1,7 @@
 // The headless client half — what the CLI and the MCP server share. Talks
-// to a running tasks server over HTTP (/snapshot to read, /apply to
-// write; writes broadcast to every live client), assembles entities the
-// same way live.ts does, and owns the dot-param grammar:
+// to a running tasks server over HTTP (/snapshot + /query to read, /apply
+// to write; writes broadcast to every live client), assembles entities
+// the same way live.ts does, and owns the dot-param grammar:
 //   .title=Hello        routes by prop — title lives only in doc
 //   .doc.title=Hello    the explicit spelling, for collisions (pin/camera
 //                       geometry) or clarity
@@ -39,6 +39,18 @@ export let snapshot = async () => {
   let res = await request(`http://${host()}/snapshot`)
   if (!res.ok) throw new Error(`server said ${res.status}`)
   return res.json() as Promise<{ changes: Change[]; deps: Dep[] }>
+}
+
+export let query = async (filters: string[], kind?: string) => {
+  let args = [...(kind ? [`kind=${kind}`] : []), ...filters]
+  let url = args.map(encodeURIComponent).join('&')
+  let res = await request(`http://${host()}/query?${url}`)
+  if (!res.ok) throw new Error(`server said ${res.status}`)
+  let hits = await res.json() as Row[]
+  return hits.map((r) => ({
+    ...r,
+    num: Number(r.comps.entity?.num ?? r.num),
+  }))
 }
 
 // The graph as rows: one per entity, components merged in; kind derived.
