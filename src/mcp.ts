@@ -58,9 +58,9 @@ import { commands, focusOf, run as runCommand } from './commands.ts'
 // How the tools reach the graph — in-process on the server, HTTP here.
 export type IO = {
   read: () => Promise<{ changes: Change[]; deps: Dep[] }>
-  // `actor` is journal attribution — the calling session's id, when the
+  // `via` is journal attribution — the calling session's id, when the
   // tool knows it. Never auth.
-  write: (changes: Change[], actor?: string) => Promise<void>
+  write: (changes: Change[], via?: string) => Promise<void>
   find: (q: string, limit?: number) => Promise<Hit[]>
   // Land an HTML page in the frozen store for an existing web entity.
   upload: (eid: string, html: string) => Promise<void>

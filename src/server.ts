@@ -351,9 +351,9 @@ let mcp = async (req: Request) => {
       // deno-lint-ignore require-await
       read: async () => snapshot(db),
       // deno-lint-ignore require-await
-      write: async (changes, actor) => {
+      write: async (changes, via) => {
         let t = trace()
-        let out = apply(db, changes, t, actor)
+        let out = apply(db, changes, t, via)
         cast(out)
         effect(out, t)
       },
