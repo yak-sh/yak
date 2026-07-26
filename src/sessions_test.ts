@@ -45,6 +45,10 @@ let row = (eid: string) =>
   db.prepare('select * from session where eid = ?').get(eid) as
     | Record<string, string | number | null>
     | undefined
+let spawnRow = (eid: string) =>
+  db.prepare('select * from spawn where eid = ?').get(eid) as
+    | Record<string, string | number | null>
+    | undefined
 
 // The same curated list server.ts registers — the tests drive the wire.
 on('session', { created: spawned(cast), removed: deleted })
@@ -122,6 +126,30 @@ let begin = (
       ...extra,
     },
   }], via)
+  return { eid, done }
+}
+
+let beginCanonical = (
+  task: string,
+  extra: Record<string, unknown> = {},
+) => {
+  let eid = uid()
+  let done = write([
+    {
+      eid,
+      name: 'session',
+      comp: { id: uid(), requested_task_eid: task },
+    },
+    {
+      eid,
+      name: 'spawn',
+      comp: {
+        provider: 'fake',
+        model: 'fake-fast',
+        ...extra,
+      },
+    },
+  ])
   return { eid, done }
 }
 
@@ -257,6 +285,10 @@ Deno.test('a fake session runs end to end', async () => {
   assertEquals(s.serving_model, 'fake-fast')
   assertEquals(s.latest_seq, 5) // the prompt line, then the child's four
   assertEquals(s.requested_task_eid, t)
+  assertEquals(spawnRow(eid)?.provider, 'fake')
+  assertEquals(spawnRow(eid)?.model, 'fake-fast')
+  assertEquals(s.provider, 'fake') // dormant old-reader alias
+  assertEquals(s.model, 'fake-fast')
   assertMatch(String(s.final_text), /^done: /)
   assertEquals(JSON.parse(String(s.usage_json)).output_tokens, 34)
   assertEquals(s.error, null)
@@ -286,6 +318,39 @@ Deno.test('a fake session runs end to end', async () => {
     [1, 2, 3, 4, 5],
   )
   assertMatch(String(page.stderr), /stderr noise/) // diagnostics, unordered
+})
+
+Deno.test('a canonical fake session dual-materializes and runs', async () => {
+  let { t } = seed()
+  let { eid, done } = beginCanonical(t, { effort: 'high' })
+  await done
+  assertEquals(row(eid)?.status, 'completed')
+  assertEquals(row(eid)?.provider, 'fake')
+  assertEquals(row(eid)?.model, 'fake-fast')
+  assertEquals(row(eid)?.effort, 'high')
+  assertEquals(spawnRow(eid)?.provider, 'fake')
+  assertEquals(spawnRow(eid)?.model, 'fake-fast')
+  assertEquals(spawnRow(eid)?.effort, 'high')
+  assertEquals(logs(eid, new URLSearchParams()).entries.length, 5)
+})
+
+Deno.test('an external provider patch is not a launch request', async () => {
+  let eid = uid()
+  await write([{
+    eid,
+    name: 'session',
+    comp: { id: uid(), cwd: scratch },
+  }])
+  assertEquals(spawnRow(eid)?.provider, null)
+  await write([{
+    eid,
+    name: 'session',
+    comp: { provider: 'fake', model: 'fake-fast' },
+  }])
+  assertEquals(spawnRow(eid)?.provider, 'fake')
+  assertEquals(row(eid)?.origin, 'external')
+  assertEquals(row(eid)?.status, null)
+  assertEquals(logs(eid, new URLSearchParams()).entries, [])
 })
 
 Deno.test('a worn persona rides the prompt whole — tiers and all', async () => {

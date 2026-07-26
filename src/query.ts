@@ -91,6 +91,10 @@ let routes: Record<string, readonly string[]> = {
 let SKETCH =
   'filters are dot-params: .status=open, .priority<=1, .project=P-19, .title~=word, …'
 
+let spawnTwin = (prop: string, owners: string[]) =>
+  prop in comps.spawn && owners.length == 2 &&
+  owners.every((name) => name == 'session' || name == 'spawn')
+
 // Route a bare prop to its component; ambiguity is an error that names
 // the candidates rather than a guess. The sugar rule rides here: a prop
 // with no column of its own, where exactly ONE component carries
@@ -103,6 +107,9 @@ export let route = (prop: string): { comp: string; prop: string } => {
       .map(([name]) => name)
   let own = hits(prop)
   if (own.length == 1) return { comp: own[0], prop }
+  // Spawn's legacy session aliases are one concept during the rolling
+  // window: filters read either home, while write routing chooses explicitly.
+  if (spawnTwin(prop, own)) return { comp: '', prop }
   if (own.length > 1) {
     throw new Error(
       `.${prop} is ambiguous (${own.join(', ')}) — use .${own[0]}.${prop}`,

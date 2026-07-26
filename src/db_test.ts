@@ -47,8 +47,9 @@ Deno.test('vocabHash: writable declarations still invalidate a cache', () => {
   )
 })
 
-let comp = (eid: string, name: string) =>
-  snapshot(db).changes.find((c) => c.eid == eid && c.name == name)?.comp
+let compOf = (d: ReturnType<typeof open>, eid: string, name: string) =>
+  snapshot(d).changes.find((c) => c.eid == eid && c.name == name)?.comp
+let comp = (eid: string, name: string) => compOf(db, eid, name)
 
 let tag = (
   db: ReturnType<typeof fresh>,
@@ -417,6 +418,194 @@ Deno.test('session lifecycle columns are server-owned', () => {
   assertEquals(comp(s, 'session')?.status, null) // lifecycle: server only
   assertEquals(comp(s, 'session')?.origin, 'external') // the default holds
   assertEquals(comp(s, 'session')?.latest_seq, 0)
+  apply(db, [{
+    eid: s,
+    name: 'spawn',
+    comp: { provider: 'fake', status: 'completed', exit_code: 0 },
+  }])
+  assertEquals(comp(s, 'spawn')?.provider, 'fake')
+  assertEquals(comp(s, 'spawn')?.status, undefined)
+  assertEquals(comp(s, 'session')?.provider, 'fake') // dormant reader alias
+  assertEquals(comp(s, 'session')?.status, null)
+})
+
+Deno.test('legacy session launch fields dual-materialize', () => {
+  let d = fresh()
+  let s = uid(), persona = uid()
+  apply(d, [{ eid: persona, name: 'persona', comp: {} }])
+  let out = apply(d, [{
+    eid: s,
+    name: 'session',
+    comp: {
+      id: uid(),
+      provider: 'fake',
+      model: 'fake-fast',
+      effort: 'low',
+      persona_eid: persona,
+    },
+  }])
+  let spec = {
+    provider: 'fake',
+    model: 'fake-fast',
+    effort: 'low',
+    persona_eid: persona,
+  }
+  assertEquals(
+    Object.fromEntries(
+      Object.keys(spec).map((k) => [k, compOf(d, s, 'spawn')?.[k]]),
+    ),
+    spec,
+  )
+  assertEquals(
+    Object.fromEntries(
+      Object.keys(spec).map((k) => [k, compOf(d, s, 'session')?.[k]]),
+    ),
+    spec,
+  )
+  assertEquals(out.some((c) => c.eid == s && c.name == 'spawn'), true)
+})
+
+Deno.test('canonical session launch fields dual-materialize', () => {
+  let d = fresh()
+  let s = uid(), task = uid()
+  apply(d, [{ eid: task, name: 'task', comp: { status: 'open' } }])
+  let out = apply(d, [
+    {
+      eid: s,
+      name: 'spawn',
+      comp: { provider: 'fake', model: 'fake-fast', effort: 'high' },
+    },
+    {
+      eid: s,
+      name: 'session',
+      comp: {
+        id: uid(),
+        requested_task_eid: task,
+        provider: 'claude',
+        model: 'claude-sonnet-4-5',
+        effort: 'low',
+      },
+    },
+  ])
+  assertEquals(compOf(d, s, 'spawn')?.provider, 'fake')
+  assertEquals(compOf(d, s, 'spawn')?.model, 'fake-fast')
+  assertEquals(compOf(d, s, 'spawn')?.effort, 'high')
+  assertEquals(compOf(d, s, 'session')?.provider, 'fake')
+  assertEquals(compOf(d, s, 'session')?.model, 'fake-fast')
+  assertEquals(compOf(d, s, 'session')?.effort, 'high')
+  assertEquals(compOf(d, s, 'session')?.requested_task_eid, task)
+  assertEquals(
+    out.filter((c) => c.eid == s && c.name == 'session').length,
+    1,
+  )
+})
+
+Deno.test('a task spawn hint never becomes a session', () => {
+  let d = fresh()
+  let task = uid()
+  apply(d, [
+    { eid: task, name: 'doc', comp: { title: 'hinted' } },
+    { eid: task, name: 'task', comp: { status: 'open' } },
+    {
+      eid: task,
+      name: 'spawn',
+      comp: { provider: 'fake', model: 'fake-fast' },
+    },
+  ])
+  assertEquals(compOf(d, task, 'spawn')?.provider, 'fake')
+  assertEquals(compOf(d, task, 'session'), undefined)
+  assertEquals(search(d, 'hinted')[0]?.kind, 'task')
+  apply(d, [{ eid: task, name: 'spawn', comp: null }])
+  assertEquals(compOf(d, task, 'spawn'), undefined)
+  assertEquals(compOf(d, task, 'session'), undefined)
+})
+
+Deno.test('deleting a session spawn clears both homes without removing it', () => {
+  let d = fresh()
+  let clear = (s: string) => {
+    assertEquals(compOf(d, s, 'spawn')?.provider, null)
+    assertEquals(compOf(d, s, 'spawn')?.model, null)
+    assertEquals(compOf(d, s, 'session')?.provider, null)
+    assertEquals(compOf(d, s, 'session')?.model, null)
+  }
+  let existing = uid()
+  apply(d, [
+    { eid: existing, name: 'session', comp: { id: uid() } },
+    {
+      eid: existing,
+      name: 'spawn',
+      comp: { provider: 'fake', model: 'fake-fast' },
+    },
+  ])
+  apply(d, [{ eid: existing, name: 'spawn', comp: null }])
+  clear(existing)
+
+  let oneBatch = uid()
+  apply(d, [
+    { eid: oneBatch, name: 'session', comp: { id: uid() } },
+    {
+      eid: oneBatch,
+      name: 'spawn',
+      comp: { provider: 'fake', model: 'fake-fast' },
+    },
+    { eid: oneBatch, name: 'spawn', comp: null },
+  ])
+  clear(oneBatch)
+})
+
+Deno.test('canonical mirrors roll back with a refused batch', () => {
+  let d = fresh()
+  let s = uid()
+  apply(d, [
+    { eid: s, name: 'session', comp: { id: uid() } },
+    {
+      eid: s,
+      name: 'spawn',
+      comp: { provider: 'fake', model: 'fake-fast' },
+    },
+  ])
+  let bad = uid(), ghost = uid()
+  assertThrows(
+    () =>
+      apply(d, [
+        { eid: s, name: 'session', comp: { cwd: '/changed' } },
+        { eid: s, name: 'spawn', comp: { model: 'changed' } },
+        {
+          eid: bad,
+          name: 'task',
+          comp: { status: 'open', project_eid: ghost },
+        },
+      ]),
+    Error,
+    'project_eid',
+  )
+  assertEquals(compOf(d, s, 'spawn')?.model, 'fake-fast')
+  assertEquals(compOf(d, s, 'session')?.model, 'fake-fast')
+  assertEquals(compOf(d, s, 'session')?.cwd, null)
+  assertEquals(compOf(d, s, 'spawn')?.persona_eid, null)
+  assertEquals(compOf(d, s, 'session')?.persona_eid, null)
+  assertEquals(compOf(d, bad, 'entity'), undefined)
+})
+
+Deno.test('old snapshot readers keep the legacy session view', async () => {
+  let { rows } = await import('./client.ts')
+  let d = fresh()
+  let s = uid()
+  apply(d, [{
+    eid: s,
+    name: 'session',
+    comp: { id: uid(), provider: 'fake', model: 'fake-fast' },
+  }])
+  let snap = snapshot(d)
+  assertEquals(snap.capabilities, ['spawn'])
+  let old = {
+    changes: snap.changes.filter((c) => c.name != 'spawn'),
+    deps: snap.deps,
+  }
+  let row = rows(old).find((r) => r.eid == s)!
+  assertEquals(row.kind, 'session')
+  assertEquals(row.comps.session?.provider, 'fake')
+  assertEquals(row.comps.session?.model, 'fake-fast')
 })
 
 Deno.test('claim is a lease: conflict throws + audits, same session refreshes', () => {
@@ -940,6 +1129,51 @@ Deno.test('backfill: mail.read_at seeds opened, idempotently', () => {
   assertEquals(openedAt(), 'MOVED')
 })
 
+Deno.test('open backfills every pre-spawn session, once', () => {
+  let path = Deno.makeTempFileSync({ prefix: 'tasks-spawn-', suffix: '.db' })
+  let legacy = uid(), external = uid()
+  let d = open(path)
+  apply(d, [
+    {
+      eid: legacy,
+      name: 'session',
+      comp: {
+        id: uid(),
+        provider: 'fake',
+        model: 'fake-fast',
+        effort: 'low',
+      },
+    },
+    { eid: external, name: 'session', comp: { id: uid(), cwd: '/tmp' } },
+  ])
+  d.exec('drop table spawn')
+  d.close()
+
+  d = open(path)
+  assertEquals(
+    (d.prepare('select count(*) as n from spawn').get() as { n: number }).n,
+    (d.prepare('select count(*) as n from session').get() as { n: number }).n,
+  )
+  assertEquals(compOf(d, legacy, 'spawn')?.model, 'fake-fast')
+  assertEquals(compOf(d, external, 'spawn')?.provider, null)
+  d.prepare("update spawn set model = 'canonical' where eid = ?").run(legacy)
+  d.close()
+
+  d = open(path)
+  assertEquals(compOf(d, legacy, 'spawn')?.model, 'canonical')
+  assertEquals(compOf(d, legacy, 'session')?.model, 'fake-fast')
+  apply(d, [{ eid: legacy, name: 'spawn', comp: null }])
+  d.close()
+
+  d = open(path)
+  assertEquals(compOf(d, legacy, 'spawn')?.provider, null)
+  assertEquals(compOf(d, legacy, 'spawn')?.model, null)
+  assertEquals(compOf(d, legacy, 'session')?.provider, null)
+  assertEquals(compOf(d, legacy, 'session')?.model, null)
+  d.close()
+  Deno.removeSync(path)
+})
+
 Deno.test('backfill: comment instruments move into created.via', () => {
   let d = fresh()
   let target = uid(), author = uid(), comment = uid()
@@ -1240,6 +1474,7 @@ Deno.test('detach: a dead task or persona lets its sessions go', () => {
   )
   apply(db, [{ eid: muse, name: 'entity', comp: null }])
   assertEquals(comp(s, 'session')?.persona_eid, null)
+  assertEquals(comp(s, 'spawn')?.persona_eid, null)
 })
 
 Deno.test('release: a dead client sheds its shelf, the canvas survives', () => {

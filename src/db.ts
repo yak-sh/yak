@@ -11,6 +11,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { dirname, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
 import {
+  capabilities,
   type Change,
   comps,
   deaths,
@@ -163,6 +164,13 @@ let schema = `
     eid text primary key references entity(eid),
     id  text not null unique,
     cwd text
+  );
+  create table if not exists spawn (
+    eid         text primary key references entity(eid),
+    provider    text,
+    model       text,
+    effort      text,
+    persona_eid text references entity(eid)
   );
   create table if not exists claim (
     eid         text primary key references entity(eid),
@@ -528,6 +536,15 @@ export let backfillVia = (db: DatabaseSync) =>
      )`,
   )
 
+// Give every session its canonical launch facet before graph-out can observe
+// the handle. The dormant aliases stay as rollback input; insert-or-ignore
+// makes the canonical row authoritative on every later open.
+export let backfillSpawn = (db: DatabaseSync) =>
+  db.exec(
+    `insert or ignore into spawn (eid, provider, model, effort, persona_eid)
+       select eid, provider, model, effort, persona_eid from session`,
+  )
+
 let sqlName = (name: string) => `"${name.replaceAll('"', '""')}"`
 
 // Stored values pass through the same language as incoming values. Invalid
@@ -625,12 +642,10 @@ export let open = (path = file) => {
     addCol(table, 'via', 'via text')
   }
   addCol('journal', 'via', 'via text')
-  // The managed-session lifecycle (src/sessions.ts): what was asked for,
-  // what it's doing, how it ended. The REQUEST columns (provider, model,
-  // effort, persona_eid, requested_task_eid) are wire-writable — creating
-  // a session with them IS the spawn request; the rest is server-owned
-  // (absent from comps.session, so the wire can't write it) and rides OUT
-  // in the snapshot like any row.
+  // The managed-session lifecycle (src/sessions.ts): what it is doing and
+  // how it ended. The old launch aliases are planted before backfillSpawn()
+  // for live databases, then stay dormant as rollback input. The rest is
+  // server-owned and rides OUT in the snapshot.
   // Listed once, planted in place; each ddl leads with its column name.
   for (
     let ddl of [
@@ -656,6 +671,7 @@ export let open = (path = file) => {
       'error text',
     ]
   ) addCol('session', ddl.split(' ')[0], ddl)
+  backfillSpawn(db)
   // The identity chain (types.ts): instruments point at who they act for.
   addCol('client', 'actor_eid', 'actor_eid text references entity(eid)')
   // The event mark (M-4062): machinery's comments — settle notices,
@@ -791,6 +807,84 @@ let admitted = (change: Change): Change | undefined => {
   if (sent.length && !kept.length) return
   let comp = Object.fromEntries(kept)
   return { ...change, comp }
+}
+
+let spawnCols = Object.keys(comps.spawn)
+let spawnSpec = (comp: Record<string, unknown>) =>
+  Object.fromEntries(
+    spawnCols.filter((col) => col in comp).map((col) => [col, comp[col]]),
+  )
+
+// One session launch spec, two rolling-release homes. Whole-batch projection
+// runs under apply()'s write lock: canonical spawn fields win a conflict,
+// every session gets a spawn facet, and a task hint can never mint session.
+// Coalescing the session twin into one change matters — created(session)
+// effects key off the Trace row and must fire once.
+let dualSpawn = (db: DatabaseSync, changes: Change[]): Change[] => {
+  let out = changes.map((change) => ({
+    ...change,
+    comp: change.comp && { ...change.comp },
+  }))
+  let eids = new Set(
+    out.filter((c) => c.name == 'session' || c.name == 'spawn')
+      .map((c) => c.eid),
+  )
+  let sessions = new Set(
+    [...eids].filter((eid) =>
+      db.prepare('select 1 from session where eid = ?').get(eid)
+    ),
+  )
+  let killed = new Set<string>()
+  for (let change of out) {
+    if (change.name == 'entity' && change.comp == null) {
+      killed.add(change.eid)
+      sessions.delete(change.eid)
+    }
+    if (killed.has(change.eid) || change.name != 'session') continue
+    if (change.comp == null) sessions.delete(change.eid)
+    else sessions.add(change.eid)
+  }
+  for (let eid of sessions) {
+    let si: number[] = [], pi: number[] = []
+    let legacy: Record<string, unknown> = {}
+    let canonical: Record<string, unknown> = {}
+    let spawnGone = false
+    let spawnAt: number | undefined
+    out.forEach((change, i) => {
+      if (change.eid != eid) return
+      if (change.name == 'session' && change.comp) {
+        si.push(i)
+        legacy = { ...legacy, ...spawnSpec(change.comp) }
+      }
+      if (change.name == 'spawn') {
+        spawnAt = i
+        if (change.comp) {
+          pi.push(i)
+          canonical = { ...canonical, ...spawnSpec(change.comp) }
+          spawnGone = false
+        } else {
+          canonical = Object.fromEntries(spawnCols.map((col) => [col, null]))
+          spawnGone = true
+        }
+      }
+    })
+    let spec = { ...legacy, ...canonical }
+    for (let i of [...si, ...pi]) {
+      for (let col of spawnCols) delete out[i].comp?.[col]
+    }
+    let session = si.at(-1)
+    if (session == null && Object.keys(canonical).length) {
+      session = out.push({ eid, name: 'session', comp: {} }) - 1
+    }
+    if (session != null) out[session].comp = { ...out[session].comp, ...spec }
+    let spawn = spawnGone ? spawnAt : pi.at(-1)
+    if (spawnGone && spawn != null) out[spawn].comp = {}
+    if (spawn == null) {
+      spawn = out.push({ eid, name: 'spawn', comp: {} }) - 1
+    }
+    if (spawn != null) out[spawn].comp = { ...out[spawn].comp, ...spec }
+  }
+  return out
 }
 
 // Graph-out is the declared readable vocabulary, never the table's migration
@@ -1087,6 +1181,7 @@ export let apply = (
   // a deferred read transaction can fail immediately to avoid a deadlock.
   db.exec('begin immediate')
   try {
+    changes = dualSpawn(db, changes)
     // Mint spines in first-touch order before writing components. A typed
     // reference may then precede its target component without pre-minting that
     // target out of order. An entity-null still voids every later touch.
@@ -1943,6 +2038,7 @@ export let snapshot = (db: DatabaseSync): Snapshot => {
     cursor,
     epoch,
     vocabHash,
+    capabilities,
   }
 }
 

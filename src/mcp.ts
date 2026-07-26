@@ -11,7 +11,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
-import { type Change, type Dep, type Hit, uuid } from './types.ts'
+import { type Change, type Hit, type Snapshot, uuid } from './types.ts'
 import { trouble } from './adapters.ts'
 import { FILTERS, GRAMMAR } from './grammar.ts'
 import {
@@ -59,7 +59,7 @@ import { request } from './http.ts'
 
 // How the tools reach the graph — in-process on the server, HTTP here.
 export type IO = {
-  read: () => Promise<{ changes: Change[]; deps: Dep[] }>
+  read: () => Promise<Snapshot>
   // `via` is journal attribution — the calling session's id, when the
   // tool knows it. Never auth.
   write: (changes: Change[], via?: string) => Promise<void>

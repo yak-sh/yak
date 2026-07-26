@@ -34,6 +34,10 @@ Deno.test('schema(): stamped marked, death words carried, tags empty', () => {
   // wire-writable and stamped columns of one comp land in one place
   let session = rows.session.map((c) => c.col)
   assert(session.includes('provider') && session.includes('exit_code'))
+  assertEquals(
+    rows.spawn.map((c) => c.col),
+    ['provider', 'model', 'effort', 'persona_eid'],
+  )
 })
 
 Deno.test('vocabularyMd: components, death words, effects — all present', () => {

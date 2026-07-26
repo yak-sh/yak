@@ -39,7 +39,7 @@ export type Row = {
 export let snapshot = async () => {
   let res = await request(`http://${host()}/snapshot`)
   if (!res.ok) throw new Error(`server said ${res.status}`)
-  return res.json() as Promise<{ changes: Change[]; deps: Dep[] }>
+  return res.json() as Promise<Snapshot>
 }
 
 export let query = async (filters: string[], kind?: string) => {
@@ -251,6 +251,11 @@ export let historyLine = (e: JournalEntry) => {
 
 export type Param = { comp: string; prop: string; value: unknown }
 
+let legacySpawnProp = (name: string) => {
+  let prop = name == 'persona' ? 'persona_eid' : name
+  return prop in comps.spawn && prop in comps.session ? prop : undefined
+}
+
 // '.title=Hello' | '.doc.title=Hello' → {comp, prop, value}; null if the
 // argument isn't a dot-param at all (a bare word). Bare props ride
 // query.ts route(), so the reference sugar holds for writes too:
@@ -267,7 +272,10 @@ export let param = (arg: string): Param | null => {
     }
     p = { comp: a, prop: b, value: raw }
   } else {
-    let r = route(a)
+    // Bare launch props keep speaking the legacy session frame until every
+    // writer is capability-gated. Canonical task hints spell `.spawn.*`.
+    let legacy = legacySpawnProp(a)
+    let r = legacy ? { comp: 'session', prop: legacy } : route(a)
     // route()'s any-of ('' comp) serves FILTERS; a write must aim at one
     // component, so demand the explicit spelling.
     if (!r.comp) {

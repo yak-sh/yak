@@ -34,13 +34,19 @@ export type Meta = {
   cursor?: number
   epoch?: string
   vocabHash?: string
+  capabilities?: string[]
   schemaVersion?: number
   scope?: string
 }
 
 // The stamps a boot write commits with — the server-boot `epoch`, the
 // `vocabHash`, and the journal `cursor` this result is current as of.
-export type Stamp = { epoch: string; vocabHash: string; cursor: number }
+export type Stamp = {
+  epoch: string
+  vocabHash: string
+  cursor: number
+  capabilities?: string[]
+}
 
 // The forward-only compare-and-swap decision: may `next` overwrite what's
 // stored? A `full` snapshot is self-consistent, so it replaces across a
@@ -130,7 +136,14 @@ export let hydrate = async (): Promise<{
     let keys = ask(es.getAllKeys(), [] as IDBValidKey[])
     let vals = ask(es.getAll(), [] as Comps[])
     let ds = ask(tx.objectStore(DEPS).getAll(), [] as Dep[])
-    let names = ['cursor', 'epoch', 'vocabHash', 'schemaVersion', 'scope']
+    let names = [
+      'cursor',
+      'epoch',
+      'vocabHash',
+      'capabilities',
+      'schemaVersion',
+      'scope',
+    ]
     let meta = names.map((name) => ask(ms.get(name), undefined))
     let [ks, vs, deps, mv] = await Promise.all([
       keys,
@@ -159,7 +172,14 @@ export let meta = async (): Promise<Meta> => {
   try {
     let s = db.transaction(META, 'readonly').objectStore(META)
     let out: Meta = {}
-    let keys = ['cursor', 'epoch', 'vocabHash', 'schemaVersion', 'scope']
+    let keys = [
+      'cursor',
+      'epoch',
+      'vocabHash',
+      'capabilities',
+      'schemaVersion',
+      'scope',
+    ]
     await Promise.all(keys.map(async (k) => {
       let v = await ask(s.get(k), undefined)
       if (v !== undefined) (out as Record<string, unknown>)[k] = v
@@ -203,6 +223,7 @@ let commit = async (
           write({ ents: tx.objectStore(ENTS), deps: tx.objectStore(DEPS) })
           ms.put(next.epoch, 'epoch')
           ms.put(next.vocabHash, 'vocabHash')
+          ms.put(next.capabilities ?? [], 'capabilities')
           ms.put(SCHEMA, 'schemaVersion')
           ms.put('full-eager', 'scope') // T-3683 seam: partial caches widen it
           ms.put(next.cursor, 'cursor')
@@ -225,13 +246,18 @@ export let seed = (
   cursor: number,
   epoch: string,
   vocabHash: string,
+  capabilities: string[] = [],
 ): Promise<boolean> =>
-  commit({ epoch, vocabHash, cursor }, true, ({ ents, deps: ds }) => {
-    ents.clear()
-    for (let [eid, r] of Object.entries(cache)) ents.put(r, eid)
-    ds.clear()
-    for (let d of deps) ds.put(d, depKey(d))
-  })
+  commit(
+    { epoch, vocabHash, cursor, capabilities },
+    true,
+    ({ ents, deps: ds }) => {
+      ents.clear()
+      for (let [eid, r] of Object.entries(cache)) ents.put(r, eid)
+      ds.clear()
+      for (let d of deps) ds.put(d, depKey(d))
+    },
+  )
 
 // The delta write: patch exactly the touched eids and edges, advancing the
 // cursor in the same atomic commit. A same-epoch `patch`, forward-only. A

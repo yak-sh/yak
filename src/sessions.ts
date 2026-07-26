@@ -1,10 +1,10 @@
 // Managed sessions: spawn an agent on a task, in its own git worktree, and
 // keep its session row honest while it runs. Server-only. Everything here
-// enters through the GRAPH, not routes: a session created carrying a
-// provider is the spawn request, a stop_request is the brake, a comment
-// aimed at a settled session resumes it, a deleted session takes its
-// process with it. server.ts registers those handlers on the effects
-// registry (effects.ts); the only HTTP left is reading the log back.
+// enters through the GRAPH, not routes: a session created with a normalized
+// spawn spec is the launch request, a stop_request is the brake, a comment
+// aimed at a settled session resumes it, a deleted session takes its process
+// with it. server.ts registers those handlers on the effects registry
+// (effects.ts); the only HTTP left is reading the log back.
 //
 // Three ideas hold the whole thing up:
 //
@@ -864,17 +864,22 @@ let CONTRACT = `House rules for this run:
 - File discoveries as new tasks linked to yours instead of silently
   widening scope.`
 
-// created(session) carrying a provider — the spawn request, arrived over
-// the wire like any other data (its card and pin, if it was started onto
-// a canvas, rode the same batch: the client minted them). The session is
-// already committed and broadcast, so every way this can fail is a failed
-// Session on the board rather than a toast nobody kept: validation stamps
-// `failed` with the reason, and only a request the graph can honor
-// reaches launch(). A session created WITHOUT a provider is an external
-// one announcing itself — no effect.
+// Session runtime beside its normalized launch spec. Explicit aliases avoid
+// duplicate column names and keep validation on the canonical component.
+let runRow = (eid: string) =>
+  db.prepare(
+    `select s.*, p.provider as spawn_provider, p.model as spawn_model,
+            p.effort as spawn_effort, p.persona_eid as spawn_persona_eid
+     from session s left join spawn p on p.eid = s.eid where s.eid = ?`,
+  ).get(eid) as Row | undefined
+
+// created(session) reads the committed spawn request. The session is already
+// committed and broadcast, so every way this can fail is a failed Session on
+// the board rather than a toast nobody kept: validation stamps `failed` with
+// the reason, and only a request the graph can honor reaches launch(). An
+// empty spawn is an external session announcing itself — no effect.
 export let spawned =
-  (cast: Cast) => (eid: string, comp: Record<string, unknown>) => {
-    if (!comp.provider) return
+  (cast: Cast) => (eid: string, _comp: Record<string, unknown>) => {
     let fail = (error: string) =>
       stamp(eid, {
         origin: 'managed',
@@ -882,17 +887,16 @@ export let spawned =
         error,
         finished_at: now(),
       }, cast)
-    // The committed row is the request — the patch already landed.
-    let row = db.prepare('select * from session where eid = ?').get(eid) as
-      | Row
-      | undefined
-    if (!row) return // deleted in its own batch: the tombstone wins
-    let ad = adapters[String(row.provider)]
-    if (!ad) return fail(`unknown provider: ${row.provider}`)
-    let model = String(row.model)
-    if (!ad.models.includes(model)) return fail(`unknown model: ${row.model}`)
-    if (row.effort && !ad.efforts.includes(String(row.effort))) {
-      return fail(`unknown effort: ${row.effort}`)
+    let row = runRow(eid)
+    if (!row?.spawn_provider) return // external, or deleted in its own batch
+    let ad = adapters[String(row.spawn_provider)]
+    if (!ad) return fail(`unknown provider: ${row.spawn_provider}`)
+    let model = String(row.spawn_model)
+    if (!ad.models.includes(model)) {
+      return fail(`unknown model: ${row.spawn_model}`)
+    }
+    if (row.spawn_effort && !ad.efforts.includes(String(row.spawn_effort))) {
+      return fail(`unknown effort: ${row.spawn_effort}`)
     }
     let task = db.prepare(`
       select t.project_eid, e.num, d.title, d.body from task t
@@ -918,10 +922,12 @@ export let spawned =
     // by materialize() so the spawn's prompt and the repo's .tasks files
     // say the same thing. A docless persona_eid falls back to CONTRACT.
     let worn: string | undefined
-    if (row.persona_eid) {
+    if (row.spawn_persona_eid) {
       let snap = snapshot(db)
       let all = rows(snap)
-      let p = all.find((r) => r.eid == String(row.persona_eid) && r.comps.doc)
+      let p = all.find((r) =>
+        r.eid == String(row.spawn_persona_eid) && r.comps.doc
+      )
       if (p) worn = materialize(all, snap.deps, p, Date.now())
     }
     let { num } = db.prepare('select num from entity where eid = ?')
@@ -954,7 +960,7 @@ export let spawned =
       tree,
       branch: `session/${sid}`,
       model,
-      effort: row.effort ? String(row.effort) : undefined,
+      effort: row.spawn_effort ? String(row.spawn_effort) : undefined,
     }, cast)
   }
 

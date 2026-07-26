@@ -134,11 +134,9 @@ export let comps: Record<string, Record<string, PropType>> = {
   shelf: { client_eid: { eid: 'client', death: 'release' } },
   // acked_at is the session's OWN "seen up to here" cursor for the
   // while-you-were-away digest — wire-writable because forging it only
-  // deafens yourself. The REQUEST columns (provider, model, effort, the
-  // task and persona) are wire-writable too: a session created carrying a
-  // provider IS a spawn request — the server's created(session) effect
-  // validates and launches it, and everything it learns (status, branch,
-  // exit…) stays server-stamped.
+  // deafens yourself. The four launch aliases stay writable during the
+  // spawn compatibility window; apply() mirrors them into the canonical
+  // spawn comp before effects run.
   session: {
     id: 'text',
     cwd: 'text',
@@ -169,6 +167,17 @@ export let comps: Record<string, Record<string, PropType>> = {
     requested_task_eid: { eid: '', death: 'detach' },
     persona_eid: { eid: '', death: 'detach' },
     actor_eid: { eid: '', death: 'detach' }, // who this run acts for — see client above
+  },
+  // One launch vocabulary, worn two ways: on a session it records the
+  // request that launched it; on a task it is the hint for its next run.
+  // Partial on purpose — doors fill the gaps from their caller and the
+  // provider table. apply() mirrors session facets into the legacy aliases
+  // above; a task facet stays spawn-only.
+  spawn: {
+    provider: 'text',
+    model: 'text',
+    effort: 'text',
+    persona_eid: { eid: '', death: 'detach' },
   },
   // 'release' is the claim's word exactly: when the session dies the
   // LEASE vanishes (row deleted, claim-null on the wire) but the claimed
@@ -417,7 +426,8 @@ export let stamped: Record<string, Record<string, PropType>> = {
     at: 'time',
   },
   // The managed-session lifecycle (sessions.ts owns every write; the
-  // wire-writable REQUEST columns live in comps.session above).
+  // wire-writable launch spec lives in comps.spawn, with session aliases
+  // admitted only for compatibility).
   session: {
     origin: { enum: ['external', 'managed'] },
     branch: 'text',
@@ -474,6 +484,12 @@ export let uuid = () => {
 // one is an ending (see Session below). One list: the server decides what
 // may be stopped by it, the browser decides what to keep polling by it.
 export let sessionActive = ['starting', 'running', 'stopping']
+
+// `spawn` means a server accepts the canonical spawn component. Its absence
+// tells a client to send only legacy session aliases. The token survives
+// alias retirement: those aliases may leave only after every writer gates
+// canonical frames on this signal and the rollout has soaked.
+export let capabilities = ['spawn']
 
 // One log line, in the vocabulary the RENDERER speaks — flat and small, the
 // same six shapes whatever provider wrote it. Adapters own the dialects
@@ -739,6 +755,15 @@ export type Session = {
   error?: string | null // diagnostics: malformed frames, spawn failures
 }
 
+// A launch request on a session, or its reusable hint on a task.
+export type Spawn = {
+  eid: string
+  provider?: string | null // adapters.ts key
+  model?: string | null
+  effort?: string | null
+  persona_eid?: string | null
+}
+
 // Is anybody home? The client's half of door.ts `present()`, from
 // wire-visible columns alone: a session we spawned says it in its status,
 // and one that only announced itself is awake while it holds a provider
@@ -942,6 +967,7 @@ export type Ent = {
   fold?: Fold
   shelf?: Shelf
   session?: Session
+  spawn?: Spawn
   claim?: Claim
   stop_request?: StopRequest
   knock?: Knock
@@ -995,7 +1021,7 @@ export type Live = { live: Change[]; cursor: number }
 // `cursor` = the journal rowid this snapshot is current as of (a returning
 // client's next delta `since`); `epoch`/`vocabHash` = the server-boot and
 // vocabulary stamps a delta is validated against (db.ts). OPTIONAL so the
-// addition stays additive: snapshot() always fills all five, but the many
+// additions stay additive: snapshot() fills every field, but the many
 // consumers that only read `changes`/`deps` (and build a bare {changes, deps}
 // to feed notices/edgesOf/digests) stay valid Snapshots untouched.
 export type Snapshot = {
@@ -1004,4 +1030,5 @@ export type Snapshot = {
   cursor?: number
   epoch?: string
   vocabHash?: string
+  capabilities?: string[]
 }

@@ -88,6 +88,21 @@ let CASES: [string, { comp: string; prop: string; value: unknown } | RegExp][] =
     ['.status=WIP', { comp: 'task', prop: 'status', value: 'wip' }],
     ['.domain=Eng', { comp: 'task', prop: 'domain', value: 'Eng' }],
     ['.operator=YES', { comp: 'session', prop: 'operator', value: 1 }],
+    ['.provider=fake', {
+      comp: 'session',
+      prop: 'provider',
+      value: 'fake',
+    }],
+    ['.persona=N-1', {
+      comp: 'session',
+      prop: 'persona_eid',
+      value: 'N-1',
+    }],
+    ['.spawn.provider=fake', {
+      comp: 'spawn',
+      prop: 'provider',
+      value: 'fake',
+    }],
     ['.project.retired_at=2026-07-01T00:00:00Z', {
       comp: 'project',
       prop: 'retired_at',

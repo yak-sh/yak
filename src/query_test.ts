@@ -412,6 +412,15 @@ Deno.test('sugar: a ref name several comps share is any-of', () => {
   assertEquals(adopt(ps, 'client'), {})
 })
 
+Deno.test('spawn compatibility fields filter across both homes', () => {
+  assertEquals(route('provider'), { comp: '', prop: 'provider' })
+  let ps = parseQuery('.provider=fake')
+  assert(matchQuery({ session: { provider: 'fake' } }, ps))
+  assert(matchQuery({ spawn: { provider: 'fake' } }, ps))
+  assert(!matchQuery({ session: { provider: 'claude' } }, ps))
+  assertEquals(route('persona'), { comp: '', prop: 'persona_eid' })
+})
+
 Deno.test('paths: a component first segment stays the explicit spelling', () => {
   assertEquals(pred('.pin.x=12'), {
     comp: 'pin',

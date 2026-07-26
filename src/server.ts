@@ -724,14 +724,14 @@ let http = Deno.serve(
 )
 
 // The curated effects — the graph's post-commit levers, one list, like
-// Entity.tsx's renderer list. A session created with a provider is a spawn
+// Entity.tsx's renderer list. A session created with a spawn spec is a launch
 // request; a stop_request is the brake; a comment at a settled managed
 // session resumes it; a deleted session's process dies with its row.
 // A future plugin contributes rows here the same way it would renderers.
 on('session', {
   created: spawned(cast),
   removed: deleted,
-  doc: 'a session created with a provider is a spawn request — validate, ' +
+  doc: 'a session created with a spawn spec is a launch request — validate, ' +
     'launch the agent; a deleted session kills its process',
 })
 on('session', {

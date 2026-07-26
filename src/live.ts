@@ -171,6 +171,7 @@ export let applyLocal = (changes: Change[]) => {
 // from this cursor; the server replays the handoff gap before joining it to
 // live broadcast.
 let held: idb.Meta = {}
+export let capable = (name: string) => !!held.capabilities?.includes(name)
 
 // Consumers that care about canonical live edits subscribe here. WebSocket is
 // an implementation detail now that follower tabs have none.
@@ -453,7 +454,12 @@ let seedFrom = (snap: Snapshot, write = true) => {
   cache.value = {}
   deps.value = snap.deps
   applyLocal(snap.changes)
-  held = { cursor: snap.cursor, epoch: snap.epoch, vocabHash: snap.vocabHash }
+  held = {
+    cursor: snap.cursor,
+    epoch: snap.epoch,
+    vocabHash: snap.vocabHash,
+    capabilities: snap.capabilities,
+  }
   if (write) {
     return idb.seed(
       cache.value,
@@ -461,6 +467,7 @@ let seedFrom = (snap: Snapshot, write = true) => {
       snap.cursor ?? 0,
       snap.epoch ?? '',
       snap.vocabHash ?? '',
+      snap.capabilities ?? [],
     )
   }
   return Promise.resolve(false)
@@ -481,6 +488,7 @@ let persist = (
     epoch: held.epoch ?? '',
     vocabHash: held.vocabHash ?? '',
     cursor,
+    capabilities: held.capabilities ?? [],
   })
 
 type Land = 'leader' | 'follower' | 'solo'

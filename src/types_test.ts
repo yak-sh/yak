@@ -66,6 +66,7 @@ Deno.test('death words: every reference declares, the sets hold', () => {
       'session.actor_eid',
       'session.requested_task_eid',
       'session.persona_eid',
+      'spawn.persona_eid',
       'persona.home_eid',
     ]),
   )
