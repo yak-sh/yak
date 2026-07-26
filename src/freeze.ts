@@ -6,7 +6,7 @@
 // provenance, not storage, decides the trust. Server-only.
 import { parseHTML } from 'linkedom'
 import { type Change } from './types.ts'
-import { db } from './db.ts'
+import { db, record } from './db.ts'
 
 // Freeze a pasted URL: monolith fetches the page and inlines every asset
 // into ONE self-contained, script-free, network-isolated HTML file. It
@@ -87,6 +87,10 @@ let land = (
     db.prepare('insert into doc (eid, title) values (?, ?)').run(eid, title)
     changes.push({ eid, name: 'doc', comp: { title } })
   }
+  // The stamp must reach the journal as well as the sockets: a tab that
+  // boots by catch-up replay hears only journal batches, and an archive
+  // whose frozen_at it never hears renders as "freezing …" forever.
+  record(db, changes)
   cast(changes)
   return Response.json(changes)
 }

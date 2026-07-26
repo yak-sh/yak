@@ -1220,6 +1220,27 @@ export let vocabularyDoc = (db: DatabaseSync, body: string): void => {
   )
 }
 
+// The journal door for a server STAMP — a write the wire may not carry
+// (frozen_at and kin), made by direct SQL beside this call. delta()
+// promises catch-up clients the same content the live cast carried, so
+// a stamp must reach the journal too, or every tab that boots by replay
+// silently loses the column (T-7437). Recording never throws, like the
+// journal insert in apply().
+export let record = (
+  db: DatabaseSync,
+  changes: Change[],
+  writer?: string | null,
+) => {
+  try {
+    db.prepare('insert into journal (actor, batch) values (?, ?)').run(
+      writerActor(db, writer),
+      JSON.stringify(changes),
+    )
+  } catch (e) {
+    console.warn('journal skipped —', e)
+  }
+}
+
 // A single entity's history, newest first: the journal rows that touched
 // the eid, each cut down to its changes. The batch is JSON and json_each
 // does the walking — v0 reads are fine at this scale; a seek index
