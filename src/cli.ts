@@ -77,6 +77,7 @@ import type { JournalEntry } from './client.ts'
 import { agentPid, claudePid, parentOf } from './proc.ts'
 import { filesFor, syncFiles } from './persona.ts'
 import { commit } from './git.ts'
+import { request } from './http.ts'
 import { commands, focusOf, run as runCommand } from './commands.ts'
 
 // Every verb: usage, blurb, worked examples. `task help` derives all its
@@ -689,7 +690,7 @@ let mailFiles = async (args: string[]) => {
   let [id] = rest
   if (!id) throw new Error(`task mail files <id> [--out DIR]\n\n${MAIL_USAGE}`)
   let door = `http://${host()}/mail/${encodeURIComponent(id)}/files`
-  let res = await fetch(door)
+  let res = await request(door)
   if (!res.ok) throw new Error(await res.text())
   let { message_id, files } = await res.json() as {
     message_id: string
@@ -699,7 +700,7 @@ let mailFiles = async (args: string[]) => {
   out ??= `mail-attachments/${message_id.replace(/[^\w.-]/g, '_')}`
   Deno.mkdirSync(out, { recursive: true })
   for (let f of files) {
-    let r = await fetch(`${door}/${encodeURIComponent(f.name)}`)
+    let r = await request(`${door}/${encodeURIComponent(f.name)}`)
     if (!r.ok) throw new Error(`${f.name}: ${await r.text()}`)
     // R2 keys can't hide a directory in a NAME — but never trust one.
     let path = `${Deno.realPathSync(out)}/${f.name.replaceAll('/', '_')}`
@@ -873,7 +874,7 @@ let launch = async (
   let provider = flags.provider ?? mine.provider
   let model = flags.model ?? (flags.provider ? undefined : mine.model)
   if (!provider || !model) {
-    let table = await (await fetch(`http://${host()}/providers`)).json() as {
+    let table = await (await request(`http://${host()}/providers`)).json() as {
       name: string
       models: string[]
     }[]
@@ -1470,7 +1471,7 @@ let telemetry = async (args: string[]) => {
   if (since) q.set('since', since.slice(8))
   let n = args.indexOf('-n')
   if (n >= 0 && args[n + 1]) q.set('limit', args[n + 1])
-  let res = await fetch(`http://${host()}/telemetry?${q}`)
+  let res = await request(`http://${host()}/telemetry?${q}`)
   if (!res.ok) throw new Error(`server said ${res.status}`)
   let rows = await res.json() as Log[]
   if (!rows.length) return console.error('(nothing recorded)')

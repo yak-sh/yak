@@ -56,6 +56,7 @@ import {
   warm,
 } from './query.ts'
 import { commands, focusOf, run as runCommand } from './commands.ts'
+import { request } from './http.ts'
 
 // How the tools reach the graph — in-process on the server, HTTP here.
 export type IO = {
@@ -1216,7 +1217,7 @@ if (import.meta.main) {
     write: send,
     find: search,
     upload: async (eid, html) => {
-      let res = await fetch(`http://${host()}/upload?eid=${eid}`, {
+      let res = await request(`http://${host()}/upload?eid=${eid}`, {
         method: 'POST',
         body: html,
       })
@@ -1228,13 +1229,13 @@ if (import.meta.main) {
     // mount (/mcp, the fleet's door) is where recall counts.
     touch: async () => {},
     logs: async (eid, q) => {
-      let res = await fetch(`http://${host()}/sessions/${eid}/logs?${q}`)
+      let res = await request(`http://${host()}/sessions/${eid}/logs?${q}`)
       if (!res.ok) throw new Error(`server said ${res.status}`)
       return res.json()
     },
     history: (eid, limit) => history(eid, limit),
     providers: async () => {
-      let res = await fetch(`http://${host()}/providers`)
+      let res = await request(`http://${host()}/providers`)
       if (!res.ok) throw new Error(`server said ${res.status}`)
       return res.json()
     },

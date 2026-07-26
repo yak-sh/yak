@@ -24,6 +24,7 @@ import {
 import { idOf } from './types.ts'
 import { hot, matchQuery, type Pred, route } from './query.ts'
 import { FLOOR } from './embed.ts'
+import { request } from './http.ts'
 import { unmime } from './rfc2047.ts'
 export { idOf }
 
@@ -37,7 +38,7 @@ export type Row = {
 }
 
 export let snapshot = async () => {
-  let res = await fetch(`http://${host()}/snapshot`)
+  let res = await request(`http://${host()}/snapshot`)
   if (!res.ok) throw new Error(`server said ${res.status}`)
   return res.json() as Promise<{ changes: Change[]; deps: Dep[] }>
 }
@@ -66,7 +67,7 @@ export let editedAt = (r: Row) =>
 
 // Full-text search, server-side (FTS5) — the graph's docs, ranked.
 export let search = async (q: string, limit = 20) => {
-  let res = await fetch(
+  let res = await request(
     `http://${host()}/search?q=${encodeURIComponent(q)}&limit=${limit}`,
   )
   if (!res.ok) throw new Error(`server said ${res.status}`)
@@ -89,7 +90,7 @@ export let me = (
 // identity is me() — hooks and spawned agents get their writes
 // attributed without asking.
 export let send = async (changes: Change[], via = me()) => {
-  let res = await fetch(`http://${host()}/apply`, {
+  let res = await request(`http://${host()}/apply`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -124,13 +125,13 @@ export type JournalEntry = {
   changes: Change[]
 }
 export let history = async (eid: string, limit = 50) => {
-  let res = await fetch(`http://${host()}/journal?eid=${eid}&limit=${limit}`)
+  let res = await request(`http://${host()}/journal?eid=${eid}&limit=${limit}`)
   if (!res.ok) throw new Error(`server said ${res.status}`)
   return res.json() as Promise<JournalEntry[]>
 }
 
 export let historyBy = async (via: string, limit = 500) => {
-  let res = await fetch(
+  let res = await request(
     `http://${host()}/journal?via=${encodeURIComponent(via)}&limit=${limit}`,
   )
   if (!res.ok) throw new Error(`server said ${res.status}`)
@@ -1370,7 +1371,7 @@ export let similarHint = async (
   floor = FLOOR,
 ) => {
   try {
-    let res = await fetch(
+    let res = await request(
       `http://${host()}/similar?q=${
         encodeURIComponent(text.slice(0, 2000))
       }&limit=4&floor=${floor}`,
