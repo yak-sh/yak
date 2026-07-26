@@ -26,6 +26,9 @@ import { Entity } from '../Entity.tsx'
 // never learns one). We match on row.kind, so a say is markdown, a tool a
 // chip, reasoning dim — the pane reads like a transcript, not a dump. A
 // line with no row (a heartbeat, a torn frame) falls back to its bare type.
+// The WHOLE log, always: the first read takes every line, and the poll
+// asks only for what came after (useLog) — so showing all of it costs one
+// read, not one per tick.
 
 let Frame = block('div', 'Session', {
   Head: 'div',
@@ -257,19 +260,40 @@ let Row = ({ x }: { x: Entry }) => {
   )
 }
 
-// Tail the log file. `live` is in the deps on purpose: when the status
-// flips to an ending the effect re-runs, which reads once more (the bytes
-// a child writes on its way out are the important ones) and leaves no
-// timer behind.
+// Read the whole log, then keep reading the rest of it. `seq` is how far
+// we've got: `after=0` is the entire file, and every read after that asks
+// only for lines past the last one in hand, appended — the log grows by
+// its delta, so a long transcript is paid for once. `live` is in the deps
+// on purpose: when the status flips to an ending the effect re-runs, which
+// reads once more (the bytes a child writes on its way out are the
+// important ones) and leaves no timer behind.
 let useLog = (eid: string, live: boolean) => {
   let [log, setLog] = useState<Log>({ entries: [] })
+  let seq = useRef(0)
+  // Another session is another log — never append one onto the other.
+  // Declared first, so an eid change resets before the read below runs.
+  useEffect(() => {
+    seq.current = 0
+    setLog({ entries: [] })
+  }, [eid])
   useEffect(() => {
     let go = true
     let read = async () => {
       try {
-        let r = await fetch(`${base()}/sessions/${eid}/logs?tail=100`)
-        let l = await r.json()
-        if (go) setLog(l)
+        let r = await fetch(
+          `${base()}/sessions/${eid}/logs?after=${seq.current}`,
+        )
+        let l: Log = await r.json()
+        if (!go) return
+        seq.current = l.entries.at(-1)?.seq ?? seq.current
+        // stderr comes whole every time (it has no seqs to page), so it
+        // replaces; entries accrue.
+        setLog((was) => ({
+          entries: l.entries.length
+            ? [...was.entries, ...l.entries]
+            : was.entries,
+          stderr: l.stderr,
+        }))
       } catch { /* a server that's away comes back — the next tick reads */ }
     }
     read()
@@ -298,9 +322,13 @@ let scrollerOf = (n: HTMLElement | null) => {
 // BEFORE new rows land, because right after a render the end has already
 // moved and measuring would always say "not at end". The programmatic
 // pin fires a scroll event too, re-arming itself.
-let useTail = (live: boolean, seq?: number) => {
+let useTail = (seq?: number) => {
   let frame = useRef<HTMLDivElement>(null)
-  let stuck = useRef(live) // a finished session opens unpinned
+  // Every session opens at the END of its log — the newest lines are the
+  // news, and now that the whole transcript loads, the top is a thousand
+  // lines from what just happened. A finished one pins once (its seq never
+  // moves again) and stays wherever the reader takes it.
+  let stuck = useRef(true)
   useEffect(() => {
     let s = scrollerOf(frame.current)
     if (!s) return
@@ -328,7 +356,7 @@ export let Session = ({ e }: { e: Ent }) => {
   // (sessions.ts watched()).
   let live = sessionActive.includes(status) || (!!s.pid && !s.finished_at)
   let log = useLog(e.eid, live)
-  let frame = useTail(live, log.entries.at(-1)?.seq)
+  let frame = useTail(log.entries.at(-1)?.seq)
   // The Final block IS the last agent say — don't print it twice. Only a
   // session whose log grew no say row (an external one, a torn log) still
   // leans on final_text.

@@ -604,9 +604,14 @@ running or settled; stderr rides along when the child wrote any. ${BUS}`,
         ...(s.exit_code == null ? [] : [`exit ${s.exit_code}`]),
         ...(s.error ? [`error: ${String(s.error).slice(0, 200)}`] : []),
       ].join(' · ')
+      // The cap is PEEK's, not the door's: /logs serves a whole log to a
+      // reader that wants one (the web pane does), so a glance clamps for
+      // itself rather than dropping a transcript into an agent's context.
       let out = await io.logs(
         row.eid,
-        new URLSearchParams({ tail: String(tail ?? 20) }),
+        new URLSearchParams({
+          tail: String(Math.min(Math.max(tail ?? 20, 1), 500)),
+        }),
       )
       let lines = out.entries.map(peekLine)
       return bus(

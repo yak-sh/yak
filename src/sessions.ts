@@ -528,8 +528,11 @@ let rowOf = (line: string, ad: Adapter | undefined): LogRow | undefined => {
   return ad?.row(e) ?? undefined
 }
 
-// The log, bounded: `after=N` reads forward from seq N, `tail=N` reads the
-// last N lines, limit clamps at 500 either way. Each line carries its
+// The log, WHOLE by default — a reader asking for a session's log wants
+// the session, not its last screenful. `after=N` reads forward from seq N
+// (the delta a tailing reader asks for, and how the pane stays cheap),
+// `tail=N` the last N lines, and `limit` caps a page only when a caller
+// names one: nothing here truncates unbidden. Each line carries its
 // renderer `row` (the adapter's normalization — omitted when the line isn't
 // worth one). stderr rides along whole (its tail, anyway) — unordered
 // diagnostics, plainly labelled as such. v0 reads the file per request; when
@@ -542,12 +545,12 @@ export let logs = (eid: string, q: URLSearchParams) => {
   let ad = dialectOf(eid)
   let lines = text.split('\n')
   if (lines.at(-1) == '') lines.pop() // the trailing newline isn't a line
-  let limit = Math.min(Math.max(Number(q.get('limit') ?? 100) || 100, 1), 500)
-  let tail = Number(q.get('tail') ?? 0)
+  let limit = Math.max(0, Number(q.get('limit')) || 0)
+  let tail = Math.max(0, Number(q.get('tail')) || 0)
   let from = tail > 0
-    ? Math.max(0, lines.length - Math.min(tail, limit))
-    : Math.max(0, Number(q.get('after') ?? 0))
-  let entries = lines.slice(from, from + limit)
+    ? Math.max(0, lines.length - tail)
+    : Math.max(0, Number(q.get('after')) || 0)
+  let entries = lines.slice(from, limit > 0 ? from + limit : undefined)
     .map((line, i) => {
       let row = rowOf(line, ad)
       return { seq: from + i + 1, line: clip(line), ...(row ? { row } : {}) }

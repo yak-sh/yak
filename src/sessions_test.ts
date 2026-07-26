@@ -254,6 +254,12 @@ Deno.test('a fake session runs end to end', async () => {
   assertEquals(JSON.parse(page.entries[0].line).type, 'message')
   assertEquals(logs(eid, new URLSearchParams('tail=1')).entries[0].seq, 5)
   assertEquals(logs(eid, new URLSearchParams('after=99')).entries, [])
+  // No bounds asked for, none applied: the whole log, which is what a
+  // reader opening a session gets.
+  assertEquals(
+    logs(eid, new URLSearchParams()).entries.map((e) => e.seq),
+    [1, 2, 3, 4, 5],
+  )
   assertMatch(String(page.stderr), /stderr noise/) // diagnostics, unordered
 })
 
