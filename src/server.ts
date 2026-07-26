@@ -587,14 +587,12 @@ Deno.serve(
         // Attribution is an honesty header, not auth: the CLI names its
         // session in x-via (the instrument — a principal writing directly
         // is its own instrument), apply resolves it to the actor it acts
-        // for, and an anonymous post falls back to the box owner. x-actor
-        // is the header's old name — older installed CLIs still send it
-        // (T-7114); drop the fallback once they've rotated.
+        // for, and an anonymous post falls back to the box owner.
         let out = apply(
           db,
           changes,
           t,
-          req.headers.get('x-via') ?? req.headers.get('x-actor'),
+          req.headers.get('x-via'),
         )
         cast(out)
         effect(out, t)
