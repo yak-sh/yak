@@ -452,9 +452,9 @@ Normative for all fleet code (source: `docs/STYLE.md`, the owner's DNA). JS-flav
 
 *Recall a body by id (memory_recall / task show).*
 
+- M-4062 feedback: letters vs notices: email is for prose agents wrote; machine events are marked at mint · 2×
 - M-4066 feedback: agents take warm paths, not right paths — adoption is won structurally · 2×
 - M-4061 project: vocabulary naming: artifacts get artifact names, pure acts keep _request · 1×
-- M-4062 feedback: letters vs notices: email is for prose agents wrote; machine events are marked at mint · 1×
 - M-4457 feedback: code style (Ruby/Rails) — the class-macro idiom · 1×
 - M-4064 project: identity is faceted; personas differ by emphasis, not content · 1×
 - M-4065 project: federation discipline: one home graph per entity, intents across boundaries, no consensus · 1×

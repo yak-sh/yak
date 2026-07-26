@@ -79,8 +79,15 @@ human; machine events are marked at mint.
 The boundary still has named gaps: an EXTERNAL-facing address must carry a Cloudflare
 routing rule (literal-only, silent drop without one — T-5837) and a graph address-book
 entry (T-5958 reconciles the book). Fleet-internal mail depends on neither. The
-`email@holdco-fleet` plugin remains only until the owner finishes hand-removing it
-(T-5836).
+
+---
+
+# M-4062 letters vs notices: email is for prose agents wrote; machine events are marked at mint
+
+Inter-agent email is reserved for things an agent actually WROTE. Automated events (status changes, reason dual-writes, webhook noise) are a different species: comment.event is stamped at mint, they render as subordinate chips not bubbles, they never ride the mail relay, and their proper delivery is the inbox concept (T-3690) and the comms bus — not correspondence.
+
+**Why:** the fanout relay inherited v1's every-comment-emails semantics and mail-bombed operator inboxes (71 mails in 2h) the moment addresses landed — the graph knew the difference between speech and machinery; the relay didn't ask.
+**How to apply:** any new notification path asks first: was this authored, or emitted? Authored → letter channels. Emitted → marked event, bus/inbox.
 
 ---
 
@@ -175,15 +182,6 @@ It is also self-correcting: knock an operator during YELLOW by mistake and it ta
 ## Persona changes need a restart
 
 A persona reaches an operator via `--append-system-prompt-file`, read at **claude launch** — so a persona edit does nothing until `bin/holdco restart <id>` (the closing step of a durable persona edit). Memories are different: they ride the `task context` digest and land on the next clear, which is why a new memory can change behavior before a restart does.
-
----
-
-# M-4062 letters vs notices: email is for prose agents wrote; machine events are marked at mint
-
-Inter-agent email is reserved for things an agent actually WROTE. Automated events (status changes, reason dual-writes, webhook noise) are a different species: comment.event is stamped at mint, they render as subordinate chips not bubbles, they never ride the mail relay, and their proper delivery is the inbox concept (T-3690) and the comms bus — not correspondence.
-
-**Why:** the fanout relay inherited v1's every-comment-emails semantics and mail-bombed operator inboxes (71 mails in 2h) the moment addresses landed — the graph knew the difference between speech and machinery; the relay didn't ask.
-**How to apply:** any new notification path asks first: was this authored, or emitted? Authored → letter channels. Emitted → marked event, bus/inbox.
 
 ---
 
