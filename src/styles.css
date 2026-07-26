@@ -37,9 +37,10 @@
   --soft: color-mix(in srgb, var(--text) 6%, transparent);
 
   /* status colours — dots and status text consume these */
-  /* the signal bar (owner call, T-7416): the pip is a vertical bar and
-     FILL tells the story — open empty, wip half, done full. Open wears
-     blue, done green (back); wip stays amber, cancelled stays muted. */
+  /* the glyph pips (owner call, T-7416): the pip is a disc and the
+     SHAPE tells the story — ring open, half-moon wip (pulsing full
+     when a live session holds the claim), check done. Open wears
+     blue, done green; wip stays amber, cancelled stays muted. */
   --open: var(--blue);
   --wip: var(--yellow);
   --done: var(--accent);
@@ -890,10 +891,6 @@ html {
   /* the title dot sits over the ROWS' dots: their border + padding */
   padding-left: calc(var(--half-gap) + 1px);
 }
-.Board_ColName .Dot {
-  width: 0.25rem;
-  height: 0.56rem;
-}
 .Board_Count {
   margin-left: auto;
   color: var(--dim);
@@ -909,8 +906,9 @@ html {
 }
 .Board_Col-folded .Board_ColName {
   width: max-content;
-  /* pivot on the DOT's center — now sitting past the title inset */
-  transform-origin: calc(var(--half-gap) + 1px + 0.25rem / 2) 50%;
+  /* pivot on the DOT's center — now sitting past the title inset
+     (0.72em: the pip inherits this element's font, so em agrees) */
+  transform-origin: calc(var(--half-gap) + 1px + 0.72em / 2) 50%;
   transform: rotate(90deg);
 }
 /* Quick-create: a dim `+` riding the column header (after the count),
@@ -992,7 +990,7 @@ html {
 }
 .TaskTile > .Dot {
   align-self: start;
-  margin-top: calc((1lh - 0.68rem) / 2); /* pinned to the title's first line */
+  margin-top: calc((1lh - 0.72em) / 2); /* pinned to the title's first line */
 }
 .TaskTile_Title {
   min-width: 0; /* wraps freely — a board card reads, it doesn't truncate */
@@ -1055,7 +1053,7 @@ html {
 }
 .Show_Heading .Dot {
   align-self: start;
-  margin-top: calc((1lh - 0.68rem) / 2);
+  margin-top: calc((1lh - 0.72em) / 2);
 }
 .Show_Title {
   flex: 1;
@@ -1431,49 +1429,128 @@ html {
 
 .Dot {
   --dot: var(--dim);
-  --fill: 100%; /* how much of the bar has landed, bottom-up */
+  position: relative;
   flex: none;
-  width: 0.3rem;
-  height: 0.68rem;
-  border-radius: 0.12rem;
-  border: 1px solid var(--dot);
-  background: linear-gradient(to top, var(--dot) var(--fill), transparent 0);
+  width: 0.72em; /* em on purpose: the pip rides its line's font */
+  height: 0.72em;
+  border-radius: 50%;
+  border: max(1px, 0.09em) solid var(--dot);
+  background: var(--dot);
+}
+/* the glyphs are pseudo-elements drawn in bg ink — they read as cutouts */
+.Dot::before,
+.Dot::after {
+  position: absolute;
 }
 .Dot-open {
   --dot: var(--open);
-  --fill: 0%;
+  background: transparent;
 }
 .Dot-wip {
   --dot: var(--wip);
-  --fill: 50%;
+  background: linear-gradient(90deg, var(--dot) 50%, transparent 0);
+}
+/* a live hand on it — the claim's session is awake (or the run is
+   going): the pip fills and breathes instead of sitting half */
+.Dot-wip.Dot-live,
+.Dot-running,
+.Dot-stopping {
+  background: var(--dot);
+  animation: DotPulse 2.2s ease-out infinite;
+}
+@keyframes DotPulse {
+  from {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--dot) 55%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 0.45em color-mix(in srgb, var(--dot) 0%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .Dot {
+    animation: none; /* the full disc still says live; only the breath goes */
+  }
 }
 .Dot-done {
   --dot: var(--done);
 }
+.Dot-done::after,
+.Dot-completed::after {
+  content: '';
+  left: 50%;
+  top: 50%;
+  width: 0.3em;
+  height: 0.16em;
+  border-left: 0.09em solid var(--bg);
+  border-bottom: 0.09em solid var(--bg);
+  transform: translate(-50%, -65%) rotate(-45deg);
+}
 .Dot-cancelled {
   --dot: var(--cancelled);
-  --fill: 0%;
+}
+.Dot-cancelled::before,
+.Dot-cancelled::after,
+.Dot-failed::before,
+.Dot-failed::after,
+.Dot-interrupted::before,
+.Dot-interrupted::after {
+  content: '';
+  left: 50%;
+  top: 50%;
+  width: 0.09em;
+  height: 0.38em;
+  border-radius: 0.04em;
+  background: var(--bg);
+}
+.Dot-cancelled::before,
+.Dot-failed::before,
+.Dot-interrupted::before {
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+.Dot-cancelled::after,
+.Dot-failed::after,
+.Dot-interrupted::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
 }
 .Dot-gated {
   --dot: var(--red); /* open requires deps: blocked in fact, not in status */
 }
+.Dot-gated::before {
+  content: '';
+  left: 50%;
+  top: 0.1em;
+  width: 0.09em;
+  height: 0.24em;
+  border-radius: 0.04em;
+  translate: -50%;
+  background: var(--bg);
+}
+.Dot-gated::after {
+  content: '';
+  left: 50%;
+  bottom: 0.08em;
+  width: 0.1em;
+  height: 0.1em;
+  border-radius: 50%;
+  translate: -50%;
+  background: var(--bg);
+}
 
-/* A session's lifecycle wears the same pip: the bar fills as the run
-   does — starting empty, running half, every ending full (completed
-   green, the rest a fault colour). An external session has no lifecycle
-   to wear: while its door is open it borrows `running` (types.ts
-   `standing`), and once it shuts it keeps the full dim default. */
+/* A session's lifecycle wears the same pip: a ring while starting, the
+   live pulse while going, a glyph for how it ended — check, ✕ in a
+   fault colour, a dashed ring for lost. An external session has no
+   lifecycle to wear: while its door is open it borrows `running`
+   (types.ts `standing`), and once it shuts it keeps the full dim
+   default. */
 .Dot-starting {
   --dot: var(--open);
-  --fill: 0%;
+  background: transparent;
 }
 .Dot-running {
   --dot: var(--wip);
-  --fill: 50%;
 }
 .Dot-stopping {
   --dot: var(--orange);
-  --fill: 50%;
 }
 .Dot-completed {
   --dot: var(--done);
@@ -1486,6 +1563,8 @@ html {
 }
 .Dot-lost {
   --dot: var(--purple);
+  background: transparent;
+  border-style: dashed;
 }
 
 /* The search palette: `/` in normal mode. A fixed veil (click to
@@ -1664,11 +1743,6 @@ html {
 /* the verb is a small label; the name keeps the body's normal size */
 .Dependency_Type {
   font-size: 11px;
-}
-/* the pip rides the sentence inline, sized to its 13px line */
-.Dependency .Dot {
-  width: 0.25rem;
-  height: 0.56rem;
 }
 .Dependency_Type-requires {
   color: var(--red);

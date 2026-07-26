@@ -7,6 +7,7 @@ import {
   base,
   boardsOver,
   commentCount,
+  crewed,
   ent,
   gated,
   parents,
@@ -86,6 +87,7 @@ export let Pip = ({ e }: { e: Ent }) => {
         elRef={anchor}
         status={e.task!.status}
         gated={gated(e)}
+        live={crewed(e)}
         class='Show_Pip'
         onClick={() => setOpen((was) => !was)}
       />

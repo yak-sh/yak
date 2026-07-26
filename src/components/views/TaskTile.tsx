@@ -1,5 +1,5 @@
 import { type Ent } from '../../types.ts'
-import { commentCount, ent, gated, settled } from '../../live.ts'
+import { commentCount, crewed, ent, gated, settled } from '../../live.ts'
 import { Dot } from '../Dot.tsx'
 import { clickProps, menuAt } from '../nav.tsx'
 import { Prio } from '../Prio.tsx'
@@ -54,7 +54,7 @@ export let TaskTile = ({ e }: { e: Ent }) => {
   ]
   return (
     <Frame {...clickProps(e)} onContextMenu={menuAt(e)}>
-      <Dot status={e.task!.status} gated={gated(e)} />
+      <Dot status={e.task!.status} gated={gated(e)} live={crewed(e)} />
       <Title>{e.doc?.title}</Title>
       <Meta>
         <Prio p={e.task!.priority} />

@@ -14,6 +14,7 @@ import {
   byPriority,
   cache,
   commentsOn,
+  crewed,
   ent,
   gated,
   mode,
@@ -186,7 +187,7 @@ let TuiBoard = ({ e }: { e: Ent }) => (
 let TuiTask = ({ e }: { e: Ent }) => (
   <div class='Task'>
     <div class='Task_Head'>
-      <Dot status={e.task!.status} gated={gated(e)} />
+      <Dot status={e.task!.status} gated={gated(e)} live={crewed(e)} />
       <span class='Task_Title'>{e.doc?.title}</span>
       <span class='Task_Prio'>{formatProp(priority, e.task!.priority)}</span>
       {e.claim && (

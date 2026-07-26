@@ -3,6 +3,7 @@
 // keep it current, and every component renders straight out of it.
 import { computed, signal } from '@preact/signals'
 import {
+  awake,
   type Change,
   comps as vocab,
   type Dep,
@@ -105,6 +106,14 @@ export let gated = (e: Ent) =>
     let c = ent(r.child)
     return r.type == 'requires' && c.task && !settled(c.task.status)
   })
+
+// A live hand on the entity: its claim's session is awake — a managed
+// run still going, or an external door still open. The wip pip pulses
+// on this instead of sitting half-filled; a stale claim doesn't count.
+export let crewed = (e: Ent) => {
+  let s = e.claim && ent(e.claim.session_eid).session
+  return !!s && awake(s)
+}
 
 // Which door boot took, plus a cache peek — exposed for eyes (a CDP probe,
 // the console) to verify properties invisible from the DOM (the reload win,

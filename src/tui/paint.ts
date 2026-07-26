@@ -35,14 +35,16 @@ let sheet: Record<string, Style> = {
   TStatus_Hint: { fg: '#7a8478' },
 
   // shared views, styled by the same class names the web uses. The web's
-  // signal bar speaks sparkline here: the pip fills bottom-up as the work
-  // does — open empty (blue), wip half (amber), done full (green).
-  Dot: { glyph: '█', fg: '#7a8478' },
-  'Dot-open': { glyph: '▁', fg: '#7fbbb3' },
-  'Dot-wip': { glyph: '▄', fg: '#dbbc7f' },
-  'Dot-done': { fg: '#a7c080' },
-  'Dot-cancelled': { glyph: '▁', fg: '#7a8478' },
-  'Dot-gated': { fg: '#e67e80' }, // open requires deps: blocked in fact
+  // glyph pips speak character here: ring open, half-moon wip — a full
+  // disc when a live hand is on it (Dot-live) — ✓ done, ✕ cancelled,
+  // ! blocked.
+  Dot: { glyph: '●', fg: '#7a8478' },
+  'Dot-open': { glyph: '○', fg: '#7fbbb3' },
+  'Dot-wip': { glyph: '◐', fg: '#dbbc7f' },
+  'Dot-live': { glyph: '●' },
+  'Dot-done': { glyph: '✓', fg: '#a7c080' },
+  'Dot-cancelled': { glyph: '✕', fg: '#7a8478' },
+  'Dot-gated': { glyph: '!', fg: '#e67e80', bold: true }, // open requires deps: blocked in fact
   Id: { fg: '#7a8478' },
   'Id-retired': { fg: '#7a8478', dim: true, strike: true },
   MemoryType: { fg: '#a7c080' },
