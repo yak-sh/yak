@@ -27,12 +27,12 @@
 //    agent goes; the pidfile and the log file are enough to adopt the agent
 //    back at boot. Nothing here reaps children.
 // 3. ONE WRITER. Every summary column goes through stamp(): row first, then
-//    the full session comp down the same cast() path apply()'s return
-//    takes — server-constructed, post-commit, so every cache hears the
-//    truth exactly once and none of it ever rode the wire inbound.
+//    the moved session patch through the journal and cast() path apply()'s
+//    return takes — server-constructed, post-commit, so every cache hears
+//    the truth exactly once and none of it ever rode the wire inbound.
 import { basename, dirname } from 'node:path'
 import { type Adapter, adapters, type Event, type Summary } from './adapters.ts'
-import { apply, db, snapshot } from './db.ts'
+import { apply, db, record, snapshot } from './db.ts'
 import { listening, present } from './door.ts'
 import { dispatch, trace } from './effects.ts'
 import { lapseChanges, rows } from './client.ts'
@@ -148,6 +148,11 @@ let stamp = (
     | Row
     | undefined
   let ending = table == 'session' && SETTLED.includes(String(patch.status))
+  let moved = Object.fromEntries(
+    cols
+      .filter((c) => c != 'latest_seq' && (patch as Row)[c] != was?.[c])
+      .map((c) => [c, (patch as Row)[c]]),
+  )
   let vals = cols.map((c) => (patch as Row)[c] as string | number | null)
   db.prepare(
     `update ${table} set ${cols.map((c) => `${c} = ?`).join(', ')}
@@ -157,8 +162,10 @@ let stamp = (
   // tick makes every client re-render the world for a counter nobody
   // shows, and a long run freezes every open canvas (T-7063). Only a
   // column whose value actually moved is worth telling everyone.
-  if (cols.some((c) => c != 'latest_seq' && (patch as Row)[c] != was?.[c])) {
-    castRow(eid, cast, table)
+  if (was && Object.keys(moved).length) {
+    let changes = [{ eid, name: table, comp: moved }]
+    record(db, changes)
+    cast(changes)
   }
   if (ending && was?.status != patch.status) {
     settled(eid, String(patch.status), cast)

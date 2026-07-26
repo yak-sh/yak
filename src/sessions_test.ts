@@ -22,7 +22,7 @@ Deno.env.set('WORKTREES_DIR', `${tmp}/worktrees`)
 Deno.env.set('POLL_MS', '10') // tests wait on facts, never on the clock
 Deno.env.set('STOP_GRACE_MS', '1000')
 
-let { apply, db } = await import('./db.ts')
+let { apply, db, delta, snapshot } = await import('./db.ts')
 let {
   childPath,
   commented,
@@ -499,6 +499,37 @@ Deno.test('boot: a child that died while we were away is read from its file', as
   assertMatch(String(s.stop_reason), /unobserved/)
 })
 
+Deno.test('a settled lifecycle stamp is one replayable moved patch', async () => {
+  let eid = plant([])
+  let c0 = snapshot(db).cursor ?? 0
+  heard = []
+  recover(cast)
+  await running.get(eid)!.done
+
+  let rows = db.prepare(
+    'select batch from journal where rowid > ? order by rowid',
+  ).all(c0) as { batch: string }[]
+  assertEquals(rows.length, 1)
+  let changes = JSON.parse(rows[0].batch) as Change[]
+  assertEquals(changes, [{
+    eid,
+    name: 'session',
+    comp: {
+      status: 'failed',
+      stop_reason: 'exit unobserved: the child outlived the server',
+      finished_at: row(eid)?.finished_at,
+    },
+  }])
+  assertEquals(
+    heard.filter((c) => c.eid == eid && c.name == 'session'),
+    changes,
+  )
+  assertEquals(
+    delta(db, c0).changes.filter((c) => c.name == 'session'),
+    changes,
+  )
+})
+
 Deno.test('bad lines are diagnosed, and the ending is the FIRST one', async () => {
   let eid = plant([
     INIT,
@@ -589,18 +620,22 @@ Deno.test('a tail tick that only moves the counter stays off the wire', async ()
   // stays silent — a run's whole transcript must not re-render every
   // client per poll tick (T-7063).
   heard = []
+  let c0 = snapshot(db).cursor ?? 0
   let f = Deno.openSync(log(eid), { append: true, write: true })
   f.writeSync(new TextEncoder().encode(
     '{"type":"message","text":"a"}\n{"type":"message","text":"b"}\n',
   ))
   await until(() => row(eid)?.latest_seq == 3, 'the counted lines')
   assertEquals(heard.filter((c) => c.name == 'session'), [])
+  assertEquals(delta(db, c0), { changes: [], cursor: c0 })
 
-  // The terminal event is news — it rides the wire, counter and all.
+  // The terminal event is news — its summary rides the wire.
   f.writeSync(new TextEncoder().encode(`${RESULT}\n`))
   f.close()
   await until(() => row(eid)?.final_text == 'first', 'the terminal event')
-  assert(heard.some((c) => c.name == 'session' && c.comp?.latest_seq == 4))
+  assert(
+    heard.some((c) => c.name == 'session' && c.comp?.final_text == 'first'),
+  )
 
   child.kill('SIGKILL')
   await child.status
