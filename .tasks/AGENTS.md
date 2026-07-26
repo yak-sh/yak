@@ -355,9 +355,9 @@ Keep those narrow and curated — a plugin should be "a module that exports
 Renderer[] / a comps fragment", not a framework. If a change makes one of these
 seams wider or leakier, that's the wrong direction.
 
-## Preloaded
+---
 
-### M-3715 delegation discipline
+# M-3715 delegation discipline
 
 Delegation in the fleet, so that if our system breaks the work still continues on the floor and the board stays the truth about who is doing what:
 
@@ -368,7 +368,9 @@ Delegation in the fleet, so that if our system breaks the work still continues o
 
 Every Agent-tool spawn gets `isolation: worktree` + the claim-discipline paragraph in its brief; prefer task bodies over prompt-only specs.
 
-### M-4474 document new fleet tooling in a memory so the fleet discovers it
+---
+
+# M-4474 document new fleet tooling in a memory so the fleet discovers it
 
 When you build or discover new fleet tooling — a CLI verb, an MCP tool, a hook, a workflow, a colon-command — write a memory for it immediately (reference or feedback, unscoped so it rides every operator's `task context` digest).
 
@@ -376,7 +378,9 @@ Tooling nobody memorializes is invisible: the next operator learns it by acciden
 
 Applies to what you ship AND to what you notice someone else shipped.
 
-### M-4458 code style — the values, omissions, and which strata to imitate
+---
+
+# M-4458 code style — the values, omissions, and which strata to imitate
 
 Source: `docs/STYLE.md`. The meta-layer under every language rule: **small composable parts, examples over prose, no speculative abstraction.** `docs/STYLE.md` is normative for all fleet code; for a language it doesn't cover, carry these values into that idiom.
 
@@ -395,7 +399,9 @@ Both corpora have strata; imitate the **hand-written** layers, not agent-written
 
 His DNA register is terse + example-driven — never paragraph-essay comments. When mimicking surface tokens, get the granularity right: many small files, not a monolith wearing the right syntax.
 
-### M-4456 code style (CSS) — the scaling component system
+---
+
+# M-4456 code style (CSS) — the scaling component system
 
 Source: `docs/STYLE.md` (product ground truth: `cafe_car/app/assets/stylesheets/ui/`). Designed to scale — one file + one import + a var contract per component, so adding UI never touches existing files and re-skinning never touches structure. (yak-sh's own flat-CSS minimalism was an experiment that doesn't scale — don't imitate it.)
 
@@ -405,7 +411,9 @@ Source: `docs/STYLE.md` (product ground truth: `cafe_car/app/assets/stylesheets/
 - **Lean on modern CSS:** zero-specificity `:where()`, `:is()`/`:has()`, native nesting `& + &`, container queries, `color-mix`, `color-scheme: light dark` with per-component dark overrides.
 - Still **no preprocessor, no Tailwind, no build step.**
 
-### M-4455 code style (JS/TS) — module shape, the whole app, testing
+---
+
+# M-4455 code style (JS/TS) — module shape, the whole app, testing
 
 Source: `docs/STYLE.md`. How a file, app, and test suite are shaped.
 
@@ -421,7 +429,9 @@ A file is a vocabulary composed top-to-bottom: `id`, `always`, `tap`, then `inc 
 ## Testing
 No test-framework dependency, ever. Doctests are *discovered*: a runner scans for `///` lines and codegens a test module (`->` equality, `~>` pattern-match, `/// let` setup, `// /` skip). Scenario tests in `*.test.js` using a tiny in-repo `suite(name, ({it, equal, ok}) => …)`; benchmarks in `*.bench.js`. CI is one job running `bin/test`.
 
-### M-4454 code style (JS/TS) — the ten rules
+---
+
+# M-4454 code style (JS/TS) — the ten rules
 
 Normative for all fleet code (source: `docs/STYLE.md`, the owner's DNA). JS-flavored; carry the same values into any language's native idiom.
 
@@ -436,9 +446,11 @@ Normative for all fleet code (source: `docs/STYLE.md`, the owner's DNA). JS-flav
 9. **Don't build the speculative layer.** An abstraction earns its place by removing code from callers, not adding indirection. Leave a visible stub or a comment saying why the layer is absent.
 10. **Build a vocabulary, then compose it.** A file reads top-to-bottom as later exports made of earlier ones (`export let inc = add(1)`). Complexity comes from composition, never a long phased body. Primitives are protocol-extensible. A module tops ~600 lines; grow a system as many small files, never a monolith.
 
-## Index
+---
 
-Recall a body by id (memory_recall / task show).
+## Memory Index
+
+*Recall a body by id (memory_recall / task show).*
 
 - M-4066 feedback: agents take warm paths, not right paths — adoption is won structurally · 2×
 - M-4061 project: vocabulary naming: artifacts get artifact names, pure acts keep _request · 1×
