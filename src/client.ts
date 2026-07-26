@@ -702,19 +702,41 @@ export let mailNotified = (
     .map((r): Change => ({ eid: r.eid, name: 'notified', comp: {} }))
 }
 
-// The project you stand in: the repo-wearing entity whose path prefixes
-// the cwd. LONGEST prefix wins, so a repo nested inside another claims a
-// cwd under it — first-match would have handed it to whichever registered
-// first. Every caller-aware door derives its scope from here.
-export let repoAt = (all: Row[], cwd?: string) => {
-  if (!cwd) return undefined
-  let best: Row | undefined
-  let len = -1
-  for (let r of all) {
-    let p = String(r.comps.repo?.path ?? '')
-    if (p && cwd.startsWith(p) && p.length > len) (best = r), (len = p.length)
+let cleanPath = (path: string) => path.replace(/\/+$/, '') || '/'
+
+// The deepest directory root containing a path. Boundaries matter:
+// /code/app does not contain /code/apple.
+export let ancestorAt = (roots: string[], path: string) => {
+  let best: string | undefined
+  for (let root of roots.map(cleanPath)) {
+    if (
+      (path == root || path.startsWith(`${root}/`)) &&
+      root.length > (best?.length ?? -1)
+    ) best = root
   }
   return best
+}
+
+// The central fleet layout carries only a repo basename. Ambiguity stays
+// unplaced rather than crediting the wrong venture.
+export let worktreeAt = (roots: string[], path: string) => {
+  let found = roots.map(cleanPath).filter((root) => {
+    let name = root.split('/').pop()
+    let marker = `/worktrees/${name}/`
+    return name && path.includes(marker) &&
+      path.slice(path.indexOf(marker) + marker.length).length > 0
+  })
+  return found.length == 1 ? found[0] : undefined
+}
+
+// The project you stand in: a direct checkout first, then the fleet's linked
+// worktree layout. Every caller-aware door derives its scope from here.
+export let repoAt = (all: Row[], cwd?: string) => {
+  if (!cwd) return undefined
+  let repos = all.filter((r) => r.comps.repo?.path)
+  let roots = repos.map((r) => String(r.comps.repo.path))
+  let at = ancestorAt(roots, cwd) ?? worktreeAt(roots, cwd)
+  return repos.find((r) => cleanPath(String(r.comps.repo.path)) == at)
 }
 
 // The project a caller stands in, resolved by falling priority: an explicit

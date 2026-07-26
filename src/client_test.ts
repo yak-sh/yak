@@ -837,6 +837,20 @@ Deno.test('repoAt: path prefix names the project you stand in', () => {
   assertEquals(repoAt(g), undefined)
 })
 
+Deno.test('repoAt: the fleet worktree path names its main repo', () => {
+  let R = 'aaaaaaaa-0000-4000-8000-000000000034'
+  let g = rows({
+    changes: [
+      { eid: R, name: 'entity', comp: { eid: R, num: 34, created_at: '' } },
+      { eid: R, name: 'repo', comp: { path: '/code/tasks' } },
+    ],
+  })
+  assertEquals(repoAt(g, '/home/me/.tasks/worktrees/tasks/S-42')?.eid, R)
+  assertEquals(repoAt(g, '/home/me/.tasks/worktrees/tasks/S-42/src')?.eid, R)
+  assertEquals(repoAt(g, '/home/me/.tasks/worktrees/tasks/'), undefined)
+  assertEquals(repoAt(g, '/code/tasksmith'), undefined)
+})
+
 // Nested repos: the LONGEST path prefix wins, so an inner repo claims a cwd
 // under it rather than the outer one that also prefixes it.
 Deno.test('repoAt: longest prefix wins for nested repos', () => {
@@ -852,6 +866,20 @@ Deno.test('repoAt: longest prefix wins for nested repos', () => {
   })
   assertEquals(repoAt(g, '/code/app/x')?.eid, inn)
   assertEquals(repoAt(g, '/code/other')?.eid, out)
+})
+
+Deno.test('repoAt: an ambiguous worktree basename stays unplaced', () => {
+  let one = 'aaaaaaaa-0000-4000-8000-000000000035'
+  let two = 'aaaaaaaa-0000-4000-8000-000000000036'
+  let g = rows({
+    changes: [
+      { eid: one, name: 'entity', comp: { eid: one, num: 35, created_at: '' } },
+      { eid: one, name: 'repo', comp: { path: '/code/one/app' } },
+      { eid: two, name: 'entity', comp: { eid: two, num: 36, created_at: '' } },
+      { eid: two, name: 'repo', comp: { path: '/code/two/app' } },
+    ],
+  })
+  assertEquals(repoAt(g, '/home/me/.tasks/worktrees/app/S-42'), undefined)
 })
 
 // One resolution for every caller-aware door, in falling priority: an
@@ -889,6 +917,8 @@ Deno.test('scopeFor: arg > cwd-repo > persona-home > actor-project > none', () =
   assertEquals(scopeFor(g, sess, '/code/p/deep', 'ARG'), 'ARG')
   // no arg: the cwd's repo (P), longest-prefix
   assertEquals(scopeFor(g, sess, '/code/p/deep'), P)
+  // the fleet worktree layout names the same repo
+  assertEquals(scopeFor(g, sess, '/home/me/.tasks/worktrees/p/S-42'), P)
   // cwd places nothing: the worn persona's home (Q)
   assertEquals(scopeFor(g, sess, '/nowhere'), Q)
   // no persona: the actor, since it IS a project (R)

@@ -8,7 +8,7 @@
 // Ids: `eid` is a UUID so ANY side (client included) can mint entities;
 // `num` is the server-minted human number (T-7 in the UI, one global counter).
 import { DatabaseSync } from 'node:sqlite'
-import { dirname } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
 import {
   type Change,
@@ -23,7 +23,7 @@ import {
   stamped,
 } from './types.ts'
 import { type Trace } from './effects.ts'
-import { rows } from './client.ts'
+import { ancestorAt, rows } from './client.ts'
 import { homeReads } from './persona.ts'
 import { matchQuery, parseQuery, resolveRefs, TEXT } from './query.ts'
 
@@ -739,16 +739,45 @@ let ownerActor = (db: DatabaseSync): string | null => {
   return people.length == 1 ? people[0].eid : null
 }
 
-// The venture a path stands in: the repo whose path prefixes the cwd —
-// the cwd → repo → project rule every operator-scoped door already shares
-// (client.ts repoAt is its cache-side twin).
+let read = (path: string) => {
+  try {
+    return Deno.readTextFileSync(path)
+  } catch {
+    return ''
+  }
+}
+
+// A linked worktree names its main checkout in the nearest .git file.
+let worktreeGitdir = (cwd: string): string | null => {
+  let at = resolve(cwd)
+  while (true) {
+    let gitdir = read(`${at}/.git`).match(/^gitdir:\s*(.+)$/m)?.[1].trim()
+    if (gitdir) return resolve(at, gitdir)
+    let parent = dirname(at)
+    if (parent == at) return null
+    at = parent
+  }
+}
+
+// The venture a path stands in: the repo whose path prefixes the cwd, or
+// whose gitdir owns the linked worktree. The cwd → repo → project rule every
+// operator-scoped door shares (client.ts repoAt is its cache-side twin).
 let ventureAt = (db: DatabaseSync, cwd?: string | null): string | null => {
   if (!cwd) return null
   let repos = db.prepare('select eid, path from repo').all() as {
     eid: string
     path: string
   }[]
-  return repos.find((r) => cwd.startsWith(r.path))?.eid ?? null
+  let path = ancestorAt(repos.map((r) => r.path), cwd)
+  if (path) {
+    return repos.find((r) => resolve(r.path) == resolve(path))?.eid ?? null
+  }
+  let gitdir = worktreeGitdir(cwd)
+  if (!gitdir) return null
+  let roots = repos.map((r) => resolve(r.path, '.git/worktrees'))
+  let common = ancestorAt(roots, gitdir)
+  return repos.find((r) => resolve(r.path, '.git/worktrees') == common)?.eid ??
+    null
 }
 
 // The actor a write acts FOR, resolved from the writer the door named — a

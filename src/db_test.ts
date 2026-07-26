@@ -1024,6 +1024,41 @@ Deno.test('actor fill: a session that ran in a repo resolves to its venture', ()
   assertEquals(comp(s2, 'session')?.actor_eid, who) // named actor untouched
 })
 
+Deno.test('actor fill: a linked worktree resolves through its main repo', () => {
+  let root = Deno.makeTempDirSync({ prefix: 'tasks-worktree-' })
+  try {
+    let repo = `${root}/venture`
+    let tree = `${root}/detached/tree`
+    Deno.mkdirSync(`${repo}/.git/worktrees/tree`, { recursive: true })
+    Deno.mkdirSync(`${tree}/deep`, { recursive: true })
+    Deno.writeTextFileSync(
+      `${tree}/.git`,
+      `gitdir: ${repo}/.git/worktrees/tree\n`,
+    )
+    let proj = uid(), s = uid(), comment = uid()
+    let sid = `wt-${s}`
+    apply(db, [
+      { eid: proj, name: 'project', comp: {} },
+      { eid: proj, name: 'repo', comp: { path: repo } },
+      {
+        eid: s,
+        name: 'session',
+        comp: { id: sid, cwd: `${tree}/deep`, origin: 'external' },
+      },
+    ])
+    assertEquals(comp(s, 'session')?.actor_eid, proj)
+    apply(
+      db,
+      [{ eid: comment, name: 'doc', comp: { title: '', body: 'agent word' } }],
+      undefined,
+      sid,
+    )
+    assertEquals(comp(comment, 'created')?.by, proj)
+  } finally {
+    Deno.removeSync(root, { recursive: true })
+  }
+})
+
 Deno.test('journal: cascade casualties ride the record', () => {
   let a = uid(), c = uid()
   apply(db, [
