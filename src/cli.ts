@@ -69,7 +69,7 @@ import {
   STATIC_RULES,
 } from './doctor.ts'
 import { FILTERS, GRAMMAR } from './grammar.ts'
-import { type Edge, edges, type Snapshot } from './types.ts'
+import { type Edge, edges, type Snapshot, statuses } from './types.ts'
 // `import type` (not the repo's usual inline `{ type X }`): telemetry.ts
 // reaches for node:sqlite, and the CLI has no business loading a db driver.
 import type { Log } from './telemetry.ts'
@@ -150,6 +150,16 @@ let VERBS: Verb[] = [
   ]],
   ['release <id>', 'drop the lease', ['task release T-3']],
   [
+    '<id> [show|is|as|edge] …',
+    'show or act on a subject; task <id> --help lists the exact grammar',
+    [
+      'task T-3',
+      'task T-3 requires T-9',
+      'task T-3 is done',
+      'task T-3 as json',
+    ],
+  ],
+  [
     'spawn <id> [--provider=X] [--model=Y] [--effort=Z] [--persona=P-9]',
     "dispatch a managed agent onto a task (defaults: your session's own)",
     ['task spawn T-3', 'task spawn T-3 --provider=codex --model=gpt-5.4'],
@@ -160,8 +170,8 @@ let VERBS: Verb[] = [
   ]],
   [
     'dep <id> <type> <child> [--gone]',
-    'link (--gone unlinks) an edge: requires | contains | reads | about',
-    ['task dep T-3 requires T-9', 'task dep T-3 requires T-9 --gone'],
+    'legacy edge spelling; prefer task <id> <type> <child>',
+    ['task T-3 requires T-9', 'task T-3 requires T-9 --gone'],
   ],
   ['backup', 'snapshot the db + commit/push the data dir', []],
   [
@@ -239,6 +249,18 @@ let ALIASES: Verb[] = [
 let cliVerbs = new Set(
   [...VERBS, ...ALIASES].map(([u]) => u.split(' ')[0]),
 )
+let formats = ['markdown', 'json']
+
+export let subjectUsage = (id = '<id>') =>
+  `task ${id} — subject-first verbs
+
+  task ${id} [show] [--json]        show the entity
+  task ${id} as ${formats.join('|')}       choose the show format
+  task ${id} is ${statuses.join('|')}  set task status
+  task ${id} ${edges.join('|')} <id> [--gone]
+                                      link or unlink an edge
+  task ${id} :<command> …            run a focused ':' command
+`
 
 let usage = `task — the entity graph, from a shell
 
@@ -257,8 +279,9 @@ shows examples.
 `
 
 let help = (args: string[]) => {
-  let [topic] = args
+  let [topic, id] = args
   if (!topic) return console.log(usage.trim())
+  if (topic == 'subject') return console.log(subjectUsage(id).trim())
   if (topic == 'grammar') {
     return console.log(`${GRAMMAR}\n\n${FILTERS}`)
   }
@@ -338,6 +361,60 @@ let option = (arg: string) =>
 
 let optionName = (arg: string) =>
   arg.startsWith('--') ? arg.split('=')[0] : arg.slice(0, 2)
+
+// Subject-first is syntax sugar only. The returned route enters the same
+// handlers as the canonical subcommands, so graph behavior has one owner.
+export let subject = (id: string | undefined, args: string[]) => {
+  if (
+    !id || id == '--help' || cliVerbs.has(id) || id.startsWith(':') ||
+    option(id)
+  ) return
+  let [verb, ...objects] = args
+  if (!verb) return { cmd: 'show', args: [id] }
+  if (args.includes('--help') || args.includes('-h')) {
+    return { cmd: 'help', args: ['subject', id] }
+  }
+  if (verb == '--json') {
+    if (objects.length) throw new Error(`task ${id} [show] [--json]`)
+    return { cmd: 'show', args: [id, verb] }
+  }
+  if (verb == 'show') {
+    if (objects.length > 1 || objects.some((x) => x != '--json')) {
+      throw new Error(`task ${id} [show] [--json]`)
+    }
+    return { cmd: 'show', args: [id, ...objects] }
+  }
+  if ((edges as readonly string[]).includes(verb)) {
+    let children = objects.filter((x) => x != '--gone')
+    let flags = objects.filter((x) => x == '--gone')
+    if (
+      children.length != 1 || flags.length > 1 ||
+      flags.length != objects.length - 1
+    ) {
+      throw new Error(`task ${id} ${verb} <id> [--gone]`)
+    }
+    return { cmd: 'dep', args: [id, verb, ...objects] }
+  }
+  if (verb == 'is') {
+    if (objects.length != 1 || !statuses.includes(objects[0])) {
+      throw new Error(`status is one of: ${statuses.join(', ')}`)
+    }
+    return { cmd: 'set', args: [id, `.status=${objects[0]}`] }
+  }
+  if (verb == 'as') {
+    if (objects.length != 1 || !formats.includes(objects[0])) {
+      throw new Error(`format is one of: ${formats.join(', ')}`)
+    }
+    return {
+      cmd: 'show',
+      args: [id, ...(objects[0] == 'json' ? ['--json'] : [])],
+    }
+  }
+  // Focused palette commands keep their explicit colon: several accept
+  // optional objects whose subject-first reading would be ambiguous.
+  if (verb.startsWith(':')) return
+  throw new Error(`no subject verb: ${verb} (task ${id} --help)`)
+}
 
 let rejectOptions = (verb: string | undefined, args: string[]) => {
   if (
@@ -1621,6 +1698,11 @@ let tui = async () => {
 if (import.meta.main) {
   let [cmd, ...rest] = Deno.args
   try {
+    let routed = subject(cmd, rest)
+    if (routed) {
+      cmd = routed.cmd
+      rest = routed.args
+    }
     let asksHelp = rest.includes('--help') || rest.includes('-h')
     if (!asksHelp) rejectOptions(leaf(cmd, rest), rest)
     if (cmd?.startsWith(':')) await colon(undefined, [cmd, ...rest])

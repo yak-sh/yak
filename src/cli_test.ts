@@ -2,7 +2,12 @@
 // CLI grammar is dot-params. The guard must catch both the glued `--project=P`
 // and the space-separated `--project P` forms — the latter is what agents
 // actually type, and the bug that let it through polluted the owner board.
-import { assertEquals, assertMatch, assertRejects } from '@std/assert'
+import {
+  assertEquals,
+  assertMatch,
+  assertRejects,
+  assertThrows,
+} from '@std/assert'
 import {
   bodyOf,
   claudeLaunch,
@@ -13,6 +18,8 @@ import {
   operatorHook,
   strayFlag,
   subagentDigest,
+  subject,
+  subjectUsage,
   workHook,
 } from './cli.ts'
 import { observerDigest } from './client.ts'
@@ -38,6 +45,65 @@ let cli = (...args: string[]) =>
   }).output()
 
 let text = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
+
+Deno.test('subject: sentences route through the existing CLI verbs', () => {
+  let route = (line: string) => {
+    let [id, ...args] = line.split(' ')
+    return subject(id, args)
+  }
+  assertEquals(route('T-3'), { cmd: 'show', args: ['T-3'] })
+  assertEquals(route('T-3 show --json'), {
+    cmd: 'show',
+    args: ['T-3', '--json'],
+  })
+  assertEquals(route('T-3 as markdown'), { cmd: 'show', args: ['T-3'] })
+  assertEquals(route('T-3 as json'), {
+    cmd: 'show',
+    args: ['T-3', '--json'],
+  })
+  assertEquals(route('T-3 is wip'), {
+    cmd: 'set',
+    args: ['T-3', '.status=wip'],
+  })
+  for (let edge of ['requires', 'contains', 'reads', 'about']) {
+    assertEquals(route(`T-3 ${edge} T-9 --gone`), {
+      cmd: 'dep',
+      args: ['T-3', edge, 'T-9', '--gone'],
+    })
+  }
+})
+
+Deno.test('subject: old commands and explicit focused commands keep their door', () => {
+  assertEquals(subject('show', ['T-3']), undefined)
+  assertEquals(subject('dep', ['T-3', 'requires', 'T-9']), undefined)
+  assertEquals(subject('T-3', [':done']), undefined)
+})
+
+Deno.test('subject: malformed sentences teach the contextual grammar', () => {
+  assertThrows(() => subject('T-3', ['requires']), Error, '<id> [--gone]')
+  assertThrows(
+    () => subject('T-3', ['show', 'T-9']),
+    Error,
+    '[show] [--json]',
+  )
+  assertThrows(() => subject('T-3', ['is', 'blocked']), Error, 'status is one')
+  assertThrows(() => subject('T-3', ['as', 'yaml']), Error, 'format is one')
+  assertThrows(
+    () => subject('T-3', ['frobnicate']),
+    Error,
+    'task T-3 --help',
+  )
+})
+
+Deno.test('task subject help is contextual and needs no server', async () => {
+  let out = await cli('T-3', '--help')
+  assertEquals(out.code, 0)
+  let stdout = text(out.stdout)
+  assertMatch(stdout, /task T-3 — subject-first verbs/)
+  assertMatch(stdout, /requires\|contains\|reads\|about <id> \[--gone\]/)
+  assertMatch(stdout, /task T-3 is open\|wip\|done\|cancelled/)
+  assertEquals(subjectUsage('T-3').trim(), stdout.trim())
+})
 
 Deno.test('bodyOf: only explicit stdin spellings read the pipe', async () => {
   let cases: [string[], string[], string, number][] = [
