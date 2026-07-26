@@ -681,15 +681,10 @@ let AIMED = deaths('cascade')
 let DETACHED = deaths('detach')
 let RELEASED = deaths('release')
 
-// An FK bounce (errcode 787, SQLITE_CONSTRAINT_FOREIGNKEY) is a REFUSAL,
-// not a race: the change aimed an eid column at an entity with no live
-// row — tombstoned, or never minted. SQLite's own message names nothing,
-// so decode it: walk the table's declared FKs and point at each sent
-// value whose referent is missing. Returns null for any other error —
-// those keep their own semantics. In-batch referent-first creates never
-// land here: the referent's spine is already in the transaction when the
-// referrer inserts. Death's cascades and detaches never land here either
-// — they delete dependents first and null soft refs server-side.
+// An FK bounce (errcode 787, SQLITE_CONSTRAINT_FOREIGNKEY) names nothing,
+// so enrich it: walk the table's declared refs and point at each sent
+// value whose referent is missing. The caller rejects every SQL failure;
+// other errors keep their own message.
 let refused = (
   db: DatabaseSync,
   name: string,
@@ -1020,12 +1015,10 @@ export let apply = (
       }
       if (hit) continue
       // No row: this change CREATES — spine + comp together, in a savepoint.
-      // A partial patch whose row is gone is an edit racing a delete: the
-      // delete wins, the change rolls back to nothing (no zombie spine) and
-      // the rest of the batch survives. A malformed create fails the same
-      // way, loudly in the log — except an FK refusal (a reference to a
-      // tombstoned or never-minted entity), which fails the whole BATCH
-      // loudly: "applied N change(s)" must mean the rows landed.
+      // A known component that reaches SQL must land or fail its whole
+      // batch: "applied N change(s)" means every accepted row landed.
+      // Semantic no-ops (unknown comps, invalid edges, dead eids) were
+      // decided above, before SQL.
       db.exec('savepoint change')
       try {
         if (spine(db, eid).changes) minted.add(eid)
@@ -1044,14 +1037,12 @@ export let apply = (
         }
         db.exec('release change')
       } catch (e) {
-        // Decode BEFORE the rollback: the savepoint holds the freshly
-        // minted spine, so the entity's own eid can't read as a false
-        // offender — only truly dangling references do.
-        let fk = refused(db, name, eid, comp, e)
+        // Decode BEFORE the rollback: FK diagnostics need the freshly
+        // minted spine so the entity's eid can't read as a false offender.
+        let refusal = refused(db, name, eid, comp, e)
         db.exec('rollback to change')
         db.exec('release change')
-        if (fk) throw fk // the outer catch rolls the whole batch back
-        console.warn(`sync: change for ${name} ${eid} dropped —`, e)
+        throw refusal ?? e // the outer catch rolls the whole batch back
       }
     }
     // Every touched entity carries when it last changed — server-stamped

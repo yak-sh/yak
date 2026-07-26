@@ -182,6 +182,21 @@ Deno.test('an FK refusal fails the whole batch loudly, naming the column', () =>
   assertEquals(comp(rider, 'doc'), undefined) // the whole batch rolled back
 })
 
+Deno.test('a NOT NULL refusal fails the whole batch', () => {
+  let s = uid(), rider = uid()
+  assertThrows(
+    () =>
+      apply(db, [
+        { eid: rider, name: 'doc', comp: { title: 'rides along' } },
+        { eid: s, name: 'session', comp: { model: 'claude-opus-4-8' } },
+      ]),
+    Error,
+    'session.id',
+  )
+  assertEquals(comp(s, 'entity'), undefined)
+  assertEquals(comp(rider, 'doc'), undefined)
+})
+
 Deno.test('a comment aimed at a ghost refuses the same way', () => {
   let c = uid()
   assertThrows(
