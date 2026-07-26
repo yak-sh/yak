@@ -120,11 +120,10 @@ let MAX_LINE = 1_000_000
 
 // ---- the one writer ----
 
-let castRow = (eid: string, cast: Cast, table = 'session') => {
-  let row = db.prepare(`select * from ${table} where eid = ?`).get(eid) as
-    | Row
-    | undefined
-  if (row) cast([{ eid, name: table, comp: row }])
+let publish = (eid: string, comp: Row, cast: Cast, table = 'session') => {
+  let changes = [{ eid, name: table, comp }]
+  record(db, changes)
+  cast(changes)
 }
 
 // Update summary columns and tell everyone. A deleted row updates
@@ -163,9 +162,7 @@ let stamp = (
   // shows, and a long run freezes every open canvas (T-7063). Only a
   // column whose value actually moved is worth telling everyone.
   if (was && Object.keys(moved).length) {
-    let changes = [{ eid, name: table, comp: moved }]
-    record(db, changes)
-    cast(changes)
+    publish(eid, moved, cast, table)
   }
   if (ending && was?.status != patch.status) {
     settled(eid, String(patch.status), cast)
@@ -1043,15 +1040,18 @@ export let stopped =
     // CAS and kill). Fall through and signal again; a TERM at a dying
     // group is a no-op, and acted_at then says the signals were truly
     // sent, not merely intended.
+    let stop_requested_at = now()
     let hit = db.prepare(`
       update session set status = 'stopping', stop_requested_at = ?
       where eid = ? and status in ('starting', 'running')
-    `).run(now(), target).changes
+    `).run(stop_requested_at, target).changes
     if (!hit) {
       let s = db.prepare('select status from session where eid = ?')
         .get(target) as { status: string | null } | undefined
       if (!sessionActive.includes(String(s?.status))) return acted()
-    } else castRow(target, cast)
+    } else {
+      publish(target, { status: 'stopping', stop_requested_at }, cast)
+    }
     let pid = running.get(target)?.pid || pidOf(target) // run.pid is 0 pre-birth
     if (!pid) {
       lost('no pid: the child was never spawned or its pidfile is gone')

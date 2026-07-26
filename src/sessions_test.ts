@@ -384,12 +384,26 @@ Deno.test('stop: a stop_request signals the group, the ending is OBSERVED', asyn
   let { t } = seed('delay:9000')
   let { eid, done } = begin(t)
   await until(() => row(eid)?.status == 'running', 'the init event')
+  let c0 = snapshot(db).cursor ?? 0
+  heard = []
   let sr = uid()
   await write([{ eid: sr, name: 'stop_request', comp: { target_eid: eid } }])
   let s = row(eid)!
   assertEquals(s.status, 'interrupted') // never stamped before the exit
   assert(s.stop_requested_at)
   assertEquals(s.exit_code, 143) // SIGTERM, from a child that was ours
+  let stopping: Change = {
+    eid,
+    name: 'session',
+    comp: {
+      status: 'stopping',
+      stop_requested_at: s.stop_requested_at,
+    },
+  }
+  let isStopping = (c: Change) =>
+    c.eid == eid && c.name == 'session' && c.comp?.status == 'stopping'
+  assertEquals(heard.filter(isStopping), [stopping])
+  assertEquals(delta(db, c0).changes.filter(isStopping), [stopping])
   // The request stays as audit, stamped when the signals had been sent.
   let sat = db.prepare('select acted_at from stop_request where eid = ?')
     .get(sr) as { acted_at: string | null }
@@ -438,11 +452,16 @@ Deno.test('sweep: a target that settled on its own is acted, not errored', async
   ]))
   await done // the child finishes on its own; the request outlives the run
   assertEquals(row(eid)!.status, 'completed')
+  heard = []
+  let c0 = snapshot(db).cursor ?? 0
   await relay(pending)
   assert(acted(sr)) // nothing to stop IS acted
   let s = row(eid)!
   assertEquals(s.status, 'completed') // never re-stamped, never 'lost'
   assertEquals(s.exit_code, 0)
+  let session = (c: Change) => c.eid == eid && c.name == 'session'
+  assertEquals(heard.filter(session), [])
+  assertEquals(delta(db, c0).changes.filter(session), [])
 })
 
 Deno.test('the rule refuses sessions that are not ours to end', () => {
