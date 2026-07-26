@@ -34,6 +34,15 @@ export let cache = signal<Record<string, Comps>>({})
 export let deps = signal<Dep[]>([])
 export let problem = signal('')
 
+let sameProps = (
+  a: Record<string, unknown>,
+  b: Record<string, unknown>,
+) => {
+  let keys = Object.keys(a)
+  return keys.length == Object.keys(b).length &&
+    keys.every((k) => Object.is(a[k], b[k]))
+}
+
 // Where the server lives and what a code reload means. The browser answers
 // both from its location; other hosts (the TUI) configure these before
 // boot() — a terminal process can't "reload the page". swap/css are the
@@ -132,9 +141,18 @@ export let applyLocal = (changes: Change[]) => {
   let next = { ...cache.value }
   let eids = new Set<string>()
   let edges: Dep[] = []
+  let changed = false
+  // Camera motion renders from camera.value + hear(), not the graph cache.
+  // Keep its durable row current without publishing a whole-graph signal.
+  let motion = changes.length > 0 &&
+    changes.every(({ eid, name, comp }) =>
+      !!cache.value[eid]?.camera && comp != null &&
+      (name == 'camera' || name == 'updated')
+    )
   for (let { eid, name, comp } of changes) {
     if (name == 'entity' && comp == null) {
       delete next[eid]
+      changed = true
       eids.add(eid)
       // The cascade: every edge touching the dead eid leaves deps too —
       // record them so the IDB shadow drops the same rows the signal does.
@@ -163,13 +181,25 @@ export let applyLocal = (changes: Change[]) => {
         : [...deps.value, d]
       continue
     }
-    let row = { ...next[eid] } as Record<string, unknown>
-    if (comp == null) delete row[name]
-    else row[name] = { ...(row[name] as object), ...comp }
-    next[eid] = row as Comps
     eids.add(eid)
+    let before = next[eid] as Record<string, unknown> | undefined
+    if (comp == null) {
+      if (!before || !(name in before)) continue
+      let row = { ...before }
+      delete row[name]
+      next[eid] = row as Comps
+      changed = true
+      continue
+    }
+    let prior = before?.[name] as Record<string, unknown> | undefined
+    let after = { ...prior, ...comp }
+    if (prior && sameProps(prior, after)) continue
+    next[eid] = { ...before, [name]: after } as Comps
+    changed = true
   }
-  cache.value = next
+  if (changed && motion) {
+    for (let eid of eids) cache.value[eid] = next[eid]
+  } else if (changed) cache.value = next
   // The touched keys feed either the boot catch-up write, or the Web-Lock
   // leader's live persist. Followers and 2.1 fallback tabs never persist a
   // live frame.

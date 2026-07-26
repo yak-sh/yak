@@ -23,7 +23,12 @@ import {
   topZ,
 } from './live.ts'
 import { type Ent } from './types.ts'
-import { assertEquals } from '@std/assert'
+import { effect } from '@preact/signals'
+import {
+  assertEquals,
+  assertNotStrictEquals,
+  assertStrictEquals,
+} from '@std/assert'
 
 // A cache of task/project rows: `['T', 'Ops']` is a task in domain Ops
 // (null = the column is absent), `['P', 'Fable']` a project by title.
@@ -214,6 +219,82 @@ Deno.test('ent: refs and kids partition edges, order preserved', () => {
   assertEquals(e.kids.map((k) => k.eid), ['b', 'c'])
 })
 
+// Camera motion has its own live signal; publishing the graph cache too
+// would recompute every entity, board, and pin set mounted on the canvas.
+Deno.test('camera edits do not publish the whole-cache signal', () => {
+  cache.value = {
+    board: {
+      entity: { eid: 'board', num: 1 },
+      board: { eid: 'board', query: '.status=open' },
+    },
+    task: {
+      entity: { eid: 'task', num: 2 },
+      task: { eid: 'task', status: 'open', priority: 1 },
+    },
+    cam: {
+      entity: { eid: 'cam', num: 3 },
+      camera: {
+        eid: 'cam',
+        client_eid: 'client',
+        canvas_eid: 'canvas',
+        x: 0,
+        y: 0,
+        zoom: 1,
+        w: 800,
+        h: 600,
+      },
+    },
+    card: {
+      entity: { eid: 'card', num: 4 },
+      card: { eid: 'card', target_eid: 'task', view: 'Full' },
+      pin: {
+        eid: 'card',
+        canvas_eid: 'canvas',
+        x: 0,
+        y: 0,
+        w: 0,
+        h: 0,
+        z: 1,
+      },
+    },
+  }
+  deps.value = []
+  let runs = { ent: 0, board: 0, pins: 0 }
+  let stops = [
+    effect(() => {
+      ent('task')
+      runs.ent++
+    }),
+    effect(() => {
+      boardTasks(ent('board'))
+      runs.board++
+    }),
+    effect(() => {
+      pinned('canvas')
+      runs.pins++
+    }),
+  ]
+  try {
+    applyLocal([{ eid: 'cam', name: 'camera', comp: { x: 10 } }])
+    assertEquals(runs, { ent: 1, board: 1, pins: 1 })
+    assertEquals(cache.value.cam.camera!.x, 10)
+    applyLocal([
+      { eid: 'cam', name: 'camera', comp: { x: 10 } },
+      { eid: 'cam', name: 'updated', comp: { at: 'now' } },
+    ])
+    assertEquals(runs, { ent: 1, board: 1, pins: 1 })
+    assertEquals(cache.value.cam.updated!.at, 'now')
+
+    applyLocal([{ eid: 'task', name: 'task', comp: { priority: 2 } }])
+    assertEquals(runs, { ent: 2, board: 2, pins: 2 })
+
+    applyLocal([{ eid: 'card', name: 'pin', comp: { x: 10 } }])
+    assertEquals(runs, { ent: 3, board: 3, pins: 3 })
+  } finally {
+    for (let stop of stops) stop()
+  }
+})
+
 // applyLocal returns the keys it touched, the map the IDB persist tail
 // writes (T-6823). A component merge/delete touches its eid; a dependency
 // change names its edge; an entity death touches the eid AND every edge it
@@ -243,6 +324,32 @@ Deno.test('applyLocal: reports touched eids and edges', () => {
   assertEquals(t2.eids, [])
   assertEquals(t2.edges, [{ parent: 'a', type: 'requires', child: 'b' }])
   assertEquals(deps.value.length, 1)
+})
+
+Deno.test('applyLocal: an idempotent replay preserves cache identity', () => {
+  cache.value = {
+    a: {
+      entity: { eid: 'a', num: 1 },
+      task: { eid: 'a', status: 'open', priority: 1 },
+    },
+  }
+  let before = cache.value
+  let touched = applyLocal([
+    { eid: 'a', name: 'task', comp: { status: 'open' } },
+  ])
+  assertStrictEquals(cache.value, before)
+  assertEquals(touched.eids, ['a'])
+})
+
+Deno.test('applyLocal: a camera birth still publishes the cache', () => {
+  cache.value = {}
+  let before = cache.value
+  applyLocal([{
+    eid: 'cam',
+    name: 'camera',
+    comp: { client_eid: 'client', canvas_eid: 'canvas' },
+  }])
+  assertNotStrictEquals(cache.value, before)
 })
 
 // The cascade: deleting an entity reports the eid plus every edge that
