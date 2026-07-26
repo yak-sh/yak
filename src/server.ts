@@ -705,8 +705,8 @@ on('session', {
 on('session', {
   created: watched(cast),
   changed: { pid: watched(cast) },
-  doc: 'a session that announced a claude process gets watched: say when ' +
-    'the door shuts, counting its transcript if it wrote one (we never ' +
+  doc: 'a session that announced a provider process gets watched: say when ' +
+    'the process leaves, counting its transcript if it wrote one (we never ' +
     'forked it, so there is no exit code to report)',
 })
 on('stop_request', {

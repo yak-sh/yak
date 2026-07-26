@@ -73,7 +73,7 @@ import { type Edge, edges, prio, type Snapshot } from './types.ts'
 // reaches for node:sqlite, and the CLI has no business loading a db driver.
 import type { Log } from './telemetry.ts'
 import type { JournalEntry } from './client.ts'
-import { claudePid } from './proc.ts'
+import { agentPid, claudePid } from './proc.ts'
 import { filesFor, syncFiles } from './persona.ts'
 import { commit } from './git.ts'
 import { commands, focusOf, run as runCommand } from './commands.ts'
@@ -1081,7 +1081,7 @@ let context = async (args: string[]) => {
         rows(snap),
         sid,
         cwd,
-        provider == 'claude' ? claudePid() : undefined,
+        agentPid(provider),
         {
           agent_type: String(body.agent_type ?? '') || undefined,
           source: String(body.source ?? '') || undefined,

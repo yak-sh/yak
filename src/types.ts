@@ -159,9 +159,9 @@ export let comps: Record<string, Record<string, PropType>> = {
   session: {
     id: 'text',
     cwd: 'text',
-    // The claude process this session runs in — the SessionStart hook walks
-    // /proc and stamps it, and the channel plugin binds by it (a /clear
-    // reifies a NEW session id under the SAME pid; service follows).
+    // The provider process this session runs in — the SessionStart hook walks
+    // /proc and stamps it. Claude's channel binds by it; Codex's log follower
+    // uses it as liveness.
     // Wire-writable like acked_at: forging it only misroutes your own mail.
     pid: 'number',
     // The provider's own transcript JSONL — the SessionStart payload names
@@ -702,7 +702,7 @@ export type Session = {
   eid: string
   id: string
   cwd?: string | null
-  pid?: number | null // the claude process it runs in (hook-stamped)
+  pid?: number | null // the provider process it runs in (hook-stamped)
   transcript?: string | null // provider-owned JSONL — an external log
   acked_at?: string | null
   agent_type?: string | null // set when launched `claude --agent <name>`
@@ -730,9 +730,9 @@ export type Session = {
   error?: string | null // diagnostics: malformed frames, spawn failures
 }
 
-// Is anybody home? The client's half of door.ts `listening()`, from
+// Is anybody home? The client's half of door.ts `present()`, from
 // wire-visible columns alone: a session we spawned says it in its status,
-// and one that only announced itself is awake while it holds a claude
+// and one that only announced itself is awake while it holds a provider
 // process the server hasn't watched shut (sessions.ts watched() stamps
 // finished_at the moment that door closes). Origin never enters it —
 // origin says who STARTED a session, never whether anybody is home, and

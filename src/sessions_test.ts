@@ -13,7 +13,7 @@ import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
 import { existsSync } from 'node:fs'
 import { type Change } from './types.ts'
 import { dispatch, on, relay, trace } from './effects.ts'
-import { fakeClaude } from './door_fake.ts'
+import { fakeClaude, fakeCodex } from './door_fake.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let tmp = Deno.makeTempDirSync({ prefix: 'tasks-sessions-' })
@@ -885,6 +885,23 @@ Deno.test("external session logs read each provider's confined transcript", asyn
   Deno.removeSync(outside)
   c.kill('SIGKILL')
   await c.status
+})
+
+Deno.test('an external Codex transcript follows its provider process', async () => {
+  let c = await fakeCodex()
+  let line = JSON.stringify({
+    type: 'event_msg',
+    payload: { type: 'user_message', message: 'one' },
+  })
+  let { eid, path } = announce(c.pid, [line], '', 'codex')
+  watched(cast)(eid, { pid: c.pid })
+  await until(() => !!row(eid)?.started_at, 'the Codex watch to start')
+  assertEquals(row(eid)?.latest_seq, 1)
+  Deno.writeTextFileSync(path, `${line}\n`, { append: true })
+  await until(() => row(eid)?.latest_seq == 2, 'the Codex log to grow')
+  c.kill('SIGKILL')
+  await c.status
+  await until(() => !!row(eid)?.finished_at, 'the Codex process to leave')
 })
 
 Deno.test('a session we never forked is watched by its door, not its exit code', async () => {

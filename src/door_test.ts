@@ -3,10 +3,10 @@
 // which is the whole point, since the bug this fixes was a predicate that
 // never asked the process anything.
 import { assertEquals } from '@std/assert'
-import { fakeClaude } from './door_fake.ts'
+import { fakeClaude, fakeCodex } from './door_fake.ts'
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, db, open } = await import('./db.ts')
-let { listening } = await import('./door.ts')
+let { listening, present } = await import('./door.ts')
 
 open()
 let uid = () => crypto.randomUUID()
@@ -71,4 +71,14 @@ Deno.test("a subagent reifying does not take its operator's door (T-7288)", asyn
 
 Deno.test('a live pid that is not a claude is not a door', () => {
   assertEquals(listening(session({ pid: Deno.pid })), false) // this is deno
+})
+
+Deno.test('a live Codex is present for logs without claiming a message door', async () => {
+  let c = await fakeCodex()
+  let eid = session({ pid: c.pid })
+  assertEquals(present(eid), true)
+  assertEquals(listening(eid), false)
+  c.kill('SIGKILL')
+  await c.status
+  assertEquals(present(eid), false)
 })

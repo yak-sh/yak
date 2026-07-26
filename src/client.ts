@@ -380,9 +380,9 @@ export let byBoard = (a: Row, b: Row) =>
 
 // Find-or-mint the session entity for an external session id: its eid
 // plus the change that creates or refreshes it. cwd is where it runs; pid
-// is the claude process it runs IN (the SessionStart hook walks /proc for
-// it) — the anchor that lets the channel plugin follow a /clear rotation,
-// when a NEW session id reifies under the same process.
+// is the provider process it runs IN (the SessionStart hook walks /proc for
+// it) — liveness for every provider, and the anchor that lets Claude's
+// channel follow a /clear rotation under the same process.
 export let sessionFor = (
   all: Row[],
   session: string,

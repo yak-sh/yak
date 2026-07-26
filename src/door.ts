@@ -1,10 +1,8 @@
-// The door: is anyone LISTENING to a session right now? Two places ask —
-// the knock ladder's first rung (knock.ts) and comment-resume's gate
-// (sessions.ts) — and both used to ask it as `origin = 'managed'`, which
-// shut out every operator: an operator runs plain `claude` and reifies as
-// 'external', and knocking on an operator's door is the whole point of
-// knocks (T-7279). Origin says who STARTED a session; it never says
-// whether anybody is home. SERVER-ONLY (imports db).
+// The door: is anyone LISTENING to a session, and is its provider process
+// PRESENT? Claude's channel makes both true; interactive Codex has a process
+// and transcript but no message channel. Keeping the questions separate lets
+// sessions.ts follow both logs without claiming Codex heard a knock.
+// SERVER-ONLY (imports db).
 import { db } from './db.ts'
 import { commOf } from './proc.ts'
 import { type Seat, served } from './served.ts'
@@ -12,11 +10,8 @@ import { sessionActive } from './types.ts'
 
 type Door = { eid: string; pid: number | null; status: string | null }
 
-// The session a claude process's channel plugin serves — served.ts's rule,
-// asked of the rows this db holds. An older row on a live pid is a ghost:
-// nothing sent to it renders anywhere, and calling it awake would silence
-// the fallback that would have reached someone. The plugin derives the
-// same seat from its own stream index, so the two can't drift (T-7288).
+// The newest session wearing a provider process. An older row on a live pid is
+// a ghost: Claude's channel moved on, and a transcript follower must too.
 let seat = (pid: number) =>
   served(
     db.prepare(
@@ -26,17 +21,29 @@ let seat = (pid: number) =>
     pid,
   )?.eid
 
-// Someone is home when either ear is open: a session we spawned is heard
-// through its log tail while it's still going, and a session that got the
-// SessionStart hook is heard through its channel — which needs the pid to
-// still BE a claude (pids get reused, so comm is checked, not existence)
-// and this row to still be the one that process serves. A session with
-// neither — no pid, no active run — has no door.
-export let listening = (eid: string) => {
-  let s = db.prepare(
+let state = (eid: string) =>
+  db.prepare(
     'select eid, pid, status from session where eid = ?',
   ).get(eid) as Door | undefined
-  if (!s) return false
-  return sessionActive.includes(String(s.status)) ||
-    (!!s.pid && commOf(s.pid) == 'claude' && seat(s.pid) == s.eid)
+
+let terminal = (s?: Door) => {
+  if (!s?.pid || seat(s.pid) != s.eid) return ''
+  let comm = commOf(s.pid)
+  return comm == 'claude' || comm == 'codex' ? comm : ''
+}
+
+// A managed run is present through its lifecycle; an external one through the
+// provider pid SessionStart stamped. Pid reuse is guarded by comm + newest seat.
+export let present = (eid: string) => {
+  let s = state(eid)
+  return !!s &&
+    (sessionActive.includes(String(s.status)) || !!terminal(s))
+}
+
+// A process is a message door only when it has an ear. Managed sessions are
+// tailed by us; external Claude has a channel; interactive Codex has neither.
+export let listening = (eid: string) => {
+  let s = state(eid)
+  return !!s &&
+    (sessionActive.includes(String(s.status)) || terminal(s) == 'claude')
 }

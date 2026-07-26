@@ -39,6 +39,7 @@ export let ancestor = (comm: string, pid = Deno.pid): number | undefined => {
   }
 }
 
-// The claude process this one runs under — the pid the SessionStart hook
-// stamps on the session entity, and the channel plugin's binding to it.
-export let claudePid = () => ancestor('claude')
+// The provider process this hook runs under. Claude's channel also binds to
+// this pid; Codex uses it only to keep its external transcript followed.
+export let agentPid = (provider: string) => ancestor(provider)
+export let claudePid = () => agentPid('claude')
