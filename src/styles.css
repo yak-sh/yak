@@ -2090,25 +2090,77 @@ a[data-ref]:hover {
 /* A session: summary head, the agent's answer, then the log tail — a
    terminal-flavoured block, so the log is monospace and never wraps
    (a line clips; the file is the whole truth). */
+/* The console (W-3676 #5): a sticky slim bar, facts behind a disclosure,
+   the transcript straight on the card. The hosts drop their padding so
+   the bar can pin edge-to-edge (the well pattern, as Board does) and the
+   body re-pads itself. */
+.Card_Scroll:has(> .Session),
+.Peek_Body:has(> .Session) {
+  padding: 0;
+}
+.App_Body > .Session {
+  padding: 0;
+}
 .Session {
   display: grid;
-  gap: var(--half-gap);
+  gap: 0;
+  align-content: start;
   min-width: 0;
 }
 .Session_Head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: var(--half-gap);
   min-width: 0; /* the head must shrink, or the Inline can never truncate */
+  padding: var(--half-gap) var(--gap);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.Session_Body {
+  display: grid;
+  gap: var(--gap);
+  min-width: 0;
+  padding: var(--half-gap) var(--gap) var(--gap);
 }
 .Session_Status {
   font-weight: 600;
+}
+/* the bar's status text wears the pip's colour (the Dot palette) */
+.Session_Status-starting {
+  color: var(--open);
+}
+.Session_Status-running {
+  color: var(--wip);
+}
+.Session_Status-stopping,
+.Session_Status-interrupted {
+  color: var(--orange);
+}
+.Session_Status-completed {
+  color: var(--done);
+}
+.Session_Status-failed {
+  color: var(--red);
+}
+.Session_Status-lost {
+  color: var(--purple);
 }
 .Session_Model,
 .Session_Seq,
 .Session_Type {
   color: var(--dim);
   font-size: 11px;
+}
+/* the model, worn as a chip */
+.Session_Model {
+  color: var(--muted);
+  background: var(--soft);
+  border-radius: 4px;
+  padding: 1px 6px;
+  white-space: nowrap;
 }
 /* the task it runs keeps the head's right edge, truncating first */
 .Session_Head > .Inline {
@@ -2129,18 +2181,38 @@ a[data-ref]:hover {
 .Session_Stop:hover {
   border-color: var(--red);
 }
+/* The facts fold behind one dim line; the kv grid (and the stamp) wait
+   inside the disclosure. */
 .Session_Facts {
+  font-size: 11px;
+  color: var(--dim);
+}
+.Session_Gist {
+  cursor: pointer;
+  list-style: none;
+  overflow-wrap: anywhere;
+}
+.Session_Gist::-webkit-details-marker {
+  display: none;
+}
+.Session_Gist::after {
+  content: ' ▸';
+}
+.Session_Facts[open] .Session_Gist::after {
+  content: ' ▾';
+}
+.Session_Kv {
   display: grid;
   grid-template-columns: max-content 1fr;
   gap: 2px var(--gap);
   align-items: baseline;
-  font-size: 12px;
+  padding-top: 4px;
 }
 .Session_Key {
   color: var(--dim);
-  font-size: 11px;
 }
 .Session_Val {
+  color: var(--muted);
   overflow-wrap: anywhere;
 }
 .Session_Fault {
@@ -2152,17 +2224,13 @@ a[data-ref]:hover {
 .Session_Fault-error {
   color: var(--red);
 }
-/* The log is a transcript now, not a dump: normal text flow, each row
-   styled by its kind. Only the machine rows (exec, an unrecognized line)
-   fall back to monospace. */
+/* The log is the console floor: messages sit straight on the card, no
+   panel box — each row styled by its kind, only the machine rows (exec,
+   an unrecognized line) falling back to monospace. */
 .Session_Log {
   display: grid;
   gap: var(--half-gap);
   font-size: 12px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: var(--half-gap);
 }
 /* Every line: the seq gutter, the transcript face beside it, and (when
    opened) the raw-event inspector wrapping to its own full-width row. */
@@ -2234,13 +2302,19 @@ a[data-ref]:hover {
 .Session_Agent :is(p, ul, ol, pre):last-child {
   margin-bottom: 0;
 }
-/* What the human said, resuming — set off by an accent rail. */
+/* What the human said — a soft prompt block, `› ` leading the line. */
 .Session_User {
   color: var(--muted);
-  border-left: 2px solid var(--accent);
-  padding-left: var(--half-gap);
+  background: var(--soft);
+  border-radius: var(--radius);
+  padding: 5px 9px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+.Session_User::before {
+  content: '› ';
+  color: var(--blue);
+  font-family: var(--mono);
 }
 /* The model thinking out loud — dim, skippable. */
 .Session_Reason {
@@ -2287,12 +2361,30 @@ a[data-ref]:hover {
   color: var(--dim);
   margin-left: var(--half-gap);
 }
-/* A turn closing: a thin dim divider carrying its usage. */
+/* A turn closing: a hairline flexes across, the duration and usage
+   settle at its right end. */
 .Session_Turn {
-  border-top: 1px solid var(--border);
-  padding-top: var(--half-gap);
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
   color: var(--dim);
   font-size: 11px;
+}
+.Session_Turn::before {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--border);
+}
+/* The live tail thinks out loud. */
+.Session_Think {
+  color: var(--dim);
+  font-size: 12px;
+  animation: SessionPulse 1.6s ease-in-out infinite;
+}
+@keyframes SessionPulse {
+  50% {
+    opacity: 0.35;
+  }
 }
 /* Provider housekeeping: one dim chip line — the tag names the family,
    the text the gist, ×N how many frames it speaks for. */

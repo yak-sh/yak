@@ -479,7 +479,7 @@ export let sessionActive = ['starting', 'running', 'stopping']
 //   reason the model thinking out loud — dim, skippable
 //   tool   a tool call as a chip: name + ok/✗, its detail, its error
 //   exec   a shell command it ran — desc says what for, in its own words
-//   turn   a turn closing, with usage — a thin divider, not content
+//   turn   a turn closing, with usage and duration — a divider, not content
 //   error  the run itself went wrong
 //   sys    provider housekeeping worth a dim chip: the tag names the
 //          family (thinking, hook, task, …), the text carries the gist.
@@ -495,7 +495,7 @@ export type LogRow =
     error?: string
   }
   | { kind: 'exec'; command: string; desc?: string; exit?: number }
-  | { kind: 'turn'; usage?: string }
+  | { kind: 'turn'; usage?: string; ms?: number }
   | { kind: 'error'; text: string }
   | { kind: 'sys'; tag: string; text?: string }
 

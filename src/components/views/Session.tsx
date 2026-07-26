@@ -15,10 +15,12 @@ import { Comments } from '../Comments.tsx'
 import { Id } from './Inline.tsx'
 import { Entity } from '../Entity.tsx'
 
-// An agent session, watched: the lifecycle summary (server-owned columns,
-// riding the snapshot like any component — so the head re-renders itself
-// off the cache as the run moves), then its log, then the comment rail
-// (Comments.tsx), which doubles as the way to talk TO the agent.
+// An agent session, watched — the console (W-3676 #5): a sticky slim bar
+// (status, model, stop) over the lifecycle summary (server-owned columns,
+// riding the snapshot like any component — so the bar re-renders itself
+// off the cache as the run moves), the facts behind a disclosure, then
+// the log, then the comment rail (Comments.tsx), which doubles as the
+// way to talk TO the agent.
 //
 // The log is the FILE (src/sessions.ts): we read it back over
 // /sessions/:eid/logs, where each line already carries its renderer `row`
@@ -35,9 +37,13 @@ let Frame = block('div', 'Session', {
   Status: 'span',
   Model: 'span',
   Stop: 'button',
-  Facts: 'div',
+  Body: 'div',
+  Facts: 'details',
+  Gist: 'summary',
+  Kv: 'div',
   Key: 'span',
   Val: 'span',
+  Think: 'div',
   Final: 'div',
   Fault: 'p',
   Log: 'div',
@@ -69,9 +75,13 @@ let {
   Status,
   Model,
   Stop,
+  Body: Panel,
   Facts,
+  Gist,
+  Kv,
   Key,
   Val,
+  Think,
   Final,
   Fault,
   Log,
@@ -138,6 +148,22 @@ let clock = (t: string) =>
     minute: '2-digit',
     hour12: false,
   })
+
+// A duration a human reads: 42s, 1m 40s.
+let span = (ms: number) => {
+  let s = Math.round(ms / 1000)
+  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`
+}
+
+// The tail thinks out loud: what the run is doing right now, read off
+// its newest row — thinking (with the streaming token count when the
+// squeeze kept one) or just working between events.
+let doing = (r?: LogRow) =>
+  r?.kind == 'reason'
+    ? 'thinking…'
+    : r?.kind == 'sys' && r.tag == 'thinking'
+    ? (r.text ? `thinking · ${r.text}` : 'thinking…')
+    : 'working…'
 
 // A named fact, present only when there IS one — absence says enough.
 let Fact = ({ k, v }: { k: string; v?: string | null }) =>
@@ -213,7 +239,12 @@ let Body = ({ x }: { x: Entry }) => {
         </Exec>
       )
     case 'turn':
-      return <Turn>{usage(r.usage)}</Turn>
+      return (
+        <Turn>
+          {[r.ms != null && span(r.ms), usage(r.usage)]
+            .filter(Boolean).join(' · ')}
+        </Turn>
+      )
     case 'error':
       return <Oops>{r.text}</Oops>
     case 'sys':
@@ -363,6 +394,13 @@ export let Session = ({ e }: { e: Ent }) => {
   let said = log.entries.some(
     (x) => x.row?.kind == 'say' && x.row.role == 'agent',
   )
+  let rows = squeeze(log.entries)
+  // The facts fold behind one dim line — the mock's disclosure summary.
+  let gist = [
+    s.branch,
+    s.cwd,
+    s.started_at && `started ${clock(s.started_at)}`,
+  ].filter(Boolean).join(' · ') || 'session'
   return (
     <Frame elRef={frame}>
       <Head>
@@ -398,40 +436,46 @@ export let Session = ({ e }: { e: Ent }) => {
           </Stop>
         )}
       </Head>
-      <Facts>
-        <Fact k='id' v={s.id} />
-        <Fact k='branch' v={s.branch} />
-        <Fact k='cwd' v={s.cwd} />
-        {
-          /* The one irreducible difference, said rather than left blank:
-            a session we watch is a pid, not a child — so no exit code. */
-        }
-        {s.origin != 'managed' && (
-          <Fact
-            k='pid'
-            v={s.pid ? `${s.pid}` : null}
-          />
+      <Panel>
+        <Facts>
+          <Gist>{gist}</Gist>
+          <Kv>
+            <Fact k='id' v={s.id} />
+            <Fact k='branch' v={s.branch} />
+            <Fact k='cwd' v={s.cwd} />
+            {
+              /* The one irreducible difference, said rather than left blank:
+              a session we watch is a pid, not a child — so no exit code. */
+            }
+            {s.origin != 'managed' && (
+              <Fact
+                k='pid'
+                v={s.pid ? `${s.pid}` : null}
+              />
+            )}
+            <Fact k='started' v={when(s.started_at)} />
+            <Fact k='finished' v={when(s.finished_at)} />
+          </Kv>
+          <Stamp e={e} />
+        </Facts>
+        {/* markdown: our own data, so no sanitizer — as with a task body */}
+        {!said && s.final_text && (
+          <Final dangerouslySetInnerHTML={{ __html: md(s.final_text) }} />
         )}
-        <Fact k='started' v={when(s.started_at)} />
-        <Fact k='finished' v={when(s.finished_at)} />
-      </Facts>
-      <Stamp e={e} />
-      {/* markdown: our own data, so no sanitizer — as with a task body */}
-      {!said && s.final_text && (
-        <Final dangerouslySetInnerHTML={{ __html: md(s.final_text) }} />
-      )}
-      {s.error && <Fault mod='error'>{s.error}</Fault>}
-      {s.stop_reason && <Fault>{s.stop_reason}</Fault>}
-      <Log>
-        {squeeze(log.entries).map((x) => <Row key={x.seq} x={x} />)}
-      </Log>
-      {/* stderr: unordered diagnostics, never inside the log's seqs */}
-      {log.stderr && <Err>{log.stderr}</Err>}
-      {
-        /* the one composer: comment about it, or arm → session to say TO
+        {s.error && <Fault mod='error'>{s.error}</Fault>}
+        {s.stop_reason && <Fault>{s.stop_reason}</Fault>}
+        <Log>
+          {rows.map((x) => <Row key={x.seq} x={x} />)}
+          {live && <Think>✳ {doing(rows.at(-1)?.row)}</Think>}
+        </Log>
+        {/* stderr: unordered diagnostics, never inside the log's seqs */}
+        {log.stderr && <Err>{log.stderr}</Err>}
+        {
+          /* the one composer: comment about it, or arm → session to say TO
           it (Comments.tsx knows which sessions can take words) */
-      }
-      <Comments eid={e.eid} />
+        }
+        <Comments eid={e.eid} />
+      </Panel>
     </Frame>
   )
 }

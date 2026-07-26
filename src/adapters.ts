@@ -365,6 +365,7 @@ export let adapters: Record<string, Adapter> = {
           : {
             kind: 'turn',
             usage: e.usage ? JSON.stringify(e.usage) : undefined,
+            ...(e.duration_ms ? { ms: Number(e.duration_ms) } : {}),
           }
       }
       // Housekeeping, said small (shapes from live probes). thinking_tokens
