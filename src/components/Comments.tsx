@@ -64,6 +64,21 @@ export let Note = ({ c }: { c: Ent }) => {
 // managed session with the words, and an active one hears them on its
 // next tool call through the bus. To leave a note ABOUT the run without
 // waking it, comment on its task instead.
+export let prompt = (e: Ent) => {
+  let s = e.session
+  let settled = !!s && s.origin == 'managed' && !!s.provider_session_id &&
+    !sessionActive.includes(String(s.status))
+  // Persona, model nick, graph chip: provider ids never face people.
+  let who = s &&
+    ((s.persona_eid && ent(s.persona_eid).doc?.title) ||
+      nick(s.serving_model ?? s.model) || idOf(e))
+  return settled
+    ? `send to ${who}… (resumes the session)`
+    : s
+    ? 'comment… (the agent hears it on its next tool call)'
+    : 'comment…'
+}
+
 export let Composer = ({ eid }: { eid: string }) => {
   let box = useRef<HTMLTextAreaElement>(null)
   let dkey = `${eid}.comment`
@@ -71,14 +86,6 @@ export let Composer = ({ eid }: { eid: string }) => {
   // words are still there. Only posting spends it. If this box was the
   // one being typed in when a hot swap hit, it takes the caret back.
   let { sync, spend } = useDraft(dkey, box)
-  let s = ent(eid).session
-  let settled = !!s && s.origin == 'managed' && !!s.provider_session_id &&
-    !sessionActive.includes(String(s.status))
-  // Who you're addressing: the persona's name when the session has one,
-  // else the model's nick — never the raw session id.
-  let who = s &&
-    ((s.persona_eid && ent(s.persona_eid).doc?.title) ||
-      nick(s.serving_model ?? s.model) || s.id)
 
   let post = () => {
     let body = box.current!.value.trim()
@@ -110,11 +117,7 @@ export let Composer = ({ eid }: { eid: string }) => {
       data-eid={eid}
       rows={1}
       onInput={(e: InputEvent) => sync(e.currentTarget as HTMLTextAreaElement)}
-      placeholder={settled
-        ? `send to ${who}… (resumes the session)`
-        : s && !settled
-        ? 'comment… (the agent hears it on its next tool call)'
-        : 'comment…'}
+      placeholder={prompt(ent(eid))}
       onKeyDown={key}
     />
   )
