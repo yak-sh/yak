@@ -5,8 +5,8 @@
 # The single canonical launcher for the operator. BOTH `bin/operate run` (manual,
 # from the repo) and holdco's `bin/holdco run <id>` (which wraps this in a named
 # tmux window via the fleet Deno supervisor) use THIS script to construct and exec
-# the `claude` invocation: persona, model, effort, remote-control, email channel,
-# and the /loop standing-work prompt. It replaces the old bespoke root launchers
+# the `claude` invocation: persona, model, effort, remote-control, and the
+# /loop standing-work prompt. It replaces the old bespoke root launchers
 # (./bindery, ./conductor, ./cbloom, ./homelab, ./trader).
 #
 # holdco resolves the venture's settings from the registry and passes them via env
@@ -24,7 +24,6 @@
 #   OP_MODE       / run.mode      loop cadence: long-loop | cold | cron (default: long-loop)
 #   OP_WORK                       standing-work text    (default: "Continue <name> operation.")
 #   OP_REMOTE_NAME / run.title    --remote-control conversation name
-#   run.channels                  --channels value      (default: plugin:email@holdco-fleet)
 #   OP_REMOTE=0                   disable --remote-control
 #   OP_RESUME=1                   --continue (resume last session)
 #   COLD_FALLBACK_EVERY           cold-mode /loop interval (default: 8h)
