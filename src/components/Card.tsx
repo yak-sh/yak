@@ -134,7 +134,8 @@ export let Card = ({ p }: { p: Pinned }) => {
     e: PointerEvent & { currentTarget: HTMLDivElement },
     d: string,
   ) => {
-    e.stopPropagation()
+    e.stopPropagation() // the grip's down never reaches the Pin's handler,
+    toFront(p.eid) // so the grab raises the card here — same as any touch
     if (e.button != 0) return
     let grip = e.currentTarget
     let card = grip.parentElement!.querySelector('.Card') as HTMLElement
