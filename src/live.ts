@@ -583,11 +583,18 @@ export let topZ = (canvas: string) =>
 
 // Any interaction pulls a card to the front. Reads the pin fresh from the
 // cache, so a burst of events (a scroll's worth of wheels) raises once.
+// The card must clear every OTHER pin, not merely match the canvas top —
+// a tie at the top (fresh pins all land at 0) still raises.
 export let toFront = (pin: string) => {
   let p = cache.value[pin]?.pin
   if (!p) return
-  let top = topZ(p.canvas_eid)
-  if (p.z != top) mutate({ eid: pin, name: 'pin', comp: { z: top + 1 } })
+  let top = Math.max(
+    -1,
+    ...Object.entries(cache.value)
+      .filter(([eid, r]) => eid != pin && r.pin?.canvas_eid == p.canvas_eid)
+      .map(([, r]) => r.pin!.z),
+  )
+  if (p.z <= top) mutate({ eid: pin, name: 'pin', comp: { z: top + 1 } })
 }
 
 // Screen px → plane coords, through the camera over the given canvas rect.
