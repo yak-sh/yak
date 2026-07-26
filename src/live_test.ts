@@ -5,6 +5,7 @@ import {
   backlinks,
   byWarmth,
   cache,
+  commentCount,
   deps,
   domains,
   ent,
@@ -52,6 +53,18 @@ Deno.test('domains: nothing to say about an empty graph', () => {
 Deno.test('projects: project rows only, oldest first, named by doc', () => {
   fill([['T', 'Ops'], ['P', 'Sol'], ['P', 'Fable']])
   assertEquals(projects().map((p) => p.doc?.title), ['Sol', 'Fable'])
+})
+
+Deno.test('commentCount: events are not conversation', () => {
+  let comment = (eid: string, target_eid: string, event?: number) => ({
+    comment: { eid, target_eid, author_eid: null, event },
+  })
+  cache.value = {
+    prose: comment('prose', 'talk'),
+    machine: comment('machine', 'talk', 1),
+    alone: comment('alone', 'event-only', 1),
+  }
+  assertEquals(commentCount.value, { talk: 1 })
 })
 
 // Backlinks read the SCHEMA — wire vocabulary plus server-stamped columns

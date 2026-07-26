@@ -491,13 +491,13 @@ export let commentsOn = (eid: string): Ent[] =>
     .map(([id]) => ent(id))
     .sort((a, b) => a.num - b.num)
 
-// Comment tallies for every entity in ONE cache pass — a board of
+// Conversation tallies for every entity in ONE cache pass — a board of
 // hundreds of rows reads this map instead of each scanning the cache.
 export let commentCount = computed(() => {
   let n: Record<string, number> = {}
   for (let r of Object.values(cache.value)) {
     let t = r.comment?.target_eid
-    if (t) n[String(t)] = (n[String(t)] ?? 0) + 1
+    if (t && !r.comment?.event) n[String(t)] = (n[String(t)] ?? 0) + 1
   }
   return n
 })
