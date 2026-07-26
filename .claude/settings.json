@@ -1,7 +1,4 @@
 {
-  "enabledPlugins": {
-    "email@holdco-fleet": true
-  },
   "fallbackModel": ["claude-sonnet-5", "claude-haiku-4-5"],
   "hooks": {
     "SessionStart": [
