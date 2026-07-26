@@ -7,13 +7,14 @@
 //   'text'            one line (sometimes more)
 //   'body'            long markdown
 //   'number' 'bool'   what they say
+//   'priority'        a number operators spell with an optional P
 //   'query'           a line of the filter grammar (query.ts) — text
 //                     whose editor knows the vocabulary
 //   'time'            an ISO timestamp — a text column whose face is
 //                     relative words (full stamp on hover)
 //   'url'             an address out on the web — a text column whose
 //                     face is a link
-//   {enum: [...]}     a closed set — the values ARE the doc
+//   {enum: [...]}     a closed set; aliases are input spellings only
 //   {eid: 'project',  an association; the name says which component the
 //    death: …}        target carries ('' = any entity), the death word
 //                     what the reference means when the target dies
@@ -40,11 +41,12 @@ export type PropType =
   | 'text'
   | 'body'
   | 'number'
+  | 'priority'
   | 'bool'
   | 'query'
   | 'time'
   | 'url'
-  | { enum: string[] }
+  | { enum: string[]; aliases?: Record<string, string> }
   | { eid: string; death: Death }
   | { text: string }
 
@@ -97,7 +99,7 @@ export let comps: Record<string, Record<string, PropType>> = {
   doc: { title: 'text', body: 'body' },
   task: {
     status: { enum: statuses },
-    priority: 'number',
+    priority: 'priority',
     project_eid: { eid: 'project', death: 'detach' },
     // Whose PLATE this is — durable routing to any entity (a person, a
     // project standing in for its operator). Orthogonal to claim, which

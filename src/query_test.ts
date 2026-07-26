@@ -3,7 +3,6 @@ import {
   adopt,
   complete,
   hot,
-  instant,
   matchQuery,
   noFilter,
   orderOf,
@@ -11,11 +10,11 @@ import {
   pred,
   resolveRefs,
   route,
-  span,
   SUNK,
   sunk,
   warm as rank, // the test file's own `warm` fixture predates the export
 } from './query.ts'
+import { instant, span } from './time.ts'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 
 // A task-shaped entity to filter against.

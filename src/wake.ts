@@ -11,7 +11,7 @@
 import { apply, db } from './db.ts'
 import { dispatch, trace } from './effects.ts'
 import { type Change, uuid } from './types.ts'
-import { instant } from './query.ts'
+import { instant } from './time.ts'
 
 type Cast = (changes: Change[]) => void
 type Row = {

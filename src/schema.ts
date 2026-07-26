@@ -27,10 +27,11 @@ export type Col = {
 // A PropType said in one word or phrase — the same spelling everywhere
 // the schema is shown (view, doc, and whatever asks next).
 export let typeWord = (t: PropType): string =>
-  typeof t == 'string'
-    ? t
-    : 'enum' in t
-    ? t.enum.join(' | ')
+  typeof t == 'string' ? t : 'enum' in t
+    ? [
+      t.enum.join(' | '),
+      ...Object.entries(t.aliases ?? {}).map(([a, v]) => `${a} → ${v}`),
+    ].join('; ')
     : 'eid' in t
     ? `→ ${t.eid || 'any'}`
     : `text (${t.text})`

@@ -10,9 +10,9 @@ import { comps, type PropType, statuses } from './types.ts'
 // typed table everything else reads.
 let sig = (t: PropType) =>
   typeof t == 'string'
-    ? ''
+    ? t == 'priority' ? '(P<number>)' : ''
     : 'enum' in t
-    ? `(${t.enum.join('|')})`
+    ? `(${[...t.enum, ...Object.keys(t.aliases ?? {})].join('|')})`
     : 'eid' in t
     ? '(eid)'
     : ''

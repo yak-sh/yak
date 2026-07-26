@@ -7,7 +7,12 @@ import { schema, typeWord, vocabularyMd } from './schema.ts'
 Deno.test('typeWord: one spelling per type', () => {
   assertEquals(typeWord('text'), 'text')
   assertEquals(typeWord('number'), 'number')
+  assertEquals(typeWord('priority'), 'priority')
   assertEquals(typeWord({ enum: ['a', 'b'] }), 'a | b')
+  assertEquals(
+    typeWord({ enum: ['open'], aliases: { todo: 'open' } }),
+    'open; todo → open',
+  )
   assertEquals(typeWord({ eid: 'project', death: 'detach' }), '→ project')
   assertEquals(typeWord({ eid: '', death: 'cascade' }), '→ any')
   assertEquals(typeWord({ text: 'domains' }), 'text (domains)')

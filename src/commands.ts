@@ -31,7 +31,8 @@ import {
   spec,
   taskChanges,
 } from './client.ts'
-import { adopt, instant, parseQuery } from './query.ts'
+import { adopt, parseQuery } from './query.ts'
+import { instant } from './time.ts'
 
 // Where the typist is standing: the focused entity (the web's root card,
 // the TUI's trail head), the graph to resolve names against, and the
