@@ -149,6 +149,10 @@ Deno.test('propAt: types and unambiguous error names come from schema', () => {
     type: 'priority',
   })
   assertEquals(propAt('created', 'at')?.name, 'created.at')
+  let verdict = propAt('review', 'verdict')!
+  assertEquals(parseProp(verdict, 'approve'), 'approved')
+  assertEquals(parseProp(verdict, 'reject'), 'rejected')
+  assertEquals(parseProp(verdict, 'changes'), 'changes_requested')
   assertEquals(propAt('task', 'missing'), undefined)
 })
 

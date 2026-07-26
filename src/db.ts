@@ -225,6 +225,10 @@ let schema = `
     author_eid text,
     event      integer
   );
+  create table if not exists review (
+    eid     text primary key references entity(eid),
+    verdict text not null
+  );
   create table if not exists alias (
     eid  text primary key references entity(eid),
     slug text not null unique

@@ -55,6 +55,12 @@ export type PropType =
 // decision about real work, trail intact.
 export let statuses = ['open', 'wip', 'done', 'cancelled']
 
+// A review is a comment with one of these verdicts. Input aliases keep
+// the operator verbs short; the graph stores only the settled words.
+export let verdicts = ['approved', 'rejected', 'changes_requested']
+export let verdictName = (verdict?: string | null) =>
+  String(verdict ?? '').replaceAll('_', ' ')
+
 // Settled = no longer open work, whether it finished or was called off.
 // Gating, board defaults, and lease-lapse audits all key off this
 // instead of 'done' alone, so a cancelled blocker releases its gate too.
@@ -234,6 +240,16 @@ export let comps: Record<string, Record<string, PropType>> = {
     // relay and render as chips, not bubbles; the comms bus still
     // delivers them.
     event: 'bool',
+  },
+  review: {
+    verdict: {
+      enum: verdicts,
+      aliases: {
+        approve: 'approved',
+        reject: 'rejected',
+        changes: 'changes_requested',
+      },
+    },
   },
   alias: { slug: 'text' },
   // A durable identity — the owner, an operator. The doc carries the
@@ -513,6 +529,7 @@ export let kindOrder = [
   'mail',
   'hook',
   'conflict',
+  'review',
   'comment',
   'memory',
   'person',
@@ -808,6 +825,13 @@ export type Comment = {
   event?: number | null
 }
 
+// A verdict-bearing comment. The aim, rationale, and authorship stay on
+// comment + doc + created; this component contributes only judgment.
+export type Review = {
+  eid: string
+  verdict: string
+}
+
 // A claim that BOUNCED, kept as an entity: who tried (loser), who held
 // (holder) — resolved to session-id strings at rejection time, because
 // the loser's session entity may have been minted in the very batch
@@ -918,6 +942,7 @@ export type Ent = {
   email?: Email
   conflict?: Conflict
   comment?: Comment
+  review?: Review
   alias?: Alias
   memory?: Memory
   persona?: Persona

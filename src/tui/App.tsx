@@ -7,7 +7,7 @@
 import { signal } from '@preact/signals'
 import { useBoardSub } from '../components/subscriptions.ts'
 import { formatProp, propAt } from '../props.ts'
-import { type Ent, idOf } from '../types.ts'
+import { type Ent, idOf, verdictName } from '../types.ts'
 import {
   applyLocal,
   boardTasks,
@@ -206,7 +206,13 @@ let TuiTask = ({ e }: { e: Ent }) => (
     ))}
     {commentsOn(e.eid).map((c) => (
       <div class='TComment'>
-        <span class='Comments_Who'>{byline(c)}</span>{' '}
+        <span class='Comments_Who'>{byline(c)}</span> {c.review && (
+          <span
+            class={`Comments_Verdict-${c.review.verdict.replaceAll('_', '-')}`}
+          >
+            [{verdictName(c.review.verdict)}]{' '}
+          </span>
+        )}
         <Md text={c.doc?.body ?? ''} />
       </div>
     ))}

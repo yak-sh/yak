@@ -17,6 +17,7 @@ import {
   stamped,
   statuses,
   uuid,
+  verdictName,
 } from './types.ts'
 import { idOf } from './types.ts'
 import { formatProp, parseProp, propAt } from './props.ts'
@@ -188,10 +189,11 @@ export let ledger = (entries: JournalEntry[], all: Row[]): string[] => {
       )
       if (comps.comment) {
         let first = cut(comps.doc?.body)
+        let verdict = verdictName(comps.review?.verdict as string | undefined)
         lines.push(
-          `- 💬 on ${name(comps.comment.target_eid)}${
-            first ? `: ${first}` : ''
-          }`,
+          `- ${verdict ? '✓' : '💬'} on ${name(comps.comment.target_eid)}${
+            verdict ? ` · ${verdict}` : ''
+          }${first ? `: ${first}` : ''}`,
         )
       } else {
         lines.push(
@@ -553,13 +555,14 @@ export let hookClaim = (
 
 // A comment: a doc aimed at the target. The session reification lets the
 // server stamp its instrument; `event` marks machinery speaking (M-4062)
-// so the mail relay skips it.
+// so the mail relay skips it. A verdict adds review judgment to the same
+// entity — rationale, aim, and authorship stay the comment's.
 export let commentChanges = (
   all: Row[],
   target: string,
   body: string,
   session?: string,
-  event?: boolean,
+  mark: { event?: boolean; verdict?: string } = {},
 ): Change[] => {
   let s = session ? sessionFor(all, session) : undefined
   let eid = uuid()
@@ -571,9 +574,12 @@ export let commentChanges = (
       name: 'comment',
       comp: {
         target_eid: target,
-        ...(event ? { event: 1 } : {}),
+        ...(mark.event ? { event: 1 } : {}),
       },
     },
+    ...(mark.verdict == null
+      ? []
+      : [{ eid, name: 'review', comp: { verdict: mark.verdict } }]),
   ]
 }
 
@@ -1003,9 +1009,13 @@ let onMine = (
     ...hits.map((r) => {
       let c = r.comps.comment
       let body = String(r.comps.doc?.body ?? '').split('\n')[0].slice(0, 96)
+      let verdict = verdictName(String(r.comps.review?.verdict ?? ''))
+      let words = [verdict ? `[${verdict}]` : '', body].filter(Boolean).join(
+        ' ',
+      )
       return `- ${idOf(byEid.get(String(c.target_eid))!)} 💬 ${
         name(r.comps.created?.by ?? r.comps.created?.via)
-      }: ${body}`
+      }: ${words}`
     }),
   ]
 }
@@ -1260,7 +1270,9 @@ export let notices = (snap: Snapshot, session: string) => {
     let target = byEid.get(String(c.target_eid))
     let at = target && target.eid != sess.eid ? `${idOf(target)} ` : ''
     let body = String(r.comps.doc?.body ?? '').split('\n')[0].slice(0, 120)
-    return `${at}💬 ${who(r.comps.created)}: ${body}`
+    let verdict = verdictName(String(r.comps.review?.verdict ?? ''))
+    let words = [verdict ? `[${verdict}]` : '', body].filter(Boolean).join(' ')
+    return `${at}💬 ${who(r.comps.created)}: ${words}`
   })
   if (unseen.length > 20) lines.push(`…and ${unseen.length - 20} more`)
   // A `notified` stamp per SERVED comment is the read-state that gates the
@@ -1294,7 +1306,7 @@ export let lapseChanges = (all: Row[], sess: Row): Change[] => {
         r.eid,
         '⚑ lease lapsed: session `' + id + '` ended before this was done',
         id,
-        true, // machinery speaking, not the agent — never mailed
+        { event: true }, // machinery speaking, not the agent — never mailed
       ).slice(-2)), // the session exists — skip the mint, keep doc + comment
       { eid: r.eid, name: 'claim', comp: null },
     ])
@@ -1564,7 +1576,12 @@ export let showMd = (snap: Snapshot, all: Row[], row: Row) => {
         : by || via
         ? ` · ${by || via}`
         : ''
-      out.push('', `— ${bornAt(c)}${who}`, '')
+      let verdict = verdictName(String(c.comps.review?.verdict ?? ''))
+      out.push(
+        '',
+        `— ${bornAt(c)}${who}${verdict ? ` · ${verdict}` : ''}`,
+        '',
+      )
       out.push(String(c.comps.doc?.body ?? ''))
     }
   }

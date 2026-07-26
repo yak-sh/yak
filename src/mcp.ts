@@ -664,17 +664,34 @@ diffs without a version table. id: T-3, S-12, or eid. ${BUS}`,
   server.tool(
     'task_comment',
     `Comment on ANY entity (tasks, boards, docs, frozen pages — anything
-with an id). Body is markdown. Pass the same stable session identifier
-you claim with, for attribution.`,
-    { id: z.string(), body: body(), session: z.string() },
+with an id). An optional verdict makes it a review; its body is the
+rationale and may be empty for a bare verdict. Pass the same stable
+session identifier you claim with, for attribution.`,
+    {
+      id: z.string(),
+      body: body().optional(),
+      verdict: z.enum(['approved', 'rejected', 'changes_requested']).optional(),
+      session: z.string(),
+    },
     async (
-      { id, body, session }: { id: string; body: string; session: string },
+      { id, body, verdict, session }: {
+        id: string
+        body?: string
+        verdict?: string
+        session: string
+      },
     ) => {
+      if (body == null && !verdict) return err('body or verdict is required')
       let all = rows(await io.read())
       let row = find(all, id)
       if (!row) return err(`no entity: ${id}`)
-      await io.write(commentChanges(all, row.eid, body, session), session)
-      return bus(`commented on ${idOf(row)}${wall(body)}`, session)
+      let words = body ?? ''
+      await io.write(
+        commentChanges(all, row.eid, words, session, { verdict }),
+        session,
+      )
+      let said = verdict ? `${verdict} review` : 'comment'
+      return bus(`${said} on ${idOf(row)}${wall(words)}`, session)
     },
   )
 

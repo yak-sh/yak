@@ -76,6 +76,7 @@ Deno.test('rows: merge, derived kind, ids', () => {
   assertEquals(by(S).kind, 'session')
   assertEquals(idOf(by(T1)), 'T-2')
   assertEquals(idOf(by(S)), 'S-1')
+  assertEquals(kindOf({ comment: {}, review: {} }), 'review')
   assertEquals(kindOf({}), 'entity')
 })
 
@@ -165,6 +166,7 @@ Deno.test('notices: unseen comments on claimed tasks + messages to the session',
       { eid: B, name: 'session', comp: { id: 'sess-b', actor_eid: P } },
       // on the claimed task, after the cutoff: heard
       ...mk('c-1', T1, B, '2026-01-02', 'heads up'),
+      { eid: 'c-1', name: 'review', comp: { verdict: 'approved' } },
       // aimed at the session itself: heard (a message TO sess-x)
       ...mk('c-2', S, B, '2026-01-03', 'ping'),
       // spoken via the listener: never echoed back
@@ -177,6 +179,7 @@ Deno.test('notices: unseen comments on claimed tasks + messages to the session',
   let n = notices(busSnap, 'sess-x')
   assertEquals(n.lines.length, 2)
   assertEquals(n.lines[0].includes('heads up'), true)
+  assertEquals(n.lines[0].includes('[approved]'), true)
   assertEquals(n.lines[1].includes('Task Graph · via S-80: ping'), true)
   assertEquals(n.ack[0].name, 'session')
   assertEquals(typeof n.ack[0].comp?.acked_at, 'string')
@@ -278,6 +281,17 @@ Deno.test('notices: per-item stamp is drain-proof (a served ack cannot hide a si
 Deno.test('rows filter through the query grammar + byBoard', () => {
   assertEquals(matchQuery(by(T1).comps, parseQuery('.status=wip')), true)
   assertEquals(matchQuery(by(T1).comps, parseQuery('.status=done')), false)
+  let review = {
+    comment: { target_eid: T1 },
+    review: { verdict: 'approved' },
+  }
+  assertEquals(
+    matchQuery(
+      review,
+      parseQuery(`.comment.target_eid=${T1}&.verdict=approved`),
+    ),
+    true,
+  )
   assertEquals([...all.filter((r) => r.comps.task)].sort(byBoard)[0].eid, T2) // open before wip
 })
 
@@ -451,7 +465,17 @@ Deno.test('commentChanges: doc + aim, session reified for server stamping', () =
   assertEquals(cs[1].comp?.event, undefined) // authored words: no mark
   assertEquals(commentChanges(all, T1, 'hi')[1].comp, { target_eid: T1 })
   // machinery speaking wears the mark (M-4062)
-  assertEquals(commentChanges(all, T1, 'hi', 'sess-x', true)[1].comp?.event, 1)
+  assertEquals(
+    commentChanges(all, T1, 'hi', 'sess-x', { event: true })[1].comp?.event,
+    1,
+  )
+  let review = commentChanges(all, T1, '', 'sess-x', {
+    verdict: 'approved',
+  })
+  assertEquals(review.slice(-2), [
+    { eid: review[0].eid, name: 'comment', comp: { target_eid: T1 } },
+    { eid: review[0].eid, name: 'review', comp: { verdict: 'approved' } },
+  ])
 })
 
 Deno.test('claimant resolves through the session entity', () => {
@@ -1309,18 +1333,26 @@ Deno.test('showMd: comments ride as a section, oldest first', () => {
       { eid: C, name: 'created', comp: { at: '2t', via: S } },
       { eid: C, name: 'doc', comp: { title: '', body: 'a remark' } },
       { eid: C, name: 'comment', comp: { target_eid: T1 } },
+      { eid: C, name: 'review', comp: { verdict: 'changes_requested' } },
     ],
     deps: snap.deps,
   }
   let all2 = rows(snap2)
   let md = showMd(snap2, all2, all2.find((r) => r.eid == T1)!)
-  assertMatch(md, /## Comments\n\n— 2t · S-1 — sess-x\n\na remark/)
+  assertMatch(
+    md,
+    /## Comments\n\n— 2t · S-1 — sess-x · changes requested\n\na remark/,
+  )
 })
 
 Deno.test('grammar: the teaching text derives from the vocabulary', async () => {
   let { GRAMMAR, FILTERS } = await import('./grammar.ts')
   assertMatch(GRAMMAR, /status\(open\|wip\|done\|cancelled\)/)
   assertMatch(GRAMMAR, /Statuses: open, wip, done, cancelled/)
+  assertMatch(
+    GRAMMAR,
+    /review: verdict\(approved\|rejected\|changes_requested\|approve\|reject\|changes\)/,
+  )
   assertMatch(GRAMMAR, /typed scalars parse by their grammar/)
   assertMatch(FILTERS, /time phrases/i)
 })

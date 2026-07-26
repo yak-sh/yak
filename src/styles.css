@@ -746,6 +746,18 @@ html {
   font-size: 11px;
   margin-left: var(--half-gap);
 }
+.Comments_Verdict {
+  --verdict: var(--yellow);
+  color: var(--verdict);
+  font-size: 11px;
+  margin-left: var(--half-gap);
+}
+.Comments_Verdict-approved {
+  --verdict: var(--green);
+}
+.Comments_Verdict-rejected {
+  --verdict: var(--red);
+}
 .Comments_Who,
 .Comments_Via,
 .Comments_When {

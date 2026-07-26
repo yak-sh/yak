@@ -139,6 +139,27 @@ Deno.test('comment.event: the machine mark rides the wire, absent by default', (
   assertEquals(comp(plain, 'comment')?.event, null)
 })
 
+Deno.test('review: a comment carries one canonical verdict', () => {
+  let t = uid(), c = uid()
+  apply(db, [
+    { eid: t, name: 'doc', comp: { title: 'work' } },
+    { eid: c, name: 'doc', comp: { title: '', body: '' } },
+    { eid: c, name: 'comment', comp: { target_eid: t } },
+    { eid: c, name: 'review', comp: { verdict: 'approve' } },
+  ])
+  assertEquals(comp(c, 'review')?.verdict, 'approved')
+  assertThrows(
+    () =>
+      apply(db, [{
+        eid: uid(),
+        name: 'review',
+        comp: { verdict: 'maybe' },
+      }]),
+    Error,
+    "verdict is one of approved, rejected, changes_requested — got 'maybe'",
+  )
+})
+
 Deno.test('graph-out carries declared columns only', () => {
   let d = fresh()
   let eid = uid()

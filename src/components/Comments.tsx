@@ -3,18 +3,19 @@ import { md } from '../md.ts'
 import { commentsOn, ent, mutate, uuid } from '../live.ts'
 import { ago, block, pretty } from './ui.tsx'
 import { useDraft } from './drafts.ts'
-import { type Ent, idOf, nick, sessionActive } from '../types.ts'
+import { type Ent, idOf, nick, sessionActive, verdictName } from '../types.ts'
 import { linkProps } from './nav.tsx'
 
 let Frame = block('div', 'Comments', {
   Item: 'div',
   Who: 'a',
   Via: 'a',
+  Verdict: 'span',
   When: 'a',
   Body: 'div',
   New: 'textarea',
 })
-let { Item, Who, Via, When, Body, New } = Frame
+let { Item, Who, Via, Verdict, When, Body, New } = Frame
 
 // An instrument's face: browsers by a short client handle, anything else
 // by its chip id (S-31, never the raw session uuid).
@@ -57,6 +58,11 @@ export let Note = ({ c }: { c: Ent }) => {
         <Via {...linkProps(instrument)}>
           · via {viaName(instrument.eid)}
         </Via>
+      )}
+      {c.review && (
+        <Verdict mod={c.review.verdict.replaceAll('_', '-')}>
+          {verdictName(c.review.verdict)}
+        </Verdict>
       )}
       <When data-tip={pretty(c.created?.at)} {...linkProps(c)}>
         {ago(c.created?.at)}

@@ -165,10 +165,15 @@ let VERBS: Verb[] = [
     "dispatch a managed agent onto a task (defaults: your session's own)",
     ['task spawn T-3', 'task spawn T-3 --provider=codex --model=gpt-5.4'],
   ],
-  ['comment <id> <text...>', 'say something about ANY entity', [
-    'task comment T-3 "blocked on the schema call"',
-    'task comment S-31 "status?"   # commenting on a session IS messaging it',
-  ]],
+  [
+    'comment <id> [text...] [--verdict=approved|rejected|changes_requested]',
+    'comment on any entity; a verdict makes the comment a review',
+    [
+      'task comment T-3 "blocked on the schema call"',
+      'task comment S-31 "status?"   # a comment on a session messages it',
+      'task comment T-3 --verdict=approved',
+    ],
+  ],
   [
     'dep <id> <type> <child> [--gone]',
     'legacy edge spelling; prefer task <id> <type> <child>',
@@ -356,6 +361,7 @@ let options: Record<string, RegExp[]> = {
     /^--persona=.*$/,
   ],
   dep: [/^--gone$/],
+  comment: [/^--verdict=.*$/],
   remember: [/^--body=.*$/, /^--type=.*$/, /^--scope=.*$/],
   context: [/^--hook$/, /^--subagent$/],
   wrap: [/^--hook$/],
@@ -1084,14 +1090,21 @@ let dep = async (args: string[]) => {
 
 // Comments attach to anything; attribution rides the session env (me()).
 let comment = async (args: string[]) => {
-  let [id, ...words] = args
+  let verdictArg = args.find((a) => a.startsWith('--verdict='))
+  let verdict = verdictArg?.slice(10)
+  let [id, ...words] = args.filter((a) => !a.startsWith('--verdict='))
   let body = words.join(' ')
-  if (!id || !body) throw new Error('task comment <id> <text...>')
+  if (verdictArg != null && !verdict) {
+    throw new Error('--verdict needs approved, rejected, or changes_requested')
+  }
+  if (!id || (!body && !verdict)) {
+    throw new Error('task comment <id> [text...] [--verdict=...]')
+  }
   let all = rows(await snapshot())
   let row = find(all, id)
   if (!row) throw new Error(`no entity: ${id}`)
-  await send(commentChanges(all, row.eid, body, me()))
-  console.log(`commented on ${idOf(row)}`)
+  await send(commentChanges(all, row.eid, body, me(), { verdict }))
+  console.log(`${verdict ? `${verdict} review` : 'comment'} on ${idOf(row)}`)
 }
 
 let show = async (args: string[]) => {

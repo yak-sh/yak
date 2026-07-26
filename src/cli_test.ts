@@ -232,6 +232,15 @@ Deno.test('task codex is discoverable with its own help', async () => {
   )
 })
 
+Deno.test('task comment help teaches verdict-bearing comments', async () => {
+  let out = await cli('comment', '--help')
+  assertEquals(out.code, 0)
+  assertMatch(
+    text(out.stdout),
+    /--verdict=approved\|rejected\|changes_requested/,
+  )
+})
+
 Deno.test('task claude scopes operator capability and strips its local flag', () => {
   let launch = claudeLaunch(
     ['--model', 'opus', '--operator', '--continue'],
