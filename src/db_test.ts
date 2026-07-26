@@ -302,21 +302,39 @@ Deno.test('typed rejection rolls back; optional empty scalars clear', () => {
 
 Deno.test('unknown component names are ignored, batch survives', () => {
   let t = uid()
-  apply(db, [
+  let out = apply(db, [
     { eid: t, name: 'hovercraft', comp: { eels: 9 } },
     { eid: t, name: 'doc', comp: { title: 'ok' } },
   ])
   assertEquals(comp(t, 'doc')?.title, 'ok')
+  assertEquals(out.some((c) => c.name == 'hovercraft'), false)
+  assertEquals(
+    journalOf(db, t)[0].changes.some((c) => c.name == 'hovercraft'),
+    false,
+  )
 })
 
-Deno.test('server-owned columns never ride the wire', () => {
+Deno.test('server-owned columns never ride persistence or effective batches', () => {
   let t = uid()
-  apply(db, [{
+  let since = (db.prepare('select max(rowid) as n from journal').get() as {
+    n: number | null
+  }).n ?? 0
+  let out = apply(db, [{
     eid: t,
     name: 'web',
     comp: { url: 'http://x', frozen_at: 'FAKE' },
   }])
   assertEquals(comp(t, 'web')?.frozen_at, null)
+  let expected = { url: 'http://x' }
+  assertEquals(out.find((c) => c.name == 'web')?.comp, expected)
+  assertEquals(
+    journalOf(db, t)[0].changes.find((c) => c.name == 'web')?.comp,
+    expected,
+  )
+  assertEquals(
+    delta(db, since).changes.find((c) => c.name == 'web')?.comp,
+    expected,
+  )
 })
 
 Deno.test('repo is a tag on a project: wire-writable, never the kind', () => {

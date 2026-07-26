@@ -757,6 +757,20 @@ let cmps: Record<string, string[]> = {
   ),
 }
 
+let edgeCols = ['type', 'child_eid', 'gone']
+
+// The effective batch says what landed. Unknown components stay a compatible
+// no-op; undeclared columns stay server-owned or dormant.
+let admitted = (change: Change): Change | undefined => {
+  let cols = change.name == 'dependency' ? edgeCols : cmps[change.name]
+  if (!cols) return
+  if (change.comp == null) return change
+  let comp = Object.fromEntries(
+    Object.entries(change.comp).filter(([name]) => cols.includes(name)),
+  )
+  return { ...change, comp }
+}
+
 // Graph-out is the declared readable vocabulary, never the table's migration
 // history. `comps` admits writes; `stamped` adds server-owned reads.
 let readable: Record<string, string[]> = Object.fromEntries(
@@ -1024,6 +1038,9 @@ export let apply = (
   changes = normalizeChanges(changes, {
     now: Date.now(),
     resolve: (id) => ident(db, id),
+  }).flatMap((change) => {
+    let kept = admitted(change)
+    return kept ? [kept] : []
   })
   let dead = db.prepare('select 1 from tombstone where eid = ?')
   let extra: Change[] = []
