@@ -516,8 +516,12 @@ export let rootCanvas = () =>
 export let pinned = (canvas: string): Pinned[] =>
   Object.entries(cache.value)
     .filter(([, r]) => r.pin?.canvas_eid == canvas && r.card)
-    .map(([, r]) => ({
+    .map(([eid, r]) => ({
       ...r.pin!,
+      // The cache key IS the identity: a pin cast from another client
+      // carries no eid inside its comp, and a Pinned without one aims
+      // every raise/drag write at eid undefined (T-7437).
+      eid,
       target_eid: r.card!.target_eid,
       view: r.card!.view,
     }))
@@ -573,11 +577,13 @@ export let boardsOver = (eid: string) =>
   )
 
 // The highest stacking order on a canvas — a raised card gets topZ + 1.
+// The pin presence test is load-bearing: with `?.` alone a nullish canvas
+// matches every PINLESS row too (undefined == null) and the map crashes.
 export let topZ = (canvas: string) =>
   Math.max(
     0,
     ...Object.values(cache.value)
-      .filter((r) => r.pin?.canvas_eid == canvas)
+      .filter((r) => r.pin && r.pin.canvas_eid == canvas)
       .map((r) => r.pin!.z),
   )
 

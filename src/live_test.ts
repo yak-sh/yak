@@ -9,7 +9,9 @@ import {
   domains,
   ent,
   gated,
+  pinned,
   projects,
+  topZ,
 } from './live.ts'
 import { type Ent } from './types.ts'
 import { assertEquals } from '@std/assert'
@@ -262,4 +264,37 @@ Deno.test('boardAll: whole-graph match, chrome/comments/self excluded', async ()
   // preds still screen: a task-shaped query matches only tasks
   cache.value.board.board!.query = '.status=open'
   assertEquals(boardAll(ent('board')).map((e) => e.eid), ['task'])
+})
+
+// pinned: a pin comp cast from another client carries no eid — the cache
+// key is the identity, and a Pinned without one aims every raise/drag
+// write at eid undefined (T-7437).
+Deno.test('pinned: the cache key is the eid, a cast comp carries none', () => {
+  cache.value = {
+    c1: {
+      entity: { eid: 'c1', num: 1 },
+      card: { eid: 'c1', target_eid: 'w1', view: 'Web' },
+      // exactly what /ws delivers for an MCP card_open: no eid inside
+      pin: { canvas_eid: 'cv', x: 0, y: 0, w: 0, h: 0, z: 1 },
+    } as unknown as (typeof cache)['value'][string],
+  }
+  assertEquals(pinned('cv').map((p) => p.eid), ['c1'])
+})
+
+// topZ: a nullish canvas must match nothing — the old `?.` filter let
+// every PINLESS row through (undefined == null) and crashed on .z.
+Deno.test('topZ: pinless rows never ride, whatever the canvas', () => {
+  cache.value = {
+    t1: {
+      entity: { eid: 't1', num: 1 },
+      task: { eid: 't1', status: 'open', priority: 1, domain: null },
+    },
+    c1: {
+      entity: { eid: 'c1', num: 2 },
+      card: { eid: 'c1', target_eid: 't1', view: 'Full' },
+      pin: { eid: 'c1', canvas_eid: 'cv', x: 0, y: 0, w: 0, h: 0, z: 3 },
+    },
+  }
+  assertEquals(topZ('cv'), 3)
+  assertEquals(topZ(undefined as unknown as string), 0)
 })
