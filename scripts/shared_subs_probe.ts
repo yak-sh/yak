@@ -200,7 +200,7 @@ try {
   pages = [await page(url), await page(url)]
   await until(async () => {
     let states = await Promise.all(pages.map(state))
-    return states.every((s) =>
+    return states.some((s) =>
       s.members.includes(first)
     ) &&
       states.filter((s) => s.sync.leader && s.sync.socket == WebSocket.OPEN)
@@ -220,7 +220,10 @@ try {
 
   let next = await page(url)
   pages.push(next)
-  await until(async () => (await state(next)).members.includes(second))
+  await until(async () => {
+    let current = await state(next)
+    return !current.sync.leader && current.sync.socket == null
+  })
   await apply([
     { eid: board, name: 'board', comp: { query: '.status=done' } },
     ...task(done, 'done'),

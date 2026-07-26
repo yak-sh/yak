@@ -35,8 +35,12 @@ export type IO<T> = {
 }
 
 let forever = () => new Promise<void>(() => {})
-let PULSE = 1_000
-let STALE = 4_000
+let PULSE = 30_000
+let STALE = 180_000
+
+// Hidden tabs may wake only once a minute. A 30-second pulse with a three-
+// minute lease tolerates throttling; abrupt owner loss lingers at most 3m.
+export let stale = (seen: number, now = Date.now()) => now - seen > STALE
 
 export let topology = <T>(
   locks: Lock,
@@ -85,7 +89,7 @@ export let topology = <T>(
     return new Map([...found].map(([name, pick]) => [name, pick.use.value]))
   }
 
-  let settle = (force = false, refresh = new Set<string>()) => {
+  let settle = (force = false) => {
     let next = wanted()
     for (let name of present.keys()) {
       if (!next.has(name)) io.forget?.(name)
@@ -96,9 +100,7 @@ export let topology = <T>(
       if (!next.has(name)) io.unsubscribe?.(name)
     }
     for (let [name, value] of next) {
-      if (installed.get(name) != value || refresh.has(name)) {
-        io.subscribe?.(name, value)
-      }
+      if (installed.get(name) != value) io.subscribe?.(name, value)
     }
     installed = new Map(next)
   }
@@ -107,7 +109,7 @@ export let topology = <T>(
     announce()
     let now = Date.now()
     for (let [id, state] of peers) {
-      if (now - state.seen > STALE) peers.delete(id)
+      if (stale(state.seen, now)) peers.delete(id)
     }
     settle()
   }
@@ -148,17 +150,9 @@ export let topology = <T>(
     } else if (data.kind == 'sent') {
       pending.delete(data.id)
     } else if (data.kind == 'owned' && data.tab != tab) {
-      let old = peers.get(data.tab)?.uses ?? []
-      let before = new Map(old.map((use) => [use.name, use]))
-      let refresh = new Set(
-        data.uses.filter((use) => {
-          let was = before.get(use.name)
-          return !was || was.rev != use.rev || was.value != use.value
-        }).map((use) => use.name),
-      )
       for (let use of data.uses) clock = Math.max(clock, use.rev)
       peers.set(data.tab, { seen: Date.now(), uses: data.uses })
-      settle(false, refresh)
+      settle()
     }
   }
 
@@ -205,7 +199,7 @@ export let topology = <T>(
     let rev = ++clock
     mine.set(name, { name, value, rev })
     announce()
-    settle(false, new Set([name]))
+    settle()
   }
 
   let drop = (name: string) => {

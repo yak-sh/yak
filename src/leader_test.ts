@@ -1,7 +1,13 @@
 // The leader topology as facts: one holder serves, followers buffer until
 // hydrated, writes flow inward, canonical frames flow outward, and releasing
 // the lease promotes the next queued tab.
-import { type Channel, type Lock, type Message, topology } from './leader.ts'
+import {
+  type Channel,
+  type Lock,
+  type Message,
+  stale,
+  topology,
+} from './leader.ts'
 import { assertEquals } from '@std/assert'
 
 let channels = <T>() => {
@@ -233,15 +239,11 @@ Deno.test('one board name lives until its final tab owner leaves', async () => {
   a.use('board:x', '.status=open')
   b.use('board:x', '.status=open')
   a.drop('board:x')
-  assertEquals(calls[0], [
-    'sub:board:x:.status=open',
-    'sub:board:x:.status=open',
-  ])
+  assertEquals(calls[0], ['sub:board:x:.status=open'])
 
   b.use('board:x', '.status=done')
   b.drop('board:x')
   assertEquals(calls[0], [
-    'sub:board:x:.status=open',
     'sub:board:x:.status=open',
     'sub:board:x:.status=done',
     'unsub:board:x',
@@ -251,6 +253,11 @@ Deno.test('one board name lives until its final tab owner leaves', async () => {
   b.leave()
   leases[0].resolve()
   leases[1].resolve()
+})
+
+Deno.test('a hidden tab survives throttling but an abandoned lease expires', () => {
+  assertEquals(stale(0, 180_000), false)
+  assertEquals(stale(0, 180_001), true)
 })
 
 Deno.test('a promoted follower replays the live ownership reduction', async () => {
