@@ -140,15 +140,6 @@ let squeeze = (entries: Entry[]) => {
 // ISO in the db; a local clock is what a human reads.
 let when = (t?: string | null) => t ? new Date(t).toLocaleString() : null
 
-// The facts line's clock: the time of day says enough for "started" —
-// messages wear the house timestamp (ago + pretty tooltip) instead.
-let clock = (t: string) =>
-  new Date(t).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
-
 // A duration a human reads: 42s, 1m 40s.
 let span = (ms: number) => {
   let s = Math.round(ms / 1000)
@@ -399,7 +390,7 @@ export let Session = ({ e }: { e: Ent }) => {
   let gist = [
     s.branch,
     s.cwd,
-    s.started_at && `started ${clock(s.started_at)}`,
+    s.started_at && `started ${ago(s.started_at)}`,
   ].filter(Boolean).join(' · ') || 'session'
   return (
     <Frame elRef={frame}>
