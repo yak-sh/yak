@@ -1089,12 +1089,11 @@ card id (close it with card_close, move it with card_move).`,
     'page_put',
     `Publish an HTML page into the graph — the way to drop a one-shot
 artifact (mockup, report, diagram) where people work. Mints a web
-entity and lands your HTML in its frozen store; it renders in a
-sandboxed iframe after the standard archive scrub (scripts, frames,
-and every external reference removed — inline <style> carries the
-design, so self-contained pages only). Markdown needs no upload: put
-it in any doc body. Show the page with card_open. Passing the id of an
-existing web entity replaces its page instead.`,
+entity and lands your HTML AS-IS: inline scripts, styles, and external
+references all render (in a sandboxed iframe cut off from the app's
+origin). Markdown needs no upload: put it in any doc body. Show the
+page with card_open. Passing the id of an existing web entity replaces
+its page instead.`,
     { title: z.string(), html: z.string(), id: z.string().optional() },
     async (
       { title, html, id }: { title: string; html: string; id?: string },

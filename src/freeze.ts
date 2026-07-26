@@ -1,7 +1,9 @@
 // URL freezing — the server-side archive pipeline. A pasted URL never
 // renders live: monolith snapshots it into ONE self-contained HTML file,
 // scrub() strips every remaining external reference, and the archive is
-// served back under a no-script/no-network CSP. Server-only.
+// served back under a no-script/no-network CSP. A page DELIVERED over
+// the wire (page_put) is an agent's own artifact and lands as-is —
+// provenance, not storage, decides the trust. Server-only.
 import { parseHTML } from 'linkedom'
 import { type Change } from './types.ts'
 import { db } from './db.ts'
@@ -35,6 +37,8 @@ let URLISH = [
 ]
 let cssScrub = (css: string) =>
   css.replace(/url\(\s*(?!['"]?\s*data:)[^)]*\)/gi, 'url()')
+let titleOf = (raw: string) =>
+  parseHTML(raw).document.querySelector('title')?.textContent?.trim()
 let scrub = (raw: string) => {
   let { document } = parseHTML(raw)
   let all = (sel: string) => [...document.querySelectorAll(sel)]
@@ -113,34 +117,44 @@ export let freeze = async (eid: string, cast: (c: Change[]) => void) => {
   return land(eid, title, cast)
 }
 
-// The upload door: same store, same scrub, same stamp — the page just
-// arrives over the wire (an agent one-shotting a mockup or report)
-// instead of through monolith. The web row must already exist (the
+// The upload door: same store, same stamp, but NO scrub — the page
+// arrives over the wire (an agent one-shotting a mockup or report), and
+// the author's bytes are the artifact: inline scripts and external refs
+// are the point, not a leak. `scrubbed` keeps the inert form available
+// for a caller that wants it. The web row must already exist (the
 // uploader mints it first), so a bare POST can't spray files onto disk.
 export let store = async (
   eid: string,
   raw: string,
   cast: (c: Change[]) => void,
+  scrubbed = false,
 ) => {
   if (!webRow(eid)) return new Response('no such web entity', { status: 404 })
   Deno.mkdirSync(frozen, { recursive: true })
-  let { html, title } = scrub(raw)
+  let { html, title } = scrubbed
+    ? scrub(raw)
+    : { html: raw, title: titleOf(raw) }
   await Deno.writeTextFile(`${frozen}/${eid}.html`, html)
   return land(eid, title, cast)
 }
 
 // Serve an archive. eid is validated to a bare uuid — no path escapes.
 // The CSP mirrors the iframe's sandbox but holds in EVERY context (an
-// archive opened directly in a tab has no iframe to sandbox it): no
-// scripts, no network fetches — the freeze stays inert and offline.
+// archive opened directly in a tab has no iframe to sandbox it), and
+// provenance picks it: a URL freeze (web.url set) stays inert and
+// offline — no scripts, no network; a delivered page runs its scripts
+// and loads what it references, but in an opaque origin, so it never
+// acts as the app.
 export let serveFrozen = async (eid: string) => {
   if (!/^[0-9a-f-]{36}$/i.test(eid)) return new Response('no', { status: 400 })
+  let csp = webRow(eid)?.url
+    ? "sandbox allow-same-origin; script-src 'none'; connect-src 'none'"
+    : 'sandbox allow-scripts'
   try {
     return new Response(await Deno.readFile(`${frozen}/${eid}.html`), {
       headers: {
         'content-type': 'text/html; charset=utf-8',
-        'content-security-policy':
-          "sandbox allow-same-origin; script-src 'none'; connect-src 'none'",
+        'content-security-policy': csp,
       },
     })
   } catch {

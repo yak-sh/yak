@@ -666,7 +666,12 @@ Deno.serve(
     }
     if (path == '/upload' && req.method == 'POST') {
       return req.text().then((body) =>
-        store(url.searchParams.get('eid') ?? '', body, cast)
+        store(
+          url.searchParams.get('eid') ?? '',
+          body,
+          cast,
+          url.searchParams.has('scrub'),
+        )
       )
     }
     if (path.startsWith('/frozen/')) {
