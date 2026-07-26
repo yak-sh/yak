@@ -450,13 +450,13 @@ other sessions. ${BUS}`,
   server.tool(
     'task_spawn',
     `Dispatch a managed agent onto a task: mints a session entity carrying
-the request — the server validates and launches it in its own git
-worktree, and every way that can fail is a failed Session on the board
-(never an error here). Returns the S-id: session_peek checks on it,
-task_comment at the SETTLED session says more to it, and when the run
-settles the server comments the outcome on the task, so holders hear it
-on the bus. provider/model default to YOUR session's own (pass the same
-session id you claim with), then the provider table's first entry. ${BUS}`,
+the request. Invalid provider/model/effort values fail before minting;
+launch failures become a failed Session on the board. Returns the S-id:
+session_peek checks on it, task_comment at the SETTLED session says more
+to it, and when the run settles the server comments the outcome on the
+task AND your spawning session, so you hear it directly. provider/model
+default to YOUR session's own (pass the same session id you claim with),
+then the provider table's first entry. ${BUS}`,
     {
       id: z.string(),
       provider: z.string().optional(),

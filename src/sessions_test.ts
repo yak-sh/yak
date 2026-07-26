@@ -23,6 +23,7 @@ Deno.env.set('POLL_MS', '10') // tests wait on facts, never on the clock
 Deno.env.set('STOP_GRACE_MS', '1000')
 
 let { apply, db, delta, snapshot } = await import('./db.ts')
+let { notices } = await import('./client.ts')
 let {
   childPath,
   commented,
@@ -67,9 +68,9 @@ let acted = (sr: string) =>
 // A graph write as the server performs it: apply, cast, dispatch. The
 // returned promise is every effect the batch set off — a whole run, when
 // the batch was a spawn.
-let write = (changes: Change[]) => {
+let write = (changes: Change[], via?: string) => {
   let t = trace()
-  let out = apply(db, changes, t)
+  let out = apply(db, changes, t, via)
   cast(out)
   return dispatch(out, t)
 }
@@ -104,7 +105,11 @@ let seed = (body = '', repo: string | null = scratch) => {
 
 // The spawn request, as any client writes it: one session change carrying
 // the request columns. `extra` overrides for the refusal cases.
-let begin = (task: string, extra: Record<string, unknown> = {}) => {
+let begin = (
+  task: string,
+  extra: Record<string, unknown> = {},
+  via?: string,
+) => {
   let eid = uid()
   let done = write([{
     eid,
@@ -116,7 +121,7 @@ let begin = (task: string, extra: Record<string, unknown> = {}) => {
       requested_task_eid: task,
       ...extra,
     },
-  }])
+  }], via)
   return { eid, done }
 }
 
@@ -340,15 +345,57 @@ Deno.test('a settled session says so on its task', async () => {
   )
 })
 
-Deno.test('a failed spawn tells the task too — and only once', async () => {
+Deno.test('a failed spawn tells its task and its spawner — and only once', async () => {
   let { t } = seed()
-  let { eid, done } = begin(t, { model: 'no-such-model' })
+  let spawner = uid(), sid = uid()
+  apply(db, [{ eid: spawner, name: 'session', comp: { id: sid } }])
+  heard = []
+  let { eid, done } = begin(t, { model: 'no-such-model' }, sid)
   await done
   assertEquals(row(eid)?.status, 'failed')
   let said = settleComments(t, eid)
   assertEquals(said.length, 1)
   assertMatch(said[0], /^S-\d+ failed\n/)
   assertMatch(said[0], /unknown model/)
+  assertEquals(settleComments(spawner, eid), said)
+  assertEquals(
+    (db.prepare('select via from created where eid = ?').get(eid) as {
+      via: string
+    }).via,
+    spawner,
+  )
+  assert(
+    heard.some((c) =>
+      c.name == 'comment' && c.comp?.target_eid == spawner &&
+      c.comp.event == 1
+    ),
+  )
+  let bus = notices(snapshot(db), sid)
+  assertEquals(bus.lines.length, 1)
+  assertMatch(bus.lines[0], /S-\d+ failed/)
+  spawned(cast)(eid, { provider: 'fake' })
+  assertEquals(settleComments(t, eid).length, 1)
+  assertEquals(settleComments(spawner, eid).length, 1)
+})
+
+Deno.test('a client-launched session reports only on its task', async () => {
+  let { t } = seed()
+  let client = uid()
+  apply(db, [{
+    eid: client,
+    name: 'client',
+    comp: { user_agent: 'test' },
+  }])
+  let { eid, done } = begin(t, { model: 'no-such-model' }, client)
+  await done
+  assertEquals(
+    (db.prepare('select via from created where eid = ?').get(eid) as {
+      via: string
+    }).via,
+    client,
+  )
+  assertEquals(settleComments(t, eid).length, 1)
+  assertEquals(settleComments(client, eid), [])
 })
 
 Deno.test('a settling session releases its leases — a live one keeps its own', async () => {

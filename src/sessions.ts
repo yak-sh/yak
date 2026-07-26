@@ -196,16 +196,57 @@ let followWrite = async (eid: string, write: () => void) => {
 // lands, whoever asked for the work deserves to hear it.
 let SETTLED = ['completed', 'failed', 'interrupted', 'lost']
 
-// The outcome, said on the TASK as an ordinary comment authored by the
-// session — and the session's leases released with it, the same batch
-// task wrap builds for an interactive end (lapseChanges, the one release
-// truth): a dead session's claim must not outlive it and lock its task
-// against every successor. Holders and watchers hear it on their next
-// tool call (the comms bus), and the task's trail keeps the record.
-// Graph data, so it rides apply()+cast+dispatch like any wire write —
-// a direct db stamp would skip the journal and leave every client cache
-// holding a ghost claim. Telling must never break the ending it reports,
-// so a refusal is a warning, not a throw.
+// The outcome, said as ordinary comments authored by the session: one on
+// the task for its trail, one on the spawning session so its caller hears
+// directly. created.via is that server-stamped instrument; created.by is
+// the actor it spoke for. One body means the two doors cannot disagree.
+let report = (eid: string, status: string, row: Row): Change[] => {
+  let task = String(row.requested_task_eid ?? '')
+  let spawner = db.prepare(`
+    select s.eid from created c join session s on s.eid = c.via
+    where c.eid = ?
+  `).get(eid) as { eid: string } | undefined
+  let targets = new Set<string>()
+  if (task && db.prepare('select 1 from task where eid = ?').get(task)) {
+    targets.add(task)
+  }
+  if (spawner && spawner.eid != eid) targets.add(spawner.eid)
+  if (!targets.size) return []
+
+  let { num } = db.prepare('select num from entity where eid = ?').get(
+    eid,
+  ) as { num: number }
+  let gist = String(row.final_text ?? '').replace(/\s+/g, ' ').trim()
+    .slice(0, 240)
+  let body = [
+    `S-${num} ${status}${
+      row.exit_code == null ? '' : ` · exit ${row.exit_code}`
+    }`,
+    ...(row.error ? [`error: ${String(row.error).slice(0, 240)}`] : []),
+    ...(gist ? [gist] : []),
+  ].join('\n')
+  return [...targets].flatMap((target) => {
+    let cid = crypto.randomUUID()
+    return [
+      { eid: cid, name: 'doc', comp: { title: '', body } },
+      {
+        eid: cid,
+        name: 'comment',
+        // event: the server speaking, not the agent (M-4062) — the bus
+        // delivers it, the mail relay must not.
+        comp: { target_eid: target, author_eid: eid, event: 1 },
+      },
+    ]
+  })
+}
+
+// The session's leases release with its report, the same batch task wrap
+// builds for an interactive end (lapseChanges, the one release truth): a
+// dead session's claim must not outlive it and lock its task against every
+// successor. Graph data, so it rides apply()+cast+dispatch like any wire
+// write — a direct db stamp would skip the journal and leave every client
+// cache holding a ghost claim. Telling must never break the ending it
+// reports, so a refusal is a warning, not a throw.
 let settled = (eid: string, status: string, cast: Cast) => {
   let row = db.prepare('select * from session where eid = ?').get(eid) as
     | Row
@@ -214,32 +255,7 @@ let settled = (eid: string, status: string, cast: Cast) => {
   let all = rows(snapshot(db))
   let sess = all.find((r) => r.eid == eid)
   let changes: Change[] = sess ? lapseChanges(all, sess) : []
-  let task = String(row.requested_task_eid ?? '')
-  if (task && db.prepare('select 1 from task where eid = ?').get(task)) {
-    let { num } = db.prepare('select num from entity where eid = ?').get(
-      eid,
-    ) as { num: number }
-    let gist = String(row.final_text ?? '').replace(/\s+/g, ' ').trim()
-      .slice(0, 240)
-    let body = [
-      `S-${num} ${status}${
-        row.exit_code == null ? '' : ` · exit ${row.exit_code}`
-      }`,
-      ...(row.error ? [`error: ${String(row.error).slice(0, 240)}`] : []),
-      ...(gist ? [gist] : []),
-    ].join('\n')
-    let cid = crypto.randomUUID()
-    changes.push(
-      { eid: cid, name: 'doc', comp: { title: '', body } },
-      {
-        eid: cid,
-        name: 'comment',
-        // event: the server speaking, not the agent (M-4062) — the bus
-        // delivers it, the mail relay must not.
-        comp: { target_eid: task, author_eid: eid, event: 1 },
-      },
-    )
-  }
+  changes.push(...report(eid, status, row))
   if (changes.length) {
     try {
       let t = trace()
