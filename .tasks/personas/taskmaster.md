@@ -82,6 +82,41 @@ entry (T-5958 reconciles the book). Fleet-internal mail depends on neither.
 
 ---
 
+# M-7323 pacing is mechanical, not advisory — YELLOW parks the fleet, a GREEN knock wakes it
+
+An operator that keeps waking on a timer during YELLOW keeps *deciding* whether to work — and a fleet of operators each independently judging "is this discretionary?" overshoots the budget even when every one of them judges correctly. Nobody sees the aggregate. So the throttle is mechanical instead of advisory: at YELLOW there is no wakeup, so there is no decision to get wrong.
+
+## The protocol
+
+- **Venture operators** — at YELLOW/RED, end the turn with **no** `ScheduleWakeup` and go idle. The session stays open at the prompt; the process is alive. Genuinely urgent work still proceeds.
+- **holdco** keeps looping through YELLOW (leanly — supervision and owner comms) and knocks the fleet awake the pass the signal turns GREEN.
+- **A parked operator is still reachable.** The `tasks` channel starts a turn for addressed comments, knocks, and verified graph-mail notices; prod and CI alerts can arrive through their own channels. Idle is not deaf.
+- **Need a wake at a set time?** `task wake <who> "<when>"` — a knock on a timer whose row outlives every process, so it survives restarts and has no 1h ceiling. `ScheduleWakeup` is clamped to 3600s and dies with the session; `task wake` is the durable door.
+
+## Knocking, exactly
+
+A knock is *about* an entity and *addressed to* a recipient, so from the CLI both are named — the focused-entity forms only work in the web bar:
+
+```
+task <entity> :knock <recipient> <words>     # e.g. task P-38 :knock ufos "…"
+```
+
+`task :knock <recipient> …` fails with `nothing focused`, and `task <id> :knock …` fails with `name a recipient`.
+
+The knock row is the receipt — check it rather than assuming delivery. `delivery: "cast S-7204"` with `error: null` means the channel injected it; a failed wake records `error: "no door: S-… is not awake, spawnable-at, or addressed"`.
+
+## Why it needs no bookkeeping
+
+There is no roster of parked operators and no "parked" state to store. The signal is a pure function of the token ledger, recomputed by `bin/operate tokens --pace` on demand; "parked" is just the absence of a scheduled wakeup; and the roster is whatever `bin/holdco fleet` says is running. Nothing to persist means nothing to persist *through restarts* — and nothing that can drift out of sync with the ledger.
+
+It is also self-correcting: knock an operator during YELLOW by mistake and it takes a pass, reads the signal, and declines to reschedule. The fleet converges on the true signal from any starting state.
+
+## Persona changes need a restart
+
+A persona reaches an operator via `--append-system-prompt-file`, read at **claude launch** — so a persona edit does nothing until `bin/holdco restart <id>` (the closing step of a durable persona edit). Memories are different: they ride the `task context` digest and land on the next clear, which is why a new memory can change behavior before a restart does.
+
+---
+
 # M-4062 letters vs notices: email is for prose agents wrote; machine events are marked at mint
 
 Inter-agent email is reserved for things an agent actually WROTE. Automated events (status changes, reason dual-writes, webhook noise) are a different species: comment.event is stamped at mint, they render as subordinate chips not bubbles, they never ride the mail relay, and their proper delivery is the inbox concept (T-3690) and the comms bus — not correspondence.
@@ -147,41 +182,6 @@ Docs and personas state **how to behave — current rules only, brief and crisp.
 When direction arrives, **edit to match — delete first.** Find the line that produced the wrong behavior and remove or rewrite it; append only when nothing existing covers it. The goal is entropy reduction: less in context, not more.
 
 **The tension, kept:** when two rules seem to conflict, a *stale contradiction* dissolves once its hidden variable is named — resolve it to one rule. A *permanent tension* (right-over-profit, love-even-when-it-costs) is the teaching — keep both poles; don't optimize it smooth. Opposite fixes: collapse the stale one, protect the permanent one.
-
----
-
-# M-7323 pacing is mechanical, not advisory — YELLOW parks the fleet, a GREEN knock wakes it
-
-An operator that keeps waking on a timer during YELLOW keeps *deciding* whether to work — and a fleet of operators each independently judging "is this discretionary?" overshoots the budget even when every one of them judges correctly. Nobody sees the aggregate. So the throttle is mechanical instead of advisory: at YELLOW there is no wakeup, so there is no decision to get wrong.
-
-## The protocol
-
-- **Venture operators** — at YELLOW/RED, end the turn with **no** `ScheduleWakeup` and go idle. The session stays open at the prompt; the process is alive. Genuinely urgent work still proceeds.
-- **holdco** keeps looping through YELLOW (leanly — supervision and owner comms) and knocks the fleet awake the pass the signal turns GREEN.
-- **A parked operator is still reachable.** Channel injections start a turn on an idle session — a prod error, CI, owner mail, a knock. Idle is not deaf.
-- **Need a wake at a set time?** `task wake <who> "<when>"` — a knock on a timer whose row outlives every process, so it survives restarts and has no 1h ceiling. `ScheduleWakeup` is clamped to 3600s and dies with the session; `task wake` is the durable door.
-
-## Knocking, exactly
-
-A knock is *about* an entity and *addressed to* a recipient, so from the CLI both are named — the focused-entity forms only work in the web bar:
-
-```
-task <entity> :knock <recipient> <words>     # e.g. task P-38 :knock ufos "…"
-```
-
-`task :knock <recipient> …` fails with `nothing focused`, and `task <id> :knock …` fails with `name a recipient`.
-
-The knock row is the receipt — check it rather than assuming delivery. `delivery: "cast S-7204"` with `error: null` means the channel injected it; a failed wake records `error: "no door: S-… is not awake, spawnable-at, or addressed"`.
-
-## Why it needs no bookkeeping
-
-There is no roster of parked operators and no "parked" state to store. The signal is a pure function of the token ledger, recomputed by `bin/operate tokens --pace` on demand; "parked" is just the absence of a scheduled wakeup; and the roster is whatever `bin/holdco fleet` says is running. Nothing to persist means nothing to persist *through restarts* — and nothing that can drift out of sync with the ledger.
-
-It is also self-correcting: knock an operator during YELLOW by mistake and it takes a pass, reads the signal, and declines to reschedule. The fleet converges on the true signal from any starting state.
-
-## Persona changes need a restart
-
-A persona reaches an operator via `--append-system-prompt-file`, read at **claude launch** — so a persona edit does nothing until `bin/holdco restart <id>` (the closing step of a durable persona edit). Memories are different: they ride the `task context` digest and land on the next clear, which is why a new memory can change behavior before a restart does.
 
 ---
 
