@@ -2,17 +2,21 @@
 // world. Pure functions of the cache signal — no DOM, no socket.
 import {
   applyLocal,
+  assertAgree,
   backlinks,
   boardPost,
+  boardTasks,
   byWarmth,
   cache,
   commentCount,
+  config,
   deps,
   domains,
   ent,
   gated,
   pinned,
   projects,
+  subscriptionChecks,
   topZ,
 } from './live.ts'
 import { type Ent } from './types.ts'
@@ -35,6 +39,38 @@ let fill = (rows: [string, string | null][]) => {
       },
   ]))
 }
+
+Deno.test('agreement diagnostics are inert until explicitly enabled', () => {
+  config.agreement = false
+  cache.value = {
+    board: {
+      entity: { eid: 'board', num: 1 },
+      board: { eid: 'board', query: '.status=open' },
+    },
+    task: {
+      entity: { eid: 'task', num: 2 },
+      task: { eid: 'task', status: 'open', priority: 1 },
+    },
+  }
+  let scheduled = 0
+  let timer = globalThis.setTimeout
+  globalThis.setTimeout = ((..._args: Parameters<typeof setTimeout>) => {
+    scheduled++
+    return 0
+  }) as typeof setTimeout
+  try {
+    assertEquals(boardTasks(ent('board')).map((e) => e.eid), ['task'])
+    assertAgree('board:board', '.status=open', ['task'], [])
+  } finally {
+    globalThis.setTimeout = timer
+  }
+  assertEquals(scheduled, 0)
+  assertEquals(subscriptionChecks(), undefined)
+  assertEquals(
+    (globalThis as { __subscriptions?: unknown }).__subscriptions,
+    undefined,
+  )
+})
 
 Deno.test('domains: distinct, sorted, absent ones skipped', () => {
   fill([['T', 'Ops'], ['T', 'Eng'], ['T', 'Ops'], ['T', null], ['P', 'Fable']])

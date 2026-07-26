@@ -51,6 +51,9 @@ export let config: {
   client?: string
   // One switch restores 2.1's per-tab socket + boot-only IDB writes.
   shared: boolean
+  // Stage-2 migration probes compare shadow sets to scans. Deployed clients
+  // maintain the shadow without carrying agreement telemetry.
+  agreement: boolean
   reload: () => void
   swap?: (gen: number) => void
   css?: (gen: number) => void
@@ -60,6 +63,7 @@ export let config: {
   // the socket and fetches — a hardcoded http:// is mixed content there.
   secure: loc?.protocol == 'https:',
   shared: true,
+  agreement: false,
   reload: () => loc?.reload(),
 }
 export let base = () => `http${config.secure ? 's' : ''}://${config.host}`
@@ -276,7 +280,6 @@ export let send = (...changes: unknown[]) => route(changes)
 let subMembers = new Map<string, Set<string>>()
 let subVersion = signal(0)
 let shadows = new Set<string>()
-let shadowQueries = new Map<string, string>()
 
 // A subscription frame: land its changes like any batch (adds + updates flow
 // through the unchanged applyLocal), then track membership. A death rides in
@@ -328,12 +331,10 @@ let control = (frame: object) => {
 export let subscribe = (sub: string, q: string) => control({ sub, q })
 let shadow = (sub: string, q: string) => {
   shadows.add(sub)
-  shadowQueries.set(sub, q)
   control({ sub, q, shadow: true })
 }
 export let unsubscribe = (sub: string) => {
   shadows.delete(sub)
-  shadowQueries.delete(sub)
   subMembers.delete(sub)
   control({ unsub: sub })
 }
@@ -346,10 +347,13 @@ export let subEids = (sub: string): Set<string> | undefined => {
   return found && new Set(found)
 }
 
-let checked = new Map<string, string>()
-let checks = { agreements: 0, divergences: 0, annotated: 0 }
-;(globalThis as { __subscriptions?: () => typeof checks }).__subscriptions =
-  () => ({ ...checks })
+type Agreement = {
+  checked: Map<string, string>
+  counts: { agreements: number; divergences: number; annotated: number }
+}
+let agreement: Agreement | undefined
+export let subscriptionChecks = () =>
+  agreement ? { ...agreement.counts } : undefined
 
 // Compare after adjacent full/sub frames have both had a turn. The scan stays
 // the caller's render source; this is only a diagnostic and probe counter.
@@ -359,17 +363,24 @@ export let assertAgree = (
   scan: Iterable<string>,
   members: Iterable<string>,
 ) => {
+  if (!config.agreement) return
+  let state = agreement ??= {
+    checked: new Map(),
+    counts: { agreements: 0, divergences: 0, annotated: 0 },
+  }
   let expected = [...new Set(scan)].sort()
   let received = [...new Set(members)].sort()
   let signature = JSON.stringify([q, expected, received])
-  if (checked.get(sub) == signature) return
-  checked.set(sub, signature)
+  if (state.checked.get(sub) == signature) return
+  state.checked.set(sub, signature)
   setTimeout(() => {
-    if (shadowQueries.get(sub) != q || checked.get(sub) != signature) return
-    checks.agreements++
+    if (
+      boardUses.get(sub)?.q != q || state.checked.get(sub) != signature
+    ) return
+    state.counts.agreements++
     let d = diff(expected, received)
     if (!d.scanOnly.length && !d.subOnly.length) return
-    checks.divergences++
+    state.counts.divergences++
     let unsupported = gaps(parseQuery(q))
     let note = {
       sub,
@@ -379,7 +390,7 @@ export let assertAgree = (
       unsupported,
     }
     if (unsupported.length) {
-      checks.annotated++
+      state.counts.annotated++
       console.warn('subscription agreement deferred —', note)
     } else {
       console.assert(false, 'subscription divergence', note)
@@ -409,7 +420,7 @@ export let boardSub = (e: Ent) => {
     let held = boardUses.get(sub)
     if (!held || --held.n > 0) return
     boardUses.delete(sub)
-    checked.delete(sub)
+    agreement?.checked.delete(sub)
     unsubscribe(sub)
   }
 }
@@ -658,14 +669,16 @@ let boardScan = (e: Ent, tasks: boolean): Ent[] => {
   )
   let hits = boardPost(e, tasks, Object.keys(cache.value))
     .filter((eid) => matchQuery(cache.value[eid], preds, (t) => cache.value[t]))
-  let members = subEids(`board:${e.eid}`)
-  if (members) {
-    assertAgree(
-      `board:${e.eid}`,
-      q,
-      hits,
-      boardPost(e, tasks, members),
-    )
+  if (config.agreement) {
+    let members = subEids(`board:${e.eid}`)
+    if (members) {
+      assertAgree(
+        `board:${e.eid}`,
+        q,
+        hits,
+        boardPost(e, tasks, members),
+      )
+    }
   }
   return hits.map(ent)
 }

@@ -25,6 +25,7 @@ let bye = (code = 0) => {
 }
 
 config.host = Deno.env.get('TASKS_HOST') ?? '127.0.0.1:5173'
+config.agreement = Deno.env.get('TASKS_SUBS_PROBE') == '1'
 // The server says 'reload' on any src change; a dead socket ends up here
 // too (live.ts polls until the server is back, then reloads). Both mean
 // the same thing to a terminal process: be reborn.
