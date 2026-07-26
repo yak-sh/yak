@@ -11,6 +11,8 @@ let BACKOFF = [100, 200, 400, 800, 1600, 3200]
 let sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms))
 let message = (e: unknown) => e instanceof Error ? e.message : String(e)
+let replayable = (init?: RequestInit) =>
+  ['GET', 'HEAD'].includes((init?.method ?? 'GET').toUpperCase())
 
 export let request = async (
   input: string | URL,
@@ -18,6 +20,8 @@ export let request = async (
   run: Fetch = fetch,
   pause: (ms: number) => Promise<void> = sleep,
 ) => {
+  // A rejected write may have committed before its response vanished.
+  if (!replayable(init)) return run(input, init)
   let last: unknown
   for (let ms of [0, ...BACKOFF]) {
     if (ms) await pause(ms)

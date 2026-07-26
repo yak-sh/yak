@@ -48,6 +48,27 @@ Deno.test('request never replays an HTTP response', async () => {
   assertEquals(waits, [])
 })
 
+Deno.test('request never replays a rejected write', async () => {
+  let fetch = failing(1)
+  let waits: number[] = []
+  await assertRejects(
+    () =>
+      request(
+        'http://tasks.test/apply',
+        { method: 'POST', body: '[]' },
+        fetch.run,
+        (ms) => {
+          waits.push(ms)
+          return Promise.resolve()
+        },
+      ),
+    TypeError,
+    'refused',
+  )
+  assertEquals(fetch.calls(), 1)
+  assertEquals(waits, [])
+})
+
 Deno.test('request names an outage after the retry window', async () => {
   let fetch = failing(Infinity)
   let waits: number[] = []
