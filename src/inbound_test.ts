@@ -65,6 +65,7 @@ let venture = (title: string, address: string) => {
 
 let cafecar = venture('CafeCar', 'cafecar@bot.yak.sh')
 let homelab = venture('Homelab', 'homelab@bot.yak.sh')
+let moonshot = venture('Moonshot', 'moonshot@bot.yak.sh')
 
 // The archive dialect, as rowToJson speaks it: from/to/text, boolean
 // verified, ISO received_at riding beside the epoch ts.
@@ -89,10 +90,23 @@ Deno.test('routeTo: the address book reversed, case-blind, P-20 the rest', () =>
 })
 
 Deno.test('hookTo: the venture path routes, variants converge, misses fall back', () => {
+  let observer = uid()
+  apply(db, [
+    { eid: observer, name: 'doc', comp: { title: 'Observer' } },
+    { eid: observer, name: 'email', comp: { address: 'observer@bot.yak.sh' } },
+  ])
+  assertEquals(hookTo('/hook/cafecar/posthog'), cafecar)
+  assertEquals(hookTo('/hook/cafe_car/posthog'), cafecar)
   assertEquals(hookTo('/hook/Cafe_Car/posthog'), cafecar)
   assertEquals(hookTo('/hook/homelab/github'), homelab)
+  assertEquals(hookTo('/hook/moonshot/anything'), moonshot)
+  assertEquals(hookTo('/hook/observer/anything'), holdco)
   assertEquals(hookTo('/hook/stranger/posthog'), holdco)
   assertEquals(hookTo('/hook'), holdco)
+  assertEquals(hookTo('/hook/'), holdco)
+  assertEquals(hookTo('/hook//posthog'), holdco)
+  assertEquals(hookTo('/hooks/cafecar/posthog'), holdco)
+  assertEquals(hookTo('/prefix/hook/cafecar/posthog'), holdco)
   assertEquals(hookTo(null), holdco)
 })
 
@@ -153,16 +167,25 @@ Deno.test('mailChanges: subject and body land verbatim, provenance stamps', () =
   )
 })
 
-Deno.test('hookChanges: the event word, best source first; payload verbatim', () => {
+Deno.test('hookChanges: event derives; captured request stays verbatim', () => {
   let base = { id: 'r1', ts: 1752000000000, source: 'github' }
+  let headers = JSON.stringify({ 'X-GitHub-Event': 'issues' })
+  let path = '/hook/cafe_car/posthog/issue-created'
   let named = hookChanges({
     ...base,
-    headers: JSON.stringify({ 'X-GitHub-Event': 'issues' }),
+    method: 'POST',
+    path,
+    headers,
     body: '{"action":"opened"}',
+    sig_ok: 0,
   }, holdco)
   assertEquals(named.stamp.event, 'issues') // the sender's own header wins
   assertEquals(named.stamp.payload, '{"action":"opened"}')
   assertEquals(named.stamp.spool_id, 'r1')
+  assertEquals(named.stamp.method, 'POST')
+  assertEquals(named.stamp.path, path)
+  assertEquals(named.stamp.headers, headers)
+  assertEquals(named.stamp.sig_ok, 0) // routing never upgrades trust
   let doc = named.wire.find((c) => c.name == 'doc')!.comp!
   assertEquals(doc.title, 'github: issues')
   let edge = named.wire.find((c) => c.name == 'dependency')!.comp!
@@ -218,8 +241,11 @@ Deno.test('the sweep: mints once, stamps back, and dir=out never lands', async (
     [{
       id: 'r9',
       source: 'github',
+      method: 'POST',
       path: '/hook/cafecar/github',
+      headers: '{"content-type":"application/json"}',
       body: '{"action":"ping"}',
+      sig_ok: 1,
     }],
   )
   await inboundSweep(cast, api)
@@ -234,10 +260,15 @@ Deno.test('the sweep: mints once, stamps back, and dir=out never lands', async (
   assertEquals(processed, [['r9']])
   let hooks = db.prepare('select * from hook').all() as Record<
     string,
-    string
+    string | number | null
   >[]
   assertEquals(hooks.length, 1)
   assertEquals(hooks[0].source, 'github')
+  assertEquals(hooks[0].method, 'POST')
+  assertEquals(hooks[0].path, '/hook/cafecar/github')
+  assertEquals(hooks[0].headers, '{"content-type":"application/json"}')
+  assertEquals(hooks[0].payload, '{"action":"ping"}')
+  assertEquals(hooks[0].sig_ok, 1)
   let aimed = db.prepare(
     `select child_eid from dependency
      where parent_eid = ? and type = 'about'`,

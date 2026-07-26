@@ -389,16 +389,21 @@ export let stamped: Record<string, Record<string, PropType>> = {
     // reached this graph. inbound.ts derives reply_to_eid when it has.
     in_reply_to: 'text',
   },
-  // Webhook provenance (inbound.ts): source names the edge route the
-  // request hit, event the parser's one-line verdict, payload the raw
-  // body verbatim, spool_id the edge's row id — (source, spool_id) is
-  // the idempotency key — received_at when the edge captured it.
+  // Webhook provenance (inbound.ts): source names the edge route;
+  // method/path/headers/payload/sig_ok are its captured request,
+  // unchanged. Event is the graph's one-line derivation, spool_id the
+  // edge row — (source, spool_id) is the idempotency key — and received_at
+  // says when the edge captured it.
   hook: {
     source: 'text',
     event: 'text',
     payload: 'body',
     spool_id: 'text',
     received_at: 'time',
+    method: 'text',
+    path: 'text',
+    headers: 'body',
+    sig_ok: 'bool',
   },
   memory: { last_confirmed_at: 'time' },
   recall: { count: 'number', first_at: 'time', last_at: 'time' },
@@ -814,6 +819,10 @@ export type Hook = {
   payload?: string | null
   spool_id?: string | null
   received_at?: string | null
+  method?: string | null
+  path?: string | null
+  headers?: string | null
+  sig_ok?: number | null
 }
 
 // A comment is a doc AIMED at something — and since target_eid is any

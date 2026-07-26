@@ -206,7 +206,11 @@ let schema = `
     event       text,
     payload     text,
     spool_id    text,
-    received_at text
+    received_at text,
+    method      text,
+    path        text,
+    headers     text,
+    sig_ok      integer
   );
   create table if not exists email (
     eid     text primary key references entity(eid),
@@ -673,6 +677,12 @@ export let open = (path = file) => {
   addCol('mail', 'sent_id', 'sent_id text')
   addCol('mail', 'read_at', 'read_at text')
   addCol('mail', 'in_reply_to', 'in_reply_to text')
+  // The hook row keeps the edge's captured request facts intact.
+  // Routing reads path but never rewrites it or upgrades sig_ok.
+  addCol('hook', 'method', 'method text')
+  addCol('hook', 'path', 'path text')
+  addCol('hook', 'headers', 'headers text')
+  addCol('hook', 'sig_ok', 'sig_ok integer')
   // Read-state moved from mail.read_at to the `opened` stamp (T-7006): seed
   // it once BEFORE the readers flip to `NOT opened`, so no mail flickers
   // unread mid-migration.

@@ -165,7 +165,15 @@ export let routeTo = (addr: string | null | undefined): string | null => {
 // the reversed address book remains the one venture registry.
 export let hookTo = (path: string | null | undefined): string | null => {
   let venture = /^\/hook\/([^/?#]+)/.exec(path ?? '')?.[1]
-  return routeTo(venture ? canon(`${venture}@bot.yak.sh`) : null)
+  let address = venture ? canon(`${venture}@bot.yak.sh`) : null
+  let project = address
+    ? db.prepare(
+      `select email.eid from email
+       join project on project.eid = email.eid
+       where email.address = ? collate nocase`,
+    ).get(address) as { eid: string } | undefined
+    : undefined
+  return project?.eid ?? routeTo(null)
 }
 
 // The From: HEADER names the author; the envelope from is SMTP plumbing
@@ -286,6 +294,10 @@ export let hookChanges = (r: SpoolReq, target: string | null) => {
     payload: r.body ?? null,
     spool_id: r.id,
     received_at: new Date(r.ts ?? Date.now()).toISOString(),
+    method: r.method ?? null,
+    path: r.path ?? null,
+    headers: r.headers ?? null,
+    sig_ok: r.sig_ok ?? null,
   }
   return { eid, wire, stamp }
 }
