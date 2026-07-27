@@ -1712,7 +1712,6 @@ html {
      narrow card the NAME wins the bar, the glance folds away */
   flex: 0 8 14em;
   min-width: 0;
-  overflow: hidden;
 }
 .Filter input {
   width: 100%;
