@@ -181,6 +181,18 @@ let exec = (line: string) => {
   }
 }
 
+// Leave before an intent writes: mutate() can synchronously rerender this
+// component, and a mode change through the old render would never repaint.
+export let submit = (
+  line: string,
+  leave: () => void,
+  execute: (line: string) => void = exec,
+) => {
+  last.value = line.trim() || last.value
+  leave()
+  execute(line)
+}
+
 // The identity chain's web end: who this browser acts for. A lone person
 // binds on sight (Canvas); with CANDIDATES the bar asks — "you are …?" —
 // and one click asserts it. An assertion, not a login: a wrong answer
@@ -309,10 +321,10 @@ export let Status = () => {
     let multi = e.currentTarget.value.includes('\n')
     if (e.key == 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      last.value = e.currentTarget.value.trim() || last.value
-      exec(e.currentTarget.value)
-      put('')
-      mode.value = 'normal'
+      submit(e.currentTarget.value, () => {
+        put('')
+        mode.value = 'normal'
+      })
     } else if (e.key == 'Escape') {
       put('')
       mode.value = 'normal'
