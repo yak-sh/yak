@@ -418,6 +418,12 @@ export let Canvas = ({ eid }: { eid: string }) => {
         peak: fresh ? mag : Math.max(g!.peak, mag),
         sign: sign || (g?.sign ?? 0),
       }
+      // A wheel raises the card only when the card consumes it. A canvas
+      // pan merely passing beneath the pointer is not a card interaction.
+      if (fresh && mode == 'scroll' && e.target instanceof Element) {
+        let pin = e.target.closest<HTMLElement>('.Pin')
+        if (pin?.dataset.eid) toFront(pin.dataset.eid)
+      }
       if (mode == 'scroll') return // scrolling a card's body keeps the latch
       e.preventDefault()
       unlatch()

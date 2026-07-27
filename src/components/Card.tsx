@@ -200,7 +200,6 @@ export let Card = ({ p }: { p: Pinned }) => {
         (p.w ? `width:${p.w}px;` : '') +
         (p.h ? `height:${p.h}px;` : '')}
       onPointerDown={down}
-      onWheel={() => toFront(p.eid)}
       // The CARD is the right-click target — "open here" (make this the
       // root card) and "open in new tab" for its target. Links, inputs,
       // and selectable text keep the browser's own menu.
