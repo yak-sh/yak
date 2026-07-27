@@ -1,4 +1,4 @@
-import { useComputed } from '@preact/signals'
+import { type Signal, useComputed, useSignal } from '@preact/signals'
 import { camera, ent, mutate, pinZ, toFront, topZ } from '../live.ts'
 import { idOf, type Pinned } from '../types.ts'
 import { block, el } from './ui.tsx'
@@ -40,6 +40,13 @@ let Frame = block('section', 'Card', {
 })
 let { Tabs, X, Scroll } = Frame
 
+export let pinStyle = (live: Signal<Pinned>) => {
+  let p = live.value
+  return `left:${p.x}px;top:${p.y}px;z-index:${pinZ(p.eid, p.z).value};` +
+    (p.w ? `width:${p.w}px;` : '') +
+    (p.h ? `height:${p.h}px;` : '')
+}
+
 // A card: one entity through one chosen view, framed by a tab per view that
 // applies. Everything renders from the cache, so a tab click is just a card
 // patch and a titlebar drag is pin patches — local first (instant), wire on
@@ -49,12 +56,12 @@ let { Tabs, X, Scroll } = Frame
 // The scroller (not the card) owns the padding, so the scrollbar rides the
 // card border and the padding scrolls away with the content.
 export let Card = ({ p }: { p: Pinned }) => {
-  // A z-only raise binds to this attribute without rerendering the card body.
-  let style = useComputed(() =>
-    `left:${p.x}px;top:${p.y}px;z-index:${pinZ(p.eid, p.z).value};` +
-    (p.w ? `width:${p.w}px;` : '') +
-    (p.h ? `height:${p.h}px;` : '')
-  )
+  // Plain props do not invalidate a computed signal. Mirror the latest pin
+  // into one so moves update the style while z-only raises still bind
+  // straight to the attribute without rerendering the card body.
+  let live = useSignal(p)
+  live.value = p
+  let style = useComputed(() => pinStyle(live))
   let down = (e: PointerEvent & { currentTarget: HTMLDivElement }) => {
     if (!(e.target instanceof Element)) return
     toFront(p.eid) // ANY touch raises the card — the drag gate is below
