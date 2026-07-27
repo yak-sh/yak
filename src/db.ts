@@ -110,6 +110,16 @@ let schema = `
     path text not null,
     base_branch text not null default 'main'
   );
+  create table if not exists role (
+    eid          text primary key references entity(eid),
+    state        text not null default 'stopped',
+    surface      text not null default 'native',
+    scope_eid    text references entity(eid),
+    applied_hash text,
+    applied_at   text,
+    stopped_at   text,
+    error        text
+  );
   create table if not exists board (
     eid text primary key references entity(eid)
   );
@@ -660,6 +670,7 @@ export let open = (path = file) => {
       'effort text',
       'persona_eid text',
       'requested_task_eid text',
+      'role_eid text',
       'branch text',
       'base_revision text',
       'status text',

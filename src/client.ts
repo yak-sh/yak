@@ -438,6 +438,7 @@ export let sessionFor = (
     operator?: boolean
     pane?: string | null
     turn?: string
+    role_eid?: string
   },
 ) => {
   let s = all.find((r) => r.comps.session && r.comps.session.id == session)
@@ -447,6 +448,9 @@ export let sessionFor = (
   if (pid && s?.comps.session.pid != pid) comp.pid = pid
   for (let k of ['agent_type', 'source', 'transcript', 'turn'] as const) {
     if (self?.[k] && s?.comps.session[k] != self[k]) comp[k] = self[k]
+  }
+  if (self?.role_eid && s?.comps.session.role_eid != self.role_eid) {
+    comp.role_eid = self.role_eid
   }
   if (self?.pane !== undefined && s?.comps.session.pane != self.pane) {
     comp.pane = self.pane
@@ -605,8 +609,8 @@ export let commentChanges = (
 // means a deliberate preview/bare view, which keeps showing project mail.
 export let isOperator = (s?: Record<string, unknown>) =>
   !s ||
-  (s.operator == true && String(s.origin ?? '') != 'managed' &&
-    !s.requested_task_eid)
+  (s.operator == true && !s.requested_task_eid &&
+    (String(s.origin ?? '') != 'managed' || !!s.role_eid))
 
 // The notification lifecycle (T-7006), read as pure Row-predicates over
 // the stamp components: presence is the fact, absence the earlier state.

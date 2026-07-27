@@ -937,6 +937,10 @@ Deno.test('isOperator: only an explicit eligible session is an operator', () => 
   assertEquals(isOperator({ origin: 'external', operator: true }), true)
   assertEquals(isOperator({ origin: 'managed', operator: true }), false)
   assertEquals(
+    isOperator({ origin: 'managed', operator: true, role_eid: 'R' }),
+    true,
+  )
+  assertEquals(
     isOperator({ requested_task_eid: 'T', operator: true }),
     false,
   )
@@ -1002,6 +1006,7 @@ Deno.test('sessionFor: hook identity round-trips and refreshes only on change', 
     operator: false,
     pane: '%42',
     turn: 'idle',
+    role_eid: 'role',
   }
   let minted = sessionFor(all, 'sess-new', '/w2', 4242, self)
   assertEquals(minted.changes[0].comp, {
@@ -1013,6 +1018,7 @@ Deno.test('sessionFor: hook identity round-trips and refreshes only on change', 
     turn: 'idle',
     pane: '%42',
     operator: 0,
+    role_eid: 'role',
   })
   // a known session already wearing the same agent_type is silent for it;
   // only the still-absent source patches.
@@ -1029,6 +1035,7 @@ Deno.test('sessionFor: hook identity round-trips and refreshes only on change', 
           pane: '%42',
           turn: 'idle',
           operator: false,
+          role_eid: 'role',
         },
       },
     ],

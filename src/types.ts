@@ -59,6 +59,11 @@ export let statuses = ['open', 'wip', 'done', 'cancelled'] as const
 // this positive boundary instead of guessing from terminal animation.
 export let turnStates = ['idle', 'busy'] as const
 
+// A role is desired capacity. Native owns an interactive provider TUI;
+// managed owns a resumable Tasks session.
+export let roleStates = ['running', 'stopped'] as const
+export let roleSurfaces = ['native', 'managed'] as const
+
 // A review is a comment with one of these verdicts. Input aliases keep
 // the operator verbs short; the graph stores only the settled words.
 export let verdicts = [
@@ -103,6 +108,11 @@ export let comps: Record<string, Record<string, PropType>> = {
   // filed under it stays referenceable but sinks (search, .order=hot).
   project: { retired_at: 'time' },
   repo: { path: 'text', base_branch: 'text' }, // the project's checkout
+  role: {
+    state: { enum: roleStates },
+    surface: { enum: roleSurfaces },
+    scope_eid: { eid: 'project', death: 'detach' },
+  },
   board: { query: 'query' }, // saved filter (query.ts grammar); '' = all
   canvas: {},
   web: { url: 'url' }, // frozen_at is server-stamped, never wire-writable
@@ -181,6 +191,7 @@ export let comps: Record<string, Record<string, PropType>> = {
     model: 'text',
     effort: 'text',
     requested_task_eid: { eid: '', death: 'detach' },
+    role_eid: { eid: 'role', death: 'detach' },
     persona_eid: { eid: '', death: 'detach' },
     actor_eid: { eid: '', death: 'detach' }, // who this run acts for — see client above
   },
@@ -441,6 +452,12 @@ export let stamped: Record<string, Record<string, PropType>> = {
     holder: 'text',
     at: 'time',
   },
+  role: {
+    applied_hash: 'text',
+    applied_at: 'time',
+    stopped_at: 'time',
+    error: 'text',
+  },
   // The managed-session lifecycle (sessions.ts owns every write; the
   // wire-writable launch spec lives in comps.spawn, with session aliases
   // admitted only for compatibility).
@@ -565,6 +582,7 @@ export let kindOrder = [
   'client',
   'camera',
   'fold',
+  'role',
   'session',
   'claim',
   'stop_request',
@@ -597,6 +615,7 @@ export let prefix: Record<string, string> = {
   task: 'T',
   project: 'P',
   board: 'B',
+  role: 'R',
   session: 'S',
   memory: 'M',
   person: 'U', // U-ser: P is the projects'
@@ -767,6 +786,7 @@ export type Session = {
   persona_eid?: string | null
   actor_eid?: string | null // who this run acts for (comps comment)
   requested_task_eid?: string | null // provenance: what it was started on
+  role_eid?: string | null // persistent role this run serves
   branch?: string | null
   base_revision?: string | null
   status?: string | null // starting|running|stopping|completed|failed|interrupted|lost
@@ -791,6 +811,19 @@ export type Spawn = {
   model?: string | null
   effort?: string | null
   persona_eid?: string | null
+}
+
+// Desired fleet capacity. Runtime facts are server-stamped on the same row;
+// sessions point back through role_eid instead of a mutable current pointer.
+export type Role = {
+  eid: string
+  state: string
+  surface: string
+  scope_eid: string | null
+  applied_hash?: string | null
+  applied_at?: string | null
+  stopped_at?: string | null
+  error?: string | null
 }
 
 // Is anybody home? The client's half of door.ts `present()`, from
@@ -984,6 +1017,7 @@ export type Ent = {
   doc?: Doc
   task?: Task
   project?: ProjectTag
+  role?: Role
   person?: { eid: string }
   repo?: Repo
   canvas?: { eid: string }

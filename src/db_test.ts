@@ -80,6 +80,7 @@ let contract = (
 
 let contracts = [
   contract('task', 'project_eid', 'project', { status: 'open' }),
+  contract('role', 'scope_eid', 'project'),
   contract('camera', 'client_eid', 'client', (d) => ({
     canvas_eid: tag(d, 'canvas'),
   })),
@@ -98,6 +99,7 @@ let contracts = [
     (d, eid) => apply(d, [{ eid, name: 'doc', comp: { title: 'claimed' } }]),
   ),
   contract('stop_request', 'target_eid', 'session'),
+  contract('session', 'role_eid', 'role', { id: 'role-session' }),
   contract('mail', 'reply_to_eid', 'mail', {
     to: 'operator@example.test',
   }),
