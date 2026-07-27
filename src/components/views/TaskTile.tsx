@@ -9,6 +9,7 @@ import { Id } from './Inline.tsx'
 let Frame = block('div', 'TaskTile', {
   Title: 'span',
   Meta: 'div',
+  Project: 'span',
   Domain: 'span',
   Comments: 'span',
   Claim: 'span',
@@ -16,11 +17,12 @@ let Frame = block('div', 'TaskTile', {
   Deps: 'span',
   Done: 's',
 })
-let { Title, Meta, Domain, Comments, Claim, Assignee, Deps, Done } = Frame
+let { Title, Meta, Project, Domain, Comments, Claim, Assignee, Deps, Done } =
+  Frame
 
 // A task as a small board card, Trello-shaped: wrapping title beside its
-// dot, then one meta line — priority, domain, edge tallies ("2 requires",
-// edge-colored), comment tally, claim flag, id. Plain spans only
+// dot, then one meta line — priority, project, domain, edge tallies
+// ("2 requires", edge-colored), comment tally, claim flag, id. Plain spans only
 // (no editors, no markdown): hundreds of these must render without the
 // browser noticing. The whole tile is the LINK — clickProps on the el:
 // click peeks, double click navigates — and right-click serves the app
@@ -58,6 +60,9 @@ export let TaskTile = ({ e }: { e: Ent }) => {
       <Title>{e.doc?.title}</Title>
       <Meta>
         <Prio p={e.task!.priority} />
+        {e.task!.project_eid && (
+          <Project>{ent(e.task!.project_eid).doc?.title}</Project>
+        )}
         {e.task!.domain && <Domain>{e.task!.domain}</Domain>}
         {edges.map(([t, open, done]) =>
           (open > 0 || done > 0) && (
