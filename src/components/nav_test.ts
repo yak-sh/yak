@@ -1,4 +1,6 @@
-// Entity links share one peek state: opening, marking, and closing are one seam.
+// A peek belongs to its one opener without making every link reactive.
+import { effect } from '@preact/signals'
+import { parseHTML } from 'linkedom'
 import { assertEquals } from '@std/assert'
 import { type Ent } from '../types.ts'
 import { clickProps, openAt, peek } from './nav.tsx'
@@ -11,26 +13,57 @@ let e: Ent = {
   kids: [],
 }
 
-let ev = { clientX: 12, clientY: 34 } as MouseEvent
+let from = () => peek.value?.from
 
-Deno.test('clicking the open peek link closes it', () => {
-  let prior = Object.getOwnPropertyDescriptor(globalThis, 'matchMedia')
-  Object.defineProperty(globalThis, 'matchMedia', {
-    value: () => ({ matches: true }),
-    configurable: true,
+Deno.test('only the same opener toggles its peek closed', () => {
+  let priorMedia = Object.getOwnPropertyDescriptor(globalThis, 'matchMedia')
+  let priorElement = Object.getOwnPropertyDescriptor(globalThis, 'Element')
+  let { document, window } = parseHTML('<a id="a"></a><a id="b"></a>')
+  Object.defineProperties(globalThis, {
+    matchMedia: {
+      value: () => ({ matches: true }),
+      configurable: true,
+    },
+    Element: { value: window.Element, configurable: true },
   })
+  let a = document.querySelector('#a')!
+  let b = document.querySelector('#b')!
+  let ev = (from: Element) =>
+    ({
+      currentTarget: from,
+      target: from,
+      clientX: 12,
+      clientY: 34,
+    }) as unknown as MouseEvent
+
   try {
     peek.value = null
+    openAt(e.eid, ev(a))
+    assertEquals(from(), a)
 
-    openAt(e.eid, ev)
-    assertEquals(peek.value, { eid: 'task', x: 12, y: 34 })
-    assertEquals(clickProps(e)['data-peek'], 'open')
+    openAt(e.eid, ev(b))
+    assertEquals(from(), b)
 
-    openAt(e.eid, ev)
+    openAt(e.eid, ev(b))
     assertEquals(peek.value, null)
-    assertEquals(clickProps(e)['data-peek'], undefined)
   } finally {
-    if (prior) Object.defineProperty(globalThis, 'matchMedia', prior)
+    peek.value = null
+    if (priorMedia) Object.defineProperty(globalThis, 'matchMedia', priorMedia)
     else delete (globalThis as { matchMedia?: unknown }).matchMedia
+    if (priorElement) {
+      Object.defineProperty(globalThis, 'Element', priorElement)
+    } else delete (globalThis as { Element?: unknown }).Element
   }
+})
+
+Deno.test('link props do not subscribe to peek state', () => {
+  let runs = 0
+  let stop = effect(() => {
+    clickProps(e)
+    runs++
+  })
+  peek.value = { eid: e.eid, x: 1, y: 2 }
+  assertEquals(runs, 1)
+  stop()
+  peek.value = null
 })

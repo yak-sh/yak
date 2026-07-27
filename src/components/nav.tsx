@@ -1,4 +1,4 @@
-import { effect, signal } from '@preact/signals'
+import { signal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
 import { block, copy, setFollow } from './ui.tsx'
 import { usePlaceAt } from './overlay.tsx'
@@ -35,17 +35,26 @@ export let navigate = (to: string) => {
 // at the pointer instead of a fullscreen root swap (Peek.tsx renders it).
 // view is the peek's own tab choice; unset means the entity's default.
 export let peek = signal<
-  { eid: string; x: number; y: number; view?: string } | null
+  { eid: string; x: number; y: number; view?: string; from?: Element } | null
 >(null)
 
-export let peeking = (eid: string) => peek.value?.eid == eid
+let linkAt = (ev: MouseEvent) => {
+  let el = (v: EventTarget | null) =>
+    typeof Element != 'undefined' && v instanceof Element ? v : null
+  let current = el(ev.currentTarget)
+  return current?.matches('a, [role="link"]')
+    ? current
+    : el(ev.target)?.closest('a, [role="link"]') ?? undefined
+}
 
 // One opener for every entity click: a fine pointer peeks, a coarse one
 // navigates — fullscreen IS the phone's right answer. navigate() stays
 // the deliberate root change (:open, "open here", direct urls).
 export let openAt = (eid: string, ev: MouseEvent) => {
   if (globalThis.matchMedia?.('(pointer: fine)').matches) {
-    peek.value = peeking(eid) ? null : { eid, x: ev.clientX, y: ev.clientY }
+    let from = linkAt(ev)
+    let same = peek.value?.eid == eid && peek.value.from == from
+    peek.value = same ? null : { eid, x: ev.clientX, y: ev.clientY, from }
   } else navigate(`/${idOf(ent(eid))}`)
 }
 
@@ -57,20 +66,6 @@ export let eidOf = (id: string) => {
   if (!m) return eids.includes(id) ? id : undefined
   return eids.find((eid) => cache.peek()[eid]?.entity?.num == +m![1])
 }
-
-// Markdown refs live inside innerHTML, outside Preact's signal render.
-// Mirror the shared link state onto them so every entity link keeps the
-// same toggle and open treatment.
-effect(() => {
-  let eid = peek.value?.eid
-  let e = eid && ent(eid)
-  let ids = new Set(e ? [e.eid, String(e.num), idOf(e)] : [])
-  globalThis.document?.querySelectorAll<HTMLAnchorElement>('a[data-ref]')
-    .forEach((a) => {
-      if (ids.has(a.dataset.ref!)) a.dataset.peek = 'open'
-      else delete a.dataset.peek
-    })
-})
 
 // The plain-click half of an in-app anchor: modifiers, middle-click and
 // the native context menu keep their new-tab forms; a bare click (tap
@@ -114,7 +109,6 @@ export let clickProps = (e: Ent) => {
   let href = `/${idOf(e)}`
   return {
     href,
-    'data-peek': peeking(e.eid) ? 'open' : undefined,
     onClick: follow(href, e.eid),
     onDblClick: follow(href),
   }

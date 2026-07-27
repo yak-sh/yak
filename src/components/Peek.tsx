@@ -37,11 +37,10 @@ export let Peek = () => {
       // popout editors portal into a body-mounted .Overlay (overlay.tsx),
       // so containment can't see them — pressing one is USING the peek,
       // and dismissing here would unmount the control before its click.
-      // The open link also owns its next click: leave the peek intact
-      // until openAt() can toggle it closed.
       if (
         ev.target instanceof Element && !el.contains(ev.target) &&
-        !ev.target.closest('.Overlay, [data-peek="open"]')
+        !p.from?.contains(ev.target) &&
+        !ev.target.closest('.Overlay')
       ) peek.value = null
     }
     let key = (ev: KeyboardEvent) => {
