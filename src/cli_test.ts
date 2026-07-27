@@ -13,8 +13,10 @@ import {
   claimedDigest,
   claudeLaunch,
   codexArgs,
+  codexLaunch,
   finalText,
   hookDialect,
+  hookTurn,
   leadPrio,
   operatorHook,
   strayFlag,
@@ -229,7 +231,7 @@ Deno.test('task codex is discoverable with its own help', async () => {
   assertEquals(out.code, 0)
   assertMatch(
     text(out.stdout),
-    /task codex \[codex args\.\.\.\][\s\S]*task codex resume --last/,
+    /task codex \[--operator\] \[codex args\.\.\.\][\s\S]*task codex --operator resume --last/,
   )
 })
 
@@ -276,39 +278,73 @@ Deno.test('task claude scopes operator capability and strips its local flag', ()
   )
 })
 
-Deno.test('an unmarked Claude hook observes; explicit work paths may claim', () => {
+Deno.test('task codex scopes operator capability and strips its local flag', () => {
+  assertEquals(
+    codexLaunch(['--operator', 'resume', '--last'], 42),
+    {
+      args: [
+        '--dangerously-bypass-approvals-and-sandbox',
+        '--dangerously-bypass-hook-trust',
+        'resume',
+        '--last',
+      ],
+      env: {
+        TASKS_OPERATOR: '42',
+        TASKS_TASK: '',
+        CLAUDE_CODE_CHILD_SESSION: '',
+      },
+    },
+  )
+  assertEquals(codexLaunch(['resume', '--last'], 42).env.TASKS_OPERATOR, '')
+  assertEquals(
+    codexLaunch(['--', '--operator'], 42).args.slice(-2),
+    ['--', '--operator'],
+  )
+})
+
+Deno.test('unmarked external hooks observe; explicit operators may claim', () => {
   let env = (vars: Record<string, string>) => (name: string) => vars[name]
-  let parent = (_pid: number) => 42
-  assertEquals(workHook('claude', undefined, 7, env({}), parent), false)
+  let under = (pid: number, root: number) => pid == 7 && root == 42
+  assertEquals(workHook('claude', undefined, 7, env({}), under), false)
   assertEquals(
-    workHook('claude', undefined, 7, env({ TASKS_OPERATOR: '42' }), parent),
+    workHook('claude', undefined, 7, env({ TASKS_OPERATOR: '42' }), under),
     true,
   )
   assertEquals(
-    workHook('claude', undefined, 7, env({ TASKS_OPERATOR: '99' }), parent),
+    workHook('claude', undefined, 7, env({ TASKS_OPERATOR: '99' }), under),
     false,
   )
   assertEquals(
-    workHook('claude', undefined, 7, env({ TASKS_TASK: 'T-2' }), parent),
+    workHook('claude', undefined, 7, env({ TASKS_TASK: 'T-2' }), under),
     false,
   )
-  assertEquals(workHook('claude', { operator: true }, 7, env({}), parent), true)
+  assertEquals(workHook('claude', { operator: true }, 7, env({}), under), true)
   assertEquals(
-    workHook('claude', { operator: false }, 7, env({}), parent),
+    workHook('claude', { operator: false }, 7, env({}), under),
     false,
   )
   assertEquals(
-    workHook('claude', { origin: 'managed' }, 7, env({}), parent),
+    workHook('claude', { origin: 'managed' }, 7, env({}), under),
     true,
   )
-  assertEquals(workHook('codex', undefined, 7, env({}), parent), true)
-  assertEquals(operatorHook(7, env({ TASKS_OPERATOR: '42' }), parent), true)
+  assertEquals(workHook('codex', undefined, 7, env({}), under), false)
+  assertEquals(
+    workHook('codex', undefined, 7, env({ TASKS_OPERATOR: '42' }), under),
+    true,
+  )
+  assertEquals(operatorHook(7, env({ TASKS_OPERATOR: '42' }), under), true)
 
   let out = observerDigest('probe-1')
   assertMatch(out, /observation-only target/)
   for (let mark of ['T-2', 'claim:', '## mail', 'from the fleet']) {
     assertEquals(out.includes(mark), false)
   }
+})
+
+Deno.test('Codex turn hooks announce only busy and idle boundaries', () => {
+  assertEquals(hookTurn({ hook_event_name: 'UserPromptSubmit' }), 'busy')
+  assertEquals(hookTurn({ hook_event_name: 'Stop' }), 'idle')
+  assertEquals(hookTurn({ hook_event_name: 'SessionStart' }), undefined)
 })
 
 Deno.test('the canonical operator launcher opts into work injection', () => {
@@ -409,6 +445,8 @@ Deno.test('Codex hooks inject sessions, delegate children, and wrap at exit', ()
   assertEquals(Object.keys(config.hooks), [
     'SessionStart',
     'SubagentStart',
+    'UserPromptSubmit',
+    'Stop',
     'SessionEnd',
   ])
   assertMatch(
@@ -419,6 +457,16 @@ Deno.test('Codex hooks inject sessions, delegate children, and wrap at exit', ()
     config.hooks.SubagentStart[0].hooks[0].command,
     /task session context --hook/,
   )
+  assertMatch(
+    config.hooks.UserPromptSubmit[0].hooks[0].command,
+    /task session turn --hook/,
+  )
+  assertMatch(
+    config.hooks.Stop[0].hooks[0].command,
+    /task session turn --hook/,
+  )
+  assertEquals(config.hooks.UserPromptSubmit[0].hooks[0].timeout, 3)
+  assertEquals(config.hooks.Stop[0].hooks[0].timeout, 3)
   assertMatch(
     config.hooks.SessionEnd[0].hooks[0].command,
     /task session wrap --hook/,

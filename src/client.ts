@@ -435,6 +435,8 @@ export let sessionFor = (
     source?: string
     transcript?: string
     operator?: boolean
+    pane?: string | null
+    turn?: string
   },
 ) => {
   let s = all.find((r) => r.comps.session && r.comps.session.id == session)
@@ -442,8 +444,11 @@ export let sessionFor = (
   let comp: Record<string, unknown> = s ? {} : { id: session }
   if (cwd && s?.comps.session.cwd != cwd) comp.cwd = cwd
   if (pid && s?.comps.session.pid != pid) comp.pid = pid
-  for (let k of ['agent_type', 'source', 'transcript'] as const) {
+  for (let k of ['agent_type', 'source', 'transcript', 'turn'] as const) {
     if (self?.[k] && s?.comps.session[k] != self[k]) comp[k] = self[k]
+  }
+  if (self?.pane !== undefined && s?.comps.session.pane != self.pane) {
+    comp.pane = self.pane
   }
   if (
     self?.operator != undefined &&

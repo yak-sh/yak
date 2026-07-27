@@ -221,7 +221,7 @@ Deno.test('apply canonicalizes every scalar and reference spelling', () => {
     {
       eid: 'typed-subject',
       name: 'session',
-      comp: { pid: '06e2', operator: 'YES' },
+      comp: { pid: '06e2', operator: 'YES', pane: '%7', turn: 'IDLE' },
     },
     {
       eid: 'typed-subject',
@@ -253,7 +253,7 @@ Deno.test('apply canonicalizes every scalar and reference spelling', () => {
     {
       eid: subject,
       name: 'session',
-      comp: { pid: 600, operator: 1 },
+      comp: { pid: 600, operator: 1, pane: '%7', turn: 'idle' },
     },
     {
       eid: subject,

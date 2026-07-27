@@ -55,6 +55,10 @@ export type PropType =
 // decision about real work, trail intact.
 export let statuses = ['open', 'wip', 'done', 'cancelled'] as const
 
+// A provider hook says whether its composer is between turns. Delivery uses
+// this positive boundary instead of guessing from terminal animation.
+export let turnStates = ['idle', 'busy'] as const
+
 // A review is a comment with one of these verdicts. Input aliases keep
 // the operator verbs short; the graph stores only the settled words.
 export let verdicts = [
@@ -152,6 +156,11 @@ export let comps: Record<string, Record<string, PropType>> = {
     // uses it as liveness.
     // Wire-writable like acked_at: forging it only misroutes your own mail.
     pid: 'number',
+    // The native terminal surface inherited by a provider hook. It is an
+    // address, not authority: the server revalidates its process tree before
+    // using it.
+    pane: 'text',
+    turn: { enum: turnStates },
     // The provider's own transcript JSONL — the SessionStart payload names
     // it, and it is an EXTERNAL session's durable log the way
     // ~/.tasks/logs/<eid>.jsonl is a managed run's. Wire-writable like the
@@ -165,8 +174,8 @@ export let comps: Record<string, Record<string, PropType>> = {
     // a forged value only mislabels your own row.
     agent_type: 'text',
     source: 'text',
-    // Positive capability granted by `task claude --operator`. Null is a
-    // legacy/managed session; false is an observation-only external target.
+    // Positive capability granted by a provider launcher's `--operator`.
+    // Null is a legacy/managed session; false is observation-only.
     operator: 'bool',
     provider: 'text',
     model: 'text',
@@ -734,11 +743,13 @@ export type Session = {
   id: string
   cwd?: string | null
   pid?: number | null // the provider process it runs in (hook-stamped)
+  pane?: string | null // native terminal address, revalidated before use
+  turn?: string | null // idle|busy, announced by provider lifecycle hooks
   transcript?: string | null // provider-owned JSONL — an external log
   acked_at?: string | null
   agent_type?: string | null // set when launched `claude --agent <name>`
   source?: string | null // boot mode: startup|resume|clear|compact|fork
-  operator?: boolean | null // external Claude may receive the work digest
+  operator?: boolean | null // an external TUI may receive fleet work
   origin?: string // 'external' (announced) | 'managed' (we spawned it)
   provider?: string | null // adapters.ts key
   model?: string | null

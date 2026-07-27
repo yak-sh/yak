@@ -74,7 +74,7 @@ import { type Edge, edges, type Snapshot, statuses } from './types.ts'
 // reaches for node:sqlite, and the CLI has no business loading a db driver.
 import type { Log } from './telemetry.ts'
 import type { JournalEntry } from './client.ts'
-import { agentPid, claudePid, parentOf } from './proc.ts'
+import { agentPid, claudePid, descends } from './proc.ts'
 import { filesFor, syncFiles } from './persona.ts'
 import { commit } from './git.ts'
 import { request } from './http.ts'
@@ -923,16 +923,16 @@ export let subagentDigest = (
   return task ? taskBlock(all, snap.deps, task).join('\n') : head
 }
 
-// Operator capability belongs to the Claude process launched by `task
-// claude --operator`, not every child it may shell. The launcher's pid scopes
-// the inherited env marker to that one direct child.
+// Operator capability belongs to the provider tree launched by `task
+// <provider> --operator`, not every terminal on the box. A provider shim may
+// sit between the launcher and agent, so the marker names an ancestor.
 export let operatorHook = (
   pid = agentPid('claude'),
   get = (name: string) => Deno.env.get(name),
-  parent = parentOf,
+  under = descends,
 ) => {
   let marker = Number(get('TASKS_OPERATOR'))
-  return !!marker && !!pid && parent(pid) == marker
+  return !!marker && !!pid && under(pid, marker)
 }
 
 export let workHook = (
@@ -940,11 +940,18 @@ export let workHook = (
   saved?: Record<string, unknown>,
   pid = agentPid(provider),
   get = (name: string) => Deno.env.get(name),
-  parent = parentOf,
+  under = descends,
 ) => {
-  if (provider != 'claude' || saved?.origin == 'managed') return true
-  return saved?.operator == true || operatorHook(pid, get, parent)
+  if (saved?.origin == 'managed') return true
+  return saved?.operator == true || operatorHook(pid, get, under)
 }
+
+export let hookTurn = (body: Record<string, unknown>) =>
+  body.hook_event_name == 'UserPromptSubmit'
+    ? 'busy'
+    : body.hook_event_name == 'Stop'
+    ? 'idle'
+    : undefined
 
 let context = async (args: string[]) => {
   let hook = args.includes('--hook')
@@ -1019,6 +1026,7 @@ let context = async (args: string[]) => {
         prior?.comps.session,
         pid,
       )
+      let external = prior?.comps.session?.origin != 'managed'
       // The provider's transcript is the external session's durable log.
       // `provider` stays out of this CREATE: a new session carrying one is
       // a managed spawn request. It lands as a patch below.
@@ -1031,12 +1039,12 @@ let context = async (args: string[]) => {
           agent_type: String(body.agent_type ?? '') || undefined,
           source: String(body.source ?? '') || undefined,
           transcript,
-          // Managed work already has TASKS_TASK. This column distinguishes
-          // only external Claude operators from observation targets.
-          operator: provider == 'claude' &&
-              prior?.comps.session?.origin != 'managed'
-            ? work
+          pane: external
+            ? Deno.env.get('TMUX_PANE')?.trim() || null
             : undefined,
+          // Managed work already has TASKS_TASK. Every external provider
+          // needs the same positive capability before project work arrives.
+          operator: external ? work : undefined,
         },
       )
       if (s.changes.length) await send(s.changes)
@@ -1129,6 +1137,43 @@ let context = async (args: string[]) => {
     snap = await snapshot()
   }
   await tell(snap, sid)
+}
+
+// Turn hooks say when a native composer is safe to address. The state is a
+// hint about this session's own terminal, so a hook may write it like pid and
+// pane; the delivery adapter still revalidates all three before touching tmux.
+let sessionTurn = async (args: string[]) => {
+  let hook = args.includes('--hook')
+  let words = args.filter((a) => !a.startsWith('--'))
+  try {
+    let body: Record<string, unknown> = {}
+    if (hook) {
+      body = JSON.parse(await new Response(Deno.stdin.readable).text())
+    }
+    let turn = hook
+      ? hookTurn(body)
+      : words.find((w) => /^(idle|busy)$/.test(w))
+    let sid = String(body.session_id ?? '') ||
+      words.find((w) => w != turn) ||
+      me()
+    if (!sid || !turn) {
+      if (hook) return
+      throw new Error('task session turn <idle|busy> [sid]')
+    }
+    let all = rows(await snapshot())
+    let sess = all.find((r) =>
+      r.comps.session && String(r.comps.session.id) == sid
+    )
+    if (!sess || sess.comps.session.turn == turn) return
+    await send([{
+      eid: sess.eid,
+      name: 'session',
+      comp: { turn },
+    }])
+    if (!hook) console.log(`${idOf(sess)} turn ${turn}`)
+  } catch (e) {
+    if (!hook) throw e
+  }
 }
 
 // Save a memory: doc + memory comp, stamped via the calling session — the
@@ -1243,6 +1288,7 @@ let session = (args: string[]) => {
   if (sub == 'context') return context(rest)
   if (sub == 'wrap') return wrap(rest)
   if (sub == 'brief') return sessionBrief(rest)
+  if (sub == 'turn') return sessionTurn(rest)
   if (!sub || sub == 'help' || sub == '--help') {
     return console.log(help(['session']))
   }
@@ -1334,30 +1380,37 @@ let terminal = async (
 }
 
 let CHANNEL = 'plugin:tasks@tasks-fleet'
+let terminalScope = (args: string[], pid: number) => {
+  let end = args.indexOf('--')
+  if (end < 0) end = args.length
+  let operator = args.slice(0, end).includes('--operator')
+  return {
+    args: args.filter((a, i) => a != '--operator' || i >= end),
+    env: {
+      TASKS_OPERATOR: operator ? String(pid) : '',
+      TASKS_TASK: '',
+      CLAUDE_CODE_CHILD_SESSION: '',
+    },
+  }
+}
+
 export let claudeLaunch = (
   args: string[],
   listed: boolean,
   pid = Deno.pid,
 ) => {
-  let end = args.indexOf('--')
-  if (end < 0) end = args.length
-  let operator = args.slice(0, end).includes('--operator')
-  let pass = args.filter((a, i) => a != '--operator' || i >= end)
+  let scope = terminalScope(args, pid)
   return {
     args: [
       '--dangerously-skip-permissions',
       '--channels',
       CHANNEL,
       ...(listed ? [] : ['--dangerously-load-development-channels', CHANNEL]),
-      ...pass,
+      ...scope.args,
     ],
     // A nested interactive launch is a new session, never the caller's managed
     // task or Task-tool child. Empty values actively clear inherited hints.
-    env: {
-      TASKS_OPERATOR: operator ? String(pid) : '',
-      TASKS_TASK: '',
-      CLAUDE_CODE_CHILD_SESSION: '',
-    },
+    env: scope.env,
   }
 }
 
@@ -1374,16 +1427,26 @@ let claude = async (args: string[]) => {
   await terminal('claude', launch.args, launch.env)
 }
 
-// The Codex twin: full access matches the interactive Claude posture;
-// project hooks bind its thread to the graph at start and wrap it
-// at exit. Every other Codex argument stays in the caller's order.
-export let codexArgs = (args: string[]) => [
-  '--dangerously-bypass-approvals-and-sandbox',
-  '--dangerously-bypass-hook-trust',
-  ...args,
-]
+// Full access matches the interactive Claude posture; lifecycle hooks bind
+// the provider thread to the graph. Every other Codex argument keeps order.
+export let codexLaunch = (args: string[], pid = Deno.pid) => {
+  let scope = terminalScope(args, pid)
+  return {
+    args: [
+      '--dangerously-bypass-approvals-and-sandbox',
+      '--dangerously-bypass-hook-trust',
+      ...scope.args,
+    ],
+    env: scope.env,
+  }
+}
 
-let codex = (args: string[]) => terminal('codex', codexArgs(args))
+export let codexArgs = (args: string[]) => codexLaunch(args).args
+
+let codex = async (args: string[]) => {
+  let launch = codexLaunch(args)
+  await terminal('codex', launch.args, launch.env)
+}
 
 let tui = async () => {
   // The same be-reborn loop as `deno task tui`, so a global install hot

@@ -54,9 +54,10 @@ export let manuals: Record<string, Manual> = {
     passthrough: true,
   },
   codex: {
-    usage: 'codex [codex args...]',
-    about: 'interactive codex, fleet-wired: full access + the tasks lifecycle',
-    examples: ['task codex', 'task codex resume --last'],
+    usage: 'codex [--operator] [codex args...]',
+    about:
+      'interactive codex: observer by default, --operator injects fleet work',
+    examples: ['task codex', 'task codex --operator resume --last'],
     root: true,
     passthrough: true,
   },
@@ -308,12 +309,13 @@ export let manuals: Record<string, Manual> = {
     words: [1],
   },
   session: {
-    usage: 'session <context|wrap|brief> …',
+    usage: 'session <context|wrap|brief|turn> …',
     about: 'the session lifecycle: boot digest, wrap, self-authored brief',
     examples: [
       'task session context',
       'task session context my-session-id',
       'task session brief --body=@-',
+      'task session turn idle',
       'task session wrap',
     ],
     root: true,
@@ -339,6 +341,12 @@ export let manuals: Record<string, Manual> = {
       words.length || args.some((a) => a.startsWith('--body='))
         ? undefined
         : 'needs brief text or --body=@file|-|@-',
+  },
+  'session turn': {
+    usage: 'session turn <idle|busy> [sid] [--hook]',
+    about: 'announce a native provider turn boundary',
+    options: [flag('--hook')],
+    words: [0, 2],
   },
   telemetry: {
     usage: 'telemetry [--errors] [--since=ISO] [-n N]',

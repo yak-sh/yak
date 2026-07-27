@@ -39,6 +39,20 @@ export let ancestor = (comm: string, pid = Deno.pid): number | undefined => {
   }
 }
 
+// A launcher marker scopes an inherited capability to its one process tree.
+// Provider shims may sit between the launcher and agent, so direct parenthood
+// is too narrow; walking to the named root still excludes sibling launches.
+export let descends = (
+  pid: number,
+  root: number,
+  parent = parentOf,
+): boolean => {
+  for (let p: number | undefined = pid; p; p = parent(p)) {
+    if (p == root) return true
+  }
+  return false
+}
+
 // The provider process this hook runs under. Claude's channel also binds to
 // this pid; Codex uses it only to keep its external transcript followed.
 export let agentPid = (provider: string) => ancestor(provider)

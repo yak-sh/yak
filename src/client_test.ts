@@ -845,7 +845,13 @@ Deno.test('project mail reaches the operator, not a specialist; direct address a
 })
 
 Deno.test('sessionFor: hook identity round-trips and refreshes only on change', () => {
-  let self = { agent_type: 'reviewer', source: 'startup', operator: false }
+  let self = {
+    agent_type: 'reviewer',
+    source: 'startup',
+    operator: false,
+    pane: '%42',
+    turn: 'idle',
+  }
   let minted = sessionFor(all, 'sess-new', '/w2', 4242, self)
   assertEquals(minted.changes[0].comp, {
     id: 'sess-new',
@@ -853,6 +859,8 @@ Deno.test('sessionFor: hook identity round-trips and refreshes only on change', 
     pid: 4242,
     agent_type: 'reviewer',
     source: 'startup',
+    turn: 'idle',
+    pane: '%42',
     operator: 0,
   })
   // a known session already wearing the same agent_type is silent for it;
@@ -867,6 +875,8 @@ Deno.test('sessionFor: hook identity round-trips and refreshes only on change', 
           id: 'sess-x',
           cwd: '/w',
           agent_type: 'reviewer',
+          pane: '%42',
+          turn: 'idle',
           operator: false,
         },
       },
@@ -875,6 +885,10 @@ Deno.test('sessionFor: hook identity round-trips and refreshes only on change', 
   assertEquals(sessionFor(g, 'sess-x', '/w', undefined, self).changes, [
     { eid: S, name: 'session', comp: { source: 'startup' } },
   ])
+  assertEquals(
+    sessionFor(g, 'sess-x', '/w', undefined, { pane: null }).changes,
+    [{ eid: S, name: 'session', comp: { pane: null } }],
+  )
 })
 
 // One derivation for every caller-aware door: the repo whose path
