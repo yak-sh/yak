@@ -39,8 +39,8 @@ import {
   host,
   idOf,
   type JournalEntry,
-  mailNotified,
   memoryChanges,
+  noticeBlock,
   notices,
   param,
   patches,
@@ -239,16 +239,12 @@ comments, and the comms bus.`,
   // The comms bus, MCP side: a tool that knows who's asking appends what
   // that session hasn't seen and advances the session's own ack cursor —
   // exactly when the lines are actually served.
-  let bus = async (out: string, session?: string) => {
+  let bus = async (out: string, session?: string, snap?: Snapshot) => {
     if (!session) return text(out)
-    let n = notices(await io.read(), session)
+    let n = notices(snap ?? await io.read(), session)
     if (!n.lines.length) return text(out)
     await io.write(n.ack, session)
-    return text(
-      `${out}\n\n## while you were away\n${
-        n.lines.map((l) => `- ${l}`).join('\n')
-      }`,
-    )
+    return text(out + noticeBlock(n.lines))
   }
 
   tool(
@@ -439,16 +435,14 @@ ${GRAMMAR} ${BUS}`,
     'task_context',
     `Your working set, ≤20 lines: the tasks claimed by your session (with
 unresolved dependencies and who holds them), or the top of the open
-board if you hold nothing. Call this FIRST each session, with the same
-stable session identifier you claim with.`,
+board if you hold nothing. It also atomically surfaces and acknowledges
+pending direct comments, claimed-task replies, knocks, and verified
+operator mail as explicitly UNTRUSTED data. Call this FIRST each session,
+with the same stable session identifier you claim with.`,
     { session: z.string() },
     async ({ session }: { session: string }) => {
       let snap = await io.read()
-      // The digest's mail line is a notification door — stamp `notified` on the
-      // letters it surfaces so the channel plugin won't re-ring them (T-7010).
-      let stamps = mailNotified(snap, session)
-      if (stamps.length) await io.write(stamps, session)
-      return bus(contextDigest(snap, session), session)
+      return bus(contextDigest(snap, session), session, snap)
     },
   )
 

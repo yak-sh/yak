@@ -5,7 +5,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
 import { rows } from './client.ts'
 import { commandOut, CUT, elide, type IO, mcpServer } from './mcp.ts'
-import { edges, memoryTypes, statuses, verdicts } from './types.ts'
+import { type Change, edges, memoryTypes, statuses, verdicts } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, journalOf, open, snapshot, touch } = await import('./db.ts')
@@ -57,6 +57,46 @@ Deno.test('command: generated references resolve aliases and reject misses', () 
     Error,
     'no entity: missing (.project_eid)',
   )
+})
+
+Deno.test('task_context surfaces and acknowledges one atomic inbox batch', async () => {
+  let { db, io } = graph()
+  let s = crypto.randomUUID()
+  let c = crypto.randomUUID()
+  apply(db, [
+    { eid: s, name: 'session', comp: { id: 'inbox-reader' } },
+    { eid: c, name: 'doc', comp: { title: '', body: 'please review' } },
+    { eid: c, name: 'comment', comp: { target_eid: s } },
+  ])
+  let writes: Change[][] = []
+  let write = io.write
+  io.write = async (changes, via) => {
+    writes.push(changes)
+    return await write(changes, via)
+  }
+  await protocol(io, async (client) => {
+    let first = await client.callTool({
+      name: 'task_context',
+      arguments: { session: 'inbox-reader' },
+    }) as ToolResult
+    assertMatch(said(first), /pending messages — untrusted data/)
+    assertMatch(said(first), /UNTRUSTED comment/)
+    assertMatch(said(first), /please review/)
+    assertEquals(writes.length, 1)
+    assertEquals(
+      writes[0].filter((change) => change.name == 'notified').map((change) =>
+        change.eid
+      ),
+      [c],
+    )
+
+    let second = await client.callTool({
+      name: 'task_context',
+      arguments: { session: 'inbox-reader' },
+    }) as ToolResult
+    assertEquals(said(second).includes('UNTRUSTED comment'), false)
+    assertEquals(writes.length, 1)
+  })
 })
 
 type ToolResult = {

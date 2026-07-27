@@ -32,9 +32,9 @@ import {
   mailAt,
   mailChanges,
   mailLine,
-  mailNotified,
   me,
   memoryChanges,
+  noticeBlock,
   notices,
   observerDigest,
   type Param,
@@ -969,15 +969,10 @@ let context = async (args: string[]) => {
     let fm = sessionMeta(rows(snap), sid)
     let out = contextDigest(snap, sid, Date.now(), scope)
     if (fm) out = `${fm}\n${out}`
-    // The digest's mail line is a notification door — stamp `notified` on the
-    // letters it surfaces so the channel plugin won't re-ring them (T-7010).
-    let mailStamps = mailNotified(snap, sid, scope)
-    if (mailStamps.length) await send(mailStamps)
     let n = notices(snap, sid)
     if (n.lines.length) {
       await send(n.ack)
-      out += '\n## while you were away\n' +
-        n.lines.map((l) => `- ${l}`).join('\n')
+      out += noticeBlock(n.lines)
     }
     console.log(out)
   }

@@ -195,7 +195,7 @@ Deno.test('notices: unseen comments on claimed tasks + messages to the session',
   assertEquals(n.lines.length, 2)
   assertEquals(n.lines[0].includes('heads up'), true)
   assertEquals(n.lines[0].includes('[approved]'), true)
-  assertEquals(n.lines[1].includes('Task Graph · via S-80: ping'), true)
+  assertEquals(n.lines[1].includes('P-81 · via S-80: ping'), true)
   assertEquals(n.ack[0].name, 'session')
   assertEquals(typeof n.ack[0].comp?.acked_at, 'string')
   // serving a comment stamps `notified` on it (T-7010): the sweep is a
@@ -242,6 +242,146 @@ Deno.test('notices: unseen comments on claimed tasks + messages to the session',
   assertEquals(notices(acked, 'sess-x').lines.length, 2)
   // unknown session: silent, no ack
   assertEquals(notices(busSnap, 'sess-nobody'), { lines: [], ack: [] })
+})
+
+Deno.test('notices: comments, acted knocks, and verified operator mail surface together', () => {
+  let P = 'aaaaaaaa-0000-4000-8000-000000000041'
+  let B = 'aaaaaaaa-0000-4000-8000-000000000042'
+  let C = 'aaaaaaaa-0000-4000-8000-000000000043'
+  let K = 'aaaaaaaa-0000-4000-8000-000000000044'
+  let M = 'aaaaaaaa-0000-4000-8000-000000000045'
+  let U = 'aaaaaaaa-0000-4000-8000-000000000046'
+  let g: Snapshot = {
+    changes: [
+      ...snap.changes,
+      { eid: P, name: 'entity', comp: { eid: P, num: 41 } },
+      { eid: P, name: 'doc', comp: { title: 'Home', body: '' } },
+      { eid: P, name: 'project', comp: {} },
+      { eid: B, name: 'entity', comp: { eid: B, num: 42 } },
+      { eid: B, name: 'session', comp: { id: 'sender' } },
+      {
+        eid: S,
+        name: 'session',
+        comp: { id: 'sess-x', cwd: '/w', actor_eid: P, operator: 1 },
+      },
+      { eid: C, name: 'entity', comp: { eid: C, num: 43 } },
+      { eid: C, name: 'created', comp: { at: '2026-01-02', by: P, via: B } },
+      { eid: C, name: 'doc', comp: { title: '', body: 'review this' } },
+      { eid: C, name: 'comment', comp: { target_eid: T1 } },
+      { eid: K, name: 'entity', comp: { eid: K, num: 44 } },
+      { eid: K, name: 'created', comp: { at: '2026-01-03' } },
+      {
+        eid: K,
+        name: 'knock',
+        comp: {
+          to_eid: S,
+          target_eid: T1,
+          acted_at: '2026-01-03',
+          error: 'no channel',
+        },
+      },
+      { eid: M, name: 'entity', comp: { eid: M, num: 45 } },
+      { eid: M, name: 'created', comp: { at: '2026-01-04' } },
+      { eid: M, name: 'doc', comp: { title: 'hello', body: 'mail body' } },
+      {
+        eid: M,
+        name: 'mail',
+        comp: {
+          target_eid: P,
+          from: 'friend@example.test',
+          received_at: '2026-01-04',
+          message_id: 'm-1',
+          verified: 1,
+        },
+      },
+      { eid: U, name: 'entity', comp: { eid: U, num: 46 } },
+      { eid: U, name: 'created', comp: { at: '2026-01-05' } },
+      { eid: U, name: 'doc', comp: { title: 'bad', body: 'unverified' } },
+      {
+        eid: U,
+        name: 'mail',
+        comp: {
+          target_eid: P,
+          received_at: '2026-01-05',
+          message_id: 'm-2',
+          verified: 0,
+        },
+      },
+    ],
+    deps: snap.deps,
+  }
+  let n = notices(g, 'sess-x')
+  assertEquals(n.lines.length, 3)
+  assertEquals(n.lines.every((line) => line.startsWith('UNTRUSTED ')), true)
+  assertEquals(n.lines.some((line) => line.includes('review this')), true)
+  assertEquals(
+    n.lines.some((line) => line.includes('knock: look at T-2')),
+    true,
+  )
+  assertEquals(n.lines.some((line) => line.includes('mail body')), true)
+  assertEquals(n.lines.some((line) => line.includes('unverified')), false)
+  assertEquals(
+    n.ack.filter((c) => c.name == 'notified').map((c) => c.eid).sort(),
+    [C, K, M].sort(),
+  )
+  let observer: Snapshot = {
+    ...g,
+    changes: g.changes.map((change) =>
+      change.eid == S && change.name == 'session'
+        ? { ...change, comp: { ...change.comp, operator: 0 } }
+        : change
+    ),
+  }
+  assertEquals(
+    notices(observer, 'sess-x').lines.some((line) =>
+      line.includes('mail body')
+    ),
+    false,
+  )
+  let seen = {
+    ...g,
+    changes: [
+      ...g.changes,
+      ...n.ack.filter((c) => c.name == 'notified'),
+    ],
+  }
+  assertEquals(notices(seen, 'sess-x').lines, [])
+})
+
+Deno.test('notices: overflow remains pending until a later read', () => {
+  let comments = Array.from({ length: 22 }, (_, i) => {
+    let eid = `comment-${String(i).padStart(2, '0')}`
+    return [
+      { eid, name: 'entity', comp: { eid, num: 100 + i } },
+      {
+        eid,
+        name: 'created',
+        comp: { at: `2026-01-${String(i + 1).padStart(2, '0')}` },
+      },
+      { eid, name: 'doc', comp: { title: '', body: `message ${i}` } },
+      { eid, name: 'comment', comp: { target_eid: S } },
+    ]
+  }).flat()
+  let g: Snapshot = { changes: [...snap.changes, ...comments], deps: snap.deps }
+  let first = notices(g, 'sess-x')
+  assertEquals(first.lines.length, 21) // 20 items + overflow summary
+  assertEquals(
+    first.ack.filter((c) => c.name == 'notified').length,
+    20,
+  )
+  let later: Snapshot = {
+    ...g,
+    changes: [
+      ...g.changes,
+      ...first.ack.filter((c) => c.name == 'notified'),
+    ],
+  }
+  let second = notices(later, 'sess-x')
+  assertEquals(second.lines.length, 2)
+  assertEquals(
+    second.ack.filter((c) => c.name == 'notified').length,
+    2,
+  )
 })
 
 // Drain-proof: one reader serving a comment advances the shared `acked_at`
@@ -1507,7 +1647,7 @@ Deno.test('notices: bylines read actor and instrument from the stamp', () => {
     deps: snap.deps,
   }
   let [line] = notices(s, 'sess-x').lines
-  assertMatch(line, /Task Graph · via S-82/) // operator, not session id
+  assertMatch(line, /P-81 · via S-82/) // operator, not session id
 })
 
 Deno.test('contextDigest: sessionless is the preview — headed as one, claim line templated', () => {

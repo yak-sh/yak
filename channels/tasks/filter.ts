@@ -69,7 +69,10 @@ export type Ctx = {
   //   see the knock branch.
   // Either way `done`/`injects`/`operator` still gate — correctness, not
   // dedup.
-  mode?: 'catchup' | 'resume'
+  // `inbox` is the deliberate task_context sweep: unlike a live channel,
+  // it may surface an addressed knock after the resolver stamped its routing
+  // outcome. `notified` still bounds it to what nobody has read.
+  mode?: 'catchup' | 'resume' | 'inbox'
   // Whether the served session is the project's operator loop — a specialist
   // (false) gets no project mail, only direct address (client.ts isOperator,
   // T-7006). Absent = true (an unresolved session errs toward delivery).
@@ -115,6 +118,7 @@ export type Sess = {
   pid?: number
   actorEid?: string
   personaEid?: string
+  operator?: boolean
   origin?: string
   requestedTaskEid?: string
 }
@@ -128,6 +132,13 @@ let remember = (row: Row, comp: Record<string, unknown>) => {
   if ('pid' in comp) s.pid = typeof comp.pid == 'number' ? comp.pid : undefined
   if ('actor_eid' in comp) s.actorEid = str(comp.actor_eid) || undefined
   if ('persona_eid' in comp) s.personaEid = str(comp.persona_eid) || undefined
+  if ('operator' in comp) {
+    s.operator = comp.operator == true || comp.operator == 1
+      ? true
+      : comp.operator == false || comp.operator == 0
+      ? false
+      : undefined
+  }
   if ('origin' in comp) s.origin = str(comp.origin) || undefined
   if ('requested_task_eid' in comp) {
     s.requestedTaskEid = str(comp.requested_task_eid) || undefined
@@ -336,7 +347,9 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
   let created = createdIn(changes)
   // Only the resume sweep needs birthdays (commentOn) — a live batch is one
   // moment, so everything in it rode together.
-  let born = ctx.mode == 'resume' ? bornIn(changes) : undefined
+  let born = ctx.mode == 'resume' || ctx.mode == 'inbox'
+    ? bornIn(changes)
+    : undefined
   let out: Event[] = []
   // Already told: our own deliveries always, the fleet's `notified` stamp
   // except on a catch-up replay (see Ctx.mode).
@@ -372,7 +385,11 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
       // CLAIMING this channel took it, and an un-`notified` row proves the
       // claim false — that knock is exactly what a disconnect ate
       // (T-7302), so ring it and make the stamp true.
-      if (c.comp.acted_at != null && !(ctx.mode == 'resume' && lost(c, ctx))) {
+      if (
+        c.comp.acted_at != null &&
+        ctx.mode != 'inbox' &&
+        !(ctx.mode == 'resume' && lost(c, ctx))
+      ) {
         continue
       }
       let recipient = str(c.comp.to_eid)

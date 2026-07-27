@@ -99,6 +99,7 @@ let homeEid: string | undefined
 // mail — only direct address.
 let origin: string | undefined
 let requestedTaskEid: string | undefined
+let operator = false
 
 // persona eid → its home project, learned from every persona change (personas
 // are few), so the served session's home resolves even when the persona row
@@ -162,6 +163,7 @@ let resolve = (changes: Change[]) => {
     personaEid = s?.personaEid
     origin = s?.origin
     requestedTaskEid = s?.requestedTaskEid
+    operator = s?.operator == true
   }
   homeEid = (personaEid ? homes.get(personaEid) : undefined) ??
     (actorEid && index.get(actorEid)?.comps.has('project')
@@ -291,7 +293,7 @@ let feed = (changes: Change[], mode?: 'catchup' | 'resume') => {
     sent: (eid) => sent.has(eid),
     mode,
     // The operator loop gets project mail; a specialist does not (T-7006).
-    operator: origin != 'managed' && !requestedTaskEid,
+    operator: operator && origin != 'managed' && !requestedTaskEid,
   })
   let stamps: Change[] = []
   for (let e of events) {

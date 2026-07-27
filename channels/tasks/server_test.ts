@@ -178,6 +178,18 @@ Deno.test("the resolver's stamp re-broadcast is a receipt, not a nudge", () => {
   assertEquals(channelEvents(batch, ctx()), [])
 })
 
+Deno.test('an inbox sweep deliberately reads an addressed acted knock', () => {
+  let batch = [ch('k1', 'knock', {
+    to_eid: 'sess',
+    target_eid: 't9',
+    acted_at: '2026-07-27T00:00:00Z',
+    error: 'no live channel',
+  })]
+  assertEquals(channelEvents(batch, ctx({ mode: 'inbox' })), [
+    { content: 'knock: look at T-9', meta: { kind: 'knock' }, eid: 'k1' },
+  ])
+})
+
 // --- mail --------------------------------------------------------------------
 // The arrival signal is the sweep's full-row stamp broadcast: a bare `mail`
 // change carrying received_at (server-only, never on a wire patch). The doc
@@ -652,11 +664,13 @@ Deno.test('findSession reads the operator/specialist marks off the reify', () =>
     ch('e1', 'session', {
       id: 'sp',
       pid: 4242,
+      operator: 1,
       origin: 'managed',
       requested_task_eid: 't7',
     }),
   ])
   let s = findSession(idx, { pid: 4242 })
+  assertEquals(s?.operator, true)
   assertEquals(s?.origin, 'managed')
   assertEquals(s?.requestedTaskEid, 't7')
 })
