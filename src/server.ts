@@ -68,6 +68,7 @@ import {
   warm,
 } from './query.ts'
 import { liveFrame } from './wire.ts'
+import { nativeSoon, nativeSweep, noticeAccepted } from './tmux.ts'
 
 // The hot-swap generation: bumped by the watcher on every client-code or
 // css change, stamped into every served module's relative imports so a
@@ -268,6 +269,7 @@ let sendLive = (changes: Change[], except?: WebSocket) => {
 let cast = (changes: Change[], except?: WebSocket) => {
   sendLive(changes, except)
   maintain(changes)
+  nativeSoon(cast)
 }
 
 // The effect half of a write, run AFTER the casts: a slow or failing
@@ -742,6 +744,11 @@ on('session', {
     'the process leaves, counting its transcript if it wrote one (we never ' +
     'forked it, so there is no exit code to report)',
 })
+on('session', {
+  changed: { turn: noticeAccepted(cast) },
+  doc: 'a busy native-TUI turn after a submitted wake-up records acceptance; ' +
+    'graph message content remains pending until task_context surfaces it',
+})
 on('stop_request', {
   created: stopped(cast),
   sweep: { pending: 'acted_at is null' },
@@ -855,6 +862,12 @@ on('doc', {
 // still alive, finalize the ones that died while we were away. Nothing here
 // reaps a child; the watcher below must never learn how.
 recover(cast)
+
+// Native Codex panes have no content channel. Reconcile pending inboxes at
+// boot and on a short tick; graph writes also debounce nativeSoon() through
+// cast. Per-session submission/acceptance clocks bound swallowed-send retries.
+nativeSweep(cast)
+setInterval(() => nativeSweep(cast), 2_000)
 
 // Then the outbox relay: intents that committed but never fired their
 // effect (a crash in the post-commit gap) re-fire now — strictly AFTER

@@ -445,6 +445,13 @@ export let stamped: Record<string, Record<string, PropType>> = {
   // wire-writable launch spec lives in comps.spawn, with session aliases
   // admitted only for compatibility).
   session: {
+    // Native-TUI wake-up audit. A submitted notice carries no graph content:
+    // token is an opaque attempt id, notice_at is when tmux accepted the
+    // command, and notice_accepted_at is the later busy-turn hook proving the
+    // provider consumed Enter. Server-only so a session cannot forge delivery.
+    notice_at: 'time',
+    notice_accepted_at: 'time',
+    notice_token: 'text',
     origin: { enum: ['external', 'managed'] },
     branch: 'text',
     base_revision: 'text',
@@ -745,6 +752,9 @@ export type Session = {
   pid?: number | null // the provider process it runs in (hook-stamped)
   pane?: string | null // native terminal address, revalidated before use
   turn?: string | null // idle|busy, announced by provider lifecycle hooks
+  notice_at?: string | null // server-submitted native-TUI wake-up
+  notice_accepted_at?: string | null // later busy hook accepted it
+  notice_token?: string | null // opaque attempt id, never message content
   transcript?: string | null // provider-owned JSONL — an external log
   acked_at?: string | null
   agent_type?: string | null // set when launched `claude --agent <name>`

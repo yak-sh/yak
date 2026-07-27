@@ -633,6 +633,9 @@ export let open = (path = file) => {
   addCol('session', 'pid', 'pid integer')
   addCol('session', 'pane', 'pane text')
   addCol('session', 'turn', 'turn text')
+  addCol('session', 'notice_at', 'notice_at text')
+  addCol('session', 'notice_accepted_at', 'notice_accepted_at text')
+  addCol('session', 'notice_token', 'notice_token text')
   // A provider-owned transcript JSONL — an external session's log file.
   addCol('session', 'transcript', 'transcript text')
   addCol('session', 'acked_at', 'acked_at text')
