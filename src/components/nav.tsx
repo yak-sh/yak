@@ -1,4 +1,4 @@
-import { signal } from '@preact/signals'
+import { effect, signal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
 import { block, copy, setFollow } from './ui.tsx'
 import { usePlaceAt } from './overlay.tsx'
@@ -38,12 +38,14 @@ export let peek = signal<
   { eid: string; x: number; y: number; view?: string } | null
 >(null)
 
+export let peeking = (eid: string) => peek.value?.eid == eid
+
 // One opener for every entity click: a fine pointer peeks, a coarse one
 // navigates — fullscreen IS the phone's right answer. navigate() stays
 // the deliberate root change (:open, "open here", direct urls).
 export let openAt = (eid: string, ev: MouseEvent) => {
   if (globalThis.matchMedia?.('(pointer: fine)').matches) {
-    peek.value = { eid, x: ev.clientX, y: ev.clientY }
+    peek.value = peeking(eid) ? null : { eid, x: ev.clientX, y: ev.clientY }
   } else navigate(`/${idOf(ent(eid))}`)
 }
 
@@ -55,6 +57,20 @@ export let eidOf = (id: string) => {
   return Object.entries(cache.value)
     .find(([, r]) => r.entity?.num == +m![1])?.[0]
 }
+
+// Markdown refs live inside innerHTML, outside Preact's signal render.
+// Mirror the shared link state onto them so every entity link keeps the
+// same toggle and open treatment.
+effect(() => {
+  let eid = peek.value?.eid
+  let e = eid && ent(eid)
+  let ids = new Set(e ? [e.eid, String(e.num), idOf(e)] : [])
+  globalThis.document?.querySelectorAll<HTMLAnchorElement>('a[data-ref]')
+    .forEach((a) => {
+      if (ids.has(a.dataset.ref!)) a.dataset.peek = 'open'
+      else delete a.dataset.peek
+    })
+})
 
 // The plain-click half of an in-app anchor: modifiers, middle-click and
 // the native context menu keep their new-tab forms; a bare click (tap
@@ -98,6 +114,7 @@ export let clickProps = (e: Ent) => {
   let href = `/${idOf(e)}`
   return {
     href,
+    'data-peek': peeking(e.eid) ? 'open' : undefined,
     onClick: follow(href, e.eid),
     onDblClick: follow(href),
   }

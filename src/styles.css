@@ -1083,6 +1083,11 @@ html {
 .Id-retired:hover {
   text-decoration: line-through underline;
 }
+/* The link that owns the floating card stays visibly tied to it. */
+:where(a, [role='link'])[data-peek='open'] {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .Show_Meta .Id {
   margin-left: auto; /* the id keeps the row's right edge, as in a titlebar */
 }
