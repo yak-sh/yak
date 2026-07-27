@@ -1356,6 +1356,57 @@ html {
   display: inline;
   margin: 0;
 }
+
+/* A role is desired state first, prose second. Its small configuration grid
+   uses the ordinary typed Prop controls; the server-stamped receipt stays
+   read-only and compact above it. */
+.Role_Head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--gap);
+  margin: 0;
+  font-size: 1.75rem;
+  line-height: 1.15;
+}
+.Role_State {
+  color: var(--dim);
+  font-size: 12px;
+  font-weight: 500;
+}
+.Role_State-running {
+  color: var(--green);
+}
+.Role_Title {
+  flex: 1;
+  min-width: 0;
+}
+.Role_Meta {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  margin-top: var(--half-gap);
+  color: var(--dim);
+  font-size: 11px;
+}
+.Role_Grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  gap: var(--half-gap) var(--gap);
+  margin: var(--gap) 0;
+}
+.Role_Field {
+  min-width: 0;
+}
+.Role_Label {
+  display: block;
+  color: var(--dim);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+.Role_Fault {
+  color: var(--red);
+  white-space: pre-wrap;
+}
 .Debug_Linked {
   display: flex;
   align-items: baseline;

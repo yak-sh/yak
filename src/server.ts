@@ -69,6 +69,7 @@ import {
 } from './query.ts'
 import { liveFrame } from './wire.ts'
 import { nativeSoon, nativeSweep, noticeAccepted } from './tmux.ts'
+import { roleRemoved, rolesSoon, rolesSweep } from './roles.ts'
 
 // The hot-swap generation: bumped by the watcher on every client-code or
 // css change, stamped into every served module's relative imports so a
@@ -270,6 +271,7 @@ let cast = (changes: Change[], except?: WebSocket) => {
   sendLive(changes, except)
   maintain(changes)
   nativeSoon(cast)
+  rolesSoon(cast)
 }
 
 // The effect half of a write, run AFTER the casts: a slow or failing
@@ -754,6 +756,11 @@ on('stop_request', {
   sweep: { pending: 'acted_at is null' },
   doc: 'the brake: signal the targeted session to stop, stamp acted_at',
 })
+on('role', {
+  removed: roleRemoved(cast),
+  doc: 'a removed persistent role closes its deterministic native tmux door; ' +
+    'desired state reconciliation owns starts, stops, and configuration drift',
+})
 on('comment', {
   created: commented(cast),
   doc: 'a comment at a settled session resumes that agent with its ' +
@@ -868,6 +875,13 @@ recover(cast)
 // cast. Per-session submission/acceptance clocks bound swallowed-send retries.
 nativeSweep(cast)
 setInterval(() => nativeSweep(cast), 2_000)
+
+// Persistent roles are desired state: boot and the short tick heal a daemon
+// restart or dead native TUI, while every graph cast debounces a faster pass.
+let reconcileRoles = () =>
+  rolesSweep(cast).catch((e) => console.warn('roles sweep —', e))
+reconcileRoles()
+setInterval(reconcileRoles, 2_000)
 
 // Then the outbox relay: intents that committed but never fired their
 // effect (a crash in the post-commit gap) re-fire now — strictly AFTER

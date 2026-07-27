@@ -23,6 +23,7 @@ import {
   leadPrio,
   lifecycleHooks,
   operatorHook,
+  roleEid,
   strayFlag,
   subagentDigest,
   subject,
@@ -340,6 +341,24 @@ Deno.test('operator capability follows the explicit launcher marker', () => {
   )
   assertEquals(operatorHook(7, env({ TASKS_OPERATOR: '99' }), under), false)
   assertEquals(operatorHook(7, env({}), under), false)
+})
+
+Deno.test('role binding accepts only a live role entity', () => {
+  let role = {
+    eid: 'role-eid',
+    num: 7,
+    kind: 'role',
+    comps: { role: { state: 'running' } },
+  }
+  let task = {
+    eid: 'task-eid',
+    num: 8,
+    kind: 'task',
+    comps: { task: { status: 'open' } },
+  }
+  assertEquals(roleEid([role, task], 'R-7'), role.eid)
+  assertEquals(roleEid([role, task], task.eid), undefined)
+  assertEquals(roleEid([role, task], 'missing'), undefined)
 })
 
 Deno.test('Codex turn hooks announce only busy and idle boundaries', () => {

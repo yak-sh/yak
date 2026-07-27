@@ -27,6 +27,7 @@ let { notices } = await import('./client.ts')
 let {
   childPath,
   commented,
+  continueSession,
   deleted,
   logs,
   logsDir,
@@ -318,6 +319,62 @@ Deno.test('a fake session runs end to end', async () => {
     [1, 2, 3, 4, 5],
   )
   assertMatch(String(page.stderr), /stderr noise/) // diagnostics, unordered
+})
+
+Deno.test('a managed role runs in its project and resumes content-free', async () => {
+  let project = uid(), role = uid(), eid = uid(), id = uid()
+  let done = write([
+    { eid: project, name: 'doc', comp: { title: 'Project', body: '' } },
+    { eid: project, name: 'project', comp: {} },
+    {
+      eid: project,
+      name: 'repo',
+      comp: { path: scratch, base_branch: 'main' },
+    },
+    {
+      eid: role,
+      name: 'doc',
+      comp: { title: 'Coordinator', body: 'report-role-env' },
+    },
+    {
+      eid: role,
+      name: 'role',
+      comp: { state: 'running', surface: 'managed', scope_eid: project },
+    },
+    {
+      eid,
+      name: 'session',
+      comp: {
+        id,
+        provider: 'fake',
+        model: 'fake-fast',
+        role_eid: role,
+        operator: 1,
+      },
+    },
+  ])
+  await done
+  assertEquals(row(eid)?.status, 'completed', JSON.stringify(row(eid)))
+  assertEquals(row(eid)?.actor_eid, project)
+  assertEquals(row(eid)?.requested_task_eid, null)
+  let events = Deno.readTextFileSync(log(eid)).split('\n').filter(Boolean)
+  assert(
+    events.some((line) => line.includes(`"text":"role:${role}"`)),
+  )
+
+  await continueSession(
+    eid,
+    'You have pending Tasks messages. Call task_context now.',
+    cast,
+  )
+  assertEquals(row(eid)?.status, 'completed')
+  let inputs = Deno.readTextFileSync(log(eid)).split('\n').filter(Boolean)
+    .map((line) => JSON.parse(line) as { type?: string; text?: string })
+    .filter((event) => event.type == 'session.input')
+  assertEquals(
+    inputs.at(-1)?.text,
+    'You have pending Tasks messages. Call task_context now.',
+  )
 })
 
 Deno.test('a canonical fake session dual-materializes and runs', async () => {
@@ -866,6 +923,23 @@ Deno.test('a comment resumes nothing it should not', async () => {
   await write(say(evented, 'S-1 completed · exit 0', 1))
   assertEquals(row(evented)?.status, 'completed')
   assertEquals(refusals(evented).length, 1) // only the event we wrote
+  // a persistent role never receives graph words through provider argv;
+  // roles.ts sends a fixed task_context wake after the turn settles.
+  let role = uid(), roleRun = plant([INIT])
+  apply(db, [
+    {
+      eid: role,
+      name: 'role',
+      comp: { state: 'running', surface: 'managed' },
+    },
+    { eid: roleRun, name: 'session', comp: { role_eid: role } },
+  ])
+  db.prepare("update session set status = 'completed' where eid = ?")
+    .run(roleRun)
+  let pending = say(roleRun, 'graph words stay in the graph')
+  await write(pending)
+  assertEquals(row(roleRun)?.status, 'completed')
+  assertEquals(told(pending[1].eid), false)
 })
 
 Deno.test('a comment at a settled session joins the log and resumes it', async () => {

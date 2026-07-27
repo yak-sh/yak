@@ -65,7 +65,6 @@ Deno.test('death words: every reference declares, the sets hold', () => {
       'client.actor_eid',
       'session.actor_eid',
       'session.requested_task_eid',
-      'session.role_eid',
       'session.persona_eid',
       'spawn.persona_eid',
       'role.scope_eid',
@@ -80,6 +79,7 @@ Deno.test('death words: every reference declares, the sets hold', () => {
     words('keep'),
     new Set([
       'memory.scope_eid',
+      'session.role_eid',
       'mail.target_eid',
       'mail.reply_to_eid',
       'created.by',

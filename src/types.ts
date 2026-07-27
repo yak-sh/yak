@@ -191,7 +191,9 @@ export let comps: Record<string, Record<string, PropType>> = {
     model: 'text',
     effort: 'text',
     requested_task_eid: { eid: '', death: 'detach' },
-    role_eid: { eid: 'role', death: 'detach' },
+    // Role membership is launch history. A deleted role closes its process,
+    // but the sessions that served it keep saying which role they served.
+    role_eid: { eid: 'role', death: 'keep' },
     persona_eid: { eid: '', death: 'detach' },
     actor_eid: { eid: '', death: 'detach' }, // who this run acts for — see client above
   },
@@ -462,10 +464,11 @@ export let stamped: Record<string, Record<string, PropType>> = {
   // wire-writable launch spec lives in comps.spawn, with session aliases
   // admitted only for compatibility).
   session: {
-    // Native-TUI wake-up audit. A submitted notice carries no graph content:
-    // token is an opaque attempt id, notice_at is when tmux accepted the
-    // command, and notice_accepted_at is the later busy-turn hook proving the
-    // provider consumed Enter. Server-only so a session cannot forge delivery.
+    // Content-free wake-up audit. A submitted notice carries no graph content:
+    // token is an opaque attempt id and notice_at is when the door accepted
+    // it. For a native TUI, notice_accepted_at is the later busy-turn hook
+    // proving the provider consumed Enter. Server-only so a session cannot
+    // forge delivery.
     notice_at: 'time',
     notice_accepted_at: 'time',
     notice_token: 'text',

@@ -18,6 +18,7 @@ import {
   AnyTitle,
   BoardTitle,
   DocTitle,
+  RoleTitle,
   SessionTitle,
   TaskTitle,
   WebTitle,
@@ -36,6 +37,7 @@ import { Json } from './views/Json.tsx'
 import { Md, mdText } from './views/Md.tsx'
 import { Web } from './views/Web.tsx'
 import { Session, SessionRow } from './views/Session.tsx'
+import { Role } from './views/Role.tsx'
 import { openRun } from './Run.tsx'
 import { viaName } from './Comments.tsx'
 
@@ -70,6 +72,13 @@ define([
   { view: 'Card.Full', match: has('doc'), Render: CardFull },
   { view: 'Board', match: has('doc', 'board'), Render: Board },
   { view: 'Persona', match: has('doc', 'persona'), Render: Persona },
+  // Role's linked-session sections walk back through Entity, so defer the
+  // binding like Canvas's cycle above.
+  {
+    view: 'Role',
+    match: has('doc', 'role'),
+    Render: (props) => <Role {...props} />,
+  },
   { view: 'Web', match: has('web'), Render: Web },
   { view: 'Session', match: has('session'), Render: Session },
   // The sections — Full's legos, internal views like Inline and Dependency.
@@ -87,6 +96,7 @@ define([
   { view: 'Comments', match: () => true, Render: Talkback },
   { view: 'Card.Title', match: has('doc', 'task'), Render: TaskTitle },
   { view: 'Card.Title', match: has('doc', 'board'), Render: BoardTitle },
+  { view: 'Card.Title', match: has('doc', 'role'), Render: RoleTitle },
   { view: 'Card.Title', match: has('web'), Render: WebTitle },
   { view: 'Card.Title', match: has('session'), Render: SessionTitle },
   { view: 'Card.Title', match: has('doc'), Render: DocTitle },
@@ -127,6 +137,7 @@ define([
   'List',
   'Board',
   'Persona',
+  'Role',
   'Full',
   'Web',
   'Session',
@@ -172,6 +183,20 @@ defineActions([
         { label: 'run agent…', run: () => openRun(e.eid) },
       ]
     },
+  },
+  {
+    match: has('role'),
+    acts: (e) => [{
+      label: e.role!.state == 'running' ? 'stop role' : 'start role',
+      run: () =>
+        mutate({
+          eid: e.eid,
+          name: 'role',
+          comp: {
+            state: e.role!.state == 'running' ? 'stopped' : 'running',
+          },
+        }),
+    }],
   },
   {
     match: has('claim'),

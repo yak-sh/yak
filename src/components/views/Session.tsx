@@ -454,6 +454,7 @@ export let Session = ({ e }: { e: Ent }) => {
         {s.requested_task_eid && (
           <Entity eid={s.requested_task_eid} view='Inline' />
         )}
+        {s.role_eid && <Entity eid={s.role_eid} view='Inline' />}
         {
           /* No brake on a process we never forked — apply() refuses a
             stop_request at anything but a managed run, and the button

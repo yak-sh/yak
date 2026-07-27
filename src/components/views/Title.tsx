@@ -34,6 +34,16 @@ export let BoardTitle = ({ e }: { e: Ent }) => (
   </Frame>
 )
 
+export let RoleTitle = ({ e }: { e: Ent }) => (
+  <Frame>
+    <Id e={e} />
+    <Dot status={e.role!.state == 'running' ? 'running' : 'completed'} />
+    <Text>
+      <Edit eid={e.eid} comp='doc' prop='title' />
+    </Text>
+  </Frame>
+)
+
 export let WebTitle = ({ e }: { e: Ent }) => {
   let host
   try {

@@ -1489,6 +1489,24 @@ Deno.test('detach: a dead task or persona lets its sessions go', () => {
   assertEquals(comp(s, 'spawn')?.persona_eid, null)
 })
 
+Deno.test('keep: a session remembers the role it served after deletion', () => {
+  let role = uid(), s = uid()
+  apply(db, [
+    {
+      eid: role,
+      name: 'role',
+      comp: { state: 'running', surface: 'managed' },
+    },
+    {
+      eid: s,
+      name: 'session',
+      comp: { id: `role-history-${s}`, role_eid: role },
+    },
+  ])
+  apply(db, [{ eid: role, name: 'entity', comp: null }])
+  assertEquals(comp(s, 'session')?.role_eid, role)
+})
+
 Deno.test('release: a dead client sheds its shelf, the canvas survives', () => {
   let c = uid(), canvas = uid()
   apply(db, [

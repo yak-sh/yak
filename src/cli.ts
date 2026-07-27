@@ -968,6 +968,14 @@ export let hookTurn = (body: Record<string, unknown>) =>
     ? 'idle'
     : undefined
 
+// TASKS_ROLE is an invocation coordinate, not an authority claim. Bind it
+// only when the referenced entity still carries the role component; stale or
+// hand-written values leave an ordinary graph session.
+export let roleEid = (all: Row[], id?: string) => {
+  let role = id ? find(all, id) : undefined
+  return role?.comps.role ? role.eid : undefined
+}
+
 let context = async (args: string[]) => {
   let hook = args.includes('--hook')
   // Subagent mode: explicit --subagent (debug override), or the payload's
@@ -1029,6 +1037,7 @@ let context = async (args: string[]) => {
       let prior = all.find((r) =>
         r.comps.session && String(r.comps.session.id) == sid
       )
+      let role = roleEid(all, Deno.env.get('TASKS_ROLE'))
       let pid = agentPid(provider)
       let external = prior?.comps.session?.origin != 'managed'
       let operator = external && operatorHook(pid)
@@ -1050,6 +1059,7 @@ let context = async (args: string[]) => {
           // Project-wide attention is the one positive capability. Every
           // session gets the normal graph digest and direct notifications.
           operator: external ? operator : undefined,
+          role_eid: role,
         },
       )
       if (s.changes.length) await send(s.changes)
@@ -1133,7 +1143,14 @@ let context = async (args: string[]) => {
     // claim; the SubagentStart hook already stamps none.
     let own = !Deno.env.get('CLAUDE_CODE_CHILD_SESSION') &&
       Deno.env.get('CLAUDE_CODE_SESSION_ID') == sid
-    let s = sessionFor(all, sid, Deno.cwd(), own ? claudePid() : undefined)
+    let role = roleEid(all, Deno.env.get('TASKS_ROLE'))
+    let s = sessionFor(
+      all,
+      sid,
+      Deno.cwd(),
+      own ? claudePid() : undefined,
+      { role_eid: role },
+    )
     await send(s.changes)
     snap = await snapshot()
   }

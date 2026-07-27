@@ -250,13 +250,15 @@ export let Dependencies = ({ e }: { e: Ent }) => (
   </>
 )
 
-// The entity's sessions: every run that named it (backlinks via
-// session.requested_task_eid) plus the claim's holder — one row each, so
-// a task is the door to the agents that worked it.
+// The entity's sessions: every run that named it as requested work or its
+// persistent role, plus the claim's holder — one row each, so a task or role
+// is the door to the agents that served it.
 export let Runs = ({ e }: { e: Ent }) => {
   let ids = new Set(
     backlinks(e.eid)
-      .filter((b) => b.via == 'session.requested_task_eid')
+      .filter((b) =>
+        ['session.requested_task_eid', 'session.role_eid'].includes(b.via)
+      )
       .map((b) => b.from),
   )
   if (e.claim) ids.add(e.claim.session_eid)
