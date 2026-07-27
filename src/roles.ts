@@ -94,7 +94,6 @@ export let nativeProviderArgs = (
     return [
       'task',
       'claude',
-      '--operator',
       '--model',
       c.model,
       '--append-system-prompt-file',
@@ -107,7 +106,6 @@ export let nativeProviderArgs = (
     return [
       'task',
       'codex',
-      '--operator',
       '--model',
       c.model,
       ...(c.effort

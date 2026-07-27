@@ -103,13 +103,13 @@ Deno.test('native role argv carries only fixed bootstrap content', () => {
     { provider: 'codex', model: 'gpt-5.6-sol', effort: 'high' },
     '/tmp/role.md',
   )
-  assertEquals(args.slice(0, 5), [
+  assertEquals(args.slice(0, 4), [
     'task',
     'codex',
-    '--operator',
     '--model',
     'gpt-5.6-sol',
   ])
+  assert(!args.includes('--operator'))
   assert(args.includes('model_reasoning_effort="high"'))
   assert(args.includes('model_instructions_file="/tmp/role.md"'))
   assert(!args.join(' ').includes('Keep the fleet moving'))

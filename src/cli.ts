@@ -976,6 +976,11 @@ export let roleEid = (all: Row[], id?: string) => {
   return role?.comps.role ? role.eid : undefined
 }
 
+// A graph-declared role already names the capability the daemon launched.
+// The ancestry marker is the equivalent opt-in for an ad-hoc terminal.
+export let hookOperator = (role?: string, pid?: number) =>
+  !!role || operatorHook(pid)
+
 let context = async (args: string[]) => {
   let hook = args.includes('--hook')
   // Subagent mode: explicit --subagent (debug override), or the payload's
@@ -1040,7 +1045,7 @@ let context = async (args: string[]) => {
       let role = roleEid(all, Deno.env.get('TASKS_ROLE'))
       let pid = agentPid(provider)
       let external = prior?.comps.session?.origin != 'managed'
-      let operator = external && operatorHook(pid)
+      let operator = external && hookOperator(role, pid)
       // The provider's transcript is the external session's durable log.
       // `provider` stays out of this CREATE: a new session carrying one is
       // a managed spawn request. It lands as a patch below.

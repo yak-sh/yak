@@ -18,6 +18,7 @@ import {
   codexLaunch,
   finalText,
   hookDialect,
+  hookOperator,
   hookProvider,
   hookTurn,
   leadPrio,
@@ -359,6 +360,11 @@ Deno.test('role binding accepts only a live role entity', () => {
   assertEquals(roleEid([role, task], 'R-7'), role.eid)
   assertEquals(roleEid([role, task], task.eid), undefined)
   assertEquals(roleEid([role, task], 'missing'), undefined)
+})
+
+Deno.test('a bound role carries operator capability without a launcher marker', () => {
+  assertEquals(hookOperator('role-eid'), true)
+  assertEquals(hookOperator(undefined, undefined), false)
 })
 
 Deno.test('Codex turn hooks announce only busy and idle boundaries', () => {
