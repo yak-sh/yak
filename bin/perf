@@ -3,13 +3,14 @@
 //
 // The fleet's "verify end-to-end" turned on RENDERING: it drives the real
 // app in headless Chrome, records a devtools trace, and localizes the
-// main-thread cost that drops frames. Three scenarios:
+// main-thread cost that drops frames. Four scenarios:
 //   1. canvas pan   — a real mouse drag; per-frame scripting + long tasks.
 //                     A transform-only pan should show ~zero per-frame
 //                     script; it FLAGS if pointer-move drives reconciliation.
 //   2. board render — first render localized into script / layout / paint
 //                     (the ~500ms the owner reports), then scroll health.
-//   3. graph patch  — one unrelated doc edit with 6,000 board rows mounted.
+//   3. mounted pan  — the same drag with 6,000 board rows under the camera.
+//   4. graph patch  — one unrelated doc edit with 6,000 board rows mounted.
 //                     This is the T-7249 baseline; T-8964 promotes its budget
 //                     to an exit gate after row-level invalidation lands.
 //
@@ -412,8 +413,14 @@ let health = (title: string, evs: Ev[], lo: number, hi: number) => {
 let panScenario = async (
   page: Awaited<ReturnType<typeof chrome>>,
   canvas = '',
+  mounted = false,
 ) => {
   await page.go(canvas ? `/${canvas}?v=Canvas` : '/')
+  let rows = mounted
+    ? await until(() =>
+      page.evalIn<number>(`document.querySelectorAll('.Board_Item').length`)
+    )
+    : 0
   await sleep(400)
   // A point on empty canvas — never inside a .Pin, or the drag is a card grab.
   let pt = await page.evalIn<string>(
@@ -442,14 +449,21 @@ let panScenario = async (
   })
   let lo = markTs(evs, 'pan-start')
   let hi = markTs(evs, 'pan-end')
-  let h = health('30-move drag', evs, lo, hi)
+  let h = health(
+    mounted ? `30-move drag over ${rows} mounted board rows` : '30-move drag',
+    evs,
+    lo,
+    hi,
+  )
   let flag = h.scriptPer > PAN_SCRIPT_MS
     ? `    FLAG: pointer-move spends ${ms1(h.scriptPer)}ms script/frame — ` +
       `pan is re-rendering, not transform-only`
     : `    ✓ pan is transform-cheap (${ms1(h.scriptPer)}ms script/frame)`
   let pass = h.p95 <= FRAME_MS && h.long == 0 && h.scriptPer <= PAN_SCRIPT_MS
   return {
-    title: 'SCENARIO 1 — canvas pan',
+    title: mounted
+      ? 'SCENARIO 3 — mounted canvas pan'
+      : 'SCENARIO 1 — canvas pan',
     lines: [...h.lines, flag],
     pass,
   }
@@ -523,7 +537,7 @@ let boardScenario = async (
   }
 }
 
-// ---- scenario 3: one unrelated graph patch with mounted boards ----
+// ---- scenario 4: one unrelated graph patch with mounted boards ----
 let patchScenario = async (
   page: Awaited<ReturnType<typeof chrome>>,
   sentinel: string,
@@ -577,7 +591,7 @@ let patchScenario = async (
   let total = split(forest(evs, mainTid(evs), lo, hi))
   let pass = h.max <= PATCH_MAX_MS && h.long == 0 && mutations == 0
   return {
-    title: 'SCENARIO 3 — unrelated graph patch',
+    title: 'SCENARIO 4 — unrelated graph patch',
     lines: [
       ...h.lines,
       `    localized: script ${ms1(total.script)}ms · layout ${
@@ -768,6 +782,7 @@ let main = async () => {
   try {
     let pan = await panScenario(page, panCanvas)
     let brd = await boardScenario(page, board)
+    let mountedPan = sentinel ? await panScenario(page, '', true) : null
     let patch = sentinel ? await patchScenario(page, sentinel) : null
     let report = [
       '',
@@ -778,10 +793,13 @@ let main = async () => {
       '',
       brd.title,
       ...brd.lines,
+      ...(mountedPan ? ['', mountedPan.title, ...mountedPan.lines] : []),
       ...(patch ? ['', patch.title, ...patch.lines] : []),
       '',
       `result: pan ${pan.pass ? 'PASS' : 'FAIL'} · board ${
         brd.pass ? 'PASS' : 'FAIL'
+      }${
+        mountedPan ? ` · mounted pan ${mountedPan.pass ? 'PASS' : 'FAIL'}` : ''
       }${patch ? ` · patch baseline ${patch.pass ? 'PASS' : 'FAIL'}` : ''}`,
       '',
     ]
@@ -793,7 +811,7 @@ let main = async () => {
     } else {
       console.log(`kept: chrome :${cdpPort} · server ${base} · ${scratch}`)
     }
-    Deno.exit(pan.pass && brd.pass ? 0 : 1)
+    Deno.exit(pan.pass && brd.pass && (mountedPan?.pass ?? true) ? 0 : 1)
   } catch (e) {
     page.kill()
     srv?.kill('SIGKILL')

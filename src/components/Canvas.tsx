@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from 'preact/hooks'
-import { useSignal } from '@preact/signals'
+import { effect, useSignal } from '@preact/signals'
 import {
   cache,
   camera,
@@ -85,6 +85,7 @@ export let spawnHit = (canvas: string, target: string) => {
 // plane coords: translate = viewport/2 - center * zoom.
 export let Canvas = ({ eid }: { eid: string }) => {
   let el = useRef<HTMLDivElement>(null)
+  let plane = useRef<HTMLDivElement>(null)
   let mouse = useRef<{ x: number; y: number } | null>(null) // paste lands here
   let cam = useRef('') // this client's camera eid for THIS canvas
   let timer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -321,6 +322,23 @@ export let Canvas = ({ eid }: { eid: string }) => {
     }
   }, [eid])
 
+  // Camera motion owns two DOM attributes, not the card tree. The signal
+  // effect runs before paint and updates those attributes without asking
+  // Preact to reconcile any mounted card or board.
+  useLayoutEffect(() =>
+    effect(() => {
+      if (!el.current || !plane.current) return
+      let { x, y, zoom, w, h } = camera.value
+      let tx = w / 2 - x * zoom
+      let ty = h / 2 - y * zoom
+      el.current.style.backgroundPosition = `${tx}px ${ty}px`
+      el.current.style.backgroundSize = `${24 * zoom}px ${24 * zoom}px`
+      plane.current.style.transform =
+        `translate(${tx}px,${ty}px) scale(${zoom})`
+      el.current.classList.toggle('Canvas-glide', glide.value)
+      plane.current.classList.toggle('Canvas_Plane-glide', glide.value)
+    }), [])
+
   let down = (e: PointerEvent & { currentTarget: HTMLDivElement }) => {
     if (e.target instanceof Element && e.target.closest('.Pin')) return
     unlatch()
@@ -539,15 +557,9 @@ export let Canvas = ({ eid }: { eid: string }) => {
     }
   }
 
-  let { x, y, zoom, w, h } = camera.value
-  let tx = w / 2 - x * zoom
-  let ty = h / 2 - y * zoom
   return (
     <Frame
       elRef={el}
-      mod={glide.value && 'glide'}
-      style={`background-position:${tx}px ${ty}px;` +
-        `background-size:${24 * zoom}px ${24 * zoom}px`}
       onPointerDown={down}
       onPointerMove={(e: PointerEvent) => {
         mouse.current = { x: e.clientX, y: e.clientY }
@@ -569,10 +581,7 @@ export let Canvas = ({ eid }: { eid: string }) => {
         spawnAt([], row.dataset.eid, 'Full', 0, e.clientX, e.clientY)
       }}
     >
-      <Plane
-        mod={glide.value && 'glide'}
-        style={`transform:translate(${tx}px,${ty}px) scale(${zoom})`}
-      >
+      <Plane elRef={plane}>
         {pinned(eid).map((p) => <Card key={p.eid} p={p} />)}
       </Plane>
     </Frame>
