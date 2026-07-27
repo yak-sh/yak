@@ -27,6 +27,7 @@ let dir = Deno.makeTempDirSync({ prefix: 'tasks-role-repo-' })
 let sessions = new Set<string>()
 let commands: string[][] = []
 let files = new Map<string, string>()
+let removed = new Set<string>()
 let clock = 0
 let ok = () => ({
   success: true,
@@ -35,6 +36,7 @@ let ok = () => ({
 })
 let deps = {
   now: () => `2026-07-27T00:00:0${clock++}.000Z`,
+  remove: (path: string) => removed.add(path),
   wait: () => Promise.resolve(),
   write: (path: string, body: string) => files.set(path, body),
   command: (args: string[]) => {
@@ -280,7 +282,7 @@ Deno.test('deleting a managed role keeps history and requests a stop', async () 
     `update session set origin = 'managed', status = 'running' where eid = ?`,
   ).run(run.eid)
   apply(db, [{ eid: role, name: 'entity', comp: null }])
-  await roleRemoved(cast)(role)
+  await roleRemoved(cast, deps)(role)
   assertEquals(
     db.prepare('select role_eid from session where eid = ?').get(run.eid),
     { role_eid: role },
@@ -291,6 +293,7 @@ Deno.test('deleting a managed role keeps history and requests a stop', async () 
     ).get(),
     { target_eid: run.eid },
   )
+  assert(removed.has(`${tasksHome}/.tasks/roles/${role}`))
 })
 
 Deno.test('managed attention resumes once with no graph content', async () => {

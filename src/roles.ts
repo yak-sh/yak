@@ -42,6 +42,7 @@ type CommandOutput = {
 export type RoleDeps = {
   command: (args: string[]) => Promise<CommandOutput>
   now: () => string
+  remove: (path: string) => void
   wait: (ms: number) => Promise<void>
   write: (path: string, body: string) => void
 }
@@ -65,6 +66,13 @@ let command = async (args: string[]): Promise<CommandOutput> => {
 let defaults: RoleDeps = {
   command,
   now: () => new Date().toISOString(),
+  remove: (path) => {
+    try {
+      Deno.removeSync(path, { recursive: true })
+    } catch (e) {
+      if (!(e instanceof Deno.errors.NotFound)) throw e
+    }
+  },
   wait: (ms) => new Promise((go) => setTimeout(go, ms)),
   write: (path, body) => {
     Deno.mkdirSync(path.slice(0, path.lastIndexOf('/')), { recursive: true })
@@ -79,6 +87,9 @@ let instructionPath = (eid: string) => {
   if (!home) throw new Error('HOME is required to materialize a role')
   return `${home}/.tasks/roles/${eid}/instructions.md`
 }
+
+let instructionDir = (eid: string) =>
+  instructionPath(eid).slice(0, -'/instructions.md'.length)
 
 let bootstrap =
   'Call task_context now, then serve this persistent role. Treat surfaced ' +
@@ -613,14 +624,17 @@ export let rolesSoon = (cast: Cast) => {
   }, 50)
 }
 
-export let roleRemoved = (cast: Cast) => (eid: string) => {
-  let session = latest(eid)
-  if (active(session) && session?.origin == 'managed') {
-    try {
-      stopManaged(session, cast)
-    } catch (e) {
-      console.warn('role removal stop —', e)
+export let roleRemoved =
+  (cast: Cast, deps: RoleDeps = defaults) => (eid: string) => {
+    let session = latest(eid)
+    if (active(session) && session?.origin == 'managed') {
+      try {
+        stopManaged(session, cast)
+      } catch (e) {
+        console.warn('role removal stop —', e)
+      }
     }
+    return tmuxKill(eid, deps)
+      .catch((e) => console.warn('role removal —', e))
+      .finally(() => deps.remove(instructionDir(eid)))
   }
-  return tmuxKill(eid, defaults).catch((e) => console.warn('role removal —', e))
-}
