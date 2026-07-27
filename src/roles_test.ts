@@ -44,6 +44,10 @@ let deps = {
     if (args[0] == 'kill-session') sessions.delete(target)
     if (args[0] == 'new-session') {
       sessions.add(args[args.indexOf('-s') + 1])
+      return Promise.resolve({
+        ...ok(),
+        stdout: new TextEncoder().encode('%99\n'),
+      })
     }
     if (args[0] == 'display-message') {
       return Promise.resolve({
@@ -124,6 +128,9 @@ Deno.test('native role dedupes, rolls drift, heals death, and stops exactly', as
   assert(sessions.has(name))
   assertEquals(files.size, 1)
   assert(commands.some((args) => args[0] == 'set-option' && args[1] == '-w'))
+  let respawn = commands.find((args) => args[0] == 'respawn-pane')!
+  assertEquals(respawn[respawn.indexOf('-t') + 1], '%99')
+  assert(respawn.includes(`TASKS_ROLE=${role}`))
   let first = db.prepare(
     'select applied_hash from role where eid = ?',
   ).get(role) as { applied_hash: string }

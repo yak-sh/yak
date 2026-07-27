@@ -138,6 +138,9 @@ let nativeEnv = (eid: string) => {
 export let nativeTmuxArgs = (c: RoleConfig) => [
   'new-session',
   '-d',
+  '-P',
+  '-F',
+  '#{pane_id}',
   '-s',
   roleTmux(c.eid),
   '-c',
@@ -148,11 +151,15 @@ export let nativeTmuxArgs = (c: RoleConfig) => [
   ]),
 ]
 
-export let nativeRespawnArgs = (c: RoleConfig, file: string) => [
+export let nativeRespawnArgs = (
+  c: RoleConfig,
+  file: string,
+  pane = `=${roleTmux(c.eid)}:`,
+) => [
   'respawn-pane',
   '-k',
   '-t',
-  `=${roleTmux(c.eid)}:0.0`,
+  pane,
   '-c',
   c.repo.path,
   ...Object.entries(nativeEnv(c.eid)).flatMap(([key, value]) => [
@@ -185,18 +192,24 @@ let tmuxStart = async (c: RoleConfig, file: string, deps: RoleDeps) => {
         'tmux refused the role session',
     )
   }
-  let target = `=${roleTmux(c.eid)}`
+  let session = `=${roleTmux(c.eid)}`
+  let window = `${session}:`
+  let pane = tmuxText(made)
+  if (!/^%\d+$/.test(pane)) {
+    await tmuxKill(c.eid, deps)
+    throw new Error('tmux did not report the role pane')
+  }
   try {
     let kept = await deps.command([
       'set-option',
       '-w',
       '-t',
-      target,
+      window,
       'remain-on-exit',
       'on',
     ])
     if (!kept.success) throw new Error('tmux refused the role launch guard')
-    let started = await deps.command(nativeRespawnArgs(c, file))
+    let started = await deps.command(nativeRespawnArgs(c, file, pane))
     if (!started.success) {
       throw new Error(
         new TextDecoder().decode(started.stderr).trim() ||
@@ -208,25 +221,25 @@ let tmuxStart = async (c: RoleConfig, file: string, deps: RoleDeps) => {
       'display-message',
       '-p',
       '-t',
-      `${target}:0.0`,
+      pane,
       '#{pane_dead}',
     ])
     if (!dead.success || tmuxText(dead) == '1') {
-      let pane = await deps.command([
+      let captured = await deps.command([
         'capture-pane',
         '-p',
         '-t',
-        `${target}:0.0`,
+        pane,
         '-S',
         '-100',
       ])
-      throw new Error(tmuxText(pane) || 'provider exited during launch')
+      throw new Error(tmuxText(captured) || 'provider exited during launch')
     }
     await deps.command([
       'set-option',
       '-w',
       '-t',
-      target,
+      window,
       'remain-on-exit',
       'off',
     ])
