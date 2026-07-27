@@ -348,7 +348,7 @@ export let Similar = ({ e }: { e: Ent }) => {
 // the document face (root Full) passes `id` and always gets the row —
 // its id chip lives here, under the h1.
 export let Meta = ({ e, id }: { e: Ent; id?: boolean }) => {
-  let talk = commentCount.value[e.eid]
+  let talk = commentCount(e.eid).value
   if (!id && !e.task && !talk && !e.claim) return null
   return (
     <MetaEl>

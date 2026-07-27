@@ -27,7 +27,7 @@ let { Title, Meta, Domain, Comments, Claim, Assignee, Deps, Done } = Frame
 // menu (menuAt), so the verbs are one click from any board. Drag out to
 // the canvas for the full Task card (the board Item owns the drag).
 export let TaskTile = ({ e }: { e: Ent }) => {
-  let talk = commentCount.value[e.eid]
+  let talk = commentCount(e.eid).value
   // Each tally reads as a sentence, verb first — "requires ~2~ 1": two
   // blockers already settled (struck — done or cancelled), one still
   // open. A child that isn't a task can't be settled, so it counts as

@@ -1,6 +1,6 @@
 import { useEffect } from 'preact/hooks'
 import { idOf } from '../types.ts'
-import { cache, ent, mode } from '../live.ts'
+import { census, ent, mode } from '../live.ts'
 import { Admin } from './Admin.tsx'
 import { block, Chip, el } from './ui.tsx'
 import { filterable, FilterInput } from './Filter.tsx'
@@ -65,7 +65,7 @@ let Lost = () => {
 // it), each a real anchor whose plain click is the deliberate in-place
 // return. Dead entities just drop out.
 let Crumbs = () => {
-  let eids = trail.value.filter((eid) => cache.value[eid]).slice(-3)
+  let eids = trail.value.filter((eid) => census.value.includes(eid)).slice(-3)
   if (!eids.length) return null
   return (
     <Trail>

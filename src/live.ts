@@ -1,6 +1,6 @@
-// The browser half: one entity cache, one socket, one identity, one camera.
-// The cache is the client's whole world — a snapshot fills it, ws patches
-// keep it current, and every component renders straight out of it.
+// The browser half: one graph cache, narrow render signals, one socket,
+// one identity, one camera. A snapshot fills the cache; patches publish
+// only the rows and relationships their renderers hold.
 import {
   batch,
   computed,
@@ -21,7 +21,7 @@ import {
   stamped,
 } from './types.ts'
 import { type Row } from './client.ts'
-import { matchQuery, parseQuery, resolveRefs, warm } from './query.ts'
+import { matchQuery, orderOf, parseQuery, resolveRefs, warm } from './query.ts'
 import { normalizeChanges } from './props.ts'
 import * as idb from './idb.ts'
 import { topology } from './leader.ts'
@@ -43,28 +43,44 @@ let pinZs = new Map<string, Signal<number>>()
 let rowSignals = new Map<string, Signal<Comps | undefined>>()
 let relationSignals = new Map<string, Signal<Dep[]>>()
 export let census = signal<string[]>([])
+let canvasVersion = signal(0)
+let noRelations: Dep[] = []
+let refreshBoards = (_eids: Set<string>) => {}
+let refreshPins = (_eids: Set<string>) => {}
+let refreshComments = (_eids: Set<string>) => {}
+let refreshFolds = (_eids: Set<string>) => {}
+
+// One pass over deps gives every parent a stable seed. The narrow signals
+// below own render invalidation; this computed only avoids an edge-list scan
+// for every entity mounted during first render.
+let relationIndex = computed(() => {
+  let found = new Map<string, Dep[]>()
+  for (let d of deps.value) {
+    let mine = found.get(d.parent)
+    if (mine) mine.push(d)
+    else found.set(d.parent, [d])
+  }
+  return found
+})
 
 // Renderers hold these narrow signals; the complete cache remains the
 // persistence and query door. A signal is minted once per eid so a patch
 // cannot wake an unrelated entity.
 export let row = (eid: string) => {
+  let current = untracked(() => cache.value[eid])
   let found = rowSignals.get(eid)
   if (!found) {
-    rowSignals.set(eid, found = signal(untracked(() => cache.value[eid])))
-  }
+    rowSignals.set(eid, found = signal(current))
+  } else if (found.peek() !== current) found.value = current
   return found
 }
 
 export let relations = (eid: string) => {
+  let current = untracked(() => relationIndex.value.get(eid)) ?? noRelations
   let found = relationSignals.get(eid)
   if (!found) {
-    relationSignals.set(
-      eid,
-      found = signal(
-        untracked(() => deps.value.filter((d) => d.parent == eid)),
-      ),
-    )
-  }
+    relationSignals.set(eid, found = signal(current))
+  } else if (found.peek() !== current) found.value = current
   return found
 }
 
@@ -77,18 +93,24 @@ let publish = (eids: Set<string>, parentEids: Set<string>) =>
     for (let eid of parentEids) {
       let found = relationSignals.get(eid)
       if (found) {
-        found.value = deps.value.filter((d) => d.parent == eid)
+        found.value = relationIndex.value.get(eid) ?? noRelations
       }
     }
   })
 
 let resetSignals = () =>
   batch(() => {
+    let touched = new Set([...census.peek(), ...Object.keys(cache.value)])
     census.value = Object.keys(cache.value)
+    canvasVersion.value++
     for (let [eid, found] of rowSignals) found.value = cache.value[eid]
     for (let [eid, found] of relationSignals) {
-      found.value = deps.value.filter((d) => d.parent == eid)
+      found.value = relationIndex.value.get(eid) ?? noRelations
     }
+    refreshBoards(touched)
+    refreshPins(touched)
+    refreshComments(touched)
+    refreshFolds(touched)
   })
 
 // A z-only pin patch binds straight to its one DOM attribute. The fallback
@@ -207,6 +229,8 @@ export let applyLocal = (changes: Change[]) => {
   let edges: Dep[] = []
   let changedRows = new Set<string>()
   let changedParents = new Set<string>()
+  let changedPins = new Set<string>()
+  let changedCanvas = false
   let changedCensus = false
   let changed = false
   // Camera motion renders from camera.value + hear(), not the graph cache.
@@ -232,6 +256,8 @@ export let applyLocal = (changes: Change[]) => {
       changed = true
       if (lived) changedCensus = true
       changedRows.add(eid)
+      changedPins.add(eid)
+      changedCanvas = true
       eids.add(eid)
       // The cascade: every edge touching the dead eid leaves deps too —
       // record them so the IDB shadow drops the same rows the signal does.
@@ -276,6 +302,8 @@ export let applyLocal = (changes: Change[]) => {
       next[eid] = row as Comps
       changed = true
       changedRows.add(eid)
+      if (name == 'card' || name == 'pin') changedPins.add(eid)
+      if (name == 'canvas' || name == 'entity') changedCanvas = true
       continue
     }
     let prior = before?.[name] as Record<string, unknown> | undefined
@@ -284,16 +312,28 @@ export let applyLocal = (changes: Change[]) => {
     next[eid] = { ...before, [name]: after } as Comps
     if (!before) changedCensus = true
     if (name == 'pin' && after.z != null) zs.set(eid, Number(after.z))
+    if (
+      name == 'card' ||
+      (name == 'pin' && Object.keys(comp).some((p) => p != 'z'))
+    ) changedPins.add(eid)
+    if (name == 'canvas' || name == 'entity') changedCanvas = true
     changed = true
     changedRows.add(eid)
   }
   if (changed && !quiet) cache.value = next
-  if (changedCensus) census.value = Object.keys(next)
-  publish(changedRows, changedParents)
-  for (let [eid, z] of zs) {
-    let live = pinZs.get(eid)
-    if (live) live.value = z
-  }
+  batch(() => {
+    if (changedCensus) census.value = Object.keys(next)
+    if (changedCanvas) canvasVersion.value++
+    publish(changedRows, changedParents)
+    refreshBoards(changedRows)
+    refreshPins(changedPins)
+    refreshComments(changedRows)
+    refreshFolds(changedRows)
+    for (let [eid, z] of zs) {
+      let live = pinZs.get(eid)
+      if (live) live.value = z
+    }
+  })
   // The touched keys feed either the boot catch-up write, or the Web-Lock
   // leader's live persist. Followers and 2.1 fallback tabs never persist a
   // live frame.
@@ -454,9 +494,11 @@ let evict = (eids: string[]) => {
   let held = (eid: string) => [...subMembers.values()].some((s) => s.has(eid))
   let next = { ...cache.value }
   let changed = false
+  let changedCanvas = false
   let gone = new Set<string>()
   for (let eid of eids) {
     if (!held(eid) && next[eid]) {
+      if (next[eid].canvas) changedCanvas = true
       delete next[eid]
       pinZs.delete(eid)
       changed = true
@@ -465,8 +507,15 @@ let evict = (eids: string[]) => {
   }
   if (changed) {
     cache.value = next
-    census.value = Object.keys(next)
-    publish(gone, new Set())
+    batch(() => {
+      census.value = Object.keys(next)
+      if (changedCanvas) canvasVersion.value++
+      publish(gone, new Set())
+      refreshBoards(gone)
+      refreshPins(gone)
+      refreshComments(gone)
+      refreshFolds(gone)
+    })
   }
 }
 
@@ -768,30 +817,13 @@ export let boot = async () => {
   cursor: held.cursor,
 })
 
-// Edges grouped by parent, one pass over deps. ent() partitions its own
-// slice into refs/kids instead of rescanning all 751 edges twice per call —
-// without this the initial canvas (hundreds of ents × the edge list, called
-// recursively) spent its whole render budget here (T-6772). A computed off
-// the deps signal, so it rebuilds only when deps changes; applyLocal always
-// assigns a fresh array, so the memo invalidates. Insertion order is
-// preserved per parent, keeping refs/kids order identical to the old scan.
-let byParent = computed(() => {
-  let m = new Map<string, Dep[]>()
-  for (let d of deps.value) {
-    let mine = m.get(d.parent)
-    if (mine) mine.push(d)
-    else m.set(d.parent, [d])
-  }
-  return m
-})
-
 // The whole entity, assembled for a renderer: spine, components present,
 // outgoing edge sentences, contained children (recursive — graphs stay
 // small; a view reads as deep as it wants).
 export let ent = (eid: string): Ent => {
-  let { entity, ...comps } = cache.value[eid] ?? {}
+  let { entity, ...comps } = row(eid).value ?? {}
   if (comps.pin) comps.pin = { ...comps.pin, z: pinZ(eid, comps.pin.z).value }
-  let mine = byParent.value.get(eid) ?? []
+  let mine = relations(eid).value
   return {
     ...comps, // whatever components the entity carries, verbatim —
     // created/updated (provenance) ride here like any other component now
@@ -807,13 +839,6 @@ export let ent = (eid: string): Ent => {
   }
 }
 
-// A board's tasks: its saved query evaluated against the live cache.
-// Membership is never stored — a task is on a board because it matches,
-// so it appears the moment it's born and leaves the moment it stops
-// matching. Throws on a malformed query; the Board view shows the error.
-// The stored query may carry sugar values ('.assignee=jeff') and path
-// preds ('.assignee.title~=j') — the cache is the graph they resolve
-// and deref against.
 export let findEid = (id: string): string | undefined => {
   let num = id.match(/^[A-Za-z]+-(\d+)$/)?.[1] ?? id.match(/^(\d+)$/)?.[1]
   for (let [eid, r] of Object.entries(cache.value)) {
@@ -840,14 +865,37 @@ export let boardPost = (
     return !!r && (tasks ? !!r.task : eid != e.eid && !chrome(r))
   })
 
-let boardScan = (e: Ent, tasks: boolean): Ent[] => {
-  let q = String(e.board?.query ?? '')
-  let preds = resolveRefs(
-    parseQuery(q),
-    findEid,
-  )
-  let hits = boardPost(e, tasks, Object.keys(cache.value))
+type BoardSet = {
+  eid: string
+  tasks: boolean
+  q: string
+  preds: ReturnType<typeof parseQuery>
+  complex: boolean
+  graph: Record<string, Comps>
+  ids: Signal<string[]>
+  error?: unknown
+}
+let boardSets = new Map<string, BoardSet>()
+let boardKey = (eid: string, tasks: boolean) =>
+  `${eid}:${tasks ? 'tasks' : 'all'}`
+let boardHits = (
+  e: Ent,
+  tasks: boolean,
+  preds: ReturnType<typeof parseQuery>,
+) =>
+  boardPost(e, tasks, Object.keys(cache.value))
     .filter((eid) => matchQuery(cache.value[eid], preds, (t) => cache.value[t]))
+
+let scanBoard = (set: BoardSet, e: Ent) => {
+  let q = String(e.board?.query ?? '')
+  let parsed = parseQuery(q)
+  let preds = resolveRefs(parsed, findEid)
+  let hits = boardHits(e, set.tasks, preds)
+  set.q = q
+  set.preds = preds
+  set.complex = preds.some((p) => !!p.at) || orderOf(parsed) == 'hot'
+  set.graph = cache.value
+  set.error = undefined
   if (config.agreement) {
     let members = subEids(`board:${e.eid}`)
     if (members) {
@@ -855,12 +903,79 @@ let boardScan = (e: Ent, tasks: boolean): Ent[] => {
         `board:${e.eid}`,
         q,
         hits,
-        boardPost(e, tasks, members),
+        boardPost(e, set.tasks, members),
       )
     }
   }
-  return hits.map(ent)
+  return hits
 }
+
+// Board membership is a local derived index, not a server subscription.
+// A graph patch tests only its touched rows; stable membership keeps a
+// parent Board asleep while an unrelated entity changes.
+let boardSet = (e: Ent, tasks: boolean) => {
+  let key = boardKey(e.eid, tasks)
+  let q = String(e.board?.query ?? '')
+  let found = boardSets.get(key)
+  if (!found) {
+    found = {
+      eid: e.eid,
+      tasks,
+      q: '\0',
+      preds: [],
+      complex: false,
+      graph: cache.peek(),
+      ids: signal<string[]>([]),
+    }
+    boardSets.set(key, found)
+  }
+  if (found.q != q || found.graph != cache.peek()) {
+    try {
+      found.ids.value = untracked(() => scanBoard(found!, e))
+    } catch (error) {
+      found.q = q
+      found.graph = cache.peek()
+      found.error = error
+    }
+  }
+  if (found.error) throw found.error
+  return found
+}
+
+refreshBoards = (eids: Set<string>) => {
+  for (let set of boardSets.values()) {
+    let board = ent(set.eid)
+    let q = String(board.board?.query ?? '')
+    if (set.q != q || set.complex) {
+      try {
+        set.ids.value = untracked(() => scanBoard(set, board))
+      } catch (error) {
+        set.q = q
+        set.graph = cache.peek()
+        set.error = error
+      }
+      continue
+    }
+    let ids = set.ids.peek()
+    let next = ids
+    for (let eid of eids) {
+      let had = next.includes(eid)
+      let row = cache.peek()[eid]
+      let candidate = !!row &&
+        (set.tasks ? !!row.task : eid != set.eid && !chrome(row))
+      let wants = candidate &&
+        matchQuery(row, set.preds, (t) => cache.peek()[t])
+      if (had != wants) {
+        next = wants ? [...next, eid] : next.filter((x) => x != eid)
+      } else if (had) next = [...next]
+    }
+    set.graph = cache.peek()
+    if (next != ids) set.ids.value = next
+  }
+}
+
+let boardScan = (e: Ent, tasks: boolean): Ent[] =>
+  boardSet(e, tasks).ids.value.map(ent)
 
 export let boardTasks = (e: Ent): Ent[] => boardScan(e, true)
 export let boardAll = (e: Ent): Ent[] => boardScan(e, false)
@@ -911,31 +1026,155 @@ export let commentsOn = (eid: string): Ent[] =>
     .map(([id]) => ent(id))
     .sort((a, b) => a.num - b.num)
 
-// Conversation tallies for every entity in ONE cache pass — a board of
-// hundreds of rows reads this map instead of each scanning the cache.
-export let commentCount = computed(() => {
-  let n: Record<string, number> = {}
-  for (let r of Object.values(cache.value)) {
-    let t = r.comment?.target_eid
-    if (t && !r.comment?.event) n[String(t)] = (n[String(t)] ?? 0) + 1
+type CommentSet = {
+  graph: Record<string, Comps>
+  ids: Set<string>
+  count: Signal<number>
+}
+let commentSets = new Map<string, CommentSet>()
+let commentIds = (target: string) =>
+  new Set(
+    Object.entries(cache.value)
+      .filter(([, r]) => r.comment?.target_eid == target && !r.comment?.event)
+      .map(([eid]) => eid),
+  )
+
+// A tile subscribes to its own tally. Comment birth, death, retargeting,
+// and event changes update only the targets whose count changed.
+export let commentCount = (target: string) => {
+  let found = commentSets.get(target)
+  if (!found) {
+    let ids = untracked(() => commentIds(target))
+    found = { graph: cache.peek(), ids, count: signal(ids.size) }
+    commentSets.set(target, found)
+  } else if (found.graph != cache.peek()) {
+    found.ids = untracked(() => commentIds(target))
+    found.graph = cache.peek()
+    found.count.value = found.ids.size
   }
-  return n
-})
+  return found.count
+}
+
+refreshComments = (eids: Set<string>) => {
+  for (let [target, set] of commentSets) {
+    let changed = false
+    for (let eid of eids) {
+      let had = set.ids.has(eid)
+      let c = cache.peek()[eid]?.comment
+      let wants = c?.target_eid == target && !c.event
+      if (had == wants) continue
+      wants ? set.ids.add(eid) : set.ids.delete(eid)
+      changed = true
+    }
+    set.graph = cache.peek()
+    if (changed) set.count.value = set.ids.size
+  }
+}
+
+type Folded = { eid: string; statuses: string }
+type FoldSet = {
+  graph: Record<string, Comps>
+  value: Signal<Folded | undefined>
+}
+let foldSets = new Map<string, FoldSet>()
+let foldKey = (client: string, board: string) => `${client}:${board}`
+let scanFold = (client: string, board: string): Folded | undefined => {
+  let found = Object.entries(cache.value).find(([, r]) =>
+    r.fold?.client_eid == client && r.fold.board_eid == board
+  )
+  return found && {
+    eid: found[0],
+    statuses: String(found[1].fold?.statuses ?? ''),
+  }
+}
+
+export let foldFor = (client: string, board: string) => {
+  let key = foldKey(client, board)
+  let found = foldSets.get(key)
+  if (!found) {
+    found = {
+      graph: cache.peek(),
+      value: signal(untracked(() => scanFold(client, board))),
+    }
+    foldSets.set(key, found)
+  } else if (found.graph != cache.peek()) {
+    found.graph = cache.peek()
+    found.value.value = untracked(() => scanFold(client, board))
+  }
+  return found.value.value
+}
+
+refreshFolds = (eids: Set<string>) => {
+  for (let [key, set] of foldSets) {
+    let [client, board] = key.split(':')
+    let current = set.value.peek()
+    let relevant = [...eids].some((eid) =>
+      eid == current?.eid || !!cache.peek()[eid]?.fold
+    )
+    set.graph = cache.peek()
+    if (relevant) set.value.value = scanFold(client, board)
+  }
+}
 
 // The root canvas (first canvas-tagged entity) and its pinned cards.
 // A canvas whose num hasn't arrived yet can't be "first" — sorting the
 // unknown to the front would yank every tab sitting on `/` to it.
-export let rootCanvas = () =>
-  Object.entries(cache.value)
+export let rootCanvas = () => {
+  canvasVersion.value
+  return Object.entries(cache.peek())
     .filter(([, r]) => r.canvas)
     .sort(([, a], [, b]) =>
       (a.entity?.num ?? Infinity) - (b.entity?.num ?? Infinity)
     )[0]
     ?.[0]
+}
 
-export let pinned = (canvas: string): Pinned[] => {
-  return Object.entries(cache.value)
+type PinSet = {
+  graph: Record<string, Comps>
+  ids: Signal<string[]>
+}
+let pinSets = new Map<string, PinSet>()
+let scanPins = (canvas: string) =>
+  Object.entries(cache.value)
     .filter(([, r]) => r.pin?.canvas_eid == canvas && r.card)
+    .map(([eid]) => eid)
+
+let pinSet = (canvas: string) => {
+  let found = pinSets.get(canvas)
+  if (!found) {
+    found = {
+      graph: cache.peek(),
+      ids: signal(untracked(() => scanPins(canvas))),
+    }
+    pinSets.set(canvas, found)
+  } else if (found.graph != cache.peek()) {
+    found.graph = cache.peek()
+    found.ids.value = untracked(() => scanPins(canvas))
+  }
+  return found
+}
+
+refreshPins = (eids: Set<string>) => {
+  for (let [canvas, set] of pinSets) {
+    let ids = set.ids.peek()
+    let next = ids
+    for (let eid of eids) {
+      let had = next.includes(eid)
+      let r = cache.peek()[eid]
+      let wants = !!r?.card && r.pin?.canvas_eid == canvas
+      if (had != wants) {
+        next = wants ? [...next, eid] : next.filter((x) => x != eid)
+      } else if (had) next = [...next]
+    }
+    set.graph = cache.peek()
+    if (next != ids) set.ids.value = next
+  }
+}
+
+export let pinned = (canvas: string): Pinned[] =>
+  pinSet(canvas).ids.value
+    .map((eid) => [eid, cache.peek()[eid]] as const)
+    .filter((x): x is readonly [string, Comps] => !!x[1]?.pin && !!x[1].card)
     .map(([eid, r]) => ({
       ...r.pin!,
       // The cache key IS the identity: a pin cast from another client
@@ -946,7 +1185,6 @@ export let pinned = (canvas: string): Pinned[] => {
       view: r.card!.view,
     }))
     .sort((a, b) => (a.z - b.z) || (a.eid < b.eid ? -1 : 1))
-}
 
 // Who points HERE, and via what: every eid-typed prop in the SCHEMA —
 // the wire-writable vocabulary UNION the server-stamped columns (a

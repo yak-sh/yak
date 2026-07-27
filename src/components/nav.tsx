@@ -2,7 +2,7 @@ import { effect, signal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
 import { block, copy, setFollow } from './ui.tsx'
 import { usePlaceAt } from './overlay.tsx'
-import { cache, ent, rootCanvas } from '../live.ts'
+import { cache, census, ent, rootCanvas } from '../live.ts'
 import { actionsFor, resolve } from './registry.ts'
 import { type Ent, idOf } from '../types.ts'
 import { dragData } from './drag.ts'
@@ -52,10 +52,10 @@ export let openAt = (eid: string, ev: MouseEvent) => {
 // An id in the wild — T-num, bare num, or raw eid — resolved against the
 // live cache; undefined when unloaded or dead.
 export let eidOf = (id: string) => {
+  let eids = census.value
   let m = id.match(/^[A-Za-z]+-(\d+)$/) ?? id.match(/^(\d+)$/)
-  if (!m) return cache.value[id] ? id : undefined
-  return Object.entries(cache.value)
-    .find(([, r]) => r.entity?.num == +m![1])?.[0]
+  if (!m) return eids.includes(id) ? id : undefined
+  return eids.find((eid) => cache.peek()[eid]?.entity?.num == +m![1])
 }
 
 // Markdown refs live inside innerHTML, outside Preact's signal render.

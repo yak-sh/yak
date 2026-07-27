@@ -4,9 +4,9 @@ import {
   boardTasks,
   byPriority,
   byWarmth,
-  cache,
   clientId,
   ent,
+  foldFor,
   mutate,
   statuses,
   uuid,
@@ -157,19 +157,15 @@ export let Board = ({ e }: { e: Ent }) => {
       return null
     }
   })()
-  let row = me
-    ? Object.entries(cache.value).find(([, c]) =>
-      c.fold?.client_eid == me && c.fold.board_eid == e.eid
-    )
-    : null
+  let row = me ? foldFor(me, e.eid) : null
   let folded = new Set(
-    String(row?.[1].fold?.statuses ?? '').split(',').filter(Boolean),
+    String(row?.statuses ?? '').split(',').filter(Boolean),
   )
   let fold = (s: string) => {
     if (!me) return
     folded.has(s) ? folded.delete(s) : folded.add(s)
     mutate({
-      eid: row?.[0] ?? crypto.randomUUID(),
+      eid: row?.eid ?? crypto.randomUUID(),
       name: 'fold',
       comp: {
         client_eid: me,

@@ -138,7 +138,8 @@ Deno.test('commentCount: events are not conversation', () => {
     machine: comment('machine', 'talk', 1),
     alone: comment('alone', 'event-only', 1),
   }
-  assertEquals(commentCount.value, { talk: 1 })
+  assertEquals(commentCount('talk').value, 1)
+  assertEquals(commentCount('event-only').value, 0)
 })
 
 // Backlinks read the SCHEMA — wire vocabulary plus server-stamped columns
@@ -303,10 +304,10 @@ Deno.test('camera motion and card stacking stay off the graph signal', () => {
     assertEquals(cache.value.card.updated!.at, 'later')
 
     applyLocal([{ eid: 'task', name: 'task', comp: { priority: 2 } }])
-    assertEquals(runs, { ent: 2, pin: 4, board: 2, pins: 2 })
+    assertEquals(runs, { ent: 2, pin: 3, board: 2, pins: 1 })
 
     applyLocal([{ eid: 'card', name: 'pin', comp: { x: 10 } }])
-    assertEquals(runs, { ent: 3, pin: 5, board: 3, pins: 3 })
+    assertEquals(runs, { ent: 2, pin: 4, board: 2, pins: 2 })
   } finally {
     for (let stop of stops) stop()
   }
@@ -443,6 +444,46 @@ Deno.test('narrow signals follow births, subscription eviction, and census', () 
   landSub({ sub: 'narrow-signals', changes: [], drop: ['narrow_drop'] })
   assertEquals(live.value, undefined)
   assertEquals(census.value, ['narrow_keep'])
+})
+
+Deno.test('board membership sleeps through an unrelated row patch', () => {
+  cache.value = {
+    board_narrow: {
+      entity: { eid: 'board_narrow', num: 1 },
+      board: { eid: 'board_narrow', query: '.status=open' },
+    },
+    task_narrow: {
+      entity: { eid: 'task_narrow', num: 2 },
+      task: { eid: 'task_narrow', status: 'open', priority: 1 },
+    },
+    doc_narrow: {
+      entity: { eid: 'doc_narrow', num: 3 },
+      doc: { eid: 'doc_narrow', title: 'note', body: '' },
+    },
+  }
+  deps.value = []
+  let runs = 0
+  let stop = effect(() => {
+    boardTasks(ent('board_narrow'))
+    runs++
+  })
+  try {
+    applyLocal([{
+      eid: 'doc_narrow',
+      name: 'doc',
+      comp: { title: 'changed' },
+    }])
+    assertEquals(runs, 1)
+
+    applyLocal([{
+      eid: 'task_narrow',
+      name: 'task',
+      comp: { priority: 2 },
+    }])
+    assertEquals(runs, 2)
+  } finally {
+    stop()
+  }
 })
 
 Deno.test('applyLocal: a camera birth still publishes the cache', () => {
@@ -614,4 +655,44 @@ Deno.test('topZ: pinless rows never ride, whatever the canvas', () => {
   }
   assertEquals(topZ('cv'), 3)
   assertEquals(topZ(undefined as unknown as string), 0)
+})
+
+Deno.test('pinned sleeps through an unrelated row patch', () => {
+  cache.value = {
+    pin_narrow: {
+      entity: { eid: 'pin_narrow', num: 1 },
+      card: { eid: 'pin_narrow', target_eid: 'target', view: 'Full' },
+      pin: {
+        eid: 'pin_narrow',
+        canvas_eid: 'canvas_narrow',
+        x: 0,
+        y: 0,
+        w: 0,
+        h: 0,
+        z: 1,
+      },
+    },
+    target: {
+      entity: { eid: 'target', num: 2 },
+      doc: { eid: 'target', title: 'target', body: '' },
+    },
+  }
+  let runs = 0
+  let stop = effect(() => {
+    pinned('canvas_narrow')
+    runs++
+  })
+  try {
+    applyLocal([{
+      eid: 'target',
+      name: 'doc',
+      comp: { title: 'changed' },
+    }])
+    assertEquals(runs, 1)
+
+    applyLocal([{ eid: 'pin_narrow', name: 'pin', comp: { x: 10 } }])
+    assertEquals(runs, 2)
+  } finally {
+    stop()
+  }
 })
