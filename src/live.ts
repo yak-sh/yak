@@ -1,7 +1,7 @@
 // The browser half: one entity cache, one socket, one identity, one camera.
 // The cache is the client's whole world — a snapshot fills it, ws patches
 // keep it current, and every component renders straight out of it.
-import { computed, signal } from '@preact/signals'
+import { computed, type Signal, signal } from '@preact/signals'
 import {
   awake,
   type Change,
@@ -33,6 +33,15 @@ export type Comps =
 export let cache = signal<Record<string, Comps>>({})
 export let deps = signal<Dep[]>([])
 export let problem = signal('')
+let pinZs = new Map<string, Signal<number>>()
+
+// A z-only pin patch binds straight to its one DOM attribute. The fallback
+// seeds cards mounted after the patch without making this signal map a cache.
+export let pinZ = (eid: string, fallback: number) => {
+  let z = pinZs.get(eid)
+  if (!z) pinZs.set(eid, z = signal(fallback))
+  return z
+}
 
 let sameProps = (
   a: Record<string, unknown>,
@@ -138,20 +147,28 @@ let mark = (path: string) => ((globalThis as { __boot?: string }).__boot = path)
 // persist tail — and boot's explicit delta write — mirror exactly those keys
 // into IDB, no diff of the whole cache.
 export let applyLocal = (changes: Change[]) => {
-  let next = { ...cache.value }
   let eids = new Set<string>()
   let edges: Dep[] = []
   let changed = false
   // Camera motion renders from camera.value + hear(), not the graph cache.
   // Keep its durable row current without publishing a whole-graph signal.
-  let motion = changes.length > 0 &&
-    changes.every(({ eid, name, comp }) =>
-      !!cache.value[eid]?.camera && comp != null &&
-      (name == 'camera' || name == 'updated')
-    )
+  let motion = ({ eid, name, comp }: Change) =>
+    !!cache.value[eid]?.camera && comp != null &&
+    (name == 'camera' || name == 'updated')
+  // Stacking is its own live partition too: raising one card must repaint
+  // pins, not every entity and board mounted around them.
+  let stacking = ({ eid, name, comp }: Change) =>
+    !!cache.value[eid]?.pin && comp != null &&
+    (name == 'updated' ||
+      (name == 'pin' && Object.keys(comp).every((p) => p == 'z')))
+  let quiet = changes.length > 0 &&
+    changes.every((c) => motion(c) || stacking(c))
+  let next = quiet ? cache.value : { ...cache.value }
+  let zs = new Map<string, number>()
   for (let { eid, name, comp } of changes) {
     if (name == 'entity' && comp == null) {
       delete next[eid]
+      pinZs.delete(eid)
       changed = true
       eids.add(eid)
       // The cascade: every edge touching the dead eid leaves deps too —
@@ -195,11 +212,14 @@ export let applyLocal = (changes: Change[]) => {
     let after = { ...prior, ...comp }
     if (prior && sameProps(prior, after)) continue
     next[eid] = { ...before, [name]: after } as Comps
+    if (name == 'pin' && after.z != null) zs.set(eid, Number(after.z))
     changed = true
   }
-  if (changed && motion) {
-    for (let eid of eids) cache.value[eid] = next[eid]
-  } else if (changed) cache.value = next
+  if (changed && !quiet) cache.value = next
+  for (let [eid, z] of zs) {
+    let live = pinZs.get(eid)
+    if (live) live.value = z
+  }
   // The touched keys feed either the boot catch-up write, or the Web-Lock
   // leader's live persist. Followers and 2.1 fallback tabs never persist a
   // live frame.
@@ -363,6 +383,7 @@ let evict = (eids: string[]) => {
   for (let eid of eids) {
     if (!held(eid) && next[eid]) {
       delete next[eid]
+      pinZs.delete(eid)
       changed = true
     }
   }
@@ -490,6 +511,7 @@ export let boardQuery = (e: Ent) => {
 // held cursor, and seed IDB — seed() is a `full` forward-only commit that
 // wins across a changed epoch and clears the stale rows in the same txn.
 let seedFrom = (snap: Snapshot, write = true) => {
+  pinZs.clear()
   cache.value = {}
   deps.value = snap.deps
   applyLocal(snap.changes)
@@ -584,6 +606,7 @@ let local = async (write: boolean) => {
     await fromSnapshot(write)
   } else {
     mark('hydrate+delta')
+    pinZs.clear()
     cache.value = stored.ents
     deps.value = stored.deps
     held = stored.meta
@@ -685,6 +708,7 @@ let byParent = computed(() => {
 // small; a view reads as deep as it wants).
 export let ent = (eid: string): Ent => {
   let { entity, ...comps } = cache.value[eid] ?? {}
+  if (comps.pin) comps.pin = { ...comps.pin, z: pinZ(eid, comps.pin.z).value }
   let mine = byParent.value.get(eid) ?? []
   return {
     ...comps, // whatever components the entity carries, verbatim —
@@ -827,8 +851,8 @@ export let rootCanvas = () =>
     )[0]
     ?.[0]
 
-export let pinned = (canvas: string): Pinned[] =>
-  Object.entries(cache.value)
+export let pinned = (canvas: string): Pinned[] => {
+  return Object.entries(cache.value)
     .filter(([, r]) => r.pin?.canvas_eid == canvas && r.card)
     .map(([eid, r]) => ({
       ...r.pin!,
@@ -840,6 +864,7 @@ export let pinned = (canvas: string): Pinned[] =>
       view: r.card!.view,
     }))
     .sort((a, b) => (a.z - b.z) || (a.eid < b.eid ? -1 : 1))
+}
 
 // Who points HERE, and via what: every eid-typed prop in the SCHEMA —
 // the wire-writable vocabulary UNION the server-stamped columns (a

@@ -219,9 +219,9 @@ Deno.test('ent: refs and kids partition edges, order preserved', () => {
   assertEquals(e.kids.map((k) => k.eid), ['b', 'c'])
 })
 
-// Camera motion has its own live signal; publishing the graph cache too
-// would recompute every entity, board, and pin set mounted on the canvas.
-Deno.test('camera edits do not publish the whole-cache signal', () => {
+// Camera motion and card stacking have narrow live signals; publishing the
+// graph cache too would recompute every entity and board mounted around them.
+Deno.test('camera motion and card stacking stay off the graph signal', () => {
   cache.value = {
     board: {
       entity: { eid: 'board', num: 1 },
@@ -259,11 +259,15 @@ Deno.test('camera edits do not publish the whole-cache signal', () => {
     },
   }
   deps.value = []
-  let runs = { ent: 0, board: 0, pins: 0 }
+  let runs = { ent: 0, pin: 0, board: 0, pins: 0 }
   let stops = [
     effect(() => {
       ent('task')
       runs.ent++
+    }),
+    effect(() => {
+      ent('card')
+      runs.pin++
     }),
     effect(() => {
       boardTasks(ent('board'))
@@ -276,20 +280,30 @@ Deno.test('camera edits do not publish the whole-cache signal', () => {
   ]
   try {
     applyLocal([{ eid: 'cam', name: 'camera', comp: { x: 10 } }])
-    assertEquals(runs, { ent: 1, board: 1, pins: 1 })
+    assertEquals(runs, { ent: 1, pin: 1, board: 1, pins: 1 })
     assertEquals(cache.value.cam.camera!.x, 10)
     applyLocal([
       { eid: 'cam', name: 'camera', comp: { x: 10 } },
       { eid: 'cam', name: 'updated', comp: { at: 'now' } },
     ])
-    assertEquals(runs, { ent: 1, board: 1, pins: 1 })
+    assertEquals(runs, { ent: 1, pin: 1, board: 1, pins: 1 })
     assertEquals(cache.value.cam.updated!.at, 'now')
 
+    applyLocal([{ eid: 'card', name: 'pin', comp: { z: 2 } }])
+    assertEquals(runs, { ent: 1, pin: 2, board: 1, pins: 1 })
+    assertEquals(cache.value.card.pin!.z, 2)
+    applyLocal([
+      { eid: 'card', name: 'pin', comp: { z: 3 } },
+      { eid: 'card', name: 'updated', comp: { at: 'later' } },
+    ])
+    assertEquals(runs, { ent: 1, pin: 3, board: 1, pins: 1 })
+    assertEquals(cache.value.card.updated!.at, 'later')
+
     applyLocal([{ eid: 'task', name: 'task', comp: { priority: 2 } }])
-    assertEquals(runs, { ent: 2, board: 2, pins: 2 })
+    assertEquals(runs, { ent: 2, pin: 4, board: 2, pins: 2 })
 
     applyLocal([{ eid: 'card', name: 'pin', comp: { x: 10 } }])
-    assertEquals(runs, { ent: 3, board: 3, pins: 3 })
+    assertEquals(runs, { ent: 3, pin: 5, board: 3, pins: 3 })
   } finally {
     for (let stop of stops) stop()
   }

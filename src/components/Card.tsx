@@ -1,4 +1,5 @@
-import { camera, ent, mutate, toFront, topZ } from '../live.ts'
+import { useComputed } from '@preact/signals'
+import { camera, ent, mutate, pinZ, toFront, topZ } from '../live.ts'
 import { idOf, type Pinned } from '../types.ts'
 import { block, el } from './ui.tsx'
 import { applicable } from './registry.ts'
@@ -48,6 +49,12 @@ let { Tabs, X, Scroll } = Frame
 // The scroller (not the card) owns the padding, so the scrollbar rides the
 // card border and the padding scrolls away with the content.
 export let Card = ({ p }: { p: Pinned }) => {
+  // A z-only raise binds to this attribute without rerendering the card body.
+  let style = useComputed(() =>
+    `left:${p.x}px;top:${p.y}px;z-index:${pinZ(p.eid, p.z).value};` +
+    (p.w ? `width:${p.w}px;` : '') +
+    (p.h ? `height:${p.h}px;` : '')
+  )
   let down = (e: PointerEvent & { currentTarget: HTMLDivElement }) => {
     if (!(e.target instanceof Element)) return
     toFront(p.eid) // ANY touch raises the card — the drag gate is below
@@ -196,9 +203,7 @@ export let Card = ({ p }: { p: Pinned }) => {
     <Pin
       mod={[p.h ? 'sized' : false, !p.w && 'auto']}
       data-eid={p.eid}
-      style={`left:${p.x}px;top:${p.y}px;z-index:${p.z};` +
-        (p.w ? `width:${p.w}px;` : '') +
-        (p.h ? `height:${p.h}px;` : '')}
+      style={style}
       onPointerDown={down}
       // The CARD is the right-click target — "open here" (make this the
       // root card) and "open in new tab" for its target. Links, inputs,
