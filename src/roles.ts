@@ -225,15 +225,21 @@ let tmuxStart = async (c: RoleConfig, file: string, deps: RoleDeps) => {
       '#{pane_dead}',
     ])
     if (!dead.success || tmuxText(dead) == '1') {
-      let captured = await deps.command([
-        'capture-pane',
-        '-p',
-        '-t',
-        pane,
-        '-S',
-        '-100',
+      let captures = await Promise.all([
+        deps.command([
+          'capture-pane',
+          '-p',
+          '-t',
+          pane,
+          '-S',
+          '-100',
+        ]),
+        // TUIs usually leave their useful failure text in the alternate
+        // screen; the ordinary dead pane contains only tmux's exit banner.
+        deps.command(['capture-pane', '-a', '-p', '-t', pane]),
       ])
-      throw new Error(tmuxText(captured) || 'provider exited during launch')
+      let text = [...new Set(captures.map(tmuxText).filter(Boolean))].join('\n')
+      throw new Error(text || 'provider exited during launch')
     }
     await deps.command([
       'set-option',

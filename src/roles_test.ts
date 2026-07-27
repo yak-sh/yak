@@ -208,7 +208,11 @@ Deno.test('an early-dead native provider is captured, not marked applied', async
       if (args[0] == 'capture-pane') {
         return Promise.resolve({
           ...ok(),
-          stdout: new TextEncoder().encode('codex: bad role config\n'),
+          stdout: new TextEncoder().encode(
+            args.includes('-a')
+              ? 'codex: bad role config\n'
+              : 'Pane is dead (status 1)\n',
+          ),
         })
       }
       return deps.command(args)
@@ -220,7 +224,10 @@ Deno.test('an early-dead native provider is captured, not marked applied', async
     db.prepare(
       'select applied_hash, error from role where eid = ?',
     ).get(role),
-    { applied_hash: null, error: 'Error: codex: bad role config' },
+    {
+      applied_hash: null,
+      error: 'Error: Pane is dead (status 1)\ncodex: bad role config',
+    },
   )
 })
 
