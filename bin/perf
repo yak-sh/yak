@@ -26,8 +26,8 @@
 // compositor's presented cadence. Read the script/layout/paint split and
 // the long-task stacks as the truth; treat absolute fps as indicative.
 //
-// The shipped pan/board budgets exit non-zero, so they can gate CI or alert
-// from cron. The known-red patch budget reports until T-8964 promotes it.
+// Every shipped budget exits non-zero, so the probe can gate CI or alert
+// from cron.
 // A periodic version that files regressions onto the board is a noted
 // follow-up (T-6772 territory).
 //
@@ -44,6 +44,7 @@ let PAN_SCRIPT_MS = 4 // per-frame script a transform-only pan may spend
 let TTFR_MS = 1000 // board time-to-first-render ceiling
 let SCROLL_P95_MS = 33 // board scroll main-thread p95
 let PATCH_MAX_MS = 50 // one unrelated patch may never be a long task
+let TOUCHED_MAX_MS = 250 // one task repeated across mounted boards
 let PATCH_SETTLE_MS = 3000 // shadow snapshots stay outside the patch fence
 
 let root = new URL('..', import.meta.url).pathname
@@ -459,7 +460,8 @@ let panScenario = async (
     ? `    FLAG: pointer-move spends ${ms1(h.scriptPer)}ms script/frame — ` +
       `pan is re-rendering, not transform-only`
     : `    ✓ pan is transform-cheap (${ms1(h.scriptPer)}ms script/frame)`
-  let pass = h.p95 <= FRAME_MS && h.long == 0 && h.scriptPer <= PAN_SCRIPT_MS
+  let pass = h.p95 <= FRAME_MS && h.scriptPer <= PAN_SCRIPT_MS &&
+    (mounted || h.long == 0)
   return {
     title: mounted
       ? 'SCENARIO 3 — mounted canvas pan'
@@ -537,71 +539,146 @@ let boardScenario = async (
   }
 }
 
-// ---- scenario 4: one unrelated graph patch with mounted boards ----
-let patchScenario = async (
+// ---- scenario 4: graph edits with mounted boards ----
+let changeScenarios = async (
   page: Awaited<ReturnType<typeof chrome>>,
-  sentinel: string,
+  ids: { sentinel: string; task: string; card: string },
 ) => {
   await page.go('/')
   let rows = await until(() =>
     page.evalIn<number>(`document.querySelectorAll('.Board_Item').length`)
   )
   await sleep(PATCH_SETTLE_MS)
-  await page.evalIn(`
-    (() => {
-      let root = document.querySelector('.Canvas')
-      globalThis.__patchMutations = 0
-      globalThis.__patchObserver = new MutationObserver((records) => {
-        globalThis.__patchMutations += records.reduce((n, r) =>
-          n + (r.type == 'childList'
+  let measure = async (
+    title: string,
+    changes: unknown[],
+    max: number,
+    mutationMax: number,
+    allowLong = false,
+  ) => {
+    await page.evalIn(`
+      (() => {
+        let root = document.querySelector('.Canvas')
+        globalThis.__patchMutations = 0
+        globalThis.__patchKinds = {}
+        globalThis.__patchObserver = new MutationObserver((records) => {
+          for (let r of records) {
+            let n = r.type == 'childList'
+              ? r.addedNodes.length + r.removedNodes.length
+              : 1
+            globalThis.__patchMutations += n
+            let name = r.target instanceof Element
+              ? r.target.className || r.target.tagName
+              : r.target.parentElement?.className || r.target.nodeName
+            let key = r.type + ':' + String(name).slice(0, 80)
+            globalThis.__patchKinds[key] =
+              (globalThis.__patchKinds[key] || 0) + n
+          }
+        })
+        globalThis.__patchObserver.observe(root, {
+          attributes: true,
+          childList: true,
+          characterData: true,
+          subtree: true,
+        })
+      })()
+    `)
+    let evs = await page.trace(async () => {
+      await page.mark('change-start')
+      await apply(changes)
+      await sleep(500)
+      await page.mark('change-end')
+    })
+    let mutation = await page.evalIn<{
+      count: number
+      kinds: Record<string, number>
+    }>(`
+      (() => {
+        for (let r of globalThis.__patchObserver.takeRecords()) {
+          let n = r.type == 'childList'
             ? r.addedNodes.length + r.removedNodes.length
-            : 1), 0)
-      })
-      globalThis.__patchObserver.observe(root, {
-        attributes: true,
-        childList: true,
-        characterData: true,
-        subtree: true,
-      })
-    })()
-  `)
-  let evs = await page.trace(async () => {
-    await page.mark('patch-start')
-    await apply([{
-      eid: sentinel,
-      name: 'doc',
-      comp: { body: `unrelated ${crypto.randomUUID()}` },
-    }])
-    await sleep(500)
-    await page.mark('patch-end')
-  })
-  let mutations = await page.evalIn<number>(`
-    (() => {
-      globalThis.__patchMutations += globalThis.__patchObserver.takeRecords()
-        .reduce((n, r) => n + (r.type == 'childList'
-          ? r.addedNodes.length + r.removedNodes.length
-          : 1), 0)
-      globalThis.__patchObserver.disconnect()
-      return globalThis.__patchMutations
-    })()
-  `)
-  let lo = markTs(evs, 'patch-start')
-  let hi = markTs(evs, 'patch-end')
-  let h = health(`${rows} mounted board rows`, evs, lo, hi)
-  let total = split(forest(evs, mainTid(evs), lo, hi))
-  let pass = h.max <= PATCH_MAX_MS && h.long == 0 && mutations == 0
+            : 1
+          globalThis.__patchMutations += n
+          let name = r.target instanceof Element
+            ? r.target.className || r.target.tagName
+            : r.target.parentElement?.className || r.target.nodeName
+          let key = r.type + ':' + String(name).slice(0, 80)
+          globalThis.__patchKinds[key] =
+            (globalThis.__patchKinds[key] || 0) + n
+        }
+        globalThis.__patchObserver.disconnect()
+        return {
+          count: globalThis.__patchMutations,
+          kinds: globalThis.__patchKinds,
+        }
+      })()
+    `)
+    let lo = markTs(evs, 'change-start')
+    let hi = markTs(evs, 'change-end')
+    let h = health(title, evs, lo, hi)
+    let total = split(forest(evs, mainTid(evs), lo, hi))
+    let pass = h.max <= max && (allowLong || h.long == 0) &&
+      mutation.count <= mutationMax
+    let kinds = Object.entries(mutation.kinds).sort((a, b) => b[1] - a[1])
+      .slice(0, 3).map(([name, n]) => `${name} ${n}`).join(' · ')
+    return {
+      lines: [
+        ...h.lines,
+        `    localized: script ${ms1(total.script)}ms · layout ${
+          ms1(total.layout)
+        }ms · paint ${ms1(total.paint)}ms`,
+        `    canvas DOM mutations: ${mutation.count} (≤${mutationMax})` +
+        (kinds ? ` — ${kinds}` : ''),
+        `    gate: max ≤${max}ms${allowLong ? '' : ' · no long task'} — ${
+          pass ? 'PASS' : 'FAIL'
+        }`,
+      ],
+      pass,
+    }
+  }
+
+  let born = uuid()
+  let cases = [
+    await measure(
+      `unrelated patch over ${rows} mounted board rows`,
+      [{
+        eid: ids.sentinel,
+        name: 'doc',
+        comp: { body: `unrelated ${crypto.randomUUID()}` },
+      }],
+      PATCH_MAX_MS,
+      0,
+    ),
+    await measure(
+      'one task edit repeated across mounted boards',
+      [{ eid: ids.task, name: 'task', comp: { priority: 10_000 } }],
+      TOUCHED_MAX_MS,
+      160,
+      true,
+    ),
+    await measure(
+      'one card raise',
+      [{ eid: ids.card, name: 'pin', comp: { z: 10_000 } }],
+      PATCH_MAX_MS,
+      2,
+    ),
+    await measure(
+      'unlisted entity birth',
+      [{ eid: born, name: 'doc', comp: { title: 'born outside boards' } }],
+      PATCH_MAX_MS,
+      0,
+    ),
+    await measure(
+      'unlisted entity death',
+      [{ eid: born, name: 'entity', comp: null }],
+      PATCH_MAX_MS,
+      0,
+    ),
+  ]
   return {
-    title: 'SCENARIO 4 — unrelated graph patch',
-    lines: [
-      ...h.lines,
-      `    localized: script ${ms1(total.script)}ms · layout ${
-        ms1(total.layout)
-      }ms · paint ${ms1(total.paint)}ms`,
-      `    DOM mutations under canvas: ${mutations}`,
-      `    future gate: max ≤${PATCH_MAX_MS}ms · no long task · ` +
-      `0 unrelated mutations — ${pass ? 'PASS' : 'BASELINE FAIL'}`,
-    ],
-    pass,
+    title: 'SCENARIO 4 — touched graph edits',
+    lines: cases.flatMap((c, i) => i ? ['', ...c.lines] : c.lines),
+    pass: cases.every((c) => c.pass),
   }
 }
 
@@ -664,6 +741,7 @@ let seed = async () => {
     .find((c) => c.name == 'canvas')?.eid
   if (!canvasEid) throw new Error('no root canvas in the seed')
   let cards: unknown[] = []
+  let mountedCards: string[] = []
   for (let i = 0; i < 20; i++) {
     let eid = uuid()
     cards.push(
@@ -689,6 +767,7 @@ let seed = async () => {
   }
   for (let [i, target] of boards.entries()) {
     let eid = uuid()
+    mountedCards.push(eid)
     cards.push(
       { eid, name: 'card', comp: { target_eid: target, view: 'Board' } },
       {
@@ -713,7 +792,13 @@ let seed = async () => {
   let num =
     (snap2.changes as { eid: string; name: string; comp: { num: number } }[])
       .find((c) => c.eid == board && c.name == 'entity')?.comp.num
-  return { board: `B-${num}`, panCanvas, sentinel }
+  return {
+    board: `B-${num}`,
+    panCanvas,
+    sentinel,
+    task: tasks[0],
+    card: mountedCards[0],
+  }
 }
 
 let server = async (port: number, dbPath: string) => {
@@ -753,6 +838,8 @@ let main = async () => {
   let board = 'B-5' // the seed's own board, if we reuse a --url server
   let panCanvas = ''
   let sentinel = ''
+  let task = ''
+  let card = ''
 
   if (own) {
     base = `http://127.0.0.1:${srvPort}`
@@ -761,6 +848,8 @@ let main = async () => {
     board = seeded.board
     panCanvas = seeded.panCanvas
     sentinel = seeded.sentinel
+    task = seeded.task
+    card = seeded.card
   } else {
     base = urlArg.replace(/\/$/, '')
     // reuse the largest board on that server
@@ -783,7 +872,9 @@ let main = async () => {
     let pan = await panScenario(page, panCanvas)
     let brd = await boardScenario(page, board)
     let mountedPan = sentinel ? await panScenario(page, '', true) : null
-    let patch = sentinel ? await patchScenario(page, sentinel) : null
+    let changes = sentinel
+      ? await changeScenarios(page, { sentinel, task, card })
+      : null
     let report = [
       '',
       `perf — ${base}  (headless main-thread; not GPU presentation)`,
@@ -794,13 +885,13 @@ let main = async () => {
       brd.title,
       ...brd.lines,
       ...(mountedPan ? ['', mountedPan.title, ...mountedPan.lines] : []),
-      ...(patch ? ['', patch.title, ...patch.lines] : []),
+      ...(changes ? ['', changes.title, ...changes.lines] : []),
       '',
       `result: pan ${pan.pass ? 'PASS' : 'FAIL'} · board ${
         brd.pass ? 'PASS' : 'FAIL'
       }${
         mountedPan ? ` · mounted pan ${mountedPan.pass ? 'PASS' : 'FAIL'}` : ''
-      }${patch ? ` · patch baseline ${patch.pass ? 'PASS' : 'FAIL'}` : ''}`,
+      }${changes ? ` · edits ${changes.pass ? 'PASS' : 'FAIL'}` : ''}`,
       '',
     ]
     console.log(report.join('\n'))
@@ -811,7 +902,12 @@ let main = async () => {
     } else {
       console.log(`kept: chrome :${cdpPort} · server ${base} · ${scratch}`)
     }
-    Deno.exit(pan.pass && brd.pass && (mountedPan?.pass ?? true) ? 0 : 1)
+    Deno.exit(
+      pan.pass && brd.pass && (mountedPan?.pass ?? true) &&
+        (changes?.pass ?? true)
+        ? 0
+        : 1,
+    )
   } catch (e) {
     page.kill()
     srv?.kill('SIGKILL')

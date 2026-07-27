@@ -1,5 +1,6 @@
 import { ent, mutate } from '../live.ts'
 import { type Action, define, defineActions, has, resolve } from './registry.ts'
+import { memo } from './memo.ts'
 import {
   Boards,
   Body,
@@ -213,7 +214,7 @@ defineActions([
 
 // The one front door: render an entity (straight out of the live cache)
 // through a view. Extra props flow through to the renderer.
-export let Entity = (
+let EntityFace = (
   { eid, view, ...rest }: {
     eid: string
     view?: string
@@ -224,3 +225,5 @@ export let Entity = (
   let r = resolve(e, view)
   return <r.Render e={e} {...rest} />
 }
+
+export let Entity = memo(EntityFace)

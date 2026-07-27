@@ -25,6 +25,7 @@ import {
   projects,
   relations,
   row,
+  sieve,
   subEids,
   subscriptionChecks,
   topZ,
@@ -470,6 +471,35 @@ Deno.test('applyLocal: an idempotent replay preserves cache identity', () => {
   ])
   assertStrictEquals(cache.value, before)
   assertEquals(touched.eids, ['a'])
+})
+
+Deno.test('applyLocal: an idempotent entity death preserves cache identity', () => {
+  cache.value = {}
+  deps.value = []
+  let before = cache.value
+  let touched = applyLocal([{ eid: 'gone', name: 'entity', comp: null }])
+  assertStrictEquals(cache.value, before)
+  assertEquals(touched.eids, ['gone'])
+})
+
+Deno.test('an empty sieve does not subscribe to the graph', () => {
+  cache.value = {
+    a: {
+      entity: { eid: 'a', num: 1 },
+      doc: { eid: 'a', title: 'a', body: '' },
+    },
+  }
+  let runs = 0
+  let stop = effect(() => {
+    sieve('')('a')
+    runs++
+  })
+  try {
+    applyLocal([{ eid: 'a', name: 'doc', comp: { title: 'changed' } }])
+    assertEquals(runs, 1)
+  } finally {
+    stop()
+  }
 })
 
 Deno.test('applyLocal: narrow signals wake only touched graph slices', () => {

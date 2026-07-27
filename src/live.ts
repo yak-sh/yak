@@ -290,15 +290,18 @@ export let applyLocal = (changes: Change[]) => {
   let zs = new Map<string, number>()
   for (let { eid, name, comp } of changes) {
     if (name == 'entity' && comp == null) {
-      let lived = !!next[eid]
-      delete next[eid]
-      pinZs.delete(eid)
-      changed = true
-      if (lived) changedCensus = true
-      changedRows.add(eid)
-      changedPins.add(eid)
-      changedCanvas = true
+      let before = next[eid]
+      let lived = !!before
       eids.add(eid)
+      if (lived) {
+        delete next[eid]
+        pinZs.delete(eid)
+        changed = true
+        changedCensus = true
+        changedRows.add(eid)
+        changedPins.add(eid)
+        if (before.canvas) changedCanvas = true
+      }
       // The cascade: every edge touching the dead eid leaves deps too —
       // record them so the IDB shadow drops the same rows the signal does.
       for (let d of deps.value) {
@@ -308,7 +311,9 @@ export let applyLocal = (changes: Change[]) => {
           changedChildren.add(d.child)
         }
       }
-      deps.value = deps.value.filter((d) => d.parent != eid && d.child != eid)
+      if (edges.length) {
+        deps.value = deps.value.filter((d) => d.parent != eid && d.child != eid)
+      }
       continue
     }
     // An edge change names its whole triple (see db.ts): gone removes it,
@@ -345,7 +350,9 @@ export let applyLocal = (changes: Change[]) => {
       changed = true
       changedRows.add(eid)
       if (name == 'card' || name == 'pin') changedPins.add(eid)
-      if (name == 'canvas' || name == 'entity') changedCanvas = true
+      if (name == 'canvas' || (name == 'entity' && before?.canvas)) {
+        changedCanvas = true
+      }
       continue
     }
     let prior = before?.[name] as Record<string, unknown> | undefined
@@ -358,7 +365,9 @@ export let applyLocal = (changes: Change[]) => {
       name == 'card' ||
       (name == 'pin' && Object.keys(comp).some((p) => p != 'z'))
     ) changedPins.add(eid)
-    if (name == 'canvas' || name == 'entity') changedCanvas = true
+    if (name == 'canvas' || (name == 'entity' && before?.canvas)) {
+      changedCanvas = true
+    }
     changed = true
     changedRows.add(eid)
   }
@@ -1036,8 +1045,9 @@ export let boardAll = (e: Ent): Ent[] => boardScan(e, false)
 // catches (mid-keystroke is no place to error) where a board would show.
 export let sieve = (line: string): (eid: string) => boolean => {
   let preds = resolveRefs(parseQuery(line), findEid)
+  if (!preds.length) return () => true
   return (eid) =>
-    matchQuery(cache.value[eid] ?? {}, preds, (t) => cache.value[t])
+    matchQuery(cache.peek()[eid] ?? {}, preds, (t) => cache.peek()[t])
 }
 
 // The cache as client Rows — the shape the headless half's helpers speak
@@ -1112,7 +1122,8 @@ refreshFacets = (eids: Set<string>) => {
     let after = cache.peek()[eid]
     return before?.task?.domain != after?.task?.domain ||
       !!before?.project != !!after?.project ||
-      before?.entity?.num != after?.entity?.num ||
+      ((!!before?.project || !!after?.project) &&
+        before?.entity?.num != after?.entity?.num) ||
       !!before?.session != !!after?.session ||
       before?.shelf?.client_eid != after?.shelf?.client_eid
   })
