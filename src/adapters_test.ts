@@ -48,6 +48,21 @@ Deno.test('claude: the result event is the last word', () => {
   assertEquals(bad?.error, 'result: error_during_execution')
 })
 
+Deno.test('claude: interactive assistant events state model and effort', () => {
+  assertEquals(
+    claude.observe?.({
+      type: 'assistant',
+      effort: 'high',
+      message: { model: 'claude-sonnet-5' },
+    }),
+    {
+      serving_model: 'claude-sonnet-5',
+      effort: 'high',
+    },
+  )
+  assertEquals(claude.observe?.({ type: 'user' }), null)
+})
+
 Deno.test('codex: thread.started is the init, sans model', () => {
   assertEquals(
     codex.init({

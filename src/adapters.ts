@@ -44,6 +44,9 @@ export type Adapter = {
   resume: (job: Job, provider_session_id: string, text: string) => string[]
   init: (e: Event) => Summary | null
   terminal: (e: Event) => Summary | null
+  // Facts an interactive transcript states outright. Unlike terminal(),
+  // these never invent a lifecycle ending from conversation.
+  observe?: (e: Event) => Summary | null
   // The dialect, normalized: one event → one renderer row (or null when the
   // line isn't worth showing — thread/turn starts, system init). This is the
   // ONLY place a vendor's shape is known; the browser reads LogRow, never a
@@ -308,6 +311,16 @@ export let adapters: Record<string, Adapter> = {
           ...(e.is_error ? { error: `result: ${e.subtype}` } : {}),
         }
         : null,
+    observe: (e) => {
+      if (e.type != 'assistant') return null
+      let message = e.message as { model?: unknown } | undefined
+      let model = String(message?.model ?? '')
+      if (!model) return null
+      return {
+        serving_model: model,
+        ...(e.effort ? { effort: String(e.effort) } : {}),
+      }
+    },
     // stream-json: one content block per assistant/user event here (probed
     // live). thinking → reason, text → say; a tool_use is the call, the
     // matching user tool_result its answer (a separate line, so its own

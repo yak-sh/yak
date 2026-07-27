@@ -630,6 +630,38 @@ Deno.test('boot: a child that died while we were away is read from its file', as
   assertMatch(String(s.stop_reason), /unobserved/)
 })
 
+Deno.test('boot: external transcripts restore model facts missed at startup', () => {
+  let eid = uid()
+  let path = `${stores.claude}/${uid()}.jsonl`
+  Deno.mkdirSync(stores.claude, { recursive: true })
+  Deno.writeTextFileSync(
+    path,
+    JSON.stringify({
+      type: 'assistant',
+      effort: 'high',
+      message: { model: 'claude-sonnet-5' },
+    }) + '\n',
+  )
+  apply(db, [{
+    eid,
+    name: 'session',
+    comp: { id: uid(), cwd: scratch, transcript: path },
+  }])
+  db.prepare('update session set finished_at = ? where eid = ?')
+    .run('2026-07-27T16:07:22.782Z', eid)
+
+  heard = []
+  recover(cast)
+
+  assertEquals(row(eid)?.provider, 'claude')
+  assertEquals(row(eid)?.serving_model, 'claude-sonnet-5')
+  assertEquals(row(eid)?.effort, 'high')
+  assert(heard.some((c) =>
+    c.eid == eid && c.name == 'session' &&
+    c.comp?.serving_model == 'claude-sonnet-5'
+  ))
+})
+
 Deno.test('a settled lifecycle stamp is one replayable moved patch', async () => {
   let eid = plant([])
   let c0 = snapshot(db).cursor ?? 0

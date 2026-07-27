@@ -549,10 +549,11 @@ let RowLine = block('div', 'SessionRow', {
 export let SessionRow = ({ e }: { e: Ent }) => {
   let s = e.session!
   let job = jobOf(e)
+  let model = s.serving_model || s.model
   return (
     <RowLine {...clickProps(e)}>
       <Dot status={standing(s)} />
-      {s.model && <RowLine.Model>{friendly(s.model)}</RowLine.Model>}
+      {model && <RowLine.Model>{friendly(model)}</RowLine.Model>}
       {job && <RowLine.Task>{ent(job).doc?.title}</RowLine.Task>}
       <Id e={e} />
     </RowLine>

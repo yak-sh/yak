@@ -98,6 +98,31 @@ let dialectOf = (eid: string) => {
     adapters[transcriptOf(eid)?.provider ?? '']
 }
 
+// An interactive transcript can state provider facts even though it cannot
+// state whether a process is alive. Keep those two questions separate:
+// observing a model is evidence; deriving an ending from conversation is not.
+let observed = (eid: string, lines: string[]): Summary => {
+  let transcript = transcriptOf(eid)
+  let ad = adapters[transcript?.provider ?? '']
+  if (!transcript || !ad) return {}
+  let patch: Summary = { provider: transcript.provider }
+  for (let line of lines) {
+    try {
+      Object.assign(patch, ad.observe?.(JSON.parse(line)) ?? {})
+    } catch { /* a malformed log line carries no facts */ }
+  }
+  return patch
+}
+
+let transcriptLines = (eid: string) => {
+  try {
+    let path = transcriptOf(eid)?.path
+    return path ? Deno.readTextFileSync(path).trim().split('\n') : []
+  } catch {
+    return []
+  }
+}
+
 // The file that IS a session's log. Whoever owns the PROCESS owns its
 // stdout: a run we spawned writes ours, and everything else — an
 // operator's terminal — keeps the provider's transcript, so one file is the
@@ -607,18 +632,18 @@ let watch = async (eid: string, was: Watch, cast: Cast) => {
   await trail(eid, cast)
 }
 
-// Sit beside the provider process, counting whatever log there is. Lines are
-// COUNTED, not parsed: an external session's summary
-// is nobody's to derive — the provider never wrote us a terminal event,
-// and inventing one from a conversation would be a guess. No transcript
-// means nothing to count, never a reason to stop asking after the process.
+// Sit beside the provider process, counting whatever log there is. Explicit
+// provider facts ride with the count; lifecycle still comes only from the
+// process, never from interpreting conversation.
 let trail = async (eid: string, cast: Cast) => {
   let t: Tail = { at: 0, seq: 0, ended: false, errs: [] }
   for (;;) {
     let shut = !present(eid)
-    t.seq += readLines(logOf(eid), t).length
+    let lines = readLines(logOf(eid), t)
+    t.seq += lines.length
     await followWrite(eid, () =>
       stamp(eid, {
+        ...(lines.length ? observed(eid, lines) : {}),
         latest_seq: t.seq,
         ...(shut ? { finished_at: now() } : {}),
       }, cast))
@@ -1424,6 +1449,16 @@ export let recover = (cast: Cast) => {
     running.set(eid, run)
     run.done = following(eid, ad, cast)
   }
+  // Fresh Claude sessions announce before their first assistant event, so
+  // SessionStart cannot yet see a model. Reconcile the transcript at boot too:
+  // this heals finished rows as well as any live door a restart re-adopts.
+  for (
+    let s of db.prepare(`
+      select eid from session
+      where origin != 'managed' and transcript is not null
+        and (provider is null or serving_model is null)
+    `).all() as { eid: string }[]
+  ) stamp(s.eid, observed(s.eid, transcriptLines(s.eid)), cast)
   // The other half of boot: sessions we never spawned but were watching.
   // A restart drops every trail, and an operator's terminal doesn't
   // re-announce itself for us — so ask the door directly, and stamp the
