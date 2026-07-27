@@ -1,13 +1,14 @@
 // The CLI manual's table is the contract: every registered route answers
 // help, and the same entries reject malformed arguments before dispatch.
 
-import { assert, assertMatch, assertThrows } from '@std/assert'
+import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
 import { commands } from './commands.ts'
 import {
   help,
   manuals,
   requestedHelp,
   route,
+  usage,
   validate,
   validateCommand,
 } from './manual.ts'
@@ -41,6 +42,24 @@ Deno.test('help topics cover nested and colon vocabularies', () => {
     'no such help topic',
   )
   assertThrows(() => help([':fix', 'extra']), Error, 'no such help topic')
+})
+
+Deno.test('deprecated routes leave the index but keep their manuals', () => {
+  let index = usage()
+  for (let [name, manual] of Object.entries(manuals)) {
+    if (!manual.deprecated) continue
+    if (manual.root) {
+      assertEquals(index.includes(`task ${manual.usage}`), false, name)
+    }
+    let direct = help(name.split(' '))
+    assertMatch(direct, /^task /)
+    assert(direct.includes(`Deprecated: ${manual.deprecated}`), name)
+  }
+  assertThrows(
+    check('dep', []),
+    Error,
+    'deprecated: superseded by task <id> <type> <child> [--gone]',
+  )
 })
 
 let check = (name: string, args: string[]) => {

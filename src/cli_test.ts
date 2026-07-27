@@ -363,6 +363,26 @@ Deno.test('task wrap help documents the legacy alias', async () => {
   )
 })
 
+Deno.test('deprecated routes leave root help but teach at their door', async () => {
+  let root = await cli('--help')
+  assertEquals(root.code, 0)
+  assertEquals(/^\s+task dep\b/m.test(text(root.stdout)), false)
+
+  let direct = await cli('dep', '--help')
+  assertEquals(direct.code, 0)
+  assertMatch(
+    text(direct.stdout),
+    /task dep <id> <type> <child> \[--gone\][\s\S]*Deprecated: superseded/,
+  )
+
+  let bare = await cli('dep')
+  assertEquals(bare.code, 1)
+  assertMatch(
+    text(bare.stderr),
+    /usage: task dep <id> <type> <child> \[--gone\][\s\S]*deprecated:/,
+  )
+})
+
 Deno.test('task session wrap help never runs the hook verb', async () => {
   let out = await cli('session', 'wrap', '--help')
   assertEquals(out.code, 0)

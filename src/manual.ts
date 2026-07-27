@@ -16,6 +16,7 @@ type Opt = {
 export type Manual = {
   usage: string
   about: string
+  deprecated?: string
   examples?: string[]
   detail?: string
   root?: boolean
@@ -268,7 +269,8 @@ export let manuals: Record<string, Manual> = {
   },
   dep: {
     usage: 'dep <id> <type> <child> [--gone]',
-    about: 'legacy edge spelling; prefer task <id> <type> <child>',
+    about: 'link or unlink an edge',
+    deprecated: 'superseded by task <id> <type> <child> [--gone]',
     examples: ['task T-3 requires T-9', 'task T-3 requires T-9 --gone'],
     root: true,
     options: [flag('--gone')],
@@ -390,14 +392,16 @@ export let manuals: Record<string, Manual> = {
   },
   ls: {
     usage: 'ls [filters...] [--json]',
-    about: 'legacy alias for task list',
+    about: 'list tasks (filter grammar)',
+    deprecated: 'superseded by task list',
     examples: ['task list .status=open'],
     alias: true,
     options: [json],
   },
   context: {
     usage: 'context [sid] [--hook] [--subagent]',
-    about: 'legacy alias for task session context',
+    about: 'reify and print the session digest',
+    deprecated: 'superseded by task session context',
     examples: ['task session context'],
     alias: true,
     options: [flag('--hook'), flag('--subagent')],
@@ -405,7 +409,8 @@ export let manuals: Record<string, Manual> = {
   },
   wrap: {
     usage: 'wrap [sid] [--hook]',
-    about: 'legacy alias for task session wrap',
+    about: 'release claims and preserve the session brief',
+    deprecated: 'superseded by task session wrap',
     examples: ['task session wrap'],
     alias: true,
     options: [flag('--hook')],
@@ -432,7 +437,7 @@ export let subjectUsage = (id = '<id>') =>
                                       link or unlink an edge
   task ${id} :<command> …            run a focused ':' command`
 
-let roots = () => Object.values(manuals).filter((m) => m.root)
+let roots = () => Object.values(manuals).filter((m) => m.root && !m.deprecated)
 
 export let usage = () =>
   `task — the entity graph, from a shell
@@ -451,7 +456,8 @@ filter grammar; 'task help <verb>' shows examples.`
 
 let children = (name: string) =>
   Object.entries(manuals)
-    .filter(([key]) =>
+    .filter(([key, manual]) =>
+      !manual.deprecated &&
       key.startsWith(`${name} `) && !key.slice(name.length + 1)
         .includes(' ')
     )
@@ -459,6 +465,7 @@ let children = (name: string) =>
 
 let render = (name: string, m: Manual) => {
   let out = `task ${m.usage}\n  ${m.about}`
+  if (m.deprecated) out += `\n\nDeprecated: ${m.deprecated}`
   let subs = children(name)
   if (subs.length) {
     out += '\n\n' +
@@ -549,7 +556,10 @@ let optionName = (arg: string) =>
   arg.startsWith('--') ? arg.split('=')[0] : arg.slice(0, 2)
 
 let usageError = (name: string, manual: Manual, message: string) =>
-  new Error(`${name} ${message}\nusage: task ${manual.usage}`)
+  new Error(
+    `${name} ${message}\nusage: task ${manual.usage}` +
+      (manual.deprecated ? `\ndeprecated: ${manual.deprecated}` : ''),
+  )
 
 export let validate = (
   name: string,
