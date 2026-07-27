@@ -8,6 +8,7 @@ import { Dot } from './Dot.tsx'
 import { Edit } from './Edit.tsx'
 import { Overlay } from './overlay.tsx'
 import { useComplete } from './Complete.tsx'
+import * as suggest from './suggest.ts'
 
 // The PROP registry — the renderer registry's sibling. The typed
 // vocabulary (types.ts comps) is the DETECTION layer: one entry per
@@ -217,9 +218,8 @@ let EidEdit = ({ ...p }: EditorProps) => {
   let t = p.t as { eid: string }
   let [q, setQ] = useState('')
   let hits = candidates(t.eid)
-    .filter((e) =>
-      !q || (e.doc?.title ?? '').toLowerCase().includes(q.toLowerCase())
-    )
+    .filter((e) => suggest.match(q, e))
+    .sort(suggest.order(q))
     .slice(0, 8)
   return (
     <Pop mod='list'>
@@ -236,7 +236,7 @@ let EidEdit = ({ ...p }: EditorProps) => {
       <Row mod='none' onClick={() => set(p, null)}>none</Row>
       {hits.map((e) => (
         <Row key={e.eid} onClick={() => set(p, e.eid)}>
-          {e.doc?.title || e.kind}
+          {suggest.label(e)}
         </Row>
       ))}
     </Pop>
@@ -248,7 +248,6 @@ let candidates = (target: string) =>
     .filter((e) =>
       target ? !!(e as unknown as Record<string, unknown>)[target] : !!e.doc
     )
-    .sort((a, b) => b.num - a.num)
 
 // ---- the stock faces ----
 

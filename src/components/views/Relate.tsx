@@ -5,6 +5,7 @@ import { spec, taskChanges } from '../../client.ts'
 import { peek, useDraft } from '../drafts.ts'
 import { block } from '../ui.tsx'
 import { Overlay } from '../overlay.tsx'
+import * as suggest from '../suggest.ts'
 
 let Frame = block('span', 'Relate', {
   Verb: 'button',
@@ -64,10 +65,8 @@ export let Relate = ({ e }: { e: Ent }) => {
   let hits = !verb ? [] : Object.keys(cache.value)
     .map(ent)
     .filter((t) => t.task && !taken.has(t.eid))
-    .filter((t) =>
-      !q || (t.doc?.title ?? '').toLowerCase().includes(q.toLowerCase())
-    )
-    .sort((a, b) => b.num - a.num)
+    .filter((t) => suggest.match(q, t))
+    .sort(suggest.order(q))
     .slice(0, 6)
   let fresh = q.trim() ? spec(q).title : ''
 
@@ -166,7 +165,7 @@ export let Relate = ({ e }: { e: Ent }) => {
                   onMouseEnter={() => setPick(i)}
                   onMouseDown={(ev: MouseEvent) => grab(ev, () => link(t.eid))}
                 >
-                  {t.doc?.title || t.kind}
+                  {suggest.label(t)}
                 </Row>
               ))}
               {fresh && (
