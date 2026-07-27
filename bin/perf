@@ -3,12 +3,15 @@
 //
 // The fleet's "verify end-to-end" turned on RENDERING: it drives the real
 // app in headless Chrome, records a devtools trace, and localizes the
-// main-thread cost that drops frames. Two scenarios:
+// main-thread cost that drops frames. Three scenarios:
 //   1. canvas pan   — a real mouse drag; per-frame scripting + long tasks.
 //                     A transform-only pan should show ~zero per-frame
 //                     script; it FLAGS if pointer-move drives reconciliation.
 //   2. board render — first render localized into script / layout / paint
 //                     (the ~500ms the owner reports), then scroll health.
+//   3. graph patch  — one unrelated doc edit with 6,000 board rows mounted.
+//                     This is the T-7249 baseline; T-8964 promotes its budget
+//                     to an exit gate after row-level invalidation lands.
 //
 // Self-contained: it spins its OWN server on a unique port with a scratch
 // DB_PATH, seeds it, profiles, and tears everything down — the live db is
@@ -22,11 +25,12 @@
 // compositor's presented cadence. Read the script/layout/paint split and
 // the long-task stacks as the truth; treat absolute fps as indicative.
 //
-// Exits non-zero when a threshold is blown, so it can gate CI or alert from
-// cron. A periodic version that files regressions onto the board is a noted
+// The shipped pan/board budgets exit non-zero, so they can gate CI or alert
+// from cron. The known-red patch budget reports until T-8964 promotes it.
+// A periodic version that files regressions onto the board is a noted
 // follow-up (T-6772 territory).
 //
-//   bin/perf                 # seed a scratch app, run both scenarios
+//   bin/perf                 # seed a scratch app, run every scenario
 //   bin/perf --url URL        # profile a running server instead
 //   bin/perf --keep           # leave chrome + server up for inspection
 
@@ -38,6 +42,8 @@ let LONG_MS = 50 // the long-task bar
 let PAN_SCRIPT_MS = 4 // per-frame script a transform-only pan may spend
 let TTFR_MS = 1000 // board time-to-first-render ceiling
 let SCROLL_P95_MS = 33 // board scroll main-thread p95
+let PATCH_MAX_MS = 50 // one unrelated patch may never be a long task
+let PATCH_SETTLE_MS = 3000 // shadow snapshots stay outside the patch fence
 
 let root = new URL('..', import.meta.url).pathname
 
@@ -182,7 +188,8 @@ let chrome = async (port: number, profile: string) => {
     })
     return (r.result as { value: T }).value
   }
-  let mark = (name: string) => evalIn(`performance.mark(${JSON.stringify(name)})`)
+  let mark = (name: string) =>
+    evalIn(`performance.mark(${JSON.stringify(name)})`)
   let trace = async (fn: () => Promise<void>) => {
     buf.length = 0
     await c.send('Tracing.start', {
@@ -354,9 +361,7 @@ let culprit = (root: Node) => {
     let d = n.args?.data as
       | { functionName?: string; url?: string; stackTrace?: unknown[] }
       | undefined
-    let key = d?.functionName
-      ? `${d.functionName} ${short(d.url)}`
-      : n.name
+    let key = d?.functionName ? `${d.functionName} ${short(d.url)}` : n.name
     by.set(key, (by.get(key) ?? 0) + n.self / 1000)
     if (!stackOf.length && Array.isArray(d?.stackTrace)) {
       stackOf = (d!.stackTrace as { functionName?: string; url?: string }[])
@@ -377,13 +382,14 @@ let health = (title: string, evs: Ev[], lo: number, hi: number) => {
   let roots = forest(evs, tid, lo, hi)
   let fs = frames(roots)
   let times = fs.map((f) => f.ms)
+  let max = Math.max(0, ...times)
   let long = roots.filter((r) => r.dur! / 1000 > LONG_MS)
   let over = times.filter((t) => t > FRAME_MS).length
   let scriptPer = fs.length ? sum(fs.map((f) => f.script)) / fs.length : 0
   let out = [
     `  ${title}`,
     `    main-thread tasks: ${fs.length} · p95 ${ms1(p95(times))}ms · ` +
-    `max ${ms1(Math.max(0, ...times))}ms · over ${FRAME_MS}ms: ${over}`,
+    `max ${ms1(max)}ms · over ${FRAME_MS}ms: ${over}`,
     `    script/frame: ${ms1(scriptPer)}ms · long tasks (>${LONG_MS}ms): ` +
     long.length,
   ]
@@ -392,15 +398,23 @@ let health = (title: string, evs: Ev[], lo: number, hi: number) => {
     out.push(`      ⚠ ${ms1(t.dur! / 1000)}ms task — ${c.top.join(' · ')}`)
     if (c.stack.length) out.push(`        ↳ ${c.stack.join(' ← ')}`)
   }
-  return { lines: out, p95: p95(times), over, long: long.length, scriptPer }
+  return {
+    lines: out,
+    p95: p95(times),
+    max,
+    over,
+    long: long.length,
+    scriptPer,
+  }
 }
 
 // ---- scenario 1: canvas pan ----
 let panScenario = async (
   page: Awaited<ReturnType<typeof chrome>>,
+  canvas = '',
 ) => {
-  await page.go('/')
-  await sleep(400) // let the canvas settle before we measure
+  await page.go(canvas ? `/${canvas}?v=Canvas` : '/')
+  await sleep(400)
   // A point on empty canvas — never inside a .Pin, or the drag is a card grab.
   let pt = await page.evalIn<string>(
     `(()=>{for(let y=innerHeight-60;y>80;y-=40)` +
@@ -509,6 +523,74 @@ let boardScenario = async (
   }
 }
 
+// ---- scenario 3: one unrelated graph patch with mounted boards ----
+let patchScenario = async (
+  page: Awaited<ReturnType<typeof chrome>>,
+  sentinel: string,
+) => {
+  await page.go('/')
+  let rows = await until(() =>
+    page.evalIn<number>(`document.querySelectorAll('.Board_Item').length`)
+  )
+  await sleep(PATCH_SETTLE_MS)
+  await page.evalIn(`
+    (() => {
+      let root = document.querySelector('.Canvas')
+      globalThis.__patchMutations = 0
+      globalThis.__patchObserver = new MutationObserver((records) => {
+        globalThis.__patchMutations += records.reduce((n, r) =>
+          n + (r.type == 'childList'
+            ? r.addedNodes.length + r.removedNodes.length
+            : 1), 0)
+      })
+      globalThis.__patchObserver.observe(root, {
+        attributes: true,
+        childList: true,
+        characterData: true,
+        subtree: true,
+      })
+    })()
+  `)
+  let evs = await page.trace(async () => {
+    await page.mark('patch-start')
+    await apply([{
+      eid: sentinel,
+      name: 'doc',
+      comp: { body: `unrelated ${crypto.randomUUID()}` },
+    }])
+    await sleep(500)
+    await page.mark('patch-end')
+  })
+  let mutations = await page.evalIn<number>(`
+    (() => {
+      globalThis.__patchMutations += globalThis.__patchObserver.takeRecords()
+        .reduce((n, r) => n + (r.type == 'childList'
+          ? r.addedNodes.length + r.removedNodes.length
+          : 1), 0)
+      globalThis.__patchObserver.disconnect()
+      return globalThis.__patchMutations
+    })()
+  `)
+  let lo = markTs(evs, 'patch-start')
+  let hi = markTs(evs, 'patch-end')
+  let h = health(`${rows} mounted board rows`, evs, lo, hi)
+  let total = split(forest(evs, mainTid(evs), lo, hi))
+  let pass = h.max <= PATCH_MAX_MS && h.long == 0 && mutations == 0
+  return {
+    title: 'SCENARIO 3 — unrelated graph patch',
+    lines: [
+      ...h.lines,
+      `    localized: script ${ms1(total.script)}ms · layout ${
+        ms1(total.layout)
+      }ms · paint ${ms1(total.paint)}ms`,
+      `    DOM mutations under canvas: ${mutations}`,
+      `    future gate: max ≤${PATCH_MAX_MS}ms · no long task · ` +
+      `0 unrelated mutations — ${pass ? 'PASS' : 'BASELINE FAIL'}`,
+    ],
+    pass,
+  }
+}
+
 // ---- the scratch app: seed a server we own, or reuse --url ----
 let apply = async (changes: unknown[]) => {
   let r = await fetch(`${base}/apply`, {
@@ -520,8 +602,8 @@ let apply = async (changes: unknown[]) => {
 }
 
 let seed = async () => {
-  // 200 tasks across the four columns for a heavy board; a board over the
-  // lot; ~40 cards pinned on the root canvas for a heavy pan.
+  // Thirty mounted 200-row boards expose graph-wide invalidation without
+  // turning the existing board-first-render scenario into a boot benchmark.
   let statuses = ['open', 'wip', 'done', 'cancelled']
   let tasks: string[] = []
   let batch: unknown[] = []
@@ -534,7 +616,8 @@ let seed = async () => {
         name: 'doc',
         comp: {
           title: `Perf task ${i} — a representative row with some words`,
-          body: `Body ${i}. Enough prose to make a tile render like a real one.`,
+          body:
+            `Body ${i}. Enough prose to make a tile render like a real one.`,
         },
       },
       {
@@ -545,9 +628,19 @@ let seed = async () => {
     )
   }
   let board = uuid()
+  let boards = Array.from({ length: 30 }, uuid)
+  let panCanvas = uuid()
+  let sentinel = uuid()
   batch.push(
     { eid: board, name: 'doc', comp: { title: 'Perf board' } },
     { eid: board, name: 'board', comp: { query: '' } },
+    { eid: panCanvas, name: 'doc', comp: { title: 'Perf pan canvas' } },
+    { eid: panCanvas, name: 'canvas', comp: {} },
+    { eid: sentinel, name: 'doc', comp: { title: 'Patch sentinel' } },
+    ...boards.flatMap((eid, i) => [
+      { eid, name: 'doc', comp: { title: `Mounted perf board ${i}` } },
+      { eid, name: 'board', comp: { query: '' } },
+    ]),
   )
   await apply(batch)
 
@@ -557,7 +650,7 @@ let seed = async () => {
     .find((c) => c.name == 'canvas')?.eid
   if (!canvasEid) throw new Error('no root canvas in the seed')
   let cards: unknown[] = []
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 20; i++) {
     let eid = uuid()
     cards.push(
       {
@@ -570,7 +663,7 @@ let seed = async () => {
         name: 'pin',
         comp: {
           eid,
-          canvas_eid: canvasEid,
+          canvas_eid: panCanvas,
           x: (i % 8) * 360,
           y: Math.floor(i / 8) * 300,
           w: 320,
@@ -580,13 +673,33 @@ let seed = async () => {
       },
     )
   }
+  for (let [i, target] of boards.entries()) {
+    let eid = uuid()
+    cards.push(
+      { eid, name: 'card', comp: { target_eid: target, view: 'Board' } },
+      {
+        eid,
+        name: 'pin',
+        comp: {
+          eid,
+          canvas_eid: canvasEid,
+          x: (i % 5) * 520,
+          y: Math.floor(i / 5) * 760,
+          w: 480,
+          h: 700,
+          z: 30 + i,
+        },
+      },
+    )
+  }
   await apply(cards)
 
   // the board's human id for its URL
   let snap2 = await (await fetch(`${base}/snapshot`)).json()
-  let num = (snap2.changes as { eid: string; name: string; comp: { num: number } }[])
-    .find((c) => c.eid == board && c.name == 'entity')?.comp.num
-  return `B-${num}`
+  let num =
+    (snap2.changes as { eid: string; name: string; comp: { num: number } }[])
+      .find((c) => c.eid == board && c.name == 'entity')?.comp.num
+  return { board: `B-${num}`, panCanvas, sentinel }
 }
 
 let server = async (port: number, dbPath: string) => {
@@ -624,16 +737,25 @@ let main = async () => {
   let srvPort = 8300 + Math.floor(Math.random() * 700)
   let srv: Deno.ChildProcess | undefined
   let board = 'B-5' // the seed's own board, if we reuse a --url server
+  let panCanvas = ''
+  let sentinel = ''
 
   if (own) {
     base = `http://127.0.0.1:${srvPort}`
     srv = await server(srvPort, `${scratch}/tasks.db`)
-    board = await seed()
+    let seeded = await seed()
+    board = seeded.board
+    panCanvas = seeded.panCanvas
+    sentinel = seeded.sentinel
   } else {
     base = urlArg.replace(/\/$/, '')
     // reuse the largest board on that server
     let snap = await (await fetch(`${base}/snapshot`)).json()
-    let boards = (snap.changes as { eid: string; name: string; comp: Record<string, unknown> }[])
+    let boards = (snap.changes as {
+      eid: string
+      name: string
+      comp: Record<string, unknown>
+    }[])
       .filter((c) => c.name == 'board')
     let nums = new Map(
       (snap.changes as { eid: string; name: string; comp: { num: number } }[])
@@ -644,8 +766,9 @@ let main = async () => {
 
   let page = await chrome(cdpPort, `${scratch}/chrome`)
   try {
-    let pan = await panScenario(page)
+    let pan = await panScenario(page, panCanvas)
     let brd = await boardScenario(page, board)
+    let patch = sentinel ? await patchScenario(page, sentinel) : null
     let report = [
       '',
       `perf — ${base}  (headless main-thread; not GPU presentation)`,
@@ -655,10 +778,11 @@ let main = async () => {
       '',
       brd.title,
       ...brd.lines,
+      ...(patch ? ['', patch.title, ...patch.lines] : []),
       '',
       `result: pan ${pan.pass ? 'PASS' : 'FAIL'} · board ${
         brd.pass ? 'PASS' : 'FAIL'
-      }`,
+      }${patch ? ` · patch baseline ${patch.pass ? 'PASS' : 'FAIL'}` : ''}`,
       '',
     ]
     console.log(report.join('\n'))
