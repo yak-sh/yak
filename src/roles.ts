@@ -89,10 +89,11 @@ let bootstrap =
 export let nativeProviderArgs = (
   c: Pick<RoleConfig, 'provider' | 'model' | 'effort'>,
   file: string,
+  task = 'task',
 ) => {
   if (c.provider == 'claude') {
     return [
-      'task',
+      task,
       'claude',
       '--model',
       c.model,
@@ -104,7 +105,7 @@ export let nativeProviderArgs = (
   }
   if (c.provider == 'codex') {
     return [
-      'task',
+      task,
       'codex',
       '--model',
       c.model,
@@ -118,6 +119,17 @@ export let nativeProviderArgs = (
     ]
   }
   throw new Error(`native roles require claude or codex, got ${c.provider}`)
+}
+
+export let commandPath = (name: string, path: string) => {
+  for (let dir of path.split(':').filter(Boolean)) {
+    let file = `${dir}/${name}`
+    try {
+      let stat = Deno.statSync(file)
+      if (stat.isFile && (stat.mode == null || stat.mode & 0o111)) return file
+    } catch { /* keep looking */ }
+  }
+  throw new Error(`${name} is not installed in PATH`)
 }
 
 let nativeEnv = (eid: string) => {
@@ -167,7 +179,13 @@ export let nativeRespawnArgs = (
     '-e',
     `${key}=${value}`,
   ]),
-  ...nativeProviderArgs(c, file),
+  // tmux resolves argv[0] before applying respawn-pane's -e PATH. Resolve it
+  // here or a daemon with a narrower PATH may launch an unrelated `task`.
+  ...nativeProviderArgs(
+    c,
+    file,
+    commandPath('task', String(nativeEnv(c.eid).PATH)),
+  ),
 ]
 
 let tmuxHas = async (eid: string, deps: RoleDeps) =>

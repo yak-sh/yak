@@ -5,7 +5,11 @@ import { assert, assertEquals, assertMatch } from '@std/assert'
 import { type Change } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
-Deno.env.set('HOME', Deno.makeTempDirSync({ prefix: 'tasks-roles-home-' }))
+let tasksHome = Deno.makeTempDirSync({ prefix: 'tasks-roles-home-' })
+Deno.env.set('HOME', tasksHome)
+Deno.mkdirSync(`${tasksHome}/.deno/bin`, { recursive: true })
+Deno.writeTextFileSync(`${tasksHome}/.deno/bin/task`, '')
+Deno.chmodSync(`${tasksHome}/.deno/bin/task`, 0o755)
 
 let { apply, db } = await import('./db.ts')
 let {
@@ -132,6 +136,7 @@ Deno.test('native role dedupes, rolls drift, heals death, and stops exactly', as
   assertEquals(respawn[respawn.indexOf('-t') + 1], '%99')
   assert(respawn.includes(`TASKS_ROLE=${role}`))
   assert(respawn.includes('TERM=xterm-256color'))
+  assert(respawn.includes(`${tasksHome}/.deno/bin/task`))
   let first = db.prepare(
     'select applied_hash from role where eid = ?',
   ).get(role) as { applied_hash: string }
