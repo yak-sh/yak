@@ -9,6 +9,7 @@ import {
   boardTasks,
   byWarmth,
   cache,
+  census,
   commentCount,
   config,
   deps,
@@ -18,6 +19,8 @@ import {
   landSub,
   pinned,
   projects,
+  relations,
+  row,
   subEids,
   subscriptionChecks,
   topZ,
@@ -353,6 +356,93 @@ Deno.test('applyLocal: an idempotent replay preserves cache identity', () => {
   ])
   assertStrictEquals(cache.value, before)
   assertEquals(touched.eids, ['a'])
+})
+
+Deno.test('applyLocal: narrow signals wake only touched graph slices', () => {
+  let spine = (eid: string, num: number) => ({
+    entity: { eid, num },
+    doc: { eid, title: eid, body: '' },
+  })
+  cache.value = {
+    narrow_a: spine('narrow_a', 1),
+    narrow_b: spine('narrow_b', 2),
+  }
+  deps.value = []
+  let runs = { a: 0, b: 0, pa: 0, pb: 0 }
+  let stops = [
+    effect(() => {
+      row('narrow_a').value
+      runs.a++
+    }),
+    effect(() => {
+      row('narrow_b').value
+      runs.b++
+    }),
+    effect(() => {
+      relations('narrow_a').value
+      runs.pa++
+    }),
+    effect(() => {
+      relations('narrow_b').value
+      runs.pb++
+    }),
+  ]
+  try {
+    applyLocal([{
+      eid: 'narrow_a',
+      name: 'doc',
+      comp: { title: 'changed' },
+    }])
+    assertEquals(runs, { a: 2, b: 1, pa: 1, pb: 1 })
+
+    applyLocal([{
+      eid: 'narrow_a',
+      name: 'dependency',
+      comp: { type: 'reads', child_eid: 'narrow_b' },
+    }])
+    assertEquals(runs, { a: 2, b: 1, pa: 2, pb: 1 })
+
+    applyLocal([{
+      eid: 'narrow_b',
+      name: 'entity',
+      comp: null,
+    }])
+    assertEquals(runs, { a: 2, b: 2, pa: 3, pb: 1 })
+    assertEquals(row('narrow_b').value, undefined)
+    assertEquals(relations('narrow_a').value, [])
+  } finally {
+    for (let stop of stops) stop()
+  }
+})
+
+Deno.test('narrow signals follow births, subscription eviction, and census', () => {
+  cache.value = {
+    narrow_keep: {
+      entity: { eid: 'narrow_keep', num: 1 },
+      doc: { eid: 'narrow_keep', title: 'keep', body: '' },
+    },
+  }
+  deps.value = []
+  applyLocal([{
+    eid: 'narrow_drop',
+    name: 'entity',
+    comp: { eid: 'narrow_drop', num: 2 },
+  }])
+  assertEquals(census.value.toSorted(), ['narrow_drop', 'narrow_keep'])
+
+  let live = row('narrow_drop')
+  landSub({
+    sub: 'narrow-signals',
+    replace: true,
+    changes: [{
+      eid: 'narrow_drop',
+      name: 'doc',
+      comp: { title: 'drop' },
+    }],
+  })
+  landSub({ sub: 'narrow-signals', changes: [], drop: ['narrow_drop'] })
+  assertEquals(live.value, undefined)
+  assertEquals(census.value, ['narrow_keep'])
 })
 
 Deno.test('applyLocal: a camera birth still publishes the cache', () => {

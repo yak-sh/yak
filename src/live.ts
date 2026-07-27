@@ -1,7 +1,13 @@
 // The browser half: one entity cache, one socket, one identity, one camera.
 // The cache is the client's whole world — a snapshot fills it, ws patches
 // keep it current, and every component renders straight out of it.
-import { computed, type Signal, signal } from '@preact/signals'
+import {
+  batch,
+  computed,
+  type Signal,
+  signal,
+  untracked,
+} from '@preact/signals'
 import {
   awake,
   type Change,
@@ -34,6 +40,56 @@ export let cache = signal<Record<string, Comps>>({})
 export let deps = signal<Dep[]>([])
 export let problem = signal('')
 let pinZs = new Map<string, Signal<number>>()
+let rowSignals = new Map<string, Signal<Comps | undefined>>()
+let relationSignals = new Map<string, Signal<Dep[]>>()
+export let census = signal<string[]>([])
+
+// Renderers hold these narrow signals; the complete cache remains the
+// persistence and query door. A signal is minted once per eid so a patch
+// cannot wake an unrelated entity.
+export let row = (eid: string) => {
+  let found = rowSignals.get(eid)
+  if (!found) {
+    rowSignals.set(eid, found = signal(untracked(() => cache.value[eid])))
+  }
+  return found
+}
+
+export let relations = (eid: string) => {
+  let found = relationSignals.get(eid)
+  if (!found) {
+    relationSignals.set(
+      eid,
+      found = signal(
+        untracked(() => deps.value.filter((d) => d.parent == eid)),
+      ),
+    )
+  }
+  return found
+}
+
+let publish = (eids: Set<string>, parentEids: Set<string>) =>
+  batch(() => {
+    for (let eid of eids) {
+      let found = rowSignals.get(eid)
+      if (found) found.value = cache.value[eid]
+    }
+    for (let eid of parentEids) {
+      let found = relationSignals.get(eid)
+      if (found) {
+        found.value = deps.value.filter((d) => d.parent == eid)
+      }
+    }
+  })
+
+let resetSignals = () =>
+  batch(() => {
+    census.value = Object.keys(cache.value)
+    for (let [eid, found] of rowSignals) found.value = cache.value[eid]
+    for (let [eid, found] of relationSignals) {
+      found.value = deps.value.filter((d) => d.parent == eid)
+    }
+  })
 
 // A z-only pin patch binds straight to its one DOM attribute. The fallback
 // seeds cards mounted after the patch without making this signal map a cache.
@@ -149,6 +205,9 @@ let mark = (path: string) => ((globalThis as { __boot?: string }).__boot = path)
 export let applyLocal = (changes: Change[]) => {
   let eids = new Set<string>()
   let edges: Dep[] = []
+  let changedRows = new Set<string>()
+  let changedParents = new Set<string>()
+  let changedCensus = false
   let changed = false
   // Camera motion renders from camera.value + hear(), not the graph cache.
   // Keep its durable row current without publishing a whole-graph signal.
@@ -167,14 +226,20 @@ export let applyLocal = (changes: Change[]) => {
   let zs = new Map<string, number>()
   for (let { eid, name, comp } of changes) {
     if (name == 'entity' && comp == null) {
+      let lived = !!next[eid]
       delete next[eid]
       pinZs.delete(eid)
       changed = true
+      if (lived) changedCensus = true
+      changedRows.add(eid)
       eids.add(eid)
       // The cascade: every edge touching the dead eid leaves deps too —
       // record them so the IDB shadow drops the same rows the signal does.
       for (let d of deps.value) {
-        if (d.parent == eid || d.child == eid) edges.push(d)
+        if (d.parent == eid || d.child == eid) {
+          edges.push(d)
+          changedParents.add(d.parent)
+        }
       }
       deps.value = deps.value.filter((d) => d.parent != eid && d.child != eid)
       continue
@@ -191,11 +256,15 @@ export let applyLocal = (changes: Change[]) => {
       edges.push(d)
       let same = (x: Dep) =>
         x.parent == d.parent && x.type == d.type && x.child == d.child
-      deps.value = comp.gone
+      let nextDeps = comp.gone
         ? deps.value.filter((x) => !same(x))
         : deps.value.some(same)
         ? deps.value
         : [...deps.value, d]
+      if (nextDeps != deps.value) {
+        deps.value = nextDeps
+        changedParents.add(eid)
+      }
       continue
     }
     eids.add(eid)
@@ -206,16 +275,21 @@ export let applyLocal = (changes: Change[]) => {
       delete row[name]
       next[eid] = row as Comps
       changed = true
+      changedRows.add(eid)
       continue
     }
     let prior = before?.[name] as Record<string, unknown> | undefined
     let after = { ...prior, ...comp }
     if (prior && sameProps(prior, after)) continue
     next[eid] = { ...before, [name]: after } as Comps
+    if (!before) changedCensus = true
     if (name == 'pin' && after.z != null) zs.set(eid, Number(after.z))
     changed = true
+    changedRows.add(eid)
   }
   if (changed && !quiet) cache.value = next
+  if (changedCensus) census.value = Object.keys(next)
+  publish(changedRows, changedParents)
   for (let [eid, z] of zs) {
     let live = pinZs.get(eid)
     if (live) live.value = z
@@ -380,14 +454,20 @@ let evict = (eids: string[]) => {
   let held = (eid: string) => [...subMembers.values()].some((s) => s.has(eid))
   let next = { ...cache.value }
   let changed = false
+  let gone = new Set<string>()
   for (let eid of eids) {
     if (!held(eid) && next[eid]) {
       delete next[eid]
       pinZs.delete(eid)
       changed = true
+      gone.add(eid)
     }
   }
-  if (changed) cache.value = next
+  if (changed) {
+    cache.value = next
+    census.value = Object.keys(next)
+    publish(gone, new Set())
+  }
 }
 
 // A control frame is an OBJECT (design §1), distinct from the array batches
@@ -515,6 +595,7 @@ let seedFrom = (snap: Snapshot, write = true) => {
   cache.value = {}
   deps.value = snap.deps
   applyLocal(snap.changes)
+  resetSignals()
   held = {
     cursor: snap.cursor,
     epoch: snap.epoch,
@@ -609,6 +690,7 @@ let local = async (write: boolean) => {
     pinZs.clear()
     cache.value = stored.ents
     deps.value = stored.deps
+    resetSignals()
     held = stored.meta
   }
 }
