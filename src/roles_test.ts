@@ -123,6 +123,7 @@ Deno.test('native role dedupes, rolls drift, heals death, and stops exactly', as
   assertEquals(count('new-session'), 1)
   assert(sessions.has(name))
   assertEquals(files.size, 1)
+  assert(commands.some((args) => args[0] == 'set-option' && args[1] == '-w'))
   let first = db.prepare(
     'select applied_hash from role where eid = ?',
   ).get(role) as { applied_hash: string }

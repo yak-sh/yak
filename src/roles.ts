@@ -189,6 +189,7 @@ let tmuxStart = async (c: RoleConfig, file: string, deps: RoleDeps) => {
   try {
     let kept = await deps.command([
       'set-option',
+      '-w',
       '-t',
       target,
       'remain-on-exit',
@@ -223,6 +224,7 @@ let tmuxStart = async (c: RoleConfig, file: string, deps: RoleDeps) => {
     }
     await deps.command([
       'set-option',
+      '-w',
       '-t',
       target,
       'remain-on-exit',
