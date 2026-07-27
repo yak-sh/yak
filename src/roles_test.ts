@@ -31,6 +31,7 @@ let ok = () => ({
 })
 let deps = {
   now: () => `2026-07-27T00:00:0${clock++}.000Z`,
+  wait: () => Promise.resolve(),
   write: (path: string, body: string) => files.set(path, body),
   command: (args: string[]) => {
     commands.push(args)
@@ -43,6 +44,12 @@ let deps = {
     if (args[0] == 'kill-session') sessions.delete(target)
     if (args[0] == 'new-session') {
       sessions.add(args[args.indexOf('-s') + 1])
+    }
+    if (args[0] == 'display-message') {
+      return Promise.resolve({
+        ...ok(),
+        stdout: new TextEncoder().encode('0\n'),
+      })
     }
     return Promise.resolve(ok())
   },
@@ -175,6 +182,38 @@ Deno.test('invalid native drift closes the stale door and stamps the cause', asy
     error: string
   }
   assertMatch(row.error, /native roles require claude or codex/)
+})
+
+Deno.test('an early-dead native provider is captured, not marked applied', async () => {
+  commands = []
+  sessions.clear()
+  let { role } = seed('native')
+  let dying = {
+    ...deps,
+    command: (args: string[]) => {
+      if (args[0] == 'display-message') {
+        return Promise.resolve({
+          ...ok(),
+          stdout: new TextEncoder().encode('1\n'),
+        })
+      }
+      if (args[0] == 'capture-pane') {
+        return Promise.resolve({
+          ...ok(),
+          stdout: new TextEncoder().encode('codex: bad role config\n'),
+        })
+      }
+      return deps.command(args)
+    },
+  }
+  await rolesSweep(cast, dying)
+  assert(!sessions.has(roleTmux(role)))
+  assertEquals(
+    db.prepare(
+      'select applied_hash, error from role where eid = ?',
+    ).get(role),
+    { applied_hash: null, error: 'Error: codex: bad role config' },
+  )
 })
 
 Deno.test('managed role mints one operator session and stops through the graph', async () => {

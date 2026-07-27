@@ -42,6 +42,7 @@ type CommandOutput = {
 export type RoleDeps = {
   command: (args: string[]) => Promise<CommandOutput>
   now: () => string
+  wait: (ms: number) => Promise<void>
   write: (path: string, body: string) => void
 }
 
@@ -64,6 +65,7 @@ let command = async (args: string[]): Promise<CommandOutput> => {
 let defaults: RoleDeps = {
   command,
   now: () => new Date().toISOString(),
+  wait: (ms) => new Promise((go) => setTimeout(go, ms)),
   write: (path, body) => {
     Deno.mkdirSync(path.slice(0, path.lastIndexOf('/')), { recursive: true })
     Deno.writeTextFileSync(path, body)
@@ -133,11 +135,24 @@ let nativeEnv = (eid: string) => {
   }
 }
 
-export let nativeTmuxArgs = (c: RoleConfig, file: string) => [
+export let nativeTmuxArgs = (c: RoleConfig) => [
   'new-session',
   '-d',
   '-s',
   roleTmux(c.eid),
+  '-c',
+  c.repo.path,
+  ...Object.entries(nativeEnv(c.eid)).flatMap(([key, value]) => [
+    '-e',
+    `${key}=${value}`,
+  ]),
+]
+
+export let nativeRespawnArgs = (c: RoleConfig, file: string) => [
+  'respawn-pane',
+  '-k',
+  '-t',
+  `=${roleTmux(c.eid)}:0.0`,
   '-c',
   c.repo.path,
   ...Object.entries(nativeEnv(c.eid)).flatMap(([key, value]) => [
@@ -154,6 +169,69 @@ let tmuxKill = async (eid: string, deps: RoleDeps) => {
   if (!await tmuxHas(eid, deps)) return false
   await deps.command(['kill-session', '-t', `=${roleTmux(eid)}`])
   return true
+}
+
+let tmuxText = (out: CommandOutput) =>
+  new TextDecoder().decode(out.stdout).trim()
+
+// Keep an early-dead pane around just long enough to read its error. tmux
+// accepting new-session only proves that tmux started a process, not that the
+// provider parsed its config or reached its hooks.
+let tmuxStart = async (c: RoleConfig, file: string, deps: RoleDeps) => {
+  let made = await deps.command(nativeTmuxArgs(c))
+  if (!made.success) {
+    throw new Error(
+      new TextDecoder().decode(made.stderr).trim() ||
+        'tmux refused the role session',
+    )
+  }
+  let target = `=${roleTmux(c.eid)}`
+  try {
+    let kept = await deps.command([
+      'set-option',
+      '-t',
+      target,
+      'remain-on-exit',
+      'on',
+    ])
+    if (!kept.success) throw new Error('tmux refused the role launch guard')
+    let started = await deps.command(nativeRespawnArgs(c, file))
+    if (!started.success) {
+      throw new Error(
+        new TextDecoder().decode(started.stderr).trim() ||
+          'tmux refused the provider process',
+      )
+    }
+    await deps.wait(300)
+    let dead = await deps.command([
+      'display-message',
+      '-p',
+      '-t',
+      `${target}:0.0`,
+      '#{pane_dead}',
+    ])
+    if (!dead.success || tmuxText(dead) == '1') {
+      let pane = await deps.command([
+        'capture-pane',
+        '-p',
+        '-t',
+        `${target}:0.0`,
+        '-S',
+        '-100',
+      ])
+      throw new Error(tmuxText(pane) || 'provider exited during launch')
+    }
+    await deps.command([
+      'set-option',
+      '-t',
+      target,
+      'remain-on-exit',
+      'off',
+    ])
+  } catch (e) {
+    await tmuxKill(c.eid, deps)
+    throw e
+  }
 }
 
 let roleText = (c: RoleConfig) =>
@@ -381,11 +459,7 @@ let reconcileNative = async (
   if (has) await tmuxKill(c.eid, deps)
   let file = instructionPath(c.eid)
   deps.write(file, roleText(c))
-  let out = await deps.command(nativeTmuxArgs(c, file))
-  if (!out.success) {
-    let why = new TextDecoder().decode(out.stderr).trim()
-    throw new Error(why || 'tmux refused the role session')
-  }
+  await tmuxStart(c, file, deps)
   stamp(c.eid, {
     applied_hash: hash,
     applied_at: deps.now(),
