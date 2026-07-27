@@ -29,10 +29,14 @@ One deterministic tmux session belongs to each role. The reconciler:
 
 1. Validates the provider, model, persona, project, and repo.
 2. Materializes the role's system instructions under `~/.tasks/roles/`.
-3. Starts `task claude --operator` or `task codex --operator` in the project's
-   checkout with `TASKS_ROLE` in the invocation environment.
+3. Starts `task claude` or `task codex` in the project's checkout with
+   `TASKS_ROLE` in the invocation environment.
 4. Lets the normal provider lifecycle hook mint the session and attach
    `role_eid`.
+
+The role binding itself grants project-wide attention. `--operator` remains the
+equivalent explicit capability for an ad-hoc terminal, not a requirement for a
+graph-declared role.
 
 Claude receives its instruction file through `--append-system-prompt-file`;
 Codex receives the same file through the invocation-scoped

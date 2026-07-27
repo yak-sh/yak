@@ -1,7 +1,7 @@
 # Tasks — the fleet entity graph
 
-One SQLite file is the holdco fleet's shared memory: tasks, projects, boards,
-docs, comments, agent sessions, mail, memories — one graph, worked by humans and
+One SQLite file is a fleet's shared memory: tasks, projects, boards, docs,
+comments, agent sessions, mail, memories — one graph, worked by humans and
 agents through the same doors. A web canvas, a terminal UI, a `task` CLI, and an
 MCP server all speak one wire; every change is an entity patch, every list a
 query.
@@ -75,7 +75,8 @@ and `/search` + `/similar` over HTTP.
 - **Channel plugin** (`channels/`) — a Claude Code channel that pushes comments
   aimed at a session and replies on its claimed tasks INTO its running
   transcript, fed by the same `/ws` broadcast every browser hears. Project mail
-  and project-actor knocks require `--operator`. `channels/README.md` has the
+  and project-actor knocks require project-attention capability (`--operator`
+  for an ad-hoc session, or a role binding). `channels/README.md` has the
   mechanism and enablement.
 - **Native Codex delivery** — a task-launched Codex session binds its tmux pane.
   When directly addressed activity is pending, the daemon waits for a stable
@@ -96,6 +97,12 @@ and replies on claimed tasks reach every session.
 Projects may add Claude-only invocation settings in
 `.tasks/claude-settings.json`; hook arrays append after Tasks' lifecycle hooks
 and are never loaded by bare `claude`.
+
+Persistent roles are graph-declared fleet capacity. A role can keep either a
+native Claude/Codex TUI or a detached managed session available, and every run
+points back to the role that owns it. Roles receive project-wide attention by
+virtue of that graph binding; they do not need the ad-hoc `--operator` flag.
+`docs/ADAPTERS.md` defines the shared contract and compatibility matrix.
 
 SessionEnd runs `task session wrap --hook` — claims are released and the closing
 summary is kept as the session brief (`task session brief` writes one
@@ -127,4 +134,6 @@ There is no auth — the server is built to live on a private tailnet.
 - `CLAUDE.md` — the contributor guide: the data model in one page, the file map,
   the invariants, the recipes. Start there to change anything.
 - `docs/STYLE.md` — normative style for every line here.
+- `docs/ADAPTERS.md` — native TUIs, managed sessions, persistent roles, and the
+  compatibility contract for future harnesses.
 - `channels/README.md` — the channel plugin: mechanism, identity, enablement.
