@@ -56,9 +56,8 @@ export let manuals: Record<string, Manual> = {
   },
   codex: {
     usage: 'codex [--operator] [codex args...]',
-    about:
-      'interactive codex: observer by default, --operator injects fleet work',
-    examples: ['task codex', 'task codex --operator resume --last'],
+    about: 'interactive codex: project operator by default',
+    examples: ['task codex', 'task codex resume --last'],
     root: true,
     passthrough: true,
   },

@@ -231,7 +231,7 @@ Deno.test('task codex is discoverable with its own help', async () => {
   assertEquals(out.code, 0)
   assertMatch(
     text(out.stdout),
-    /task codex \[--operator\] \[codex args\.\.\.\][\s\S]*task codex --operator resume --last/,
+    /task codex \[--operator\] \[codex args\.\.\.\][\s\S]*project operator by default[\s\S]*task codex resume --last/,
   )
 })
 
@@ -302,7 +302,7 @@ Deno.test('task codex scopes operator capability and strips its local flag', () 
   )
 })
 
-Deno.test('unmarked external hooks observe; explicit operators may claim', () => {
+Deno.test('ordinary Codex works; Claude needs explicit operator capability', () => {
   let env = (vars: Record<string, string>) => (name: string) => vars[name]
   let under = (pid: number, root: number) => pid == 7 && root == 42
   assertEquals(workHook('claude', undefined, 7, env({}), under), false)
@@ -327,7 +327,11 @@ Deno.test('unmarked external hooks observe; explicit operators may claim', () =>
     workHook('claude', { origin: 'managed' }, 7, env({}), under),
     true,
   )
-  assertEquals(workHook('codex', undefined, 7, env({}), under), false)
+  assertEquals(workHook('codex', undefined, 7, env({}), under), true)
+  assertEquals(
+    workHook('codex', { operator: false }, 7, env({}), under),
+    true,
+  )
   assertEquals(
     workHook('codex', undefined, 7, env({ TASKS_OPERATOR: '42' }), under),
     true,

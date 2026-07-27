@@ -942,7 +942,10 @@ export let workHook = (
   get = (name: string) => Deno.env.get(name),
   under = descends,
 ) => {
-  if (saved?.origin == 'managed') return true
+  // Codex's repository hook is its working door. Requiring an env marker
+  // from an optional wrapper makes an ordinary `codex` launch unusable;
+  // Claude keeps the explicit observer/operator split for channel targets.
+  if (provider == 'codex' || saved?.origin == 'managed') return true
   return saved?.operator == true || operatorHook(pid, get, under)
 }
 
