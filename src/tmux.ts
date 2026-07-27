@@ -46,7 +46,7 @@ export type NotifyDeps = {
   token: () => string
 }
 
-type Cell = { char: string; dim: boolean; bg: boolean }
+type Cell = { char: string; dim: boolean; bold: boolean; bg: boolean }
 
 // Decode only the SGR state the guard needs. Extended foreground/background
 // sequences are skipped as one unit so their `2` (truecolor) is never mistaken
@@ -54,6 +54,7 @@ type Cell = { char: string; dim: boolean; bg: boolean }
 let cells = (capture: string): Cell[][] => {
   let lines: Cell[][] = [[]]
   let dim = false
+  let bold = false
   let bg = false
   let at = 0
   // deno-lint-ignore no-control-regex
@@ -62,7 +63,7 @@ let cells = (capture: string): Cell[][] => {
     let text = capture.slice(at, hit.index)
     for (let char of text) {
       if (char == '\n') lines.push([])
-      else if (char != '\r') lines.at(-1)!.push({ char, dim, bg })
+      else if (char != '\r') lines.at(-1)!.push({ char, dim, bold, bg })
     }
     let codes = (hit[1] || '0').replaceAll(':', ';').split(';')
       .map((n) => Number(n || 0))
@@ -70,10 +71,14 @@ let cells = (capture: string): Cell[][] => {
       let code = codes[i]
       if (code == 0) {
         dim = false
+        bold = false
         bg = false
-      } else if (code == 2) dim = true
-      else if (code == 22) dim = false
-      else if (code == 49) bg = false
+      } else if (code == 1) bold = true
+      else if (code == 2) dim = true
+      else if (code == 22) {
+        dim = false
+        bold = false
+      } else if (code == 49) bg = false
       else if (code == 48 || code == 38) {
         if (code == 48) bg = true
         if (codes[i + 1] == 2) i += 4
@@ -86,7 +91,7 @@ let cells = (capture: string): Cell[][] => {
   }
   for (let char of capture.slice(at)) {
     if (char == '\n') lines.push([])
-    else if (char != '\r') lines.at(-1)!.push({ char, dim, bg })
+    else if (char != '\r') lines.at(-1)!.push({ char, dim, bold, bg })
   }
   return lines
 }
@@ -106,7 +111,8 @@ export let emptyComposer = (capture: string): boolean => {
   for (let i = lines.length - 1; i >= 0; i--) {
     let first = lines[i].findIndex((c) => !/\s/.test(c.char))
     if (
-      first >= 0 && lines[i][first].char == '›' && lines[i][first].bg
+      first >= 0 && lines[i][first].char == '›' &&
+      (lines[i][first].bg || lines[i][first].bold)
     ) {
       prompt = i
       marker = first
@@ -115,11 +121,12 @@ export let emptyComposer = (capture: string): boolean => {
   }
   if (prompt < 0) return false
 
-  for (let i = prompt; i < lines.length; i++) {
-    let start = i == prompt ? marker + 1 : 0
-    for (let cell of lines[i].slice(start)) {
-      if (cell.bg && !/\s/.test(cell.char) && !cell.dim) return false
-    }
+  // The current Codex composer has no background; its placeholder is dim
+  // and typed text is not. Older versions paint the composer background but
+  // use the same dim/typed distinction. A multiline draft adds another
+  // visible line below and is rejected by the tail shape check.
+  for (let cell of lines[prompt].slice(marker + 1)) {
+    if (!/\s/.test(cell.char) && !cell.dim) return false
   }
 
   let after = lines.slice(prompt + 1).map(visible)

@@ -35,10 +35,24 @@ let MULTILINE = [
   '  gpt-5.6-sol xhigh · No changes · Ready · Context 20% used · weekly 80% left',
 ].join('\n')
 
+let EMPTY_145 = [
+  '\x1b[0;1m›\x1b[0m \x1b[2mFind and fix a bug in @filename\x1b[0m',
+  '',
+  '  gpt-5.6-sol xhigh · No changes · Ready · Context 7% used · weekly 78% left',
+].join('\n')
+
 Deno.test('emptyComposer recognizes only an empty stable Codex composer', () => {
   assertEquals(emptyComposer(EMPTY), true)
+  assertEquals(emptyComposer(EMPTY_145), true)
   assertEquals(emptyComposer(TYPED), false)
   assertEquals(emptyComposer(MULTILINE), false)
+  assertEquals(
+    emptyComposer(EMPTY_145.replace(
+      '\x1b[2mFind and fix a bug in @filename',
+      'do not overwrite this draft',
+    )),
+    false,
+  )
   assertEquals(
     emptyComposer(EMPTY.replace('Ready', 'Working')),
     false,
