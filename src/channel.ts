@@ -1,15 +1,14 @@
-// The pure heart of the tasks channel — split out of server.ts so the socket-
-// free logic (who a broadcast batch is aimed at, how it renders) is unit-
-// testable without a WebSocket or an MCP stdio pipe. server.ts wires these to
-// the live stream; server_test.ts drives them with hand-built batches.
+// The pure event selector shared by the tasks channel and every provider's
+// graph inbox. It owns the stream index, recipient rules, and rendering;
+// transports only supply context and deliver the resulting events.
 //
 // A `Change` is the wire unit `{eid, name, comp}` — a component PATCH. The /ws
 // endpoint rebroadcasts every applied batch to every client, so this channel is
 // just another client that reads, never writes: it watches the stream for three
 // things aimed at ITS session and turns each into one channel event.
 
-import { type Change, idOf, kindOf } from '../../src/types.ts'
-import { type Seat, served } from '../../src/served.ts'
+import { type Change, idOf, kindOf } from './types.ts'
+import { type Seat, served } from './served.ts'
 
 // A rendered channel event: `{content, meta}` is the notification params shape
 // server.js emits under method notifications/claude/channel. The MCP server's

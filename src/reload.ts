@@ -12,6 +12,7 @@ export let serverFiles = [
   'subs.ts',
   'freeze.ts',
   'hot.ts',
+  'channel.ts',
   'mcp.ts',
   'client.ts',
   'sessions.ts',

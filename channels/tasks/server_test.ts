@@ -14,7 +14,7 @@ import {
   type Index,
   learn,
   printRun,
-} from './filter.ts'
+} from '../../src/channel.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, delta, open, snapshot } = await import('../../src/db.ts')

@@ -8,7 +8,7 @@ let { addressOf, FANOUT_PENDING, fanout, mailed, rfcId } = await import(
   './mail.ts'
 )
 let { canon, payload } = await import('./mailer.ts')
-let { channelEvents } = await import('../channels/tasks/filter.ts')
+let { channelEvents } = await import('./channel.ts')
 let { assertEquals, assertMatch, assertThrows } = await import('@std/assert')
 
 // Hermetic: the host's own mailer env must never reach these tests.

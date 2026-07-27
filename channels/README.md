@@ -26,9 +26,9 @@ the session already has (`task_comment` on the sender or the named entity).
 - `tasks/server.ts` — the Deno MCP stdio server: opens `ws://$TASKS_HOST/ws`,
   resolves its session entity from `/snapshot`, emits channel events, reconnects
   with backoff (one loop, never stacked).
-- `tasks/filter.ts` — the pure seam: `channelEvents` (which changes are aimed at
-  a session, and how each renders), `learn`/`humanId` (eid → human id from the
-  stream), `findSession`. No sockets — this is what the tests drive.
+- `../src/channel.ts` — the pure seam: `channelEvents` (which changes are aimed
+  at a session, and how each renders), `learn`/`humanId` (eid → human id from
+  the stream), `findSession`. No sockets — this is what the tests drive.
 - `tasks/server_test.ts` — fast pure-seam tests
   (`deno test -A channels/tasks/`).
 - `marketplace/` — the plugin layout (see Enablement).

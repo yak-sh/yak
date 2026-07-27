@@ -25,10 +25,7 @@ import { hot, matchQuery, type Pred, route } from './query.ts'
 import { FLOOR } from './embed.ts'
 import { request } from './http.ts'
 import { unmime } from './rfc2047.ts'
-import {
-  channelEvents,
-  type Event as InboxEvent,
-} from '../channels/tasks/filter.ts'
+import { channelEvents, type Event as InboxEvent } from './channel.ts'
 export { idOf }
 
 export let host = () => Deno.env.get('TASKS_HOST') ?? '127.0.0.1:5173'

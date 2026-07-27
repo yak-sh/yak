@@ -157,7 +157,7 @@ export let mailed =
     // because apply() authenticated the author; acted_at still records
     // when delivery happened. The full-row broadcast rings the
     // recipient's channel exactly like the sweep's arrival stamp
-    // (channels/tasks/filter.ts injects on received_at). And the
+    // (channel.ts injects on received_at). And the
     // arrive() precedent holds: a relay mail keeps aiming at its task —
     // only a bare letter aims at the recipient's inbox entity.
     let home = homeOf(addr, to)

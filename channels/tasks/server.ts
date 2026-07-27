@@ -41,7 +41,7 @@ import {
   learn,
   notifiedOf,
   printRun,
-} from './filter.ts'
+} from '../../src/channel.ts'
 import { argsOf, claudePid } from '../../src/proc.ts'
 import { liveChanges } from '../../src/wire.ts'
 
@@ -67,7 +67,7 @@ let HINT = (Deno.env.get('CLAUDE_CODE_SESSION_ID') || '').trim() || undefined
 let BOUND = PID != null || HINT != null
 
 // A print-mode claude renders no channel events, and stamping `notified`
-// for injections nobody sees deafens the bus (filter.ts printRun, T-7420)
+// for injections nobody sees deafens the bus (channel.ts printRun, T-7420)
 // — same no-op posture as UNBOUND. Without /proc there is no argv to read,
 // so the check fails open toward serving, as the walk itself does.
 let PRINT = PID != null && printRun(argsOf(PID))
@@ -274,7 +274,7 @@ let sent = new Set<string>()
 // Learn from a batch of changes, keep identity fresh, and emit whatever it
 // aims at this session. Three passes share it: live frames, the {catchup}
 // journal replay, and the reconnect `resume` sweep over a snapshot — the
-// modes differ only in how they dedup (filter.ts Ctx.mode).
+// modes differ only in how they dedup (channel.ts Ctx.mode).
 let feed = (changes: Change[], mode?: 'catchup' | 'resume') => {
   learn(index, changes)
   resolve(changes)
