@@ -18,6 +18,7 @@ import {
   codexLaunch,
   finalText,
   hookDialect,
+  hookProvider,
   hookTurn,
   leadPrio,
   lifecycleHooks,
@@ -210,25 +211,45 @@ Deno.test('hookDialect: Codex payload and Claude transcript name the provider', 
         message: { model: 'claude-opus-5' },
       }),
     )
-    assertEquals(hookDialect({ transcript_path: path }), {
-      provider: 'claude',
-      model: 'claude-opus-5',
-      transcript: path,
-    })
+    assertEquals(
+      hookDialect({
+        model: 'claude-opus-5',
+        transcript_path: path,
+      }, 'claude'),
+      {
+        provider: 'claude',
+        model: 'claude-opus-5',
+        transcript: path,
+      },
+    )
     assertEquals(
       hookDialect({
         model: 'gpt-5.6-sol',
         transcript_path: '/unstable/codex.jsonl',
-      }),
+      }, 'codex'),
       {
         provider: 'codex',
         model: 'gpt-5.6-sol',
         transcript: '/unstable/codex.jsonl',
       },
     )
+    assertEquals(hookDialect({}).provider, 'claude')
   } finally {
     Deno.removeSync(path)
   }
+})
+
+Deno.test('hookProvider: invocation name wins; ancestry recovers old hooks', () => {
+  let find = (provider: string) =>
+    provider == 'claude' ? 10 : provider == 'codex' ? 20 : undefined
+  assertEquals(hookProvider('claude', find), 'claude')
+  assertEquals(hookProvider('codex', find), 'codex')
+  assertEquals(
+    hookProvider('', find, (pid, root) => pid == 20 && root == 10),
+    'codex',
+  )
+  assertEquals(hookProvider('', find, () => false), 'claude')
+  assertEquals(hookProvider('', () => undefined), undefined)
 })
 
 Deno.test('task codex is discoverable with its own help', async () => {
@@ -448,7 +469,7 @@ Deno.test('launchers scope lifecycle hooks to their provider invocation', () => 
   ])
   assertMatch(
     codex.SessionStart[0].hooks[0].command,
-    /task session context --hook/,
+    /TASKS_PROVIDER=codex task session context --hook/,
   )
   assertMatch(
     codex.SubagentStart[0].hooks[0].command,
@@ -478,6 +499,10 @@ Deno.test('launchers scope lifecycle hooks to their provider invocation', () => 
     'SessionEnd',
   ])
   assertMatch(claude.Stop[0].hooks[0].command, /self-clear-stop\.sh/)
+  assertMatch(
+    claude.SessionStart[0].hooks[0].command,
+    /TASKS_PROVIDER=claude task session context --hook/,
+  )
   assertEquals(
     JSON.parse(claudeHookSettings()).hooks,
     claude,

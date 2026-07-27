@@ -848,17 +848,44 @@ let modelOf = (path: string) => {
   } catch { /* no transcript is no announcement */ }
 }
 
-// Codex announces its model in the hook payload. Claude's payload does not,
-// so its transcript remains the evidence for both provider and model.
-export let hookDialect = (body: Record<string, unknown>) => {
-  let codexModel = String(body.model ?? '')
-  let provider = codexModel ? 'codex' : 'claude'
+// The launcher names the hook dialect; payload fields are provider-owned and
+// may converge over time (Claude 2.1.220 started carrying `model`, which used
+// to distinguish Codex). Older invocation configs can still recover from the
+// live process ancestry, with the payload spelling only a final compatibility
+// fallback.
+export let hookDialect = (
+  body: Record<string, unknown>,
+  bound?: Provider,
+) => {
+  let announced = String(body.model ?? '')
   let transcript = String(body.transcript_path ?? '') || undefined
+  let transcriptModel = modelOf(transcript ?? '')
+  let hint = announced || transcriptModel || ''
+  let provider = bound ??
+    (!hint || /^claude(?:-|$)/i.test(hint) ? 'claude' : 'codex')
   return {
     provider,
-    model: codexModel || modelOf(transcript ?? ''),
+    model: provider == 'claude'
+      ? transcriptModel || announced || undefined
+      : announced || transcriptModel,
     transcript,
   }
+}
+
+// Invocation config is authoritative. Old configs did not set it, so choose
+// the nearest provider in this hook process's ancestry. If one provider is
+// nested under another (a Codex tool inside Claude, for example), the inner
+// process owns the hook.
+export let hookProvider = (
+  named = Deno.env.get('TASKS_PROVIDER'),
+  find = agentPid,
+  under = descends,
+): Provider | undefined => {
+  if (named == 'claude' || named == 'codex') return named
+  let claude = find('claude')
+  let codex = find('codex')
+  if (claude && codex) return under(codex, claude) ? 'codex' : 'claude'
+  return codex ? 'codex' : claude ? 'claude' : undefined
 }
 
 // The session's closing words from either provider's transcript. The
@@ -994,10 +1021,9 @@ let context = async (args: string[]) => {
       sid ??= String(body.session_id ?? '')
       if (!sid) return
       let snap = await snapshot()
-      // Codex names its model in the hook payload; Claude names it only
-      // after its transcript has an assistant turn. The provider decides
-      // which transcript and process fields are meaningful.
-      let { model, provider, transcript } = hookDialect(body)
+      // The generated hook names its provider; old configs recover it from
+      // process ancestry. Payload model fields are metadata, never identity.
+      let { model, provider, transcript } = hookDialect(body, hookProvider())
       let cwd = String(body.cwd ?? '') || undefined
       let all = rows(snap)
       let prior = all.find((r) =>
@@ -1373,8 +1399,9 @@ let commandHook = (command: string, timeout?: number): Hook => ({
   }],
 })
 
-let hookCommand = (verb: string) =>
-  `PATH="$HOME/.deno/bin:$PATH" task session ${verb} --hook || true`
+let hookCommand = (provider: Provider, verb: string) =>
+  `PATH="$HOME/.deno/bin:$PATH" TASKS_PROVIDER=${provider} ` +
+  `task session ${verb} --hook || true`
 
 // TODO(T-3906): replace this compatibility call with Tasks-owned self-clear
 // state and gates. Until then, task-launched Claude preserves a project's
@@ -1387,15 +1414,15 @@ let selfClear =
 // Launcher-owned lifecycle config: a bare provider launch remains untouched,
 // while `task claude` / `task codex` opt this invocation into graph identity.
 export let lifecycleHooks = (provider: Provider): Record<string, Hook[]> => ({
-  SessionStart: [commandHook(hookCommand('context'))],
-  SubagentStart: [commandHook(hookCommand('context'))],
+  SessionStart: [commandHook(hookCommand(provider, 'context'))],
+  SubagentStart: [commandHook(hookCommand(provider, 'context'))],
   ...(provider == 'codex'
     ? {
-      UserPromptSubmit: [commandHook(hookCommand('turn'), 3)],
-      Stop: [commandHook(hookCommand('turn'), 3)],
+      UserPromptSubmit: [commandHook(hookCommand(provider, 'turn'), 3)],
+      Stop: [commandHook(hookCommand(provider, 'turn'), 3)],
     }
     : { Stop: [commandHook(selfClear, 20)] }),
-  SessionEnd: [commandHook(hookCommand('wrap'), 3)],
+  SessionEnd: [commandHook(hookCommand(provider, 'wrap'), 3)],
 })
 
 let toml = (value: unknown): string => {
