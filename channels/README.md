@@ -8,15 +8,18 @@ push delivery with no polling.
 
 `channels/tasks/` is the tasks channel: a **read-only** listener that watches
 the tasks server's `/ws` sync socket (the same broadcast every browser tab
-hears) and emits the two things aimed at ITS session:
+hears) and emits the activity aimed at ITS session:
 
 - **`comment`** — a comment whose `target_eid` is this session's entity (someone
-  messaging the session). Rendered `kind="comment" from="<byline>"`, content =
-  the comment's words. Only mint-time comments (the batch also carries the doc
-  that holds the words) are emitted; a bodiless later patch is skipped.
-- **`knock`** — a nudge whose recipient (`to_eid`/`target_eid`) is this
-  session's entity or its actor. Rendered `kind="knock"`, content =
-  `knock: look at <target id> — <words riding the batch>`.
+  messaging the session) or a task it claims. Rendered
+  `kind="comment" from="<byline>"`, content = the comment's words. Only
+  mint-time comments (the batch also carries the doc that holds the words) are
+  emitted; a bodiless later patch is skipped.
+- **`knock`** — a nudge whose recipient is this session. An actor-level knock
+  reaches only a session launched with `--operator`. Rendered `kind="knock"`,
+  content = `knock: look at <target id> — <words riding the batch>`.
+- **`mail`** — verified unread mail for the home project, only for a session
+  launched with `--operator`.
 
 It writes NOTHING to the graph. Replies go through the normal `task` CLI / MCP
 the session already has (`task_comment` on the sender or the named entity).
@@ -134,10 +137,11 @@ somewhere other than `/home/yaks/code/tasks`.
 ## The interactive door: `task claude`
 
 `task claude [args...]` launches an interactive session fleet-wired: it passes
-`--dangerously-skip-permissions` and `--channels plugin:tasks@tasks-fleet`, and
-— when root's managed settings don't allowlist `tasks-fleet` — adds the dev-load
-flag, accepting its press-Enter dialog (a keyboard is present; that's the only
-place the verb runs). One-time setup, already scripted by the verb's docs:
+invocation-scoped lifecycle settings, `--dangerously-skip-permissions`, and
+`--channels plugin:tasks@tasks-fleet`, and — when root's managed settings don't
+allowlist `tasks-fleet` — adds the dev-load flag, accepting its press-Enter
+dialog (a keyboard is present; that's the only place the verb runs). One-time
+setup, already scripted by the verb's docs:
 `claude plugin marketplace add <repo>/channels/marketplace` +
 `claude plugin install tasks@tasks-fleet`. To go dialog-free, add
 `{ "marketplace": "tasks-fleet", "plugin": "tasks" }` to `allowedChannelPlugins`

@@ -599,15 +599,13 @@ export let commentChanges = (
   ]
 }
 
-// The operator loop is the session that TRIAGES a project — the interactive
-// door that RECEIVES its project mail. A SPECIALIST does not: a wire-spawned
-// managed run (origin server-stamped 'managed') or any session started ON a
-// task (requested_task_eid, the wire belt-and-suspenders) hears only what's
-// aimed at it directly (its own session, its claimed tasks). No session known
-// = a preview/bare view: treat as the operator so mail still shows (T-7006).
+// The operator loop is the session that TRIAGES a project — the only door that
+// receives project-wide mail and actor knocks. Every session still participates
+// in the graph and hears what is aimed at it or its claimed tasks. No session
+// means a deliberate preview/bare view, which keeps showing project mail.
 export let isOperator = (s?: Record<string, unknown>) =>
   !s ||
-  (s.operator != false && String(s.origin ?? '') != 'managed' &&
+  (s.operator == true && String(s.origin ?? '') != 'managed' &&
     !s.requested_task_eid)
 
 // The notification lifecycle (T-7006), read as pure Row-predicates over
@@ -625,8 +623,8 @@ export type Reader = {
   session?: string
   actor?: string
   scope?: string
-  // Whether this reader is the project's operator loop — a specialist (false)
-  // gets no project mail, only direct address (isOperator, T-7006).
+  // Whether this reader is the project's operator loop. Non-operators get no
+  // project-wide mail or actor knocks, only direct address and claimed work.
   operator?: boolean
   claims?: Set<string>
 }
@@ -645,13 +643,14 @@ export let addressed = (who: Reader) => (r: Row): boolean => {
   let k = r.comps.knock
   if (k) {
     let t = String(k.to_eid ?? '')
-    return !!t && (t == who.session || t == who.actor)
+    return !!t &&
+      (t == who.session || (who.operator == true && t == who.actor))
   }
   let m = r.comps.mail
   if (m) {
     // Project mail reaches only the operator loop, never a specialist —
     // direct address (comment/knock above) is always delivered (T-7006).
-    return who.operator !== false && !!m.message_id &&
+    return who.operator == true && !!m.message_id &&
       (!who.scope || String(m.target_eid) == who.scope)
   }
   return false
@@ -703,9 +702,9 @@ export let unreadMail = (r: Row) => !!r.comps.mail?.message_id && isUnread(r)
 // The mail inbox — ONE scoping truth: the digest's unread count and the
 // bare `task mail` view agree by construction. Unread, not archived, aimed
 // at the scope when one stands; no scope sees the fleet's whole pile.
-// A specialist (operator == false) is excluded from PROJECT mail — it hears
-// only direct address (isOperator, T-7006). Default operator == true keeps the
-// preview digest and the bare `task mail` view showing mail.
+// A non-operator is excluded from PROJECT mail. Default true keeps the preview
+// digest and bare `task mail` view showing mail; session readers pass a
+// positively-derived capability.
 export let inboxMail = (scope?: string, operator = true) => (r: Row) =>
   operator && unreadMail(r) && inInbox(r) &&
   (!scope || r.comps.mail?.target_eid == scope)
@@ -1108,11 +1107,6 @@ export let sessionMeta = (all: Row[], sid: string) => {
 // operator sees, minus the session extras — parity by construction.
 // Scope resolves via scopeFor: an explicit arg, else the cwd's repo, else
 // the worn persona's home, else the actor-as-project (client.ts scopeFor).
-export let observerDigest = (sid: string) =>
-  `# observer · session ${sid}\n` +
-  'You are an observation-only target. Do not inspect, claim, modify, or ' +
-  'commit repository work.'
-
 export let contextDigest = (
   snap: Snapshot,
   session?: string,
@@ -1124,12 +1118,6 @@ export let contextDigest = (
   let sess = all.find((r) =>
     r.comps.session && String(r.comps.session.id) == session
   )
-  if (
-    sess?.comps.session?.operator == false &&
-    String(sess.comps.session.origin ?? '') != 'managed'
-  ) {
-    return observerDigest(String(session))
-  }
   let cwd = String(sess?.comps.session?.cwd ?? '')
   scope = scopeFor(all, sess, cwd, scope)
   let here = scope ? byEid.get(scope) : undefined

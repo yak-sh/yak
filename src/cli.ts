@@ -36,7 +36,6 @@ import {
   memoryChanges,
   noticeBlock,
   notices,
-  observerDigest,
   type Param,
   param,
   patches,
@@ -935,20 +934,6 @@ export let operatorHook = (
   return !!marker && !!pid && under(pid, marker)
 }
 
-export let workHook = (
-  provider: string,
-  saved?: Record<string, unknown>,
-  pid = agentPid(provider),
-  get = (name: string) => Deno.env.get(name),
-  under = descends,
-) => {
-  // Codex's repository hook is its working door. Requiring an env marker
-  // from an optional wrapper makes an ordinary `codex` launch unusable;
-  // Claude keeps the explicit observer/operator split for channel targets.
-  if (provider == 'codex' || saved?.origin == 'managed') return true
-  return saved?.operator == true || operatorHook(pid, get, under)
-}
-
 export let hookTurn = (body: Record<string, unknown>) =>
   body.hook_event_name == 'UserPromptSubmit'
     ? 'busy'
@@ -961,7 +946,7 @@ let context = async (args: string[]) => {
   // Subagent mode: explicit --subagent (debug override), or the payload's
   // SubagentStart event, or a Bash-shelled `task` inside a Task-tool child
   // (CLAUDE_CODE_CHILD_SESSION). The hook branch confirms the event from
-  // stdin below; SessionStart later selects operator or observer mode.
+  // stdin below; SessionStart reifies a normal graph participant.
   let sub = args.includes('--subagent')
   let sid = args.find((a) => !a.startsWith('--')) ?? me()
   // The digest plus the comms bus: unseen comments ride along, and the
@@ -1019,12 +1004,8 @@ let context = async (args: string[]) => {
         r.comps.session && String(r.comps.session.id) == sid
       )
       let pid = agentPid(provider)
-      let work = workHook(
-        provider,
-        prior?.comps.session,
-        pid,
-      )
       let external = prior?.comps.session?.origin != 'managed'
+      let operator = external && operatorHook(pid)
       // The provider's transcript is the external session's durable log.
       // `provider` stays out of this CREATE: a new session carrying one is
       // a managed spawn request. It lands as a patch below.
@@ -1040,9 +1021,9 @@ let context = async (args: string[]) => {
           pane: external
             ? Deno.env.get('TMUX_PANE')?.trim() || null
             : undefined,
-          // Managed work already has TASKS_TASK. Every external provider
-          // needs the same positive capability before project work arrives.
-          operator: external ? work : undefined,
+          // Project-wide attention is the one positive capability. Every
+          // session gets the normal graph digest and direct notifications.
+          operator: external ? operator : undefined,
         },
       )
       if (s.changes.length) await send(s.changes)
@@ -1059,10 +1040,6 @@ let context = async (args: string[]) => {
       // from the reify batch's cwd (cwd → repo → project, falling back to
       // the box owner) — for a SESSION that means the OPERATOR, never a
       // watching person, and never blank (T-6669). One home, every door.
-      if (!work) {
-        console.log(observerDigest(sid))
-        return
-      }
       // A managed spawn boots already holding its lease: the launcher
       // passes TASKS_TASK, and an unclaimed task claims quietly here —
       // no prompt discipline required. A held lease stays held (the
@@ -1378,6 +1355,73 @@ let terminal = async (
 }
 
 let CHANNEL = 'plugin:tasks@tasks-fleet'
+
+type Provider = 'claude' | 'codex'
+type Hook = {
+  hooks: {
+    type: 'command'
+    command: string
+    timeout?: number
+  }[]
+}
+
+let commandHook = (command: string, timeout?: number): Hook => ({
+  hooks: [{
+    type: 'command',
+    command,
+    ...(timeout == null ? {} : { timeout }),
+  }],
+})
+
+let hookCommand = (verb: string) =>
+  `PATH="$HOME/.deno/bin:$PATH" task session ${verb} --hook || true`
+
+// TODO(T-3906): replace this compatibility call with Tasks-owned self-clear
+// state and gates. Until then, task-launched Claude preserves a project's
+// explicit self-clear hook without making bare Claude load it.
+let selfClear =
+  'if [ -x "${CLAUDE_PROJECT_DIR}/.claude/hooks/self-clear-stop.sh" ]; then ' +
+  '"${CLAUDE_PROJECT_DIR}/.claude/hooks/self-clear-stop.sh"; ' +
+  'else cat >/dev/null; fi || true'
+
+// Launcher-owned lifecycle config: a bare provider launch remains untouched,
+// while `task claude` / `task codex` opt this invocation into graph identity.
+export let lifecycleHooks = (provider: Provider): Record<string, Hook[]> => ({
+  SessionStart: [commandHook(hookCommand('context'))],
+  SubagentStart: [commandHook(hookCommand('context'))],
+  ...(provider == 'codex'
+    ? {
+      UserPromptSubmit: [commandHook(hookCommand('turn'), 3)],
+      Stop: [commandHook(hookCommand('turn'), 3)],
+    }
+    : { Stop: [commandHook(selfClear, 20)] }),
+  SessionEnd: [commandHook(hookCommand('wrap'), 3)],
+})
+
+let toml = (value: unknown): string => {
+  if (
+    typeof value == 'string' || typeof value == 'number' ||
+    typeof value == 'boolean'
+  ) return JSON.stringify(value)
+  if (Array.isArray(value)) return `[${value.map(toml).join(',')}]`
+  if (value && typeof value == 'object') {
+    return `{ ${
+      Object.entries(value).map(([key, item]) => `${key}=${toml(item)}`)
+        .join(',')
+    } }`
+  }
+  throw new Error('unsupported hook config')
+}
+
+export let codexHookArgs = () =>
+  Object.entries(lifecycleHooks('codex')).flatMap(([event, config]) => [
+    '-c',
+    `hooks.${event}=${toml(config)}`,
+  ])
+
+export let claudeHookSettings = () =>
+  JSON.stringify({ hooks: lifecycleHooks('claude') })
+
 let terminalScope = (args: string[], pid: number) => {
   let end = args.indexOf('--')
   if (end < 0) end = args.length
@@ -1401,6 +1445,8 @@ export let claudeLaunch = (
   return {
     args: [
       '--dangerously-skip-permissions',
+      '--settings',
+      claudeHookSettings(),
       '--channels',
       CHANNEL,
       ...(listed ? [] : ['--dangerously-load-development-channels', CHANNEL]),
@@ -1433,6 +1479,7 @@ export let codexLaunch = (args: string[], pid = Deno.pid) => {
     args: [
       '--dangerously-bypass-approvals-and-sandbox',
       '--dangerously-bypass-hook-trust',
+      ...codexHookArgs(),
       ...scope.args,
     ],
     env: scope.env,

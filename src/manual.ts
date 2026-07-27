@@ -49,15 +49,16 @@ export let manuals: Record<string, Manual> = {
   claude: {
     usage: 'claude [--operator] [claude args...]',
     about:
-      'interactive claude: observer by default, --operator injects fleet work',
+      'interactive claude: graph participant; --operator adds project broadcasts',
     examples: ['task claude', 'task claude --operator --continue'],
     root: true,
     passthrough: true,
   },
   codex: {
     usage: 'codex [--operator] [codex args...]',
-    about: 'interactive codex: project operator by default',
-    examples: ['task codex', 'task codex resume --last'],
+    about:
+      'interactive codex: graph participant; --operator adds project broadcasts',
+    examples: ['task codex', 'task codex --operator resume --last'],
     root: true,
     passthrough: true,
   },

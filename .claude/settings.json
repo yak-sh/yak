@@ -1,48 +1,5 @@
 {
   "fallbackModel": ["claude-sonnet-5", "claude-haiku-4-5"],
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "PATH=\"$HOME/.deno/bin:$PATH\" task session context --hook || true"
-          }
-        ]
-      }
-    ],
-    "SubagentStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "PATH=\"$HOME/.deno/bin:$PATH\" task session context --hook || true"
-          }
-        ]
-      }
-    ],
-    "SessionEnd": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "PATH=\"$HOME/.deno/bin:$PATH\" task session wrap --hook || true"
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/self-clear-stop.sh"
-          }
-        ]
-      }
-    ]
-  },
   "permissions": {
     "deny": ["AskUserQuestion"],
     "defaultMode": "bypassPermissions"

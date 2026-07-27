@@ -22,7 +22,6 @@ import {
   me,
   memoryChanges,
   notices,
-  observerDigest,
   param,
   patches,
   readerFor,
@@ -324,7 +323,7 @@ Deno.test('notices: comments, acted knocks, and verified operator mail surface t
     n.ack.filter((c) => c.name == 'notified').map((c) => c.eid).sort(),
     [C, K, M].sort(),
   )
-  let observer: Snapshot = {
+  let ordinary: Snapshot = {
     ...g,
     changes: g.changes.map((change) =>
       change.eid == S && change.name == 'session'
@@ -332,12 +331,10 @@ Deno.test('notices: comments, acted knocks, and verified operator mail surface t
         : change
     ),
   }
-  assertEquals(
-    notices(observer, 'sess-x').lines.some((line) =>
-      line.includes('mail body')
-    ),
-    false,
-  )
+  let direct = notices(ordinary, 'sess-x').lines
+  assertEquals(direct.some((line) => line.includes('mail body')), false)
+  assertEquals(direct.some((line) => line.includes('review this')), true)
+  assertEquals(direct.some((line) => line.includes('knock: look at T-2')), true)
   let seen = {
     ...g,
     changes: [
@@ -734,7 +731,7 @@ Deno.test('contextDigest: claimed set with gates, or open board', () => {
   assertEquals(d.includes('## lately'), false)
 })
 
-Deno.test('contextDigest: an observation target sees no claimable work', () => {
+Deno.test('contextDigest: a non-operator remains a normal graph participant', () => {
   let target = structuredClone(snap)
   target.changes.find((c) => c.eid == S && c.name == 'session')!.comp = {
     id: 'sess-x',
@@ -742,10 +739,9 @@ Deno.test('contextDigest: an observation target sees no claimable work', () => {
     origin: 'external',
   }
   let out = contextDigest(target, 'sess-x')
-  assertEquals(out, observerDigest('sess-x'))
-  for (let mark of ['T-2', 'claim:', '## mail', 'from the fleet']) {
-    assertEquals(out.includes(mark), false)
-  }
+  assertEquals(out.includes('T-2'), true)
+  assertEquals(out.includes('claim:'), true)
+  assertEquals(out.includes('observation-only'), false)
 })
 
 // The digest's frontmatter lead (T-4554): a reified session's own meta —
@@ -822,6 +818,7 @@ Deno.test('unreadMail + digest: unread counts, read/outbound stay quiet', () => 
   let g: Snapshot = {
     changes: [
       ...snap.changes,
+      { eid: S, name: 'session', comp: { operator: 1 } },
       { eid: P, name: 'entity', comp: { eid: P, num: 24, created_at: '' } },
       { eid: P, name: 'doc', comp: { title: 'Venture', body: '' } },
       { eid: P, name: 'project', comp: {} },
@@ -884,7 +881,11 @@ Deno.test('inbox: the four sources, archived hides, opened marks read', () => {
   let g = rows({
     changes: [
       { eid: Sx, name: 'entity', comp: { eid: Sx, num: 101, created_at: '' } },
-      { eid: Sx, name: 'session', comp: { id: 'me', actor_eid: A, cwd: '/w' } },
+      {
+        eid: Sx,
+        name: 'session',
+        comp: { id: 'me', actor_eid: A, cwd: '/w', operator: 1 },
+      },
       { eid: P, name: 'entity', comp: { eid: P, num: 103, created_at: '' } },
       { eid: P, name: 'project', comp: {} },
       { eid: TC, name: 'entity', comp: { eid: TC, num: 104, created_at: '' } },
@@ -926,17 +927,19 @@ Deno.test('inbox: the four sources, archived hides, opened marks read', () => {
   assertEquals(unread, [c1, c2, kn, ml, cN].sort())
 })
 
-// The operator/specialist split (T-7006): only the operator loop receives a
-// project's mail. A specialist — a managed spawn (origin) or a session started
-// on a task (requested_task_eid) — hears only direct address, never project
-// mail. No session known = operator (the preview/bare view still shows mail).
-Deno.test('isOperator: managed or task-started is a specialist, else operator', () => {
+// Project-wide attention is a positive capability. No session means a
+// deliberate preview, but an unmarked session is an ordinary participant.
+Deno.test('isOperator: only an explicit eligible session is an operator', () => {
   assertEquals(isOperator(undefined), true) // no session → preview
-  assertEquals(isOperator({}), true) // bare external session
-  assertEquals(isOperator({ origin: 'external' }), true)
+  assertEquals(isOperator({}), false)
+  assertEquals(isOperator({ origin: 'external' }), false)
   assertEquals(isOperator({ origin: 'external', operator: false }), false)
-  assertEquals(isOperator({ origin: 'managed' }), false) // wire-spawned
-  assertEquals(isOperator({ requested_task_eid: 'T' }), false) // started on a task
+  assertEquals(isOperator({ origin: 'external', operator: true }), true)
+  assertEquals(isOperator({ origin: 'managed', operator: true }), false)
+  assertEquals(
+    isOperator({ requested_task_eid: 'T', operator: true }),
+    false,
+  )
 })
 
 Deno.test('project mail reaches the operator, not a specialist; direct address always', () => {
@@ -945,10 +948,16 @@ Deno.test('project mail reaches the operator, not a specialist; direct address a
   let P = 'aaaaaaaa-0000-4000-8000-000000000203' //  the project
   let ml = 'aaaaaaaa-0000-4000-8000-000000000204' // mail → project (arrived)
   let cm = 'aaaaaaaa-0000-4000-8000-000000000205' // comment → specialist itself
+  let ka = 'aaaaaaaa-0000-4000-8000-000000000206' // knock → project actor
+  let kd = 'aaaaaaaa-0000-4000-8000-000000000207' // knock → specialist
   let g = rows({
     changes: [
       { eid: Op, name: 'entity', comp: { eid: Op, num: 201, created_at: '' } },
-      { eid: Op, name: 'session', comp: { id: 'op', actor_eid: P, cwd: '/w' } },
+      {
+        eid: Op,
+        name: 'session',
+        comp: { id: 'op', actor_eid: P, cwd: '/w', operator: 1 },
+      },
       { eid: Sp, name: 'entity', comp: { eid: Sp, num: 202, created_at: '' } },
       {
         eid: Sp,
@@ -970,15 +979,17 @@ Deno.test('project mail reaches the operator, not a specialist; direct address a
         comp: { to: 'm@x', message_id: 'm:1', target_eid: P },
       },
       { eid: cm, name: 'comment', comp: { target_eid: Sp } }, // aimed at the specialist
+      { eid: ka, name: 'knock', comp: { to_eid: P } },
+      { eid: kd, name: 'knock', comp: { to_eid: Sp } },
     ],
   })
   let inbox = (id: string) =>
     g.filter(inboxItem(readerFor(g, id, '/w', P))).map((r) => r.eid).sort()
   // the operator gets the project's mail; the specialist does not
-  assertEquals(inbox('op'), [ml])
+  assertEquals(inbox('op'), [ka, ml].sort())
   // the specialist still gets the comment aimed at its OWN session — direct
   // address is always delivered, only project mail is gated
-  assertEquals(inbox('sp'), [cm])
+  assertEquals(inbox('sp'), [cm, kd].sort())
   // the mail-only door agrees: gated when the reader is a specialist
   assertEquals(g.filter(inboxMail(P, false)).map((r) => r.eid), [])
   assertEquals(g.filter(inboxMail(P, true)).map((r) => r.eid), [ml])

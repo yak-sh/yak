@@ -53,9 +53,9 @@ and `/search` + `/similar` over HTTP.
   task new P1 .project=holdco Fix the flux capacitor
   task set T-3 .status=done --comment="verified end-to-end"
   task claim T-3 && task release T-3
-  task claude                   # addressable, observation-only Claude
-  task claude --operator        # operator with the fleet work digest
-  task codex                    # interactive Codex, fleet-wired
+  task claude                   # graph-wired interactive Claude
+  task codex                    # graph-wired interactive Codex
+  task codex --operator         # also receive project-wide attention
   task mail                      # your unread fleet inbox
   task search flux capac*
   task help grammar              # the whole filter grammar
@@ -73,28 +73,34 @@ and `/search` + `/similar` over HTTP.
   is the inbox; unread verified mail flows into live sessions through the
   channel plugin.
 - **Channel plugin** (`channels/`) — a Claude Code channel that pushes comments
-  and knocks aimed at a session INTO its running transcript, fed by the same
-  `/ws` broadcast every browser hears. `task claude` launches an addressable
-  observation target; `--operator` opts it into the fleet work digest.
-  `channels/README.md` has the mechanism and enablement.
+  aimed at a session and replies on its claimed tasks INTO its running
+  transcript, fed by the same `/ws` broadcast every browser hears. Project mail
+  and project-actor knocks require `--operator`. `channels/README.md` has the
+  mechanism and enablement.
+- **Native Codex delivery** — a task-launched Codex session binds its tmux pane.
+  When directly addressed activity is pending, the daemon waits for a stable
+  empty composer and types only a constant request to call `task_context`;
+  graph-authored message text never crosses tmux.
 - **HTTP** — `/snapshot` (the whole graph in one gulp), `/apply`, `/ws`,
   `/search`, `/similar`, `/query`, `/journal` (write history), `/telemetry`.
 
 ## Agents in the graph
 
-A session is an entity from boot: the repo's SessionStart hook runs
-`task session context --hook`, which reifies every session. Intentional
-operators launched with `task claude --operator` receive their claimed work as
-the boot digest, led by the session's own meta as frontmatter; observation
-targets receive no board or claimable work. SessionEnd runs
-`task session wrap --hook` — claims released, the closing summary kept as the
-session's brief (`task session brief` writes one deliberately). Claude and Codex
-share those commands through their native lifecycle hook files. Sessions also
-spawn FROM the graph (`task spawn T-3 --provider=codex`): creating a session
-entity carrying a provider IS the spawn request, and everything the run learns —
-status, branch, exit code, final text — is server-stamped onto the row. Memories
-(`task remember`, MCP `memory_save`) let a lesson outlive the session that
-learned it; recall decays with disuse and use bumps it.
+`task claude` and `task codex` add lifecycle hooks to that provider invocation;
+bare `claude` and `codex` launches keep their native configuration untouched.
+SessionStart reifies the session and returns the normal graph digest, including
+claimable work, to every task-launched agent. `--operator` grants only
+project-wide attention: project mail and project-actor knocks. Direct messages
+and replies on claimed tasks reach every session.
+
+SessionEnd runs `task session wrap --hook` — claims are released and the closing
+summary is kept as the session brief (`task session brief` writes one
+deliberately). Sessions also spawn FROM the graph
+(`task spawn T-3 --provider=codex`): creating a session entity carrying a
+provider IS the spawn request. Everything the run learns — status, branch, exit
+code, final text — is server-stamped onto the row. Memories (`task remember`,
+MCP `memory_save`) let a lesson outlive the session that learned it; recall
+decays with disuse and use bumps it.
 
 ## Run
 

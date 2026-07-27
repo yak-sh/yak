@@ -548,6 +548,7 @@ Deno.test('mailed: a fleet recipient delivers locally — no send, no out-log', 
     let evs = channelEvents(got, {
       sessionEid: 'sess',
       homeEid: ops,
+      operator: true,
       idOf: () => 'E-1',
     })
     assertEquals(evs.length, 1)

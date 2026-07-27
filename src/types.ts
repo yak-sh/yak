@@ -175,7 +175,7 @@ export let comps: Record<string, Record<string, PropType>> = {
     agent_type: 'text',
     source: 'text',
     // Positive capability granted by a provider launcher's `--operator`.
-    // Null is a legacy/managed session; false is observation-only.
+    // It gates project-wide attention, never ordinary graph participation.
     operator: 'bool',
     provider: 'text',
     model: 'text',
@@ -759,7 +759,7 @@ export type Session = {
   acked_at?: string | null
   agent_type?: string | null // set when launched `claude --agent <name>`
   source?: string | null // boot mode: startup|resume|clear|compact|fork
-  operator?: boolean | null // an external TUI may receive fleet work
+  operator?: boolean | null // receives project-wide attention
   origin?: string // 'external' (announced) | 'managed' (we spawned it)
   provider?: string | null // adapters.ts key
   model?: string | null

@@ -52,6 +52,7 @@ let ctx = (over: Partial<Ctx> = {}): Ctx => ({
   sessionEid: 'sess',
   actorEid: 'actor',
   homeEid: 'home',
+  operator: true,
   idOf,
   ...over,
 })
@@ -137,9 +138,17 @@ Deno.test('a knock at the session names its target as a human id', () => {
   ])
 })
 
-Deno.test('a knock at the session actor is delivered too', () => {
+Deno.test('an operator receives a knock at the session actor', () => {
   let batch = [ch('k1', 'knock', { to_eid: 'actor', target_eid: 't9' })]
   assertEquals(channelEvents(batch, ctx())[0].content, 'knock: look at T-9')
+})
+
+Deno.test('a non-operator receives session knocks, not actor knocks', () => {
+  let direct = ch('k1', 'knock', { to_eid: 'sess', target_eid: 't9' })
+  let project = ch('k2', 'knock', { to_eid: 'actor', target_eid: 't9' })
+  assertEquals(channelEvents([direct, project], ctx({ operator: false })), [
+    { content: 'knock: look at T-9', meta: { kind: 'knock' }, eid: 'k1' },
+  ])
 })
 
 Deno.test('a knock naming only its recipient has no look-at target', () => {

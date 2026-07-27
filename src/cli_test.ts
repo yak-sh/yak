@@ -11,21 +11,23 @@ import {
 import {
   bodyOf,
   claimedDigest,
+  claudeHookSettings,
   claudeLaunch,
   codexArgs,
+  codexHookArgs,
   codexLaunch,
   finalText,
   hookDialect,
   hookTurn,
   leadPrio,
+  lifecycleHooks,
   operatorHook,
   strayFlag,
   subagentDigest,
   subject,
   subjectUsage,
-  workHook,
 } from './cli.ts'
-import { observerDigest, type Row, rows } from './client.ts'
+import { type Row, rows } from './client.ts'
 import type { Snapshot } from './types.ts'
 
 let transcript = (...events: unknown[]) => {
@@ -156,12 +158,15 @@ Deno.test('bodyOf: both stdin spellings refuse a TTY', async () => {
 })
 
 Deno.test('codexArgs: full access and lifecycle lead, caller args keep order', () => {
+  let hooks = codexHookArgs()
   assertEquals(codexArgs(['resume', '--last']), [
     '--dangerously-bypass-approvals-and-sandbox',
     '--dangerously-bypass-hook-trust',
+    ...hooks,
     'resume',
     '--last',
   ])
+  assertEquals(hooks.filter((arg) => arg == '-c').length, 5)
 })
 
 Deno.test('finalText: Claude and Codex transcripts yield the closing answer', () => {
@@ -231,7 +236,7 @@ Deno.test('task codex is discoverable with its own help', async () => {
   assertEquals(out.code, 0)
   assertMatch(
     text(out.stdout),
-    /task codex \[--operator\] \[codex args\.\.\.\][\s\S]*project operator by default[\s\S]*task codex resume --last/,
+    /task codex \[--operator\] \[codex args\.\.\.\][\s\S]*graph participant[\s\S]*task codex --operator resume --last/,
   )
 })
 
@@ -253,6 +258,8 @@ Deno.test('task claude scopes operator capability and strips its local flag', ()
   assertEquals(launch, {
     args: [
       '--dangerously-skip-permissions',
+      '--settings',
+      claudeHookSettings(),
       '--channels',
       'plugin:tasks@tasks-fleet',
       '--model',
@@ -266,8 +273,8 @@ Deno.test('task claude scopes operator capability and strips its local flag', ()
     },
   })
 
-  let observer = claudeLaunch(['--continue'], true, 42)
-  assertEquals(observer.env, {
+  let ordinary = claudeLaunch(['--continue'], true, 42)
+  assertEquals(ordinary.env, {
     TASKS_OPERATOR: '',
     TASKS_TASK: '',
     CLAUDE_CODE_CHILD_SESSION: '',
@@ -285,6 +292,7 @@ Deno.test('task codex scopes operator capability and strips its local flag', () 
       args: [
         '--dangerously-bypass-approvals-and-sandbox',
         '--dangerously-bypass-hook-trust',
+        ...codexHookArgs(),
         'resume',
         '--last',
       ],
@@ -302,47 +310,15 @@ Deno.test('task codex scopes operator capability and strips its local flag', () 
   )
 })
 
-Deno.test('ordinary Codex works; Claude needs explicit operator capability', () => {
+Deno.test('operator capability follows the explicit launcher marker', () => {
   let env = (vars: Record<string, string>) => (name: string) => vars[name]
   let under = (pid: number, root: number) => pid == 7 && root == 42
-  assertEquals(workHook('claude', undefined, 7, env({}), under), false)
   assertEquals(
-    workHook('claude', undefined, 7, env({ TASKS_OPERATOR: '42' }), under),
+    operatorHook(7, env({ TASKS_OPERATOR: '42' }), under),
     true,
   )
-  assertEquals(
-    workHook('claude', undefined, 7, env({ TASKS_OPERATOR: '99' }), under),
-    false,
-  )
-  assertEquals(
-    workHook('claude', undefined, 7, env({ TASKS_TASK: 'T-2' }), under),
-    false,
-  )
-  assertEquals(workHook('claude', { operator: true }, 7, env({}), under), true)
-  assertEquals(
-    workHook('claude', { operator: false }, 7, env({}), under),
-    false,
-  )
-  assertEquals(
-    workHook('claude', { origin: 'managed' }, 7, env({}), under),
-    true,
-  )
-  assertEquals(workHook('codex', undefined, 7, env({}), under), true)
-  assertEquals(
-    workHook('codex', { operator: false }, 7, env({}), under),
-    true,
-  )
-  assertEquals(
-    workHook('codex', undefined, 7, env({ TASKS_OPERATOR: '42' }), under),
-    true,
-  )
-  assertEquals(operatorHook(7, env({ TASKS_OPERATOR: '42' }), under), true)
-
-  let out = observerDigest('probe-1')
-  assertMatch(out, /observation-only target/)
-  for (let mark of ['T-2', 'claim:', '## mail', 'from the fleet']) {
-    assertEquals(out.includes(mark), false)
-  }
+  assertEquals(operatorHook(7, env({ TASKS_OPERATOR: '99' }), under), false)
+  assertEquals(operatorHook(7, env({}), under), false)
 })
 
 Deno.test('Codex turn hooks announce only busy and idle boundaries', () => {
@@ -461,12 +437,9 @@ Deno.test('task dep rejects surplus positional arguments', async () => {
   )
 })
 
-Deno.test('Codex hooks inject sessions, delegate children, and wrap at exit', () => {
-  let path = new URL('../.codex/hooks.json', import.meta.url)
-  let config = JSON.parse(Deno.readTextFileSync(path)) as {
-    hooks: Record<string, { hooks: { command: string; timeout?: number }[] }[]>
-  }
-  assertEquals(Object.keys(config.hooks), [
+Deno.test('launchers scope lifecycle hooks to their provider invocation', () => {
+  let codex = lifecycleHooks('codex')
+  assertEquals(Object.keys(codex), [
     'SessionStart',
     'SubagentStart',
     'UserPromptSubmit',
@@ -474,28 +447,47 @@ Deno.test('Codex hooks inject sessions, delegate children, and wrap at exit', ()
     'SessionEnd',
   ])
   assertMatch(
-    config.hooks.SessionStart[0].hooks[0].command,
+    codex.SessionStart[0].hooks[0].command,
     /task session context --hook/,
   )
   assertMatch(
-    config.hooks.SubagentStart[0].hooks[0].command,
+    codex.SubagentStart[0].hooks[0].command,
     /task session context --hook/,
   )
   assertMatch(
-    config.hooks.UserPromptSubmit[0].hooks[0].command,
+    codex.UserPromptSubmit[0].hooks[0].command,
     /task session turn --hook/,
   )
   assertMatch(
-    config.hooks.Stop[0].hooks[0].command,
+    codex.Stop[0].hooks[0].command,
     /task session turn --hook/,
   )
-  assertEquals(config.hooks.UserPromptSubmit[0].hooks[0].timeout, 3)
-  assertEquals(config.hooks.Stop[0].hooks[0].timeout, 3)
+  assertEquals(codex.UserPromptSubmit[0].hooks[0].timeout, 3)
+  assertEquals(codex.Stop[0].hooks[0].timeout, 3)
   assertMatch(
-    config.hooks.SessionEnd[0].hooks[0].command,
+    codex.SessionEnd[0].hooks[0].command,
     /task session wrap --hook/,
   )
-  assertEquals(config.hooks.SessionEnd[0].hooks[0].timeout, 3)
+  assertEquals(codex.SessionEnd[0].hooks[0].timeout, 3)
+
+  let claude = lifecycleHooks('claude')
+  assertEquals(Object.keys(claude), [
+    'SessionStart',
+    'SubagentStart',
+    'Stop',
+    'SessionEnd',
+  ])
+  assertMatch(claude.Stop[0].hooks[0].command, /self-clear-stop\.sh/)
+  assertEquals(
+    JSON.parse(claudeHookSettings()).hooks,
+    claude,
+  )
+  let project = JSON.parse(
+    Deno.readTextFileSync(
+      new URL('../.claude/settings.json', import.meta.url),
+    ),
+  )
+  assertEquals(project.hooks, undefined)
 })
 
 // `task new P1 …` honors the documented shorthand (T-6741): a LEADING

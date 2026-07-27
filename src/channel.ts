@@ -72,9 +72,9 @@ export type Ctx = {
   // it may surface an addressed knock after the resolver stamped its routing
   // outcome. `notified` still bounds it to what nobody has read.
   mode?: 'catchup' | 'resume' | 'inbox'
-  // Whether the served session is the project's operator loop — a specialist
-  // (false) gets no project mail, only direct address (client.ts isOperator,
-  // T-7006). Absent = true (an unresolved session errs toward delivery).
+  // Whether the served session is the project's operator loop. Only a positive
+  // capability receives project mail or actor knocks; direct address and
+  // claimed-task replies do not depend on it.
   operator?: boolean
 }
 
@@ -259,15 +259,14 @@ export let findSession = (
 // `opened`/`archived` stamps (T-7006) read off the index — replacing the old
 // mail.read_at column so a letter already opened or archived never re-rings.
 // Narrowing later is one line here.
-// `operator` gates PROJECT mail to the operator loop: a specialist (a managed
-// spawn, or a session started on a task) hears only direct address, never the
-// project's mail (client.ts isOperator, T-7006). Default true — an unresolved
-// session errs toward delivery, and comments/knocks reach it regardless.
+// `operator` gates PROJECT mail to the operator loop. Missing identity fails
+// closed; direct comments, session knocks, and claimed-task replies are
+// selected independently.
 export let injects = (
   m: Record<string, unknown>,
   homeEid?: string | null,
   done?: boolean,
-  operator = true,
+  operator = false,
 ): boolean =>
   operator && !!m.verified && !done && !!homeEid &&
   str(m.target_eid) == homeEid
@@ -392,7 +391,10 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
         continue
       }
       let recipient = str(c.comp.to_eid)
-      if (recipient != ctx.sessionEid && recipient != ctx.actorEid) continue
+      if (
+        recipient != ctx.sessionEid &&
+        !(ctx.operator == true && recipient == ctx.actorEid)
+      ) continue
       if (told(c.eid)) continue
       let at = str(c.comp.target_eid)
       let atId = at ? ctx.idOf(at) ?? at : null
@@ -417,7 +419,7 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
       // re-broadcast — or a reconnect — from ringing twice.
       if (c.comp.received_at == null) continue
       if (
-        !injects(c.comp, ctx.homeEid, ctx.done?.(c.eid), ctx.operator !== false)
+        !injects(c.comp, ctx.homeEid, ctx.done?.(c.eid), ctx.operator == true)
       ) continue
       if (told(c.eid)) continue
       let id = ctx.idOf(c.eid)
