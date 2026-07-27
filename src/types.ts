@@ -775,6 +775,7 @@ export type Session = {
   latest_seq?: number // lines of log so far
   started_at?: string | null
   stop_requested_at?: string | null
+  input_at?: string | null // a live managed turn is yielding to new words
   finished_at?: string | null
   exit_code?: number | null // null when the child outlived us — unknowable
   stop_reason?: string | null

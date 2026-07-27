@@ -521,8 +521,14 @@ let following = (eid: string, ad: Adapter, cast: Cast, from?: Tail) => {
 // stop() never stamps that itself, because a signal sent is not a process
 // ended.
 let finish = async (eid: string, t: Tail, run: Run, cast: Cast) => {
-  let row = db.prepare('select stop_requested_at from session where eid = ?')
-    .get(eid) as { stop_requested_at: string | null } | undefined
+  let row = db.prepare(
+    `select stop_requested_at, input_at, provider_session_id
+     from session where eid = ?`,
+  ).get(eid) as {
+    stop_requested_at: string | null
+    input_at: string | null
+    provider_session_id: string | null
+  } | undefined
   if (!row) return // deleted mid-run
   // The wrapper reports a beat AFTER the child vanishes (wait, then the
   // echo into the code file) — give it that beat before calling the code
@@ -546,6 +552,16 @@ let finish = async (eid: string, t: Tail, run: Run, cast: Cast) => {
       Deno.removeSync(f) // terminal: nothing left to adopt or report
     } catch { /* never written, or already gone */ }
   }
+  // A managed print run has no live input stream. New words interrupt only
+  // its current provider turn, then continue the same thread without a false
+  // settlement (and therefore without releasing its task).
+  if (
+    row.input_at && !row.stop_requested_at && row.provider_session_id &&
+    unheard(eid).length
+  ) {
+    resume(eid, cast, true).catch((e) => console.warn('input resume —', e))
+    return
+  }
   await followWrite(eid, () =>
     stamp(eid, {
       status: row.stop_requested_at
@@ -555,6 +571,7 @@ let finish = async (eid: string, t: Tail, run: Run, cast: Cast) => {
         : 'failed',
       exit_code: code,
       stop_reason: code == null ? run.why : null,
+      input_at: null,
       finished_at: now(),
       latest_seq: t.seq,
       ...(t.errs.length ? { error: diagnosis(t) } : {}),
@@ -1250,12 +1267,12 @@ let told = (msgs: { eid: string }[], cast: Cast) => {
 // swallowed message reads as delivered. The lines and the reply land in
 // the SAME log — seq just continues — and the existing tailer closes the
 // session again when the continuation ends.
-let resume = async (eid: string, cast: Cast) => {
+let resume = async (eid: string, cast: Cast, active = false) => {
   let row = db.prepare('select * from session where eid = ?').get(eid) as
     | Row
     | undefined
   if (!row) return
-  if (reachable(eid)) return // somebody is home — the cast is delivery
+  if (!active && reachable(eid)) return // somebody is home — the cast delivers
   let msgs = unheard(eid)
   if (!msgs.length) return // nothing owed
   let body = msgs.map((m) => m.body).join('\n\n')
@@ -1347,6 +1364,7 @@ let resume = async (eid: string, cast: Cast) => {
     error: null,
     stop_reason: null,
     stop_requested_at: null,
+    input_at: null,
     finished_at: null,
   }, cast)
 
@@ -1368,18 +1386,66 @@ let resume = async (eid: string, cast: Cast) => {
   })
 }
 
+// Headless managed providers accept one prompt per process. A comment is a
+// steer, so yield the current provider turn and let finish() resume its thread
+// with the durable unheard backlog. The input_at stamp makes the handoff
+// survive a server restart and distinguishes it from the operator's stop.
+let interrupt = async (eid: string) => {
+  let row = db.prepare(`
+    select origin, status, provider_session_id from session where eid = ?
+  `).get(eid) as {
+    origin: string
+    status: string | null
+    provider_session_id: string | null
+  } | undefined
+  if (
+    row?.origin != 'managed' ||
+    !sessionActive.includes(String(row.status)) ||
+    !row.provider_session_id
+  ) return
+  let run = running.get(eid)
+  if (!run) return
+  let pid = run.pid || pidOf(eid)
+  for (let end = Date.now() + grace(); !pid && Date.now() < end;) {
+    await sleep(poll())
+    if (running.get(eid) != run) return
+    pid = run.pid || pidOf(eid)
+  }
+  if (!pid) return
+  let grp = pids(eid)?.group ?? pid
+  let signal = (sig: Deno.Signal) => {
+    try {
+      Deno.kill(-grp, sig)
+    } catch { /* already gone — the follower is the truth */ }
+  }
+  let left = async () => {
+    let end = Date.now() + grace()
+    while (Date.now() < end) {
+      if (await run.exit()) return true
+      await sleep(poll())
+    }
+    return false
+  }
+  signal('SIGTERM')
+  if (!await left()) signal('SIGKILL')
+  await run.done
+}
+
+let steer = (eid: string, cast: Cast) => {
+  let row = db.prepare(
+    'select input_at from session where eid = ?',
+  ).get(eid) as { input_at: string | null } | undefined
+  if (!row?.input_at) stamp(eid, { input_at: now() }, cast)
+  return interrupt(eid)
+}
+
 // created(comment) — commenting on a session IS messaging that agent (the
 // comms bus already says so). With someone home the cast alone is
-// delivery — an interactive session's channel injects it, a busy managed
-// run's next tool call serves it off the bus — and nothing happens here;
-// a session nobody is listening to is woken with its backlog. Which one
-// it is is a question of LIVENESS, never of origin (door.ts): an operator
-// runs plain `claude` and reifies as 'external', and gating on origin
-// left every operator's session unresumable and every knock at one
-// unheard. A session's own comments never resume it (an agent must not
-// wake itself by talking), and machine events carry news, never words to
-// wake on — which is also what keeps refuse()'s own reply out of this
-// gate.
+// delivery — an interactive session's channel injects it. A managed print
+// run has no such ear, so it yields the current turn and continues its thread
+// with the backlog. A session's own comments never resume it (an agent must
+// not wake itself by talking), and machine events carry news, never words to
+// wake on — which is also what keeps refuse()'s own reply out of this gate.
 export let commented =
   (cast: Cast) => (ceid: string, comp: Record<string, unknown>) => {
     let eid = String(comp.target_eid)
@@ -1388,7 +1454,14 @@ export let commented =
     ) as { via: string | null } | undefined
     if (stamp?.via == eid) return // the session talking about itself
     if (comp.event) return // the server speaking, not someone to answer
-    if (!db.prepare('select 1 from session where eid = ?').get(eid)) return
+    let row = db.prepare(
+      'select origin, status from session where eid = ?',
+    ).get(eid) as { origin: string; status: string | null } | undefined
+    if (!row) return
+    if (
+      row.origin == 'managed' &&
+      sessionActive.includes(String(row.status))
+    ) return steer(eid, cast)
     return resume(eid, cast)
   }
 
@@ -1425,10 +1498,14 @@ export let deleted = (eid: string) => {
 // open(): db.ts stays pure.
 export let recover = (cast: Cast) => {
   let rows = db.prepare(`
-    select eid, provider from session
+    select eid, provider, input_at from session
     where origin = 'managed' and status in ('starting', 'running', 'stopping')
-  `).all() as { eid: string; provider: string | null }[]
-  for (let { eid, provider } of rows) {
+  `).all() as {
+    eid: string
+    provider: string | null
+    input_at: string | null
+  }[]
+  for (let { eid, provider, input_at } of rows) {
     let ad = adapters[String(provider)]
     if (!ad) {
       stamp(eid, {
@@ -1448,6 +1525,9 @@ export let recover = (cast: Cast) => {
     }
     running.set(eid, run)
     run.done = following(eid, ad, cast)
+    if (input_at) {
+      interrupt(eid).catch((e) => console.warn('input recovery —', e))
+    }
   }
   // Fresh Claude sessions announce before their first assistant event, so
   // SessionStart cannot yet see a model. Reconcile the transcript at boot too:

@@ -764,6 +764,38 @@ Deno.test('boot: a live child is adopted, its file followed from where it is', a
   assertEquals(row(eid)?.status, 'completed')
 })
 
+Deno.test('boot: a pending live comment completes its interrupted handoff', async () => {
+  let eid = plant([INIT])
+  db.prepare(`
+    update session set provider_session_id = 'sid-1', model = 'fake-fast',
+      cwd = ?, input_at = '2026-07-27T12:00:00Z'
+    where eid = ?
+  `).run(scratch, eid)
+  let pending = say(eid, 'heard after restart')
+  apply(db, pending)
+  let child = new Deno.Command('setsid', {
+    args: ['sleep', '9'],
+    stdout: 'null',
+    stderr: 'null',
+  }).spawn()
+  Deno.writeTextFileSync(`${logsDir()}/${eid}.pid`, String(child.pid))
+
+  recover(cast)
+  await until(
+    () => told(pending[1].eid) && row(eid)?.status == 'completed',
+    'the recovered input handoff',
+  )
+  await child.status
+  let events = Deno.readTextFileSync(log(eid)).split('\n').filter(Boolean)
+    .map((line) => JSON.parse(line) as { type: string; text?: string })
+  assertEquals(
+    events.some((e) =>
+      e.type == 'session.input' && e.text == 'heard after restart'
+    ),
+    true,
+  )
+})
+
 Deno.test('a tail tick that only moves the counter stays off the wire', async () => {
   let eid = plant([INIT])
   let child = new Deno.Command('setsid', {
@@ -879,58 +911,53 @@ Deno.test('a session commenting on itself never resumes it', async () => {
   assertEquals(row(eid)?.latest_seq, before) // the log never heard it
 })
 
-Deno.test('words said mid-turn wait, and the settle delivers them', async () => {
+Deno.test('a comment steers a live managed session without settling it', async () => {
   let { t } = seed()
   let { eid, done } = begin(t)
   await done
-  // The resume dawdles (delay: the fake reads stage directions), long
-  // enough for more words to land while the door says busy.
-  let resumed = write(say(eid, 'delay:200 keep going'))
+  let reports = settleComments(t, eid).length
+  // The resumed turn dawdles long enough for a comment to steer it.
+  let resumed = write(say(eid, 'delay:1000 keep going'))
   assertEquals(row(eid)?.status, 'running')
-  let while1 = say(eid, 'also: rename it')
-  let while2 = say(eid, 'and: green gate')
-  await write(while1)
-  await write(while2)
-  // Mid-turn nobody took them: the effect stayed out, nothing stamped —
-  // owed, not lost.
-  assertEquals(told(while1[1].eid), false)
-  assertEquals(row(eid)?.status, 'running')
+  let steer = say(eid, 'also: rename it')
+  await write(steer)
   await resumed
-  // The settle flushed the backlog as one more resume: both delivered,
-  // both stamped, and the session settles clean again.
   await until(
-    () =>
-      told(while1[1].eid) && told(while2[1].eid) &&
-      row(eid)?.status == 'completed',
-    'the settle flush to deliver',
+    () => told(steer[1].eid) && row(eid)?.status == 'completed',
+    'the steered continuation to settle',
   )
   let events = Deno.readTextFileSync(log(eid)).split('\n').filter(Boolean)
-    .map((l) => JSON.parse(l) as { type: string; text?: string })
-  // Each message joined the log as its own say, in the order it was said…
+    .map((l) =>
+      JSON.parse(l) as { type: string; text?: string; final_text?: string }
+    )
   assertEquals(
     events.filter((e) => e.type == 'session.input').map((e) => e.text),
-    ['delay:200 keep going', 'also: rename it', 'and: green gate'],
+    ['delay:1000 keep going', 'also: rename it'],
   )
-  // …and ONE continuation carried both (the fake echoes its instruction).
-  assert(
-    events.some((e) => e.text == 'working: also: rename it\n\nand: green gate'),
+  assertEquals(
+    events.some((e) => e.text == 'working: also: rename it'),
+    true,
   )
+  assertEquals(
+    events.some((e) =>
+      e.type == 'result' && e.final_text?.includes('delay:1000 keep going')
+    ),
+    false,
+  )
+  // Steering is one continuous session, not an interrupted settlement.
+  assertEquals(settleComments(t, eid).length, reports + 1)
 })
 
-Deno.test('a failed run stays down, but the next word carries the backlog', async () => {
+Deno.test('a failed run stays down until the next word resumes it', async () => {
   let { t } = seed()
   let { eid, done } = begin(t)
   await done
-  let crashed = write(say(eid, 'delay:200 fail:3 then crash'))
-  assertEquals(row(eid)?.status, 'running')
-  let missed = say(eid, 'you okay?')
-  await write(missed) // mid-turn: owed
-  await crashed
+  await write(say(eid, 'fail:3 then crash'))
   assertEquals(row(eid)?.status, 'failed') // no flush — a broken run stays down
-  assertEquals(told(missed[1].eid), false)
-  await write(say(eid, 'wake up'))
+  let wake = say(eid, 'wake up')
+  await write(wake)
   await until(() => row(eid)?.status == 'completed', 'the woken run to settle')
-  assertEquals(told(missed[1].eid), true) // the wake carried the backlog
+  assertEquals(told(wake[1].eid), true)
 })
 
 Deno.test('refused words stay owed, never marked told', async () => {

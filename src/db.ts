@@ -668,6 +668,7 @@ export let open = (path = file) => {
       'latest_seq integer not null default 0',
       'started_at text',
       'stop_requested_at text',
+      'input_at text',
       'finished_at text',
       'exit_code integer',
       'stop_reason text',
