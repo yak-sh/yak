@@ -93,6 +93,10 @@ claimable work, to every task-launched agent. `--operator` grants only
 project-wide attention: project mail and project-actor knocks. Direct messages
 and replies on claimed tasks reach every session.
 
+Projects may add Claude-only invocation settings in
+`.tasks/claude-settings.json`; hook arrays append after Tasks' lifecycle hooks
+and are never loaded by bare `claude`.
+
 SessionEnd runs `task session wrap --hook` — claims are released and the closing
 summary is kept as the session brief (`task session brief` writes one
 deliberately). Sessions also spawn FROM the graph

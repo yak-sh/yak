@@ -490,6 +490,41 @@ Deno.test('launchers scope lifecycle hooks to their provider invocation', () => 
   assertEquals(project.hooks, undefined)
 })
 
+Deno.test('task claude appends project settings only for its invocation', () => {
+  let dir = Deno.makeTempDirSync()
+  try {
+    Deno.mkdirSync(`${dir}/.tasks`)
+    Deno.writeTextFileSync(
+      `${dir}/.tasks/claude-settings.json`,
+      JSON.stringify({
+        env: { DESK: 'trading' },
+        hooks: {
+          SessionStart: [{
+            hooks: [{ type: 'command', command: 'echo rearm' }],
+          }],
+        },
+      }),
+    )
+    let settings = JSON.parse(claudeHookSettings(dir))
+    assertEquals(settings.env, { DESK: 'trading' })
+    assertEquals(settings.hooks.SessionStart.length, 2)
+    assertMatch(
+      settings.hooks.SessionStart[0].hooks[0].command,
+      /task session context --hook/,
+    )
+    assertEquals(
+      settings.hooks.SessionStart[1].hooks[0].command,
+      'echo rearm',
+    )
+    assertEquals(
+      JSON.parse(claudeLaunch([], true, 42, dir).args[2]),
+      settings,
+    )
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
+})
+
 // `task new P1 …` honors the documented shorthand (T-6741): a LEADING
 // P<n> becomes priority, a bare word stays title, and a mid-title P keeps
 // its words.

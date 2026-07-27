@@ -1419,8 +1419,53 @@ export let codexHookArgs = () =>
     `hooks.${event}=${toml(config)}`,
   ])
 
-export let claudeHookSettings = () =>
-  JSON.stringify({ hooks: lifecycleHooks('claude') })
+let claudeSettings = (cwd: string): Record<string, unknown> => {
+  let path = `${cwd}/.tasks/claude-settings.json`
+  try {
+    let settings = JSON.parse(Deno.readTextFileSync(path))
+    if (!settings || typeof settings != 'object' || Array.isArray(settings)) {
+      throw new Error('settings must be an object')
+    }
+    return settings
+  } catch (e) {
+    if (e instanceof Deno.errors.NotFound) return {}
+    throw new Error(`${path}: ${e instanceof Error ? e.message : String(e)}`)
+  }
+}
+
+// A project may add provider settings under `.tasks/`, where they affect only
+// `task claude`. Lifecycle arrays append after Tasks' identity hooks.
+export let claudeHookSettings = (cwd = Deno.cwd()) => {
+  let settings = claudeSettings(cwd)
+  let custom = settings.hooks
+  if (
+    custom != null &&
+    (typeof custom != 'object' || Array.isArray(custom))
+  ) {
+    throw new Error(
+      `${cwd}/.tasks/claude-settings.json: hooks must be an object`,
+    )
+  }
+  let hooks: Record<string, unknown[]> = Object.fromEntries(
+    Object.entries(lifecycleHooks('claude')).map(([event, entries]) => [
+      event,
+      [...entries],
+    ]),
+  )
+  for (
+    let [event, entries] of Object.entries(
+      custom as Record<string, unknown> ?? {},
+    )
+  ) {
+    if (!Array.isArray(entries)) {
+      throw new Error(
+        `${cwd}/.tasks/claude-settings.json: hooks.${event} must be an array`,
+      )
+    }
+    hooks[event] = [...(hooks[event] ?? []), ...entries]
+  }
+  return JSON.stringify({ ...settings, hooks })
+}
 
 let terminalScope = (args: string[], pid: number) => {
   let end = args.indexOf('--')
@@ -1440,13 +1485,14 @@ export let claudeLaunch = (
   args: string[],
   listed: boolean,
   pid = Deno.pid,
+  cwd = Deno.cwd(),
 ) => {
   let scope = terminalScope(args, pid)
   return {
     args: [
       '--dangerously-skip-permissions',
       '--settings',
-      claudeHookSettings(),
+      claudeHookSettings(cwd),
       '--channels',
       CHANNEL,
       ...(listed ? [] : ['--dangerously-load-development-channels', CHANNEL]),
