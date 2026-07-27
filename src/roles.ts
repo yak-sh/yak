@@ -124,10 +124,13 @@ export let nativeProviderArgs = (
 
 let nativeEnv = (eid: string) => {
   let home = Deno.env.get('HOME') ?? ''
+  let term = Deno.env.get('TERM')
   return {
     PATH: childPath(home, Deno.env.get('PATH') ?? ''),
     HOME: home,
-    TERM: Deno.env.get('TERM') ?? 'xterm-256color',
+    // A daemon commonly inherits TERM=dumb even though the process it opens
+    // is an interactive TUI. Codex exits at startup under that terminal.
+    TERM: term && term != 'dumb' ? term : 'xterm-256color',
     TASKS_ROLE: eid,
     ...(Deno.env.get('TASKS_HOST')
       ? { TASKS_HOST: Deno.env.get('TASKS_HOST')! }

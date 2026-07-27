@@ -131,6 +131,7 @@ Deno.test('native role dedupes, rolls drift, heals death, and stops exactly', as
   let respawn = commands.find((args) => args[0] == 'respawn-pane')!
   assertEquals(respawn[respawn.indexOf('-t') + 1], '%99')
   assert(respawn.includes(`TASKS_ROLE=${role}`))
+  assert(respawn.includes('TERM=xterm-256color'))
   let first = db.prepare(
     'select applied_hash from role where eid = ?',
   ).get(role) as { applied_hash: string }
