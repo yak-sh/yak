@@ -2,10 +2,12 @@ import { signal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
 import { block, copy, setFollow } from './ui.tsx'
 import { usePlaceAt } from './overlay.tsx'
-import { cache, census, ent, rootCanvas } from '../live.ts'
+import { cache, census, ent, peek, rootCanvas } from '../live.ts'
 import { actionsFor, resolve } from './registry.ts'
 import { type Ent, idOf } from '../types.ts'
 import { dragData } from './drag.ts'
+
+export { peek }
 
 // The URL is the root card: `/` shows the root canvas, `/T-123` (or any
 // id form) shows that entity fullscreened, `?v=List` picks its view.
@@ -30,13 +32,6 @@ export let navigate = (to: string) => {
   route.value = to
   track(was)
 }
-
-// A peeked entity: desktop's answer to clicking a link — a popover card
-// at the pointer instead of a fullscreen root swap (Peek.tsx renders it).
-// view is the peek's own tab choice; unset means the entity's default.
-export let peek = signal<
-  { eid: string; x: number; y: number; view?: string; from?: Element } | null
->(null)
 
 let linkAt = (ev: MouseEvent) => {
   let el = (v: EventTarget | null) =>

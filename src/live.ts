@@ -1542,3 +1542,10 @@ export let mode = signal<'normal' | 'insert' | 'command' | 'visual'>('normal')
 // Whether the search palette is up. Shell state so a hot swap of the
 // component graph can't shut it mid-search (Search.tsx owns the rest).
 export let searchOpen = signal(false)
+
+// Desktop opens entity links as a floating card at the pointer. This is
+// shell state: a component hot swap replaces nav.tsx, but the card the
+// operator is reading must stay open. view is its own optional tab choice.
+export let peek = signal<
+  { eid: string; x: number; y: number; view?: string; from?: Element } | null
+>(null)

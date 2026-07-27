@@ -1,7 +1,8 @@
 // A peek belongs to its one opener without making every link reactive.
 import { effect } from '@preact/signals'
 import { parseHTML } from 'linkedom'
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertStrictEquals } from '@std/assert'
+import { peek as shellPeek } from '../live.ts'
 import { type Ent } from '../types.ts'
 import { clickProps, openAt, peek } from './nav.tsx'
 
@@ -14,6 +15,10 @@ let e: Ent = {
 }
 
 let from = () => peek.value?.from
+
+Deno.test('peek state lives above the hot-swap boundary', () => {
+  assertStrictEquals(peek, shellPeek)
+})
 
 Deno.test('only the same opener toggles its peek closed', () => {
   let priorMedia = Object.getOwnPropertyDescriptor(globalThis, 'matchMedia')
