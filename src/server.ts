@@ -387,6 +387,7 @@ let mcp = async (req: Request) => {
         let out = apply(db, changes, t, via)
         cast(out)
         effect(out, t)
+        return out
       },
       // deno-lint-ignore require-await
       find: async (q, limit) => search(db, q, limit),

@@ -290,7 +290,8 @@ export let Tasks = ({ e }: { e: Ent }) => {
     .map((b) => ent(b.from))
     .filter((t) => t.task && !settled(t.task.status))
     .sort((a, b) =>
-      statuses.indexOf(a.task!.status) - statuses.indexOf(b.task!.status) ||
+      statuses.findIndex((s) => s == a.task!.status) -
+        statuses.findIndex((s) => s == b.task!.status) ||
       a.task!.priority - b.task!.priority
     )
   if (!ids.length) return null

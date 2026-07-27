@@ -110,6 +110,8 @@ export let send = async (changes: Change[], via = me()) => {
     body: JSON.stringify(changes),
   })
   if (!res.ok) throw new Error(`apply failed: ${await res.text()}`)
+  let out = await res.json() as { changes: Change[] }
+  return out.changes
 }
 
 // A value starting with @ is a FILE read by the tool itself — the safe
@@ -413,8 +415,8 @@ export let find = (all: Row[], id: string) => {
 
 // The board sort: status column order, then priority, then num.
 export let byBoard = (a: Row, b: Row) =>
-  (statuses.indexOf(String(a.comps.task?.status)) -
-    statuses.indexOf(String(b.comps.task?.status))) ||
+  (statuses.findIndex((s) => s == a.comps.task?.status) -
+    statuses.findIndex((s) => s == b.comps.task?.status)) ||
   (Number(a.comps.task?.priority ?? 0) - Number(b.comps.task?.priority ?? 0)) ||
   (a.num - b.num)
 

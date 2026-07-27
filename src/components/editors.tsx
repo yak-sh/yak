@@ -157,7 +157,7 @@ let QueryEdit = ({ ...p }: EditorProps) => {
 // status set answers the pip that opened it in the same paint: each
 // choice wears its own dot.
 let EnumEdit = ({ ...p }: EditorProps) => {
-  let t = p.t as { enum: string[] }
+  let t = p.t as { enum: readonly string[] }
   return (
     <Pop>
       {t.enum.map((v) => (

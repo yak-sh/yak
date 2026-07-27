@@ -45,7 +45,7 @@ export type PropType =
   | 'query'
   | 'time'
   | 'url'
-  | { enum: string[]; aliases?: Record<string, string> }
+  | { enum: readonly string[]; aliases?: Record<string, string> }
   | { eid: string; death: Death }
   | { text: string }
 
@@ -53,13 +53,20 @@ export type PropType =
 // not derived — nobody can derive "we changed our minds" — and not
 // deletion: deletion tombstones mistakes, cancellation preserves a
 // decision about real work, trail intact.
-export let statuses = ['open', 'wip', 'done', 'cancelled']
+export let statuses = ['open', 'wip', 'done', 'cancelled'] as const
 
 // A review is a comment with one of these verdicts. Input aliases keep
 // the operator verbs short; the graph stores only the settled words.
-export let verdicts = ['approved', 'rejected', 'changes_requested']
+export let verdicts = [
+  'approved',
+  'rejected',
+  'changes_requested',
+] as const
 export let verdictName = (verdict?: string | null) =>
   String(verdict ?? '').replaceAll('_', ' ')
+
+// One memory vocabulary feeds persistence, editors, and every door.
+export let memoryTypes = ['user', 'feedback', 'project', 'reference'] as const
 
 // Settled = no longer open work, whether it finished or was called off.
 // Gating, board defaults, and lease-lapse audits all key off this
@@ -288,7 +295,7 @@ export let comps: Record<string, Record<string, PropType>> = {
   // collision would make it ambiguous. last_confirmed_at is server-stamped
   // by the confirm door, never wire-set.
   memory: {
-    type: { enum: ['user', 'feedback', 'project', 'reference'] },
+    type: { enum: memoryTypes },
     // Scope is history — a fact outlives the project it was learned for.
     scope_eid: { eid: 'project', death: 'keep' },
   },

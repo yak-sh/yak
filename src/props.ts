@@ -83,7 +83,7 @@ let time = (p: Prop, v: unknown, ctx: PropContext): string => {
 }
 
 let oneOf = (p: Prop, v: unknown): string => {
-  let type = p.type as Extract<PropType, { enum: string[] }>
+  let type = p.type as Extract<PropType, { enum: readonly string[] }>
   let s = typeof v == 'string' ? v : ''
   let declared = type.enum.find((x) => x.toLowerCase() == s.toLowerCase())
   let alias = Object.entries(type.aliases ?? {})

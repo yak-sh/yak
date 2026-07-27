@@ -420,7 +420,7 @@ export let subject = (id: string | undefined, args: string[]) => {
     return { cmd: 'dep', args: [id, verb, ...objects] }
   }
   if (verb == 'is') {
-    if (objects.length != 1 || !statuses.includes(objects[0])) {
+    if (objects.length != 1 || !statuses.some((s) => s == objects[0])) {
       throw new Error(`status is one of: ${statuses.join(', ')}`)
     }
     return { cmd: 'set', args: [id, `.status=${objects[0]}`] }

@@ -10,8 +10,18 @@
 // spelling for the few collisions. The tool descriptions teach it.
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
-import { type Change, type Hit, type Snapshot, uuid } from './types.ts'
+import {
+  type Change,
+  edges,
+  type Hit,
+  memoryTypes,
+  type Snapshot,
+  statuses,
+  uuid,
+  verdicts,
+} from './types.ts'
 import { trouble } from './adapters.ts'
 import { FILTERS, GRAMMAR } from './grammar.ts'
 import {
@@ -62,7 +72,7 @@ export type IO = {
   read: () => Promise<Snapshot>
   // `via` is journal attribution — the calling session's id, when the
   // tool knows it. Never auth.
-  write: (changes: Change[], via?: string) => Promise<void>
+  write: (changes: Change[], via?: string) => Promise<Change[]>
   find: (q: string, limit?: number) => Promise<Hit[]>
   // Land an HTML page in the frozen store for an existing web entity.
   upload: (eid: string, html: string) => Promise<void>
@@ -176,6 +186,7 @@ commit: short paragraphs, bullet lists for anything enumerable (schemas,
 steps, options), ## headings when it has parts, fenced code for code.
 Never one run-on paragraph.`
 let body = () => z.string().describe(DOC)
+let count = z.number().int().positive()
 
 // The write-time backstop: a long body with not one line break is a
 // wall of text. It still stores (never drop words) — the reply says so
@@ -212,6 +223,18 @@ Call task_context first each session, and pass the same stable session
 id to every tool that takes one — it is your identity for claims,
 comments, and the comms bus.`,
   })
+  let tool = <Shape extends z.ZodRawShape>(
+    name: string,
+    description: string,
+    shape: Shape,
+    run: (
+      args: z.output<z.ZodObject<Shape>>,
+    ) => CallToolResult | Promise<CallToolResult>,
+  ) =>
+    server.registerTool(name, {
+      description,
+      inputSchema: z.object(shape).strict(),
+    }, run)
 
   // The comms bus, MCP side: a tool that knows who's asking appends what
   // that session hasn't seen and advances the session's own ack cursor —
@@ -228,7 +251,7 @@ comments, and the comms bus.`,
     )
   }
 
-  server.tool(
+  tool(
     'search',
     `Full-text search (FTS5) across every doc in the graph — task titles
 and bodies, boards, projects, comments. Words AND together; a trailing *
@@ -238,7 +261,10 @@ list matching entities, newest first. Returns ranked hits as 'id kind
 title — snippet'; a comment hit names the entity it targets. Use this
 FIRST when looking for existing work — cheaper and better-ranked than
 paging graph_query.`,
-    { q: z.string(), limit: z.number().optional() },
+    {
+      q: z.string(),
+      limit: count.describe('Maximum hits to return (default 20).').optional(),
+    },
     async ({ q, limit }: { q: string; limit?: number }) => {
       let hits = await io.find(q, limit ?? 20)
       return text(
@@ -252,7 +278,7 @@ paging graph_query.`,
     },
   )
 
-  server.tool(
+  tool(
     'task_list',
     `List tasks (id, status, title), board-ordered. Optional dot-param
 filters must ALL match. ${FILTERS} ${BUS}`,
@@ -284,27 +310,31 @@ filters must ALL match. ${FILTERS} ${BUS}`,
     },
   )
 
-  server.tool(
+  tool(
     'task_new',
-    `Create one task — or a BATCH: pass tasks:[{title, body?, status?,
-params?}] and they land in one atomic apply (shared dot-params go in
-each item's params). *_eid param values accept human ids (.project_eid=
-P-19). ${GRAMMAR} ${BUS}`,
+    `Create one task, or a batch with tasks:[{title, body?, status?,
+params?}]. The single-task fields and tasks mode are exclusive. A
+task's dedicated title/body/status wins over the same property in its
+params; params carries every other writable property. The whole batch
+lands in one atomic apply. *_eid param values accept human ids
+(.project_eid=P-19). ${GRAMMAR} ${BUS}`,
     {
       title: z.string().optional(),
       body: body().optional(),
-      status: z.enum(['open', 'wip', 'done', 'cancelled']).optional(),
+      status: z.enum(statuses).optional(),
       params: z.array(z.string()).optional(),
-      tasks: z.array(z.object({
-        title: z.string(),
-        body: body().optional(),
-        status: z.enum(['open', 'wip', 'done', 'cancelled']).optional(),
-        params: z.array(z.string()).optional(),
-      })).optional(),
+      tasks: z.array(
+        z.object({
+          title: z.string(),
+          body: body().optional(),
+          status: z.enum(statuses).optional(),
+          params: z.array(z.string()).optional(),
+        }).strict(),
+      ).min(1).optional(),
       session: z.string().optional(),
     },
     async (
-      { title, body, status, params = [], tasks, session }: {
+      { title, body, status, params, tasks, session }: {
         title?: string
         body?: string
         status?: string
@@ -319,15 +349,25 @@ P-19). ${GRAMMAR} ${BUS}`,
       },
     ) => {
       let all = rows(await io.read())
+      if (
+        tasks &&
+        [title, body, status, params].some((value) => value != null)
+      ) {
+        return err('tasks cannot be combined with single-task fields')
+      }
       let want = tasks ?? [{ title: title ?? '', body, status, params }]
       if (!want.length || want.some((t) => !t.title)) {
-        return text('every task needs a title (pass title or tasks[])')
+        return err('every task needs a title (pass title or tasks[])')
       }
       let minted: string[] = []
       let changes = want.flatMap((t) => {
         let grouped = patches(derefParams(all, parseAll(t.params ?? [])))
-        grouped.doc = { title: t.title, body: t.body ?? '', ...grouped.doc }
-        if (t.status) grouped.task = { status: t.status, ...grouped.task }
+        grouped.doc = {
+          ...grouped.doc,
+          title: t.title,
+          ...(t.body != null ? { body: t.body } : {}),
+        }
+        if (t.status) grouped.task = { ...grouped.task, status: t.status }
         let eid = crypto.randomUUID()
         minted.push(eid)
         return taskChanges(eid, grouped)
@@ -355,20 +395,23 @@ P-19). ${GRAMMAR} ${BUS}`,
     },
   )
 
-  server.tool(
+  tool(
     'task_update',
     `Patch an entity by id (T-3, bare num, or eid) with dot-params, e.g.
 [".status=done"] or [".body=notes..."]. Only the named props change.
+comment optionally lands a plain comment in the same atomic batch.
 *_eid values accept human ids. Cancelling (".status=cancelled") calls off
-work without pretending it finished — follow it with task_comment saying
-why. ${DOC} ${GRAMMAR} ${BUS}`,
+work without pretending it finished; use comment to say why. ${DOC}
+${GRAMMAR} ${BUS}`,
     {
       id: z.string(),
       params: z.array(z.string()).min(1),
       // Why, in human words: lands as a PLAIN comment on the entity in
       // the same atomic batch — commentary, never a change trail (the
       // journal records the change). Cancellations should carry one.
-      comment: z.string().optional(),
+      comment: z.string()
+        .describe('Plain comment to write atomically with the patch.')
+        .optional(),
       session: z.string().optional(),
     },
     async (
@@ -392,7 +435,7 @@ why. ${DOC} ${GRAMMAR} ${BUS}`,
     },
   )
 
-  server.tool(
+  tool(
     'task_context',
     `Your working set, ≤20 lines: the tasks claimed by your session (with
 unresolved dependencies and who holds them), or the top of the open
@@ -409,7 +452,7 @@ stable session identifier you claim with.`,
     },
   )
 
-  server.tool(
+  tool(
     'task_claim',
     `Claim a task for your session — a lease telling other agents who is
 working it (⚑ in listings). Pass a STABLE identifier for yourself
@@ -433,7 +476,7 @@ or hand off.`,
     },
   )
 
-  server.tool(
+  tool(
     'task_release',
     `Drop the claim on a task (yours or a stale one), freeing it for
 other sessions. ${BUS}`,
@@ -446,7 +489,7 @@ other sessions. ${BUS}`,
     },
   )
 
-  server.tool(
+  tool(
     'task_spawn',
     `Dispatch a managed agent onto a task: mints a session entity carrying
 the request. Invalid provider/model/effort values fail before minting;
@@ -455,13 +498,16 @@ session_peek checks on it, task_comment at the SETTLED session says more
 to it, and when the run settles the server comments the outcome on the
 task AND your spawning session, so you hear it directly. provider/model
 default to YOUR session's own (pass the same session id you claim with),
-then the provider table's first entry. ${BUS}`,
+then the provider table's first entry. persona names the persona entity
+(id or alias) the spawned session should wear. ${BUS}`,
     {
       id: z.string(),
       provider: z.string().optional(),
       model: z.string().optional(),
       effort: z.string().optional(),
-      persona: z.string().optional(),
+      persona: z.string()
+        .describe('Persona entity id or alias for the spawned session.')
+        .optional(),
       session: z.string().optional(),
     },
     async (
@@ -517,7 +563,7 @@ then the provider table's first entry. ${BUS}`,
     },
   )
 
-  server.tool(
+  tool(
     'command',
     `Run a \`:\` command line — the SAME vocabulary the owner types into
 the web bar and TUI, one language across every door. Focus ("where you
@@ -589,7 +635,7 @@ ${
     },
   )
 
-  server.tool(
+  tool(
     'session_peek',
     `Check in on a session (S-12): status, provider/model, seq, timing,
 error — then the last lines of its log as rendered rows (what it said,
@@ -597,7 +643,7 @@ ran, called). tail picks how many lines (default 20, cap 500). Works
 running or settled; stderr rides along when the child wrote any. ${BUS}`,
     {
       id: z.string(),
-      tail: z.number().optional(),
+      tail: count.max(500).optional(),
       session: z.string().optional(),
     },
     async (
@@ -634,15 +680,18 @@ running or settled; stderr rides along when the child wrote any. ${BUS}`,
     },
   )
 
-  server.tool(
+  tool(
     'history',
     `An entity's write history from the journal, newest first: when · who
 · what changed (comp{cols} for patches, -comp for removals, † for the
 entity's death). The journal records every applied batch — blame and
-diffs without a version table. id: T-3, S-12, or eid. ${BUS}`,
+diffs without a version table. id: T-3, S-12, or eid. limit is the
+maximum number of newest batches to return. ${BUS}`,
     {
       id: z.string(),
-      limit: z.number().optional(),
+      limit: count
+        .describe('Maximum newest journal batches to return.')
+        .optional(),
       session: z.string().optional(),
     },
     async (
@@ -661,7 +710,7 @@ diffs without a version table. id: T-3, S-12, or eid. ${BUS}`,
     },
   )
 
-  server.tool(
+  tool(
     'task_comment',
     `Comment on ANY entity (tasks, boards, docs, frozen pages — anything
 with an id). An optional verdict makes it a review; its body is the
@@ -670,7 +719,7 @@ session identifier you claim with, for attribution.`,
     {
       id: z.string(),
       body: body().optional(),
-      verdict: z.enum(['approved', 'rejected', 'changes_requested']).optional(),
+      verdict: z.enum(verdicts).optional(),
       session: z.string(),
     },
     async (
@@ -681,7 +730,7 @@ session identifier you claim with, for attribution.`,
         session: string
       },
     ) => {
-      if (body == null && !verdict) return err('body or verdict is required')
+      if (!verdict && !body?.trim()) return err('body or verdict is required')
       let all = rows(await io.read())
       let row = find(all, id)
       if (!row) return err(`no entity: ${id}`)
@@ -695,7 +744,7 @@ session identifier you claim with, for attribution.`,
     },
   )
 
-  server.tool(
+  tool(
     'memory_save',
     `Save a memory — one distilled fact the whole fleet can recall.
 Content is a doc: title is the INDEX LINE (recall shows it first),
@@ -708,7 +757,7 @@ confirm what you reuse, and it decays slower. ${BUS}`,
     {
       title: z.string().optional(),
       body: body().optional(),
-      type: z.enum(['user', 'feedback', 'project', 'reference']).optional(),
+      type: z.enum(memoryTypes).optional(),
       scope: z.string().optional(),
       id: z.string().optional(),
       session: z.string(),
@@ -738,7 +787,15 @@ confirm what you reuse, and it decays slower. ${BUS}`,
             },
           })
         }
-        if (type) patch.push({ eid: row.eid, name: 'memory', comp: { type } })
+        let memory: Record<string, unknown> = type ? { type } : {}
+        if (scope != null) {
+          let project = find(all, scope)
+          if (!project?.comps.project) return err(`no project: ${scope}`)
+          memory.scope_eid = project.eid
+        }
+        if (Object.keys(memory).length) {
+          patch.push({ eid: row.eid, name: 'memory', comp: memory })
+        }
         if (patch.length) await io.write(patch, session)
         await io.touch([row.eid], true)
         return bus(`confirmed ${idOf(row)}${wall(body)}`, session)
@@ -764,21 +821,27 @@ confirm what you reuse, and it decays slower. ${BUS}`,
     },
   )
 
-  server.tool(
+  tool(
     'memory_recall',
     `Recall memories, warmest first. The default reply is the INDEX —
 'M-7 0.84 feedback: title · 3× · confirmed 2026-07-01' — no bodies.
 Pass ids: [M-7, …] to read full bodies: THAT is the activation that
 bumps a memory's recall stats (listing never does), so expand only
-what you actually use. query mixes text terms with dot-param filters
-('.type=feedback', '.scope_eid=P-19', '.count>=3',
-'.last_confirmed_at<"last month"'); rank is recency vs earned
-stability — recalled often and spread out decays slowest. ${BUS}`,
+what you actually use. ids mode cannot be combined with query, type,
+or limit. In index mode, type is an exact memory-type filter and limit
+caps returned index lines (default 20). query mixes text terms with
+dot-param filters ('.type=feedback', '.scope_eid=P-19', '.count>=3',
+'.last_confirmed_at<"last month"'); rank is recency vs earned stability
+— recalled often and spread out decays slowest. ${BUS}`,
     {
       query: z.string().optional(),
-      type: z.enum(['user', 'feedback', 'project', 'reference']).optional(),
-      ids: z.array(z.string()).optional(),
-      limit: z.number().optional(),
+      type: z.enum(memoryTypes)
+        .describe('Exact memory type for index mode.')
+        .optional(),
+      ids: z.array(z.string()).min(1).optional(),
+      limit: count
+        .describe('Maximum index lines to return (default 20).')
+        .optional(),
       session: z.string().optional(),
     },
     async (
@@ -791,7 +854,13 @@ stability — recalled often and spread out decays slowest. ${BUS}`,
       },
     ) => {
       let all = rows(await io.read())
-      if (ids?.length) {
+      if (
+        ids &&
+        [query, type, limit].some((value) => value != null)
+      ) {
+        return err('ids cannot be combined with query, type, or limit')
+      }
+      if (ids) {
         let hits: Row[] = []
         for (let id of ids) {
           let row = find(all, id)
@@ -828,17 +897,21 @@ stability — recalled often and spread out decays slowest. ${BUS}`,
 
   // ---- the generic graph surface: the UI is data, so this IS UI control ----
 
-  server.tool(
+  tool(
     'graph_query',
     `The WHOLE graph, not just tasks: every entity as {id, kind, eid,
 comps}, dot-param filtered. Cards, pins (positions), cameras (what each
 client is looking at), sessions, comments — all live here. A query is a
 LIST door: long text values (persona bodies, mail, final_text) are cut
 at ${CUT} chars with a marker naming the rest — task_show reads one
-entity whole; full: true returns every byte. ${GRAMMAR} ${FILTERS}`,
+entity whole; full: true returns every byte. kind screens on the
+entity's derived display kind (task, project, comment, and so on).
+${GRAMMAR} ${FILTERS}`,
     {
       filters: z.array(z.string()).optional(),
-      kind: z.string().optional(),
+      kind: z.string()
+        .describe('Derived entity kind to return.')
+        .optional(),
       full: z.boolean().optional(),
     },
     async (
@@ -877,35 +950,48 @@ entity whole; full: true returns every byte. ${GRAMMAR} ${FILTERS}`,
     },
   )
 
-  server.tool(
+  tool(
     'graph_apply',
     `Raw wire access: apply a batch of changes atomically. A change is
 {eid, name, comp} — comp is a PATCH (omitted columns untouched), comp:
 null deletes the component, {name:'entity', comp:null} deletes the
 entity. Mint uuids for new entities. eid and *_eid comp values accept
 human ids (T-3, P-19) for EXISTING entities. Edges: name 'dependency',
-comp {type: requires|contains|reads|about, child_eid} links eid→child; add
-gone: true to unlink (a triple has no row key, so the comp names the
-whole edge). Same allowlist and claim-lease rules as every other
-client; writes broadcast live to all screens. ${GRAMMAR}`,
+comp {type: ${edges.join('|')}, child_eid} links eid→child; add gone:
+true to unlink (a triple has no row key, so the comp names the whole
+edge). Unknown component names are forward-compatible no-ops. Same
+allowlist and claim-lease rules as every other client; writes broadcast
+live to all screens. The result reports submitted intent and the
+authoritative effective batch returned by apply(). ${GRAMMAR}`,
     {
-      changes: z.array(z.object({
-        eid: z.string(),
-        name: z.string(),
-        comp: z.record(z.unknown()).nullable(),
-      })).min(1),
+      changes: z.array(
+        z.object({
+          eid: z.string(),
+          name: z.string(),
+          comp: z.record(z.unknown()).nullable(),
+        }).strict(),
+      ).min(1),
     },
     async ({ changes }: { changes: Change[] }) => {
+      let effective
       try {
-        await io.write(changes)
+        effective = await io.write(changes)
       } catch (e) {
         return err(`apply failed: ${(e as Error).message}`)
       }
-      return text(`applied ${changes.length} change(s)`)
+      return text(JSON.stringify(
+        {
+          submitted: changes.length,
+          effective: effective.length,
+          changes: effective,
+        },
+        null,
+        2,
+      ))
     },
   )
 
-  server.tool(
+  tool(
     'ui_state',
     `What's on screen right now: every client's camera (viewport rect in
 plane coords) and every pinned card (position, size, view, target),
@@ -966,7 +1052,7 @@ as ~240px for visibility.`,
     },
   )
 
-  server.tool(
+  tool(
     'card_open',
     `Open a card on the canvas: target entity through a view, at x/y
 (plane coords) — omitted position lands at the center of the most
@@ -990,7 +1076,7 @@ card id (close it with card_close, move it with card_move).`,
       let row = find(all, target)
       if (!row) return err(`no entity: ${target}`)
       let canvas = all.find((r) => r.kind == 'canvas')
-      if (!canvas) return text('no canvas')
+      if (!canvas) return err('no canvas')
       if (x == null || y == null) {
         // The LIVELIEST viewport, not the newest-minted: a camera moves
         // whenever its human pans, so updated.at names who's looking.
@@ -1040,7 +1126,7 @@ card id (close it with card_close, move it with card_move).`,
     },
   )
 
-  server.tool(
+  tool(
     'card_move',
     'Move/resize a card: any of x, y (plane coords), w, h (px; h 0 = auto).',
     {
@@ -1070,7 +1156,7 @@ card id (close it with card_close, move it with card_move).`,
     },
   )
 
-  server.tool(
+  tool(
     'card_close',
     'Close a card (deletes the card entity, never its target).',
     { id: z.string() },
@@ -1082,7 +1168,7 @@ card id (close it with card_close, move it with card_move).`,
     },
   )
 
-  server.tool(
+  tool(
     'page_put',
     `Publish an HTML page into the graph — the way to drop a one-shot
 artifact (mockup, report, diagram) where people work. Mints a web
@@ -1090,7 +1176,7 @@ entity and lands your HTML AS-IS: inline scripts, styles, and external
 references all render (in a sandboxed iframe cut off from the app's
 origin). Markdown needs no upload: put it in any doc body. Show the
 page with card_open. Passing the id of an existing web entity replaces
-its page instead.`,
+its page and title instead.`,
     { title: z.string(), html: z.string(), id: z.string().optional() },
     async (
       { title, html, id }: { title: string; html: string; id?: string },
@@ -1100,6 +1186,7 @@ its page instead.`,
         let row = find(rows(await io.read()), id)
         if (!row?.comps.web) return err(`no web entity: ${id}`)
         eid = row.eid
+        await io.write([{ eid, name: 'doc', comp: { title } }])
       } else {
         eid = uuid()
         await io.write([
@@ -1114,7 +1201,7 @@ its page instead.`,
     },
   )
 
-  server.tool(
+  tool(
     'code_run',
     `Code mode: run JS against the graph in a sandboxed worker (no fs, no
 net, no env — its ONLY capability is the graph). In scope: graph
@@ -1125,11 +1212,15 @@ the script finishes — unless dry_run, which returns the batch without
 applying (preview a layout before committing it). Example — grid the
 cards: const pins = graph.rows.filter(r => r.comps.pin); pins.forEach(
 (p, i) => apply({eid: p.eid, name: 'pin', comp: {x: (i%4)*360, y:
-Math.floor(i/4)*280}})); return pins.length`,
+Math.floor(i/4)*280}})); return pins.length. timeout_ms is the positive
+integer execution deadline in milliseconds (default 10000, maximum
+30000).`,
     {
       js: z.string(),
       dry_run: z.boolean().optional(),
-      timeout_ms: z.number().max(30_000).optional(),
+      timeout_ms: count.max(30_000)
+        .describe('Execution deadline in milliseconds (maximum 30000).')
+        .optional(),
     },
     async (
       { js, dry_run, timeout_ms }: {
@@ -1173,17 +1264,26 @@ Math.floor(i/4)*280}})); return pins.length`,
         worker.terminate()
       }
       if (!out.ok) {
-        return text(
+        return err(
           `code threw: ${out.error}\nlogs:\n${out.logs.join('\n')}`,
         )
       }
       let applied = ''
       if (out.batch.length && !dry_run) {
         try {
-          await io.write(out.batch)
-          applied = `applied ${out.batch.length} change(s)`
+          let effective = await io.write(out.batch)
+          applied = `${out.batch.length} submitted; ` +
+            `${effective.length} effective change(s)`
         } catch (e) {
-          applied = `batch REJECTED: ${(e as Error).message}`
+          return err(JSON.stringify(
+            {
+              result: out.result,
+              logs: out.logs,
+              status: `batch REJECTED: ${(e as Error).message}`,
+            },
+            null,
+            2,
+          ))
         }
       } else if (out.batch.length) {
         applied = `dry run — ${out.batch.length} change(s) NOT applied`
@@ -1201,7 +1301,7 @@ Math.floor(i/4)*280}})); return pins.length`,
     },
   )
 
-  server.tool(
+  tool(
     'task_show',
     `One entity, whole: spine, every component, its edges (refs out,
 backrefs in), its comments, as JSON. id: T-3, bare num, or eid. ${BUS}`,
