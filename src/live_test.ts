@@ -146,6 +146,22 @@ Deno.test('commentCount: events are not conversation', () => {
   assertEquals(commentCount('event-only').value, 0)
 })
 
+Deno.test('commentCount: cold targets share one graph scan', () => {
+  let scans = 0
+  cache.value = new Proxy({
+    one: { comment: { eid: 'one', target_eid: 'cold_one' } },
+    two: { comment: { eid: 'two', target_eid: 'cold_two' } },
+  }, {
+    ownKeys: (target) => {
+      scans++
+      return Reflect.ownKeys(target)
+    },
+  })
+  assertEquals(commentCount('cold_one').value, 1)
+  assertEquals(commentCount('cold_two').value, 1)
+  assertEquals(scans, 1)
+})
+
 // Backlinks read the SCHEMA — wire vocabulary plus server-stamped columns
 // (a session's requested_task_eid is an edge no client may write).
 Deno.test('backlinks: stamped associations count', () => {

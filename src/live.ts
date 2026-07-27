@@ -1129,16 +1129,28 @@ type CommentSet = {
   list: Signal<string[]>
   count: Signal<number>
 }
+type CommentIds = { ids: Set<string>; talk: Set<string> }
 let commentSets = new Map<string, CommentSet>()
-let commentIds = (target: string) => {
-  let ids = new Set<string>()
-  let talk = new Set<string>()
+// One pass seeds every cold face. Per-target sets below own later live
+// invalidation, so mounting a board never turns into one graph scan per tile.
+let commentIndex = computed(() => {
+  let found = new Map<string, CommentIds>()
   for (let [eid, r] of Object.entries(cache.value)) {
-    if (r.comment?.target_eid != target) continue
-    ids.add(eid)
-    if (!r.comment.event) talk.add(eid)
+    let target = r.comment?.target_eid
+    if (!target) continue
+    let ids = found.get(target)
+    if (!ids) found.set(target, ids = { ids: new Set(), talk: new Set() })
+    ids.ids.add(eid)
+    if (!r.comment?.event) ids.talk.add(eid)
   }
-  return { ids, talk }
+  return found
+})
+let commentIds = (target: string) => {
+  let found = commentIndex.value.get(target)
+  return {
+    ids: new Set(found?.ids),
+    talk: new Set(found?.talk),
+  }
 }
 
 let commentSet = (target: string) => {
