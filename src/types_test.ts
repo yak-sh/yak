@@ -109,7 +109,7 @@ Deno.test('settled: done or cancelled, nothing else', () => {
   assertEquals(settled(undefined), false)
 })
 
-// The client's half of door.ts `listening()` — one predicate every surface
+// The client's half of door.ts `present()` — one predicate every surface
 // shares (T-7461). Origin never enters it: an operator's own terminal is a
 // session somebody is home in, and a managed row that ended is not.
 let sess = (x: Partial<Session>): Session => ({ eid: 'e', id: 'i', ...x })

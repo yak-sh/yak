@@ -1,14 +1,26 @@
-// The door: is anyone LISTENING to a session, and is its provider process
-// PRESENT? Claude's channel makes both true; interactive Codex has a process
-// and transcript but no message channel. Keeping the questions separate lets
-// sessions.ts follow both logs without claiming Codex heard a knock.
+// The delivery door. Presence is process/lifecycle truth; delivery is a
+// separate transport decision. A reachable door can surface graph content
+// now. A queued door has a live session but must leave content pending for an
+// adapter (Codex's tmux notice is intentionally not content delivery).
+//
+// `notified` remains the per-item fact that content was surfaced. Neither a
+// queued route nor a successful wake-up notice may mint that stamp.
 // SERVER-ONLY (imports db).
 import { db } from './db.ts'
 import { commOf } from './proc.ts'
 import { type Seat, served } from './served.ts'
 import { sessionActive } from './types.ts'
 
-type Door = { eid: string; pid: number | null; status: string | null }
+type Row = {
+  eid: string
+  pid: number | null
+  pane: string | null
+  status: string | null
+}
+export type Delivery = {
+  state: 'absent' | 'queued' | 'reachable'
+  transport: 'managed' | 'channel' | 'tmux' | null
+}
 
 // The newest session wearing a provider process. An older row on a live pid is
 // a ghost: Claude's channel moved on, and a transcript follower must too.
@@ -23,10 +35,10 @@ let seat = (pid: number) =>
 
 let state = (eid: string) =>
   db.prepare(
-    'select eid, pid, status from session where eid = ?',
-  ).get(eid) as Door | undefined
+    'select eid, pid, pane, status from session where eid = ?',
+  ).get(eid) as Row | undefined
 
-let terminal = (s?: Door) => {
+let terminal = (s?: Row) => {
   if (!s?.pid || seat(s.pid) != s.eid) return ''
   let comm = commOf(s.pid)
   return comm == 'claude' || comm == 'codex' ? comm : ''
@@ -40,10 +52,26 @@ export let present = (eid: string) => {
     (sessionActive.includes(String(s.status)) || !!terminal(s))
 }
 
-// A process is a message door only when it has an ear. Managed sessions are
-// tailed by us; external Claude has a channel; interactive Codex has neither.
-export let listening = (eid: string) => {
+// One provider-neutral routing decision. Managed sessions have the daemon bus;
+// external Claude has a content channel. Native Codex names a tmux route when
+// it has a pane, but its graph content remains queued for task_context.
+export let delivery = (eid: string): Delivery => {
   let s = state(eid)
-  return !!s &&
-    (sessionActive.includes(String(s.status)) || terminal(s) == 'claude')
+  if (!s) return { state: 'absent', transport: null }
+  if (sessionActive.includes(String(s.status))) {
+    return { state: 'reachable', transport: 'managed' }
+  }
+  let provider = terminal(s)
+  if (provider == 'claude') {
+    return { state: 'reachable', transport: 'channel' }
+  }
+  if (provider == 'codex') {
+    return {
+      state: 'queued',
+      transport: s.pane ? 'tmux' : null,
+    }
+  }
+  return { state: 'absent', transport: null }
 }
+
+export let reachable = (eid: string) => delivery(eid).state == 'reachable'

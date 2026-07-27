@@ -6,7 +6,7 @@ import { assertEquals } from '@std/assert'
 import { fakeClaude, fakeCodex } from './door_fake.ts'
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, db, open } = await import('./db.ts')
-let { listening, present } = await import('./door.ts')
+let { delivery, present, reachable } = await import('./door.ts')
 
 open()
 let uid = () => crypto.randomUUID()
@@ -32,13 +32,16 @@ let session = (
 Deno.test('a managed run is heard through its tail until it settles', () => {
   let going = session({}, { origin: 'managed', status: 'running' })
   let done = session({}, { origin: 'managed', status: 'completed' })
-  assertEquals(listening(going), true)
-  assertEquals(listening(done), false)
-  assertEquals(listening(uid()), false) // no such session
+  assertEquals(delivery(going), {
+    state: 'reachable',
+    transport: 'managed',
+  })
+  assertEquals(delivery(done), { state: 'absent', transport: null })
+  assertEquals(delivery(uid()), { state: 'absent', transport: null })
 })
 
 Deno.test('a session with no pid and no run has no door', () => {
-  assertEquals(listening(session({})), false)
+  assertEquals(delivery(session({})), { state: 'absent', transport: null })
 })
 
 Deno.test('a live claude answers, a dead one does not — and only the newest row on a pid is served', async () => {
@@ -46,15 +49,15 @@ Deno.test('a live claude answers, a dead one does not — and only the newest ro
   // An EXTERNAL session (the operator's case): origin says nothing, the
   // process says everything.
   let op = session({ pid: c.pid })
-  assertEquals(listening(op), true)
+  assertEquals(delivery(op), { state: 'reachable', transport: 'channel' })
   // A /clear reifies a new entity under the same process; the channel
   // follows it forward, so the row it left behind goes quiet.
   let after = session({ pid: c.pid })
-  assertEquals(listening(op), false)
-  assertEquals(listening(after), true)
+  assertEquals(reachable(op), false)
+  assertEquals(reachable(after), true)
   c.kill('SIGKILL')
   await c.status
-  assertEquals(listening(after), false)
+  assertEquals(reachable(after), false)
 })
 
 Deno.test("a subagent reifying does not take its operator's door (T-7288)", async () => {
@@ -63,22 +66,30 @@ Deno.test("a subagent reifying does not take its operator's door (T-7288)", asyn
   // A subagent is a tool call inside the operator's claude: its row is
   // newer, and wears no pid because a child has no process of its own.
   let kid = session({})
-  assertEquals(listening(op), true)
-  assertEquals(listening(kid), false)
+  assertEquals(reachable(op), true)
+  assertEquals(reachable(kid), false)
   c.kill('SIGKILL')
   await c.status
 })
 
 Deno.test('a live pid that is not a claude is not a door', () => {
-  assertEquals(listening(session({ pid: Deno.pid })), false) // this is deno
+  assertEquals(
+    delivery(session({ pid: Deno.pid })),
+    { state: 'absent', transport: null },
+  )
 })
 
-Deno.test('a live Codex is present for logs without claiming a message door', async () => {
+Deno.test('a live Codex pane is queued without claiming content surfaced', async () => {
   let c = await fakeCodex()
-  let eid = session({ pid: c.pid })
+  let eid = session({ pid: c.pid, pane: '%42' })
   assertEquals(present(eid), true)
-  assertEquals(listening(eid), false)
+  assertEquals(delivery(eid), { state: 'queued', transport: 'tmux' })
+  assertEquals(reachable(eid), false)
+  let noPane = session({ pid: c.pid })
+  assertEquals(delivery(eid), { state: 'absent', transport: null })
+  assertEquals(delivery(noPane), { state: 'queued', transport: null })
   c.kill('SIGKILL')
   await c.status
-  assertEquals(present(eid), false)
+  assertEquals(present(noPane), false)
+  assertEquals(delivery(noPane), { state: 'absent', transport: null })
 })

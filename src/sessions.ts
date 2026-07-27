@@ -33,7 +33,7 @@
 import { basename, dirname } from 'node:path'
 import { type Adapter, adapters, type Event, type Summary } from './adapters.ts'
 import { apply, db, record, snapshot } from './db.ts'
-import { listening, present } from './door.ts'
+import { present, reachable } from './door.ts'
 import { dispatch, trace } from './effects.ts'
 import { lapseChanges, rows } from './client.ts'
 import { materialize } from './persona.ts'
@@ -1230,7 +1230,7 @@ let resume = async (eid: string, cast: Cast) => {
     | Row
     | undefined
   if (!row) return
-  if (listening(eid)) return // somebody is home — the cast is delivery
+  if (reachable(eid)) return // somebody is home — the cast is delivery
   let msgs = unheard(eid)
   if (!msgs.length) return // nothing owed
   let body = msgs.map((m) => m.body).join('\n\n')
