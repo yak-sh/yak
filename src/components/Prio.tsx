@@ -9,7 +9,8 @@ let type = propAt('task', 'priority')!
 // like 1.5 included); only the colour tier is clamped to 0–3. Like the
 // Dot, the badge is paint — a host that wants a control hangs it on here.
 export let Prio = ({ p, ...rest }: { p: unknown; [x: string]: unknown }) => {
-  let face = formatProp(type, p)!
+  let face = formatProp(type, p)
+  if (!face) return null
   let n = Number(face.slice(1))
   return (
     <Badge mod={String(Math.min(Math.max(Math.round(n), 0), 3))} {...rest}>

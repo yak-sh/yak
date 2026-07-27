@@ -49,6 +49,7 @@ Deno.test('the type picks its face', () => {
 Deno.test('formatted scalars feed browser faces and badges', () => {
   let badge = vn(Prio({ p: 'p02' }))
   assertEquals(badge.props.children, 'P2')
+  assertEquals(Prio({ p: null }), null)
   assertEquals(formatProp(prop('bool'), 'YES'), 'true')
   assertEquals(formatProp(prop('number'), '+01.0'), '1')
 })
