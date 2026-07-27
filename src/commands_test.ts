@@ -163,6 +163,7 @@ Deno.test('status moves land on the focused task', () => {
   assertEquals(run('done', ctx(T)).msg, 'T-4 → done')
   assertThrows(() => run('done', ctx(B)), Error, 'B-3 is not a task')
   assertThrows(() => run('done', ctx()), Error, 'nothing focused')
+  assertThrows(() => run('done because', ctx(T)), Error, 'usage :done')
 })
 
 Deno.test('cancel: trailing words become a plain comment, same batch', () => {
@@ -188,6 +189,7 @@ Deno.test('open: an argument navigates, none is the status move', () => {
   assertEquals(run('open', ctx(T)).changes![0].comp, { status: 'open' })
   assertEquals(run('open', ctx(T)).go, undefined)
   assertThrows(() => run('open T-99', ctx()), Error, 'no such entity: T-99')
+  assertThrows(() => run('open T-4 extra', ctx()), Error, 'usage :open [T-42]')
 })
 
 Deno.test('claim: names a session, or takes the ambient one', () => {
@@ -202,6 +204,11 @@ Deno.test('claim: names a session, or takes the ambient one', () => {
   assertEquals(minted[1].comp, { session_eid: minted[0].eid })
   assertEquals(run('claim', ctx(T, 'sess-x')).changes!.length, 1) // ambient
   assertThrows(() => run('claim', ctx(T)), Error, 'name a session')
+  assertThrows(
+    () => run('claim sess-x extra', ctx(T)),
+    Error,
+    'usage :claim [session]',
+  )
 })
 
 Deno.test('set: the write grammar, routed and grouped', () => {
@@ -363,6 +370,11 @@ Deno.test('scribe: summon the desk onto a session brief', () => {
   assertEquals(run('scribe', ctx(S)).msg, 'S-1 → scribe')
   // anything that isn't a session: say so
   assertThrows(() => run('scribe', ctx(T)), Error, 'name a session')
+  assertThrows(
+    () => run('scribe S-1 extra', ctx()),
+    Error,
+    'usage :scribe [S-31]',
+  )
 })
 
 Deno.test('scribe: a busy desk queues the ask without a second spawn', () => {

@@ -100,10 +100,14 @@ let inherit = (ctx: Ctx): Record<string, unknown> => {
   return p ? { project_eid: p } : {}
 }
 
-// A command carries its own manual — example args and a one-line
-// summary — so the suggest list and the ghost can never drift from what
-// run() accepts: they read the same table.
-export type Command = { args: string; about: string; run: Verb }
+// A command carries its own manual and any finite word count, so every
+// renderer and dispatcher shares both the prompt and the refusal.
+export type Command = {
+  args: string
+  about: string
+  run: Verb
+  words?: [min: number, max: number]
+}
 
 export let commands: Record<string, Command> = {
   // :new speaks the spec grammar (client.ts): 'P1 .domain=Eng Ship it'
@@ -127,6 +131,7 @@ export let commands: Record<string, Command> = {
   open: {
     args: '[T-42]',
     about: 'reopen the task — or go to T-42',
+    words: [0, 1],
     run: (rest, ctx) => rest.trim() ? go(rest.trim(), ctx) : reopen(rest, ctx),
   },
   // :fix is capture-to-agent in one line: a bare id runs an agent on
@@ -176,8 +181,18 @@ export let commands: Record<string, Command> = {
       }
     },
   },
-  done: { args: '', about: 'move the focused task to done', run: move('done') },
-  wip: { args: '', about: 'move the focused task to wip', run: move('wip') },
+  done: {
+    args: '',
+    about: 'move the focused task to done',
+    words: [0, 0],
+    run: move('done'),
+  },
+  wip: {
+    args: '',
+    about: 'move the focused task to wip',
+    words: [0, 0],
+    run: move('wip'),
+  },
   cancel: {
     args: '[reason]',
     about: 'call off the focused task; the words become a comment',
@@ -331,6 +346,7 @@ export let commands: Record<string, Command> = {
   scribe: {
     args: '[S-31]',
     about: "have the scribe write that session's brief",
+    words: [0, 1],
     run: (rest, ctx) => {
       let name = rest.trim().split(/\s+/).filter(Boolean)[0]
       let target = name ? find(ctx.rows, name) : here(ctx)
@@ -363,6 +379,7 @@ export let commands: Record<string, Command> = {
   claim: {
     args: '[session]',
     about: 'lease the focused entity',
+    words: [0, 1],
     run: (rest, ctx) => {
       let r = here(ctx)
       let session = rest.trim() || ctx.session
@@ -406,6 +423,13 @@ export let run = (
   if (!name) return {}
   let v = { ...commands, ...local }[name]
   if (!v) throw new Error(`not a command: ${name}`)
+  let words = (rest ?? '').trim().split(/\s+/).filter(Boolean).length
+  if (v.words && (words < v.words[0] || words > v.words[1])) {
+    throw new Error(
+      `${name}: usage :${`${name} ${v.args}`.trim()} ` +
+        `(got ${words} argument${words == 1 ? '' : 's'})`,
+    )
+  }
   return v.run(rest ?? '', ctx)
 }
 

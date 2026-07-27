@@ -69,7 +69,6 @@ import {
   type Rules,
   STATIC_RULES,
 } from './doctor.ts'
-import { FILTERS, GRAMMAR } from './grammar.ts'
 import { type Edge, edges, type Snapshot, statuses } from './types.ts'
 // `import type` (not the repo's usual inline `{ type X }`): telemetry.ts
 // reaches for node:sqlite, and the CLI has no business loading a db driver.
@@ -80,242 +79,18 @@ import { filesFor, syncFiles } from './persona.ts'
 import { commit } from './git.ts'
 import { request } from './http.ts'
 import { commands, focusOf, run as runCommand } from './commands.ts'
+import {
+  cliVerbs,
+  help,
+  requestedHelp,
+  route,
+  usage,
+  validate,
+  validateCommand,
+} from './manual.ts'
+export { subjectUsage } from './manual.ts'
 
-// Every verb: usage, blurb, worked examples. `task help` derives all its
-// faces from this table plus grammar.ts, so what the CLI teaches and what
-// it accepts are the same text — extend the table, every door updates.
-type Verb = [usage: string, blurb: string, examples: string[]]
-
-let VERBS: Verb[] = [
-  ['tui', 'open the terminal UI', []],
-  [
-    'claude [--operator] [claude args...]',
-    'interactive claude: observer by default, --operator injects fleet work',
-    ['task claude', 'task claude --operator --continue'],
-  ],
-  [
-    'codex [codex args...]',
-    'interactive codex, fleet-wired: full access + the tasks lifecycle',
-    ['task codex', 'task codex resume --last'],
-  ],
-  ['list [filters...] [--json]', 'list tasks (filter grammar)', [
-    'task list .status=open .priority<=1',
-    'task list .project=harness .updated.at>="1 week ago"',
-    'task list .assignee=jeff --json',
-  ]],
-  ['new .title="..." [...]', 'create a task (bare words become the title)', [
-    'task new P1 .project=holdco Fix the flux capacitor',
-    'task new .title="Write the digest" .body="Details..." .domain=Eng',
-  ]],
-  [
-    'set <id> .prop=value ... [--comment=words]',
-    'patch any entity; --comment says why, as plain commentary, same batch',
-    [
-      'task set T-3 .status=done --comment="verified end-to-end"',
-      'task set T-3 .assignee=jeff .priority=1',
-      'task set S-12 ".body=@brief.md"   # @ = the CLI reads the file itself',
-    ],
-  ],
-  ['show <id> [--json]', 'one entity as a document (--json for scripts)', [
-    'task show T-3',
-    'task show T-3 --json',
-  ]],
-  ['history <id> [-n N] [--json]', "the entity's write history (journal)", [
-    'task history T-3 -n 10',
-  ]],
-  ['search <words...> [--json]', 'full-text search (trailing * = prefix)', [
-    'task search flux capac*',
-    'task search .project=holdco deploy',
-  ]],
-  [
-    'mail [filters|show|send|reply|search|files|doctor]',
-    'fleet mail: bare = your unread inbox; task mail --help spells the family',
-    [
-      'task mail',
-      'task mail show E-9',
-      'task mail send jeff Subject words --body=@draft.md',
-      'task mail reply E-9 "on it — landing today"',
-    ],
-  ],
-  [
-    'inbox [show <id> | archive <id>]',
-    'everything addressed to you (comments, knocks, mail); archive to hide',
-    [
-      'task inbox',
-      'task inbox show E-9   # marks it opened',
-      'task inbox archive E-9',
-    ],
-  ],
-  ['claim <id> [session]', 'lease a task (default: your own session id)', [
-    'task claim T-3 my-session-id',
-  ]],
-  ['release <id>', 'drop the lease', ['task release T-3']],
-  [
-    '<id> [show|is|as|edge] …',
-    'show or act on a subject; task <id> --help lists the exact grammar',
-    [
-      'task T-3',
-      'task T-3 requires T-9',
-      'task T-3 is done',
-      'task T-3 as json',
-    ],
-  ],
-  [
-    'spawn <id> [--provider=X] [--model=Y] [--effort=Z] [--persona=P-9]',
-    "dispatch a managed agent onto a task (defaults: your session's own)",
-    ['task spawn T-3', 'task spawn T-3 --provider=codex --model=gpt-5.4'],
-  ],
-  [
-    'comment <id> [text...] [--verdict=approved|rejected|changes_requested]',
-    'comment on any entity; a verdict makes the comment a review',
-    [
-      'task comment T-3 "blocked on the schema call"',
-      'task comment S-31 "status?"   # a comment on a session messages it',
-      'task comment T-3 --verdict=approved',
-    ],
-  ],
-  [
-    'dep <id> <type> <child> [--gone]',
-    'legacy edge spelling; prefer task <id> <type> <child>',
-    ['task T-3 requires T-9', 'task T-3 requires T-9 --gone'],
-  ],
-  ['backup', 'snapshot the db + commit/push the data dir', []],
-  [
-    'sync [--no-commit]',
-    "materialize personas into each project repo's .tasks/ (and commit)",
-    ['task sync', 'task sync --no-commit'],
-  ],
-  [
-    'remember <title...> [--body=…] [--type=feedback|project] [--scope=P-9]',
-    'save a memory: the title is the index line, the body the lesson',
-    [
-      'task remember "pipe a gate, lose its exit code" --type=feedback --scope=P-19',
-    ],
-  ],
-  [
-    'session <context|wrap|brief> …',
-    'the session lifecycle: boot digest, wrap, self-authored brief',
-    [
-      'task session context             # your digest (bare = preview)',
-      'task session context my-sess-id  # a raw sid reifies, by hand',
-      'task session brief --body=@-     # your narrative → the session doc',
-      'task session wrap',
-    ],
-  ],
-  ['telemetry [--errors] [--since=ISO] [-n N]', 'tool calls + crashes', [
-    'task telemetry --errors -n 20',
-  ]],
-  [
-    'wake <who> <when...> [target]',
-    'a knock on a timer: the row outlives every process, so it still lands',
-    [
-      'task wake S-31 in 60m',
-      'task wake homelab "9am tomorrow" T-42',
-      'task wake jeff after 8 hours',
-    ],
-  ],
-  [
-    ':<command> … | <id> :<command> …',
-    "the web bar's `:` vocabulary — same table, same words (task help :); " +
-    'the colon is optional for a verb no CLI name of its own claims',
-    [
-      'task :fix T-42',
-      'task :new P1 ship the fix',
-      'task T-42 :done',
-      'task :done   # your claim is the focus',
-    ],
-  ],
-  ['help [verb|grammar|:]', 'this text; grammar = filters + dot-params', [
-    'task help list',
-    'task help grammar',
-    'task help :fix',
-  ]],
-]
-
-// Aliases stay out of the menu, but their own help must admit and explain
-// them. New callers should learn the canonical spellings.
-let ALIASES: Verb[] = [
-  [
-    'ls [filters...] [--json]',
-    'legacy alias for task list',
-    ['task list .status=open'],
-  ],
-  [
-    'context [sid] [--hook]',
-    'legacy alias for task session context',
-    ['task session context'],
-  ],
-  [
-    'wrap [sid] [--hook]',
-    'legacy alias for task session wrap',
-    ['task session wrap'],
-  ],
-]
-
-let cliVerbs = new Set(
-  [...VERBS, ...ALIASES].map(([u]) => u.split(' ')[0]),
-)
 let formats = ['markdown', 'json']
-
-export let subjectUsage = (id = '<id>') =>
-  `task ${id} — subject-first verbs
-
-  task ${id} [show] [--json]        show the entity
-  task ${id} as ${formats.join('|')}       choose the show format
-  task ${id} is ${statuses.join('|')}  set task status
-  task ${id} ${edges.join('|')} <id> [--gone]
-                                      link or unlink an edge
-  task ${id} :<command> …            run a focused ':' command
-`
-
-let usage = `task — the entity graph, from a shell
-
-${
-  VERBS.map(([u, b]) =>
-    u.length > 29
-      ? `  task ${u}\n${' '.repeat(38)}${b}`
-      : `  task ${u.padEnd(29)}  ${b}`
-  ).join('\n')
-}
-
-dot-params route by prop (.title= → doc.title); where a prop lives in
-several components (pin/camera x,y,w,h) spell it out: .pin.x=12
-'task help grammar' spells the whole filter grammar; 'task help <verb>'
-shows examples.
-`
-
-let help = (args: string[]) => {
-  let [topic, id] = args
-  if (!topic) return console.log(usage.trim())
-  if (topic == 'subject') return console.log(subjectUsage(id).trim())
-  if (topic == 'grammar') {
-    return console.log(`${GRAMMAR}\n\n${FILTERS}`)
-  }
-  // The `:` vocabulary teaches from its own table — the one the web bar
-  // and TUI run — so the shell can never describe a command it doesn't
-  // share. `task help :` is the menu, `task help :fix` one entry.
-  if (topic.startsWith(':')) {
-    let name = topic.slice(1)
-    let show = name ? { [name]: commands[name] } : commands
-    if (name && !commands[name]) {
-      throw new Error(`not a command: ${name} (task help : lists them)`)
-    }
-    return console.log(
-      Object.entries(show)
-        .map(([n, c]) =>
-          `task :${`${n} ${c.args}`.trim().padEnd(34)} ${c.about}`
-        )
-        .join('\n'),
-    )
-  }
-  let hit = [...VERBS, ...ALIASES].find(([u]) => u.split(' ')[0] == topic)
-  if (!hit) throw new Error(`no such verb: ${topic} (task help lists them)`)
-  let [u, b, examples] = hit
-  console.log(`task ${u}\n  ${b}`)
-  if (examples.length) {
-    console.log(`\n${examples.map((e) => `  ${e}`).join('\n')}`)
-  }
-}
 
 export let claimedDigest = (mine: Row[]) =>
   mine
@@ -324,7 +99,7 @@ export let claimedDigest = (mine: Row[]) =>
     .join('\n')
 
 let bare = async () => {
-  console.log(usage.trim())
+  console.log(usage())
   let session = me()
   if (!session) return
   let [sess] = await query([`.session.id=${session}`], 'session')
@@ -334,64 +109,12 @@ let bare = async () => {
   if (digest) console.log(`\n${digest}`)
 }
 
-// A selected verb owns every option-shaped arg before it can touch the
-// graph. Passthrough launchers and `task new` stay out: claude/codex own
-// their flags, while new has its more useful --flag → .param correction.
-let options: Record<string, RegExp[]> = {
-  list: [/^--json$/],
-  ls: [/^--json$/],
-  set: [/^--comment=.*$/],
-  show: [/^--json$/],
-  history: [/^--json$/, /^-n\d*$/],
-  search: [/^--json$/],
-  mail: [/^--json$/, /^--all$/, /^--sent$/],
-  'mail show': [/^--json$/],
-  'mail send': [/^--body=.*$/, /^--from=.*$/],
-  'mail reply': [/^--body=.*$/, /^--from=.*$/],
-  'mail files': [/^--out(?:=.*)?$/],
-  inbox: [/^--json$/],
-  'inbox show': [/^--json$/],
-  'session context': [/^--hook$/, /^--subagent$/],
-  'session wrap': [/^--hook$/],
-  'session brief': [/^--body=.*$/],
-  spawn: [
-    /^--provider=.*$/,
-    /^--model=.*$/,
-    /^--effort=.*$/,
-    /^--persona=.*$/,
-  ],
-  dep: [/^--gone$/],
-  comment: [/^--verdict=.*$/],
-  remember: [/^--body=.*$/, /^--type=.*$/, /^--scope=.*$/],
-  context: [/^--hook$/, /^--subagent$/],
-  wrap: [/^--hook$/],
-  sync: [/^--no-commit$/],
-  telemetry: [/^--errors$/, /^--since=.*$/, /^-n\d*$/],
-}
-
-let leaf = (cmd: string | undefined, args: string[]) => {
-  if (!cmd) return
-  let subs: Record<string, string[]> = {
-    mail: ['show', 'send', 'reply', 'search', 'files', 'doctor'],
-    inbox: ['show', 'archive'],
-    session: ['context', 'wrap', 'brief'],
-  }
-  let sub = args[0]
-  return subs[cmd]?.includes(sub) ? `${cmd} ${sub}` : cmd
-}
-
-let option = (arg: string) =>
-  arg != '--' && (arg.startsWith('--') || /^-[A-Za-z]/.test(arg))
-
-let optionName = (arg: string) =>
-  arg.startsWith('--') ? arg.split('=')[0] : arg.slice(0, 2)
-
 // Subject-first is syntax sugar only. The returned route enters the same
 // handlers as the canonical subcommands, so graph behavior has one owner.
 export let subject = (id: string | undefined, args: string[]) => {
   if (
-    !id || id == '--help' || cliVerbs.has(id) || id.startsWith(':') ||
-    option(id)
+    !id || id == '--help' || cliVerbs.has(id) || commands[id] ||
+    id.startsWith(':') || id.startsWith('-')
   ) return
   let [verb, ...objects] = args
   if (!verb) return { cmd: 'show', args: [id] }
@@ -438,24 +161,6 @@ export let subject = (id: string | undefined, args: string[]) => {
   // optional objects whose subject-first reading would be ambiguous.
   if (verb.startsWith(':')) return
   throw new Error(`no subject verb: ${verb} (task ${id} --help)`)
-}
-
-let rejectOptions = (verb: string | undefined, args: string[]) => {
-  if (
-    !verb || ['claude', 'codex', 'new'].includes(verb) ||
-    verb.startsWith(':') || (commands[verb] && !cliVerbs.has(verb)) ||
-    args[0]?.startsWith(':')
-  ) return
-  let allow = options[verb] ?? []
-  let bad = args.find((a) => option(a) && !allow.some((p) => p.test(a)))
-  if (!bad) return
-  let name = optionName(bad)
-  if ((verb == 'wrap' || verb == 'session wrap') && name == '--body') {
-    throw new Error(
-      "wrap takes no --body — did you mean 'task session brief --body=…'?",
-    )
-  }
-  throw new Error(`${verb} does not take ${name}`)
 }
 
 let split = (args: string[]) => {
@@ -605,19 +310,6 @@ let seek = async (args: string[]) => {
 // ---- task mail: the mail door (letters only — mail-comp wearers; hooks
 // and event comments never surface here) ----
 
-let MAIL_USAGE = `task mail — fleet mail in the graph
-  task mail [filters...]            your unread inbox, newest last
-  task mail --all | --sent          the fleet's mail / outbound only
-  task mail show <id>               the mail + its thread; marks it read
-  task mail send <to> <subj...> --body=@f|-|@- [--from=...]  (-/@- = stdin)
-  task mail reply <id> [text... | --body=@f|-|@-]
-  task mail search <words...>       full-text search, mail only
-  task mail files <id> [--out DIR]  download attachments
-  task mail doctor                  every book address vs the CF rules
-<to> is a raw address or a graph reference (alias, P-9, eid) — the
-address book resolves at delivery. Filters speak the query grammar:
-  task mail --all .from~=stripe .verified=0`
-
 // The body, by preference: --body= (@file reads the file — the safe
 // door for long prose; - and @- read piped stdin), then trailing words.
 // stdin is never read implicitly: a harness holding the pipe open but
@@ -663,7 +355,7 @@ let mailList = async (args: string[]) => {
   let preds = args.filter((a) => !['--json', '--all', '--sent'].includes(a))
     .map((a) => {
       let p = pred(a)
-      if (!p) throw new Error(`not a mail filter: ${a}\n\n${MAIL_USAGE}`)
+      if (!p) throw new Error(`not a mail filter: ${a}\n\n${help(['mail'])}`)
       return p
     })
   let all = rows(await snapshot())
@@ -702,7 +394,7 @@ let mailList = async (args: string[]) => {
 let mailShow = async (args: string[]) => {
   let json = args.includes('--json')
   let [id] = args.filter((a) => a != '--json')
-  if (!id) throw new Error(`task mail show <id>\n\n${MAIL_USAGE}`)
+  if (!id) throw new Error(help(['mail', 'show']))
   let snap = await snapshot()
   let all = rows(snap)
   let row = find(all, id)
@@ -734,7 +426,7 @@ let mailSend = async (args: string[]) => {
   let flags = args.filter((a) => a.startsWith('--'))
   let [to, ...subj] = args.filter((a) => !a.startsWith('--'))
   if (!to || !subj.length) {
-    throw new Error(`task mail send <to> <subject...>\n\n${MAIL_USAGE}`)
+    throw new Error(help(['mail', 'send']))
   }
   let body = await bodyOf(flags, [])
   if (!body) {
@@ -757,7 +449,7 @@ let mailSend = async (args: string[]) => {
 let mailReply = async (args: string[]) => {
   let flags = args.filter((a) => a.startsWith('--'))
   let [id, ...text] = args.filter((a) => !a.startsWith('--'))
-  if (!id) throw new Error(`task mail reply <id> [text...]\n\n${MAIL_USAGE}`)
+  if (!id) throw new Error(help(['mail', 'reply']))
   let all = rows(await snapshot())
   let row = find(all, id)
   if (!row?.comps.mail) throw new Error(`not a mail: ${id}`)
@@ -794,7 +486,7 @@ let mailFiles = async (args: string[]) => {
     else rest.push(args[i])
   }
   let [id] = rest
-  if (!id) throw new Error(`task mail files <id> [--out DIR]\n\n${MAIL_USAGE}`)
+  if (!id) throw new Error(help(['mail', 'files']))
   let door = `http://${host()}/mail/${encodeURIComponent(id)}/files`
   let res = await request(door)
   if (!res.ok) throw new Error(await res.text())
@@ -850,7 +542,7 @@ let mailDoctor = async () => {
 // FTS, screened to mail — the one search surface, one more door.
 let mailSeek = async (args: string[]) => {
   let q = args.join(' ')
-  if (!q) throw new Error(`task mail search <words...>\n\n${MAIL_USAGE}`)
+  if (!q) throw new Error(help(['mail', 'search']))
   let hits = (await search(q)).filter((h) => h.kind == 'mail')
   if (!hits.length) return console.log('(no hits)')
   for (let h of hits) {
@@ -867,7 +559,7 @@ let mail = (args: string[]) => {
   if (sub == 'search') return mailSeek(rest)
   if (sub == 'files') return mailFiles(rest)
   if (sub == 'doctor') return mailDoctor()
-  if (sub == 'help' || sub == '--help') return console.log(MAIL_USAGE)
+  if (sub == 'help' || sub == '--help') return console.log(help(['mail']))
   return mailList(args)
 }
 
@@ -875,11 +567,6 @@ let mail = (args: string[]) => {
 // and claimed tasks, knocks at your door, project mail — filtered to what
 // you haven't archived (T-7006). `show` marks an item opened (reading IS
 // the mark); `archive` is the ONE act that hides. Generalizes `task mail`.
-let INBOX_USAGE = `task inbox — your notification inbox in the graph
-  task inbox [--json]              everything addressed to you, unread first
-  task inbox show <id> [--json]    the item whole; marks it opened
-  task inbox archive <id>          hide it — the one act that removes it`
-
 let inboxLine = (r: Row) => {
   let dot = isUnread(r) ? '●' : '·'
   let body = String(r.comps.doc?.body ?? r.comps.doc?.title ?? '')
@@ -911,7 +598,7 @@ let inboxList = async (args: string[]) => {
 let inboxShow = async (args: string[]) => {
   let json = args.includes('--json')
   let [id] = args.filter((a) => a != '--json')
-  if (!id) throw new Error(`task inbox show <id>\n\n${INBOX_USAGE}`)
+  if (!id) throw new Error(help(['inbox', 'show']))
   let snap = await snapshot()
   let all = rows(snap)
   let row = find(all, id)
@@ -927,7 +614,7 @@ let inboxShow = async (args: string[]) => {
 // inbox predicate. Deliberate — no sweep or subagent can do this for you.
 let inboxArchive = async (args: string[]) => {
   let [id] = args
-  if (!id) throw new Error(`task inbox archive <id>\n\n${INBOX_USAGE}`)
+  if (!id) throw new Error(help(['inbox', 'archive']))
   let row = find(rows(await snapshot()), id)
   if (!row) throw new Error(`no such entity: ${id}`)
   await send([{ eid: row.eid, name: 'archived', comp: {} }])
@@ -938,7 +625,7 @@ let inbox = (args: string[]) => {
   let [sub, ...rest] = args
   if (sub == 'show') return inboxShow(rest)
   if (sub == 'archive') return inboxArchive(rest)
-  if (sub == 'help' || sub == '--help') return console.log(INBOX_USAGE)
+  if (sub == 'help' || sub == '--help') return console.log(help(['inbox']))
   return inboxList(args)
 }
 
@@ -1551,29 +1238,15 @@ let sessionBrief = async (args: string[]) => {
 
 // Session-lifecycle verbs live here — root `task context` / `task wrap`
 // stay as quiet aliases: hook lines in the wild call them (T-4554).
-let SESSION_USAGE = `task session — the lifecycle of the session you are
-  task session context [sid] [--hook]   reify + digest (the SessionStart
-                                        hook); a raw sid mints the entity
-  task session wrap [sid] [--hook]      over: release claims, capture the
-                                        brief (the SessionEnd hook)
-  task session brief [text... | --body=@f|-|@-]
-                                        write your own brief (survives wrap)`
-
 let session = (args: string[]) => {
   let [sub, ...rest] = args
-  if (
-    ['context', 'wrap', 'brief'].includes(sub) &&
-    (rest.includes('--help') || rest.includes('-h'))
-  ) {
-    return console.log(SESSION_USAGE)
-  }
   if (sub == 'context') return context(rest)
   if (sub == 'wrap') return wrap(rest)
   if (sub == 'brief') return sessionBrief(rest)
   if (!sub || sub == 'help' || sub == '--help') {
-    return console.log(SESSION_USAGE)
+    return console.log(help(['session']))
   }
-  throw new Error(`not a session verb: ${sub}\n\n${SESSION_USAGE}`)
+  throw new Error(`not a session verb: ${sub}\n\n${help(['session'])}`)
 }
 
 // What the tools have been doing: MCP calls, HTTP writes and browser
@@ -1732,56 +1405,58 @@ let tui = async () => {
 if (import.meta.main) {
   let [cmd, ...rest] = Deno.args
   try {
-    let routed = subject(cmd, rest)
-    if (routed) {
-      cmd = routed.cmd
-      rest = routed.args
-    }
-    let asksHelp = rest.includes('--help') || rest.includes('-h')
-    if (!asksHelp) rejectOptions(leaf(cmd, rest), rest)
-    if (cmd?.startsWith(':')) await colon(undefined, [cmd, ...rest])
-    // `<verb> --help` shows the verb's help, not the verb run with a stray flag.
-    // mail/inbox/session own their own richer --help, so let them through.
-    else if (
-      cmd && cmd != 'mail' && cmd != 'inbox' && cmd != 'session' &&
-      (rest.includes('--help') || rest.includes('-h'))
-    ) {
-      help([cmd])
-    } else if (cmd == 'tui') await tui()
-    else if (cmd == 'claude') await claude(rest)
-    else if (cmd == 'codex') await codex(rest)
-    else if (cmd == 'list' || cmd == 'ls') await list(rest)
-    else if (cmd == 'new') await create(rest)
-    else if (cmd == 'set') await set(rest)
-    else if (cmd == 'show') await show(rest)
-    else if (cmd == 'history') await past(rest)
-    else if (cmd == 'search') await seek(rest)
-    else if (cmd == 'mail') await mail(rest)
-    else if (cmd == 'inbox') await inbox(rest)
-    else if (cmd == 'session') await session(rest)
-    else if (cmd == 'claim') await claim(rest)
-    else if (cmd == 'spawn') await spawn(rest)
-    else if (cmd == 'comment') await comment(rest)
-    else if (cmd == 'dep') await dep(rest)
-    else if (cmd == 'backup') await backup()
-    else if (cmd == 'remember') await remember(rest)
-    else if (cmd == 'context') await context(rest)
-    else if (cmd == 'wrap') await wrap(rest)
-    else if (cmd == 'sync') await sync(rest)
-    else if (cmd == 'release') await release(rest)
-    else if (cmd == 'telemetry') await telemetry(rest)
-    else if (cmd == 'help' || cmd == '--help') help(rest)
-    else if (!cmd) await bare()
-    // `task T-42 :done` — an id ahead of a colon line names the focus.
-    else if (rest[0]?.startsWith(':')) await colon(cmd, rest)
-    // Anything left that the shared table knows is that verb, colon
-    // optional: `task wake homelab in 60m` is `task :wake …`. The verbs
-    // above win the name — this is the tail of the chain, so a CLI verb
-    // never loses its own spelling to the palette's.
-    else if (cmd && commands[cmd]) await colon(undefined, [cmd, ...rest])
+    let asked = requestedHelp(Deno.args)
+    if (asked != null) console.log(asked)
     else {
-      console.log(usage.trim())
-      Deno.exit(2)
+      let routed = subject(cmd, rest)
+      if (routed) {
+        cmd = routed.cmd
+        rest = routed.args
+      }
+      let selected = route(cmd, rest)
+      if (selected) {
+        validate(selected.name, selected.manual, selected.args)
+      } else if (cmd?.startsWith(':')) {
+        validateCommand(cmd.slice(1), rest)
+      } else if (rest[0]?.startsWith(':')) {
+        validateCommand(rest[0].slice(1), rest.slice(1))
+      } else if (cmd && commands[cmd]) {
+        validateCommand(cmd, rest)
+      }
+      if (cmd?.startsWith(':')) await colon(undefined, [cmd, ...rest])
+      else if (cmd == 'tui') await tui()
+      else if (cmd == 'claude') await claude(rest)
+      else if (cmd == 'codex') await codex(rest)
+      else if (cmd == 'list' || cmd == 'ls') await list(rest)
+      else if (cmd == 'new') await create(rest)
+      else if (cmd == 'set') await set(rest)
+      else if (cmd == 'show') await show(rest)
+      else if (cmd == 'history') await past(rest)
+      else if (cmd == 'search') await seek(rest)
+      else if (cmd == 'mail') await mail(rest)
+      else if (cmd == 'inbox') await inbox(rest)
+      else if (cmd == 'session') await session(rest)
+      else if (cmd == 'claim') await claim(rest)
+      else if (cmd == 'spawn') await spawn(rest)
+      else if (cmd == 'comment') await comment(rest)
+      else if (cmd == 'dep') await dep(rest)
+      else if (cmd == 'backup') await backup()
+      else if (cmd == 'remember') await remember(rest)
+      else if (cmd == 'context') await context(rest)
+      else if (cmd == 'wrap') await wrap(rest)
+      else if (cmd == 'sync') await sync(rest)
+      else if (cmd == 'release') await release(rest)
+      else if (cmd == 'telemetry') await telemetry(rest)
+      else if (cmd == 'help' || cmd == '--help') console.log(help(rest))
+      else if (!cmd) await bare()
+      // `task T-42 :done` — an id ahead of a colon line names the focus.
+      else if (rest[0]?.startsWith(':')) await colon(cmd, rest)
+      // CLI verbs win shared names; the remaining palette words may omit `:`.
+      else if (cmd && commands[cmd]) await colon(undefined, [cmd, ...rest])
+      else {
+        console.log(usage())
+        Deno.exit(2)
+      }
     }
   } catch (e) {
     console.error(`task: ${(e as Error).message} (server: ${host()})`)

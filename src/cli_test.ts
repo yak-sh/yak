@@ -84,6 +84,7 @@ Deno.test('subject: sentences route through the existing CLI verbs', () => {
 Deno.test('subject: old commands and explicit focused commands keep their door', () => {
   assertEquals(subject('show', ['T-3']), undefined)
   assertEquals(subject('dep', ['T-3', 'requires', 'T-9']), undefined)
+  assertEquals(subject('fix', ['T-3']), undefined)
   assertEquals(subject('T-3', [':done']), undefined)
 })
 
@@ -332,6 +333,22 @@ Deno.test('task session wrap help never runs the hook verb', async () => {
   assertMatch(text(out.stdout), /task session wrap \[sid\] \[--hook\]/)
 })
 
+Deno.test('nested and palette help always resolves before effects', async () => {
+  let cases: [string[], RegExp][] = [
+    [['mail', 'show', '--help'], /^task mail show/],
+    [['inbox', 'archive', '--help'], /^task inbox archive/],
+    [[':fix', '--help'], /^task :fix/],
+    [['fix', '--help'], /^task :fix/],
+    [['T-1', ':done', '--help'], /^task :done/],
+  ]
+  for (let [args, expected] of cases) {
+    let out = await cli(...args)
+    assertEquals(out.code, 0)
+    assertMatch(text(out.stdout), expected)
+    assertEquals(text(out.stderr), '')
+  }
+})
+
 Deno.test('task wrap rejects body before touching the session', async () => {
   let out = await cli('wrap', 'test-session', '--body=@brief.md')
   assertEquals(out.code, 1)
@@ -350,6 +367,21 @@ Deno.test('task verbs reject unknown flags before their effects', async () => {
     text(out.stderr),
     /release does not take --wat/,
   )
+})
+
+Deno.test('task verbs reject surplus words and missing values before effects', async () => {
+  let cases: [string[], RegExp][] = [
+    [['claim', 'T-1', 'sess', 'extra'], /claim expected 1–2 arguments/],
+    [['inbox', 'archive', 'E-1', 'extra'], /expected 1 argument, got 2/],
+    [['backup', 'extra'], /backup expected 0 arguments/],
+    [['history', 'T-1', '-n'], /-n needs a positive number/],
+  ]
+  for (let [args, expected] of cases) {
+    let out = await cli(...args)
+    assertEquals(out.code, 1)
+    assertEquals(text(out.stdout), '')
+    assertMatch(text(out.stderr), expected)
+  }
 })
 
 Deno.test('task set rejects surplus positional arguments', async () => {
