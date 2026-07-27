@@ -8,6 +8,7 @@ Deno.test('serverFile: recognizes the backend graph only', () => {
     let [path, want] of [
       ['/repo/src/server.ts', true],
       ['/repo/src/reload.ts', true],
+      ['/repo/src/tmux.ts', true],
       ['/repo/src/components/Card.tsx', false],
       ['/repo/src/styles.css', false],
       ['/repo/src/server.ts.old', false],

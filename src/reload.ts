@@ -17,6 +17,7 @@ export let serverFiles = [
   'client.ts',
   'sessions.ts',
   'door.ts',
+  'tmux.ts',
   'served.ts',
   'proc.ts',
   'adapters.ts',
