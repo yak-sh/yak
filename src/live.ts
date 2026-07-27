@@ -16,6 +16,7 @@ import {
   type Ent,
   type Live,
   type Pinned,
+  type Session,
   settled,
   type Snapshot,
   stamped,
@@ -42,6 +43,7 @@ export let problem = signal('')
 let pinZs = new Map<string, Signal<number>>()
 let rowSignals = new Map<string, Signal<Comps | undefined>>()
 let relationSignals = new Map<string, Signal<Dep[]>>()
+let childSignals = new Map<string, Signal<Dep[]>>()
 export let census = signal<string[]>([])
 let canvasVersion = signal(0)
 let noRelations: Dep[] = []
@@ -49,6 +51,10 @@ let refreshBoards = (_eids: Set<string>) => {}
 let refreshPins = (_eids: Set<string>) => {}
 let refreshComments = (_eids: Set<string>) => {}
 let refreshFolds = (_eids: Set<string>) => {}
+let refreshBacklinks = (_eids: Set<string>) => {}
+let refreshJobs = (_eids: Set<string>) => {}
+let refreshBoardLinks = (_eids: Set<string>) => {}
+let refreshFacets = (_eids: Set<string>) => {}
 
 // One pass over deps gives every parent a stable seed. The narrow signals
 // below own render invalidation; this computed only avoids an edge-list scan
@@ -59,6 +65,15 @@ let relationIndex = computed(() => {
     let mine = found.get(d.parent)
     if (mine) mine.push(d)
     else found.set(d.parent, [d])
+  }
+  return found
+})
+let childIndex = computed(() => {
+  let found = new Map<string, Dep[]>()
+  for (let d of deps.value) {
+    let mine = found.get(d.child)
+    if (mine) mine.push(d)
+    else found.set(d.child, [d])
   }
   return found
 })
@@ -84,7 +99,20 @@ export let relations = (eid: string) => {
   return found
 }
 
-let publish = (eids: Set<string>, parentEids: Set<string>) =>
+let childRelations = (eid: string) => {
+  let current = untracked(() => childIndex.value.get(eid)) ?? noRelations
+  let found = childSignals.get(eid)
+  if (!found) {
+    childSignals.set(eid, found = signal(current))
+  } else if (found.peek() !== current) found.value = current
+  return found
+}
+
+let publish = (
+  eids: Set<string>,
+  parentEids: Set<string>,
+  childEids: Set<string>,
+) =>
   batch(() => {
     for (let eid of eids) {
       let found = rowSignals.get(eid)
@@ -95,6 +123,10 @@ let publish = (eids: Set<string>, parentEids: Set<string>) =>
       if (found) {
         found.value = relationIndex.value.get(eid) ?? noRelations
       }
+    }
+    for (let eid of childEids) {
+      let found = childSignals.get(eid)
+      if (found) found.value = childIndex.value.get(eid) ?? noRelations
     }
   })
 
@@ -107,10 +139,17 @@ let resetSignals = () =>
     for (let [eid, found] of relationSignals) {
       found.value = relationIndex.value.get(eid) ?? noRelations
     }
+    for (let [eid, found] of childSignals) {
+      found.value = childIndex.value.get(eid) ?? noRelations
+    }
     refreshBoards(touched)
     refreshPins(touched)
     refreshComments(touched)
     refreshFolds(touched)
+    refreshBacklinks(touched)
+    refreshJobs(touched)
+    refreshBoardLinks(touched)
+    refreshFacets(touched)
   })
 
 // A z-only pin patch binds straight to its one DOM attribute. The fallback
@@ -229,6 +268,7 @@ export let applyLocal = (changes: Change[]) => {
   let edges: Dep[] = []
   let changedRows = new Set<string>()
   let changedParents = new Set<string>()
+  let changedChildren = new Set<string>()
   let changedPins = new Set<string>()
   let changedCanvas = false
   let changedCensus = false
@@ -265,6 +305,7 @@ export let applyLocal = (changes: Change[]) => {
         if (d.parent == eid || d.child == eid) {
           edges.push(d)
           changedParents.add(d.parent)
+          changedChildren.add(d.child)
         }
       }
       deps.value = deps.value.filter((d) => d.parent != eid && d.child != eid)
@@ -290,6 +331,7 @@ export let applyLocal = (changes: Change[]) => {
       if (nextDeps != deps.value) {
         deps.value = nextDeps
         changedParents.add(eid)
+        changedChildren.add(d.child)
       }
       continue
     }
@@ -324,11 +366,15 @@ export let applyLocal = (changes: Change[]) => {
   batch(() => {
     if (changedCensus) census.value = Object.keys(next)
     if (changedCanvas) canvasVersion.value++
-    publish(changedRows, changedParents)
+    publish(changedRows, changedParents, changedChildren)
     refreshBoards(changedRows)
     refreshPins(changedPins)
     refreshComments(changedRows)
     refreshFolds(changedRows)
+    refreshBacklinks(changedRows)
+    refreshJobs(changedRows)
+    refreshBoardLinks(changedRows)
+    refreshFacets(changedRows)
     for (let [eid, z] of zs) {
       let live = pinZs.get(eid)
       if (live) live.value = z
@@ -510,11 +556,15 @@ let evict = (eids: string[]) => {
     batch(() => {
       census.value = Object.keys(next)
       if (changedCanvas) canvasVersion.value++
-      publish(gone, new Set())
+      publish(gone, new Set(), new Set())
       refreshBoards(gone)
       refreshPins(gone)
       refreshComments(gone)
       refreshFolds(gone)
+      refreshBacklinks(gone)
+      refreshJobs(gone)
+      refreshBoardLinks(gone)
+      refreshFacets(gone)
     })
   }
 }
@@ -1001,73 +1051,147 @@ export let rows = (): Row[] =>
     comps: r as Record<string, Record<string, unknown>>,
   }))
 
-// The domains in use, distinct and sorted — what the domain picker
-// suggests. domain is free text by convention (types.ts): the vocabulary
-// is whatever the graph already says, never a table to keep in step.
-export let domains = computed(() =>
-  [...new Set(Object.values(cache.value).flatMap((r) => r.task?.domain || []))]
-    .sort()
-)
-
-// Every project, oldest first — what the project picker lists. A project
-// is a doc + project tag and its name IS its doc.title (types.ts), so
-// there's nothing to resolve but the entity.
-export let projects = (): Ent[] =>
-  Object.entries(cache.value)
+let facetGraph = cache.peek()
+let facetVersion = signal(0)
+let domainList: string[] = []
+let projectIds: string[] = []
+let sessionIds: string[] = []
+let shelfIds: string[] = []
+let scanFacets = () => {
+  domainList = [
+    ...new Set(
+      Object.values(cache.peek()).flatMap((r) => r.task?.domain || []),
+    ),
+  ].sort()
+  projectIds = Object.entries(cache.peek())
     .filter(([, r]) => r.project)
-    .map(([eid]) => ent(eid))
-    .sort((a, b) => a.num - b.num)
+    .sort(([, a], [, b]) =>
+      (a.entity?.num ?? Infinity) - (b.entity?.num ?? Infinity)
+    )
+    .map(([eid]) => eid)
+  sessionIds = Object.entries(cache.peek())
+    .filter(([, r]) => r.session)
+    .map(([eid]) => eid)
+  shelfIds = Object.entries(cache.peek())
+    .filter(([, r]) => r.shelf)
+    .map(([eid]) => eid)
+  facetGraph = cache.peek()
+}
+let facets = () => {
+  facetVersion.value
+  if (facetGraph != cache.peek()) scanFacets()
+}
 
-// Everything said ABOUT an entity, oldest first — comments are entities
-// whose comment.target_eid points here.
-export let commentsOn = (eid: string): Ent[] =>
-  Object.entries(cache.value)
-    .filter(([, r]) => r.comment?.target_eid == eid)
-    .map(([id]) => ent(id))
-    .sort((a, b) => a.num - b.num)
+// Pickers watch the domain/project census, then each returned project row.
+// An unrelated patch changes neither and leaves an open editor asleep.
+export let domains = {
+  get value() {
+    facets()
+    return domainList
+  },
+}
+export let projects = (): Ent[] => {
+  facets()
+  return projectIds.map(ent)
+}
+export let sessionRows = (): [string, Session][] => {
+  facets()
+  return sessionIds.flatMap((eid) => {
+    let s = row(eid).value?.session
+    return s ? [[eid, s]] : []
+  })
+}
+export let shelfFor = (client: string) => {
+  facets()
+  return shelfIds.find((eid) => cache.peek()[eid]?.shelf?.client_eid == client)
+}
+
+refreshFacets = (eids: Set<string>) => {
+  let changed = [...eids].some((eid) => {
+    let before = facetGraph[eid]
+    let after = cache.peek()[eid]
+    return before?.task?.domain != after?.task?.domain ||
+      !!before?.project != !!after?.project ||
+      before?.entity?.num != after?.entity?.num ||
+      !!before?.session != !!after?.session ||
+      before?.shelf?.client_eid != after?.shelf?.client_eid
+  })
+  facetGraph = cache.peek()
+  if (!changed) return
+  scanFacets()
+  facetVersion.value++
+}
 
 type CommentSet = {
   graph: Record<string, Comps>
   ids: Set<string>
+  talk: Set<string>
+  list: Signal<string[]>
   count: Signal<number>
 }
 let commentSets = new Map<string, CommentSet>()
-let commentIds = (target: string) =>
-  new Set(
-    Object.entries(cache.value)
-      .filter(([, r]) => r.comment?.target_eid == target && !r.comment?.event)
-      .map(([eid]) => eid),
-  )
+let commentIds = (target: string) => {
+  let ids = new Set<string>()
+  let talk = new Set<string>()
+  for (let [eid, r] of Object.entries(cache.value)) {
+    if (r.comment?.target_eid != target) continue
+    ids.add(eid)
+    if (!r.comment.event) talk.add(eid)
+  }
+  return { ids, talk }
+}
 
-// A tile subscribes to its own tally. Comment birth, death, retargeting,
-// and event changes update only the targets whose count changed.
-export let commentCount = (target: string) => {
+let commentSet = (target: string) => {
   let found = commentSets.get(target)
   if (!found) {
-    let ids = untracked(() => commentIds(target))
-    found = { graph: cache.peek(), ids, count: signal(ids.size) }
+    let { ids, talk } = untracked(() => commentIds(target))
+    found = {
+      graph: cache.peek(),
+      ids,
+      talk,
+      list: signal([...ids]),
+      count: signal(talk.size),
+    }
     commentSets.set(target, found)
   } else if (found.graph != cache.peek()) {
-    found.ids = untracked(() => commentIds(target))
+    let { ids, talk } = untracked(() => commentIds(target))
+    found.ids = ids
+    found.talk = talk
     found.graph = cache.peek()
-    found.count.value = found.ids.size
+    found.list.value = [...ids]
+    found.count.value = talk.size
   }
-  return found.count
+  return found
 }
+
+// A face subscribes to its own comment list and tally. Birth, death,
+// retargeting, and event changes update only the targets they affect.
+export let commentsOn = (target: string): Ent[] =>
+  commentSet(target).list.value.map(ent).sort((a, b) => a.num - b.num)
+export let commentCount = (target: string) => commentSet(target).count
 
 refreshComments = (eids: Set<string>) => {
   for (let [target, set] of commentSets) {
-    let changed = false
+    let listed = false
+    let counted = false
     for (let eid of eids) {
       let had = set.ids.has(eid)
+      let spoke = set.talk.has(eid)
       let c = cache.peek()[eid]?.comment
-      let wants = c?.target_eid == target && !c.event
-      if (had == wants) continue
-      wants ? set.ids.add(eid) : set.ids.delete(eid)
-      changed = true
+      let wants = c?.target_eid == target
+      let talks = wants && !c?.event
+      if (had != wants) {
+        wants ? set.ids.add(eid) : set.ids.delete(eid)
+        listed = true
+      }
+      if (spoke != talks) {
+        talks ? set.talk.add(eid) : set.talk.delete(eid)
+        counted = true
+      }
     }
     set.graph = cache.peek()
-    if (changed) set.count.value = set.ids.size
+    if (listed) set.list.value = [...set.ids]
+    if (counted) set.count.value = set.talk.size
   }
 }
 
@@ -1198,42 +1322,136 @@ let eidProps = [...new Set([...Object.keys(vocab), ...Object.keys(stamped)])]
       .filter(([, t]) => typeof t == 'object' && 'eid' in t)
       .map(([p]) => [c, p] as [string, string])
   )
-export let backlinks = (eid: string) =>
-  Object.entries(cache.value).flatMap(([from, r]) =>
-    eidProps
-      .filter(([c, p]) =>
-        (r[c as keyof typeof r] as Record<string, unknown>)?.[p] == eid
-      )
-      .map(([c, p]) => ({ from, via: `${c}.${p}` }))
-  )
+type Backlink = { from: string; via: string }
+type BacklinkSet = {
+  graph: Record<string, Comps>
+  value: Signal<Backlink[]>
+}
+let backlinkSets = new Map<string, BacklinkSet>()
+let linksFrom = (from: string, r: Comps | undefined, target: string) =>
+  !r ? [] : eidProps
+    .filter(([c, p]) =>
+      (r[c as keyof typeof r] as Record<string, unknown>)?.[p] == target
+    )
+    .map(([c, p]) => ({ from, via: `${c}.${p}` }))
+let scanBacklinks = (target: string) =>
+  Object.entries(cache.value).flatMap(([from, r]) => linksFrom(from, r, target))
 
-// The task a session is ON: the newest task it holds a claim over (a
-// claim lives on the claimed entity, pointing back at the session), else
-// its managed request — the claim is the live lease, the request the
-// birth spec that outlives release. Null between jobs.
-export let jobOf = (e: Ent): string | null =>
+export let backlinks = (target: string) => {
+  let found = backlinkSets.get(target)
+  if (!found) {
+    found = {
+      graph: cache.peek(),
+      value: signal(untracked(() => scanBacklinks(target))),
+    }
+    backlinkSets.set(target, found)
+  } else if (found.graph != cache.peek()) {
+    found.graph = cache.peek()
+    found.value.value = untracked(() => scanBacklinks(target))
+  }
+  return found.value.value
+}
+
+refreshBacklinks = (eids: Set<string>) => {
+  for (let [target, set] of backlinkSets) {
+    let changed = [...eids].some((eid) =>
+      JSON.stringify(linksFrom(eid, set.graph[eid], target)) !=
+        JSON.stringify(linksFrom(eid, cache.peek()[eid], target))
+    )
+    set.graph = cache.peek()
+    if (changed) set.value.value = scanBacklinks(target)
+  }
+}
+
+let scanJob = (session: string): string | null =>
   Object.entries(cache.value)
-    .filter(([, r]) => r.task && r.claim?.session_eid == e.eid)
+    .filter(([, r]) => r.task && r.claim?.session_eid == session)
     .toSorted(([, a], [, b]) =>
       String(b.claim?.claimed_at ?? '').localeCompare(
         String(a.claim?.claimed_at ?? ''),
       )
-    )[0]?.[0] ??
-    e.session?.requested_task_eid ?? null
+    )[0]?.[0] ?? null
+
+type JobSet = {
+  graph: Record<string, Comps>
+  value: Signal<string | null>
+}
+let jobSets = new Map<string, JobSet>()
+
+// The task a session is ON: the newest task it holds a claim over, else
+// its managed request. Each session watches only claim-bearing rows.
+export let jobOf = (e: Ent): string | null => {
+  let found = jobSets.get(e.eid)
+  if (!found) {
+    found = {
+      graph: cache.peek(),
+      value: signal(untracked(() => scanJob(e.eid))),
+    }
+    jobSets.set(e.eid, found)
+  } else if (found.graph != cache.peek()) {
+    found.graph = cache.peek()
+    found.value.value = untracked(() => scanJob(e.eid))
+  }
+  return found.value.value ?? e.session?.requested_task_eid ?? null
+}
+
+refreshJobs = (eids: Set<string>) => {
+  for (let [session, set] of jobSets) {
+    let changed = [...eids].some((eid) => {
+      let before = set.graph[eid]
+      let after = cache.peek()[eid]
+      let mine = before?.claim?.session_eid == session ||
+        after?.claim?.session_eid == session
+      return mine &&
+        (before?.claim !== after?.claim || !!before?.task != !!after?.task)
+    })
+    set.graph = cache.peek()
+    if (changed) set.value.value = scanJob(session)
+  }
+}
 
 // The edges that hold an entity FROM ABOVE — every dependency whose child
 // is this eid. refs/kids read downward; this is the climb back up, how a
 // task names the parents that contain or require it.
-export let parents = (eid: string) => deps.value.filter((d) => d.child == eid)
+export let parents = (eid: string) => childRelations(eid).value
 
-// The saved boards that WATCH an entity — a board's reference lives
-// inside its query string ('.project_eid=<eid>&…'), not in an eid-typed
-// column, so backlinks can't see it. Eids are uuids: a substring hit IS
-// a reference — no parse needed, no false positives possible.
-export let boardsOver = (eid: string) =>
-  Object.keys(cache.value).filter((b) =>
-    cache.value[b].board?.query?.includes(eid)
+type BoardLinks = {
+  graph: Record<string, Comps>
+  value: Signal<string[]>
+}
+let boardLinks = new Map<string, BoardLinks>()
+let scanBoardLinks = (target: string) =>
+  Object.keys(cache.value).filter((eid) =>
+    cache.value[eid].board?.query?.includes(target)
   )
+
+// A board query carries refs as text, outside the schema's eid columns.
+// The target face watches only board query rows that gain or lose its eid.
+export let boardsOver = (target: string) => {
+  let found = boardLinks.get(target)
+  if (!found) {
+    found = {
+      graph: cache.peek(),
+      value: signal(untracked(() => scanBoardLinks(target))),
+    }
+    boardLinks.set(target, found)
+  } else if (found.graph != cache.peek()) {
+    found.graph = cache.peek()
+    found.value.value = untracked(() => scanBoardLinks(target))
+  }
+  return found.value.value
+}
+
+refreshBoardLinks = (eids: Set<string>) => {
+  for (let [target, set] of boardLinks) {
+    let changed = [...eids].some((eid) =>
+      !!set.graph[eid]?.board?.query?.includes(target) !=
+        !!cache.peek()[eid]?.board?.query?.includes(target)
+    )
+    set.graph = cache.peek()
+    if (changed) set.value.value = scanBoardLinks(target)
+  }
+}
 
 // The highest stacking order on a canvas — a raised card gets topZ + 1.
 // The pin presence test is load-bearing: with `?.` alone a nullish canvas

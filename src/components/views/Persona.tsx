@@ -1,5 +1,5 @@
 import { type Change, type Ent } from '../../types.ts'
-import { byWarmth, cache, deps, ent, mutate } from '../../live.ts'
+import { byWarmth, cache, ent, mutate, relations } from '../../live.ts'
 import { block } from '../ui.tsx'
 import { dragData } from '../drag.ts'
 import { Entity } from '../Entity.tsx'
@@ -29,7 +29,7 @@ let TIERS = [
 
 export let Persona = ({ e }: { e: Ent }) => {
   let now = Date.now()
-  let mine = deps.value.filter((d) => d.parent == e.eid)
+  let mine = relations(e.eid).value
   let linked = (t: string) =>
     mine.filter((d) => d.type == t)
       .map((d) => ent(d.child))

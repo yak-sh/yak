@@ -6,17 +6,21 @@ import {
   assertAgree,
   backlinks,
   boardPost,
+  boardsOver,
   boardTasks,
   byWarmth,
   cache,
   census,
   commentCount,
+  commentsOn,
   config,
   deps,
   domains,
   ent,
   gated,
+  jobOf,
   landSub,
+  parents,
   pinned,
   projects,
   relations,
@@ -164,6 +168,99 @@ Deno.test('backlinks: stamped associations count', () => {
     via: 'session.requested_task_eid',
   }])
   assertEquals(backlinks('s1'), [{ from: 'c1', via: 'claim.session_eid' }])
+})
+
+Deno.test('relationship indices wake only their affected targets', () => {
+  cache.value = {
+    index_target: {
+      entity: { eid: 'index_target', num: 1 },
+      task: { eid: 'index_target', status: 'open', priority: 1 },
+    },
+    index_other: {
+      entity: { eid: 'index_other', num: 2 },
+      doc: { eid: 'index_other', title: 'other', body: '' },
+    },
+    index_session: {
+      entity: { eid: 'index_session', num: 3 },
+      session: { eid: 'index_session', id: 'session' },
+    },
+  }
+  deps.value = []
+  let runs = { comments: 0, links: 0, parents: 0, job: 0, boards: 0 }
+  let stops = [
+    effect(() => {
+      commentsOn('index_target')
+      commentCount('index_target').value
+      runs.comments++
+    }),
+    effect(() => {
+      backlinks('index_target')
+      runs.links++
+    }),
+    effect(() => {
+      parents('index_target')
+      runs.parents++
+    }),
+    effect(() => {
+      jobOf(ent('index_session'))
+      runs.job++
+    }),
+    effect(() => {
+      boardsOver('index_target')
+      runs.boards++
+    }),
+  ]
+  try {
+    applyLocal([{
+      eid: 'index_other',
+      name: 'doc',
+      comp: { title: 'changed' },
+    }])
+    assertEquals(runs, {
+      comments: 1,
+      links: 1,
+      parents: 1,
+      job: 1,
+      boards: 1,
+    })
+
+    applyLocal([
+      {
+        eid: 'index_comment',
+        name: 'comment',
+        comp: { target_eid: 'index_target' },
+      },
+      {
+        eid: 'index_other',
+        name: 'task',
+        comp: { assignee_eid: 'index_target' },
+      },
+      {
+        eid: 'index_parent',
+        name: 'dependency',
+        comp: { type: 'reads', child_eid: 'index_target' },
+      },
+      {
+        eid: 'index_target',
+        name: 'claim',
+        comp: { session_eid: 'index_session' },
+      },
+      {
+        eid: 'index_board',
+        name: 'board',
+        comp: { query: '.project_eid=index_target' },
+      },
+    ])
+    assertEquals(runs, {
+      comments: 2,
+      links: 2,
+      parents: 2,
+      job: 2,
+      boards: 2,
+    })
+  } finally {
+    for (let stop of stops) stop()
+  }
 })
 
 // byWarmth: the .order=hot board sort — a well-recalled old thing

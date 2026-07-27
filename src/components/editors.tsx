@@ -2,7 +2,7 @@ import { type ComponentChildren, type JSX } from 'preact'
 import { useContext, useRef, useState } from 'preact/hooks'
 import { formatProp, propAt } from '../props.ts'
 import { comps, idOf, type PropType, statuses } from '../types.ts'
-import { cache, domains, ent, mutate, problem } from '../live.ts'
+import { cache, census, domains, ent, mutate, problem } from '../live.ts'
 import { ago, block, focus, pretty, Surround } from './ui.tsx'
 import { Dot } from './Dot.tsx'
 import { Edit } from './Edit.tsx'
@@ -243,7 +243,7 @@ let EidEdit = ({ ...p }: EditorProps) => {
   )
 }
 let candidates = (target: string) =>
-  Object.keys(cache.value)
+  census.value
     .map((eid) => ent(eid))
     .filter((e) =>
       target ? !!(e as unknown as Record<string, unknown>)[target] : !!e.doc

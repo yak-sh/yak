@@ -1,6 +1,15 @@
 import { useEffect, useRef } from 'preact/hooks'
 import { signal } from '@preact/signals'
-import { cache, clientId, mutate, pinned, topZ, uuid } from '../live.ts'
+import {
+  cache,
+  clientId,
+  mutate,
+  pinned,
+  sessionRows,
+  shelfFor,
+  topZ,
+  uuid,
+} from '../live.ts'
 import { awake, type Session, standing } from '../types.ts'
 import { block } from './ui.tsx'
 import { Dot } from './Dot.tsx'
@@ -58,17 +67,11 @@ let shown = (eid: string, s: Session) =>
     !seen.value.includes(eid))
 
 // LIVE: the digest a human wants without opening every session.
-let live = () =>
-  Object.entries(cache.value)
-    .flatMap(([eid, r]) =>
-      r.session && shown(eid, r.session) ? [[eid, r.session] as const] : []
-    )
+let live = () => sessionRows().filter(([eid, session]) => shown(eid, session))
 
 // This client's shelf canvas, if it's been born — the canvas tagged with a
 // shelf pointing back at us. null until the first drop mints one.
-export let shelf = () =>
-  Object.entries(cache.value)
-    .find(([, r]) => r.shelf?.client_eid == clientId())?.[0] ?? null
+export let shelf = () => shelfFor(clientId()) ?? null
 
 // Mint the shelf on first use: a canvas plus the tag binding it to us.
 export let shelfMint = () => {
