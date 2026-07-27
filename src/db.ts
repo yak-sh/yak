@@ -1551,6 +1551,28 @@ export let apply = (
         .get(eid) as Change['comp'] | undefined
       if (row) extra.push({ eid, name, comp: row })
     }
+    // A create may omit columns that SQLite defaults. The persisted row is
+    // complete, so make the last write for that new component complete too:
+    // a live cache then sees the same writable shape as a fresh snapshot in
+    // this one atomic batch. Read only `cmps` — server-owned columns still
+    // ride through their explicit stamped echoes, never as client-writable
+    // data.
+    for (let key of createdComps) {
+      let cut = key.indexOf(' ')
+      let name = key.slice(0, cut)
+      let eid = key.slice(cut + 1)
+      let cols = cmps[name]
+      if (!cols.length) continue
+      let row = db.prepare(
+        `select ${cols.map(sqlName).join(', ')} from ${sqlName(name)}
+         where eid = ?`,
+      ).get(eid) as Change['comp'] | undefined
+      if (!row) continue
+      let i = changes.findLastIndex((change) =>
+        change.eid == eid && change.name == name && change.comp != null
+      )
+      if (i >= 0) changes[i] = { ...changes[i], comp: row }
+    }
     // Births ride the return AFTER stamping, so the spine arrives final.
     // A mint rolled back by its savepoint (or deleted later in the batch)
     // has no row — the select is the guard. entity === eid: only identity

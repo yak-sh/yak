@@ -107,12 +107,22 @@ let contracts = [
 
 Deno.test('create + patch + column clear', () => {
   let t = uid()
-  apply(db, [
+  let out = apply(db, [
     { eid: t, name: 'doc', comp: { title: 'A', body: 'b' } },
     { eid: t, name: 'task', comp: { status: 'open' } },
   ])
   assertEquals(comp(t, 'doc')?.title, 'A')
   assertEquals(comp(t, 'task')?.priority, 0) // schema default
+  assertEquals(
+    out.find((c) => c.eid == t && c.name == 'task')?.comp,
+    {
+      status: 'open',
+      priority: 0,
+      project_eid: null,
+      assignee_eid: null,
+      domain: null,
+    },
+  ) // the live batch carries the same defaults as a snapshot
   apply(db, [{ eid: t, name: 'doc', comp: { title: 'B' } }])
   assertEquals(comp(t, 'doc')?.title, 'B')
   assertEquals(comp(t, 'doc')?.body, 'b') // patch: untouched column survives
