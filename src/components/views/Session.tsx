@@ -40,6 +40,7 @@ let Frame = block('div', 'Session', {
   Stop: 'button',
   Body: 'div',
   Facts: 'details',
+  Diagnostics: 'details',
   Gist: 'summary',
   Kv: 'div',
   Key: 'span',
@@ -80,6 +81,7 @@ let {
   Stop,
   Body: Panel,
   Facts,
+  Diagnostics,
   Gist,
   Kv,
   Key,
@@ -149,6 +151,11 @@ let when = (t?: string | null) => t ? new Date(t).toLocaleString() : null
 let span = (ms: number) => {
   let s = Math.round(ms / 1000)
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`
+}
+
+let lineLabel = (text: string) => {
+  let n = text.replace(/\n$/, '').split('\n').length
+  return `${n} ${n == 1 ? 'line' : 'lines'}`
 }
 
 // Weave the heard comments into the log by time: only says wear a
@@ -502,8 +509,16 @@ export let Session = ({ e }: { e: Ent }) => {
           )}
           {live && <Think>✳ {doing(rows.at(-1)?.row)}</Think>}
         </Log>
-        {/* stderr: unordered diagnostics, never inside the log's seqs */}
-        {log.stderr && <Err>{log.stderr}</Err>}
+        {
+          /* stderr is durable evidence, not transcript: it has no seqs and
+            resumes append to it. Routine noise folds; failed runs show it. */
+        }
+        {log.stderr && (
+          <Diagnostics open={status == 'failed'}>
+            <Gist>diagnostics · {lineLabel(log.stderr)}</Gist>
+            <Err>{log.stderr}</Err>
+          </Diagnostics>
+        )}
         {unsent.length > 0 && (
           <Unsent>
             {unsent.map((c) => <Note key={c.eid} c={c} />)}

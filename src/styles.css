@@ -2307,9 +2307,9 @@ a[data-ref]:hover {
 .Session_Stop:hover {
   border-color: var(--red);
 }
-/* The facts fold behind one dim line; the kv grid (and the stamp) wait
-   inside the disclosure. */
-.Session_Facts {
+/* Facts and unordered diagnostics fold behind one dim line. */
+.Session_Facts,
+.Session_Diagnostics {
   font-size: 11px;
   color: var(--dim);
 }
@@ -2324,7 +2324,7 @@ a[data-ref]:hover {
 .Session_Gist::after {
   content: ' ▸';
 }
-.Session_Facts[open] .Session_Gist::after {
+:is(.Session_Facts, .Session_Diagnostics)[open] .Session_Gist::after {
   content: ' ▾';
 }
 .Session_Kv {
@@ -2542,7 +2542,7 @@ a[data-ref]:hover {
   overflow-wrap: anywhere;
 }
 .Session_Err {
-  margin: 0;
+  margin: var(--half-gap) 0 0;
   padding: var(--half-gap);
   font-size: 11px;
   color: var(--dim); /* unordered diagnostics, dim beside the ordered log */
