@@ -183,6 +183,8 @@ Docs and personas should state **how to behave — current rules only, brief and
 
 When direction arrives, **edit to match — delete first.** Find the line that produced the wrong behavior and remove or rewrite it; append only when nothing existing covers it. The goal is entropy reduction: less in context, not more.
 
+If you find war stories (especially in personas), clean it up. Don't continue adding more dates and directives. Clean the context.
+
 ---
 
 # M-5839 spawn discipline — delegate through one-shot subagents
