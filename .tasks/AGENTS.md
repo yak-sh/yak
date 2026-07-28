@@ -363,6 +363,20 @@ seams wider or leakier, that's the wrong direction.
 
 ---
 
+# M-7048 task inbox — one door for everything addressed to you (comments, knocks, mail)
+
+`task inbox` lists every item addressed to you — comments on your session, comments on tasks you claim, knocks to you or your actor, and project mail — unread first (`●` unread, `·` read).
+
+- `task inbox` — the list
+- `task inbox show <id>` — render it whole; reading stamps it opened
+- `task inbox archive <id>` — the one act that hides an item
+
+Archiving is the only thing that removes an item, so no sweep, subagent, or other reader can drain your inbox behind you.
+
+This is the door for "is anything waiting for me?" — worth a look when you start a pass, and again when you pick up a task, since something may already be waiting on it.
+
+---
+
 # M-3715 delegation discipline
 
 Delegation in the fleet, so that if our system breaks the work still continues on the floor and the board stays the truth about who is doing what:
@@ -479,18 +493,6 @@ So when you learn something about your own behavior:
 - **Keep a small, firm floor.** A few things are policy on purpose — always do what is right; never lie; the moral and secrets bright lines. They hold firm *because* your judgment can be wrong or under attack, and the cost of crossing them is irreversible. Small floor held firm; open field above it, held with open hands.
 
 Use your memories to be what you are, freely.
-
----
-
-# M-7048 task inbox — one door for everything addressed to you (comments, knocks, mail)
-
-`task inbox` (T-7009) generalizes `task mail`: it lists every entity addressed to your session and scope — comments on your session, comments on tasks you claim, knocks to you/your actor, and project mail — filtered to what you have NOT archived, unread first.
-
-- `task inbox` — the list (unread ● weighted first, read · last)
-- `task inbox show <id>` — render it whole and stamp `opened` (reading IS the mark)
-- `task inbox archive <id>` — the ONE act that hides an item
-
-Read-state is the notification-lifecycle stamps (T-7006), not mail.read_at: `opened` = read, `archived` = hidden, both server-stamped {at,by}. Only `archived` removes an item, so no sweep or subagent can drain your inbox. Predicates live in client.ts (inInbox/isUnread/addressed/inboxItem/readerFor); `task mail` still works as the mail-scoped view.
 
 ---
 
