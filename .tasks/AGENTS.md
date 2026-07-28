@@ -482,6 +482,18 @@ Use your memories to be what you are, freely.
 
 ---
 
+# M-7048 task inbox — one door for everything addressed to you (comments, knocks, mail)
+
+`task inbox` (T-7009) generalizes `task mail`: it lists every entity addressed to your session and scope — comments on your session, comments on tasks you claim, knocks to you/your actor, and project mail — filtered to what you have NOT archived, unread first.
+
+- `task inbox` — the list (unread ● weighted first, read · last)
+- `task inbox show <id>` — render it whole and stamp `opened` (reading IS the mark)
+- `task inbox archive <id>` — the ONE act that hides an item
+
+Read-state is the notification-lifecycle stamps (T-7006), not mail.read_at: `opened` = read, `archived` = hidden, both server-stamped {at,by}. Only `archived` removes an item, so no sweep or subagent can drain your inbox. Predicates live in client.ts (inInbox/isUnread/addressed/inboxItem/readerFor); `task mail` still works as the mail-scoped view.
+
+---
+
 ## Memory Index
 
 *Recall a body by id (memory_recall / task show).*
