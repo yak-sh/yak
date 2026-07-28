@@ -163,8 +163,8 @@ Deno.test('commentCount: cold targets share one graph scan', () => {
   assertEquals(scans, 1)
 })
 
-// Backlinks read the SCHEMA — wire vocabulary plus server-stamped columns
-// (a session's requested_task_eid is an edge no client may write).
+// Backlinks read the SCHEMA — every declared *_eid association points back at
+// its target, whoever is allowed to write the column.
 Deno.test('backlinks: stamped associations count', () => {
   cache.value = {
     t1: {
