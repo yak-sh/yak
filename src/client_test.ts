@@ -1202,15 +1202,15 @@ Deno.test('mailChanges/replyChanges: to as given, Re: derived, thread edge set',
   let made = mailChanges({ to: 'P-20', subject: 'Hello', body: 'hi' })
   assertEquals(made.changes[0].comp, { title: 'Hello', body: 'hi' })
   assertEquals(made.changes[1].comp, { to: 'P-20' }) // unresolved on purpose
+  // No sender rides along: `from` is off the wire, stamped by the server
+  // from the writing actor, so a builder cannot offer to sign the letter.
   let full = mailChanges({
     to: 'x@y.test',
     subject: 's',
-    from: 'us@x.test',
     replyTo: 'some-eid',
   })
   assertEquals(full.changes[1].comp, {
     to: 'x@y.test',
-    from: 'us@x.test',
     reply_to_eid: 'some-eid',
   })
   assertEquals(reSubject('question'), 'Re: question')

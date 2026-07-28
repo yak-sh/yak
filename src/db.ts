@@ -1575,6 +1575,34 @@ export let apply = (
         .get(eid) as Change['comp'] | undefined
       if (row) extra.push({ eid, name, comp: row })
     }
+    // The mail SENDER, derived. `from` is off the wire (types.ts), so this
+    // is its only writer: a letter speaks as the actor that WROTE it, the
+    // same resolution behind created.by. No caller can sign as anyone else
+    // (T-9511), and nothing signs as the fleet default any more (T-9489).
+    //
+    // An actor with no address leaves `from` empty rather than failing the
+    // batch — writing the graph is not sending, and a fixture that mints a
+    // mail is not asking to deliver one. The refusal belongs at delivery,
+    // where mailed() stamps the error onto the row and the board shows it.
+    //
+    // Inbound arrives through this door too (inbound.ts mint), and its
+    // message_id — the never-send mark — is stamped just AFTER apply. So a
+    // swept row is stamped here as well and corrected a moment later by that
+    // same stamp, before dispatch hands anything to delivery. Only the
+    // intermediate cast ever carries the derived value.
+    let addrOf = db.prepare('select address from email where eid = ?')
+    let sender = db.prepare('update mail set "from" = ? where eid = ?')
+    for (let key of createdComps) {
+      if (!key.startsWith('mail ')) continue
+      let eid = key.slice(5)
+      if (!alive.get(eid)) continue
+      let addr = actor
+        ? (addrOf.get(actor) as { address: string } | undefined)?.address
+        : undefined
+      if (!addr) continue
+      sender.run(addr, eid)
+      extra.push({ eid, name: 'mail', comp: { eid, from: addr } })
+    }
     // A create may omit columns that SQLite defaults. The persisted row is
     // complete, so make the last write for that new component complete too:
     // a live cache then sees the same writable shape as a fresh snapshot in

@@ -9,6 +9,7 @@ let { addressOf, FANOUT_PENDING, fanout, mailed, rfcId } = await import(
 )
 let { canon, payload } = await import('./mailer.ts')
 let { channelEvents } = await import('./channel.ts')
+let { comps } = await import('./types.ts')
 let { assertEquals, assertMatch, assertThrows } = await import('@std/assert')
 
 // Hermetic: the host's own mailer env must never reach these tests.
@@ -46,6 +47,15 @@ let somebody = (slug: string, address?: string) => {
   ])
   return eid
 }
+
+// Who a fixture's letters are FROM. A mail is signed by its author now —
+// apply() stamps `from` from the writing actor — so a letter that expects to
+// be delivered names one, passed as the writer exactly as a session's actor
+// would resolve. Unsigned mail is refused at delivery, on purpose.
+let author = somebody('sender', 'sender@bot.test')
+// An actor with no address on file — its letters cannot be signed, so
+// delivery must refuse them rather than sign them as somebody else.
+let unsigned = somebody('unsigned')
 
 // The capture mailer: appends argv + stdin to a file, so a test reads
 // back exactly what delivery would have handed the world.
@@ -86,17 +96,25 @@ Deno.test('mailed: delivers, stamps the receipt, sweep replay is a no-op', async
   Deno.env.set('TASKS_MAIL_CMD', mailer(dir))
   let to = somebody('op', 'op@x.test')
   let m = uid()
-  apply(db, [
-    { eid: m, name: 'doc', comp: { title: 'hello', body: 'the body' } },
-    { eid: m, name: 'mail', comp: { to: 'op' } },
-  ])
+  apply(
+    db,
+    [
+      { eid: m, name: 'doc', comp: { title: 'hello', body: 'the body' } },
+      { eid: m, name: 'mail', comp: { to: 'op' } },
+    ],
+    undefined,
+    author,
+  )
   await mailed(cast)(m, {})
   let r = row(m)
   assertMatch(String(r.acted_at), /T/)
   assertEquals(r.to_addr, 'op@x.test') // the envelope copy
   assertEquals(r.error, null)
   assertEquals(mails(dir).length, 1)
-  assertMatch(mails(dir)[0], /--to op@x.test hello :: the body/)
+  assertMatch(
+    mails(dir)[0],
+    /--to op@x.test --from sender@bot.test hello :: the body/,
+  )
   // the audit is denormalized: a later address edit rewrites nothing
   apply(db, [{ eid: to, name: 'email', comp: { address: 'moved@x.test' } }])
   assertEquals(row(m).to_addr, 'op@x.test')
@@ -109,46 +127,66 @@ Deno.test('mailed: failure and misconfiguration stamp errors, visibly', async ()
   let dir = Deno.makeTempDirSync()
   Deno.env.set('TASKS_MAIL_CMD', mailer(dir, true))
   let m = uid()
-  apply(db, [
-    { eid: m, name: 'doc', comp: { title: 's', body: 'b' } },
-    { eid: m, name: 'mail', comp: { to: 'x@y.test' } },
-  ])
+  apply(
+    db,
+    [
+      { eid: m, name: 'doc', comp: { title: 's', body: 'b' } },
+      { eid: m, name: 'mail', comp: { to: 'x@y.test' } },
+    ],
+    undefined,
+    author,
+  )
   await mailed(cast)(m, {})
   assertMatch(String(row(m).error), /exit 1: boom/)
   assertMatch(String(row(m).acted_at), /T/) // ran, failed — no retry storm
   let noAddr = uid()
-  apply(db, [
-    { eid: noAddr, name: 'doc', comp: { title: 's', body: 'b' } },
-    { eid: noAddr, name: 'mail', comp: { to: 'addressless' } },
-  ])
+  apply(
+    db,
+    [
+      { eid: noAddr, name: 'doc', comp: { title: 's', body: 'b' } },
+      { eid: noAddr, name: 'mail', comp: { to: 'addressless' } },
+    ],
+    undefined,
+    author,
+  )
   await mailed(cast)(noAddr, {})
   assertMatch(String(row(noAddr).error), /no address on file/)
   assertEquals(row(noAddr).to_addr, null) // nothing resolved, nothing claimed
   Deno.env.delete('TASKS_MAIL_CMD')
   let bare = uid()
-  apply(db, [
-    { eid: bare, name: 'doc', comp: { title: 's', body: 'b' } },
-    { eid: bare, name: 'mail', comp: { to: 'x@y.test' } },
-  ])
+  apply(
+    db,
+    [
+      { eid: bare, name: 'doc', comp: { title: 's', body: 'b' } },
+      { eid: bare, name: 'mail', comp: { to: 'x@y.test' } },
+    ],
+    undefined,
+    author,
+  )
   await mailed(cast)(bare, {})
   assertMatch(String(row(bare).error), /no mailer configured/)
 })
 
 Deno.test('stamped trio never rides the wire', () => {
   let m = uid()
-  apply(db, [
-    { eid: m, name: 'doc', comp: { title: 's', body: 'b' } },
-    {
-      eid: m,
-      name: 'mail',
-      comp: {
-        to: 'x@y.test',
-        acted_at: 'forged',
-        to_addr: 'forged@x',
-        sent_id: 'forged@send',
+  apply(
+    db,
+    [
+      { eid: m, name: 'doc', comp: { title: 's', body: 'b' } },
+      {
+        eid: m,
+        name: 'mail',
+        comp: {
+          to: 'x@y.test',
+          acted_at: 'forged',
+          to_addr: 'forged@x',
+          sent_id: 'forged@send',
+        },
       },
-    },
-  ])
+    ],
+    undefined,
+    author,
+  )
   assertEquals(row(m).acted_at, null)
   assertEquals(row(m).to_addr, null)
   assertEquals(row(m).sent_id, null)
@@ -282,22 +320,36 @@ Deno.test('mailed: reply_to_eid resolves to --in-reply-to at delivery', async ()
   let dir = Deno.makeTempDirSync()
   Deno.env.set('TASKS_MAIL_CMD', mailer(dir))
   let orig = uid()
-  apply(db, [
-    { eid: orig, name: 'doc', comp: { title: 'question', body: 'asked' } },
-    { eid: orig, name: 'mail', comp: { to: 'us@x.test', from: 'them@y.test' } },
-  ])
+  apply(
+    db,
+    [
+      { eid: orig, name: 'doc', comp: { title: 'question', body: 'asked' } },
+      {
+        eid: orig,
+        name: 'mail',
+        comp: { to: 'us@x.test', from: 'them@y.test' },
+      },
+    ],
+    undefined,
+    author,
+  )
   // inbound provenance is server-stamped (the inbound.ts idiom)
   db.prepare('update mail set message_id = ? where eid = ?')
     .run('msg:123:<orig-id@y.test>', orig)
   let reply = uid()
-  apply(db, [
-    { eid: reply, name: 'doc', comp: { title: 'Re: question', body: 'a' } },
-    {
-      eid: reply,
-      name: 'mail',
-      comp: { to: 'them@y.test', reply_to_eid: orig },
-    },
-  ])
+  apply(
+    db,
+    [
+      { eid: reply, name: 'doc', comp: { title: 'Re: question', body: 'a' } },
+      {
+        eid: reply,
+        name: 'mail',
+        comp: { to: 'them@y.test', reply_to_eid: orig },
+      },
+    ],
+    undefined,
+    author,
+  )
   await mailed(cast)(reply, {})
   assertMatch(
     mails(dir).at(-1)!,
@@ -305,30 +357,45 @@ Deno.test('mailed: reply_to_eid resolves to --in-reply-to at delivery', async ()
   )
   // replying to our OWN sent mail threads through sent_id
   let sent = uid()
-  apply(db, [
-    { eid: sent, name: 'doc', comp: { title: 'opener', body: 'b' } },
-    { eid: sent, name: 'mail', comp: { to: 'them@y.test' } },
-  ])
+  apply(
+    db,
+    [
+      { eid: sent, name: 'doc', comp: { title: 'opener', body: 'b' } },
+      { eid: sent, name: 'mail', comp: { to: 'them@y.test' } },
+    ],
+    undefined,
+    author,
+  )
   await mailed(cast)(sent, {})
   db.prepare('update mail set sent_id = ? where eid = ?')
     .run('cf-abc@sender', sent)
   let follow = uid()
-  apply(db, [
-    { eid: follow, name: 'doc', comp: { title: 'Re: opener', body: 'c' } },
-    {
-      eid: follow,
-      name: 'mail',
-      comp: { to: 'them@y.test', reply_to_eid: sent },
-    },
-  ])
+  apply(
+    db,
+    [
+      { eid: follow, name: 'doc', comp: { title: 'Re: opener', body: 'c' } },
+      {
+        eid: follow,
+        name: 'mail',
+        comp: { to: 'them@y.test', reply_to_eid: sent },
+      },
+    ],
+    undefined,
+    author,
+  )
   await mailed(cast)(follow, {})
   assertMatch(mails(dir).at(-1)!, /--in-reply-to cf-abc@sender Re: opener/)
   // no id resolvable: delivered unthreaded, never an error
   let dark = uid()
-  apply(db, [
-    { eid: dark, name: 'doc', comp: { title: 'unthreadable', body: 'd' } },
-    { eid: dark, name: 'mail', comp: { to: 'x@y.test', reply_to_eid: sent } },
-  ])
+  apply(
+    db,
+    [
+      { eid: dark, name: 'doc', comp: { title: 'unthreadable', body: 'd' } },
+      { eid: dark, name: 'mail', comp: { to: 'x@y.test', reply_to_eid: sent } },
+    ],
+    undefined,
+    author,
+  )
   db.prepare('update mail set sent_id = null where eid = ?').run(sent)
   await mailed(cast)(dark, {})
   let last = mails(dir).at(-1)!
@@ -417,21 +484,31 @@ Deno.test('mailed: native send stamps sent_id, threads, logs dir=out', async () 
   )
   try {
     let orig = uid()
-    apply(db, [
-      { eid: orig, name: 'doc', comp: { title: 'q', body: 'asked' } },
-      { eid: orig, name: 'mail', comp: { to: 'us@x.test' } },
-    ])
+    apply(
+      db,
+      [
+        { eid: orig, name: 'doc', comp: { title: 'q', body: 'asked' } },
+        { eid: orig, name: 'mail', comp: { to: 'us@x.test' } },
+      ],
+      undefined,
+      author,
+    )
     db.prepare('update mail set message_id = ? where eid = ?')
       .run('msg:9:<orig@y.test>', orig)
     let m = uid()
-    apply(db, [
-      { eid: m, name: 'doc', comp: { title: 'Re: q', body: 'answered' } },
-      {
-        eid: m,
-        name: 'mail',
-        comp: { to: 'cafe_car@bot.yak.sh', reply_to_eid: orig },
-      },
-    ])
+    apply(
+      db,
+      [
+        { eid: m, name: 'doc', comp: { title: 'Re: q', body: 'answered' } },
+        {
+          eid: m,
+          name: 'mail',
+          comp: { to: 'cafe_car@bot.yak.sh', reply_to_eid: orig },
+        },
+      ],
+      undefined,
+      author,
+    )
     await mailed(cast)(m, {})
     let r = row(m)
     assertEquals(r.error, null)
@@ -441,8 +518,8 @@ Deno.test('mailed: native send stamps sent_id, threads, logs dir=out', async () 
     assertMatch(hits[0].url, /accounts\/acct-1\/email\/sending\/send$/)
     assertEquals(hits[0].auth, 'Bearer dummy-token')
     assertEquals(hits[0].body.from, {
-      address: 'holdco@bot.yak.sh',
-      name: 'holdco',
+      address: 'sender@bot.test',
+      name: 'sender',
     })
     assertEquals(hits[0].body.to, ['cafecar@bot.yak.sh'])
     assertEquals(hits[0].body.headers, {
@@ -466,22 +543,33 @@ Deno.test('mailed: native failure and a missing from stamp errors', async () => 
   let { restore } = netStub(() => ({ success: false, errors: ['nope'] }))
   try {
     let m = uid()
-    apply(db, [
-      { eid: m, name: 'doc', comp: { title: 's', body: 'b' } },
-      { eid: m, name: 'mail', comp: { to: 'x@y.test', from: 'a@b.test' } },
-    ])
+    apply(
+      db,
+      [
+        { eid: m, name: 'doc', comp: { title: 's', body: 'b' } },
+        { eid: m, name: 'mail', comp: { to: 'x@y.test', from: 'a@b.test' } },
+      ],
+      undefined,
+      author,
+    )
     await mailed(cast)(m, {})
     assertMatch(String(row(m).error), /send failed \(HTTP 200\)/)
     assertMatch(String(row(m).acted_at), /T/) // ran, failed — no retry storm
     assertEquals(row(m).sent_id, null)
-    // no row.from and no TASKS_MAIL_FROM: stamped, never guessed
+    // An author with no address cannot borrow one: refused and stamped,
+    // where it used to go out signed by the fleet default (T-9489).
     let bare = uid()
-    apply(db, [
-      { eid: bare, name: 'doc', comp: { title: 's', body: 'b' } },
-      { eid: bare, name: 'mail', comp: { to: 'x@y.test' } },
-    ])
+    apply(
+      db,
+      [
+        { eid: bare, name: 'doc', comp: { title: 's', body: 'b' } },
+        { eid: bare, name: 'mail', comp: { to: 'x@y.test' } },
+      ],
+      undefined,
+      unsigned,
+    )
     await mailed(cast)(bare, {})
-    assertMatch(String(row(bare).error), /no from address/)
+    assertMatch(String(row(bare).error), /no sender/)
   } finally {
     restore()
     nativeEnvOff()
@@ -495,10 +583,15 @@ Deno.test('mailed: $TASKS_MAIL_CMD wins over the native env', async () => {
   let { hits, restore } = netStub(() => ({ success: true }))
   try {
     let m = uid()
-    apply(db, [
-      { eid: m, name: 'doc', comp: { title: 'seam', body: 'held' } },
-      { eid: m, name: 'mail', comp: { to: 'x@y.test' } },
-    ])
+    apply(
+      db,
+      [
+        { eid: m, name: 'doc', comp: { title: 'seam', body: 'held' } },
+        { eid: m, name: 'mail', comp: { to: 'x@y.test' } },
+      ],
+      undefined,
+      author,
+    )
     await mailed(cast)(m, {})
     assertEquals(mails(dir).length, 1) // the override delivered
     assertEquals(hits.length, 0) // nothing touched the network path
@@ -523,10 +616,15 @@ Deno.test('mailed: a fleet recipient delivers locally — no send, no out-log', 
   try {
     let ops = somebody('ops', 'ops@bot.yak.sh')
     let m = uid()
-    apply(db, [
-      { eid: m, name: 'doc', comp: { title: 'ping', body: 'hi there' } },
-      { eid: m, name: 'mail', comp: { to: 'ops' } },
-    ])
+    apply(
+      db,
+      [
+        { eid: m, name: 'doc', comp: { title: 'ping', body: 'hi there' } },
+        { eid: m, name: 'mail', comp: { to: 'ops' } },
+      ],
+      undefined,
+      author,
+    )
     let got: Parameters<typeof channelEvents>[0] = []
     await mailed((cs) => got.push(...cs))(m, {})
     let r = row(m)
@@ -537,7 +635,9 @@ Deno.test('mailed: a fleet recipient delivers locally — no send, no out-log', 
     assertMatch(String(r.acted_at), /T/) // delivered, and when
     assertEquals(Number(r.verified), 1) // apply() authenticated the author
     assertEquals(r.target_eid, ops) // aimed at the recipient's inbox
-    assertEquals(r.from, 'holdco@bot.yak.sh') // attribution defaulted
+    // The author signs it, even though TASKS_MAIL_FROM is set — the env
+    // default no longer speaks for anyone (T-9489).
+    assertEquals(r.from, 'sender@bot.test')
     assertEquals(r.sent_id, null) // nothing was ever sent
     assertEquals(mails(dir).length, 0) // the override seam never fired
     assertEquals(hits.length, 0) // no Cloudflare send, no D1 out-log
@@ -567,19 +667,24 @@ Deno.test('mailed: a book entry Cloudflare would bounce still lands at home', as
   try {
     let p = somebody('under_bot', 'under_score@bot.yak.sh')
     let m = uid()
-    apply(db, [
-      { eid: m, name: 'doc', comp: { title: 's', body: 'b' } },
-      {
-        eid: m,
-        name: 'mail',
-        comp: { to: 'under_score@bot.yak.sh', from: 'a@bot.yak.sh' },
-      },
-    ])
+    apply(
+      db,
+      [
+        { eid: m, name: 'doc', comp: { title: 's', body: 'b' } },
+        {
+          eid: m,
+          name: 'mail',
+          comp: { to: 'under_score@bot.yak.sh' },
+        },
+      ],
+      undefined,
+      author,
+    )
     await mailed(cast)(m, {})
     let r = row(m)
     assertEquals(r.error, null)
     assertEquals(r.target_eid, p) // the pre-canon spelling found the book
-    assertEquals(r.from, 'a@bot.yak.sh') // a stamped from stays
+    assertEquals(r.from, 'sender@bot.test') // signed by its author
     assertEquals(hits.length, 0)
   } finally {
     restore()
@@ -595,10 +700,15 @@ Deno.test('mailed: local delivery keeps a relay mail aimed at its task', async (
     { eid: t, name: 'task', comp: { status: 'open' } },
   ])
   let m = uid()
-  apply(db, [
-    { eid: m, name: 'doc', comp: { title: '[T] the work', body: 'a note' } },
-    { eid: m, name: 'mail', comp: { to: 'relayed', target_eid: t } },
-  ])
+  apply(
+    db,
+    [
+      { eid: m, name: 'doc', comp: { title: '[T] the work', body: 'a note' } },
+      { eid: m, name: 'mail', comp: { to: 'relayed', target_eid: t } },
+    ],
+    undefined,
+    author,
+  )
   await mailed(cast)(m, {})
   assertEquals(row(m).target_eid, t) // the arrive() precedent holds
   assertMatch(String(row(m).message_id), /^local:/)
@@ -609,10 +719,15 @@ Deno.test('mailed: an external address in the book still rides the boundary', as
   Deno.env.set('TASKS_MAIL_CMD', mailer(dir))
   somebody('owner', 'owner@ext.test')
   let m = uid()
-  apply(db, [
-    { eid: m, name: 'doc', comp: { title: 'to the owner', body: 'words' } },
-    { eid: m, name: 'mail', comp: { to: 'owner' } },
-  ])
+  apply(
+    db,
+    [
+      { eid: m, name: 'doc', comp: { title: 'to the owner', body: 'words' } },
+      { eid: m, name: 'mail', comp: { to: 'owner' } },
+    ],
+    undefined,
+    author,
+  )
   await mailed(cast)(m, {})
   assertEquals(mails(dir).length, 1) // delivered outward, not locally
   assertEquals(row(m).message_id, null)
@@ -623,12 +738,63 @@ Deno.test('mailed: concurrent fires deliver once (the boot-sweep race)', async (
   let dir = Deno.makeTempDirSync()
   Deno.env.set('TASKS_MAIL_CMD', mailer(dir))
   let m = uid()
-  apply(db, [
-    { eid: m, name: 'doc', comp: { title: 'once', body: 'only' } },
-    { eid: m, name: 'mail', comp: { to: 'x@y.test' } },
-  ])
+  apply(
+    db,
+    [
+      { eid: m, name: 'doc', comp: { title: 'once', body: 'only' } },
+      { eid: m, name: 'mail', comp: { to: 'x@y.test' } },
+    ],
+    undefined,
+    author,
+  )
   // dispatch and sweep racing: both fire before either stamps
   await Promise.all([mailed(cast)(m, {}), mailed(cast)(m, {})])
   assertEquals(mails(dir).length, 1)
   Deno.env.delete('TASKS_MAIL_CMD')
+})
+
+// The point of T-9511/T-9489, stated directly: a letter is signed by whoever
+// wrote it, and the writer gets no say. `from` is off the wire, so a caller
+// asserting one is not refused so much as unable — there is no column to
+// write. Two ventures, both directions, plus an attempt to borrow.
+Deno.test('the sender is the author, in both directions and unborrowable', () => {
+  let alpha = somebody('alpha-co', 'alpha@bot.test')
+  let beta = somebody('beta-co', 'beta@bot.test')
+
+  // alpha writes to beta, and tries to sign the letter as beta
+  let out = uid()
+  apply(
+    db,
+    [
+      { eid: out, name: 'doc', comp: { title: 'hello', body: 'b' } },
+      {
+        eid: out,
+        name: 'mail',
+        comp: { to: 'beta@bot.test', from: 'beta@bot.test' },
+      },
+    ],
+    undefined,
+    alpha,
+  )
+  assertEquals(row(out).from, 'alpha@bot.test') // the claim never lands
+
+  // beta answers — signed by beta, not by the address it is answering
+  let back = uid()
+  apply(
+    db,
+    [
+      { eid: back, name: 'doc', comp: { title: 'Re: hello', body: 'b' } },
+      {
+        eid: back,
+        name: 'mail',
+        comp: { to: 'alpha@bot.test', reply_to_eid: out },
+      },
+    ],
+    undefined,
+    beta,
+  )
+  assertEquals(row(back).from, 'beta@bot.test')
+
+  // and the vocabulary itself is the guarantee: no `from` to write
+  assertEquals('from' in comps.mail, false)
 })

@@ -145,11 +145,19 @@ export let mailed =
       return done({ acted_at: now(), error: (e as Error).message })
     }
     let to = canon(addr)
-    // The concrete sender: the row's own from, or the fleet default the
-    // service env names ($TASKS_MAIL_FROM, holdco@bot.yak.sh for the
-    // relay's unsigned mail). The native door requires one; local
-    // delivery stamps it only as attribution when the row has none.
-    let from = String(row.from ?? '') || Deno.env.get('TASKS_MAIL_FROM') || ''
+    // The concrete sender: the row's own from, stamped by apply() from the
+    // actor that wrote it. There is deliberately NO fallback — the fleet
+    // default used to fill this gap, so mail authored by two ventures went
+    // out signed by the portfolio, and every reply in those threads then
+    // aimed at the wrong inbox (T-9489). An unsigned letter is a defect to
+    // report, not one to sign on the author's behalf.
+    let from = String(row.from ?? '')
+    if (!from) {
+      return done({
+        acted_at: now(),
+        error: 'no sender: the authoring actor has no address on file',
+      })
+    }
     // Local-first: a fleet recipient never leaves the graph — the sent
     // entity IS the delivery, gaining its inbound half right here.
     // message_id doubles as the never-send mark (inbound.ts), so a

@@ -130,17 +130,16 @@ Deno.test('author: the From header wins over the envelope', () => {
 })
 
 Deno.test('mailChanges: from is the author, not the envelope', () => {
-  let { wire } = mailChanges(
+  // The sender rides the STAMP, never the wire — an outbound letter's from
+  // is derived from its author, so arrival is the one case that supplies it.
+  let { stamp } = mailChanges(
     msg({
       from: 'bounces@cf-bounce.bot.test',
       from_header: '"holdco" <holdco@bot.test>',
     }),
     null,
   )
-  assertEquals(
-    wire.find((c) => c.name == 'mail')!.comp!.from,
-    'holdco@bot.test',
-  )
+  assertEquals(stamp.from, 'holdco@bot.test')
 })
 
 Deno.test('mailChanges: subject and body land verbatim, provenance stamps', () => {
@@ -150,7 +149,8 @@ Deno.test('mailChanges: subject and body land verbatim, provenance stamps', () =
   assertEquals(doc.title, 'hello')
   assertEquals(doc.body, 'the body')
   assertEquals(mail.to, 'venture@bot.test')
-  assertEquals(mail.from, 'sender@x.test')
+  assertEquals(mail.from, undefined) // off the wire
+  assertEquals(stamp.from, 'sender@x.test')
   assertEquals(mail.target_eid, operator)
   assertEquals(stamp.message_id, 'msg:1752000000000:abc')
   assertEquals(stamp.verified, 1) // boolean in the dialect, 1/0 in the row
@@ -333,11 +333,13 @@ Deno.test('the echo keeps an aimed target and a stamped from', async () => {
     {
       eid: letter,
       name: 'mail',
-      comp: { to: 'venture@bot.test', from: 'me@bot.test', target_eid: holdco },
+      comp: { to: 'venture@bot.test', target_eid: holdco },
     },
   ])
-  db.prepare('update mail set sent_id = ? where eid = ?')
-    .run('echo-2@bot.test', letter)
+  // `from` is server-stamped now (apply derives it from the author), so a
+  // fixture standing in for an already-sent letter writes it the same way.
+  db.prepare('update mail set sent_id = ?, "from" = ? where eid = ?')
+    .run('echo-2@bot.test', 'me@bot.test', letter)
   await inboundSweep(
     cast,
     fakeApi([msg({ id: 'msg:1752000000003:echo-2@bot.test' })], null).api,

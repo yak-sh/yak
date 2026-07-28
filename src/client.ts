@@ -801,7 +801,6 @@ export let mailChanges = (m: {
   to: string
   subject: string
   body?: string
-  from?: string
   replyTo?: string
 }) => {
   let eid = uuid()
@@ -812,7 +811,6 @@ export let mailChanges = (m: {
       name: 'mail',
       comp: {
         to: m.to,
-        ...(m.from ? { from: m.from } : {}),
         ...(m.replyTo ? { reply_to_eid: m.replyTo } : {}),
       },
     },
@@ -827,13 +825,12 @@ export let reSubject = (s: string) =>
 // The reply batch: answer goes to the far side — an inbound row's
 // sender, your own sent row's recipient — subject prefilled Re: …, and
 // reply_to_eid records the thread at authoring (delivery resolves it).
-export let replyChanges = (row: Row, body: string, from?: string) => {
+export let replyChanges = (row: Row, body: string) => {
   let m = row.comps.mail ?? {}
   return mailChanges({
     to: String((m.message_id ? m.from ?? m.to : m.to) ?? ''),
     subject: reSubject(String(row.comps.doc?.title ?? '')),
     body,
-    from,
     replyTo: row.eid,
   })
 }

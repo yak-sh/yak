@@ -434,12 +434,7 @@ let mailSend = async (args: string[]) => {
       'a mail needs a body: --body=@file, or --body=- with piped stdin',
     )
   }
-  let made = mailChanges({
-    to,
-    subject: subj.join(' '),
-    body,
-    from: flags.find((a) => a.startsWith('--from='))?.slice(7),
-  })
+  let made = mailChanges({ to, subject: subj.join(' '), body })
   await send(made.changes)
   let after = rows(await snapshot()).find((r) => r.eid == made.eid)
   let eid = after ? idOf(after) : made.eid
@@ -459,11 +454,7 @@ let mailReply = async (args: string[]) => {
       'a reply needs words: text, --body=@file, or --body=- with stdin',
     )
   }
-  let made = replyChanges(
-    row,
-    body,
-    flags.find((a) => a.startsWith('--from='))?.slice(7),
-  )
+  let made = replyChanges(row, body)
   await send(made.changes)
   let after = rows(await snapshot()).find((r) => r.eid == made.eid)
   let eid = after ? idOf(after) : made.eid

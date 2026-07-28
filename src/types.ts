@@ -249,9 +249,13 @@ export let comps: Record<string, Record<string, PropType>> = {
   // doc.title, the body doc.body — a mail is a document that travels.
   // `to` is a raw address (has an @) or a graph reference — alias slug,
   // human id, eid — resolved against the address book at delivery.
+  // `from` is NOT here on purpose: the sender is who WROTE the mail, and
+  // that is the server's fact, not the caller's claim. apply() stamps it
+  // from the writing actor's address — the same resolution behind
+  // created.by — so no door can assert someone else's identity, and the
+  // trust tier operators key on that byline cannot be forged.
   mail: {
     to: 'text',
-    from: 'text',
     // What the mail is ABOUT. A sent mail is history — its subject's
     // death doesn't unsend it (the provenance byline rule).
     target_eid: { eid: '', death: 'keep' },

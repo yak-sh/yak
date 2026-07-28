@@ -144,10 +144,13 @@ export let manuals: Record<string, Manual> = {
   'mail send': {
     // Root because `mail` itself is deprecated: sending a letter is not
     // superseded by the inbox, so it keeps its own door in the usage.
-    usage: 'mail send <to> <subject...> --body=@file|-|@- [--from=...]',
+    usage: 'mail send <to> <subject...> --body=@file|-|@-',
     about: 'send a letter; - and @- read the body from stdin',
     root: true,
-    options: [body, value('--from', 'an address or graph reference')],
+    // No --from: a letter is signed by whoever wrote it, derived from the
+    // session's actor server-side (T-9511). Naming one is now an error,
+    // which is the point — it used to be honoured.
+    options: [body],
     words: [2],
     check: (args) =>
       args.some((a) => a.startsWith('--body='))
@@ -155,9 +158,9 @@ export let manuals: Record<string, Manual> = {
         : 'needs --body=@file, --body=-, or --body=@-',
   },
   'mail reply': {
-    usage: 'mail reply <id> [text... | --body=@file|-|@-] [--from=...]',
+    usage: 'mail reply <id> [text... | --body=@file|-|@-]',
     about: 'reply in the existing mail thread',
-    options: [body, value('--from', 'an address or graph reference')],
+    options: [body],
     words: [1],
     check: (args, words) =>
       words.length > 1 || args.some((a) => a.startsWith('--body='))
