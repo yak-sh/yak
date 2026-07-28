@@ -5,6 +5,10 @@ import { assert, assertEquals, assertMatch } from '@std/assert'
 import { type Change } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
+// Pin TERM like DB_PATH and HOME: the launcher passes the ambient terminal
+// through unless it is dumb, so an unpinned TERM makes these assertions depend
+// on whose shell ran the suite. dumb exercises the documented fallback.
+Deno.env.set('TERM', 'dumb')
 let tasksHome = Deno.makeTempDirSync({ prefix: 'tasks-roles-home-' })
 Deno.env.set('HOME', tasksHome)
 Deno.mkdirSync(`${tasksHome}/.deno/bin`, { recursive: true })

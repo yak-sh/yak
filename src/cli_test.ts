@@ -364,7 +364,16 @@ Deno.test('role binding accepts only a live role entity', () => {
 
 Deno.test('a bound role carries operator capability without a launcher marker', () => {
   assertEquals(hookOperator('role-eid'), true)
-  assertEquals(hookOperator(undefined, undefined), false)
+  // Unbound falls through to the launcher marker, which is read from the
+  // ambient environment — so clear it, or this asserts nothing when the suite
+  // itself is run from inside an operator session.
+  let marker = Deno.env.get('TASKS_OPERATOR')
+  Deno.env.delete('TASKS_OPERATOR')
+  try {
+    assertEquals(hookOperator(undefined, undefined), false)
+  } finally {
+    if (marker != undefined) Deno.env.set('TASKS_OPERATOR', marker)
+  }
 })
 
 Deno.test('Codex turn hooks announce only busy and idle boundaries', () => {
