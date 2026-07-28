@@ -20,6 +20,9 @@ let Frame = block('div', 'TaskTile', {
 let { Title, Meta, Project, Domain, Comments, Claim, Assignee, Deps, Done } =
   Frame
 
+// Every guard below compares — a bare `count &&` yields 0, and Preact paints
+// that as a stray digit in the meta line.
+//
 // A task as a small board card, Trello-shaped: wrapping title beside its
 // dot, then one meta line — priority, project, domain, edge tallies
 // ("2 requires", edge-colored), comment tally, claim flag, id. Plain spans only
@@ -78,7 +81,7 @@ export let TaskTile = ({ e }: { e: Ent }) => {
             </Deps>
           )
         )}
-        {talk && <Comments>💬 {talk}</Comments>}
+        {talk > 0 && <Comments>💬 {talk}</Comments>}
         {e.task!.assignee_eid && (
           <Assignee>{ent(e.task!.assignee_eid).doc?.title}</Assignee>
         )}
