@@ -175,7 +175,7 @@ When a budget is **pre-paid and use-it-or-lose-it**, glide cumulative usage to l
 
 ---
 
-# M-4404 keep the context clean — write what IS, delete first, entropy down
+# M-4404 Keep the context clean: write what IS, delete first, keep entropy low
 
 Docs and personas should state **how to behave — current rules only, brief and crisp.**
 
