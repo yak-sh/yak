@@ -263,20 +263,19 @@ These hold everywhere in this repo, whoever — or whatever — writes the code:
   An in-process probe must set `DB_PATH`: db.ts `open()` defaults to the LIVE
   graph, so a script that imports apply()/open() and skips the server mints
   entities in the owner's board (silent on the first run, a UNIQUE failure on
-  the second). Probe servers must pick UNIQUE ports: the server binds `reusePort`, so two
-  probes on one port silently round-robin — one agent's stale modules fed
-  another's browser mid-verification (observed twice, 2026-07-20/21). The CDP
-  port is a probe port too: two agents defaulting to
-  `--remote-debugging-port=9333` share ONE chrome — the second launch
-  silently fails and both drive the first's tabs (a probe's page got
-  navigated away mid-gesture, faking a repro, 2026-07-24). And `pkill -f
-  <pattern>` matches your own shell's command line — bracket a character
-  (`[s]rc/server.ts`) or kill by pid. And a probe cleans up after itself on a
-  SHARED box (the owner's live server and every other operator are here):
-  `jobs -p` is EMPTY inside a non-interactive `zsh -c`, so
-  `P=$(jobs -p); …; kill $P` kills nothing and the shell exits leaving the
-  children running — record each pid as you spawn it (`cmd & echo $!`), kill
-  that list, and confirm with `uptime`.
+  the second). Probe servers must pick UNIQUE ports: the server binds
+  `reusePort`, so two probes on one port silently round-robin — one agent's
+  stale modules fed another's browser mid-verification (observed twice,
+  2026-07-20/21). The CDP port is a probe port too: two agents defaulting to
+  `--remote-debugging-port=9333` share ONE chrome — the second launch silently
+  fails and both drive the first's tabs (a probe's page got navigated away
+  mid-gesture, faking a repro, 2026-07-24). And `pkill -f <pattern>` matches
+  your own shell's command line — bracket a character (`[s]rc/server.ts`) or
+  kill by pid. And a probe cleans up after itself on a SHARED box (the owner's
+  live server and every other operator are here): `jobs -p` is EMPTY inside a
+  non-interactive `zsh -c`, so `P=$(jobs -p); …; kill $P` kills nothing and
+  the shell exits leaving the children running — record each pid as you spawn
+  it (`cmd & echo $!`), kill that list, and confirm with `uptime`.
 - **The injection loop**: `.claude/settings.json` runs
   `task session context --hook` on SessionStart — agent sessions boot into
   their claimed work (`task context` / MCP `task_context`, same digest), led by
