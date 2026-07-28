@@ -196,12 +196,31 @@ let plant = (lines: string[], provider = 'fake') => {
 }
 let log = (eid: string) => `${logsDir()}/${eid}.jsonl`
 
-let until = async (fact: () => boolean, what = 'it') => {
-  for (let i = 0; i < 400; i++) {
+// Wait for something the machine does off-thread: a tail catching up, a
+// child settling. The budget is deliberately generous because its only job
+// is to fail instead of hanging — it is NOT an assertion about speed. These
+// waits ride real subprocesses, and a loaded box stretches a 130ms settle
+// past a second; a budget tight enough to catch that turns a green suite red
+// at random, which trains people to re-run instead of read.
+// Wait for something the machine does off-thread: a tail catching up, a
+// child settling. The budget is deliberately generous because its only job
+// is to fail instead of hanging — it is NOT an assertion about speed. These
+// waits ride real subprocesses, and a loaded box stretches a 130ms settle
+// past a second; a budget tight enough to catch that turns a green suite red
+// at random, which trains people to re-run instead of read. `what` may be a
+// thunk, so a wait that does time out can say which half of it stalled.
+let until = async (
+  fact: () => boolean,
+  what: string | (() => string) = 'it',
+) => {
+  let deadline = Date.now() + 20_000
+  do {
     if (fact()) return
     await new Promise((go) => setTimeout(go, 5))
-  }
-  throw new Error(`timed out waiting for ${what}`)
+  } while (Date.now() < deadline)
+  throw new Error(
+    `timed out waiting for ${typeof what == 'function' ? what() : what}`,
+  )
 }
 
 let INIT = '{"type":"init","session_id":"sid-1","model":"fake-fast"}'
@@ -998,7 +1017,12 @@ Deno.test('a comment steers a live managed session without settling it', async (
   await resumed
   await until(
     () => told(steer[1].eid) && row(eid)?.status == 'completed',
-    'the steered continuation to settle',
+    // Both halves named: if this ever times out again, the message says
+    // whether the steer went undelivered or the run never settled — a
+    // stalled fact and a slow one want opposite fixes.
+    () =>
+      `the steered continuation to settle ` +
+      `(steer delivered=${told(steer[1].eid)}, status=${row(eid)?.status})`,
   )
   let events = Deno.readTextFileSync(log(eid)).split('\n').filter(Boolean)
     .map((l) =>
