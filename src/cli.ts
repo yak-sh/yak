@@ -1517,12 +1517,16 @@ let selfClear =
 export let lifecycleHooks = (provider: Provider): Record<string, Hook[]> => ({
   SessionStart: [commandHook(hookCommand(provider, 'context'))],
   SubagentStart: [commandHook(hookCommand(provider, 'context'))],
-  ...(provider == 'codex'
-    ? {
-      UserPromptSubmit: [commandHook(hookCommand(provider, 'turn'), 3)],
-      Stop: [commandHook(hookCommand(provider, 'turn'), 3)],
-    }
-    : { Stop: [commandHook(selfClear, 20)] }),
+  // Turn boundaries are provider-neutral — every adapter owes the graph a
+  // busy/idle fact, and "is this session mid-turn?" is what decides whether a
+  // parked operator needs waking. The turn stamp leads the Stop array so the
+  // cheap fact lands before Claude's self-clear gate spends its 20s; both
+  // receive the same payload on their own stdin.
+  UserPromptSubmit: [commandHook(hookCommand(provider, 'turn'), 3)],
+  Stop: [
+    commandHook(hookCommand(provider, 'turn'), 3),
+    ...(provider == 'claude' ? [commandHook(selfClear, 20)] : []),
+  ],
   SessionEnd: [commandHook(hookCommand(provider, 'wrap'), 3)],
 })
 

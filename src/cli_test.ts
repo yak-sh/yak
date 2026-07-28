@@ -529,10 +529,23 @@ Deno.test('launchers scope lifecycle hooks to their provider invocation', () => 
   assertEquals(Object.keys(claude), [
     'SessionStart',
     'SubagentStart',
+    'UserPromptSubmit',
     'Stop',
     'SessionEnd',
   ])
-  assertMatch(claude.Stop[0].hooks[0].command, /self-clear-stop\.sh/)
+  // Claude reports turn boundaries like every other adapter, and carries the
+  // project's self-clear gate as a SECOND Stop hook — ordered after the turn
+  // stamp so the cheap fact never queues behind the expensive check.
+  assertMatch(
+    claude.UserPromptSubmit[0].hooks[0].command,
+    /TASKS_PROVIDER=claude task session turn --hook/,
+  )
+  assertMatch(claude.Stop[0].hooks[0].command, /task session turn --hook/)
+  assertEquals(claude.Stop[0].hooks[0].timeout, 3)
+  assertMatch(claude.Stop[1].hooks[0].command, /self-clear-stop\.sh/)
+  assertEquals(claude.Stop[1].hooks[0].timeout, 20)
+  // Codex has no self-clear gate, so its Stop carries the turn stamp alone.
+  assertEquals(codex.Stop.length, 1)
   assertMatch(
     claude.SessionStart[0].hooks[0].command,
     /TASKS_PROVIDER=claude task session context --hook/,
