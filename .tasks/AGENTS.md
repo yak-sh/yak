@@ -268,7 +268,13 @@ These hold everywhere in this repo, whoever — or whatever — writes the code:
   silently fails and both drive the first's tabs (a probe's page got
   navigated away mid-gesture, faking a repro, 2026-07-24). And `pkill -f
   <pattern>` matches your own shell's command line — bracket a character
-  (`[s]rc/server.ts`) or kill by pid.
+  (`[s]rc/server.ts`) or kill by pid. And a probe cleans up after itself on a
+  SHARED box (the owner's live server and every other operator are here):
+  `jobs -p` is EMPTY inside a non-interactive `zsh -c`, so
+  `P=$(jobs -p); …; kill $P` kills nothing and the shell exits leaving the
+  children running — record each pid as you spawn it (`cmd & echo $!`), kill
+  that list, and confirm the box recovered with `uptime` (106 synthetic-load
+  loops outlived their run at load average 115, 2026-07-28).
 - **The injection loop**: `.claude/settings.json` runs
   `task session context --hook` on SessionStart — agent sessions boot into
   their claimed work (`task context` / MCP `task_context`, same digest), led by
