@@ -469,6 +469,30 @@ Deno.test('sessionFor: reuse, mint, cwd + pid refresh', () => {
   ])
 })
 
+Deno.test('sessionFor: task context fills only a missing actor', () => {
+  let actor = 'aaaaaaaa-0000-4000-8000-000000000004'
+  assertEquals(
+    sessionFor(all, 'sess-x', undefined, undefined, { actor_eid: actor })
+      .changes,
+    [{ eid: S, name: 'session', comp: { actor_eid: actor } }],
+  )
+  let worn = rows({
+    changes: [
+      ...snap.changes,
+      {
+        eid: S,
+        name: 'session',
+        comp: { id: 'sess-x', cwd: '/w', actor_eid: T2 },
+      },
+    ],
+  })
+  assertEquals(
+    sessionFor(worn, 'sess-x', undefined, undefined, { actor_eid: actor })
+      .changes,
+    [],
+  )
+})
+
 Deno.test('me: provider ids name external sessions; launchers name managed ones', () => {
   let env = (vals: Record<string, string>) => (k: string) => vals[k]
   assertEquals(
@@ -628,6 +652,23 @@ Deno.test('commentChanges: doc + aim, session reified for server stamping', () =
     { eid: review[0].eid, name: 'comment', comp: { target_eid: T1 } },
     { eid: review[0].eid, name: 'review', comp: { verdict: 'approved' } },
   ])
+})
+
+Deno.test('task interaction anchors a tool-only session to the project', () => {
+  let project = 'aaaaaaaa-0000-4000-8000-000000000004'
+  let g = rows({
+    changes: [
+      ...snap.changes,
+      { eid: project, name: 'project', comp: {} },
+      { eid: T2, name: 'task', comp: { project_eid: project } },
+    ],
+  })
+  let actor = { eid: S, name: 'session', comp: { actor_eid: project } }
+  assertEquals(claimChanges(g, T2, 'sess-x'), [
+    actor,
+    { eid: T2, name: 'claim', comp: { session_eid: S } },
+  ])
+  assertEquals(commentChanges(g, T2, 'project words', 'sess-x')[0], actor)
 })
 
 Deno.test('claimant resolves through the session entity', () => {

@@ -436,6 +436,7 @@ export let sessionFor = (
     source?: string
     transcript?: string
     operator?: boolean
+    actor_eid?: string
     pane?: string | null
     turn?: string
     role_eid?: string
@@ -462,11 +463,20 @@ export let sessionFor = (
   ) {
     comp.operator = Number(self.operator)
   }
+  // A tool-only session has no cwd to place it. Its first task interaction
+  // anchors it to that venture; an identity it already wears always wins.
+  if (self?.actor_eid && !s?.comps.session.actor_eid) {
+    comp.actor_eid = self.actor_eid
+  }
   let changes: Change[] = Object.keys(comp).length
     ? [{ eid, name: 'session', comp }]
     : []
   return { eid, changes }
 }
+
+let taskActor = (all: Row[], target: string) =>
+  String(all.find((r) => r.eid == target)?.comps.task?.project_eid ?? '') ||
+  undefined
 
 // The claim pointing at a session entity — one batch, atomic on the server.
 export let claimChanges = (
@@ -475,7 +485,9 @@ export let claimChanges = (
   session: string,
   cwd?: string,
 ): Change[] => {
-  let s = sessionFor(all, session, cwd)
+  let s = sessionFor(all, session, cwd, undefined, {
+    actor_eid: taskActor(all, target),
+  })
   return [
     ...s.changes,
     { eid: target, name: 'claim', comp: { session_eid: s.eid } },
@@ -584,7 +596,11 @@ export let commentChanges = (
   session?: string,
   mark: { event?: boolean; verdict?: string } = {},
 ): Change[] => {
-  let s = session ? sessionFor(all, session) : undefined
+  let s = session
+    ? sessionFor(all, session, undefined, undefined, {
+      actor_eid: taskActor(all, target),
+    })
+    : undefined
   let eid = uuid()
   return [
     ...(s?.changes ?? []),

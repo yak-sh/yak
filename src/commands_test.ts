@@ -171,7 +171,9 @@ Deno.test('cancel: trailing words become a plain comment, same batch', () => {
     { eid: T, name: 'task', comp: { status: 'cancelled' } },
   ])
   let why = run('cancel superseded by T-9', ctx(T, 'sess-x'))
-  let [move, doc, comment] = why.changes!
+  let move = why.changes!.find((c) => c.name == 'task')!
+  let doc = why.changes!.find((c) => c.name == 'doc')!
+  let comment = why.changes!.find((c) => c.name == 'comment')!
   assertEquals(move, { eid: T, name: 'task', comp: { status: 'cancelled' } })
   assertEquals(doc.comp?.body, 'superseded by T-9')
   assertEquals(comment.name, 'comment')
@@ -194,15 +196,16 @@ Deno.test('open: an argument navigates, none is the status move', () => {
 
 Deno.test('claim: names a session, or takes the ambient one', () => {
   assertEquals(run('claim sess-x', ctx(T)).changes, [
+    { eid: S, name: 'session', comp: { actor_eid: P } },
     { eid: T, name: 'claim', comp: { session_eid: S } }, // known: no mint
   ])
   // An unknown session is minted, and the claim points at the new entity.
   let minted = run('claim sess-new', ctx(T)).changes!
   assertEquals(minted[0].name, 'session')
-  assertEquals(minted[0].comp, { id: 'sess-new' })
+  assertEquals(minted[0].comp, { id: 'sess-new', actor_eid: P })
   assertEquals(UUID.test(minted[0].eid), true)
   assertEquals(minted[1].comp, { session_eid: minted[0].eid })
-  assertEquals(run('claim', ctx(T, 'sess-x')).changes!.length, 1) // ambient
+  assertEquals(run('claim', ctx(T, 'sess-x')).changes!.length, 2) // ambient
   assertThrows(() => run('claim', ctx(T)), Error, 'name a session')
   assertThrows(
     () => run('claim sess-x extra', ctx(T)),
@@ -284,7 +287,9 @@ Deno.test('focusOf: one claim is "here"; none, several, or no session is not', (
 
 Deno.test('knock: recipient resolves, words ride as plain comment, project defaults', () => {
   let k = run('knock B-3 need it today', ctx(T, 'sess-x'))
-  let [knock, doc, comment] = k.changes!
+  let knock = k.changes!.find((c) => c.name == 'knock')!
+  let doc = k.changes!.find((c) => c.name == 'doc')!
+  let comment = k.changes!.find((c) => c.name == 'comment')!
   assertEquals(knock.name, 'knock')
   assertEquals(knock.comp, { target_eid: T, to_eid: B })
   assertEquals(doc.comp?.body, 'need it today')
