@@ -177,12 +177,11 @@ When a budget is **pre-paid and use-it-or-lose-it**, glide cumulative usage to l
 
 # M-4404 keep the context clean — write what IS, delete first, entropy down
 
-- Docs and personas should state **how to behave — current rules only, brief and crisp.**
-- **No war stories**: dates, quotes,, or "supersedes" notes: provenance lives in git history, narrative in the worklog. A rule stands on its own or it doesn't belong. Write what IS — never recite the cruft to avoid; naming it plants it.
+Docs and personas should state **how to behave — current rules only, brief and crisp.**
+
+**No war stories**: dates, quotes, or "supersedes" notes: provenance lives in the history. A rule stands on its own or it doesn't belong.
 
 When direction arrives, **edit to match — delete first.** Find the line that produced the wrong behavior and remove or rewrite it; append only when nothing existing covers it. The goal is entropy reduction: less in context, not more.
-
-**The tension, kept:** when two rules seem to conflict, a *stale contradiction* dissolves once its hidden variable is named — resolve it to one rule. A *permanent tension* (right-over-profit, love-even-when-it-costs) is the teaching — keep both poles; don't optimize it smooth. Opposite fixes: collapse the stale one, protect the permanent one
 
 ---
 
