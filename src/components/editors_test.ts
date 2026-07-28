@@ -1,15 +1,17 @@
-// The prop registry's faces: the PropType picks its entry, the entry's
-// show says the value the human way. Pure VNode inspection — no DOM.
+// The prop registry's faces and edit doors: a PropType picks the words
+// and the control that owns its value.
 import { assertEquals } from '@std/assert'
-import { editorFor } from './editors.tsx'
+import { h, render } from 'preact'
+import { parseHTML } from 'linkedom'
+import { editorFor, Prop } from './editors.tsx'
 import { Prio } from './Prio.tsx'
 import { ago, pretty } from './ui.tsx'
 import { cache, ent } from '../live.ts'
-import { formatProp, type Prop } from '../props.ts'
+import { formatProp, type Prop as PropRow } from '../props.ts'
 import { idOf } from '../types.ts'
 import { type PropType } from '../types.ts'
 
-let prop = (type: PropType): Prop => ({
+let prop = (type: PropType): PropRow => ({
   comp: 'test',
   prop: 'value',
   name: 'value',
@@ -66,6 +68,59 @@ Deno.test('an eid face reads as its target id and title', () => {
   assertEquals(vn(show(t, eid)).props.children, 'D-5 — Hello')
   assertEquals(show(t, null), null)
   cache.value = {}
+})
+
+Deno.test('a linked prop keeps a separate edit press', () => {
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let { document } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  let task = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  let person = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  cache.value = {
+    [task]: {
+      entity: { eid: task, num: 1 },
+      task: {
+        eid: task,
+        status: 'open',
+        priority: 0,
+        project_eid: null,
+        assignee_eid: person,
+        domain: null,
+      },
+    },
+    [person]: {
+      entity: { eid: person, num: 2 },
+      doc: { eid: person, title: 'Jeff', body: '' },
+      person: { eid: person },
+    },
+  }
+  let root = document.querySelector('main')!
+  try {
+    render(
+      h(Prop, {
+        eid: task,
+        comp: 'task',
+        prop: 'assignee_eid',
+        editable: true,
+        handle: true,
+        name: 'assignee',
+        show: (face) => h('a', { href: '/U-2' }, face),
+      }),
+      root,
+    )
+    assertEquals(root.querySelector('a')?.textContent, 'U-2 — Jeff')
+    let hand = root.querySelector('button')
+    assertEquals(hand?.textContent, '▾')
+    assertEquals(hand?.getAttribute('aria-label'), 'change assignee')
+  } finally {
+    render(null, root)
+    cache.value = {}
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else delete (globalThis as { document?: unknown }).document
+  }
 })
 
 Deno.test('ago says the distance in words', () => {

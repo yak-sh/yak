@@ -1178,6 +1178,27 @@ html {
   text-decoration: underline;
   color: var(--text);
 }
+/* A link-faced prop keeps navigation on its face and editing on a quiet
+   handle beside it. */
+.Prop_Hand {
+  white-space: nowrap;
+  font-size: 11px;
+  font-family: inherit;
+  color: var(--dim);
+  cursor: pointer;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+.Prop_Hand:hover {
+  color: var(--text);
+}
+.Prop_Hand-empty {
+  opacity: 0.6;
+}
+.Prop_Hand-empty:hover {
+  opacity: 1;
+}
 /* The picker's handle beside the project link — the link owns the click,
    so the caret owns the picker. */
 .Show_Caret {

@@ -82,6 +82,7 @@ let set = (p: EditorProps, v: unknown) => {
 
 let Frame = block('span', 'Prop', {
   Val: 'span',
+  Hand: 'button',
   Pop: 'span',
   Tab: 'button',
   Row: 'span',
@@ -89,7 +90,7 @@ let Frame = block('span', 'Prop', {
   Num: 'input',
   Query: 'span',
 })
-let { Val, Pop, Tab, Row, Find, Num, Query } = Frame
+let { Val, Hand, Pop, Tab, Row, Find, Num, Query } = Frame
 
 // ---- the stock editors ----
 
@@ -323,21 +324,21 @@ defineWells({ domains: () => domains.value })
 // entry's wrapper owns the layout, Prop only hands it the anchor and the
 // face. Callers may dress the value: `show` paints a custom face (a
 // badge, a chip, a link) while the registry still owns the editing;
-// `name` is the ghost label when empty. A face that is itself a LINK
-// keeps its own click — the press ignores clicks landing on an anchor
-// inside the face.
+// `name` is the ghost label when empty; `handle` gives a LINK face its
+// own edit press without stealing navigation.
 export let Prop = (
-  { eid, comp, prop, editable, name, show: paint }: {
+  { eid, comp, prop, editable, name, show: paint, handle }: {
     eid: string
     comp: string
     prop: string
     editable?: boolean
     name?: string
     show?: (face: string | null, value: unknown) => JSX.Element | null
+    handle?: boolean
   },
 ) => {
   let [editing, setEditing] = useState(false)
-  // What the popout control anchors on — the value's own element.
+  // What the popout control anchors on — the value or its handle.
   let anchor = useRef<HTMLElement>(null)
   let t = comps[comp]?.[prop]
   let e = ent(eid) as unknown as Record<
@@ -394,9 +395,28 @@ export let Prop = (
     press()
   })
   let shown = (
-    <Val elRef={anchor} mod={!face && 'nil'} onClick={open}>
-      {face || (paint && editor ? `+ ${name ?? prop}` : '—')}
-    </Val>
+    <>
+      {(face || !handle) && (
+        <Val
+          elRef={handle ? undefined : anchor}
+          mod={!face && 'nil'}
+          onClick={handle ? undefined : open}
+        >
+          {face || (paint && editor ? `+ ${name ?? prop}` : '—')}
+        </Val>
+      )}
+      {handle && editor && (
+        <Hand
+          elRef={anchor}
+          mod={!face && 'empty'}
+          type='button'
+          aria-label={`change ${name ?? prop}`}
+          onClick={press}
+        >
+          {face ? '▾' : `+ ${name ?? prop}`}
+        </Hand>
+      )}
+    </>
   )
   return (
     <Frame mod={editor && 'live'}>
