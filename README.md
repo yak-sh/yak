@@ -104,6 +104,21 @@ points back to the role that owns it. Roles receive project-wide attention by
 virtue of that graph binding; they do not need the ad-hoc `--operator` flag.
 `docs/ADAPTERS.md` defines the shared contract and compatibility matrix.
 
+A role is _desired_ capacity, so the reconciler continuously drives real
+processes toward it. Killing a pane or a tmux session is therefore not a stop —
+the next sweep puts it back. Stopping means patching the desire, which is what
+the CLI does:
+
+```sh
+task role                  # what should be running, what is, and any launch error
+task role stop R-12        # this role stays down — across daemon and machine restarts
+task role stop --all       # the fleet-wide off switch
+task role start R-12       # hand it back to the reconciler
+```
+
+`task role stop` with nothing named is refused rather than treated as "stop
+everything"; the fleet-wide form has to be spelled `--all`.
+
 SessionEnd runs `task session wrap --hook` — claims are released and the closing
 summary is kept as the session brief (`task session brief` writes one
 deliberately). Sessions also spawn FROM the graph

@@ -85,6 +85,9 @@ Deno.test('manual validation rejects loss-shaped arguments', () => {
     ['session brief', [], 'needs brief text or --body='],
     ['telemetry', ['-n', '--errors'], '-n needs a positive number'],
     ['wrap', ['sid', '--body=@x'], 'task session brief --body=…'],
+    // An unscoped stop must never be read as "stop everything".
+    ['role stop', [], 'name at least one role, or --all'],
+    ['role start', [], 'name at least one role, or --all'],
   ]
   for (let [name, args, message] of cases) {
     assertThrows(check(name, args), Error, message)
@@ -97,6 +100,9 @@ Deno.test('manual validation accepts each supported option shape', () => {
   check('mail files', ['E-1', '--out', 'tmp'])()
   check('mail files', ['E-1', '--out=tmp'])()
   check('comment', ['T-1', '--verdict=approved'])()
+  check('role stop', ['R-1'])()
+  check('role stop', ['--all'])()
+  check('role start', ['R-1', 'R-2'])()
 })
 
 Deno.test('palette validation rejects CLI flags before command dispatch', () => {

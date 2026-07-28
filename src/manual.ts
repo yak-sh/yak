@@ -350,6 +350,46 @@ export let manuals: Record<string, Manual> = {
     options: [flag('--hook')],
     words: [0, 2],
   },
+  role: {
+    usage: 'role [--json] | role <stop|start> <id>… | --all',
+    about: 'persistent roles: what should be running, and the off switch',
+    examples: [
+      'task role',
+      'task role stop R-12',
+      'task role stop --all',
+      'task role start R-12',
+    ],
+    detail:
+      'A role is DESIRED capacity — the reconciler drives real processes ' +
+      'toward it every couple of seconds. Killing a pane or tmux session is ' +
+      'therefore not a stop; the next sweep relaunches it. `role stop` patches ' +
+      'the desire itself, so it holds across daemon and machine restarts. ' +
+      '`role stop --all` is the fleet-wide off switch.',
+    root: true,
+    options: [json],
+  },
+  'role stop': {
+    usage: 'role stop <id>… | --all',
+    about: 'set roles to stopped — the durable off switch',
+    examples: ['task role stop R-12', 'task role stop --all'],
+    options: [flag('--all')],
+    words: [0],
+    check: (args, words) =>
+      words.length || args.includes('--all')
+        ? undefined
+        : 'name at least one role, or --all',
+  },
+  'role start': {
+    usage: 'role start <id>… | --all',
+    about: 'set roles to running — the reconciler launches them',
+    examples: ['task role start R-12', 'task role start --all'],
+    options: [flag('--all')],
+    words: [0],
+    check: (args, words) =>
+      words.length || args.includes('--all')
+        ? undefined
+        : 'name at least one role, or --all',
+  },
   telemetry: {
     usage: 'telemetry [--errors] [--since=ISO] [-n N]',
     about: 'tool calls + crashes',

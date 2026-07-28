@@ -749,6 +749,85 @@ let release = async (args: string[]) => {
   console.log(`${idOf(row)} released`)
 }
 
+// A role is DESIRED capacity, so the only honest stop is a state patch. The
+// reconciler drives processes toward this row every couple of seconds, which
+// means killing a pane or a tmux session is not a stop — it is a relaunch with
+// extra steps. `task role stop` is therefore the whole off switch, and it is
+// durable: it survives a daemon restart because the desire, not the process,
+// is what got written down.
+let roleOf = (all: Row[], id: string) => {
+  let row = find(all, id)
+  if (!row) throw new Error(`no entity: ${id}`)
+  if (!row.comps.role) throw new Error(`not a role: ${id}`)
+  return row
+}
+
+let roleSession = (all: Row[], eid: string) =>
+  all.filter((r) => r.comps.session?.role_eid == eid)
+    .sort((a, b) => a.num - b.num).at(-1)
+
+let roleLine = (all: Row[], r: Row) => {
+  let role = r.comps.role, spawn = r.comps.spawn ?? {}
+  let scope = all.find((x) => x.eid == role.scope_eid)
+  let live = roleSession(all, r.eid)
+  let cells = [
+    idOf(r).padEnd(7),
+    String(role.state ?? '').padEnd(8),
+    String(role.surface ?? '').padEnd(8),
+    `${spawn.provider ?? '?'}/${spawn.model ?? '?'}`.padEnd(16),
+    (scope ? String(scope.comps.doc?.title ?? idOf(scope)) : '—').padEnd(14),
+    live ? `${idOf(live)} ${live.comps.session?.turn ?? ''}`.trim() : '—',
+  ]
+  return cells.join('  ').trimEnd() +
+    (role.error ? `\n${' '.repeat(9)}error: ${role.error}` : '')
+}
+
+let roleState = async (sub: string, rest: string[]) => {
+  let want = sub == 'stop' ? 'stopped' : 'running'
+  let ids = rest.filter((a) => a != '--all')
+  let all = rows(await snapshot())
+  let targets = rest.includes('--all')
+    ? all.filter((r) => r.comps.role).sort((a, b) => a.num - b.num)
+    : ids.map((id) => roleOf(all, id))
+  if (!targets.length) {
+    throw new Error(rest.includes('--all') ? 'no roles' : help(['role', sub]))
+  }
+  let moved = targets.filter((r) => r.comps.role.state != want)
+  await send(
+    moved.map((r) => ({ eid: r.eid, name: 'role', comp: { state: want } })),
+  )
+  for (let r of targets) {
+    let already = !moved.includes(r) ? ' (already)' : ''
+    console.log(`${idOf(r)} ${want}${already}  ${r.comps.doc?.title ?? ''}`)
+  }
+}
+
+let role = async (args: string[]) => {
+  let [sub, ...rest] = args
+  if (sub == 'help' || sub == '--help') return console.log(help(['role']))
+  if (sub == 'stop' || sub == 'start') return await roleState(sub, rest)
+  if (sub && sub != '--json') {
+    throw new Error(`not a role verb: ${sub}\n\n${help(['role'])}`)
+  }
+  let all = rows(await snapshot())
+  let roles = all.filter((r) => r.comps.role).sort((a, b) => a.num - b.num)
+  if (sub == '--json') {
+    return console.log(JSON.stringify(
+      roles.map((r) => ({
+        id: idOf(r),
+        title: r.comps.doc?.title ?? null,
+        ...r.comps.role,
+        spawn: r.comps.spawn ?? null,
+        session: roleSession(all, r.eid)?.comps.session?.id ?? null,
+      })),
+      null,
+      2,
+    ))
+  }
+  if (!roles.length) return console.log('no roles')
+  for (let r of roles) console.log(roleLine(all, r))
+}
+
 // An edge is a sentence — "<id> requires <child>" — and the comp names the
 // whole triple, so link and unlink are the same Change with gone flipped.
 let dep = async (args: string[]) => {
@@ -1649,6 +1728,7 @@ if (import.meta.main) {
       else if (cmd == 'wrap') await wrap(rest)
       else if (cmd == 'sync') await sync(rest)
       else if (cmd == 'release') await release(rest)
+      else if (cmd == 'role') await role(rest)
       else if (cmd == 'telemetry') await telemetry(rest)
       else if (cmd == 'help' || cmd == '--help') console.log(help(rest))
       else if (!cmd) await bare()
