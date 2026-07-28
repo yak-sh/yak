@@ -87,13 +87,26 @@ setFollow((href) => ({
 // T-123 in any body the same in-app open as an Id chip. The id resolves
 // against the live cache at click time; a ref the cache can't name (an
 // unloaded or dead entity) falls through to its href, the honest 404.
-globalThis.document?.addEventListener?.('click', (ev: MouseEvent) => {
+let openRef = (ev: MouseEvent) => {
   let a = (ev.target as Element | null)?.closest?.('a[data-ref]')
   if (!a) return
   let id = a.getAttribute('data-ref')!
   let eid = eidOf(id)
   if (eid) follow(`/${id}`, eid)(ev)
-})
+}
+
+// Startup, exported so either host's document can be proven against it. The
+// TUI's fake document (tui/dom.ts) carries only what preact reaches for, so
+// an object guard is not enough here — `document?.member(…)` passes it and
+// then throws on the missing member. Guard the METHOD, always.
+type Host = {
+  addEventListener?: (t: string, fn: (ev: MouseEvent) => void) => void
+}
+
+export let wire = (doc: Host | undefined = globalThis.document) =>
+  doc?.addEventListener?.('click', openRef)
+
+wire()
 
 // The click half of the internal-link contract: a real href (new-tab
 // forms and the native menu stay native), plain click follows in place,
