@@ -544,6 +544,7 @@ export let Session = ({ e }: { e: Ent }) => {
 let RowLine = block('div', 'SessionRow', {
   Status: 'span',
   Model: 'span',
+  Actor: 'span',
   Task: 'span',
 })
 
@@ -555,6 +556,9 @@ export let SessionRow = ({ e }: { e: Ent }) => {
     <RowLine {...clickProps(e)}>
       <Dot status={standing(s)} />
       {model && <RowLine.Model>{friendly(model)}</RowLine.Model>}
+      {s.actor_eid && (
+        <RowLine.Actor>{ent(s.actor_eid).doc?.title}</RowLine.Actor>
+      )}
       {job && <RowLine.Task>{ent(job).doc?.title}</RowLine.Task>}
       <Id e={e} />
     </RowLine>

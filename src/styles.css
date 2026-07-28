@@ -2617,6 +2617,9 @@ a[data-ref]:hover {
   color: var(--dim);
   font-size: 11px;
 }
+.SessionRow_Actor {
+  color: var(--muted);
+}
 /* the job title takes the slack and yields with an ellipsis */
 .SessionRow_Task {
   flex: 1;
