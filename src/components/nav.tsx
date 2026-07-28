@@ -2,12 +2,12 @@ import { signal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
 import { block, copy, setFollow } from './ui.tsx'
 import { usePlaceAt } from './overlay.tsx'
-import { cache, census, ent, peek, rootCanvas } from '../live.ts'
+import { cache, census, ent, peek, rootCanvas, trail } from '../live.ts'
 import { actionsFor, resolve } from './registry.ts'
 import { type Ent, idOf } from '../types.ts'
 import { dragData } from './drag.ts'
 
-export { peek }
+export { peek, trail }
 
 // The URL is the root card: `/` shows the root canvas, `/T-123` (or any
 // id form) shows that entity fullscreened, `?v=List` picks its view.
@@ -140,13 +140,11 @@ export let screenTarget = () => {
   return eid ? { eid, view } : null
 }
 
-// The trail: roots passed through in place, oldest first — the App bar
-// wears the last few as breadcrumbs (the TUI keeps its own). Both route
-// writers above call track() with where they WERE: landing somewhere
-// already on the trail (a crumb click, the back button) cuts back to it,
-// so the trail never loops and never holds the present. The root canvas
-// never rides — the brand is that crumb.
-export let trail = signal<string[]>([])
+// Writing the trail (live.ts holds it, above the hot-swap boundary): both
+// route writers above call track() with where they WERE — landing somewhere
+// already on the trail (a crumb click, the back button) cuts back to it, so
+// the trail never loops and never holds the present. The root canvas never
+// rides — the brand is that crumb.
 let track = (was?: string) => {
   let now = screenTarget()?.eid
   if (!now || now == was) return

@@ -1549,3 +1549,9 @@ export let searchOpen = signal(false)
 export let peek = signal<
   { eid: string; x: number; y: number; view?: string; from?: Element } | null
 >(null)
+
+// The roots passed through, oldest first — the App bar wears the last few
+// as breadcrumbs. Shell state for the same reason as peek: where the
+// operator has BEEN outlives any hot swap of the components that got them
+// there. nav.tsx owns how it is written (track()).
+export let trail = signal<string[]>([])
