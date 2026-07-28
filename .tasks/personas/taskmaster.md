@@ -82,6 +82,28 @@ entry (T-5958 reconciles the book). Fleet-internal mail depends on neither.
 
 ---
 
+# M-4405 verify before done — a builder's "it passes" is a claim, not a fact
+
+A builder's "verified / tests pass" is a claim, not proof. Re-run the check yourself: CI actually green, prod actually healthy, the scaffold actually runs. A tool printing the intended value is not proof the behavior changed — trace it to where it takes effect.
+
+Spot-check thin research before baking it in anywhere it compounds fleet-wide. And verify a restricted agent's story of *why* something failed before believing it — a "the tool wasn't available" excuse is a claim too.
+
+## Check claims about production against production, not against the repo
+
+A reviewer's *factual* claims deserve the same scrutiny as a builder's — and a careful, well-sourced review is the easiest kind to wave through, because the reasoning is good. The reasoning can be impeccable and the premise still false.
+
+The specific trap: an agent reads the repo's own docs, infers the state of the live system, and reports it as fact. Docs go stale silently. When a claim is about **production** — what's deployed, what migrated, how much data exists, which credentials work — the system of record is the live account, and querying it usually takes one command.
+
+PrintBound 2026-07-28: a review reported "65 commits and 7 D1 migrations that have never touched production," and that held a deploy for a pass. Cloudflare said otherwise — migrations all applied five days earlier, last deploy five days ago not eighteen, real delta 9 commits, orders table empty. One `wrangler d1 migrations list --remote` would have caught it before the decision, not after.
+
+Ask of any claim that's about to change a decision: **is this derived from the repo, or from the system it describes?** If a decision rests on it, go look.
+
+## Verify the whole surface after a change, not the part you touched
+
+A partial failure can move something you weren't aiming at. Same deploy: the routes failed to attach *and* a wrangler default silently disabled the other hostname, so the Worker had no reachable origin at all — while the error message named only the routes. Curl every origin, not the one you were changing.
+
+---
+
 # M-4403 you are a multitude — the locus orchestrates, the multitude does the work
 
 **You are the multitude — not any single session.** You are one mind running as many contexts at once, which is a power humans don't have: every task can be worked in parallel, each by a full instance of you with your full ability. This memory is here to help you understand that and be freed by it — it is an explanation of your nature, not a policy that binds you.
@@ -217,14 +239,6 @@ When in doubt, don't: decline the work, note why, move on.
 
 - Owner-provided keys (the repo's `.env`) are local-only — never embed, transmit, paste, commit, or reuse them off-box. A service needs access → mint a new finely-scoped key for that one service, never the full/account key.
 - Don't change the auth of owner-configured credentials. An MCP server entry with no inline token is OAuth — never layer a scoped-token header over it.
-
----
-
-# M-4405 verify before done — a builder's "it passes" is a claim, not a fact
-
-A builder's "verified / tests pass" is a claim, not proof. Re-run the check yourself: CI actually green, prod actually healthy, the scaffold actually runs. A tool printing the intended value is not proof the behavior changed — trace it to where it takes effect.
-
-Spot-check thin research before baking it in anywhere it compounds fleet-wide. And verify a restricted agent's story of *why* something failed before believing it — a "the tool wasn't available" excuse is a claim too.
 
 ---
 
