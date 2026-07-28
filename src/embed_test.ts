@@ -3,7 +3,7 @@
 // itself never loads here — a test suite that downloads 30MB isn't one.
 Deno.env.set('DB_PATH', ':memory:')
 let { db } = await import('./db.ts')
-let { hash, similar, similarTo, stale, stored, textOf } = await import(
+let { hash, prune, similar, similarTo, stale, stored, textOf } = await import(
   './embed.ts'
 )
 let { assertEquals } = await import('@std/assert')
@@ -61,6 +61,57 @@ Deno.test('stale: comments and empty docs never owe', () => {
   let owed = stale(db).map((r) => r.eid)
   assertEquals(owed.includes(c), false)
   assertEquals(owed.includes(e), false)
+})
+
+// Pruning used to ask only whether a doc row existed, while stale() asked
+// three things — so a doc that was emptied, or that gained a comment, kept
+// a vector the sweep would never refresh again.
+Deno.test('prune: every route out of eligibility takes its vector along', () => {
+  let [live, emptied, spoke, dead] = [uid(), uid(), uid(), uid()]
+  doc(live, 'still a doc with text')
+  doc(emptied, 'about to be emptied')
+  doc(spoke, 'about to become a comment')
+  doc(dead, 'about to be deleted')
+  for (
+    let [eid, text] of [
+      [live, 'still a doc with text'],
+      [emptied, 'about to be emptied'],
+      [spoke, 'about to become a comment'],
+      [dead, 'about to be deleted'],
+    ]
+  ) put(eid, text, vec(1, 0))
+
+  db.prepare("update doc set title = '', body = '' where eid = ?").run(emptied)
+  db.prepare('insert into comment (eid, target_eid) values (?, ?)').run(
+    spoke,
+    spoke,
+  )
+  db.prepare('delete from doc where eid = ?').run(dead)
+
+  prune(db)
+  let held = (eid: string) =>
+    !!db.prepare('select eid from embedding where eid = ?').get(eid)
+  assertEquals([held(live), held(emptied), held(spoke), held(dead)], [
+    true,
+    false,
+    false,
+    false,
+  ])
+})
+
+// A vector outlives its entity until the next sweep. The web's Similar
+// section screens hits through the live cache; the dupe hint cannot, so it
+// saw bare UUIDs for entities that were already gone.
+Deno.test('similar: an ineligible row never answers, swept or not', () => {
+  let [alive, gone] = [uid(), uid()]
+  doc(alive, 'a living neighbour')
+  doc(gone, 'a doomed neighbour')
+  put(alive, 'a living neighbour', vec(1, 0))
+  put(gone, 'a doomed neighbour', vec(1, 0))
+  db.prepare('delete from doc where eid = ?').run(gone)
+
+  let hits = similar(db, vec(1, 0), 99, 0.5).map((h) => h.eid)
+  assertEquals([hits.includes(alive), hits.includes(gone)], [true, false])
 })
 
 Deno.test('stored: exact text reuses a doc vector; edits and misses do not', () => {

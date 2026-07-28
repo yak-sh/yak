@@ -68,23 +68,49 @@ export let embed = async (text: string): Promise<Float32Array | null> => {
   return Float32Array.from(out.data)
 }
 
-// The docs owed a (re)embedding: doc-bearing, non-comment, non-empty,
-// whose stored hash no longer names their text. Pure SQL + hash — the
-// testable half of the sweep.
+// SQLite's trim() strips spaces only, so name the whitespace JS trims —
+// the rule below and textOf have to agree on what "empty" means.
+let WS = ' \t\n\r\v\f'
+
+// The one rule for what should hold a vector: doc-bearing, not a comment,
+// carrying text. Every reader below asks THIS clause — stale() embeds
+// exactly these, prune() keeps exactly these, similar() answers for exactly
+// these — so an emptied doc, a doc that became a comment, and a deleted
+// entity all leave together, and no door can drift from another.
+// Correlated on purpose: `not exists` probes the comment index for the one
+// row at hand, so the same clause is cheap swept over every doc AND asked of
+// a single eid — one rule, never a second phrasing to fall out of step.
+let ELIGIBLE = `not exists (select 1 from comment where comment.eid = doc.eid)
+       and trim(coalesce(doc.title,'') || coalesce(doc.body,''), ?) != ''`
+
+let lives = (db: DatabaseSync, eid: string) =>
+  !!db.prepare(`select eid from doc where eid = ? and ${ELIGIBLE}`)
+    .get(eid, WS)
+
+// The docs owed a (re)embedding: eligible, and whose stored hash no longer
+// names their text. Pure SQL + hash — the testable half of the sweep.
 export let stale = (db: DatabaseSync) =>
   (db.prepare(
     `select d.eid, d.title, d.body, e.hash as had from doc d
      left join embedding e on e.eid = d.eid
-     where d.eid not in (select eid from comment)`,
-  ).all() as { eid: string; title: string; body: string; had: string | null }[])
+     where d.eid in (select eid from doc where ${ELIGIBLE})`,
+  ).all(WS) as {
+    eid: string
+    title: string
+    body: string
+    had: string | null
+  }[])
     .map((r) => ({ ...r, text: textOf(r.title, r.body) }))
     .filter((r) => r.text && hash(r.text) != r.had)
 
-// Rows for the dead: embeddings whose doc is gone (entity deleted, or
-// the doc emptied). Pruned by the sweep, so death needs no hook here.
-let prune = (db: DatabaseSync) =>
-  db.prepare('delete from embedding where eid not in (select eid from doc)')
-    .run()
+// Rows for the ineligible: an entity deleted, a doc emptied, a doc that
+// became a comment. Pruning reads the SAME rule stale() embeds by, so the
+// table can never keep a vector the sweep would never refresh.
+export let prune = (db: DatabaseSync) =>
+  db.prepare(
+    `delete from embedding
+     where eid not in (select eid from doc where ${ELIGIBLE})`,
+  ).run(WS)
 
 let put = (db: DatabaseSync, eid: string, text: string, vec: Float32Array) =>
   db.prepare(
@@ -147,7 +173,19 @@ export let similar = (
     for (let i = 0; i < q.length; i++) s += q[i] * v[i]
     if (s >= floor) hits.push({ eid: r.eid, score: s })
   }
-  return hits.sort((a, b) => b.score - a.score).slice(0, limit)
+  hits.sort((a, b) => b.score - a.score)
+  // Screen the ranked HEAD, not the table: a vector outlives its entity
+  // until the next sweep and must never answer (the web's Similar section
+  // filters hits through the live cache, but the dupe hint has no cache to
+  // filter through — it saw bare UUIDs for entities already gone). Dead
+  // rows are rare, so this costs ~limit point lookups; folding the rule
+  // into the fetch instead cost +75% on every call to screen out nothing.
+  let live: typeof hits = []
+  for (let h of hits) {
+    if (live.length == limit) break
+    if (lives(db, h.eid)) live.push(h)
+  }
+  return live
 }
 
 // A doc's row is reusable only while it names this model and exact text.
