@@ -2286,6 +2286,14 @@ a[data-ref]:hover {
   grid-template-rows: auto 1fr auto;
   min-height: 100%;
   min-width: 0;
+  /* The hosts are COLUMN flex containers, so height is the main axis and a
+     flex item shrinks to fit by default — which capped this at one viewport
+     while the transcript inside ran thousands of pixels longer. A sticky
+     child can only travel inside its own box, so the head unstuck after
+     exactly one screen. Refusing to shrink lets the box be as tall as the
+     log, which is the whole distance the head has to cover. min-height
+     still fills the host when the log is short. */
+  flex-shrink: 0;
 }
 .Session_Head {
   position: sticky;
