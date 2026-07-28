@@ -113,6 +113,14 @@ let homes = new Map<string, string>()
 // session_eid null) or a tombstone drops the eid.
 let claims = new Map<string, string>()
 
+// The entities this session holds right now — the filter's `mine` set, and
+// the thing `feed` diffs across a batch to notice a claim arriving.
+let ours = () => {
+  let held = new Set<string>()
+  for (let [eid, holder] of claims) if (holder == sessionEid) held.add(eid)
+  return held
+}
+
 // Fold a batch into what identity is made of — persona homes, claim
 // holders — and re-derive the session we serve. The home project —
 // where the session's mail lands (mail.target_eid, routed by the address
@@ -277,10 +285,14 @@ let sent = new Set<string>()
 // modes differ only in how they dedup (channel.ts Ctx.mode).
 let feed = (changes: Change[], mode?: 'catchup' | 'resume') => {
   learn(index, changes)
+  // What this session held BEFORE the batch. A claim inside it widens our
+  // scope, and `widen` below closes the backlog that widening exposes. Only
+  // a live frame is measured: a resume sweep carries every claim row in the
+  // graph, so measuring one would re-trigger itself forever.
+  let before = mode ? undefined : ours()
   resolve(changes)
   if (!sessionEid) return // our session isn't in the graph yet
-  let claimedEids = new Set<string>()
-  for (let [eid, s] of claims) if (s == sessionEid) claimedEids.add(eid)
+  let claimedEids = ours()
   let events = channelEvents(changes, {
     sessionEid,
     actorEid,
@@ -308,6 +320,16 @@ let feed = (changes: Change[], mode?: 'catchup' | 'resume') => {
     stamps.push({ eid: e.eid, name: 'notified', comp: {} })
   }
   if (stamps.length) markNotified(stamps)
+  // A claim we just gained makes entities ours that were not ours a moment
+  // ago — so their comments were never aimed at anyone this channel serves,
+  // and no live frame will ever carry them again. That is the reconnect gap
+  // in a different dimension: there the gap is in TIME, here it is in SCOPE,
+  // and either way what we missed is sitting in the snapshot. So resume over
+  // it. `notified` bounds the sweep, so anything the push already delivered
+  // stays delivered once (T-9394).
+  if (before && [...claimedEids].some((eid) => !before.has(eid))) {
+    sync().catch((e: unknown) => err(`claim resume failed: ${e}`))
+  }
 }
 
 // One /ws frame. `{live}` is a committed sync patch. The {since}-handshake
