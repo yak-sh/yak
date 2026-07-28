@@ -273,8 +273,7 @@ These hold everywhere in this repo, whoever — or whatever — writes the code:
   `jobs -p` is EMPTY inside a non-interactive `zsh -c`, so
   `P=$(jobs -p); …; kill $P` kills nothing and the shell exits leaving the
   children running — record each pid as you spawn it (`cmd & echo $!`), kill
-  that list, and confirm the box recovered with `uptime` (106 synthetic-load
-  loops outlived their run at load average 115, 2026-07-28).
+  that list, and confirm with `uptime`.
 - **The injection loop**: `.claude/settings.json` runs
   `task session context --hook` on SessionStart — agent sessions boot into
   their claimed work (`task context` / MCP `task_context`, same digest), led by
