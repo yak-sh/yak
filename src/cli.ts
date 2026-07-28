@@ -51,7 +51,7 @@ import {
   sessionMeta,
   showMd,
   similarHint,
-  snapshot,
+  snapshot as readGraph,
   spawnChanges,
   spawnDefaults,
   taskBlock,
@@ -1048,6 +1048,35 @@ export let roleEid = (all: Row[], id?: string) => {
 }
 
 // A graph-declared role already names the capability the daemon launched.
+// The last graph this process read. Every verb that already looks at the
+// graph — claim, show, list, comment, set, release, the colon verbs — leaves
+// it here, and the bus is served from it after the verb finishes. That is why
+// there is no wrapper around dispatch fetching its own: a snapshot of a real
+// graph is ~16MB and a quarter second, far too much to spend on every `task`
+// call to find out that nothing is waiting.
+let seen: Snapshot | undefined
+let snapshot = async () => (seen = await readGraph())
+
+// Serve the comms bus once per run, on STDERR. A pipe redirects stdout only,
+// so `task list | head` still shows this, `--json` stays parseable, and a
+// redirect to a file stays clean. `2>/dev/null` does hide it — but the stamp
+// demotes an item from unread to read in `task inbox`, which keeps everything
+// until it is ARCHIVED, so a message can be missed here and never lost.
+//
+// Verbs that only write serve nothing, which is right: they never read the
+// graph, so there is nothing in hand to serve from.
+let told = false
+let heard = async () => {
+  if (told || !seen) return
+  told = true
+  let sid = me()
+  if (!sid) return
+  let n = notices(seen, sid)
+  if (!n.lines.length) return
+  await send(n.ack)
+  console.error(noticeBlock(n.lines))
+}
+
 // The ancestry marker is the equivalent opt-in for an ad-hoc terminal.
 export let hookOperator = (role?: string, pid?: number) =>
   !!role || operatorHook(pid)
@@ -1069,6 +1098,7 @@ let context = async (args: string[]) => {
     let out = contextDigest(snap, sid, Date.now(), scope)
     if (fm) out = `${fm}\n${out}`
     let n = notices(snap, sid)
+    told = true // this digest IS the serving; heard() must not repeat it
     if (n.lines.length) {
       await send(n.ack)
       out += noticeBlock(n.lines)
@@ -1746,6 +1776,8 @@ if (import.meta.main) {
         Deno.exit(2)
       }
     }
+    // Whatever the verb did, hand over anything addressed to this session.
+    await heard()
   } catch (e) {
     console.error(`task: ${(e as Error).message} (server: ${host()})`)
     Deno.exit(1)

@@ -682,6 +682,54 @@ let graph: Snapshot = {
   deps: [],
 }
 
+// A comment on sub-1's claimed task, from another session, never notified —
+// the thing the bus is supposed to hand over.
+let C = 'bbbbbbbb-0000-4000-8000-000000000005'
+let W = 'bbbbbbbb-0000-4000-8000-000000000006'
+let busGraph: Snapshot = {
+  changes: [
+    ...graph.changes,
+    { eid: W, name: 'entity', comp: { eid: W, num: 5, created_at: '' } },
+    { eid: W, name: 'session', comp: { id: 'writer-1' } },
+    { eid: C, name: 'entity', comp: { eid: C, num: 6, created_at: '' } },
+    { eid: C, name: 'doc', comp: { title: '', body: 'the ask you missed' } },
+    { eid: C, name: 'comment', comp: { target_eid: T } },
+    {
+      eid: C,
+      name: 'created',
+      comp: { eid: C, at: '2026-07-28T00:00:00.000Z', via: W },
+    },
+  ],
+  deps: [],
+}
+
+// Serves busGraph and records the acks it is asked to write.
+let busServer = () => {
+  let acked: string[] = []
+  let server = Deno.serve({
+    hostname: '127.0.0.1',
+    port: 0,
+    onListen: () => {},
+  }, async (req) => {
+    let url = new URL(req.url)
+    if (req.method == 'POST' && url.pathname == '/apply') {
+      let changes = await req.json() as { eid: string; name: string }[]
+      for (let c of changes) if (c.name == 'notified') acked.push(c.eid)
+      return Response.json({ ok: true, changes })
+    }
+    if (url.pathname == '/snapshot') return Response.json(busGraph)
+    return Response.json(
+      rows(busGraph).map((r) => ({
+        eid: r.eid,
+        kind: r.kind,
+        comps: r.comps,
+      })),
+    )
+  })
+  let port = (server.addr as Deno.NetAddr).port
+  return { server, acked, host: `127.0.0.1:${port}` }
+}
+
 let graphServer = () => {
   let seen: string[] = []
   let all = rows(graph)
@@ -785,6 +833,39 @@ Deno.test('bare task never reads or prints the open board', async () => {
     assertEquals(out.code, 0)
     assertEquals(text(out.stdout).includes('Open board task'), false)
     assertEquals(seen.includes('/snapshot'), false)
+  } finally {
+    await server.shutdown()
+  }
+})
+
+// Passive delivery: a verb that merely READ the graph serves the bus from
+// what it already has — no per-verb wiring, and no second snapshot (one is
+// ~16MB on a real graph). It rides stderr so a pipe or --json can never
+// swallow a message that was just stamped read.
+Deno.test('any graph-reading verb serves the bus, on stderr', async () => {
+  let { server, acked, host } = busServer()
+  try {
+    let out = await new Deno.Command(Deno.execPath(), {
+      args: [
+        'run',
+        '-A',
+        new URL('./cli.ts', import.meta.url).pathname,
+        'show',
+        'T-2',
+      ],
+      clearEnv: true,
+      env: { TASKS_HOST: host, TASKS_SESSION: 'sub-1' },
+    }).output()
+    assertEquals(out.code, 0)
+    // the message reached the operator as a served notice...
+    assertMatch(text(out.stderr), /pending messages/)
+    assertMatch(text(out.stderr), /the ask you missed/)
+    // ...and the block never touched what the caller asked for. (`show`
+    // renders the comment thread itself on stdout, which is its job — what
+    // must not leak there is the BUS, since that is what a pipe would eat.)
+    assertEquals(/pending messages/.test(text(out.stdout)), false)
+    // ...and was stamped read exactly once
+    assertEquals(acked, [C])
   } finally {
     await server.shutdown()
   }
