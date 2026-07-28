@@ -124,17 +124,15 @@ export let manuals: Record<string, Manual> = {
   },
   mail: {
     usage: 'mail [filters...] [--json|--all|--sent]',
-    about: 'fleet mail: bare means your unread inbox',
+    about: 'the mail-only slice of your items',
+    deprecated: 'superseded by task inbox, where mail is one kind of item',
     examples: [
-      'task mail',
-      'task mail show E-9',
+      'task inbox',
       'task mail send jeff Subject words --body=@draft.md',
-      'task mail reply E-9 "on it — landing today"',
     ],
     detail:
       '<to> is an address or graph reference (alias, P-9, eid); the address ' +
       'book resolves it at delivery. Filters speak `task help grammar`.',
-    root: true,
     options: [json, flag('--all'), flag('--sent')],
   },
   'mail show': {
@@ -144,8 +142,11 @@ export let manuals: Record<string, Manual> = {
     words: [1, 1],
   },
   'mail send': {
+    // Root because `mail` itself is deprecated: sending a letter is not
+    // superseded by the inbox, so it keeps its own door in the usage.
     usage: 'mail send <to> <subject...> --body=@file|-|@- [--from=...]',
     about: 'send a letter; - and @- read the body from stdin',
+    root: true,
     options: [body, value('--from', 'an address or graph reference')],
     words: [2],
     check: (args) =>

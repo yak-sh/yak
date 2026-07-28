@@ -373,11 +373,12 @@ let mailList = async (args: string[]) => {
   if (json) return console.log(JSON.stringify(hits, null, 2))
   if (!hits.length) {
     return console.error(
-      sent
-        ? '(nothing sent)'
-        : every
+      sent ? '(nothing sent)' : every
         ? '(no mail)'
-        : '(no unread mail — task mail --all sees everything)',
+        // Points at the inbox, not at more mail: an operator reads this line
+        // and concludes they are current, so it must name the surface that
+        // actually holds everything owed to them.
+        : '(no unread mail — task inbox is everything addressed to you)',
     )
   }
   let bold = Deno.stdout.isTerminal()
@@ -1702,6 +1703,15 @@ if (import.meta.main) {
       let selected = route(cmd, rest)
       if (selected) {
         validate(selected.name, selected.manual, selected.args)
+        // A deprecated verb still WORKS — this is a signpost, not a gate.
+        // It has to fire on the RUN: the only people still typing one are
+        // acting from habit, and they never read the help. stderr, because
+        // stdout is what the caller asked for and is usually piped.
+        if (selected.manual.deprecated) {
+          console.error(
+            `task ${selected.name}: deprecated — ${selected.manual.deprecated}`,
+          )
+        }
       } else if (cmd?.startsWith(':')) {
         validateCommand(cmd.slice(1), rest)
       } else if (rest[0]?.startsWith(':')) {
