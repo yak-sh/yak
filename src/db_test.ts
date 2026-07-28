@@ -1186,6 +1186,31 @@ Deno.test('open backfills every pre-spawn session, once', () => {
   Deno.removeSync(path)
 })
 
+Deno.test('open drops a retired acked_at, and keeps the session', () => {
+  let path = Deno.makeTempFileSync({ prefix: 'tasks-acked-', suffix: '.db' })
+  let sess = uid()
+  let d = open(path)
+  apply(d, [{ eid: sess, name: 'session', comp: { id: 'probe', cwd: '/tmp' } }])
+  // A database written before the stamp replaced the cursor.
+  d.exec('alter table session add column acked_at text')
+  d.prepare('update session set acked_at = ? where eid = ?')
+    .run('2026-01-01T00:00:00.000Z', sess)
+  d.close()
+
+  let cols = (db: ReturnType<typeof open>) =>
+    (db.prepare("select name from pragma_table_info('session')")
+      .all() as { name: string }[]).map((c) => c.name)
+  d = open(path)
+  assertEquals(cols(d).includes('acked_at'), false)
+  assertEquals(compOf(d, sess, 'session')?.cwd, '/tmp') // the row survives
+  d.close()
+
+  d = open(path) // idempotent: a second boot has nothing to drop
+  assertEquals(cols(d).includes('acked_at'), false)
+  d.close()
+  Deno.removeSync(path)
+})
+
 Deno.test('backfill: comment instruments move into created.via', () => {
   let d = fresh()
   let target = uid(), author = uid(), comment = uid()

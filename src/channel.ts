@@ -107,9 +107,9 @@ export type Row = {
   comps: Set<string>
   doc?: { title: string; body: string }
   // A session row's own fields, MERGED across patches — identity is read
-  // off the index, not off one batch, so a patch that carries only
-  // `acked_at` can't blank the actor and a rotation can't strand a stale
-  // one. `pid` is the seat (findSession, below); the rest route delivery.
+  // off the index, not off one batch, so a patch that carries only `turn`
+  // can't blank the actor and a rotation can't strand a stale one. `pid`
+  // is the seat (findSession, below); the rest route delivery.
   sess?: Sess
 }
 export type Sess = {

@@ -425,10 +425,10 @@ export let Session = ({ e }: { e: Ent }) => {
   // A comment joins the thread once the session has HEARD it: a managed
   // resume prints the words as its own `session.input` line (the log IS
   // the delivery — the comment would double it, so it hides), and the
-  // bus cursor (`acked_at`) covers what a live run was served. An event
-  // comment is machinery narrating and the session's own note is the
-  // agent speaking — both already part of the story. Anything else is
-  // still in flight: it waits under the log until the agent takes it.
+  // `notified` stamp covers what a live run was served. An event comment
+  // is machinery narrating and the session's own note is the agent
+  // speaking — both already part of the story. Anything else is still in
+  // flight: it waits under the log until the agent takes it.
   let inputs = new Set(
     log.entries.flatMap((x) =>
       x.row?.kind == 'say' && x.row.role == 'user' ? [x.row.text] : []
@@ -436,8 +436,7 @@ export let Session = ({ e }: { e: Ent }) => {
   )
   let cs = commentsOn(e.eid).filter((c) => !inputs.has(c.doc?.body ?? ''))
   let heard = (c: Ent) =>
-    !!c.comment!.event || c.created?.via == e.eid ||
-    (!!s.acked_at && String(c.created?.at ?? '') <= s.acked_at)
+    !!c.comment!.event || c.created?.via == e.eid || !!c.notified
   let thread = weave(rows, cs.filter(heard))
   let unsent = cs.filter((c) => !heard(c))
   return (

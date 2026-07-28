@@ -104,7 +104,7 @@ export let comps: Record<string, Record<string, PropType>> = {
     domain: { text: 'domains' }, // free text; the graph suggests
   },
   // retired_at: the project is over, not erased. Wire-writable — stamping
-  // it IS the retirement (like acked_at, no effect needed); everything
+  // it IS the retirement (like a mail's read_at, no effect needed); everything
   // filed under it stays referenceable but sinks (search, .order=hot).
   project: { retired_at: 'time' },
   repo: { path: 'text', base_branch: 'text' }, // the project's checkout
@@ -131,8 +131,8 @@ export let comps: Record<string, Record<string, PropType>> = {
   // in for its operator; {eid: ''} because the pool is shared). The
   // universal provenance stamp keeps both levels directly queryable
   // (`.created.by=jeff`, `.created.via=S-31`). An assertion, not
-  // authentication — forging it only garbles your own attribution, like
-  // acked_at.
+  // authentication — forging it only garbles your own attribution, like a
+  // mail's read_at.
   client: { user_agent: 'text', actor_eid: { eid: '', death: 'detach' } }, // ip is server-stamped too
   camera: {
     client_eid: { eid: 'client', death: 'cascade' },
@@ -153,18 +153,19 @@ export let comps: Record<string, Record<string, PropType>> = {
   // survives as a plain canvas — the binding was the client's, the
   // contents aren't.
   shelf: { client_eid: { eid: 'client', death: 'release' } },
-  // acked_at is the session's OWN "seen up to here" cursor for the
-  // while-you-were-away digest — wire-writable because forging it only
-  // deafens yourself. The four launch aliases stay writable during the
-  // spawn compatibility window; apply() mirrors them into the canonical
-  // spawn comp before effects run.
+  // What a session may say about ITSELF — wire-writable because forging any
+  // of it only misdirects your own session. What it has SEEN is not here: it
+  // is the per-item `notified` stamp, so no cursor can sweep past an item
+  // that was never actually served. The four launch aliases stay writable
+  // during the spawn compatibility window; apply() mirrors them into the
+  // canonical spawn comp before effects run.
   session: {
     id: 'text',
     cwd: 'text',
     // The provider process this session runs in — the SessionStart hook walks
     // /proc and stamps it. Claude's channel binds by it; Codex's log follower
     // uses it as liveness.
-    // Wire-writable like acked_at: forging it only misroutes your own mail.
+    // Wire-writable like id/cwd: forging it only misroutes your own mail.
     pid: 'number',
     // The native terminal surface inherited by a provider hook. It is an
     // address, not authority: the server revalidates its process tree before
@@ -177,7 +178,6 @@ export let comps: Record<string, Record<string, PropType>> = {
     // rest of this block, and therefore a REFERENCE, not a capability: the
     // server confines it to the provider-owned stores (sessions.ts).
     transcript: 'text',
-    acked_at: 'time',
     // What KIND of session this is, self-reported at SessionStart: `agent_type`
     // is set when launched `claude --agent <name>`; `source` is the boot mode
     // (startup|resume|clear|compact|fork). Wire-writable like id/cwd/pid —
@@ -259,8 +259,8 @@ export let comps: Record<string, Record<string, PropType>> = {
     // RFC Message-ID at delivery (mail.ts). History like target_eid: a
     // reply outlives the mail it answered.
     reply_to_eid: { eid: 'mail', death: 'keep' },
-    // The reader's own "seen" mark — wire-writable like session.acked_at:
-    // forging it only deafens yourself. Unread derives: message_id set
+    // The reader's own "seen" mark — wire-writable: forging it only
+    // deafens yourself. Unread derives: message_id set
     // (it arrived) and this still empty; outbound is born read.
     read_at: 'time',
   },
@@ -757,8 +757,8 @@ export type Fold = {
 export type Shelf = { eid: string; client_eid: string }
 
 // An agent session, reified: `id` is its external identity (a Claude
-// session id, an operator name), `cwd` where it runs, `acked_at` its own
-// comms-bus cursor — the three things a session may say about itself.
+// session id, an operator name) and `cwd` where it runs — what a session
+// may say about itself. What it has seen lives on the items, not here.
 //
 // Everything below is the LIFECYCLE of a session we spawned (origin
 // 'managed'; an 'external' session just announces itself and carries
@@ -778,7 +778,6 @@ export type Session = {
   notice_accepted_at?: string | null // later busy hook accepted it
   notice_token?: string | null // opaque attempt id, never message content
   transcript?: string | null // provider-owned JSONL — an external log
-  acked_at?: string | null
   agent_type?: string | null // set when launched `claude --agent <name>`
   source?: string | null // boot mode: startup|resume|clear|compact|fork
   operator?: boolean | null // receives project-wide attention

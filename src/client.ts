@@ -931,12 +931,15 @@ let unheard = (all: Row[], sess: Row | undefined, now: number) => {
     .slice(0, 5)
   let got = recent
     .map((s) => {
-      let cutoff = String(s.comps.session?.acked_at ?? '') || bornAt(s)
+      // Unheard is the per-item stamp, the same rule notices() serves by —
+      // so the digest and the bus can never disagree about what is owed.
+      // Still floored at the session's birth: nothing can be owed to a
+      // session that did not exist when it was written.
       let n = all.filter((r) => {
         let c = r.comps.comment
         return c && c.target_eid == s.eid && !c.event &&
-          r.comps.created?.by != actor &&
-          bornAt(r) > cutoff
+          r.comps.created?.by != actor && !r.comps.notified &&
+          bornAt(r) > bornAt(s)
       }).length
       return [s, n] as const
     })
@@ -1273,20 +1276,14 @@ export let notices = (snap: Snapshot, session: string) => {
   if (events.length > served.length) {
     lines.push(`…and ${events.length - served.length} more pending`)
   }
-  // One atomic ack batch: the session's coarse fallback cursor plus exactly
-  // the items rendered above. Overflow and concurrent arrivals remain owed.
-  let ack: Change[] = [
-    {
-      eid: sess.eid,
-      name: 'session',
-      comp: { acked_at: new Date().toISOString() },
-    },
-    ...served.map((ev): Change => ({
-      eid: ev.eid,
-      name: 'notified',
-      comp: {},
-    })),
-  ]
+  // One atomic ack batch: exactly the items rendered above, each stamped
+  // where it can be read back per item. Overflow and concurrent arrivals
+  // remain owed, because nothing here says "seen up to a time".
+  let ack: Change[] = served.map((ev): Change => ({
+    eid: ev.eid,
+    name: 'notified',
+    comp: {},
+  }))
   return { lines, ack }
 }
 

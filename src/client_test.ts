@@ -195,8 +195,6 @@ Deno.test('notices: unseen comments on claimed tasks + messages to the session',
   assertEquals(n.lines[0].includes('heads up'), true)
   assertEquals(n.lines[0].includes('[approved]'), true)
   assertEquals(n.lines[1].includes('P-81 · via S-80: ping'), true)
-  assertEquals(n.ack[0].name, 'session')
-  assertEquals(typeof n.ack[0].comp?.acked_at, 'string')
   // serving a comment stamps `notified` on it (T-7010): the sweep is a
   // delivery door, so the channel plugin won't re-inject what it already told.
   let told = n.ack.filter((c) => c.name == 'notified').map((c) => c.eid).sort()
@@ -2021,11 +2019,8 @@ Deno.test('contextDigest: unheard — comments after a past session stopped list
   let base = [
     ...mk(eid(2), ago(0), { session: { id: 'u-new', actor_eid: OP } }),
     ...mk(eid(1), ago(50), { session: { id: 'u-other', actor_eid: OTHER } }),
-    // wrapped 20h ago, last ack 21h ago
-    ...mk(eid(3), ago(20), {
-      session: { id: 'u-old', actor_eid: OP, acked_at: ago(21) },
-    }),
-    // never acked: birth is the cutoff
+    // wrapped 20h ago — birth floors what can be owed to it
+    ...mk(eid(3), ago(20), { session: { id: 'u-old', actor_eid: OP } }),
     ...mk(eid(4), ago(30), { session: { id: 'u-older', actor_eid: OP } }),
     // beyond the week: out of "recent"
     ...mk(eid(5), ago(24 * 8), { session: { id: 'u-stale', actor_eid: OP } }),
@@ -2034,15 +2029,19 @@ Deno.test('contextDigest: unheard — comments after a past session stopped list
     changes: [...base, ...extra],
     deps: [],
   })
-  // one session, two unheard: after the ack, foreign, not events
+  // one session, two unheard: un-notified, foreign, not events
   let one = g([
     ...note(eid(6), eid(3), ago(10)),
     ...note(eid(7), eid(3), ago(5)),
-    ...note(eid(8), eid(3), ago(22)), // before the ack: was served
+    ...note(eid(8), eid(3), ago(22)), // predates the session: void
     ...note(eid(9), eid(3), ago(4), OTHER, 'status'), // machinery
     ...note(eid(10), eid(3), ago(3), OP), // own actor
     ...note(eid(11), eid(1), ago(2)), // another actor's session
     ...note(eid(12), eid(5), ago(1)), // too old a session
+    // already served — the per-item stamp is what makes it heard, and it
+    // sits between the two that count, so a cursor could not have hidden it
+    ...note(eid(13), eid(3), ago(7)),
+    { eid: eid(13), name: 'notified', comp: {} },
   ])
   let d = contextDigest(one, 'u-new', NOW)
   assertMatch(d, /## unheard — S-72 got 2 comments after it wrapped/)

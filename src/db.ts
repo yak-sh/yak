@@ -636,6 +636,19 @@ export let open = (path = file) => {
       db.exec(`alter table ${table} add column ${ddl}`)
     }
   }
+  // The mirror of addCol, for a column whose mechanism is gone. A retired
+  // column that lingers still answers a schema read, so it keeps teaching a
+  // mechanism the code no longer has — the drop is what makes removal true.
+  let dropCol = (table: string, col: string) => {
+    let cols = db.prepare(`select name from pragma_table_info('${table}')`)
+      .all() as { name: string }[]
+    if (cols.some((c) => c.name == col)) {
+      db.exec(`alter table ${table} drop column ${col}`)
+    }
+  }
+  // Retired by the per-comment `notified` stamp, which is per item and so
+  // cannot advance past an unserved sibling the way a cursor could.
+  dropCol('session', 'acked_at')
   addCol('task', 'project_eid', 'project_eid text references entity(eid)')
   addCol('task', 'assignee_eid', 'assignee_eid text references entity(eid)')
   addCol('task', 'domain', 'domain text')
@@ -648,7 +661,6 @@ export let open = (path = file) => {
   addCol('session', 'notice_token', 'notice_token text')
   // A provider-owned transcript JSONL — an external session's log file.
   addCol('session', 'transcript', 'transcript text')
-  addCol('session', 'acked_at', 'acked_at text')
   // Self-reported at SessionStart (types.ts): what kind of session, how it booted.
   addCol('session', 'agent_type', 'agent_type text')
   addCol('session', 'source', 'source text')

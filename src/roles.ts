@@ -548,17 +548,23 @@ let reconcileManaged = async (
   let pending = notices(snapshot(db), String(session.id))
   if (!pending.lines.length) return
   let newest =
-    pending.ack.slice(1).map((change) =>
+    pending.ack.map((change) =>
       (db.prepare('select at from created where eid = ?').get(change.eid) as
         | { at: string }
         | undefined)?.at ?? ''
     ).sort().at(-1) ?? ''
   let sent = String(session.notice_at ?? '')
-  let acked = String(session.acked_at ?? '')
-  // One wake per pending horizon. A task_context after the attempt advances
-  // acked_at and may reveal overflow; a newer graph item creates a new
+  // When this session last CONSUMED notices: serving stamps `notified` with
+  // the serving session as `via`, so the newest such stamp is the answer,
+  // per item and exact.
+  let served = String(
+    (db.prepare('select max(at) as at from notified where via = ?')
+      .get(String(session.eid)) as { at: string | null } | undefined)?.at ?? '',
+  )
+  // One wake per pending horizon. A task_context after the attempt consumes
+  // notices and may reveal overflow; a newer graph item creates a new
   // horizon. An ignored prompt is not repeated every two seconds.
-  if (sent && acked <= sent && newest <= sent) return
+  if (sent && served <= sent && newest <= sent) return
   let at = deps.now()
   stampSession(String(session.eid), {
     notice_at: at,
