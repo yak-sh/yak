@@ -798,3 +798,28 @@ Deno.test('the sender is the author, in both directions and unborrowable', () =>
   // and the vocabulary itself is the guarantee: no `from` to write
   assertEquals('from' in comps.mail, false)
 })
+
+// The residual T-9511 left behind: signing fell back to the box owner when
+// nothing named a writer, so an unattributed POST — and every relay letter,
+// which names none — went out as the owner, the highest-trust byline there
+// is. Provenance may fall back; a signature may not.
+Deno.test('nothing signs by fallback: the relay, and the unattributed write', async () => {
+  let voice = somebody('a-venture', 'venture@bot.test')
+
+  // A relay carries someone's words, so it is signed by whoever wrote them.
+  let { task } = fixture()
+  let c = comment(task, voice)
+  fanout(cast)(c, { target_eid: task })
+  assertEquals(mintedFor(c)[0].from, 'venture@bot.test')
+
+  // An unattributed write signs nothing at all, and delivery refuses it
+  // rather than letting it speak as the owner.
+  let m = uid()
+  apply(db, [
+    { eid: m, name: 'doc', comp: { title: 's', body: 'b' } },
+    { eid: m, name: 'mail', comp: { to: 'x@y.test' } },
+  ])
+  assertEquals(row(m).from, null)
+  await mailed(cast)(m, {})
+  assertMatch(String(row(m).error), /no sender/)
+})

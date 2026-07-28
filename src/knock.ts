@@ -71,6 +71,11 @@ export let knocked =
     let done = (delivery: string) =>
       stamp(eid, { acted_at: now(), delivery }, cast)
     let fail = (error: string) => stamp(eid, { acted_at: now(), error }, cast)
+    // Who asked. The knock's own provenance is the author of anything it
+    // sends on their behalf.
+    let knocker = () =>
+      (db.prepare('select "by" from created where eid = ?')
+        .get(eid) as { by: string | null } | undefined)?.by ?? null
     try {
       // 1: someone with that identity is reachable — the cast already
       // delivered (channel plugin / comms bus); the stamp names them.
@@ -105,17 +110,24 @@ export let knocked =
         let words = wordsFor(target)
         let m = uuid()
         let t = trace()
-        let out = apply(db, [
-          {
-            eid: m,
-            name: 'doc',
-            comp: {
-              title: `knock: ${human(target)}`,
-              body: words || `You are asked to look at ${human(target)}.`,
+        let out = apply(
+          db,
+          [
+            {
+              eid: m,
+              name: 'doc',
+              comp: {
+                title: `knock: ${human(target)}`,
+                body: words || `You are asked to look at ${human(target)}.`,
+              },
             },
-          },
-          { eid: m, name: 'mail', comp: { to, target_eid: target } },
-        ], t)
+            { eid: m, name: 'mail', comp: { to, target_eid: target } },
+            // Signed by whoever knocked — the letter carries their words.
+            // An unnamed writer would sign it by fallback, as the owner.
+          ],
+          t,
+          knocker(),
+        )
         cast(out)
         dispatch(out, t, (c, e) => console.warn(`knock mail ${c} —`, e))
         return done(`mailed ${human(to)}`)

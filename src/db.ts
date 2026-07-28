@@ -1138,6 +1138,33 @@ export let writerActor = (
   return ownerActor(db)
 }
 
+// Who may SIGN a letter: writerActor's chain with its FALLBACKS REMOVED.
+// Provenance is allowed to guess — an unattributed write is still something
+// the box owner set in motion, so created.by names them. A signature is not:
+// falling back would let any unattributed /apply POST send mail as the owner,
+// the highest-trust byline in the fleet, which is exactly the tier a forged
+// sender was able to claim (T-9511). Nothing resolved means nothing signed,
+// and mail.ts refuses to deliver an unsigned letter.
+export let senderActor = (
+  db: DatabaseSync,
+  writer?: string | null,
+): string | null => {
+  if (!writer) return null
+  let s = db.prepare(
+    'select cwd, actor_eid from session where id = ? or eid = ?',
+  ).get(writer, writer) as
+    | { cwd: string | null; actor_eid: string | null }
+    | undefined
+  if (s) return s.actor_eid ?? ventureAt(db, s.cwd) ?? null
+  let c = db.prepare('select actor_eid from client where eid = ?')
+    .get(writer) as { actor_eid: string | null } | undefined
+  if (c) return c.actor_eid ?? null
+  let a = db.prepare(
+    'select eid from person where eid = ? union select eid from project where eid = ?',
+  ).get(writer, writer) as { eid: string } | undefined
+  return a ? writer : null
+}
+
 // The instrument stopped one step before writerActor's principal: a session
 // label or eid resolves to that session, a client eid to that client. Direct
 // actor writes have no reified instrument.
@@ -1596,8 +1623,9 @@ export let apply = (
       if (!key.startsWith('mail ')) continue
       let eid = key.slice(5)
       if (!alive.get(eid)) continue
-      let addr = actor
-        ? (addrOf.get(actor) as { address: string } | undefined)?.address
+      let signer = senderActor(db, writer)
+      let addr = signer
+        ? (addrOf.get(signer) as { address: string } | undefined)?.address
         : undefined
       if (!addr) continue
       sender.run(addr, eid)

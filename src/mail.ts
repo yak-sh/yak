@@ -304,26 +304,35 @@ export let fanout =
     let sid = crypto.randomUUID()
     let t2 = trace()
     try {
-      let out = apply(db, [
-        {
-          eid: sid,
-          name: 'doc',
-          comp: {
-            title: `[T-${num}] ${title}`,
-            body: `${said}\n\nhttp://127.0.0.1:5173/T-${num}`,
+      let out = apply(
+        db,
+        [
+          {
+            eid: sid,
+            name: 'doc',
+            comp: {
+              title: `[T-${num}] ${title}`,
+              body: `${said}\n\nhttp://127.0.0.1:5173/T-${num}`,
+            },
           },
-        },
-        {
-          eid: sid,
-          name: 'mail',
-          comp: { to: t.project_eid, target_eid: target },
-        },
-        {
-          eid: sid,
-          name: 'dependency',
-          comp: { type: 'about', child_eid: eid },
-        },
-      ], t2)
+          {
+            eid: sid,
+            name: 'mail',
+            comp: { to: t.project_eid, target_eid: target },
+          },
+          {
+            eid: sid,
+            name: 'dependency',
+            comp: { type: 'about', child_eid: eid },
+          },
+          // The relay carries someone's WORDS, so it is signed by whoever
+          // wrote them. Without a writer named here the sender would resolve
+          // by fallback, and a comment relayed from any venture would leave
+          // signed by the box owner (T-9571).
+        ],
+        t2,
+        actor?.by ?? null,
+      )
       cast(out)
       dispatch(out, t2, (c, e) => console.warn(`relay effect ${c} —`, e))
     } catch (e) {

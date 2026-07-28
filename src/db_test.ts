@@ -13,10 +13,12 @@ let {
   mendMail,
   open,
   search,
+  senderActor,
   snapshot,
   touch,
   vocabHashOf,
   vocabularyDoc,
+  writerActor,
 } = await import(
   './db.ts'
 )
@@ -2282,4 +2284,36 @@ Deno.test('delta: snapshot@C0 + delta(C0) matches the live broadcast stream, cas
   // journal, absent from it.
   assertEquals(typeof recon.cache[other].created?.at, 'string')
   assertEquals(typeof recon.cache[other].updated?.at, 'string')
+})
+
+Deno.test('a signature never falls back the way provenance does', () => {
+  // A db with exactly ONE person: that person IS the box owner, which is
+  // when the fallback in writerActor has something to return.
+  let path = Deno.makeTempFileSync({ prefix: 'tasks-signer-', suffix: '.db' })
+  let d = open(path)
+  let owner = uid()
+  apply(d, [
+    { eid: owner, name: 'doc', comp: { title: 'the owner' } },
+    { eid: owner, name: 'person', comp: {} },
+    { eid: owner, name: 'email', comp: { address: 'owner@yak.test' } },
+  ])
+
+  // Provenance guesses, and should: an unattributed write is still theirs.
+  assertEquals(writerActor(d, null), owner)
+  // A signature refuses to. Otherwise any unattributed POST to the local
+  // /apply sends mail as the owner — the fleet's highest-trust byline.
+  assertEquals(senderActor(d, null), null)
+  assertEquals(senderActor(d, 'nobody-by-that-name'), null)
+  assertEquals(senderActor(d, owner), owner) // named outright, it stands
+
+  let m = uid()
+  apply(d, [
+    { eid: m, name: 'doc', comp: { title: 's', body: 'b' } },
+    { eid: m, name: 'mail', comp: { to: 'x@y.test' } },
+  ])
+  let signed = d.prepare('select "from" as f from mail where eid = ?')
+    .get(m) as { f: string | null }
+  assertEquals(signed.f, null) // unsigned, so mail.ts will refuse to send it
+  d.close()
+  Deno.removeSync(path)
 })
