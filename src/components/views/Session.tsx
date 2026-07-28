@@ -17,11 +17,11 @@ import { Id } from './Inline.tsx'
 import { Entity } from '../Entity.tsx'
 
 // An agent session, watched — the console (W-3676 #5): a sticky slim bar
-// (status, model, stop) over the lifecycle summary (server-owned columns,
-// riding the snapshot like any component — so the bar re-renders itself
-// off the cache as the run moves), the facts behind a disclosure, then
-// the log with the session's comments woven in by time, then the pinned
-// composer (Comments.tsx), which is the way to talk TO the agent.
+// (status, model, lifecycle summary, stop — server-owned columns riding
+// the snapshot like any component, so the bar re-renders itself as the
+// run moves), the log with the session's comments woven in by time, then
+// the pinned composer (Comments.tsx), which is the way to talk TO the
+// agent.
 //
 // The log is the FILE (src/sessions.ts): we read it back over
 // /sessions/:eid/logs, where each line already carries its renderer `row`
@@ -451,6 +451,27 @@ export let Session = ({ e }: { e: Ent }) => {
             {s.effort && ` · ${s.effort}`}
           </Model>
         )}
+        <Facts>
+          <Gist>{gist}</Gist>
+          <Kv>
+            <Fact k='id' v={s.id} />
+            <Fact k='branch' v={s.branch} />
+            <Fact k='cwd' v={s.cwd} />
+            {
+              /* The one irreducible difference, said rather than left blank:
+              a session we watch is a pid, not a child — so no exit code. */
+            }
+            {s.origin != 'managed' && (
+              <Fact
+                k='pid'
+                v={s.pid ? `${s.pid}` : null}
+              />
+            )}
+            <Fact k='started' v={when(s.started_at)} />
+            <Fact k='finished' v={when(s.finished_at)} />
+          </Kv>
+          <Stamp e={e} />
+        </Facts>
         {s.requested_task_eid && (
           <Entity eid={s.requested_task_eid} view='Inline' />
         )}
@@ -477,27 +498,6 @@ export let Session = ({ e }: { e: Ent }) => {
         )}
       </Head>
       <Panel>
-        <Facts>
-          <Gist>{gist}</Gist>
-          <Kv>
-            <Fact k='id' v={s.id} />
-            <Fact k='branch' v={s.branch} />
-            <Fact k='cwd' v={s.cwd} />
-            {
-              /* The one irreducible difference, said rather than left blank:
-              a session we watch is a pid, not a child — so no exit code. */
-            }
-            {s.origin != 'managed' && (
-              <Fact
-                k='pid'
-                v={s.pid ? `${s.pid}` : null}
-              />
-            )}
-            <Fact k='started' v={when(s.started_at)} />
-            <Fact k='finished' v={when(s.finished_at)} />
-          </Kv>
-          <Stamp e={e} />
-        </Facts>
         {/* markdown: our own data, so no sanitizer — as with a task body */}
         {!said && s.final_text && (
           <Final dangerouslySetInnerHTML={{ __html: md(s.final_text) }} />
