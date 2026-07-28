@@ -102,6 +102,13 @@ Ask of any claim that's about to change a decision: **is this derived from the r
 
 A partial failure can move something you weren't aiming at. Same deploy: the routes failed to attach *and* a wrangler default silently disabled the other hostname, so the Worker had no reachable origin at all — while the error message named only the routes. Curl every origin, not the one you were changing.
 
+## Prove a test can fail — and check that the restore landed where it started
+
+The strongest evidence a test is worth anything is watching it fail: break the fix, see red, put it back. Two things make that check lie to you.
+
+- **A test that passes either way proves nothing.** It usually means the fixture never reaches the code path — a fallback that returns null in the test database, an assertion on a value the scenario never produces. If reverting the fix leaves the test green, fix the test, not the code.
+- **The restore is itself an edit.** A first-match search-and-replace can put the line back in the wrong function, and the suite then fails for a reason that looks like the test's fault. Re-read the restored line in place before believing either result.
+
 ---
 
 # M-4403 you are a multitude — the locus orchestrates, the multitude does the work
