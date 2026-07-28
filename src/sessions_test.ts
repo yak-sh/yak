@@ -1021,8 +1021,11 @@ Deno.test('a comment steers a live managed session without settling it', async (
     // whether the steer went undelivered or the run never settled — a
     // stalled fact and a slow one want opposite fixes.
     () =>
-      `the steered continuation to settle ` +
-      `(steer delivered=${told(steer[1].eid)}, status=${row(eid)?.status})`,
+      `the steered continuation to settle (steer delivered=${
+        told(steer[1].eid)
+      }, status=${row(eid)?.status}, exit=${row(eid)?.exit_code}, error=${
+        row(eid)?.error
+      }, stop=${row(eid)?.stop_reason}, seq=${row(eid)?.latest_seq})`,
   )
   let events = Deno.readTextFileSync(log(eid)).split('\n').filter(Boolean)
     .map((l) =>
