@@ -1063,10 +1063,10 @@ export let hookOperator = (role?: string, pid?: number) =>
 
 let context = async (args: string[]) => {
   let hook = args.includes('--hook')
-  // Subagent mode: explicit --subagent (debug override), or the payload's
-  // SubagentStart event, or a Bash-shelled `task` inside a Task-tool child
-  // (CLAUDE_CODE_CHILD_SESSION). The hook branch confirms the event from
-  // stdin below; SessionStart reifies a normal graph participant.
+  // Subagent mode is DECLARED, never sniffed: explicit --subagent, or the
+  // payload's SubagentStart event (which carries the child's own agent_id).
+  // The hook branch confirms the event from stdin below; SessionStart
+  // reifies a normal graph participant.
   let sub = args.includes('--subagent')
   let sid = args.find((a) => !a.startsWith('--')) ?? me()
   // The digest plus the comms bus: unseen comments ride along, and the
@@ -1178,10 +1178,14 @@ let context = async (args: string[]) => {
     }
     return
   }
-  // A manual `task context` shelled from inside a Task-tool child carries
-  // CLAUDE_CODE_CHILD_SESSION — same subagent output (task block only), no
-  // reify (no payload here) and no digest. --subagent forces it too.
-  if ((sub || Deno.env.get('CLAUDE_CODE_CHILD_SESSION') == '1') && sid) {
+  // `task context --subagent`: the task block only, no reify (no payload
+  // here) and no digest. This used to fire on CLAUDE_CODE_CHILD_SESSION too,
+  // but that variable is set in an OPERATOR's own Bash — so the branch caught
+  // every shelled `task context` and returned before the bus was ever served,
+  // which is why a comment on a claimed task never reached its holder
+  // (T-9394). A subagent is told what it is; it is not guessed from the
+  // environment.
+  if (sub && sid) {
     let snap = await snapshot()
     let sess = rows(snap).find((r) =>
       r.comps.session && String(r.comps.session.id) == sid
@@ -1218,16 +1222,12 @@ let context = async (args: string[]) => {
   // JSON. An existing session stays a pure read: refreshing cwd/pid from
   // whoever happens to preview it would corrupt the row.
   if (!all.some((r) => r.comps.session && String(r.comps.session.id) == sid)) {
-    // The pid is THIS process's claude, so it may only be stamped when
-    // the sid names THIS process's conversation. A subagent is a tool
-    // call INSIDE the operator's claude (CLAUDE_CODE_CHILD_SESSION=1,
-    // and its CLAUDE_CODE_SESSION_ID is the operator's) — a child that
-    // mints its own id would otherwise hang a second row on the
-    // operator's process, and a pid with two rows is an ambiguous door
-    // (T-7279, T-7288). A child session has no process of its own to
-    // claim; the SubagentStart hook already stamps none.
-    let own = !Deno.env.get('CLAUDE_CODE_CHILD_SESSION') &&
-      Deno.env.get('CLAUDE_CODE_SESSION_ID') == sid
+    // The pid is THIS process's claude, so it may only be stamped when the
+    // sid names THIS process's conversation — and that equality is the whole
+    // test. A child minting its own id fails it (its CLAUDE_CODE_SESSION_ID
+    // is the operator's), so it can never hang a second row on the operator's
+    // process, and a pid with two rows stays impossible (T-7279, T-7288).
+    let own = Deno.env.get('CLAUDE_CODE_SESSION_ID') == sid
     let role = roleEid(all, Deno.env.get('TASKS_ROLE'))
     let s = sessionFor(
       all,
