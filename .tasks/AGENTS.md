@@ -401,9 +401,11 @@ seams wider or leakier, that's the wrong direction.
 
 ---
 
-# M-9273 @file is the DOOR's convention — but on a bare positional it is the VERB's, so mail reply sends the path
+# M-9273 @file is the DOOR's convention — every door holding your filesystem reads it, in every spelling
 
-A dot-param value that starts with `@` is read by the tool: `@file` is a file, `@-` is piped stdin, `@@` escapes a literal leading `@`. That convention belongs to the **door**, and every door with a filesystem speaks it — the same reading, whichever spelling you reach for:
+A value that starts with `@` is read by the tool itself: `@file` is a file, `@-` is piped stdin, `@@` escapes a literal leading `@`. The convention belongs to the **door**, never to the verb or the spelling. Every door that holds *your* filesystem reads it the same way, so you do not have to remember which call you are in.
+
+## Dot-param values
 
 | door | `.body=@file` |
 | --- | --- |
@@ -415,46 +417,51 @@ A dot-param value that starts with `@` is read by the tool: `@file` is a file, `
 | the web command bar | literal |
 | MCP `command` | literal |
 
-**A missing file is loud** — `task: .body=@/no/such/file: no such file`, exit 1, and the previous body untouched. An empty pipe is refused the same way rather than clearing the column.
+## Bare positionals read it too
 
-**Only `@` is special.** `.body=-` writes the single character `-`; the stdin door is spelled `@-`.
+A body passed as trailing words gets the same reading — but only when the body **IS** a reference: exactly one argv token, with no whitespace inside it.
 
-## The bare positional is a different question — and it is not uniform
-
-Everything above is about a **dot-param value**. Some verbs also take a bare positional `@file`, and there the reading is per-verb:
-
-| call | `@file` as a bare positional |
+| call | a lone trailing `@file` |
 | --- | --- |
-| `task comment <id> @file` | **reads the file** |
-| `task mail reply <id> @file` | **literal — the path becomes the message** |
+| `task comment <id> @file` | reads the file |
+| `task mail reply <id> @file` | reads the file |
+| `task session brief @file` | reads the file |
+| `task <mail> :reply @file` | reads the file |
+| `task :mail <to> <subj> -- @file` | reads the file |
 
-`task mail reply <id> [text… | --body=@file|-|@-]` takes free text as its positional, so a bare `@file` is faithfully sent as the body. **The correct form is `task mail reply <id> --body=@file`**, and `task mail send <to> <subject…> --body=@file` likewise.
+That confinement is what keeps prose safe. All of these stay verbatim text:
 
-This one is nastier than the other literal doors for two reasons:
+- `task mail reply E-9 @jeff thanks for the note` — more than one token
+- `task mail reply E-9 "@jeff thanks for the note"` — one token, but it holds spaces
+- `task mail reply E-9 @@handle` — `@@` escapes a genuine one-word `@`
 
-- **It is silent and outbound.** No error, exit 0, a cheerful receipt with a real mail id — and a human on the far end receives `@/tmp/claude-…/scratchpad/reply.md`. Nothing in the graph looks wrong.
-- **Success on the neighbouring door teaches the wrong lesson.** `task comment <id> @file` honours the bare form, so an agent that just used it ten times pattern-matches straight into the trap. 2026-07-29: two consecutive replies to the owner during a live P0 went out as bare paths; he read both, saw nothing, and reported a mail-tooling bug that did not exist.
+**`task mail send` is the one verb with no positional body**: its words are the *subject*, so the body must ride `--body=`, and it refuses without one — `task mail send <to> <subject…> --body=@file|-|@-`.
 
-Rule of thumb: **on any door whose positional argument is prose meant for a person, pass the body through `--body=`.** Reserve bare `@file` for verbs whose positional is unambiguously a document.
+## The failure modes are loud
 
-## Why the two literal doors
+- **A missing file**: `task: @/no/such/file: no such file`, exit 1 — thrown before anything is written, minted, or sent. A half-sent letter is not reachable, and the message names the token you typed rather than some other spelling.
+- **An empty pipe** is refused rather than clearing the column.
+- **Only `@` is special.** A dot-param `.body=-` writes the single character `-`; the stdin door is spelled `@-`. (`--body=-` is the one place a bare `-` means stdin, the way flags conventionally use it.)
 
-Neither has the caller's filesystem. In the web bar there is no disk to read. In MCP `command` the line is spoken to the **server's** process, so `@/etc/passwd` would read the server's disk and not the caller's — that door stays shut on purpose. An MCP caller passes a long body as a plain string instead: `graph_apply` with `{eid, name: "doc", comp: {body: "…"}}`, or `task_new` / `memory_save`, where `body` is a real parameter.
+## Why the web bar and MCP `command` stay literal
+
+Neither holds the caller's filesystem. In the web bar there is no disk to read. In MCP `command` the line is spoken to the **server's** process, so `@/etc/passwd` would read the server's disk and not yours — that door stays shut on purpose. An MCP caller passes a long body as a plain string instead: `graph_apply` with `{eid, name: "doc", comp: {body: "…"}}`, or `task_new` / `memory_save`, where `body` is a real parameter.
 
 ## Write a long body this way
 
 - **`task set <id> .body=@file`** or **`task <id> :set .body=@file`** — the shortest doors from a shell.
+- **`task mail reply <id> @file`** — or `--body=@file`; both read it.
 - **`graph_apply`** (MCP `tasks`) — the body is a normal JSON string, so newlines and markdown survive intact.
 - **`POST http://127.0.0.1:5173/apply`** with `[{eid, name:"doc", comp:{body}}]` — the same door over HTTP. Build the JSON from a file with a script and the body never passes through an agent's context, which matters for anything large.
-- **`memory_save`** for memories. Replacing an existing memory's body also needs the `was:` token `memory_recall` prints above it.
+- **`memory_save`** for memories. Replacing an existing body also needs the `was:` token `memory_recall` prints above it.
 
-## The habit that catches the rest of this class
+## Read back what you wrote, and what you sent
 
-Any write that REPLACES a body destroys what was there, so read the node to a file (`task show <id> --json` → `comps.doc.body`), patch the file, write it back, then **verify by reading the node again** — never by trusting the success message. This bites hardest on **persona and memory nodes**: blanking the `N-…` for a repo's common persona empties that repo's `AGENTS.md` on the next materialize, and the materializer auto-commits, so the damage lands in git within seconds.
+Any write that REPLACES a body destroys what was there. Read the node to a file (`task show <id> --json` → `comps.doc.body`), patch it, write it back, then **verify by reading the node again** — never by trusting the success message. This bites hardest on **persona and memory nodes**: blanking the `N-…` for a repo's common persona empties that repo's `AGENTS.md` on the next materialize, and the materializer auto-commits, so the damage lands in git within seconds.
+
+For outbound mail the same habit is `task show <id>` on the receipt — one call, and the only thing that distinguishes a delivered letter from a delivered file path.
 
 `task history <id> --json` holds every prior body verbatim, so recovery is a read plus one write even when you did not save a copy first.
-
-**For outbound mail the same habit is: read back what you sent.** `task show <id>` on the receipt costs one call and is the only thing that distinguishes a delivered letter from a delivered file path.
 
 ---
 
