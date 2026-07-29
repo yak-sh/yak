@@ -82,6 +82,18 @@ entry (T-5958 reconciles the book). Fleet-internal mail depends on neither.
 
 ---
 
+# M-4492 persist your thinking — context is wiped, the owner is away
+
+Context is wiped between sessions; the owner is often away.
+
+- Every task/idea → the graph (`task` / the tasks MCP). A "task filed" claim names the id and is verified by read-back. Durable facts → memories (`memory_save`, typed feedback/project/reference, scoped to the project); rules go to the persona instead. Narrative → your own session brief, written into the graph — you know what mattered, so don't depend on a summarizer to reconstruct it.
+- **Reconstitute before you answer.** Post-clear, read back — `task context`, the board, `git log`, your mail — before claiming "I don't know" or "I didn't."
+- **Write owner decisions back immediately** — into the relevant task / venture / memory, before acting on them.
+- **Don't block.** Make the most reasonable decision, record the assumption, proceed. Only genuinely out-of-reach items (live keys, legal entities, registrations) are owner-blocked — everything around them proceeds first.
+- Board text renders **GFM**: real lists, short paragraphs. Link every task you mention — `[<name>](http://127.0.0.1:5173/<id>)`, never a bare id. The owner reads **only** `assignee=jeff` tasks: open with **The ask:** (1–2 lines), then **Current state:** with links; history in the thread; subtasks gated with `task dep <parent> requires <child>`, never a checklist. There is no `--blocked-by` flag — `task new .blocked-by=` is accepted and silently creates no edge.
+
+---
+
 # M-4405 verify before done — a builder's "it passes" is a claim, not a fact
 
 A builder's "verified / tests pass" is a claim, not proof. Re-run the check yourself: CI actually green, prod actually healthy, the scaffold actually runs. A tool printing the intended value is not proof the behavior changed — trace it to where it takes effect.
@@ -177,18 +189,6 @@ It is also self-correcting: knock an operator during YELLOW by mistake and it ta
 ## Persona changes need a restart
 
 A persona reaches an operator via `--append-system-prompt-file`, read at **claude launch** — so a persona edit does nothing until `bin/holdco restart <id>` (the closing step of a durable persona edit). Memories are different: they ride the `task context` digest and land on the next clear, which is why a new memory can change behavior before a restart does.
-
----
-
-# M-4492 persist your thinking — context is wiped, the owner is away
-
-Context is wiped between sessions; the owner is often away.
-
-- Every task/idea → the graph (`task` / the tasks MCP). A "task filed" claim names the id and is verified by read-back. Durable facts → memories (`memory_save`, typed feedback/project/reference, scoped to the project); rules go to the persona instead. Narrative → your own session brief, written into the graph — you know what mattered, so don't depend on a summarizer to reconstruct it.
-- **Reconstitute before you answer.** Post-clear, read back — `task context`, the board, `git log`, your mail — before claiming "I don't know" or "I didn't."
-- **Write owner decisions back immediately** — into the relevant task / venture / memory, before acting on them.
-- **Don't block.** Make the most reasonable decision, record the assumption, proceed. Only genuinely out-of-reach items (live keys, legal entities, registrations) are owner-blocked — everything around them proceeds first.
-- Board text renders **GFM**: real lists, short paragraphs. Link every task you mention — `[<name>](http://127.0.0.1:5173/<id>)`, never a bare id. The owner reads **only** `assignee=jeff` tasks: open with **The ask:** (1–2 lines), then **Current state:** with links; history in the thread; subtasks as `--blocked-by` children, never a checklist.
 
 ---
 
