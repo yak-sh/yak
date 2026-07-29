@@ -6,7 +6,7 @@
     "install": "sh -c 'cd \"$(git worktree list --porcelain | head -1 | cut -c 10-)\" && deno install -g -f --name task -A --config deno.json src/cli.ts'",
     "mcp": "deno run -A --unstable-worker-options src/mcp.ts",
     "seed": "deno run -A src/db.ts",
-    "test": "deno test -A --unstable-worker-options src channels",
+    "test": "deno test -A --unstable-net --unstable-worker-options src channels",
     "bench": "deno bench -A src"
   },
   "fmt": {

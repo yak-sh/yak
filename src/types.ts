@@ -1104,6 +1104,13 @@ export type Pinned = Pin & { target_eid: string; view: string }
 // write; a column absent from `was` is simply unguarded, which is every
 // caller's behavior today. It rides BESIDE comp, never inside it: comp
 // admits only real columns, so `doc.was` would be refused as alien.
+//
+// Riding beside comp is also why every hop from a client to apply() must
+// SPREAD a change rather than rebuild it. Rewrite one as `{eid, name, comp}`
+// and nothing breaks loudly — the guard just stops guarding, and the write
+// lands unguarded while the caller believes it was protected. That is worse
+// than never having had it, so precondition_test.ts drives each door and
+// refuses the shape.
 export type Change = {
   eid: string
   name: string
