@@ -127,6 +127,12 @@ let CASES: [string, { comp: string; prop: string; value: unknown } | RegExp][] =
     }],
     ['.x=12', /ambiguous/],
     ['.nope=1', /unknown prop/],
+    // Hyphenated names must ROUTE (and fail) rather than slip the
+    // pattern: a name the regex rejected returned null, and cli.ts's
+    // split() files every non-param token under `words` — so
+    // `.blocked-by=T-1` became part of the task's TITLE, no edge and no
+    // error. No column is hyphenated, so nothing new resolves.
+    ['.blocked-by=T-1', /unknown prop/],
     ['.doc.nope=1', /no such prop/],
   ]
 Deno.test('dot-param routing', () => {

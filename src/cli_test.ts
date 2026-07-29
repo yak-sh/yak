@@ -640,10 +640,13 @@ Deno.test('strayFlag: trailing --flag with no value', () => {
   )
 })
 
-Deno.test('strayFlag: hyphenated flag name (--blocked-by)', () => {
+// The suggestion is checked before it is offered. `.blocked-by` routes
+// nowhere, so there is nothing to recommend — and recommending it sent
+// agents to a spelling that landed in the task's TITLE.
+Deno.test('strayFlag: a flag with no matching prop suggests nothing', () => {
   assertEquals(
     strayFlag(['Title', '--blocked-by', 'T-9']),
-    { got: '--blocked-by', suggest: '.blocked-by=T-9' },
+    { got: '--blocked-by' },
   )
 })
 

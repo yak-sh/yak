@@ -226,9 +226,14 @@ export let leadPrio = (
     }
     : { words }
 
+// A stray --flag, and the dot-param it MEANT — if one exists. The
+// suggestion is checked against the grammar before it is offered:
+// suggesting `.blocked-by=T-1` for `--blocked-by` sent agents to a
+// spelling that routes nowhere, and (until the param pattern admitted
+// hyphens) landed in the task's title instead of erroring.
 export let strayFlag = (
   words: string[],
-): { got: string; suggest: string } | null => {
+): { got: string; suggest?: string } | null => {
   let i = words.findIndex((w) => /^--[\w-]+(=|$)/.test(w))
   if (i < 0) return null
   let raw = words[i]
@@ -236,15 +241,33 @@ export let strayFlag = (
   let [flag, val] = eq >= 0
     ? [raw.slice(0, eq), raw.slice(eq + 1)]
     : [raw, words[i + 1]]
-  return { got: raw, suggest: `${flag.replace(/^--/, '.')}=${val ?? '…'}` }
+  let dot = `${flag.replace(/^--/, '.')}=${val ?? '…'}`
+  try {
+    // param() throws for a name that routes nowhere and for an ambiguous
+    // one; either way there is no single spelling to recommend.
+    return { got: raw, ...(param(dot) ? { suggest: dot } : {}) }
+  } catch {
+    return { got: raw }
+  }
 }
+
+// The flags agents reach for that are EDGES, not props — the one class
+// where "no such prop" is an unhelpful answer on its own.
+let edgeish = /block|depend|require|parent|child|subtask/i
 
 let create = async (args: string[]) => {
   let { params, words } = split(args)
   let stray = strayFlag(words)
   if (stray) {
     throw new Error(
-      `task new uses dot-params, not --flags — did you mean ${stray.suggest}? (got ${stray.got})`,
+      stray.suggest
+        ? `task new uses dot-params, not --flags — did you mean ${stray.suggest}? (got ${stray.got})`
+        : `no such prop for ${stray.got}${
+          edgeish.test(stray.got)
+            ? ' — a dependency is an EDGE, not a prop: ' +
+              'task dep <parent> requires <child>'
+            : ` — ${help(['grammar'])}`
+        }`,
     )
   }
   // Reference values (.project=bindery, .assignee=jeff) resolve at the

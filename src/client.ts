@@ -264,8 +264,14 @@ let legacySpawnProp = (name: string) => {
 // query.ts route(), so the reference sugar holds for writes too:
 // '.assignee=jeff' patches task.assignee_eid (derefParams turns the
 // value into an eid at the door).
+// A hyphen is admitted into the NAME so a hyphenated spelling reaches
+// route() and earns the same `unknown prop` error as any other unknown.
+// No column is hyphenated, so nothing new routes — but before this, a
+// name the pattern rejected returned null, and cli.ts's split() files
+// every non-param token under `words`: `.blocked-by=T-1` became part of
+// a task's TITLE. Silence, not an edge and not an error.
 export let param = (arg: string): Param | null => {
-  let m = arg.match(/^\.([A-Za-z_]+)(?:\.([A-Za-z_]+))?=(.*)$/s)
+  let m = arg.match(/^\.([A-Za-z_-]+)(?:\.([A-Za-z_-]+))?=(.*)$/s)
   if (!m) return null
   let [, a, b, raw] = m
   let p: Param
