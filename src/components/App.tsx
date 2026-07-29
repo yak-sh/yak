@@ -5,7 +5,7 @@ import { Admin } from './Admin.tsx'
 import { block, Chip, el } from './ui.tsx'
 import { filterable, FilterInput } from './Filter.tsx'
 import { applicable } from './registry.ts'
-import { icons } from './Card.tsx'
+import { TabFace } from './Card.tsx'
 import { spawnHit } from './Canvas.tsx'
 import { Icon } from './icons.tsx'
 import {
@@ -187,7 +187,7 @@ export let App = () => {
             data-tip={v}
             onClick={() => v != view && show(v)}
           >
-            <Icon name={icons[v]} />
+            <TabFace view={v} eid={e.eid} />
           </Tab>
         ))}
         <Tab

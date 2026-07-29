@@ -666,6 +666,24 @@ html {
   min-height: var(--tap);
   display: grid;
   place-items: center; /* the glyph stays centered as the floor grows */
+  position: relative; /* the badge hangs off the corner */
+}
+/* What is waiting behind a tab, without opening it. Out of flow, so the
+   glyph stays centered whether or not there is a count. */
+.Tab_Badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  min-width: 1.1em;
+  padding: 0 0.25em;
+  border-radius: 1em;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 0.65em;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  pointer-events: none; /* the whole tab stays one click target */
 }
 .Tab + .Tab {
   margin-left: calc(-1 * var(--gap)); /* cancel the row gap — gapless chips */

@@ -1,5 +1,5 @@
 import { type Signal, useComputed, useSignal } from '@preact/signals'
-import { camera, ent, mutate, pinZ, toFront, topZ } from '../live.ts'
+import { camera, ent, mutate, pinZ, toFront, topZ, unreadFor } from '../live.ts'
 import { type Pinned } from '../types.ts'
 import { block, el } from './ui.tsx'
 import { applicable } from './registry.ts'
@@ -26,6 +26,22 @@ export let icons: Record<string, string> = {
   JSON: 'braces',
   Schema: 'shapes',
   Debug: 'bug',
+}
+
+let Badge = el('span', 'Tab_Badge')
+
+// A tab's face: its icon, plus what is waiting behind it. Only the Inbox
+// carries a count today, and it is the difference between a tab you check
+// and one you remember to check. Shared by all three tab rows (card, peek,
+// fullscreen) so a badge can never appear on one and not another.
+export let TabFace = ({ view, eid }: { view: string; eid: string }) => {
+  let n = view == 'Inbox' ? unreadFor(eid) : 0
+  return (
+    <>
+      <Icon name={icons[view]} />
+      {n > 0 && <Badge>{n > 99 ? '99+' : n}</Badge>}
+    </>
+  )
 }
 
 let Pin = el('div', 'Pin')
@@ -236,7 +252,7 @@ export let Card = ({ p }: { p: Pinned }) => {
               aria-label={v}
               data-tip={v}
             >
-              <Icon name={icons[v]} />
+              <TabFace view={v} eid={p.target_eid} />
             </Tab>
           ))}
           <X

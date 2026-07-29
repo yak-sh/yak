@@ -21,7 +21,7 @@ import {
   type Snapshot,
   stamped,
 } from './types.ts'
-import { type Row } from './client.ts'
+import { inboxItem, isUnread, readerAt, type Row } from './client.ts'
 import { matchQuery, orderOf, parseQuery, resolveRefs, warm } from './query.ts'
 import { normalizeChanges } from './props.ts'
 import * as idb from './idb.ts'
@@ -241,6 +241,15 @@ export let gated = (e: Ent) =>
     let c = ent(r.child)
     return r.type == 'requires' && c.task && !settled(c.task.status)
   })
+
+// How many inbox items are waiting for this entity — a derived display
+// fact like gated() above, so it belongs here rather than in the view.
+// The SAME predicate the Inbox view, `task inbox` and the boot digest
+// read: a number on a tab can never promise what the tab doesn't hold.
+export let unreadFor = (eid: string) => {
+  let all = rows()
+  return all.filter(inboxItem(readerAt(all, eid))).filter(isUnread).length
+}
 
 // A live hand on the entity: its claim's session is awake — a managed
 // run still going, or an external door still open. The wip pip pulses

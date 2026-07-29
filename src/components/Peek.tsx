@@ -5,8 +5,7 @@ import { cardMenuAt, peek } from './nav.tsx'
 import { applicable, resolve } from './registry.ts'
 import { dragData } from './drag.ts'
 import { Entity } from './Entity.tsx'
-import { icons } from './Card.tsx'
-import { Icon } from './icons.tsx'
+import { TabFace } from './Card.tsx'
 import { place } from './overlay.tsx'
 
 // The Peek: what a clicked link opens on desktop — a temporary card in a
@@ -96,7 +95,7 @@ export let Peek = () => {
             aria-label={v}
             data-tip={v}
           >
-            <Icon name={icons[v]} />
+            <TabFace view={v} eid={p!.eid} />
           </Tab>
         ))}
       </Head>
