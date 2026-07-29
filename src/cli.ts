@@ -269,12 +269,24 @@ let create = async (args: string[]) => {
 
 let set = async (args: string[]) => {
   // --comment=... rides the same atomic batch as plain commentary — the
-  // change itself is the journal's to record, never a comment's.
+  // change itself is the journal's to record, never a comment's. --event
+  // marks that commentary as EMITTED, for the sweeps whose whole reason
+  // to comment is the mutation they just made: the mark has to be
+  // available HERE or the atomic form is the one that mails, and an
+  // agent learns to split its batch to get quiet.
   let say = args.find((a) => a.startsWith('--comment='))?.slice(10)
-  let { params, words } = split(args.filter((a) => !a.startsWith('--comment=')))
+  let event = args.includes('--event')
+  let { params, words } = split(
+    args.filter((a) => !a.startsWith('--comment=') && a != '--event'),
+  )
   let [id] = words
   if (!id || words.length != 1 || !params.length) {
     throw new Error('task set <id> .prop=value ...')
+  }
+  // Silently ignoring a mark is how the wrong thing ships quietly — the
+  // whole reason this flag exists.
+  if (event && say == null) {
+    throw new Error('--event marks a --comment; there is no comment here')
   }
   let all = rows(await snapshot())
   let row = find(all, id)
@@ -282,7 +294,7 @@ let set = async (args: string[]) => {
   await send([
     ...Object.entries(patches(derefParams(all, params)))
       .map(([name, comp]) => ({ eid: row.eid, name, comp })),
-    ...(say ? commentChanges(all, row.eid, say, me()) : []),
+    ...(say ? commentChanges(all, row.eid, say, me(), { event }) : []),
   ])
   console.log(`${idOf(row)} updated`)
 }

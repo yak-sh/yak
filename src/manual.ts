@@ -85,15 +85,20 @@ export let manuals: Record<string, Manual> = {
     passthrough: true,
   },
   set: {
-    usage: 'set <id> .prop=value ... [--comment=words]',
+    usage: 'set <id> .prop=value ... [--comment=words] [--event]',
     about: 'patch any entity; --comment says why, in the same batch',
     examples: [
       'task set T-3 .status=done --comment="verified end-to-end"',
       'task set T-3 .assignee=jeff .priority=1',
       'task set S-12 ".body=@brief.md"',
+      'task set T-3 .domain=Eng --comment="sweep: missing domain" --event',
     ],
+    detail: '--event marks the --comment as EMITTED by machinery rather than ' +
+      'written by an agent, so it never rides the mail relay (see ' +
+      '`task help comment`). A sweep keeps its patch and its reason in one ' +
+      'atomic batch and stays quiet — it never has to choose between them.',
     root: true,
-    options: [value('--comment', 'comment text')],
+    options: [value('--comment', 'comment text'), flag('--event')],
   },
   show: {
     usage: 'show <id> [--json]',

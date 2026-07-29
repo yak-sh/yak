@@ -380,7 +380,9 @@ lands in one atomic apply. *_eid param values accept human ids
     'task_update',
     `Patch an entity by id (T-3, bare num, or eid) with dot-params, e.g.
 [".status=done"] or [".body=notes..."]. Only the named props change.
-comment optionally lands a plain comment in the same atomic batch.
+comment optionally lands a plain comment in the same atomic batch; set
+event when a machine emitted that comment rather than an agent writing
+it, so it never rides the mail relay.
 *_eid values accept human ids. Cancelling (".status=cancelled") calls off
 work without pretending it finished; use comment to say why. ${DOC}
 ${GRAMMAR} ${BUS}`,
@@ -393,13 +395,17 @@ ${GRAMMAR} ${BUS}`,
       comment: z.string()
         .describe('Plain comment to write atomically with the patch.')
         .optional(),
+      event: z.boolean()
+        .describe('That comment was emitted by machinery, not written.')
+        .optional(),
       session: z.string().optional(),
     },
     async (
-      { id, params, comment, session }: {
+      { id, params, comment, event, session }: {
         id: string
         params: string[]
         comment?: string
+        event?: boolean
         session?: string
       },
     ) => {
@@ -410,7 +416,9 @@ ${GRAMMAR} ${BUS}`,
       await io.write([
         ...Object.entries(grouped)
           .map(([name, comp]) => ({ eid: row.eid, name, comp })),
-        ...(comment ? commentChanges(all, row.eid, comment, session) : []),
+        ...(comment
+          ? commentChanges(all, row.eid, comment, session, { event })
+          : []),
       ], session)
       return bus(`updated ${idOf(row)}${wall(grouped.doc?.body)}`, session)
     },
