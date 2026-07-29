@@ -271,29 +271,30 @@ These hold everywhere in this repo, whoever — or whatever — writes the code:
   `--virtual-time-budget`, because the canvas paints after a socket the
   virtual clock never resolves. A blank PNG looks like an empty page, so it
   is worse than no check: assert on the DOM instead.
-  Clean up any entities a probe creates (delete = `{name:'entity', comp:null}`),
-  and never point a probe that DRIVES A GESTURE at the live graph: clicking a
-  destructive control (archive, delete, a status move) is a live write by a
-  script whose whole job is to click things. "It only reads" describes your
-  intent, not the button — a verification run archived a real letter out of
-  the owner's inbox this way, and only a count that came up one short caught
-  it. Drive gestures against a probe server; read the live one.
+- **Probe hygiene** — the box is SHARED, so a leaked probe outlives its agent.
   An in-process probe must set `DB_PATH`: db.ts `open()` defaults to the LIVE
   graph, so a script that imports apply()/open() and skips the server mints
-  entities in the owner's board (silent on the first run, a UNIQUE failure on
-  the second). Probe servers must pick UNIQUE ports: the server binds
-  `reusePort`, so two probes on one port silently round-robin — one agent's
-  stale modules fed another's browser mid-verification (observed twice,
-  2026-07-20/21). The CDP port is a probe port too: two agents defaulting to
-  `--remote-debugging-port=9333` share ONE chrome — the second launch silently
-  fails and both drive the first's tabs (a probe's page got navigated away
-  mid-gesture, faking a repro, 2026-07-24). And `pkill -f <pattern>` matches
-  your own shell's command line — bracket a character (`[s]rc/server.ts`) or
-  kill by pid. And a probe cleans up after itself on a SHARED box (the owner's
-  live server and every other operator are here): `jobs -p` is EMPTY inside a
-  non-interactive `zsh -c`, so `P=$(jobs -p); …; kill $P` kills nothing and
-  the shell exits leaving the children running — record each pid as you spawn
-  it (`cmd & echo $!`), kill that list, and confirm with `uptime`.
+  entities in the owner's board. Pick a UNIQUE port and read back where you
+  LANDED (`ss -lptn | grep pid=<pid>`): `PORT` is an env var, not a flag, and
+  the server binds `reusePort`, so a wrong guess silently joins someone else's
+  socket instead of failing. The CDP port is a probe port too — two agents on
+  `--remote-debugging-port=9333` share ONE chrome, the second launch fails
+  silently, and both drive the first's tabs. Never point a probe that DRIVES A
+  GESTURE at the live graph: clicking a destructive control (archive, delete, a
+  status move) is a live write by a script whose whole job is to click things,
+  and "it only reads" describes your intent, not the button. Drive gestures
+  against a probe server, read the live one, and delete the entities the probe
+  created (`{name:'entity', comp:null}`).
+- **Reap what you spawn, and confirm the reap.** zsh does not word-split
+  unquoted expansions, so `kill $PIDS` on a pid STRING dies as `illegal pid`,
+  and `jobs -p` is EMPTY in a non-interactive `zsh -c`. Both complain to stderr
+  mid-script, return 1 into a cleanup block nobody checks, and leave the
+  children reparented to init — which is how probe servers survive for days.
+  Accumulate into an ARRAY — `cmd & PIDS+=($!)`, then `kill $PIDS` — or force
+  the split with `kill ${=PIDS}`. Then PROVE it: `kill -0 $p` per pid, or
+  re-check the port. A cleanup that cannot report its own failure is not a
+  cleanup. And `pkill -f <pattern>` matches your own shell's command line —
+  bracket a character (`[s]rc/server.ts`) or kill by pid.
 - **The injection loop**: `.claude/settings.json` runs
   `task session context --hook` on SessionStart — agent sessions boot into
   their claimed work (`task context` / MCP `task_context`, same digest), led by
