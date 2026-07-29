@@ -106,6 +106,10 @@ PrintBound 2026-07-29: PostHog had never once worked on the live site — the an
 
 So: name the failure mode, then ask what evidence would actually distinguish it. Behavior enforced by a browser needs a browser. Behavior enforced by a real client needs that client. When a check has never failed, suspect that it *cannot*.
 
+**The mechanical form, for any check that asserts an absence** — no mail sent, no error logged, no request made: **prove the presence case on the same fixture first, or you are measuring your setup.** Run the unsuppressed version, watch it produce the thing, then run the suppressed one. A suppression test with no positive control cannot tell a working gate from a quiet minute, and it passes before the feature exists.
+
+Tasks 2026-07-29: verifying that `--event` stops a comment from fanning out as mail, the control didn't fire — a fresh probe session is reified with the *target task's* actor, which is the project, and `fanout()` skips a comment authored by the project itself. Both "no mail" results were noise. holdco's parallel probe dodged it only by luck of fixture.
+
 ## Verify the whole surface after a change, not the part you touched
 
 A partial failure can move something you weren't aiming at. PrintBound 2026-07-28: routes failed to attach *and* a wrangler default silently disabled the other hostname, so the Worker had no reachable origin at all — while the error message named only the routes. Curl every origin, not the one you were changing.
