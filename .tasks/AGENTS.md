@@ -233,6 +233,16 @@ the mobile door — whose rows resolve through `List.Item`.
   never need the num→eid lookup dance. If a real agent shells out to `deno eval`
   instead of using a tool, treat it as a bug report (T-3568).
 
+- **A precondition rides BESIDE `comp`, so every hop must SPREAD a change,
+  never rebuild it.** `Change.was` names the value the caller read — per
+  column, SHA-256, `null` for "I read no value" — and `apply()` refuses the
+  whole batch if a guarded column has moved. It cannot live inside `comp`,
+  which admits only real columns. So rewrite any hop between a client and
+  `apply()` as `{eid, name, comp}` and nothing breaks loudly: the guard stops
+  guarding, and the write lands unguarded while the caller believes it was
+  protected — worse than never having had it. `precondition_test.ts` drives
+  `/apply` and a joined `/ws` socket against a booted server to hold that line.
+
 ## Principles
 
 These hold everywhere in this repo, whoever — or whatever — writes the code:
