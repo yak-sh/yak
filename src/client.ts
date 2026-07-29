@@ -658,7 +658,14 @@ export let addressed = (who: Reader) => (r: Row): boolean => {
   let c = r.comps.comment
   if (c) {
     let t = String(c.target_eid ?? '')
-    return t == who.session || !!who.claims?.has(t)
+    // Said TO the actor, not just to one of its sessions: an operator loop
+    // outlives the session that happened to be running when someone spoke
+    // to the venture, so a comment on P-19 must reach whoever runs P-19 —
+    // it was unheard by anyone otherwise. Gated on `operator` exactly like
+    // the actor knock below, so a specialist still hears only direct
+    // address and its own claimed work.
+    return t == who.session || !!who.claims?.has(t) ||
+      (who.operator == true && !!who.actor && t == who.actor)
   }
   let k = r.comps.knock
   if (k) {

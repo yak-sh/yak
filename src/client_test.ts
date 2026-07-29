@@ -900,11 +900,11 @@ Deno.test('unreadMail + digest: unread counts, read/outbound stay quiet', () => 
   assertEquals(contextDigest(snap, 'sess-x').includes('## mail'), false)
 })
 
-// The inbox generalizes the mail predicates over all four addressed-to-me
-// sources (T-7006): comment→session, comment→claimed, knock→actor,
-// mail→project. Membership is NOT archived; unread is NOT opened. Only
+// The inbox generalizes the mail predicates over every addressed-to-me
+// source (T-7006): comment→session, comment→claimed, comment→actor,
+// knock→actor, mail→project. Membership is NOT archived; unread is NOT opened. Only
 // `archived` hides — the inbox is drain-proof.
-Deno.test('inbox: the four sources, archived hides, opened marks read', () => {
+Deno.test('inbox: every source, archived hides, opened marks read', () => {
   let Sx = 'aaaaaaaa-0000-4000-8000-000000000101' // my session
   let A = 'aaaaaaaa-0000-4000-8000-000000000102' //  my actor
   let P = 'aaaaaaaa-0000-4000-8000-000000000103' //  my project
@@ -913,6 +913,7 @@ Deno.test('inbox: the four sources, archived hides, opened marks read', () => {
   let c2 = 'aaaaaaaa-0000-4000-8000-000000000112' // comment → claimed task
   let kn = 'aaaaaaaa-0000-4000-8000-000000000113' // knock → actor
   let ml = 'aaaaaaaa-0000-4000-8000-000000000114' // mail → project (arrived)
+  let cAc = 'aaaaaaaa-0000-4000-8000-000000000119' // comment → my actor
   let cO = 'aaaaaaaa-0000-4000-8000-000000000115' // comment aimed elsewhere
   let cA = 'aaaaaaaa-0000-4000-8000-000000000116' // to session, archived
   let cR = 'aaaaaaaa-0000-4000-8000-000000000117' // to session, opened
@@ -938,6 +939,7 @@ Deno.test('inbox: the four sources, archived hides, opened marks read', () => {
         name: 'mail',
         comp: { to: 'm@x', message_id: 'm:1', target_eid: P },
       },
+      { eid: cAc, name: 'comment', comp: { target_eid: A } }, // said to the venture
       { eid: cO, name: 'comment', comp: { target_eid: P } }, // not addressed to me
       { eid: cA, name: 'comment', comp: { target_eid: Sx } },
       { eid: cA, name: 'archived', comp: { at: 'now' } },
@@ -958,12 +960,12 @@ Deno.test('inbox: the four sources, archived hides, opened marks read', () => {
   // all four sources arrive; a comment aimed elsewhere and an archived one
   // don't. `notified` (cN) does NOT hide — being told keeps it in the inbox.
   let inbox = g.filter(inboxItem(who)).map((r) => r.eid).sort()
-  assertEquals(inbox, [c1, c2, kn, ml, cR, cN].sort())
+  assertEquals(inbox, [c1, c2, cAc, kn, ml, cR, cN].sort())
   // unread within: the opened one counts as read; a `notified`-only item is
   // still unread (told != opened); the rest are unread
   let unread = g.filter(inboxItem(who)).filter(isUnread).map((r) => r.eid)
     .sort()
-  assertEquals(unread, [c1, c2, kn, ml, cN].sort())
+  assertEquals(unread, [c1, c2, cAc, kn, ml, cN].sort())
 })
 
 // Project-wide attention is a positive capability. No session means a
