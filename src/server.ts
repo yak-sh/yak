@@ -31,6 +31,7 @@ import { vocabularyMd } from './schema.ts'
 import { freeze, serveFrozen, store } from './freeze.ts'
 import { fanout, FANOUT_PENDING, mailed } from './mail.ts'
 import { native } from './mailer.ts'
+import { closingTask } from './closing.ts'
 import { knocked } from './knock.ts'
 import { waking } from './wake.ts'
 import {
@@ -771,6 +772,12 @@ on('comment', {
   created: obeyed(cast),
   doc: 'a comment whose first line opens with `:` is a command line — ' +
     'run against its target, as its author, answered by an event comment',
+})
+on('task', {
+  changed: { status: closingTask(cast) },
+  doc: 'closing a task archives the correspondence about it — the ' +
+    'letters and comments that were waiting at the moment it closed, ' +
+    'never anything that arrives after',
 })
 on('knock', {
   created: knocked(cast),

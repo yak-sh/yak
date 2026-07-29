@@ -9,6 +9,7 @@
 // collisions use the explicit .comp.prop spelling. TASKS_HOST points at a
 // non-default server.
 import {
+  addressed,
   bornAt,
   byBoard,
   claimant,
@@ -558,7 +559,7 @@ let mail = (args: string[]) => {
 // you haven't archived (T-7006). `show` marks an item opened (reading IS
 // the mark); `archive` is the ONE act that hides. Generalizes `task mail`.
 let inboxLine = (r: Row) => {
-  let dot = isUnread(r) ? '●' : '·'
+  let dot = r.comps.archived ? '×' : isUnread(r) ? '●' : '·'
   let body = String(r.comps.doc?.body ?? r.comps.doc?.title ?? '')
     .split('\n')[0].slice(0, 80)
   return `${dot} ${idOf(r)} ${r.kind}${body ? ` — ${body}` : ''}`
@@ -566,16 +567,23 @@ let inboxLine = (r: Row) => {
 
 // The inbox list: addressed to me, NOT archived, unread weighted (unread
 // first, then oldest→newest so the freshest sits at the bottom, like mail).
+// --all keeps the archived (`×`), which is what makes archiving safe to
+// automate: closing a task hides its correspondence, and this is the way
+// back to it.
 let inboxList = async (args: string[]) => {
   let json = args.includes('--json')
+  let every = args.includes('--all')
   let all = rows(await snapshot())
   let who = readerFor(all, me(), Deno.cwd())
-  let items = all.filter(inboxItem(who)).sort((a, b) =>
+  let mine = every ? addressed(who) : inboxItem(who)
+  let items = all.filter(mine).sort((a, b) =>
     (isUnread(b) ? 1 : 0) - (isUnread(a) ? 1 : 0) ||
     bornAt(a).localeCompare(bornAt(b))
   )
   if (json) return console.log(JSON.stringify(items, null, 2))
-  if (!items.length) return console.error('(inbox empty)')
+  if (!items.length) {
+    return console.error(every ? '(nothing addressed to you)' : '(inbox empty)')
+  }
   let bold = Deno.stdout.isTerminal()
   for (let r of items) {
     let line = inboxLine(r)

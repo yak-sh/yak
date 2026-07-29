@@ -184,15 +184,20 @@ export let manuals: Record<string, Manual> = {
     words: [0, 0],
   },
   inbox: {
-    usage: 'inbox [--json]',
+    usage: 'inbox [--json|--all]',
     about: 'everything addressed to you, unread first',
     examples: [
       'task inbox',
+      'task inbox --all',
       'task inbox show E-9',
       'task inbox archive E-9',
     ],
+    detail:
+      'Archived items are hidden; --all shows them too, marked `\u00d7`. ' +
+      'Closing a task archives the correspondence about it, so --all is ' +
+      'where that correspondence went.',
     root: true,
-    options: [json],
+    options: [json, flag('--all')],
     words: [0, 0],
   },
   'inbox show': {
