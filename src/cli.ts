@@ -25,9 +25,7 @@ import {
   host,
   idOf,
   inboxItem,
-  inboxMail,
   inflate,
-  isOperator,
   isUnread,
   mailAt,
   mailChanges,
@@ -360,14 +358,15 @@ let mailList = async (args: string[]) => {
   let all = rows(await snapshot())
   let resolved = resolveRefs(preds, (id) => find(all, id)?.eid)
   let byEid = new Map(all.map((r) => [r.eid, r.comps]))
-  let sess = all.find((r) => String(r.comps.session?.id ?? '') == me())
-  let inbox = inboxMail(
-    repoAt(all, Deno.cwd())?.eid,
-    isOperator(sess?.comps.session),
-  )
+  // The one predicate. "Your items" means the same thing here as in the
+  // inbox and the boot digest, so the mail-only slice can never disagree
+  // with the door it is a slice of.
+  let mine = inboxItem(readerFor(all, me(), Deno.cwd()))
   let hits = all
     .filter((r) => r.comps.mail)
-    .filter((r) => sent ? !r.comps.mail.message_id : every ? true : inbox(r))
+    .filter((r) =>
+      sent ? !r.comps.mail.message_id : every ? true : unreadMail(r) && mine(r)
+    )
     .filter((r) => matchQuery(r.comps, resolved, (e) => byEid.get(e)))
     .sort((a, b) => mailAt(a).localeCompare(mailAt(b)))
   if (json) return console.log(JSON.stringify(hits, null, 2))

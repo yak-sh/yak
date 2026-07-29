@@ -767,16 +767,6 @@ export let readerFor = (
 // later task drops it.
 export let unreadMail = (r: Row) => !!r.comps.mail?.message_id && isUnread(r)
 
-// The mail inbox — ONE scoping truth: the digest's unread count and the
-// bare `task mail` view agree by construction. Unread, not archived, aimed
-// at the scope when one stands; no scope sees the fleet's whole pile.
-// A non-operator is excluded from PROJECT mail. Default true keeps the preview
-// digest and bare `task mail` view showing mail; session readers pass a
-// positively-derived capability.
-export let inboxMail = (scope?: string, operator = true) => (r: Row) =>
-  operator && unreadMail(r) && inInbox(r) &&
-  (!scope || r.comps.mail?.target_eid == scope)
-
 let cleanPath = (path: string) => path.replace(/\/+$/, '') || '/'
 
 // The deepest directory root containing a path. Boundaries matter:

@@ -11,7 +11,6 @@ import {
   find,
   hookClaim,
   inboxItem,
-  inboxMail,
   inflate,
   isOperator,
   isUnread,
@@ -899,11 +898,15 @@ Deno.test('unreadMail + digest: unread counts, read/outbound stay quiet', () => 
   assertEquals(is(M1), true)
   assertEquals(is(M2), false) // read
   assertEquals(is(M3), false) // outbound is born read
-  // `task mail`'s own screen is by TARGET — what a letter is about
-  let inbox = (scope?: string) => all.filter(inboxMail(scope)).map((r) => r.eid)
-  assertEquals(inbox(P), [M1])
-  assertEquals(inbox(T2), [M4])
-  assertEquals(inbox(), [M1, M4])
+  // `task mail` is a SLICE of the inbox, never a second screen: unread
+  // inbound, kept only if the inbox would have shown it anyway
+  let mailOnly = (scope?: string) =>
+    all.filter((r) =>
+      unreadMail(r) && inboxItem(readerFor(all, 'sess-x', '/w', scope))(r)
+    ).map((r) => r.eid)
+  assertEquals(mailOnly(P), [M1, M4])
+  assertEquals(mailOnly(T2), [M4])
+  assertEquals(mailOnly(), [M4]) // scopeless: only what my address holds
   // the digest counts with the INBOX's predicate — addressed to me — so
   // the number and `task inbox` cannot disagree. Standing in the venture,
   // that is its mail PLUS the letter to my own address, whatever it's about
@@ -1124,9 +1127,13 @@ Deno.test('project mail reaches the operator, not a specialist; direct address a
   // the specialist still gets the comment aimed at its OWN session — direct
   // address is always delivered, only project mail is gated
   assertEquals(inbox('sp'), [cm, kd].sort())
-  // the mail-only door agrees: gated when the reader is a specialist
-  assertEquals(g.filter(inboxMail(P, false)).map((r) => r.eid), [])
-  assertEquals(g.filter(inboxMail(P, true)).map((r) => r.eid), [ml])
+  // the mail-only door is that same predicate sliced, so the gate holds
+  // there too: the specialist sees no project mail, the operator does
+  let mailOnly = (id: string) =>
+    g.filter((r) => unreadMail(r) && inboxItem(readerFor(g, id, '/w', P))(r))
+      .map((r) => r.eid)
+  assertEquals(mailOnly('sp'), [])
+  assertEquals(mailOnly('op'), [ml])
 })
 
 Deno.test('sessionFor: hook identity round-trips and refreshes only on change', () => {
