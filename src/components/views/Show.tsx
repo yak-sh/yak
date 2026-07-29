@@ -363,7 +363,7 @@ export let Meta = ({ e, id }: { e: Ent; id?: boolean }) => {
           <Facet e={e} />
         </>
       )}
-      {talk && <Talk>💬 {talk}</Talk>}
+      {talk > 0 && <Talk>💬 {talk}</Talk>}
       {e.claim && (
         <Claim {...linkProps(ent(e.claim.session_eid))}>
           ⚑ {viaName(e.claim.session_eid)}
