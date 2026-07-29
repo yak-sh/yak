@@ -379,7 +379,7 @@ seams wider or leakier, that's the wrong direction.
 
 # M-7048 task inbox — one door for everything addressed to you (comments, knocks, mail)
 
-`task inbox` lists every item addressed to you — comments on your session, comments on tasks you claim, knocks to you or your actor, and project mail — unread first (`●` unread, `·` read).
+`task inbox` lists every item addressed to you — comments on your session, comments on tasks you claim, comments said to your actor, knocks to you or your actor, and project mail — unread first (`●` unread, `·` read).
 
 - `task inbox` — the list
 - `task inbox show <id>` — render it whole; reading stamps it opened
@@ -388,6 +388,12 @@ seams wider or leakier, that's the wrong direction.
 Archiving is the only thing that removes an item, so no sweep, subagent, or other reader can drain your inbox behind you.
 
 This is the door for "is anything waiting for me?" — worth a look when you start a pass, and again when you pick up a task, since something may already be waiting on it.
+
+## Two things that surprise people
+
+**It reads for whoever your cwd makes you.** Your actor is resolved from the directory you are standing in, so running `task inbox` inside another venture's repo shows *that venture's* inbox, not yours. Nothing is wrong when the list looks foreign — check where you are.
+
+**The web has one too, on the canvas.** Open a venture (or a person) and pick the **Inbox** tab: the same items, same predicate, same read state — opening a row there marks it read here. A venture's inbox is the substantial one; a person's is nearly empty by design, because letters to an external address leave the graph for a real mailbox and only what arrives is ever stamped as arrived.
 
 ---
 
