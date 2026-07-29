@@ -24,6 +24,7 @@ export let serverFiles = [
   'roles.ts',
   'served.ts',
   'proc.ts',
+  'probes.ts',
   'adapters.ts',
   'telemetry.ts',
   'mail.ts',

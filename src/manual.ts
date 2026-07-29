@@ -447,6 +447,26 @@ export let manuals: Record<string, Manual> = {
         ? undefined
         : 'name at least one role, or --all',
   },
+  probes: {
+    usage: 'probes [--all] [--reap] [--grace=MINUTES]',
+    about: 'what dead sessions left running — browsers, servers, worktrees',
+    detail:
+      'Lists by default; --reap kills the orphans and removes the worktrees.\n' +
+      'A process is an orphan only on ephemeral ground (a worktree or a\n' +
+      'scratchpad) or as a headless browser holding a debugging port, and\n' +
+      'only when no live session owns it. --all shows what was spared and\n' +
+      'why. --grace=0 drops the 30-minute head start a young probe gets.\n' +
+      'The server sweeps on its own only under TASKS_SWEEP=1; unset, this\n' +
+      'verb is the one door and nothing is killed unless you say so.',
+    examples: ['task probes', 'task probes --all', 'task probes --reap'],
+    root: true,
+    options: [
+      flag('--all'),
+      flag('--reap'),
+      value('--grace', 'minutes', false, /^\d+$/),
+    ],
+    words: [0, 0],
+  },
   telemetry: {
     usage: 'telemetry [--errors] [--since=ISO] [-n N]',
     about: 'tool calls + crashes',

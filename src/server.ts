@@ -72,6 +72,7 @@ import {
 import { liveFrame } from './wire.ts'
 import { nativeSoon, nativeSweep, noticeAccepted } from './tmux.ts'
 import { roleRemoved, rolesSoon, rolesSweep } from './roles.ts'
+import { prune as pruneTree, reap as reapProbes, sweep } from './probes.ts'
 
 // The hot-swap generation: bumped by the watcher on every client-code or
 // css change, stamped into every served module's relative imports so a
@@ -899,6 +900,48 @@ let reconcileRoles = () =>
   rolesSweep(cast).catch((e) => console.warn('roles sweep —', e))
 reconcileRoles()
 setInterval(reconcileRoles, 2_000)
+
+// What sessions leave running (probes.ts): a headless browser squatting on a
+// CDP port, a probe server on a scratch db, a worktree with nothing left in
+// it. SessionEnd cannot be this door — a killed session never fires one — so
+// the sweep is a reconciler on a slow tick, reading /proc as it stands. Only
+// the LIVE server sweeps: a probe server reaping its siblings would be the
+// leak wearing a uniform. No boot pass — a restart is not new evidence.
+//
+// Unattended killing is OPT-IN (TASKS_SWEEP=1). The predicate is proven
+// against one afternoon's /proc, and the operator door — `task probes`, which
+// lists and only reaps when told — costs nothing to read for a week first. A
+// false positive here is not a bug report, it is somebody's work gone with no
+// one watching; the flag is what makes turning it on a decision.
+if (mayStamp() && Deno.env.get('TASKS_SWEEP') == '1') {
+  let repo = Deno.cwd()
+  setInterval(async () => {
+    try {
+      let sessions = db.prepare('select id, cwd, pid from session').all() as {
+        id: string
+        cwd: string | null
+        pid: number | null
+      }[]
+      let seen = sweep(sessions, repo)
+      let killed = await reapProbes(seen.verdicts)
+      let gone = seen.trees.filter((t) => t.prune && pruneTree(repo, t.tree))
+      for (let v of seen.verdicts.filter((v) => v.reap)) {
+        console.log(`swept ${v.proc.pid} — ${v.why}`)
+      }
+      for (let t of gone) console.log(`swept ${t.tree.path} — ${t.why}`)
+      if (killed.length || gone.length) {
+        record(db, {
+          source: 'http',
+          name: 'probes',
+          ok: true,
+          detail: `${killed.length} process(es), ${gone.length} worktree(s)`,
+        })
+      }
+    } catch (e) {
+      console.warn('probe sweep —', e)
+    }
+  }, 10 * 60_000)
+}
 
 // Then the outbox relay: intents that committed but never fired their
 // effect (a crash in the post-commit gap) re-fire now — strictly AFTER

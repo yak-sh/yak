@@ -31,6 +31,57 @@ export let commOf = (pid: number) => read(`/proc/${pid}/comm`).trim()
 export let argsOf = (pid: number) =>
   read(`/proc/${pid}/cmdline`).split('\0').filter((a) => a != '')
 
+// Where a process is standing. The kernel appends ' (deleted)' when the
+// directory has been removed under it — a marker worth keeping, since a
+// process working in a directory nobody can reach is finished by definition.
+export let cwdOf = (pid: number) => {
+  try {
+    return Deno.readLinkSync(`/proc/${pid}/cwd`)
+  } catch {
+    return ''
+  }
+}
+
+// One variable out of a process's launch environment. environ is a frozen
+// copy of exec time, which is what makes it evidence: a child carries the
+// session id of whoever spawned it long after that session is gone.
+export let envOf = (pid: number, name: string) => {
+  for (let pair of read(`/proc/${pid}/environ`).split('\0')) {
+    if (pair.startsWith(`${name}=`)) return pair.slice(name.length + 1)
+  }
+}
+
+// When a process started, and who owns it: /proc/<pid>'s own inode carries
+// both, so one stat answers age and ownership without parsing clock ticks.
+export let bornAt = (pid: number) => {
+  try {
+    return Deno.statSync(`/proc/${pid}`).mtime?.getTime()
+  } catch {
+    return undefined
+  }
+}
+
+export let ownerOf = (pid: number) => {
+  try {
+    return Deno.statSync(`/proc/${pid}`).uid ?? undefined
+  } catch {
+    return undefined
+  }
+}
+
+// Every process on the box, by pid. /proc's numeric entries ARE the roster;
+// anything that dies between the listing and the read simply reads empty.
+export let pids = (): number[] => {
+  try {
+    return [...Deno.readDirSync('/proc')]
+      .map((e) => Number(e.name))
+      .filter((n) => n > 0)
+      .sort((a, b) => a - b)
+  } catch {
+    return []
+  }
+}
+
 // The nearest ancestor (self included) with this comm, or undefined when
 // the walk tops out at init.
 export let ancestor = (comm: string, pid = Deno.pid): number | undefined => {
@@ -51,6 +102,14 @@ export let descends = (
     if (p == root) return true
   }
   return false
+}
+
+// Every pid from here up to init. A reaper's blind spot on purpose: it must
+// never be able to kill the process it is running in, or its shell.
+export let lineage = (pid = Deno.pid): number[] => {
+  let out: number[] = []
+  for (let p: number | undefined = pid; p; p = parentOf(p)) out.push(p)
+  return out
 }
 
 // The provider process this hook runs under. Claude's channel also binds to

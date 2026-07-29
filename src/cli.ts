@@ -61,6 +61,7 @@ import {
   unreadMail,
   wrapChanges,
 } from './client.ts'
+import { prune, reap, sweep } from './probes.ts'
 import { matchQuery, noFilter, pred, resolveRefs } from './query.ts'
 import {
   bookOf,
@@ -1492,6 +1493,70 @@ let session = (args: string[]) => {
   throw new Error(`not a session verb: ${sub}\n\n${help(['session'])}`)
 }
 
+// The main checkout behind whatever worktree we stand in: removing a
+// worktree and deleting its branch are the repo's acts, not the copy's.
+let repoRoot = () => {
+  let out = new Deno.Command('git', {
+    args: ['rev-parse', '--path-format=absolute', '--git-common-dir'],
+    stderr: 'null',
+  }).outputSync()
+  if (!out.success) return undefined
+  return new TextDecoder().decode(out.stdout).trim().replace(/\/\.git\/?$/, '')
+}
+
+// What the fleet left running: probes whose session is gone, and worktrees
+// with nothing left in them. Listing is the default because the acting form
+// is destructive — read the reasons, THEN pass --reap.
+let probes = async (args: string[]) => {
+  let mins = Number(args.find((a) => a.startsWith('--grace='))?.slice(8))
+  let repo = repoRoot()
+  let all = rows(await readGraph())
+  let sessions = all.filter((r) => r.comps.session).map((r) => ({
+    id: String(r.comps.session!.id ?? ''),
+    cwd: r.comps.session!.cwd as string | null,
+    pid: r.comps.session!.pid as number | null,
+  }))
+  let seen = sweep(
+    sessions,
+    repo,
+    undefined,
+    Number.isFinite(mins) ? mins * 60_000 : undefined,
+  )
+  let age = (born: number) =>
+    `${Math.round((Date.now() - born) / 60_000)}m`.padStart(6)
+  let doomed = seen.verdicts.filter((v) => v.reap)
+  let stale = seen.trees.filter((t) => t.prune)
+  for (let v of doomed) {
+    console.log(
+      `orphan  ${String(v.proc.pid).padStart(8)} ${age(v.proc.born)}  ${v.why}`,
+    )
+  }
+  for (let t of stale) console.log(`tree    ${t.tree.path}  ${t.why}`)
+  if (args.includes('--all')) {
+    for (let v of seen.verdicts.filter((v) => !v.reap && v.proc.cwd)) {
+      console.log(
+        `spared  ${String(v.proc.pid).padStart(8)} ${
+          age(v.proc.born)
+        }  ${v.proc.comm}: ${v.why}`,
+      )
+    }
+    for (let t of seen.trees.filter((t) => !t.prune)) {
+      console.log(`kept    ${t.tree.path}  ${t.why}`)
+    }
+  }
+  if (!args.includes('--reap')) {
+    console.error(
+      `${doomed.length} orphan(s), ${stale.length} stale worktree(s)`,
+    )
+    return
+  }
+  let killed = await reap(seen.verdicts)
+  let pruned = repo ? stale.filter((t) => prune(repo, t.tree)) : []
+  console.error(
+    `reaped ${killed.length} process(es), ${pruned.length} worktree(s)`,
+  )
+}
+
 // What the tools have been doing: MCP calls, HTTP writes and browser
 // crashes, newest first. --errors is the view you want most days.
 let telemetry = async (args: string[]) => {
@@ -1842,6 +1907,7 @@ if (import.meta.main) {
       else if (cmd == 'sync') await sync(rest)
       else if (cmd == 'release') await release(rest)
       else if (cmd == 'role') await role(rest)
+      else if (cmd == 'probes') await probes(rest)
       else if (cmd == 'telemetry') await telemetry(rest)
       else if (cmd == 'help' || cmd == '--help') console.log(help(rest))
       else if (!cmd) await bare()
