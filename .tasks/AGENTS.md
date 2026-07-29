@@ -438,20 +438,6 @@ Any write that REPLACES a body destroys what was there, so read the node to a fi
 
 ---
 
-# M-6995 personas & memories live in the graph — the files are generated, edit the graph
-
-Your persona, and every memory preloaded into it, are **entities in the Task Graph** — not the `.md` file you are reading. That file (`AGENTS.md`, `.claude/agents/*`) is a **generated projection**: a materializer renders it from the graph and overwrites it on the next sync, so a hand-edit to the file is lost. The banner at the top of each file names its source node (`N-…`).
-
-**The shape.** A **persona** is a node (`kind: persona`, id `N-…`) whose doc body is the persona text. A **memory** is an entity (`kind: memory`, id `M-…`) — one distilled fact, `type` one of user | feedback | project | reference. A persona **preloads** a memory by holding a `contains` edge to it; the materializer renders each contained memory's whole body into that persona's `## Preloaded` block, warmest first. One memory can be preloaded by many personas.
-
-**Changing it — in the graph, never the file:**
-
-- **Add or edit a memory:** `memory_save` (MCP `tasks`) — new content mints an `M-…`; passing `id` confirms and patches an existing one. Replacing a body also needs the `was:` token `memory_recall` prints above it, so a concurrent edit is refused rather than silently lost.
-- **Preload / unpreload:** add (or `gone: true` to remove) a `contains` edge from the `N-…` to the `M-…`, via `graph_apply` or the web UI.
-- **Reach everyone in a repo:** preload into that repo's `* common persona` (which projects to `AGENTS.md`, read by every agent there) — not a single role's persona.
-
----
-
 # M-7048 task inbox — one door for everything addressed to you, and watch/mute to change what lands there
 
 `task inbox` lists every item addressed to you — comments on your session, comments on tasks you claim, comments said to your actor, knocks to you or your actor, and project mail — unread first (`●` unread, `·` read).
@@ -503,6 +489,20 @@ The web tab and your CLI list can legitimately show different counts: the tab re
 ## Your boot digest already tells you
 
 Every session's `task context` opens with `## inbox — N unread (task inbox)`. That N is counted with the inbox's own predicate, so the number and the list can't disagree — if the line is there, something is waiting; if it's absent, nothing is.
+
+---
+
+# M-6995 personas & memories live in the graph — the files are generated, edit the graph
+
+Your persona, and every memory preloaded into it, are **entities in the Task Graph** — not the `.md` file you are reading. That file (`AGENTS.md`, `.claude/agents/*`) is a **generated projection**: a materializer renders it from the graph and overwrites it on the next sync, so a hand-edit to the file is lost. The banner at the top of each file names its source node (`N-…`).
+
+**The shape.** A **persona** is a node (`kind: persona`, id `N-…`) whose doc body is the persona text. A **memory** is an entity (`kind: memory`, id `M-…`) — one distilled fact, `type` one of user | feedback | project | reference. A persona **preloads** a memory by holding a `contains` edge to it; the materializer renders each contained memory's whole body into that persona's `## Preloaded` block, warmest first. One memory can be preloaded by many personas.
+
+**Changing it — in the graph, never the file:**
+
+- **Add or edit a memory:** `memory_save` (MCP `tasks`) — new content mints an `M-…`; passing `id` confirms and patches an existing one. Replacing a body also needs the `was:` token `memory_recall` prints above it, so a concurrent edit is refused rather than silently lost.
+- **Preload / unpreload:** add (or `gone: true` to remove) a `contains` edge from the `N-…` to the `M-…`, via `graph_apply` or the web UI.
+- **Reach everyone in a repo:** preload into that repo's `* common persona` (which projects to `AGENTS.md`, read by every agent there) — not a single role's persona.
 
 ---
 

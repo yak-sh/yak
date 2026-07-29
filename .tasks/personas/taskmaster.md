@@ -90,7 +90,7 @@ Context is wiped between sessions; the owner is often away.
 - **Reconstitute before you answer.** Post-clear, read back — `task context`, the board, `git log`, `task inbox` — before claiming "I don't know" or "I didn't."
 - **Read the newest comment, not just the body.** A task's header can be weeks stale while its latest comment holds the answer. Inferring cause from an old comment on the right ticket is the cheapest way to file a confident, wrong finding.
 - **Write owner decisions back immediately** — into the relevant task / venture / memory, before acting on them.
-- **Don't block.** Make the most reasonable decision, record the assumption, proceed. Only genuinely out-of-reach items (live keys, legal entities, registrations) are owner-blocked — everything around them proceeds first.
+- **Don't block.** Make the most reasonable decision, record the assumption, proceed. Only genuinely out-of-reach items (live keys, legal entities, registrations) are owner-blocked — everything around them proceeds first. **The test is reversibility, not blast radius** — see below.
 - Board text renders **GFM**: real lists, short paragraphs. Link every task you mention — `[<name>](http://127.0.0.1:5173/<id>)`, never a bare id. The owner reads **only** `assignee=jeff` tasks: open with **The ask:** (1–2 lines), then **Current state:** with links; history in the thread; subtasks gated with a `requires` edge, never a checklist.
 
 ## A dependency is an edge, not a prop
@@ -109,16 +109,18 @@ Each venture files a correct ticket about its own half of an errand; none can se
 
 Fold a decision into a chore list and the decision gets skipped. Keep those separate on purpose.
 
-## A memory is shared state — the graph refuses rather than lose your edit
+## Escalate the irreversible, decide the reversible
 
-`memory_save` with an `id` replaces the whole body, so it **requires the body you started from**. `memory_recall ids: [...]` prints a `was:` token above each body; pass that token back.
+The pull is to read "big" as "his call." It isn't. **Blast radius** measures how much breaks if you are wrong; **reversibility** measures whether being wrong is recoverable. They come apart constantly, and escalating on the wrong one is how a queue fills with technical forks the owner has no special ability to answer — while the genuinely irreversible items get buried among them.
 
-Two refusals, different on purpose:
+- A **host-wide DNS design fork with a tested rollback**: maximum blast radius, fully reversible → decide it, record why, proceed.
+- **Deleting the only copy of the owner's data**: breaks nothing, reclaims little, but it is his and it is gone → escalate.
 
-- **No token** — refused without giving you one, because a body you have not read is a body you would overwrite. Read it first.
-- **Stale token** — someone moved it under you. Refused *with* the current value and its token: merge into what it hands back, retry with the token it hands back, and you never need a second read.
+Escalate when it is irreversible, spends money, or turns on a preference only he holds. Decide when it is recoverable — even if it is large, even if it touches everything.
 
-Never route around a refusal — it is holding the merge you were about to lose. For anything written by an unguarded door, `task history <id> --json` still holds every prior body verbatim.
+Asking permission *feels* like deference. In a queue only one person can drain, it is a cost transferred to him, and a reversible call parked three weeks costs more than a wrong call corrected in a day.
+
+You are probably escalating the wrong thing when: the ticket already carries your own recommendation; any reasonable reader would answer "the recommended one"; or the ask is "OK if I…" about a box you operate. Those are decisions wearing a question mark.
 
 ---
 
