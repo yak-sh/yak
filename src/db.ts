@@ -825,13 +825,47 @@ let cmps: Record<string, string[]> = {
 
 let edgeCols = ['type', 'child_eid', 'gone']
 
-// The effective batch says what landed. Unknown components stay a compatible
-// no-op; undeclared columns stay server-owned or dormant.
+// What the SCHEMA has, as opposed to what the wire may write — the
+// authority for telling a name that EXISTS from a name that doesn't.
+// Memoized per table; an empty set means no such table.
+let stored: Record<string, Set<string>> = {}
+let columnsOf = (table: string): Set<string> =>
+  stored[table] ??= new Set(
+    (db.prepare('select name from pragma_table_info(?)').all(table) as {
+      name: string
+    }[]).map((c) => c.name),
+  )
+
+// The effective batch says what landed. An unknown COMPONENT stays a
+// compatible no-op on purpose — that is the seam a plugin or a newer
+// client writes through, and the effective batch reports what was
+// dropped. But inside a component we DO know, a column naming nothing is
+// a typo, not a version:
+//
+//   writable             → kept.
+//   stored, not writable → dropped in silence. Server-owned (a client
+//     that read a row and patched it back must not be punished for
+//     echoing created.at, and stripping mail.from here is the boundary
+//     holding T-9511's forged-sender fix) or dormant (retired from comps,
+//     column still standing — the deprecation path).
+//   stored nowhere       → THROWS. `task.statuss` has no compatibility
+//     story: the wire used to take it, write the DEFAULT status, and
+//     answer 200, so a caller asking for `done` got `open` and success.
 let admitted = (change: Change): Change | undefined => {
-  let cols = change.name == 'dependency' ? edgeCols : cmps[change.name]
+  let table = change.name
+  let cols = table == 'dependency' ? edgeCols : cmps[table]
   if (!cols) return
   if (change.comp == null) return change
   let sent = Object.entries(change.comp)
+  let real = columnsOf(table)
+  let alien = sent.filter(([n]) => !cols.includes(n) && !real.has(n))
+  if (alien.length) {
+    throw new Error(
+      `unknown column${alien.length > 1 ? 's' : ''}: ${
+        alien.map(([n]) => `${table}.${n}`).join(', ')
+      }`,
+    )
+  }
   let kept = sent.filter(([name]) => cols.includes(name))
   if (sent.length && !kept.length) return
   let comp = Object.fromEntries(kept)

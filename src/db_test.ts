@@ -349,6 +349,31 @@ Deno.test('unknown component names are ignored, batch survives', () => {
   )
 })
 
+// The other half of the hovercraft rule: an unknown COMPONENT is a
+// compatible no-op, but a misspelled COLUMN inside a known one has no
+// version story — it used to be stripped, the column's DEFAULT written,
+// and 200 returned, so a caller asking for `done` got `open` and success.
+Deno.test('a column naming nothing is refused, not silently defaulted', () => {
+  let t = uid()
+  assertThrows(
+    () => apply(db, [{ eid: t, name: 'task', comp: { statuss: 'done' } }]),
+    Error,
+    'unknown column: task.statuss',
+  )
+  assertEquals(comp(t, 'task'), undefined) // nothing landed at the default
+  // the batch is refused WHOLE — a good change beside a typo does not slip
+  assertThrows(
+    () =>
+      apply(db, [
+        { eid: t, name: 'doc', comp: { title: 'fine' } },
+        { eid: t, name: 'task', comp: { status: 'done', statuss: 'done' } },
+      ]),
+    Error,
+    'unknown column: task.statuss',
+  )
+  assertEquals(comp(t, 'doc'), undefined)
+})
+
 Deno.test('server-owned columns never ride persistence or effective batches', () => {
   let t = uid()
   let since = (db.prepare('select max(rowid) as n from journal').get() as {
@@ -432,13 +457,25 @@ Deno.test('session lifecycle columns are server-owned', () => {
   assertEquals(comp(s, 'session')?.status, null) // lifecycle: server only
   assertEquals(comp(s, 'session')?.origin, 'external') // the default holds
   assertEquals(comp(s, 'session')?.latest_seq, 0)
-  apply(db, [{
-    eid: s,
-    name: 'spawn',
-    comp: { provider: 'fake', status: 'completed', exit_code: 0 },
-  }])
+  // A lifecycle column aimed at the wrong facet names nothing at all —
+  // `spawn` is launch fields only. That used to be stripped in silence,
+  // keeping `provider` and answering success; the caller's belief that it
+  // had set a status went uncorrected. Server-owned is a silence (above);
+  // nonexistent is an error.
+  assertThrows(
+    () =>
+      apply(db, [{
+        eid: s,
+        name: 'spawn',
+        comp: { provider: 'fake', status: 'completed', exit_code: 0 },
+      }]),
+    Error,
+    'unknown columns: spawn.status, spawn.exit_code',
+  )
+  // refused whole: the facet the session minted is still blank
+  assertEquals(comp(s, 'spawn')?.provider, null)
+  apply(db, [{ eid: s, name: 'spawn', comp: { provider: 'fake' } }])
   assertEquals(comp(s, 'spawn')?.provider, 'fake')
-  assertEquals(comp(s, 'spawn')?.status, undefined)
   assertEquals(comp(s, 'session')?.provider, 'fake') // dormant reader alias
   assertEquals(comp(s, 'session')?.status, null)
 })
