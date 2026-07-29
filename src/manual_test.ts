@@ -79,10 +79,10 @@ Deno.test('manual validation rejects loss-shaped arguments', () => {
     ['history', ['T-1', '-n'], '-n needs a positive number'],
     ['history', ['T-1', '-n0'], '-n needs a positive number'],
     ['mail files', ['E-1', '--out'], '--out needs a directory'],
-    ['mail reply', ['E-1'], 'needs reply words or --body='],
+    ['mail reply', ['E-1'], 'needs reply words, @file, or --body='],
     ['mail send', ['jeff', 'subject'], 'needs --body='],
     ['comment', ['T-1'], 'needs comment text or --verdict='],
-    ['session brief', [], 'needs brief text or --body='],
+    ['session brief', [], 'needs brief text, @file, or --body='],
     ['telemetry', ['-n', '--errors'], '-n needs a positive number'],
     ['wrap', ['sid', '--body=@x'], 'task session brief --body=…'],
     // An unscoped stop must never be read as "stop everything".

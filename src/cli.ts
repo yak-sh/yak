@@ -363,6 +363,15 @@ let seek = async (args: string[]) => {
 // verb-level door only adds the bare `-` spelling flags conventionally
 // carry, normalizes it, and hands the value over. Shared by mail
 // send/reply and the session brief — one body door, every verb.
+//
+// @ belongs to the DOOR, not to the flag: a lone trailing @token is the
+// same ask said positionally. Reading it through --body= but not through
+// the words sent letters carrying the literal path of the file they
+// should have quoted (T-10461). Only when the body IS a reference — one
+// token AND no whitespace in it, `task comment`'s own test — so neither
+// bare prose nor a quoted "@jeff thanks for the note" is read as a
+// filename; @@ escapes a genuine one-word @, and a missing file throws
+// before anything is minted or sent.
 export let bodyOf = (flags: string[], words: string[], io = stdin) => {
   let b = flags.find((a) => a.startsWith('--body='))?.slice(7)
   if (b?.startsWith('@') || b == '-') {
@@ -370,7 +379,13 @@ export let bodyOf = (flags: string[], words: string[], io = stdin) => {
     let p = { comp: 'doc', prop: 'body', value: v }
     return String(inflate(p, io, `--body=${b}`).value)
   }
-  return b ?? words.join(' ')
+  if (b != null) return b
+  let only = words.join(' ')
+  if (words.length == 1 && /^@\S+$/.test(only)) {
+    let p = { comp: 'doc', prop: 'body', value: only }
+    return String(inflate(p, io, only).value)
+  }
+  return only
 }
 
 // The inbox: YOUR unread bare — the digest's own predicate, scoped to
@@ -481,7 +496,7 @@ let mailReply = async (args: string[]) => {
   let body = bodyOf(flags, text)
   if (!body) {
     throw new Error(
-      'a reply needs words: text, --body=@file, or --body=- with stdin',
+      'a reply needs words: text, @file, or --body=@file|-|@-',
     )
   }
   let made = replyChanges(row, body)
@@ -1466,7 +1481,7 @@ let sessionBrief = async (args: string[]) => {
   let body = bodyOf(flags, words)
   if (!body) {
     throw new Error(
-      'a brief needs words: text, --body=@file, or --body=- with stdin',
+      'a brief needs words: text, @file, or --body=@file|-|@-',
     )
   }
   let all = rows(await snapshot())

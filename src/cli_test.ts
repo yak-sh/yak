@@ -133,6 +133,47 @@ Deno.test('bodyOf: only explicit stdin spellings read the pipe', () => {
   }
 })
 
+// @ is the door's convention, not the flag's — a lone trailing @file is
+// read exactly as --body=@file is, so a letter can never go out carrying
+// the path of the file it should have quoted (T-10461).
+Deno.test('bodyOf: a lone trailing @file is read, prose is not', () => {
+  let f = Deno.makeTempFileSync()
+  Deno.writeTextFileSync(f, 'the whole letter\n')
+  let tty = { terminal: () => true, read: () => '' }
+  assertEquals(bodyOf([], [`@${f}`], tty), 'the whole letter\n')
+  // @@ escapes to a literal @, the same as every other door
+  assertEquals(bodyOf([], ['@@handle'], tty), '@handle')
+  // more than one word is prose: an opening @handle is never a filename
+  assertEquals(bodyOf([], ['@handle', 'thanks!'], tty), '@handle thanks!')
+  assertEquals(bodyOf([], ['plain', 'words'], tty), 'plain words')
+  // a QUOTED sentence is still one argv token — prose, not a reference
+  assertEquals(bodyOf([], ['@handle thanks!'], tty), '@handle thanks!')
+  // a missing file is loud — the caller's own token names the door
+  assertThrows(
+    () => bodyOf([], ['@/no/such/file'], tty),
+    Error,
+    '@/no/such/file: no such file',
+  )
+  Deno.removeSync(f)
+})
+
+Deno.test('bodyOf: a lone trailing @- is the pipe, and refuses a TTY', () => {
+  let read = 0
+  assertEquals(
+    bodyOf([], ['@-'], {
+      terminal: () => false,
+      read: () => (read++, ' hi\n'),
+    }),
+    'hi',
+  )
+  assertEquals(read, 1)
+  assertThrows(
+    () => bodyOf([], ['@-'], { terminal: () => true, read: () => 'x' }),
+    Error,
+    '@-: stdin is a TTY',
+  )
+})
+
 Deno.test('bodyOf: both stdin spellings refuse a TTY', () => {
   for (let b of ['-', '@-']) {
     let read = 0

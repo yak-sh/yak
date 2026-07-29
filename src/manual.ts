@@ -172,14 +172,17 @@ export let manuals: Record<string, Manual> = {
         : 'needs --body=@file, --body=-, or --body=@-',
   },
   'mail reply': {
-    usage: 'mail reply <id> [text... | --body=@file|-|@-]',
-    about: 'reply in the existing mail thread',
+    // A lone trailing @file reads the file, exactly as --body=@file does —
+    // one @ convention per door, named here so the two spellings can't be
+    // read as equal when only one works (T-10461).
+    usage: 'mail reply <id> [text... | @file | --body=@file|-|@-]',
+    about: 'reply in the existing mail thread; a lone @file is read',
     options: [body],
     words: [1],
     check: (args, words) =>
       words.length > 1 || args.some((a) => a.startsWith('--body='))
         ? undefined
-        : 'needs reply words or --body=@file|-|@-',
+        : 'needs reply words, @file, or --body=@file|-|@-',
   },
   'mail search': {
     usage: 'mail search <words...>',
@@ -392,14 +395,14 @@ export let manuals: Record<string, Manual> = {
     words: [0, 1],
   },
   'session brief': {
-    usage: 'session brief [text... | --body=@file|-|@-]',
-    about: 'write your own session brief',
+    usage: 'session brief [text... | @file | --body=@file|-|@-]',
+    about: 'write your own session brief; a lone @file is read',
     options: [body],
     words: [0],
     check: (args, words) =>
       words.length || args.some((a) => a.startsWith('--body='))
         ? undefined
-        : 'needs brief text or --body=@file|-|@-',
+        : 'needs brief text, @file, or --body=@file|-|@-',
   },
   'session turn': {
     usage: 'session turn <idle|busy> [sid] [--hook]',
