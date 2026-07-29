@@ -2881,6 +2881,8 @@ a[data-ref]:hover {
   z-index: 20;
   width: max-content;
   max-width: min(33rem, calc(100vw - 2 * var(--gap)));
+  max-height: 70dvh;
+  overflow-y: auto;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
