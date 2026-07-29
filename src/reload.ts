@@ -16,6 +16,8 @@ export let serverFiles = [
   'mcp.ts',
   'client.ts',
   'sessions.ts',
+  'commands.ts',
+  'obey.ts',
   'door.ts',
   'tmux.ts',
   'roles.ts',

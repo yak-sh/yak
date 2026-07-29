@@ -4,7 +4,8 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
 import { rows } from './client.ts'
-import { commandOut, CUT, elide, type IO, mcpServer } from './mcp.ts'
+import { CUT, elide, type IO, mcpServer } from './mcp.ts'
+import { commandOut } from './commands.ts'
 import { type Change, edges, memoryTypes, statuses, verdicts } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')

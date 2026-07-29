@@ -57,6 +57,7 @@ import {
 } from './sessions.ts'
 import { outcome, recent, record, toolCall } from './telemetry.ts'
 import { stamp } from './hot.ts'
+import { obeyed } from './obey.ts'
 import { serverFile } from './reload.ts'
 import { find, type Row, rows } from './client.ts'
 import {
@@ -765,6 +766,11 @@ on('comment', {
   created: commented(cast),
   doc: 'a comment at a settled session resumes that agent with its ' +
     'unheard backlog',
+})
+on('comment', {
+  created: obeyed(cast),
+  doc: 'a comment whose first line opens with `:` is a command line — ' +
+    'run against its target, as its author, answered by an event comment',
 })
 on('knock', {
   created: knocked(cast),

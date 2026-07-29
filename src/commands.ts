@@ -20,6 +20,7 @@ import { type Change, idOf, uuid } from './types.ts'
 import {
   claimChanges,
   commentChanges,
+  derefChanges,
   DESK,
   find,
   mailChanges,
@@ -431,6 +432,20 @@ export let run = (
     )
   }
   return v.run(rest ?? '', ctx)
+}
+
+// The door every non-typing caller enters by: the line with or without
+// its colon, and the changes deref'd — any *_eid value a verb produced may
+// be a human id (T-3, P-19) or an alias (jeff), and client.ts resolves
+// them HERE rather than letting a miss fail as an FK later.
+export let commandOut = (
+  all: Row[],
+  line: string,
+  eid?: string,
+  session?: string,
+) => {
+  let out = run(line.replace(/^:/, ''), { eid, rows: all, session })
+  return out.changes ? { ...out, changes: derefChanges(all, out.changes) } : out
 }
 
 // Typeahead over the table: prefix matches lead (`:d` is to the point),

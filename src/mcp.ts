@@ -30,7 +30,6 @@ import {
   claimChanges,
   commentChanges,
   contextDigest,
-  derefChanges,
   derefParams,
   edgesOf,
   find,
@@ -64,7 +63,7 @@ import {
   resolveRefs,
   warm,
 } from './query.ts'
-import { commands, focusOf, run as runCommand } from './commands.ts'
+import { commandOut, commands, focusOf } from './commands.ts'
 import { request } from './http.ts'
 
 // How the tools reach the graph — in-process on the server, HTTP here.
@@ -197,20 +196,6 @@ let wall = (s: unknown) =>
 markdown documents (paragraphs, lists, headings). Rewrite via task_update
 ".body=".`
     : ''
-
-// Any *_eid dot-param value may be a human id (T-3, P-19) or an alias
-// (jeff) — client.ts derefParams resolves them at the door, and a miss
-// throws here rather than failing an FK later.
-
-export let commandOut = (
-  all: Row[],
-  line: string,
-  eid?: string,
-  session?: string,
-) => {
-  let out = runCommand(line.replace(/^:/, ''), { eid, rows: all, session })
-  return out.changes ? { ...out, changes: derefChanges(all, out.changes) } : out
-}
 
 export let mcpServer = (io: IO) => {
   // Server instructions ride the initialize handshake and land in the
