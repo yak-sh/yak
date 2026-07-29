@@ -1225,11 +1225,16 @@ export let contextDigest = (
     )
     local.sort(byBoard).slice(0, 5).forEach(show)
   }
-  // Unread mail rides one line — the door teaches itself (adoption is
-  // structural): the inbox predicate, scoped like everything else.
-  let unread = all.filter(inboxMail(scope, isOperator(sess?.comps.session)))
+  // What is waiting rides one line, and the door teaches itself (adoption
+  // is structural). The count is the INBOX's own predicate, so this number
+  // and `task inbox` can never disagree — it used to screen mail by what
+  // the letter was ABOUT rather than who it was TO, which reported zero
+  // while hundreds of letters addressed to the venture sat unread, and it
+  // pointed at `task mail`, a door that has since been retired.
+  let unread = all.filter(inboxItem(readerFor(all, session, cwd, scope)))
+    .filter(isUnread)
   if (unread.length) {
-    lines.push(`## mail — ${unread.length} unread (task mail)`)
+    lines.push(`## inbox — ${unread.length} unread (task inbox)`)
   }
   // What your past selves were told after they stopped listening —
   // history on one line, never re-injected as live conversation.

@@ -850,6 +850,8 @@ Deno.test('unreadMail + digest: unread counts, read/outbound stay quiet', () => 
   let M2 = 'aaaaaaaa-0000-4000-8000-000000000022' // inbound, read
   let M3 = 'aaaaaaaa-0000-4000-8000-000000000023' // outbound
   let P = 'aaaaaaaa-0000-4000-8000-000000000024' // a project scope
+  let M4 = 'aaaaaaaa-0000-4000-8000-000000000025' // inbound, to ME
+  let A = 'aaaaaaaa-0000-4000-8000-000000000026' // the actor sess-x acts for
   let mk = (eid: string, num: number, mail: Record<string, unknown>) => [
     { eid, name: 'entity', comp: { eid, num, created_at: '' } },
     { eid, name: 'doc', comp: { title: `mail ${num}`, body: '' } },
@@ -858,7 +860,14 @@ Deno.test('unreadMail + digest: unread counts, read/outbound stay quiet', () => 
   let g: Snapshot = {
     changes: [
       ...snap.changes,
-      { eid: S, name: 'session', comp: { operator: 1 } },
+      {
+        eid: S,
+        name: 'session',
+        comp: { id: 'sess-x', cwd: '/w', operator: 1, actor_eid: A },
+      },
+      { eid: A, name: 'entity', comp: { eid: A, num: 26, created_at: '' } },
+      { eid: A, name: 'doc', comp: { title: 'Operator', body: '' } },
+      { eid: A, name: 'email', comp: { address: 'me@x.test' } },
       { eid: P, name: 'entity', comp: { eid: P, num: 24, created_at: '' } },
       { eid: P, name: 'doc', comp: { title: 'Venture', body: '' } },
       { eid: P, name: 'project', comp: {} },
@@ -875,6 +884,13 @@ Deno.test('unreadMail + digest: unread counts, read/outbound stay quiet', () => 
       // read-state now rides the `opened` stamp (T-7006), not mail.read_at
       { eid: M2, name: 'opened', comp: { at: '2026-07-22T00:00:00Z' } },
       ...mk(M3, 23, { to: 'them@y.test' }),
+      // addressed to ME by address, ABOUT some other entity — the case
+      // the old target_eid-only screen dropped on the floor
+      ...mk(M4, 25, {
+        to: 'me@x.test',
+        message_id: 'msg:4:<d@x>',
+        target_eid: T2,
+      }),
     ],
     deps: snap.deps,
   }
@@ -883,22 +899,23 @@ Deno.test('unreadMail + digest: unread counts, read/outbound stay quiet', () => 
   assertEquals(is(M1), true)
   assertEquals(is(M2), false) // read
   assertEquals(is(M3), false) // outbound is born read
-  // the inbox predicate is the ONE scoping truth: scoped sees only mail
-  // aimed at the scope, a foreign scope hears nothing, unscoped sees all
+  // `task mail`'s own screen is by TARGET — what a letter is about
   let inbox = (scope?: string) => all.filter(inboxMail(scope)).map((r) => r.eid)
   assertEquals(inbox(P), [M1])
-  assertEquals(inbox(T2), [])
-  assertEquals(inbox(), [M1])
-  assertMatch(contextDigest(g, 'sess-x'), /## mail — 1 unread \(task mail\)/)
+  assertEquals(inbox(T2), [M4])
+  assertEquals(inbox(), [M1, M4])
+  // the digest counts with the INBOX's predicate — addressed to me — so
+  // the number and `task inbox` cannot disagree. Standing in the venture,
+  // that is its mail PLUS the letter to my own address, whatever it's about
   assertMatch(
     contextDigest(g, 'sess-x', Date.now(), P),
-    /## mail — 1 unread/,
+    /## inbox — 2 unread \(task inbox\)/,
   )
-  // a scope the mail isn't aimed at hears nothing; nor does a graph
-  // whose only mail is read or outbound
-  let other = contextDigest(g, 'sess-x', Date.now(), T2)
-  assertEquals(other.includes('## mail'), false)
-  assertEquals(contextDigest(snap, 'sess-x').includes('## mail'), false)
+  // scopeless, I am still an address: the letter to me survives, the
+  // venture's does not — an unscoped session never saw the fleet's pile
+  assertMatch(contextDigest(g, 'sess-x'), /## inbox — 1 unread/)
+  // nothing addressed, nothing said
+  assertEquals(contextDigest(snap, 'sess-x').includes('## inbox'), false)
 })
 
 // The inbox generalizes the mail predicates over every addressed-to-me
