@@ -261,11 +261,16 @@ These hold everywhere in this repo, whoever — or whatever — writes the code:
   lint failure ride to main and removed a worktree under an unmerged branch
   (both 2026-07-22) — the trap earns its ink.
 - **Verify end-to-end before done** — the holdco standard. Recipes that work
-  headless: screenshot
-  `google-chrome --headless=new --screenshot=x.png
-  http://127.0.0.1:5173/`;
-  drive hovers/keys/clicks over CDP (`--remote-debugging-port`); TUI via
+  headless: CDP for anything in the browser — launch with
+  `--remote-debugging-port`, `PUT /json/new?<encoded-url>`, then
+  `Runtime.evaluate` against the rendered DOM (query for the element and read
+  its text); the same session drives hovers, keys and clicks. TUI via
   `tmux new-session -d` + `send-keys` + `capture-pane -p` (`-e` keeps ANSI).
+  **`--headless=new --screenshot` does NOT work for this app** — it writes a
+  blank page even against the live server and even with a 20s
+  `--virtual-time-budget`, because the canvas paints after a socket the
+  virtual clock never resolves. A blank PNG looks like an empty page, so it
+  is worse than no check: assert on the DOM instead.
   Clean up any entities a probe creates (delete = `{name:'entity', comp:null}`),
   and never point a probe that DRIVES A GESTURE at the live graph: clicking a
   destructive control (archive, delete, a status move) is a live write by a
