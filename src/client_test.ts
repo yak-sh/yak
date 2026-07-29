@@ -1642,6 +1642,24 @@ Deno.test('spec: a typed task — leading P, params anywhere, body below', () =>
   assertEquals(spec('').title, '')
 })
 
+Deno.test('spec: read is the door’s value convention, and it throws', () => {
+  let f = Deno.makeTempFileSync()
+  Deno.writeTextFileSync(f, 'the whole brief\n')
+  // no reader: the value is what was typed
+  assertEquals(spec(`Ship it .body=@${f}`).grouped.doc, { body: `@${f}` })
+  assertEquals(
+    spec(`Ship it .body=@${f}`, inflate).grouped.doc,
+    { body: 'the whole brief\n' },
+  )
+  // a missing file is LOUD — never a word swallowed into the title
+  assertThrows(
+    () => spec('Ship it .body=@/no/such/file', inflate),
+    Error,
+    'no such file',
+  )
+  Deno.removeSync(f)
+})
+
 // ---- the memory doors' pure halves ----
 
 Deno.test('memoryChanges: doc face + memory comp, session writer and scope', () => {

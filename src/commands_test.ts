@@ -9,7 +9,7 @@ import {
   run,
   suggest,
 } from './commands.ts'
-import { rows } from './client.ts'
+import { inflate, rows } from './client.ts'
 import { type Snapshot } from './types.ts'
 import { assertEquals, assertThrows } from '@std/assert'
 
@@ -229,6 +229,43 @@ Deno.test('set: the write grammar, routed and grouped', () => {
   assertThrows(() => run('set .doc.nope=1', ctx(T)), Error, 'no such prop')
   assertThrows(() => run('set title=x', ctx(T)), Error, 'not a param: title=x')
   assertThrows(() => run('set', ctx(T)), Error, 'needs .prop=value')
+})
+
+// The door's value convention, not the verb's: a shell hands in inflate
+// and `.body=@file` is the file — the same reading `task set` gives it.
+// A door without a filesystem hands in nothing and the value is literal,
+// which is what keeps an MCP caller from reading the server's disk.
+Deno.test('set/new: @file rides ctx.read, and only where a door has one', () => {
+  let f = Deno.makeTempFileSync()
+  Deno.writeTextFileSync(f, 'the whole brief\n')
+  let shell = { ...ctx(T), read: inflate }
+  assertEquals(
+    run(`set .body=@${f}`, shell).changes![0].comp,
+    { body: 'the whole brief\n' },
+  )
+  // no reader: the literal path, exactly as typed
+  assertEquals(run(`set .body=@${f}`, ctx(T)).changes![0].comp, {
+    body: `@${f}`,
+  })
+  // @@ is the escape, both ways
+  assertEquals(run('set .body=@@x', shell).changes![0].comp, { body: '@x' })
+  // a plain value is untouched
+  assertEquals(run('set .title=two words', shell).changes![0].comp, {
+    title: 'two words',
+  })
+  // :new speaks the same convention through spec()
+  assertEquals(
+    run(`new Ship it .body=@${f}`, { ...ctx(B), read: inflate }).changes![0]
+      .comp!.body,
+    'the whole brief\n',
+  )
+  // a missing file is LOUD — never the literal path over the old value
+  assertThrows(
+    () => run('set .body=@/no/such/file', shell),
+    Error,
+    'no such file',
+  )
+  Deno.removeSync(f)
 })
 
 Deno.test('dispatch: unknown names say so, local verbs ride, empty is a no-op', () => {

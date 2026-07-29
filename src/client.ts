@@ -427,8 +427,11 @@ export let patches = (params: Param[]) => {
 // keeps its words. One parser for every door that takes a typed task —
 // the board's quick-add, :new, whatever comes next. A malformed
 // dot-param stays a word rather than throwing: mid-typing is not an
-// error, and Enter files what the preview showed.
-export let spec = (text: string) => {
+// error, and Enter files what the preview showed. `read` is the door's
+// value convention (inflate, where there's a filesystem) — it runs
+// OUTSIDE the not-a-param catch, so a missing @file is an error and
+// never a word swallowed into the title.
+export let spec = (text: string, read: (p: Param) => Param = (p) => p) => {
   let [line, ...rest] = text.split('\n')
   let words: string[] = []
   let ps: Param[] = []
@@ -441,13 +444,14 @@ export let spec = (text: string) => {
       continue
     }
     if (w.startsWith('.')) {
+      let d: Param | null = null
       try {
-        let d = param(w)
-        if (d) {
-          ps.push(d)
-          continue
-        }
+        d = param(w)
       } catch { /* not a real prop: a word after all */ }
+      if (d) {
+        ps.push(read(d))
+        continue
+      }
     }
     leading = false
     words.push(w)

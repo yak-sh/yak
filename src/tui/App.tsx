@@ -25,6 +25,7 @@ import {
   statuses,
 } from '../live.ts'
 import { type Command, commands, type Ctx, run } from '../commands.ts'
+import { inflate } from '../client.ts'
 import {
   applicable,
   has,
@@ -269,8 +270,13 @@ export let overrides: Renderer[] = [
 
 // The command context here: the entity you're IN (the trail's head), or
 // the row the cursor is on at the board — the same "what you're looking
-// at" rule the web reads off its URL.
-let ctx = (): Ctx => ({ eid: trail.value.at(-1) ?? selected(), rows: graph() })
+// at" rule the web reads off its URL. A terminal has a filesystem, so
+// `:set .body=@file` reads it here exactly as it does from the shell.
+let ctx = (): Ctx => ({
+  eid: trail.value.at(-1) ?? selected(),
+  rows: graph(),
+  read: inflate,
+})
 
 // Quitting is the one verb a browser has no answer for; the rest of the
 // language is shared (commands.ts).

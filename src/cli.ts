@@ -784,7 +784,9 @@ let colon = async (focus: string | undefined, argv: string[]) => {
     if (!r) throw new Error(`no entity: ${focus}`)
     eid = r.eid
   } else eid = focusOf(all, session)
-  let out = runCommand(line, { eid, rows: all, session })
+  // A shell has a filesystem, so a dot-param value here reads @file and
+  // @- exactly as `task set` does — one convention across the CLI's doors.
+  let out = runCommand(line, { eid, rows: all, session, read: inflate })
   if (out.changes?.length) await send(out.changes)
   if (out.msg) console.log(out.msg)
   if (out.spawn) await launch(out.spawn, {})

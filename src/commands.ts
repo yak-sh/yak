@@ -10,7 +10,9 @@
 //   :open            …and back to open — but
 //   :open T-42       an ARGUMENT means navigate. Shape is the whole rule.
 //   :claim [session] lease the focused entity
-//   :set .prop=v …   the write grammar (client.ts param), verbatim
+//   :set .prop=v …   the write grammar (client.ts param); a value rides
+//                    the door's own convention (Ctx.read) — @file and @-
+//                    where the door has a filesystem, literal elsewhere
 //
 // A bad command throws; the bar shows the message, exactly as a malformed
 // board query does (query.ts). Platform-local verbs (the TUI's :q, the
@@ -24,6 +26,7 @@ import {
   DESK,
   find,
   mailChanges,
+  type Param,
   param,
   patches,
   replyChanges,
@@ -38,10 +41,20 @@ import { instant } from './time.ts'
 // Where the typist is standing: the focused entity (the web's root card,
 // the TUI's trail head), the graph to resolve names against, and the
 // session speaking — a browser has none, so :claim must name one there.
+//
+// `read` is the door's VALUE convention for a dot-param — client.ts
+// inflate(), so `.body=@file` is the file and `.body=@-` is stdin, the
+// same reading `task set` and `task new` give it. It rides the context
+// because it is a fact about the door, not about the verb: this module
+// touches no filesystem, so the doors that HAVE one (the shell, the TUI)
+// hand it in and the doors that don't (the web bar, MCP over /mcp) leave
+// it absent and every value stays literal. Reading a path named by an
+// MCP caller would be the SERVER's filesystem, so that door stays shut.
 export type Ctx = {
   eid?: string
   rows: Row[]
   session?: string
+  read?: (p: Param) => Param
 }
 
 export type Result = {
@@ -117,7 +130,7 @@ export let commands: Record<string, Command> = {
     args: 'P1 .domain=Eng title…',
     about: 'file a task where you stand',
     run: (rest, ctx) => {
-      let { title, body, grouped } = spec(rest)
+      let { title, body, grouped } = spec(rest, ctx.read)
       if (!title) throw new Error('new: needs a title')
       return {
         changes: taskChanges(uuid(), {
@@ -159,7 +172,7 @@ export let commands: Record<string, Command> = {
         if (!r?.comps.task) throw new Error(`no such task: ${text}`)
         return { spawn: r.eid, msg: `${idOf(r)} → agent` }
       }
-      let { title, body, grouped } = spec(text)
+      let { title, body, grouped } = spec(text, ctx.read)
       if (!title) throw new Error('fix: needs a title')
       let task = { ...grouped.task }
       if (!task.project_eid) {
@@ -393,7 +406,8 @@ export let commands: Record<string, Command> = {
   },
   // Params start at a dot, which is what lets a value hold spaces
   // (:set .title=two words) without quoting rules the CLI's argv gives
-  // it for free.
+  // it for free. Values ride ctx.read — one @file convention for every
+  // door that has a filesystem, the same one `task set` speaks.
   set: {
     args: '.prop=value …',
     about: 'patch the focused entity',
@@ -401,10 +415,11 @@ export let commands: Record<string, Command> = {
       let r = here(ctx)
       let args = rest.trim().split(/\s+(?=\.)/).filter(Boolean)
       if (!args.length) throw new Error('set: needs .prop=value')
+      let read = ctx.read ?? ((p: Param) => p)
       let ps = args.map((a) => {
         let p = param(a)
         if (!p) throw new Error(`not a param: ${a}`)
-        return p
+        return read(p)
       })
       return {
         changes: Object.entries(patches(ps))
@@ -449,6 +464,11 @@ export let orderIn = (body: string) => {
 // its colon, and the changes deref'd — any *_eid value a verb produced may
 // be a human id (T-3, P-19) or an alias (jeff), and client.ts resolves
 // them HERE rather than letting a miss fail as an FK later.
+//
+// No Ctx.read: this door is MCP over /mcp, where the caller's line is
+// spoken to the SERVER's process. `@/etc/passwd` there would read the
+// server's disk, not the caller's, so values stay literal — an MCP caller
+// passes a long body as a string (task_new/graph_apply take one whole).
 export let commandOut = (
   all: Row[],
   line: string,
