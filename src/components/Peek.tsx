@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef } from 'preact/hooks'
 import { ent } from '../live.ts'
 import { block, el } from './ui.tsx'
-import { peek } from './nav.tsx'
+import { cardMenuAt, peek } from './nav.tsx'
 import { applicable, resolve } from './registry.ts'
 import { dragData } from './drag.ts'
 import { Entity } from './Entity.tsx'
@@ -73,7 +73,7 @@ export let Peek = () => {
   }
 
   return (
-    <Frame elRef={root}>
+    <Frame elRef={root} onContextMenu={cardMenuAt(e)}>
       <Head
         draggable
         onDragStart={(ev: DragEvent) => dragData(ev, p!.eid, view)}

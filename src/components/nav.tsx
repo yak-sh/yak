@@ -48,6 +48,9 @@ let linkAt = (ev: MouseEvent) => {
 export let openAt = (eid: string, ev: MouseEvent) => {
   if (globalThis.matchMedia?.('(pointer: fine)').matches) {
     let from = linkAt(ev)
+    // The peek already shows this entity. Its own id's clicks must leave
+    // it mounted long enough for the deliberate double-click to navigate.
+    if (peek.value?.eid == eid && from?.closest('.Peek')) return
     let same = peek.value?.eid == eid && peek.value.from == from
     peek.value = same ? null : { eid, x: ev.clientX, y: ev.clientY, from }
   } else navigate(`/${idOf(ent(eid))}`)
@@ -169,6 +172,16 @@ export let menuAt = (e: Ent) => (ev: MouseEvent) => {
   ev.preventDefault()
   ev.stopPropagation()
   menu.value = { x: ev.clientX, y: ev.clientY, href: `/${idOf(e)}`, eid: e.eid }
+}
+
+// A card is the menu target except where a nested control or link owns
+// the browser's menu. Pinned and temporary cards share this boundary.
+export let cardMenuAt = (e: Ent) => (ev: MouseEvent) => {
+  if (
+    ev.target instanceof Element &&
+    ev.target.closest('a, input, textarea, [contenteditable]')
+  ) return
+  menuAt(e)(ev)
 }
 
 let Frame = block('div', 'Menu', { Item: 'button' })

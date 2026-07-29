@@ -1,13 +1,13 @@
 import { type Signal, useComputed, useSignal } from '@preact/signals'
 import { camera, ent, mutate, pinZ, toFront, topZ } from '../live.ts'
-import { idOf, type Pinned } from '../types.ts'
+import { type Pinned } from '../types.ts'
 import { block, el } from './ui.tsx'
 import { applicable } from './registry.ts'
 import { dragData } from './drag.ts'
 import { Entity } from './Entity.tsx'
 import { filterable, FilterInput } from './Filter.tsx'
 import { Icon } from './icons.tsx'
-import { menu } from './nav.tsx'
+import { cardMenuAt } from './nav.tsx'
 import { overTray, shelf, shelfMint } from './Tray.tsx'
 
 // Each tab view wears an icon; the name moves into an anchored tooltip.
@@ -216,20 +216,7 @@ export let Card = ({ p }: { p: Pinned }) => {
       // The CARD is the right-click target — "open here" (make this the
       // root card) and "open in new tab" for its target. Links, inputs,
       // and selectable text keep the browser's own menu.
-      onContextMenu={(ev: MouseEvent) => {
-        if (
-          ev.target instanceof Element &&
-          ev.target.closest('a, input, textarea, [contenteditable]')
-        ) return
-        ev.preventDefault()
-        ev.stopPropagation()
-        menu.value = {
-          x: ev.clientX,
-          y: ev.clientY,
-          href: `/${idOf(ent(p.target_eid))}`,
-          eid: p.target_eid,
-        }
-      }}
+      onContextMenu={cardMenuAt(ent(p.target_eid))}
     >
       <Frame>
         <Tabs>
