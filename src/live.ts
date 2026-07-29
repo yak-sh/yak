@@ -522,6 +522,10 @@ let shadows = new Set<string>()
 // maintenance frames patch it.
 export let landSub = (f: Sub) => {
   let touched = applyLocal(f.changes)
+  // The server marks shadow-ness on every frame it sends, so believe the
+  // frame: the local `shadows` set only knows what THIS client asked for,
+  // and the two must not be able to disagree about who owns the cache.
+  if (f.shadow) shadows.add(f.sub)
   let old = subMembers.get(f.sub) ?? new Set<string>()
   let mine = f.replace ? new Set<string>() : old
   subMembers.set(f.sub, mine)
@@ -588,10 +592,19 @@ let shadow = (sub: string, q: string) => {
   shadows.add(sub)
   control({ sub, q, shadow: true })
 }
+// Closing a subscription hands its members back. Both orderings matter and
+// they pull opposite ways: the departing set must be read BEFORE the
+// subscription goes (deleting it first loses the list), and evict() must run
+// AFTER, because it asks the REMAINING subscriptions whether anyone still
+// holds each eid — an eid two boards share survives the first close and
+// leaves on the second. A shadow sub never owned the cache (the complete
+// stream did), so it takes nothing with it.
 let forget = (sub: string) => {
+  let leaving = shadows.has(sub) ? [] : [...(subMembers.get(sub) ?? [])]
   shadows.delete(sub)
   subMembers.delete(sub)
   agreement?.checked.delete(sub)
+  if (leaving.length) evict(leaving)
   subVersion.value++
 }
 export let unsubscribe = (sub: string) => {

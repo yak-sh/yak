@@ -29,6 +29,7 @@ import {
   subEids,
   subscriptionChecks,
   topZ,
+  unsubscribe,
 } from './live.ts'
 import { type Ent } from './types.ts'
 import { effect } from '@preact/signals'
@@ -112,6 +113,53 @@ Deno.test('a replacement frame forgets the prior query set', () => {
     shadow: true,
   })
   assertEquals([...(subEids('board:replace') ?? [])], ['new'])
+})
+
+// Closing the last consumer is the only moment the cache can leak: the
+// departing set is gone from `subMembers` before anyone asks what it held.
+Deno.test('unsubscribing evicts only what no other subscription holds', () => {
+  let ent = (eid: string) => [
+    { eid, name: 'entity', comp: { eid, num: 1 } },
+  ]
+  cache.value = {}
+  landSub({
+    sub: 'left',
+    replace: true,
+    changes: [...ent('mine'), ...ent('both')],
+  })
+  landSub({
+    sub: 'right',
+    replace: true,
+    changes: [...ent('theirs'), ...ent('both')],
+  })
+  assertEquals(Object.keys(cache.value).toSorted(), ['both', 'mine', 'theirs'])
+
+  unsubscribe('left')
+  // `mine` was held by nobody else and goes; `both` is still the right
+  // subscription's, and evicting it would blank a board still on screen.
+  assertEquals(Object.keys(cache.value).toSorted(), ['both', 'theirs'])
+  assertEquals(subEids('left'), undefined)
+
+  unsubscribe('right')
+  assertEquals(Object.keys(cache.value), [])
+})
+
+// A shadow subscription rides beside the complete stream, which is still the
+// cache's owner — so closing one must take nothing with it.
+Deno.test('closing a shadow subscription evicts nothing', () => {
+  cache.value = {}
+  landSub({
+    sub: 'watching',
+    replace: true,
+    shadow: true,
+    changes: [{
+      eid: 'watched',
+      name: 'entity',
+      comp: { eid: 'watched', num: 1 },
+    }],
+  })
+  unsubscribe('watching')
+  assertEquals(Object.keys(cache.value), ['watched'])
 })
 
 Deno.test('domains: distinct, sorted, absent ones skipped', () => {
