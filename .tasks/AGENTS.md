@@ -266,7 +266,13 @@ These hold everywhere in this repo, whoever — or whatever — writes the code:
   http://127.0.0.1:5173/`;
   drive hovers/keys/clicks over CDP (`--remote-debugging-port`); TUI via
   `tmux new-session -d` + `send-keys` + `capture-pane -p` (`-e` keeps ANSI).
-  Clean up any entities a probe creates (delete = `{name:'entity', comp:null}`).
+  Clean up any entities a probe creates (delete = `{name:'entity', comp:null}`),
+  and never point a probe that DRIVES A GESTURE at the live graph: clicking a
+  destructive control (archive, delete, a status move) is a live write by a
+  script whose whole job is to click things. "It only reads" describes your
+  intent, not the button — a verification run archived a real letter out of
+  the owner's inbox this way, and only a count that came up one short caught
+  it. Drive gestures against a probe server; read the live one.
   An in-process probe must set `DB_PATH`: db.ts `open()` defaults to the LIVE
   graph, so a script that imports apply()/open() and skips the server mints
   entities in the owner's board (silent on the first run, a UNIQUE failure on
