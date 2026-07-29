@@ -401,7 +401,7 @@ seams wider or leakier, that's the wrong direction.
 
 ---
 
-# M-9273 @file is the DOOR's convention, not the verb's — every door with a filesystem reads it, the web bar and MCP take it literally
+# M-9273 @file is the DOOR's convention — but on a bare positional it is the VERB's, so mail reply sends the path
 
 A dot-param value that starts with `@` is read by the tool: `@file` is a file, `@-` is piped stdin, `@@` escapes a literal leading `@`. That convention belongs to the **door**, and every door with a filesystem speaks it — the same reading, whichever spelling you reach for:
 
@@ -419,6 +419,24 @@ A dot-param value that starts with `@` is read by the tool: `@file` is a file, `
 
 **Only `@` is special.** `.body=-` writes the single character `-`; the stdin door is spelled `@-`.
 
+## The bare positional is a different question — and it is not uniform
+
+Everything above is about a **dot-param value**. Some verbs also take a bare positional `@file`, and there the reading is per-verb:
+
+| call | `@file` as a bare positional |
+| --- | --- |
+| `task comment <id> @file` | **reads the file** |
+| `task mail reply <id> @file` | **literal — the path becomes the message** |
+
+`task mail reply <id> [text… | --body=@file|-|@-]` takes free text as its positional, so a bare `@file` is faithfully sent as the body. **The correct form is `task mail reply <id> --body=@file`**, and `task mail send <to> <subject…> --body=@file` likewise.
+
+This one is nastier than the other literal doors for two reasons:
+
+- **It is silent and outbound.** No error, exit 0, a cheerful receipt with a real mail id — and a human on the far end receives `@/tmp/claude-…/scratchpad/reply.md`. Nothing in the graph looks wrong.
+- **Success on the neighbouring door teaches the wrong lesson.** `task comment <id> @file` honours the bare form, so an agent that just used it ten times pattern-matches straight into the trap. 2026-07-29: two consecutive replies to the owner during a live P0 went out as bare paths; he read both, saw nothing, and reported a mail-tooling bug that did not exist.
+
+Rule of thumb: **on any door whose positional argument is prose meant for a person, pass the body through `--body=`.** Reserve bare `@file` for verbs whose positional is unambiguously a document.
+
 ## Why the two literal doors
 
 Neither has the caller's filesystem. In the web bar there is no disk to read. In MCP `command` the line is spoken to the **server's** process, so `@/etc/passwd` would read the server's disk and not the caller's — that door stays shut on purpose. An MCP caller passes a long body as a plain string instead: `graph_apply` with `{eid, name: "doc", comp: {body: "…"}}`, or `task_new` / `memory_save`, where `body` is a real parameter.
@@ -435,6 +453,8 @@ Neither has the caller's filesystem. In the web bar there is no disk to read. In
 Any write that REPLACES a body destroys what was there, so read the node to a file (`task show <id> --json` → `comps.doc.body`), patch the file, write it back, then **verify by reading the node again** — never by trusting the success message. This bites hardest on **persona and memory nodes**: blanking the `N-…` for a repo's common persona empties that repo's `AGENTS.md` on the next materialize, and the materializer auto-commits, so the damage lands in git within seconds.
 
 `task history <id> --json` holds every prior body verbatim, so recovery is a read plus one write even when you did not save a copy first.
+
+**For outbound mail the same habit is: read back what you sent.** `task show <id>` on the receipt costs one call and is the only thing that distinguishes a delivered letter from a delivered file path.
 
 ---
 
