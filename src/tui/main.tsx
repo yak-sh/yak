@@ -8,7 +8,7 @@ import { render } from 'preact'
 import { effect } from '@preact/signals'
 import { boot, config } from '../live.ts'
 import { extend } from '../components/registry.ts'
-import { App, key, overrides, quit, sel, trail } from './App.tsx'
+import { App, key, overrides, quit, sel, trail, views } from './App.tsx'
 import { paint } from './paint.ts'
 
 let enc = new TextEncoder()
@@ -38,11 +38,16 @@ try {
   let s = JSON.parse(Deno.readTextFileSync(stateFile))
   sel.value = s.sel ?? sel.value
   trail.value = s.trail ?? trail.value
+  views.value = s.views ?? views.value
 } catch { /* first run */ }
 effect(() => {
   Deno.writeTextFile(
     stateFile,
-    JSON.stringify({ sel: sel.value, trail: trail.value }),
+    JSON.stringify({
+      sel: sel.value,
+      trail: trail.value,
+      views: views.value,
+    }),
   )
 })
 
@@ -60,14 +65,20 @@ onPaint(() => paint(root))
 render(<App />, root as unknown as Parameters<typeof render>[1])
 
 // The key loop: raw bytes → key(). Multi-byte escape sequences (arrows,
-// function keys) arrive as one chunk — skipped for now, vim keys only.
+// function keys) arrive as one chunk, and a chunk is passed WHOLE or not
+// at all — dribbling one through key() char by char would type its
+// `[`, `Z`, … into the command line. Only ⇧⇥ is spoken for so far; the
+// rest are dropped, vim keys only.
 let buf = new Uint8Array(64)
 let dec = new TextDecoder()
 while (!quit.value) {
   let n = await Deno.stdin.read(buf)
   if (n == null) break
   let s = dec.decode(buf.subarray(0, n))
-  if (s.length > 1 && s.startsWith('\x1b')) continue
+  if (s.length > 1 && s.startsWith('\x1b')) {
+    if (s == '\x1b[Z') key(s)
+    continue
+  }
   for (let ch of s) key(ch)
 }
 bye()

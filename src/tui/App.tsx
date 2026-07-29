@@ -25,7 +25,12 @@ import {
   statuses,
 } from '../live.ts'
 import { type Command, commands, type Ctx, run } from '../commands.ts'
-import { has, type Renderer, resolve } from '../components/registry.ts'
+import {
+  applicable,
+  has,
+  type Renderer,
+  resolve,
+} from '../components/registry.ts'
 import { Entity } from '../components/Entity.tsx'
 import { byline, viaName } from '../components/Comments.tsx'
 import { Dot } from '../components/Dot.tsx'
@@ -59,6 +64,41 @@ export let selected = () => {
 // Where we are: a trail of entities entered with l/Enter; empty = the
 // board. h (or Ctrl-d, from any mode) pops back out.
 export let trail = signal<string[]>([])
+
+// HOW we're looking at it. The web gives every entity a row of tabs and
+// names the choice in `?v=`; the terminal reached none of it, so an
+// entity always painted through whichever renderer scored highest and
+// the Inbox — among others — was unreachable here. Keyed by eid so
+// stepping back out and in again returns you to the view you were in;
+// persisted beside the trail for the same reason it is.
+export let views = signal<Record<string, string>>({})
+
+// The views this entity offers: the SAME curated tabs the web screens
+// `?v=` against, so the two doors can't drift apart as views are added.
+// No terminal-only allowlist — the TUI overrides Board and Full and lets
+// the rest render through the shared registry into the fake DOM, which
+// is the seam working as intended rather than a gap to paper over.
+let tabsFor = (eid: string) => applicable(ent(eid))
+
+// The view a pane is SHOWING when none was picked. Not tabs[0] — the
+// tab ORDER and the renderer SCORES are different rankings and they
+// disagree: a project tabs Inbox first but paints Full, so seeding the
+// cycle with tabs[0] made the first ⇥ a visible no-op. Ask the registry
+// the same question <Entity> asks when it gets no view prop.
+let viewOf = (eid: string) => views.value[eid] ?? resolve(ent(eid)).view
+
+// ⇥ walks the row forward, ⇧⇥ back, both wrapping.
+let cycle = (d: number) => {
+  let here = trail.value.at(-1)
+  if (!here) return
+  let tabs = tabsFor(here)
+  if (tabs.length < 2) return
+  let at = tabs.indexOf(viewOf(here))
+  views.value = {
+    ...views.value,
+    [here]: tabs[(at + d + tabs.length) % tabs.length],
+  }
+}
 
 let enter = (): boolean => {
   let s = selected()
@@ -291,6 +331,8 @@ export let key = (k: string) => {
   else if (k == '\r') {
     if (enter()) startEdit()
   } else if (k == 'h') back()
+  else if (k == '\t') cycle(1)
+  else if (k == '\x1b[Z') cycle(-1) // ⇧⇥, delivered whole by the key loop
   else if (k == 'y') yank()
   else if (k == 'q' || k == '\x03') quit.value = true
   else if (k == '\x1b') msg.value = ''
@@ -328,7 +370,8 @@ let TStatus = () => {
               <span class='TStatus_Msg'>{msg.value || problem.value}</span>
             )}
             <span class='TStatus_Hint'>
-              j/k browse · l in · h out · i edit · y yank · : cmd · q quit
+              j/k browse · l in · h out · ⇥ view · i edit · y yank · : cmd · q
+              quit
             </span>
           </>
         )}
@@ -351,12 +394,19 @@ export let App = () => {
   }
   let crumbs = [
     p ? ent(p).doc?.title ?? 'untitled' : 'no board',
-    ...trail.value.map((eid) => idOf(ent(eid))),
+    // the view rides the breadcrumb when it isn't the one the pane would
+    // paint anyway, the way `?v=` rides the URL — otherwise there is no
+    // way to tell which of two look-alike panes you are on
+    ...trail.value.map((eid) => {
+      let e = ent(eid)
+      let v = views.value[eid]
+      return idOf(e) + (v && v != resolve(e).view ? ` · ${v}` : '')
+    }),
   ]
   return (
     <div class='TApp'>
       <div class='TTitle'>{['tasks', ...crumbs].join(' · ')}</div>
-      {here ? <Entity eid={here} /> : p && (
+      {here ? <Entity eid={here} view={views.value[here]} /> : p && (
         <>
           <Entity eid={p} view='Board' />
           {s && (
