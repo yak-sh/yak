@@ -289,8 +289,13 @@ These hold everywhere in this repo, whoever — or whatever — writes the code:
   graph, so a script that imports apply()/open() and skips the server mints
   entities in the owner's board. Pick a UNIQUE port and read back where you
   LANDED (`ss -lptn | grep pid=<pid>`): `PORT` is an env var, not a flag, and
-  the server binds `reusePort`, so a wrong guess silently joins someone else's
-  socket instead of failing. The CDP port is a probe port too — two agents on
+  the server binds `reusePort`, so two servers CAN hold one address. A probe
+  that set `DB_PATH` is now REFUSED there — a server asks `GET /graph` who
+  already serves the port and exits rather than sit beside a different graph
+  (src/bind.ts), because a kernel that deals readers between two graphs
+  answers `no entity` for rows that exist. A probe that leaves `DB_PATH` unset
+  still joins silently: same file, same answers, and every write is a LIVE
+  write. The CDP port is a probe port too — two agents on
   `--remote-debugging-port=9333` share ONE chrome, the second launch fails
   silently, and both drive the first's tabs. Never point a probe that DRIVES A
   GESTURE at the live graph: clicking a destructive control (archive, delete, a
