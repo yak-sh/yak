@@ -6,6 +6,7 @@ import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
 import { rows } from './client.ts'
 import { CUT, elide, type IO, mcpServer } from './mcp.ts'
 import { commandOut } from './commands.ts'
+import { sha } from './sha.ts'
 import { type Change, edges, memoryTypes, statuses, verdicts } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
@@ -468,7 +469,11 @@ Deno.test('MCP modes apply every accepted field and reject conflicts', async () 
         arguments: { ids: [memory] },
       })
       assertEquals(recalled.isError, undefined)
-      assertMatch(said(recalled), /Confirmed\nFact/)
+      // The body arrives under the token that guards replacing it.
+      assertMatch(
+        said(recalled),
+        new RegExp(`Confirmed\nwas: ${sha('Fact')}\nFact`),
+      )
       let indexed = await client.callTool({
         name: 'memory_recall',
         arguments: { type: 'feedback', limit: 1 },
@@ -580,6 +585,88 @@ Deno.test('code_run throws and rejected batches are MCP errors', async () => {
       })
       assertEquals(rejected.isError, true)
       assertMatch(said(rejected), /batch REJECTED/)
+    })
+  } finally {
+    g.db.close()
+  }
+})
+
+// The door where the loss was observed. A guard that never refuses passes
+// every test that never tries to make it refuse, so each case here drives
+// the refusal first and only then proves the write it was protecting.
+Deno.test('memory_save guards the body it replaces', async () => {
+  let g = graph()
+  let M = '50000000-0000-4000-8000-000000000001'
+  let stored = () =>
+    rows(snapshot(g.db)).find((r) => r.eid == M)?.comps.doc?.body
+  let token = (out: ToolResult) => said(out).match(/was: (\w{64})/)?.[1]
+  try {
+    await protocol(g.io, async (client) => {
+      apply(g.db, [
+        { eid: M, name: 'doc', comp: { title: 'Memory', body: 'ONE' } },
+        { eid: M, name: 'memory', comp: { type: 'project', scope_eid: null } },
+      ])
+      let save = (args: Record<string, unknown>) =>
+        client.callTool({
+          name: 'memory_save',
+          arguments: { id: M, session: 'test', ...args },
+        })
+      let recall = () =>
+        client.callTool({ name: 'memory_recall', arguments: { ids: [M] } })
+
+      // POSITIVE CONTROL: a body replacement naming no prior state is
+      // refused, and the stored body is untouched by the attempt.
+      let bare = await save({ body: 'CLOBBER' })
+      assertEquals(bare.isError, true)
+      assertMatch(said(bare), /needs the body you started from/)
+      assertMatch(said(bare), /memory_recall/)
+      assertEquals(stored(), 'ONE')
+      // The refusal must NOT hand over the token: a body you have not read
+      // is a body you would overwrite.
+      assertEquals(token(bare), undefined)
+
+      // The read is where a token comes from, and it is the body's hash.
+      let read = await recall()
+      assertEquals(token(read), sha('ONE'))
+
+      // A guarded save with that token succeeds.
+      let ok = await save({ body: 'TWO', was: token(read) })
+      assertEquals(ok.isError, undefined)
+      assertEquals(stored(), 'TWO')
+
+      // A COLLISION: the same pre-state saved twice. The second is refused,
+      // the first writer's text survives verbatim, and the refusal carries
+      // the value to merge into plus a token for it — so the retry needs no
+      // re-read that could race again.
+      let stale = await save({ body: 'THIRD', was: token(read) })
+      assertEquals(stale.isError, true)
+      assertEquals(stored(), 'TWO')
+      assertMatch(said(stale), /has moved since you read it/)
+      assertMatch(said(stale), /--- current doc\.body ---\nTWO/)
+      assertEquals(token(stale), sha('TWO'))
+      // and the token it handed back is the one that works
+      let retry = await save({ body: 'MERGED', was: token(stale) })
+      assertEquals(retry.isError, undefined)
+      assertEquals(stored(), 'MERGED')
+
+      // An unwritten body reads as '' — not null — so sha('') is its guard.
+      // A null-shaped guard here would refuse every time.
+      apply(g.db, [{ eid: M, name: 'doc', comp: { body: '' } }])
+      assertEquals(token(await recall()), sha(''))
+      let filled = await save({ body: 'FROM EMPTY', was: sha('') })
+      assertEquals(filled.isError, undefined)
+      assertEquals(stored(), 'FROM EMPTY')
+
+      // Doors that replace no body are untouched: confirming props needs no
+      // token, and a new memory has no prior state to name.
+      let props = await save({ type: 'feedback' })
+      assertEquals(props.isError, undefined)
+      assertEquals(stored(), 'FROM EMPTY')
+      let made = await client.callTool({
+        name: 'memory_save',
+        arguments: { title: 'Fresh', body: 'No id, no guard', session: 'test' },
+      })
+      assertEquals(made.isError, undefined)
     })
   } finally {
     g.db.close()

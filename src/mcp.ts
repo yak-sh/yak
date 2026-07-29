@@ -23,6 +23,7 @@ import {
   verdicts,
 } from './types.ts'
 import { trouble } from './adapters.ts'
+import { sha } from './sha.ts'
 import { FILTERS, GRAMMAR } from './grammar.ts'
 import {
   byBoard,
@@ -748,22 +749,33 @@ to work, with the why) | project (ongoing state) | reference (a
 pointer). scope names the project it belongs to (P-19). Passing id
 instead CONFIRMS an existing memory: patches whatever props ride
 along, stamps last_confirmed_at, and counts as a strong recall —
-confirm what you reuse, and it decays slower. ${BUS}`,
+confirm what you reuse, and it decays slower.
+Editing a body REPLACES it, so id + body also needs was: the token
+memory_recall prints above the body it hands you. Read, merge into
+what you were given, save with that token — another writer since
+your read is refused, with their text and a fresh token. ${BUS}`,
     {
       title: z.string().optional(),
       body: body().optional(),
       type: z.enum(memoryTypes).optional(),
       scope: z.string().optional(),
       id: z.string().optional(),
+      was: z.string()
+        .describe(
+          'The was: token memory_recall printed for the body you are ' +
+            'replacing. Required with id + body.',
+        )
+        .optional(),
       session: z.string(),
     },
     async (
-      { title, body, type, scope, id, session }: {
+      { title, body, type, scope, id, was, session }: {
         title?: string
         body?: string
         type?: string
         scope?: string
         id?: string
+        was?: string
         session: string
       },
     ) => {
@@ -771,6 +783,20 @@ confirm what you reuse, and it decays slower. ${BUS}`,
       if (id) {
         let row = find(all, id)
         if (!row?.comps.memory) return err(`no memory: ${id}`)
+        // Replacing a body without naming the one you read is the lost
+        // update, so it is refused HERE rather than left to the caller's
+        // care — the wire keeps `was` optional for every single-writer
+        // door, and this is the door where two agents collide.
+        if (body != null && was == null) {
+          return err(
+            `memory_save on ${idOf(row)} replaces the whole body, so it ` +
+              `needs the body you started from.\n` +
+              `Run memory_recall ids: ["${idOf(row)}"], merge your change ` +
+              `into the body it prints, and pass its was: token back here.\n` +
+              `The token is deliberately not in this message: a body you ` +
+              `have not read is a body you would overwrite.`,
+          )
+        }
         let patch: Change[] = []
         if (title != null || body != null) {
           patch.push({
@@ -780,6 +806,7 @@ confirm what you reuse, and it decays slower. ${BUS}`,
               ...(title != null ? { title } : {}),
               ...(body != null ? { body } : {}),
             },
+            ...(was != null ? { was: { body: was } } : {}),
           })
         }
         let memory: Record<string, unknown> = type ? { type } : {}
@@ -791,7 +818,16 @@ confirm what you reuse, and it decays slower. ${BUS}`,
         if (Object.keys(memory).length) {
           patch.push({ eid: row.eid, name: 'memory', comp: memory })
         }
-        if (patch.length) await io.write(patch, session)
+        if (patch.length) {
+          // A refused precondition is an answer, not a crash: it carries the
+          // current value and the token to retry with, which is exactly what
+          // the caller needs to finish the job.
+          try {
+            await io.write(patch, session)
+          } catch (e) {
+            return err((e as Error).message)
+          }
+        }
         await io.touch([row.eid], true)
         return bus(`confirmed ${idOf(row)}${wall(body)}`, session)
       }
@@ -865,9 +901,14 @@ dot-param filters ('.type=feedback', '.scope_eid=P-19', '.count>=3',
         await io.touch(hits.map((r) => r.eid))
         return bus(
           hits.map((r) =>
-            `${idOf(r)} ${r.comps.memory.type}: ${r.comps.doc?.title ?? ''}\n${
-              r.comps.doc?.body ?? ''
-            }`
+            // The `was` token rides the read because this is the only place
+            // an agent can get one — it cannot hash a body itself, and a
+            // guarded save is the only way to edit a memory. Reading and
+            // then writing is the whole loop, so the read hands over what
+            // the write will ask for.
+            `${idOf(r)} ${r.comps.memory.type}: ${
+              r.comps.doc?.title ?? ''
+            }\nwas: ${sha(r.comps.doc?.body ?? '')}\n${r.comps.doc?.body ?? ''}`
           ).join('\n\n'),
           session,
         )

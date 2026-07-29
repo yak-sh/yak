@@ -10,6 +10,7 @@
 import { DatabaseSync } from 'node:sqlite'
 import { dirname, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
+import { sha } from './sha.ts'
 import {
   capabilities,
   type Change,
@@ -1243,13 +1244,10 @@ export let writerVia = (
 // one stamped from its venture or the box owner (T-6669): the writing
 // identity is never blank, and the journal keeps a resolvable actor eid,
 // not a raw label.
-// What a precondition compares. A column holds text, a number or a bool in
-// one slot, so String() is the single normalization both ends apply — the
-// caller hashes the body it already holds, with nothing new from the read
-// path. null is not hashed: it IS the sentinel for "I read no value", which
-// is why expected-absent can compare equal without colliding with a hash.
-export let sha = (v: unknown) =>
-  createHash('sha256').update(String(v)).digest('hex')
+// What a precondition compares — one definition, shared with the door that
+// hands agents their token (sha.ts says why it lives there). Re-exported
+// because apply()'s rule is where callers already look for it.
+export { sha }
 
 // A refused precondition, carrying what is stored NOW in full. The consumer
 // is an agent, and its loop is: refused-with-value → merge into the value it
@@ -1268,6 +1266,13 @@ export class Stale extends Error {
     super(
       `${comp}.${col} on ${eid} has moved since you read it — batch refused. ` +
         `Merge into the current value below and retry with its hash.\n` +
+        // The hash of the value shown, not of whatever is stored when the
+        // caller gets around to retrying. A caller that had to re-read for
+        // the token could merge into the value printed here and guard with
+        // a token for a NEWER one — a refusal that hands out the means to
+        // clobber. It also spares every caller a second door: an agent
+        // cannot hash for itself.
+        `was: ${value == null ? null : sha(value)}\n` +
         `--- current ${comp}.${col} ---\n${value ?? ''}`,
     )
     this.eid = eid

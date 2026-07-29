@@ -5,6 +5,7 @@
 export let serverFiles = [
   'server.ts',
   'db.ts',
+  'sha.ts',
   'effects.ts',
   'schema.ts',
   'types.ts',
