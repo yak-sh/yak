@@ -7,6 +7,7 @@
 // survives — it lives in live.ts, above the swap), css edits re-fetch the
 // stylesheet, and only shell/server edits still cost a real reload.
 import { transform } from 'sucrase'
+import { alone, type Serving } from './bind.ts'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { providers } from './adapters.ts'
 import { type Change, idOf, kindOf } from './types.ts'
@@ -17,6 +18,7 @@ import {
   delta,
   eager,
   epoch,
+  file as graph,
   journalBy,
   journalOf,
   search,
@@ -491,12 +493,27 @@ let clientError = async (req: Request) => {
 // request on the process that accepted it until its response is complete.
 let booted: () => void = () => {}
 let boot = new Promise<void>((resolve) => booted = resolve)
+let port = Number(Deno.env.get('PORT') ?? 5173)
+// Whose graph holds this address (src/bind.ts). A successor serves the same
+// file and is welcome beside its predecessor; a stranger's graph on the same
+// port makes every reader a coin flip, so this process declines to be the
+// second answer instead of poisoning the address.
+let serving: Serving = { db: graph, epoch, pid: Deno.pid }
+try {
+  await alone(port, graph)
+} catch (e) {
+  console.error(`tasks: ${(e as Error).message}`)
+  Deno.exit(1)
+}
 let http = Deno.serve(
-  { port: Number(Deno.env.get('PORT') ?? 5173), reusePort: true },
+  { port, reusePort: true },
   async (req) => {
-    await boot
     let url = new URL(req.url)
     let path = url.pathname
+    // Answered BEFORE boot: a peer deciding whether it may join this address
+    // must hear whose graph is here without waiting out our migrations.
+    if (path == '/graph') return Response.json(serving)
+    await boot
     if (path == '/ws') return ws(req)
     if (path == '/snapshot') return Response.json(snapshot(db))
     if (path == '/delta') {

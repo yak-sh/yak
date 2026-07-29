@@ -33,7 +33,9 @@ import { normalizeChanges, parseProp, propAt } from './props.ts'
 
 // The db lives outside the repo (this is open source): a home-dir dotpath by
 // default, overridable with DB_PATH.
-let file = Deno.env.get('DB_PATH') ??
+// Exported because it is this process's IDENTITY on a shared port: which
+// graph it serves is what a joining peer must check (src/bind.ts).
+export let file = Deno.env.get('DB_PATH') ??
   `${Deno.env.get('HOME')}/.tasks/tasks.db`
 
 // The edge table's check derives from the vocabulary (types.ts `edges`),
