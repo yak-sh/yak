@@ -81,6 +81,45 @@ export let knocked =
       // delivered (channel plugin / comms bus); the stamp names them.
       let up = awake(to)
       if (up) return done(`cast S-${up.num}`)
+      // 1b: a settled managed session still owns a door. INPUT to a
+      // session is a comment aimed at it — the one way in — and
+      // commented() wakes the run to hear it. So a knock takes that door
+      // rather than growing a second mechanism, exactly as rung 3 takes
+      // mail: each rung says the knock in the medium its target hears.
+      // Only a MANAGED session: an external one has no run to continue,
+      // and rung 1 already caught every session that was reachable.
+      let managed = db.prepare(
+        `select 1 from session where eid = ? and origin = 'managed'`,
+      ).get(to)
+      if (managed) {
+        let c = uuid()
+        let t = trace()
+        let words = wordsFor(target)
+        let out = apply(
+          db,
+          [
+            {
+              eid: c,
+              name: 'doc',
+              comp: {
+                title: '',
+                body: `knock: ${human(target)}${words ? ` — ${words}` : ''}`,
+              },
+            },
+            // Not an event: these are the knocker's own words relayed, the
+            // same reason rung 3's letter is a letter (M-4062). An event
+            // would also be ignored by commented(), so nothing would wake.
+            { eid: c, name: 'comment', comp: { target_eid: to } },
+          ],
+          t,
+          knocker(),
+        )
+        cast(out)
+        dispatch(out, t, (n, e) => console.warn(`knock resume ${n} —`, e))
+        // What WE did. Waking the run belongs to the comment effect, which
+        // keeps its own trail — the same division as `mailed`.
+        return done(`commented ${human(to)}`)
+      }
       // 2: an actor with a repo and nobody awake — spawn onto the
       // target task; the session boots holding the ask.
       let project = db.prepare(

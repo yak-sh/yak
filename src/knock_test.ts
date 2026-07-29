@@ -129,6 +129,49 @@ Deno.test('an operator is a door: external claude hears it, its child does not',
   assertMatch(String(krow(knock(task, project)).delivery), /^spawned S-\d+$/)
 })
 
+// A settled managed run is not a dead end: input to a session is a
+// comment aimed at it, and that is the door the knock takes.
+Deno.test('a settled managed session: the knock rides its input door', () => {
+  let sess = uid()
+  apply(db, [{ eid: sess, name: 'session', comp: { id: uid() } }])
+  db.prepare(
+    `update session set origin = 'managed', status = 'completed' where eid = ?`,
+  ).run(sess)
+  // The knocker's words, said on the target a moment before the knock —
+  // the same window rung 3's letter reads.
+  let said = uid()
+  apply(db, [
+    {
+      eid: said,
+      name: 'doc',
+      comp: { title: '', body: 'the key expires today' },
+    },
+    { eid: said, name: 'comment', comp: { target_eid: task } },
+  ])
+
+  let k = knock(task, sess)
+  assertEquals(krow(k).error, null)
+  assertMatch(String(krow(k).delivery), /^commented S-/)
+  // The comment landed ON the session — that IS the input, and it is not
+  // an event, or commented() would ignore it and nothing would wake.
+  let input = db.prepare(
+    `select d.body, c.event from comment c join doc d on d.eid = c.eid
+     where c.target_eid = ? order by c.rowid desc limit 1`,
+  ).get(sess) as { body: string; event: number | null }
+  assertMatch(input.body, /^knock: T-\d+ — the key expires today$/)
+  assertEquals(input.event, null)
+})
+
+// An EXTERNAL session that has gone quiet has no run to continue, so it
+// must fall through rather than mint input nobody will read.
+Deno.test('a settled external session is not a door', () => {
+  let sess = uid()
+  apply(db, [{ eid: sess, name: 'session', comp: { id: uid() } }])
+  db.prepare(`update session set status = 'completed' where eid = ?`).run(sess)
+  let k = knock(task, sess)
+  assertMatch(String(krow(k).error), /no door/)
+})
+
 Deno.test('no door: the artifact says why nobody heard', () => {
   let stray = uid()
   apply(db, [{ eid: stray, name: 'doc', comp: { title: 'nobody' } }])
