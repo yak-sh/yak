@@ -789,6 +789,46 @@ html {
 .Comments_New::placeholder {
   color: var(--dim);
 }
+/* The composer's command completion: the vocabulary, offered where the
+   typing already happens. It sits ABOVE the box (the rail grows down, so
+   below would push the box off the read) and only exists while the first
+   line is a `:` line. */
+.Comments_Box {
+  display: grid;
+  gap: var(--half-gap);
+}
+.Comments_Hints {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  padding: var(--half-gap);
+  max-height: 40vh;
+  overflow-y: auto;
+}
+.Comments_Hint {
+  display: flex;
+  align-items: baseline;
+  gap: var(--half-gap);
+  padding: 2px var(--half-gap);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.Comments_Hint-pick {
+  background: var(--soft);
+}
+.Comments_Name {
+  color: var(--text);
+}
+.Comments_Args {
+  color: var(--muted);
+}
+.Comments_About {
+  color: var(--dim);
+  margin-left: auto;
+}
 /* The delivery switch a session composer grows: armed, posting also
    resumes the session — the button wears the accent to say so. */
 .Comments_Send {

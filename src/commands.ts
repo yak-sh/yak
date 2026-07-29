@@ -434,6 +434,17 @@ export let run = (
   return v.run(rest ?? '', ctx)
 }
 
+// The order in a piece of writing: only the FIRST line commands, and the
+// rest rides as prose, so `:fix` plus a paragraph of context is both the
+// order and the note. A leading space escapes it — prose that opens with
+// a colon is rare, and never indented by accident. The rule lives with
+// the vocabulary because both ends need it: the effect that RUNS a
+// comment's order, and the composer that completes one as it's typed.
+export let orderIn = (body: string) => {
+  let [first = ''] = body.split('\n')
+  return /^:\S/.test(first) ? first.trim() : ''
+}
+
 // The door every non-typing caller enters by: the line with or without
 // its colon, and the changes deref'd — any *_eid value a verb produced may
 // be a human id (T-3, P-19) or an alias (jeff), and client.ts resolves

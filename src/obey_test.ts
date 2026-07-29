@@ -3,7 +3,7 @@
 // way production drives it (apply, then dispatch the effect).
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, db, open } = await import('./db.ts')
-let { obeyed, orderIn } = await import('./obey.ts')
+let { obeyed } = await import('./obey.ts')
 let { assertEquals, assertMatch } = await import('@std/assert')
 
 open()
@@ -52,18 +52,6 @@ let replies = (target: string) =>
     `select d.body, c.event from comment c join doc d on d.eid = c.eid
      where c.target_eid = ? order by c.rowid`,
   ).all(target) as { body: string; event: number | null }[]
-
-Deno.test('only a first line that opens with a colon is an order', () => {
-  assertEquals(orderIn(':done'), ':done')
-  assertEquals(
-    orderIn(':fix the toolbar clips\n\nand here is why'),
-    ':fix the toolbar clips',
-  )
-  assertEquals(orderIn(' :done'), '') // a leading space escapes it
-  assertEquals(orderIn('sure: done'), '')
-  assertEquals(orderIn('the plan:\n:done'), '') // only the FIRST line commands
-  assertEquals(orderIn(': done'), '') // a colon alone is punctuation
-})
 
 Deno.test('a comment that says :done closes the task it was said on', () => {
   let t = task()

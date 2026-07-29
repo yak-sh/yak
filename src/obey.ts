@@ -15,20 +15,11 @@
 import { apply, db, snapshot } from './db.ts'
 import { dispatch, trace } from './effects.ts'
 import { providers } from './adapters.ts'
-import { commandOut } from './commands.ts'
+import { commandOut, orderIn } from './commands.ts'
 import { type Change, idOf } from './types.ts'
 import { find, rows, spawnChanges, spawnDefaults } from './client.ts'
 
 type Cast = (changes: Change[]) => void
-
-// Only the FIRST line commands; the rest rides as prose, so `:fix` plus a
-// paragraph of context is both the order and the note. A leading space
-// escapes it — prose that opens with a colon is rare, and never indented
-// by accident.
-export let orderIn = (body: string) => {
-  let [first = ''] = body.split('\n')
-  return /^:\S/.test(first) ? first.trim() : ''
-}
 
 // The author, as the vocabulary knows them: `run` wants the session's own
 // id (that's how :claim names a lease and how focus resolves), while the

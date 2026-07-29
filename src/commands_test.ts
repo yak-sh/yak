@@ -5,6 +5,7 @@ import {
   commands,
   focusOf,
   ghost,
+  orderIn,
   run,
   suggest,
 } from './commands.ts'
@@ -402,4 +403,18 @@ Deno.test('scribe: a busy desk queues the ask without a second spawn', () => {
   )
   assertEquals(out.changes!.some((c) => c.name == 'comment'), true)
   assertEquals(out.msg, 'S-1 → scribe (desk busy, ask queued)')
+})
+
+// The rule both ends of the vocabulary read: the effect that RUNS a
+// comment's order, and the composer that completes one as it's typed.
+Deno.test('only a first line that opens with a colon is an order', () => {
+  assertEquals(orderIn(':done'), ':done')
+  assertEquals(
+    orderIn(':fix the toolbar clips\n\nand here is why'),
+    ':fix the toolbar clips',
+  )
+  assertEquals(orderIn(' :done'), '') // a leading space escapes it
+  assertEquals(orderIn('sure: done'), '')
+  assertEquals(orderIn('the plan:\n:done'), '') // only the FIRST line commands
+  assertEquals(orderIn(': done'), '') // a colon alone is punctuation
 })

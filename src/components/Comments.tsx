@@ -1,4 +1,5 @@
-import { useRef } from 'preact/hooks'
+import { useRef, useState } from 'preact/hooks'
+import { commands, orderIn, suggest } from '../commands.ts'
 import { md } from '../md.ts'
 import { commentsOn, ent, mutate, uuid } from '../live.ts'
 import { ago, block, pretty } from './ui.tsx'
@@ -13,9 +14,16 @@ let Frame = block('div', 'Comments', {
   Verdict: 'span',
   When: 'a',
   Body: 'div',
+  Box: 'div',
   New: 'textarea',
+  Hints: 'div',
+  Hint: 'div',
+  Name: 'span',
+  Args: 'span',
+  About: 'span',
 })
-let { Item, Who, Via, Verdict, When, Body, New } = Frame
+let { Item, Who, Via, Verdict, When, Body, Box, New } = Frame
+let { Hints, Hint, Name, Args, About } = Frame
 
 // An instrument's face: browsers by a short client handle, anything else
 // by its chip id (S-31, never the raw session uuid).
@@ -100,10 +108,35 @@ export let prompt = (e: Ent) => {
 export let Composer = ({ eid }: { eid: string }) => {
   let box = useRef<HTMLTextAreaElement>(null)
   let dkey = `${eid}.comment`
+  // The typed line, mirrored for the hints (the DOM textarea stays the
+  // owner, exactly as the palette does it) and which hint is picked.
+  let [line, setLine] = useState('')
+  let [pick, setPick] = useState(0)
   // A draft outlives blur on purpose — abandon the box, come back, the
   // words are still there. Only posting spends it. If this box was the
   // one being typed in when a hot swap hit, it takes the caret back.
-  let { sync, spend } = useDraft(dkey, box)
+  let { sync, spend } = useDraft(dkey, box, setLine)
+
+  // The vocabulary teaches where the typing happens: a comment opening
+  // with `:` IS a command line (obey.ts runs it on landing), so the
+  // composer completes it the way the palette does — same table, same
+  // suggest(). Two lines qualify: one that already IS an order, and the
+  // lone `:` that is about to be — that keystroke opens the whole menu,
+  // which is how you find a verb whose name you don't know. `: like this`
+  // stays quiet, because it isn't going to run either. The hints retire
+  // once prose starts: by then the command line is written, and the words
+  // under it are just words.
+  let typing = !line.includes('\n') && (line == ':' || !!orderIn(line))
+  let hints = typing ? suggest(line.slice(1), commands) : []
+
+  let put = (v: string) => {
+    let el = box.current
+    if (!el) return
+    el.value = v
+    setLine(v)
+    setPick(0)
+    sync(el)
+  }
 
   let post = () => {
     let body = box.current!.value.trim()
@@ -118,6 +151,8 @@ export let Composer = ({ eid }: { eid: string }) => {
       },
     )
     box.current!.value = ''
+    setLine('')
+    setPick(0)
     spend()
   }
 
@@ -125,19 +160,60 @@ export let Composer = ({ eid }: { eid: string }) => {
     if (e.key == 'Enter' && !e.shiftKey) {
       e.preventDefault()
       post()
+      return
     }
-    if (e.key == 'Escape') box.current!.blur()
+    if (e.key == 'Escape') return box.current!.blur()
+    if (!hints.length) return
+    // Only while the command line is the whole box: past that the caret
+    // has prose to walk through, and the textarea's own keys win.
+    if (e.key == 'Tab') {
+      e.preventDefault()
+      let name = hints[pick]?.[0]
+      if (name) put(`:${name} `)
+    } else if (e.key == 'ArrowUp') {
+      e.preventDefault() // the caret would jump home instead
+      setPick((p) => Math.min(p + 1, hints.length - 1))
+    } else if (e.key == 'ArrowDown') {
+      e.preventDefault()
+      setPick((p) => Math.max(p - 1, 0))
+    }
   }
 
   return (
-    <New
-      elRef={box}
-      data-eid={eid}
-      rows={1}
-      onInput={(e: InputEvent) => sync(e.currentTarget as HTMLTextAreaElement)}
-      placeholder={prompt(ent(eid))}
-      onKeyDown={key}
-    />
+    <Box>
+      {hints.length > 0 && (
+        <Hints>
+          {hints.slice(0, 6).map(([name, c], i) => (
+            <Hint
+              key={name}
+              mod={i == pick && 'pick'}
+              onMouseEnter={() => setPick(i)}
+              onMouseDown={(e: MouseEvent) => {
+                e.preventDefault() // keep the box's focus
+                put(`:${name} `)
+              }}
+            >
+              <Name>:{name}</Name>
+              {c.args && <Args>{c.args}</Args>}
+              <About>{c.about}</About>
+            </Hint>
+          ))}
+        </Hints>
+      )}
+      <New
+        elRef={box}
+        data-eid={eid}
+        rows={1}
+        onInput={(e: InputEvent) => {
+          let el = e.currentTarget as HTMLTextAreaElement
+          sync(el)
+          setLine(el.value)
+          setPick(0)
+        }}
+        placeholder={prompt(ent(eid))}
+        onKeyDown={key}
+      />
+    </Box>
   )
 }
 
