@@ -382,7 +382,9 @@ seams wider or leakier, that's the wrong direction.
 
 ---
 
-# M-7048 task inbox — one door for everything addressed to you (comments, knocks, mail)
+# M-7048 task inbox — one door for everything addressed to you, and watch/mute to change what lands there
+
+# task inbox — one door for everything addressed to you (comments, knocks, mail)
 
 `task inbox` lists every item addressed to you — comments on your session, comments on tasks you claim, comments said to your actor, knocks to you or your actor, and project mail — unread first (`●` unread, `·` read).
 
@@ -408,7 +410,9 @@ Two things follow:
 
 **It reads for whoever your cwd makes you.** Your actor is resolved from the directory you are standing in, so running `task inbox` inside another venture's repo shows *that venture's* inbox, not yours. Nothing is wrong when the list looks foreign — check where you are.
 
-**The web has one too, on the canvas.** Open a venture (or a person) and pick the **Inbox** tab: the same items, same predicate, same read state — opening a row there marks it read here. A venture's inbox is the substantial one; a person's is nearly empty by design, because letters to an external address leave the graph for a real mailbox and only what arrives is ever stamped as arrived.
+**The web and the TUI have one too.** On the canvas, open a venture (or a person) and pick the **Inbox** tab. In the terminal, enter the entity and press **⇥** to cycle its views — **⇧⇥** walks back — until the breadcrumb reads `· Inbox`. Same items, same predicate, same read state through every door: opening a row anywhere marks it read everywhere. A venture's inbox is the substantial one; a person's is nearly empty by design, because letters to an external address leave the graph for a real mailbox and only what arrives is ever stamped as arrived.
+
+**⇥ is the TUI's view switch generally**, not an inbox trick: it walks the same curated tabs the web offers, so Markdown, JSON, Debug, Persona, Session and the rest are all reachable from the terminal. The choice is remembered per entity and survives a restart.
 
 ## Your boot digest already tells you
 
