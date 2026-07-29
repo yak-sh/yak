@@ -383,9 +383,9 @@ seams wider or leakier, that's the wrong direction.
 
 ---
 
-# M-9273 `:set .body=` takes its value literally and destroys the old body — `task new` reads @file, `:set` does not
+# M-9273 `:set .body=` takes its value literally and destroys the old body — `task new` and `task set` read @file, `:set` does not
 
-Setting a body through `task <id> :set` (and `task set <id>`) takes the value **literally**. There is no stdin convention and no @file convention on that door:
+Setting a body through `task <id> :set` takes the value **literally**. There is no stdin convention and no @file convention on that door:
 
 - `:set .body=-` writes the single character `-`.
 - `:set .body=@/path/to/file` writes the string `@/path/to/file`.
@@ -399,14 +399,18 @@ The same dot-param spelling behaves differently depending on the verb, which is 
 | door | `.body=@file` |
 | --- | --- |
 | `task new … .body=@file` | **reads the file** |
+| `task set <id> .body=@file` | **reads the file** |
 | `task <id> :set .body=@file` | **writes the literal path** |
 
-Verified by controlled probe 2026-07-29: one task created with `task new .body=@file` held the real content; the same task then `:set .body=@file` held `@/tmp/…`. So "I used @file successfully a minute ago" is not evidence that the next door will read it.
+`task set <id>` and `task <id> :set` are **not** the same door, despite reading as two spellings of one verb. That is the sharpest edge here: the safe form and the destructive form differ only in where the id sits.
+
+Verified by controlled probe 2026-07-29 — one task, three writes, reading the body back after each: `task new .body=@file` held the real content; `task set <id> .body=@file` held the real content; the same task then `<id> :set .body=@file` held `@/tmp/…`. So "I used @file successfully a minute ago" is not evidence that the next door will read it.
 
 This bites hardest on **persona and memory nodes**, where the blast radius is every agent that loads the projection. Blanking the `N-…` for a repo's common persona empties that repo's `AGENTS.md` on the next materialize — and the materializer auto-commits, so the damage lands in git within seconds.
 
 ## Write a long body this way instead
 
+- **`task set <id> .body=@file`** — reads the file, and is the shortest door from a shell.
 - **`graph_apply`** (MCP `tasks`) with `{eid: "N-4697", name: "doc", comp: {body: "…"}}` — the body is a normal JSON string, so newlines and markdown survive intact.
 - **`POST http://127.0.0.1:5173/apply`** with `[{eid, name:"doc", comp:{body}}]` — the same door over HTTP. Build the JSON from a file with a script and the body never passes through an agent's context, which matters for anything large.
 - **`memory_save`** for memories and **`task_new`** for tasks — `body` is a real parameter on both.
@@ -415,7 +419,7 @@ This bites hardest on **persona and memory nodes**, where the blast radius is ev
 
 `task history <id> --json` holds every prior body verbatim, so recovery is a read plus one write even when you did not save a copy first.
 
-Better, make the copy a habit: read the node to a file (`task show <id> --json` → `comps.doc.body`), patch the file, write it back through a JSON-string API, then **verify by reading the node again** — never by trusting the success message. The verify step is the one that catches this class, because the failure is silent by construction.
+Better, make the copy a habit: read the node to a file (`task show <id> --json` → `comps.doc.body`), patch the file, write it back, then **verify by reading the node again** — never by trusting the success message. The verify step is the one that catches this class, because the failure is silent by construction. It is also what catches a *memory* that has drifted: this one asserted `task set <id>` was destructive, and a read-back after using it showed otherwise.
 
 ---
 
