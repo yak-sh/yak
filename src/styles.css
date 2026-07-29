@@ -3175,3 +3175,65 @@ tbody .Admin_Row:hover {
   justify-self: start;
   width: max-content;
 }
+
+/* The inbox: a read-order list, unread carrying the weight. Rows borrow
+   the ListTile geometry deliberately — an inbox line and a board line are
+   the same kind of object, and only the leading marks differ. */
+.Inbox {
+  display: grid;
+  gap: var(--half-gap);
+}
+.Inbox_Count {
+  color: var(--dim);
+  font-size: 11px;
+}
+.Inbox_Empty {
+  color: var(--dim);
+  padding: var(--gap);
+}
+.Inbox_Item {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  padding: var(--half-gap);
+}
+/* Unread is WEIGHT, not colour: it survives a theme and a colour-blind
+   reader, which a tinted row does not. */
+.Inbox_Item-unread {
+  font-weight: 600;
+}
+.Inbox_Dot {
+  flex: none;
+  color: var(--accent);
+}
+.Inbox_Kind {
+  flex: none;
+  color: var(--dim);
+  font-size: 11px;
+  min-width: 4.5em;
+}
+.Inbox_Title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: inherit;
+  text-decoration: none;
+}
+.Inbox_Archive {
+  flex: none;
+  font: inherit;
+  color: var(--dim);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.Inbox_Archive:hover {
+  color: var(--text);
+  border-color: var(--border2);
+}

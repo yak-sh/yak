@@ -18,6 +18,7 @@ export let icons: Record<string, string> = {
   Full: 'file-text',
   Board: 'kanban',
   Persona: 'drama',
+  Inbox: 'inbox',
   Role: 'bot',
   Web: 'globe',
   Session: 'bot',

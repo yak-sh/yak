@@ -25,6 +25,7 @@ import {
 } from './views/Title.tsx'
 import { Board } from './views/Board.tsx'
 import { Persona } from './views/Persona.tsx'
+import { Inbox } from './views/Inbox.tsx'
 import { MemoryTile } from './views/Memory.tsx'
 import { TaskTile } from './views/TaskTile.tsx'
 import { BoardList, List, ListTile } from './views/List.tsx'
@@ -72,6 +73,10 @@ define([
   { view: 'Card.Full', match: has('doc'), Render: CardFull },
   { view: 'Board', match: has('doc', 'board'), Render: Board },
   { view: 'Persona', match: has('doc', 'persona'), Render: Persona },
+  // An inbox reads FOR an actor, so it offers itself on the two things
+  // that can be one: a venture and a person.
+  { view: 'Inbox', match: has('project'), Render: Inbox },
+  { view: 'Inbox', match: has('person'), Render: Inbox },
   // Role's linked-session sections walk back through Entity, so defer the
   // binding like Canvas's cycle above.
   {
@@ -137,6 +142,7 @@ define([
   'List',
   'Board',
   'Persona',
+  'Inbox',
   'Role',
   'Full',
   'Web',
