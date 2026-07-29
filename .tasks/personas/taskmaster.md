@@ -82,6 +82,29 @@ entry (T-5958 reconciles the book). Fleet-internal mail depends on neither.
 
 ---
 
+# M-4066 agents take warm paths, not right paths — adoption is won structurally
+
+Agents reach for the warm path, not the right one. Four causes:
+
+- **Warm-path bias** — any loading friction loses.
+- **Composition gravity** — one call that chains five operations beats five calls.
+- **Discovery asymmetry** — CLIs teach at failure time; tool docs only teach agents who already loaded them.
+- **One-family stickiness** — whichever surface you started in is the one you stay in.
+
+Knowing all this does not protect you. The pull is structural, so an agent who can explain the pattern will still hand-roll the raw call an hour later — which is exactly why adoption is won by changing the path, never by a paragraph asking people to choose better.
+
+## Corollaries
+
+- Tools win adoption by being **asymmetrically better** (the bus riding MCP replies) and **one-verb frictionless** (`task review`).
+- **Structural triggers beat felt judgment** — name review criteria in the brief; never leave them to an agent's self-assessment.
+- **Put knowledge where the need arises** — the delete idiom belongs in the tool's docstring, not a wiki.
+
+## How to apply
+
+When agents route around a tool, fix the tool's warmth, composability, or self-teaching before blaming the agent (T-3568). `tool_call` telemetry makes the drift measurable per session, so this is an observation you can check rather than a hunch.
+
+---
+
 # M-4492 persist your thinking — context is wiped, the owner is away
 
 Context is wiped between sessions; the owner is often away.
@@ -228,15 +251,6 @@ It is also self-correcting: knock an operator during YELLOW by mistake and it ta
 ## Persona changes need a restart
 
 A persona reaches an operator via `--append-system-prompt-file`, read at **claude launch** — so a persona edit does nothing until `bin/holdco restart <id>` (the closing step of a durable persona edit). Memories are different: they ride the `task context` digest and land on the next clear, which is why a new memory can change behavior before a restart does.
-
----
-
-# M-4066 agents take warm paths, not right paths — adoption is won structurally
-
-Four causes drive agents to shell over tools: warm-path bias (any loading friction loses), composition gravity (one call chaining five ops), discovery asymmetry (CLIs teach at failure time; tool docs only teach agents who already loaded them), and one-family stickiness. Corollaries: tools win adoption by being asymmetrically better (the bus riding MCP replies) and one-verb frictionless (task review); structural triggers beat felt judgment (review criteria named in briefs, never left to agent self-assessment); put knowledge where the need arises (delete idiom in the tool docstring, not a wiki).
-
-**Why:** owner probed the CLI-vs-MCP drift twice (2026-07-21/22); the empirical capstone: I hand-rolled raw /apply and got burned by literal values in the same hour I'd explained the pattern — the tool would have deref'd. tool_call telemetry makes the drift measurable per session.
-**How to apply:** when agents route around a tool, fix the tool's warmth/composability/self-teaching before blaming the agent (T-3568).
 
 ---
 
