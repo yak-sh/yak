@@ -384,8 +384,6 @@ seams wider or leakier, that's the wrong direction.
 
 # M-7048 task inbox — one door for everything addressed to you, and watch/mute to change what lands there
 
-# task inbox — one door for everything addressed to you (comments, knocks, mail)
-
 `task inbox` lists every item addressed to you — comments on your session, comments on tasks you claim, comments said to your actor, knocks to you or your actor, and project mail — unread first (`●` unread, `·` read).
 
 - `task inbox` — the list
