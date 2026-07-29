@@ -389,6 +389,10 @@ Archiving is the only thing that removes an item, so no sweep, subagent, or othe
 
 This is the door for "is anything waiting for me?" — worth a look when you start a pass, and again when you pick up a task, since something may already be waiting on it.
 
+## Your boot digest already tells you
+
+Every session's `task context` opens with `## inbox — N unread (task inbox)`. That N is counted with the inbox's own predicate, so the number and the list can't disagree — if the line is there, something is waiting; if it's absent, nothing is. No need to run `task inbox` just to find out whether to run it.
+
 ## Two things that surprise people
 
 **It reads for whoever your cwd makes you.** Your actor is resolved from the directory you are standing in, so running `task inbox` inside another venture's repo shows *that venture's* inbox, not yours. Nothing is wrong when the list looks foreign — check where you are.
