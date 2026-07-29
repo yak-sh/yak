@@ -460,6 +460,39 @@ Deno.test('a child that exits nonzero failed, whatever it said', async () => {
   assertEquals(row(eid)?.exit_code, 3)
 })
 
+// The launcher's refusals are all SILENT — it backgrounds systemd-run and
+// exits 0 — so the only witness is the stderr file and the pidfile that
+// never appeared. Shadowing systemd-run with a refusal replays the whole
+// class (a scope name still held, an unreachable user bus) exactly.
+Deno.test('a launch that never starts is stillborn, and says what refused', async () => {
+  let { t } = seed()
+  let path = Deno.env.get('PATH')!
+  Deno.mkdirSync(`${tmp}/bin`, { recursive: true })
+  Deno.writeTextFileSync(
+    `${tmp}/bin/systemd-run`,
+    '#!/bin/sh\necho "Failed to start transient scope unit: ' +
+      'Unit already exists." >&2\nexit 1\n',
+  )
+  Deno.chmodSync(`${tmp}/bin/systemd-run`, 0o755)
+  Deno.env.set('PATH', `${tmp}/bin:${path}`)
+  Deno.env.set('BIRTH_GRACE_MS', '400')
+  let eid: string
+  try {
+    let run = begin(t)
+    eid = run.eid
+    await run.done
+  } finally {
+    Deno.env.set('PATH', path)
+    Deno.env.delete('BIRTH_GRACE_MS')
+  }
+  let s = row(eid)!
+  assertEquals(s.status, 'failed')
+  assertEquals(s.exit_code, null)
+  // Not 'the wrapper died before reporting': no wrapper ever ran to die.
+  assertMatch(String(s.stop_reason), /^stillborn/)
+  assertMatch(String(s.error), /transient scope unit/)
+})
+
 // The settle broadcast: whoever holds the task hears the ending on the
 // bus, because the ending IS a comment on the task, via the
 // session — cast like any wire write, exactly once per settle.

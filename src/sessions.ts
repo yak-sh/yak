@@ -137,6 +137,13 @@ let logOf = (eid: string) =>
 
 let poll = () => Number(Deno.env.get('POLL_MS') ?? 300)
 let grace = () => Number(Deno.env.get('STOP_GRACE_MS') ?? 5000)
+// How long a wrapper has to write its pidfile before the child is called
+// stillborn. Generous on purpose, and deliberately NOT shortened by the
+// first stderr byte: a live agent can out-print its own wrapper's pidfile
+// write under load, and settling THAT run would orphan it. Ten seconds of
+// patience costs a failed launch its diagnosis a little late; impatience
+// costs a working one its life.
+let birth = () => Number(Deno.env.get('BIRTH_GRACE_MS') ?? 10_000)
 let sleep = (ms: number) => new Promise((go) => setTimeout(go, ms))
 let now = () => new Date().toISOString()
 
@@ -486,7 +493,10 @@ type Run = {
   pid: number
   exit: () => boolean | Promise<boolean>
   code: () => number | null
-  why: string | null // why the code is unknowable
+  // Why the code is unknowable, told whether a wrapper ever reported for
+  // duty — the one fact that separates a run that died from one that never
+  // began, and it isn't known until the end.
+  why: (reported: boolean) => string
   done: Promise<void>
 }
 export let running = new Map<string, Run>()
@@ -537,13 +547,22 @@ let finish = async (eid: string, t: Tail, run: Run, cast: Cast) => {
   // unknowable. No pidfile means no wrapper ever reported for duty
   // (a recovered corpse): nothing to wait for.
   let code = run.code()
-  if (code == null && pids(eid)) {
+  let reported = !!pids(eid)
+  if (code == null && reported) {
     for (let end = Date.now() + 1000; code == null && Date.now() < end;) {
       await sleep(50)
       code = run.code()
     }
   }
   let ok = t.ended && !t.errs.length && (code ?? 0) == 0
+  // A stillborn launch wrote no log to diagnose — its only witness is the
+  // launcher's own stderr (systemd's refusal, an unreachable user bus),
+  // which otherwise sits in a file nobody thinks to read.
+  let error = t.errs.length
+    ? diagnosis(t)
+    : code == null && !reported
+    ? errTail(eid).trim().slice(-2000)
+    : ''
   // Bookkeeping BEFORE the ending is said: stamp() fires settled(), whose
   // unheard flush may wake the session right back up — and the new run's
   // `running` entry and pidfile must not be swept by this one's epilogue.
@@ -572,11 +591,11 @@ let finish = async (eid: string, t: Tail, run: Run, cast: Cast) => {
         ? 'completed'
         : 'failed',
       exit_code: code,
-      stop_reason: code == null ? run.why : null,
+      stop_reason: code == null ? run.why(reported) : null,
       input_at: null,
       finished_at: now(),
       latest_seq: t.seq,
-      ...(t.errs.length ? { error: diagnosis(t) } : {}),
+      ...(error ? { error } : {}),
     }, cast))
 }
 
@@ -865,11 +884,12 @@ let spawn = (
       // name whose predecessor is still loaded, and --collect frees a settled
       // scope but not synchronously — so a session that resumes the instant
       // its turn is killed (a steer does exactly that) can ask for a name the
-      // dead run still holds. That failure is SILENT: the launcher backgrounds
-      // systemd-run and exits 0, so nothing throws; no wrapper starts, no
-      // pidfile appears, and the follower can only call it `exit unobserved`
-      // ten seconds later and settle the session `failed` (T-9261). A fresh
-      // name per launch cannot collide, so the reclaim is never raced. systemd-run stays in tasksd's cgroup and dies at restart
+      // dead run still holds. A fresh name per launch cannot collide, so the
+      // reclaim is never raced (T-9261). Every such refusal is INVISIBLE to
+      // the launcher — it backgrounds systemd-run and exits 0, so nothing
+      // throws — which is why the ending is derived from the pidfile instead:
+      // no wrapper, no pid, `stillborn`, and this stderr as the reason.
+      // systemd-run stays in tasksd's cgroup and dies at restart
       // — harmless, the agent is already in the scope; its OWN stderr (a
       // missing user bus complains here) joins the err file, so an unreachable
       // manager surfaces as a failed session, the same as a missing CLI's
@@ -1159,11 +1179,14 @@ let track = (
     pid: 0,
     exit: async () => {
       run.pid ||= pidOf(eid) ?? 0
-      if (!run.pid) return Date.now() - born > 10_000
+      if (!run.pid) return Date.now() - born > birth()
       return !(await alive(run.pid))
     },
     code: () => codeOf(eid),
-    why: 'exit unobserved: the wrapper died before reporting',
+    why: (reported) =>
+      reported
+        ? 'exit unobserved: the wrapper died before reporting'
+        : 'stillborn: the launch never produced a wrapper',
     done: Promise.resolve(),
   }
   running.set(eid, run)
@@ -1587,7 +1610,9 @@ export let recover = (cast: Cast) => {
       pid: pid ?? 0,
       exit: () => pid == null ? true : alive(pid).then((a) => !a),
       code: () => codeOf(eid), // the wrapper's report survives restarts
-      why: 'exit unobserved: the child outlived the server',
+      // Never stillborn: a session we are recovering was running before the
+      // restart, so a wrapper certainly ran — the pidfile is just gone now.
+      why: () => 'exit unobserved: the child outlived the server',
       done: Promise.resolve(),
     }
     running.set(eid, run)
