@@ -93,7 +93,8 @@ export let manuals: Record<string, Manual> = {
       'task set S-12 ".body=@brief.md"',
       'task set T-3 .domain=Eng --comment="sweep: missing domain" --event',
     ],
-    detail: '--event marks the --comment as EMITTED by machinery rather than ' +
+    detail: 'A --comment that IS `@file` is read from that file. ' +
+      '--event marks the --comment as EMITTED by machinery rather than ' +
       'written by an agent, so it never rides the mail relay (see ' +
       '`task help comment`). A sweep keeps its patch and its reason in one ' +
       'atomic batch and stays quiet — it never has to choose between them.',
@@ -292,7 +293,8 @@ export let manuals: Record<string, Manual> = {
       'task comment T-3 --verdict=approved',
       'task comment T-3 "sweep: missing domain" --event',
     ],
-    detail:
+    detail: 'A body that IS `@file` is read from that file (`@@` escapes a ' +
+      'comment that genuinely starts with an @). ' +
       '--event marks a comment EMITTED by machinery — a sweep finding, a ' +
       'status nudge. An event never rides the mail relay and renders as a ' +
       'chip, not a bubble; the bus and the inbox still deliver it. Prose ' +

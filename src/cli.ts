@@ -298,7 +298,15 @@ let set = async (args: string[]) => {
   // to comment is the mutation they just made: the mark has to be
   // available HERE or the atomic form is the one that mails, and an
   // agent learns to split its batch to get quiet.
+  // @file is the fleet's door for a long value (M-4415) and inflate()
+  // implements it whole — the @@ escape for prose that starts with an @,
+  // and a loud `no such file` otherwise. Dot-params route through it;
+  // this one didn't, so `--comment=@plan.md` stored the PATH as the
+  // comment and reported success. A recorded design was lost that way.
   let say = args.find((a) => a.startsWith('--comment='))?.slice(10)
+  if (say?.startsWith('@')) {
+    say = String(inflate({ comp: 'doc', prop: 'body', value: say }).value)
+  }
   let event = args.includes('--event')
   let { params, words } = split(
     args.filter((a) => !a.startsWith('--comment=') && a != '--event'),
@@ -925,6 +933,13 @@ let comment = async (args: string[]) => {
     !a.startsWith('--verdict=') && a != '--event'
   )
   let body = words.join(' ')
+  // Only when the body IS a reference: one token AND no whitespace in it.
+  // A quoted sentence is still one argv token, so `task comment T-3
+  // "@holdco look at this"` must stay prose — `@@` escapes a genuine
+  // one-word comment that starts with an @.
+  if (words.length == 1 && /^@\S+$/.test(body)) {
+    body = String(inflate({ comp: 'doc', prop: 'body', value: body }).value)
+  }
   if (verdictArg != null && !verdict) {
     throw new Error('--verdict needs approved, rejected, or changes_requested')
   }
