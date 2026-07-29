@@ -53,6 +53,7 @@ import {
   snapshot as readGraph,
   spawnChanges,
   spawnDefaults,
+  stdin,
   subChanges,
   taskBlock,
   taskChanges,
@@ -352,37 +353,19 @@ let seek = async (args: string[]) => {
 // ---- task mail: the mail door (letters only — mail-comp wearers; hooks
 // and event comments never surface here) ----
 
-// The body, by preference: --body= (@file reads the file — the safe
-// door for long prose; - and @- read piped stdin), then trailing words.
-// stdin is never read implicitly: a harness holding the pipe open but
-// silent would hang the send forever (observed live, T-5854) and no
-// guard can tell that pipe from a slow one — so - or @- is the deliberate
-// ask, and a missing body fails fast instead of blocking. Shared by
-// mail send/reply and the session brief — one body door, every verb.
-type Input = {
-  terminal: () => boolean
-  read: () => Promise<string>
-}
-
-let input: Input = {
-  terminal: () => Deno.stdin.isTerminal(),
-  read: () => new Response(Deno.stdin.readable).text(),
-}
-
-export let bodyOf = async (
-  flags: string[],
-  words: string[],
-  stdin = input,
-) => {
+// The body, by preference: --body= (@file reads the file, @- reads piped
+// stdin — the safe doors for long prose), then trailing words. inflate()
+// is the ONE reader of both: two readers with separate vocabularies is
+// what left `.body=@-` a suggested door that opened nothing, so this
+// verb-level door only adds the bare `-` spelling flags conventionally
+// carry, normalizes it, and hands the value over. Shared by mail
+// send/reply and the session brief — one body door, every verb.
+export let bodyOf = (flags: string[], words: string[], io = stdin) => {
   let b = flags.find((a) => a.startsWith('--body='))?.slice(7)
-  if (b == '-' || b == '@-') {
-    if (stdin.terminal()) {
-      throw new Error(`--body=${b}: stdin is a TTY — pipe the body in`)
-    }
-    return (await stdin.read()).trim()
-  }
-  if (b?.startsWith('@')) {
-    b = String(inflate({ comp: 'doc', prop: 'body', value: b }).value)
+  if (b?.startsWith('@') || b == '-') {
+    let v = b == '-' ? '@-' : b
+    let p = { comp: 'doc', prop: 'body', value: v }
+    return String(inflate(p, io, `--body=${b}`).value)
   }
   return b ?? words.join(' ')
 }
@@ -472,7 +455,7 @@ let mailSend = async (args: string[]) => {
   if (!to || !subj.length) {
     throw new Error(help(['mail', 'send']))
   }
-  let body = await bodyOf(flags, [])
+  let body = bodyOf(flags, [])
   if (!body) {
     throw new Error(
       'a mail needs a body: --body=@file, or --body=- with piped stdin',
@@ -492,7 +475,7 @@ let mailReply = async (args: string[]) => {
   let all = rows(await snapshot())
   let row = find(all, id)
   if (!row?.comps.mail) throw new Error(`not a mail: ${id}`)
-  let body = await bodyOf(flags, text)
+  let body = bodyOf(flags, text)
   if (!body) {
     throw new Error(
       'a reply needs words: text, --body=@file, or --body=- with stdin',
@@ -1475,7 +1458,7 @@ let sessionBrief = async (args: string[]) => {
   let words = args.filter((a) => !a.startsWith('--'))
   let sid = me()
   if (!sid) throw new Error('session brief: run under a session (no identity)')
-  let body = await bodyOf(flags, words)
+  let body = bodyOf(flags, words)
   if (!body) {
     throw new Error(
       'a brief needs words: text, --body=@file, or --body=- with stdin',

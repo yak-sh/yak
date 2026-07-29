@@ -2,12 +2,7 @@
 // CLI grammar is dot-params. The guard must catch both the glued `--project=P`
 // and the space-separated `--project P` forms — the latter is what agents
 // actually type, and the bug that let it through polluted the owner board.
-import {
-  assertEquals,
-  assertMatch,
-  assertRejects,
-  assertThrows,
-} from '@std/assert'
+import { assertEquals, assertMatch, assertThrows } from '@std/assert'
 import {
   bodyOf,
   claimedDigest,
@@ -121,7 +116,7 @@ Deno.test('task subject help is contextual and needs no server', async () => {
   assertEquals(subjectUsage('T-3').trim(), stdout.trim())
 })
 
-Deno.test('bodyOf: only explicit stdin spellings read the pipe', async () => {
+Deno.test('bodyOf: only explicit stdin spellings read the pipe', () => {
   let cases: [string[], string[], string, number][] = [
     [['--body=-'], [], 'piped', 1],
     [['--body=@-'], [], 'piped', 1],
@@ -130,30 +125,25 @@ Deno.test('bodyOf: only explicit stdin spellings read the pipe', async () => {
   ]
   for (let [flags, words, want, reads] of cases) {
     let read = 0
-    let got = await bodyOf(flags, words, {
+    let got = bodyOf(flags, words, {
       terminal: () => false,
-      read: () => {
-        read++
-        return Promise.resolve(' piped\n')
-      },
+      read: () => (read++, ' piped\n'),
     })
     assertEquals({ flags, got, read }, { flags, got: want, read: reads })
   }
 })
 
-Deno.test('bodyOf: both stdin spellings refuse a TTY', async () => {
+Deno.test('bodyOf: both stdin spellings refuse a TTY', () => {
   for (let b of ['-', '@-']) {
     let read = 0
-    await assertRejects(
+    assertThrows(
       () =>
         bodyOf([`--body=${b}`], [], {
           terminal: () => true,
-          read: () => {
-            read++
-            return Promise.resolve('piped')
-          },
+          read: () => (read++, 'piped'),
         }),
       Error,
+      // the error names the spelling the caller typed, not a synonym
       `--body=${b}: stdin is a TTY`,
     )
     assertEquals(read, 0)

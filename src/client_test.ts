@@ -2129,15 +2129,59 @@ Deno.test('contextDigest: preview parity — project layer matches with/without 
   )
 })
 
+let p = (value: string) => ({ comp: 'doc', prop: 'body', value })
+let pipe = (terminal = false) => ({
+  terminal: () => terminal,
+  read: () => ' the whole brief\n',
+})
+
 Deno.test('inflate: @ reads the file loudly, @@ is a literal, plain rides', () => {
   let f = Deno.makeTempFileSync()
   Deno.writeTextFileSync(f, 'the whole brief\n')
-  let p = (value: string) => ({ comp: 'doc', prop: 'body', value })
   assertEquals(inflate(p(`@${f}`)).value, 'the whole brief\n')
   assertEquals(inflate(p('@@handle')).value, '@handle')
   assertEquals(inflate(p('plain')).value, 'plain')
   assertThrows(() => inflate(p('@/no/such/file')), Error, 'no such file')
   Deno.removeSync(f)
+})
+
+Deno.test('inflate: @- is the pipe — the same door as @file, trimmed', () => {
+  assertEquals(inflate(p('@-'), pipe()).value, 'the whole brief')
+  // a bare - is a LITERAL here: dot-param values carry no operators, and
+  // only @ opens a reader. The flag layer spells it - as flags do.
+  assertEquals(inflate(p('-'), pipe()).value, '-')
+})
+
+Deno.test('inflate: a TTY fails fast, it never waits on the pipe', () => {
+  let read = 0
+  let io = { terminal: () => true, read: () => (read++, 'nope') }
+  assertThrows(() => inflate(p('@-'), io), Error, '.body=@-: stdin is a TTY')
+  assertEquals(read, 0)
+})
+
+Deno.test('inflate: stdin is consumable once — the second @- is refused', () => {
+  let io = pipe()
+  assertEquals(inflate(p('@-'), io).value, 'the whole brief')
+  // the second read would come back EMPTY, and an empty value clears the
+  // column — the failure that wiped four session briefs.
+  assertThrows(
+    () => inflate({ comp: 'doc', prop: 'title', value: '@-' }, io),
+    Error,
+    '.title=@-: stdin was already read by .body=@-',
+  )
+})
+
+Deno.test('inflate: an empty pipe is refused, never a silent clear', () => {
+  let io = { terminal: () => false, read: () => '  \n' }
+  assertThrows(() => inflate(p('@-'), io), Error, '.body=@-: stdin was empty')
+})
+
+Deno.test('inflate: errors name the token the caller typed', () => {
+  assertThrows(
+    () => inflate(p('@/no/such/file'), pipe(), '--body=@/no/such/file'),
+    Error,
+    '--body=@/no/such/file: no such file',
+  )
 })
 
 Deno.test("contextDigest: previously — the same operator's last brief", () => {

@@ -79,7 +79,13 @@ export let manuals: Record<string, Manual> = {
     examples: [
       'task new P1 .project=holdco Fix the flux capacitor',
       'task new .title="Write the digest" .body="Details..." .domain=Eng',
+      'task new .title="Write the digest" .body=@- <<\'EOF\'',
     ],
+    detail: 'Any dot-param value may be `@file` (read from that file) or ' +
+      '`@-` (read from piped stdin) — the safe doors for a long body, ' +
+      'since shell substitution fails silently and an empty value CLEARS ' +
+      'the column. `@@` escapes a value that genuinely starts with an @. ' +
+      'stdin is consumable once: a second `@-` in one command is refused.',
     root: true,
     // create() owns the more useful --flag → .param correction.
     passthrough: true,
@@ -91,9 +97,11 @@ export let manuals: Record<string, Manual> = {
       'task set T-3 .status=done --comment="verified end-to-end"',
       'task set T-3 .assignee=jeff .priority=1',
       'task set S-12 ".body=@brief.md"',
+      'task set S-12 .body=@- < brief.md',
       'task set T-3 .domain=Eng --comment="sweep: missing domain" --event',
     ],
-    detail: 'A --comment that IS `@file` is read from that file. ' +
+    detail: 'A dot-param or --comment that IS `@file` is read from that ' +
+      'file, and `@-` from piped stdin. ' +
       '--event marks the --comment as EMITTED by machinery rather than ' +
       'written by an agent, so it never rides the mail relay (see ' +
       '`task help comment`). A sweep keeps its patch and its reason in one ' +

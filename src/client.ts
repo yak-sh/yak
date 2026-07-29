@@ -115,19 +115,80 @@ export let send = async (changes: Change[], via = me()) => {
   return out.changes
 }
 
-// A value starting with @ is a FILE read by the tool itself — the safe
-// door for long bodies. Shell substitution offers the same and fails
-// silently ($(cat) in a zsh pipeline reads nothing, and an empty value
-// CLEARS the column — this wiped four session briefs, 2026-07-22); a
-// missing file here is a loud error instead. Literal leading @: @@.
-export let inflate = (p: Param): Param => {
+// The pipe, as a seam. Reading is sync because inflate is, and `taken`
+// rides the seam because consumability is a fact about the resource, not
+// about the caller — every door that asks for stdin in one command asks
+// the same object, so the second ask can be refused instead of served an
+// empty string.
+export type Stdin = {
+  terminal: () => boolean
+  read: () => string
+  taken?: string
+}
+
+let slurp = () => {
+  let chunks: Uint8Array[] = [], buf = new Uint8Array(65536)
+  for (let n: number | null; (n = Deno.stdin.readSync(buf)) != null;) {
+    chunks.push(buf.slice(0, n))
+  }
+  // Concatenate the BYTES and decode once — a per-chunk decode splits a
+  // multibyte character that straddles a read boundary.
+  let all = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0))
+  let at = 0
+  for (let c of chunks) {
+    all.set(c, at)
+    at += c.length
+  }
+  return new TextDecoder().decode(all)
+}
+
+export let stdin: Stdin = {
+  terminal: () => Deno.stdin.isTerminal(),
+  read: slurp,
+}
+
+// stdin is read ONLY for the explicit @- ask, never implicitly: a harness
+// holding the pipe open but silent would block forever (T-5854) and no
+// guard can tell that pipe from a slow one, so a TTY fails fast instead.
+// And it is consumable once — a second @- would read empty, and an empty
+// value CLEARS the column (the failure that wiped four session briefs),
+// so the second ask is refused loudly rather than served that emptiness.
+let piped = (io: Stdin, prop: string, as: string) => {
+  if (io.taken) {
+    throw new Error(
+      `${as}: stdin was already read by .${io.taken}=@- — a pipe is ` +
+        `consumable once, and the second read would clear the column`,
+    )
+  }
+  if (io.terminal()) throw new Error(`${as}: stdin is a TTY — pipe it in`)
+  io.taken = prop
+  let v = io.read().trim()
+  // An empty pipe is the same silent clear this door exists to prevent, so
+  // it is refused: clearing is `.prop=`, said deliberately.
+  if (!v) throw new Error(`${as}: stdin was empty`)
+  return v
+}
+
+// A value starting with @ is read by the tool itself: @file is a FILE,
+// @- is piped stdin — the safe doors for long bodies. Shell substitution
+// offers the same and fails silently ($(cat) in a zsh pipeline reads
+// nothing, and an empty value CLEARS the column — this wiped four session
+// briefs, 2026-07-22); a missing file here is a loud error instead.
+// Literal leading @: @@. `as` is the token the caller actually typed, so
+// an error names the door the user reached for and not a synonym.
+export let inflate = (
+  p: Param,
+  io = stdin,
+  as = `.${p.prop}=${p.value}`,
+): Param => {
   let v = p.value
   if (typeof v != 'string' || !v.startsWith('@')) return p
   if (v.startsWith('@@')) return { ...p, value: v.slice(1) }
+  if (v == '@-') return { ...p, value: piped(io, p.prop, as) }
   try {
     return { ...p, value: Deno.readTextFileSync(v.slice(1)) }
   } catch {
-    throw new Error(`.${p.prop}=@: no such file: ${v.slice(1)}`)
+    throw new Error(`${as}: no such file`)
   }
 }
 
