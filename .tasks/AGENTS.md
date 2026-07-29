@@ -401,7 +401,7 @@ Your persona, and every memory preloaded into it, are **entities in the Task Gra
 
 **Changing it — in the graph, never the file:**
 
-- **Add or edit a memory:** `memory_save` (MCP `tasks`) — new content mints an `M-…`; passing `id` confirms and patches an existing one.
+- **Add or edit a memory:** `memory_save` (MCP `tasks`) — new content mints an `M-…`; passing `id` confirms and patches an existing one. Replacing a body also needs the `was:` token `memory_recall` prints above it, so a concurrent edit is refused rather than silently lost.
 - **Preload / unpreload:** add (or `gone: true` to remove) a `contains` edge from the `N-…` to the `M-…`, via `graph_apply` or the web UI.
 - **Reach everyone in a repo:** preload into that repo's `* common persona` (which projects to `AGENTS.md`, read by every agent there) — not a single role's persona.
 
