@@ -136,9 +136,13 @@ the mobile door — whose rows resolve through `List.Item`.
   (additive, in place); anything shapier needs the owner.
 - **This repo is open source.** Never commit the db, fleet data, secrets, or
   anything from `~/code/holdco/.env`.
-- **Server-stamped columns never ride the wire** — that's what keeps `frozen_at`
-  (archive exists), `claimed_at`, and every managed-session lifecycle column
-  (status, exit_code, final_text, …) honest. A session's REQUEST columns
+- **Server-stamped columns are never wire-WRITABLE** — that's what keeps
+  `frozen_at` (archive exists), `claimed_at`, and every managed-session lifecycle
+  column (status, exit_code, final_text, …) honest. They still ride graph-OUT:
+  `comps` admits writes, `stamped` (types.ts) adds server-owned reads, and db.ts
+  `readable` is the union `snapshot()` selects. Both halves are load-bearing — a
+  column in neither is stamped correctly and invisible to every client, which is
+  how `mail.from` silently misrouted every reply. A session's REQUEST columns
   (provider, model, effort, requested_task_eid, persona_eid) are the
   wire-writable exception on purpose: creating a session with them IS the spawn
   request, validated by the created(session) effect — every failure is a failed
@@ -176,8 +180,10 @@ the mobile door — whose rows resolve through `List.Item`.
   sanitizes `\n`/`\r`/`\t` in text nodes; only the layout emits cursor moves.
 - **One reconnect poller per process** (live.ts `polling`) — a down server must
   not stack pollers that all fire reload together.
-- **The watcher's `graph` list in server.ts must cover every server import**, or
-  edits to a server file merely reload clients against a stale process.
+- **`serverFiles` (reload.ts) must name every server import**, or edits to a
+  server file merely hot-swap clients against a stale process. The dev
+  supervisor and the browser watcher share that one predicate, so neither can
+  mistake a backend edit for a client-only swap.
 - Deleting an entity tombstones it; late patches for that eid are void. Death
   CASCADES to entities that exist about the dead one (cards viewing it, comments
   aimed at it, pins/cameras on a dead canvas or client) and detaches soft refs
@@ -215,12 +221,13 @@ the mobile door — whose rows resolve through `List.Item`.
 - Bounced claims are audited: apply() records each rejection as a server-minted
   `conflict` entity (loser/holder as strings — the loser's session row may die
   in the same rollback). `graph_query kind=conflict` is the contention report.
-- **The comms bus is a cursor, not a queue** (`notices()` in client.ts): any
-  task tool told the caller's session appends unseen comments on its claimed
-  tasks + comments aimed at the session entity (commenting on S-31 IS messaging
-  that agent), then advances `session.acked_at`. The cursor is wire-writable on
-  purpose — a session forging its own cursor only deafens itself. Serve lines
-  and ack in the same breath, never ack unserved lines.
+- **The comms bus marks each item, never a cursor** (`notices()` in client.ts):
+  any CLI verb or task tool told the caller's session appends unseen comments on
+  its claimed tasks + comments aimed at the session entity (commenting on S-31 IS
+  messaging that agent), then stamps `notified` on each line it just served. Per
+  item on purpose — a cursor can sweep past a sibling it never served, and the
+  stamp cannot. Serve lines and mark them in the same breath, never mark
+  unserved ones.
 - MCP ergonomics are load-bearing: `task_new` batches via `tasks:[…]`, and
   `eid`/`*_eid` values accept human ids (T-3, P-19) everywhere — an agent should
   never need the num→eid lookup dance. If a real agent shells out to `deno eval`
