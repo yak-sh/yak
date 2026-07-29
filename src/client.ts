@@ -647,6 +647,11 @@ export type Reader = {
   // project-wide mail or actor knocks, only direct address and claimed work.
   operator?: boolean
   claims?: Set<string>
+  // The addresses this reader answers to (its actor's, plus the actor's own
+  // eid, which is how a letter names a recipient before delivery resolves
+  // it). A letter reaches a PERSON this way — they stand in no project, so
+  // the scope arm below says nothing about them.
+  addrs?: Set<string>
 }
 
 // Addressed to this reader — the four doors an item reaches attention
@@ -677,8 +682,17 @@ export let addressed = (who: Reader) => (r: Row): boolean => {
   if (m) {
     // Project mail reaches only the operator loop, never a specialist —
     // direct address (comment/knock above) is always delivered (T-7006).
-    return who.operator == true && !!m.message_id &&
-      (!who.scope || String(m.target_eid) == who.scope)
+    if (who.operator != true || !m.message_id) return false
+    // Two ways a letter is yours, and the FIRST is what a person has: it
+    // was sent to an address you answer to. A person stands in no project,
+    // so the scope arm says nothing about them — and a reader with neither
+    // arm matches NOTHING rather than the fleet's whole correspondence
+    // (1338 arrived letters in a week: the wrong default is a firehose,
+    // not an inconvenience).
+    return (!!who.addrs?.size &&
+      (who.addrs.has(String(m.to_addr ?? '')) ||
+        who.addrs.has(String(m.to ?? '')))) ||
+      (!!who.scope && String(m.target_eid) == who.scope)
   }
   return false
 }
@@ -693,6 +707,31 @@ export let inboxItem = (who: Reader) => {
 // The reader an inbox reads for, resolved from the graph in one place:
 // the session named, the actor it acts for, the project it stands in, and
 // the eids it claims — everything addressed() needs.
+// Every address an actor answers to: the address book entry it carries,
+// and its own eid — a letter names its recipient by reference and only
+// resolves to an address at delivery (M-4063), so both forms appear in the
+// stored row depending on when you look.
+let addrsOf = (all: Row[], actor?: string): Set<string> => {
+  let out = new Set<string>()
+  if (!actor) return out
+  out.add(actor)
+  let a = all.find((r) => r.eid == actor)?.comps.email?.address
+  if (a) out.add(String(a))
+  return out
+}
+
+// The reader a WEB client reads for. A browser has no session — its
+// identity is the actor its client entity names — and a person browsing
+// their own graph IS the loop, which is all `operator` has ever meant.
+// No claims: leases belong to sessions, and a person holds none.
+export let readerAt = (all: Row[], actor?: string): Reader => ({
+  actor,
+  operator: true,
+  claims: new Set(),
+  addrs: addrsOf(all, actor),
+  scope: all.find((r) => r.eid == actor)?.comps.project ? actor : undefined,
+})
+
 export let readerFor = (
   all: Row[],
   session?: string,
@@ -702,9 +741,11 @@ export let readerFor = (
   let sess = session
     ? all.find((r) => r.comps.session && String(r.comps.session.id) == session)
     : undefined
+  let actor = String(sess?.comps.session?.actor_eid ?? '') || undefined
   return {
     session: sess?.eid,
-    actor: String(sess?.comps.session?.actor_eid ?? '') || undefined,
+    actor,
+    addrs: addrsOf(all, actor),
     scope: scopeFor(
       all,
       sess,

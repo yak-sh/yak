@@ -24,6 +24,7 @@ import {
   notices,
   param,
   patches,
+  readerAt,
   readerFor,
   recallIndex,
   replyChanges,
@@ -956,6 +957,7 @@ Deno.test('inbox: every source, archived hides, opened marks read', () => {
     scope: P,
     operator: true,
     claims: new Set([TC]),
+    addrs: new Set([A]), // the actor's own eid; it carries no address here
   })
   // all four sources arrive; a comment aimed elsewhere and an archived one
   // don't. `notified` (cN) does NOT hide — being told keeps it in the inbox.
@@ -966,6 +968,76 @@ Deno.test('inbox: every source, archived hides, opened marks read', () => {
   let unread = g.filter(inboxItem(who)).filter(isUnread).map((r) => r.eid)
     .sort()
   assertEquals(unread, [c1, c2, cAc, kn, ml, cN].sort())
+})
+
+// A person reads a browser inbox with no session and no project to stand
+// in. The arm that finds their letters is their ADDRESS — and the arm that
+// must not fire is the project one, or an unscoped reader matches every
+// arrived letter in the graph (1338 of them in a week, live).
+Deno.test("readerAt: a person hears their own letters, not the fleet's", () => {
+  let ME = 'bbbbbbbb-0000-4000-8000-000000000201' // a person, addressed
+  let VENTURE = 'bbbbbbbb-0000-4000-8000-000000000202' // someone else's
+  let mine = 'bbbbbbbb-0000-4000-8000-000000000211' // to me@x, arrived
+  let byEid = 'bbbbbbbb-0000-4000-8000-000000000212' // to my EID, arrived
+  let theirs = 'bbbbbbbb-0000-4000-8000-000000000213' // to the venture
+  let sent = 'bbbbbbbb-0000-4000-8000-000000000214' // to me, never arrived
+  let kn = 'bbbbbbbb-0000-4000-8000-000000000215' // knock at me
+  let said = 'bbbbbbbb-0000-4000-8000-000000000216' // comment at me
+  let g = rows({
+    changes: [
+      { eid: ME, name: 'entity', comp: { eid: ME, num: 201, created_at: '' } },
+      { eid: ME, name: 'person', comp: {} },
+      { eid: ME, name: 'email', comp: { address: 'me@x' } },
+      {
+        eid: VENTURE,
+        name: 'entity',
+        comp: { eid: VENTURE, num: 202, created_at: '' },
+      },
+      { eid: VENTURE, name: 'project', comp: {} },
+      {
+        eid: mine,
+        name: 'mail',
+        comp: { to: 'me@x', to_addr: 'me@x', message_id: 'm:1' },
+      },
+      { eid: byEid, name: 'mail', comp: { to: ME, message_id: 'm:2' } },
+      {
+        eid: theirs,
+        name: 'mail',
+        comp: { to: 'v@x', message_id: 'm:3', target_eid: VENTURE },
+      },
+      { eid: sent, name: 'mail', comp: { to: 'me@x', to_addr: 'me@x' } },
+      { eid: kn, name: 'knock', comp: { to_eid: ME, target_eid: VENTURE } },
+      { eid: said, name: 'comment', comp: { target_eid: ME } },
+    ],
+  })
+  let who = readerAt(g, ME)
+  assertEquals(who.operator, true) // browsing your own graph IS the loop
+  assertEquals(who.scope, undefined) // a person stands in no project
+  let inbox = g.filter(inboxItem(who)).map((r) => r.eid).sort()
+  // Sent mail never arrived, and the venture's letter is not this person's
+  // — that exclusion is the whole point of the address arm.
+  assertEquals(inbox, [mine, byEid, kn, said].sort())
+})
+
+// The same constructor pointed at a PROJECT: it stands in itself, so the
+// scope arm is the one that speaks and project mail lands.
+Deno.test('readerAt: a project reads its own project mail', () => {
+  let P2 = 'bbbbbbbb-0000-4000-8000-000000000221'
+  let ml = 'bbbbbbbb-0000-4000-8000-000000000222'
+  let g = rows({
+    changes: [
+      { eid: P2, name: 'entity', comp: { eid: P2, num: 221, created_at: '' } },
+      { eid: P2, name: 'project', comp: {} },
+      {
+        eid: ml,
+        name: 'mail',
+        comp: { to: 'p@x', message_id: 'm:9', target_eid: P2 },
+      },
+    ],
+  })
+  let who = readerAt(g, P2)
+  assertEquals(who.scope, P2)
+  assertEquals(g.filter(inboxItem(who)).map((r) => r.eid), [ml])
 })
 
 // Project-wide attention is a positive capability. No session means a
