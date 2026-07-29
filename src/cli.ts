@@ -62,7 +62,14 @@ import {
   wrapChanges,
 } from './client.ts'
 import { prune, reap, sweep } from './probes.ts'
-import { matchQuery, noFilter, pred, resolveRefs } from './query.ts'
+import {
+  EDGE_DOOR,
+  edgeish,
+  matchQuery,
+  noFilter,
+  pred,
+  resolveRefs,
+} from './query.ts'
 import {
   bookOf,
   diagnose,
@@ -254,10 +261,6 @@ export let strayFlag = (
   }
 }
 
-// The flags agents reach for that are EDGES, not props — the one class
-// where "no such prop" is an unhelpful answer on its own.
-let edgeish = /block|depend|require|parent|child|subtask/i
-
 let create = async (args: string[]) => {
   let { params, words } = split(args)
   let stray = strayFlag(words)
@@ -267,8 +270,7 @@ let create = async (args: string[]) => {
         ? `task new uses dot-params, not --flags — did you mean ${stray.suggest}? (got ${stray.got})`
         : `no such prop for ${stray.got}${
           edgeish.test(stray.got)
-            ? ' — a dependency is an EDGE, not a prop: ' +
-              'task <parent> requires <child>'
+            ? ` — ${EDGE_DOOR}`
             : ` — ${help(['grammar'])}`
         }`,
     )

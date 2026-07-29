@@ -348,6 +348,25 @@ Deno.test('noFilter teaches the door a stray predicate belongs to', () => {
   )
 })
 
+// A dependency is an edge in EITHER grammar, so the miss teaches the edge
+// door instead of the sketch — every door through route() inherits it.
+Deno.test('an edge-ish prop names the edge door, not the sketch', () => {
+  for (let prop of ['blocked-by', 'depends_on', 'parent', 'subtasks']) {
+    assertThrows(
+      () => route(prop),
+      Error,
+      "link one with 'task <parent> requires <child>'",
+    )
+  }
+  assertThrows(
+    () => parseQuery('.blocked-by=T-1'),
+    Error,
+    'an EDGE, not a prop',
+  )
+  // and nothing else changes: the sketch still answers a plain miss
+  assertThrows(() => route('hovercraft'), Error, 'filters are dot-params')
+})
+
 Deno.test('.order=hot is a ranking, not a filter', () => {
   let ps = parseQuery('.order=hot&.status=open')
   assertEquals(orderOf(ps), 'hot')

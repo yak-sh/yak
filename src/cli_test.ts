@@ -442,8 +442,19 @@ Deno.test('the deprecation notice follows the spelling, not the handler', async 
 Deno.test('the --blocked-by refusal names the current edge door', async () => {
   let out = await cli('new', 'Title', '--blocked-by=T-1')
   assertEquals(out.code, 1)
-  assertMatch(text(out.stderr), /an EDGE, not a prop: task <parent> requires/)
+  assertMatch(text(out.stderr), /an EDGE, not a prop/)
+  assertMatch(text(out.stderr), /task <parent> requires <child>/)
   assertEquals(/task dep\b/.test(text(out.stderr)), false)
+})
+
+// Both grammars carry one mistake — the dot-param spelling used to earn
+// the filter sketch, correct and silent about the edge it was reaching for.
+Deno.test('.blocked-by names the same edge door as --blocked-by', async () => {
+  let out = await cli('new', 'Title', '.blocked-by=T-1')
+  assertEquals(out.code, 1)
+  assertMatch(text(out.stderr), /an EDGE, not a prop/)
+  assertMatch(text(out.stderr), /task <parent> requires <child>/)
+  assertEquals(/filters are dot-params/.test(text(out.stderr)), false)
 })
 
 Deno.test('task session wrap help never runs the hook verb', async () => {

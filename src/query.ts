@@ -91,6 +91,14 @@ let routes: Record<string, readonly string[]> = {
 let SKETCH =
   'filters are dot-params: .status=open, .priority<=1, .project=P-19, .title~=word, …'
 
+// The names agents reach for that are EDGES — a dependency has no column
+// and never will, so the sketch answers the wrong question in either
+// grammar. The door says what it DOES ('link one'), because from a filter
+// this is the shape of the mistake, not a listing verb.
+export let edgeish = /block|depend|require|parent|child|subtask/i
+export let EDGE_DOOR = 'a dependency is an EDGE, not a prop: ' +
+  "link one with 'task <parent> requires <child>'"
+
 let spawnTwin = (prop: string, owners: string[]) =>
   prop in comps.spawn && owners.length == 2 &&
   owners.every((name) => name == 'session' || name == 'spawn')
@@ -130,7 +138,7 @@ export let route = (prop: string): { comp: string; prop: string } => {
       ? "kind is graph_query's kind parameter, not a filter prop"
       : prop == 'eid'
       ? 'address entities by id directly (T-3, E-9) — filters match component props'
-      : `unknown prop: .${prop} — ${SKETCH}`,
+      : `unknown prop: .${prop} — ${edgeish.test(prop) ? EDGE_DOOR : SKETCH}`,
   )
 }
 
@@ -202,9 +210,14 @@ let range = (p: Prop, value: string): string => {
 let typedValue = (p: Prop, value: string): string =>
   value.split(',').map((v) => range(p, v)).join(',')
 
+// A hyphen is admitted into the NAME so a hyphenated spelling reaches
+// route() and earns the same refusal writes give it (client.ts param()).
+// No column is hyphenated, so nothing new routes — but before this,
+// '.blocked-by=T-1' failed the pattern and fell through to a bare TEXT
+// term, silently searching for the filter the caller thought they wrote.
 export let pred = (token: string): Pred | null => {
   let m = token.match(
-    /^\.([A-Za-z_]+)(?:\.([A-Za-z_]+))?(!=|~=|<=|>=|<|>|=)(.*)$/s,
+    /^\.([A-Za-z_-]+)(?:\.([A-Za-z_-]+))?(!=|~=|<=|>=|<|>|=)(.*)$/s,
   )
   if (!m) return null
   let [, a, b, op, value] = m
