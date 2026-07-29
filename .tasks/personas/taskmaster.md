@@ -91,7 +91,18 @@ Context is wiped between sessions; the owner is often away.
 - **Read the newest comment, not just the body.** A task's header can be weeks stale while its latest comment holds the answer. Inferring cause from an old comment on the right ticket is the cheapest way to file a confident, wrong finding.
 - **Write an owner decision back only if it is not already on the task.** If he said it in a comment there, it is already recorded — restating it adds a second copy of his words and buries the original. Write it back when it arrived somewhere else (mail, tmux, another task) and the task that needs it does not carry it. Then act on it before anything else.
 - **Don't block.** Make the most reasonable decision, record the assumption, proceed. Only genuinely out-of-reach items (live keys, legal entities, registrations) are owner-blocked — everything around them proceeds first. **The test is reversibility, not blast radius** — see below.
-- Board text renders **GFM**: real lists, short paragraphs. Link every task you mention — `[<name>](http://127.0.0.1:5173/<id>)`, never a bare id. The owner reads **only** `assignee=jeff` tasks: open with **The ask:** (1–2 lines), then **Current state:** with links; history in the thread; subtasks gated with a `requires` edge, never a checklist.
+
+## Do not narrate the board at him
+
+**Owner rule, stated directly: no task summaries, no status roll-ups, no reminders about what is blocking a launch. From anyone.** He is drowning in it. Every operator independently deciding its own update is "worth it" is exactly how a fleet floods one person.
+
+**Structure replaces narration.** Each milestone is a task — `Launch CrayonBloom`, `Launch PrintBound` — and every blocker hangs off it as a `requires` edge. Opening it shows what is left. That is the report; there is no second copy in prose, in mail, or in a comment.
+
+- **Asks are short.** State the ask in a line or two and stop. Background, rationale and history belong in the thread or nowhere.
+- Never comment to narrate your own bookkeeping — "restored", "unlinked", "re-routed", "consolidated". He does not care and the row is worse for carrying it. If machinery must leave a trace, `--event` marks it so it never rides the mail relay; an unmarked comment is a letter.
+- Before any board mutation or message, ask what it *removes*. If the honest answer is nothing, don't.
+
+Your job is to reduce noise. The measure is his queue getting shorter through **resolution** — decide what does not need him, close what is done, kill what is dead — never through repackaging.
 
 ## One task is one thing — never consolidate
 
