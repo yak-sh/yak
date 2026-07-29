@@ -82,6 +82,51 @@ entry (T-5958 reconciles the book). Fleet-internal mail depends on neither.
 
 ---
 
+# M-4405 verify before done — a builder's "it passes" is a claim, not a fact
+
+A builder's "verified / tests pass" is a claim, not proof. Re-run the check yourself: CI actually green, prod actually healthy, the scaffold actually runs. A tool printing the intended value is not proof the behavior changed — trace it to where it takes effect.
+
+Spot-check thin research before baking it in anywhere it compounds fleet-wide. And verify a restricted agent's story of *why* something failed before believing it — a "the tool wasn't available" excuse is a claim too.
+
+## Check claims about production against production, not against the repo
+
+A reviewer's *factual* claims deserve the same scrutiny as a builder's — and a careful, well-sourced review is the easiest kind to wave through, because the reasoning is good. The reasoning can be impeccable and the premise still false.
+
+The specific trap: an agent reads the repo's own docs, infers the state of the live system, and reports it as fact. Docs go stale silently. When a claim is about **production** — what's deployed, what migrated, how much data exists, which credentials work — the system of record is the live account, and querying it usually takes one command.
+
+PrintBound 2026-07-28: a review reported "65 commits and 7 D1 migrations that have never touched production," and that held a deploy for a pass. Cloudflare said otherwise — migrations all applied five days earlier, last deploy five days ago not eighteen, real delta 9 commits, orders table empty. One `wrangler d1 migrations list --remote` would have caught it before the decision, not after.
+
+Ask of any claim that's about to change a decision: **is this derived from the repo, or from the system it describes?** If a decision rests on it, go look.
+
+## Your own helpful output is a claim too
+
+The failure that costs the most is not the silent no-op — nobody writes one on purpose. It is the tool that **guesses helpfully and never checks its guess**, handed to someone at the moment they are already confused. A suggestion, a "did you mean", an error message naming the door to use instead: each asserts something about the system, and owes the same verification as any other output. Saying nothing is cheaper than spending the user's trust on a wrong answer.
+
+Tasks 2026-07-29: `task new --blocked-by=T-1` was refused with *"did you mean `.blocked-by=T-1`?"* — a spelling `strayFlag` composed mechanically and never validated. It routed nowhere, and the token landed in the task's **title**. The correction pointed straight at the corruption. Two rules fall out, both cheap:
+
+- **Check a suggestion against the grammar before offering it.** If nothing valid exists, say so plainly.
+- **An error that names a working door owes proof that door works** — round-trip it. An error naming a broken door is the same bug one level up.
+
+## Ask whether your check *could* fail for the bug you fear
+
+A green check proves nothing if it is structurally blind to the failure mode. This is worse than no check, because it manufactures confidence.
+
+PrintBound 2026-07-29: PostHog had never once worked on the live site — the analytics proxy dropped `Access-Control-Allow-Origin`, so browsers discarded every response. It survived a month because **every cheap signal was blind in a different way**: `curl` gets a clean 200 (curl doesn't enforce CORS); Cloudflare counted 4,823 requests and **zero errors** (nothing *failed* — the browser threw the response away afterward); the jsdom tests passed (jsdom doesn't enforce CORS either); and the runbook's own verify step curled `/static/array.js`, which carries a fixed `ACAO: *` and passes even when the broken path is fully broken. The runbook was actively certifying health.
+
+So: name the failure mode, then ask what evidence would actually distinguish it. Behavior enforced by a browser needs a browser. Behavior enforced by a real client needs that client. When a check has never failed, suspect that it *cannot*.
+
+**The mechanical form, for any check that asserts an absence** — no mail sent, no error logged, no request made: **prove the presence case on the same fixture first, or you are measuring your setup.** Run the unsuppressed version, watch it produce the thing, then run the suppressed one. A suppression test with no positive control cannot tell a working gate from a quiet minute, and it passes before the feature exists.
+
+Tasks 2026-07-29: verifying that `--event` stops a comment from fanning out as mail, the control didn't fire — a fresh probe session is reified with the *target task's* actor, which is the project, and `fanout()` skips a comment authored by the project itself. Both "no mail" results were noise. holdco's parallel probe dodged it only by luck of fixture.
+
+**Build the fixture the common path uses.** A probe that reaches for the explicit, careful form tests a path few callers take. The same day, a probe passing `.title=` explicitly saw a clean no-op where a bare-word title — the form in every shipped example — got silently corrupted.
+
+## Verify the whole surface after a change, not the part you touched
+
+A partial failure can move something you weren't aiming at. PrintBound 2026-07-28: routes failed to attach *and* a wrangler default silently disabled the other hostname, so the Worker had no reachable origin at all — while the error message named only the routes. Curl every origin, not the one you were changing.
+
+---
+
 # M-4492 persist your thinking — context is wiped, the owner is away
 
 Context is wiped between sessions; the owner is often away.
@@ -99,40 +144,6 @@ There is no `--blocked-by` and no `.blocked-by`. Both now fail loudly — `--blo
 ```
 task dep <parent> requires <child>
 ```
-
----
-
-# M-4405 verify before done — a builder's "it passes" is a claim, not a fact
-
-A builder's "verified / tests pass" is a claim, not proof. Re-run the check yourself: CI actually green, prod actually healthy, the scaffold actually runs. A tool printing the intended value is not proof the behavior changed — trace it to where it takes effect.
-
-Spot-check thin research before baking it in anywhere it compounds fleet-wide. And verify a restricted agent's story of *why* something failed before believing it — a "the tool wasn't available" excuse is a claim too.
-
-## Check claims about production against production, not against the repo
-
-A reviewer's *factual* claims deserve the same scrutiny as a builder's — and a careful, well-sourced review is the easiest kind to wave through, because the reasoning is good. The reasoning can be impeccable and the premise still false.
-
-The specific trap: an agent reads the repo's own docs, infers the state of the live system, and reports it as fact. Docs go stale silently. When a claim is about **production** — what's deployed, what migrated, how much data exists, which credentials work — the system of record is the live account, and querying it usually takes one command.
-
-PrintBound 2026-07-28: a review reported "65 commits and 7 D1 migrations that have never touched production," and that held a deploy for a pass. Cloudflare said otherwise — migrations all applied five days earlier, last deploy five days ago not eighteen, real delta 9 commits, orders table empty. One `wrangler d1 migrations list --remote` would have caught it before the decision, not after.
-
-Ask of any claim that's about to change a decision: **is this derived from the repo, or from the system it describes?** If a decision rests on it, go look.
-
-## Ask whether your check *could* fail for the bug you fear
-
-A green check proves nothing if it is structurally blind to the failure mode. This is worse than no check, because it manufactures confidence.
-
-PrintBound 2026-07-29: PostHog had never once worked on the live site — the analytics proxy dropped `Access-Control-Allow-Origin`, so browsers discarded every response. It survived a month because **every cheap signal was blind in a different way**: `curl` gets a clean 200 (curl doesn't enforce CORS); Cloudflare counted 4,823 requests and **zero errors** (nothing *failed* — the browser threw the response away afterward); the jsdom tests passed (jsdom doesn't enforce CORS either); and the runbook's own verify step curled `/static/array.js`, which carries a fixed `ACAO: *` and passes even when the broken path is fully broken. The runbook was actively certifying health.
-
-So: name the failure mode, then ask what evidence would actually distinguish it. Behavior enforced by a browser needs a browser. Behavior enforced by a real client needs that client. When a check has never failed, suspect that it *cannot*.
-
-**The mechanical form, for any check that asserts an absence** — no mail sent, no error logged, no request made: **prove the presence case on the same fixture first, or you are measuring your setup.** Run the unsuppressed version, watch it produce the thing, then run the suppressed one. A suppression test with no positive control cannot tell a working gate from a quiet minute, and it passes before the feature exists.
-
-Tasks 2026-07-29: verifying that `--event` stops a comment from fanning out as mail, the control didn't fire — a fresh probe session is reified with the *target task's* actor, which is the project, and `fanout()` skips a comment authored by the project itself. Both "no mail" results were noise. holdco's parallel probe dodged it only by luck of fixture.
-
-## Verify the whole surface after a change, not the part you touched
-
-A partial failure can move something you weren't aiming at. PrintBound 2026-07-28: routes failed to attach *and* a wrangler default silently disabled the other hostname, so the Worker had no reachable origin at all — while the error message named only the routes. Curl every origin, not the one you were changing.
 
 ---
 
