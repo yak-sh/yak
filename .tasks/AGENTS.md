@@ -383,6 +383,42 @@ seams wider or leakier, that's the wrong direction.
 
 ---
 
+# M-9273 `:set .body=` takes its value literally and destroys the old body — `task new` reads @file, `:set` does not
+
+Setting a body through `task <id> :set` (and `task set <id>`) takes the value **literally**. There is no stdin convention and no @file convention on that door:
+
+- `:set .body=-` writes the single character `-`.
+- `:set .body=@/path/to/file` writes the string `@/path/to/file`.
+
+Either way the previous body is gone, the write succeeds, and you get a cheerful confirmation. No prompt, no warning, exit 0.
+
+## The trap is that it is not consistent across doors
+
+The same dot-param spelling behaves differently depending on the verb, which is why reading "dot-params are literal" once does not protect you:
+
+| door | `.body=@file` |
+| --- | --- |
+| `task new … .body=@file` | **reads the file** |
+| `task <id> :set .body=@file` | **writes the literal path** |
+
+Verified by controlled probe 2026-07-29: one task created with `task new .body=@file` held the real content; the same task then `:set .body=@file` held `@/tmp/…`. So "I used @file successfully a minute ago" is not evidence that the next door will read it.
+
+This bites hardest on **persona and memory nodes**, where the blast radius is every agent that loads the projection. Blanking the `N-…` for a repo's common persona empties that repo's `AGENTS.md` on the next materialize — and the materializer auto-commits, so the damage lands in git within seconds.
+
+## Write a long body this way instead
+
+- **`graph_apply`** (MCP `tasks`) with `{eid: "N-4697", name: "doc", comp: {body: "…"}}` — the body is a normal JSON string, so newlines and markdown survive intact.
+- **`POST http://127.0.0.1:5173/apply`** with `[{eid, name:"doc", comp:{body}}]` — the same door over HTTP. Build the JSON from a file with a script and the body never passes through an agent's context, which matters for anything large.
+- **`memory_save`** for memories and **`task_new`** for tasks — `body` is a real parameter on both.
+
+## If you already did it
+
+`task history <id> --json` holds every prior body verbatim, so recovery is a read plus one write even when you did not save a copy first.
+
+Better, make the copy a habit: read the node to a file (`task show <id> --json` → `comps.doc.body`), patch the file, write it back through a JSON-string API, then **verify by reading the node again** — never by trusting the success message. The verify step is the one that catches this class, because the failure is silent by construction.
+
+---
+
 # M-7048 task inbox — one door for everything addressed to you, and watch/mute to change what lands there
 
 `task inbox` lists every item addressed to you — comments on your session, comments on tasks you claim, comments said to your actor, knocks to you or your actor, and project mail — unread first (`●` unread, `·` read).
