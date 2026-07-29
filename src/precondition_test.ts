@@ -44,17 +44,25 @@ let post = async (changes: unknown[]) => {
 
 // What is stored right now, read through a door of its own, so "the write did
 // not land" rests on the graph rather than on the response under test.
-let stored = async (eid: string) => {
+let snap = async () => {
   let res = await fetch(`http://${U}/snapshot`)
-  let snap = await res.json() as {
+  let out = await res.json() as {
     changes: {
       eid: string
       name: string
       comp: Record<string, unknown> | null
     }[]
   }
-  return snap.changes.find((c) => c.eid == eid && c.name == 'doc')?.comp?.body
+  return out.changes
 }
+
+let stored = async (eid: string) =>
+  (await snap()).find((c) => c.eid == eid && c.name == 'doc')?.comp?.body
+
+// The server-minted number behind the human id — what the refusal must
+// speak, read through the same door rather than parsed out of the message.
+let num = async (eid: string) =>
+  (await snap()).find((c) => c.eid == eid && c.name == 'entity')?.comp?.num
 
 // A doc holding a value the caller never read: it read ONE, someone else
 // wrote TWO, so ONE's hash is stale and a guard naming it must refuse.
@@ -76,6 +84,25 @@ Deno.test('POST /apply carries a precondition to the rule', alone, async () => {
   assertEquals(refused.status, 400)
   assertStringIncludes(refused.text, 'has moved since you read it')
   assertEquals(await stored(eid), 'TWO')
+})
+
+// Every door TAKES human ids, so the refusal must SPEAK them: its reader is
+// an agent mid-collision, about to merge and retry, and the one thing it may
+// want first is to open the entity it collided on. A uuid it never typed is
+// unpasteable in every other door. The uuid is right to carry (Stale.eid);
+// only the message is agent-facing. `stale()` mints a doc-only entity, so
+// its spoken id is D-<num> (T-10277).
+Deno.test('a refusal speaks the human id, not the eid', alone, async () => {
+  let { eid, was } = await stale()
+  let refused = await post([{
+    eid,
+    name: 'doc',
+    comp: { body: 'CLOBBER' },
+    was,
+  }])
+  assertStringIncludes(refused.text, `doc.body on D-${await num(eid)} has`)
+  // The whole point: no uuid anywhere in what the agent reads.
+  assertEquals(refused.text.includes(eid), false)
 })
 
 Deno.test(

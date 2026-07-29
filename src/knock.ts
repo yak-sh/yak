@@ -5,10 +5,10 @@
 // running session's channel plugin hears the broadcast the moment the
 // knock commits. Words never live in the knock — they ride as a plain
 // comment on the target in the same batch. SERVER-ONLY (imports db).
-import { apply, db, snapshot } from './db.ts'
+import { apply, db, human, snapshot } from './db.ts'
 import { reachable } from './door.ts'
 import { dispatch, trace } from './effects.ts'
-import { type Change, idOf, uuid } from './types.ts'
+import { type Change, uuid } from './types.ts'
 import { rows, spawnChanges } from './client.ts'
 import { adapters } from './adapters.ts'
 
@@ -29,11 +29,6 @@ let stamp = (eid: string, patch: Row, cast: Cast) => {
   if (row) {
     cast([{ eid, name: 'knock', comp: row as Record<string, unknown> }])
   }
-}
-
-let human = (eid: string) => {
-  let r = rows(snapshot(db)).find((x) => x.eid == eid)
-  return r ? idOf(r) : eid
 }
 
 // The most recent comment on the target — the words that rode the
@@ -103,7 +98,9 @@ export let knocked =
               name: 'doc',
               comp: {
                 title: '',
-                body: `knock: ${human(target)}${words ? ` — ${words}` : ''}`,
+                body: `knock: ${human(db, target)}${
+                  words ? ` — ${words}` : ''
+                }`,
               },
             },
             // Not an event: these are the knocker's own words relayed, the
@@ -118,7 +115,7 @@ export let knocked =
         dispatch(out, t, (n, e) => console.warn(`knock resume ${n} —`, e))
         // What WE did. Waking the run belongs to the comment effect, which
         // keeps its own trail — the same division as `mailed`.
-        return done(`commented ${human(to)}`)
+        return done(`commented ${human(db, to)}`)
       }
       // 2: an actor with a repo and nobody awake — spawn onto the
       // target task; the session boots holding the ask.
@@ -128,7 +125,7 @@ export let knocked =
       if (project) {
         let isTask = db.prepare('select 1 from task where eid = ?').get(target)
         if (!isTask) {
-          return fail(`nobody awake and ${human(target)} is not spawnable`)
+          return fail(`nobody awake and ${human(db, target)} is not spawnable`)
         }
         let provider = Object.keys(adapters).find((k) => k != 'fake') ?? 'fake'
         let made = spawnChanges(rows(snapshot(db)), {
@@ -140,7 +137,7 @@ export let knocked =
         let out = apply(db, made.changes, t)
         cast(out)
         dispatch(out, t, (c, e) => console.warn(`knock spawn ${c} —`, e))
-        return done(`spawned ${human(made.eid)}`)
+        return done(`spawned ${human(db, made.eid)}`)
       }
       // 3: a person (or anything addressed) — the knock rides mail; the
       // mail effect owns delivery and its own audit trail.
@@ -156,8 +153,8 @@ export let knocked =
               eid: m,
               name: 'doc',
               comp: {
-                title: `knock: ${human(target)}`,
-                body: words || `You are asked to look at ${human(target)}.`,
+                title: `knock: ${human(db, target)}`,
+                body: words || `You are asked to look at ${human(db, target)}.`,
               },
             },
             { eid: m, name: 'mail', comp: { to, target_eid: target } },
@@ -169,11 +166,11 @@ export let knocked =
         )
         cast(out)
         dispatch(out, t, (c, e) => console.warn(`knock mail ${c} —`, e))
-        return done(`mailed ${human(to)}`)
+        return done(`mailed ${human(db, to)}`)
       }
       // 4: a settled session keeps its own door — commenting on it
       // resumes it (sessions.ts commented); the knock records the miss.
-      fail(`no door: ${human(to)} is not awake, spawnable-at, or addressed`)
+      fail(`no door: ${human(db, to)} is not awake, spawnable-at, or addressed`)
     } catch (e) {
       fail(String(e).slice(0, 500))
     }

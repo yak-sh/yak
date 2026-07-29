@@ -382,7 +382,11 @@ let connect = () => {
         err(
           `serving ${
             sessionEid ? humanId(index, sessionEid) ?? sessionEid : 'nobody yet'
-          } — home project: ${homeEid ?? 'unresolved — no mail'}`,
+          } — home project: ${
+            homeEid
+              ? humanId(index, homeEid) ?? homeEid
+              : 'unresolved — no mail'
+          }`,
         )
       })
       .catch((e) => err(`snapshot sync failed: ${e}`))

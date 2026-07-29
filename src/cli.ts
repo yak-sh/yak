@@ -344,7 +344,7 @@ let seek = async (args: string[]) => {
   if (json) return console.log(JSON.stringify(hits, null, 2))
   if (!hits.length) return console.log('(no hits)')
   for (let h of hits) {
-    let aim = h.open_eid != h.eid ? ` → on ${h.open_eid}` : ''
+    let aim = h.open_eid != h.eid ? ` → on ${h.open_id ?? h.open_eid}` : ''
     let snip = h.snip.replaceAll('\x01', '[').replaceAll('\x02', ']')
     let sunk = h.retired ? ' · retired' : ''
     console.log(

@@ -19,6 +19,7 @@ import {
   type Dep,
   edges,
   type Hit,
+  idOf,
   kindOrder,
   sessionActive,
   type Snapshot,
@@ -1001,6 +1002,26 @@ let ident = (db: DatabaseSync, id: string): string | undefined => {
     | undefined)?.eid
 }
 
+// ident's inverse: eid → the human id every other door speaks (T-7) — the
+// raw eid when there is none to speak. Every agent-facing message owes
+// this. Inputs accept both spellings; outputs speak human, or a caller
+// that typed `M-10276` is handed back an identifier it has no index for,
+// at the one moment (a refusal) it most wants to open the entity.
+// A tombstone keeps its num but not its components, so its kind — and
+// with it the prefix — died with them: it stays the raw eid rather than
+// wear a guessed one.
+export let human = (db: DatabaseSync, eid: string): string => {
+  let row = db.prepare('select num from entity where eid = ?').get(eid) as
+    | { num: number }
+    | undefined
+  if (!row?.num) return eid
+  let kind =
+    kindOrder.find((k) =>
+      db.prepare(`select 1 from ${k} where eid = ?`).get(eid)
+    ) ?? 'entity'
+  return idOf({ kind, num: row.num })
+}
+
 // The notification-lifecycle stamps (notified/opened/archived): a
 // client-requested, server-stamped act — an EMPTY wire comp (presence IS the
 // signal) whose `stamped` twin is the {at, by, via} stamp. Derived, not
@@ -1046,7 +1067,7 @@ let refused = (
       )
     )
     .map((f) =>
-      `${f.col} → ${given[f.col]} (${
+      `${f.col} → ${human(db, given[f.col] as string)} (${
         db.prepare('select 1 from tombstone where eid = ?')
             .get(given[f.col] as string)
           ? 'tombstoned'
@@ -1054,7 +1075,9 @@ let refused = (
       })`
     )
   return new Error(
-    `${name} ${eid} refused: ${bad.join(', ') || 'foreign key violation'}`,
+    `${name} ${human(db, eid)} refused: ${
+      bad.join(', ') || 'foreign key violation'
+    }`,
   )
 }
 
@@ -1097,9 +1120,9 @@ let refRefused = (
   let gone = db.prepare('select 1 from tombstone where eid = ?')
     .get(bad.target)
   return new Error(
-    `${ref.name} ${bad.eid} refused: ${ref.col} → ${bad.target} (${
-      gone ? 'tombstoned' : `no such ${to}`
-    })`,
+    `${ref.name} ${human(db, bad.eid)} refused: ${ref.col} → ${
+      human(db, bad.target)
+    } (${gone ? 'tombstoned' : `no such ${to}`})`,
   )
 }
 
@@ -1262,9 +1285,19 @@ export class Stale extends Error {
   comp: string
   col: string
   value: unknown
-  constructor(eid: string, comp: string, col: string, value: unknown) {
+  // `id` is what to PRINT — the human id (human() above) when the entity
+  // has one; `eid` is what to CARRY, for the in-process caller reading the
+  // fields. Defaulted so the class stands alone, but every throw hands the
+  // spoken form: the reader here is an agent mid-collision.
+  constructor(
+    eid: string,
+    comp: string,
+    col: string,
+    value: unknown,
+    id = eid,
+  ) {
     super(
-      `${comp}.${col} on ${eid} has moved since you read it — batch refused. ` +
+      `${comp}.${col} on ${id} has moved since you read it — batch refused. ` +
         `Merge into the current value below and retry with its hash.\n` +
         // The hash of the value shown, not of whatever is stored when the
         // caller gets around to retrying. A caller that had to re-read for
@@ -1423,7 +1456,7 @@ export let apply = (
           if (!real.has(col)) throw new Error(`unknown column: ${name}.${col}`)
           let cur = row?.[col] ?? null
           if ((cur == null ? null : sha(cur)) == want) continue
-          throw new Stale(eid, name, col, cur)
+          throw new Stale(eid, name, col, cur, human(db, eid))
         }
       }
       // A claim is a LEASE, not a patch: taking one over another session's
@@ -1444,8 +1477,13 @@ export let apply = (
             loser: loser?.id ?? String(comp.session_eid),
             holder: cur.id ?? cur.session_eid,
           }
+          // The holder is named by its session LABEL when it has one —
+          // that's a name someone chose, not an eid; only the fallback
+          // needs speaking.
           throw new Error(
-            `${eid} already claimed by ${cur.id ?? cur.session_eid}`,
+            `${human(db, eid)} already claimed by ${
+              cur.id ?? human(db, cur.session_eid)
+            }`,
           )
         }
       }
@@ -2181,6 +2219,9 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
       title: r.title || at?.title || '',
       kind,
       open_eid: at?.target_eid ?? r.eid,
+      // What a comment hit points AT, spoken: the line already says
+      // `→ on …`, and a uuid there is unpasteable in every other door.
+      ...(at?.target_eid ? { open_id: human(db, at.target_eid) } : {}),
       ...(sank.get(r.eid) ? { retired: true } : {}),
     }
   })

@@ -32,7 +32,7 @@
 //    the truth exactly once and none of it ever rode the wire inbound.
 import { basename, dirname } from 'node:path'
 import { type Adapter, adapters, type Event, type Summary } from './adapters.ts'
-import { apply, db, record, snapshot } from './db.ts'
+import { apply, db, human, record, snapshot } from './db.ts'
 import { present, reachable } from './door.ts'
 import { dispatch, trace } from './effects.ts'
 import { lapseChanges, rows } from './client.ts'
@@ -1001,9 +1001,11 @@ export let spawned =
         | undefined
       : undefined
     if (row.requested_task_eid && !task) {
-      return fail(`no such task: ${row.requested_task_eid}`)
+      return fail(`no such task: ${human(db, String(row.requested_task_eid))}`)
     }
-    if (row.role_eid && !role) return fail(`no such role: ${row.role_eid}`)
+    if (row.role_eid && !role) {
+      return fail(`no such role: ${human(db, String(row.role_eid))}`)
+    }
     if (!task && !role) return fail('a managed session needs a task or role')
     let project = task?.project_eid ?? role?.scope_eid
     // The workspace comes from the GRAPH, never the request: the task's

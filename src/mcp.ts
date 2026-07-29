@@ -252,7 +252,7 @@ paging graph_query.`,
       return text(
         hits.map((h) =>
           `${idOf(h)} ${h.kind}: ${h.title || '(untitled)'}` +
-          `${h.open_eid != h.eid ? ` → on ${h.open_eid}` : ''}` +
+          `${h.open_eid != h.eid ? ` → on ${h.open_id ?? h.open_eid}` : ''}` +
           ` — ${h.snip.replaceAll('\x01', '[').replaceAll('\x02', ']')}` +
           `${h.retired ? ' · retired' : ''}`
         ).join('\n') || '(no hits)',

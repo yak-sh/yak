@@ -1027,6 +1027,7 @@ export type Hit = {
   title: string
   snip: string
   open_eid: string
+  open_id?: string // open_eid spoken (T-7) — only when it isn't the hit
   retired?: boolean // its project is over — the hit sank to the tail
 }
 

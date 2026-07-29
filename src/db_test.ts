@@ -758,9 +758,16 @@ Deno.test('task project_eid requires a project and fails atomically', () => {
         },
       ]),
     Error,
-    task,
+    'refused',
   )
-  assertMatch(err.message, new RegExp(`project_eid.*${bare}`))
+  // Outputs speak human (T-10277): the refusal names ids the caller can
+  // paste, never the uuids it never typed. The task's own id is only a
+  // shape here — its spine died with the rollback that built the message.
+  assertMatch(err.message, /^task T-\d+ refused: /)
+  assertMatch(
+    err.message,
+    new RegExp(`project_eid → D-${comp(bare, 'entity')?.num} \\(no such`),
+  )
   assertEquals(comp(task, 'entity'), undefined)
   assertEquals(comp(rider, 'doc'), undefined)
 
