@@ -853,22 +853,29 @@ let dep = async (args: string[]) => {
 }
 
 // Comments attach to anything; attribution rides the session env (me()).
+// --event is how MACHINERY says so: a sweep, a cron, a status nudge. The
+// mark has to ride the mint — fanout() fires there, so a comment flagged
+// afterwards has already left as a letter (M-4062).
 let comment = async (args: string[]) => {
   let verdictArg = args.find((a) => a.startsWith('--verdict='))
   let verdict = verdictArg?.slice(10)
-  let [id, ...words] = args.filter((a) => !a.startsWith('--verdict='))
+  let event = args.includes('--event')
+  let [id, ...words] = args.filter((a) =>
+    !a.startsWith('--verdict=') && a != '--event'
+  )
   let body = words.join(' ')
   if (verdictArg != null && !verdict) {
     throw new Error('--verdict needs approved, rejected, or changes_requested')
   }
   if (!id || (!body && !verdict)) {
-    throw new Error('task comment <id> [text...] [--verdict=...]')
+    throw new Error('task comment <id> [text...] [--verdict=...] [--event]')
   }
   let all = rows(await snapshot())
   let row = find(all, id)
   if (!row) throw new Error(`no entity: ${id}`)
-  await send(commentChanges(all, row.eid, body, me(), { verdict }))
-  console.log(`${verdict ? `${verdict} review` : 'comment'} on ${idOf(row)}`)
+  await send(commentChanges(all, row.eid, body, me(), { verdict, event }))
+  let said = verdict ? `${verdict} review` : event ? 'event' : 'comment'
+  console.log(`${said} on ${idOf(row)}`)
 }
 
 let show = async (args: string[]) => {

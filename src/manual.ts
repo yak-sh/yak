@@ -254,13 +254,21 @@ export let manuals: Record<string, Manual> = {
   },
   comment: {
     usage:
-      'comment <id> [text...] [--verdict=approved|rejected|changes_requested]',
+      'comment <id> [text...] [--verdict=approved|rejected|changes_requested] ' +
+      '[--event]',
     about: 'comment on any entity; a verdict makes it a review',
     examples: [
       'task comment T-3 "blocked on the schema call"',
       'task comment S-31 "status?"',
       'task comment T-3 --verdict=approved',
+      'task comment T-3 "sweep: missing domain" --event',
     ],
+    detail:
+      '--event marks a comment EMITTED by machinery — a sweep finding, a ' +
+      'status nudge. An event never rides the mail relay and renders as a ' +
+      'chip, not a bubble; the bus and the inbox still deliver it. Prose ' +
+      'you wrote is a letter and stays one. The mark must ride the mint: ' +
+      'the relay fires there, so flagging afterwards is too late.',
     root: true,
     options: [
       value(
@@ -269,6 +277,7 @@ export let manuals: Record<string, Manual> = {
         false,
         /^(approved|rejected|changes_requested)$/,
       ),
+      flag('--event'),
     ],
     words: [1],
     check: (args, words) =>

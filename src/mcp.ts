@@ -694,18 +694,26 @@ maximum number of newest batches to return. ${BUS}`,
     `Comment on ANY entity (tasks, boards, docs, frozen pages — anything
 with an id). An optional verdict makes it a review; its body is the
 rationale and may be empty for a bare verdict. Pass the same stable
-session identifier you claim with, for attribution.`,
+session identifier you claim with, for attribution. Set event when the
+comment is EMITTED rather than written — a sweep's finding, a status
+nudge, anything a machine produced: an event never rides the mail relay
+and renders as a chip, not a bubble. Prose you actually wrote is a
+letter and stays one.`,
     {
       id: z.string(),
       body: body().optional(),
       verdict: z.enum(verdicts).optional(),
+      event: z.boolean()
+        .describe('Emitted by machinery, not written — mark it at mint.')
+        .optional(),
       session: z.string(),
     },
     async (
-      { id, body, verdict, session }: {
+      { id, body, verdict, event, session }: {
         id: string
         body?: string
         verdict?: string
+        event?: boolean
         session: string
       },
     ) => {
@@ -715,10 +723,10 @@ session identifier you claim with, for attribution.`,
       if (!row) return err(`no entity: ${id}`)
       let words = body ?? ''
       await io.write(
-        commentChanges(all, row.eid, words, session, { verdict }),
+        commentChanges(all, row.eid, words, session, { verdict, event }),
         session,
       )
-      let said = verdict ? `${verdict} review` : 'comment'
+      let said = verdict ? `${verdict} review` : event ? 'event' : 'comment'
       return bus(`${said} on ${idOf(row)}${wall(words)}`, session)
     },
   )
