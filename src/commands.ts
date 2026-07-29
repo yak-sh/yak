@@ -33,6 +33,7 @@ import {
   type Row,
   spawnChanges,
   spec,
+  type Stdin,
   taskChanges,
 } from './client.ts'
 import { adopt, parseQuery } from './query.ts'
@@ -54,7 +55,9 @@ export type Ctx = {
   eid?: string
   rows: Row[]
   session?: string
-  read?: (p: Param) => Param
+  // `as` is the token the typist actually reached for — an error must
+  // never name `.body=` at a door where the body is bare words.
+  read?: (p: Param, io?: Stdin, as?: string) => Param
 }
 
 export type Result = {
@@ -82,6 +85,20 @@ let here = (ctx: Ctx): Row => {
   if (!r) throw new Error('nothing focused')
   return r
 }
+
+// A letter's page, through the door's own @ convention (T-10461). `read`
+// is the same seam the dot-params use, so a door with no filesystem —
+// the web bar, MCP — leaves it absent and every page stays literal. It
+// reads only when the page IS a reference: one token, no whitespace, so
+// prose that opens `@someone` keeps its words either way. @@ escapes,
+// and a missing file throws before the mail is minted.
+let page = (body: string, ctx: Ctx) =>
+  ctx.read && /^@\S+$/.test(body)
+    ? String(
+      ctx.read({ comp: 'doc', prop: 'body', value: body }, undefined, body)
+        .value,
+    )
+    : body
 
 let move = (status: string): Verb => (_rest, ctx) => {
   let r = here(ctx)
@@ -316,7 +333,7 @@ export let commands: Record<string, Command> = {
   mail: {
     args: 'jeff subject… -- body…',
     about: 'send a letter: to, subject, -- body',
-    run: (rest) => {
+    run: (rest, ctx) => {
       let [, head, body] = rest.match(/^([\s\S]*?)\s+--\s+([\s\S]+)$/) ?? []
       let [to, ...subj] = (head ?? '').trim().split(/\s+/).filter(Boolean)
       if (!to || !subj.length || !body?.trim()) {
@@ -326,15 +343,16 @@ export let commands: Record<string, Command> = {
       }
       let subject = subj.join(' ')
       return {
-        changes: mailChanges({ to, subject, body: body.trim() }).changes,
+        changes:
+          mailChanges({ to, subject, body: page(body.trim(), ctx) }).changes,
         msg: `mail → ${to} — ${subject}`,
       }
     },
   },
   // :reply answers a mail where you stand — or the E-id the line leads
-  // with. The words are the whole page, verbatim; replyChanges aims at
-  // the far side and records the thread at authoring (reply_to_eid),
-  // delivery resolves it to a Message-ID.
+  // with. The words ARE the page (a lone @file is that page — see
+  // `page`); replyChanges aims at the far side and records the thread at
+  // authoring (reply_to_eid), delivery resolves it to a Message-ID.
   reply: {
     args: '[E-9] the answer…',
     about: 'answer the mail — Re: threads at delivery',
@@ -345,7 +363,7 @@ export let commands: Record<string, Command> = {
       if (!row.comps.mail) throw new Error(`${idOf(row)} is not a mail`)
       let body = (row == named ? more : rest).trim()
       if (!body) throw new Error('reply: needs words (:reply E-9 on it)')
-      let made = replyChanges(row, body)
+      let made = replyChanges(row, page(body, ctx))
       return {
         changes: made.changes,
         msg: `${idOf(row)} ← reply → ${made.changes[1].comp?.to}`,

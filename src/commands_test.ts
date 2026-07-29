@@ -399,6 +399,46 @@ Deno.test('reply: answers the named mail — or the focused one', () => {
   assertThrows(() => run('reply on it', ctx()), Error, 'nothing focused')
 })
 
+// A letter's page speaks the door's @ convention wherever the door HAS a
+// filesystem — the shell and the TUI hand `read` in, the web bar and MCP
+// don't and stay literal (T-10461).
+Deno.test('mail/reply: a lone @file is the page, only where read is given', () => {
+  let f = Deno.makeTempFileSync()
+  Deno.writeTextFileSync(f, 'the whole letter\n')
+  let read = (
+    p: { comp: string; prop: string; value: unknown },
+    _io?: unknown,
+    as?: string,
+  ) => inflate(p, { terminal: () => true, read: () => '' }, as)
+  let withDisk = { ...ctx(), read }
+  assertEquals(
+    run(`reply E-7 @${f}`, withDisk).changes![0].comp?.body,
+    'the whole letter\n',
+  )
+  assertEquals(
+    run(`mail jeff subject -- @${f}`, withDisk).changes![0].comp?.body,
+    'the whole letter\n',
+  )
+  // no filesystem behind the door: the path stays the words it typed
+  assertEquals(run(`reply E-7 @${f}`, ctx()).changes![0].comp?.body, `@${f}`)
+  // prose is prose, quoted or not — and @@ escapes a one-word @
+  assertEquals(
+    run('reply E-7 @jeff thanks for the note', withDisk).changes![0].comp?.body,
+    '@jeff thanks for the note',
+  )
+  assertEquals(
+    run('reply E-7 @@handle', withDisk).changes![0].comp?.body,
+    '@handle',
+  )
+  // the refusal names the token typed, never a `.body=` this door lacks
+  assertThrows(
+    () => run('reply E-7 @/no/such/file', withDisk),
+    Error,
+    '@/no/such/file: no such file',
+  )
+  Deno.removeSync(f)
+})
+
 Deno.test('scribe: summon the desk onto a session brief', () => {
   let out = run('scribe S-1', ctx())
   // the ask is a comment on the desk task…
