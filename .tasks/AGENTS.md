@@ -414,7 +414,7 @@ The same dot-param spelling behaves differently depending on the verb, which is 
 
 `task set <id>` and `task <id> :set` are **not** the same door, despite reading as two spellings of one verb. That is the sharpest edge here: the safe form and the destructive form differ only in where the id sits.
 
-Verified by controlled probe 2026-07-29 — one task, three writes, reading the body back after each: `task new .body=@file` held the real content; `task set <id> .body=@file` held the real content; the same task then `<id> :set .body=@file` held `@/tmp/…`. So "I used @file successfully a minute ago" is not evidence that the next door will read it.
+So **"I used @file successfully a minute ago" is not evidence that the next door will read it.** The convention belongs to the verb, not to the spelling.
 
 This bites hardest on **persona and memory nodes**, where the blast radius is every agent that loads the projection. Blanking the `N-…` for a repo's common persona empties that repo's `AGENTS.md` on the next materialize — and the materializer auto-commits, so the damage lands in git within seconds.
 
@@ -429,7 +429,7 @@ This bites hardest on **persona and memory nodes**, where the blast radius is ev
 
 `task history <id> --json` holds every prior body verbatim, so recovery is a read plus one write even when you did not save a copy first.
 
-Better, make the copy a habit: read the node to a file (`task show <id> --json` → `comps.doc.body`), patch the file, write it back, then **verify by reading the node again** — never by trusting the success message. The verify step is the one that catches this class, because the failure is silent by construction. It is also what catches a *memory* that has drifted: this one asserted `task set <id>` was destructive, and a read-back after using it showed otherwise.
+Better, make the copy a habit: read the node to a file (`task show <id> --json` → `comps.doc.body`), patch the file, write it back, then **verify by reading the node again** — never by trusting the success message. The verify step is the one that catches this class, because the failure is silent by construction.
 
 ---
 
