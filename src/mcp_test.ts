@@ -18,14 +18,14 @@ let T = 'aaaaaaaa-0000-4000-8000-000000000003'
 let long = 'x'.repeat(CUT * 3)
 let all = rows({
   changes: [
-    { eid: N, name: 'entity', comp: { eid: N, num: 9, created_at: '' } },
+    { eid: N, name: 'entity', comp: { eid: N, num: 9 } },
     { eid: N, name: 'doc', comp: { title: 'operator', body: long } },
     { eid: N, name: 'persona', comp: { home_eid: null } },
-    { eid: P, name: 'entity', comp: { eid: P, num: 19, created_at: '' } },
+    { eid: P, name: 'entity', comp: { eid: P, num: 19 } },
     { eid: P, name: 'doc', comp: { title: 'Home', body: '' } },
     { eid: P, name: 'project', comp: {} },
     { eid: P, name: 'alias', comp: { slug: 'home' } },
-    { eid: T, name: 'entity', comp: { eid: T, num: 7595, created_at: '' } },
+    { eid: T, name: 'entity', comp: { eid: T, num: 7595 } },
     { eid: T, name: 'doc', comp: { title: 'Task', body: '' } },
     { eid: T, name: 'task', comp: { status: 'open' } },
   ],

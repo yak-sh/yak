@@ -213,7 +213,6 @@ let stamp = (over: Record<string, unknown> = {}) =>
     message_id: 'msg:1:x',
     received_at: '2026-07-22T00:00:00Z',
     verified: 1,
-    read_at: null,
     ...over,
   })
 

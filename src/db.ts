@@ -71,7 +71,6 @@ let mailDdl = `create table if not exists mail (
     verified    integer,
     reply_to_eid text,
     sent_id     text,
-    read_at     text,
     in_reply_to text
   )`
 
@@ -81,9 +80,7 @@ let mailDdl = `create table if not exists mail (
 let schema = `
   create table if not exists entity (
     eid         text primary key,
-    num         integer not null unique,
-    created_at  text not null,
-    modified_at text
+    num         integer not null unique
   );
   create table if not exists canvas (
     eid text primary key references entity(eid)
@@ -259,7 +256,6 @@ let schema = `
   create table if not exists comment (
     eid        text primary key references entity(eid),
     target_eid text not null references entity(eid),
-    author_eid text,
     event      integer
   );
   create table if not exists review (
@@ -273,7 +269,6 @@ let schema = `
   create table if not exists memory (
     eid         text primary key references entity(eid),
     type        text not null default 'project',
-    source_eid  text,
     scope_eid   text,
     last_confirmed_at text
   );
@@ -394,14 +389,14 @@ let schema = `
 // The max spans the graves too: nums are monotonic forever, or a deleted
 // T-3889's number is reborn on a stranger and every old reference lies.
 // No kind: an entity is what its components make it.
-let spine = (db: DatabaseSync, eid: string) => {
-  let now = new Date().toISOString()
-  return db.prepare(`
-    insert or ignore into entity (eid, num, created_at, modified_at)
+// Birth time is the `created` component's business (T-6670), stamped by
+// apply() from the batch's one clock — never a second one taken here.
+let spine = (db: DatabaseSync, eid: string) =>
+  db.prepare(`
+    insert or ignore into entity (eid, num)
     values (?, (select coalesce(max(num), 0) + 1 from
-      (select num from entity union all select num from tombstone)), ?, ?)
-  `).run(eid, now, now)
-}
+      (select num from entity union all select num from tombstone)))
+  `).run(eid)
 
 // Mint a bare entity; components hang off the returned eid.
 let ent = (db: DatabaseSync) => {
@@ -508,6 +503,13 @@ let seed = (db: DatabaseSync) => {
 // A baked constraint can't be changed in place: rebuild the table around
 // its current ddl, rows copied whole (column ORDER must match — additive
 // columns always append, so a ddl listing them in shipping order does).
+// Does this table still carry that column? The one question both schema
+// guards ask, and the gate on every backfill that reads a retired column:
+// once the drop lands, the read that fed it must stop compiling away.
+export let hasCol = (db: DatabaseSync, table: string, col: string) =>
+  (db.prepare(`select name from pragma_table_info('${table}')`)
+    .all() as { name: string }[]).some((c) => c.name == col)
+
 let ddlOf = (db: DatabaseSync, name: string) =>
   (db.prepare(
     `select sql from sqlite_master where type = 'table' and name = ?`,
@@ -533,33 +535,43 @@ export let mendMail = (db: DatabaseSync) => {
 
 // The read→opened migration (T-7006): seed `opened` from every letter the
 // old mail.read_at column already marked read. `insert or ignore` on the pk
-// is idempotent, so a re-boot never moves an existing stamp; read_at stays
-// dormant as the rollback source until a later task drops it.
-export let backfillOpened = (db: DatabaseSync) =>
+// is idempotent, so a re-boot never moves an existing stamp. A no-op once
+// the column is gone — the stamp has been the only read-state since.
+export let backfillOpened = (db: DatabaseSync) => {
+  if (!hasCol(db, 'mail', 'read_at')) return
   db.exec(
     `insert or ignore into opened (eid, at)
        select eid, read_at from mail where read_at is not null`,
   )
+}
 
-// Lift component-specific instruments into the universal register once.
-// The dormant columns are migration input only; they never ride the wire.
-export let backfillVia = (db: DatabaseSync) =>
-  db.exec(
-    `update created set via = (
-       select author_eid from comment where comment.eid = created.eid
-     )
-     where via is null and exists (
-       select 1 from comment
-       where comment.eid = created.eid and author_eid is not null
-     );
-     update created set via = (
-       select source_eid from memory where memory.eid = created.eid
-     )
-     where via is null and exists (
-       select 1 from memory
-       where memory.eid = created.eid and source_eid is not null
-     )`,
-  )
+// Lift component-specific instruments into the universal register once
+// (T-7113). Each half is guarded on its own source column: the register is
+// the only home, and these reads are the last thing the columns are for.
+export let backfillVia = (db: DatabaseSync) => {
+  if (hasCol(db, 'comment', 'author_eid')) {
+    db.exec(
+      `update created set via = (
+         select author_eid from comment where comment.eid = created.eid
+       )
+       where via is null and exists (
+         select 1 from comment
+         where comment.eid = created.eid and author_eid is not null
+       )`,
+    )
+  }
+  if (hasCol(db, 'memory', 'source_eid')) {
+    db.exec(
+      `update created set via = (
+         select source_eid from memory where memory.eid = created.eid
+       )
+       where via is null and exists (
+         select 1 from memory
+         where memory.eid = created.eid and source_eid is not null
+       )`,
+    )
+  }
+}
 
 // Give every session its canonical launch facet before graph-out can observe
 // the handle. The dormant aliases stay as rollback input; insert-or-ignore
@@ -645,9 +657,7 @@ export let open = (path = file) => {
   db.exec('pragma busy_timeout = 5000')
   db.exec(schema)
   let addCol = (table: string, col: string, ddl: string) => {
-    let cols = db.prepare(`select name from pragma_table_info('${table}')`)
-      .all() as { name: string }[]
-    if (!cols.some((c) => c.name == col)) {
+    if (!hasCol(db, table, col)) {
       db.exec(`alter table ${table} add column ${ddl}`)
     }
   }
@@ -655,9 +665,7 @@ export let open = (path = file) => {
   // column that lingers still answers a schema read, so it keeps teaching a
   // mechanism the code no longer has — the drop is what makes removal true.
   let dropCol = (table: string, col: string) => {
-    let cols = db.prepare(`select name from pragma_table_info('${table}')`)
-      .all() as { name: string }[]
-    if (cols.some((c) => c.name == col)) {
+    if (hasCol(db, table, col)) {
       db.exec(`alter table ${table} drop column ${col}`)
     }
   }
@@ -735,7 +743,6 @@ export let open = (path = file) => {
   // T-4593). sent_id is the sender-assigned Message-ID, server-stamped.
   addCol('mail', 'reply_to_eid', 'reply_to_eid text')
   addCol('mail', 'sent_id', 'sent_id text')
-  addCol('mail', 'read_at', 'read_at text')
   addCol('mail', 'in_reply_to', 'in_reply_to text')
   // The hook row keeps the edge's captured request facts intact.
   // Routing reads path but never rewrites it or upgrades sig_ok.
@@ -743,10 +750,6 @@ export let open = (path = file) => {
   addCol('hook', 'path', 'path text')
   addCol('hook', 'headers', 'headers text')
   addCol('hook', 'sig_ok', 'sig_ok integer')
-  // Read-state moved from mail.read_at to the `opened` stamp (T-7006): seed
-  // it once BEFORE the readers flip to `NOT opened`, so no mail flickers
-  // unread mid-migration.
-  backfillOpened(db)
   addCol('session', 'actor_eid', 'actor_eid text references entity(eid)')
   // A board is a saved filter over tasks (query.ts grammar), not an edge
   // list — membership can't drift when it isn't stored.
@@ -774,15 +777,9 @@ export let open = (path = file) => {
     db.exec('drop table send_request')
     db.exec('commit')
   }
-  // modified_at is server-stamped on every apply() touch; rows from
-  // before the column (or from direct writers) read as their creation.
-  addCol('entity', 'modified_at', 'modified_at text')
   // Nums already recycled before this column existed stay unknowable —
   // monotonic from here on; old graves just don't raise the high-water.
   addCol('tombstone', 'num', 'num integer')
-  db.exec(
-    'update entity set modified_at = created_at where modified_at is null',
-  )
   // The FTS mirror follows doc by trigger from here on. Anything older,
   // any out-of-band writer, or shadow-table damage (overlapping watcher
   // restarts have managed it) shows up here as a failed integrity check
@@ -805,22 +802,34 @@ export let open = (path = file) => {
     n: number
   }
   if (!n) seed(db)
-  // Provenance components (T-6670): the timestamps moved off the spine into
-  // created/updated. Backfill once from the old columns — created.at is
-  // birth, updated.at the last edit (only where it MOVED past birth, else
-  // the entity was never edited and stays updated-absent). "by" is unknown
-  // for pre-provenance rows (no guessed backfill). Runs AFTER seed so the
-  // demo entities (direct inserts, not apply) get provenance too; insert-
-  // or-ignore keeps it a boot no-op once healed. TODO(T-6670): drop
-  // entity.created_at / modified_at and their spine/apply stamps once every
-  // reader is proven on the components — kept live meanwhile as the
-  // migration's rollback source.
-  db.exec(`insert or ignore into created (eid, at, "by")
-    select eid, created_at, null from entity`)
-  db.exec(`insert or ignore into updated (eid, at, "by")
-    select eid, modified_at, null from entity
-    where modified_at is not null and modified_at <> created_at`)
+  // Provenance components (T-6670), now the ONLY home: birth and last-edit
+  // moved off the spine, and this is the last pass that reads the old
+  // columns before they go. Runs AFTER seed so the demo entities (direct
+  // inserts, not apply) get provenance too; insert-or-ignore keeps it a
+  // no-op once healed.
+  //
+  // `updated` is deliberately NOT re-derived. A minted entity took its
+  // created_at from spine()'s clock and its modified_at from apply()'s, a
+  // few ms later — so `modified_at <> created_at` reads a birth as an edit
+  // and would mint provenance for entities nothing ever touched (61 such
+  // rows in the live graph). apply() has stamped the component directly
+  // since T-6670 shipped, so there is nothing left for a derivation to
+  // recover and nothing but noise for it to invent.
+  if (hasCol(db, 'entity', 'created_at')) {
+    db.exec(`insert or ignore into created (eid, at, "by")
+      select eid, created_at, null from entity`)
+  }
   backfillVia(db)
+  backfillOpened(db)
+  // The dormant columns are migration INPUT, and every one of them has now
+  // been read for the last time (T-6670, T-7113, T-7006). A retired column
+  // that lingers still answers a schema read, so it keeps teaching a
+  // mechanism the code no longer has.
+  dropCol('entity', 'created_at')
+  dropCol('entity', 'modified_at')
+  dropCol('comment', 'author_eid')
+  dropCol('memory', 'source_eid')
+  dropCol('mail', 'read_at')
   healStored(db)
   return db
 }
@@ -829,8 +838,9 @@ export let open = (path = file) => {
 export let db = open()
 
 // The sync allowlist: the shared vocabulary plus the spine (which has no
-// writable columns — num and created_at are server-owned, kind doesn't
-// exist). Order matters — deletes run it REVERSED so dependents go first.
+// writable columns — num is server-owned, kind doesn't exist, and the
+// timestamps are components now). Order matters — deletes run it REVERSED
+// so dependents go first.
 let cmps: Record<string, string[]> = {
   entity: [],
   ...Object.fromEntries(
@@ -1250,8 +1260,8 @@ export let writerVia = (
 }
 
 // Apply a batch atomically. Unknown component names are ignored (a newer
-// client speaking to an older server shouldn't wedge the socket). num and
-// created_at are server-owned — never writable over the wire. Returns the
+// client speaking to an older server shouldn't wedge the socket). num is
+// server-owned — never writable over the wire. Returns the
 // EFFECTIVE batch: the input plus a synthesized entity-null for every
 // cascade victim and the minted spine of every entity BORN here (num is
 // server-owned, so no cache — the sender's included — knows it otherwise),
@@ -1670,14 +1680,10 @@ export let apply = (
       let refusal = refRefused(db, ref, undefined, target)
       if (refusal) throw refusal
     }
-    // Every touched entity carries when it last changed — server-stamped
-    // (modified_at is not in comps, so the wire can never fake it).
-    // Deleted eids just miss; their rows are gone. TODO(T-6670): the
-    // `updated` component below is the reader-facing home now; this spine
-    // stamp stays as the migration's rollback source until it's dropped.
-    let stamp = db.prepare('update entity set modified_at = ? where eid = ?')
+    // One clock for the whole batch: every provenance stamp below reads it,
+    // so a birth and the edits beside it agree instead of drifting by the
+    // milliseconds between two `new Date()` calls (T-6670).
     let now = new Date().toISOString()
-    for (let eid of touched) stamp.run(now, eid)
     // A session that RAN somewhere but names no actor gets one from where
     // it stands — the writing identity is never blank (T-6669). Resolved
     // from the session row's CURRENT cwd (not a client's stale snapshot,

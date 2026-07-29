@@ -11,7 +11,7 @@ let { assertEquals } = await import('@std/assert')
 let uid = (): string => crypto.randomUUID()
 let doc = (eid: string, title: string, body = '') => {
   db.prepare(
-    "insert into entity (eid, num, created_at, modified_at) values (?, ?, '', '')",
+    'insert into entity (eid, num) values (?, ?)',
   ).run(eid, Math.floor(Math.random() * 1e9))
   db.prepare('insert into doc (eid, title, body) values (?, ?, ?)').run(
     eid,

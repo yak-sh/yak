@@ -41,8 +41,7 @@ export type Ctx = {
   docOf?: (eid: string) => { title: string; body: string } | null
   // The durable read-state (T-7006): true once a mail wears `opened` or
   // `archived`, read off the index — so a letter already dealt with never
-  // re-rings across a reconnect (the old ephemeral read_at guard, made
-  // restart-proof).
+  // re-rings across a reconnect.
   done?: (eid: string) => boolean
   // The durable dedup (T-7010): true once an entity wears `notified`, read off
   // the index — so anything this plugin (or the sweep) already told the operator
@@ -256,9 +255,8 @@ export let findSession = (
 // The injection policy (owner, 2026-07-22): ALL verified unread mail aimed at
 // this session's home project injects; unverified never does — it stays in the
 // store/graph for deliberate triage. `done` is the durable read-state — the
-// `opened`/`archived` stamps (T-7006) read off the index — replacing the old
-// mail.read_at column so a letter already opened or archived never re-rings.
-// Narrowing later is one line here.
+// `opened`/`archived` stamps (T-7006) read off the index — so a letter
+// already opened or archived never re-rings. Narrowing later is one line here.
 // `operator` gates PROJECT mail to the operator loop. Missing identity fails
 // closed; direct comments, session knocks, and claimed-task replies are
 // selected independently.

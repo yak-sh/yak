@@ -24,31 +24,31 @@ let UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-/
 
 let snap: Snapshot = {
   changes: [
-    { eid: S, name: 'entity', comp: { eid: S, num: 1, created_at: '' } },
+    { eid: S, name: 'entity', comp: { eid: S, num: 1 } },
     { eid: S, name: 'session', comp: { id: 'sess-x' } },
-    { eid: P, name: 'entity', comp: { eid: P, num: 2, created_at: '' } },
+    { eid: P, name: 'entity', comp: { eid: P, num: 2 } },
     { eid: P, name: 'doc', comp: { title: 'Proj', body: '' } },
     { eid: P, name: 'project', comp: {} },
     { eid: P, name: 'repo', comp: { path: '/x', base_branch: 'main' } },
-    { eid: B, name: 'entity', comp: { eid: B, num: 3, created_at: '' } },
+    { eid: B, name: 'entity', comp: { eid: B, num: 3 } },
     { eid: B, name: 'doc', comp: { title: 'Board', body: '' } },
     { eid: B, name: 'board', comp: { query: `.project_eid=${P}&.domain=Eng` } },
-    { eid: T, name: 'entity', comp: { eid: T, num: 4, created_at: '' } },
+    { eid: T, name: 'entity', comp: { eid: T, num: 4 } },
     { eid: T, name: 'doc', comp: { title: 'A task', body: '' } },
     {
       eid: T,
       name: 'task',
       comp: { status: 'open', priority: 0, project_eid: P },
     },
-    { eid: D, name: 'entity', comp: { eid: D, num: 5, created_at: '' } },
+    { eid: D, name: 'entity', comp: { eid: D, num: 5 } },
     { eid: D, name: 'doc', comp: { title: 'Scribe desk', body: '' } },
     { eid: D, name: 'task', comp: { status: 'open', priority: 3 } },
     { eid: D, name: 'alias', comp: { slug: 'scribe-desk' } },
-    { eid: N, name: 'entity', comp: { eid: N, num: 6, created_at: '' } },
+    { eid: N, name: 'entity', comp: { eid: N, num: 6 } },
     { eid: N, name: 'doc', comp: { title: 'scribe', body: '' } },
     { eid: N, name: 'persona', comp: {} },
     { eid: N, name: 'alias', comp: { slug: 'scribe' } },
-    { eid: M, name: 'entity', comp: { eid: M, num: 7, created_at: '' } },
+    { eid: M, name: 'entity', comp: { eid: M, num: 7 } },
     { eid: M, name: 'doc', comp: { title: 'Hello there', body: 'hi' } },
     {
       eid: M,
@@ -133,7 +133,7 @@ Deno.test('fix: a bare id spawns, words file a task first', () => {
   let many = rows({
     changes: [
       ...snap.changes,
-      { eid: H, name: 'entity', comp: { eid: H, num: 8, created_at: '' } },
+      { eid: H, name: 'entity', comp: { eid: H, num: 8 } },
       { eid: H, name: 'doc', comp: { title: 'Tool', body: '' } },
       { eid: H, name: 'project', comp: {} },
       { eid: H, name: 'repo', comp: { path: '/tool', base_branch: 'main' } },
@@ -465,7 +465,7 @@ Deno.test('scribe: a busy desk queues the ask without a second spawn', () => {
   let busy = rows({
     changes: [
       ...snap.changes,
-      { eid: W, name: 'entity', comp: { eid: W, num: 7, created_at: '' } },
+      { eid: W, name: 'entity', comp: { eid: W, num: 7 } },
       {
         eid: W,
         name: 'session',

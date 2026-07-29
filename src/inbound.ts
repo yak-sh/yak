@@ -350,8 +350,8 @@ let mint = (
 // the RFC id in the store key is the sent_id a graph mail already
 // wears. That letter EXISTS; minting again forks it into twins (one
 // letter, one entity), and skipping silently loses the arrival — which
-// is exactly what makes it UNREAD for the recipient (message_id set,
-// read_at empty; T-5882). So the one entity gains its inbound half:
+// is exactly what makes it UNREAD for the recipient (message_id set, no
+// `opened` stamp; T-5882). So the one entity gains its inbound half:
 // arrival provenance, plus routing/author only where the send left them
 // empty — a relay mail keeps aiming at its task, a stamped from stays.
 // True = this message is an echo, handled; already-stamped means a

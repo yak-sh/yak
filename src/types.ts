@@ -110,8 +110,9 @@ export let comps: Record<string, Record<string, PropType>> = {
     domain: { text: 'domains' }, // free text; the graph suggests
   },
   // retired_at: the project is over, not erased. Wire-writable — stamping
-  // it IS the retirement (like a mail's read_at, no effect needed); everything
-  // filed under it stays referenceable but sinks (search, .order=hot).
+  // it IS the retirement (like the `opened` stamp, no effect needed);
+  // everything filed under it stays referenceable but sinks (search,
+  // .order=hot).
   project: { retired_at: 'time' },
   repo: { path: 'text', base_branch: 'text' }, // the project's checkout
   role: {
@@ -137,8 +138,7 @@ export let comps: Record<string, Record<string, PropType>> = {
   // in for its operator; {eid: ''} because the pool is shared). The
   // universal provenance stamp keeps both levels directly queryable
   // (`.created.by=jeff`, `.created.via=S-31`). An assertion, not
-  // authentication — forging it only garbles your own attribution, like a
-  // mail's read_at.
+  // authentication — forging it only garbles your own attribution.
   client: { user_agent: 'text', actor_eid: { eid: '', death: 'detach' } }, // ip is server-stamped too
   camera: {
     client_eid: { eid: 'client', death: 'cascade' },
@@ -279,10 +279,9 @@ export let comps: Record<string, Record<string, PropType>> = {
     // RFC Message-ID at delivery (mail.ts). History like target_eid: a
     // reply outlives the mail it answered.
     reply_to_eid: { eid: 'mail', death: 'keep' },
-    // The reader's own "seen" mark — wire-writable: forging it only
-    // deafens yourself. Unread derives: message_id set
-    // (it arrived) and this still empty; outbound is born read.
-    read_at: 'time',
+    // Read-state is the `opened` stamp (T-7006), not a column here: one
+    // vocabulary for every item the inbox carries. Unread still derives —
+    // message_id set (it arrived) and no `opened` — so outbound is born read.
   },
   conflict: {}, // server-minted audit rows — nothing is wire-writable
   // A webhook delivery, derived from the edge's raw request spool
@@ -381,9 +380,9 @@ export let comps: Record<string, Record<string, PropType>> = {
 // lives in server code (db.ts, sessions.ts, freeze.ts), each write beside
 // its why.
 export let stamped: Record<string, Record<string, PropType>> = {
-  // entity === eid: the spine keeps only identity now — created_at /
-  // modified_at moved into the `created`/`updated` components (T-6670).
-  // (The db columns linger, dormant, until the reader-drop follow-up.)
+  // entity === eid: the spine keeps identity and nothing else — birth and
+  // last-edit are the `created`/`updated` components (T-6670), columns and
+  // all.
   entity: { num: 'number' },
   // The frozen twins of each provenance component's wire-writable `by`
   // (comps above) — stamped in apply(), never on the wire.
@@ -921,7 +920,6 @@ export type Mail = {
   received_at?: string | null
   verified?: number | null
   sent_id?: string | null
-  read_at?: string | null
   in_reply_to?: string | null
 }
 

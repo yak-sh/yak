@@ -1203,28 +1203,31 @@ Deno.test('lifecycle stamps: one-list — snapshot, showMd, and GRAMMAR pick the
 // The read→opened migration (T-7006): the backfill seeds `opened` from
 // every already-read letter, so no mail flickers unread when the readers
 // flip to NOT opened. Insert-or-ignore on the pk makes it a no-op on
-// re-boot; read_at lingers dormant as the rollback source.
+// re-boot. A fresh graph has no read_at at all, so the pre-migration
+// column is planted here — that IS the only shape the backfill is for.
 Deno.test('backfill: mail.read_at seeds opened, idempotently', () => {
   let d = fresh()
   let m = uid()
-  // a legacy read letter: read_at set the OLD way, no `opened` stamp yet
   apply(d, [
     { eid: m, name: 'doc', comp: { title: 'old letter' } },
-    {
-      eid: m,
-      name: 'mail',
-      comp: { to: 'jeff', read_at: '2026-07-01T00:00:00Z' },
-    },
+    { eid: m, name: 'mail', comp: { to: 'jeff' } },
   ])
+  d.exec('alter table mail add column read_at text')
+  d.prepare('update mail set read_at = ? where eid = ?')
+    .run('2026-07-01T00:00:00Z', m)
   let openedAt = () =>
     (d.prepare('select at from opened where eid = ?').get(m) as
       | { at: string }
       | undefined)?.at
-  assertEquals(openedAt(), undefined) // the wire write of read_at made no stamp
+  assertEquals(openedAt(), undefined) // the legacy column alone stamps nothing
   backfillOpened(d)
-  assertEquals(openedAt(), '2026-07-01T00:00:00.000Z') // canonical read_at
+  assertEquals(openedAt(), '2026-07-01T00:00:00Z')
   // idempotent: a re-run never moves an existing stamp
   d.prepare('update opened set at = ? where eid = ?').run('MOVED', m)
+  backfillOpened(d)
+  assertEquals(openedAt(), 'MOVED')
+  // and once the column is dropped the pass is a quiet no-op, not a crash
+  d.exec('alter table mail drop column read_at')
   backfillOpened(d)
   assertEquals(openedAt(), 'MOVED')
 })
@@ -1306,18 +1309,10 @@ Deno.test('backfill: comment instruments move into created.via', () => {
     { eid: target, name: 'doc', comp: { title: 'target' } },
     { eid: author, name: 'session', comp: { id: uid() } },
     { eid: comment, name: 'doc', comp: { title: '', body: 'old words' } },
-    {
-      eid: comment,
-      name: 'comment',
-      comp: { target_eid: target, author_eid: author },
-    },
+    { eid: comment, name: 'comment', comp: { target_eid: target } },
   ])
-  assertEquals(
-    (d.prepare('select author_eid from comment where eid = ?').get(comment) as {
-      author_eid: string | null
-    }).author_eid,
-    null,
-  ) // retired: the wire cannot write the dormant source
+  // a pre-migration graph: the retired column, still naming the author
+  d.exec('alter table comment add column author_eid text')
   d.prepare('update comment set author_eid = ? where eid = ?')
     .run(author, comment)
   assertEquals(
@@ -1347,6 +1342,8 @@ Deno.test('backfill: memory instruments move into created.via', () => {
     { eid: memory, name: 'doc', comp: { title: 'old fact' } },
     { eid: memory, name: 'memory', comp: { type: 'reference' } },
   ])
+  // a pre-migration graph: the retired column, still naming the source
+  d.exec('alter table memory add column source_eid text')
   d.prepare('update memory set source_eid = ? where eid = ?')
     .run(source, memory)
   d.prepare('update created set via = null where eid = ?').run(memory)
@@ -1465,7 +1462,6 @@ Deno.test('mendMail: rebuilds the FK-era table, no-ops when healed', () => {
   // so the stale table always matches the rebuild ddl's shipping order.
   d.exec('alter table mail add column reply_to_eid text')
   d.exec('alter table mail add column sent_id text')
-  d.exec('alter table mail add column read_at text')
   d.exec('alter table mail add column in_reply_to text')
   let t = uid(), m = uid()
   apply(d, [
@@ -1915,7 +1911,6 @@ Deno.test('memory: scope rides in, provenance and confirmation are stamped', () 
         name: 'memory',
         comp: {
           type: 'feedback',
-          source_eid: s,
           scope_eid: p,
           last_confirmed_at: 'FAKE',
         },
@@ -1928,12 +1923,13 @@ Deno.test('memory: scope rides in, provenance and confirmation are stamped', () 
   assertEquals(row?.type, 'feedback')
   assertEquals(row?.scope_eid, p)
   assertEquals(row?.last_confirmed_at, null) // server-owned
-  assertEquals(
-    (db.prepare('select source_eid from memory where eid = ?').get(m) as {
-      source_eid: string | null
-    }).source_eid,
-    null,
-  ) // retired: the wire cannot write the dormant source
+  // Retired to created.via (T-7113) and dropped: naming it is now a loud
+  // refusal, not a silent drop — the vocabulary is the whole truth.
+  assertThrows(
+    () => apply(db, [{ eid: m, name: 'memory', comp: { source_eid: s } }]),
+    Error,
+    'unknown column: memory.source_eid',
+  )
   assertEquals(
     snapshot(db).changes.find((c) => c.eid == m && c.name == 'created')
       ?.comp?.via,

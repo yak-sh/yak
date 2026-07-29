@@ -245,6 +245,11 @@ let mailCount = () =>
   (db.prepare('select count(*) as n from mail where message_id is not null')
     .get() as { n: number }).n
 
+// Read-state is the stamp, not a mail column (T-7006).
+let opened = (eid: string) =>
+  (db.prepare('select count(*) as n from opened where eid = ?')
+    .get(eid) as { n: number }).n
+
 Deno.test('the sweep: mints once, stamps back, and dir=out never lands', async () => {
   let { api, notified, processed } = fakeApi(
     [msg(), msg({ id: 'out:1:x', dir: 'out' })],
@@ -348,7 +353,7 @@ Deno.test('the sweep: an echo arrives on the sent entity, once', async () => {
   assertEquals(row.verified, 1)
   assertEquals(row.target_eid, operator) // routed like a fresh mint
   assertEquals(row.from, 'holdco@bot.test') // the header, not the envelope
-  assertEquals(row.read_at, null) // unread for the recipient
+  assertEquals(opened(letter), 0) // unread for the recipient (T-7006)
   // re-sweep: arrival is already recorded — idempotent, still no twin
   await inboundSweep(cast, api)
   assertEquals(mailCount(), before + 1)

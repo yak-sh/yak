@@ -900,9 +900,8 @@ export let readerFor = (
 
 // Unread mail: it ARRIVED (message_id is the inbound mark) and the reader
 // hasn't opened it. Outbound rows carry no message_id, so they never count
-// — sent mail is born read. Read-state now rides the `opened` stamp
-// (T-7006); mail.read_at lingers dormant as the rollback source until a
-// later task drops it.
+// — sent mail is born read. Read-state rides the `opened` stamp (T-7006),
+// the one vocabulary for every item the inbox carries.
 export let unreadMail = (r: Row) => !!r.comps.mail?.message_id && isUnread(r)
 
 let cleanPath = (path: string) => path.replace(/\/+$/, '') || '/'
