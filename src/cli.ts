@@ -267,7 +267,7 @@ let create = async (args: string[]) => {
         : `no such prop for ${stray.got}${
           edgeish.test(stray.got)
             ? ' — a dependency is an EDGE, not a prop: ' +
-              'task dep <parent> requires <child>'
+              'task <parent> requires <child>'
             : ` — ${help(['grammar'])}`
         }`,
     )
@@ -1801,7 +1801,10 @@ if (import.meta.main) {
         // It has to fire on the RUN: the only people still typing one are
         // acting from habit, and they never read the help. stderr, because
         // stdout is what the caller asked for and is usually piped.
-        if (selected.manual.deprecated) {
+        // The signpost belongs to the SPELLING, not the handler it lands in:
+        // subject-first sentences merely reuse the old verb's code, so
+        // `task T-3 requires T-9` was told the form it just used is obsolete.
+        if (selected.manual.deprecated && !routed) {
           console.error(
             `task ${selected.name}: deprecated — ${selected.manual.deprecated}`,
           )

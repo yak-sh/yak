@@ -408,6 +408,44 @@ Deno.test('deprecated routes leave root help but teach at their door', async () 
   )
 })
 
+// The signpost belongs to the spelling typed, not the handler reached —
+// the subject-first sentence IS the successor `dep` points at. Both forms
+// need a server to answer (a dead host costs 6s of backoff), so they run
+// against an empty graph and die on `no entity` instead.
+Deno.test('the deprecation notice follows the spelling, not the handler', async () => {
+  let empty = Deno.serve(
+    { port: 0, onListen: () => {} },
+    () => Response.json({ changes: [], deps: [] }),
+  )
+  let run = (...args: string[]) =>
+    new Deno.Command(Deno.execPath(), {
+      args: [
+        'run',
+        '-A',
+        new URL('./cli.ts', import.meta.url).pathname,
+        ...args,
+      ],
+      env: { TASKS_HOST: `127.0.0.1:${empty.addr.port}` },
+    }).output()
+  try {
+    let typed = await run('dep', 'T-3', 'requires', 'T-9')
+    assertMatch(text(typed.stderr), /task dep: deprecated — superseded by/)
+
+    let sentence = await run('T-3', 'requires', 'T-9')
+    assertMatch(text(sentence.stderr), /no entity: T-3/)
+    assertEquals(/deprecated/.test(text(sentence.stderr)), false)
+  } finally {
+    await empty.shutdown()
+  }
+})
+
+Deno.test('the --blocked-by refusal names the current edge door', async () => {
+  let out = await cli('new', 'Title', '--blocked-by=T-1')
+  assertEquals(out.code, 1)
+  assertMatch(text(out.stderr), /an EDGE, not a prop: task <parent> requires/)
+  assertEquals(/task dep\b/.test(text(out.stderr)), false)
+})
+
 Deno.test('task session wrap help never runs the hook verb', async () => {
   let out = await cli('session', 'wrap', '--help')
   assertEquals(out.code, 0)
