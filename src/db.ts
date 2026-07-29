@@ -1398,6 +1398,20 @@ export let apply = (
           )
         }
       }
+      // A board IS its query (membership is never stored), so a query the
+      // grammar can't parse is a board that will never match anything and
+      // never say why. The parser already knows — `task list .zzz=1`
+      // errors — so refuse at the door, while the typo is still in front
+      // of whoever made it. Empty stays legal: it means every task.
+      if (name == 'board' && comp?.query != null) {
+        try {
+          parseQuery(String(comp.query))
+        } catch (e) {
+          throw new Error(
+            `board query refused: ${e instanceof Error ? e.message : e}`,
+          )
+        }
+      }
       if (comp == null) {
         if (name != 'entity') {
           if (

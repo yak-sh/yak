@@ -640,8 +640,12 @@ let http = Deno.serve(
         note(true)
         return Response.json({ ok: true, changes: out })
       }).catch((e) => {
-        note(false, String(e))
-        return new Response(String(e), { status: 400 })
+        // The MESSAGE, not String(e) — a rejection is read by a person or
+        // an agent, and `String(new Error(x))` prefixes a stray "Error:"
+        // that the CLI then wraps again ("apply failed: Error: …").
+        let why = e instanceof Error ? e.message : String(e)
+        note(false, why)
+        return new Response(why, { status: 400 })
       })
     }
     // The adapter table, for a browser that must offer what a spawn

@@ -374,6 +374,28 @@ Deno.test('a column naming nothing is refused, not silently defaulted', () => {
   assertEquals(comp(t, 'doc'), undefined)
 })
 
+// A board is a saved query, so an unparseable one is broken forever and
+// silent about it — the query names a prop or an enum value that cannot
+// exist, and the board just opens empty. Refuse it while the typo is
+// still in front of somebody.
+Deno.test('a board query the grammar cannot parse is refused', () => {
+  let b = uid()
+  let save = (query: string) =>
+    apply(db, [
+      { eid: b, name: 'doc', comp: { title: 'a board' } },
+      { eid: b, name: 'board', comp: { query } },
+    ])
+  assertThrows(() => save('.zzz=1'), Error, 'board query refused')
+  assertThrows(() => save('.status=nonsens'), Error, 'board query refused')
+  assertEquals(comp(b, 'board'), undefined) // refused whole, doc included
+  // every legitimate shape still saves: a filter, empty (= every task),
+  // bare words (text preds), an opless dot-word (a term, not a filter)
+  for (let q of ['.project=P-19&.status=open,wip', '', 'bare words', '.env']) {
+    save(q)
+    assertEquals(comp(b, 'board')?.query, q)
+  }
+})
+
 Deno.test('server-owned columns never ride persistence or effective batches', () => {
   let t = uid()
   let since = (db.prepare('select max(rowid) as n from journal').get() as {
