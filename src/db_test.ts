@@ -1031,9 +1031,9 @@ Deno.test('provenance: created once at birth, updated absent until edited', () =
   assertEquals(comp(t, 'created')?.at, bornAt) // created.at still frozen
 })
 
-Deno.test('provenance: created.by defaults to the writer actor; the wire overrides', () => {
-  // A fresh :memory: graph so the lone person IS the box owner writerActor
-  // falls back to (the shared db may already hold several).
+Deno.test('provenance: created.by is the writer actor; the wire overrides', () => {
+  // A fresh :memory: graph so the lone person IS the box owner — the only
+  // condition under which a fallback would have had anything to return.
   let d = fresh()
   let at = (eid: string, name: string) =>
     snapshot(d).changes.find((c) => c.eid == eid && c.name == name)?.comp
@@ -1042,10 +1042,21 @@ Deno.test('provenance: created.by defaults to the writer actor; the wire overrid
     { eid: jeff, name: 'person', comp: {} },
     { eid: amy, name: 'doc', comp: { title: 'Amy' } },
   ])
-  // default: no writer named → the box owner authors
+  // no writer named → nobody authored it. Not the box owner: this is the
+  // shape every server-minted entity has, and borrowing his name for it put
+  // 608 machine writes in his hand (T-9934).
   let t = uid()
   apply(d, [{ eid: t, name: 'doc', comp: { title: 'filed' } }])
-  assertEquals(at(t, 'created')?.by, jeff)
+  assertEquals(at(t, 'created')?.by, null)
+  // named writer → that actor authors
+  let w = uid()
+  apply(
+    d,
+    [{ eid: w, name: 'doc', comp: { title: 'filed by hand' } }],
+    undefined,
+    jeff,
+  )
+  assertEquals(at(w, 'created')?.by, jeff)
   // override: the batch names the author explicitly
   let u = uid()
   apply(d, [
@@ -1151,8 +1162,15 @@ Deno.test('lifecycle stamps: one-list — snapshot, showMd, and GRAMMAR pick the
   let jeff = uid()
   apply(d, [{ eid: jeff, name: 'person', comp: {} }])
   let t = uid()
-  apply(d, [{ eid: t, name: 'doc', comp: { title: 'a letter' } }])
-  apply(d, [{ eid: t, name: 'opened', comp: {} }])
+  // Named writer: a stamp's `by` is whoever DID it, and nothing fills that
+  // in for an anonymous write any more (T-9934).
+  apply(
+    d,
+    [{ eid: t, name: 'doc', comp: { title: 'a letter' } }],
+    undefined,
+    jeff,
+  )
+  apply(d, [{ eid: t, name: 'opened', comp: {} }], undefined, jeff)
   let snap = snapshot(d)
   // cache shape: snapshot carries the tag comp with its stamped at
   let carried = snap.changes.find((c) => c.eid == t && c.name == 'opened')
@@ -2345,9 +2363,9 @@ Deno.test('delta: snapshot@C0 + delta(C0) matches the live broadcast stream, cas
   assertEquals(typeof recon.cache[other].updated?.at, 'string')
 })
 
-Deno.test('a signature never falls back the way provenance does', () => {
+Deno.test('nobody writes in the owner name but the owner keyboard', () => {
   // A db with exactly ONE person: that person IS the box owner, which is
-  // when the fallback in writerActor has something to return.
+  // the only condition under which ownerActor has anything to return.
   let path = Deno.makeTempFileSync({ prefix: 'tasks-signer-', suffix: '.db' })
   let d = open(path)
   let owner = uid()
@@ -2357,10 +2375,24 @@ Deno.test('a signature never falls back the way provenance does', () => {
     { eid: owner, name: 'email', comp: { address: 'owner@yak.test' } },
   ])
 
-  // Provenance guesses, and should: an unattributed write is still theirs.
-  assertEquals(writerActor(d, null), owner)
-  // A signature refuses to. Otherwise any unattributed POST to the local
-  // /apply sends mail as the owner — the fleet's highest-trust byline.
+  // The server's own machinery — a sweep, a wake, an anonymous POST — names
+  // no writer. It is not the owner, and provenance no longer says it is: the
+  // fallback made 608 rows read as authored by him, one of them a letter he
+  // was then asked about (T-9934).
+  assertEquals(writerActor(d, null), null)
+  assertEquals(writerActor(d, 'nobody-by-that-name'), null)
+  // An agent session with no actor and no venture is likewise not its owner.
+  let s = uid()
+  apply(d, [{ eid: s, name: 'session', comp: { id: 'sess-1' } }])
+  assertEquals(writerActor(d, 'sess-1'), null)
+  // A browser tab that never named an actor IS someone at a keyboard, and on
+  // a one-person box that someone is them — the one inference left standing.
+  let tab = uid()
+  apply(d, [{ eid: tab, name: 'client', comp: {} }])
+  assertEquals(writerActor(d, tab), owner)
+  // A signature refuses even that. Otherwise any unattributed POST to the
+  // local /apply sends mail as the owner — the fleet's highest-trust byline.
+  assertEquals(senderActor(d, tab), null)
   assertEquals(senderActor(d, null), null)
   assertEquals(senderActor(d, 'nobody-by-that-name'), null)
   assertEquals(senderActor(d, owner), owner) // named outright, it stands

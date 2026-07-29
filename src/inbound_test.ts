@@ -16,6 +16,7 @@ let {
   mailIdOf,
   mayStamp,
   routeTo,
+  wearer,
 } = await import('./inbound.ts')
 let { mailed } = await import('./mail.ts')
 let { assertEquals, assertMatch } = await import('@std/assert')
@@ -87,6 +88,15 @@ Deno.test('routeTo: the address book reversed, case-blind, P-20 the rest', () =>
   assertEquals(routeTo('VENTURE@bot.test'), operator)
   assertEquals(routeTo('stranger@x.test'), holdco)
   assertEquals(routeTo(null), holdco)
+})
+
+// Routing and ATTRIBUTION read the same book and must not share a fallback:
+// where to file a stranger's letter is a choice, who wrote it is a fact.
+Deno.test('wearer: the same book, strict — a stranger is nobody', () => {
+  assertEquals(wearer('venture@bot.test'), operator)
+  assertEquals(wearer('VENTURE@bot.test'), operator)
+  assertEquals(wearer('stranger@x.test'), null) // routeTo says holdco
+  assertEquals(wearer(null), null)
 })
 
 Deno.test('hookTo: the venture path routes, variants converge, misses fall back', () => {
@@ -287,6 +297,34 @@ Deno.test('the sweep: mints once, stamps back, and dir=out never lands', async (
 // One letter, one entity: the echo of our own send stamps arrival ON
 // the sent mail — unread for the recipient — never a twin, never a
 // silent skip (T-5882).
+// The sweep is machinery, but the letter it mints has an AUTHOR — the
+// sender. Left unattributed it used to inherit the box owner, so every
+// stranger's mail entered the journal in his name (T-9934).
+Deno.test('the sweep: an arriving letter is authored by its sender', async () => {
+  let by = (id: string) =>
+    (db.prepare(
+      'select c."by" as by from created c join mail m using(eid) where m.message_id = ?',
+    ).get(id) as { by: string | null } | undefined)?.by ?? null
+
+  // Positive control FIRST: a sender the book knows lands attributed, so the
+  // null below is a refusal to guess and not an inert fixture.
+  let known = 'msg:1752000000001:known'
+  await inboundSweep(
+    cast,
+    fakeApi([msg({ id: known, from_header: 'cafecar@bot.yak.sh' })], null).api,
+  )
+  assertEquals(by(known), cafecar)
+
+  // A stranger has no entity to be. Nobody is the honest answer.
+  let alien = 'msg:1752000000002:alien'
+  await inboundSweep(
+    cast,
+    fakeApi([msg({ id: alien, from_header: 'nobody@elsewhere.test' })], null)
+      .api,
+  )
+  assertEquals(by(alien), null)
+})
+
 Deno.test('the sweep: an echo arrives on the sent entity, once', async () => {
   let letter = uid()
   apply(db, [

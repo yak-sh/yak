@@ -1102,10 +1102,12 @@ let refRefused = (
   )
 }
 
-// The box owner: the lone `person`, the actor a context-less write falls
-// back to (one person today — Jeff). With several people it goes DARK
-// rather than guess — the only case a write still resolves blank, and one
-// worth surfacing. Same rule T-3758 binds a browser's "you are" by.
+// The box owner: the lone `person` behind a HUMAN instrument — a browser
+// tab that hasn't named itself is still someone at a keyboard, and on a
+// one-person box that someone is them. With several people it goes DARK
+// rather than guess. Same rule T-3758 binds a browser's "you are" by.
+// Nothing else may reach for this: an agent is not its owner and the
+// server's own machinery is nobody, so both resolve blank instead (T-9934).
 let ownerActor = (db: DatabaseSync): string | null => {
   let people = db.prepare('select eid from person').all() as { eid: string }[]
   return people.length == 1 ? people[0].eid : null
@@ -1155,44 +1157,22 @@ let ventureAt = (db: DatabaseSync, cwd?: string | null): string | null => {
 // The actor a write acts FOR, resolved from the writer the door named — a
 // session id (the CLI's x-via, a reified agent), a client eid (a browser
 // tab), or nothing. A session speaks as its own actor, else the venture it
-// stands in; a client as its person; a nameless write as the box owner.
-// Never the raw label the journal used to keep — the audit trail is actor
-// eids, each resolvable to a name.
-export let writerActor = (
+// stands in; a client as its person. Never the raw label the journal used
+// to keep — the audit trail is actor eids, each resolvable to a name.
+//
+// A write that resolves to nobody stays BLANK. It used to fall back to the
+// box owner, which made every server-minted entity — an arriving letter, a
+// wake's knock, the scribe's desk — read as authored by them: 608 rows, one
+// of which was holdco's comment relayed as a letter FROM the owner, to the
+// owner, about a residual he never raised (T-9934). Machinery is not a
+// person, and an unowned write says so by naming no one.
+// `human` is the one place the two callers differ: a browser tab that never
+// named an actor is still someone at a keyboard, so provenance reads it as
+// the box owner. A SIGNATURE won't — see senderActor.
+let actorFor = (
   db: DatabaseSync,
-  writer?: string | null,
-): string | null => {
-  if (writer) {
-    let s = db.prepare(
-      'select cwd, actor_eid from session where id = ? or eid = ?',
-    )
-      .get(writer, writer) as
-        | { cwd: string | null; actor_eid: string | null }
-        | undefined
-    if (s) return s.actor_eid ?? ventureAt(db, s.cwd) ?? ownerActor(db)
-    let c = db.prepare('select actor_eid from client where eid = ?')
-      .get(writer) as { actor_eid: string | null } | undefined
-    if (c) return c.actor_eid ?? ownerActor(db)
-    // A writer naming an actor entity (person or project) directly stands
-    // for itself — the CLI's own operator eid, or a hand-set x-via.
-    let a = db.prepare(
-      'select eid from person where eid = ? union select eid from project where eid = ?',
-    ).get(writer, writer) as { eid: string } | undefined
-    if (a) return writer
-  }
-  return ownerActor(db)
-}
-
-// Who may SIGN a letter: writerActor's chain with its FALLBACKS REMOVED.
-// Provenance is allowed to guess — an unattributed write is still something
-// the box owner set in motion, so created.by names them. A signature is not:
-// falling back would let any unattributed /apply POST send mail as the owner,
-// the highest-trust byline in the fleet, which is exactly the tier a forged
-// sender was able to claim (T-9511). Nothing resolved means nothing signed,
-// and mail.ts refuses to deliver an unsigned letter.
-export let senderActor = (
-  db: DatabaseSync,
-  writer?: string | null,
+  writer: string | null | undefined,
+  human: boolean,
 ): string | null => {
   if (!writer) return null
   let s = db.prepare(
@@ -1203,12 +1183,29 @@ export let senderActor = (
   if (s) return s.actor_eid ?? ventureAt(db, s.cwd) ?? null
   let c = db.prepare('select actor_eid from client where eid = ?')
     .get(writer) as { actor_eid: string | null } | undefined
-  if (c) return c.actor_eid ?? null
+  if (c) return c.actor_eid ?? (human ? ownerActor(db) : null)
+  // A writer naming an actor entity (person or project) directly stands
+  // for itself — the CLI's own operator eid, or a hand-set x-via.
   let a = db.prepare(
     'select eid from person where eid = ? union select eid from project where eid = ?',
   ).get(writer, writer) as { eid: string } | undefined
   return a ? writer : null
 }
+
+export let writerActor = (
+  db: DatabaseSync,
+  writer?: string | null,
+): string | null => actorFor(db, writer, true)
+
+// Who may SIGN a letter: the same chain, minus the one inference provenance
+// is allowed to make. A tab at the owner's keyboard may be RECORDED as them;
+// it may not SPEAK as them, because that is the fleet's highest-trust byline
+// and exactly the tier a forged sender claimed (T-9511). Nothing resolved
+// means nothing signed, and mail.ts refuses to deliver an unsigned letter.
+export let senderActor = (
+  db: DatabaseSync,
+  writer?: string | null,
+): string | null => actorFor(db, writer, false)
 
 // The instrument stopped one step before writerActor's principal: a session
 // label or eid resolves to that session, a client eid to that client. Direct
@@ -1594,7 +1591,7 @@ export let apply = (
         | { cwd: string | null; actor_eid: string | null }
         | undefined
       if (!s || s.actor_eid || !s.cwd) continue
-      let a = ventureAt(db, s.cwd) ?? ownerActor(db)
+      let a = ventureAt(db, s.cwd)
       if (a) {
         fill.run(a, eid)
         extra.push({ eid, name: 'session', comp: { actor_eid: a } })

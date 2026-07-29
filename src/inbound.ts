@@ -144,16 +144,22 @@ export let fleetRaw = (path: string): Promise<Response> | null => {
   })
 }
 
-// The address book, reversed: which entity wears this address? Unmatched
-// inbound aims at the holdco project (P-20) — the operator's triage
-// pile — resolved by name each sweep, so a db without it (tests, a
-// fresh install) just leaves the mail unrouted.
+// The address book, reversed and STRICT: which entity wears this address,
+// or nobody. Attribution uses this door and only this one — a sender the
+// book doesn't know is a stranger, and a stranger must resolve to no one
+// rather than to whatever the routing fallback would have picked (T-9934).
+export let wearer = (addr: string | null | undefined): string | null =>
+  (addr
+    ? db.prepare('select eid from email where address = ? collate nocase')
+      .get(String(addr)) as { eid: string } | undefined
+    : undefined)?.eid ?? null
+
+// The same book as ROUTING: unmatched inbound aims at the holdco project
+// (P-20) — the operator's triage pile — resolved by name each sweep, so a
+// db without it (tests, a fresh install) just leaves the mail unrouted.
 export let routeTo = (addr: string | null | undefined): string | null => {
-  let hit = addr
-    ? (db.prepare('select eid from email where address = ? collate nocase')
-      .get(String(addr)) as { eid: string } | undefined)
-    : undefined
-  if (hit) return hit.eid
+  let hit = wearer(addr)
+  if (hit) return hit
   let fallback = db.prepare(
     'select e.eid from entity e join project p on p.eid = e.eid where e.num = 20',
   ).get() as { eid: string } | undefined
@@ -322,13 +328,19 @@ let stamp = (table: string, eid: string, patch: Row, cast: Cast) => {
 // Mint one derived entity: apply the wire half, stamp provenance BEFORE
 // dispatch (mailed() must find the inbound mark, not a deliverable), then
 // let effects see the batch like any other door's.
+//
+// `by` is the AUTHOR — the sender the address book knows, not the sweep.
+// Passing nothing used to leave the write unattributed, which the old
+// writerActor fallback then read as the box owner: every stranger's letter
+// entered the journal signed by him (T-9934).
 let mint = (
   { eid, wire, stamp: s }: { eid: string; wire: Change[]; stamp: Row },
   table: string,
   cast: Cast,
+  by?: string | null,
 ) => {
   let t = trace()
-  let out = apply(db, wire, t)
+  let out = apply(db, wire, t, by)
   cast(out)
   stamp(table, eid, s, cast)
   dispatch(out, t, (c, e) => console.warn(`inbound effect ${c} —`, e))
@@ -383,7 +395,9 @@ let sweep = async (cast: Cast, api: FleetApi) => {
     for (let m of await api.messages()) {
       if (m.dir && m.dir != 'in') continue // only arrival mints
       if (!db.prepare('select 1 from mail where message_id = ?').get(m.id)) {
-        if (!arrive(m, cast)) mint(mailChanges(m, routeTo(m.to)), 'mail', cast)
+        if (!arrive(m, cast)) {
+          mint(mailChanges(m, routeTo(m.to)), 'mail', cast, wearer(author(m)))
+        }
       }
       done.push(m.id)
     }
