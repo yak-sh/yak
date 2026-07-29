@@ -2317,3 +2317,28 @@ Deno.test('a signature never falls back the way provenance does', () => {
   d.close()
   Deno.removeSync(path)
 })
+
+// Unwritable and unreadable are different words. A signature the wire
+// cannot forge must still be one the wire can SEE — a letter whose sender
+// no client can read is a letter nobody can answer (`reply` aims at it).
+Deno.test('the sender rides graph-out, unforgeable but readable', () => {
+  let who = uid(), m = uid()
+  apply(db, [
+    { eid: who, name: 'doc', comp: { title: 'a correspondent' } },
+    { eid: who, name: 'person', comp: {} },
+    { eid: who, name: 'email', comp: { address: 'writer@yak.test' } },
+  ])
+  // Written AS that actor, and claiming someone else's name on the way.
+  apply(
+    db,
+    [
+      { eid: m, name: 'doc', comp: { title: 's', body: 'b' } },
+      { eid: m, name: 'mail', comp: { to: 'x@y.test', from: 'someone@else' } },
+    ],
+    undefined,
+    who,
+  )
+
+  let sent = snapshot(db).changes.find((c) => c.eid == m && c.name == 'mail')
+  assertEquals(sent?.comp?.from, 'writer@yak.test') // seen, not theirs to name
+})

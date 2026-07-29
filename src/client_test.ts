@@ -1241,6 +1241,26 @@ Deno.test('mailChanges/replyChanges: to as given, Re: derived, thread edge set',
   assertEquals(replyChanges(sent, 'more').changes[1].comp?.to, 'them@y.test')
 })
 
+// The misroute homelab reported: a letter that ARRIVED but carries no
+// sender used to fall back to the address it was delivered to — our own
+// inbox — so the reply looked sent and went nowhere near the writer.
+Deno.test('a reply to an unsigned letter refuses, it does not guess', () => {
+  let unsigned = {
+    eid: 'm3',
+    num: 3,
+    kind: 'mail',
+    comps: {
+      doc: { title: 'asked', body: '' },
+      mail: { to: 'us@x.test', message_id: 'local:1:m3' },
+    },
+  }
+  assertThrows(
+    () => replyChanges(unsigned, 'answer'),
+    Error,
+    'carries no sender',
+  )
+})
+
 // The thread walk: up the reply chain and down through every answer,
 // chronological by arrival/birth.
 Deno.test('threadOf: both directions, in time order', () => {

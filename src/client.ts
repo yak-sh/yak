@@ -825,10 +825,21 @@ export let reSubject = (s: string) =>
 // The reply batch: answer goes to the far side — an inbound row's
 // sender, your own sent row's recipient — subject prefilled Re: …, and
 // reply_to_eid records the thread at authoring (delivery resolves it).
+// Whom a reply is FOR: the sender of a letter that arrived, the same
+// recipient for one we sent. Never a fallback BETWEEN those two — the
+// near miss is our own inbox (the address the letter was delivered to),
+// so a reply that quietly goes to the wrong desk looks sent and isn't.
+// An unsigned letter earns a refusal instead; mail it directly.
 export let replyChanges = (row: Row, body: string) => {
   let m = row.comps.mail ?? {}
+  let to = String((m.message_id ? m.from : m.to) ?? '')
+  if (!to) {
+    throw new Error(
+      'cannot reply: that letter carries no sender — send a fresh mail',
+    )
+  }
   return mailChanges({
-    to: String((m.message_id ? m.from ?? m.to : m.to) ?? ''),
+    to,
     subject: reSubject(String(row.comps.doc?.title ?? '')),
     body,
     replyTo: row.eid,

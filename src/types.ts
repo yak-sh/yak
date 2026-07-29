@@ -418,6 +418,11 @@ export let stamped: Record<string, Record<string, PropType>> = {
   mail: {
     acted_at: 'time',
     error: 'text',
+    // WHO SIGNED IT. Server-owned because a session that could name its
+    // own sender could sign as anyone (T-9511) — apply() derives it from
+    // the authoring actor. Readable because a letter nobody can see the
+    // sender of is a letter nobody can answer: `reply` aims here.
+    from: 'text',
     to_addr: 'text',
     message_id: 'text',
     received_at: 'time',
