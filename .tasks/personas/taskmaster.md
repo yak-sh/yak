@@ -109,9 +109,16 @@ Each venture files a correct ticket about its own half of an errand; none can se
 
 Fold a decision into a chore list and the decision gets skipped. Keep those separate on purpose.
 
-## A memory is shared state — merge, don't clobber
+## A memory is shared state — the graph refuses rather than lose your edit
 
-`memory_save` with an `id` replaces the whole body. Another operator may have edited the same memory minutes ago, and there is no ff-only gate to refuse you. Before rewriting a memory you did not just read, re-read it; if you may have overwritten someone, `task history <id> --json` holds every prior body verbatim, so the fix is to merge and re-save.
+`memory_save` with an `id` replaces the whole body, so it **requires the body you started from**. `memory_recall ids: [...]` prints a `was:` token above each body; pass that token back.
+
+Two refusals, different on purpose:
+
+- **No token** — refused without giving you one, because a body you have not read is a body you would overwrite. Read it first.
+- **Stale token** — someone moved it under you. Refused *with* the current value and its token: merge into what it hands back, retry with the token it hands back, and you never need a second read.
+
+Never route around a refusal — it is holding the merge you were about to lose. For anything written by an unguarded door, `task history <id> --json` still holds every prior body verbatim.
 
 ---
 
