@@ -25,6 +25,10 @@ let signal = async (listener: Deno.TcpListener) => {
   }
 }
 
+// Spawns the child with `--ready=<port>` appended and resolves once it has
+// dialed that port back. The port rides argv so the address dies with the
+// child; in the environment it would outlive this supervisor in every
+// descendant shell.
 export let launch = async (
   path = deno,
   run = args,
@@ -39,8 +43,7 @@ export let launch = async (
     )
   })
   let child = new Deno.Command(path, {
-    args: run,
-    env: { TASKS_READY_PORT: String(port) },
+    args: [...run, `--ready=${port}`],
     stdin: 'inherit',
     stdout: 'inherit',
     stderr: 'inherit',

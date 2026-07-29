@@ -1013,11 +1013,23 @@ let watch = async () => {
 }
 watch()
 
+// The supervisor's private rendezvous port arrives on ARGV, never the
+// environment: an env var is inherited by every descendant, so a shell started
+// under `deno task dev` hands the address to every probe server an agent spawns
+// hours later — long after that supervisor is gone, and after the port may
+// belong to a stranger. Argv is scoped to the one process meant to answer.
+// And the signal is best effort: nobody listening is a normal condition, not
+// something to serve requests and then die of.
 let ready = async () => {
-  let port = Number(Deno.env.get('TASKS_READY_PORT'))
-  if (!port) return
-  using conn = await Deno.connect({ hostname: '127.0.0.1', port })
-  await conn.write(new Uint8Array([1]))
+  let arg = Deno.args.find((a) => a.startsWith('--ready='))
+  if (!arg) return
+  try {
+    let port = Number(arg.split('=')[1])
+    using conn = await Deno.connect({ hostname: '127.0.0.1', port })
+    await conn.write(new Uint8Array([1]))
+  } catch (e) {
+    console.warn('ready signal not delivered —', e)
+  }
 }
 
 let draining = false
