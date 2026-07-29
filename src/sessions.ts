@@ -766,6 +766,13 @@ let alive = async (pid: number) =>
 
 // The pidfile holds "group child" (older files, one number meaning both):
 // the CHILD is watched for aliveness, the GROUP is what stop() signals.
+// A transient scope name, unique per LAUNCH. The eid leads so a session's
+// scopes are still greppable; the suffix is what keeps a resume from asking
+// for the name its own dead run has not released yet.
+let launches = 0
+let scopeUnit = (eid: string) =>
+  `task-${eid}-${Date.now().toString(36)}${++launches}`
+
 let pids = (eid: string) => {
   try {
     let ns = Deno.readTextFileSync(pidFile(eid)).trim().split(/\s+/)
@@ -854,16 +861,22 @@ let spawn = (
       // thing OUT of tasksd's cgroup into its OWN scope in user-<uid>.slice —
       // a unit restart mass-kills the service cgroup and no KillMode opts out
       // (T-7127), so the cgroup escape is what survives a full restart. The
-      // scope's unit name is the eid: unique per spawn (respawning a live name
-      // fails "already loaded"), --collect frees a settled one so a resume
-      // reclaims it. systemd-run stays in tasksd's cgroup and dies at restart
+      // scope's unit name is per LAUNCH, not per session. systemd refuses a
+      // name whose predecessor is still loaded, and --collect frees a settled
+      // scope but not synchronously — so a session that resumes the instant
+      // its turn is killed (a steer does exactly that) can ask for a name the
+      // dead run still holds. That failure is SILENT: the launcher backgrounds
+      // systemd-run and exits 0, so nothing throws; no wrapper starts, no
+      // pidfile appears, and the follower can only call it `exit unobserved`
+      // ten seconds later and settle the session `failed` (T-9261). A fresh
+      // name per launch cannot collide, so the reclaim is never raced. systemd-run stays in tasksd's cgroup and dies at restart
       // — harmless, the agent is already in the scope; its OWN stderr (a
       // missing user bus complains here) joins the err file, so an unreachable
       // manager surfaces as a failed session, the same as a missing CLI's
       // exit 127. `sh <file>` gives systemd a metacharacter-free command line
       // (WRAPPER above); inside it, the file's `$@` is the agent argv and sh
       // does the log/err redirection Deno.Command can't.
-      `systemd-run --user --scope --collect --unit="task-${eid}" ` +
+      `systemd-run --user --scope --collect --unit="${scopeUnit(eid)}" ` +
       `setsid sh "$WRAPPER_SH" "$@" 2>> "$TASKS_ERR" &`,
       'sh',
       ...argv,
