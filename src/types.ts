@@ -64,6 +64,12 @@ export let turnStates = ['idle', 'busy'] as const
 export let roleStates = ['running', 'stopped'] as const
 export let roleSurfaces = ['native', 'managed'] as const
 
+// What an actor has said about a thread, overriding the addressed-to
+// default. There is no 'auto': absent IS auto, because auto is exactly
+// what addressed() already does — a stored default is a row that means
+// nothing and can drift out of step with the rule it duplicates.
+export let subModes = ['watch', 'mute'] as const
+
 // A review is a comment with one of these verdicts. Input aliases keep
 // the operator verbs short; the graph stores only the settled words.
 export let verdicts = [
@@ -212,6 +218,16 @@ export let comps: Record<string, Record<string, PropType>> = {
   // LEASE vanishes (row deleted, claim-null on the wire) but the claimed
   // entity — somebody's task — survives, freed. claimed_at server-stamped.
   claim: { session_eid: { eid: 'session', death: 'release' } },
+  // An actor's standing instruction about ONE entity: watch it even
+  // though nothing is aimed at me, or mute it though something is. Read
+  // as an override on the item's TARGET — a subscription is aimed at the
+  // task or venture, the inbox items are the letters and comments ABOUT
+  // it. Both ends cascade: a muted thread's subscription dies with it.
+  subscription: {
+    actor_eid: { eid: '', death: 'cascade' },
+    target_eid: { eid: '', death: 'cascade' },
+    mode: { enum: subModes },
+  },
   // The brake, pulled as data: creating one asks the server to stop the
   // session it targets. Valid only against an ACTIVE managed session
   // (apply() refuses the rest); acted_at is server-stamped and the row
@@ -597,6 +613,7 @@ export let kindOrder = [
   'role',
   'session',
   'claim',
+  'subscription',
   'stop_request',
   'knock',
   'wake',

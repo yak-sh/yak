@@ -242,6 +242,27 @@ export let gated = (e: Ent) =>
     return r.type == 'requires' && c.task && !settled(c.task.status)
   })
 
+// Who this viewer IS, for the verbs that are per-actor. A browser has no
+// session — its identity is the actor its client entity names — and a
+// viewer that names none holds no standing instructions, so the verbs
+// that need one simply aren't offered.
+export let myActor = () => {
+  let c = config.client ? cache.value[config.client] : undefined
+  return String(c?.client?.actor_eid ?? '') || undefined
+}
+
+// What this viewer has said about an entity: 'watch', 'mute', or nothing.
+export let myMode = (target: string) => {
+  let me = myActor()
+  if (!me) return undefined
+  let hit = rows().find((r) =>
+    r.comps.subscription &&
+    String(r.comps.subscription.actor_eid) == me &&
+    String(r.comps.subscription.target_eid) == target
+  )
+  return hit?.comps.subscription?.mode as 'watch' | 'mute' | undefined
+}
+
 // How many inbox items are waiting for this entity — a derived display
 // fact like gated() above, so it belongs here rather than in the view.
 // The SAME predicate the Inbox view, `task inbox` and the boot digest

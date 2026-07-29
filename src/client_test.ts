@@ -38,6 +38,7 @@ import {
   spawnDefaults,
   spec,
   STUB,
+  subChanges,
   taskBlock,
   taskChanges,
   threadOf,
@@ -45,7 +46,7 @@ import {
   wrapChanges,
 } from './client.ts'
 import { matchQuery, parseQuery } from './query.ts'
-import { idOf, kindOf, type Snapshot } from './types.ts'
+import { type Change, idOf, kindOf, type Snapshot } from './types.ts'
 import { assertEquals, assertMatch, assertThrows } from '@std/assert'
 
 // A tiny graph: one board-ordered pair of tasks, a session, a claim.
@@ -984,6 +985,8 @@ Deno.test('inbox: every source, archived hides, opened marks read', () => {
     operator: true,
     claims: new Set([TC]),
     addrs: new Set([A]), // the actor's own eid; it carries no address here
+    watching: new Set<string>(), // no standing instruction either way
+    muting: new Set<string>(),
   })
   // all four sources arrive; a comment aimed elsewhere and an archived one
   // don't. `notified` (cN) does NOT hide — being told keeps it in the inbox.
@@ -1140,6 +1143,98 @@ Deno.test('project mail reaches the operator, not a specialist; direct address a
       .map((r) => r.eid)
   assertEquals(mailOnly('sp'), [])
   assertEquals(mailOnly('op'), [ml])
+})
+
+// A standing instruction overrides the addressed-to default, on what the
+// item is ABOUT. Three branches, and the one that matters most is mute
+// beating direct address — a thread the operator has declared finished.
+Deno.test('watch adds, mute subtracts, absent leaves addressed() alone', () => {
+  let A = 'aaaaaaaa-0000-4000-8000-000000000201' // the actor
+  let Sx = 'aaaaaaaa-0000-4000-8000-000000000202' // its session
+  let far = 'aaaaaaaa-0000-4000-8000-000000000203' // a task nothing aims at me
+  let mine = 'aaaaaaaa-0000-4000-8000-000000000204' // a task I claim
+  let cFar = 'aaaaaaaa-0000-4000-8000-000000000205'
+  let cMine = 'aaaaaaaa-0000-4000-8000-000000000206'
+  let cDirect = 'aaaaaaaa-0000-4000-8000-000000000207' // said to my session
+  let sub = 'aaaaaaaa-0000-4000-8000-000000000208'
+  let base: Change[] = [
+    { eid: A, name: 'doc', comp: { title: 'Operator' } },
+    { eid: A, name: 'project', comp: {} },
+    { eid: Sx, name: 'session', comp: { id: 'me', operator: 1, actor_eid: A } },
+    { eid: far, name: 'task', comp: { status: 'open', priority: 0 } },
+    { eid: mine, name: 'task', comp: { status: 'open', priority: 0 } },
+    { eid: mine, name: 'claim', comp: { session_eid: Sx } },
+    { eid: cFar, name: 'comment', comp: { target_eid: far } },
+    { eid: cMine, name: 'comment', comp: { target_eid: mine } },
+    { eid: cDirect, name: 'comment', comp: { target_eid: Sx } },
+  ]
+  let seen = (extra: Change[]) => {
+    let g = rows({ changes: [...base, ...extra] })
+    return g.filter(inboxItem(readerFor(g, 'me', '/w', A))).map((r) => r.eid)
+      .sort()
+  }
+  // absent: today's rule, unchanged — the far task's comment is nobody's
+  assertEquals(seen([]), [cMine, cDirect].sort())
+  // watch: the far one arrives although nothing was aimed at me
+  assertEquals(
+    seen([{
+      eid: sub,
+      name: 'subscription',
+      comp: { actor_eid: A, target_eid: far, mode: 'watch' },
+    }]),
+    [cFar, cMine, cDirect].sort(),
+  )
+  // mute: a task I CLAIM goes quiet — the instruction beats the default
+  assertEquals(
+    seen([{
+      eid: sub,
+      name: 'subscription',
+      comp: { actor_eid: A, target_eid: mine, mode: 'mute' },
+    }]),
+    [cDirect],
+  )
+  // and mute beats DIRECT address too: my own session, silenced
+  assertEquals(
+    seen([{
+      eid: sub,
+      name: 'subscription',
+      comp: { actor_eid: A, target_eid: Sx, mode: 'mute' },
+    }]),
+    [cMine],
+  )
+  // another actor's instruction is not mine
+  assertEquals(
+    seen([{
+      eid: sub,
+      name: 'subscription',
+      comp: { actor_eid: far, target_eid: mine, mode: 'mute' },
+    }]),
+    [cMine, cDirect].sort(),
+  )
+})
+
+// Saying it twice is idempotent and changing your mind is a change, not a
+// second opinion — both fall out of reusing the existing row's eid.
+Deno.test('subChanges: one row per (actor, target), --gone removes it', () => {
+  let A = 'aaaaaaaa-0000-4000-8000-000000000301'
+  let T = 'aaaaaaaa-0000-4000-8000-000000000302'
+  let sub = 'aaaaaaaa-0000-4000-8000-000000000303'
+  let none = rows({ changes: [] })
+  let first = subChanges(none, A, T, 'watch')
+  assertEquals(first.length, 1)
+  assertEquals(first[0].comp, { actor_eid: A, target_eid: T, mode: 'watch' })
+  let had = rows({
+    changes: [{
+      eid: sub,
+      name: 'subscription',
+      comp: { actor_eid: A, target_eid: T, mode: 'watch' },
+    }],
+  })
+  assertEquals(subChanges(had, A, T, 'mute')[0].eid, sub) // the same row
+  assertEquals(subChanges(had, A, T, null), [
+    { eid: sub, name: 'entity', comp: null },
+  ])
+  assertEquals(subChanges(none, A, T, null), []) // nothing to undo
 })
 
 Deno.test('sessionFor: hook identity round-trips and refreshes only on change', () => {

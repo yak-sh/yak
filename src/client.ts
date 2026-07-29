@@ -485,6 +485,32 @@ let taskActor = (all: Row[], target: string) =>
   undefined
 
 // The claim pointing at a session entity — one batch, atomic on the server.
+// Set or clear this actor's standing instruction about one entity. A
+// subscription needs its own entity because MANY actors subscribe to one
+// target — unlike a claim, which is a comp on the task itself. Reusing
+// the existing row's eid is what makes saying it twice idempotent, and
+// what makes watch→mute a change of mind rather than a second opinion.
+export let subChanges = (
+  all: Row[],
+  actor: string,
+  target: string,
+  mode: 'watch' | 'mute' | null,
+): Change[] => {
+  let had = all.find((r) =>
+    r.comps.subscription &&
+    String(r.comps.subscription.actor_eid) == actor &&
+    String(r.comps.subscription.target_eid) == target
+  )
+  if (!mode) {
+    return had ? [{ eid: had.eid, name: 'entity', comp: null }] : []
+  }
+  return [{
+    eid: had?.eid ?? uuid(),
+    name: 'subscription',
+    comp: { actor_eid: actor, target_eid: target, mode },
+  }]
+}
+
 export let claimChanges = (
   all: Row[],
   target: string,
@@ -658,6 +684,33 @@ export type Reader = {
   // it). A letter reaches a PERSON this way — they stand in no project, so
   // the scope arm below says nothing about them.
   addrs?: Set<string>
+  // The entities this actor has a standing instruction about: watch them
+  // though nothing is aimed at me, mute them though something is. Absent
+  // from both is the default, which is whatever addressed() says.
+  watching?: Set<string>
+  muting?: Set<string>
+}
+
+// What an inbox item is ABOUT — a subscription is aimed at the task or
+// the venture, never at the individual letter, so this is the eid the
+// watch/mute sets are asked about.
+export let aboutOf = (r: Row) =>
+  String(
+    r.comps.comment?.target_eid ?? r.comps.mail?.target_eid ??
+      r.comps.knock?.target_eid ?? '',
+  )
+
+// Every entity this actor has said something about, split by mode.
+export let subsOf = (all: Row[], actor?: string) => {
+  let watching = new Set<string>(), muting = new Set<string>()
+  if (actor) {
+    for (let r of all) {
+      let sub = r.comps.subscription
+      if (!sub || String(sub.actor_eid) != actor) continue
+      ;(sub.mode == 'mute' ? muting : watching).add(String(sub.target_eid))
+    }
+  }
+  return { watching, muting }
 }
 
 // Addressed to this reader — the four doors an item reaches attention
@@ -705,9 +758,21 @@ export let addressed = (who: Reader) => (r: Row): boolean => {
 
 // The inbox: addressed to me and NOT archived. Unread within it is
 // isUnread (NOT opened) — the two derived predicates the design names.
+//
+// A standing instruction OVERRIDES the addressed-to default, on what the
+// item is about rather than the item itself. Mute wins even over direct
+// address: it is the operator saying a thread is finished, and a rule
+// that quietly declines to obey that is worse than one that obeys it
+// too well — `--all` is the way back, the same as everywhere else.
 export let inboxItem = (who: Reader) => {
   let to = addressed(who)
-  return (r: Row) => to(r) && inInbox(r)
+  return (r: Row) => {
+    if (!inInbox(r)) return false
+    let about = aboutOf(r)
+    if (about && who.muting?.has(about)) return false
+    if (about && who.watching?.has(about)) return true
+    return to(r)
+  }
 }
 
 // The reader an inbox reads for, resolved from the graph in one place:
@@ -736,6 +801,7 @@ export let readerAt = (all: Row[], actor?: string): Reader => ({
   claims: new Set(),
   addrs: addrsOf(all, actor),
   scope: all.find((r) => r.eid == actor)?.comps.project ? actor : undefined,
+  ...subsOf(all, actor),
 })
 
 export let readerFor = (
@@ -763,6 +829,7 @@ export let readerFor = (
       all.filter((r) => sess && r.comps.claim?.session_eid == sess.eid)
         .map((r) => r.eid),
     ),
+    ...subsOf(all, actor),
   }
 }
 

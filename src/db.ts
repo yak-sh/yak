@@ -187,6 +187,17 @@ let schema = `
     session_eid text not null references entity(eid),
     claimed_at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
+  -- An actor's standing instruction about one entity (watch / mute).
+  -- One row per (actor, target); the unique index is what makes setting
+  -- it twice idempotent rather than a pile.
+  create table if not exists subscription (
+    eid        text primary key references entity(eid),
+    actor_eid  text not null references entity(eid),
+    target_eid text not null references entity(eid),
+    mode       text not null
+  );
+  create unique index if not exists subscription_one
+    on subscription (actor_eid, target_eid);
   create table if not exists stop_request (
     eid        text primary key references entity(eid),
     target_eid text not null references entity(eid),

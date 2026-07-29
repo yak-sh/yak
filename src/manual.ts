@@ -188,6 +188,30 @@ export let manuals: Record<string, Manual> = {
     about: 'compare every book address with the Cloudflare routing rules',
     words: [0, 0],
   },
+  watch: {
+    usage: 'watch <id> [--gone]',
+    about: 'put an entity in your inbox even when nothing is aimed at you',
+    examples: ['task watch T-3', 'task watch T-3 --gone'],
+    detail:
+      'A standing instruction about ONE entity: its comments, letters and ' +
+      'knocks reach your inbox whether or not they were addressed to you. ' +
+      '--gone clears it. Per-actor, resolved from your cwd like `task inbox`.',
+    root: true,
+    options: [flag('--gone')],
+    words: [1, 1],
+  },
+  mute: {
+    usage: 'mute <id> [--gone]',
+    about: 'stop an entity reaching your inbox, even direct address',
+    examples: ['task mute T-3', 'task mute T-3 --gone'],
+    detail:
+      'The opposite standing instruction, and it wins over direct address: ' +
+      'a thread you have declared finished stays out. Nothing is deleted — ' +
+      '`task inbox --all` still shows it. --gone clears it.',
+    root: true,
+    options: [flag('--gone')],
+    words: [1, 1],
+  },
   inbox: {
     usage: 'inbox [--json|--all]',
     about: 'everything addressed to you, unread first',
@@ -198,9 +222,9 @@ export let manuals: Record<string, Manual> = {
       'task inbox archive E-9',
     ],
     detail:
-      'Archived items are hidden; --all shows them too, marked `\u00d7`. ' +
-      'Closing a task archives the correspondence about it, so --all is ' +
-      'where that correspondence went.',
+      'Archived items are hidden; --all shows them too, marked `\u00d7`, ' +
+      'and ignores `task mute`. Closing a task archives the correspondence ' +
+      'about it, so --all is where that correspondence went.',
     root: true,
     options: [json, flag('--all')],
     words: [0, 0],

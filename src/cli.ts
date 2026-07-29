@@ -53,6 +53,7 @@ import {
   snapshot as readGraph,
   spawnChanges,
   spawnDefaults,
+  subChanges,
   taskBlock,
   taskChanges,
   threadOf,
@@ -652,6 +653,31 @@ let inboxArchive = async (args: string[]) => {
   if (!row) throw new Error(`no such entity: ${id}`)
   await send([{ eid: row.eid, name: 'archived', comp: {} }])
   console.log(`archived ${idOf(row)}`)
+}
+
+// The standing instruction, as two verbs — because a component nobody
+// has a verb for is a component nobody writes. Read for whoever the cwd
+// makes you, the same actor `task inbox` reads for, so what you watch
+// here is what shows up there.
+let subscribe = (mode: 'watch' | 'mute') => async (args: string[]) => {
+  let gone = args.includes('--gone')
+  let [id] = args.filter((a) => a != '--gone')
+  if (!id) throw new Error(help([mode]))
+  let all = rows(await snapshot())
+  let row = find(all, id)
+  if (!row) throw new Error(`no such entity: ${id}`)
+  let who = readerFor(all, me(), Deno.cwd())
+  let actor = who.actor ?? who.scope
+  if (!actor) {
+    throw new Error(
+      `no actor here: ${mode} is per-actor, and this cwd resolves to none`,
+    )
+  }
+  let changes = subChanges(all, actor, row.eid, gone ? null : mode)
+  let said = mode == 'watch' ? 'watching' : 'muting'
+  if (!changes.length) return console.error(`not ${said} ${idOf(row)}`)
+  await send(changes)
+  console.log(`${gone ? `no longer ${said}` : said} ${idOf(row)}`)
 }
 
 let inbox = (args: string[]) => {
@@ -1801,6 +1827,8 @@ if (import.meta.main) {
       else if (cmd == 'search') await seek(rest)
       else if (cmd == 'mail') await mail(rest)
       else if (cmd == 'inbox') await inbox(rest)
+      else if (cmd == 'watch') await subscribe('watch')(rest)
+      else if (cmd == 'mute') await subscribe('mute')(rest)
       else if (cmd == 'session') await session(rest)
       else if (cmd == 'claim') await claim(rest)
       else if (cmd == 'spawn') await spawn(rest)

@@ -45,6 +45,10 @@ Deno.test('death words: every reference declares, the sets hold', () => {
     new Set([
       'card.target_eid',
       'comment.target_eid',
+      // both ends: a standing instruction is meaningless without the
+      // actor who gave it or the thread it is about
+      'subscription.actor_eid',
+      'subscription.target_eid',
       'stop_request.target_eid',
       'knock.target_eid',
       'knock.to_eid',

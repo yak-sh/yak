@@ -1,4 +1,5 @@
-import { ent, mutate } from '../live.ts'
+import { subChanges } from '../client.ts'
+import { ent, mutate, myActor, myMode, rows } from '../live.ts'
 import { type Action, define, defineActions, has, resolve } from './registry.ts'
 import { memo } from './memo.ts'
 import {
@@ -203,6 +204,26 @@ defineActions([
           },
         }),
     }],
+  },
+  {
+    // Watch and mute, on ANYTHING — a standing instruction is about a
+    // thread, and a thread can be a task, a venture, a session. Offered
+    // only to a viewer whose client names an actor: without one there is
+    // nobody for the instruction to belong to.
+    match: () => !!myActor(),
+    acts: (e) => {
+      let mode = myMode(e.eid)
+      let set = (to: 'watch' | 'mute' | null) => () =>
+        mutate(...subChanges(rows(), myActor()!, e.eid, to))
+      return [
+        mode == 'watch'
+          ? { label: 'unwatch', run: set(null) }
+          : { label: 'watch', run: set('watch') },
+        mode == 'mute'
+          ? { label: 'unmute', run: set(null) }
+          : { label: 'mute', run: set('mute') },
+      ]
+    },
   },
   {
     match: has('claim'),
