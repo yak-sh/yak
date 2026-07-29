@@ -1097,10 +1097,18 @@ export type Pinned = Pin & { target_eid: string; view: string }
 // row key, so the comp names the WHOLE sentence: {type, child_eid} links
 // eid→child, and the same sentence with gone: true unlinks it (comp: null
 // could never say which edge). Both endpoints must exist.
+// `was` is a PRECONDITION — the graph's --ff-only. It names the value the
+// caller read, column by column (SHA-256 of it, or null for "I read no
+// value"), and apply() refuses the whole batch if any guarded column has
+// moved since. Per column, so a title edit never refuses an unrelated body
+// write; a column absent from `was` is simply unguarded, which is every
+// caller's behavior today. It rides BESIDE comp, never inside it: comp
+// admits only real columns, so `doc.was` would be refused as alien.
 export type Change = {
   eid: string
   name: string
   comp: Record<string, unknown> | null
+  was?: Record<string, string | null>
 }
 
 // A negotiated committed batch. The cursor makes the frame a complete

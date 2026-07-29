@@ -14,7 +14,9 @@ let {
   open,
   search,
   senderActor,
+  sha,
   snapshot,
+  Stale,
   touch,
   vocabHashOf,
   vocabularyDoc,
@@ -2432,4 +2434,171 @@ Deno.test('the sender rides graph-out, unforgeable but readable', () => {
 
   let sent = snapshot(db).changes.find((c) => c.eid == m && c.name == 'mail')
   assertEquals(sent?.comp?.from, 'writer@yak.test') // seen, not theirs to name
+})
+
+// A precondition is the graph's --ff-only. The hazard is a guard that never
+// fires: it passes every test that doesn't try to make it reject, and it
+// passes before the feature exists — so each of these carries its control.
+
+Deno.test('precondition: a moved value refuses, and the value survives', () => {
+  let m = uid()
+  apply(db, [{ eid: m, name: 'doc', comp: { title: 'memory', body: 'ONE' } }])
+  let read = sha('ONE') // what the first writer read
+  // A second writer lands between that read and the write.
+  apply(db, [{ eid: m, name: 'doc', comp: { body: 'TWO' } }])
+  assertThrows(
+    () =>
+      apply(db, [
+        { eid: m, name: 'doc', comp: { body: 'THREE' }, was: { body: read } },
+      ]),
+    Error,
+    'doc.body',
+  )
+  assertEquals(comp(m, 'doc')?.body, 'TWO') // the clobber did NOT land
+  // The control: the same write, guarding what is there, applies.
+  apply(db, [
+    { eid: m, name: 'doc', comp: { body: 'THREE' }, was: { body: sha('TWO') } },
+  ])
+  assertEquals(comp(m, 'doc')?.body, 'THREE')
+})
+
+Deno.test('precondition: the refusal hands back the current value', () => {
+  let m = uid()
+  apply(db, [{ eid: m, name: 'doc', comp: { title: 'm', body: 'CURRENT' } }])
+  let e = assertThrows(
+    () =>
+      apply(db, [
+        { eid: m, name: 'doc', comp: { body: 'x' }, was: { body: sha('OLD') } },
+      ]),
+    Stale,
+  )
+  assertEquals(e.value, 'CURRENT') // merge into THIS, not into a re-read
+  assertEquals(e.col, 'body')
+  assertEquals(e.eid, m)
+  assertMatch(e.message, /CURRENT/)
+  // The three-step loop terminates: merge into what you were handed, resend.
+  apply(db, [{
+    eid: m,
+    name: 'doc',
+    comp: { body: e.value + '+mine' },
+    was: { body: sha(e.value) },
+  }])
+  assertEquals(comp(m, 'doc')?.body, 'CURRENT+mine')
+})
+
+// `doc.body` is `not null default ''`, so a body is never NULL — an unwritten
+// body reads as the empty string, and that is what a caller guarding a fresh
+// memory hashes. The null sentinel is for columns that really are nullable.
+Deno.test('precondition: an unwritten body is empty, not null', () => {
+  let m = uid()
+  apply(db, [{ eid: m, name: 'doc', comp: { title: 'no body yet' } }])
+  apply(db, [
+    { eid: m, name: 'doc', comp: { body: 'first' }, was: { body: sha('') } },
+  ])
+  assertEquals(comp(m, 'doc')?.body, 'first')
+  // The control: that same guard now refuses, because a body stands there.
+  assertThrows(
+    () =>
+      apply(db, [
+        {
+          eid: m,
+          name: 'doc',
+          comp: { body: 'second' },
+          was: { body: sha('') },
+        },
+      ]),
+    Stale,
+    'has moved since you read it',
+  )
+  assertEquals(comp(m, 'doc')?.body, 'first')
+})
+
+Deno.test('precondition: null is a value — expected-absent compares', () => {
+  let m = uid(), p = uid()
+  apply(db, [
+    { eid: p, name: 'doc', comp: { title: 'a scope' } },
+    { eid: p, name: 'project', comp: {} },
+    { eid: m, name: 'doc', comp: { title: 'a memory' } },
+    { eid: m, name: 'memory', comp: { type: 'project' } }, // scope_eid null
+  ])
+  // Guarding a genuinely absent column, expecting absent, applies.
+  apply(db, [
+    {
+      eid: m,
+      name: 'memory',
+      comp: { scope_eid: p },
+      was: { scope_eid: null },
+    },
+  ])
+  assertEquals(comp(m, 'memory')?.scope_eid, p)
+  // Expecting absent where a value now stands refuses — the write that
+  // would otherwise clobber a scope set since the caller read.
+  assertThrows(
+    () =>
+      apply(db, [
+        {
+          eid: m,
+          name: 'memory',
+          comp: { scope_eid: null },
+          was: { scope_eid: null },
+        },
+      ]),
+    Stale,
+  )
+  assertEquals(comp(m, 'memory')?.scope_eid, p)
+})
+
+Deno.test('precondition: per column — an unrelated edit does not refuse', () => {
+  let m = uid()
+  apply(db, [{ eid: m, name: 'doc', comp: { title: 'T', body: 'B' } }])
+  apply(db, [{ eid: m, name: 'doc', comp: { title: 'T2' } }]) // title moves
+  // The body guard still passes: a title edit is not a body conflict.
+  apply(db, [
+    { eid: m, name: 'doc', comp: { body: 'B2' }, was: { body: sha('B') } },
+  ])
+  assertEquals(comp(m, 'doc')?.body, 'B2')
+})
+
+Deno.test('precondition: a batch losing one guard keeps NEITHER change', () => {
+  let a = uid(), b = uid()
+  apply(db, [
+    { eid: a, name: 'doc', comp: { title: 'a', body: 'A' } },
+    { eid: b, name: 'doc', comp: { title: 'b', body: 'B' } },
+  ])
+  assertThrows(() =>
+    apply(db, [
+      { eid: b, name: 'doc', comp: { body: 'B-new' } }, // unguarded, valid
+      {
+        eid: a,
+        name: 'doc',
+        comp: { body: 'A-new' },
+        was: { body: sha('stale') },
+      },
+    ])
+  )
+  assertEquals(comp(a, 'doc')?.body, 'A')
+  assertEquals(comp(b, 'doc')?.body, 'B') // partial would have left B-new
+})
+
+Deno.test('precondition: absent `was` is unguarded, exactly as before', () => {
+  let m = uid()
+  apply(db, [{ eid: m, name: 'doc', comp: { title: 'm', body: 'ONE' } }])
+  apply(db, [{ eid: m, name: 'doc', comp: { body: 'TWO' } }])
+  assertEquals(comp(m, 'doc')?.body, 'TWO')
+})
+
+Deno.test('precondition: a guard on an unknown column is refused', () => {
+  let m = uid()
+  apply(db, [{ eid: m, name: 'doc', comp: { title: 'm', body: 'ONE' } }])
+  // Guarding a column that isn't there would protect nothing — failing
+  // OPEN silently, which is the bug wearing a safety label.
+  assertThrows(
+    () =>
+      apply(db, [
+        { eid: m, name: 'doc', comp: { body: 'x' }, was: { bodyy: null } },
+      ]),
+    Error,
+    'unknown column: doc.bodyy',
+  )
+  assertEquals(comp(m, 'doc')?.body, 'ONE')
 })

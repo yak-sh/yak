@@ -1243,6 +1243,40 @@ export let writerVia = (
 // one stamped from its venture or the box owner (T-6669): the writing
 // identity is never blank, and the journal keeps a resolvable actor eid,
 // not a raw label.
+// What a precondition compares. A column holds text, a number or a bool in
+// one slot, so String() is the single normalization both ends apply — the
+// caller hashes the body it already holds, with nothing new from the read
+// path. null is not hashed: it IS the sentinel for "I read no value", which
+// is why expected-absent can compare equal without colliding with a hash.
+export let sha = (v: unknown) =>
+  createHash('sha256').update(String(v)).digest('hex')
+
+// A refused precondition, carrying what is stored NOW in full. The consumer
+// is an agent, and its loop is: refused-with-value → merge into the value it
+// was handed → re-send with that value's hash. Handing back a bare conflict
+// would send it back to READ, and the state can move between the refusal and
+// that read — the same lost update, one level up. The value rides in the
+// message because every door already surfaces `e.message` (HTTP 400, the
+// CLI, MCP); the fields are for an in-process caller that would rather not
+// parse prose.
+export class Stale extends Error {
+  eid: string
+  comp: string
+  col: string
+  value: unknown
+  constructor(eid: string, comp: string, col: string, value: unknown) {
+    super(
+      `${comp}.${col} on ${eid} has moved since you read it — batch refused. ` +
+        `Merge into the current value below and retry with its hash.\n` +
+        `--- current ${comp}.${col} ---\n${value ?? ''}`,
+    )
+    this.eid = eid
+    this.comp = comp
+    this.col = col
+    this.value = value
+  }
+}
+
 export let apply = (
   db: DatabaseSync,
   changes: Change[],
@@ -1295,7 +1329,7 @@ export let apply = (
       ) continue
       if (spine(db, eid).changes) minted.add(eid)
     }
-    for (let { eid, name, comp } of changes) {
+    for (let { eid, name, comp, was } of changes) {
       // An edge is a TRIPLE, not a row keyed by eid: the comp names the
       // whole (parent=eid, type, child_eid) sentence, so linking is
       // insert-or-ignore, and unlinking says the same sentence with
@@ -1361,6 +1395,30 @@ export let apply = (
             ref,
             eid,
           ])
+        }
+      }
+      // A precondition is the graph's --ff-only: the caller names the value
+      // it READ, and a value that has moved since refuses the whole batch
+      // rather than clobbering the writer it never saw. Checked here with
+      // the other rules so it holds for every entry path by construction —
+      // in memory_save it would be reintroduced as a bug by the next door
+      // that replaces a body. A batch guarding two columns and losing one
+      // keeps NEITHER: partial application is how you end up with a body
+      // from one writer and a title from another.
+      if (was) {
+        let row = db.prepare(`select * from ${name} where eid = ?`).get(eid) as
+          | Record<string, unknown>
+          | undefined
+        let real = columnsOf(name)
+        for (let [col, want] of Object.entries(was)) {
+          // A guard on a column that doesn't exist would read undefined,
+          // compare equal to null, and protect nothing — the precondition
+          // failing OPEN, which is the original bug wearing a safety label.
+          // A typo is refused here, the way `admitted` refuses one in comp.
+          if (!real.has(col)) throw new Error(`unknown column: ${name}.${col}`)
+          let cur = row?.[col] ?? null
+          if ((cur == null ? null : sha(cur)) == want) continue
+          throw new Stale(eid, name, col, cur)
         }
       }
       // A claim is a LEASE, not a patch: taking one over another session's
