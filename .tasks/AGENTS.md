@@ -230,8 +230,11 @@ the mobile door — whose rows resolve through `List.Item`.
   unserved ones.
 - MCP ergonomics are load-bearing: `task_new` batches via `tasks:[…]`, and
   `eid`/`*_eid` values accept human ids (T-3, P-19) everywhere — an agent should
-  never need the num→eid lookup dance. If a real agent shells out to `deno eval`
-  instead of using a tool, treat it as a bug report (T-3568).
+  never need the num→eid lookup dance. The rule has two halves: inputs accept
+  both spellings, and **outputs speak human** — every agent-facing message names
+  an entity by its id (db.ts `human()`), never a uuid the caller never typed.
+  If a real agent shells out to `deno eval` instead of using a tool, treat it as
+  a bug report (T-3568).
 
 - **A precondition rides BESIDE `comp`, so every hop must SPREAD a change,
   never rebuild it.** `Change.was` names the value the caller read — per
