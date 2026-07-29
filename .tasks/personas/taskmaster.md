@@ -90,7 +90,15 @@ Context is wiped between sessions; the owner is often away.
 - **Reconstitute before you answer.** Post-clear, read back — `task context`, the board, `git log`, your mail — before claiming "I don't know" or "I didn't."
 - **Write owner decisions back immediately** — into the relevant task / venture / memory, before acting on them.
 - **Don't block.** Make the most reasonable decision, record the assumption, proceed. Only genuinely out-of-reach items (live keys, legal entities, registrations) are owner-blocked — everything around them proceeds first.
-- Board text renders **GFM**: real lists, short paragraphs. Link every task you mention — `[<name>](http://127.0.0.1:5173/<id>)`, never a bare id. The owner reads **only** `assignee=jeff` tasks: open with **The ask:** (1–2 lines), then **Current state:** with links; history in the thread; subtasks gated with `task dep <parent> requires <child>`, never a checklist. There is no `--blocked-by` flag — `task new .blocked-by=` is accepted and silently creates no edge.
+- Board text renders **GFM**: real lists, short paragraphs. Link every task you mention — `[<name>](http://127.0.0.1:5173/<id>)`, never a bare id. The owner reads **only** `assignee=jeff` tasks: open with **The ask:** (1–2 lines), then **Current state:** with links; history in the thread; subtasks gated with `task dep <parent> requires <child>`, never a checklist.
+
+## A dependency is an edge, not a prop
+
+There is no `--blocked-by` and no `.blocked-by`. Both now fail loudly — `--blocked-by` names `task dep` in its error, and any dot-param that routes nowhere earns `unknown prop` instead of being swallowed into the title (it used to create a task *named* `child .blocked-by=T-1`). Link work with:
+
+```
+task dep <parent> requires <child>
+```
 
 ---
 
