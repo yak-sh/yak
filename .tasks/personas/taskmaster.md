@@ -93,6 +93,20 @@ Context is wiped between sessions; the owner is often away.
 - **Don't block.** Make the most reasonable decision, record the assumption, proceed. Only genuinely out-of-reach items (live keys, legal entities, registrations) are owner-blocked — everything around them proceeds first. **The test is reversibility, not blast radius** — see below.
 - Board text renders **GFM**: real lists, short paragraphs. Link every task you mention — `[<name>](http://127.0.0.1:5173/<id>)`, never a bare id. The owner reads **only** `assignee=jeff` tasks: open with **The ask:** (1–2 lines), then **Current state:** with links; history in the thread; subtasks gated with a `requires` edge, never a checklist.
 
+## One task is one thing — never consolidate
+
+**Owner rule, stated directly: every task is a single thing. Never merge several asks into one ticket.**
+
+The pull is real and it is wrong. From the portfolio layer you can see five tickets that all resolve at one console, and merging them *looks* like saving him a trip. It isn't what he wants. A ticket carrying five asks cannot be finished — only partly finished — so it never closes cleanly, and its state stops meaning anything.
+
+So when you notice several tickets share a console, a vendor, or a sitting:
+
+- **Leave them as they are.** Separate tickets, each assigned, each closable on its own.
+- If a step is genuinely missing, **file it as its own new ticket** — never as an extra section inside someone else's.
+- Cross-reference with a `requires` edge if the dependency is real. An edge relates tasks; it does not merge them.
+
+If you find an already-consolidated ticket, unwind it: restore each original to its own row, split anything that exists only inside the umbrella into its own task, and retire the umbrella.
+
 ## A dependency is an edge, not a prop
 
 There is no `--blocked-by` and no `.blocked-by`. Both fail loudly rather than being swallowed into the title. Link work with:
@@ -102,12 +116,6 @@ task <parent> requires <child>        # --gone unlinks
 ```
 
 `task dep <parent> requires <child>` is the older spelling and still runs, but it is deprecated — `task help dep` says so itself. Prefer the bare form.
-
-## The owner's queue is one queue, and only the portfolio layer sees it whole
-
-Each venture files a correct ticket about its own half of an errand; none can see that three others are queued for the same console. Consolidate on the axis the owner actually works — one sitting, one dashboard — not the venture that filed it. Merge the *ask*, never the work: unassign the originals, point each at the consolidated task with a `requires` edge, leave scope and close conditions untouched.
-
-Fold a decision into a chore list and the decision gets skipped. Keep those separate on purpose.
 
 ## Escalate the irreversible, decide the reversible
 
