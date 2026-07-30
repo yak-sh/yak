@@ -324,11 +324,7 @@ let create = async (args: string[]) => {
 
 let set = async (args: string[]) => {
   // --comment=... rides the same atomic batch as plain commentary — the
-  // change itself is the journal's to record, never a comment's. --event
-  // marks that commentary as EMITTED, for the sweeps whose whole reason
-  // to comment is the mutation they just made: the mark has to be
-  // available HERE or the atomic form is the one that mails, and an
-  // agent learns to split its batch to get quiet.
+  // change itself is the journal's to record, never a comment's.
   // @file is the fleet's door for a long value (M-4415) and inflate()
   // implements it whole — the @@ escape for prose that starts with an @,
   // and a loud `no such file` otherwise. Dot-params route through it;
@@ -338,18 +334,12 @@ let set = async (args: string[]) => {
   if (say?.startsWith('@')) {
     say = String(inflate({ comp: 'doc', prop: 'body', value: say }).value)
   }
-  let event = args.includes('--event')
   let { params, words } = split(
-    args.filter((a) => !a.startsWith('--comment=') && a != '--event'),
+    args.filter((a) => !a.startsWith('--comment=')),
   )
   let [id] = words
   if (!id || words.length != 1 || !params.length) {
     throw new Error('task set <id> .prop=value ...')
-  }
-  // Silently ignoring a mark is how the wrong thing ships quietly — the
-  // whole reason this flag exists.
-  if (event && say == null) {
-    throw new Error('--event marks a --comment; there is no comment here')
   }
   let all = rows(await snapshot())
   let row = find(all, id)
@@ -357,7 +347,7 @@ let set = async (args: string[]) => {
   await send([
     ...Object.entries(patches(derefParams(all, params)))
       .map(([name, comp]) => ({ eid: row.eid, name, comp })),
-    ...(say ? commentChanges(all, row.eid, say, me(), { event }) : []),
+    ...(say ? commentChanges(all, row.eid, say, me()) : []),
   ])
   console.log(`${idOf(row)} updated`)
 }
@@ -1004,16 +994,13 @@ let dep = async (args: string[]) => {
 }
 
 // Comments attach to anything; attribution rides the session env (me()).
-// --event is how MACHINERY says so: a sweep, a cron, a status nudge. The
-// mark has to ride the mint — fanout() fires there, so a comment flagged
-// afterwards has already left as a letter (M-4062).
+// A comment is something you WROTE — there is no door here for marking it
+// as machinery, because a caller who has one uses it to stay off the mail
+// relay and files their own letter as emitted (T-7018).
 let comment = async (args: string[]) => {
   let verdictArg = args.find((a) => a.startsWith('--verdict='))
   let verdict = verdictArg?.slice(10)
-  let event = args.includes('--event')
-  let [id, ...words] = args.filter((a) =>
-    !a.startsWith('--verdict=') && a != '--event'
-  )
+  let [id, ...words] = args.filter((a) => !a.startsWith('--verdict='))
   separated(words)
   let body = words.join(' ')
   // One token AND no whitespace in it is what inflate reads: a quoted
@@ -1030,13 +1017,13 @@ let comment = async (args: string[]) => {
     throw new Error('--verdict needs approved, rejected, or changes_requested')
   }
   if (!id || (!body && !verdict)) {
-    throw new Error('task comment <id> [text...] [--verdict=...] [--event]')
+    throw new Error('task comment <id> [text...] [--verdict=...]')
   }
   let all = rows(await snapshot())
   let row = find(all, id)
   if (!row) throw new Error(`no entity: ${id}`)
-  await send(commentChanges(all, row.eid, body, me(), { verdict, event }))
-  let said = verdict ? `${verdict} review` : event ? 'event' : 'comment'
+  await send(commentChanges(all, row.eid, body, me(), { verdict }))
+  let said = verdict ? `${verdict} review` : 'comment'
   console.log(`${said} on ${idOf(row)}`)
 }
 

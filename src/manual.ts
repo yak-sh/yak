@@ -91,23 +91,19 @@ export let manuals: Record<string, Manual> = {
     passthrough: true,
   },
   set: {
-    usage: 'set <id> .prop=value ... [--comment=words] [--event]',
+    usage: 'set <id> .prop=value ... [--comment=words]',
     about: 'patch any entity; --comment says why, in the same batch',
     examples: [
       'task set T-3 .status=done --comment="verified end-to-end"',
       'task set T-3 .assignee=jeff .priority=1',
       'task set S-12 ".body=@brief.md"',
       'task set S-12 .body=@- < brief.md',
-      'task set T-3 .domain=Eng --comment="sweep: missing domain" --event',
     ],
     detail: 'A dot-param or --comment that IS `@file` is read from that ' +
-      'file, and `@-` from piped stdin. ' +
-      '--event marks the --comment as EMITTED by machinery rather than ' +
-      'written by an agent, so it never rides the mail relay (see ' +
-      '`task help comment`). A sweep keeps its patch and its reason in one ' +
-      'atomic batch and stays quiet — it never has to choose between them.',
+      'file, and `@-` from piped stdin. The patch and the reason for it ' +
+      'ride one atomic batch, so neither can land without the other.',
     root: true,
-    options: [value('--comment', 'comment text'), flag('--event')],
+    options: [value('--comment', 'comment text')],
   },
   show: {
     usage: 'show <id> [--json]',
@@ -297,22 +293,16 @@ export let manuals: Record<string, Manual> = {
   },
   comment: {
     usage:
-      'comment <id> [text...] [--verdict=approved|rejected|changes_requested] ' +
-      '[--event]',
+      'comment <id> [text...] [--verdict=approved|rejected|changes_requested]',
     about: 'comment on any entity; a verdict makes it a review',
     examples: [
       'task comment T-3 "blocked on the schema call"',
       'task comment S-31 "status?"',
       'task comment T-3 --verdict=approved',
-      'task comment T-3 "sweep: missing domain" --event',
     ],
     detail: 'A body that IS `@file` is read from that file (`@@` escapes a ' +
-      'comment that genuinely starts with an @). ' +
-      '--event marks a comment EMITTED by machinery — a sweep finding, a ' +
-      'status nudge. An event never rides the mail relay and renders as a ' +
-      'chip, not a bubble; the bus and the inbox still deliver it. Prose ' +
-      'you wrote is a letter and stays one. The mark must ride the mint: ' +
-      'the relay fires there, so flagging afterwards is too late.',
+      'comment that genuinely starts with an @). A comment is something ' +
+      'you WROTE, and it reaches whoever the entity concerns.',
     root: true,
     options: [
       value(
@@ -321,7 +311,6 @@ export let manuals: Record<string, Manual> = {
         false,
         /^(approved|rejected|changes_requested)$/,
       ),
-      flag('--event'),
     ],
     words: [1],
     check: (args, words) =>

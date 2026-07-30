@@ -387,9 +387,7 @@ lands in one atomic apply. *_eid param values accept human ids
     'task_update',
     `Patch an entity by id (T-3, bare num, or eid) with dot-params, e.g.
 [".status=done"] or [".body=notes..."]. Only the named props change.
-comment optionally lands a plain comment in the same atomic batch; set
-event when a machine emitted that comment rather than an agent writing
-it, so it never rides the mail relay.
+comment optionally lands a plain comment in the same atomic batch.
 *_eid values accept human ids. Cancelling (".status=cancelled") calls off
 work without pretending it finished; use comment to say why. ${DOC}
 ${GRAMMAR} ${BUS}`,
@@ -402,17 +400,13 @@ ${GRAMMAR} ${BUS}`,
       comment: z.string()
         .describe('Plain comment to write atomically with the patch.')
         .optional(),
-      event: z.boolean()
-        .describe('That comment was emitted by machinery, not written.')
-        .optional(),
       session: z.string().optional(),
     },
     async (
-      { id, params, comment, event, session }: {
+      { id, params, comment, session }: {
         id: string
         params: string[]
         comment?: string
-        event?: boolean
         session?: string
       },
     ) => {
@@ -423,9 +417,7 @@ ${GRAMMAR} ${BUS}`,
       await io.write([
         ...Object.entries(grouped)
           .map(([name, comp]) => ({ eid: row.eid, name, comp })),
-        ...(comment
-          ? commentChanges(all, row.eid, comment, session, { event })
-          : []),
+        ...(comment ? commentChanges(all, row.eid, comment, session) : []),
       ], session)
       return bus(`updated ${idOf(row)}${wall(grouped.doc?.body)}`, session)
     },
@@ -709,26 +701,18 @@ maximum number of newest batches to return. ${BUS}`,
     `Comment on ANY entity (tasks, boards, docs, frozen pages — anything
 with an id). An optional verdict makes it a review; its body is the
 rationale and may be empty for a bare verdict. Pass the same stable
-session identifier you claim with, for attribution. Set event when the
-comment is EMITTED rather than written — a sweep's finding, a status
-nudge, anything a machine produced: an event never rides the mail relay
-and renders as a chip, not a bubble. Prose you actually wrote is a
-letter and stays one.`,
+session identifier you claim with, for attribution.`,
     {
       id: z.string(),
       body: body().optional(),
       verdict: z.enum(verdicts).optional(),
-      event: z.boolean()
-        .describe('Emitted by machinery, not written — mark it at mint.')
-        .optional(),
       session: z.string(),
     },
     async (
-      { id, body, verdict, event, session }: {
+      { id, body, verdict, session }: {
         id: string
         body?: string
         verdict?: string
-        event?: boolean
         session: string
       },
     ) => {
@@ -738,10 +722,10 @@ letter and stays one.`,
       if (!row) return err(`no entity: ${id}`)
       let words = body ?? ''
       await io.write(
-        commentChanges(all, row.eid, words, session, { verdict, event }),
+        commentChanges(all, row.eid, words, session, { verdict }),
         session,
       )
-      let said = verdict ? `${verdict} review` : event ? 'event' : 'comment'
+      let said = verdict ? `${verdict} review` : 'comment'
       return bus(`${said} on ${idOf(row)}${wall(words)}`, session)
     },
   )
