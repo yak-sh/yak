@@ -814,6 +814,8 @@ html {
 .Comments_Box {
   display: grid;
   gap: var(--half-gap);
+  position: sticky;
+  bottom: var(--half-gap);
 }
 .Comments_Hints {
   display: flex;
