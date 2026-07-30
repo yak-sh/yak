@@ -186,7 +186,7 @@ let piped = (io: Stdin, prop: string, as: string) => {
 // one holding a '/' that stats as a file — so prose is untouched, a bare
 // word like 'done' can never trip it even beside a file of that name, and a
 // path that does NOT exist stays storable as text.
-let isFile = (v: string) => {
+export let isFile = (v: string) => {
   try {
     return Deno.statSync(v).isFile
   } catch {

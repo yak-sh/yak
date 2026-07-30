@@ -27,6 +27,7 @@ import {
   idOf,
   inboxItem,
   inflate,
+  isFile,
   isUnread,
   mailAt,
   mailChanges,
@@ -270,8 +271,25 @@ export let strayFlag = (
   }
 }
 
+// A bare `@file` among the title words. `task new`'s trailing words ARE
+// the title, so an @-token lands in it verbatim and the task mints with an
+// empty body — silently, because the caller's next read is the "T-… created"
+// line and not the row. The sibling of client.ts's `dropped()`, narrowed
+// the same three ways: one whitespace-free token, `@`-led, and naming a
+// file that exists. `@@` escapes, prose survives, a path that isn't there
+// stays storable as text.
+export let strayFile = (words: string[]) =>
+  words.find((w) => /^@[^@\s]\S*$/.test(w) && isFile(w.slice(1)))
+
 let create = async (args: string[]) => {
   let { params, words } = split(args)
+  let at = strayFile(words)
+  if (at) {
+    throw new Error(
+      `${at} names a file, and \`task new\`'s words are the TITLE — ` +
+        `the body rides its own door: task new "…" .body=${at}`,
+    )
+  }
   let stray = strayFlag(words)
   if (stray) {
     throw new Error(

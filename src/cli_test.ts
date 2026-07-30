@@ -20,6 +20,7 @@ import {
   lifecycleHooks,
   operatorHook,
   roleEid,
+  strayFile,
   strayFlag,
   subagentDigest,
   subject,
@@ -736,6 +737,32 @@ Deno.test('strayFlag: a flag with no matching prop suggests nothing', () => {
 
 Deno.test('strayFlag: bare -- is not a flag', () => {
   assertEquals(strayFlag(['Title', '--', 'more']), null)
+})
+
+// The @-token sibling. `task new "title" @body.md` is the corruption:
+// the words ARE the title, so the path lands in it and the body mints
+// empty. Every case is a whole argv WORD, the way a shell hands them over.
+Deno.test('strayFile: an @file among the title words', () => {
+  // README.md exists relative to the repo root the suite runs from — the
+  // positive control, without which every case below passes vacuously.
+  assertEquals(Deno.statSync('README.md').isFile, true)
+
+  let cases: [string[], string | undefined][] = [
+    [['a', 'title', '@README.md'], '@README.md'],
+    [['@README.md'], '@README.md'],
+    // nothing to read: prose, an escape, and a path that isn't there
+    [['a', 'clean', 'title'], undefined],
+    [['a', 'title', '@@README.md'], undefined],
+    [['a', 'title', '@nope/not/here.md'], undefined],
+    // one token holding whitespace is prose someone quoted, not a door
+    [['@README.md and more'], undefined],
+    // a bare word that happens to name a file is still just a word
+    [['README.md'], undefined],
+    [['@'], undefined],
+  ]
+  for (let [words, want] of cases) {
+    assertEquals(strayFile(words), want, words.join(' '))
+  }
 })
 
 // A subagent (a Task-tool child) sees ONLY its task — never the operator's
