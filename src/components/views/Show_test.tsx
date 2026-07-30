@@ -1,7 +1,8 @@
 // The full document face's section renderers — especially the meta line,
 // where an absent field must paint nothing.
-import { type VNode } from 'preact'
+import { render, type VNode } from 'preact'
 import { assertEquals } from '@std/assert'
+import { parseHTML } from 'linkedom'
 import { cache, ent } from '../../live.ts'
 import { resolve } from '../registry.ts'
 import '../Entity.tsx'
@@ -21,6 +22,62 @@ Deno.test('document meta paints no tally when it has no comments', () => {
   let e = ent('doc')
   let meta = resolve(e, 'Meta').Render({ e, id: true })!
   assertEquals(raw(meta).filter((c) => typeof c == 'number'), [])
+})
+
+Deno.test('document meta names its creator and editor after their ages', () => {
+  let jeff = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  let robin = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let { document } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  let now = Date.now()
+  cache.value = {
+    doc: {
+      entity: { eid: 'doc', num: 1 },
+      doc: { eid: 'doc', title: 'Changed document', body: '' },
+      created: {
+        eid: 'doc',
+        at: new Date(now - 2 * 86_400_000).toISOString(),
+        by: jeff,
+      },
+      updated: {
+        eid: 'doc',
+        at: new Date(now - 18 * 3_600_000).toISOString(),
+        by: robin,
+      },
+    },
+    [jeff]: {
+      entity: { eid: jeff, num: 2 },
+      doc: { eid: jeff, title: 'Jeff', body: '' },
+      person: { eid: jeff },
+    },
+    [robin]: {
+      entity: { eid: robin, num: 3 },
+      doc: { eid: robin, title: 'Robin', body: '' },
+      person: { eid: robin },
+    },
+  }
+  let root = document.querySelector('main')!
+  try {
+    let e = ent('doc')
+    render(resolve(e, 'Meta').Render({ e })!, root)
+    assertEquals(
+      root.querySelector('.Stamp')?.textContent,
+      '2 days ago by U-2 — Jeff· edited 18 hours ago by U-3 — Robin',
+    )
+    assertEquals(
+      [...root.querySelectorAll('.Stamp a')].map((a) => a.getAttribute('href')),
+      ['/U-2', '/U-3'],
+    )
+  } finally {
+    render(null, root)
+    cache.value = {}
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else delete (globalThis as { document?: unknown }).document
+  }
 })
 
 Deno.test('comment dependencies lead with the entity commented on', () => {

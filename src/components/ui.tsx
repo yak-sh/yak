@@ -153,10 +153,14 @@ let StampEl = el('span', 'Stamp')
 // when present, edited; `at` names any other graph timestamp. Full
 // stamps ride the tooltips.
 export let Stamp = (
-  { e, at, label }: {
-    e?: { created?: { at?: string }; updated?: { at?: string } }
+  { e, at, label, by }: {
+    e?: {
+      created?: { at?: string; by?: string | null }
+      updated?: { at?: string; by?: string | null }
+    }
     at?: string | null
     label?: string
+    by?: (comp: 'created' | 'updated') => ComponentChildren
   },
 ) => {
   let born = at ?? e?.created?.at
@@ -169,8 +173,14 @@ export let Stamp = (
       <span data-tip={pretty(born)}>
         {label && `${label} `}
         {ago(born)}
+        {by && e?.created?.by && <>{' by '}{by('created')}</>}
       </span>
-      {edited && <span data-tip={pretty(edited)}>· edited {ago(edited)}</span>}
+      {edited && (
+        <span data-tip={pretty(edited)}>
+          · edited {ago(edited)}
+          {by && e?.updated?.by && <>{' by '}{by('updated')}</>}
+        </span>
+      )}
     </StampEl>
   )
 }

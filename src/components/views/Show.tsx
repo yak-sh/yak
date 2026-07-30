@@ -133,15 +133,16 @@ let Facet = ({ e }: { e: Ent }) => (
   />
 )
 
-// Who authored this — the created.by actor (T-6670), the authority signal
-// (owner ask vs agent filing). The registry walk renders the actor's
-// Inline chip; absent (pre-provenance) it renders nothing.
-let By = ({ e }: { e: Ent }) =>
-  e.created?.by
+// Who authored or edited this — the stamp supplies the sentence, while
+// the prop registry supplies each actor's linked face.
+let By = (
+  { e, comp }: { e: Ent; comp: 'created' | 'updated' },
+) =>
+  e[comp]?.by
     ? (
       <Prop
         eid={e.eid}
-        comp='created'
+        comp={comp}
         prop='by'
         show={(face, v) => {
           if (!face || !v) return null
@@ -367,7 +368,7 @@ export let Similar = ({ e }: { e: Ent }) => {
 // its id chip lives here, under the h1.
 export let Meta = ({ e, id }: { e: Ent; id?: boolean }) => {
   let talk = commentCount(e.eid).value
-  if (!id && !e.task && !talk && !e.claim) return null
+  if (!id && !e.task && !talk && !e.claim && !e.created?.at) return null
   return (
     <MetaEl>
       {e.task && (
@@ -384,8 +385,7 @@ export let Meta = ({ e, id }: { e: Ent; id?: boolean }) => {
           ⚑ {viaName(e.claim.session_eid)}
         </Claim>
       )}
-      <By e={e} />
-      <Stamp e={e} />
+      <Stamp e={e} by={(comp) => <By e={e} comp={comp} />} />
       {id && <Id e={e} />}
     </MetaEl>
   )
