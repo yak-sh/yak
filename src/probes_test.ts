@@ -11,6 +11,8 @@ import {
   live,
   probe,
   type Proc,
+  profiles,
+  throwaway,
   type Tree,
   within,
   worktree,
@@ -244,4 +246,55 @@ Deno.test('a worktree is pruned only when all three locks open', () => {
     'not merged into main',
   )
   assertEquals(judgeTree({ ...base, busy: 'pid 9 is inside' }).prune, false)
+})
+
+// Killing a browser and leaving its profile is half a cleanup, and on a
+// RAM-backed /tmp the expensive half (T-10898). These two are what decide
+// which directories the sweep may remove.
+Deno.test('throwaway: scaffolding under /tmp, never a real profile', () => {
+  assert(throwaway('/tmp/perf-a1b2/chrome'))
+  assert(throwaway('/tmp/com.google.Chrome.scoped_dir.QbSdFo'))
+  assert(throwaway('/tmp/cdp-t7081'))
+  // A person's browser state is not ours to delete, whoever launched it.
+  assertEquals(throwaway('/home/yaks/.config/google-chrome'), false)
+  assertEquals(throwaway('/home/yaks/code/tasks/profile'), false)
+  // /tmp itself, and anything walking out of it, are refused not resolved —
+  // this feeds a recursive delete.
+  assertEquals(throwaway('/tmp'), false)
+  assertEquals(throwaway('/tmp/'), false)
+  assertEquals(throwaway('/tmp/../home/yaks'), false)
+})
+
+Deno.test('profiles: the reaped browsers dirs, deduped and spared-safe', () => {
+  let dir = '/tmp/perf-xyz/chrome'
+  let doomed = proc({
+    pid: 800,
+    comm: 'chrome',
+    args: [
+      '--headless=new',
+      '--remote-debugging-port=9200',
+      `--user-data-dir=${dir}`,
+    ],
+  })
+  // Two verdicts on one dir (a browser and its helper) yield one removal.
+  let helper = proc({ ...doomed, pid: 801 })
+  assertEquals(
+    profiles([
+      { proc: doomed, reap: true, why: 'orphan' },
+      { proc: helper, reap: true, why: 'helper' },
+    ]),
+    [dir],
+  )
+  // A SPARED browser keeps its profile — that is a run still in flight.
+  assertEquals(profiles([{ proc: doomed, reap: false, why: 'mine' }]), [])
+  // And a browser whose profile is a real one is reaped without the delete.
+  let home = proc({
+    ...doomed,
+    args: [
+      '--headless=new',
+      '--remote-debugging-port=9200',
+      '--user-data-dir=/home/yaks/.config/google-chrome',
+    ],
+  })
+  assertEquals(profiles([{ proc: home, reap: true, why: 'orphan' }]), [])
 })

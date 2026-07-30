@@ -125,7 +125,12 @@ type Ev = {
   args?: Record<string, unknown>
 }
 
-let chrome = async (port: number, profile: string) => {
+// `tmp` is where chrome puts its OWN scratch — the
+// `com.google.Chrome.scoped_dir.*` dirs, which do NOT live under
+// --user-data-dir and are only cleaned on a graceful exit. We kill chrome, so
+// they were never cleaned; pointing TMPDIR inside the run's scratch makes them
+// die with it however the run ends (T-10898).
+let chrome = async (port: number, profile: string, tmp: string) => {
   let bin = ['google-chrome', 'google-chrome-stable', 'chromium']
     .find((b) => {
       try {
@@ -146,6 +151,7 @@ let chrome = async (port: number, profile: string) => {
       '--force-device-scale-factor=1',
       'about:blank',
     ],
+    env: { TMPDIR: tmp, TMP: tmp, TEMP: tmp },
     stdout: 'null',
     stderr: 'null',
   }).spawn()
@@ -222,7 +228,10 @@ let chrome = async (port: number, profile: string) => {
       cmd.kill('SIGKILL')
     } catch { /* already gone */ }
   }
-  return { evalIn, mark, trace, mouse, go, kill }
+  // Killing is a REQUEST; `gone` is the fact. The profile cannot be removed
+  // until chrome has actually exited, or the delete races its teardown.
+  let gone = () => cmd.status
+  return { evalIn, mark, trace, mouse, go, kill, gone }
 }
 
 // `base` is filled once we know where the app lives (own server or --url).
@@ -835,6 +844,55 @@ let main = async () => {
   let cdpPort = 9200 + Math.floor(Math.random() * 700)
   let srvPort = 8300 + Math.floor(Math.random() * 700)
   let srv: Deno.ChildProcess | undefined
+  let page: Awaited<ReturnType<typeof chrome>> | undefined
+
+  // ONE cleanup, armed before anything exists and idempotent, because the run
+  // that leaks is the run that DIED — /tmp is RAM-backed tmpfs here, so a
+  // profile left behind is memory and swap, not idle clutter (T-10898). It
+  // closes over `srv`/`page` so later assignments are visible.
+  let done = false
+  let cleanup = async () => {
+    if (done) return
+    done = true
+    try {
+      page?.kill()
+    } catch { /* already gone is the outcome we wanted */ }
+    try {
+      srv?.kill('SIGKILL')
+    } catch { /* ditto */ }
+    // WAIT for chrome to be gone before removing its profile. Killing and
+    // deleting in the same breath races the teardown: the delete fails with
+    // the directory busy, and the original code swallowed that failure — which
+    // is how 31 SUCCESSFUL runs leaked their scratch. The crash path was never
+    // the only leak.
+    await page?.gone().catch(() => {})
+    await srv?.status.catch(() => {})
+    for (let i = 0;; i++) {
+      try {
+        Deno.removeSync(scratch, { recursive: true })
+        return
+      } catch (e) {
+        if (i == 9) {
+          // Say it. A cleanup that cannot report its own failure is not a
+          // cleanup, and on a RAM-backed /tmp the cost is memory.
+          console.error(
+            `perf: could not remove ${scratch} — ${(e as Error).message}`,
+          )
+          return
+        }
+        await new Promise((ok) => setTimeout(ok, 100))
+      }
+    }
+  }
+  // earlyoom sends SIGTERM before it escalates, so this is the signal that
+  // actually fires on this box. SIGKILL cannot be caught by anyone, which is
+  // why `task sweep` removes a reaped browser's profile too — the spawner
+  // cannot be the only line of defence.
+  for (let sig of ['SIGINT', 'SIGTERM'] as Deno.Signal[]) {
+    Deno.addSignalListener(sig, () => {
+      cleanup().finally(() => Deno.exit(130))
+    })
+  }
   let board = 'B-5' // the seed's own board, if we reuse a --url server
   let panCanvas = ''
   let sentinel = ''
@@ -867,8 +925,11 @@ let main = async () => {
     if (boards[0]) board = `B-${nums.get(boards[0].eid)}`
   }
 
-  let page = await chrome(cdpPort, `${scratch}/chrome`)
+  // chrome INSIDE the guard: launching is itself a step that fails (no chrome
+  // on PATH, port squatted, ws url never appears), and outside it that failure
+  // leaked the whole scratch plus a live server.
   try {
+    page = await chrome(cdpPort, `${scratch}/chrome`, scratch)
     let pan = await panScenario(page, panCanvas)
     let brd = await boardScenario(page, board)
     let mountedPan = sentinel ? await panScenario(page, '', true) : null
@@ -896,9 +957,7 @@ let main = async () => {
     ]
     console.log(report.join('\n'))
     if (!keep) {
-      page.kill()
-      srv?.kill('SIGKILL')
-      await Deno.remove(scratch, { recursive: true }).catch(() => {})
+      await cleanup()
     } else {
       console.log(`kept: chrome :${cdpPort} · server ${base} · ${scratch}`)
     }
@@ -909,9 +968,7 @@ let main = async () => {
         : 1,
     )
   } catch (e) {
-    page.kill()
-    srv?.kill('SIGKILL')
-    await Deno.remove(scratch, { recursive: true }).catch(() => {})
+    await cleanup()
     throw e
   }
 }

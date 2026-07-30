@@ -217,6 +217,33 @@ export let scan = (mine = Deno.uid() ?? undefined): Proc[] => {
   return out
 }
 
+// A throwaway profile, safe to delete. `/tmp` is the whole rule: it is where
+// scaffolding goes, and a real Chrome profile lives in $HOME, so the worst a
+// wrong verdict here can cost is a re-login — never a person's browser state.
+// A path with `..` in it is refused rather than resolved: this deletes
+// recursively, so the predicate stays something you can read in one line.
+export let throwaway = (dir: string) =>
+  /^\/tmp\/[^/]/.test(dir) && !dir.includes('/..')
+
+// The profile directories of the browsers we just reaped. Killing the process
+// and leaving its profile is half a cleanup, and on this box the expensive
+// half: `/tmp` is RAM-backed tmpfs, so a 150M profile nobody removed is 150M
+// of memory and swap. 351 of them (4.6G) helped saturate swap and got
+// operators earlyoom-killed (T-10898) — a leak that makes the next OOM more
+// likely, which is the shape of a feedback loop.
+//
+// The sweep already knows each directory (it groups helpers by it), and being
+// a reconciler is what makes this the right home: a run that dies by SIGKILL
+// runs no cleanup of its own, so no amount of care in the spawner can close
+// this. Whoever launched the browser, however it died, the dir goes.
+export let profiles = (verdicts: Verdict[]) => [
+  ...new Set(
+    verdicts.filter((v) => v.reap && browser(v.proc))
+      .map((v) => optOf(v.proc, '--user-data-dir'))
+      .filter((d): d is string => d != null && throwaway(d)),
+  ),
+]
+
 // TERM first, KILL what ignores it. A process already gone between the scan
 // and the signal is the outcome we wanted, so ESRCH is success.
 export let reap = async (verdicts: Verdict[]) => {
@@ -225,6 +252,11 @@ export let reap = async (verdicts: Verdict[]) => {
   if (!doomed.length) return []
   await new Promise((ok) => setTimeout(ok, 2000))
   for (let pid of doomed) if (commOf(pid)) signal(pid, 'SIGKILL')
+  // Profiles AFTER the kill, never before: a live chrome rewrites what we
+  // just removed, and would recreate the leak we came to collect.
+  for (let dir of profiles(verdicts)) {
+    await Deno.remove(dir, { recursive: true }).catch(() => {})
+  }
   return doomed
 }
 
