@@ -25,6 +25,7 @@ let {
   rolesSweep,
   roleTmux,
   styleArgs,
+  windowOf,
   ventureOf,
 } = await import('./roles.ts')
 
@@ -406,9 +407,19 @@ Deno.test('role window styling matches holdco, keyed on the venture', () => {
   }
 
   // The window carries the venture name, and automatic-rename is off — the
-  // one guards the other, so assert them together.
+  // one guards the other, so assert them together. With no venture title the
+  // tab reads as the id; with one it takes its first word, which is holdco's
+  // rule (`title: Trading Desk` → window `Trading`).
   let argv = nativeTmuxArgs(base)
   assertEquals(argv[argv.indexOf('-n') + 1], 'trading')
+  assertEquals(windowOf(base), 'trading')
+  assertEquals(windowOf({ ...base, venture: 'Trading Desk' }), 'Trading')
+  assertEquals(windowOf({ ...base, venture: '  ' }), 'trading')
+  // Retitling a venture must NOT move its colour — the hash stays on the id.
+  assertEquals(
+    roleColour(ventureOf({ ...base, venture: 'Trading Desk' })),
+    roleColour('trading'),
+  )
 
   let style = styleArgs(base, '%7')
   let win = `=${roleTmux(base.eid)}:`

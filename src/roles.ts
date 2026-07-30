@@ -24,6 +24,7 @@ export type RoleConfig = {
   state: string
   surface: string
   scope: string
+  venture?: string
   title: string
   body: string
   repo: { path: string; base_branch: string }
@@ -184,6 +185,17 @@ const PALETTE = [
   'colour208',
 ]
 
+// The window's NAME, holdco's convention: the first word of the venture's
+// DISPLAY title, falling back to the id. holdco reads that title from its
+// registry; the graph is the authority here, so a venture whose project doc
+// carries a proper title (`Trading Desk`) gets the tab holdco would give it
+// (`Trading`), and one that doesn't simply reads as its id.
+//
+// Deliberately NOT the colour key: the colour hashes the lowercase id so it
+// survives a venture being retitled, exactly as it does in holdco.
+export let windowOf = (c: RoleConfig) =>
+  (c.venture ?? '').trim().split(/\s+/)[0] || ventureOf(c)
+
 export let roleColour = (name: string) =>
   PALETTE[
     [...name].reduce((n, ch) => n + ch.charCodeAt(0), 0) % PALETTE.length
@@ -224,7 +236,7 @@ export let nativeTmuxArgs = (c: RoleConfig) => [
   '-s',
   roleTmux(c.eid),
   '-n',
-  ventureOf(c),
+  windowOf(c),
   '-c',
   c.repo.path,
   ...Object.entries(nativeEnv(c.eid)).flatMap(([key, value]) => [
@@ -373,9 +385,11 @@ export let roleHash = (c: RoleConfig) =>
 let config = (eid: string): RoleConfig => {
   let row = db.prepare(`
     select r.*, d.title, d.body, p.provider, p.model, p.effort,
-           p.persona_eid, repo.path, repo.base_branch
+           p.persona_eid, repo.path, repo.base_branch,
+           scope.title as venture_title
     from role r
     left join doc d on d.eid = r.eid
+    left join doc scope on scope.eid = r.scope_eid
     left join spawn p on p.eid = r.eid
     left join repo on repo.eid = r.scope_eid
     where r.eid = ?
@@ -416,6 +430,7 @@ let config = (eid: string): RoleConfig => {
     state: String(row.state),
     surface: String(row.surface),
     scope: String(row.scope_eid),
+    venture: String(row.venture_title ?? '') || undefined,
     title: String(row.title ?? ''),
     body: String(row.body ?? ''),
     repo: {
