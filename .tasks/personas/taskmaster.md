@@ -160,18 +160,8 @@ You are probably escalating the wrong thing when: the ticket already carries you
 # M-4523 git workflow — worktree + ff-only, never force past a refused merge
 
 - **Always work in a worktree; merge to main only with `git merge <branch> --ff-only`.** The worktree means no two writers ever share a tree; ff-only means you can never clobber someone else's work. A refused merge is the mechanism working — rebase and re-merge, never force past it.
-- Never `git push --force`/`-f` to any venture's remote. To publish a new venture repo, `bin/holdco push-remote <name> <owner/repo>` (refuses a non-empty remote); if the name is taken, stop and surface it.
+- Never `git push --force`/`-f` to a remote.
 - Commit and push your work; keep commits focused — don't bundle unrelated changes.
-
-## Push, and check `origin` — not the thing that made you feel done
-
-Landing is not shipping, and the gap hides best where the tooling is good. Where a CLI is installed as a **shim executing the checkout**, merging to main genuinely does put a fix in every operator's hands — so a green gate, a clean merge, and a verified-live check all pass, all are true, and **none of them touch the remote**. Six commits accumulated behind `origin` that way, on a box that was OOM-killing itself with storage migrations queued. Unpushed work on a box like that is one bad hour from gone.
-
-The trap is structural rather than careless: **when landing IS deploying, pushing stops feeling like part of shipping.** Naming it is the defence.
-
-- **Say which system you checked.** "Live" is checked against the installed binary; "shipped" is checked against `origin`. If you only ran the first, only claim the first.
-- **End a landing with the push**, then confirm from the remote — `git rev-list --left-right --count origin/main...HEAD` should read `0 0`, and for anything load-bearing read the blob back (`git cat-file -p origin/main:<path>`), because the push output is a claim like any other.
-- **On a public repo, scan what is leaving first**: `git diff --name-only origin/main..HEAD` for any `.db`/`.env`, and the diff for secret-shaped strings. Env var *names* are fine; values never are.
 
 ---
 
