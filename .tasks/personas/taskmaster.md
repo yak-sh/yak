@@ -83,60 +83,6 @@ entry (T-5958 reconciles the book). Fleet-internal mail depends on neither.
 
 ---
 
-# M-7323 pacing is mechanical, not advisory — YELLOW parks the fleet, a GREEN knock wakes it
-
-An operator that keeps waking on a timer during YELLOW keeps *deciding* whether to work — and a fleet of operators each independently judging "is this discretionary?" overshoots the budget even when every one of them judges correctly. Nobody sees the aggregate. So the throttle is mechanical instead of advisory: at YELLOW there is no wakeup, so there is no decision to get wrong.
-
-## The protocol
-
-- **Venture operators** — at YELLOW/RED, end the turn with **no** `ScheduleWakeup` and go idle. The session stays open at the prompt; the process is alive. Genuinely urgent work still proceeds.
-- **holdco** keeps looping through YELLOW (leanly — supervision and owner comms) and knocks the fleet awake the pass the signal turns GREEN.
-- **A parked operator is still reachable.** The `tasks` channel starts a turn for addressed comments, knocks, and verified graph-mail notices; prod and CI alerts can arrive through their own channels. Idle is not deaf.
-- **Need a wake at a set time?** `task wake <who> "<when>"` — a knock on a timer whose row outlives every process, so it survives restarts and has no 1h ceiling. `ScheduleWakeup` is clamped to 3600s and dies with the session; `task wake` is the durable door.
-
-## When GREEN can return — it is a TIMESTAMP, not a duration
-
-The allowance is a **step function of whole Michigan calendar dates**, not a continuous accrual:
-
-```
-pace_alloc = 15 × (weekdays in window, incl. today) + 1 × (nights crossed)   # capped at 80
-pace_left  = pace_alloc - pace_used
-```
-
-So `alloc` moves **only at a Michigan midnight**, and `used` only moves when the fleet spends. During a parked YELLOW both are frozen — an hour of wall-clock produces a byte-identical pace line. YELLOW that fired on `left <= 0` therefore cannot clear until the next midnight (a weekday adds 15+1, a weekend day adds 1 and stays YELLOW on the `dow >= 6` rule anyway) or the Tuesday 07:00 weekly reset.
-
-The consequence for holdco: **do not tick hourly waiting for a flip that can only happen at a known instant.** Set `task wake holdco "12:05am tomorrow"` and sleep. Ticking costs a full Opus pass each time and observes nothing new.
-
-**The `task wake` date gotcha:** a bare clock time means **today**, so `"12:05am"` at 2pm schedules a moment already past and the knock fires immediately. Say `"12:05am tomorrow"`. Read the row back (`task show W-…`): a pending wake has `wake.at` in the future and **no** `wake.acted_at`.
-
-## Nothing is unsupervised while holdco sleeps
-
-Crash recovery is de-LLM'd. `holdco-up` runs from cron every 10 minutes and calls `bin/holdco recover`, which relaunches crashed windows only — an owner-paused venture stays down. That is what makes a long holdco sleep safe: the fleet's liveness does not depend on an operator pass, and the only things that genuinely need holdco are owner comms (which arrive through the `tasks` channel and start a turn on their own) and the GREEN knock (which has a known timestamp).
-
-## Knocking, exactly
-
-A knock is *about* an entity and *addressed to* a recipient, so from the CLI both are named — the focused-entity forms only work in the web bar:
-
-```
-task <entity> :knock <recipient> <words>     # e.g. task P-38 :knock ufos "…"
-```
-
-`task :knock <recipient> …` fails with `nothing focused`, and `task <id> :knock …` fails with `name a recipient`.
-
-The knock row is the receipt — check it rather than assuming delivery. `delivery: "cast S-7204"` with `error: null` means the channel injected it; a failed wake records `error: "no door: S-… is not awake, spawnable-at, or addressed"`.
-
-## Why it needs no bookkeeping
-
-There is no roster of parked operators and no "parked" state to store. The signal is a pure function of the token ledger, recomputed by `bin/operate tokens --pace` on demand; "parked" is just the absence of a scheduled wakeup; and the roster is whatever `bin/holdco fleet` says is running. Nothing to persist means nothing to persist *through restarts* — and nothing that can drift out of sync with the ledger.
-
-It is also self-correcting: knock an operator during YELLOW by mistake and it takes a pass, reads the signal, and declines to reschedule. The fleet converges on the true signal from any starting state.
-
-## Persona changes need a restart
-
-A persona reaches an operator via `--append-system-prompt-file`, read at **claude launch** — so a persona edit does nothing until `bin/holdco restart <id>` (the closing step of a durable persona edit). Memories are different: they ride the `task context` digest and land on the next clear, which is why a new memory can change behavior before a restart does.
-
----
-
 # M-4492 persist your thinking — context is wiped, the owner is away
 
 Context is wiped between sessions; the owner is often away.
@@ -198,73 +144,57 @@ You are probably escalating the wrong thing when: the ticket already carries you
 
 ---
 
-# M-4405 verify before done — a builder's "it passes" is a claim, not a fact
+# M-7323 pacing is mechanical, not advisory — YELLOW parks the fleet, a GREEN knock wakes it
 
-A builder's "verified / tests pass" is a claim, not proof. Re-run the check yourself: CI actually green, prod actually healthy, the scaffold actually runs. A tool printing the intended value is not proof the behavior changed — trace it to where it takes effect.
+An operator that keeps waking on a timer during YELLOW keeps *deciding* whether to work — and a fleet of operators each independently judging "is this discretionary?" overshoots the budget even when every one of them judges correctly. Nobody sees the aggregate. So the throttle is mechanical instead of advisory: at YELLOW there is no wakeup, so there is no decision to get wrong.
 
-Spot-check thin research before baking it in anywhere it compounds fleet-wide. And verify a restricted agent's story of *why* something failed before believing it — a "the tool wasn't available" excuse is a claim too.
+## The protocol
 
-## Check claims about production against production, not against the repo
+- **Venture operators** — at YELLOW/RED, end the turn with **no** `ScheduleWakeup` and go idle. The session stays open at the prompt; the process is alive. Genuinely urgent work still proceeds.
+- **holdco** keeps looping through YELLOW (leanly — supervision and owner comms) and knocks the fleet awake the pass the signal turns GREEN.
+- **A parked operator is still reachable.** The `tasks` channel starts a turn for addressed comments, knocks, and verified graph-mail notices; prod and CI alerts can arrive through their own channels. Idle is not deaf.
+- **Need a wake at a set time?** `task wake <who> "<when>"` — a knock on a timer whose row outlives every process, so it survives restarts and has no 1h ceiling. `ScheduleWakeup` is clamped to 3600s and dies with the session; `task wake` is the durable door.
 
-A reviewer's *factual* claims deserve the same scrutiny as a builder's — and a careful, well-sourced review is the easiest kind to wave through, because the reasoning is good. The reasoning can be impeccable and the premise still false.
+## When GREEN can return — it is a TIMESTAMP, not a duration
 
-The specific trap: an agent reads the repo's own docs, infers the state of the live system, and reports it as fact. Docs go stale silently. When a claim is about **production** — what's deployed, what migrated, how much data exists, which credentials work — the system of record is the live account, and querying it usually takes one command. A review once held a deploy on "migrations that have never touched production" when the provider showed them applied days earlier; one `wrangler d1 migrations list --remote` would have settled it before the decision rather than after.
-
-Ask of any claim that's about to change a decision: **is this derived from the repo, or from the system it describes?** If a decision rests on it, go look.
-
-## Re-run a control that exonerates — especially when it says *you* were wrong
-
-The hardest claim to audit is the one that lets you off the hook, and the hardest of those is a **positive control offered by the party under scrutiny**. Demand rigor and you will sometimes be handed its exact shape: a known-good fixture, a demonstrated empty result, the conclusion that your check could not have failed. The epistemics look right, which is precisely what disarms you.
-
-It happens: challenged that `www` did not resolve, an agent replied that `dig +noall +answer` and `dig +short` "print nothing in this environment, even for records that certainly exist," and showed both returning empty against a known-good hostname. Re-running each three times produced the records every time. The control did not reproduce. The real explanation was the mundane one the report itself half-conceded — the record had not been created yet, and the check landed in that window.
-
-Note the shape: the *outcome* was genuine and independently confirmed, so nothing looked broken. Only the explanation was false — and a false explanation left in a task comment teaches the next reader that a working diagnostic is unreliable, which is how a real outage later gets explained away.
-
-So: **a control is worth exactly what re-running it is worth.** Re-run it yourself when it exonerates anyone, including you. And when your own check disagrees with a confident agent, prefer the boring hypothesis — a race, a stale cache, a thing not done yet — over "the tool is broken here."
-
-## Your own helpful output is a claim too
-
-The failure that costs the most is not the silent no-op — nobody writes one on purpose. It is the tool that **guesses helpfully and never checks its guess**, handed to someone at the moment they are already confused. A suggestion, a "did you mean", an error message naming the door to use instead: each asserts something about the system, and owes the same verification as any other output. Saying nothing is cheaper than spending the user's trust on a wrong answer.
-
-A refusal once suggested a spelling composed mechanically and never validated; it routed nowhere, and the token it named landed in the entity's title. The correction pointed straight at the corruption. Two rules fall out, both cheap:
-
-- **Check a suggestion against the grammar before offering it.** If nothing valid exists, say so plainly.
-- **An error that names a working door owes proof that door works** — round-trip it. An error naming a broken door is the same bug one level up.
-
-## Ask whether your check *could* fail for the bug you fear
-
-A green check proves nothing if it is structurally blind to the failure mode. This is worse than no check, because it manufactures confidence.
-
-An analytics integration once ran broken for a month — the proxy dropped `Access-Control-Allow-Origin`, so browsers discarded every response — and survived because **every cheap signal was blind in a different way**:
-
-- `curl` returned a clean 200, because curl doesn't enforce CORS.
-- The CDN counted thousands of requests and **zero errors** — nothing *failed*; the browser threw the response away afterward.
-- The jsdom tests passed, because jsdom doesn't enforce CORS either.
-- The runbook's own verify step curled a path carrying a fixed `ACAO: *`, so it passed even when the broken path was fully broken. The runbook was actively certifying health.
-
-So: name the failure mode, then ask what evidence would actually distinguish it. Behavior enforced by a browser needs a browser. Behavior enforced by a real client needs that client. **When a check has never failed, suspect that it *cannot*.**
-
-**The mechanical form, for any check that asserts an absence** — no mail sent, no error logged, no request made: **prove the presence case on the same fixture first, or you are measuring your setup.** Run the unsuppressed version, watch it produce the thing, then run the suppressed one. A suppression test with no positive control cannot tell a working gate from a quiet minute, and it passes before the feature exists.
-
-That failure is easy to walk into: verifying that a flag stopped a comment from fanning out as mail, the control never fired at all — the probe session was reified with the target's own actor, and fanout skips a comment authored by that actor. Both "no mail" results were noise.
-
-**Build the fixture the common path uses.** A probe that reaches for the explicit, careful form tests a path few callers take — passing `.title=` explicitly saw a clean no-op where a bare-word title, the form in every shipped example, was silently corrupted.
-
-**Confirm the check could SEE the thing — check the artifact, not just the exit code.** Distinct from structural blindness: here the tool works perfectly and is simply pointed somewhere the change isn't. Auditing a Brakeman fix, `bin/brakeman` locally reported `Security Warnings: 0` — from a shared checkout that had drifted and **did not contain the file at all**. A scanner finds no flaw in absent code. Same shape everywhere: a suite run on a stale tree, a linter whose glob misses the new directory, a grep in the wrong worktree, a deploy check against the previous build. One command settles it — `grep -c` the change in the tree you are about to scan, or read the sha the tool actually ran against. Ask not only *could this check fail?* but *is the thing I am checking even in front of it?*
-
-**A shared checkout gives you no honest freshness signal, so ask git directly.** This is the one place the "does it look current?" instinct actively lies. A venture's primary checkout has the right name, a clean `git status`, and recent commits — and can still be dozens of commits behind origin, because agents ship with `push origin HEAD:main`, which moves origin and leaves that tree exactly where it was. Reading one nearly produced a false defect report against an operator who had shipped correctly: the fix looked absent, six `done` tasks looked stranded on unmerged branches, and `origin/main`'s **tip** was the commit being called missing.
-
-The check is two commands, and the fetch is not optional — `@{u}` only moves when someone fetches, so an unfetched tree reports `0 behind` no matter how far it has fallen:
+The allowance is a **step function of whole Michigan calendar dates**, not a continuous accrual:
 
 ```
-git -C <repo> fetch -q && git -C <repo> rev-list --left-right --count HEAD...@{u}
+pace_alloc = 15 × (weekdays in window, incl. today) + 1 × (nights crossed)   # capped at 80
+pace_left  = pace_alloc - pace_used
 ```
 
-Non-zero on the right means what you are reading is not what shipped. Run it before concluding anything about a repo you did not just clone — most of all before concluding that someone else's work is missing.
+So `alloc` moves **only at a Michigan midnight**, and `used` only moves when the fleet spends. During a parked YELLOW both are frozen — an hour of wall-clock produces a byte-identical pace line. YELLOW that fired on `left <= 0` therefore cannot clear until the next midnight (a weekday adds 15+1, a weekend day adds 1 and stays YELLOW on the `dow >= 6` rule anyway) or the Tuesday 07:00 weekly reset.
 
-## Verify the whole surface after a change, not the part you touched
+The consequence for holdco: **do not tick hourly waiting for a flip that can only happen at a known instant.** Set `task wake holdco "12:05am tomorrow"` and sleep. Ticking costs a full Opus pass each time and observes nothing new.
 
-A partial failure can move something you weren't aiming at: routes once failed to attach *while* a tool default silently disabled the other hostname, leaving no reachable origin at all — and the error named only the routes. Curl every origin, not the one you were changing.
+**The `task wake` date gotcha:** a bare clock time means **today**, so `"12:05am"` at 2pm schedules a moment already past and the knock fires immediately. Say `"12:05am tomorrow"`. Read the row back (`task show W-…`): a pending wake has `wake.at` in the future and **no** `wake.acted_at`.
+
+## Nothing is unsupervised while holdco sleeps
+
+Crash recovery is de-LLM'd. `holdco-up` runs from cron every 10 minutes and calls `bin/holdco recover`, which relaunches crashed windows only — an owner-paused venture stays down. That is what makes a long holdco sleep safe: the fleet's liveness does not depend on an operator pass, and the only things that genuinely need holdco are owner comms (which arrive through the `tasks` channel and start a turn on their own) and the GREEN knock (which has a known timestamp).
+
+## Knocking, exactly
+
+A knock is *about* an entity and *addressed to* a recipient, so from the CLI both are named — the focused-entity forms only work in the web bar:
+
+```
+task <entity> :knock <recipient> <words>     # e.g. task P-38 :knock ufos "…"
+```
+
+`task :knock <recipient> …` fails with `nothing focused`, and `task <id> :knock …` fails with `name a recipient`.
+
+The knock row is the receipt — check it rather than assuming delivery. `delivery: "cast S-7204"` with `error: null` means the channel injected it; a failed wake records `error: "no door: S-… is not awake, spawnable-at, or addressed"`.
+
+## Why it needs no bookkeeping
+
+There is no roster of parked operators and no "parked" state to store. The signal is a pure function of the token ledger, recomputed by `bin/operate tokens --pace` on demand; "parked" is just the absence of a scheduled wakeup; and the roster is whatever `bin/holdco fleet` says is running. Nothing to persist means nothing to persist *through restarts* — and nothing that can drift out of sync with the ledger.
+
+It is also self-correcting: knock an operator during YELLOW by mistake and it takes a pass, reads the signal, and declines to reschedule. The fleet converges on the true signal from any starting state.
+
+## Persona changes need a restart
+
+A persona reaches an operator via `--append-system-prompt-file`, read at **claude launch** — so a persona edit does nothing until `bin/holdco restart <id>` (the closing step of a durable persona edit). Memories are different: they ride the `task context` digest and land on the next clear, which is why a new memory can change behavior before a restart does.
 
 ---
 
@@ -339,11 +269,11 @@ When a budget is **pre-paid and use-it-or-lose-it**, glide cumulative usage to l
 
 # M-4404 Keep the context clean: write what IS, delete first, keep entropy low
 
-Docs and personas should state **how to behave — current rules only, brief and crisp.**
+Every artifact (task, doc, persona, memory) you write should state **the current state** — brief and crisp.
 
-**No war stories**: dates, quotes, or "supersedes" notes: provenance lives in the history. A rule stands on its own or it doesn't belong.
+**No war stories**: dates, quotes, or "supersedes" notes: provenance lives in the history. A doc stands on its own or it doesn't belong.
 
-When direction arrives, **edit to match — delete first.** Find the line that produced the wrong behavior and remove or rewrite it; append only when nothing existing covers it. The goal is entropy reduction: less in context, not more.
+When correction arrives, **edit to match — delete first.** Find the line that produced the wrong behavior and remove or rewrite it; append only when nothing existing covers it. The goal is entropy reduction: less in context, not more.
 
 If you find war stories (especially in personas), clean it up. Don't continue adding more dates and directives. Clean the context.
 
