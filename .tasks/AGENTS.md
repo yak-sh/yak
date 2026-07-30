@@ -401,6 +401,64 @@ seams wider or leakier, that's the wrong direction.
 
 ---
 
+# M-7048 task inbox — one door for everything addressed to you, and watch/mute to change what lands there
+
+`task inbox` lists every item addressed to you — comments on your session, comments on tasks you claim, comments said to your actor, knocks to you or your actor, and project mail — unread first (`●` unread, `·` read).
+
+- `task inbox` — the list
+- `task inbox --all` — archived items too, marked `×`
+- `task inbox <filters…>` — screen it with dot-params: `.from=jeff@yak.sh`, `.verified=0`, `.received_at>=today`
+- `task inbox --sent` — the letters you sent
+- `task inbox show <id>` — render it whole; reading stamps it opened
+- `task inbox archive <id>` — the one act that hides an item
+
+Archiving is the only thing that removes an item, so no sweep, subagent, or other reader can drain your inbox behind you.
+
+**Filters are the one grammar** (`task help grammar`) — the same parser boards and `task list` use, so anything that works there works here, and several preds AND together. A word that isn't a filter is refused and names the verb rather than being guessed at. This is why `task mail` is deprecated: the inbox now answers everything its bare list did, `--sent` included.
+
+This is the door for "is anything waiting for me?" — worth a look when you start a pass, and again when you pick up a task, since something may already be waiting on it.
+
+## Watch and mute — a standing instruction over the default
+
+`task watch <id>` and `task mute <id>` override what the inbox decides on its own, per actor:
+
+- `task watch <id>` — its comments, letters and knocks reach you **even though nothing was aimed at you**
+- `task mute <id>` — they stop reaching you **even though something was**
+- `--gone` on either clears the instruction
+
+The instruction aims at **anything** — a task, a venture, a session — and governs everything *about* that entity, not one letter. There is no `auto` mode: absent IS auto, which is the default rule above.
+
+**Mute wins over direct address.** Muting your own session silences a comment said straight to it. That is deliberate — it is you declaring a thread finished. Nothing is deleted, and `task inbox --all` ignores mute, so it is always the way back.
+
+Saying it twice is idempotent, and `watch` → `mute` is a change of mind rather than a second opinion: one row per (actor, target). Clearing something you never set says `not watching <id>` and is not an error.
+
+**In the web:** right-click any card and the menu carries `watch` / `mute` (`unwatch` / `unmute` once set). They appear only if your client names an actor — without one there is nobody for the instruction to belong to, and the rows are simply absent.
+
+## Closing a task closes its correspondence
+
+When a task goes `done` or `cancelled`, the letters and comments about it are archived automatically. Nothing is waiting in a letter about a closed task, and without this the inbox fills with archaeology.
+
+Two things follow:
+
+- **What arrives *after* a close is untouched.** A letter questioning a closure still lands in your inbox. The archive happens at the moment of closing; it is not a rule about the target's status.
+- **`--all` is where it went.** Archived is hidden, never deleted, and comment threads on the task still show everything — only the inbox filters on it.
+
+## Two things that surprise people
+
+**It reads for whoever your cwd makes you.** Your actor is resolved from the directory you are standing in, so running `task inbox` inside another venture's repo shows *that venture's* inbox, not yours. Nothing is wrong when the list looks foreign — check where you are.
+
+**The web and the TUI have one too.** On the canvas, open a venture (or a person) and pick the **Inbox** tab — it carries a **badge** with its unread count, so you can tell whether anything is waiting without opening it. In the terminal, enter the entity and press **⇥** to cycle its views — **⇧⇥** walks back — until the breadcrumb reads `· Inbox`. Same items, same predicate, same read state through every door: opening a row anywhere marks it read everywhere. A venture's inbox is the substantial one; a person's is nearly empty by design, because letters to an external address leave the graph for a real mailbox and only what arrives is ever stamped as arrived.
+
+**⇥ is the TUI's view switch generally**, not an inbox trick: it walks the same curated tabs the web offers, so Markdown, JSON, Debug, Persona, Session and the rest are all reachable from the terminal. The choice is remembered per entity and survives a restart.
+
+The web tab and your CLI list can legitimately show different counts: the tab reads for the **entity you opened**, while `task inbox` reads for **your session**, which also carries the tasks you claim.
+
+## Your boot digest already tells you
+
+Every session's `task context` opens with `## inbox — N unread (task inbox)`. That N is counted with the inbox's own predicate, so the number and the list can't disagree — if the line is there, something is waiting; if it's absent, nothing is.
+
+---
+
 # M-9273 @file is the DOOR's convention — every door holding your filesystem reads it, in every spelling
 
 A value that starts with `@` is read by the tool itself: `@file` is a file, `@-` is piped stdin, `@@` escapes a literal leading `@`. The convention belongs to the **door**, never to the verb or the spelling. Every door that holds *your* filesystem reads it the same way, so you do not have to remember which call you are in.
@@ -465,60 +523,6 @@ Any write that REPLACES a body destroys what was there. Read the node to a file 
 For outbound mail the same habit is `task show <id>` on the receipt — still worth the one call now that a dropped `@` is refused, because only the receipt shows what actually went out.
 
 `task history <id> --json` holds every prior body verbatim, so recovery is a read plus one write even when you did not save a copy first.
-
----
-
-# M-7048 task inbox — one door for everything addressed to you, and watch/mute to change what lands there
-
-`task inbox` lists every item addressed to you — comments on your session, comments on tasks you claim, comments said to your actor, knocks to you or your actor, and project mail — unread first (`●` unread, `·` read).
-
-- `task inbox` — the list
-- `task inbox --all` — archived items too, marked `×`
-- `task inbox show <id>` — render it whole; reading stamps it opened
-- `task inbox archive <id>` — the one act that hides an item
-
-Archiving is the only thing that removes an item, so no sweep, subagent, or other reader can drain your inbox behind you.
-
-This is the door for "is anything waiting for me?" — worth a look when you start a pass, and again when you pick up a task, since something may already be waiting on it.
-
-## Watch and mute — a standing instruction over the default
-
-`task watch <id>` and `task mute <id>` override what the inbox decides on its own, per actor:
-
-- `task watch <id>` — its comments, letters and knocks reach you **even though nothing was aimed at you**
-- `task mute <id>` — they stop reaching you **even though something was**
-- `--gone` on either clears the instruction
-
-The instruction aims at **anything** — a task, a venture, a session — and governs everything *about* that entity, not one letter. There is no `auto` mode: absent IS auto, which is the default rule above.
-
-**Mute wins over direct address.** Muting your own session silences a comment said straight to it. That is deliberate — it is you declaring a thread finished. Nothing is deleted, and `task inbox --all` ignores mute, so it is always the way back.
-
-Saying it twice is idempotent, and `watch` → `mute` is a change of mind rather than a second opinion: one row per (actor, target). Clearing something you never set says `not watching <id>` and is not an error.
-
-**In the web:** right-click any card and the menu carries `watch` / `mute` (`unwatch` / `unmute` once set). They appear only if your client names an actor — without one there is nobody for the instruction to belong to, and the rows are simply absent.
-
-## Closing a task closes its correspondence
-
-When a task goes `done` or `cancelled`, the letters and comments about it are archived automatically. Nothing is waiting in a letter about a closed task, and without this the inbox fills with archaeology.
-
-Two things follow:
-
-- **What arrives *after* a close is untouched.** A letter questioning a closure still lands in your inbox. The archive happens at the moment of closing; it is not a rule about the target's status.
-- **`--all` is where it went.** Archived is hidden, never deleted, and comment threads on the task still show everything — only the inbox filters on it.
-
-## Two things that surprise people
-
-**It reads for whoever your cwd makes you.** Your actor is resolved from the directory you are standing in, so running `task inbox` inside another venture's repo shows *that venture's* inbox, not yours. Nothing is wrong when the list looks foreign — check where you are.
-
-**The web and the TUI have one too.** On the canvas, open a venture (or a person) and pick the **Inbox** tab — it carries a **badge** with its unread count, so you can tell whether anything is waiting without opening it. In the terminal, enter the entity and press **⇥** to cycle its views — **⇧⇥** walks back — until the breadcrumb reads `· Inbox`. Same items, same predicate, same read state through every door: opening a row anywhere marks it read everywhere. A venture's inbox is the substantial one; a person's is nearly empty by design, because letters to an external address leave the graph for a real mailbox and only what arrives is ever stamped as arrived.
-
-**⇥ is the TUI's view switch generally**, not an inbox trick: it walks the same curated tabs the web offers, so Markdown, JSON, Debug, Persona, Session and the rest are all reachable from the terminal. The choice is remembered per entity and survives a restart.
-
-The web tab and your CLI list can legitimately show different counts: the tab reads for the **entity you opened**, while `task inbox` reads for **your session**, which also carries the tasks you claim.
-
-## Your boot digest already tells you
-
-Every session's `task context` opens with `## inbox — N unread (task inbox)`. That N is counted with the inbox's own predicate, so the number and the list can't disagree — if the line is there, something is waiting; if it's absent, nothing is.
 
 ---
 
