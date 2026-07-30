@@ -269,7 +269,7 @@ When a budget is **pre-paid and use-it-or-lose-it**, glide cumulative usage to l
 
 # M-4404 Keep the context clean: write what IS, delete first, keep entropy low
 
-Every artifact (task, doc, persona, memory) you write should state **the current state** — brief and crisp.
+Every artifact (task, doc, persona, memory, etc.) you write should state **the current state** — brief and crisp.
 
 **No war stories**: dates, quotes, or "supersedes" notes: provenance lives in the history. A doc stands on its own or it doesn't belong.
 
