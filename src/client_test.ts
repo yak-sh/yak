@@ -2341,3 +2341,31 @@ Deno.test('contextDigest: unheard — comments after a past session stopped list
   assertEquals(contextDigest(g([]), 'u-new', NOW).includes('unheard'), false)
   assertEquals(contextDigest(one, undefined, NOW).includes('unheard'), false)
 })
+
+// T-10612: a dropped @ stored the path as the whole body and the door
+// printed its receipt. Two operators lost content to it independently.
+Deno.test('inflate: a dropped @ on an existing file is refused, not stored', () => {
+  let f = Deno.makeTempFileSync()
+  Deno.writeTextFileSync(f, 'the whole brief\n')
+  assertThrows(() => inflate(p(f)), Error, 'names a file that exists')
+  assertThrows(() => inflate(p(f)), Error, `did you mean @${f}`)
+  // The @ door still works, which is what earns the suggestion its place.
+  assertEquals(inflate(p(`@${f}`)).value, 'the whole brief\n')
+  Deno.removeSync(f)
+})
+
+Deno.test('inflate: the dropped-@ guard is too narrow to overshoot', () => {
+  let f = Deno.makeTempFileSync()
+  // A path that does NOT exist stays storable text.
+  assertEquals(inflate(p('/no/such/file.md')).value, '/no/such/file.md')
+  // Prose merely MENTIONING a path is prose — the token must stand alone.
+  assertEquals(inflate(p(`see ${f} for it`)).value, `see ${f} for it`)
+  // Only `body`: a filesystem path is the whole point of repo.path.
+  assertEquals(inflate({ comp: 'repo', prop: 'path', value: f }).value, f)
+  // A bare word never trips, even standing beside a file of that name. The
+  // stat is the POSITIVE CONTROL: if cwd moved, this fails loudly rather
+  // than passing because the file was simply absent.
+  assertEquals(Deno.statSync('README.md').isFile, true)
+  assertEquals(inflate(p('README.md')).value, 'README.md')
+  Deno.removeSync(f)
+})

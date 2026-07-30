@@ -61,6 +61,7 @@ import {
   orderOf,
   parseQuery,
   pred,
+  resolution,
   resolveRefs,
   warm,
 } from './query.ts'
@@ -285,8 +286,13 @@ filters must ALL match. ${FILTERS} ${BUS}`,
               warm(a.comps, now, (e) => byEid.get(e))
             : byBoard,
         )
+      let why = hits.length ? '' : resolution(ps, 'task')
       return bus(
-        hits.map((r) => line(all, r)).join('\n') || '(no matches)',
+        hits.map((r) => line(all, r)).join('\n') ||
+          (why
+            ? `(no matches) · filters resolved to ${why} — task_list ` +
+              `returns tasks`
+            : '(no matches)'),
         session,
       )
     },
@@ -973,7 +979,7 @@ ${GRAMMAR} ${FILTERS}`,
           warm(a.comps, now, (e) => byEid.get(e))
         )
       }
-      return text(JSON.stringify(
+      let out = JSON.stringify(
         hits.map((r) => ({
           id: idOf(r),
           kind: r.kind,
@@ -982,7 +988,22 @@ ${GRAMMAR} ${FILTERS}`,
         })),
         null,
         2,
-      ))
+      )
+      // An empty array is where a mis-routed filter reads as absence, so
+      // the routing rides along — as its OWN content block, leaving the
+      // first block byte-identical JSON for anyone who parses it.
+      let why = hits.length ? '' : resolution(ps, kind)
+      return why
+        ? {
+          content: [
+            { type: 'text' as const, text: out },
+            {
+              type: 'text' as const,
+              text: `(no rows) · filters resolved to ${why}`,
+            },
+          ],
+        }
+        : text(out)
     },
   )
 

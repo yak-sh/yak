@@ -176,13 +176,44 @@ let piped = (io: Stdin, prop: string, as: string) => {
 // briefs, 2026-07-22); a missing file here is a loud error instead.
 // Literal leading @: @@. `as` is the token the caller actually typed, so
 // an error names the door the user reached for and not a synonym.
+// A DROPPED @ is indistinguishable from success: the path lands as the
+// whole body and the door prints its cheerful receipt. Two operators hit it
+// independently (T-10612), and it lands on the CAREFUL path — long bodies
+// written to a file first, which is where the content matters most.
+//
+// Narrow on purpose, three ways: only `body` (a filesystem path is the
+// whole point of `repo.path`), only a lone whitespace-free token, and only
+// one holding a '/' that stats as a file — so prose is untouched, a bare
+// word like 'done' can never trip it even beside a file of that name, and a
+// path that does NOT exist stays storable as text.
+let dropped = (p: Param, as: string) => {
+  let v = p.value
+  if (p.prop != 'body' || typeof v != 'string') return
+  if (!/^\S+$/.test(v) || !v.includes('/')) return
+  try {
+    if (!Deno.statSync(v).isFile) return
+  } catch {
+    return
+  }
+  // @@ would escape to a LITERAL leading @ — '@/tmp/x' — so it is not the
+  // door out of here; the pipe is. Named because it is verified to work.
+  // `as` already names the token the caller typed, so it is not repeated.
+  throw new Error(
+    `${as}: names a file that exists — did you mean @${v}? ` +
+      `(to store the path itself as text, pipe it in with @-)`,
+  )
+}
+
 export let inflate = (
   p: Param,
   io = stdin,
   as = `.${p.prop}=${p.value}`,
 ): Param => {
   let v = p.value
-  if (typeof v != 'string' || !v.startsWith('@')) return p
+  if (typeof v != 'string' || !v.startsWith('@')) {
+    dropped(p, as)
+    return p
+  }
   if (v.startsWith('@@')) return { ...p, value: v.slice(1) }
   if (v == '@-') return { ...p, value: piped(io, p.prop, as) }
   try {

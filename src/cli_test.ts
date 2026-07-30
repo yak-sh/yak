@@ -953,3 +953,18 @@ Deno.test('any graph-reading verb serves the bus, on stderr', async () => {
     await server.shutdown()
   }
 })
+
+// The same guard through the positional and --body= doors, since the
+// mistake transfers between verbs (T-10612).
+Deno.test('bodyOf: a lone path that forgot its @ is refused at every door', () => {
+  let f = Deno.makeTempFileSync()
+  Deno.writeTextFileSync(f, 'the whole letter\n')
+  let tty = { terminal: () => true, read: () => '' }
+  assertThrows(() => bodyOf([], [f], tty), Error, 'did you mean @')
+  assertThrows(() => bodyOf([`--body=${f}`], [], tty), Error, 'did you mean @')
+  // Prose keeps its exemption: more than one token is never a reference.
+  assertEquals(bodyOf([], ['see', f, 'please'], tty), `see ${f} please`)
+  // And one token holding whitespace is still prose, @ or not.
+  assertEquals(bodyOf([], [`@handle re ${f}`], tty), `@handle re ${f}`)
+  Deno.removeSync(f)
+})

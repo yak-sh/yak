@@ -45,7 +45,7 @@
 // (`.pin.x=12`); any other first segment is a PATH — `.assignee.title~=j`
 // dereferences the eid column and predicates the target's prop. Depth 1.
 import { parseProp, type Prop, propAt } from './props.ts'
-import { comps, stamped } from './types.ts'
+import { comps, kindOrder, stamped } from './types.ts'
 import { type Span, span } from './time.ts'
 
 export type Pred = {
@@ -160,6 +160,46 @@ let OPS: Record<string, string> = {
 export let ORDER = 'order'
 
 export let orderOf = (preds: Pred[]) => preds.find((p) => p.op == ORDER)?.value
+
+// `doc` sits in kindOrder as the fallback NAME for a bare document, but
+// every kind wears one — so a doc pred is never the cross-kind mistake.
+// Anything outside kindOrder (created, updated, recall) is a facet too.
+let facet = (comp: string) => comp == 'doc' || !kindOrder.includes(comp)
+
+// An empty result is the one moment a caller cannot tell INTERPRETATION
+// from data. A pred naming another kind's column is perfectly valid, so it
+// matches nothing and prints exactly like a truthful "none" — `.from=jeff`
+// routes to mail.from and answers "no matches" for TASKS; `.to=holdco`
+// routes to mail.to (a real column, so the _eid sugar never fires) and
+// never consults wake.to_eid. Both were read as evidence of absence.
+//
+// So on empty — and only on empty — a door says how the filters actually
+// routed. This reports what route() DID, never what COULD match: an entity
+// may carry `task` and `mail` both and still be NAMED a task (kindOf takes
+// the first component in kindOrder), so impossibility is not derivable and
+// a refusal here would be a policy wearing a fact's clothes. Being advisory
+// is what makes it safe to add: a legitimate "none" is unchanged.
+export let resolution = (preds: Pred[], kind?: string) => {
+  let crossed = preds.filter((p) =>
+    p.op != ORDER && p.comp && p.comp != kind && !facet(p.comp)
+  )
+  // The suggestion is composed through the routing table, so it can only
+  // name a spelling that parses — an error naming a door owes that much.
+  let alt = (prop: string) => {
+    let cols = (kind ? routes[kind] : undefined) ?? []
+    return cols.includes(prop)
+      ? `.${kind}.${prop}`
+      : cols.includes(`${prop}_eid`)
+      ? `.${kind}.${prop}_eid`
+      : ''
+  }
+  return crossed
+    .map((p) => {
+      let mean = alt(p.prop)
+      return `${p.comp}.${p.prop}${mean ? ` — did you mean ${mean}=?` : ''}`
+    })
+    .join(', ')
+}
 
 // Shared-reference sugar has no one owning component, but its type is still
 // known: every routed column ends in _eid. All other aims come straight from

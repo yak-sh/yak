@@ -8,6 +8,7 @@ import {
   orderOf,
   parseQuery,
   pred,
+  resolution,
   resolveRefs,
   route,
   SUNK,
@@ -616,4 +617,26 @@ Deno.test('.project.retired_at is the explicit spelling, and = means live', () =
   })
   assert(matchQuery({ project: {} }, ps)) // a live project
   assert(!matchQuery({ project: { retired_at: 'x' } }, ps))
+})
+
+// T-10611: a VALID pred naming another kind's column matches nothing and
+// prints like a truthful "none". These are the two occurrences that were
+// read as evidence of absence.
+Deno.test('resolution: an empty answer names the routing it actually used', () => {
+  let ps = (q: string) => parseQuery(q)
+  // `.from` is real — on mail (stamped). `task list` returns tasks.
+  assertEquals(resolution(ps('.from=jeff@yak.sh'), 'task'), 'mail.from')
+  // `.to` is a real mail COLUMN, so the _eid sugar never fires and wake's
+  // to_eid is never consulted. The suggestion is the spelling that works.
+  assertEquals(
+    resolution(ps('.to=holdco'), 'wake'),
+    'mail.to — did you mean .wake.to_eid=?',
+  )
+  // Silent where there is nothing to explain: the door's own kind, the doc
+  // facet every kind wears, and provenance. Advisory means never noisy.
+  assertEquals(resolution(ps('.status=open'), 'task'), '')
+  assertEquals(resolution(ps('.title~=word'), 'task'), '')
+  assertEquals(resolution(ps('.created.at=today'), 'task'), '')
+  // A ranking is not a filter and never routes.
+  assertEquals(resolution(ps('.order=hot'), 'task'), '')
 })

@@ -68,6 +68,7 @@ import {
   matchQuery,
   noFilter,
   pred,
+  resolution,
   resolveRefs,
 } from './query.ts'
 import {
@@ -212,7 +213,14 @@ let list = async (args: string[]) => {
       }${flag}`,
     )
   }
-  if (!hits.length) console.error('(no matches)')
+  if (!hits.length) {
+    let why = resolution(preds, 'task')
+    console.error(
+      why
+        ? `(no matches) · filters resolved to ${why} — list returns tasks`
+        : '(no matches)',
+    )
+  }
 }
 
 // task new uses dot-params, not --flags. A stray --flag in the title is the
@@ -379,9 +387,18 @@ export let bodyOf = (flags: string[], words: string[], io = stdin) => {
     let p = { comp: 'doc', prop: 'body', value: v }
     return String(inflate(p, io, `--body=${b}`).value)
   }
-  if (b != null) return b
+  // Non-@ values still go THROUGH inflate: it passes them back unchanged,
+  // so the only new behavior is its dropped-@ guard.
+  if (b != null) {
+    let p = { comp: 'doc', prop: 'body', value: b }
+    return String(inflate(p, io, `--body=${b}`).value)
+  }
+  // The no-whitespace test stays HERE, not in inflate: inflate sees only a
+  // leading @, so it would read '@handle thanks!' — one argv token holding
+  // spaces — as a filename. Prose keeps its exemption; a whitespace-free
+  // token is either an @-reference or a dropped-@ path.
   let only = words.join(' ')
-  if (words.length == 1 && /^@\S+$/.test(only)) {
+  if (words.length == 1 && /^\S+$/.test(only)) {
     let p = { comp: 'doc', prop: 'body', value: only }
     return String(inflate(p, io, only).value)
   }
@@ -936,12 +953,15 @@ let comment = async (args: string[]) => {
     !a.startsWith('--verdict=') && a != '--event'
   )
   let body = words.join(' ')
-  // Only when the body IS a reference: one token AND no whitespace in it.
-  // A quoted sentence is still one argv token, so `task comment T-3
-  // "@holdco look at this"` must stay prose — `@@` escapes a genuine
-  // one-word comment that starts with an @.
-  if (words.length == 1 && /^@\S+$/.test(body)) {
-    body = String(inflate({ comp: 'doc', prop: 'body', value: body }).value)
+  // One token AND no whitespace in it is what inflate reads: a quoted
+  // sentence is still one argv token, so `task comment T-3 "@holdco look at
+  // this"` stays prose, and `@@` escapes a genuine one-word comment that
+  // starts with an @. A lone token that NAMES A FILE and forgot its @ is
+  // refused there too, rather than stored as the path.
+  if (words.length == 1 && /^\S+$/.test(body)) {
+    body = String(
+      inflate({ comp: 'doc', prop: 'body', value: body }, stdin, body).value,
+    )
   }
   if (verdictArg != null && !verdict) {
     throw new Error('--verdict needs approved, rejected, or changes_requested')
@@ -1405,8 +1425,9 @@ let remember = async (args: string[]) => {
   if (!session) throw new Error('remember: no session identity (attribution)')
   let all = rows(await snapshot())
   let body = flag('body')
-  if (body?.startsWith('@')) {
-    body = String(inflate({ comp: 'doc', prop: 'body', value: body }).value)
+  if (body != null) {
+    let p = { comp: 'doc', prop: 'body', value: body }
+    body = String(inflate(p, stdin, `--body=${body}`).value)
   }
   let made = memoryChanges(all, {
     title,
