@@ -1,0 +1,38 @@
+# The fleet's tmux server, owned by the systemd USER manager.
+#
+# Why this exists as its own unit: tmux is client/server, and whichever
+# process first runs a tmux command starts the server and becomes its cgroup
+# parent. When that happened to be tasksd, a `systemctl restart tasksd`
+# mass-killed the unit's cgroup and took every operator pane with it —
+# five operators lost mid-turn (T-11139). The parent had been chosen by a
+# race between two 2s reconcile sweeps, not by anyone.
+#
+# tasksd restarts on every source edit; panes must live for hours. So the
+# server is owned here, under user-<uid>.slice, which a system-service
+# restart cannot touch, and tasksd only ever connects as a client.
+#
+# Install:
+#   ln -sf "$PWD/etc/tasks-tmux.service" ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now tasks-tmux.service
+#   loginctl enable-linger "$USER"   # so it runs without a login session
+
+[Unit]
+Description=tmux server for the tasks fleet
+# Deliberately independent of tasksd: no After=, no Requires=. The whole
+# point is that the two lifetimes are unrelated.
+
+[Service]
+# ONE tmux invocation, not two. `start-server` alone leaves a server with no
+# sessions, which exits immediately — a second command to set the option
+# always loses that race (measured). `exit-empty off` in the same invocation
+# is what keeps the server alive while idle. The `\;` is escaped because
+# systemd reads a bare `;` as a command separator.
+Type=forking
+ExecStart=/usr/bin/tmux start-server \; set -g exit-empty off
+ExecStop=/usr/bin/tmux kill-server
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target

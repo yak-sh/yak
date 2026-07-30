@@ -852,7 +852,7 @@ let uid = () => Deno.uid() ?? 0
 // keeps that manager alive across the owner's logout, so an escaped agent's
 // slice never tears down under it; the bus exists iff user@<uid> is active,
 // so a missing one makes systemd-run fail loudly into the err file.
-export let userBus = () => ({
+let userBus = () => ({
   XDG_RUNTIME_DIR: `/run/user/${uid()}`,
   DBUS_SESSION_BUS_ADDRESS: `unix:path=/run/user/${uid()}/bus`,
 })

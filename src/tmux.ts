@@ -205,18 +205,72 @@ type Run = (args: string[]) => Promise<{
   stdout: Uint8Array
 }>
 
-let command: Run = async (args) => {
+export type TmuxOut = {
+  success: boolean
+  stdout: Uint8Array
+  stderr: Uint8Array
+}
+
+let bare = async (args: string[]): Promise<TmuxOut> => {
   try {
     let out = await new Deno.Command('tmux', {
       args,
       stdout: 'piped',
-      stderr: 'null',
+      stderr: 'piped',
     }).output()
-    return { success: out.success, stdout: out.stdout }
-  } catch {
-    return { success: false, stdout: new Uint8Array() }
+    return { success: out.success, stdout: out.stdout, stderr: out.stderr }
+  } catch (e) {
+    return {
+      success: false,
+      stdout: new Uint8Array(),
+      stderr: new TextEncoder().encode(String(e)),
+    }
   }
 }
+
+// The one door every tmux command in this process goes through, and the one
+// place that knows this daemon must never OWN a tmux server.
+//
+// tmux is client/server, and the first command that finds no server starts
+// one — `new-session` does it implicitly, so there is no call site that is
+// safely "read only". A server started here inherits tasksd's cgroup, and
+// systemd mass-kills a unit's cgroup on restart, so it would die with the
+// daemon and take every operator pane along (T-11139). The daemon restarts
+// on every source edit; the panes must live for hours. Nothing that restarts
+// that often may be the parent of anything that long-lived.
+//
+// So the server belongs to `tasks-tmux.service` (etc/tasks-tmux.service), a
+// systemd USER unit under user-<uid>.slice that a system-service restart
+// cannot touch. Here we only ever CONNECT. When no server is up we refuse
+// and say which door opens one — a loud failure the reconcile reports, in
+// place of a silent success that rebuilds the coupling. Escaping the cgroup
+// after the fact (setsid, systemd-run --scope) was the previous answer and
+// is the wrong shape: it has to be remembered at every call site forever,
+// and the first attempt at it already missed one.
+let RUNNING = 5_000
+let seen = 0
+let up = async () => {
+  if (Date.now() - seen < RUNNING) return true
+  // `display-message` reads; unlike new-session it never starts a server.
+  if ((await bare(['display-message', '-p', '#{pid}'])).success) {
+    seen = Date.now()
+    return true
+  }
+  return false
+}
+
+export let tmuxRun = async (args: string[]): Promise<TmuxOut> => {
+  if (await up()) return bare(args)
+  return {
+    success: false,
+    stdout: new Uint8Array(),
+    stderr: new TextEncoder().encode(
+      'no tmux server — systemctl --user start tasks-tmux.service',
+    ),
+  }
+}
+
+let command: Run = tmuxRun
 
 let text = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
 
