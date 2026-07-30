@@ -452,6 +452,17 @@ That confinement is what keeps prose safe. All of these stay verbatim text:
 - **An empty pipe** is refused rather than clearing the column.
 - **Only `@` is special.** A dot-param `.body=-` writes the single character `-`; the stdin door is spelled `@-`. (`--body=-` is the one place a bare `-` means stdin, the way flags conventionally use it.)
 
+## But a WRONG file is SILENT — every guard above is about the spelling
+
+None of them can tell you that the file you named is not the file you meant. `@file` fails loudly when the path is **absent** and never when it is merely **wrong**, so the one mistake with no guard is the one that publishes real content to the wrong place.
+
+The shape it takes: in a **shared scratchpad**, a generic name — `comment.md`, `body.md`, `reply.md`, `brief.md` — is very likely a *neighbouring agent's* file. An agent writing up one task published another task's Postgres analysis onto its ticket exactly this way; the file existed, so the door read it cheerfully and printed its usual receipt.
+
+Two habits, both cheap:
+
+- **Name scratch files for the task or session**, never generically: `t-10502-comment.md`, not `comment.md`. Parallel agents share the directory far more often than they expect.
+- **Read back what landed** whenever the body matters — the receipt confirms a write happened, never that it was *yours*.
+
 ## Why the web bar and MCP `command` stay literal
 
 Neither holds the caller's filesystem. In the web bar there is no disk to read. In MCP `command` the line is spoken to the **server's** process, so `@/etc/passwd` would read the server's disk and not yours — that door stays shut on purpose. An MCP caller passes a long body as a plain string instead: `graph_apply` with `{eid, name: "doc", comp: {body: "…"}}`, or `task_new` / `memory_save`, where `body` is a real parameter.
