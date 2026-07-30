@@ -1806,7 +1806,11 @@ export let showMd = (snap: Snapshot, all: Row[], row: Row) => {
     // them, not the page.
     for (let prop of Object.keys({ ...props, ...stamped[comp] })) {
       let v = row.comps[comp][prop]
-      if (v == null || v === '') continue
+      if (v == null || v === '') {
+        // A missing memory scope is a fleet-wide choice, not missing data.
+        if (comp == 'memory' && prop == 'scope_eid') fm.push('scope: shared')
+        continue
+      }
       let p = propAt(comp, prop)!
       let key = p.name.replace(/_eid$/, '')
       let face = formatProp(p, v, { describe: said })

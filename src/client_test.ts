@@ -1785,6 +1785,50 @@ Deno.test('showMd: frontmatter, edge sentences, claim holder, body', () => {
   assertMatch(back, /referenced by:\n {2}- T-2 \(wip\) — First · requires this/)
 })
 
+Deno.test('showMd: memories name their scope and persona memberships', () => {
+  let P = 'aaaaaaaa-0000-4000-8000-000000000020'
+  let N = 'aaaaaaaa-0000-4000-8000-000000000021'
+  let M1 = 'aaaaaaaa-0000-4000-8000-000000000022'
+  let M2 = 'aaaaaaaa-0000-4000-8000-000000000023'
+  let graph: Snapshot = {
+    changes: [
+      { eid: P, name: 'entity', comp: { eid: P, num: 20 } },
+      { eid: P, name: 'doc', comp: { title: 'Atlas' } },
+      { eid: P, name: 'project', comp: {} },
+      { eid: N, name: 'entity', comp: { eid: N, num: 21 } },
+      { eid: N, name: 'doc', comp: { title: 'Operator' } },
+      { eid: N, name: 'persona', comp: { home_eid: P } },
+      { eid: M1, name: 'entity', comp: { eid: M1, num: 22 } },
+      {
+        eid: M1,
+        name: 'memory',
+        comp: { type: 'feedback', scope_eid: null },
+      },
+      { eid: M2, name: 'entity', comp: { eid: M2, num: 23 } },
+      {
+        eid: M2,
+        name: 'memory',
+        comp: { type: 'project', scope_eid: P },
+      },
+    ],
+    deps: [
+      { parent: N, type: 'contains', child: M1 },
+      { parent: N, type: 'reads', child: M2 },
+    ],
+  }
+  let people = rows(graph)
+  let show = (eid: string) =>
+    showMd(graph, people, people.find((r) => r.eid == eid)!)
+  assertMatch(
+    show(M1),
+    /scope: shared[\s\S]*N-21 — Operator · contains this/,
+  )
+  assertMatch(
+    show(M2),
+    /scope: P-20 — Atlas[\s\S]*N-21 — Operator · reads this/,
+  )
+})
+
 Deno.test('showMd: comments ride as a section, oldest first', () => {
   let C = 'aaaaaaaa-0000-4000-8000-000000000009'
   let snap2: Snapshot = {
