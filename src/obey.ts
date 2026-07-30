@@ -32,9 +32,6 @@ let speaker = (via: string) =>
 
 export let obeyed =
   (cast: Cast) => (ceid: string, comp: Record<string, unknown>) => {
-    // A receipt never commands. This one line is the loop's floor: every
-    // comment this effect mints is an event, so nothing it says can cascade.
-    if (comp.event) return
     let target = String(comp.target_eid ?? '')
     if (!target) return
     let doc = db.prepare('select body from doc where eid = ?').get(ceid) as
@@ -98,14 +95,21 @@ export let obeyed =
     }
   }
 
-// The answer, spoken where the order was: a comment on the same target,
-// stamped as an event — the server talking, so it renders subordinate and
-// the mail relay leaves it alone (M-4062). It still rides the bus, which
-// is exactly the ack a headless asker needs.
+// A RECEIPT NEVER COMMANDS — the loop's floor, and it belongs here because
+// this effect both reads comments and mints them. orderIn() is the only
+// thing that makes a body an order, so one leading space is the entire
+// mechanism: invisible when rendered, and the first line can no longer
+// open with ':'. No command's message starts that way today, which is
+// precisely why the floor is structural rather than incidental — the day
+// one does, the graph would obey itself forever.
+export let inert = (body: string) => orderIn(body) ? ` ${body}` : body
+
+// The answer, spoken where the order was: a comment on the same target.
+// It rides the bus, which is exactly the ack a headless asker needs.
 let receipt = (target: string, body: string): Change[] => {
   let cid = crypto.randomUUID()
   return [
-    { eid: cid, name: 'doc', comp: { title: '', body } },
-    { eid: cid, name: 'comment', comp: { target_eid: target, event: 1 } },
+    { eid: cid, name: 'doc', comp: { title: '', body: inert(body) } },
+    { eid: cid, name: 'comment', comp: { target_eid: target } },
   ]
 }

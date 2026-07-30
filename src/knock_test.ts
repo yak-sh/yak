@@ -152,14 +152,12 @@ Deno.test('a settled managed session: the knock rides its input door', () => {
   let k = knock(task, sess)
   assertEquals(krow(k).error, null)
   assertMatch(String(krow(k).delivery), /^commented S-/)
-  // The comment landed ON the session — that IS the input, and it is not
-  // an event, or commented() would ignore it and nothing would wake.
+  // The comment landed ON the session — that IS the input.
   let input = db.prepare(
-    `select d.body, c.event from comment c join doc d on d.eid = c.eid
+    `select d.body from comment c join doc d on d.eid = c.eid
      where c.target_eid = ? order by c.rowid desc limit 1`,
-  ).get(sess) as { body: string; event: number | null }
+  ).get(sess) as { body: string }
   assertMatch(input.body, /^knock: T-\d+ — the key expires today$/)
-  assertEquals(input.event, null)
 })
 
 // An EXTERNAL session that has gone quiet has no run to continue, so it

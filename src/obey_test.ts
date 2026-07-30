@@ -3,7 +3,8 @@
 // way production drives it (apply, then dispatch the effect).
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, db, open } = await import('./db.ts')
-let { obeyed } = await import('./obey.ts')
+let { inert, obeyed } = await import('./obey.ts')
+let { orderIn } = await import('./commands.ts')
 let { assertEquals, assertMatch } = await import('@std/assert')
 
 open()
@@ -14,10 +15,9 @@ let obey = obeyed(cast)
 
 // A comment as any door writes it — landed, then handed to the effect
 // with the comp apply() committed.
-let say = (target: string, body: string, via?: string, event?: number) => {
+let say = (target: string, body: string, via?: string) => {
   let eid = uid()
   let comp: Record<string, unknown> = { target_eid: target }
-  if (event) comp.event = event
   apply(
     db,
     [
@@ -45,13 +45,13 @@ let status = (eid: string) =>
     | { status: string }
     | undefined)?.status
 
-// Every comment aimed at the target, oldest first, with its event flag —
-// the receipts are in here, and nothing else should be.
+// Every comment aimed at the target, oldest first — the receipts are in
+// here, and nothing else should be.
 let replies = (target: string) =>
   db.prepare(
-    `select d.body, c.event from comment c join doc d on d.eid = c.eid
+    `select d.body from comment c join doc d on d.eid = c.eid
      where c.target_eid = ? order by c.rowid`,
-  ).all(target) as { body: string; event: number | null }[]
+  ).all(target) as { body: string }[]
 
 Deno.test('a comment that says :done closes the task it was said on', () => {
   let t = task()
@@ -61,9 +61,7 @@ Deno.test('a comment that says :done closes the task it was said on', () => {
   let said = replies(t)
   assertEquals(said.length, 2)
   assertEquals(said[0].body, ':done')
-  assertEquals(said[0].event, null)
   assertMatch(said[1].body, /done/)
-  assertEquals(said[1].event, 1)
 })
 
 Deno.test('the order rides with its prose, and the prose stays put', () => {
@@ -73,11 +71,27 @@ Deno.test('the order rides with its prose, and the prose stays put', () => {
   assertMatch(replies(t)[0].body, /parser is the hard half/)
 })
 
-Deno.test('a receipt never commands — that is the loop floor', () => {
+// THE FLOOR: this effect reads comments AND mints them, so a receipt whose
+// first line opened with ':' would obey itself forever. receipt() neutralises
+// the body at the mint. No command's message starts that way today, which is
+// precisely why the invariant is asserted rather than trusted — the day one
+// does, this fails instead of hanging the server.
+Deno.test('nothing this effect mints can itself be an order', () => {
   let t = task()
-  say(t, ':done', undefined, 1) // the server speaking
-  assertEquals(status(t), 'open')
-  assertEquals(replies(t).length, 1) // no answer to an event
+  say(t, ':done') // a receipt for an order that ran
+  say(t, ':dnoe') // a receipt for one that was refused
+  // Everything after each order is the effect's own words.
+  let minted = replies(t).map((r) => r.body).filter((b) => !b.startsWith(':'))
+  assertEquals(minted.length, 2) // the positive control: receipts DID land
+  for (let body of minted) assertEquals(orderIn(body), '')
+
+  // And the mechanism itself, which the loop above cannot exercise because
+  // no command's message opens with ':' — so without this the assertion
+  // above would pass whether or not the floor were there at all.
+  assertEquals(orderIn(':done'), ':done') // what it must defuse
+  assertEquals(inert(':done'), ' :done')
+  assertEquals(orderIn(inert(':done')), '')
+  assertEquals(inert('T-1 → done'), 'T-1 → done') // prose is untouched
 })
 
 Deno.test('prose is never an order', () => {
@@ -95,7 +109,6 @@ Deno.test('a refusal is taught where the order was given', () => {
   let said = replies(t)
   assertEquals(said.length, 2)
   assertMatch(said[1].body, /not a command: dnoe/)
-  assertEquals(said[1].event, 1)
 })
 
 Deno.test('a bad order changes nothing — the refusal is the only write', () => {

@@ -343,7 +343,7 @@ export let commands: Record<string, Command> = {
   // :mail is the letter in one line — to, subject, then `--` folds the
   // envelope open into the page. Minting doc+mail IS the send request
   // (the mailer effect delivers and stamps the receipt); the verb mints
-  // PROSE only — machinery speaks through event comments, never mail.
+  // PROSE only — a letter is words an agent wrote.
   // `to` stays as given: raw address or graph reference, the address
   // book resolves at delivery.
   mail: {
@@ -414,7 +414,6 @@ export let commands: Record<string, Command> = {
             desk.eid,
             `brief ${idOf(target)} — write its session doc`,
             ctx.session,
-            { event: true }, // the command's phrasing, not the caller's — never mailed
           ),
           ...(busy ? [] : spawnChanges(ctx.rows, DESK).changes),
         ],

@@ -155,28 +155,23 @@ let beginCanonical = (
 }
 
 // A comment aimed at a session — the input path.
-let say = (
-  target: string,
-  body: string,
-  event: number | null = null,
-) => {
+let say = (target: string, body: string) => {
   let c = uid()
   return [
     { eid: c, name: 'doc', comp: { title: '', body } },
-    {
-      eid: c,
-      name: 'comment',
-      comp: { target_eid: target, event },
-    },
+    { eid: c, name: 'comment', comp: { target_eid: target } },
   ]
 }
 
-// What the server said back on a session — refusals are event comments.
+// What the server said back on a session. refuse() writes AS the session,
+// so its own `via` is what marks the reply — the same stamp that keeps it
+// from re-entering commented() and refusing forever.
 let refusals = (target: string) =>
   (db.prepare(
     `select d.body from comment c join doc d on d.eid = c.eid
-     where c.target_eid = ? and c.event = 1`,
-  ).all(target) as { body: string }[]).map((c) => c.body)
+     join created cr on cr.eid = c.eid
+     where c.target_eid = ? and cr.via = ?`,
+  ).all(target, target) as { body: string }[]).map((c) => c.body)
 
 // The delivery ledger: a comment wears `notified` once some ear took it.
 let told = (eid: string) =>
@@ -539,10 +534,7 @@ Deno.test('a failed spawn tells its task and its spawner — and only once', asy
     spawner,
   )
   assert(
-    heard.some((c) =>
-      c.name == 'comment' && c.comp?.target_eid == spawner &&
-      c.comp.event == 1
-    ),
+    heard.some((c) => c.name == 'comment' && c.comp?.target_eid == spawner),
   )
   let bus = notices(snapshot(db), sid)
   assertEquals(bus.lines.length, 1)
@@ -968,13 +960,19 @@ Deno.test('a comment resumes nothing it should not', async () => {
   await write(say(bare, 'hi'))
   assertEquals(row(bare)?.status, 'completed')
   assertMatch(refusals(bare)[0], /never announced a provider thread/)
-  // a machine event is news, not words to wake on — no resume, no refusal
-  let evented = plant([INIT])
-  db.prepare("update session set status = 'completed' where eid = ?")
-    .run(evented)
-  await write(say(evented, 'S-1 completed · exit 0', 1))
-  assertEquals(row(evented)?.status, 'completed')
-  assertEquals(refusals(evented).length, 1) // only the event we wrote
+  // THE FLOOR: refuse() writes its reply AS the session, so commented()
+  // reads it as the session talking about itself and lets it lie. Without
+  // it the reply re-enters the gate, fails to resume again, and refuses
+  // forever — removing the writer arg HANGS this file rather than failing
+  // it, so the stamp is asserted directly too and breaks fast.
+  assertEquals(refusals(bare).length, 1) // the line above is the control
+  assertEquals(
+    (db.prepare(
+      `select cr.via from comment c join created cr on cr.eid = c.eid
+       where c.target_eid = ? order by c.rowid desc limit 1`,
+    ).get(bare) as { via: string | null }).via,
+    bare,
+  )
   // a persistent role never receives graph words through provider argv;
   // roles.ts sends a fixed task_context wake after the turn settles.
   let role = uid(), roleRun = plant([INIT])

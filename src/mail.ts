@@ -266,14 +266,8 @@ export let mailed =
 // mint idempotent, and the boot sweep's predicate reads it back. Mail
 // written by the project's own operator stays home (the self-echo
 // guard delivery.js had).
-//
-// PROSE ONLY: email is reserved for words an agent actually wrote.
-// Machine comments — settle notices, lease lapses — are stamped
-// comment.event at mint (M-4062) and skipped here; their channel is the
-// comms bus (and the future inbox, T-3690), never the relay.
 export let fanout =
   (cast: Cast) => (eid: string, comp: Record<string, unknown>) => {
-    if (comp.event) return // emitted, not authored — the bus's to deliver
     let target = String(comp.target_eid ?? '')
     let t = db.prepare('select project_eid from task where eid = ?').get(
       target,

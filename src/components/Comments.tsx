@@ -54,7 +54,7 @@ export let Note = ({ c }: { c: Ent }) => {
   return (
     /* An event is machinery speaking (M-4062) — a chip, not a
        bubble: the -event modifier shrinks and dims the row. */
-    <Item mod={c.comment!.event ? 'event' : undefined}>
+    <Item>
       {
         /* The name links to whoever said it; the age to the comment
         itself — both wear the internal-link contract. */

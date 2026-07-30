@@ -781,7 +781,7 @@ export let commentChanges = (
   target: string,
   body: string,
   session?: string,
-  mark: { event?: boolean; verdict?: string } = {},
+  mark: { verdict?: string } = {},
 ): Change[] => {
   let s = session
     ? sessionFor(all, session, undefined, undefined, {
@@ -795,10 +795,7 @@ export let commentChanges = (
     {
       eid,
       name: 'comment',
-      comp: {
-        target_eid: target,
-        ...(mark.event ? { event: 1 } : {}),
-      },
+      comp: { target_eid: target },
     },
     ...(mark.verdict == null
       ? []
@@ -1210,7 +1207,7 @@ let unheard = (all: Row[], sess: Row | undefined, now: number) => {
       // session that did not exist when it was written.
       let n = all.filter((r) => {
         let c = r.comps.comment
-        return c && c.target_eid == s.eid && !c.event &&
+        return c && c.target_eid == s.eid &&
           r.comps.created?.by != actor && !r.comps.notified &&
           bornAt(r) > bornAt(s)
       }).length
@@ -1285,7 +1282,7 @@ let onMine = (
   let hits = all
     .filter((r) => {
       let c = r.comps.comment
-      return c && !c.event && r.comps.created?.via != sess.eid &&
+      return c && r.comps.created?.via != sess.eid &&
         mine.has(String(c.target_eid)) && now - Date.parse(bornAt(r)) < 7 * DAY
     })
     .sort((a, b) => bornAt(b).localeCompare(bornAt(a)))
@@ -1587,7 +1584,6 @@ export let lapseChanges = (all: Row[], sess: Row): Change[] => {
         r.eid,
         `⚑ lease lapsed: session ${name} ended before this was done`,
         id,
-        { event: true }, // machinery speaking, not the agent — never mailed
       ).slice(-2)), // the session exists — skip the mint, keep doc + comment
       { eid: r.eid, name: 'claim', comp: null },
     ])

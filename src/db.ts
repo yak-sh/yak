@@ -255,8 +255,7 @@ let schema = `
   );
   create table if not exists comment (
     eid        text primary key references entity(eid),
-    target_eid text not null references entity(eid),
-    event      integer
+    target_eid text not null references entity(eid)
   );
   create table if not exists review (
     eid     text primary key references entity(eid),
@@ -726,12 +725,6 @@ export let open = (path = file) => {
   backfillSpawn(db)
   // The identity chain (types.ts): instruments point at who they act for.
   addCol('client', 'actor_eid', 'actor_eid text references entity(eid)')
-  // The event mark (M-4062): machinery's comments — settle notices,
-  // lease lapses — are stamped at mint so the mail relay can tell
-  // emitted from authored. Not the old status-trail experiment (that
-  // column was dropped); the journal still records change, this marks
-  // the SPEAKER.
-  addCol('comment', 'event', 'event integer')
   // Inbound provenance (inbound.ts): the fleet sweep's idempotency key
   // (and the never-send mark), arrival time, and the edge's DKIM verdict
   // — see stamped.mail in types.ts.
@@ -828,6 +821,10 @@ export let open = (path = file) => {
   dropCol('entity', 'created_at')
   dropCol('entity', 'modified_at')
   dropCol('comment', 'author_eid')
+  // Machine comments are not a species of their own: the sweep noise that
+  // wanted marking is deleted, and everything else was always someone's
+  // words (T-7018). Nothing reads the mark now, so the column goes.
+  dropCol('comment', 'event')
   dropCol('memory', 'source_eid')
   dropCol('mail', 'read_at')
   healStored(db)

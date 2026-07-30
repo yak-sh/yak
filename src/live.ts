@@ -1195,7 +1195,7 @@ let commentIndex = computed(() => {
     let ids = found.get(target)
     if (!ids) found.set(target, ids = { ids: new Set(), talk: new Set() })
     ids.ids.add(eid)
-    if (!r.comment?.event) ids.talk.add(eid)
+    ids.talk.add(eid)
   }
   return found
 })
@@ -1245,7 +1245,7 @@ refreshComments = (eids: Set<string>) => {
       let spoke = set.talk.has(eid)
       let c = cache.peek()[eid]?.comment
       let wants = c?.target_eid == target
-      let talks = wants && !c?.event
+      let talks = wants
       if (had != wants) {
         wants ? set.ids.add(eid) : set.ids.delete(eid)
         listed = true

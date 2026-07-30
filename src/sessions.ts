@@ -266,7 +266,7 @@ let report = (eid: string, status: string, row: Row): Change[] => {
         name: 'comment',
         // event: the server speaking, not the agent (M-4062) — the bus
         // delivers it, the mail relay must not.
-        comp: { target_eid: target, event: 1 },
+        comp: { target_eid: target },
       },
     ]
   })
@@ -1272,23 +1272,30 @@ let departed = async (eid: string, pid: number, ms: number) => {
 
 // ---- the input effect ----
 
-// The plain refusal: a machine-event comment on the session saying why
-// the words didn't wake it, so the sender learns on their next glance.
-// event marks the server speaking (M-4062) — the bus delivers it, the
-// mail relay must not, and the resume gate never wakes on it. Telling
-// must never throw out of the effect.
+// The plain refusal: a comment on the session saying why the words didn't
+// wake it, so the sender learns on their next glance. Written AS that
+// session — it is that session's own resume machinery reporting on itself
+// — which is also the loop's floor: commented() ignores a session talking
+// about itself, and without that this reply would re-enter the gate,
+// fail to resume again, and refuse forever. Telling must never throw out
+// of the effect.
 let refuse = (eid: string, why: string, cast: Cast) => {
   try {
     let cid = crypto.randomUUID()
     let t = trace()
-    let out = apply(db, [
-      {
-        eid: cid,
-        name: 'doc',
-        comp: { title: '', body: `can't resume — ${why}` },
-      },
-      { eid: cid, name: 'comment', comp: { target_eid: eid, event: 1 } },
-    ], t)
+    let out = apply(
+      db,
+      [
+        {
+          eid: cid,
+          name: 'doc',
+          comp: { title: '', body: `can't resume — ${why}` },
+        },
+        { eid: cid, name: 'comment', comp: { target_eid: eid } },
+      ],
+      t,
+      eid,
+    )
     cast(out)
     dispatch(out, t, (comp, e) => console.warn(`resume refusal ${comp} —`, e))
   } catch (e) {
@@ -1307,7 +1314,7 @@ let unheard = (eid: string) =>
      join doc d on d.eid = c.eid
      join created b on b.eid = c.eid
      left join notified n on n.eid = c.eid
-     where c.target_eid = ? and n.eid is null and c.event is null
+     where c.target_eid = ? and n.eid is null
        and b.via is not ? and trim(d.body) != ''
      order by b.at`,
   ).all(eid, eid) as { eid: string; body: string }[]
@@ -1530,8 +1537,8 @@ let steer = (eid: string, cast: Cast) => {
 // delivery — an interactive session's channel injects it. A managed print
 // run has no such ear, so it yields the current turn and continues its thread
 // with the backlog. A session's own comments never resume it (an agent must
-// not wake itself by talking), and machine events carry news, never words to
-// wake on — which is also what keeps refuse()'s own reply out of this gate.
+// not wake itself by talking) — which is also what keeps refuse()'s own
+// reply out of this gate, since it is written as the session.
 export let commented =
   (cast: Cast) => (ceid: string, comp: Record<string, unknown>) => {
     let eid = String(comp.target_eid)
@@ -1539,7 +1546,6 @@ export let commented =
       ceid,
     ) as { via: string | null } | undefined
     if (stamp?.via == eid) return // the session talking about itself
-    if (comp.event) return // the server speaking, not someone to answer
     let row = db.prepare(
       'select origin, status, role_eid from session where eid = ?',
     ).get(eid) as

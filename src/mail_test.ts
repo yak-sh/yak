@@ -244,26 +244,6 @@ Deno.test('fanout: mints to the project REFERENCE, once, with the receipt', () =
   assertEquals(mintedFor(c).length, 1)
 })
 
-Deno.test('fanout: event comments never ride the relay', () => {
-  let { task } = fixture()
-  let c = uid()
-  apply(db, [
-    { eid: c, name: 'doc', comp: { title: '', body: 'S-1 failed · exit 1' } },
-    { eid: c, name: 'comment', comp: { target_eid: task, event: 1 } },
-  ])
-  fanout(cast)(c, { target_eid: task, event: 1 }) // the wire's comp
-  assertEquals(mintedFor(c).length, 0)
-  // the boot sweep's feed is the row itself — same skip, both doors
-  fanout(cast)(
-    c,
-    db.prepare('select * from comment where eid = ?').get(c) as Record<
-      string,
-      unknown
-    >,
-  )
-  assertEquals(mintedFor(c).length, 0)
-})
-
 Deno.test('fanout: self-echo and the unaddressed stay home', () => {
   let { proj, task } = fixture()
   let sess = uid()

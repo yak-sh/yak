@@ -182,17 +182,18 @@ Deno.test('projects: project rows only, oldest first, named by doc', () => {
   assertEquals(projects().map((p) => p.doc?.title), ['Sol', 'Fable'])
 })
 
-Deno.test('commentCount: events are not conversation', () => {
-  let comment = (eid: string, target_eid: string, event?: number) => ({
-    comment: { eid, target_eid, event },
+Deno.test('commentCount: every comment aimed at a target counts', () => {
+  let comment = (eid: string, target_eid: string) => ({
+    comment: { eid, target_eid },
   })
   cache.value = {
-    prose: comment('prose', 'talk'),
-    machine: comment('machine', 'talk', 1),
-    alone: comment('alone', 'event-only', 1),
+    one: comment('one', 'talk'),
+    two: comment('two', 'talk'),
+    elsewhere: comment('elsewhere', 'other'),
   }
-  assertEquals(commentCount('talk').value, 1)
-  assertEquals(commentCount('event-only').value, 0)
+  assertEquals(commentCount('talk').value, 2)
+  assertEquals(commentCount('other').value, 1)
+  assertEquals(commentCount('silent').value, 0)
 })
 
 Deno.test('commentCount: cold targets share one graph scan', () => {

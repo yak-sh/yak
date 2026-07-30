@@ -644,13 +644,7 @@ Deno.test('commentChanges: doc + aim, session reified for server stamping', () =
   let cs = commentChanges(all, T1, 'hi', 'sess-x')
   assertEquals(cs.length, 2)
   assertEquals(cs[1].comp, { target_eid: T1 })
-  assertEquals(cs[1].comp?.event, undefined) // authored words: no mark
   assertEquals(commentChanges(all, T1, 'hi')[1].comp, { target_eid: T1 })
-  // machinery speaking wears the mark (M-4062)
-  assertEquals(
-    commentChanges(all, T1, 'hi', 'sess-x', { event: true })[1].comp?.event,
-    1,
-  )
   let review = commentChanges(all, T1, '', 'sess-x', {
     verdict: 'approved',
   })
@@ -690,8 +684,7 @@ Deno.test('wrapChanges: unfinished gets the trail, done goes quiet', () => {
     cs.find((c) => c.name == 'doc')?.comp?.body,
     '⚑ lease lapsed: session S-1 ended before this was done',
   )
-  // the lapse notice is machinery, not the agent — marked, never mailed
-  assertEquals(cs.find((c) => c.name == 'comment')?.comp?.event, 1)
+  assertEquals(cs.find((c) => c.name == 'comment')?.comp, { target_eid: T1 })
   let done = structuredClone(snap)
   done.changes.find((c) => c.eid == T1 && c.name == 'task')!.comp!.status =
     'done'
@@ -2295,12 +2288,11 @@ Deno.test('contextDigest: unheard — comments after a past session stopped list
     target: string,
     at: string,
     by = OTHER,
-    event?: string,
   ) =>
     mk(eid, at, {
       created: { by },
       doc: { title: '', body: 'words' },
-      comment: { target_eid: target, ...(event ? { event } : {}) },
+      comment: { target_eid: target },
     })
   let base = [
     ...mk(eid(2), ago(0), { session: { id: 'u-new', actor_eid: OP } }),
@@ -2315,12 +2307,11 @@ Deno.test('contextDigest: unheard — comments after a past session stopped list
     changes: [...base, ...extra],
     deps: [],
   })
-  // one session, two unheard: un-notified, foreign, not events
+  // one session, two unheard: un-notified, and by another actor
   let one = g([
     ...note(eid(6), eid(3), ago(10)),
     ...note(eid(7), eid(3), ago(5)),
     ...note(eid(8), eid(3), ago(22)), // predates the session: void
-    ...note(eid(9), eid(3), ago(4), OTHER, 'status'), // machinery
     ...note(eid(10), eid(3), ago(3), OP), // own actor
     ...note(eid(11), eid(1), ago(2)), // another actor's session
     ...note(eid(12), eid(5), ago(1)), // too old a session

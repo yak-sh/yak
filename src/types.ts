@@ -292,11 +292,6 @@ export let comps: Record<string, Record<string, PropType>> = {
   hook: {},
   comment: {
     target_eid: { eid: '', death: 'cascade' },
-    // Emitted, not authored (M-4062): machinery marks its comments at
-    // mint — a settle notice, a lease lapse. Events never ride the mail
-    // relay and render as chips, not bubbles; the comms bus still
-    // delivers them.
-    event: 'bool',
   },
   review: {
     verdict: {
@@ -944,7 +939,6 @@ export type Hook = {
 export type Comment = {
   eid: string
   target_eid: string
-  event?: number | null
 }
 
 // A verdict-bearing comment. The aim, rationale, and authorship stay on

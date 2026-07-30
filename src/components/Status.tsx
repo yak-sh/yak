@@ -117,13 +117,7 @@ let scene = (task: string): Change[] => {
   let c = uuid()
   return [
     { eid: c, name: 'doc', comp: { title: '', body } },
-    {
-      eid: c,
-      name: 'comment',
-      // event: the command's context capture, not words anyone typed
-      // (M-4062) — never mailed.
-      comp: { target_eid: task, event: 1 },
-    },
+    { eid: c, name: 'comment', comp: { target_eid: task } },
   ]
 }
 

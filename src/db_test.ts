@@ -143,19 +143,6 @@ Deno.test('entity delete tombstones; nothing resurrects the eid', () => {
   assertEquals(comp(t, 'doc'), undefined)
 })
 
-Deno.test('comment.event: the machine mark rides the wire, absent by default', () => {
-  let t = uid(), c = uid(), plain = uid()
-  apply(db, [
-    { eid: t, name: 'doc', comp: { title: 'work' } },
-    { eid: c, name: 'doc', comp: { title: '', body: 'S-1 failed' } },
-    { eid: c, name: 'comment', comp: { target_eid: t, event: 1 } },
-    { eid: plain, name: 'doc', comp: { title: '', body: 'words' } },
-    { eid: plain, name: 'comment', comp: { target_eid: t } },
-  ])
-  assertEquals(comp(c, 'comment')?.event, 1)
-  assertEquals(comp(plain, 'comment')?.event, null)
-})
-
 Deno.test('review: a comment carries one canonical verdict', () => {
   let t = uid(), c = uid()
   apply(db, [
@@ -1318,7 +1305,7 @@ Deno.test('backfill: comment instruments move into created.via', () => {
   assertEquals(
     snapshot(d).changes.find((c) => c.eid == comment && c.name == 'comment')
       ?.comp,
-    { eid: comment, target_eid: target, event: null },
+    { eid: comment, target_eid: target },
   ) // dormant migration input never rides graph-out
   d.prepare('update created set via = null where eid = ?').run(comment)
   backfillVia(d)
