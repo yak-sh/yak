@@ -676,7 +676,6 @@ Use your memories to be what you are, freely.
 
 *Recall a body by id (memory_recall / task show).*
 
-- M-4062 feedback: letters vs notices: email is for prose agents wrote; machine events are not comments at all · 4× · confirmed 2026-07-30
 - M-4066 feedback: agents take warm paths, not right paths — adoption is won structurally · 5× · confirmed 2026-07-29
 - M-4061 project: vocabulary naming: artifacts get artifact names, pure acts keep _request · 1×
 - M-4457 feedback: code style (Ruby/Rails) — the class-macro idiom · 1×

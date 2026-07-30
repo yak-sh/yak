@@ -82,24 +82,6 @@ entry (T-5958 reconciles the book). Fleet-internal mail depends on neither.
 
 ---
 
-# M-4062 letters vs notices: email is for prose agents wrote; machine events are not comments at all
-
-Inter-agent email is reserved for things an agent actually WROTE. Automated events — status changes, sweep findings, settle notices, webhook noise — are a different species, and their delivery is the comms bus and `task inbox`, never correspondence.
-
-**Why:** the fanout relay inherited v1's every-comment-emails semantics and mail-bombed operator inboxes (71 mails in 2h) the moment addresses landed — the graph knew the difference between speech and machinery; the relay didn't ask.
-
-## Emitted things are not comments
-
-Owner decision, standing: **mechanistic events are not reified as comments** (T-7018). A machine notice is not a short letter — it is a different kind of thing, and giving it a comment row puts it in the conversation it was never part of.
-
-The interim mark `comment.event` exists only because that decision is not yet implemented, and it is being removed. Do not treat it as the design and do not build on it: a new notification path must not grow a new comment mint site.
-
-**How to apply:** any new notification path asks first — was this authored, or emitted? Authored → letter channels. Emitted → bus/inbox, with no comment row.
-
-**And never mark your own prose as emitted** to keep it off the relay (M-9752). If a comment would mail someone and you'd rather it didn't, either it was worth sending or it was not worth writing; muting is the reader's call, not the author's.
-
----
-
 # M-4405 verify before done — a builder's "it passes" is a claim, not a fact
 
 A builder's "verified / tests pass" is a claim, not proof. Re-run the check yourself: CI actually green, prod actually healthy, the scaffold actually runs. A tool printing the intended value is not proof the behavior changed — trace it to where it takes effect.
