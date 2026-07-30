@@ -299,10 +299,16 @@ export let manuals: Record<string, Manual> = {
       'task comment T-3 "blocked on the schema call"',
       'task comment S-31 "status?"',
       'task comment T-3 --verdict=approved',
+      'task set C-13 .body="what it should have said"',
     ],
     detail: 'A body that IS `@file` is read from that file (`@@` escapes a ' +
       'comment that genuinely starts with an @). A comment is something ' +
-      'you WROTE, and it reaches whoever the entity concerns.',
+      'you WROTE, and it reaches whoever the entity concerns.\n\n' +
+      "Prints the comment's own id. A comment is an ordinary entity, so " +
+      'REVISE a wrong one in place — `task set C-13 .body="…"` — rather ' +
+      'than posting a correction beneath it. `task history C-13` keeps every ' +
+      'earlier version, so nothing is lost by fixing it; a correction ' +
+      'comment only leaves the wrong text as the one read first.',
     root: true,
     options: [
       value(

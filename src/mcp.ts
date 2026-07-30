@@ -701,7 +701,14 @@ maximum number of newest batches to return. ${BUS}`,
     `Comment on ANY entity (tasks, boards, docs, frozen pages — anything
 with an id). An optional verdict makes it a review; its body is the
 rationale and may be empty for a bare verdict. Pass the same stable
-session identifier you claim with, for attribution.`,
+session identifier you claim with, for attribution.
+
+Returns the comment's own id (C-13). A comment is an ordinary entity, so
+REVISE a wrong one in place — graph_apply {eid: 'C-13', name: 'doc',
+comp: {body: '…'}} — instead of posting a correction under it. The
+original text stays in \`history\`, so nothing is lost by fixing it, while
+a correction comment leaves the wrong version as the one people read
+first.`,
     {
       id: z.string(),
       body: body().optional(),
@@ -721,12 +728,17 @@ session identifier you claim with, for attribution.`,
       let row = find(all, id)
       if (!row) return err(`no entity: ${id}`)
       let words = body ?? ''
-      await io.write(
-        commentChanges(all, row.eid, words, session, { verdict }),
+      let made = commentChanges(all, row.eid, words, session, { verdict })
+      await io.write(made, session)
+      // The writer's handle on what it just wrote — without it, fixing a
+      // wrong comment means writing another one.
+      let mine = made.find((c) => c.name == 'comment')?.eid
+      let after = rows(await io.read()).find((r) => r.eid == mine)
+      let said = verdict ? `${verdict} review` : 'comment'
+      return bus(
+        `${after ? idOf(after) : mine} — ${said} on ${idOf(row)}${wall(words)}`,
         session,
       )
-      let said = verdict ? `${verdict} review` : 'comment'
-      return bus(`${said} on ${idOf(row)}${wall(words)}`, session)
     },
   )
 

@@ -1022,9 +1022,18 @@ let comment = async (args: string[]) => {
   let all = rows(await snapshot())
   let row = find(all, id)
   if (!row) throw new Error(`no entity: ${id}`)
-  await send(commentChanges(all, row.eid, body, me(), { verdict }))
+  let made = commentChanges(all, row.eid, body, me(), { verdict })
+  await send(made)
+  // Hand back the comment's OWN id, like every other mint door. Without it a
+  // writer has no reference to what it just wrote, so the only reachable way
+  // to fix a wrong comment is another comment — which is why the board fills
+  // with corrections instead of corrected text (`task set C-13 .body=…`).
+  let mine = made.find((c) => c.name == 'comment')?.eid
+  let after = rows(await snapshot()).find((r) => r.eid == mine)
   let said = verdict ? `${verdict} review` : 'comment'
-  console.log(`${said} on ${idOf(row)}`)
+  console.log(
+    `${after ? idOf(after) : mine} — ${said} on ${idOf(row)}`,
+  )
 }
 
 let show = async (args: string[]) => {
