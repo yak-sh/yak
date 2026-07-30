@@ -73,8 +73,9 @@ channel injects verified unread mail into the live session it's routed to
 (`kind="mail"`; owner policy: ALL verified mail injects, unverified holds for triage —
 the policy is one predicate in channels/tasks/filter.ts). Stdin to `task mail send` is
 the explicit `--body=@-` door only — a missing body fails fast, never hangs. Keep the
-loop healthy, and the letters-vs-notices line sharp: mail is prose an agent wrote for a
-human; machine events are marked at mint.
+loop healthy: mail is prose an agent wrote for a human, and a machine notice is not a
+short letter — it is a different thing, and it gets its own entity, never a comment
+(T-7018).
 
 The boundary still has named gaps: an EXTERNAL-facing address must carry a Cloudflare
 routing rule (literal-only, silent drop without one — T-5837) and a graph address-book
