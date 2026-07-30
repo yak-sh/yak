@@ -134,6 +134,8 @@ That failure is easy to walk into: verifying that a flag stopped a comment from 
 
 **Build the fixture the common path uses.** A probe that reaches for the explicit, careful form tests a path few callers take — passing `.title=` explicitly saw a clean no-op where a bare-word title, the form in every shipped example, was silently corrupted.
 
+**Confirm the check could SEE the thing — check the artifact, not just the exit code.** Distinct from structural blindness: here the tool works perfectly and is simply pointed somewhere the change isn't. Auditing a Brakeman fix, `bin/brakeman` locally reported `Security Warnings: 0` — from a shared checkout that had drifted and **did not contain the file at all**. A scanner finds no flaw in absent code. Same shape everywhere: a suite run on a stale tree, a linter whose glob misses the new directory, a grep in the wrong worktree, a deploy check against the previous build. One command settles it — `grep -c` the change in the tree you are about to scan, or read the sha the tool actually ran against. Ask not only *could this check fail?* but *is the thing I am checking even in front of it?*
+
 ## Verify the whole surface after a change, not the part you touched
 
 A partial failure can move something you weren't aiming at: routes once failed to attach *while* a tool default silently disabled the other hostname, leaving no reachable origin at all — and the error named only the routes. Curl every origin, not the one you were changing.
