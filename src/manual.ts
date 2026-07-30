@@ -225,21 +225,23 @@ export let manuals: Record<string, Manual> = {
     words: [1, 1],
   },
   inbox: {
-    usage: 'inbox [--json|--all]',
+    usage: 'inbox [filters...] [--json|--all|--sent]',
     about: 'everything addressed to you, unread first',
     examples: [
       'task inbox',
       'task inbox --all',
+      'task inbox .from=jeff@yak.sh',
       'task inbox show E-9',
       'task inbox archive E-9',
     ],
     detail:
       'Archived items are hidden; --all shows them too, marked `\u00d7`, ' +
       'and ignores `task mute`. Closing a task archives the correspondence ' +
-      'about it, so --all is where that correspondence went.',
+      'about it, so --all is where that correspondence went. --sent is the ' +
+      'letters you sent. Filters speak `task help grammar` \u2014 the same one ' +
+      'parser every list door uses.',
     root: true,
-    options: [json, flag('--all')],
-    words: [0, 0],
+    options: [json, flag('--all'), flag('--sent')],
   },
   'inbox show': {
     usage: 'inbox show <id> [--json]',

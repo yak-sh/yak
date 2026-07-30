@@ -544,6 +544,10 @@ Deno.test('task verbs reject surplus words and missing values before effects', a
   let cases: [string[], RegExp][] = [
     [['claim', 'T-1', 'sess', 'extra'], /claim expected 1–2 arguments/],
     [['inbox', 'archive', 'E-1', 'extra'], /expected 1 argument, got 2/],
+    // The inbox takes filters now, so a bare word is no longer surplus —
+    // it is a bad FILTER, and it teaches the verb instead of guessing
+    // (T-10767). Refused before the snapshot, like every arity check.
+    [['inbox', 'notafilter'], /not an inbox filter/],
     [['backup', 'extra'], /backup expected 0 arguments/],
     [['history', 'T-1', '-n'], /-n needs a positive number/],
   ]

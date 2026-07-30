@@ -405,10 +405,12 @@ export let bodyOf = (flags: string[], words: string[], io = stdin) => {
   return only
 }
 
-// The inbox: YOUR unread bare — the digest's own predicate, scoped to
-// the project you stand in — --all/--sent widen to the fleet, dot-params
-// screen (the one filter grammar). A word that isn't a filter teaches
-// the verb family instead of guessing.
+// The MAIL SLICE (deprecated — `task inbox` is the door): YOUR unread
+// bare, the digest's own predicate scoped to the project you stand in;
+// --all/--sent widen to the fleet, dot-params screen (the one filter
+// grammar). A word that isn't a filter teaches the verb family instead of
+// guessing. `task inbox` now speaks all of this, which is what lets this
+// one retire.
 let mailList = async (args: string[]) => {
   let json = args.includes('--json')
   let every = args.includes('--all'), sent = args.includes('--sent')
@@ -635,16 +637,43 @@ let inboxLine = (r: Row) => {
 let inboxList = async (args: string[]) => {
   let json = args.includes('--json')
   let every = args.includes('--all')
+  let sent = args.includes('--sent')
+  // The one filter grammar, same as every other list door. Deprecating
+  // `task mail` must not NARROW the surface: it took filters and --sent, so
+  // the door that supersedes it takes them too, or the warm path stays the
+  // deprecated one (T-10767).
+  let preds = args.filter((a) => !['--json', '--all', '--sent'].includes(a))
+    .map((a) => {
+      let p = pred(a)
+      if (!p) throw new Error(`not an inbox filter: ${a}\n\n${help(['inbox'])}`)
+      return p
+    })
   let all = rows(await snapshot())
+  let resolved = resolveRefs(preds, (id) => find(all, id)?.eid)
+  let byEid = new Map(all.map((r) => [r.eid, r.comps]))
   let who = readerFor(all, me(), Deno.cwd())
-  let mine = every ? addressed(who) : inboxItem(who)
-  let items = all.filter(mine).sort((a, b) =>
-    (isUnread(b) ? 1 : 0) - (isUnread(a) ? 1 : 0) ||
-    bornAt(a).localeCompare(bornAt(b))
-  )
+  // Outbound is the mail door's own test — no message_id means it never
+  // arrived from the edge — so the two verbs cannot disagree about "sent".
+  let mine = sent
+    ? (r: Row) => !!r.comps.mail && !r.comps.mail.message_id
+    : every
+    ? addressed(who)
+    : inboxItem(who)
+  let items = all.filter(mine)
+    .filter((r) => matchQuery(r.comps, resolved, (e) => byEid.get(e)))
+    .sort((a, b) =>
+      (isUnread(b) ? 1 : 0) - (isUnread(a) ? 1 : 0) ||
+      bornAt(a).localeCompare(bornAt(b))
+    )
   if (json) return console.log(JSON.stringify(items, null, 2))
   if (!items.length) {
-    return console.error(every ? '(nothing addressed to you)' : '(inbox empty)')
+    return console.error(
+      sent
+        ? '(nothing sent)'
+        : every
+        ? '(nothing addressed to you)'
+        : '(inbox empty)',
+    )
   }
   let bold = Deno.stdout.isTerminal()
   for (let r of items) {
