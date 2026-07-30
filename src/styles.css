@@ -787,9 +787,6 @@ html {
 .Comments_When:hover {
   text-decoration: underline;
 }
-.Comments_Body {
-  color: var(--muted);
-}
 .Comments_Body p {
   margin: 0;
 }

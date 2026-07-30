@@ -59,7 +59,6 @@ let sheet: Record<string, Style> = {
   'Comments_Verdict-changes-requested': { fg: '#dbbc7f' },
   Task_Prio: { fg: '#7a8478' },
   Debug_Prio: { fg: '#7a8478' },
-  TComment: { fg: '#9da9a0' },
   Dependency: { fg: '#9da9a0' },
   'Dependency_Type-requires': { fg: '#e67e80' },
   'Dependency_Type-reads': { fg: '#7fbbb3' },
