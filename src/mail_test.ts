@@ -10,7 +10,8 @@ let { addressOf, FANOUT_PENDING, fanout, mailed, rfcId } = await import(
 let { canon, payload } = await import('./mailer.ts')
 let { channelEvents } = await import('./channel.ts')
 let { comps } = await import('./types.ts')
-let { assertEquals, assertMatch, assertThrows } = await import('@std/assert')
+let { assertEquals, assertMatch, assertStringIncludes, assertThrows } =
+  await import('@std/assert')
 
 // Hermetic: the host's own mailer env must never reach these tests.
 for (
@@ -391,18 +392,21 @@ Deno.test('canon: bot.yak.sh sheds underscores; other domains pass', () => {
   assertEquals(canon('under_score@gmail.com'), 'under_score@gmail.com')
 })
 
-Deno.test('payload: the bin/email shape, threading headers on mid', () => {
+Deno.test('payload: text and rendered markdown, threading headers on mid', () => {
   let p = payload({
     from: 'ops@bot.yak.sh',
     to: 'jeff@yak.sh',
     subject: 'subj',
-    body: 'text',
+    body: '**bold** https://example.com and T-123',
   })
   assertEquals(p.from, { address: 'ops@bot.yak.sh', name: 'ops' })
   assertEquals(p.to, ['jeff@yak.sh'])
   assertEquals(p.reply_to, 'ops@bot.yak.sh')
   assertEquals(p.subject, 'subj')
-  assertEquals(p.text, 'text')
+  assertEquals(p.text, '**bold** https://example.com and T-123')
+  assertStringIncludes(p.html, '<strong>bold</strong>')
+  assertStringIncludes(p.html, '<a href="https://example.com">')
+  assertStringIncludes(p.html, 'href="/T-123" data-ref="T-123"')
   assertEquals(p.headers, undefined)
   let r = payload({
     from: 'a@b.c',
@@ -502,6 +506,8 @@ Deno.test('mailed: native send stamps sent_id, threads, logs dir=out', async () 
       name: 'sender',
     })
     assertEquals(hits[0].body.to, ['cafecar@bot.yak.sh'])
+    assertEquals(hits[0].body.text, 'answered')
+    assertEquals(hits[0].body.html, '<p>answered</p>\n')
     assertEquals(hits[0].body.headers, {
       'In-Reply-To': '<orig@y.test>',
       References: '<orig@y.test>',

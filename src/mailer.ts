@@ -13,6 +13,8 @@
 // bounces whatever the routing rules say. Canonicalizing at send
 // (lowercase, shed underscores) is the only reliable fix; every other
 // domain passes untouched.
+import { md } from './md.ts'
+
 export let canon = (to: string) => {
   let m = /^([^@]+)@(bot\.yak\.sh)$/i.exec(to.trim())
   return m
@@ -50,6 +52,7 @@ export let payload = (l: Letter) => ({
   reply_to: l.from,
   subject: l.subject,
   text: l.body,
+  html: md(l.body),
   ...(l.mid
     ? {
       headers: { 'In-Reply-To': `<${l.mid}>`, References: `<${l.mid}>` },
