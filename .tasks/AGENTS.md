@@ -440,6 +440,9 @@ That confinement is what keeps prose safe. All of these stay verbatim text:
 ## The failure modes are loud
 
 - **A missing file**: `task: @/no/such/file: no such file`, exit 1 — thrown before anything is written, minted, or sent. A half-sent letter is not reachable, and the message names the token you typed rather than some other spelling.
+- **A DROPPED `@` is refused too.** A lone whitespace-free token that NAMES AN EXISTING FILE is never stored as text: `task: /tmp/report.md: names a file that exists — did you mean @/tmp/report.md?`, exit 1, nothing written. Before this it cost an interim report on a live P0, because the path landed as the body and the door printed its usual receipt.
+  - To store such a path as text on purpose, **pipe it**: `printf %s /tmp/report.md | task comment T-1 @-`. **`@@` will not do it** — that escapes to a literal leading `@`, giving `@/tmp/report.md`.
+  - Narrow by design, so it cannot overshoot: only a `body`, only one whitespace-free token, only one holding a `/` that stats as a file. Prose is untouched, a bare word like `done` never trips it even beside a file of that name, a path that does not exist stays storable, and `repo.path` still takes a path.
 - **An empty pipe** is refused rather than clearing the column.
 - **Only `@` is special.** A dot-param `.body=-` writes the single character `-`; the stdin door is spelled `@-`. (`--body=-` is the one place a bare `-` means stdin, the way flags conventionally use it.)
 
@@ -459,7 +462,7 @@ Neither holds the caller's filesystem. In the web bar there is no disk to read. 
 
 Any write that REPLACES a body destroys what was there. Read the node to a file (`task show <id> --json` → `comps.doc.body`), patch it, write it back, then **verify by reading the node again** — never by trusting the success message. This bites hardest on **persona and memory nodes**: blanking the `N-…` for a repo's common persona empties that repo's `AGENTS.md` on the next materialize, and the materializer auto-commits, so the damage lands in git within seconds.
 
-For outbound mail the same habit is `task show <id>` on the receipt — one call, and the only thing that distinguishes a delivered letter from a delivered file path.
+For outbound mail the same habit is `task show <id>` on the receipt — still worth the one call now that a dropped `@` is refused, because only the receipt shows what actually went out.
 
 `task history <id> --json` holds every prior body verbatim, so recovery is a read plus one write even when you did not save a copy first.
 
