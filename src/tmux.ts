@@ -326,10 +326,17 @@ export let nativeSweep = (cast: Cast): Promise<void> => {
   return sweeping
 }
 
+// The debounce door for graph casts. Nothing holds the timer's promise, so
+// an unguarded rejection here would end the process (T-11139) — the sweep is
+// a reconciler, and a failed pass is the next tick's problem, never the
+// server's life.
 let soon: ReturnType<typeof setTimeout> | undefined
 export let nativeSoon = (cast: Cast) => {
   clearTimeout(soon)
-  soon = setTimeout(() => nativeSweep(cast), 100)
+  soon = setTimeout(
+    () => nativeSweep(cast).catch((e) => console.warn('native sweep —', e)),
+    100,
+  )
 }
 
 // A busy hook after submission is durable acceptance evidence. A swallowed

@@ -69,12 +69,55 @@ export let launch = async (
   }
 }
 
+// Condemned (we are retiring it) and departed (its status settled). A child
+// can be both; the pair is what tells a death we caused from one we must heal.
 let stopping = new WeakSet<Deno.ChildProcess>()
+let dead = new WeakSet<Deno.ChildProcess>()
+
+// The server this supervisor is answerable for.
+let current: Deno.ChildProcess | undefined
+
+// Every mint and retire runs here, one at a time. A crash-relaunch and an
+// edit-swap both replace `current`, and interleaved they lose a handle — the
+// orphan keeps the port under reusePort, so the address answers from a server
+// nobody can stop or reload.
+let lock: Promise<unknown> = Promise.resolve()
+let serial = <T>(work: () => Promise<T>): Promise<T> => {
+  let done = lock.then(work, work)
+  lock = done.catch(() => {})
+  return done
+}
+
+// Backoff for a successor that will not boot: climbs while boots keep
+// failing, resets on one that stands up. A bad commit should idle the box,
+// not spin it.
+const RETRY = [0, 1_000, 2_000, 5_000, 10_000, 30_000]
+
+// A supervisor ABSORBS its child's death; it never escalates one. Exiting
+// here hands the problem to systemd, and `Restart=always` mass-kills this
+// unit's cgroup — where the operator tmux tree lives — so a crash we could
+// heal in a second costs every operator mid-turn instead (T-11139). There is
+// no failure a child can have that the supervisor improves by dying too.
+let revive = async (departed: Deno.ChildProcess) => {
+  if (current != departed) return // a swap already replaced it
+  for (let n = 0;; n++) {
+    let ms = RETRY[Math.min(n, RETRY.length - 1)]
+    if (ms) await wait(ms)
+    try {
+      current = watch(await launch())
+      return
+    } catch (e) {
+      console.error('server relaunch failed —', e)
+    }
+  }
+}
+
 let watch = (child: Deno.ChildProcess) => {
   child.status.then((status) => {
+    dead.add(child)
     if (stopping.has(child)) return
-    console.error(`server stopped unexpectedly (${status.code})`)
-    Deno.exit(status.code || 1)
+    console.error(`server stopped unexpectedly (${status.code}) — relaunching`)
+    serial(() => revive(child))
   })
   return child
 }
@@ -89,19 +132,31 @@ let stop = async (child: Deno.ChildProcess) => {
   await child.status
 }
 
-let swap = async (old: Deno.ChildProcess) => {
+// Condemn the predecessor BEFORE the successor boots. It stays on the port
+// and keeps serving, but it is already being replaced — and the successor's
+// boot runs migrations against the graph they briefly share, so old code
+// meeting a schema that moved under it is expected, not news. Left until
+// after `launch()` resolved, that window classified a doomed process's death
+// as unexpected and took the supervisor down with it (T-11139).
+let swap = async () => {
+  let old = current!
+  stopping.add(old)
   try {
-    let next = watch(await launch())
+    current = watch(await launch())
     await stop(old)
-    return next
   } catch (e) {
     console.error('server handoff failed —', e)
-    return old
+    // No successor, so the predecessor is still ours: lift the condemnation.
+    stopping.delete(old)
+    current = old
+    // Unless the reprieve came too late — nothing watches a child whose
+    // status already settled, so heal here or sit holding a dead handle.
+    if (dead.has(old)) await revive(old)
   }
 }
 
 let supervise = async () => {
-  let current = watch(await launch())
+  current = watch(await launch())
   let pending = false
   let swapping = false
 
@@ -110,7 +165,7 @@ let supervise = async () => {
     while (pending) {
       pending = false
       await wait(50)
-      if (!pending) current = await swap(current)
+      if (!pending) await serial(swap)
     }
     swapping = false
   }

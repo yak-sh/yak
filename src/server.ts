@@ -76,10 +76,28 @@ import { nativeSoon, nativeSweep, noticeAccepted } from './tmux.ts'
 import { roleRemoved, rolesSoon, rolesSweep } from './roles.ts'
 import { prune as pruneTree, reap as reapProbes, sweep } from './probes.ts'
 
-// The hot-swap generation: bumped by the watcher on every client-code or
-// css change, stamped into every served module's relative imports so a
-// swap re-fetches the whole component graph (see hot.ts).
-let gen = 1
+// The last line of defence. A rejection nobody handled ends a Deno process,
+// and this process dying costs every operator (T-11139) — so an escaped one
+// degrades to a logged error. This never replaces guarding a sweep at its
+// call site (`tick` below); it is what catches the one nobody guarded, and
+// the warning is how you find it.
+globalThis.addEventListener('unhandledrejection', (e) => {
+  e.preventDefault()
+  console.error('unhandled rejection —', e.reason)
+})
+
+// The hot-swap generation: bumped by the watcher on every client-code or css
+// change, stamped into every served module's relative imports so a swap
+// re-fetches the whole component graph (see hot.ts).
+//
+// Seeded from the clock because the browser's ESM cache OUTLIVES this
+// process and is keyed by exact specifier. Counting from 1 each boot re-mints
+// `?v=2` after every restart — and a tab that already holds `App.tsx?v=2`
+// answers the re-import from cache, so the swap reports `code v2 live` while
+// running the previous process's modules. Nothing throws, so main.tsx's
+// `Good` fallback cannot see it either. Monotonic across processes is the
+// property that matters; within one, only that it climbs.
+let gen = Date.now()
 
 let src = new URL('.', import.meta.url).pathname
 
@@ -905,18 +923,34 @@ on('doc', {
 // reaps a child; the watcher below must never learn how.
 recover(cast)
 
+// Every reconciler runs on a timer, which means nothing is holding its
+// promise — and in Deno a rejection nobody handled ENDS THE PROCESS. A sweep
+// that throws would take the server, and the server dying costs every
+// operator (T-11139). So the guard is the SHAPE here, not a `.catch` each
+// caller has to remember: four of the five sweeps below had forgotten it.
+// `boot` runs the first pass now, as the boot-time reconcile most of them
+// want; the returned runner is the debounce door for graph casts.
+let tick = (name: string, sweep: () => unknown, ms: number, boot = true) => {
+  let run = async () => {
+    try {
+      await sweep()
+    } catch (e) {
+      console.warn(`${name} sweep —`, e)
+    }
+  }
+  if (boot) run()
+  setInterval(run, ms)
+  return run
+}
+
 // Native Codex panes have no content channel. Reconcile pending inboxes at
 // boot and on a short tick; graph writes also debounce nativeSoon() through
 // cast. Per-session submission/acceptance clocks bound swallowed-send retries.
-nativeSweep(cast)
-setInterval(() => nativeSweep(cast), 2_000)
+tick('native', () => nativeSweep(cast), 2_000)
 
 // Persistent roles are desired state: boot and the short tick heal a daemon
 // restart or dead native TUI, while every graph cast debounces a faster pass.
-let reconcileRoles = () =>
-  rolesSweep(cast).catch((e) => console.warn('roles sweep —', e))
-reconcileRoles()
-setInterval(reconcileRoles, 2_000)
+tick('roles', () => rolesSweep(cast), 2_000)
 
 // What sessions leave running (probes.ts): a headless browser squatting on a
 // CDP port, a probe server on a scratch db, a worktree with nothing left in
@@ -976,8 +1010,7 @@ relay((comp, pending) =>
 // dormancy, said once, never an error — and a non-live db is REFUSAL
 // (mayStamp), or a probe inheriting live creds steals delivery.
 if (fleetApi()) {
-  inboundSweep(cast)
-  setInterval(() => inboundSweep(cast), 10_000)
+  tick('inbound', () => inboundSweep(cast), 10_000)
 } else {
   console.log(
     mayStamp()
@@ -1002,21 +1035,19 @@ console.log(
 // session wearing the scribe persona writes the briefs and memories.
 // Ten-minute tick; the sweep's own throttle keeps it to one desk an
 // hour. Graduates to a `system` entity under T-3906 with the others.
-scribeSweep(cast)
-setInterval(() => scribeSweep(cast), 10 * 60_000)
+tick('scribe', () => scribeSweep(cast), 10 * 60_000)
 
 // Embeddings (embed.ts): every non-comment doc keeps a semantic vector,
 // refreshed a few seconds after its text moves — that's what lets a
 // create reply say "this already exists" while the ink is still wet.
 // Boot sweeps the backfill; the interval catches anything the debounce
 // dropped. A box without the model sweeps zero rows, forever, silently.
-embedSweep(db)
-setInterval(() => embedSweep(db), 10 * 60_000)
+let embedding = tick('embed', () => embedSweep(db), 10 * 60_000)
 let embedSoon = (() => {
   let t: ReturnType<typeof setTimeout> | undefined
   return () => {
     clearTimeout(t)
-    t = setTimeout(() => embedSweep(db), 3_000)
+    t = setTimeout(embedding, 3_000)
   }
 })()
 on('doc', {

@@ -12,7 +12,7 @@ import { apply, db, record, snapshot } from './db.ts'
 import { dispatch, trace } from './effects.ts'
 import { notices, rows } from './client.ts'
 import { materialize } from './persona.ts'
-import { childPath, continueSession } from './sessions.ts'
+import { childPath, continueSession, userBus } from './sessions.ts'
 import { type Change, sessionActive, uuid } from './types.ts'
 
 type Cast = (changes: Change[]) => void
@@ -47,7 +47,51 @@ export type RoleDeps = {
   write: (path: string, body: string) => void
 }
 
+// tmux is client/server, and the FIRST command that finds no server STARTS
+// one — usually `has-session`, not `new-session`. That server daemonizes but
+// stays in its starter's cgroup: setsid escapes a process group, never a
+// cgroup (T-7127 measured the KillMode alternatives and refuted every one).
+// So a server born under tasksd.service is mass-killed with the unit, taking
+// every operator pane with it — five operators lost mid-turn (T-11139).
+//
+// Start it deliberately, inside a user scope, before tmux can be started by
+// accident: systemd does not touch user-<uid>.slice when a system service
+// restarts. Idempotent and cheap — `start-server` is a no-op when a server is
+// already up, including the owner's own login one, so this only decides where
+// a server WE would have started ends up living.
+let serving: Promise<void> | undefined
+let startServer = () =>
+  serving ??= (async () => {
+    try {
+      let out = await new Deno.Command('systemd-run', {
+        args: [
+          '--user',
+          '--scope',
+          '--collect',
+          `--unit=tasks-tmux-${Date.now().toString(36)}`,
+          'tmux',
+          'start-server',
+        ],
+        env: userBus(),
+        stdin: 'null',
+        stdout: 'null',
+        stderr: 'piped',
+      }).output()
+      if (!out.success) {
+        console.warn(
+          'tmux scope —',
+          new TextDecoder().decode(out.stderr).trim(),
+        )
+      }
+    } catch (e) {
+      // No systemd-run, no user bus: an in-cgroup server is worse than a
+      // scoped one and better than no roles at all. Say so and carry on.
+      console.warn('tmux scope —', e)
+    }
+  })()
+
 let command = async (args: string[]): Promise<CommandOutput> => {
+  await startServer()
   try {
     return await new Deno.Command('tmux', {
       args,
