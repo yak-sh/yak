@@ -17,12 +17,30 @@ let ZONE = 'a0879bd97b46bc6d35cb60b3e831c8d8'
 export type Rule = { value: string; enabled: boolean }
 export type Rules = { live: boolean; catchall: boolean; rules: Rule[] }
 
-// NOT AUTHORITATIVE — a checked-in snapshot of the rule set (last
-// reconciled 2026-07-23, T-5958/T-6262), used only when no on-box token
-// carries Email Routing read. It can drift from Cloudflare silently —
-// the whole disease this doctor treats — so the CLI warns loudly
-// whenever this is what it diagnosed from. Live mode needs
-// CLOUDFLARE_ROUTING_READ_TOKEN (owner-mintable, read-only).
+// NOT AUTHORITATIVE — a checked-in snapshot of the rule set, used only
+// when nothing on the box can read Email Routing. It drifts from
+// Cloudflare silently, which is the whole disease this doctor treats, so
+// a rule-dependent verdict read from here is reported as UNVERIFIED
+// rather than as a failure (`fromRules: true` on the finding, `?` at the
+// renderer).
+//
+// It has already drifted once, expensively: `task` and `taskmaster` were
+// added to Cloudflare on 2026-07-23 08:25Z and verified end-to-end at
+// 09:42Z (T-5837), but this list was reconciled just before that and kept
+// a date that made it look current. The doctor then reported
+// `✗ task@bot.yak.sh — mail drops silently` for months while letters were
+// arriving at it, and that verdict was filed as a production defect
+// (T-10480). Both entries are restored below on two independent proofs:
+// the live probe recorded on T-5837, and a DKIM-verified letter from
+// Gmail that reached task@ and minted E-10458 off the edge spool.
+//
+// Reading it live is NOT an env-token job: the credential that carries
+// Email Routing scope on this box is the **MCP Cloudflare server**
+// (OAuth, no inline token), reachable from a session that has it — which
+// is why every bearer token in .env fails this call with code 10000. So
+// refreshing this list is an agent errand, not a config change. If a
+// read-only routing token is ever minted, put it in
+// CLOUDFLARE_ROUTING_READ_TOKEN and live mode takes over.
 export let STATIC_RULES: Rules = {
   live: false,
   catchall: false, // zone catch-all is disabled (action: drop)
@@ -37,6 +55,8 @@ export let STATIC_RULES: Rules = {
     'harness',
     'mailtest',
     'ufos',
+    'task', // added + verified live 2026-07-23 (T-5837)
+    'taskmaster', // ditto
   ].map((v) => ({ value: `${v}@bot.yak.sh`, enabled: true })),
 }
 
@@ -57,25 +77,38 @@ export let bookOf = (all: Row[]): Entry[] =>
 // catch-all catching). Caveat the flip must verify (T-5837): a zone
 // catch-all has not covered the bot.yak.sh subdomain historically — if
 // it reads enabled here, probe before trusting it.
-export type Finding = Entry & { problem: string }
+// `fromRules` says whether the verdict DEPENDS on the rule set, and it is
+// the whole difference between a measurement and a guess. A bad local-part
+// is decided by `canon` alone — authoritative in either mode. "No routing
+// rule" is only as true as the rules we read, so against the snapshot it
+// is unverified, and the renderer must not dress it as a failure.
+export type Finding = Entry & { problem: string; fromRules: boolean }
 export let diagnose = (book: Entry[], r: Rules): Finding[] =>
-  book.filter((e) => /@bot\.yak\.sh$/i.test(e.address)).flatMap((e) => {
-    if (canon(e.address) != e.address) {
-      return [{
+  book.filter((e) => /@bot\.yak\.sh$/i.test(e.address)).flatMap(
+    (e): Finding[] => {
+      if (canon(e.address) != e.address) {
+        return [{
+          ...e,
+          fromRules: false,
+          problem: `illegal local-part — Cloudflare bounces it at RCPT, ` +
+            `upstream of every rule; canonical is ${canon(e.address)}`,
+        }]
+      }
+      let ruled = r.rules.some((x) =>
+        x.enabled && x.value.toLowerCase() == e.address.toLowerCase()
+      )
+      return ruled || r.catchall ? [] : [{
         ...e,
-        problem: `illegal local-part — Cloudflare bounces it at RCPT, ` +
-          `upstream of every rule; canonical is ${canon(e.address)}`,
+        fromRules: true,
+        problem: r.live
+          ? 'no enabled routing rule and the catch-all is off — ' +
+            'sends report success, mail drops silently'
+          : 'no rule in the checked-in snapshot — UNVERIFIED, not a ' +
+            'measurement: the snapshot has drifted before (task@, T-10480). ' +
+            'Read the live rules before filing this as a defect',
       }]
-    }
-    let ruled = r.rules.some((x) =>
-      x.enabled && x.value.toLowerCase() == e.address.toLowerCase()
-    )
-    return ruled || r.catchall ? [] : [{
-      ...e,
-      problem: 'no enabled routing rule and the catch-all is off — ' +
-        'sends report success, mail drops silently',
-    }]
-  })
+    },
+  )
 
 // The live rule set: literal to-matchers plus the catch-all's state
 // (enabled AND not action=drop is what makes it a delivery path).
@@ -83,9 +116,14 @@ export let diagnose = (book: Entry[], r: Rules): Finding[] =>
 // token that can't read (wrong scope) throws instead, so a misminted
 // token is a loud fact, never a silent degrade.
 export let liveRules = async (): Promise<Rules | null> => {
-  // || not ??: a set-but-empty first name must fall through, not veto.
-  let token = Deno.env.get('CLOUDFLARE_ROUTING_READ_TOKEN') ||
-    Deno.env.get('CLOUDFLARE_TASKS_TOKEN')
+  // ONE name, deliberately. CLOUDFLARE_TASKS_TOKEN used to be the
+  // fallback, but it is proven NOT to carry Email Routing scope (code
+  // 10000, same as every other bearer token on this box) — so naming it
+  // here turned the loud-failure branch into a guaranteed false alarm on
+  // any box that loads holdco's .env, while the branch was meant to catch
+  // a MISMINTED token. A token that cannot read still throws; a box with
+  // no token degrades to the snapshot and says so.
+  let token = Deno.env.get('CLOUDFLARE_ROUTING_READ_TOKEN')
   if (!token) return null
   let zone = Deno.env.get('CLOUDFLARE_ZONE_ID') ?? ZONE
   let get = async (path: string) => {

@@ -583,13 +583,24 @@ let mailDoctor = async () => {
     rules = STATIC_RULES
     console.error(
       '⚠ STATIC rule snapshot (src/doctor.ts) — NOT authoritative, it can\n' +
-        '  drift from Cloudflare silently; set CLOUDFLARE_ROUTING_READ_TOKEN\n' +
-        '  (Email Routing read on the yak.sh zone) for the live check',
+        '  drift from Cloudflare silently, and has. Rule verdicts below are\n' +
+        '  marked ? and are NOT measurements. Email Routing scope on this\n' +
+        '  box belongs to the MCP Cloudflare server (OAuth), not to any\n' +
+        '  bearer token — so a live read is an agent errand: read the rules\n' +
+        '  and refresh STATIC_RULES. Set CLOUDFLARE_ROUTING_READ_TOKEN if a\n' +
+        '  read-only routing token is ever minted.',
     )
   }
   let bots = book.filter((e) => /@bot\.yak\.sh$/i.test(e.address))
   let bad = diagnose(book, rules)
-  for (let f of bad) console.log(`✗ ${f.address} (${f.owner}) — ${f.problem}`)
+  // '?' where the verdict came from the snapshot rather than Cloudflare.
+  // A '✗' asserts a measurement, and one read off a stale constant was
+  // filed as a production defect (T-10480) — the marker is what stops
+  // that, since the ⚠ banner above is read as advisory and this is not.
+  for (let f of bad) {
+    let mark = f.fromRules && !rules.live ? '?' : '✗'
+    console.log(`${mark} ${f.address} (${f.owner}) — ${f.problem}`)
+  }
   console.log(
     `${bots.length - bad.length}/${bots.length} bot.yak.sh addresses ` +
       `deliverable (${book.length} in the book; rules: ` +

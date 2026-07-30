@@ -89,3 +89,40 @@ Deno.test('static snapshot: marked non-live, every value canonical', () => {
   assertEquals(STATIC_RULES.live, false)
   for (let r of STATIC_RULES.rules) assertEquals(canon(r.value), r.value)
 })
+
+// The measurement/guess split (T-10610). A rule verdict is only as true as
+// the rules we read; a local-part verdict is decided by canon alone.
+Deno.test('diagnose: fromRules marks which verdicts depend on the rule set', () => {
+  let ruleGap = diagnose([{ address: 'b@bot.yak.sh', owner: 'P-2' }], rules([]))
+  assertEquals(ruleGap[0].fromRules, true)
+  // An underscore is illegal whatever the rules say — authoritative either way.
+  let illegal = diagnose(
+    [{ address: 'a_b@bot.yak.sh', owner: 'P-3' }],
+    rules(['a_b@bot.yak.sh']),
+  )
+  assertEquals(illegal[0].fromRules, false)
+})
+
+Deno.test('diagnose: the snapshot says UNVERIFIED where live says drops', () => {
+  let book = [{ address: 'b@bot.yak.sh', owner: 'P-2' }]
+  let snap = diagnose(book, { live: false, catchall: false, rules: [] })
+  let live = diagnose(book, { live: true, catchall: false, rules: [] })
+  // Same finding, different claim — the snapshot must not assert a drop.
+  assertEquals(snap[0].problem.includes('UNVERIFIED'), true)
+  assertEquals(snap[0].problem.includes('drops silently'), false)
+  assertEquals(live[0].problem.includes('drops silently'), true)
+})
+
+// The regression guard for the drift that started this: the snapshot was
+// reconciled just before task@/taskmaster@ were added to Cloudflare, so the
+// doctor called the fleet's OWN address undeliverable while mail arrived at
+// it. Pin both, so dropping one fails here instead of in a filed defect.
+Deno.test('static snapshot: carries the fleet addresses verified on T-5837', () => {
+  let has = (a: string) => STATIC_RULES.rules.some((r) => r.value == a)
+  assertEquals(has('task@bot.yak.sh'), true)
+  assertEquals(has('taskmaster@bot.yak.sh'), true)
+  assertEquals(
+    diagnose([{ address: 'task@bot.yak.sh', owner: 'P-19' }], STATIC_RULES),
+    [],
+  )
+})
