@@ -22,3 +22,27 @@ Deno.test('document meta paints no tally when it has no comments', () => {
   let meta = resolve(e, 'Meta').Render({ e, id: true })!
   assertEquals(raw(meta).filter((c) => typeof c == 'number'), [])
 })
+
+Deno.test('comment dependencies lead with the entity commented on', () => {
+  cache.value = {
+    comment: {
+      entity: { eid: 'comment', num: 2 },
+      doc: { eid: 'comment', title: '', body: 'A note' },
+      comment: { eid: 'comment', target_eid: 'target' },
+    },
+    target: {
+      entity: { eid: 'target', num: 1 },
+      doc: { eid: 'target', title: 'The subject', body: '' },
+    },
+  }
+
+  let e = ent('comment')
+  let renderer = resolve(e, 'Dependencies')
+  let target = raw(renderer.Render({ e })!)[0]
+  assertEquals(target.props, {
+    eid: 'target',
+    view: 'Dependency',
+    type: 'comment',
+    label: 'on',
+  })
+})

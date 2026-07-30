@@ -6,6 +6,7 @@ import {
   Boards,
   Body,
   CardFull,
+  CommentDependencies,
   Dependencies,
   Meta,
   Relate,
@@ -93,6 +94,11 @@ define([
   // scoring entry above these, never an edit to Full.
   { view: 'Body', match: () => true, Render: Body },
   { view: 'Meta', match: () => true, Render: Meta },
+  {
+    view: 'Dependencies',
+    match: has('comment'),
+    Render: CommentDependencies,
+  },
   { view: 'Dependencies', match: () => true, Render: Dependencies },
   { view: 'Relate', match: () => true, Render: Relate },
   { view: 'Boards', match: () => true, Render: Boards },

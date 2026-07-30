@@ -251,6 +251,21 @@ export let Dependencies = ({ e }: { e: Ent }) => (
   </>
 )
 
+// A comment's target is its first relationship sentence. Compose the
+// ordinary edge rows too: comments remain entities and may carry edges of
+// their own.
+export let CommentDependencies = ({ e }: { e: Ent }) => (
+  <>
+    <Entity
+      eid={e.comment!.target_eid}
+      view='Dependency'
+      type='comment'
+      label='on'
+    />
+    <Dependencies e={e} />
+  </>
+)
+
 // The entity's sessions: every run that named it as requested work or its
 // persistent role, plus the claim's holder — one row each, so a task or role
 // is the door to the agents that served it.
