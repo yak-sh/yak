@@ -97,7 +97,8 @@ let schema = `
   );
   create table if not exists project (
     eid text primary key references entity(eid),
-    retired_at text
+    retired_at text,
+    color text
   );
   create table if not exists person (
     eid text primary key references entity(eid)
@@ -748,6 +749,8 @@ export let open = (path = file) => {
   // list — membership can't drift when it isn't stored.
   addCol('board', 'query', 'query text')
   addCol('project', 'retired_at', 'retired_at text')
+  // The venture's window colour, set by the owner; empty derives from the id.
+  addCol('project', 'color', 'color text')
   // A live table's check constraint is frozen at create; when the edge
   // vocabulary outgrows the baked list (the 'about' verb shipped without
   // this once — every about edge bounced off the old check), rebuild the

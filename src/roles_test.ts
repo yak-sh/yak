@@ -19,7 +19,8 @@ let { apply, db } = await import('./db.ts')
 let {
   nativeProviderArgs,
   nativeTmuxArgs,
-  roleColour,
+  colorOf,
+  roleColor,
   roleHash,
   roleRemoved,
   rolesSweep,
@@ -403,7 +404,7 @@ Deno.test('role window styling matches holdco, keyed on the venture', () => {
       'colour208',
     ][[...name].reduce((n, c) => n + c.charCodeAt(0), 0) % 20]
   for (let v of ['trading', 'tasks', 'ufos', 'crayonbloom', 'bindery']) {
-    assertEquals(roleColour(v), holdco(v), `${v} must match holdco`)
+    assertEquals(roleColor(v), holdco(v), `${v} must match holdco`)
   }
 
   // The window carries the venture name, and automatic-rename is off — the
@@ -417,13 +418,28 @@ Deno.test('role window styling matches holdco, keyed on the venture', () => {
   assertEquals(windowOf({ ...base, venture: '  ' }), 'trading')
   // Retitling a venture must NOT move its colour — the hash stays on the id.
   assertEquals(
-    roleColour(ventureOf({ ...base, venture: 'Trading Desk' })),
-    roleColour('trading'),
+    roleColor(ventureOf({ ...base, venture: 'Trading Desk' })),
+    roleColor('trading'),
   )
+
+  // The hash is a DEFAULT, not a policy: an owner-set project.color wins.
+  // It has to — twenty ventures over twenty colours collide, and trading and
+  // ufos already hash to the same cyan with no other way to break the tie.
+  assertEquals(roleColor('trading'), roleColor('ufos'))
+  assertEquals(colorOf(base), roleColor('trading'))
+  assertEquals(colorOf({ ...base, color: 'colour208' }), 'colour208')
+  assertEquals(colorOf({ ...base, color: '#5fafd7' }), '#5fafd7')
+  // Blank or whitespace is "unset", not a colour named ''.
+  assertEquals(colorOf({ ...base, color: '   ' }), roleColor('trading'))
+  assertEquals(colorOf({ ...base, color: '' }), roleColor('trading'))
+  // And the configured value is what actually reaches tmux.
+  let set = styleArgs({ ...base, color: 'colour208' }, '%7')
+    .find((a) => a[3] == 'window-status-style')!
+  assertEquals(set.at(-1), 'fg=colour208')
 
   let style = styleArgs(base, '%7')
   let win = `=${roleTmux(base.eid)}:`
-  let colour = roleColour('trading')
+  let colour = roleColor('trading')
   assertEquals(
     style.filter((a) => a[0] == 'set-window-option').map((a) => a.slice(3)),
     [

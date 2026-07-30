@@ -25,6 +25,7 @@ export type RoleConfig = {
   surface: string
   scope: string
   venture?: string
+  color?: string
   title: string
   body: string
   repo: { path: string; base_branch: string }
@@ -196,10 +197,21 @@ const PALETTE = [
 export let windowOf = (c: RoleConfig) =>
   (c.venture ?? '').trim().split(/\s+/)[0] || ventureOf(c)
 
-export let roleColour = (name: string) =>
+// The DERIVED colour: stable per venture id, so a venture that sets nothing
+// still keeps one colour of its own rather than the terminal default.
+export let roleColor = (name: string) =>
   PALETTE[
     [...name].reduce((n, ch) => n + ch.charCodeAt(0), 0) % PALETTE.length
   ]
+
+// What the window actually wears. An owner-set `project.color` wins over the
+// hash — the palette is a sensible default, never a policy, and a fleet of
+// twenty ventures over twenty colours will collide (trading and ufos already
+// both hash to cyan) with no way to break the tie but to say so.
+// Any tmux spelling passes through; a bad one is tmux's to reject, and the
+// caller logs that rejection rather than swallowing it.
+export let colorOf = (c: RoleConfig) =>
+  (c.color ?? '').trim() || roleColor(ventureOf(c))
 
 // Window chrome plus the pane's identity — holdco's exact set, so an adopted
 // role pane is indistinguishable from an operator's. `@operator` is the
@@ -208,7 +220,7 @@ export let roleColour = (name: string) =>
 export let styleArgs = (c: RoleConfig, pane: string): string[][] => {
   let name = ventureOf(c)
   let win = `=${roleTmux(c.eid)}:`
-  let colour = roleColour(name)
+  let colour = colorOf(c)
   let label = ' #W#{?window_bell_flag, !,} '
   return [
     ['set-window-option', '-t', win, 'automatic-rename', 'off'],
@@ -355,8 +367,19 @@ let tmuxStart = async (c: RoleConfig, file: string, deps: RoleDeps) => {
   }
   // Chrome last, and OUTSIDE the guard: the role is running by here, so a
   // pane that lost an argument to its colour is a cosmetic complaint — never
-  // a reason for the catch above to tear down a live provider.
-  for (let args of styleArgs(c, pane)) await deps.command(args)
+  // a reason for the catch above to tear down a live provider. But SAY so:
+  // a configured `project.color` tmux won't take is the one failure here an
+  // owner is waiting to see, and swallowing it leaves a window wearing the
+  // default with nothing to explain why.
+  for (let args of styleArgs(c, pane)) {
+    let out = await deps.command(args)
+    if (out.success) continue
+    console.warn(
+      `role ${c.eid}: tmux ${args.slice(0, 1).concat(args.slice(3)).join(' ')}`,
+      '—',
+      new TextDecoder().decode(out.stderr).trim() || 'refused',
+    )
+  }
 }
 
 let roleText = (c: RoleConfig) =>
@@ -386,10 +409,11 @@ let config = (eid: string): RoleConfig => {
   let row = db.prepare(`
     select r.*, d.title, d.body, p.provider, p.model, p.effort,
            p.persona_eid, repo.path, repo.base_branch,
-           scope.title as venture_title
+           scope.title as venture_title, venture.color as venture_color
     from role r
     left join doc d on d.eid = r.eid
     left join doc scope on scope.eid = r.scope_eid
+    left join project venture on venture.eid = r.scope_eid
     left join spawn p on p.eid = r.eid
     left join repo on repo.eid = r.scope_eid
     where r.eid = ?
@@ -431,6 +455,7 @@ let config = (eid: string): RoleConfig => {
     surface: String(row.surface),
     scope: String(row.scope_eid),
     venture: String(row.venture_title ?? '') || undefined,
+    color: String(row.venture_color ?? '') || undefined,
     title: String(row.title ?? ''),
     body: String(row.body ?? ''),
     repo: {

@@ -113,7 +113,12 @@ export let comps: Record<string, Record<string, PropType>> = {
   // it IS the retirement (like the `opened` stamp, no effect needed);
   // everything filed under it stays referenceable but sinks (search,
   // .order=hot).
-  project: { retired_at: 'time' },
+  // color: the venture's tmux window colour, and whatever else comes to want
+  // one. Any tmux colour spelling (`cyan`, `brightblue`, `colour45`,
+  // `#5fafd7`). Empty means DERIVE it — roles.ts hashes the venture id over
+  // the fleet palette, so a venture that never sets one still gets a stable
+  // colour of its own rather than the default.
+  project: { retired_at: 'time', color: 'text' },
   repo: { path: 'text', base_branch: 'text' }, // the project's checkout
   role: {
     state: { enum: roleStates },
