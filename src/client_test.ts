@@ -686,6 +686,10 @@ Deno.test('wrapChanges: unfinished gets the trail, done goes quiet', () => {
   let cs = wrapChanges(all, 'sess-x') // T1 is wip → comment + release
   assertEquals(cs.filter((c) => c.name == 'claim').length, 1)
   assertEquals(cs.filter((c) => c.name == 'comment').length, 1)
+  assertEquals(
+    cs.find((c) => c.name == 'doc')?.comp?.body,
+    '⚑ lease lapsed: session S-1 ended before this was done',
+  )
   // the lapse notice is machinery, not the agent — marked, never mailed
   assertEquals(cs.find((c) => c.name == 'comment')?.comp?.event, 1)
   let done = structuredClone(snap)

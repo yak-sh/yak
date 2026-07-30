@@ -1579,12 +1579,13 @@ export let noticeBlock = (lines: string[]) =>
 // server's managed-session settle both speak through this.
 export let lapseChanges = (all: Row[], sess: Row): Change[] => {
   let id = String(sess.comps.session?.id ?? '')
+  let name = idOf(sess)
   return all.filter((r) => r.comps.claim?.session_eid == sess.eid)
     .flatMap((r): Change[] => [
       ...(settled(String(r.comps.task?.status)) ? [] : commentChanges(
         all,
         r.eid,
-        '⚑ lease lapsed: session `' + id + '` ended before this was done',
+        `⚑ lease lapsed: session ${name} ended before this was done`,
         id,
         { event: true }, // machinery speaking, not the agent — never mailed
       ).slice(-2)), // the session exists — skip the mint, keep doc + comment
