@@ -339,6 +339,29 @@ Deno.test('knock: recipient resolves, words ride as plain comment, project defau
   assertThrows(() => run('knock', ctx(B)), Error, 'name a recipient')
 })
 
+// T-10905: an unresolvable first word used to fall through to the project
+// default AND ride into the body, so the caller got a success-looking
+// receipt while their recipient was never asked and the message opened
+// with a stray token. Any word given must name someone.
+Deno.test('knock: an unresolvable recipient is refused, never made body', () => {
+  assertThrows(
+    () => run('knock definitely-not-an-actor hello', ctx(T)),
+    Error,
+    'no such recipient: definitely-not-an-actor',
+  )
+  // even alone — a lone word is still an address, not prose
+  assertThrows(
+    () => run('knock tasks', ctx(T)),
+    Error,
+    'no such recipient: tasks',
+  )
+  // the bare form is untouched: nothing was said, so nothing is mistaken
+  assertEquals(run('knock', ctx(T)).changes![0].comp, {
+    target_eid: T,
+    to_eid: P,
+  })
+})
+
 Deno.test('wake: who, when, and a trailing id is what to look at', () => {
   let r = run('wake B-3 in 60m T-4', ctx(P, 'sess-x'))
   let [doc, wake] = r.changes!

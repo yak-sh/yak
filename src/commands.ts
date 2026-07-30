@@ -245,11 +245,21 @@ export let commands: Record<string, Command> = {
     },
   },
   // :knock is the attention lever: bring the focused entity to someone's
-  // attention NOW. The recipient is the first word when it names an
-  // entity (alias, id); with none, a task's own project is asked. The
-  // rest of the words ride as a plain comment on the target — the knock
+  // attention NOW. The first word IS the recipient (alias, id) and must
+  // resolve; the rest ride as a plain comment on the target — the knock
   // artifact itself never carries prose. Delivery is the server's
   // ladder (knock.ts); the stamp on the K-entity says what happened.
+  //
+  // A BARE `:knock` still asks the entity's own project — no word was
+  // said, so nothing can be mistaken. But a first word that fails to
+  // resolve used to fall through to that same default while folding the
+  // word into the BODY (T-10905), and nothing looked wrong: the receipt
+  // read `→ knock project`, delivery happened, an operator woke — and the
+  // message they read opened with a stray token while the recipient it
+  // named was never asked. Those two cases are indistinguishable from the
+  // inside, so any word given must NAME someone: an unresolved address
+  // must never become content. `:wake`, the same sentence with a clock,
+  // has always refused an unresolvable first word — the siblings agree now.
   knock: {
     args: 'homelab need the key today',
     about: "someone's attention, now — on the focused entity",
@@ -257,7 +267,13 @@ export let commands: Record<string, Command> = {
       let r = here(ctx)
       let [first, ...more] = rest.trim().split(/\s+/).filter(Boolean)
       let to = first ? find(ctx.rows, first) : undefined
-      let words = (to ? more : [first, ...more]).filter(Boolean).join(' ')
+      if (first && !to) {
+        throw new Error(
+          `knock: no such recipient: ${first} — name an alias or id ` +
+            `(:knock homelab …, :knock P-19 …)`,
+        )
+      }
+      let words = more.filter(Boolean).join(' ')
       let toEid = to?.eid ?? (r.comps.task?.project_eid as string | undefined)
       if (!toEid) {
         throw new Error('knock: name a recipient (:knock homelab …)')
