@@ -6,11 +6,11 @@ import { Dot } from '../Dot.tsx'
 
 // The Inline role: identify an entity in flowing content — chip (+dot for a
 // task) + truncated title, ONE anchor wearing the whole internal-link
-// contract (nav.tsx linkProps): plain click follows, cmd/middle-click and
-// the native menu do the new-tab forms, dragging makes a card. The chip
-// inside carries no link of its own — the sentence IS the anchor, and the
-// Surround stack keeps the Chip a span. `Id` is the bare chip for dense
-// rows whose surround already says the title (meta lines, titlebars).
+// contract (nav.tsx linkProps): plain click follows, cmd/middle-click open
+// new tabs, right-click opens the entity menu, and dragging makes a card.
+// The chip inside carries no link of its own — the sentence IS the anchor,
+// and the Surround stack keeps the Chip a span. `Id` is the bare chip for
+// dense rows whose surround already says the title (meta lines, titlebars).
 
 let retired = (e: Ent) => (e.project?.retired_at ? 'retired' : undefined)
 

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { type Hit, idOf, uuid } from '../types.ts'
 import { ent, mutate, searchOpen } from '../live.ts'
-import { navigate } from './nav.tsx'
+import { menuAt, navigate } from './nav.tsx'
 import { drop, peek, save } from './drafts.ts'
 import { block } from './ui.tsx'
 import { Icon } from './icons.tsx'
@@ -180,9 +180,9 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
         </Line>
         {err && <Snip>{err}</Snip>}
         {
-          /* Each hit is a real anchor: cmd/middle-click and the native
-            menu do the new-tab forms; a plain click keeps the palette's
-            own open — a card spawned on the canvas. */
+          /* Each hit is a real anchor: cmd/middle-click opens a new tab,
+            right-click opens the target entity's menu, and a plain click
+            keeps the palette's own open — a card spawned on the canvas. */
         }
         {hits.map((h, i) => (
           <Row
@@ -190,6 +190,7 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
             href={href(h)}
             mod={i == sel ? 'sel' : undefined}
             onMouseEnter={() => setSel(i)}
+            onContextMenu={menuAt(ent(h.open_eid))}
             onClick={(e: MouseEvent) => {
               if (e.metaKey || e.ctrlKey || e.shiftKey || e.button != 0) return
               e.preventDefault()

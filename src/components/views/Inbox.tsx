@@ -48,8 +48,8 @@ let at = (r: Row) => String(r.comps.created?.at ?? '')
 let order = (a: Row, b: Row) =>
   Number(isUnread(b)) - Number(isUnread(a)) || at(b).localeCompare(at(a))
 
-// One line. A real anchor, so cmd-click and the browser's own menu behave
-// — the Id chip's rule, applied to the whole row.
+// One line. A real anchor, with the Id chip's navigation and entity-menu
+// contract applied to the whole row.
 let Line = ({ r }: { r: Row }) => {
   let e: Ent = ent(r.eid)
   let go = clickProps(e)

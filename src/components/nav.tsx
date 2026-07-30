@@ -65,10 +65,9 @@ export let eidOf = (id: string) => {
   return eids.find((eid) => cache.peek()[eid]?.entity?.num == +m![1])
 }
 
-// The plain-click half of an in-app anchor: modifiers, middle-click and
-// the native context menu keep their new-tab forms; a bare click (tap
-// included) opens in place — peeked when the caller knows its entity,
-// navigated when all it has is an href.
+// The plain-click half of an in-app anchor: modifiers and middle-click keep
+// their new-tab forms; a bare click (tap included) opens in place — peeked
+// when the caller knows its entity, navigated when all it has is an href.
 export let follow = (href: string, eid?: string) => (ev: MouseEvent) => {
   if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.button != 0) return
   ev.preventDefault()
@@ -98,6 +97,17 @@ let openRef = (ev: MouseEvent) => {
   if (eid) follow(`/${id}`, eid)(ev)
 }
 
+// Component-owned entity links carry menuAt directly. Rendered prose and
+// other native anchors have no component to do that, so their root-relative
+// entity href resolves here. External and app-chrome links fall through.
+let menuRef = (ev: MouseEvent) => {
+  let a = (ev.target as Element | null)?.closest?.('a[href]')
+  let href = a?.getAttribute('href') ?? ''
+  let id = href.match(/^\/([^/?#]+)(?:\?[^#]*)?$/)?.[1]
+  let eid = id && eidOf(id)
+  if (eid) menuAt(ent(eid))(ev)
+}
+
 // Startup, exported so either host's document can be proven against it. The
 // TUI's fake document (tui/dom.ts) carries only what preact reaches for, so
 // an object guard is not enough here — `document?.member(…)` passes it and
@@ -106,22 +116,24 @@ type Host = {
   addEventListener?: (t: string, fn: (ev: MouseEvent) => void) => void
 }
 
-export let wire = (doc: Host | undefined = globalThis.document) =>
+export let wire = (doc: Host | undefined = globalThis.document) => {
   doc?.addEventListener?.('click', openRef)
+  doc?.addEventListener?.('contextmenu', menuRef)
+}
 
 wire()
 
-// The click half of the internal-link contract: a real href (new-tab
-// forms and the native menu stay native), plain click follows in place,
-// double click is the deliberate fullscreen (follow with only the href
-// navigates — the same root change as "open here"). For tiles whose
-// wrapper already owns the drag (a board Item, a List Row).
+// The pointer half of the internal-link contract: a real href keeps native
+// new-tab gestures, plain click follows in place, double click is the
+// deliberate fullscreen, and right-click opens the target entity's menu.
+// For tiles whose wrapper already owns the drag (a board Item, a List Row).
 export let clickProps = (e: Ent) => {
   let href = `/${idOf(e)}`
   return {
     href,
     onClick: follow(href, e.eid),
     onDblClick: follow(href),
+    onContextMenu: menuAt(e),
   }
 }
 
@@ -166,8 +178,7 @@ export let menu = signal<
   { x: number; y: number; href: string; eid: string; align?: 'right' } | null
 >(null)
 
-// Right-click serving the app menu instead of the browser's — for faces
-// that are themselves links (tiles) so the native menu never fires.
+// Right-click serving the entity's app menu instead of the browser's.
 export let menuAt = (e: Ent) => (ev: MouseEvent) => {
   ev.preventDefault()
   ev.stopPropagation()
@@ -175,7 +186,7 @@ export let menuAt = (e: Ent) => (ev: MouseEvent) => {
 }
 
 // A card is the menu target except where a nested control or link owns
-// the browser's menu. Pinned and temporary cards share this boundary.
+// the gesture. Pinned and temporary cards share this boundary.
 export let cardMenuAt = (e: Ent) => (ev: MouseEvent) => {
   if (
     ev.target instanceof Element &&

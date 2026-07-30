@@ -98,7 +98,7 @@ Deno.test('the current peek id stays mounted for double-click navigation', () =>
   }
 })
 
-Deno.test('a card menu leaves nested links to the browser', () => {
+Deno.test('a card menu leaves nested controls and links to themselves', () => {
   let priorElement = Object.getOwnPropertyDescriptor(globalThis, 'Element')
   let { document, window } = parseHTML(
     '<div id="body"></div><a id="link"><span id="inside"></span></a>',
@@ -136,6 +136,25 @@ Deno.test('a card menu leaves nested links to the browser', () => {
     if (priorElement) {
       Object.defineProperty(globalThis, 'Element', priorElement)
     } else delete (globalThis as { Element?: unknown }).Element
+  }
+})
+
+Deno.test('an entity link opens its target menu', () => {
+  let prevented = false
+  let stopped = false
+  let ev = {
+    clientX: 12,
+    clientY: 34,
+    preventDefault: () => (prevented = true),
+    stopPropagation: () => (stopped = true),
+  } as unknown as MouseEvent
+
+  try {
+    clickProps(e).onContextMenu(ev)
+    assertEquals([prevented, stopped], [true, true])
+    assertEquals(menu.value?.eid, e.eid)
+  } finally {
+    menu.value = null
   }
 })
 

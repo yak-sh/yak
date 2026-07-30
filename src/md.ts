@@ -7,9 +7,9 @@
 //
 // The graph's ids are part of the prose: a bare T-123 auto-links, and
 // [my task idea](T-123) aims a written link at an entity. Both render
-// as real anchors carrying data-ref — nav.tsx's delegated listener
-// gives them the in-app click (peek/navigate) while new-tab forms stay
-// native. Code spans and blocks keep ids literal (the tokenizer never
+// as real anchors carrying data-ref — nav.tsx's delegated listeners give
+// them the in-app click (peek/navigate) and entity menu while new-tab forms
+// stay native. Code spans and blocks keep ids literal (the tokenizer never
 // enters consumed code).
 import { marked } from 'marked'
 import { prefix } from './types.ts'
