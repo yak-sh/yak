@@ -275,9 +275,15 @@ These hold everywhere in this repo, whoever — or whatever — writes the code:
   (both 2026-07-22) — the trap earns its ink.
 - **Verify end-to-end before done** — the holdco standard. Recipes that work
   headless: CDP for anything in the browser — launch with
-  `--remote-debugging-port`, `PUT /json/new?<encoded-url>`, then
-  `Runtime.evaluate` against the rendered DOM (query for the element and read
-  its text); the same session drives hovers, keys and clicks. TUI via
+  `--remote-debugging-port` and `--user-data-dir=/tmp/cdp-<unique>`, with
+  `TMPDIR` pointed at that same directory; then `PUT /json/new?<encoded-url>`
+  and `Runtime.evaluate` against the rendered DOM (query for the element and
+  read its text); the same session drives hovers, keys and clicks. Both
+  placements are load-bearing: the sweep may only collect a profile under
+  `/tmp`, and `TMPDIR` is what contains chrome's own
+  `com.google.Chrome.scoped_dir.*` (~150M each), which sit OUTSIDE
+  `--user-data-dir` and are cleaned only on a graceful exit — which a killed
+  chrome never gets. `/tmp` here is RAM, so a leaked profile is memory. TUI via
   `tmux new-session -d` + `send-keys` + `capture-pane -p` (`-e` keeps ANSI).
   **`--headless=new --screenshot` does NOT work for this app** — it writes a
   blank page even against the live server and even with a 20s
@@ -312,7 +318,11 @@ These hold everywhere in this repo, whoever — or whatever — writes the code:
   the split with `kill ${=PIDS}`. Then PROVE it: `kill -0 $p` per pid, or
   re-check the port. A cleanup that cannot report its own failure is not a
   cleanup. And `pkill -f <pattern>` matches your own shell's command line —
-  bracket a character (`[s]rc/server.ts`) or kill by pid.
+  bracket a character (`[s]rc/server.ts`) or kill by pid. A browser is TWO
+  things to reap, the process and its profile directory: wait for the process
+  to be gone before removing the directory (a delete racing chrome's teardown
+  fails), retry, and report a removal you could not make — a swallowed
+  `.catch` there leaks on the SUCCESS path, where nobody thinks to look.
 - **The injection loop**: `.claude/settings.json` runs
   `task session context --hook` on SessionStart — agent sessions boot into
   their claimed work (`task context` / MCP `task_context`, same digest), led by
