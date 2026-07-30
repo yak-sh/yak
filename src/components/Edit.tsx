@@ -37,6 +37,7 @@ export let Edit = (
   let dkey = `${eid}.${comp}.${prop}`
 
   let begin = (t: HTMLElement) => {
+    if (t.isContentEditable) return
     let row = t.closest<HTMLElement>('[draggable="true"]')
     if (row) row.draggable = false
     t.dataset.was = t.textContent ?? ''
