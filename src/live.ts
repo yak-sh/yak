@@ -934,7 +934,11 @@ export let ent = (eid: string): Ent => {
     kind: kindOf(comps), // derived — the display convention, not data
     refs: mine
       .filter((d) => d.type != 'contains')
-      .map((d) => ({ type: d.type, child: d.child })),
+      .map((d) => ({ type: d.type, child: d.child }))
+      .sort((a, b) =>
+        Number(settled(row(a.child).value?.task?.status)) -
+        Number(settled(row(b.child).value?.task?.status))
+      ),
     kids: mine
       .filter((d) => d.type == 'contains')
       .map((d) => ent(d.child)),

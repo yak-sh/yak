@@ -367,22 +367,38 @@ Deno.test('gated: a cancelled requires child releases the gate', () => {
 })
 
 // ent(): edges partition into refs (non-contains, {type, child}) and kids
-// (contains, resolved), preserving deps order per parent — the indexed
-// scan (T-6772) must stay byte-identical to the old double-filter.
-Deno.test('ent: refs and kids partition edges, order preserved', () => {
-  let sp = (eid: string) => ({
+// (contains, resolved). Open refs lead without disturbing the order inside
+// either half; kids preserve their graph order.
+Deno.test('ent: refs put open work before settled work', () => {
+  let sp = (eid: string, status = 'open') => ({
     entity: { eid, num: 0, created_at: '' },
-    task: { eid, status: 'open', priority: 1, domain: null },
+    task: { eid, status, priority: 1, domain: null },
   })
-  cache.value = { p: sp('p'), a: sp('a'), b: sp('b'), c: sp('c') }
+  cache.value = {
+    p: sp('p'),
+    a: sp('a', 'done'),
+    b: sp('b'),
+    c: sp('c'),
+    d: sp('d', 'cancelled'),
+    e: sp('e'),
+    n: { entity: { eid: 'n', num: 0 }, doc: { eid: 'n', title: '', body: '' } },
+  }
   deps.value = [
     { parent: 'p', type: 'contains', child: 'b' },
     { parent: 'p', type: 'requires', child: 'a' },
     { parent: 'p', type: 'contains', child: 'c' },
+    { parent: 'p', type: 'reads', child: 'n' },
+    { parent: 'p', type: 'requires', child: 'd' },
+    { parent: 'p', type: 'about', child: 'e' },
     { parent: 'other', type: 'requires', child: 'a' },
   ]
   let e = ent('p')
-  assertEquals(e.refs, [{ type: 'requires', child: 'a' }])
+  assertEquals(e.refs, [
+    { type: 'reads', child: 'n' },
+    { type: 'about', child: 'e' },
+    { type: 'requires', child: 'a' },
+    { type: 'requires', child: 'd' },
+  ])
   assertEquals(e.kids.map((k) => k.eid), ['b', 'c'])
 })
 
