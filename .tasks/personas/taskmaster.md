@@ -83,6 +83,43 @@ entry (T-5958 reconciles the book). Fleet-internal mail depends on neither.
 
 ---
 
+# M-7323 pacing is mechanical, not advisory — YELLOW parks the fleet, a GREEN knock wakes it
+
+A fleet of operators each judging "is this discretionary?" overshoots the budget even when every one judges correctly — nobody sees the aggregate. So the throttle is mechanical: at YELLOW there is no wakeup, so there is no decision to get wrong.
+
+## The protocol
+
+- **Venture operators** — at YELLOW/RED end the turn with **no** `ScheduleWakeup` and go idle. The process stays alive at the prompt. Genuinely urgent work still proceeds.
+- **holdco** loops leanly through YELLOW — supervision and owner comms — and knocks the fleet awake the pass the signal turns GREEN.
+- **A parked operator is still reachable.** The `tasks` channel starts a turn for addressed comments, knocks and verified mail; prod and CI alerts arrive on their own channels. Idle is not deaf.
+- **Crash recovery needs no operator.** `holdco-up` runs `bin/holdco recover` from cron every 10 minutes, so fleet liveness never depends on a pass.
+
+## GREEN returns at a timestamp, not after a duration
+
+The allowance is a step function of whole Michigan calendar dates — 15% per weekday in the window plus 1% per night crossed, capped at 80. It moves only at midnight, and `used` moves only when the fleet spends, so during a parked YELLOW the pace line is frozen. YELLOW that fired on `left <= 0` cannot clear before the next Michigan midnight or the Tuesday 07:00 weekly reset.
+
+Sleep to that instant instead of ticking toward it: `task wake holdco "12:05am tomorrow"`.
+
+## The doors
+
+`task wake <who> <when>` is a knock on a timer — its row outlives every process and has no ceiling, where `ScheduleWakeup` is clamped to 3600s and dies with the session. A bare clock time means **today**, so `"12:05am"` in the afternoon fires immediately; a pending row has `wake.at` in the future and no `wake.acted_at`.
+
+A knock names both the entity it is about and the recipient — the focused forms work only in the web bar:
+
+```
+task <entity> :knock <recipient> <words>
+```
+
+The row is the receipt: `delivery: "cast S-7204"` with `error: null` means the channel injected it; a failure records `error: "no door: …"`.
+
+## No bookkeeping
+
+Nothing tracks who is parked. The signal is a pure function of the token ledger, "parked" is just the absence of a wakeup, and the roster is whatever `bin/holdco fleet` says is running — so nothing can drift out of sync. Knock someone during YELLOW by mistake and they take a pass, read the signal and decline to reschedule; the fleet converges on the true signal from any starting state.
+
+A persona edit is read at claude launch, so it does nothing until `bin/holdco restart <id>`. Memories differ — they ride the `task context` digest and land on the next clear.
+
+---
+
 # M-4492 persist your thinking — context is wiped, the owner is away
 
 Context is wiped between sessions; the owner is often away.
@@ -141,60 +178,6 @@ Escalate when it is irreversible, spends money, or turns on a preference only he
 Asking permission *feels* like deference. In a queue only one person can drain, it is a cost transferred to him, and a reversible call parked three weeks costs more than a wrong call corrected in a day.
 
 You are probably escalating the wrong thing when: the ticket already carries your own recommendation; any reasonable reader would answer "the recommended one"; or the ask is "OK if I…" about a box you operate. Those are decisions wearing a question mark.
-
----
-
-# M-7323 pacing is mechanical, not advisory — YELLOW parks the fleet, a GREEN knock wakes it
-
-An operator that keeps waking on a timer during YELLOW keeps *deciding* whether to work — and a fleet of operators each independently judging "is this discretionary?" overshoots the budget even when every one of them judges correctly. Nobody sees the aggregate. So the throttle is mechanical instead of advisory: at YELLOW there is no wakeup, so there is no decision to get wrong.
-
-## The protocol
-
-- **Venture operators** — at YELLOW/RED, end the turn with **no** `ScheduleWakeup` and go idle. The session stays open at the prompt; the process is alive. Genuinely urgent work still proceeds.
-- **holdco** keeps looping through YELLOW (leanly — supervision and owner comms) and knocks the fleet awake the pass the signal turns GREEN.
-- **A parked operator is still reachable.** The `tasks` channel starts a turn for addressed comments, knocks, and verified graph-mail notices; prod and CI alerts can arrive through their own channels. Idle is not deaf.
-- **Need a wake at a set time?** `task wake <who> "<when>"` — a knock on a timer whose row outlives every process, so it survives restarts and has no 1h ceiling. `ScheduleWakeup` is clamped to 3600s and dies with the session; `task wake` is the durable door.
-
-## When GREEN can return — it is a TIMESTAMP, not a duration
-
-The allowance is a **step function of whole Michigan calendar dates**, not a continuous accrual:
-
-```
-pace_alloc = 15 × (weekdays in window, incl. today) + 1 × (nights crossed)   # capped at 80
-pace_left  = pace_alloc - pace_used
-```
-
-So `alloc` moves **only at a Michigan midnight**, and `used` only moves when the fleet spends. During a parked YELLOW both are frozen — an hour of wall-clock produces a byte-identical pace line. YELLOW that fired on `left <= 0` therefore cannot clear until the next midnight (a weekday adds 15+1, a weekend day adds 1 and stays YELLOW on the `dow >= 6` rule anyway) or the Tuesday 07:00 weekly reset.
-
-The consequence for holdco: **do not tick hourly waiting for a flip that can only happen at a known instant.** Set `task wake holdco "12:05am tomorrow"` and sleep. Ticking costs a full Opus pass each time and observes nothing new.
-
-**The `task wake` date gotcha:** a bare clock time means **today**, so `"12:05am"` at 2pm schedules a moment already past and the knock fires immediately. Say `"12:05am tomorrow"`. Read the row back (`task show W-…`): a pending wake has `wake.at` in the future and **no** `wake.acted_at`.
-
-## Nothing is unsupervised while holdco sleeps
-
-Crash recovery is de-LLM'd. `holdco-up` runs from cron every 10 minutes and calls `bin/holdco recover`, which relaunches crashed windows only — an owner-paused venture stays down. That is what makes a long holdco sleep safe: the fleet's liveness does not depend on an operator pass, and the only things that genuinely need holdco are owner comms (which arrive through the `tasks` channel and start a turn on their own) and the GREEN knock (which has a known timestamp).
-
-## Knocking, exactly
-
-A knock is *about* an entity and *addressed to* a recipient, so from the CLI both are named — the focused-entity forms only work in the web bar:
-
-```
-task <entity> :knock <recipient> <words>     # e.g. task P-38 :knock ufos "…"
-```
-
-`task :knock <recipient> …` fails with `nothing focused`, and `task <id> :knock …` fails with `name a recipient`.
-
-The knock row is the receipt — check it rather than assuming delivery. `delivery: "cast S-7204"` with `error: null` means the channel injected it; a failed wake records `error: "no door: S-… is not awake, spawnable-at, or addressed"`.
-
-## Why it needs no bookkeeping
-
-There is no roster of parked operators and no "parked" state to store. The signal is a pure function of the token ledger, recomputed by `bin/operate tokens --pace` on demand; "parked" is just the absence of a scheduled wakeup; and the roster is whatever `bin/holdco fleet` says is running. Nothing to persist means nothing to persist *through restarts* — and nothing that can drift out of sync with the ledger.
-
-It is also self-correcting: knock an operator during YELLOW by mistake and it takes a pass, reads the signal, and declines to reschedule. The fleet converges on the true signal from any starting state.
-
-## Persona changes need a restart
-
-A persona reaches an operator via `--append-system-prompt-file`, read at **claude launch** — so a persona edit does nothing until `bin/holdco restart <id>` (the closing step of a durable persona edit). Memories are different: they ride the `task context` digest and land on the next clear, which is why a new memory can change behavior before a restart does.
 
 ---
 
