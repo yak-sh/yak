@@ -50,11 +50,12 @@ Deno.test('derivation: a new comp needs zero admin edits', () => {
   }
 })
 
-Deno.test('groupedKinds: system kinds fold, content leads', () => {
+Deno.test('groupedKinds: sessions are content and machinery folds', () => {
   let { content, system } = groupedKinds()
   assertEquals(content.includes('task'), true)
   assertEquals(content.includes('memory'), true)
-  assertEquals(system.includes('session'), true)
+  assertEquals(content.includes('session'), true)
+  assertEquals(system.includes('session'), false)
   assertEquals(system.includes('claim'), true)
   assertEquals(content.includes('claim'), false)
 })

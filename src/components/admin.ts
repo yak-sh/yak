@@ -13,7 +13,6 @@ let SYSTEM = new Set([
   'client',
   'camera',
   'fold',
-  'session',
   'claim',
   'stop_request',
   'send_request',
