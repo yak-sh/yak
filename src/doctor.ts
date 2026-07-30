@@ -22,17 +22,15 @@ export type Rules = { live: boolean; catchall: boolean; rules: Rule[] }
 // Cloudflare silently, which is the whole disease this doctor treats, so
 // a rule-dependent verdict read from here is reported as UNVERIFIED
 // rather than as a failure (`fromRules: true` on the finding, `?` at the
-// renderer).
+// renderer). A snapshot that merely LOOKS current is how `task@` was
+// reported as silently dropping while letters were landing in it
+// (T-10480) — believe the live read or believe a probe, never this list.
 //
-// It has already drifted once, expensively: `task` and `taskmaster` were
-// added to Cloudflare on 2026-07-23 08:25Z and verified end-to-end at
-// 09:42Z (T-5837), but this list was reconciled just before that and kept
-// a date that made it look current. The doctor then reported
-// `✗ task@bot.yak.sh — mail drops silently` for months while letters were
-// arriving at it, and that verdict was filed as a production defect
-// (T-10480). Both entries are restored below on two independent proofs:
-// the live probe recorded on T-5837, and a DKIM-verified letter from
-// Gmail that reached task@ and minted E-10458 off the edge spool.
+// The catch-all carries delivery now, so the literal list below decides
+// nothing: `diagnose` short-circuits on `catchall` and every canonical
+// bot.yak.sh address is deliverable. What still bites is an illegal
+// local-part, rejected at RCPT upstream of every rule — and `canon`
+// decides that without consulting anything here.
 //
 // Reading it live is NOT an env-token job: the credential that carries
 // Email Routing scope on this box is the **MCP Cloudflare server**
@@ -43,7 +41,13 @@ export type Rules = { live: boolean; catchall: boolean; rules: Rule[] }
 // CLOUDFLARE_ROUTING_READ_TOKEN and live mode takes over.
 export let STATIC_RULES: Rules = {
   live: false,
-  catchall: false, // zone catch-all is disabled (action: drop)
+  // The zone catch-all is ENABLED and covers the bot.yak.sh subdomain —
+  // the owner onboarded the subdomain and flipped it 2026-07-30, proven by
+  // a probe pair to one unruled local-part 88s apart: E-11328 (before)
+  // never arrived, E-11329 (after) round-tripped in 288ms, verified.
+  // The apex is not at risk and never was: yak.sh MX is Google Workspace,
+  // so Cloudflare receives no @yak.sh mail for a catch-all to catch.
+  catchall: true,
   rules: [
     'holdco',
     'printbound',
