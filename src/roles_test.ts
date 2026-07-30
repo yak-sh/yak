@@ -18,10 +18,14 @@ Deno.chmodSync(`${tasksHome}/.deno/bin/task`, 0o755)
 let { apply, db } = await import('./db.ts')
 let {
   nativeProviderArgs,
+  nativeTmuxArgs,
+  roleColour,
   roleHash,
   roleRemoved,
   rolesSweep,
   roleTmux,
+  styleArgs,
+  ventureOf,
 } = await import('./roles.ts')
 
 let uid = () => crypto.randomUUID()
@@ -351,6 +355,91 @@ Deno.test('managed attention resumes once with no graph content', async () => {
     Deno.readTextFileSync(path).match(/"type":"session.input"/g)?.length,
     inputs,
   )
+})
+
+// The colour must be a pure function of the VENTURE, matching holdco's own
+// palette and hash (lib/fleet/operators.js). holdco is adopting roles, and a
+// venture whose window changes colour depending on which orchestrator started
+// it is exactly the seam an owner notices.
+Deno.test('role window styling matches holdco, keyed on the venture', () => {
+  let base = {
+    eid: uid(),
+    state: 'running',
+    surface: 'native',
+    scope: uid(),
+    title: 'Trading Role',
+    body: '',
+    repo: { path: '/home/yaks/code/trading', base_branch: 'main' },
+    provider: 'codex',
+    model: 'gpt-5.6-sol',
+  }
+  // The venture id is the repo's directory name, not the role's title or eid.
+  assertEquals(ventureOf(base), 'trading')
+  assertEquals(ventureOf({ ...base, title: 'Something Else' }), 'trading')
+
+  // holdco's exact hash: sum of char codes, modulo a 20-colour palette.
+  let holdco = (name: string) =>
+    [
+      'red',
+      'green',
+      'yellow',
+      'blue',
+      'magenta',
+      'cyan',
+      'brightred',
+      'brightgreen',
+      'brightyellow',
+      'brightblue',
+      'brightmagenta',
+      'brightcyan',
+      'colour203',
+      'colour214',
+      'colour220',
+      'colour135',
+      'colour45',
+      'colour171',
+      'colour111',
+      'colour208',
+    ][[...name].reduce((n, c) => n + c.charCodeAt(0), 0) % 20]
+  for (let v of ['trading', 'tasks', 'ufos', 'crayonbloom', 'bindery']) {
+    assertEquals(roleColour(v), holdco(v), `${v} must match holdco`)
+  }
+
+  // The window carries the venture name, and automatic-rename is off — the
+  // one guards the other, so assert them together.
+  let argv = nativeTmuxArgs(base)
+  assertEquals(argv[argv.indexOf('-n') + 1], 'trading')
+
+  let style = styleArgs(base, '%7')
+  let win = `=${roleTmux(base.eid)}:`
+  let colour = roleColour('trading')
+  assertEquals(
+    style.filter((a) => a[0] == 'set-window-option').map((a) => a.slice(3)),
+    [
+      ['automatic-rename', 'off'],
+      ['window-status-format', ' #W#{?window_bell_flag, !,} '],
+      ['window-status-current-format', ' #W#{?window_bell_flag, !,} '],
+      ['window-status-style', `fg=${colour}`],
+      ['window-status-current-style', `fg=${colour},reverse`],
+    ],
+  )
+  assert(style.every((a) => a.includes(win) || a.includes('%7')))
+  // `@operator` is what holdco's tooling reads to find a live operator pane.
+  assertEquals(style.at(-2), [
+    'set-option',
+    '-p',
+    '-t',
+    '%7',
+    '@operator',
+    'trading',
+  ])
+  assertEquals(style.at(-1), [
+    'select-pane',
+    '-t',
+    '%7',
+    '-T',
+    'trading operator',
+  ])
 })
 
 Deno.test('role hash covers instructions and materialized persona text', () => {

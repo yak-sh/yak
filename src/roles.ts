@@ -150,6 +150,71 @@ let nativeEnv = (eid: string) => {
   }
 }
 
+// The venture this role serves, which for every venture is its repo's
+// directory name (holdco's registry: `id: trading`, `repo: …/code/trading`).
+// Naming the window after it — rather than leaving tmux to auto-name — is
+// what `automatic-rename off` below is protecting.
+export let ventureOf = (c: RoleConfig) =>
+  c.repo.path.split('/').filter(Boolean).pop() ?? 'role'
+
+// holdco's window palette and its hash, copied deliberately
+// (holdco lib/fleet/operators.js). A venture must keep ONE colour whichever
+// orchestrator started its pane — the same string in, the same colour out —
+// or adoption renames every window's colour out from under the owner.
+const PALETTE = [
+  'red',
+  'green',
+  'yellow',
+  'blue',
+  'magenta',
+  'cyan',
+  'brightred',
+  'brightgreen',
+  'brightyellow',
+  'brightblue',
+  'brightmagenta',
+  'brightcyan',
+  'colour203',
+  'colour214',
+  'colour220',
+  'colour135',
+  'colour45',
+  'colour171',
+  'colour111',
+  'colour208',
+]
+
+export let roleColour = (name: string) =>
+  PALETTE[
+    [...name].reduce((n, ch) => n + ch.charCodeAt(0), 0) % PALETTE.length
+  ]
+
+// Window chrome plus the pane's identity — holdco's exact set, so an adopted
+// role pane is indistinguishable from an operator's. `@operator` is the
+// option holdco's own tooling reads to find a live operator pane, so a role
+// that omits it is invisible to every reader that already exists.
+export let styleArgs = (c: RoleConfig, pane: string): string[][] => {
+  let name = ventureOf(c)
+  let win = `=${roleTmux(c.eid)}:`
+  let colour = roleColour(name)
+  let label = ' #W#{?window_bell_flag, !,} '
+  return [
+    ['set-window-option', '-t', win, 'automatic-rename', 'off'],
+    ['set-window-option', '-t', win, 'window-status-format', label],
+    ['set-window-option', '-t', win, 'window-status-current-format', label],
+    ['set-window-option', '-t', win, 'window-status-style', `fg=${colour}`],
+    [
+      'set-window-option',
+      '-t',
+      win,
+      'window-status-current-style',
+      `fg=${colour},reverse`,
+    ],
+    ['set-option', '-p', '-t', pane, '@operator', name],
+    ['select-pane', '-t', pane, '-T', `${name} operator`],
+  ]
+}
+
 export let nativeTmuxArgs = (c: RoleConfig) => [
   'new-session',
   '-d',
@@ -158,6 +223,8 @@ export let nativeTmuxArgs = (c: RoleConfig) => [
   '#{pane_id}',
   '-s',
   roleTmux(c.eid),
+  '-n',
+  ventureOf(c),
   '-c',
   c.repo.path,
   ...Object.entries(nativeEnv(c.eid)).flatMap(([key, value]) => [
@@ -274,6 +341,10 @@ let tmuxStart = async (c: RoleConfig, file: string, deps: RoleDeps) => {
     await tmuxKill(c.eid, deps)
     throw e
   }
+  // Chrome last, and OUTSIDE the guard: the role is running by here, so a
+  // pane that lost an argument to its colour is a cosmetic complaint — never
+  // a reason for the catch above to tear down a live provider.
+  for (let args of styleArgs(c, pane)) await deps.command(args)
 }
 
 let roleText = (c: RoleConfig) =>
