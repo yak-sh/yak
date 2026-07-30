@@ -186,15 +186,19 @@ let piped = (io: Stdin, prop: string, as: string) => {
 // one holding a '/' that stats as a file — so prose is untouched, a bare
 // word like 'done' can never trip it even beside a file of that name, and a
 // path that does NOT exist stays storable as text.
+let isFile = (v: string) => {
+  try {
+    return Deno.statSync(v).isFile
+  } catch {
+    return false
+  }
+}
+
 let dropped = (p: Param, as: string) => {
   let v = p.value
   if (p.prop != 'body' || typeof v != 'string') return
   if (!/^\S+$/.test(v) || !v.includes('/')) return
-  try {
-    if (!Deno.statSync(v).isFile) return
-  } catch {
-    return
-  }
+  if (!isFile(v)) return
   // @@ would escape to a LITERAL leading @ — '@/tmp/x' — so it is not the
   // door out of here; the pipe is. Named because it is verified to work.
   // `as` already names the token the caller typed, so it is not repeated.
@@ -229,6 +233,32 @@ let misplaced = (p: Param, as: string) => {
     `${as}: a body flag in the value position — the body is '${meant}', ` +
       `not '${v}'. Pass just '${meant}'. ` +
       `(to store the whole token as text, pipe it in with @-)`,
+  )
+}
+
+// The same flag with a SPACE instead of '=' — `task comment T-1 .body @file` —
+// falls in the seam between every guard above: not a flag (no leading --, so
+// the unknown-flag check never sees it), not a dot-param (no =, so param()
+// never sees it), and TWO tokens, so the lone-token tests in `misplaced` and
+// `dropped` cannot fire. Each guard is individually right; the spelling lives
+// in the gap between them, at the same cost as its siblings (T-10873).
+//
+// Multi-token, so it cannot live in inflate, which only ever sees one value:
+// it belongs to the doors that hold `words`. Narrow so prose opening with the
+// word `.body` is untouched — exactly two tokens, and the second must be a
+// REFERENCE or an existing file, which is what a caller who meant the flag
+// would always have typed.
+export let separated = (words: string[]) => {
+  if (words.length != 2) return
+  let [flag, v] = words
+  if (!/^(?:--|-|\.)?body$/.test(flag)) return
+  if (!v.startsWith('@') && !isFile(v)) return
+  // The VALUE is what they meant, the same reasoning `misplaced` uses: the
+  // correction is right at every door, where naming a spelling would not be.
+  throw new Error(
+    `${flag} ${v}: a body flag with a space instead of '=' — the body is ` +
+      `'${v}'. Pass just '${v}'. ` +
+      `(to store both words as text, pipe them in with @-)`,
   )
 }
 

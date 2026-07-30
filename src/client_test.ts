@@ -31,6 +31,7 @@ import {
   reSubject,
   rows,
   scopeFor,
+  separated,
   sessionFor,
   sessionMeta,
   showMd,
@@ -2398,4 +2399,32 @@ Deno.test('inflate: the body-flag guard is too narrow to overshoot', () => {
   // It does not require the remainder to be a FILE: the content is lost
   // either way, and a stale path is exactly when a loud refusal earns most.
   assertThrows(() => inflate(p('.body=@/no/such/file.md')), Error, 'Pass just')
+})
+
+// T-10873: the last hole in the family — a body flag with a space instead of
+// '='. Not a flag, not a dot-param, and two tokens, so every guard above is
+// structurally blind to it.
+Deno.test('separated: a body flag with a space instead of = is refused', () => {
+  let f = Deno.makeTempFileSync()
+  for (let flag of ['.body', '--body', '-body', 'body']) {
+    assertThrows(
+      () => separated([flag, `@${f}`]),
+      Error,
+      "space instead of '='",
+    )
+    assertThrows(() => separated([flag, f]), Error, `the body is '${f}'`)
+  }
+  Deno.removeSync(f)
+})
+
+Deno.test('separated: too narrow to touch prose', () => {
+  let f = Deno.makeTempFileSync()
+  // Three tokens is prose, whatever it opens with.
+  assertEquals(separated(['.body', 'takes', 'a', 'file']), undefined)
+  // A second token that is neither a reference nor a file it could have meant.
+  assertEquals(separated(['.body', 'somenote']), undefined)
+  // A first token that is not a body flag at all.
+  assertEquals(separated(['.title', `@${f}`]), undefined)
+  assertEquals(separated([f]), undefined)
+  Deno.removeSync(f)
 })

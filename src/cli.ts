@@ -46,6 +46,7 @@ import {
   rows,
   search,
   send,
+  separated,
   sessionFor,
   sessionMeta,
   showMd,
@@ -393,6 +394,9 @@ export let bodyOf = (flags: string[], words: string[], io = stdin) => {
     let p = { comp: 'doc', prop: 'body', value: b }
     return String(inflate(p, io, `--body=${b}`).value)
   }
+  // Two tokens, so it belongs here rather than in inflate, which sees one
+  // value at a time.
+  separated(words)
   // The no-whitespace test stays HERE, not in inflate: inflate sees only a
   // leading @, so it would read '@handle thanks!' — one argv token holding
   // spaces — as a filename. Prose keeps its exemption; a whitespace-free
@@ -981,6 +985,7 @@ let comment = async (args: string[]) => {
   let [id, ...words] = args.filter((a) =>
     !a.startsWith('--verdict=') && a != '--event'
   )
+  separated(words)
   let body = words.join(' ')
   // One token AND no whitespace in it is what inflate reads: a quoted
   // sentence is still one argv token, so `task comment T-3 "@holdco look at

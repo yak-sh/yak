@@ -994,3 +994,28 @@ Deno.test('bodyOf: a body flag in the value position is refused at every door', 
   assertEquals(bodyOf([], ['.body=@x', 'or', 'so'], tty), '.body=@x or so')
   Deno.removeSync(f)
 })
+
+// The WHOLE family in one table, because the family is only closed if every
+// spelling is asserted — the dropped @ (T-10612), the flag in the value
+// position (T-10858), and the dropped separator (T-10873). The last row is the
+// positive control: the spelling that works must still work, or this test is
+// measuring nothing.
+Deno.test('bodyOf: every misplaced-body spelling is refused, and @file still reads', () => {
+  let f = Deno.makeTempFileSync()
+  Deno.writeTextFileSync(f, 'the whole ruling\n')
+  let tty = { terminal: () => true, read: () => '' }
+  for (let said of [`.body=@${f}`, `--body=@${f}`, `body=@${f}`]) {
+    assertThrows(() => bodyOf([], [said], tty), Error, 'value position', said)
+  }
+  for (let flag of ['.body', '--body', 'body']) {
+    assertThrows(
+      () => bodyOf([], [flag, `@${f}`], tty),
+      Error,
+      "space instead of '='",
+      flag,
+    )
+  }
+  assertThrows(() => bodyOf([], [f], tty), Error, 'names a file that exists')
+  assertEquals(bodyOf([], [`@${f}`], tty), 'the whole ruling\n')
+  Deno.removeSync(f)
+})
