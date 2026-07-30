@@ -2369,3 +2369,33 @@ Deno.test('inflate: the dropped-@ guard is too narrow to overshoot', () => {
   assertEquals(inflate(p('README.md')).value, 'README.md')
   Deno.removeSync(f)
 })
+
+// The body flag handed over AS the body. The dropped-@ guard cannot see it —
+// '.body=@/tmp/x' does not stat as a file — so it sailed through as prose and
+// mailed a launch-gating ruling as its own file path.
+Deno.test('inflate: a body flag in the value position is refused, not stored', () => {
+  let f = Deno.makeTempFileSync()
+  Deno.writeTextFileSync(f, 'the whole ruling\n')
+  for (let said of [`.body=@${f}`, `--body=@${f}`, `body=@${f}`]) {
+    assertThrows(() => inflate(p(said)), Error, 'body flag in the value')
+    assertThrows(() => inflate(p(said)), Error, `Pass just '@${f}'`)
+  }
+  // The POSITIVE CONTROL for the suggestion: the remainder it names really
+  // does read the file, so the error is not sending anyone to a dead door.
+  assertEquals(inflate(p(`@${f}`)).value, 'the whole ruling\n')
+  Deno.removeSync(f)
+})
+
+Deno.test('inflate: the body-flag guard is too narrow to overshoot', () => {
+  // Prose that merely opens with the word is prose — the token must stand
+  // alone, and these hold whitespace.
+  assertEquals(inflate(p('.body=@x is the door')).value, '.body=@x is the door')
+  // A remainder is required, so the bare flag stays storable as text.
+  assertEquals(inflate(p('.body=')).value, '.body=')
+  // Only `body`: another prop carrying the same shape is left alone.
+  let other = { comp: 'repo', prop: 'path', value: '.body=@/tmp/x' }
+  assertEquals(inflate(other).value, '.body=@/tmp/x')
+  // It does not require the remainder to be a FILE: the content is lost
+  // either way, and a stale path is exactly when a loud refusal earns most.
+  assertThrows(() => inflate(p('.body=@/no/such/file.md')), Error, 'Pass just')
+})

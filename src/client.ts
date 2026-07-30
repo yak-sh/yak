@@ -204,6 +204,34 @@ let dropped = (p: Param, as: string) => {
   )
 }
 
+// The body flag SAID IN THE VALUE POSITION — `.body=@file` handed to a door
+// as the body itself, so the whole dot-param lands as prose and the door
+// prints its cheerful receipt. Neither guard above can see it: '.body=@/tmp/x'
+// does not stat as a file, and it does not open with @, so it is never read.
+// It cost a portfolio ruling on a launch-gating task and a production-security
+// decision in a single session, both of which then fanned out as mail.
+//
+// Narrow the same three ways: only `body`, only a lone whitespace-free token,
+// and only one opening with a body-flag spelling AND carrying a remainder —
+// so prose is untouched and a body of exactly '.body=' stays storable.
+//
+// The remainder is what the caller meant, so the error names THAT rather than
+// a spelling: the correction is to the value, which makes it right at every
+// door — `.body=`, `--body=`, and the lone positional token alike. Naming a
+// concrete flag would be wrong for whichever door the caller was not at.
+let misplaced = (p: Param, as: string) => {
+  let v = p.value
+  if (p.prop != 'body' || typeof v != 'string') return
+  if (!/^\S+$/.test(v)) return
+  let meant = /^(?:--body=|\.body=|body=)(.+)$/.exec(v)?.[1]
+  if (!meant) return
+  throw new Error(
+    `${as}: a body flag in the value position — the body is '${meant}', ` +
+      `not '${v}'. Pass just '${meant}'. ` +
+      `(to store the whole token as text, pipe it in with @-)`,
+  )
+}
+
 export let inflate = (
   p: Param,
   io = stdin,
@@ -211,6 +239,7 @@ export let inflate = (
 ): Param => {
   let v = p.value
   if (typeof v != 'string' || !v.startsWith('@')) {
+    misplaced(p, as)
     dropped(p, as)
     return p
   }

@@ -972,3 +972,25 @@ Deno.test('bodyOf: a lone path that forgot its @ is refused at every door', () =
   assertEquals(bodyOf([], [`@handle re ${f}`], tty), `@handle re ${f}`)
   Deno.removeSync(f)
 })
+
+// The mistake that actually shipped: the dot-param handed to `task comment`
+// as its positional body. It reached the graph as prose and fanned out as
+// mail, so the guard has to hold at the door the caller reached for.
+Deno.test('bodyOf: a body flag in the value position is refused at every door', () => {
+  let f = Deno.makeTempFileSync()
+  Deno.writeTextFileSync(f, 'the whole ruling\n')
+  let tty = { terminal: () => true, read: () => '' }
+  assertThrows(() => bodyOf([], [`.body=@${f}`], tty), Error, 'Pass just')
+  assertThrows(
+    () => bodyOf([`--body=.body=@${f}`], [], tty),
+    Error,
+    'Pass just',
+  )
+  // The corrected value reads the file through both doors — the control that
+  // earns the suggestion its place.
+  assertEquals(bodyOf([], [`@${f}`], tty), 'the whole ruling\n')
+  assertEquals(bodyOf([`--body=@${f}`], [], tty), 'the whole ruling\n')
+  // Prose keeps its exemption here too.
+  assertEquals(bodyOf([], ['.body=@x', 'or', 'so'], tty), '.body=@x or so')
+  Deno.removeSync(f)
+})
