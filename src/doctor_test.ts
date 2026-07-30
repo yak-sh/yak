@@ -113,16 +113,22 @@ Deno.test('diagnose: the snapshot says UNVERIFIED where live says drops', () => 
   assertEquals(live[0].problem.includes('drops silently'), true)
 })
 
-// The regression guard for the drift that started this: the snapshot was
-// reconciled just before task@/taskmaster@ were added to Cloudflare, so the
-// doctor called the fleet's OWN address undeliverable while mail arrived at
-// it. Pin both, so dropping one fails here instead of in a filed defect.
-Deno.test('static snapshot: carries the fleet addresses verified on T-5837', () => {
-  let has = (a: string) => STATIC_RULES.rules.some((r) => r.value == a)
-  assertEquals(has('task@bot.yak.sh'), true)
-  assertEquals(has('taskmaster@bot.yak.sh'), true)
-  assertEquals(
-    diagnose([{ address: 'task@bot.yak.sh', owner: 'P-19' }], STATIC_RULES),
-    [],
-  )
+// The regression guard for the drift that started this: the doctor once
+// called the fleet's OWN address undeliverable while mail was arriving at
+// it (T-10480). Guard the VERDICT, not what carries it — routing is one
+// catch-all now, and pinning literal rules would only re-pin the mechanism
+// that drifted. Any canonical fleet address must come back clean.
+Deno.test("static snapshot: the fleet's own addresses read deliverable", () => {
+  for (let a of ['task@bot.yak.sh', 'taskmaster@bot.yak.sh']) {
+    assertEquals(diagnose([{ address: a, owner: 'P-19' }], STATIC_RULES), [])
+  }
+})
+
+// The catch-all is what makes that true, so say so out loud: drop it and
+// every bot.yak.sh address goes back to reporting a silent drop.
+Deno.test('static snapshot: without the catch-all, the same address is a finding', () => {
+  let book = [{ address: 'task@bot.yak.sh', owner: 'P-19' }]
+  let off = diagnose(book, { ...STATIC_RULES, catchall: false })
+  assertEquals(off.length, 1)
+  assertEquals(off[0].fromRules, true)
 })

@@ -26,11 +26,12 @@ export type Rules = { live: boolean; catchall: boolean; rules: Rule[] }
 // reported as silently dropping while letters were landing in it
 // (T-10480) — believe the live read or believe a probe, never this list.
 //
-// The catch-all carries delivery now, so the literal list below decides
-// nothing: `diagnose` short-circuits on `catchall` and every canonical
-// bot.yak.sh address is deliverable. What still bites is an illegal
-// local-part, rejected at RCPT upstream of every rule — and `canon`
-// decides that without consulting anything here.
+// There are no literal rules left to drift: Email Routing is ONE catch-all
+// to the inbox worker, so the address book is the only place that decides
+// where a letter goes, and a new operator address is a graph row rather
+// than a dashboard visit. What still bites is an illegal local-part,
+// rejected at RCPT upstream of every rule — and `canon` decides that
+// without consulting anything here.
 //
 // Reading it live is NOT an env-token job: the credential that carries
 // Email Routing scope on this box is the **MCP Cloudflare server**
@@ -41,27 +42,18 @@ export type Rules = { live: boolean; catchall: boolean; rules: Rule[] }
 // CLOUDFLARE_ROUTING_READ_TOKEN and live mode takes over.
 export let STATIC_RULES: Rules = {
   live: false,
-  // The zone catch-all is ENABLED and covers the bot.yak.sh subdomain —
-  // the owner onboarded the subdomain and flipped it 2026-07-30, proven by
-  // a probe pair to one unruled local-part 88s apart: E-11328 (before)
-  // never arrived, E-11329 (after) round-tripped in 288ms, verified.
-  // The apex is not at risk and never was: yak.sh MX is Google Workspace,
-  // so Cloudflare receives no @yak.sh mail for a catch-all to catch.
+  // The zone catch-all is ENABLED and covers the bot.yak.sh subdomain,
+  // proven by a probe pair to one unruled local-part 88s apart: E-11328
+  // (before the flip) never arrived, E-11329 (after) round-tripped in
+  // 288ms, verified. The apex is not at risk and never was: yak.sh MX is
+  // Google Workspace, so Cloudflare receives no @yak.sh mail to catch.
   catchall: true,
-  rules: [
-    'holdco',
-    'printbound',
-    'crayonbloom',
-    'cafecar',
-    'homelab',
-    'trading',
-    'zestful',
-    'harness',
-    'mailtest',
-    'ufos',
-    'task', // added + verified live 2026-07-23 (T-5837)
-    'taskmaster', // ditto
-  ].map((v) => ({ value: `${v}@bot.yak.sh`, enabled: true })),
+  // Empty because it IS empty — all twelve per-address rules were deleted
+  // 2026-07-30, each having pointed at the same worker the catch-all does.
+  // Re-probed after: mailtest@ and taskmaster@ (the two with no book entry,
+  // so they ride Cloudflare instead of local-first delivery) both arrived
+  // verified with no rule of their own.
+  rules: [],
 }
 
 // The book the doctor checks: every email-comp wearer still in play —
