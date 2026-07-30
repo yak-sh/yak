@@ -8,6 +8,7 @@ import {
   CardFull,
   CommentDependencies,
   Dependencies,
+  Mail,
   Meta,
   Relate,
   Runs,
@@ -94,6 +95,7 @@ define([
   // scoring entry above these, never an edit to Full.
   { view: 'Body', match: () => true, Render: Body },
   { view: 'Meta', match: () => true, Render: Meta },
+  { view: 'Mail', match: () => true, Render: Mail },
   {
     view: 'Dependencies',
     match: has('comment'),

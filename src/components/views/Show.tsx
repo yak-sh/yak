@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
+import { type ComponentChildren } from 'preact'
 import { md } from '../../md.ts'
 import { comps, type Ent } from '../../types.ts'
 import { FLOOR, textOf } from '../../embed.ts'
@@ -43,6 +44,10 @@ let Frame = block('div', 'Show', {
   Project: 'a',
   Assignee: 'a',
   Meta: 'div',
+  Mail: 'div',
+  MailKey: 'span',
+  MailVal: 'span',
+  MailFault: 'span',
   Comments: 'span',
   Runs: 'div',
   Boards: 'div',
@@ -60,6 +65,10 @@ let {
   Project,
   Assignee,
   Meta: MetaEl,
+  Mail: MailEl,
+  MailKey,
+  MailVal,
+  MailFault,
   Comments: Talk,
   Runs: RunsEl,
   Boards: BoardsEl,
@@ -187,6 +196,51 @@ let Home = ({ e }: { e: Ent }) => (
     }}
   />
 )
+
+let MailField = (
+  { name, children }: { name: string; children: ComponentChildren },
+) => (
+  <>
+    <MailKey>{name}</MailKey>
+    <MailVal>{children}</MailVal>
+  </>
+)
+
+// A letter says its envelope and receipt before its prose. Transport ids
+// remain in Debug; Full carries the fields used to read and trust it.
+export let Mail = ({ e }: { e: Ent }) => {
+  let m = e.mail
+  if (!m) return null
+  let inbound = !!m.message_id
+  return (
+    <MailEl>
+      <MailField name='from'>{m.from || '?'}</MailField>
+      {m.to_addr && m.to_addr != m.to &&
+        <MailField name='requested'>{m.to}</MailField>}
+      <MailField name='to'>{m.to_addr || m.to}</MailField>
+      {inbound
+        ? (
+          <>
+            <MailField name='received'>
+              <Stamp at={m.received_at} />
+            </MailField>
+            <MailKey>verified</MailKey>
+            <MailVal mod={m.verified ? 'verified' : 'unverified'}>
+              {m.verified ? 'yes' : 'no'}
+            </MailVal>
+          </>
+        )
+        : m.acted_at
+        ? (
+          <MailField name={m.error ? 'attempted' : 'sent'}>
+            <Stamp at={m.acted_at} />
+          </MailField>
+        )
+        : <MailField name='status'>pending</MailField>}
+      {m.error && <MailFault>{m.error}</MailFault>}
+    </MailEl>
+  )
+}
 
 // ---- the sections ----
 
@@ -423,6 +477,7 @@ export let Show = ({ e }: { e: Ent }) => (
       </Title>
     </Heading>
     <Entity eid={e.eid} view='Meta' id />
+    <Entity eid={e.eid} view='Mail' />
     <Entity eid={e.eid} view='Body' />
     {stack.map((v) => <Entity key={v} eid={e.eid} view={v} />)}
   </Frame>
@@ -433,6 +488,7 @@ export let Show = ({ e }: { e: Ent }) => (
 export let CardFull = ({ e }: { e: Ent }) => (
   <>
     <Entity eid={e.eid} view='Meta' />
+    <Entity eid={e.eid} view='Mail' />
     <Entity eid={e.eid} view='Body' mod='bare' />
     {stack.map((v) => <Entity key={v} eid={e.eid} view={v} />)}
   </>

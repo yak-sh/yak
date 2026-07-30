@@ -169,7 +169,7 @@ html {
 /* The mono keepers: ids, chips, badges, edge verbs, timestamps, code,
    and every command/inspector/log surface. Prose everywhere else is
    var(--font) via body. :where keeps this overridable. */
-:where(code, pre, kbd, .Id, .Prio, .Show_Domain, .Show_Project, .Show_Assignee, .Show_Claim, .Dependency_Type, .Relate_Verb, .Stamp, .Comments_When, .Comments_Who, .Comments_Via, .Board_ColName, .Board_Count, .Board_Chips, .Status, .Search_Box input, .Search_Id, .Debug, .Debug_Claim, .SessionRow, .Session_Facts, .Session_Status, .Session_Model, .Session_Tool, .Session_Exec, .Session_Turn, .Session_When, .Session_Err, .TaskTile_Project, .TaskTile_Assignee) {
+:where(code, pre, kbd, .Id, .Prio, .Show_Domain, .Show_Project, .Show_Assignee, .Show_Claim, .Show_Mail, .Dependency_Type, .Relate_Verb, .Stamp, .Comments_When, .Comments_Who, .Comments_Via, .Board_ColName, .Board_Count, .Board_Chips, .Status, .Search_Box input, .Search_Id, .Debug, .Debug_Claim, .SessionRow, .Session_Facts, .Session_Status, .Session_Model, .Session_Tool, .Session_Exec, .Session_Turn, .Session_When, .Session_Err, .TaskTile_Project, .TaskTile_Assignee) {
   font-family: var(--mono);
 }
 
@@ -1325,6 +1325,31 @@ html {
 }
 .Show_Meta .Show_Assignee {
   color: var(--orange); /* a person's warmth, apart from fleet purple */
+}
+.Show_Mail {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 2px var(--gap);
+  margin-bottom: var(--half-gap);
+  font-size: 11px;
+}
+.Show_MailKey {
+  color: var(--dim);
+}
+.Show_MailVal {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.Show_MailVal-verified {
+  color: var(--green);
+}
+.Show_MailVal-unverified,
+.Show_MailFault {
+  color: var(--red);
+}
+.Show_MailFault {
+  grid-column: 1 / -1;
+  overflow-wrap: anywhere;
 }
 .Show_Comments {
   white-space: nowrap;
