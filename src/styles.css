@@ -1717,7 +1717,6 @@ html {
   overflow: hidden;
 }
 .Search_Line {
-  position: relative; /* the completion dropdown anchors under this line */
   display: flex;
   align-items: center;
   gap: var(--half-gap);
@@ -1797,12 +1796,9 @@ html {
 
 /* The completion dropdown (Complete.tsx): the grammar's own candidates
    under whatever input is teaching — the palette line, a filter bar,
-   the query editor. Anchors to its positioned host, raised like a Pop. */
+   the query editor. Portaled into an .Overlay so every door gets the
+   same viewport placement and clears its clipping ancestors. */
 .Complete {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  z-index: 30;
   min-width: min(18rem, 80vw);
   display: flex;
   flex-direction: column;
@@ -1839,7 +1835,6 @@ html {
    ground. No chrome until it speaks — a dim placeholder, ink when
    typed. */
 .Filter {
-  position: relative; /* seats the completion dropdown */
   /* shrinks 8× faster than the title and all the way to nothing: on a
      narrow card the NAME wins the bar, the glance folds away */
   flex: 0 8 14em;
@@ -2849,7 +2844,6 @@ a[data-ref]:hover {
   padding: 2px var(--half-gap);
 }
 .Prop_Query {
-  position: relative; /* seats the completion dropdown (Complete.tsx) */
   display: inline-flex;
   min-width: min(24rem, 60vw); /* a query is a line, not a word */
 }

@@ -10,6 +10,7 @@ import { useRef, useState } from 'preact/hooks'
 import { type Cand, complete } from '../query.ts'
 import { domains } from '../live.ts'
 import { block } from './ui.tsx'
+import { Overlay } from './overlay.tsx'
 
 let Frame = block('div', 'Complete', { Row: 'div', Text: 'span', Kind: 'span' })
 let { Row, Text, Kind } = Frame
@@ -31,12 +32,14 @@ export let useComplete = () => {
   let [cands, setCands] = useState<Cand[]>([])
   let [sel, setSel] = useState(0)
   let at = useRef({ el: null as Box | null, start: 0, end: 0 })
+  let anchor = useRef<Box | null>(null)
 
   let close = () => {
     setCands([])
     setSel(0)
   }
   let track = (el: Box) => {
+    anchor.current = el
     let caret = el.selectionStart ?? el.value.length
     let hit = tokenAt(el.value, caret)
     if (!hit) return close()
@@ -78,23 +81,25 @@ export let useComplete = () => {
     return false
   }
   let list = cands.length == 0 ? null : (
-    <Frame>
-      {cands.map((c, i) => (
-        <Row
-          key={c.text}
-          mod={i == sel ? 'sel' : undefined}
-          onMouseEnter={() => setSel(i)}
-          // mousedown, prevented: accept without ever blurring the input
-          onMouseDown={(e: MouseEvent) => {
-            e.preventDefault()
-            accept(c)
-          }}
-        >
-          <Text>{c.text}</Text>
-          <Kind>{c.kind}</Kind>
-        </Row>
-      ))}
-    </Frame>
+    <Overlay anchor={anchor} side='below'>
+      <Frame>
+        {cands.map((c, i) => (
+          <Row
+            key={c.text}
+            mod={i == sel ? 'sel' : undefined}
+            onMouseEnter={() => setSel(i)}
+            // mousedown, prevented: accept without ever blurring the input
+            onMouseDown={(e: MouseEvent) => {
+              e.preventDefault()
+              accept(c)
+            }}
+          >
+            <Text>{c.text}</Text>
+            <Kind>{c.kind}</Kind>
+          </Row>
+        ))}
+      </Frame>
+    </Overlay>
   )
   return { track, key, close, list }
 }
