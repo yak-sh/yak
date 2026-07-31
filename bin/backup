@@ -152,6 +152,26 @@ if git remote get-url origin >/dev/null 2>&1; then
 fi
 echo "backup: committed $n entities"
 
+# Pack, or the history is 15x its own size: gc had never once run here, and
+# 1644 loose objects had reached 2.56 GiB that packed down to 171 MB in 130s.
+#
+# NOT `gc --auto`, which does not fire for this repo's shape. Its default
+# threshold is 6700 loose objects and this repo writes ~5 an hour, so that alone
+# is years away — but lowering it does not help either, because --auto does not
+# COUNT loose objects, it ESTIMATES them by sampling one of the 256 fanout
+# directories and multiplying. With a handful of huge objects the estimate is
+# quantized to 0 or 256, so it misfires both ways: measured here, ten loose
+# objects against a threshold of five packed nothing at all.
+#
+# `count-objects -v` is an exact count, so this fires when it should. ~5 objects
+# per commit puts it under a day.
+# Failure is not fatal: an unpacked repo is a big repo, not a lost one, and the
+# backup itself already succeeded above.
+loose=$(git count-objects -v | awk '/^count:/ { print $2 }')
+if [ "${loose:-0}" -ge 100 ]; then
+  git gc --quiet || echo "backup: gc failed (repo is unpacked, not broken)" >&2
+fi
+
 # The commit landed, so say so above — but a rejected push means the only
 # off-box copy has stopped advancing, which is the failure this backup exists
 # to prevent. The fleet deadman gates its stamp on this exit code, so
