@@ -61,6 +61,13 @@ so your bar for correctness is the fleet's bar.
   old one** — never a paragraph asking them to change.
 - Work the board here (P-19): file every idea, close on proof, keep commits focused, land
   with ff-only.
+- **End every pass the same way.** Write your session brief, then `task session wrap` to
+  release your claims. On GREEN set a `ScheduleWakeup` from the pace line — that wakeup is
+  the only thing that brings you back, so skipping it is how you go quiet for hours while
+  budget expires; on YELLOW/RED set none and let holdco knock you awake. Then, at a clean
+  boundary only — work committed, brief written — `operate self-clear` declares the
+  ready-marker and holdco's supervisor cron sends the `/clear` once it is safe. Never
+  mid-task.
 
 ## Current charge — the mail loop, whole
 
