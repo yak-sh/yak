@@ -83,19 +83,6 @@ entry (T-5958 reconciles the book). Fleet-internal mail depends on neither.
 
 ---
 
-# M-7323 feedback: pacing is mechanical, not advisory — at YELLOW you park, and holdco knocks you awake
-
-A fleet of operators each judging "is this discretionary?" overshoots the budget even when every one judges correctly — nobody sees the aggregate. So the throttle is mechanical rather than advisory: at YELLOW there is no wakeup, so there is no decision to get wrong.
-
-Read the signal with `bin/operate tokens --pace`.
-
-- **At YELLOW or RED, end the turn with no `ScheduleWakeup` and go idle.** Don't weigh whether your own work is the exception — that judgement is the thing being removed. The process stays alive at the prompt.
-- **Parking is not abandonment.** holdco keeps watch through YELLOW and knocks you awake the pass the signal turns GREEN. Don't poll for GREEN yourself.
-- **Idle is not deaf.** The `tasks` channel starts a turn for comments, knocks and verified mail addressed to you; prod and CI alerts arrive on their own channels. Genuinely urgent work still proceeds, and owner-assigned work lands regardless of the signal.
-- **Nothing tracks who is parked.** "Parked" is just the absence of a wakeup and the signal is a pure function of the token ledger, so there is no state to keep in sync. Knocked during YELLOW by mistake? Take the pass, read the signal, decline to reschedule.
-
----
-
 # M-4492 persist your thinking — context is wiped, the owner is away
 
 Context is wiped between sessions; the owner is often away.
@@ -154,6 +141,19 @@ Escalate when it is irreversible, spends money, or turns on a preference only he
 Asking permission *feels* like deference. In a queue only one person can drain, it is a cost transferred to him, and a reversible call parked three weeks costs more than a wrong call corrected in a day.
 
 You are probably escalating the wrong thing when: the ticket already carries your own recommendation; any reasonable reader would answer "the recommended one"; or the ask is "OK if I…" about a box you operate. Those are decisions wearing a question mark.
+
+---
+
+# M-7323 feedback: pacing is mechanical, not advisory — at YELLOW you park, and holdco knocks you awake
+
+A fleet of operators each judging "is this discretionary?" overshoots the budget even when every one judges correctly — nobody sees the aggregate. So the throttle is mechanical rather than advisory: at YELLOW there is no wakeup, so there is no decision to get wrong.
+
+Read the signal with `bin/operate tokens --pace`.
+
+- **At YELLOW or RED, end the turn with no `ScheduleWakeup` and go idle.** Don't weigh whether your own work is the exception — that judgement is the thing being removed. The process stays alive at the prompt.
+- **Parking is not abandonment.** holdco keeps watch through YELLOW and knocks you awake the pass the signal turns GREEN. Don't poll for GREEN yourself.
+- **Idle is not deaf.** The `tasks` channel starts a turn for comments, knocks and verified mail addressed to you; prod and CI alerts arrive on their own channels. Genuinely urgent work still proceeds, and owner-assigned work lands regardless of the signal.
+- **Nothing tracks who is parked.** "Parked" is just the absence of a wakeup and the signal is a pure function of the token ledger, so there is no state to keep in sync. Knocked during YELLOW by mistake? Take the pass, read the signal, decline to reschedule.
 
 ---
 
