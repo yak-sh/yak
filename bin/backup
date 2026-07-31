@@ -3,9 +3,28 @@
 #
 # The data dir IS a git repo: files (frozen/, images, md) commit as
 # themselves; the LIVE SQLite db never commits — a commit could catch it
-# mid-transaction — so each run snapshots it atomically (VACUUM INTO) to
-# snap/tasks.db and history holds that. Restore = clone, copy
-# snap/tasks.db → tasks.db, start the server.
+# mid-transaction — so each run snapshots it atomically (VACUUM INTO) and
+# then writes that snapshot out as TEXT for history to hold.
+#
+# Restore = clone, then
+#   cat snap/schema.sql snap/graph.sql snap/journal.sql | sqlite3 tasks.db
+# and start the server. The FTS index rebuilds from the boot-time integrity
+# check and embeddings backfill on the sweep, which is why neither is dumped.
+#
+# TEXT, not the binary, because git cannot delta a SQLite file: every hourly
+# commit stored a near-complete new copy (~167 MB/day, and .git reached 2.5 GB
+# in 15 days), while the whole db as text costs ~29 KB per commit — measured,
+# two real consecutive snapshots. The same change makes the working files
+# smaller than the binary was, since the two biggest tables are derived data
+# nobody needs to carry: embeddings and the FTS index are ~29% of the db and
+# both rebuild themselves.
+#
+# SPLIT across files because GitHub's hard 100 MB limit is per FILE. The
+# journal is the largest table and the fastest-growing, and it is append-only,
+# so it gets its own file: it deltas to nearly nothing and its size cannot
+# push the rest of the graph over the ceiling. Splitting keeps every byte —
+# the alternative, pruning old journal rows, would buy the same headroom by
+# discarding the write history.
 #
 # Cron-safe: explicit PATH, no interactivity, exits 0 on "nothing new".
 # A missing origin is not an error — that is a deliberate local-history-only
@@ -23,12 +42,74 @@ cd "$data"
 sq() { sqlite3 -batch -init /dev/null -noheader -list "$@"; }
 
 mkdir -p snap
+# The snapshot is still taken atomically and still checked — it is just no
+# longer what history stores. It lives outside the repo (.gitignore) as the
+# consistent point-in-time source the text dump is written from, so the dump
+# can never catch the live db mid-transaction either.
 rm -f snap/tasks.db # VACUUM INTO refuses to overwrite
 sq tasks.db "VACUUM INTO 'snap/tasks.db'"
 sq snap/tasks.db "pragma integrity_check;" | grep -qx ok || {
   echo "backup: snapshot failed integrity_check" >&2
   exit 1
 }
+
+# Derived tables carry no information the graph cannot rebuild: `embedding`
+# refills on the embed sweep, and doc_fts* is an external-content FTS5 index
+# healed by the integrity check in db.ts open(). Their SCHEMA still ships (the
+# .schema dump below is complete) so a restored db has the tables to fill.
+derived="name = 'embedding' or name like 'doc_fts%'"
+
+# Data as INSERT statements, no DDL — `.mode insert` names each table, so the
+# files concatenate onto the schema in any order.
+dump_data() {
+  for t in $(sq snap/tasks.db "select name from sqlite_master
+      where type = 'table' and name not like 'sqlite_%' and not ($derived)
+        and ($1) order by name"); do
+    sqlite3 -batch -init /dev/null snap/tasks.db \
+      ".mode insert \"$t\"" "select * from \"$t\";"
+  done
+}
+
+# The schema, minus the FTS SHADOW TABLES only. `.schema` writes those out as
+# ordinary CREATE TABLEs, but creating the virtual table makes them itself, so
+# replaying both collides ('doc_fts_data already exists') and every trigger
+# behind it then has no doc_fts to reference. The filter is on TYPE as well as
+# name because the sync triggers are called doc_fts_ai/ad/au and matching them
+# by name alone would drop the very things that refill the index — with them
+# kept, loading the doc rows below rebuilds the index on the way in.
+# glob, not like: `_` is a wildcard in LIKE and would also match doc_fts.
+sqlite3 -batch -init /dev/null snap/tasks.db \
+  "select sql || ';' from sqlite_master
+   where sql is not null and not (type = 'table' and name glob 'doc_fts_*')
+   order by rowid" > snap/schema.sql.tmp
+dump_data "name = 'journal'" > snap/journal.sql.tmp
+dump_data "name != 'journal'" > snap/graph.sql.tmp
+
+# The gate: the dump must restore to the same graph it came from. Comparing
+# row counts per table catches a truncated write, a quoting bug, and a table
+# silently dropped from the dump — the failures that would otherwise be found
+# at restore time, which is the one moment there is no second chance.
+probe="snap/.verify.db"
+rm -f "$probe"
+cat snap/schema.sql.tmp snap/graph.sql.tmp snap/journal.sql.tmp |
+  sqlite3 -batch -init /dev/null "$probe" || {
+  echo "backup: dump did not load back" >&2
+  rm -f "$probe" snap/*.sql.tmp
+  exit 1
+}
+for t in $(sq snap/tasks.db "select name from sqlite_master
+    where type = 'table' and name not like 'sqlite_%' and not ($derived)
+    order by name"); do
+  a=$(sq snap/tasks.db "select count(*) from \"$t\"")
+  b=$(sq "$probe" "select count(*) from \"$t\"")
+  [ "$a" = "$b" ] || {
+    echo "backup: round-trip lost rows in $t ($a → $b)" >&2
+    rm -f "$probe" snap/*.sql.tmp
+    exit 1
+  }
+done
+rm -f "$probe"
+for f in schema graph journal; do mv "snap/$f.sql.tmp" "snap/$f.sql"; done
 
 git add -A
 # Nothing to commit is only healthy if everything already committed got out.
