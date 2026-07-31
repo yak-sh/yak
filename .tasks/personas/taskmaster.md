@@ -148,7 +148,7 @@ You are probably escalating the wrong thing when: the ticket already carries you
 
 A fleet of operators each judging "is this discretionary?" overshoots the budget even when every one judges correctly — nobody sees the aggregate. So the throttle is mechanical rather than advisory: at YELLOW there is no wakeup, so there is no decision to get wrong.
 
-Read the signal with `bin/operate tokens --pace`.
+Read the signal with `operate tokens --pace`.
 
 - **At YELLOW or RED, end the turn with no `ScheduleWakeup` and go idle.** Don't weigh whether your own work is the exception — that judgement is the thing being removed. The process stays alive at the prompt.
 - **Parking is not abandonment.** holdco keeps watch through YELLOW and knocks you awake the pass the signal turns GREEN. Don't poll for GREEN yourself.
