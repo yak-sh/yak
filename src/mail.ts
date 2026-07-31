@@ -12,7 +12,7 @@
 // sent_id (the Message-ID the native send was assigned). The comment
 // relay mints mails for comments on an addressed project's tasks — the
 // graph's replacement for holdco's delivery.js. SERVER-ONLY (imports db).
-import { apply, db } from './db.ts'
+import { apply, db, human } from './db.ts'
 import { dispatch, trace } from './effects.ts'
 import { canon, type Letter, logOut, native, send } from './mailer.ts'
 import { type Change } from './types.ts'
@@ -66,6 +66,24 @@ export let addressOf = (to: string): string => {
   return e.address
 }
 
+// The id grammar IS the address grammar: `S-31@bot.yak.sh` names S-31.
+// DERIVED, never stored — sessions mint and die constantly, so a book row
+// per session is bookkeeping nobody would keep true, and addressing one
+// should not require minting anything. `human()` is the single place that
+// decides an entity's id, so round-tripping through it is what makes the
+// PREFIX binding rather than decorative: T-31@ resolves to nothing when
+// 31 is a session, even though the two share a num.
+export let named = (to: string): string | null => {
+  let local = /^([A-Za-z]+-(\d+))@bot\.yak\.sh$/i.exec(to.trim())
+  if (!local) return null
+  let row = db.prepare('select eid from entity where num = ?')
+    .get(Number(local[2])) as { eid: string } | undefined
+  if (!row) return null
+  return human(db, row.eid).toLowerCase() == local[1].toLowerCase()
+    ? row.eid
+    : null
+}
+
 // The address book, reversed and strict — which fleet entity wears this
 // address? Only bot.yak.sh addresses count as fleet: an external
 // mailbox in the book (the owner's own, a customer's) must still ride
@@ -73,12 +91,15 @@ export let addressOf = (to: string): string => {
 // and canon'd, so a book entry Cloudflare would bounce (underscores)
 // still delivers at home. No triage fallback (that's routeTo's, an
 // inbound concern) — absence means "not fleet".
+// The BOOK WINS over the derivation: an `email` comp is somebody's
+// decision, and an id-shaped address is only the fallback for the
+// entities too short-lived to carry one.
 let homeOf = (addr: string, to: string): string | null => {
   if (!/@bot\.yak\.sh$/i.test(to)) return null
   let hit = (a: string) =>
     (db.prepare('select eid from email where address = ? collate nocase')
       .get(a) as { eid: string } | undefined)?.eid
-  return hit(to) ?? hit(addr) ?? null
+  return hit(to) ?? hit(addr) ?? named(to) ?? named(addr)
 }
 
 // A stored message id to the RFC Message-ID a mail client threads on:

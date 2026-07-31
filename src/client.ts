@@ -891,9 +891,17 @@ export let addressed = (who: Reader) => (r: Row): boolean => {
   }
   let m = r.comps.mail
   if (m) {
-    // Project mail reaches only the operator loop, never a specialist —
-    // direct address (comment/knock above) is always delivered (T-7006).
-    if (who.operator != true || !m.message_id) return false
+    // An arrival, never a letter still going out — message_id is the
+    // inbound mark, and it screens both arms below.
+    if (!m.message_id) return false
+    // A letter to your SESSION is direct address, so it lands whatever loop
+    // you run — the same rule the comment and knock arms above already
+    // follow. Sessions are addressable by id (`S-31@bot.yak.sh`, resolved
+    // in src/mail.ts), and gating that on `operator` would resolve the
+    // address perfectly and then tell nobody.
+    if (who.session && String(m.target_eid) == who.session) return true
+    // Project mail reaches only the operator loop, never a specialist.
+    if (who.operator != true) return false
     // Two ways a letter is yours, and the FIRST is what a person has: it
     // was sent to an address you answer to. A person stands in no project,
     // so the scope arm says nothing about them — and a reader with neither

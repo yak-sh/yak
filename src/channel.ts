@@ -260,14 +260,22 @@ export let findSession = (
 // `operator` gates PROJECT mail to the operator loop. Missing identity fails
 // closed; direct comments, session knocks, and claimed-task replies are
 // selected independently.
+// A letter to the SESSION ITSELF (`S-31@bot.yak.sh`, resolved in
+// src/mail.ts) is direct address and rings whatever loop this is — the
+// operator gate belongs to project mail alone, exactly as it does in the
+// inbox predicate (client.ts `addressed`).
 export let injects = (
   m: Record<string, unknown>,
   homeEid?: string | null,
   done?: boolean,
   operator = false,
-): boolean =>
-  operator && !!m.verified && !done && !!homeEid &&
-  str(m.target_eid) == homeEid
+  sessionEid?: string | null,
+): boolean => {
+  if (!m.verified || done) return false
+  let at = str(m.target_eid)
+  if (sessionEid && at == sessionEid) return true
+  return operator && !!homeEid && at == homeEid
+}
 
 // A knock the ladder stamped as OURS: `delivery: cast S-31` names the very
 // session this channel serves (knock.ts writes `cast S-${num}` when the door
@@ -417,7 +425,13 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
       // re-broadcast — or a reconnect — from ringing twice.
       if (c.comp.received_at == null) continue
       if (
-        !injects(c.comp, ctx.homeEid, ctx.done?.(c.eid), ctx.operator == true)
+        !injects(
+          c.comp,
+          ctx.homeEid,
+          ctx.done?.(c.eid),
+          ctx.operator == true,
+          ctx.sessionEid,
+        )
       ) continue
       if (told(c.eid)) continue
       let id = ctx.idOf(c.eid)

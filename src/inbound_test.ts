@@ -90,6 +90,27 @@ Deno.test('routeTo: the address book reversed, case-blind, P-20 the rest', () =>
   assertEquals(routeTo(null), holdco)
 })
 
+// An id-shaped local-part must route the same way it delivers in-graph, or
+// one address answers differently depending on which side it arrived from.
+Deno.test('routeTo: an id names its entity; a wrong prefix names nobody', () => {
+  let s = uid()
+  apply(db, [
+    { eid: s, name: 'doc', comp: { title: 'a session' } },
+    { eid: s, name: 'session', comp: { id: 'sess-route' } },
+  ])
+  let num = (db.prepare('select num from entity where eid = ?').get(s) as {
+    num: number
+  }).num
+  assertEquals(routeTo(`S-${num}@bot.yak.sh`), s)
+  assertEquals(routeTo(`s-${num}@bot.yak.sh`), s) // canon lowercases
+  // Same num, wrong prefix: it is a different id, so it names nothing and
+  // falls to triage rather than delivering to the session by accident.
+  assertEquals(routeTo(`T-${num}@bot.yak.sh`), holdco)
+  // The derivation is scoped to the fleet domain.
+  assertEquals(routeTo(`S-${num}@elsewhere.test`), holdco)
+  assertEquals(routeTo('S-999999@bot.yak.sh'), holdco) // no such entity
+})
+
 // Routing and ATTRIBUTION read the same book and must not share a fallback:
 // where to file a stranger's letter is a choice, who wrote it is a fact.
 Deno.test('wearer: the same book, strict — a stranger is nobody', () => {

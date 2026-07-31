@@ -4,7 +4,7 @@
 // The native path runs against a captured fetch; creds here are dummies.
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, db, open } = await import('./db.ts')
-let { addressOf, FANOUT_PENDING, fanout, mailed, rfcId } = await import(
+let { addressOf, FANOUT_PENDING, fanout, mailed, named, rfcId } = await import(
   './mail.ts'
 )
 let { canon, payload } = await import('./mailer.ts')
@@ -643,6 +643,106 @@ Deno.test('mailed: a fleet recipient delivers locally — no send, no out-log', 
   } finally {
     restore()
     Deno.env.delete('TASKS_MAIL_CMD')
+    nativeEnvOff()
+  }
+})
+
+// --- addressing an entity by its id ----------------------------------------
+
+Deno.test('named: an id names its entity, and only under its own prefix', () => {
+  let s = uid()
+  apply(db, [
+    { eid: s, name: 'doc', comp: { title: 'a session' } },
+    { eid: s, name: 'session', comp: { id: 'sess-named' } },
+  ])
+  let n = (db.prepare('select num from entity where eid = ?').get(s) as {
+    num: number
+  }).num
+  assertEquals(named(`S-${n}@bot.yak.sh`), s)
+  assertEquals(named(`s-${n}@BOT.YAK.SH`), s) // canon lowercases the local part
+  // The prefix is part of the id, not decoration: the same num under the
+  // wrong prefix is a typo, and delivering it anyway would hand the letter
+  // to an entity the sender never named.
+  assertEquals(named(`T-${n}@bot.yak.sh`), null)
+  assertEquals(named(`S-${n}@example.test`), null) // fleet domain only
+  assertEquals(named('S-99999999@bot.yak.sh'), null)
+  assertEquals(named('holdco@bot.yak.sh'), null) // not id-shaped
+})
+
+Deno.test('mailed: a letter to S-<n> delivers to that session, in-graph', async () => {
+  nativeEnv()
+  let { hits, restore } = netStub(() => ({ success: true }))
+  try {
+    let s = uid()
+    apply(db, [
+      { eid: s, name: 'doc', comp: { title: 'the session' } },
+      { eid: s, name: 'session', comp: { id: 'sess-deliver' } },
+    ])
+    let n = (db.prepare('select num from entity where eid = ?').get(s) as {
+      num: number
+    }).num
+    let m = uid()
+    apply(
+      db,
+      [
+        { eid: m, name: 'doc', comp: { title: 'ping', body: 'you there?' } },
+        { eid: m, name: 'mail', comp: { to: `S-${n}@bot.yak.sh` } },
+      ],
+      undefined,
+      author,
+    )
+    let got: Parameters<typeof channelEvents>[0] = []
+    await mailed((cs) => got.push(...cs))(m, {})
+    let r = row(m)
+    assertEquals(r.error, null)
+    assertEquals(r.target_eid, s) // aimed at the session it named
+    assertMatch(String(r.message_id), /^local:\d+:/) // never left the graph
+    assertEquals(Number(r.verified), 1)
+    assertEquals(hits.length, 0) // no Cloudflare, so no rule to depend on
+    // and it rings that session's channel WITHOUT the operator gate
+    let evs = channelEvents(got, {
+      sessionEid: s,
+      operator: false,
+      idOf: () => 'E-2',
+    })
+    assertEquals(evs.length, 1)
+    assertEquals(evs[0].meta.kind, 'mail')
+  } finally {
+    restore()
+    nativeEnvOff()
+  }
+})
+
+// An `email` comp is somebody's decision; the derivation is only the
+// fallback for entities too short-lived to carry one.
+Deno.test('named: the address book outranks the derivation', async () => {
+  nativeEnv()
+  let { restore } = netStub(() => ({ success: true }))
+  try {
+    let s = uid()
+    apply(db, [
+      { eid: s, name: 'doc', comp: { title: 'shadowed' } },
+      { eid: s, name: 'session', comp: { id: 'sess-shadowed' } },
+    ])
+    let n = (db.prepare('select num from entity where eid = ?').get(s) as {
+      num: number
+    }).num
+    // Somebody books the id-shaped address for themselves.
+    let squatter = somebody('squatter', `S-${n}@bot.yak.sh`)
+    let m = uid()
+    apply(
+      db,
+      [
+        { eid: m, name: 'doc', comp: { title: 'to whom', body: 'x' } },
+        { eid: m, name: 'mail', comp: { to: `S-${n}@bot.yak.sh` } },
+      ],
+      undefined,
+      author,
+    )
+    await mailed(cast)(m, {})
+    assertEquals(row(m).target_eid, squatter)
+  } finally {
+    restore()
     nativeEnvOff()
   }
 })

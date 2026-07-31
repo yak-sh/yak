@@ -11,7 +11,7 @@
 // (imports db).
 import { apply, db } from './db.ts'
 import { dispatch, trace } from './effects.ts'
-import { rfcId } from './mail.ts'
+import { named, rfcId } from './mail.ts'
 import { canon } from './mailer.ts'
 import { type Change, uuid } from './types.ts'
 
@@ -157,8 +157,11 @@ export let wearer = (addr: string | null | undefined): string | null =>
 // The same book as ROUTING: unmatched inbound aims at the holdco project
 // (P-20) — the operator's triage pile — resolved by name each sweep, so a
 // db without it (tests, a fresh install) just leaves the mail unrouted.
+// An id-shaped local-part resolves the same way it does on the way OUT
+// (`named`, src/mail.ts), or a letter to S-31@ would deliver in-graph and
+// land in triage when it arrived from outside — one address, two answers.
 export let routeTo = (addr: string | null | undefined): string | null => {
-  let hit = wearer(addr)
+  let hit = wearer(addr) ?? (addr ? named(String(addr)) : null)
   if (hit) return hit
   let fallback = db.prepare(
     'select e.eid from entity e join project p on p.eid = e.eid where e.num = 20',

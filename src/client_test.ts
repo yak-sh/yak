@@ -1067,6 +1067,53 @@ Deno.test('readerAt: a project reads its own project mail', () => {
   assertEquals(g.filter(inboxItem(who)).map((r) => r.eid), [ml])
 })
 
+// A letter to the session itself is DIRECT address, so it lands whatever
+// loop the reader runs — the rule comments and knocks already follow.
+// Sessions are addressable by id (`S-31@bot.yak.sh`), and gating this on
+// `operator` would resolve the address perfectly and then tell nobody.
+Deno.test('addressed: a letter to my session reaches me without operator', () => {
+  let S = 'bbbbbbbb-0000-4000-8000-000000000331'
+  let mine = 'bbbbbbbb-0000-4000-8000-000000000332'
+  let theirs = 'bbbbbbbb-0000-4000-8000-000000000333'
+  let P3 = 'bbbbbbbb-0000-4000-8000-000000000334'
+  let g = rows({
+    changes: [
+      {
+        eid: mine,
+        name: 'mail',
+        comp: { to: 'S-31@bot.yak.sh', message_id: 'm:31', target_eid: S },
+      },
+      // Project mail stays operator-only — this arm is unchanged.
+      {
+        eid: theirs,
+        name: 'mail',
+        comp: { to: 'p@x', message_id: 'm:32', target_eid: P3 },
+      },
+    ],
+  })
+  let who = { session: S, scope: P3, operator: false }
+  assertEquals(g.filter(inboxItem(who)).map((r) => r.eid), [mine])
+  // An operator in the same seat gets both, so nothing was traded away.
+  let boss = { session: S, scope: P3, operator: true }
+  assertEquals(
+    g.filter(inboxItem(boss)).map((r) => r.eid).sort(),
+    [
+      mine,
+      theirs,
+    ].sort(),
+  )
+})
+
+// A letter still going OUT is not an arrival, whoever it names.
+Deno.test('addressed: an unsent letter to my session is not in my inbox', () => {
+  let S = 'bbbbbbbb-0000-4000-8000-000000000341'
+  let out = 'bbbbbbbb-0000-4000-8000-000000000342'
+  let g = rows({
+    changes: [{ eid: out, name: 'mail', comp: { to: 'x', target_eid: S } }],
+  })
+  assertEquals(g.filter(inboxItem({ session: S, operator: false })).length, 0)
+})
+
 // Project-wide attention is a positive capability. No session means a
 // deliberate preview, but an unmarked session is an ordinary participant.
 Deno.test('isOperator: only an explicit eligible session is an operator', () => {
