@@ -101,7 +101,7 @@ Read the signal with `operate tokens --pace`.
 Operators run as **plain claude tmux windows** (`bin/holdco run`), not `/loop`. `ScheduleWakeup` does not fire there. A pass that ends with only a `ScheduleWakeup` schedules nothing, so the operator goes quiet until knocked — which looks exactly like a healthy operator with nothing to do, and is why it went unnoticed.
 
 ```
-task wake <you> "in 15m"      # GREEN: N from the pace line's sleep field
+task wake <you> "in 15m"      # N from the pace line's sleep field — its first number
 ```
 
 The wake row is a graph entity, so it outlives your process — it survives your `/clear` and a restart, and has no 1h clamp. Check the row to confirm it landed rather than assuming.
@@ -111,6 +111,17 @@ The wake row is a graph entity, so it outlives your process — it survives your
 - **Parking is not abandonment.** holdco keeps watch through YELLOW and knocks you awake the pass the signal turns GREEN. Don't poll for GREEN yourself.
 - **Idle is not deaf.** The `tasks` channel starts a turn for comments, knocks and verified mail addressed to you; prod and CI alerts arrive on their own channels. Genuinely urgent work still proceeds, and owner-assigned work lands regardless of the signal.
 - **Nothing tracks who is parked.** "Parked" is just the absence of a wake and the signal is a pure function of the token ledger, so there is no state to keep in sync. Knocked during YELLOW by mistake? Take the pass, read the signal, decline to reschedule.
+
+## The signal is quantized — it cannot flip mid-day
+
+`alloc` is a step function of **whole elapsed midnights** (`15 × weekdays + 1 × nights`, Michigan), not a smooth accrual, and burning tokens only ever pushes `left` down. So nothing you do can lift YELLOW, and it cannot lift itself between midnights. Only two events can:
+
+- **the next local midnight** — `alloc` steps, and `dow` rolls
+- **the cap reset** — `used` drops
+
+Weekends are forced YELLOW outright (`dow >= 6`, where Mon=1…Sun=7), regardless of budget. A Friday that is over the line therefore stays YELLOW until **Monday**, and re-checking hourly through it is pure waste.
+
+**The pace line now carries this**: its leading number is seconds until the nearer of those two boundaries, so `task wake <you> "in <that>s"` is the whole decision — don't hand-reason about midnights. A `hold` pin or an owner lever keeps the flat hourly re-check on purpose, since those can change at any moment.
 
 ## Verifying the fleet is parked — query the wakes, not the sessions
 
