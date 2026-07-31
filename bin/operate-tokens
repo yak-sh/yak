@@ -22,13 +22,16 @@
 #   operate tokens --tmux    one-liner for the status bar
 #   operate tokens --pace    one machine-readable line for loops/schedulers:
 #                            "<sleep_seconds> <SIGNAL> left=<n> used=<n> alloc=<n> cap=<n>
-#                             [MONDAY-BURN …] codex=<SIG> [claude_forced=<SIG>] ADVICE: <text>"
+#                             [MONDAY-BURN …] [proj=<n>] codex=<SIG> [claude_forced=<SIG>]
+#                             ADVICE: <text>"
 #                            SIGNAL (field 2) is the CLAUDE signal — the operator's own
 #                            pace. `cap=` is the 7-day HARD-CAP % used (0..100) — distinct
-#                            from the allowance-relative used=/alloc=/left=. The email
-#                            channel reads cap= for its >95%-only hold gate (deliver
-#                            mail unless the fleet is over 95% of the 7-day cap).
-#                            The 6-field prefix through cap= is byte-stable; codex=/
+#                            from the allowance-relative used=/alloc=/left=. `proj=` is the
+#                            projected 7-day cap % by reset at the window-average rate (the
+#                            table's `proj`), so a trajectory that exhausts the cap reads
+#                            differently from ordinary glide-line drift; absent while the
+#                            window is warming up.
+#                            The 6-field prefix through cap= is byte-stable; proj=/codex=/
 #                            ADVICE: are ADDITIVE trailing tokens (like MONDAY-BURN).
 #                            The signal folds in this venture's registry status when
 #                            tokens.registry_file (operate.json) is configured AND
@@ -84,6 +87,8 @@ JQ="$(command -v jq 2>/dev/null || true)"
 CONFIG="${OPERATE_CONFIG:-$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)/operate.json}"
 cfg() { [ -n "$JQ" ] && [ -f "$CONFIG" ] && "$JQ" -r ".$1 // empty" "$CONFIG" 2>/dev/null || true; }
 untilde() { case "$1" in "~/"*) printf '%s' "$HOME/${1#\~/}" ;; *) printf '%s' "$1" ;; esac; }
+die() { echo "operate-tokens: $*" >&2; exit 2; }
+need() { case "${2:-}" in "" | -*) die "$1 needs a value" ;; esac; }
 
 CACHE_DIR="${CLAUDE_USAGE_DIR:-}"
 [ -n "$CACHE_DIR" ] || CACHE_DIR="$(untilde "$(cfg tokens.usage_dir)")"
@@ -107,9 +112,9 @@ while [ $# -gt 0 ]; do
 	case "$1" in
 	--tmux) MODE="tmux" ;;
 	--pace) MODE="pace" ;;
-	--set-signal) MODE="set-signal"; SET_SPEC="${2:-}"; shift ;;
+	--set-signal) need "$@"; MODE="set-signal"; SET_SPEC="$2"; shift ;;
 	--clear-signal) MODE="clear-signal"; case "${2:-}" in claude | codex) CLEAR_PROV="$2"; shift ;; esac ;;
-	--until) UNTIL_RAW="${2:-}"; shift ;;
+	--until) need "$@"; UNTIL_RAW="$2"; shift ;;
 	--watch)
 		MODE="watch"
 		case "${2:-}" in [0-9]*) WATCH_IVAL="$2"; shift ;; esac
@@ -216,7 +221,16 @@ human_until() {
 }
 
 shopt -s nullglob
-files=("$CACHE_DIR"/usage.*)
+# Sessions only — never the writer's scratch. claude-status writes
+# usage.<label>.tmp.<pid> and renames it into place, so a .tmp.* file is either
+# mid-write or an orphan from a failed write: partial at best (a truncated one
+# has no CWD, which trips the LIVE_CWD lookup below), and at worst a phantom
+# duplicate row for the live session whose CWD it still carries.
+files=()
+for f in "$CACHE_DIR"/usage.*; do
+	case "$f" in *.tmp.*) continue ;; esac
+	files+=("$f")
+done
 
 # Live session CWDs — the set of dirs backed by a running claude/node process, so
 # we can tell a live-but-idle operator from a corpse cache file. A cache whose CWD
@@ -231,7 +245,10 @@ for pcwd in /proc/[0-9]*/cwd; do
 	[ -n "$link" ] || continue
 	pid="${pcwd#/proc/}"; pid="${pid%/cwd}"
 	comm="$(cat "/proc/$pid/comm" 2>/dev/null)" || continue
-	case "$comm" in claude | node) LIVE_CWD["$link"]=1 ;; esac
+	# Node names its main thread, so comm reads node-MainThread, not node —
+	# match the prefixes or this map is silently always empty and every rule
+	# below degrades to age-only.
+	case "$comm" in claude | claude-* | node | node-*) LIVE_CWD["$link"]=1 ;; esac
 done
 
 # Account-wide caps: track the FRESHEST reading in the CURRENT window — the
@@ -352,10 +369,9 @@ fi
 # ---- per-venture signal (this venture's registry status) ----------------------
 # Resolve THIS venture's registry status from tokens.registry_file (operate.json,
 # a ventures/<id>.md path) and adjust the FLEET signal for this one operator:
-#   hold → owner-directed holding pattern: pins YELLOW with the long sleep,
-#          regardless of budget — the operator executes owner instructions only.
-# Per-venture *softening* (a launch venture getting a faster signal) belongs here
-# too. No config / missing file / unknown status → the fleet signal passes through
+#   hold      → owner-directed holding pattern: pins YELLOW with the long sleep,
+#               regardless of budget — the operator executes owner instructions only.
+# No config / missing file / unknown status → the fleet signal passes through
 # unchanged (fail open) — and on a holdco-less box the key is simply absent.
 if [ "$MODE" = "pace" ]; then
 	reg="$(untilde "$(cfg tokens.registry_file)")"
@@ -419,16 +435,34 @@ if [ "$pace_have" = 1 ] && ((pace_dow == 1)) && ((pace_used < 99)) && [ "$claude
 	pace_hint=" MONDAY-BURN target~99 by Tue 07:00"
 fi
 
+# Projection, as a tail field. The signal words alone cannot separate "above the
+# glide line, ease off" from "on a trajectory that exhausts the account cap": only
+# left= drives YELLOW and only used >= HARD drives RED, so neither reads the BURN
+# RATE, and both print the same string. proj= carries the same linear
+# extrapolation the table shows (used ÷ fraction-of-window-elapsed), so the two
+# cases are distinguishable on the terse line. Empty while warming up, when the
+# projection would divide by ~0.
+pace_proj=""
+if [ "$pace_have" = 1 ]; then
+	pace_proj="$(awk -v u="$pace_used" -v r="$((cur_seven_reset - now))" -v w="$SEVEN_WIN" 'BEGIN{
+		if (r < 0) r = 0
+		frac = 1 - r/w
+		if (frac < 0.05) exit
+		p = u/frac; if (p > 999) p = 999
+		printf "%d", int(p+0.5)
+	}')"
+fi
+proj_tail=""
+[ -n "$pace_proj" ] && proj_tail=" proj=$pace_proj"
+
 if [ "$MODE" = "pace" ]; then
 	# cap= is the raw 7-day HARD-CAP % used (= pace_used; RED fires at cap >= HARD).
 	# It is appended AFTER alloc= (before any Monday hint) so positional parsers of
-	# the first fields are untouched; the email channel greps cap= for its >95% hold
-	# gate. When there's no cap data (pace_have=0) cap=0 — the channel fails open
-	# (delivers) rather than holding on an unknown budget.
-	# ADDITIVE tail (after the byte-stable 6-field prefix): codex=<lever>, an optional
-	# claude_forced=<SIG> marker, then a trailing human ADVICE: to end-of-line. No
-	# consumer reads past cap= positionally, so fields 1-2 + left/used/alloc/cap stay
-	# byte-identical whether or not a lever is set.
+	# the first fields are untouched. When there's no cap data (pace_have=0), cap=0.
+	# ADDITIVE tail (after the byte-stable 6-field prefix): proj=<n>, codex=<lever>,
+	# an optional claude_forced=<SIG> marker, then a trailing human ADVICE: to
+	# end-of-line. No consumer reads past cap= positionally, so fields 1-2 +
+	# left/used/alloc/cap stay byte-identical whether or not a lever is set.
 	codex_tail=" codex=$codex_sig"
 	[ -n "$CODEX_LEVER" ] && [ -n "$CODEX_LEVER_UNTIL" ] && codex_tail+=" codex_until=$CODEX_LEVER_UNTIL"
 	forced_tail=""
@@ -436,9 +470,9 @@ if [ "$MODE" = "pace" ]; then
 		forced_tail=" claude_forced=$pace_signal"
 		[ -n "$CLAUDE_FORCE_UNTIL" ] && forced_tail+=" claude_until=$CLAUDE_FORCE_UNTIL"
 	fi
-	printf '%s %s left=%s used=%s alloc=%s cap=%s%s%s%s ADVICE: %s\n' \
+	printf '%s %s left=%s used=%s alloc=%s cap=%s%s%s%s%s ADVICE: %s\n' \
 		"$pace_sleep" "$pace_signal" "$pace_left" "$pace_used" "$pace_alloc" "$pace_used" \
-		"$pace_hint" "$codex_tail" "$forced_tail" "$pace_advice"
+		"$pace_hint" "$proj_tail" "$codex_tail" "$forced_tail" "$pace_advice"
 	exit 0
 fi
 

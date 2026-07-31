@@ -21,13 +21,12 @@
 # Declaring is UNCONDITIONAL at a clean boundary: judging whether the clear is
 # worthwhile (size) and safe (idle, pane at rest, human-in-the-pane) is the
 # supervisor's job now, not this session's. The one precondition enforced here is the
-# clean boundary itself — a dirty working tree (excluding volatile channel-rewritten
-# paths like data/mail) is NOT a boundary, so we decline (no marker) unless --force.
-# `/clear` never touches the working tree, so leaving volatile mail uncommitted is safe.
+# clean boundary itself — a dirty working tree is NOT a boundary, so we decline
+# (no marker) unless --force.
 #
-# 🚨 Call this as the FINAL action of a pass, AFTER your work is committed and the
-# pass is logged to git (WORKLOG.md), then stop. Write your `.operate/wake-brief.md`
-# note-to-self first (a SessionStart hook re-injects it after the clear).
+# 🚨 Call this as the FINAL action of a pass, AFTER your work is committed and your
+# session brief is written to the graph (`task wrap` / your session doc), then stop.
+# The SessionStart hook re-injects that brief via `task context` on the next cold start.
 #
 # USAGE: operate self-clear [--force]
 #   (--if-optimal / --if-bloated [N] are accepted as deprecated no-op aliases so an
@@ -81,9 +80,8 @@ munged="$(printf '%s' "$PWD" | sed 's/[^a-zA-Z0-9]/-/g')"
 tdir="$PROJECTS_DIR/$munged"
 [ -d "$tdir" ] && { latest="$(ls -t "$tdir"/*.jsonl 2>/dev/null | head -1)"; [ -n "$latest" ] && session="$(basename "$latest" .jsonl)"; }
 
-# Clean-boundary guard: a dirty tree (volatile channel-rewritten mail excluded — a
-# native git pathspec, robust vs. line parsing) is NOT a boundary; decline.
-if [[ "$force" != 1 ]] && [ -n "$(git status --porcelain -- . ':(exclude)data/mail' 2>/dev/null)" ]; then
+# Clean-boundary guard: a dirty tree is NOT a boundary; decline.
+if [[ "$force" != 1 ]] && [ -n "$(git status --porcelain -- . 2>/dev/null)" ]; then
 	echo "self-clear: working tree is DIRTY — commit + log your pass first (or --force); not declared."
 	exit 0
 fi

@@ -10,7 +10,7 @@
 # (./bindery, ./conductor, ./cbloom, ./homelab, ./trader).
 #
 # holdco resolves the venture's settings from the registry and passes them via env
-# (OP_MODEL, OP_EFFORT, OP_MODE, OP_WORK, OP_REMOTE_NAME, EMAIL_CHANNEL_ADDR). Run
+# (OP_MODEL, OP_EFFORT, OP_MODE, OP_WORK, OP_REMOTE_NAME). Run
 # standalone, it falls back to operate.json `run.*` then built-in defaults, so a
 # venture repo launches with no holdco repo on the box.
 #
@@ -50,10 +50,12 @@ mode="${OP_MODE:-$(cfg run.mode)}";        mode="${mode:-long-loop}"
 remote_name="${OP_REMOTE_NAME:-$name Operator}"
 work="${OP_WORK:-Continue $name operation.}"
 
-# Assemble the operator invocation. `--operator` opts this intentional worker
-# into the SessionStart digest; `task claude` adds skip-permissions and the
-# tasks channel. Email is in the graph now — no email channel. We pass persona,
-# model, effort, --remote-control, and the /loop standing-work prompt through.
+# Assemble the operator invocation. Launched via `task claude --operator`,
+# which adds
+# --dangerously-skip-permissions, the tasks channel, and one bound TASKS_SESSION
+# that the SessionStart hook, the MCP tools, and the channel all share. Email is
+# in the graph now — no email channel. We pass persona, model, effort,
+# --remote-control, and the /loop standing-work prompt through.
 args=()
 [ "${OP_REMOTE:-1}" != 0 ] && args+=( --remote-control "$remote_name" )
 args+=( --model "$model" --effort "$effort" --append-system-prompt-file "$PERSONA" )

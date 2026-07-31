@@ -40,6 +40,8 @@ JQ="$(command -v jq 2>/dev/null || true)"
 CONFIG="${OPERATE_CONFIG:-$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)/operate.json}"
 cfg() { [ -n "$JQ" ] && [ -f "$CONFIG" ] && "$JQ" -r ".$1 // empty" "$CONFIG" 2>/dev/null || true; }
 untilde() { case "$1" in "~/"*) printf '%s' "$HOME/${1#\~/}" ;; *) printf '%s' "$1" ;; esac; }
+die() { echo "operate-context: $*" >&2; exit 2; }
+need() { case "${2:-}" in "" | -*) die "$1 needs a value" ;; esac; }
 
 PROJECTS_DIR="${CLAUDE_PROJECTS_DIR:-}"
 [ -n "$PROJECTS_DIR" ] || PROJECTS_DIR="$(untilde "$(cfg context.projects_dir)")"
@@ -53,8 +55,8 @@ dir="$PWD"
 session=""
 while [ $# -gt 0 ]; do
 	case "$1" in
-	--dir) shift; dir="${1:-}" ;;
-	--session) shift; session="${1:-}" ;;
+	--dir) need "$@"; dir="$(cd "$2" 2>/dev/null && pwd)" || dir="$2"; shift ;;
+	--session) need "$@"; session="$2"; shift ;;
 	-h | --help) awk 'NR==1{next} /^#/{sub(/^# ?/,"");print;next}{exit}' "$0"; exit 0 ;;
 	*) echo "operate-context: unknown arg '$1'" >&2; exit 2 ;;
 	esac

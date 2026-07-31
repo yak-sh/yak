@@ -9,7 +9,7 @@
 #
 #   operate help       list every operate-* tool (line-3 summary) + built-ins
 #   operate version    per-tool short sha256 — eyeball drift against the source
-#   operate sync       copy any differing operate* from sync.source into bin/
+#   operate sync       copy differing operate* + .claude/skills/** from sync.source
 #   operate <tool> --help   the tool's own header block
 #
 # Config: operate.json at the repo root (git-tracked, non-secret; every key
@@ -71,6 +71,17 @@ sync)
 			cp "$s" "$d" && chmod +x "$d" && { echo "  synced $b"; changed=1; }
 		fi
 	done
+	# skills: mirror .claude/skills/** (sibling of the sync-source bin) into our tree.
+	# Copy only files that exist in the source, so venture-local skills survive.
+	skills_src="$(dirname "$src")/.claude/skills"; skills_dst="$(dirname "$DIR")/.claude/skills"
+	if [ -d "$skills_src" ]; then
+		while IFS= read -r s; do
+			rel="${s#"$skills_src"/}"; d="$skills_dst/$rel"
+			if [ ! -f "$d" ] || ! cmp -s "$s" "$d"; then
+				mkdir -p "$(dirname "$d")" && cp "$s" "$d" && { echo "  synced .claude/skills/$rel"; changed=1; }
+			fi
+		done < <(find "$skills_src" -type f)
+	fi
 	if [ "$changed" = 0 ]; then
 		echo "operate sync: already up to date."
 	else
