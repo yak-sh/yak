@@ -8,8 +8,9 @@
 # snap/tasks.db → tasks.db, start the server.
 #
 # Cron-safe: explicit PATH, no interactivity, exits 0 on "nothing new".
-# Push is best-effort only when an origin exists — a missing remote makes
-# this a local-history-only backup, not an error.
+# A missing origin is not an error — that is a deliberate local-history-only
+# backup. A push that is REJECTED is, because the off-box copy has stopped
+# advancing while the local one keeps moving.
 set -eu
 export PATH="$HOME/.deno/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin"
 
@@ -30,8 +31,21 @@ sq snap/tasks.db "pragma integrity_check;" | grep -qx ok || {
 }
 
 git add -A
+# Nothing to commit is only healthy if everything already committed got out.
+# Otherwise a quiet run launders the failure of a noisy one: an earlier push
+# was rejected, this run finds no change, exits 0, and the deadman stamps the
+# backup healthy while the off-box copy sits frozen.
+unpushed() {
+  b=$(git rev-parse --abbrev-ref HEAD)
+  git rev-parse --verify -q "origin/$b" >/dev/null || return 1  # never fetched — cannot tell
+  [ "$(git rev-list --count "origin/$b..HEAD")" != 0 ]
+}
 if git diff --cached --quiet; then
   echo "backup: nothing new"
+  if git remote get-url origin >/dev/null 2>&1 && unpushed; then
+    echo "backup: nothing new, but local commits are unpushed — off-box copy is stale" >&2
+    exit 1
+  fi
   exit 0
 fi
 
@@ -39,7 +53,18 @@ n=$(sq snap/tasks.db 'select count(*) from entity')
 git -c user.name=backup -c user.email=backup@yak.sh \
   commit -qm "backup: $(date -u +%Y-%m-%dT%H:%M:%SZ) — $n entities"
 
+pushed=1
 if git remote get-url origin >/dev/null 2>&1; then
-  git push -q origin HEAD || echo "backup: push failed (kept locally)" >&2
+  git push -q origin HEAD || pushed=0
 fi
 echo "backup: committed $n entities"
+
+# The commit landed, so say so above — but a rejected push means the only
+# off-box copy has stopped advancing, which is the failure this backup exists
+# to prevent. The fleet deadman gates its stamp on this exit code, so
+# returning 0 here would certify the backup healthy for as long as the push
+# keeps failing. That is the shape that hid an 18h outage; do not repeat it.
+if [ "$pushed" = 0 ]; then
+  echo "backup: push REJECTED — off-box copy is now stale" >&2
+  exit 1
+fi
