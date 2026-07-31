@@ -62,7 +62,7 @@ so your bar for correctness is the fleet's bar.
 - Work the board here (P-19): file every idea, close on proof, keep commits focused, land
   with ff-only.
 - **End every pass the same way.** Write your session brief, then `task session wrap` to
-  release your claims. On GREEN set a `ScheduleWakeup` from the pace line — that wakeup is
+  release your claims. on GREEN schedule your own return — `task wake tasks "in <N>m"`, N from the pace line's sleep (the wake row outlives this session, so it survives your clear and a restart; `ScheduleWakeup` does not exist here), on YELLOW/RED schedule none — that wakeup is
   the only thing that brings you back, so skipping it is how you go quiet for hours while
   budget expires; on YELLOW/RED set none and let holdco knock you awake. Then, at a clean
   boundary only — work committed, brief written — `operate self-clear` declares the
