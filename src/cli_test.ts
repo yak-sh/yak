@@ -414,11 +414,17 @@ Deno.test('Codex turn hooks announce only busy and idle boundaries', () => {
   assertEquals(hookTurn({ hook_event_name: 'SessionStart' }), undefined)
 })
 
-Deno.test('the canonical operator launcher opts into work injection', () => {
-  let path = new URL('../bin/operate-run', import.meta.url)
-  let script = Deno.readTextFileSync(path)
-  assertMatch(script, /exec task claude --operator "\$\{args\[@\]\}"/)
-  assertMatch(script, /printf 'task claude --operator'/)
+// The launcher is the global `operate` CLI; its dry run prints the exact argv it
+// would exec, so the --operator opt-in is checked against the real thing.
+Deno.test('the canonical operator launcher opts into work injection', async () => {
+  let repo = new URL('..', import.meta.url).pathname
+  let out = await new Deno.Command('operate', {
+    args: ['run'],
+    cwd: repo,
+    env: { DRY_RUN: '1' },
+  }).output()
+  assertEquals(out.code, 0)
+  assertMatch(text(out.stdout), /^task claude --operator /)
 })
 
 Deno.test('task wrap help documents the legacy alias', async () => {
