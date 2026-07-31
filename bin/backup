@@ -61,13 +61,25 @@ derived="name = 'embedding' or name like 'doc_fts%'"
 
 # Data as INSERT statements, no DDL — `.mode insert` names each table, so the
 # files concatenate onto the schema in any order.
+#
+# WRAPPED IN ONE TRANSACTION, which is not a nicety. Bare INSERTs are each
+# their own transaction, so replaying them fsyncs once PER ROW: ~28k fsyncs to
+# load this graph. On a real disk that is over an hour; the hourly job hung in
+# uninterruptible I/O and cron would have stacked a new one on top every hour.
+# It is invisible on tmpfs — where fsync is free — which is exactly how a probe
+# written to /tmp measured 8s for work that takes an hour where it actually
+# runs. Two transactions instead of 28k applies to the RESTORE too, which is
+# the path that matters most and the one nobody times until they need it.
+# Each file wraps itself, so any subset still concatenates and replays.
 dump_data() {
+  echo 'BEGIN TRANSACTION;'
   for t in $(sq snap/tasks.db "select name from sqlite_master
       where type = 'table' and name not like 'sqlite_%' and not ($derived)
         and ($1) order by name"); do
     sqlite3 -batch -init /dev/null snap/tasks.db \
       ".mode insert \"$t\"" "select * from \"$t\";"
   done
+  echo 'COMMIT;'
 }
 
 # The schema, minus the FTS SHADOW TABLES only. `.schema` writes those out as
