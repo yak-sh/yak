@@ -238,6 +238,22 @@ Deno.test('unverified mail never injects — it waits for triage', () => {
   assertEquals(out, [])
 })
 
+// A letter addressed to the SESSION by id (`S-31@bot.yak.sh`) is direct
+// address, so it rings whatever loop this is — the operator gate belongs to
+// project mail alone. Without this the address resolves perfectly and the
+// session it names never hears about it.
+Deno.test('mail addressed to this session injects without operator', () => {
+  let mine = stamp({ to: 'S-31@bot.yak.sh', target_eid: 'sess' })
+  let out = channelEvents([mine], ctx({ docOf: letter, operator: false }))
+  assertEquals(out.length, 1)
+  assertEquals(out[0].meta.kind, 'mail')
+  // The project arm is untouched: a specialist still hears no venture mail.
+  assertEquals(
+    channelEvents([stamp()], ctx({ docOf: letter, operator: false })),
+    [],
+  )
+})
+
 Deno.test('mail already opened/archived is not re-announced', () => {
   let batch = [stamp()]
   let dealt = ctx({ docOf: letter, done: () => true })
