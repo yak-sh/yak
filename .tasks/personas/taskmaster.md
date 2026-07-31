@@ -112,6 +112,16 @@ The wake row is a graph entity, so it outlives your process — it survives your
 - **Idle is not deaf.** The `tasks` channel starts a turn for comments, knocks and verified mail addressed to you; prod and CI alerts arrive on their own channels. Genuinely urgent work still proceeds, and owner-assigned work lands regardless of the signal.
 - **Nothing tracks who is parked.** "Parked" is just the absence of a wake and the signal is a pure function of the token ledger, so there is no state to keep in sync. Knocked during YELLOW by mistake? Take the pass, read the signal, decline to reschedule.
 
+## Verifying the fleet is parked — query the wakes, not the sessions
+
+A session's `age` in `operate tokens` says when an operator *last ran*; it cannot tell a parked operator from one about to wake in five minutes. Since parked is the *absence* of a scheduled return, the state is a wake query — one call answers it for the whole fleet:
+
+```
+graph_query kind=wake .wake.at>=<now>     # a returned row with acted_at: null is a pending return
+```
+
+`acted_at` is not filterable, so read it off the rows. Every venture absent from that list is parked; a venture present with a null `acted_at` is still on a timer and will burn budget. Trust this over session ages and over any operator's report of its own state.
+
 ## Persona changes need a restart
 
 A persona reaches an operator via `--append-system-prompt-file`, read at **claude launch** — so a persona edit does nothing until `bin/holdco restart <id>`. Memories are different: they ride the `task context` digest and land on the next clear, which is why a new memory can change behavior before a restart does.
