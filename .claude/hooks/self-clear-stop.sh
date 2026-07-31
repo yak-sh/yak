@@ -2,7 +2,7 @@
 #
 # self-clear-stop.sh — Stop hook: clear THIS session at turn-end, ASAP.
 #
-# operate-self-clear declares a ready-marker at a clean boundary but can't /clear its
+# `operate self-clear` declares a ready-marker at a clean boundary but can't /clear its
 # own pane mid-turn. The `*/1` holdco-idle-clear cron sends the clear once its gate
 # chain passes — but a busy operator gets injected traffic (email/cron/task) every
 # 30-60 min, and each injected turn STALES the marker (DROP-STALE), so the cron rarely

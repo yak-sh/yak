@@ -1,8 +1,5 @@
 {
   "venture": "tasks",
-  "sync": {
-    "source": "~/code/holdco/templates/new-venture/bin"
-  },
   "run": {
     "title": "TaskMaster",
     "model": "opus",
