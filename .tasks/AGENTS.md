@@ -384,10 +384,31 @@ These hold everywhere in this repo, whoever — or whatever — writes the code:
 runs hourly from cron: it snapshots the live db atomically
 (`VACUUM INTO snap/tasks.db` + integrity_check — the live `tasks.db` is
 gitignored and must never commit, a commit could catch it mid-transaction), then
-commits and pushes everything else (frozen/, future images/md) as plain files.
-Restore = clone, copy `snap/tasks.db` → `tasks.db`, start the server. If blobs
-ever outgrow git, the planned escape hatch is restic → R2 (encrypted, deduped,
-retention) — see the holdco board.
+writes that snapshot out as TEXT and commits the text, alongside everything else
+(frozen/, future images/md) as plain files. **The binary snapshot is gitignored**
+— it is the consistent source the dump is written from, not what history stores.
+
+Restore:
+
+```sh
+cat snap/schema.sql snap/graph.sql snap/journal.sql | sqlite3 tasks.db
+```
+
+then start the server. The FTS index refills from its sync triggers as the doc
+rows load, and embeddings backfill on the embed sweep — which is why neither is
+dumped.
+
+Text, split, and derived-free, all for measured reasons: git cannot delta a
+SQLite file, so every hourly commit stored a near-complete new copy (~167 MB/day,
+`.git` at 2.5 GB in 15 days) where the whole graph as text costs ~29 KB per
+commit; `embedding` + the FTS index are ~29% of the db and rebuild themselves;
+and GitHub's hard 100 MB limit is per FILE, so the append-only journal gets its
+own file rather than being pruned to buy headroom. `bin/backup` refuses to
+publish a dump it cannot load back with matching row counts — the restore path
+is exercised every hour, not first discovered in an emergency.
+
+If blobs ever outgrow git, the planned escape hatch is restic → R2 (encrypted,
+deduped, retention) — see the holdco board.
 
 ## Style
 
