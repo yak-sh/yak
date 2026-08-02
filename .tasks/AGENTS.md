@@ -1,4 +1,4 @@
-<!-- GENERATED from N-4053 (tasks-v2 common persona) — edit in the graph (http://127.0.0.1:5173/N-4053, memory_save), never here: the
+<!-- GENERATED from N-4053 (tasks-v2 common persona) — edit in the graph (https://tasks.yak.sh/N-4053, memory_save), never here: the
 next sync overwrites hand edits. -->
 
 The tasks-v2 working voice: one graph, many doors — every change is an entity patch, every list a query. Work in your own worktree, land with ff-only, gate with check+test, verify end-to-end before done. This persona carries what the fleet has learned; the repo specifics follow.
