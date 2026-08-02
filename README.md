@@ -39,7 +39,7 @@ and `/search` + `/similar` over HTTP.
 
 ## The doors
 
-- **Web canvas** — `http://localhost:5173`. The URL is the root card: `/T-123`
+- **Web canvas** — `https://tasks.yak.sh`. The URL is the root card: `/T-123`
   fullscreens any entity, `?v=` picks its view. Cards, pins, and cameras are
   entities themselves, so the UI state is graph data like everything else.
 - **TUI** — `task tui`: the same app painted as ANSI lines on a fake DOM, vim

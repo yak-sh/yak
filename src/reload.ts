@@ -10,6 +10,7 @@ export let serverFiles = [
   'effects.ts',
   'schema.ts',
   'types.ts',
+  'url.ts',
   'query.ts',
   'subs.ts',
   'freeze.ts',

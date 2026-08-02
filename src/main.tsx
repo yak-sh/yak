@@ -36,13 +36,15 @@ config.client = clientId()
 config.agreement = agreementProbe(location.search)
 await boot()
 
-// The grandfather door: tasks-v1 linked '?task=<slug>', and those slugs
-// live on as alias components. Resolve once the cache is full and
+// The grandfather door: tasks-v1 linked '?task=<slug>', and old guidance also
+// used human ids there. Resolve once the cache is full and
 // REPLACE the URL — a legacy address shouldn't linger in history. An
 // unknown slug just renders the root: a dead old link is not a crash.
 let legacy = new URLSearchParams(location.search).get('task')
 if (legacy) {
-  let hit = Object.entries(cache.value).find(([, c]) => c.alias?.slug == legacy)
+  let hit = Object.entries(cache.value).find(([eid, c]) =>
+    c.alias?.slug == legacy || idOf(ent(eid)) == legacy
+  )
   if (hit) {
     history.replaceState(null, '', `/${idOf(ent(hit[0]))}`)
     route.value = location.pathname + location.search

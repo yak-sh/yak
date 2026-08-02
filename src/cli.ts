@@ -63,6 +63,7 @@ import {
   unreadMail,
   wrapChanges,
 } from './client.ts'
+import { entityUrl } from './url.ts'
 import { prune, reap, sweep } from './probes.ts'
 import {
   EDGE_DOOR,
@@ -876,7 +877,7 @@ let colon = async (focus: string | undefined, argv: string[]) => {
   if (out.spawn) await launch(out.spawn, {})
   if (out.go) {
     let r = all.find((x) => x.eid == out.go)
-    console.log(`http://${host()}/${r ? idOf(r) : out.go}`)
+    console.log(entityUrl(r ? idOf(r) : out.go))
   }
 }
 

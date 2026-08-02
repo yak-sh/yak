@@ -67,6 +67,7 @@ import {
 } from './query.ts'
 import { commandOut, commands, focusOf } from './commands.ts'
 import { request } from './http.ts'
+import { entityUrl } from './url.ts'
 
 // How the tools reach the graph — in-process on the server, HTTP here.
 export type IO = {
@@ -615,7 +616,7 @@ ${
       }
       if (out.go) {
         let r = all.find((x) => x.eid == out.go)
-        said.push(`http://${host()}/${r ? idOf(r) : out.go}`)
+        said.push(entityUrl(r ? idOf(r) : out.go))
       }
       return bus(said.join('\n') || 'ok', session)
     },

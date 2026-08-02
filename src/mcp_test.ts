@@ -61,6 +61,26 @@ Deno.test('command: generated references resolve aliases and reject misses', () 
   )
 })
 
+Deno.test('command: open returns the public entity URL', async () => {
+  let io = blank()
+  io.read = () =>
+    Promise.resolve({
+      changes: [
+        { eid: T, name: 'entity', comp: { eid: T, num: 7595 } },
+        { eid: T, name: 'doc', comp: { title: 'Task', body: '' } },
+        { eid: T, name: 'task', comp: { status: 'open' } },
+      ],
+      deps: [],
+    })
+  await protocol(io, async (client) => {
+    let out = await client.callTool({
+      name: 'command',
+      arguments: { line: ':open T-7595' },
+    }) as ToolResult
+    assertEquals(said(out), 'https://tasks.yak.sh/T-7595')
+  })
+})
+
 Deno.test('task_context surfaces and acknowledges one atomic inbox batch', async () => {
   let { db, io } = graph()
   let s = crypto.randomUUID()

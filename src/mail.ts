@@ -16,6 +16,7 @@ import { apply, db, human } from './db.ts'
 import { dispatch, trace } from './effects.ts'
 import { canon, type Letter, logOut, native, send } from './mailer.ts'
 import { type Change } from './types.ts'
+import { entityUrl } from './url.ts'
 
 type Cast = (changes: Change[]) => void
 type Row = Record<string, string | number | null>
@@ -327,7 +328,7 @@ export let fanout =
             name: 'doc',
             comp: {
               title: `[T-${num}] ${title}`,
-              body: `${said}\n\nhttp://127.0.0.1:5173/T-${num}`,
+              body: `${said}\n\n${entityUrl(`T-${num}`)}`,
             },
           },
           {

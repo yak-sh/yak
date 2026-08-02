@@ -880,6 +880,26 @@ let graphServer = () => {
   return { server, seen, host: `127.0.0.1:${port}` }
 }
 
+Deno.test('colon open prints the public entity URL', async () => {
+  let { server, host } = graphServer()
+  try {
+    let out = await new Deno.Command(Deno.execPath(), {
+      args: [
+        'run',
+        '-A',
+        new URL('./cli.ts', import.meta.url).pathname,
+        ':open',
+        'T-2',
+      ],
+      env: { TASKS_HOST: host },
+    }).output()
+    assertEquals(out.code, 0)
+    assertEquals(text(out.stdout).trim(), 'https://tasks.yak.sh/T-2')
+  } finally {
+    await server.shutdown()
+  }
+})
+
 Deno.test('subagentDigest: a held claim renders that task block, nothing else', () => {
   let out = subagentDigest(sub, 'sub-1', 'general')
   assertEquals(out, '- T-2 wip — Child work')

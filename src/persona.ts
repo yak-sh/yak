@@ -12,10 +12,10 @@
 import { type Dep, idOf } from './types.ts'
 import { type Row } from './client.ts'
 import { hot } from './query.ts'
+import { entityUrl } from './url.ts'
 
 // A persona's home page in the UI — the header points hand-editors back
-// at the graph. One base for now; federation can teach it homes later.
-let BASE = 'http://127.0.0.1:5173'
+// at the graph.
 
 // The DIALECT is the frame a provider reads — header text and section
 // names; the content is single-sourced from the graph and never varies.
@@ -30,7 +30,9 @@ export type Dialect = {
 }
 export let DIALECT: Dialect = {
   header: (id, title) =>
-    `<!-- GENERATED from ${id} (${title}) — edit in the graph (${BASE}/${id}, memory_save), never here: the
+    `<!-- GENERATED from ${id} (${title}) — edit in the graph (${
+      entityUrl(id)
+    }, memory_save), never here: the
 next sync overwrites hand edits. -->`,
   rule: '---',
   index:

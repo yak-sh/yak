@@ -240,7 +240,7 @@ Deno.test('fanout: mints to the project REFERENCE, once, with the receipt', () =
   ) as { title: string; body: string }
   assertMatch(doc.title, new RegExp(`\\[T-${num}\\] the work`))
   assertMatch(doc.body, /a note/)
-  assertMatch(doc.body, new RegExp(`/T-${num}`))
+  assertMatch(doc.body, new RegExp(`https://tasks\\.yak\\.sh/T-${num}`))
   fanout(cast)(c, { target_eid: task }) // the receipt makes it idempotent
   assertEquals(mintedFor(c).length, 1)
 })

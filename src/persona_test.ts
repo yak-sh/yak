@@ -65,6 +65,7 @@ Deno.test('materialize: header, core, tiers in warmth order', () => {
   ]
   let md = materialize(all, deps, persona, NOW)
   assertStringIncludes(md, `GENERATED from N-${persona.num}`)
+  assertStringIncludes(md, `https://tasks.yak.sh/N-${persona.num}`)
   assertStringIncludes(md, 'Review sternly.')
   // preloaded bodies ride whole — each its own document under an H1
   // title behind a rule, warm before cold, no tier label
