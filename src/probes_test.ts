@@ -104,6 +104,20 @@ Deno.test('a live session keeps its probe, by id and by ground', () => {
   assertEquals(verdict(proc({ pid: 504, session: 'dead-1' }), it).reap, true)
 })
 
+Deno.test('a live session owns its scratch graph after env and ancestry are gone', () => {
+  let sid = 'abc-123'
+  let it = live([{ id: sid, pid: 999 }], () => 'claude')
+  let server = proc({
+    pid: 505,
+    cwd: '/tmp/orphaned',
+    db: `/tmp/claude-1000/-home-yaks-code-tasks/${sid}/scratchpad/tasks.db`,
+  })
+  let v = verdict(server, it)
+  assertEquals(v.reap, false)
+  assertEquals(v.why, `session ${sid} owns its scratch graph`)
+  assertEquals(verdict(server).reap, true)
+})
+
 Deno.test("both ends of a live agent's line are spared", () => {
   let it: Live = { sessions: new Set(), pids: [999], cwds: [] }
   // A helper below the agent, and the launcher above it: descends() answers

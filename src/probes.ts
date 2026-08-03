@@ -65,6 +65,12 @@ export type Verdict = { proc: Proc; reap: boolean; why: string }
 // something long-lived there, and a bare temp directory is not a claim.
 export let worktree = (cwd: string) => /(^|\/)(tasks-)?worktrees\//.test(cwd)
 
+// A Claude scratchpad is rooted under its session id. A probe must keep its
+// DB_PATH to use the graph, so this ownership survives env filtering and
+// reparenting even when CLAUDE_CODE_SESSION_ID does not.
+let scratchSession = (path?: string) =>
+  path?.match(/(^|\/)([^/]+)\/scratchpad(\/|$)/)?.[2]
+
 // A browser held open for CDP. Nothing on this box legitimately runs headless
 // with a debugging port for hours — the probe that opened it is long gone,
 // and the port it squats on is why two agents end up driving one browser.
@@ -129,6 +135,10 @@ let spared = (
   if (now - p.born < grace) return 'younger than the grace period'
   if (p.session && it.sessions.has(p.session)) {
     return `session ${p.session.slice(0, 8)} is live`
+  }
+  let owner = scratchSession(p.db)
+  if (owner && it.sessions.has(owner)) {
+    return `session ${owner.slice(0, 8)} owns its scratch graph`
   }
   // Both directions of the family. A helper BELOW a live agent is that
   // agent's business; a launcher ABOVE one is holding it up — a harness node
