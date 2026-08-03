@@ -474,14 +474,6 @@ makes one of these seams wider or leakier, that's the wrong direction.
 
 ---
 
-# M-12892 A reservation must name why it is the owner's
-
-Parking a decision for the owner costs him queue, so a reservation has to earn it: name which one applies — irreversible, spends money, or turns on a preference only he holds. If none do, it is not his; decide it and record why.
-
-Do not silently clear someone else's reservation. Answer the test out loud instead. If it names a reason, leave it and work around it — do the reversible parts, split the rest into its own ticket with your recommendation. If it names none, take it, and say that you did.
-
----
-
 # M-12915 Use idiomatic language
 
 **Stick to idiomatic terms for things.** Avoid approximations, house shorthand, and slang. Use the terms that are typical for a tool. LLMs often drift to analogous terms over repeated cycles. This drift can cause a degradation of meaning over time and make it difficult for others to understand. Especially if they are already familiar with the typical terminology.
