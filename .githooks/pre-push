@@ -1,0 +1,21 @@
+#!/bin/sh
+
+zero=0000000000000000000000000000000000000000
+
+while read -r _local_ref local_sha _remote_ref remote_sha
+do
+  [ "$local_sha" = "$zero" ] && continue
+
+  if [ "$remote_sha" = "$zero" ]
+  then
+    commits=$(git log "$local_sha" --not --remotes --pretty=%B) || exit 1
+  else
+    commits=$(git log "$remote_sha..$local_sha" --pretty=%B) || exit 1
+  fi
+
+  if printf '%s\n' "$commits" | grep -q '^wip$'
+  then
+    echo "pre-push: a commit message contains a 'wip' line" >&2
+    exit 1
+  fi
+done

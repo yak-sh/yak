@@ -44,9 +44,10 @@ and `/search` + `/similar` over HTTP.
   entities themselves, so the UI state is graph data like everything else.
 - **TUI** — `task tui`: the same app painted as ANSI lines on a fake DOM, vim
   keys, another live client — edits made in a browser appear on the next frame.
-- **CLI** — `deno task install` puts a global `task` on PATH. Dot-params route
-  by prop through the component vocabulary (`.title=` can only mean
-  `doc.title`); the same grammar filters and writes:
+- **CLI** — `deno task install` puts a global `task` on PATH and enables the
+  repository's git hooks. Dot-params route by prop through the component
+  vocabulary (`.title=` can only mean `doc.title`); the same grammar filters and
+  writes:
 
   ```sh
   task list .status=open .priority<=1
