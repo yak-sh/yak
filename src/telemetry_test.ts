@@ -27,6 +27,15 @@ Deno.test('record + recent: round-trip, newest first', () => {
   assertEquals(typeof rows[1].ts, 'string')
 })
 
+// The server's own background work has no caller to disappoint, so a
+// dropped row is a failure nobody ever hears about — the one source that
+// most needs the check constraint to know it.
+Deno.test('srv: the sync that could not land is recorded like any call', () => {
+  let name = tag()
+  record(db, { source: 'srv', name, ok: false, error: 'push refused' })
+  assertEquals(mine(name, { only: 'errors' }).map((r) => r.source), ['srv'])
+})
+
 Deno.test('long text is clipped; the limit clamps at 500', () => {
   let name = tag()
   record(db, { source: 'web', name, ok: false, detail: 'x'.repeat(5000) })

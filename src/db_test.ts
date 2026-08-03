@@ -10,6 +10,7 @@ let {
   eager,
   journalBy,
   journalOf,
+  mendCalls,
   mendMail,
   open,
   search,
@@ -1466,6 +1467,32 @@ Deno.test('mendMail: rebuilds the FK-era table, no-ops when healed', () => {
   mendMail(d) // already-fixed db: a no-op
   assertEquals(ddl(), healed)
   assertEquals(row(), { target_eid: t })
+})
+
+// The same frozen-check disease on tool_call: a live db's source list
+// predates the server's own background reports, and a dropped row is the
+// one report nobody else was going to make.
+Deno.test('mendCalls: widens the frozen source list, keeps the rows', () => {
+  let d = fresh()
+  d.exec('drop table tool_call')
+  d.exec(`create table tool_call (
+    ts text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    source text not null check (source in ('mcp','http','web')),
+    name text not null, session_id text, ok integer not null,
+    ms integer, error text, detail text)`)
+  d.exec(`insert into tool_call (source, name, ok) values ('mcp', 'kept', 1)`)
+  let put = () =>
+    d.exec(`insert into tool_call (source, name, ok) values ('srv', 'x', 0)`)
+  assertThrows(put)
+  mendCalls(d)
+  put()
+  let names = () => d.prepare('select name from tool_call order by rowid').all()
+  assertEquals(names(), [{ name: 'kept' }, { name: 'x' }])
+  let ddl = () =>
+    d.prepare(`select sql from sqlite_master where name = 'tool_call'`).get()
+  let healed = ddl()
+  mendCalls(d) // already-widened: a no-op
+  assertEquals(ddl(), healed)
 })
 
 // Every soft-detach rides the RETURN — a cache that misses one keeps a

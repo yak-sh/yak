@@ -74,6 +74,22 @@ let mailDdl = `create table if not exists mail (
     in_reply_to text
   )`
 
+// Named apart from `schema` for the same reason mail is: the sources are a
+// baked CHECK, and a live db that shipped with the narrower list must be
+// rebuilt around this one or record() drops every row it doesn't know —
+// which would be exactly the rows nobody else reports (telemetry.ts `srv`).
+let callDdl = `create table if not exists tool_call (
+    ts         text not null
+               default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    source     text not null check (source in ('mcp','http','web','srv')),
+    name       text not null,
+    session_id text,
+    ok         integer not null,
+    ms         integer,
+    error      text,
+    detail     text
+  )`
+
 // The star: an entity spine plus one component table per kind, plus the edge
 // table. `if not exists` makes this idempotent — safe to run every boot.
 // A canvas is an entity with no component (yet) — its geometry lives in `pin`.
@@ -343,17 +359,7 @@ let schema = `
   );
   -- Log data, not graph: no eid, no components, so snapshot() (which walks
   -- the comps vocabulary) never carries it. telemetry.ts owns the rows.
-  create table if not exists tool_call (
-    ts         text not null
-               default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-    source     text not null check (source in ('mcp','http','web')),
-    name       text not null,
-    session_id text,
-    ok         integer not null,
-    ms         integer,
-    error      text,
-    detail     text
-  );
+  ${callDdl};
   -- Derived data, not graph (like doc_fts): a doc's semantic vector,
   -- written only by embed.ts's sweep. hash names the exact text embedded
   -- (skip unchanged), model names the embedder (a model upgrade just
@@ -555,6 +561,16 @@ let rebuild = (db: DatabaseSync, name: string, ddl: string) => {
 export let mendMail = (db: DatabaseSync) => {
   if (ddlOf(db, 'mail')?.includes('target_eid text references')) {
     rebuild(db, 'mail', mailDdl)
+  }
+}
+
+// The same shape for tool_call's source list: a row the CHECK doesn't know
+// is dropped with a warning, and record() is by contract silent about its
+// own failures — so an unwidened live table would swallow the very reports
+// nobody else makes. No-ops once healed.
+export let mendCalls = (db: DatabaseSync) => {
+  if (!ddlOf(db, 'tool_call')?.includes("'srv'")) {
+    rebuild(db, 'tool_call', callDdl)
   }
 }
 
@@ -789,6 +805,7 @@ export let open = (path = file) => {
     rebuild(db, 'dependency', depDdl)
   }
   mendMail(db)
+  mendCalls(db)
   // A mail was briefly a 'send_request' (the intent idiom over-applied —
   // the artifact deserved its name). Adopt the old table's rows once;
   // `create if not exists mail` above already made the empty successor,
