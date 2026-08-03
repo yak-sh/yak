@@ -640,17 +640,22 @@ export let kindOf = (has: Record<string, unknown>) =>
 // Kinds are singular in the graph and plural in the mouth — a listing is
 // asked for `projects`, never `project`. Derived, so a new kind gets its
 // listing word the moment it joins kindOrder.
+let irregular: Record<string, string> = { person: 'people' }
 export let plural = (kind: string) =>
-  kind.endsWith('y')
-    ? `${kind.slice(0, -1)}ies`
-    : /(?:s|x|ch|sh)$/.test(kind)
-    ? `${kind}es`
-    : `${kind}s`
-export let plurals = new Set(kindOrder.map(plural))
+  irregular[kind] ??
+    (kind.endsWith('y')
+      ? `${kind.slice(0, -1)}ies`
+      : /(?:s|x|ch|sh)$/.test(kind)
+      ? `${kind}es`
+      : `${kind}s`)
+// Every plural spelling — the naive one rides along so whatever a listing
+// accepts as a word, the bare verb accepts too.
+export let plurals = new Set(kindOrder.flatMap((k) => [plural(k), `${k}s`]))
 
-// The word a caller types for a kind, in either number.
+// The word a caller types for a kind, in either number — the naive plural
+// too, so `persons` still lands where `people` does.
 export let kindWord = (word: string) =>
-  kindOrder.find((k) => k == word || plural(k) == word)
+  kindOrder.find((k) => k == word || plural(k) == word || `${k}s` == word)
 
 // The human id: prefix-num (T-7, P-2). Curated prefixes for the kinds
 // people type daily; everything else leads with its capitalized initial.

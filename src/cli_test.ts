@@ -99,6 +99,9 @@ Deno.test('kindArg: every spelling of a kind names it, a filter is not one', () 
   assertEquals(kindArg('memories'), 'memory')
   assertEquals(kindArg('canvases'), 'canvas')
   assertEquals(kindArg('aliases'), 'alias')
+  // English's one irregular, and the naive plural still lands
+  assertEquals(kindArg('people'), 'person')
+  assertEquals(kindArg('persons'), 'person')
   // A filter, a bare word that names nothing: not a kind, so it falls
   // through to the filter parser rather than being guessed at.
   assertEquals(kindArg('.status=open'), undefined)
@@ -114,6 +117,8 @@ Deno.test('listing: a plural kind is the list verb, the singular is a subject', 
     cmd: 'list',
     args: ['memories', '--json'],
   })
+  assertEquals(listing('people', []), { cmd: 'list', args: ['people'] })
+  assertEquals(listing('persons', []), { cmd: 'list', args: ['persons'] })
   assertEquals(listing('project', []), undefined)
   assertEquals(listing('T-3', []), undefined)
   assertEquals(listing(undefined, []), undefined)
