@@ -1416,6 +1416,33 @@ export class Stale extends Error {
   }
 }
 
+// An actor has one cadence clock: minting its next untargeted wake removes
+// every pending predecessor in the same transaction. A target makes a wake a
+// reminder about that entity, so those stay independent of the cadence and of
+// one another. The rule lives at apply(), where concurrent doors serialize;
+// command-side replacement would let two stale snapshots both survive.
+let replaceWakes = (db: DatabaseSync, changes: Change[]): Change[] => {
+  let exists = db.prepare('select 1 from wake where eid = ?')
+  let pending = db.prepare(`
+    select eid from wake
+    where to_eid = ? and target_eid is null and acted_at is null and eid != ?
+  `)
+  return changes.flatMap((change) => {
+    if (
+      change.name != 'wake' || !change.comp ||
+      change.comp.target_eid != null || !change.comp.to_eid ||
+      exists.get(change.eid)
+    ) return [change]
+    let drops = pending.all(String(change.comp.to_eid), change.eid) as {
+      eid: string
+    }[]
+    return [
+      ...drops.map(({ eid }) => ({ eid, name: 'entity', comp: null })),
+      change,
+    ]
+  })
+}
+
 export let apply = (
   db: DatabaseSync,
   changes: Change[],
@@ -1452,6 +1479,7 @@ export let apply = (
   // a deferred read transaction can fail immediately to avoid a deadlock.
   db.exec('begin immediate')
   try {
+    changes = replaceWakes(db, changes)
     changes = dualSpawn(db, changes)
     // Mint spines in first-touch order before writing components. A typed
     // reference may then precede its target component without pre-minting that

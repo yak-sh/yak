@@ -71,6 +71,25 @@ Deno.test('no target: the wake is its own subject', () => {
   assertEquals(knocks().find((k) => k.target_eid == w)?.to_eid, jeff)
 })
 
+Deno.test('a new untargeted wake replaces only the pending untargeted one', () => {
+  let at = new Date(Date.now() + 3_600_000).toISOString()
+  let targeted = wake(at, jeff)
+  let acted = wake(new Date(Date.now() - 1000).toISOString())
+  arm(cast)
+  let first = wake(at)
+  let reminder = wake(at, jeff)
+  let second = wake(at)
+  assertEquals(wrow(targeted).target_eid, jeff)
+  assertEquals(wrow(reminder).target_eid, jeff)
+  assertMatch(String(wrow(acted).acted_at), /^\d{4}-/)
+  assertEquals(wrow(first), undefined)
+  assertEquals(wrow(second).acted_at, null)
+  assertEquals(
+    landed.some((c) => c.eid == first && c.name == 'entity' && !c.comp),
+    true,
+  )
+})
+
 Deno.test('a phrase off the raw wire lands absolute, at MINT', () => {
   let w = wake('in 2 hours')
   arm(cast)
