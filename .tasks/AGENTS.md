@@ -432,6 +432,19 @@ seams wider or leakier, that's the wrong direction.
 
 ---
 
+# M-3715 delegation discipline
+
+Delegation in the fleet, so that if our system breaks the work still continues on the floor and the board stays the truth about who is doing what:
+
+- **Worktree-only, one writer per worktree.** Every agent — harness spawns and the coordinator's own session — works in its own git worktree and lands via `git merge --ff-only`; use the Agent tool's `isolation: "worktree"` for spawns. Never let two agents share an index.
+- **Harness spawns are the default and must integrate fully.** Every spawn brief directs the agent to reify a session entity, claim its task under that identity, comment progress and completion (with sha), and release when done. The task body carries the full spec — the prompt is delivery, the task is the record.
+- **Internal spawns** (wire-created sessions, `task spawn`) are for codex/other providers and well-specified cold-context work; at parity with the harness since T-3698 (auto-claim, session_peek, settle→bus). The harness remains the reliability floor.
+- **Communication flows through the graph**, not harness-native channels, wherever possible: comment on a session to steer it, comment on the task for the record; the comms bus delivers on the next tool call. Harness push notifications remain the wake channel until the graph grows one.
+
+Every Agent-tool spawn gets `isolation: worktree` + the claim-discipline paragraph in its brief; prefer task bodies over prompt-only specs.
+
+---
+
 # M-7048 task inbox — one door for everything addressed to you, and watch/mute to change what lands there
 
 `task inbox` lists every item addressed to you — comments on your session, comments on tasks you claim, comments said to your actor, knocks to you or your actor, and project mail — unread first (`●` unread, `·` read).
@@ -501,19 +514,6 @@ Your persona, and every memory preloaded into it, are **entities in the Task Gra
 - **Add or edit a memory:** `memory_save` (MCP `tasks`) — new content mints an `M-…`; passing `id` confirms and patches an existing one. Replacing a body also needs the `was:` token `memory_recall` prints above it, so a concurrent edit is refused rather than silently lost.
 - **Preload / unpreload:** add (or `gone: true` to remove) a `contains` edge from the `N-…` to the `M-…`, via `graph_apply` or the web UI.
 - **Reach everyone in a repo:** preload into that repo's `* common persona` (which projects to `AGENTS.md`, read by every agent there) — not a single role's persona.
-
----
-
-# M-3715 delegation discipline
-
-Delegation in the fleet, so that if our system breaks the work still continues on the floor and the board stays the truth about who is doing what:
-
-- **Worktree-only, one writer per worktree.** Every agent — harness spawns and the coordinator's own session — works in its own git worktree and lands via `git merge --ff-only`; use the Agent tool's `isolation: "worktree"` for spawns. Never let two agents share an index.
-- **Harness spawns are the default and must integrate fully.** Every spawn brief directs the agent to reify a session entity, claim its task under that identity, comment progress and completion (with sha), and release when done. The task body carries the full spec — the prompt is delivery, the task is the record.
-- **Internal spawns** (wire-created sessions, `task spawn`) are for codex/other providers and well-specified cold-context work; at parity with the harness since T-3698 (auto-claim, session_peek, settle→bus). The harness remains the reliability floor.
-- **Communication flows through the graph**, not harness-native channels, wherever possible: comment on a session to steer it, comment on the task for the record; the comms bus delivers on the next tool call. Harness push notifications remain the wake channel until the graph grows one.
-
-Every Agent-tool spawn gets `isolation: worktree` + the claim-discipline paragraph in its brief; prefer task bodies over prompt-only specs.
 
 ---
 

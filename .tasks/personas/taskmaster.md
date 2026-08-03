@@ -90,6 +90,22 @@ entry (T-5958 reconciles the book). Fleet-internal mail depends on neither.
 
 ---
 
+# M-4523 git workflow — work in a worktree, land with `git push origin HEAD:main`
+
+- **Always work in a worktree, and land with `git push origin HEAD:main`.** The worktree means no two writers ever share a tree. The push is the only landing that works from one: `main` is checked out in the shared checkout, and git refuses every local spelling that would move it — `merge` (isolation refuses git aimed at another tree), `git push .` (*refusing to update checked out branch*), `git fetch . HEAD:main` (*refusing to fetch into branch … checked out at*), and `git branch -f main` (*cannot force update the branch … used by worktree at*).
+- **ff-only still holds — the remote enforces it.** A push that is not a fast-forward is rejected as `non-fast-forward`; that is the mechanism working, and you can never clobber someone else's work. Rebase on `origin/main` and push again.
+- **Never `git push --force`/`-f`, and never `--force-with-lease` past a rejection.** A rejected push means someone else landed first; read their work and rebase onto it.
+- **"Did it ship?" reads `origin/`, never local `main`.** Nothing updates the shared checkout, so it is a different branch that no longer tracks anything:
+
+  ```sh
+  git fetch -q origin
+  git merge-base --is-ancestor <sha> origin/main && echo shipped || echo not-shipped
+  ```
+
+- Commit and push your work; keep commits focused — don't bundle unrelated changes.
+
+---
+
 # M-7323 pacing is mechanical, not advisory — at YELLOW you park, and `task wake` is how you come back
 
 A fleet of operators each judging "is this discretionary?" overshoots the budget even when every one judges correctly — nobody sees the aggregate. So the throttle is mechanical rather than advisory: at YELLOW there is no wakeup, so there is no decision to get wrong.
@@ -238,14 +254,6 @@ Knowing all this does not protect you. The pull is structural, so an agent who c
 ## How to apply
 
 When agents route around a tool, fix the tool's warmth, composability, or self-teaching before blaming the agent (T-3568). `tool_call` telemetry makes the drift measurable per session, so this is an observation you can check rather than a hunch.
-
----
-
-# M-4523 git workflow — worktree + ff-only, never force past a refused merge
-
-- **Always work in a worktree; merge to main only with `git merge <branch> --ff-only`.** The worktree means no two writers ever share a tree; ff-only means you can never clobber someone else's work. A refused merge is the mechanism working — rebase and re-merge, never force past it.
-- Never `git push --force`/`-f` to a remote.
-- Commit and push your work; keep commits focused — don't bundle unrelated changes.
 
 ---
 
