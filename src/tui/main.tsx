@@ -3,12 +3,23 @@
 // live server:
 //   deno task tui                     (TASKS_HOST=host:port to point away)
 // Edits made elsewhere appear live; this is another client on the same ws.
-import { onPaint, root } from './dom.ts' // installs globalThis.document — first
+import { onPaint, root, touch } from './dom.ts' // installs document — first
 import { render } from 'preact'
 import { effect } from '@preact/signals'
 import { boot, config } from '../live.ts'
 import { extend } from '../components/registry.ts'
-import { App, key, overrides, quit, sel, trail, views } from './App.tsx'
+import {
+  App,
+  fit,
+  key,
+  overrides,
+  quit,
+  sel,
+  spot,
+  spots,
+  trail,
+  views,
+} from './App.tsx'
 import { paint } from './paint.ts'
 
 let enc = new TextEncoder()
@@ -39,6 +50,7 @@ try {
   sel.value = s.sel ?? sel.value
   trail.value = s.trail ?? trail.value
   views.value = s.views ?? views.value
+  spots.value = s.spots ?? spots.value
 } catch { /* first run */ }
 effect(() => {
   Deno.writeTextFile(
@@ -47,6 +59,7 @@ effect(() => {
       sel: sel.value,
       trail: trail.value,
       views: views.value,
+      spots: spots.value,
     }),
   )
 })
@@ -61,7 +74,11 @@ effect(() => {
   if (quit.value) bye()
 })
 
-onPaint(() => paint(root))
+// The painter is the only thing that measures, so the cursor goes down and
+// the content's height comes back — a resize is a repaint like any other,
+// and the clamp rides it.
+onPaint(() => fit(paint(root, spot())))
+Deno.addSignalListener('SIGWINCH', touch)
 render(<App />, root as unknown as Parameters<typeof render>[1])
 
 // The key loop: raw bytes → key(). Multi-byte escape sequences (arrows,

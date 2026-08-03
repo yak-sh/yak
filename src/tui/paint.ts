@@ -2,7 +2,8 @@
 // elements flow into them, and class names look up the sheet — the same
 // BEM names the web styles, wearing the same Everforest in ANSI truecolor.
 // Layout is one column of lines (no flex, no boxes yet); the app's last
-// line (the statusbar) is pinned to the bottom row.
+// line (the statusbar) is pinned to the bottom row, and the rest is a
+// window onto the lines around the app's cursor.
 import { TElement, TNode, TText } from './dom.ts'
 
 type Style = {
@@ -224,17 +225,54 @@ export let clipboard = (text: string) => {
   Deno.stdout.writeSync(enc.encode(`\x1b]52;c;${b64}\x07`))
 }
 
-// One full repaint: content lines fill the screen (clipped — no scrolling
-// yet), the tree's last line rides the bottom row as the statusbar.
-export let paint = (root: TElement) => {
-  let { columns, rows } = Deno.consoleSize()
+// The lines a tree makes, minus the statusbar the app pins to the bottom
+// row. The window and `l` read the same list, so what the cursor is on is
+// exactly what you see it on.
+let pane = (root: TElement) => {
   let lines = blocks(root, {})
   while (lines.length && !lines[lines.length - 1].length) lines.pop()
   let status = lines.pop() ?? []
+  return { lines, status }
+}
+
+// The link on a line, if it has one. Every Id chip and Inline title is
+// already an anchor carrying the href the web navigates, so a row-selecting
+// view (Inbox, List) is enterable from the terminal without growing a
+// selection of its own.
+export let link = (root: TElement, at: number) =>
+  pane(root).lines[at]?.find((s) => s.style.href)?.style.href
+
+// Where the window sits: the smallest move from `top` that keeps the cursor
+// line on screen, never past the end of the content. `at < 0` — the board,
+// whose cursor is over the QUERY rather than over lines — pins it to the
+// first line.
+export let win = (top: number, at: number, h: number, n: number) =>
+  Math.max(0, Math.min(Math.max(top, at - h + 1), at, n - h))
+
+// The cursor line, inverted: the terminal cursor is hidden, so the bar is
+// the only thing saying where j/k are. A blank line still shows one cell.
+let mark = (l: Line): Line =>
+  (l.length ? l : [{ text: ' ', style: {} }])
+    .map((s) => ({ ...s, style: { ...s.style, inverse: true } }))
+
+// One full repaint: the window's lines fill the screen, the tree's last line
+// rides the bottom row as the statusbar. `at` is the app's cursor line (-1
+// for none); the window offset lives HERE because only the painter knows how
+// tall the window or the content is. Returns the content's height so the app
+// can pull back a cursor the content shrank past.
+let top = 0
+export let paint = (root: TElement, at = -1) => {
+  let { columns, rows } = Deno.consoleSize()
+  let { lines, status } = pane(root)
+  let h = rows - 1
+  at = Math.min(at, lines.length - 1)
+  top = win(top, at, h, lines.length)
   let out = '\x1b[H'
-  for (let i = 0; i < rows - 1; i++) {
-    out += ansi(clip(lines[i] ?? [], columns)) + '\x1b[K\r\n'
+  for (let i = 0; i < h; i++) {
+    let l = lines[top + i] ?? []
+    out += ansi(clip(top + i == at ? mark(l) : l, columns)) + '\x1b[K\r\n'
   }
   out += ansi(clip(status, columns)) + '\x1b[K'
   Deno.stdout.writeSync(enc.encode(out))
+  return lines.length
 }

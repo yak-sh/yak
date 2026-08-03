@@ -7,8 +7,10 @@
 let paint = { fn: () => {} }
 export let onPaint = (fn: () => void) => paint.fn = fn
 
+// Exported because not every change to the SCREEN is a change to the tree:
+// a scroll and a resize move no nodes and still owe a repaint.
 let dirty = false
-let touch = () => {
+export let touch = () => {
   if (dirty) return
   dirty = true
   queueMicrotask(() => {

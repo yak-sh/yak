@@ -36,7 +36,9 @@ import { Entity } from '../components/Entity.tsx'
 import { byline, viaName } from '../components/Comments.tsx'
 import { Dot } from '../components/Dot.tsx'
 import { Id } from '../components/views/Inline.tsx'
-import { clipboard } from './paint.ts'
+import { eidOf } from '../components/nav.tsx'
+import { clipboard, link } from './paint.ts'
+import { root, touch } from './dom.ts'
 import { Md } from './md.tsx'
 
 export let sel = signal({ col: 0, row: 0 })
@@ -74,6 +76,35 @@ export let trail = signal<string[]>([])
 // persisted beside the trail for the same reason it is.
 export let views = signal<Record<string, string>>({})
 
+// WHERE in the pane we are reading: the cursor's LINE, keyed by eid beside
+// the trail and persisted with it, so stepping out and back in returns you
+// to the line you left. One number is the whole scroll state — the window
+// derives from it in the painter (win()), which alone knows how tall the
+// window and the content came out.
+//
+// A line cursor rather than a bare offset because it answers `l` too: the
+// lines already carry the hrefs the web navigates, so an Inbox row is
+// enterable without Inbox, List and Comments — shared with the web — each
+// growing a terminal-only selection to paint.
+export let spots = signal<Record<string, number>>({})
+
+// -1 at the board: its j/k move a cursor over the QUERY (sel), which is a
+// different thing — a query cursor can be entered, a line can only be read.
+export let spot = () =>
+  trail.value.length ? spots.value[trail.value.at(-1)!] ?? 0 : -1
+
+let jump = (to: number) => {
+  let here = trail.value.at(-1)
+  to = Math.max(0, to)
+  if (!here || spot() == to) return
+  spots.value = { ...spots.value, [here]: to }
+  touch() // a scroll moves no nodes; the screen changed anyway
+}
+
+// The painter measured: a cursor past the end — the content shrank, the
+// window grew, the terminal was resized — comes back to the last line.
+export let fit = (lines: number) => jump(Math.min(spot(), lines - 1))
+
 // The views this entity offers: the SAME curated tabs the web screens
 // `?v=` against, so the two doors can't drift apart as views are added.
 // No terminal-only allowlist — the TUI overrides Board and Full and lets
@@ -99,10 +130,18 @@ let cycle = (d: number) => {
     ...views.value,
     [here]: tabs[(at + d + tabs.length) % tabs.length],
   }
+  jump(0) // another view is other content — land at its top, not mid-pane
+}
+
+// What the cursor line points at: the entity its link names. Absent on a
+// line that is only prose, which is why `l` there does nothing.
+let pointed = () => {
+  let href = link(root, spot())
+  return href?.startsWith('/') ? eidOf(href.slice(1)) : undefined
 }
 
 let enter = (): boolean => {
-  let s = selected()
+  let s = trail.value.length ? pointed() : selected()
   if (!s || trail.value.at(-1) == s) return false
   trail.value = [...trail.value, s]
   return true
@@ -179,9 +218,13 @@ let yank = () => {
   msg.value = `yanked ${idOf(e)}.${f.ext}`
 }
 
-// Vertically the board reads as ONE list: j past the bottom of a column
-// continues into the next column's first row, k mirrors it back up.
+// j/k walk a pane's lines, but the board's rows are a QUERY's, so there
+// they walk `sel` — which is also why the board itself doesn't scroll: its
+// cursor isn't a line, so the window has nothing to follow. Vertically the
+// board reads as ONE list: j past the bottom of a column continues into
+// the next column's first row, k mirrors it back up.
 let vert = (d: number) => {
+  if (trail.value.length) return jump(spot() + d)
   let p = boardEid()
   if (!p) return
   let e = ent(p)
