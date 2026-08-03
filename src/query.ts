@@ -496,9 +496,25 @@ export let matchQuery = (
 // One column read, honoring route()'s any-of: comp '' means the prop is
 // a shared ref name (actor_eid), so take the first value any comp holds
 // — an entity carries at most one of the sharing comps in practice.
-let read = (c: Comps, comp: string, prop: string) =>
-  comp ? c[comp]?.[prop] : Object.values(c).map((v) => v?.[prop])
-    .find((v) => v != null)
+//
+// `updated.at` falls back to `created.at`, because the `updated` row is only
+// stamped by a LATER write: an entity made and never touched since carries
+// `created` and no `updated` at all. 1,656 of the graph's 10,767 entities are
+// in that state, and every one of them was invisible to `.updated.at>=…` —
+// including the two boards whose whole job is showing recent activity, which
+// silently omitted anything filed and not revisited. Being made IS the last
+// time a thing changed, so this is what the column already meant.
+//
+// Only `at`. Whether `.updated.by` should name the creator of an untouched
+// entity is a different question about authorship, and nothing is broken by
+// leaving it alone.
+let read = (c: Comps, comp: string, prop: string): unknown => {
+  if (!comp) {
+    return Object.values(c).map((v) => v?.[prop]).find((v) => v != null)
+  }
+  let v = c[comp]?.[prop]
+  return v == null && comp == 'updated' && prop == 'at' ? c.created?.at : v
+}
 
 // The warmth of an entity, on (0,1] — the rank behind '.order=hot'.
 // Recall aggregates (count, first_at, last_at) are the whole model:

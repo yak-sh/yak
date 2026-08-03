@@ -640,3 +640,42 @@ Deno.test('resolution: an empty answer names the routing it actually used', () =
   // A ranking is not a filter and never routes.
   assertEquals(resolution(ps('.order=hot'), 'task'), '')
 })
+
+// The `updated` row is stamped by a LATER write, so an entity made and never
+// touched since carries `created` and no `updated` at all — 1,656 of the live
+// graph's 10,767 entities. Every one was invisible to `.updated.at>=…`,
+// including the boards whose whole job is showing recent activity: a task
+// filed an hour ago and not revisited simply was not on them.
+Deno.test('.updated.at reads created.at when nothing has updated it', () => {
+  let born = {
+    entity: { eid: 'e', num: 1 },
+    doc: { title: 'never touched' },
+    created: { at: '2026-08-03T00:00:00.000Z' },
+  }
+  let touched = {
+    entity: { eid: 'f', num: 2 },
+    doc: { title: 'edited since' },
+    created: { at: '2020-01-01T00:00:00.000Z' },
+    updated: { at: '2026-08-03T00:00:00.000Z' },
+  }
+  let hits = (line: string, c: Record<string, Record<string, unknown>>) =>
+    matchQuery(c, parseQuery(line))
+
+  // The fallback: born inside the window, never updated, still a match.
+  assertEquals(hits('.updated.at>=2026-08-01', born), true)
+  assertEquals(hits('.updated.at>=2026-08-01', touched), true)
+  // And it does not invent recency: born long ago is still out.
+  assertEquals(
+    hits('.updated.at>=2026-08-01', { ...born, created: { at: '2019-01-01' } }),
+    false,
+  )
+  // A real `updated` still wins over `created` in both directions.
+  assertEquals(hits('.updated.at<=2021-01-01', touched), false)
+  assertEquals(
+    hits('.updated.at<=2021-01-01', { ...born, created: { at: '2020-06-01' } }),
+    true,
+  )
+  // Absence still means absence when there is no created row either.
+  assertEquals(hits('.updated.at=', { entity: { eid: 'g', num: 3 } }), true)
+  assertEquals(hits('.updated.at=', born), false)
+})
