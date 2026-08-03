@@ -66,7 +66,7 @@ import { outcome, recent, record, toolCall } from './telemetry.ts'
 import { stamp } from './hot.ts'
 import { obeyed } from './obey.ts'
 import { serverFile } from './reload.ts'
-import { find, type Row, rows } from './client.ts'
+import { find, jsonOf, type Row, rows } from './client.ts'
 import {
   matchQuery,
   orderOf,
@@ -714,8 +714,9 @@ let http = Deno.serve(
     if (path == '/query') {
       // The graph over plain GET: the query string IS the filter line —
       // the same grammar boards and task_list speak — and hits come back
-      // graph_query-shaped. `kind=` screens by derived kind; `backlinks=1`
-      // adds who points at each hit (eid columns + edges). A malformed
+      // Structured like every entity JSON door. `kind=` screens by derived
+      // kind; `backlinks=1` adds who points at each hit (eid columns + edges).
+      // A malformed
       // filter is the typist's news, not a server error.
       try {
         let segs = url.search.slice(1).split('&').filter(Boolean)
@@ -757,10 +758,7 @@ let http = Deno.serve(
           }
         }
         return Response.json(hits.map((r) => ({
-          id: idOf(r),
-          kind: r.kind,
-          eid: r.eid,
-          comps: r.comps,
+          ...jsonOf(r),
           ...(backs ? { backlinks: back.get(r.eid) ?? [] } : {}),
         })))
       } catch (e) {

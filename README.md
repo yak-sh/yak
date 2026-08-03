@@ -33,6 +33,25 @@ untouched, `comp: null` deletes the component, `{name:'entity', comp:null}`
 tombstones the entity. Browser tabs sync over `/ws`; headless clients POST
 `/apply`; both broadcast to everyone else.
 
+Structured entity JSON (`task ... --json`, `GET /query`, MCP `graph_query` and
+`task_show`) is the components themselves, with derived `kind` kept beside them:
+
+```json
+{
+  "kind": "task",
+  "entity": { "eid": "bd3d…", "num": 12585 },
+  "doc": { "title": "…", "body": "…" },
+  "task": { "status": "done", "priority": 2 }
+}
+```
+
+The entity spine owns `eid` and `num`; other components omit their SQL `eid`
+join key. `task_show` additionally carries `refs`, `backrefs`, and `comments`,
+whose rows use the same shape. This is a breaking structured-output contract:
+the former top-level `eid`/`num` and `comps` wrapper do not exist. `kind` is a
+reserved key in the component namespace, so extensions must not register a
+component named `kind`.
+
 Beside the graph sit FTS5 full-text search over every doc and local semantic
 embeddings — one index behind `/` in the web UI, `task search`, MCP `search`,
 and `/search` + `/similar` over HTTP.

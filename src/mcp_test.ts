@@ -202,6 +202,68 @@ let protocol = async (
   }
 }
 
+Deno.test('MCP entity JSON shares the component-shaped contract', async () => {
+  let task = 'aaaaaaaa-0000-4000-8000-000000000041'
+  let comment = 'aaaaaaaa-0000-4000-8000-000000000042'
+  let io = blank()
+  io.read = () =>
+    Promise.resolve({
+      changes: [
+        { eid: task, name: 'entity', comp: { eid: task, num: 41 } },
+        {
+          eid: task,
+          name: 'doc',
+          comp: { eid: task, title: 'Structured', body: 'One shape' },
+        },
+        {
+          eid: task,
+          name: 'task',
+          comp: { eid: task, status: 'done', priority: 2 },
+        },
+        { eid: comment, name: 'entity', comp: { eid: comment, num: 42 } },
+        {
+          eid: comment,
+          name: 'doc',
+          comp: { eid: comment, title: '', body: 'Looks right' },
+        },
+        {
+          eid: comment,
+          name: 'comment',
+          comp: { eid: comment, target_eid: task },
+        },
+      ],
+      deps: [],
+    })
+  let entity = {
+    kind: 'task',
+    entity: { eid: task, num: 41 },
+    doc: { title: 'Structured', body: 'One shape' },
+    task: { status: 'done', priority: 2 },
+  }
+  await protocol(io, async (client) => {
+    let listed = await client.callTool({
+      name: 'graph_query',
+      arguments: { kind: 'task', full: true },
+    }) as ToolResult
+    let shown = await client.callTool({
+      name: 'task_show',
+      arguments: { id: 'T-41' },
+    }) as ToolResult
+    assertEquals(JSON.parse(said(listed)), [entity])
+    assertEquals(JSON.parse(said(shown)), {
+      ...entity,
+      refs: [],
+      backrefs: [],
+      comments: [{
+        kind: 'comment',
+        entity: { eid: comment, num: 42 },
+        doc: { title: '', body: 'Looks right' },
+        comment: { target_eid: task },
+      }],
+    })
+  })
+})
+
 let bases: Record<string, Record<string, unknown>> = {
   search: { q: 'x' },
   task_list: {},

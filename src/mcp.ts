@@ -41,6 +41,7 @@ import {
   host,
   idOf,
   type JournalEntry,
+  jsonOf,
   memoryChanges,
   memoryHead,
   noticeBlock,
@@ -989,8 +990,9 @@ recording someone's correction, and limit caps returned index lines
 
   tool(
     'graph_query',
-    `The WHOLE graph, not just tasks: every entity as {id, kind, eid,
-comps}, dot-param filtered. Cards, pins (positions), cameras (what each
+    `The WHOLE graph, not just tasks: every entity as {kind,
+entity:{eid,num}, ...components}, dot-param filtered. Cards, pins
+(positions), cameras (what each
 client is looking at), sessions, comments — all live here. A query is a
 LIST door: long text values (persona bodies, mail, final_text) are cut
 at ${CUT} chars with a marker naming the rest — task_show reads one
@@ -1029,12 +1031,7 @@ ${GRAMMAR} ${FILTERS}`,
         )
       }
       let out = JSON.stringify(
-        hits.map((r) => ({
-          id: idOf(r),
-          kind: r.kind,
-          eid: r.eid,
-          comps: full ? r.comps : elide(r),
-        })),
+        hits.map((r) => jsonOf(r, full ? r.comps : elide(r))),
         null,
         2,
       )
@@ -1409,8 +1406,9 @@ integer execution deadline in milliseconds (default 10000, maximum
 
   tool(
     'task_show',
-    `One entity, whole: spine, every component, its edges (refs out,
-backrefs in), its comments, as JSON. id: T-3, bare num, or eid. ${BUS}`,
+    `One entity, whole: {kind, entity:{eid,num}, ...components}, plus its
+edges (refs out, backrefs in) and comments in the same entity shape. id:
+T-3, bare num, or eid. ${BUS}`,
     { id: z.string(), session: z.string().optional() },
     async ({ id, session }: { id: string; session?: string }) => {
       let snap = await io.read()
@@ -1420,7 +1418,15 @@ backrefs in), its comments, as JSON. id: T-3, bare num, or eid. ${BUS}`,
       let comments = all.filter((r) => r.comps.comment?.target_eid == row.eid)
       let edges = edgesOf(snap, all, row.eid)
       return bus(
-        JSON.stringify({ ...row, ...edges, comments }, null, 2),
+        JSON.stringify(
+          {
+            ...jsonOf(row),
+            ...edges,
+            comments: comments.map((r) => jsonOf(r)),
+          },
+          null,
+          2,
+        ),
         session,
       )
     },

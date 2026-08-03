@@ -31,7 +31,7 @@ import {
   subject,
   subjectUsage,
 } from './cli.ts'
-import { type Row, rows } from './client.ts'
+import { jsonOf, type Row, rows } from './client.ts'
 import { parseQuery } from './query.ts'
 import type { Snapshot } from './types.ts'
 
@@ -945,13 +945,7 @@ let busServer = () => {
       return Response.json({ ok: true, changes })
     }
     if (url.pathname == '/snapshot') return Response.json(busGraph)
-    return Response.json(
-      rows(busGraph).map((r) => ({
-        eid: r.eid,
-        kind: r.kind,
-        comps: r.comps,
-      })),
-    )
+    return Response.json(rows(busGraph).map((r) => jsonOf(r)))
   })
   let port = (server.addr as Deno.NetAddr).port
   return { server, acked, host: `127.0.0.1:${port}` }
@@ -960,7 +954,7 @@ let busServer = () => {
 let graphServer = (snap = graph) => {
   let seen: string[] = []
   let all = rows(snap)
-  let wire = (r: Row) => ({ eid: r.eid, kind: r.kind, comps: r.comps })
+  let wire = (r: Row) => jsonOf(r)
   let server = Deno.serve({
     hostname: '127.0.0.1',
     port: 0,
@@ -1018,6 +1012,84 @@ Deno.test('list strips terminal controls from graph text', async () => {
     assertEquals(out.code, 0)
     assertMatch(stdout, /Open]52;c;QQ== board2J task/)
     assertEquals(unsafe(stdout), [])
+  } finally {
+    await server.shutdown()
+  }
+})
+
+Deno.test('entity JSON has one component-shaped contract across CLI doors', async () => {
+  let task = 'bbbbbbbb-0000-4000-8000-000000000041'
+  let comment = 'bbbbbbbb-0000-4000-8000-000000000042'
+  let snap: Snapshot = {
+    changes: [
+      { eid: task, name: 'entity', comp: { eid: task, num: 41 } },
+      {
+        eid: task,
+        name: 'doc',
+        comp: { eid: task, title: 'Structured', body: 'One shape' },
+      },
+      {
+        eid: task,
+        name: 'task',
+        comp: { eid: task, status: 'done', priority: 2 },
+      },
+      {
+        eid: task,
+        name: 'decided',
+        comp: { eid: task, at: '2026-08-03T00:00:00.000Z' },
+      },
+      { eid: comment, name: 'entity', comp: { eid: comment, num: 42 } },
+      {
+        eid: comment,
+        name: 'doc',
+        comp: { eid: comment, title: '', body: 'Looks right' },
+      },
+      {
+        eid: comment,
+        name: 'comment',
+        comp: { eid: comment, target_eid: task },
+      },
+    ],
+    deps: [],
+  }
+  let { server, host } = graphServer(snap)
+  let run = (...args: string[]) =>
+    new Deno.Command(Deno.execPath(), {
+      args: [
+        'run',
+        '-A',
+        new URL('./cli.ts', import.meta.url).pathname,
+        ...args,
+      ],
+      env: { TASKS_HOST: host },
+    }).output()
+  let entity = {
+    kind: 'task',
+    entity: { eid: task, num: 41 },
+    doc: { title: 'Structured', body: 'One shape' },
+    task: { status: 'done', priority: 2 },
+    decided: { at: '2026-08-03T00:00:00.000Z' },
+  }
+  try {
+    let listed = await run('list', '--json')
+    let decided = await run('decided', '--all', '--json')
+    let shown = await run('show', 'T-41', '--json')
+    assertEquals(listed.code, 0)
+    assertEquals(decided.code, 0)
+    assertEquals(shown.code, 0)
+    assertEquals(JSON.parse(text(listed.stdout)), [entity])
+    assertEquals(JSON.parse(text(decided.stdout)), [entity])
+    assertEquals(JSON.parse(text(shown.stdout)), {
+      ...entity,
+      refs: [],
+      backrefs: [],
+      comments: [{
+        kind: 'comment',
+        entity: { eid: comment, num: 42 },
+        doc: { title: '', body: 'Looks right' },
+        comment: { target_eid: task },
+      }],
+    })
   } finally {
     await server.shutdown()
   }

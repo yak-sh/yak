@@ -32,6 +32,7 @@ import {
   inflate,
   isFile,
   isUnread,
+  jsonOf,
   mailAt,
   mailChanges,
   mailLine,
@@ -288,7 +289,7 @@ let list = async (args: string[]) => {
     .filter((r) => r.kind == kind)
     .filter((r) => matchQuery(r.comps, preds, (e) => byEid.get(e)))
     .sort(byBoard)
-  if (json) return print(jsonText(hits))
+  if (json) return print(jsonText(hits.map((r) => jsonOf(r))))
   // Ids alone do not disambiguate — two projects are both titled `holdco`
   // — so the second column carries the handle a caller can TYPE: a task's
   // status, everything else's alias.
@@ -366,7 +367,7 @@ let decided = async (args: string[]) => {
     .filter((r) => r.comps.decided && belongs(r, scope))
     .filter((r) => matchQuery(r.comps, screen, (e) => byEid.get(e)))
     .sort((a, b) => decidedAt(b).localeCompare(decidedAt(a)))
-  if (json) return print(jsonText(hits))
+  if (json) return print(jsonText(hits.map((r) => jsonOf(r))))
   // Three columns, not four: the id's PREFIX is the kind (M- is a memory,
   // T- a task), so a kind column spells the id twice and costs every title
   // a fixed indent it then truncates into. `--json` keeps the whole row.
@@ -598,7 +599,7 @@ let mailList = async (args: string[]) => {
     )
     .filter((r) => matchQuery(r.comps, resolved, (e) => byEid.get(e)))
     .sort((a, b) => mailAt(a).localeCompare(mailAt(b)))
-  if (json) return print(jsonText(hits))
+  if (json) return print(jsonText(hits.map((r) => jsonOf(r))))
   if (!hits.length) {
     return warn(
       sent ? '(nothing sent)' : every
@@ -629,7 +630,10 @@ let mailShow = async (args: string[]) => {
   if (!row?.comps.mail) throw new Error(`not a mail: ${id}`)
   let thread = threadOf(all, row.eid)
   if (json) {
-    print(jsonText({ ...row, thread: thread.map((t) => idOf(t)) }))
+    print(jsonText({
+      ...jsonOf(row),
+      thread: thread.map((t) => idOf(t)),
+    }))
   } else {
     print(showMd(snap, all, row))
     if (thread.length > 1) {
@@ -836,7 +840,7 @@ let inboxList = async (args: string[]) => {
       (isUnread(b) ? 1 : 0) - (isUnread(a) ? 1 : 0) ||
       bornAt(a).localeCompare(bornAt(b))
     )
-  if (json) return print(jsonText(items))
+  if (json) return print(jsonText(items.map((r) => jsonOf(r))))
   if (!items.length) {
     return warn(
       sent
@@ -863,7 +867,7 @@ let inboxShow = async (args: string[]) => {
   let all = rows(snap)
   let row = find(all, id)
   if (!row) throw new Error(`no such entity: ${id}`)
-  if (json) print(jsonText(row))
+  if (json) print(jsonText(jsonOf(row)))
   else print(showMd(snap, all, row))
   if (!row.comps.opened) {
     await send([{ eid: row.eid, name: 'opened', comp: {} }])
@@ -1183,10 +1187,14 @@ let show = async (args: string[]) => {
   let all = rows(snap)
   let row = need(all, id)
   if (json) {
-    // The machine shape, unchanged forever: scripts parse this.
+    // Edges and comments surround the same entity shape every list door uses.
     let comments = all.filter((r) => r.comps.comment?.target_eid == row.eid)
     let edges = edgesOf(snap, all, row.eid)
-    print(jsonText({ ...row, ...edges, comments }))
+    print(jsonText({
+      ...jsonOf(row),
+      ...edges,
+      comments: comments.map((r) => jsonOf(r)),
+    }))
   } else print(showMd(snap, all, row))
 }
 

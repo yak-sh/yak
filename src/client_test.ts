@@ -16,6 +16,7 @@ import {
   inflate,
   isOperator,
   isUnread,
+  jsonOf,
   ledger,
   mailAt,
   mailChanges,
@@ -82,6 +83,26 @@ Deno.test('rows: merge, derived kind, ids', () => {
   assertEquals(idOf(by(S)), 'S-1')
   assertEquals(kindOf({ comment: {}, review: {} }), 'review')
   assertEquals(kindOf({}), 'entity')
+})
+
+Deno.test('jsonOf: an entity is its components without SQL join keys', () => {
+  let r: Row = {
+    eid: T1,
+    num: 2,
+    kind: 'task',
+    comps: {
+      entity: { eid: T1, num: 2 },
+      doc: { eid: T1, title: 'First', body: '' },
+      task: { eid: T1, status: 'wip', priority: 0 },
+      kind: { eid: T1, value: 'reserved' },
+    },
+  }
+  assertEquals(jsonOf(r), {
+    kind: 'task',
+    entity: { eid: T1, num: 2 },
+    doc: { title: 'First', body: '' },
+    task: { status: 'wip', priority: 0 },
+  })
 })
 
 // The grammar, as a case table: arg → routed {comp, prop, value} or error.

@@ -58,8 +58,8 @@ let post = async (changes: Change[]) => {
 let queried = async (q: string): Promise<string[]> => {
   let res = await fetch(`http://${U}/query?${encodeURIComponent(q)}`)
   if (!res.ok) throw new Error(`query refused: ${await res.text()}`)
-  let hits = await res.json() as { eid: string }[]
-  return hits.map((r) => r.eid).sort()
+  let hits = await res.json() as { entity: { eid: string } }[]
+  return hits.map((r) => r.entity.eid).sort()
 }
 
 // A subscribing socket that folds frames into member sets exactly as the wire

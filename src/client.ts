@@ -39,6 +39,35 @@ export type Row = {
   comps: Record<string, Record<string, unknown>>
 }
 
+// Structured output mirrors the patch wire: eid addresses a component but is
+// not one of its columns. The entity spine is the exception — eid is its data.
+// `kind` owns its top-level name, so a component with that name is reserved.
+export let jsonOf = (
+  r: Row,
+  source = r.comps,
+): Record<string, unknown> => ({
+  kind: r.kind,
+  ...Object.fromEntries(
+    Object.entries(source)
+      .filter(([name]) => name != 'kind')
+      .map(([name, comp]) => {
+        let { eid: _eid, ...props } = comp
+        return [name, name == 'entity' ? { eid: r.eid, ...props } : props]
+      }),
+  ),
+})
+
+let rowOf = (r: Record<string, unknown>): Row => {
+  let { kind, ...comps } = r
+  let entity = comps.entity as Record<string, unknown>
+  return {
+    eid: String(entity.eid),
+    num: Number(entity.num ?? 0),
+    kind: String(kind),
+    comps: comps as Record<string, Record<string, unknown>>,
+  }
+}
+
 export let snapshot = async () => {
   let res = await request(`http://${host()}/snapshot`)
   if (!res.ok) throw new Error(`server said ${res.status}`)
@@ -50,11 +79,8 @@ export let query = async (filters: string[], kind?: string) => {
   let url = args.map(encodeURIComponent).join('&')
   let res = await request(`http://${host()}/query?${url}`)
   if (!res.ok) throw new Error(`server said ${res.status}`)
-  let hits = await res.json() as Row[]
-  return hits.map((r) => ({
-    ...r,
-    num: Number(r.comps.entity?.num ?? r.num),
-  }))
+  let hits = await res.json() as Record<string, unknown>[]
+  return hits.map(rowOf)
 }
 
 // The graph as rows: one per entity, components merged in; kind derived.
