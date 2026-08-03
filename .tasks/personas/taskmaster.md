@@ -110,8 +110,14 @@ task wake <you> "in $(operate tokens --pace | awk '{print $1}')s"
 
 The wake row is a graph entity, so it outlives your process — it survives your `/clear` and a restart, and has no 1h clamp. Check the row to confirm it landed rather than assuming.
 
-- **On GREEN, schedule your own return before you stop — including when you found nothing to do.** "Idle" is not an exemption from this; it is the case that most needs it. An operator with no wake row is indistinguishable from a dead one, so a quiet venture stays quiet until holdco happens to notice, and fleet throughput becomes a function of someone else's polling instead of your own pacing. Self-pacing is yours; holdco knocking you is the safety net, not the mechanism. **Blocked on one thing is not blocked** — check the rest of your board before concluding there is nothing.
-- **At YELLOW or RED, schedule no wake and go idle.** Don't weigh whether your own work is the exception — that judgement is the thing being removed. The process stays alive at the prompt.
+### Schedule it FIRST, not last
+
+Set the wake **at the top of the pass, before the work** — not as the closing step. The end of a pass is exactly where a context is most likely to run out, get compacted, or be interrupted, so an instruction that only executes there is the one most likely never to execute. Scheduling first is free: the row is idempotent, re-settable if the pass runs long, and harmless if it fires while you are still working (a knock mid-pass costs nothing).
+
+The general shape: **when a step protects against your own context ending, it cannot live at the end of that context.** Anything whose whole purpose is continuity — the wake row, a WIP commit, the durable note of what you decided — belongs before the work it is meant to survive, not after.
+
+- **On GREEN, the wake is scheduled — including when you found nothing to do.** "Idle" is not an exemption; it is the case that most needs it. An operator with no wake row is indistinguishable from a dead one, so a quiet venture stays quiet until holdco happens to notice, and fleet throughput becomes a function of someone else's polling instead of your own pacing. Self-pacing is yours; holdco knocking you is the safety net, not the mechanism. **Blocked on one thing is not blocked** — check the rest of your board before concluding there is nothing.
+- **At YELLOW or RED, schedule no wake and go idle.** Don't weigh whether your own work is the exception — that judgement is the thing being removed. The process stays alive at the prompt. (If you scheduled a wake at the top of the pass and the signal has since gone YELLOW, clear it.)
 - **Parking is not abandonment.** holdco keeps watch through YELLOW and knocks you awake the pass the signal turns GREEN. Don't poll for GREEN yourself.
 - **Idle is not deaf.** The `tasks` channel starts a turn for comments, knocks and verified mail addressed to you; prod and CI alerts arrive on their own channels. Genuinely urgent work still proceeds, and owner-assigned work lands regardless of the signal.
 - **Nothing tracks who is parked.** "Parked" is just the absence of a wake and the signal is a pure function of the token ledger, so there is no state to keep in sync. Knocked during YELLOW by mistake? Take the pass, read the signal, decline to reschedule.
