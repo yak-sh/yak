@@ -1,6 +1,7 @@
 // Git, only as far as a projection needs it: commit the files we just
-// wrote, in the repos that already track them. Two rules make this safe
-// to run from a server effect into somebody's live checkout. First,
+// wrote, in the repos that already track them, and push where the venture
+// permits. Two rules make this safe to run from a server effect into
+// somebody's live checkout. First,
 // TRACKED ONLY — an untracked path is skipped, so the materializer never
 // introduces a file into a repo unbidden. Second, `git commit -- <paths>`
 // with an explicit pathspec and never `git add`: a pathspec commit records
@@ -14,9 +15,16 @@
 // SHARED checkouts holding no work but ours, and nobody drains them:
 // agents ship with `push origin HEAD:main`, which moves origin and leaves
 // the shared tree's branch exactly where it was. Commit onto it anyway and
-// the fork deepens without bound — 49 commits in some repos — until the
+// the fork deepens without bound — 100 commits in some repos — until the
 // tree can no longer take a fix from origin at all, while looking perfectly
 // current: clean status, recent commits, every one of them ours.
+//
+// Which is why the push is the drain, and why it is a PERMISSION rather
+// than a policy (`repo.push`, off by default and off for anything this
+// code can't ask about). Pushing generated output from a shared tree is a
+// write that leaves the box, and in a venture whose main branch deploys it
+// is a deploy. Granted, it also self-heals: the first sync after the grant
+// pushes the whole backlog, and every one after keeps the tree at zero.
 
 let dec = new TextDecoder()
 
@@ -41,6 +49,12 @@ let dir = (p: string) => p.slice(0, p.lastIndexOf('/'))
 
 let line = (s: string) => s.split('\n').find(Boolean)?.slice(0, 160) ?? ''
 
+// A refused push opens its stderr with `To <url>` and buries the verdict
+// in the `!` line — report that one, not the address it was sent to.
+let why = (s: string) =>
+  line(s.split('\n').filter((l) => l.trimStart().startsWith('!')).join('\n')) ||
+  line(s)
+
 // The repo that tracks this path, or nothing. Asked from the file's own
 // directory so a path under a nested checkout answers for that checkout.
 let tracker = async (path: string) => {
@@ -49,6 +63,17 @@ let tracker = async (path: string) => {
   if (!root.ok) return
   let known = await git(at, 'ls-files', '--error-unmatch', '--', path)
   return known.ok ? root.out : undefined
+}
+
+// The remote and branch this one tracks, split, or nothing when it
+// tracks none. Read rather than assumed: `git push` with no refspec
+// obeys push.default, and `origin HEAD` guesses at both halves — a
+// projection must land on the branch the tree already answers to.
+let upstream = async (root: string) => {
+  let ref = await git(root, 'rev-parse', '--abbrev-ref', '@{u}')
+  if (!ref.ok) return
+  let cut = ref.out.indexOf('/')
+  return { remote: ref.out.slice(0, cut), branch: ref.out.slice(cut + 1) }
 }
 
 // How this branch sits against its upstream, or nothing when it has no
@@ -87,27 +112,46 @@ let level = async (root: string, ms = 20_000) => {
   return await standing(root)
 }
 
-// Commit these paths where git already tracks them, one commit per repo.
-// Safe to hand every projection path every time: a path already matching
-// HEAD is a non-event, so this is the idempotent "leave the repos clean"
-// move, not a "commit what I just wrote" one. Reports the repos that
-// committed, the paths git doesn't track (the caller's `git add` is what
+// Commit these paths where git already tracks them, one commit per repo,
+// and push what the venture permits — a file says where it is and whether
+// its venture lets our commits leave the box. Safe to hand every
+// projection file every time: a path already matching HEAD is a non-event,
+// so this is the idempotent "leave the repos level" move, not a "commit
+// what I just wrote" one. Reports the repos that committed, the ones that
+// pushed, the paths git doesn't track (the caller's `git add` is what
 // adopts one), and the repos that refused — never throws at its caller.
-export let commit = async (paths: string[], msg: string) => {
+export let commit = async (
+  files: { path: string; push?: boolean }[],
+  msg: string,
+) => {
   let committed: string[] = []
+  let pushed: string[] = []
   let untracked: string[] = []
   let failed: string[] = []
-  let repos = new Map<string, string[]>()
-  for (let p of paths) {
-    let root = await tracker(p)
-    if (!root) untracked.push(p)
-    else repos.set(root, [...(repos.get(root) ?? []), p])
+  // A repo's permission is the AND of its files' — two projects sharing a
+  // checkout can only agree downward, which is the safe direction.
+  let repos = new Map<string, { paths: string[]; push: boolean }>()
+  for (let f of files) {
+    let root = await tracker(f.path)
+    if (!root) untracked.push(f.path)
+    else {
+      let at = repos.get(root)
+      repos.set(root, {
+        paths: [...(at?.paths ?? []), f.path],
+        push: (at?.push ?? true) && !!f.push,
+      })
+    }
   }
-  for (let [root, ps] of repos) {
-    // Nothing here differs from HEAD: no empty commit, and nothing worth
-    // reporting. An unborn HEAD errors instead of answering, and falls
-    // through to make the initial commit.
-    if ((await git(root, 'diff', '--quiet', 'HEAD', '--', ...ps)).ok) continue
+  for (let [root, { paths, push }] of repos) {
+    // Nothing here differs from HEAD: no empty commit. An unborn HEAD
+    // errors instead of answering, and falls through to the first commit.
+    let dirty = !(await git(root, 'diff', '--quiet', 'HEAD', '--', ...paths)).ok
+    // The other reason to be here: a repo may hold an undrained chain with
+    // nothing left to write, and the day push is granted is the day that
+    // chain should go. Local and free — `ahead` is ours either way, and
+    // only `behind` needs the fetch below.
+    let chain = push && (await standing(root))?.ahead
+    if (!dirty && !chain) continue
     // Level up, then decline anything still behind. BEHIND, not merely
     // diverged: committing onto a behind branch is what makes it diverged,
     // and the fast-forward can't always clear it — when origin's commit
@@ -122,9 +166,29 @@ export let commit = async (paths: string[], msg: string) => {
       )
       continue
     }
-    let done = await git(root, 'commit', '-q', '-m', msg, '--', ...ps)
-    if (done.ok) committed.push(root)
-    else failed.push(`${root}: ${line(done.err)}`)
+    if (dirty) {
+      let done = await git(root, 'commit', '-q', '-m', msg, '--', ...paths)
+      if (!done.ok) {
+        failed.push(`${root}: ${line(done.err)}`)
+        continue
+      }
+      committed.push(root)
+    }
+    // Push, where the venture said we may. This is what keeps the tree
+    // level instead of merely current: unpushed, every projection commit
+    // is another one the next operator has to rebase past, and the fork
+    // grows for as long as nobody drains it.
+    let up = push ? await upstream(root) : undefined
+    if (!up) continue
+    let to = `HEAD:${up.branch}`
+    let sent = await git(root, 'push', '--quiet', up.remote, to)
+    if (sent.ok) pushed.push(root)
+    // Someone pushed between our fetch and this. Declined, not forced and
+    // not retried: the commits are safe on the branch, and the next sync
+    // starts over from a fetch that can see them.
+    else {failed.push(
+        `${root}: push refused (${why(sent.err)}); git pull --ff-only`,
+      )}
   }
-  return { committed, untracked, failed }
+  return { committed, pushed, untracked, failed }
 }

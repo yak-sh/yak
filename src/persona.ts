@@ -143,15 +143,21 @@ export let homeReads = (all: Row[], deps: Dep[]): Dep[] =>
 // checkout, the common persona (if any) as .tasks/AGENTS.md and each
 // other home persona as .tasks/personas/<slug>.md. Fleet-shared
 // personas (no home) ride spawns only — they are nobody's file.
+//
+// Each file carries its venture's `push` permission, because that is the
+// only place the two facts meet: git.ts sees paths, and only the project
+// row knows whether this venture's origin may hear from us.
 export let filesFor = (all: Row[], deps: Dep[], now: number) => {
-  let out: { path: string; body: string }[] = []
+  let out: { path: string; body: string; push: boolean }[] = []
   for (let proj of all.filter((r) => r.comps.project && r.comps.repo?.path)) {
     let root = `${proj.comps.repo.path}/.tasks`
+    let push = !!proj.comps.repo.push
     let base = commonOf(all, deps, proj.eid)
     if (base) {
       out.push({
         path: `${root}/AGENTS.md`,
         body: materialize(all, deps, base, now),
+        push,
       })
     }
     for (
@@ -163,6 +169,7 @@ export let filesFor = (all: Row[], deps: Dep[], now: number) => {
       out.push({
         path: `${root}/personas/${slug}.md`,
         body: materialize(all, deps, p, now),
+        push,
       })
     }
   }

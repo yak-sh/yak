@@ -1,7 +1,9 @@
-// What the tools are actually doing: every MCP tool call, HTTP write, and
-// browser crash lands in `tool_call` — who called what, how long it took,
-// whether it worked. That's the feedback loop for tool ergonomics: the
-// errors agents hit are the docs we haven't written yet.
+// What the tools are actually doing: every MCP tool call, HTTP write,
+// browser crash, and background sync that couldn't land in `tool_call` —
+// who called what, how long it took, whether it worked. That's the
+// feedback loop for tool ergonomics: the errors agents hit are the docs we
+// haven't written yet, and the errors nobody hits are the ones that decay
+// into a hand repair six months on.
 //
 // Deliberately OUTSIDE the graph. This is verbose log data, not entities:
 // the table isn't in the `comps` vocabulary, so snapshot() never walks it
@@ -13,8 +15,10 @@ import { type DatabaseSync } from 'node:sqlite'
 
 // What a caller reports. `ok` is the only judgement: a tool that answered
 // with an error is a call that happened AND failed — both facts matter.
+// `srv` is the server's own background work (the persona sync): no caller
+// to disappoint, but the same question — what failed, when, and why.
 export type Call = {
-  source: 'mcp' | 'http' | 'web'
+  source: 'mcp' | 'http' | 'web' | 'srv'
   name: string
   session_id?: string | null
   ok: boolean

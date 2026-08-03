@@ -349,6 +349,11 @@ export let manuals: Record<string, Manual> = {
     usage: 'sync [--no-commit]',
     about: "materialize personas into each project repo's .tasks/",
     examples: ['task sync', 'task sync --no-commit'],
+    detail: 'Commits what it wrote in the repos that track it, and pushes ' +
+      'in the ventures that permit it — `task set P-34 .push=1` grants it, ' +
+      'and absent is no, so a venture whose main branch deploys simply ' +
+      'never gets one. Unpushed, every projection commit is one more the ' +
+      'next operator has to rebase past.',
     root: true,
     options: [flag('--no-commit')],
     words: [0, 0],

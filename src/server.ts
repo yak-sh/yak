@@ -980,20 +980,35 @@ on('comment', {
 // That's the trade we take knowingly — one small commit per persona
 // edit, so the rebase is always trivial.
 let syncing: ReturnType<typeof setTimeout> | undefined
+// Nobody reads this process's stdout. A sync that can't land — a tree
+// behind its upstream, a push origin refused — is exactly the failure
+// that decays into a hand repair months later, so every one of them is
+// also a telemetry row: `task telemetry --errors` is where an operator
+// meets it, and the graph's own writes stay unbothered either way.
+let stuck = (e: unknown) => {
+  console.warn('persona sync —', e)
+  record(db, {
+    source: 'srv',
+    name: 'persona sync',
+    ok: false,
+    error: String(e),
+  })
+}
 let syncSoon = () => {
   clearTimeout(syncing)
   syncing = setTimeout(async () => {
     try {
       let snap = snapshot(db)
       let files = filesFor(rows(snap), snap.deps, Date.now())
-      for (let f of syncFiles(files).failed) console.warn('persona sync —', f)
+      for (let f of syncFiles(files).failed) stuck(f)
       // Every projection path, not just this tick's writes: a file some
       // earlier tick left dirty (untracked then, adopted since) is dirt
       // this tick can clear. commit() ignores whatever matches HEAD.
-      let done = await commit(files.map((f) => f.path), 'personas: materialize')
-      for (let f of done.failed) console.warn('persona commit —', f)
+      for (let f of (await commit(files, 'personas: materialize')).failed) {
+        stuck(f)
+      }
     } catch (e) {
-      console.warn('persona sync —', e)
+      stuck(e)
     }
   }, 250)
 }

@@ -1748,8 +1748,9 @@ let sync = async (args: string[]) => {
   if (args.includes('--no-commit')) return
   // Every path, not just this run's writes: a file left dirty by an
   // earlier sync (or adopted with `git add` since) lands here too.
-  let done = await commit(files.map((f) => f.path), 'personas: materialize')
+  let done = await commit(files, 'personas: materialize')
   for (let root of done.committed) console.log(`committed ${root}`)
+  for (let root of done.pushed) console.log(`pushed ${root}`)
   for (let p of done.untracked) console.log(`untracked ${p} — git add to adopt`)
   for (let f of done.failed) console.error(`commit failed ${f}`)
 }

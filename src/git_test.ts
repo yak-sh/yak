@@ -37,6 +37,10 @@ let repo = async () => {
 }
 let write = (p: string, body: string) => (Deno.writeTextFileSync(p, body), p)
 
+// One projection file as commit() hears it. `push` unspoken is the
+// default every venture starts on: commit here, and nothing leaves.
+let one = (path: string, push?: boolean) => ({ path, push })
+
 Deno.test('commit: takes the paths it wrote, leaves a staged neighbour staged', async () => {
   let dir = await repo()
   try {
@@ -44,8 +48,9 @@ Deno.test('commit: takes the paths it wrote, leaves a staged neighbour staged', 
     // a concurrent agent's work, half of it staged
     write(`${dir}/other.md`, 'wip\n')
     await sh(dir, 'add', 'other.md')
-    assertEquals(await commit([file], 'personas: materialize'), {
+    assertEquals(await commit([one(file)], 'personas: materialize'), {
       committed: [dir],
+      pushed: [],
       untracked: [],
       failed: [],
     })
@@ -78,9 +83,13 @@ Deno.test('commit: passes over the untracked, the unchanged, and the repo-less',
     let same = `${dir}/.tasks/AGENTS.md`
     // no repo at all
     let loose = write(`${Deno.makeTempDirSync()}/AGENTS.md`, 'hello\n')
-    let out = await commit([fresh, same, loose], 'personas: materialize')
+    let out = await commit(
+      [one(fresh), one(same), one(loose)],
+      'personas: materialize',
+    )
     assertEquals(out, {
       committed: [],
+      pushed: [],
       untracked: [fresh, loose],
       failed: [],
     })
@@ -103,7 +112,7 @@ Deno.test('commit: a repo mid-merge keeps the file and reports the refusal', asy
       `${dir}/.git/MERGE_HEAD`,
       await sh(dir, 'rev-parse', 'HEAD'),
     )
-    let out = await commit([file], 'personas: materialize')
+    let out = await commit([one(file)], 'personas: materialize')
     assertEquals(out.committed, [])
     assertEquals(out.failed.length, 1)
     assert(out.failed[0].startsWith(`${dir}: `), out.failed[0])
@@ -143,8 +152,12 @@ let paired = async () => {
   await sh(ship, 'push', '-q', '-u', 'origin', 'main')
   await sh(base, 'clone', '-q', origin, 'tree')
   let tree = await named('tree')
-  return { base, ship, tree, file: `${tree}/.tasks/AGENTS.md` }
+  return { base, origin, ship, tree, file: `${tree}/.tasks/AGENTS.md` }
 }
+
+// What origin has heard. The one question every push test asks — of the
+// bare repo itself, so no fetch of ours can flatter the answer.
+let landed = (w: { origin: string }) => sh(w.origin, 'rev-parse', 'main')
 
 // Someone ships the normal way, moving origin without touching the tree.
 // Which file matters: origin landing on the projection's own path is what
@@ -193,7 +206,7 @@ Deno.test('commit: behind-only fast-forwards first, then commits', async () => {
     assertEquals(await standing(w.tree), { ahead: 0, behind: 0 })
 
     let file = write(w.file, 'projected\n')
-    let out = await commit([file], 'personas: materialize')
+    let out = await commit([one(file)], 'personas: materialize')
     assertEquals(out.failed, [])
     assertEquals(out.committed, [w.tree])
     // Took origin's commit and kept ours on top: nothing discarded, and
@@ -222,7 +235,7 @@ Deno.test('commit: behind on the projection path itself is refused, not forced',
     await shipped(w, '.tasks/AGENTS.md')
 
     let file = write(w.file, 'projected\n')
-    let out = await commit([file], 'personas: materialize')
+    let out = await commit([one(file)], 'personas: materialize')
     assertEquals(out.committed, [])
     assertEquals(out.failed.length, 1)
     assert(out.failed[0].includes('1 behind upstream (0 ahead)'), out.failed[0])
@@ -244,7 +257,7 @@ Deno.test('commit: a diverged branch is refused, the file stays written', async 
     await shipped(w)
 
     let file = write(w.file, 'projected\n')
-    let out = await commit([file], 'personas: materialize')
+    let out = await commit([one(file)], 'personas: materialize')
     assertEquals(out.committed, [])
     assertEquals(out.failed.length, 1)
     assert(out.failed[0].includes('1 behind upstream (1 ahead)'), out.failed[0])
@@ -262,15 +275,118 @@ Deno.test('commit: a diverged branch is refused, the file stays written', async 
   }
 })
 
-Deno.test('commit: ahead-only still commits — draining that chain is not ours to decide', async () => {
+// Ungranted is the default, and the default is that origin never hears
+// from us — not for the commit we just made, not for the chain behind it.
+// A venture the graph knows nothing about lands here too: absent reads as
+// no, which is the only reading that can't deploy something by accident.
+Deno.test('commit: ahead-only commits, and without the grant nothing leaves', async () => {
   let w = await paired()
   try {
     await ours(w, 'ours\n')
+    let was = await landed(w)
     let file = write(w.file, 'projected\n')
-    let out = await commit([file], 'personas: materialize')
+    // A second projection file in the same checkout, granted — one file's
+    // yes can't speak for a repo another file says nothing about.
+    let out = await commit(
+      [one(write(`${w.tree}/other.md`, 'projected too\n'), true), one(file)],
+      'personas: materialize',
+    )
     assertEquals(out.failed, [])
     assertEquals(out.committed, [w.tree])
+    assertEquals(out.pushed, [])
     assertEquals(await standing(w.tree), { ahead: 2, behind: 0 })
+    assertEquals(await landed(w), was)
+  } finally {
+    Deno.removeSync(w.base, { recursive: true })
+  }
+})
+
+// The grant, and what it is for: the chain goes, and the tree that has
+// been reading `N ahead` for months reads level again.
+Deno.test('commit: a granted push drains the whole chain and levels the tree', async () => {
+  let w = await paired()
+  try {
+    await ours(w, 'two\n')
+    await ours(w, 'three\n')
+    assertEquals(await standing(w.tree), { ahead: 2, behind: 0 })
+
+    let file = write(w.file, 'projected\n')
+    let out = await commit([one(file, true)], 'personas: materialize')
+    assertEquals(out.failed, [])
+    assertEquals(out.committed, [w.tree])
+    assertEquals(out.pushed, [w.tree])
+    assertEquals(await standing(w.tree), { ahead: 0, behind: 0 })
+    assertEquals(await landed(w), await sh(w.tree, 'rev-parse', 'HEAD'))
+  } finally {
+    Deno.removeSync(w.base, { recursive: true })
+  }
+})
+
+// The backlog drains even when this run has nothing to write, which is
+// what makes the grant self-healing: no hand repair, no sweep — the next
+// persona edit anywhere is what empties the repo that was left behind.
+Deno.test('commit: the grant drains a chain with nothing left to write', async () => {
+  let w = await paired()
+  try {
+    await ours(w, 'projected\n')
+    let out = await commit([one(w.file, true)], 'personas: materialize')
+    assertEquals(out.committed, [])
+    assertEquals(out.pushed, [w.tree])
+    assertEquals(out.failed, [])
+    assertEquals(await standing(w.tree), { ahead: 0, behind: 0 })
+  } finally {
+    Deno.removeSync(w.base, { recursive: true })
+  }
+})
+
+// Origin can refuse — a branch it protects, a hook, or the race we lose
+// when someone pushes between our fetch and ours. The commit is already
+// safe on the branch, so the answer is to say so and stop: no --force,
+// and exactly one attempt, which the counter is here to prove.
+Deno.test('commit: a refused push declines with the remedy, never forces, never retries', async () => {
+  let w = await paired()
+  try {
+    let hook = `${w.origin}/hooks/pre-receive`
+    Deno.writeTextFileSync(
+      hook,
+      '#!/bin/sh\nprintf x >> "$GIT_DIR/tries"\necho "fetch first" >&2\nexit 1\n',
+    )
+    Deno.chmodSync(hook, 0o755)
+    let was = await landed(w)
+
+    let file = write(w.file, 'projected\n')
+    let out = await commit([one(file, true)], 'personas: materialize')
+    assertEquals(out.committed, [w.tree])
+    assertEquals(out.pushed, [])
+    assertEquals(out.failed.length, 1)
+    assert(out.failed[0].includes('push refused'), out.failed[0])
+    assert(out.failed[0].includes('git pull --ff-only'), out.failed[0])
+
+    assertEquals(Deno.readTextFileSync(`${w.origin}/tries`), 'x')
+    assertEquals(await landed(w), was)
+    assertEquals(await standing(w.tree), { ahead: 1, behind: 0 })
+  } finally {
+    Deno.removeSync(w.base, { recursive: true })
+  }
+})
+
+// The grant is permission to drain, never permission to overrun: a tree
+// that is behind still declines, still keeps the write on disk, and still
+// tells origin nothing.
+Deno.test('commit: the grant does not weaken the refusal to commit onto a behind branch', async () => {
+  let w = await paired()
+  try {
+    await shipped(w, '.tasks/AGENTS.md')
+    let was = await landed(w)
+
+    let file = write(w.file, 'projected\n')
+    let out = await commit([one(file, true)], 'personas: materialize')
+    assertEquals(out.committed, [])
+    assertEquals(out.pushed, [])
+    assertEquals(out.failed.length, 1)
+    assert(out.failed[0].includes('1 behind upstream (0 ahead)'), out.failed[0])
+    assertEquals(Deno.readTextFileSync(file), 'projected\n')
+    assertEquals(await landed(w), was)
   } finally {
     Deno.removeSync(w.base, { recursive: true })
   }

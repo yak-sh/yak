@@ -243,6 +243,12 @@ Deno.test('filesFor: common → AGENTS.md, others → personas/<slug>.md, fleet 
   ])
   assertStringIncludes(files[0].body, 'b')
   assertStringIncludes(files[1].body, 'o')
+  // Every file carries its venture's push permission, and a venture that
+  // never granted one grants none — git.ts reads this and nothing else.
+  assertEquals(files.map((f) => f.push), [false, false])
+  proj.comps.repo.push = 1
+  let granted = filesFor([proj, base], [edge(proj, 'contains', base)], NOW)
+  assertEquals(granted.map((f) => f.push), [true])
 })
 
 Deno.test('syncFiles: writes changes, skips fresh, isolates failures', () => {

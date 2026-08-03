@@ -119,7 +119,11 @@ export let comps: Record<string, Record<string, PropType>> = {
   // the fleet palette, so a venture that never sets one still gets a stable
   // colour of its own rather than the default.
   project: { retired_at: 'time', color: 'text' },
-  repo: { path: 'text', base_branch: 'text' }, // the project's checkout
+  // the project's checkout. `push` is the venture's standing permission for
+  // the projection to push what it commits — OFF by default, and off for
+  // every repo the graph doesn't know, because a push to main deploys in
+  // some ventures and an unknown repo must land on the harmless side.
+  repo: { path: 'text', base_branch: 'text', push: 'bool' },
   role: {
     state: { enum: roleStates },
     surface: { enum: roleSurfaces },
@@ -742,7 +746,15 @@ export type ProjectTag = { eid: string; retired_at?: string | null }
 // kindOrder. Wire-writable, because the owner points a project at a
 // checkout from the UI or the CLI like any other data; spawning only
 // READS it, so a browser can never hand the server a path to run in.
-export type Repo = { eid: string; path: string; base_branch: string }
+// `push` is that same owner saying the projection's commits may leave the
+// box for this venture — a per-venture permission because in some of them
+// a push to main deploys.
+export type Repo = {
+  eid: string
+  path: string
+  base_branch: string
+  push?: boolean
+}
 
 // A board is a saved filter over tasks: `query` speaks the query.ts
 // grammar ('.project_eid=…&.status=open,wip'); empty/null means every task.
