@@ -957,6 +957,62 @@ let CONTRACT = `House rules for this run:
 - File discoveries as new tasks linked to yours instead of widening scope.
 - When the work is committed, land it with task land.`
 
+// A tree may be broad enough for a small team and deep enough for a
+// coordinator plus builder. These are delegation limits; the global process
+// ceiling is independent because settled siblings cost neither tree capacity
+// nor a process.
+let SPAWN_MAX_DEPTH = 2
+let SPAWN_MAX_CHILDREN = 4
+
+// A root session stamps itself as its own instrument, and a browser client
+// without a session facet is another known root. Anything else missing from a
+// non-empty chain is lossy ancestry: spend the ceiling rather than silently
+// making the tree shallower.
+let spawnCeiling = (eid: string): string | undefined => {
+  let at = eid
+  let depth = 0
+  let parent: string | undefined
+  let seen = new Set([eid])
+  for (;;) {
+    let made = db.prepare('select via from created where eid = ?').get(at) as
+      | { via: string | null }
+      | undefined
+    if (!made) {
+      return `SPAWN_MAX_DEPTH=${SPAWN_MAX_DEPTH} reached: ` +
+        'spawn ancestry is ambiguous'
+    }
+    let via = made.via
+    if (!via || via == at) break
+    if (seen.has(via)) {
+      return `SPAWN_MAX_DEPTH=${SPAWN_MAX_DEPTH} reached: ` +
+        'spawn ancestry is ambiguous'
+    }
+    if (!db.prepare('select 1 from session where eid = ?').get(via)) {
+      if (db.prepare('select 1 from client where eid = ?').get(via)) break
+      return `SPAWN_MAX_DEPTH=${SPAWN_MAX_DEPTH} reached: ` +
+        'spawn ancestry is ambiguous'
+    }
+    parent ??= via
+    seen.add(via)
+    at = via
+    depth++
+    if (depth > SPAWN_MAX_DEPTH) {
+      return `SPAWN_MAX_DEPTH=${SPAWN_MAX_DEPTH} exceeded by depth ${depth}`
+    }
+  }
+  if (!parent) return
+  let marks = sessionActive.map(() => '?').join(', ')
+  let active = db.prepare(`
+    select count(*) as n from session s join created c on c.eid = s.eid
+    where c.via = ? and s.origin = 'managed' and s.status in (${marks})
+  `).get(parent, ...sessionActive) as { n: number }
+  if (active.n >= SPAWN_MAX_CHILDREN) {
+    return `SPAWN_MAX_CHILDREN=${SPAWN_MAX_CHILDREN} reached by ${
+      human(db, parent)
+    }`
+  }
+}
+
 // Session runtime beside its normalized launch spec. Explicit aliases avoid
 // duplicate column names and keep validation on the canonical component.
 let runRow = (eid: string) =>
@@ -982,6 +1038,8 @@ export let spawned =
       }, cast)
     let row = runRow(eid)
     if (!row?.spawn_provider) return // external, or deleted in its own batch
+    let ceiling = spawnCeiling(eid)
+    if (ceiling) return fail(ceiling)
     let ad = adapters[String(row.spawn_provider)]
     if (!ad) return fail(`unknown provider: ${row.spawn_provider}`)
     let model = String(row.spawn_model)

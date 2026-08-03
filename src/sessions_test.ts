@@ -110,13 +110,12 @@ let seed = (body = '', repo: string | null = scratch) => {
 
 // The spawn request, as any client writes it: one session change carrying
 // the request columns. `extra` overrides for the refusal cases.
-let begin = (
+let request = (
   task: string,
   extra: Record<string, unknown> = {},
-  via?: string,
 ) => {
   let eid = uid()
-  let done = write([{
+  let change: Change = {
     eid,
     name: 'session',
     comp: {
@@ -126,8 +125,17 @@ let begin = (
       requested_task_eid: task,
       ...extra,
     },
-  }], via)
-  return { eid, done }
+  }
+  return { eid, change }
+}
+
+let begin = (
+  task: string,
+  extra: Record<string, unknown> = {},
+  via?: string,
+) => {
+  let made = request(task, extra)
+  return { eid: made.eid, done: write([made.change], via) }
 }
 
 let beginCanonical = (
@@ -152,6 +160,24 @@ let beginCanonical = (
     },
   ])
   return { eid, done }
+}
+
+// A root writes under its own id, exactly as SessionStart does. Children name
+// their parent's eid, and a status makes one an active managed child without
+// launching a process the ceiling test does not need.
+let session = (via?: string, status?: string) => {
+  let eid = uid(), id = uid()
+  apply(
+    db,
+    [{ eid, name: 'session', comp: { id } }],
+    undefined,
+    via ?? id,
+  )
+  if (status) {
+    db.prepare('update session set origin = ?, status = ? where eid = ?')
+      .run('managed', status, eid)
+  }
+  return eid
 }
 
 // A comment aimed at a session — the input path.
@@ -543,6 +569,71 @@ Deno.test('a failed spawn tells its task and its spawner — and only once', asy
   spawned(cast)(eid, { provider: 'fake' })
   assertEquals(settleComments(t, eid).length, 1)
   assertEquals(settleComments(spawner, eid).length, 1)
+})
+
+Deno.test('spawn depth permits two and refuses three', async () => {
+  let { t } = seed()
+  let root = session()
+  let one = begin(t, {}, root)
+  await one.done
+  assertEquals(row(one.eid)?.status, 'completed')
+  let two = begin(t, {}, one.eid)
+  await two.done
+  assertEquals(row(two.eid)?.status, 'completed')
+  // Components compose: wearing a client facet cannot hide a session hop.
+  apply(db, [{
+    eid: two.eid,
+    name: 'client',
+    comp: { user_agent: 'test' },
+  }])
+  let three = begin(t, {}, two.eid)
+  await three.done
+  assertEquals(row(three.eid)?.status, 'failed')
+  assertMatch(String(row(three.eid)?.error), /SPAWN_MAX_DEPTH=2.*depth 3/)
+})
+
+Deno.test('spawn fan-out counts only active managed children', async () => {
+  let { t } = seed()
+  let root = session()
+  let children = ['starting', 'running', 'stopping', 'running']
+    .map((status) => session(root, status))
+  let full = begin(t, {}, root)
+  await full.done
+  assertEquals(row(full.eid)?.status, 'failed')
+  assertMatch(String(row(full.eid)?.error), /SPAWN_MAX_CHILDREN=4/)
+
+  db.prepare("update session set status = 'completed' where eid = ?")
+    .run(children[0])
+  let freed = begin(t, {}, root)
+  await freed.done
+  assertEquals(row(freed.eid)?.status, 'completed')
+})
+
+Deno.test('a spawn batch cannot take the same final child slot twice', async () => {
+  let { t } = seed()
+  let root = session()
+  for (let status of ['starting', 'running', 'stopping']) {
+    session(root, status)
+  }
+  let first = request(t), second = request(t)
+  await write([first.change, second.change], root)
+  assertEquals(row(first.eid)?.status, 'completed')
+  assertEquals(row(second.eid)?.status, 'failed')
+  assertMatch(String(row(second.eid)?.error), /SPAWN_MAX_CHILDREN=4/)
+})
+
+Deno.test('spawn depth fails closed across deleted ancestry', async () => {
+  let { t } = seed()
+  let root = session()
+  let parent = session(root)
+  apply(db, [{ eid: root, name: 'entity', comp: null }])
+  let child = begin(t, {}, parent)
+  await child.done
+  assertEquals(row(child.eid)?.status, 'failed')
+  assertMatch(
+    String(row(child.eid)?.error),
+    /SPAWN_MAX_DEPTH=2.*ancestry is ambiguous/,
+  )
 })
 
 Deno.test('a client-launched session reports only on its task', async () => {
