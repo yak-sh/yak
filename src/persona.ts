@@ -10,7 +10,7 @@
 // only syncFiles() touches the filesystem, and it stops at the write —
 // committing what it wrote is git.ts's job, at the callers.
 import { type Dep, idOf } from './types.ts'
-import { type Row } from './client.ts'
+import { memoryHead, type Row } from './client.ts'
 import { hot } from './query.ts'
 import { entityUrl } from './url.ts'
 
@@ -49,7 +49,7 @@ let byWarm = (now: number) => (a: Row, b: Row) =>
 export let indexLine = (r: Row, _now: number) => {
   let m = r.comps.memory
   let n = Number(r.comps.recall?.count ?? 0)
-  let head = m ? `${m.type}: ` : ''
+  let head = memoryHead(r)
   let seen = m?.last_confirmed_at
     ? ` · confirmed ${String(m.last_confirmed_at).slice(0, 10)}`
     : ''

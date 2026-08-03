@@ -1766,27 +1766,49 @@ Deno.test('spec: read is the door’s value convention, and it throws', () => {
 Deno.test('memoryChanges: doc face + memory comp, session writer and scope', () => {
   let { changes } = memoryChanges(all, {
     title: 'Prefers terse tests',
-    type: 'feedback',
     scope: 'T-3',
     session: 'sess-x',
   })
   assertEquals(changes.length, 2) // the session exists: nothing minted
   assertEquals(changes[0].comp?.title, 'Prefers terse tests')
   assertEquals(changes[1].name, 'memory')
-  assertEquals(changes[1].comp, {
-    type: 'feedback',
-    scope_eid: T2,
-  })
+  assertEquals(changes[1].comp, { scope_eid: T2 })
   assertThrows(() =>
     memoryChanges(all, { title: 'x', scope: 'P-99', session: 'sess-x' })
   )
+})
+
+// The retired enum's one surviving value, as a facet: `feedback` names WHO
+// gave it, resolved like any reference, and a bare '' still tags the memory
+// — the source being unknown is not a reason to lose the fact.
+Deno.test('memoryChanges: the feedback tag carries its source, or none', () => {
+  let named = memoryChanges(all, {
+    title: 'Prefers terse tests',
+    feedback: 'T-3',
+    session: 'sess-x',
+  }).changes
+  assertEquals(named.at(-1)?.name, 'feedback')
+  assertEquals(named.at(-1)?.comp, { by: T2 })
+  let bare = memoryChanges(all, {
+    title: 'Somebody said this once',
+    feedback: '',
+    session: 'sess-x',
+  }).changes
+  assertEquals(bare.at(-1)?.comp, {})
+  // A handle that names nothing is refused, never stored as text.
+  assertThrows(() =>
+    memoryChanges(all, { title: 'x', feedback: 'nobody', session: 'sess-x' })
+  )
+  // Untagged is the default: a memory carrying no correction wears nothing.
+  let plain = memoryChanges(all, { title: 'a fact', session: 'sess-x' }).changes
+  assertEquals(plain.some((c) => c.name == 'feedback'), false)
 })
 
 Deno.test('memoryChanges: an unknown session is minted alongside', () => {
   let { changes } = memoryChanges(all, { title: 'x', session: 'newcomer' })
   assertEquals(changes.length, 3)
   assertEquals(changes[0].name, 'session')
-  assertEquals(changes[2].comp, { type: 'project', scope_eid: null })
+  assertEquals(changes[2].comp, { scope_eid: null })
 })
 
 Deno.test('recallIndex: warmest first, index lines only, filtered', () => {
@@ -1799,7 +1821,7 @@ Deno.test('recallIndex: warmest first, index lines only, filtered', () => {
     changes: [
       { eid: M1, name: 'entity', comp: { eid: M1, num: 11, created_at: '' } },
       { eid: M1, name: 'doc', comp: { title: 'cold fact', body: 'long ago' } },
-      { eid: M1, name: 'memory', comp: { type: 'project' } },
+      { eid: M1, name: 'memory', comp: { scope_eid: null } },
       {
         eid: M1,
         name: 'recall',
@@ -1810,8 +1832,9 @@ Deno.test('recallIndex: warmest first, index lines only, filtered', () => {
       {
         eid: M2,
         name: 'memory',
-        comp: { type: 'feedback', last_confirmed_at: at(D) },
+        comp: { last_confirmed_at: at(D) },
       },
+      { eid: M2, name: 'feedback', comp: {} },
       {
         eid: M2,
         name: 'recall',
@@ -1826,7 +1849,11 @@ Deno.test('recallIndex: warmest first, index lines only, filtered', () => {
   assertMatch(lines[0], /5×/)
   assertMatch(lines[0], /confirmed 2026-07-19/)
   assertEquals(lines[0].includes('today'), false) // bodies stay home
-  assertEquals(recallIndex(mems, parseQuery('.type=project'), NOW).length, 1)
+  // The tag is what the head says now — the retired enum's other values
+  // said only what the line already carried.
+  assertMatch(lines[0], /M-12 [\d.]+ feedback: warm fact/)
+  assertMatch(lines[1], /M-11 [\d.]+ cold fact/)
+  assertEquals(recallIndex(mems, parseQuery('cold'), NOW).length, 1)
 })
 
 Deno.test('derefParams: reference values resolve at the door', () => {

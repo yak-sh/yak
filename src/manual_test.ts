@@ -85,6 +85,11 @@ Deno.test('manual validation rejects loss-shaped arguments', () => {
     ['session brief', [], 'needs brief text, @file, or --body='],
     ['telemetry', ['-n', '--errors'], '-n needs a positive number'],
     ['wrap', ['sid', '--body=@x'], 'task session brief --body=…'],
+    // A RETIRED flag names its replacement instead of "does not take": the
+    // habit outlives the mechanism, so the refusal has to answer the
+    // caller's question, not just the grammar's (T-12585).
+    ['remember', ['a fact', '--type=feedback'], '--feedback=jeff says who'],
+    ['remember', ['a fact', '--nonsense=1'], 'does not take --nonsense'],
     // An unscoped stop must never be read as "stop everything".
     ['role stop', [], 'name at least one role, or --all'],
     ['role start', [], 'name at least one role, or --all'],

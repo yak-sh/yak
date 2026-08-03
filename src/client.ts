@@ -1822,6 +1822,42 @@ export let DESK = {
   persona: 'scribe',
 }
 
+// memory.type is retired (T-12585), and the word is deep fleet habit — so
+// every door that took it REFUSES it and names the replacement per value.
+// Dropping the argument silently would file the memory wrong and say
+// nothing, which is the failure this repo keeps paying for.
+export let RETIRED_TYPE =
+  `memory.type is retired — the graph already said all four:
+- project → scope: P-19 names the project (omit for a fleet-wide principle)
+- feedback → feedback: 'jeff' names WHO gave it ('' if nobody wrote it down)
+- reference → say nothing; a memory with no tag IS a reference
+- user → nothing ever wore it
+Re-send without type. To LIST feedback, memory_recall feedback: true.`
+
+// The `feedback` tag as a change: this records feedback, and `who` names
+// the SOURCE — a handle, a human id, an eid, or '' for the bare tag when
+// nobody knows who said it. Resolved at the door like any reference, so a
+// name that means nothing here is refused rather than stored as text.
+export let feedbackChange = (
+  all: Row[],
+  eid: string,
+  who: string,
+): Change => {
+  if (!who) return { eid, name: 'feedback', comp: {} }
+  let r = find(all, who)
+  if (!r) throw new Error(`no entity: ${who}`)
+  return { eid, name: 'feedback', comp: { by: r.eid } }
+}
+
+// What an index line says about a memory before its title. The retired
+// enum printed all four of its values here; three of them said nothing the
+// line did not already carry (a scope, or a default), so only feedback
+// speaks now — and it speaks because someone's correction is a different
+// kind of thing to re-read than a fact. The SOURCE stays off the line: it
+// is one word on the row (`.feedback.by`) and naming it here would cost a
+// graph lookup in both renderers to repeat what `task show` already says.
+export let memoryHead = (r: Row) => r.comps.feedback ? 'feedback: ' : ''
+
 // The `decided` stamp as a change: WHEN the decision was taken. The value
 // speaks the same time grammar as every other door — '2026-06-01',
 // 'yesterday', '3 months ago' — and apply()'s normalizeChanges resolves it
@@ -1835,16 +1871,17 @@ export let decidedChange = (eid: string, at?: string): Change => ({
 
 // The memory-save batch: a doc face (title = index line, body = the fact)
 // plus the memory comp, scoped to a project when one is named. The calling
-// session is minted if new so the door can stamp it in created.via. A
-// `decided` date rides along for the case the stamp exists to serve: writing
-// up a decision that was taken before anyone filed it.
+// session is minted if new so the door can stamp it in created.via. Two
+// facets ride along when the caller names them: `feedback` (who gave it) and
+// `decided` (when the decision it records was taken, which is routinely
+// older than the row).
 export let memoryChanges = (
   all: Row[],
   m: {
     title: string
     body?: string
-    type?: string
     scope?: string
+    feedback?: string
     decided?: string
     session: string
   },
@@ -1856,15 +1893,9 @@ export let memoryChanges = (
   let changes: Change[] = [
     ...s.changes,
     { eid, name: 'doc', comp: { title: m.title, body: m.body ?? '' } },
-    {
-      eid,
-      name: 'memory',
-      comp: {
-        type: m.type ?? 'project',
-        scope_eid: scope?.eid ?? null,
-      },
-    },
+    { eid, name: 'memory', comp: { scope_eid: scope?.eid ?? null } },
   ]
+  if (m.feedback != null) changes.push(feedbackChange(all, eid, m.feedback))
   if (m.decided != null) changes.push(decidedChange(eid, m.decided))
   return { eid, changes }
 }
@@ -1889,7 +1920,7 @@ export let recallIndex = (
       let seen = m.last_confirmed_at
         ? ` · confirmed ${String(m.last_confirmed_at).slice(0, 10)}`
         : ''
-      return `${idOf(r)} ${score.toFixed(2)} ${m.type}: ${
+      return `${idOf(r)} ${score.toFixed(2)} ${memoryHead(r)}${
         r.comps.doc?.title ?? ''
       }${n ? ` · ${n}×` : ''}${seen}`
     })

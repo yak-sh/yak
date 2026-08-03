@@ -7,7 +7,7 @@ import { rows } from './client.ts'
 import { CUT, elide, type IO, mcpServer } from './mcp.ts'
 import { commandOut } from './commands.ts'
 import { sha } from './sha.ts'
-import { type Change, edges, memoryTypes, statuses, verdicts } from './types.ts'
+import { type Change, edges, statuses, verdicts } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, journalOf, open, snapshot, touch } = await import('./db.ts')
@@ -305,14 +305,6 @@ Deno.test('MCP schemas document parameters and derive closed vocabularies', asyn
       prop(byName(tools, 'task_comment'), 'verdict')?.enum,
       [...verdicts],
     )
-    assertEquals(
-      prop(byName(tools, 'memory_save'), 'type')?.enum,
-      [...memoryTypes],
-    )
-    assertEquals(
-      prop(byName(tools, 'memory_recall'), 'type')?.enum,
-      [...memoryTypes],
-    )
     assertMatch(
       byName(tools, 'graph_apply').description ?? '',
       new RegExp(edges.join('\\|')),
@@ -428,11 +420,7 @@ Deno.test('MCP modes apply every accepted field and reject conflicts', async () 
         { eid: project, name: 'doc', comp: { title: 'Project' } },
         { eid: project, name: 'project', comp: {} },
         { eid: memory, name: 'doc', comp: { title: 'Memory', body: 'Fact' } },
-        {
-          eid: memory,
-          name: 'memory',
-          comp: { type: 'project', scope_eid: null },
-        },
+        { eid: memory, name: 'memory', comp: { scope_eid: null } },
       ])
 
       let confirmed = await client.callTool({
@@ -440,7 +428,7 @@ Deno.test('MCP modes apply every accepted field and reject conflicts', async () 
         arguments: {
           id: memory,
           title: 'Confirmed',
-          type: 'feedback',
+          feedback: '',
           scope: project,
           session: 'test',
         },
@@ -448,8 +436,16 @@ Deno.test('MCP modes apply every accepted field and reject conflicts', async () 
       assertEquals(confirmed.isError, undefined)
       let remembered = rows(snapshot(g.db)).find((row) => row.eid == memory)
       assertEquals(remembered?.comps.doc?.title, 'Confirmed')
-      assertEquals(remembered?.comps.memory?.type, 'feedback')
       assertEquals(remembered?.comps.memory?.scope_eid, project)
+      assert(remembered?.comps.feedback) // tagged, source unknown
+      // The retired enum is refused, not dropped — a silently ignored
+      // argument would file the memory wrong and say nothing (T-12585).
+      let typed = await client.callTool({
+        name: 'memory_save',
+        arguments: { id: memory, type: 'feedback', session: 'test' },
+      })
+      assertEquals(typed.isError, true)
+      assertMatch(said(typed), /memory\.type is retired/)
 
       let badScope = await client.callTool({
         name: 'memory_save',
@@ -466,7 +462,6 @@ Deno.test('MCP modes apply every accepted field and reject conflicts', async () 
         arguments: {
           title: 'New memory',
           body: 'New fact',
-          type: 'reference',
           scope: project,
           session: 'test',
         },
@@ -494,12 +489,14 @@ Deno.test('MCP modes apply every accepted field and reject conflicts', async () 
         said(recalled),
         new RegExp(`Confirmed\nwas: ${sha('Fact')}\nFact`),
       )
+      // The tag screens the index — no column, so it never rides a pred.
       let indexed = await client.callTool({
         name: 'memory_recall',
-        arguments: { type: 'feedback', limit: 1 },
+        arguments: { feedback: true, limit: 5 },
       })
       assertEquals(indexed.isError, undefined)
-      assertMatch(said(indexed), /Confirmed/)
+      assertMatch(said(indexed), /feedback: Confirmed/)
+      assertEquals(said(indexed).includes('New memory'), false)
 
       let published = await client.callTool({
         name: 'page_put',
@@ -663,7 +660,7 @@ Deno.test('memory_save guards the body it replaces', async () => {
     await protocol(g.io, async (client) => {
       apply(g.db, [
         { eid: M, name: 'doc', comp: { title: 'Memory', body: 'ONE' } },
-        { eid: M, name: 'memory', comp: { type: 'project', scope_eid: null } },
+        { eid: M, name: 'memory', comp: { scope_eid: null } },
       ])
       let save = (args: Record<string, unknown>) =>
         client.callTool({
@@ -718,7 +715,7 @@ Deno.test('memory_save guards the body it replaces', async () => {
 
       // Doors that replace no body are untouched: confirming props needs no
       // token, and a new memory has no prior state to name.
-      let props = await save({ type: 'feedback' })
+      let props = await save({ feedback: '' })
       assertEquals(props.isError, undefined)
       assertEquals(stored(), 'FROM EMPTY')
       let made = await client.callTool({

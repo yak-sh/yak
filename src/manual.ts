@@ -22,6 +22,11 @@ export type Manual = {
   root?: boolean
   alias?: boolean
   options?: Opt[]
+  // Flags this verb USED to take, and what to say instead. Out of `usage`
+  // and out of `options`, so nothing teaches them — but named here, because
+  // "does not take --type" answers the grammar question and leaves the
+  // caller's actual one open.
+  retired?: Record<string, string>
   words?: [min: number, max?: number]
   passthrough?: boolean
   check?: (args: string[], words: string[]) => string | undefined
@@ -37,6 +42,12 @@ let value = (
 
 let json = flag('--json')
 let body = value('--body', 'text, @file, - or @-')
+// Retired flags whose habit outlives them, said once each (Manual.retired).
+let BRIEF_BODY = "takes no --body — did you mean 'task session brief --body=…'?"
+let REMEMBER_TYPE =
+  'takes no --type: the memory.type enum is retired (T-12585) — ' +
+  '--scope=P-19 says project, --feedback=jeff says who gave it, and ' +
+  'saying nothing IS a reference'
 let count = value('-n', 'a positive number', true, /^[1-9]\d*$/)
 
 export let manuals: Record<string, Manual> = {
@@ -375,23 +386,23 @@ export let manuals: Record<string, Manual> = {
     words: [0, 0],
   },
   remember: {
-    usage: 'remember <title...> [--body=…] ' +
-      '[--type=user|feedback|project|reference] [--scope=P-9]',
+    usage: 'remember <title...> [--body=…] [--feedback=who] [--scope=P-9]',
     about: 'save a memory: the title is the index line, the body the lesson',
     examples: [
-      'task remember "pipe a gate, lose its exit code" --type=feedback',
+      'task remember "pipe a gate, lose its exit code" --feedback=jeff',
+      'task remember "the sweep runs hourly" --scope=P-19',
     ],
+    detail: '--scope names the project it belongs to; omit it for a ' +
+      'principle every operator carries. --feedback names WHO gave it (an ' +
+      'empty value tags it with no source). There is no --type: the enum ' +
+      'is retired, and saying nothing IS a reference.',
     root: true,
     options: [
       body,
-      value(
-        '--type',
-        'user, feedback, project, or reference',
-        false,
-        /^(user|feedback|project|reference)$/,
-      ),
+      value('--feedback', 'who gave it, or empty', false, /.*/),
       value('--scope', 'a project reference'),
     ],
+    retired: { '--type': REMEMBER_TYPE },
     words: [1],
   },
   session: {
@@ -416,6 +427,7 @@ export let manuals: Record<string, Manual> = {
     usage: 'session wrap [sid] [--hook]',
     about: 'release claims and preserve the session brief',
     options: [flag('--hook')],
+    retired: { '--body': BRIEF_BODY },
     words: [0, 1],
   },
   'session brief': {
@@ -558,6 +570,7 @@ export let manuals: Record<string, Manual> = {
     examples: ['task session wrap'],
     alias: true,
     options: [flag('--hook')],
+    retired: { '--body': BRIEF_BODY },
     words: [0, 1],
   },
 }
@@ -729,16 +742,8 @@ export let validate = (
     }
     let opt = manual.options?.find((o) => match(o, arg))
     if (!opt) {
-      if (
-        (name == 'wrap' || name == 'session wrap') &&
-        optionName(arg) == '--body'
-      ) {
-        throw usageError(
-          name,
-          manual,
-          "takes no --body — did you mean 'task session brief --body=…'?",
-        )
-      }
+      let gone = manual.retired?.[optionName(arg)]
+      if (gone) throw usageError(name, manual, gone)
       throw usageError(name, manual, `does not take ${optionName(arg)}`)
     }
     if (!opt.value) continue

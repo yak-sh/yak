@@ -285,9 +285,15 @@ let schema = `
   );
   create table if not exists memory (
     eid         text primary key references entity(eid),
-    type        text not null default 'project',
     scope_eid   text,
     last_confirmed_at text
+  );
+  -- The retired memory.type enum's one surviving value, as a tag (T-12585).
+  -- "by" is who GAVE the feedback — no FK and no default (types.ts says
+  -- why: the recorder is not the source), quoted because BY is a keyword.
+  create table if not exists feedback (
+    eid  text primary key references entity(eid),
+    "by" text
   );
   -- recall's not-null columns have no defaults ON PURPOSE: they refuse
   -- even apply()'s bare {} touch, so touch() below stays the one writer.
@@ -623,6 +629,23 @@ export let backfillVia = (db: DatabaseSync) => {
   }
 }
 
+// memory.type → the `feedback` tag (T-12585). The enum said four things the
+// graph already knew: `project` restated scope_eid, `user` had zero rows,
+// `reference` was the absence of anything else. Only `feedback` carried a
+// fact, so only `feedback` becomes a row — with a NULL source, because
+// `created.by` names the recorder (a venture, in 81 of 87 rows), not who
+// gave the feedback, and an inferred author that is wrong is worse than an
+// absent one. The drop is what makes the retirement true: a column that
+// lingers keeps teaching a vocabulary the code no longer has.
+export let retireMemoryType = (db: DatabaseSync) => {
+  if (!hasCol(db, 'memory', 'type')) return
+  db.exec(
+    `insert or ignore into feedback (eid)
+       select eid from memory where type = 'feedback'`,
+  )
+  db.exec('alter table memory drop column type')
+}
+
 // Give every session its canonical launch facet before graph-out can observe
 // the handle. The dormant aliases stay as rollback input; insert-or-ignore
 // makes the canonical row authoritative on every later open.
@@ -887,6 +910,9 @@ export let open = (path = file) => {
   dropCol('comment', 'event')
   dropCol('memory', 'source_eid')
   dropCol('mail', 'read_at')
+  // Reads memory.type and drops it in the same breath, so it belongs with
+  // the retirements rather than the backfills above.
+  retireMemoryType(db)
   healStored(db)
   return db
 }

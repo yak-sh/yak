@@ -515,7 +515,7 @@ let has: [string, string, string, string][] = [
   ['ref sugar', '.', '.assignee', 'task · ref'],
   ['shared ref sugar', '.', '.actor', 'ref'],
   ['prefix keeps the comp', '.mem', '.memory.', 'comp'],
-  ['comp columns', '.memory.', '.memory.type', 'memory'],
+  ['comp columns', '.memory.', '.memory.scope_eid', 'memory'],
   [
     'stamped column, dimmed',
     '.memory.',

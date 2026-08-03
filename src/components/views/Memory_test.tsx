@@ -17,9 +17,9 @@ let memory: Ent = {
   doc: { eid: 'memory', title: 'Prefer examples over prose', body: '' },
   memory: {
     eid: 'memory',
-    type: 'feedback',
     last_confirmed_at: '2026-07-25T12:00:00.000Z',
   },
+  feedback: { eid: 'memory' },
 }
 
 let children = (v: VNode) =>
@@ -33,9 +33,9 @@ Deno.test('memory owns its list tile', () => {
   assertEquals(resolve(memory, 'List.Tile').Render, MemoryTile)
 })
 
-Deno.test('memory tile says type, index, confirmation age, and id', () => {
-  let [type, title, stamp, id] = children(MemoryTile({ e: memory }))
-  assertEquals(text(type), 'feedback')
+Deno.test('memory tile says feedback, index, confirmation age, and id', () => {
+  let [tag, title, stamp, id] = children(MemoryTile({ e: memory }))
+  assertEquals(text(tag), 'feedback')
   assertEquals(text(title), 'Prefer examples over prose')
   assertEquals(stamp.type === Stamp, true)
   assertEquals(stamp.props as unknown, {
@@ -43,4 +43,12 @@ Deno.test('memory tile says type, index, confirmation age, and id', () => {
     label: 'confirmed',
   })
   assertEquals(id.type === Id, true)
+})
+
+// A memory that records nobody's correction shows no tag at all — the
+// retired enum's other three values said only what the row already held.
+Deno.test('memory tile: no feedback tag, no slot', () => {
+  let { feedback: _gone, ...plain } = memory
+  let [tag] = children(MemoryTile({ e: plain }))
+  assertEquals(tag, null)
 })

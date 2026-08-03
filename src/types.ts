@@ -80,9 +80,6 @@ export let verdicts = [
 export let verdictName = (verdict?: string | null) =>
   String(verdict ?? '').replaceAll('_', ' ')
 
-// One memory vocabulary feeds persistence, editors, and every door.
-export let memoryTypes = ['user', 'feedback', 'project', 'reference'] as const
-
 // Settled = no longer open work, whether it finished or was called off.
 // Gating, board defaults, and lease-lapse audits all key off this
 // instead of 'done' alone, so a cancelled blocker releases its gate too.
@@ -339,11 +336,29 @@ export let comps: Record<string, Record<string, PropType>> = {
   // must keep routing to task (live board queries depend on it), and a
   // collision would make it ambiguous. last_confirmed_at is server-stamped
   // by the confirm door, never wire-set.
+  //
+  // There is no `type` column (T-12585). It was a kind column hiding inside
+  // a component, in a graph whose whole premise is that an entity IS what
+  // its components make it — and the four values said nothing the graph did
+  // not already hold: `project` restated `scope_eid`, `user` had zero rows
+  // in 222, `reference` was what remained when nothing was said, and
+  // `feedback` is now the tag below, which records WHO gave it.
   memory: {
-    type: { enum: memoryTypes },
     // Scope is history — a fact outlives the project it was learned for.
     scope_eid: { eid: 'project', death: 'keep' },
   },
+  // This entity records feedback, and `by` is who GAVE it. A facet like the
+  // stamps: a memory usually wears it, but a comment or a doc may. Not in
+  // kindOrder — a memory that carries feedback is still a memory.
+  //
+  // `by` is wire-only, deliberately NOT defaulted to the writing actor: the
+  // recorder is almost never the source. Of the 87 rows the retired enum
+  // called feedback, `created.by` named a VENTURE in 81 (the repo an agent
+  // stood in) and a person in 6 — so a default would have asserted, 81
+  // times, that a project said something a person said. Absent means the
+  // source was not recorded, which is true; it is never a claim about
+  // anyone. Death 'keep': the source outlives their tombstone, like a byline.
+  feedback: { by: { eid: '', death: 'keep' } },
   // Server-minted recall aggregates — count·first_at·last_at is the
   // decay model's whole memory (query.ts hot() derives rank at read).
   // Nothing is wire-writable; db.ts touch() is the one writer. Keyed by
@@ -1050,15 +1065,18 @@ export type Alias = { eid: string; slug: string }
 export type Persona = { eid: string; home_eid?: string | null }
 
 // A distilled fact the fleet keeps: content in the doc, provenance in
-// created, scope in scope_eid (the project it belongs to).
-// last_confirmed_at is the last explicit re-confirmation — server-stamped,
-// like every recall statistic.
+// created, scope in scope_eid (the project it belongs to; absent = a
+// principle every operator carries). last_confirmed_at is the last explicit
+// re-confirmation — server-stamped, like every recall statistic.
 export type Memory = {
   eid: string
-  type: string // user | feedback | project | reference
   scope_eid?: string | null
   last_confirmed_at?: string | null
 }
+
+// This entity records feedback; `by` is who gave it, absent when nobody
+// wrote the source down. A facet — any entity may wear it.
+export type Feedback = { eid: string; by?: string | null }
 
 // Recall aggregates, server-minted on every activation (db.ts touch()).
 // Three numbers are the whole model: query.ts hot() derives stability
@@ -1146,6 +1164,7 @@ export type Ent = {
   review?: Review
   alias?: Alias
   memory?: Memory
+  feedback?: Feedback
   persona?: Persona
   recall?: Recall
   created?: Created

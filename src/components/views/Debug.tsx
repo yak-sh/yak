@@ -106,8 +106,8 @@ let Row = ({ comp, k, v }: { comp?: string; k: string; v: unknown }) => (
 // A component's rows are the UNION of its stored columns and its
 // vocabulary columns: a freshly-added comp lands in the cache empty
 // (mutate({name, comp:{}})), so the vocab keys are what surface its
-// editable Prop rows before any value exists — set memory.type the moment
-// you add memory. For an entity loaded whole (snapshot carries every
+// editable Prop rows before any value exists — set memory.scope_eid the
+// moment you add memory. For an entity loaded whole (snapshot carries every
 // column) this union is exactly its stored keys.
 let cells = (e: Ent, name: string, comp: Record<string, unknown>) => {
   let keys = [

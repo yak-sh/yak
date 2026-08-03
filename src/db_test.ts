@@ -8,11 +8,13 @@ let {
   db,
   delta,
   eager,
+  hasCol,
   journalBy,
   journalOf,
   mendCalls,
   mendMail,
   open,
+  retireMemoryType,
   search,
   senderActor,
   sha,
@@ -109,7 +111,7 @@ let contracts = [
     to: 'operator@example.test',
   }),
   contract('persona', 'home_eid', 'project'),
-  contract('memory', 'scope_eid', 'project', { type: 'project' }),
+  contract('memory', 'scope_eid', 'project'),
 ]
 
 Deno.test('create + patch + column clear', () => {
@@ -874,7 +876,7 @@ Deno.test('typed refs may precede their targets without reordering births', () =
     {
       eid: memory,
       name: 'memory',
-      comp: { type: 'reference', scope_eid: project },
+      comp: { scope_eid: project },
     },
     { eid: middle, name: 'doc', comp: { title: 'middle' } },
     { eid: project, name: 'project', comp: {} },
@@ -1229,7 +1231,7 @@ Deno.test('decided: the wire dates and signs it, the server names the instrument
   let m = uid()
   apply(d, [
     { eid: m, name: 'doc', comp: { title: 'we bill quarterly' } },
-    { eid: m, name: 'memory', comp: { type: 'project' } },
+    { eid: m, name: 'memory', comp: {} },
   ])
   apply(
     d,
@@ -1258,6 +1260,46 @@ Deno.test('decided: the wire dates and signs it, the server names the instrument
   assertMatch(String(stamp(t)?.at), /^2026-03-01T/)
   assertEquals(stamp(t)?.by, jeff)
   assertEquals(stamp(t)?.via, client)
+})
+
+// memory.type → the `feedback` tag (T-12585). Only `feedback` becomes a row:
+// `project` said what scope_eid says, `reference` was the absence of anything
+// else, and `user` was worn by nothing. The source is NOT inferred —
+// created.by names the recorder, and 81 of the live graph's 87 feedback rows
+// were recorded by a venture rather than a person.
+Deno.test('retireMemoryType: feedback becomes a tag, the column goes', () => {
+  let d = fresh()
+  let mk = (title: string) => {
+    let eid = uid()
+    apply(d, [
+      { eid, name: 'doc', comp: { title } },
+      { eid, name: 'memory', comp: {} },
+    ])
+    return eid
+  }
+  let says = mk('a correction'), holds = mk('a fact'), points = mk('a pointer')
+  // The pre-migration shape: the enum column, still carrying all of it.
+  d.exec(`alter table memory add column type text not null default 'project'`)
+  let typed = d.prepare('update memory set type = ? where eid = ?')
+  typed.run('feedback', says)
+  typed.run('project', holds)
+  typed.run('reference', points)
+  let tagged = () =>
+    (d.prepare('select eid from feedback').all() as { eid: string }[])
+      .map((r) => r.eid)
+
+  retireMemoryType(d)
+  assertEquals(tagged(), [says]) // one value carried a fact; three did not
+  assertEquals(
+    d.prepare('select "by" from feedback where eid = ?').get(says),
+    { by: null }, // never inferred from created.by
+  )
+  assertEquals(hasCol(d, 'memory', 'type'), false) // the drop makes it true
+  // Every row still exists — the retirement moves a fact, it never sheds one.
+  assertEquals(d.prepare('select count(*) as n from memory').get(), { n: 3 })
+  // Idempotent: a second boot has no column left to read and does nothing.
+  retireMemoryType(d)
+  assertEquals(tagged(), [says])
 })
 
 // The read→opened migration (T-7006): the backfill seeds `opened` from
@@ -1400,7 +1442,7 @@ Deno.test('backfill: memory instruments move into created.via', () => {
   apply(d, [
     { eid: source, name: 'session', comp: { id: uid() } },
     { eid: memory, name: 'doc', comp: { title: 'old fact' } },
-    { eid: memory, name: 'memory', comp: { type: 'reference' } },
+    { eid: memory, name: 'memory', comp: {} },
   ])
   // a pre-migration graph: the retired column, still naming the source
   d.exec('alter table memory add column source_eid text')
@@ -1410,12 +1452,7 @@ Deno.test('backfill: memory instruments move into created.via', () => {
   assertEquals(
     snapshot(d).changes.find((c) => c.eid == memory && c.name == 'memory')
       ?.comp,
-    {
-      eid: memory,
-      type: 'reference',
-      scope_eid: null,
-      last_confirmed_at: null,
-    },
+    { eid: memory, scope_eid: null, last_confirmed_at: null },
   )
   backfillVia(d)
   let via = snapshot(d).changes.find((c) =>
@@ -1995,18 +2032,13 @@ Deno.test('memory: scope rides in, provenance and confirmation are stamped', () 
       {
         eid: m,
         name: 'memory',
-        comp: {
-          type: 'feedback',
-          scope_eid: p,
-          last_confirmed_at: 'FAKE',
-        },
+        comp: { scope_eid: p, last_confirmed_at: 'FAKE' },
       },
     ],
     undefined,
     `sess-${s}`,
   )
   let row = comp(m, 'memory')
-  assertEquals(row?.type, 'feedback')
   assertEquals(row?.scope_eid, p)
   assertEquals(row?.last_confirmed_at, null) // server-owned
   // Retired to created.via (T-7113) and dropped: naming it is now a loud
@@ -2050,7 +2082,7 @@ Deno.test('touch confirm stamps the memory; death takes the recall row', () => {
   let m = uid()
   apply(db, [
     { eid: m, name: 'doc', comp: { title: 'confirmable' } },
-    { eid: m, name: 'memory', comp: { type: 'user' } },
+    { eid: m, name: 'memory', comp: {} },
   ])
   let out = touch(db, [m], true)
   assertEquals(out.map((c) => c.name), ['recall', 'memory'])
@@ -2608,7 +2640,7 @@ Deno.test('precondition: null is a value — expected-absent compares', () => {
     { eid: p, name: 'doc', comp: { title: 'a scope' } },
     { eid: p, name: 'project', comp: {} },
     { eid: m, name: 'doc', comp: { title: 'a memory' } },
-    { eid: m, name: 'memory', comp: { type: 'project' } }, // scope_eid null
+    { eid: m, name: 'memory', comp: {} }, // scope_eid null
   ])
   // Guarding a genuinely absent column, expecting absent, applies.
   apply(db, [

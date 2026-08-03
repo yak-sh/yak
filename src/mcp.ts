@@ -16,7 +16,6 @@ import {
   type Change,
   edges,
   type Hit,
-  memoryTypes,
   type Snapshot,
   statuses,
   uuid,
@@ -35,6 +34,7 @@ import {
   decidedChange,
   derefParams,
   edgesOf,
+  feedbackChange,
   find,
   history,
   historyLine,
@@ -42,11 +42,13 @@ import {
   idOf,
   type JournalEntry,
   memoryChanges,
+  memoryHead,
   noticeBlock,
   notices,
   param,
   patches,
   recallIndex,
+  RETIRED_TYPE,
   type Row,
   rows,
   search,
@@ -750,9 +752,10 @@ first.`,
     'memory_save',
     `Save a memory — one distilled fact the whole fleet can recall.
 Content is a doc: title is the INDEX LINE (recall shows it first),
-body the fact. ${DOC} type: user (who the owner is) | feedback (how
-to work, with the why) | project (ongoing state) | reference (a
-pointer). scope names the project it belongs to (P-19). Passing id
+body the fact. ${DOC} scope names the project it belongs to (P-19);
+omit it for a principle every operator carries. feedback names WHO
+gave it, when the memory records someone's correction ('jeff', or ''
+if the source is unknown). Passing id
 instead CONFIRMS an existing memory: patches whatever props ride
 along, stamps last_confirmed_at, and counts as a strong recall —
 confirm what you reuse, and it decays slower.
@@ -763,8 +766,19 @@ your read is refused, with their text and a fresh token. ${BUS}`,
     {
       title: z.string().optional(),
       body: body().optional(),
-      type: z.enum(memoryTypes).optional(),
+      // The retired enum, kept only to REFUSE — the habit is four years of
+      // fleet muscle memory and a silently dropped argument would file the
+      // memory wrong without saying so (T-12585).
+      type: z.string()
+        .describe('RETIRED — see the error it returns.')
+        .optional(),
       scope: z.string().optional(),
+      feedback: z.string()
+        .describe(
+          "Who GAVE this feedback — 'jeff', a human id, or '' when the " +
+            'source is unknown. Tags the memory as feedback either way.',
+        )
+        .optional(),
       decided: z.string()
         .describe(
           'When the decision this records was TAKEN — an ISO date or a ' +
@@ -783,17 +797,19 @@ your read is refused, with their text and a fresh token. ${BUS}`,
       session: z.string(),
     },
     async (
-      { title, body, type, scope, decided, id, was, session }: {
+      { title, body, type, scope, feedback, decided, id, was, session }: {
         title?: string
         body?: string
         type?: string
         scope?: string
+        feedback?: string
         decided?: string
         id?: string
         was?: string
         session: string
       },
     ) => {
+      if (type != null) return err(RETIRED_TYPE)
       let all = rows(await io.read())
       if (id) {
         let row = find(all, id)
@@ -824,14 +840,21 @@ your read is refused, with their text and a fresh token. ${BUS}`,
             ...(was != null ? { was: { body: was } } : {}),
           })
         }
-        let memory: Record<string, unknown> = type ? { type } : {}
         if (scope != null) {
           let project = find(all, scope)
           if (!project?.comps.project) return err(`no project: ${scope}`)
-          memory.scope_eid = project.eid
+          patch.push({
+            eid: row.eid,
+            name: 'memory',
+            comp: { scope_eid: project.eid },
+          })
         }
-        if (Object.keys(memory).length) {
-          patch.push({ eid: row.eid, name: 'memory', comp: memory })
+        if (feedback != null) {
+          try {
+            patch.push(feedbackChange(all, row.eid, feedback))
+          } catch (e) {
+            return err((e as Error).message)
+          }
         }
         if (decided != null) patch.push(decidedChange(row.eid, decided))
         if (patch.length) {
@@ -855,8 +878,8 @@ your read is refused, with their text and a fresh token. ${BUS}`,
         made = memoryChanges(all, {
           title,
           body,
-          type,
           scope,
+          feedback,
           decided,
           session,
         })
@@ -881,16 +904,20 @@ your read is refused, with their text and a fresh token. ${BUS}`,
 'M-7 0.84 feedback: title · 3× · confirmed 2026-07-01' — no bodies.
 Pass ids: [M-7, …] to read full bodies: THAT is the activation that
 bumps a memory's recall stats (listing never does), so expand only
-what you actually use. ids mode cannot be combined with query, type,
-or limit. In index mode, type is an exact memory-type filter and limit
-caps returned index lines (default 20). query mixes text terms with
-dot-param filters ('.type=feedback', '.scope_eid=P-19', '.count>=3',
+what you actually use. ids mode cannot be combined with query,
+feedback, or limit. In index mode, feedback: true keeps only memories
+recording someone's correction, and limit caps returned index lines
+(default 20). query mixes text terms with dot-param filters
+('.scope_eid=P-19', '.feedback.by=jeff', '.count>=3',
 '.last_confirmed_at<"last month"'); rank is recency vs earned stability
 — recalled often and spread out decays slowest. ${BUS}`,
     {
       query: z.string().optional(),
-      type: z.enum(memoryTypes)
-        .describe('Exact memory type for index mode.')
+      type: z.string()
+        .describe('RETIRED — see the error it returns.')
+        .optional(),
+      feedback: z.boolean()
+        .describe('Index mode: keep only memories tagged as feedback.')
         .optional(),
       ids: z.array(z.string()).min(1).optional(),
       limit: count
@@ -899,20 +926,22 @@ dot-param filters ('.type=feedback', '.scope_eid=P-19', '.count>=3',
       session: z.string().optional(),
     },
     async (
-      { query, type, ids, limit, session }: {
+      { query, type, feedback, ids, limit, session }: {
         query?: string
         type?: string
+        feedback?: boolean
         ids?: string[]
         limit?: number
         session?: string
       },
     ) => {
+      if (type != null) return err(RETIRED_TYPE)
       let all = rows(await io.read())
       if (
         ids &&
-        [query, type, limit].some((value) => value != null)
+        [query, feedback, limit].some((value) => value != null)
       ) {
-        return err('ids cannot be combined with query, type, or limit')
+        return err('ids cannot be combined with query, feedback, or limit')
       }
       if (ids) {
         let hits: Row[] = []
@@ -929,9 +958,9 @@ dot-param filters ('.type=feedback', '.scope_eid=P-19', '.count>=3',
             // guarded save is the only way to edit a memory. Reading and
             // then writing is the whole loop, so the read hands over what
             // the write will ask for.
-            `${idOf(r)} ${r.comps.memory.type}: ${
-              r.comps.doc?.title ?? ''
-            }\nwas: ${sha(r.comps.doc?.body ?? '')}\n${r.comps.doc?.body ?? ''}`
+            `${idOf(r)} ${memoryHead(r)}${r.comps.doc?.title ?? ''}\nwas: ${
+              sha(r.comps.doc?.body ?? '')
+            }\n${r.comps.doc?.body ?? ''}`
           ).join('\n\n'),
           session,
         )
@@ -942,14 +971,14 @@ dot-param filters ('.type=feedback', '.scope_eid=P-19', '.count>=3',
           parseQuery(query ?? ''),
           (id) => find(all, id)?.eid,
         )
-        if (type) {
-          let p = pred(`.type=${type}`)
-          if (p) preds.push(p)
-        }
       } catch (e) {
         return err((e as Error).message)
       }
-      let lines = recallIndex(all, preds, Date.now(), limit ?? 20)
+      // A tag comp has no column, so it screens HERE rather than through the
+      // pred grammar — the same way the inbox reads `archived`. Its `by` is a
+      // column and does filter: '.feedback.by=jeff'.
+      let pool = feedback ? all.filter((r) => r.comps.feedback) : all
+      let lines = recallIndex(pool, preds, Date.now(), limit ?? 20)
       return bus(lines.join('\n') || '(no memories)', session)
     },
   )

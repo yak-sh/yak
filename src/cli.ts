@@ -1578,11 +1578,13 @@ let remember = async (args: string[]) => {
     let p = { comp: 'doc', prop: 'body', value: body }
     body = String(inflate(p, stdin, `--body=${body}`).value)
   }
+  // --type is retired (T-12585); manual.ts `retired` refuses it upstream of
+  // here with the replacement named, so nothing silently drops it.
   let made = memoryChanges(all, {
     title,
     body,
-    type: flag('type'),
     scope: flag('scope'),
+    feedback: flag('feedback'),
     session,
   })
   await send(made.changes)

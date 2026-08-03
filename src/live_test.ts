@@ -774,7 +774,7 @@ Deno.test('boardAll: whole-graph match, chrome/comments/self excluded', async ()
     mem: {
       entity: spine('mem', 4),
       doc: { eid: 'mem', title: 'a fact', body: '' },
-      memory: { eid: 'mem', type: 'project' },
+      memory: { eid: 'mem', scope_eid: null },
     },
     cam: {
       entity: spine('cam', 5),

@@ -52,7 +52,8 @@ let cold = doc(
 )
 let indexed = row({
   doc: { title: 'delegation discipline', body: 'Worktrees only.' },
-  memory: { type: 'feedback', last_confirmed_at: day(3) },
+  memory: { last_confirmed_at: day(3) },
+  feedback: {},
   recall: { count: 4, first_at: day(30), last_at: day(2) },
 }, 2)
 
@@ -153,7 +154,7 @@ Deno.test('materialize: a dialect reframes without touching content', () => {
   assert(!md.includes('---'))
 })
 
-Deno.test('indexLine: id, type, count, confirmed date — never warmth', () => {
+Deno.test('indexLine: id, feedback tag, count, confirmed date — never warmth', () => {
   let line = indexLine(indexed, NOW)
   assertStringIncludes(
     line,

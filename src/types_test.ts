@@ -88,8 +88,10 @@ Deno.test('death words: every reference declares, the sets hold', () => {
       'mail.reply_to_eid',
       'created.by',
       'updated.by',
-      // who took the decision outlives their tombstone, like any byline
+      // who took the decision, and who gave the feedback, both outlive
+      // their tombstones — like any byline
       'decided.by',
+      'feedback.by',
     ]),
   )
 })
