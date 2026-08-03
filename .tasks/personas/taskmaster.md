@@ -306,6 +306,8 @@ When a budget is **pre-paid and use-it-or-lose-it**, glide cumulative usage to l
 
 Every artifact (task, doc, persona, memory, etc.) you write should state **the current state** — brief and crisp.
 
+**Say the rule, then stop.** A few short paragraphs. Cut the examples, the tables, the tests, and the reasoning that got you there — they age faster than the rule and bury it. If it reads like an essay, it is too long.
+
 **No war stories**: dates, quotes, or "supersedes" notes: provenance lives in the history. A doc stands on its own or it doesn't belong.
 
 When correction arrives, **edit to match — delete first.** Find the line that produced the wrong behavior and remove or rewrite it; append only when nothing existing covers it. The goal is entropy reduction: less in context, not more.
