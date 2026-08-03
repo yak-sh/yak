@@ -64,6 +64,14 @@ put('e5', {
   doc: { title: '10', body: 'digits in a text column' },
   task: { status: 'open', priority: 10, domain: '9' },
 })
+// The trigram index narrows with the needle's wildcards left in, so these two
+// are the rows a missing re-test would hand back: each holds what `100%` and
+// `under_score` become once `%` and `_` are wildcards, and neither is a match.
+put('e6', { doc: { title: 'wider', body: '100 percent, underXscore' } })
+// Non-ASCII, which the two case foldings do not agree about (see has()): the
+// stored text is lowercase so an ASCII needle reaching PAST it still agrees,
+// while a needle carrying the accent itself declines.
+put('e7', { doc: { title: 'café', body: 'a café in zürich' } })
 
 // The JS side reads the same shape live.ts and client.ts hand matchQuery:
 // eid → { comp → { col → value } }, absent components simply missing.
@@ -165,6 +173,28 @@ let COMPILES = [
   '.task.status=open&.order=hot',
   // the empty query is every entity
   '',
+  // a bare word: the trigram index narrows, instr() decides — title, body,
+  // and the entities carrying no doc at all
+  'widget',
+  'gamma',
+  'first',
+  'WIDGET',
+  'widget&.task.status=wip',
+  'nothing-matches-this',
+  // an empty needle is true of every string, so a TEXT pred asks only whether
+  // the doc exists — and `~=` over a body asks nothing at all
+  '""',
+  '.doc.body~=',
+  // a substring over a body, where the needle carries LIKE's own wildcards:
+  // e6 holds what each becomes once they widen, and must not come back
+  '.doc.body~=100%',
+  '.doc.body~=under_score',
+  '100%',
+  'under_score',
+  // an ASCII needle reaching past a multibyte character — the trigrams it
+  // wants sit behind two of them
+  '.doc.body~=rich',
+  'rich',
 ]
 
 for (let q of COMPILES) {
@@ -180,14 +210,20 @@ for (let q of COMPILES) {
 let DECLINES = [
   '.updated.at>=1-week-ago', // a moving span
   '.created.at=today',
-  // a body is never scanned in SQL — FTS is the tool, and instr() over every
-  // body measured 6.7x SLOWER than the JS path it was meant to replace
-  'widget',
-  'gamma',
-  'widget&.task.status=wip',
-  '.doc.body~=100%',
-  '.doc.body=',
+  '.doc.body=', // a body is only ever narrowed by the index, never scanned
   '.task.domain>=1', // text column against a numeric operand
+  // shorter than a trigram: fts5 would answer these by decoding the whole
+  // index, slower than the scan the index was brought in to replace
+  '.doc.body~=a',
+  '.doc.body~=ab',
+  'a',
+  'ab',
+  '.doc.body~=a%b', // wildcards leave no run of three
+  // a non-ASCII needle: SQLite's lower() folds A-Z and no more, so the two
+  // matchers do not mean the same thing by `~=café`
+  '.doc.body~=café',
+  '.doc.title~=café',
+  'café',
 ]
 
 for (let q of DECLINES) {
@@ -195,3 +231,15 @@ for (let q of DECLINES) {
     assertEquals(bySql(q), null, `${q} should have declined`)
   })
 }
+
+// doc_gram indexes doc and nothing else, so a substring over any OTHER body
+// column would narrow by the wrong table's rowid and lose rows. No dot-param
+// reaches those columns today (they are server-stamped), so this is the only
+// door the invariant can be tested through — and the day one of them becomes
+// wire-writable, it must not start compiling by accident.
+Deno.test('a body column the index does not cover declines', () => {
+  assertEquals(
+    where([{ comp: 'session', prop: 'final_text', op: '~', value: 'hello' }]),
+    null,
+  )
+})

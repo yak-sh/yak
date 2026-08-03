@@ -382,6 +382,30 @@ let schema = `
     insert into doc_fts (rowid, title, body)
     values (new.rowid, new.title, new.body);
   end;
+  -- The SUBSTRING index, and the reason it cannot be doc_fts: doc_fts indexes
+  -- TOKENS, so a search for idget finds none of the rows holding widget — a
+  -- prefix search is a strict subset of a substring one and loses rows
+  -- silently. The trigram tokenizer indexes every 3-character window instead,
+  -- which is what lets SQLite answer LIKE %x% from an index (sql.ts) rather
+  -- than by lowercasing every body in the graph. Derived like doc_fts: never
+  -- on the wire, never dumped (bin/backup), healed by the same check below.
+  create virtual table if not exists doc_gram using fts5(
+    title, body, content='doc', content_rowid='rowid', tokenize='trigram'
+  );
+  create trigger if not exists doc_gram_ai after insert on doc begin
+    insert into doc_gram (rowid, title, body)
+    values (new.rowid, new.title, new.body);
+  end;
+  create trigger if not exists doc_gram_ad after delete on doc begin
+    insert into doc_gram (doc_gram, rowid, title, body)
+    values ('delete', old.rowid, old.title, old.body);
+  end;
+  create trigger if not exists doc_gram_au after update on doc begin
+    insert into doc_gram (doc_gram, rowid, title, body)
+    values ('delete', old.rowid, old.title, old.body);
+    insert into doc_gram (rowid, title, body)
+    values (new.rowid, new.title, new.body);
+  end;
 `
 
 // Insert an entity spine row: the eid arrives (or is minted) as a UUID, the
@@ -776,24 +800,26 @@ export let open = (path = file) => {
   // Nums already recycled before this column existed stay unknowable —
   // monotonic from here on; old graves just don't raise the high-water.
   addCol('tombstone', 'num', 'num integer')
-  // The FTS mirror follows doc by trigger from here on. Anything older,
+  // Both doc mirrors follow it by trigger from here on. Anything older,
   // any out-of-band writer, or shadow-table damage (overlapping watcher
   // restarts have managed it) shows up here as a failed integrity check
   // or a count drift — one rebuild pass over the content table heals
-  // both, and at this scale it costs milliseconds on boot.
+  // both, and at this scale it costs milliseconds on boot. A doc_gram
+  // that has never been built is exactly a count drift, so the index
+  // arrives filled on the first boot that knows about it.
   let count = (t: string) =>
     (db.prepare(`select count(*) as n from ${t}`).get() as { n: number }).n
-  let sound = () => {
+  let sound = (t: string) => {
     try {
-      db.exec(
-        `insert into doc_fts (doc_fts, rank) values ('integrity-check', 1)`,
-      )
-      return count('doc_fts') == count('doc')
+      db.exec(`insert into ${t} (${t}, rank) values ('integrity-check', 1)`)
+      return count(t) == count('doc')
     } catch {
       return false
     }
   }
-  if (!sound()) db.exec(`insert into doc_fts (doc_fts) values ('rebuild')`)
+  for (let t of ['doc_fts', 'doc_gram']) {
+    if (!sound(t)) db.exec(`insert into ${t} (${t}) values ('rebuild')`)
+  }
   let { n } = db.prepare('select count(*) as n from task').get() as {
     n: number
   }
@@ -2348,28 +2374,38 @@ export let locate = (db: DatabaseSync, id: string): string | undefined => {
 // Every entity a compiled filter matches, with its components — the shape
 // `rows(snapshot())` hands a matcher, restricted to the rows that matched.
 //
-// The filter rides in as a SUBQUERY, one statement per component table, rather
-// than one `eager()` per row. That distinction is the whole difference between
-// a fast path and a slower one: a query matching the 10,618-entity graph costs
-// about as many statements as the graph has components either way, where
-// per-row reads cost 150,000 and time out.
+// One statement per component table, rather than one `eager()` per row: a
+// query matching the 10,618-entity graph costs about as many statements as the
+// graph has components either way, where per-row reads cost 150,000 and time
+// out.
+//
+// The filter itself runs ONCE, into `hit`. It used to ride into each of those
+// statements as a subquery, which re-asked the whole question forty times over
+// — invisible while every predicate was an indexed column read, and the whole
+// cost the moment one of them takes milliseconds. A substring over a body
+// (sql.ts) is that predicate: answered forty times it is slower than the JS
+// matcher it replaces, and answered once it is several times faster.
 export let matching = (
   db: DatabaseSync,
   filter: { sql: string; params: (string | number)[] },
 ): { eid: string; comps: Record<string, Record<string, unknown>> }[] => {
+  db.exec('create temp table if not exists hit (eid text primary key)')
+  db.exec('delete from hit')
+  db.prepare(`insert or ignore into hit (eid) ${filter.sql}`)
+    .run(...filter.params)
   let out = new Map<string, Record<string, Record<string, unknown>>>()
-  let spine = db.prepare(
-    `${select('entity')} where eid in (${filter.sql})`,
-  ).all(...filter.params) as Record<string, unknown>[]
+  let only = `where eid in (select eid from hit)`
+  let spine = db.prepare(`${select('entity')} ${only}`)
+    .all() as Record<string, unknown>[]
   for (let r of spine) out.set(String(r.eid), { entity: r })
   if (!out.size) return []
   for (let name of Object.keys(readable)) {
     if (name == 'entity') continue
-    let rows = db.prepare(`${select(name)} where eid in (${filter.sql})`)
-      .all(...filter.params) as Record<string, unknown>[]
+    let rows = db.prepare(`${select(name)} ${only}`)
+      .all() as Record<string, unknown>[]
     for (let r of rows) {
-      let hit = out.get(String(r.eid))
-      if (hit) hit[name] = r
+      let e = out.get(String(r.eid))
+      if (e) e[name] = r
     }
   }
   return [...out].map(([eid, comps]) => ({ eid, comps }))

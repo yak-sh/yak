@@ -15,9 +15,10 @@
 # commit stored a near-complete new copy (~167 MB/day, and .git reached 2.5 GB
 # in 15 days), while the whole db as text costs ~29 KB per commit — measured,
 # two real consecutive snapshots. The same change makes the working files
-# smaller than the binary was, since the two biggest tables are derived data
-# nobody needs to carry: embeddings and the FTS index are ~29% of the db and
-# both rebuild themselves.
+# smaller than the binary was, since the biggest tables are derived data nobody
+# needs to carry: embeddings and the two FTS indexes are over half the db —
+# doc_gram alone runs ~4x the size of the text it indexes — and all of them
+# rebuild themselves.
 #
 # SPLIT across files because GitHub's hard 100 MB limit is per FILE. The
 # journal is the largest table and the fastest-growing, and it is append-only,
@@ -54,10 +55,13 @@ sq snap/tasks.db "pragma integrity_check;" | grep -qx ok || {
 }
 
 # Derived tables carry no information the graph cannot rebuild: `embedding`
-# refills on the embed sweep, and doc_fts* is an external-content FTS5 index
-# healed by the integrity check in db.ts open(). Their SCHEMA still ships (the
-# .schema dump below is complete) so a restored db has the tables to fill.
-derived="name = 'embedding' or name like 'doc_fts%'"
+# refills on the embed sweep, and doc_fts*/doc_gram* are external-content FTS5
+# indexes healed by the integrity check in db.ts open(). Their SCHEMA still
+# ships (the .schema dump below is complete) so a restored db has the tables to
+# fill. doc_gram is the biggest of the three by far — a trigram index runs ~4x
+# the size of the text it indexes — so dumping it would be the largest thing in
+# history and the least worth carrying.
+derived="name = 'embedding' or name glob 'doc_fts*' or name glob 'doc_gram*'"
 
 # Data as INSERT statements, no DDL — `.mode insert` names each table, so the
 # files concatenate onto the schema in any order.
@@ -86,13 +90,15 @@ dump_data() {
 # ordinary CREATE TABLEs, but creating the virtual table makes them itself, so
 # replaying both collides ('doc_fts_data already exists') and every trigger
 # behind it then has no doc_fts to reference. The filter is on TYPE as well as
-# name because the sync triggers are called doc_fts_ai/ad/au and matching them
-# by name alone would drop the very things that refill the index — with them
-# kept, loading the doc rows below rebuilds the index on the way in.
+# name because the sync triggers are called doc_fts_ai/ad/au (doc_gram_ai/ad/au
+# for the trigram index) and matching them by name alone would drop the very
+# things that refill the index — with them kept, loading the doc rows below
+# rebuilds both indexes on the way in.
 # glob, not like: `_` is a wildcard in LIKE and would also match doc_fts.
 sqlite3 -batch -init /dev/null snap/tasks.db \
   "select sql || ';' from sqlite_master
-   where sql is not null and not (type = 'table' and name glob 'doc_fts_*')
+   where sql is not null and not (type = 'table'
+     and (name glob 'doc_fts_*' or name glob 'doc_gram_*'))
    order by rowid" > snap/schema.sql.tmp
 dump_data "name = 'journal'" > snap/journal.sql.tmp
 dump_data "name != 'journal'" > snap/graph.sql.tmp

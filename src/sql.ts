@@ -16,9 +16,9 @@
 //
 // What it declines today, all still served by the fallback: time phrases (the
 // span is a moving window, and inTime's edge cases deserve their own pass),
-// path predicates (`.assignee.title~=j`, a second join), and the shared-ref
+// path predicates (`.assignee.title~=j`, a second join), the shared-ref
 // spelling (`comp: ''`, which reads whichever component happens to carry the
-// column).
+// column), and a substring too short for a trigram (see `grams`).
 import { propAt } from './props.ts'
 import { ORDER, type Pred, TEXT } from './query.ts'
 import { comps, stamped } from './types.ts'
@@ -129,23 +129,77 @@ let cmp = (c: string, op: string, value: string): Sql | null => {
 // LIKE so a '%' or '_' in the needle needs no escaping; coalesce so a missing
 // column reads as '' exactly as the JS does. An empty needle is true of every
 // string, including that ''.
-let has = (c: string, value: string): Sql =>
-  value == '' ? { sql: '1', params: [] } : {
+//
+// A NON-ASCII needle declines, because the two case foldings are not the same
+// one: SQLite's lower() touches A-Z and nothing else, while JS's toLowerCase()
+// is Unicode — so `~=café` finds a stored 'CAFÉ' in the matcher and misses it
+// here. There is no unicode-aware lower() to compile to without ICU, and an
+// almost-right answer is the thing this file exists not to give. (The mirror
+// case — an ASCII needle against text holding U+212A or U+0130, whose JS
+// lowercase IS ASCII — cannot be seen from a needle and stays uncompiled-for.)
+let ascii = (s: string) => [...s].every((c) => c.charCodeAt(0) < 128)
+let has = (c: string, value: string): Sql | null =>
+  !ascii(value) ? null : value == '' ? { sql: '1', params: [] } : {
     sql: `instr(lower(coalesce(${asText(c)}, '')), lower(?)) > 0`,
     params: [value],
   }
 
-// A bare word is a TEXT pred over the doc — and it DECLINES, because the SQL
-// for it is a full scan of every body in the graph. Measured against the JS
-// path on the live board: 3,716ms vs 553ms for `decay`, 3,439ms vs 420ms for
-// `graph`, where a column predicate goes the other way (172ms vs 632ms). The
-// fast path has to be faster or it is not a fast path.
+// A substring over a body is the one predicate instr() cannot afford — it
+// lowercases every body in the graph, ~60ms a pass. `doc_gram` (db.ts) is the
+// index that fixes it: FTS5's trigram tokenizer, which is what lets SQLite
+// answer `like '%x%'` from an index. doc_fts cannot stand in — it indexes
+// TOKENS, so `idget` finds none of the rows holding `widget`, and narrowing a
+// substring with it loses rows silently.
 //
-// The graph already has the right tool for this and it is not a LIKE: FTS5
-// over doc, which `/search` and `task search` speak. Teaching the compiler to
-// route a text predicate there is its own piece of work; guessing at it with
-// instr() would make every search-shaped board seven times slower.
-let text = (_value: string): Sql | null => null
+// The index NARROWS, it never decides. The needle rides into LIKE raw, its
+// `%` and `_` still wildcards — a wildcard only ever WIDENS a pattern, so the
+// candidates stay a superset and no escaping is needed — and has() re-tests
+// each one with the same instr() the JS matcher agrees with. The answer is a
+// scan's answer whatever the tokenizer folds.
+//
+// Fewer than three consecutive non-wildcard characters is no trigram at all:
+// fts5 answers those by decoding the whole index, which is slower than the
+// scan it replaced, so they decline and the JS matcher takes them.
+let GRAM = 3
+let grams = (needle: string) =>
+  needle.split(/[%_]/).some((run) => [...run].length >= GRAM)
+
+// Only doc's own columns are indexed, so the rowid is doc's.
+let narrow = (cols: string[], needle: string, exact: Sql | null): Sql | null =>
+  exact && grams(needle)
+    ? {
+      sql: `("doc"."rowid" in (${
+        cols.map((c) => `select rowid from doc_gram where "${c}" like ?`)
+          .join(' union ')
+      }) and ${exact.sql})`,
+      params: [...cols.map(() => `%${needle}%`), ...exact.params],
+    }
+    : null
+
+// A bare word is a TEXT pred: contains over the doc, title OR body, the one
+// pred with two columns. JS reads a missing doc as no match at all — which is
+// the only thing an empty needle can turn on, since it is true of every string.
+let text = (value: string): Sql | null => {
+  if (value == '') return { sql: `"doc"."eid" is not null`, params: [] }
+  let cols = ['title', 'body']
+  let [t, b] = cols.map((p) => has(col('doc', p), value))
+  return t && b
+    ? narrow(cols, value, {
+      sql: `(${t.sql} or ${b.sql})`,
+      params: [...t.params, ...b.params],
+    })
+    : null
+}
+
+// A body is never scanned. `~=` over doc.body goes through the index; every
+// other op, and every other body column (hook.payload, session.final_text —
+// none of them indexed), declines and the JS matcher answers.
+let body = (p: Pred, c: string): Sql | null =>
+  p.op != '~' || p.comp != 'doc' || p.prop != 'body'
+    ? null
+    : p.value == ''
+    ? has(c, p.value)
+    : narrow(['body'], p.value, has(c, p.value))
 
 // The ops query.ts routes to cmp(), spelled the same in SQL.
 let CMP: Record<string, string> = { '<': '<', '<=': '<=', '>': '>', '>=': '>=' }
@@ -157,8 +211,8 @@ let one = (p: Pred): Sql | null => {
   if (!known(p.comp, p.prop)) return null
   let tag = tagOf(p.comp, p.prop)
   if (tag == 'time') return null // spans are their own pass
-  if (tag == 'body') return null // a body is FTS's job, never a scan
   let c = col(p.comp, p.prop)
+  if (tag == 'body') return body(p, c)
   if (p.op == '') return eq(c, p.value)
   if (p.op == '!') {
     // `!eq(v, value)`, and eq(null, …) is FALSE — but SQL's `not (null = ?)`
