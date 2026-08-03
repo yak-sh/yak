@@ -81,7 +81,16 @@ import {
   type Rules,
   STATIC_RULES,
 } from './doctor.ts'
-import { type Edge, edges, type Snapshot, statuses } from './types.ts'
+import {
+  type Edge,
+  edges,
+  kindOrder,
+  kindWord,
+  plural,
+  plurals,
+  type Snapshot,
+  statuses,
+} from './types.ts'
 // `import type` (not the repo's usual inline `{ type X }`): telemetry.ts
 // reaches for node:sqlite, and the CLI has no business loading a db driver.
 import type { Log } from './telemetry.ts'
@@ -120,6 +129,13 @@ let bare = async () => {
   let digest = claimedDigest(mine)
   if (digest) console.log(`\n${digest}`)
 }
+
+// `task projects` is `task list projects` — the plural IS the listing
+// verb, because it is what a cold caller types before reading any help.
+// Only the plural: the singular stays a subject (`task board`, `task
+// home`), so no alias is shadowed by a word that names a kind.
+export let listing = (cmd: string | undefined, args: string[]) =>
+  cmd && plurals.has(cmd) ? { cmd: 'list', args: [cmd, ...args] } : undefined
 
 // Subject-first is syntax sugar only. The returned route enters the same
 // handlers as the canonical subcommands, so graph behavior has one owner.
@@ -186,41 +202,81 @@ let split = (args: string[]) => {
   return { params, words }
 }
 
+// Which KIND a listing walks. It is a selector, not a filter — kind is
+// derived from an entity's components, so no row carries the column and
+// no pred could test it (route() says so to whoever writes `.kind` into a
+// board). Every spelling a caller reaches for names it: the bare word in
+// either number, the `/query` parameter, and the dot-param the filter
+// grammar makes them expect. Undefined = not a kind word at all, so the
+// argument falls through to the filter parser.
+export let kindArg = (arg: string) => {
+  let word = arg.replace(/^\.?kind=/, '')
+  let kind = kindWord(word)
+  if (!kind && word != arg) {
+    throw new Error(`no such kind: ${word} — one of ${kindOrder.join(', ')}`)
+  }
+  return kind
+}
+
 let list = async (args: string[]) => {
   // Filters speak the query grammar — operators, lists, ranges
   // ('.priority<=1', '.domain=Ops,Eng'). A word that isn't a filter
   // teaches instead of silently listing everything.
   let json = args.includes('--json')
   let all = rows(await snapshot())
+  let words = args.filter((a) => a != '--json')
+    .map((a) => [a, kindArg(a)] as const)
+  let kind = words.find(([, k]) => k)?.[1] ?? 'task'
   let preds = resolveRefs(
-    args.filter((a) => a != '--json').map((a) => {
+    words.filter(([, k]) => !k).map(([a]) => {
       let p = pred(a)
-      if (!p) throw new Error(`${noFilter(a)} (task help grammar)`)
+      // Here a bare word is also a KIND, so one that is neither names
+      // both doors rather than only the filter one.
+      if (!p) {
+        throw new Error(
+          `${noFilter(a)} (task help grammar)` +
+            (a.startsWith('.') ? '' : '; a bare word may name a KIND, as in ' +
+              'task list projects'),
+        )
+      }
       return p
     }),
     (id) => find(all, id)?.eid,
   )
   let byEid = new Map(all.map((r) => [r.eid, r.comps]))
   let hits = all
-    .filter((r) => r.comps.task)
+    .filter((r) => r.kind == kind)
     .filter((r) => matchQuery(r.comps, preds, (e) => byEid.get(e)))
     .sort(byBoard)
   if (json) return console.log(JSON.stringify(hits, null, 2))
-  for (let r of hits) {
-    let t = r.comps.task ?? {}
+  // Ids alone do not disambiguate — two projects are both titled `holdco`
+  // — so the second column carries the handle a caller can TYPE: a task's
+  // status, everything else's alias.
+  let lines = hits.map((r) =>
+    [
+      r,
+      String(
+        r.comps.task ? r.comps.task.status ?? '' : r.comps.alias?.slug ?? '',
+      ),
+    ] as const
+  )
+  let wide = Math.max(5, ...lines.map(([, handle]) => handle.length))
+  for (let [r, handle] of lines) {
     let who = claimant(all, r)
     let flag = who ? `  \u2691 ${who}` : ''
     console.log(
-      `${idOf(r).padEnd(6)} ${String(t.status ?? '').padEnd(5)} ${
+      `${idOf(r).padEnd(6)} ${handle.padEnd(wide)} ${
         String(r.comps.doc?.title ?? '')
       }${flag}`,
     )
   }
   if (!hits.length) {
-    let why = resolution(preds, 'task')
+    let why = resolution(preds, kind)
     console.error(
       why
-        ? `(no matches) · filters resolved to ${why} — list returns tasks`
+        ? `(no matches) · filters resolved to ${why} — list returns ${
+          plural(kind)
+        }`
         : '(no matches)',
     )
   }
@@ -1952,7 +2008,7 @@ if (import.meta.main) {
     let asked = requestedHelp(Deno.args)
     if (asked != null) console.log(asked)
     else {
-      let routed = subject(cmd, rest)
+      let routed = listing(cmd, rest) ?? subject(cmd, rest)
       if (routed) {
         cmd = routed.cmd
         rest = routed.args

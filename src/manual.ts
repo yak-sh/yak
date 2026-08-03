@@ -4,7 +4,7 @@
 
 import { commands } from './commands.ts'
 import { FILTERS, GRAMMAR } from './grammar.ts'
-import { edges, statuses } from './types.ts'
+import { edges, kindOrder, plurals, statuses } from './types.ts'
 
 type Opt = {
   name: string
@@ -63,13 +63,19 @@ export let manuals: Record<string, Manual> = {
     passthrough: true,
   },
   list: {
-    usage: 'list [filters...] [--json]',
-    about: 'list tasks (filter grammar)',
+    usage: 'list [kind] [filters...] [--json]',
+    about: 'list tasks — or any kind (filter grammar)',
     examples: [
       'task list .status=open .priority<=1',
       'task list .project=harness .updated.at>="1 week ago"',
-      'task list .assignee=jeff --json',
+      'task projects',
+      'task list boards .title~=fleet',
     ],
+    detail: 'A leading KIND word says what to list — `projects`, ' +
+      '`.kind=project` and `kind=project` all name it, and the plural is a ' +
+      'verb of its own (`task projects`). Tasks are the default. The second ' +
+      "column is the handle you can type: a task's status, everything " +
+      `else's alias. Kinds: ${kindOrder.join(', ')}.`,
     root: true,
     options: [json],
   },
@@ -624,6 +630,9 @@ export let help = (args: string[]) => {
 let helpAt = (args: string[]) => {
   if (!args.length) return usage()
   if (args[0] == 'help') return help(args.slice(1))
+  // A plural kind IS the list verb (cli.ts `listing`), so its help is
+  // list's — otherwise `task projects --help` reads as a subject.
+  if (plurals.has(args[0])) return render('list', manuals.list)
   let colon = args.find((a) => a.startsWith(':'))
   if (colon) return commandHelp(colon.slice(1))
   let root = manuals[args[0]]

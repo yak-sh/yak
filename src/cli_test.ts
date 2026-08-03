@@ -16,8 +16,10 @@ import {
   hookOperator,
   hookProvider,
   hookTurn,
+  kindArg,
   leadPrio,
   lifecycleHooks,
+  listing,
   operatorHook,
   roleEid,
   strayFile,
@@ -82,6 +84,39 @@ Deno.test('subject: sentences route through the existing CLI verbs', () => {
       args: ['T-3', edge, 'T-9', '--gone'],
     })
   }
+})
+
+Deno.test('kindArg: every spelling of a kind names it, a filter is not one', () => {
+  for (
+    let spelling of [
+      'project',
+      'projects',
+      '.kind=project',
+      'kind=project',
+      '.kind=projects',
+    ]
+  ) assertEquals(kindArg(spelling), 'project')
+  assertEquals(kindArg('memories'), 'memory')
+  assertEquals(kindArg('canvases'), 'canvas')
+  assertEquals(kindArg('aliases'), 'alias')
+  // A filter, a bare word that names nothing: not a kind, so it falls
+  // through to the filter parser rather than being guessed at.
+  assertEquals(kindArg('.status=open'), undefined)
+  assertEquals(kindArg('projekts'), undefined)
+  // Spelled as a kind and wrong: the door names the vocabulary.
+  assertThrows(() => kindArg('.kind=projekt'), Error, 'no such kind: projekt')
+  assertThrows(() => kindArg('kind=task,project'), Error, 'no such kind')
+})
+
+Deno.test('listing: a plural kind is the list verb, the singular is a subject', () => {
+  assertEquals(listing('projects', []), { cmd: 'list', args: ['projects'] })
+  assertEquals(listing('memories', ['--json']), {
+    cmd: 'list',
+    args: ['memories', '--json'],
+  })
+  assertEquals(listing('project', []), undefined)
+  assertEquals(listing('T-3', []), undefined)
+  assertEquals(listing(undefined, []), undefined)
 })
 
 Deno.test('subject: old commands and explicit focused commands keep their door', () => {

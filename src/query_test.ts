@@ -338,8 +338,10 @@ Deno.test('noFilter teaches the door a stray predicate belongs to', () => {
   assert(!m.includes('\n')) // one line — it rides tool errors verbatim
   assert(!noFilter('sessions').includes('graph_query')) // kind= only
   assert(noFilter('sessions').includes('dot-params'))
-  // the dot forms reject at route() — one seam, every door inherits
-  assertThrows(() => route('kind'), Error, "graph_query's kind parameter")
+  // the dot forms reject at route() — one seam, every door inherits — and
+  // name the doors that DO select a kind (cli.ts kindArg, /query kind=)
+  assertThrows(() => route('kind'), Error, 'kind selects what to LIST')
+  assertThrows(() => route('kind'), Error, 'task list projects')
   assertThrows(() => route('eid'), Error, '(T-3, E-9)')
   assertEquals(route('id'), { comp: 'session', prop: 'id' }) // no near-miss
   assertThrows(

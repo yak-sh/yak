@@ -637,6 +637,21 @@ export let kindOrder = [
 export let kindOf = (has: Record<string, unknown>) =>
   kindOrder.find((k) => has[k]) ?? 'entity'
 
+// Kinds are singular in the graph and plural in the mouth — a listing is
+// asked for `projects`, never `project`. Derived, so a new kind gets its
+// listing word the moment it joins kindOrder.
+export let plural = (kind: string) =>
+  kind.endsWith('y')
+    ? `${kind.slice(0, -1)}ies`
+    : /(?:s|x|ch|sh)$/.test(kind)
+    ? `${kind}es`
+    : `${kind}s`
+export let plurals = new Set(kindOrder.map(plural))
+
+// The word a caller types for a kind, in either number.
+export let kindWord = (word: string) =>
+  kindOrder.find((k) => k == word || plural(k) == word)
+
 // The human id: prefix-num (T-7, P-2). Curated prefixes for the kinds
 // people type daily; everything else leads with its capitalized initial.
 export let prefix: Record<string, string> = {

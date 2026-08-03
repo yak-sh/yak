@@ -135,7 +135,8 @@ export let route = (prop: string): { comp: string; prop: string } => {
   // (.id needs no branch: session.id owns it, so it routes.)
   throw new Error(
     prop == 'kind'
-      ? "kind is graph_query's kind parameter, not a filter prop"
+      ? 'kind selects what to LIST, it is not a filter prop — ' +
+        'task list projects, graph_query kind=project'
       : prop == 'eid'
       ? 'address entities by id directly (T-3, E-9) — filters match component props'
       : `unknown prop: .${prop} — ${edgeish.test(prop) ? EDGE_DOOR : SKETCH}`,
