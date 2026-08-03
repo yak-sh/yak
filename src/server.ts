@@ -7,7 +7,7 @@
 // survives — it lives in live.ts, above the swap), css edits re-fetch the
 // stylesheet, and only shell/server edits still cost a real reload.
 import { transform } from 'sucrase'
-import { alone, type Serving } from './bind.ts'
+import { bound, guard, type Serving } from './bind.ts'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { providers } from './adapters.ts'
 import { type Change, idOf, kindOf } from './types.ts'
@@ -638,8 +638,9 @@ let port = Number(Deno.env.get('PORT') ?? 5173)
 // twice over is a probe writing to the owner's board — unless `--join` says
 // a supervisor meant this process to succeed the one already there.
 let serving: Serving = { db: graph, epoch, pid: Deno.pid }
+let ownership: Deno.FsFile
 try {
-  await alone(port, graph, Deno.args.includes('--join'))
+  ownership = await guard(port, graph, Deno.args.includes('--join'))
 } catch (e) {
   console.error(`tasks: ${(e as Error).message}`)
   Deno.exit(1)
@@ -895,6 +896,7 @@ let http = Deno.serve(
     return file(src.slice(0, -1), path.includes('.') ? path : '/index.html')
   },
 )
+bound(ownership)
 
 // The curated effects — the graph's post-commit levers, one list, like
 // Entity.tsx's renderer list. A session created with a spawn spec is a launch
@@ -1275,6 +1277,7 @@ let drain = async () => {
   draining = true
   for (let c of clients) c.close(1012, 'server restart')
   await http.shutdown()
+  ownership.close()
   Deno.exit(0)
 }
 
