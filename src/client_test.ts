@@ -1,6 +1,7 @@
 // The headless client's pure half: dot-param grammar, row assembly,
 // change builders, and the injection digest. No server, no db.
 import {
+  belongs,
   byBoard,
   checkRefs,
   claimant,
@@ -30,6 +31,7 @@ import {
   replyChanges,
   repoAt,
   reSubject,
+  type Row,
   rows,
   scopeFor,
   separated,
@@ -1725,6 +1727,42 @@ Deno.test('contextDigest: ## decided — by decision date, stamp-only', () => {
   assertEquals(d.includes('Still arguing') && d.includes('## decided'), true)
   assertEquals(said.some((l) => l.includes('Still arguing')), false)
   assertEquals(d.includes('Their call'), false)
+})
+
+// The scope test the `## decided` block and `task decided` share. Each kind
+// names its project its own way, and an UNSCOPED memory belongs to every one
+// of them — a fleet-wide ruling binds the project you stand in hardest, so
+// scoping a door must never be what hides it.
+Deno.test('belongs: a project reads each kind, and the fleet rides along', () => {
+  let P = 'p', Q = 'q'
+  let row = (comps: Record<string, Record<string, unknown>>): Row => ({
+    eid: 'e',
+    num: 1,
+    kind: 'thing',
+    comps,
+  })
+  let task = row({ task: { project_eid: P } })
+  let mine = row({ memory: { scope_eid: P } })
+  let fleet = row({ memory: {} })
+  let doc = row({ doc: { title: 'a note' } })
+  assertEquals([task, mine, fleet, doc].map((r) => belongs(r, P)), [
+    true,
+    true,
+    true,
+    true,
+  ])
+  assertEquals([task, mine, fleet, doc].map((r) => belongs(r, Q)), [
+    false,
+    false,
+    true,
+    true,
+  ])
+  // No scope is every scope — the `--all` view, and a cwd that places nobody.
+  assertEquals([task, mine].map((r) => belongs(r)), [true, true])
+  // A project entity is its own scope; a persona belongs to its home.
+  assertEquals(belongs({ ...row({ project: {} }), eid: P }, P), true)
+  assertEquals(belongs({ ...row({ project: {} }), eid: P }, Q), false)
+  assertEquals(belongs(row({ persona: { home_eid: Q } }), Q), true)
 })
 
 Deno.test('spec: a typed task — leading P, params anywhere, body below', () => {

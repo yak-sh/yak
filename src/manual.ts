@@ -91,20 +91,24 @@ export let manuals: Record<string, Manual> = {
     options: [json],
   },
   decided: {
-    usage: 'decided [filters...] [--json]',
-    about: 'what has been settled, newest decision first',
+    usage: 'decided [filters...] [--all] [--json]',
+    about: 'what has been settled here, newest decision first',
     examples: [
       'task decided',
-      'task decided .project=P-19',
+      'task decided .project=P-30',
+      'task decided --all',
       'task decided .decided.at>="1 month ago"',
     ],
     detail: 'The `decided` stamp is a facet, not a kind — a task, a memory ' +
       'and a doc can all wear one — so this walks every kind at once. The ' +
       'date leads each line, and it is the DECISION date: record an old one ' +
       'with `task set <id> .decided.at="2026-06-01"`, which is not the same ' +
-      'as when the entity was filed.',
+      'as when the entity was filed. The default scope is the project your ' +
+      'cwd puts you in, plus the fleet-wide rulings that bind it — the same ' +
+      "scope the digest's `## decided` block uses. `.project=P-30` asks " +
+      'about another one; `--all` asks about every project at once.',
     root: true,
-    options: [json],
+    options: [json, flag('--all')],
   },
   new: {
     usage: 'new .title="..." [...]',

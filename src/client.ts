@@ -1250,7 +1250,13 @@ let snip = (s: string, n = 72) => s.length > n ? `${s.slice(0, n)}…` : s
 // memories (unscoped memories are principles — they always ride), its
 // personas. What can't be classified stays — hiding the unclassifiable
 // would make the digest lie by omission.
-let belongs = (r: Row, scope?: string) => {
+// Does this row belong to that project? Each kind names its scope its own
+// way — a task's project, a memory's scope (absent = the whole fleet, so a
+// standing ruling rides every project), a persona's home — and anything with
+// no such column belongs everywhere. The `## decided` block and `task
+// decided` share it, which is what keeps the section and the listing one
+// answer.
+export let belongs = (r: Row, scope?: string) => {
   if (!scope) return true
   if (r.comps.task) return r.comps.task.project_eid == scope
   if (r.comps.memory) {

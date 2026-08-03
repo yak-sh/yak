@@ -21,6 +21,7 @@ import {
   lifecycleHooks,
   listing,
   operatorHook,
+  place,
   roleEid,
   strayFile,
   strayFlag,
@@ -29,6 +30,7 @@ import {
   subjectUsage,
 } from './cli.ts'
 import { type Row, rows } from './client.ts'
+import { parseQuery } from './query.ts'
 import type { Snapshot } from './types.ts'
 
 let transcript = (...events: unknown[]) => {
@@ -109,6 +111,22 @@ Deno.test('kindArg: every spelling of a kind names it, a filter is not one', () 
   // Spelled as a kind and wrong: the door names the vocabulary.
   assertThrows(() => kindArg('.kind=projekt'), Error, 'no such kind: projekt')
   assertThrows(() => kindArg('kind=task,project'), Error, 'no such kind')
+})
+
+// `task decided` scopes itself to where you stand, so `.project=P-30` has to
+// mean STAND THERE — the task column alone would answer with that project's
+// tasks and hide its memories. Only the plain `=` form names a place; a list
+// or a `!=` is a predicate, and screens whatever the scope already chose.
+Deno.test('place: one project is somewhere to stand, a predicate is not', () => {
+  let named = (q: string) => place(parseQuery(q))?.value
+  assertEquals(named('.project=P-30'), 'P-30')
+  assertEquals(named('.project=P-30 .status=done'), 'P-30')
+  assertEquals(named('.project_eid=P-30'), 'P-30')
+  assertEquals(named('.status=done'), undefined)
+  assertEquals(named('.project!=P-30'), undefined)
+  assertEquals(named('.project=P-30,P-19'), undefined)
+  // `.project=` is "no project at all" — an absence, not an address.
+  assertEquals(named('.project='), undefined)
 })
 
 Deno.test('listing: a plural kind is the list verb, the singular is a subject', () => {

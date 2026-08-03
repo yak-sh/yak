@@ -10,6 +10,7 @@
 // non-default server.
 import {
   addressed,
+  belongs,
   bornAt,
   byBoard,
   checkRefs,
@@ -48,6 +49,7 @@ import {
   repoAt,
   type Row,
   rows,
+  scopeFor,
   search,
   send,
   separated,
@@ -73,6 +75,7 @@ import {
   edgeish,
   matchQuery,
   noFilter,
+  type Pred,
   pred,
   resolution,
   resolveRefs,
@@ -298,22 +301,49 @@ let list = async (args: string[]) => {
   }
 }
 
-// ---- task decided: what has been SETTLED, newest decision first. The stamp
-// is a FACET, not a kind — a task, a memory and a doc can all wear one — so
-// this walks every kind at once instead of joining `task list`'s kind
-// selector. Filters are the one grammar ('.project=P-19',
-// '.decided.at>="1 month ago"'), and the date leads each line because WHEN a
-// thing was settled is the question the door answers; `created.at` would
-// misreport every decision written up from an old letter.
+// ---- task decided: what has been SETTLED where you stand, newest decision
+// first. The stamp is a FACET, not a kind — a task, a memory and a doc can all
+// wear one — so this walks every kind at once instead of joining `task list`'s
+// kind selector. Scope comes from the cwd like `task inbox`'s reader, and is
+// tested with the digest's own `belongs`, so `## decided` and this door cannot
+// answer one question two ways — unscoped memories included, since a ruling
+// that binds every project binds this one hardest. `--all` drops the scope.
+// Filters are the one grammar ('.decided.at>="1 month ago"'), and the date
+// leads each line because WHEN a thing was settled is the question the door
+// answers; `created.at` would misreport a decision written up from an old
+// letter.
+// The project a filter NAMES, when it names exactly one — the plain
+// `.project=P-30`. A list or a `!=` predicates the task column instead, and
+// there is no one place in it to stand.
+export let place = (preds: Pred[]) =>
+  preds.find((p) =>
+    p.comp == 'task' && p.prop == 'project_eid' && p.op == '' && p.value &&
+    !p.value.includes(',')
+  )
+
 let decided = async (args: string[]) => {
   let json = args.includes('--json')
   let all = rows(await snapshot())
-  let preds = filters(all, args.filter((a) => a != '--json'))
+  let preds = filters(
+    all,
+    args.filter((a) => a != '--json' && a != '--all'),
+  )
   checkRefs(all, preds)
   let byEid = new Map(all.map((r) => [r.eid, r.comps]))
+  // A named project is lifted OUT of the query and stands in for the cwd:
+  // asking about P-30 must mean what standing in P-30 means, and the task
+  // column alone would hide that project's own memories.
+  let named = place(preds)
+  let sess = all.find((r) =>
+    r.comps.session && String(r.comps.session.id) == me()
+  )
+  let scope = args.includes('--all')
+    ? undefined
+    : scopeFor(all, sess, Deno.cwd(), named?.value)
+  let screen = preds.filter((p) => p != named)
   let hits = all
-    .filter((r) => r.comps.decided)
-    .filter((r) => matchQuery(r.comps, preds, (e) => byEid.get(e)))
+    .filter((r) => r.comps.decided && belongs(r, scope))
+    .filter((r) => matchQuery(r.comps, screen, (e) => byEid.get(e)))
     .sort((a, b) => decidedAt(b).localeCompare(decidedAt(a)))
   if (json) return console.log(JSON.stringify(hits, null, 2))
   let wide = Math.max(4, ...hits.map((r) => r.kind.length))
