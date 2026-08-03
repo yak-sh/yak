@@ -476,41 +476,9 @@ makes one of these seams wider or leakier, that's the wrong direction.
 
 # M-12915 Use idiomatic language
 
-**If you are talking about git, use git's words.** Not approximations, not house shorthand — the
-terms the tool itself prints and documents. Same for SQL, HTTP, systemd, DNS, or any other tool with
-a manual. The vocabulary is not ours to improvise inside.
+**Stick to idiomatic terms for things.** Avoid approximations, house shorthand, and slang. Use the terms that are typical for a tool. LLMs often drift to analogous terms over repeated cycles. This drift can cause a degradation of meaning over time and make it difficult for others to understand. Especially if they are already familiar with the typical terminology.
 
-The drift is easy to miss because it does not feel like inventing. You are deep in a subsystem, you
-need a word for a thing you keep discussing, one appears, and it is instantly as comfortable as a
-word everyone knows. From the inside a term coined last week and a term from the git manual are
-indistinguishable. That is why this needs a rule with an external referent rather than a reminder to
-write clearly — your own sense of "this is a normal word" is exactly the faculty that has failed.
-
-We coined four in one ticket and none of them named anything git lacks a word for:
-
-| we wrote | git says |
-| --- | --- |
-| an undrained **chain** | unpushed commits, or `N ahead` |
-| **drain** it | push |
-| **materialize** | write the file out |
-| the **projection** | the generated file |
-
-The cost compounds. A coined word buys nothing — git already had the concept, precisely defined,
-documented, and known to every reader — while it strips the term of its exact meaning, hides that the
-situation is ordinary (`ahead`/`behind` is a state every developer recognizes; "an undrained chain"
-sounds like a problem unique to us), and quietly excludes anyone who was not in the conversation
-where it was coined. The owner is the reader that matters most and the one least likely to have been
-in that conversation, so he pays first — on a ticket that existed to save him a decoding pass.
-
-**The test, when you catch yourself reaching for a term:** could I point at where this word is
-documented? If the answer is the tool's manual, use it. If the answer is "a design conversation we
-had", write what the tool calls it. And when a concept is genuinely ours — an entity, a component, a
-claim — the name is fine; define it once where a stranger meets it, and keep it out of sentences
-whose subject is somebody else's tool.
-
-Plain terms are also shorter. "Our persona-file writer commits into seven repos and never pushes"
-beats the version with four coined nouns on clarity AND length, which is why this costs nothing to
-follow.
+This applies when talking about git, SQL, HTTP, systemd, DNS, programming languages, and any other similar tool.
 
 ---
 
