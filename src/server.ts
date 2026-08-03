@@ -215,6 +215,32 @@ let evalQuery = (q: string) => {
 // through the same eager read) but their far-side changes aren't indexed yet,
 // so a path-pred sub only re-checks members a batch actually touched — the
 // staged gap (design §2), not a silent wrong answer.
+// What a subscription frame has to CARRY. A live subscription owns its
+// client's view of these rows, so it ships the components. A SHADOW one does
+// not: it never flips the socket into `filtered`, so the same client is still
+// hearing the complete broadcast, and landSub() reads a shadow frame's changes
+// for one thing only — the eids, to keep the member set. Everything else in
+// that frame is a second copy of what the client already has.
+//
+// It is not a small second copy. Over the eighteen live boards the shadow
+// frames came to 62.6 MB, and the spine says the same thing about membership
+// in 3.9 MB — 6.2% of the bytes, with the whole-graph board going from 21.7 MB
+// and 765ms to 1.4 MB and 383ms. Membership is identical on every one.
+//
+// The ordering under cast() is what makes the spine safe: sendLive() reaches
+// the complete-broadcast clients BEFORE maintain() runs, so a client always
+// holds an entity's components before a shadow frame mentions its eid. Reverse
+// that and a spine-only add would land a component-less row in a cache whose
+// whole contract is that it is complete.
+let payload = (
+  sub: Sub,
+  eid: string,
+  comps: Record<string, Record<string, unknown>>,
+): Change[] =>
+  sub.shadow
+    ? [{ eid, name: 'entity', comp: comps.entity as Change['comp'] }]
+    : spread(eid, comps)
+
 let maintain = (batch: Change[]) => {
   if (!subs.size) return
   let cur = cursorOf(db)
@@ -240,9 +266,12 @@ let maintain = (batch: Change[]) => {
         let alive = !gone.has(eid) && !!c.entity
         let hit = alive && matchQuery(c, sub.preds, comps)
         let s: Step = step(sub.members, eid, alive, hit)
-        if (s == 'add') changes.push(...spread(eid, c))
-        else if (s == 'update') changes.push(...(patch.get(eid) ?? []))
-        else if (s == 'remove') drop.push(eid)
+        if (s == 'add') changes.push(...payload(sub, eid, c))
+        // A standing match tells a shadow sub nothing: membership did not
+        // move, and the client heard the patch on the complete stream.
+        else if (s == 'update' && !sub.shadow) {
+          changes.push(...(patch.get(eid) ?? []))
+        } else if (s == 'remove') drop.push(eid)
         else if (s == 'dead') changes.push({ eid, name: 'entity', comp: null })
       }
       if (changes.length || drop.length) {
@@ -335,7 +364,8 @@ let control = (
       shadow: !!f.shadow,
       moving: gaps(preds).includes('moving-time'),
     })
-    let changes = hits.flatMap((r) => spread(r.eid, r.comps))
+    let sub = map.get(f.sub)!
+    let changes = hits.flatMap((r) => payload(sub, r.eid, r.comps))
     sock.send(
       JSON.stringify({
         sub: f.sub,

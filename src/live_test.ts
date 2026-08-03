@@ -937,17 +937,13 @@ Deno.test('the agreement counter counts on the incremental path', async () => {
     assertEquals(boardTasks(ent('board')).map((e) => e.eid), ['t1'])
     assertEquals(subscriptionChecks(), undefined)
 
-    // The subscription's first frame lands after the mount scan, as it does.
+    // The subscription's first frame lands after the mount scan, as it does —
+    // and a SHADOW frame carries the spine alone. It has to be enough: the
+    // client is still on the complete broadcast, so membership is the only
+    // thing this frame is for.
     landSub({
       sub: 'board:board',
-      changes: [
-        { eid: 't1', name: 'entity', comp: { eid: 't1', num: 2 } },
-        {
-          eid: 't1',
-          name: 'task',
-          comp: { eid: 't1', status: 'open', priority: 1 },
-        },
-      ],
+      changes: [{ eid: 't1', name: 'entity', comp: { eid: 't1', num: 2 } }],
       replace: true,
       shadow: true,
     })
