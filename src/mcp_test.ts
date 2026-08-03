@@ -452,6 +452,7 @@ Deno.test('MCP modes apply every accepted field and reject conflicts', async () 
             '.title=Param title',
             '.body=Param body',
             '.status=open',
+            '.proposal=true',
           ],
         },
       })
@@ -461,6 +462,7 @@ Deno.test('MCP modes apply every accepted field and reject conflicts', async () 
       )
       assertEquals(made?.comps.doc?.body, 'Dedicated body')
       assertEquals(made?.comps.task?.status, 'done')
+      assertEquals(made?.comps.task?.proposal, 1)
 
       let batch = await client.callTool({
         name: 'task_new',

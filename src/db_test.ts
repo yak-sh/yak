@@ -130,6 +130,7 @@ Deno.test('create + patch + column clear', () => {
       project_eid: null,
       assignee_eid: null,
       domain: null,
+      proposal: null,
     },
   ) // the live batch carries the same defaults as a snapshot
   apply(db, [{ eid: t, name: 'doc', comp: { title: 'B' } }])
@@ -188,13 +189,15 @@ Deno.test('graph-out carries declared columns only', () => {
 })
 
 Deno.test('declared booleans bind as SQLite integers', () => {
-  let s = uid()
+  let s = uid(), t = uid()
   apply(db, [{
     eid: s,
     name: 'session',
     comp: { id: uid(), operator: false },
   }])
+  apply(db, [{ eid: t, name: 'task', comp: { proposal: true } }])
   assertEquals(comp(s, 'session')?.operator, 0)
+  assertEquals(comp(t, 'task')?.proposal, 1)
   apply(db, [{ eid: s, name: 'session', comp: { operator: true } }])
   assertEquals(comp(s, 'session')?.operator, 1)
 })
@@ -1892,6 +1895,18 @@ Deno.test('open adds the repo landing gate in place', () => {
   legacy.close()
   let healed = open(path)
   assertEquals(hasCol(healed, 'repo', 'gate'), true)
+  healed.close()
+  Deno.removeSync(root, { recursive: true })
+})
+
+Deno.test('open adds the task proposal marker in place', () => {
+  let root = Deno.makeTempDirSync({ prefix: 'tasks-proposal-' })
+  let path = `${root}/tasks.db`
+  let legacy = open(path)
+  legacy.exec('alter table task drop column proposal')
+  legacy.close()
+  let healed = open(path)
+  assertEquals(hasCol(healed, 'task', 'proposal'), true)
   healed.close()
   Deno.removeSync(root, { recursive: true })
 })

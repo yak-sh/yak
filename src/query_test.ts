@@ -43,6 +43,8 @@ let hit = (q: string, task: Record<string, unknown> = {}) =>
 let cases: [string, string, Record<string, unknown>, boolean][] = [
   ['equality', '.status=open', {}, true],
   ['equality miss', '.status=done', {}, false],
+  ['boolean marker', '.proposal=true', { proposal: 1 }, true],
+  ['boolean marker absent', '.proposal=true', {}, false],
   ['and across params', '.status=open&.domain=Ops', {}, true],
   ['and fails on one', '.status=open&.domain=Eng', {}, false],
   ['any-of list', '.domain=Ops,Eng', {}, true],
@@ -135,6 +137,7 @@ Deno.test('query: pred routes and normalizes ops', () => {
 Deno.test('query: typed atoms canonicalize or reject as one matrix', () => {
   let accepted = [
     ['.status=OPEN', 'open'],
+    ['.proposal=YES', '1'],
     ['.verified=YES,no', '1,0'],
     ['.pin.x=+01.0', '1'],
     ['.priority=p02', '2'],

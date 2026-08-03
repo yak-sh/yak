@@ -105,6 +105,7 @@ export let comps: Record<string, Record<string, PropType>> = {
     // is who holds it NOW; a dead assignee detaches, never takes the task.
     assignee_eid: { eid: '', death: 'detach' },
     domain: { text: 'domains' }, // free text; the graph suggests
+    proposal: 'bool',
   },
   // retired_at: the project is over, not erased. Wire-writable — stamping
   // it IS the retirement (like the `opened` stamp, no effect needed);
@@ -792,6 +793,7 @@ export type Task = {
   assignee_eid?: string | null // whose plate — durable; claim is who's on it now
   domain?: string | null // cross-project facet (Eng, Legal, Ops, …) — free
   // text by convention; a picker derives its options from distinct values
+  proposal?: boolean | null // asks offered for the owner to accept or decline
 }
 
 // A tag: "this doc fronts a project" (a venture, a workstream). Its name
