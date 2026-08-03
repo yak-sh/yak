@@ -346,12 +346,14 @@ let decided = async (args: string[]) => {
     .filter((r) => matchQuery(r.comps, screen, (e) => byEid.get(e)))
     .sort((a, b) => decidedAt(b).localeCompare(decidedAt(a)))
   if (json) return console.log(JSON.stringify(hits, null, 2))
-  let wide = Math.max(4, ...hits.map((r) => r.kind.length))
+  // Three columns, not four: the id's PREFIX is the kind (M- is a memory,
+  // T- a task), so a kind column spells the id twice and costs every title
+  // a fixed indent it then truncates into. `--json` keeps the whole row.
   for (let r of hits) {
     console.log(
       `${decidedAt(r).slice(0, 10)} ${idOf(r).padEnd(6)} ${
-        r.kind.padEnd(wide)
-      } ${String(r.comps.doc?.title ?? '')}`,
+        String(r.comps.doc?.title ?? '')
+      }`,
     )
   }
   if (!hits.length) console.error('(nothing decided)')
