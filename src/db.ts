@@ -29,7 +29,7 @@ import { type Trace } from './effects.ts'
 import { ancestorAt, rows } from './client.ts'
 import { homeReads } from './persona.ts'
 import { matchQuery, parseQuery, resolveRefs, TEXT } from './query.ts'
-import { normalizeChanges, parseProp, propAt } from './props.ts'
+import { bodyCols, normalizeChanges, parseProp, propAt } from './props.ts'
 
 // The db lives outside the repo (this is open source): a home-dir dotpath by
 // default, overridable with DB_PATH.
@@ -2327,6 +2327,28 @@ export let eager = (
     let row = db.prepare(`${select(name)} where eid = ?`)
       .get(eid) as Record<string, unknown> | undefined
     if (row) out[name] = row
+  }
+  return out
+}
+
+// The body columns a bodyless payload left behind (subs.ts), keyed by eid —
+// the other end of the deferral. The answer IS a Change batch, so it lands
+// through the client's ordinary applyLocal and merges onto the doc already
+// cached, keeping its title: exactly what a live body edit does. One
+// statement per component that declares a body, so a card asks for its own
+// body and all its comments' bodies in one trip.
+export let bodies = (db: DatabaseSync, eids: string[]): Change[] => {
+  if (!eids.length) return []
+  let out: Change[] = []
+  let holes = eids.map(() => '?').join(', ')
+  for (let name of Object.keys(readable)) {
+    let cut = bodyCols(name).filter((c) => readable[name].includes(c))
+    if (!cut.length) continue
+    let rows = db.prepare(
+      `select eid, ${cut.map(sqlName).join(', ')} from ${sqlName(name)}
+       where eid in (${holes})`,
+    ).all(...eids) as Record<string, unknown>[]
+    for (let row of rows) out.push({ eid: String(row.eid), name, comp: row })
   }
   return out
 }

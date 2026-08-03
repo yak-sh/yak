@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'preact/hooks'
-import { ent, mode, mutate, problem } from '../live.ts'
+import { ent, mode, mutate, problem, want } from '../live.ts'
+import { propAt } from '../props.ts'
 import { drop, peek, save } from './drafts.ts'
 import { el } from './ui.tsx'
 
@@ -32,12 +33,18 @@ export let Edit = (
     string,
     Record<string, unknown> | undefined
   >
-  let value = String(comps[comp]?.[prop] ?? '')
+  let held = comps[comp]?.[prop]
+  // A body may be DEFERRED (live.ts `want`): undefined is unloaded, not
+  // empty. Seeding the editor from a value we don't have and committing on
+  // blur would write a fragment over the stored body — so the editor stays
+  // read-only until the body lands, and asking is what lands it.
+  let unloaded = held === undefined && propAt(comp, prop)?.type == 'body'
+  let value = String(held ?? '')
   let ref = useRef<HTMLElement>(null)
   let dkey = `${eid}.${comp}.${prop}`
 
   let begin = (t: HTMLElement) => {
-    if (t.isContentEditable) return
+    if (unloaded || t.isContentEditable) return
     let row = t.closest<HTMLElement>('[draggable="true"]')
     if (row) row.draggable = false
     t.dataset.was = t.textContent ?? ''
@@ -49,6 +56,7 @@ export let Edit = (
 
   useEffect(() => {
     let t = ref.current
+    if (unloaded) return void want(eid)
     if (!t || t.isContentEditable) return
     let d = peek(dkey) // a draft only exists mid-edit: resume it
     if (!open && !d) return
@@ -57,7 +65,9 @@ export let Edit = (
       t.textContent = d.v
       getSelection()?.setPosition(t, t.childNodes.length)
     }
-  }, [open])
+    // `unloaded` is a dependency because the body LANDS: an editor opened
+    // over a deferred body arms itself the moment its text arrives.
+  }, [open, unloaded])
 
   let key = (ev: KeyboardEvent) => {
     let t = ev.currentTarget as HTMLElement

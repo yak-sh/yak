@@ -1,7 +1,7 @@
 import { useRef, useState } from 'preact/hooks'
 import { commands, orderIn, suggest } from '../commands.ts'
 import { md } from '../md.ts'
-import { commentsOn, ent, mutate, uuid } from '../live.ts'
+import { commentsOn, ent, mutate, pending, uuid } from '../live.ts'
 import { ago, block, pretty } from './ui.tsx'
 import { useDraft } from './drafts.ts'
 import { type Ent, idOf, nick, sessionActive, verdictName } from '../types.ts'
@@ -75,9 +75,15 @@ export let Note = ({ c }: { c: Ent }) => {
       <When data-tip={pretty(c.created?.at)} {...linkProps(c)}>
         {ago(c.created?.at)}
       </When>
-      <Body
-        dangerouslySetInnerHTML={{ __html: md(c.doc?.body ?? '') }}
-      />
+      {
+        /* A comment IS its body, so an unshipped one paints the wait rather
+          than an empty note (pending() is the ask). */
+      }
+      {pending(c) ? <Body>…</Body> : (
+        <Body
+          dangerouslySetInnerHTML={{ __html: md(c.doc?.body ?? '') }}
+        />
+      )}
     </Item>
   )
 }

@@ -1,5 +1,5 @@
 import { type Ent, idOf, kindOf } from '../../types.ts'
-import { cache, deps, ent } from '../../live.ts'
+import { cache, deps, ent, pending } from '../../live.ts'
 import { el } from '../ui.tsx'
 import { materialize } from '../../persona.ts'
 import type { Row } from '../../client.ts'
@@ -35,7 +35,9 @@ export let mdText = (e: Ent) => {
     ...(refs ? [refs] : []),
     '---',
     '',
-    e.doc?.body ?? '',
+    // The raw file is also what a drag drops on the desktop, so a body this
+    // client hasn't been shipped says so rather than dropping an empty one.
+    pending(e) ? '…' : e.doc?.body ?? '',
     '',
   ].join('\n')
 }

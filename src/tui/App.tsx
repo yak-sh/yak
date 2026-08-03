@@ -19,6 +19,7 @@ import {
   gated,
   mode,
   mutate,
+  pending,
   problem,
   rows as graph,
   send,
@@ -174,6 +175,13 @@ let startEdit = () => {
   let eid = here ?? selected()
   if (!eid || !ent(eid).doc) return
   let prop: 'title' | 'body' = here ? 'body' : 'title'
+  // `was` is what the commit diffs against, so editing a body this client
+  // was never shipped would send the typing over the stored text. Wait for
+  // it — asking is what brings it (live.ts `pending`).
+  if (prop == 'body' && pending(ent(eid))) {
+    msg.value = 'body still loading'
+    return
+  }
   let was = ent(eid).doc![prop] ?? ''
   edit.value = { eid, prop, text: was, was }
   mode.value = 'insert'
@@ -281,11 +289,17 @@ let TuiTask = ({ e }: { e: Ent }) => (
       )}
       <Id e={e} />
     </div>
-    {e.doc?.body && (
-      <p class='Task_Body'>
-        <Md text={e.doc.body} />
-      </p>
-    )}
+    {
+      /* An unshipped body is not an empty one: the wait paints, and asking
+        is what ends it (live.ts `pending`). */
+    }
+    {pending(e)
+      ? <p class='Task_Body'>…</p>
+      : e.doc?.body && (
+        <p class='Task_Body'>
+          <Md text={e.doc.body} />
+        </p>
+      )}
     {e.refs.map((r) => (
       <Entity key={r.child} eid={r.child} view='Dependency' type={r.type} />
     ))}
@@ -298,7 +312,7 @@ let TuiTask = ({ e }: { e: Ent }) => (
             [{verdictName(c.review.verdict)}]{' '}
           </span>
         )}
-        <Md text={c.doc?.body ?? ''} />
+        <Md text={pending(c) ? '…' : c.doc?.body ?? ''} />
       </div>
     ))}
   </div>

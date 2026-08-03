@@ -442,6 +442,48 @@ let tell = (changes: Change[]) => {
   for (let fn of listeners) fn(changes)
 }
 
+// Bodies ride only on the payloads that paint one entity whole (subs.ts
+// `bodied`), and a patch that names no body leaves none either — so a cached
+// doc can lack its body while the stored column holds one. The column
+// defaults to '', so an ABSENT body means UNLOADED, never empty: nothing may
+// render it as content or arm an editor over it, because a commit would write
+// a fragment over the stored body. want() is the other end: the answer lands
+// as an ordinary doc patch through applyLocal, which merges onto the cached
+// doc and keeps its title — exactly what a live body edit does.
+//
+// One trip per PAINT, not per element: a card and all its comments ask
+// within the same render, so the queue drains on the next turn and they
+// travel together.
+let asked = new Set<string>()
+let queue = new Set<string>()
+let sweep = () => {
+  let eids = [...queue]
+  queue.clear()
+  for (let eid of eids) asked.add(eid)
+  fetch(`${base()}/body?eids=${encodeURIComponent(eids.join(','))}`)
+    .then((r) => r.json())
+    .then((b: { changes?: Change[] }) => applyLocal(b.changes ?? []))
+    // A dead server is not an answer: forget the ask so the next paint retries.
+    .catch(() => {
+      for (let eid of eids) asked.delete(eid)
+    })
+}
+export let want = (eid: string) => {
+  if (asked.has(eid) || queue.has(eid)) return
+  if (!queue.size) setTimeout(sweep)
+  queue.add(eid)
+}
+
+// Whether a view is still waiting on this entity's body — and ASKING is what
+// fetches it, so no placeholder outlives one round trip. Fused for the same
+// reason step() folds its bookkeeping into the verb: a caller that could
+// paint the placeholder without asking would paint it forever.
+export let pending = (e: Ent) => {
+  if (!e.doc || e.doc.body !== undefined) return false
+  want(e.eid)
+  return true
+}
+
 // Land a local edit: cache first (instant render), then the wire.
 export let mutate = (...changes: Change[]) => {
   problem.value = ''
@@ -590,6 +632,7 @@ let evict = (eids: string[]) => {
       if (next[eid].canvas) changedCanvas = true
       delete next[eid]
       pinZs.delete(eid)
+      asked.delete(eid) // it may come back bodyless; let it ask again
       changed = true
       gone.add(eid)
     }

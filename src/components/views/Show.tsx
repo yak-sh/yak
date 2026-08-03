@@ -12,6 +12,7 @@ import {
   ent,
   gated,
   parents,
+  pending,
   settled,
   statuses,
 } from '../../live.ts'
@@ -252,6 +253,9 @@ export let Mail = ({ e }: { e: Ent }) => {
 export let Body = ({ e, mod }: { e: Ent; mod?: string }) => {
   let [src, setSrc] = useState(false)
   if (!e.doc) return null
+  // A body this client was never shipped is not an empty one: paint the
+  // wait and offer no editor until it lands (pending() is the ask).
+  if (pending(e)) return <BodyEl mod={mod}>…</BodyEl>
   return src
     ? (
       <BodyEl mod={mod}>

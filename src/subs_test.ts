@@ -2,7 +2,15 @@
 // and the comps→Changes spread. Run: deno test src/subs_test.ts
 import { assertEquals } from '@std/assert'
 import { matchQuery, parseQuery } from './query.ts'
-import { diff, gaps, spread, type Step, step } from './subs.ts'
+import {
+  bodied,
+  bodyless,
+  diff,
+  gaps,
+  spread,
+  type Step,
+  step,
+} from './subs.ts'
 
 // One step, reading the verb AND the resulting membership — the Set is the
 // bookkeeping, so a test asserts both.
@@ -44,6 +52,48 @@ Deno.test('spread turns comps into a Change batch, entity riding too', () => {
       { eid: 'e1', name: 'entity', comp: { eid: 'e1', num: 7 } },
       { eid: 'e1', name: 'doc', comp: { title: 'hi' } },
     ],
+  )
+})
+
+Deno.test('only card and route subscriptions carry bodies', () => {
+  for (let sub of ['card:e1', 'route:T-3']) assertEquals(bodied(sub), true, sub)
+  for (
+    let sub of ['board:e1', 'shape:canvas', 'refs:e1', 'canvas=e1', '', 'card']
+  ) assertEquals(bodied(sub), false, sub)
+})
+
+Deno.test('the bodyless projection drops declared bodies, keeps the rest', () => {
+  assertEquals(
+    bodyless([
+      { eid: 'e1', name: 'entity', comp: { eid: 'e1', num: 7 } },
+      { eid: 'e1', name: 'doc', comp: { title: 'hi', body: 'long' } },
+      { eid: 'e1', name: 'task', comp: { status: 'open' } },
+      { eid: 'e1', name: 'session', comp: { status: 'done', final_text: 'x' } },
+      { eid: 'e1', name: 'doc', comp: { body: 'the whole patch' } },
+      { eid: 'e1', name: 'entity', comp: null },
+    ]),
+    [
+      { eid: 'e1', name: 'entity', comp: { eid: 'e1', num: 7 } },
+      { eid: 'e1', name: 'doc', comp: { title: 'hi' } },
+      { eid: 'e1', name: 'task', comp: { status: 'open' } },
+      { eid: 'e1', name: 'session', comp: { status: 'done' } },
+      // a patch that was only a body says nothing at all
+      { eid: 'e1', name: 'entity', comp: null },
+    ],
+  )
+})
+
+// A precondition rides BESIDE comp, so the projection must SPREAD what it
+// touches: a rebuilt Change would drop the guard and land unguarded.
+Deno.test('the projection carries a precondition through', () => {
+  assertEquals(
+    bodyless([{
+      eid: 'e1',
+      name: 'doc',
+      comp: { title: 'hi', body: 'long' },
+      was: { title: 'abc' },
+    }]),
+    [{ eid: 'e1', name: 'doc', comp: { title: 'hi' }, was: { title: 'abc' } }],
   )
 })
 

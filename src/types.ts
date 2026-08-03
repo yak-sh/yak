@@ -722,7 +722,12 @@ export type Edge = (typeof edges)[number]
 // The written face of an entity — title and markdown body. Anything can
 // carry one: tasks and boards do; notes, comments, and future kinds get
 // rendering/editing/files for free by carrying it too.
-export type Doc = { eid: string; title: string; body: string }
+// `body` is optional because a payload may DEFER it (subs.ts `bodyless`):
+// undefined means unloaded, '' means empty, and the column defaults to ''
+// so the two can never be confused. Every reader must tell them apart —
+// paint a placeholder and ask (live.ts `pending`), never treat a missing
+// body as an empty one, which is how an editor clobbers a stored body.
+export type Doc = { eid: string; title: string; body?: string }
 
 // Workflow state only — a task is a doc with task-management added.
 export type Task = {

@@ -36,6 +36,13 @@ export let propAt = (comp: string, prop: string): Prop | undefined => {
   }
 }
 
+// The columns a component declares as BODIES — the long markdown that no
+// board, list or dot view reads, and the one slice a payload may leave
+// behind (subs.ts `bodyless`). Derived from the vocabulary, so a new body
+// column is deferred and healed without touching either end.
+export let bodyCols = (comp: string) =>
+  Object.entries(types(comp)).filter(([, t]) => t == 'body').map(([p]) => p)
+
 let got = (v: unknown) => String(v)
 let fail = (p: Prop, grammar: string, v: unknown): never => {
   throw new Error(`${p.name} is ${grammar} — got '${got(v)}'`)

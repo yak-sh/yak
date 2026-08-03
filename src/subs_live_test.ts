@@ -71,12 +71,14 @@ let queried = async (q: string): Promise<string[]> => {
 let subscriber = async () => {
   let socket = new WebSocket(`ws://${U}/ws`)
   let sets = new Map<string, Set<string>>()
+  let seen = new Map<string, Change[]>()
   let waiting = new Map<string, () => void>()
   socket.onmessage = (m) => {
     let f = JSON.parse(String(m.data)) as Frame
     if (!f || typeof f.sub != 'string') return
     let mine = f.replace ? new Set<string>() : sets.get(f.sub) ?? new Set()
     sets.set(f.sub, mine)
+    seen.set(f.sub, [...(f.replace ? [] : seen.get(f.sub) ?? []), ...f.changes])
     for (let c of f.changes ?? []) {
       if (c.name == 'entity' && c.comp == null) mine.delete(c.eid)
       else mine.add(c.eid)
@@ -96,6 +98,9 @@ let subscriber = async () => {
   let n = 0
   return {
     open: (sub: string, q: string) => reply(sub, { sub, q }),
+    // What a frame CARRIED, not just which eids it named — the projection is
+    // a claim about columns, so a test of it has to read them.
+    carried: (sub: string) => seen.get(sub) ?? [],
     // Every enqueued maintain frame is already on the wire ahead of this
     // subscribe's reply, so awaiting the reply awaits them all. The query must
     // PARSE (a bad one is caught server-side and never answered) and match
@@ -266,6 +271,57 @@ Deno.test(
     }
   },
 )
+
+// Doc bodies are 44% of what a whole-graph subscription ships, and no board
+// or shape view paints one. So a board's frames carry none — and the two
+// doors that answer "give me this body" are the `card:` subscription (the
+// 2c card/route path) and /body (what a client asks when it holds a doc it
+// was shipped no body for). A placeholder that neither could end would be
+// permanent, so this walks all three in one sentence.
+Deno.test('bodies ride only where a body is read', alone, async () => {
+  let a = task({})
+  let q = `.doc.title~=${a.eid.slice(0, 8)}`
+  let board = `board:${uid()}`
+  let card = `card:${a.eid}`
+  let client = await subscriber()
+  let doc = (sub: string) =>
+    client.carried(sub).filter((c) => c.eid == a.eid && c.name == 'doc')
+      .map((c) => c.comp!)
+  try {
+    await post([...a.born, {
+      eid: a.eid,
+      name: 'doc',
+      comp: { body: 'the stored body' },
+    }])
+    await client.open(board, q)
+    await client.open(card, q)
+    assertEquals(doc(board).map((c) => 'body' in c), [false])
+    assertEquals(doc(card).map((c) => c.body), ['the stored body'])
+    // The title still rides on both: it is the shape, not the body.
+    assertEquals(doc(board).map((c) => 'title' in c), [true])
+
+    // A body EDIT is likewise the card's news and nothing to the board.
+    await post([{ eid: a.eid, name: 'doc', comp: { body: 'a later body' } }])
+    await client.settle()
+    assertEquals(doc(board).length, 1, 'no second doc change for the board')
+    assertEquals(doc(card).map((c) => c.body), [
+      'the stored body',
+      'a later body',
+    ])
+
+    // And the door for a body nobody subscribed: the answer IS a patch.
+    let res = await fetch(`http://${U}/body?eids=${a.eid}`)
+    assertEquals(await res.json(), {
+      changes: [{
+        eid: a.eid,
+        name: 'doc',
+        comp: { eid: a.eid, body: 'a later body' },
+      }],
+    })
+  } finally {
+    client.close()
+  }
+})
 
 // Every case above moves membership by WRITING. A moving time window moves it
 // by doing nothing at all: the window advances, the row's timestamp does not,

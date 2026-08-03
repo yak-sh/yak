@@ -1,6 +1,7 @@
 // TUI-only renderers keep the shared scalar language in their visible labels.
 import { assertEquals } from '@std/assert'
 import { type Ent } from '../types.ts'
+import { config } from '../live.ts'
 import { fit, key, overrides, spot, spots, trail } from './App.tsx'
 
 // deno-lint-ignore no-explicit-any
@@ -16,27 +17,35 @@ let find = (node: any, cls: string): any => {
   return find(node.props.children, cls)
 }
 
+let eid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+let task = (body?: string): Ent => ({
+  eid,
+  num: 1,
+  kind: 'task',
+  doc: { eid, title: 'One', ...(body === undefined ? {} : { body }) },
+  task: { eid, status: 'open', priority: 1.5 },
+  refs: [],
+  kids: [],
+})
+let full = (e: Ent) =>
+  overrides.find((r) => r.view == 'Full' && r.match(e))!.Render({ e })
+
 Deno.test('the TUI task heading formats priority through its type', () => {
-  let e: Ent = {
-    eid: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-    num: 1,
-    kind: 'task',
-    doc: {
-      eid: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-      title: 'One',
-      body: '',
-    },
-    task: {
-      eid: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-      status: 'open',
-      priority: 1.5,
-    },
-    refs: [],
-    kids: [],
+  assertEquals(find(full(task('')), 'Task_Prio').props.children, 'P1.5')
+})
+
+// A body this client was never shipped is not an empty one: the terminal
+// paints the wait too, rather than a task that looks like it has no body.
+Deno.test('the TUI paints the wait for a body it does not have', () => {
+  let prior = globalThis.fetch
+  globalThis.fetch = () => Promise.reject(new Error('no server')) // pending() asks
+  config.host = '127.0.0.1:0' // and nothing it queues may reach a real one
+  try {
+    assertEquals(find(full(task('')), 'Task_Body'), undefined)
+    assertEquals(find(full(task(undefined)), 'Task_Body').props.children, '…')
+  } finally {
+    globalThis.fetch = prior
   }
-  let render = overrides.find((r) => r.view == 'Full' && r.match(e))!.Render
-  let heading = render({ e })
-  assertEquals(find(heading, 'Task_Prio').props.children, 'P1.5')
 })
 
 Deno.test('j/k move the pane cursor, keyed by the entity we are in', () => {

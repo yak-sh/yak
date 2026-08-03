@@ -13,6 +13,7 @@ import { providers } from './adapters.ts'
 import { type Change, idOf, kindOf } from './types.ts'
 import {
   apply,
+  bodies,
   cursorOf,
   db,
   delta,
@@ -29,7 +30,7 @@ import {
   vocabHash,
   vocabularyDoc,
 } from './db.ts'
-import { gaps, spread, type Step, step } from './subs.ts'
+import { bodied, bodyless, gaps, spread, type Step, step } from './subs.ts'
 import { where } from './sql.ts'
 import { dispatch, docs, on, relay, trace } from './effects.ts'
 import { vocabularyMd } from './schema.ts'
@@ -171,6 +172,7 @@ type Sub = {
   members: Set<string>
   shadow: boolean
   moving: boolean
+  bodies: boolean
 }
 let subs = new Map<WebSocket, Map<string, Sub>>()
 let filtered = new Set<WebSocket>()
@@ -232,6 +234,14 @@ let evalQuery = (q: string) => {
 // holds an entity's components before a shadow frame mentions its eid. Reverse
 // that and a spine-only add would land a component-less row in a cache whose
 // whole contract is that it is complete.
+//
+// The other half of the same question is BODIES: a live subscription owns the
+// rows, but a board or shape never paints a body, and doc bodies are 44% of
+// what a whole-graph subscription ships. Only `card:`/`route:` subs — the
+// ones that exist to show one entity whole — carry them (subs.ts `bodied`).
+let carry = (sub: Sub, changes: Change[]) =>
+  sub.bodies ? changes : bodyless(changes)
+
 let payload = (
   sub: Sub,
   eid: string,
@@ -239,7 +249,7 @@ let payload = (
 ): Change[] =>
   sub.shadow
     ? [{ eid, name: 'entity', comp: comps.entity as Change['comp'] }]
-    : spread(eid, comps)
+    : carry(sub, spread(eid, comps))
 
 let maintain = (batch: Change[]) => {
   if (!subs.size) return
@@ -270,7 +280,7 @@ let maintain = (batch: Change[]) => {
         // A standing match tells a shadow sub nothing: membership did not
         // move, and the client heard the patch on the complete stream.
         else if (s == 'update' && !sub.shadow) {
-          changes.push(...(patch.get(eid) ?? []))
+          changes.push(...carry(sub, patch.get(eid) ?? []))
         } else if (s == 'remove') drop.push(eid)
         else if (s == 'dead') changes.push({ eid, name: 'entity', comp: null })
       }
@@ -363,6 +373,7 @@ let control = (
       members: new Set(hits.map((r) => r.eid)),
       shadow: !!f.shadow,
       moving: gaps(preds).includes('moving-time'),
+      bodies: bodied(f.sub),
     })
     let sub = map.get(f.sub)!
     let changes = hits.flatMap((r) => payload(sub, r.eid, r.comps))
@@ -644,6 +655,13 @@ let http = Deno.serve(
     await boot
     if (path == '/ws') return ws(req)
     if (path == '/snapshot') return Response.json(snapshot(db))
+    if (path == '/body') {
+      // The bodies a bodyless payload deferred, for the eids a view is about
+      // to paint or edit (live.ts `want`). A Change batch, so it lands
+      // through applyLocal like any patch — no second intake path.
+      let eids = (url.searchParams.get('eids') ?? '').split(',').filter(Boolean)
+      return Response.json({ changes: bodies(db, eids) })
+    }
     if (path == '/delta') {
       // The returning client's catch-up: changes since its cursor. A cursor
       // is only valid against the epoch and vocabulary that issued it — a
