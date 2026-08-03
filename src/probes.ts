@@ -25,6 +25,7 @@ import {
   ownerOf,
   pids,
 } from './proc.ts'
+import { worktreeDirs } from './ground.ts'
 
 // The provider comms. An agent is never reaped, and everything descending
 // from a live one is its business, not the sweep's.
@@ -58,10 +59,11 @@ export type Live = {
 export type Verdict = { proc: Proc; reap: boolean; why: string }
 
 // A git worktree: the fleet's one convention for throwaway ground, named the
-// same way everywhere (`worktrees/<repo>/<task>`, `.claude/worktrees/<id>`).
+// same way everywhere (`tasks-worktrees/<repo>/<task>`, the legacy
+// `worktrees/<repo>/<task>`, and `.claude/worktrees/<id>`).
 // A scratchpad is NOT enough on its own — an operator may deliberately park
 // something long-lived there, and a bare temp directory is not a claim.
-export let worktree = (cwd: string) => /(^|\/)worktrees\//.test(cwd)
+export let worktree = (cwd: string) => /(^|\/)(tasks-)?worktrees\//.test(cwd)
 
 // A browser held open for CDP. Nothing on this box legitimately runs headless
 // with a debugging port for hours — the probe that opened it is long gone,
@@ -88,7 +90,7 @@ let optOf = (p: Proc, name: string) =>
   joined(p).match(new RegExp(`(^|\\s)${name}=(\\S+)`))?.[2]
 
 // Containment, spelled once. Worktree roots nest at different depths across
-// the fleet (`worktrees/<repo>/<name>` here, `.claude/worktrees/<name>`
+// the fleet (`tasks-worktrees/<repo>/<name>` here, `.claude/worktrees/<name>`
 // there), so the sweep never tries to NAME the root — it asks whether one
 // path is inside another, which is true at any depth.
 export let within = (path: string, root: string) =>
@@ -327,7 +329,7 @@ export let trees = (
   let out: Tree[] = []
   let entry: Partial<Tree> = {}
   let finish = () => {
-    if (!entry.path || !entry.path.startsWith(under)) return
+    if (!entry.path || !within(entry.path, under)) return
     let path = entry.path
     let idle = now - touched(path)
     let inside = procs.find((p) => within(p.cwd, path))
@@ -370,7 +372,7 @@ export let trees = (
 export let sweep = (
   sessions: Session[],
   repo?: string,
-  under = `${Deno.env.get('HOME')}/.tasks/worktrees/`,
+  under: string | string[] = worktreeDirs(),
   grace = GRACE,
 ) => {
   let now = Date.now()
@@ -380,8 +382,11 @@ export let sweep = (
   // Worktrees are judged against EVERY process, including the ones this pass
   // is about to reap: a checkout somebody stood in a second ago keeps its
   // reprieve until the next pass, which costs ten minutes and nothing else.
+  let roots = Array.isArray(under) ? under : [under]
   let forest = repo
-    ? trees(repo, under, it, procs, now, grace).map(judgeTree)
+    ? roots.flatMap((root) =>
+      trees(repo, root, it, procs, now, grace).map(judgeTree)
+    )
     : []
   return { verdicts, trees: forest }
 }

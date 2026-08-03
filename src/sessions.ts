@@ -35,6 +35,7 @@ import { type Adapter, adapters, type Event, type Summary } from './adapters.ts'
 import { apply, db, human, record, snapshot } from './db.ts'
 import { present, reachable } from './door.ts'
 import { dispatch, trace } from './effects.ts'
+import { legacyWorktreesDir, worktreesDir } from './ground.ts'
 import { lapseChanges, rows } from './client.ts'
 import { materialize } from './persona.ts'
 import { type Change, type LogRow, sessionActive } from './types.ts'
@@ -44,7 +45,6 @@ type Row = Record<string, unknown>
 
 // Dirs are read per call, not at import: tests point them at a temp dir.
 export let logsDir = () => Deno.env.get('LOGS_DIR') ?? home('logs')
-let worktreesDir = () => Deno.env.get('WORKTREES_DIR') ?? home('worktrees')
 let home = (d: string) => `${Deno.env.get('HOME')}/.tasks/${d}`
 let logFile = (eid: string) => `${logsDir()}/${eid}.jsonl`
 let errFile = (eid: string) => `${logsDir()}/${eid}.stderr.log`
@@ -321,7 +321,8 @@ let settled = (eid: string, status: string, cast: Cast) => {
 export let tidy = async (cast: Cast) => {
   let rows = db.prepare(
     `select * from session
-     where origin = 'managed' and status = 'completed' and cwd is not null`,
+     where origin = 'managed' and status = 'completed'
+       and cwd is not null and branch is not null`,
   ).all() as Row[]
   for (let row of rows) await cleanup(row, cast)
 }
@@ -337,9 +338,9 @@ let repoOf = (row: Row) =>
     | undefined
 
 // One worktree, considered and (maybe) removed. Every refusal is a
-// warning, never a throw. The row sheds cwd and branch afterwards — a
-// later comment-resume sees the shed and regrows instead of spawning
-// into a directory that no longer exists.
+// warning, never a throw. The row sheds its branch afterwards, but keeps cwd:
+// a provider's thread is tied to that exact path, including across a root
+// migration. A later comment-resume sees the shed branch and regrows there.
 let cleanup = async (row: Row, cast: Cast) => {
   try {
     let tree = String(row.cwd ?? '')
@@ -349,7 +350,7 @@ let cleanup = async (row: Row, cast: Cast) => {
       Deno.statSync(tree)
     } catch (e) {
       if (!(e instanceof Deno.errors.NotFound)) throw e
-      stamp(String(row.eid), { cwd: null, branch: null }, cast)
+      stamp(String(row.eid), { branch: null }, cast)
       return
     }
     let repo = repoOf(row)
@@ -364,7 +365,7 @@ let cleanup = async (row: Row, cast: Cast) => {
     ])
     await git(repo.path, ['worktree', 'remove', tree])
     await git(repo.path, ['branch', '-d', branch])
-    stamp(String(row.eid), { cwd: null, branch: null }, cast)
+    stamp(String(row.eid), { branch: null }, cast)
   } catch (e) {
     console.warn('worktree cleanup skipped —', e)
   }
@@ -381,7 +382,12 @@ let regrow = async (row: Row) => {
   let { num } = db.prepare('select num from entity where eid = ?')
     .get(String(row.eid)) as { num: number }
   let sid = `S-${num}`
-  let tree = `${worktreesDir()}/${basename(repo.path)}/${sid}`
+  // Rows cleaned before the visible-root migration shed cwd. They were born
+  // under the old convention, so deriving that path is the only way to keep
+  // their provider thread resumable. New rows retain the path they were born
+  // with, and therefore never take this fallback.
+  let tree = String(row.cwd ?? '') ||
+    `${legacyWorktreesDir()}/${basename(repo.path)}/${sid}`
   Deno.mkdirSync(dirname(tree), { recursive: true })
   await git(repo.path, [
     'worktree',
@@ -392,6 +398,14 @@ let regrow = async (row: Row) => {
     repo.base_branch,
   ])
   return { cwd: tree, branch: `session/${sid}` }
+}
+
+let directory = (path: unknown) => {
+  try {
+    return Deno.statSync(String(path)).isDirectory
+  } catch {
+    return false
+  }
 }
 
 // ---- following the file ----
@@ -1388,10 +1402,10 @@ let resume = async (
     )
     return
   }
-  // A swept worktree is no reason to stay quiet: tidy only removes
-  // MERGED trees, and the provider's thread outlives them — regrow at
-  // the same path and carry on.
-  if (!row.cwd) {
+  // A swept worktree is no reason to stay quiet: tidy only removes MERGED
+  // trees, and the provider's thread outlives them — regrow at the recorded
+  // path and carry on. Legacy rows with no recorded path use the old root.
+  if (!directory(row.cwd)) {
     try {
       let back = await regrow(row)
       stamp(eid, back, cast)

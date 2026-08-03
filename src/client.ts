@@ -1119,14 +1119,17 @@ export let ancestorAt = (roots: string[], path: string) => {
   return best
 }
 
-// The central fleet layout carries only a repo basename. Ambiguity stays
-// unplaced rather than crediting the wrong venture.
+// The central fleet layouts carry only a repo basename. The visible root and
+// its hidden predecessor both remain readable; ambiguity stays unplaced rather
+// than crediting the wrong venture.
 export let worktreeAt = (roots: string[], path: string) => {
   let found = roots.map(cleanPath).filter((root) => {
     let name = root.split('/').pop()
-    let marker = `/worktrees/${name}/`
-    return name && path.includes(marker) &&
+    let markers = [`/tasks-worktrees/${name}/`, `/worktrees/${name}/`]
+    return name && markers.some((marker) =>
+      path.includes(marker) &&
       path.slice(path.indexOf(marker) + marker.length).length > 0
+    )
   })
   return found.length == 1 ? found[0] : undefined
 }

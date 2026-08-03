@@ -75,6 +75,9 @@ thorough; a paragraph is almost always the wrong size.
 
 ## Workflow
 
+- Managed fleet worktrees live under `~/tasks-worktrees/`. Keep their root
+  visible: some tools interpret any hidden ancestor as an instruction to use a
+  different file set, even when the checkout itself contains no hidden path.
 - Work in a worktree; land with `git push origin HEAD:main`. A worktree cannot
   merge into `main` — it is checked out in the shared tree, which refuses
   `merge`, `push .`, `fetch .` and `branch -f` alike. ff-only is the remote's

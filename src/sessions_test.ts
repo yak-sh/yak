@@ -1120,10 +1120,10 @@ Deno.test('tidy: a merged clean tree goes at boot, unmerged work stays', async (
   inTree(treeB, 'commit', '-m', 'ahead')
   heard = []
   await tidy(cast)
-  // a: its branch tip IS the base tip, tree clean — worktree and branch go,
-  // the row sheds both, and the shed rides the cast
+  // a: its branch tip IS the base tip, tree clean — worktree and branch go.
+  // The row keeps its cwd for thread identity and sheds the branch marker.
   assertThrows(() => Deno.statSync(treeA))
-  assertEquals(row(a.eid)?.cwd, null)
+  assertEquals(row(a.eid)?.cwd, treeA)
   assertEquals(row(a.eid)?.branch, null)
   assertEquals(
     inTree(scratch, 'rev-parse', '--verify', branchA).success,
@@ -1154,7 +1154,7 @@ Deno.test('tidy: an absent tree is reconciled once', async () => {
   heard = []
   await tidy(cast)
   await tidy(cast)
-  assertEquals(row(eid)?.cwd, null)
+  assertEquals(row(eid)?.cwd, tree)
   assertEquals(row(eid)?.branch, null)
   assertEquals(
     heard.filter((c) => c.eid == eid && c.name == 'session').length,
@@ -1167,8 +1167,9 @@ Deno.test('a comment after the sweep regrows the worktree and resumes', async ()
   let { eid, done } = begin(t)
   await done
   let tree = String(row(eid)!.cwd), branch = String(row(eid)!.branch)
-  await tidy(cast) // merged and clean: swept, the row shed cwd and branch
-  assertEquals(row(eid)?.cwd, null)
+  await tidy(cast) // merged and clean: swept, with its exact path retained
+  assertEquals(row(eid)?.cwd, tree)
+  assertEquals(row(eid)?.branch, null)
   let resumed = write(say(eid, 'one more thing'))
   await until(() => row(eid)?.status == 'running', 'the regrown resume')
   assertEquals(row(eid)?.cwd, tree) // the SAME path — the thread lives there
@@ -1177,6 +1178,18 @@ Deno.test('a comment after the sweep regrows the worktree and resumes', async ()
   await resumed
   assertEquals(row(eid)?.status, 'completed') // the continuation settled
   assertEquals(refusals(eid), [])
+
+  // Rows swept before the visible-root migration lost cwd. Their old path is
+  // deterministic, so they still resume on the ground where their thread was
+  // born instead of silently moving it.
+  await tidy(cast)
+  db.prepare('update session set cwd = null where eid = ?').run(eid)
+  let legacy = write(say(eid, 'from the old root'))
+  await until(() => row(eid)?.status == 'running', 'the legacy regrow')
+  assertEquals(row(eid)?.cwd, tree)
+  await legacy
+  assertEquals(row(eid)?.status, 'completed')
+
   // and when the graph can't place a tree, the refusal is said
   db.prepare('update session set cwd = null where eid = ?').run(eid)
   db.prepare('delete from repo where eid = ?').run(p)

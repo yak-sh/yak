@@ -1381,6 +1381,8 @@ Deno.test('repoAt: the fleet worktree path names its main repo', () => {
   })
   assertEquals(repoAt(g, '/home/me/.tasks/worktrees/tasks/S-42')?.eid, R)
   assertEquals(repoAt(g, '/home/me/.tasks/worktrees/tasks/S-42/src')?.eid, R)
+  assertEquals(repoAt(g, '/home/me/tasks-worktrees/tasks/S-42')?.eid, R)
+  assertEquals(repoAt(g, '/home/me/tasks-worktrees/tasks/S-42/src')?.eid, R)
   assertEquals(repoAt(g, '/home/me/.tasks/worktrees/tasks/'), undefined)
   assertEquals(repoAt(g, '/code/tasksmith'), undefined)
 })

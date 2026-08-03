@@ -41,6 +41,7 @@ let verdict = (p: Proc, it = nobody, self: number[] = []) =>
 
 Deno.test('a worktree is throwaway ground; a scratchpad alone is not', () => {
   assert(worktree('/home/yaks/.tasks/worktrees/tasks/T-9722'))
+  assert(worktree('/home/yaks/tasks-worktrees/tasks/T-9722'))
   assert(worktree('/home/yaks/code/tasks/.claude/worktrees/agent-a4cca'))
   assertEquals(worktree('/home/yaks/code/tasks'), false)
   // A service an operator parked in a scratchpad carries no probe marker,
