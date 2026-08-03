@@ -13,6 +13,13 @@ let args = [
   'src/server.ts',
 ]
 
+// A SUCCESSOR — and only a successor — may bind an address that is already
+// serving; bind.ts refuses everyone else, so a second `deno task dev` against
+// the live port is refused rather than quietly doubling it. The first boot
+// and the relaunch after a death both expect an empty address, so neither
+// asks.
+let succeeding = [...args, '--join']
+
 let wait = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms))
 
@@ -142,7 +149,7 @@ let swap = async () => {
   let old = current!
   stopping.add(old)
   try {
-    current = watch(await launch())
+    current = watch(await launch(deno, succeeding))
     await stop(old)
   } catch (e) {
     console.error('server handoff failed —', e)

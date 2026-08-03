@@ -1,14 +1,18 @@
-// One address, one graph. `reusePort` turns the public port into an accept
-// POOL: any process may join it, and the kernel deals each connection to
-// whichever listener it likes. Two servers over the SAME file is the deploy
-// handoff — they answer identically, so nobody can tell. Two servers over
-// DIFFERENT files is a coin flip per request, and the loser answers
-// `no entity: T-10093` for rows that plainly exist. That reads as a deleted
-// task, not as a wrong server, so the graph lies about its own contents.
+// One address, one graph, one server that meant to be there. `reusePort`
+// turns the public port into an accept POOL: any process may join it, and the
+// kernel deals each connection to whichever listener it likes.
 //
-// Nothing downstream can repair it: a client has no way to ask which graph
-// answered. So the check belongs here, before the join — a server asks the
-// address who already serves it, and refuses to sit beside a stranger.
+// Two servers over DIFFERENT files is a coin flip per request, and the loser
+// answers `no entity: T-10093` for rows that plainly exist. That reads as a
+// deleted task, not as a wrong server, so the graph lies about its contents.
+// Two servers over the SAME file is quieter and likelier: both answer alike,
+// so nothing ever looks wrong, while a probe that forgot DB_PATH writes into
+// the owner's board. Only the deploy handoff wants that, and the handoff can
+// say so — so joining is opt-in (`--join`) and everything else is refused.
+//
+// Nothing downstream can repair either: a client has no way to ask which
+// graph answered. So the check belongs here, before the join — a server asks
+// the address who already serves it, and declines to be the second answer.
 import { resolve } from 'node:path'
 
 // What /graph answers: which file this process serves, and who it is.
@@ -46,17 +50,44 @@ export let peer = async (
 
 // Throws rather than exits: a function that kills the process cannot be
 // tested, and the caller wants one clean line on stderr, not a stack.
+//
+// `join` is the supervisor's signature — dev.ts appends `--join` to a
+// SUCCESSOR and to nothing else — and it permits ONLY a same-file peer: a
+// stranger's graph is refused however deliberate the boot. It rides argv
+// rather than the environment for the reason the ready port does: the server
+// spawns agents, and an env var would be inherited by every one of them and
+// by every probe they run, handing the mistake back its permission.
 export let alone = async (
   port: number,
   mine: string,
+  join = false,
   find = peer,
 ) => {
   let held = await find(port)
-  if (!held || same(mine, held.db)) return held
-  throw new Error(
-    `port ${port} already serves a different graph — ${held.db} ` +
-      `(pid ${held.pid}); this process serves ${mine}. Two graphs on one ` +
-      `address deal every reader a coin flip, which reads as 'no entity' ` +
-      `for rows that exist. Set PORT to a free port, or stop that server.`,
+  if (!held) return null
+  if (!same(mine, held.db)) {
+    throw new Error(
+      `port ${port} already serves a different graph — ${held.db} ` +
+        `(pid ${held.pid}); this process serves ${mine}. Two graphs on one ` +
+        `address deal every reader a coin flip, which reads as 'no entity' ` +
+        `for rows that exist. Set PORT to a free port, or stop that server.`,
+    )
+  }
+  if (!join) {
+    throw new Error(
+      `port ${port} already serves this same graph — ${held.db} ` +
+        `(pid ${held.pid}). Both servers would answer alike, so nothing ` +
+        `would look wrong while every write here landed in that graph. ` +
+        `Copy the file and take a free port: cp ${held.db} /tmp/probe.db ` +
+        `&& DB_PATH=/tmp/probe.db PORT=5199 deno run -A --unstable-net ` +
+        `--unstable-worker-options src/server.ts. (--join is the dev ` +
+        `supervisor's word for its own successors, not a way past this.)`,
+    )
+  }
+  // A join is never silent — the one case we allow still says so, because
+  // a second listener nobody can see is what made this class expensive.
+  console.warn(
+    `tasks: joining ${held.db} on port ${port} beside pid ${held.pid}`,
   )
+  return held
 }

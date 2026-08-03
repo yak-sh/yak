@@ -622,13 +622,13 @@ let clientError = async (req: Request) => {
 let booted: () => void = () => {}
 let boot = new Promise<void>((resolve) => booted = resolve)
 let port = Number(Deno.env.get('PORT') ?? 5173)
-// Whose graph holds this address (src/bind.ts). A successor serves the same
-// file and is welcome beside its predecessor; a stranger's graph on the same
-// port makes every reader a coin flip, so this process declines to be the
-// second answer instead of poisoning the address.
+// Whose graph holds this address (src/bind.ts). An occupied port is refused
+// — a stranger's graph makes every reader a coin flip, and even our own file
+// twice over is a probe writing to the owner's board — unless `--join` says
+// a supervisor meant this process to succeed the one already there.
 let serving: Serving = { db: graph, epoch, pid: Deno.pid }
 try {
-  await alone(port, graph)
+  await alone(port, graph, Deno.args.includes('--join'))
 } catch (e) {
   console.error(`tasks: ${(e as Error).message}`)
   Deno.exit(1)

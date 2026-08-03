@@ -40,17 +40,30 @@ Deno.test('peer: an empty address and a stranger both read as nobody', async () 
   }
 })
 
-Deno.test('alone: a peer over the same file is the handoff, and joins', async () => {
+Deno.test('alone: --join takes the same file — the deploy handoff', async () => {
   let { port, http } = answers({ db: '/t/tasks.db', epoch: 'e', pid: 7 })
   try {
-    assertEquals((await alone(port, '/t/tasks.db'))?.pid, 7)
+    assertEquals((await alone(port, '/t/tasks.db', true))?.pid, 7)
   } finally {
     await http.shutdown()
   }
 })
 
-Deno.test('alone: an empty address joins', async () => {
+Deno.test('alone: the same file without --join is refused, naming the way in', async () => {
+  let { port, http } = answers({ db: '/t/tasks.db', epoch: 'e', pid: 7 })
+  try {
+    let e = await assertRejects(() => alone(port, '/t/tasks.db'))
+    assertStringIncludes((e as Error).message, '/t/tasks.db')
+    assertStringIncludes((e as Error).message, 'DB_PATH')
+    assertStringIncludes((e as Error).message, '--join')
+  } finally {
+    await http.shutdown()
+  }
+})
+
+Deno.test('alone: an empty address joins, asked for or not', async () => {
   assertEquals(await alone(free(), '/t/tasks.db'), null)
+  assertEquals(await alone(free(), '/t/tasks.db', true), null)
 })
 
 Deno.test('alone: a peer over another file is refused, naming both', async () => {
@@ -60,6 +73,15 @@ Deno.test('alone: a peer over another file is refused, naming both', async () =>
     assertStringIncludes((e as Error).message, '/live/tasks.db')
     assertStringIncludes((e as Error).message, '/probe/tasks.db')
     assertStringIncludes((e as Error).message, 'PORT')
+  } finally {
+    await http.shutdown()
+  }
+})
+
+Deno.test('alone: --join is no licence to sit beside a stranger', async () => {
+  let { port, http } = answers({ db: '/live/tasks.db', epoch: 'e', pid: 7 })
+  try {
+    await assertRejects(() => alone(port, '/probe/tasks.db', true))
   } finally {
     await http.shutdown()
   }
