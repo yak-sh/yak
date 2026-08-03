@@ -784,7 +784,9 @@ your read is refused, with their text and a fresh token. ${BUS}`,
           'When the decision this records was TAKEN — an ISO date or a ' +
             "phrase ('3 months ago'). Stamps `decided`, which is what " +
             '`task decided` and the digest order by. Say it when writing up ' +
-            'an old decision: filing it today is not deciding it today.',
+            'an old decision: filing it today is not deciding it today. The ' +
+            'stamp SAYS it is a decision, so the title must not — never ' +
+            "prefix one with 'decision:'.",
         )
         .optional(),
       id: z.string().optional(),
