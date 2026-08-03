@@ -127,6 +127,7 @@ let schema = `
     eid  text primary key references entity(eid),
     path text not null,
     base_branch text not null default 'main',
+    gate text,
     push integer not null default 0
   );
   create table if not exists role (
@@ -752,6 +753,9 @@ export let open = (path = file) => {
   // is the owner's to grant per venture, never something a migration hands
   // out (src/git.ts).
   addCol('repo', 'push', 'push integer not null default 0')
+  // A missing gate refuses landing. There is no safe cross-language default,
+  // so the project names one complete command explicitly (src/land.ts).
+  addCol('repo', 'gate', 'gate text')
   addCol('session', 'cwd', 'cwd text')
   addCol('session', 'pid', 'pid integer')
   addCol('session', 'pane', 'pane text')

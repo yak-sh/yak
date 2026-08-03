@@ -1,6 +1,7 @@
 {
   "tasks": {
     "check": "deno fmt --check . && deno lint . && deno check src/ channels/",
+    "gate": "deno fmt src/ && deno task check && DB_PATH=:memory: deno task test",
     "dev": "deno run -A --unstable-net --unstable-worker-options src/dev.ts",
     "tui": "sh -c 'while :; do deno run -A src/tui/main.tsx && break; [ $? -eq 42 ] || break; done'",
     "install": "sh -c 'cd \"$(git worktree list --porcelain | head -1 | cut -c 10-)\" && git config core.hooksPath .githooks && deno install -g -f --name task -A --config deno.json src/cli.ts'",

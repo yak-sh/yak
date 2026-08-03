@@ -328,6 +328,17 @@ export let manuals: Record<string, Manual> = {
     ],
     words: [1, 1],
   },
+  land: {
+    usage: 'land',
+    about: "rebase, gate, and land this session's worktree",
+    examples: ['task land'],
+    detail: "The session's task chooses the repo, base branch, worktree and " +
+      'repo.gate command from the graph. A concurrent fast-forward makes the ' +
+      'verb rebase and retest, up to five times. Success comments the landed ' +
+      'sha on the task, then removes the worktree and its local branch.',
+    root: true,
+    words: [0, 0],
+  },
   comment: {
     usage:
       'comment <id> [text...] [--verdict=approved|rejected|changes_requested]',

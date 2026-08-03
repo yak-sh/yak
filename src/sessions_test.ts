@@ -444,7 +444,8 @@ Deno.test('a worn persona rides the prompt whole — tiers and all', async () =>
   assertMatch(text, /Be terse\./)
   assertMatch(text, /---\n\n# D-\d+ lesson/)
   assertMatch(text, /Front door\./)
-  assert(!text.includes('House rules')) // the persona replaces CONTRACT
+  assertMatch(text, /House rules/)
+  assertMatch(text, /task land/)
 })
 
 Deno.test('a child that exits nonzero failed, whatever it said', async () => {

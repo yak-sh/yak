@@ -105,6 +105,7 @@ import type { JournalEntry } from './client.ts'
 import { agentPid, claudePid, descends } from './proc.ts'
 import { filesFor, syncFiles } from './persona.ts'
 import { commit } from './git.ts'
+import { land as landTree, landing } from './land.ts'
 import { request } from './http.ts'
 import { commands, focusOf, run as runCommand } from './commands.ts'
 import {
@@ -995,6 +996,29 @@ let spawn = async (args: string[]) => {
     effort: flag('effort'),
     persona: flag('persona'),
   })
+}
+
+// The one landing door: the graph supplies the session's task, checkout,
+// branch and gate; the shell supplies none. Record the remote CAS before the
+// tree disappears. The exact-body check makes a retry idempotent if the first
+// response was lost after the comment committed.
+let land = async () => {
+  let all = rows(await snapshot())
+  let spec = landing(all, me())
+  let sha = await landTree(spec, {
+    record: async (sha) => {
+      let current = rows(await snapshot())
+      let body = `Landed \`${sha}\`.`
+      let recorded = current.some((r) =>
+        r.comps.comment?.target_eid == spec.task.eid &&
+        r.comps.doc?.body == body
+      )
+      if (!recorded) {
+        await send(commentChanges(current, spec.task.eid, body, me()))
+      }
+    },
+  })
+  console.log(`${idOf(spec.task)} landed ${sha}`)
 }
 
 // The palette's `:` line, spoken from the shell — the same commands.ts
@@ -2146,6 +2170,7 @@ if (import.meta.main) {
       else if (cmd == 'session') await session(rest)
       else if (cmd == 'claim') await claim(rest)
       else if (cmd == 'spawn') await spawn(rest)
+      else if (cmd == 'land') await land()
       else if (cmd == 'comment') await comment(rest)
       else if (cmd == 'dep') await dep(rest)
       else if (cmd == 'backup') await backup()

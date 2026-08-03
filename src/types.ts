@@ -116,11 +116,12 @@ export let comps: Record<string, Record<string, PropType>> = {
   // the fleet palette, so a venture that never sets one still gets a stable
   // colour of its own rather than the default.
   project: { retired_at: 'time', color: 'text' },
-  // the project's checkout. `push` is the venture's standing permission for
-  // the projection to push what it commits — OFF by default, and off for
-  // every repo the graph doesn't know, because a push to main deploys in
-  // some ventures and an unknown repo must land on the harmless side.
-  repo: { path: 'text', base_branch: 'text', push: 'bool' },
+  // the project's checkout. `gate` names its one complete test command;
+  // `push` is the venture's standing permission for the projection to push
+  // what it commits — OFF by default, and off for every repo the graph doesn't
+  // know, because a push to main deploys in some ventures and an unknown repo
+  // must land on the harmless side.
+  repo: { path: 'text', base_branch: 'text', gate: 'text', push: 'bool' },
   role: {
     state: { enum: roleStates },
     surface: { enum: roleSurfaces },
@@ -811,6 +812,7 @@ export type Repo = {
   eid: string
   path: string
   base_branch: string
+  gate?: string | null
   push?: boolean
 }
 

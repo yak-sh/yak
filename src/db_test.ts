@@ -437,10 +437,19 @@ Deno.test('repo is a tag on a project: wire-writable, never the kind', () => {
   apply(db, [
     { eid: p, name: 'doc', comp: { title: 'a venture' } },
     { eid: p, name: 'project', comp: {} },
-    { eid: p, name: 'repo', comp: { path: '/tmp/x', base_branch: 'trunk' } },
+    {
+      eid: p,
+      name: 'repo',
+      comp: {
+        path: '/tmp/x',
+        base_branch: 'trunk',
+        gate: 'deno task gate',
+      },
+    },
   ])
   assertEquals(comp(p, 'repo')?.path, '/tmp/x')
   assertEquals(comp(p, 'repo')?.base_branch, 'trunk')
+  assertEquals(comp(p, 'repo')?.gate, 'deno task gate')
   assertEquals(search(db, 'venture')[0]?.kind, 'project') // repo doesn't name it
 })
 
@@ -1873,6 +1882,18 @@ Deno.test('edges: a dead endpoint voids the link; delete prunes edges', () => {
 
 Deno.test('open() is idempotent and additive on live files', () => {
   assertMatch(String(fresh().prepare('select 1 as ok').get()?.ok), /1/)
+})
+
+Deno.test('open adds the repo landing gate in place', () => {
+  let root = Deno.makeTempDirSync({ prefix: 'tasks-repo-gate-' })
+  let path = `${root}/tasks.db`
+  let legacy = open(path)
+  legacy.exec('alter table repo drop column gate')
+  legacy.close()
+  let healed = open(path)
+  assertEquals(hasCol(healed, 'repo', 'gate'), true)
+  healed.close()
+  Deno.removeSync(root, { recursive: true })
 })
 
 Deno.test('open heals canonical stored values once and preserves failures', () => {

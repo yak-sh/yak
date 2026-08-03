@@ -922,26 +922,15 @@ let spawn = (
 
 // ---- the spawn effect ----
 
-// The standing contract every managed spawn carries — the default
-// persona, replaced wholesale once a session names a real one. Repo-
-// agnostic on purpose: a spawn may land in any project's checkout, so
-// the repo's own docs carry the specifics (this graph's docs/STYLE.md
-// names its exact gate chain). Born of S-3648, which merged a commit
-// that failed the format check because nothing told it not to.
+// The standing rider every managed spawn carries, including one wearing a
+// persona. Mechanics belong to `task land`; repeating them here would turn
+// every refinement back into two prose contracts that can drift.
 let CONTRACT = `House rules for this run:
-- You are in a dedicated worktree on your own branch. Commit focused
-  work there, then land with git push origin HEAD:<base> — a worktree
-  cannot merge into a branch checked out elsewhere, so git refuses
-  every local spelling. If the push is refused as non-fast-forward,
-  rebase on origin/<base> and push again. Never force-push.
-- Before pushing, run the repo's checks (format, lint, typecheck,
-  tests — docs/STYLE.md or the task runner names them), chained with
-  && so a failure stops the line, and READ the output. Never push
-  red; formatting counts.
+- Work only in this dedicated worktree and commit focused changes.
 - Read docs/STYLE.md before writing code, if the repo has one, and
   match the existing code's voice.
-- File discoveries as new tasks linked to yours instead of silently
-  widening scope.`
+- File discoveries as new tasks linked to yours instead of widening scope.
+- When the work is committed, land it with task land.`
 
 // Session runtime beside its normalized launch spec. Explicit aliases avoid
 // duplicate column names and keep validation on the canonical component.
@@ -1024,7 +1013,8 @@ export let spawned =
     }
     // The worn persona rides whole — core text plus its tiers, rendered
     // by materialize() so the spawn's prompt and the repo's .tasks files
-    // say the same thing. A docless persona_eid falls back to CONTRACT.
+    // say the same thing. The house rider stays independent: that is what
+    // makes one landing contract reach every persona.
     let worn: string | undefined
     if (row.spawn_persona_eid) {
       let snap = snapshot(db)
@@ -1049,7 +1039,8 @@ export let spawned =
       ...(row.actor_eid ? {} : { actor_eid: project }),
     }, cast)
     let instruction = [
-      worn ?? CONTRACT,
+      worn,
+      CONTRACT,
       task && `T-${task.num}: ${task.title}`,
       task?.body,
       role && `# R-${role.num} ${role.title ?? ''}`,
