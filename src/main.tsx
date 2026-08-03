@@ -1,7 +1,7 @@
 import { render } from 'preact'
 import { agreementProbe, boot, cache, clientId, config, ent } from './live.ts'
 import { idOf } from './types.ts'
-import { route } from './components/nav.tsx'
+import { restore, route } from './components/nav.tsx'
 import { App } from './components/App.tsx'
 
 // Tell the server when this page breaks (the rows land in telemetry) — a
@@ -50,6 +50,12 @@ if (legacy) {
     route.value = location.pathname + location.search
   }
 }
+
+// A cold launch at `/` — the manifest's start_url, so every app launch —
+// resumes the card and view this device left off on, with the canvas
+// seeded under it for the back gesture. Here because the cache is full
+// (a remembered entity that died falls back) and nothing has painted yet.
+restore()
 
 render(<App />, document.body)
 

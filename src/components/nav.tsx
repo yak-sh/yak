@@ -22,6 +22,7 @@ globalThis.addEventListener?.('popstate', () => {
   let was = screenTarget()?.eid
   route.value = loc!.pathname + loc!.search
   track(was)
+  keep()
 })
 
 export let navigate = (to: string) => {
@@ -31,6 +32,7 @@ export let navigate = (to: string) => {
   his.pushState(null, '', to)
   route.value = to
   track(was)
+  keep()
 }
 
 let linkAt = (ev: MouseEvent) => {
@@ -145,10 +147,12 @@ export let linkProps = (e: Ent) => ({
   onDragStart: (ev: DragEvent) => dragData(ev, e.eid, resolve(e).view),
 })
 
-// Resolve the route to {eid, view}: bare `/` means the root canvas; an
-// id is T-num / bare num / eid, looked up in the live cache.
-export let screenTarget = () => {
-  let url = new URL(route.value, 'http://x')
+// Resolve a route to {eid, view}: bare `/` means the root canvas; an
+// id is T-num / bare num / eid, looked up in the live cache. The argument
+// is how a REMEMBERED route (below) is screened against the same resolver
+// the screen uses — a route naming a dead entity resolves to nothing.
+export let screenTarget = (at = route.value) => {
+  let url = new URL(at, 'http://x')
   let id = decodeURIComponent(url.pathname.slice(1))
   let view = url.searchParams.get('v') ?? undefined
   let eid = id ? eidOf(id) : rootCanvas()
@@ -166,6 +170,72 @@ let track = (was?: string) => {
   let i = trail.value.indexOf(now)
   if (i >= 0) trail.value = trail.value.slice(0, i)
   else if (was && was != rootCanvas()) trail.value = [...trail.value, was]
+}
+
+// WHERE THIS DEVICE WAS. `at` is the last route that named something;
+// `home` is the last one that named the root canvas — the canvas in the
+// view it was left in, which is what a restored card sits on top of.
+// Per device rather than in the graph on purpose: a phone and a desktop
+// want different last positions, and a graph row would cost a write per
+// navigation (broadcast to every other client) to buy a cross-device
+// continuity nobody asked for. Storage is read inside the functions —
+// the TUI imports this module and has no localStorage.
+type Where = { at: string; home: string }
+let WHERE = 'tasks-where'
+let WARM = 'tasks-warm'
+
+let kept = (): Where => {
+  try {
+    return { at: '/', home: '/', ...JSON.parse(localStorage.getItem(WHERE)!) }
+  } catch {
+    return { at: '/', home: '/' }
+  }
+}
+
+// Every landing writes it — both route writers above, plus boot. A route
+// that resolves to nothing (/admin, a 404) leaves the memory alone:
+// chrome and dead ends are not places you were.
+let keep = () => {
+  let t = screenTarget()
+  if (!loc || !t) return
+  try {
+    let at = route.value
+    let home = t.eid == rootCanvas() ? at : kept().home
+    localStorage.setItem(WHERE, JSON.stringify({ at, home }))
+  } catch { /* private mode: the memory is a nicety, never a failure */ }
+}
+
+// A COLD launch at bare `/` resumes where the device left off; anything
+// else wins over the memory. A deep link carries a path or a query and
+// never reaches the restore. `/` itself is the subtle one — the brand is
+// a native anchor, so tapping home is a page LOAD at `/`, and bouncing
+// that back to the card would make the canvas unreachable. So a browsing
+// context marks itself warm on its first boot: the fresh tab (or app
+// launch) restores, every later `/` in that tab shows the canvas.
+//
+// main.tsx calls this once, after boot() has filled the cache and before
+// the first render — so a remembered entity that has since been DELETED
+// resolves to nothing here and falls back to the canvas, and the URL is
+// rewritten before anything paints. Back is a real history entry: home
+// goes under the card, so one gesture returns to the canvas.
+export let restore = () => {
+  if (!loc || !his) return
+  let warm = false
+  try {
+    warm = !!sessionStorage.getItem(WARM)
+    sessionStorage.setItem(WARM, '1')
+  } catch { /* no storage, no memory — kept() defaults to the canvas */ }
+  if (warm || loc.pathname != '/' || loc.search) {
+    keep()
+    return
+  }
+  let w = kept()
+  let home = screenTarget(w.home) ? w.home : '/'
+  let at = screenTarget(w.at) ? w.at : home
+  if (home != '/') his.replaceState(null, '', home)
+  if (at != home) his.pushState(null, '', at)
+  route.value = at
+  keep()
 }
 
 // The entity context menu: navigation first ("open here" is the
