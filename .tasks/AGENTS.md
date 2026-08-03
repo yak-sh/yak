@@ -429,14 +429,15 @@ Restore:
 cat snap/schema.sql snap/graph.sql snap/journal.sql | sqlite3 tasks.db
 ```
 
-then start the server. The FTS index refills from its sync triggers as the doc
-rows load, and embeddings backfill on the embed sweep — which is why neither is
-dumped.
+then start the server. The `doc_fts*` and `doc_gram*` indexes refill from their
+sync triggers as doc rows load. `embedding` backfills on the embed sweep, so
+none are dumped.
 
 Text, split, and derived-free, all for measured reasons: git cannot delta a
 SQLite file, so every hourly commit stored a near-complete new copy (~167 MB/day,
 `.git` at 2.5 GB in 15 days) where the whole graph as text costs ~29 KB per
-commit; `embedding` + the FTS index are ~29% of the db and rebuild themselves;
+commit; `embedding`, `doc_fts*`, and `doc_gram*` are ~57% of the db and rebuild
+themselves;
 and GitHub's hard 100 MB limit is per FILE, so the append-only journal gets its
 own file rather than being pruned to buy headroom. `bin/backup` refuses to
 publish a dump it cannot load back with matching row counts — the restore path
