@@ -121,6 +121,34 @@ Deno.test('task_context surfaces and acknowledges one atomic inbox batch', async
   })
 })
 
+Deno.test('task_spawn refuses an undecided proposal without minting a session', async () => {
+  let { db, io } = graph()
+  let task = crypto.randomUUID()
+  apply(db, [
+    { eid: task, name: 'doc', comp: { title: 'fleet idea' } },
+    { eid: task, name: 'task', comp: { status: 'open' } },
+    { eid: task, name: 'proposed', comp: {} },
+  ])
+  await protocol(io, async (client) => {
+    let out = await client.callTool({
+      name: 'task_spawn',
+      arguments: { id: task, provider: 'claude', model: 'opus' },
+    }) as ToolResult
+    assertEquals(out.isError, true)
+    assertMatch(said(out), /is proposed but not decided/)
+    assertMatch(
+      said(out),
+      /task set T-\d+ \.decided\.at=now \.decided\.by=U-3709/,
+    )
+  })
+  assertEquals(
+    db.prepare(
+      'select count(*) as n from session where requested_task_eid = ?',
+    ).get(task),
+    { n: 0 },
+  )
+})
+
 type ToolResult = {
   content: { type: string; text?: string }[]
   isError?: boolean
@@ -452,7 +480,7 @@ Deno.test('MCP modes apply every accepted field and reject conflicts', async () 
             '.title=Param title',
             '.body=Param body',
             '.status=open',
-            '.proposal=true',
+            '.proposed.at=2026-08-01T00:00:00.000Z',
           ],
         },
       })
@@ -462,7 +490,7 @@ Deno.test('MCP modes apply every accepted field and reject conflicts', async () 
       )
       assertEquals(made?.comps.doc?.body, 'Dedicated body')
       assertEquals(made?.comps.task?.status, 'done')
-      assertEquals(made?.comps.task?.proposal, 1)
+      assertEquals(made?.comps.proposed?.at, '2026-08-01T00:00:00.000Z')
 
       let batch = await client.callTool({
         name: 'task_new',

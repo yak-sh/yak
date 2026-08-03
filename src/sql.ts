@@ -35,7 +35,7 @@ let col = (comp: string, prop: string) => `"${comp}"."${prop}"`
 // Is this a column the graph actually has? A pred naming an unknown column
 // would compile to broken SQL rather than to `false`, so it is refused.
 let known = (comp: string, prop: string) =>
-  !!comp && !!propAt(comp, prop) &&
+  !!comp && (!prop ? comp in comps : !!propAt(comp, prop)) &&
   (comp in comps || comp in stamped)
 
 let tagOf = (comp: string, prop: string) => {
@@ -209,6 +209,12 @@ let one = (p: Pred): Sql | null => {
   if (p.op == TEXT) return text(p.value)
   if (p.at) return null // path preds need a second join
   if (!known(p.comp, p.prop)) return null
+  if (!p.prop) {
+    return {
+      sql: `${col(p.comp, 'eid')} is ${p.op == '~' ? 'not ' : ''}null`,
+      params: [],
+    }
+  }
   let tag = tagOf(p.comp, p.prop)
   if (tag == 'time') return null // spans are their own pass
   let c = col(p.comp, p.prop)

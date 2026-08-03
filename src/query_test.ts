@@ -43,8 +43,6 @@ let hit = (q: string, task: Record<string, unknown> = {}) =>
 let cases: [string, string, Record<string, unknown>, boolean][] = [
   ['equality', '.status=open', {}, true],
   ['equality miss', '.status=done', {}, false],
-  ['boolean marker', '.proposal=true', { proposal: 1 }, true],
-  ['boolean marker absent', '.proposal=true', {}, false],
   ['and across params', '.status=open&.domain=Ops', {}, true],
   ['and fails on one', '.status=open&.domain=Eng', {}, false],
   ['any-of list', '.domain=Ops,Eng', {}, true],
@@ -93,6 +91,22 @@ Deno.test('query: comparisons never match an absent prop', () => {
   )
 })
 
+Deno.test('query: component names test facet absence and presence', () => {
+  let fix = row({})
+  let idea = row({}, { proposed: { at: '2026-08-01T00:00:00.000Z' } })
+  let matches = (q: string, r: ReturnType<typeof row>) =>
+    matchQuery(r, parseQuery(q))
+  assertEquals(matches('.proposed=', fix), true)
+  assertEquals(matches('.proposed=', idea), false)
+  assertEquals(matches('.proposed~=', fix), false)
+  assertEquals(matches('.proposed~=', idea), true)
+  assertThrows(
+    () => parseQuery('.proposed!=yes'),
+    Error,
+    'component filters are presence tests',
+  )
+})
+
 Deno.test('query: bad tokens are loud, bare words are terms', () => {
   assertThrows(() => parseQuery('.hovercraft=eels'), Error, 'unknown prop')
   assertThrows(() => parseQuery('.task.eels=9'), Error, 'no such prop')
@@ -137,7 +151,6 @@ Deno.test('query: pred routes and normalizes ops', () => {
 Deno.test('query: typed atoms canonicalize or reject as one matrix', () => {
   let accepted = [
     ['.status=OPEN', 'open'],
-    ['.proposal=YES', '1'],
     ['.verified=YES,no', '1,0'],
     ['.pin.x=+01.0', '1'],
     ['.priority=p02', '2'],
@@ -530,6 +543,8 @@ let has: [string, string, string, string][] = [
   ['ops after a prop', '.status', '.status=', 'equals'],
   ['negation op', '.status', '.status!=', 'not'],
   ['contains op', '.title', '.title~=', 'contains'],
+  ['facet absent', '.proposed', '.proposed=', 'absent'],
+  ['facet present', '.proposed', '.proposed~=', 'present'],
   ['range skeleton', '.priority', '.priority=..', 'range'],
   ['half-typed op', '.status!', '.status!=', 'not'],
   ['enum values', '.status=', '.status=open', 'status'],

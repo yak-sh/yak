@@ -9,6 +9,7 @@ let {
   delta,
   eager,
   hasCol,
+  human,
   journalBy,
   journalOf,
   mendCalls,
@@ -130,7 +131,6 @@ Deno.test('create + patch + column clear', () => {
       project_eid: null,
       assignee_eid: null,
       domain: null,
-      proposal: null,
     },
   ) // the live batch carries the same defaults as a snapshot
   apply(db, [{ eid: t, name: 'doc', comp: { title: 'B' } }])
@@ -189,15 +189,13 @@ Deno.test('graph-out carries declared columns only', () => {
 })
 
 Deno.test('declared booleans bind as SQLite integers', () => {
-  let s = uid(), t = uid()
+  let s = uid()
   apply(db, [{
     eid: s,
     name: 'session',
     comp: { id: uid(), operator: false },
   }])
-  apply(db, [{ eid: t, name: 'task', comp: { proposal: true } }])
   assertEquals(comp(s, 'session')?.operator, 0)
-  assertEquals(comp(t, 'task')?.proposal, 1)
   apply(db, [{ eid: s, name: 'session', comp: { operator: true } }])
   assertEquals(comp(s, 'session')?.operator, 1)
 })
@@ -575,6 +573,40 @@ Deno.test('canonical session launch fields dual-materialize', () => {
     out.filter((c) => c.eid == s && c.name == 'session').length,
     1,
   )
+})
+
+Deno.test('spawn refuses an undecided proposal and allows an atomic decision', () => {
+  let d = fresh()
+  let task = uid(), refused = uid(), accepted = uid()
+  apply(d, [
+    { eid: task, name: 'doc', comp: { title: 'fleet idea' } },
+    { eid: task, name: 'task', comp: { status: 'open' } },
+    { eid: task, name: 'proposed', comp: {} },
+  ])
+  let id = human(d, task)
+  assertThrows(
+    () =>
+      apply(d, [{
+        eid: refused,
+        name: 'session',
+        comp: { id: uid(), requested_task_eid: task },
+      }]),
+    Error,
+    `${id} is proposed but not decided — accept it with ` +
+      `task set ${id} .decided.at=now .decided.by=U-3709`,
+  )
+  assertEquals(compOf(d, refused, 'session'), undefined)
+  assertEquals(compOf(d, refused, 'spawn'), undefined)
+
+  apply(d, [
+    { eid: task, name: 'decided', comp: {} },
+    {
+      eid: accepted,
+      name: 'session',
+      comp: { id: uid(), requested_task_eid: task },
+    },
+  ])
+  assertEquals(compOf(d, accepted, 'session')?.requested_task_eid, task)
 })
 
 Deno.test('a task spawn hint never becomes a session', () => {
@@ -1274,6 +1306,34 @@ Deno.test('decided: the wire dates and signs it, the server names the instrument
   assertEquals(stamp(t)?.via, client)
 })
 
+Deno.test('proposed: any entity wears the authored, server-signed stamp', () => {
+  let d = fresh()
+  let proposer = uid(), client = uid(), subject = uid()
+  apply(d, [
+    { eid: proposer, name: 'person', comp: {} },
+    { eid: client, name: 'client', comp: { actor_eid: proposer } },
+    { eid: subject, name: 'doc', comp: { title: 'an idea' } },
+  ])
+  let out = apply(
+    d,
+    [{
+      eid: subject,
+      name: 'proposed',
+      comp: { at: '2026-08-01T12:00:00.000Z', via: 'FORGED' },
+    }],
+    undefined,
+    client,
+  )
+  let stamp = compOf(d, subject, 'proposed')
+  assertEquals(stamp?.at, '2026-08-01T12:00:00.000Z')
+  assertEquals(stamp?.by, proposer)
+  assertEquals(stamp?.via, client)
+  assertEquals(
+    out.findLast((c) => c.eid == subject && c.name == 'proposed')?.comp,
+    stamp,
+  )
+})
+
 // memory.type → the `feedback` tag (T-12585). Only `feedback` becomes a row:
 // `project` said what scope_eid says, `reference` was the absence of anything
 // else, and `user` was worn by nothing. The source is NOT inferred —
@@ -1899,15 +1959,51 @@ Deno.test('open adds the repo landing gate in place', () => {
   Deno.removeSync(root, { recursive: true })
 })
 
-Deno.test('open adds the task proposal marker in place', () => {
+Deno.test('open retires proposal into a stamp and rewrites stale boards', () => {
   let root = Deno.makeTempDirSync({ prefix: 'tasks-proposal-' })
   let path = `${root}/tasks.db`
   let legacy = open(path)
-  legacy.exec('alter table task drop column proposal')
+  let idea = uid(), declined = uid(), plain = uid(), board = uid()
+  apply(legacy, [
+    { eid: idea, name: 'task', comp: { status: 'open' } },
+    { eid: declined, name: 'task', comp: { status: 'open' } },
+    { eid: plain, name: 'task', comp: { status: 'open' } },
+    { eid: board, name: 'board', comp: { query: '.status=open' } },
+  ])
+  let filed = compOf(legacy, idea, 'created')!
+  legacy.exec('alter table task add column proposal integer')
+  legacy.prepare('update task set proposal = ? where eid = ?').run(1, idea)
+  legacy.prepare('update task set proposal = ? where eid = ?')
+    .run(0, declined)
+  legacy.prepare('update board set query = ? where eid = ?').run(
+    '.status=open&.proposal=true&.domain=Eng',
+    board,
+  )
   legacy.close()
+
   let healed = open(path)
-  assertEquals(hasCol(healed, 'task', 'proposal'), true)
+  assertEquals(hasCol(healed, 'task', 'proposal'), false)
+  assertEquals(compOf(healed, idea, 'proposed'), {
+    eid: idea,
+    at: filed.at,
+    by: filed.by,
+    via: filed.via,
+  })
+  assertEquals(compOf(healed, declined, 'proposed'), undefined)
+  assertEquals(compOf(healed, plain, 'proposed'), undefined)
+  assertEquals(
+    compOf(healed, board, 'board')?.query,
+    '.status=open&.proposed~=&.domain=Eng',
+  )
+  // A partially migrated database may have lost the column before its saved
+  // query changed. The rewrite is independently idempotent.
+  healed.prepare('update board set query = ? where eid = ?')
+    .run('.proposal=true', board)
   healed.close()
+  let again = open(path)
+  assertEquals(compOf(again, board, 'board')?.query, '.proposed~=')
+  assertEquals(compOf(again, idea, 'proposed')?.at, filed.at)
+  again.close()
   Deno.removeSync(root, { recursive: true })
 })
 

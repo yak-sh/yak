@@ -34,9 +34,10 @@
 // Schedulers want one moment instead — that's instant(), below span.
 //
 // Unqualified props route by component, same rule as writes; `.task.status`
-// is the explicit spelling. `.num` routes to the entity spine; `at`/`by`
-// are shared by the stamps — created, updated, decided — so spell those
-// out (`.created.at`, `.decided.at`).
+// is the explicit spelling. A component name by itself tests the facet:
+// `.proposed=` means absent, `.proposed~=` present. `.num` routes to the
+// entity spine; `at`/`by` are shared by the stamps — created, updated,
+// decided, proposed — so spell those out (`.created.at`, `.decided.at`).
 //
 // References go sugar-free: `.assignee=jeff` — a prop with no column of
 // its own, where exactly one component carries `prop_eid`, routes to
@@ -89,6 +90,7 @@ let routes: Record<string, readonly string[]> = {
   // `via` stamped — so its routes are the same union, and `.decided.at` is
   // the spelling `## decided` and `task decided` both answer.
   decided: [...Object.keys(comps.decided), ...Object.keys(stamped.decided)],
+  proposed: [...Object.keys(comps.proposed), ...Object.keys(stamped.proposed)],
 }
 
 // The dot-param shape, sketched — the tail of every strict rejection
@@ -135,6 +137,10 @@ export let route = (prop: string): { comp: string; prop: string } => {
   // comp for the prop. Writes can't aim at "any" — param() rejects the
   // bare form and asks for the explicit spelling.
   if (ref.length > 1) return { comp: '', prop: `${prop}_eid` }
+  // A facet is itself filterable. Scalar and reference columns win above,
+  // preserving `.project=P-3`; a component with no namesake column gets the
+  // presence grammar (`=` absent, `~=` present) without a second vocabulary.
+  if (prop in comps) return { comp: prop, prop: '' }
   // The rejection is the teaching moment: agents keep reaching for kind
   // and eid as filter props — name what the asker meant, one line each.
   // (.id needs no branch: session.id owns it, so it routes.)
@@ -288,6 +294,15 @@ export let pred = (token: string): Pred | null => {
     }
   } else {
     p = { ...route(a), op: OPS[op], value }
+  }
+  if (!p.prop) {
+    if (p.value || (p.op != '' && p.op != '~')) {
+      throw new Error(
+        `component filters are presence tests: .${p.comp}= is absent, ` +
+          `.${p.comp}~= is present`,
+      )
+    }
+    return p
   }
   // Contains is deliberately literal. Absence has no scalar atom. Every
   // other form parses each scalar/list/range atom against the near or far
@@ -491,6 +506,7 @@ export let matchQuery = (
         String(d.body ?? '').toLowerCase().includes(needle)
       )
     }
+    if (!p.prop) return p.op == '~' ? !!c[p.comp] : !c[p.comp]
     if (p.at) {
       let ref = read(c, p.comp, p.prop)
       let t = ref ? ent?.(String(ref)) : undefined
@@ -664,6 +680,11 @@ let opsFor = (base: string): Cand[] => [
   { text: base + '=..', kind: 'range' },
 ]
 
+let presenceOps = (base: string): Cand[] => [
+  { text: base + '=', kind: 'absent' },
+  { text: base + '~=', kind: 'present' },
+]
+
 // which column a token's base names — the same resolution pred() does,
 // silent instead of thrown (mid-keystroke is no place to error)
 let aim = (a: string, b?: string): { comp: string; prop: string } | null => {
@@ -754,8 +775,9 @@ export let complete = (
   let first = token.match(/^\.([A-Za-z_]*)$/)
   if (!first) return []
   let pre = first[1]
+  let routed = pre ? tryRoute(pre) : null
   return [
-    ...pre && tryRoute(pre) ? opsFor(`.${pre}`) : [],
+    ...routed ? (routed.prop ? opsFor(`.${pre}`) : presenceOps(`.${pre}`)) : [],
     ...Object.keys(routes).filter((c) => starts(c, pre)).toSorted()
       .map((c) => ({ text: `.${c}.`, kind: 'comp' })),
     ...bares().filter((c) =>

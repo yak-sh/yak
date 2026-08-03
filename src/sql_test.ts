@@ -50,6 +50,7 @@ put('p1', { doc: { title: 'a project' }, project: {} })
 put('e1', {
   doc: { title: 'alpha widget', body: 'the first one' },
   task: { status: 'open', priority: 1, domain: 'Eng', project_eid: 'p1' },
+  proposed: { at: '2026-08-01T00:00:00.000Z', by: null, via: null },
 })
 put('e2', {
   doc: { title: 'beta WIDGET', body: '100% sure' },
@@ -85,7 +86,7 @@ let graph = () => {
   ) {
     out[r.eid] = { entity: { eid: r.eid, num: r.num } }
   }
-  for (let comp of ['doc', 'task']) {
+  for (let comp of ['doc', 'task', 'proposed']) {
     for (
       let r of db.prepare(`select * from "${comp}"`).all() as Record<
         string,
@@ -140,6 +141,9 @@ let COMPILES = [
   '.task.project_eid=',
   '.task.domain=',
   '.task.status=',
+  // facet presence is the component row itself, not one nullable column
+  '.proposed=',
+  '.proposed~=',
   // negation
   '.task.status!=done',
   '.task.priority!=1',

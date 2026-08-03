@@ -112,7 +112,11 @@ let CASES: [string, { comp: string; prop: string; value: unknown } | RegExp][] =
     ['.status=done', { comp: 'task', prop: 'status', value: 'done' }],
     ['.status=WIP', { comp: 'task', prop: 'status', value: 'wip' }],
     ['.domain=Eng', { comp: 'task', prop: 'domain', value: 'Eng' }],
-    ['.proposal=YES', { comp: 'task', prop: 'proposal', value: 1 }],
+    ['.proposed.at=2026-08-01T00:00:00.000Z', {
+      comp: 'proposed',
+      prop: 'at',
+      value: '2026-08-01T00:00:00.000Z',
+    }],
     ['.operator=YES', { comp: 'session', prop: 'operator', value: 1 }],
     ['.provider=fake', {
       comp: 'session',
@@ -1791,11 +1795,14 @@ Deno.test('belongs: a project reads each kind, and the fleet rides along', () =>
 
 Deno.test('spec: a typed task — leading P, params anywhere, body below', () => {
   let s = spec(
-    'P1 .domain=Eng Build a thing .proposal=yes blah blah\nline two\nline three',
+    'P1 .domain=Eng Build a thing ' +
+      '.proposed.at=2026-08-01T00:00:00.000Z blah blah\n' +
+      'line two\nline three',
   )
   assertEquals(s.title, 'Build a thing blah blah')
   assertEquals(s.body, 'line two\nline three')
-  assertEquals(s.grouped.task, { priority: 1, domain: 'Eng', proposal: 1 })
+  assertEquals(s.grouped.task, { priority: 1, domain: 'Eng' })
+  assertEquals(s.grouped.proposed, { at: '2026-08-01T00:00:00.000Z' })
   // P mid-title is a WORD — only a leading P is a setter
   assertEquals(spec('Fix the P2 endpoint').title, 'Fix the P2 endpoint')
   assertEquals(spec('Fix the P2 endpoint').grouped.task, undefined)

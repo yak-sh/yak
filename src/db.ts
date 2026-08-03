@@ -109,8 +109,7 @@ let schema = `
   create table if not exists task (
     eid    text primary key references entity(eid),
     status text not null default 'open',
-    priority real not null default 0,
-    proposal integer
+    priority real not null default 0
   );
   create table if not exists project (
     eid text primary key references entity(eid),
@@ -342,6 +341,14 @@ let schema = `
     via text
   );
   create table if not exists archived (
+    eid text primary key references entity(eid),
+    at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    "by" text,
+    via text
+  );
+  -- A fleet proposal awaiting a decision: like decided, its authored time
+  -- and byline ride the wire while the server alone names the instrument.
+  create table if not exists proposed (
     eid text primary key references entity(eid),
     at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
     "by" text,
@@ -648,6 +655,39 @@ export let retireMemoryType = (db: DatabaseSync) => {
   db.exec('alter table memory drop column type')
 }
 
+// task.proposal → the universal proposal stamp. The old boolean had no
+// provenance of its own, so its filing stamp is the only authored fact it can
+// preserve. The board rewrite is independently guarded: a database interrupted
+// between old deployments may have lost the column while retaining its query.
+export let retireProposal = (db: DatabaseSync) => {
+  let legacy = hasCol(db, 'task', 'proposal')
+  let stale = db.prepare(
+    "select 1 from board where instr(query, '.proposal=true') > 0 limit 1",
+  ).get()
+  if (!legacy && !stale) return
+  db.exec('begin')
+  try {
+    if (legacy) {
+      db.exec(`
+        insert or ignore into proposed (eid, at, "by", via)
+        select t.eid,
+          coalesce(c.at, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+          c."by", c.via
+        from task t left join created c on c.eid = t.eid
+        where t.proposal != 0
+      `)
+    }
+    db.exec(`update board
+      set query = replace(query, '.proposal=true', '.proposed~=')
+      where instr(query, '.proposal=true') > 0`)
+    if (legacy) db.exec('alter table task drop column proposal')
+    db.exec('commit')
+  } catch (e) {
+    db.exec('rollback')
+    throw e
+  }
+}
+
 // Give every session its canonical launch facet before graph-out can observe
 // the handle. The dormant aliases stay as rollback input; insert-or-ignore
 // makes the canonical row authoritative on every later open.
@@ -750,7 +790,6 @@ export let open = (path = file) => {
   addCol('task', 'project_eid', 'project_eid text references entity(eid)')
   addCol('task', 'assignee_eid', 'assignee_eid text references entity(eid)')
   addCol('task', 'domain', 'domain text')
-  addCol('task', 'proposal', 'proposal integer')
   // Off for every checkout the graph already knows: the permission to push
   // is the owner's to grant per venture, never something a migration hands
   // out (src/git.ts).
@@ -919,6 +958,7 @@ export let open = (path = file) => {
   // Reads memory.type and drops it in the same breath, so it belongs with
   // the retirements rather than the backfills above.
   retireMemoryType(db)
+  retireProposal(db)
   healStored(db)
   return db
 }
@@ -1123,18 +1163,19 @@ export let human = (db: DatabaseSync, eid: string): string => {
   return idOf({ kind, num: row.num })
 }
 
-// The stamp family (notified/opened/archived/decided): a client-requested act
+// The stamp family (notified/opened/archived/decided/proposed): a
+// client-requested act
 // the server signs, whose WHOLE component is one {at, by, via} stamp. That
 // shape is the discriminator — derived, not hand-listed, so a new stamp joins
 // with zero edits — and `recall` (stamped {count…}, no at) and `conflict` (no
 // by: a server-minted audit, never wire-created) fall out on it.
 //
 // Which HALF the wire owns varies and doesn't matter here: the notification
-// three write a bare presence and the server dates them, `decided` may date
-// and sign itself (types.ts). What the loop below owns is `via`, server-only
-// in every member. `created`/`updated` wear the same shape but fire on an
-// entity's birth and touch rather than on the wire naming them, so they keep
-// their own loops and are named out.
+// three write a bare presence and the server dates them; `decided` and
+// `proposed` may date and sign themselves (types.ts). What the loop below owns
+// is `via`, server-only in every member. `created`/`updated` wear the same
+// shape but fire on an entity's birth and touch rather than on the wire naming
+// them, so they keep their own loops and are named out.
 let stamps = Object.keys(comps).filter((c) => {
   let all = { ...comps[c], ...stamped[c] }
   return c != 'created' && c != 'updated' &&
@@ -1803,6 +1844,32 @@ export let apply = (
       let refusal = refRefused(db, ref, undefined, target)
       if (refusal) throw refusal
     }
+    // A proposal does not authorize an agent spawn. This rule sits after
+    // every write so deciding and spawning in one batch works, and before
+    // commit so every door — including a raw session request — gets the same
+    // refusal.
+    let request = db.prepare(
+      'select requested_task_eid from session where eid = ?',
+    )
+    let pending = db.prepare(`
+      select 1 from proposed p
+      left join decided d on d.eid = p.eid
+      where p.eid = ? and d.eid is null
+    `)
+    for (let key of createdComps) {
+      if (!key.startsWith('session ')) continue
+      let eid = key.slice('session '.length)
+      let row = request.get(eid) as
+        | { requested_task_eid: string | null }
+        | undefined
+      let target = row?.requested_task_eid
+      if (!target || !pending.get(target)) continue
+      let id = human(db, target)
+      throw new Error(
+        `${id} is proposed but not decided — accept it with ` +
+          `task set ${id} .decided.at=now .decided.by=U-3709`,
+      )
+    }
     // One clock for the whole batch: every provenance stamp below reads it,
     // so a birth and the edits beside it agree instead of drifting by the
     // milliseconds between two `new Date()` calls (T-6670).
@@ -1870,7 +1937,8 @@ export let apply = (
       let row = uRow.get(eid) as Change['comp'] | undefined
       if (row) extra.push({ eid, name: 'updated', comp: row })
     }
-    // The stamp family (notified/opened/archived/decided): fill the actor GAP
+    // The stamp family (notified/opened/archived/decided/proposed): fill the
+    // actor GAP
     // and stamp the instrument, on insert only — then re-read the row so an
     // optimistic cache never keeps a blank stamp. The created/updated re-read,
     // generalized to one small loop.

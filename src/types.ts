@@ -105,7 +105,6 @@ export let comps: Record<string, Record<string, PropType>> = {
     // is who holds it NOW; a dead assignee detaches, never takes the task.
     assignee_eid: { eid: '', death: 'detach' },
     domain: { text: 'domains' }, // free text; the graph suggests
-    proposal: 'bool',
   },
   // retired_at: the project is over, not erased. Wire-writable — stamping
   // it IS the retirement (like the `opened` stamp, no effect needed);
@@ -408,6 +407,10 @@ export let comps: Record<string, Record<string, PropType>> = {
   // heat and decidedness are two facts about one row. The hot index and the
   // ordered `## decided` digest section are two queries, not a special case.
   decided: { at: 'time', by: { eid: '', death: 'keep' } },
+  // An idea from the fleet awaiting acceptance. It mirrors `decided`: the
+  // proposer and proposal date may be recorded after the fact, while the
+  // instrument stays server-owned. Absence is self-authorizing work.
+  proposed: { at: 'time', by: { eid: '', death: 'keep' } },
 }
 
 // Server-stamped columns — never wire-writable (cols() reads `comps`
@@ -452,6 +455,7 @@ export let stamped: Record<string, Record<string, PropType>> = {
   // A caller may say when a decision was taken and who took it; nothing may
   // say what wrote it down.
   decided: { via: { eid: '', death: 'keep' } },
+  proposed: { via: { eid: '', death: 'keep' } },
   web: { frozen_at: 'time' }, // the freeze finished (freeze.ts)
   client: { ip: 'text' },
   claim: { claimed_at: 'time' },
@@ -791,9 +795,9 @@ export type Task = {
   priority: number // board order within a status column; lower sorts first
   project_eid?: string | null // the project (venture) this task belongs to
   assignee_eid?: string | null // whose plate — durable; claim is who's on it now
-  domain?: string | null // cross-project facet (Eng, Legal, Ops, …) — free
-  // text by convention; a picker derives its options from distinct values
-  proposal?: boolean | null // asks offered for the owner to accept or decline
+  // Cross-project facet (Eng, Legal, Ops, …), free text by convention; a
+  // picker derives its options from distinct values.
+  domain?: string | null
 }
 
 // A tag: "this doc fronts a project" (a venture, a workstream). Its name
@@ -1106,11 +1110,11 @@ export type Created = {
 export type Updated = Created
 
 // A moment stamped on an entity — the notification lifecycle (T-7006:
-// presence records it, the whole stamp is server-frozen) and `decided`
-// (T-12574: the wire dates and signs it, the server names the instrument).
+// presence records it, the whole stamp is server-frozen), `decided`, and
+// `proposed` (the wire dates and signs them, the server names the instrument).
 // Same shape as Created/Updated; absence is the earlier state (no `opened`
-// row == unread, no `decided` row == nothing settled). Read as pure
-// Row-predicates, like unreadMail today.
+// row == unread, no `decided` row == nothing settled, no `proposed` row ==
+// self-authorizing work). Read as pure Row-predicates, like unreadMail today.
 export type Stamp = Created
 
 // A full-text search hit. snip marks matches with \x01…\x02 (renderers
@@ -1177,6 +1181,7 @@ export type Ent = {
   opened?: Stamp
   archived?: Stamp
   decided?: Stamp
+  proposed?: Stamp
   refs: Ref[]
   kids: Ent[]
 }
