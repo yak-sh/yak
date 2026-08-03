@@ -85,3 +85,107 @@ Deno.test('md: an id in a table cell keeps the canvas anchor', () => {
     '<td><a href="/T-123" data-ref="T-123">T-123</a></td>',
   )
 })
+
+// A body can come from anyone who mails the fleet, and this string goes
+// to innerHTML on an origin that owns /apply and /ws. Nothing a body
+// writes may become markup — through either door (T-12814).
+let doors = { md, mdAbs }
+
+for (let [door, render] of Object.entries(doors)) {
+  Deno.test(`${door}: html written in a body renders as text`, () => {
+    for (
+      let payload of [
+        '<script>alert(1)</script>',
+        '<img src=x onerror="alert(1)">',
+        '<svg/onload=alert(1)>',
+        '<iframe src="x"></iframe>',
+        '<style>body{display:none}</style>',
+        '<a href="https://y.z">x</a>',
+        '<div onclick="alert(1)">x</div>',
+        '<!-- <img src=x onerror=alert(1)> -->',
+      ]
+    ) {
+      let html = render(`before ${payload} after`)
+      assertEquals(html.includes('<script'), false, payload)
+      assertEquals(
+        /<(?:img|svg|iframe|style|a|div)\b/.test(html),
+        false,
+        payload,
+      )
+      assertStringIncludes(html, '&lt;')
+    }
+  })
+
+  Deno.test(`${door}: a url that could carry a scheme never becomes an href`, () => {
+    for (
+      let payload of [
+        '[x](javascript:alert(1))',
+        '[x](JaVaScRiPt:alert(1))',
+        '[x](  javascript:alert(1)  )',
+        '[x](data:text/html,<script>alert(1)</script>)',
+        '[x](&#106;avascript:alert(1))',
+        '[x](javascript&colon;alert(1))',
+        '<javascript:alert(1)>',
+        '![x](javascript:alert(1))',
+        '[a]: javascript:alert(1)\n\n[x][a]',
+      ]
+    ) {
+      let html = render(payload)
+      assertEquals(html.includes('href='), false, payload)
+      assertEquals(html.includes('src='), false, payload)
+    }
+  })
+
+  // The words survive the refusal — a reader still sees what was written.
+  Deno.test(`${door}: a refused link keeps its text and its markup`, () => {
+    assertStringIncludes(
+      render('[a **bold** trap](javascript:alert(1))'),
+      '<strong>bold</strong>',
+    )
+  })
+
+  // Everything a url can legitimately be still links.
+  Deno.test(`${door}: ordinary urls still link`, () => {
+    for (
+      let [payload, href] of [
+        ['[x](https://y.z/a?b=c#d)', 'https://y.z/a?b=c#d'],
+        ['[x](http://y.z)', 'http://y.z'],
+        ['[x](mailto:a@b.c)', 'mailto:a@b.c'],
+        ['[x](tel:+15551234)', 'tel:+15551234'],
+        ['[x](./notes.md)', './notes.md'],
+        ['[x](#top)', '#top'],
+        ['[x](docs)', 'docs'],
+        ['<a@b.c>', 'mailto:a@b.c'],
+        ['see https://y.z here', 'https://y.z'],
+        ['see www.y.z here', 'http://www.y.z'],
+      ] as [string, string][]
+    ) {
+      assertStringIncludes(render(payload), `href="${href}"`, payload)
+    }
+    assertStringIncludes(
+      render('![alt](https://y.z/i.png)'),
+      'src="https://y.z/i.png"',
+    )
+  })
+
+  // The door's OWN output is not content: our anchors and marked's own
+  // escaping of code, titles and lang all still stand.
+  Deno.test(`${door}: what we generate is untouched`, () => {
+    assertStringIncludes(render('T-123'), 'href=')
+    assertStringIncludes(render('| a |\n| - |\n| 1 |'), '<table>')
+    assertStringIncludes(render('- [ ] todo'), 'type="checkbox"')
+    assertStringIncludes(
+      render('`<b>x</b>`'),
+      '<code>&lt;b&gt;x&lt;/b&gt;</code>',
+    )
+    assertStringIncludes(
+      render('```js\n<script>x</script>\n```'),
+      '<pre><code class="language-js">&lt;script&gt;',
+    )
+    // marked escapes a link title; a body cannot break out of it
+    assertStringIncludes(
+      render('[x](https://y.z "a\\" onmouseover=alert(1) b=")'),
+      'title="a&quot; onmouseover=alert(1) b="',
+    )
+  })
+}

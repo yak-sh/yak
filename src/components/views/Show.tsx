@@ -245,11 +245,12 @@ export let Mail = ({ e }: { e: Ent }) => {
 
 // ---- the sections ----
 
-// The body is markdown: rendered as HTML (md.ts; our own data, so no
-// sanitizer between us and ourselves), double-click swaps in the raw
-// source through the same <Edit>, and the blur that commits swaps the
-// rendered view back. An empty body keeps a line of height to give the
-// double-click somewhere to land.
+// The body is markdown: rendered as HTML (md.ts, which is where the
+// text stops being able to speak HTML — a body can come from anyone who
+// mails the fleet), double-click swaps in the raw source through the
+// same <Edit>, and the blur that commits swaps the rendered view back.
+// An empty body keeps a line of height to give the double-click
+// somewhere to land.
 export let Body = ({ e, mod }: { e: Ent; mod?: string }) => {
   let [src, setSrc] = useState(false)
   if (!e.doc) return null

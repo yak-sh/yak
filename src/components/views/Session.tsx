@@ -234,7 +234,7 @@ let Body = ({ x }: { x: Entry }) => {
   }
   switch (r.kind) {
     case 'say':
-      // our own data, so no sanitizer — as with a task body
+      // markdown, escaped of any markup by md.ts — as with a task body
       return r.role == 'user'
         ? <User>{r.text}</User>
         : <Agent dangerouslySetInnerHTML={{ __html: md(r.text) }} />
@@ -496,7 +496,7 @@ export let Session = ({ e }: { e: Ent }) => {
         )}
       </Head>
       <Panel>
-        {/* markdown: our own data, so no sanitizer — as with a task body */}
+        {/* markdown, escaped of any markup by md.ts — as with a task body */}
         {!said && s.final_text && (
           <Final dangerouslySetInnerHTML={{ __html: md(s.final_text) }} />
         )}
