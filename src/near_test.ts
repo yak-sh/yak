@@ -4,7 +4,14 @@
 import { assertEquals } from '@std/assert'
 import { nearest, offer } from './near.ts'
 
-let P = (id: string, alias: string, title: string) => ({ id, alias, title })
+// A project's title is its NAME; a task's is a sentence about work.
+let P = (id: string, alias: string, title: string) => ({
+  id,
+  alias,
+  title,
+  named: true,
+})
+let T = (id: string, alias: string, title: string) => ({ id, alias, title })
 let fleet = [
   P('P-19', 'home', 'Task Graph'),
   P('P-20', 'holdco', 'holdco'),
@@ -12,6 +19,36 @@ let fleet = [
   P('P-26', 'harness', 'harness'),
   P('P-30', 'bindery', 'bindery'),
 ]
+
+// The untargeted pool is the whole graph, so a common word opens somebody's
+// ticket every time. A name outranks a sentence that merely starts with it.
+Deno.test('nearest: a ticket opening with the word loses to the thing named by it', () => {
+  let graph = [
+    ...fleet,
+    T(
+      'T-801',
+      'holdco-tasks-cancelled-state-per-task-timeline-history',
+      'Tasks: add cancelled state + per-task timeline history',
+    ),
+    T(
+      'T-1102',
+      'board-notifications-phase-1-read-tracking-notification-cente',
+      'Board notifications Phase 1: read-tracking + notification center',
+    ),
+    // same name, no handle: the aliased one is the one somebody decided
+    // should be addressable by name
+    { id: 'B-5', title: 'Task Graph', named: true },
+  ]
+  assertEquals(nearest('tasks', graph)?.id, 'P-19')
+  assertEquals(nearest('task', graph)?.id, 'P-19')
+  // nothing in this graph is NAMED `board` — silence beats the ticket
+  assertEquals(nearest('board', graph), undefined)
+  // `asks` is only letters found inside `tasks`; `task` opens `Task Graph`
+  assertEquals(
+    nearest('tasks', [...fleet, P('B-3710', '', 'Asks')])?.id,
+    'P-19',
+  )
+})
 
 Deno.test('nearest: a title word answers the alias nobody could guess', () => {
   // the reported shape: `tasks` IS the venture, `home` is its handle
@@ -31,15 +68,14 @@ Deno.test('nearest: nothing close is nothing offered', () => {
   // one letter is not evidence of anything
   assertEquals(nearest('h', fleet), undefined)
   // a stub inside a long title is coincidence, not a match: `jef` sits in
-  // every task titled after jeff@yak.sh, and named one of them
+  // every task titled after jeff@yak.sh, and named one of them. Both gates
+  // hold it — a task's title is not a name, and the stub covers none of it.
+  let jeffish = 'Two-way email between holdco and the owner (jeff@yak.sh)'
   assertEquals(
-    nearest('jef', [{
-      id: 'T-47',
-      alias: 'email-channel-to-owner',
-      title: 'Two-way email between holdco and the owner (jeff@yak.sh)',
-    }]),
+    nearest('jef', [T('T-47', 'email-to-owner', jeffish)]),
     undefined,
   )
+  assertEquals(nearest('jef', [P('P-9', '', jeffish)]), undefined)
   assertEquals(nearest('jef', [{ id: 'U-3709', alias: 'jeff' }])?.id, 'U-3709')
 })
 
@@ -48,8 +84,8 @@ Deno.test('nearest: duplicate names are told apart by the handle', () => {
   // the winner is whichever the caller's word matches, and offer() prints
   // the alias that tells them apart.
   let boards = [
-    { id: 'B-21', alias: 'holdco-board', title: 'holdco' },
-    { id: 'B-27', alias: 'harness-board', title: 'harness (dead)' },
+    P('B-21', 'holdco-board', 'holdco'),
+    P('B-27', 'harness-board', 'harness (dead)'),
   ]
   assertEquals(nearest('holdco', boards)?.id, 'B-21')
   assertEquals(nearest('harness', boards)?.id, 'B-27')

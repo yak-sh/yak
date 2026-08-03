@@ -1840,14 +1840,17 @@ Deno.test('derefParams: a failed project names the alias that would work', () =>
     Error,
     "project_eid is a human id / alias / UUID — got 'flux'",
   )
-  // The declared target narrows the search: `First` is a task, so a bad
-  // project is never answered with one.
+  // Two things keep a task out of the answer. The declared target narrows
+  // `.project=` to projects; and a task's TITLE is a sentence about work,
+  // never a handle, so even the untargeted `.assignee=` stays silent.
+  assertThrows(() => one('.project=Frist'), Error, 'a human id / alias / UUID')
+  assertThrows(() => one('.assignee=Frist'), Error, 'a human id / alias / UUID')
+  // Its ALIAS is a handle whatever wears it, so that still answers.
   assertThrows(
-    () => one('.project=Frist'),
+    () => one('.assignee=old-board-slig'),
     Error,
-    'a human id / alias / UUID',
+    "did you mean 'old-board-slug' (T-3, Second)?",
   )
-  assertThrows(() => one('.assignee=Frist'), Error, 'did you mean T-2 (First)?')
 })
 
 Deno.test('edgesOf: both directions, ids humanized', () => {

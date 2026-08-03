@@ -7,6 +7,7 @@
 //                       geometry) or clarity
 // Values that look like numbers become numbers.
 import {
+  byName,
   type Change,
   comps,
   type Dep,
@@ -474,6 +475,12 @@ let UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 // failed, so a suggestion can never route somewhere the retry won't.
 // `comp` narrows to the reference's declared target, so a bad `.project=`
 // is only ever answered with a project.
+//
+// A title is MATCHED only for the kinds it names (types.ts byName), though
+// every title still shows. Untargeted, the pool is the whole graph and a
+// common word opens somebody's ticket every time — `tasks` reached T-801
+// ("Tasks: add cancelled state…") ahead of the project called Task Graph.
+// An alias always rides: it is a typed handle whatever wears it.
 export let nearby = (all: Row[]) => (v: string, comp = '') => {
   let hit = nearest(
     v,
@@ -482,6 +489,7 @@ export let nearby = (all: Row[]) => (v: string, comp = '') => {
       id: idOf(r),
       alias: r.comps.alias?.slug as string | undefined,
       title: r.comps.doc?.title as string | undefined,
+      named: byName.has(r.kind),
     })),
   )
   if (!hit) return

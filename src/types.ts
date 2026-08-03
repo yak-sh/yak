@@ -661,6 +661,22 @@ export let plurals = new Set(kindOrder.flatMap((k) => [plural(k), `${k}s`]))
 export let kindWord = (word: string) =>
   kindOrder.find((k) => k == word || plural(k) == word || `${k}s` == word)
 
+// Kinds whose doc title is a NAME — something a caller can type to
+// address the thing. Everywhere else the title is a description: a task
+// reads "Tasks: add cancelled state + per-task timeline history", which
+// is a sentence about work, and its address is its num. The distinction
+// is what keeps a bare handle from being answered with a ticket that
+// merely opens with the word (near.ts). An alias is a typed handle
+// whatever wears it, so aliases ride for every kind.
+export let byName = new Set([
+  'project',
+  'board',
+  'person',
+  'persona',
+  'role',
+  'canvas',
+])
+
 // The human id: prefix-num (T-7, P-2). Curated prefixes for the kinds
 // people type daily; everything else leads with its capitalized initial.
 export let prefix: Record<string, string> = {
