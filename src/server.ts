@@ -27,7 +27,7 @@ import {
   vocabHash,
   vocabularyDoc,
 } from './db.ts'
-import { spread, type Step, step } from './subs.ts'
+import { gaps, spread, type Step, step } from './subs.ts'
 import { dispatch, docs, on, relay, trace } from './effects.ts'
 import { vocabularyMd } from './schema.ts'
 import { freeze, serveFrozen, store } from './freeze.ts'
@@ -163,7 +163,12 @@ let envelopes = new Set<WebSocket>()
 // subscriptions, `filtered` holds every socket that opened a non-shadow sub.
 // Shadow subs hear both streams for prove-before-flip; the later migration
 // switch is still one boolean. onclose drops both — GC-free, per-socket.
-type Sub = { preds: Pred[]; members: Set<string>; shadow: boolean }
+type Sub = {
+  preds: Pred[]
+  members: Set<string>
+  shadow: boolean
+  moving: boolean
+}
 let subs = new Map<WebSocket, Map<string, Sub>>()
 let filtered = new Set<WebSocket>()
 
@@ -232,6 +237,59 @@ let maintain = (batch: Change[]) => {
   }
 }
 
+// A moving time phrase ('today', '1 week ago') names a window the CLOCK moves,
+// not the data — so a member ages out of it with nobody writing anything, and
+// maintain() only ever re-tests what a batch touched. The sweep is that missing
+// trigger: on each tick, every moving-time subscription re-tests its OWN members
+// against the clock and drops the ones that have fallen out.
+//
+// Members only, and that is exact rather than partial. A past-facing window
+// ('today', 'since a week ago') sheds as its near edge advances and can never
+// GAIN a member without a write, because a row's timestamp does not move. Only
+// a FUTURE-facing phrase over a future column ('.wake.at<=in 60m') can gain,
+// and finding those entrants means asking the whole graph — evalQuery takes
+// ~1s over a 22 MB snapshot of the live board, so a tick that did it would cost
+// more than everything it serves. gaps() still reports 'moving-time' for both,
+// so that half stays classified rather than silently assumed handled.
+//
+// `now` is a parameter because a window a client waits a minute to cross is a
+// test nobody writes; handing the matcher a later moment states the same thing
+// in a millisecond.
+export let aged = (now = Date.now()) => {
+  if (!subs.size) return
+  let cur = cursorOf(db)
+  let reads = new Map<string, Record<string, Record<string, unknown>>>()
+  let comps = (eid: string) => {
+    let hit = reads.get(eid)
+    if (!hit) reads.set(eid, hit = eager(db, eid))
+    return hit
+  }
+  for (let [sock, map] of subs) {
+    if (sock.readyState != WebSocket.OPEN) continue
+    for (let [id, sub] of map) {
+      if (!sub.moving) continue
+      let changes: Change[] = []
+      let drop: string[] = []
+      for (let eid of [...sub.members]) {
+        let c = comps(eid)
+        let alive = !!c.entity
+        let hit = alive && matchQuery(c, sub.preds, comps, now)
+        let s: Step = step(sub.members, eid, alive, hit)
+        if (s == 'remove') drop.push(eid)
+        else if (s == 'dead') changes.push({ eid, name: 'entity', comp: null })
+      }
+      if (changes.length || drop.length) {
+        sock.send(JSON.stringify({
+          sub: id,
+          changes,
+          drop,
+          cursor: cur,
+          shadow: sub.shadow,
+        }))
+      }
+    }
+  }
+}
 // A socket's control frame (design §1): `{sub, q}` subscribes or replaces (the
 // initial frame is the query's current matches as one batch, and seeds the
 // member set, marked `replace` for the client); `{unsub}` forgets one. A
@@ -254,6 +312,7 @@ let control = (
       preds,
       members: new Set(hits.map((r) => r.eid)),
       shadow: !!f.shadow,
+      moving: gaps(preds).includes('moving-time'),
     })
     let changes = hits.flatMap((r) => spread(r.eid, r.comps))
     sock.send(
@@ -946,6 +1005,11 @@ let tick = (name: string, sweep: () => unknown, ms: number, boot = true) => {
 // Native Codex panes have no content channel. Reconcile pending inboxes at
 // boot and on a short tick; graph writes also debounce nativeSoon() through
 // cast. Per-session submission/acceptance clocks bound swallowed-send retries.
+// Moving time windows advance with no write behind them, so the subscriptions
+// standing in one need a clock of their own. No boot pass: at boot there is
+// nobody subscribed for it to serve.
+tick('subs', () => aged(), 30_000, false)
+
 tick('native', () => nativeSweep(cast), 2_000)
 
 // Persistent roles are desired state: boot and the short tick heal a daemon

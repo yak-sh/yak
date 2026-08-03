@@ -388,16 +388,16 @@ let inTime = (v: string, p: Pred, s: Span): boolean => {
   }
 }
 
-let test = (v: unknown, p: Pred): boolean => {
+let test = (v: unknown, p: Pred, now?: number): boolean => {
   let target = p.at ?? p
   let type = typed(target.comp, target.prop)
   if (p.op != '~' && type && kind(type) == 'time' && typeof v == 'string') {
-    let spans = p.value.split(',').map((value) => span(value))
+    let spans = p.value.split(',').map((value) => span(value, now))
     if (spans.every((s) => s)) {
       let hit = spans.some((s) => inTime(v, { ...p, op: '' }, s!))
       if (p.op == '' || p.op == '!') return p.op == '' ? hit : !hit
     }
-    let s = span(p.value)
+    let s = span(p.value, now)
     if (s) return inTime(v, p, s)
   }
   switch (p.op) {
@@ -463,10 +463,17 @@ export let resolveRefs = (
 // evaluator's graph); no ent, no ref, or no target reads as an absent
 // value — so `.assignee.title=x` misses and `!=x` holds, same as any
 // null column.
+//
+// `now` is the clock a time phrase reads. It defaults to the wall clock,
+// which is what every door wants — a saved `today` must advance tomorrow.
+// It is a parameter because a moving phrase names a window the clock moves
+// THROUGH, so the only way to state "this row has aged out" as a test is to
+// hand the matcher a later moment (see the subscription sweep).
 export let matchQuery = (
   c: Comps,
   preds: Pred[],
   ent?: (eid: string) => Comps | undefined,
+  now?: number,
 ) =>
   preds.every((p) => {
     if (p.op == ORDER) return true
@@ -481,9 +488,9 @@ export let matchQuery = (
     if (p.at) {
       let ref = read(c, p.comp, p.prop)
       let t = ref ? ent?.(String(ref)) : undefined
-      return test(t && read(t, p.at.comp, p.at.prop), p)
+      return test(t && read(t, p.at.comp, p.at.prop), p, now)
     }
-    return test(read(c, p.comp, p.prop), p)
+    return test(read(c, p.comp, p.prop), p, now)
   })
 
 // One column read, honoring route()'s any-of: comp '' means the prop is

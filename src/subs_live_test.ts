@@ -28,7 +28,7 @@ let port = (seat.addr as Deno.NetAddr).port
 seat.close()
 Deno.env.set('PORT', String(port))
 Deno.env.set('DB_PATH', ':memory:')
-await import('./server.ts')
+let { aged } = await import('./server.ts')
 
 let U = `127.0.0.1:${port}`
 let uid = () => crypto.randomUUID()
@@ -261,6 +261,65 @@ Deno.test(
       assertEquals(client.members('open'), await queried(open))
       assertEquals(client.members('mine'), await queried(mine))
       assertEquals(client.members('mine'), [a.eid])
+    } finally {
+      client.close()
+    }
+  },
+)
+
+// Every case above moves membership by WRITING. A moving time window moves it
+// by doing nothing at all: the window advances, the row's timestamp does not,
+// and the row falls out the far side with no batch for maintain() to react to.
+// So these hand the sweep a later clock instead of waiting a minute for the
+// real one, and prove the drop came from the CLOCK — the oracle, asked at the
+// true present, still returns the member.
+Deno.test(
+  'sweep: a member ages out of a moving window with no write',
+  alone,
+  async () => {
+    let a = task({})
+    let tag = a.eid.slice(0, 8)
+    let q = `.doc.title~=${tag}&.created.at>=1-minute-ago`
+    let client = await subscriber()
+    try {
+      await post(a.born)
+      await client.open('moving', q)
+      assertEquals(client.members('moving'), [a.eid])
+
+      // The present is unchanged, so nothing has aged: the sweep is a no-op.
+      aged()
+      await client.settle()
+      assertEquals(client.members('moving'), [a.eid])
+
+      // Two minutes on, the window has left the row behind.
+      aged(Date.now() + 120_000)
+      await client.settle()
+      assertEquals(client.members('moving'), [])
+      assertEquals(await queried(q), [a.eid], 'still a hit at the true present')
+    } finally {
+      client.close()
+    }
+  },
+)
+
+// The other direction: a set that no time phrase governs is settled by
+// maintain() alone, and no clock the sweep is handed — however absurd — may
+// disturb it. (That the sweep also SKIPS such a sub is a cost property, not a
+// visible one; this holds whether it skips or re-tests.)
+Deno.test(
+  'sweep: leaves a subscription with no moving window alone',
+  alone,
+  async () => {
+    let a = task({})
+    let tag = a.eid.slice(0, 8)
+    let client = await subscriber()
+    try {
+      await post(a.born)
+      await client.open('still', `.doc.title~=${tag}`)
+      assertEquals(client.members('still'), [a.eid])
+      aged(Date.now() + 400 * 86_400_000) // a year on
+      await client.settle()
+      assertEquals(client.members('still'), [a.eid])
     } finally {
       client.close()
     }
