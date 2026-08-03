@@ -4,6 +4,7 @@
 export type Span = { start: number; end: number }
 
 let UNIT_MS: Record<string, number> = {
+  second: 1_000,
   minute: 60_000,
   hour: 3_600_000,
   day: 86_400_000,
@@ -11,9 +12,15 @@ let UNIT_MS: Record<string, number> = {
 }
 
 // The short forms are what a hand types; m is minutes and mo is months,
-// following the calendar convention.
+// following the calendar convention. Seconds are here because machines emit
+// them: `operate tokens --pace` reports its sleep in seconds, and an operator
+// told to wake on that number should be able to pass it through rather than
+// divide by 60 — a conversion whose failure mode is sleeping 60x too long.
 let unit = (w: string): string | undefined =>
   ({
+    s: 'second',
+    sec: 'second',
+    secs: 'second',
     m: 'minute',
     min: 'minute',
     mins: 'minute',
@@ -25,7 +32,7 @@ let unit = (w: string): string | undefined =>
     mo: 'month',
     y: 'year',
   })[w] ??
-    (/^(minute|hour|day|week|month|year)s?$/.test(w)
+    (/^(second|minute|hour|day|week|month|year)s?$/.test(w)
       ? w.replace(/s$/, '')
       : undefined)
 

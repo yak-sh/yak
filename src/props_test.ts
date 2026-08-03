@@ -87,6 +87,16 @@ Deno.test('parseProp: booleans, enum aliases, and time canonicalize', () => {
     parse('at', 'time', 'in 60m'),
     '2026-07-15T15:30:00.000Z',
   )
+  // Seconds, because machines emit them: `operate tokens --pace` reports its
+  // sleep in seconds and an operator passes that straight to `task wake`.
+  assertEquals(
+    parse('at', 'time', 'in 3600s'),
+    '2026-07-15T15:30:00.000Z',
+  )
+  assertEquals(
+    parse('at', 'time', 'in 90 seconds'),
+    '2026-07-15T14:31:30.000Z',
+  )
 })
 
 Deno.test('parseProp: references resolve and every rejection teaches', () => {
