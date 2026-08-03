@@ -5,6 +5,7 @@
 // line (the statusbar) is pinned to the bottom row, and the rest is a
 // window onto the lines around the app's cursor.
 import { TElement, TNode, TText } from './dom.ts'
+import { safe, safeHref } from '../terminal.ts'
 
 type Style = {
   fg?: string // hex
@@ -112,20 +113,6 @@ let inherit = (parent: Style, node: Style): Style => ({
   href: node.href ?? parent.href,
 })
 
-// Content may not SPEAK to the terminal. A title, a comment, a memory, a
-// letter off the open internet — none of it is written by the operator, and
-// all of it is painted, so the whole control class goes rather than ESC
-// alone: 0x9b is CSI to a terminal reading C1, \r and its neighbours move
-// the cursor out of the absolute frame, and a bare BEL closes an OSC the
-// painter opened. What stays is what the graph gives meaning — \n, the break
-// blocks() splits on, and \x01/\x02, which bracket an FTS snippet's hit. A
-// tab becomes spaces rather than a stop the terminal picks.
-// deno-lint-ignore no-control-regex -- the control class IS the subject
-let ctrl = /[\x00-\x1f\x7f-\x9f]/g
-let keep = new Set('\x01\x02\n')
-let safe = (s: string) =>
-  s.replaceAll('\t', '  ').replace(ctrl, (c) => keep.has(c) ? c : '')
-
 let inline = (n: TNode, st: Style): Seg[] => {
   if (n instanceof TText) {
     let text = safe(n.data)
@@ -137,7 +124,7 @@ let inline = (n: TNode, st: Style): Seg[] => {
   // rides inside an OSC 8, where a single BEL ends the sequence and lets the
   // rest of the URL run as its own. A URL needs nothing from the class.
   if (el.localName == 'a' && el.attr('href')) {
-    o.href = el.attr('href')!.replace(ctrl, '')
+    o.href = safeHref(el.attr('href')!)
   }
   let s = inherit(st, o)
   if (o.glyph) return [{ text: o.glyph, style: s }]

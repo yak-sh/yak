@@ -16,12 +16,14 @@ import {
   hookOperator,
   hookProvider,
   hookTurn,
+  jsonText,
   kindArg,
   leadPrio,
   lifecycleHooks,
   listing,
   operatorHook,
   place,
+  printer,
   roleEid,
   strayFile,
   strayFlag,
@@ -60,6 +62,43 @@ let bareCli = (env: Record<string, string>) =>
   }).output()
 
 let text = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
+
+let unsafe = (text: string) =>
+  [...text].filter((c) => {
+    let n = c.charCodeAt(0)
+    return (n < 0x20 && ![1, 2, 10].includes(n)) ||
+      (n >= 0x7f && n <= 0x9f)
+  })
+
+Deno.test('printer: content cannot speak to the terminal', () => {
+  let cases: [string, string, string][] = [
+    ['ESC and BEL go', 'a\x1b]52;c;QQ==\x07b', 'a]52;c;QQ==b'],
+    ['C1 goes', 'a\x9b2Jb', 'a2Jb'],
+    ['DEL goes', 'a\x7fb', 'ab'],
+    ['C0 goes', 'a\x00\x05\r\x1fb', 'ab'],
+    ['FTS marks stay', 'a \x01hit\x02 b', 'a \x01hit\x02 b'],
+    ['newlines stay', 'a\nb', 'a\nb'],
+    ['tabs become spaces', 'a\tb', 'a  b'],
+  ]
+  for (let [what, content, want] of cases) {
+    let got = ''
+    printer((line) => got = line)(content)
+    assertEquals(got, want, what)
+  }
+})
+
+Deno.test('printer: CLI styling wraps sanitized content', () => {
+  let got = ''
+  printer((line) => got = line)('safe\x1b[2Jtext', true)
+  assertEquals(got, '\x1b[1msafe[2Jtext\x1b[0m')
+})
+
+Deno.test('jsonText: terminal bytes go while parsed values stay whole', () => {
+  let value = { body: 'a\x00\x7f\x9fb' }
+  let got = jsonText(value)
+  assertEquals(unsafe(got), [])
+  assertEquals(JSON.parse(got), value)
+})
 
 Deno.test('subject: sentences route through the existing CLI verbs', () => {
   let route = (line: string) => {
@@ -873,7 +912,14 @@ let busGraph: Snapshot = {
     { eid: W, name: 'entity', comp: { eid: W, num: 5, created_at: '' } },
     { eid: W, name: 'session', comp: { id: 'writer-1' } },
     { eid: C, name: 'entity', comp: { eid: C, num: 6, created_at: '' } },
-    { eid: C, name: 'doc', comp: { title: '', body: 'the ask you missed' } },
+    {
+      eid: C,
+      name: 'doc',
+      comp: {
+        title: '',
+        body: 'the ask you missed\x1b]52;c;QQ==\x07\x9b2J\x7f',
+      },
+    },
     { eid: C, name: 'comment', comp: { target_eid: T } },
     {
       eid: C,
@@ -911,9 +957,9 @@ let busServer = () => {
   return { server, acked, host: `127.0.0.1:${port}` }
 }
 
-let graphServer = () => {
+let graphServer = (snap = graph) => {
   let seen: string[] = []
-  let all = rows(graph)
+  let all = rows(snap)
   let wire = (r: Row) => ({ eid: r.eid, kind: r.kind, comps: r.comps })
   let server = Deno.serve({
     hostname: '127.0.0.1',
@@ -923,7 +969,7 @@ let graphServer = () => {
     let url = new URL(req.url)
     let line = decodeURIComponent(`${url.pathname}${url.search}`)
     seen.push(line)
-    if (url.pathname == '/snapshot') return Response.json(graph)
+    if (url.pathname == '/snapshot') return Response.json(snap)
     let sid = line.match(/\.session\.id=([^&]+)/)?.[1]
     if (sid) {
       return Response.json(
@@ -940,6 +986,42 @@ let graphServer = () => {
   let port = (server.addr as Deno.NetAddr).port
   return { server, seen, host: `127.0.0.1:${port}` }
 }
+
+Deno.test('list strips terminal controls from graph text', async () => {
+  let poisoned: Snapshot = {
+    ...graph,
+    changes: graph.changes.map((change) =>
+      change.eid == O && change.name == 'doc'
+        ? {
+          ...change,
+          comp: {
+            title: 'Open\x1b]52;c;QQ==\x07 board\x9b2J\x7f\x00 task',
+            body: '',
+          },
+        }
+        : change
+    ),
+  }
+  let { server, host } = graphServer(poisoned)
+  try {
+    let out = await new Deno.Command(Deno.execPath(), {
+      args: [
+        'run',
+        '-A',
+        new URL('./cli.ts', import.meta.url).pathname,
+        'list',
+      ],
+      clearEnv: true,
+      env: { TASKS_HOST: host },
+    }).output()
+    let stdout = text(out.stdout)
+    assertEquals(out.code, 0)
+    assertMatch(stdout, /Open]52;c;QQ== board2J task/)
+    assertEquals(unsafe(stdout), [])
+  } finally {
+    await server.shutdown()
+  }
+})
 
 Deno.test('colon open prints the public entity URL', async () => {
   let { server, host } = graphServer()
@@ -1061,10 +1143,12 @@ Deno.test('any graph-reading verb serves the bus, on stderr', async () => {
     // the message reached the operator as a served notice...
     assertMatch(text(out.stderr), /pending messages/)
     assertMatch(text(out.stderr), /the ask you missed/)
+    assertEquals(unsafe(text(out.stderr)), [])
     // ...and the block never touched what the caller asked for. (`show`
     // renders the comment thread itself on stdout, which is its job — what
     // must not leak there is the BUS, since that is what a pipe would eat.)
     assertEquals(/pending messages/.test(text(out.stdout)), false)
+    assertEquals(unsafe(text(out.stdout)), [])
     // ...and was stamped read exactly once
     assertEquals(acked, [C])
   } finally {

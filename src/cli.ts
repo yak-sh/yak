@@ -115,9 +115,30 @@ import {
   validate,
   validateCommand,
 } from './manual.ts'
+import { safe } from './terminal.ts'
 export { subjectUsage } from './manual.ts'
 
 let formats = ['markdown', 'json']
+
+// Graph content may not speak to the terminal. Every CLI line crosses this
+// seam; styling belongs to the CLI and wraps only the sanitized content.
+export let printer =
+  (write: (line: string) => void) => (text: string, bold = false) => {
+    let line = safe(text)
+    write(bold ? `\x1b[1m${line}\x1b[0m` : line)
+  }
+
+let print = printer((line) => console.log(line))
+let warn = printer((line) => console.error(line))
+
+// JSON.stringify already escapes C0, but writes DEL and C1 as terminal bytes.
+// Spell those as JSON escapes so the parsed value and machine shape stay whole.
+let jsonCtrl = /[\x7f-\x9f]/g
+export let jsonText = (value: unknown) =>
+  (JSON.stringify(value, null, 2) ?? '').replace(
+    jsonCtrl,
+    (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`,
+  )
 
 export let claimedDigest = (mine: Row[]) =>
   mine
@@ -126,14 +147,14 @@ export let claimedDigest = (mine: Row[]) =>
     .join('\n')
 
 let bare = async () => {
-  console.log(usage())
+  print(usage())
   let session = me()
   if (!session) return
   let [sess] = await query([`.session.id=${session}`], 'session')
   if (!sess) return
   let mine = await query([`.claim.session_eid=${sess.eid}`], 'task')
   let digest = claimedDigest(mine)
-  if (digest) console.log(`\n${digest}`)
+  if (digest) print(`\n${digest}`)
 }
 
 // `task projects` is `task list projects` — the plural IS the listing
@@ -267,7 +288,7 @@ let list = async (args: string[]) => {
     .filter((r) => r.kind == kind)
     .filter((r) => matchQuery(r.comps, preds, (e) => byEid.get(e)))
     .sort(byBoard)
-  if (json) return console.log(JSON.stringify(hits, null, 2))
+  if (json) return print(jsonText(hits))
   // Ids alone do not disambiguate — two projects are both titled `holdco`
   // — so the second column carries the handle a caller can TYPE: a task's
   // status, everything else's alias.
@@ -283,7 +304,7 @@ let list = async (args: string[]) => {
   for (let [r, handle] of lines) {
     let who = claimant(all, r)
     let flag = who ? `  \u2691 ${who}` : ''
-    console.log(
+    print(
       `${idOf(r).padEnd(6)} ${handle.padEnd(wide)} ${
         String(r.comps.doc?.title ?? '')
       }${flag}`,
@@ -291,7 +312,7 @@ let list = async (args: string[]) => {
   }
   if (!hits.length) {
     let why = resolution(preds, kind)
-    console.error(
+    warn(
       why
         ? `(no matches) · filters resolved to ${why} — list returns ${
           plural(kind)
@@ -345,18 +366,18 @@ let decided = async (args: string[]) => {
     .filter((r) => r.comps.decided && belongs(r, scope))
     .filter((r) => matchQuery(r.comps, screen, (e) => byEid.get(e)))
     .sort((a, b) => decidedAt(b).localeCompare(decidedAt(a)))
-  if (json) return console.log(JSON.stringify(hits, null, 2))
+  if (json) return print(jsonText(hits))
   // Three columns, not four: the id's PREFIX is the kind (M- is a memory,
   // T- a task), so a kind column spells the id twice and costs every title
   // a fixed indent it then truncates into. `--json` keeps the whole row.
   for (let r of hits) {
-    console.log(
+    print(
       `${decidedAt(r).slice(0, 10)} ${idOf(r).padEnd(6)} ${
         String(r.comps.doc?.title ?? '')
       }`,
     )
   }
-  if (!hits.length) console.error('(nothing decided)')
+  if (!hits.length) warn('(nothing decided)')
 }
 
 // task new uses dot-params, not --flags. A stray --flag in the title is the
@@ -448,12 +469,12 @@ let create = async (args: string[]) => {
   let eid = crypto.randomUUID()
   await send(taskChanges(eid, grouped))
   let made = rows(await snapshot()).find((r) => r.eid == eid)
-  console.log(`${made ? idOf(made) : eid} created`)
+  print(`${made ? idOf(made) : eid} created`)
   let hint = await similarHint(
     `${grouped.doc.title}\n${grouped.doc.body ?? ''}`,
     eid,
   )
-  if (hint) console.log(hint)
+  if (hint) print(hint)
 }
 
 let set = async (args: string[]) => {
@@ -485,7 +506,7 @@ let set = async (args: string[]) => {
       .map(([name, comp]) => ({ eid: row.eid, name, comp })),
     ...(say ? commentChanges(all, row.eid, say, me()) : []),
   ])
-  console.log(`${idOf(row)} updated`)
+  print(`${idOf(row)} updated`)
 }
 
 // Full-text search — every doc in the graph, ranked, matches bracketed.
@@ -494,13 +515,13 @@ let seek = async (args: string[]) => {
   let q = args.filter((a) => a != '--json').join(' ')
   if (!q) throw new Error('task search <words...> (trailing * = prefix)')
   let hits = await search(q)
-  if (json) return console.log(JSON.stringify(hits, null, 2))
-  if (!hits.length) return console.log('(no hits)')
+  if (json) return print(jsonText(hits))
+  if (!hits.length) return print('(no hits)')
   for (let h of hits) {
     let aim = h.open_eid != h.eid ? ` → on ${h.open_id ?? h.open_eid}` : ''
     let snip = h.snip.replaceAll('\x01', '[').replaceAll('\x02', ']')
     let sunk = h.retired ? ' · retired' : ''
-    console.log(
+    print(
       `${idOf(h)} ${h.kind}: ${h.title || '(untitled)'}${aim} — ${snip}${sunk}`,
     )
   }
@@ -577,9 +598,9 @@ let mailList = async (args: string[]) => {
     )
     .filter((r) => matchQuery(r.comps, resolved, (e) => byEid.get(e)))
     .sort((a, b) => mailAt(a).localeCompare(mailAt(b)))
-  if (json) return console.log(JSON.stringify(hits, null, 2))
+  if (json) return print(jsonText(hits))
   if (!hits.length) {
-    return console.error(
+    return warn(
       sent ? '(nothing sent)' : every
         ? '(no mail)'
         // Points at the inbox, not at more mail: an operator reads this line
@@ -591,7 +612,7 @@ let mailList = async (args: string[]) => {
   let bold = Deno.stdout.isTerminal()
   for (let r of hits) {
     let line = mailLine(r)
-    console.log(bold && unreadMail(r) ? `\x1b[1m${line}\x1b[0m` : line)
+    print(line, bold && unreadMail(r))
   }
 }
 
@@ -608,17 +629,13 @@ let mailShow = async (args: string[]) => {
   if (!row?.comps.mail) throw new Error(`not a mail: ${id}`)
   let thread = threadOf(all, row.eid)
   if (json) {
-    console.log(JSON.stringify(
-      { ...row, thread: thread.map((t) => idOf(t)) },
-      null,
-      2,
-    ))
+    print(jsonText({ ...row, thread: thread.map((t) => idOf(t)) }))
   } else {
-    console.log(showMd(snap, all, row))
+    print(showMd(snap, all, row))
     if (thread.length > 1) {
-      console.log('\n## Thread')
+      print('\n## Thread')
       for (let t of thread) {
-        console.log(`${t.eid == row.eid ? '▶' : ' '} ${mailLine(t)}`)
+        print(`${t.eid == row.eid ? '▶' : ' '} ${mailLine(t)}`)
       }
     }
   }
@@ -645,7 +662,7 @@ let mailSend = async (args: string[]) => {
   await send(made.changes)
   let after = rows(await snapshot()).find((r) => r.eid == made.eid)
   let eid = after ? idOf(after) : made.eid
-  console.log(`${eid} → ${to} — task show ${eid} for the delivery receipt`)
+  print(`${eid} → ${to} — task show ${eid} for the delivery receipt`)
 }
 
 let mailReply = async (args: string[]) => {
@@ -665,7 +682,7 @@ let mailReply = async (args: string[]) => {
   await send(made.changes)
   let after = rows(await snapshot()).find((r) => r.eid == made.eid)
   let eid = after ? idOf(after) : made.eid
-  console.log(
+  print(
     `${eid} → ${made.changes[1].comp?.to} (re: ${
       idOf(row)
     }) — task show ${eid} for the receipt`,
@@ -692,7 +709,7 @@ let mailFiles = async (args: string[]) => {
     message_id: string
     files: { name: string; size: number }[]
   }
-  if (!files.length) return console.log(`no attachments for ${id}`)
+  if (!files.length) return print(`no attachments for ${id}`)
   out ??= `mail-attachments/${message_id.replace(/[^\w.-]/g, '_')}`
   Deno.mkdirSync(out, { recursive: true })
   for (let f of files) {
@@ -701,7 +718,7 @@ let mailFiles = async (args: string[]) => {
     // R2 keys can't hide a directory in a NAME — but never trust one.
     let path = `${Deno.realPathSync(out)}/${f.name.replaceAll('/', '_')}`
     await Deno.writeFile(path, new Uint8Array(await r.arrayBuffer()))
-    console.log(path)
+    print(path)
   }
 }
 
@@ -716,11 +733,11 @@ let mailDoctor = async () => {
   try {
     rules = await liveRules()
   } catch (e) {
-    console.error(`⚠ live rule read failed — ${(e as Error).message}`)
+    warn(`⚠ live rule read failed — ${(e as Error).message}`)
   }
   if (!rules) {
     rules = STATIC_RULES
-    console.error(
+    warn(
       '⚠ STATIC rule snapshot (src/doctor.ts) — NOT authoritative, it can\n' +
         '  drift from Cloudflare silently, and has. Rule verdicts below are\n' +
         '  marked ? and are NOT measurements. Email Routing scope on this\n' +
@@ -738,9 +755,9 @@ let mailDoctor = async () => {
   // that, since the ⚠ banner above is read as advisory and this is not.
   for (let f of bad) {
     let mark = f.fromRules && !rules.live ? '?' : '✗'
-    console.log(`${mark} ${f.address} (${f.owner}) — ${f.problem}`)
+    print(`${mark} ${f.address} (${f.owner}) — ${f.problem}`)
   }
-  console.log(
+  print(
     `${bots.length - bad.length}/${bots.length} bot.yak.sh addresses ` +
       `deliverable (${book.length} in the book; rules: ` +
       `${rules.live ? 'live' : 'static'})`,
@@ -753,10 +770,10 @@ let mailSeek = async (args: string[]) => {
   let q = args.join(' ')
   if (!q) throw new Error(help(['mail', 'search']))
   let hits = (await search(q)).filter((h) => h.kind == 'mail')
-  if (!hits.length) return console.log('(no hits)')
+  if (!hits.length) return print('(no hits)')
   for (let h of hits) {
     let snip = h.snip.replaceAll('\x01', '[').replaceAll('\x02', ']')
-    console.log(`${idOf(h)} ${h.title || '(no subject)'} — ${snip}`)
+    print(`${idOf(h)} ${h.title || '(no subject)'} — ${snip}`)
   }
 }
 
@@ -768,7 +785,7 @@ let mail = (args: string[]) => {
   if (sub == 'search') return mailSeek(rest)
   if (sub == 'files') return mailFiles(rest)
   if (sub == 'doctor') return mailDoctor()
-  if (sub == 'help' || sub == '--help') return console.log(help(['mail']))
+  if (sub == 'help' || sub == '--help') return print(help(['mail']))
   return mailList(args)
 }
 
@@ -819,9 +836,9 @@ let inboxList = async (args: string[]) => {
       (isUnread(b) ? 1 : 0) - (isUnread(a) ? 1 : 0) ||
       bornAt(a).localeCompare(bornAt(b))
     )
-  if (json) return console.log(JSON.stringify(items, null, 2))
+  if (json) return print(jsonText(items))
   if (!items.length) {
-    return console.error(
+    return warn(
       sent
         ? '(nothing sent)'
         : every
@@ -832,7 +849,7 @@ let inboxList = async (args: string[]) => {
   let bold = Deno.stdout.isTerminal()
   for (let r of items) {
     let line = inboxLine(r)
-    console.log(bold && isUnread(r) ? `\x1b[1m${line}\x1b[0m` : line)
+    print(line, bold && isUnread(r))
   }
 }
 
@@ -846,8 +863,8 @@ let inboxShow = async (args: string[]) => {
   let all = rows(snap)
   let row = find(all, id)
   if (!row) throw new Error(`no such entity: ${id}`)
-  if (json) console.log(JSON.stringify(row, null, 2))
-  else console.log(showMd(snap, all, row))
+  if (json) print(jsonText(row))
+  else print(showMd(snap, all, row))
   if (!row.comps.opened) {
     await send([{ eid: row.eid, name: 'opened', comp: {} }])
   }
@@ -861,7 +878,7 @@ let inboxArchive = async (args: string[]) => {
   let row = find(rows(await snapshot()), id)
   if (!row) throw new Error(`no such entity: ${id}`)
   await send([{ eid: row.eid, name: 'archived', comp: {} }])
-  console.log(`archived ${idOf(row)}`)
+  print(`archived ${idOf(row)}`)
 }
 
 // The standing instruction, as two verbs — because a component nobody
@@ -884,16 +901,16 @@ let subscribe = (mode: 'watch' | 'mute') => async (args: string[]) => {
   }
   let changes = subChanges(all, actor, row.eid, gone ? null : mode)
   let said = mode == 'watch' ? 'watching' : 'muting'
-  if (!changes.length) return console.error(`not ${said} ${idOf(row)}`)
+  if (!changes.length) return warn(`not ${said} ${idOf(row)}`)
   await send(changes)
-  console.log(`${gone ? `no longer ${said}` : said} ${idOf(row)}`)
+  print(`${gone ? `no longer ${said}` : said} ${idOf(row)}`)
 }
 
 let inbox = (args: string[]) => {
   let [sub, ...rest] = args
   if (sub == 'show') return inboxShow(rest)
   if (sub == 'archive') return inboxArchive(rest)
-  if (sub == 'help' || sub == '--help') return console.log(help(['inbox']))
+  if (sub == 'help' || sub == '--help') return print(help(['inbox']))
   return inboxList(args)
 }
 
@@ -909,7 +926,7 @@ let claim = async (args: string[]) => {
   let all = rows(await snapshot())
   let row = need(all, id)
   await send(claimChanges(all, row.eid, session, Deno.cwd()))
-  console.log(`${idOf(row)} claimed by ${session}`)
+  print(`${idOf(row)} claimed by ${session}`)
 }
 
 // Dispatch a managed agent onto a task — one wire write; the server's
@@ -954,7 +971,7 @@ let launch = async (
   await send(made.changes)
   let after = rows(await snapshot()).find((r) => r.eid == made.eid)
   let onto = find(all, id)
-  console.log(
+  print(
     `${after ? idOf(after) : made.eid} spawned onto ${onto ? idOf(onto) : id}`,
   )
 }
@@ -1001,11 +1018,11 @@ let colon = async (focus: string | undefined, argv: string[]) => {
   // @- exactly as `task set` does — one convention across the CLI's doors.
   let out = runCommand(line, { eid, rows: all, session, read: inflate })
   if (out.changes?.length) await send(out.changes)
-  if (out.msg) console.log(out.msg)
+  if (out.msg) print(out.msg)
   if (out.spawn) await launch(out.spawn, {})
   if (out.go) {
     let r = all.find((x) => x.eid == out.go)
-    console.log(entityUrl(r ? idOf(r) : out.go))
+    print(entityUrl(r ? idOf(r) : out.go))
   }
 }
 
@@ -1014,7 +1031,7 @@ let release = async (args: string[]) => {
   if (!id) throw new Error('task release <id>')
   let row = need(rows(await snapshot()), id)
   await send([{ eid: row.eid, name: 'claim', comp: null }])
-  console.log(`${idOf(row)} released`)
+  print(`${idOf(row)} released`)
 }
 
 // A role is DESIRED capacity, so the only honest stop is a state patch. The
@@ -1065,13 +1082,13 @@ let roleState = async (sub: string, rest: string[]) => {
   )
   for (let r of targets) {
     let already = !moved.includes(r) ? ' (already)' : ''
-    console.log(`${idOf(r)} ${want}${already}  ${r.comps.doc?.title ?? ''}`)
+    print(`${idOf(r)} ${want}${already}  ${r.comps.doc?.title ?? ''}`)
   }
 }
 
 let role = async (args: string[]) => {
   let [sub, ...rest] = args
-  if (sub == 'help' || sub == '--help') return console.log(help(['role']))
+  if (sub == 'help' || sub == '--help') return print(help(['role']))
   if (sub == 'stop' || sub == 'start') return await roleState(sub, rest)
   if (sub && sub != '--json') {
     throw new Error(`not a role verb: ${sub}\n\n${help(['role'])}`)
@@ -1079,7 +1096,7 @@ let role = async (args: string[]) => {
   let all = rows(await snapshot())
   let roles = all.filter((r) => r.comps.role).sort((a, b) => a.num - b.num)
   if (sub == '--json') {
-    return console.log(JSON.stringify(
+    return print(jsonText(
       roles.map((r) => ({
         id: idOf(r),
         title: r.comps.doc?.title ?? null,
@@ -1087,12 +1104,10 @@ let role = async (args: string[]) => {
         spawn: r.comps.spawn ?? null,
         session: roleSession(all, r.eid)?.comps.session?.id ?? null,
       })),
-      null,
-      2,
     ))
   }
-  if (!roles.length) return console.log('no roles')
-  for (let r of roles) console.log(roleLine(all, r))
+  if (!roles.length) return print('no roles')
+  for (let r of roles) print(roleLine(all, r))
 }
 
 // An edge is a sentence — "<id> requires <child>" — and the comp names the
@@ -1115,7 +1130,7 @@ let dep = async (args: string[]) => {
     name: 'dependency',
     comp: { type, child_eid: child.eid, ...(gone ? { gone: true } : {}) },
   }])
-  console.log(`${idOf(row)} ${type} ${idOf(child)}${gone ? ' — unlinked' : ''}`)
+  print(`${idOf(row)} ${type} ${idOf(child)}${gone ? ' — unlinked' : ''}`)
 }
 
 // Comments attach to anything; attribution rides the session env (me()).
@@ -1155,7 +1170,7 @@ let comment = async (args: string[]) => {
   let mine = made.find((c) => c.name == 'comment')?.eid
   let after = rows(await snapshot()).find((r) => r.eid == mine)
   let said = verdict ? `${verdict} review` : 'comment'
-  console.log(
+  print(
     `${after ? idOf(after) : mine} — ${said} on ${idOf(row)}`,
   )
 }
@@ -1171,8 +1186,8 @@ let show = async (args: string[]) => {
     // The machine shape, unchanged forever: scripts parse this.
     let comments = all.filter((r) => r.comps.comment?.target_eid == row.eid)
     let edges = edgesOf(snap, all, row.eid)
-    console.log(JSON.stringify({ ...row, ...edges, comments }, null, 2))
-  } else console.log(showMd(snap, all, row))
+    print(jsonText({ ...row, ...edges, comments }))
+  } else print(showMd(snap, all, row))
 }
 
 // The entity's write history — the journal, one line per touching batch:
@@ -1187,9 +1202,9 @@ let past = async (args: string[]) => {
   let all = rows(await snapshot())
   let row = need(all, id)
   let entries = await history(row.eid, n)
-  if (json) return console.log(JSON.stringify(entries, null, 2))
-  if (!entries.length) return console.log(`${idOf(row)}: no history`)
-  for (let e of entries) console.log(historyLine(e))
+  if (json) return print(jsonText(entries))
+  if (!entries.length) return print(`${idOf(row)}: no history`)
+  for (let e of entries) print(historyLine(e))
 }
 
 // The injection loop's front door. Plain: print the digest for a session
@@ -1368,7 +1383,7 @@ let heard = async () => {
   let n = notices(seen, sid)
   if (!n.lines.length) return
   await send(n.ack)
-  console.error(noticeBlock(n.lines))
+  warn(noticeBlock(n.lines))
 }
 
 // The ancestry marker is the equivalent opt-in for an ad-hoc terminal.
@@ -1397,7 +1412,7 @@ let context = async (args: string[]) => {
       await send(n.ack)
       out += noticeBlock(n.lines)
     }
-    console.log(out)
+    print(out)
   }
   if (hook) {
     try {
@@ -1423,7 +1438,7 @@ let context = async (args: string[]) => {
           await send(s.changes)
           snap = await snapshot() // the block should see the reify
         }
-        console.log(subagentDigest(snap, subId, agentType))
+        print(subagentDigest(snap, subId, agentType))
         return
       }
       sid ??= String(body.session_id ?? '')
@@ -1506,7 +1521,7 @@ let context = async (args: string[]) => {
       r.comps.session && String(r.comps.session.id) == sid
     )
     let agentType = sess?.comps.session?.agent_type
-    return console.log(
+    return print(
       subagentDigest(snap, sid, agentType ? String(agentType) : undefined),
     )
   }
@@ -1517,11 +1532,11 @@ let context = async (args: string[]) => {
   let all = rows(snap)
   let named = sid ? find(all, sid) : undefined
   if (named?.comps.project) {
-    return console.log(contextDigest(snap, undefined, Date.now(), named.eid))
+    return print(contextDigest(snap, undefined, Date.now(), named.eid))
   }
   if (!sid) {
     let at = repoAt(all, Deno.cwd())
-    return console.log(contextDigest(snap, undefined, Date.now(), at?.eid))
+    return print(contextDigest(snap, undefined, Date.now(), at?.eid))
   }
   // S-12 (or its eid) names the session ENTITY; the id string inside it
   // is the identity every tool speaks. Anything else that resolves is a
@@ -1588,7 +1603,7 @@ let sessionTurn = async (args: string[]) => {
       name: 'session',
       comp: { turn },
     }])
-    if (!hook) console.log(`${idOf(sess)} turn ${turn}`)
+    if (!hook) print(`${idOf(sess)} turn ${turn}`)
   } catch (e) {
     if (!hook) throw e
   }
@@ -1621,9 +1636,9 @@ let remember = async (args: string[]) => {
   })
   await send(made.changes)
   let after = rows(await snapshot()).find((r) => r.eid == made.eid)
-  console.log(`${after ? idOf(after) : made.eid} remembered`)
+  print(`${after ? idOf(after) : made.eid} remembered`)
   let hint = await similarHint(`${title}\n${body ?? ''}`, made.eid)
-  if (hint) console.log(hint)
+  if (hint) print(hint)
 }
 
 // SessionEnd's mirror of context: drop everything the session holds.
@@ -1662,7 +1677,7 @@ let wrap = async (args: string[]) => {
     )
     if (changes.length) await send(changes)
     if (!hook) {
-      console.log(
+      print(
         `released ${changes.filter((c) => c.name == 'claim').length} claim(s)`,
       )
     }
@@ -1699,7 +1714,7 @@ let sessionBrief = async (args: string[]) => {
   let day = new Date().toISOString().slice(0, 10)
   let title = String(sess.comps.doc?.title || `Work session ${day}`)
   await send([{ eid: sess.eid, name: 'doc', comp: { title, body } }])
-  console.log(`${idOf(sess)} brief written`)
+  print(`${idOf(sess)} brief written`)
 }
 
 // Session-lifecycle verbs live here — root `task context` / `task wrap`
@@ -1711,7 +1726,7 @@ let session = (args: string[]) => {
   if (sub == 'brief') return sessionBrief(rest)
   if (sub == 'turn') return sessionTurn(rest)
   if (!sub || sub == 'help' || sub == '--help') {
-    return console.log(help(['session']))
+    return print(help(['session']))
   }
   throw new Error(`not a session verb: ${sub}\n\n${help(['session'])}`)
 }
@@ -1750,32 +1765,32 @@ let probes = async (args: string[]) => {
   let doomed = seen.verdicts.filter((v) => v.reap)
   let stale = seen.trees.filter((t) => t.prune)
   for (let v of doomed) {
-    console.log(
+    print(
       `orphan  ${String(v.proc.pid).padStart(8)} ${age(v.proc.born)}  ${v.why}`,
     )
   }
-  for (let t of stale) console.log(`tree    ${t.tree.path}  ${t.why}`)
+  for (let t of stale) print(`tree    ${t.tree.path}  ${t.why}`)
   if (args.includes('--all')) {
     for (let v of seen.verdicts.filter((v) => !v.reap && v.proc.cwd)) {
-      console.log(
+      print(
         `spared  ${String(v.proc.pid).padStart(8)} ${
           age(v.proc.born)
         }  ${v.proc.comm}: ${v.why}`,
       )
     }
     for (let t of seen.trees.filter((t) => !t.prune)) {
-      console.log(`kept    ${t.tree.path}  ${t.why}`)
+      print(`kept    ${t.tree.path}  ${t.why}`)
     }
   }
   if (!args.includes('--reap')) {
-    console.error(
+    warn(
       `${doomed.length} orphan(s), ${stale.length} stale worktree(s)`,
     )
     return
   }
   let killed = await reap(seen.verdicts)
   let pruned = repo ? stale.filter((t) => prune(repo, t.tree)) : []
-  console.error(
+  warn(
     `reaped ${killed.length} process(es), ${pruned.length} worktree(s)`,
   )
 }
@@ -1792,9 +1807,9 @@ let telemetry = async (args: string[]) => {
   let res = await request(`http://${host()}/telemetry?${q}`)
   if (!res.ok) throw new Error(`server said ${res.status}`)
   let rows = await res.json() as Log[]
-  if (!rows.length) return console.error('(nothing recorded)')
+  if (!rows.length) return warn('(nothing recorded)')
   for (let r of rows) {
-    console.log(
+    print(
       `${r.ts}  ${r.source.padEnd(4)} ${r.name.padEnd(14)} ${
         r.ok ? 'ok ' : 'ERR'
       } ${(r.ms == null ? '' : `${r.ms}ms`).padStart(6)}  ${
@@ -1817,20 +1832,20 @@ let sync = async (args: string[]) => {
   let snap = await snapshot()
   let files = filesFor(rows(snap), snap.deps, Date.now())
   if (!files.length) {
-    return console.log('no personas with a homed repo — nothing to write')
+    return print('no personas with a homed repo — nothing to write')
   }
   let { written, failed } = syncFiles(files)
-  for (let p of written) console.log(`wrote ${p}`)
-  for (let f of failed) console.error(`failed ${f}`)
-  if (!written.length && !failed.length) console.log('all fresh')
+  for (let p of written) print(`wrote ${p}`)
+  for (let f of failed) warn(`failed ${f}`)
+  if (!written.length && !failed.length) print('all fresh')
   if (args.includes('--no-commit')) return
   // Every path, not just this run's writes: a file left dirty by an
   // earlier sync (or adopted with `git add` since) lands here too.
   let done = await commit(files, 'personas: materialize')
-  for (let root of done.committed) console.log(`committed ${root}`)
-  for (let root of done.pushed) console.log(`pushed ${root}`)
-  for (let p of done.untracked) console.log(`untracked ${p} — git add to adopt`)
-  for (let f of done.failed) console.error(`commit failed ${f}`)
+  for (let root of done.committed) print(`committed ${root}`)
+  for (let root of done.pushed) print(`pushed ${root}`)
+  for (let p of done.untracked) print(`untracked ${p} — git add to adopt`)
+  for (let f of done.failed) warn(`commit failed ${f}`)
 }
 
 let backup = async () => {
@@ -2076,7 +2091,7 @@ if (import.meta.main) {
   let [cmd, ...rest] = Deno.args
   try {
     let asked = requestedHelp(Deno.args)
-    if (asked != null) console.log(asked)
+    if (asked != null) print(asked)
     else {
       let routed = listing(cmd, rest) ?? subject(cmd, rest)
       if (routed) {
@@ -2094,7 +2109,7 @@ if (import.meta.main) {
         // subject-first sentences merely reuse the old verb's code, so
         // `task T-3 requires T-9` was told the form it just used is obsolete.
         if (selected.manual.deprecated && !routed) {
-          console.error(
+          warn(
             `task ${selected.name}: deprecated — ${selected.manual.deprecated}`,
           )
         }
@@ -2134,21 +2149,21 @@ if (import.meta.main) {
       else if (cmd == 'role') await role(rest)
       else if (cmd == 'probes') await probes(rest)
       else if (cmd == 'telemetry') await telemetry(rest)
-      else if (cmd == 'help' || cmd == '--help') console.log(help(rest))
+      else if (cmd == 'help' || cmd == '--help') print(help(rest))
       else if (!cmd) await bare()
       // `task T-42 :done` — an id ahead of a colon line names the focus.
       else if (rest[0]?.startsWith(':')) await colon(cmd, rest)
       // CLI verbs win shared names; the remaining palette words may omit `:`.
       else if (cmd && commands[cmd]) await colon(undefined, [cmd, ...rest])
       else {
-        console.log(usage())
+        print(usage())
         Deno.exit(2)
       }
     }
     // Whatever the verb did, hand over anything addressed to this session.
     await heard()
   } catch (e) {
-    console.error(`task: ${(e as Error).message} (server: ${host()})`)
+    warn(`task: ${(e as Error).message} (server: ${host()})`)
     Deno.exit(1)
   }
 }
