@@ -169,7 +169,7 @@ html {
 /* The mono keepers: ids, chips, badges, edge verbs, timestamps, code,
    and every command/inspector/log surface. Prose everywhere else is
    var(--font) via body. :where keeps this overridable. */
-:where(code, pre, kbd, .Id, .Prio, .Show_Domain, .Show_Project, .Show_Assignee, .Show_Claim, .Show_Mail, .Dependency_Type, .Relate_Verb, .Stamp, .Comments_When, .Comments_Who, .Comments_Via, .Board_ColName, .Board_Count, .Board_Chips, .Status, .Search_Box input, .Search_Id, .Debug, .Debug_Claim, .SessionRow, .Session_Facts, .Session_Status, .Session_Model, .Session_Tool, .Session_Exec, .Session_Turn, .Session_When, .Session_Err, .TaskTile_Project, .TaskTile_Assignee) {
+:where(code, pre, kbd, .Id, .Prio, .Show_Domain, .Show_Project, .Show_Assignee, .Show_Claim, .Show_Deps, .Show_Mail, .Dependency_Type, .Relate_Verb, .Stamp, .Comments_When, .Comments_Who, .Comments_Via, .Board_ColName, .Board_Count, .Board_Chips, .Status, .Search_Box input, .Search_Id, .Debug, .Debug_Claim, .SessionRow, .Session_Facts, .Session_Status, .Session_Model, .Session_Tool, .Session_Exec, .Session_Turn, .Session_When, .Session_Err) {
   font-family: var(--mono);
 }
 
@@ -1033,9 +1033,8 @@ html {
   contain-intrinsic-size: auto 4rem;
 }
 
-/* The board's card for a task, Trello-shaped: dot + wrapping title, then
-   a meta line (prio · project · domain · 💬 · ⚑ · id). Plain spans, no editors —
-   hundreds of these must render without the browser noticing. */
+/* The board's card for a task, Trello-shaped: dot + wrapping title, then the
+   shared meta line at dense scale. */
 .TaskTile {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -1047,6 +1046,20 @@ html {
   /* the tile IS a link; it must not read as one word-by-word */
   color: inherit;
   text-decoration: none;
+  container-type: inline-size;
+}
+/* Density changes metrics, never the shared Meta markup. Provenance gives
+   out first; the narrower container rungs below retire assignee, then project. */
+.TaskTile-dense {
+  --meta-wrap: nowrap;
+  --meta-gap: var(--half-gap);
+  --meta-margin: 0;
+  --meta-chip-padding: 0;
+  --meta-chip-border: 0;
+  --meta-chip-radius: 0;
+  --meta-empty: none;
+  --meta-hand: none;
+  --meta-stamp: none;
 }
 .TaskTile > .Dot {
   align-self: start;
@@ -1055,43 +1068,32 @@ html {
 .TaskTile_Title {
   min-width: 0; /* wraps freely — a board card reads, it doesn't truncate */
 }
-.TaskTile_Meta {
+.TaskTile > .Show_Meta {
   grid-column: 2;
-  display: flex;
-  align-items: baseline;
-  gap: var(--half-gap);
-  font-size: 11px;
-  color: var(--dim);
+  min-width: 0;
+  overflow: hidden;
 }
-.TaskTile_Meta .Id {
+.TaskTile > .Show_Meta .Id {
   margin-left: auto;
 }
-.TaskTile_Comments {
-  white-space: nowrap;
+.TaskTile > .Show_Meta > .Prop:has(.Show_Assignee) {
+  flex-shrink: 8;
 }
-.TaskTile_Claim {
-  color: var(--purple);
+.TaskTile > .Show_Meta > .Prop:has(.Show_Project) {
+  flex-shrink: 2;
 }
-/* Whose plate, said quietly beside the ⚑ — same weight as the claim. */
-.TaskTile_Assignee {
-  color: var(--orange);
+.TaskTile > .Show_Meta > .Show_Claim {
+  flex-shrink: 4;
 }
-/* Edge tallies wear their edge colors, dimmed to meta-line volume. */
-.TaskTile_Deps {
-  white-space: nowrap;
+@container (max-width: 20rem) {
+  .TaskTile > .Show_Meta > .Prop:has(.Show_Assignee) {
+    display: none;
+  }
 }
-/* the done share of a tally: struck and faded, the open count stands */
-.TaskTile_Done {
-  opacity: 0.55;
-}
-.TaskTile_Deps-requires {
-  color: var(--red);
-}
-.TaskTile_Deps-contains {
-  color: var(--yellow);
-}
-.TaskTile_Deps-reads {
-  color: var(--blue);
+@container (max-width: 14rem) {
+  .TaskTile > .Show_Meta > .Prop:has(.Show_Project) {
+    display: none;
+  }
 }
 
 /* The document face sits borderless on the floor — the card frame
@@ -1171,7 +1173,7 @@ html {
   text-decoration: underline;
   color: var(--fg);
 }
-/* a settled task no longer binds: struck, TaskTile_Done's fade */
+/* a settled task no longer binds: struck, Show_Done's fade */
 .Inline_Title-settled {
   text-decoration: line-through;
   opacity: 0.55;
@@ -1300,20 +1302,44 @@ html {
    prio · domain · 💬 · ⚑, under the titlebar, above the body. */
 .Show_Meta {
   display: flex;
-  flex-wrap: wrap; /* a narrow card wraps the chips; nothing overflows */
+  flex-wrap: var(--meta-wrap, wrap);
   align-items: baseline;
-  gap: 2px var(--half-gap);
+  gap: var(--meta-gap, 2px var(--half-gap));
   font-size: 11px;
   color: var(--dim);
-  margin-bottom: var(--half-gap);
+  margin-bottom: var(--meta-margin, var(--half-gap));
+}
+.Show_Meta > :is(.Prop, .Show_Claim, .Stamp) {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+.Show_Meta > .Prop > .Prop_Val {
+  min-width: 0;
+  overflow: hidden;
+}
+.Show_Meta > .Prop:has(:is(.Prop_Hand-empty, .Prop_Val-nil)) {
+  display: var(--meta-empty, inline-flex);
+}
+.Show_Meta .Prop_Hand {
+  display: var(--meta-hand, inline-block);
+}
+.Show_Meta :is(.Show_Domain, .Show_Project, .Show_Assignee, .Show_Claim) {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 /* The meta line wears the W-3639 mockup's chip grammar: every field a
    bordered rounded chip, quiet color naming the field — domain blue,
    project purple, prio its rank color, claim fleet purple. */
 .Show_Meta :is(.Show_Domain, .Show_Project, .Show_Assignee, .Show_Claim, .Prio, .Show_Comments) {
-  padding: 1px 7px;
-  border: 1px solid var(--border2);
-  border-radius: 4px;
+  padding: var(--meta-chip-padding, 1px 7px);
+  border: var(--meta-chip-border, 1px solid var(--border2));
+  border-radius: var(--meta-chip-radius, 4px);
+}
+.Show_Meta > .Stamp {
+  display: var(--meta-stamp, inline-flex);
 }
 .Show_Meta .Prio {
   background: transparent;
@@ -1356,6 +1382,23 @@ html {
 }
 .Show_Comments {
   white-space: nowrap;
+}
+/* Edge tallies wear their edge colors, dimmed to meta-line volume. */
+.Show_Deps {
+  white-space: nowrap;
+}
+/* the done share of a tally: struck and faded, the open count stands */
+.Show_Done {
+  opacity: 0.55;
+}
+.Show_Deps-requires {
+  color: var(--red);
+}
+.Show_Deps-contains {
+  color: var(--yellow);
+}
+.Show_Deps-reads {
+  color: var(--blue);
 }
 /* The session lease badge — who's working this, in fleet purple. */
 .Show_Claim,

@@ -45,6 +45,8 @@ let Frame = block('div', 'Show', {
   Project: 'a',
   Assignee: 'a',
   Meta: 'div',
+  Deps: 'span',
+  Done: 's',
   Mail: 'div',
   MailKey: 'span',
   MailVal: 'span',
@@ -66,6 +68,8 @@ let {
   Project,
   Assignee,
   Meta: MetaEl,
+  Deps,
+  Done,
   Mail: MailEl,
   MailKey,
   MailVal,
@@ -177,7 +181,7 @@ let Plate = ({ e }: { e: Ent }) => (
     show={(face, v) => {
       if (!face || !v) return null
       let a = ent(String(v))
-      return <Assignee {...linkProps(a)}>{face}</Assignee>
+      return <Assignee {...linkProps(a)}>{a.doc?.title || face}</Assignee>
     }}
   />
 )
@@ -193,7 +197,7 @@ let Home = ({ e }: { e: Ent }) => (
     show={(face, v) => {
       if (!face || !v) return null
       let p = ent(String(v))
-      return <Project {...linkProps(p)}>{face}</Project>
+      return <Project {...linkProps(p)}>{p.doc?.title || face}</Project>
     }}
   />
 )
@@ -420,25 +424,68 @@ export let Similar = ({ e }: { e: Ent }) => {
   )
 }
 
-// The meta line — the board row's grammar, prio · project · domain · 💬
-// · ⚑ · age, every field the same editor everywhere. In a card frame the
-// titlebar carries title, pip, and id, so an empty line renders nothing;
-// the document face (root Full) passes `id` and always gets the row —
-// its id chip lives here, under the h1.
+// Each tally reads as a sentence, verb first — "requires ~2~ 1": two
+// blockers already settled (struck — done or cancelled), one still open. A
+// child that isn't a task can't be settled, so it counts as open. gated()
+// tells the same story on the dot: only an open requires burns red.
+let split = (kids: Ent[]): [number, number] => {
+  let done = kids.filter((k) => settled(k.task?.status)).length
+  return [kids.length - done, done]
+}
+
+let tallies = (e: Ent): [string, number, number][] => [
+  [
+    'requires',
+    ...split(
+      e.refs.filter((r) => r.type == 'requires').map((r) => ent(r.child)),
+    ),
+  ],
+  ['contains', ...split(e.kids)],
+  [
+    'reads',
+    ...split(
+      e.refs.filter((r) => r.type == 'reads').map((r) => ent(r.child)),
+    ),
+  ],
+]
+
+// The meta line — the union of the board row and Full's facts: prio · project
+// · domain · edge tallies · comments · assignee · claim · age. Every field
+// uses the same face everywhere and renders nothing when absent. In a card
+// frame the titlebar carries title, pip, and id, so an empty line renders
+// nothing; the document face and dense tile pass `id` to keep its chip here.
 export let Meta = ({ e, id }: { e: Ent; id?: boolean }) => {
   let talk = commentCount(e.eid).value
-  if (!id && !e.task && !talk && !e.claim && !e.created?.at) return null
+  let edges = tallies(e)
+  let hasEdges = edges.some(([, open, done]) => open > 0 || done > 0)
+  if (!id && !e.task && !talk && !e.claim && !e.created?.at && !hasEdges) {
+    return null
+  }
   return (
     <MetaEl>
       {e.task && (
         <>
           <Rank e={e} />
           <Home e={e} />
-          <Plate e={e} />
           <Facet e={e} />
         </>
       )}
+      {edges.map(([t, open, done]) =>
+        (open > 0 || done > 0) && (
+          <Deps key={t} mod={t}>
+            {t}
+            {done > 0 && (
+              <>
+                {' '}
+                <Done>{done}</Done>
+              </>
+            )}
+            {open > 0 && ` ${open}`}
+          </Deps>
+        )
+      )}
       {talk > 0 && <Talk>💬 {talk}</Talk>}
+      {e.task && <Plate e={e} />}
       {e.claim && (
         <Claim {...linkProps(ent(e.claim.session_eid))}>
           ⚑ {viaName(e.claim.session_eid)}

@@ -1,93 +1,23 @@
 import { type Ent } from '../../types.ts'
-import { commentCount, crewed, ent, gated, settled } from '../../live.ts'
+import { crewed, gated } from '../../live.ts'
 import { Dot } from '../Dot.tsx'
+import { Entity } from '../Entity.tsx'
 import { clickProps, menuAt } from '../nav.tsx'
-import { Prio } from '../Prio.tsx'
 import { block } from '../ui.tsx'
-import { Id } from './Inline.tsx'
 
-let Frame = block('div', 'TaskTile', {
-  Title: 'span',
-  Meta: 'div',
-  Project: 'span',
-  Domain: 'span',
-  Comments: 'span',
-  Claim: 'span',
-  Assignee: 'span',
-  Deps: 'span',
-  Done: 's',
-})
-let { Title, Meta, Project, Domain, Comments, Claim, Assignee, Deps, Done } =
-  Frame
+let Frame = block('div', 'TaskTile', { Title: 'span' })
+let { Title } = Frame
 
-// Every guard below compares — a bare `count &&` yields 0, and Preact paints
-// that as a stray digit in the meta line.
-//
 // A task as a small board card, Trello-shaped: wrapping title beside its
-// dot, then one meta line — priority, project, domain, edge tallies
-// ("2 requires", edge-colored), comment tally, claim flag, id. Plain spans only
-// (no editors, no markdown): hundreds of these must render without the
-// browser noticing. The whole tile is the LINK — clickProps on the el:
-// click peeks, double click navigates — and right-click serves the app
-// menu (menuAt), so the verbs are one click from any board. Drag out to
-// the canvas for the full Task card (the board Item owns the drag).
-export let TaskTile = ({ e }: { e: Ent }) => {
-  let talk = commentCount(e.eid).value
-  // Each tally reads as a sentence, verb first — "requires ~2~ 1": two
-  // blockers already settled (struck — done or cancelled), one still
-  // open. A child that isn't a task can't be settled, so it counts as
-  // open. gated() tells the same story on the dot: only an open requires
-  // burns red.
-  let split = (kids: Ent[]): [number, number] => {
-    let done = kids.filter((k) => settled(k.task?.status)).length
-    return [kids.length - done, done]
-  }
-  let edges: [string, number, number][] = [
-    [
-      'requires',
-      ...split(
-        e.refs.filter((r) => r.type == 'requires').map((r) => ent(r.child)),
-      ),
-    ],
-    ['contains', ...split(e.kids)],
-    [
-      'reads',
-      ...split(
-        e.refs.filter((r) => r.type == 'reads').map((r) => ent(r.child)),
-      ),
-    ],
-  ]
-  return (
-    <Frame {...clickProps(e)} onContextMenu={menuAt(e)}>
-      <Dot status={e.task!.status} gated={gated(e)} live={crewed(e)} />
-      <Title>{e.doc?.title}</Title>
-      <Meta>
-        <Prio p={e.task!.priority} />
-        {e.task!.project_eid && (
-          <Project>{ent(e.task!.project_eid).doc?.title}</Project>
-        )}
-        {e.task!.domain && <Domain>{e.task!.domain}</Domain>}
-        {edges.map(([t, open, done]) =>
-          (open > 0 || done > 0) && (
-            <Deps key={t} mod={t}>
-              {t}
-              {done > 0 && (
-                <>
-                  {' '}
-                  <Done>{done}</Done>
-                </>
-              )}
-              {open > 0 && ` ${open}`}
-            </Deps>
-          )
-        )}
-        {talk > 0 && <Comments>💬 {talk}</Comments>}
-        {e.task!.assignee_eid && (
-          <Assignee>{ent(e.task!.assignee_eid).doc?.title}</Assignee>
-        )}
-        {e.claim && <Claim>⚑</Claim>}
-        <Id e={e} />
-      </Meta>
-    </Frame>
-  )
-}
+// dot, then the shared Meta registry view at tile density. The whole tile is
+// the LINK — clickProps on the el: click peeks, double click navigates — and
+// right-click serves the app menu (menuAt), so the verbs are one click from
+// any board. Drag out to the canvas for the full Task card (the board Item
+// owns the drag).
+export let TaskTile = ({ e }: { e: Ent }) => (
+  <Frame mod='dense' {...clickProps(e)} onContextMenu={menuAt(e)}>
+    <Dot status={e.task!.status} gated={gated(e)} live={crewed(e)} />
+    <Title>{e.doc?.title}</Title>
+    <Entity eid={e.eid} view='Meta' id />
+  </Frame>
+)

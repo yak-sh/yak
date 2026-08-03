@@ -69,7 +69,13 @@ define([
   { view: 'List', match: has('canvas'), Render: List },
   { view: 'List', match: has('board'), Render: BoardList },
   { view: 'List.Tile', match: has('doc', 'memory'), Render: MemoryTile },
-  { view: 'List.Tile', match: has('doc', 'task'), Render: TaskTile },
+  // TaskTile walks back through Entity for its Meta row; defer the binding
+  // for the same reason as Canvas above.
+  {
+    view: 'List.Tile',
+    match: has('doc', 'task'),
+    Render: (props) => <TaskTile {...props} />,
+  },
   { view: 'List.Tile', match: has('session'), Render: SessionRow },
   { view: 'List.Tile', match: () => true, Render: ListTile },
   { view: 'Full', match: has('doc'), Render: Show },
