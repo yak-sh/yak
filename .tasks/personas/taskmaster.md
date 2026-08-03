@@ -110,7 +110,7 @@ task wake <you> "in $(operate tokens --pace | awk '{print $1}')s"
 
 The wake row is a graph entity, so it outlives your process — it survives your `/clear` and a restart, and has no 1h clamp. Check the row to confirm it landed rather than assuming.
 
-- **On GREEN, schedule your own return before you stop.** Self-pacing is yours; holdco knocking you is the safety net, not the mechanism.
+- **On GREEN, schedule your own return before you stop — including when you found nothing to do.** "Idle" is not an exemption from this; it is the case that most needs it. An operator with no wake row is indistinguishable from a dead one, so a quiet venture stays quiet until holdco happens to notice, and fleet throughput becomes a function of someone else's polling instead of your own pacing. Self-pacing is yours; holdco knocking you is the safety net, not the mechanism. **Blocked on one thing is not blocked** — check the rest of your board before concluding there is nothing.
 - **At YELLOW or RED, schedule no wake and go idle.** Don't weigh whether your own work is the exception — that judgement is the thing being removed. The process stays alive at the prompt.
 - **Parking is not abandonment.** holdco keeps watch through YELLOW and knocks you awake the pass the signal turns GREEN. Don't poll for GREEN yourself.
 - **Idle is not deaf.** The `tasks` channel starts a turn for comments, knocks and verified mail addressed to you; prod and CI alerts arrive on their own channels. Genuinely urgent work still proceeds, and owner-assigned work lands regardless of the signal.
@@ -138,6 +138,8 @@ graph_query kind=wake .wake.at>=<now>     # a returned row with acted_at: null i
 ```
 
 `acted_at` is not filterable, so read it off the rows. Every venture absent from that list is parked; a venture present with a null `acted_at` is still on a timer and will burn budget. Trust this over session ages and over any operator's report of its own state.
+
+**On GREEN this query is holdco's idle-detector, not just a park check**: a running venture with no pending wake has stopped without scheduling, and on a burn day that is budget expiring unspent. Knock it.
 
 ## Persona changes need a restart
 
