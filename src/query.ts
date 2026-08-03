@@ -35,7 +35,8 @@
 //
 // Unqualified props route by component, same rule as writes; `.task.status`
 // is the explicit spelling. `.num` routes to the entity spine; `at`/`by`
-// are shared by created+updated, so spell those out (`.created.at`).
+// are shared by the stamps — created, updated, decided — so spell those
+// out (`.created.at`, `.decided.at`).
 //
 // References go sugar-free: `.assignee=jeff` — a prop with no column of
 // its own, where exactly one component carries `prop_eid`, routes to
@@ -84,6 +85,10 @@ let routes: Record<string, readonly string[]> = {
   // `.created.at`, `.updated.by`, the pin/camera precedent.
   created: [...Object.keys(comps.created), ...Object.keys(stamped.created)],
   updated: [...Object.keys(comps.updated), ...Object.keys(stamped.updated)],
+  // `decided` splits the same stamp the other way — `at`/`by` on the wire,
+  // `via` stamped — so its routes are the same union, and `.decided.at` is
+  // the spelling `## decided` and `task decided` both answer.
+  decided: [...Object.keys(comps.decided), ...Object.keys(stamped.decided)],
 }
 
 // The dot-param shape, sketched — the tail of every strict rejection

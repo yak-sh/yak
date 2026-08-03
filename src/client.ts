@@ -1391,6 +1391,38 @@ let onMine = (
   ]
 }
 
+// When a decision was taken — '' for an entity wearing no stamp, which
+// sorts last and reads as "nothing settled". The digest and `task decided`
+// order by the same string, so the section and the listing agree.
+export let decidedAt = (r: Row) => String(r.comps.decided?.at ?? '')
+
+// PROJECT layer — what has been SETTLED in the scope you stand in, newest
+// decision first. The `decided` stamp is the only source, so an entity
+// without one is absent rather than sorted oddly, and nothing is guessed
+// from status or age.
+//
+// Ordered by decided.at, never by heat: a decision does not become less true
+// for going cold, and that divergence is the whole reason the stamp lives
+// beside recall instead of inside it. The date leads the line — the point of
+// the section is WHEN, and a decision written up from an old letter has a
+// date its `created` stamp would misreport.
+let decisions = (all: Row[], budget: number, scope?: string) => {
+  if (budget < 2) return []
+  let hits = all
+    .filter((r) => r.comps.decided && belongs(r, scope))
+    .sort((a, b) => decidedAt(b).localeCompare(decidedAt(a)))
+    .slice(0, budget - 1)
+  if (!hits.length) return []
+  return [
+    '## decided',
+    ...hits.map((r) =>
+      `- ${decidedAt(r).slice(0, 10)} ${idOf(r)} — ${
+        snip(String(r.comps.doc?.title ?? ''))
+      }`
+    ),
+  ]
+}
+
 // PROJECT layer — the fleet's shared mind, surfaced: the warmest UNSCOPED
 // memories (scoped ones ride their own project), listed for recognition
 // under a standing directive to read and adopt. recallIndex ranks and
@@ -1561,16 +1593,18 @@ export let contextDigest = (
     let told = briefOf(prev).split('\n').map((l) => l.trim()).filter(Boolean)
     for (let l of told.slice(0, 4)) lines.push(`> ${snip(l, 96)}`)
   }
-  // The tail, three tiers drawing on the room the 48-line cap leaves:
+  // The tail, four tiers drawing on the room the 48-line cap leaves:
   // onMine (SESSION layer — comments on your claimed tasks, the backstop
   // under a missed instant push), then the PROJECT pulse (what moved in
-  // your scope), then the fleet's shared memory. onMine and fleetMemory
-  // are capped small so the cap always leaves pulse and fleetMemory more
-  // room than their own tiny caps need — that headroom is what makes the
-  // project layer render identically with or without a session (parity).
+  // your scope), what was DECIDED here, then the fleet's shared memory.
+  // onMine, decisions and fleetMemory are capped small so the cap always
+  // leaves the project tiers more room than their own tiny caps need — that
+  // headroom is what makes the project layer render identically with or
+  // without a session (parity).
   let room = () => 48 - lines.length
   lines.push(...onMine(all, sess, now, Math.min(4, room())))
   lines.push(...pulse(all, now, room(), scope))
+  lines.push(...decisions(all, Math.min(6, room()), scope))
   lines.push(...fleetMemory(all, now, Math.min(6, room())))
   lines.push(
     `claim: \`task claim <id> ${
@@ -1788,9 +1822,22 @@ export let DESK = {
   persona: 'scribe',
 }
 
+// The `decided` stamp as a change: WHEN the decision was taken. The value
+// speaks the same time grammar as every other door — '2026-06-01',
+// 'yesterday', '3 months ago' — and apply()'s normalizeChanges resolves it
+// once, so no stored row ever holds a phrase and this stays one shape rather
+// than a second parser. Empty is the bare stamp, which the column dates now.
+export let decidedChange = (eid: string, at?: string): Change => ({
+  eid,
+  name: 'decided',
+  comp: at ? { at } : {},
+})
+
 // The memory-save batch: a doc face (title = index line, body = the fact)
 // plus the memory comp, scoped to a project when one is named. The calling
-// session is minted if new so the door can stamp it in created.via.
+// session is minted if new so the door can stamp it in created.via. A
+// `decided` date rides along for the case the stamp exists to serve: writing
+// up a decision that was taken before anyone filed it.
 export let memoryChanges = (
   all: Row[],
   m: {
@@ -1798,6 +1845,7 @@ export let memoryChanges = (
     body?: string
     type?: string
     scope?: string
+    decided?: string
     session: string
   },
 ) => {
@@ -1817,6 +1865,7 @@ export let memoryChanges = (
       },
     },
   ]
+  if (m.decided != null) changes.push(decidedChange(eid, m.decided))
   return { eid, changes }
 }
 

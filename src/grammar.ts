@@ -43,8 +43,10 @@ yesterday, '2026-07-04', this|last|next week|month|year, '5 minutes ago',
 14:00, noon, '9am tomorrow' — and a full stamp, '2026-07-25T09:00'. A
 phrase is a RANGE: = within it, >= from its start, <= to its
 end ('.updated.at>="1 hour ago"'; glue with - where quoting is hard).
-Provenance shares column names, so spell out the component: '.created.at',
+The stamps share column names, so spell out the component: '.created.at',
 '.updated.at', '.created.by=jeff' (who authored), '.updated.by!=jeff'.
+'.decided.at' is the DECISION's own date — it can be older than the row,
+which is why 'task decided' orders by it and not by when a thing was filed.
 Reference filters take the same sugar ('.assignee=jeff', '.project=P-19'),
 and a DOTTED path walks one reference: '.assignee.title~=jeff' — but a
 first segment naming a component stays the explicit spelling ('.pin.x=12',

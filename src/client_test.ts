@@ -1672,6 +1672,61 @@ Deno.test('contextDigest: pulse — scoped tasks that moved, no foreign bleed', 
   assertEquals(d.includes('Ours stale'), false)
 })
 
+// `## decided` orders by decided.at, NOT by heat or by when a thing was
+// filed — the oldest decision here is the most recently created row, and it
+// still sorts last. An entity with no stamp is absent from the section, and
+// the stamp is a facet, so a task and a memory both qualify.
+Deno.test('contextDigest: ## decided — by decision date, stamp-only', () => {
+  let NOW = Date.parse('2026-07-20T12:00:00Z')
+  let num = 60
+  let eid = (i: number) => `cccccccc-0000-4000-8000-00000000000${i}`
+  let P = eid(9)
+  let mk = (
+    e: string,
+    born: string,
+    parts: Record<string, Record<string, unknown>>,
+  ) => [
+    { eid: e, name: 'entity', comp: { eid: e, num: num++ } },
+    { eid: e, name: 'created', comp: { at: born } },
+    ...Object.entries(parts).map(([name, comp]) => ({ eid: e, name, comp })),
+  ]
+  let snap: Snapshot = {
+    changes: [
+      ...mk(P, '2026-07-01T00:00:00Z', { doc: { title: 'Ours' }, project: {} }),
+      ...mk(eid(1), '2026-07-19T00:00:00Z', {
+        doc: { title: 'Ship weekly' },
+        task: { status: 'done', priority: 0, project_eid: P },
+        decided: { at: '2026-05-04T00:00:00Z' },
+      }),
+      ...mk(eid(2), '2026-07-02T00:00:00Z', {
+        doc: { title: 'Bill quarterly' },
+        memory: { type: 'project', scope_eid: P },
+        decided: { at: '2026-06-30T00:00:00Z' },
+      }),
+      // no stamp: absent from the section, whatever its age
+      ...mk(eid(3), '2026-07-19T00:00:00Z', {
+        doc: { title: 'Still arguing' },
+        task: { status: 'open', priority: 0, project_eid: P },
+      }),
+      // decided in another project: not ours
+      ...mk(eid(4), '2026-07-19T00:00:00Z', {
+        doc: { title: 'Their call' },
+        task: { status: 'done', priority: 0, project_eid: eid(8) },
+        decided: { at: '2026-07-01T00:00:00Z' },
+      }),
+    ],
+    deps: [],
+  }
+  let d = contextDigest(snap, undefined, NOW, P)
+  let said = d.split('\n').filter((l) => l.startsWith('- 2026-'))
+  assertEquals(said.length, 2)
+  assertMatch(said[0], /^- 2026-06-30 .* Bill quarterly$/)
+  assertMatch(said[1], /^- 2026-05-04 .* Ship weekly$/)
+  assertEquals(d.includes('Still arguing') && d.includes('## decided'), true)
+  assertEquals(said.some((l) => l.includes('Still arguing')), false)
+  assertEquals(d.includes('Their call'), false)
+})
+
 Deno.test('spec: a typed task — leading P, params anywhere, body below', () => {
   let s = spec('P1 .domain=Eng Build a thing blah blah\nline two\nline three')
   assertEquals(s.title, 'Build a thing blah blah')

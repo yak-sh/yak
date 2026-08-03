@@ -32,6 +32,7 @@ import {
   claimChanges,
   commentChanges,
   contextDigest,
+  decidedChange,
   derefParams,
   edgesOf,
   find,
@@ -764,6 +765,14 @@ your read is refused, with their text and a fresh token. ${BUS}`,
       body: body().optional(),
       type: z.enum(memoryTypes).optional(),
       scope: z.string().optional(),
+      decided: z.string()
+        .describe(
+          'When the decision this records was TAKEN — an ISO date or a ' +
+            "phrase ('3 months ago'). Stamps `decided`, which is what " +
+            '`task decided` and the digest order by. Say it when writing up ' +
+            'an old decision: filing it today is not deciding it today.',
+        )
+        .optional(),
       id: z.string().optional(),
       was: z.string()
         .describe(
@@ -774,11 +783,12 @@ your read is refused, with their text and a fresh token. ${BUS}`,
       session: z.string(),
     },
     async (
-      { title, body, type, scope, id, was, session }: {
+      { title, body, type, scope, decided, id, was, session }: {
         title?: string
         body?: string
         type?: string
         scope?: string
+        decided?: string
         id?: string
         was?: string
         session: string
@@ -823,6 +833,7 @@ your read is refused, with their text and a fresh token. ${BUS}`,
         if (Object.keys(memory).length) {
           patch.push({ eid: row.eid, name: 'memory', comp: memory })
         }
+        if (decided != null) patch.push(decidedChange(row.eid, decided))
         if (patch.length) {
           // A refused precondition is an answer, not a crash: it carries the
           // current value and the token to retry with, which is exactly what
@@ -841,7 +852,14 @@ your read is refused, with their text and a fresh token. ${BUS}`,
       }
       let made
       try {
-        made = memoryChanges(all, { title, body, type, scope, session })
+        made = memoryChanges(all, {
+          title,
+          body,
+          type,
+          scope,
+          decided,
+          session,
+        })
       } catch (e) {
         return err((e as Error).message)
       }

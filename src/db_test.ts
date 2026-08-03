@@ -1188,6 +1188,78 @@ Deno.test('lifecycle stamps: one-list — snapshot, showMd, and GRAMMAR pick the
   assertEquals(snapshot(d).changes.find((c) => c.name == 'conflict'), undefined)
 })
 
+// `decided` is the stamp family's odd member: `at` and `by` ride the WIRE
+// (a decision is written up after it was taken), `via` stays server-only.
+// Everything else — the by-default, the insert-only stamp, the echo on the
+// return — is the same loop the notification stamps ride.
+Deno.test('decided: the wire dates and signs it, the server names the instrument', () => {
+  let d = fresh()
+  let stamp = (eid: string) =>
+    snapshot(d).changes.find((c) => c.eid == eid && c.name == 'decided')?.comp
+  let jeff = uid(), amy = uid(), client = uid()
+  apply(d, [
+    { eid: jeff, name: 'person', comp: {} },
+    { eid: amy, name: 'person', comp: {} },
+    { eid: client, name: 'client', comp: { actor_eid: jeff } },
+  ])
+  // A TASK wears it: the stamp is a facet, not a memory column.
+  let t = uid()
+  apply(d, [
+    { eid: t, name: 'doc', comp: { title: 'ship the thing' } },
+    { eid: t, name: 'task', comp: { status: 'done' } },
+  ])
+  let out = apply(
+    d,
+    [{ eid: t, name: 'decided', comp: { at: '2026-04-02T00:00:00.000Z' } }],
+    undefined,
+    client,
+  )
+  // The BACKDATE survives: stored as sent, not rewritten to now — which is
+  // the entire reason `at` is wire-writable.
+  assertEquals(stamp(t)?.at, '2026-04-02T00:00:00.000Z')
+  assertEquals(stamp(t)?.by, jeff) // the gap, filled with the writing actor
+  assertEquals(stamp(t)?.via, client) // its instrument, server-stamped
+  let rode = out.findLast((c) => c.eid == t && c.name == 'decided')
+  assertEquals(rode?.comp?.at, '2026-04-02T00:00:00.000Z')
+  assertEquals(rode?.comp?.by, jeff)
+
+  // A wire-named decider is KEPT (created.by's rule), and `via` is refused
+  // whatever the wire says — that is what keeps the instrument unspoofable
+  // even when the date is asserted.
+  let m = uid()
+  apply(d, [
+    { eid: m, name: 'doc', comp: { title: 'we bill quarterly' } },
+    { eid: m, name: 'memory', comp: { type: 'project' } },
+  ])
+  apply(
+    d,
+    [{
+      eid: m,
+      name: 'decided',
+      comp: { at: '2026-01-09T12:00:00.000Z', by: amy, via: 'FORGED' },
+    }],
+    undefined,
+    client,
+  )
+  assertEquals(stamp(m)?.by, amy)
+  assertEquals(stamp(m)?.via, client)
+
+  // Bare {}: the column default dates it now, so the cheap spelling works.
+  let u = uid()
+  apply(d, [{ eid: u, name: 'doc', comp: { title: 'settled today' } }])
+  apply(d, [{ eid: u, name: 'decided', comp: {} }], undefined, client)
+  assertMatch(String(stamp(u)?.at), /^\d{4}-/)
+  assertEquals(stamp(u)?.by, jeff)
+
+  // A time PHRASE is resolved once at the door (normalizeChanges), so no row
+  // ever holds one — and correcting the date later moves `at` alone: who
+  // wrote the decision down does not change because its date did.
+  apply(d, [{ eid: t, name: 'decided', comp: { at: '2026-03-01' } }])
+  assertMatch(String(stamp(t)?.at), /^2026-03-01T/)
+  assertEquals(stamp(t)?.by, jeff)
+  assertEquals(stamp(t)?.via, client)
+})
+
 // The read→opened migration (T-7006): the backfill seeds `opened` from
 // every already-read letter, so no mail flickers unread when the readers
 // flip to NOT opened. Insert-or-ignore on the pk makes it a no-op on

@@ -681,3 +681,35 @@ Deno.test('.updated.at reads created.at when nothing has updated it', () => {
   assertEquals(hits('.updated.at=', { entity: { eid: 'g', num: 3 } }), true)
   assertEquals(hits('.updated.at=', born), false)
 })
+
+// `.decided.at` needed no grammar work: `at` is declared in comps, so route()
+// and the time predicates carried it. The one edit was the routes union
+// created/updated already have, which is what makes `.decided.via` filterable
+// without its ever being writable.
+Deno.test('.decided.at filters like any stamped time', () => {
+  let settled = {
+    entity: { eid: 'e', num: 1 },
+    doc: { title: 'ship weekly' },
+    created: { at: '2026-08-03T00:00:00.000Z' },
+    decided: { at: '2026-05-04T00:00:00.000Z', by: 'jeff' },
+  }
+  let open = {
+    entity: { eid: 'f', num: 2 },
+    doc: { title: 'still arguing' },
+    created: { at: '2026-08-03T00:00:00.000Z' },
+  }
+  let hits = (line: string, c: Record<string, Record<string, unknown>>) =>
+    matchQuery(c, parseQuery(line))
+
+  // The decision date, not the filing date — the whole point of the stamp.
+  assertEquals(hits('.decided.at>=2026-05-01', settled), true)
+  assertEquals(hits('.decided.at>=2026-06-01', settled), false)
+  assertEquals(hits('.decided.at=2026-01-01..2026-06-01', settled), true)
+  // Absent stamp: `=` empty finds it, everything else misses it.
+  assertEquals(hits('.decided.at=', open), true)
+  assertEquals(hits('.decided.at=', settled), false)
+  assertEquals(hits('.decided.at>=2026-01-01', open), false)
+  // The byline filters like created's, and bare `at` stays ambiguous.
+  assertEquals(hits('.decided.by=jeff', settled), true)
+  assertThrows(() => parseQuery('.at>=2026-01-01'), Error, 'ambiguous')
+})

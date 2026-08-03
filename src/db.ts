@@ -339,6 +339,15 @@ let schema = `
     "by" text,
     via text
   );
+  -- A decision taken (T-12574): the same three columns, but "at" and "by"
+  -- arrive on the WIRE — a decision is often written up after the fact, so
+  -- the default clock is only the fallback. Only "via" is stamped.
+  create table if not exists decided (
+    eid text primary key references entity(eid),
+    at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    "by" text,
+    via text
+  );
   create table if not exists tombstone (
     eid        text primary key,
     num        integer,
@@ -1082,18 +1091,24 @@ export let human = (db: DatabaseSync, eid: string): string => {
   return idOf({ kind, num: row.num })
 }
 
-// The notification-lifecycle stamps (notified/opened/archived): a
-// client-requested, server-stamped act — an EMPTY wire comp (presence IS the
-// signal) whose `stamped` twin is the {at, by, via} stamp. Derived, not
-// hand-listed — a new stamp of this shape joins with zero edits. That shape is
-// the whole discriminator: `recall` (empty comp, but stamped {count…}, no at)
-// and `conflict` (empty comp, stamped {…,at}, but no by — a server-minted
-// audit, never wire-created) both stay out.
-let stampedPresence = Object.keys(comps).filter(
-  (c) =>
-    !Object.keys(comps[c]).length && stamped[c]?.at && stamped[c]?.by &&
-    stamped[c]?.via,
-)
+// The stamp family (notified/opened/archived/decided): a client-requested act
+// the server signs, whose WHOLE component is one {at, by, via} stamp. That
+// shape is the discriminator — derived, not hand-listed, so a new stamp joins
+// with zero edits — and `recall` (stamped {count…}, no at) and `conflict` (no
+// by: a server-minted audit, never wire-created) fall out on it.
+//
+// Which HALF the wire owns varies and doesn't matter here: the notification
+// three write a bare presence and the server dates them, `decided` may date
+// and sign itself (types.ts). What the loop below owns is `via`, server-only
+// in every member. `created`/`updated` wear the same shape but fire on an
+// entity's birth and touch rather than on the wire naming them, so they keep
+// their own loops and are named out.
+let stamps = Object.keys(comps).filter((c) => {
+  let all = { ...comps[c], ...stamped[c] }
+  return c != 'created' && c != 'updated' &&
+    !comps[c].via && stamped[c]?.via && all.at && all.by &&
+    Object.keys(all).length == 3
+})
 
 // The reaper's worklists, derived from the death word each reference
 // declares in the vocabulary (types.ts Death says what each word means).
@@ -1795,19 +1810,23 @@ export let apply = (
       let row = uRow.get(eid) as Change['comp'] | undefined
       if (row) extra.push({ eid, name: 'updated', comp: row })
     }
-    // Notification-lifecycle stamps (notified/opened/archived): the wire
-    // wrote a bare presence, and the main loop's insert already stamped `at`
-    // from the column default — the wire can touch none of the stamp. Fill
-    // actor + instrument only on insert, then re-read the frozen row so an
-    // optimistic cache never keeps a blank stamp.
-    // The created/updated re-read, generalized to one small loop.
+    // The stamp family (notified/opened/archived/decided): fill the actor GAP
+    // and stamp the instrument, on insert only — then re-read the row so an
+    // optimistic cache never keeps a blank stamp. The created/updated re-read,
+    // generalized to one small loop.
+    //
+    // `coalesce` is what lets one loop serve both halves of the family: a
+    // notification stamp can't carry a wire `by` (the column isn't in comps),
+    // so filling it is unconditional there; `decided` can, and a caller who
+    // named the decider keeps it. Insert-only for the same reason `created`
+    // is: correcting a decision's date later doesn't change who wrote it down,
+    // and the correction is journaled anyway.
     for (let { eid, name, comp } of changes) {
-      if (comp == null || !stampedPresence.includes(name) || !alive.get(eid)) {
-        continue
-      }
+      if (comp == null || !stamps.includes(name) || !alive.get(eid)) continue
       if (createdComps.has(`${name} ${eid}`)) {
-        db.prepare(`update ${name} set "by" = ?, via = ? where eid = ?`)
-          .run(actor, via, eid)
+        db.prepare(
+          `update ${name} set "by" = coalesce("by", ?), via = ? where eid = ?`,
+        ).run(actor, via, eid)
       }
       let row = db.prepare(
         `select eid, at, "by", via from ${name} where eid = ?`,
@@ -1888,7 +1907,7 @@ export let apply = (
       // repeat the ts + actor + via the journal row keeps. The wire's own
       // write (the bare presence, an authorship `by`) rides in `changes` and
       // stays audited.
-      let echoed = new Set(['created', 'updated', ...stampedPresence])
+      let echoed = new Set(['created', 'updated', ...stamps])
       let logged = [...changes, ...extra.filter((c) => !echoed.has(c.name))]
       if (logged.length) {
         db.prepare(

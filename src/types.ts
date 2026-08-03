@@ -374,6 +374,23 @@ export let comps: Record<string, Record<string, PropType>> = {
   notified: {}, // the operator has been told (inject or sweep) — never hides
   opened: {}, //   the operator has looked — NOT opened == unread; never hides
   archived: {}, // the operator is done — the ONE stamp that hides an item
+  // A decision was TAKEN about this entity — a task, a memory, a doc,
+  // anything; like its three neighbours a facet, never an identity. It is
+  // the same {at, by, via} stamp, split differently: `at` and `by` are
+  // WIRE-writable here, because a decision is routinely written up long
+  // after it was made (PrintBound's first 22 came out of old letters), and
+  // dating them all "today" throws away the one fact the component exists to
+  // carry — created is when it was filed, `decided` when it was settled.
+  // Defaults are the honest ones: `at` now (the column default), `by` the
+  // writing actor. That is `created.by`'s asymmetry taken one step further —
+  // there the wire may name the author but not the hour, here it may name
+  // both — and `via` stays server-only (in `stamped`), so the INSTRUMENT
+  // cannot be claimed even when the date is asserted.
+  //
+  // Deliberately NOT decay-exempt: recall is keyed by eid for any entity, so
+  // heat and decidedness are two facts about one row. The hot index and the
+  // ordered `## decided` digest section are two queries, not a special case.
+  decided: { at: 'time', by: { eid: '', death: 'keep' } },
 }
 
 // Server-stamped columns — never wire-writable (cols() reads `comps`
@@ -413,6 +430,11 @@ export let stamped: Record<string, Record<string, PropType>> = {
     by: { eid: '', death: 'keep' },
     via: { eid: '', death: 'keep' },
   },
+  // `decided`'s server half is the instrument ALONE — its `at` and `by` ride
+  // the wire (comps above), which is why this stamp is the one that is split.
+  // A caller may say when a decision was taken and who took it; nothing may
+  // say what wrote it down.
+  decided: { via: { eid: '', death: 'keep' } },
   web: { frozen_at: 'time' }, // the freeze finished (freeze.ts)
   client: { ip: 'text' },
   claim: { claimed_at: 'time' },
@@ -1061,9 +1083,11 @@ export type Created = {
 }
 export type Updated = Created
 
-// Notification-lifecycle stamps (T-7006): presence records the moment; the
-// whole stamp is server-frozen. Same shape as Created/Updated; absence is the
-// earlier state (no `opened` row == unread). The inbox reads these as pure
+// A moment stamped on an entity — the notification lifecycle (T-7006:
+// presence records it, the whole stamp is server-frozen) and `decided`
+// (T-12574: the wire dates and signs it, the server names the instrument).
+// Same shape as Created/Updated; absence is the earlier state (no `opened`
+// row == unread, no `decided` row == nothing settled). Read as pure
 // Row-predicates, like unreadMail today.
 export type Stamp = Created
 
@@ -1129,6 +1153,7 @@ export type Ent = {
   notified?: Stamp
   opened?: Stamp
   archived?: Stamp
+  decided?: Stamp
   refs: Ref[]
   kids: Ent[]
 }

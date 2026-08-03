@@ -79,6 +79,22 @@ export let manuals: Record<string, Manual> = {
     root: true,
     options: [json],
   },
+  decided: {
+    usage: 'decided [filters...] [--json]',
+    about: 'what has been settled, newest decision first',
+    examples: [
+      'task decided',
+      'task decided .project=P-19',
+      'task decided .decided.at>="1 month ago"',
+    ],
+    detail: 'The `decided` stamp is a facet, not a kind — a task, a memory ' +
+      'and a doc can all wear one — so this walks every kind at once. The ' +
+      'date leads each line, and it is the DECISION date: record an old one ' +
+      'with `task set <id> .decided.at="2026-06-01"`, which is not the same ' +
+      'as when the entity was filed.',
+    root: true,
+    options: [json],
+  },
   new: {
     usage: 'new .title="..." [...]',
     about: 'create a task (bare words become the title)',

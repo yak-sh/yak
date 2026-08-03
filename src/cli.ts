@@ -17,6 +17,7 @@ import {
   claimChanges,
   commentChanges,
   contextDigest,
+  decidedAt,
   derefParams,
   edgesOf,
   find,
@@ -220,30 +221,39 @@ export let kindArg = (arg: string) => {
   return kind
 }
 
+// Every argument at a listing door must BE a filter — the query grammar's
+// operators, lists and ranges ('.priority<=1', '.domain=Ops,Eng') — so a word
+// that isn't teaches instead of silently listing everything. `hint` says what
+// ELSE the word could have named at that particular door.
+let filters = (
+  all: Row[],
+  args: string[],
+  hint: (a: string) => string = () => '',
+) =>
+  resolveRefs(
+    args.map((a) => {
+      let p = pred(a)
+      if (!p) throw new Error(`${noFilter(a)} (task help grammar)${hint(a)}`)
+      return p
+    }),
+    (id) => find(all, id)?.eid,
+  )
+
 let list = async (args: string[]) => {
-  // Filters speak the query grammar — operators, lists, ranges
-  // ('.priority<=1', '.domain=Ops,Eng'). A word that isn't a filter
-  // teaches instead of silently listing everything.
   let json = args.includes('--json')
   let all = rows(await snapshot())
   let words = args.filter((a) => a != '--json')
     .map((a) => [a, kindArg(a)] as const)
   let kind = words.find(([, k]) => k)?.[1] ?? 'task'
-  let preds = resolveRefs(
-    words.filter(([, k]) => !k).map(([a]) => {
-      let p = pred(a)
-      // Here a bare word is also a KIND, so one that is neither names
-      // both doors rather than only the filter one.
-      if (!p) {
-        throw new Error(
-          `${noFilter(a)} (task help grammar)` +
-            (a.startsWith('.') ? '' : '; a bare word may name a KIND, as in ' +
-              'task list projects'),
-        )
-      }
-      return p
-    }),
-    (id) => find(all, id)?.eid,
+  // Here a bare word is also a KIND, so one that is neither names both
+  // doors rather than only the filter one.
+  let preds = filters(
+    all,
+    words.filter(([, k]) => !k).map(([a]) => a),
+    (a) =>
+      a.startsWith('.')
+        ? ''
+        : '; a bare word may name a KIND, as in task list projects',
   )
   // A handle that names nothing is a typo, not an empty result: the caller
   // typed it a moment ago and can act on the correction. Boards keep the
@@ -286,6 +296,35 @@ let list = async (args: string[]) => {
         : '(no matches)',
     )
   }
+}
+
+// ---- task decided: what has been SETTLED, newest decision first. The stamp
+// is a FACET, not a kind — a task, a memory and a doc can all wear one — so
+// this walks every kind at once instead of joining `task list`'s kind
+// selector. Filters are the one grammar ('.project=P-19',
+// '.decided.at>="1 month ago"'), and the date leads each line because WHEN a
+// thing was settled is the question the door answers; `created.at` would
+// misreport every decision written up from an old letter.
+let decided = async (args: string[]) => {
+  let json = args.includes('--json')
+  let all = rows(await snapshot())
+  let preds = filters(all, args.filter((a) => a != '--json'))
+  checkRefs(all, preds)
+  let byEid = new Map(all.map((r) => [r.eid, r.comps]))
+  let hits = all
+    .filter((r) => r.comps.decided)
+    .filter((r) => matchQuery(r.comps, preds, (e) => byEid.get(e)))
+    .sort((a, b) => decidedAt(b).localeCompare(decidedAt(a)))
+  if (json) return console.log(JSON.stringify(hits, null, 2))
+  let wide = Math.max(4, ...hits.map((r) => r.kind.length))
+  for (let r of hits) {
+    console.log(
+      `${decidedAt(r).slice(0, 10)} ${idOf(r).padEnd(6)} ${
+        r.kind.padEnd(wide)
+      } ${String(r.comps.doc?.title ?? '')}`,
+    )
+  }
+  if (!hits.length) console.error('(nothing decided)')
 }
 
 // task new uses dot-params, not --flags. A stray --flag in the title is the
@@ -2037,6 +2076,7 @@ if (import.meta.main) {
       else if (cmd == 'claude') await claude(rest)
       else if (cmd == 'codex') await codex(rest)
       else if (cmd == 'list' || cmd == 'ls') await list(rest)
+      else if (cmd == 'decided') await decided(rest)
       else if (cmd == 'new') await create(rest)
       else if (cmd == 'set') await set(rest)
       else if (cmd == 'show') await show(rest)
