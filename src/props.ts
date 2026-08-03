@@ -7,6 +7,10 @@ export type PropContext = {
   now?: number
   resolve?: (id: string) => string | undefined
   describe?: (eid: string) => string | undefined
+  // What the caller probably meant, already checked to resolve (near.ts).
+  // `comp` is the reference's declared target, so a bad `.project=` can
+  // only ever be answered with a project.
+  near?: (id: string, comp: string) => string | undefined
 }
 
 export type Prop = {
@@ -93,11 +97,20 @@ let oneOf = (p: Prop, v: unknown): string => {
   return value ?? fail(p, `one of ${type.enum.join(', ')}`, v)
 }
 
+// `.project=tasks` is the shape: a token that IS a venture in the fleet,
+// under an alias that diverges. When a near match resolves, naming it is
+// the whole message — the grammar is not what the caller got wrong, and
+// it is spelled by the noun the column carries ('no project', not 'no
+// project_eid'). Nothing close: the grammar line, plainly, no guess.
+let noun = (p: Prop) => p.prop == 'eid' ? 'entity' : p.prop.replace(/_eid$/, '')
 let eid = (p: Prop, v: unknown, ctx: PropContext): string => {
   let s = String(v).trim()
   if (UUID.test(s)) return s.toLowerCase()
   let found = ctx.resolve?.(s)
   if (found && UUID.test(found)) return found.toLowerCase()
+  let target = typeof p.type == 'object' && 'eid' in p.type ? p.type.eid : ''
+  let near = ctx.near?.(s, target)
+  if (near) throw new Error(`no ${noun(p)} '${s}' — did you mean ${near}?`)
   return fail(p, 'a human id / alias / UUID', v)
 }
 

@@ -34,6 +34,7 @@ import {
   mailLine,
   me,
   memoryChanges,
+  need,
   noticeBlock,
   notices,
   type Param,
@@ -402,8 +403,7 @@ let set = async (args: string[]) => {
     throw new Error('task set <id> .prop=value ...')
   }
   let all = rows(await snapshot())
-  let row = find(all, id)
-  if (!row) throw new Error(`no entity: ${id}`)
+  let row = need(all, id)
   await send([
     ...Object.entries(patches(derefParams(all, params)))
       .map(([name, comp]) => ({ eid: row.eid, name, comp })),
@@ -831,8 +831,7 @@ let claim = async (args: string[]) => {
     throw new Error('task claim <id> <session> (or run under a session)')
   }
   let all = rows(await snapshot())
-  let row = find(all, id)
-  if (!row) throw new Error(`no entity: ${id}`)
+  let row = need(all, id)
   await send(claimChanges(all, row.eid, session, Deno.cwd()))
   console.log(`${idOf(row)} claimed by ${session}`)
 }
@@ -919,8 +918,7 @@ let colon = async (focus: string | undefined, argv: string[]) => {
   let all = rows(await snapshot())
   let eid: string | undefined
   if (focus) {
-    let r = find(all, focus)
-    if (!r) throw new Error(`no entity: ${focus}`)
+    let r = need(all, focus)
     eid = r.eid
   } else eid = focusOf(all, session)
   // A shell has a filesystem, so a dot-param value here reads @file and
@@ -938,8 +936,7 @@ let colon = async (focus: string | undefined, argv: string[]) => {
 let release = async (args: string[]) => {
   let [id] = args
   if (!id) throw new Error('task release <id>')
-  let row = find(rows(await snapshot()), id)
-  if (!row) throw new Error(`no entity: ${id}`)
+  let row = need(rows(await snapshot()), id)
   await send([{ eid: row.eid, name: 'claim', comp: null }])
   console.log(`${idOf(row)} released`)
 }
@@ -951,8 +948,7 @@ let release = async (args: string[]) => {
 // durable: it survives a daemon restart because the desire, not the process,
 // is what got written down.
 let roleOf = (all: Row[], id: string) => {
-  let row = find(all, id)
-  if (!row) throw new Error(`no entity: ${id}`)
+  let row = need(all, id)
   if (!row.comps.role) throw new Error(`not a role: ${id}`)
   return row
 }
@@ -1036,10 +1032,8 @@ let dep = async (args: string[]) => {
     throw new Error(`edge type is one of: ${edges.join(', ')}`)
   }
   let all = rows(await snapshot())
-  let row = find(all, id)
-  let child = find(all, childId)
-  if (!row) throw new Error(`no entity: ${id}`)
-  if (!child) throw new Error(`no entity: ${childId}`)
+  let row = need(all, id)
+  let child = need(all, childId)
   await send([{
     eid: row.eid,
     name: 'dependency',
@@ -1075,8 +1069,7 @@ let comment = async (args: string[]) => {
     throw new Error('task comment <id> [text...] [--verdict=...]')
   }
   let all = rows(await snapshot())
-  let row = find(all, id)
-  if (!row) throw new Error(`no entity: ${id}`)
+  let row = need(all, id)
   let made = commentChanges(all, row.eid, body, me(), { verdict })
   await send(made)
   // Hand back the comment's OWN id, like every other mint door. Without it a
@@ -1097,8 +1090,7 @@ let show = async (args: string[]) => {
   if (!id) throw new Error('task show <id> [--json]')
   let snap = await snapshot()
   let all = rows(snap)
-  let row = find(all, id)
-  if (!row) throw new Error(`no entity: ${id}`)
+  let row = need(all, id)
   if (json) {
     // The machine shape, unchanged forever: scripts parse this.
     let comments = all.filter((r) => r.comps.comment?.target_eid == row.eid)
@@ -1117,8 +1109,7 @@ let past = async (args: string[]) => {
   let id = args.find((a) => !a.startsWith('-'))
   if (!id) throw new Error('task history <id> [-n N]')
   let all = rows(await snapshot())
-  let row = find(all, id)
-  if (!row) throw new Error(`no entity: ${id}`)
+  let row = need(all, id)
   let entries = await history(row.eid, n)
   if (json) return console.log(JSON.stringify(entries, null, 2))
   if (!entries.length) return console.log(`${idOf(row)}: no history`)

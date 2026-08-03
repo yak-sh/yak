@@ -1802,6 +1802,54 @@ Deno.test('derefParams: project references accept P-nums and eids', () => {
   assertEquals(one(`.project=${p}`), p)
 })
 
+// The failure fires exactly when someone reasons from the fleet id: the
+// project called `tasks` answers to `home`. Naming the near match is safe
+// only because it is checked to RESOLVE before it is offered.
+Deno.test('derefParams: a failed project names the alias that would work', () => {
+  let p = 'aaaaaaaa-0000-4000-8000-000000000004'
+  let q = 'aaaaaaaa-0000-4000-8000-000000000005'
+  let graph = rows({
+    changes: [
+      ...snap.changes,
+      { eid: p, name: 'entity', comp: { eid: p, num: 19 } },
+      { eid: p, name: 'doc', comp: { title: 'Task Graph', body: '' } },
+      { eid: p, name: 'alias', comp: { slug: 'home' } },
+      { eid: p, name: 'project', comp: {} },
+      { eid: q, name: 'entity', comp: { eid: q, num: 20 } },
+      { eid: q, name: 'doc', comp: { title: 'holdco', body: '' } },
+      { eid: q, name: 'alias', comp: { slug: 'holdco' } },
+      { eid: q, name: 'project', comp: {} },
+    ],
+  })
+  let one = (s: string) => derefParams(graph, [param(s)!])[0].value
+  assertEquals(one('.project=home'), p) // the handle that works
+  assertThrows(
+    () => one('.project=tasks'),
+    Error,
+    "no project 'tasks' — did you mean 'home' (P-19, Task Graph)?",
+  )
+  assertThrows(
+    () => one('.project=holdc'),
+    Error,
+    "did you mean 'holdco' (P-20, holdco)?",
+  )
+  // Nothing close: the grammar line, plainly — never a guess that routes
+  // nowhere, because the caller is already confused when they read it.
+  assertThrows(
+    () => one('.project=flux'),
+    Error,
+    "project_eid is a human id / alias / UUID — got 'flux'",
+  )
+  // The declared target narrows the search: `First` is a task, so a bad
+  // project is never answered with one.
+  assertThrows(
+    () => one('.project=Frist'),
+    Error,
+    'a human id / alias / UUID',
+  )
+  assertThrows(() => one('.assignee=Frist'), Error, 'did you mean T-2 (First)?')
+})
+
 Deno.test('edgesOf: both directions, ids humanized', () => {
   let all = rows(snap)
   let out = edgesOf(snap, all, T1)

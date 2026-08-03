@@ -21,6 +21,7 @@ import {
 } from './types.ts'
 import { idOf } from './types.ts'
 import { formatProp, parseProp, propAt } from './props.ts'
+import { nearest, offer } from './near.ts'
 import { hot, matchQuery, type Pred, route } from './query.ts'
 import { FLOOR } from './embed.ts'
 import { request } from './http.ts'
@@ -468,16 +469,46 @@ export let param = (arg: string): Param | null => {
 // the door throws, never a silent FK failure later. One resolver for
 // every write door (CLI, MCP task_new/update/command, graph_apply).
 let UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-export let deref = (all: Row[], v: string, where = '') => {
-  if (!v || UUID.test(v)) return v
-  let hit = find(all, v)
-  if (!hit) throw new Error(`no entity: ${v}${where}`)
-  return hit.eid
+// The near match, offered only once the handle it prints RESOLVES here —
+// find() is the same reading of "what names an entity" the caller just
+// failed, so a suggestion can never route somewhere the retry won't.
+// `comp` narrows to the reference's declared target, so a bad `.project=`
+// is only ever answered with a project.
+export let nearby = (all: Row[]) => (v: string, comp = '') => {
+  let hit = nearest(
+    v,
+    all.filter((r) => !comp || r.comps[comp]).map((r) => ({
+      eid: r.eid,
+      id: idOf(r),
+      alias: r.comps.alias?.slug as string | undefined,
+      title: r.comps.doc?.title as string | undefined,
+    })),
+  )
+  if (!hit) return
+  return find(all, hit.alias ?? hit.id)?.eid == hit.eid ? offer(hit) : undefined
 }
-let derefProp = (all: Row[], prop: string, value: unknown) =>
+// find(), where a miss is the door's error. One message for every lookup,
+// so a mistyped handle teaches at whichever door heard it.
+export let need = (all: Row[], id: string, where = '', comp = '') => {
+  let hit = find(all, id)
+  if (hit) return hit
+  let near = nearby(all)(id, comp)
+  throw new Error(
+    `no entity: ${id}${where}${near ? ` — did you mean ${near}?` : ''}`,
+  )
+}
+export let deref = (all: Row[], v: string, where = '', comp = '') =>
+  !v || UUID.test(v) ? v : need(all, v, where, comp).eid
+// The reference's declared target ({eid: 'project'}), '' where any entity
+// will do — what narrows a suggestion to the kind the column takes.
+let targetOf = (comp: string, prop: string) => {
+  let t = propAt(comp, prop)?.type
+  return typeof t == 'object' && 'eid' in t ? t.eid : ''
+}
+let derefProp = (all: Row[], name: string, prop: string, value: unknown) =>
   prop.endsWith('_eid') &&
     (typeof value == 'string' || typeof value == 'number')
-    ? deref(all, String(value), ` (.${prop})`)
+    ? deref(all, String(value), ` (.${prop})`, targetOf(name, prop))
     : value
 export let derefParams = (all: Row[], ps: Param[]) =>
   ps.map((p) => {
@@ -485,6 +516,7 @@ export let derefParams = (all: Row[], ps: Param[]) =>
     let value = typeof declared.type == 'object' && 'eid' in declared.type
       ? parseProp(declared, p.value, {
         resolve: (id) => find(all, id)?.eid,
+        near: nearby(all),
       })
       : p.value
     return { ...p, value }
@@ -495,7 +527,7 @@ export let derefChanges = (all: Row[], changes: Change[]) =>
     eid: deref(all, c.eid, ' (eid)'),
     comp: c.comp == null ? c.comp : Object.fromEntries(
       Object.entries(c.comp)
-        .map(([prop, value]) => [prop, derefProp(all, prop, value)]),
+        .map(([prop, value]) => [prop, derefProp(all, c.name, prop, value)]),
     ),
   }))
 let named = (v: unknown) =>
