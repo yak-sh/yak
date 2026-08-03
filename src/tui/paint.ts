@@ -112,24 +112,44 @@ let inherit = (parent: Style, node: Style): Style => ({
   href: node.href ?? parent.href,
 })
 
+// Content may not SPEAK to the terminal. A title, a comment, a memory, a
+// letter off the open internet — none of it is written by the operator, and
+// all of it is painted, so the whole control class goes rather than ESC
+// alone: 0x9b is CSI to a terminal reading C1, \r and its neighbours move
+// the cursor out of the absolute frame, and a bare BEL closes an OSC the
+// painter opened. What stays is what the graph gives meaning — \n, the break
+// blocks() splits on, and \x01/\x02, which bracket an FTS snippet's hit. A
+// tab becomes spaces rather than a stop the terminal picks.
+// deno-lint-ignore no-control-regex -- the control class IS the subject
+let ctrl = /[\x00-\x1f\x7f-\x9f]/g
+let keep = new Set('\x01\x02\n')
+let safe = (s: string) =>
+  s.replaceAll('\t', '  ').replace(ctrl, (c) => keep.has(c) ? c : '')
+
 let inline = (n: TNode, st: Style): Seg[] => {
   if (n instanceof TText) {
-    // \n survives as a break (blocks() splits on it); \r and \t would let
-    // the terminal do its own cursor moves — one scrolled line breaks the
-    // whole absolute-positioned frame.
-    let text = n.data.replaceAll('\r', '').replaceAll('\t', '  ')
+    let text = safe(n.data)
     return text ? [{ text, style: st }] : []
   }
   let el = n as TElement
   let o = own(el)
-  if (el.localName == 'a' && el.attr('href')) o.href = el.attr('href')
+  // An href is content too — a markdown link in a body writes one — and it
+  // rides inside an OSC 8, where a single BEL ends the sequence and lets the
+  // rest of the URL run as its own. A URL needs nothing from the class.
+  if (el.localName == 'a' && el.attr('href')) {
+    o.href = el.attr('href')!.replace(ctrl, '')
+  }
   let s = inherit(st, o)
   if (o.glyph) return [{ text: o.glyph, style: s }]
   return el.childNodes.flatMap((c) => inline(c, s))
 }
 
+// The <pre> path's text, sanitized at the same seam — a text node's data is
+// never painted raw, whichever branch reaches it.
 let text = (n: TNode): string =>
-  n instanceof TText ? n.data : (n as TElement).childNodes.map(text).join('')
+  n instanceof TText
+    ? safe(n.data)
+    : (n as TElement).childNodes.map(text).join('')
 
 let blocks = (el: TElement, st: Style): Line[] => {
   let o = own(el)
@@ -182,7 +202,9 @@ let rgb = (hex: string) =>
   [hex.slice(1, 3), hex.slice(3, 5), hex.slice(5, 7)]
     .map((h) => parseInt(h, 16))
 
-let ansi = (line: Line): string =>
+// The bytes a line becomes — every escape the terminal sees is emitted HERE
+// or by paint(), never by content. Exported so the test can read the stream.
+export let ansi = (line: Line): string =>
   line.map((s) => {
     let codes: string[] = []
     if (s.style.fg) codes.push(`38;2;${rgb(s.style.fg).join(';')}`)
@@ -228,7 +250,7 @@ export let clipboard = (text: string) => {
 // The lines a tree makes, minus the statusbar the app pins to the bottom
 // row. The window and `l` read the same list, so what the cursor is on is
 // exactly what you see it on.
-let pane = (root: TElement) => {
+export let pane = (root: TElement) => {
   let lines = blocks(root, {})
   while (lines.length && !lines[lines.length - 1].length) lines.pop()
   let status = lines.pop() ?? []

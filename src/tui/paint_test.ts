@@ -1,6 +1,8 @@
-// The window: where a screenful sits over the content, given a cursor.
-import { assertEquals } from '@std/assert'
-import { win } from './paint.ts'
+// The window: where a screenful sits over the content, given a cursor — and
+// the escape invariant: content never speaks to the terminal.
+import { assertEquals, assertStringIncludes } from '@std/assert'
+import { TElement, TNode, TText } from './dom.ts'
+import { ansi, pane, win } from './paint.ts'
 
 // top, cursor, window height, content height -> where the window sits
 let cases: [number[], number][] = [
@@ -21,4 +23,59 @@ Deno.test('the window follows the cursor and stops at both ends', () => {
   for (let [[top, at, h, n], want] of cases) {
     assertEquals(win(top, at, h, n), want, `win(${top}, ${at}, ${h}, ${n})`)
   }
+})
+
+// A div wearing a class, and the bytes a tree hands the terminal — what
+// paint() writes, minus the screen it measures.
+let div = (cls: string, ...kids: (TNode | string)[]) => {
+  let e = new TElement('div')
+  e.className = cls
+  for (let k of kids) e.appendChild(typeof k == 'string' ? new TText(k) : k)
+  return e
+}
+let bytes = (...kids: TNode[]) => {
+  let root = new TElement('root')
+  for (let k of kids) root.appendChild(k)
+  let p = pane(root)
+  return [...p.lines, p.status].map(ansi).join('\n')
+}
+
+// A task title, a comment, a letter from the open internet — all painted,
+// none of it written by the operator.
+let content: [string, string, string][] = [
+  [
+    'ESC goes, so no CSI/OSC/DCS can form',
+    'a\x1b]52;c;QQ==\x07b',
+    'a]52;c;QQ==b',
+  ],
+  ['erase-display never forms', 'a\x1b[2Jb', 'a[2Jb'],
+  ['C1 goes too — 0x9b is CSI to some terminals', 'a\x9b2Jb', 'a2Jb'],
+  ['DEL goes', 'a\x7fb', 'ab'],
+  ['\\r goes — it would move the cursor in the frame', 'a\rb', 'ab'],
+  ['NUL and the rest of C0 go', 'a\x00\x05\x0e\x1fb', 'ab'],
+  ['an FTS snippet keeps its hit marks', 'a \x01hit\x02 b', 'a \x01hit\x02 b'],
+  ['\\n stays a line break', 'a\nb', 'a\nb'],
+  ['\\t expands to spaces we chose', 'a\tb', 'a  b'],
+]
+
+Deno.test('content cannot speak to the terminal', () => {
+  for (let [what, data, want] of content) {
+    assertEquals(bytes(div('', data)), want, what)
+  }
+})
+
+Deno.test('the painter still speaks: SGR, OSC 8, and a sanitized href', () => {
+  // Style the sheet knows is emitted by ansi(), not by the content.
+  assertStringIncludes(bytes(div('Md_B', 'bold')), '\x1b[1mbold\x1b[0m')
+
+  // A markdown link's href is content: a BEL in it would close the OSC 8
+  // early and let the tail run as a clipboard write of its own.
+  let a = new TElement('a')
+  a.className = 'Md_A'
+  a.setAttribute('href', 'http://x/\x07\x1b]52;c;QQ==\x07')
+  a.appendChild(new TText('click'))
+  let out = bytes(div('', a))
+  assertStringIncludes(out, '\x1b]8;;http://x/]52;c;QQ==\x07')
+  assertEquals(out.includes('\x1b]52'), false, 'no clipboard write')
+  assertStringIncludes(out, '\x1b]8;;\x07') // and the link still closes
 })
