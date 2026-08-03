@@ -306,7 +306,7 @@ When a budget is **pre-paid and use-it-or-lose-it**, glide cumulative usage to l
 
 Every artifact (task, doc, persona, memory, etc.) you write should state **the current state** — brief and crisp.
 
-**Say the rule, then stop.** A few short paragraphs. Cut the examples, the tables, the tests, and the reasoning that got you there — they age faster than the rule and bury it. If it reads like an essay, it is too long.
+**Say the rule, then stop.** A few short paragraphs. Cut the tables, the tests, and the reasoning that got you there — they age faster than the rule and bury it. Keep an example only when it gives what the rule can't: a literal spelling, an API shape. Illustrating something the reader already understands is bulk. (Code is the exception — a doctest runs, so it can't drift.)
 
 **No war stories**: dates, quotes, or "supersedes" notes: provenance lives in the history. A doc stands on its own or it doesn't belong.
 
