@@ -118,22 +118,26 @@ The general shape: **when a step protects against your own context ending, it ca
 
 - **On GREEN, the wake is scheduled — including when you found nothing to do.** "Idle" is not an exemption; it is the case that most needs it. An operator with no wake row is indistinguishable from a dead one, so a quiet venture stays quiet until holdco happens to notice, and fleet throughput becomes a function of someone else's polling instead of your own pacing. Self-pacing is yours; holdco knocking you is the safety net, not the mechanism. **Blocked on one thing is not blocked** — check the rest of your board before concluding there is nothing.
 - **At YELLOW or RED, schedule no wake and go idle.** Don't weigh whether your own work is the exception — that judgement is the thing being removed. The process stays alive at the prompt. (If you scheduled a wake at the top of the pass and the signal has since gone YELLOW, clear it.)
+- **The burn is the one exception, and it is still mechanical.** On the window's final day the pace sleep is short and load-bearing: `alloc` is a line rising to the target at the reset, so a YELLOW lifts on its own within the hour and the number says exactly when. Take it verbatim there, the same as on GREEN. Going dark on a burn day is how a week's pre-paid remainder expires unspent.
 - **Parking is not abandonment.** holdco keeps watch through YELLOW and knocks you awake the pass the signal turns GREEN. Don't poll for GREEN yourself.
 - **Idle is not deaf.** The `tasks` channel starts a turn for comments, knocks and verified mail addressed to you; prod and CI alerts arrive on their own channels. Genuinely urgent work still proceeds, and owner-assigned work lands regardless of the signal.
 - **Nothing tracks who is parked.** "Parked" is just the absence of a wake and the signal is a pure function of the token ledger, so there is no state to keep in sync. Knocked during YELLOW by mistake? Take the pass, read the signal, decline to reschedule.
 
-## The signal is quantized — it cannot flip mid-day
+## The signal is quantized six days a week, and continuous on the seventh
 
-`alloc` is a step function of **whole elapsed midnights** (`15 × weekdays + 1 × nights`, Michigan), not a smooth accrual, and burning tokens only ever pushes `left` down. So nothing you do can lift YELLOW, and it cannot lift itself between midnights. Only two events can:
+`alloc` is a step function of **whole elapsed midnights** (`15 × weekdays + 1 × nights`, Michigan), not a smooth accrual, and burning tokens only ever pushes `left` down. So nothing you do can lift YELLOW, and it cannot lift itself between midnights. Only three events can:
 
 - **the next local midnight** — `alloc` steps, and `dow` rolls
 - **the cap reset** — `used` drops
+- **the burn, on the window's final day** — `alloc` becomes a rising line rather than a step, so it lifts YELLOW continuously through the day
 
-Weekends are forced YELLOW outright (`dow >= 6`, where Mon=1…Sun=7), regardless of budget. A Friday that is over the line therefore stays YELLOW until **Monday**, and re-checking hourly through it is pure waste.
+Weekends are forced YELLOW outright (`dow >= 6`, where Mon=1…Sun=7), regardless of budget — unless the burn is on, which overrides it, since the band expires either way. A Friday that is over the line therefore stays YELLOW until **Monday**, and re-checking hourly through it is pure waste.
 
-The pace line's sleep already encodes all of this — it is seconds until the nearer of those two boundaries, so taking it verbatim is the whole decision and hand-reasoning about midnights is never needed. A `hold` pin or an owner lever keeps a flat hourly re-check on purpose, since those can change at any moment.
+The pace line's sleep already encodes all of this — it is seconds until the nearer of those boundaries, or until the rising line reaches you during a burn, so taking it verbatim is the whole decision and hand-reasoning about midnights is never needed. A `hold` pin or an owner lever keeps a flat hourly re-check on purpose, since those can change at any moment.
 
-**`alloc` clamps at 80** — the top band is the owner's reserved headroom. So the fleet self-limits: as `used` approaches 80 the operators park on their own. Near a reset that band is *use-it-or-lose-it*, and spending it down is holdco's job, not theirs — which is why a Monday prints `MONDAY-BURN target~99 by Tue 07:00`.
+**`alloc` clamps at 80** — the top band is the owner's reserved headroom for the projects he assigns, so the fleet self-limits: as `used` approaches 80 the operators park on their own. But that band is pre-paid and expires at the reset, so on the **final day of the window** the clamp is replaced by a line rising 80→99 at the reset, and the hard/RED line rides the target up with it. Spending it down is the whole fleet's job, not holdco's alone — the ventures hold the backlogs, and holdco working solo burns roughly a tenth of what they do together. Work under the line, park ahead of it, take the pace sleep verbatim. `burn_target_pct` is the dial; the clamp is never lifted by hand.
+
+The burn keys off `cap.reset`, never the weekday. In practice the reset is 07:00 Tuesday and this is the Monday burn, but a week whose window opened on a Saturday also has a Monday — one five days from its reset, where burning would blow the real cap.
 
 ## Verifying the fleet is parked — query the wakes, not the sessions
 
