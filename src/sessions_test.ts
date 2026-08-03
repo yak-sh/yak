@@ -795,7 +795,7 @@ Deno.test('a settled lifecycle stamp is one replayable moved patch', async () =>
   )
 })
 
-Deno.test('bad lines are diagnosed, and the ending is the FIRST one', async () => {
+Deno.test('tail diagnoses never override a successful ending', async () => {
   let eid = plant([
     INIT,
     '{"type":"message", this is not json',
@@ -806,12 +806,40 @@ Deno.test('bad lines are diagnosed, and the ending is the FIRST one', async () =
   recover(cast)
   await running.get(eid)!.done
   let s = row(eid)!
-  assertEquals(s.status, 'failed') // a log with holes is not a clean run
+  assertEquals(s.status, 'completed')
   assertEquals(s.final_text, 'first') // the late result never lands
   assertEquals(s.latest_seq, 5) // every line counted, none skipped
   assertMatch(String(s.error), /line 2: malformed/)
-  assertMatch(String(s.error), /line 4: oversized/)
+  assertMatch(String(s.error), /line 4: truncated \(1100028 bytes/)
   assertMatch(String(s.error), /line 5: output after the terminal event/)
+})
+
+Deno.test('an oversized line is truncated and the tail reaches exit 0', async () => {
+  let huge = JSON.stringify({ type: 'message', text: 'x'.repeat(1_100_000) })
+  let eid = plant([
+    INIT,
+    huge,
+    '{"type":"message","text":"after"}',
+    '{"type":"result","final_text":"done after truncation"}',
+  ])
+  Deno.writeTextFileSync(`${logsDir()}/${eid}.code`, '0')
+  recover(cast)
+  await running.get(eid)!.done
+
+  let s = row(eid)!
+  assertEquals(s.status, 'completed')
+  assertEquals(s.exit_code, 0)
+  assertEquals(s.final_text, 'done after truncation')
+  assertEquals(s.latest_seq, 4)
+  assertMatch(String(s.error), /line 2: truncated \(1100028 bytes/)
+
+  let entries = logs(eid, new URLSearchParams()).entries
+  assertEquals(entries.map((e) => e.seq), [1, 2, 3, 4])
+  assert(entries[1].line.startsWith('{"type":"message","text":"xxx'))
+  assert(entries[1].line.endsWith('… [truncated]'))
+  assertEquals(entries[1].row, undefined)
+  assertEquals(JSON.parse(entries[2].line).text, 'after')
+  assertEquals(JSON.parse(entries[3].line).final_text, 'done after truncation')
 })
 
 Deno.test('boot: a resumed log re-opens at its input marker', async () => {

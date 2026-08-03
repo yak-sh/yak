@@ -147,8 +147,12 @@ let birth = () => Number(Deno.env.get('BIRTH_GRACE_MS') ?? 10_000)
 let sleep = (ms: number) => new Promise((go) => setTimeout(go, ms))
 let now = () => new Date().toISOString()
 
-// A line past this is a runaway, not an event: diagnosed, never parsed.
-let MAX_LINE = 1_000_000
+// Whole logs routinely span megabytes; a single JSONL event should not.
+// One decimal megabyte keeps a runaway tool result out of the adapter while
+// leaving the file intact for inspection.
+let lineCap = 1_000_000
+let utf8 = new TextEncoder()
+let byteLength = (s: string) => utf8.encode(s).length
 
 // ---- the one writer ----
 
@@ -454,8 +458,11 @@ let drain = async (eid: string, ad: Adapter, t: Tail, cast: Cast) => {
   for (let line of lines) {
     t.seq++
     if (!line.trim()) continue // a blank line is a line, not a fault
-    if (line.length > MAX_LINE) {
-      t.errs.push(`line ${t.seq}: oversized (${line.length} bytes)`)
+    let size = byteLength(line)
+    if (size > lineCap) {
+      t.errs.push(
+        `line ${t.seq}: truncated (${size} bytes; ${lineCap} byte cap)`,
+      )
       continue
     }
     let e: Event
@@ -541,11 +548,11 @@ let following = (eid: string, ad: Adapter, cast: Cast, from?: Tail) => {
   return done
 }
 
-// The ending, derived rather than announced: a clean exit that reached the
-// provider's terminal event with nothing malformed on the way is the only
-// way to complete. A stop we asked for and then OBSERVED is interrupted —
-// stop() never stamps that itself, because a signal sent is not a process
-// ended.
+// The ending, derived rather than announced: the process exit and provider's
+// terminal event own lifecycle. A tailing diagnosis belongs beside that
+// status in error; an observer cannot turn its subject's success into failure.
+// A stop we asked for and then OBSERVED is interrupted — stop() never stamps
+// that itself, because a signal sent is not a process ended.
 let finish = async (eid: string, t: Tail, run: Run, cast: Cast) => {
   let row = db.prepare(
     `select stop_requested_at, input_at, provider_session_id
@@ -568,7 +575,7 @@ let finish = async (eid: string, t: Tail, run: Run, cast: Cast) => {
       code = run.code()
     }
   }
-  let ok = t.ended && !t.errs.length && (code ?? 0) == 0
+  let ok = t.ended && (code ?? 0) == 0
   // A stillborn launch wrote no log to diagnose — its only witness is the
   // launcher's own stderr (systemd's refusal, an unreachable user bus),
   // which otherwise sits in a file nobody thinks to read.
@@ -706,7 +713,10 @@ let trail = async (eid: string, cast: Cast) => {
 
 // ---- reading the log back ----
 
-let clip = (s: string) => s.length > 64_000 ? `${s.slice(0, 64_000)}…` : s
+// Every record stays addressable by seq. Its first 64,000 characters are
+// enough to inspect a runaway without shipping its full payload to a client.
+let clip = (s: string) =>
+  s.length > 64_000 ? `${s.slice(0, 64_000)}… [truncated]` : s
 
 // One line, normalized for the renderer: the synthetic input line is a
 // `say` from the human for EVERY provider (so it's handled here, before any
@@ -748,11 +758,11 @@ let readerOf = (eid: string) => {
 // the session, not its last screenful. `after=N` reads forward from seq N
 // (the delta a tailing reader asks for, and how the pane stays cheap),
 // `tail=N` the last N lines, and `limit` caps a page only when a caller
-// names one: nothing here truncates unbidden. Each line carries its
-// renderer `row` (the adapter's normalization — omitted when the line isn't
-// worth one). stderr rides along whole (its tail, anyway) — unordered
-// diagnostics, plainly labelled as such. v0 reads the file per request; when
-// logs get big this is where a seq→offset index goes.
+// names one: no records are dropped unbidden. Each line within the parser cap
+// carries its renderer `row` (the adapter's normalization — omitted when the
+// line is oversized or isn't worth one). stderr rides along whole (its tail,
+// anyway) — unordered diagnostics, plainly labelled as such. v0 reads the file
+// per request; when logs get big this is where a seq→offset index goes.
 export let logs = (eid: string, q: URLSearchParams) => {
   let text = ''
   try {
@@ -768,8 +778,9 @@ export let logs = (eid: string, q: URLSearchParams) => {
     : Math.max(0, Number(q.get('after')) || 0)
   let entries = lines.slice(from, limit > 0 ? from + limit : undefined)
     .map((line, i) => {
-      let row = rowOf(line, read)
-      return { seq: from + i + 1, line: clip(line), ...(row ? { row } : {}) }
+      let shown = clip(line)
+      let row = byteLength(line) <= lineCap ? rowOf(line, read) : undefined
+      return { seq: from + i + 1, line: shown, ...(row ? { row } : {}) }
     })
   let err = errTail(eid)
   return { entries, ...(err ? { stderr: err } : {}) }
