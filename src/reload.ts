@@ -31,6 +31,9 @@ export let serverFiles = [
   'adapters.ts',
   'telemetry.ts',
   'mail.ts',
+  // The markdown door is a browser module AND the mailer's renderer, so a
+  // client-only swap would leave outbound mail rendering from stale code.
+  'md.ts',
   'mailer.ts',
   'persona.ts',
   'git.ts',

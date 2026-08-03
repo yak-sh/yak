@@ -13,7 +13,7 @@
 // bounces whatever the routing rules say. Canonicalizing at send
 // (lowercase, shed underscores) is the only reliable fix; every other
 // domain passes untouched.
-import { md } from './md.ts'
+import { mdAbs } from './md.ts'
 
 export let canon = (to: string) => {
   let m = /^([^@]+)@(bot\.yak\.sh)$/i.exec(to.trim())
@@ -44,15 +44,18 @@ export let base = () =>
 
 // A letter → the Email Sending payload: the
 // display name is the local-part, reply_to echoes the sender, and the
-// threading headers carry the bracketed Message-ID. Pure — the tested
-// seam.
+// threading headers carry the bracketed Message-ID. The HTML part renders
+// through mdAbs: a mail client has no base document, so the canvas's
+// relative `/T-123` would reach the reader as `http:///T-123` (T-12558).
+// The text part stays the body as written — the bare id is the address.
+// Pure — the tested seam.
 export let payload = (l: Letter) => ({
   from: { address: l.from, name: l.from.split('@')[0] },
   to: [l.to],
   reply_to: l.from,
   subject: l.subject,
   text: l.body,
-  html: md(l.body),
+  html: mdAbs(l.body),
   ...(l.mid
     ? {
       headers: { 'In-Reply-To': `<${l.mid}>`, References: `<${l.mid}>` },

@@ -397,16 +397,24 @@ Deno.test('payload: text and rendered markdown, threading headers on mid', () =>
     from: 'ops@bot.yak.sh',
     to: 'jeff@yak.sh',
     subject: 'subj',
-    body: '**bold** https://example.com and T-123',
+    body: '**bold** https://example.com and T-123 and [idea](T-124)',
   })
   assertEquals(p.from, { address: 'ops@bot.yak.sh', name: 'ops' })
   assertEquals(p.to, ['jeff@yak.sh'])
   assertEquals(p.reply_to, 'ops@bot.yak.sh')
   assertEquals(p.subject, 'subj')
-  assertEquals(p.text, '**bold** https://example.com and T-123')
+  assertEquals(
+    p.text,
+    '**bold** https://example.com and T-123 and [idea](T-124)',
+  )
   assertStringIncludes(p.html, '<strong>bold</strong>')
   assertStringIncludes(p.html, '<a href="https://example.com">')
-  assertStringIncludes(p.html, 'href="/T-123" data-ref="T-123"')
+  // Absolute, and no data-ref: a mail client has no base document to
+  // resolve `/T-123` against, and nothing to bind data-ref to (T-12558).
+  assertStringIncludes(p.html, '<a href="https://tasks.yak.sh/T-123">T-123</a>')
+  assertStringIncludes(p.html, '<a href="https://tasks.yak.sh/T-124">idea</a>')
+  assertEquals(p.html.includes('data-ref'), false)
+  assertEquals(p.html.includes('href="/'), false)
   assertEquals(p.headers, undefined)
   let r = payload({
     from: 'a@b.c',

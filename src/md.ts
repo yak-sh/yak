@@ -11,8 +11,14 @@
 // them the in-app click (peek/navigate) and entity menu while new-tab forms
 // stay native. Code spans and blocks keep ids literal (the tokenizer never
 // enters consumed code).
-import { marked } from 'marked'
+//
+// The door comes in two: `md` for the canvas, `mdAbs` for a reader with
+// no base document to resolve `/T-123` against — an email client turns
+// that into `http:///T-123` (T-12558). Same parse, same everything, one
+// difference (how a ref becomes an href), so neither can drift.
+import { Marked } from 'marked'
 import { prefix } from './types.ts'
+import { entityUrl } from './url.ts'
 
 // The vendored marked ships no types — the two token shapes we touch.
 type RefToken = { id?: unknown }
@@ -24,33 +30,42 @@ type Inline = { parser: { parseInline: (t: unknown) => string } }
 // SHA-256 stay words because their letters sit mid-word.
 let LETTERS = [...new Set([...Object.values(prefix), 'D'])].join('|')
 let REF = new RegExp(`^(?:${LETTERS})-\\d+\\b`)
-let refLink = (id: string, text: string) =>
-  `<a href="/${id}" data-ref="${id}">${text}</a>`
 
-marked.use({
-  gfm: true,
-  breaks: true,
-  extensions: [{
-    name: 'ref',
-    level: 'inline',
-    start: (src: string) =>
-      src.match(new RegExp(`\\b(?:${LETTERS})-\\d`))?.index,
-    tokenizer(src: string) {
-      let m = REF.exec(src)
-      if (m) return { type: 'ref', raw: m[0], id: m[0] }
-    },
-    renderer: (t: RefToken) => refLink(String(t.id), String(t.id)),
-  }],
-  renderer: {
-    // A written link aimed at an id gets the same in-app anchor; every
-    // other link keeps marked's own rendering.
-    link(this: Inline, token: LinkToken) {
-      if (/^[A-Za-z]+-\d+$/.test(token.href)) {
-        return refLink(token.href, this.parser.parseInline(token.tokens))
-      }
-      return false
-    },
-  },
-})
+type Ref = (id: string, text: string) => string
 
-export let md = (s: string): string => marked.parse(s) as string
+let door = (ref: Ref) =>
+  new Marked({
+    gfm: true,
+    breaks: true,
+    extensions: [{
+      name: 'ref',
+      level: 'inline',
+      start: (src: string) =>
+        src.match(new RegExp(`\\b(?:${LETTERS})-\\d`))?.index,
+      tokenizer(src: string) {
+        let m = REF.exec(src)
+        if (m) return { type: 'ref', raw: m[0], id: m[0] }
+      },
+      renderer: (t: RefToken) => ref(String(t.id), String(t.id)),
+    }],
+    renderer: {
+      // A written link aimed at an id gets the same anchor as a bare one;
+      // every other link keeps marked's own rendering.
+      link(this: Inline, token: LinkToken) {
+        if (/^[A-Za-z]+-\d+$/.test(token.href)) {
+          return ref(token.href, this.parser.parseInline(token.tokens))
+        }
+        return false
+      },
+    },
+  })
+
+let canvas = door((id, text) => `<a href="/${id}" data-ref="${id}">${text}</a>`)
+
+// Away from the canvas data-ref has nothing to bind to — the delegated
+// listeners aren't there — so the anchor sheds it rather than mailing
+// inert markup out.
+let away = door((id, text) => `<a href="${entityUrl(id)}">${text}</a>`)
+
+export let md = (s: string): string => canvas.parse(s) as string
+export let mdAbs = (s: string): string => away.parse(s) as string
