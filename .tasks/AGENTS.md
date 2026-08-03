@@ -70,16 +70,16 @@ exist.
 `{view, match,
 Render}` where `match(e)` returns a score — `has('doc','task')`
 counts matched components, `true` = 0.5 for catch-alls; highest score wins the
-view, ties go to registration order. `components/View.tsx` is the curated list +
-the `<View eid view/>` front door. The TUI boots by `extend()`ing overrides
-(same views, painted as terminal lines) — that's also the seam a future renderer
-plugin would use. registry.ts imports no views, so anything may import matchers
-from it without cycles.
+view, ties go to registration order. `components/Entity.tsx` holds the curated
+list and the `<Entity eid view/>` front door. The TUI boots by `extend()`ing
+overrides (same views, painted as terminal lines). That's also the seam a
+future renderer plugin would use. `registry.ts` imports no views, so
+anything may import matchers from it without cycles.
 
-**To add a view**: component file under `components/views/`, entry in View.tsx's
-`define()` list; to make it a card tab, add its name to the tabs array there and
-an icon row in `Card.tsx` + `components/icons.tsx` (vendored Lucide paths — add
-a row, not a dependency).
+**To add a view**: add its component file under `components/views/`, then add
+an entry to `Entity.tsx`'s `define()` list. To make it a card tab, add its name
+to the tabs array there, map it to an icon in `Card.tsx`, and add the glyph in
+`components/icons.tsx` (vendored Lucide paths — add a row, not a dependency).
 
 ## Navigation (web)
 
@@ -93,10 +93,11 @@ deliberate in-place root change, plus "open in new tab") belongs to the CARD —
 right-click its pin anywhere that isn't a link, input, or editable text
 (`components/nav.tsx` owns route/navigate/menu, all guarded for the TUI). Below
 navigation the menu lists the entity's VERBS, contributed per component with
-UNION semantics (registry `defineActions`/`actionsFor`, curated in View.tsx like
-the renderers): a task offers its status moves, a claim its release, anything
-its delete. Adding a verb = one contributor row. A canvas offers a `List` view —
-the mobile door — whose rows resolve through `List.Item`.
+UNION semantics (`defineActions`/`actionsFor` in the registry, curated beside
+the renderers in `Entity.tsx`): a task offers its status moves, a claim its
+release, and anything its delete. Adding a verb is one contributor row. A
+canvas offers a `List` view — the mobile door — whose rows resolve through
+`List.Item`.
 
 ## Map
 
@@ -125,7 +126,7 @@ the mobile door — whose rows resolve through `List.Item`.
 | `src/sandbox.ts`   | code mode's worker: permissionless, graph-only, postMessage SDK            |
 | `src/live.ts`      | browser/TUI half: cache signal, socket, applyLocal/mutate, ent()           |
 | `src/paste.ts`     | clipboard/drop text → entity spec (ids, URLs, JSON, plain text)            |
-| `src/components/`  | web UI: registry.ts + View.tsx, nav.tsx (routing), Canvas, Card, Edit, …   |
+| `src/components/`  | web UI: registry.ts + Entity.tsx, nav.tsx (routing), Canvas, Card, Edit, …   |
 | `src/tui/`         | fake DOM (dom.ts), ANSI painter (paint.ts), Md, App (vim keys), main       |
 | `src/vendor/`      | preact/signals/snarkdown as plain ESM — no node_modules                    |
 
@@ -458,11 +459,17 @@ deduped, retention) — see the holdco board.
 
 ## Plugins (direction, not yet built)
 
-The seams a plugin story will use already exist: `extend()` for renderers, the
-`comps` list for data models, `mcpServer(io)` for tools, the CLI verb table.
-Keep those narrow and curated — a plugin should be "a module that exports
-Renderer[] / a comps fragment", not a framework. If a change makes one of these
-seams wider or leakier, that's the wrong direction.
+No plugin loader exists yet: `src/main.tsx`, `src/server.ts`,
+`src/cli.ts`, and `src/tui/main.tsx` each import a closed graph of `src/`
+modules. Machinery such as `extend()`, `defineActions()`, `on()`,
+`defineEditors()`, `comps`, and the CLI verb table is internal; no
+third-party module can reach it. The exported MCP `IO` interface is a useful
+boundary, but `mcpServer(io)` registers its tools inline; there is no tool
+registry to extend.
+
+The future seams should stay narrow and curated — a plugin should be "a module
+that exports Renderer[] / a comps fragment", not a framework. If a change
+makes one of these seams wider or leakier, that's the wrong direction.
 
 ---
 
