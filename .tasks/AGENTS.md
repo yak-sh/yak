@@ -176,8 +176,30 @@ the mobile door — whose rows resolve through `List.Item`.
 - **Frozen pages must render from their own bytes.** Self-containment is
   enforced at freeze time (scrub removes every external ref); the CSP at serve
   time is defense-in-depth, not the mechanism.
-- **TUI: text content must never move the terminal cursor.** The painter
-  sanitizes `\n`/`\r`/`\t` in text nodes; only the layout emits cursor moves.
+- **TUI: content must never SPEAK to the terminal** — nothing painted is
+  written by the operator (task titles, comments, memory bodies, mail off the
+  open internet), so `paint.ts` strips the whole control class from every text
+  node AND from an `<a>`'s href: C0, DEL and C1, since dropping ESC alone
+  leaves 0x9b, which a terminal reading C1 takes as CSI. Only `\n` (the break
+  `blocks()` splits on) and `\x01`/`\x02` (an FTS snippet's hit marks)
+  survive; `\t` expands to spaces we chose. The href half is not optional: it
+  rides inside the OSC 8 `ansi()` emits, where one BEL ends the sequence and
+  lets the rest of a markdown link's URL run as its own escape — that was a
+  clipboard write (`\x1b]52`) with no ESC in a text node at all. Every escape
+  the terminal sees is emitted by the layout, by `ansi()`, or by the yank.
+- **Web: content must never SPEAK HTML** — the same class, the other
+  medium. A doc body reaches `dangerouslySetInnerHTML` (Show, Comments,
+  Session) on an origin that owns `/apply` and `/ws` with no auth, and
+  inbound mail makes any body writable by anyone with an email client. So
+  `md.ts` — the one markdown door, both instances — renders an html token
+  as its own escaped text and refuses any href that could carry a scheme
+  (http(s), mailto, tel, relative pass; the words stay, the link goes).
+  The test is the SHAPE of a url, not a list of forbidden schemes,
+  because a browser decodes entities inside an attribute and
+  `javascript&colon;` is a scheme by the time it parses one. What the
+  door GENERATES stays whole — the ref anchors, code, tables — and the
+  same rule ships outward, since `mdAbs` builds the HTML part of a
+  letter someone else's mail client will render.
 - **One reconnect poller per process** (live.ts `polling`) — a down server must
   not stack pollers that all fire reload together.
 - **`serverFiles` (reload.ts) must name every server import**, or edits to a
@@ -295,13 +317,17 @@ These hold everywhere in this repo, whoever — or whatever — writes the code:
   graph, so a script that imports apply()/open() and skips the server mints
   entities in the owner's board. Pick a UNIQUE port and read back where you
   LANDED (`ss -lptn | grep pid=<pid>`): `PORT` is an env var, not a flag, and
-  the server binds `reusePort`, so two servers CAN hold one address. A probe
-  that set `DB_PATH` is now REFUSED there — a server asks `GET /graph` who
-  already serves the port and exits rather than sit beside a different graph
-  (src/bind.ts), because a kernel that deals readers between two graphs
-  answers `no entity` for rows that exist. A probe that leaves `DB_PATH` unset
-  still joins silently: same file, same answers, and every write is a LIVE
-  write. The CDP port is a probe port too — two agents on
+  the server binds `reusePort`, so two servers CAN hold one address — which
+  is why an OCCUPIED port now refuses a second server outright (src/bind.ts).
+  A stranger's graph is refused because a kernel dealing readers between two
+  graphs answers `no entity` for rows that exist; its OWN graph is refused
+  because that is a probe that forgot `DB_PATH`, and nothing would ever look
+  wrong while its every write landed in the owner's board. Only the dev
+  supervisor's successor may join, and it says so — `--join`, passed to a
+  successor and nothing else, and announced on the way in. The refusal prints
+  the copy-the-file-and-take-a-free-port command to run instead, so a probe
+  that forgets `DB_PATH` fails to boot rather than boots into the live graph.
+  The CDP port is a probe port too — two agents on
   `--remote-debugging-port=9333` share ONE chrome, the second launch fails
   silently, and both drive the first's tabs. Never point a probe that DRIVES A
   GESTURE at the live graph: clicking a destructive control (archive, delete, a
@@ -356,8 +382,8 @@ These hold everywhere in this repo, whoever — or whatever — writes the code:
   digest's `lately` block (today/this week, hot-ranked) plus the `### memory`
   index lines (M-* entities). Deliberate recall is `memory_recall` / `task
   search`. To remember something durably, write the graph: a lesson or
-  correction → `memory_save` (type feedback/project, scoped to the project
-  entity); the session's own story → its session doc (S-*, the work-session
+  correction → `memory_save` (`scope` names the project it belongs to;
+  omit it for a fleet-wide principle, and `feedback` names who gave it); the session's own story → its session doc (S-*, the work-session
   pattern — S-3678 is the exemplar); anything task-shaped → a task with the
   context in its body. Reading a memory's body bumps its recall — use, and the
   graph remembers that you used it; disuse decays. Facts need no filing at all:
@@ -516,7 +542,7 @@ Every session's `task context` opens with `## inbox — N unread (task inbox)`. 
 
 Your persona, and every memory preloaded into it, are **entities in the Task Graph** — not the `.md` file you are reading. That file (`AGENTS.md`, `.claude/agents/*`) is a **generated projection**: a materializer renders it from the graph and overwrites it on the next sync, so a hand-edit to the file is lost. The banner at the top of each file names its source node (`N-…`).
 
-**The shape.** A **persona** is a node (`kind: persona`, id `N-…`) whose doc body is the persona text. A **memory** is an entity (`kind: memory`, id `M-…`) — one distilled fact, `type` one of user | feedback | project | reference. A persona **preloads** a memory by holding a `contains` edge to it; the materializer renders each contained memory's whole body into that persona's `## Preloaded` block, warmest first. One memory can be preloaded by many personas.
+**The shape.** A **persona** is a node (`kind: persona`, id `N-…`) whose doc body is the persona text. A **memory** is an entity (`kind: memory`, id `M-…`) — one distilled fact, scoped to a project by `scope_eid` (unscoped = a principle every operator carries) and tagged `feedback` when it records someone's correction, with `feedback.by` naming who gave it. A persona **preloads** a memory by holding a `contains` edge to it; the materializer renders each contained memory's whole body into that persona's `## Preloaded` block, warmest first. One memory can be preloaded by many personas.
 
 **Changing it — in the graph, never the file:**
 
@@ -622,9 +648,9 @@ Use your memories to be what you are, freely.
 
 *Recall a body by id (memory_recall / task show).*
 
+- M-4065 federation discipline: one home graph per entity, intents across boundaries, no consensus · 3×
 - M-4066 feedback: agents take warm paths, not right paths — adoption is won structurally · 5× · confirmed 2026-07-29
-- M-4061 project: vocabulary naming: artifacts get artifact names, pure acts keep _request · 1×
+- M-4061 vocabulary naming: artifacts get artifact names, pure acts keep _request · 1×
 - M-4457 feedback: code style (Ruby/Rails) — the class-macro idiom · 1×
-- M-4064 project: identity is faceted; personas differ by emphasis, not content · 1×
-- M-4065 project: federation discipline: one home graph per entity, intents across boundaries, no consensus · 1×
-- M-4063 project: reference at authoring, resolve at delivery, record the served form
+- M-4064 identity is faceted; personas differ by emphasis, not content · 1×
+- M-4063 reference at authoring, resolve at delivery, record the served form

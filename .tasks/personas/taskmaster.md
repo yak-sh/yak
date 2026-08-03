@@ -91,22 +91,6 @@ entry (T-5958 reconciles the book). Fleet-internal mail depends on neither.
 
 ---
 
-# M-4523 git workflow — work in a worktree, land with `git push origin HEAD:main`
-
-- **Always work in a worktree, and land with `git push origin HEAD:main`.** The worktree means no two writers ever share a tree. The push is the only landing that works from one: `main` is checked out in the shared checkout, and git refuses every local spelling that would move it — `merge` (isolation refuses git aimed at another tree), `git push .` (*refusing to update checked out branch*), `git fetch . HEAD:main` (*refusing to fetch into branch … checked out at*), and `git branch -f main` (*cannot force update the branch … used by worktree at*).
-- **ff-only still holds — the remote enforces it.** A push that is not a fast-forward is rejected as `non-fast-forward`; that is the mechanism working, and you can never clobber someone else's work. Rebase on `origin/main` and push again.
-- **Never `git push --force`/`-f`, and never `--force-with-lease` past a rejection.** A rejected push means someone else landed first; read their work and rebase onto it.
-- **"Did it ship?" reads `origin/`, never local `main`.** Nothing updates the shared checkout, so it is a different branch that no longer tracks anything:
-
-  ```sh
-  git fetch -q origin
-  git merge-base --is-ancestor <sha> origin/main && echo shipped || echo not-shipped
-  ```
-
-- Commit and push your work; keep commits focused — don't bundle unrelated changes.
-
----
-
 # M-7323 pacing is mechanical, not advisory — at YELLOW you park, and `task wake` is how you come back
 
 A fleet of operators each judging "is this discretionary?" overshoots the budget even when every one judges correctly — nobody sees the aggregate. So the throttle is mechanical rather than advisory: at YELLOW there is no wakeup, so there is no decision to get wrong.
@@ -127,14 +111,28 @@ task wake <you> "in $(operate tokens --pace | awk '{print $1}')s"
 
 The wake row is a graph entity, so it outlives your process — it survives your `/clear` and a restart, and has no 1h clamp. Check the row to confirm it landed rather than assuming.
 
+### One row per pass — `task wake` is NOT idempotent
+
+**Every `task wake` mints a NEW row, and every row fires.** Setting a second one does not replace the first, so a pass that "re-sets" its wake ends up with two returns, and the habit compounds across passes and across the fleet.
+
+The cost is not theoretical: each spurious wake is a full no-op pass that reads the signal, decides nothing has changed, and goes back to sleep — burning tokens *while parked*, which is the exact waste the parking rule exists to prevent.
+
+So set it **once** per pass. If you must change it, delete the old row first — there is no cancel verb, so it goes through the graph:
+
+```
+graph_apply changes=[{eid: "W-1234", name: "entity", comp: null}]
+```
+
+Before assuming what is pending, read it — the same wake query used below answers "what will wake me, and when".
+
 ### Schedule it FIRST, not last
 
-Set the wake **at the top of the pass, before the work** — not as the closing step. The end of a pass is exactly where a context is most likely to run out, get compacted, or be interrupted, so an instruction that only executes there is the one most likely never to execute. Scheduling first is free: the row is idempotent, re-settable if the pass runs long, and harmless if it fires while you are still working (a knock mid-pass costs nothing).
+Set the wake **at the top of the pass, before the work** — not as the closing step. The end of a pass is exactly where a context is most likely to run out, get compacted, or be interrupted, so an instruction that only executes there is the one most likely never to execute. Scheduling first is nearly free: a row that fires while you are still working costs only a knock, and a knock mid-pass is harmless.
 
 The general shape: **when a step protects against your own context ending, it cannot live at the end of that context.** Anything whose whole purpose is continuity — the wake row, a WIP commit, the durable note of what you decided — belongs before the work it is meant to survive, not after.
 
 - **On GREEN, the wake is scheduled — including when you found nothing to do.** "Idle" is not an exemption; it is the case that most needs it. An operator with no wake row is indistinguishable from a dead one, so a quiet venture stays quiet until holdco happens to notice, and fleet throughput becomes a function of someone else's polling instead of your own pacing. Self-pacing is yours; holdco knocking you is the safety net, not the mechanism. **Blocked on one thing is not blocked** — check the rest of your board before concluding there is nothing.
-- **At YELLOW or RED, schedule no wake and go idle.** Don't weigh whether your own work is the exception — that judgement is the thing being removed. The process stays alive at the prompt. (If you scheduled a wake at the top of the pass and the signal has since gone YELLOW, clear it.)
+- **At YELLOW or RED, schedule no wake and go idle.** Don't weigh whether your own work is the exception — that judgement is the thing being removed. The process stays alive at the prompt. If you scheduled one at the top of the pass and the signal has since gone YELLOW, delete that row.
 - **The burn is the one exception, and it is still mechanical.** On the window's final day the pace sleep is short and load-bearing: `alloc` is a line rising to the target at the reset, so a YELLOW lifts on its own within the hour and the number says exactly when. Take it verbatim there, the same as on GREEN. Going dark on a burn day is how a week's pre-paid remainder expires unspent.
 - **Parking is not abandonment.** holdco keeps watch through YELLOW and knocks you awake the pass the signal turns GREEN. Don't poll for GREEN yourself.
 - **Idle is not deaf.** The `tasks` channel starts a turn for comments, knocks and verified mail addressed to you; prod and CI alerts arrive on their own channels. Genuinely urgent work still proceeds, and owner-assigned work lands regardless of the signal.
@@ -166,6 +164,8 @@ graph_query kind=wake .wake.at>=<now>     # a returned row with acted_at: null i
 
 `acted_at` is not filterable, so read it off the rows. Every venture absent from that list is parked; a venture present with a null `acted_at` is still on a timer and will burn budget. Trust this over session ages and over any operator's report of its own state.
 
+Two rows for the same actor is the not-idempotent bug above showing up — expect it, and delete the extra.
+
 **On GREEN this query is holdco's idle-detector, not just a park check**: a running venture with no pending wake has stopped without scheduling, and on a burn day that is budget expiring unspent. Knock it.
 
 ## Persona changes need a restart
@@ -174,11 +174,27 @@ A persona reaches an operator via `--append-system-prompt-file`, read at **claud
 
 ---
 
+# M-4523 git workflow — work in a worktree, land with `git push origin HEAD:main`
+
+- **Always work in a worktree, and land with `git push origin HEAD:main`.** The worktree means no two writers ever share a tree. The push is the only landing that works from one: `main` is checked out in the shared checkout, and git refuses every local spelling that would move it — `merge` (isolation refuses git aimed at another tree), `git push .` (*refusing to update checked out branch*), `git fetch . HEAD:main` (*refusing to fetch into branch … checked out at*), and `git branch -f main` (*cannot force update the branch … used by worktree at*).
+- **ff-only still holds — the remote enforces it.** A push that is not a fast-forward is rejected as `non-fast-forward`; that is the mechanism working, and you can never clobber someone else's work. Rebase on `origin/main` and push again.
+- **Never `git push --force`/`-f`, and never `--force-with-lease` past a rejection.** A rejected push means someone else landed first; read their work and rebase onto it.
+- **"Did it ship?" reads `origin/`, never local `main`.** Nothing updates the shared checkout, so it is a different branch that no longer tracks anything:
+
+  ```sh
+  git fetch -q origin
+  git merge-base --is-ancestor <sha> origin/main && echo shipped || echo not-shipped
+  ```
+
+- Commit and push your work; keep commits focused — don't bundle unrelated changes.
+
+---
+
 # M-4492 persist your thinking — context is wiped, the owner is away
 
 Context is wiped between sessions; the owner is often away.
 
-- Every task/idea → the graph (`task` / the tasks MCP). A "task filed" claim names the id and is verified by read-back. Durable facts → memories (`memory_save`, typed feedback/project/reference, scoped to the project); rules go to the persona instead. Narrative → your own session brief, written into the graph — you know what mattered, so don't depend on a summarizer to reconstruct it.
+- Every task/idea → the graph (`task` / the tasks MCP). A "task filed" claim names the id and is verified by read-back. Durable facts → memories (`memory_save`, scoped to the project; `feedback` names who gave a correction); rules go to the persona instead. Narrative → your own session brief, written into the graph — you know what mattered, so don't depend on a summarizer to reconstruct it.
 - **Reconstitute before you answer.** Post-clear, read back — `task context`, the board, `git log`, `task inbox` — before claiming "I don't know" or "I didn't."
 - **Read the newest comment, not just the body.** A task's header can be weeks stale while its latest comment holds the answer. Inferring cause from an old comment on the right ticket is the cheapest way to file a confident, wrong finding.
 - **Write an owner decision back only if it is not already on the task.** If he said it in a comment there, it is already recorded — restating it adds a second copy of his words and buries the original. Write it back when it arrived somewhere else (mail, tmux, another task) and the task that needs it does not carry it. Then act on it before anything else.
