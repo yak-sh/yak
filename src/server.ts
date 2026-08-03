@@ -21,6 +21,8 @@ import {
   file as graph,
   journalBy,
   journalOf,
+  locate,
+  matching,
   search,
   snapshot,
   touch,
@@ -28,6 +30,7 @@ import {
   vocabularyDoc,
 } from './db.ts'
 import { gaps, spread, type Step, step } from './subs.ts'
+import { where } from './sql.ts'
 import { dispatch, docs, on, relay, trace } from './effects.ts'
 import { vocabularyMd } from './schema.ts'
 import { freeze, serveFrozen, store } from './freeze.ts'
@@ -176,6 +179,24 @@ let filtered = new Set<WebSocket>()
 // current graph parsed, ref-resolved, matched. `hits` are every row matching
 // the preds; `preds`/`all`/`byEid`/`snap` ride out for whoever ranks or
 // backlinks on top (design §10.2).
+// The same question answered by the INDEX, when the filter compiles. This is
+// the whole point of sql.ts: evalQuery below builds a 22 MB snapshot and
+// matches 10,618 rows in JS, synchronously, so every subscribe stalls the
+// server for ~330ms — long enough that a browser's own subscribe has been seen
+// to go unanswered. Here nothing is materialized but the rows that matched.
+//
+// null means the filter declined, and the caller falls back to evalQuery. The
+// two must not disagree: `sql_test.ts` holds them against each other per
+// predicate class, and the hits carry `eager()` comps, which walk the same
+// `readable` union `snapshot()` selects — so a subscriber cannot tell which
+// path answered it.
+let evalFast = (q: string) => {
+  let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
+  let built = where(preds)
+  if (!built) return null
+  return { preds, hits: matching(db, built) }
+}
+
 let evalQuery = (q: string) => {
   let snap = snapshot(db)
   let all = rows(snap)
@@ -307,7 +328,7 @@ let control = (
   if (typeof f.unsub == 'string') return void map.delete(f.unsub)
   if (typeof f.sub != 'string') return
   try {
-    let { preds, hits } = evalQuery(f.q ?? '')
+    let { preds, hits } = evalFast(f.q ?? '') ?? evalQuery(f.q ?? '')
     map.set(f.sub, {
       preds,
       members: new Set(hits.map((r) => r.eid)),

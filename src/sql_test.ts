@@ -132,7 +132,6 @@ let COMPILES = [
   '.task.project_eid=',
   '.task.domain=',
   '.task.status=',
-  '.doc.body=',
   // negation
   '.task.status!=done',
   '.task.priority!=1',
@@ -140,8 +139,6 @@ let COMPILES = [
   // contains, including the characters LIKE would have read as wildcards
   '.doc.title~=widget',
   '.doc.title~=WIDGET',
-  '.doc.body~=100%',
-  '.doc.body~=under_score',
   '.doc.title~=',
   // a numeric operand that no JS number stringifies to: JS matches nothing
   '.task.priority=1.0',
@@ -159,14 +156,10 @@ let COMPILES = [
   '.task.priority=0..2',
   '.task.priority=0...2',
   '.task.priority=1..10',
-  // a bare word is a TEXT pred over the doc
-  'widget',
-  'gamma',
-  'nothingmatchesthis',
   // several preds AND together
   '.task.status=open&.task.priority=1',
   '.task.status=open,wip&.doc.title~=widget',
-  'widget&.task.status=wip',
+  '.task.status=open&.task.domain=Eng',
   // an order is a ranking, not a filter
   '.order=hot',
   '.task.status=open&.order=hot',
@@ -187,6 +180,13 @@ for (let q of COMPILES) {
 let DECLINES = [
   '.updated.at>=1-week-ago', // a moving span
   '.created.at=today',
+  // a body is never scanned in SQL — FTS is the tool, and instr() over every
+  // body measured 6.7x SLOWER than the JS path it was meant to replace
+  'widget',
+  'gamma',
+  'widget&.task.status=wip',
+  '.doc.body~=100%',
+  '.doc.body=',
   '.task.domain>=1', // text column against a numeric operand
 ]
 

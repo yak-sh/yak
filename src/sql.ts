@@ -135,13 +135,17 @@ let has = (c: string, value: string): Sql =>
     params: [value],
   }
 
-// A bare word is a TEXT pred: it reads the doc itself, either column, and an
-// entity with no doc never matches.
-let text = (value: string): Sql => ({
-  sql:
-    `("doc"."eid" is not null and (instr(lower(coalesce("doc"."title", '')), lower(?)) > 0 or instr(lower(coalesce("doc"."body", '')), lower(?)) > 0))`,
-  params: [value, value],
-})
+// A bare word is a TEXT pred over the doc — and it DECLINES, because the SQL
+// for it is a full scan of every body in the graph. Measured against the JS
+// path on the live board: 3,716ms vs 553ms for `decay`, 3,439ms vs 420ms for
+// `graph`, where a column predicate goes the other way (172ms vs 632ms). The
+// fast path has to be faster or it is not a fast path.
+//
+// The graph already has the right tool for this and it is not a LIKE: FTS5
+// over doc, which `/search` and `task search` speak. Teaching the compiler to
+// route a text predicate there is its own piece of work; guessing at it with
+// instr() would make every search-shaped board seven times slower.
+let text = (_value: string): Sql | null => null
 
 // The ops query.ts routes to cmp(), spelled the same in SQL.
 let CMP: Record<string, string> = { '<': '<', '<=': '<=', '>': '>', '>=': '>=' }
@@ -151,7 +155,9 @@ let one = (p: Pred): Sql | null => {
   if (p.op == TEXT) return text(p.value)
   if (p.at) return null // path preds need a second join
   if (!known(p.comp, p.prop)) return null
-  if (tagOf(p.comp, p.prop) == 'time') return null // spans are their own pass
+  let tag = tagOf(p.comp, p.prop)
+  if (tag == 'time') return null // spans are their own pass
+  if (tag == 'body') return null // a body is FTS's job, never a scan
   let c = col(p.comp, p.prop)
   if (p.op == '') return eq(c, p.value)
   if (p.op == '!') {

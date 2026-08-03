@@ -2326,3 +2326,51 @@ if (import.meta.main) {
     } edges`,
   )
 }
+
+// An id to an eid, through the index — client.ts `find()`'s three rules
+// (X-123 or a bare number by num, an eid verbatim, an alias slug) asked of
+// SQLite instead of of a materialized graph. It exists so a query can resolve
+// its own references without anyone building a snapshot first; keep the two
+// readings of "what names an entity" in step.
+export let locate = (db: DatabaseSync, id: string): string | undefined => {
+  let m = id.match(/^[A-Za-z]+-(\d+)$/) ?? id.match(/^(\d+)$/)
+  if (m) {
+    return (db.prepare('select eid from entity where num = ?')
+      .get(Number(m[1])) as { eid: string } | undefined)?.eid
+  }
+  let self = db.prepare('select eid from entity where eid = ?')
+    .get(id) as { eid: string } | undefined
+  return self?.eid ??
+    (db.prepare('select eid from alias where slug = ?')
+      .get(id) as { eid: string } | undefined)?.eid
+}
+
+// Every entity a compiled filter matches, with its components — the shape
+// `rows(snapshot())` hands a matcher, restricted to the rows that matched.
+//
+// The filter rides in as a SUBQUERY, one statement per component table, rather
+// than one `eager()` per row. That distinction is the whole difference between
+// a fast path and a slower one: a query matching the 10,618-entity graph costs
+// about as many statements as the graph has components either way, where
+// per-row reads cost 150,000 and time out.
+export let matching = (
+  db: DatabaseSync,
+  filter: { sql: string; params: (string | number)[] },
+): { eid: string; comps: Record<string, Record<string, unknown>> }[] => {
+  let out = new Map<string, Record<string, Record<string, unknown>>>()
+  let spine = db.prepare(
+    `${select('entity')} where eid in (${filter.sql})`,
+  ).all(...filter.params) as Record<string, unknown>[]
+  for (let r of spine) out.set(String(r.eid), { entity: r })
+  if (!out.size) return []
+  for (let name of Object.keys(readable)) {
+    if (name == 'entity') continue
+    let rows = db.prepare(`${select(name)} where eid in (${filter.sql})`)
+      .all(...filter.params) as Record<string, unknown>[]
+    for (let r of rows) {
+      let hit = out.get(String(r.eid))
+      if (hit) hit[name] = r
+    }
+  }
+  return [...out].map(([eid, comps]) => ({ eid, comps }))
+}
