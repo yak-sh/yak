@@ -2254,9 +2254,28 @@ Deno.test('inflate: @ reads the file loudly, @@ is a literal, plain rides', () =
 
 Deno.test('inflate: @- is the pipe — the same door as @file, trimmed', () => {
   assertEquals(inflate(p('@-'), pipe()).value, 'the whole brief')
-  // a bare - is a LITERAL here: dot-param values carry no operators, and
-  // only @ opens a reader. The flag layer spells it - as flags do.
-  assertEquals(inflate(p('-'), pipe()).value, '-')
+  // a bare - is the same ask, not a one-character string: the spelling
+  // --body already answered, so it means the pipe at every door.
+  assertEquals(inflate(p('-'), pipe()).value, 'the whole brief')
+})
+
+Deno.test('inflate: only an EXACT - is the pipe, a hyphen in prose is prose', () => {
+  for (let v of ['a-b', '-x', '--', '- ', ' -', '-\n-']) {
+    assertEquals(inflate(p(v), pipe()).value, v)
+  }
+})
+
+Deno.test('inflate: a bare - with no pipe fails fast, it never waits', () => {
+  let read = 0
+  let io = { terminal: () => true, read: () => (read++, 'nope') }
+  assertThrows(() => inflate(p('-'), io), Error, '.body=-: stdin is a TTY')
+  assertEquals(read, 0)
+  // and an empty pipe is refused the same as @-'s: clearing is `.prop=`.
+  assertThrows(
+    () => inflate(p('-'), { terminal: () => false, read: () => '  \n' }),
+    Error,
+    '.body=-: stdin was empty',
+  )
 })
 
 Deno.test('inflate: a TTY fails fast, it never waits on the pipe', () => {
@@ -2275,6 +2294,16 @@ Deno.test('inflate: stdin is consumable once — the second @- is refused', () =
     () => inflate({ comp: 'doc', prop: 'title', value: '@-' }, io),
     Error,
     '.title=@-: stdin was already read by .body=@-',
+  )
+})
+
+Deno.test('inflate: the refusal names the token that drank the pipe', () => {
+  let io = pipe()
+  assertEquals(inflate(p('-'), io, '--body=-').value, 'the whole brief')
+  assertThrows(
+    () => inflate(p('@-'), io),
+    Error,
+    '.body=@-: stdin was already read by --body=-',
   )
 })
 

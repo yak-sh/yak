@@ -82,7 +82,7 @@ export let manuals: Record<string, Manual> = {
       'task new .title="Write the digest" .body=@- <<\'EOF\'',
     ],
     detail: 'Any dot-param value may be `@file` (read from that file) or ' +
-      '`@-` (read from piped stdin) — the safe doors for a long body, ' +
+      '`-`/`@-` (read from piped stdin) — the safe doors for a long body, ' +
       'since shell substitution fails silently and an empty value CLEARS ' +
       'the column. `@@` escapes a value that genuinely starts with an @. ' +
       'stdin is consumable once: a second `@-` in one command is refused.',
@@ -100,8 +100,8 @@ export let manuals: Record<string, Manual> = {
       'task set S-12 .body=@- < brief.md',
     ],
     detail: 'A dot-param or --comment that IS `@file` is read from that ' +
-      'file, and `@-` from piped stdin. The patch and the reason for it ' +
-      'ride one atomic batch, so neither can land without the other.',
+      'file, and `-`/`@-` from piped stdin. The patch and the reason for ' +
+      'it ride one atomic batch, so neither can land without the other.',
     root: true,
     options: [value('--comment', 'comment text')],
   },

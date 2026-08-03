@@ -119,7 +119,9 @@ export let send = async (changes: Change[], via = me()) => {
 // rides the seam because consumability is a fact about the resource, not
 // about the caller — every door that asks for stdin in one command asks
 // the same object, so the second ask can be refused instead of served an
-// empty string.
+// empty string. `taken` holds the TOKEN that drank it, not the prop: the
+// refusal names a door the caller can recognize, whichever spelling they
+// reached for.
 export type Stdin = {
   terminal: () => boolean
   read: () => string
@@ -153,15 +155,15 @@ export let stdin: Stdin = {
 // And it is consumable once — a second @- would read empty, and an empty
 // value CLEARS the column (the failure that wiped four session briefs),
 // so the second ask is refused loudly rather than served that emptiness.
-let piped = (io: Stdin, prop: string, as: string) => {
+let piped = (io: Stdin, as: string) => {
   if (io.taken) {
     throw new Error(
-      `${as}: stdin was already read by .${io.taken}=@- — a pipe is ` +
+      `${as}: stdin was already read by ${io.taken} — a pipe is ` +
         `consumable once, and the second read would clear the column`,
     )
   }
   if (io.terminal()) throw new Error(`${as}: stdin is a TTY — pipe it in`)
-  io.taken = prop
+  io.taken = as
   let v = io.read().trim()
   // An empty pipe is the same silent clear this door exists to prevent, so
   // it is refused: clearing is `.prop=`, said deliberately.
@@ -268,13 +270,19 @@ export let inflate = (
   as = `.${p.prop}=${p.value}`,
 ): Param => {
   let v = p.value
+  // A bare '-' IS the pipe — the unix spelling, and the one --body
+  // answers (T-5866). Held literal, it swallowed whole heredocs and
+  // reported success (T-11771): stdin at one door and a one-character
+  // string at the next is not a spelling any hand can hold. EXACT only —
+  // a value merely CONTAINING a hyphen ('a-b', '--') is prose. No door
+  // stores a lone literal '-'; the pipe is the way if one ever must.
+  if (v == '-' || v == '@-') return { ...p, value: piped(io, as) }
   if (typeof v != 'string' || !v.startsWith('@')) {
     misplaced(p, as)
     dropped(p, as)
     return p
   }
   if (v.startsWith('@@')) return { ...p, value: v.slice(1) }
-  if (v == '@-') return { ...p, value: piped(io, p.prop, as) }
   try {
     return { ...p, value: Deno.readTextFileSync(v.slice(1)) }
   } catch {

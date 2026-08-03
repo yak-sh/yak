@@ -327,13 +327,16 @@ let set = async (args: string[]) => {
   // --comment=... rides the same atomic batch as plain commentary — the
   // change itself is the journal's to record, never a comment's.
   // @file is the fleet's door for a long value (M-4415) and inflate()
-  // implements it whole — the @@ escape for prose that starts with an @,
-  // and a loud `no such file` otherwise. Dot-params route through it;
-  // this one didn't, so `--comment=@plan.md` stored the PATH as the
-  // comment and reported success. A recorded design was lost that way.
+  // implements it whole — @- and - for the pipe, the @@ escape for prose
+  // that starts with an @, a loud `no such file` otherwise. Dot-params
+  // route through it; this one didn't, so `--comment=@plan.md` stored the
+  // PATH as the comment and reported success. A recorded design was lost
+  // that way. EVERY value goes over, prose included: deciding here which
+  // ones are worth reading is the second vocabulary that caused it.
   let say = args.find((a) => a.startsWith('--comment='))?.slice(10)
-  if (say?.startsWith('@')) {
-    say = String(inflate({ comp: 'doc', prop: 'body', value: say }).value)
+  if (say != null) {
+    let p = { comp: 'doc', prop: 'body', value: say }
+    say = String(inflate(p, stdin, `--comment=${say}`).value)
   }
   let { params, words } = split(
     args.filter((a) => !a.startsWith('--comment=')),
@@ -374,13 +377,13 @@ let seek = async (args: string[]) => {
 // ---- task mail: the mail door (letters only — mail-comp wearers; hooks
 // and event comments never surface here) ----
 
-// The body, by preference: --body= (@file reads the file, @- reads piped
-// stdin — the safe doors for long prose), then trailing words. inflate()
-// is the ONE reader of both: two readers with separate vocabularies is
-// what left `.body=@-` a suggested door that opened nothing, so this
-// verb-level door only adds the bare `-` spelling flags conventionally
-// carry, normalizes it, and hands the value over. Shared by mail
-// send/reply and the session brief — one body door, every verb.
+// The body, by preference: --body= (@file reads the file, `-`/`@-` read
+// piped stdin — the safe doors for long prose), then trailing words.
+// inflate() is the ONE reader of all of them, the bare `-` included: two
+// readers with separate vocabularies is what left `.body=@-` a suggested
+// door that opened nothing, so every value goes over as it was typed and
+// nothing here decides what a spelling means. Shared by mail send/reply
+// and the session brief — one body door, every verb.
 //
 // @ belongs to the DOOR, not to the flag: a lone trailing @token is the
 // same ask said positionally. Reading it through --body= but not through
@@ -392,13 +395,8 @@ let seek = async (args: string[]) => {
 // before anything is minted or sent.
 export let bodyOf = (flags: string[], words: string[], io = stdin) => {
   let b = flags.find((a) => a.startsWith('--body='))?.slice(7)
-  if (b?.startsWith('@') || b == '-') {
-    let v = b == '-' ? '@-' : b
-    let p = { comp: 'doc', prop: 'body', value: v }
-    return String(inflate(p, io, `--body=${b}`).value)
-  }
-  // Non-@ values still go THROUGH inflate: it passes them back unchanged,
-  // so the only new behavior is its dropped-@ guard.
+  // Literal values ride through inflate too — it hands them back unchanged
+  // and its dropped-@ guard gets to see them.
   if (b != null) {
     let p = { comp: 'doc', prop: 'body', value: b }
     return String(inflate(p, io, `--body=${b}`).value)

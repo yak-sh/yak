@@ -159,20 +159,23 @@ Deno.test('bodyOf: a lone trailing @file is read, prose is not', () => {
 })
 
 Deno.test('bodyOf: a lone trailing @- is the pipe, and refuses a TTY', () => {
-  let read = 0
-  assertEquals(
-    bodyOf([], ['@-'], {
-      terminal: () => false,
-      read: () => (read++, ' hi\n'),
-    }),
-    'hi',
-  )
-  assertEquals(read, 1)
-  assertThrows(
-    () => bodyOf([], ['@-'], { terminal: () => true, read: () => 'x' }),
-    Error,
-    '@-: stdin is a TTY',
-  )
+  // said positionally, both spellings, exactly as the flag says them
+  for (let t of ['@-', '-']) {
+    let read = 0
+    assertEquals(
+      bodyOf([], [t], {
+        terminal: () => false,
+        read: () => (read++, ' hi\n'),
+      }),
+      'hi',
+    )
+    assertEquals(read, 1)
+    assertThrows(
+      () => bodyOf([], [t], { terminal: () => true, read: () => 'x' }),
+      Error,
+      `${t}: stdin is a TTY`,
+    )
+  }
 })
 
 Deno.test('bodyOf: both stdin spellings refuse a TTY', () => {
