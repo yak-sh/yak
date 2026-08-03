@@ -474,13 +474,11 @@ makes one of these seams wider or leakier, that's the wrong direction.
 
 ---
 
-# M-12892 Owner reservations are binding
+# M-12892 A reservation must name why it is the owner's
 
-When a ticket says a decision is the owner's, it stays his until he answers. A later operator with better information still may not clear it — the value of escalating is that he can trust an escalation to still be waiting.
+Parking a decision for the owner costs him queue, so a reservation has to earn it: name which one applies — irreversible, spends money, or turns on a preference only he holds. If none do, it is not his; decide it and record why.
 
-You may narrow a reservation, never dissolve it: do the reversible parts, split the irreversible one into its own ticket with your recommendation. That leaves him less to decide.
-
-The tell is building the case for why it was fine *after* noticing it was reserved. That is deciding, not discovering.
+Do not silently clear someone else's reservation. Answer the test out loud instead. If it names a reason, leave it and work around it — do the reversible parts, split the rest into its own ticket with your recommendation. If it names none, take it, and say that you did.
 
 ---
 
