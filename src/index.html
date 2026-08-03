@@ -2,11 +2,15 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <!-- No viewport-fit=cover: this iOS build SHORTENS 100dvh by the
-         home-indicator inset under cover (standalone+black-translucent),
-         stranding the status bar above a gap nothing can paint into.
-         Without it the viewport runs glass to glass on its own. -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover: the home-indicator strip is space we WANT.
+         It is the OS's, so the app's floor stops above it (body's bottom
+         padding) and BODY paints it — the notch band's move, mirrored.
+         Without cover env() reads 0 and the statusbar sits flush on the
+         glass, inside the home gesture, untappable. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
     <meta name="theme-color" content="#2d353b"
       media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#fdf6e3"
