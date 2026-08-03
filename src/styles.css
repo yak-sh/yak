@@ -750,14 +750,6 @@ html {
   border-left: 2px solid var(--border2);
   padding-left: var(--half-gap);
 }
-/* Machinery speaking (comment.event) — a chip, not a bubble: small,
-   dim, the body quieted to the byline's register. */
-.Comments_Item-event {
-  font-size: 11px;
-}
-.Comments_Item-event .Comments_Body {
-  color: var(--dim);
-}
 /* Both are links now — the name to its author, the age to the comment —
    in their old dress: underline only on hover says so. */
 .Comments_When {

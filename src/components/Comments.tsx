@@ -52,8 +52,6 @@ export let Note = ({ c }: { c: Ent }) => {
   let instrument = c.created?.via ? ent(String(c.created.via)) : undefined
   let who = actor ?? instrument
   return (
-    /* An event is machinery speaking (M-4062) — a chip, not a
-       bubble: the -event modifier shrinks and dims the row. */
     <Item>
       {
         /* The name links to whoever said it; the age to the comment
