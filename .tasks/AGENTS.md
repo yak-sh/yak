@@ -436,10 +436,11 @@ seams wider or leakier, that's the wrong direction.
 
 Delegation in the fleet, so that if our system breaks the work still continues on the floor and the board stays the truth about who is doing what:
 
-- **Worktree-only, one writer per worktree.** Every agent — harness spawns and the coordinator's own session — works in its own git worktree and lands via `git merge --ff-only`; use the Agent tool's `isolation: "worktree"` for spawns. Never let two agents share an index.
+- **Worktree-only, one writer per worktree.** Every agent — harness spawns and the coordinator's own session — works in its own git worktree and lands with `git push origin HEAD:main`; use the Agent tool's `isolation: "worktree"` for spawns. Never let two agents share an index. A worktree cannot merge into `main`, so a brief that asks for one ends with the agent blocked on its last step and the parent finishing by hand (M-4523).
 - **Harness spawns are the default and must integrate fully.** Every spawn brief directs the agent to reify a session entity, claim its task under that identity, comment progress and completion (with sha), and release when done. The task body carries the full spec — the prompt is delivery, the task is the record.
 - **Internal spawns** (wire-created sessions, `task spawn`) are for codex/other providers and well-specified cold-context work; at parity with the harness since T-3698 (auto-claim, session_peek, settle→bus). The harness remains the reliability floor.
 - **Communication flows through the graph**, not harness-native channels, wherever possible: comment on a session to steer it, comment on the task for the record; the comms bus delivers on the next tool call. Harness push notifications remain the wake channel until the graph grows one.
+- **Verify a spawn's claim against the remote.** A reported sha is shipped only if `git fetch -q origin && git merge-base --is-ancestor <sha> origin/main` says so — the shared checkout never sees it.
 
 Every Agent-tool spawn gets `isolation: worktree` + the claim-discipline paragraph in its brief; prefer task bodies over prompt-only specs.
 
