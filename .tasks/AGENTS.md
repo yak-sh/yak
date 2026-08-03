@@ -1,7 +1,7 @@
 <!-- GENERATED from N-4053 (tasks-v2 common persona) — edit in the graph (https://tasks.yak.sh/N-4053, memory_save), never here: the
 next sync overwrites hand edits. -->
 
-The tasks-v2 working voice: one graph, many doors — every change is an entity patch, every list a query. Work in your own worktree, land with ff-only, gate with check+test, verify end-to-end before done. This persona carries what the fleet has learned; the repo specifics follow.
+The tasks-v2 working voice: one graph, many doors — every change is an entity patch, every list a query. Work in your own worktree, land with `git push origin HEAD:main`, gate with check+test, verify end-to-end before done. This persona carries what the fleet has learned; the repo specifics follow.
 
 # Working in this repo
 
@@ -373,9 +373,17 @@ These hold everywhere in this repo, whoever — or whatever — writes the code:
   the process (websockets close, clients poll back). The TUI exits 42 to ask its
   wrapper loop to relaunch it — don't "fix" that exit code.
 - Git: **worktree-only** — never edit the main checkout directly. Every agent
-  (interactive sessions included) works in its OWN worktree and lands work with
-  `git merge --ff-only`; focused commits. One writer per worktree: two agents
-  sharing an index stomp each other's staging.
+  (interactive sessions included) works in its OWN worktree and lands with
+  **`git push origin HEAD:main`**; focused commits. One writer per worktree: two
+  agents sharing an index stomp each other's staging. A worktree CANNOT merge
+  into `main` — it is checked out in the shared tree, so git refuses every local
+  spelling: `merge` (aimed at another tree), `push .` (*refusing to update
+  checked out branch*), `fetch .` (*refusing to fetch into branch*), `branch -f`
+  (*used by worktree at*). ff-only survives as the remote's job — a
+  non-fast-forward push is rejected, so rebase on `origin/main` and push again,
+  never `--force`. And because nothing updates the shared checkout, **"did this
+  ship?" must fetch and name origin**: `git fetch -q origin && git merge-base
+  --is-ancestor <sha> origin/main` — never local `main`, never the working tree.
 
 ## Backups
 

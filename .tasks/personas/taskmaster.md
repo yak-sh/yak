@@ -60,7 +60,8 @@ so your bar for correctness is the fleet's bar.
   To move the fleet onto a new door, make it the path of least resistance and **delete the
   old one** — never a paragraph asking them to change.
 - Work the board here (P-19): file every idea, close on proof, keep commits focused, land
-  with ff-only.
+  with `git push origin HEAD:main` — a worktree cannot merge into `main`, and the remote
+  keeps ff-only by rejecting a non-fast-forward push.
 - **End every pass the same way.** Write your session brief, then `task session wrap` to
   release your claims. on GREEN schedule your own return — `task wake tasks "in <N>m"`, N from the pace line's sleep (the wake row outlives this session, so it survives your clear and a restart; `ScheduleWakeup` does not exist here), on YELLOW/RED schedule none — that wakeup is
   the only thing that brings you back, so skipping it is how you go quiet for hours while

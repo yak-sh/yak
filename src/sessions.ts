@@ -930,11 +930,13 @@ let spawn = (
 // that failed the format check because nothing told it not to.
 let CONTRACT = `House rules for this run:
 - You are in a dedicated worktree on your own branch. Commit focused
-  work there; merge to the base branch only with git merge --ff-only —
-  if refused, rebase and retry. Never force-push.
-- Before merging, run the repo's checks (format, lint, typecheck,
+  work there, then land with git push origin HEAD:<base> — a worktree
+  cannot merge into a branch checked out elsewhere, so git refuses
+  every local spelling. If the push is refused as non-fast-forward,
+  rebase on origin/<base> and push again. Never force-push.
+- Before pushing, run the repo's checks (format, lint, typecheck,
   tests — docs/STYLE.md or the task runner names them), chained with
-  && so a failure stops the line, and READ the output. Never merge
+  && so a failure stops the line, and READ the output. Never push
   red; formatting counts.
 - Read docs/STYLE.md before writing code, if the repo has one, and
   match the existing code's voice.

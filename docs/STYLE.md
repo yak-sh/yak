@@ -75,9 +75,20 @@ thorough; a paragraph is almost always the wrong size.
 
 ## Workflow
 
-- Work in a worktree; merge to main only with `--ff-only`. A refused merge is
-  the mechanism working — rebase and re-merge.
-- Gates before every merge, strictly `&&`-chained so a failure stops the line:
+- Work in a worktree; land with `git push origin HEAD:main`. A worktree cannot
+  merge into `main` — it is checked out in the shared tree, which refuses
+  `merge`, `push .`, `fetch .` and `branch -f` alike. ff-only is the remote's
+  job: a non-fast-forward push is rejected, which is the mechanism working —
+  rebase on `origin/main` and push again, never `--force`.
+- Gates before every push, strictly `&&`-chained so a failure stops the line:
   `deno fmt src/ && deno task check && DB_PATH=:memory: deno task test`. Read
   the output; never trust a log a skipped command "wrote".
+- "Did it ship?" reads the remote. Nothing updates the shared checkout, so local
+  `main` and the working tree answer confidently and wrongly:
+
+  ```sh
+  git fetch -q origin
+  git merge-base --is-ancestor <sha> origin/main && echo shipped
+  ```
+
 - Keep commits focused; commit messages say why, in prose.
