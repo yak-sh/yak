@@ -1002,17 +1002,7 @@ let scanBoard = (set: BoardSet, e: Ent) => {
   set.complex = preds.some((p) => !!p.at) || orderOf(parsed) == 'hot'
   set.graph = cache.value
   set.error = undefined
-  if (config.agreement) {
-    let members = subEids(`board:${e.eid}`)
-    if (members) {
-      assertAgree(
-        `board:${e.eid}`,
-        q,
-        hits,
-        boardPost(e, set.tasks, members),
-      )
-    }
-  }
+  agree(set, e, q, hits)
   return hits
 }
 
@@ -1077,7 +1067,29 @@ refreshBoards = (eids: Set<string>) => {
     }
     set.graph = cache.peek()
     if (next != ids) set.ids.value = next
+    // The other half of the agreement check, and the half that actually runs.
+    // scanBoard's call can only fire on a full rescan, and a simple board gets
+    // exactly one of those — at mount, BEFORE its subscription's first frame
+    // has landed, so `members` is undefined and nothing is compared. From then
+    // on every batch takes the branch above, and `set.graph` is stamped here,
+    // so no later render rescans either: the counter for a simple board was
+    // structurally pinned at zero. Measured on the real graph — eighteen boards
+    // rendered, two writes pushed through, `subscriptionChecks()` still null.
+    //
+    // A counter that cannot count reads as "no divergence found" forever, which
+    // is worse than having none: it is the evidence 2b is waiting on.
+    agree(set, board, q, next)
   }
+}
+
+// Compare the client's own membership against the subscription's, whichever
+// path produced it. `mine` is already post-filtered; the sub set is raw, so it
+// goes through the same boardPost before the two can be compared at all.
+let agree = (set: BoardSet, board: Ent, q: string, mine: string[]) => {
+  if (!config.agreement) return
+  let members = subEids(`board:${set.eid}`)
+  if (!members) return
+  assertAgree(`board:${set.eid}`, q, mine, boardPost(board, set.tasks, members))
 }
 
 let boardScan = (e: Ent, tasks: boolean): Ent[] =>

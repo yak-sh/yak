@@ -7,6 +7,7 @@ import {
   backlinks,
   boardPost,
   boardsOver,
+  boardSub,
   boardTasks,
   byWarmth,
   cache,
@@ -902,5 +903,69 @@ Deno.test('pinned sleeps through an unrelated row patch', () => {
     assertEquals(runs, 2)
   } finally {
     stop()
+  }
+})
+
+// The agreement counter is the evidence stage 2b is waiting on, and it was
+// structurally unable to count. scanBoard is the only place that compared, and
+// a simple board scans exactly once — at mount, BEFORE its subscription's first
+// frame lands, so there is nothing to compare against. Every batch after that
+// takes the incremental branch of refreshBoards, which stamps `set.graph` and
+// so keeps any later render from rescanning either.
+//
+// The order below is the bug's order: scan first, subscription second, write
+// third. A counter that only ever reads zero is indistinguishable from one that
+// found no divergence, which is the worse of the two failures.
+Deno.test('the agreement counter counts on the incremental path', async () => {
+  config.agreement = true
+  cache.value = {
+    board: {
+      entity: { eid: 'board', num: 1 },
+      board: { eid: 'board', query: '.status=open' },
+    },
+    t1: {
+      entity: { eid: 't1', num: 2 },
+      task: { eid: 't1', status: 'open', priority: 1 },
+    },
+  }
+  // What the Board component does on mount: register the subscription (the
+  // deferred counter only counts a sub some view is actually holding), then
+  // render from the scan.
+  let drop = boardSub(ent('board'))
+  try {
+    // Mount: the scan runs with no subscription frame to compare against.
+    assertEquals(boardTasks(ent('board')).map((e) => e.eid), ['t1'])
+    assertEquals(subscriptionChecks(), undefined)
+
+    // The subscription's first frame lands after the mount scan, as it does.
+    landSub({
+      sub: 'board:board',
+      changes: [
+        { eid: 't1', name: 'entity', comp: { eid: 't1', num: 2 } },
+        {
+          eid: 't1',
+          name: 'task',
+          comp: { eid: 't1', status: 'open', priority: 1 },
+        },
+      ],
+      replace: true,
+      shadow: true,
+    })
+    assertEquals(subEids('board:board')?.size, 1)
+
+    // A committed batch — the only thing that reaches a simple board now.
+    applyLocal([{
+      eid: 't1',
+      name: 'task',
+      comp: { eid: 't1', status: 'open', priority: 0 },
+    }])
+    await new Promise((r) => setTimeout(r, 40))
+    let counts = subscriptionChecks()
+    assertEquals(counts?.divergences, 0)
+    assertEquals((counts?.agreements ?? 0) > 0, true, 'the counter counted')
+  } finally {
+    config.agreement = false
+    drop()
+    unsubscribe('board:board')
   }
 })
