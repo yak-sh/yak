@@ -12,6 +12,7 @@ import {
   addressed,
   bornAt,
   byBoard,
+  checkRefs,
   claimant,
   claimChanges,
   commentChanges,
@@ -244,6 +245,10 @@ let list = async (args: string[]) => {
     }),
     (id) => find(all, id)?.eid,
   )
+  // A handle that names nothing is a typo, not an empty result: the caller
+  // typed it a moment ago and can act on the correction. Boards keep the
+  // forgiving reading (client.ts checkRefs).
+  checkRefs(all, preds)
   let byEid = new Map(all.map((r) => [r.eid, r.comps]))
   let hits = all
     .filter((r) => r.kind == kind)

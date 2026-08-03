@@ -513,6 +513,37 @@ let targetOf = (comp: string, prop: string) => {
   let t = propAt(comp, prop)?.type
   return typeof t == 'object' && 'eid' in t ? t.eid : ''
 }
+
+// A reference in a FILTER that resolved to nothing. query.ts resolveRefs
+// is forgiving on purpose — a saved board may name an entity that is not
+// here yet, and a board mid-render is no place to throw — so the strict
+// reading is a separate question an INTERACTIVE door asks afterwards. Its
+// absence is what let `.project=bindry` answer `(no matches)`, which reads
+// as "that project has no tasks" rather than "there is no such project".
+//
+// Narrow on purpose: only an eid-typed column, only equality-shaped ops,
+// only a non-empty value. `=` empty means ABSENT, a range is a range, and
+// `~=` is literal — none of those name an entity. Stored evaluation never
+// calls this, so a renamed or deleted project still leaves its board total.
+export let checkRefs = (all: Row[], preds: Pred[]) => {
+  for (let p of preds) {
+    let comp = p.at?.comp ?? p.comp
+    let prop = p.at?.prop ?? p.prop
+    let t = propAt(comp, prop)?.type
+    // route()'s any-of: comp '' means a ref name several comps share, so
+    // the _eid suffix is the only signal and no kind narrows the search.
+    let target = typeof t == 'object' && 'eid' in t
+      ? t.eid
+      : !comp && prop.endsWith('_eid')
+      ? ''
+      : undefined
+    if (target == null) continue
+    if ((p.op != '' && p.op != '!') || /\.\./.test(p.value)) continue
+    for (let v of p.value.split(',')) {
+      if (v) deref(all, v, ` (.${prop})`, target)
+    }
+  }
+}
 let derefProp = (all: Row[], name: string, prop: string, value: unknown) =>
   prop.endsWith('_eid') &&
     (typeof value == 'string' || typeof value == 'number')

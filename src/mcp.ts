@@ -27,6 +27,7 @@ import { sha } from './sha.ts'
 import { FILTERS, GRAMMAR } from './grammar.ts'
 import {
   byBoard,
+  checkRefs,
   claimant,
   claimChanges,
   commentChanges,
@@ -276,6 +277,7 @@ filters must ALL match. ${FILTERS} ${BUS}`,
         parseFilters(filters),
         (id) => find(all, id)?.eid,
       )
+      checkRefs(all, ps)
       let byEid = new Map(all.map((r) => [r.eid, r.comps]))
       let hits = all
         .filter((r) => r.comps.task)
@@ -966,6 +968,7 @@ ${GRAMMAR} ${FILTERS}`,
         parseFilters(filters),
         (id) => find(all, id)?.eid,
       )
+      checkRefs(all, ps)
       let byEid = new Map(all.map((r) => [r.eid, r.comps]))
       let hits = all
         .filter((r) => !kind || r.kind == kind)

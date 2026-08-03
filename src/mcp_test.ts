@@ -547,6 +547,45 @@ Deno.test('MCP modes apply every accepted field and reject conflicts', async () 
   }
 })
 
+// A one-shot query is typed, never stored, so it may refuse. `(no
+// matches)` for a handle naming nothing reads as "that project has no
+// tasks"; boards keep the forgiving reading (client.ts checkRefs).
+Deno.test('task_list and graph_query refuse a handle that names nothing', async () => {
+  let g = graph()
+  try {
+    await protocol(g.io, async (client) => {
+      let P = '50000000-0000-4000-8000-000000000001'
+      await client.callTool({
+        name: 'graph_apply',
+        arguments: {
+          changes: [
+            { eid: P, name: 'doc', comp: { title: 'bindery', body: '' } },
+            { eid: P, name: 'alias', comp: { slug: 'bindery' } },
+            { eid: P, name: 'project', comp: {} },
+          ],
+        },
+      })
+      for (let name of ['task_list', 'graph_query']) {
+        let out = await client.callTool({
+          name,
+          arguments: { filters: ['.project=bindry'] },
+        })
+        assertEquals(out.isError, true, name)
+        assertMatch(said(out), /no entity: bindry .* did you mean 'bindery'/)
+      }
+      // and a handle that resolves still lists
+      let ok = await client.callTool({
+        name: 'task_list',
+        arguments: { filters: ['.project=bindery'] },
+      })
+      assertEquals(ok.isError, undefined)
+      assertMatch(said(ok), /no matches/)
+    })
+  } finally {
+    g.db.close()
+  }
+})
+
 Deno.test('graph_apply reports the authoritative effective batch', async () => {
   let g = graph()
   try {

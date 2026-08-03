@@ -2,6 +2,7 @@
 // change builders, and the injection digest. No server, no db.
 import {
   byBoard,
+  checkRefs,
   claimant,
   claimChanges,
   commentChanges,
@@ -46,7 +47,7 @@ import {
   unreadMail,
   wrapChanges,
 } from './client.ts'
-import { matchQuery, parseQuery } from './query.ts'
+import { matchQuery, parseQuery, resolveRefs } from './query.ts'
 import { type Change, idOf, kindOf, type Snapshot } from './types.ts'
 import { assertEquals, assertMatch, assertThrows } from '@std/assert'
 
@@ -1800,6 +1801,51 @@ Deno.test('derefParams: project references accept P-nums and eids', () => {
   let one = (s: string) => derefParams(graph, [param(s)!])[0].value
   assertEquals(one('.project=P-4'), p)
   assertEquals(one(`.project=${p}`), p)
+})
+
+// `(no matches)` for a handle that names nothing reads as "that project
+// has no tasks", not "there is no such project" — the quiet half of the
+// same typo the write door already teaches.
+Deno.test('checkRefs: an unresolvable handle in a filter is a typo, not an empty list', () => {
+  let p = 'aaaaaaaa-0000-4000-8000-000000000004'
+  let graph = rows({
+    changes: [
+      ...snap.changes,
+      { eid: p, name: 'entity', comp: { eid: p, num: 30 } },
+      { eid: p, name: 'doc', comp: { title: 'bindery', body: '' } },
+      { eid: p, name: 'alias', comp: { slug: 'bindery' } },
+      { eid: p, name: 'project', comp: {} },
+    ],
+  })
+  let ask = (q: string) =>
+    checkRefs(graph, resolveRefs(parseQuery(q), (id) => find(graph, id)?.eid))
+  assertThrows(
+    () => ask('.project=bindry'),
+    Error,
+    "no entity: bindry (.project_eid) — did you mean 'bindery' (P-30, bindery)?",
+  )
+  assertThrows(() => ask('.project=zzzznope'), Error, 'no entity: zzzznope')
+  // lists check every part; != is the same claim about the same handle
+  assertThrows(() => ask('.project=bindery,zzzznope'), Error, 'zzzznope')
+  assertThrows(() => ask('.project!=zzzznope'), Error, 'zzzznope')
+  // and everything that does NOT name an entity passes through untouched
+  ask('.project=bindery') // resolves
+  ask('.project=') // empty IS absent, the documented spelling
+  ask('.project~=bind') // contains is literal
+  ask('.priority<=1') // not a reference at all
+  ask('.title~=zzzznope')
+  ask('.updated.at=today')
+  ask('.num=1..9')
+})
+
+// A board is a saved query: the project it names may be renamed or
+// deleted long after, and a board that throws is worse than one that
+// returns nothing. Stored evaluation never calls checkRefs — the forgiving
+// reading stays where the query is stored, the strict one where it is typed.
+Deno.test('resolveRefs stays total for a handle that is gone', () => {
+  let preds = resolveRefs(parseQuery('.project=vanished'), () => undefined)
+  assertEquals(preds[0].value, 'vanished') // as typed, matching nothing
+  assertEquals(matchQuery({ task: { project_eid: 'x' } }, preds), false)
 })
 
 // The failure fires exactly when someone reasons from the fleet id: the
