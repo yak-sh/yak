@@ -1928,6 +1928,9 @@ html {
   gap: var(--half-gap);
   padding: 2px calc(var(--gap) + env(safe-area-inset-right, 0px)) 2px
     calc(var(--gap) + env(safe-area-inset-left, 0px));
+  /* Under a thumb the bar IS the door to the commands (Status.tsx), so it
+     takes the tap floor — 0 under a fine pointer, where `:` opens it. */
+  min-height: var(--tap);
   background: var(--surface);
   border-top: 1px solid var(--border);
   font-size: 12px;
@@ -1943,8 +1946,12 @@ html {
 .Status_Mode-visual {
   color: var(--purple);
 }
+/* The colon is also the line's handle: with the line covering the rest of
+   the bar, this is the strip a thumb taps to shut it again — so it takes
+   the tap floor too. */
 .Status_Colon {
   color: var(--text);
+  min-width: var(--tap);
   margin-right: calc(-1 * var(--half-gap)); /* the line hugs the colon */
   align-self: start; /* a grown line keeps the colon on its first row */
 }
@@ -2014,11 +2021,14 @@ html {
   max-height: 50vh;
   overflow-y: auto;
 }
+/* A hint is a ROW to tap on a phone (the vocabulary, listed) as much as a
+   completion to arrow through, so it takes the tap floor. */
 .Status_Hint {
   display: flex;
-  align-items: baseline;
+  align-items: center; /* the floor below would strand a baseline at the top */
   gap: var(--half-gap);
   padding: 2px var(--half-gap);
+  min-height: var(--tap);
   border-radius: var(--radius);
   cursor: pointer;
 }

@@ -64,6 +64,15 @@ let {
 let msg = signal('')
 let last = signal('') // what ↑ recalls
 
+// A thumb has no `:` key, so the BAR is the door — a tap opens the command
+// line, another shuts it. And the keyboard WAITS: under a coarse pointer
+// the line opens unfocused, which leaves the hints standing as a palette
+// of verbs to TAP; picking one writes it in and takes the keyboard then,
+// for the arguments it actually needs.
+let thumb = () => !!globalThis.matchMedia?.('(pointer: coarse)').matches
+// What in the bar owns its own tap, and so never works the door.
+let own = 'button, a, input, textarea, .Status_Hints'
+
 // The context a command runs in: what you're LOOKING at is what you're
 // commanding — the root card (the URL) is the focused entity. A browser
 // speaks for no session, so :claim must name one here.
@@ -265,14 +274,15 @@ export let Status = () => {
     }
   }, [])
 
-  // The command line grabs focus the moment it appears — and if a draft
-  // outlived a swap, the late-mounting input catches up to the line.
+  // The command line grabs focus the moment it appears — a thumb's the
+  // exception (see above) — and if a draft outlived a swap, the late-
+  // mounting input catches up to the line.
   useEffect(() => {
     if (mode.value != 'command') return
     let i = input.current
     if (!i) return
     if (i.value != line) i.value = line
-    i.focus()
+    if (!thumb()) i.focus()
   })
 
   // The typed line, mirrored for the ghost and the hints (the DOM input
@@ -295,6 +305,18 @@ export let Status = () => {
     v ? save('cmd', v) : drop('cmd')
     setLine(v)
     setPick(0)
+    if (v) input.current?.focus() // a picked verb takes the keyboard
+  }
+
+  // The bar's tap, both ways. Escape is the desktop's exit and a phone has
+  // none, so opening must also close — otherwise a thumb that opened the
+  // line by accident is stuck in it.
+  let door = (e: MouseEvent) => {
+    if (e.target instanceof HTMLElement && e.target.closest(own)) return
+    if (!globalThis.getSelection?.()?.isCollapsed) return // a drag isn't a tap
+    if (mode.value == 'command') put('')
+    else msg.value = ''
+    mode.value = mode.value == 'command' ? 'normal' : 'command'
   }
 
   let cmdKey = (e: KeyboardEvent & { currentTarget: HTMLTextAreaElement }) => {
@@ -327,7 +349,7 @@ export let Status = () => {
   }
 
   return (
-    <Frame>
+    <Frame onClick={door}>
       {mode.value == 'command'
         ? (
           <>
