@@ -32,3 +32,22 @@ Deno.test('session row names its actor', () => {
   let actor = children(row)[2]
   assertEquals(actor.props.children, 'Task Graph')
 })
+
+Deno.test('session title names model and effort', () => {
+  cache.value = {
+    session: {
+      entity: { eid: 'session', num: 2 },
+      session: {
+        eid: 'session',
+        id: 'session-id',
+        model: 'gpt-5.6',
+        effort: 'high',
+      },
+    },
+  }
+
+  let e = ent('session')
+  let title = resolve(e, 'Card.Title').Render({ e })!
+  let text = children(title)[2]
+  assertEquals(text.props.children, ['GPT 5.6', ' · high'])
+})

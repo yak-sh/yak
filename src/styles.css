@@ -169,7 +169,7 @@ html {
 /* The mono keepers: ids, chips, badges, edge verbs, timestamps, code,
    and every command/inspector/log surface. Prose everywhere else is
    var(--font) via body. :where keeps this overridable. */
-:where(code, pre, kbd, .Id, .Prio, .Show_Domain, .Show_Project, .Show_Assignee, .Show_Claim, .Show_Deps, .Show_Mail, .Dependency_Type, .Relate_Verb, .Stamp, .Comments_When, .Comments_Who, .Comments_Via, .Board_ColName, .Board_Count, .Board_Chips, .Status, .Search_Box input, .Search_Id, .Debug, .Debug_Claim, .SessionRow, .Session_Facts, .Session_Status, .Session_Model, .Session_Tool, .Session_Exec, .Session_Turn, .Session_When, .Session_Err) {
+:where(code, pre, kbd, .Id, .Prio, .Show_Domain, .Show_Project, .Show_Assignee, .Show_Claim, .Show_Deps, .Show_Mail, .Dependency_Type, .Relate_Verb, .Stamp, .Comments_When, .Comments_Who, .Comments_Via, .Board_ColName, .Board_Count, .Board_Chips, .Status, .Search_Box input, .Search_Id, .Debug, .Debug_Claim, .SessionRow, .Session_Facts, .Session_Tool, .Session_Exec, .Session_Turn, .Session_When, .Session_Err) {
   font-family: var(--mono);
 }
 
@@ -2429,7 +2429,6 @@ a[data-ref]:hover {
   top: 0;
   z-index: 1;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: var(--half-gap);
   min-width: 0; /* the head must shrink, or the Inline can never truncate */
@@ -2461,46 +2460,15 @@ a[data-ref]:hover {
   border-top: 1px solid var(--border);
   padding: var(--half-gap) var(--gap);
 }
-.Session_Status {
-  font-weight: 600;
-}
-/* the bar's status text wears the pip's colour (the Dot palette) */
-.Session_Status-starting {
-  color: var(--open);
-}
-.Session_Status-running {
-  color: var(--wip);
-}
-.Session_Status-stopping,
-.Session_Status-interrupted {
-  color: var(--orange);
-}
-.Session_Status-completed {
-  color: var(--done);
-}
-.Session_Status-failed {
-  color: var(--red);
-}
-.Session_Status-lost {
-  color: var(--purple);
-}
-.Session_Model,
 .Session_Seq,
 .Session_Type {
   color: var(--dim);
   font-size: 11px;
 }
-/* the model, worn as a chip */
-.Session_Model {
-  color: var(--muted);
-  background: var(--soft);
-  border-radius: 4px;
-  padding: 1px 6px;
-  white-space: nowrap;
-}
-/* the task it runs keeps the head's right edge, truncating first */
+/* Task and role give out first; their own titles paint the ellipsis. */
 .Session_Head > .Inline {
-  margin-left: auto;
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
 }
 .Session_Stop {
@@ -2523,14 +2491,10 @@ a[data-ref]:hover {
   font-size: 11px;
   color: var(--dim);
 }
-.Session_Head > .Session_Facts {
-  order: 1;
-  flex-basis: 100%;
-}
 .Session_Gist {
   cursor: pointer;
   list-style: none;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
 }
 .Session_Gist::-webkit-details-marker {
   display: none;

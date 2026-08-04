@@ -25,7 +25,7 @@ import { Id } from './Inline.tsx'
 import { Entity } from '../Entity.tsx'
 
 // An agent session, watched — the console (W-3676 #5): a sticky slim bar
-// (status, model, lifecycle summary, stop — server-owned columns riding
+// (task, lifecycle summary, stop — server-owned columns riding
 // the snapshot like any component, so the bar re-renders itself as the
 // run moves), the log with the session's comments woven in by time, then
 // the pinned composer (Comments.tsx), which is the way to talk TO the
@@ -43,8 +43,6 @@ import { Entity } from '../Entity.tsx'
 
 let Frame = block('div', 'Session', {
   Head: 'div',
-  Status: 'span',
-  Model: 'span',
   Stop: 'button',
   Body: 'div',
   Facts: 'details',
@@ -84,8 +82,6 @@ let Frame = block('div', 'Session', {
 })
 let {
   Head,
-  Status,
-  Model,
   Stop,
   Body: Panel,
   Facts,
@@ -425,12 +421,8 @@ export let Session = ({ e }: { e: Ent }) => {
     (x) => x.row?.kind == 'say' && x.row.role == 'agent',
   )
   let rows = squeeze(log.entries)
-  // The facts fold behind one dim line — the mock's disclosure summary.
-  let gist = [
-    s.branch,
-    s.cwd,
-    s.started_at && `started ${ago(s.started_at)}`,
-  ].filter(Boolean).join(' · ') || 'session'
+  // The facts fold behind the one lifecycle fact worth keeping in the bar.
+  let gist = s.started_at ? `started ${ago(s.started_at)}` : 'not started'
   // A comment joins the thread once the session has HEARD it: a managed
   // resume prints the words as its own `session.input` line (the log IS
   // the delivery — the comment would double it, so it hides), and the
@@ -451,13 +443,10 @@ export let Session = ({ e }: { e: Ent }) => {
     <Frame elRef={frame}>
       <Head>
         <Dot status={status} />
-        <Status mod={status}>{status || 'external'}</Status>
-        {(s.serving_model || s.model) && (
-          <Model>
-            {friendly(s.serving_model || s.model)}
-            {s.effort && ` · ${s.effort}`}
-          </Model>
+        {s.requested_task_eid && (
+          <Entity eid={s.requested_task_eid} view='Inline' />
         )}
+        {s.role_eid && <Entity eid={s.role_eid} view='Inline' />}
         <Facts>
           <Gist>{gist}</Gist>
           <Kv>
@@ -479,10 +468,6 @@ export let Session = ({ e }: { e: Ent }) => {
           </Kv>
           <Stamp e={e} />
         </Facts>
-        {s.requested_task_eid && (
-          <Entity eid={s.requested_task_eid} view='Inline' />
-        )}
-        {s.role_eid && <Entity eid={s.role_eid} view='Inline' />}
         {
           /* No brake on a process we never forked — apply() refuses a
             stop_request at anything but a managed run, and the button

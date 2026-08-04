@@ -77,6 +77,7 @@ export let SessionTitle = ({ e }: { e: Ent }) => {
       <Dot status={standing(s)} />
       <Text>
         {friendly(s.serving_model || s.model) ?? 'session'}
+        {s.effort && ` · ${s.effort}`}
       </Text>
     </Frame>
   )
