@@ -158,7 +158,6 @@ You are probably escalating the wrong thing when: the ticket already carries you
 # M-4523 git workflow — work in a worktree, land with `task land`
 
 - **Work in your own worktree, and land with `task land`.** The worktree means no two writers ever share a tree. `task land` rebases your branch on `main`, re-runs the gate on the exact rebased commit, and fast-forward merges it into the shared checkout's `main` — the tree the server runs from. Landing is what makes a change take effect.
-- **Origin is publication, not landing.** A push moves bytes to a remote and changes nothing anyone is executing. Publishing is its own act, after the land — never a way around worktree isolation.
 - **ff-only is the compare-and-swap.** If another lander moved `main` between your rebase and the merge, the merge is no longer a fast-forward and git refuses. Rebase on `main`, re-gate, land again. Never `--force`/`-f`, and never `--force-with-lease` past a refusal: a refusal means someone landed first, so read their work and rebase onto it.
 - **"Did it land?" asks the shared checkout's `main`.** Worktrees share one ref store, so it is readable from yours:
 
