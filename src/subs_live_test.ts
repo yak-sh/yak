@@ -228,6 +228,21 @@ Deno.test(
   },
 )
 
+Deno.test(
+  'subscription: presence pred follows a stamped column',
+  alone,
+  async () => {
+    let a = task({})
+    let tag = a.eid.slice(0, 8)
+    await walk(`.proposed.at!&.doc.title~=${tag}`, [
+      a.born, // no proposal — out
+      [{ eid: a.eid, name: 'proposed', comp: {} }], // stamped at — in
+      [{ eid: a.eid, name: 'task', comp: { priority: 1 } }], // untouched — still in
+      [{ eid: a.eid, name: 'proposed', comp: null }], // absent — out
+    ])
+  },
+)
+
 // A component deleted whole is not a column cleared: the row is gone, so every
 // pred over it must stop matching — including a `!=` that a missing column
 // might otherwise be read as satisfying.

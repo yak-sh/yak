@@ -73,6 +73,7 @@ put('e6', { doc: { title: 'wider', body: '100 percent, underXscore' } })
 // stored text is lowercase so an ASCII needle reaching PAST it still agrees,
 // while a needle carrying the accent itself declines.
 put('e7', { doc: { title: 'café', body: 'a café in zürich' } })
+put('e8', { proposed: { at: '', by: null, via: null } })
 
 // The JS side reads the same shape live.ts and client.ts hand matchQuery:
 // eid → { comp → { col → value } }, absent components simply missing.
@@ -144,6 +145,8 @@ let COMPILES = [
   // facet presence is the component row itself, not one nullable column
   '.proposed=',
   '.proposed~=',
+  '.proposed!',
+  '.proposed.at!',
   // negation
   '.task.status!=done',
   '.task.priority!=1',
@@ -213,6 +216,7 @@ for (let q of COMPILES) {
 // own agreement case rather than by accident.
 let DECLINES = [
   '.updated.at>=1-week-ago', // a moving span
+  '.updated.at!', // the matcher falls back to created.at
   '.created.at=today',
   '.doc.body=', // a body is only ever narrowed by the index, never scanned
   '.task.domain>=1', // text column against a numeric operand

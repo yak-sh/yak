@@ -69,6 +69,8 @@ let cases: [string, string, Record<string, unknown>, boolean][] = [
   ['null means absent', '.domain=', { domain: null }, true],
   ['null miss', '.domain=', {}, false],
   ['not-null', '.domain!=', {}, true],
+  ['present', '.domain!', {}, true],
+  ['empty string is present', '.domain!', { domain: '' }, true],
   ['spine num', '.num=7', {}, true],
   ['spine num list', '.num=1,7,9', {}, true],
   ['explicit comp', '.task.status=open', {}, true],
@@ -91,6 +93,20 @@ Deno.test('query: comparisons never match an absent prop', () => {
   )
 })
 
+Deno.test('query: trailing bang tests property presence', () => {
+  let p = pred('.proposed.at!')!
+  assertEquals(p, {
+    comp: 'proposed',
+    prop: 'at',
+    op: 'exists',
+    value: '',
+  })
+  assertEquals(matchQuery({}, [p]), false)
+  assertEquals(matchQuery({ proposed: { at: null } }, [p]), false)
+  assertEquals(matchQuery({ proposed: { at: '' } }, [p]), true)
+  assertEquals(matchQuery({ proposed: { at: '2026-08-01' } }, [p]), true)
+})
+
 Deno.test('query: component names test facet absence and presence', () => {
   let fix = row({})
   let idea = row({}, { proposed: { at: '2026-08-01T00:00:00.000Z' } })
@@ -100,6 +116,8 @@ Deno.test('query: component names test facet absence and presence', () => {
   assertEquals(matches('.proposed=', idea), false)
   assertEquals(matches('.proposed~=', fix), false)
   assertEquals(matches('.proposed~=', idea), true)
+  assertEquals(matches('.proposed!', fix), false)
+  assertEquals(matches('.proposed!', idea), true)
   assertThrows(
     () => parseQuery('.proposed!=yes'),
     Error,
@@ -541,10 +559,12 @@ let has: [string, string, string, string][] = [
   ['recall columns', '.recall.', '.recall.count', 'recall · stamped'],
   ['explicit spelling for collisions', '.pin.', '.pin.x', 'pin'],
   ['ops after a prop', '.status', '.status=', 'equals'],
+  ['presence op', '.status', '.status!', 'exists'],
   ['negation op', '.status', '.status!=', 'not'],
   ['contains op', '.title', '.title~=', 'contains'],
   ['facet absent', '.proposed', '.proposed=', 'absent'],
   ['facet present', '.proposed', '.proposed~=', 'present'],
+  ['facet bang present', '.proposed', '.proposed!', 'present'],
   ['range skeleton', '.priority', '.priority=..', 'range'],
   ['half-typed op', '.status!', '.status!=', 'not'],
   ['enum values', '.status=', '.status=open', 'status'],
@@ -684,6 +704,7 @@ Deno.test('.updated.at reads created.at when nothing has updated it', () => {
   // The fallback: born inside the window, never updated, still a match.
   assertEquals(hits('.updated.at>=2026-08-01', born), true)
   assertEquals(hits('.updated.at>=2026-08-01', touched), true)
+  assertEquals(hits('.updated.at!', born), true)
   // And it does not invent recency: born long ago is still out.
   assertEquals(
     hits('.updated.at>=2026-08-01', { ...born, created: { at: '2019-01-01' } }),

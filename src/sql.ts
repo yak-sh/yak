@@ -20,7 +20,7 @@
 // spelling (`comp: ''`, which reads whichever component happens to carry the
 // column), and a substring too short for a trigram (see `grams`).
 import { propAt } from './props.ts'
-import { ORDER, type Pred, TEXT } from './query.ts'
+import { EXISTS, ORDER, type Pred, TEXT } from './query.ts'
 import { comps, stamped } from './types.ts'
 
 // Bound values are only ever text or numbers — the grammar has no other
@@ -211,9 +211,17 @@ let one = (p: Pred): Sql | null => {
   if (!known(p.comp, p.prop)) return null
   if (!p.prop) {
     return {
-      sql: `${col(p.comp, 'eid')} is ${p.op == '~' ? 'not ' : ''}null`,
+      sql: `${col(p.comp, 'eid')} is ${
+        p.op == '~' || p.op == EXISTS ? 'not ' : ''
+      }null`,
       params: [],
     }
+  }
+  // query.ts reads an untouched entity's created.at as updated.at. Compiling
+  // this would need that second join; the exact fallback already has it.
+  if (p.op == EXISTS && p.comp == 'updated' && p.prop == 'at') return null
+  if (p.op == EXISTS) {
+    return { sql: `${col(p.comp, p.prop)} is not null`, params: [] }
   }
   let tag = tagOf(p.comp, p.prop)
   if (tag == 'time') return null // spans are their own pass

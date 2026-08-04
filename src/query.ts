@@ -12,6 +12,7 @@
 //   .prop=1..5       range, inclusive (1...5 excludes the end; ISO dates
 //                    compare fine lexicographically)
 //   .prop=           null / absent
+//   .prop!            present (including an empty string)
 //   .prop!=v         not — negates any value form above
 //   .prop~=v         contains, case-insensitive
 //   .prop<v <=v >v >=v   comparisons (numeric when both sides are numbers)
@@ -35,9 +36,9 @@
 //
 // Unqualified props route by component, same rule as writes; `.task.status`
 // is the explicit spelling. A component name by itself tests the facet:
-// `.proposed=` means absent, `.proposed~=` present. `.num` routes to the
-// entity spine; `at`/`by` are shared by the stamps — created, updated,
-// decided, proposed — so spell those out (`.created.at`, `.decided.at`).
+// `.proposed=` means absent, `.proposed!` present. `.num` routes to the entity
+// spine; `at`/`by` are shared by the stamps — created, updated, decided,
+// proposed — so spell those out (`.created.at`, `.decided.at`).
 //
 // References go sugar-free: `.assignee=jeff` — a prop with no column of
 // its own, where exactly one component carries `prop_eid`, routes to
@@ -156,8 +157,10 @@ export let route = (prop: string): { comp: string; prop: string } => {
 
 // One token — '.priority<=1', '.domain=Ops,Eng' — to a Pred; null if the
 // string isn't a dot-param at all.
+export let EXISTS = 'exists'
 let OPS: Record<string, string> = {
   '=': '',
+  '!': EXISTS,
   '!=': '!',
   '~=': '~',
   '<': '<',
@@ -269,10 +272,13 @@ let typedValue = (p: Prop, value: string): string =>
 // term, silently searching for the filter the caller thought they wrote.
 export let pred = (token: string): Pred | null => {
   let m = token.match(
-    /^\.([A-Za-z_-]+)(?:\.([A-Za-z_-]+))?(!=|~=|<=|>=|<|>|=)(.*)$/s,
+    /^\.([A-Za-z_-]+)(?:\.([A-Za-z_-]+))?(!=|~=|<=|>=|<|>|=|!)(.*)$/s,
   )
   if (!m) return null
   let [, a, b, op, value] = m
+  if (op == '!' && value) {
+    throw new Error(`presence filters end at !: .${a}${b ? `.${b}` : ''}!`)
+  }
   // a quoted value is the escape hatch for spaces where whitespace splits
   value = value.replace(/^"(.*)"$/s, '$1')
   if (a == 'order' && !b && op == '=') {
@@ -296,10 +302,10 @@ export let pred = (token: string): Pred | null => {
     p = { ...route(a), op: OPS[op], value }
   }
   if (!p.prop) {
-    if (p.value || (p.op != '' && p.op != '~')) {
+    if (p.value || (p.op != '' && p.op != '~' && p.op != EXISTS)) {
       throw new Error(
         `component filters are presence tests: .${p.comp}= is absent, ` +
-          `.${p.comp}~= is present`,
+          `.${p.comp}! is present`,
       )
     }
     return p
@@ -410,6 +416,7 @@ let inTime = (v: string, p: Pred, s: Span): boolean => {
 }
 
 let test = (v: unknown, p: Pred, now?: number): boolean => {
+  if (p.op == EXISTS) return v != null
   let target = p.at ?? p
   let type = typed(target.comp, target.prop)
   if (p.op != '~' && type && kind(type) == 'time' && typeof v == 'string') {
@@ -506,7 +513,7 @@ export let matchQuery = (
         String(d.body ?? '').toLowerCase().includes(needle)
       )
     }
-    if (!p.prop) return p.op == '~' ? !!c[p.comp] : !c[p.comp]
+    if (!p.prop) return p.op == '~' || p.op == EXISTS ? !!c[p.comp] : !c[p.comp]
     if (p.at) {
       let ref = read(c, p.comp, p.prop)
       let t = ref ? ent?.(String(ref)) : undefined
@@ -617,6 +624,7 @@ export type Cand = { text: string; kind: string }
 // range, the op picks its edge), which read fine for scalars too.
 let OP_WORDS: [string, string][] = [
   ['=', 'equals'],
+  ['!', 'exists'],
   ['!=', 'not'],
   ['~=', 'contains'],
   ['<', 'before'],
@@ -682,6 +690,7 @@ let opsFor = (base: string): Cand[] => [
 
 let presenceOps = (base: string): Cand[] => [
   { text: base + '=', kind: 'absent' },
+  { text: base + '!', kind: 'present' },
   { text: base + '~=', kind: 'present' },
 ]
 
@@ -731,7 +740,7 @@ export let complete = (
   // a half-typed op ('.p!', '.p~') wants its '='
   let half = token.match(/^(\.[A-Za-z_]+(?:\.[A-Za-z_]+)?)([!~])$/)
   if (half) {
-    return OP_WORDS.filter(([op]) => op.startsWith(half[2]))
+    return OP_WORDS.filter(([op]) => op != half[2] && op.startsWith(half[2]))
       .map(([op, kind]) => ({ text: half[1] + op, kind }))
   }
 

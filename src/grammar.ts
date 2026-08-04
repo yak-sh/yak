@@ -35,7 +35,8 @@ text stays text; typed scalars parse by their grammar ('.pin.x=01',
 export let FILTERS = `Filters add operators to that routing: '.priority<=P1',
 '.domain=Ops,Eng' (any of), '.priority=P1..P3' (range; P1...P3 excludes
 the end), '.status!=done', '.title~=flux' (literal contains), '.domain='
-(absent), '.verified=yes', '.num=01,2,3'. Each scalar/list/range atom
+(absent), '.proposed.at!' (present), '.verified=yes', '.num=01,2,3'. Each
+scalar/list/range atom
 parses through the property's type; invalid enum, boolean, number, and
 priority values fail loudly. Timestamp columns take time phrases — today,
 yesterday, '2026-07-04', this|last|next week|month|year, '5 minutes ago',
@@ -48,7 +49,7 @@ The stamps share column names, so spell out the component: '.created.at',
 '.decided.at' is the DECISION's own date — it can be older than the row,
 which is why 'task decided' orders by it and not by when a thing was filed.
 Component names test facets directly: '.proposed=' means absent (the fix
-queue), while '.proposed~=' means present (the idea backlog).
+queue), while '.proposed!' means present (the idea backlog).
 Reference filters take the same sugar ('.assignee=jeff', '.project=P-19'),
 and a DOTTED path walks one reference: '.assignee.title~=jeff' — but a
 first segment naming a component stays the explicit spelling ('.pin.x=12',
