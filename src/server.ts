@@ -994,7 +994,7 @@ on('comment', {
 // leaves the index alone, so staged work survives (git.ts), and only
 // tracked files are committed, so nothing new appears in their tree.
 // What it does do is advance the branch under them: a worktree's pending
-// `push origin HEAD:main` stops being fast-forward and needs a rebase.
+// `task land` stops being a fast-forward and needs a rebase.
 // That's the trade we take knowingly — one small commit per persona
 // edit, so the rebase is always trivial.
 let syncing: ReturnType<typeof setTimeout> | undefined

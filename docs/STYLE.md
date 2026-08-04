@@ -78,20 +78,20 @@ thorough; a paragraph is almost always the wrong size.
 - Managed fleet worktrees live under `~/tasks-worktrees/`. Keep their root
   visible: some tools interpret any hidden ancestor as an instruction to use a
   different file set, even when the checkout itself contains no hidden path.
-- Work in a worktree; land with `git push origin HEAD:main`. A worktree cannot
-  merge into `main` — it is checked out in the shared tree, which refuses
-  `merge`, `push .`, `fetch .` and `branch -f` alike. ff-only is the remote's
-  job: a non-fast-forward push is rejected, which is the mechanism working —
-  rebase on `origin/main` and push again, never `--force`.
-- Gates before every push, strictly `&&`-chained so a failure stops the line:
+- Work in a worktree; land with `task land`. It rebases your branch on `main`,
+  re-runs the gate on the rebased commit, and fast-forward merges it into the
+  shared checkout — the tree the server runs from. ff-only is the
+  compare-and-swap: another lander moving `main` first makes the merge no longer
+  a fast-forward and git refuses, so rebase, re-gate and land again, never
+  `--force`. Pushing to origin publishes; it never lands.
+- Gates before every land, strictly `&&`-chained so a failure stops the line:
   `deno fmt src/ && deno task check && DB_PATH=:memory: deno task test`. Read
   the output; never trust a log a skipped command "wrote".
-- "Did it ship?" reads the remote. Nothing updates the shared checkout, so local
-  `main` and the working tree answer confidently and wrongly:
+- "Did it land?" reads the shared checkout's `main` — readable from your
+  worktree, since worktrees share one ref store:
 
   ```sh
-  git fetch -q origin
-  git merge-base --is-ancestor <sha> origin/main && echo shipped
+  git merge-base --is-ancestor <sha> main && echo landed
   ```
 
 - Keep commits focused; commit messages say why, in prose.

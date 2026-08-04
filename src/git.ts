@@ -13,8 +13,7 @@
 //
 // That last one is why this file knows about upstreams at all. These are
 // SHARED checkouts holding no work but ours, and nobody drains them:
-// agents ship with `push origin HEAD:main`, which moves origin and leaves
-// the shared tree's branch exactly where it was. Commit onto it anyway and
+// what we commit here is never published. Commit onto it anyway and
 // the fork deepens without bound — 100 commits in some repos — until the
 // tree can no longer take a fix from origin at all, while looking perfectly
 // current: clean status, recent commits, every one of them ours.
