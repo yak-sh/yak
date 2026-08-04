@@ -267,6 +267,14 @@ export let land = async (spec: Landing, ops: LandOps = {}) => {
     let merged = await git(spec.repo, ['merge', '--ff-only', branch])
     if (!merged.code) {
       await ops.record?.(sha)
+      // The harness locks the worktree it hands an agent, and git refuses to
+      // remove a locked one — so the landing merged, closed the task, and
+      // then died on cleanup. The lock means "an agent is working here"; the
+      // caller of this verb IS that agent, standing in that tree, saying it
+      // has finished. Its exit code decides nothing because the only failure
+      // reachable here is "not locked": the tree was proven a worktree of
+      // this repo before the gate ran.
+      await git(spec.repo, ['worktree', 'unlock', spec.tree], false)
       let removed = await git(
         spec.repo,
         ['worktree', 'remove', spec.tree],

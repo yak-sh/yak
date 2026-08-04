@@ -177,6 +177,10 @@ let setup = async (): Promise<Repo> => {
   await command(repo, 'add', 'base.txt')
   await command(repo, 'commit', '-m', 'base')
   await command(repo, 'worktree', 'add', '-b', 'session/S-7', tree, 'main')
+  // Locked, because that is how an agent's worktree arrives: the harness
+  // locks the tree it hands out, naming that agent's pid. Every landing here
+  // therefore runs the case the field has.
+  await command(repo, 'worktree', 'lock', '--reason', 'an agent lives', tree)
   Deno.writeTextFileSync(`${tree}/candidate.txt`, 'candidate\n')
   await command(tree, 'add', 'candidate.txt')
   await command(tree, 'commit', '-m', 'candidate')
