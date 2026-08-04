@@ -25,6 +25,7 @@ import { drop, peek, save } from './drafts.ts'
 import { load, offers, providers } from './Run.tsx'
 import { Tray } from './Tray.tsx'
 import { block } from './ui.tsx'
+import { Id } from './views/Inline.tsx'
 
 let Frame = block('footer', 'Status', {
   Mode: 'span',
@@ -61,8 +62,31 @@ let {
   Person,
 } = Frame
 
-let msg = signal('')
+type Message = string | { task: string; session: string }
+
+let msg = signal<Message>('')
 let last = signal('') // what ↑ recalls
+
+// A spawn answer stays attached to the graph instead of freezing the
+// optimistic S-0. The session becomes linkable only once the server has
+// minted its number; its lifecycle comes from that same authoritative row.
+export let FixMessage = (
+  { task, session }: { task: string; session: string },
+) => {
+  let t = ent(task)
+  let s = ent(session)
+  return (
+    <>
+      <Id e={t} /> → {s.num
+        ? (
+          <>
+            <Id e={s} /> {s.session?.status ?? 'starting'}
+          </>
+        )
+        : 'agent starting'}
+    </>
+  )
+}
 
 // A thumb has no `:` key, so the BAR is the door — a tap opens the command
 // line, another shuts it. And the keyboard WAITS: under a coarse pointer
@@ -133,43 +157,37 @@ let scene = (task: string): Change[] => {
 // The spawn intent (:fix): defaults are the first offer, medium effort
 // when its provider has the axis — the same list the Run form shows.
 // The session is one graph write on the same socket
-// the task just rode, so ordering is free; the beat before naming it
-// lets the server-minted num cast back. The bar narrates as answers
-// arrive; anything the graph can't honor lands as a failed Session.
+// the task just rode, so ordering is free. The bar narrates from the graph;
+// anything it can't honor lands as a failed Session.
 let launch = async (task: string) => {
-  try {
-    if (!providers.value.length) await load()
-    let m = offers(providers.value)[0]
-    if (!m) throw new Error('no providers')
-    let eid = uuid()
-    mutate({
-      eid,
-      name: 'session',
-      comp: {
-        id: uuid(),
-        provider: m.p.name,
-        model: m.model,
-        ...(m.p.efforts.length
-          ? {
-            effort: m.p.efforts.includes('medium') ? 'medium' : m.p.efforts[0],
-          }
-          : {}),
-        requested_task_eid: task,
-      },
-    })
-    setTimeout(() => {
-      msg.value = `${idOf(ent(task))} → ${idOf(ent(eid))} running`
-    }, 300)
-  } catch (e) {
-    msg.value = `fix: ${e instanceof Error ? e.message : String(e)}`
-  }
+  if (!providers.value.length) await load()
+  let m = offers(providers.value)[0]
+  if (!m) throw new Error('no providers')
+  let eid = uuid()
+  mutate({
+    eid,
+    name: 'session',
+    comp: {
+      id: uuid(),
+      provider: m.p.name,
+      model: m.model,
+      ...(m.p.efforts.length
+        ? {
+          effort: m.p.efforts.includes('medium') ? 'medium' : m.p.efforts[0],
+        }
+        : {}),
+      requested_task_eid: task,
+    },
+  })
+  return eid
 }
 
 // Run a line and spend its intent: writes go out through mutate like every
 // other view, `go` is a real navigation, spawn starts an agent, and a
 // throw lands in the bar rather than a toast — the message is about the
 // line you just typed, so it belongs where you typed it.
-let exec = (line: string) => {
+let exec = async (line: string) => {
+  let launching = false
   try {
     let r = run(line, ctx(), local)
     let changes = r.changes ?? []
@@ -177,11 +195,16 @@ let exec = (line: string) => {
     if (changes.length) mutate(...changes)
     if (r.go) navigate(`/${idOf(ent(r.go))}`)
     if (r.spawn) {
-      launch(r.spawn)
+      launching = true
+      msg.value = r.msg ?? ''
+      let session = await launch(r.spawn)
+      msg.value = { task: r.spawn, session }
+    } else {
+      msg.value = r.msg ?? ''
     }
-    msg.value = r.msg ?? ''
   } catch (e) {
-    msg.value = e instanceof Error ? e.message : String(e)
+    let why = e instanceof Error ? e.message : String(e)
+    msg.value = `${launching ? 'fix: ' : ''}${why}`
   }
 }
 
@@ -418,7 +441,11 @@ export let Status = () => {
                 : 'NORMAL'}
             </Mode>
             {(msg.value || problem.value) && (
-              <Msg>{msg.value || problem.value}</Msg>
+              <Msg>
+                {typeof msg.value == 'string'
+                  ? msg.value || problem.value
+                  : <FixMessage {...msg.value} />}
+              </Msg>
             )}
           </>
         )}
