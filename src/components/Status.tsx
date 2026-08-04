@@ -116,7 +116,7 @@ let scene = (task: string): Change[] => {
       })
     : []
   let body = [
-    `:fix filed from ${location.pathname}`,
+    `fix filed from ${location.pathname}`,
     r && `- looking at: ${idOf(r)} "${r.doc?.title ?? r.kind}"`,
     r?.canvas &&
     `- camera: ${Math.round(x)},${Math.round(y)} @ ${zoom.toFixed(2)}×`,
