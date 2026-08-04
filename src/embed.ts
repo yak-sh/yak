@@ -162,41 +162,26 @@ export let similar = (
   limit = 8,
   floor = 0,
 ) => {
-  let rows = db.prepare(
-    `select embedding.eid, embedding.vec, task.eid as target_eid
-     from embedding
-     left join mail on mail.eid = embedding.eid
-     left join task on task.eid = mail.target_eid
-     where embedding.model = ?`,
-  ).all(MODEL) as {
-    eid: string
-    vec: Uint8Array
-    target_eid: string | null
-  }[]
-  let hits = new Map<string, { eid: string; score: number }>()
+  let rows = db.prepare('select eid, vec from embedding where model = ?')
+    .all(MODEL) as { eid: string; vec: Uint8Array }[]
+  let hits: { eid: string; score: number }[] = []
   for (let r of rows) {
     // slice() re-homes the blob on a fresh, 4-aligned buffer — a view
     // straight over sqlite's bytes throws when the offset is odd.
     let v = new Float32Array(r.vec.slice().buffer, 0, q.length)
     let s = 0
     for (let i = 0; i < q.length; i++) s += q[i] * v[i]
-    if (s < floor) continue
-    // Relay mail repeats the task's title and often outranks the task it is
-    // about. The task is the semantic result; coalescing here also keeps its
-    // fanout copies from spending every result slot.
-    let eid = r.target_eid ?? r.eid
-    let had = hits.get(eid)
-    if (!had || s > had.score) hits.set(eid, { eid, score: s })
+    if (s >= floor) hits.push({ eid: r.eid, score: s })
   }
-  let ranked = [...hits.values()].sort((a, b) => b.score - a.score)
+  hits.sort((a, b) => b.score - a.score)
   // Screen the ranked HEAD, not the table: a vector outlives its entity
   // until the next sweep and must never answer (the web's Similar section
   // filters hits through the live cache, but the dupe hint has no cache to
   // filter through — it saw bare UUIDs for entities already gone). Dead
   // rows are rare, so this costs ~limit point lookups; folding the rule
   // into the fetch instead cost +75% on every call to screen out nothing.
-  let live: { eid: string; score: number }[] = []
-  for (let h of ranked) {
+  let live: typeof hits = []
+  for (let h of hits) {
     if (live.length == limit) break
     if (lives(db, h.eid)) live.push(h)
   }

@@ -27,18 +27,6 @@ let put = (eid: string, text: string, v: Float32Array) =>
   db.prepare(
     'insert into embedding (eid, model, hash, vec) values (?, ?, ?, ?)',
   ).run(eid, 'Xenova/bge-small-en-v1.5', hash(text), new Uint8Array(v.buffer))
-let task = (eid: string) =>
-  db.prepare('insert into task (eid, status, priority) values (?, ?, ?)').run(
-    eid,
-    'open',
-    0,
-  )
-let mail = (eid: string, target: string | null) =>
-  db.prepare('insert into mail (eid, "to", target_eid) values (?, ?, ?)').run(
-    eid,
-    'someone@example.com',
-    target,
-  )
 
 Deno.test('hash: stable for same text, moved by any edit', () => {
   assertEquals(hash('a title\nbody'), hash('a title\nbody'))
@@ -124,26 +112,6 @@ Deno.test('similar: an ineligible row never answers, swept or not', () => {
 
   let hits = similar(db, vec(1, 0), 99, 0.5).map((h) => h.eid)
   assertEquals([hits.includes(alive), hits.includes(gone)], [true, false])
-})
-
-Deno.test('similar: mail speaks for the task it is about', () => {
-  let [target, first, second, loose] = [uid(), uid(), uid(), uid()]
-  doc(target, 'a terse task')
-  task(target)
-  for (let letter of [first, second]) {
-    doc(letter, 'a verbose account of the matching problem')
-    mail(letter, target)
-  }
-  doc(loose, 'untargeted mail stays mail')
-  mail(loose, null)
-  put(first, 'a verbose account of the matching problem', vec(1, 0))
-  put(second, 'a verbose account of the matching problem', vec(3, 1))
-  put(loose, 'untargeted mail stays mail', vec(1, 1))
-
-  let ours = similar(db, vec(1, 0), 99, 0.5)
-    .filter((h) => [target, first, second, loose].includes(h.eid))
-  assertEquals(ours.map((h) => h.eid), [target, loose])
-  assertEquals(ours[0].score, 1)
 })
 
 Deno.test('stored: exact text reuses a doc vector; edits and misses do not', () => {
