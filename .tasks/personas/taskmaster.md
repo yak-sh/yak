@@ -345,7 +345,7 @@ When in doubt, don't: decline the work, note why, move on.
 
 *Recall a body by id (memory_recall / task show).*
 
-- M-4415 feedback: long CLI values ride the @file door — every door that takes a body reads it · 4× · confirmed 2026-07-29
+- M-4415 feedback: long CLI values ride the @file door — every door that takes a body reads it · 5× · confirmed 2026-07-29
 - M-4491 feedback: glean — the owner's named research operation · 3×
 - M-4496 feedback: generated repo artifacts live in the repo (committed), not ~/ · 1×
 - M-4416 feedback: a session worktree must never own a global install · 1×
