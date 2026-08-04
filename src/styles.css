@@ -2429,6 +2429,7 @@ a[data-ref]:hover {
   top: 0;
   z-index: 1;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--half-gap);
   min-width: 0; /* the head must shrink, or the Inline can never truncate */
@@ -2521,6 +2522,10 @@ a[data-ref]:hover {
 .Session_Diagnostics {
   font-size: 11px;
   color: var(--dim);
+}
+.Session_Head > .Session_Facts {
+  order: 1;
+  flex-basis: 100%;
 }
 .Session_Gist {
   cursor: pointer;
