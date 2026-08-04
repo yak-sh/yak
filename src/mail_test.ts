@@ -268,6 +268,36 @@ Deno.test('fanout: self-echo and the unaddressed stay home', () => {
   assertEquals(mintedFor(c2).length, 0) // no address, no mail
 })
 
+Deno.test('fanout: commentary born with a task stays in its filing event', () => {
+  let { proj } = fixture()
+  let filed = uid(), c = uid()
+  apply(db, [
+    { eid: filed, name: 'doc', comp: { title: 'the filed work' } },
+    {
+      eid: filed,
+      name: 'task',
+      comp: { status: 'open', project_eid: proj },
+    },
+    { eid: c, name: 'doc', comp: { title: '', body: 'filed T-1' } },
+    { eid: c, name: 'comment', comp: { target_eid: filed } },
+  ])
+  fanout(cast)(c, { target_eid: filed })
+  assertEquals(mintedFor(c).length, 0)
+
+  let pending = db.prepare(`select eid from comment where ${FANOUT_PENDING}`)
+    .all() as { eid: string }[]
+  assertEquals(pending.some((r) => r.eid == c), false)
+
+  let later = uid()
+  apply(db, [
+    { eid: filed, name: 'task', comp: { status: 'wip' } },
+    { eid: later, name: 'doc', comp: { title: '', body: 'new words' } },
+    { eid: later, name: 'comment', comp: { target_eid: filed } },
+  ])
+  fanout(cast)(later, { target_eid: filed })
+  assertEquals(mintedFor(later).length, 1) // a task patch is still news
+})
+
 Deno.test('the sweep predicate finds unreceipted recent comments only', () => {
   let { task } = fixture()
   let fresh = comment(task)

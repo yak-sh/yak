@@ -172,10 +172,11 @@ let launch = async (task: string) => {
 let exec = (line: string) => {
   try {
     let r = run(line, ctx(), local)
-    if (r.changes?.length) mutate(...r.changes)
+    let changes = r.changes ?? []
+    if (r.spawn) changes = [...changes, ...scene(r.spawn)]
+    if (changes.length) mutate(...changes)
     if (r.go) navigate(`/${idOf(ent(r.go))}`)
     if (r.spawn) {
-      mutate(...scene(r.spawn)) // what you're looking at rides along
       launch(r.spawn)
     }
     msg.value = r.msg ?? ''

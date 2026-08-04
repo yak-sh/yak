@@ -281,6 +281,29 @@ export let mailed =
     )
   }
 
+// A batch is one event. Commentary born beside its task is part of filing it,
+// not new correspondence — and the journal is the durable batch boundary the
+// boot sweep can read back. Both component and spine must be present: a task
+// patch in the same batch is still news.
+let TASK_BIRTH_BATCH = `
+  exists (
+    select 1 from journal j, json_each(j.batch) c
+    where json_extract(c.value, '$.eid') = comment.eid
+      and json_extract(c.value, '$.name') = 'entity'
+      and json_type(c.value, '$.comp') = 'object'
+      and exists (
+        select 1 from json_each(j.batch) t, json_each(j.batch) e
+        where json_extract(t.value, '$.name') = 'task'
+          and json_extract(t.value, '$.eid') = comment.target_eid
+          and json_extract(e.value, '$.name') = 'entity'
+          and json_type(e.value, '$.comp') = 'object'
+          and json_extract(e.value, '$.eid') = comment.target_eid))
+`.trim()
+
+let bornWithTask = (eid: string) =>
+  !!db.prepare(`select 1 from comment where eid = ? and ${TASK_BIRTH_BATCH}`)
+    .get(eid)
+
 // created(comment): a comment on an ADDRESSED project's task fans out as
 // a mail — to the project REFERENCE, not a raw address, so the
 // resolution path (and its audit trail) is exercised on every relay. The
@@ -290,6 +313,7 @@ export let mailed =
 // guard delivery.js had).
 export let fanout =
   (cast: Cast) => (eid: string, comp: Record<string, unknown>) => {
+    if (bornWithTask(eid)) return
     let target = String(comp.target_eid ?? '')
     let t = db.prepare('select project_eid from task where eid = ?').get(
       target,
@@ -363,6 +387,8 @@ export let fanout =
 // history, not undelivered mail, and a day of it arriving at once is a
 // mail bomb, not a catch-up.
 export let FANOUT_PENDING = `
+  not ${TASK_BIRTH_BATCH}
+  and
   not exists (
     select 1 from dependency d join mail s on s.eid = d.parent_eid
     where d.type = 'about' and d.child_eid = comment.eid)
