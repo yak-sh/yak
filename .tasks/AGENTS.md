@@ -474,14 +474,6 @@ makes one of these seams wider or leakier, that's the wrong direction.
 
 ---
 
-# M-12915 Use idiomatic language
-
-**Stick to idiomatic terms for things.** Avoid approximations, house shorthand, and slang. Use the terms that are typical for a tool. LLMs often drift to analogous terms over repeated cycles. This drift can cause a degradation of meaning over time and make it difficult for others to understand. Especially if they are already familiar with the typical terminology.
-
-This applies when talking about git, SQL, HTTP, systemd, DNS, programming languages, and any other similar tool.
-
----
-
 # M-3715 delegation discipline
 
 Delegation in the fleet, so that if our system breaks the work still continues on the floor and the board stays the truth about who is doing what:
@@ -551,6 +543,14 @@ The web tab and your CLI list can legitimately show different counts: the tab re
 ## Your boot digest already tells you
 
 Every session's `task context` opens with `## inbox — N unread (task inbox)`. That N is counted with the inbox's own predicate, so the number and the list can't disagree — if the line is there, something is waiting; if it's absent, nothing is.
+
+---
+
+# M-12915 Use idiomatic language
+
+**Stick to idiomatic terms for things.** Avoid approximations, house shorthand, and slang. Use the terms that are typical for a tool. LLMs often drift to analogous terms over repeated cycles. This drift can cause a degradation of meaning over time and make it difficult for others to understand. Especially if they are already familiar with the typical terminology.
+
+This applies when talking about git, SQL, HTTP, systemd, DNS, programming languages, and any other similar tool.
 
 ---
 
