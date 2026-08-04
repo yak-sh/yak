@@ -36,7 +36,7 @@ import { apply, db, human, record, snapshot } from './db.ts'
 import { present, reachable } from './door.ts'
 import { dispatch, trace } from './effects.ts'
 import { legacyWorktreesDir, worktreesDir } from './ground.ts'
-import { lapseChanges, rows } from './client.ts'
+import { rows, wrapChanges } from './client.ts'
 import { materialize } from './persona.ts'
 import { type Change, type LogRow, sessionActive } from './types.ts'
 
@@ -290,7 +290,15 @@ let settled = (eid: string, status: string, cast: Cast) => {
   if (!row || row.origin != 'managed') return
   let all = rows(snapshot(db))
   let sess = all.find((r) => r.eid == eid)
-  let changes: Change[] = sess ? lapseChanges(all, sess) : []
+  let changes: Change[] = sess
+    ? wrapChanges(
+      all,
+      String(sess.comps.session?.id ?? ''),
+      Date.now(),
+      [],
+      String(row.final_text ?? '') || undefined,
+    )
+    : []
   changes.push(...report(eid, status, row))
   if (changes.length) {
     try {

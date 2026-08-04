@@ -305,6 +305,12 @@ Deno.test('a fake session runs end to end', async () => {
   assertEquals(s.provider, 'fake') // dormant old-reader alias
   assertEquals(s.model, 'fake-fast')
   assertMatch(String(s.final_text), /^done: /)
+  assertEquals(
+    (db.prepare('select body from doc where eid = ?').get(eid) as {
+      body: string
+    }).body,
+    s.final_text,
+  )
   assertEquals(JSON.parse(String(s.usage_json)).output_tokens, 34)
   assertEquals(s.error, null)
   assertMatch(String(s.branch), /^session\/S-\d+$/)

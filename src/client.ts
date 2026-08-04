@@ -1784,7 +1784,8 @@ let brief = (
   let spoke = all.some((r) =>
     r.comps.comment && r.comps.created?.via == sess.eid
   )
-  if (!held.length && !spoke && !entries.length) return []
+  let tasked = !!sess.comps.session?.requested_task_eid
+  if (!tasked && !held.length && !spoke && !entries.length) return []
   let day = new Date(now).toISOString().slice(0, 10)
   let title = String(sess.comps.doc?.title || `Work session ${day}`)
   if (final) {
