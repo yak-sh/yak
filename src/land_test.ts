@@ -50,6 +50,68 @@ Deno.test('landing reads the session task and its project from the graph', () =>
   )
 })
 
+// The graph names a session's task two ways and the harness only ever uses
+// the second, so every combination is a case this verb meets in the field.
+let graph = () => {
+  let project = row('p', 19, 'project', {
+    project: {},
+    repo: { path: '/code/tasks', base_branch: 'main', gate: 'deno task gate' },
+  })
+  let session = row('s', 7, 'session', {
+    session: { id: 'thread', cwd: '/worktrees/S-7' },
+  })
+  let task = (eid: string, num: number, claimed = false) =>
+    row(eid, num, 'task', {
+      task: { status: 'open', project_eid: project.eid },
+      ...(claimed ? { claim: { session_eid: session.eid } } : {}),
+    })
+  return { project, session, task }
+}
+
+Deno.test('a claimed task is the session task when nothing requested one', () => {
+  let g = graph()
+  let claimed = g.task('t', 42, true)
+  assertEquals(
+    landing([g.project, claimed, g.session], 'thread').task,
+    claimed,
+  )
+})
+
+Deno.test('the request wins over the claim it agrees with', () => {
+  let g = graph()
+  let claimed = g.task('t', 42, true)
+  g.session.comps.session.requested_task_eid = claimed.eid
+  assertEquals(
+    landing([g.project, claimed, g.session], 'thread').task,
+    claimed,
+  )
+})
+
+Deno.test('several claims are refused by name, never guessed at', () => {
+  let g = graph()
+  let rows = [
+    g.project,
+    g.task('a', 42, true),
+    g.task('b', 41, true),
+    g.session,
+  ]
+  assertThrows(
+    () => landing(rows, 'thread'),
+    Error,
+    'land: this session claims T-41, T-42 — release the ones you are not ' +
+      'landing (task release <id>)',
+  )
+})
+
+Deno.test('a session working nothing lands nothing', () => {
+  let g = graph()
+  assertThrows(
+    () => landing([g.project, g.task('t', 42), g.session], 'thread'),
+    Error,
+    'land: this session has no task',
+  )
+})
+
 Deno.test('a landing completes its task with one idempotent receipt', () => {
   let task = row('t', 42, 'task', { task: { status: 'wip' } })
   let session = row('s', 7, 'session', { session: { id: 'thread' } })
