@@ -1,4 +1,5 @@
 import { type JSX } from 'preact'
+import { commitUrl } from '../md.ts'
 import { prefix } from '../types.ts'
 
 // Markdown for the terminal: the tiny common subset parsed into spans the
@@ -15,7 +16,7 @@ let RE = new RegExp(
     `\\[([^\\]]+)\\]\\(([^)]+)\\)|\\b((?:${LETTERS})-\\d+)\\b`,
 )
 
-let inline = (t: string): (string | JSX.Element)[] => {
+let inline = (t: string, repo?: string): (string | JSX.Element)[] => {
   let out: (string | JSX.Element)[] = []
   while (t) {
     let m = t.match(RE)
@@ -27,8 +28,18 @@ let inline = (t: string): (string | JSX.Element)[] => {
     let k = out.length
     if (m[2]) out.push(<b key={k} class='Md_B'>{m[2]}</b>)
     else if (m[4]) out.push(<span key={k} class='Md_I'>{m[4]}</span>)
-    else if (m[5]) out.push(<span key={k} class='Md_Code'>{m[5]}</span>)
-    else if (m[6]) out.push(<span key={k} class='Md_S'>{m[6]}</span>)
+    else if (m[5]) {
+      let href = commitUrl(repo, m[5])
+      out.push(
+        href
+          ? (
+            <a key={k} class='Md_A' href={href}>
+              <span class='Md_Code'>{m[5]}</span>
+            </a>
+          )
+          : <span key={k} class='Md_Code'>{m[5]}</span>,
+      )
+    } else if (m[6]) out.push(<span key={k} class='Md_S'>{m[6]}</span>)
     else if (m[9]) out.push(<span key={k} class='Md_Ref'>{m[9]}</span>)
     else if (/^[A-Za-z]+-\d+$/.test(m[8] ?? '')) {
       // a written link aimed at an id: the words, then the id it means
@@ -39,7 +50,7 @@ let inline = (t: string): (string | JSX.Element)[] => {
   return out
 }
 
-export let Md = ({ text }: { text: string }) => {
+export let Md = ({ text, repo }: { text: string; repo?: string }) => {
   let fence = false
   return (
     <div class='Md'>
@@ -51,12 +62,12 @@ export let Md = ({ text }: { text: string }) => {
         if (fence) return <div key={i} class='Md_Code'>{line}</div>
         if (!line.trim()) return <div key={i}>&#32;</div> // blank = content
         let h = line.match(/^#+\s+(.*)/)
-        if (h) return <div key={i} class='Md_H'>{inline(h[1])}</div>
+        if (h) return <div key={i} class='Md_H'>{inline(h[1], repo)}</div>
         let q = line.match(/^>\s?(.*)/)
-        if (q) return <div key={i} class='Md_Q'>▎ {inline(q[1])}</div>
+        if (q) return <div key={i} class='Md_Q'>▎ {inline(q[1], repo)}</div>
         let li = line.match(/^\s*[-*]\s+(.*)/)
-        if (li) return <div key={i} class='Md_Li'>• {inline(li[1])}</div>
-        return <div key={i}>{inline(line)}</div>
+        if (li) return <div key={i} class='Md_Li'>• {inline(li[1], repo)}</div>
+        return <div key={i}>{inline(line, repo)}</div>
       })}
     </div>
   )

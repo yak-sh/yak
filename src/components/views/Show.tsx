@@ -13,6 +13,7 @@ import {
   gated,
   parents,
   pending,
+  repoUrl,
   settled,
   statuses,
 } from '../../live.ts'
@@ -278,7 +279,9 @@ export let Body = ({ e, mod }: { e: Ent; mod?: string }) => {
       <BodyEl
         mod={mod}
         onDblClick={() => setSrc(true)}
-        dangerouslySetInnerHTML={{ __html: md(e.doc?.body ?? '') }}
+        dangerouslySetInnerHTML={{
+          __html: md(e.doc?.body ?? '', repoUrl(e)),
+        }}
       />
     )
 }

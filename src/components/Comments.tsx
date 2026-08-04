@@ -1,7 +1,7 @@
 import { useRef, useState } from 'preact/hooks'
 import { commands, orderIn, suggest } from '../commands.ts'
 import { md } from '../md.ts'
-import { commentsOn, ent, mutate, pending, uuid } from '../live.ts'
+import { commentsOn, ent, mutate, pending, repoUrl, uuid } from '../live.ts'
 import { ago, block, pretty } from './ui.tsx'
 import { useDraft } from './drafts.ts'
 import { type Ent, idOf, nick, sessionActive, verdictName } from '../types.ts'
@@ -79,7 +79,9 @@ export let Note = ({ c }: { c: Ent }) => {
       }
       {pending(c) ? <Body>…</Body> : (
         <Body
-          dangerouslySetInnerHTML={{ __html: md(c.doc?.body ?? '') }}
+          dangerouslySetInnerHTML={{
+            __html: md(c.doc?.body ?? '', repoUrl(c)),
+          }}
         />
       )}
     </Item>

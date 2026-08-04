@@ -427,7 +427,8 @@ Deno.test('payload: text and rendered markdown, threading headers on mid', () =>
     from: 'ops@bot.yak.sh',
     to: 'jeff@yak.sh',
     subject: 'subj',
-    body: '**bold** https://example.com and T-123 and [idea](T-124)',
+    body: '**bold** https://example.com and T-123 and [idea](T-124) `46dcd3f`',
+    repo: 'https://github.com/acme/widget',
   })
   assertEquals(p.from, { address: 'ops@bot.yak.sh', name: 'ops' })
   assertEquals(p.to, ['jeff@yak.sh'])
@@ -435,7 +436,7 @@ Deno.test('payload: text and rendered markdown, threading headers on mid', () =>
   assertEquals(p.subject, 'subj')
   assertEquals(
     p.text,
-    '**bold** https://example.com and T-123 and [idea](T-124)',
+    '**bold** https://example.com and T-123 and [idea](T-124) `46dcd3f`',
   )
   assertStringIncludes(p.html, '<strong>bold</strong>')
   assertStringIncludes(p.html, '<a href="https://example.com">')
@@ -443,6 +444,10 @@ Deno.test('payload: text and rendered markdown, threading headers on mid', () =>
   // resolve `/T-123` against, and nothing to bind data-ref to (T-12558).
   assertStringIncludes(p.html, '<a href="https://tasks.yak.sh/T-123">T-123</a>')
   assertStringIncludes(p.html, '<a href="https://tasks.yak.sh/T-124">idea</a>')
+  assertStringIncludes(
+    p.html,
+    'href="https://github.com/acme/widget/commit/46dcd3f"',
+  )
   assertEquals(p.html.includes('data-ref'), false)
   assertEquals(p.html.includes('href="/'), false)
   assertEquals(p.headers, undefined)

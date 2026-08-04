@@ -988,6 +988,23 @@ export let ent = (eid: string): Ent => {
   }
 }
 
+// Markdown belongs to the project its entity speaks for. Follow only the
+// graph's explicit ownership/reference columns: task/memory/role → project,
+// comment → target, session → requested task. A seen set makes malformed
+// cycles inert.
+export let repoUrl = (start: Ent): string | undefined => {
+  let seen = new Set<string>()
+  let e: Ent | undefined = start
+  while (e && !seen.has(e.eid)) {
+    seen.add(e.eid)
+    if (e.repo?.url) return e.repo.url
+    let next: string | null | undefined = e.task?.project_eid ??
+      e.comment?.target_eid ??
+      e.session?.requested_task_eid ?? e.role?.scope_eid ?? e.memory?.scope_eid
+    e = next ? ent(next) : undefined
+  }
+}
+
 export let findEid = (id: string): string | undefined => {
   let num = id.match(/^[A-Za-z]+-(\d+)$/)?.[1] ?? id.match(/^(\d+)$/)?.[1]
   for (let [eid, r] of Object.entries(cache.value)) {

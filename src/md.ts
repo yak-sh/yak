@@ -21,6 +21,9 @@
 // stay native. Code spans and blocks keep ids literal (the tokenizer never
 // enters consumed code).
 //
+// A code span shaped like a git commit links when its caller supplies the
+// owning project's repo URL. Without that project context it stays code.
+//
 // The door comes in two: `md` for the canvas, `mdAbs` for a reader with
 // no base document to resolve `/T-123` against — an email client turns
 // that into `http:///T-123` (T-12558). Same parse, same everything, one
@@ -34,6 +37,7 @@ type RefToken = { id?: unknown }
 type LinkToken = { href: string; tokens: unknown }
 type ImageToken = { href: string; text: string }
 type TextToken = { text: string }
+type CodeToken = { text: string }
 type Inline = { parser: { parseInline: (t: unknown) => string } }
 
 // `&` first, or the escapes escape.
@@ -56,7 +60,21 @@ let REF = new RegExp(`^(?:${LETTERS})-\\d+\\b`)
 
 type Ref = (id: string, text: string) => string
 
-let door = (ref: Ref) =>
+let SHA = /^[0-9a-f]{7,40}$/i
+
+// A project supplies the repository root; a commit is one stable page below
+// it. Only an http address can become generated markup, and the attribute is
+// escaped because repo settings ride the same untrusted graph as prose.
+export let commitUrl = (repo: string | null | undefined, sha: string) => {
+  let root = String(repo ?? '').trim().replace(/\/+$/, '')
+  return SHA.test(sha) && /^https?:\/\//i.test(root)
+    ? `${root}/commit/${sha}`
+    : undefined
+}
+
+let attr = (s: string) => esc(s).replace(/"/g, '&quot;')
+
+let door = (ref: Ref, repo?: string | null) =>
   new Marked({
     gfm: true,
     breaks: true,
@@ -90,15 +108,35 @@ let door = (ref: Ref) =>
       // Same rule for a src; an image we refuse shows its alt text.
       image: (t: ImageToken) =>
         LINKABLE.test(t.href.trim()) ? false : esc(t.text),
+      // A code span is an explicit signal that a hex word is a commit, so
+      // ordinary prose such as "decafed" never becomes a repository link.
+      codespan: (t: CodeToken) => {
+        let href = commitUrl(repo, t.text)
+        return href
+          ? `<a href="${attr(href)}"><code>${esc(t.text)}</code></a>`
+          : false
+      },
     },
   })
 
-let canvas = door((id, text) => `<a href="/${id}" data-ref="${id}">${text}</a>`)
+let canvasRef = (id: string, text: string) =>
+  `<a href="/${id}" data-ref="${id}">${text}</a>`
 
 // Away from the canvas data-ref has nothing to bind to — the delegated
 // listeners aren't there — so the anchor sheds it rather than mailing
 // inert markup out.
-let away = door((id, text) => `<a href="${entityUrl(id)}">${text}</a>`)
+let awayRef = (id: string, text: string) =>
+  `<a href="${entityUrl(id)}">${text}</a>`
 
-export let md = (s: string): string => canvas.parse(s) as string
-export let mdAbs = (s: string): string => away.parse(s) as string
+let doors = new Map<string, ReturnType<typeof door>>()
+let parser = (ref: Ref, repo?: string | null) => {
+  let key = `${ref == canvasRef ? 'canvas' : 'away'}\0${repo ?? ''}`
+  let found = doors.get(key)
+  if (!found) doors.set(key, found = door(ref, repo))
+  return found
+}
+
+export let md = (s: string, repo?: string | null): string =>
+  parser(canvasRef, repo).parse(s) as string
+export let mdAbs = (s: string, repo?: string | null): string =>
+  parser(awayRef, repo).parse(s) as string

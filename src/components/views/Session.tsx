@@ -8,7 +8,15 @@ import {
   type LogRow,
   standing,
 } from '../../types.ts'
-import { base, commentsOn, ent, jobOf, mutate, uuid } from '../../live.ts'
+import {
+  base,
+  commentsOn,
+  ent,
+  jobOf,
+  mutate,
+  repoUrl,
+  uuid,
+} from '../../live.ts'
 import { clickProps } from '../nav.tsx'
 import { ago, block, pretty, Stamp } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
@@ -226,7 +234,7 @@ let bareType = (line: string) => {
 // The transcript face of a line, matched on the normalized row
 // (adapters.ts). No row means the adapter didn't recognize it: show its
 // bare type, as the dump did.
-let Body = ({ x }: { x: Entry }) => {
+let Body = ({ x, repo }: { x: Entry; repo?: string }) => {
   let r = x.row
   if (!r) {
     let t = bareType(x.line)
@@ -237,7 +245,7 @@ let Body = ({ x }: { x: Entry }) => {
       // markdown, escaped of any markup by md.ts — as with a task body
       return r.role == 'user'
         ? <User>{r.text}</User>
-        : <Agent dangerouslySetInnerHTML={{ __html: md(r.text) }} />
+        : <Agent dangerouslySetInnerHTML={{ __html: md(r.text, repo) }} />
     case 'reason':
       return <Reason>{r.text}</Reason>
     case 'tool':
@@ -294,7 +302,7 @@ let prettyJson = (line: string) => {
 // (the FILE is the durable log), so this is where inspection lives: any
 // row, a system frame or a truncated tool chip alike, opens to the full
 // JSON the provider actually wrote.
-let Row = ({ x }: { x: Entry }) => {
+let Row = ({ x, repo }: { x: Entry; repo?: string }) => {
   let [open, setOpen] = useState(false)
   let at = x.row?.kind == 'say' ? x.row.at : undefined
   return (
@@ -305,7 +313,7 @@ let Row = ({ x }: { x: Entry }) => {
       >
         {x.seq}
       </Seq>
-      <Body x={x} />
+      <Body x={x} repo={repo} />
       {at && <When data-tip={pretty(at)}>{ago(at)}</When>}
       {open && <Json>{prettyJson(x.line)}</Json>}
     </Line>
@@ -401,6 +409,7 @@ let useTail = (seq?: number) => {
 
 export let Session = ({ e }: { e: Ent }) => {
   let s = e.session!
+  let repo = repoUrl(e)
   // One predicate for every surface (types.ts): a session we spawned says
   // it's going in its status, one that only announced itself is going while
   // its door is open. `standing` is that answer as a word, so an external
@@ -498,13 +507,17 @@ export let Session = ({ e }: { e: Ent }) => {
       <Panel>
         {/* markdown, escaped of any markup by md.ts — as with a task body */}
         {!said && s.final_text && (
-          <Final dangerouslySetInnerHTML={{ __html: md(s.final_text) }} />
+          <Final
+            dangerouslySetInnerHTML={{ __html: md(s.final_text, repo) }}
+          />
         )}
         {s.error && <Fault mod='error'>{s.error}</Fault>}
         {s.stop_reason && <Fault>{s.stop_reason}</Fault>}
         <Log>
           {thread.map((x) =>
-            'seq' in x ? <Row key={x.seq} x={x} /> : <Note key={x.eid} c={x} />
+            'seq' in x
+              ? <Row key={x.seq} x={x} repo={repo} />
+              : <Note key={x.eid} c={x} />
           )}
           {live && <Think>✳ {doing(rows.at(-1)?.row)}</Think>}
         </Log>

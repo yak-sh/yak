@@ -25,6 +25,7 @@ import {
   pinned,
   projects,
   relations,
+  repoUrl,
   row,
   sieve,
   subEids,
@@ -39,6 +40,41 @@ import {
   assertNotStrictEquals,
   assertStrictEquals,
 } from '@std/assert'
+
+Deno.test('repoUrl follows task, comment, and session ownership', () => {
+  cache.value = {
+    project: {
+      entity: { eid: 'project', num: 1 },
+      project: { eid: 'project' },
+      repo: {
+        eid: 'project',
+        path: '/code/widget',
+        url: 'https://github.com/acme/widget',
+        base_branch: 'main',
+      },
+    },
+    task: {
+      entity: { eid: 'task', num: 2 },
+      task: {
+        eid: 'task',
+        status: 'open',
+        priority: 1,
+        project_eid: 'project',
+      },
+    },
+    session: {
+      entity: { eid: 'session', num: 3 },
+      session: { eid: 'session', id: 'run', requested_task_eid: 'task' },
+    },
+    comment: {
+      entity: { eid: 'comment', num: 4 },
+      comment: { eid: 'comment', target_eid: 'session' },
+    },
+  }
+  for (let eid of ['project', 'task', 'session', 'comment']) {
+    assertEquals(repoUrl(ent(eid)), 'https://github.com/acme/widget')
+  }
+})
 
 // A cache of task/project rows: `['T', 'Ops']` is a task in domain Ops
 // (null = the column is absent), `['P', 'Fable']` a project by title.

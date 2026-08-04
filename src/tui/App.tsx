@@ -21,6 +21,7 @@ import {
   mutate,
   pending,
   problem,
+  repoUrl,
   rows as graph,
   send,
   statuses,
@@ -297,7 +298,7 @@ let TuiTask = ({ e }: { e: Ent }) => (
       ? <p class='Task_Body'>…</p>
       : e.doc?.body && (
         <p class='Task_Body'>
-          <Md text={e.doc.body} />
+          <Md text={e.doc.body} repo={repoUrl(e)} />
         </p>
       )}
     {e.refs.map((r) => (
@@ -312,7 +313,10 @@ let TuiTask = ({ e }: { e: Ent }) => (
             [{verdictName(c.review.verdict)}]{' '}
           </span>
         )}
-        <Md text={pending(c) ? '…' : c.doc?.body ?? ''} />
+        <Md
+          text={pending(c) ? '…' : c.doc?.body ?? ''}
+          repo={repoUrl(c)}
+        />
       </div>
     ))}
   </div>

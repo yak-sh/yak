@@ -126,6 +126,7 @@ let schema = `
   create table if not exists repo (
     eid  text primary key references entity(eid),
     path text not null,
+    url text,
     base_branch text not null default 'main',
     gate text,
     push integer not null default 0
@@ -790,6 +791,7 @@ export let open = (path = file) => {
   addCol('task', 'project_eid', 'project_eid text references entity(eid)')
   addCol('task', 'assignee_eid', 'assignee_eid text references entity(eid)')
   addCol('task', 'domain', 'domain text')
+  addCol('repo', 'url', 'url text')
   // Off for every checkout the graph already knows: the permission to push
   // is the owner's to grant per venture, never something a migration hands
   // out (src/git.ts).

@@ -126,6 +126,14 @@ let threadId = (eid: string) => {
   return mid ? String(mid) : undefined
 }
 
+let repoUrl = (target: string | null) =>
+  target
+    ? (db.prepare(
+      `select repo.url from task join repo on repo.eid = task.project_eid
+       where task.eid = ?`,
+    ).get(target) as { url: string | null } | undefined)?.url ?? undefined
+    : undefined
+
 // created(mail): deliver and stamp. $TASKS_MAIL_CMD, when set, is the
 // mailer — argv `--to <addr> [--from <addr>] [--in-reply-to <mid>]
 // <subject>`, body on stdin, exit 0 = sent (the retired bin/email's
@@ -262,6 +270,7 @@ export let mailed =
       subject: String(doc?.title ?? ''),
       body: String(doc?.body ?? ''),
       mid,
+      repo: repoUrl(row.target_eid == null ? null : String(row.target_eid)),
     }
     let id: string | undefined
     try {

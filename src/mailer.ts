@@ -30,6 +30,7 @@ export type Letter = {
   subject: string
   body: string
   mid?: string
+  repo?: string
 }
 
 // null = not configured — mail.ts falls through to its stamped error.
@@ -55,7 +56,7 @@ export let payload = (l: Letter) => ({
   reply_to: l.from,
   subject: l.subject,
   text: l.body,
-  html: mdAbs(l.body),
+  html: mdAbs(l.body, l.repo),
   ...(l.mid
     ? {
       headers: { 'In-Reply-To': `<${l.mid}>`, References: `<${l.mid}>` },

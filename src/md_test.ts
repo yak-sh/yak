@@ -52,6 +52,28 @@ Deno.test('md: ids in code stay literal; mid-word letters stay words', () => {
   assertEquals(md('X-123').includes('data-ref'), false)
 })
 
+Deno.test('md: a code-span commit links through its project repo', () => {
+  let html = md('landed as `46dcd3f`', 'https://github.com/acme/widget')
+  assertStringIncludes(
+    html,
+    '<a href="https://github.com/acme/widget/commit/46dcd3f"><code>46dcd3f</code></a>',
+  )
+  assertEquals(md('`46dcd3f`').includes('<a '), false)
+  assertEquals(
+    md('decafed', 'https://github.com/acme/widget').includes('<a '),
+    false,
+  )
+  assertEquals(
+    md('`123abc`', 'https://github.com/acme/widget').includes('<a '),
+    false,
+  )
+})
+
+Deno.test('md: a repo setting cannot inject an attribute', () => {
+  let html = md('`46dcd3f`', 'javascript:alert(1)" autofocus="')
+  assertEquals(html.includes('<a '), false)
+})
+
 // mdAbs is the same door for a reader with no base document: a mail
 // client resolves the canvas's `/T-123` as `http:///T-123` (T-12558).
 Deno.test('mdAbs: ids link to the public door, without data-ref', () => {
@@ -75,6 +97,10 @@ Deno.test('mdAbs: everything else renders as the canvas does', () => {
   let cell = mdAbs('| a |\n| - |\n| T-123 |')
   assertStringIncludes(cell, '<td><a href="https://tasks.yak.sh/T-123">')
   assertEquals(mdAbs('one\n\ntwo').trim(), md('one\n\ntwo').trim())
+  assertStringIncludes(
+    mdAbs('`46dcd3f`', 'https://github.com/acme/widget'),
+    'href="https://github.com/acme/widget/commit/46dcd3f"',
+  )
 })
 
 // The canvas anchor is what nav.tsx's delegated listeners bind to — a
