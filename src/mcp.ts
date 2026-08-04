@@ -193,6 +193,10 @@ commit: short paragraphs, bullet lists for anything enumerable (schemas,
 steps, options), ## headings when it has parts, fenced code for code.
 Never one run-on paragraph.`
 let body = () => z.string().describe(DOC)
+let title = () =>
+  z.string().describe(
+    'Plain text source. Pass <, >, and & literally; never HTML-encode them.',
+  )
 let count = z.number().int().positive()
 
 // The write-time backstop: a long body with not one line break is a
@@ -210,7 +214,9 @@ export let mcpServer = (io: IO) => {
   // agent's standing context — the strongest ambient steering the
   // protocol offers. Keep it to what every writer must know.
   let server = new McpServer({ name: 'tasks', version: '0.1.0' }, {
-    instructions: `The graph renders everything as markdown. ${DOC}
+    instructions: `Tool arguments are source data, never HTML. Pass <, >,
+and & literally; the renderer escapes them for its own output type.
+The graph renders bodies as markdown. ${DOC}
 
 Call task_context first each session, and pass the same stable session
 id to every tool that takes one — it is your identity for claims,
@@ -314,13 +320,13 @@ params; params carries every other writable property. The whole batch
 lands in one atomic apply. *_eid param values accept human ids
 (.project_eid=P-19). ${GRAMMAR} ${BUS}`,
     {
-      title: z.string().optional(),
+      title: title().optional(),
       body: body().optional(),
       status: z.enum(statuses).optional(),
       params: z.array(z.string()).optional(),
       tasks: z.array(
         z.object({
-          title: z.string(),
+          title: title(),
           body: body().optional(),
           status: z.enum(statuses).optional(),
           params: z.array(z.string()).optional(),
@@ -765,7 +771,7 @@ memory_recall prints above the body it hands you. Read, merge into
 what you were given, save with that token — another writer since
 your read is refused, with their text and a fresh token. ${BUS}`,
     {
-      title: z.string().optional(),
+      title: title().optional(),
       body: body().optional(),
       // The retired enum, kept only to REFUSE — the habit is four years of
       // fleet muscle memory and a silently dropped argument would file the
@@ -1280,7 +1286,7 @@ references all render (in a sandboxed iframe cut off from the app's
 origin). Markdown needs no upload: put it in any doc body. Show the
 page with card_open. Passing the id of an existing web entity replaces
 its page and title instead.`,
-    { title: z.string(), html: z.string(), id: z.string().optional() },
+    { title: title(), html: z.string(), id: z.string().optional() },
     async (
       { title, html, id }: { title: string; html: string; id?: string },
     ) => {

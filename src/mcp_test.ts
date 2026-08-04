@@ -373,9 +373,11 @@ Deno.test('MCP schemas document parameters and derive closed vocabularies', asyn
     for (
       let [name, field] of [
         ['search', 'limit'],
+        ['task_new', 'title'],
         ['task_update', 'comment'],
         ['task_spawn', 'persona'],
         ['history', 'limit'],
+        ['memory_save', 'title'],
         ['memory_recall', 'type'],
         ['memory_recall', 'limit'],
         ['graph_query', 'kind'],
@@ -391,6 +393,7 @@ Deno.test('MCP schemas document parameters and derive closed vocabularies', asyn
       field(prop(task, 'tasks')?.items, 'status')?.enum,
       [...statuses],
     )
+    assert(field(prop(task, 'tasks')?.items, 'title')?.description)
     assertEquals(
       prop(byName(tools, 'task_comment'), 'verdict')?.enum,
       [...verdicts],
@@ -473,8 +476,8 @@ Deno.test('MCP modes apply every accepted field and reject conflicts', async () 
       let single = await client.callTool({
         name: 'task_new',
         arguments: {
-          title: 'Dedicated title',
-          body: 'Dedicated body',
+          title: 'Dedicated <title> & words',
+          body: 'Dedicated <body> & words',
           status: 'done',
           params: [
             '.title=Param title',
@@ -486,9 +489,9 @@ Deno.test('MCP modes apply every accepted field and reject conflicts', async () 
       })
       assertEquals(single.isError, undefined)
       let made = rows(snapshot(g.db)).find((row) =>
-        row.comps.doc?.title == 'Dedicated title'
+        row.comps.doc?.title == 'Dedicated <title> & words'
       )
-      assertEquals(made?.comps.doc?.body, 'Dedicated body')
+      assertEquals(made?.comps.doc?.body, 'Dedicated <body> & words')
       assertEquals(made?.comps.task?.status, 'done')
       assertEquals(made?.comps.proposed?.at, '2026-08-01T00:00:00.000Z')
 
@@ -552,8 +555,8 @@ Deno.test('MCP modes apply every accepted field and reject conflicts', async () 
       let saved = await client.callTool({
         name: 'memory_save',
         arguments: {
-          title: 'New memory',
-          body: 'New fact',
+          title: 'Remember <source> & output',
+          body: 'Keep <source> & output',
           scope: project,
           session: 'test',
         },
@@ -561,7 +564,8 @@ Deno.test('MCP modes apply every accepted field and reject conflicts', async () 
       assertEquals(saved.isError, undefined)
       assert(
         rows(snapshot(g.db)).some((row) =>
-          row.comps.doc?.title == 'New memory' &&
+          row.comps.doc?.title == 'Remember <source> & output' &&
+          row.comps.doc?.body == 'Keep <source> & output' &&
           row.comps.memory?.scope_eid == project
         ),
       )
