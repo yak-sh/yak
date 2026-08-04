@@ -3,7 +3,7 @@
 // retests, and a non-contention refusal does not burn the retry budget.
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { type Row } from './client.ts'
-import { land, type Landing, landing } from './land.ts'
+import { land, landedChanges, type Landing, landing } from './land.ts'
 
 let row = (
   eid: string,
@@ -44,6 +44,27 @@ Deno.test('landing reads the session task and its project from the graph', () =>
     () => landing([project, task, session], 'thread'),
     Error,
     'P-19: repo.gate is required',
+  )
+})
+
+Deno.test('a landing completes its task with one idempotent receipt', () => {
+  let task = row('t', 42, 'task', { task: { status: 'wip' } })
+  let session = row('s', 7, 'session', { session: { id: 'thread' } })
+  let changes = landedChanges([task, session], task, 'abc123', 'thread')
+  assertEquals(changes[0], {
+    eid: task.eid,
+    name: 'task',
+    comp: { status: 'done' },
+  })
+  let doc = changes.find((c) => c.name == 'doc')!
+  assertEquals(doc.comp?.body, 'Landed `abc123`.')
+  let receipt = row(doc.eid, 8, 'comment', {
+    doc: doc.comp!,
+    comment: { target_eid: task.eid },
+  })
+  assertEquals(
+    landedChanges([task, session, receipt], task, 'abc123', 'thread'),
+    [],
   )
 })
 

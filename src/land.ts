@@ -3,8 +3,8 @@
 // concurrent landers. Git exit codes decide every transition; its prose is
 // only diagnostics, never control flow.
 import { resolve } from 'node:path'
-import { type Row } from './client.ts'
-import { idOf } from './types.ts'
+import { commentChanges, type Row } from './client.ts'
+import { type Change, idOf } from './types.ts'
 
 export type Landing = {
   repo: string
@@ -12,6 +12,24 @@ export type Landing = {
   gate: string
   tree: string
   task: Row
+}
+
+// A landed commit completes the task in the same graph transaction as its
+// receipt. The exact receipt makes a lost-response retry idempotent.
+export let landedChanges = (
+  all: Row[],
+  task: Row,
+  sha: string,
+  session?: string,
+): Change[] => {
+  let body = `Landed \`${sha}\`.`
+  let recorded = all.some((r) =>
+    r.comps.comment?.target_eid == task.eid && r.comps.doc?.body == body
+  )
+  return recorded ? [] : [
+    { eid: task.eid, name: 'task', comp: { status: 'done' } },
+    ...commentChanges(all, task.eid, body, session),
+  ]
 }
 
 // A session can land only the task and worktree the graph assigned it. The
