@@ -1,6 +1,9 @@
 // Landing against disposable git repositories: the graph chooses every
-// coordinate, a red gate leaves origin untouched, contention rebases and
-// retests, and a non-contention refusal does not burn the retry budget.
+// coordinate, a red gate leaves the base branch untouched, contention
+// rebases and retests, and a non-contention refusal does not burn the retry
+// budget. No remote anywhere — landing is a fast-forward of the project's
+// own checkout, and a test that needed a network would be testing the wrong
+// verb.
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { type Row } from './client.ts'
 import { land, landedChanges, type Landing, landing } from './land.ts'
@@ -68,7 +71,7 @@ Deno.test('a landing completes its task with one idempotent receipt', () => {
   )
 })
 
-type Repo = { root: string; repo: string; remote: string; spec: Landing }
+type Repo = { root: string; repo: string; spec: Landing }
 
 let command = async (cwd: string, ...args: string[]) => {
   let r = await new Deno.Command('git', {
@@ -102,17 +105,15 @@ let exists = (path: string) => {
 
 let setup = async (): Promise<Repo> => {
   let root = Deno.makeTempDirSync({ prefix: 'tasks-land-' })
-  let remote = `${root}/origin.git`
   let repo = `${root}/repo`
   let tree = `${root}/S-7`
-  await command(root, 'init', '--bare', '--initial-branch=main', remote)
-  await command(root, 'clone', remote, repo)
+  Deno.mkdirSync(repo)
+  await command(repo, 'init', '--initial-branch=main')
   await command(repo, 'config', 'user.email', 'test@example.com')
   await command(repo, 'config', 'user.name', 'Test')
   Deno.writeTextFileSync(`${repo}/base.txt`, 'base\n')
   await command(repo, 'add', 'base.txt')
   await command(repo, 'commit', '-m', 'base')
-  await command(repo, 'push', 'origin', 'HEAD:main')
   await command(repo, 'worktree', 'add', '-b', 'session/S-7', tree, 'main')
   Deno.writeTextFileSync(`${tree}/candidate.txt`, 'candidate\n')
   await command(tree, 'add', 'candidate.txt')
@@ -121,7 +122,6 @@ let setup = async (): Promise<Repo> => {
   return {
     root,
     repo,
-    remote,
     spec: {
       repo,
       base: 'main',
@@ -134,10 +134,10 @@ let setup = async (): Promise<Repo> => {
 
 let quiet = { write: () => {} }
 
-Deno.test('a red project gate never reaches origin', async () => {
+Deno.test('a red project gate never moves the base branch', async () => {
   let r = await setup()
   try {
-    let before = await command(r.repo, 'rev-parse', 'origin/main')
+    let before = await command(r.repo, 'rev-parse', 'main')
     r.spec.gate = "printf 'looks green\\n'; exit 7"
     await assertRejects(
       () =>
@@ -148,8 +148,44 @@ Deno.test('a red project gate never reaches origin', async () => {
       Error,
       'project gate failed with exit 7',
     )
-    assertEquals(await command(r.repo, 'rev-parse', 'origin/main'), before)
+    assertEquals(await command(r.repo, 'rev-parse', 'main'), before)
     assert(exists(r.spec.tree))
+  } finally {
+    Deno.removeSync(r.root, { recursive: true })
+  }
+})
+
+Deno.test('landing refuses a checkout sitting on another branch', async () => {
+  let r = await setup()
+  try {
+    await command(r.repo, 'checkout', '-q', '-b', 'detour')
+    await assertRejects(
+      () => land(r.spec, { ...quiet, cwd: r.spec.tree }),
+      Error,
+      `land: ${r.repo} is on detour, not main`,
+    )
+  } finally {
+    Deno.removeSync(r.root, { recursive: true })
+  }
+})
+
+Deno.test('landing leaves the checkout holding the work it tested', async () => {
+  let r = await setup()
+  try {
+    // Dirt the merge does not touch stays put: the shared checkout is a tree
+    // people work in, and landing is not entitled to a spotless one.
+    Deno.writeTextFileSync(`${r.repo}/scratch.txt`, 'mine\n')
+    let sha = await land(r.spec, {
+      ...quiet,
+      cwd: r.spec.tree,
+      gate: () => Promise.resolve(0),
+    })
+    assertEquals(await command(r.repo, 'rev-parse', 'main'), sha)
+    assertEquals(
+      Deno.readTextFileSync(`${r.repo}/candidate.txt`),
+      'candidate\n',
+    )
+    assertEquals(Deno.readTextFileSync(`${r.repo}/scratch.txt`), 'mine\n')
   } finally {
     Deno.removeSync(r.root, { recursive: true })
   }
@@ -159,20 +195,20 @@ Deno.test('a concurrent landing rebases, retests, records, and cleans up', async
   let r = await setup()
   try {
     let rival = `${r.root}/rival`
-    await command(r.root, 'clone', r.remote, rival)
-    await command(rival, 'config', 'user.email', 'test@example.com')
-    await command(rival, 'config', 'user.name', 'Test')
     let gates = 0, recorded = ''
     let sha = await land(r.spec, {
       ...quiet,
       cwd: r.spec.tree,
+      // A rival lander does exactly what this verb does: its own worktree,
+      // fast-forwarded into the same checkout while our gate is running.
       gate: async () => {
         gates++
         if (gates == 1) {
+          await command(r.repo, 'worktree', 'add', '-b', 'rival', rival, 'main')
           Deno.writeTextFileSync(`${rival}/rival.txt`, 'rival\n')
           await command(rival, 'add', 'rival.txt')
           await command(rival, 'commit', '-m', 'rival')
-          await command(rival, 'push', 'origin', 'HEAD:main')
+          await command(r.repo, 'merge', '--ff-only', 'rival')
         }
         return 0
       },
@@ -184,16 +220,11 @@ Deno.test('a concurrent landing rebases, retests, records, and cleans up', async
     })
     assertEquals(gates, 2)
     assertEquals(recorded, sha)
+    assertEquals(await command(r.repo, 'rev-parse', 'main'), sha)
+    assertEquals(Deno.readTextFileSync(`${r.repo}/rival.txt`), 'rival\n')
     assertEquals(
-      (await command(r.repo, 'ls-remote', 'origin', 'refs/heads/main')).split(
-        /\s/,
-      )[0],
-      sha,
-    )
-    assertEquals(await command(r.repo, 'show', `${sha}:rival.txt`), 'rival')
-    assertEquals(
-      await command(r.repo, 'show', `${sha}:candidate.txt`),
-      'candidate',
+      Deno.readTextFileSync(`${r.repo}/candidate.txt`),
+      'candidate\n',
     )
     assertEquals(exists(r.spec.tree), false)
     assertEquals(
@@ -206,12 +237,14 @@ Deno.test('a concurrent landing rebases, retests, records, and cleans up', async
   }
 })
 
-Deno.test('a push refusal without contention does not rerun the gate', async () => {
+Deno.test('a merge refusal without contention does not rerun the gate', async () => {
   let r = await setup()
   try {
-    let hook = `${r.remote}/hooks/pre-receive`
-    Deno.writeTextFileSync(hook, '#!/bin/sh\nexit 1\n')
-    Deno.chmodSync(hook, 0o755)
+    // The candidate rewrites a file the checkout has uncommitted edits to, so
+    // git refuses the fast-forward while the base branch has not moved at all.
+    Deno.writeTextFileSync(`${r.spec.tree}/base.txt`, 'rewritten\n')
+    await command(r.spec.tree, 'commit', '-am', 'rewrite base')
+    Deno.writeTextFileSync(`${r.repo}/base.txt`, 'being edited\n')
     let gates = 0
     await assertRejects(
       () =>
@@ -221,10 +254,11 @@ Deno.test('a push refusal without contention does not rerun the gate', async () 
           gate: () => Promise.resolve((gates++, 0)),
         }),
       Error,
-      'git push failed with exit 1',
+      'git merge failed with exit 1',
     )
     assertEquals(gates, 1)
     assert(exists(r.spec.tree))
+    assertEquals(Deno.readTextFileSync(`${r.repo}/base.txt`), 'being edited\n')
   } finally {
     Deno.removeSync(r.root, { recursive: true })
   }

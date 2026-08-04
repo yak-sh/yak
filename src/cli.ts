@@ -1000,7 +1000,7 @@ let spawn = async (args: string[]) => {
 
 // The one landing door: the graph supplies the session's task, checkout,
 // branch and gate; the shell supplies none. Complete the task and record the
-// remote CAS before the tree disappears.
+// sha the checkout took before the tree disappears.
 let land = async () => {
   let all = rows(await snapshot())
   let spec = landing(all, me())

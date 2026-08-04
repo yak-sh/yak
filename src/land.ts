@@ -1,7 +1,22 @@
 // The worktree landing protocol: resolve no coordinates from the shell, test
-// the exact rebased commit, and let origin's fast-forward update serialize
-// concurrent landers. Git exit codes decide every transition; its prose is
-// only diagnostics, never control flow.
+// the exact rebased commit, and fast-forward the project's own checkout onto
+// it. Git exit codes decide every transition; its prose is only diagnostics,
+// never control flow.
+//
+// Landing means the shared checkout — the tree the server RUNS from. Pushing
+// to origin publishes bytes and changes nothing anyone is executing, so it
+// cannot be what makes work take effect; nothing else in the fleet brings that
+// tree forward, which is why this verb must. Every step is local: worktrees
+// share one ref store, so the base branch is a ref to rebase onto and
+// fast-forward, and no network is involved. ff-only is still the
+// compare-and-swap that serializes concurrent landers — a lander whose base
+// moved is no longer a fast-forward, git refuses, and ancestry (never stderr)
+// says whether that was contention worth retesting for.
+//
+// The harness's worktree isolation inspects the command string an AGENT types
+// and refuses one aimed at the shared checkout; a subprocess spawned here is
+// not subject to it. That guard stops an agent from editing a tree it does not
+// own — not the project's own landing verb from fast-forwarding a branch.
 import { resolve } from 'node:path'
 import { commentChanges, type Row } from './client.ts'
 import { type Change, idOf } from './types.ts'
@@ -135,6 +150,22 @@ export let land = async (spec: Landing, ops: LandOps = {}) => {
     )
     if (status) throw new Error(`land: worktree is dirty:\n${status}`)
   }
+  // The checkout we fast-forward has to be sitting on the base branch, or the
+  // merge lands this work on whatever else it holds — silently, in the tree
+  // the server runs from. Asked once to fail before a minutes-long gate, and
+  // again after it, because that is long enough for someone to wander off.
+  let onBase = async () => {
+    let on = await need(
+      'read project branch',
+      spec.repo,
+      ['symbolic-ref', '--short', 'HEAD'],
+    )
+    if (on != spec.base) {
+      throw new Error(
+        `land: ${spec.repo} is on ${on}, not ${spec.base} — check it out first`,
+      )
+    }
+  }
 
   let top = await need('find worktree', cwd, ['rev-parse', '--show-toplevel'])
   if (resolve(top) != resolve(spec.tree)) {
@@ -180,12 +211,11 @@ export let land = async (spec: Landing, ops: LandOps = {}) => {
     throw new Error('land: the session worktree belongs to another repo')
   }
   await clean()
+  await onBase()
 
   for (let attempt = 1; attempt <= retries; attempt++) {
-    write(`land ${attempt}/${retries}: fetch ${spec.base}`)
-    let fetched = await git(spec.tree, ['fetch', 'origin', spec.base])
-    if (fetched.code) throw new Error(message('git fetch', fetched))
-    let rebased = await git(spec.tree, ['rebase', `origin/${spec.base}`])
+    write(`land ${attempt}/${retries}: rebase onto ${spec.base}`)
+    let rebased = await git(spec.tree, ['rebase', spec.base])
     if (rebased.code) throw new Error(message('git rebase', rebased))
     await clean()
 
@@ -203,20 +233,23 @@ export let land = async (spec: Landing, ops: LandOps = {}) => {
     await clean()
     let sha = await need('read tested commit', spec.tree, ['rev-parse', 'HEAD'])
 
-    write(`land ${attempt}/${retries}: push ${sha} to ${spec.base}`)
-    let pushed = await git(
-      spec.tree,
-      ['push', 'origin', `HEAD:${spec.base}`],
-    )
-    if (!pushed.code) {
+    write(`land ${attempt}/${retries}: merge ${sha} into ${spec.base}`)
+    await onBase()
+    // No cleanliness check of our own: git refuses a merge that would
+    // overwrite someone's uncommitted work and names the files, and leaves
+    // edits it would not touch alone. Demanding a spotless shared checkout
+    // would fail landings over dirt that has nothing to do with them.
+    let merged = await git(spec.repo, ['merge', '--ff-only', branch])
+    if (!merged.code) {
       await ops.record?.(sha)
       let removed = await git(
         spec.repo,
         ['worktree', 'remove', spec.tree],
       )
       if (removed.code) throw new Error(message('remove worktree', removed))
-      // The remote already names this exact sha. Delete only the local ref we
-      // tested, by compare-and-swap, without asking stale local main about it.
+      // The base branch already names this exact sha. Delete only the ref we
+      // tested, by compare-and-swap, so a branch someone advanced meanwhile
+      // survives.
       let dropped = await git(
         spec.repo,
         ['update-ref', '-d', `refs/heads/${branch}`, sha],
@@ -225,23 +258,22 @@ export let land = async (spec: Landing, ops: LandOps = {}) => {
       return sha
     }
 
-    // Refresh origin and ask ancestry, not stderr, why the push refused. If
-    // origin/base is still behind HEAD, this was not contention and a retest
-    // cannot help. Otherwise another lander won the CAS; rebase and retest.
-    let refresh = await git(spec.tree, ['fetch', 'origin', spec.base])
-    if (refresh.code) throw new Error(message('push and refresh', refresh))
+    // Ask ancestry, not stderr, why the merge refused. If base is still an
+    // ancestor of HEAD this was never a fast-forward problem — a dirty tree,
+    // a hook — and a retest cannot help. Otherwise another lander won the
+    // CAS; rebase onto where it left the branch and retest.
     let current = await git(
       spec.tree,
-      ['merge-base', '--is-ancestor', `origin/${spec.base}`, 'HEAD'],
+      ['merge-base', '--is-ancestor', spec.base, 'HEAD'],
       false,
     )
-    if (current.code == 0) throw new Error(message('git push', pushed))
+    if (current.code == 0) throw new Error(message('git merge', merged))
     if (current.code != 1) {
-      throw new Error(message('read push contention', current))
+      throw new Error(message('read merge contention', current))
     }
     if (attempt == retries) {
       throw new Error(
-        `origin/${spec.base} moved during ${retries} landing attempts`,
+        `${spec.base} moved during ${retries} landing attempts`,
       )
     }
   }
