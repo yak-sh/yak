@@ -94,9 +94,11 @@ entry (T-5958 reconciles the book). Fleet-internal mail depends on neither.
 
 # M-4446 design before build — a design session and recorded plan precede any non-trivial build
 
-For anything non-trivial, design before you build: a design session (thinking + research — alternatives, prior art, gaps), the plan recorded to a dated design doc, tasks filed, then build autonomously.
+For anything non-trivial, design before you build: a design session (thinking + research — alternatives, prior art, gaps), the plan recorded in the graph with `task design <title...>`, tasks filed against it, then build autonomously.
 
 The recorded plan is an **FYI the owner redirects by exception, not an approval gate** — and owner-requested work is already approved. Don't stall waiting for a sign-off that isn't required; record the plan and move.
+
+A design carries its own date in the `proposed` mark, so it needs no dated filename and no file. Accepting one later is `task set D-9 .decided.at=now .decided.by=jeff`.
 
 ---
 
