@@ -2,7 +2,7 @@
 // empty Codex composer; graph content stays in task_context and is never
 // copied through tmux. Every guard fails closed.
 // SERVER-ONLY (imports db).
-import { db, snapshot } from './db.ts'
+import { cursorOf, db, snapshot } from './db.ts'
 import { delivery } from './door.ts'
 import { notices } from './client.ts'
 import { descends } from './proc.ts'
@@ -341,13 +341,31 @@ let stamp = (
   }
 }
 
+// notices() is a pure function of the graph, and the journal cursor is the
+// graph's write version — so a pass that follows no write can answer from the
+// snapshot it already built. Every write bumps the cursor AND debounces a
+// fresh pass through cast(), so nothing waits on this: it only ever spares a
+// walk that was going to reach the same answer. One snapshot is held rather
+// than one built per tick, which is also the end of the sawtooth this cost
+// the heap.
+let graphed: { cursor: number; snap: ReturnType<typeof snapshot> } | undefined
+let graph = () => {
+  let cursor = cursorOf(db)
+  if (graphed?.cursor != cursor) graphed = { cursor, snap: snapshot(db) }
+  return graphed.snap
+}
+
+// `snap` is a THUNK because the snapshot is the pass's one expensive act and
+// only `pending` ever wants it — behind notify()'s cheap gates (a live pid, an
+// idle turn, a queued tmux route). Taking it eagerly made every pass cost a
+// whole-graph walk to discover there was nothing to say.
 let systemDeps = (
-  snap: ReturnType<typeof snapshot>,
+  snap: () => ReturnType<typeof snapshot>,
   cast: Cast,
 ): NotifyDeps => ({
   now: Date.now,
   route: delivery,
-  pending: (id) => notices(snap, id).lines.length > 0,
+  pending: (id) => notices(snap(), id).lines.length > 0,
   pane: paneInfo,
   under: descends,
   capture: capturePane,
@@ -367,14 +385,17 @@ let sweeping: Promise<void> | undefined
 export let nativeSweep = (cast: Cast): Promise<void> => {
   if (sweeping) return sweeping
   sweeping = (async () => {
-    let snap = snapshot(db)
-    let deps = systemDeps(snap, cast)
+    // Discovery first, and it is one indexed read. A pass that finds no
+    // native session — or finds none past notify()'s gates — never builds a
+    // snapshot at all: the walk is owed to work, never to the tick.
     let sessions = db.prepare(`
       select eid, id, pid, pane, turn, notice_at,
              notice_accepted_at
       from session
       where pane is not null and finished_at is null
     `).all() as NativeSession[]
+    if (!sessions.length) return
+    let deps = systemDeps(graph, cast)
     for (let session of sessions) await notify(session, deps)
   })().finally(() => sweeping = undefined)
   return sweeping

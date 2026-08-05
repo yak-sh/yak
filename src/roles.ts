@@ -8,7 +8,7 @@
 // task_context, whose atomic inbox owns retrieval and acknowledgement.
 import { createHash } from 'node:crypto'
 import { trouble } from './adapters.ts'
-import { apply, db, record, snapshot } from './db.ts'
+import { apply, cursorOf, db, record, snapshot } from './db.ts'
 import { dispatch, trace } from './effects.ts'
 import { notices, rows } from './client.ts'
 import { materialize } from './persona.ts'
@@ -405,6 +405,31 @@ export let roleHash = (c: RoleConfig) =>
     body: c.body,
   })).digest('hex')
 
+// Materializing a persona walks the whole graph, and config() runs on every
+// roles tick to rebuild a hash that almost always matches what is applied.
+// The journal cursor is the graph's write version (the same one client sync
+// trusts), so a pass that follows no write reuses the text it already
+// derived: the walk is owed to a CHANGE, never to a tick. Keyed per persona
+// so several roles can't evict each other.
+//
+// It also stops the hash drifting on its own. materialize() ranks the
+// preloaded tier by recall warmth, which DECAYS with the clock — so the same
+// unchanged graph used to hash differently as time passed, and a role could
+// be torn down and restarted with nothing about it changed.
+let personas = new Map<string, { cursor: number; text: string }>()
+let personaFor = (eid: string): string => {
+  let cursor = cursorOf(db)
+  let got = personas.get(eid)
+  if (got?.cursor == cursor) return got.text
+  let snap = snapshot(db)
+  let all = rows(snap)
+  let p = all.find((r) => r.eid == eid && r.comps.persona && r.comps.doc)
+  if (!p) throw new Error('role persona is not a documented persona')
+  let text = materialize(all, snap.deps, p, Date.now())
+  personas.set(eid, { cursor, text })
+  return text
+}
+
 let config = (eid: string): RoleConfig => {
   let row = db.prepare(`
     select r.*, d.title, d.body, p.provider, p.model, p.effort,
@@ -441,14 +466,7 @@ let config = (eid: string): RoleConfig => {
   let bad = trouble({ provider, model, effort })
   if (bad) throw new Error(bad)
   let persona = String(row.persona_eid ?? '') || undefined
-  let personaText: string | undefined
-  if (persona) {
-    let snap = snapshot(db)
-    let all = rows(snap)
-    let p = all.find((r) => r.eid == persona && r.comps.persona && r.comps.doc)
-    if (!p) throw new Error('role persona is not a documented persona')
-    personaText = materialize(all, snap.deps, p, Date.now())
-  }
+  let personaText = persona ? personaFor(persona) : undefined
   return {
     eid,
     state: String(row.state),
