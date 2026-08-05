@@ -285,7 +285,7 @@ Deno.test('landing leaves the checkout holding the work it tested', async () => 
   }
 })
 
-Deno.test('a concurrent landing rebases, retests, records, and cleans up', async () => {
+Deno.test('a concurrent landing rebases, retests, records, and keeps the tree', async () => {
   let r = await setup()
   try {
     let rival = `${r.root}/rival`
@@ -320,12 +320,15 @@ Deno.test('a concurrent landing rebases, retests, records, and cleans up', async
       Deno.readTextFileSync(`${r.repo}/candidate.txt`),
       'candidate\n',
     )
-    assertEquals(exists(r.spec.tree), false)
-    assertEquals(
+    // The caller is still standing here, with a claim to release and scratch
+    // to delete, so the tree and its branch outlive the landing — unlocked,
+    // for whoever collects it once nobody is inside (probes.ts).
+    assert(exists(r.spec.tree))
+    assert(
       (await result(r.repo, 'show-ref', '--verify', 'refs/heads/session/S-7'))
         .success,
-      false,
     )
+    await command(r.repo, 'worktree', 'remove', r.spec.tree)
   } finally {
     Deno.removeSync(r.root, { recursive: true })
   }

@@ -14,6 +14,7 @@ import {
   profiles,
   throwaway,
   type Tree,
+  trees,
   within,
   worktree,
 } from './probes.ts'
@@ -261,6 +262,42 @@ Deno.test('a worktree is pruned only when all three locks open', () => {
     'not merged into main',
   )
   assertEquals(judgeTree({ ...base, busy: 'pid 9 is inside' }).prune, false)
+})
+
+// The one test here that reads a filesystem, because scope is the whole
+// question: a fork's checkout lives under the repo's own `.claude/worktrees/`
+// and a landing now leaves it standing, so a sweep that only knew the fleet
+// roots would be no collector at all (T-13942).
+Deno.test('the forest is every throwaway checkout, wherever it hangs', async () => {
+  let root = Deno.makeTempDirSync({ prefix: 'tasks-trees-' })
+  let git = async (cwd: string, ...args: string[]) => {
+    let r = await new Deno.Command('git', { args, cwd, stderr: 'piped' })
+      .output()
+    if (!r.code) return
+    throw new Error(
+      `git ${args.join(' ')}: ${new TextDecoder().decode(r.stderr)}`,
+    )
+  }
+  try {
+    let repo = `${root}/repo`
+    Deno.mkdirSync(repo)
+    await git(repo, 'init', '--initial-branch=main')
+    await git(repo, 'config', 'user.email', 'test@example.com')
+    await git(repo, 'config', 'user.name', 'Test')
+    Deno.writeTextFileSync(`${repo}/base.txt`, 'base\n')
+    await git(repo, 'add', 'base.txt')
+    await git(repo, 'commit', '-m', 'base')
+    let fork = `${repo}/.claude/worktrees/agent-a4cca`
+    await git(repo, 'worktree', 'add', '-b', 'fork', fork, 'main')
+    // A working copy that is nobody's leavings, told apart by its path alone.
+    await git(repo, 'worktree', 'add', '-b', 'mine', `${root}/mine`, 'main')
+    // Real clock: the idle guard reads an index mtime off this filesystem.
+    let seen = trees(repo, nobody, [], Date.now(), 0)
+    assertEquals(seen.map((t) => t.path), [fork])
+    assertEquals(judgeTree(seen[0]).prune, true)
+  } finally {
+    Deno.removeSync(root, { recursive: true })
+  }
 })
 
 // Killing a browser and leaving its profile is half a cleanup, and on a

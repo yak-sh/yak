@@ -274,27 +274,22 @@ export let land = async (spec: Landing, ops: LandOps = {}) => {
     let merged = await git(spec.repo, ['merge', '--ff-only', branch])
     if (!merged.code) {
       await ops.record?.(sha)
-      // The harness locks the worktree it hands an agent, and git refuses to
-      // remove a locked one — so the landing merged, closed the task, and
-      // then died on cleanup. The lock means "an agent is working here"; the
-      // caller of this verb IS that agent, standing in that tree, saying it
-      // has finished. Its exit code decides nothing because the only failure
-      // reachable here is "not locked": the tree was proven a worktree of
+      // The tree and its branch SURVIVE the landing. The caller is standing
+      // here and its closing bookkeeping comes after us — releasing the
+      // claim, filing what it found, deleting its scratch, writing its wrap —
+      // and a command whose cwd was unlinked under it is refused by the
+      // kernel, so removal here converts an agent's own cleanup into
+      // somebody else's chore (T-13942).
+      //
+      // Unlock instead: the harness locks the tree it hands an agent to say
+      // "someone works here", and this verb is that agent saying it has
+      // finished, which is the one fact only it knows. Whoever comes next
+      // collects — probes.ts prunes a worktree that is merged, clean, and has
+      // nobody inside it, and that last clause is what waits for the agent to
+      // leave. The unlock's exit code decides nothing: the only failure
+      // reachable here is "not locked", and the tree was proven a worktree of
       // this repo before the gate ran.
       await git(spec.repo, ['worktree', 'unlock', spec.tree], false)
-      let removed = await git(
-        spec.repo,
-        ['worktree', 'remove', spec.tree],
-      )
-      if (removed.code) throw new Error(message('remove worktree', removed))
-      // The base branch already names this exact sha. Delete only the ref we
-      // tested, by compare-and-swap, so a branch someone advanced meanwhile
-      // survives.
-      let dropped = await git(
-        spec.repo,
-        ['update-ref', '-d', `refs/heads/${branch}`, sha],
-      )
-      if (dropped.code) throw new Error(message('delete branch', dropped))
       return sha
     }
 

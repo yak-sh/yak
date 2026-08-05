@@ -999,9 +999,25 @@ let spawn = async (args: string[]) => {
   })
 }
 
+// All the sweep wants from the graph: the id a probe carries, the ground a
+// session worked in, the pid it ran as. /proc decides the rest.
+let sessionsOf = (all: Row[]) =>
+  all.filter((r) => r.comps.session).map((r) => ({
+    id: String(r.comps.session!.id ?? ''),
+    cwd: r.comps.session!.cwd as string | null,
+    pid: r.comps.session!.pid as number | null,
+  }))
+
 // The one landing door: the graph supplies the session's task, checkout,
 // branch and gate; the shell supplies none. Complete the task and record the
-// sha the checkout took before the tree disappears.
+// sha the checkout took.
+//
+// The caller keeps its worktree (land.ts), so each landing collects what
+// EARLIER ones left: whoever comes next is, reliably, the next lander.
+// Checkouts only — killing processes stays behind `task probes --reap`,
+// where an operator reads the reasons first. This tree is never a candidate
+// while the verb runs in it: judgeTree spares a worktree with a process
+// inside, and that process is us.
 let land = async () => {
   let all = rows(await snapshot())
   let session = me()
@@ -1015,6 +1031,9 @@ let land = async () => {
     },
   })
   console.log(`${idOf(spec.task)} landed ${sha}`)
+  for (let t of sweep(sessionsOf(all), spec.repo).trees) {
+    if (t.prune && prune(spec.repo, t.tree)) warn(`swept ${t.tree.path}`)
+  }
 }
 
 // The palette's `:` line, spoken from the shell — the same commands.ts
@@ -1799,15 +1818,9 @@ let probes = async (args: string[]) => {
   let mins = Number(args.find((a) => a.startsWith('--grace='))?.slice(8))
   let repo = repoRoot()
   let all = rows(await readGraph())
-  let sessions = all.filter((r) => r.comps.session).map((r) => ({
-    id: String(r.comps.session!.id ?? ''),
-    cwd: r.comps.session!.cwd as string | null,
-    pid: r.comps.session!.pid as number | null,
-  }))
   let seen = sweep(
-    sessions,
+    sessionsOf(all),
     repo,
-    undefined,
     Number.isFinite(mins) ? mins * 60_000 : undefined,
   )
   let age = (born: number) =>

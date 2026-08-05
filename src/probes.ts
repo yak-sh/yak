@@ -25,7 +25,6 @@ import {
   ownerOf,
   pids,
 } from './proc.ts'
-import { worktreeDirs } from './ground.ts'
 
 // The provider comms. An agent is never reaped, and everything descending
 // from a live one is its business, not the sweep's.
@@ -326,11 +325,14 @@ let touched = (path: string) => {
   }
 }
 
-// The repo's own worktrees, scoped to the fleet's shared ground. A checkout
-// somewhere else is somebody's working copy, not a session's leavings.
+// The repo's own throwaway checkouts, named by the same ephemeral-ground
+// predicate the process half uses. A root list said less and missed more: a
+// fork's tree lives under the repo's own `.claude/worktrees/`, so naming the
+// fleet roots left exactly the trees `task land` stops removing (T-13942)
+// with no collector at all. A checkout outside any `worktrees/` root is
+// somebody's working copy, not a session's leavings.
 export let trees = (
   repo: string,
-  under: string,
   it: Live,
   procs: Proc[],
   now = Date.now(),
@@ -339,7 +341,7 @@ export let trees = (
   let out: Tree[] = []
   let entry: Partial<Tree> = {}
   let finish = () => {
-    if (!entry.path || !within(entry.path, under)) return
+    if (!entry.path || !worktree(entry.path)) return
     let path = entry.path
     let idle = now - touched(path)
     let inside = procs.find((p) => within(p.cwd, path))
@@ -379,12 +381,7 @@ export let trees = (
 // One pass, both halves, from the graph's session table. Callers differ only
 // in where that table comes from — the CLI reads a snapshot, the server has
 // one in hand — so the composition lives here and neither door can drift.
-export let sweep = (
-  sessions: Session[],
-  repo?: string,
-  under: string | string[] = worktreeDirs(),
-  grace = GRACE,
-) => {
+export let sweep = (sessions: Session[], repo?: string, grace = GRACE) => {
   let now = Date.now()
   let it = live(sessions)
   let procs = scan()
@@ -392,12 +389,7 @@ export let sweep = (
   // Worktrees are judged against EVERY process, including the ones this pass
   // is about to reap: a checkout somebody stood in a second ago keeps its
   // reprieve until the next pass, which costs ten minutes and nothing else.
-  let roots = Array.isArray(under) ? under : [under]
-  let forest = repo
-    ? roots.flatMap((root) =>
-      trees(repo, root, it, procs, now, grace).map(judgeTree)
-    )
-    : []
+  let forest = repo ? trees(repo, it, procs, now, grace).map(judgeTree) : []
   return { verdicts, trees: forest }
 }
 

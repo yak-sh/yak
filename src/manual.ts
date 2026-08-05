@@ -335,7 +335,9 @@ export let manuals: Record<string, Manual> = {
     detail: "The session's task chooses the repo, base branch, worktree and " +
       'repo.gate command from the graph. A concurrent fast-forward makes the ' +
       'verb rebase and retest, up to five times. Success comments the landed ' +
-      'sha on the task, then removes the worktree and its local branch.',
+      'sha on the task and unlocks the worktree — you keep standing in it, so ' +
+      'you can still release, comment and clean up. A later landing (or ' +
+      '`task probes --reap`) removes it once nobody is inside.',
     root: true,
     words: [0, 0],
   },
