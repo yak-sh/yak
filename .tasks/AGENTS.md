@@ -546,14 +546,6 @@ Every session's `task context` opens with `## inbox — N unread (task inbox)`. 
 
 ---
 
-# M-12915 Use idiomatic language
-
-**Stick to idiomatic terms for things.** Avoid approximations, house shorthand, and slang. Use the terms that are typical for a tool. LLMs often drift to analogous terms over repeated cycles. This drift can cause a degradation of meaning over time and make it difficult for others to understand. Especially if they are already familiar with the typical terminology.
-
-This applies when talking about git, SQL, HTTP, systemd, DNS, programming languages, and any other similar tool.
-
----
-
 # M-6995 personas & memories live in the graph — the files are generated, edit the graph
 
 Your persona, and every memory preloaded into it, are **entities in the Task Graph** — not the `.md` file you are reading. That file (`AGENTS.md`, `.claude/agents/*`) is a **generated projection**: a materializer renders it from the graph and overwrites it on the next sync, so a hand-edit to the file is lost. The banner at the top of each file names its source node (`N-…`).
@@ -565,6 +557,14 @@ Your persona, and every memory preloaded into it, are **entities in the Task Gra
 - **Add or edit a memory:** `memory_save` (MCP `tasks`) — new content mints an `M-…`; passing `id` confirms and patches an existing one. Replacing a body also needs the `was:` token `memory_recall` prints above it, so a concurrent edit is refused rather than silently lost.
 - **Preload / unpreload:** add (or `gone: true` to remove) a `contains` edge from the `N-…` to the `M-…`, via `graph_apply` or the web UI.
 - **Reach everyone in a repo:** preload into that repo's `* common persona` (which projects to `AGENTS.md`, read by every agent there) — not a single role's persona.
+
+---
+
+# M-12915 Use idiomatic language
+
+**Stick to idiomatic terms for things.** Avoid approximations, house shorthand, and slang. Use the terms that are typical for a tool. LLMs often drift to analogous terms over repeated cycles. This drift can cause a degradation of meaning over time and make it difficult for others to understand. Especially if they are already familiar with the typical terminology.
+
+This applies when talking about git, SQL, HTTP, systemd, DNS, programming languages, and any other similar tool.
 
 ---
 
