@@ -389,6 +389,13 @@ These hold everywhere in this repo, whoever — or whatever — writes the code:
   context in its body. Reading a memory's body bumps its recall — use, and the
   graph remembers that you used it; disuse decays. Facts need no filing at all:
   every write is already journal-attributed (`task history`).
+- **The repo documents what IS; the graph holds what is PROPOSED.** This file
+  and README describe the system as built. A design — the thinking that
+  precedes a build — is an entity: `task design <title...>` mints `doc` + the
+  `design` tag + the `proposed` mark, `task designs` lists them, and
+  `task set D-9 .decided.at=now .decided.by=jeff` accepts one. There is no
+  `docs/design/` directory and no state enum of its own — `proposed`/`decided`
+  is the pair the graph already uses on tasks and memories.
 - The MCP surface has two tiers: task_* sugar and the generic tier
   (graph_query/graph_apply/ui_state/card_*/code_run). The generic tier is
   possible because the UI is data — cards/pins/cameras are entities; keep it

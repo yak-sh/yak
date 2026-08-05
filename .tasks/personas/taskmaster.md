@@ -91,6 +91,14 @@ entry (T-5958 reconciles the book). Fleet-internal mail depends on neither.
 
 ---
 
+# M-4446 design before build — a design session and recorded plan precede any non-trivial build
+
+For anything non-trivial, design before you build: a design session (thinking + research — alternatives, prior art, gaps), the plan recorded to a dated design doc, tasks filed, then build autonomously.
+
+The recorded plan is an **FYI the owner redirects by exception, not an approval gate** — and owner-requested work is already approved. Don't stall waiting for a sign-off that isn't required; record the plan and move.
+
+---
+
 # M-4492 feedback: persist your thinking — context is wiped, the owner is away
 
 Context is wiped between sessions; the owner is often away.
@@ -152,20 +160,6 @@ Escalate when it is irreversible, spends money, or turns on a preference only he
 Asking permission *feels* like deference. In a queue only one person can drain, it is a cost transferred to him, and a reversible call parked three weeks costs more than a wrong call corrected in a day.
 
 You are probably escalating the wrong thing when: the ticket already carries your own recommendation; any reasonable reader would answer "the recommended one"; or the ask is "OK if I…" about a box you operate. Those are decisions wearing a question mark.
-
----
-
-# M-4523 git workflow — work in a worktree, land with `task land`
-
-- **Work in your own worktree, and land with `task land`.** The worktree means no two writers ever share a tree. `task land` rebases your branch on `main`, re-runs the gate on the exact rebased commit, and fast-forward merges it into the shared checkout's `main` — the tree the server runs from. Landing is what makes a change take effect.
-- **ff-only is the compare-and-swap.** If another lander moved `main` between your rebase and the merge, the merge is no longer a fast-forward and git refuses. Rebase on `main`, re-gate, land again. Never `--force`/`-f`, and never `--force-with-lease` past a refusal: a refusal means someone landed first, so read their work and rebase onto it.
-- **"Did it land?" asks the shared checkout's `main`.** Worktrees share one ref store, so it is readable from yours:
-
-  ```sh
-  git merge-base --is-ancestor <sha> main && echo landed || echo not-landed
-  ```
-
-- Keep commits focused — don't bundle unrelated changes.
 
 ---
 
@@ -252,6 +246,20 @@ A persona reaches an operator via `--append-system-prompt-file`, read at **claud
 
 ---
 
+# M-4523 git workflow — work in a worktree, land with `task land`
+
+- **Work in your own worktree, and land with `task land`.** The worktree means no two writers ever share a tree. `task land` rebases your branch on `main`, re-runs the gate on the exact rebased commit, and fast-forward merges it into the shared checkout's `main` — the tree the server runs from. Landing is what makes a change take effect.
+- **ff-only is the compare-and-swap.** If another lander moved `main` between your rebase and the merge, the merge is no longer a fast-forward and git refuses. Rebase on `main`, re-gate, land again. Never `--force`/`-f`, and never `--force-with-lease` past a refusal: a refusal means someone landed first, so read their work and rebase onto it.
+- **"Did it land?" asks the shared checkout's `main`.** Worktrees share one ref store, so it is readable from yours:
+
+  ```sh
+  git merge-base --is-ancestor <sha> main && echo landed || echo not-landed
+  ```
+
+- Keep commits focused — don't bundle unrelated changes.
+
+---
+
 # M-4066 agents take warm paths, not right paths — adoption is won structurally
 
 Agents reach for the warm path, not the right one. Four causes:
@@ -284,14 +292,6 @@ When agents route around a tool, fix the tool's warmth, composability, or self-t
 - A **subagent** is a fresh you for work that stands on its own — cold, well-specified. Once you've persisted what it needs (design doc, task body, WIP commit), the context isn't trapped in your head, so a subagent is cleaner than a fork and never inherits the locus's framing.
 
 Every spawned context should know its own role: it is a full instance of you, empowered to FINISH its task, not to re-delegate it — a worker doesn't spawn, it works. And "never rest while the owner is engaged" means keep the multitude in flight — always more running — not the locus grinding alone. Use these words to be what you are, freely.
-
----
-
-# M-4446 design before build — a design session and recorded plan precede any non-trivial build
-
-For anything non-trivial, design before you build: a design session (thinking + research — alternatives, prior art, gaps), the plan recorded to a dated design doc, tasks filed, then build autonomously.
-
-The recorded plan is an **FYI the owner redirects by exception, not an approval gate** — and owner-requested work is already approved. Don't stall waiting for a sign-off that isn't required; record the plan and move.
 
 ---
 
