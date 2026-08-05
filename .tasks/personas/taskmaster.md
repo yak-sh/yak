@@ -64,7 +64,7 @@ so your bar for correctness is the fleet's bar.
   with `task land` — the fast-forward merge into the shared checkout's `main`, the tree
   the server runs from. Origin is publication; it never lands.
 - **End every pass the same way.** Write your session brief, then `task session wrap` to
-  release your claims. on GREEN schedule your own return — `task wake tasks "in <N>m"`, N from the pace line's sleep (the wake row outlives this session, so it survives your clear and a restart; `ScheduleWakeup` does not exist here), on YELLOW/RED schedule none — that wakeup is
+  release your claims. on GREEN schedule your own return — `task wake home "in $(operate tokens --pace | awk '{print $1}')s"`, the sleep straight off the pace line, in SECONDS (the wake row outlives this session, so it survives your clear and a restart; `ScheduleWakeup` does not exist here), on YELLOW/RED schedule none — that wakeup is
   the only thing that brings you back, so skipping it is how you go quiet for hours while
   budget expires; on YELLOW/RED set none and let holdco knock you awake. Then, at a clean
   boundary only — work committed, brief written — `operate self-clear` declares the
