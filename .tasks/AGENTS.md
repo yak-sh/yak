@@ -110,6 +110,8 @@ canvas offers a `List` view — the mobile door — whose rows resolve through
 | `src/sessions.ts`  | managed sessions: spawn/stop/adopt a detached agent, tail its log file     |
 | `src/adapters.ts`  | the provider table: argv, model/effort allowlists, init/terminal readers   |
 | `src/freeze.ts`    | URL → monolith archive → scrub() → CSP-served, server-only                 |
+| `src/page.ts`      | POST /page: a page as witnessed — find-or-mint, the `:` line, the capture  |
+| `src/url.ts`       | public entity links, and normalize() — THE canonical page address          |
 | `src/client.ts`    | headless HTTP client: rows(), dot-params, find, change builders            |
 | `src/query.ts`     | the FILTER grammar (ops/lists/ranges/time/text) — boards, CLI, MCP, search |
 | `src/grammar.ts`   | GRAMMAR + FILTERS texts, derived from comps — CLI and MCP teach one page   |
