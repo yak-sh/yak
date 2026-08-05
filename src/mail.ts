@@ -395,13 +395,31 @@ export let fanout =
 // backfill when a project FIRST gains an address: older comments are
 // history, not undelivered mail, and a day of it arriving at once is a
 // mail bomb, not a catch-up.
+//
+// The horizon is an UNCORRELATED `in`, and that shape is load-bearing.
+// TASK_BIRTH_BATCH costs ~130ms a row — it scans the whole journal and
+// expands its batch JSON — so the sweep is only affordable if the window
+// decides which rows it ever runs on. As a correlated `exists` the
+// horizon cannot drive anything: SQLite picks its own order for `and`
+// terms, chose the journal scan first, and the boot sweep took 602
+// SECONDS across every comment in the graph (T-13872). Writing the cheap
+// term first does NOT fix that — text order is not evaluation order, and
+// a flattened CTE loses the bound the same way. An uncorrelated `in`
+// against comment's primary key is structural instead of advisory:
+// SQLite materializes the window once and SEARCHes comment by eid, so
+// the journal scan can only ever see rows inside the hour.
+//
+// Keep it uncorrelated. Anything that ties this subquery back to
+// `comment` hands the order back to the planner, and the failure is
+// silent — the same rows come back, minutes later.
 export let FANOUT_PENDING = `
-  not ${TASK_BIRTH_BATCH}
+  comment.eid in (
+    select cr.eid from created cr
+    where cr.at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour'))
   and
   not exists (
     select 1 from dependency d join mail s on s.eid = d.parent_eid
     where d.type = 'about' and d.child_eid = comment.eid)
-  and exists (
-    select 1 from created cr where cr.eid = comment.eid
-    and cr.at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour'))
+  and
+  not ${TASK_BIRTH_BATCH}
 `.trim()
