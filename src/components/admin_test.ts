@@ -3,7 +3,12 @@
 // admin edits. The fixture comp is injected into the live comps object
 // and removed again; if columnsFor had its own list, this test would
 // have nothing to find.
+import { h, render } from 'preact'
+import { parseHTML } from 'linkedom'
 import { adminRoute, columnsFor, groupedKinds } from './admin.ts'
+import { Admin } from './Admin.tsx'
+import { route } from './nav.tsx'
+import { cache } from '../live.ts'
 import { comps, kindOrder, stamped } from '../types.ts'
 import { assertEquals } from '@std/assert'
 
@@ -64,4 +69,60 @@ Deno.test('adminRoute: bare, kind, and new forms', () => {
   assertEquals(adminRoute('/admin'), { kind: 'task', form: false })
   assertEquals(adminRoute('/admin/memory'), { kind: 'memory', form: false })
   assertEquals(adminRoute('/admin/person/new'), { kind: 'person', form: true })
+})
+
+Deno.test('the index is a typed grid and grid mode is bare tiles', async () => {
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let { document } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  let project = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  let task = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  cache.value = {
+    [project]: {
+      entity: { eid: project, num: 1 },
+      doc: { eid: project, title: 'Task Graph', body: '' },
+      project: { eid: project },
+    },
+    [task]: {
+      entity: { eid: task, num: 2 },
+      doc: { eid: task, title: 'Ship it', body: '' },
+      task: {
+        eid: task,
+        status: 'open',
+        priority: 1,
+        project_eid: project,
+        assignee_eid: null,
+        domain: null,
+      },
+    },
+  }
+  route.value = '/admin/task'
+  let root = document.querySelector('main')!
+  try {
+    render(h(Admin, {}), root)
+    let table = root.querySelector('.Admin_Table')!
+    assertEquals(table.tagName, 'DIV')
+    assertEquals(
+      [...root.querySelectorAll('.Admin_Cell')].map((x) => x.textContent),
+      ['T-2', 'Ship it', 'open', 'P1', 'Task Graph', '—', '—', ''],
+    )
+
+    let grid = [...root.querySelectorAll<HTMLButtonElement>('.Admin_Tool')]
+      .find((x) => x.textContent == 'grid')!
+    grid.dispatchEvent(
+      new document.defaultView!.Event('click', { bubbles: true }),
+    )
+    await Promise.resolve()
+    assertEquals(root.querySelector('.Admin_Grid > .TaskTile') != null, true)
+    assertEquals(root.querySelector('.Admin_Grid > div > .TaskTile'), null)
+  } finally {
+    render(null, root)
+    cache.value = {}
+    route.value = '/'
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else delete (globalThis as { document?: unknown }).document
+  }
 })

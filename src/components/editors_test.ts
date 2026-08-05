@@ -20,7 +20,7 @@ let prop = (type: PropType): PropRow => ({
 let describe = (eid: string) => {
   if (!cache.value[eid]) return
   let e = ent(eid)
-  return `${idOf(e)}${e.doc?.title ? ` — ${e.doc.title}` : ''}`
+  return e.doc?.title || idOf(e)
 }
 let show = (t: PropType, v: unknown) =>
   editorFor(t)!.show!(formatProp(prop(t), v, { describe }), t)
@@ -56,7 +56,7 @@ Deno.test('formatted scalars feed browser faces and badges', () => {
   assertEquals(formatProp(prop('number'), '+01.0'), '1')
 })
 
-Deno.test('an eid face reads as its target id and title', () => {
+Deno.test('an eid face prefers its target title and falls back to id', () => {
   let eid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   cache.value = {
     [eid]: {
@@ -65,7 +65,9 @@ Deno.test('an eid face reads as its target id and title', () => {
     },
   }
   let t: PropType = { eid: '', death: 'keep' }
-  assertEquals(vn(show(t, eid)).props.children, 'D-5 — Hello')
+  assertEquals(vn(show(t, eid)).props.children, 'Hello')
+  cache.value[eid]!.doc = undefined
+  assertEquals(vn(show(t, eid)).props.children, 'E-5')
   assertEquals(show(t, null), null)
   cache.value = {}
 })
@@ -111,7 +113,7 @@ Deno.test('a linked prop keeps a separate edit press', () => {
       }),
       root,
     )
-    assertEquals(root.querySelector('a')?.textContent, 'U-2 — Jeff')
+    assertEquals(root.querySelector('a')?.textContent, 'Jeff')
     let hand = root.querySelector('button')
     assertEquals(hand?.textContent, '▾')
     assertEquals(hand?.getAttribute('aria-label'), 'change assignee')

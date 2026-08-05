@@ -1,7 +1,7 @@
 import { type ComponentChildren, type JSX } from 'preact'
 import { useContext, useRef, useState } from 'preact/hooks'
 import { formatProp, propAt } from '../props.ts'
-import { comps, idOf, type PropType, statuses } from '../types.ts'
+import { idOf, type PropType, statuses } from '../types.ts'
 import { cache, census, domains, ent, mutate, problem } from '../live.ts'
 import { ago, block, focus, pretty, Surround } from './ui.tsx'
 import { Dot } from './Dot.tsx'
@@ -340,20 +340,20 @@ export let Prop = (
   let [editing, setEditing] = useState(false)
   // What the popout control anchors on — the value or its handle.
   let anchor = useRef<HTMLElement>(null)
-  let t = comps[comp]?.[prop]
   let e = ent(eid) as unknown as Record<
     string,
     Record<string, unknown> | undefined
   >
   let value = e[comp]?.[prop]
   let p = propAt(comp, prop)
+  let t = p?.type
   let faceValue = p
     ? formatProp(p, value, {
       describe: (eid) => {
         if (!cache.value[eid]) return
         let target = ent(eid)
         let title = target.doc?.title
-        return `${idOf(target)}${title ? ` — ${title}` : ''}`
+        return title || idOf(target)
       },
     })
     : value == null

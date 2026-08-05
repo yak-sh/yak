@@ -10,7 +10,7 @@ import { ent, mutate, rows } from '../live.ts'
 import { block } from './ui.tsx'
 import { adminRoute, type Col, columnsFor, groupedKinds } from './admin.ts'
 import { FilterInput, passOf } from './Filter.tsx'
-import { Dot } from './Dot.tsx'
+import { Prop } from './editors.tsx'
 import { Id } from './views/Inline.tsx'
 import { Entity } from './Entity.tsx'
 import { follow, navigate, route } from './nav.tsx'
@@ -26,11 +26,11 @@ let Frame = block('div', 'Admin', {
   Name: 'h1',
   Tools: 'span',
   Tool: 'button',
-  Table: 'table',
+  Table: 'div',
   Grid: 'div',
-  Cell: 'td',
-  Th: 'th',
-  Row: 'tr',
+  Cell: 'div',
+  Th: 'div',
+  Row: 'div',
   More: 'div',
   Form: 'form',
   Field: 'label',
@@ -63,9 +63,6 @@ let CAP = 200
 
 // ---- cells: a value's read-only face, picked by its PropType ----
 
-let statusLike = (t?: PropType) =>
-  typeof t == 'object' && 'enum' in t && t.enum.includes('open')
-
 let CellVal = ({ e, col }: { e: Ent; col: Col }) => {
   if (col.key == 'id') return <Id e={e} />
   if (col.key == 'title') {
@@ -76,21 +73,7 @@ let CellVal = ({ e, col }: { e: Ent; col: Col }) => {
       <span>{String(e.updated?.at ?? e.created?.at ?? '').slice(0, 16)}</span>
     )
   }
-  let v = (e as unknown as Record<string, Record<string, unknown>>)[col.comp!]
-    ?.[col.prop!]
-  if (v == null || v === '') return null
-  if (statusLike(col.t)) {
-    return (
-      <span>
-        <Dot status={String(v)} /> {String(v)}
-      </span>
-    )
-  }
-  if (typeof col.t == 'object' && 'eid' in col.t) {
-    let target = ent(String(v))
-    return target.num ? <Id e={target} /> : <span>{String(v).slice(0, 8)}</span>
-  }
-  return <span>{String(v)}</span>
+  return <Prop eid={e.eid} comp={col.comp!} prop={col.prop!} />
 }
 
 // ---- the index: one kind, every row, columns from the vocabulary ----
@@ -146,43 +129,42 @@ let Index = ({ kind }: { kind: string }) => {
         ? (
           <Grid>
             {shown.map((e) => (
-              <div key={e.eid}>
-                <Entity eid={e.eid} view='List.Tile' />
-              </div>
+              <Entity key={e.eid} eid={e.eid} view='List.Tile' />
             ))}
           </Grid>
         )
         : (
-          <Table>
-            <thead>
-              <Row>
+          <Table
+            style={{
+              gridTemplateColumns:
+                `repeat(${cols.length}, minmax(max-content, 1fr))`,
+            }}
+          >
+            <Row mod='head'>
+              {cols.map((c) => (
+                <Th
+                  key={c.key}
+                  mod={sort?.key == c.key && (sort.dir > 0 ? 'asc' : 'desc')}
+                  onClick={() =>
+                    setSort(
+                      sort?.key == c.key && sort.dir > 0
+                        ? { key: c.key, dir: -1 }
+                        : { key: c.key, dir: 1 },
+                    )}
+                >
+                  {c.key.replace(/_eid$/, '')}
+                </Th>
+              ))}
+            </Row>
+            {shown.map((e) => (
+              <Row key={e.eid} onClick={follow(`/${idOf(e)}`, e.eid)}>
                 {cols.map((c) => (
-                  <Th
-                    key={c.key}
-                    mod={sort?.key == c.key && (sort.dir > 0 ? 'asc' : 'desc')}
-                    onClick={() =>
-                      setSort(
-                        sort?.key == c.key && sort.dir > 0
-                          ? { key: c.key, dir: -1 }
-                          : { key: c.key, dir: 1 },
-                      )}
-                  >
-                    {c.key.replace(/_eid$/, '')}
-                  </Th>
+                  <Cell key={c.key} mod={c.key}>
+                    <CellVal e={e} col={c} />
+                  </Cell>
                 ))}
               </Row>
-            </thead>
-            <tbody>
-              {shown.map((e) => (
-                <Row key={e.eid} onClick={follow(`/${idOf(e)}`, e.eid)}>
-                  {cols.map((c) => (
-                    <Cell key={c.key} mod={c.key}>
-                      <CellVal e={e} col={c} />
-                    </Cell>
-                  ))}
-                </Row>
-              ))}
-            </tbody>
+            ))}
           </Table>
         )}
       {all.length > CAP && (

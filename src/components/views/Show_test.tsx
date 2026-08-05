@@ -245,7 +245,7 @@ Deno.test('document meta names its creator and editor after their ages', () => {
     render(resolve(e, 'Meta').Render({ e })!, root)
     assertEquals(
       root.querySelector('.Stamp')?.textContent,
-      '2 days ago by U-2 — Jeff· edited 18 hours ago by U-3 — Robin',
+      '2 days ago by Jeff· edited 18 hours ago by Robin',
     )
     assertEquals(
       [...root.querySelectorAll('.Stamp a')].map((a) => a.getAttribute('href')),

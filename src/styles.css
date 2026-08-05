@@ -3132,11 +3132,18 @@ a[data-ref]:hover {
   background: var(--card);
 }
 .Admin_Table {
+  display: grid;
   width: 100%;
-  border-collapse: collapse;
   font-size: 13px;
 }
+.Admin_Row {
+  display: contents;
+  cursor: pointer;
+}
 .Admin_Th {
+  position: sticky;
+  z-index: 1;
+  top: 0;
   text-align: left;
   font-weight: 600;
   font-size: 11px;
@@ -3148,6 +3155,7 @@ a[data-ref]:hover {
   cursor: pointer;
   user-select: none;
   white-space: nowrap;
+  background: var(--bg);
 }
 .Admin_Th-asc::after {
   content: ' ↑';
@@ -3155,10 +3163,7 @@ a[data-ref]:hover {
 .Admin_Th-desc::after {
   content: ' ↓';
 }
-.Admin_Row {
-  cursor: pointer;
-}
-tbody .Admin_Row:hover {
+.Admin_Row:hover > .Admin_Cell {
   background: var(--card);
 }
 .Admin_Cell {
@@ -3180,13 +3185,6 @@ tbody .Admin_Row:hover {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: var(--half-gap);
-}
-.Admin_Grid > div {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: var(--half-gap);
-  overflow: hidden;
 }
 .Admin_More {
   padding: var(--gap);
