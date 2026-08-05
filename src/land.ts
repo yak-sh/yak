@@ -18,7 +18,7 @@
 // not subject to it. That guard stops an agent from editing a tree it does not
 // own — not the project's own landing verb from fast-forwarding a branch.
 import { resolve } from 'node:path'
-import { commentChanges, type Row } from './client.ts'
+import { commentChanges, releaseChange, type Row } from './client.ts'
 import { type Change, idOf } from './types.ts'
 
 export type Landing = {
@@ -29,22 +29,29 @@ export type Landing = {
   task: Row
 }
 
-// A landed commit completes the task in the same graph transaction as its
-// receipt. The exact receipt makes a lost-response retry idempotent.
+// A landed commit completes the task, releases the session's leases, and
+// records its receipt in one graph transaction. The exact receipt makes a
+// lost-response retry idempotent.
 export let landedChanges = (
   all: Row[],
   task: Row,
   sha: string,
-  session?: string,
+  session: string,
 ): Change[] => {
   let body = `Landed \`${sha}\`.`
   let recorded = all.some((r) =>
     r.comps.comment?.target_eid == task.eid && r.comps.doc?.body == body
   )
-  return recorded ? [] : [
+  let sess = all.find((r) => String(r.comps.session?.id ?? '') == session)
+  let releases = sess
+    ? all.filter((r) => r.comps.claim?.session_eid == sess.eid)
+      .map(releaseChange)
+    : []
+  let completion: Change[] = recorded ? [] : [
     { eid: task.eid, name: 'task', comp: { status: 'done' } },
     ...commentChanges(all, task.eid, body, session),
   ]
+  return [...completion, ...releases]
 }
 
 // A session's task is the one it is WORKING, however it came by it: the

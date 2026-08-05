@@ -112,10 +112,27 @@ Deno.test('a session working nothing lands nothing', () => {
   )
 })
 
-Deno.test('a landing completes its task with one idempotent receipt', () => {
-  let task = row('t', 42, 'task', { task: { status: 'wip' } })
+Deno.test('a landing completes and releases in one idempotent batch', () => {
   let session = row('s', 7, 'session', { session: { id: 'thread' } })
-  let changes = landedChanges([task, session], task, 'abc123', 'thread')
+  let other = row('o', 8, 'session', { session: { id: 'other' } })
+  let task = row('t', 42, 'task', {
+    task: { status: 'wip' },
+    claim: { session_eid: session.eid },
+  })
+  let extra = row('x', 43, 'task', {
+    task: { status: 'open' },
+    claim: { session_eid: session.eid },
+  })
+  let foreign = row('f', 44, 'task', {
+    task: { status: 'open' },
+    claim: { session_eid: other.eid },
+  })
+  let changes = landedChanges(
+    [task, extra, foreign, session, other],
+    task,
+    'abc123',
+    'thread',
+  )
   assertEquals(changes[0], {
     eid: task.eid,
     name: 'task',
@@ -123,12 +140,23 @@ Deno.test('a landing completes its task with one idempotent receipt', () => {
   })
   let doc = changes.find((c) => c.name == 'doc')!
   assertEquals(doc.comp?.body, 'Landed `abc123`.')
+  assertEquals(changes.filter((c) => c.name == 'claim'), [
+    { eid: task.eid, name: 'claim', comp: null },
+    { eid: extra.eid, name: 'claim', comp: null },
+  ])
   let receipt = row(doc.eid, 8, 'comment', {
     doc: doc.comp!,
     comment: { target_eid: task.eid },
   })
+  delete task.comps.claim
+  delete extra.comps.claim
   assertEquals(
-    landedChanges([task, session, receipt], task, 'abc123', 'thread'),
+    landedChanges(
+      [task, extra, foreign, session, other, receipt],
+      task,
+      'abc123',
+      'thread',
+    ),
     [],
   )
 })

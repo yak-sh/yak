@@ -1725,6 +1725,13 @@ export let noticeBlock = (lines: string[]) =>
       lines.map((line) => `- ${line}`).join('\n')
     : ''
 
+// One claim has one release shape at every session-ending door.
+export let releaseChange = (row: Row): Change => ({
+  eid: row.eid,
+  name: 'claim',
+  comp: null,
+})
+
 // The one release truth: a session ended — every claim it holds drops,
 // and tasks it did NOT finish get a comment saying so (the simple audit:
 // no timers, no heartbeats, just "ended before done" on the record).
@@ -1741,7 +1748,7 @@ export let lapseChanges = (all: Row[], sess: Row): Change[] => {
         `⚑ lease lapsed: session ${name} ended before this was done`,
         id,
       ).slice(-2)), // the session exists — skip the mint, keep doc + comment
-      { eid: r.eid, name: 'claim', comp: null },
+      releaseChange(r),
     ])
 }
 

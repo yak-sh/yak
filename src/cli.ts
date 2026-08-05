@@ -1004,11 +1004,13 @@ let spawn = async (args: string[]) => {
 // sha the checkout took before the tree disappears.
 let land = async () => {
   let all = rows(await snapshot())
-  let spec = landing(all, me())
+  let session = me()
+  if (!session) throw new Error('land: no session identity')
+  let spec = landing(all, session)
   let sha = await landTree(spec, {
     record: async (sha) => {
       let current = rows(await snapshot())
-      let changes = landedChanges(current, spec.task, sha, me())
+      let changes = landedChanges(current, spec.task, sha, session)
       if (changes.length) await send(changes)
     },
   })
