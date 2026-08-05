@@ -17,16 +17,18 @@ let Span = el('span', 'Edit')
 // open: mount already editing — for hosts that swap rendered content for
 // source (the markdown body), where there's no same-node dblclick to
 // start from. onClose fires when the edit ends, commit or revert.
+// html: show rendered markup at rest, but edit and save its source.
 // Keystrokes save a draft; blur spends it — so a hot swap mid-edit
 // remounts, finds the draft, and resumes editing where typing stopped.
 export let Edit = (
-  { eid, comp, prop, multi, open, onClose }: {
+  { eid, comp, prop, multi, open, onClose, html }: {
     eid: string
     comp: string
     prop: string
     multi?: boolean
     open?: boolean
     onClose?: () => void
+    html?: (value: string) => string
   },
 ) => {
   let comps = ent(eid) as unknown as Record<
@@ -42,12 +44,16 @@ export let Edit = (
   let value = String(held ?? '')
   let ref = useRef<HTMLElement>(null)
   let dkey = `${eid}.${comp}.${prop}`
+  let rendered = html
+    ? { dangerouslySetInnerHTML: { __html: html(value) } }
+    : {}
 
   let begin = (t: HTMLElement) => {
     if (unloaded || t.isContentEditable) return
     let row = t.closest<HTMLElement>('[draggable="true"]')
     if (row) row.draggable = false
-    t.dataset.was = t.textContent ?? ''
+    t.dataset.was = value
+    if (html) t.textContent = value
     t.contentEditable = 'plaintext-only'
     t.focus()
     getSelection()?.setPosition(t, t.childNodes.length) // caret at the end
@@ -91,14 +97,17 @@ export let Edit = (
     mode.value = 'normal'
     let was = t.dataset.was ?? ''
     let text = (t.textContent ?? '').trim()
+    let shown = was
     if (text && text != was) {
       try {
         mutate({ eid, name: comp, comp: { [prop]: text } })
+        shown = text
       } catch (e) {
         problem.value = e instanceof Error ? e.message : String(e)
-        if (t.firstChild instanceof Text) t.firstChild.data = was
       }
-    } else if (t.firstChild instanceof Text) t.firstChild.data = was
+    }
+    if (html) t.innerHTML = html(shown)
+    else t.textContent = shown
     onClose?.()
   }
 
@@ -110,8 +119,9 @@ export let Edit = (
       onInput={(ev: InputEvent) =>
         save(dkey, (ev.currentTarget as HTMLElement).textContent ?? '')}
       onBlur={blur}
+      {...rendered}
     >
-      {value}
+      {html ? null : value}
     </Span>
   )
 }

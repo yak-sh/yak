@@ -24,10 +24,12 @@
 // A code span shaped like a git commit links when its caller supplies the
 // owning project's repo URL. Without that project context it stays code.
 //
-// The door comes in two: `md` for the canvas, `mdAbs` for a reader with
+// The door comes in three: `md` for the canvas, `mdAbs` for a reader with
 // no base document to resolve `/T-123` against — an email client turns
 // that into `http:///T-123` (T-12558). Same parse, same everything, one
 // difference (how a ref becomes an href), so neither can drift.
+// `mdInline` is the title face: no block wrapper, links/images flattened
+// because the surrounding title is usually the link.
 import { Marked } from 'marked'
 import { prefix } from './types.ts'
 import { entityUrl } from './url.ts'
@@ -74,7 +76,7 @@ export let commitUrl = (repo: string | null | undefined, sha: string) => {
 
 let attr = (s: string) => esc(s).replace(/"/g, '&quot;')
 
-let door = (ref: Ref, repo?: string | null) =>
+let door = (ref: Ref, repo?: string | null, links = true) =>
   new Marked({
     gfm: true,
     breaks: true,
@@ -97,6 +99,7 @@ let door = (ref: Ref, repo?: string | null) =>
       // every other link keeps marked's own rendering, unless its href
       // couldn't be an href — then the words stay, the trap goes.
       link(this: Inline, token: LinkToken) {
+        if (!links) return this.parser.parseInline(token.tokens)
         if (/^[A-Za-z]+-\d+$/.test(token.href)) {
           return ref(token.href, this.parser.parseInline(token.tokens))
         }
@@ -107,7 +110,7 @@ let door = (ref: Ref, repo?: string | null) =>
       },
       // Same rule for a src; an image we refuse shows its alt text.
       image: (t: ImageToken) =>
-        LINKABLE.test(t.href.trim()) ? false : esc(t.text),
+        links && LINKABLE.test(t.href.trim()) ? false : esc(t.text),
       // A code span is an explicit signal that a hex word is a commit, so
       // ordinary prose such as "decafed" never becomes a repository link.
       codespan: (t: CodeToken) => {
@@ -128,11 +131,16 @@ let canvasRef = (id: string, text: string) =>
 let awayRef = (id: string, text: string) =>
   `<a href="${entityUrl(id)}">${text}</a>`
 
+// A title is itself the link in most of its faces, so links and images
+// flatten to their words. The rest of inline markdown keeps its meaning.
+let titleRef = (_id: string, text: string) => text
+
 let doors = new Map<string, ReturnType<typeof door>>()
 let parser = (ref: Ref, repo?: string | null) => {
-  let key = `${ref == canvasRef ? 'canvas' : 'away'}\0${repo ?? ''}`
+  let name = ref == canvasRef ? 'canvas' : ref == awayRef ? 'away' : 'title'
+  let key = `${name}\0${repo ?? ''}`
   let found = doors.get(key)
-  if (!found) doors.set(key, found = door(ref, repo))
+  if (!found) doors.set(key, found = door(ref, repo, ref != titleRef))
   return found
 }
 
@@ -140,3 +148,5 @@ export let md = (s: string, repo?: string | null): string =>
   parser(canvasRef, repo).parse(s) as string
 export let mdAbs = (s: string, repo?: string | null): string =>
   parser(awayRef, repo).parse(s) as string
+export let mdInline = (s: string): string =>
+  parser(titleRef).parseInline(s) as string

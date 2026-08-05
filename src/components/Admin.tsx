@@ -14,6 +14,7 @@ import { Dot } from './Dot.tsx'
 import { Id } from './views/Inline.tsx'
 import { Entity } from './Entity.tsx'
 import { follow, navigate, route } from './nav.tsx'
+import { title } from './title.tsx'
 
 let Frame = block('div', 'Admin', {
   Side: 'nav',
@@ -68,7 +69,7 @@ let statusLike = (t?: PropType) =>
 let CellVal = ({ e, col }: { e: Ent; col: Col }) => {
   if (col.key == 'id') return <Id e={e} />
   if (col.key == 'title') {
-    return <span>{String(e.doc?.title ?? '')}</span>
+    return <span {...title(String(e.doc?.title ?? ''))} />
   }
   if (col.key == 'modified') {
     return (

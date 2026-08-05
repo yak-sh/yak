@@ -1,6 +1,6 @@
 import { type Ent, friendly, standing } from '../../types.ts'
 import { block } from '../ui.tsx'
-import { Edit } from '../Edit.tsx'
+import { title, TitleEdit } from '../title.tsx'
 import { Pip } from './Show.tsx'
 import { Dot } from '../Dot.tsx'
 import { Id } from './Inline.tsx'
@@ -20,7 +20,7 @@ export let TaskTitle = ({ e }: { e: Ent }) => (
     <Id e={e} />
     <Pip e={e} />
     <Text>
-      <Edit eid={e.eid} comp='doc' prop='title' />
+      <TitleEdit eid={e.eid} />
     </Text>
   </Frame>
 )
@@ -29,7 +29,7 @@ export let BoardTitle = ({ e }: { e: Ent }) => (
   <Frame>
     <Id e={e} />
     <Text>
-      <Edit eid={e.eid} comp='doc' prop='title' />
+      <TitleEdit eid={e.eid} />
     </Text>
   </Frame>
 )
@@ -39,7 +39,7 @@ export let RoleTitle = ({ e }: { e: Ent }) => (
     <Id e={e} />
     <Dot status={e.role!.state == 'running' ? 'running' : 'completed'} />
     <Text>
-      <Edit eid={e.eid} comp='doc' prop='title' />
+      <TitleEdit eid={e.eid} />
     </Text>
   </Frame>
 )
@@ -55,7 +55,7 @@ export let WebTitle = ({ e }: { e: Ent }) => {
   return (
     <Frame>
       <Id e={e} />
-      <Text>{e.doc?.title ?? host}</Text>
+      <Text {...title(e.doc?.title ?? host)} />
     </Frame>
   )
 }
@@ -64,7 +64,7 @@ export let DocTitle = ({ e }: { e: Ent }) => (
   <Frame>
     <Id e={e} />
     <Text>
-      <Edit eid={e.eid} comp='doc' prop='title' />
+      <TitleEdit eid={e.eid} />
     </Text>
   </Frame>
 )

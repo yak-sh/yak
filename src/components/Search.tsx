@@ -6,6 +6,7 @@ import { drop, peek, save } from './drafts.ts'
 import { block } from './ui.tsx'
 import { Icon } from './icons.tsx'
 import { useComplete } from './Complete.tsx'
+import { title } from './title.tsx'
 
 // `/` in normal mode opens the palette (the App shell owns the hotkey
 // and the mount, so any root can search; the `open` callback decides
@@ -197,7 +198,7 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
               pick(h)
             }}
           >
-            <Title>{h.title || '(untitled)'}</Title>
+            <Title {...title(h.title || '(untitled)')} />
             <Id>{idOf(h)}</Id>
             <Snip>{marked(h.snip)}{h.retired && ' · retired'}</Snip>
           </Row>

@@ -26,6 +26,7 @@ import { load, offers, providers } from './Run.tsx'
 import { Tray } from './Tray.tsx'
 import { block } from './ui.tsx'
 import { Id } from './views/Inline.tsx'
+import { title } from './title.tsx'
 
 let Frame = block('footer', 'Status', {
   Mode: 'span',
@@ -230,9 +231,8 @@ let WhoAmI = () => {
               name: 'client',
               comp: { actor_eid: p.eid },
             })}
-        >
-          {String(p.comps.doc?.title ?? '') || idOf(p)}
-        </Person>
+          {...title(String(p.comps.doc?.title ?? '') || idOf(p))}
+        />
       ))}
       ?
     </You>

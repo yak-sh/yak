@@ -9,6 +9,7 @@ import { Prop } from '../editors.tsx'
 import { Id } from './Inline.tsx'
 import { Entity } from '../Entity.tsx'
 import { viaName } from '../Comments.tsx'
+import { title } from '../title.tsx'
 
 // Adding/removing comps is a browser power tool — the TUI paints Debug as
 // static lines with no live events, so the controls stay web-only. typeof
@@ -249,7 +250,7 @@ export let DebugTaskItem = ({ e }: { e: Ent }) => (
   <Item>
     <Id e={e} />
     <Kind>{e.kind}</Kind>
-    <Title>{e.doc?.title}</Title>
+    <Title {...title(e.doc?.title ?? '')} />
     {e.claim && <Claim>⚑ {viaName(e.claim.session_eid)}</Claim>}
     <Prio>{formatProp(priority, e.task!.priority)}</Prio>
     <Status mod={e.task!.status}>{e.task!.status}</Status>
@@ -260,6 +261,6 @@ export let DebugAnyItem = ({ e }: { e: Ent }) => (
   <Item>
     <Id e={e} />
     <Kind>{e.kind}</Kind>
-    {e.doc?.title && <Title>{e.doc.title}</Title>}
+    {e.doc?.title && <Title {...title(e.doc.title)} />}
   </Item>
 )

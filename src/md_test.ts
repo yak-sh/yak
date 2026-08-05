@@ -1,7 +1,16 @@
 // The markdown door's contract — the behaviors the app leans on. If a
 // re-vendored marked or a config change breaks one, this says so.
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { md, mdAbs } from './md.ts'
+import { md, mdAbs, mdInline } from './md.ts'
+
+Deno.test('mdInline: title markup has no block wrapper or nested links', () => {
+  assertEquals(
+    mdInline('designs use `task design` and **prose**'),
+    'designs use <code>task design</code> and <strong>prose</strong>',
+  )
+  assertEquals(mdInline('[words](https://y.z) and T-123'), 'words and T-123')
+  assertEquals(mdInline('![alt](https://y.z/x.png)'), 'alt')
+})
 
 Deno.test('md: paragraphs are <p>, not a wall of <br>', () => {
   assertEquals(md('one\n\ntwo').trim(), '<p>one</p>\n<p>two</p>')

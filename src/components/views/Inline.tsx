@@ -3,6 +3,7 @@ import { crewed, gated } from '../../live.ts'
 import { block, Chip } from '../ui.tsx'
 import { linkProps } from '../nav.tsx'
 import { Dot } from '../Dot.tsx'
+import { title } from '../title.tsx'
 
 // The Inline role: identify an entity in flowing content — chip (+dot for a
 // task) + truncated title, ONE anchor wearing the whole internal-link
@@ -33,9 +34,10 @@ export let Inline = ({ e, dot }: { e: Ent; dot?: boolean }) => (
         {' '}
       </>
     )}
-    <Title mod={settled(e.task?.status) && 'settled'}>
-      {e.doc?.title ?? e.kind}
-    </Title>
+    <Title
+      mod={settled(e.task?.status) && 'settled'}
+      {...title(e.doc?.title ?? e.kind)}
+    />
   </Line>
 )
 

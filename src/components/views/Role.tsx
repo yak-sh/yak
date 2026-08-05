@@ -1,6 +1,6 @@
 import { type Ent } from '../../types.ts'
 import { block, Stamp } from '../ui.tsx'
-import { Edit } from '../Edit.tsx'
+import { TitleEdit } from '../title.tsx'
 import { Prop } from '../editors.tsx'
 import { Entity } from '../Entity.tsx'
 import { Id } from './Inline.tsx'
@@ -46,7 +46,7 @@ export let Role = ({ e }: { e: Ent }) => {
       <Head>
         <State mod={r.state}>{r.state}</State>
         <Title>
-          <Edit eid={e.eid} comp='doc' prop='title' />
+          <TitleEdit eid={e.eid} />
         </Title>
       </Head>
       <Meta>

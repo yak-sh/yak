@@ -23,6 +23,7 @@ import { Comments, viaName } from '../Comments.tsx'
 import { Dot } from '../Dot.tsx'
 import { Prio } from '../Prio.tsx'
 import { Edit } from '../Edit.tsx'
+import { title, TitleEdit } from '../title.tsx'
 import { editorFor, Prop } from '../editors.tsx'
 import { Relate } from './Relate.tsx'
 import { Id } from './Inline.tsx'
@@ -182,7 +183,7 @@ let Plate = ({ e }: { e: Ent }) => (
     show={(face, v) => {
       if (!face || !v) return null
       let a = ent(String(v))
-      return <Assignee {...linkProps(a)}>{a.doc?.title || face}</Assignee>
+      return <Assignee {...linkProps(a)} {...title(a.doc?.title || face)} />
     }}
   />
 )
@@ -198,7 +199,7 @@ let Home = ({ e }: { e: Ent }) => (
     show={(face, v) => {
       if (!face || !v) return null
       let p = ent(String(v))
-      return <Project {...linkProps(p)}>{p.doc?.title || face}</Project>
+      return <Project {...linkProps(p)} {...title(p.doc?.title || face)} />
     }}
   />
 )
@@ -528,7 +529,7 @@ export let Show = ({ e }: { e: Ent }) => (
     <Heading>
       {e.task && <Pip e={e} />}
       <Title>
-        <Edit eid={e.eid} comp='doc' prop='title' />
+        <TitleEdit eid={e.eid} />
       </Title>
     </Heading>
     <Entity eid={e.eid} view='Meta' id />

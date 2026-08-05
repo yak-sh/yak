@@ -4,6 +4,7 @@ import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
 import { cache, config } from '../live.ts'
+import { mdInline } from '../md.ts'
 import { type Change } from '../types.ts'
 import { Edit } from './Edit.tsx'
 
@@ -26,19 +27,29 @@ Deno.test('double-click selects words while already editing', () => {
   cache.value = {
     [eid]: {
       entity: { eid, num: 1 },
-      doc: { eid, title: 'hello world', body: '' },
+      doc: { eid, title: 'hello `world`', body: '' },
     },
   }
   let root = document.querySelector('main')!
   try {
-    render(h(Edit, { eid, comp: 'doc', prop: 'title' }), root)
+    render(
+      h(Edit, {
+        eid,
+        comp: 'doc',
+        prop: 'title',
+        html: mdInline,
+      }),
+      root,
+    )
     let edit = root.querySelector('span')!
+    assertEquals(edit.innerHTML, 'hello <code>world</code>')
     edit.dispatchEvent(new window.Event('dblclick', { bubbles: true }))
-    assertEquals(edit.dataset.was, 'hello world')
+    assertEquals(edit.dataset.was, 'hello `world`')
+    assertEquals(edit.textContent, 'hello `world`')
 
     edit.textContent = 'hello brave world'
     edit.dispatchEvent(new window.Event('dblclick', { bubbles: true }))
-    assertEquals(edit.dataset.was, 'hello world')
+    assertEquals(edit.dataset.was, 'hello `world`')
     assertEquals(positions, 1)
   } finally {
     render(null, root)

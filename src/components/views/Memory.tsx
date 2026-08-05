@@ -2,6 +2,7 @@ import { type Ent } from '../../types.ts'
 import { clickProps, menuAt } from '../nav.tsx'
 import { block, el, Stamp } from '../ui.tsx'
 import { Id } from './Inline.tsx'
+import { title } from '../title.tsx'
 
 // A memory in a list: index line, confirmation age, id — with `feedback`
 // ahead of it when the memory records someone's correction, the one thing
@@ -14,7 +15,7 @@ let Type = el('span', 'MemoryType')
 export let MemoryTile = ({ e }: { e: Ent }) => (
   <Line {...clickProps(e)} onContextMenu={menuAt(e)}>
     {e.feedback ? <Type>feedback</Type> : null}
-    <Line.Title>{e.doc!.title}</Line.Title>
+    <Line.Title {...title(e.doc!.title)} />
     <Stamp at={e.memory!.last_confirmed_at} label='confirmed' />
     <Id e={e} />
   </Line>

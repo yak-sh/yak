@@ -23,6 +23,7 @@ import { Dot } from '../Dot.tsx'
 import { Composer, Note } from '../Comments.tsx'
 import { Id } from './Inline.tsx'
 import { Entity } from '../Entity.tsx'
+import { title } from '../title.tsx'
 
 // An agent session, watched — the console (W-3676 #5): a sticky slim bar
 // (task, lifecycle summary, stop — server-owned columns riding
@@ -553,9 +554,9 @@ export let SessionRow = ({ e }: { e: Ent }) => {
       <Dot status={standing(s)} />
       {model && <RowLine.Model>{friendly(model)}</RowLine.Model>}
       {s.actor_eid && (
-        <RowLine.Actor>{ent(s.actor_eid).doc?.title}</RowLine.Actor>
+        <RowLine.Actor {...title(ent(s.actor_eid).doc?.title ?? '')} />
       )}
-      {job && <RowLine.Task>{ent(job).doc?.title}</RowLine.Task>}
+      {job && <RowLine.Task {...title(ent(job).doc?.title ?? '')} />}
       <Id e={e} />
     </RowLine>
   )

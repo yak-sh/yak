@@ -4,6 +4,7 @@ import { Dot } from '../Dot.tsx'
 import { Entity } from '../Entity.tsx'
 import { clickProps, menuAt } from '../nav.tsx'
 import { block } from '../ui.tsx'
+import { title } from '../title.tsx'
 
 let Frame = block('div', 'TaskTile', { Title: 'span' })
 let { Title } = Frame
@@ -17,7 +18,7 @@ let { Title } = Frame
 export let TaskTile = ({ e }: { e: Ent }) => (
   <Frame mod='dense' {...clickProps(e)} onContextMenu={menuAt(e)}>
     <Dot status={e.task!.status} gated={gated(e)} live={crewed(e)} />
-    <Title>{e.doc?.title}</Title>
+    <Title {...title(e.doc?.title ?? '')} />
     <Entity eid={e.eid} view='Meta' id />
   </Frame>
 )

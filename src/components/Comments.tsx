@@ -6,6 +6,7 @@ import { ago, block, pretty } from './ui.tsx'
 import { useDraft } from './drafts.ts'
 import { type Ent, idOf, nick, sessionActive, verdictName } from '../types.ts'
 import { linkProps } from './nav.tsx'
+import { title } from './title.tsx'
 
 let Frame = block('div', 'Comments', {
   Item: 'div',
@@ -57,9 +58,12 @@ export let Note = ({ c }: { c: Ent }) => {
         /* The name links to whoever said it; the age to the comment
         itself — both wear the internal-link contract. */
       }
-      <Who {...(who ? linkProps(who) : {})}>
-        {actor ? actor.doc?.title || idOf(actor) : viaName(instrument?.eid)}
-      </Who>
+      <Who
+        {...(who ? linkProps(who) : {})}
+        {...title(
+          actor ? actor.doc?.title || idOf(actor) : viaName(instrument?.eid),
+        )}
+      />
       {actor && instrument && actor.eid != instrument.eid && (
         <Via {...linkProps(instrument)}>
           · via {viaName(instrument.eid)}

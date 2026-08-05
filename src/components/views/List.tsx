@@ -9,6 +9,7 @@ import { dragData } from '../drag.ts'
 import { useBoardSub } from '../subscriptions.ts'
 import { Id } from './Inline.tsx'
 import { Entity } from '../Entity.tsx'
+import { title } from '../title.tsx'
 
 let Frame = block('div', 'List', { Row: 'div' })
 let { Row } = Frame
@@ -86,9 +87,11 @@ let Line = block('div', 'ListTile', { Title: 'span' })
 export let ListTile = ({ e }: { e: Ent }) => (
   <Line {...clickProps(e)} onContextMenu={menuAt(e)}>
     {/* a mail's stored subject may be an encoded-word — decode to read */}
-    <Line.Title>
-      {(e.mail ? unmime(e.doc?.title ?? '') : e.doc?.title) || e.kind}
-    </Line.Title>
+    <Line.Title
+      {...title(
+        (e.mail ? unmime(e.doc?.title ?? '') : e.doc?.title) || e.kind,
+      )}
+    />
     <Id e={e} />
   </Line>
 )
