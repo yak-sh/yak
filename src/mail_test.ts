@@ -203,6 +203,13 @@ let fixture = () => {
     { eid: task, name: 'doc', comp: { title: 'the work' } },
     { eid: task, name: 'task', comp: { status: 'open', project_eid: proj } },
   ])
+  // A standing task, not one being filed this instant: commenting on it is
+  // correspondence. Birth commentary is its own case and builds its own
+  // target, so only these tests need the age.
+  db.prepare(`
+    update created set at = strftime('%Y-%m-%dT%H:%M:%fZ','now','-1 hour')
+    where eid = ?
+  `).run(task)
   return { proj, task }
 }
 let comment = (target: string, writer?: string) => {
@@ -288,6 +295,12 @@ Deno.test('fanout: commentary born with a task stays in its filing event', () =>
     .all() as { eid: string }[]
   assertEquals(pending.some((r) => r.eid == c), false)
 
+  // Birth commentary is a one-second window, not a standing exemption: age
+  // the filing and the same task is news again.
+  db.prepare(`
+    update created set at = strftime('%Y-%m-%dT%H:%M:%fZ','now','-1 hour')
+    where eid = ?
+  `).run(filed)
   let later = uid()
   apply(db, [
     { eid: filed, name: 'task', comp: { status: 'wip' } },
@@ -295,7 +308,34 @@ Deno.test('fanout: commentary born with a task stays in its filing event', () =>
     { eid: later, name: 'comment', comp: { target_eid: filed } },
   ])
   fanout(cast)(later, { target_eid: filed })
-  assertEquals(mintedFor(later).length, 1) // a task patch is still news
+  assertEquals(mintedFor(later).length, 1)
+})
+
+// The debounce is the whole rule, so pin both of its edges. A comment inside
+// the window is part of filing; one past it is correspondence, whatever it
+// was filed against.
+Deno.test('fanout: the birth window is one second, either side of it', () => {
+  let { proj } = fixture()
+  let target = uid(), inside = uid(), outside = uid()
+  apply(db, [
+    { eid: target, name: 'doc', comp: { title: 'the work' } },
+    { eid: target, name: 'task', comp: { status: 'open', project_eid: proj } },
+    { eid: inside, name: 'doc', comp: { title: '', body: 'born beside it' } },
+    { eid: inside, name: 'comment', comp: { target_eid: target } },
+    { eid: outside, name: 'doc', comp: { title: '', body: 'said after' } },
+    { eid: outside, name: 'comment', comp: { target_eid: target } },
+  ])
+  // Two seconds is the nearest gap the graph actually holds — inside the
+  // window nothing sits between one second and it.
+  db.prepare(`
+    update created set at = strftime('%Y-%m-%dT%H:%M:%fZ', at, '+2 seconds')
+    where eid = ?
+  `).run(outside)
+
+  fanout(cast)(inside, { target_eid: target })
+  fanout(cast)(outside, { target_eid: target })
+  assertEquals(mintedFor(inside).length, 0)
+  assertEquals(mintedFor(outside).length, 1)
 })
 
 Deno.test('the sweep predicate finds unreceipted recent comments only', () => {

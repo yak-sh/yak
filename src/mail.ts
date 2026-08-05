@@ -290,27 +290,31 @@ export let mailed =
     )
   }
 
-// A batch is one event. Commentary born beside its task is part of filing it,
-// not new correspondence — and the journal is the durable batch boundary the
-// boot sweep can read back. Both component and spine must be present: a task
-// patch in the same batch is still news.
-let TASK_BIRTH_BATCH = `
+// Commentary born beside its target is part of filing it, not new
+// correspondence. The two births are the whole question, and a shared batch
+// is the wrong way to ask it: the doors mint the target in one apply() and
+// the comment in the next, milliseconds later, so batch identity holds for 3
+// of the 122 pairs actually born together.
+//
+// One second is where the data splits — 122 pairs land inside it and the
+// next is two seconds out, so the window sits in an empty band rather than
+// on a gradient. The target's kind does not enter into it: a comment born
+// beside a memory, a design or a session is the same event.
+//
+// A missing birth on either side reads as NOT born together, so the comment
+// still fans out. A letter delivered is recoverable; correspondence silently
+// swallowed is not.
+let BORN_WITH_TARGET = `
   exists (
-    select 1 from journal j, json_each(j.batch) c
-    where json_extract(c.value, '$.eid') = comment.eid
-      and json_extract(c.value, '$.name') = 'entity'
-      and json_type(c.value, '$.comp') = 'object'
-      and exists (
-        select 1 from json_each(j.batch) t, json_each(j.batch) e
-        where json_extract(t.value, '$.name') = 'task'
-          and json_extract(t.value, '$.eid') = comment.target_eid
-          and json_extract(e.value, '$.name') = 'entity'
-          and json_type(e.value, '$.comp') = 'object'
-          and json_extract(e.value, '$.eid') = comment.target_eid))
+    select 1 from created c, created t
+    where c.eid = comment.eid
+      and t.eid = comment.target_eid
+      and c.at >= t.at
+      and c.at <= strftime('%Y-%m-%dT%H:%M:%fZ', t.at, '+1 second'))
 `.trim()
 
-let bornWithTask = (eid: string) =>
-  !!db.prepare(`select 1 from comment where eid = ? and ${TASK_BIRTH_BATCH}`)
+let bornWithTarget = (eid: string) =>
+  !!db.prepare(`select 1 from comment where eid = ? and ${BORN_WITH_TARGET}`)
     .get(eid)
 
 // created(comment): a comment on an ADDRESSED project's task fans out as
@@ -322,7 +326,7 @@ let bornWithTask = (eid: string) =>
 // guard delivery.js had).
 export let fanout =
   (cast: Cast) => (eid: string, comp: Record<string, unknown>) => {
-    if (bornWithTask(eid)) return
+    if (bornWithTarget(eid)) return
     let target = String(comp.target_eid ?? '')
     let t = db.prepare('select project_eid from task where eid = ?').get(
       target,
@@ -396,22 +400,10 @@ export let fanout =
 // history, not undelivered mail, and a day of it arriving at once is a
 // mail bomb, not a catch-up.
 //
-// The horizon is an UNCORRELATED `in`, and that shape is load-bearing.
-// TASK_BIRTH_BATCH costs ~130ms a row — it scans the whole journal and
-// expands its batch JSON — so the sweep is only affordable if the window
-// decides which rows it ever runs on. As a correlated `exists` the
-// horizon cannot drive anything: SQLite picks its own order for `and`
-// terms, chose the journal scan first, and the boot sweep took 602
-// SECONDS across every comment in the graph (T-13872). Writing the cheap
-// term first does NOT fix that — text order is not evaluation order, and
-// a flattened CTE loses the bound the same way. An uncorrelated `in`
-// against comment's primary key is structural instead of advisory:
-// SQLite materializes the window once and SEARCHes comment by eid, so
-// the journal scan can only ever see rows inside the hour.
-//
-// Keep it uncorrelated. Anything that ties this subquery back to
-// `comment` hands the order back to the planner, and the failure is
-// silent — the same rows come back, minutes later.
+// The horizon is an uncorrelated `in` so the sweep stays proportional to the
+// window rather than to the comment table: SQLite materializes it once and
+// SEARCHes comment by eid. Tying it back to `comment` makes the window
+// advisory and hands the row count to the planner.
 export let FANOUT_PENDING = `
   comment.eid in (
     select cr.eid from created cr
@@ -421,5 +413,5 @@ export let FANOUT_PENDING = `
     select 1 from dependency d join mail s on s.eid = d.parent_eid
     where d.type = 'about' and d.child_eid = comment.eid)
   and
-  not ${TASK_BIRTH_BATCH}
+  not ${BORN_WITH_TARGET}
 `.trim()
