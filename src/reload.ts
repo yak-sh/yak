@@ -12,6 +12,7 @@ export let serverFiles = [
   'types.ts',
   'url.ts',
   'query.ts',
+  'sql.ts',
   'subs.ts',
   'freeze.ts',
   'hot.ts',

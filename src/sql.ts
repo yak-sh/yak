@@ -263,7 +263,13 @@ export let where = (preds: Pred[]): Sql | null => {
     if (p.op == TEXT) tables.add('doc')
     else if (p.comp && !p.at) tables.add(p.comp)
   }
+  // The spine is already the FROM table, so `.entity.num=13882` must not join
+  // it to itself: SQLite refuses the statement outright ("ambiguous column
+  // name: entity.eid"), and where() has no way to say so — it returns a Sql,
+  // the caller reads that as "compiled", and the throw surfaces at prepare
+  // time as a 400 where an answer belongs.
   let joins = [...tables]
+    .filter((t) => t != 'entity')
     .map((t) => ` left join "${t}" on "${t}"."eid" = "entity"."eid"`)
     .join('')
   let cond = parts.length ? parts.map((p) => p.sql).join(' and ') : '1'

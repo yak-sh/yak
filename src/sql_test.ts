@@ -175,6 +175,13 @@ let COMPILES = [
   '.task.status=open&.task.priority=1',
   '.task.status=open,wip&.doc.title~=widget',
   '.task.status=open&.task.domain=Eng',
+  // the SPINE, which is the from table rather than a joined one — how `task
+  // show T-3` asks its question, and the one component whose join would be
+  // to itself
+  '.entity.num=2',
+  '.entity.num=1,2',
+  '.entity.num!=2',
+  '.entity.num=2&.task.status=open',
   // an order is a ranking, not a filter
   '.order=hot',
   '.task.status=open&.order=hot',

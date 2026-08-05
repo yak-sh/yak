@@ -69,6 +69,7 @@ import { serverFile } from './reload.ts'
 import { find, jsonOf, type Row, rows } from './client.ts'
 import {
   matchQuery,
+  ORDER,
   orderOf,
   parseQuery,
   type Pred,
@@ -177,10 +178,15 @@ type Sub = {
 let subs = new Map<WebSocket, Map<string, Sub>>()
 let filtered = new Set<WebSocket>()
 
-// The query pipeline shared by /query and a subscription's initial set: the
-// current graph parsed, ref-resolved, matched. `hits` are every row matching
-// the preds; `preds`/`all`/`byEid`/`snap` ride out for whoever ranks or
-// backlinks on top (design §10.2).
+// A filter of only rankings — or of nothing at all — selects EVERY entity, and
+// there the index has nothing to offer: matching() would read all 12,530 rows
+// through the same per-table statements snapshot() uses, pay a temp table on
+// top, and hand back a set the caller narrows in JS anyway (`kind=memory` and
+// a bare listing are both this shape). Measured slower than the path it
+// replaces, so it declines for the second reason a compiler can decline: not
+// "I cannot say this" but "saying it buys nothing".
+let narrows = (preds: Pred[]) => preds.some((p) => p.op != ORDER)
+
 // The same question answered by the INDEX, when the filter compiles. This is
 // the whole point of sql.ts: evalQuery below builds a 22 MB snapshot and
 // matches 10,618 rows in JS, synchronously, so every subscribe stalls the
@@ -191,14 +197,26 @@ let filtered = new Set<WebSocket>()
 // two must not disagree: `sql_test.ts` holds them against each other per
 // predicate class, and the hits carry `eager()` comps, which walk the same
 // `readable` union `snapshot()` selects — so a subscriber cannot tell which
-// path answered it.
+// path answered it. `hits` are full Rows for the same reason: a caller must
+// not be able to tell by their shape either.
 let evalFast = (q: string) => {
   let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
+  if (!narrows(preds)) return null
   let built = where(preds)
   if (!built) return null
-  return { preds, hits: matching(db, built) }
+  let hits = matching(db, built).map(({ eid, comps }): Row => ({
+    eid,
+    num: Number(comps.entity?.num ?? 0),
+    kind: kindOf(comps),
+    comps,
+  }))
+  return { preds, hits }
 }
 
+// The query pipeline shared by /query and a subscription's initial set: the
+// current graph parsed, ref-resolved, matched. `hits` are every row matching
+// the preds; `preds`/`all`/`byEid`/`snap` ride out for whoever ranks or
+// backlinks on top (design §10.2).
 let evalQuery = (q: string) => {
   let snap = snapshot(db)
   let all = rows(snap)
@@ -725,11 +743,33 @@ let http = Deno.serve(
         let backs = segs.includes('backlinks=1')
         let kind = segs.find((s) => s.startsWith('kind='))?.slice(5)
         segs = segs.filter((s) => s != 'backlinks=1' && !s.startsWith('kind='))
-        // One pipeline with the subscription initial-set (evalQuery); kind,
-        // hot-ranking and backlinks layer on top of its matches.
-        let { snap, all, preds, byEid, hits } = evalQuery(segs.join('&'))
+        let q = segs.join('&')
+        let screen = (hits: Row[]) =>
+          kind ? hits.filter((r) => r.kind == kind) : hits
+        // One pipeline with the subscription initial-set; kind, hot-ranking
+        // and backlinks layer on top of its matches. The index answers first
+        // — a one-row question cost a 27 MB snapshot and 0.29s before this,
+        // 100x what the same question costs through sql.ts. Only the two
+        // layers that read rows the filter never matched hold it back:
+        // backlinks scans EVERY row's _eid columns plus snap.deps, and hot
+        // ranking resolves each hit's refs through byEid.
+        let fast = backs ? null : evalFast(q)
+        if (fast && orderOf(fast.preds) != 'hot') {
+          // Unranked hits come back oldest first. That is what the snapshot
+          // path has always answered — it walks the entity table, whose rowid
+          // order IS num order — but there it was the query plan's accident;
+          // here it is said out loud, so the two paths cannot drift apart on
+          // the one thing sql_test.ts does not compare (it sorts before it
+          // asserts, because a subscription's set has no order to keep).
+          return Response.json(
+            screen(fast.hits).sort((a, b) => a.num - b.num).map((r) =>
+              jsonOf(r)
+            ),
+          )
+        }
+        let { snap, all, preds, byEid, hits } = evalQuery(q)
         let now = Date.now()
-        hits = kind ? hits.filter((r) => r.kind == kind) : hits
+        hits = screen(hits)
         if (orderOf(preds) == 'hot') {
           hits.sort((a, b) =>
             warm(b.comps, now, (e) => byEid.get(e)) -

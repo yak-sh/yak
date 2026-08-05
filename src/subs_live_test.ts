@@ -396,3 +396,67 @@ Deno.test(
     }
   },
 )
+
+// `/query` answers from the INDEX when the filter compiles (sql.ts) and from a
+// materialized snapshot when it declines, and a caller must not be able to
+// tell which. sql_test.ts holds the two matchers against each other, but it
+// sorts before it asserts — a subscription keeps a Set, so order is nothing to
+// it. Through this door the answer is a JSON ARRAY, so order is part of it.
+//
+// `backlinks=1` is the lever: it needs every row's _eid columns, so it always
+// takes the snapshot path. Asking the same line both ways therefore asks the
+// two paths the same question, over HTTP, with nothing mocked.
+//
+// It is a live-server test because the fast path only exists there: `where()`
+// can hand back a statement SQLite refuses to PREPARE, which no pure test of
+// the compiler sees. `.entity.num=` did exactly that — the spine joined to
+// itself — and reached a caller as a 400 where an answer belonged.
+let bothWays = async (q: string) => {
+  let one = await fetch(`http://${U}/query?${encodeURIComponent(q)}`)
+  let two = await fetch(
+    `http://${U}/query?${encodeURIComponent(q)}&backlinks=1`,
+  )
+  if (!one.ok) throw new Error(`fast path refused ${q}: ${await one.text()}`)
+  if (!two.ok) throw new Error(`slow path refused ${q}: ${await two.text()}`)
+  let ids = (hits: { entity: { eid: string } }[]) =>
+    hits.map((r) => r.entity.eid)
+  return [
+    ids(await one.json()),
+    ids(await two.json()),
+  ]
+}
+
+Deno.test(
+  'query: index and snapshot answer alike, order included',
+  alone,
+  async () => {
+    let a = task({ status: 'open', priority: 1 })
+    let b = task({ status: 'open', priority: 2 })
+    await post([...a.born, ...b.born])
+    let num = async (eid: string) =>
+      ((await (await fetch(
+        `http://${U}/query?${
+          encodeURIComponent(`.doc.title~=${eid.slice(0, 8)}`)
+        }`,
+      ))
+        .json()) as { entity: { num: number } }[])[0].entity.num
+    for (
+      let q of [
+        '.task.status=open',
+        '.task.priority=1',
+        '.task.status=open&.task.priority=2',
+        '.task.status!=done',
+        `.doc.title~=${a.eid.slice(0, 8)}`,
+        // the spine, which is the from table rather than a joined one
+        `.entity.num=${await num(a.eid)}`,
+        // and the shapes that must FALL BACK: a ranking, and a filter that
+        // narrows nothing — neither may answer differently for it
+        '.order=hot',
+        '',
+      ]
+    ) {
+      let [fast, slow] = await bothWays(q)
+      assertEquals(fast, slow, `paths disagreed on: ${q || '(empty)'}`)
+    }
+  },
+)
