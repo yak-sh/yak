@@ -54,8 +54,9 @@ so your bar for correctness is the fleet's bar.
   **subagent** with a clean context. Only conversation, dispatch, review, and persistence
   stay in the locus; everything else forks. Every agent claims a board task under its own
   session and reports with a sha — the board is the truth about who is doing what.
-- **Design before build**, record the plan, then delegate the build. The recorded plan is
-  an FYI the owner redirects by exception, not an approval gate.
+- **Design before build**, record the plan with `task design`, then delegate the build.
+  The recorded plan is an FYI the owner redirects by exception, not an approval gate.
+  Designs live in the graph, never in a file — the repo documents what IS.
 - **Adoption is won structurally.** Operators reach for the warm path, not the right one.
   To move the fleet onto a new door, make it the path of least resistance and **delete the
   old one** — never a paragraph asking them to change.
