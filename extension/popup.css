@@ -1,0 +1,153 @@
+/* Everforest, the same palette the canvas and the TUI wear (styles.css) —
+   a popup that looks like the app it files into. Custom properties are
+   the variant mechanism here too. */
+:root {
+  --gap: 0.75rem;
+  --half-gap: calc(var(--gap) / 2);
+  --radius: 6px;
+  --bg: #232a2e;
+  --surface: #2d353b;
+  --border: #3d484d;
+  --text: #d3c6aa;
+  --muted: #9da9a0;
+  --dim: #7a8478;
+  --accent: #a7c080;
+  --red: #e67e80;
+  --font: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color-scheme: dark;
+}
+
+body {
+  width: 24rem;
+  margin: 0;
+  padding: var(--gap);
+  display: flex;
+  flex-direction: column;
+  gap: var(--half-gap);
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.4 var(--font);
+}
+
+#title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#url {
+  color: var(--dim);
+  font: 11px/1.4 var(--mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+textarea,
+input {
+  field-sizing: content;
+  min-height: 2.4em;
+  max-height: 12em;
+  padding: var(--half-gap);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  resize: none;
+}
+
+input {
+  min-height: 0;
+  flex: 1;
+  font: 11px/1.4 var(--mono);
+}
+
+:where(textarea, input):focus-visible {
+  outline: 1px solid var(--accent);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--half-gap);
+}
+
+label {
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 0.35em;
+}
+
+button {
+  padding: 0.3em 0.9em;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+#said {
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+
+#said:empty {
+  display: none;
+}
+
+#said.bad {
+  color: var(--red);
+}
+
+#refs:empty {
+  display: none;
+}
+
+#refs h2 {
+  margin: var(--half-gap) 0 0;
+  color: var(--dim);
+  font: 11px/1.4 var(--font);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+a.ref {
+  display: flex;
+  gap: var(--half-gap);
+  padding: 0.25em 0;
+  color: var(--text);
+  text-decoration: none;
+  border-top: 1px solid var(--border);
+}
+
+a.ref:hover {
+  color: var(--accent);
+}
+
+a.ref .id {
+  color: var(--dim);
+  font: 11px/1.6 var(--mono);
+}
+
+a.ref .what {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+summary {
+  color: var(--dim);
+  cursor: pointer;
+}

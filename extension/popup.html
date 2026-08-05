@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <div id="title"></div>
+      <div id="url"></div>
+    </header>
+
+    <textarea
+      id="line"
+      rows="1"
+      placeholder="P1 .domain=Eng title…   ( :fix, :done, : anything )"
+      autofocus
+    ></textarea>
+
+    <div class="row">
+      <label><input type="checkbox" id="capture" /> capture the page</label>
+      <button id="file">file</button>
+    </div>
+
+    <div id="said"></div>
+
+    <section id="refs"></section>
+
+    <details id="settings">
+      <summary>server</summary>
+      <div class="row">
+        <input id="host" type="url" spellcheck="false" />
+        <button id="save">save</button>
+      </div>
+    </details>
+  </body>
+  <script type="module" src="popup.js"></script>
+</html>

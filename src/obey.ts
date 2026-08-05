@@ -16,10 +16,65 @@ import { apply, db, snapshot } from './db.ts'
 import { dispatch, trace } from './effects.ts'
 import { providers } from './adapters.ts'
 import { commandOut, orderIn } from './commands.ts'
-import { type Change, idOf } from './types.ts'
-import { find, rows, spawnChanges, spawnDefaults } from './client.ts'
+import { type Change, idOf, type Snapshot } from './types.ts'
+import { find, type Row, rows, spawnChanges, spawnDefaults } from './client.ts'
 
 type Cast = (changes: Change[]) => void
+
+// A `:` line, run against the graph the caller holds: the batch it asks
+// for, plus what to say back. Every server-side door that obeys an order
+// runs THIS — a comment that opens with ':', the extension's file box —
+// so the two halves commands.ts deliberately leaves undone are done once.
+// Those halves are the wire (a verb returns an intent and never writes)
+// and the spawn (`:fix` names a task; only the server knows what provider
+// to default to).
+//
+// A refusal is WORDS, never a throw: the reason is the receipt, and a
+// door that swallowed it would leave the typist guessing.
+export let order = (
+  all: Row[],
+  snap: Snapshot,
+  line: string,
+  focus?: string,
+  session?: string,
+) => {
+  let changes: Change[] = []
+  let said = ''
+  let spawned = ''
+  try {
+    let out = commandOut(all, line, focus, session)
+    changes.push(...(out.changes ?? []))
+    said = out.msg ?? ''
+    // `:fix` from a comment is the point of the whole feature — an agent
+    // started by saying so where the work is discussed. The request is a
+    // session entity like any other spawn; created(session) validates it,
+    // so a bad one lands as a failed Session, never as a broken receipt.
+    if (out.spawn) {
+      let mine = spawnDefaults(all, session)
+      let table = providers()
+      let provider = mine.provider ?? table[0]?.name
+      let model = mine.model ??
+        table.find((p) => p.name == provider)?.models[0]
+      if (!provider || !model) throw new Error('no provider to default to')
+      let made = spawnChanges(all, {
+        task: out.spawn,
+        provider,
+        model,
+        by: session,
+        deps: snap.deps,
+      })
+      changes.push(...made.changes)
+      spawned = out.spawn
+      let onto = find(all, out.spawn)
+      said = [said, `spawned onto ${onto ? idOf(onto) : out.spawn}`]
+        .filter(Boolean).join('\n')
+    }
+  } catch (e) {
+    said = (e as Error).message
+    changes.length = 0
+  }
+  return { changes, said, spawned }
+}
 
 // The author, as the vocabulary knows them: `run` wants the session's own
 // id (that's how :claim names a lease and how focus resolves), while the
@@ -47,42 +102,10 @@ export let obeyed =
     let session = via ? speaker(via) : undefined
 
     let snap = snapshot(db)
-    let all = rows(snap)
-    let changes: Change[] = []
-    let said = ''
-    try {
-      let out = commandOut(all, line, target, session)
-      changes.push(...(out.changes ?? []))
-      said = out.msg ?? ''
-      // `:fix` from a comment is the point of the whole feature — an agent
-      // started by saying so where the work is discussed. The request is a
-      // session entity like any other spawn; created(session) validates it,
-      // so a bad one lands as a failed Session, never as a broken receipt.
-      if (out.spawn) {
-        let mine = spawnDefaults(all, session)
-        let table = providers()
-        let provider = mine.provider ?? table[0]?.name
-        let model = mine.model ??
-          table.find((p) => p.name == provider)?.models[0]
-        if (!provider || !model) throw new Error('no provider to default to')
-        let made = spawnChanges(all, {
-          task: out.spawn,
-          provider,
-          model,
-          by: session,
-          deps: snap.deps,
-        })
-        changes.push(...made.changes)
-        let onto = find(all, out.spawn)
-        said = [said, `spawned onto ${onto ? idOf(onto) : out.spawn}`]
-          .filter(Boolean).join('\n')
-      }
-    } catch (e) {
-      // Teach at the point of failure: the refusal IS the receipt, said
-      // where the order was given, so the next line typed is a better one.
-      said = (e as Error).message
-      changes.length = 0
-    }
+    // Teach at the point of failure: order() hands back the refusal as
+    // words, and the receipt below says them where the order was given,
+    // so the next line typed is a better one.
+    let { changes, said } = order(rows(snap), snap, line, target, session)
     if (!said && !changes.length) return // `:open` moves a viewport we don't have
     if (said) changes.push(...receipt(target, said))
     try {

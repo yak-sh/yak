@@ -99,6 +99,19 @@ Deno.test('parseProp: booleans, enum aliases, and time canonicalize', () => {
   )
 })
 
+// The badge's whole honesty: a page saved and the same page filtered for
+// canonicalize through THIS parser, so neither door can spell it its own way.
+Deno.test('parseProp: a url has one spelling, and only when it is one', () => {
+  assertEquals(
+    parse('url', 'url', 'HTTPS://X.com/p/?utm_source=n#top'),
+    'https://x.com/p',
+  )
+  assertEquals(
+    parse('url', 'url', 'git@github.com:jeffpeterson/tasks.git'),
+    'git@github.com:jeffpeterson/tasks.git',
+  )
+})
+
 Deno.test('parseProp: references resolve and every rejection teaches', () => {
   let type: PropType = { eid: '', death: 'keep' }
   let id = 'AAAAAAAA-0000-4000-8000-000000000001'

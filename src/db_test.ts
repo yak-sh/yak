@@ -172,13 +172,13 @@ Deno.test('graph-out carries declared columns only', () => {
   let d = fresh()
   let eid = uid()
   d.exec('alter table web add column dormant text')
-  apply(d, [{ eid, name: 'web', comp: { url: 'https://example.test' } }])
+  apply(d, [{ eid, name: 'web', comp: { url: 'https://example.test/' } }])
   d.prepare(
     'update web set frozen_at = ?, dormant = ? where eid = ?',
   ).run('2026-07-26T00:00:00Z', 'migration input', eid)
   let expected = {
     eid,
-    url: 'https://example.test',
+    url: 'https://example.test/',
     frozen_at: '2026-07-26T00:00:00Z',
   }
   let snap = snapshot(d).changes.find((c) => c.eid == eid && c.name == 'web')
@@ -243,7 +243,7 @@ Deno.test('apply canonicalizes every scalar and reference spelling', () => {
     {
       eid: 'typed-subject',
       name: 'web',
-      comp: { url: 'https://example.test' },
+      comp: { url: 'HTTPS://Example.test/p/?utm_source=n#top' },
     },
   ])
   assertEquals(out.slice(0, 5), [
@@ -275,7 +275,7 @@ Deno.test('apply canonicalizes every scalar and reference spelling', () => {
     {
       eid: subject,
       name: 'web',
-      comp: { url: 'https://example.test' },
+      comp: { url: 'https://example.test/p' },
     },
   ])
   assertEquals(comp(subject, 'task')?.priority, 2)
@@ -397,10 +397,10 @@ Deno.test('server-owned columns never ride persistence or effective batches', ()
   let out = apply(db, [{
     eid: t,
     name: 'web',
-    comp: { url: 'http://x', frozen_at: 'FAKE' },
+    comp: { url: 'http://x/', frozen_at: 'FAKE' },
   }])
   assertEquals(comp(t, 'web')?.frozen_at, null)
-  let expected = { url: 'http://x' }
+  let expected = { url: 'http://x/' }
   assertEquals(out.find((c) => c.name == 'web')?.comp, expected)
   assertEquals(
     journalOf(db, t)[0].changes.find((c) => c.name == 'web')?.comp,

@@ -340,12 +340,21 @@ let text = (value: string): Pred => ({
   value,
 })
 
+// The '&' split, quote-aware: a quoted run is ONE value even when it
+// carries the separator. Quotes already glue a value across whitespace;
+// they glue it across '&' for the same reason, and the case that forced
+// it is the one a page address makes ordinary — `.web.url="https://x/p
+// ?a=1&b=2"` is a single predicate, where unquoted it silently became a
+// url pred plus a stray text term that matched nothing. An unbalanced
+// quote never matches the quoted branch, so it splits exactly as before.
+let segments = (q: string) => q.match(/(?:"[^"]*"|[^&])+/g) ?? []
+
 // A query string to preds. '&' separates first (an &-segment that IS one
 // dot-param keeps its spaces — the old grammar); a segment holding ` .`
 // or bare words splits on whitespace, quotes glue: that's how a search
 // box mixes terms and filters in one line. Empty: matches everything.
 export let parseQuery = (q: string): Pred[] =>
-  q.split('&').map((t) => t.trim()).filter(Boolean).flatMap((seg) => {
+  segments(q).map((t) => t.trim()).filter(Boolean).flatMap((seg) => {
     if (seg.startsWith('.') && !/\s\./.test(seg)) {
       let p = pred(seg) // null = an opless dot-word (.env) — a term
       if (p) return [p]

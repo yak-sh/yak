@@ -35,6 +35,7 @@ import { where } from './sql.ts'
 import { dispatch, docs, on, relay, trace } from './effects.ts'
 import { vocabularyMd } from './schema.ts'
 import { freeze, serveFrozen, store } from './freeze.ts'
+import { filed } from './page.ts'
 import { fanout, FANOUT_PENDING, mailed } from './mail.ts'
 import { native } from './mailer.ts'
 import { closingTask } from './closing.ts'
@@ -776,13 +777,23 @@ let http = Deno.serve(
             warm(a.comps, now, (e) => byEid.get(e))
           )
         }
-        let back = new Map<string, { from: string; via: string }[]>()
+        let back = new Map<
+          string,
+          { from: string; via: string; title: string }[]
+        >()
         if (backs) {
           let wanted = new Set(hits.map((r) => r.eid))
+          // The title rides along because a backlink is READ, not chased:
+          // the extension's "what references this page" panel is one query
+          // or it is two, and the id alone would force the second.
           let add = (to: unknown, from: Row, via: string) => {
             if (typeof to != 'string' || !wanted.has(to)) return
             let list = back.get(to) ?? []
-            list.push({ from: idOf(from), via })
+            list.push({
+              from: idOf(from),
+              via,
+              title: String(from.comps.doc?.title ?? ''),
+            })
             back.set(to, list)
           }
           for (let r of all) {
@@ -917,6 +928,15 @@ let http = Deno.serve(
     }
     if (path == '/freeze') {
       return freeze(url.searchParams.get('eid') ?? '', cast)
+    }
+    // A page as witnessed by a browser — the extension's write door
+    // (page.ts owns what one filing IS).
+    if (path == '/page' && req.method == 'POST') {
+      return req.json().then((body) => filed(body, cast)).catch((e) =>
+        new Response(e instanceof Error ? e.message : String(e), {
+          status: 400,
+        })
+      )
     }
     if (path == '/upload' && req.method == 'POST') {
       return req.text().then((body) =>

@@ -96,8 +96,8 @@ let land = (
 }
 
 let webRow = (eid: string) =>
-  db.prepare('select url from web where eid = ?').get(eid) as
-    | { url: string }
+  db.prepare('select url, frozen_at from web where eid = ?').get(eid) as
+    | { url: string; frozen_at: string | null }
     | undefined
 
 export let freeze = async (eid: string, cast: (c: Change[]) => void) => {
@@ -149,16 +149,26 @@ export let store = async (
 // offline — no scripts, no network; a delivered page runs its scripts
 // and loads what it references, but in an opaque origin, so it never
 // acts as the app.
+// An archive also SAYS what it is an archive of, in the words the web
+// already has for it (RFC 7089): Memento-Datetime is the moment these
+// bytes were what the page said, and the original link is the address
+// they were said at. Both halves come off the same row whichever door
+// filled it — a refetch or a browser's own witness — so a reader can
+// date a snapshot without asking the graph.
 export let serveFrozen = async (eid: string) => {
   if (!/^[0-9a-f-]{36}$/i.test(eid)) return new Response('no', { status: 400 })
-  let csp = webRow(eid)?.url
+  let row = webRow(eid)
+  let csp = row?.url
     ? "sandbox allow-same-origin; script-src 'none'; connect-src 'none'"
     : 'sandbox allow-scripts'
+  let at = row?.frozen_at ? new Date(row.frozen_at) : null
   try {
     return new Response(await Deno.readFile(`${frozen}/${eid}.html`), {
       headers: {
         'content-type': 'text/html; charset=utf-8',
         'content-security-policy': csp,
+        ...at && !isNaN(+at) ? { 'memento-datetime': at.toUTCString() } : {},
+        ...row?.url ? { link: `<${row.url}>; rel="original"` } : {},
       },
     })
   } catch {

@@ -493,6 +493,17 @@ export let orderIn = (body: string) => {
   return /^:\S/.test(first) ? first.trim() : ''
 }
 
+// What ONE input box means, where filing is the common case: a line that
+// opens with ':' is the verb it names, and anything else is a task —
+// the board's quick-add rule, said once so every such box says it the
+// same way (the browser extension's, today). Not folded into run(): a
+// bare word at a door that only ever takes commands is a typo, and
+// `not a command: Read` is the right answer there.
+export let filing = (text: string) => {
+  let line = text.trim()
+  return line.startsWith(':') ? line : `:new ${line}`
+}
+
 // The door every non-typing caller enters by: the line with or without
 // its colon, and the changes deref'd — any *_eid value a verb produced may
 // be a human id (T-3, P-19) or an alias (jeff), and client.ts resolves

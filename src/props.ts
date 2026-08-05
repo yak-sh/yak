@@ -2,6 +2,7 @@
 // this module gives every declaration one canonical stored and shown value.
 import { type Change, comps, edges, type PropType, stamped } from './types.ts'
 import { instant } from './time.ts'
+import { normalize } from './url.ts'
 
 export type PropContext = {
   now?: number
@@ -124,6 +125,13 @@ let eid = (p: Prop, v: unknown, ctx: PropContext): string => {
 let text = (p: Prop, v: unknown): string =>
   typeof v == 'string' ? v : fail(p, 'text', v)
 
+// A page address is text with ONE canonical spelling (url.ts normalize).
+// Living here is what keeps a save and a query in agreement without
+// either side knowing: both grammars parse their scalars through this
+// module, so `.url=https://x.com/p?utm_source=n#top` written and the same
+// string filtered land on the same characters.
+let url = (p: Prop, v: unknown): string => normalize(text(p, v))
+
 let tag = (t: PropType) =>
   typeof t == 'string' ? t : 'enum' in t ? 'enum' : 'eid' in t ? 'eid' : 'text'
 
@@ -144,6 +152,7 @@ let parsers: Record<string, Parser> = {
   enum: oneOf,
   eid,
   text,
+  url,
 }
 
 // Null always passes through. Empty text is text; empty optional scalars clear.

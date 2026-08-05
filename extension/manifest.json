@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Tasks",
+  "version": "2.0.0",
+  "description": "File a task about the page you are on, and see what already references it.",
+  "action": {
+    "default_title": "File this page",
+    "default_popup": "popup.html",
+    "default_icon": { "128": "icon.png" }
+  },
+  "icons": { "128": "icon.png" },
+  "background": { "service_worker": "background.js", "type": "module" },
+  "permissions": ["activeTab", "scripting", "storage", "tabs"],
+  "host_permissions": [
+    "http://127.0.0.1:5173/*",
+    "http://localhost:5173/*",
+    "https://tasks.yak.sh/*"
+  ],
+  "optional_host_permissions": ["*://*/*"]
+}

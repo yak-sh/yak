@@ -131,6 +131,28 @@ Deno.test('query: bad tokens are loud, bare words are terms', () => {
   assertEquals(parseQuery('sandwich')[0].op, 'text') // a term, not an error
 })
 
+// A page address is the ordinary value that carries the separator, and
+// an unquoted one used to become a url pred plus a stray term matching
+// nothing — an empty badge that looked like a truthful "nothing here".
+Deno.test('query: quotes hold a value that carries the separator', () => {
+  let preds = parseQuery('.web.url="https://x.test/p?a=1&b=2"&.status=open')
+  assertEquals(preds.length, 2)
+  assertEquals(preds[0].value, 'https://x.test/p?a=1&b=2')
+  assertEquals([preds[1].comp, preds[1].prop, preds[1].value], [
+    'task',
+    'status',
+    'open',
+  ])
+  // A url still canonicalizes inside its quotes, and unquoted still splits.
+  assertEquals(
+    parseQuery('.web.url="https://X.test/p/?utm_source=n#top"')[0].value,
+    'https://x.test/p',
+  )
+  assertEquals(parseQuery('.web.url=https://x.test/p?a=1&b=2').length, 2)
+  // An unbalanced quote is not a value form — it splits exactly as before.
+  assertEquals(parseQuery('.title~="half&.status=open').length, 2)
+})
+
 Deno.test('query: adopt pins down scalar equalities only', () => {
   let preds = parseQuery(
     '.project_eid=p1&.priority=2&.domain=Ops,Eng&.status!=done&.num=1..9&.title~=x',
