@@ -50,6 +50,9 @@ The stamps share column names, so spell out the component: '.created.at',
 which is why 'task decided' orders by it and not by when a thing was filed.
 Component names test facets directly: '.proposed=' means absent (the fix
 queue), while '.proposed!' means present (the idea backlog).
+Quotes hold a value together against BOTH separators, whitespace and '&':
+'.web.url="https://x.test/p?a=1&b=2"' is one predicate, where unquoted the
+'&' would start a second one.
 Reference filters take the same sugar ('.assignee=jeff', '.project=P-19'),
 and a DOTTED path walks one reference: '.assignee.title~=jeff' — but a
 first segment naming a component stays the explicit spelling ('.pin.x=12',
