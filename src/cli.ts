@@ -20,6 +20,7 @@ import {
   contextDigest,
   decidedAt,
   derefParams,
+  designChanges,
   edgesOf,
   find,
   history,
@@ -1634,6 +1635,28 @@ let sessionTurn = async (args: string[]) => {
   }
 }
 
+// Record a design: doc + design tag + the `proposed` mark, stamped via the
+// calling session. The one door that mints a plain doc — `task new` is
+// doc + task and always was, so before this the only way to write a design
+// into the graph was a raw batch, and the file stayed the warm path.
+let design = async (args: string[]) => {
+  let title = args.filter((a) => !a.startsWith('--')).join(' ').trim()
+  if (!title) throw new Error('task design <title...> (what it proposes)')
+  let session = me()
+  if (!session) throw new Error('design: no session identity (attribution)')
+  let body = args.find((a) => a.startsWith('--body='))?.slice(7)
+  if (body != null) {
+    let p = { comp: 'doc', prop: 'body', value: body }
+    body = String(inflate(p, stdin, `--body=${body}`).value)
+  }
+  let made = designChanges(rows(await snapshot()), { title, body, session })
+  await send(made.changes)
+  let after = rows(await snapshot()).find((r) => r.eid == made.eid)
+  print(`${after ? idOf(after) : made.eid} proposed`)
+  let hint = await similarHint(`${title}\n${body ?? ''}`, made.eid)
+  if (hint) print(hint)
+}
+
 // Save a memory: doc + memory comp, stamped via the calling session — the
 // CLI face of MCP memory_save, so headless agents (the scribe first) have
 // the door too.
@@ -2168,6 +2191,7 @@ if (import.meta.main) {
       else if (cmd == 'dep') await dep(rest)
       else if (cmd == 'backup') await backup()
       else if (cmd == 'remember') await remember(rest)
+      else if (cmd == 'design') await design(rest)
       else if (cmd == 'context') await context(rest)
       else if (cmd == 'wrap') await wrap(rest)
       else if (cmd == 'sync') await sync(rest)

@@ -101,6 +101,11 @@ let schema = `
   create table if not exists canvas (
     eid text primary key references entity(eid)
   );
+  -- A design is a doc wearing this tag; its life is the proposed/decided
+  -- stamps below, so the tag itself has nothing to say but its name.
+  create table if not exists design (
+    eid text primary key references entity(eid)
+  );
   create table if not exists doc (
     eid   text primary key references entity(eid),
     title text not null,

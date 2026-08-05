@@ -9,6 +9,7 @@ import {
   commentChanges,
   contextDigest,
   derefParams,
+  designChanges,
   edgesOf,
   find,
   hookClaim,
@@ -1880,6 +1881,47 @@ Deno.test('memoryChanges: an unknown session is minted alongside', () => {
   assertEquals(changes.length, 3)
   assertEquals(changes[0].name, 'session')
   assertEquals(changes[2].comp, { scope_eid: null })
+})
+
+// ---- the design door's pure half ----
+
+Deno.test('designChanges: a doc, the tag, and the proposed mark', () => {
+  let { changes } = designChanges(all, {
+    title: 'Mail is local-first for fleet recipients',
+    body: 'The sent entity gains its arrival stamp in-graph.',
+    session: 'sess-x',
+  })
+  assertEquals(changes.length, 3) // the session exists: nothing minted
+  assertEquals(
+    changes[0].comp?.title,
+    'Mail is local-first for fleet recipients',
+  )
+  assertEquals(changes[1].name, 'design')
+  assertEquals(changes[1].comp, {}) // a tag says only its name
+  assertEquals(changes[2].name, 'proposed')
+  assertEquals(changes[2].comp, {}) // bare: the column dates it now
+  // No decided mark — proposing is not deciding, and the spawn gate reads
+  // exactly that difference.
+  assertEquals(changes.some((c) => c.name == 'decided'), false)
+})
+
+// A design carried in from a file was written before the row existed, and
+// created.at is server-stamped, so the day it was written has nowhere else
+// to live. The phrase rides the wire; apply() resolves it once.
+Deno.test('designChanges: `at` says when it was written', () => {
+  let { changes } = designChanges(all, {
+    title: 'Boot partition',
+    at: '2026-07-23',
+    session: 'sess-x',
+  })
+  assertEquals(changes.at(-1)?.comp, { at: '2026-07-23' })
+  assertEquals(changes[0].comp?.body, '') // a design may be all title
+})
+
+Deno.test('designChanges: an unknown session is minted alongside', () => {
+  let { changes } = designChanges(all, { title: 'x', session: 'newcomer' })
+  assertEquals(changes.length, 4)
+  assertEquals(changes[0].name, 'session')
 })
 
 Deno.test('recallIndex: warmest first, index lines only, filtered', () => {

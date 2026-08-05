@@ -135,6 +135,12 @@ export let comps: Record<string, Record<string, PropType>> = {
     scope_eid: { eid: 'project', death: 'detach' },
   },
   board: { query: 'query' }, // saved filter (query.ts grammar); '' = all
+  // The thinking that precedes a build. A tag, because the doc already
+  // carries the writing and the `proposed`/`decided` stamps below already
+  // carry its life — awaiting acceptance, then settled, with the date on
+  // the wire. A state enum here would be a second vocabulary for a fact
+  // the graph holds, and the two would drift.
+  design: {},
   canvas: {},
   web: { url: 'url' }, // frozen_at is server-stamped, never wire-writable
   card: { target_eid: { eid: '', death: 'cascade' }, view: 'text' },
@@ -678,6 +684,8 @@ export let kindOrder = [
   'memory',
   'person',
   'persona',
+  // Ahead of doc: a design IS a doc, wearing a tag that says which kind.
+  'design',
   'doc',
   // An address is a facet like a handle: it names an entity only when
   // nothing else does (a bare address-book entry), same reasoning as
@@ -1152,6 +1160,7 @@ export type Ent = {
   num: number
   kind: string
   doc?: Doc
+  design?: { eid: string }
   task?: Task
   project?: ProjectTag
   role?: Role

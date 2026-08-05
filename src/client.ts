@@ -1905,6 +1905,27 @@ export let decidedChange = (eid: string, at?: string): Change => ({
   comp: at ? { at } : {},
 })
 
+// The design batch: a doc face (title + the writing), the tag that names the
+// kind, and the `proposed` mark — a design is written awaiting acceptance,
+// and `task set <id> .decided.at=…` is how it settles. `at` says when it was
+// WRITTEN, which created.at cannot: that column is server-stamped, so a
+// design carried in from a file would otherwise read as born on the day it
+// moved.
+export let designChanges = (
+  all: Row[],
+  d: { title: string; body?: string; at?: string; session: string },
+) => {
+  let s = sessionFor(all, d.session)
+  let eid = uuid()
+  let changes: Change[] = [
+    ...s.changes,
+    { eid, name: 'doc', comp: { title: d.title, body: d.body ?? '' } },
+    { eid, name: 'design', comp: {} },
+    { eid, name: 'proposed', comp: d.at ? { at: d.at } : {} },
+  ]
+  return { eid, changes }
+}
+
 // The memory-save batch: a doc face (title = index line, body = the fact)
 // plus the memory comp, scoped to a project when one is named. The calling
 // session is minted if new so the door can stamp it in created.via. Two

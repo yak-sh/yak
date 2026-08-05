@@ -400,6 +400,24 @@ export let manuals: Record<string, Manual> = {
     options: [flag('--no-commit')],
     words: [0, 0],
   },
+  design: {
+    usage: 'design <title...> [--body=…]',
+    about: 'record a design: the thinking that precedes a build, proposed',
+    examples: [
+      'task design "Mail is local-first for fleet recipients" --body=@plan.md',
+      'task designs',
+      'task designs .decided=',
+    ],
+    detail: 'A design is a doc wearing the `design` tag and the `proposed` ' +
+      'mark — written awaiting acceptance. Accepting one is `task set D-9 ' +
+      '.decided.at=now .decided.by=jeff`, the same stamp a task or a memory ' +
+      'takes; both marks then stand, proposed on that day and decided on ' +
+      'this one. `task designs` lists them, `.decided=` screens the ones ' +
+      'still waiting.',
+    root: true,
+    options: [body],
+    words: [1],
+  },
   remember: {
     usage: 'remember <title...> [--body=…] [--feedback=who] [--scope=P-9]',
     about: 'save a memory: the title is the index line, the body the lesson',
