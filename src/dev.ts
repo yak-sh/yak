@@ -42,11 +42,14 @@ export let launch = async (
 ) => {
   using listener = Deno.listen({ hostname: '127.0.0.1', port: 0 })
   let port = (listener.addr as Deno.NetAddr).port
+  // Sized to measured boot time with headroom for a loaded box. A child past
+  // this is wedged rather than slow, so replacing it is the cure — but the
+  // deadline only holds while boot stays bounded, so it moves when that does.
   let timer: ReturnType<typeof setTimeout> | undefined
   let late = new Promise<never>((_, reject) => {
     timer = setTimeout(
-      () => reject(new Error('server did not become ready in 30s')),
-      30_000,
+      () => reject(new Error('server did not become ready in 60s')),
+      60_000,
     )
   })
   let child = new Deno.Command(path, {
