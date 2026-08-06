@@ -31,12 +31,16 @@ import { homeReads } from './persona.ts'
 import { matchQuery, parseQuery, resolveRefs, TEXT } from './query.ts'
 import { bodyCols, normalizeChanges, parseProp, propAt } from './props.ts'
 
+// The owner's live graph — the one path a test must never open (open() below
+// refuses it under `deno test`). A function, not a constant, so it re-reads
+// HOME and the guard that holds this can't drift from a stale literal.
+export let liveDb = () => `${Deno.env.get('HOME')}/.tasks/tasks.db`
+
 // The db lives outside the repo (this is open source): a home-dir dotpath by
 // default, overridable with DB_PATH.
 // Exported because it is this process's IDENTITY on a shared port: which
 // graph it serves is what a joining peer must check (src/bind.ts).
-export let file = Deno.env.get('DB_PATH') ??
-  `${Deno.env.get('HOME')}/.tasks/tasks.db`
+export let file = Deno.env.get('DB_PATH') ?? liveDb()
 
 // The edge table's check derives from the vocabulary (types.ts `edges`),
 // so a new verb there is a new verb here with no second edit. Named apart
@@ -770,6 +774,20 @@ export let healStored = (db: DatabaseSync) => {
 // lifetime. No real migrations: NEW columns are added in place (additive,
 // no data moves); anything shapier still means export/reseed.
 export let open = (path = file) => {
+  // A test must NEVER open the owner's live graph. Under `deno test` the main
+  // module is always a *_test.ts file; reaching the live path there means a
+  // caller forgot DB_PATH (the `test` task sets :memory:). Refuse before we
+  // mkdir/migrate/lock it — loudly, so the next module-scope import that would
+  // reintroduce this footgun fails at the door instead of quietly reseeding
+  // the owner's board (T-14260).
+  if (
+    Deno.mainModule.endsWith('_test.ts') &&
+    resolve(path) === resolve(liveDb())
+  ) {
+    throw new Error(
+      `refusing to open the live graph (${path}) under a test — set DB_PATH`,
+    )
+  }
   Deno.mkdirSync(dirname(path), { recursive: true })
   let db = new DatabaseSync(path)
   // Listener handoff overlaps two server processes. SQLite serializes their

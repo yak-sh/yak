@@ -12,6 +12,7 @@ let {
   human,
   journalBy,
   journalOf,
+  liveDb,
   mendCalls,
   mendMail,
   open,
@@ -1947,6 +1948,24 @@ Deno.test('edges: a dead endpoint voids the link; delete prunes edges', () => {
 
 Deno.test('open() is idempotent and additive on live files', () => {
   assertMatch(String(fresh().prepare('select 1 as ok').get()?.ok), /1/)
+})
+
+Deno.test('open refuses the live graph under a test, before touching disk', () => {
+  // The footgun T-14260 disarmed: under `deno test` (main module ends
+  // _test.ts) open() must reject the HOME-derived live path and create
+  // NOTHING — a module-scope import that forgot DB_PATH fails at the door
+  // instead of migrating and locking the owner's board. Aim liveDb() at a
+  // scratch HOME so the proof needs no real db.
+  let home = Deno.env.get('HOME')!
+  let scratch = Deno.makeTempDirSync({ prefix: 'tasks-liveguard-' })
+  try {
+    Deno.env.set('HOME', scratch)
+    assertThrows(() => open(liveDb()), Error, 'refusing to open the live graph')
+    assertEquals([...Deno.readDirSync(scratch)].length, 0)
+  } finally {
+    Deno.env.set('HOME', home)
+    Deno.removeSync(scratch, { recursive: true })
+  }
 })
 
 Deno.test('open adds the repo landing gate in place', () => {
