@@ -54,7 +54,7 @@ import {
 import { scribeSweep } from './scribe.ts'
 import { embedSweep, similarTo } from './embed.ts'
 import { mcpServer } from './mcp.ts'
-import { filesFor, syncFiles } from './persona.ts'
+import { projection, syncFiles } from './persona.ts'
 import { commit } from './git.ts'
 import {
   commented,
@@ -1154,7 +1154,7 @@ let syncSoon = () => {
   syncing = setTimeout(async () => {
     try {
       let snap = snapshot(db)
-      let files = filesFor(rows(snap), snap.deps, Date.now())
+      let files = projection(rows(snap), snap.deps, Date.now())
       for (let f of syncFiles(files).failed) stuck(f)
       // Every projection path, not just this tick's writes: a file some
       // earlier tick left dirty (untracked then, adopted since) is dirt

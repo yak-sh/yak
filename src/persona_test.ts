@@ -3,7 +3,12 @@
 // temp dir (never a repo). The server effect and the CLI verb render
 // through these same functions, so what passes here is what lands on
 // disk everywhere.
-import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertStringIncludes,
+  assertThrows,
+} from '@std/assert'
 import { type Dep, type Edge, kindOf } from './types.ts'
 import { type Row } from './client.ts'
 import {
@@ -13,7 +18,10 @@ import {
   homeReads,
   indexLine,
   materialize,
+  orphans,
+  projection,
   syncFiles,
+  taskRoots,
 } from './persona.ts'
 
 let NOW = Date.parse('2026-07-22T00:00:00Z')
@@ -266,13 +274,144 @@ Deno.test('syncFiles: writes changes, skips fresh, isolates failures', () => {
     assertEquals(syncFiles([f]).written, [f.path])
     assertEquals(Deno.readTextFileSync(f.path), 'one\n')
     // unchanged → untouched (no churn for git status to see)
-    assertEquals(syncFiles([f]), { written: [], failed: [] })
+    assertEquals(syncFiles([f]), { written: [], removed: [], failed: [] })
     // one bad path fails alone; the good write still lands
     let good = { path: `${dir}/ok.md`, body: 'two\n' }
     let bad = { path: `${dir}/ok.md/impossible.md`, body: 'x' }
     let out = syncFiles([good, bad])
     assertEquals(out.written, [good.path])
     assertEquals(out.failed.length, 1)
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
+})
+
+Deno.test('filesFor / taskRoots: a retired venture is neither written nor swept', () => {
+  let proj = row({
+    project: { retired_at: day(1) },
+    doc: { title: 'V' },
+    repo: { path: '/repo' },
+  })
+  let base = row({
+    doc: { title: 'base', body: 'b' },
+    persona: { home_eid: proj.eid },
+  })
+  let deps = [edge(proj, 'contains', base)]
+  assertEquals(filesFor([proj, base], deps, NOW), [])
+  assertEquals(taskRoots([proj, base]), [])
+})
+
+Deno.test('taskRoots: active ventures only, carrying push', () => {
+  let live = row({
+    project: {},
+    doc: { title: 'L' },
+    repo: { path: '/a', push: 1 },
+  })
+  let noPush = row({ project: {}, doc: { title: 'N' }, repo: { path: '/b' } })
+  let noRepo = row({ project: {}, doc: { title: 'H' } })
+  assertEquals(taskRoots([live, noPush, noRepo]), [
+    { root: '/a/.tasks', push: true },
+    { root: '/b/.tasks', push: false },
+  ])
+})
+
+Deno.test('orphans: a held file absent from the render is a null-body delete', () => {
+  let dir = Deno.makeTempDirSync()
+  try {
+    Deno.mkdirSync(`${dir}/.tasks/personas`, { recursive: true })
+    Deno.writeTextFileSync(`${dir}/.tasks/AGENTS.md`, 'a')
+    Deno.writeTextFileSync(`${dir}/.tasks/personas/gone.md`, 'g')
+    Deno.writeTextFileSync(`${dir}/.tasks/personas/keep.md`, 'k')
+    let roots = [{ root: `${dir}/.tasks`, push: false }]
+    let keep = [
+      { path: `${dir}/.tasks/AGENTS.md` },
+      { path: `${dir}/.tasks/personas/keep.md` },
+    ]
+    assertEquals(orphans(roots, keep), [
+      { path: `${dir}/.tasks/personas/gone.md`, body: null, push: false },
+    ])
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
+})
+
+Deno.test('syncFiles: a null body un-writes; a write leaves no temp litter', () => {
+  let dir = Deno.makeTempDirSync()
+  try {
+    let p = `${dir}/AGENTS.md`
+    syncFiles([{ path: p, body: 'x\n' }])
+    // the write landed whole (temp + rename) and left nothing beside it
+    assertEquals(Deno.readTextFileSync(p), 'x\n')
+    assertEquals([...Deno.readDirSync(dir)].map((e) => e.name), ['AGENTS.md'])
+    // a null body removes it
+    assertEquals(syncFiles([{ path: p, body: null }]).removed, [p])
+    assertThrows(() => Deno.statSync(p))
+    // removing an already-gone path is a no-op, never a failure
+    assertEquals(syncFiles([{ path: p, body: null }]), {
+      written: [],
+      removed: [],
+      failed: [],
+    })
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
+})
+
+Deno.test('projection: a renamed slug orphans the old file; sync removes it', () => {
+  let dir = Deno.makeTempDirSync()
+  try {
+    let proj = row({ project: {}, doc: { title: 'V' }, repo: { path: dir } })
+    let base = row({
+      doc: { title: 'base', body: 'b' },
+      persona: { home_eid: proj.eid },
+    })
+    let spec = row({
+      doc: { title: 'rev', body: 'r' },
+      persona: { home_eid: proj.eid },
+      alias: { slug: 'old' },
+    })
+    let all = [proj, base, spec]
+    let deps = [edge(proj, 'contains', base)]
+    syncFiles(projection(all, deps, NOW))
+    assert(Deno.readTextFileSync(`${dir}/.tasks/personas/old.md`).length > 0)
+    // rename the slug: old.md is now an orphan, new.md is what the render wants
+    spec.comps.alias.slug = 'new'
+    let plan = projection(all, deps, NOW)
+    assert(
+      plan.some((f) => f.path.endsWith('/personas/old.md') && f.body == null),
+    )
+    let { written, removed } = syncFiles(plan)
+    assert(removed.includes(`${dir}/.tasks/personas/old.md`))
+    assert(written.includes(`${dir}/.tasks/personas/new.md`))
+    assertThrows(() => Deno.statSync(`${dir}/.tasks/personas/old.md`))
+    assert(Deno.readTextFileSync(`${dir}/.tasks/personas/new.md`).length > 0)
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
+})
+
+Deno.test('projection: a deleted persona orphans its file; AGENTS.md untouched', () => {
+  let dir = Deno.makeTempDirSync()
+  try {
+    let proj = row({ project: {}, doc: { title: 'V' }, repo: { path: dir } })
+    let base = row({
+      doc: { title: 'base', body: 'b' },
+      persona: { home_eid: proj.eid },
+    })
+    let spec = row({
+      doc: { title: 'rev', body: 'r' },
+      persona: { home_eid: proj.eid },
+      alias: { slug: 'spec' },
+    })
+    let deps = [edge(proj, 'contains', base)]
+    syncFiles(projection([proj, base, spec], deps, NOW))
+    assert(Deno.readTextFileSync(`${dir}/.tasks/personas/spec.md`).length > 0)
+    // spec deleted from the graph — its file is an orphan under a dir we own
+    let { removed } = syncFiles(projection([proj, base], deps, NOW))
+    assert(removed.includes(`${dir}/.tasks/personas/spec.md`))
+    assertThrows(() => Deno.statSync(`${dir}/.tasks/personas/spec.md`))
+    // the surviving common persona's file is left alone
+    assert(Deno.readTextFileSync(`${dir}/.tasks/AGENTS.md`).length > 0)
   } finally {
     Deno.removeSync(dir, { recursive: true })
   }

@@ -146,6 +146,14 @@ export let homeReads = (
       : []
   )
 
+// A venture the materializer writes to: a project with a checkout that is
+// not retired. Retired drops out of BOTH the render and the sweep — no new
+// projection, and its adopted files left exactly as the venture last saw
+// them (deleting them would dangle a CLAUDE.md symlink). filesFor and
+// taskRoots share this so the two can't disagree on who is managed.
+let managed = (r: Row) =>
+  !!(r.comps.project && r.comps.repo?.path && !r.comps.project.retired_at)
+
 // Every file materialization owes the fleet: for each project with a
 // checkout, the common persona (if any) as .tasks/AGENTS.md and each
 // other home persona as .tasks/personas/<slug>.md. Fleet-shared
@@ -156,7 +164,7 @@ export let homeReads = (
 // row knows whether this venture's origin may hear from us.
 export let filesFor = (all: Row[], deps: Dep[], now: number) => {
   let out: { path: string; body: string; push: boolean }[] = []
-  for (let proj of all.filter((r) => r.comps.project && r.comps.repo?.path)) {
+  for (let proj of all.filter(managed)) {
     let root = `${proj.comps.repo.path}/.tasks`
     let push = !!proj.comps.repo.push
     let base = commonOf(all, deps, proj.eid)
@@ -183,14 +191,97 @@ export let filesFor = (all: Row[], deps: Dep[], now: number) => {
   return out
 }
 
-// Write what changed, report what was written. Reads before writing so
-// an unchanged materialization never churns mtimes (or git status), and
-// a failure on one file never stops the rest — the caller hears both.
-export let syncFiles = (files: { path: string; body: string }[]) => {
+// The .tasks roots the materializer OWNS, one per managed venture, with the
+// venture's push permission. filesFor writes what SHOULD be there; the sweep
+// (orphans) reads what IS there and deletes the difference — so a repo whose
+// last persona was deleted is still reconciled, even though it produced no
+// file this render.
+export let taskRoots = (all: Row[]): { root: string; push: boolean }[] =>
+  all.filter(managed).map((r) => ({
+    root: `${r.comps.repo.path}/.tasks`,
+    push: !!r.comps.repo.push,
+  }))
+
+// The two file shapes the materializer can hold under a .tasks root. We own
+// the directory end to end, so a listing is authoritative: anything matching
+// these shapes is ours, and a missing dir or file is simply nothing to sweep.
+let held = (root: string) => {
+  let out: string[] = []
+  try {
+    Deno.statSync(`${root}/AGENTS.md`)
+    out.push(`${root}/AGENTS.md`)
+  } catch { /* no common persona here */ }
+  try {
+    for (let e of Deno.readDirSync(`${root}/personas`)) {
+      if (e.isFile && e.name.endsWith('.md')) {
+        out.push(`${root}/personas/${e.name}`)
+      }
+    }
+  } catch { /* no specialists here */ }
+  return out
+}
+
+// Projection files present under an owned root that this render did NOT
+// produce — a persona was deleted or its slug renamed, leaving a stale spec
+// still wearing the "authoritative" banner. Each is a delete (body: null,
+// the wire's clear semantics) carrying its venture's push, so syncFiles
+// removes it and git.ts commits the removal. The render IS the manifest;
+// no side-ledger to drift.
+export let orphans = (
+  roots: { root: string; push: boolean }[],
+  keep: { path: string }[],
+) => {
+  let want = new Set(keep.map((f) => f.path))
+  return roots.flatMap(({ root, push }) =>
+    held(root).filter((p) => !want.has(p))
+      .map((path) => ({ path, body: null, push }))
+  )
+}
+
+// The full reconcile plan: files to write (filesFor) plus orphans to delete.
+// Impure — it reads the .tasks dirs to see what's there but shouldn't be — so
+// it lives beside syncFiles, not the pure renderers. One plan feeds both the
+// CLI verb and the server effect, so they reconcile identically.
+export let projection = (all: Row[], deps: Dep[], now: number) => {
+  let files = filesFor(all, deps, now)
+  return [...files, ...orphans(taskRoots(all), files)]
+}
+
+// Write via a temp file + rename: writeTextFileSync truncates before it
+// writes, so a harness reading CLAUDE.md mid-write sees an empty file — and
+// that file is what every agent here boots into. rename is atomic within a
+// filesystem; the temp rides in the same directory to stay on it, and is
+// cleaned if the rename fails so a broken write leaves no litter.
+let writeAtomic = (path: string, body: string) => {
+  let tmp = `${path}.${crypto.randomUUID()}.tmp`
+  try {
+    Deno.writeTextFileSync(tmp, body)
+    Deno.renameSync(tmp, path)
+  } catch (e) {
+    try {
+      Deno.removeSync(tmp)
+    } catch { /* nothing to clean */ }
+    throw e
+  }
+}
+
+// Reconcile the plan to disk: write string bodies, remove null ones (an
+// orphan or a retracted spec). Reads before writing so an unchanged
+// materialization never churns mtimes (or git status), and a failure on one
+// file never stops the rest — the caller hears all three.
+export let syncFiles = (files: { path: string; body: string | null }[]) => {
   let written: string[] = []
+  let removed: string[] = []
   let failed: string[] = []
   for (let f of files) {
     try {
+      if (f.body == null) {
+        try {
+          Deno.removeSync(f.path)
+          removed.push(f.path)
+        } catch { /* already gone — nothing to un-write */ }
+        continue
+      }
       let had: string | undefined
       try {
         had = Deno.readTextFileSync(f.path)
@@ -199,11 +290,11 @@ export let syncFiles = (files: { path: string; body: string }[]) => {
       Deno.mkdirSync(f.path.slice(0, f.path.lastIndexOf('/')), {
         recursive: true,
       })
-      Deno.writeTextFileSync(f.path, f.body)
+      writeAtomic(f.path, f.body)
       written.push(f.path)
     } catch (e) {
       failed.push(`${f.path}: ${(e as Error).message}`)
     }
   }
-  return { written, failed }
+  return { written, removed, failed }
 }
