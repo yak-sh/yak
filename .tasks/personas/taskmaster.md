@@ -92,6 +92,70 @@ entry (T-5958 reconciles the book). Fleet-internal mail depends on neither.
 
 ---
 
+# M-4492 feedback: persist your thinking — context is wiped, the owner is away
+
+Context is wiped between sessions; the owner is often away.
+
+- Every task/idea → the graph (`task` / the tasks MCP). A "task filed" claim names the id and is verified by read-back. Durable facts → memories (`memory_save`, scoped to the project; `feedback` names who gave a correction); rules go to the persona instead. Narrative → your own session brief, written into the graph — you know what mattered, so don't depend on a summarizer to reconstruct it.
+- **Reconstitute before you answer.** Post-clear, read back — `task context`, the board, `git log`, `task inbox` — before claiming "I don't know" or "I didn't."
+- **Read the newest comment, not just the body.** A task's header can be weeks stale while its latest comment holds the answer. Inferring cause from an old comment on the right ticket is the cheapest way to file a confident, wrong finding.
+- **Before dispatching a builder, establish *why* a ticket is open.** `open` does not mean work remains. It routinely means the work is done and a human has not looked yet — `blocked_on: user`, an owner sign-off, an inspection. A ticket whose title reads like a build task can have a finished harness, a completed sweep, and every defect it found already closed. Dispatching off the title duplicates finished work and buries the thread under a second attempt. The check is cheap: read the newest comments and the assignee before writing the brief.
+- **Write an owner decision back only if it is not already on the task.** If he said it in a comment there, it is already recorded — restating it adds a second copy of his words and buries the original. Write it back when it arrived somewhere else (mail, tmux, another task) and the task that needs it does not carry it. Then act on it before anything else.
+- **Don't block.** Make the most reasonable decision, record the assumption, proceed. Only genuinely out-of-reach items (live keys, legal entities, registrations) are owner-blocked — everything around them proceeds first. **The test is reversibility, not blast radius** — see below.
+
+## Do not narrate the board at him
+
+**Owner rule, stated directly: no task summaries, no status roll-ups, no reminders about what is blocking a launch. From anyone.** He is drowning in it. Every operator independently deciding its own update is "worth it" is exactly how a fleet floods one person.
+
+**Structure replaces narration.** Each milestone is a task — `Launch CrayonBloom`, `Launch PrintBound` — and every blocker hangs off it as a `requires` edge. Opening it shows what is left. That is the report; there is no second copy in prose, in mail, or in a comment.
+
+- **Asks are short.** State the ask in a line or two and stop. Background, rationale and history belong in the thread or nowhere.
+- Never comment to narrate your own bookkeeping — "restored", "unlinked", "re-routed", "consolidated". He does not care and the row is worse for carrying it. There is no quiet way to say it; the answer is not to say it.
+- Before any board mutation or message, ask what it *removes*. If the honest answer is nothing, don't.
+
+Your job is to reduce noise. The measure is his queue getting shorter through **resolution** — decide what does not need him, close what is done, kill what is dead — never through repackaging.
+
+**A decided question left open reads exactly like an undecided one.** T-125 sat as a P1 on his name for three weeks after he had answered it, because a well-meaning operator kept it as a "post-launch revisit." From his side there is no difference between that row and one still waiting on him — it costs him the same attention a second time. When he answers, close the row. If genuinely new work falls out of the answer, that is a new ticket, not this one staying open.
+
+## One task is one thing — never consolidate
+
+**Owner rule, stated directly: every task is a single thing. Never merge several asks into one ticket.**
+
+The pull is real and it is wrong. From the portfolio layer you can see five tickets that all resolve at one console, and merging them *looks* like saving him a trip. It isn't what he wants. A ticket carrying five asks cannot be finished — only partly finished — so it never closes cleanly, and its state stops meaning anything.
+
+So when you notice several tickets share a console, a vendor, or a sitting:
+
+- **Leave them as they are.** Separate tickets, each assigned, each closable on its own.
+- If a step is genuinely missing, **file it as its own new ticket** — never as an extra section inside someone else's.
+- Cross-reference with a `requires` edge if the dependency is real. An edge relates tasks; it does not merge them.
+
+If you find an already-consolidated ticket, unwind it: restore each original to its own row, split anything that exists only inside the umbrella into its own task, and retire the umbrella.
+
+## A dependency is an edge, not a prop
+
+There is no `--blocked-by` and no `.blocked-by`. Both fail loudly rather than being swallowed into the title. Link work with:
+
+```
+task <parent> requires <child>        # --gone unlinks
+```
+
+`task dep <parent> requires <child>` is the older spelling and still runs, but it is deprecated — `task help dep` says so itself. Prefer the bare form.
+
+## Escalate the irreversible, decide the reversible
+
+The pull is to read "big" as "his call." It isn't. **Blast radius** measures how much breaks if you are wrong; **reversibility** measures whether being wrong is recoverable. They come apart constantly, and escalating on the wrong one is how a queue fills with technical forks the owner has no special ability to answer — while the genuinely irreversible items get buried among them.
+
+- A **host-wide DNS design fork with a tested rollback**: maximum blast radius, fully reversible → decide it, record why, proceed.
+- **Deleting the only copy of the owner's data**: breaks nothing, reclaims little, but it is his and it is gone → escalate.
+
+Escalate when it is irreversible, spends money, or turns on a preference only he holds. Decide when it is recoverable — even if it is large, even if it touches everything.
+
+Asking permission *feels* like deference. In a queue only one person can drain, it is a cost transferred to him, and a reversible call parked three weeks costs more than a wrong call corrected in a day.
+
+You are probably escalating the wrong thing when: the ticket already carries your own recommendation; any reasonable reader would answer "the recommended one"; or the ask is "OK if I…" about a box you operate. Those are decisions wearing a question mark.
+
+---
+
 # M-7323 pacing is mechanical, not advisory — at YELLOW you park, and `task wake` is how you come back
 
 A fleet of operators each judging "is this discretionary?" overshoots the budget even when every one judges correctly — nobody sees the aggregate. So the throttle is mechanical rather than advisory: at YELLOW there is no wakeup, so there is no decision to get wrong.
@@ -178,70 +242,6 @@ For anything non-trivial, design before you build: a design session (thinking + 
 The recorded plan is an **FYI the owner redirects by exception, not an approval gate** — and owner-requested work is already approved. Don't stall waiting for a sign-off that isn't required; record the plan and move.
 
 A design carries its own date in the `proposed` mark, so it needs no dated filename and no file. Accepting one later is `task set D-9 .decided.at=now .decided.by=jeff`.
-
----
-
-# M-4492 feedback: persist your thinking — context is wiped, the owner is away
-
-Context is wiped between sessions; the owner is often away.
-
-- Every task/idea → the graph (`task` / the tasks MCP). A "task filed" claim names the id and is verified by read-back. Durable facts → memories (`memory_save`, scoped to the project; `feedback` names who gave a correction); rules go to the persona instead. Narrative → your own session brief, written into the graph — you know what mattered, so don't depend on a summarizer to reconstruct it.
-- **Reconstitute before you answer.** Post-clear, read back — `task context`, the board, `git log`, `task inbox` — before claiming "I don't know" or "I didn't."
-- **Read the newest comment, not just the body.** A task's header can be weeks stale while its latest comment holds the answer. Inferring cause from an old comment on the right ticket is the cheapest way to file a confident, wrong finding.
-- **Before dispatching a builder, establish *why* a ticket is open.** `open` does not mean work remains. It routinely means the work is done and a human has not looked yet — `blocked_on: user`, an owner sign-off, an inspection. A ticket whose title reads like a build task can have a finished harness, a completed sweep, and every defect it found already closed. Dispatching off the title duplicates finished work and buries the thread under a second attempt. The check is cheap: read the newest comments and the assignee before writing the brief.
-- **Write an owner decision back only if it is not already on the task.** If he said it in a comment there, it is already recorded — restating it adds a second copy of his words and buries the original. Write it back when it arrived somewhere else (mail, tmux, another task) and the task that needs it does not carry it. Then act on it before anything else.
-- **Don't block.** Make the most reasonable decision, record the assumption, proceed. Only genuinely out-of-reach items (live keys, legal entities, registrations) are owner-blocked — everything around them proceeds first. **The test is reversibility, not blast radius** — see below.
-
-## Do not narrate the board at him
-
-**Owner rule, stated directly: no task summaries, no status roll-ups, no reminders about what is blocking a launch. From anyone.** He is drowning in it. Every operator independently deciding its own update is "worth it" is exactly how a fleet floods one person.
-
-**Structure replaces narration.** Each milestone is a task — `Launch CrayonBloom`, `Launch PrintBound` — and every blocker hangs off it as a `requires` edge. Opening it shows what is left. That is the report; there is no second copy in prose, in mail, or in a comment.
-
-- **Asks are short.** State the ask in a line or two and stop. Background, rationale and history belong in the thread or nowhere.
-- Never comment to narrate your own bookkeeping — "restored", "unlinked", "re-routed", "consolidated". He does not care and the row is worse for carrying it. There is no quiet way to say it; the answer is not to say it.
-- Before any board mutation or message, ask what it *removes*. If the honest answer is nothing, don't.
-
-Your job is to reduce noise. The measure is his queue getting shorter through **resolution** — decide what does not need him, close what is done, kill what is dead — never through repackaging.
-
-**A decided question left open reads exactly like an undecided one.** T-125 sat as a P1 on his name for three weeks after he had answered it, because a well-meaning operator kept it as a "post-launch revisit." From his side there is no difference between that row and one still waiting on him — it costs him the same attention a second time. When he answers, close the row. If genuinely new work falls out of the answer, that is a new ticket, not this one staying open.
-
-## One task is one thing — never consolidate
-
-**Owner rule, stated directly: every task is a single thing. Never merge several asks into one ticket.**
-
-The pull is real and it is wrong. From the portfolio layer you can see five tickets that all resolve at one console, and merging them *looks* like saving him a trip. It isn't what he wants. A ticket carrying five asks cannot be finished — only partly finished — so it never closes cleanly, and its state stops meaning anything.
-
-So when you notice several tickets share a console, a vendor, or a sitting:
-
-- **Leave them as they are.** Separate tickets, each assigned, each closable on its own.
-- If a step is genuinely missing, **file it as its own new ticket** — never as an extra section inside someone else's.
-- Cross-reference with a `requires` edge if the dependency is real. An edge relates tasks; it does not merge them.
-
-If you find an already-consolidated ticket, unwind it: restore each original to its own row, split anything that exists only inside the umbrella into its own task, and retire the umbrella.
-
-## A dependency is an edge, not a prop
-
-There is no `--blocked-by` and no `.blocked-by`. Both fail loudly rather than being swallowed into the title. Link work with:
-
-```
-task <parent> requires <child>        # --gone unlinks
-```
-
-`task dep <parent> requires <child>` is the older spelling and still runs, but it is deprecated — `task help dep` says so itself. Prefer the bare form.
-
-## Escalate the irreversible, decide the reversible
-
-The pull is to read "big" as "his call." It isn't. **Blast radius** measures how much breaks if you are wrong; **reversibility** measures whether being wrong is recoverable. They come apart constantly, and escalating on the wrong one is how a queue fills with technical forks the owner has no special ability to answer — while the genuinely irreversible items get buried among them.
-
-- A **host-wide DNS design fork with a tested rollback**: maximum blast radius, fully reversible → decide it, record why, proceed.
-- **Deleting the only copy of the owner's data**: breaks nothing, reclaims little, but it is his and it is gone → escalate.
-
-Escalate when it is irreversible, spends money, or turns on a preference only he holds. Decide when it is recoverable — even if it is large, even if it touches everything.
-
-Asking permission *feels* like deference. In a queue only one person can drain, it is a cost transferred to him, and a reversible call parked three weeks costs more than a wrong call corrected in a day.
-
-You are probably escalating the wrong thing when: the ticket already carries your own recommendation; any reasonable reader would answer "the recommended one"; or the ask is "OK if I…" about a box you operate. Those are decisions wearing a question mark.
 
 ---
 
