@@ -94,6 +94,15 @@ export let fetched = async (ids: string[], filters: string[] = []) =>
 // One entity by address, or undefined — find() over the wire.
 export let got = async (id: string) => (await fetched([id]))[0]
 
+// The session entity for an external session id — a keyed read on the
+// unique `session.id` index (db.ts). This is the AUTHORITATIVE absent
+// signal a find-or-mint builder needs: `query` throws on a fetch failure
+// (never []), so undefined means genuinely-absent and only then, never on
+// a dropped read. sessionFor over this narrow row mints exactly when the
+// whole-snapshot find() would have — one session, on true first sight.
+export let sessionRow = async (sid: string) =>
+  (await query([`.session.id=${sid}`], 'session'))[0]
+
 // The human id of a just-minted entity, read back by its eid for the num
 // the server stamped — /apply is synchronous against the same db, so the
 // row is already there; the eid stands in on the rare miss. One keyed

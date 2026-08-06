@@ -62,6 +62,7 @@ import {
   separated,
   sessionFor,
   sessionMeta,
+  sessionRow,
   showMd,
   similarHint,
   snapshot,
@@ -1003,9 +1004,16 @@ let claim = async (args: string[]) => {
   if (!session) {
     throw new Error('task claim <id> <session> (or run under a session)')
   }
-  let all = rows(await snapshot())
-  let row = need(all, id)
-  await send(claimChanges(all, row.eid, session, Deno.cwd()))
+  // The task by address, and the claiming session by its unique id — the
+  // two rows claimChanges reads. sessionFor mints the session only on a
+  // genuinely-absent sessionRow (query throws on a fetch miss, never []),
+  // so a claim reifies exactly one session on first sight, as the whole
+  // snapshot did.
+  let row = await needed(id)
+  let srow = await sessionRow(session)
+  await send(
+    claimChanges([row, ...(srow ? [srow] : [])], row.eid, session, Deno.cwd()),
+  )
   print(`${idOf(row)} claimed by ${session}`)
 }
 
@@ -1284,9 +1292,21 @@ let comment = async (args: string[]) => {
   if (!id || (!body && !verdict)) {
     throw new Error('task comment <id> [text...] [--verdict=...]')
   }
-  let all = rows(await snapshot())
-  let row = need(all, id)
-  let made = commentChanges(all, row.eid, body, me(), { verdict })
+  // The target by address, and the caller's own session row by its unique
+  // id — the two rows commentChanges reads (taskActor off the target,
+  // sessionFor off the session). sessionFor mints the session only when
+  // sessionRow returns undefined, which is genuine absence and never a
+  // dropped read, so first-sight reification stays exact off a keyed pair.
+  let row = await needed(id)
+  let sid = me()
+  let sess = sid ? await sessionRow(sid) : undefined
+  let made = commentChanges(
+    [row, ...(sess ? [sess] : [])],
+    row.eid,
+    body,
+    sid,
+    { verdict },
+  )
   await send(made)
   // Hand back the comment's OWN id, like every other mint door. Without it a
   // writer has no reference to what it just wrote, so the only reachable way
