@@ -460,3 +460,71 @@ Deno.test(
     }
   },
 )
+
+// `id=` is the door a lookup goes through — `task show T-3` and every
+// find()/need() in the CLI, which today open with a whole-graph snapshot to
+// resolve one name. It must speak all four forms locate() knows, and it must
+// agree with the filter path it composes with: `id=` names the candidates,
+// any remaining filter line screens them.
+let byId = async (ids: string, extra = '') => {
+  let res = await fetch(
+    `http://${U}/query?${encodeURIComponent(`id=${ids}`)}${extra}`,
+  )
+  if (!res.ok) throw new Error(`id= refused ${ids}: ${await res.text()}`)
+  return (await res.json() as { entity: { eid: string } }[])
+    .map((r) => r.entity.eid)
+}
+
+Deno.test('query: id= fetches by every form a name takes', alone, async () => {
+  let a = task({ status: 'open' })
+  let b = task({ status: 'done' })
+  await post([
+    ...a.born,
+    ...b.born,
+    { eid: a.eid, name: 'alias', comp: { slug: `probe-${a.eid.slice(0, 8)}` } },
+  ])
+  let num = async (eid: string) =>
+    ((await (await fetch(
+      `http://${U}/query?${
+        encodeURIComponent(`.doc.title~=${eid.slice(0, 8)}`)
+      }`,
+    )).json()) as { entity: { num: number } }[])[0].entity.num
+
+  // a uuid, a bare num, the X-123 spelling, and an alias slug
+  assertEquals(await byId(a.eid), [a.eid], 'by uuid')
+  assertEquals(await byId(String(await num(a.eid))), [a.eid], 'by bare num')
+  assertEquals(await byId(`T-${await num(a.eid)}`), [a.eid], 'by T-num')
+  assertEquals(
+    await byId(`probe-${a.eid.slice(0, 8)}`),
+    [a.eid],
+    'by alias slug',
+  )
+
+  // several at once, oldest first — and a name for nothing is absent, not an
+  // error, so asking for one that died still answers about the others
+  assertEquals(await byId(`${a.eid},${b.eid}`), [a.eid, b.eid], 'several')
+  assertEquals(await byId(`${b.eid},${a.eid}`), [a.eid, b.eid], 'order is num')
+  assertEquals(await byId(`${a.eid},no-such-name`), [a.eid], 'unknown absent')
+  assertEquals(await byId('no-such-name'), [], 'all unknown')
+
+  // a remaining filter line SCREENS the named set rather than being ignored
+  assertEquals(
+    await byId(
+      `${a.eid},${b.eid}`,
+      `&${encodeURIComponent('.task.status=open')}`,
+    ),
+    [a.eid],
+    'filters screen the named set',
+  )
+
+  // backlinks takes the snapshot path, and must name the same entities
+  assertEquals(
+    await byId(`${a.eid},${b.eid}`, '&backlinks=1'),
+    [a.eid, b.eid],
+    'same set through the snapshot path',
+  )
+
+  // a dead entity is named and rightly absent
+  await post([{ eid: b.eid, name: 'entity', comp: null }])
+  assertEquals(await byId(`${a.eid},${b.eid}`), [a.eid], 'tombstone absent')
+})

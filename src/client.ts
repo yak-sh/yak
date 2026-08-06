@@ -83,6 +83,17 @@ export let query = async (filters: string[], kind?: string) => {
   return hits.map(rowOf)
 }
 
+// Entities BY ADDRESS — the narrow half of find(), which needs `all: Row[]`
+// and so opens every CLI verb with a whole-graph snapshot. Speaks the same
+// four forms (T-3, a bare num, an alias slug, a uuid), resolved server-side
+// through locate(). An id naming nothing is absent from the result, so a
+// caller wanting find()'s undefined asks for one and reads the first.
+export let fetched = async (ids: string[], filters: string[] = []) =>
+  ids.length ? await query([`id=${ids.join(',')}`, ...filters]) : []
+
+// One entity by address, or undefined — find() over the wire.
+export let got = async (id: string) => (await fetched([id]))[0]
+
 // The graph as rows: one per entity, components merged in; kind derived.
 export let rows = ({ changes }: { changes: Change[] }) => {
   let out = new Map<string, Row>()

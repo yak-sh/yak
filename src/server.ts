@@ -735,18 +735,66 @@ let http = Deno.serve(
       // The graph over plain GET: the query string IS the filter line —
       // the same grammar boards and task_list speak — and hits come back
       // Structured like every entity JSON door. `kind=` screens by derived
-      // kind; `backlinks=1` adds who points at each hit (eid columns + edges).
-      // A malformed
+      // kind; `backlinks=1` adds who points at each hit (eid columns + edges);
+      // `id=` names entities outright. A malformed
       // filter is the typist's news, not a server error.
       try {
         let segs = url.search.slice(1).split('&').filter(Boolean)
           .map(decodeURIComponent)
         let backs = segs.includes('backlinks=1')
         let kind = segs.find((s) => s.startsWith('kind='))?.slice(5)
-        segs = segs.filter((s) => s != 'backlinks=1' && !s.startsWith('kind='))
+        // `id=` FETCHES rather than filters: each value is an ADDRESS — T-3, a
+        // bare num, an alias slug, a uuid — and locate() is the index's own
+        // reading of "what names an entity", the same four rules find() spells
+        // over a materialized graph. It is a parameter beside kind= and
+        // backlinks= rather than a predicate because addressing is not
+        // filtering: `.entity.eid~=abc` would be a substring search over
+        // uuids, legal and meaningless.
+        //
+        // An id naming nothing is simply absent, the way a filter matching
+        // nothing returns no rows — a caller asking for five and getting three
+        // learns which two are gone by their absence.
+        let named = segs.filter((s) => s.startsWith('id='))
+          .flatMap((s) => s.slice(3).split(',')).filter(Boolean)
+        let only = named.length
+          ? new Set(
+            named.map((i) => locate(db, i)).filter(Boolean) as string[],
+          )
+          : null
+        segs = segs.filter((s) =>
+          s != 'backlinks=1' && !s.startsWith('kind=') && !s.startsWith('id=')
+        )
         let q = segs.join('&')
-        let screen = (hits: Row[]) =>
-          kind ? hits.filter((r) => r.kind == kind) : hits
+        // Any remaining filter line still screens, so `id=` composes with the
+        // grammar rather than replacing it.
+        let screen = (hits: Row[]) => {
+          let out = kind ? hits.filter((r) => r.kind == kind) : hits
+          return only ? out.filter((r) => only.has(r.eid)) : out
+        }
+        // Named entities are read one eager() each — a handful of keyed reads,
+        // against a filter that would otherwise select everything and drag the
+        // whole graph in behind it. Backlinks still needs every row's _eid
+        // columns, so it falls through to the snapshot path, where `only`
+        // screens it exactly the same way.
+        if (only && !backs) {
+          let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
+          let hits = [...only].map((eid): Row => {
+            let comps = eager(db, eid)
+            return {
+              eid,
+              num: Number(comps.entity?.num ?? 0),
+              kind: kindOf(comps),
+              comps,
+            }
+          })
+            // eager() answers {} for an eid the graph no longer has, which is
+            // how a tombstone reads here: named, and rightly absent.
+            .filter((r) => !!r.comps.entity)
+            .filter((r) => matchQuery(r.comps, preds, (e) => eager(db, e)))
+          return Response.json(
+            screen(hits).sort((a, b) => a.num - b.num).map((r) => jsonOf(r)),
+          )
+        }
         // One pipeline with the subscription initial-set; kind, hot-ranking
         // and backlinks layer on top of its matches. The index answers first
         // — a one-row question cost a 27 MB snapshot and 0.29s before this,
