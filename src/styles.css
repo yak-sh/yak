@@ -3477,3 +3477,106 @@ a[data-ref]:hover {
   color: var(--dim);
   font-size: 11px;
 }
+
+/* The tiling container (views/Layout.tsx, D-14718): a container pane is a
+   flex row/column along its dir, each child weighted by its own size via
+   inline flex-grow; gutters between siblings drag to resize. --gutter is
+   the one variant knob. */
+.Layout {
+  --gutter: 5px;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.Layout_Pane {
+  position: relative;
+  display: flex;
+  flex-basis: 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.Layout_Pane-row {
+  flex-direction: row;
+}
+.Layout_Pane-col {
+  flex-direction: column;
+}
+.Layout_Pane-leaf {
+  display: block;
+  overflow: auto;
+  padding: var(--half-gap);
+}
+.Layout_Gutter {
+  flex: 0 0 var(--gutter);
+  background: var(--border);
+  background-clip: content-box;
+  touch-action: none;
+}
+.Layout_Gutter-h {
+  cursor: col-resize;
+  padding-inline: 2px;
+}
+.Layout_Gutter-v {
+  cursor: row-resize;
+  padding-block: 2px;
+}
+.Layout_Gutter:hover {
+  background-color: var(--accent);
+}
+.Layout_Acts {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.Layout_Pane-leaf:hover > .Layout_Acts {
+  opacity: 1;
+}
+.Layout_Act {
+  padding: 0 5px;
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--dim);
+  font-size: 11px;
+  line-height: 1.6;
+  cursor: pointer;
+}
+.Layout_Act:hover {
+  color: var(--fg);
+}
+.Layout_Fill {
+  display: grid;
+  gap: var(--half-gap);
+  align-content: center;
+  justify-items: center;
+  height: 100%;
+  color: var(--dim);
+}
+.Layout_Fill input {
+  width: min(24rem, 90%);
+}
+.Layout_Row {
+  border: none;
+  background: none;
+  color: var(--fg);
+  font-size: 12px;
+  cursor: pointer;
+}
+.Layout_Row span {
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+.Layout_Row:hover {
+  color: var(--accent);
+}
+.Layout_Empty {
+  margin: auto;
+  color: var(--dim);
+}

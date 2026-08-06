@@ -49,6 +49,13 @@ let glyphs: Record<string, JSX.Element> = {
       <rect width='7' height='5' x='3' y='16' rx='1' />
     </>
   ),
+  'columns-3': (
+    <>
+      <rect width='18' height='18' x='3' y='3' rx='2' />
+      <path d='M9 3v18' />
+      <path d='M15 3v18' />
+    </>
+  ),
   kanban: (
     <>
       <path d='M6 5v11' />

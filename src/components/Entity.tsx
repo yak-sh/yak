@@ -27,6 +27,7 @@ import {
   WebTitle,
 } from './views/Title.tsx'
 import { Board } from './views/Board.tsx'
+import { Layout } from './views/Layout.tsx'
 import { Dashboard } from './views/Dashboard.tsx'
 import { Persona } from './views/Persona.tsx'
 import { Inbox } from './views/Inbox.tsx'
@@ -82,6 +83,13 @@ define([
   { view: 'Full', match: has('doc'), Render: Show },
   { view: 'Card.Full', match: has('doc'), Render: CardFull },
   { view: 'Board', match: has('doc', 'board'), Render: Board },
+  // The tiling container (D-14718) — a layout's default face. Its leaves
+  // walk back through Entity, so defer the binding like Canvas above.
+  {
+    view: 'Layout',
+    match: has('doc', 'layout'),
+    Render: (props) => <Layout {...props} />,
+  },
   // The Project Cockpit (D-14587). Scores 1 on purpose — not
   // has('doc','project')'s 2 — so Full keeps the project's default face:
   // the cockpit is a chosen tab, never a changed default. Its facet rows
@@ -166,6 +174,7 @@ define([
   'Canvas',
   'List',
   'Board',
+  'Layout',
   'Persona',
   // After Inbox on purpose: the fullscreen bar opens a bare URL on
   // tabs[0] (App.tsx), and a project's first tab was Inbox before the
