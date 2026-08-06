@@ -21,7 +21,6 @@ import {
   verdictName,
 } from './types.ts'
 import { idOf } from './types.ts'
-import { dirname, resolve } from 'node:path'
 import { formatProp, parseProp, propAt } from './props.ts'
 import { nearest, offer } from './near.ts'
 import { hot, matchQuery, type Pred, route } from './query.ts'
@@ -145,13 +144,24 @@ export let search = async (q: string, limit = 20) => {
 // A linked worktree's `.git` is a FILE (a `gitdir:` pointer) while the main
 // checkout's is a directory everyone shares — only the former is one agent's
 // own tree. Walk up so a tool run from a subdirectory still resolves the root.
+//
+// Parent by string, not `node:path`: client.ts is imported by the browser (it
+// carries Row, the reader predicates, the change builders), and a `node:`
+// import at module top-level is fetched when the page loads — before any
+// function runs — so it CORS-fails and takes the whole UI down (browser_test
+// holds this). The `Deno.*` calls below are lazy — evaluated only when a
+// server/CLI caller runs this — so they never reach the browser.
+let parentDir = (p: string) => {
+  let i = p.lastIndexOf('/')
+  return i <= 0 ? '/' : p.slice(0, i)
+}
 export let worktreeRoot = (dir = Deno.cwd()): string | undefined => {
-  let d = resolve(dir)
+  let d = dir
   while (true) {
     try {
       if (Deno.statSync(`${d}/.git`).isFile) return d
     } catch { /* no .git at this level — keep climbing */ }
-    let up = dirname(d)
+    let up = parentDir(d)
     if (up == d) return
     d = up
   }
