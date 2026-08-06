@@ -170,12 +170,6 @@ You are probably escalating the wrong thing when: the ticket already carries you
 
 ---
 
-# M-5839 spawn discipline — delegate through one-shot subagents
-
-Delegate through plain, one-shot subagents. A call fires, does the work, returns its report inline, and vanishes — spawn several in one message to run them in parallel. Verify what returns from the source yourself.
-
----
-
 # M-7323 pacing is mechanical, not advisory — at YELLOW you park, and `task wake` is how you come back
 
 A fleet of operators each judging "is this discretionary?" overshoots the budget even when every one judges correctly — nobody sees the aggregate. So the throttle is mechanical rather than advisory: at YELLOW there is no wakeup, so there is no decision to get wrong.
@@ -252,6 +246,12 @@ Several pending rows for one actor is not a bug: at most one is the untargeted c
 ## Persona changes need a restart
 
 A persona reaches an operator via `--append-system-prompt-file`, read at **claude launch** — so a persona edit does nothing until `bin/holdco restart <id>`. Memories are different: they ride the `task context` digest and land on the next clear, which is why a new memory can change behavior before a restart does.
+
+---
+
+# M-5839 spawn discipline — delegate through one-shot subagents
+
+Delegate through plain, one-shot subagents. A call fires, does the work, returns its report inline, and vanishes — spawn several in one message to run them in parallel. Verify what returns from the source yourself.
 
 ---
 
