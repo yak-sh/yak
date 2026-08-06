@@ -1995,6 +1995,7 @@ html {
   border-top: 1px solid var(--border);
   font-size: 12px;
   position: relative; /* the hints panel anchors to the bar */
+  z-index: 2; /* shell chrome clears sticky content (z1) */
 }
 .Status_Mode {
   color: var(--dim);
