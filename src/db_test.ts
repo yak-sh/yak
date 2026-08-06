@@ -115,6 +115,9 @@ let contracts = [
   }),
   contract('persona', 'home_eid', 'project'),
   contract('memory', 'scope_eid', 'project'),
+  contract('layout', 'root_eid', 'pane'),
+  contract('pane', 'layout_eid', 'layout'),
+  contract('pane', 'parent_eid', 'pane'),
 ]
 
 Deno.test('create + patch + column clear', () => {

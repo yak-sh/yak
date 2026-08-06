@@ -55,6 +55,9 @@ Deno.test('death words: every reference declares, the sets hold', () => {
       'wake.target_eid',
       'wake.to_eid',
       'pin.canvas_eid',
+      // a pane dies with its layout and with its container (D-14718)
+      'pane.layout_eid',
+      'pane.parent_eid',
       'camera.client_eid',
       'camera.canvas_eid',
       'fold.client_eid',
@@ -74,6 +77,10 @@ Deno.test('death words: every reference declares, the sets hold', () => {
       'spawn.persona_eid',
       'role.scope_eid',
       'persona.home_eid',
+      // a shown entity's death only empties its pane; a directly deleted
+      // root orphans the layout rather than cascading through it
+      'pane.content_eid',
+      'layout.root_eid',
     ]),
   )
   assertEquals(
