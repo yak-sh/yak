@@ -154,6 +154,23 @@ let schema = `
   create table if not exists board (
     eid text primary key references entity(eid)
   );
+  -- A tiling layout (D-14718): the doc names it, root_eid its top pane.
+  create table if not exists layout (
+    eid      text primary key references entity(eid),
+    root_eid text references entity(eid)
+  );
+  -- One pane: container (dir) or leaf (content_eid/view). size is a
+  -- weight among siblings; "order" quoted — an SQL keyword, like "to".
+  create table if not exists pane (
+    eid         text primary key references entity(eid),
+    layout_eid  text references entity(eid),
+    parent_eid  text references entity(eid),
+    size        real not null default 1,
+    "order"     real not null default 0,
+    dir         text,
+    content_eid text references entity(eid),
+    view        text
+  );
   create table if not exists web (
     eid text primary key references entity(eid),
     url text not null,

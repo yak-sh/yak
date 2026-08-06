@@ -67,6 +67,10 @@ export let turnStates = ['idle', 'busy'] as const
 export let roleStates = ['running', 'stopped', 'held'] as const
 export let roleSurfaces = ['native', 'managed'] as const
 
+// A container pane lays its children along this axis: h = side by side,
+// v = stacked.
+export let dirs = ['h', 'v'] as const
+
 // What an actor has said about a thread, overriding the addressed-to
 // default. There is no 'auto': absent IS auto, because auto is exactly
 // what addressed() already does — a stored default is a row that means
@@ -143,6 +147,27 @@ export let comps: Record<string, Record<string, PropType>> = {
     retry_at: 'time',
   },
   board: { query: 'query' }, // saved filter (query.ts grammar); '' = all
+  // A tiling layout (D-14718): the doc names it, root_eid its top pane.
+  // Shared like a board — fork is an explicit gesture, never copy-on-write.
+  // death 'detach' on purpose: deleting the root pane directly orphans the
+  // layout to an empty state instead of chaining a second cascade back
+  // through it (gestures never do this — close() on the last pane clears).
+  layout: { root_eid: { eid: 'pane', death: 'detach' } },
+  // One pane of a layout: a CONTAINER when dir is set (children are the
+  // panes whose parent_eid names it, ordered by `order`), a LEAF otherwise
+  // (content_eid + view, card's pair; both absent = empty → the palette).
+  // size is a WEIGHT among siblings — renderers divide by the siblings'
+  // sum, so closing a pane renormalizes the rest with no array to splice.
+  // content_eid is a SOFT ref: the shown entity's death empties the pane.
+  pane: {
+    layout_eid: { eid: 'layout', death: 'cascade' },
+    parent_eid: { eid: 'pane', death: 'cascade' },
+    size: 'number',
+    order: 'number',
+    dir: { enum: dirs },
+    content_eid: { eid: '', death: 'detach' },
+    view: 'text',
+  },
   // The thinking that precedes a build. A tag, because the doc already
   // carries the writing and the `proposed`/`decided` stamps below already
   // carry its life — awaiting acceptance, then settled, with the date on
@@ -692,10 +717,12 @@ export let kilo = (n: number): string =>
 export let kindOrder = [
   'task',
   'project',
+  'layout',
   'board',
   'canvas',
   'web',
   'card',
+  'pane',
   'client',
   'camera',
   'fold',
@@ -758,6 +785,7 @@ export let kindWord = (word: string) =>
 // whatever wears it, so aliases ride for every kind.
 export let byName = new Set([
   'project',
+  'layout',
   'board',
   'person',
   'persona',
@@ -770,6 +798,7 @@ export let byName = new Set([
 export let prefix: Record<string, string> = {
   task: 'T',
   project: 'P',
+  layout: 'L',
   board: 'B',
   role: 'R',
   session: 'S',
@@ -871,6 +900,22 @@ export type Repo = {
 // A board is a saved filter over tasks: `query` speaks the query.ts
 // grammar ('.project_eid=…&.status=open,wip'); empty/null means every task.
 export type BoardTag = { eid: string; query?: string | null }
+
+// A tiling layout (D-14718): the doc names it, root_eid its top pane.
+export type LayoutTag = { eid: string; root_eid?: string | null }
+
+// One pane: container (dir set, children point here via parent_eid) or
+// leaf (content_eid + view). size is its weight among siblings.
+export type Pane = {
+  eid: string
+  layout_eid?: string | null
+  parent_eid?: string | null
+  size?: number
+  order?: number
+  dir?: string | null
+  content_eid?: string | null
+  view?: string | null
+}
 // An external page. The URL is what was pasted; the rendered thing is the
 // server's frozen archive of it (one self-contained HTML file on disk),
 // stamped frozen_at when ready — frozen_at is server-owned, never wire-set.
@@ -1199,6 +1244,8 @@ export type Ent = {
   repo?: Repo
   canvas?: { eid: string }
   board?: BoardTag
+  layout?: LayoutTag
+  pane?: Pane
   web?: Web
   card?: CardComp
   pin?: Pin
