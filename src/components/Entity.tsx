@@ -27,6 +27,7 @@ import {
   WebTitle,
 } from './views/Title.tsx'
 import { Board } from './views/Board.tsx'
+import { Dashboard } from './views/Dashboard.tsx'
 import { Persona } from './views/Persona.tsx'
 import { Inbox } from './views/Inbox.tsx'
 import { MemoryTile } from './views/Memory.tsx'
@@ -81,6 +82,15 @@ define([
   { view: 'Full', match: has('doc'), Render: Show },
   { view: 'Card.Full', match: has('doc'), Render: CardFull },
   { view: 'Board', match: has('doc', 'board'), Render: Board },
+  // The Project Cockpit (D-14587). Scores 1 on purpose — not
+  // has('doc','project')'s 2 — so Full keeps the project's default face:
+  // the cockpit is a chosen tab, never a changed default. Its facet rows
+  // walk back through Entity; defer the binding like Canvas above.
+  {
+    view: 'Dashboard',
+    match: (e) => !!(e.doc && e.project) && 1,
+    Render: (props) => <Dashboard {...props} />,
+  },
   { view: 'Persona', match: has('doc', 'persona'), Render: Persona },
   // An inbox reads FOR an actor, so it offers itself on the two things
   // that can be one: a venture and a person.
@@ -157,7 +167,12 @@ define([
   'List',
   'Board',
   'Persona',
+  // After Inbox on purpose: the fullscreen bar opens a bare URL on
+  // tabs[0] (App.tsx), and a project's first tab was Inbox before the
+  // cockpit existed — the cockpit is a chosen tab, never a changed
+  // default.
   'Inbox',
+  'Dashboard',
   'Role',
   'Full',
   'Web',

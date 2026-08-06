@@ -3340,3 +3340,55 @@ a[data-ref]:hover {
     white-space: nowrap;
   }
 }
+
+/* The Project Cockpit (views/Dashboard.tsx): the facet vocabulary in a
+   fixed grid — Boards · Inbox · Roles · Sessions · Lately. Every cell is a
+   live query rendered through the shared rows at summary density; a long
+   facet scrolls inside its cell rather than stretching the grid. */
+.Dash {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  gap: var(--gap);
+  align-items: start;
+}
+.Dash_Cell {
+  --density: summary;
+  display: grid;
+  gap: var(--half-gap);
+  align-content: start;
+  min-width: 0;
+  max-block-size: 24rem;
+  overflow: auto;
+}
+.Dash_Name {
+  display: flex;
+  align-items: baseline;
+  gap: var(--half-gap);
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: normal;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--dim);
+}
+.Dash_Badge {
+  min-width: 1.1em;
+  padding: 0 0.25em;
+  border-radius: 1em;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 10px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.Dash_Rows {
+  display: grid;
+  gap: 2px;
+}
+.Dash_More,
+.Dash_Empty {
+  color: var(--dim);
+  font-size: 11px;
+}
