@@ -14,7 +14,7 @@ import {
   bornAt,
   bus,
   byBoard,
-  checkRefs,
+  checkedRefs,
   claimant,
   claimChanges,
   commentChanges,
@@ -257,45 +257,44 @@ export let kindArg = (arg: string) => {
 // operators, lists and ranges ('.priority<=1', '.domain=Ops,Eng') — so a word
 // that isn't teaches instead of silently listing everything. `hint` says what
 // ELSE the word could have named at that particular door.
-let filters = (
-  all: Row[],
-  args: string[],
-  hint: (a: string) => string = () => '',
-) =>
-  resolveRefs(
-    args.map((a) => {
-      let p = pred(a)
-      if (!p) throw new Error(`${noFilter(a)} (task help grammar)${hint(a)}`)
-      return p
-    }),
-    (id) => find(all, id)?.eid,
-  )
+// Parse each listing arg to a pred, teaching on a word that is no filter.
+// A narrow door leaves the ref VALUES raw so the server's own resolveRefs
+// (and checkedRefs) reads the human id, rather than pre-resolving against a
+// whole snapshot it no longer holds.
+let parse = (args: string[], hint: (a: string) => string = () => '') =>
+  args.map((a) => {
+    let p = pred(a)
+    if (!p) throw new Error(`${noFilter(a)} (task help grammar)${hint(a)}`)
+    return p
+  })
 
 let list = async (args: string[]) => {
   let json = args.includes('--json')
-  let all = rows(await snapshot())
   let words = args.filter((a) => a != '--json')
     .map((a) => [a, kindArg(a)] as const)
   let kind = words.find(([, k]) => k)?.[1] ?? 'task'
   // Here a bare word is also a KIND, so one that is neither names both
   // doors rather than only the filter one.
-  let preds = filters(
-    all,
-    words.filter(([, k]) => !k).map(([a]) => a),
+  let line = words.filter(([, k]) => !k).map(([a]) => a)
+  let preds = parse(
+    line,
     (a) =>
       a.startsWith('.')
         ? ''
         : '; a bare word may name a KIND, as in task list projects',
   )
   // A handle that names nothing is a typo, not an empty result: the caller
-  // typed it a moment ago and can act on the correction. Boards keep the
-  // forgiving reading (client.ts checkRefs).
-  checkRefs(all, preds)
-  let byEid = new Map(all.map((r) => [r.eid, r.comps]))
-  let hits = all
-    .filter((r) => r.kind == kind)
-    .filter((r) => matchQuery(r.comps, preds, (e) => byEid.get(e)))
-    .sort(byBoard)
+  // typed it a moment ago and can act on the correction. The server's own
+  // resolveRefs is forgiving (a saved board must not throw), so the strict
+  // reading rides a keyed check here (client.ts checkedRefs).
+  await checkedRefs(preds)
+  // The server matches and kind-filters; byBoard stays local. The ⚑ column
+  // reads each hit's own claim.session_eid, resolved to its id by a second
+  // keyed read over just those sessions.
+  let hits = (await query(line, kind)).sort(byBoard)
+  let sessions = await fetched(
+    hits.map((r) => String(r.comps.claim?.session_eid ?? '')).filter((s) => s),
+  )
   if (json) return print(jsonText(hits.map((r) => jsonOf(r))))
   // Ids alone do not disambiguate — two projects are both titled `holdco`
   // — so the second column carries the handle a caller can TYPE: a task's
@@ -310,7 +309,7 @@ let list = async (args: string[]) => {
   )
   let wide = Math.max(5, ...lines.map(([, handle]) => handle.length))
   for (let [r, handle] of lines) {
-    let who = claimant(all, r)
+    let who = claimant(sessions, r)
     let flag = who ? `  \u2691 ${who}` : ''
     print(
       `${idOf(r).padEnd(6)} ${handle.padEnd(wide)} ${
@@ -350,29 +349,51 @@ export let place = (preds: Pred[]) =>
     !p.value.includes(',')
   )
 
+// The scope decided() stands in, resolved narrowly — scopeFor otherwise
+// reads a whole snapshot. A named project is the value place() lifted: a
+// human ref scopeFor returns verbatim, so resolve it to the eid belongs()
+// compares. Otherwise scopeFor touches only the caller's session, every repo
+// row, and the persona/actor it wears — fetched as a small set that stands in
+// for the corpus, since scopeFor reads nothing else.
+let scopeOf = async (named?: string): Promise<string | undefined> => {
+  if (named) return (await got(named))?.eid
+  let sid = me()
+  let sess = sid
+    ? (await query([`.session.id=${sid}`], 'session'))[0]
+    : undefined
+  let people = await fetched(
+    [
+      String(sess?.comps.session?.persona_eid ?? ''),
+      String(sess?.comps.session?.actor_eid ?? ''),
+    ].filter((e) => e),
+  )
+  let worn = people.find((r) => r.eid == sess?.comps.session?.persona_eid)
+  let home = String(worn?.comps.persona?.home_eid ?? '')
+  let all = [
+    ...(sess ? [sess] : []),
+    ...await query(['.repo.path!']),
+    ...people,
+    ...(home ? await fetched([home]) : []),
+  ]
+  return scopeFor(all, sess, Deno.cwd(), undefined)
+}
+
 let decided = async (args: string[]) => {
   let json = args.includes('--json')
-  let all = rows(await snapshot())
-  let preds = filters(
-    all,
-    args.filter((a) => a != '--json' && a != '--all'),
-  )
-  checkRefs(all, preds)
-  let byEid = new Map(all.map((r) => [r.eid, r.comps]))
+  let words = args.filter((a) => a != '--json' && a != '--all')
+  let preds = parse(words)
+  await checkedRefs(preds)
   // A named project is lifted OUT of the query and stands in for the cwd:
   // asking about P-30 must mean what standing in P-30 means, and the task
   // column alone would hide that project's own memories.
   let named = place(preds)
-  let sess = all.find((r) =>
-    r.comps.session && String(r.comps.session.id) == me()
-  )
-  let scope = args.includes('--all')
-    ? undefined
-    : scopeFor(all, sess, Deno.cwd(), named?.value)
-  let screen = preds.filter((p) => p != named)
-  let hits = all
-    .filter((r) => r.comps.decided && belongs(r, scope))
-    .filter((r) => matchQuery(r.comps, screen, (e) => byEid.get(e)))
+  let scope = args.includes('--all') ? undefined : await scopeOf(named?.value)
+  // The lifted project's own arg drops from what the server screens on; the
+  // rest ride the query line beside the `.decided!` presence filter. belongs()
+  // stays a JS screen — a 4-way component switch no one filter expresses.
+  let screen = words.filter((_, i) => preds[i] != named)
+  let hits = (await query(['.decided!', ...screen]))
+    .filter((r) => belongs(r, scope))
     .sort((a, b) => decidedAt(b).localeCompare(decidedAt(a)))
   if (json) return print(jsonText(hits.map((r) => jsonOf(r))))
   // Three columns, not four: the id's PREFIX is the kind (M- is a memory,

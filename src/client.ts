@@ -634,7 +634,12 @@ let targetOf = (comp: string, prop: string) => {
 // only a non-empty value. `=` empty means ABSENT, a range is a range, and
 // `~=` is literal — none of those name an entity. Stored evaluation never
 // calls this, so a renamed or deleted project still leaves its board total.
-export let checkRefs = (all: Row[], preds: Pred[]) => {
+//
+// Each ref carries the prop it rode and the kind it targets — what deref
+// needs for `no entity: bindry (.project_eid) — did you mean …?`. Shared by
+// the strict check and its keyed sibling below.
+let filterRefs = (preds: Pred[]) => {
+  let out: { v: string; prop: string; target: string }[] = []
   for (let p of preds) {
     let comp = p.at?.comp ?? p.comp
     let prop = p.at?.prop ?? p.prop
@@ -648,10 +653,30 @@ export let checkRefs = (all: Row[], preds: Pred[]) => {
       : undefined
     if (target == null) continue
     if ((p.op != '' && p.op != '!') || /\.\./.test(p.value)) continue
-    for (let v of p.value.split(',')) {
-      if (v) deref(all, v, ` (.${prop})`, target)
-    }
+    for (let v of p.value.split(',')) if (v) out.push({ v, prop, target })
   }
+  return out
+}
+export let checkRefs = (all: Row[], preds: Pred[]) => {
+  for (let { v, prop, target } of filterRefs(preds)) {
+    deref(all, v, ` (.${prop})`, target)
+  }
+}
+
+// checkRefs over the wire — the narrow door for the strict listing verbs.
+// Confirm a filter's eid-typed refs exist with ONE keyed read, and pull the
+// whole snapshot ONLY on a miss: the error path, where nearby()'s "did you
+// mean?" earns its 0.4 s and nothing else does. locate() is find()'s faithful
+// mirror, so a ref the server resolved resolves in find() over the fetched
+// rows too; a false miss merely re-checks against the snapshot and agrees.
+// The miss branch is the original checkRefs verbatim, so the thrown message is
+// byte-identical to the whole-graph door's.
+export let checkedRefs = async (preds: Pred[]) => {
+  let refs = filterRefs(preds)
+  if (!refs.length) return
+  let hits = await fetched(refs.map((r) => r.v))
+  if (refs.every(({ v }) => find(hits, v))) return
+  checkRefs(rows(await snapshot()), preds)
 }
 let derefProp = (all: Row[], name: string, prop: string, value: unknown) =>
   prop.endsWith('_eid') &&
