@@ -593,9 +593,14 @@ Deno.test('deprecated routes leave root help but teach at their door', async () 
 // need a server to answer (a dead host costs 6s of backoff), so they run
 // against an empty graph and die on `no entity` instead.
 Deno.test('the deprecation notice follows the spelling, not the handler', async () => {
+  // /query answers with a JSON ARRAY (a narrowed verb resolves its id
+  // there first); everything else gets the empty-snapshot shape.
   let empty = Deno.serve(
     { port: 0, onListen: () => {} },
-    () => Response.json({ changes: [], deps: [] }),
+    (req) =>
+      new URL(req.url).pathname == '/query'
+        ? Response.json([])
+        : Response.json({ changes: [], deps: [] }),
   )
   let run = (...args: string[]) =>
     new Deno.Command(Deno.execPath(), {

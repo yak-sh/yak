@@ -23,6 +23,7 @@ import {
   derefParams,
   designChanges,
   edgesOf,
+  fetched,
   find,
   got,
   history,
@@ -1108,8 +1109,8 @@ let release = async (args: string[]) => {
 // extra steps. `task role stop` is therefore the whole off switch, and it is
 // durable: it survives a daemon restart because the desire, not the process,
 // is what got written down.
-let roleOf = (all: Row[], id: string) => {
-  let row = need(all, id)
+let neededRole = async (id: string) => {
+  let row = await needed(id)
   if (!row.comps.role) throw new Error(`not a role: ${id}`)
   return row
 }
@@ -1137,10 +1138,12 @@ let roleLine = (all: Row[], r: Row) => {
 let roleState = async (sub: string, rest: string[]) => {
   let want = sub == 'stop' ? 'stopped' : 'running'
   let ids = rest.filter((a) => a != '--all')
-  let all = rows(await snapshot())
+  // `.role.state!`, not `.role!` — bare `.role` is _eid sugar for
+  // session.role_eid (route()'s any-of), which would list sessions. state
+  // is NOT NULL on every role, so its presence IS the component's.
   let targets = rest.includes('--all')
-    ? all.filter((r) => r.comps.role).sort((a, b) => a.num - b.num)
-    : ids.map((id) => roleOf(all, id))
+    ? (await query(['.role.state!'])).sort((a, b) => a.num - b.num)
+    : await Promise.all(ids.map(neededRole))
   if (!targets.length) {
     throw new Error(rest.includes('--all') ? 'no roles' : help(['role', sub]))
   }
@@ -1161,8 +1164,16 @@ let role = async (args: string[]) => {
   if (sub && sub != '--json') {
     throw new Error(`not a role verb: ${sub}\n\n${help(['role'])}`)
   }
-  let all = rows(await snapshot())
-  let roles = all.filter((r) => r.comps.role).sort((a, b) => a.num - b.num)
+  // Three keyed queries stand in for the corpus: the roles, the entities
+  // they scope, and every session carrying a role_eid (roleSession picks
+  // the newest per role). roleLine/roleSession read them as one set.
+  // `.role.state!` (state is NOT NULL on every role), not `.role!` — bare
+  // `.role` is _eid sugar for session.role_eid and would list sessions.
+  let roles = (await query(['.role.state!'])).sort((a, b) => a.num - b.num)
+  let scopes = await fetched(
+    roles.map((r) => String(r.comps.role.scope_eid ?? '')).filter(Boolean),
+  )
+  let all = [...roles, ...scopes, ...await query(['.session.role_eid!'])]
   if (sub == '--json') {
     return print(jsonText(
       roles.map((r) => ({
