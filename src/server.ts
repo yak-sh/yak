@@ -776,6 +776,10 @@ let http = Deno.serve(
         // whole graph in behind it. Backlinks still needs every row's _eid
         // columns, so it falls through to the snapshot path, where `only`
         // screens it exactly the same way.
+        // A dead entity is gone before this: every arm of locate() reads a
+        // table whose row dies with it — the spine by num or by eid, and an
+        // alias, which is a component of the entity it names — so `only`
+        // holds live eids only and eager() always finds a spine.
         if (only && !backs) {
           let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
           let hits = [...only].map((eid): Row => {
@@ -787,9 +791,6 @@ let http = Deno.serve(
               comps,
             }
           })
-            // eager() answers {} for an eid the graph no longer has, which is
-            // how a tombstone reads here: named, and rightly absent.
-            .filter((r) => !!r.comps.entity)
             .filter((r) => matchQuery(r.comps, preds, (e) => eager(db, e)))
           return Response.json(
             screen(hits).sort((a, b) => a.num - b.num).map((r) => jsonOf(r)),

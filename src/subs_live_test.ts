@@ -524,7 +524,10 @@ Deno.test('query: id= fetches by every form a name takes', alone, async () => {
     'same set through the snapshot path',
   )
 
-  // a dead entity is named and rightly absent
+  // A dead entity is named and rightly absent — and it is locate() that makes
+  // it so, not a guard downstream: the spine row is gone, so the name resolves
+  // to nothing and never reaches the fetch. Asserted here because that is the
+  // behaviour a caller depends on, whichever half of the door delivers it.
   await post([{ eid: b.eid, name: 'entity', comp: null }])
   assertEquals(await byId(`${a.eid},${b.eid}`), [a.eid], 'tombstone absent')
 })
