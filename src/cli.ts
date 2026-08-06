@@ -1640,10 +1640,18 @@ let sessionTurn = async (args: string[]) => {
       if (hook) return
       throw new Error('task session turn <idle|busy> [sid]')
     }
-    let all = rows(await snapshot())
-    let sess = all.find((r) =>
-      r.comps.session && String(r.comps.session.id) == sid
-    )
+    // The narrowest read in the CLI, because this is its hottest caller: one
+    // hook per prompt and per stop of every session in the fleet, inside a 3 s
+    // timeout. `session.id` is uniquely indexed, so asking the index costs 3ms
+    // where the whole-graph snapshot this used to open with cost 28 MB and
+    // ~0.6s to answer the same one-row question.
+    // The predicate that used to screen every row still decides: a filter
+    // grammar reading the id as a list or a range would hand back somebody
+    // else's session, and this verb WRITES. And a refused query throws
+    // (client.ts query()) rather than answering empty, so a narrow miss is a
+    // skipped update — the one thing this path may safely do.
+    let sess = (await query([`.session.id=${sid}`]))
+      .find((r) => r.comps.session && String(r.comps.session.id) == sid)
     if (!sess || sess.comps.session.turn == turn) return
     await send([{
       eid: sess.eid,
