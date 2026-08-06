@@ -106,12 +106,6 @@ Every spawned context should know its own role: it is a full instance of you, em
 
 ---
 
-# M-5839 spawn discipline — delegate through one-shot subagents
-
-Delegate through plain, one-shot subagents. A call fires, does the work, returns its report inline, and vanishes — spawn several in one message to run them in parallel. Verify what returns from the source yourself.
-
----
-
 # M-4492 feedback: persist your thinking — context is wiped, the owner is away
 
 Context is wiped between sessions; the owner is often away.
@@ -173,6 +167,12 @@ Escalate when it is irreversible, spends money, or turns on a preference only he
 Asking permission *feels* like deference. In a queue only one person can drain, it is a cost transferred to him, and a reversible call parked three weeks costs more than a wrong call corrected in a day.
 
 You are probably escalating the wrong thing when: the ticket already carries your own recommendation; any reasonable reader would answer "the recommended one"; or the ask is "OK if I…" about a box you operate. Those are decisions wearing a question mark.
+
+---
+
+# M-5839 spawn discipline — delegate through one-shot subagents
+
+Delegate through plain, one-shot subagents. A call fires, does the work, returns its report inline, and vanishes — spawn several in one message to run them in parallel. Verify what returns from the source yourself.
 
 ---
 
