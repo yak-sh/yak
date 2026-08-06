@@ -11,6 +11,9 @@
   --half-gap: calc(var(--gap) / 2);
   --radius: 6px;
   --tap: 0px; /* touch-target floor — grows under a coarse pointer */
+  --measure: 68ch; /* readable line length — running prose caps here while
+  the view itself fills the floor; tables, code and
+  images break out to the full width */
 
   /* Prose reads proportional; mono stays where mono MEANS something —
      ids, chips, verbs, timestamps, code, command surfaces (the keeper
@@ -281,13 +284,10 @@ html {
      bounce up to the page. */
   overscroll-behavior: contain;
 }
-/* Prose-shaped roots read as a page column; a board or canvas takes the
-   whole floor. */
+/* Ordinary roots just get breathing room; every root fills the floor —
+   a board or canvas paints its own. */
 .App_Body > :not(.Canvas, .Board, .Admin) {
   padding: var(--gap);
-  max-width: 52rem;
-  width: 100%;
-  margin: 0 auto;
 }
 .App_Body > .Board {
   /* vertical padding rides INSIDE the columns (the header band carries
@@ -313,13 +313,17 @@ html {
 }
 
 /* The 404 face (App.tsx Lost): the URL named nothing the cache can
-   resolve. Rides the prose column; the shell around it stays whole. */
+   resolve. Prose, so it caps at the reading measure like the doc body;
+   the shell around it stays whole. */
+.Lost {
+  max-width: var(--measure);
+}
 .Lost_Code {
   font-size: 2.5rem;
   font-weight: 600;
   color: var(--dim);
-  /* the drop from the bar lives here: the prose-column rule (App_Body's
-     :not) outguns .Lost's own margin, but can't reach inside it */
+  /* the drop from the bar lives on the child, not .Lost, so nothing
+     the section might grow (a measure, a margin) fights it */
   margin: 15vh 0 0;
 }
 .Lost_Hint {
@@ -1108,6 +1112,7 @@ html {
   display: flex;
   gap: var(--half-gap);
   margin: 0;
+  max-width: var(--measure); /* the title wraps at the reading measure */
   font-size: 1.75rem;
   font-weight: 650;
   line-height: 1.15;
@@ -1580,6 +1585,12 @@ html {
 /* Markdown innards: tight spacing, our palette. */
 .Show_Body :is(p, ul, ol, pre, blockquote) {
   margin: 0 0 var(--half-gap);
+}
+/* Running prose reads at a measure and stays left-aligned; the structural
+   blocks (pre, table, img) are left OUT so they keep the full view width —
+   a wide table scrolls in its own box rather than folding into a column. */
+.Show_Body :is(p, ul, ol, blockquote, h1, h2, h3, h4, h5, h6) {
+  max-width: var(--measure);
 }
 /* Body headings step DOWN from the document h1 — a ## section may never
    out-shout the title above it. */
@@ -2167,9 +2178,12 @@ html {
   font-size: 12px;
   white-space: pre;
 }
-/* prose lines run long; the raw-file view wraps instead of scrolling */
+/* prose lines run long; the raw-file view wraps instead of scrolling, and
+   caps at the reading measure like the rendered body — it is one wrapped
+   block, so the measure rides the pre itself */
 .Md {
   white-space: pre-wrap;
+  max-width: var(--measure);
 }
 
 /* A graph id in rendered prose (md.ts data-ref anchors): said in the
