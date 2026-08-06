@@ -5,6 +5,7 @@
 // its own comp props (wire-writable AND stamped — outcomes belong on the
 // page) between the id/title lead and the entity timestamps.
 import { comps, kindOrder, type PropType, stamped } from '../types.ts'
+import { type Row } from '../client.ts'
 
 // The chrome kinds — the UI's own furniture and the machinery's audit
 // rows. Real to the graph, noise to a census; the sidebar folds them.
@@ -23,6 +24,23 @@ export let groupedKinds = () => ({
   content: kindOrder.filter((k) => !SYSTEM.has(k)),
   system: kindOrder.filter((k) => SYSTEM.has(k)),
 })
+
+// A section lists by component PRESENCE, not primary kind: an entity
+// appears under EVERY component it carries. A facet (alias, email) always
+// rides a higher-ranked kind — kindOf picks one, so a kind filter empties
+// its section (P-19 is alias{slug} yet kindOf=project). Presence picks all.
+export let inSection = (rows: Row[], kind: string): Row[] =>
+  rows.filter((r) => r.comps[kind])
+
+// The sidebar count is the same rule tallied: each entity increments every
+// kindOrder component it wears, so the counts and the sections agree.
+export let countsByPresence = (rows: Row[], order = kindOrder) => {
+  let counts: Record<string, number> = {}
+  for (let r of rows) {
+    for (let k of order) if (r.comps[k]) counts[k] = (counts[k] ?? 0) + 1
+  }
+  return counts
+}
 
 // One index column: the lead/timestamp columns carry only a key; a
 // vocabulary column carries its comp + PropType so the cell can pick a

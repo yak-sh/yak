@@ -5,17 +5,17 @@
 // to types.ts and this interface grows a section, a column set, and a
 // form with zero edits — the same property every other surface holds.
 import { useState } from 'preact/hooks'
-import {
-  comps,
-  type Ent,
-  idOf,
-  kindOrder,
-  type PropType,
-  uuid,
-} from '../types.ts'
+import { comps, type Ent, idOf, type PropType, uuid } from '../types.ts'
 import { ent, mutate, rows } from '../live.ts'
 import { block } from './ui.tsx'
-import { adminRoute, type Col, columnsFor, groupedKinds } from './admin.ts'
+import {
+  adminRoute,
+  type Col,
+  columnsFor,
+  countsByPresence,
+  groupedKinds,
+  inSection,
+} from './admin.ts'
 import { FilterInput, passOf } from './Filter.tsx'
 import { Prop } from './editors.tsx'
 import { Id } from './views/Inline.tsx'
@@ -99,7 +99,7 @@ let Index = ({ kind }: { kind: string }) => {
   let [sort, setSort] = useState<{ key: string; dir: 1 | -1 } | null>(null)
   let cols = columnsFor(kind)
   let pass = passOf(`admin:${kind}`)
-  let all = rows().filter((r) => r.comps[kind]).map((r) => ent(r.eid))
+  let all = inSection(rows(), kind).map((r) => ent(r.eid))
     .filter((e) => pass(e.eid))
   if (sort) {
     let col = cols.find((c) => c.key == sort!.key)!
@@ -334,12 +334,7 @@ let NewForm = ({ kind }: { kind: string }) => {
 
 export let Admin = () => {
   let { kind, form } = adminRoute(route.value.split('?')[0])
-  let counts: Record<string, number> = {}
-  // A section counts every entity carrying its component, not just those
-  // it primarily names — a facet (alias, email) always rides a higher kind.
-  for (let r of rows()) {
-    for (let k of kindOrder) if (r.comps[k]) counts[k] = (counts[k] ?? 0) + 1
-  }
+  let counts = countsByPresence(rows())
   let { content, system } = groupedKinds()
   let [folded, setFolded] = useState(true)
   let link = (k: string) => (

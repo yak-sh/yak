@@ -5,7 +5,13 @@
 // have nothing to find.
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
-import { adminRoute, columnsFor, groupedKinds } from './admin.ts'
+import {
+  adminRoute,
+  columnsFor,
+  countsByPresence,
+  groupedKinds,
+  inSection,
+} from './admin.ts'
 import { Admin } from './Admin.tsx'
 import { route } from './nav.tsx'
 import { cache } from '../live.ts'
@@ -53,6 +59,32 @@ Deno.test('derivation: a new comp needs zero admin edits', () => {
     delete (comps as Record<string, unknown>).gadget
     kindOrder.pop()
   }
+})
+
+// P-19's shape: a project that also wears an alias facet. kindOf(P-19) is
+// 'project', so a kind filter would empty the alias section — presence
+// lists it under both. A revert to r.kind == kind fails these.
+let faceted = {
+  eid: 'p',
+  num: 19,
+  kind: 'project',
+  comps: { doc: {}, project: {}, alias: { slug: 'home' } },
+}
+let plain = { eid: 't', num: 2, kind: 'task', comps: { doc: {}, task: {} } }
+
+Deno.test('inSection: an entity appears under every component it wears', () => {
+  let rows = [faceted, plain]
+  assertEquals(inSection(rows, 'alias'), [faceted])
+  assertEquals(inSection(rows, 'project'), [faceted])
+  // a plain entity lands only in its own section — presence == kind there
+  assertEquals(inSection(rows, 'task'), [plain])
+})
+
+Deno.test('countsByPresence: each entity counts under every component', () => {
+  let counts = countsByPresence([faceted, plain], ['project', 'alias', 'task'])
+  assertEquals(counts.project, 1)
+  assertEquals(counts.alias, 1)
+  assertEquals(counts.task, 1)
 })
 
 Deno.test('groupedKinds: sessions are content and machinery folds', () => {
