@@ -11,7 +11,7 @@
   --half-gap: calc(var(--gap) / 2);
   --radius: 6px;
   --tap: 0px; /* touch-target floor — grows under a coarse pointer */
-  --measure: 68ch; /* readable line length — running prose caps here while
+  --measure: 90ch; /* readable line length — running prose caps here while
   the view itself fills the floor; tables, code and
   images break out to the full width */
 
@@ -185,7 +185,7 @@ html {
   padding-bottom: env(safe-area-inset-bottom, 0px);
   display: flex;
   flex-direction: column;
-  font: 13px/1.5 var(--font);
+  font: 14px/1.5 var(--font);
   /* Surface, not --bg: the phone's bands — the notch above, that strip
      below — take their color from BODY (observed on-device; the html
      background never shows there). The app's dark floor lives on .App
@@ -1584,7 +1584,7 @@ html {
 }
 /* Markdown innards: tight spacing, our palette. */
 .Show_Body :is(p, ul, ol, pre, blockquote) {
-  margin: 0 0 var(--half-gap);
+  margin: 0 0 var(--gap);
 }
 /* Running prose reads at a measure and stays left-aligned; the structural
    blocks (pre, table, img) are left OUT so they keep the full view width —
@@ -1620,6 +1620,10 @@ html {
   background: var(--soft);
   padding: 0 3px;
   border-radius: 3px;
+}
+.Show_Body pre code {
+  display: block;
+  padding: var(--half-gap);
 }
 .Show_Body blockquote {
   border-left: 2px solid var(--border2);
