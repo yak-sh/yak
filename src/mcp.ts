@@ -151,6 +151,7 @@ let parseFilters = (filters: string[]) =>
     return hit
   })
 
+let output = z.object({ text: z.string() }).strict()
 let text = (s: string) => ({ content: [{ type: 'text' as const, text: s }] })
 // A refusal IS an error: isError rides the reply so agent harnesses (and
 // telemetry) count it as one, instead of a success that reads like an apology.
@@ -230,10 +231,23 @@ comments, and the comms bus.`,
       args: z.output<z.ZodObject<Shape>>,
     ) => CallToolResult | Promise<CallToolResult>,
   ) =>
-    server.registerTool(name, {
-      description,
-      inputSchema: z.object(shape).strict(),
-    }, run)
+    server.registerTool(
+      name,
+      {
+        description,
+        inputSchema: z.object(shape).strict(),
+        outputSchema: output,
+      },
+      async (args: z.output<z.ZodObject<Shape>>) => {
+        let out: CallToolResult = await run(args)
+        if (out.isError) return out
+        let said = out.content
+          .filter((c: { type: string }) => c.type == 'text')
+          .map((c: { text?: string }) => c.text ?? '')
+          .join('\n')
+        return { ...out, structuredContent: { text: said } }
+      },
+    )
 
   // The comms bus, MCP side: a tool that knows who's asking appends what
   // that session hasn't seen and advances the session's own ack cursor —

@@ -151,12 +151,14 @@ Deno.test('task_spawn refuses an undecided proposal without minting a session', 
 
 type ToolResult = {
   content: { type: string; text?: string }[]
+  structuredContent?: Record<string, unknown>
   isError?: boolean
 }
 type Tool = {
   name: string
   description?: string
   inputSchema: Record<string, unknown>
+  outputSchema?: Record<string, unknown>
 }
 type Schema = {
   additionalProperties?: unknown
@@ -164,6 +166,8 @@ type Schema = {
   enum?: string[]
   items?: Schema
   properties?: Record<string, Schema>
+  required?: string[]
+  type?: string
 }
 
 let said = (out: ToolResult) =>
@@ -173,6 +177,7 @@ let said = (out: ToolResult) =>
     .join('\n')
 
 let schema = (tool: Tool) => tool.inputSchema as Schema
+let outputSchema = (tool: Tool) => tool.outputSchema as Schema
 let field = (schema: Schema | undefined, name: string) =>
   schema?.properties?.[name]
 let prop = (tool: Tool, name: string) => field(schema(tool), name)
@@ -402,6 +407,27 @@ Deno.test('MCP schemas document parameters and derive closed vocabularies', asyn
       byName(tools, 'graph_apply').description ?? '',
       new RegExp(edges.join('\\|')),
     )
+  })
+})
+
+Deno.test('MCP tools declare and return their text output', async () => {
+  await protocol(blank(), async (client) => {
+    let tools: Tool[] = (await client.listTools()).tools
+    for (let tool of tools) {
+      assertEquals(outputSchema(tool).additionalProperties, false, tool.name)
+      assertEquals(outputSchema(tool).required, ['text'], tool.name)
+      assertEquals(field(outputSchema(tool), 'text')?.type, 'string', tool.name)
+    }
+
+    let out = await client.callTool({ name: 'search', arguments: { q: 'x' } })
+    assertEquals(out.structuredContent, { text: said(out) })
+
+    let multi = await client.callTool({
+      name: 'graph_query',
+      arguments: { kind: 'task', filters: ['.mail.to=x'] },
+    })
+    assertEquals(multi.content.length, 2)
+    assertEquals(multi.structuredContent, { text: said(multi) })
   })
 })
 
