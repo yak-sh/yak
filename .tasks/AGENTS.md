@@ -205,10 +205,15 @@ canvas offers a `List` view — the mobile door — whose rows resolve through
   letter someone else's mail client will render.
 - **One reconnect poller per process** (live.ts `polling`) — a down server must
   not stack pollers that all fire reload together.
-- **`serverFiles` (reload.ts) must name every server import**, or edits to a
-  server file merely hot-swap clients against a stale process. The dev
-  supervisor and the browser watcher share that one predicate, so neither can
-  mistake a backend edit for a client-only swap.
+- **The server module graph is WALKED, never listed** (reload.ts `graph()`,
+  from `server.ts`) — or edits to a server file merely hot-swap clients against
+  a stale process. The dev supervisor and the browser watcher share that one
+  predicate, so neither can mistake a backend edit for a client-only swap, and
+  the names it decides by are the TREE's rather than whatever the asking process
+  imported at its own start. The hand-kept list this replaces sat eight modules
+  short beneath a passing test whose body was eight sampled paths: before
+  writing a test for a universal claim, ask whether the claim can be derived
+  instead.
 - Deleting an entity tombstones it; late patches for that eid are void. Death
   CASCADES to entities that exist about the dead one (cards viewing it, comments
   aimed at it, pins/cameras on a dead canvas or client) and detaches soft refs
