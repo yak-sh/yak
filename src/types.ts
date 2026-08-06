@@ -222,6 +222,13 @@ export let comps: Record<string, Record<string, PropType>> = {
     role_eid: { eid: 'role', death: 'keep' },
     persona_eid: { eid: '', death: 'detach' },
     actor_eid: { eid: '', death: 'detach' }, // who this run acts for — see client above
+    // The session that spawned this one: a delegated agent shares its
+    // operator's inherited session id but is its OWN context in its own
+    // worktree (client.ts me()), so it reifies as a CHILD of the operator
+    // rather than a second writer on one row. Lineage, not capability — the
+    // link is what makes the board legible about who spawned whom; a dead
+    // parent detaches it, the child lives on.
+    parent_eid: { eid: 'session', death: 'detach' },
   },
   // One launch vocabulary, worn two ways: on a session it records the
   // request that launched it; on a task it is the hint for its next run.

@@ -21,6 +21,7 @@ import {
   verdictName,
 } from './types.ts'
 import { idOf } from './types.ts'
+import { dirname, resolve } from 'node:path'
 import { formatProp, parseProp, propAt } from './props.ts'
 import { nearest, offer } from './near.ts'
 import { hot, matchQuery, type Pred, route } from './query.ts'
@@ -140,14 +141,42 @@ export let search = async (q: string, limit = 20) => {
   return res.json() as Promise<Hit[]>
 }
 
+// The linked git worktree a path stands in, or undefined in the main checkout.
+// A linked worktree's `.git` is a FILE (a `gitdir:` pointer) while the main
+// checkout's is a directory everyone shares — only the former is one agent's
+// own tree. Walk up so a tool run from a subdirectory still resolves the root.
+export let worktreeRoot = (dir = Deno.cwd()): string | undefined => {
+  let d = resolve(dir)
+  while (true) {
+    try {
+      if (Deno.statSync(`${d}/.git`).isFile) return d
+    } catch { /* no .git at this level — keep climbing */ }
+    let up = dirname(d)
+    if (up == d) return
+    d = up
+  }
+}
+
 // The CLI's standing identity: a provider's own thread id for an external
 // session, but the launcher's TASKS_SESSION for a managed non-Claude spawn —
-// that id already owns the task lease. The env lookup is injectable so the
-// precedence is testable without mutating the process.
+// that id already owns the task lease.
+//
+// A DELEGATED agent (an in-process Agent-tool child) is the exception the
+// first clause fixes: the harness inherits it the operator's
+// CLAUDE_CODE_SESSION_ID and gives it no id of its own, so every child would
+// otherwise reify onto the operator's row and stomp it. Nothing in a child's
+// environment is per-agent — the one coordinate it and all its later tool
+// calls share is its own git WORKTREE, which isolation gives each a distinct
+// one. So a child in a linked worktree IS that worktree; the operator, managed
+// spawns and external uuid sessions (no CHILD flag) are unchanged. Both the
+// env lookup and the tree resolver are injectable so the precedence is
+// testable without a process or a filesystem.
 export let me = (
   env: (k: string) => string | undefined = (k) => Deno.env.get(k),
+  tree = worktreeRoot,
 ) =>
-  env('CLAUDE_CODE_SESSION_ID') ?? env('TASKS_SESSION') ??
+  (env('CLAUDE_CODE_CHILD_SESSION') == '1' ? tree() : undefined) ??
+    env('CLAUDE_CODE_SESSION_ID') ?? env('TASKS_SESSION') ??
     env('CODEX_THREAD_ID')
 
 // Writes carry WHO SPOKE when the caller knows: the x-via header names
@@ -732,6 +761,7 @@ export let sessionFor = (
     pane?: string | null
     turn?: string
     role_eid?: string
+    parent_eid?: string
   },
 ) => {
   let s = all.find((r) => r.comps.session && r.comps.session.id == session)
@@ -759,6 +789,11 @@ export let sessionFor = (
   // anchors it to that venture; an identity it already wears always wins.
   if (self?.actor_eid && !s?.comps.session.actor_eid) {
     comp.actor_eid = self.actor_eid
+  }
+  // Who spawned this run — set once, at birth: lineage is history, not a
+  // field a later reify should relabel.
+  if (self?.parent_eid && !s?.comps.session.parent_eid) {
+    comp.parent_eid = self.parent_eid
   }
   let changes: Change[] = Object.keys(comp).length
     ? [{ eid, name: 'session', comp }]

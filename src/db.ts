@@ -835,6 +835,9 @@ export let open = (path = file) => {
   addCol('session', 'agent_type', 'agent_type text')
   addCol('session', 'source', 'source text')
   addCol('session', 'operator', 'operator integer')
+  // The operator session a delegated agent descends from (types.ts): a child
+  // reifies as its own row rather than a second writer on the operator's.
+  addCol('session', 'parent_eid', 'parent_eid text references entity(eid)')
   for (let table of ['created', 'updated', 'notified', 'opened', 'archived']) {
     addCol(table, 'via', 'via text')
   }

@@ -1496,6 +1496,47 @@ let context = async (args: string[]) => {
   if (hook) {
     try {
       let body = JSON.parse(await new Response(Deno.stdin.readable).text())
+      // A DELEGATED agent shares the operator's inherited session id but is
+      // its own context in its own worktree, so me() yielded that worktree id
+      // (client.ts). When it differs from the id this hook was told about,
+      // reify a CHILD of the operator rather than a second writer on the
+      // operator's row: its own cwd and claims, a parent edge for lineage, no
+      // operator capability, and no pid — it rides the operator's process, so
+      // the graph comms bus is its channel, not a native push. Its digest is
+      // the lone task block; a delegated agent triages nothing. This runs
+      // ahead of the SubagentStart branch so the reified id always equals the
+      // one me() returns for every later claim, wrap and land.
+      let inherited = String(body.session_id ?? '') ||
+        Deno.env.get('CLAUDE_CODE_SESSION_ID') || ''
+      if (
+        sid && sid != inherited &&
+        Deno.env.get('CLAUDE_CODE_CHILD_SESSION') == '1'
+      ) {
+        let snap = await snapshot()
+        let all = rows(snap)
+        let parent = all.find((r) =>
+          r.comps.session && String(r.comps.session.id) == inherited
+        )
+        let cwd = String(body.cwd ?? '') || Deno.cwd()
+        let agentType = String(body.agent_type ?? '') || undefined
+        let s = sessionFor(all, sid, cwd, undefined, {
+          agent_type: agentType,
+          source: String(body.source ?? '') || undefined,
+          parent_eid: parent?.eid,
+          operator: false,
+        })
+        if (s.changes.length) {
+          await send(s.changes)
+          snap = await snapshot()
+        }
+        let hc = hookClaim(rows(snap), Deno.env.get('TASKS_TASK'), sid, cwd)
+        if (hc.length) {
+          await send(hc)
+          snap = await snapshot()
+        }
+        print(subagentDigest(snap, sid, agentType))
+        return
+      }
       // The payload disambiguates the two hooks wired to this one line:
       // SubagentStart → subagent mode; SessionStart (anything else) →
       // the external-session gate below.

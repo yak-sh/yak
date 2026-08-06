@@ -109,6 +109,7 @@ let contracts = [
   ),
   contract('stop_request', 'target_eid', 'session'),
   contract('session', 'role_eid', 'role', { id: 'role-session' }),
+  contract('session', 'parent_eid', 'session', { id: 'child-session' }),
   contract('mail', 'reply_to_eid', 'mail', {
     to: 'operator@example.test',
   }),

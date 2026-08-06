@@ -49,6 +49,7 @@ import {
   taskChanges,
   threadOf,
   unreadMail,
+  worktreeRoot,
   wrapChanges,
 } from './client.ts'
 import { matchQuery, parseQuery, resolveRefs } from './query.ts'
@@ -545,6 +546,70 @@ Deno.test('me: provider ids name external sessions; launchers name managed ones'
   )
   assertEquals(me(env({ CODEX_THREAD_ID: 'codex' })), 'codex')
   assertEquals(me(env({})), undefined)
+})
+
+Deno.test('me: a delegated child in a worktree is that tree, not the inherited id', () => {
+  let env = (vals: Record<string, string>) => (k: string) => vals[k]
+  let wt = '/home/a/.wt/agent-1'
+  // child + linked worktree → the worktree wins over the inherited operator id
+  assertEquals(
+    me(
+      env({ CLAUDE_CODE_CHILD_SESSION: '1', CLAUDE_CODE_SESSION_ID: 'op' }),
+      () => wt,
+    ),
+    wt,
+  )
+  // child in the main checkout (no linked worktree) → the inherited id stands
+  assertEquals(
+    me(
+      env({ CLAUDE_CODE_CHILD_SESSION: '1', CLAUDE_CODE_SESSION_ID: 'op' }),
+      () => undefined,
+    ),
+    'op',
+  )
+  // not a child → the worktree is irrelevant, the inherited id stands
+  assertEquals(me(env({ CLAUDE_CODE_SESSION_ID: 'op' }), () => wt), 'op')
+})
+
+Deno.test('worktreeRoot: a linked worktree resolves, a main checkout does not', async () => {
+  let base = await Deno.makeTempDir()
+  // a linked worktree: .git is a FILE (a gitdir: pointer)
+  let wt = `${base}/wt`
+  await Deno.mkdir(`${wt}/sub`, { recursive: true })
+  await Deno.writeTextFile(`${wt}/.git`, 'gitdir: /x/.git/worktrees/wt')
+  assertEquals(worktreeRoot(wt), wt)
+  assertEquals(worktreeRoot(`${wt}/sub`), wt) // from a subdir, still the root
+  // a main checkout: .git is a DIRECTORY everyone shares → not one agent's
+  let main = `${base}/main`
+  await Deno.mkdir(`${main}/.git`, { recursive: true })
+  assertEquals(worktreeRoot(main), undefined)
+  await Deno.remove(base, { recursive: true })
+})
+
+Deno.test('sessionFor: a child records its operator parent, once', () => {
+  // a fresh child carries the parent it was born under
+  assertEquals(
+    (sessionFor(all, 'child-1', '/wt', undefined, { parent_eid: S })
+      .changes[0].comp as Record<string, unknown>).parent_eid,
+    S,
+  )
+  // an existing session keeps the parent it already wears — a later reify
+  // never relabels lineage
+  let worn = rows({
+    changes: [
+      { eid: S, name: 'entity', comp: { eid: S, num: 1, created_at: '' } },
+      {
+        eid: S,
+        name: 'session',
+        comp: { id: 'child-1', parent_eid: 'op-eid' },
+      },
+    ],
+  })
+  assertEquals(
+    sessionFor(worn, 'child-1', undefined, undefined, { parent_eid: 'other' })
+      .changes,
+    [],
+  )
 })
 
 Deno.test('claimChanges points at the session entity', () => {

@@ -131,7 +131,11 @@ export let route = (prop: string): { comp: string; prop: string } => {
       `.${prop} is ambiguous (${own.join(', ')}) — use .${own[0]}.${prop}`,
     )
   }
-  let ref = hits(`${prop}_eid`)
+  // The _eid sugar never fires for an EDGE word: bare `.parent` means the
+  // dependency edge, never session.parent_eid — reach that ref by its full
+  // name (`.parent_eid`) or its comp (`.session.parent_eid`), so the short
+  // form stays the edge door it has always taught.
+  let ref = edgeish.test(prop) ? [] : hits(`${prop}_eid`)
   if (ref.length == 1) return { comp: ref[0], prop: `${prop}_eid` }
   // Several comps sharing a ref name (actor_eid on client AND session)
   // stay one CONCEPT: comp '' means any-of, and matchQuery scans every
