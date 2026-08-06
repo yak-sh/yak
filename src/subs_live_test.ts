@@ -403,18 +403,23 @@ Deno.test(
 // sorts before it asserts — a subscription keeps a Set, so order is nothing to
 // it. Through this door the answer is a JSON ARRAY, so order is part of it.
 //
-// `backlinks=1` is the lever: it needs every row's _eid columns, so it always
-// takes the snapshot path. Asking the same line both ways therefore asks the
-// two paths the same question, over HTTP, with nothing mocked.
+// LEVER is what forces the snapshot path: sql.ts refuses every time-typed
+// column (spans are their own pass), so a `!=` on created.at compiles to
+// nothing — while screening nothing either, since no entity was created on
+// that day and one carrying no created.at at all still passes a `!=`. Asking
+// the same line with and without it therefore asks the two paths the same
+// question, over HTTP, with nothing mocked. `backlinks=1` was this lever
+// until it stopped costing a snapshot (T-14166).
 //
 // It is a live-server test because the fast path only exists there: `where()`
 // can hand back a statement SQLite refuses to PREPARE, which no pure test of
 // the compiler sees. `.entity.num=` did exactly that — the spine joined to
 // itself — and reached a caller as a 400 where an answer belonged.
+let LEVER = '.created.at!=1999-01-01'
 let bothWays = async (q: string) => {
   let one = await fetch(`http://${U}/query?${encodeURIComponent(q)}`)
   let two = await fetch(
-    `http://${U}/query?${encodeURIComponent(q)}&backlinks=1`,
+    `http://${U}/query?${encodeURIComponent(q)}&${encodeURIComponent(LEVER)}`,
   )
   if (!one.ok) throw new Error(`fast path refused ${q}: ${await one.text()}`)
   if (!two.ok) throw new Error(`slow path refused ${q}: ${await two.text()}`)
@@ -517,11 +522,11 @@ Deno.test('query: id= fetches by every form a name takes', alone, async () => {
     'filters screen the named set',
   )
 
-  // backlinks takes the snapshot path, and must name the same entities
+  // the layers ride the same set, whichever of them a caller asked for
   assertEquals(
-    await byId(`${a.eid},${b.eid}`, '&backlinks=1'),
+    await byId(`${a.eid},${b.eid}`, '&backlinks=1&deps=1'),
     [a.eid, b.eid],
-    'same set through the snapshot path',
+    'same set with the edge layers on',
   )
 
   // A dead entity is named and rightly absent — and it is locate() that makes
@@ -531,3 +536,78 @@ Deno.test('query: id= fetches by every form a name takes', alone, async () => {
   await post([{ eid: b.eid, name: 'entity', comp: null }])
   assertEquals(await byId(`${a.eid},${b.eid}`), [a.eid], 'tombstone absent')
 })
+
+// `deps=1` is the only door outside /snapshot that carries an entity's OWN
+// edges — `task show` prints its requires:/referenced by: blocks out of them,
+// and could not be narrowed without it. It reads the edge table keyed by the
+// hits, where /snapshot returns every edge in the graph; so what it says about
+// one entity must be edge for edge what the graph-out door says.
+//
+// Derived `reads` are the half that would go missing quietly: home_eid is the
+// one truth, so snapshot() computes a project→persona edge on its way OUT
+// rather than storing it, and a narrow door reading only the `dependency`
+// table drops it with nothing to see anywhere.
+type Dep = { parent: string; type: string; child: string }
+let sentences = (deps: Dep[], eid: string) =>
+  deps.filter((d) => d.parent == eid || d.child == eid)
+    .map((d) => `${d.parent} ${d.type} ${d.child}`).sort()
+
+let bothEdges = async (eid: string) => {
+  let hits = await (await fetch(`http://${U}/query?id=${eid}&deps=1`))
+    .json() as { deps: Dep[] }[]
+  let snap = await (await fetch(`http://${U}/snapshot`))
+    .json() as { deps: Dep[] }
+  return [sentences(hits[0].deps, eid), sentences(snap.deps, eid)]
+}
+
+Deno.test(
+  'query: deps= reports the edges /snapshot reports, derived reads included',
+  alone,
+  async () => {
+    let a = task({ status: 'open' })
+    let b = task({ status: 'open' })
+    let proj = uid(), common = uid(), spec = uid()
+    await post([
+      ...a.born,
+      ...b.born,
+      { eid: proj, name: 'doc', comp: { title: 'probe venture' } },
+      { eid: proj, name: 'project', comp: {} },
+      { eid: common, name: 'doc', comp: { title: 'probe common' } },
+      { eid: common, name: 'persona', comp: { home_eid: proj } },
+      { eid: spec, name: 'doc', comp: { title: 'probe specialist' } },
+      { eid: spec, name: 'persona', comp: { home_eid: proj } },
+      {
+        eid: a.eid,
+        name: 'dependency',
+        comp: { type: 'requires', child_eid: b.eid },
+      },
+      {
+        eid: proj,
+        name: 'dependency',
+        comp: { type: 'contains', child_eid: common },
+      },
+    ])
+    for (let eid of [a.eid, b.eid, proj, common, spec]) {
+      let [door, snap] = await bothEdges(eid)
+      assertEquals(door, snap, `deps disagreed about ${eid}`)
+    }
+    // Stated outright, or the comparison above passes on two empty lists: the
+    // stored edge both ways round, and the specialist's derived one — while
+    // the common persona rides its `contains` and derives nothing on top.
+    assertEquals((await bothEdges(a.eid))[0], [`${a.eid} requires ${b.eid}`])
+    assertEquals((await bothEdges(b.eid))[0], [`${a.eid} requires ${b.eid}`])
+    assertEquals((await bothEdges(spec))[0], [`${proj} reads ${spec}`])
+    assertEquals((await bothEdges(common))[0], [`${proj} contains ${common}`])
+
+    // and a backlink is a backlink whatever made the edge: the derived one
+    // names its project the same way the stored one does.
+    let backs = async (eid: string) =>
+      ((await (await fetch(`http://${U}/query?id=${eid}&backlinks=1`))
+        .json()) as { backlinks: { from: string; via: string }[] }[])[0]
+        .backlinks.map((b) => b.via).sort()
+    assertEquals(await backs(spec), ['reads'])
+    assertEquals(await backs(common), ['contains'])
+    // the project is pointed at by both personas' home_eid column
+    assertEquals(await backs(proj), ['persona.home_eid', 'persona.home_eid'])
+  },
+)

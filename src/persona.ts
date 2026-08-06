@@ -126,18 +126,25 @@ export let commonOf = (all: Row[], deps: Dep[], projectEid: string) =>
 // can't drift (a home is a fact, like a board is a query: membership is
 // computed, not an edge list). The common persona already rides `contains`
 // so it's skipped, as is any persona already carrying a stored edge from
-// its home (no double sentence). snapshot() folds these into `deps`.
-export let homeReads = (all: Row[], deps: Dep[]): Dep[] =>
-  all.flatMap((r) => {
-    let home = r.comps.persona?.home_eid
-    return home &&
-        !deps.some((d) =>
-          d.parent == home && d.child == r.eid &&
-          (d.type == 'contains' || d.type == 'reads')
-        )
-      ? [{ parent: String(home), type: 'reads' as const, child: r.eid }]
+// its home (no double sentence).
+//
+// It takes the homes, not the graph, because every door that returns edges
+// owes these: snapshot() folds them into `deps` off the persona table, and
+// the keyed reading (db.ts depsOf) off the same table screened by eid. A
+// door that reads only the `dependency` table silently loses them.
+export let homeReads = (
+  homes: { eid: string; home: unknown }[],
+  deps: Dep[],
+): Dep[] =>
+  homes.flatMap(({ eid, home }) =>
+    home &&
+      !deps.some((d) =>
+        d.parent == home && d.child == eid &&
+        (d.type == 'contains' || d.type == 'reads')
+      )
+      ? [{ parent: String(home), type: 'reads' as const, child: eid }]
       : []
-  })
+  )
 
 // Every file materialization owes the fleet: for each project with a
 // checkout, the common persona (if any) as .tasks/AGENTS.md and each

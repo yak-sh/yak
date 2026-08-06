@@ -26,7 +26,7 @@ import {
   stamped,
 } from './types.ts'
 import { type Trace } from './effects.ts'
-import { ancestorAt, rows } from './client.ts'
+import { ancestorAt } from './client.ts'
 import { homeReads } from './persona.ts'
 import { matchQuery, parseQuery, resolveRefs, TEXT } from './query.ts'
 import { bodyCols, normalizeChanges, parseProp, propAt } from './props.ts'
@@ -2507,6 +2507,13 @@ export let bodies = (db: DatabaseSync, eids: string[]): Change[] => {
   return out
 }
 
+// The home each persona names — homeReads' whole input, twenty-odd rows off
+// its own table, where reading it out of a materialized graph costs the graph.
+// `only` is a where clause, so the narrow door asks the same question keyed.
+let homes = (db: DatabaseSync, only = '') =>
+  db.prepare(`select eid, home_eid as home from persona ${only}`)
+    .all() as { eid: string; home: unknown }[]
+
 // The whole graph as one batch (plus edges) — what a fresh client cache eats.
 // entity === eid: only identity (eid, num) rides in the spine comp now —
 // provenance travels as `created`/`updated` (T-6670), the dormant spine
@@ -2533,7 +2540,7 @@ export let snapshot = (db: DatabaseSync): Snapshot => {
   // and can never drift from ownership — nothing to store, nothing to sync.
   return {
     changes,
-    deps: [...deps, ...homeReads(rows({ changes }), deps)],
+    deps: [...deps, ...homeReads(homes(db), deps)],
     cursor,
     epoch,
     vocabHash,
@@ -2569,6 +2576,41 @@ export let locate = (db: DatabaseSync, id: string): string | undefined => {
       .get(id) as { eid: string } | undefined)?.eid
 }
 
+let clear = (db: DatabaseSync) => {
+  db.exec('create temp table if not exists hit (eid text primary key)')
+  db.exec('delete from hit')
+}
+
+// The eids a keyed reader asks about, staged. A temp table rather than an
+// `in (?,?,…)` list because a hit set has no ceiling (a query can match the
+// whole graph) and a bound parameter list does. `hit` is filled and read out
+// within one reader, never held across two.
+let stage = (db: DatabaseSync, eids: string[]) => {
+  clear(db)
+  let put = db.prepare('insert or ignore into hit (eid) values (?)')
+  for (let e of eids) put.run(e)
+}
+
+// The comps of whatever `hit` holds, shaped as `rows(snapshot())` shapes them.
+let staged = (db: DatabaseSync) => {
+  let out = new Map<string, Record<string, Record<string, unknown>>>()
+  let only = `where eid in (select eid from hit)`
+  let spine = db.prepare(`${select('entity')} ${only}`)
+    .all() as Record<string, unknown>[]
+  for (let r of spine) out.set(String(r.eid), { entity: r })
+  if (!out.size) return []
+  for (let name of Object.keys(readable)) {
+    if (name == 'entity') continue
+    let rows = db.prepare(`${select(name)} ${only}`)
+      .all() as Record<string, unknown>[]
+    for (let r of rows) {
+      let e = out.get(String(r.eid))
+      if (e) e[name] = r
+    }
+  }
+  return [...out].map(([eid, comps]) => ({ eid, comps }))
+}
+
 // Every entity a compiled filter matches, with its components — the shape
 // `rows(snapshot())` hands a matcher, restricted to the rows that matched.
 //
@@ -2587,24 +2629,59 @@ export let matching = (
   db: DatabaseSync,
   filter: { sql: string; params: (string | number)[] },
 ): { eid: string; comps: Record<string, Record<string, unknown>> }[] => {
-  db.exec('create temp table if not exists hit (eid text primary key)')
-  db.exec('delete from hit')
+  clear(db)
   db.prepare(`insert or ignore into hit (eid) ${filter.sql}`)
     .run(...filter.params)
-  let out = new Map<string, Record<string, Record<string, unknown>>>()
-  let only = `where eid in (select eid from hit)`
-  let spine = db.prepare(`${select('entity')} ${only}`)
-    .all() as Record<string, unknown>[]
-  for (let r of spine) out.set(String(r.eid), { entity: r })
-  if (!out.size) return []
-  for (let name of Object.keys(readable)) {
-    if (name == 'entity') continue
-    let rows = db.prepare(`${select(name)} ${only}`)
-      .all() as Record<string, unknown>[]
-    for (let r of rows) {
-      let e = out.get(String(r.eid))
-      if (e) e[name] = r
+  return staged(db)
+}
+
+// The same rows for a KNOWN set of eids — what a backlinks layer needs to
+// NAME its sources (an id and a title come off the whole row, since kind is
+// derived from which components are there). One eager() each would cost a
+// statement per component per row; this costs one per component.
+export let rowsOf = (db: DatabaseSync, eids: string[]) => {
+  if (!eids.length) return []
+  stage(db, eids)
+  return staged(db)
+}
+
+// Every edge touching these entities, both directions — the narrow reading of
+// `snap.deps`, derived `reads` included. Losing those would make this door
+// disagree with the graph-out one about what an entity's edges ARE, so the
+// persona table is read here too, keyed the same way: personas homed at a hit,
+// and a hit that is itself a persona.
+export let depsOf = (db: DatabaseSync, eids: string[]): Dep[] => {
+  if (!eids.length) return []
+  stage(db, eids)
+  let mine = `in (select eid from hit)`
+  let deps = db.prepare(
+    `select parent_eid as parent, type, child_eid as child from dependency
+      where parent_eid ${mine} or child_eid ${mine}`,
+  ).all() as Dep[]
+  return [
+    ...deps,
+    ...homeReads(homes(db, `where home_eid ${mine} or eid ${mine}`), deps),
+  ]
+}
+
+// Who points AT these entities through a typed eid column — one keyed
+// statement per column in the readable vocabulary (`stamped` included, so an
+// association nobody may write still says who made it), where the graph-out
+// reading walks every column of every row. `via` names the column.
+export let refsOf = (db: DatabaseSync, eids: string[]) => {
+  if (!eids.length) return []
+  stage(db, eids)
+  let out: { from: string; via: string; to: string }[] = []
+  for (let [name, cols] of Object.entries(readable)) {
+    for (let col of cols.filter((c) => c.endsWith('_eid'))) {
+      let rows = db.prepare(
+        `select eid, ${sqlName(col)} as at from ${sqlName(name)}
+          where ${sqlName(col)} in (select eid from hit)`,
+      ).all() as { eid: string; at: string }[]
+      for (let r of rows) {
+        out.push({ from: r.eid, via: `${name}.${col}`, to: r.at })
+      }
     }
   }
-  return [...out].map(([eid, comps]) => ({ eid, comps }))
+  return out
 }

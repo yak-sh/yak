@@ -39,6 +39,10 @@ let edge = (parent: Row, type: Edge, child: Row): Dep => ({
   type,
   child: child.eid,
 })
+// homeReads takes the homes, not the graph — off the persona table in the
+// server, off a hand-made graph here.
+let homes = (all: Row[]) =>
+  all.map((r) => ({ eid: r.eid, home: r.comps.persona?.home_eid }))
 
 let persona = row({
   doc: { title: 'graybeard', body: 'Review sternly.' },
@@ -192,7 +196,7 @@ Deno.test('homeReads: specialists derive project→persona reads from home_eid',
   let all = [proj, base, spec, fleet]
   // base is the common persona (contains), so only the specialist derives an
   // edge; a homeless fleet persona is nobody's specialist.
-  assertEquals(homeReads(all, [edge(proj, 'contains', base)]), [
+  assertEquals(homeReads(homes(all), [edge(proj, 'contains', base)]), [
     { parent: proj.eid, type: 'reads', child: spec.eid },
   ])
 })
@@ -205,8 +209,11 @@ Deno.test('homeReads: a stored edge from home is left alone (no double sentence)
   })
   // whether the stored edge is the common `contains` or a hand-made `reads`,
   // the derivation must not add a duplicate — home_eid stays the one truth.
-  assertEquals(homeReads([proj, spec], [edge(proj, 'reads', spec)]), [])
-  assertEquals(homeReads([proj, spec], [edge(proj, 'contains', spec)]), [])
+  assertEquals(homeReads(homes([proj, spec]), [edge(proj, 'reads', spec)]), [])
+  assertEquals(
+    homeReads(homes([proj, spec]), [edge(proj, 'contains', spec)]),
+    [],
+  )
 })
 
 Deno.test('filesFor: common → AGENTS.md, others → personas/<slug>.md, fleet → nowhere', () => {

@@ -10,13 +10,14 @@ import { transform } from 'sucrase'
 import { bound, guard, type Serving } from './bind.ts'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { providers } from './adapters.ts'
-import { type Change, idOf, kindOf } from './types.ts'
+import { type Change, type Dep, idOf, kindOf } from './types.ts'
 import {
   apply,
   bodies,
   cursorOf,
   db,
   delta,
+  depsOf,
   eager,
   epoch,
   file as graph,
@@ -24,6 +25,8 @@ import {
   journalOf,
   locate,
   matching,
+  refsOf,
+  rowsOf,
   search,
   snapshot,
   touch,
@@ -200,18 +203,27 @@ let narrows = (preds: Pred[]) => preds.some((p) => p.op != ORDER)
 // `readable` union `snapshot()` selects — so a subscriber cannot tell which
 // path answered it. `hits` are full Rows for the same reason: a caller must
 // not be able to tell by their shape either.
+// A keyed read wearing the shape a materialized graph hands out: kind is
+// derived, num rides the spine, and a caller must not be able to tell which
+// door read the row.
+let rowed = (
+  { eid, comps }: {
+    eid: string
+    comps: Record<string, Record<string, unknown>>
+  },
+): Row => ({
+  eid,
+  num: Number(comps.entity?.num ?? 0),
+  kind: kindOf(comps),
+  comps,
+})
+
 let evalFast = (q: string) => {
   let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
   if (!narrows(preds)) return null
   let built = where(preds)
   if (!built) return null
-  let hits = matching(db, built).map(({ eid, comps }): Row => ({
-    eid,
-    num: Number(comps.entity?.num ?? 0),
-    kind: kindOf(comps),
-    comps,
-  }))
-  return { preds, hits }
+  return { preds, hits: matching(db, built).map(rowed) }
 }
 
 // The query pipeline shared by /query and a subscription's initial set: the
@@ -735,13 +747,14 @@ let http = Deno.serve(
       // The graph over plain GET: the query string IS the filter line —
       // the same grammar boards and task_list speak — and hits come back
       // Structured like every entity JSON door. `kind=` screens by derived
-      // kind; `backlinks=1` adds who points at each hit (eid columns + edges);
-      // `id=` names entities outright. A malformed
-      // filter is the typist's news, not a server error.
+      // kind; `backlinks=1` adds who points at each hit (eid columns + edges),
+      // `deps=1` the hit's own edges both ways; `id=` names entities outright.
+      // A malformed filter is the typist's news, not a server error.
       try {
         let segs = url.search.slice(1).split('&').filter(Boolean)
           .map(decodeURIComponent)
         let backs = segs.includes('backlinks=1')
+        let edged = segs.includes('deps=1')
         let kind = segs.find((s) => s.startsWith('kind='))?.slice(5)
         // `id=` FETCHES rather than filters: each value is an ADDRESS — T-3, a
         // bare num, an alias slug, a uuid — and locate() is the index's own
@@ -762,7 +775,8 @@ let http = Deno.serve(
           )
           : null
         segs = segs.filter((s) =>
-          s != 'backlinks=1' && !s.startsWith('kind=') && !s.startsWith('id=')
+          s != 'backlinks=1' && s != 'deps=1' && !s.startsWith('kind=') &&
+          !s.startsWith('id=')
         )
         let q = segs.join('&')
         // Any remaining filter line still screens, so `id=` composes with the
@@ -771,39 +785,90 @@ let http = Deno.serve(
           let out = kind ? hits.filter((r) => r.kind == kind) : hits
           return only ? out.filter((r) => only.has(r.eid)) : out
         }
+        // What a hit carries BESIDE its components: its own edges (deps=1)
+        // and who points at it (backlinks=1). Both are keyed off the hits —
+        // depsOf and refsOf read the edge table and each typed eid column by
+        // eid — so a one-entity question costs one entity. Backlinks used to
+        // walk every row of the graph for this, which is what held the whole
+        // door on the snapshot path; now every path serves both layers the
+        // same way, and `deps` is the first door outside /snapshot to carry an
+        // entity's OUTGOING edges at all (`task show` prints them).
+        //
+        // `deps` are the snap.deps triples touching the hit, eids and all: an
+        // endpoint's id and status come from fetching it, and a caller
+        // rendering edges is fetching those rows anyway.
+        let layers = (hits: Row[]) => {
+          if (!backs && !edged) return hits.map((r) => jsonOf(r))
+          let eids = hits.map((r) => r.eid)
+          let deps = depsOf(db, eids)
+          let mine = new Map<string, Dep[]>()
+          for (let d of deps) {
+            for (let e of [d.parent, d.child]) {
+              if (mine.has(e)) mine.get(e)!.push(d)
+              else mine.set(e, [d])
+            }
+          }
+          let back = new Map<
+            string,
+            { from: string; via: string; title: string }[]
+          >()
+          if (backs) {
+            let wanted = new Set(eids)
+            // An edge is a reference like any other; its verb IS the `via`.
+            let refs = [
+              ...refsOf(db, eids),
+              ...deps.filter((d) => wanted.has(d.child))
+                .map((d) => ({ from: d.parent, via: d.type, to: d.child })),
+            ]
+            // The title rides along because a backlink is READ, not chased:
+            // the extension's "what references this page" panel is one query
+            // or it is two, and the id alone would force the second.
+            let named = new Map(
+              rowsOf(db, [...new Set(refs.map((r) => r.from))])
+                .map(rowed).map((r) => [r.eid, r]),
+            )
+            for (let { from, via, to } of refs) {
+              let r = named.get(from)
+              if (!r) continue // a comp row whose spine is gone names nobody
+              let list = back.get(to) ?? []
+              list.push({
+                from: idOf(r),
+                via,
+                title: String(r.comps.doc?.title ?? ''),
+              })
+              back.set(to, list)
+            }
+          }
+          return hits.map((r) => ({
+            ...jsonOf(r),
+            ...(edged ? { deps: mine.get(r.eid) ?? [] } : {}),
+            ...(backs ? { backlinks: back.get(r.eid) ?? [] } : {}),
+          }))
+        }
         // Named entities are read one eager() each — a handful of keyed reads,
         // against a filter that would otherwise select everything and drag the
-        // whole graph in behind it. Backlinks still needs every row's _eid
-        // columns, so it falls through to the snapshot path, where `only`
-        // screens it exactly the same way.
+        // whole graph in behind it.
         // A dead entity is gone before this: every arm of locate() reads a
         // table whose row dies with it — the spine by num or by eid, and an
         // alias, which is a component of the entity it names — so `only`
         // holds live eids only and eager() always finds a spine.
-        if (only && !backs) {
+        if (only) {
           let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
-          let hits = [...only].map((eid): Row => {
-            let comps = eager(db, eid)
-            return {
-              eid,
-              num: Number(comps.entity?.num ?? 0),
-              kind: kindOf(comps),
-              comps,
-            }
-          })
+          let hits = [...only].map((eid) =>
+            rowed({ eid, comps: eager(db, eid) })
+          )
             .filter((r) => matchQuery(r.comps, preds, (e) => eager(db, e)))
           return Response.json(
-            screen(hits).sort((a, b) => a.num - b.num).map((r) => jsonOf(r)),
+            layers(screen(hits).sort((a, b) => a.num - b.num)),
           )
         }
-        // One pipeline with the subscription initial-set; kind, hot-ranking
-        // and backlinks layer on top of its matches. The index answers first
-        // — a one-row question cost a 27 MB snapshot and 0.29s before this,
-        // 100x what the same question costs through sql.ts. Only the two
-        // layers that read rows the filter never matched hold it back:
-        // backlinks scans EVERY row's _eid columns plus snap.deps, and hot
-        // ranking resolves each hit's refs through byEid.
-        let fast = backs ? null : evalFast(q)
+        // One pipeline with the subscription initial-set; kind and hot-ranking
+        // layer on top of its matches. The index answers first — a one-row
+        // question cost a 27 MB snapshot and 0.29s before this, 100x what the
+        // same question costs through sql.ts. Only hot ranking holds it back
+        // now: it resolves each hit's refs through byEid, which is every row
+        // the filter never matched.
+        let fast = evalFast(q)
         if (fast && orderOf(fast.preds) != 'hot') {
           // Unranked hits come back oldest first. That is what the snapshot
           // path has always answered — it walks the entity table, whose rowid
@@ -812,12 +877,10 @@ let http = Deno.serve(
           // the one thing sql_test.ts does not compare (it sorts before it
           // asserts, because a subscription's set has no order to keep).
           return Response.json(
-            screen(fast.hits).sort((a, b) => a.num - b.num).map((r) =>
-              jsonOf(r)
-            ),
+            layers(screen(fast.hits).sort((a, b) => a.num - b.num)),
           )
         }
-        let { snap, all, preds, byEid, hits } = evalQuery(q)
+        let { preds, byEid, hits } = evalQuery(q)
         let now = Date.now()
         hits = screen(hits)
         if (orderOf(preds) == 'hot') {
@@ -826,42 +889,7 @@ let http = Deno.serve(
             warm(a.comps, now, (e) => byEid.get(e))
           )
         }
-        let back = new Map<
-          string,
-          { from: string; via: string; title: string }[]
-        >()
-        if (backs) {
-          let wanted = new Set(hits.map((r) => r.eid))
-          // The title rides along because a backlink is READ, not chased:
-          // the extension's "what references this page" panel is one query
-          // or it is two, and the id alone would force the second.
-          let add = (to: unknown, from: Row, via: string) => {
-            if (typeof to != 'string' || !wanted.has(to)) return
-            let list = back.get(to) ?? []
-            list.push({
-              from: idOf(from),
-              via,
-              title: String(from.comps.doc?.title ?? ''),
-            })
-            back.set(to, list)
-          }
-          for (let r of all) {
-            for (let [c, comp] of Object.entries(r.comps)) {
-              for (let [p, v] of Object.entries(comp)) {
-                if (p.endsWith('_eid')) add(v, r, `${c}.${p}`)
-              }
-            }
-          }
-          let rowOf = new Map(all.map((r) => [r.eid, r]))
-          for (let d of snap.deps) {
-            let from = rowOf.get(d.parent)
-            if (from) add(d.child, from, d.type)
-          }
-        }
-        return Response.json(hits.map((r) => ({
-          ...jsonOf(r),
-          ...(backs ? { backlinks: back.get(r.eid) ?? [] } : {}),
-        })))
+        return Response.json(layers(hits))
       } catch (e) {
         return new Response(String((e as Error).message ?? e), { status: 400 })
       }
