@@ -90,6 +90,15 @@ Deno.test('manual validation rejects loss-shaped arguments', () => {
     // caller's question, not just the grammar's (T-12585).
     ['remember', ['a fact', '--type=feedback'], '--feedback=jeff says who'],
     ['remember', ['a fact', '--nonsense=1'], 'does not take --nonsense'],
+    // The dot spelling of the same mistake — the one a title door used to
+    // swallow (T-14187). The refusal names the argument AND the params the
+    // verb does take, so the correction is on the screen that refuses it.
+    ['design', ['A title', '.project=P-19'], 'does not take .project='],
+    ['design', ['A title', '.project=P-19'], 'it takes .body='],
+    ['remember', ['a fact', '.feddback=jeff'], 'does not take .feddback='],
+    ['mail send', ['jeff', 'Subject', '.oops=1'], 'does not take .oops='],
+    ['comment', ['T-1', 'text', '.body=@x'], 'does not take .body='],
+    ['claim', ['T-1', '.session=S-3'], 'does not take .session='],
     // An unscoped stop must never be read as "stop everything".
     ['role stop', [], 'name at least one role, or --all'],
     ['role start', [], 'name at least one role, or --all'],
@@ -108,6 +117,42 @@ Deno.test('manual validation accepts each supported option shape', () => {
   check('role stop', ['R-1'])()
   check('role stop', ['--all'])()
   check('role start', ['R-1', 'R-2'])()
+  // The body at the dot spelling, where the verb declares it — and it is a
+  // VALUE, so it never counts toward the words the title needs.
+  check('design', ['A title', '.body=@plan.md'])()
+  check('remember', [
+    'a fact',
+    '.body=@m.md',
+    '.scope=P-19',
+    '.feedback=jeff',
+  ])()
+  check('mail send', ['jeff', 'Subject', '.body=@letter.md'])()
+  check('spawn', ['T-1', '.provider=codex'])()
+  // A verb whose grammar IS the filter/write params keeps every one of them.
+  check('list', ['.status=open', '.priority<=1'])()
+  check('set', ['T-1', '.status=done'])()
+  check('search', ['.project=P-19', 'deploy'])()
+})
+
+// A verb that takes its title as "everything left over" turns any argument it
+// does not know into silent corruption, so the DEFAULT is refusal: a verb
+// declares the params it reads (`dots`), and everything else is named back to
+// the caller. Written as a sweep over the whole table because the point is the
+// next verb — one written by subtraction tomorrow inherits the guard instead
+// of having to remember it (T-14187).
+Deno.test('a verb refuses any dot-param it does not declare, by name', () => {
+  for (let [name, manual] of Object.entries(manuals)) {
+    if (manual.dots || manual.passthrough) continue
+    assertThrows(
+      () => validate(name, manual, ['.zzz=1']),
+      Error,
+      'does not take .zzz=',
+    )
+    // The usage line rides every refusal, so the working form is right there.
+    assertThrows(() => validate(name, manual, ['.zzz=1']), Error, manual.usage)
+  }
+  // A word that merely opens with a dot is prose, and stays prose.
+  validate('design', manuals.design, ['.gitignore', 'handling'])
 })
 
 Deno.test('palette validation rejects CLI flags before command dispatch', () => {

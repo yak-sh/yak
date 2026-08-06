@@ -27,6 +27,15 @@ export type Manual = {
   // "does not take --type" answers the grammar question and leaves the
   // caller's actual one open.
   retired?: Record<string, string>
+  // The dot-params this verb takes: `true` when the grammar IS its argument
+  // list (list, set, inbox…), or the NAMES it reads beside its flags. Absent
+  // means none, and the default is the point — a verb whose trailing words
+  // are its title takes them by SUBTRACTION, so anything it does not know
+  // lands in the title rather than being refused: `task design "…"
+  // .body=@plan.md` stored the flag in the title, minted an empty body and
+  // printed its D-… receipt as if it had worked (T-14187). Refusing by
+  // default means the next verb written that way inherits the guard.
+  dots?: true | string[]
   words?: [min: number, max?: number]
   passthrough?: boolean
   check?: (args: string[], words: string[]) => string | undefined
@@ -49,6 +58,11 @@ let REMEMBER_TYPE =
   '--scope=P-19 says project, --feedback=jeff says who gave it, and ' +
   'saying nothing IS a reference'
 let count = value('-n', 'a positive number', true, /^[1-9]\d*$/)
+
+// A body said at EITHER spelling. The checks below are readers too, and a
+// reader that knows only `--body=` answers "needs --body=" to a caller who
+// just gave it one at the dot door (T-14187).
+let hasBody = (args: string[]) => args.some((a) => /^(?:--|\.)body=/.test(a))
 
 export let manuals: Record<string, Manual> = {
   tui: {
@@ -75,6 +89,7 @@ export let manuals: Record<string, Manual> = {
   },
   list: {
     usage: 'list [kind] [filters...] [--json]',
+    dots: true,
     about: 'list tasks — or any kind (filter grammar)',
     examples: [
       'task list .status=open .priority<=1',
@@ -92,6 +107,7 @@ export let manuals: Record<string, Manual> = {
   },
   decided: {
     usage: 'decided [filters...] [--all] [--json]',
+    dots: true,
     about: 'what has been settled here, newest decision first',
     examples: [
       'task decided',
@@ -129,6 +145,7 @@ export let manuals: Record<string, Manual> = {
   },
   set: {
     usage: 'set <id> .prop=value ... [--comment=words]',
+    dots: true,
     about: 'patch any entity; --comment says why, in the same batch',
     examples: [
       'task set T-3 .status=done --comment="verified end-to-end"',
@@ -160,6 +177,7 @@ export let manuals: Record<string, Manual> = {
   },
   search: {
     usage: 'search <words...> [--json]',
+    dots: true,
     about: 'full-text search (trailing * = prefix)',
     examples: [
       'task search flux capac*',
@@ -171,6 +189,7 @@ export let manuals: Record<string, Manual> = {
   },
   mail: {
     usage: 'mail [filters...] [--json|--all|--sent]',
+    dots: true,
     about: 'the mail-only slice of your items',
     deprecated: 'superseded by task inbox, where mail is one kind of item',
     examples: [
@@ -192,6 +211,7 @@ export let manuals: Record<string, Manual> = {
     // Root because `mail` itself is deprecated: sending a letter is not
     // superseded by the inbox, so it keeps its own door in the usage.
     usage: 'mail send <to> <subject...> --body=@file|-|@-',
+    dots: ['body'],
     about: 'send a letter; - and @- read the body from stdin',
     root: true,
     // No --from: a letter is signed by whoever wrote it, derived from the
@@ -200,20 +220,19 @@ export let manuals: Record<string, Manual> = {
     options: [body],
     words: [2],
     check: (args) =>
-      args.some((a) => a.startsWith('--body='))
-        ? undefined
-        : 'needs --body=@file, --body=-, or --body=@-',
+      hasBody(args) ? undefined : 'needs --body=@file, --body=-, or --body=@-',
   },
   'mail reply': {
     // A lone trailing @file reads the file, exactly as --body=@file does —
     // one @ convention per door, named here so the two spellings can't be
     // read as equal when only one works (T-10461).
     usage: 'mail reply <id> [text... | @file | --body=@file|-|@-]',
+    dots: ['body'],
     about: 'reply in the existing mail thread; a lone @file is read',
     options: [body],
     words: [1],
     check: (args, words) =>
-      words.length > 1 || args.some((a) => a.startsWith('--body='))
+      words.length > 1 || hasBody(args)
         ? undefined
         : 'needs reply words, @file, or --body=@file|-|@-',
   },
@@ -259,6 +278,7 @@ export let manuals: Record<string, Manual> = {
   },
   inbox: {
     usage: 'inbox [filters...] [--json|--all|--sent]',
+    dots: true,
     about: 'everything addressed to you, unread first',
     examples: [
       'task inbox',
@@ -314,6 +334,7 @@ export let manuals: Record<string, Manual> = {
   },
   spawn: {
     usage: 'spawn <id> [--provider=X] [--model=Y] [--effort=Z] [--persona=P-9]',
+    dots: ['provider', 'model', 'effort', 'persona'],
     about: "dispatch a managed agent (defaults: your session's provider)",
     examples: [
       'task spawn T-3',
@@ -404,9 +425,11 @@ export let manuals: Record<string, Manual> = {
   },
   design: {
     usage: 'design <title...> [--body=…]',
+    dots: ['body'],
     about: 'record a design: the thinking that precedes a build, proposed',
     examples: [
-      'task design "Mail is local-first for fleet recipients" --body=@plan.md',
+      'task design "Mail is local-first for fleet recipients" .body=@plan.md',
+      'task design "One graph, many doors" --body=@plan.md',
       'task designs',
       'task designs .decided=',
     ],
@@ -415,22 +438,30 @@ export let manuals: Record<string, Manual> = {
       '.decided.at=now .decided.by=jeff`, the same stamp a task or a memory ' +
       'takes; both marks then stand, proposed on that day and decided on ' +
       'this one. `task designs` lists them, `.decided=` screens the ones ' +
-      'still waiting.',
+      'still waiting.\n\nThe words are the TITLE, so the writing rides its ' +
+      'own door: `.body=@plan.md` or `--body=@plan.md` reads that file, ' +
+      '`-`/`@-` reads piped stdin. Any other argument is refused rather ' +
+      'than joined to the title.',
     root: true,
     options: [body],
     words: [1],
   },
   remember: {
     usage: 'remember <title...> [--body=…] [--feedback=who] [--scope=P-9]',
+    dots: ['body', 'scope', 'feedback'],
     about: 'save a memory: the title is the index line, the body the lesson',
     examples: [
-      'task remember "pipe a gate, lose its exit code" --feedback=jeff',
-      'task remember "the sweep runs hourly" --scope=P-19',
+      'task remember "pipe a gate, lose its exit code" .feedback=jeff',
+      'task remember "the sweep runs hourly" .scope=P-19 .body=@lesson.md',
     ],
-    detail: '--scope names the project it belongs to; omit it for a ' +
-      'principle every operator carries. --feedback names WHO gave it (an ' +
-      'empty value tags it with no source). There is no --type: the enum ' +
-      'is retired, and saying nothing IS a reference.',
+    detail: 'Every value is said at either spelling — `.scope=P-19` and ' +
+      '`--scope=P-19` alike — and the words are the TITLE, so anything ' +
+      'else is refused rather than joined to it. `.body=@lesson.md` reads ' +
+      'that file, `-`/`@-` piped stdin.\n\nscope names the project it ' +
+      'belongs to; omit it for a principle every operator carries. ' +
+      'feedback names WHO gave it (an empty value tags it with no ' +
+      'source). There is no --type: the enum is retired, and saying ' +
+      'nothing IS a reference.',
     root: true,
     options: [
       body,
@@ -467,11 +498,12 @@ export let manuals: Record<string, Manual> = {
   },
   'session brief': {
     usage: 'session brief [text... | @file | --body=@file|-|@-]',
+    dots: ['body'],
     about: 'write your own session brief; a lone @file is read',
     options: [body],
     words: [0],
     check: (args, words) =>
-      words.length || args.some((a) => a.startsWith('--body='))
+      words.length || hasBody(args)
         ? undefined
         : 'needs brief text, @file, or --body=@file|-|@-',
   },
@@ -583,6 +615,7 @@ export let manuals: Record<string, Manual> = {
   },
   ls: {
     usage: 'ls [filters...] [--json]',
+    dots: true,
     about: 'list tasks (filter grammar)',
     deprecated: 'superseded by task list',
     examples: ['task list .status=open'],
@@ -750,6 +783,19 @@ let match = (opt: Opt, arg: string) => {
 let optionName = (arg: string) =>
   arg.startsWith('--') ? arg.split('=')[0] : arg.slice(0, 2)
 
+// The dot-param SHAPE — client.ts param()'s, narrowed to the leading name.
+// An `=` is required, so a title word that merely opens with a dot (a
+// `.gitignore`, a leading ellipsis) is prose and stays prose.
+let dotted = (arg: string) =>
+  /^\.([A-Za-z_][\w-]*)(?:\.[A-Za-z_][\w-]*)?=/
+    .exec(arg)?.[1]
+
+// What a verb that takes SOME dot-params should be told it takes.
+let takes = (manual: Manual) =>
+  Array.isArray(manual.dots) && manual.dots.length
+    ? ` — it takes ${manual.dots.map((d) => `.${d}=`).join(' ')}`
+    : ''
+
 let usageError = (name: string, manual: Manual, message: string) =>
   new Error(
     `${name} ${message}\nusage: task ${manual.usage}` +
@@ -772,6 +818,23 @@ export let validate = (
       continue
     }
     if (!option(arg)) {
+      let dot = manual.dots === true ? undefined : dotted(arg)
+      if (dot) {
+        // A param the verb declares is a VALUE, so it never counts as one of
+        // the words; anything else is refused by name rather than swallowed.
+        if (manual.dots !== true && manual.dots?.includes(dot)) continue
+        // A retired flag is retired at BOTH spellings: the habit that
+        // outlives the mechanism reaches for whichever one it learned.
+        let gone = manual.retired?.[`--${dot}`]
+        if (gone) throw usageError(name, manual, gone)
+        throw usageError(
+          name,
+          manual,
+          `does not take .${dot}=: its bare words are TEXT, and an ` +
+            `argument it does not know would be swallowed by them` +
+            takes(manual),
+        )
+      }
       words.push(arg)
       continue
     }

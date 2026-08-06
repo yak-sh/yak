@@ -533,8 +533,39 @@ let seek = async (args: string[]) => {
 // ---- task mail: the mail door (letters only — mail-comp wearers; hooks
 // and event comments never surface here) ----
 
-// The body, by preference: --body= (@file reads the file, `-`/`@-` read
-// piped stdin — the safe doors for long prose), then trailing words.
+// A writing verb's arguments as its door reads them: the VALUES it takes,
+// each said at either spelling — `--body=x` and `.body=x`, since the dot form
+// is what every other writing door speaks and the agent who just filed a task
+// types it here too — and the bare WORDS, which are its title, subject or
+// text. A param can therefore never reach the words, which is the whole
+// point: these doors build their text by SUBTRACTION, so `task design "…"
+// .body=@plan.md` used to store the flag IN the title and mint an empty body
+// (T-14187). A param the verb does NOT take never gets this far — manual.ts
+// `dots` refuses it by name.
+export let parts = (args: string[]) => {
+  let vals: Record<string, { as: string; value: string }> = {}
+  let words: string[] = []
+  for (let a of args) {
+    let m = /^(?:--|\.)([A-Za-z_][\w-]*)=([\s\S]*)$/.exec(a)
+    if (m) vals[m[1]] ??= { as: a, value: m[2] }
+    // A bare --flag belongs to the verb, never to its text.
+    else if (!a.startsWith('--')) words.push(a)
+  }
+  return { vals, words }
+}
+
+// The body said as a VALUE, read through inflate — @file, the piped `-` and
+// `@-`, and the misplaced/dropped guards, naming the token as it was typed.
+export let bodyIn = (vals: ReturnType<typeof parts>['vals'], io = stdin) => {
+  let b = vals.body
+  if (!b) return undefined
+  let p = { comp: 'doc', prop: 'body', value: b.value }
+  return String(inflate(p, io, b.as).value)
+}
+
+// The body, by preference: the --body=/.body= value (@file reads the file,
+// `-`/`@-` read piped stdin — the safe doors for long prose), then trailing
+// words.
 // inflate() is the ONE reader of all of them, the bare `-` included: two
 // readers with separate vocabularies is what left `.body=@-` a suggested
 // door that opened nothing, so every value goes over as it was typed and
@@ -549,14 +580,11 @@ let seek = async (args: string[]) => {
 // bare prose nor a quoted "@jeff thanks for the note" is read as a
 // filename; @@ escapes a genuine one-word @, and a missing file throws
 // before anything is minted or sent.
-export let bodyOf = (flags: string[], words: string[], io = stdin) => {
-  let b = flags.find((a) => a.startsWith('--body='))?.slice(7)
+export let bodyOf = (args: string[], words: string[], io = stdin) => {
   // Literal values ride through inflate too — it hands them back unchanged
   // and its dropped-@ guard gets to see them.
-  if (b != null) {
-    let p = { comp: 'doc', prop: 'body', value: b }
-    return String(inflate(p, io, `--body=${b}`).value)
-  }
+  let b = bodyIn(parts(args).vals, io)
+  if (b != null) return b
   // Two tokens, so it belongs here rather than in inflate, which sees one
   // value at a time.
   separated(words)
@@ -653,12 +681,11 @@ let mailShow = async (args: string[]) => {
 // Minting doc+mail IS the send request — the server's effect delivers
 // and stamps the receipt; task show <E-id> reads it back.
 let mailSend = async (args: string[]) => {
-  let flags = args.filter((a) => a.startsWith('--'))
-  let [to, ...subj] = args.filter((a) => !a.startsWith('--'))
+  let [to, ...subj] = parts(args).words
   if (!to || !subj.length) {
     throw new Error(help(['mail', 'send']))
   }
-  let body = bodyOf(flags, [])
+  let body = bodyOf(args, [])
   if (!body) {
     throw new Error(
       'a mail needs a body: --body=@file, or --body=- with piped stdin',
@@ -672,13 +699,12 @@ let mailSend = async (args: string[]) => {
 }
 
 let mailReply = async (args: string[]) => {
-  let flags = args.filter((a) => a.startsWith('--'))
-  let [id, ...text] = args.filter((a) => !a.startsWith('--'))
+  let [id, ...text] = parts(args).words
   if (!id) throw new Error(help(['mail', 'reply']))
   let all = rows(await snapshot())
   let row = find(all, id)
   if (!row?.comps.mail) throw new Error(`not a mail: ${id}`)
-  let body = bodyOf(flags, text)
+  let body = bodyOf(args, text)
   if (!body) {
     throw new Error(
       'a reply needs words: text, @file, or --body=@file|-|@-',
@@ -983,9 +1009,9 @@ let launch = async (
 }
 
 let spawn = async (args: string[]) => {
-  let flag = (n: string) =>
-    args.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3)
-  let [id] = args.filter((a) => !a.startsWith('--'))
+  let { vals, words } = parts(args)
+  let flag = (n: string) => vals[n]?.value
+  let [id] = words
   if (!id) {
     throw new Error(
       'task spawn <id> [--provider=X] [--model=Y] [--effort=Z] [--persona=P-9]',
@@ -1669,15 +1695,12 @@ let sessionTurn = async (args: string[]) => {
 // doc + task and always was, so before this the only way to write a design
 // into the graph was a raw batch, and the file stayed the warm path.
 let design = async (args: string[]) => {
-  let title = args.filter((a) => !a.startsWith('--')).join(' ').trim()
+  let { vals, words } = parts(args)
+  let title = words.join(' ').trim()
   if (!title) throw new Error('task design <title...> (what it proposes)')
   let session = me()
   if (!session) throw new Error('design: no session identity (attribution)')
-  let body = args.find((a) => a.startsWith('--body='))?.slice(7)
-  if (body != null) {
-    let p = { comp: 'doc', prop: 'body', value: body }
-    body = String(inflate(p, stdin, `--body=${body}`).value)
-  }
+  let body = bodyIn(vals)
   let made = designChanges(rows(await snapshot()), { title, body, session })
   await send(made.changes)
   let after = rows(await snapshot()).find((r) => r.eid == made.eid)
@@ -1690,25 +1713,20 @@ let design = async (args: string[]) => {
 // CLI face of MCP memory_save, so headless agents (the scribe first) have
 // the door too.
 let remember = async (args: string[]) => {
-  let flag = (n: string) =>
-    args.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3)
-  let title = args.filter((a) => !a.startsWith('--')).join(' ').trim()
+  let { vals, words } = parts(args)
+  let title = words.join(' ').trim()
   if (!title) throw new Error('task remember <title...> (the index line)')
   let session = me()
   if (!session) throw new Error('remember: no session identity (attribution)')
   let all = rows(await snapshot())
-  let body = flag('body')
-  if (body != null) {
-    let p = { comp: 'doc', prop: 'body', value: body }
-    body = String(inflate(p, stdin, `--body=${body}`).value)
-  }
+  let body = bodyIn(vals)
   // --type is retired (T-12585); manual.ts `retired` refuses it upstream of
   // here with the replacement named, so nothing silently drops it.
   let made = memoryChanges(all, {
     title,
     body,
-    scope: flag('scope'),
-    feedback: flag('feedback'),
+    scope: vals.scope?.value,
+    feedback: vals.feedback?.value,
     session,
   })
   await send(made.changes)
@@ -1770,11 +1788,10 @@ let wrap = async (args: string[]) => {
 // trailing words, --body=@file, --body=- or @- (piped stdin). Another
 // session's doc is task set's job (task set S-12 .body=@brief.md).
 let sessionBrief = async (args: string[]) => {
-  let flags = args.filter((a) => a.startsWith('--'))
-  let words = args.filter((a) => !a.startsWith('--'))
+  let { words } = parts(args)
   let sid = me()
   if (!sid) throw new Error('session brief: run under a session (no identity)')
-  let body = bodyOf(flags, words)
+  let body = bodyOf(args, words)
   if (!body) {
     throw new Error(
       'a brief needs words: text, @file, or --body=@file|-|@-',

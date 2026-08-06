@@ -4,6 +4,7 @@
 // actually type, and the bug that let it through polluted the owner board.
 import { assertEquals, assertMatch, assertThrows } from '@std/assert'
 import {
+  bodyIn,
   bodyOf,
   claimedDigest,
   claudeHookSettings,
@@ -22,6 +23,7 @@ import {
   lifecycleHooks,
   listing,
   operatorHook,
+  parts,
   place,
   printer,
   roleEid,
@@ -290,6 +292,35 @@ Deno.test('bodyOf: both stdin spellings refuse a TTY', () => {
     )
     assertEquals(read, 0)
   }
+})
+
+// The doors whose trailing words are a TITLE have no positional body door at
+// all, so the param is the only way to say one — and a title built by
+// SUBTRACTION swallowed it whole: `task design "…" .body=@plan.md` stored the
+// flag in the title, minted an empty body and printed its receipt (T-14187).
+// Both spellings, because the dot form is what every other writing door
+// speaks and is what the agent who just filed a task types here.
+Deno.test('parts: a value never reaches the words, at either spelling', () => {
+  let f = Deno.makeTempFileSync()
+  Deno.writeTextFileSync(f, 'the whole design\n')
+  let tty = { terminal: () => true, read: () => '' }
+  for (let said of [`--body=@${f}`, `.body=@${f}`]) {
+    let { vals, words } = parts(['Some', 'title', said, '--json'])
+    assertEquals({ said, words }, { said, words: ['Some', 'title'] })
+    assertEquals(bodyIn(vals, tty), 'the whole design\n')
+  }
+  // Prose keeps every word: only a param spelling is taken out of the text.
+  assertEquals(parts(['a', '.gitignore', 'rule']).words, [
+    'a',
+    '.gitignore',
+    'rule',
+  ])
+  assertEquals(bodyIn(parts(['no', 'body']).vals, tty), undefined)
+  // The token as TYPED names the door in an error, whichever spelling it was.
+  for (let said of ['--body=@/no/such/file', '.body=@/no/such/file']) {
+    assertThrows(() => bodyIn(parts([said]).vals, tty), Error, said)
+  }
+  Deno.removeSync(f)
 })
 
 Deno.test('codexArgs: full access and lifecycle lead, caller args keep order', () => {
