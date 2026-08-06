@@ -537,6 +537,32 @@ let set = async (args: string[]) => {
   print(`${idOf(row)} updated`)
 }
 
+// `task done T-3 [comment]` / `task cancel T-3 [reason]` — sugar over
+// .status=done|cancelled plus an optional comment, one atomic batch like
+// `task set`. Only fires when the FIRST word is id-shaped: `done` and
+// `cancel` are also palette verbs (commands.ts) that operate on the
+// session's FOCUSED task, and bare prose ("cancel duplicate of the
+// umbrella") is legitimately a reason for that focused task, not a typo'd
+// target — the dispatcher below sends anything else there unchanged. What
+// this closes is the id-shaped case: T-14573 found `task cancel T-123`
+// silently cancelling the wrong (focused) task and posting "T-123" as the
+// reason, because the id read as reason prose instead of a target.
+let idLike = (s?: string) => !!s && /^[A-Za-z]+-\d+$/.test(s)
+
+let finish = (status: 'done' | 'cancelled') => async (args: string[]) => {
+  let [id, ...words] = args
+  let all = rows(await snapshot())
+  let row = need(all, id)
+  let comment = words.join(' ')
+  await send([
+    { eid: row.eid, name: 'task', comp: { status } },
+    ...(comment ? commentChanges(all, row.eid, comment, me()) : []),
+  ])
+  print(`${idOf(row)} → ${status}${comment ? ` — ${comment}` : ''}`)
+}
+let done = finish('done')
+let cancel = finish('cancelled')
+
 // Full-text search — every doc in the graph, ranked, matches bracketed.
 let seek = async (args: string[]) => {
   let json = args.includes('--json')
@@ -2309,6 +2335,9 @@ if (import.meta.main) {
         validateCommand(cmd.slice(1), rest)
       } else if (rest[0]?.startsWith(':')) {
         validateCommand(rest[0].slice(1), rest.slice(1))
+      } else if ((cmd == 'done' || cmd == 'cancel') && idLike(rest[0])) {
+        // Explicit-target sugar (T-14573) — done/cancel validate their
+        // own args below, not the focused-task palette's word count.
       } else if (cmd && commands[cmd]) {
         validateCommand(cmd, rest)
       }
@@ -2345,6 +2374,10 @@ if (import.meta.main) {
       else if (cmd == 'telemetry') await telemetry(rest)
       else if (cmd == 'help' || cmd == '--help') print(help(rest))
       else if (!cmd) await bare()
+      // `task done T-3` / `task cancel T-3 …` — an id-shaped first word is
+      // an explicit target, never reason prose (T-14573).
+      else if (cmd == 'done' && idLike(rest[0])) await done(rest)
+      else if (cmd == 'cancel' && idLike(rest[0])) await cancel(rest)
       // `task T-42 :done` — an id ahead of a colon line names the focus.
       else if (rest[0]?.startsWith(':')) await colon(cmd, rest)
       // CLI verbs win shared names; the remaining palette words may omit `:`.

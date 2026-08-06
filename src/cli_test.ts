@@ -1306,6 +1306,116 @@ Deno.test('any graph-reading verb serves the bus, on stderr', async () => {
   }
 })
 
+// T-14573: `task cancel T-4 …` used to resolve as the FOCUSED-task `:cancel`
+// — the id read as reason prose, cancelling whatever S-1 had claimed (T-2
+// here) and posting "T-4 …" as the reason. An id-shaped first word must
+// name the TARGET, never ride along as text. `task done T-4` used to fail
+// outright (`usage: task :done`, since :done takes zero words) rather than
+// act on T-4 at all.
+Deno.test('task done/cancel <id> act on the named task, never the focused one', async () => {
+  let { server, acked, host } = graphServer(graph)
+  try {
+    let out = await new Deno.Command(Deno.execPath(), {
+      args: [
+        'run',
+        '-A',
+        new URL('./cli.ts', import.meta.url).pathname,
+        'cancel',
+        'T-4',
+        'duplicate of the umbrella',
+      ],
+      clearEnv: true,
+      env: { TASKS_HOST: host, TASKS_SESSION: 'sub-1' }, // sub-1 has T-2 claimed
+    }).output()
+    assertEquals(text(out.stderr), '')
+    assertEquals(out.code, 0)
+    assertMatch(
+      text(out.stdout),
+      /^T-4 → cancelled — duplicate of the umbrella/,
+    )
+    let task = acked.filter((c) => c.name == 'task')
+    assertEquals(task, [{
+      eid: O,
+      name: 'task',
+      comp: { status: 'cancelled' },
+    }])
+    let comment = acked.find((c) => c.name == 'comment')
+    assertEquals(comment?.comp, { target_eid: O })
+  } finally {
+    await server.shutdown()
+  }
+})
+
+Deno.test('task done <id> targets the id even with no comment, past its 0-word palette form', async () => {
+  let { server, acked, host } = graphServer(graph)
+  try {
+    let out = await new Deno.Command(Deno.execPath(), {
+      args: [
+        'run',
+        '-A',
+        new URL('./cli.ts', import.meta.url).pathname,
+        'done',
+        'T-4',
+      ],
+      clearEnv: true,
+      env: { TASKS_HOST: host, TASKS_SESSION: 'sub-1' },
+    }).output()
+    assertEquals(text(out.stderr), '')
+    assertEquals(out.code, 0)
+    assertEquals(text(out.stdout).trim(), 'T-4 → done')
+    assertEquals(
+      acked.filter((c) => c.name == 'task'),
+      [{ eid: O, name: 'task', comp: { status: 'done' } }],
+    )
+  } finally {
+    await server.shutdown()
+  }
+})
+
+// The non-id spellings are untouched: `task cancel <prose>` with no
+// id-shaped first word still means the FOCUSED task, exactly as `task
+// :cancel <prose>` always has.
+Deno.test('task cancel with no id-shaped word still targets the focused task', async () => {
+  let { server, acked, host } = graphServer(graph)
+  try {
+    let out = await new Deno.Command(Deno.execPath(), {
+      args: [
+        'run',
+        '-A',
+        new URL('./cli.ts', import.meta.url).pathname,
+        'cancel',
+        'duplicate',
+        'of',
+        'the',
+        'umbrella',
+      ],
+      clearEnv: true,
+      env: { TASKS_HOST: host, TASKS_SESSION: 'sub-1' },
+    }).output()
+    assertEquals(text(out.stderr), '')
+    assertEquals(out.code, 0)
+    assertMatch(
+      text(out.stdout),
+      /^T-2 → cancelled — duplicate of the umbrella/,
+    )
+    assertEquals(
+      acked.filter((c) => c.name == 'task'),
+      [{ eid: T, name: 'task', comp: { status: 'cancelled' } }],
+    )
+  } finally {
+    await server.shutdown()
+  }
+})
+
+// An id-shaped word past the 0-word palette form used to be a bare, unhelpful
+// `usage: task :done` — it still refuses (:done is still argument-less from
+// the focus door), but only when the word does NOT name a task.
+Deno.test('task done <non-id-word> keeps refusing loudly, not silently', async () => {
+  let out = await cli('done', 'because')
+  assertEquals(out.code, 1)
+  assertMatch(text(out.stderr), /:done expected 0–0 arguments/)
+})
+
 // The same guard through the positional and --body= doors, since the
 // mistake transfers between verbs (T-10612).
 Deno.test('bodyOf: a lone path that forgot its @ is refused at every door', () => {

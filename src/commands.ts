@@ -214,7 +214,8 @@ export let commands: Record<string, Command> = {
   },
   done: {
     args: '',
-    about: 'move the focused task to done',
+    about:
+      'move the focused task to done (shell: `task done T-3 [comment]` names one explicitly)',
     words: [0, 0],
     run: move('done'),
   },
@@ -226,7 +227,8 @@ export let commands: Record<string, Command> = {
   },
   cancel: {
     args: '[reason]',
-    about: 'call off the focused task; the words become a comment',
+    about: 'call off the focused task; the words become a comment ' +
+      '(shell: `task cancel T-3 [reason]` names one explicitly)',
     run: (rest, ctx) => {
       let r = here(ctx)
       if (!r.comps.task) throw new Error(`${idOf(r)} is not a task`)
