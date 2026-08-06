@@ -10,6 +10,7 @@ import { Id } from './Inline.tsx'
 import { Entity } from '../Entity.tsx'
 import { viaName } from '../Comments.tsx'
 import { title } from '../title.tsx'
+import { compTone } from '../comp.ts'
 
 // Adding/removing comps is a browser power tool — the TUI paints Debug as
 // static lines with no live events, so the controls stay web-only. typeof
@@ -88,7 +89,7 @@ let shape = (v: unknown) =>
 let Row = ({ comp, k, v }: { comp?: string; k: string; v: unknown }) => (
   <>
     <Key>
-      {comp && <Comp>{comp}.</Comp>}
+      {comp && <Comp mod={compTone(comp)}>{comp}.</Comp>}
       {k}
     </Key>
     {v == null || v === ''
@@ -128,7 +129,7 @@ let cells = (e: Ent, name: string, comp: Record<string, unknown>) => {
     return [
       <Fragment key={`${name}.${k}`}>
         <Key>
-          <Comp>{name}.</Comp>
+          <Comp mod={compTone(name)}>{name}.</Comp>
           {k}
           {rm}
         </Key>
@@ -145,7 +146,7 @@ let cells = (e: Ent, name: string, comp: Record<string, unknown>) => {
         ? [
           <Fragment key={`${name}.${k}.assoc`}>
             <Key mod='drv'>
-              <Comp>{name}.</Comp>
+              <Comp mod={compTone(name)}>{name}.</Comp>
               {k.slice(0, -4)}
             </Key>
             <Val mod='ent'>

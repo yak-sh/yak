@@ -2233,7 +2233,25 @@ a[data-ref]:hover {
   font-size: 11px;
 }
 .Debug_Comp {
-  color: var(--orange);
+  color: var(--comp);
+}
+.Debug_Comp-0 {
+  --comp: var(--blue);
+}
+.Debug_Comp-1 {
+  --comp: var(--yellow);
+}
+.Debug_Comp-2 {
+  --comp: var(--purple);
+}
+.Debug_Comp-3 {
+  --comp: var(--accent);
+}
+.Debug_Comp-4 {
+  --comp: var(--orange);
+}
+.Debug_Comp-5 {
+  --comp: var(--red);
 }
 .Debug_Val-nil {
   color: var(--dim);
