@@ -2440,9 +2440,8 @@ a[data-ref]:hover {
   color: var(--dim);
 }
 
-/* A session: summary head, the agent's answer, then the log tail — a
-   terminal-flavoured block, so the log is monospace and never wraps
-   (a line clips; the file is the whole truth). */
+/* A session: summary head, a conversational transcript, then its composer.
+   Machine activity stays compact; prose reads at the house size. */
 /* The console (W-3676 #5): a sticky slim bar, facts behind a disclosure,
    the transcript straight on the card. The hosts drop their padding so
    the bar can pin edge-to-edge (the well pattern, as Board does) and the
@@ -2507,11 +2506,6 @@ a[data-ref]:hover {
   border-top: 1px solid var(--border);
   padding: var(--half-gap) var(--gap);
 }
-.Session_Seq,
-.Session_Type {
-  color: var(--dim);
-  font-size: 11px;
-}
 /* Task and role give out first; their own titles paint the ellipsis. */
 .Session_Head > .Inline {
   flex: 1;
@@ -2575,13 +2569,12 @@ a[data-ref]:hover {
 .Session_Fault-error {
   color: var(--red);
 }
-/* The log is the console floor: messages sit straight on the card, no
-   panel box — each row styled by its kind, only the machine rows (exec,
-   an unrecognized line) falling back to monospace. */
+/* Messages sit straight on the card, each styled by its role. Only commands
+   and broken-stream evidence fall back to monospace. */
 .Session_Log {
   display: grid;
-  gap: var(--half-gap);
-  font-size: 12px;
+  gap: var(--gap);
+  font-size: inherit;
 }
 /* Every line: the seq gutter, the transcript face beside it, and (when
    opened) the raw-event inspector wrapping to its own full-width row. */
@@ -2599,13 +2592,24 @@ a[data-ref]:hover {
   flex: none;
   text-align: right;
   min-width: 2.5ch;
+  height: min-content;
+  padding: 0;
+  border: 0;
+  background: none;
   font-family: var(--mono);
   font-size: 11px;
   color: var(--dim);
   cursor: pointer;
   user-select: none;
+  opacity: 0;
 }
-.Session_Seq:hover {
+.Session_Line:hover .Session_Seq,
+.Session_Line:focus-within .Session_Seq,
+.Session_Line-open .Session_Seq {
+  opacity: 1;
+}
+.Session_Seq:hover,
+.Session_Seq:focus-visible {
   color: var(--accent);
 }
 /* When the message landed — dim, kept at the line's right edge (the
@@ -2615,13 +2619,7 @@ a[data-ref]:hover {
   font-size: 11px;
   color: var(--dim);
 }
-/* A line the adapter gave no row: its bare type, as the old dump showed. */
-.Session_Type {
-  flex: none;
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--blue);
-}
+/* An unparseable line: the bytes stay visible as evidence of a broken stream. */
 .Session_Raw {
   font-family: var(--mono);
   font-size: 11px;
@@ -2655,10 +2653,10 @@ a[data-ref]:hover {
 }
 /* What the human said — a soft prompt block, `› ` leading the line. */
 .Session_User {
-  color: var(--muted);
+  color: var(--text);
   background: var(--soft);
   border-radius: var(--radius);
-  padding: 5px 9px;
+  padding: var(--half-gap) var(--gap);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -2670,16 +2668,20 @@ a[data-ref]:hover {
 /* The model thinking out loud — dim, skippable. */
 .Session_Reason {
   color: var(--dim);
-  font-size: 11px;
+  font-size: 12px;
+  font-style: italic;
   overflow-wrap: anywhere;
 }
-/* A tool call, one chip: name + mark, its detail dim beside it. */
+/* A tool call: its action leads, status lands at the edge, and the one
+   useful argument follows without turning back into an object dump. */
 .Session_Tool {
-  display: flex;
-  gap: var(--half-gap);
-  align-items: baseline;
+  display: grid;
+  grid-template-columns: max-content 1fr max-content;
+  gap: 2px var(--half-gap);
+  align-items: center;
   min-width: 0;
-  font-size: 11px;
+  padding: 2px 0;
+  font-size: 12px;
 }
 .Session_ToolName {
   flex: none;
@@ -2695,22 +2697,59 @@ a[data-ref]:hover {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.Session_ToolStatus {
+  color: var(--accent);
+}
+.Session_Tool-fail .Session_ToolStatus {
+  color: var(--red);
+}
 .Session_ToolErr {
+  grid-column: 2 / -1;
   color: var(--red);
   overflow-wrap: anywhere;
 }
-/* A shell command it ran — monospace, its nonzero exit spelled out,
-   the model's own description of what it's for dim beside it. */
+/* A shell command: the model's summary leads like an activity title; the
+   literal command and its outcome remain visible evidence beneath it. */
 .Session_Exec {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--half-gap) var(--gap);
+  border-left: 2px solid var(--border2);
+  background: var(--soft);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+.Session_Exec-ok {
+  border-color: var(--accent);
+}
+.Session_Exec-fail {
+  border-color: var(--red);
+}
+.Session_ExecHead {
+  display: flex;
+  gap: var(--half-gap);
+  align-items: baseline;
+  min-width: 0;
+}
+.Session_ExecCommand {
   color: var(--muted);
-  font-family: ui-monospace, monospace;
-  font-size: 11px;
+  font-size: 12px;
+  white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 .Session_ExecDesc {
+  flex: 1;
+  color: var(--text);
   font-family: var(--font);
-  color: var(--dim);
-  margin-left: var(--half-gap);
+  font-size: 13px;
+}
+.Session_ExecStatus {
+  flex: none;
+  color: var(--accent);
+  font-size: 11px;
+}
+.Session_Exec-fail .Session_ExecStatus {
+  color: var(--red);
 }
 /* A turn closing: a hairline flexes across, the duration and usage
    settle at its right end. */
@@ -2744,12 +2783,11 @@ a[data-ref]:hover {
   gap: var(--half-gap);
   align-items: baseline;
   min-width: 0;
-  font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
 }
 .Session_SysTag {
   flex: none;
-  color: var(--blue);
+  color: var(--muted);
 }
 .Session_SysText {
   color: var(--dim);

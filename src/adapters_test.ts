@@ -380,7 +380,29 @@ Deno.test('codex row: only item.completed narrates; turns divide', () => {
         status: 'failed',
       },
     }),
-    { kind: 'exec', command: "zsh -lc 'task --help'", exit: 127 },
+    {
+      kind: 'exec',
+      command: "zsh -lc 'task --help'",
+      exit: 127,
+      status: 'failed',
+    },
+  )
+  assertEquals(
+    codex.row({
+      type: 'item.completed',
+      item: {
+        type: 'command_execution',
+        command: 'deno task check',
+        exit_code: 0,
+        status: 'completed',
+      },
+    }),
+    {
+      kind: 'exec',
+      command: 'deno task check',
+      exit: 0,
+      status: 'completed',
+    },
   )
   assertEquals(
     codex.row({

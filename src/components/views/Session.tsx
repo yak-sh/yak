@@ -57,9 +57,8 @@ let Frame = block('div', 'Session', {
   Fault: 'p',
   Log: 'div',
   Line: 'div',
-  Seq: 'span',
+  Seq: 'button',
   When: 'time',
-  Type: 'span',
   Raw: 'span',
   Agent: 'div',
   User: 'div',
@@ -67,9 +66,13 @@ let Frame = block('div', 'Session', {
   Tool: 'div',
   ToolName: 'span',
   ToolDetail: 'span',
+  ToolStatus: 'span',
   ToolErr: 'span',
   Exec: 'div',
+  ExecHead: 'div',
+  ExecCommand: 'code',
   ExecDesc: 'span',
+  ExecStatus: 'span',
   Turn: 'div',
   Oops: 'div',
   Err: 'pre',
@@ -98,7 +101,6 @@ let {
   Line,
   Seq,
   When,
-  Type,
   Raw,
   Agent,
   User,
@@ -106,9 +108,13 @@ let {
   Tool,
   ToolName,
   ToolDetail,
+  ToolStatus,
   ToolErr,
   Exec,
+  ExecHead,
+  ExecCommand,
   ExecDesc,
+  ExecStatus,
   Turn,
   Oops,
   Err,
@@ -229,13 +235,14 @@ let bareType = (line: string) => {
 }
 
 // The transcript face of a line, matched on the normalized row
-// (adapters.ts). No row means the adapter didn't recognize it: show its
-// bare type, as the dump did.
+// (adapters.ts). JSON the adapter left out is provider machinery, not a
+// chat item. Non-JSON bytes stay visible because they are evidence of a
+// broken stream, not a dialect the adapter deliberately ignored.
 let Body = ({ x, repo }: { x: Entry; repo?: string }) => {
   let r = x.row
   if (!r) {
     let t = bareType(x.line)
-    return t ? <Type>{t}</Type> : <Raw>{x.line}</Raw>
+    return t ? null : <Raw>{x.line}</Raw>
   }
   switch (r.kind) {
     case 'say':
@@ -248,22 +255,29 @@ let Body = ({ x, repo }: { x: Entry; repo?: string }) => {
     case 'tool':
       return (
         <Tool mod={r.ok === false && 'fail'}>
-          <ToolName>
-            {r.name}
-            {r.ok === false ? ' ✗' : r.ok ? ' ✓' : ''}
-          </ToolName>
+          <ToolName>{r.name}</ToolName>
           {r.detail && <ToolDetail>{r.detail}</ToolDetail>}
+          {r.ok != null && (
+            <ToolStatus>{r.ok ? '✓ done' : '✗ failed'}</ToolStatus>
+          )}
           {r.error && <ToolErr>{r.error}</ToolErr>}
         </Tool>
       )
-    case 'exec':
+    case 'exec': {
+      let failed = r.exit != null ? r.exit != 0 : r.status == 'failed'
+      let status = r.exit != null
+        ? `${failed ? '✗' : '✓'} exit ${r.exit}`
+        : r.status
       return (
-        <Exec>
-          {r.command}
-          {r.exit != null && r.exit != 0 && ` · exit ${r.exit}`}
-          {r.desc && <ExecDesc>{r.desc}</ExecDesc>}
+        <Exec mod={failed ? 'fail' : status ? 'ok' : undefined}>
+          <ExecHead>
+            <ExecDesc>{r.desc || 'Command'}</ExecDesc>
+            {status && <ExecStatus>{status}</ExecStatus>}
+          </ExecHead>
+          <ExecCommand>$ {r.command}</ExecCommand>
         </Exec>
       )
+    }
     case 'turn':
       return (
         <Turn>
@@ -301,10 +315,12 @@ let prettyJson = (line: string) => {
 // JSON the provider actually wrote.
 let Row = ({ x, repo }: { x: Entry; repo?: string }) => {
   let [open, setOpen] = useState(false)
-  let at = x.row?.kind == 'say' ? x.row.at : undefined
+  let at = x.row?.at
   return (
-    <Line>
+    <Line mod={open && 'open'}>
       <Seq
+        type='button'
+        aria-label={`${open ? 'hide' : 'show'} event ${x.seq} details`}
         data-tip={open ? undefined : 'the raw event'}
         onClick={() => setOpen(!open)}
       >
@@ -421,7 +437,7 @@ export let Session = ({ e }: { e: Ent }) => {
   let said = log.entries.some(
     (x) => x.row?.kind == 'say' && x.row.role == 'agent',
   )
-  let rows = squeeze(log.entries)
+  let rows = squeeze(log.entries.filter((x) => x.row || !bareType(x.line)))
   // The facts fold behind the one lifecycle fact worth keeping in the bar.
   let gist = s.started_at ? `started ${ago(s.started_at)}` : 'not started'
   // A comment joins the thread once the session has HEARD it: a managed

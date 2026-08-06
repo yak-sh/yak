@@ -1276,6 +1276,7 @@ let announce = (
 
 let SAID = JSON.stringify({
   type: 'assistant',
+  timestamp: '2026-07-26T12:00:00Z',
   message: { content: [{ type: 'text', text: 'hello from a tty' }] },
 })
 
@@ -1286,6 +1287,7 @@ Deno.test("external session logs read each provider's confined transcript", asyn
     kind: 'say',
     role: 'agent',
     text: 'hello from a tty',
+    at: '2026-07-26T12:00:00Z',
   })
   // Older Claude rows predate provider stamping; their store still names
   // the dialect. A contradictory provider cannot cross into another store.
@@ -1308,6 +1310,24 @@ Deno.test("external session logs read each provider's confined transcript", asyn
     role: 'user',
     text: 'hello Codex',
     at: '2026-07-26T12:00:00Z',
+  })
+  let clocked = announce(
+    c.pid,
+    [JSON.stringify({
+      timestamp: '2026-07-26T12:01:00Z',
+      type: 'response_item',
+      payload: {
+        type: 'reasoning',
+        summary: [{ type: 'summary_text', text: 'thinking' }],
+      },
+    })],
+    '',
+    'codex',
+  )
+  assertEquals(logs(clocked.eid, new URLSearchParams()).entries[0].row, {
+    kind: 'reason',
+    text: 'thinking',
+    at: '2026-07-26T12:01:00Z',
   })
   // A transcript is a reference, never a capability: traversal and a
   // symlink out of either provider's store both read nothing.

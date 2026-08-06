@@ -752,7 +752,10 @@ let rowOf = (
       ...(e.timestamp ? { at: String(e.timestamp) } : {}),
     }
   }
-  return read?.(e) ?? undefined
+  let row = read?.(e) ?? undefined
+  return row && e.timestamp && !row.at
+    ? { ...row, at: String(e.timestamp) }
+    : row
 }
 
 let readerOf = (eid: string) => {

@@ -643,8 +643,7 @@ export let capabilities = ['spawn']
 // same six shapes whatever provider wrote it. Adapters own the dialects
 // (adapters.ts, server-only) and normalize each event down to one of these
 // before it reaches a browser, so the Session view never learns a vendor:
-//   say    what the agent (or the human, resuming) actually said — `at`
-//          is its clock, when the dialect (or our own writer) carries one
+//   say    what the agent (or the human, resuming) actually said
 //   reason the model thinking out loud — dim, skippable
 //   tool   a tool call as a chip: name + ok/✗, its detail, its error
 //   exec   a shell command it ran — desc says what for, in its own words
@@ -653,20 +652,30 @@ export let capabilities = ['spawn']
 //   sys    provider housekeeping worth a dim chip: the tag names the
 //          family (thinking, hook, task, …), the text carries the gist.
 //          A view may squeeze a run of same-tag frames into one line.
+// `at` is the event's clock when the dialect (or our own writer) carries one.
 export type LogRow =
-  | { kind: 'say'; role: 'agent' | 'user'; text: string; at?: string }
-  | { kind: 'reason'; text: string }
-  | {
-    kind: 'tool'
-    name: string
-    detail?: string
-    ok?: boolean
-    error?: string
-  }
-  | { kind: 'exec'; command: string; desc?: string; exit?: number }
-  | { kind: 'turn'; usage?: string; ms?: number }
-  | { kind: 'error'; text: string }
-  | { kind: 'sys'; tag: string; text?: string }
+  & { at?: string }
+  & (
+    | { kind: 'say'; role: 'agent' | 'user'; text: string }
+    | { kind: 'reason'; text: string }
+    | {
+      kind: 'tool'
+      name: string
+      detail?: string
+      ok?: boolean
+      error?: string
+    }
+    | {
+      kind: 'exec'
+      command: string
+      desc?: string
+      exit?: number
+      status?: string
+    }
+    | { kind: 'turn'; usage?: string; ms?: number }
+    | { kind: 'error'; text: string }
+    | { kind: 'sys'; tag: string; text?: string }
+  )
 
 // Token counts the way a human reads them: 831, 12k, 1.2M.
 export let kilo = (n: number): string =>

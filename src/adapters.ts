@@ -541,6 +541,7 @@ export let adapters: Record<string, Adapter> = {
             kind: 'exec',
             command: String(it.command ?? ''),
             ...(it.exit_code == null ? {} : { exit: Number(it.exit_code) }),
+            ...(it.status ? { status: String(it.status) } : {}),
           }
         }
         return null
