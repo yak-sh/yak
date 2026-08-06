@@ -32,7 +32,7 @@ let {
 let { assertEquals, assertMatch, assertNotEquals, assertThrows } = await import(
   '@std/assert'
 )
-let { comps } = await import('./types.ts')
+let { comps, stamped } = await import('./types.ts')
 
 let fresh = () => open() // each test file shares one :memory: handle; use eids per test
 let uid = () => crypto.randomUUID()
@@ -187,6 +187,52 @@ Deno.test('graph-out carries declared columns only', () => {
     ?.comp
   assertEquals(snap, expected)
   assertEquals(eager(d, eid).web, expected)
+  d.close()
+})
+
+// Tables genuinely outside the component vocabulary: they carry no
+// eid+components a client cache walks, so snapshot() never selects them and
+// the "every stored column is declared" invariant below does not reach them.
+// This list IS the contract — an addition to it is a decision, so each entry
+// says why it is not a component.
+let outsideVocabulary: Record<string, string> = {
+  dependency: 'edges: a triple keyed by (parent, type, child), no eid row',
+  tombstone: 'death record: the eid is dead, nothing reads a component back',
+  journal: 'the write log: append-only audit, never walked by snapshot()',
+  tool_call: 'telemetry: no eid, no components — read at /telemetry',
+  embedding: 'semantic vectors: rebuilt from doc on the sweep, never synced',
+}
+// FTS5 generates a family of shadow tables per index (_data/_idx/_config/
+// _docsize); they refill from the doc sync triggers and hold no vocabulary.
+let ftsShadow = (t: string) =>
+  t.startsWith('doc_fts') || t.startsWith('doc_gram')
+
+// The universal invariant CLAUDE.md names: every stored column is declared in
+// comps (wire-writable) or stamped (server-owned read), because snapshot()'s
+// readable union is exactly their sum. A column in NEITHER is invisible to
+// every client though its type may promise it — the mail.from misrouting, the
+// session.input_at hole (T-14205). Derive the check from the LIVE schema so
+// the next undeclared column fails the gate here, not silently in production.
+Deno.test('every stored column is declared in comps or stamped', () => {
+  let d = fresh()
+  let tables = (d.prepare(
+    `select name from sqlite_master
+       where type = 'table' and name not like 'sqlite_%'`,
+  ).all() as { name: string }[]).map((r) => r.name)
+  let undeclared: string[] = []
+  for (let t of tables) {
+    if (outsideVocabulary[t] || ftsShadow(t)) continue
+    // eid is the universal join key, present on every component table and
+    // never in comps/stamped. A table nobody declared and nobody exempted
+    // lands here with allow = {eid} alone, so its columns show as drift too —
+    // a new table is a decision, same as a new column.
+    let allow = new Set(['eid', ...Object.keys({ ...comps[t], ...stamped[t] })])
+    let cols = (d.prepare(
+      'select name from pragma_table_info(?)',
+    ).all(t) as { name: string }[]).map((c) => c.name)
+    for (let c of cols) if (!allow.has(c)) undeclared.push(`${t}.${c}`)
+  }
+  assertEquals(undeclared, [])
   d.close()
 })
 
@@ -485,6 +531,13 @@ Deno.test('session lifecycle columns are server-owned', () => {
   assertEquals(comp(s, 'session')?.status, null) // lifecycle: server only
   assertEquals(comp(s, 'session')?.origin, 'external') // the default holds
   assertEquals(comp(s, 'session')?.latest_seq, 0)
+  // input_at is a lifecycle peer of stop_requested_at: the wire cannot set it,
+  // but once the server stamps it (a steer yielding a managed turn) it rides
+  // graph-out so a client can see the session is yielding (T-14205).
+  assertEquals(comp(s, 'session')?.input_at, null) // rides out, wire left it unset
+  db.prepare('update session set input_at = ? where eid = ?')
+    .run('2026-08-06T00:00:00Z', s)
+  assertEquals(comp(s, 'session')?.input_at, '2026-08-06T00:00:00Z')
   // A lifecycle column aimed at the wrong facet names nothing at all —
   // `spawn` is launch fields only. That used to be stripped in silence,
   // keeping `provider` and answering success; the caller's belief that it

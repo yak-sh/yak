@@ -572,6 +572,12 @@ export let stamped: Record<string, Record<string, PropType>> = {
     latest_seq: 'number',
     started_at: 'time',
     stop_requested_at: 'time',
+    // A steer arrived mid-turn: a managed print run is yielding its current
+    // provider turn to new words, then continuing the same thread (sessions.ts
+    // steer/finish/recover). Server-set via stamp(), never wire-writable — a
+    // lifecycle peer of stop_requested_at, so it rides the snapshot out to
+    // clients the same way the rest of the ending does.
+    input_at: 'time',
     finished_at: 'time',
     exit_code: 'number',
     stop_reason: 'text',
