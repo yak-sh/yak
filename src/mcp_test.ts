@@ -132,7 +132,7 @@ Deno.test('task_spawn refuses an undecided proposal without minting a session', 
   await protocol(io, async (client) => {
     let out = await client.callTool({
       name: 'task_spawn',
-      arguments: { id: task, provider: 'claude', model: 'opus' },
+      arguments: { id: task, provider: 'claude', model: 'claude-opus-4-8' },
     }) as ToolResult
     assertEquals(out.isError, true)
     assertMatch(said(out), /is proposed but not decided/)

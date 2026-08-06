@@ -26,7 +26,7 @@ Deno.test('friendly: the display face — caps back, dots back, pins off', () =>
   assertEquals(friendly('claude-opus-4-8'), 'Opus 4.8')
   assertEquals(friendly('claude-fable-5'), 'Fable 5')
   assertEquals(friendly('claude-haiku-4-5-20251001'), 'Haiku 4.5')
-  assertEquals(friendly('opus'), 'Opus') // a short alias stays a word
+  assertEquals(friendly('sonnet'), 'Sonnet') // a short alias stays a word
   assertEquals(friendly('gpt-5.6-sol'), 'GPT 5.6 Sol')
   assertEquals(friendly('fake-fast'), 'Fake Fast')
   assertEquals(friendly(''), null)

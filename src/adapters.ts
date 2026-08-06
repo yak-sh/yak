@@ -233,30 +233,31 @@ export let adapters: Record<string, Adapter> = {
   // ours are the same string — correlation for free.
   claude: {
     // Pinned full ids ARE the offer — the version is part of it, so a
-    // pinned id can't silently move when Anthropic ships. But the CLI
-    // natively resolves the short aliases (`opus`→latest opus, and so on),
-    // so we accept those too: ergonomics for a caller who just wants "the
-    // current opus" and lets the CLI pin the version at launch. Probed live
-    // against the CLI.
+    // pinned id can't silently move when Anthropic ships. The CLI natively
+    // resolves a short alias to the latest of its line (`sonnet`→latest
+    // sonnet), so we accept those for the lines whose latest is what we
+    // want. `opus` is NOT one of them: its latest is claude-opus-5, which is
+    // barred, so opus is pinned to claude-opus-4-8 — the bare `opus` alias
+    // is neither offered nor accepted, and a request for `opus` or
+    // `claude-opus-5` is refused outright, never silently downgraded.
+    // claude-opus-4-8 leads, so it is the house default every door reads as
+    // models[0] (:fix, spawn, the Run form). Probed live against the CLI.
     models: [
-      'opus',
+      'claude-opus-4-8',
       'sonnet',
       'haiku',
       'fable',
       'claude-fable-5',
-      'claude-opus-5',
-      'claude-opus-4-8',
       'claude-sonnet-5',
       'claude-haiku-4-5',
     ],
     efforts: [],
-    // The MENU is aliases only, and its first entry is the house default
-    // (offers()[0] — what :fix launches and the Run form preselects). A
-    // pinned id stays requestable from the allowlist above; it just isn't
-    // an offer, because a menu of pins needs an edit every release and
-    // this one never does.
+    // The MENU is the labels map, first entry the house default (offers()[0]
+    // — what the Run form preselects for this provider). Opus is the pinned
+    // 4-8; the other lines ride their alias, so the menu needs no edit when a
+    // non-opus line ships a new latest.
     labels: {
-      opus: 'Opus',
+      'claude-opus-4-8': 'Opus',
       fable: 'Fable',
       sonnet: 'Sonnet',
       haiku: 'Haiku',

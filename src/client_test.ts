@@ -779,11 +779,11 @@ Deno.test('spawnDefaults: the caller session lends its provider/model', () => {
   mine.changes.find((c) => c.eid == S && c.name == 'session')!.comp = {
     id: 'sess-x',
     provider: 'claude',
-    model: 'opus',
+    model: 'claude-opus-4-8',
   }
   assertEquals(spawnDefaults(rows(mine), 'sess-x'), {
     provider: 'claude',
-    model: 'opus',
+    model: 'claude-opus-4-8',
   })
   // a row with neither, an unknown session, no session: all default to none
   let none = { provider: undefined, model: undefined }
@@ -834,7 +834,7 @@ Deno.test('sessionMeta: the YAML lead — known fields only, or nothing', () => 
           id: 'sess-m',
           cwd: '/w',
           provider: 'claude',
-          model: 'opus',
+          model: 'claude-opus-4-8',
           effort: 'high',
           persona_eid: PN,
         },
@@ -851,7 +851,7 @@ Deno.test('sessionMeta: the YAML lead — known fields only, or nothing', () => 
       'session: S-21',
       'sid: sess-m',
       'provider: claude',
-      'model: opus',
+      'model: claude-opus-4-8',
       'effort: high',
       'cwd: /w',
       'persona: N-22 Scribe',

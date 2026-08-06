@@ -1,7 +1,7 @@
 // The adapter readers against REAL captured events — each fixture line is
 // pasted from a live probe of the CLI it mimics (trimmed, same shape).
 // If a vendor changes dialect, these say exactly which reader went deaf.
-import { assertEquals, assertMatch } from '@std/assert'
+import { assertEquals, assertMatch, assertNotEquals } from '@std/assert'
 import { adapters, providers, trouble } from './adapters.ts'
 
 let { claude, codex } = adapters
@@ -137,16 +137,24 @@ Deno.test('providers: every adapter but fake, allowlists only — no argv', () =
   )
 })
 
-Deno.test('claude: short aliases and pinned ids both validate; opus-5 offered', () => {
-  // the CLI resolves the alias to the latest; the pinned id keeps its version
-  assertEquals(trouble({ provider: 'claude', model: 'opus' }), null)
+Deno.test('claude: opus-5 and the bare opus alias are barred; 4-8 is the default', () => {
+  // A non-opus line rides its alias (latest is wanted); opus does not.
   assertEquals(trouble({ provider: 'claude', model: 'sonnet' }), null)
-  assertEquals(trouble({ provider: 'claude', model: 'claude-opus-5' }), null)
   assertEquals(trouble({ provider: 'claude', model: 'claude-opus-4-8' }), null)
-  // the MENU is aliases only — a pin is allowed, never offered — and its
-  // first entry is the house default every door reads as offers()[0]
-  assertEquals(Object.keys(claude.labels), ['opus', 'fable', 'sonnet', 'haiku'])
-  assertEquals(claude.models[0], 'opus')
+  // The ban is a rejection, never a silent downgrade — both spellings that
+  // reach claude-opus-5 are refused: the pinned id and the alias that
+  // resolves to it.
+  assertNotEquals(trouble({ provider: 'claude', model: 'claude-opus-5' }), null)
+  assertNotEquals(trouble({ provider: 'claude', model: 'opus' }), null)
+  // Derived from the allowlist, not sampled, so the ban can't rot into a
+  // decoy: nothing the adapter accepts may be opus-5 or the poison alias.
+  assertEquals(claude.models.includes('claude-opus-5'), false)
+  assertEquals(claude.models.includes('opus'), false)
+  // claude-opus-4-8 leads, so it is the house default every door reads.
+  assertEquals(claude.models[0], 'claude-opus-4-8')
+  // The menu offers Opus, and the model behind it is the pinned 4-8.
+  assertEquals(claude.labels['claude-opus-4-8'], 'Opus')
+  assertEquals(Object.keys(claude.labels)[0], 'claude-opus-4-8')
 })
 
 Deno.test('trouble: unknown provider/model/effort each name the valid ones', () => {

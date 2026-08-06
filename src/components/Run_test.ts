@@ -7,7 +7,7 @@ import { offers } from './Run.tsx'
 Deno.test('offers: Sol leads; Opus, Fable, Terra, and Luna stay put', () => {
   assertEquals(offers(providers()).map((x) => x.model), [
     'gpt-5.6-sol',
-    'opus',
+    'claude-opus-4-8',
     'fable',
     'sonnet',
     'haiku',

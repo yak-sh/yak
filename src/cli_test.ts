@@ -374,17 +374,17 @@ Deno.test('hookDialect: Codex payload and Claude transcript name the provider', 
       path,
       JSON.stringify({
         type: 'assistant',
-        message: { model: 'claude-opus-5' },
+        message: { model: 'claude-opus-4-8' },
       }),
     )
     assertEquals(
       hookDialect({
-        model: 'claude-opus-5',
+        model: 'claude-opus-4-8',
         transcript_path: path,
       }, 'claude'),
       {
         provider: 'claude',
-        model: 'claude-opus-5',
+        model: 'claude-opus-4-8',
         transcript: path,
       },
     )
@@ -438,7 +438,7 @@ Deno.test('task comment help teaches verdict-bearing comments', async () => {
 
 Deno.test('task claude scopes operator capability and strips its local flag', () => {
   let launch = claudeLaunch(
-    ['--model', 'opus', '--operator', '--continue'],
+    ['--model', 'claude-opus-4-8', '--operator', '--continue'],
     true,
     42,
   )
@@ -450,7 +450,7 @@ Deno.test('task claude scopes operator capability and strips its local flag', ()
       '--channels',
       'plugin:tasks@tasks-fleet',
       '--model',
-      'opus',
+      'claude-opus-4-8',
       '--continue',
     ],
     env: {
