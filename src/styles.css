@@ -3294,3 +3294,49 @@ a[data-ref]:hover {
   color: var(--text);
   border-color: var(--border2);
 }
+
+/* Density: one renderer, three sizes. A composite view sets --density on a
+   cell and the shared row components answer through style queries — metrics
+   and elisions only, never markup, so one renderer serves every tier (the
+   .TaskTile-dense var set, made selectable by a value). Unset = full: each
+   rule here is inert outside a container that sets the property, which is
+   what keeps boards, lists and inboxes elsewhere untouched. */
+@container style(--density: summary) {
+  .ListTile,
+  .TaskTile,
+  .Inbox_Item {
+    padding: 2px var(--half-gap);
+    font-size: 12px;
+  }
+  .TaskTile {
+    --meta-stamp: none; /* provenance is the full tier's luxury */
+  }
+  .Inbox_Kind {
+    min-width: 0;
+  }
+}
+/* glance: the row folds to its marks — dot, chips, a line that ellipsizes;
+   the prose and provenance yield. The Fleet Grid's tier (D-14587). */
+@container style(--density: glance) {
+  .ListTile,
+  .TaskTile,
+  .SessionRow,
+  .Inbox_Item {
+    padding: 0 2px;
+    border: 0;
+    background: none;
+    font-size: 11px;
+  }
+  .TaskTile > .Show_Meta,
+  .SessionRow_Actor,
+  .SessionRow_Task,
+  .Inbox_Kind,
+  .Stamp {
+    display: none;
+  }
+  .TaskTile_Title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
