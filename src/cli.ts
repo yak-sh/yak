@@ -24,6 +24,7 @@ import {
   designChanges,
   edgesOf,
   find,
+  got,
   history,
   historyBy,
   historyLine,
@@ -40,7 +41,9 @@ import {
   mailLine,
   me,
   memoryChanges,
+  minted,
   need,
+  needed,
   noticeBlock,
   noticesFor,
   type Param,
@@ -472,8 +475,7 @@ let create = async (args: string[]) => {
   if (!grouped.doc.title) throw new Error('a task needs a .title')
   let eid = crypto.randomUUID()
   await send(taskChanges(eid, grouped))
-  let made = rows(await snapshot()).find((r) => r.eid == eid)
-  print(`${made ? idOf(made) : eid} created`)
+  print(`${await minted(eid)} created`)
   let hint = await similarHint(
     `${grouped.doc.title}\n${grouped.doc.body ?? ''}`,
     eid,
@@ -694,8 +696,7 @@ let mailSend = async (args: string[]) => {
   }
   let made = mailChanges({ to, subject: subj.join(' '), body })
   await send(made.changes)
-  let after = rows(await snapshot()).find((r) => r.eid == made.eid)
-  let eid = after ? idOf(after) : made.eid
+  let eid = await minted(made.eid)
   print(`${eid} → ${to} — task show ${eid} for the delivery receipt`)
 }
 
@@ -713,8 +714,7 @@ let mailReply = async (args: string[]) => {
   }
   let made = replyChanges(row, body)
   await send(made.changes)
-  let after = rows(await snapshot()).find((r) => r.eid == made.eid)
-  let eid = after ? idOf(after) : made.eid
+  let eid = await minted(made.eid)
   print(
     `${eid} → ${made.changes[1].comp?.to} (re: ${
       idOf(row)
@@ -1002,10 +1002,9 @@ let launch = async (
     deps: snap.deps,
   })
   await send(made.changes)
-  let after = rows(await snapshot()).find((r) => r.eid == made.eid)
   let onto = find(all, id)
   print(
-    `${after ? idOf(after) : made.eid} spawned onto ${onto ? idOf(onto) : id}`,
+    `${await minted(made.eid)} spawned onto ${onto ? idOf(onto) : id}`,
   )
 }
 
@@ -1237,11 +1236,10 @@ let comment = async (args: string[]) => {
   // writer has no reference to what it just wrote, so the only reachable way
   // to fix a wrong comment is another comment — which is why the board fills
   // with corrections instead of corrected text (`task set C-13 .body=…`).
-  let mine = made.find((c) => c.name == 'comment')?.eid
-  let after = rows(await snapshot()).find((r) => r.eid == mine)
+  let mine = made.find((c) => c.name == 'comment')!.eid
   let said = verdict ? `${verdict} review` : 'comment'
   print(
-    `${after ? idOf(after) : mine} — ${said} on ${idOf(row)}`,
+    `${await minted(mine)} — ${said} on ${idOf(row)}`,
   )
 }
 
@@ -1750,8 +1748,7 @@ let design = async (args: string[]) => {
   let body = bodyIn(vals)
   let made = designChanges(rows(await snapshot()), { title, body, session })
   await send(made.changes)
-  let after = rows(await snapshot()).find((r) => r.eid == made.eid)
-  print(`${after ? idOf(after) : made.eid} proposed`)
+  print(`${await minted(made.eid)} proposed`)
   let hint = await similarHint(`${title}\n${body ?? ''}`, made.eid)
   if (hint) print(hint)
 }
@@ -1777,8 +1774,7 @@ let remember = async (args: string[]) => {
     session,
   })
   await send(made.changes)
-  let after = rows(await snapshot()).find((r) => r.eid == made.eid)
-  print(`${after ? idOf(after) : made.eid} remembered`)
+  print(`${await minted(made.eid)} remembered`)
   let hint = await similarHint(`${title}\n${body ?? ''}`, made.eid)
   if (hint) print(hint)
 }

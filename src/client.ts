@@ -94,6 +94,15 @@ export let fetched = async (ids: string[], filters: string[] = []) =>
 // One entity by address, or undefined — find() over the wire.
 export let got = async (id: string) => (await fetched([id]))[0]
 
+// The human id of a just-minted entity, read back by its eid for the num
+// the server stamped — /apply is synchronous against the same db, so the
+// row is already there; the eid stands in on the rare miss. One keyed
+// query instead of a whole snapshot for every mint's success line.
+export let minted = async (eid: string) => {
+  let r = await got(eid)
+  return r ? idOf(r) : eid
+}
+
 // The graph as rows: one per entity, components merged in; kind derived.
 export let rows = ({ changes }: { changes: Change[] }) => {
   let out = new Map<string, Row>()
@@ -595,6 +604,15 @@ export let need = (all: Row[], id: string, where = '', comp = '') => {
   throw new Error(
     `no entity: ${id}${where}${near ? ` — did you mean ${near}?` : ''}`,
   )
+}
+// need(), narrowed: got() the entity by address, and ONLY on a miss pull
+// the whole graph — the error path, where nearby()'s "did you mean?" is
+// worth its 0.4s and nothing else is. The one door that turns a verb's
+// opening `need(rows(await snapshot()), id)` into a keyed read.
+export let needed = async (id: string, where = '', comp = '') => {
+  let hit = await got(id)
+  if (hit) return hit
+  return need(rows(await snapshot()), id, where, comp)
 }
 export let deref = (all: Row[], v: string, where = '', comp = '') =>
   !v || UUID.test(v) ? v : need(all, v, where, comp).eid
