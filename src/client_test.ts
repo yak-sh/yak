@@ -24,7 +24,7 @@ import {
   mailLine,
   me,
   memoryChanges,
-  notices,
+  noticesFor,
   param,
   patches,
   readerAt,
@@ -228,7 +228,7 @@ Deno.test('notices: unseen comments on claimed tasks + messages to the session',
     ],
     deps: snap.deps,
   }
-  let n = notices(busSnap, 'sess-x')
+  let n = noticesFor(busSnap, 'sess-x')
   assertEquals(n.lines.length, 2)
   assertEquals(n.lines[0].includes('heads up'), true)
   assertEquals(n.lines[0].includes('[approved]'), true)
@@ -248,7 +248,7 @@ Deno.test('notices: unseen comments on claimed tasks + messages to the session',
     deps: snap.deps,
   }
   assertEquals(
-    notices(pre, 'sess-x').ack.filter((c) => c.name == 'notified').map((c) =>
+    noticesFor(pre, 'sess-x').ack.filter((c) => c.name == 'notified').map((c) =>
       c.eid
     ),
     ['c-2'],
@@ -263,7 +263,7 @@ Deno.test('notices: unseen comments on claimed tasks + messages to the session',
     ],
     deps: snap.deps,
   }
-  assertEquals(notices(seen, 'sess-x').lines.length, 0)
+  assertEquals(noticesFor(seen, 'sess-x').lines.length, 0)
   // the acked_at cursor no longer gates: a cursor past both comments does NOT
   // hide them — only the per-item stamp does (drain-proof, see below).
   let acked: Snapshot = {
@@ -274,9 +274,9 @@ Deno.test('notices: unseen comments on claimed tasks + messages to the session',
     ),
     deps: snap.deps,
   }
-  assertEquals(notices(acked, 'sess-x').lines.length, 2)
+  assertEquals(noticesFor(acked, 'sess-x').lines.length, 2)
   // unknown session: silent, no ack
-  assertEquals(notices(busSnap, 'sess-nobody'), { lines: [], ack: [] })
+  assertEquals(noticesFor(busSnap, 'sess-nobody'), { lines: [], ack: [] })
 })
 
 Deno.test('notices: comments, acted knocks, and verified operator mail surface together', () => {
@@ -345,7 +345,7 @@ Deno.test('notices: comments, acted knocks, and verified operator mail surface t
     ],
     deps: snap.deps,
   }
-  let n = notices(g, 'sess-x')
+  let n = noticesFor(g, 'sess-x')
   assertEquals(n.lines.length, 3)
   assertEquals(n.lines.every((line) => line.startsWith('UNTRUSTED ')), true)
   assertEquals(n.lines.some((line) => line.includes('review this')), true)
@@ -367,7 +367,7 @@ Deno.test('notices: comments, acted knocks, and verified operator mail surface t
         : change
     ),
   }
-  let direct = notices(ordinary, 'sess-x').lines
+  let direct = noticesFor(ordinary, 'sess-x').lines
   assertEquals(direct.some((line) => line.includes('mail body')), false)
   assertEquals(direct.some((line) => line.includes('review this')), true)
   assertEquals(direct.some((line) => line.includes('knock: look at T-2')), true)
@@ -378,7 +378,7 @@ Deno.test('notices: comments, acted knocks, and verified operator mail surface t
       ...n.ack.filter((c) => c.name == 'notified'),
     ],
   }
-  assertEquals(notices(seen, 'sess-x').lines, [])
+  assertEquals(noticesFor(seen, 'sess-x').lines, [])
 })
 
 Deno.test('notices: overflow remains pending until a later read', () => {
@@ -396,7 +396,7 @@ Deno.test('notices: overflow remains pending until a later read', () => {
     ]
   }).flat()
   let g: Snapshot = { changes: [...snap.changes, ...comments], deps: snap.deps }
-  let first = notices(g, 'sess-x')
+  let first = noticesFor(g, 'sess-x')
   assertEquals(first.lines.length, 21) // 20 items + overflow summary
   assertEquals(
     first.ack.filter((c) => c.name == 'notified').length,
@@ -409,7 +409,7 @@ Deno.test('notices: overflow remains pending until a later read', () => {
       ...first.ack.filter((c) => c.name == 'notified'),
     ],
   }
-  let second = notices(later, 'sess-x')
+  let second = noticesFor(later, 'sess-x')
   assertEquals(second.lines.length, 2)
   assertEquals(
     second.ack.filter((c) => c.name == 'notified').length,
@@ -441,7 +441,7 @@ Deno.test('notices: per-item stamp is drain-proof (a served ack cannot hide a si
     deps: snap.deps,
   }
   // fresh: both un-notified, both served
-  assertEquals(notices(g, 'sess-x').lines.length, 2)
+  assertEquals(noticesFor(g, 'sess-x').lines.length, 2)
   // one reader served m-1: it stamped `notified` on m-1 AND advanced the
   // shared cursor past BOTH (acked_at = now). The old cursor gate would now
   // hide m-2 (born before the cursor); per-item keeps it — m-2 is un-notified.
@@ -456,7 +456,7 @@ Deno.test('notices: per-item stamp is drain-proof (a served ack cannot hide a si
     ],
     deps: snap.deps,
   }
-  let n = notices(drained, 'sess-x')
+  let n = noticesFor(drained, 'sess-x')
   assertEquals(n.lines.length, 1)
   assertEquals(n.lines[0].includes('second ping'), true)
   // and serving it only stamps the sibling, never re-stamps m-1
@@ -2321,7 +2321,7 @@ Deno.test('notices: bylines read actor and instrument from the stamp', () => {
     ],
     deps: snap.deps,
   }
-  let [line] = notices(s, 'sess-x').lines
+  let [line] = noticesFor(s, 'sess-x').lines
   assertMatch(line, /P-81 · via S-82/) // operator, not session id
 })
 

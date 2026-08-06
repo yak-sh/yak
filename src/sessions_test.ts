@@ -23,7 +23,7 @@ Deno.env.set('POLL_MS', '10') // tests wait on facts, never on the clock
 Deno.env.set('STOP_GRACE_MS', '1000')
 
 let { apply, db, delta, snapshot } = await import('./db.ts')
-let { notices } = await import('./client.ts')
+let { noticesFor } = await import('./client.ts')
 let {
   childPath,
   commented,
@@ -543,7 +543,7 @@ Deno.test('a failed spawn tells its task and its spawner — and only once', asy
   assert(
     heard.some((c) => c.name == 'comment' && c.comp?.target_eid == spawner),
   )
-  let bus = notices(snapshot(db), sid)
+  let bus = noticesFor(snapshot(db), sid)
   assertEquals(bus.lines.length, 1)
   assertMatch(bus.lines[0], /S-\d+ failed/)
   spawned(cast)(eid, { provider: 'fake' })

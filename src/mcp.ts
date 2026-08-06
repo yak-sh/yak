@@ -45,7 +45,7 @@ import {
   memoryChanges,
   memoryHead,
   noticeBlock,
-  notices,
+  noticesFor,
   param,
   patches,
   recallIndex,
@@ -254,7 +254,7 @@ comments, and the comms bus.`,
   // exactly when the lines are actually served.
   let bus = async (out: string, session?: string, snap?: Snapshot) => {
     if (!session) return text(out)
-    let n = notices(snap ?? await io.read(), session)
+    let n = noticesFor(snap ?? await io.read(), session)
     if (!n.lines.length) return text(out)
     await io.write(n.ack, session)
     return text(out + noticeBlock(n.lines))

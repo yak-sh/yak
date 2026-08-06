@@ -12,6 +12,7 @@ import {
   addressed,
   belongs,
   bornAt,
+  bus,
   byBoard,
   checkRefs,
   claimant,
@@ -41,7 +42,7 @@ import {
   memoryChanges,
   need,
   noticeBlock,
-  notices,
+  noticesFor,
   type Param,
   param,
   patches,
@@ -59,7 +60,7 @@ import {
   sessionMeta,
   showMd,
   similarHint,
-  snapshot as readGraph,
+  snapshot,
   spawnChanges,
   spawnDefaults,
   stdin,
@@ -1429,37 +1430,42 @@ export let roleEid = (all: Row[], id?: string) => {
   return role?.comps.role ? role.eid : undefined
 }
 
-// A graph-declared role already names the capability the daemon launched.
-// The last graph this process read. Every verb that already looks at the
-// graph — claim, show, list, comment, set, release, the colon verbs — leaves
-// it here, and the bus is served from it after the verb finishes. That is why
-// there is no wrapper around dispatch fetching its own: a snapshot of a real
-// graph is ~16MB and a quarter second, far too much to spend on every `task`
-// call to find out that nothing is waiting.
-let seen: Snapshot | undefined
-let snapshot = async () => (seen = await readGraph())
-
 // Serve the comms bus once per run, on STDERR. A pipe redirects stdout only,
 // so `task list | head` still shows this, `--json` stays parseable, and a
 // redirect to a file stays clean. `2>/dev/null` does hide it — but the stamp
 // demotes an item from unread to read in `task inbox`, which keeps everything
 // until it is ARCHIVED, so a message can be missed here and never lost.
 //
-// Verbs that only write serve nothing, which is right: they never read the
-// graph, so there is nothing in hand to serve from.
+// The bus asks its OWN bounded question (client.ts bus()) rather than reading
+// whatever snapshot a verb happened to leave behind. That is what lets a verb
+// stop pulling the corpus (T-13882) without the bus going silent — and it is
+// why a verb that only writes serves the bus too.
+//
+// A HOOK is the case where nobody is there (T-14196). Serving stamps every
+// line `notified`, which demotes it from unread — so a hook's stderr, which
+// no operator will ever read, would consume the messages and lose them.
+// `wrap --hook` is SessionEnd: the worst moment to do that. This used to be
+// masked by "only a verb that read a snapshot serves", and asking the bus its
+// own question removes the mask, so the rule has to be said out loud.
+// `context --hook` needs no exception: its stdout IS the digest the session
+// boots into, so it serves deliberately and sets `told` itself.
 let told = false
 let heard = async () => {
-  if (told || !seen) return
+  if (told || Deno.args.includes('--hook')) return
   told = true
   let sid = me()
   if (!sid) return
-  let n = notices(seen, sid)
-  if (!n.lines.length) return
+  // An aside, never the answer: a server that went away between the verb and
+  // this fetch costs the notices — which stay unread and ring again — not the
+  // verb's exit code. `task help` still works with nothing listening.
+  let n = await bus(sid).catch(() => undefined)
+  if (!n?.lines.length) return
   await send(n.ack)
   warn(noticeBlock(n.lines))
 }
 
-// The ancestry marker is the equivalent opt-in for an ad-hoc terminal.
+// A graph-declared role already names the capability the daemon launched;
+// the ancestry marker is the equivalent opt-in for an ad-hoc terminal.
 export let hookOperator = (role?: string, pid?: number) =>
   !!role || operatorHook(pid)
 
@@ -1479,7 +1485,7 @@ let context = async (args: string[]) => {
     let fm = sessionMeta(rows(snap), sid)
     let out = contextDigest(snap, sid, Date.now(), scope)
     if (fm) out = `${fm}\n${out}`
-    let n = notices(snap, sid)
+    let n = noticesFor(snap, sid)
     told = true // this digest IS the serving; heard() must not repeat it
     if (n.lines.length) {
       await send(n.ack)
@@ -1842,7 +1848,7 @@ let repoRoot = () => {
 let probes = async (args: string[]) => {
   let mins = Number(args.find((a) => a.startsWith('--grace='))?.slice(8))
   let repo = repoRoot()
-  let all = rows(await readGraph())
+  let all = rows(await snapshot())
   let seen = sweep(
     sessionsOf(all),
     repo,

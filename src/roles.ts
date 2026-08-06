@@ -10,7 +10,7 @@ import { createHash } from 'node:crypto'
 import { trouble } from './adapters.ts'
 import { apply, cursorOf, db, record, snapshot } from './db.ts'
 import { dispatch, trace } from './effects.ts'
-import { notices, rows } from './client.ts'
+import { noticesFor, rows } from './client.ts'
 import { materialize } from './persona.ts'
 import { childPath, continueSession } from './sessions.ts'
 import { tmuxRun } from './tmux.ts'
@@ -665,7 +665,7 @@ let reconcileManaged = async (
     return
   }
   if (session.status != 'completed' || !session.provider_session_id) return
-  let pending = notices(snapshot(db), String(session.id))
+  let pending = noticesFor(snapshot(db), String(session.id))
   if (!pending.lines.length) return
   let newest =
     pending.ack.map((change) =>

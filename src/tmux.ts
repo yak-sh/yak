@@ -4,7 +4,7 @@
 // SERVER-ONLY (imports db).
 import { cursorOf, db, snapshot } from './db.ts'
 import { delivery } from './door.ts'
-import { notices } from './client.ts'
+import { noticesFor } from './client.ts'
 import { descends } from './proc.ts'
 import type { Change } from './types.ts'
 
@@ -365,7 +365,7 @@ let systemDeps = (
 ): NotifyDeps => ({
   now: Date.now,
   route: delivery,
-  pending: (id) => notices(snap(), id).lines.length > 0,
+  pending: (id) => noticesFor(snap(), id).lines.length > 0,
   pane: paneInfo,
   under: descends,
   capture: capturePane,

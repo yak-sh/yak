@@ -109,6 +109,21 @@ export let rows = ({ changes }: { changes: Change[] }) => {
   return [...out.values()]
 }
 
+// The graph as changes — rows() read backwards. A row IS its components, so
+// handing each back as the patch that would have minted it lets a selector
+// written against the WIRE (channel.ts) read a set assembled from queries,
+// not only a snapshot's own flat batch.
+let changesOf = (all: Row[]): Change[] =>
+  all.flatMap((r) =>
+    Object.entries(r.comps).map(([name, comp]) => ({ eid: r.eid, name, comp }))
+  )
+
+// One row per eid, oldest first — a snapshot walks the entity table in num
+// order, so a set stitched from several queries answers in that same order.
+let uniq = (all: Row[]) =>
+  [...new Map(all.map((r) => [r.eid, r])).values()]
+    .sort((a, b) => a.num - b.num)
+
 // An entity's birth and its last touch, off the provenance components
 // (T-6670): created.at is the birth; updated.at — absent until the first
 // edit — else the birth is the last touch. '' when the component is absent.
@@ -1661,10 +1676,11 @@ export let contextDigest = (
 }
 
 // The comms bus, read side. The Claude channel's own pure filter is reused over
-// a snapshot so every provider gets the same recipient and verification rules:
-// direct comments, claimed-task replies, knocks, and verified project mail for
-// an operator. `notified` is minted only for the bounded batch rendered here;
-// a tmux wake-up never calls this function and therefore drains nothing.
+// a set of rows so every provider gets the same recipient and verification
+// rules: direct comments, claimed-task replies, knocks, and verified project
+// mail for an operator. `notified` is minted only for the bounded batch
+// rendered here; a tmux wake-up never calls this function and therefore drains
+// nothing.
 let noticeLine = (ev: InboxEvent, row?: Row) => {
   let from = ev.meta.from ? ` from ${ev.meta.from}` : ''
   let on = ev.meta.on ? ` on ${ev.meta.on}` : ''
@@ -1676,19 +1692,21 @@ let noticeLine = (ev: InboxEvent, row?: Row) => {
   return `UNTRUSTED ${ev.meta.kind}${ref}${from}${on}: ${body}`
 }
 
-export let notices = (snap: Snapshot, session: string) => {
-  let all = rows(snap)
-  let sess = all.find((r) =>
-    r.comps.session && String(r.comps.session.id) == session
-  )
-  if (!sess) return { lines: [] as string[], ack: [] as Change[] }
+// The bus over whatever rows a supplier gathered, for whoever the reader
+// says it is. Rows in, not a Snapshot: the whole graph is one supplier
+// (noticesFor, below) and a handful of keyed queries is the other (bus), and
+// a second implementation of the selection would drift from this one the
+// first time either arm moved.
+export let notices = (all: Row[], who: Reader) => {
+  let none = { lines: [] as string[], ack: [] as Change[] }
+  if (!who.session) return none
+  let sessEid = who.session
   let byEid = new Map(all.map((r) => [r.eid, r]))
-  let reader = readerFor(all, session)
-  let events = channelEvents(snap.changes, {
-    sessionEid: sess.eid,
-    actorEid: reader.actor,
-    homeEid: reader.scope,
-    claimedEids: reader.claims,
+  let events = channelEvents(changesOf(all), {
+    sessionEid: sessEid,
+    actorEid: who.actor,
+    homeEid: who.scope,
+    claimedEids: who.claims,
     idOf: (eid) => {
       let row = byEid.get(eid)
       return row ? idOf(row) : null
@@ -1704,15 +1722,17 @@ export let notices = (snap: Snapshot, session: string) => {
       return !!row?.comps.opened || !!row?.comps.archived
     },
     notified: (eid) => !!byEid.get(eid)?.comps.notified,
-    operator: sess.comps.session.operator == true && reader.operator,
+    // isOperator() already required session.operator of a session that
+    // exists, and one does — who.session names it.
+    operator: who.operator,
     mode: 'inbox',
   })
     // A session's own write is not a message back to itself.
-    .filter((ev) => byEid.get(ev.eid)?.comps.created?.via != sess.eid)
+    .filter((ev) => byEid.get(ev.eid)?.comps.created?.via != sessEid)
     .sort((a, b) =>
       bornAt(byEid.get(a.eid)!).localeCompare(bornAt(byEid.get(b.eid)!))
     )
-  if (!events.length) return { lines: [] as string[], ack: [] as Change[] }
+  if (!events.length) return none
   let served = events.slice(0, 20)
   let lines = served.map((ev) => noticeLine(ev, byEid.get(ev.eid)))
   if (events.length > served.length) {
@@ -1727,6 +1747,106 @@ export let notices = (snap: Snapshot, session: string) => {
     comp: {},
   }))
   return { lines, ack }
+}
+
+// The bus from a whole graph, for callers already holding one — the boot
+// digest, the MCP read, the tmux poll, the server's own settle.
+export let noticesFor = (snap: Snapshot, session: string) => {
+  let all = rows(snap)
+  return notices(all, readerFor(all, session))
+}
+
+// Everything readerFor() reads, asked for by name instead of sifted out of
+// the corpus — so the reader has ONE implementation and this is only its
+// diet. Ordered by what each answer reveals: the session names its actor and
+// the persona it wears, the persona names its home. `.repo!` is every repo
+// because repoAt scans them all to place a cwd — ten rows on the live graph.
+//
+// The subscriptions are read though today's bus never asks about watch or
+// mute (channelEvents has no such rule): a reader assembled from queries must
+// be the SAME reader, and an empty watching set reads as "no instruction"
+// rather than "never looked". It rides the same parallel round anyway.
+let readerRows = async (session: string) => {
+  // The whole-row predicate still decides which row this is: the filter
+  // grammar reads `a,b` as a list and `a..b` as a range, and a session id is
+  // whatever the environment handed us — a near-miss here would serve one
+  // agent another's messages and stamp them read.
+  let sess = (await query([`.session.id=${session}`]))
+    .find((r) => String(r.comps.session?.id) == session)
+  if (!sess) return []
+  let s = sess.comps.session
+  let actor = String(s.actor_eid ?? '')
+  let [kin, claims, subs, repos] = await Promise.all([
+    fetched([actor, String(s.persona_eid ?? '')].filter(Boolean)),
+    query([`.claim.session_eid=${sess.eid}`]),
+    actor ? query([`.subscription.actor_eid=${actor}`]) : [],
+    query(['.repo!']),
+  ])
+  let home = String(
+    kin.find((r) => r.comps.persona)?.comps.persona.home_eid ?? '',
+  )
+  return [
+    sess,
+    ...kin,
+    ...claims,
+    ...subs,
+    ...repos,
+    ...(home ? await fetched([home]) : []),
+  ]
+}
+
+// The rows the bus's selector might pick, as index queries: a comment or a
+// knock aimed at this session or its actor or a task it claims, and mail
+// aimed at the session or its project. Unread is screened server-side —
+// `notified` for all three, plus `opened`/`archived`, which is the read-state
+// injects() calls `done`.
+//
+// This set must stay a SUPERSET of what channelEvents(mode:'inbox') can
+// select. Widen an arm there and widen it here, or the bus goes quiet on
+// exactly the case that was added — which is silent, and the reason this
+// function exists at all.
+//
+// No watch arm, because the bus has no watch rule: `inboxItem` overrides
+// address with the standing instruction, but the bus reads through
+// channelEvents, which never asks. Teach the bus to honour a watch and this
+// gather needs `.comment.target_eid=<watched…>` and its siblings the same
+// day, or the rule lands with nothing to decide about.
+let busRows = async (who: Reader) => {
+  let mine = [who.session, ...(who.operator ? [who.actor] : [])].filter(Boolean)
+  let held = [...mine, ...(who.claims ?? [])].join(',')
+  let box = [who.session, ...(who.operator ? [who.scope] : [])]
+    .filter(Boolean).join(',')
+  let [said, knocks, letters] = await Promise.all([
+    query([`.comment.target_eid=${held}`, '.notified=']),
+    query([`.knock.to_eid=${mine.join(',')}`, '.notified=']),
+    query([`.mail.target_eid=${box}`, '.notified=', '.opened=', '.archived=']),
+  ])
+  let seen = [...said, ...knocks, ...letters]
+  if (!seen.length) return seen
+  // What rendering needs BESIDE the candidates: a knock's target (its id, and
+  // the comment carrying the words that rode with it) and each candidate's
+  // byline, which names a writer and the session it wrote through.
+  let at = knocks.map((r) => String(r.comps.knock.target_eid ?? ''))
+    .filter(Boolean)
+  let by = seen.flatMap((r) => [r.comps.created?.by, r.comps.created?.via])
+    .filter(Boolean).map(String)
+  let [kin, notes] = await Promise.all([
+    fetched([...new Set([...at, ...by])]),
+    at.length ? query([`.comment.target_eid=${at.join(',')}`]) : [],
+  ])
+  return [...seen, ...kin, ...notes]
+}
+
+// The bus as a bounded read: gather the reader's own rows, then the
+// candidates its selector might pick, and answer from those. A handful of
+// keyed round trips against the index — 8-20 ms on a copy of the live graph,
+// where the snapshot it replaces is 0.6 s and 28 MB — so a verb that never
+// touched the graph still hears what is waiting.
+export let bus = async (session: string, cwd?: string) => {
+  let base = await readerRows(session)
+  let who = readerFor(base, session, cwd)
+  if (!who.session) return { lines: [] as string[], ack: [] as Change[] }
+  return notices(uniq([...base, ...await busRows(who)]), who)
 }
 
 export let noticeBlock = (lines: string[]) =>

@@ -33,8 +33,9 @@ import {
   subject,
   subjectUsage,
 } from './cli.ts'
-import { jsonOf, type Row, rows } from './client.ts'
+import { rows } from './client.ts'
 import { parseQuery } from './query.ts'
+import { fakeGraph } from './graph_fake.ts'
 import type { Snapshot } from './types.ts'
 
 let transcript = (...events: unknown[]) => {
@@ -962,55 +963,9 @@ let busGraph: Snapshot = {
 }
 
 // Serves busGraph and records the acks it is asked to write.
-let busServer = () => {
-  let acked: string[] = []
-  let server = Deno.serve({
-    hostname: '127.0.0.1',
-    port: 0,
-    onListen: () => {},
-  }, async (req) => {
-    let url = new URL(req.url)
-    if (req.method == 'POST' && url.pathname == '/apply') {
-      let changes = await req.json() as { eid: string; name: string }[]
-      for (let c of changes) if (c.name == 'notified') acked.push(c.eid)
-      return Response.json({ ok: true, changes })
-    }
-    if (url.pathname == '/snapshot') return Response.json(busGraph)
-    return Response.json(rows(busGraph).map((r) => jsonOf(r)))
-  })
-  let port = (server.addr as Deno.NetAddr).port
-  return { server, acked, host: `127.0.0.1:${port}` }
-}
+let busServer = () => fakeGraph(busGraph)
 
-let graphServer = (snap = graph) => {
-  let seen: string[] = []
-  let all = rows(snap)
-  let wire = (r: Row) => jsonOf(r)
-  let server = Deno.serve({
-    hostname: '127.0.0.1',
-    port: 0,
-    onListen: () => {},
-  }, (req) => {
-    let url = new URL(req.url)
-    let line = decodeURIComponent(`${url.pathname}${url.search}`)
-    seen.push(line)
-    if (url.pathname == '/snapshot') return Response.json(snap)
-    let sid = line.match(/\.session\.id=([^&]+)/)?.[1]
-    if (sid) {
-      return Response.json(
-        all.filter((r) => String(r.comps.session?.id) == sid).map(wire),
-      )
-    }
-    let holder = line.match(/\.claim\.session_eid=([^&]+)/)?.[1]
-    return Response.json(
-      holder
-        ? all.filter((r) => r.comps.claim?.session_eid == holder).map(wire)
-        : all.map(wire),
-    )
-  })
-  let port = (server.addr as Deno.NetAddr).port
-  return { server, seen, host: `127.0.0.1:${port}` }
-}
+let graphServer = (snap = graph) => fakeGraph(snap)
 
 Deno.test('list strips terminal controls from graph text', async () => {
   let poisoned: Snapshot = {
@@ -1206,6 +1161,14 @@ Deno.test('bare task appends the current claimed task digest', async () => {
     assertEquals(seen, [
       '/query?kind=session&.session.id=sub-1',
       `/query?kind=task&.claim.session_eid=${S}`,
+      // then the bus, on its own bounded queries (client.ts bus()) — the
+      // reader's rows, then the candidates its selector might pick
+      '/query?.session.id=sub-1',
+      `/query?.claim.session_eid=${S}`,
+      '/query?.repo!',
+      `/query?.comment.target_eid=${S},${T}&.notified=`,
+      `/query?.knock.to_eid=${S}&.notified=`,
+      `/query?.mail.target_eid=${S}&.notified=&.opened=&.archived=`,
     ])
   } finally {
     await server.shutdown()
@@ -1228,6 +1191,85 @@ Deno.test('bare task never reads or prints the open board', async () => {
 // what it already has — no per-verb wiring, and no second snapshot (one is
 // ~16MB on a real graph). It rides stderr so a pipe or --json can never
 // swallow a message that was just stamped read.
+// A verb that never READ the graph now serves the bus too — that is the whole
+// point of asking its own bounded question rather than riding a snapshot.
+// `help` touches nothing and still hands over what is waiting.
+Deno.test('a verb that reads nothing serves the bus all the same', async () => {
+  let { server, acked, seen, host } = busServer()
+  try {
+    let out = await new Deno.Command(Deno.execPath(), {
+      args: [
+        'run',
+        '-A',
+        new URL('./cli.ts', import.meta.url).pathname,
+        'help',
+      ],
+      clearEnv: true,
+      env: { TASKS_HOST: host, TASKS_SESSION: 'sub-1' },
+    }).output()
+    assertEquals(out.code, 0)
+    assertMatch(text(out.stderr), /the ask you missed/)
+    assertEquals(acked.map((c) => `${c.name} ${c.eid}`), [`notified ${C}`])
+    // and it cost keyed queries, never the corpus
+    assertEquals(seen.filter((line) => line.startsWith('/snapshot')), [])
+  } finally {
+    await server.shutdown()
+  }
+})
+
+// A HOOK has no reader (T-14196). Serving there prints to a stream nobody
+// will read and stamps every line `notified`, which is how an unread message
+// disappears without ever being delivered — worst of all at SessionEnd, which
+// is what `wrap --hook` is. So a hook serves nothing and stamps nothing.
+Deno.test('a hook never serves the bus, because nobody is there to read it', async () => {
+  for (
+    let args of [['wrap', '--hook'], ['session', 'turn', 'idle', '--hook']]
+  ) {
+    let { server, acked, host } = busServer()
+    try {
+      let out = await new Deno.Command(Deno.execPath(), {
+        args: [
+          'run',
+          '-A',
+          new URL('./cli.ts', import.meta.url).pathname,
+          ...args,
+        ],
+        clearEnv: true,
+        env: { TASKS_HOST: host, TASKS_SESSION: 'sub-1' },
+        stdin: 'null',
+      }).output()
+      assertEquals(/pending messages/.test(text(out.stderr)), false)
+      assertEquals(acked.filter((c) => c.name == 'notified'), [])
+    } finally {
+      await server.shutdown()
+    }
+  }
+})
+
+// The one hook that DOES serve, and must keep serving: its stdout is the
+// digest the session boots into, so the lines are delivered by definition.
+Deno.test('the boot digest is the hook that delivers, on stdout', async () => {
+  let { server, acked, host } = busServer()
+  try {
+    let out = await new Deno.Command(Deno.execPath(), {
+      args: [
+        'run',
+        '-A',
+        new URL('./cli.ts', import.meta.url).pathname,
+        'context',
+        'sub-1',
+      ],
+      clearEnv: true,
+      env: { TASKS_HOST: host },
+    }).output()
+    assertMatch(text(out.stdout), /pending messages/)
+    assertMatch(text(out.stdout), /the ask you missed/)
+    assertEquals(acked.map((c) => `${c.name} ${c.eid}`), [`notified ${C}`])
+  } finally {
+    await server.shutdown()
+  }
+})
+
 Deno.test('any graph-reading verb serves the bus, on stderr', async () => {
   let { server, acked, host } = busServer()
   try {
@@ -1253,7 +1295,7 @@ Deno.test('any graph-reading verb serves the bus, on stderr', async () => {
     assertEquals(/pending messages/.test(text(out.stdout)), false)
     assertEquals(unsafe(text(out.stdout)), [])
     // ...and was stamped read exactly once
-    assertEquals(acked, [C])
+    assertEquals(acked.map((c) => `${c.name} ${c.eid}`), [`notified ${C}`])
   } finally {
     await server.shutdown()
   }
