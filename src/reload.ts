@@ -1,6 +1,12 @@
 // The server module graph that needs a process handoff. The dev supervisor and
 // the browser hot-reload watcher share this predicate, so neither can mistake a
 // backend edit for a client-only swap.
+//
+// A running supervisor holds the copy of this list it IMPORTED at its own
+// start, and nothing re-imports it — landing a name here restarts the child
+// (this file is in the list) but leaves the supervisor deciding by yesterday's
+// names until someone restarts `deno task dev`. The same goes for any edit to
+// dev.ts itself.
 
 export let serverFiles = [
   'server.ts',

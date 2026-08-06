@@ -103,6 +103,44 @@ let serial = <T>(work: () => Promise<T>): Promise<T> => {
 // not spin it.
 const RETRY = [0, 1_000, 2_000, 5_000, 10_000, 30_000]
 
+// One attempt at a time, made once the edits stop arriving and made AGAIN —
+// on the same backoff a crash gets — until it reports success. An edit says
+// the tree is newer than the process, and a failed handoff does not make that
+// untrue, so the intent survives the failure. Dropping it is how a landed
+// change ran nowhere: one handoff failed — a boot past its readiness deadline
+// is enough — the supervisor kept the old child, and the tree stayed ahead of
+// the process until some unrelated later edit happened to swap (T-14046). A
+// crashed child was already healed this way; a failed handoff was not.
+export let insist = (
+  work: () => Promise<boolean>,
+  waits = RETRY,
+  quiet = 50,
+) => {
+  let pending = false
+  let running = false
+  let loop = async () => {
+    running = true
+    let n = 0
+    while (pending) {
+      pending = false
+      await wait(quiet)
+      if (pending) continue // still arriving — settle again
+      // A rejection is a failure like any other. The supervisor absorbs it
+      // (T-11139); an unhandled one would kill the process this loop serves.
+      if (await work().catch((e) => (console.error(e), false))) n = 0
+      else {
+        pending = true
+        await wait(waits[Math.min(++n, waits.length - 1)])
+      }
+    }
+    running = false
+  }
+  return () => {
+    pending = true
+    if (!running) loop()
+  }
+}
+
 // A supervisor ABSORBS its child's death; it never escalates one. Exiting
 // here hands the problem to systemd, and `Restart=always` mass-kills this
 // unit's cgroup — where the operator tmux tree lives — so a crash we could
@@ -154,6 +192,7 @@ let swap = async () => {
   try {
     current = watch(await launch(deno, succeeding))
     await stop(old)
+    return true
   } catch (e) {
     console.error('server handoff failed —', e)
     // No successor, so the predecessor is still ours: lift the condemnation.
@@ -162,28 +201,15 @@ let swap = async () => {
     // Unless the reprieve came too late — nothing watches a child whose
     // status already settled, so heal here or sit holding a dead handle.
     if (dead.has(old)) await revive(old)
+    return false
   }
 }
 
 let supervise = async () => {
   current = watch(await launch())
-  let pending = false
-  let swapping = false
-
-  let swaps = async () => {
-    swapping = true
-    while (pending) {
-      pending = false
-      await wait(50)
-      if (!pending) await serial(swap)
-    }
-    swapping = false
-  }
-
+  let handoff = insist(() => serial(swap))
   for await (let event of Deno.watchFs(src)) {
-    if (!event.paths.some(serverFile)) continue
-    pending = true
-    if (!swapping) swaps()
+    if (event.paths.some(serverFile)) handoff()
   }
 }
 
