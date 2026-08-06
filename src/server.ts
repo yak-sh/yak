@@ -72,6 +72,7 @@ import { obeyed } from './obey.ts'
 import { serverFile } from './reload.ts'
 import { find, jsonOf, type Row, rows } from './client.ts'
 import {
+  kindPreds,
   matchQuery,
   ORDER,
   orderOf,
@@ -185,10 +186,12 @@ let filtered = new Set<WebSocket>()
 // A filter of only rankings — or of nothing at all — selects EVERY entity, and
 // there the index has nothing to offer: matching() would read all 12,530 rows
 // through the same per-table statements snapshot() uses, pay a temp table on
-// top, and hand back a set the caller narrows in JS anyway (`kind=memory` and
-// a bare listing are both this shape). Measured slower than the path it
-// replaces, so it declines for the second reason a compiler can decline: not
-// "I cannot say this" but "saying it buys nothing".
+// top, and hand back a set the caller narrows in JS anyway. Measured slower
+// than the path it replaces, so it declines for the second reason a compiler
+// can decline: not "I cannot say this" but "saying it buys nothing". A lone
+// kind= is no longer this shape — evalFast folds it into kindPreds (K present,
+// every earlier comp absent), so the index answers what a JS screen over the
+// whole snapshot used to.
 let narrows = (preds: Pred[]) => preds.some((p) => p.op != ORDER)
 
 // The same question answered by the INDEX, when the filter compiles. This is
@@ -218,8 +221,10 @@ let rowed = (
   comps,
 })
 
-let evalFast = (q: string) => {
+let evalFast = (q: string, kind?: string) => {
   let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
+  let kp = kind ? kindPreds(kind) : null
+  if (kp) preds = [...kp, ...preds]
   if (!narrows(preds)) return null
   let built = where(preds)
   if (!built) return null
@@ -862,13 +867,16 @@ let http = Deno.serve(
             layers(screen(hits).sort((a, b) => a.num - b.num)),
           )
         }
-        // One pipeline with the subscription initial-set; kind and hot-ranking
-        // layer on top of its matches. The index answers first — a one-row
-        // question cost a 27 MB snapshot and 0.29s before this, 100x what the
-        // same question costs through sql.ts. Only hot ranking holds it back
-        // now: it resolves each hit's refs through byEid, which is every row
-        // the filter never matched.
-        let fast = evalFast(q)
+        // One pipeline with the subscription initial-set; hot-ranking layers
+        // on top of its matches. The index answers first — a one-row question
+        // cost a 27 MB snapshot and 0.29s before this, 100x what the same
+        // question costs through sql.ts. kind rides IN now, folded to kindPreds
+        // so a lone kind= (sessions, memories, boards) is answered by the index
+        // too, not built whole and screened. Only hot ranking holds it back:
+        // it resolves each hit's refs through byEid, which is every row the
+        // filter never matched. screen() still runs for the derived `entity`
+        // kind, which no pred can name.
+        let fast = evalFast(q, kind)
         if (fast && orderOf(fast.preds) != 'hot') {
           // Unranked hits come back oldest first. That is what the snapshot
           // path has always answered — it walks the entity table, whose rowid

@@ -180,6 +180,29 @@ export let ORDER = 'order'
 
 export let orderOf = (preds: Pred[]) => preds.find((p) => p.op == ORDER)?.value
 
+// kind=K as a filter, not a JS screen. kindOf is "the first kindOrder
+// component present", so kind=K is K present AND every earlier component
+// absent — a synthetic Pred[] the SQL compiler answers from the index, where
+// a lone kind= otherwise built the whole 27 MB snapshot to screen it in JS.
+// The absence clauses are what make it EXACT: an entity wearing both `memory`
+// and `comment` is a comment (comment is earlier), so kind=memory must skip
+// it — presence (`.memory!`) cannot, and overcounts. null for a word naming
+// no kind (kind=entity, a typo): the derived `entity` fallback is every
+// kindOrder comp absent, and its only reader is the JS screen that stays.
+export let kindPreds = (kind: string): Pred[] | null => {
+  let i = kindOrder.indexOf(kind)
+  if (i < 0) return null
+  return [
+    { comp: kind, prop: '', op: EXISTS, value: '' },
+    ...kindOrder.slice(0, i).map((c) => ({
+      comp: c,
+      prop: '',
+      op: '',
+      value: '',
+    })),
+  ]
+}
+
 // `doc` sits in kindOrder as the fallback NAME for a bare document, but
 // every kind wears one — so a doc pred is never the cross-kind mistake.
 // Anything outside kindOrder (created, updated, recall) is a facet too.

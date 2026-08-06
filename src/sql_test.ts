@@ -11,9 +11,10 @@
 // string beside an absent column, a needle containing LIKE's wildcards.
 
 import { assertEquals } from '@std/assert'
-import { matchQuery, parseQuery } from './query.ts'
+import { kindPreds, matchQuery, parseQuery } from './query.ts'
 import { where } from './sql.ts'
 import { open } from './db.ts'
+import { kindOf, kindOrder } from './types.ts'
 
 let db = open(':memory:')
 
@@ -74,6 +75,11 @@ put('e6', { doc: { title: 'wider', body: '100 percent, underXscore' } })
 // while a needle carrying the accent itself declines.
 put('e7', { doc: { title: 'café', body: 'a café in zürich' } })
 put('e8', { proposed: { at: '', by: null, via: null } })
+// Two kindOrder components on one entity: kindOf takes the EARLIER one, so this
+// is a task, not a project. It is the case presence (`.project!`) cannot tell
+// from a bare project and kind= must — the row kind=task keeps and kind=project
+// drops.
+put('pt', { task: { status: 'open', priority: 1, domain: '' }, project: {} })
 
 // The JS side reads the same shape live.ts and client.ts hand matchQuery:
 // eid → { comp → { col → value } }, absent components simply missing.
@@ -87,7 +93,10 @@ let graph = () => {
   ) {
     out[r.eid] = { entity: { eid: r.eid, num: r.num } }
   }
-  for (let comp of ['doc', 'task', 'proposed']) {
+  // Every kindOrder comp plus proposed: kindOf reads which components an
+  // entity carries, so the JS world must mirror the DB or it names a seeded
+  // board a doc. The SQL side reads the DB directly, and the two must agree.
+  for (let comp of [...new Set([...kindOrder, 'proposed'])]) {
     for (
       let r of db.prepare(`select * from "${comp}"`).all() as Record<
         string,
@@ -246,6 +255,43 @@ for (let q of DECLINES) {
     assertEquals(bySql(q), null, `${q} should have declined`)
   })
 }
+
+// kind=K is not a filter STRING but a synthetic Pred[] (query.ts kindPreds):
+// K present and every earlier kindOrder comp absent, which is EXACTLY kindOf.
+// So the compiled set must equal both the JS matcher over those preds AND
+// kindOf itself — the derivation and the index cannot drift, and neither may
+// drift from what an entity IS. `pt` is the adversarial row: a task carrying a
+// project comp too, which presence would miscount as a project and kind must
+// not. Every kind still compiles (the absence tail is 27 joins at its
+// longest); a kind naming nothing is an empty set, not a decline.
+let kindOfSet = (kind: string) =>
+  Object.entries(world).filter(([, c]) => kindOf(c) == kind)
+    .map(([eid]) => eid).sort()
+let bySqlKind = (kind: string) => {
+  let built = where(kindPreds(kind)!)
+  if (!built) return null
+  return (db.prepare(built.sql).all(...built.params) as { eid: string }[])
+    .map((r) => r.eid).sort()
+}
+let byJsKind = (kind: string) =>
+  Object.entries(world).filter(([, c]) => matchQuery(c, kindPreds(kind)!))
+    .map(([eid]) => eid).sort()
+
+for (let kind of ['task', 'project', 'doc', 'board', 'alias', 'memory']) {
+  Deno.test(`kind=${kind} compiles to kindOf exactly`, () => {
+    let want = kindOfSet(kind)
+    assertEquals(byJsKind(kind), want, `${kind}: kindPreds is not kindOf`)
+    assertEquals(bySqlKind(kind), want, `${kind}: sql disagreed with kindOf`)
+  })
+}
+
+// A word naming no kind declines to a JS screen — the derived `entity` kind
+// (every kindOrder comp absent) has no component to point at, so the door's
+// screen() stays its only reader.
+Deno.test('kind= for a non-kind word has no preds to compile', () => {
+  assertEquals(kindPreds('entity'), null)
+  assertEquals(kindPreds('nonsense'), null)
+})
 
 // doc_gram indexes doc and nothing else, so a substring over any OTHER body
 // column would narrow by the wrong table's rowid and lose rows. No dot-param
