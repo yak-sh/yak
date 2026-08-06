@@ -97,6 +97,8 @@ export let FixMessage = (
 let thumb = () => !!globalThis.matchMedia?.('(pointer: coarse)').matches
 // What in the bar owns its own tap, and so never works the door.
 let own = 'button, a, input, textarea, .Status_Hints'
+export let owned = (target: EventTarget | null) =>
+  target instanceof Element && !!target.closest(own)
 
 // The context a command runs in: what you're LOOKING at is what you're
 // commanding — the root card (the URL) is the focused entity. A browser
@@ -336,7 +338,7 @@ export let Status = () => {
   // none, so opening must also close — otherwise a thumb that opened the
   // line by accident is stuck in it.
   let door = (e: MouseEvent) => {
-    if (e.target instanceof HTMLElement && e.target.closest(own)) return
+    if (owned(e.target)) return
     if (!globalThis.getSelection?.()?.isCollapsed) return // a drag isn't a tap
     if (mode.value == 'command') put('')
     else msg.value = ''

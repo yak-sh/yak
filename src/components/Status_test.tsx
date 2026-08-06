@@ -1,10 +1,28 @@
-// The statusbar's graph-backed spawn answer: server-minted ids and lifecycle,
-// never optimistic placeholders.
+// The statusbar's owned controls and graph-backed spawn answer: clicks stay at
+// their controls; session messages follow server-minted ids and lifecycle.
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
 import { assertEquals } from '@std/assert'
 import { applyLocal, cache } from '../live.ts'
-import { FixMessage } from './Status.tsx'
+import { FixMessage, owned } from './Status.tsx'
+
+Deno.test('SVG controls own their statusbar clicks', () => {
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'Element')
+  let { document, window } = parseHTML(
+    '<footer><button><svg><path /></svg></button><span /></footer>',
+  )
+  Object.defineProperty(globalThis, 'Element', {
+    value: window.Element,
+    configurable: true,
+  })
+  try {
+    assertEquals(owned(document.querySelector('path')), true)
+    assertEquals(owned(document.querySelector('span')), false)
+  } finally {
+    if (prior) Object.defineProperty(globalThis, 'Element', prior)
+    else delete (globalThis as { Element?: unknown }).Element
+  }
+})
 
 Deno.test('fix status links minted ids and follows the session lifecycle', async () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
