@@ -20,11 +20,13 @@ let {
   nativeProviderArgs,
   nativeTmuxArgs,
   colorOf,
+  looping,
   roleColor,
   roleHash,
   roleRemoved,
   rolesSweep,
   roleTmux,
+  starting,
   styleArgs,
   windowOf,
   ventureOf,
@@ -113,6 +115,78 @@ let seed = (
 }
 
 let count = (name: string) => commands.filter((args) => args[0] == name).length
+
+// A role run as the graph keeps it, minted straight into the db (no effects,
+// so nothing spawns): started `life` ms before it ended, `endAgo` ms before
+// now. endAgo null leaves it still booting (no finished_at). Real wall-clock,
+// to match the reconciler's real now() in these tests.
+let live = { ...deps, now: () => new Date().toISOString() }
+let launch = (role: string, endAgo: number | null, life = 1_300) => {
+  let e = uid()
+  apply(db, [{ eid: e, name: 'session', comp: { id: uid(), role_eid: role } }])
+  let t = Date.now()
+  db.prepare('update session set started_at = ?, finished_at = ? where eid = ?')
+    .run(
+      new Date(t - (endAgo ?? 0) - life).toISOString(),
+      endAgo == null ? null : new Date(t - endAgo).toISOString(),
+      e,
+    )
+  return e
+}
+
+// Spawns FOR one role — the shared db means rolesSweep also reconciles every
+// other test's role, so a bare new-session count would mix them. The tmux
+// session name (`-s`) carries the role eid, so filter on it.
+let spawns = (role: string) =>
+  commands.filter((a) =>
+    a[0] == 'new-session' && a[a.indexOf('-s') + 1] == roleTmux(role)
+  ).length
+
+Deno.test('the breaker trips on a burst of stillborn launches, never on a healthy cadence', () => {
+  let now = Date.now()
+  let dead = (endAgo: number, life = 1_300) => ({
+    started_at: new Date(now - endAgo - life).toISOString(),
+    finished_at: new Date(now - endAgo).toISOString(),
+  })
+  // Five launches that each lived ~1.3s, all inside the last minute: a burn.
+  let burst = [10, 20, 30, 40, 50].map((s) => dead(s * 1_000))
+  assert(looping(burst, now, 0))
+  // Four is below the threshold.
+  assert(!looping(burst.slice(1), now, 0))
+  // A healthy cadence — each lived nine minutes, ten minutes apart — never.
+  let healthy = [0, 1, 2, 3, 4].map((i) => dead(i * 600_000, 540_000))
+  assert(!looping(healthy, now, 0))
+  // The retry fence excludes deaths before it, so a fixed role won't re-trip.
+  assert(!looping(burst, now, now - 5_000))
+  // Deaths older than the window don't count.
+  assert(
+    !looping(
+      [10, 20, 30, 40, 50].map((s) => dead(s * 1_000 + 400_000)),
+      now,
+      0,
+    ),
+  )
+})
+
+Deno.test('starting holds a still-booting run and frees a finished or wedged one', () => {
+  let now = Date.now()
+  let booting = {
+    started_at: new Date(now - 30_000).toISOString(),
+    finished_at: null,
+  }
+  assert(starting(booting, now)) // no racer for a run still coming up
+  assert(
+    !starting({ ...booting, finished_at: new Date(now).toISOString() }, now),
+  ) // dead
+  // Past the grace cap a run with no finished_at is treated as wedged, freed.
+  assert(
+    !starting({
+      started_at: new Date(now - 700_000).toISOString(),
+      finished_at: null,
+    }, now),
+  )
+  assert(!starting(undefined, now)) // no run at all is not starting
+})
 
 Deno.test('native role argv carries only fixed bootstrap content', () => {
   let args = nativeProviderArgs(
@@ -486,4 +560,49 @@ Deno.test('role hash covers instructions and materialized persona text', () => {
     roleHash({ ...base, personaText: 'one' }) !=
       roleHash({ ...base, personaText: 'two' }),
   )
+})
+
+// Integration tests LAST: rolesSweep reconciles every role in the shared db,
+// so these leave running roles behind — running them after the count-based
+// 'dedupes' test keeps that test's sweep to its own role. `spawns(role)`
+// isolates each assertion to its own tmux session.
+Deno.test('a crash-looping native role is held after N deaths, stops spawning, and a start revives it', async () => {
+  commands = []
+  sessions.clear()
+  let { role } = seed('native')
+  for (let i = 0; i < 5; i++) launch(role, (i + 1) * 5_000)
+  await rolesSweep(cast, live)
+  let held = db.prepare('select state, error from role where eid = ?').get(
+    role,
+  ) as { state: string; error: string }
+  assertEquals(held.state, 'held')
+  assertMatch(held.error, /crash-loop/)
+  assertEquals(spawns(role), 0) // never spawned into the burn
+  // Bounded: a held role never comes back on its own.
+  await rolesSweep(cast, live)
+  assertEquals(spawns(role), 0)
+  // An owner start fences the breaker; the stale burst no longer counts.
+  apply(db, [{
+    eid: role,
+    name: 'role',
+    comp: { state: 'running', retry_at: new Date().toISOString(), error: null },
+  }])
+  await rolesSweep(cast, live)
+  assertEquals(db.prepare('select state from role where eid = ?').get(role), {
+    state: 'running',
+  })
+  assertEquals(spawns(role), 1) // the fenced retry launches once
+})
+
+Deno.test('a still-starting native run gets no second spawn; a dead one is relaunched', async () => {
+  commands = []
+  sessions.clear()
+  let { role } = seed('native')
+  let s = launch(role, null, 30_000) // started 30s ago, no finished_at
+  await rolesSweep(cast, live)
+  assertEquals(spawns(role), 0) // idempotent: no racer for a booting run
+  db.prepare('update session set finished_at = ? where eid = ?')
+    .run(new Date().toISOString(), s) // it died
+  await rolesSweep(cast, live)
+  assertEquals(spawns(role), 1) // now a relaunch is due
 })

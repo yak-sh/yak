@@ -537,6 +537,72 @@ let active = (s?: DbRow) =>
   (sessionActive.includes(String(s.status)) ||
     (!!s.pid && !s.finished_at))
 
+// ---- the crash-loop breaker + spawn idempotency (pure, so roles_test can
+// drive the whole decision without a db or a tmux). ----
+//
+// The reconciler's per-surface checks (native's tmuxHas, managed's active())
+// answer "is one running NOW?" but read no HISTORY, so a launch that dies the
+// instant its pane/row appears is respawned every tick forever — the R-9381
+// burn. These derive both bounds from the session rows the graph already
+// keeps: every role run carries started_at/finished_at (native: sessions.ts
+// watched()/trail() stamp finished_at when the process leaves; managed:
+// follow()), so no counter column is invented.
+
+// The only columns the breaker reads off a role's runs.
+export type Launch = { started_at: string | null; finished_at: string | null }
+
+let ms = (t: string | null) => (t ? Date.parse(t) : NaN)
+
+// Tuning, deliberately generous — the breaker's ONE job is to stop a BURNING
+// role, never to doubt a healthy one. Two independent guards both have to
+// hold before a death counts (lived briefly AND clustered), and a healthy
+// operator restarts minutes-to-hours apart with sessions that live for
+// minutes, so it can never gather this many quick deaths this fast.
+let stillbornMs = 120_000 // a launch that lived < 2min never did real work
+let breakerWindowMs = 300_000 // deaths must cluster inside 5 minutes
+let breakerCount = 5 // ...and there must be at least this many
+// Idempotency's cap. finished_at == null is the truth that a run is still
+// alive (so it distinguishes a slow boot — T-14615 — from a death); this only
+// frees a role whose watcher died mid-boot and can therefore only ever DELAY
+// a relaunch, never strand a slow starter or race a live one with a second.
+let graceMs = 600_000
+
+// A launch that both started and died fast, recently, and after the owner's
+// last retry fence. The tight started→finished gap is the launch-failure
+// signature; a live or still-booting run has no finished_at and is never one.
+let stillborn = (l: Launch, now: number, since: number) =>
+  ms(l.started_at) >= 0 && ms(l.finished_at) >= 0 &&
+  ms(l.finished_at) - ms(l.started_at) < stillbornMs &&
+  now - ms(l.finished_at) < breakerWindowMs &&
+  ms(l.finished_at) > since
+
+// The breaker: breakerCount stillborn launches in the window trips it. `since`
+// is the role's retry_at (0 when unset), so a manual `task role start` starts
+// a fresh streak and a fixed role's stale burst can't re-trip it.
+export let looping = (lives: Launch[], now: number, since: number) =>
+  lives.filter((l) => stillborn(l, now, since)).length >= breakerCount
+
+// Idempotency: the newest launch is still coming up — started, no finished_at,
+// inside the grace cap — so a second spawn would race it. Undefined (no runs
+// yet) is not starting: the surface handler's own check owns that window.
+export let starting = (l: Launch | undefined, now: number) =>
+  !!l && ms(l.started_at) >= 0 && !l.finished_at &&
+  now - ms(l.started_at) < graceMs
+
+// A role's recent runs, newest first — enough to see a whole stillborn streak
+// even if a stray healthy run sits among them.
+let livesOf = (eid: string): Launch[] =>
+  db.prepare(`
+    select s.started_at, s.finished_at from session s
+    join entity e on e.eid = s.eid
+    where s.role_eid = ? order by e.num desc limit 20
+  `).all(eid) as Launch[]
+
+// What the owner sees on a held role, and how to revive it.
+let breakerReason = () =>
+  `crash-loop held: ${breakerCount} launches died within ` +
+  `${breakerWindowMs / 60_000}m — fix the spawn config, then task role start`
+
 let applyGraph = (changes: Change[], cast: Cast) => {
   let t = trace()
   let out = apply(db, changes, t)
@@ -581,6 +647,20 @@ let startManaged = (
     stopped_at: null,
     error: null,
   }, cast)
+}
+
+// A held role stays down until an owner `task role start`. The trip already
+// recorded state + the reason, so this only keeps the process from coming
+// back and never stamps — the error survives every tick unclouded.
+let reconcileHeld = async (eid: string, cast: Cast, deps: RoleDeps) => {
+  await tmuxKill(eid, deps)
+  let session = latest(eid)
+  if (
+    active(session) && session?.origin == 'managed' &&
+    session.status != 'stopping'
+  ) {
+    stopManaged(session, cast)
+  }
 }
 
 let reconcileStopped = async (eid: string, cast: Cast, deps: RoleDeps) => {
@@ -704,17 +784,37 @@ let reconcile = async (eid: string, cast: Cast, deps: RoleDeps) => {
   if (flights.has(eid)) return
   flights.add(eid)
   try {
-    let wanted = db.prepare('select state from role where eid = ?').get(eid) as
-      | { state: string }
-      | undefined
+    let wanted = db.prepare('select state, retry_at from role where eid = ?')
+      .get(eid) as { state: string; retry_at: string | null } | undefined
     if (!wanted) {
       await tmuxKill(eid, deps)
+      return
+    }
+    if (wanted.state == 'held') {
+      await reconcileHeld(eid, cast, deps)
       return
     }
     if (wanted.state == 'stopped') {
       await reconcileStopped(eid, cast, deps)
       return
     }
+    // Read the run history before spawning: the breaker bounds a burn, and
+    // idempotency keeps a still-booting run from getting a racer. Both stay
+    // ahead of config(), which a broken role throws in (that role spawns no
+    // runs, so looping() stays false and the catch below owns its error).
+    let now = ms(deps.now())
+    let since = wanted.retry_at ? ms(wanted.retry_at) : 0
+    let lives = livesOf(eid)
+    if (looping(lives, now, since)) {
+      await tmuxKill(eid, deps)
+      stamp(eid, {
+        state: 'held',
+        applied_hash: null,
+        error: breakerReason(),
+      }, cast)
+      return
+    }
+    if (starting(lives[0], now)) return
     let c = config(eid)
     let hash = roleHash(c)
     if (c.surface == 'native') {

@@ -148,6 +148,7 @@ let schema = `
     applied_hash text,
     applied_at   text,
     stopped_at   text,
+    retry_at     text,
     error        text
   );
   create table if not exists board (
@@ -822,6 +823,8 @@ export let open = (path = file) => {
   // A missing gate refuses landing. There is no safe cross-language default,
   // so the project names one complete command explicitly (src/land.ts).
   addCol('repo', 'gate', 'gate text')
+  // The crash-loop breaker's fresh-start fence (types.ts, src/roles.ts).
+  addCol('role', 'retry_at', 'retry_at text')
   addCol('session', 'cwd', 'cwd text')
   addCol('session', 'pid', 'pid integer')
   addCol('session', 'pane', 'pane text')

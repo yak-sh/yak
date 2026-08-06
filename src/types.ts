@@ -60,8 +60,11 @@ export let statuses = ['open', 'wip', 'done', 'cancelled'] as const
 export let turnStates = ['idle', 'busy'] as const
 
 // A role is desired capacity. Native owns an interactive provider TUI;
-// managed owns a resumable Tasks session.
-export let roleStates = ['running', 'stopped'] as const
+// managed owns a resumable Tasks session. `held` is the crash-loop breaker's
+// verdict — the reconciler stopped relaunching a burning role and waits for an
+// owner `task role start`. Distinct from `stopped` (an owner's off switch) so
+// the two read apart and `held` keeps its `error` reason across every tick.
+export let roleStates = ['running', 'stopped', 'held'] as const
 export let roleSurfaces = ['native', 'managed'] as const
 
 // What an actor has said about a thread, overriding the addressed-to
@@ -133,6 +136,11 @@ export let comps: Record<string, Record<string, PropType>> = {
     state: { enum: roleStates },
     surface: { enum: roleSurfaces },
     scope_eid: { eid: 'project', death: 'detach' },
+    // The crash-loop breaker's fresh-start boundary: `task role start` stamps
+    // it, and the breaker counts only deaths after it (roles.ts). Set by the
+    // owner's retry so a fixed role's stale burst can't re-trip it; the
+    // reconciler never writes it, so a successful launch can't wipe the fence.
+    retry_at: 'time',
   },
   board: { query: 'query' }, // saved filter (query.ts grammar); '' = all
   // The thinking that precedes a build. A tag, because the doc already
@@ -977,6 +985,7 @@ export type Role = {
   applied_hash?: string | null
   applied_at?: string | null
   stopped_at?: string | null
+  retry_at?: string | null
   error?: string | null
 }
 

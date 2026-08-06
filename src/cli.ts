@@ -1203,9 +1203,14 @@ let roleState = async (sub: string, rest: string[]) => {
     throw new Error(rest.includes('--all') ? 'no roles' : help(['role', sub]))
   }
   let moved = targets.filter((r) => r.comps.role.state != want)
-  await send(
-    moved.map((r) => ({ eid: r.eid, name: 'role', comp: { state: want } })),
-  )
+  // Start is the owner's "try again now": it also fences the crash-loop
+  // breaker (retry_at) so deaths before this instant no longer count, and
+  // clears any held reason. Without the fence, restarting a fixed role would
+  // re-trip on the stale burst still inside the breaker's window (roles.ts).
+  let comp = want == 'running'
+    ? { state: want, retry_at: new Date().toISOString(), error: null }
+    : { state: want }
+  await send(moved.map((r) => ({ eid: r.eid, name: 'role', comp })))
   for (let r of targets) {
     let already = !moved.includes(r) ? ' (already)' : ''
     print(`${idOf(r)} ${want}${already}  ${r.comps.doc?.title ?? ''}`)
