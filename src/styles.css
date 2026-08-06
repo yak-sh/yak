@@ -1822,6 +1822,19 @@ html {
   color: var(--text);
   background: var(--soft);
 }
+/* A kind's section label. The demoted variant (mail, comment) carries a
+   divider so the navigational sections read as the palette's top. */
+.Search_Head {
+  padding: var(--half-gap) var(--gap) 2px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--dim);
+}
+.Search_Head-demoted {
+  margin-top: var(--half-gap);
+  border-top: 1px solid var(--border);
+}
 .Search_Hit {
   padding: var(--half-gap) var(--gap);
   cursor: pointer;
@@ -1858,7 +1871,8 @@ html {
   color: var(--text);
   border-radius: 2px;
 }
-.Search_Box:has(input:placeholder-shown) .Search_Hit {
+.Search_Box:has(input:placeholder-shown) .Search_Hit,
+.Search_Box:has(input:placeholder-shown) .Search_Head {
   display: none; /* an empty query lists nothing */
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { type Hit, idOf, uuid } from '../types.ts'
+import { type Hit, idOf, kindOrder, plural, uuid } from '../types.ts'
 import { ent, mutate, searchOpen } from '../live.ts'
 import { menuAt, navigate } from './nav.tsx'
 import { drop, peek, save } from './drafts.ts'
@@ -21,12 +21,30 @@ let Frame = block('div', 'Search', {
   Box: 'div',
   Line: 'div',
   Board: 'button',
+  Head: 'div',
   Hit: 'a',
   Title: 'span',
   Id: 'span',
   Snip: 'div',
 })
-let { Box, Line, Board, Hit: Row, Title, Id, Snip } = Frame
+let { Box, Line, Board, Head, Hit: Row, Title, Id, Snip } = Frame
+
+// The palette is a NAVIGATOR — you open a board or project, not read mail —
+// so hits group by kind: navigational kinds lead, bulky content kinds
+// (mail, comment) sink to the tail under their own headers. A kind named in
+// neither list falls between, ordered by kindOrder so grouping is stable.
+let lead = ['project', 'board', 'task', 'design', 'memory', 'canvas']
+let tail = ['mail', 'comment']
+let rank = (kind: string) => {
+  let i = lead.indexOf(kind)
+  if (i >= 0) return i
+  let j = tail.indexOf(kind)
+  return j >= 0 ? 900 + j : 100 + kindOrder.indexOf(kind)
+}
+// Stable sort by section rank keeps each kind's hits in the order db.ts
+// ranked them; the flattened result is what the selection walks.
+let group = (hits: Hit[]) =>
+  [...hits].sort((a, b) => rank(a.kind) - rank(b.kind))
 
 // Matches arrive marked \x01…\x02 — rendered as <mark> WITHOUT parsing
 // any HTML out of the data.
@@ -58,6 +76,10 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
     box.current.focus()
   }, [searchOpen.value])
   if (!searchOpen.value) return null
+
+  // The kind-grouped list, flattened: the selection index and every key
+  // walk THIS order, so arrowing crosses sections in the order they paint.
+  let ordered = group(hits)
 
   let close = () => {
     searchOpen.value = false
@@ -106,10 +128,10 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
       // ⌘/Ctrl+Enter is cmd-click on the selected hit: a new tab, the
       // palette left standing — same as cmd-clicking the row anchor.
       if (e.metaKey || e.ctrlKey) {
-        if (hits[sel]) globalThis.open?.(href(hits[sel]))
+        if (ordered[sel]) globalThis.open?.(href(ordered[sel]))
         return
       }
-      if (hits[sel]) pick(hits[sel])
+      if (ordered[sel]) pick(ordered[sel])
       return
     }
     let down = e.key == 'ArrowDown' || (e.ctrlKey && e.key == 'n') ||
@@ -118,7 +140,9 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
       (e.ctrlKey && e.key == 'k')
     if (!down && !up) return
     e.preventDefault()
-    setSel((s) => Math.min(Math.max(s + (down ? 1 : -1), 0), hits.length - 1))
+    setSel((s) =>
+      Math.min(Math.max(s + (down ? 1 : -1), 0), ordered.length - 1)
+    )
   }
 
   return (
@@ -185,24 +209,41 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
             right-click opens the target entity's menu, and a plain click
             keeps the palette's own open — a card spawned on the canvas. */
         }
-        {hits.map((h, i) => (
-          <Row
-            key={h.eid}
-            href={href(h)}
-            mod={i == sel ? 'sel' : undefined}
-            onMouseEnter={() => setSel(i)}
-            onContextMenu={menuAt(ent(h.open_eid))}
-            onClick={(e: MouseEvent) => {
-              if (e.metaKey || e.ctrlKey || e.shiftKey || e.button != 0) return
-              e.preventDefault()
-              pick(h)
-            }}
-          >
-            <Title {...title(h.title || '(untitled)')} />
-            <Id>{idOf(h)}</Id>
-            <Snip>{marked(h.snip)}{h.retired && ' · retired'}</Snip>
-          </Row>
-        ))}
+        {ordered.flatMap((h, i) => {
+          // A header opens each kind's run; the tail kinds (mail, comment)
+          // wear a divider so the navigational targets read as the top.
+          let head = !i || ordered[i - 1].kind != h.kind
+          let row = (
+            <Row
+              key={h.eid}
+              href={href(h)}
+              mod={i == sel ? 'sel' : undefined}
+              onMouseEnter={() => setSel(i)}
+              onContextMenu={menuAt(ent(h.open_eid))}
+              onClick={(e: MouseEvent) => {
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.button != 0) {
+                  return
+                }
+                e.preventDefault()
+                pick(h)
+              }}
+            >
+              <Title {...title(h.title || '(untitled)')} />
+              <Id>{idOf(h)}</Id>
+              <Snip>{marked(h.snip)}{h.retired && ' · retired'}</Snip>
+            </Row>
+          )
+          if (!head) return [row]
+          return [
+            <Head
+              key={`head-${h.kind}`}
+              mod={tail.includes(h.kind) && 'demoted'}
+            >
+              {plural(h.kind)}
+            </Head>,
+            row,
+          ]
+        })}
       </Box>
     </Frame>
   )
