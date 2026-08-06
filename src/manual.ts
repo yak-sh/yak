@@ -411,16 +411,18 @@ export let manuals: Record<string, Manual> = {
     words: [0, 0],
   },
   sync: {
-    usage: 'sync [--no-commit]',
+    usage: 'sync [--no-commit] [--check]',
     about: "materialize personas into each project repo's .tasks/",
-    examples: ['task sync', 'task sync --no-commit'],
+    examples: ['task sync', 'task sync --no-commit', 'task sync --check'],
     detail: 'Commits what it wrote in the repos that track it, and pushes ' +
       'in the ventures that permit it — `task set P-34 .push=1` grants it, ' +
       'and absent is no, so a venture whose main branch deploys simply ' +
       'never gets one. Unpushed, every projection commit is one more the ' +
-      'next operator has to rebase past.',
+      'next operator has to rebase past. --check writes nothing: it reports ' +
+      'any projection that drifts from its render and exits non-zero, the ' +
+      "gate's guard against a hand-edit to a generated file.",
     root: true,
-    options: [flag('--no-commit')],
+    options: [flag('--no-commit'), flag('--check')],
     words: [0, 0],
   },
   design: {

@@ -109,7 +109,7 @@ import {
 import type { Log } from './telemetry.ts'
 import type { JournalEntry } from './client.ts'
 import { agentPid, claudePid, descends } from './proc.ts'
-import { filesFor, syncFiles } from './persona.ts'
+import { projection, syncFiles } from './persona.ts'
 import { commit } from './git.ts'
 import { land as landTree, landedChanges, landing } from './land.ts'
 import { request } from './http.ts'
@@ -1960,23 +1960,55 @@ let telemetry = async (args: string[]) => {
 
 // Backup is bin/backup (a data-dir git commit) — the CLI is its front
 // door so 'task backup' works wherever the CLI is installed.
-// Materialize every persona into its project repo's .tasks/ — write
-// only what changed, then commit the paths git already tracks (git.ts
+// Materialize every persona into its project repo's .tasks/ — write what
+// changed, DELETE what the render no longer produces (a deleted or renamed
+// persona's stale file), then commit the paths git already tracks (git.ts
 // keeps that safe; --no-commit stops at the write, for a look before
-// anything lands). The server's effect keeps files fresh on graph
-// changes; this verb is the explicit door — the first sync of a new
-// repo, or the committed story until the permission-gated actuator
-// (T-3926) owns it.
+// anything lands). --check writes nothing: it reports drift and exits
+// non-zero, the gate's guard against a hand-edit to a generated file. The
+// server's effect keeps files fresh on graph changes; this verb is the
+// explicit door — the first sync of a new repo, or the committed story until
+// the permission-gated actuator (T-3926) owns it.
 let sync = async (args: string[]) => {
-  let snap = await snapshot()
-  let files = filesFor(rows(snap), snap.deps, Date.now())
+  let check = args.includes('--check')
+  let snap
+  try {
+    snap = await snapshot()
+  } catch (e) {
+    // A dead server can't answer, and a check that can't run must not wedge
+    // the gate — skip rather than fail. The normal verb still surfaces it.
+    if (check) return print(`sync --check skipped: ${(e as Error).message}`)
+    throw e
+  }
+  let files = projection(rows(snap), snap.deps, Date.now())
+  if (check) {
+    let drift: string[] = []
+    for (let f of files) {
+      if (f.body == null) {
+        drift.push(`orphan ${f.path}`)
+        continue
+      }
+      let had: string | undefined
+      try {
+        had = Deno.readTextFileSync(f.path)
+      } catch { /* missing */ }
+      if (had != f.body) {
+        drift.push(`${had == null ? 'missing' : 'stale'} ${f.path}`)
+      }
+    }
+    if (!drift.length) return print('projections in sync')
+    for (let d of drift) warn(d)
+    warn(`${drift.length} projection(s) drifted — run: task sync`)
+    Deno.exit(1)
+  }
   if (!files.length) {
     return print('no personas with a homed repo — nothing to write')
   }
-  let { written, failed } = syncFiles(files)
+  let { written, removed, failed } = syncFiles(files)
   for (let p of written) print(`wrote ${p}`)
+  for (let p of removed) print(`removed ${p}`)
   for (let f of failed) warn(`failed ${f}`)
-  if (!written.length && !failed.length) print('all fresh')
+  if (!written.length && !removed.length && !failed.length) print('all fresh')
   if (args.includes('--no-commit')) return
   // Every path, not just this run's writes: a file left dirty by an
   // earlier sync (or adopted with `git add` since) lands here too.
