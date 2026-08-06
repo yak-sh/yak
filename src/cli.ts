@@ -703,8 +703,7 @@ let mailSend = async (args: string[]) => {
 let mailReply = async (args: string[]) => {
   let [id, ...text] = parts(args).words
   if (!id) throw new Error(help(['mail', 'reply']))
-  let all = rows(await snapshot())
-  let row = find(all, id)
+  let row = await got(id)
   if (!row?.comps.mail) throw new Error(`not a mail: ${id}`)
   let body = bodyOf(args, text)
   if (!body) {
@@ -908,7 +907,7 @@ let inboxShow = async (args: string[]) => {
 let inboxArchive = async (args: string[]) => {
   let [id] = args
   if (!id) throw new Error(help(['inbox', 'archive']))
-  let row = find(rows(await snapshot()), id)
+  let row = await got(id)
   if (!row) throw new Error(`no such entity: ${id}`)
   await send([{ eid: row.eid, name: 'archived', comp: {} }])
   print(`archived ${idOf(row)}`)
@@ -1098,7 +1097,7 @@ let colon = async (focus: string | undefined, argv: string[]) => {
 let release = async (args: string[]) => {
   let [id] = args
   if (!id) throw new Error('task release <id>')
-  let row = need(rows(await snapshot()), id)
+  let row = await needed(id)
   await send([{ eid: row.eid, name: 'claim', comp: null }])
   print(`${idOf(row)} released`)
 }
@@ -1191,9 +1190,8 @@ let dep = async (args: string[]) => {
   if (!edges.includes(type as Edge)) {
     throw new Error(`edge type is one of: ${edges.join(', ')}`)
   }
-  let all = rows(await snapshot())
-  let row = need(all, id)
-  let child = need(all, childId)
+  let row = await needed(id)
+  let child = await needed(childId)
   await send([{
     eid: row.eid,
     name: 'dependency',
@@ -1271,8 +1269,7 @@ let past = async (args: string[]) => {
     Number(args[args.indexOf('-n') + 1] ?? 0) || 50
   let id = args.find((a) => !a.startsWith('-'))
   if (!id) throw new Error('task history <id> [-n N]')
-  let all = rows(await snapshot())
-  let row = need(all, id)
+  let row = await needed(id)
   let entries = await history(row.eid, n)
   if (json) return print(jsonText(entries))
   if (!entries.length) return print(`${idOf(row)}: no history`)
