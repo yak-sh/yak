@@ -1179,7 +1179,11 @@ let personaish = (...eids: (string | undefined)[]) =>
   )
 on('persona', {
   created: syncSoon,
-  changed: { project_eid: syncSoon },
+  // home_eid is the persona's home project — re-homing it moves which
+  // repo the file lands in, so it must re-render. NOT project_eid: the
+  // persona component has no such column (types.ts), and a changed
+  // handler naming a column that isn't there never fires.
+  changed: { home_eid: syncSoon },
   removed: syncSoon,
   doc: "materialize personas into their projects' .tasks/ files " +
     '(write-if-changed; task sync --commit is the deliberate commit)',
