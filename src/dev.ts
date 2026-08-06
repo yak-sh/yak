@@ -1,7 +1,7 @@
 // The development and deployed server supervisor. Successors bind beside their
 // predecessors, announce when boot is complete, then let the predecessor drain;
 // the public port therefore always has a ready listener during source deploys.
-import { serverFile } from './reload.ts'
+import { devFile, serverFile } from './reload.ts'
 
 let src = new URL('.', import.meta.url).pathname
 let deno = Deno.execPath()
@@ -205,10 +205,30 @@ let swap = async () => {
   }
 }
 
+// The supervisor keeps the code it IMPORTED at its own start, and no process
+// can re-import itself — so a landing that moves this file or reload.ts leaves
+// the fleet supervised by the tree's predecessor, deciding handoffs and
+// readiness by names and deadlines that main no longer has. It cannot fix
+// itself in place; it can only ask to be born again. Stop the child first (the
+// successor is a FIRST boot, not a join, and bind.ts refuses an occupied port
+// to everyone else), then exit 42 — the repo's ask-to-be-relaunched code, the
+// TUI's too. Whoever supervises this must run `deno task dev`, whose loop is
+// what turns 42 into a relaunch: systemd would turn it into a `Restart=always`
+// cgroup mass-kill instead (T-11139), and a bare `deno run src/dev.ts` gets a
+// clean stop and this line, which beats serving yesterday's code in silence.
+let relaunch = async () => {
+  console.error('supervisor source changed — exiting 42 to be relaunched')
+  await serial(async () => {
+    if (current) await stop(current)
+  })
+  Deno.exit(42)
+}
+
 let supervise = async () => {
   current = watch(await launch())
   let handoff = insist(() => serial(swap))
   for await (let event of Deno.watchFs(src)) {
+    if (event.paths.some(devFile)) return relaunch()
     if (event.paths.some(serverFile)) handoff()
   }
 }

@@ -54,5 +54,16 @@ export let serverFiles = [
   'reload.ts',
 ]
 
-export let serverFile = (path: string) =>
-  serverFiles.some((file) => path.endsWith(`/${file}`))
+let named = (files: string[]) => (path: string) =>
+  files.some((file) => path.endsWith(`/${file}`))
+
+export let serverFile = named(serverFiles)
+
+// The supervisor's OWN module graph — dev.ts imports this file and nothing
+// else. It is the list above that makes this one necessary: a landed name
+// restarts the child, but the supervisor keeps deciding by the names it
+// imported at its start, so the tree and the process disagree about what a
+// server file even is until the supervisor relaunches (dev.ts, exit 42).
+export let devFiles = ['dev.ts', 'reload.ts']
+
+export let devFile = named(devFiles)
