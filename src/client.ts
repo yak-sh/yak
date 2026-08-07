@@ -424,6 +424,21 @@ export let historyBy = async (via: string, limit = 500) => {
   return res.json() as Promise<JournalEntry[]>
 }
 
+// The entities a journal excerpt names, for ledger humanization. Both the
+// changed eid and every typed reference may speak in ledger(), so gather the
+// vocabulary-derived set rather than falling back to a graph snapshot.
+export let journalRows = async (entries: JournalEntry[]) =>
+  fetched([
+    ...new Set(entries.flatMap((e) =>
+      e.changes.flatMap((c) => [
+        c.eid,
+        ...Object.entries(c.comp ?? {})
+          .filter(([prop, value]) => value && refOf(c.name, prop) != null)
+          .map(([, value]) => String(value)),
+      ])
+    )),
+  ])
+
 // The session's day, told from the wire's own record — no model, no
 // recollection, just the journal grouped into sentences. Pure: entries
 // arrive newest-first (as the server serves them), `all` only humanizes
@@ -1423,6 +1438,28 @@ export let threadOf = (all: Row[], eid: string): Row[] => {
   }
   return all.filter((r) => seen.has(r.eid))
     .sort((a, b) => mailAt(a).localeCompare(mailAt(b)))
+}
+
+// A mail thread over the wire: walk its one-parent chain, then grow the
+// descendant frontier. Each query is keyed by the reply references already
+// found, so a thread costs its own rows rather than every letter ever sent.
+export let mailThread = async (row: Row) => {
+  let found = [row]
+  let parent = String(row.comps.mail?.reply_to_eid ?? '')
+  while (parent) {
+    let [up] = await fetched([parent])
+    if (!up || found.some((r) => r.eid == up.eid)) break
+    found.push(up)
+    parent = String(up.comps.mail?.reply_to_eid ?? '')
+  }
+  let frontier = found.map((r) => r.eid)
+  while (frontier.length) {
+    let down = await query([`.mail.reply_to_eid=${frontier.join(',')}`], 'mail')
+    down = down.filter((r) => !found.some((x) => x.eid == r.eid))
+    found.push(...down)
+    frontier = down.map((r) => r.eid)
+  }
+  return found.sort((a, b) => mailAt(a).localeCompare(mailAt(b)))
 }
 
 // One inbox line: id, the unread dot, who → whom, subject, age — with

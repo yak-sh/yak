@@ -38,10 +38,12 @@ import {
   inflate,
   isFile,
   isUnread,
+  journalRows,
   jsonOf,
   mailAt,
   mailChanges,
   mailLine,
+  mailThread,
   me,
   memoryChanges,
   minted,
@@ -75,7 +77,6 @@ import {
   subChanges,
   taskBlock,
   taskChanges,
-  threadOf,
   unreadMail,
   wrapChanges,
 } from './client.ts'
@@ -723,18 +724,17 @@ let mailShow = async (args: string[]) => {
   let json = args.includes('--json')
   let [id] = args.filter((a) => a != '--json')
   if (!id) throw new Error(help(['mail', 'show']))
-  let snap = await snapshot()
-  let all = rows(snap)
-  let row = find(all, id)
-  if (!row?.comps.mail) throw new Error(`not a mail: ${id}`)
-  let thread = threadOf(all, row.eid)
+  let found = await around(id)
+  if (!found?.row.comps.mail) throw new Error(`not a mail: ${id}`)
+  let row = found.row
+  let thread = await mailThread(row)
   if (json) {
     print(jsonText({
       ...jsonOf(row),
       thread: thread.map((t) => idOf(t)),
     }))
   } else {
-    print(showMd(snap, all, row))
+    print(showMd({ deps: found.deps }, found.all, row))
     if (thread.length > 1) {
       print('\n## Thread')
       for (let t of thread) {
@@ -1057,11 +1057,15 @@ let launch = async (
     persona?: string
   },
 ) => {
-  let snap = await snapshot()
-  let all = rows(snap)
+  let by = me()
+  let [task, caller, persona] = await Promise.all([
+    needed(id),
+    by ? sessionRow(by) : undefined,
+    flags.persona ? around(flags.persona) : undefined,
+  ])
+  let all = [task, ...(caller ? [caller] : []), ...(persona?.all ?? [])]
   // Unnamed provider/model inherit: the calling session's own (a spawn
   // begets its own kind), then the provider table's first entry.
-  let by = me()
   let mine = spawnDefaults(all, by)
   let provider = flags.provider ?? mine.provider
   let model = flags.model ?? (flags.provider ? undefined : mine.model)
@@ -1081,7 +1085,7 @@ let launch = async (
     effort: flags.effort,
     persona: flags.persona,
     by,
-    deps: snap.deps,
+    deps: persona?.deps,
   })
   await send(made.changes)
   let onto = find(all, id)
@@ -1127,13 +1131,27 @@ let sessionsOf = (all: Row[]) =>
 // while the verb runs in it: judgeTree spares a worktree with a process
 // inside, and that process is us.
 let land = async () => {
-  let all = rows(await snapshot())
   let session = me()
   if (!session) throw new Error('land: no session identity')
+  let sessions = await query([], 'session')
+  let sess = sessions.find((r) => String(r.comps.session?.id ?? '') == session)
+  let claims = sess ? await query([`.claim.session_eid=${sess.eid}`]) : []
+  let requested = String(sess?.comps.session?.requested_task_eid ?? '')
+  let tasks = requested ? [...claims, ...await fetched([requested])] : claims
+  let projects = await fetched(
+    tasks.map((r) => String(r.comps.task?.project_eid ?? '')).filter(Boolean),
+  )
+  let all = [...sessions, ...tasks, ...projects]
   let spec = landing(all, session)
   let sha = await landTree(spec, {
     record: async (sha) => {
-      let current = rows(await snapshot())
+      let sess = await sessionRow(session)
+      let current = [
+        spec.task,
+        ...(sess ? [sess] : []),
+        ...(sess ? await query([`.claim.session_eid=${sess.eid}`]) : []),
+        ...await query([`.comment.target_eid=${spec.task.eid}`]),
+      ]
       let changes = landedChanges(current, spec.task, sha, session)
       if (changes.length) await send(changes)
     },
@@ -1921,8 +1939,17 @@ let wrap = async (args: string[]) => {
     try {
       entries = await historyBy(sid)
     } catch { /* no journal, no ledger */ }
+    let sess = await sessionRow(sid)
+    let all = sess
+      ? [
+        sess,
+        ...await query([`.claim.session_eid=${sess.eid}`]),
+        ...await query(['.comment!', `.created.via=${sess.eid}`]),
+        ...await journalRows(entries),
+      ]
+      : []
     let changes = wrapChanges(
-      rows(await snapshot()),
+      all,
       sid,
       Date.now(),
       entries,
