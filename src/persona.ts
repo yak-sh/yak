@@ -9,7 +9,7 @@
 // CLI verb, the server effect, and the tests render the same bytes;
 // only syncFiles() touches the filesystem, and it stops at the write —
 // committing what it wrote is git.ts's job, at the callers.
-import { type Dep, idOf } from './types.ts'
+import { type Dep, type Edge, idOf } from './types.ts'
 import { memoryHead, type Row } from './client.ts'
 import { hot } from './query.ts'
 import { entityUrl } from './url.ts'
@@ -58,13 +58,45 @@ export let indexLine = (r: Row, _now: number) => {
   }${seen}`
 }
 
-// The persona's tier members, resolved and warm-first. Dead or docless
-// children drop silently — a tier names what it can still say.
-let tier = (all: Row[], deps: Dep[], eid: string, type: string, now: number) =>
-  deps.filter((d) => d.parent == eid && d.type == type)
-    .map((d) => all.find((r) => r.eid == d.child))
-    .filter((r): r is Row => !!r?.comps.doc)
-    .sort(byWarm(now))
+// The persona's tier members, resolved warm-first, following persona
+// children. A contains/reads child that is ITSELF a persona is not a memory —
+// recurse into it and merge ITS tiers in, PRESERVING association: the base's
+// contains-memories flow to this persona's preload, its reads-memories to the
+// index, whichever edge reached the base. So a fleet-base persona holds a
+// memory bundle once and every container inherits it. Dedup by id (a memory
+// reachable by several paths appears once); preload wins the fuller form over
+// index. `seen` guards a persona cycle — a memory's contribution is
+// path-independent, so visiting a base once anywhere yields the right set.
+// Dead or docless children still drop silently — a tier names what it can say.
+let tiers = (
+  all: Row[],
+  deps: Dep[],
+  eid: string,
+  now: number,
+  seen = new Set<string>(),
+): { pre: Row[]; idx: Row[] } => {
+  let pre = new Map<string, Row>()
+  let idx = new Map<string, Row>()
+  seen.add(eid)
+  let kids = (type: Edge) =>
+    deps.filter((d) => d.parent == eid && d.type == type)
+      .map((d) => all.find((r) => r.eid == d.child))
+      .filter((r): r is Row => !!r?.comps.doc)
+  for (let type of ['contains', 'reads'] as const) {
+    let here = type == 'contains' ? pre : idx
+    for (let r of kids(type)) {
+      if (r.comps.persona) {
+        if (seen.has(r.eid)) continue
+        let sub = tiers(all, deps, r.eid, now, seen)
+        for (let m of sub.pre) pre.set(m.eid, m)
+        for (let m of sub.idx) idx.set(m.eid, m)
+      } else here.set(r.eid, r)
+    }
+  }
+  for (let e of pre.keys()) idx.delete(e) // preload wins the fuller form
+  let warm = (m: Map<string, Row>) => [...m.values()].sort(byWarm(now))
+  return { pre: warm(pre), idx: warm(idx) }
+}
 
 // The whole persona as one markdown document: header naming the edit
 // path, the core text, preloaded bodies (warmest first — the budgeted
@@ -80,8 +112,7 @@ export let materialize = (
   now: number,
   d: Dialect = DIALECT,
 ) => {
-  let pre = tier(all, deps, p.eid, 'contains', now)
-  let idx = tier(all, deps, p.eid, 'reads', now)
+  let { pre, idx } = tiers(all, deps, p.eid, now)
   let body = String(p.comps.doc?.body ?? '').trim()
   let header = d.header(idOf(p), String(p.comps.doc?.title ?? 'persona'))
   // Native harnesses need YAML frontmatter at byte 0, so when the body opens

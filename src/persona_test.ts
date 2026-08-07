@@ -95,6 +95,117 @@ Deno.test('materialize: header, core, tiers in warmth order', () => {
   assert(!md.includes('Worktrees only.'))
 })
 
+// Nesting: a persona that contains another persona inherits its memories.
+let base = () =>
+  row({
+    doc: { title: 'fleet base', body: 'shared' },
+    persona: { home_eid: null },
+  })
+let mem = (title: string, body: string, daysOld = 0) =>
+  doc(title, body, daysOld)
+
+Deno.test('materialize: a contained persona inherits its tiers, association kept', () => {
+  let host = row({
+    doc: { title: 'host', body: 'core.' },
+    persona: { home_eid: null },
+  })
+  let b = base()
+  let pre = mem('bundled preload', 'Preload body.')
+  let idx = row({
+    doc: { title: 'bundled index', body: 'Index body.' },
+    memory: {},
+  })
+  let all = [host, b, pre, idx]
+  let deps = [
+    edge(host, 'contains', b), // host contains the base persona
+    edge(b, 'contains', pre), // base preloads a memory
+    edge(b, 'reads', idx), // base indexes a memory
+  ]
+  let md = materialize(all, deps, host, NOW)
+  // the base's contains-memory flows into the HOST's preload (full body)
+  assertStringIncludes(md, `# D-${pre.num} bundled preload\n\n`)
+  assertStringIncludes(md, 'Preload body.')
+  // the base's reads-memory flows into the HOST's index (line only)
+  assertStringIncludes(md, '## Memory Index')
+  assertStringIncludes(md, `- M-${idx.num} bundled index`)
+  assert(!md.includes('Index body.'))
+  // the base persona itself is never rendered as a memory (no title, no body)
+  assert(!md.includes('fleet base'))
+  assert(!md.includes('shared'))
+})
+
+Deno.test('materialize: nesting is transitive — a base may contain a base', () => {
+  let host = row({
+    doc: { title: 'host', body: 'c' },
+    persona: { home_eid: null },
+  })
+  let mid = base()
+  let deep = base()
+  let m = mem('deep memory', 'Deep body.')
+  let all = [host, mid, deep, m]
+  let deps = [
+    edge(host, 'contains', mid),
+    edge(mid, 'contains', deep),
+    edge(deep, 'contains', m),
+  ]
+  let md = materialize(all, deps, host, NOW)
+  assertStringIncludes(md, `# D-${m.num} deep memory\n\n`)
+})
+
+Deno.test('materialize: a memory reachable by two paths is deduped', () => {
+  let host = row({
+    doc: { title: 'host', body: 'c' },
+    persona: { home_eid: null },
+  })
+  let b1 = base()
+  let b2 = base()
+  let m = mem('shared once', 'ONLYONCE.')
+  let all = [host, b1, b2, m]
+  let deps = [
+    edge(host, 'contains', m), // direct
+    edge(host, 'contains', b1),
+    edge(host, 'contains', b2),
+    edge(b1, 'contains', m), // via b1
+    edge(b2, 'contains', m), // via b2
+  ]
+  let md = materialize(all, deps, host, NOW)
+  assertEquals(md.match(/ONLYONCE\./g)?.length, 1)
+})
+
+Deno.test('materialize: preload wins over index for the same memory', () => {
+  let host = row({
+    doc: { title: 'host', body: 'c' },
+    persona: { home_eid: null },
+  })
+  let b = base()
+  let m = mem('both tiers', 'FULLBODY.')
+  let all = [host, b, m]
+  let deps = [
+    edge(host, 'contains', m), // preload
+    edge(host, 'reads', b),
+    edge(b, 'reads', m), // index via the base
+  ]
+  let md = materialize(all, deps, host, NOW)
+  // rendered preloaded (full body), and never also as an index line
+  assertStringIncludes(md, `# D-${m.num} both tiers\n\n`)
+  assertStringIncludes(md, 'FULLBODY.')
+  assert(!md.includes('## Memory Index'))
+})
+
+Deno.test('materialize: a persona cycle terminates', () => {
+  let a = row({ doc: { title: 'a', body: 'ca' }, persona: { home_eid: null } })
+  let b = row({ doc: { title: 'b', body: 'cb' }, persona: { home_eid: null } })
+  let m = mem('in the loop', 'LOOPBODY.')
+  let all = [a, b, m]
+  let deps = [
+    edge(a, 'contains', b),
+    edge(b, 'contains', a), // cycle
+    edge(a, 'contains', m),
+  ]
+  let md = materialize(all, deps, a, NOW)
+  assertStringIncludes(md, 'LOOPBODY.')
+})
+
 Deno.test('materialize: a bare persona is just header + core', () => {
   let md = materialize([persona], [], persona, NOW)
   assert(!md.includes('---'))
