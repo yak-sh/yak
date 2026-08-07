@@ -742,6 +742,21 @@ export let derefParams = (all: Row[], ps: Param[]) =>
       : p.value
     return { ...p, value }
   })
+
+// Dot-param references resolved from only the rows they name. As with
+// checkedRefs, the corpus is reserved for the miss path where nearby() can
+// teach a correction; a successful write pays one keyed read at most.
+export let derefedParams = async (ps: Param[]) => {
+  let refs = ps.filter((p) => {
+    let t = propAt(p.comp, p.prop)?.type
+    return typeof t == 'object' && 'eid' in t && p.value &&
+      !UUID.test(String(p.value))
+  })
+  if (!refs.length) return derefParams([], ps)
+  let all = await fetched(refs.map((p) => String(p.value)))
+  if (refs.every((p) => find(all, String(p.value)))) return derefParams(all, ps)
+  return derefParams(rows(await snapshot()), ps)
+}
 export let derefChanges = (all: Row[], changes: Change[]) =>
   changes.map((c) => ({
     ...c,

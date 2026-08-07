@@ -21,7 +21,7 @@ import {
   commentChanges,
   contextDigest,
   decidedAt,
-  derefParams,
+  derefedParams,
   designChanges,
   edgesOf,
   fetched,
@@ -491,7 +491,7 @@ let create = async (args: string[]) => {
   }
   // Reference values (.project=bindery, .assignee=jeff) resolve at the
   // door — same rule as the MCP tools.
-  let grouped = patches(derefParams(rows(await snapshot()), params))
+  let grouped = patches(await derefedParams(params))
   // A leading P<n> sets priority (the documented shorthand); an explicit
   // .priority= wins the value, but the leading token still leaves the title.
   let { words: title, priority } = leadPrio(words)
@@ -530,10 +530,15 @@ let set = async (args: string[]) => {
   if (!id || words.length != 1 || !params.length) {
     throw new Error('task set <id> .prop=value ...')
   }
-  let all = rows(await snapshot())
-  let row = need(all, id)
+  let sid = me()
+  let [row, resolved, sess] = await Promise.all([
+    needed(id),
+    derefedParams(params),
+    say && sid ? sessionRow(sid) : undefined,
+  ])
+  let all = [row, ...(sess ? [sess] : [])]
   await send([
-    ...Object.entries(patches(derefParams(all, params)))
+    ...Object.entries(patches(resolved))
       .map(([name, comp]) => ({ eid: row.eid, name, comp })),
     ...(say ? commentChanges(all, row.eid, say, me()) : []),
   ])
@@ -554,9 +559,13 @@ let idLike = (s?: string) => !!s && /^[A-Za-z]+-\d+$/.test(s)
 
 let finish = (status: 'done' | 'cancelled') => async (args: string[]) => {
   let [id, ...words] = args
-  let all = rows(await snapshot())
-  let row = need(all, id)
   let comment = words.join(' ')
+  let sid = me()
+  let [row, sess] = await Promise.all([
+    needed(id),
+    comment && sid ? sessionRow(sid) : undefined,
+  ])
+  let all = [row, ...(sess ? [sess] : [])]
   await send([
     { eid: row.eid, name: 'task', comp: { status } },
     ...(comment ? commentChanges(all, row.eid, comment, me()) : []),
@@ -1845,7 +1854,8 @@ let design = async (args: string[]) => {
   let session = me()
   if (!session) throw new Error('design: no session identity (attribution)')
   let body = bodyIn(vals)
-  let made = designChanges(rows(await snapshot()), { title, body, session })
+  let sess = await sessionRow(session)
+  let made = designChanges(sess ? [sess] : [], { title, body, session })
   await send(made.changes)
   print(`${await minted(made.eid)} proposed`)
   let hint = await similarHint(`${title}\n${body ?? ''}`, made.eid)
@@ -1861,8 +1871,14 @@ let remember = async (args: string[]) => {
   if (!title) throw new Error('task remember <title...> (the index line)')
   let session = me()
   if (!session) throw new Error('remember: no session identity (attribution)')
-  let all = rows(await snapshot())
   let body = bodyIn(vals)
+  let [sess, refs] = await Promise.all([
+    sessionRow(session),
+    fetched(
+      [vals.scope?.value, vals.feedback?.value].filter(Boolean) as string[],
+    ),
+  ])
+  let all = [...(sess ? [sess] : []), ...refs]
   // --type is retired (T-12585); manual.ts `retired` refuses it upstream of
   // here with the replacement named, so nothing silently drops it.
   let made = memoryChanges(all, {
@@ -1939,10 +1955,7 @@ let sessionBrief = async (args: string[]) => {
       'a brief needs words: text, @file, or --body=@file|-|@-',
     )
   }
-  let all = rows(await snapshot())
-  let sess = all.find((r) =>
-    r.comps.session && String(r.comps.session.id) == sid
-  )
+  let sess = await sessionRow(sid)
   if (!sess) {
     throw new Error(`no session entity for ${sid} — task session context first`)
   }
@@ -1984,7 +1997,7 @@ let repoRoot = () => {
 let probes = async (args: string[]) => {
   let mins = Number(args.find((a) => a.startsWith('--grace='))?.slice(8))
   let repo = repoRoot()
-  let all = rows(await snapshot())
+  let all = await query([], 'session')
   let seen = sweep(
     sessionsOf(all),
     repo,

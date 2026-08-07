@@ -1385,7 +1385,7 @@ Deno.test('any graph-reading verb serves the bus, on stderr', async () => {
 // outright (`usage: task :done`, since :done takes zero words) rather than
 // act on T-4 at all.
 Deno.test('task done/cancel <id> act on the named task, never the focused one', async () => {
-  let { server, acked, host } = graphServer(graph)
+  let { server, acked, seen, host } = graphServer(graph)
   try {
     let out = await new Deno.Command(Deno.execPath(), {
       args: [
@@ -1413,6 +1413,7 @@ Deno.test('task done/cancel <id> act on the named task, never the focused one', 
     }])
     let comment = acked.find((c) => c.name == 'comment')
     assertEquals(comment?.comp, { target_eid: O })
+    assertEquals(seen.some((path) => path.startsWith('/snapshot')), false)
   } finally {
     await server.shutdown()
   }
