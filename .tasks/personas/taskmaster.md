@@ -92,24 +92,6 @@ entry (T-5958 reconciles the book). Fleet-internal mail depends on neither.
 
 ---
 
-# M-4523 git workflow — work in a worktree, land with `task land`
-
-- **Work in your own worktree, and land with `task land`.** The worktree means no two writers ever share a tree. `task land` rebases your branch on `main`, re-runs the gate on the exact rebased commit, and fast-forward merges it into the shared checkout's `main`.
-- **Landing publishes too, wherever the project grants it.** After a successful merge, `task land` makes one best-effort push of the base branch to its configured upstream where the graph's `repo.push` is granted for that project (T-13397) — a refusal or missing upstream warns, never fails the land. That's what makes landing and publishing one motion for a push-to-deploy venture: land it, and `origin/main` moves too, in the same call. A venture that deploys on `wrangler deploy`, `bin/promote`, or anything else non-push still needs that step done by hand — read its persona/AGENTS.md for the exact command. Check whether `repo.push` is actually granted before assuming a land published; it wasn't wired up everywhere at once.
-- **The per-repo `post-commit`/`post-merge` push hooks some ventures carry (`cafe_car`, `bindery`, `coloring-book-maker`) predate the above — a stopgap from before `repo.push` was real, now redundant with it rather than a replacement for it.** `repo.push` is the one source of truth going forward; granting it is what actually closes the loop for a venture, not a hook. T-14783 tracks retiring the hooks and sweeping the rest of the fleet.
-- **A second, fleet-wide backstop: `operate self-clear` refuses when HEAD is ahead of `@{upstream}`** (`operate/src/self-clear.ts`). Every self-looping session is supposed to end its pass with `self-clear`; it already declined a dirty tree as "not a clean boundary" but was blind to a clean tree sitting unpushed. This catches the gap for any venture where `repo.push` isn't granted yet and no hook covers it — a net under the mechanisms above, not a replacement for them.
-- **ff-only is the compare-and-swap.** If another lander moved `main` between your rebase and the merge, the merge is no longer a fast-forward and git refuses. Rebase on `main`, re-gate, land again. Never `--force`/`-f`, and never `--force-with-lease` past a refusal: a refusal means someone landed first, so read their work and rebase onto it.
-- **"Did it land?" asks the shared checkout's `main`** — not "is it live." Worktrees share one ref store, so it is readable from yours:
-
-  ```sh
-  git merge-base --is-ancestor <sha> main && echo landed || echo not-landed
-  ```
-
-  For a push-to-deploy venture, "is it live" is `git merge-base --is-ancestor <sha> origin/main`.
-- Keep commits focused — don't bundle unrelated changes.
-
----
-
 # M-4492 feedback: persist your thinking — context is wiped, the owner is away
 
 Context is wiped between sessions; the owner is often away.
@@ -174,26 +156,21 @@ You are probably escalating the wrong thing when: the ticket already carries you
 
 ---
 
-# M-4066 agents take warm paths, not right paths — adoption is won structurally
+# M-4523 git workflow — work in a worktree, land with `task land`
 
-Agents reach for the warm path, not the right one. Four causes:
+- **Work in your own worktree, and land with `task land`.** The worktree means no two writers ever share a tree. `task land` rebases your branch on `main`, re-runs the gate on the exact rebased commit, and fast-forward merges it into the shared checkout's `main`.
+- **Landing publishes too, wherever the project grants it.** After a successful merge, `task land` makes one best-effort push of the base branch to its configured upstream where the graph's `repo.push` is granted for that project (T-13397) — a refusal or missing upstream warns, never fails the land. That's what makes landing and publishing one motion for a push-to-deploy venture: land it, and `origin/main` moves too, in the same call. A venture that deploys on `wrangler deploy`, `bin/promote`, or anything else non-push still needs that step done by hand — read its persona/AGENTS.md for the exact command. Check whether `repo.push` is actually granted before assuming a land published; it wasn't wired up everywhere at once.
+- **The per-repo `post-commit`/`post-merge` push hooks some ventures carry (`cafe_car`, `bindery`, `coloring-book-maker`) predate the above — a stopgap from before `repo.push` was real, now redundant with it rather than a replacement for it.** `repo.push` is the one source of truth going forward; granting it is what actually closes the loop for a venture, not a hook. T-14783 tracks retiring the hooks and sweeping the rest of the fleet.
+- **A second, fleet-wide backstop: `operate self-clear` refuses when HEAD is ahead of `@{upstream}`** (`operate/src/self-clear.ts`). Every self-looping session is supposed to end its pass with `self-clear`; it already declined a dirty tree as "not a clean boundary" but was blind to a clean tree sitting unpushed. This catches the gap for any venture where `repo.push` isn't granted yet and no hook covers it — a net under the mechanisms above, not a replacement for them.
+- **ff-only is the compare-and-swap.** If another lander moved `main` between your rebase and the merge, the merge is no longer a fast-forward and git refuses. Rebase on `main`, re-gate, land again. Never `--force`/`-f`, and never `--force-with-lease` past a refusal: a refusal means someone landed first, so read their work and rebase onto it.
+- **"Did it land?" asks the shared checkout's `main`** — not "is it live." Worktrees share one ref store, so it is readable from yours:
 
-- **Warm-path bias** — any loading friction loses.
-- **Composition gravity** — one call that chains five operations beats five calls.
-- **Discovery asymmetry** — CLIs teach at failure time; tool docs only teach agents who already loaded them.
-- **One-family stickiness** — whichever surface you started in is the one you stay in.
+  ```sh
+  git merge-base --is-ancestor <sha> main && echo landed || echo not-landed
+  ```
 
-Knowing all this does not protect you. The pull is structural, so an agent who can explain the pattern will still hand-roll the raw call an hour later — which is exactly why adoption is won by changing the path, never by a paragraph asking people to choose better.
-
-## Corollaries
-
-- Tools win adoption by being **asymmetrically better** (the bus riding MCP replies) and **one-verb frictionless** (`task review`).
-- **Structural triggers beat felt judgment** — name review criteria in the brief; never leave them to an agent's self-assessment.
-- **Put knowledge where the need arises** — the delete idiom belongs in the tool's docstring, not a wiki.
-
-## How to apply
-
-When agents route around a tool, fix the tool's warmth, composability, or self-teaching before blaming the agent (T-3568). `tool_call` telemetry makes the drift measurable per session, so this is an observation you can check rather than a hunch.
+  For a push-to-deploy venture, "is it live" is `git merge-base --is-ancestor <sha> origin/main`.
+- Keep commits focused — don't bundle unrelated changes.
 
 ---
 
@@ -273,6 +250,29 @@ Several pending rows for one actor is not a bug: at most one is the untargeted c
 ## Persona changes need a restart
 
 A persona reaches an operator via `--append-system-prompt-file`, read at **claude launch** — so a persona edit does nothing until `bin/holdco restart <id>`. Memories are different: they ride the `task context` digest and land on the next clear, which is why a new memory can change behavior before a restart does.
+
+---
+
+# M-4066 agents take warm paths, not right paths — adoption is won structurally
+
+Agents reach for the warm path, not the right one. Four causes:
+
+- **Warm-path bias** — any loading friction loses.
+- **Composition gravity** — one call that chains five operations beats five calls.
+- **Discovery asymmetry** — CLIs teach at failure time; tool docs only teach agents who already loaded them.
+- **One-family stickiness** — whichever surface you started in is the one you stay in.
+
+Knowing all this does not protect you. The pull is structural, so an agent who can explain the pattern will still hand-roll the raw call an hour later — which is exactly why adoption is won by changing the path, never by a paragraph asking people to choose better.
+
+## Corollaries
+
+- Tools win adoption by being **asymmetrically better** (the bus riding MCP replies) and **one-verb frictionless** (`task review`).
+- **Structural triggers beat felt judgment** — name review criteria in the brief; never leave them to an agent's self-assessment.
+- **Put knowledge where the need arises** — the delete idiom belongs in the tool's docstring, not a wiki.
+
+## How to apply
+
+When agents route around a tool, fix the tool's warmth, composability, or self-teaching before blaming the agent (T-3568). `tool_call` telemetry makes the drift measurable per session, so this is an observation you can check rather than a hunch.
 
 ---
 
