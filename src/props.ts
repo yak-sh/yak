@@ -1,7 +1,7 @@
 // Typed scalar parsing and formatting. PropType declares the language;
 // this module gives every declaration one canonical stored and shown value.
 import { type Change, comps, edges, type PropType, stamped } from './types.ts'
-import { instant } from './time.ts'
+import { instant, local } from './time.ts'
 import { normalize } from './url.ts'
 
 export type PropContext = {
@@ -175,6 +175,8 @@ export let formatProp = (
   if (parsed == null) return null
   if (tag(p.type) == 'priority') return `P${parsed}`
   if (tag(p.type) == 'bool') return parsed ? 'true' : 'false'
+  // A stamp is stored Zulu but SHOWN local — one door for every face.
+  if (tag(p.type) == 'time') return local(String(parsed))
   if (tag(p.type) == 'eid') {
     return ctx.describe?.(String(parsed)) ?? String(parsed)
   }

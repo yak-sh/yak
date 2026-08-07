@@ -109,6 +109,7 @@ import {
 // reaches for node:sqlite, and the CLI has no business loading a db driver.
 import type { Log } from './telemetry.ts'
 import type { JournalEntry } from './client.ts'
+import { local } from './time.ts'
 import { agentPid, claudePid, descends } from './proc.ts'
 import { projection, syncFiles } from './persona.ts'
 import { commit } from './git.ts'
@@ -2017,7 +2018,7 @@ let telemetry = async (args: string[]) => {
   if (!rows.length) return warn('(nothing recorded)')
   for (let r of rows) {
     print(
-      `${r.ts}  ${r.source.padEnd(4)} ${r.name.padEnd(14)} ${
+      `${local(r.ts)}  ${r.source.padEnd(4)} ${r.name.padEnd(14)} ${
         r.ok ? 'ok ' : 'ERR'
       } ${(r.ms == null ? '' : `${r.ms}ms`).padStart(6)}  ${
         (r.session_id ?? '-').padEnd(10)

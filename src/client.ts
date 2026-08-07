@@ -22,6 +22,7 @@ import {
 } from './types.ts'
 import { idOf } from './types.ts'
 import { formatProp, parseProp, propAt } from './props.ts'
+import { local } from './time.ts'
 import { nearest, offer } from './near.ts'
 import { hot, matchQuery, type Pred, route } from './query.ts'
 import { FLOOR } from './embed.ts'
@@ -501,8 +502,8 @@ export let ledger = (entries: JournalEntry[], all: Row[]): string[] => {
       }
     }
   }
-  let span = `${entries[entries.length - 1].ts} → ${
-    entries[0].ts
+  let span = `${local(entries[entries.length - 1].ts)} → ${
+    local(entries[0].ts)
   } · ${entries.length} batch(es)`
   return [span, '', ...lines]
 }
@@ -516,7 +517,9 @@ export let historyLine = (e: JournalEntry) => {
       ? c.name == 'entity' ? '†' : `-${c.name}`
       : `${c.name}{${Object.keys(c.comp).filter((k) => k != 'eid').join(' ')}}`
   ).join(' · ')
-  return `${e.ts}  ${(e.actor ?? 'unknown').slice(0, 24).padEnd(24)} ${what}`
+  return `${local(e.ts)}  ${
+    (e.actor ?? 'unknown').slice(0, 24).padEnd(24)
+  } ${what}`
 }
 
 // ---- dot-params (the WRITE grammar: values are literal; the filter
@@ -2279,9 +2282,9 @@ export let showMd = (snap: Snapshot, all: Row[], row: Row) => {
   let held = claimant(all, row)
   if (held) fm.push(`claim: ${held}`)
   let born = bornAt(row)
-  if (born) fm.push(`created: ${born}`)
+  if (born) fm.push(`created: ${local(born)}`)
   let edited = row.comps.updated?.at // absent until the first edit (T-6670)
-  if (edited) fm.push(`modified: ${edited}`)
+  if (edited) fm.push(`modified: ${local(String(edited))}`)
   // Edges as sentences, grouped by verb; the far side says its state.
   let refs = snap.deps.filter((d) => d.parent == row.eid)
   let backs = snap.deps.filter((d) => d.child == row.eid)
@@ -2319,7 +2322,7 @@ export let showMd = (snap: Snapshot, all: Row[], row: Row) => {
       let verdict = verdictName(String(c.comps.review?.verdict ?? ''))
       out.push(
         '',
-        `— ${bornAt(c)}${who}${verdict ? ` · ${verdict}` : ''}`,
+        `— ${local(bornAt(c))}${who}${verdict ? ` · ${verdict}` : ''}`,
         '',
       )
       out.push(String(c.comps.doc?.body ?? ''))

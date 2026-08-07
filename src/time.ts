@@ -3,6 +3,26 @@
 
 export type Span = { start: number; end: number }
 
+// A stored UTC stamp SHOWN in the running machine's local zone: ISO-8601
+// with the local offset where the `Z` was, so `wake.at` reads as the wall
+// clock an operator keeps while storage and wire stay Zulu. THE display face
+// of a `time` prop — formatProp routes every stamp through here, and the CLI
+// surfaces that print a stamp outside a prop (created/modified, comments, the
+// journal) call it directly; the web keeps its own relative face (ui.tsx),
+// which re-parses this back to the same instant, so its output is unchanged.
+// A non-stamp passes through untouched, so a malformed value never vanishes.
+let pad = (n: number) => String(n).padStart(2, '0')
+export let local = (iso: string): string => {
+  let d = new Date(iso)
+  if (Number.isNaN(+d)) return iso
+  let off = -d.getTimezoneOffset() // minutes east of UTC
+  let zone = `${off < 0 ? '-' : '+'}${pad(Math.abs(off) / 60 | 0)}:${
+    pad(Math.abs(off) % 60)
+  }`
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T` +
+    `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}${zone}`
+}
+
 let UNIT_MS: Record<string, number> = {
   second: 1_000,
   minute: 60_000,

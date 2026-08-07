@@ -53,6 +53,7 @@ import {
   wrapChanges,
 } from './client.ts'
 import { matchQuery, parseQuery, resolveRefs } from './query.ts'
+import { local } from './time.ts'
 import { type Change, idOf, kindOf, type Snapshot } from './types.ts'
 import { assertEquals, assertMatch, assertThrows } from '@std/assert'
 
@@ -2312,9 +2313,13 @@ let DAY: import('./client.ts').JournalEntry[] = [
 
 Deno.test('ledger: the day as lived, oldest first, ids humanized', () => {
   let lines = ledger(DAY, all)
+  // The span reads in local wall-clock, like every displayed stamp — built
+  // through the same door so the assertion holds in any zone.
   assertEquals(
     lines[0],
-    '2026-07-20T09:00:00Z → 2026-07-20T18:00:00Z · 4 batch(es)',
+    `${local('2026-07-20T09:00:00Z')} → ${
+      local('2026-07-20T18:00:00Z')
+    } · 4 batch(es)`,
   )
   let text = lines.join('\n')
   assertMatch(text, /\+ minted task T-2 First/)
