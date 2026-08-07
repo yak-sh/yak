@@ -381,8 +381,11 @@ These hold everywhere in this repo, whoever — or whatever — writes the code:
   a new one reifies, one brief per life; identity across clears is the
   ACTOR), plus cwd (the worktree it ran in) and the claude process `pid`
   (the /proc walk, src/proc.ts) that the channel plugin follows across
-  rotations. `TASKS_SESSION` survives only as the launcher fallback for
-  managed non-claude spawns. The hooks are
+  rotations. `TASKS_SESSION` is the launcher's voucher: the identity for
+  managed non-claude spawns, and — paired with `TASKS_TREE`, the worktree
+  the launcher planted — what lets a managed CLAUDE spawn speak as its own
+  session despite the `CLAUDE_CODE_CHILD_SESSION=1` claude stamps on its
+  tools (client.ts `me()`). The hooks are
   the global CLI, no repo-local shims — any repo gets the loop by carrying the
   same two settings lines.
 - **The graph IS your memory** (harness auto-memory is disabled — there are no
@@ -570,16 +573,6 @@ Every Agent-tool spawn gets `isolation: worktree` + the claim-discipline paragra
 
 ---
 
-# M-12915 Use idiomatic language
-
-**Stick to idiomatic terms for things.** Avoid approximations, house shorthand, and slang. Use the terms that are typical for a tool. LLMs often drift to analogous terms over repeated cycles. This drift can cause a degradation of meaning over time and make it difficult for others to understand. Especially if they are already familiar with the typical terminology.
-
-This applies when talking about git, SQL, HTTP, systemd, DNS, programming languages, and any other similar tool.
-
-For example, when talking about git, don't say "drain" in place of "push", or "chain" in place of "commits" or "branch".
-
----
-
 # M-7048 task inbox — one door for everything addressed to you, and watch/mute to change what lands there
 
 `task inbox` lists every item addressed to you — comments on your session, comments on tasks you claim, comments said to your actor, knocks to you or your actor, and project mail — unread first (`●` unread, `·` read).
@@ -635,6 +628,16 @@ The web tab and your CLI list can legitimately show different counts: the tab re
 ## Your boot digest already tells you
 
 Every session's `task context` opens with `## inbox — N unread (task inbox)`. That N is counted with the inbox's own predicate, so the number and the list can't disagree — if the line is there, something is waiting; if it's absent, nothing is.
+
+---
+
+# M-12915 Use idiomatic language
+
+**Stick to idiomatic terms for things.** Avoid approximations, house shorthand, and slang. Use the terms that are typical for a tool. LLMs often drift to analogous terms over repeated cycles. This drift can cause a degradation of meaning over time and make it difficult for others to understand. Especially if they are already familiar with the typical terminology.
+
+This applies when talking about git, SQL, HTTP, systemd, DNS, programming languages, and any other similar tool.
+
+For example, when talking about git, don't say "drain" in place of "push", or "chain" in place of "commits" or "branch".
 
 ---
 
