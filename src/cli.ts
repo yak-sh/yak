@@ -51,7 +51,6 @@ import {
   minted,
   needed,
   noticeBlock,
-  type Param,
   param,
   patches,
   projectionSnapshot,
@@ -65,7 +64,6 @@ import {
   scopeFor,
   search,
   send,
-  separated,
   sessionFor,
   sessionMeta,
   sessionRow,
@@ -73,7 +71,6 @@ import {
   similarHint,
   spawnChanges,
   spawnDefaults,
-  stdin,
   subChanges,
   taskBlock,
   taskChanges,
@@ -121,12 +118,14 @@ import { commands, focusOf, run as runCommand } from './commands.ts'
 import {
   cliVerbs,
   help,
+  manuals,
+  parse,
   requestedHelp,
   route,
   usage,
-  validate,
   validateCommand,
 } from './manual.ts'
+import { type Got, type Run, type Verb } from './verb.ts'
 import { safe } from './terminal.ts'
 export { subjectUsage } from './manual.ts'
 
@@ -230,17 +229,6 @@ export let subject = (id: string | undefined, args: string[]) => {
   throw new Error(`no subject verb: ${verb} (task ${id} --help)`)
 }
 
-let split = (args: string[]) => {
-  let params: Param[] = []
-  let words: string[] = []
-  for (let a of args) {
-    let p = param(a)
-    if (p) params.push(inflate(p))
-    else words.push(a)
-  }
-  return { params, words }
-}
-
 // Which KIND a listing walks. It is a selector, not a filter — kind is
 // derived from an entity's components, so no row carries the column and
 // no pred could test it (route() says so to whoever writes `.kind` into a
@@ -265,22 +253,22 @@ export let kindArg = (arg: string) => {
 // A narrow door leaves the ref VALUES raw so the server's own resolveRefs
 // (and checkedRefs) reads the human id, rather than pre-resolving against a
 // whole snapshot it no longer holds.
-let parse = (args: string[], hint: (a: string) => string = () => '') =>
+let predicates = (args: string[], hint: (a: string) => string = () => '') =>
   args.map((a) => {
     let p = pred(a)
     if (!p) throw new Error(`${noFilter(a)} (task help grammar)${hint(a)}`)
     return p
   })
 
-let list = async (args: string[]) => {
-  let json = args.includes('--json')
-  let words = args.filter((a) => a != '--json')
+let list = async (got: Got) => {
+  let json = got.flags.has('--json')
+  let words = got.words
     .map((a) => [a, kindArg(a)] as const)
   let kind = words.find(([, k]) => k)?.[1] ?? 'task'
   // Here a bare word is also a KIND, so one that is neither names both
   // doors rather than only the filter one.
   let line = words.filter(([, k]) => !k).map(([a]) => a)
-  let preds = parse(
+  let preds = predicates(
     line,
     (a) =>
       a.startsWith('.')
@@ -382,16 +370,16 @@ let scopeOf = async (named?: string): Promise<string | undefined> => {
   return scopeFor(all, sess, Deno.cwd(), undefined)
 }
 
-let decided = async (args: string[]) => {
-  let json = args.includes('--json')
-  let words = args.filter((a) => a != '--json' && a != '--all')
-  let preds = parse(words)
+let decided = async (got: Got) => {
+  let json = got.flags.has('--json')
+  let words = got.words
+  let preds = predicates(words)
   await checkedRefs(preds)
   // A named project is lifted OUT of the query and stands in for the cwd:
   // asking about P-30 must mean what standing in P-30 means, and the task
   // column alone would hide that project's own memories.
   let named = place(preds)
-  let scope = args.includes('--all') ? undefined : await scopeOf(named?.value)
+  let scope = got.flags.has('--all') ? undefined : await scopeOf(named?.value)
   // The lifted project's own arg drops from what the server screens on; the
   // rest ride the query line beside the `.decided!` presence filter. belongs()
   // stays a JS screen — a 4-way component switch no one filter expresses.
@@ -469,8 +457,8 @@ export let strayFlag = (
 export let strayFile = (words: string[]) =>
   words.find((w) => /^@[^@\s]\S*$/.test(w) && isFile(w.slice(1)))
 
-let create = async (args: string[]) => {
-  let { params, words } = split(args)
+let create = async (got: Got) => {
+  let { params, words } = got
   let at = strayFile(words)
   if (at) {
     throw new Error(
@@ -509,7 +497,7 @@ let create = async (args: string[]) => {
   if (hint) print(hint)
 }
 
-let set = async (args: string[]) => {
+let set = async (got: Got) => {
   // --comment=... rides the same atomic batch as plain commentary — the
   // change itself is the journal's to record, never a comment's.
   // @file is the fleet's door for a long value (M-4415) and inflate()
@@ -519,22 +507,15 @@ let set = async (args: string[]) => {
   // PATH as the comment and reported success. A recorded design was lost
   // that way. EVERY value goes over, prose included: deciding here which
   // ones are worth reading is the second vocabulary that caused it.
-  let say = args.find((a) => a.startsWith('--comment='))?.slice(10)
-  if (say != null) {
-    let p = { comp: 'doc', prop: 'body', value: say }
-    say = String(inflate(p, stdin, `--comment=${say}`).value)
-  }
-  let { params, words } = split(
-    args.filter((a) => !a.startsWith('--comment=')),
-  )
-  let [id] = words
-  if (!id || words.length != 1 || !params.length) {
+  let say = got.opts['--comment']
+  let id = got.args.id
+  if (!id || !got.params.length) {
     throw new Error('task set <id> .prop=value ...')
   }
   let sid = me()
   let [row, resolved, sess] = await Promise.all([
     needed(id),
-    derefedParams(params),
+    derefedParams(got.params),
     say && sid ? sessionRow(sid) : undefined,
   ])
   let all = [row, ...(sess ? [sess] : [])]
@@ -577,9 +558,9 @@ let done = finish('done')
 let cancel = finish('cancelled')
 
 // Full-text search — every doc in the graph, ranked, matches bracketed.
-let seek = async (args: string[]) => {
-  let json = args.includes('--json')
-  let q = args.filter((a) => a != '--json').join(' ')
+let seek = async (got: Got) => {
+  let json = got.flags.has('--json')
+  let q = got.words.join(' ')
   if (!q) throw new Error('task search <words...> (trailing * = prefix)')
   let hits = await search(q)
   if (json) return print(jsonText(hits))
@@ -606,63 +587,6 @@ let seek = async (args: string[]) => {
 // .body=@plan.md` used to store the flag IN the title and mint an empty body
 // (T-14187). A param the verb does NOT take never gets this far — manual.ts
 // `dots` refuses it by name.
-export let parts = (args: string[]) => {
-  let vals: Record<string, { as: string; value: string }> = {}
-  let words: string[] = []
-  for (let a of args) {
-    let m = /^(?:--|\.)([A-Za-z_][\w-]*)=([\s\S]*)$/.exec(a)
-    if (m) vals[m[1]] ??= { as: a, value: m[2] }
-    // A bare --flag belongs to the verb, never to its text.
-    else if (!a.startsWith('--')) words.push(a)
-  }
-  return { vals, words }
-}
-
-// The body said as a VALUE, read through inflate — @file, the piped `-` and
-// `@-`, and the misplaced/dropped guards, naming the token as it was typed.
-export let bodyIn = (vals: ReturnType<typeof parts>['vals'], io = stdin) => {
-  let b = vals.body
-  if (!b) return undefined
-  let p = { comp: 'doc', prop: 'body', value: b.value }
-  return String(inflate(p, io, b.as).value)
-}
-
-// The body, by preference: the --body=/.body= value (@file reads the file,
-// `-`/`@-` read piped stdin — the safe doors for long prose), then trailing
-// words.
-// inflate() is the ONE reader of all of them, the bare `-` included: two
-// readers with separate vocabularies is what left `.body=@-` a suggested
-// door that opened nothing, so every value goes over as it was typed and
-// nothing here decides what a spelling means. Shared by mail send/reply
-// and the session brief — one body door, every verb.
-//
-// @ belongs to the DOOR, not to the flag: a lone trailing @token is the
-// same ask said positionally. Reading it through --body= but not through
-// the words sent letters carrying the literal path of the file they
-// should have quoted (T-10461). Only when the body IS a reference — one
-// token AND no whitespace in it, `task comment`'s own test — so neither
-// bare prose nor a quoted "@jeff thanks for the note" is read as a
-// filename; @@ escapes a genuine one-word @, and a missing file throws
-// before anything is minted or sent.
-export let bodyOf = (args: string[], words: string[], io = stdin) => {
-  // Literal values ride through inflate too — it hands them back unchanged
-  // and its dropped-@ guard gets to see them.
-  let b = bodyIn(parts(args).vals, io)
-  if (b != null) return b
-  // Two tokens, so it belongs here rather than in inflate, which sees one
-  // value at a time.
-  separated(words)
-  // The no-whitespace test stays HERE, not in inflate: inflate sees only a
-  // leading @, so it would read '@handle thanks!' — one argv token holding
-  // spaces — as a filename. Prose keeps its exemption; a whitespace-free
-  // token is either an @-reference or a dropped-@ path.
-  let only = words.join(' ')
-  if (words.length == 1 && /^\S+$/.test(only)) {
-    let p = { comp: 'doc', prop: 'body', value: only }
-    return String(inflate(p, io, only).value)
-  }
-  return only
-}
 
 // The MAIL SLICE (deprecated — `task inbox` is the door): YOUR unread
 // bare, the digest's own predicate scoped to the project you stand in;
@@ -670,17 +594,16 @@ export let bodyOf = (args: string[], words: string[], io = stdin) => {
 // grammar). A word that isn't a filter teaches the verb family instead of
 // guessing. `task inbox` now speaks all of this, which is what lets this
 // one retire.
-let mailList = async (args: string[]) => {
-  let json = args.includes('--json')
-  let every = args.includes('--all'), sent = args.includes('--sent')
-  let preds = args.filter((a) => !['--json', '--all', '--sent'].includes(a))
-    .map((a) => {
-      let p = pred(a)
-      if (!p) throw new Error(`not a mail filter: ${a}\n\n${help(['mail'])}`)
-      return p
-    })
+let mailList = async (got: Got) => {
+  let json = got.flags.has('--json')
+  let every = got.flags.has('--all'), sent = got.flags.has('--sent')
+  let preds = got.words.map((a) => {
+    let p = pred(a)
+    if (!p) throw new Error(`not a mail filter: ${a}\n\n${help(['mail'])}`)
+    return p
+  })
   await checkedRefs(preds)
-  let filters = args.filter((a) => !['--json', '--all', '--sent'].includes(a))
+  let filters = got.words
   // The one predicate. "Your items" means the same thing here as in the
   // inbox and the boot digest, so the mail-only slice can never disagree
   // with the door it is a slice of.
@@ -720,9 +643,9 @@ let mailList = async (args: string[]) => {
 // One mail whole, its thread beneath — and reading IS the mark: the
 // `opened` stamp (T-7006) lands by a normal wire patch. Nothing else
 // auto-reads.
-let mailShow = async (args: string[]) => {
-  let json = args.includes('--json')
-  let [id] = args.filter((a) => a != '--json')
+let mailShow = async (got: Got) => {
+  let json = got.flags.has('--json')
+  let id = got.args.id
   if (!id) throw new Error(help(['mail', 'show']))
   let found = await around(id)
   if (!found?.row.comps.mail) throw new Error(`not a mail: ${id}`)
@@ -749,29 +672,29 @@ let mailShow = async (args: string[]) => {
 
 // Minting doc+mail IS the send request — the server's effect delivers
 // and stamps the receipt; task show <E-id> reads it back.
-let mailSend = async (args: string[]) => {
-  let [to, ...subj] = parts(args).words
-  if (!to || !subj.length) {
+let mailSend = async (got: Got) => {
+  let to = got.args.to, subject = got.args.subject
+  if (!to || !subject) {
     throw new Error(help(['mail', 'send']))
   }
-  let body = bodyOf(args, [])
+  let body = got.body
   if (!body) {
     throw new Error(
       'a mail needs a body: --body=@file, or --body=- with piped stdin',
     )
   }
-  let made = mailChanges({ to, subject: subj.join(' '), body })
+  let made = mailChanges({ to, subject, body })
   await send(made.changes)
   let eid = await minted(made.eid)
   print(`${eid} → ${to} — task show ${eid} for the delivery receipt`)
 }
 
-let mailReply = async (args: string[]) => {
-  let [id, ...text] = parts(args).words
+let mailReply = async (input: Got) => {
+  let id = input.args.id
   if (!id) throw new Error(help(['mail', 'reply']))
   let row = await got(id)
   if (!row?.comps.mail) throw new Error(`not a mail: ${id}`)
-  let body = bodyOf(args, text)
+  let body = input.body
   if (!body) {
     throw new Error(
       'a reply needs words: text, @file, or --body=@file|-|@-',
@@ -790,15 +713,9 @@ let mailReply = async (args: string[]) => {
 // Attachments, through the server's proxy (the worker's token lives
 // there, never here — the CLI only ever talks to its own server).
 // Default DIR: ./mail-attachments/<message-id>/.
-let mailFiles = async (args: string[]) => {
-  let out: string | undefined
-  let rest: string[] = []
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] == '--out') out = args[++i]
-    else if (args[i].startsWith('--out=')) out = args[i].slice(6)
-    else rest.push(args[i])
-  }
-  let [id] = rest
+let mailFiles = async (got: Got) => {
+  let out = got.opts['--out']
+  let id = got.args.id
   if (!id) throw new Error(help(['mail', 'files']))
   let door = `http://${host()}/mail/${encodeURIComponent(id)}/files`
   let res = await request(door)
@@ -864,8 +781,8 @@ let mailDoctor = async () => {
 }
 
 // FTS, screened to mail — the one search surface, one more door.
-let mailSeek = async (args: string[]) => {
-  let q = args.join(' ')
+let mailSeek = async (got: Got) => {
+  let q = got.args.words
   if (!q) throw new Error(help(['mail', 'search']))
   let hits = (await search(q)).filter((h) => h.kind == 'mail')
   if (!hits.length) return print('(no hits)')
@@ -873,18 +790,6 @@ let mailSeek = async (args: string[]) => {
     let snip = h.snip.replaceAll('\x01', '[').replaceAll('\x02', ']')
     print(`${idOf(h)} ${h.title || '(no subject)'} — ${snip}`)
   }
-}
-
-let mail = (args: string[]) => {
-  let [sub, ...rest] = args
-  if (sub == 'show') return mailShow(rest)
-  if (sub == 'send') return mailSend(rest)
-  if (sub == 'reply') return mailReply(rest)
-  if (sub == 'search') return mailSeek(rest)
-  if (sub == 'files') return mailFiles(rest)
-  if (sub == 'doctor') return mailDoctor()
-  if (sub == 'help' || sub == '--help') return print(help(['mail']))
-  return mailList(args)
 }
 
 // ---- task inbox: everything addressed to you — comments on your session
@@ -903,22 +808,21 @@ let inboxLine = (r: Row) => {
 // --all keeps the archived (`×`), which is what makes archiving safe to
 // automate: closing a task hides its correspondence, and this is the way
 // back to it.
-let inboxList = async (args: string[]) => {
-  let json = args.includes('--json')
-  let every = args.includes('--all')
-  let sent = args.includes('--sent')
+let inboxList = async (got: Got) => {
+  let json = got.flags.has('--json')
+  let every = got.flags.has('--all')
+  let sent = got.flags.has('--sent')
   // The one filter grammar, same as every other list door. Deprecating
   // `task mail` must not NARROW the surface: it took filters and --sent, so
   // the door that supersedes it takes them too, or the warm path stays the
   // deprecated one (T-10767).
-  let preds = args.filter((a) => !['--json', '--all', '--sent'].includes(a))
-    .map((a) => {
-      let p = pred(a)
-      if (!p) throw new Error(`not an inbox filter: ${a}\n\n${help(['inbox'])}`)
-      return p
-    })
+  let preds = got.words.map((a) => {
+    let p = pred(a)
+    if (!p) throw new Error(`not an inbox filter: ${a}\n\n${help(['inbox'])}`)
+    return p
+  })
   await checkedRefs(preds)
-  let filters = args.filter((a) => !['--json', '--all', '--sent'].includes(a))
+  let filters = got.words
   let gathered = sent
     ? {
       rows: await query(['.mail.to!', '.mail.message_id=', ...filters], 'mail'),
@@ -961,9 +865,9 @@ let inboxList = async (args: string[]) => {
 
 // Reading IS the mark: render the item whole, then stamp `opened` (a bare
 // wire write; the server freezes the clock) — the way mailShow stamps.
-let inboxShow = async (args: string[]) => {
-  let json = args.includes('--json')
-  let [id] = args.filter((a) => a != '--json')
+let inboxShow = async (got: Got) => {
+  let json = got.flags.has('--json')
+  let id = got.args.id
   if (!id) throw new Error(help(['inbox', 'show']))
   let found = await around(id)
   if (!found) throw new Error(`no such entity: ${id}`)
@@ -977,8 +881,8 @@ let inboxShow = async (args: string[]) => {
 
 // The one verb that hides: stamp `archived`, removing the item from the
 // inbox predicate. Deliberate — no sweep or subagent can do this for you.
-let inboxArchive = async (args: string[]) => {
-  let [id] = args
+let inboxArchive = async (input: Got) => {
+  let id = input.args.id
   if (!id) throw new Error(help(['inbox', 'archive']))
   let row = await got(id)
   if (!row) throw new Error(`no such entity: ${id}`)
@@ -990,9 +894,9 @@ let inboxArchive = async (args: string[]) => {
 // has a verb for is a component nobody writes. Read for whoever the cwd
 // makes you, the same actor `task inbox` reads for, so what you watch
 // here is what shows up there.
-let subscribe = (mode: 'watch' | 'mute') => async (args: string[]) => {
-  let gone = args.includes('--gone')
-  let [id] = args.filter((a) => a != '--gone')
+let subscribe = (mode: 'watch' | 'mute') => async (input: Got) => {
+  let gone = input.flags.has('--gone')
+  let id = input.args.id
   if (!id) throw new Error(help([mode]))
   let row = await got(id)
   if (!row) throw new Error(`no such entity: ${id}`)
@@ -1014,18 +918,10 @@ let subscribe = (mode: 'watch' | 'mute') => async (args: string[]) => {
   print(`${gone ? `no longer ${said}` : said} ${idOf(row)}`)
 }
 
-let inbox = (args: string[]) => {
-  let [sub, ...rest] = args
-  if (sub == 'show') return inboxShow(rest)
-  if (sub == 'archive') return inboxArchive(rest)
-  if (sub == 'help' || sub == '--help') return print(help(['inbox']))
-  return inboxList(args)
-}
-
 // A claim is a session's lease on a task — other agents see who holds
 // it, and the server refuses to hand a held lease to someone else.
-let claim = async (args: string[]) => {
-  let [id, sess] = args
+let claim = async (got: Got) => {
+  let id = got.args.id, sess = got.args.session
   let session = sess ?? me()
   if (!id) throw new Error('task claim <id> [session]')
   if (!session) {
@@ -1094,20 +990,18 @@ let launch = async (
   )
 }
 
-let spawn = async (args: string[]) => {
-  let { vals, words } = parts(args)
-  let flag = (n: string) => vals[n]?.value
-  let [id] = words
+let spawn = async (got: Got) => {
+  let id = got.args.id
   if (!id) {
     throw new Error(
       'task spawn <id> [--provider=X] [--model=Y] [--effort=Z] [--persona=P-9]',
     )
   }
   await launch(id, {
-    provider: flag('provider'),
-    model: flag('model'),
-    effort: flag('effort'),
-    persona: flag('persona'),
+    provider: got.opts['--provider'],
+    model: got.opts['--model'],
+    effort: got.opts['--effort'],
+    persona: got.opts['--persona'],
   })
 }
 
@@ -1227,8 +1121,8 @@ let colon = async (focus: string | undefined, argv: string[]) => {
   }
 }
 
-let release = async (args: string[]) => {
-  let [id] = args
+let release = async (got: Got) => {
+  let id = got.args.id
   if (!id) throw new Error('task release <id>')
   let row = await needed(id)
   await send([{ eid: row.eid, name: 'claim', comp: null }])
@@ -1267,17 +1161,19 @@ let roleLine = (all: Row[], r: Row) => {
     (role.error ? `\n${' '.repeat(9)}error: ${role.error}` : '')
 }
 
-let roleState = async (sub: string, rest: string[]) => {
+let roleState = async (sub: string, got: Got) => {
   let want = sub == 'stop' ? 'stopped' : 'running'
-  let ids = rest.filter((a) => a != '--all')
+  let ids = got.many.ids ?? []
   // `.role.state!`, not `.role!` — bare `.role` is _eid sugar for
   // session.role_eid (route()'s any-of), which would list sessions. state
   // is NOT NULL on every role, so its presence IS the component's.
-  let targets = rest.includes('--all')
+  let targets = got.flags.has('--all')
     ? (await query(['.role.state!'])).sort((a, b) => a.num - b.num)
     : await Promise.all(ids.map(neededRole))
   if (!targets.length) {
-    throw new Error(rest.includes('--all') ? 'no roles' : help(['role', sub]))
+    throw new Error(
+      got.flags.has('--all') ? 'no roles' : help(['role', sub]),
+    )
   }
   let moved = targets.filter((r) => r.comps.role.state != want)
   // Start is the owner's "try again now": it also fences the crash-loop
@@ -1294,11 +1190,9 @@ let roleState = async (sub: string, rest: string[]) => {
   }
 }
 
-let role = async (args: string[]) => {
-  let [sub, ...rest] = args
-  if (sub == 'help' || sub == '--help') return print(help(['role']))
-  if (sub == 'stop' || sub == 'start') return await roleState(sub, rest)
-  if (sub && sub != '--json') {
+let role = async (got: Got) => {
+  let sub = got.args.command
+  if (sub) {
     throw new Error(`not a role verb: ${sub}\n\n${help(['role'])}`)
   }
   // Three keyed queries stand in for the corpus: the roles, the entities
@@ -1311,7 +1205,7 @@ let role = async (args: string[]) => {
     roles.map((r) => String(r.comps.role.scope_eid ?? '')).filter(Boolean),
   )
   let all = [...roles, ...scopes, ...await query(['.session.role_eid!'])]
-  if (sub == '--json') {
+  if (got.flags.has('--json')) {
     return print(jsonText(
       roles.map((r) => ({
         id: idOf(r),
@@ -1328,11 +1222,10 @@ let role = async (args: string[]) => {
 
 // An edge is a sentence — "<id> requires <child>" — and the comp names the
 // whole triple, so link and unlink are the same Change with gone flipped.
-let dep = async (args: string[]) => {
-  let gone = args.includes('--gone')
-  let words = args.filter((a) => a != '--gone')
-  let [id, type, childId] = words
-  if (!id || !type || !childId || words.length != 3) {
+let dep = async (got: Got) => {
+  let gone = got.flags.has('--gone')
+  let id = got.args.id, type = got.args.type, childId = got.args.child
+  if (!id || !type || !childId) {
     throw new Error('task dep <id> <type> <child> [--gone]')
   }
   if (!edges.includes(type as Edge)) {
@@ -1352,21 +1245,13 @@ let dep = async (args: string[]) => {
 // A comment is something you WROTE — there is no door here for marking it
 // as machinery, because a caller who has one uses it to stay off the mail
 // relay and files their own letter as emitted (T-7018).
-let comment = async (args: string[]) => {
-  let verdictArg = args.find((a) => a.startsWith('--verdict='))
-  let verdict = verdictArg?.slice(10)
+let comment = async (got: Got) => {
+  let verdict = got.opts['--verdict']
   // A comment body is a DOCUMENT, exactly like a task body — so it rides the
-  // SAME door: parts() peels the id and text words off the params, and bodyOf
-  // reads the body by preference (.body=/--body= through inflate — @- heredoc,
-  // @file — else the trailing words, keeping the bare single-@token
-  // back-compat). One reader, so a markdown heredoc is stored whole instead of
-  // the flat inline string the missing `.body=` door pushed authors toward.
-  let { words } = parts(args)
-  let [id, ...text] = words
-  let body = bodyOf(args, text)
-  if (verdictArg != null && !verdict) {
-    throw new Error('--verdict needs approved, rejected, or changes_requested')
-  }
+  // The parser reads the body by preference (.body=/--body= through inflate —
+  // @- heredoc, @file — else trailing words, keeping the bare single-@token
+  // back-compat). One reader keeps every body spelling on the same door.
+  let id = got.args.id, body = got.body
   if (!id || (!body && !verdict)) {
     throw new Error('task comment <id> [text...] [--verdict=...]')
   }
@@ -1381,7 +1266,7 @@ let comment = async (args: string[]) => {
   let made = commentChanges(
     [row, ...(sess ? [sess] : [])],
     row.eid,
-    body,
+    body ?? '',
     sid,
     { verdict },
   )
@@ -1397,9 +1282,9 @@ let comment = async (args: string[]) => {
   )
 }
 
-let show = async (args: string[]) => {
-  let json = args.includes('--json')
-  let [id] = args.filter((a) => a != '--json')
+let show = async (got: Got) => {
+  let json = got.flags.has('--json')
+  let id = got.args.id
   if (!id) throw new Error('task show <id> [--json]')
   // The reading neighborhood, not the whole graph: `show` names one entity's
   // edges and comments, so it fetches one entity's set (client.ts around) —
@@ -1423,12 +1308,10 @@ let show = async (args: string[]) => {
 
 // The entity's write history — the journal, one line per touching batch:
 // when · who · what changed. Blame without a version table.
-let past = async (args: string[]) => {
-  let json = args.includes('--json')
-  args = args.filter((a) => a != '--json')
-  let n = Number(args.find((a) => a.startsWith('-n'))?.slice(2) ?? 0) ||
-    Number(args[args.indexOf('-n') + 1] ?? 0) || 50
-  let id = args.find((a) => !a.startsWith('-'))
+let past = async (got: Got) => {
+  let json = got.flags.has('--json')
+  let n = Number(got.opts['-n'])
+  let id = got.args.id
   if (!id) throw new Error('task history <id> [-n N]')
   let row = await needed(id)
   let entries = await history(row.eid, n)
@@ -1606,8 +1489,8 @@ export let roleEid = (all: Row[], id?: string) => {
 // `context --hook` needs no exception: its stdout IS the digest the session
 // boots into, so it serves deliberately and sets `told` itself.
 let told = false
-let heard = async () => {
-  if (told || Deno.args.includes('--hook')) return
+let heard = async (hook = false) => {
+  if (told || hook) return
   told = true
   let sid = me()
   if (!sid) return
@@ -1625,14 +1508,14 @@ let heard = async () => {
 export let hookOperator = (role?: string, pid?: number) =>
   !!role || operatorHook(pid)
 
-let context = async (args: string[]) => {
-  let hook = args.includes('--hook')
+let context = async (input: Got) => {
+  let hook = input.flags.has('--hook')
   // Subagent mode is DECLARED, never sniffed: explicit --subagent, or the
   // payload's SubagentStart event (which carries the child's own agent_id).
   // The hook branch confirms the event from stdin below; SessionStart
   // reifies a normal graph participant.
-  let sub = args.includes('--subagent')
-  let sid = args.find((a) => !a.startsWith('--')) ?? me()
+  let sub = input.flags.has('--subagent')
+  let sid = input.args.sid ?? me()
   let read = (
     session?: string,
     cwd = Deno.cwd(),
@@ -1871,19 +1754,16 @@ let context = async (args: string[]) => {
 // Turn hooks say when a native composer is safe to address. The state is a
 // hint about this session's own terminal, so a hook may write it like pid and
 // pane; the delivery adapter still revalidates all three before touching tmux.
-let sessionTurn = async (args: string[]) => {
-  let hook = args.includes('--hook')
-  let words = args.filter((a) => !a.startsWith('--'))
+let sessionTurn = async (got: Got) => {
+  let hook = got.flags.has('--hook')
   try {
     let body: Record<string, unknown> = {}
     if (hook) {
       body = JSON.parse(await new Response(Deno.stdin.readable).text())
     }
-    let turn = hook
-      ? hookTurn(body)
-      : words.find((w) => /^(idle|busy)$/.test(w))
+    let turn = hook ? hookTurn(body) : got.args['idle|busy']
     let sid = String(body.session_id ?? '') ||
-      words.find((w) => w != turn) ||
+      got.args.sid ||
       me()
     if (!sid || !turn) {
       if (hook) return
@@ -1917,13 +1797,12 @@ let sessionTurn = async (args: string[]) => {
 // calling session. The one door that mints a plain doc — `task new` is
 // doc + task and always was, so before this the only way to write a design
 // into the graph was a raw batch, and the file stayed the warm path.
-let design = async (args: string[]) => {
-  let { vals, words } = parts(args)
-  let title = words.join(' ').trim()
+let design = async (got: Got) => {
+  let title = got.args.title?.trim()
   if (!title) throw new Error('task design <title...> (what it proposes)')
   let session = me()
   if (!session) throw new Error('design: no session identity (attribution)')
-  let body = bodyIn(vals)
+  let body = got.body
   let sess = await sessionRow(session)
   let made = designChanges(sess ? [sess] : [], { title, body, session })
   await send(made.changes)
@@ -1935,17 +1814,16 @@ let design = async (args: string[]) => {
 // Save a memory: doc + memory comp, stamped via the calling session — the
 // CLI face of MCP memory_save, so headless agents (the scribe first) have
 // the door too.
-let remember = async (args: string[]) => {
-  let { vals, words } = parts(args)
-  let title = words.join(' ').trim()
+let remember = async (got: Got) => {
+  let title = got.args.title?.trim()
   if (!title) throw new Error('task remember <title...> (the index line)')
   let session = me()
   if (!session) throw new Error('remember: no session identity (attribution)')
-  let body = bodyIn(vals)
+  let body = got.body
   let [sess, refs] = await Promise.all([
     sessionRow(session),
     fetched(
-      [vals.scope?.value, vals.feedback?.value].filter(Boolean) as string[],
+      [got.opts['--scope'], got.opts['--feedback']].filter(Boolean),
     ),
   ])
   let all = [...(sess ? [sess] : []), ...refs]
@@ -1954,8 +1832,8 @@ let remember = async (args: string[]) => {
   let made = memoryChanges(all, {
     title,
     body,
-    scope: vals.scope?.value,
-    feedback: vals.feedback?.value,
+    scope: got.opts['--scope'],
+    feedback: got.opts['--feedback'],
     session,
   })
   await send(made.changes)
@@ -1966,9 +1844,9 @@ let remember = async (args: string[]) => {
 
 // SessionEnd's mirror of context: drop everything the session holds.
 // --hook mode (stdin JSON, silent failure) wires it to the lifecycle.
-let wrap = async (args: string[]) => {
-  let hook = args.includes('--hook')
-  let sid = args.find((a) => !a.startsWith('--')) ?? me()
+let wrap = async (got: Got) => {
+  let hook = got.flags.has('--hook')
+  let sid = got.args.sid ?? me()
   try {
     // Hook stdin always gets read: even when the env names the session,
     // the payload carries the transcript whose last assistant turn IS the
@@ -2024,11 +1902,10 @@ let wrap = async (args: string[]) => {
 // next digest quotes as `## previously`. Body doors match mail's:
 // trailing words, --body=@file, --body=- or @- (piped stdin). Another
 // session's doc is task set's job (task set S-12 .body=@brief.md).
-let sessionBrief = async (args: string[]) => {
-  let { words } = parts(args)
+let sessionBrief = async (got: Got) => {
   let sid = me()
   if (!sid) throw new Error('session brief: run under a session (no identity)')
-  let body = bodyOf(args, words)
+  let body = got.body
   if (!body) {
     throw new Error(
       'a brief needs words: text, @file, or --body=@file|-|@-',
@@ -2047,13 +1924,9 @@ let sessionBrief = async (args: string[]) => {
 
 // Session-lifecycle verbs live here — root `task context` / `task wrap`
 // stay as quiet aliases: hook lines in the wild call them (T-4554).
-let session = (args: string[]) => {
-  let [sub, ...rest] = args
-  if (sub == 'context') return context(rest)
-  if (sub == 'wrap') return wrap(rest)
-  if (sub == 'brief') return sessionBrief(rest)
-  if (sub == 'turn') return sessionTurn(rest)
-  if (!sub || sub == 'help' || sub == '--help') {
+let session = (got: Got) => {
+  let sub = got.args.command
+  if (!sub) {
     return print(help(['session']))
   }
   throw new Error(`not a session verb: ${sub}\n\n${help(['session'])}`)
@@ -2073,8 +1946,8 @@ let repoRoot = () => {
 // What the fleet left running: probes whose session is gone, and worktrees
 // with nothing left in them. Listing is the default because the acting form
 // is destructive — read the reasons, THEN pass --reap.
-let probes = async (args: string[]) => {
-  let mins = Number(args.find((a) => a.startsWith('--grace='))?.slice(8))
+let probes = async (got: Got) => {
+  let mins = Number(got.opts['--grace'])
   let repo = repoRoot()
   let all = await query([], 'session')
   let seen = sweep(
@@ -2092,7 +1965,7 @@ let probes = async (args: string[]) => {
     )
   }
   for (let t of stale) print(`tree    ${t.tree.path}  ${t.why}`)
-  if (args.includes('--all')) {
+  if (got.flags.has('--all')) {
     for (let v of seen.verdicts.filter((v) => !v.reap && v.proc.cwd)) {
       print(
         `spared  ${String(v.proc.pid).padStart(8)} ${
@@ -2104,7 +1977,7 @@ let probes = async (args: string[]) => {
       print(`kept    ${t.tree.path}  ${t.why}`)
     }
   }
-  if (!args.includes('--reap')) {
+  if (!got.flags.has('--reap')) {
     warn(
       `${doomed.length} orphan(s), ${stale.length} stale worktree(s)`,
     )
@@ -2119,13 +1992,11 @@ let probes = async (args: string[]) => {
 
 // What the tools have been doing: MCP calls, HTTP writes and browser
 // crashes, newest first. --errors is the view you want most days.
-let telemetry = async (args: string[]) => {
+let telemetry = async (got: Got) => {
   let q = new URLSearchParams()
-  if (args.includes('--errors')) q.set('only', 'errors')
-  let since = args.find((a) => a.startsWith('--since='))
-  if (since) q.set('since', since.slice(8))
-  let n = args.indexOf('-n')
-  if (n >= 0 && args[n + 1]) q.set('limit', args[n + 1])
+  if (got.flags.has('--errors')) q.set('only', 'errors')
+  if (got.opts['--since']) q.set('since', got.opts['--since'])
+  if (got.opts['-n']) q.set('limit', got.opts['-n'])
   let res = await request(`http://${host()}/telemetry?${q}`)
   if (!res.ok) throw new Error(`server said ${res.status}`)
   let rows = await res.json() as Log[]
@@ -2152,8 +2023,8 @@ let telemetry = async (args: string[]) => {
 // server's effect keeps files fresh on graph changes; this verb is the
 // explicit door — the first sync of a new repo, or the committed story until
 // the permission-gated actuator (T-3926) owns it.
-let sync = async (args: string[]) => {
-  let check = args.includes('--check')
+let sync = async (got: Got) => {
+  let check = got.flags.has('--check')
   let snap
   try {
     snap = await projectionSnapshot()
@@ -2192,7 +2063,7 @@ let sync = async (args: string[]) => {
   for (let p of removed) print(`removed ${p}`)
   for (let f of failed) warn(`failed ${f}`)
   if (!written.length && !removed.length && !failed.length) print('all fresh')
-  if (args.includes('--no-commit')) return
+  if (got.flags.has('--no-commit')) return
   // Every path, not just this run's writes: a file left dirty by an
   // earlier sync (or adopted with `git add` since) lands here too.
   let done = await commit(files, 'personas: materialize')
@@ -2352,12 +2223,10 @@ export let claudeHookSettings = (cwd = Deno.cwd()) => {
   return JSON.stringify({ ...settings, hooks })
 }
 
-let terminalScope = (args: string[], pid: number) => {
-  let end = args.indexOf('--')
-  if (end < 0) end = args.length
-  let operator = args.slice(0, end).includes('--operator')
+let terminalScope = (got: Got, pid: number) => {
+  let operator = got.flags.has('--operator')
   return {
-    args: args.filter((a, i) => a != '--operator' || i >= end),
+    args: got.words,
     env: {
       TASKS_OPERATOR: operator ? String(pid) : '',
       TASKS_TASK: '',
@@ -2366,13 +2235,13 @@ let terminalScope = (args: string[], pid: number) => {
   }
 }
 
-export let claudeLaunch = (
-  args: string[],
+let claudeLaunchGot = (
+  got: Got,
   listed: boolean,
   pid = Deno.pid,
   cwd = Deno.cwd(),
 ) => {
-  let scope = terminalScope(args, pid)
+  let scope = terminalScope(got, pid)
   return {
     args: [
       '--dangerously-skip-permissions',
@@ -2389,7 +2258,14 @@ export let claudeLaunch = (
   }
 }
 
-let claude = async (args: string[]) => {
+export let claudeLaunch = (
+  args: string[],
+  listed: boolean,
+  pid = Deno.pid,
+  cwd = Deno.cwd(),
+) => claudeLaunchGot(parse('claude', manuals.claude, args), listed, pid, cwd)
+
+let claude = async (got: Got) => {
   // Allowlisted in root's managed settings → clean launch; otherwise the
   // dev-load flag activates the channel behind a press-Enter dialog —
   // fine at a keyboard, which is the only place this verb runs.
@@ -2398,19 +2274,19 @@ let claude = async (args: string[]) => {
     listed = Deno.readTextFileSync('/etc/claude-code/managed-settings.json')
       .includes('"tasks-fleet"')
   } catch { /* no managed settings — dev-load below */ }
-  let launch = claudeLaunch(args, listed)
+  let launch = claudeLaunchGot(got, listed)
   await terminal('claude', launch.args, launch.env)
 }
 
 // Full access matches the interactive Claude posture; lifecycle hooks bind
 // the provider thread to the graph. An operator also wears the repo's stable
 // persona door; every other Codex argument keeps order.
-export let codexLaunch = (
-  args: string[],
+let codexLaunchGot = (
+  got: Got,
   pid = Deno.pid,
   cwd = Deno.cwd(),
 ) => {
-  let scope = terminalScope(args, pid)
+  let scope = terminalScope(got, pid)
   return {
     args: [
       '--dangerously-bypass-approvals-and-sandbox',
@@ -2430,10 +2306,16 @@ export let codexLaunch = (
   }
 }
 
+export let codexLaunch = (
+  args: string[],
+  pid = Deno.pid,
+  cwd = Deno.cwd(),
+) => codexLaunchGot(parse('codex', manuals.codex, args), pid, cwd)
+
 export let codexArgs = (args: string[]) => codexLaunch(args).args
 
-let codex = async (args: string[]) => {
-  let launch = codexLaunch(args)
+let codex = async (got: Got) => {
+  let launch = codexLaunchGot(got)
   await terminal('codex', launch.args, launch.env)
 }
 
@@ -2452,22 +2334,99 @@ let tui = async () => {
   }
 }
 
+// The declaration and its handler become one table before anything can route
+// to it. Router-only syntax (`subject` and `:`) stays in front of this table;
+// every ordinary declaration must have a run or module loading fails loudly.
+let bind = (runs: Record<string, Run>): Record<string, Verb> => {
+  let routed = Object.keys(manuals).filter((name) =>
+    !['subject', ':'].includes(name)
+  )
+  let missing = routed.filter((name) => !runs[name])
+  let unknown = Object.keys(runs).filter((name) => !routed.includes(name))
+  if (missing.length || unknown.length) {
+    throw new Error(
+      `CLI verbs: ${
+        [
+          missing.length ? `no run: ${missing.join(', ')}` : '',
+          unknown.length ? `no declaration: ${unknown.join(', ')}` : '',
+        ].filter(Boolean).join('; ')
+      }`,
+    )
+  }
+  return Object.fromEntries(
+    routed.map((name) => [name, { ...manuals[name], run: runs[name] }]),
+  )
+}
+
+export let verbs = bind({
+  tui: () => tui(),
+  claude,
+  codex,
+  list,
+  decided,
+  new: create,
+  set,
+  show,
+  history: past,
+  search: seek,
+  mail: mailList,
+  'mail show': mailShow,
+  'mail send': mailSend,
+  'mail reply': mailReply,
+  'mail search': mailSeek,
+  'mail files': mailFiles,
+  'mail doctor': () => mailDoctor(),
+  watch: subscribe('watch'),
+  mute: subscribe('mute'),
+  inbox: inboxList,
+  'inbox show': inboxShow,
+  'inbox archive': inboxArchive,
+  claim,
+  release,
+  spawn,
+  land: () => land(),
+  comment,
+  dep,
+  backup: () => backup(),
+  sync,
+  design,
+  remember,
+  session,
+  'session context': context,
+  'session wrap': wrap,
+  'session brief': sessionBrief,
+  'session turn': sessionTurn,
+  role,
+  'role stop': (got) => roleState('stop', got),
+  'role start': (got) => roleState('start', got),
+  probes,
+  telemetry,
+  wake: (got) => colon(undefined, ['wake', ...got.words]),
+  help: (got) => print(help(got.words)),
+  ls: list,
+  context,
+  wrap,
+})
+
 // Only run the CLI when invoked as the program — importing this module (e.g.
 // from tests) must not dispatch a command or call Deno.exit.
 if (import.meta.main) {
   let [cmd, ...rest] = Deno.args
   try {
     let asked = requestedHelp(Deno.args)
+    let hook = false
     if (asked != null) print(asked)
+    else if (!cmd) await bare()
     else {
       let routed = listing(cmd, rest) ?? subject(cmd, rest)
       if (routed) {
         cmd = routed.cmd
         rest = routed.args
       }
-      let selected = route(cmd, rest)
+      let selected = route(cmd, rest, verbs)
       if (selected) {
-        validate(selected.name, selected.manual, selected.args)
+        let got = parse(selected.name, selected.manual, selected.args)
+        hook = got.flags.has('--hook')
         // A deprecated verb still WORKS — this is a signpost, not a gate.
         // It has to fire on the RUN: the only people still typing one are
         // acting from habit, and they never read the help. stderr, because
@@ -2475,69 +2434,35 @@ if (import.meta.main) {
         // The signpost belongs to the SPELLING, not the handler it lands in:
         // subject-first sentences merely reuse the old verb's code, so
         // `task T-3 requires T-9` was told the form it just used is obsolete.
-        if (selected.manual.deprecated && !routed) {
+        let spelled = selected.name == 'help' && rest[0] == 'help'
+          ? manuals[cmd]
+          : selected.manual
+        if (spelled.deprecated && !routed) {
           warn(
-            `task ${selected.name}: deprecated — ${selected.manual.deprecated}`,
+            `task ${spelled.name}: deprecated — ${spelled.deprecated}`,
           )
         }
-      } else if (cmd?.startsWith(':')) {
+        await selected.manual.run(got)
+      } else if (cmd.startsWith(':')) {
         validateCommand(cmd.slice(1), rest)
+        await colon(undefined, [cmd, ...rest])
       } else if (rest[0]?.startsWith(':')) {
         validateCommand(rest[0].slice(1), rest.slice(1))
+        await colon(cmd, rest)
       } else if ((cmd == 'done' || cmd == 'cancel') && idLike(rest[0])) {
         // Explicit-target sugar (T-14573) — done/cancel validate their
         // own args below, not the focused-task palette's word count.
+        await (cmd == 'done' ? done(rest) : cancel(rest))
       } else if (cmd && commands[cmd]) {
         validateCommand(cmd, rest)
-      }
-      if (cmd?.startsWith(':')) await colon(undefined, [cmd, ...rest])
-      else if (cmd == 'tui') await tui()
-      else if (cmd == 'claude') await claude(rest)
-      else if (cmd == 'codex') await codex(rest)
-      else if (cmd == 'list' || cmd == 'ls') await list(rest)
-      else if (cmd == 'decided') await decided(rest)
-      else if (cmd == 'new') await create(rest)
-      else if (cmd == 'set') await set(rest)
-      else if (cmd == 'show') await show(rest)
-      else if (cmd == 'history') await past(rest)
-      else if (cmd == 'search') await seek(rest)
-      else if (cmd == 'mail') await mail(rest)
-      else if (cmd == 'inbox') await inbox(rest)
-      else if (cmd == 'watch') await subscribe('watch')(rest)
-      else if (cmd == 'mute') await subscribe('mute')(rest)
-      else if (cmd == 'session') await session(rest)
-      else if (cmd == 'claim') await claim(rest)
-      else if (cmd == 'spawn') await spawn(rest)
-      else if (cmd == 'land') await land()
-      else if (cmd == 'comment') await comment(rest)
-      else if (cmd == 'dep') await dep(rest)
-      else if (cmd == 'backup') await backup()
-      else if (cmd == 'remember') await remember(rest)
-      else if (cmd == 'design') await design(rest)
-      else if (cmd == 'context') await context(rest)
-      else if (cmd == 'wrap') await wrap(rest)
-      else if (cmd == 'sync') await sync(rest)
-      else if (cmd == 'release') await release(rest)
-      else if (cmd == 'role') await role(rest)
-      else if (cmd == 'probes') await probes(rest)
-      else if (cmd == 'telemetry') await telemetry(rest)
-      else if (cmd == 'help' || cmd == '--help') print(help(rest))
-      else if (!cmd) await bare()
-      // `task done T-3` / `task cancel T-3 …` — an id-shaped first word is
-      // an explicit target, never reason prose (T-14573).
-      else if (cmd == 'done' && idLike(rest[0])) await done(rest)
-      else if (cmd == 'cancel' && idLike(rest[0])) await cancel(rest)
-      // `task T-42 :done` — an id ahead of a colon line names the focus.
-      else if (rest[0]?.startsWith(':')) await colon(cmd, rest)
-      // CLI verbs win shared names; the remaining palette words may omit `:`.
-      else if (cmd && commands[cmd]) await colon(undefined, [cmd, ...rest])
-      else {
+        await colon(undefined, [cmd, ...rest])
+      } else {
         print(usage())
         Deno.exit(2)
       }
     }
     // Whatever the verb did, hand over anything addressed to this session.
-    await heard()
+    await heard(hook)
   } catch (e) {
     warn(`task: ${(e as Error).message} (server: ${host()})`)
     Deno.exit(1)

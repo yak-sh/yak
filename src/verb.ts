@@ -1,6 +1,7 @@
 // The shell verb vocabulary: one declaration of positional arguments,
 // options and dot-param policy, rendered by the manual and parsed by the CLI.
 
+import type { Param } from './client.ts'
 import type { PropType } from './types.ts'
 
 export type Kind = {
@@ -8,6 +9,7 @@ export type Kind = {
   of?: () => string[]
   test?: RegExp
   id?: boolean
+  read?: boolean
 }
 
 export type Arg = {
@@ -25,11 +27,24 @@ export type Opt = {
   separate?: boolean
 }
 
-export type Dots = 'any' | string[] | undefined
+export type Dots = 'filters' | 'params' | string[] | undefined
 
-// `run` joins this declaration in stage 2. The routing fields below keep the
-// current dispatcher explicit until every handler consumes the parsed shape.
-export type Verb<Run = unknown> = {
+// String values stay faithful to argv. `many` preserves token boundaries for
+// a trailing slot whose grammar cares about them (filters and passthrough),
+// while `args` gives ordinary handlers the named value they asked for.
+export type Got = {
+  args: Record<string, string>
+  many: Record<string, string[]>
+  opts: Record<string, string>
+  flags: Set<string>
+  params: Param[]
+  words: string[]
+  body?: string
+}
+
+export type Run = (got: Got) => unknown
+
+export type Decl = {
   name: string
   about: string
   args?: Arg[]
@@ -37,7 +52,6 @@ export type Verb<Run = unknown> = {
   dots?: Dots
   body?: 'body' | 'text'
   door: ('cli' | 'palette')[]
-  run?: Run
   some?: string[]
   examples?: string[]
   detail?: string
@@ -50,10 +64,12 @@ export type Verb<Run = unknown> = {
   syntax?: string
 }
 
+export type Verb = Decl & { run: Run }
+
 export let text: Kind = { name: 'text', test: /.+/ }
 export let id: Kind = { name: 'id', test: /.+/, id: true }
 export let path: Kind = { name: 'dir', test: /.+/ }
-export let body: Kind = { name: 'body', test: /.+/ }
+export let body: Kind = { name: 'body', test: /.+/, read: true }
 export let num: Kind = { name: 'n', test: /^[1-9]\d*$/ }
 
 export let of = (name: string, values: () => string[]): Kind => ({
@@ -79,7 +95,7 @@ let meta = (kind: Kind) => {
   return values && values.length <= 24 ? values : kind.name.toUpperCase()
 }
 
-let option = (opt: Opt, verb: Verb) => {
+let option = (opt: Opt, verb: Decl) => {
   let value = opt.kind ? `=${opt.or ?? meta(opt.kind)}` : ''
   let shape = `${opt.name}${value}`
   return verb.some?.length == 1 && verb.some[0] == opt.name
@@ -87,14 +103,14 @@ let option = (opt: Opt, verb: Verb) => {
     : `[${shape}]`
 }
 
-export let usageOf = (verb: Verb) =>
+export let usageOf = (verb: Decl) =>
   verb.syntax ?? [
     verb.name,
     ...(verb.args ?? []).map(positional),
     ...(verb.opts ?? []).map((opt) => option(opt, verb)),
   ].join(' ')
 
-export let wordsOf = (verb: Verb): [number, number?] => {
+export let wordsOf = (verb: Decl): [number, number?] => {
   let args = verb.args ?? []
   let min = args.filter((arg) => arg.need !== false).length
   return args.some((arg) => arg.rest) ? [min] : [min, args.length]

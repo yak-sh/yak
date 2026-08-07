@@ -4,8 +4,6 @@
 // actually type, and the bug that let it through polluted the owner board.
 import { assertEquals, assertMatch, assertThrows } from '@std/assert'
 import {
-  bodyIn,
-  bodyOf,
   claimedDigest,
   claudeHookSettings,
   claudeLaunch,
@@ -23,7 +21,6 @@ import {
   lifecycleHooks,
   listing,
   operatorHook,
-  parts,
   place,
   printer,
   roleEid,
@@ -32,8 +29,10 @@ import {
   subagentDigest,
   subject,
   subjectUsage,
+  verbs,
 } from './cli.ts'
 import { rows } from './client.ts'
+import { manuals, parse } from './manual.ts'
 import { parseQuery } from './query.ts'
 import { fakeGraph } from './graph_fake.ts'
 import type { Snapshot } from './types.ts'
@@ -68,12 +67,25 @@ let bareCli = (env: Record<string, string>) =>
 
 let text = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
 
+let commentBody = (args: string[], io: Parameters<typeof parse>[3]) =>
+  parse('comment', manuals.comment, ['T-1', ...args], io).body
+
 let unsafe = (text: string) =>
   [...text].filter((c) => {
     let n = c.charCodeAt(0)
     return (n < 0x20 && ![1, 2, 10].includes(n)) ||
       (n >= 0x7f && n <= 0x9f)
   })
+
+Deno.test('every routed CLI declaration owns its handler', () => {
+  let names = Object.keys(manuals).filter((name) =>
+    !['subject', ':'].includes(name)
+  )
+  assertEquals(Object.keys(verbs), names)
+  for (let [name, verb] of Object.entries(verbs)) {
+    assertEquals(typeof verb.run, 'function', name)
+  }
+})
 
 Deno.test('printer: content cannot speak to the terminal', () => {
   let cases: [string, string, string][] = [
@@ -219,7 +231,7 @@ Deno.test('task subject help is contextual and needs no server', async () => {
   assertEquals(subjectUsage('T-3').trim(), stdout.trim())
 })
 
-Deno.test('bodyOf: only explicit stdin spellings read the pipe', () => {
+Deno.test('parse: only explicit stdin spellings read the pipe', () => {
   let cases: [string[], string[], string, number][] = [
     [['--body=-'], [], 'piped', 1],
     [['--body=@-'], [], 'piped', 1],
@@ -228,7 +240,7 @@ Deno.test('bodyOf: only explicit stdin spellings read the pipe', () => {
   ]
   for (let [flags, words, want, reads] of cases) {
     let read = 0
-    let got = bodyOf(flags, words, {
+    let got = commentBody([...words, ...flags], {
       terminal: () => false,
       read: () => (read++, ' piped\n'),
     })
@@ -239,33 +251,33 @@ Deno.test('bodyOf: only explicit stdin spellings read the pipe', () => {
 // @ is the door's convention, not the flag's — a lone trailing @file is
 // read exactly as --body=@file is, so a letter can never go out carrying
 // the path of the file it should have quoted (T-10461).
-Deno.test('bodyOf: a lone trailing @file is read, prose is not', () => {
+Deno.test('parse: a lone trailing @file is read, prose is not', () => {
   let f = Deno.makeTempFileSync()
   Deno.writeTextFileSync(f, 'the whole letter\n')
   let tty = { terminal: () => true, read: () => '' }
-  assertEquals(bodyOf([], [`@${f}`], tty), 'the whole letter\n')
+  assertEquals(commentBody([`@${f}`], tty), 'the whole letter\n')
   // @@ escapes to a literal @, the same as every other door
-  assertEquals(bodyOf([], ['@@handle'], tty), '@handle')
+  assertEquals(commentBody(['@@handle'], tty), '@handle')
   // more than one word is prose: an opening @handle is never a filename
-  assertEquals(bodyOf([], ['@handle', 'thanks!'], tty), '@handle thanks!')
-  assertEquals(bodyOf([], ['plain', 'words'], tty), 'plain words')
+  assertEquals(commentBody(['@handle', 'thanks!'], tty), '@handle thanks!')
+  assertEquals(commentBody(['plain', 'words'], tty), 'plain words')
   // a QUOTED sentence is still one argv token — prose, not a reference
-  assertEquals(bodyOf([], ['@handle thanks!'], tty), '@handle thanks!')
+  assertEquals(commentBody(['@handle thanks!'], tty), '@handle thanks!')
   // a missing file is loud — the caller's own token names the door
   assertThrows(
-    () => bodyOf([], ['@/no/such/file'], tty),
+    () => commentBody(['@/no/such/file'], tty),
     Error,
     '@/no/such/file: no such file',
   )
   Deno.removeSync(f)
 })
 
-Deno.test('bodyOf: a lone trailing @- is the pipe, and refuses a TTY', () => {
+Deno.test('parse: a lone trailing @- is the pipe, and refuses a TTY', () => {
   // said positionally, both spellings, exactly as the flag says them
   for (let t of ['@-', '-']) {
     let read = 0
     assertEquals(
-      bodyOf([], [t], {
+      commentBody([t], {
         terminal: () => false,
         read: () => (read++, ' hi\n'),
       }),
@@ -273,19 +285,19 @@ Deno.test('bodyOf: a lone trailing @- is the pipe, and refuses a TTY', () => {
     )
     assertEquals(read, 1)
     assertThrows(
-      () => bodyOf([], [t], { terminal: () => true, read: () => 'x' }),
+      () => commentBody([t], { terminal: () => true, read: () => 'x' }),
       Error,
       `${t}: stdin is a TTY`,
     )
   }
 })
 
-Deno.test('bodyOf: both stdin spellings refuse a TTY', () => {
+Deno.test('parse: both stdin spellings refuse a TTY', () => {
   for (let b of ['-', '@-']) {
     let read = 0
     assertThrows(
       () =>
-        bodyOf([`--body=${b}`], [], {
+        commentBody([`--body=${b}`], {
           terminal: () => true,
           read: () => (read++, 'piped'),
         }),
@@ -303,25 +315,29 @@ Deno.test('bodyOf: both stdin spellings refuse a TTY', () => {
 // flag in the title, minted an empty body and printed its receipt (T-14187).
 // Both spellings, because the dot form is what every other writing door
 // speaks and is what the agent who just filed a task types here.
-Deno.test('parts: a value never reaches the words, at either spelling', () => {
+Deno.test('parse: a value never reaches the words, at either spelling', () => {
   let f = Deno.makeTempFileSync()
   Deno.writeTextFileSync(f, 'the whole design\n')
   let tty = { terminal: () => true, read: () => '' }
   for (let said of [`--body=@${f}`, `.body=@${f}`]) {
-    let { vals, words } = parts(['Some', 'title', said, '--json'])
-    assertEquals({ said, words }, { said, words: ['Some', 'title'] })
-    assertEquals(bodyIn(vals, tty), 'the whole design\n')
+    let got = parse('design', manuals.design, ['Some', 'title', said], tty)
+    assertEquals({ said, title: got.args.title }, {
+      said,
+      title: 'Some title',
+    })
+    assertEquals(got.body, 'the whole design\n')
   }
   // Prose keeps every word: only a param spelling is taken out of the text.
-  assertEquals(parts(['a', '.gitignore', 'rule']).words, [
-    'a',
-    '.gitignore',
-    'rule',
-  ])
-  assertEquals(bodyIn(parts(['no', 'body']).vals, tty), undefined)
+  let prose = parse('design', manuals.design, ['a', '.gitignore', 'rule'], tty)
+  assertEquals(prose.many.title, ['a', '.gitignore', 'rule'])
+  assertEquals(prose.body, undefined)
   // The token as TYPED names the door in an error, whichever spelling it was.
   for (let said of ['--body=@/no/such/file', '.body=@/no/such/file']) {
-    assertThrows(() => bodyIn(parts([said]).vals, tty), Error, said)
+    assertThrows(
+      () => parse('design', manuals.design, ['title', said], tty),
+      Error,
+      said,
+    )
   }
   Deno.removeSync(f)
 })
@@ -1498,38 +1514,42 @@ Deno.test('task done <non-id-word> keeps refusing loudly, not silently', async (
 
 // The same guard through the positional and --body= doors, since the
 // mistake transfers between verbs (T-10612).
-Deno.test('bodyOf: a lone path that forgot its @ is refused at every door', () => {
+Deno.test('parse: a lone path that forgot its @ is refused at every door', () => {
   let f = Deno.makeTempFileSync()
   Deno.writeTextFileSync(f, 'the whole letter\n')
   let tty = { terminal: () => true, read: () => '' }
-  assertThrows(() => bodyOf([], [f], tty), Error, 'did you mean @')
-  assertThrows(() => bodyOf([`--body=${f}`], [], tty), Error, 'did you mean @')
+  assertThrows(() => commentBody([f], tty), Error, 'did you mean @')
+  assertThrows(
+    () => commentBody([`--body=${f}`], tty),
+    Error,
+    'did you mean @',
+  )
   // Prose keeps its exemption: more than one token is never a reference.
-  assertEquals(bodyOf([], ['see', f, 'please'], tty), `see ${f} please`)
+  assertEquals(commentBody(['see', f, 'please'], tty), `see ${f} please`)
   // And one token holding whitespace is still prose, @ or not.
-  assertEquals(bodyOf([], [`@handle re ${f}`], tty), `@handle re ${f}`)
+  assertEquals(commentBody([`@handle re ${f}`], tty), `@handle re ${f}`)
   Deno.removeSync(f)
 })
 
 // The mistake that actually shipped: the dot-param handed to `task comment`
 // as its positional body. It reached the graph as prose and fanned out as
 // mail, so the guard has to hold at the door the caller reached for.
-Deno.test('bodyOf: a body flag in the value position is refused at every door', () => {
+Deno.test('parse: a body flag in the value position is refused at every door', () => {
   let f = Deno.makeTempFileSync()
   Deno.writeTextFileSync(f, 'the whole ruling\n')
   let tty = { terminal: () => true, read: () => '' }
-  assertThrows(() => bodyOf([], [`.body=@${f}`], tty), Error, 'Pass just')
+  assertThrows(() => commentBody([`body=@${f}`], tty), Error, 'Pass just')
   assertThrows(
-    () => bodyOf([`--body=.body=@${f}`], [], tty),
+    () => commentBody([`--body=.body=@${f}`], tty),
     Error,
     'Pass just',
   )
   // The corrected value reads the file through both doors — the control that
   // earns the suggestion its place.
-  assertEquals(bodyOf([], [`@${f}`], tty), 'the whole ruling\n')
-  assertEquals(bodyOf([`--body=@${f}`], [], tty), 'the whole ruling\n')
+  assertEquals(commentBody([`@${f}`], tty), 'the whole ruling\n')
+  assertEquals(commentBody([`--body=@${f}`], tty), 'the whole ruling\n')
   // Prose keeps its exemption here too.
-  assertEquals(bodyOf([], ['.body=@x', 'or', 'so'], tty), '.body=@x or so')
+  assertEquals(commentBody(['body=@x or so'], tty), 'body=@x or so')
   Deno.removeSync(f)
 })
 
@@ -1538,22 +1558,31 @@ Deno.test('bodyOf: a body flag in the value position is refused at every door', 
 // position (T-10858), and the dropped separator (T-10873). The last row is the
 // positive control: the spelling that works must still work, or this test is
 // measuring nothing.
-Deno.test('bodyOf: every misplaced-body spelling is refused, and @file still reads', () => {
+Deno.test('parse: every misplaced-body spelling is refused, and @file still reads', () => {
   let f = Deno.makeTempFileSync()
   Deno.writeTextFileSync(f, 'the whole ruling\n')
   let tty = { terminal: () => true, read: () => '' }
   for (let said of [`.body=@${f}`, `--body=@${f}`, `body=@${f}`]) {
-    assertThrows(() => bodyOf([], [said], tty), Error, 'value position', said)
+    assertThrows(
+      () => commentBody([`--`, said], tty),
+      Error,
+      'value position',
+      said,
+    )
   }
   for (let flag of ['.body', '--body', 'body']) {
     assertThrows(
-      () => bodyOf([], [flag, `@${f}`], tty),
+      () => commentBody(['--', flag, `@${f}`], tty),
       Error,
       "space instead of '='",
       flag,
     )
   }
-  assertThrows(() => bodyOf([], [f], tty), Error, 'names a file that exists')
-  assertEquals(bodyOf([], [`@${f}`], tty), 'the whole ruling\n')
+  assertThrows(
+    () => commentBody([f], tty),
+    Error,
+    'names a file that exists',
+  )
+  assertEquals(commentBody([`@${f}`], tty), 'the whole ruling\n')
   Deno.removeSync(f)
 })

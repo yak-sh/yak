@@ -4,12 +4,22 @@
 
 import { commands } from './commands.ts'
 import { providers } from './adapters.ts'
+import {
+  inflate,
+  type Param,
+  param,
+  separated,
+  type Stdin,
+  stdin,
+} from './client.ts'
 import { FILTERS, GRAMMAR } from './grammar.ts'
 import { comps, edges, kindOrder, plurals, statuses } from './types.ts'
 import {
   type Arg,
   body as bodyKind,
+  type Decl,
   enumOf,
+  type Got,
   id,
   num,
   of,
@@ -17,11 +27,10 @@ import {
   path,
   text,
   usageOf,
-  type Verb,
   wordsOf,
 } from './verb.ts'
 
-export type Manual = Verb
+export type Manual = Decl
 
 let arg = (
   name: string,
@@ -39,6 +48,7 @@ let value = (name: string, kind = text, separate = false): Opt => ({
 
 let json = flag('--json')
 let body = value('--body', bodyKind)
+let bodyText = { ...bodyKind, name: 'text' }
 // Retired flags whose habit outlives them, said once each (Manual.retired).
 let BRIEF_BODY = "takes no --body — did you mean 'task session brief --body=…'?"
 let REMEMBER_TYPE =
@@ -95,7 +105,7 @@ export let manuals = declare({
     passthrough: true,
   },
   list: {
-    dots: 'any',
+    dots: 'filters',
     about: 'list tasks — or any kind (filter grammar)',
     examples: [
       'task list .status=open .priority<=1',
@@ -113,7 +123,7 @@ export let manuals = declare({
     opts: [json],
   },
   decided: {
-    dots: 'any',
+    dots: 'filters',
     about: 'what has been settled here, newest decision first',
     examples: [
       'task decided',
@@ -134,6 +144,7 @@ export let manuals = declare({
     opts: [flag('--all'), json],
   },
   new: {
+    dots: 'params',
     about: 'create a task (bare words become the title)',
     body: 'body',
     examples: [
@@ -152,7 +163,7 @@ export let manuals = declare({
     passthrough: true,
   },
   set: {
-    dots: 'any',
+    dots: 'params',
     about: 'patch any entity; --comment says why, in the same batch',
     examples: [
       'task set T-3 .status=done --comment="verified end-to-end"',
@@ -165,7 +176,7 @@ export let manuals = declare({
       'it ride one atomic batch, so neither can land without the other.',
     root: true,
     args: [arg('id', id)],
-    opts: [value('--comment')],
+    opts: [value('--comment', bodyText)],
   },
   show: {
     about: 'one entity as a document (--json for scripts)',
@@ -182,7 +193,7 @@ export let manuals = declare({
     opts: [{ ...count, or: '50' }, json],
   },
   search: {
-    dots: 'any',
+    dots: 'filters',
     about: 'full-text search (trailing * = prefix)',
     examples: [
       'task search flux capac*',
@@ -193,7 +204,7 @@ export let manuals = declare({
     opts: [json],
   },
   mail: {
-    dots: 'any',
+    dots: 'filters',
     about: 'the mail-only slice of your items',
     deprecated: 'superseded by task inbox, where mail is one kind of item',
     examples: [
@@ -272,7 +283,7 @@ export let manuals = declare({
     opts: [flag('--gone')],
   },
   inbox: {
-    dots: 'any',
+    dots: 'filters',
     about: 'everything addressed to you, unread first',
     examples: [
       'task inbox',
@@ -593,7 +604,7 @@ export let manuals = declare({
     ],
   },
   ls: {
-    dots: 'any',
+    dots: 'filters',
     about: 'list tasks (filter grammar)',
     deprecated: 'superseded by task list',
     examples: ['task list .status=open'],
@@ -751,15 +762,21 @@ export let requestedHelp = (argv: string[]) => {
   return helpAt(head.filter((a) => a != '--help' && a != '-h'))
 }
 
-export let route = (cmd: string | undefined, args: string[]) => {
+export let route = <V extends Manual = Manual>(
+  cmd: string | undefined,
+  args: string[],
+  all: Record<string, V> = manuals as Record<string, V>,
+) => {
   if (!cmd) return
-  let nested = manuals[`${cmd} ${args[0]}`]
+  let nested = all[`${cmd} ${args[0]}`]
   let familyHelp = args[0] == 'help' &&
-    Object.keys(manuals).some((name) => name.startsWith(`${cmd} `))
+    Object.keys(all).some((name) => name.startsWith(`${cmd} `))
   return nested
     ? { name: `${cmd} ${args[0]}`, manual: nested, args: args.slice(1) }
-    : manuals[cmd]
-    ? { name: cmd, manual: manuals[cmd], args: familyHelp ? [] : args }
+    : familyHelp
+    ? { name: 'help', manual: all.help, args: [cmd] }
+    : all[cmd]
+    ? { name: cmd, manual: all[cmd], args }
     : undefined
 }
 
@@ -826,30 +843,77 @@ let some = (manual: Manual, present: Set<string>) => {
   return `needs ${missing.map(shape).join(' or ')}`
 }
 
-export let validate = (
+let parsed = (
   name: string,
   manual: Manual,
-  args: string[],
-) => {
-  if (manual.passthrough) return
+  argv: string[],
+  io: Stdin,
+  read: boolean,
+): Got => {
   let words: string[] = []
+  let slots: string[] = []
+  let opts: Record<string, string> = Object.fromEntries(
+    (manual.opts ?? []).flatMap((opt) =>
+      opt.or == null ? [] : [[opt.name, opt.or]]
+    ),
+  )
+  let flags = new Set<string>()
+  let provided = new Set<string>()
+  let params: Param[] = []
+  let paramAs: string[] = []
+  let reads: Record<string, { raw: string; as: string }> = {}
   let present = new Set<string>()
   let literal = false
-  for (let i = 0; i < args.length; i++) {
-    let arg = args[i]
-    if (literal || arg == '--') {
-      literal = true
+  let value = (opt: Opt, raw: string, as: string) => {
+    if (!accepts(opt.kind!, raw)) {
+      throw usageError(name, manual, `${opt.name} needs ${wanted(opt.kind!)}`)
+    }
+    if (provided.has(opt.name)) return
+    opts[opt.name] = raw
+    if (opt.kind!.read) reads[opt.name] = { raw, as }
+    provided.add(opt.name)
+  }
+  for (let i = 0; i < argv.length; i++) {
+    let arg = argv[i]
+    if (literal) {
       words.push(arg)
+      slots.push(arg)
+      continue
+    }
+    if (arg == '--') {
+      literal = true
+      if (manual.passthrough) {
+        words.push(arg)
+        slots.push(arg)
+      }
       continue
     }
     if (!option(arg)) {
-      if (manual.dots == 'any' && arg.startsWith('.')) continue
-      let dot = manual.dots == 'any' ? undefined : dotted(arg)
+      let dot = dotted(arg)
+      if (manual.dots == 'filters' && arg.startsWith('.')) {
+        words.push(arg)
+        continue
+      }
+      if (manual.dots == 'params' && arg.startsWith('.')) {
+        let p = param(arg)
+        if (p) {
+          params.push(p)
+          paramAs.push(arg)
+          continue
+        }
+      }
       if (dot) {
         // A param the verb declares is a VALUE, so it never counts as one of
         // the words; anything else is refused by name rather than swallowed.
-        if (manual.dots != 'any' && manual.dots?.includes(dot)) {
-          present.add(`--${dot}`)
+        if (Array.isArray(manual.dots) && manual.dots.includes(dot)) {
+          let raw = arg.slice(arg.indexOf('=') + 1)
+          let key = `--${dot}`
+          if (!provided.has(key)) {
+            opts[key] = raw
+            if (dot == 'body') reads[key] = { raw, as: arg }
+          }
+          provided.add(key)
+          present.add(key)
           continue
         }
         // A retired flag is retired at BOTH spellings: the habit that
@@ -865,51 +929,121 @@ export let validate = (
         )
       }
       words.push(arg)
+      slots.push(arg)
       continue
     }
     let opt = manual.opts?.find((o) => match(o, arg))
     if (!opt) {
+      if (manual.passthrough) {
+        words.push(arg)
+        slots.push(arg)
+        continue
+      }
       let gone = manual.retired?.[optionName(arg)]
       if (gone) throw usageError(name, manual, gone)
       throw usageError(name, manual, `does not take ${optionName(arg)}`)
     }
     present.add(opt.name)
-    if (!opt.kind) continue
+    if (!opt.kind) {
+      flags.add(opt.name)
+      continue
+    }
     let got = opt.name.startsWith('--')
       ? arg.slice(opt.name.length + 1)
       : arg.slice(opt.name.length)
     if (arg == opt.name) {
-      let next = args[i + 1]
+      let next = argv[i + 1]
       if (!opt.separate || !next || option(next)) {
         throw usageError(name, manual, `${opt.name} needs ${wanted(opt.kind)}`)
       }
       got = next
       i++
     }
-    if (!accepts(opt.kind, got)) {
-      throw usageError(name, manual, `${opt.name} needs ${wanted(opt.kind)}`)
-    }
+    value(opt, got, arg == opt.name ? `${opt.name}=${got}` : arg)
   }
+  let named: Record<string, string> = {}
+  let many: Record<string, string[]> = {}
   let at = 0
   for (let arg of manual.args ?? []) {
-    let has = arg.rest ? words.length > at : words[at] != null
-    if (has) present.add(arg.name)
-    at += arg.rest ? words.length - at : has ? 1 : 0
+    let values = arg.rest
+      ? slots.slice(at)
+      : slots[at] == null
+      ? []
+      : [slots[at]]
+    if (values.length) {
+      let raw = values.join(' ')
+      if (!arg.rest && !accepts(arg.kind, raw)) {
+        throw usageError(name, manual, `${arg.name} needs ${wanted(arg.kind)}`)
+      }
+      present.add(arg.name)
+      named[arg.name] = raw
+      many[arg.name] = values
+    }
+    at += arg.rest ? values.length : values.length ? 1 : 0
   }
   let issue = some(manual, present)
   if (issue) throw usageError(name, manual, issue)
   let [min, max] = wordsOf(manual)
-  if (words.length >= min && (max == null || words.length <= max)) return
-  let want = max == null
-    ? `at least ${min}`
-    : min == max
-    ? `${min}`
-    : `${min}–${max}`
-  throw usageError(
-    name,
-    manual,
-    `expected ${want} argument${want == '1' ? '' : 's'}, got ${words.length}`,
-  )
+  if (
+    !manual.passthrough &&
+    (slots.length < min || (max != null && slots.length > max))
+  ) {
+    let want = max == null
+      ? `at least ${min}`
+      : min == max
+      ? `${min}`
+      : `${min}–${max}`
+    throw usageError(
+      name,
+      manual,
+      `expected ${want} argument${want == '1' ? '' : 's'}, got ${slots.length}`,
+    )
+  }
+  if (read) {
+    for (let [key, value] of Object.entries(reads)) {
+      opts[key] = String(
+        inflate(
+          { comp: 'doc', prop: 'body', value: value.raw },
+          io,
+          value.as,
+        ).value,
+      )
+    }
+    params = params.map((p, i) => inflate(p, io, paramAs[i]))
+  }
+  let body: string | undefined
+  if (manual.body == 'body') {
+    let value = params.find((p) => p.prop == 'body')?.value
+    body = opts['--body'] ?? (value == null ? undefined : String(value))
+  } else if (manual.body == 'text') {
+    body = opts['--body']
+    let text = many.text ?? []
+    if (body == null && text.length) {
+      if (read) separated(text)
+      let raw = text.join(' ')
+      body = read && text.length == 1 && /^\S+$/.test(raw)
+        ? String(
+          inflate({ comp: 'doc', prop: 'body', value: raw }, io, raw).value,
+        )
+        : raw
+    }
+  }
+  return { args: named, many, opts, flags, params, words, body }
+}
+
+export let parse = (
+  name: string,
+  manual: Manual,
+  argv: string[],
+  io = stdin,
+) => parsed(name, manual, argv, io, true)
+
+export let validate = (
+  name: string,
+  manual: Manual,
+  argv: string[],
+) => {
+  parsed(name, manual, argv, stdin, false)
 }
 
 export let validateCommand = (name: string, args: string[]) => {

@@ -3,11 +3,11 @@
 
 import { assertEquals } from '@std/assert'
 import { comps } from './types.ts'
-import { enumOf, id, of, text, usageOf, type Verb, wordsOf } from './verb.ts'
+import { type Decl, enumOf, id, of, text, usageOf, wordsOf } from './verb.ts'
 
 let verb = (
-  shape: Omit<Verb, 'name' | 'about' | 'door'>,
-): Verb => ({
+  shape: Omit<Decl, 'name' | 'about' | 'door'>,
+): Decl => ({
   name: 'try',
   about: 'exercise the declaration',
   door: ['cli'],

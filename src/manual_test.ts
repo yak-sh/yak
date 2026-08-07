@@ -6,6 +6,7 @@ import { commands } from './commands.ts'
 import {
   help,
   manuals,
+  parse,
   requestedHelp,
   route,
   usage,
@@ -225,6 +226,41 @@ Deno.test('manual validation accepts each supported option shape', () => {
   check('list', ['.status=open', '.priority<=1'])()
   check('set', ['T-1', '.status=done'])()
   check('search', ['.project=P-19', 'deploy'])()
+})
+
+Deno.test('parse names positionals, resolves options, and applies defaults', () => {
+  let got = parse('history', manuals.history, ['T-3', '-n', '7', '--json'])
+  assertEquals(got.args, { id: 'T-3' })
+  assertEquals(got.opts, { '-n': '7' })
+  assertEquals([...got.flags], ['--json'])
+
+  assertEquals(parse('history', manuals.history, ['T-3']).opts['-n'], '50')
+  assertEquals(parse('probes', manuals.probes, []).opts['--grace'], '30')
+  assertEquals(
+    parse('spawn', manuals.spawn, ['T-3', '.provider=codex']).opts,
+    { '--effort': 'high', '--provider': 'codex' },
+  )
+})
+
+Deno.test('parse preserves filter tokens and routes write params', () => {
+  let filters = ['projects', '.title~=fleet', '.updated.at>=1 week ago']
+  let listed = parse('list', manuals.list, filters)
+  assertEquals(listed.words, filters)
+  assertEquals(listed.params, [])
+
+  let made = parse('new', manuals.new, [
+    'P1',
+    '.project=P-19',
+    'ship',
+    'it',
+  ])
+  assertEquals(made.words, ['P1', 'ship', 'it'])
+  assertEquals(made.args.title, 'P1 ship it')
+  assertEquals(made.params[0], {
+    comp: 'task',
+    prop: 'project_eid',
+    value: 'P-19',
+  })
 })
 
 let shellWords = (line: string) => {
