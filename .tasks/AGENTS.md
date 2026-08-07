@@ -488,6 +488,26 @@ makes one of these seams wider or leakier, that's the wrong direction.
 
 ---
 
+# M-14942 a cross-cutting fact is a component, not a per-type column — the recurring modeling reflex to catch
+
+When modeling a fact in the graph, ask one question: **does this fact apply to more than one entity type?** If yes, it is a COMPONENT — a facet any entity wears — never a column baked onto the type you happen to be editing.
+
+The entity-component model exists for exactly this. Read-state (`notified`/`opened`/`archived`), provenance (`created`/`updated`), and decision (`decided`/`proposed`) are already facets shared across types. Delivery, failure, and addressing are the same kind of fact and belong in the same register:
+
+- `delivered {at, via}` — reached its destination, and how (replaces the per-type `acted_at`, `received_at`, `delivery` on knock/wake/mail).
+- `error {at, message}` — an attempt failed, and why (today littered as a column on knock, wake, mail, role, session — all the same fact).
+- `envelope {to_eid}` — where a deliverable goes (today reinvented as `to_eid`/`to` per type).
+
+## The tell
+
+The recurring bug is the reflex to bake a field onto the specific component you are editing — adding `error` to `delivered`, `delivery` to `wake`. The signal is: **you are about to add a column that means the same thing as a column another type already has.** Stop and make it a component instead.
+
+## The payoff
+
+One query spans every type at once — `.error` is a fleet-wide health report, `.delivered.at>=today` is every delivery — and the next type inherits the facet for free instead of reinventing it. Success = `delivered`, failure = `error`, pending = neither: the same tri-state the inbox marks already have.
+
+---
+
 # M-14769 a mistake is a systems bug — fix the context or the tools, never promise to change
 
 There is no point owning up to a mistake and promising to change: you cannot actually commit to change, because you forget it once your context ends. Your behavior comes from your prompts and your tools, not from personal accountability.
