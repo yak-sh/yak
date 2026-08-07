@@ -900,18 +900,63 @@ export let migrateDeliver = (db: DatabaseSync) => {
   }
   if (hasCol(db, 'mail', 'to')) {
     let rows = db.prepare(
-      `select eid, "to" from mail where "to" is not null and "to" != ''`,
-    ).all() as { eid: string; to: string }[]
-    for (let { eid, to } of rows) {
-      let raw = String(to)
+      `select eid, "to", to_addr, received_at, sent_id from mail
+         where "to" is not null and "to" != ''`,
+    ).all() as {
+      eid: string
+      to: string
+      to_addr: string | null
+      received_at: string | null
+      sent_id: string | null
+    }[]
+    for (let r of rows) {
+      // An INBOUND letter is a record of arrival, not an outbound ask — its
+      // recipient is the address it was delivered TO (to_addr), never a
+      // deliver{to}. received_at is the arrival mark; sent_id null excludes an
+      // echoed outbound, which also carries a received_at. Migrating an inbound
+      // recipient into deliver{to} strands it: the inbox matches inbound by
+      // to_addr, so it goes invisible (T-15110). Runtime already stamps to_addr
+      // with no deliver — this keeps a fresh migration matching that.
+      if (r.received_at != null && r.sent_id == null) {
+        if (!r.to_addr) {
+          db.prepare('update mail set to_addr = ? where eid = ?')
+            .run(r.to, r.eid)
+        }
+        continue
+      }
+      let raw = String(r.to)
       let ref = UUIDRE.test(raw)
         ? raw.toLowerCase()
         : ADDR.test(raw)
         ? addressEntity(db, raw)
         : ident(db, raw) ?? addressEntity(db, raw)
-      ins.run(eid, ref)
+      ins.run(r.eid, ref)
     }
     db.exec('alter table mail drop column "to"')
+  }
+}
+
+// The heal for the graphs migrateDeliver already stranded before the split
+// above existed (T-15110): every inbound letter migrated then wears a
+// deliver{to} naming the venue it ARRIVED at, with to_addr empty — invisible
+// to the inbox, which matches inbound by to_addr, while the runtime stamps
+// to_addr with no deliver. So migrated history disagreed with live behaviour.
+// For each such inbound mail (received_at set, sent_id null so an echo is
+// excluded) whose to_addr is empty but which wears a deliver{to} resolving to
+// an address, set to_addr from that address and drop the stray deliver row.
+// Guarded by the data shape — no-ops the moment every stranded row is mended,
+// the mendMail/backfillOpened idiom.
+export let healInboundDeliver = (db: DatabaseSync) => {
+  let rows = db.prepare(
+    `select m.eid, em.address from mail m
+       join deliver d on d.eid = m.eid
+       join email em on em.eid = d."to"
+     where m.received_at is not null and m.sent_id is null
+       and (m.to_addr is null or m.to_addr = '')`,
+  ).all() as { eid: string; address: string }[]
+  for (let { eid, address } of rows) {
+    db.prepare('update mail set to_addr = ? where eid = ?').run(address, eid)
+    db.prepare('delete from deliver where eid = ?').run(eid)
   }
 }
 
@@ -1156,6 +1201,9 @@ export let open = (path = file) => {
   migrateDelivery(db)
   migrateDeliver(db)
   mendMail(db)
+  // Mend the inbound letters an earlier migrateDeliver stranded in deliver{to}
+  // (T-15110). After mendMail so it reads the rebuilt mail table.
+  healInboundDeliver(db)
   mendCalls(db)
   // A mail was briefly a 'send_request' (the intent idiom over-applied —
   // the artifact deserved its name). Adopt the old table's rows once;

@@ -9,6 +9,7 @@ let {
   delta,
   eager,
   hasCol,
+  healInboundDeliver,
   human,
   journalBy,
   journalOf,
@@ -2947,4 +2948,65 @@ Deno.test('precondition: a guard on an unknown column is refused', () => {
     'unknown column: doc.bodyy',
   )
   assertEquals(comp(m, 'doc')?.body, 'ONE')
+})
+
+Deno.test('healInboundDeliver: a stranded inbound letter mends; outbound is left alone', () => {
+  open()
+  // A venue that wears its fleet address, and the two mails that name it.
+  let venue = uid()
+  apply(db, [
+    { eid: venue, name: 'doc', comp: { title: 'CafeCar' } },
+    { eid: venue, name: 'email', comp: { address: 'cafecar@bot.test' } },
+  ])
+  // An INBOUND letter migrated wrongly: recipient stranded in deliver{to},
+  // to_addr empty. received_at set + sent_id null is what marks it inbound.
+  let inb = uid()
+  apply(db, [
+    { eid: inb, name: 'doc', comp: { title: 'a letter' } },
+    { eid: inb, name: 'mail', comp: {} },
+    { eid: inb, name: 'deliver', comp: { to: venue } },
+  ])
+  db.prepare('update mail set received_at = ?, message_id = ? where eid = ?')
+    .run('2026-01-01T00:00:00Z', 'm-in', inb)
+  // An OUTBOUND letter legitimately carries deliver{to}: sent_id set excludes
+  // it from the heal even though it too came home (received_at set).
+  let out = uid()
+  apply(db, [
+    { eid: out, name: 'doc', comp: { title: 'a reply' } },
+    { eid: out, name: 'mail', comp: {} },
+    { eid: out, name: 'deliver', comp: { to: venue } },
+  ])
+  db.prepare('update mail set sent_id = ?, received_at = ? where eid = ?')
+    .run('sent-out', '2026-01-02T00:00:00Z', out)
+
+  healInboundDeliver(db)
+
+  // The inbound letter now names its venue by address, and sheds the deliver.
+  assertEquals(
+    (db.prepare('select to_addr from mail where eid = ?').get(inb) as {
+      to_addr: string
+    }).to_addr,
+    'cafecar@bot.test',
+  )
+  assertEquals(
+    db.prepare('select count(*) c from deliver where eid = ?').get(inb),
+    { c: 0 },
+  )
+  // The outbound letter is untouched.
+  assertEquals(
+    db.prepare('select count(*) c from deliver where eid = ?').get(out),
+    { c: 1 },
+  )
+  // Idempotent: a second pass finds nothing to mend.
+  healInboundDeliver(db)
+  assertEquals(
+    (db.prepare('select to_addr from mail where eid = ?').get(inb) as {
+      to_addr: string
+    }).to_addr,
+    'cafecar@bot.test',
+  )
+  assertEquals(
+    db.prepare('select count(*) c from deliver where eid = ?').get(out),
+    { c: 1 },
+  )
 })
