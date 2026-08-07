@@ -488,23 +488,23 @@ makes one of these seams wider or leakier, that's the wrong direction.
 
 ---
 
-# M-14942 a cross-cutting fact is a component, not a per-type column — the recurring modeling reflex to catch
+# M-14942 a component describes a single aspect of an entity — cohesion is the test, sharing is the payoff
 
-When modeling a fact in the graph, ask one question: **does this fact apply to more than one entity type?** If yes, it is a COMPONENT — a facet any entity wears — never a column baked onto the type you happen to be editing.
+When modeling in the graph, the test is **cohesion**: each component describes a single aspect of an entity — even if only one type ever wears it. "Does this fact apply to more than one type?" is the symptom, not the criterion: `wake` carrying `acted_at`/`error` was wrong before any second type existed, because "when to fire" and "how the attempt went" are two aspects mashed into one component.
 
-The entity-component model exists for exactly this. Read-state (`notified`/`opened`/`archived`), provenance (`created`/`updated`), and decision (`decided`/`proposed`) are already facets shared across types. Delivery, failure, and addressing are the same kind of fact and belong in the same register:
+The entity-component model exists for exactly this. Read-state (`notified`/`opened`/`archived`), provenance (`created`/`updated`), and decision (`decided`/`proposed`) are each one aspect, factored out. Delivery, failure, and addressing are aspects too:
 
 - `delivered {at, via}` — reached its destination, and how (replaces the per-type `acted_at`, `received_at`, `delivery` on knock/wake/mail).
-- `error {at, message}` — an attempt failed, and why (today littered as a column on knock, wake, mail, role, session — all the same fact).
+- `error {at, message}` — an attempt failed, and why (today littered as a column on knock, wake, mail, role, session — all the same aspect).
 - `envelope {to_eid}` — where a deliverable goes (today reinvented as `to_eid`/`to` per type).
 
 ## The tell
 
-The recurring bug is the reflex to bake a field onto the specific component you are editing — adding `error` to `delivered`, `delivery` to `wake`. The signal is: **you are about to add a column that means the same thing as a column another type already has.** Stop and make it a component instead.
+The reflex to catch is baking a field onto whatever component you happen to be editing — `error` onto `delivered`, `delivery` onto `wake`. Before adding a column, ask: **is this the same aspect the component already describes, or a different one riding along?** A different aspect is its own component. (A column that means the same thing as a column on another type is the loudest form of this signal.)
 
 ## The payoff
 
-One query spans every type at once — `.error` is a fleet-wide health report, `.delivered.at>=today` is every delivery — and the next type inherits the facet for free instead of reinventing it. Success = `delivered`, failure = `error`, pending = neither: the same tri-state the inbox marks already have.
+Factor by aspect and sharing falls out: one query spans every type (`.error` is a fleet-wide health report, `.delivered.at>=today` is every delivery), and the next type inherits the facet for free. Success = `delivered`, failure = `error`, pending = neither — the same tri-state the inbox marks already have.
 
 ---
 
