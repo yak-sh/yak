@@ -174,7 +174,7 @@ let AllProps = ({ e }: { e: Ent }) => (
 // 'project'), and its columns then surface as the editable Prop rows
 // above. The spine and `entity` are never comps here, so they can't be
 // added; deleting the entity stays the verb menu's job.
-let AddComp = ({ e }: { e: Ent }) => {
+export let AddComp = ({ e }: { e: Ent }) => {
   let [open, setOpen] = useState(false)
   let present = new Set(comps(e).map(([n]) => n))
   let addable = Object.keys(vocab).filter((n) => !present.has(n)).sort()
@@ -195,7 +195,7 @@ let AddComp = ({ e }: { e: Ent }) => {
               type='button'
               onClick={() => add(n)}
             >
-              {n}
+              <Comp mod={compTone(n)}>{n}</Comp>
             </AddItem>
           ))}
         </AddList>

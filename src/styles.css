@@ -2359,7 +2359,6 @@ a[data-ref]:hover {
   background: none;
   border: 0;
   border-radius: var(--radius);
-  color: var(--orange);
   cursor: pointer;
   padding: 2px var(--half-gap);
 }
