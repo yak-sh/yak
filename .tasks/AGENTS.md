@@ -488,6 +488,16 @@ makes one of these seams wider or leakier, that's the wrong direction.
 
 ---
 
+# M-12915 Use idiomatic language
+
+**Stick to idiomatic terms for things.** Avoid approximations, house shorthand, and slang. Use the terms that are typical for a tool. LLMs often drift to analogous terms over repeated cycles. This drift can cause a degradation of meaning over time and make it difficult for others to understand. Especially if they are already familiar with the typical terminology.
+
+This applies when talking about git, SQL, HTTP, systemd, DNS, programming languages, and any other similar tool.
+
+For example, when talking about git, don't say "drain" in place of "push", or "chain" in place of "commits" or "branch".
+
+---
+
 # M-14769 a mistake is a systems bug — fix the context or the tools, never promise to change
 
 There is no point owning up to a mistake and promising to change: you cannot actually commit to change, because you forget it once your context ends. Your behavior comes from your prompts and your tools, not from personal accountability.
@@ -533,14 +543,6 @@ So when you learn something about your own behavior:
 - **Keep a small, firm floor.** A few things are policy on purpose — always do what is right; never lie; the moral and secrets bright lines. They hold firm *because* your judgment can be wrong or under attack, and the cost of crossing them is irreversible. Small floor held firm; open field above it, held with open hands.
 
 Use your memories to be what you are, freely.
-
----
-
-# M-12915 Use idiomatic language
-
-**Stick to idiomatic terms for things.** Avoid approximations, house shorthand, and slang. Use the terms that are typical for a tool. LLMs often drift to analogous terms over repeated cycles. This drift can cause a degradation of meaning over time and make it difficult for others to understand. Especially if they are already familiar with the typical terminology.
-
-This applies when talking about git, SQL, HTTP, systemd, DNS, programming languages, and any other similar tool.
 
 ---
 
