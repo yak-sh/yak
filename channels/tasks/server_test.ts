@@ -4,15 +4,19 @@
 import { assertEquals } from '@std/assert'
 import type { Change } from '../../src/types.ts'
 import {
+  channelAck,
+  channelBaseline,
   channelEvents,
   cleanAttr,
   cleanBody,
   type Ctx,
   docOf,
+  doneOf,
   findSession,
   humanId,
   type Index,
   learn,
+  notifiedOf,
   printRun,
 } from '../../src/channel.ts'
 
@@ -327,13 +331,9 @@ Deno.test('an already-notified item is not re-injected (durable dedup)', () => {
   assertEquals(channelEvents([stamp()], c), [])
 })
 
-Deno.test('a gap item notified AFTER boot injects; the boot backlog does not', () => {
-  // The regression that dropped E-15034: a letter arrives while the channel is
-  // down, the CLI comms-bus stamps `notified` before the channel recovers it,
-  // and the old whole-`notified` gate then skipped it on every live/resume
-  // frame forever. With a boot baseline, `notified` narrows to what was ALREADY
-  // told at boot: a stamp acquired after boot (this gap item, absent from the
-  // baseline) rings; the pre-boot backlog (in the baseline) stays silent.
+Deno.test('a bus-notified item injects; a channel-notified item does not', () => {
+  // The shared presence cannot answer whether PUSH happened. The baseline is
+  // the durable subset whose anonymous provenance proves a prior channel did.
   let c = (over: Partial<Ctx>) =>
     ctx({ docOf: letter, notified: () => true, ...over })
   // No baseline (tests, the inbox sweep): the whole-`notified` gate stands.
@@ -342,17 +342,17 @@ Deno.test('a gap item notified AFTER boot injects; the boot backlog does not', (
     0,
     'no baseline: old gate',
   )
-  // Baseline says this eid was NOT the boot backlog → a gap item, so it rings.
+  // A session-authored bus stamp is outside the PUSH baseline, so it rings.
   assertEquals(
     channelEvents([stamp()], c({ baseline: () => false })).length,
     1,
-    'notified after boot: the push fires',
+    'bus-only: the push fires',
   )
-  // Baseline says this eid WAS the boot backlog → never re-ring history.
+  // An anonymous channel stamp belongs to the baseline and stays silent.
   assertEquals(
     channelEvents([stamp()], c({ baseline: () => true })).length,
     0,
-    'the pre-boot backlog stays silent',
+    'channel-confirmed history stays silent',
   )
   // Our own delivery still outranks the baseline lift.
   assertEquals(
@@ -361,6 +361,65 @@ Deno.test('a gap item notified AFTER boot injects; the boot backlog does not', (
     0,
     'what this run already sent is never re-rung',
   )
+})
+
+Deno.test('a fresh channel recovers a bus stamp once, then stays quiet', () => {
+  let db = open()
+  let item = crypto.randomUUID()
+  let bus = crypto.randomUUID()
+  apply(db, [
+    { eid: item, name: 'doc', comp: { title: 'hello', body: 'a letter' } },
+    { eid: bus, name: 'session', comp: { id: 'bus-session' } },
+  ])
+  apply(
+    db,
+    [{ eid: item, name: 'notified', comp: {} }],
+    undefined,
+    'bus-session',
+  )
+
+  let boot = () => {
+    let changes = [...snapshot(db).changes, { ...stamp(), eid: item }]
+    let index: Index = new Map()
+    learn(index, changes)
+    let baseline = channelBaseline(changes)
+    return channelEvents(changes, {
+      ...ctx({
+        docOf: letter,
+        idOf: (eid) => eid == item ? 'E-5' : idOf(eid),
+        mode: 'resume',
+      }),
+      done: (eid) => doneOf(index, eid),
+      notified: (eid) => notifiedOf(index, eid),
+      baseline: (eid) => baseline.has(eid),
+    })
+  }
+
+  let busStamp = snapshot(db).changes.find((c) =>
+    c.eid == item && c.name == 'notified'
+  )
+  assertEquals(busStamp?.comp?.via, bus)
+  assertEquals(boot().map((e) => e.eid), [item])
+
+  // The successful push promotes the shared stamp to a durable channel proof.
+  apply(db, channelAck(item, true))
+  let channelStamp = snapshot(db).changes.find((c) =>
+    c.eid == item && c.name == 'notified'
+  )
+  assertEquals(channelStamp?.comp?.via, null)
+  assertEquals(boot(), [])
+  assertEquals(boot(), [])
+
+  // Read-state remains the stronger gate even when only the bus told it.
+  apply(db, [{ eid: item, name: 'notified', comp: null }])
+  apply(
+    db,
+    [{ eid: item, name: 'notified', comp: {} }],
+    undefined,
+    'bus-session',
+  )
+  apply(db, [{ eid: item, name: 'opened', comp: {} }])
+  assertEquals(boot(), [])
 })
 
 Deno.test('a catch-up replay pushes a notified gap item anyway (T-7167)', () => {

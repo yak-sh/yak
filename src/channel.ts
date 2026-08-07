@@ -53,16 +53,11 @@ export type Ctx = {
   // and our own write is lost if the server is down when we try); this is
   // ours, so a replay can never re-ring what we already said.
   sent?: (eid: string) => boolean
-  // The backlog captured at THIS channel's first snapshot: every entity
-  // already `notified` at boot — the pile the digest showed, which a boot is
-  // "state, not news" about and must never ring. It de-conflates the shared
-  // `notified` stamp: the bus writes `notified` when it shows an item in a CLI
-  // reply, and gating the PUSH on that bus-authored stamp is what dropped a
-  // letter arriving during a channel-down gap (it got `notified` before the
-  // channel recovered it, and resume's dedup then skipped it forever). With a
-  // baseline, `notified` suppresses only what was ALREADY told at boot; a stamp
-  // acquired AFTER boot (the signature of a gap item) no longer hides the push.
-  // Absent (tests, the inbox sweep) → the old whole-`notified` gate stands.
+  // The durable PUSH proofs captured at this channel process's first snapshot:
+  // notified rows whose server-stamped `via` is null. The bus writes the same
+  // presence through its serving session, so its non-null stamp cannot claim a
+  // channel instance delivered anything. A baseline makes that distinction;
+  // absent (tests, the inbox sweep), the whole-`notified` gate stands.
   baseline?: (eid: string) => boolean
   // Which pass this is; absent = a live frame.
   // - `catchup`: the {since} journal replay on a freshly-(re)connected
@@ -208,6 +203,28 @@ export let doneOf = (index: Index, eid: string) => {
 // the live server wires in. Orthogonal to done: told, not dealt-with.
 export let notifiedOf = (index: Index, eid: string) =>
   !!index.get(eid)?.comps.has('notified')
+
+// What a fresh channel process may trust as proof of an earlier PUSH. A
+// channel writes anonymously (`via = null`); the comms bus names the session
+// that printed the item. The distinction survives process churn because a
+// snapshot carries every server-stamped column.
+export let channelBaseline = (changes: Change[]) =>
+  new Set(
+    changes
+      .filter((c) =>
+        c.name == 'notified' && c.comp != null && c.comp.via === null
+      )
+      .map((c) => c.eid),
+  )
+
+// A recovered bus-served item already wears `notified`. Replace that one
+// presence atomically after the push lands so its current stamp becomes the
+// durable channel proof the next process can trust. The journal retains both
+// acts; unopened state remains present throughout the transaction.
+export let channelAck = (eid: string, replace = false): Change[] => [
+  ...(replace ? [{ eid, name: 'notified', comp: null }] : []),
+  { eid, name: 'notified', comp: {} },
+]
 
 // eid → human id (T-7), or null when the spine's num hasn't been seen yet.
 export let humanId = (index: Index, eid: string): string | null => {
@@ -395,15 +412,13 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
     ? bornIn(changes)
     : undefined
   let out: Event[] = []
-  // Already told: our own deliveries always, and the fleet's `notified` stamp
-  // except on a catch-up replay (see Ctx.mode) — but a bus-authored `notified`
-  // only suppresses what was in the boot backlog. Without a baseline (tests,
-  // the inbox sweep) the whole-`notified` gate stands; with one, a stamp
-  // acquired after boot (a gap item) rings anyway.
-  let backlog = (eid: string) => ctx.baseline ? ctx.baseline(eid) : true
+  // Already told by PUSH: this run's deliveries, or an anonymous channel stamp
+  // from an earlier process. Without a baseline (tests, the inbox sweep), the
+  // shared `notified` presence retains its ordinary whole-fleet meaning.
+  let pushed = (eid: string) => ctx.baseline ? ctx.baseline(eid) : true
   let told = (eid: string) =>
     !!ctx.sent?.(eid) ||
-    (ctx.mode != 'catchup' && !!ctx.notified?.(eid) && backlog(eid))
+    (ctx.mode != 'catchup' && !!ctx.notified?.(eid) && pushed(eid))
   for (let c of changes) {
     if (!c.comp) continue
 

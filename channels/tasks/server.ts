@@ -31,6 +31,8 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import type { Change, Snapshot } from '../../src/types.ts'
 import {
+  channelAck,
+  channelBaseline,
   channelEvents,
   docOf,
   doneOf,
@@ -189,34 +191,17 @@ let held: { cursor?: number; epoch?: string; vocabHash?: string } = {}
 // Fold a snapshot into our state: remember its cursor/epoch/vocab (for the next
 // {since}), warm the index, resolve identity.
 //
-// The FIRST snapshot is state, not news — a session that just booted hears its
-// backlog from the digest, and ringing history would be noise. A LATER one
-// means we were AWAY, and the gap it hides is the bug T-7302 names: whatever
-// committed while the socket was down is INSIDE this snapshot, so the {since}
-// handshake below (whose cursor comes from this very snapshot, and whose epoch
-// a server restart invalidates anyway) can never replay it. So a re-sync
-// RESUMES: the same filter over the snapshot, bounded by `notified` to what
-// nobody has told this session yet.
-let synced = false
-// The boot backlog: every entity already `notified` at the FIRST snapshot —
-// the pile the digest showed, which a boot is "state, not news" about. Captured
-// ONCE, so a `notified` stamp acquired AFTER boot (a letter that arrived during
-// a channel-down gap, then bus-stamped before the channel recovered it) is NOT
-// mistaken for history and still pushes. undefined until captured; the first
-// feed runs under the old whole-`notified` gate, which is what suppresses this
-// same backlog from ringing at boot.
+// Every snapshot closes a time gap: whatever committed while this process (or
+// its socket) was away is inside the snapshot, beyond the {since} window. The
+// first one is also the only durable handoff from the prior MCP process.
+// `notified.via` separates the history a channel already pushed (anonymous)
+// from an item only the comms bus printed (session-authored), so process churn
+// recovers the latter once without re-ringing the former.
 let baseline: Set<string> | undefined
 let absorb = (snap: Snapshot) => {
   held = { cursor: snap.cursor, epoch: snap.epoch, vocabHash: snap.vocabHash }
-  let first = !synced
-  feed(snap.changes, synced ? 'resume' : undefined)
-  synced = true
-  if (first) {
-    baseline = new Set()
-    for (let [eid, row] of index) {
-      if (row.comps.has('notified')) baseline.add(eid)
-    }
-  }
+  baseline ??= channelBaseline(snap.changes)
+  feed(snap.changes, 'resume')
 }
 
 // One authed-free GET of the whole graph — warms the index and resolves the
@@ -260,11 +245,8 @@ let mcp = new Server(
 
 // eid names the entity to stamp `notified` — the plugin's business, not the
 // client's — so it is stripped here, never riding the notification params.
-let flush = ({ eid: _eid, ...ev }: Event) => {
-  mcp
-    .notification({ method: 'notifications/claude/channel', params: ev })
-    .catch((e: unknown) => err(`failed to deliver to Claude: ${e}`))
-}
+let flush = ({ eid: _eid, ...ev }: Event) =>
+  mcp.notification({ method: 'notifications/claude/channel', params: ev })
 
 // The channel's ONE write: stamp `notified` on what it just delivered — a bare
 // presence the server's stampedPresence loop clocks (T-7010). Not graph content
@@ -272,16 +254,13 @@ let flush = ({ eid: _eid, ...ev }: Event) => {
 // knocked()/mailed() stamp their outcomes. /apply is the local server's own
 // unauthed surface, same as /snapshot and /ws.
 let markNotified = async (changes: Change[]) => {
-  try {
-    let res = await fetch(`http://${HOST}/apply`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(changes),
-    })
-    await res.body?.cancel()
-  } catch (e) {
-    err(`notified stamp failed: ${e}`)
-  }
+  let res = await fetch(`http://${HOST}/apply`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(changes),
+  })
+  if (!res.ok) throw new Error(`apply ${res.status}: ${await res.text()}`)
+  await res.body?.cancel()
 }
 
 // --- the stream --------------------------------------------------------------
@@ -317,27 +296,30 @@ let feed = (changes: Change[], mode?: 'catchup' | 'resume') => {
     docOf: (eid) => docOf(index, eid),
     done: (eid) => doneOf(index, eid),
     notified: (eid) => notifiedOf(index, eid),
-    // Only once the boot backlog is captured does `notified` narrow to it;
-    // until then the whole-`notified` gate stands (undefined → old behavior).
+    // A fresh process trusts only channel-authored notification stamps. The
+    // inbox path omits this baseline and keeps whole-fleet `notified` meaning.
     baseline: baseline ? (eid) => baseline!.has(eid) : undefined,
     sent: (eid) => sent.has(eid),
     mode,
     // The operator loop gets project mail; a specialist does not (T-7006).
     operator: operator && origin != 'managed' && !requestedTaskEid,
   })
-  let stamps: Change[] = []
   for (let e of events) {
-    flush(e)
-    // Record our own delivery, durably: stamp `notified` on what we injected so
-    // a reconnect — or the same letter re-broadcast — never re-rings it. Mark
-    // the index optimistically NOW so a re-broadcast inside the POST's
-    // round-trip gap is already deduped; learn() confirms it when the write
-    // echoes back. The write itself is idempotent (insert-or-ignore).
-    index.get(e.eid)?.comps.add('notified')
+    // Claim the in-flight delivery before the async pipe write, or a second
+    // frame in that window can enqueue the same event. A rejected write drops
+    // the claim and leaves no durable proof, so the next recovery may retry.
+    let replace = notifiedOf(index, e.eid) && !baseline?.has(e.eid)
     sent.add(e.eid)
-    stamps.push({ eid: e.eid, name: 'notified', comp: {} })
+    flush(e)
+      .then(() => {
+        index.get(e.eid)?.comps.add('notified')
+        return markNotified(channelAck(e.eid, replace))
+      })
+      .catch((why: unknown) => {
+        sent.delete(e.eid)
+        err(`delivery confirmation failed: ${why}`)
+      })
   }
-  if (stamps.length) markNotified(stamps)
   // A claim we just gained makes entities ours that were not ours a moment
   // ago — so their comments were never aimed at anyone this channel serves,
   // and no live frame will ever carry them again. That is the reconnect gap

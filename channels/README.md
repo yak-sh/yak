@@ -58,21 +58,23 @@ no-op (connects, delivers nothing).
 
 Push is the socket: every applied batch is rebroadcast, and the plugin emits
 what the batch aims at its session. Two things bound it. `notified` is the
-durable stamp (the plugin writes one per inject; the bus/digest write it too),
-so nothing rings twice across a reconnect; the plugin also remembers what IT
-sent this run, because the stamp is a wire write and the server is down exactly
-when gaps happen.
+shared durable stamp: an anonymous `via` proves a channel push, while a session
+`via` says only that the bus printed the item. The plugin also remembers what it
+sent this run, because the stamp is a wire write and the server can be down
+exactly when gaps happen.
 
 A gap has two halves. The snapshot→join window is replayed by the `{since}`
 handshake as `{catchup}`, which pushes past `notified` (T-7167). The
 disconnect→snapshot half is **inside** the snapshot — no cursor window can reach
 it, and a tasksd restart mints a fresh epoch that voids the cursor anyway — so a
 RE-sync reconciles against state instead: the same filter over the whole
-snapshot, bounded by `notified` to what nobody has told this session yet
-(T-7302). The first sync never does this — a booting session's backlog belongs
-to the digest. A knock the ladder already stamped `delivery: cast S-me` is the
-sweep's sharpest case: the stamp claims this channel took it, and no `notified`
-proves it never did.
+snapshot, bounded by channel-authored `notified` stamps and read-state. This
+includes the first sync after Claude replaces an MCP subprocess, so a bus stamp
+cannot suppress a push the previous process missed. A recovered item is
+atomically re-stamped anonymously after its notification write succeeds; later
+processes then stay quiet. A knock the ladder already stamped
+`delivery: cast S-me` is the sweep's sharpest case: the stamp claims this
+channel took it, and no channel-authored `notified` proves it did.
 
 ## Env
 
