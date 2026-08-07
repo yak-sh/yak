@@ -54,7 +54,9 @@ let transcript = (...events: unknown[]) => {
 let cli = (...args: string[]) =>
   new Deno.Command(Deno.execPath(), {
     args: ['run', '-A', new URL('./cli.ts', import.meta.url).pathname, ...args],
-    env: { TASKS_HOST: '127.0.0.1:1' },
+    // A dead host on purpose; fail on the first refusal instead of retrying
+    // through the 6.3s restart ladder these offline-parsing tests never need.
+    env: { TASKS_HOST: '127.0.0.1:1', TASKS_BACKOFF: '' },
   }).output()
 
 let bareCli = (env: Record<string, string>) =>
