@@ -449,7 +449,7 @@ export let adapters: Record<string, Adapter> = {
   codex: {
     // The celestial line, all probed live against the CLI.
     models: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'],
-    efforts: ['low', 'medium', 'high', 'xhigh'],
+    efforts: ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
     labels: {
       'gpt-5.6-sol': 'GPT-5.6 Sol',
       'gpt-5.6-terra': 'GPT-5.6 Terra',

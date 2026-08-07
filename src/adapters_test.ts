@@ -157,6 +157,28 @@ Deno.test('claude: opus-5 and the bare opus alias are barred; 4-8 is the default
   assertEquals(Object.keys(claude.labels)[0], 'claude-opus-4-8')
 })
 
+Deno.test('codex: the probed celestial line, with Sol as the default', () => {
+  assertEquals(codex.models, [
+    'gpt-5.6-sol',
+    'gpt-5.6-terra',
+    'gpt-5.6-luna',
+  ])
+  assertEquals(codex.efforts, [
+    'low',
+    'medium',
+    'high',
+    'xhigh',
+    'max',
+    'ultra',
+  ])
+  assertEquals(codex.labels, {
+    'gpt-5.6-sol': 'GPT-5.6 Sol',
+    'gpt-5.6-terra': 'GPT-5.6 Terra',
+    'gpt-5.6-luna': 'GPT-5.6 Luna',
+  })
+  assertEquals(codex.models[0], 'gpt-5.6-sol')
+})
+
 Deno.test('trouble: unknown provider/model/effort each name the valid ones', () => {
   assertMatch(
     trouble({ provider: 'oracle', model: 'x' })!,
