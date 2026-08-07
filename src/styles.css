@@ -123,31 +123,48 @@ html {
   color: var(--purple);
 }
 
-/* Markdown bodies (marked, GFM — src/md.ts). Zero-specificity defaults
-   tuned to cards: real paragraphs with modest gaps (edges trimmed so a
-   body hugs its box), headings barely louder than text (a card is not a
-   document), retro-minimal tables. */
-:where(p) {
-  margin: var(--gap) 0;
+/* Markdown bodies (marked, GFM — src/md.ts). These are prose defaults,
+   wherever prose lands: documents, comments, and session messages all
+   speak the same HTML. Zero specificity lets a component still override
+   a structural choice. */
+:where(p, ul, ol, pre, blockquote) {
+  margin: 0 0 var(--gap);
 }
-:where(p:first-child, h1:first-child, h2:first-child, h3:first-child) {
-  margin-top: 0;
-}
-:where(p:last-child) {
-  margin-bottom: 0;
+:where(p, ul, ol, blockquote, h1, h2, h3, h4, h5, h6) {
+  max-width: var(--measure);
 }
 :where(h1, h2, h3, h4, h5, h6) {
-  margin: 0.7em 0 0.3em;
-  line-height: 1.3;
+  margin: var(--gap) 0 var(--half-gap);
+  line-height: 1.25;
 }
 :where(h1) {
-  font-size: 1.25em;
+  font-size: 1.35rem;
 }
 :where(h2) {
-  font-size: 1.15em;
+  font-size: 1.2rem;
 }
-:where(h3, h4, h5, h6) {
-  font-size: 1.05em;
+:where(h3) {
+  font-size: 1.05rem;
+}
+:where(h4, h5, h6) {
+  font-size: 1rem;
+}
+:where(p, ul, ol, pre, blockquote, table, h1, h2, h3):first-child,
+:where(h4, h5, h6):first-child {
+  margin-top: 0;
+}
+:where(p, ul, ol, pre, blockquote, table, h1, h2, h3):last-child,
+:where(h4, h5, h6):last-child {
+  margin-bottom: 0;
+}
+:where(code) {
+  background: var(--soft);
+  padding: 0 3px;
+  border-radius: 3px;
+}
+:where(pre code) {
+  display: block;
+  padding: var(--half-gap);
 }
 :where(table) {
   border-collapse: collapse;
@@ -163,8 +180,7 @@ html {
   background: var(--soft);
 }
 :where(blockquote) {
-  margin: 0.5em 0;
-  padding-left: var(--gap);
+  padding-left: var(--half-gap);
   border-left: 2px solid var(--border2);
   color: var(--muted);
 }
@@ -871,9 +887,6 @@ html {
 .Comments_Via:hover,
 .Comments_When:hover {
   text-decoration: underline;
-}
-.Comments_Body p {
-  margin: 0;
 }
 /* The input is an ordinary sunken box at the rail's foot. */
 .Comments_New {
@@ -1667,54 +1680,6 @@ html {
 .Show_Body:empty {
   min-height: 1lh;
 }
-/* Markdown innards: tight spacing, our palette. */
-.Show_Body :is(p, ul, ol, pre, blockquote) {
-  margin: 0 0 var(--gap);
-}
-/* Running prose reads at a measure and stays left-aligned; the structural
-   blocks (pre, table, img) are left OUT so they keep the full view width —
-   a wide table scrolls in its own box rather than folding into a column. */
-.Show_Body :is(p, ul, ol, blockquote, h1, h2, h3, h4, h5, h6) {
-  max-width: var(--measure);
-}
-/* Body headings step DOWN from the document h1 — a ## section may never
-   out-shout the title above it. */
-.Show_Body :is(h1, h2, h3, h4, h5, h6) {
-  margin: var(--gap) 0 var(--half-gap);
-  line-height: 1.25;
-}
-.Show_Body h1 {
-  font-size: 1.35rem;
-}
-.Show_Body h2 {
-  font-size: 1.2rem;
-}
-.Show_Body h3 {
-  font-size: 1.05rem;
-}
-.Show_Body :is(h4, h5, h6) {
-  font-size: 1rem;
-}
-.Show_Body > :first-child {
-  margin-top: 0;
-}
-.Show_Body > :last-child {
-  margin-bottom: 0;
-}
-.Show_Body code {
-  background: var(--soft);
-  padding: 0 3px;
-  border-radius: 3px;
-}
-.Show_Body pre code {
-  display: block;
-  padding: var(--half-gap);
-}
-.Show_Body blockquote {
-  border-left: 2px solid var(--border2);
-  padding-left: var(--half-gap);
-}
-
 /* In-place editing (double-click a title): the same node, the same look —
    editing adds only a caret and a seam under the text. */
 [contenteditable='plaintext-only'] {
@@ -2800,12 +2765,6 @@ a[data-ref]:hover {
 .Session_Agent {
   color: var(--text);
   overflow-wrap: anywhere;
-}
-.Session_Agent p {
-  margin: 0 0 var(--half-gap);
-}
-.Session_Agent :is(p, ul, ol, pre):last-child {
-  margin-bottom: 0;
 }
 /* What the human said — a soft prompt block, `› ` leading the line. */
 .Session_User {
