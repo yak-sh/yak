@@ -458,11 +458,16 @@ let tallies = (e: Ent): [string, number, number][] => [
 // uses the same face everywhere and renders nothing when absent. In a card
 // frame the titlebar carries title, pip, and id, so an empty line renders
 // nothing; the document face and dense tile pass `id` to keep its chip here.
-export let Meta = ({ e, id }: { e: Ent; id?: boolean }) => {
+export let Meta = (
+  { e, id, children }: { e: Ent; id?: boolean; children?: ComponentChildren },
+) => {
   let talk = commentCount(e.eid).value
   let edges = tallies(e)
   let hasEdges = edges.some(([, open, done]) => open > 0 || done > 0)
-  if (!id && !e.task && !talk && !e.claim && !e.created?.at && !hasEdges) {
+  if (
+    !id && !children && !e.task && !talk && !e.claim && !e.created?.at &&
+    !hasEdges
+  ) {
     return null
   }
   return (
@@ -497,6 +502,7 @@ export let Meta = ({ e, id }: { e: Ent; id?: boolean }) => {
       )}
       <Stamp e={e} by={(comp) => <By e={e} comp={comp} />} />
       {id && <Id e={e} />}
+      {children}
     </MetaEl>
   )
 }

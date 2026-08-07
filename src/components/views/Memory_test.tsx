@@ -23,9 +23,8 @@ let memory: Ent = {
 }
 
 let children = (v: VNode) =>
-  (Array.isArray(v.props.children)
-    ? v.props.children
-    : [v.props.children]) as VNode[]
+  (Array.isArray(v.props.children) ? v.props.children : [v.props.children])
+    .filter((x) => x !== undefined && x !== false) as VNode[]
 
 let text = (v: VNode): ComponentChildren => v.props.children
 

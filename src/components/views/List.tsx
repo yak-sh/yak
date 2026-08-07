@@ -3,16 +3,17 @@ import { unmime } from '../../rfc2047.ts'
 import { boardAll, byWarmth, pinned } from '../../live.ts'
 import { orderOf, parseQuery } from '../../query.ts'
 import { block } from '../ui.tsx'
-import { clickProps, menuAt } from '../nav.tsx'
+import { menuAt } from '../nav.tsx'
 import { passOf } from '../Filter.tsx'
 import { dragData } from '../drag.ts'
 import { useBoardSub } from '../subscriptions.ts'
 import { Id } from './Inline.tsx'
 import { Entity } from '../Entity.tsx'
 import { title } from '../title.tsx'
+import { slot, tileLink, type TileProps } from '../Tile.tsx'
+import { ListFrame } from '../ListFrame.tsx'
 
-let Frame = block('div', 'List', { Row: 'div' })
-let { Row } = Frame
+let { Row } = ListFrame
 
 // A canvas as a linear list — every pinned card's target, one summary row
 // each, id chips linking through. The mobile answer to a spatial plane.
@@ -21,7 +22,7 @@ let { Row } = Frame
 export let List = ({ e }: { e: Ent }) => {
   let pass = passOf(e.eid)
   return (
-    <Frame>
+    <ListFrame>
       {pinned(e.eid)
         .toSorted((a, b) => b.z - a.z)
         .filter((p) => pass(p.target_eid))
@@ -35,7 +36,7 @@ export let List = ({ e }: { e: Ent }) => {
             <Entity eid={p.target_eid} view='List.Tile' />
           </Row>
         ))}
-    </Frame>
+    </ListFrame>
   )
 }
 
@@ -58,11 +59,11 @@ export let BoardList = ({ e }: { e: Ent }) => {
     rows = boardAll(e).filter((t) => pass(t.eid))
       .toSorted(hot ? byWarmth(Date.now()) : byModified)
   } catch {
-    return <Frame /> // a bad query already shows itself on the Board face
+    return <ListFrame /> // a bad query already shows itself on the Board face
   }
   let more = rows.length - CAP
   return (
-    <Frame>
+    <ListFrame>
       {rows.slice(0, CAP).map((t) => (
         // a feed row dragged onto a canvas spawns the entity as a card
         <Row
@@ -74,7 +75,7 @@ export let BoardList = ({ e }: { e: Ent }) => {
         </Row>
       ))}
       {more > 0 && <Row mod='more'>+{more} more</Row>}
-    </Frame>
+    </ListFrame>
   )
 }
 
@@ -84,14 +85,16 @@ export let BoardList = ({ e }: { e: Ent }) => {
 // plus the entity's verbs. Tasks override List.Tile via the registry
 // (TaskTile).
 let Line = block('div', 'ListTile', { Title: 'span' })
-export let ListTile = ({ e }: { e: Ent }) => (
-  <Line {...clickProps(e)} onContextMenu={menuAt(e)}>
+let summary = (e: Ent) =>
+  (e.mail ? unmime(e.doc?.title ?? '') : e.doc?.title) ||
+  e.doc?.body?.split('\n').find((line) => line.trim()) || e.kind
+
+export let ListTile = ({ e, slots, onOpen }: TileProps) => (
+  <Line {...tileLink(e, onOpen)} onContextMenu={menuAt(e)}>
+    {slot(slots, 'before')}
     {/* a mail's stored subject may be an encoded-word — decode to read */}
-    <Line.Title
-      {...title(
-        (e.mail ? unmime(e.doc?.title ?? '') : e.doc?.title) || e.kind,
-      )}
-    />
+    <Line.Title {...title(summary(e))} />
     <Id e={e} />
+    {slot(slots, 'after')}
   </Line>
 )

@@ -377,6 +377,53 @@ html {
 .List_Row {
   min-width: 0;
 }
+.List_Row:has(> .List_Action) {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+}
+.List_Row:has(> .List_Action) > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+.List_Row-unread {
+  font-weight: 600;
+}
+.List_Summary,
+.List_Label,
+.List_Empty {
+  color: var(--dim);
+}
+.List_Summary,
+.List_Label {
+  font-size: 11px;
+}
+.List_Empty {
+  padding: var(--gap);
+}
+.List_Label {
+  flex: none;
+  min-width: 4.5em;
+}
+.List_Action {
+  flex: none;
+  font: inherit;
+  color: var(--dim);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.List_Action:hover {
+  color: var(--text);
+  border-color: var(--border2);
+}
+.TileSlot {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--half-gap);
+  min-width: 0;
+}
 /* The loud cap: a board List cuts at 100 rows and says so. */
 .List_Row-more {
   color: var(--dim);
@@ -1052,6 +1099,12 @@ html {
   text-decoration: none;
   container-type: inline-size;
 }
+.TaskTile:has(> .TileSlot-before) {
+  grid-template-columns: auto auto 1fr;
+}
+.TaskTile:has(> .TileSlot-before) > .Show_Meta {
+  grid-column: 3;
+}
 /* Density changes metrics, never the shared Meta markup. Provenance gives
    out first; the narrower container rungs below retire assignee, then project. */
 .TaskTile-dense {
@@ -1660,6 +1713,9 @@ html {
 .Dot-open {
   --dot: var(--open);
   background: transparent;
+}
+.Dot-unread {
+  --dot: var(--accent);
 }
 .Dot-wip {
   --dot: var(--wip);
@@ -3386,68 +3442,6 @@ a[data-ref]:hover {
   width: max-content;
 }
 
-/* The inbox: a read-order list, unread carrying the weight. Rows borrow
-   the ListTile geometry deliberately — an inbox line and a board line are
-   the same kind of object, and only the leading marks differ. */
-.Inbox {
-  display: grid;
-  gap: var(--half-gap);
-}
-.Inbox_Count {
-  color: var(--dim);
-  font-size: 11px;
-}
-.Inbox_Empty {
-  color: var(--dim);
-  padding: var(--gap);
-}
-.Inbox_Item {
-  display: flex;
-  align-items: center;
-  gap: var(--half-gap);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--card);
-  padding: var(--half-gap);
-}
-/* Unread is WEIGHT, not colour: it survives a theme and a colour-blind
-   reader, which a tinted row does not. */
-.Inbox_Item-unread {
-  font-weight: 600;
-}
-.Inbox_Dot {
-  flex: none;
-  color: var(--accent);
-}
-.Inbox_Kind {
-  flex: none;
-  color: var(--dim);
-  font-size: 11px;
-  min-width: 4.5em;
-}
-.Inbox_Title {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: inherit;
-  text-decoration: none;
-}
-.Inbox_Archive {
-  flex: none;
-  font: inherit;
-  color: var(--dim);
-  background: none;
-  border: 1px solid transparent;
-  border-radius: var(--radius);
-  cursor: pointer;
-}
-.Inbox_Archive:hover {
-  color: var(--text);
-  border-color: var(--border2);
-}
-
 /* Density: one renderer, three sizes. A composite view sets --density on a
    cell and the shared row components answer through style queries — metrics
    and elisions only, never markup, so one renderer serves every tier (the
@@ -3456,15 +3450,14 @@ a[data-ref]:hover {
    what keeps boards, lists and inboxes elsewhere untouched. */
 @container style(--density: summary) {
   .ListTile,
-  .TaskTile,
-  .Inbox_Item {
+  .TaskTile {
     padding: 2px var(--half-gap);
     font-size: 12px;
   }
   .TaskTile {
     --meta-stamp: none; /* provenance is the full tier's luxury */
   }
-  .Inbox_Kind {
+  .List_Label {
     min-width: 0;
   }
 }
@@ -3473,8 +3466,7 @@ a[data-ref]:hover {
 @container style(--density: glance) {
   .ListTile,
   .TaskTile,
-  .SessionRow,
-  .Inbox_Item {
+  .SessionRow {
     padding: 0 2px;
     border: 0;
     background: none;
@@ -3483,7 +3475,7 @@ a[data-ref]:hover {
   .TaskTile > .Show_Meta,
   .SessionRow_Actor,
   .SessionRow_Task,
-  .Inbox_Kind,
+  .List_Label,
   .Stamp {
     display: none;
   }

@@ -17,7 +17,7 @@ import {
   repoUrl,
   uuid,
 } from '../../live.ts'
-import { clickProps } from '../nav.tsx'
+import { slot, tileLink, type TileProps } from '../Tile.tsx'
 import { ago, block, pretty, Stamp } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
 import { Composer, Note } from '../Comments.tsx'
@@ -561,12 +561,13 @@ let RowLine = block('div', 'SessionRow', {
   Task: 'span',
 })
 
-export let SessionRow = ({ e }: { e: Ent }) => {
+export let SessionRow = ({ e, slots, onOpen }: TileProps) => {
   let s = e.session!
   let job = jobOf(e)
   let model = s.serving_model || s.model
   return (
-    <RowLine {...clickProps(e)}>
+    <RowLine {...tileLink(e, onOpen)}>
+      {slot(slots, 'before')}
       <Dot status={standing(s)} />
       {model && <RowLine.Model>{friendly(model)}</RowLine.Model>}
       {s.actor_eid && (
@@ -574,6 +575,7 @@ export let SessionRow = ({ e }: { e: Ent }) => {
       )}
       {job && <RowLine.Task {...title(ent(job).doc?.title ?? '')} />}
       <Id e={e} />
+      {slot(slots, 'after')}
     </RowLine>
   )
 }

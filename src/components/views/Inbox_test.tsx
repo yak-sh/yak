@@ -20,6 +20,7 @@ Deno.test('a knock names and opens its target', () => {
     knock: {
       entity: { eid: 'knock', num: 2 },
       knock: { eid: 'knock', to_eid: 'person', target_eid: 'project' },
+      created: { eid: 'knock', at: '2026-08-07T12:00:00.000Z' },
     },
     project: {
       entity: { eid: 'project', num: 30 },
@@ -30,10 +31,28 @@ Deno.test('a knock names and opens its target', () => {
   let root = document.querySelector('main')!
   try {
     render(<Inbox e={ent('person')} />, root)
-    let line = root.querySelector('.Inbox_Title')
-    assertEquals(line?.textContent, 'P-30 — PrintBound')
+    let line = root.querySelector('.ListTile')
+    assertEquals(
+      line?.querySelector('.ListTile_Title')?.textContent,
+      'PrintBound',
+    )
     assertEquals(line?.getAttribute('href'), '/P-30')
-    assertEquals(root.querySelector('.Id')?.textContent, 'K-2')
+    assertEquals(
+      [...root.querySelectorAll('.Id')].map((id) => id.textContent),
+      ['P-30', 'K-2'],
+    )
+    assertEquals(root.querySelector('.List > .List_Row') != null, true)
+    assertEquals(
+      root.querySelector('.Dot-unread')?.getAttribute('title'),
+      'unread',
+    )
+    assertEquals(root.querySelector('.List_Label')?.textContent, 'knock')
+    assertEquals(root.querySelector('.Stamp') != null, true)
+    assertEquals(
+      root.querySelector('.List_Action')?.getAttribute('title'),
+      'archive',
+    )
+    assertEquals(root.querySelector('[class^="Inbox"]'), null)
   } finally {
     render(null, root)
     cache.value = {}

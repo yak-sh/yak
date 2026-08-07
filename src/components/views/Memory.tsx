@@ -1,5 +1,5 @@
-import { type Ent } from '../../types.ts'
-import { clickProps, menuAt } from '../nav.tsx'
+import { menuAt } from '../nav.tsx'
+import { slot, tileLink, type TileProps } from '../Tile.tsx'
 import { block, el, Stamp } from '../ui.tsx'
 import { Id } from './Inline.tsx'
 import { title } from '../title.tsx'
@@ -12,11 +12,13 @@ import { title } from '../title.tsx'
 let Line = block('div', 'ListTile', { Title: 'span' })
 let Type = el('span', 'MemoryType')
 
-export let MemoryTile = ({ e }: { e: Ent }) => (
-  <Line {...clickProps(e)} onContextMenu={menuAt(e)}>
+export let MemoryTile = ({ e, slots, onOpen }: TileProps) => (
+  <Line {...tileLink(e, onOpen)} onContextMenu={menuAt(e)}>
+    {slot(slots, 'before')}
     {e.feedback ? <Type>feedback</Type> : null}
     <Line.Title {...title(e.doc!.title)} />
     <Stamp at={e.memory!.last_confirmed_at} label='confirmed' />
     <Id e={e} />
+    {slot(slots, 'after')}
   </Line>
 )

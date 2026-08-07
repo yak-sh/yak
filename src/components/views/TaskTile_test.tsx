@@ -2,6 +2,7 @@
 import { type VNode } from 'preact'
 import { assertEquals } from '@std/assert'
 import { type Ent } from '../../types.ts'
+import { TileSlot } from '../Tile.tsx'
 import { TaskTile } from './TaskTile.tsx'
 
 let children = (v: VNode) =>
@@ -19,9 +20,26 @@ Deno.test('task tile delegates its dense meta row to the registry', () => {
     kids: [],
   }
 
-  let tile = TaskTile({ e })
-  let meta = children(tile)[2]
+  let before = <span>before</span>
+  let after = <span>after</span>
+  let opened = 0
+  let tile = TaskTile({
+    e,
+    slots: { before, after },
+    onOpen: () => opened++,
+  })
+  let parts = children(tile)
+  let meta = parts[3]
   let props = meta.props as unknown as Record<string, unknown>
   assertEquals(tile.props.mod, 'dense')
-  assertEquals(props, { eid: 'task', view: 'Meta', id: true })
+  assertEquals(parts[0].type === TileSlot, true)
+  assertEquals(parts[0].props.children, before)
+  assertEquals(props.eid, 'task')
+  assertEquals(props.view, 'Meta')
+  assertEquals(props.id, true)
+  let tail = props.children as VNode
+  assertEquals(tail.type === TileSlot, true)
+  assertEquals(tail.props.children, after)
+  tile.props.onClick({ metaKey: true } as MouseEvent)
+  assertEquals(opened, 1)
 })

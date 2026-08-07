@@ -107,8 +107,18 @@ define([
   { view: 'Persona', match: has('doc', 'persona'), Render: Persona },
   // An inbox reads FOR an actor, so it offers itself on the two things
   // that can be one: a venture and a person.
-  { view: 'Inbox', match: has('project'), Render: Inbox },
-  { view: 'Inbox', match: has('person'), Render: Inbox },
+  // Inbox delegates its rows back through Entity, so defer the binding as
+  // with every other composite view above.
+  {
+    view: 'Inbox',
+    match: has('project'),
+    Render: (props) => <Inbox {...props} />,
+  },
+  {
+    view: 'Inbox',
+    match: has('person'),
+    Render: (props) => <Inbox {...props} />,
+  },
   // Role's linked-session sections walk back through Entity, so defer the
   // binding like Canvas's cycle above.
   {

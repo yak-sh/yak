@@ -1,8 +1,8 @@
-import { type Ent } from '../../types.ts'
 import { crewed, gated } from '../../live.ts'
 import { Dot } from '../Dot.tsx'
 import { Entity } from '../Entity.tsx'
-import { clickProps, menuAt } from '../nav.tsx'
+import { menuAt } from '../nav.tsx'
+import { slot, tileLink, type TileProps } from '../Tile.tsx'
 import { block } from '../ui.tsx'
 import { title } from '../title.tsx'
 
@@ -15,10 +15,13 @@ let { Title } = Frame
 // right-click serves the app menu (menuAt), so the verbs are one click from
 // any board. Drag out to the canvas for the full Task card (the board Item
 // owns the drag).
-export let TaskTile = ({ e }: { e: Ent }) => (
-  <Frame mod='dense' {...clickProps(e)} onContextMenu={menuAt(e)}>
+export let TaskTile = ({ e, slots, onOpen }: TileProps) => (
+  <Frame mod='dense' {...tileLink(e, onOpen)} onContextMenu={menuAt(e)}>
+    {slot(slots, 'before')}
     <Dot status={e.task!.status} gated={gated(e)} live={crewed(e)} />
     <Title {...title(e.doc?.title ?? '')} />
-    <Entity eid={e.eid} view='Meta' id />
+    <Entity eid={e.eid} view='Meta' id>
+      {slot(slots, 'after')}
+    </Entity>
   </Frame>
 )
