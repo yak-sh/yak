@@ -13,6 +13,7 @@ import { apply, db } from './db.ts'
 import { dispatch, trace } from './effects.ts'
 import { named, rfcId } from './mail.ts'
 import { canon } from './mailer.ts'
+import { record } from './telemetry.ts'
 import { type Change, uuid } from './types.ts'
 
 type Cast = (changes: Change[]) => void
@@ -394,6 +395,24 @@ let arrive = (m: FleetMsg, cast: Cast): boolean => {
 // so it drains. Ids already minted still stamp back — that heals the
 // crash gap between a mint and its notified. Each stream fails alone:
 // a mail hiccup must not silence hooks, and vice versa.
+//
+// A failure surfaces DURABLY, not just on stderr: a dead token, a moved
+// worker or a network refusal is an EMPTY spool as far as `console.warn`
+// on a socket nobody collects is concerned, so a broken sweep looked
+// exactly like a quiet one and hid for hours (T-15110). A `srv` telemetry
+// row — queryable at /telemetry and `task telemetry --errors` — is the
+// difference between "nothing arrived" and "the sweep can't pull". record()
+// is best-effort by contract, so watching the sweep can never break it.
+let broke = (stream: string, e: unknown) => {
+  console.warn(`inbound sweep (${stream}) —`, e)
+  record(db, {
+    source: 'srv',
+    name: `inbound sweep (${stream})`,
+    ok: false,
+    error: String(e),
+  })
+}
+
 let sweep = async (cast: Cast, api: FleetApi) => {
   try {
     let done: string[] = []
@@ -408,7 +427,7 @@ let sweep = async (cast: Cast, api: FleetApi) => {
     }
     if (done.length) await api.notified(done)
   } catch (e) {
-    console.warn('inbound sweep (mail) —', e)
+    broke('mail', e)
   }
   try {
     let reqs = await api.requests() // null: no spool yet — nothing to pull
@@ -426,7 +445,7 @@ let sweep = async (cast: Cast, api: FleetApi) => {
       if (done.length) await api.processed(done)
     }
   } catch (e) {
-    console.warn('inbound sweep (hooks) —', e)
+    broke('hooks', e)
   }
 }
 

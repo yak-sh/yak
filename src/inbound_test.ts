@@ -19,6 +19,7 @@ let {
   wearer,
 } = await import('./inbound.ts')
 let { mailed } = await import('./mail.ts')
+let { recent } = await import('./telemetry.ts')
 let { assertEquals, assertMatch } = await import('@std/assert')
 
 open()
@@ -576,4 +577,44 @@ Deno.test('mailChanges links an earlier inbound RFC id when present', () => {
   let mail = wire.find((c) => c.name == 'mail')!.comp!
   assertEquals(mail.reply_to_eid, orig)
   assertEquals(stamp.in_reply_to, 'first@x.test')
+})
+
+// A broken pull is NOT an empty one: before this, a dead token or moved
+// worker threw into `console.warn` on a socket nobody collects, so a sweep
+// that could not fetch looked exactly like a quiet spool (T-15110). Now the
+// failure lands as a `srv` telemetry row — queryable, not just gone.
+Deno.test('a broken sweep surfaces as a srv telemetry error', async () => {
+  let boom = 'spool fetch refused — dead token'
+  await inboundSweep(cast, {
+    messages: () => Promise.reject(new Error(boom)), // the mail pull dies
+    notified: () => Promise.resolve(),
+    requests: () => Promise.resolve(null), // the hook stream is simply quiet
+    processed: () => Promise.resolve(),
+  })
+  let hit = recent(db, { only: 'errors' })
+    .find((r) =>
+      r.source == 'srv' && r.name == 'inbound sweep (mail)' &&
+      String(r.error).includes(boom)
+    )
+  assertEquals(!!hit, true)
+})
+
+// The two streams still fail alone: a hook pull that throws records its own
+// error and leaves the mail pull — which delivered a letter — untouched.
+Deno.test('a hook-stream failure records without silencing mail', async () => {
+  let before = mailCount()
+  let boom = 'requests endpoint 500'
+  await inboundSweep(cast, {
+    messages: () =>
+      Promise.resolve([msg({ id: 'msg:1752000009999:solo@x.test' })]),
+    notified: () => Promise.resolve(),
+    requests: () => Promise.reject(new Error(boom)), // hooks die
+    processed: () => Promise.resolve(),
+  })
+  assertEquals(mailCount(), before + 1) // the mail still landed
+  let hit = recent(db, { only: 'errors' })
+    .find((r) =>
+      r.name == 'inbound sweep (hooks)' && String(r.error).includes(boom)
+    )
+  assertEquals(!!hit, true)
 })
