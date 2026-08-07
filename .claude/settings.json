@@ -1,5 +1,5 @@
 {
-  "fallbackModel": ["claude-sonnet-5", "claude-haiku-4-5"],
+  "fallbackModel": ["claude-opus-4-8[1m]", "claude-fable-5"],
   "permissions": {
     "deny": ["AskUserQuestion"],
     "defaultMode": "bypassPermissions"
