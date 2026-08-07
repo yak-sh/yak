@@ -79,6 +79,7 @@ let attr = (s: string) => esc(s).replace(/"/g, '&quot;')
 let door = (ref: Ref, repo?: string | null, links = true) =>
   new Marked({
     gfm: true,
+    breaks: true,
     extensions: [{
       name: 'ref',
       level: 'inline',
