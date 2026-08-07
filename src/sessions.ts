@@ -1147,7 +1147,7 @@ let launch = async (eid: string, ad: Adapter, j: Launch, cast: Cast) => {
       cast,
     )
     await track(eid, ad, ad.argv(j), j.tree, {
-      ...childEnv(j.session_id, j.role),
+      ...childEnv(j.session_id, j.tree, j.role),
       ...(j.task ? { TASKS_TASK: j.task } : {}),
     }, cast)
   } catch (e) {
@@ -1171,7 +1171,7 @@ export let childPath = (home: string, path: string) => {
   return rest ? `${bin}:${rest}` : bin
 }
 
-let childEnv = (session: string, role?: string) => ({
+let childEnv = (session: string, tree: string, role?: string) => ({
   PATH: childPath(
     Deno.env.get('HOME') ?? '',
     Deno.env.get('PATH') ?? '',
@@ -1179,6 +1179,10 @@ let childEnv = (session: string, role?: string) => ({
   HOME: Deno.env.get('HOME') ?? '',
   TERM: Deno.env.get('TERM') ?? 'dumb',
   TASKS_SESSION: session,
+  // The tree half of the launcher's voucher: claude marks a managed spawn's
+  // own tools CHILD_SESSION=1, so me() (client.ts) needs the planted
+  // worktree to tell the spawn itself from an agent delegated inside it.
+  TASKS_TREE: tree,
   ...(role ? { TASKS_ROLE: role } : {}),
   ...(Deno.env.get('TASKS_HOST')
     ? { TASKS_HOST: Deno.env.get('TASKS_HOST')! }
@@ -1421,7 +1425,7 @@ let resume = async (
       eid,
       ad.resume(job, thread, body),
       String(row.cwd),
-      childEnv(job.session_id),
+      childEnv(job.session_id, String(row.cwd)),
     )
     return
   }
@@ -1488,6 +1492,7 @@ let resume = async (
     String(row.cwd),
     childEnv(
       job.session_id,
+      String(row.cwd),
       row.role_eid ? String(row.role_eid) : undefined,
     ),
     cast,

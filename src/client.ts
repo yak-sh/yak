@@ -192,22 +192,36 @@ export let worktreeRoot = (dir = Deno.cwd()): string | undefined => {
 // that id already owns the task lease.
 //
 // A DELEGATED agent (an in-process Agent-tool child) is the exception the
-// first clause fixes: the harness inherits it the operator's
+// CHILD clause fixes: the harness inherits it the operator's
 // CLAUDE_CODE_SESSION_ID and gives it no id of its own, so every child would
 // otherwise reify onto the operator's row and stomp it. Nothing in a child's
 // environment is per-agent — the one coordinate it and all its later tool
 // calls share is its own git WORKTREE, which isolation gives each a distinct
-// one. So a child in a linked worktree IS that worktree; the operator, managed
-// spawns and external uuid sessions (no CHILD flag) are unchanged. Both the
-// env lookup and the tree resolver are injectable so the precedence is
-// testable without a process or a filesystem.
+// one. So a child in a linked worktree IS that worktree.
+//
+// But claude stamps CHILD_SESSION=1 on a MANAGED spawn's own tools too
+// (claude spawning claude — any `claude -p --session-id`), so the flag alone
+// cannot separate the spawn from a child delegated inside it: their envs are
+// identical. The launcher's voucher is what tells them apart — it named the
+// session (TASKS_SESSION) and the tree it planted it in (TASKS_TREE). A
+// process holding that conversation, standing in that tree, IS the managed
+// session and speaks as its own id; anything else marked CHILD is a
+// delegated context and its worktree is its identity. Both the env lookup
+// and the tree resolver are injectable so the precedence is testable
+// without a process or a filesystem.
 export let me = (
   env: (k: string) => string | undefined = (k) => Deno.env.get(k),
   tree = worktreeRoot,
-) =>
-  (env('CLAUDE_CODE_CHILD_SESSION') == '1' ? tree() : undefined) ??
-    env('CLAUDE_CODE_SESSION_ID') ?? env('TASKS_SESSION') ??
+) => {
+  let id = env('CLAUDE_CODE_SESSION_ID') ?? env('TASKS_SESSION') ??
     env('CODEX_THREAD_ID')
+  if (env('CLAUDE_CODE_CHILD_SESSION') != '1') return id
+  let at = tree()
+  let own = env('TASKS_SESSION') != null &&
+    env('TASKS_SESSION') == env('CLAUDE_CODE_SESSION_ID') &&
+    at != null && at == env('TASKS_TREE')
+  return own ? id : at ?? id
+}
 
 // Writes carry WHO SPOKE when the caller knows: the x-via header names
 // the instrument — a session id or client eid the server resolves to the

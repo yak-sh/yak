@@ -571,6 +571,30 @@ Deno.test('me: a delegated child in a worktree is that tree, not the inherited i
   assertEquals(me(env({ CLAUDE_CODE_SESSION_ID: 'op' }), () => wt), 'op')
 })
 
+Deno.test('me: the launcher voucher names a managed spawn despite the CHILD mark', () => {
+  let env = (vals: Record<string, string>) => (k: string) => vals[k]
+  let tree = '/home/a/.tasks/trees/repo/u-1'
+  let spawn = {
+    CLAUDE_CODE_CHILD_SESSION: '1', // claude stamps its own -p tools too
+    CLAUDE_CODE_SESSION_ID: 'u-1',
+    TASKS_SESSION: 'u-1',
+    TASKS_TREE: tree,
+  }
+  // the vouched conversation, standing in the vouched tree → the spawn itself
+  assertEquals(me(env(spawn), () => tree), 'u-1')
+  // a child delegated inside it stands in its OWN worktree → tree identity
+  let wt = '/home/a/repo/.claude/worktrees/agent-1'
+  assertEquals(me(env(spawn), () => wt), wt)
+  // a nested interactive launch holds a DIFFERENT conversation → not vouched
+  assertEquals(
+    me(env({ ...spawn, CLAUDE_CODE_SESSION_ID: 'u-2' }), () => tree),
+    tree,
+  )
+  // an old launcher that named no tree → today's child behavior, unchanged
+  let { TASKS_TREE: _, ...unvouched } = spawn
+  assertEquals(me(env(unvouched), () => tree), tree)
+})
+
 Deno.test('worktreeRoot: a linked worktree resolves, a main checkout does not', async () => {
   let base = await Deno.makeTempDir()
   // a linked worktree: .git is a FILE (a gitdir: pointer)
