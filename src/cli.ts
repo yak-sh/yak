@@ -10,6 +10,7 @@
 // non-default server.
 import {
   addressed,
+  around,
   belongs,
   bornAt,
   bus,
@@ -1325,9 +1326,14 @@ let show = async (args: string[]) => {
   let json = args.includes('--json')
   let [id] = args.filter((a) => a != '--json')
   if (!id) throw new Error('task show <id> [--json]')
-  let snap = await snapshot()
-  let all = rows(snap)
-  let row = need(all, id)
+  // The reading neighborhood, not the whole graph: `show` names one entity's
+  // edges and comments, so it fetches one entity's set (client.ts around) —
+  // keyed reads, not a 31 MB /snapshot. A miss falls to needed(), whose error
+  // path is the only place the graph is worth pulling (for "did you mean?").
+  let found = await around(id)
+  if (!found) return void await needed(id)
+  let { deps, all, row } = found
+  let snap = { deps }
   if (json) {
     // Edges and comments surround the same entity shape every list door uses.
     let comments = all.filter((r) => r.comps.comment?.target_eid == row.eid)

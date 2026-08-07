@@ -5,26 +5,34 @@
 // ignored a predicate would let a narrow read pass by being answered broadly,
 // which is exactly the mistake these tests exist to catch.
 
-import { idOf, jsonOf, type Row, rows } from './client.ts'
+import { idOf, jsonOf, rows } from './client.ts'
 import { matchQuery, parseQuery } from './query.ts'
 import type { Change, Snapshot } from './types.ts'
 
-export let answers = (all: Row[]) => {
+export let answers = (snap: Snapshot) => {
+  let all = rows(snap)
   let byEid = new Map(all.map((r) => [r.eid, r]))
+  // A hit's edges both ways — the `deps=1` layer the server attaches, read
+  // off the fixed snapshot so the double agrees with the real /query.
+  let edgesOf = (eid: string) =>
+    snap.deps.filter((d) => d.parent == eid || d.child == eid)
   return (search: string) => {
     let segs = search.split('&').filter(Boolean)
     let kind = segs.find((s) => s.startsWith('kind='))?.slice(5)
+    let edged = segs.includes('deps=1')
     let named = segs.filter((s) => s.startsWith('id='))
       .flatMap((s) => s.slice(3).split(',')).filter(Boolean)
     let preds = parseQuery(
-      segs.filter((s) => !s.startsWith('id=') && !s.startsWith('kind='))
-        .join('&'),
+      segs.filter((s) =>
+        !s.startsWith('id=') && !s.startsWith('kind=') &&
+        s != 'deps=1' && s != 'backlinks=1'
+      ).join('&'),
     )
     return all.filter((r) =>
       matchQuery(r.comps, preds, (e) => byEid.get(e)?.comps) &&
       (!kind || r.kind == kind) &&
       (!named.length || named.includes(r.eid) || named.includes(idOf(r)))
-    ).map((r) => jsonOf(r))
+    ).map((r) => edged ? { ...jsonOf(r), deps: edgesOf(r.eid) } : jsonOf(r))
   }
 }
 
@@ -34,7 +42,7 @@ export let answers = (all: Row[]) => {
 export let fakeGraph = (snap: Snapshot) => {
   let seen: string[] = []
   let acked: Change[] = []
-  let answer = answers(rows(snap))
+  let answer = answers(snap)
   let server = Deno.serve({
     hostname: '127.0.0.1',
     port: 0,

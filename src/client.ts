@@ -626,6 +626,48 @@ export let needed = async (id: string, where = '', comp = '') => {
   if (hit) return hit
   return need(rows(await snapshot()), id, where, comp)
 }
+// The eids a row NAMES through its typed columns — every {eid} prop across
+// its components (created.by/via and *_eid alike), read off the vocabulary so
+// a new reference column is picked up with no edit here. This is the set a
+// reader must fetch to render an id + title instead of a bare uuid.
+export let refsIn = (r: Row): string[] => {
+  let out: string[] = []
+  for (let [comp, props] of Object.entries(r.comps)) {
+    for (let [prop, v] of Object.entries(props)) {
+      if (!v) continue
+      let t = propAt(comp, prop)?.type
+      if (typeof t == 'object' && 'eid' in t) out.push(String(v))
+    }
+  }
+  return out
+}
+
+// One entity's reading NEIGHBORHOOD without the whole-graph snapshot: the
+// entity and its edges (deps=1), the comments aimed at it, and every row those
+// NAME (edge endpoints, *_eid columns, comment authors, the claim's session) —
+// exactly the set showMd resolves ids against. A page costs a handful of keyed
+// queries, not a 31 MB /snapshot. undefined when the id names nothing; the
+// caller owns that error path (needed() pulls the graph there for a "did you
+// mean?"). (T-14926)
+export let around = async (id: string) => {
+  let res = await request(
+    `http://${host()}/query?id=${encodeURIComponent(id)}&deps=1`,
+  )
+  if (!res.ok) throw new Error(`server said ${res.status}`)
+  let [hit] = await res.json() as Record<string, unknown>[]
+  if (!hit) return undefined
+  let { deps: raw, ...rest } = hit
+  let deps = (raw ?? []) as Dep[]
+  let row = rowOf(rest)
+  let comments = await query([`.comment.target_eid=${row.eid}`])
+  let want = new Set<string>()
+  for (let r of [row, ...comments]) for (let e of refsIn(r)) want.add(e)
+  for (let d of deps) want.add(d.parent), want.add(d.child)
+  want.delete(row.eid)
+  let all = uniq([row, ...comments, ...await fetched([...want])])
+  return { deps, all, row }
+}
+
 export let deref = (all: Row[], v: string, where = '', comp = '') =>
   !v || UUID.test(v) ? v : need(all, v, where, comp).eid
 // The reference's declared target ({eid: 'project'}), '' where any entity
@@ -2224,7 +2266,7 @@ export let recallIndex = (
 // The entity's sentences, both directions, ids humanized — "whole" is a
 // lie without them (an edge is data about the entity that lives in no
 // component row, so rows() alone can never surface it).
-export let edgesOf = (snap: Snapshot, all: Row[], eid: string) => {
+export let edgesOf = (snap: { deps: Dep[] }, all: Row[], eid: string) => {
   let name = (e: string) => {
     let r = all.find((x) => x.eid == e)
     return r ? idOf(r) : e
@@ -2243,7 +2285,7 @@ export let edgesOf = (snap: Snapshot, all: Row[], eid: string) => {
 // comments follow as a section. Every eid resolves to its human id +
 // title, because nobody reads uuids. `task show`'s default face; --json
 // keeps the machine shape.
-export let showMd = (snap: Snapshot, all: Row[], row: Row) => {
+export let showMd = (snap: { deps: Dep[] }, all: Row[], row: Row) => {
   let byEid = new Map(all.map((r) => [r.eid, r]))
   let clip = (s: unknown, n = 64) => {
     let t = String(s ?? '').replace(/\s+/g, ' ').trim()
