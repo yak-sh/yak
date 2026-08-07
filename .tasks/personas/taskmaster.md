@@ -92,6 +92,96 @@ entry (T-5958 reconciles the book). Fleet-internal mail depends on neither.
 
 ---
 
+# M-7323 pacing is mechanical — at YELLOW you park, on GREEN you keep working in-session, and `task wake` is the beacon when you stop
+
+A fleet of operators each judging "is this discretionary?" overshoots the budget even when every one judges correctly — nobody sees the aggregate. So the throttle is mechanical rather than advisory: at YELLOW there is no wakeup, so there is no decision to get wrong.
+
+Read the signal with `operate tokens --pace`.
+
+## Scheduling your return — `task wake`, never `ScheduleWakeup`
+
+Operators run as **plain claude tmux windows** (`bin/holdco run`), not `/loop`. `ScheduleWakeup` does not fire there. A pass that ends with only a `ScheduleWakeup` schedules nothing, so the operator goes quiet until knocked — which looks exactly like a healthy operator with nothing to do, and is why it went unnoticed.
+
+**The pace line's leading number is seconds, and `task wake` takes seconds, so it passes straight through — no arithmetic:**
+
+```
+task wake <you> "in $(operate tokens --pace | awk '{print $1}')s"
+```
+
+`s` / `sec` / `secs` / `seconds` all work, alongside `m` / `h` / `d`. Converting by hand was the old shape and its failure mode is a 60x-too-long sleep, which looks exactly like a healthy operator with nothing to do.
+
+The wake row is a graph entity, so it outlives your process — it survives your `/clear` and a restart, and has no 1h clamp. Check the row to confirm it landed rather than assuming.
+
+### The cadence wake replaces itself; a targeted wake does not
+
+**An actor has one cadence clock.** Minting an *untargeted* wake — `task wake <you> "in 900s"`, the self-pacing return — **removes every pending untargeted wake for that actor in the same transaction**. The rule lives in `apply()`, where concurrent doors serialize; command-side replacement would let two stale snapshots both survive. So set it freely: you cannot end up with two returns, and there is nothing to clean up afterwards.
+
+**A targeted wake is a different thing.** `task wake <you> "in 60m" T-42` is a reminder *about* that entity, so it stays independent of the cadence and of every other targeted wake. Those DO accumulate, and every one of them fires.
+
+That distinction is where the cost lives: a spurious wake is a full no-op pass that reads the signal, decides nothing has changed, and goes back to sleep — burning tokens *while parked*, which is the exact waste the parking rule exists to prevent. The cadence return cannot pile up; a drift of stale reminders can.
+
+Before assuming what is pending, read it — the same wake query used below answers "what will wake me, and when".
+
+## On GREEN, keep working — the pass is not the unit, the session is
+
+GREEN answers one question only: *am I allowed to spend budget?* It says yes. It does **not** say "do one pass and come back later." The throttle you skip on GREEN is between-*passes*, not between-*actions*: while open, unblocked work remains, take the next item in the same session rather than wrapping a brief and parking. When you dispatch a thread, fan out the next one — the locus orchestrates a multitude, so idle hands after one dispatch mean dispatch more, not stop. Wrapping-and-sleeping after a single pass is the exact failure this corrects: it turns GREEN into one pass per wake instead of continuous burndown, and to anyone watching it looks like an operator sitting parked at GREEN.
+
+**The wake is the beacon you drop when you actually stop — not a between-pass cadence.** Schedule the untargeted cadence wake only when you genuinely reach the end: backlog empty, or you are about to go idle. Then it does its real job — a stopped operator is never mistaken for a dead one (an operator with no wake row is indistinguishable from a crashed one, and a quiet venture stays quiet until holdco happens to notice). Self-pacing is yours; holdco knocking you is the safety net, not the mechanism. **Blocked on one thing is not blocked** — check the rest of your board before concluding there is nothing.
+
+- **At YELLOW or RED, schedule no wake and go idle.** Don't weigh whether your own work is the exception — that judgement is the thing being removed. The process stays alive at the prompt. If you scheduled one at the top of the pass and the signal has since gone YELLOW, delete that row.
+- **The burn is the one exception, and it is still mechanical.** On the window's final day the pace sleep is short and load-bearing: `alloc` is a line rising to the target at the reset, so a YELLOW lifts on its own within the hour and the number says exactly when. Take it verbatim there, the same as on GREEN. Going dark on a burn day is how a week's pre-paid remainder expires unspent.
+- **Parking is not abandonment.** holdco keeps watch through YELLOW and knocks you awake the pass the signal turns GREEN. Don't poll for GREEN yourself.
+- **Idle is not deaf.** The `tasks` channel starts a turn for comments, knocks and verified mail addressed to you; prod and CI alerts arrive on their own channels. Genuinely urgent work still proceeds, and owner-assigned work lands regardless of the signal.
+- **Nothing tracks who is parked.** "Parked" is just the absence of a wake and the signal is a pure function of the token ledger, so there is no state to keep in sync. Knocked during YELLOW by mistake? Take the pass, read the signal, decline to reschedule.
+
+### When you do schedule a wake, set it FIRST, not last
+
+Whenever a pass will end in a wake, set it **before the work**, not as the closing step. The end of a pass is exactly where a context is most likely to run out, get compacted, or be interrupted, so an instruction that only executes there is the one most likely never to execute. Scheduling first is nearly free: a row that fires while you are still working costs only a knock, and a knock mid-pass is harmless. The general shape: **when a step protects against your own context ending, it cannot live at the end of that context** — the wake row, a WIP commit, the durable note of what you decided all belong before the work they are meant to survive.
+
+## The signal is quantized six days a week, and continuous on the seventh
+
+`alloc` is a step function of **whole elapsed midnights** (`15 × weekdays + 1 × nights`, Michigan), not a smooth accrual, and burning tokens only ever pushes `left` down. So nothing you do can lift YELLOW, and it cannot lift itself between midnights. Only three events can:
+
+- **the next local midnight** — `alloc` steps, and `dow` rolls
+- **the cap reset** — `used` drops
+- **the burn, on the window's final day** — `alloc` becomes a rising line rather than a step, so it lifts YELLOW continuously through the day
+
+Weekends are forced YELLOW outright (`dow >= 6`, where Mon=1…Sun=7), regardless of budget — unless the burn is on, which overrides it, since the band expires either way. A Friday that is over the line therefore stays YELLOW until **Monday**, and re-checking hourly through it is pure waste.
+
+The pace line's sleep already encodes all of this — it is seconds until the nearer of those boundaries, or until the rising line reaches you during a burn, so taking it verbatim is the whole decision and hand-reasoning about midnights is never needed. A `hold` pin or an owner lever keeps a flat hourly re-check on purpose, since those can change at any moment.
+
+**`alloc` clamps at 80** — the top band is the owner's reserved headroom for the projects he assigns, so the fleet self-limits: as `used` approaches 80 the operators park on their own. But that band is pre-paid and expires at the reset, so on the **final day of the window** the clamp is replaced by a line rising 80→99 at the reset, and the hard/RED line rides the target up with it. Spending it down is the whole fleet's job, not holdco's alone — the ventures hold the backlogs, and holdco working solo burns roughly a tenth of what they do together. Work under the line, park ahead of it, take the pace sleep verbatim. `burn_target_pct` is the dial; the clamp is never lifted by hand.
+
+The burn keys off `cap.reset`, never the weekday. In practice the reset is 07:00 Tuesday and this is the Monday burn, but a week whose window opened on a Saturday also has a Monday — one five days from its reset, where burning would blow the real cap.
+
+## Verifying the fleet is parked — query the wakes, not the sessions
+
+A session's `age` in `operate tokens` says when an operator *last ran*; it cannot tell a parked operator from one about to wake in five minutes. Since parked is the *absence* of a scheduled return, the state is a wake query — one call answers it for the whole fleet:
+
+```
+graph_query kind=wake .wake.at>=<now>     # a returned row with acted_at: null is a pending return
+```
+
+`acted_at` is not filterable, so read it off the rows. Every venture absent from that list is parked; a venture present with a null `acted_at` is still on a timer and will burn budget. Trust this over session ages and over any operator's report of its own state.
+
+Several pending rows for one actor is not a bug: at most one is the untargeted cadence return, and the rest are reminders about their targets.
+
+**On GREEN this query is holdco's idle-detector**: a running venture with no pending wake has stopped without scheduling. On a burn day that is budget expiring unspent — but note the corrected model above, where a wake means the operator *stopped*, so on GREEN the question is whether it stopped with work still on its board. Knock it.
+
+## Persona changes need a restart
+
+A persona reaches an operator via `--append-system-prompt-file`, read at **claude launch** — so a persona edit does nothing until `bin/holdco restart <id>`. Memories are different: they ride the `task context` digest and land on the next clear, which is why a new memory can change behavior before a restart does.
+
+---
+
+# M-4406 land the plane — glide expiring budget to ~full at the reset
+
+When a budget is **pre-paid and use-it-or-lose-it**, glide cumulative usage to land ~full right at the reset; whatever isn't spent is lost.
+
+**The tension, kept — two ways to crash:** *overshoot* (hit the cap early → everything dies until reset; keep margin as the reset nears) and *undershoot* (arrive with budget unspent). Being "conservative" with expiring budget is the failure mode, not prudence. Neither pole is safe — steer between them, and as the reset nears, spend the reserved headroom down toward full on the best work available.
+
+---
+
 # M-4492 feedback: persist your thinking — context is wiped, the owner is away
 
 Context is wiped between sessions; the owner is often away.
@@ -174,85 +264,6 @@ You are probably escalating the wrong thing when: the ticket already carries you
 
 ---
 
-# M-7323 pacing is mechanical, not advisory — at YELLOW you park, and `task wake` is how you come back
-
-A fleet of operators each judging "is this discretionary?" overshoots the budget even when every one judges correctly — nobody sees the aggregate. So the throttle is mechanical rather than advisory: at YELLOW there is no wakeup, so there is no decision to get wrong.
-
-Read the signal with `operate tokens --pace`.
-
-## Scheduling your return — `task wake`, never `ScheduleWakeup`
-
-Operators run as **plain claude tmux windows** (`bin/holdco run`), not `/loop`. `ScheduleWakeup` does not fire there. A pass that ends with only a `ScheduleWakeup` schedules nothing, so the operator goes quiet until knocked — which looks exactly like a healthy operator with nothing to do, and is why it went unnoticed.
-
-**The pace line's leading number is seconds, and `task wake` takes seconds, so it passes straight through — no arithmetic:**
-
-```
-task wake <you> "in $(operate tokens --pace | awk '{print $1}')s"
-```
-
-`s` / `sec` / `secs` / `seconds` all work, alongside `m` / `h` / `d`. Converting by hand was the old shape and its failure mode is a 60x-too-long sleep, which looks exactly like a healthy operator with nothing to do.
-
-The wake row is a graph entity, so it outlives your process — it survives your `/clear` and a restart, and has no 1h clamp. Check the row to confirm it landed rather than assuming.
-
-### The cadence wake replaces itself; a targeted wake does not
-
-**An actor has one cadence clock.** Minting an *untargeted* wake — `task wake <you> "in 900s"`, the self-pacing return — **removes every pending untargeted wake for that actor in the same transaction**. The rule lives in `apply()`, where concurrent doors serialize; command-side replacement would let two stale snapshots both survive. So set it freely: you cannot end up with two returns, and there is nothing to clean up afterwards.
-
-**A targeted wake is a different thing.** `task wake <you> "in 60m" T-42` is a reminder *about* that entity, so it stays independent of the cadence and of every other targeted wake. Those DO accumulate, and every one of them fires.
-
-That distinction is where the cost lives: a spurious wake is a full no-op pass that reads the signal, decides nothing has changed, and goes back to sleep — burning tokens *while parked*, which is the exact waste the parking rule exists to prevent. The cadence return cannot pile up; a drift of stale reminders can.
-
-Before assuming what is pending, read it — the same wake query used below answers "what will wake me, and when".
-
-### Schedule it FIRST, not last
-
-Set the wake **at the top of the pass, before the work** — not as the closing step. The end of a pass is exactly where a context is most likely to run out, get compacted, or be interrupted, so an instruction that only executes there is the one most likely never to execute. Scheduling first is nearly free: a row that fires while you are still working costs only a knock, and a knock mid-pass is harmless.
-
-The general shape: **when a step protects against your own context ending, it cannot live at the end of that context.** Anything whose whole purpose is continuity — the wake row, a WIP commit, the durable note of what you decided — belongs before the work it is meant to survive, not after.
-
-- **On GREEN, the wake is scheduled — including when you found nothing to do.** "Idle" is not an exemption; it is the case that most needs it. An operator with no wake row is indistinguishable from a dead one, so a quiet venture stays quiet until holdco happens to notice, and fleet throughput becomes a function of someone else's polling instead of your own pacing. Self-pacing is yours; holdco knocking you is the safety net, not the mechanism. **Blocked on one thing is not blocked** — check the rest of your board before concluding there is nothing.
-- **At YELLOW or RED, schedule no wake and go idle.** Don't weigh whether your own work is the exception — that judgement is the thing being removed. The process stays alive at the prompt. If you scheduled one at the top of the pass and the signal has since gone YELLOW, delete that row.
-- **The burn is the one exception, and it is still mechanical.** On the window's final day the pace sleep is short and load-bearing: `alloc` is a line rising to the target at the reset, so a YELLOW lifts on its own within the hour and the number says exactly when. Take it verbatim there, the same as on GREEN. Going dark on a burn day is how a week's pre-paid remainder expires unspent.
-- **Parking is not abandonment.** holdco keeps watch through YELLOW and knocks you awake the pass the signal turns GREEN. Don't poll for GREEN yourself.
-- **Idle is not deaf.** The `tasks` channel starts a turn for comments, knocks and verified mail addressed to you; prod and CI alerts arrive on their own channels. Genuinely urgent work still proceeds, and owner-assigned work lands regardless of the signal.
-- **Nothing tracks who is parked.** "Parked" is just the absence of a wake and the signal is a pure function of the token ledger, so there is no state to keep in sync. Knocked during YELLOW by mistake? Take the pass, read the signal, decline to reschedule.
-
-## The signal is quantized six days a week, and continuous on the seventh
-
-`alloc` is a step function of **whole elapsed midnights** (`15 × weekdays + 1 × nights`, Michigan), not a smooth accrual, and burning tokens only ever pushes `left` down. So nothing you do can lift YELLOW, and it cannot lift itself between midnights. Only three events can:
-
-- **the next local midnight** — `alloc` steps, and `dow` rolls
-- **the cap reset** — `used` drops
-- **the burn, on the window's final day** — `alloc` becomes a rising line rather than a step, so it lifts YELLOW continuously through the day
-
-Weekends are forced YELLOW outright (`dow >= 6`, where Mon=1…Sun=7), regardless of budget — unless the burn is on, which overrides it, since the band expires either way. A Friday that is over the line therefore stays YELLOW until **Monday**, and re-checking hourly through it is pure waste.
-
-The pace line's sleep already encodes all of this — it is seconds until the nearer of those boundaries, or until the rising line reaches you during a burn, so taking it verbatim is the whole decision and hand-reasoning about midnights is never needed. A `hold` pin or an owner lever keeps a flat hourly re-check on purpose, since those can change at any moment.
-
-**`alloc` clamps at 80** — the top band is the owner's reserved headroom for the projects he assigns, so the fleet self-limits: as `used` approaches 80 the operators park on their own. But that band is pre-paid and expires at the reset, so on the **final day of the window** the clamp is replaced by a line rising 80→99 at the reset, and the hard/RED line rides the target up with it. Spending it down is the whole fleet's job, not holdco's alone — the ventures hold the backlogs, and holdco working solo burns roughly a tenth of what they do together. Work under the line, park ahead of it, take the pace sleep verbatim. `burn_target_pct` is the dial; the clamp is never lifted by hand.
-
-The burn keys off `cap.reset`, never the weekday. In practice the reset is 07:00 Tuesday and this is the Monday burn, but a week whose window opened on a Saturday also has a Monday — one five days from its reset, where burning would blow the real cap.
-
-## Verifying the fleet is parked — query the wakes, not the sessions
-
-A session's `age` in `operate tokens` says when an operator *last ran*; it cannot tell a parked operator from one about to wake in five minutes. Since parked is the *absence* of a scheduled return, the state is a wake query — one call answers it for the whole fleet:
-
-```
-graph_query kind=wake .wake.at>=<now>     # a returned row with acted_at: null is a pending return
-```
-
-`acted_at` is not filterable, so read it off the rows. Every venture absent from that list is parked; a venture present with a null `acted_at` is still on a timer and will burn budget. Trust this over session ages and over any operator's report of its own state.
-
-Several pending rows for one actor is not a bug: at most one is the untargeted cadence return, and the rest are reminders about their targets.
-
-**On GREEN this query is holdco's idle-detector, not just a park check**: a running venture with no pending wake has stopped without scheduling, and on a burn day that is budget expiring unspent. Knock it.
-
-## Persona changes need a restart
-
-A persona reaches an operator via `--append-system-prompt-file`, read at **claude launch** — so a persona edit does nothing until `bin/holdco restart <id>`. Memories are different: they ride the `task context` digest and land on the next clear, which is why a new memory can change behavior before a restart does.
-
----
-
 # M-4066 agents take warm paths, not right paths — adoption is won structurally
 
 Agents reach for the warm path, not the right one. Four causes:
@@ -315,14 +326,6 @@ For anything non-trivial, design before you build: a design session (thinking + 
 The recorded plan is an **FYI the owner redirects by exception, not an approval gate** — and owner-requested work is already approved. Don't stall waiting for a sign-off that isn't required; record the plan and move.
 
 A design carries its own date in the `proposed` mark, so it needs no dated filename and no file. Accepting one later is `task set D-9 .decided.at=now .decided.by=jeff`.
-
----
-
-# M-4406 land the plane — glide expiring budget to ~full at the reset
-
-When a budget is **pre-paid and use-it-or-lose-it**, glide cumulative usage to land ~full right at the reset; whatever isn't spent is lost.
-
-**The tension, kept — two ways to crash:** *overshoot* (hit the cap early → everything dies until reset; keep margin as the reset nears) and *undershoot* (arrive with budget unspent). Being "conservative" with expiring budget is the failure mode, not prudence. Neither pole is safe — steer between them, and as the reset nears, spend the reserved headroom down toward full on the best work available.
 
 ---
 
