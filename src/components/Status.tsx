@@ -100,6 +100,18 @@ let own = 'button, a, input, textarea, .Status_Hints'
 export let owned = (target: EventTarget | null) =>
   target instanceof Element && !!target.closest(own)
 
+// A command line can lose focus to the canvas without spending its draft.
+// `:` takes it back, but remains ordinary text when the line already owns it.
+export let commandFocus = (
+  e: Pick<KeyboardEvent, 'key' | 'target' | 'preventDefault'>,
+  input: HTMLTextAreaElement | null,
+) => {
+  if (e.key != ':' || !input || e.target == input) return false
+  e.preventDefault()
+  input.focus()
+  return true
+}
+
 // The context a command runs in: what you're LOOKING at is what you're
 // commanding — the root card (the URL) is the focused entity. A browser
 // speaks for no session, so :claim must name one here.
@@ -249,7 +261,10 @@ export let Status = () => {
 
   useEffect(() => {
     let key = (e: KeyboardEvent) => {
-      if (mode.value == 'command') return // the command input owns its keys
+      if (mode.value == 'command') {
+        commandFocus(e, input.current)
+        return // the command input owns every other key
+      }
       let t = e.target
       let typing = t instanceof HTMLElement &&
         t.matches('input, textarea, select, [contenteditable]')

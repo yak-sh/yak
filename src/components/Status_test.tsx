@@ -4,7 +4,7 @@ import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
 import { assertEquals } from '@std/assert'
 import { applyLocal, cache } from '../live.ts'
-import { FixMessage, owned } from './Status.tsx'
+import { commandFocus, FixMessage, owned } from './Status.tsx'
 
 Deno.test('SVG controls own their statusbar clicks', () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'Element')
@@ -22,6 +22,22 @@ Deno.test('SVG controls own their statusbar clicks', () => {
     if (prior) Object.defineProperty(globalThis, 'Element', prior)
     else delete (globalThis as { Element?: unknown }).Element
   }
+})
+
+Deno.test('colon refocuses an open command without consuming its own text', () => {
+  let focused = 0
+  let prevented = 0
+  let input = { focus: () => focused++ } as unknown as HTMLTextAreaElement
+  let key = (value: string, target: EventTarget | null) => ({
+    key: value,
+    target,
+    preventDefault: () => prevented++,
+  })
+
+  assertEquals(commandFocus(key(':', null), input), true)
+  assertEquals(commandFocus(key(':', input), input), false)
+  assertEquals(commandFocus(key('x', null), input), false)
+  assertEquals({ focused, prevented }, { focused: 1, prevented: 1 })
 })
 
 Deno.test('fix status links minted ids and follows the session lifecycle', async () => {
