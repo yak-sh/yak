@@ -92,24 +92,6 @@ entry (T-5958 reconciles the book). Fleet-internal mail depends on neither.
 
 ---
 
-# M-4523 git workflow — work in a worktree, land with `task land`
-
-- **Work in your own worktree, and land with `task land`.** The worktree means no two writers ever share a tree. `task land` rebases your branch on `main`, re-runs the gate on the exact rebased commit, and fast-forward merges it into the shared checkout's `main`.
-- **Landing reaches the shared checkout — that is not always the same tree as production.** `task land` was built for this graph's own server, which runs directly off that checkout: for a project shaped that way, landing IS deploying, full stop. But a venture hosted elsewhere — Railway, a Cloudflare Worker behind CI, anything that redeploys only when ITS remote sees new commits — can sit on stale code all night even though `task land` succeeded, because nothing pushed to the remote that actually serves traffic. The shared checkout moving forward and production moving forward are two different facts; don't infer one from the other.
-- **Don't rely on remembering to push — wire it in.** `cafe_car`, `bindery`, and `coloring-book-maker` (CrayonBloom) each carry a `post-commit`/`post-merge` hook (installed 2026-08-06, after a landed fix sat unpushed overnight) that pushes `main` to `origin` on every advance, so landing and publishing happen in one motion for push-to-deploy ventures. A venture that deploys on `wrangler deploy`, `bin/promote`, or anything else non-push still needs that step done by hand — read its persona/AGENTS.md for the exact command. A new push-to-deploy venture should get the same hook at scaffold time, not a note to self (T-14783).
-- **A second, fleet-wide backstop: `operate self-clear` refuses when HEAD is ahead of `@{upstream}`** (`operate/src/self-clear.ts`, added 2026-08-06 after the same incident). Every self-looping session is supposed to end its pass with `self-clear`; it already declined a dirty tree as "not a clean boundary" but was blind to a clean tree sitting unpushed. This catches the gap even where a venture's own push hook is missing, broken, or not yet installed — a net under the per-repo hooks above, not a replacement for them.
-- **ff-only is the compare-and-swap.** If another lander moved `main` between your rebase and the merge, the merge is no longer a fast-forward and git refuses. Rebase on `main`, re-gate, land again. Never `--force`/`-f`, and never `--force-with-lease` past a refusal: a refusal means someone landed first, so read their work and rebase onto it.
-- **"Did it land?" asks the shared checkout's `main`** — not "is it live." Worktrees share one ref store, so it is readable from yours:
-
-  ```sh
-  git merge-base --is-ancestor <sha> main && echo landed || echo not-landed
-  ```
-
-  For a push-to-deploy venture, "is it live" is `git merge-base --is-ancestor <sha> origin/main`.
-- Keep commits focused — don't bundle unrelated changes.
-
----
-
 # M-4492 feedback: persist your thinking — context is wiped, the owner is away
 
 Context is wiped between sessions; the owner is often away.
@@ -171,6 +153,24 @@ Escalate when it is irreversible, spends money, or turns on a preference only he
 Asking permission *feels* like deference. In a queue only one person can drain, it is a cost transferred to him, and a reversible call parked three weeks costs more than a wrong call corrected in a day.
 
 You are probably escalating the wrong thing when: the ticket already carries your own recommendation; any reasonable reader would answer "the recommended one"; or the ask is "OK if I…" about a box you operate. Those are decisions wearing a question mark.
+
+---
+
+# M-4523 git workflow — work in a worktree, land with `task land`
+
+- **Work in your own worktree, and land with `task land`.** The worktree means no two writers ever share a tree. `task land` rebases your branch on `main`, re-runs the gate on the exact rebased commit, and fast-forward merges it into the shared checkout's `main`.
+- **Landing reaches the shared checkout — that is not always the same tree as production.** `task land` was built for this graph's own server, which runs directly off that checkout: for a project shaped that way, landing IS deploying, full stop. But a venture hosted elsewhere — Railway, a Cloudflare Worker behind CI, anything that redeploys only when ITS remote sees new commits — can sit on stale code all night even though `task land` succeeded, because nothing pushed to the remote that actually serves traffic. The shared checkout moving forward and production moving forward are two different facts; don't infer one from the other.
+- **Don't rely on remembering to push — wire it in.** `cafe_car`, `bindery`, and `coloring-book-maker` (CrayonBloom) each carry a `post-commit`/`post-merge` hook (installed 2026-08-06, after a landed fix sat unpushed overnight) that pushes `main` to `origin` on every advance, so landing and publishing happen in one motion for push-to-deploy ventures. A venture that deploys on `wrangler deploy`, `bin/promote`, or anything else non-push still needs that step done by hand — read its persona/AGENTS.md for the exact command. A new push-to-deploy venture should get the same hook at scaffold time, not a note to self (T-14783).
+- **A second, fleet-wide backstop: `operate self-clear` refuses when HEAD is ahead of `@{upstream}`** (`operate/src/self-clear.ts`, added 2026-08-06 after the same incident). Every self-looping session is supposed to end its pass with `self-clear`; it already declined a dirty tree as "not a clean boundary" but was blind to a clean tree sitting unpushed. This catches the gap even where a venture's own push hook is missing, broken, or not yet installed — a net under the per-repo hooks above, not a replacement for them.
+- **ff-only is the compare-and-swap.** If another lander moved `main` between your rebase and the merge, the merge is no longer a fast-forward and git refuses. Rebase on `main`, re-gate, land again. Never `--force`/`-f`, and never `--force-with-lease` past a refusal: a refusal means someone landed first, so read their work and rebase onto it.
+- **"Did it land?" asks the shared checkout's `main`** — not "is it live." Worktrees share one ref store, so it is readable from yours:
+
+  ```sh
+  git merge-base --is-ancestor <sha> main && echo landed || echo not-landed
+  ```
+
+  For a push-to-deploy venture, "is it live" is `git merge-base --is-ancestor <sha> origin/main`.
+- Keep commits focused — don't bundle unrelated changes.
 
 ---
 
