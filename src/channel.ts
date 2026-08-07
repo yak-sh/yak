@@ -53,6 +53,17 @@ export type Ctx = {
   // and our own write is lost if the server is down when we try); this is
   // ours, so a replay can never re-ring what we already said.
   sent?: (eid: string) => boolean
+  // The backlog captured at THIS channel's first snapshot: every entity
+  // already `notified` at boot — the pile the digest showed, which a boot is
+  // "state, not news" about and must never ring. It de-conflates the shared
+  // `notified` stamp: the bus writes `notified` when it shows an item in a CLI
+  // reply, and gating the PUSH on that bus-authored stamp is what dropped a
+  // letter arriving during a channel-down gap (it got `notified` before the
+  // channel recovered it, and resume's dedup then skipped it forever). With a
+  // baseline, `notified` suppresses only what was ALREADY told at boot; a stamp
+  // acquired AFTER boot (the signature of a gap item) no longer hides the push.
+  // Absent (tests, the inbox sweep) → the old whole-`notified` gate stands.
+  baseline?: (eid: string) => boolean
   // Which pass this is; absent = a live frame.
   // - `catchup`: the {since} journal replay on a freshly-(re)connected
   //   socket (T-7167). It pushes past `notified`, because the digest/bus may
@@ -384,10 +395,15 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
     ? bornIn(changes)
     : undefined
   let out: Event[] = []
-  // Already told: our own deliveries always, the fleet's `notified` stamp
-  // except on a catch-up replay (see Ctx.mode).
+  // Already told: our own deliveries always, and the fleet's `notified` stamp
+  // except on a catch-up replay (see Ctx.mode) — but a bus-authored `notified`
+  // only suppresses what was in the boot backlog. Without a baseline (tests,
+  // the inbox sweep) the whole-`notified` gate stands; with one, a stamp
+  // acquired after boot (a gap item) rings anyway.
+  let backlog = (eid: string) => ctx.baseline ? ctx.baseline(eid) : true
   let told = (eid: string) =>
-    !!ctx.sent?.(eid) || (ctx.mode != 'catchup' && !!ctx.notified?.(eid))
+    !!ctx.sent?.(eid) ||
+    (ctx.mode != 'catchup' && !!ctx.notified?.(eid) && backlog(eid))
   for (let c of changes) {
     if (!c.comp) continue
 

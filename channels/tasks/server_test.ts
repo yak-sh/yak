@@ -327,6 +327,42 @@ Deno.test('an already-notified item is not re-injected (durable dedup)', () => {
   assertEquals(channelEvents([stamp()], c), [])
 })
 
+Deno.test('a gap item notified AFTER boot injects; the boot backlog does not', () => {
+  // The regression that dropped E-15034: a letter arrives while the channel is
+  // down, the CLI comms-bus stamps `notified` before the channel recovers it,
+  // and the old whole-`notified` gate then skipped it on every live/resume
+  // frame forever. With a boot baseline, `notified` narrows to what was ALREADY
+  // told at boot: a stamp acquired after boot (this gap item, absent from the
+  // baseline) rings; the pre-boot backlog (in the baseline) stays silent.
+  let c = (over: Partial<Ctx>) =>
+    ctx({ docOf: letter, notified: () => true, ...over })
+  // No baseline (tests, the inbox sweep): the whole-`notified` gate stands.
+  assertEquals(
+    channelEvents([stamp()], c({})).length,
+    0,
+    'no baseline: old gate',
+  )
+  // Baseline says this eid was NOT the boot backlog → a gap item, so it rings.
+  assertEquals(
+    channelEvents([stamp()], c({ baseline: () => false })).length,
+    1,
+    'notified after boot: the push fires',
+  )
+  // Baseline says this eid WAS the boot backlog → never re-ring history.
+  assertEquals(
+    channelEvents([stamp()], c({ baseline: () => true })).length,
+    0,
+    'the pre-boot backlog stays silent',
+  )
+  // Our own delivery still outranks the baseline lift.
+  assertEquals(
+    channelEvents([stamp()], c({ baseline: () => false, sent: () => true }))
+      .length,
+    0,
+    'what this run already sent is never re-rung',
+  )
+})
+
 Deno.test('a catch-up replay pushes a notified gap item anyway (T-7167)', () => {
   // The idle-operator case: the digest/bus stamped `notified` while the channel
   // was down, so the live gate would skip it — but the {since} catch-up replay

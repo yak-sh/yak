@@ -198,10 +198,25 @@ let held: { cursor?: number; epoch?: string; vocabHash?: string } = {}
 // RESUMES: the same filter over the snapshot, bounded by `notified` to what
 // nobody has told this session yet.
 let synced = false
+// The boot backlog: every entity already `notified` at the FIRST snapshot —
+// the pile the digest showed, which a boot is "state, not news" about. Captured
+// ONCE, so a `notified` stamp acquired AFTER boot (a letter that arrived during
+// a channel-down gap, then bus-stamped before the channel recovered it) is NOT
+// mistaken for history and still pushes. undefined until captured; the first
+// feed runs under the old whole-`notified` gate, which is what suppresses this
+// same backlog from ringing at boot.
+let baseline: Set<string> | undefined
 let absorb = (snap: Snapshot) => {
   held = { cursor: snap.cursor, epoch: snap.epoch, vocabHash: snap.vocabHash }
+  let first = !synced
   feed(snap.changes, synced ? 'resume' : undefined)
   synced = true
+  if (first) {
+    baseline = new Set()
+    for (let [eid, row] of index) {
+      if (row.comps.has('notified')) baseline.add(eid)
+    }
+  }
 }
 
 // One authed-free GET of the whole graph — warms the index and resolves the
@@ -302,6 +317,9 @@ let feed = (changes: Change[], mode?: 'catchup' | 'resume') => {
     docOf: (eid) => docOf(index, eid),
     done: (eid) => doneOf(index, eid),
     notified: (eid) => notifiedOf(index, eid),
+    // Only once the boot backlog is captured does `notified` narrow to it;
+    // until then the whole-`notified` gate stands (undefined → old behavior).
+    baseline: baseline ? (eid) => baseline!.has(eid) : undefined,
     sent: (eid) => sent.has(eid),
     mode,
     // The operator loop gets project mail; a specialist does not (T-7006).
