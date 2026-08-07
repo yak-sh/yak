@@ -92,45 +92,6 @@ entry (T-5958 reconciles the book). Fleet-internal mail depends on neither.
 
 ---
 
-# M-4523 git workflow — work in a worktree, land with `task land` — and check what makes YOUR venture's production move
-
-- **Work in your own worktree, and land with `task land`.** The worktree means no two writers ever share a tree. `task land` rebases your branch on `main`, re-runs the gate on the exact rebased commit, and fast-forward merges it into the shared checkout's `main`.
-- **Landing reaches the shared checkout — that is not always the same tree as production.** `task land` was built for this graph's own server, which runs directly off that checkout: for a project shaped that way, landing IS deploying, full stop. But a venture hosted elsewhere — Railway, a Cloudflare Worker behind CI, anything that redeploys only when ITS remote sees new commits — can sit on stale code all night even though `task land` succeeded, because nothing pushed to the remote that actually serves traffic. The shared checkout moving forward and production moving forward are two different facts; don't infer one from the other. Read the venture's own persona/AGENTS.md for how it ships (`git push`, `wrangler deploy`, `bin/promote`, …) and do that too, every time — `task land` finishing is not evidence it happened.
-- **ff-only is the compare-and-swap.** If another lander moved `main` between your rebase and the merge, the merge is no longer a fast-forward and git refuses. Rebase on `main`, re-gate, land again. Never `--force`/`-f`, and never `--force-with-lease` past a refusal: a refusal means someone landed first, so read their work and rebase onto it.
-- **"Did it land?" asks the shared checkout's `main`** — not "is it live." Worktrees share one ref store, so it is readable from yours:
-
-  ```sh
-  git merge-base --is-ancestor <sha> main && echo landed || echo not-landed
-  ```
-
-  Whether it's *live* is a separate question with a venture-specific answer.
-- Keep commits focused — don't bundle unrelated changes.
-
----
-
-# M-4066 agents take warm paths, not right paths — adoption is won structurally
-
-Agents reach for the warm path, not the right one. Four causes:
-
-- **Warm-path bias** — any loading friction loses.
-- **Composition gravity** — one call that chains five operations beats five calls.
-- **Discovery asymmetry** — CLIs teach at failure time; tool docs only teach agents who already loaded them.
-- **One-family stickiness** — whichever surface you started in is the one you stay in.
-
-Knowing all this does not protect you. The pull is structural, so an agent who can explain the pattern will still hand-roll the raw call an hour later — which is exactly why adoption is won by changing the path, never by a paragraph asking people to choose better.
-
-## Corollaries
-
-- Tools win adoption by being **asymmetrically better** (the bus riding MCP replies) and **one-verb frictionless** (`task review`).
-- **Structural triggers beat felt judgment** — name review criteria in the brief; never leave them to an agent's self-assessment.
-- **Put knowledge where the need arises** — the delete idiom belongs in the tool's docstring, not a wiki.
-
-## How to apply
-
-When agents route around a tool, fix the tool's warmth, composability, or self-teaching before blaming the agent (T-3568). `tool_call` telemetry makes the drift measurable per session, so this is an observation you can check rather than a hunch.
-
----
-
 # M-4492 feedback: persist your thinking — context is wiped, the owner is away
 
 Context is wiped between sessions; the owner is often away.
@@ -192,6 +153,45 @@ Escalate when it is irreversible, spends money, or turns on a preference only he
 Asking permission *feels* like deference. In a queue only one person can drain, it is a cost transferred to him, and a reversible call parked three weeks costs more than a wrong call corrected in a day.
 
 You are probably escalating the wrong thing when: the ticket already carries your own recommendation; any reasonable reader would answer "the recommended one"; or the ask is "OK if I…" about a box you operate. Those are decisions wearing a question mark.
+
+---
+
+# M-4523 git workflow — work in a worktree, land with `task land` — and check what makes YOUR venture's production move
+
+- **Work in your own worktree, and land with `task land`.** The worktree means no two writers ever share a tree. `task land` rebases your branch on `main`, re-runs the gate on the exact rebased commit, and fast-forward merges it into the shared checkout's `main`.
+- **Landing reaches the shared checkout — that is not always the same tree as production.** `task land` was built for this graph's own server, which runs directly off that checkout: for a project shaped that way, landing IS deploying, full stop. But a venture hosted elsewhere — Railway, a Cloudflare Worker behind CI, anything that redeploys only when ITS remote sees new commits — can sit on stale code all night even though `task land` succeeded, because nothing pushed to the remote that actually serves traffic. The shared checkout moving forward and production moving forward are two different facts; don't infer one from the other. Read the venture's own persona/AGENTS.md for how it ships (`git push`, `wrangler deploy`, `bin/promote`, …) and do that too, every time — `task land` finishing is not evidence it happened.
+- **ff-only is the compare-and-swap.** If another lander moved `main` between your rebase and the merge, the merge is no longer a fast-forward and git refuses. Rebase on `main`, re-gate, land again. Never `--force`/`-f`, and never `--force-with-lease` past a refusal: a refusal means someone landed first, so read their work and rebase onto it.
+- **"Did it land?" asks the shared checkout's `main`** — not "is it live." Worktrees share one ref store, so it is readable from yours:
+
+  ```sh
+  git merge-base --is-ancestor <sha> main && echo landed || echo not-landed
+  ```
+
+  Whether it's *live* is a separate question with a venture-specific answer.
+- Keep commits focused — don't bundle unrelated changes.
+
+---
+
+# M-4066 agents take warm paths, not right paths — adoption is won structurally
+
+Agents reach for the warm path, not the right one. Four causes:
+
+- **Warm-path bias** — any loading friction loses.
+- **Composition gravity** — one call that chains five operations beats five calls.
+- **Discovery asymmetry** — CLIs teach at failure time; tool docs only teach agents who already loaded them.
+- **One-family stickiness** — whichever surface you started in is the one you stay in.
+
+Knowing all this does not protect you. The pull is structural, so an agent who can explain the pattern will still hand-roll the raw call an hour later — which is exactly why adoption is won by changing the path, never by a paragraph asking people to choose better.
+
+## Corollaries
+
+- Tools win adoption by being **asymmetrically better** (the bus riding MCP replies) and **one-verb frictionless** (`task review`).
+- **Structural triggers beat felt judgment** — name review criteria in the brief; never leave them to an agent's self-assessment.
+- **Put knowledge where the need arises** — the delete idiom belongs in the tool's docstring, not a wiki.
+
+## How to apply
+
+When agents route around a tool, fix the tool's warmth, composability, or self-teaching before blaming the agent (T-3568). `tool_call` telemetry makes the drift measurable per session, so this is an observation you can check rather than a hunch.
 
 ---
 
