@@ -102,7 +102,8 @@ export let got = async (id: string) => (await fetched([id]))[0]
 // a dropped read. sessionFor over this narrow row mints exactly when the
 // whole-snapshot find() would have — one session, on true first sight.
 export let sessionRow = async (sid: string) =>
-  (await query([`.session.id=${sid}`], 'session'))[0]
+  (await query([`.session.id=${sid}`], 'session'))
+    .find((r) => String(r.comps.session?.id) == sid)
 
 // The human id of a just-minted entity, read back by its eid for the num
 // the server stamped — /apply is synchronous against the same db, so the
@@ -1901,19 +1902,12 @@ export let noticesFor = (snap: Snapshot, session: string) => {
 // mute (channelEvents has no such rule): a reader assembled from queries must
 // be the SAME reader, and an empty watching set reads as "no instruction"
 // rather than "never looked". It rides the same parallel round anyway.
-let readerRows = async (session: string) => {
-  // The whole-row predicate still decides which row this is: the filter
-  // grammar reads `a,b` as a list and `a..b` as a range, and a session id is
-  // whatever the environment handed us — a near-miss here would serve one
-  // agent another's messages and stamp them read.
-  let sess = (await query([`.session.id=${session}`]))
-    .find((r) => String(r.comps.session?.id) == session)
-  if (!sess) return []
-  let s = sess.comps.session
+let readerSet = async (sess?: Row) => {
+  let s = sess?.comps.session ?? {}
   let actor = String(s.actor_eid ?? '')
   let [kin, claims, subs, repos] = await Promise.all([
     fetched([actor, String(s.persona_eid ?? '')].filter(Boolean)),
-    query([`.claim.session_eid=${sess.eid}`]),
+    sess ? query([`.claim.session_eid=${sess.eid}`]) : [],
     actor ? query([`.subscription.actor_eid=${actor}`]) : [],
     query(['.repo!']),
   ])
@@ -1921,13 +1915,66 @@ let readerRows = async (session: string) => {
     kin.find((r) => r.comps.persona)?.comps.persona.home_eid ?? '',
   )
   return [
-    sess,
+    ...(sess ? [sess] : []),
     ...kin,
     ...claims,
     ...subs,
     ...repos,
     ...(home ? await fetched([home]) : []),
   ]
+}
+
+export let readerRows = async (session?: string) =>
+  readerSet(session ? await sessionRow(session) : undefined)
+
+// The inbox's candidate UNION, assembled from the same bounded reader diet as
+// the bus. Each arm says one way an item can reach the reader; the pure
+// inboxItem/addressed predicate still makes the final decision, so query
+// assembly can only over-fetch, never invent a second attention policy.
+//
+// `all` means the CLI's --all: direct address including archived items, with
+// standing watch/mute instructions deliberately ignored. The normal mode
+// includes watched targets and screens archived rows at the index.
+export let inboxRows = async (
+  session?: string,
+  cwd?: string,
+  filters: string[] = [],
+  mode: 'inbox' | 'all' = 'inbox',
+) => {
+  let base = await readerRows(session)
+  let who = readerFor(base, session, cwd)
+  let screen = [...(mode == 'inbox' ? ['.archived='] : []), ...filters]
+  let watched = mode == 'inbox' ? [...who.watching ?? []] : []
+  let comments = [
+    who.session,
+    ...(who.claims ?? []),
+    ...(who.operator ? [who.actor] : []),
+  ].filter(Boolean) as string[]
+  let knocks = [
+    who.session,
+    ...(who.operator ? [who.actor] : []),
+  ].filter(Boolean) as string[]
+  let boxes = [
+    who.session,
+    ...(who.operator ? [who.scope] : []),
+  ].filter(Boolean) as string[]
+  let addrs = who.operator ? [...(who.addrs ?? [])] : []
+  let ask = (prop: string, vals: string[], extra: string[] = []) =>
+    vals.length
+      ? query([`.${prop}=${vals.join(',')}`, ...extra, ...screen])
+      : Promise.resolve([] as Row[])
+  let directMail = ['.mail.message_id!']
+  let found = await Promise.all([
+    ask('comment.target_eid', comments),
+    ask('knock.to_eid', knocks),
+    ask('mail.target_eid', boxes, directMail),
+    ask('mail.to', addrs, directMail),
+    ask('mail.to_addr', addrs, directMail),
+    ask('comment.target_eid', watched),
+    ask('knock.target_eid', watched),
+    ask('mail.target_eid', watched),
+  ])
+  return { who, rows: uniq(found.flat()) }
 }
 
 // The rows the bus's selector might pick, as index queries: a comment or a
@@ -1978,7 +2025,9 @@ let busRows = async (who: Reader) => {
 // where the snapshot it replaces is 0.6 s and 28 MB — so a verb that never
 // touched the graph still hears what is waiting.
 export let bus = async (session: string, cwd?: string) => {
-  let base = await readerRows(session)
+  let sess = await sessionRow(session)
+  if (!sess) return { lines: [] as string[], ack: [] as Change[] }
+  let base = await readerSet(sess)
   let who = readerFor(base, session, cwd)
   if (!who.session) return { lines: [] as string[], ack: [] as Change[] }
   return notices(uniq([...base, ...await busRows(who)]), who)

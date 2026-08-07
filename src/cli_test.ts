@@ -977,6 +977,73 @@ let busServer = () => fakeGraph(busGraph)
 
 let graphServer = (snap = graph) => fakeGraph(snap)
 
+Deno.test('inbox asks only for its reader and candidate rows', async () => {
+  let actor = 'bbbbbbbb-0000-4000-8000-000000000051'
+  let far = 'bbbbbbbb-0000-4000-8000-000000000052'
+  let watched = 'bbbbbbbb-0000-4000-8000-000000000053'
+  let muted = 'bbbbbbbb-0000-4000-8000-000000000054'
+  let direct = 'bbbbbbbb-0000-4000-8000-000000000055'
+  let archived = 'bbbbbbbb-0000-4000-8000-000000000056'
+  let watch = 'bbbbbbbb-0000-4000-8000-000000000057'
+  let mute = 'bbbbbbbb-0000-4000-8000-000000000058'
+  let item = (
+    eid: string,
+    num: number,
+    target: string,
+    body: string,
+  ): Snapshot['changes'] => [
+    { eid, name: 'entity', comp: { eid, num, created_at: '' } },
+    { eid, name: 'doc', comp: { title: '', body } },
+    { eid, name: 'comment', comp: { target_eid: target } },
+  ]
+  let snap: Snapshot = {
+    changes: [
+      ...sub.changes,
+      { eid: S, name: 'session', comp: { id: 'sub-1', actor_eid: actor } },
+      { eid: actor, name: 'entity', comp: { eid: actor, num: 51 } },
+      { eid: far, name: 'entity', comp: { eid: far, num: 52 } },
+      ...item(watched, 53, far, 'watched words'),
+      ...item(muted, 54, T, 'muted words'),
+      ...item(direct, 55, S, 'direct words'),
+      ...item(archived, 56, S, 'archived words'),
+      { eid: archived, name: 'archived', comp: { at: 'now' } },
+      { eid: watch, name: 'entity', comp: { eid: watch, num: 57 } },
+      {
+        eid: watch,
+        name: 'subscription',
+        comp: { actor_eid: actor, target_eid: far, mode: 'watch' },
+      },
+      { eid: mute, name: 'entity', comp: { eid: mute, num: 58 } },
+      {
+        eid: mute,
+        name: 'subscription',
+        comp: { actor_eid: actor, target_eid: T, mode: 'mute' },
+      },
+    ],
+    deps: [],
+  }
+  let { server, seen, host } = graphServer(snap)
+  try {
+    let out = await new Deno.Command(Deno.execPath(), {
+      args: [
+        'run',
+        '-A',
+        new URL('./cli.ts', import.meta.url).pathname,
+        'inbox',
+        '--json',
+      ],
+      clearEnv: true,
+      env: { TASKS_HOST: host, TASKS_SESSION: 'sub-1' },
+    }).output()
+    assertEquals(out.code, 0, text(out.stderr))
+    let got = JSON.parse(text(out.stdout)) as { doc: { body: string } }[]
+    assertEquals(got.map((r) => r.doc.body), ['watched words', 'direct words'])
+    assertEquals(seen.some((path) => path.startsWith('/snapshot')), false)
+  } finally {
+    await server.shutdown()
+  }
+})
+
 Deno.test('list strips terminal controls from graph text', async () => {
   let poisoned: Snapshot = {
     ...graph,
@@ -1173,7 +1240,7 @@ Deno.test('bare task appends the current claimed task digest', async () => {
       `/query?kind=task&.claim.session_eid=${S}`,
       // then the bus, on its own bounded queries (client.ts bus()) — the
       // reader's rows, then the candidates its selector might pick
-      '/query?.session.id=sub-1',
+      '/query?kind=session&.session.id=sub-1',
       `/query?.claim.session_eid=${S}`,
       '/query?.repo!',
       `/query?.comment.target_eid=${S},${T}&.notified=`,

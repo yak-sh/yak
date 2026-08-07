@@ -34,6 +34,7 @@ import {
   host,
   idOf,
   inboxItem,
+  inboxRows,
   inflate,
   isFile,
   isUnread,
@@ -53,6 +54,7 @@ import {
   patches,
   query,
   readerFor,
+  readerRows,
   replyChanges,
   repoAt,
   type Row,
@@ -82,12 +84,10 @@ import { prune, reap, sweep } from './probes.ts'
 import {
   EDGE_DOOR,
   edgeish,
-  matchQuery,
   noFilter,
   type Pred,
   pred,
   resolution,
-  resolveRefs,
 } from './query.ts'
 import {
   bookOf,
@@ -669,19 +669,25 @@ let mailList = async (args: string[]) => {
       if (!p) throw new Error(`not a mail filter: ${a}\n\n${help(['mail'])}`)
       return p
     })
-  let all = rows(await snapshot())
-  let resolved = resolveRefs(preds, (id) => find(all, id)?.eid)
-  let byEid = new Map(all.map((r) => [r.eid, r.comps]))
+  await checkedRefs(preds)
+  let filters = args.filter((a) => !['--json', '--all', '--sent'].includes(a))
   // The one predicate. "Your items" means the same thing here as in the
   // inbox and the boot digest, so the mail-only slice can never disagree
   // with the door it is a slice of.
-  let mine = inboxItem(readerFor(all, me(), Deno.cwd()))
-  let hits = all
-    .filter((r) => r.comps.mail)
+  let gathered = every
+    ? { rows: await query(filters, 'mail'), who: undefined }
+    : sent
+    ? {
+      rows: await query(['.mail.to!', '.mail.message_id=', ...filters], 'mail'),
+      who: undefined,
+    }
+    : await inboxRows(me(), Deno.cwd(), filters)
+  let mine = gathered.who ? inboxItem(gathered.who) : () => false
+  let hits = gathered.rows
+    .filter((r) => !!r.comps.mail)
     .filter((r) =>
       sent ? !r.comps.mail.message_id : every ? true : unreadMail(r) && mine(r)
     )
-    .filter((r) => matchQuery(r.comps, resolved, (e) => byEid.get(e)))
     .sort((a, b) => mailAt(a).localeCompare(mailAt(b)))
   if (json) return print(jsonText(hits.map((r) => jsonOf(r))))
   if (!hits.length) {
@@ -811,7 +817,7 @@ let mailFiles = async (args: string[]) => {
 // its own loud line, never a silent degrade. Exit 1 on any gap: the
 // disease is sends that report success while mail vanishes (ufos@).
 let mailDoctor = async () => {
-  let book = bookOf(rows(await snapshot()))
+  let book = bookOf(await query(['.email.address!']))
   let rules: Rules | null = null
   try {
     rules = await liveRules()
@@ -902,19 +908,27 @@ let inboxList = async (args: string[]) => {
       if (!p) throw new Error(`not an inbox filter: ${a}\n\n${help(['inbox'])}`)
       return p
     })
-  let all = rows(await snapshot())
-  let resolved = resolveRefs(preds, (id) => find(all, id)?.eid)
-  let byEid = new Map(all.map((r) => [r.eid, r.comps]))
-  let who = readerFor(all, me(), Deno.cwd())
+  await checkedRefs(preds)
+  let filters = args.filter((a) => !['--json', '--all', '--sent'].includes(a))
+  let gathered = sent
+    ? {
+      rows: await query(['.mail.to!', '.mail.message_id=', ...filters], 'mail'),
+      who: undefined,
+    }
+    : await inboxRows(
+      me(),
+      Deno.cwd(),
+      filters,
+      every ? 'all' : 'inbox',
+    )
   // Outbound is the mail door's own test — no message_id means it never
   // arrived from the edge — so the two verbs cannot disagree about "sent".
   let mine = sent
     ? (r: Row) => !!r.comps.mail && !r.comps.mail.message_id
     : every
-    ? addressed(who)
-    : inboxItem(who)
-  let items = all.filter(mine)
-    .filter((r) => matchQuery(r.comps, resolved, (e) => byEid.get(e)))
+    ? addressed(gathered.who!)
+    : inboxItem(gathered.who!)
+  let items = gathered.rows.filter(mine)
     .sort((a, b) =>
       (isUnread(b) ? 1 : 0) - (isUnread(a) ? 1 : 0) ||
       bornAt(a).localeCompare(bornAt(b))
@@ -942,12 +956,11 @@ let inboxShow = async (args: string[]) => {
   let json = args.includes('--json')
   let [id] = args.filter((a) => a != '--json')
   if (!id) throw new Error(help(['inbox', 'show']))
-  let snap = await snapshot()
-  let all = rows(snap)
-  let row = find(all, id)
-  if (!row) throw new Error(`no such entity: ${id}`)
+  let found = await around(id)
+  if (!found) throw new Error(`no such entity: ${id}`)
+  let { deps, all, row } = found
   if (json) print(jsonText(jsonOf(row)))
-  else print(showMd(snap, all, row))
+  else print(showMd({ deps }, all, row))
   if (!row.comps.opened) {
     await send([{ eid: row.eid, name: 'opened', comp: {} }])
   }
@@ -972,15 +985,18 @@ let subscribe = (mode: 'watch' | 'mute') => async (args: string[]) => {
   let gone = args.includes('--gone')
   let [id] = args.filter((a) => a != '--gone')
   if (!id) throw new Error(help([mode]))
-  let all = rows(await snapshot())
-  let row = find(all, id)
+  let row = await got(id)
   if (!row) throw new Error(`no such entity: ${id}`)
+  let all = await readerRows(me())
   let who = readerFor(all, me(), Deno.cwd())
   let actor = who.actor ?? who.scope
   if (!actor) {
     throw new Error(
       `no actor here: ${mode} is per-actor, and this cwd resolves to none`,
     )
+  }
+  if (actor != who.actor) {
+    all.push(...await query([`.subscription.actor_eid=${actor}`]))
   }
   let changes = subChanges(all, actor, row.eid, gone ? null : mode)
   let said = mode == 'watch' ? 'watching' : 'muting'
