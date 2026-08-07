@@ -476,12 +476,14 @@ Deno.test('task claude scopes operator capability and strips its local flag', ()
 
 Deno.test('task codex scopes operator capability and strips its local flag', () => {
   assertEquals(
-    codexLaunch(['--operator', 'resume', '--last'], 42),
+    codexLaunch(['--operator', 'resume', '--last'], 42, '/repo'),
     {
       args: [
         '--dangerously-bypass-approvals-and-sandbox',
         '--dangerously-bypass-hook-trust',
         ...codexHookArgs(),
+        '-c',
+        'model_instructions_file="/repo/.claude/agents/operator.md"',
         'resume',
         '--last',
       ],
@@ -492,11 +494,12 @@ Deno.test('task codex scopes operator capability and strips its local flag', () 
       },
     },
   )
-  assertEquals(codexLaunch(['resume', '--last'], 42).env.TASKS_OPERATOR, '')
-  assertEquals(
-    codexLaunch(['--', '--operator'], 42).args.slice(-2),
-    ['--', '--operator'],
-  )
+  let ordinary = codexLaunch(['resume', '--last'], 42, '/repo')
+  assertEquals(ordinary.env.TASKS_OPERATOR, '')
+  assertEquals(ordinary.args.some((arg) => arg.includes('instructions')), false)
+  let literal = codexLaunch(['--', '--operator'], 42, '/repo')
+  assertEquals(literal.args.slice(-2), ['--', '--operator'])
+  assertEquals(literal.args.some((arg) => arg.includes('instructions')), false)
 })
 
 Deno.test('operator capability follows the explicit launcher marker', () => {

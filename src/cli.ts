@@ -2295,14 +2295,27 @@ let claude = async (args: string[]) => {
 }
 
 // Full access matches the interactive Claude posture; lifecycle hooks bind
-// the provider thread to the graph. Every other Codex argument keeps order.
-export let codexLaunch = (args: string[], pid = Deno.pid) => {
+// the provider thread to the graph. An operator also wears the repo's stable
+// persona door; every other Codex argument keeps order.
+export let codexLaunch = (
+  args: string[],
+  pid = Deno.pid,
+  cwd = Deno.cwd(),
+) => {
   let scope = terminalScope(args, pid)
   return {
     args: [
       '--dangerously-bypass-approvals-and-sandbox',
       '--dangerously-bypass-hook-trust',
       ...codexHookArgs(),
+      ...(scope.env.TASKS_OPERATOR
+        ? [
+          '-c',
+          `model_instructions_file=${
+            JSON.stringify(`${cwd}/.claude/agents/operator.md`)
+          }`,
+        ]
+        : []),
       ...scope.args,
     ],
     env: scope.env,
