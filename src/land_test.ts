@@ -41,7 +41,10 @@ Deno.test('landing reads the session task and its project from the graph', () =>
     gate: 'deno task gate',
     tree: '/worktrees/S-7',
     task,
+    push: false,
   })
+  project.comps.repo.push = 1
+  assertEquals(landing([project, task, session], 'thread').push, true)
   delete project.comps.repo.gate
   assertThrows(
     () => landing([project, task, session], 'thread'),
@@ -222,8 +225,31 @@ let setup = async (): Promise<Repo> => {
       gate: 'the project gate',
       tree,
       task,
+      push: false,
     },
   }
+}
+
+// A bare remote wired as the base branch's real upstream — a genuine push
+// establishes both the tracking config `@{u}` reads AND the remote-tracking
+// ref, which a config-only stub cannot fake. `reachable: false` then breaks
+// the remote's URL (tracking survives; connecting to it does not), the shape
+// an unreachable remote takes for the refusal test below.
+let withUpstream = async (r: Repo, reachable = true) => {
+  let bare = `${r.root}/origin.git`
+  await command(r.root, 'init', '--bare', '--initial-branch=main', bare)
+  await command(r.repo, 'remote', 'add', 'origin', bare)
+  await command(r.repo, 'push', '-q', '-u', 'origin', 'main')
+  if (!reachable) {
+    await command(
+      r.repo,
+      'remote',
+      'set-url',
+      'origin',
+      `${r.root}/missing.git`,
+    )
+  }
+  return bare
 }
 
 let quiet = { write: () => {} }
@@ -356,6 +382,59 @@ Deno.test('a merge refusal without contention does not rerun the gate', async ()
     assertEquals(gates, 1)
     assert(exists(r.spec.tree))
     assertEquals(Deno.readTextFileSync(`${r.repo}/base.txt`), 'being edited\n')
+  } finally {
+    Deno.removeSync(r.root, { recursive: true })
+  }
+})
+
+Deno.test("a landing publishes to the base branch's upstream when the project grants it", async () => {
+  let r = await setup()
+  try {
+    let bare = await withUpstream(r)
+    r.spec.push = true
+    let sha = await land(r.spec, {
+      ...quiet,
+      cwd: r.spec.tree,
+      gate: () => Promise.resolve(0),
+    })
+    assertEquals(await command(bare, 'rev-parse', 'main'), sha)
+  } finally {
+    Deno.removeSync(r.root, { recursive: true })
+  }
+})
+
+Deno.test('landing never publishes when the project withholds push', async () => {
+  let r = await setup()
+  try {
+    let bare = await withUpstream(r)
+    let before = await command(bare, 'rev-parse', 'main')
+    let sha = await land(r.spec, {
+      ...quiet,
+      cwd: r.spec.tree,
+      gate: () => Promise.resolve(0),
+    })
+    assertEquals(await command(r.repo, 'rev-parse', 'main'), sha)
+    assertEquals(await command(bare, 'rev-parse', 'main'), before)
+  } finally {
+    Deno.removeSync(r.root, { recursive: true })
+  }
+})
+
+Deno.test('a publish refusal lands anyway — publishing is best-effort, never a failed land', async () => {
+  let r = await setup()
+  try {
+    await withUpstream(r, false)
+    r.spec.push = true
+    let warned = ''
+    let sha = await land(r.spec, {
+      cwd: r.spec.tree,
+      gate: () => Promise.resolve(0),
+      write: (text, error) => {
+        if (error && text.includes('publish')) warned = text
+      },
+    })
+    assertEquals(await command(r.repo, 'rev-parse', 'main'), sha)
+    assert(warned.includes('landed locally, publish separately'), warned)
   } finally {
     Deno.removeSync(r.root, { recursive: true })
   }

@@ -4,14 +4,23 @@
 // never control flow.
 //
 // Landing means the shared checkout — the tree the server RUNS from. Pushing
-// to origin publishes bytes and changes nothing anyone is executing, so it
-// cannot be what makes work take effect; nothing else in the fleet brings that
-// tree forward, which is why this verb must. Every step is local: worktrees
-// share one ref store, so the base branch is a ref to rebase onto and
+// to origin publishes bytes and changes nothing anyone is executing on ITS
+// OWN, so it cannot be the thing that makes work take effect; the local
+// fast-forward is, and nothing else in the fleet brings that tree forward,
+// which is why this verb must. Every landing step is local: worktrees share
+// one ref store, so the base branch is a ref to rebase onto and
 // fast-forward, and no network is involved. ff-only is still the
 // compare-and-swap that serializes concurrent landers — a lander whose base
 // moved is no longer a fast-forward, git refuses, and ancestry (never stderr)
 // says whether that was contention worth retesting for.
+//
+// Some ventures' production DOES run off a push (a host that deploys on a
+// GitHub webhook, not off this checkout) — for those, `repo.push` grants
+// this verb one more, best-effort step after a successful merge: publish the
+// base branch to its configured upstream. A refusal is a warning, never a
+// failed land, because the merge already took effect locally; publishing
+// only stops it from sitting unpublished until some unrelated event (a
+// persona sync, a later push) happens to carry it the rest of the way.
 //
 // The harness's worktree isolation inspects the command string an AGENT types
 // and refuses one aimed at the shared checkout; a subprocess spawned here is
@@ -27,6 +36,7 @@ export type Landing = {
   gate: string
   tree: string
   task: Row
+  push: boolean
 }
 
 // A landed commit completes the task, releases the session's leases, and
@@ -100,6 +110,7 @@ export let landing = (
   let repo = String(project.comps.repo.path ?? '')
   let base = String(project.comps.repo.base_branch ?? '')
   let gate = String(project.comps.repo.gate ?? '').trim()
+  let push = !!project.comps.repo.push
   if (!repo || !base) {
     throw new Error(
       `${idOf(project)}: repo.path and repo.base_branch are required`,
@@ -113,7 +124,7 @@ export let landing = (
   }
   let tree = String(session.comps.session?.cwd ?? '')
   if (!tree) throw new Error('land: this session has no worktree')
-  return { repo, base, gate, tree, task }
+  return { repo, base, gate, tree, task, push }
 }
 
 type Result = { code: number; out: string; err: string }
@@ -173,6 +184,34 @@ export let land = async (spec: Landing, ops: LandOps = {}) => {
     let r = await git(at, args, false)
     if (r.code) throw new Error(message(label, r))
     return r.out.trim()
+  }
+  // Best-effort publish of the base branch to its configured upstream, only
+  // where the project grants it (repo.push). Never throws: a refusal, or no
+  // upstream at all, is landed-but-unpublished, not a failed land — the
+  // merge above already made the change take effect in the tree that runs.
+  let publish = async () => {
+    if (!spec.push) return
+    let up = await git(spec.repo, ['rev-parse', '--abbrev-ref', '@{u}'], false)
+    if (up.code) {
+      write(`land: ${spec.base} has no upstream — landed, not published`, true)
+      return
+    }
+    let ref = up.out.trim()
+    let cut = ref.indexOf('/')
+    let remote = ref.slice(0, cut)
+    let branch = ref.slice(cut + 1)
+    let sent = await git(
+      spec.repo,
+      ['push', '--quiet', remote, `HEAD:${branch}`],
+      false,
+    )
+    if (sent.code) {
+      write(
+        `${message(`land: publish to ${remote}/${branch}`, sent)} — landed ` +
+          'locally, publish separately',
+        true,
+      )
+    }
   }
   let clean = async () => {
     let status = await need(
@@ -274,6 +313,7 @@ export let land = async (spec: Landing, ops: LandOps = {}) => {
     let merged = await git(spec.repo, ['merge', '--ff-only', branch])
     if (!merged.code) {
       await ops.record?.(sha)
+      await publish()
       // The tree and its branch SURVIVE the landing. The caller is standing
       // here and its closing bookkeeping comes after us — releasing the
       // claim, filing what it found, deleting its scratch, writing its wrap —
