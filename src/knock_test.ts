@@ -135,6 +135,38 @@ Deno.test('an operator is a door: external claude hears it, its child does not',
   assertMatch(String(drow(knock(task, project))?.via), /^spawned S-\d+$/)
 })
 
+// The operator loop outranks recency: a delegated worktree agent is its OWN
+// live claude process wearing the same actor, reified LATER, so newest-first
+// alone would hand it the wake meant for the operator (the T-15070 hijack).
+Deno.test('an actor knock prefers the operator over a newer worktree agent', async () => {
+  let opProc = await fakeClaude()
+  let agentProc = await fakeClaude()
+  // The operator: reified FIRST (lower num), flagged operator.
+  let op = uid()
+  apply(db, [{
+    eid: op,
+    name: 'session',
+    comp: { id: 'op-op', actor_eid: project, pid: opProc.pid, operator: true },
+  }])
+  // A worktree agent: a SEPARATE reachable claude wearing the same actor,
+  // reified LATER (higher num), not an operator. Recency would pick it.
+  apply(db, [{
+    eid: uid(),
+    name: 'session',
+    comp: { id: 'agent-op', actor_eid: project, pid: agentProc.pid },
+  }])
+  let k = knock(task, project)
+  let { num } = db.prepare('select num from entity where eid = ?').get(op) as {
+    num: number
+  }
+  assertEquals(drow(k)?.via, `cast S-${num}`)
+  assertEquals(erow(k), undefined)
+  opProc.kill('SIGKILL')
+  agentProc.kill('SIGKILL')
+  await opProc.status
+  await agentProc.status
+})
+
 // A settled managed run is not a dead end: input to a session is a
 // comment aimed at it, and that is the door the knock takes.
 Deno.test('a settled managed session: the knock rides its input door', () => {

@@ -31,13 +31,18 @@ let wordsFor = (target: string): string => {
 
 // Who is awake for an identity: a session wearing that actor_eid (or the
 // session itself) with a reachable content door (door.ts — liveness, never
-// origin). Newest first, because that is the order the doors close in: a
-// /clear leaves the old row behind and the higher num is the live one.
+// origin). The OPERATOR loop wins over mere recency: project-wide attention —
+// a wake, a knock to an actor — belongs to the interactive operator, not to
+// whatever delegated worktree agent happens to wear the same actor and reified
+// LATER (its own live claude process, so also reachable). This is the same
+// `operator` gate project mail already applies (channel.ts injects). Recency
+// only breaks ties WITHIN a tier: a /clear leaves the old row behind, so the
+// higher num is the live conversation for one loop.
 let awake = (to: string): { eid: string; num: number } | undefined =>
   (db.prepare(
     `select s.eid, e.num from session s join entity e on e.eid = s.eid
      where s.eid = ? or s.actor_eid = ?
-     order by e.num desc`,
+     order by (s.operator is 1) desc, e.num desc`,
   ).all(to, to) as { eid: string; num: number }[])
     .find((s) => reachable(s.eid))
 
