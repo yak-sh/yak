@@ -1,4 +1,4 @@
-import { type Ent } from '../../types.ts'
+import { type Ent, idOf } from '../../types.ts'
 import { inboxItem, isUnread, readerAt, type Row } from '../../client.ts'
 import { ent, mutate, rows } from '../../live.ts'
 import { block, el, Stamp } from '../ui.tsx'
@@ -33,13 +33,15 @@ let Count = el('div', 'Inbox_Count')
 let doorOf = (r: Row) =>
   r.comps.mail ? 'mail' : r.comps.knock ? 'knock' : 'comment'
 
-// One line of it, whatever it is: a letter's subject, a comment's or a
-// knock's first written line. The title wins where there is one, because
-// that is the summary its author already wrote.
-let lineOf = (r: Row) =>
-  String(r.comps.doc?.title ?? '').trim() ||
-  String(r.comps.doc?.body ?? '').split('\n').find((l) => l.trim()) ||
-  '(no words)'
+// One line of it, whatever it is: a letter's subject, a comment's first
+// written line, or the entity a knock asks the reader to see. The title
+// wins where there is one, because that is the summary its author wrote.
+let lineOf = (r: Row, e: Ent) =>
+  r.comps.knock
+    ? `${idOf(e)} — ${e.doc?.title || e.kind}`
+    : String(r.comps.doc?.title ?? '').trim() ||
+      String(r.comps.doc?.body ?? '').split('\n').find((l) => l.trim()) ||
+      '(no words)'
 
 let at = (r: Row) => String(r.comps.created?.at ?? '')
 
@@ -52,7 +54,9 @@ let order = (a: Row, b: Row) =>
 // contract applied to the whole row.
 let Line = ({ r }: { r: Row }) => {
   let e: Ent = ent(r.eid)
-  let go = clickProps(e)
+  // A knock is the envelope; its target is what the reader came to see.
+  let subject = r.comps.knock ? ent(String(r.comps.knock.target_eid)) : e
+  let go = clickProps(subject)
   let fresh = isUnread(r)
   return (
     <Item mod={fresh && 'unread'}>
@@ -67,9 +71,9 @@ let Line = ({ r }: { r: Row }) => {
           if (fresh) mutate({ eid: r.eid, name: 'opened', comp: {} })
           go.onClick(ev)
         }}
-        onContextMenu={menuAt(e)}
+        onContextMenu={menuAt(subject)}
       >
-        {lineOf(r)}
+        {lineOf(r, subject)}
       </Title>
       <Stamp at={at(r)} />
       <Id e={e} />
