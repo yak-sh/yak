@@ -1,8 +1,21 @@
 // TUI-only renderers keep the shared scalar language in their visible labels.
 import { assertEquals } from '@std/assert'
+import { h, render } from 'preact'
 import { type Ent } from '../types.ts'
 import { config } from '../live.ts'
-import { fit, key, overrides, spot, spots, trail } from './App.tsx'
+import {
+  fit,
+  help,
+  key,
+  overrides,
+  quit,
+  spot,
+  spots,
+  TKeys,
+  trail,
+} from './App.tsx'
+import { TElement } from './dom.ts'
+import { pane } from './paint.ts'
 
 // deno-lint-ignore no-explicit-any
 let find = (node: any, cls: string): any => {
@@ -79,4 +92,36 @@ Deno.test('a cursor the content shrank past comes back to the last line', () => 
   trail.value = []
   fit(3) // nothing to fit at the board
   assertEquals(spot(), -1)
+})
+
+Deno.test('question mark shows keybindings until they are dismissed', () => {
+  help.value = false
+  quit.value = false
+
+  key('?')
+  assertEquals(help.value, true)
+  key('q')
+  assertEquals({ help: help.value, quit: quit.value }, {
+    help: false,
+    quit: false,
+  })
+
+  key('?')
+  key('\x1b')
+  assertEquals(help.value, false)
+})
+
+Deno.test('the TUI keybinding card teaches its navigation keys', () => {
+  let root = new TElement('root')
+  let target = root as unknown as Parameters<typeof render>[1]
+  render(h('div', null, h(TKeys, null), h('footer', null, 'status')), target)
+  let lines = pane(root).lines.map((line) => line.map((s) => s.text).join(''))
+    .filter(Boolean)
+  assertEquals(lines.slice(0, 4), [
+    'Keybindings',
+    '? show or close keybindings',
+    'j / k browse',
+    'l / Enter enter',
+  ])
+  render(null, target)
 })

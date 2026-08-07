@@ -6,6 +6,7 @@
 // painted as lines instead of CSS.
 import { signal } from '@preact/signals'
 import { useBoardSub } from '../components/subscriptions.ts'
+import { tuiKeys } from '../keybindings.ts'
 import { formatProp, propAt } from '../props.ts'
 import { type Ent, idOf, verdictName } from '../types.ts'
 import {
@@ -47,6 +48,7 @@ export let sel = signal({ col: 0, row: 0 })
 export let quit = signal(false)
 let msg = signal('')
 let buf = signal('') // the : command line
+export let help = signal(false)
 let priority = propAt('task', 'priority')!
 
 // The first board is the one we browse — v0 has exactly one.
@@ -366,6 +368,10 @@ let exec = (line: string) => {
 // line, which owns every key until Enter or Escape. Ctrl-d backs out of
 // the current entity from ANY mode; everything else is per-mode.
 export let key = (k: string) => {
+  if (help.value) {
+    if (k == '?' || k == '\x1b' || k == 'q') help.value = false
+    return
+  }
   if (k == '\x04') {
     if (mode.value == 'insert') endEdit() // commit, then out — no data loss
     return back()
@@ -391,7 +397,8 @@ export let key = (k: string) => {
     msg.value = ''
     buf.value = ''
     mode.value = 'command'
-  } else if (k == 'j') vert(1)
+  } else if (k == '?') help.value = true
+  else if (k == 'j') vert(1)
   else if (k == 'k') vert(-1)
   else if (k == 'l') enter()
   else if (k == 'i') startEdit()
@@ -404,6 +411,19 @@ export let key = (k: string) => {
   else if (k == 'q' || k == '\x03') quit.value = true
   else if (k == '\x1b') msg.value = ''
 }
+
+export let TKeys = () => (
+  <div class='TKeys'>
+    <div class='TKeys_Title'>Keybindings</div>
+    {tuiKeys.map((binding) => (
+      <div class='TKeys_Row' key={binding.keys.join('-')}>
+        <span class='TKeys_Key'>{binding.keys.join(' / ')}</span>
+        <span>{binding.about}</span>
+      </div>
+    ))}
+    <div class='TKeys_Hint'>press ? or Esc to close</div>
+  </div>
+)
 
 let TStatus = () => {
   // the verb greens once it names a command — the web bar does the same
@@ -438,7 +458,7 @@ let TStatus = () => {
             )}
             <span class='TStatus_Hint'>
               j/k browse · l in · h out · ⇥ view · i edit · y yank · : cmd · q
-              quit
+              quit · ? keys
             </span>
           </>
         )}
@@ -473,16 +493,20 @@ export let App = () => {
   return (
     <div class='TApp'>
       <div class='TTitle'>{['tasks', ...crumbs].join(' · ')}</div>
-      {here ? <Entity eid={here} view={views.value[here]} /> : p && (
-        <>
-          <Entity eid={p} view='Board' />
-          {s && (
-            <div class='TDetail'>
-              <Entity eid={s} view='Full' />
-            </div>
-          )}
-        </>
-      )}
+      {help.value
+        ? <TKeys />
+        : here
+        ? <Entity eid={here} view={views.value[here]} />
+        : p && (
+          <>
+            <Entity eid={p} view='Board' />
+            {s && (
+              <div class='TDetail'>
+                <Entity eid={s} view='Full' />
+              </div>
+            )}
+          </>
+        )}
       <TStatus />
     </div>
   )

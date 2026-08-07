@@ -35,6 +35,9 @@ let sheet: Record<string, Style> = {
   TStatus_Verb: { fg: '#a7c080' },
   TStatus_Msg: { fg: '#9da9a0' },
   TStatus_Hint: { fg: '#7a8478' },
+  TKeys_Title: { bold: true, gap: true },
+  TKeys_Key: { fg: '#dbbc7f' },
+  TKeys_Hint: { fg: '#7a8478', dim: true },
 
   // shared views, styled by the same class names the web uses. The web's
   // glyph pips speak character here: ring open, half-moon wip — a full

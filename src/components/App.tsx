@@ -23,6 +23,7 @@ import { Search, searchOpen } from './Search.tsx'
 import { Status } from './Status.tsx'
 import { Entity } from './Entity.tsx'
 import { tips } from './overlay.tsx'
+import { Keybindings } from './Keybindings.tsx'
 
 tips() // mount the one delegated [data-tip] tooltip (idempotent)
 
@@ -132,6 +133,7 @@ export let App = () => {
         <Menu />
         <Peek />
         <Search open={goto} />
+        <Keybindings />
         <Status />
       </Frame>
     )
@@ -153,6 +155,7 @@ export let App = () => {
         <Menu />
         <Peek />
         <Search open={goto} />
+        <Keybindings />
         <Status />
       </Frame>
     )
@@ -233,6 +236,7 @@ export let App = () => {
       <Peek />
       <Run />
       <Search open={view == 'Canvas' ? (h) => spawnHit(e.eid, h) : goto} />
+      <Keybindings />
       <Status />
     </Frame>
   )
