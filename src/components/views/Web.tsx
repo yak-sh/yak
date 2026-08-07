@@ -3,8 +3,12 @@ import { config } from '../../live.ts'
 import { block, el } from '../ui.tsx'
 
 let Frame = el('iframe', 'Web')
-let Wait = block('div', 'WebWait', { Url: 'span', Go: 'button' })
-let { Url, Go } = Wait
+let Wait = block('div', 'WebWait', {
+  Url: 'span',
+  Error: 'span',
+  Go: 'button',
+})
+let { Url, Error, Go } = Wait
 
 // A web entity renders its FROZEN archive, never the live site (which
 // can rot, track, or refuse framing). Provenance picks the sandbox: a
@@ -23,7 +27,9 @@ export let Web = ({ e }: { e: Ent }) =>
     )
     : (
       <Wait>
-        <Url>freezing {e.web!.url} …</Url>
+        {e.error?.message
+          ? <Error>{e.error.message}</Error>
+          : <Url>freezing {e.web!.url} …</Url>}
         <Go
           type='button'
           onClick={() =>

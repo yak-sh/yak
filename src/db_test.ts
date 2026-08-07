@@ -16,6 +16,7 @@ let {
   liveDb,
   mendCalls,
   mendMail,
+  migrateErrors,
   open,
   retireMemoryType,
   search,
@@ -1464,6 +1465,36 @@ Deno.test('backfill: mail.read_at seeds opened, idempotently', () => {
   d.exec('alter table mail drop column read_at')
   backfillOpened(d)
   assertEquals(openedAt(), 'MOVED')
+})
+
+Deno.test('migrateErrors: carries every diagnosis, verifies, then contracts', () => {
+  let d = fresh()
+  let role = uid(), session = uid()
+  apply(d, [
+    { eid: role, name: 'role', comp: { state: 'held' } },
+    { eid: session, name: 'session', comp: { id: uid() } },
+  ])
+  d.exec('alter table role add column error text')
+  d.exec('alter table session add column error text')
+  let finished = '2026-08-07T12:00:00Z'
+  d.prepare('update role set error = ? where eid = ?').run('bad role', role)
+  d.prepare(
+    `update session set status = 'failed', finished_at = ?, error = ?
+     where eid = ?`,
+  ).run(finished, 'bad session', session)
+
+  migrateErrors(d)
+  assertEquals(
+    d.prepare('select at, message from error where eid = ?').get(role),
+    { at: null, message: 'bad role' },
+  )
+  assertEquals(
+    d.prepare('select at, message from error where eid = ?').get(session),
+    { at: finished, message: 'bad session' },
+  )
+  assertEquals(hasCol(d, 'role', 'error'), false)
+  assertEquals(hasCol(d, 'session', 'error'), false)
+  migrateErrors(d) // a contracted graph is already done
 })
 
 Deno.test('open backfills every pre-spawn session, once', () => {

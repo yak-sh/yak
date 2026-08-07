@@ -256,9 +256,8 @@ defineActions([
     match: has('role'),
     acts: (e) => [{
       label: e.role!.state == 'running' ? 'stop role' : 'start role',
-      // Start also fences the crash-loop breaker (retry_at) and clears a held
-      // reason, matching `task role start` — otherwise reviving a fixed role
-      // would re-trip on the stale burst (roles.ts breaker).
+      // Start also fences the crash-loop breaker (retry_at). Reconciliation
+      // clears the shared error only after the role starts successfully.
       run: () =>
         mutate({
           eid: e.eid,
@@ -266,7 +265,6 @@ defineActions([
           comp: e.role!.state == 'running' ? { state: 'stopped' } : {
             state: 'running',
             retry_at: new Date().toISOString(),
-            error: null,
           },
         }),
     }],

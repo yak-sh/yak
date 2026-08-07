@@ -63,7 +63,7 @@ export let turnStates = ['idle', 'busy'] as const
 // managed owns a resumable Tasks session. `held` is the crash-loop breaker's
 // verdict — the reconciler stopped relaunching a burning role and waits for an
 // owner `task role start`. Distinct from `stopped` (an owner's off switch) so
-// the two read apart and `held` keeps its `error` reason across every tick.
+// the two read apart and `held` keeps its error component across every tick.
 export let roleStates = ['running', 'stopped', 'held'] as const
 export let roleSurfaces = ['native', 'managed'] as const
 
@@ -457,16 +457,14 @@ export let comps: Record<string, Record<string, PropType>> = {
   // the effects stay inert on a dead `to`. Wire-writable (unlike delivered/
   // error): naming the recipient IS the ask. NOT in kindOrder — a facet.
   deliver: { to: { eid: '', death: 'keep' } },
-  // Delivery lifecycle (D-14945): the tri-state any deliverable settles into,
-  // the same register as the read-state above — `delivered` reached its
-  // destination, `error` an attempt failed, neither = pending. One aspect,
-  // one component, worn by knock/wake/mail/stop_request in place of the
-  // per-type receipt columns each baked onto itself (M-14942). Both are
+  // Outcome and health (D-14945): `delivered` says an entity reached its
+  // destination; `error` says an effect failed. Deliverables are tri-state —
+  // delivered, error, or neither (pending) — while role/session/freeze wear
+  // the same error facet, making `.error` the fleet health query. Both are
   // server-owned and EFFECT-written: like conflict/hook, the wire may write
   // neither column (their whole shape is in `stamped` below), so comps carries
-  // only the empty presence — the delivery effects (deliver.ts) stamp the row
-  // directly and broadcast it, never crossing apply(). NOT in kindOrder: a
-  // facet a deliverable wears, never its identity.
+  // only the empty presence. NOT in kindOrder: these are facets, never an
+  // entity's identity.
   delivered: {}, // reached its destination — {at, via} in stamped
   error: {}, //     an attempt failed — {at, message} in stamped
   // A decision was TAKEN about this entity — a task, a memory, a doc,
@@ -538,15 +536,13 @@ export let stamped: Record<string, Record<string, PropType>> = {
   web: { frozen_at: 'time' }, // the freeze finished (freeze.ts)
   client: { ip: 'text' },
   claim: { claimed_at: 'time' },
-  // Delivery lifecycle (D-14945, deliver.ts): the shared outcome components
-  // knock/wake/mail/stop_request settle into, in place of the per-type
-  // receipt columns they each baked on (M-14942). `delivered.at` = reached
+  // Shared outcome and health (D-14945, deliver.ts): `delivered.at` = reached
   // its destination, `via` = how it went out (cast S-9 / spawned S-9 /
   // local / a mail's Message-ID) — descriptive text, not an eid. `error.at`
-  // = an attempt failed, `message` = why. Both server-owned and
+  // = an effect failed, `message` = why. Both are server-owned and
   // effect-written (out of comps, so the wire writes neither), the same
-  // register as frozen_at/claimed_at. A deliverable is tri-state: delivered,
-  // error, or neither (pending) — nothing else to stamp on the type itself.
+  // register as frozen_at/claimed_at. Deliverables use both as their outcome;
+  // roles, sessions, and freezes use error as their common health facet.
   delivered: { at: 'time', via: 'text' },
   error: { at: 'time', message: 'text' },
   // The resolved envelope, denormalized onto the mail row as DATA (mail.ts):
@@ -609,7 +605,6 @@ export let stamped: Record<string, Record<string, PropType>> = {
     applied_hash: 'text',
     applied_at: 'time',
     stopped_at: 'time',
-    error: 'text',
   },
   // The managed-session lifecycle (sessions.ts owns every write; the
   // wire-writable launch spec lives in comps.spawn, with session aliases
@@ -643,7 +638,6 @@ export let stamped: Record<string, Record<string, PropType>> = {
     stop_reason: 'text',
     final_text: 'body',
     usage_json: 'text',
-    error: 'text',
   },
 }
 
@@ -1044,7 +1038,6 @@ export type Session = {
   stop_reason?: string | null
   final_text?: string | null
   usage_json?: string | null
-  error?: string | null // diagnostics: malformed frames, spawn failures
 }
 
 // A launch request on a session, or its reusable hint on a task.
@@ -1067,7 +1060,6 @@ export type Role = {
   applied_at?: string | null
   stopped_at?: string | null
   retry_at?: string | null
-  error?: string | null
 }
 
 // Is anybody home? The client's half of door.ts `present()`, from
@@ -1142,10 +1134,10 @@ export type Mail = {
   in_reply_to?: string | null
 }
 
-// The delivery lifecycle facets (D-14945): `delivered` reached its
+// The shared outcome and health facets (D-14945): `delivered` reached its
 // destination (`via` says how — cast S-9 / spawned S-9 / local / a
-// Message-ID), `error` an attempt failed (`message` says why). Server-owned,
-// effect-written; any deliverable wears them, tri-state with pending.
+// Message-ID), `error` says an effect failed (`message` says why).
+// Server-owned and effect-written; `.error` is the fleet health query.
 export type Delivered = { eid: string; at?: string | null; via?: string | null }
 export type Failure = {
   eid: string

@@ -64,7 +64,7 @@ export let Role = ({ e }: { e: Ent }) => {
         <Config e={e} comp='spawn' prop='effort' name='effort' />
         <Config e={e} comp='spawn' prop='persona_eid' name='persona' />
       </Grid>
-      {r.error && <Fault>{r.error}</Fault>}
+      {e.error?.message && <Fault>{e.error.message}</Fault>}
       <Entity eid={e.eid} view='Body' />
       <Entity eid={e.eid} view='Dependencies' />
       <Entity eid={e.eid} view='Relate' />

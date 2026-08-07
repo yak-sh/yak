@@ -154,8 +154,7 @@ let schema = `
     applied_hash text,
     applied_at   text,
     stopped_at   text,
-    retry_at     text,
-    error        text
+    retry_at     text
   );
   create table if not exists board (
     eid text primary key references entity(eid)
@@ -749,6 +748,47 @@ export let backfillSpawn = (db: DatabaseSync) =>
        select eid, provider, model, effort, persona_eid from session`,
   )
 
+// D-14945 phase 4: role/session diagnostics become the shared error facet.
+// Add every component first, verify the legacy messages all arrived, and only
+// then contract the old columns. A mismatch rolls the transaction back with
+// both sources intact rather than teaching two health vocabularies.
+export let migrateErrors = (db: DatabaseSync) => {
+  let tables = ['role', 'session'].filter((table) => hasCol(db, table, 'error'))
+  if (!tables.length) return
+  let at: Record<string, string> = {
+    role: 'null',
+    session: `case when status in
+      ('completed', 'failed', 'interrupted', 'lost') then finished_at end`,
+  }
+  db.exec('begin')
+  try {
+    for (let table of tables) {
+      db.exec(
+        `insert into error (eid, at, message)
+           select eid, ${at[table]}, error from ${table}
+           where error is not null
+         on conflict(eid) do update set
+           at = coalesce(excluded.at, error.at),
+           message = excluded.message`,
+      )
+    }
+    for (let table of tables) {
+      let missed = db.prepare(
+        `select 1 from ${table} source
+         left join error target on target.eid = source.eid
+         where source.error is not null
+           and target.message is not source.error limit 1`,
+      ).get()
+      if (missed) throw new Error(`${table} error migration did not verify`)
+    }
+    for (let table of tables) db.exec(`alter table ${table} drop column error`)
+    db.exec('commit')
+  } catch (e) {
+    db.exec('rollback')
+    throw e
+  }
+}
+
 // D-14945 phase 1: the per-type delivery receipts become two shared
 // server-owned components. knock (acted_at/delivery/error), wake
 // (acted_at/error), mail (acted_at/error) and stop_request (acted_at) carried
@@ -1157,7 +1197,6 @@ export let open = (path = file) => {
       'stop_reason text',
       'final_text text',
       'usage_json text',
-      'error text',
     ]
   ) addCol('session', ddl.split(' ')[0], ddl)
   backfillSpawn(db)
@@ -1199,6 +1238,7 @@ export let open = (path = file) => {
   // The per-type delivery receipts become the shared delivered/error
   // components, and the per-type recipient columns the shared deliver.to.
   // Both before mendMail: a mail rebuild must see the trimmed shape.
+  migrateErrors(db)
   migrateDelivery(db)
   migrateDeliver(db)
   mendMail(db)

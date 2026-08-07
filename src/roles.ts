@@ -9,6 +9,7 @@
 import { createHash } from 'node:crypto'
 import { trouble } from './adapters.ts'
 import { apply, cursorOf, db, record, snapshot } from './db.ts'
+import { errorChange, healthChange } from './deliver.ts'
 import { dispatch, trace } from './effects.ts'
 import { noticesFor, rows } from './client.ts'
 import { materialize } from './persona.ts'
@@ -493,18 +494,37 @@ let stamp = (eid: string, patch: DbRow, cast: Cast) => {
     | DbRow
     | undefined
   if (!prior) return
+  let failure = Object.hasOwn(patch, 'error') ? patch.error : undefined
+  let role = Object.fromEntries(
+    Object.entries(patch).filter(([key]) => key != 'error'),
+  )
   let moved = Object.fromEntries(
-    Object.entries(patch).filter(([key, value]) => prior[key] !== value),
+    Object.entries(role).filter(([key, value]) => prior[key] !== value),
   )
   let cols = Object.keys(moved)
-  if (!cols.length) return
-  db.prepare(
-    `update role set ${cols.map((c) => `"${c}" = ?`).join(', ')}
-     where eid = ?`,
-  ).run(...cols.map((c) => moved[c] as string | number | null), eid)
-  let change = { eid, name: 'role', comp: moved }
-  record(db, [change])
-  cast([change])
+  let changes: Change[] = []
+  db.exec('begin')
+  try {
+    if (cols.length) {
+      db.prepare(
+        `update role set ${cols.map((c) => `"${c}" = ?`).join(', ')}
+         where eid = ?`,
+      ).run(...cols.map((c) => moved[c] as string | number | null), eid)
+      changes.push({ eid, name: 'role', comp: moved })
+    }
+    if (failure !== undefined) {
+      let change = failure
+        ? errorChange(eid, String(failure))
+        : healthChange(eid)
+      if (change) changes.push(change)
+    }
+    if (changes.length) record(db, changes)
+    db.exec('commit')
+  } catch (e) {
+    db.exec('rollback')
+    throw e
+  }
+  if (changes.length) cast(changes)
 }
 
 let stampSession = (eid: string, patch: DbRow, cast: Cast) => {
@@ -528,7 +548,9 @@ let stampSession = (eid: string, patch: DbRow, cast: Cast) => {
 
 let latest = (eid: string) =>
   db.prepare(`
-    select s.* from session s join entity e on e.eid = s.eid
+    select s.*, x.message as error_message from session s
+    join entity e on e.eid = s.eid
+    left join error x on x.eid = s.eid
     where s.role_eid = ? order by e.num desc limit 1
   `).get(eid) as DbRow | undefined
 
@@ -739,7 +761,7 @@ let reconcileManaged = async (
   if (session.status == 'failed') {
     stamp(
       c.eid,
-      { error: String(session.error ?? 'managed launch failed') },
+      { error: String(session.error_message ?? 'managed launch failed') },
       cast,
     )
     return

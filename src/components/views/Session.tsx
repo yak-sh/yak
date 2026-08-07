@@ -513,7 +513,7 @@ export let Session = ({ e }: { e: Ent }) => {
             dangerouslySetInnerHTML={{ __html: md(s.final_text, repo) }}
           />
         )}
-        {s.error && <Fault mod='error'>{s.error}</Fault>}
+        {e.error?.message && <Fault mod='error'>{e.error.message}</Fault>}
         {s.stop_reason && <Fault>{s.stop_reason}</Fault>}
         <Log>
           {thread.map((x) =>

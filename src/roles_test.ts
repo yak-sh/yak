@@ -15,7 +15,7 @@ Deno.mkdirSync(`${tasksHome}/.deno/bin`, { recursive: true })
 Deno.writeTextFileSync(`${tasksHome}/.deno/bin/task`, '')
 Deno.chmodSync(`${tasksHome}/.deno/bin/task`, 0o755)
 
-let { apply, db } = await import('./db.ts')
+let { apply, db, journalOf } = await import('./db.ts')
 let {
   nativeProviderArgs,
   nativeTmuxArgs,
@@ -115,6 +115,10 @@ let seed = (
 }
 
 let count = (name: string) => commands.filter((args) => args[0] == name).length
+let failure = (eid: string) =>
+  (db.prepare('select message from error where eid = ?').get(eid) as
+    | { message: string }
+    | undefined)?.message
 
 // A role run as the graph keeps it, minted straight into the db (no effects,
 // so nothing spawns): started `life` ms before it ended, `endAgo` ms before
@@ -278,10 +282,7 @@ Deno.test('invalid native drift closes the stale door and stamps the cause', asy
   }])
   await rolesSweep(cast, deps)
   assert(!sessions.has(roleTmux(role)))
-  let row = db.prepare('select error from role where eid = ?').get(role) as {
-    error: string
-  }
-  assertMatch(row.error, /native roles require claude or codex/)
+  assertMatch(failure(role) ?? '', /native roles require claude or codex/)
 })
 
 Deno.test('an early-dead native provider is captured, not marked applied', async () => {
@@ -313,13 +314,12 @@ Deno.test('an early-dead native provider is captured, not marked applied', async
   await rolesSweep(cast, dying)
   assert(!sessions.has(roleTmux(role)))
   assertEquals(
-    db.prepare(
-      'select applied_hash, error from role where eid = ?',
-    ).get(role),
-    {
-      applied_hash: null,
-      error: 'Error: Pane is dead (status 1)\ncodex: bad role config',
-    },
+    db.prepare('select applied_hash from role where eid = ?').get(role),
+    { applied_hash: null },
+  )
+  assertEquals(
+    failure(role),
+    'Error: Pane is dead (status 1)\ncodex: bad role config',
   )
 })
 
@@ -572,11 +572,15 @@ Deno.test('a crash-looping native role is held after N deaths, stops spawning, a
   let { role } = seed('native')
   for (let i = 0; i < 5; i++) launch(role, (i + 1) * 5_000)
   await rolesSweep(cast, live)
-  let held = db.prepare('select state, error from role where eid = ?').get(
-    role,
-  ) as { state: string; error: string }
+  let held = db.prepare('select state from role where eid = ?').get(role) as {
+    state: string
+  }
   assertEquals(held.state, 'held')
-  assertMatch(held.error, /crash-loop/)
+  assertMatch(failure(role) ?? '', /crash-loop/)
+  let trip = journalOf(db, role).find((entry) =>
+    entry.changes.some((c) => c.name == 'role' && c.comp?.state == 'held')
+  )
+  assert(trip?.changes.some((c) => c.name == 'error'))
   assertEquals(spawns(role), 0) // never spawned into the burn
   // Bounded: a held role never comes back on its own.
   await rolesSweep(cast, live)
@@ -585,12 +589,13 @@ Deno.test('a crash-looping native role is held after N deaths, stops spawning, a
   apply(db, [{
     eid: role,
     name: 'role',
-    comp: { state: 'running', retry_at: new Date().toISOString(), error: null },
+    comp: { state: 'running', retry_at: new Date().toISOString() },
   }])
   await rolesSweep(cast, live)
   assertEquals(db.prepare('select state from role where eid = ?').get(role), {
     state: 'running',
   })
+  assertEquals(failure(role), undefined)
   assertEquals(spawns(role), 1) // the fenced retry launches once
 })
 

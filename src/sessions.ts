@@ -33,7 +33,7 @@
 import { basename, dirname } from 'node:path'
 import { type Adapter, adapters, type Event, type Summary } from './adapters.ts'
 import { apply, db, human, record, snapshot } from './db.ts'
-import { delivered } from './deliver.ts'
+import { delivered, errorChange, healthChange } from './deliver.ts'
 import { present, reachable } from './door.ts'
 import { dispatch, trace } from './effects.ts'
 import { legacyWorktreesDir, worktreesDir } from './ground.ts'
@@ -173,8 +173,14 @@ let stamp = (
   cast: Cast,
   table = 'session',
 ) => {
-  let cols = Object.keys(patch)
-  if (!cols.length) return
+  let failure = table == 'session' && Object.hasOwn(patch, 'error')
+    ? (patch as Row).error
+    : undefined
+  let body = Object.fromEntries(
+    Object.entries(patch).filter(([col]) => col != 'error'),
+  )
+  let cols = Object.keys(body)
+  if (!cols.length && failure === undefined) return
   // The settle broadcast hangs off the ONE WRITER: lifecycle columns
   // never cross apply(), so the effects dispatcher cannot see this
   // transition — the writer that stamps an ending is the only observer
@@ -183,26 +189,45 @@ let stamp = (
   let was = db.prepare(`select * from ${table} where eid = ?`).get(eid) as
     | Row
     | undefined
-  let ending = table == 'session' && SETTLED.includes(String(patch.status))
+  if (!was) return
+  let ending = table == 'session' && SETTLED.includes(String(body.status))
   let moved = Object.fromEntries(
     cols
-      .filter((c) => c != 'latest_seq' && (patch as Row)[c] != was?.[c])
-      .map((c) => [c, (patch as Row)[c]]),
+      .filter((c) => c != 'latest_seq' && body[c] != was[c])
+      .map((c) => [c, body[c]]),
   )
-  let vals = cols.map((c) => (patch as Row)[c] as string | number | null)
-  db.prepare(
-    `update ${table} set ${cols.map((c) => `${c} = ?`).join(', ')}
-     where eid = ?`,
-  ).run(...vals, eid)
+  let changes: Change[] = []
+  db.exec('begin')
+  try {
+    if (cols.length) {
+      let vals = cols.map((c) => body[c] as string | number | null)
+      db.prepare(
+        `update ${table} set ${cols.map((c) => `${c} = ?`).join(', ')}
+         where eid = ?`,
+      ).run(...vals, eid)
+    }
+    if (Object.keys(moved).length) {
+      changes.push({ eid, name: table, comp: moved })
+    }
+    if (failure !== undefined) {
+      let change = failure
+        ? errorChange(eid, String(failure))
+        : healthChange(eid)
+      if (change) changes.push(change)
+    }
+    if (changes.length) record(db, changes)
+    db.exec('commit')
+  } catch (e) {
+    db.exec('rollback')
+    throw e
+  }
   // A busy agent's tail advances latest_seq every poll tick; a cast per
   // tick makes every client re-render the world for a counter nobody
   // shows, and a long run freezes every open canvas (T-7063). Only a
   // column whose value actually moved is worth telling everyone.
-  if (was && Object.keys(moved).length) {
-    publish(eid, moved, cast, table)
-  }
-  if (ending && was?.status != patch.status) {
-    settled(eid, String(patch.status), cast)
+  if (changes.length) cast(changes)
+  if (ending && was.status != body.status) {
+    settled(eid, String(body.status), cast)
   }
 }
 
@@ -237,7 +262,12 @@ let SETTLED = ['completed', 'failed', 'interrupted', 'lost']
 // the task for its trail, one on the spawning session so its caller hears
 // directly. created.via is that server-stamped instrument; created.by is
 // the actor it spoke for. One body means the two doors cannot disagree.
-let report = (eid: string, status: string, row: Row): Change[] => {
+let report = (
+  eid: string,
+  status: string,
+  row: Row,
+  failure?: string,
+): Change[] => {
   let task = String(row.requested_task_eid ?? '')
   let spawner = db.prepare(`
     select s.eid from created c join session s on s.eid = c.via
@@ -259,7 +289,7 @@ let report = (eid: string, status: string, row: Row): Change[] => {
     `S-${num} ${status}${
       row.exit_code == null ? '' : ` · exit ${row.exit_code}`
     }`,
-    ...(row.error ? [`error: ${String(row.error).slice(0, 240)}`] : []),
+    ...(failure ? [`error: ${failure.slice(0, 240)}`] : []),
     ...(gist ? [gist] : []),
   ].join('\n')
   return [...targets].flatMap((target) => {
@@ -300,7 +330,9 @@ let settled = (eid: string, status: string, cast: Cast) => {
       String(row.final_text ?? '') || undefined,
     )
     : []
-  changes.push(...report(eid, status, row))
+  changes.push(
+    ...report(eid, status, row, String(sess?.comps.error?.message ?? '')),
+  )
   if (changes.length) {
     try {
       let t = trace()

@@ -14,11 +14,16 @@
 // a deliverable that never settles. `via` is descriptive text (`cast S-9`,
 // `spawned S-9`, `local`, a mail's Message-ID), not an eid — how it went
 // out, said the way the ladder said it. SERVER-ONLY (imports db).
-import { db } from './db.ts'
+import { db, record } from './db.ts'
 import { type Change } from './types.ts'
 
 type Cast = (changes: Change[]) => void
 let now = () => new Date().toISOString()
+let publish = (changes: Change[], cast: Cast) => {
+  if (!changes.length) return
+  record(db, changes)
+  cast(changes)
+}
 
 // Settle a deliverable as DELIVERED. Insert-or-replace on the eid: an
 // effect records one outcome, and a boot-sweep re-drive overwrites the same
@@ -32,16 +37,52 @@ export let delivered = (eid: string, via: string, cast: Cast) => {
   cast([{ eid, name: 'delivered', comp: { eid, at, via: via || null } }])
 }
 
-// Settle a deliverable as FAILED, with the reason. Same insert-or-replace
-// rule as delivered — the two are mutually exclusive outcomes, so a later
-// success can also clear a prior error by writing delivered instead.
-export let errored = (eid: string, message: string, cast: Cast) => {
-  let at = now()
+// Stamp the shared failure facet. It is broader than delivery: roles,
+// sessions, and freezes use this same writer, which is what makes `.error`
+// the fleet health query. An unchanged failure stays put so a reconcile tick
+// cannot turn one incident into an endless stream of new timestamps.
+export let errored = (
+  eid: string,
+  message: string,
+  cast: Cast,
+  at = now(),
+) => {
+  let change = errorChange(eid, message, at)
+  if (change) publish([change], cast)
+}
+
+// The data half is exported for writers that atomically move their own
+// lifecycle beside the shared facet. They own the surrounding transaction,
+// journal batch, and cast batch; this owns the error table's one shape.
+export let errorChange = (
+  eid: string,
+  message: string,
+  at = now(),
+): Change | undefined => {
+  let prior = db.prepare('select at, message from error where eid = ?').get(
+    eid,
+  ) as
+    | { at: string | null; message: string | null }
+    | undefined
+  if (prior?.message == message && prior.at) return
   db.prepare(
     `insert into error (eid, at, message) values (?, ?, ?)
      on conflict(eid) do update set at = excluded.at, message = excluded.message`,
   ).run(eid, at, message)
-  cast([{ eid, name: 'error', comp: { eid, at, message } }])
+  return { eid, name: 'error', comp: { eid, at, message } }
+}
+
+// Absence is healthy. Delete the facet through the same journal + cast door
+// as a failure stamp so catch-up clients and live clients shed it together.
+export let healthy = (eid: string, cast: Cast) => {
+  let change = healthChange(eid)
+  if (change) publish([change], cast)
+}
+
+export let healthChange = (eid: string): Change | undefined => {
+  if (!db.prepare('select 1 from error where eid = ?').get(eid)) return
+  db.prepare('delete from error where eid = ?').run(eid)
+  return { eid, name: 'error', comp: null }
 }
 
 // Has this deliverable already settled? Either outcome present means the

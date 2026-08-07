@@ -1159,7 +1159,9 @@ let roleLine = (all: Row[], r: Row) => {
     live ? `${idOf(live)} ${live.comps.session?.turn ?? ''}`.trim() : '—',
   ]
   return cells.join('  ').trimEnd() +
-    (role.error ? `\n${' '.repeat(9)}error: ${role.error}` : '')
+    (r.comps.error?.message
+      ? `\n${' '.repeat(9)}error: ${r.comps.error.message}`
+      : '')
 }
 
 let roleState = async (sub: string, got: Got) => {
@@ -1178,11 +1180,10 @@ let roleState = async (sub: string, got: Got) => {
   }
   let moved = targets.filter((r) => r.comps.role.state != want)
   // Start is the owner's "try again now": it also fences the crash-loop
-  // breaker (retry_at) so deaths before this instant no longer count, and
-  // clears any held reason. Without the fence, restarting a fixed role would
-  // re-trip on the stale burst still inside the breaker's window (roles.ts).
+  // breaker (retry_at) so deaths before this instant no longer count. The
+  // reconciler clears the shared error only after the retry succeeds.
   let comp = want == 'running'
-    ? { state: want, retry_at: new Date().toISOString(), error: null }
+    ? { state: want, retry_at: new Date().toISOString() }
     : { state: want }
   await send(moved.map((r) => ({ eid: r.eid, name: 'role', comp })))
   for (let r of targets) {
@@ -1212,6 +1213,7 @@ let role = async (got: Got) => {
         id: idOf(r),
         title: r.comps.doc?.title ?? null,
         ...r.comps.role,
+        error: r.comps.error?.message ?? null,
         spawn: r.comps.spawn ?? null,
         session: roleSession(all, r.eid)?.comps.session?.id ?? null,
       })),

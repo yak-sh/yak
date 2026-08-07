@@ -16,8 +16,10 @@ import { codexTranscript } from './transcripts.ts'
 // recognize is just log, not summary.
 export type Event = Record<string, unknown>
 
-// A patch of session summary columns — what an event teaches us.
-export type Summary = Partial<Session>
+// A patch of session summary facts — what an event teaches us. Error is a
+// shared component now, but adapters still speak the one failure intent that
+// sessions.ts splits into that facet at its writer.
+export type Summary = Partial<Session> & { error?: string | null }
 
 // The job an adapter turns into a command line. A spawn always names a
 // model (validated against the allowlist before launch); a RESUME may

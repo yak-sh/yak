@@ -7,6 +7,7 @@
 import { parseHTML } from 'linkedom'
 import { type Change } from './types.ts'
 import { db, record } from './db.ts'
+import { errored, healthy } from './deliver.ts'
 
 // Freeze a pasted URL: monolith fetches the page and inlines every asset
 // into ONE self-contained, script-free, network-isolated HTML file. It
@@ -15,6 +16,16 @@ import { db, record } from './db.ts'
 // wire allowlist doesn't carry it, so clients can't fake an archive), the
 // page <title> becomes the entity's doc, and everyone hears over the ws.
 let frozen = `${Deno.env.get('HOME')}/.tasks/frozen`
+
+type Archive = (url: string, out: string) => Promise<{
+  success: boolean
+  stderr: Uint8Array
+}>
+
+let archive: Archive = (url, out) =>
+  new Deno.Command('monolith', {
+    args: ['-j', '-f', '-I', '-q', '-t', '30', '-o', out, url],
+  }).output()
 
 // Self-containment is enforced HERE, not at render: monolith inlines what
 // it can reach, but anything it couldn't (404'd assets, preload hints,
@@ -77,6 +88,7 @@ let land = (
   title: string | undefined,
   cast: (c: Change[]) => void,
 ) => {
+  healthy(eid, cast)
   let changes: Change[] = [
     { eid, name: 'web', comp: { frozen_at: new Date().toISOString() } },
   ]
@@ -100,25 +112,31 @@ let webRow = (eid: string) =>
     | { url: string; frozen_at: string | null }
     | undefined
 
-export let freeze = async (eid: string, cast: (c: Change[]) => void) => {
+export let freeze = async (
+  eid: string,
+  cast: (c: Change[]) => void,
+  save: Archive = archive,
+) => {
   let row = webRow(eid)
   if (!row) return new Response('no such web entity', { status: 404 })
-  Deno.mkdirSync(frozen, { recursive: true })
-  let out = `${frozen}/${eid}.html`
-  let cmd = await new Deno.Command('monolith', {
-    args: ['-j', '-f', '-I', '-q', '-t', '30', '-o', out, row.url],
-  }).output()
-  if (!cmd.success) {
-    console.warn(
-      'freeze failed:',
-      row.url,
-      new TextDecoder().decode(cmd.stderr),
-    )
+  try {
+    Deno.mkdirSync(frozen, { recursive: true })
+    let out = `${frozen}/${eid}.html`
+    let cmd = await save(row.url, out)
+    if (!cmd.success) {
+      throw new Error(
+        new TextDecoder().decode(cmd.stderr).trim() || 'monolith failed',
+      )
+    }
+    let { html, title } = scrub(await Deno.readTextFile(out))
+    await Deno.writeTextFile(out, html)
+    return land(eid, title, cast)
+  } catch (e) {
+    let message = String(e).slice(0, 2000)
+    console.warn('freeze failed:', row.url, message)
+    errored(eid, message, cast)
     return new Response('freeze failed', { status: 502 })
   }
-  let { html, title } = scrub(await Deno.readTextFile(out))
-  await Deno.writeTextFile(out, html)
-  return land(eid, title, cast)
 }
 
 // The upload door: same store, same stamp, but NO scrub — the page

@@ -40,6 +40,12 @@ let row = (
 let hit = (q: string, task: Record<string, unknown> = {}) =>
   matchQuery(row(task), parseQuery(q))
 
+Deno.test('the shared error facet is a fleet-wide health predicate', () => {
+  let failed = row({}, { error: { message: 'boom' } })
+  assertEquals(matchQuery(failed, parseQuery('.error!')), true)
+  assertEquals(matchQuery(row({}), parseQuery('.error!')), false)
+})
+
 let cases: [string, string, Record<string, unknown>, boolean][] = [
   ['equality', '.status=open', {}, true],
   ['equality miss', '.status=done', {}, false],

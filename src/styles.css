@@ -2282,6 +2282,10 @@ html {
 .WebWait_Url {
   overflow-wrap: anywhere;
 }
+.WebWait_Error {
+  color: var(--red);
+  overflow-wrap: anywhere;
+}
 .WebWait_Go {
   font: inherit;
   color: var(--muted);

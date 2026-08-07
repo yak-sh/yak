@@ -23,7 +23,7 @@ Deno.env.set('WORKTREES_DIR', `${tmp}/worktrees`)
 Deno.env.set('POLL_MS', '10') // tests wait on facts, never on the clock
 Deno.env.set('STOP_GRACE_MS', '1000')
 
-let { apply, db, delta, snapshot } = await import('./db.ts')
+let { apply, db, delta, journalOf, snapshot } = await import('./db.ts')
 let { noticesFor } = await import('./client.ts')
 let {
   childPath,
@@ -47,6 +47,10 @@ let row = (eid: string) =>
   db.prepare('select * from session where eid = ?').get(eid) as
     | Record<string, string | number | null>
     | undefined
+let failure = (eid: string) =>
+  (db.prepare('select message from error where eid = ?').get(eid) as
+    | { message: string }
+    | undefined)?.message
 let spawnRow = (eid: string) =>
   db.prepare('select * from spawn where eid = ?').get(eid) as
     | Record<string, string | number | null>
@@ -255,7 +259,13 @@ Deno.test('a spawn the graph cannot honor is a failed session, not a 400', async
     let s = row(eid)!
     assertEquals(s.status, 'failed', JSON.stringify(extra))
     assertEquals(s.origin, 'managed')
-    assertMatch(String(s.error), says)
+    assertMatch(failure(eid) ?? '', says)
+    let failed = journalOf(db, eid).find((entry) =>
+      entry.changes.some((c) =>
+        c.name == 'session' && c.comp?.status == 'failed'
+      )
+    )
+    assert(failed?.changes.some((c) => c.name == 'error'))
   }
 })
 
@@ -314,7 +324,7 @@ Deno.test('a fake session runs end to end', async () => {
     s.final_text,
   )
   assertEquals(JSON.parse(String(s.usage_json)).output_tokens, 34)
-  assertEquals(s.error, null)
+  assertEquals(failure(eid), undefined)
   assertMatch(String(s.branch), /^session\/S-\d+$/)
   assertMatch(String(s.base_revision), /^[0-9a-f]{40}$/)
   assert(Deno.statSync(String(s.cwd)).isDirectory) // it ran in its worktree
@@ -494,7 +504,7 @@ Deno.test('a launch that never starts is stillborn, and says what refused', asyn
   assertEquals(s.exit_code, null)
   // Not 'the wrapper died before reporting': no wrapper ever ran to die.
   assertMatch(String(s.stop_reason), /^stillborn/)
-  assertMatch(String(s.error), /transient scope unit/)
+  assertMatch(failure(eid) ?? '', /transient scope unit/)
 })
 
 // The settle broadcast: whoever holds the task hears the ending on the
@@ -815,9 +825,9 @@ Deno.test('tail diagnoses never override a successful ending', async () => {
   assertEquals(s.status, 'completed')
   assertEquals(s.final_text, 'first') // the late result never lands
   assertEquals(s.latest_seq, 5) // every line counted, none skipped
-  assertMatch(String(s.error), /line 2: malformed/)
-  assertMatch(String(s.error), /line 4: truncated \(1100028 bytes/)
-  assertMatch(String(s.error), /line 5: output after the terminal event/)
+  assertMatch(failure(eid) ?? '', /line 2: malformed/)
+  assertMatch(failure(eid) ?? '', /line 4: truncated \(1100028 bytes/)
+  assertMatch(failure(eid) ?? '', /line 5: output after the terminal event/)
 })
 
 Deno.test('an oversized line is truncated and the tail reaches exit 0', async () => {
@@ -837,7 +847,7 @@ Deno.test('an oversized line is truncated and the tail reaches exit 0', async ()
   assertEquals(s.exit_code, 0)
   assertEquals(s.final_text, 'done after truncation')
   assertEquals(s.latest_seq, 4)
-  assertMatch(String(s.error), /line 2: truncated \(1100028 bytes/)
+  assertMatch(failure(eid) ?? '', /line 2: truncated \(1100028 bytes/)
 
   let entries = logs(eid, new URLSearchParams()).entries
   assertEquals(entries.map((e) => e.seq), [1, 2, 3, 4])
@@ -861,7 +871,7 @@ Deno.test('boot: a resumed log re-opens at its input marker', async () => {
   assertEquals(s.status, 'completed')
   assertEquals(s.final_text, 'second') // the SECOND run's ending lands
   assertEquals(s.latest_seq, 4)
-  assertEquals(s.error, null) // resume's shape is not a violation
+  assertEquals(failure(eid), undefined) // resume's shape is not a violation
 })
 
 Deno.test('boot: a live child is adopted, its file followed from where it is', async () => {
@@ -977,7 +987,7 @@ Deno.test('boot: a session whose provider is gone fails loudly', () => {
   let eid = plant([INIT], 'oracle')
   recover(cast)
   assertEquals(row(eid)?.status, 'failed')
-  assertMatch(String(row(eid)?.error), /no adapter/)
+  assertMatch(failure(eid) ?? '', /no adapter/)
 })
 
 Deno.test('a comment resumes nothing it should not', async () => {
@@ -1090,7 +1100,7 @@ Deno.test('a comment steers a live managed session without settling it', async (
       `the steered continuation to settle (steer delivered=${
         told(steer[1].eid)
       }, status=${row(eid)?.status}, exit=${row(eid)?.exit_code}, error=${
-        row(eid)?.error
+        failure(eid)
       }, stop=${row(eid)?.stop_reason}, seq=${row(eid)?.latest_seq})`,
   )
   let events = Deno.readTextFileSync(log(eid)).split('\n').filter(Boolean)
