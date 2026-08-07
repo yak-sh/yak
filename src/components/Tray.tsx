@@ -3,6 +3,7 @@ import { signal } from '@preact/signals'
 import {
   cache,
   clientId,
+  mode,
   mutate,
   pinned,
   sessionRows,
@@ -26,12 +27,25 @@ import { Entity } from './Entity.tsx'
 // per-client scratch canvas you drag cards onto and out of.
 
 // Collapsed vs expanded, remembered across visits (default collapsed).
-let expanded = signal(
+export let trayOpen = signal(
   globalThis.localStorage?.getItem('tasks-tray') == 'open',
 )
 let toggle = (v: boolean) => {
-  expanded.value = v
-  localStorage.setItem('tasks-tray', v ? 'open' : 'shut')
+  trayOpen.value = v
+  globalThis.localStorage?.setItem('tasks-tray', v ? 'open' : 'shut')
+}
+
+export let trayKey = (
+  key: string,
+  repeat = false,
+  typing = false,
+  modified = false,
+) => {
+  if (mode.value != 'normal' || repeat || typing || modified || key != 't') {
+    return false
+  }
+  toggle(!trayOpen.value)
+  return true
 }
 
 // The mounted tray, for drop hit-testing. A titlebar drag asks overTray
@@ -135,8 +149,16 @@ export let Tray = () => {
   let root = useRef<HTMLDivElement>(null)
   useEffect(() => {
     mounted = root.current
+    let key = (e: KeyboardEvent) => {
+      let typing = e.target instanceof HTMLElement &&
+        e.target.matches('input, textarea, select, [contenteditable]')
+      let modified = e.metaKey || e.ctrlKey || e.altKey
+      if (trayKey(e.key, e.repeat, typing, modified)) e.preventDefault()
+    }
+    addEventListener('keydown', key)
     return () => {
       mounted = null
+      removeEventListener('keydown', key)
     }
   }, [])
 
@@ -148,8 +170,8 @@ export let Tray = () => {
     <Frame elRef={root} onDragOver={over} onDrop={dropIn}>
       <Strip
         type='button'
-        aria-label={expanded.value ? 'close tray' : 'open tray'}
-        onClick={() => toggle(!expanded.value)}
+        aria-label={trayOpen.value ? 'close tray' : 'open tray'}
+        onClick={() => toggle(!trayOpen.value)}
       >
         {ls.map(([eid, s]) => <Dot key={eid} status={standing(s)} />)}
         {ps.map((p) => (
@@ -158,9 +180,9 @@ export let Tray = () => {
             name={icons[p.view] ?? 'file-text'}
           />
         ))}
-        <Chevron>{expanded.value ? '⌄' : '⌃'}</Chevron>
+        <Chevron>{trayOpen.value ? '⌄' : '⌃'}</Chevron>
       </Strip>
-      {expanded.value && (
+      {trayOpen.value && (
         <Panel>
           {ls.length > 0 && (
             <Group>

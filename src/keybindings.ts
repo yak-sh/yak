@@ -7,6 +7,7 @@ export let webKeys: Keybinding[] = [
   { keys: ['?'], about: 'show or close keybindings' },
   { keys: ['/'], about: 'search the graph' },
   { keys: [':'], about: 'open the command line' },
+  { keys: ['t'], about: 'open or close the tray' },
   { keys: ['i'], about: 'enter insert mode' },
   { keys: ['Esc'], about: 'return to normal mode' },
   { keys: ['Space'], about: 'frame a canvas card' },
