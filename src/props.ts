@@ -37,6 +37,27 @@ export let propAt = (comp: string, prop: string): Prop | undefined => {
   }
 }
 
+// The declared type of a prop whose owning component isn't named — a
+// shared reference routed to comp '' (route()'s any-of), or a bare filter.
+// Every component sharing a name declares it identically, so the first hit
+// is authoritative. The vocabulary by name, in place of the _eid suffix.
+export let bareType = (prop: string): PropType | undefined => {
+  for (let c of new Set([...Object.keys(comps), ...Object.keys(stamped)])) {
+    let t = types(c)[prop]
+    if (t) return t
+  }
+}
+
+// THE reference detector: is (comp, prop) an entity reference, and to what
+// kind? '' target = any entity; undefined = not a reference. A named comp
+// reads its own declaration; comp '' searches the vocabulary. The _eid
+// suffix is a naming convention — this reads the PropType, so `created.by`
+// and a bare `to` are references as surely as `project_eid` is.
+export let refOf = (comp: string, prop: string): string | undefined => {
+  let t = comp ? types(comp)[prop] : bareType(prop)
+  return typeof t == 'object' && 'eid' in t ? t.eid : undefined
+}
+
 // The columns a component declares as BODIES — the long markdown that no
 // board, list or dot view reads, and the one slice a payload may leave
 // behind (subs.ts `bodyless`). Derived from the vocabulary, so a new body

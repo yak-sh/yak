@@ -47,7 +47,7 @@
 // dotted first segment that names a COMPONENT is the explicit spelling
 // (`.pin.x=12`); any other first segment is a PATH — `.assignee.title~=j`
 // dereferences the eid column and predicates the target's prop. Depth 1.
-import { parseProp, type Prop, propAt } from './props.ts'
+import { bareType, parseProp, type Prop, propAt, refOf } from './props.ts'
 import { comps, kindOrder, stamped } from './types.ts'
 import { type Span, span } from './time.ts'
 
@@ -244,18 +244,14 @@ export let resolution = (preds: Pred[], kind?: string) => {
 }
 
 // Shared-reference sugar has no one owning component, but its type is still
-// known: every routed column ends in _eid. All other aims come straight from
-// the vocabulary, including a path's far side.
-let typed = (comp: string, prop: string): Prop | undefined =>
-  propAt(comp, prop) ??
-    (!comp && prop.endsWith('_eid')
-      ? {
-        comp,
-        prop,
-        name: prop,
-        type: { eid: '', death: 'keep' },
-      }
-      : undefined)
+// known: the vocabulary is searched by name. All other aims come straight
+// from the vocabulary, including a path's far side.
+let typed = (comp: string, prop: string): Prop | undefined => {
+  let p = propAt(comp, prop)
+  if (p) return p
+  let type = !comp ? bareType(prop) : undefined
+  return type ? { comp, prop, name: prop, type } : undefined
+}
 
 let kind = (p: Prop) =>
   typeof p.type == 'string'
@@ -320,8 +316,10 @@ export let pred = (token: string): Pred | null => {
       p = { comp: a, prop: b, op: OPS[op], value }
     } else {
       let r = route(a)
-      if (!r.prop.endsWith('_eid')) {
-        throw new Error(`.${a} is not a reference — paths walk _eid columns`)
+      if (!isRef(r.comp, r.prop)) {
+        throw new Error(
+          `.${a} is not a reference — paths walk reference columns`,
+        )
       }
       p = { ...r, op: OPS[op], value, at: route(b) }
     }
@@ -489,15 +487,10 @@ let test = (v: unknown, p: Pred, now?: number): boolean => {
 // equality-shaped ops resolve; each part of an any-of list resolves
 // alone; a miss stays as typed and matches nothing, because a board
 // mid-render is no place to throw.
-// Is (comp, prop) an entity reference? The _eid suffix is the fast path
-// (and the only signal for the any-of comp ''), else the vocabulary's
-// PropType — so a differently-named ref like created.by still resolves its
-// sugar value ('.created.by=jeff').
-let isRef = (comp: string, prop: string) => {
-  if (prop.endsWith('_eid')) return true
-  let t = comps[comp]?.[prop] ?? stamped[comp]?.[prop]
-  return typeof t == 'object' && 'eid' in t
-}
+// Is (comp, prop) an entity reference? Its PropType decides — so a
+// differently-named ref like created.by resolves its sugar value
+// ('.created.by=jeff') exactly as `project_eid` does.
+let isRef = (comp: string, prop: string) => refOf(comp, prop) != null
 export let resolveRefs = (
   preds: Pred[],
   lookup: (id: string) => string | undefined,
@@ -708,7 +701,12 @@ let bares = (): Cand[] => {
   let out: Cand[] = []
   for (let [p, cs] of owners) {
     if (cs.length == 1) out.push({ text: `.${p}`, kind: mark(cs[0], p) })
-    if (p.endsWith('_eid') && !owners.has(p.slice(0, -4))) {
+    // The suffix-strip short form (.assignee for assignee_eid) needs both a
+    // strippable suffix and a reference type — the latter read from the
+    // vocabulary, never assumed from the name.
+    if (
+      p.endsWith('_eid') && refOf('', p) != null && !owners.has(p.slice(0, -4))
+    ) {
       out.push({
         text: `.${p.slice(0, -4)}`,
         kind: cs.length == 1 ? `${cs[0]} · ref` : 'ref',
@@ -737,7 +735,7 @@ let aim = (a: string, b?: string): { comp: string; prop: string } | null => {
     if (!b) return route(a)
     if (routes[a]) return routes[a].includes(b) ? { comp: a, prop: b } : null
     let r = route(a)
-    return r.prop.endsWith('_eid') ? route(b) : null
+    return isRef(r.comp, r.prop) ? route(b) : null
   } catch {
     return null
   }
@@ -807,7 +805,8 @@ export let complete = (
           .map((p) => ({ text: `.${a}.${p}`, kind: mark(a, p) })),
       ]
     }
-    if (!tryRoute(a)?.prop.endsWith('_eid')) return []
+    let r = tryRoute(a)
+    if (!r || !isRef(r.comp, r.prop)) return []
     return [
       ...pre && tryRoute(pre) ? opsFor(`.${a}.${pre}`) : [],
       ...bares()

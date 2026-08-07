@@ -21,7 +21,7 @@ import {
   verdictName,
 } from './types.ts'
 import { idOf } from './types.ts'
-import { formatProp, parseProp, propAt } from './props.ts'
+import { formatProp, parseProp, propAt, refOf } from './props.ts'
 import { local } from './time.ts'
 import { nearest, offer } from './near.ts'
 import { hot, matchQuery, type Pred, route } from './query.ts'
@@ -670,12 +670,6 @@ export let around = async (id: string) => {
 
 export let deref = (all: Row[], v: string, where = '', comp = '') =>
   !v || UUID.test(v) ? v : need(all, v, where, comp).eid
-// The reference's declared target ({eid: 'project'}), '' where any entity
-// will do — what narrows a suggestion to the kind the column takes.
-let targetOf = (comp: string, prop: string) => {
-  let t = propAt(comp, prop)?.type
-  return typeof t == 'object' && 'eid' in t ? t.eid : ''
-}
 
 // A reference in a FILTER that resolved to nothing. query.ts resolveRefs
 // is forgiving on purpose — a saved board may name an entity that is not
@@ -697,14 +691,9 @@ let filterRefs = (preds: Pred[]) => {
   for (let p of preds) {
     let comp = p.at?.comp ?? p.comp
     let prop = p.at?.prop ?? p.prop
-    let t = propAt(comp, prop)?.type
     // route()'s any-of: comp '' means a ref name several comps share, so
-    // the _eid suffix is the only signal and no kind narrows the search.
-    let target = typeof t == 'object' && 'eid' in t
-      ? t.eid
-      : !comp && prop.endsWith('_eid')
-      ? ''
-      : undefined
+    // refOf reads the type from whichever comp declares it.
+    let target = refOf(comp, prop)
     if (target == null) continue
     if ((p.op != '' && p.op != '!') || /\.\./.test(p.value)) continue
     for (let v of p.value.split(',')) if (v) out.push({ v, prop, target })
@@ -732,11 +721,15 @@ export let checkedRefs = async (preds: Pred[]) => {
   if (refs.every(({ v }) => find(hits, v))) return
   checkRefs(rows(await snapshot()), preds)
 }
-let derefProp = (all: Row[], name: string, prop: string, value: unknown) =>
-  prop.endsWith('_eid') &&
-    (typeof value == 'string' || typeof value == 'number')
-    ? deref(all, String(value), ` (.${prop})`, targetOf(name, prop))
+let derefProp = (all: Row[], name: string, prop: string, value: unknown) => {
+  // The reference's declared target ('' = any entity) doubles as the "this
+  // is a reference" signal — undefined where the column is a plain scalar.
+  let target = refOf(name, prop)
+  return target != null &&
+      (typeof value == 'string' || typeof value == 'number')
+    ? deref(all, String(value), ` (.${prop})`, target)
     : value
+}
 export let derefParams = (all: Row[], ps: Param[]) =>
   ps.map((p) => {
     let declared = propAt(p.comp, p.prop)!
@@ -764,7 +757,7 @@ export let needsDeref = (changes: Change[]) =>
   changes.some((c) =>
     named(c.eid) ||
     Object.entries(c.comp ?? {}).some(([prop, value]) =>
-      prop.endsWith('_eid') && named(value)
+      refOf(c.name, prop) != null && named(value)
     )
   )
 
