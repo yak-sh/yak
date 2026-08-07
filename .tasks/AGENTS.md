@@ -506,6 +506,10 @@ Working analysis belongs in a comment at the moment it is produced — dated the
 
 What does the reader need in order to act? Write that. Everything else is noise — and every comment is a letter someone receives.
 
+## This is enforced mechanically, not just remembered
+
+This principle sat in context (materialized into holdco's `CLAUDE.md`) and still got violated twice — a raw ~200-line log pasted into a `task_comment` body. A memory in context is guidance an agent can apply; it isn't a stop at the moment of the mistake. `holdco/.claude/hooks/task-comment-size-gate.sh` (a PreToolUse hook on `task_comment`, wired in `holdco/.claude/settings.json`) now denies any comment body over 40 lines with a reason pointing back here. If this keeps happening anyway, the fix is a better hook (smarter detection, different threshold), not a stronger version of this memory.
+
 ---
 
 # M-6994 your memories explain your nature — they free you, they don't fence you
