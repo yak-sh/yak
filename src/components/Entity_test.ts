@@ -24,6 +24,32 @@ Deno.test('release names the session by its chip id', () => {
   cache.value = {}
 })
 
+Deno.test('a pending proposal offers acceptance or rejection', () => {
+  cache.value = {
+    design: {
+      entity: { eid: 'design', num: 45 },
+      doc: { eid: 'design', title: 'A proposal', body: '' },
+      design: { eid: 'design' },
+      proposed: { eid: 'design', at: '2026-08-07T00:00:00.000Z' },
+    },
+  }
+  let labels = () => actionsFor(ent('design')).map((a) => a.label)
+  assertEquals(labels().includes('accept'), true)
+  assertEquals(labels().includes('reject'), true)
+  assertEquals(labels().includes('delete'), false)
+
+  cache.value = {
+    design: {
+      ...cache.value.design,
+      decided: { eid: 'design', at: '2026-08-07T01:00:00.000Z' },
+    },
+  }
+  assertEquals(labels().includes('accept'), false)
+  assertEquals(labels().includes('reject'), false)
+  assertEquals(labels().includes('delete'), true)
+  cache.value = {}
+})
+
 Deno.test('a role owns its lifecycle face, actions, and linked sessions', () => {
   cache.value = {
     role: {
