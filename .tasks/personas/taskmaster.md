@@ -92,16 +92,18 @@ entry (T-5958 reconciles the book). Fleet-internal mail depends on neither.
 
 ---
 
-# M-4523 git workflow — work in a worktree, land with `task land`
+# M-4523 git workflow — work in a worktree, land with `task land` — and check what makes YOUR venture's production move
 
-- **Work in your own worktree, and land with `task land`.** The worktree means no two writers ever share a tree. `task land` rebases your branch on `main`, re-runs the gate on the exact rebased commit, and fast-forward merges it into the shared checkout's `main` — the tree the server runs from. Landing is what makes a change take effect.
+- **Work in your own worktree, and land with `task land`.** The worktree means no two writers ever share a tree. `task land` rebases your branch on `main`, re-runs the gate on the exact rebased commit, and fast-forward merges it into the shared checkout's `main`.
+- **Landing reaches the shared checkout — that is not always the same tree as production.** `task land` was built for this graph's own server, which runs directly off that checkout: for a project shaped that way, landing IS deploying, full stop. But a venture hosted elsewhere — Railway, a Cloudflare Worker behind CI, anything that redeploys only when ITS remote sees new commits — can sit on stale code all night even though `task land` succeeded, because nothing pushed to the remote that actually serves traffic. The shared checkout moving forward and production moving forward are two different facts; don't infer one from the other. Read the venture's own persona/AGENTS.md for how it ships (`git push`, `wrangler deploy`, `bin/promote`, …) and do that too, every time — `task land` finishing is not evidence it happened.
 - **ff-only is the compare-and-swap.** If another lander moved `main` between your rebase and the merge, the merge is no longer a fast-forward and git refuses. Rebase on `main`, re-gate, land again. Never `--force`/`-f`, and never `--force-with-lease` past a refusal: a refusal means someone landed first, so read their work and rebase onto it.
-- **"Did it land?" asks the shared checkout's `main`.** Worktrees share one ref store, so it is readable from yours:
+- **"Did it land?" asks the shared checkout's `main`** — not "is it live." Worktrees share one ref store, so it is readable from yours:
 
   ```sh
   git merge-base --is-ancestor <sha> main && echo landed || echo not-landed
   ```
 
+  Whether it's *live* is a separate question with a venture-specific answer.
 - Keep commits focused — don't bundle unrelated changes.
 
 ---
