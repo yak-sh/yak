@@ -62,13 +62,15 @@ let depDdl = `create table if not exists dependency (
 // spine row, so a reference to entity(eid) would veto the delete. Named
 // apart from `schema` because open() must REBUILD a live table that
 // shipped with that FK baked in — a constraint can't be dropped in place.
+// The send OUTCOME moved off the row to the shared delivered/error
+// components (D-14945); to_addr/sent_id/received_at stay as envelope DATA.
+// Column order below is the live table's order AFTER migrateDelivery() drops
+// acted_at/error — mendMail's `insert select *` rebuild depends on the match.
 let mailDdl = `create table if not exists mail (
     eid         text primary key references entity(eid),
     "to"        text not null,
     "from"      text,
     target_eid  text,
-    acted_at    text,
-    error       text,
     to_addr     text,
     message_id  text,
     received_at text,
@@ -248,30 +250,40 @@ let schema = `
     on subscription (actor_eid, target_eid);
   create table if not exists stop_request (
     eid        text primary key references entity(eid),
-    target_eid text not null references entity(eid),
-    acted_at   text
+    target_eid text not null references entity(eid)
   );
-  -- A knock: bring target to to's attention now (knock.ts resolves;
-  -- acted_at/delivery/error are its server-stamped audit).
+  -- A knock: bring target to to's attention now (knock.ts resolves; the
+  -- outcome is the shared delivered/error facet below, not a column here).
   create table if not exists knock (
     eid        text primary key references entity(eid),
     target_eid text not null references entity(eid),
-    to_eid     text not null references entity(eid),
-    acted_at   text,
-    delivery   text,
-    error      text
+    to_eid     text not null references entity(eid)
   );
   -- A wake: mint that knock at 'at' (absolute, resolved at mint).
-  -- wake.ts arms one timer at the earliest unacted row and reconciles
-  -- at boot; acted_at/error are its receipt. target_eid is nullable —
-  -- absent means the wake is its own subject.
+  -- wake.ts arms one timer at the earliest UNACTED row (no delivered/error)
+  -- and reconciles at boot; the outcome is the shared facet below.
+  -- target_eid is nullable — absent means the wake is its own subject.
   create table if not exists wake (
     eid        text primary key references entity(eid),
     at         text not null,
     to_eid     text not null references entity(eid),
-    target_eid text references entity(eid),
-    acted_at   text,
-    error      text
+    target_eid text references entity(eid)
+  );
+  -- The delivery lifecycle (D-14945): the two outcome components any
+  -- deliverable (knock/wake/mail/stop_request) settles into — delivered
+  -- {at, via} reached its destination and how, error {at, message} an
+  -- attempt failed and why. Server-owned/effect-written (deliver.ts), keyed
+  -- by the deliverable's own eid. No FK on eid beyond the spine: the parent
+  -- entity IS the spine, and the entity-death cascade deletes both rows.
+  create table if not exists delivered (
+    eid text primary key references entity(eid),
+    at  text,
+    via text
+  );
+  create table if not exists error (
+    eid     text primary key references entity(eid),
+    at      text,
+    message text
   );
   ${mailDdl};
   -- Inbound webhook deliveries, derived from the edge's raw request
@@ -725,6 +737,58 @@ export let backfillSpawn = (db: DatabaseSync) =>
        select eid, provider, model, effort, persona_eid from session`,
   )
 
+// D-14945 phase 1: the per-type delivery receipts become two shared
+// server-owned components. knock (acted_at/delivery/error), wake
+// (acted_at/error), mail (acted_at/error) and stop_request (acted_at) carried
+// the same aspects under different names — carry every settled row across to
+// delivered {at, via} / error {at, message}, then drop the columns (a
+// lingering column keeps teaching a mechanism the code no longer has). Runs
+// BEFORE mendMail so any mail rebuild sees the already-trimmed shape.
+// Idempotent: insert-or-ignore on the eid pk, each read guarded on its source
+// column, so a re-open after the drop is a no-op. Success and failure split
+// on an `error` value being present — the resolver's fail() always set one,
+// its done() never did.
+export let migrateDelivery = (db: DatabaseSync) => {
+  let win = (table: string, via: string) => {
+    if (!hasCol(db, table, 'acted_at')) return
+    db.exec(
+      `insert or ignore into delivered (eid, at, via)
+         select eid, acted_at, ${via} from ${table}
+         where acted_at is not null` +
+        (hasCol(db, table, 'error') ? ` and error is null` : ``),
+    )
+    if (hasCol(db, table, 'error')) {
+      db.exec(
+        `insert or ignore into error (eid, at, message)
+           select eid, acted_at, error from ${table} where error is not null`,
+      )
+    }
+  }
+  win('knock', 'delivery') // delivery -> delivered.via
+  win('wake', 'null') //       the timer fired; no delivery detail to keep
+  // a sent mail's via is the native Message-ID, or 'local' for an in-graph
+  // hand-off; inbound rows never ran the send effect (acted_at null) and so
+  // carry no delivered — arrival lives on as received_at DATA.
+  win(
+    'mail',
+    `coalesce(sent_id, case when message_id like 'local:%' then 'local' end)`,
+  )
+  win('stop_request', `'signalled'`) // acted_at was the signal-sent receipt
+  let drop = (table: string, col: string) => {
+    if (hasCol(db, table, col)) {
+      db.exec(`alter table ${table} drop column ${col}`)
+    }
+  }
+  drop('knock', 'acted_at')
+  drop('knock', 'delivery')
+  drop('knock', 'error')
+  drop('wake', 'acted_at')
+  drop('wake', 'error')
+  drop('mail', 'acted_at')
+  drop('mail', 'error')
+  drop('stop_request', 'acted_at')
+}
+
 let sqlName = (name: string) => `"${name.replaceAll('"', '""')}"`
 
 // Stored values pass through the same language as incoming values. Invalid
@@ -929,6 +993,9 @@ export let open = (path = file) => {
   if (dep && edges.some((e) => !dep.includes(`'${e}'`))) {
     rebuild(db, 'dependency', depDdl)
   }
+  // The per-type delivery receipts become the shared delivered/error
+  // components. Before mendMail: a mail rebuild must see the trimmed shape.
+  migrateDelivery(db)
   mendMail(db)
   mendCalls(db)
   // A mail was briefly a 'send_request' (the intent idiom over-applied —
@@ -1518,9 +1585,13 @@ export class Stale extends Error {
 // command-side replacement would let two stale snapshots both survive.
 let replaceWakes = (db: DatabaseSync, changes: Change[]): Change[] => {
   let exists = db.prepare('select 1 from wake where eid = ?')
+  // Unacted = neither outcome component present (D-14945); the wake's own
+  // receipt columns moved to the shared delivered/error tables.
   let pending = db.prepare(`
     select eid from wake
-    where to_eid = ? and target_eid is null and acted_at is null and eid != ?
+    where to_eid = ? and target_eid is null and eid != ?
+      and not exists (select 1 from delivered where delivered.eid = wake.eid)
+      and not exists (select 1 from error where error.eid = wake.eid)
   `)
   return changes.flatMap((change) => {
     if (

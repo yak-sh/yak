@@ -20,6 +20,12 @@ let wrow = (eid: string) =>
     string,
     string | null
   >
+// The wake's outcome is the shared delivered facet now (D-14945): a fired
+// wake wears `delivered`, a pending one wears neither.
+let drow = (eid: string) =>
+  db.prepare('select * from delivered where eid = ?').get(eid) as
+    | Record<string, string | null>
+    | undefined
 let knocks = () =>
   db.prepare('select * from knock').all() as Record<string, string>[]
 
@@ -48,13 +54,13 @@ Deno.test('an hour already past fires, and mints the knock', () => {
   arm(cast)
   let k = knocks().find((k) => k.target_eid == w)!
   assertEquals(k.to_eid, jeff)
-  assertMatch(String(wrow(w).acted_at), /^\d{4}-/)
+  assertMatch(String(drow(w)?.at), /^\d{4}-/)
 })
 
 Deno.test('a wake still owed waits, and fires once when it comes', () => {
   let w = wake(new Date(Date.now() + 3_600_000).toISOString())
   arm(cast)
-  assertEquals(wrow(w).acted_at, null)
+  assertEquals(drow(w), undefined)
   assertEquals(knocks().filter((k) => k.target_eid == w).length, 0)
   // the hour arrives (the row is the clock, so move the row)
   db.prepare('update wake set at = ? where eid = ?')
@@ -81,9 +87,9 @@ Deno.test('a new untargeted wake replaces only the pending untargeted one', () =
   let second = wake(at)
   assertEquals(wrow(targeted).target_eid, jeff)
   assertEquals(wrow(reminder).target_eid, jeff)
-  assertMatch(String(wrow(acted).acted_at), /^\d{4}-/)
+  assertMatch(String(drow(acted)?.at), /^\d{4}-/)
   assertEquals(wrow(first), undefined)
-  assertEquals(wrow(second).acted_at, null)
+  assertEquals(drow(second), undefined)
   assertEquals(
     landed.some((c) => c.eid == first && c.name == 'entity' && !c.comp),
     true,
@@ -102,7 +108,7 @@ Deno.test('a phrase off the raw wire lands absolute, at MINT', () => {
   )
   let at = String(wrow(w).at)
   assertEquals(Math.abs(Date.parse(at) - mint - 7_200_000) < 1000, true)
-  assertEquals(wrow(w).acted_at, null) // two hours out, so it waits
+  assertEquals(drow(w), undefined) // two hours out, so it waits
   assertEquals(
     landed.some((c) => c.name == 'wake' && c.eid == w && c.comp?.at == at),
     true, // apply returns the canonical patch for the sender and peers

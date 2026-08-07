@@ -290,8 +290,8 @@ export let comps: Record<string, Record<string, PropType>> = {
   },
   // The brake, pulled as data: creating one asks the server to stop the
   // session it targets. Valid only against an ACTIVE managed session
-  // (apply() refuses the rest); acted_at is server-stamped and the row
-  // stays as audit, like conflict.
+  // (apply() refuses the rest); the row stays as audit, like conflict, and
+  // wears `delivered` once the signals are sent (deliver.ts).
   stop_request: { target_eid: { eid: 'session', death: 'cascade' } },
   // A knock: bring THIS entity to THAT actor's attention, NOW. The
   // artifact of an attention ask (always minted, GC-able later — the
@@ -320,8 +320,10 @@ export let comps: Record<string, Record<string, PropType>> = {
     target_eid: { eid: '', death: 'cascade' },
   },
   // Outbound mail, asked for as data: creating one requests delivery (the
-  // mailer effect sends and stamps the outcome — acted_at/error/to_addr,
-  // all server-side; the row stays as the audit envelope). Subject rides
+  // mailer effect sends and settles the outcome as the shared `delivered`/
+  // `error` components — see deliver.ts — and denormalizes the resolved
+  // envelope onto the row as DATA: to_addr, sent_id, received_at. The row
+  // stays the audit envelope). Subject rides
   // doc.title, the body doc.body — a mail is a document that travels.
   // `to` is a raw address (has an @) or a graph reference — alias slug,
   // human id, eid — resolved against the address book at delivery.
@@ -443,6 +445,18 @@ export let comps: Record<string, Record<string, PropType>> = {
   notified: {}, // the operator has been told (inject or sweep) — never hides
   opened: {}, //   the operator has looked — NOT opened == unread; never hides
   archived: {}, // the operator is done — the ONE stamp that hides an item
+  // Delivery lifecycle (D-14945): the tri-state any deliverable settles into,
+  // the same register as the read-state above — `delivered` reached its
+  // destination, `error` an attempt failed, neither = pending. One aspect,
+  // one component, worn by knock/wake/mail/stop_request in place of the
+  // per-type receipt columns each baked onto itself (M-14942). Both are
+  // server-owned and EFFECT-written: like conflict/hook, the wire may write
+  // neither column (their whole shape is in `stamped` below), so comps carries
+  // only the empty presence — the delivery effects (deliver.ts) stamp the row
+  // directly and broadcast it, never crossing apply(). NOT in kindOrder: a
+  // facet a deliverable wears, never its identity.
+  delivered: {}, // reached its destination — {at, via} in stamped
+  error: {}, //     an attempt failed — {at, message} in stamped
   // A decision was TAKEN about this entity — a task, a memory, a doc,
   // anything; like its three neighbours a facet, never an identity. It is
   // the same {at, by, via} stamp, split differently: `at` and `by` are
@@ -512,27 +526,28 @@ export let stamped: Record<string, Record<string, PropType>> = {
   web: { frozen_at: 'time' }, // the freeze finished (freeze.ts)
   client: { ip: 'text' },
   claim: { claimed_at: 'time' },
-  stop_request: { acted_at: 'time' }, // signals sent — the relay's sweep key
-  // Delivery outcome (knock.ts): acted_at = the resolver ran, delivery =
-  // what it did (cast S-9 / spawned S-9 / mailed U-2 / held), error = why
-  // it couldn't.
-  knock: { acted_at: 'time', delivery: 'text', error: 'text' },
-  // The wake's own receipt (wake.ts): acted_at = the timer fired and the
-  // knock was minted (also the pending mark — a stamped wake never fires
-  // again), error = why it couldn't (an unreadable `at`, a dead door).
-  wake: { acted_at: 'time', error: 'text' },
-  // Delivery outcome (mail.ts): acted_at = the effect ran, error = how it
-  // went wrong, to_addr = the RESOLVED envelope address — denormalized on
-  // purpose, so later edits to the address book never rewrite what a
-  // delivery actually used.
+  // Delivery lifecycle (D-14945, deliver.ts): the shared outcome components
+  // knock/wake/mail/stop_request settle into, in place of the per-type
+  // receipt columns they each baked on (M-14942). `delivered.at` = reached
+  // its destination, `via` = how it went out (cast S-9 / spawned S-9 /
+  // local / a mail's Message-ID) — descriptive text, not an eid. `error.at`
+  // = an attempt failed, `message` = why. Both server-owned and
+  // effect-written (out of comps, so the wire writes neither), the same
+  // register as frozen_at/claimed_at. A deliverable is tri-state: delivered,
+  // error, or neither (pending) — nothing else to stamp on the type itself.
+  delivered: { at: 'time', via: 'text' },
+  error: { at: 'time', message: 'text' },
+  // The resolved envelope, denormalized onto the mail row as DATA (mail.ts):
+  // to_addr = the address the delivery actually used (so later address-book
+  // edits never rewrite it), sent_id = the Message-ID our native send was
+  // assigned. The send OUTCOME is the shared delivered/error above, never a
+  // column here.
   // Inbound provenance (inbound.ts): message_id is the fleet spool's id —
   // the idempotency key AND the inbound mark (delivery skips rows that
   // carry it, or arrival would echo back out as a send); received_at when
   // the edge landed it; verified the edge's DKIM verdict. Unverified
   // content is DATA — it lands verbatim, nothing executes on it.
   mail: {
-    acted_at: 'time',
-    error: 'text',
     // WHO SIGNED IT. Server-owned because a session that could name its
     // own sender could sign as anyone (T-9511) — apply() derives it from
     // the authoring actor. Readable because a letter nobody can see the
@@ -1066,51 +1081,59 @@ export type Claim = { eid: string; session_eid: string; claimed_at?: string }
 // A request to stop the session it targets — the graph-native stop
 // button. Created over the wire, acted on by the server's effect, kept
 // as audit; acted_at is stamped when the signals have been sent.
-export type StopRequest = { eid: string; target_eid: string; acted_at?: string }
+// A stop signal, sent. It settles into `delivered` once the signals leave
+// (deliver.ts) — no receipt column of its own; the audit row is the request.
+export type StopRequest = { eid: string; target_eid: string }
 
 // An entity's mail address — the address-book facet, one comp for all.
 export type Email = { eid: string; address: string }
 
-// Mail, either direction: the request columns are the ask, the stamped
-// trio the receipt; to_addr is the envelope copy — what delivery
-// resolved and used. An INBOUND mail carries message_id (the fleet
-// spool's id, also the never-send mark), received_at, and the edge's
-// verified verdict.
+// A knock: the request columns are the ask; the outcome is the shared
+// `delivered`/`error` facet (deliver.ts), not a column here.
 export type Knock = {
   eid: string
   target_eid: string
   to_eid: string
-  acted_at?: string | null
-  delivery?: string | null
-  error?: string | null
 }
 
-// A knock waiting on the clock: `at` absolute (resolved at mint), the
-// stamps its receipt — acted_at once the knock is minted, error when the
-// timer could not read the hour or the knock would not mint.
+// A knock waiting on the clock: `at` absolute (resolved at mint). Its
+// outcome — the timer fired and minted the knock, or why it couldn't — is
+// the shared `delivered`/`error` facet, not a column here.
 export type Wake = {
   eid: string
   at: string
   to_eid: string
   target_eid?: string | null
-  acted_at?: string | null
-  error?: string | null
 }
 
+// Mail, either direction: the request columns are the ask; the send
+// outcome is the shared `delivered`/`error` facet (deliver.ts). to_addr is
+// the envelope copy — what delivery resolved and used. An INBOUND mail
+// carries message_id (the fleet spool's id, also the never-send mark),
+// received_at, and the edge's verified verdict.
 export type Mail = {
   eid: string
   to: string
   from?: string | null
   target_eid?: string | null
   reply_to_eid?: string | null
-  acted_at?: string | null
-  error?: string | null
   to_addr?: string | null
   message_id?: string | null
   received_at?: string | null
   verified?: number | null
   sent_id?: string | null
   in_reply_to?: string | null
+}
+
+// The delivery lifecycle facets (D-14945): `delivered` reached its
+// destination (`via` says how — cast S-9 / spawned S-9 / local / a
+// Message-ID), `error` an attempt failed (`message` says why). Server-owned,
+// effect-written; any deliverable wears them, tri-state with pending.
+export type Delivered = { eid: string; at?: string | null; via?: string | null }
+export type Failure = {
+  eid: string
+  at?: string | null
+  message?: string | null
 }
 
 // A webhook delivery, pulled apart from the edge's raw request spool —
@@ -1277,6 +1300,8 @@ export type Ent = {
   archived?: Stamp
   decided?: Stamp
   proposed?: Stamp
+  delivered?: Delivered
+  error?: Failure
   refs: Ref[]
   kids: Ent[]
 }

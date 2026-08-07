@@ -5,14 +5,15 @@
 // address book knows) is stamped delivered in place, never leaving the
 // graph; only the boundary — external mailboxes — rides Cloudflare
 // Email Sending (mailer.ts), or $TASKS_MAIL_CMD when that's set (the
-// override/test seam). Either way the effect stamps
-// the outcome server-side: acted_at (the effect ran), error (how it went
-// wrong), to_addr (the RESOLVED envelope address — denormalized so later
-// address-book edits never rewrite what a delivery actually used),
-// sent_id (the Message-ID the native send was assigned). The comment
-// relay mints mails for comments on an addressed project's tasks — the
-// graph's replacement for holdco's delivery.js. SERVER-ONLY (imports db).
+// override/test seam). Either way the effect settles the outcome as the
+// shared delivered/error facet (deliver.ts) and denormalizes the resolved
+// envelope onto the row as DATA: to_addr (the address the delivery used, so
+// later address-book edits never rewrite it) and sent_id (the Message-ID the
+// native send was assigned). The comment relay mints mails for comments on
+// an addressed project's tasks — the graph's replacement for holdco's
+// delivery.js. SERVER-ONLY (imports db).
 import { apply, db, human } from './db.ts'
+import { delivered, errored, settled } from './deliver.ts'
 import { dispatch, trace } from './effects.ts'
 import { canon, type Letter, logOut, native, send } from './mailer.ts'
 import { type Change } from './types.ts'
@@ -23,19 +24,31 @@ type Row = Record<string, string | number | null>
 
 let now = () => new Date().toISOString()
 
-// The one writer for the stamped trio — delivery outcome never crosses
-// apply(), so the stamp broadcasts its own full row (like sessions.ts
-// castRow) or client caches would hold a mail that never settles.
-let stamp = (eid: string, patch: Row, cast: Cast) => {
-  let cols = Object.keys(patch)
-  db.prepare(
-    `update mail set ${cols.map((c) => `"${c}" = ?`).join(', ')}
-     where eid = ?`,
-  ).run(...cols.map((c) => patch[c]), eid)
-  let row = db.prepare('select * from mail where eid = ?').get(eid)
-  if (row) {
-    cast([{ eid, name: 'mail', comp: row as Record<string, unknown> }])
+// Settle a delivery: write the resolved envelope DATA to the mail row and
+// record the OUTCOME as the shared component (D-14945) — error {at, message}
+// on failure, else delivered {at, via}, where via names how it went out (the
+// native Message-ID, a `local` hand-off, or the address). The mail row's DATA
+// broadcast and the outcome broadcast are separate frames; both are the one
+// writer's, since delivery never crosses apply() (client caches would else
+// hold a mail that never settles). Releases the in-flight lock.
+let settle = (
+  eid: string,
+  data: Row,
+  outcome: { via?: string; error?: string },
+  cast: Cast,
+) => {
+  flying.delete(eid)
+  let cols = Object.keys(data)
+  if (cols.length) {
+    db.prepare(
+      `update mail set ${cols.map((c) => `"${c}" = ?`).join(', ')}
+       where eid = ?`,
+    ).run(...cols.map((c) => data[c]), eid)
+    let row = db.prepare('select * from mail where eid = ?').get(eid)
+    if (row) cast([{ eid, name: 'mail', comp: row as Record<string, unknown> }])
   }
+  if (outcome.error) errored(eid, outcome.error, cast)
+  else delivered(eid, outcome.via ?? '', cast)
 }
 
 let UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -134,19 +147,19 @@ let repoUrl = (target: string | null) =>
     ).get(target) as { url: string | null } | undefined)?.url ?? undefined
     : undefined
 
-// created(mail): deliver and stamp. $TASKS_MAIL_CMD, when set, is the
+// created(mail): deliver and settle. $TASKS_MAIL_CMD, when set, is the
 // mailer — argv `--to <addr> [--from <addr>] [--in-reply-to <mid>]
 // <subject>`, body on stdin, exit 0 = sent (the retired bin/email's
 // contract) — the override/test seam. Otherwise the native sender
 // (mailer.ts) speaks Cloudflare Email Sending directly and sent_id
 // stamps the Message-ID it was assigned.
-// acted_at stamps on EVERY outcome, success or not: the sweep key means
-// "the effect ran", error says how it went, and a human retries by
-// minting a fresh request — an automatic retry storm helps no one.
+// EVERY outcome settles into delivered or error (D-14945): the presence of
+// either means "the effect ran", and a human retries by minting a fresh
+// request — an automatic retry storm helps no one.
 // In-flight guard: the boot sweep can catch a mail the comment
-// sweep JUST minted (dispatched, not yet stamped — delivery is async) and
-// fire it twice. acted_at must stay the crash-gap key, so the dedup for
-// the in-process race lives here, not in the row.
+// sweep JUST minted (dispatched, not yet settled — delivery is async) and
+// fire it twice. The delivered/error component is the crash-gap key
+// (settled()), so the dedup for the in-process race lives here, not in a row.
 let flying = new Set<string>()
 
 export let mailed =
@@ -154,7 +167,7 @@ export let mailed =
     let row = db.prepare('select * from mail where eid = ?').get(
       eid,
     ) as Row | undefined
-    if (!row || row.acted_at) return // gone, or a sweep replaying a done one
+    if (!row || settled(eid)) return // gone, or a sweep replaying a done one
     // Inbound mail is a RECORD of arrival, never an ask to send — the
     // message_id mark (inbound.ts stamps it) is what keeps what arrived
     // from echoing back out. The boot sweep's predicate screens it too.
@@ -164,15 +177,11 @@ export let mailed =
     let doc = db.prepare('select title, body from doc where eid = ?').get(
       eid,
     ) as { title: string; body: string } | undefined
-    let done = (patch: Row) => {
-      flying.delete(eid)
-      stamp(eid, patch, cast)
-    }
     let addr: string
     try {
       addr = addressOf(String(row.to))
     } catch (e) {
-      return done({ acted_at: now(), error: (e as Error).message })
+      return settle(eid, {}, { error: (e as Error).message }, cast)
     }
     let to = canon(addr)
     // The concrete sender: the row's own from, stamped by apply() from the
@@ -183,10 +192,9 @@ export let mailed =
     // report, not one to sign on the author's behalf.
     let from = String(row.from ?? '')
     if (!from) {
-      return done({
-        acted_at: now(),
+      return settle(eid, {}, {
         error: 'no sender: the authoring actor has no address on file',
-      })
+      }, cast)
     }
     // Local-first: a fleet recipient never leaves the graph — the sent
     // entity IS the delivery, gaining its inbound half right here.
@@ -200,15 +208,19 @@ export let mailed =
     // only a bare letter aims at the recipient's inbox entity.
     let home = homeOf(addr, to)
     if (home) {
-      return done({
-        acted_at: now(),
-        to_addr: to,
-        message_id: `local:${Date.now()}:${eid}`,
-        received_at: now(),
-        verified: 1,
-        ...(row.target_eid ? {} : { target_eid: home }),
-        ...(row.from || !from ? {} : { from }),
-      })
+      return settle(
+        eid,
+        {
+          to_addr: to,
+          message_id: `local:${Date.now()}:${eid}`,
+          received_at: now(),
+          verified: 1,
+          ...(row.target_eid ? {} : { target_eid: home }),
+          ...(row.from || !from ? {} : { from }),
+        },
+        { via: 'local' },
+        cast,
+      )
     }
     let mid = row.reply_to_eid ? threadId(String(row.reply_to_eid)) : undefined
     let cmd = Deno.env.get('TASKS_MAIL_CMD')
@@ -234,35 +246,32 @@ export let mailed =
         await w.close()
         let out = await child.output()
         let err = new TextDecoder().decode(out.stderr).trim().slice(-240)
-        done({
-          acted_at: now(),
-          to_addr: to,
-          ...(out.success ? {} : { error: `exit ${out.code}: ${err || '?'}` }),
-        })
+        settle(
+          eid,
+          { to_addr: to },
+          out.success
+            ? { via: to }
+            : { error: `exit ${out.code}: ${err || '?'}` },
+          cast,
+        )
       } catch (e) {
-        done({
-          acted_at: now(),
-          to_addr: to,
+        settle(eid, { to_addr: to }, {
           error: String((e as Error).message).slice(0, 240),
-        })
+        }, cast)
       }
       return
     }
     if (!native()) {
-      return done({
-        acted_at: now(),
-        to_addr: to,
+      return settle(eid, { to_addr: to }, {
         error: 'no mailer configured (set TASKS_MAIL_CMD, or ' +
           'CLOUDFLARE_EMAIL_TOKEN + HOLDCO_CF_ACCOUNT_ID for the native ' +
           'sender)',
-      })
+      }, cast)
     }
     if (!from) {
-      return done({
-        acted_at: now(),
-        to_addr: to,
+      return settle(eid, { to_addr: to }, {
         error: 'no from address (set mail.from or TASKS_MAIL_FROM)',
-      })
+      }, cast)
     }
     let letter: Letter = {
       from,
@@ -276,13 +285,13 @@ export let mailed =
     try {
       id = await send(letter)
     } catch (e) {
-      return done({
-        acted_at: now(),
-        to_addr: to,
+      return settle(eid, { to_addr: to }, {
         error: String((e as Error).message).slice(0, 240),
-      })
+      }, cast)
     }
-    done({ acted_at: now(), to_addr: to, ...(id ? { sent_id: id } : {}) })
+    settle(eid, { to_addr: to, ...(id ? { sent_id: id } : {}) }, {
+      via: id ?? to,
+    }, cast)
     // Sent is sent — the store log is provenance for external readers,
     // and its failure is telemetry, never a failed send.
     await logOut(letter, id).catch((e) =>

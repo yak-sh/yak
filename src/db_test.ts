@@ -1678,13 +1678,14 @@ Deno.test('mendMail: rebuilds the FK-era table, no-ops when healed', () => {
   let d = fresh()
   // regress mail to the shape live dbs shipped with (FK on target_eid)
   d.exec('drop table mail')
+  // The FK-era shape, already trimmed of acted_at/error the way open()'s
+  // migrateDelivery leaves it before mendMail runs (D-14945); the FK on
+  // target_eid is the bug this rebuild heals.
   d.exec(`create table mail (
     eid        text primary key references entity(eid),
     "to"       text not null,
     "from"     text,
     target_eid text references entity(eid),
-    acted_at   text,
-    error      text,
     to_addr    text,
     message_id text, received_at text, verified integer)`)
   // open() appends the post-FK-era columns (addCol) BEFORE mendMail runs,

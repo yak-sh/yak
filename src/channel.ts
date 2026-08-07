@@ -277,13 +277,27 @@ export let injects = (
   return operator && !!homeEid && at == homeEid
 }
 
-// A knock the ladder stamped as OURS: `delivery: cast S-31` names the very
-// session this channel serves (knock.ts writes `cast S-${num}` when the door
-// answered). Paired with the `notified` gate it is the whole test for "the
-// stamp says delivered and nobody delivered it".
-let lost = (c: Change, ctx: Ctx) => {
+// A knock the ladder settled as OURS: delivered.via `cast S-31` names the
+// very session this channel serves (knock.ts writes `cast S-${num}` when the
+// door answered). Paired with the `notified` gate it is the whole test for
+// "the stamp says delivered and nobody delivered it".
+let lost = (via: string, ctx: Ctx) => {
   let me = ctx.idOf(ctx.sessionEid)
-  return !!me && str(c.comp?.delivery) == `cast ${me}`
+  return !!me && via == `cast ${me}`
+}
+
+// The delivery OUTCOMES riding a batch, indexed by eid (D-14945): the
+// deliverable's `delivered`/`error` component travels as its own frame —
+// absent at a knock's mint, present in a resume snapshot. The knock branch
+// reads them to tell a fresh nudge from a settled receipt.
+let outcomesIn = (changes: Change[]) => {
+  let delivered = new Map<string, Record<string, unknown>>()
+  let errored = new Set<string>()
+  for (let c of changes) {
+    if (c.name == 'delivered' && c.comp) delivered.set(c.eid, c.comp)
+    if (c.name == 'error' && c.comp) errored.add(c.eid)
+  }
+  return { delivered, errored }
 }
 
 // The two edges of the doc a component's body rides on, indexed by eid within
@@ -349,6 +363,7 @@ let bornIn = (changes: Change[]) => {
 export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
   let docs = docsIn(changes)
   let created = createdIn(changes)
+  let { delivered, errored } = outcomesIn(changes)
   // Only the resume sweep needs birthdays (commentOn) — a live batch is one
   // moment, so everything in it rode together.
   let born = ctx.mode == 'resume' || ctx.mode == 'inbox'
@@ -382,17 +397,19 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
     }
 
     if (c.name == 'knock') {
-      // The resolver's stamp re-broadcasts the full row with acted_at
-      // set (a server-only column, absent at mint) — that's the receipt
-      // of a knock already delivered, not a second nudge. On a RESUME
-      // sweep it is the opposite: `delivery: cast S-me` is the ladder
-      // CLAIMING this channel took it, and an un-`notified` row proves the
-      // claim false — that knock is exactly what a disconnect ate
-      // (T-7302), so ring it and make the stamp true.
+      // A knock's OUTCOME is the shared delivered/error facet (D-14945),
+      // broadcast as its own frame — absent at mint (the live inject path),
+      // present in a resume snapshot. A settled knock is a receipt, not a
+      // second nudge, so skip it. On a RESUME sweep it is the opposite:
+      // delivered.via `cast S-me` is the ladder CLAIMING this channel took
+      // it, and an un-`notified` row proves the claim false — that knock is
+      // exactly what a disconnect ate (T-7302), so ring it and make it true.
+      let won = delivered.get(c.eid)
+      let acted = !!won || errored.has(c.eid)
       if (
-        c.comp.acted_at != null &&
+        acted &&
         ctx.mode != 'inbox' &&
-        !(ctx.mode == 'resume' && lost(c, ctx))
+        !(ctx.mode == 'resume' && lost(str(won?.via), ctx))
       ) {
         continue
       }
@@ -404,7 +421,7 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
       if (told(c.eid)) continue
       let at = str(c.comp.target_eid)
       let atId = at ? ctx.idOf(at) ?? at : null
-      let when = Date.parse(str(c.comp.acted_at))
+      let when = Date.parse(str(won?.at))
       let note = commentOn(
         changes,
         docs,

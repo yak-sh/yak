@@ -36,6 +36,17 @@ let row = (eid: string) =>
     string,
     string | null
   >
+// The send OUTCOME is the shared delivered/error facet now (D-14945): a
+// delivered mail wears `delivered` (via = how it went out), a failed one
+// wears `error` (message = why), a pending one wears neither.
+let drow = (eid: string) =>
+  db.prepare('select * from delivered where eid = ?').get(eid) as
+    | Record<string, string | null>
+    | undefined
+let erow = (eid: string) =>
+  db.prepare('select * from error where eid = ?').get(eid) as
+    | Record<string, string | null>
+    | undefined
 
 // A person with an alias and an address, minted through the wire.
 let somebody = (slug: string, address?: string) => {
@@ -108,9 +119,9 @@ Deno.test('mailed: delivers, stamps the receipt, sweep replay is a no-op', async
   )
   await mailed(cast)(m, {})
   let r = row(m)
-  assertMatch(String(r.acted_at), /T/)
+  assertMatch(String(drow(m)?.at), /T/)
   assertEquals(r.to_addr, 'op@x.test') // the envelope copy
-  assertEquals(r.error, null)
+  assertEquals(erow(m), undefined)
   assertEquals(mails(dir).length, 1)
   assertMatch(
     mails(dir)[0],
@@ -138,8 +149,8 @@ Deno.test('mailed: failure and misconfiguration stamp errors, visibly', async ()
     author,
   )
   await mailed(cast)(m, {})
-  assertMatch(String(row(m).error), /exit 1: boom/)
-  assertMatch(String(row(m).acted_at), /T/) // ran, failed — no retry storm
+  assertMatch(String(erow(m)?.message), /exit 1: boom/)
+  assertMatch(String(erow(m)?.at), /T/) // ran, failed — no retry storm
   let noAddr = uid()
   apply(
     db,
@@ -151,7 +162,7 @@ Deno.test('mailed: failure and misconfiguration stamp errors, visibly', async ()
     author,
   )
   await mailed(cast)(noAddr, {})
-  assertMatch(String(row(noAddr).error), /no address on file/)
+  assertMatch(String(erow(noAddr)?.message), /no address on file/)
   assertEquals(row(noAddr).to_addr, null) // nothing resolved, nothing claimed
   Deno.env.delete('TASKS_MAIL_CMD')
   let bare = uid()
@@ -165,10 +176,10 @@ Deno.test('mailed: failure and misconfiguration stamp errors, visibly', async ()
     author,
   )
   await mailed(cast)(bare, {})
-  assertMatch(String(row(bare).error), /no mailer configured/)
+  assertMatch(String(erow(bare)?.message), /no mailer configured/)
 })
 
-Deno.test('stamped trio never rides the wire', () => {
+Deno.test('the envelope data never rides the wire', () => {
   let m = uid()
   apply(
     db,
@@ -179,7 +190,6 @@ Deno.test('stamped trio never rides the wire', () => {
         name: 'mail',
         comp: {
           to: 'x@y.test',
-          acted_at: 'forged',
           to_addr: 'forged@x',
           sent_id: 'forged@send',
         },
@@ -188,9 +198,13 @@ Deno.test('stamped trio never rides the wire', () => {
     undefined,
     author,
   )
-  assertEquals(row(m).acted_at, null)
+  // to_addr/sent_id are server-owned envelope DATA (stamped, not comps); a
+  // forged one is dropped. The delivery OUTCOME is its own component, and a
+  // bare mail write never mints one — the mail stays pending.
   assertEquals(row(m).to_addr, null)
   assertEquals(row(m).sent_id, null)
+  assertEquals(drow(m), undefined)
+  assertEquals(erow(m), undefined)
 })
 
 // The relay fixture: an addressed project, its task, and a commenter.
@@ -452,7 +466,7 @@ Deno.test('mailed: reply_to_eid resolves to --in-reply-to at delivery', async ()
   let last = mails(dir).at(-1)!
   assertMatch(last, /unthreadable/)
   assertEquals(last.includes('--in-reply-to'), false)
-  assertEquals(row(dark).error, null)
+  assertEquals(erow(dark), undefined)
   Deno.env.delete('TASKS_MAIL_CMD')
 })
 
@@ -578,7 +592,7 @@ Deno.test('mailed: native send stamps sent_id, threads, logs dir=out', async () 
     )
     await mailed(cast)(m, {})
     let r = row(m)
-    assertEquals(r.error, null)
+    assertEquals(erow(m), undefined)
     assertEquals(r.sent_id, 'cf-1@send') // brackets shed
     assertEquals(r.to_addr, 'cafecar@bot.yak.sh') // canon at resolution
     assertEquals(hits.length, 2)
@@ -622,8 +636,8 @@ Deno.test('mailed: native failure and a missing from stamp errors', async () => 
       author,
     )
     await mailed(cast)(m, {})
-    assertMatch(String(row(m).error), /send failed \(HTTP 200\)/)
-    assertMatch(String(row(m).acted_at), /T/) // ran, failed — no retry storm
+    assertMatch(String(erow(m)?.message), /send failed \(HTTP 200\)/)
+    assertMatch(String(erow(m)?.at), /T/) // ran, failed — no retry storm
     assertEquals(row(m).sent_id, null)
     // An author with no address cannot borrow one: refused and stamped,
     // where it used to go out signed by the fleet default (T-9489).
@@ -638,7 +652,7 @@ Deno.test('mailed: native failure and a missing from stamp errors', async () => 
       unsigned,
     )
     await mailed(cast)(bare, {})
-    assertMatch(String(row(bare).error), /no sender/)
+    assertMatch(String(erow(bare)?.message), /no sender/)
   } finally {
     restore()
     nativeEnvOff()
@@ -664,7 +678,7 @@ Deno.test('mailed: $TASKS_MAIL_CMD wins over the native env', async () => {
     await mailed(cast)(m, {})
     assertEquals(mails(dir).length, 1) // the override delivered
     assertEquals(hits.length, 0) // nothing touched the network path
-    assertEquals(row(m).error, null)
+    assertEquals(erow(m), undefined)
   } finally {
     restore()
     Deno.env.delete('TASKS_MAIL_CMD')
@@ -697,11 +711,11 @@ Deno.test('mailed: a fleet recipient delivers locally — no send, no out-log', 
     let got: Parameters<typeof channelEvents>[0] = []
     await mailed((cs) => got.push(...cs))(m, {})
     let r = row(m)
-    assertEquals(r.error, null)
+    assertEquals(erow(m), undefined)
     assertEquals(r.to_addr, 'ops@bot.yak.sh')
     assertMatch(String(r.message_id), /^local:\d+:/) // the never-send mark
     assertMatch(String(r.received_at), /T/) // arrived
-    assertMatch(String(r.acted_at), /T/) // delivered, and when
+    assertMatch(String(drow(m)?.at), /T/) // delivered, and when
     assertEquals(Number(r.verified), 1) // apply() authenticated the author
     assertEquals(r.target_eid, ops) // aimed at the recipient's inbox
     // The author signs it, even though TASKS_MAIL_FROM is set — the env
@@ -777,7 +791,7 @@ Deno.test('mailed: a letter to S-<n> delivers to that session, in-graph', async 
     let got: Parameters<typeof channelEvents>[0] = []
     await mailed((cs) => got.push(...cs))(m, {})
     let r = row(m)
-    assertEquals(r.error, null)
+    assertEquals(erow(m), undefined)
     assertEquals(r.target_eid, s) // aimed at the session it named
     assertMatch(String(r.message_id), /^local:\d+:/) // never left the graph
     assertEquals(Number(r.verified), 1)
@@ -851,7 +865,7 @@ Deno.test('mailed: a book entry Cloudflare would bounce still lands at home', as
     )
     await mailed(cast)(m, {})
     let r = row(m)
-    assertEquals(r.error, null)
+    assertEquals(erow(m), undefined)
     assertEquals(r.target_eid, p) // the pre-canon spelling found the book
     assertEquals(r.from, 'sender@bot.test') // signed by its author
     assertEquals(hits.length, 0)
@@ -990,5 +1004,5 @@ Deno.test('nothing signs by fallback: the relay, and the unattributed write', as
   ])
   assertEquals(row(m).from, null)
   await mailed(cast)(m, {})
-  assertMatch(String(row(m).error), /no sender/)
+  assertMatch(String(erow(m)?.message), /no sender/)
 })

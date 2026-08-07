@@ -97,7 +97,10 @@ let said = (
 let knocked = (eid: string, num: number, to: string, target: string) =>
   ent(eid, num, {
     created: { at: '2026-01-03', by: P, via: B },
-    knock: { to_eid: to, target_eid: target, acted_at: '2026-01-03' },
+    knock: { to_eid: to, target_eid: target },
+    // Settled delivered (D-14945) — the inbox sweep surfaces it regardless,
+    // the same as the old acted_at receipt it replaces.
+    delivered: { at: '2026-01-03', via: 'cast' },
   })
 
 let letter = (

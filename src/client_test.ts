@@ -307,15 +307,13 @@ Deno.test('notices: comments, acted knocks, and verified operator mail surface t
       { eid: C, name: 'comment', comp: { target_eid: T1 } },
       { eid: K, name: 'entity', comp: { eid: K, num: 44 } },
       { eid: K, name: 'created', comp: { at: '2026-01-03' } },
+      { eid: K, name: 'knock', comp: { to_eid: S, target_eid: T1 } },
+      // The outcome is the shared error facet now (D-14945); the inbox
+      // surfaces the knock regardless, the same as its old acted_at receipt.
       {
         eid: K,
-        name: 'knock',
-        comp: {
-          to_eid: S,
-          target_eid: T1,
-          acted_at: '2026-01-03',
-          error: 'no channel',
-        },
+        name: 'error',
+        comp: { at: '2026-01-03', message: 'no channel' },
       },
       { eid: M, name: 'entity', comp: { eid: M, num: 45 } },
       { eid: M, name: 'created', comp: { at: '2026-01-04' } },

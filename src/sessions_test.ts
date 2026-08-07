@@ -13,6 +13,7 @@ import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
 import { existsSync } from 'node:fs'
 import { type Change } from './types.ts'
 import { dispatch, on, relay, trace } from './effects.ts'
+import { PENDING } from './deliver.ts'
 import { fakeClaude, fakeCodex } from './door_fake.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
@@ -55,7 +56,7 @@ let spawnRow = (eid: string) =>
 on('session', { created: spawned(cast), removed: deleted })
 on('stop_request', {
   created: stopped(cast),
-  sweep: { pending: 'acted_at is null' },
+  sweep: { pending: PENDING('stop_request') },
 })
 on('comment', { created: commented(cast) })
 
@@ -65,10 +66,11 @@ let pending = (comp: string, cond: string) =>
     string,
     unknown
   >[]
+// A stop_request settles into the shared delivered facet now (D-14945).
 let acted = (sr: string) =>
-  (db.prepare('select acted_at from stop_request where eid = ?').get(sr) as {
-    acted_at: string | null
-  }).acted_at
+  (db.prepare('select at from delivered where eid = ?').get(sr) as
+    | { at: string | null }
+    | undefined)?.at ?? null
 
 // A graph write as the server performs it: apply, cast, dispatch. The
 // returned promise is every effect the batch set off — a whole run, when
@@ -624,10 +626,8 @@ Deno.test('stop: a stop_request signals the group, the ending is OBSERVED', asyn
     c.eid == eid && c.name == 'session' && c.comp?.status == 'stopping'
   assertEquals(heard.filter(isStopping), [stopping])
   assertEquals(delta(db, c0).changes.filter(isStopping), [stopping])
-  // The request stays as audit, stamped when the signals had been sent.
-  let sat = db.prepare('select acted_at from stop_request where eid = ?')
-    .get(sr) as { acted_at: string | null }
-  assert(sat.acted_at)
+  // The request stays as audit, settled delivered when the signals were sent.
+  assert(acted(sr))
   await done
   // A second pull on a settled session bounces off the RULE.
   assertThrows(

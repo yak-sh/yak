@@ -8,7 +8,8 @@
 // vanishing. Firing MINTS A KNOCK and stops there — knock.ts owns the
 // ladder that finds a door, and a wake that re-implemented delivery
 // would be a second one to keep true. SERVER-ONLY (imports db).
-import { apply, db } from './db.ts'
+import { apply, db, human } from './db.ts'
+import { delivered, errored, PENDING } from './deliver.ts'
 import { dispatch, trace } from './effects.ts'
 import { type Change, uuid } from './types.ts'
 import { instant } from './time.ts'
@@ -22,7 +23,6 @@ type Row = {
   minted: string | null
 }
 
-let now = () => new Date().toISOString()
 let iso = (t: number) => new Date(t).toISOString()
 
 // setTimeout's ceiling is 32 bits (~24 days) and a suspended box lets a
@@ -32,46 +32,33 @@ let iso = (t: number) => new Date(t).toISOString()
 let HOUR = 3_600_000
 let timer: ReturnType<typeof setTimeout> | undefined
 
-// The one writer for the receipt — outcomes never cross apply(), so the
-// stamp broadcasts its own full row (knock.ts's rule).
-let stamp = (
-  eid: string,
-  patch: Record<string, string | null>,
-  cast: Cast,
-) => {
-  let cols = Object.keys(patch)
-  db.prepare(
-    `update wake set ${cols.map((c) => `"${c}" = ?`).join(', ')}
-     where eid = ?`,
-  ).run(...cols.map((c) => patch[c]), eid)
-  let row = db.prepare('select * from wake where eid = ?').get(eid)
-  if (row) cast([{ eid, name: 'wake', comp: row as Record<string, unknown> }])
-}
-
 // Everything still owed, earliest first — carrying the moment it was
-// minted, because that is the clock a phrase resolves against.
+// minted, because that is the clock a phrase resolves against. Unacted =
+// neither delivered nor error present (D-14945).
 let pending = () =>
   db.prepare(
-    `select w.eid, w.at, w.to_eid, w.target_eid, c.at as minted
-     from wake w left join created c on c.eid = w.eid
-     where w.acted_at is null order by w.at`,
+    `select wake.eid, wake.at, wake.to_eid, wake.target_eid, c.at as minted
+     from wake left join created c on c.eid = wake.eid
+     where ${PENDING('wake')} order by wake.at`,
   ).all() as Row[]
 
 // The knock this wake was always going to be. No target means the wake
 // itself is the subject — its doc carries whatever the asker said.
 let fire = (r: Row, cast: Cast) => {
   let t = trace()
+  let ke = uuid()
   let out = apply(db, [{
-    eid: uuid(),
+    eid: ke,
     name: 'knock',
     comp: { target_eid: r.target_eid ?? r.eid, to_eid: r.to_eid },
   }], t)
   cast(out)
   dispatch(out, t, (c, e) => console.warn(`wake ${c} —`, e))
-  // Stamped AFTER the mint: a crash in the gap re-knocks at boot, and a
-  // duplicate nudge is cheaper than the missed one this whole entity
-  // exists to prevent.
-  stamp(r.eid, { acted_at: now() }, cast)
+  // Settled DELIVERED after the mint: the wake did its one job, minting the
+  // knock that owns the ladder. `via` names it. A crash in the gap re-knocks
+  // at boot — a duplicate nudge is cheaper than the missed one this whole
+  // entity exists to prevent.
+  delivered(r.eid, `knock ${human(db, ke)}`, cast)
 }
 
 // Fire what is owed, then wait for the next. Idempotent by design — the
@@ -83,7 +70,7 @@ export let arm = (cast: Cast) => {
   for (let r of pending()) {
     let at = instant(r.at, Date.parse(r.minted ?? '') || Date.now())
     if (at == null) {
-      stamp(r.eid, { acted_at: now(), error: `unreadable at: ${r.at}` }, cast)
+      errored(r.eid, `unreadable at: ${r.at}`, cast)
       continue
     }
     // Absolute at mint: the verbs resolve the phrase before they send,
@@ -102,7 +89,7 @@ export let arm = (cast: Cast) => {
     } catch (e) {
       // A wake that can't knock (its door tombstoned mid-flight) says so
       // and is done — an unacted row would retry on every arm forever.
-      stamp(r.eid, { acted_at: now(), error: String(e).slice(0, 500) }, cast)
+      errored(r.eid, String(e).slice(0, 500), cast)
     }
   }
   if (next != null) {

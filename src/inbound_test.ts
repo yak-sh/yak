@@ -31,6 +31,11 @@ let mailRow = (eid: string) =>
     string,
     string | number | null
   >
+// A mail's send outcome is the shared delivered facet now (D-14945).
+let deliveredRow = (eid: string) =>
+  db.prepare('select * from delivered where eid = ?').get(eid) as
+    | Record<string, string | null>
+    | undefined
 
 // The triage fallback: a project renumbered to P-20, the holdco slot.
 let holdco = (() => {
@@ -357,8 +362,11 @@ Deno.test('the sweep: an echo arrives on the sent entity, once', async () => {
     { eid: letter, name: 'doc', comp: { title: 'to the fleet' } },
     { eid: letter, name: 'mail', comp: { to: 'venture@bot.test' } },
   ])
-  db.prepare('update mail set sent_id = ?, acted_at = ? where eid = ?')
-    .run('echo-1@bot.test', '2025-07-08T18:39:00.000Z', letter)
+  db.prepare('update mail set sent_id = ? where eid = ?')
+    .run('echo-1@bot.test', letter)
+  // Sent = the shared delivered facet now (D-14945), via the Message-ID.
+  db.prepare('insert into delivered (eid, at, via) values (?, ?, ?)')
+    .run(letter, '2025-07-08T18:39:00.000Z', 'echo-1@bot.test')
   let echo = msg({
     id: 'msg:1752000000001:echo-1@bot.test',
     from: 'bounces@cf-bounce.bot.test',
@@ -431,7 +439,7 @@ Deno.test('inbound mail never delivers: arrival is a record, not an ask', async 
   let eid = (db.prepare('select eid from mail where message_id is not null')
     .get() as { eid: string }).eid
   await mailed(cast)(eid, {}) // the live path: created(mail) fires on mints
-  assertEquals(mailRow(eid).acted_at, null)
+  assertEquals(deliveredRow(eid), undefined)
   try {
     Deno.readTextFileSync(`${dir}/out.txt`)
     throw new Error('delivered')
@@ -440,7 +448,9 @@ Deno.test('inbound mail never delivers: arrival is a record, not an ask', async 
   }
   // and the boot sweep's predicate screens it the same way
   let pending = db.prepare(
-    'select eid from mail where acted_at is null and message_id is null',
+    `select eid from mail where message_id is null
+       and not exists (select 1 from delivered where delivered.eid = mail.eid)
+       and not exists (select 1 from error where error.eid = mail.eid)`,
   ).all() as { eid: string }[]
   assertEquals(pending.some((p) => p.eid == eid), false)
   Deno.env.delete('TASKS_MAIL_CMD')

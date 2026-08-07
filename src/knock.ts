@@ -7,29 +7,13 @@
 // comment on the target in the same batch. SERVER-ONLY (imports db).
 import { apply, db, human, snapshot } from './db.ts'
 import { reachable } from './door.ts'
+import { delivered, errored } from './deliver.ts'
 import { dispatch, trace } from './effects.ts'
 import { type Change, uuid } from './types.ts'
 import { rows, spawnChanges } from './client.ts'
 import { adapters } from './adapters.ts'
 
 type Cast = (changes: Change[]) => void
-type Row = Record<string, string | number | null>
-
-let now = () => new Date().toISOString()
-
-// The one writer for the stamped trio — outcomes never cross apply(),
-// so the stamp broadcasts its own full row (mail.ts's rule).
-let stamp = (eid: string, patch: Row, cast: Cast) => {
-  let cols = Object.keys(patch)
-  db.prepare(
-    `update knock set ${cols.map((c) => `"${c}" = ?`).join(', ')}
-     where eid = ?`,
-  ).run(...cols.map((c) => patch[c]), eid)
-  let row = db.prepare('select * from knock where eid = ?').get(eid)
-  if (row) {
-    cast([{ eid, name: 'knock', comp: row as Record<string, unknown> }])
-  }
-}
 
 // The most recent comment on the target — the words that rode the
 // knock's batch (or the latest ask); a minute is the batch's horizon.
@@ -63,9 +47,8 @@ export let knocked =
   (cast: Cast) => (eid: string, comp: Record<string, unknown>) => {
     let to = String(comp.to_eid ?? '')
     let target = String(comp.target_eid ?? '')
-    let done = (delivery: string) =>
-      stamp(eid, { acted_at: now(), delivery }, cast)
-    let fail = (error: string) => stamp(eid, { acted_at: now(), error }, cast)
+    let done = (via: string) => delivered(eid, via, cast)
+    let fail = (error: string) => errored(eid, error, cast)
     // Who asked. The knock's own provenance is the author of anything it
     // sends on their behalf.
     let knocker = () =>

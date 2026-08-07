@@ -177,23 +177,24 @@ Deno.test('a knock aimed at neither the session nor its actor is ignored', () =>
   assertEquals(channelEvents(batch, ctx()), [])
 })
 
-Deno.test("the resolver's stamp re-broadcast is a receipt, not a nudge", () => {
-  let batch = [ch('k1', 'knock', {
-    to_eid: 'sess',
-    target_eid: 't9',
-    acted_at: 1234,
-    delivery: 'cast S-1',
-  })]
+Deno.test("the resolver's settle broadcast is a receipt, not a nudge", () => {
+  // The outcome is its own frame (D-14945): a knock that already settled
+  // delivered is a receipt, so a live batch carrying both stays silent.
+  let batch = [
+    ch('k1', 'knock', { to_eid: 'sess', target_eid: 't9' }),
+    ch('k1', 'delivered', { at: '2026-07-27T00:00:00Z', via: 'cast S-1' }),
+  ]
   assertEquals(channelEvents(batch, ctx()), [])
 })
 
-Deno.test('an inbox sweep deliberately reads an addressed acted knock', () => {
-  let batch = [ch('k1', 'knock', {
-    to_eid: 'sess',
-    target_eid: 't9',
-    acted_at: '2026-07-27T00:00:00Z',
-    error: 'no live channel',
-  })]
+Deno.test('an inbox sweep deliberately reads an addressed settled knock', () => {
+  let batch = [
+    ch('k1', 'knock', { to_eid: 'sess', target_eid: 't9' }),
+    ch('k1', 'error', {
+      at: '2026-07-27T00:00:00Z',
+      message: 'no live channel',
+    }),
+  ]
   assertEquals(channelEvents(batch, ctx({ mode: 'inbox' })), [
     { content: 'knock: look at T-9', meta: { kind: 'knock' }, eid: 'k1' },
   ])
@@ -417,17 +418,19 @@ Deno.test('what THIS run injected is never re-rung, even by a catch-up', () => {
 // state instead: the ladder stamped `cast S-31` — this session — and nothing
 // ever stamped `notified`, so the stamp is a claim nobody made good.
 
-let cast = (over: Record<string, unknown> = {}) =>
-  ch('k7', 'knock', {
-    to_eid: 'sess',
-    target_eid: 't9',
-    acted_at: '2026-07-25T00:17:58Z',
-    delivery: 'cast S-31',
-    ...over,
-  })
+// A settled knock is TWO frames now (D-14945): the knock and its delivered
+// outcome. `via` names the ladder's claim — `cast S-31`, this session — and
+// `at` is the receipt time the words window keys off.
+let cast = (over: { via?: string; at?: string } = {}): Change[] => [
+  ch('k7', 'knock', { to_eid: 'sess', target_eid: 't9' }),
+  ch('k7', 'delivered', {
+    at: over.at ?? '2026-07-25T00:17:58Z',
+    via: over.via ?? 'cast S-31',
+  }),
+]
 
 Deno.test('a resume sweep rings the knock the disconnect ate (T-7302)', () => {
-  assertEquals(channelEvents([cast()], ctx({ mode: 'resume' })), [
+  assertEquals(channelEvents(cast(), ctx({ mode: 'resume' })), [
     { content: 'knock: look at T-9', meta: { kind: 'knock' }, eid: 'k7' },
   ])
 })
@@ -440,7 +443,7 @@ Deno.test('a resume sweep carries the words that rode THAT knock', () => {
     ch('old', 'comment', { target_eid: 't9' }),
     ch('old', 'doc', { title: '', body: 'last tuesday' }),
     born('old', '2026-07-20T00:00:00Z'),
-    cast(),
+    ...cast(),
     born('k7', '2026-07-25T00:17:58Z'),
     ch('new', 'comment', { target_eid: 't9' }),
     ch('new', 'doc', { title: '', body: 'the wake words' }),
@@ -453,7 +456,7 @@ Deno.test('a resume sweep carries the words that rode THAT knock', () => {
   // Nothing in the window (a wake mints no comment at all) → bare nudge.
   assertEquals(
     channelEvents(
-      [cast(), born('k7', '2026-07-25T00:17:58Z')],
+      [...cast(), born('k7', '2026-07-25T00:17:58Z')],
       ctx({
         mode: 'resume',
       }),
@@ -465,14 +468,14 @@ Deno.test('a resume sweep carries the words that rode THAT knock', () => {
 Deno.test('a resume sweep leaves a delivered knock alone', () => {
   // `notified` is the bound: the stamp was made good, so the row is history.
   assertEquals(
-    channelEvents([cast()], ctx({ mode: 'resume', notified: () => true })),
+    channelEvents(cast(), ctx({ mode: 'resume', notified: () => true })),
     [],
   )
   // …and so is a knock the ladder resolved some OTHER way (spawn, mail) or
   // cast to a different session on this actor.
   assertEquals(
     channelEvents(
-      [cast({ delivery: 'spawned S-99' })],
+      cast({ via: 'spawned S-99' }),
       ctx({
         mode: 'resume',
       }),
@@ -480,7 +483,7 @@ Deno.test('a resume sweep leaves a delivered knock alone', () => {
     [],
   )
   assertEquals(
-    channelEvents([cast({ delivery: 'cast S-99' })], ctx({ mode: 'resume' })),
+    channelEvents(cast({ via: 'cast S-99' }), ctx({ mode: 'resume' })),
     [],
   )
 })
@@ -488,8 +491,8 @@ Deno.test('a resume sweep leaves a delivered knock alone', () => {
 Deno.test('a live re-broadcast of that same stamp is still a receipt', () => {
   // Only the resume sweep reads a `cast S-me` stamp as a missed delivery;
   // live, the resolver's own re-broadcast must stay silent.
-  assertEquals(channelEvents([cast()], ctx()), [])
-  assertEquals(channelEvents([cast()], ctx({ mode: 'catchup' })), [])
+  assertEquals(channelEvents(cast(), ctx()), [])
+  assertEquals(channelEvents(cast(), ctx({ mode: 'catchup' })), [])
 })
 
 Deno.test("learn caches a mail's doc for the stamp frame that follows", () => {

@@ -150,8 +150,13 @@ Deno.test('mail Full section shows its envelope and delivery receipt', () => {
         to: 'P-2',
         from: 'sender@x.test',
         to_addr: 'desk@x.test',
-        acted_at: '2026-07-30T12:00:00Z',
         sent_id: 'sent@x.test',
+      },
+      // The send outcome is the shared delivered facet now (D-14945).
+      delivered: {
+        eid: 'mail',
+        at: '2026-07-30T12:00:00Z',
+        via: 'sent@x.test',
       },
     },
   }

@@ -33,6 +33,7 @@
 import { basename, dirname } from 'node:path'
 import { type Adapter, adapters, type Event, type Summary } from './adapters.ts'
 import { apply, db, human, record, snapshot } from './db.ts'
+import { delivered } from './deliver.ts'
 import { present, reachable } from './door.ts'
 import { dispatch, trace } from './effects.ts'
 import { legacyWorktreesDir, worktreesDir } from './ground.ts'
@@ -1232,12 +1233,12 @@ let track = (
 // half only acts: CAS to 'stopping' (two requests race, one writes), ask
 // the process group to go, escalate once, and let the tailer stamp the
 // ending when it SEES the exit — a session we can't watch die is `lost`,
-// said plainly, not assumed dead. The request itself is stamped acted_at
-// and stays as audit, like conflict.
+// said plainly, not assumed dead. The request itself settles into
+// `delivered` (via 'signalled') and stays as audit, like conflict.
 export let stopped =
   (cast: Cast) => async (eid: string, comp: Record<string, unknown>) => {
     let target = String(comp.target_eid)
-    let acted = () => stamp(eid, { acted_at: now() }, cast, 'stop_request')
+    let acted = () => delivered(eid, 'signalled', cast)
     let lost = (stop_reason: string) =>
       stamp(target, {
         status: 'lost',
@@ -1250,7 +1251,7 @@ export let stopped =
     // case) — or it's still 'stopping': a stop was recorded whose signal
     // may never have left (another request mid-drive, or a crash between
     // CAS and kill). Fall through and signal again; a TERM at a dying
-    // group is a no-op, and acted_at then says the signals were truly
+    // group is a no-op, and `delivered` then says the signals were truly
     // sent, not merely intended.
     let stop_requested_at = now()
     let hit = db.prepare(`

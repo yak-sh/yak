@@ -14,11 +14,16 @@ let uid = () => crypto.randomUUID()
 let sent: Change[] = []
 let cast = (cs: Change[]) => sent.push(...cs)
 
-let krow = (eid: string) =>
-  db.prepare('select * from knock where eid = ?').get(eid) as Record<
-    string,
-    string | null
-  >
+// The delivery outcome is the shared delivered/error facet (D-14945): via
+// carries what the ladder did, message why it couldn't, neither = pending.
+let drow = (eid: string) =>
+  db.prepare('select * from delivered where eid = ?').get(eid) as
+    | Record<string, string | null>
+    | undefined
+let erow = (eid: string) =>
+  db.prepare('select * from error where eid = ?').get(eid) as
+    | Record<string, string | null>
+    | undefined
 
 // A project with a repo, and a task on it — the spawnable ask.
 let project = (() => {
@@ -60,14 +65,14 @@ Deno.test('awake actor: the cast is the delivery', () => {
     "update session set origin = 'managed', status = 'running' where eid = ?",
   ).run(s)
   let k = knock(task, project)
-  assertMatch(String(krow(k).delivery), /^cast S-\d+$/)
-  assertEquals(krow(k).error, null)
+  assertMatch(String(drow(k)?.via), /^cast S-\d+$/)
+  assertEquals(erow(k), undefined)
   db.prepare("update session set status = 'completed' where eid = ?").run(s)
 })
 
 Deno.test('nobody awake at a project: spawn onto the target task', () => {
   let k = knock(task, project)
-  assertMatch(String(krow(k).delivery), /^spawned S-\d+$/)
+  assertMatch(String(drow(k)?.via), /^spawned S-\d+$/)
   // the spawn request rides the graph: a session asking for the task
   let s = db.prepare(
     'select * from session where requested_task_eid = ? order by rowid desc',
@@ -77,7 +82,7 @@ Deno.test('nobody awake at a project: spawn onto the target task', () => {
   let d = uid()
   apply(db, [{ eid: d, name: 'doc', comp: { title: 'just a doc' } }])
   let k2 = knock(d, project)
-  assertMatch(String(krow(k2).error), /not spawnable/)
+  assertMatch(String(erow(k2)?.message), /not spawnable/)
 })
 
 Deno.test('an addressed person: the knock rides mail, words and all', () => {
@@ -91,7 +96,7 @@ Deno.test('an addressed person: the knock rides mail, words and all', () => {
     { eid: c, name: 'comment', comp: { target_eid: task } },
   ])
   let k = knock(task, jeff)
-  assertMatch(String(krow(k).delivery), /^mailed U-\d+$/)
+  assertMatch(String(drow(k)?.via), /^mailed U-\d+$/)
   let m = db.prepare(
     'select d.title, d.body from mail m join doc d on d.eid = m.eid',
   ).get() as { title: string; body: string }
@@ -121,12 +126,12 @@ Deno.test('an operator is a door: external claude hears it, its child does not',
   let { num } = db.prepare('select num from entity where eid = ?').get(op) as {
     num: number
   }
-  assertEquals(krow(k).delivery, `cast S-${num}`)
-  assertEquals(krow(k).error, null)
+  assertEquals(drow(k)?.via, `cast S-${num}`)
+  assertEquals(erow(k), undefined)
   c.kill('SIGKILL')
   await c.status
   // the door shuts with the process: the ladder descends again
-  assertMatch(String(krow(knock(task, project)).delivery), /^spawned S-\d+$/)
+  assertMatch(String(drow(knock(task, project))?.via), /^spawned S-\d+$/)
 })
 
 // A settled managed run is not a dead end: input to a session is a
@@ -150,8 +155,8 @@ Deno.test('a settled managed session: the knock rides its input door', () => {
   ])
 
   let k = knock(task, sess)
-  assertEquals(krow(k).error, null)
-  assertMatch(String(krow(k).delivery), /^commented S-/)
+  assertEquals(erow(k), undefined)
+  assertMatch(String(drow(k)?.via), /^commented S-/)
   // The comment landed ON the session — that IS the input.
   let input = db.prepare(
     `select d.body from comment c join doc d on d.eid = c.eid
@@ -167,13 +172,13 @@ Deno.test('a settled external session is not a door', () => {
   apply(db, [{ eid: sess, name: 'session', comp: { id: uid() } }])
   db.prepare(`update session set status = 'completed' where eid = ?`).run(sess)
   let k = knock(task, sess)
-  assertMatch(String(krow(k).error), /no door/)
+  assertMatch(String(erow(k)?.message), /no door/)
 })
 
 Deno.test('no door: the artifact says why nobody heard', () => {
   let stray = uid()
   apply(db, [{ eid: stray, name: 'doc', comp: { title: 'nobody' } }])
   let k = knock(task, stray)
-  assertEquals(krow(k).acted_at != null, true)
-  assertMatch(String(krow(k).error), /no door/)
+  assertEquals(erow(k) != null, true)
+  assertMatch(String(erow(k)?.message), /no door/)
 })

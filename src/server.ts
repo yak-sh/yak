@@ -39,6 +39,7 @@ import { dispatch, docs, on, relay, trace } from './effects.ts'
 import { vocabularyMd } from './schema.ts'
 import { freeze, serveFrozen, store } from './freeze.ts'
 import { filed } from './page.ts'
+import { PENDING } from './deliver.ts'
 import { fanout, FANOUT_PENDING, mailed } from './mail.ts'
 import { native } from './mailer.ts'
 import { closingTask } from './closing.ts'
@@ -1068,8 +1069,8 @@ on('session', {
 })
 on('stop_request', {
   created: stopped(cast),
-  sweep: { pending: 'acted_at is null' },
-  doc: 'the brake: signal the targeted session to stop, stamp acted_at',
+  sweep: { pending: PENDING('stop_request') },
+  doc: 'the brake: signal the targeted session to stop, settle delivered',
 })
 on('role', {
   removed: roleRemoved(cast),
@@ -1094,10 +1095,10 @@ on('task', {
 })
 on('knock', {
   created: knocked(cast),
-  sweep: { pending: 'acted_at is null' },
+  sweep: { pending: PENDING('knock') },
   doc: 'attention, resolved: cast to whoever is awake for the recipient, ' +
     'spawn a project operator onto the target, or mail an addressed ' +
-    'person — stamp delivery/error either way',
+    'person — settle delivered/error either way',
 })
 on('wake', {
   created: waking(cast),
@@ -1105,7 +1106,7 @@ on('wake', {
   // Not an outbox retry but the RECONCILE: boot hands back every wake
   // still owed, so an hour that passed while the server was down fires
   // now instead of vanishing.
-  sweep: { pending: 'acted_at is null' },
+  sweep: { pending: PENDING('wake') },
   doc: 'the timed knock: hold until `at`, then mint the knock and let ' +
     'the ladder deliver — one timer, re-armed at the earliest pending ' +
     'wake and reconciled at boot',
@@ -1114,10 +1115,10 @@ on('mail', {
   created: mailed(cast),
   // message_id marks INBOUND — a record of arrival the sweep must never
   // hand to delivery (mailed() guards the live path the same way).
-  sweep: { pending: 'acted_at is null and message_id is null' },
+  sweep: { pending: `message_id is null and ${PENDING('mail')}` },
   doc: 'deliver the mail — $TASKS_MAIL_CMD when set, else the native ' +
-    'Cloudflare sender — resolve the address book reference, stamp ' +
-    'acted_at/error/to_addr (the envelope copy) and sent_id (native)',
+    'Cloudflare sender — resolve the address book reference, settle ' +
+    'delivered/error and denormalize to_addr/sent_id (the envelope copy)',
 })
 on('comment', {
   created: fanout(cast),
