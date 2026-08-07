@@ -464,15 +464,15 @@ Deno.test('canon: bot.yak.sh sheds underscores; other domains pass', () => {
 
 Deno.test('payload: text and rendered markdown, threading headers on mid', () => {
   let p = payload({
-    from: 'ops@bot.yak.sh',
+    from: 'ops@bot.test',
     to: 'jeff@yak.sh',
     subject: 'subj',
     body: '**bold** https://example.com and T-123 and [idea](T-124) `46dcd3f`',
     repo: 'https://github.com/acme/widget',
   })
-  assertEquals(p.from, { address: 'ops@bot.yak.sh', name: 'ops' })
+  assertEquals(p.from, { address: 'ops@bot.test', name: 'ops' })
   assertEquals(p.to, ['jeff@yak.sh'])
-  assertEquals(p.reply_to, 'ops@bot.yak.sh')
+  assertEquals(p.reply_to, 'ops@bot.test')
   assertEquals(p.subject, 'subj')
   assertEquals(
     p.text,
@@ -541,7 +541,7 @@ let nativeEnvOff = () => {
 
 Deno.test('mailed: native send stamps sent_id, threads, logs dir=out', async () => {
   nativeEnv()
-  Deno.env.set('TASKS_MAIL_FROM', 'holdco@bot.yak.sh')
+  Deno.env.set('TASKS_MAIL_FROM', 'holdco@bot.test')
   Deno.env.set('FLEET_MAIL_API_URL', 'http://fleet.test')
   Deno.env.set('FLEET_MAIL_API_TOKEN', 'dummy-fleet')
   let { hits, restore } = netStub((url) =>
@@ -676,7 +676,7 @@ Deno.test('mailed: $TASKS_MAIL_CMD wins over the native env', async () => {
 
 Deno.test('mailed: a fleet recipient delivers locally — no send, no out-log', async () => {
   nativeEnv()
-  Deno.env.set('TASKS_MAIL_FROM', 'holdco@bot.yak.sh')
+  Deno.env.set('TASKS_MAIL_FROM', 'holdco@bot.test')
   Deno.env.set('FLEET_MAIL_API_URL', 'http://fleet.test')
   Deno.env.set('FLEET_MAIL_API_TOKEN', 'dummy-fleet')
   let dir = Deno.makeTempDirSync()

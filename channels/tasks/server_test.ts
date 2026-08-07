@@ -207,7 +207,7 @@ Deno.test('an inbox sweep deliberately reads an addressed acted knock', () => {
 
 let stamp = (over: Record<string, unknown> = {}) =>
   ch('m1', 'mail', {
-    to: 'taskmaster@bot.yak.sh',
+    to: 'taskmaster@bot.test',
     from: 'jeff@yak.sh',
     target_eid: 'home',
     message_id: 'msg:1:x',
@@ -238,12 +238,12 @@ Deno.test('unverified mail never injects — it waits for triage', () => {
   assertEquals(out, [])
 })
 
-// A letter addressed to the SESSION by id (`S-31@bot.yak.sh`) is direct
+// A letter addressed to the SESSION by id (`S-31@bot.test`) is direct
 // address, so it rings whatever loop this is — the operator gate belongs to
 // project mail alone. Without this the address resolves perfectly and the
 // session it names never hears about it.
 Deno.test('mail addressed to this session injects without operator', () => {
-  let mine = stamp({ to: 'S-31@bot.yak.sh', target_eid: 'sess' })
+  let mine = stamp({ to: 'S-31@bot.test', target_eid: 'sess' })
   let out = channelEvents([mine], ctx({ docOf: letter, operator: false }))
   assertEquals(out.length, 1)
   assertEquals(out[0].meta.kind, 'mail')

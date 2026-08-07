@@ -1165,7 +1165,7 @@ Deno.test('readerAt: a project reads its own project mail', () => {
 
 // A letter to the session itself is DIRECT address, so it lands whatever
 // loop the reader runs — the rule comments and knocks already follow.
-// Sessions are addressable by id (`S-31@bot.yak.sh`), and gating this on
+// Sessions are addressable by id (`S-31@bot.test`), and gating this on
 // `operator` would resolve the address perfectly and then tell nobody.
 Deno.test('addressed: a letter to my session reaches me without operator', () => {
   let S = 'bbbbbbbb-0000-4000-8000-000000000331'
@@ -1177,7 +1177,7 @@ Deno.test('addressed: a letter to my session reaches me without operator', () =>
       {
         eid: mine,
         name: 'mail',
-        comp: { to: 'S-31@bot.yak.sh', message_id: 'm:31', target_eid: S },
+        comp: { to: 'S-31@bot.test', message_id: 'm:31', target_eid: S },
       },
       // Project mail stays operator-only — this arm is unchanged.
       {
