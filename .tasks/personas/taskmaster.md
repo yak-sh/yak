@@ -92,6 +92,43 @@ entry (T-5958 reconciles the book). Fleet-internal mail depends on neither.
 
 ---
 
+# M-4523 git workflow — work in a worktree, land with `task land`
+
+- **Work in your own worktree, and land with `task land`.** The worktree means no two writers ever share a tree. `task land` rebases your branch on `main`, re-runs the gate on the exact rebased commit, and fast-forward merges it into the shared checkout's `main` — the tree the server runs from. Landing is what makes a change take effect.
+- **ff-only is the compare-and-swap.** If another lander moved `main` between your rebase and the merge, the merge is no longer a fast-forward and git refuses. Rebase on `main`, re-gate, land again. Never `--force`/`-f`, and never `--force-with-lease` past a refusal: a refusal means someone landed first, so read their work and rebase onto it.
+- **"Did it land?" asks the shared checkout's `main`.** Worktrees share one ref store, so it is readable from yours:
+
+  ```sh
+  git merge-base --is-ancestor <sha> main && echo landed || echo not-landed
+  ```
+
+- Keep commits focused — don't bundle unrelated changes.
+
+---
+
+# M-4066 agents take warm paths, not right paths — adoption is won structurally
+
+Agents reach for the warm path, not the right one. Four causes:
+
+- **Warm-path bias** — any loading friction loses.
+- **Composition gravity** — one call that chains five operations beats five calls.
+- **Discovery asymmetry** — CLIs teach at failure time; tool docs only teach agents who already loaded them.
+- **One-family stickiness** — whichever surface you started in is the one you stay in.
+
+Knowing all this does not protect you. The pull is structural, so an agent who can explain the pattern will still hand-roll the raw call an hour later — which is exactly why adoption is won by changing the path, never by a paragraph asking people to choose better.
+
+## Corollaries
+
+- Tools win adoption by being **asymmetrically better** (the bus riding MCP replies) and **one-verb frictionless** (`task review`).
+- **Structural triggers beat felt judgment** — name review criteria in the brief; never leave them to an agent's self-assessment.
+- **Put knowledge where the need arises** — the delete idiom belongs in the tool's docstring, not a wiki.
+
+## How to apply
+
+When agents route around a tool, fix the tool's warmth, composability, or self-teaching before blaming the agent (T-3568). `tool_call` telemetry makes the drift measurable per session, so this is an observation you can check rather than a hunch.
+
+---
+
 # M-4492 feedback: persist your thinking — context is wiped, the owner is away
 
 Context is wiped between sessions; the owner is often away.
@@ -262,43 +299,6 @@ For anything non-trivial, design before you build: a design session (thinking + 
 The recorded plan is an **FYI the owner redirects by exception, not an approval gate** — and owner-requested work is already approved. Don't stall waiting for a sign-off that isn't required; record the plan and move.
 
 A design carries its own date in the `proposed` mark, so it needs no dated filename and no file. Accepting one later is `task set D-9 .decided.at=now .decided.by=jeff`.
-
----
-
-# M-4523 git workflow — work in a worktree, land with `task land`
-
-- **Work in your own worktree, and land with `task land`.** The worktree means no two writers ever share a tree. `task land` rebases your branch on `main`, re-runs the gate on the exact rebased commit, and fast-forward merges it into the shared checkout's `main` — the tree the server runs from. Landing is what makes a change take effect.
-- **ff-only is the compare-and-swap.** If another lander moved `main` between your rebase and the merge, the merge is no longer a fast-forward and git refuses. Rebase on `main`, re-gate, land again. Never `--force`/`-f`, and never `--force-with-lease` past a refusal: a refusal means someone landed first, so read their work and rebase onto it.
-- **"Did it land?" asks the shared checkout's `main`.** Worktrees share one ref store, so it is readable from yours:
-
-  ```sh
-  git merge-base --is-ancestor <sha> main && echo landed || echo not-landed
-  ```
-
-- Keep commits focused — don't bundle unrelated changes.
-
----
-
-# M-4066 agents take warm paths, not right paths — adoption is won structurally
-
-Agents reach for the warm path, not the right one. Four causes:
-
-- **Warm-path bias** — any loading friction loses.
-- **Composition gravity** — one call that chains five operations beats five calls.
-- **Discovery asymmetry** — CLIs teach at failure time; tool docs only teach agents who already loaded them.
-- **One-family stickiness** — whichever surface you started in is the one you stay in.
-
-Knowing all this does not protect you. The pull is structural, so an agent who can explain the pattern will still hand-roll the raw call an hour later — which is exactly why adoption is won by changing the path, never by a paragraph asking people to choose better.
-
-## Corollaries
-
-- Tools win adoption by being **asymmetrically better** (the bus riding MCP replies) and **one-verb frictionless** (`task review`).
-- **Structural triggers beat felt judgment** — name review criteria in the brief; never leave them to an agent's self-assessment.
-- **Put knowledge where the need arises** — the delete idiom belongs in the tool's docstring, not a wiki.
-
-## How to apply
-
-When agents route around a tool, fix the tool's warmth, composability, or self-teaching before blaming the agent (T-3568). `tool_call` telemetry makes the drift measurable per session, so this is an observation you can check rather than a hunch.
 
 ---
 
