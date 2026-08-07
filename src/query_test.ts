@@ -688,12 +688,9 @@ Deno.test('resolution: an empty answer names the routing it actually used', () =
   let ps = (q: string) => parseQuery(q)
   // `.from` is real — on mail (stamped). `task list` returns tasks.
   assertEquals(resolution(ps('.from=jeff@yak.sh'), 'task'), 'mail.from')
-  // `.to` is a real mail COLUMN, so the _eid sugar never fires and wake's
-  // to_eid is never consulted. The suggestion is the spelling that works.
-  assertEquals(
-    resolution(ps('.to=holdco'), 'wake'),
-    'mail.to — did you mean .wake.to_eid=?',
-  )
+  // `.to` routes to the shared deliver.to (D-14945) — a facet a wake wears,
+  // so it is a legitimate filter, not a cross-kind mistake: silent.
+  assertEquals(resolution(ps('.to=holdco'), 'wake'), '')
   // Silent where there is nothing to explain: the door's own kind, the doc
   // facet every kind wears, and provenance. Advisory means never noisy.
   assertEquals(resolution(ps('.status=open'), 'task'), '')

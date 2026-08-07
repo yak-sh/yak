@@ -47,7 +47,8 @@ let task = (() => {
 let knock = (target: string, to: string) => {
   let eid = uid()
   let out = apply(db, [
-    { eid, name: 'knock', comp: { target_eid: target, to_eid: to } },
+    { eid, name: 'knock', comp: { target_eid: target } },
+    { eid, name: 'deliver', comp: { to } },
   ])
   let comp = out.find((c) => c.name == 'knock')!.comp!
   knocked(cast)(eid, comp)

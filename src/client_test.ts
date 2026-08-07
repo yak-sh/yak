@@ -307,7 +307,8 @@ Deno.test('notices: comments, acted knocks, and verified operator mail surface t
       { eid: C, name: 'comment', comp: { target_eid: T1 } },
       { eid: K, name: 'entity', comp: { eid: K, num: 44 } },
       { eid: K, name: 'created', comp: { at: '2026-01-03' } },
-      { eid: K, name: 'knock', comp: { to_eid: S, target_eid: T1 } },
+      { eid: K, name: 'knock', comp: { target_eid: T1 } },
+      { eid: K, name: 'deliver', comp: { to: S } }, // WHO — the shared facet
       // The outcome is the shared error facet now (D-14945); the inbox
       // surfaces the knock regardless, the same as its old acted_at receipt.
       {
@@ -970,22 +971,22 @@ Deno.test('unreadMail + digest: unread counts, read/outbound stay quiet', () => 
       { eid: P, name: 'doc', comp: { title: 'Venture', body: '' } },
       { eid: P, name: 'project', comp: {} },
       ...mk(M1, 21, {
-        to: 'v@x.test',
+        to_addr: 'v@x.test',
         message_id: 'msg:1:<a@x>',
         target_eid: P,
       }),
       ...mk(M2, 22, {
-        to: 'v@x.test',
+        to_addr: 'v@x.test',
         message_id: 'msg:2:<b@x>',
         target_eid: P,
       }),
       // read-state now rides the `opened` stamp (T-7006), not mail.read_at
       { eid: M2, name: 'opened', comp: { at: '2026-07-22T00:00:00Z' } },
-      ...mk(M3, 23, { to: 'them@y.test' }),
+      ...mk(M3, 23, {}), // outbound, born read
       // addressed to ME by address, ABOUT some other entity — the case
       // the old target_eid-only screen dropped on the floor
       ...mk(M4, 25, {
-        to: 'me@x.test',
+        to_addr: 'me@x.test',
         message_id: 'msg:4:<d@x>',
         target_eid: T2,
       }),
@@ -1053,11 +1054,12 @@ Deno.test('inbox: every source, archived hides, opened marks read', () => {
       { eid: TC, name: 'claim', comp: { session_eid: Sx } },
       { eid: c1, name: 'comment', comp: { target_eid: Sx } },
       { eid: c2, name: 'comment', comp: { target_eid: TC } },
-      { eid: kn, name: 'knock', comp: { to_eid: A, target_eid: TC } },
+      { eid: kn, name: 'knock', comp: { target_eid: TC } },
+      { eid: kn, name: 'deliver', comp: { to: A } },
       {
         eid: ml,
         name: 'mail',
-        comp: { to: 'm@x', message_id: 'm:1', target_eid: P },
+        comp: { to_addr: 'm@x', message_id: 'm:1', target_eid: P },
       },
       { eid: cAc, name: 'comment', comp: { target_eid: A } }, // said to the venture
       { eid: cO, name: 'comment', comp: { target_eid: P } }, // not addressed to me
@@ -1118,16 +1120,18 @@ Deno.test("readerAt: a person hears their own letters, not the fleet's", () => {
       {
         eid: mine,
         name: 'mail',
-        comp: { to: 'me@x', to_addr: 'me@x', message_id: 'm:1' },
+        comp: { to_addr: 'me@x', message_id: 'm:1' },
       },
-      { eid: byEid, name: 'mail', comp: { to: ME, message_id: 'm:2' } },
+      // arrived at the reader's own eid — addrs carries it, so to_addr matches
+      { eid: byEid, name: 'mail', comp: { to_addr: ME, message_id: 'm:2' } },
       {
         eid: theirs,
         name: 'mail',
-        comp: { to: 'v@x', message_id: 'm:3', target_eid: VENTURE },
+        comp: { to_addr: 'v@x', message_id: 'm:3', target_eid: VENTURE },
       },
-      { eid: sent, name: 'mail', comp: { to: 'me@x', to_addr: 'me@x' } },
-      { eid: kn, name: 'knock', comp: { to_eid: ME, target_eid: VENTURE } },
+      { eid: sent, name: 'mail', comp: { to_addr: 'me@x' } },
+      { eid: kn, name: 'knock', comp: { target_eid: VENTURE } },
+      { eid: kn, name: 'deliver', comp: { to: ME } },
       { eid: said, name: 'comment', comp: { target_eid: ME } },
     ],
   })
@@ -1152,7 +1156,7 @@ Deno.test('readerAt: a project reads its own project mail', () => {
       {
         eid: ml,
         name: 'mail',
-        comp: { to: 'p@x', message_id: 'm:9', target_eid: P2 },
+        comp: { to_addr: 'p@x', message_id: 'm:9', target_eid: P2 },
       },
     ],
   })
@@ -1175,13 +1179,13 @@ Deno.test('addressed: a letter to my session reaches me without operator', () =>
       {
         eid: mine,
         name: 'mail',
-        comp: { to: 'S-31@bot.test', message_id: 'm:31', target_eid: S },
+        comp: { to_addr: 'S-31@bot.test', message_id: 'm:31', target_eid: S },
       },
       // Project mail stays operator-only — this arm is unchanged.
       {
         eid: theirs,
         name: 'mail',
-        comp: { to: 'p@x', message_id: 'm:32', target_eid: P3 },
+        comp: { to_addr: 'p@x', message_id: 'm:32', target_eid: P3 },
       },
     ],
   })
@@ -1261,11 +1265,13 @@ Deno.test('project mail reaches the operator, not a specialist; direct address a
       {
         eid: ml,
         name: 'mail',
-        comp: { to: 'm@x', message_id: 'm:1', target_eid: P },
+        comp: { to_addr: 'm@x', message_id: 'm:1', target_eid: P },
       },
       { eid: cm, name: 'comment', comp: { target_eid: Sp } }, // aimed at the specialist
-      { eid: ka, name: 'knock', comp: { to_eid: P } },
-      { eid: kd, name: 'knock', comp: { to_eid: Sp } },
+      { eid: ka, name: 'knock', comp: {} },
+      { eid: ka, name: 'deliver', comp: { to: P } },
+      { eid: kd, name: 'knock', comp: {} },
+      { eid: kd, name: 'deliver', comp: { to: Sp } },
     ],
   })
   let inbox = (id: string) =>
@@ -1541,6 +1547,7 @@ Deno.test('scopeFor: arg > cwd-repo > persona-home > actor-project > none', () =
 Deno.test('mailChanges/replyChanges: to as given, Re: derived, thread edge set', () => {
   let made = mailChanges({ to: 'P-20', subject: 'Hello', body: 'hi' })
   assertEquals(made.changes[0].comp, { title: 'Hello', body: 'hi' })
+  // WHERE it goes is the shared deliver.to; the thread stays on mail.
   assertEquals(made.changes[1].comp, { to: 'P-20' }) // unresolved on purpose
   // No sender rides along: `from` is off the wire, stamped by the server
   // from the writing actor, so a builder cannot offer to sign the letter.
@@ -1549,10 +1556,8 @@ Deno.test('mailChanges/replyChanges: to as given, Re: derived, thread edge set',
     subject: 's',
     replyTo: 'some-eid',
   })
-  assertEquals(full.changes[1].comp, {
-    to: 'x@y.test',
-    reply_to_eid: 'some-eid',
-  })
+  assertEquals(full.changes[1].comp, { to: 'x@y.test' })
+  assertEquals(full.changes[2].comp, { reply_to_eid: 'some-eid' })
   assertEquals(reSubject('question'), 'Re: question')
   assertEquals(reSubject('Re: Re: question'), 'Re: question')
   assertEquals(reSubject('FWD: fw: re: question'), 'Re: question')
@@ -1562,20 +1567,25 @@ Deno.test('mailChanges/replyChanges: to as given, Re: derived, thread edge set',
     kind: 'mail',
     comps: {
       doc: { title: 'Re: asked', body: '' },
-      mail: { to: 'us@x.test', from: 'them@y.test', message_id: 'msg:1:<a>' },
+      mail: {
+        to_addr: 'us@x.test',
+        from: 'them@y.test',
+        message_id: 'msg:1:<a>',
+      },
     },
   }
   let r = replyChanges(inbound, 'answer')
-  assertEquals(r.changes[1].comp?.to, 'them@y.test') // the sender
-  assertEquals(r.changes[1].comp?.reply_to_eid, 'm1')
+  assertEquals(r.changes[1].comp?.to, 'them@y.test') // the sender → deliver.to
+  assertEquals(r.changes[2].comp?.reply_to_eid, 'm1')
   assertEquals(r.changes[0].comp?.title, 'Re: asked')
+  // our own sent letter: the far side is its recipient, the shared deliver.to
   let sent = {
     eid: 'm2',
     num: 2,
     kind: 'mail',
     comps: {
       doc: { title: 'opener', body: '' },
-      mail: { to: 'them@y.test' },
+      deliver: { to: 'them@y.test' },
     },
   }
   assertEquals(replyChanges(sent, 'more').changes[1].comp?.to, 'them@y.test')
@@ -1648,7 +1658,7 @@ Deno.test('mailLine: unread dot, unverified mark, direction', () => {
       entity: { eid: 'x', num: 9, created_at: '' },
       doc: { title: 'Invoice', body: '' },
       mail: {
-        to: 'us@x.test',
+        to_addr: 'us@x.test',
         from: 'them@y.test',
         message_id: 'msg:1:<a>',
         received_at: '2026-07-22T10:00:00Z',
@@ -1677,7 +1687,7 @@ Deno.test('mailLine: unread dot, unverified mark, direction', () => {
       entity: { eid: 'y', num: 10 },
       created: { eid: 'y', at: '2026-07-22T11:00:00Z' },
       doc: { title: 'Ping', body: '' },
-      mail: { to: 'P-20', to_addr: 'venture@x.test' },
+      mail: { to_addr: 'venture@x.test' },
     },
   }
   assertMatch(mailLine(sent, NOW), /^E-10 {3}· → venture@x.test — Ping \(1h\)$/)

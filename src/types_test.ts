@@ -51,9 +51,7 @@ Deno.test('death words: every reference declares, the sets hold', () => {
       'subscription.target_eid',
       'stop_request.target_eid',
       'knock.target_eid',
-      'knock.to_eid',
       'wake.target_eid',
-      'wake.to_eid',
       'pin.canvas_eid',
       // a pane dies with its layout and with its container (D-14718)
       'pane.layout_eid',
@@ -94,6 +92,7 @@ Deno.test('death words: every reference declares, the sets hold', () => {
       'session.role_eid',
       'mail.target_eid',
       'mail.reply_to_eid',
+      'deliver.to',
       'created.by',
       'updated.by',
       // Proposal, decision, and feedback bylines outlive their tombstones.

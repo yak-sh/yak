@@ -18,7 +18,7 @@ type Cast = (changes: Change[]) => void
 type Row = {
   eid: string
   at: string
-  to_eid: string
+  to: string
   target_eid: string | null
   minted: string | null
 }
@@ -37,8 +37,10 @@ let timer: ReturnType<typeof setTimeout> | undefined
 // neither delivered nor error present (D-14945).
 let pending = () =>
   db.prepare(
-    `select wake.eid, wake.at, wake.to_eid, wake.target_eid, c.at as minted
-     from wake left join created c on c.eid = wake.eid
+    `select wake.eid, wake.at, deliver."to" as "to", wake.target_eid,
+       c.at as minted
+     from wake join deliver on deliver.eid = wake.eid
+     left join created c on c.eid = wake.eid
      where ${PENDING('wake')} order by wake.at`,
   ).all() as Row[]
 
@@ -47,11 +49,14 @@ let pending = () =>
 let fire = (r: Row, cast: Cast) => {
   let t = trace()
   let ke = uuid()
-  let out = apply(db, [{
-    eid: ke,
-    name: 'knock',
-    comp: { target_eid: r.target_eid ?? r.eid, to_eid: r.to_eid },
-  }], t)
+  let out = apply(db, [
+    {
+      eid: ke,
+      name: 'knock',
+      comp: { target_eid: r.target_eid ?? r.eid },
+    },
+    { eid: ke, name: 'deliver', comp: { to: r.to } },
+  ], t)
   cast(out)
   dispatch(out, t, (c, e) => console.warn(`wake ${c} —`, e))
   // Settled DELIVERED after the mint: the wake did its one job, minting the

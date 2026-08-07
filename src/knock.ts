@@ -7,7 +7,7 @@
 // comment on the target in the same batch. SERVER-ONLY (imports db).
 import { apply, db, human, snapshot } from './db.ts'
 import { reachable } from './door.ts'
-import { delivered, errored } from './deliver.ts'
+import { delivered, errored, toOf } from './deliver.ts'
 import { dispatch, trace } from './effects.ts'
 import { type Change, uuid } from './types.ts'
 import { rows, spawnChanges } from './client.ts'
@@ -45,10 +45,14 @@ let awake = (to: string): { eid: string; num: number } | undefined =>
 // a silence — the artifact must say why nobody heard it.
 export let knocked =
   (cast: Cast) => (eid: string, comp: Record<string, unknown>) => {
-    let to = String(comp.to_eid ?? '')
+    let to = toOf(eid)
     let target = String(comp.target_eid ?? '')
     let done = (via: string) => delivered(eid, via, cast)
     let fail = (error: string) => errored(eid, error, cast)
+    // A knock with no recipient is inert — settle the miss and stop. A kept
+    // `to` at a tombstone isn't empty (death 'keep' holds the dead eid); the
+    // ladder finds no door for it and fails the same way, never firing.
+    if (!to) return fail('no recipient')
     // Who asked. The knock's own provenance is the author of anything it
     // sends on their behalf.
     let knocker = () =>
@@ -140,7 +144,8 @@ export let knocked =
                 body: words || `You are asked to look at ${human(db, target)}.`,
               },
             },
-            { eid: m, name: 'mail', comp: { to, target_eid: target } },
+            { eid: m, name: 'mail', comp: { target_eid: target } },
+            { eid: m, name: 'deliver', comp: { to } },
             // Signed by whoever knocked — the letter carries their words.
             // An unnamed writer would sign it by fallback, as the owner.
           ],

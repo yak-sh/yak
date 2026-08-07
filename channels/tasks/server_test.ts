@@ -25,6 +25,13 @@ let ch = (
   comp: Record<string, unknown> | null,
 ): Change => ({ eid, name, comp })
 
+// A knock is a knock comp + the shared deliver.to (D-14945): WHO it is for no
+// longer rides the knock comp, so the batch carries a deliver change beside it.
+let knock = (eid: string, to: string, target?: string): Change[] => [
+  ch(eid, 'knock', target ? { target_eid: target } : {}),
+  ch(eid, 'deliver', { to }),
+]
+
 // A stub id book — the socket-fed index is exercised separately (learn tests).
 let idOf = (eid: string): string | null =>
   ({
@@ -132,27 +139,30 @@ Deno.test('a comment falls back to its title when the body is empty', () => {
 // --- knocks ------------------------------------------------------------------
 
 Deno.test('a knock at the session names its target as a human id', () => {
-  let batch = [ch('k1', 'knock', { to_eid: 'sess', target_eid: 't9' })]
+  let batch = knock('k1', 'sess', 't9')
   assertEquals(channelEvents(batch, ctx()), [
     { content: 'knock: look at T-9', meta: { kind: 'knock' }, eid: 'k1' },
   ])
 })
 
 Deno.test('an operator receives a knock at the session actor', () => {
-  let batch = [ch('k1', 'knock', { to_eid: 'actor', target_eid: 't9' })]
+  let batch = knock('k1', 'actor', 't9')
   assertEquals(channelEvents(batch, ctx())[0].content, 'knock: look at T-9')
 })
 
 Deno.test('a non-operator receives session knocks, not actor knocks', () => {
-  let direct = ch('k1', 'knock', { to_eid: 'sess', target_eid: 't9' })
-  let project = ch('k2', 'knock', { to_eid: 'actor', target_eid: 't9' })
-  assertEquals(channelEvents([direct, project], ctx({ operator: false })), [
-    { content: 'knock: look at T-9', meta: { kind: 'knock' }, eid: 'k1' },
-  ])
+  let direct = knock('k1', 'sess', 't9')
+  let project = knock('k2', 'actor', 't9')
+  assertEquals(
+    channelEvents([...direct, ...project], ctx({ operator: false })),
+    [
+      { content: 'knock: look at T-9', meta: { kind: 'knock' }, eid: 'k1' },
+    ],
+  )
 })
 
 Deno.test('a knock naming only its recipient has no look-at target', () => {
-  let batch = [ch('k1', 'knock', { to_eid: 'sess' })]
+  let batch = knock('k1', 'sess')
   assertEquals(channelEvents(batch, ctx()), [
     { content: 'knock', meta: { kind: 'knock' }, eid: 'k1' },
   ])
@@ -160,7 +170,7 @@ Deno.test('a knock naming only its recipient has no look-at target', () => {
 
 Deno.test('a knock carries the words of the comment on its TARGET', () => {
   let batch = [
-    ch('k1', 'knock', { to_eid: 'sess', target_eid: 't9' }),
+    ...knock('k1', 'sess', 't9'),
     ch('c1', 'doc', { title: '', body: 'take a look' }),
     ...comment('c1', 't9'),
   ]
@@ -173,7 +183,7 @@ Deno.test('a knock carries the words of the comment on its TARGET', () => {
 })
 
 Deno.test('a knock aimed at neither the session nor its actor is ignored', () => {
-  let batch = [ch('k1', 'knock', { to_eid: 'stranger', target_eid: 't9' })]
+  let batch = knock('k1', 'stranger', 't9')
   assertEquals(channelEvents(batch, ctx()), [])
 })
 
@@ -181,7 +191,7 @@ Deno.test("the resolver's settle broadcast is a receipt, not a nudge", () => {
   // The outcome is its own frame (D-14945): a knock that already settled
   // delivered is a receipt, so a live batch carrying both stays silent.
   let batch = [
-    ch('k1', 'knock', { to_eid: 'sess', target_eid: 't9' }),
+    ...knock('k1', 'sess', 't9'),
     ch('k1', 'delivered', { at: '2026-07-27T00:00:00Z', via: 'cast S-1' }),
   ]
   assertEquals(channelEvents(batch, ctx()), [])
@@ -189,7 +199,7 @@ Deno.test("the resolver's settle broadcast is a receipt, not a nudge", () => {
 
 Deno.test('an inbox sweep deliberately reads an addressed settled knock', () => {
   let batch = [
-    ch('k1', 'knock', { to_eid: 'sess', target_eid: 't9' }),
+    ...knock('k1', 'sess', 't9'),
     ch('k1', 'error', {
       at: '2026-07-27T00:00:00Z',
       message: 'no live channel',
@@ -208,7 +218,7 @@ Deno.test('an inbox sweep deliberately reads an addressed settled knock', () => 
 
 let stamp = (over: Record<string, unknown> = {}) =>
   ch('m1', 'mail', {
-    to: 'taskmaster@bot.test',
+    to_addr: 'taskmaster@bot.test',
     from: 'jeff@yak.sh',
     target_eid: 'home',
     message_id: 'msg:1:x',
@@ -288,7 +298,7 @@ Deno.test('no resolved home project, no mail delivery', () => {
 Deno.test("a mint's wire frame (no received_at) is not the arrival", () => {
   let batch = [
     ch('m1', 'doc', { title: 'hello', body: 'a letter' }),
-    ch('m1', 'mail', { to: 'x@y', from: 'jeff@yak.sh', target_eid: 'home' }),
+    ch('m1', 'mail', { from: 'jeff@yak.sh', target_eid: 'home' }),
   ]
   assertEquals(channelEvents(batch, ctx()), [])
 })
@@ -422,7 +432,7 @@ Deno.test('what THIS run injected is never re-rung, even by a catch-up', () => {
 // outcome. `via` names the ladder's claim — `cast S-31`, this session — and
 // `at` is the receipt time the words window keys off.
 let cast = (over: { via?: string; at?: string } = {}): Change[] => [
-  ch('k7', 'knock', { to_eid: 'sess', target_eid: 't9' }),
+  ...knock('k7', 'sess', 't9'),
   ch('k7', 'delivered', {
     at: over.at ?? '2026-07-25T00:17:58Z',
     via: over.via ?? 'cast S-31',
@@ -501,7 +511,7 @@ Deno.test("learn caches a mail's doc for the stamp frame that follows", () => {
     ch('m1', 'entity', { num: 5 }),
     // doc BEFORE mail in the same batch — the second pass still catches it.
     ch('m1', 'doc', { title: 'hello', body: 'a letter' }),
-    ch('m1', 'mail', { to: 'x@y', from: 'jeff@yak.sh', target_eid: 'home' }),
+    ch('m1', 'mail', { from: 'jeff@yak.sh', target_eid: 'home' }),
   ])
   assertEquals(docOf(idx, 'm1'), { title: 'hello', body: 'a letter' })
   let out = channelEvents([stamp()], ctx({ docOf: (e) => docOf(idx, e) }))
@@ -512,7 +522,7 @@ Deno.test('a doc patch on a cached mail merges only what it carries', () => {
   let idx: Index = new Map()
   learn(idx, [
     ch('m1', 'doc', { title: 'hello', body: 'a letter' }),
-    ch('m1', 'mail', { to: 'x@y' }),
+    ch('m1', 'mail', {}),
   ])
   learn(idx, [ch('m1', 'doc', { body: 'edited' })])
   assertEquals(docOf(idx, 'm1'), { title: 'hello', body: 'edited' })

@@ -233,18 +233,20 @@ export let mailChanges = (m: FleetMsg, target: string | null) => {
       eid,
       name: 'mail',
       comp: {
-        to: m.to ?? '',
         ...(target ? { target_eid: target } : {}),
         ...(reply ? { reply_to_eid: reply } : {}),
       },
     },
   ]
-  // `from` rides the STAMP, not the wire: an outbound mail's sender is
-  // derived from its author (db.ts), and this is the one case where the
-  // sender is a fact about the far side instead — so it comes in through
-  // the same server-only door as message_id and verified.
+  // An INBOUND mail is a record of arrival, never an outbound ask — so it
+  // wears no `deliver {to}`; its recipient is `to_addr`, the address it was
+  // delivered to, alongside the rest of the arrival provenance. `from` rides
+  // the STAMP too: an outbound mail's sender is derived from its author
+  // (db.ts), and this is the one case where the sender is a fact about the
+  // far side instead — the same server-only door as message_id and verified.
   let stamp: Row = {
     from: author(m),
+    to_addr: m.to ?? null,
     message_id: m.id,
     received_at: arrivedAt(m),
     verified: m.verified ? 1 : 0,

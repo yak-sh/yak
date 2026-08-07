@@ -53,6 +53,18 @@ export let settled = (eid: string): boolean =>
      union all select 1 from error where eid = ?`,
   ).get(eid, eid)
 
+// WHERE this deliverable goes — the recipient off the shared `deliver {to}`
+// facet (D-14945). The effects read it here rather than off their own
+// component, since the recipient is one aspect factored out of all of them.
+// '' when none is on file: a deliverable with no recipient is inert, and the
+// resolver stamps that as its error rather than crashing.
+export let toOf = (eid: string): string =>
+  String(
+    (db.prepare('select "to" from deliver where eid = ?').get(eid) as
+      | { to?: string }
+      | undefined)?.to ?? '',
+  )
+
 // The pending predicate as a WHERE fragment over a deliverable's OWN table:
 // no outcome component yet. The boot sweeps (server.ts) and the queue
 // readers (wake.ts pending) share this one shape, so "unacted" means the

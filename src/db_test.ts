@@ -110,9 +110,7 @@ let contracts = [
   contract('stop_request', 'target_eid', 'session'),
   contract('session', 'role_eid', 'role', { id: 'role-session' }),
   contract('session', 'parent_eid', 'session', { id: 'child-session' }),
-  contract('mail', 'reply_to_eid', 'mail', {
-    to: 'operator@example.test',
-  }),
+  contract('mail', 'reply_to_eid', 'mail'),
   contract('persona', 'home_eid', 'project'),
   contract('memory', 'scope_eid', 'project'),
   contract('layout', 'root_eid', 'pane'),
@@ -1444,7 +1442,8 @@ Deno.test('backfill: mail.read_at seeds opened, idempotently', () => {
   let m = uid()
   apply(d, [
     { eid: m, name: 'doc', comp: { title: 'old letter' } },
-    { eid: m, name: 'mail', comp: { to: 'jeff' } },
+    { eid: m, name: 'mail', comp: {} },
+    { eid: m, name: 'deliver', comp: { to: 'jeff@x.test' } },
   ])
   d.exec('alter table mail add column read_at text')
   d.prepare('update mail set read_at = ? where eid = ?')
@@ -1665,7 +1664,8 @@ Deno.test('mail survives its subject: death keeps the reference', () => {
   apply(db, [
     { eid: t, name: 'doc', comp: { title: 'subject' } },
     { eid: m, name: 'doc', comp: { title: 'sent word' } },
-    { eid: m, name: 'mail', comp: { to: 'jeff', target_eid: t } },
+    { eid: m, name: 'mail', comp: { target_eid: t } },
+    { eid: m, name: 'deliver', comp: { to: 'jeff@x.test' } },
   ])
   apply(db, [{ eid: t, name: 'entity', comp: null }])
   assertEquals(comp(t, 'doc'), undefined) // the subject is gone
@@ -1678,12 +1678,11 @@ Deno.test('mendMail: rebuilds the FK-era table, no-ops when healed', () => {
   let d = fresh()
   // regress mail to the shape live dbs shipped with (FK on target_eid)
   d.exec('drop table mail')
-  // The FK-era shape, already trimmed of acted_at/error the way open()'s
-  // migrateDelivery leaves it before mendMail runs (D-14945); the FK on
-  // target_eid is the bug this rebuild heals.
+  // The FK-era shape, already trimmed of acted_at/error/to the way open()'s
+  // migrateDelivery + migrateDeliver leave it before mendMail runs (D-14945);
+  // the FK on target_eid is the bug this rebuild heals.
   d.exec(`create table mail (
     eid        text primary key references entity(eid),
-    "to"       text not null,
     "from"     text,
     target_eid text references entity(eid),
     to_addr    text,
@@ -1696,7 +1695,8 @@ Deno.test('mendMail: rebuilds the FK-era table, no-ops when healed', () => {
   let t = uid(), m = uid()
   apply(d, [
     { eid: t, name: 'doc', comp: { title: 'subject' } },
-    { eid: m, name: 'mail', comp: { to: 'jeff', target_eid: t } },
+    { eid: m, name: 'mail', comp: { target_eid: t } },
+    { eid: m, name: 'deliver', comp: { to: 'jeff@x.test' } },
   ])
   assertThrows(() => apply(d, [{ eid: t, name: 'entity', comp: null }])) // the bug
   mendMail(d)
@@ -2746,7 +2746,8 @@ Deno.test('nobody writes in the owner name but the owner keyboard', () => {
   let m = uid()
   apply(d, [
     { eid: m, name: 'doc', comp: { title: 's', body: 'b' } },
-    { eid: m, name: 'mail', comp: { to: 'x@y.test' } },
+    { eid: m, name: 'mail', comp: {} },
+    { eid: m, name: 'deliver', comp: { to: 'x@y.test' } },
   ])
   let signed = d.prepare('select "from" as f from mail where eid = ?')
     .get(m) as { f: string | null }
@@ -2770,7 +2771,8 @@ Deno.test('the sender rides graph-out, unforgeable but readable', () => {
     db,
     [
       { eid: m, name: 'doc', comp: { title: 's', body: 'b' } },
-      { eid: m, name: 'mail', comp: { to: 'x@y.test', from: 'someone@else' } },
+      { eid: m, name: 'mail', comp: {} },
+      { eid: m, name: 'deliver', comp: { to: 'x@y.test' } },
     ],
     undefined,
     who,

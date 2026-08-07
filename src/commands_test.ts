@@ -326,15 +326,17 @@ Deno.test('focusOf: one claim is "here"; none, several, or no session is not', (
 Deno.test('knock: recipient resolves, words ride as plain comment, project defaults', () => {
   let k = run('knock B-3 need it today', ctx(T, 'sess-x'))
   let knock = k.changes!.find((c) => c.name == 'knock')!
+  let deliver = k.changes!.find((c) => c.name == 'deliver')!
   let doc = k.changes!.find((c) => c.name == 'doc')!
   let comment = k.changes!.find((c) => c.name == 'comment')!
-  assertEquals(knock.name, 'knock')
-  assertEquals(knock.comp, { target_eid: T, to_eid: B })
+  assertEquals(knock.comp, { target_eid: T }) // the subject
+  assertEquals(deliver.comp, { to: B }) // WHO — the shared deliver.to
   assertEquals(doc.comp?.body, 'need it today')
   assertEquals(comment.comp?.target_eid, T)
   // no recipient word: a task asks its own project
   let p = run('knock', ctx(T))
-  assertEquals(p.changes![0].comp, { target_eid: T, to_eid: P })
+  assertEquals(p.changes![0].comp, { target_eid: T })
+  assertEquals(p.changes![1].comp, { to: P })
   // a doc with no project and no name: nowhere to aim
   assertThrows(() => run('knock', ctx(B)), Error, 'name a recipient')
 })
@@ -355,19 +357,19 @@ Deno.test('knock: an unresolvable recipient is refused, never made body', () => 
     Error,
     'no such recipient: tasks',
   )
-  // the bare form is untouched: nothing was said, so nothing is mistaken
-  assertEquals(run('knock', ctx(T)).changes![0].comp, {
-    target_eid: T,
-    to_eid: P,
-  })
+  // the bare form is untouched: nothing was said, so nothing is mistaken.
+  // WHO to knock rides the shared deliver.to now (D-14945).
+  let bare = run('knock', ctx(T)).changes!
+  assertEquals(bare[0].comp, { target_eid: T })
+  assertEquals(bare[1].comp, { to: P })
 })
 
 Deno.test('wake: who, when, and a trailing id is what to look at', () => {
   let r = run('wake B-3 in 60m T-4', ctx(P, 'sess-x'))
-  let [doc, wake] = r.changes!
+  let [doc, wake, deliver] = r.changes!
   assertEquals(doc.comp?.title, 'wake B-3 in 60m T-4')
   assertEquals(wake.name, 'wake')
-  assertEquals(wake.comp?.to_eid, B)
+  assertEquals(deliver.comp?.to, B) // WHO to wake — the shared deliver.to
   assertEquals(wake.comp?.target_eid, T) // the trailing id wins the subject
   // the phrase resolves HERE, at mint — an hour out, within the second
   let at = Date.parse(String(wake.comp?.at))
@@ -388,13 +390,14 @@ Deno.test('wake: who, when, and a trailing id is what to look at', () => {
 
 Deno.test('mail: to, subject, -- body — one letter, minted whole', () => {
   let r = run('mail jeff Lunch plans -- noon at the taco place?', ctx())
-  let [doc, mail] = r.changes!
+  let [doc, deliver, mail] = r.changes!
   assertEquals(doc.comp, {
     title: 'Lunch plans',
     body: 'noon at the taco place?',
   })
+  assertEquals(deliver.comp, { to: 'jeff' }) // as given: delivery resolves
   assertEquals(mail.name, 'mail')
-  assertEquals(mail.comp, { to: 'jeff' }) // as given: delivery resolves
+  assertEquals(mail.comp, {})
   assertEquals(doc.eid, mail.eid)
   assertEquals(UUID.test(doc.eid), true)
   assertEquals(r.msg, 'mail → jeff — Lunch plans')
@@ -405,18 +408,20 @@ Deno.test('mail: to, subject, -- body — one letter, minted whole', () => {
 
 Deno.test('reply: answers the named mail — or the focused one', () => {
   let r = run('reply E-7 on it — landing today', ctx())
-  let [doc, mail] = r.changes!
+  let [doc, deliver, mail] = r.changes!
   assertEquals(doc.comp, {
     title: 'Re: Hello there',
     body: 'on it — landing today',
   })
-  // the far side: an inbound row answers its sender, threaded at authoring
-  assertEquals(mail.comp, { to: 'jeff@yak.sh', reply_to_eid: M })
+  // the far side: an inbound row answers its sender, threaded at authoring.
+  // WHERE it goes is the shared deliver.to; the thread stays on mail.
+  assertEquals(deliver.comp, { to: 'jeff@yak.sh' })
+  assertEquals(mail.comp, { reply_to_eid: M })
   assertEquals(r.msg, 'E-7 ← reply → jeff@yak.sh')
   // standing on the mail, every word is the page
   let f = run('reply on it', ctx(M))
   assertEquals(f.changes![0].comp?.body, 'on it')
-  assertEquals(f.changes![1].comp?.reply_to_eid, M)
+  assertEquals(f.changes![2].comp?.reply_to_eid, M)
   assertThrows(() => run('reply E-7', ctx()), Error, 'needs words')
   assertThrows(() => run('reply on it', ctx(T)), Error, 'T-4 is not a mail')
   assertThrows(() => run('reply on it', ctx()), Error, 'nothing focused')

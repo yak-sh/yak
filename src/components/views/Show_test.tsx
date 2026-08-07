@@ -147,11 +147,13 @@ Deno.test('mail Full section shows its envelope and delivery receipt', () => {
       doc: { eid: 'mail', title: 'Hello', body: '' },
       mail: {
         eid: 'mail',
-        to: 'P-2',
         from: 'sender@x.test',
         to_addr: 'desk@x.test',
         sent_id: 'sent@x.test',
       },
+      // WHERE it went — the shared deliver.to (D-14945); to_addr is the
+      // address that reference resolved to.
+      deliver: { eid: 'mail', to: 'P-2' },
       // The send outcome is the shared delivered facet now (D-14945).
       delivered: {
         eid: 'mail',
@@ -182,7 +184,7 @@ Deno.test('mail Full section shows its envelope and delivery receipt', () => {
         doc: { eid: 'mail', title: 'Hello', body: '' },
         mail: {
           eid: 'mail',
-          to: 'desk@x.test',
+          to_addr: 'desk@x.test',
           from: 'stranger@x.test',
           message_id: 'received@x.test',
           received_at: '2026-07-30T13:00:00Z',

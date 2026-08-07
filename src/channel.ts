@@ -300,6 +300,18 @@ let outcomesIn = (changes: Change[]) => {
   return { delivered, errored }
 }
 
+// WHO each deliverable in the batch is for — the shared `deliver {to}` facet,
+// indexed by eid. A knock is cast with its deliver alongside (and a resume
+// snapshot carries every component), so the recipient is always in the batch
+// the moment the knock is.
+let toIn = (changes: Change[]) => {
+  let to = new Map<string, string>()
+  for (let c of changes) {
+    if (c.name == 'deliver' && c.comp) to.set(c.eid, str(c.comp.to))
+  }
+  return to
+}
+
 // The two edges of the doc a component's body rides on, indexed by eid within
 // the batch — a comment's words and a knock's note both land as a `doc` change
 // beside their own component (mint-time). Bodiless means the doc isn't here.
@@ -356,14 +368,16 @@ let bornIn = (changes: Change[]) => {
 //      rule) — but ONLY at mint, when the batch also carries the doc that holds
 //      the words (a bodiless later patch is skipped). A comment on a claimed
 //      task names that task in `on=` so the operator knows which one.
-//   2. a `knock` (types.ts): to_eid is the recipient — this session or its
-//      actor — and target_eid is what to look at; the words ride as a plain
-//      comment on the TARGET in the same batch (the :knock contract).
+//   2. a `knock` (types.ts): the shared `deliver {to}` is the recipient —
+//      this session or its actor — and target_eid is what to look at; the
+//      words ride as a plain comment on the TARGET in the same batch (the
+//      :knock contract).
 //   3. a `mail` arrival for the session's home project — see the branch.
 export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
   let docs = docsIn(changes)
   let created = createdIn(changes)
   let { delivered, errored } = outcomesIn(changes)
+  let recipients = toIn(changes)
   // Only the resume sweep needs birthdays (commentOn) — a live batch is one
   // moment, so everything in it rode together.
   let born = ctx.mode == 'resume' || ctx.mode == 'inbox'
@@ -413,7 +427,7 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
       ) {
         continue
       }
-      let recipient = str(c.comp.to_eid)
+      let recipient = recipients.get(c.eid) ?? ''
       if (
         recipient != ctx.sessionEid &&
         !(ctx.operator == true && recipient == ctx.actorEid)

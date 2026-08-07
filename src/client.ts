@@ -1218,7 +1218,8 @@ export let addressed = (who: Reader) => (r: Row): boolean => {
   }
   let k = r.comps.knock
   if (k) {
-    let t = String(k.to_eid ?? '')
+    // WHO the knock is for rides the shared `deliver {to}` facet now.
+    let t = String(r.comps.deliver?.to ?? '')
     return !!t &&
       (t == who.session || (who.operator == true && t == who.actor))
   }
@@ -1241,9 +1242,7 @@ export let addressed = (who: Reader) => (r: Row): boolean => {
     // arm matches NOTHING rather than the fleet's whole correspondence
     // (1338 arrived letters in a week: the wrong default is a firehose,
     // not an inconvenience).
-    return (!!who.addrs?.size &&
-      (who.addrs.has(String(m.to_addr ?? '')) ||
-        who.addrs.has(String(m.to ?? '')))) ||
+    return (!!who.addrs?.size && who.addrs.has(String(m.to_addr ?? ''))) ||
       (!!who.scope && String(m.target_eid) == who.scope)
   }
   return false
@@ -1401,8 +1400,10 @@ export let mailAt = (r: Row) =>
   String(r.comps.mail?.received_at ?? '') || bornAt(r)
 
 // The send batch: a mail is a document that travels — subject rides
-// doc.title, the body doc.body. `to` stays AS GIVEN (a raw address or a
-// graph reference) — the address book resolves at delivery, never here.
+// doc.title, the body doc.body, and WHERE it goes the shared `deliver {to}`.
+// `to` stays AS GIVEN (a raw address or a graph reference) — a graph
+// reference resolves at the door, a raw @-address is find-or-minted into its
+// address-book entity there (db.ts), never here.
 export let mailChanges = (m: {
   to: string
   subject: string
@@ -1412,13 +1413,11 @@ export let mailChanges = (m: {
   let eid = uuid()
   let changes: Change[] = [
     { eid, name: 'doc', comp: { title: m.subject, body: m.body ?? '' } },
+    { eid, name: 'deliver', comp: { to: m.to } },
     {
       eid,
       name: 'mail',
-      comp: {
-        to: m.to,
-        ...(m.replyTo ? { reply_to_eid: m.replyTo } : {}),
-      },
+      comp: m.replyTo ? { reply_to_eid: m.replyTo } : {},
     },
   ]
   return { eid, changes }
@@ -1438,7 +1437,9 @@ export let reSubject = (s: string) =>
 // An unsigned letter earns a refusal instead; mail it directly.
 export let replyChanges = (row: Row, body: string) => {
   let m = row.comps.mail ?? {}
-  let to = String((m.message_id ? m.from : m.to) ?? '')
+  // The far side: an arrival's sender (m.from), our own sent letter's
+  // recipient (the shared deliver.to). Never a fallback between the two.
+  let to = String((m.message_id ? m.from : row.comps.deliver?.to) ?? '')
   if (!to) {
     throw new Error(
       'cannot reply: that letter carries no sender — send a fresh mail',
@@ -1505,9 +1506,10 @@ export let mailLine = (r: Row, now = Date.now()) => {
   let m = r.comps.mail ?? {}
   let dot = unreadMail(r) ? '●' : '·'
   let bad = m.message_id && !Number(m.verified ?? 0) ? ' !unverified' : ''
-  let who = m.message_id
-    ? `${String(m.from ?? '?')} → ${String(m.to)}`
-    : `→ ${String(m.to_addr ?? m.to)}`
+  // Recipient: an arrival's to_addr, or a sent letter's resolved to_addr —
+  // and until the send resolves it, the deliver.to it was aimed at.
+  let to = String(m.to_addr ?? r.comps.deliver?.to ?? '')
+  let who = m.message_id ? `${String(m.from ?? '?')} → ${to}` : `→ ${to}`
   let ms = now - Date.parse(mailAt(r))
   let mins = Math.floor(ms / 60_000)
   let age = Number.isNaN(ms) || ms < 0
@@ -2054,9 +2056,11 @@ export let inboxRows = async (
   let directMail = ['.mail.message_id!']
   let found = await Promise.all([
     ask('comment.target_eid', comments),
-    ask('knock.to_eid', knocks),
+    // WHO a knock is for is the shared deliver.to now; wakes/outbound mail
+    // it also returns are screened back out by inboxItem (no wake arm, and
+    // the mail arm demands an inbound message_id).
+    ask('deliver.to', knocks),
     ask('mail.target_eid', boxes, directMail),
-    ask('mail.to', addrs, directMail),
     ask('mail.to_addr', addrs, directMail),
     ask('comment.target_eid', watched),
     ask('knock.target_eid', watched),
@@ -2181,11 +2185,14 @@ let busRows = async (who: Reader) => {
   let held = [...mine, ...(who.claims ?? [])].join(',')
   let box = [who.session, ...(who.operator ? [who.scope] : [])]
     .filter(Boolean).join(',')
-  let [said, knocks, letters] = await Promise.all([
+  let [said, aimed, letters] = await Promise.all([
     query([`.comment.target_eid=${held}`, '.notified=']),
-    query([`.knock.to_eid=${mine.join(',')}`, '.notified=']),
+    // WHO a knock is for is the shared deliver.to; the same facet a wake/mail
+    // wears, so keep only the knock rows the bus renders.
+    query([`.deliver.to=${mine.join(',')}`, '.notified=']),
     query([`.mail.target_eid=${box}`, '.notified=', '.opened=', '.archived=']),
   ])
+  let knocks = aimed.filter((r) => r.comps.knock)
   let seen = [...said, ...knocks, ...letters]
   if (!seen.length) return seen
   // What rendering needs BESIDE the candidates: a knock's target (its id, and

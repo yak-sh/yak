@@ -212,8 +212,8 @@ let facet = (comp: string) => comp == 'doc' || !kindOrder.includes(comp)
 // from data. A pred naming another kind's column is perfectly valid, so it
 // matches nothing and prints exactly like a truthful "none" — `.from=jeff`
 // routes to mail.from and answers "no matches" for TASKS; `.to=holdco`
-// routes to mail.to (a real column, so the _eid sugar never fires) and
-// never consults wake.to_eid. Both were read as evidence of absence.
+// routes to deliver.to (a reference, so the id sugar resolves holdco) and
+// answers "none" for TASKS. Both were read as evidence of absence.
 //
 // So on empty — and only on empty — a door says how the filters actually
 // routed. This reports what route() DID, never what COULD match: an entity

@@ -19,7 +19,8 @@ Deno.test('a knock names and opens its target', () => {
     },
     knock: {
       entity: { eid: 'knock', num: 2 },
-      knock: { eid: 'knock', to_eid: 'person', target_eid: 'project' },
+      knock: { eid: 'knock', target_eid: 'project' },
+      deliver: { eid: 'knock', to: 'person' },
       created: { eid: 'knock', at: '2026-08-07T12:00:00.000Z' },
     },
     project: {

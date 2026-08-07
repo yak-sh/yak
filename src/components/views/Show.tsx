@@ -227,9 +227,9 @@ export let Mail = ({ e }: { e: Ent }) => {
   return (
     <MailEl>
       <MailField name='from'>{m.from || '?'}</MailField>
-      {m.to_addr && m.to_addr != m.to &&
-        <MailField name='requested'>{m.to}</MailField>}
-      <MailField name='to'>{m.to_addr || m.to}</MailField>
+      {!inbound && e.deliver?.to && e.deliver.to != m.to_addr &&
+        <MailField name='requested'>{e.deliver.to}</MailField>}
+      <MailField name='to'>{m.to_addr || e.deliver?.to || ''}</MailField>
       {inbound
         ? (
           <>

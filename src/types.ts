@@ -299,10 +299,10 @@ export let comps: Record<string, Record<string, PropType>> = {
   // comment on the target in the same batch, never in the knock. The
   // resolver effect (knock.ts) walks the ladder — running session hears
   // the cast (the channel plugin), a project with nobody running spawns
-  // onto the target, a person gets mail — and stamps what it did.
+  // onto the target, a person gets mail — and stamps what it did. WHO
+  // should look is the `deliver {to}` facet below, not a column here.
   knock: {
     target_eid: { eid: '', death: 'cascade' }, // what to look at
-    to_eid: { eid: '', death: 'cascade' }, // who should look
   },
   // A wake is a knock with a clock: the same sentence, said LATER. `at`
   // is absolute — the caller writes a phrase ('in 60m', '9am tomorrow')
@@ -311,10 +311,10 @@ export let comps: Record<string, Record<string, PropType>> = {
   // read. The server keeps one timer at the earliest pending wake and
   // reconciles at boot, so an hour of downtime delays a wake instead of
   // eating it (wake.ts) — then mints the knock and lets that ladder
-  // deliver. No repeats: `every` waits for something that needs it.
+  // deliver. No repeats: `every` waits for something that needs it. WHO
+  // to wake is the `deliver {to}` facet below.
   wake: {
     at: 'time',
-    to_eid: { eid: '', death: 'cascade' }, // who to wake
     // What to look at on waking — absent means the wake itself, so the
     // words in its doc are what arrives.
     target_eid: { eid: '', death: 'cascade' },
@@ -325,15 +325,14 @@ export let comps: Record<string, Record<string, PropType>> = {
   // envelope onto the row as DATA: to_addr, sent_id, received_at. The row
   // stays the audit envelope). Subject rides
   // doc.title, the body doc.body — a mail is a document that travels.
-  // `to` is a raw address (has an @) or a graph reference — alias slug,
-  // human id, eid — resolved against the address book at delivery.
+  // WHERE it goes is the `deliver {to}` facet below (an outbound mail wears
+  // one; an INBOUND arrival does not — its recipient is `to_addr` DATA).
   // `from` is NOT here on purpose: the sender is who WROTE the mail, and
   // that is the server's fact, not the caller's claim. apply() stamps it
   // from the writing actor's address — the same resolution behind
   // created.by — so no door can assert someone else's identity, and the
   // trust tier operators key on that byline cannot be forged.
   mail: {
-    to: 'text',
     // What the mail is ABOUT. A sent mail is history — its subject's
     // death doesn't unsend it (the provenance byline rule).
     target_eid: { eid: '', death: 'keep' },
@@ -445,6 +444,19 @@ export let comps: Record<string, Record<string, PropType>> = {
   notified: {}, // the operator has been told (inject or sweep) — never hides
   opened: {}, //   the operator has looked — NOT opened == unread; never hides
   archived: {}, // the operator is done — the ONE stamp that hides an item
+  // Addressing as a facet (D-14945): WHERE a deliverable goes. `to` names a
+  // graph ENTITY — a session or actor (knock/wake), an address-book entity
+  // (mail) — never a raw string: an external address IS an `email` entity, so
+  // local-vs-external falls out of `homeOf`, and a raw @-address written here
+  // is find-or-minted into one at the door (db.ts mintAddresses). One aspect,
+  // one component, worn by knock/wake/outbound-mail in place of the per-type
+  // to_eid/to (M-14942); `deliver`→`delivered`→`error` is intent→success→
+  // failure, one letter apart because the tense is the state. death 'keep'
+  // (NOT knock/wake's old cascade): a deliverable is a debuggable record —
+  // mail history and a knock's audit outlive their recipient's tombstone, and
+  // the effects stay inert on a dead `to`. Wire-writable (unlike delivered/
+  // error): naming the recipient IS the ask. NOT in kindOrder — a facet.
+  deliver: { to: { eid: '', death: 'keep' } },
   // Delivery lifecycle (D-14945): the tri-state any deliverable settles into,
   // the same register as the read-state above — `delivered` reached its
   // destination, `error` an attempt failed, neither = pending. One aspect,
@@ -1088,21 +1100,27 @@ export type StopRequest = { eid: string; target_eid: string }
 // An entity's mail address — the address-book facet, one comp for all.
 export type Email = { eid: string; address: string }
 
-// A knock: the request columns are the ask; the outcome is the shared
-// `delivered`/`error` facet (deliver.ts), not a column here.
+// Addressing (D-14945): WHERE a deliverable goes. `to` names a graph
+// entity — the recipient a knock/wake/outbound-mail is aimed at. Shared
+// across the deliverable kinds, the intent half of the deliver/delivered/
+// error triad.
+export type Deliver = { eid: string; to: string }
+
+// A knock: the request column is the ask (what to look at); WHO looks is
+// the `deliver {to}` facet, and the outcome the shared `delivered`/`error`
+// facet (deliver.ts) — neither a column here.
 export type Knock = {
   eid: string
   target_eid: string
-  to_eid: string
 }
 
-// A knock waiting on the clock: `at` absolute (resolved at mint). Its
-// outcome — the timer fired and minted the knock, or why it couldn't — is
-// the shared `delivered`/`error` facet, not a column here.
+// A knock waiting on the clock: `at` absolute (resolved at mint). WHO to
+// wake is the `deliver {to}` facet; the outcome — the timer fired and
+// minted the knock, or why it couldn't — is the shared `delivered`/`error`
+// facet. Neither a column here.
 export type Wake = {
   eid: string
   at: string
-  to_eid: string
   target_eid?: string | null
 }
 
@@ -1113,7 +1131,6 @@ export type Wake = {
 // received_at, and the edge's verified verdict.
 export type Mail = {
   eid: string
-  to: string
   from?: string | null
   target_eid?: string | null
   reply_to_eid?: string | null
@@ -1283,6 +1300,7 @@ export type Ent = {
   knock?: Knock
   wake?: Wake
   mail?: Mail
+  deliver?: Deliver
   hook?: Hook
   email?: Email
   conflict?: Conflict

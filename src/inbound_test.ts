@@ -184,8 +184,9 @@ Deno.test('mailChanges: subject and body land verbatim, provenance stamps', () =
   let mail = wire.find((c) => c.name == 'mail')!.comp!
   assertEquals(doc.title, 'hello')
   assertEquals(doc.body, 'the body')
-  assertEquals(mail.to, 'venture@bot.test')
+  assertEquals(mail.to, undefined) // recipient is arrival DATA, not the wire
   assertEquals(mail.from, undefined) // off the wire
+  assertEquals(stamp.to_addr, 'venture@bot.test') // the address it arrived at
   assertEquals(stamp.from, 'sender@x.test')
   assertEquals(mail.target_eid, operator)
   assertEquals(stamp.message_id, 'msg:1752000000000:abc')
@@ -360,7 +361,8 @@ Deno.test('the sweep: an echo arrives on the sent entity, once', async () => {
   let letter = uid()
   apply(db, [
     { eid: letter, name: 'doc', comp: { title: 'to the fleet' } },
-    { eid: letter, name: 'mail', comp: { to: 'venture@bot.test' } },
+    { eid: letter, name: 'mail', comp: {} },
+    { eid: letter, name: 'deliver', comp: { to: 'venture@bot.test' } },
   ])
   db.prepare('update mail set sent_id = ? where eid = ?')
     .run('echo-1@bot.test', letter)
@@ -405,8 +407,9 @@ Deno.test('the echo keeps an aimed target and a stamped from', async () => {
     {
       eid: letter,
       name: 'mail',
-      comp: { to: 'venture@bot.test', target_eid: holdco },
+      comp: { target_eid: holdco },
     },
+    { eid: letter, name: 'deliver', comp: { to: 'venture@bot.test' } },
   ])
   // `from` is server-stamped now (apply derives it from the author), so a
   // fixture standing in for an already-sent letter writes it the same way.
@@ -523,7 +526,8 @@ Deno.test('mailIdOf: E-num, bare num, and eid all land; the misses differ', () =
   let out = uid() // an outbound row: mail, but no spool provenance
   apply(db, [
     { eid: out, name: 'doc', comp: { title: 'sent' } },
-    { eid: out, name: 'mail', comp: { to: 'x@y.test' } },
+    { eid: out, name: 'mail', comp: {} },
+    { eid: out, name: 'deliver', comp: { to: 'x@y.test' } },
   ])
   assertEquals(mailIdOf(out)?.message_id, null) // a mail, never spooled
 })
@@ -538,7 +542,8 @@ Deno.test('the sweep preserves In-Reply-To and links its graph mail', async () =
   let orig = uid()
   apply(db, [
     { eid: orig, name: 'doc', comp: { title: 'opener' } },
-    { eid: orig, name: 'mail', comp: { to: 'sender@x.test' } },
+    { eid: orig, name: 'mail', comp: {} },
+    { eid: orig, name: 'deliver', comp: { to: 'sender@x.test' } },
   ])
   db.prepare('update mail set sent_id = ? where eid = ?')
     .run('opener@bot.test', orig)
@@ -559,7 +564,8 @@ Deno.test('mailChanges links an earlier inbound RFC id when present', () => {
   let orig = uid()
   apply(db, [
     { eid: orig, name: 'doc', comp: { title: 'first arrival' } },
-    { eid: orig, name: 'mail', comp: { to: 'venture@bot.test' } },
+    { eid: orig, name: 'mail', comp: {} },
+    { eid: orig, name: 'deliver', comp: { to: 'venture@bot.test' } },
   ])
   db.prepare('update mail set message_id = ? where eid = ?')
     .run('msg:1752000000020:first@x.test', orig)

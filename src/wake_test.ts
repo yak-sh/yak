@@ -28,6 +28,11 @@ let drow = (eid: string) =>
     | undefined
 let knocks = () =>
   db.prepare('select * from knock').all() as Record<string, string>[]
+// WHO a knock is for rides the shared deliver.to now (D-14945).
+let toOf = (eid: string) =>
+  (db.prepare('select "to" from deliver where eid = ?').get(eid) as
+    | { to: string }
+    | undefined)?.to
 
 let jeff = (() => {
   let eid = uid()
@@ -41,11 +46,14 @@ let jeff = (() => {
 
 let wake = (at: string, target?: string) => {
   let eid = uid()
-  landed = apply(db, [{
-    eid,
-    name: 'wake',
-    comp: { at, to_eid: jeff, ...(target ? { target_eid: target } : {}) },
-  }])
+  landed = apply(db, [
+    {
+      eid,
+      name: 'wake',
+      comp: { at, ...(target ? { target_eid: target } : {}) },
+    },
+    { eid, name: 'deliver', comp: { to: jeff } },
+  ])
   return eid
 }
 
@@ -53,7 +61,7 @@ Deno.test('an hour already past fires, and mints the knock', () => {
   let w = wake(new Date(Date.now() - 60_000).toISOString())
   arm(cast)
   let k = knocks().find((k) => k.target_eid == w)!
-  assertEquals(k.to_eid, jeff)
+  assertEquals(toOf(k.eid), jeff)
   assertMatch(String(drow(w)?.at), /^\d{4}-/)
 })
 
@@ -74,7 +82,7 @@ Deno.test('a wake still owed waits, and fires once when it comes', () => {
 Deno.test('no target: the wake is its own subject', () => {
   let w = wake(new Date(Date.now() - 1000).toISOString())
   arm(cast)
-  assertEquals(knocks().find((k) => k.target_eid == w)?.to_eid, jeff)
+  assertEquals(toOf(knocks().find((k) => k.target_eid == w)!.eid), jeff)
 })
 
 Deno.test('a new untargeted wake replaces only the pending untargeted one', () => {

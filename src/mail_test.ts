@@ -112,7 +112,8 @@ Deno.test('mailed: delivers, stamps the receipt, sweep replay is a no-op', async
     db,
     [
       { eid: m, name: 'doc', comp: { title: 'hello', body: 'the body' } },
-      { eid: m, name: 'mail', comp: { to: 'op' } },
+      { eid: m, name: 'mail', comp: {} },
+      { eid: m, name: 'deliver', comp: { to: 'op' } },
     ],
     undefined,
     author,
@@ -143,7 +144,8 @@ Deno.test('mailed: failure and misconfiguration stamp errors, visibly', async ()
     db,
     [
       { eid: m, name: 'doc', comp: { title: 's', body: 'b' } },
-      { eid: m, name: 'mail', comp: { to: 'x@y.test' } },
+      { eid: m, name: 'mail', comp: {} },
+      { eid: m, name: 'deliver', comp: { to: 'x@y.test' } },
     ],
     undefined,
     author,
@@ -156,7 +158,8 @@ Deno.test('mailed: failure and misconfiguration stamp errors, visibly', async ()
     db,
     [
       { eid: noAddr, name: 'doc', comp: { title: 's', body: 'b' } },
-      { eid: noAddr, name: 'mail', comp: { to: 'addressless' } },
+      { eid: noAddr, name: 'mail', comp: {} },
+      { eid: noAddr, name: 'deliver', comp: { to: 'addressless' } },
     ],
     undefined,
     author,
@@ -170,7 +173,8 @@ Deno.test('mailed: failure and misconfiguration stamp errors, visibly', async ()
     db,
     [
       { eid: bare, name: 'doc', comp: { title: 's', body: 'b' } },
-      { eid: bare, name: 'mail', comp: { to: 'x@y.test' } },
+      { eid: bare, name: 'mail', comp: {} },
+      { eid: bare, name: 'deliver', comp: { to: 'x@y.test' } },
     ],
     undefined,
     author,
@@ -188,12 +192,15 @@ Deno.test('the envelope data never rides the wire', () => {
       {
         eid: m,
         name: 'mail',
+        // target_eid is a real writable column (so the row lands); to_addr and
+        // sent_id are server-owned envelope DATA and must be dropped.
         comp: {
-          to: 'x@y.test',
+          target_eid: author,
           to_addr: 'forged@x',
           sent_id: 'forged@send',
         },
       },
+      { eid: m, name: 'deliver', comp: { to: 'x@y.test' } },
     ],
     undefined,
     author,
@@ -241,7 +248,9 @@ let comment = (target: string, writer?: string) => {
 }
 let mintedFor = (c: string) =>
   db.prepare(`
-    select s.* from dependency d join mail s on s.eid = d.parent_eid
+    select s.*, dl."to" as deliver_to from dependency d
+    join mail s on s.eid = d.parent_eid
+    left join deliver dl on dl.eid = s.eid
     where d.type = 'about' and d.child_eid = ?
   `).all(c) as Record<string, string>[]
 
@@ -251,7 +260,7 @@ Deno.test('fanout: mints to the project REFERENCE, once, with the receipt', () =
   fanout(cast)(c, { target_eid: task })
   let made = mintedFor(c)
   assertEquals(made.length, 1)
-  assertEquals(made[0].to, proj) // the reference — resolution happens at delivery
+  assertEquals(made[0].deliver_to, proj) // the reference — resolved at delivery
   assertEquals(made[0].target_eid, task)
   let num = (db.prepare('select num from entity where eid = ?').get(task) as {
     num: number
@@ -392,8 +401,9 @@ Deno.test('mailed: reply_to_eid resolves to --in-reply-to at delivery', async ()
       {
         eid: orig,
         name: 'mail',
-        comp: { to: 'us@x.test', from: 'them@y.test' },
+        comp: {},
       },
+      { eid: orig, name: 'deliver', comp: { to: 'us@x.test' } },
     ],
     undefined,
     author,
@@ -409,8 +419,9 @@ Deno.test('mailed: reply_to_eid resolves to --in-reply-to at delivery', async ()
       {
         eid: reply,
         name: 'mail',
-        comp: { to: 'them@y.test', reply_to_eid: orig },
+        comp: { reply_to_eid: orig },
       },
+      { eid: reply, name: 'deliver', comp: { to: 'them@y.test' } },
     ],
     undefined,
     author,
@@ -426,7 +437,8 @@ Deno.test('mailed: reply_to_eid resolves to --in-reply-to at delivery', async ()
     db,
     [
       { eid: sent, name: 'doc', comp: { title: 'opener', body: 'b' } },
-      { eid: sent, name: 'mail', comp: { to: 'them@y.test' } },
+      { eid: sent, name: 'mail', comp: {} },
+      { eid: sent, name: 'deliver', comp: { to: 'them@y.test' } },
     ],
     undefined,
     author,
@@ -442,8 +454,9 @@ Deno.test('mailed: reply_to_eid resolves to --in-reply-to at delivery', async ()
       {
         eid: follow,
         name: 'mail',
-        comp: { to: 'them@y.test', reply_to_eid: sent },
+        comp: { reply_to_eid: sent },
       },
+      { eid: follow, name: 'deliver', comp: { to: 'them@y.test' } },
     ],
     undefined,
     author,
@@ -456,7 +469,8 @@ Deno.test('mailed: reply_to_eid resolves to --in-reply-to at delivery', async ()
     db,
     [
       { eid: dark, name: 'doc', comp: { title: 'unthreadable', body: 'd' } },
-      { eid: dark, name: 'mail', comp: { to: 'x@y.test', reply_to_eid: sent } },
+      { eid: dark, name: 'mail', comp: { reply_to_eid: sent } },
+      { eid: dark, name: 'deliver', comp: { to: 'x@y.test' } },
     ],
     undefined,
     author,
@@ -569,7 +583,8 @@ Deno.test('mailed: native send stamps sent_id, threads, logs dir=out', async () 
       db,
       [
         { eid: orig, name: 'doc', comp: { title: 'q', body: 'asked' } },
-        { eid: orig, name: 'mail', comp: { to: 'us@x.test' } },
+        { eid: orig, name: 'mail', comp: {} },
+        { eid: orig, name: 'deliver', comp: { to: 'us@x.test' } },
       ],
       undefined,
       author,
@@ -584,8 +599,11 @@ Deno.test('mailed: native send stamps sent_id, threads, logs dir=out', async () 
         {
           eid: m,
           name: 'mail',
-          comp: { to: 'cafe_car@bot.yak.sh', reply_to_eid: orig },
+          comp: { reply_to_eid: orig },
         },
+        // An external address (a bot.yak.sh one now resolves to its fleet
+        // entity and delivers in-graph) — this is the native Cloudflare path.
+        { eid: m, name: 'deliver', comp: { to: 'cafe_car@partner.test' } },
       ],
       undefined,
       author,
@@ -594,7 +612,7 @@ Deno.test('mailed: native send stamps sent_id, threads, logs dir=out', async () 
     let r = row(m)
     assertEquals(erow(m), undefined)
     assertEquals(r.sent_id, 'cf-1@send') // brackets shed
-    assertEquals(r.to_addr, 'cafecar@bot.yak.sh') // canon at resolution
+    assertEquals(r.to_addr, 'cafe_car@partner.test') // resolved envelope copy
     assertEquals(hits.length, 2)
     assertMatch(hits[0].url, /accounts\/acct-1\/email\/sending\/send$/)
     assertEquals(hits[0].auth, 'Bearer dummy-token')
@@ -602,7 +620,7 @@ Deno.test('mailed: native send stamps sent_id, threads, logs dir=out', async () 
       address: 'sender@bot.test',
       name: 'sender',
     })
-    assertEquals(hits[0].body.to, ['cafecar@bot.yak.sh'])
+    assertEquals(hits[0].body.to, ['cafe_car@partner.test'])
     assertEquals(hits[0].body.text, 'answered')
     assertEquals(hits[0].body.html, '<p>answered</p>\n')
     assertEquals(hits[0].body.headers, {
@@ -630,7 +648,8 @@ Deno.test('mailed: native failure and a missing from stamp errors', async () => 
       db,
       [
         { eid: m, name: 'doc', comp: { title: 's', body: 'b' } },
-        { eid: m, name: 'mail', comp: { to: 'x@y.test', from: 'a@b.test' } },
+        { eid: m, name: 'mail', comp: {} },
+        { eid: m, name: 'deliver', comp: { to: 'x@y.test' } },
       ],
       undefined,
       author,
@@ -646,7 +665,8 @@ Deno.test('mailed: native failure and a missing from stamp errors', async () => 
       db,
       [
         { eid: bare, name: 'doc', comp: { title: 's', body: 'b' } },
-        { eid: bare, name: 'mail', comp: { to: 'x@y.test' } },
+        { eid: bare, name: 'mail', comp: {} },
+        { eid: bare, name: 'deliver', comp: { to: 'x@y.test' } },
       ],
       undefined,
       unsigned,
@@ -670,7 +690,8 @@ Deno.test('mailed: $TASKS_MAIL_CMD wins over the native env', async () => {
       db,
       [
         { eid: m, name: 'doc', comp: { title: 'seam', body: 'held' } },
-        { eid: m, name: 'mail', comp: { to: 'x@y.test' } },
+        { eid: m, name: 'mail', comp: {} },
+        { eid: m, name: 'deliver', comp: { to: 'x@y.test' } },
       ],
       undefined,
       author,
@@ -703,7 +724,8 @@ Deno.test('mailed: a fleet recipient delivers locally — no send, no out-log', 
       db,
       [
         { eid: m, name: 'doc', comp: { title: 'ping', body: 'hi there' } },
-        { eid: m, name: 'mail', comp: { to: 'ops' } },
+        { eid: m, name: 'mail', comp: {} },
+        { eid: m, name: 'deliver', comp: { to: 'ops' } },
       ],
       undefined,
       author,
@@ -783,7 +805,8 @@ Deno.test('mailed: a letter to S-<n> delivers to that session, in-graph', async 
       db,
       [
         { eid: m, name: 'doc', comp: { title: 'ping', body: 'you there?' } },
-        { eid: m, name: 'mail', comp: { to: `S-${n}@bot.yak.sh` } },
+        { eid: m, name: 'mail', comp: {} },
+        { eid: m, name: 'deliver', comp: { to: `S-${n}@bot.yak.sh` } },
       ],
       undefined,
       author,
@@ -831,7 +854,8 @@ Deno.test('named: the address book outranks the derivation', async () => {
       db,
       [
         { eid: m, name: 'doc', comp: { title: 'to whom', body: 'x' } },
-        { eid: m, name: 'mail', comp: { to: `S-${n}@bot.yak.sh` } },
+        { eid: m, name: 'mail', comp: {} },
+        { eid: m, name: 'deliver', comp: { to: `S-${n}@bot.yak.sh` } },
       ],
       undefined,
       author,
@@ -857,8 +881,9 @@ Deno.test('mailed: a book entry Cloudflare would bounce still lands at home', as
         {
           eid: m,
           name: 'mail',
-          comp: { to: 'under_score@bot.yak.sh' },
+          comp: {},
         },
+        { eid: m, name: 'deliver', comp: { to: 'under_score@bot.yak.sh' } },
       ],
       undefined,
       author,
@@ -887,7 +912,8 @@ Deno.test('mailed: local delivery keeps a relay mail aimed at its task', async (
     db,
     [
       { eid: m, name: 'doc', comp: { title: '[T] the work', body: 'a note' } },
-      { eid: m, name: 'mail', comp: { to: 'relayed', target_eid: t } },
+      { eid: m, name: 'mail', comp: { target_eid: t } },
+      { eid: m, name: 'deliver', comp: { to: 'relayed' } },
     ],
     undefined,
     author,
@@ -906,7 +932,8 @@ Deno.test('mailed: an external address in the book still rides the boundary', as
     db,
     [
       { eid: m, name: 'doc', comp: { title: 'to the owner', body: 'words' } },
-      { eid: m, name: 'mail', comp: { to: 'owner' } },
+      { eid: m, name: 'mail', comp: {} },
+      { eid: m, name: 'deliver', comp: { to: 'owner' } },
     ],
     undefined,
     author,
@@ -925,7 +952,8 @@ Deno.test('mailed: concurrent fires deliver once (the boot-sweep race)', async (
     db,
     [
       { eid: m, name: 'doc', comp: { title: 'once', body: 'only' } },
-      { eid: m, name: 'mail', comp: { to: 'x@y.test' } },
+      { eid: m, name: 'mail', comp: {} },
+      { eid: m, name: 'deliver', comp: { to: 'x@y.test' } },
     ],
     undefined,
     author,
@@ -953,8 +981,9 @@ Deno.test('the sender is the author, in both directions and unborrowable', () =>
       {
         eid: out,
         name: 'mail',
-        comp: { to: 'beta@bot.test', from: 'beta@bot.test' },
+        comp: {},
       },
+      { eid: out, name: 'deliver', comp: { to: 'beta@bot.test' } },
     ],
     undefined,
     alpha,
@@ -970,8 +999,9 @@ Deno.test('the sender is the author, in both directions and unborrowable', () =>
       {
         eid: back,
         name: 'mail',
-        comp: { to: 'alpha@bot.test', reply_to_eid: out },
+        comp: { reply_to_eid: out },
       },
+      { eid: back, name: 'deliver', comp: { to: 'alpha@bot.test' } },
     ],
     undefined,
     beta,
@@ -1000,7 +1030,8 @@ Deno.test('nothing signs by fallback: the relay, and the unattributed write', as
   let m = uid()
   apply(db, [
     { eid: m, name: 'doc', comp: { title: 's', body: 'b' } },
-    { eid: m, name: 'mail', comp: { to: 'x@y.test' } },
+    { eid: m, name: 'mail', comp: {} },
+    { eid: m, name: 'deliver', comp: { to: 'x@y.test' } },
   ])
   assertEquals(row(m).from, null)
   await mailed(cast)(m, {})

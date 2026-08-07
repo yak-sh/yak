@@ -13,7 +13,7 @@
 // an addressed project's tasks — the graph's replacement for holdco's
 // delivery.js. SERVER-ONLY (imports db).
 import { apply, db, human } from './db.ts'
-import { delivered, errored, settled } from './deliver.ts'
+import { delivered, errored, settled, toOf } from './deliver.ts'
 import { dispatch, trace } from './effects.ts'
 import { canon, type Letter, logOut, native, send } from './mailer.ts'
 import { type Change } from './types.ts'
@@ -74,10 +74,15 @@ export let addressOf = (to: string): string => {
   let e = db.prepare('select address from email where eid = ?').get(eid) as
     | { address: string }
     | undefined
-  if (!e) {
-    throw new Error(`no address on file for ${to} — give it an email comp`)
+  if (e) return e.address
+  // No address-book entry: a SESSION is still reachable at its derived
+  // id-address (named() resolves it back for local delivery) — the fallback
+  // for entities too short-lived to carry an `email` comp. Anything else
+  // genuinely has no address, and guessing one would misdeliver.
+  if (db.prepare('select 1 from session where eid = ?').get(eid)) {
+    return `${human(db, eid)}@bot.yak.sh`
   }
-  return e.address
+  throw new Error(`no address on file for ${to} — give it an email comp`)
 }
 
 // The id grammar IS the address grammar: `S-31@bot.yak.sh` names S-31.
@@ -177,9 +182,12 @@ export let mailed =
     let doc = db.prepare('select title, body from doc where eid = ?').get(
       eid,
     ) as { title: string; body: string } | undefined
+    // WHERE it goes rides the shared `deliver {to}` facet now, resolved to an
+    // address by the same book rule (an eid → its email, a raw address →
+    // itself for the legacy rows migration carried over verbatim).
     let addr: string
     try {
-      addr = addressOf(String(row.to))
+      addr = addressOf(toOf(eid))
     } catch (e) {
       return settle(eid, {}, { error: (e as Error).message }, cast)
     }
@@ -377,11 +385,10 @@ export let fanout =
               body: `${said}\n\n${entityUrl(`T-${num}`)}`,
             },
           },
-          {
-            eid: sid,
-            name: 'mail',
-            comp: { to: t.project_eid, target_eid: target },
-          },
+          { eid: sid, name: 'mail', comp: { target_eid: target } },
+          // WHERE it goes rides the shared deliver.to — the project reference,
+          // resolved to its address at delivery like any other.
+          { eid: sid, name: 'deliver', comp: { to: t.project_eid } },
           {
             eid: sid,
             name: 'dependency',

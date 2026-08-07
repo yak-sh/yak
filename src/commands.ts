@@ -283,11 +283,8 @@ export let commands: Record<string, Command> = {
       let k = uuid()
       return {
         changes: [
-          {
-            eid: k,
-            name: 'knock',
-            comp: { target_eid: r.eid, to_eid: toEid },
-          },
+          { eid: k, name: 'knock', comp: { target_eid: r.eid } },
+          { eid: k, name: 'deliver', comp: { to: toEid } },
           ...(words ? commentChanges(ctx.rows, r.eid, words, ctx.session) : []),
         ],
         msg: `${idOf(r)} → knock ${to ? first : 'project'}`,
@@ -331,10 +328,10 @@ export let commands: Record<string, Command> = {
             name: 'wake',
             comp: {
               at: new Date(at).toISOString(),
-              to_eid: to.eid,
               ...(about ? { target_eid: about.eid } : {}),
             },
           },
+          { eid: w, name: 'deliver', comp: { to: to.eid } },
         ],
         msg: `wake ${idOf(to)}${about ? ` → ${idOf(about)}` : ''} at ${
           new Date(at).toString().slice(0, 21)

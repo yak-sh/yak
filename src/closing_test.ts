@@ -30,9 +30,7 @@ let about = (target: string, name: 'comment' | 'mail') => {
     {
       eid,
       name,
-      comp: name == 'mail'
-        ? { target_eid: target, to: 'someone@x.test' }
-        : { target_eid: target },
+      comp: { target_eid: target },
     },
   ])
   return eid

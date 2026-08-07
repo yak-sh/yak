@@ -1265,7 +1265,7 @@ Deno.test('bare task appends the current claimed task digest', async () => {
       `/query?.claim.session_eid=${S}`,
       '/query?.repo!',
       `/query?.comment.target_eid=${S},${T}&.notified=`,
-      `/query?.knock.to_eid=${S}&.notified=`,
+      `/query?.deliver.to=${S}&.notified=`,
       `/query?.mail.target_eid=${S}&.notified=&.opened=&.archived=`,
     ])
   } finally {

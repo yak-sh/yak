@@ -24,6 +24,7 @@ import {
   sessionActive,
   type Snapshot,
   stamped,
+  uuid,
 } from './types.ts'
 import { type Trace } from './effects.ts'
 import { ancestorAt } from './client.ts'
@@ -63,12 +64,14 @@ let depDdl = `create table if not exists dependency (
 // apart from `schema` because open() must REBUILD a live table that
 // shipped with that FK baked in — a constraint can't be dropped in place.
 // The send OUTCOME moved off the row to the shared delivered/error
-// components (D-14945); to_addr/sent_id/received_at stay as envelope DATA.
-// Column order below is the live table's order AFTER migrateDelivery() drops
-// acted_at/error — mendMail's `insert select *` rebuild depends on the match.
+// components (D-14945), and WHERE it goes to the shared `deliver {to}` — an
+// outbound mail wears one, an inbound arrival keeps its recipient in to_addr.
+// to_addr/sent_id/received_at stay as envelope DATA. Column order below is the
+// live table's order AFTER migrateDelivery()/migrateDeliver() drop
+// acted_at/error/to — mendMail's `insert select *` rebuild depends on the
+// match.
 let mailDdl = `create table if not exists mail (
     eid         text primary key references entity(eid),
-    "to"        text not null,
     "from"      text,
     target_eid  text,
     to_addr     text,
@@ -252,22 +255,30 @@ let schema = `
     eid        text primary key references entity(eid),
     target_eid text not null references entity(eid)
   );
-  -- A knock: bring target to to's attention now (knock.ts resolves; the
-  -- outcome is the shared delivered/error facet below, not a column here).
+  -- A knock: bring target to the recipient's attention now (knock.ts
+  -- resolves; WHO looks is the shared deliver.to below, the outcome the
+  -- shared delivered/error facet — neither a column here).
   create table if not exists knock (
     eid        text primary key references entity(eid),
-    target_eid text not null references entity(eid),
-    to_eid     text not null references entity(eid)
+    target_eid text not null references entity(eid)
   );
   -- A wake: mint that knock at 'at' (absolute, resolved at mint).
   -- wake.ts arms one timer at the earliest UNACTED row (no delivered/error)
-  -- and reconciles at boot; the outcome is the shared facet below.
-  -- target_eid is nullable — absent means the wake is its own subject.
+  -- and reconciles at boot; WHO to wake is the shared deliver.to, the outcome
+  -- the shared facet. target_eid is nullable — absent means the wake is its
+  -- own subject.
   create table if not exists wake (
     eid        text primary key references entity(eid),
     at         text not null,
-    to_eid     text not null references entity(eid),
     target_eid text references entity(eid)
+  );
+  -- Addressing (D-14945): WHERE a deliverable goes. deliver.to names a graph
+  -- entity — knock/wake/outbound-mail wear one. death 'keep', so like mail's
+  -- target_eid it carries NO FK: a kept ref outlives its recipient's
+  -- tombstone (an FK would veto the delete). Keyed by the deliverable's eid.
+  create table if not exists deliver (
+    eid text primary key references entity(eid),
+    "to" text
   );
   -- The delivery lifecycle (D-14945): the two outcome components any
   -- deliverable (knock/wake/mail/stop_request) settles into — delivered
@@ -789,6 +800,152 @@ export let migrateDelivery = (db: DatabaseSync) => {
   drop('stop_request', 'acted_at')
 }
 
+// Resolve a human id / bare num / alias slug to its eid (the write doors'
+// reference resolver). Defined here — ahead of the module-level `open()` — so
+// the boot migration below may lean on it without a TDZ trap.
+let ident = (db: DatabaseSync, id: string): string | undefined => {
+  let m = id.match(/^[A-Za-z]+-(\d+)$/) ?? id.match(/^(\d+)$/)
+  if (m) {
+    return (db.prepare('select eid from entity where num = ?').get(+m[1]) as
+      | { eid: string }
+      | undefined)?.eid
+  }
+  return (db.prepare('select eid from alias where slug = ?').get(id) as
+    | { eid: string }
+    | undefined)?.eid
+}
+
+// ident's inverse: eid → the human id every other door speaks (T-7) — the
+// raw eid when there is none to speak. Every agent-facing message owes
+// this. Inputs accept both spellings; outputs speak human, or a caller
+// that typed `M-10276` is handed back an identifier it has no index for,
+// at the one moment (a refusal) it most wants to open the entity.
+// A tombstone keeps its num but not its components, so its kind — and
+// with it the prefix — died with them: it stays the raw eid rather than
+// wear a guessed one.
+export let human = (db: DatabaseSync, eid: string): string => {
+  let row = db.prepare('select num from entity where eid = ?').get(eid) as
+    | { num: number }
+    | undefined
+  if (!row?.num) return eid
+  let kind =
+    kindOrder.find((k) =>
+      db.prepare(`select 1 from ${k} where eid = ?`).get(eid)
+    ) ?? 'entity'
+  return idOf({ kind, num: row.num })
+}
+
+let ADDR = /@/
+let UUIDRE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// The entity already wearing this address: an address-book `email`, or an
+// id-shaped fleet address naming one by its human id (S-31@bot.yak.sh → that
+// session). Mirrors mail.ts wearer()/named() — inlined because mail.ts imports
+// db.ts, and this is the pre-mint half of the same resolution: an address the
+// graph already knows must NOT get a second entity minted for it (that would
+// SHADOW the real one in homeOf).
+let addressed = (db: DatabaseSync, addr: string): string | undefined => {
+  let a = addr.trim()
+  let worn =
+    (db.prepare('select eid from email where address = ? collate nocase')
+      .get(a) as { eid: string } | undefined)?.eid
+  if (worn) return worn
+  let m = /^([A-Za-z]+-(\d+))@bot\.yak\.sh$/i.exec(a)
+  if (!m) return undefined
+  let row = db.prepare('select eid from entity where num = ?')
+    .get(Number(m[2])) as { eid: string } | undefined
+  return row && human(db, row.eid).toLowerCase() == m[1].toLowerCase()
+    ? row.eid
+    : undefined
+}
+
+// Find-or-mint the address-book entity wearing `addr` (D-14945): an external
+// address IS an `email` entity, so `deliver.to` can always name one. Find
+// dominates — the ventures and the owner already wear their addresses;
+// minting is only the handful of external correspondents. Case-insensitive on
+// the address so one entity answers every spelling. Direct spine+row write
+// (not apply()), for the migration and for a probe that never boots effects;
+// the apply() door mints THROUGH a change so a send gets provenance.
+export let addressEntity = (db: DatabaseSync, addr: string): string => {
+  let found = addressed(db, addr)
+  if (found) return found
+  let a = addr.trim()
+  let eid = uuid()
+  spine(db, eid)
+  db.prepare('insert into email (eid, address) values (?, ?)').run(eid, a)
+  return eid
+}
+
+// D-14945 phase 2: the per-type recipient columns become the shared
+// `deliver {to}`. knock/wake carried an eid (`to_eid`) — carry it straight.
+// mail carried a `to` that is an eid, an @-address, an alias slug, or bare
+// junk ('jeff', 'holdco', 'S-11310@bot.yak.sh'); since `deliver.to` is
+// strict-{eid}, resolve EVERY row or the wire would later refuse it — never
+// drop one. The ladder: a valid eid stays; an @-address find-or-mints an
+// `email` entity; else `ident()` (an alias/human-id/num); else the raw string
+// becomes an address, minting an `email` for it. Runs BEFORE mendMail so a
+// mail rebuild sees the trimmed shape; idempotent (insert-or-ignore on the
+// deliver pk, each source column guarded by hasCol, dedup by address on mint).
+export let migrateDeliver = (db: DatabaseSync) => {
+  let ins = db.prepare(
+    'insert or ignore into deliver (eid, "to") values (?, ?)',
+  )
+  for (let table of ['knock', 'wake']) {
+    if (!hasCol(db, table, 'to_eid')) continue
+    db.exec(
+      `insert or ignore into deliver (eid, "to")
+         select eid, to_eid from ${table} where to_eid is not null`,
+    )
+    db.exec(`alter table ${table} drop column to_eid`)
+  }
+  if (hasCol(db, 'mail', 'to')) {
+    let rows = db.prepare(
+      `select eid, "to" from mail where "to" is not null and "to" != ''`,
+    ).all() as { eid: string; to: string }[]
+    for (let { eid, to } of rows) {
+      let raw = String(to)
+      let ref = UUIDRE.test(raw)
+        ? raw.toLowerCase()
+        : ADDR.test(raw)
+        ? addressEntity(db, raw)
+        : ident(db, raw) ?? addressEntity(db, raw)
+      ins.run(eid, ref)
+    }
+    db.exec('alter table mail drop column "to"')
+  }
+}
+
+// A pre-normalize apply() rule (D-14945): a wire-written `deliver.to` bearing
+// an @ is an external address, not an eid the parser would resolve — turn it
+// into its address-book entity (find-or-mint) and inject that entity's mint so
+// the reference lands with provenance. knock/wake never carry an @, so this
+// only ever touches outbound mail. Deduped within the batch so two letters to
+// one new address mint it once.
+let mintAddresses = (db: DatabaseSync, changes: Change[]): Change[] => {
+  let mints: Change[] = []
+  let seen = new Map<string, string>()
+  let resolve = (addr: string): string => {
+    let a = addr.trim()
+    let key = a.toLowerCase()
+    let hit = seen.get(key)
+    if (hit) return hit
+    let eid = addressed(db, a)
+    if (!eid) {
+      eid = uuid()
+      mints.push({ eid, name: 'email', comp: { address: a } })
+    }
+    seen.set(key, eid)
+    return eid
+  }
+  let out = changes.map((c) =>
+    c.name == 'deliver' && c.comp && typeof c.comp.to == 'string' &&
+      ADDR.test(c.comp.to)
+      ? { ...c, comp: { ...c.comp, to: resolve(c.comp.to) } }
+      : c
+  )
+  return mints.length ? [...mints, ...out] : out
+}
+
 let sqlName = (name: string) => `"${name.replaceAll('"', '""')}"`
 
 // Stored values pass through the same language as incoming values. Invalid
@@ -994,8 +1151,10 @@ export let open = (path = file) => {
     rebuild(db, 'dependency', depDdl)
   }
   // The per-type delivery receipts become the shared delivered/error
-  // components. Before mendMail: a mail rebuild must see the trimmed shape.
+  // components, and the per-type recipient columns the shared deliver.to.
+  // Both before mendMail: a mail rebuild must see the trimmed shape.
   migrateDelivery(db)
+  migrateDeliver(db)
   mendMail(db)
   mendCalls(db)
   // A mail was briefly a 'send_request' (the intent idiom over-applied —
@@ -1245,38 +1404,6 @@ let bound = (
   comps[name]?.[col] == 'bool' && typeof value == 'boolean'
     ? Number(value)
     : value as string | number | null
-
-let ident = (db: DatabaseSync, id: string): string | undefined => {
-  let m = id.match(/^[A-Za-z]+-(\d+)$/) ?? id.match(/^(\d+)$/)
-  if (m) {
-    return (db.prepare('select eid from entity where num = ?').get(+m[1]) as
-      | { eid: string }
-      | undefined)?.eid
-  }
-  return (db.prepare('select eid from alias where slug = ?').get(id) as
-    | { eid: string }
-    | undefined)?.eid
-}
-
-// ident's inverse: eid → the human id every other door speaks (T-7) — the
-// raw eid when there is none to speak. Every agent-facing message owes
-// this. Inputs accept both spellings; outputs speak human, or a caller
-// that typed `M-10276` is handed back an identifier it has no index for,
-// at the one moment (a refusal) it most wants to open the entity.
-// A tombstone keeps its num but not its components, so its kind — and
-// with it the prefix — died with them: it stays the raw eid rather than
-// wear a guessed one.
-export let human = (db: DatabaseSync, eid: string): string => {
-  let row = db.prepare('select num from entity where eid = ?').get(eid) as
-    | { num: number }
-    | undefined
-  if (!row?.num) return eid
-  let kind =
-    kindOrder.find((k) =>
-      db.prepare(`select 1 from ${k} where eid = ?`).get(eid)
-    ) ?? 'entity'
-  return idOf({ kind, num: row.num })
-}
 
 // The stamp family (notified/opened/archived/decided/proposed): a
 // client-requested act
@@ -1586,22 +1713,29 @@ export class Stale extends Error {
 let replaceWakes = (db: DatabaseSync, changes: Change[]): Change[] => {
   let exists = db.prepare('select 1 from wake where eid = ?')
   // Unacted = neither outcome component present (D-14945); the wake's own
-  // receipt columns moved to the shared delivered/error tables.
+  // receipt columns moved to the shared delivered/error tables. The recipient
+  // moved too — to the `deliver {to}` facet, joined here and named in the same
+  // batch, since a fresh self-wake always mints its deliver alongside.
   let pending = db.prepare(`
-    select eid from wake
-    where to_eid = ? and target_eid is null and eid != ?
+    select wake.eid from wake join deliver on deliver.eid = wake.eid
+    where deliver."to" = ? and wake.target_eid is null and wake.eid != ?
       and not exists (select 1 from delivered where delivered.eid = wake.eid)
       and not exists (select 1 from error where error.eid = wake.eid)
   `)
+  let toOf = new Map<string, string>()
+  for (let c of changes) {
+    if (c.name == 'deliver' && c.comp && typeof c.comp.to == 'string') {
+      toOf.set(c.eid, c.comp.to)
+    }
+  }
   return changes.flatMap((change) => {
+    let to = toOf.get(change.eid)
     if (
       change.name != 'wake' || !change.comp ||
-      change.comp.target_eid != null || !change.comp.to_eid ||
+      change.comp.target_eid != null || !to ||
       exists.get(change.eid)
     ) return [change]
-    let drops = pending.all(String(change.comp.to_eid), change.eid) as {
-      eid: string
-    }[]
+    let drops = pending.all(to, change.eid) as { eid: string }[]
     return [
       ...drops.map(({ eid }) => ({ eid, name: 'entity', comp: null })),
       change,
@@ -1615,6 +1749,9 @@ export let apply = (
   t?: Trace,
   writer?: string | null,
 ): Change[] => {
+  // A raw @-address in `deliver.to` names no eid the parser could resolve —
+  // fold it into its address-book entity (find-or-mint) before normalize.
+  changes = mintAddresses(db, changes)
   changes = normalizeChanges(changes, {
     now: Date.now(),
     resolve: (id) => ident(db, id),

@@ -424,7 +424,7 @@ Deno.test('MCP tools declare and return their text output', async () => {
 
     let multi = await client.callTool({
       name: 'graph_query',
-      arguments: { kind: 'task', filters: ['.mail.to=x'] },
+      arguments: { kind: 'task', filters: ['.mail.from=x'] },
     })
     assertEquals(multi.content.length, 2)
     assertEquals(multi.structuredContent, { text: said(multi) })
