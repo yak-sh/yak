@@ -55,19 +55,43 @@ let knock = (target: string, to: string) => {
   return eid
 }
 
-Deno.test('awake actor: the cast is the delivery', () => {
-  let s = uid()
-  apply(db, [{
-    eid: s,
-    name: 'session',
-    comp: { id: 'op-1', actor_eid: project },
-  }])
+Deno.test('awake operator actor: the cast is the delivery', () => {
+  let s = uid(), role = uid()
+  apply(db, [
+    { eid: role, name: 'doc', comp: { title: 'operator' } },
+    { eid: role, name: 'role', comp: { scope_eid: project } },
+    {
+      eid: s,
+      name: 'session',
+      comp: { id: 'op-1', actor_eid: project, operator: true, role_eid: role },
+    },
+  ])
   db.prepare(
     "update session set origin = 'managed', status = 'running' where eid = ?",
   ).run(s)
   let k = knock(task, project)
   assertMatch(String(drow(k)?.via), /^cast S-\d+$/)
   assertEquals(erow(k), undefined)
+  db.prepare("update session set status = 'completed' where eid = ?").run(s)
+})
+
+// The T-15147 hijack: a managed spawn wearing the actor is NOT the
+// operator loop — every delivery door (channel, bus) drops actor address
+// for it, so a cast there is a stamp nobody hears. With no operator
+// awake the ladder must descend to the spawn rung, never lie.
+Deno.test('a managed spawn wearing the actor does not take the cast', () => {
+  let s = uid()
+  apply(db, [{
+    eid: s,
+    name: 'session',
+    comp: { id: 'spawn-1', actor_eid: project },
+  }])
+  db.prepare(
+    `update session set origin = 'managed', status = 'running',
+     requested_task_eid = ? where eid = ?`,
+  ).run(task, s)
+  let k = knock(task, project)
+  assertMatch(String(drow(k)?.via), /^spawned S-\d+$/)
   db.prepare("update session set status = 'completed' where eid = ?").run(s)
 })
 
@@ -113,7 +137,7 @@ Deno.test('an operator is a door: external claude hears it, its child does not',
   apply(db, [{
     eid: op,
     name: 'session',
-    comp: { id: 'op-2', actor_eid: project, pid: c.pid },
+    comp: { id: 'op-2', actor_eid: project, pid: c.pid, operator: true },
   }])
   // A subagent it spawned, reified LATER (so it sorts first) — a tool
   // call inside the operator's process, which is why it never claims the
@@ -123,6 +147,18 @@ Deno.test('an operator is a door: external claude hears it, its child does not',
     name: 'session',
     comp: { id: 'kid-1', actor_eid: project },
   }])
+  // And the live hijack shape (T-15147): a REACHABLE managed spawn
+  // reified newer than the operator. Recency must not outrank the loop.
+  let spawn = uid()
+  apply(db, [{
+    eid: spawn,
+    name: 'session',
+    comp: { id: 'spawn-2', actor_eid: project },
+  }])
+  db.prepare(
+    `update session set origin = 'managed', status = 'running',
+     requested_task_eid = ? where eid = ?`,
+  ).run(task, spawn)
   let k = knock(task, project)
   let { num } = db.prepare('select num from entity where eid = ?').get(op) as {
     num: number
@@ -131,8 +167,10 @@ Deno.test('an operator is a door: external claude hears it, its child does not',
   assertEquals(erow(k), undefined)
   c.kill('SIGKILL')
   await c.status
-  // the door shuts with the process: the ladder descends again
+  // the door shuts with the process: the ladder descends again — past
+  // the still-running managed spawn, which is not a door for the actor
   assertMatch(String(drow(knock(task, project))?.via), /^spawned S-\d+$/)
+  db.prepare("update session set status = 'completed' where eid = ?").run(spawn)
 })
 
 // The operator loop outranks recency: a delegated worktree agent is its OWN

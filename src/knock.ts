@@ -10,7 +10,7 @@ import { reachable } from './door.ts'
 import { delivered, errored, toOf } from './deliver.ts'
 import { dispatch, trace } from './effects.ts'
 import { type Change, uuid } from './types.ts'
-import { rows, spawnChanges } from './client.ts'
+import { isOperator, rows, spawnChanges } from './client.ts'
 import { adapters } from './adapters.ts'
 
 type Cast = (changes: Change[]) => void
@@ -29,21 +29,27 @@ let wordsFor = (target: string): string => {
   return String(r?.body ?? '')
 }
 
-// Who is awake for an identity: a session wearing that actor_eid (or the
-// session itself) with a reachable content door (door.ts — liveness, never
-// origin). The OPERATOR loop wins over mere recency: project-wide attention —
-// a wake, a knock to an actor — belongs to the interactive operator, not to
-// whatever delegated worktree agent happens to wear the same actor and reified
-// LATER (its own live claude process, so also reachable). This is the same
-// `operator` gate project mail already applies (channel.ts injects). Recency
-// only breaks ties WITHIN a tier: a /clear leaves the old row behind, so the
-// higher num is the live conversation for one loop.
+// Who is awake for an identity: the session itself, or — for an actor —
+// a session RUNNING that actor's loop, with a reachable content door
+// (door.ts — liveness, never origin). Only the operator loop hears an
+// actor-addressed item (isOperator — the same predicate the channel
+// plugin and the comms bus gate on), so a delegated or managed sibling
+// wearing the actor must not take the cast: it would stamp `cast S-…`
+// for a session whose every door drops actor address, and the operator
+// never hears its own wake (T-15147, the T-7288 lie again). A gate, not
+// a preference — with no operator reachable the ladder must descend
+// (spawn, mail), never settle for a stamp nobody hears. Newest first
+// among the eligible, because that is the order the doors close in: a
+// /clear leaves the old row behind and the higher num is the live one.
 let awake = (to: string): { eid: string; num: number } | undefined =>
   (db.prepare(
-    `select s.eid, e.num from session s join entity e on e.eid = s.eid
+    `select s.eid, e.num, s.operator, s.requested_task_eid, s.origin,
+            s.role_eid
+     from session s join entity e on e.eid = s.eid
      where s.eid = ? or s.actor_eid = ?
-     order by (s.operator is 1) desc, e.num desc`,
-  ).all(to, to) as { eid: string; num: number }[])
+     order by e.num desc`,
+  ).all(to, to) as ({ eid: string; num: number } & Record<string, unknown>)[])
+    .filter((s) => s.eid == to || isOperator(s))
     .find((s) => reachable(s.eid))
 
 // The ladder. Every rung stamps; a knock with no door is an error, not
