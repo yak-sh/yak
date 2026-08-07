@@ -94,11 +94,14 @@ let sortVal = (e: Ent, col: Col): string | number => {
   return typeof v == 'number' ? v : String(v ?? '')
 }
 
-let Index = ({ kind }: { kind: string }) => {
+let Index = ({ kind, query }: { kind: string; query: string }) => {
   let [grid, setGrid] = useState(false)
   let [sort, setSort] = useState<{ key: string; dir: 1 | -1 } | null>(null)
   let cols = columnsFor(kind)
-  let pass = passOf(`admin:${kind}`)
+  // A deep-linked query gets its own filter identity: it arrives filled,
+  // remains editable, and cannot inherit an unrelated glance at this kind.
+  let filter = `admin:${kind}${query ? `:${query}` : ''}`
+  let pass = passOf(filter, query)
   let all = inSection(rows(), kind).map((r) => ent(r.eid))
     .filter((e) => pass(e.eid))
   if (sort) {
@@ -115,7 +118,7 @@ let Index = ({ kind }: { kind: string }) => {
     <Main>
       <Head>
         <Name>{kind}</Name>
-        <FilterInput eid={`admin:${kind}`} />
+        <FilterInput key={filter} eid={filter} initial={query} />
         <Tools>
           <Tool
             type='button'
@@ -333,7 +336,9 @@ let NewForm = ({ kind }: { kind: string }) => {
 // ---- the frame: sidebar + whichever page the route names ----
 
 export let Admin = () => {
-  let { kind, form } = adminRoute(route.value.split('?')[0])
+  let url = new URL(route.value, 'http://x')
+  let { kind, form } = adminRoute(url.pathname)
+  let query = url.searchParams.get('q') ?? ''
   let counts = countsByPresence(rows())
   let { content, system } = groupedKinds()
   let [folded, setFolded] = useState(true)
@@ -370,7 +375,7 @@ export let Admin = () => {
           {!folded && system.map(link)}
         </Group>
       </Side>
-      {form ? <NewForm kind={kind} /> : <Index kind={kind} />}
+      {form ? <NewForm kind={kind} /> : <Index kind={kind} query={query} />}
     </Frame>
   )
 }

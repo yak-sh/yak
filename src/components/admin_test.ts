@@ -158,3 +158,52 @@ Deno.test('the index is a typed grid and grid mode is bare tiles', async () => {
     else delete (globalThis as { document?: unknown }).document
   }
 })
+
+Deno.test('an admin query deep link filters the index', async () => {
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let { document } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  let home = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  let away = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  let mine = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+  let other = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+  cache.value = {
+    [home]: {
+      entity: { eid: home, num: 19 },
+      doc: { eid: home, title: 'Task Graph', body: '' },
+      project: { eid: home },
+    },
+    [away]: {
+      entity: { eid: away, num: 20 },
+      doc: { eid: away, title: 'Elsewhere', body: '' },
+      project: { eid: away },
+    },
+    [mine]: {
+      entity: { eid: mine, num: 21 },
+      doc: { eid: mine, title: 'Mine', body: '' },
+      task: { eid: mine, status: 'open', priority: 1, project_eid: home },
+    },
+    [other]: {
+      entity: { eid: other, num: 22 },
+      doc: { eid: other, title: 'Other', body: '' },
+      task: { eid: other, status: 'open', priority: 1, project_eid: away },
+    },
+  }
+  route.value = '/admin/task?q=.task.project_eid%3DP-19'
+  let root = document.querySelector('main')!
+  try {
+    render(h(Admin, {}), root)
+    await Promise.resolve()
+    assertEquals(root.textContent.includes('Mine'), true)
+    assertEquals(root.textContent.includes('Other'), false)
+  } finally {
+    render(null, root)
+    cache.value = {}
+    route.value = '/'
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else delete (globalThis as { document?: unknown }).document
+  }
+})

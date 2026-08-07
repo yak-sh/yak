@@ -1,7 +1,7 @@
 import { Fragment } from 'preact'
 import { useState } from 'preact/hooks'
 import { formatProp, propAt } from '../../props.ts'
-import { comps as vocab, type Ent } from '../../types.ts'
+import { comps as vocab, type Ent, idOf, plural } from '../../types.ts'
 import { backlinks, ent, mutate, parents } from '../../live.ts'
 import { up } from './Show.tsx'
 import { block } from '../ui.tsx'
@@ -10,6 +10,7 @@ import { Id } from './Inline.tsx'
 import { Entity } from '../Entity.tsx'
 import { viaName } from '../Comments.tsx'
 import { title } from '../title.tsx'
+import { follow } from '../nav.tsx'
 import { compTone } from '../comp.ts'
 
 // Adding/removing comps is a browser power tool — the TUI paints Debug as
@@ -204,7 +205,7 @@ export let AddComp = ({ e }: { e: Ent }) => {
   )
 }
 
-export let Debug = ({ e }: { e: Ent }) => {
+export let Debug = ({ e, project }: { e: Ent; project?: boolean }) => {
   // Incoming references too: whatever in the cache points here, said by
   // which prop brought it (live.ts backlinks, derived from the typed
   // vocabulary — sessions on their task, cards on their target, …).
@@ -233,7 +234,7 @@ export let Debug = ({ e }: { e: Ent }) => {
           ))}
         </Kids>
       )}
-      {links.length > 0 && (
+      {project ? <ProjectIncoming e={e} /> : links.length > 0 && (
         <Kids>
           {links.map((b) => (
             <Linked key={b.from + b.via}>
@@ -246,6 +247,63 @@ export let Debug = ({ e }: { e: Ent }) => {
     </Frame>
   )
 }
+
+let CAP = 3
+let groups = (links: { from: string; via: string }[]) => {
+  let out = new Map<string, { kind: string; via: string; ids: string[] }>()
+  for (let link of links) {
+    if (link.via.endsWith('.by')) continue
+    let kind = ent(link.from).kind
+    let key = `${link.via}\0${kind}`
+    let group = out.get(key) ?? { kind, via: link.via, ids: [] }
+    group.ids.push(link.from)
+    out.set(key, group)
+  }
+  return [...out.values()].map((group) => ({
+    ...group,
+    ids: group.ids.toSorted((a, b) => ent(b).num - ent(a).num),
+  }))
+}
+
+let ProjectIncoming = ({ e }: { e: Ent }) => {
+  let linked = groups(backlinks(e.eid))
+  if (!linked.length) return null
+  return (
+    <Kids>
+      {linked.flatMap((group) => {
+        let shown = group.ids.slice(0, CAP)
+        let more = group.ids.length - shown.length
+        let query = `.${group.via}=${idOf(e)}`
+        let href = `/admin/${group.kind}?q=${encodeURIComponent(query)}`
+        return [
+          ...shown.map((eid) => (
+            <Linked key={group.via + eid}>
+              <Via>← {group.via}</Via>
+              <Entity eid={eid} view='Debug.Tile' />
+            </Linked>
+          )),
+          ...(more
+            ? [
+              <Linked
+                key={group.via + group.kind}
+                href={href}
+                onClick={follow(href)}
+              >
+                <Via>← {group.via}</Via>
+                +{more} more {plural(group.kind)}
+              </Linked>,
+            ]
+            : []),
+        ]
+      })}
+    </Kids>
+  )
+}
+
+// A project is an actor and a home, so its complete backlink set is an
+// activity ledger. Attribution belongs in history; associations stay here,
+// capped per relation with a filtered census link for the remainder.
+export let ProjectDebug = ({ e }: { e: Ent }) => <Debug e={e} project />
 
 export let DebugTaskItem = ({ e }: { e: Ent }) => (
   <Item>

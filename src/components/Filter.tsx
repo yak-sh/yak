@@ -19,9 +19,9 @@ import { useComplete } from './Complete.tsx'
 let Frame = block('div', 'Filter', {})
 
 let lines = new Map<string, Signal<string>>()
-let lineOf = (eid: string) => {
+let lineOf = (eid: string, initial = '') => {
   let s = lines.get(eid)
-  if (!s) lines.set(eid, s = signal(''))
+  if (!s) lines.set(eid, s = signal(initial))
   return s
 }
 
@@ -30,9 +30,9 @@ let lineOf = (eid: string) => {
 export let filterable = new Set(['Board', 'List'])
 
 // the face's half: the current pass predicate for this entity's rows
-export let passOf = (eid: string): (eid: string) => boolean => {
+export let passOf = (eid: string, initial = ''): (eid: string) => boolean => {
   try {
-    return sieve(lineOf(eid).value)
+    return sieve(lineOf(eid, initial).value)
   } catch {
     return () => true // half a token yet — show everything
   }
@@ -45,9 +45,11 @@ export let passOf = (eid: string): (eid: string) => boolean => {
 // swap (which mints a fresh lines Map) or reload; absent a draft, a live
 // glance from this session — the signal outlives a card remount, the DOM
 // input doesn't — is reflected back on mount.
-export let FilterInput = ({ eid }: { eid: string }) => {
+export let FilterInput = (
+  { eid, initial = '' }: { eid: string; initial?: string },
+) => {
   let c = useComplete()
-  let line = lineOf(eid)
+  let line = lineOf(eid, initial)
   let box = useRef<HTMLInputElement>(null)
   let { sync, spend } = useDraft(`filter:${eid}`, box, (v) => line.value = v)
   useEffect(() => {
@@ -59,6 +61,7 @@ export let FilterInput = ({ eid }: { eid: string }) => {
     <Frame>
       <input
         ref={box}
+        defaultValue={line.value}
         placeholder='filter…'
         onInput={(e: InputEvent) => {
           let el = e.currentTarget as HTMLInputElement

@@ -37,7 +37,12 @@ import { BoardList, List, ListTile } from './views/List.tsx'
 import { Canvas } from './Canvas.tsx'
 import { Inline, TaskInline } from './views/Inline.tsx'
 import { Dependency } from './views/Dependency.tsx'
-import { Debug, DebugAnyItem, DebugTaskItem } from './views/Debug.tsx'
+import {
+  Debug,
+  DebugAnyItem,
+  DebugTaskItem,
+  ProjectDebug,
+} from './views/Debug.tsx'
 import { Schema } from './views/Schema.tsx'
 import { Json } from './views/Json.tsx'
 import { Md, mdText } from './views/Md.tsx'
@@ -164,6 +169,7 @@ define([
     match: (e) => e.alias?.slug == 'vocabulary',
     Render: Schema,
   },
+  { view: 'Debug', match: has('project'), Render: ProjectDebug },
   { view: 'Debug', match: () => true, Render: Debug },
   { view: 'Debug.Tile', match: has('task'), Render: DebugTaskItem },
   { view: 'Debug.Tile', match: () => true, Render: DebugAnyItem },
