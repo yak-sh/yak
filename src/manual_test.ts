@@ -81,7 +81,7 @@ Deno.test('manual validation rejects loss-shaped arguments', () => {
     ['mail files', ['E-1', '--out'], '--out needs a directory'],
     ['mail reply', ['E-1'], 'needs reply words, @file, or --body='],
     ['mail send', ['jeff', 'subject'], 'needs --body='],
-    ['comment', ['T-1'], 'needs comment text or --verdict='],
+    ['comment', ['T-1'], 'needs comment text, .body=@-|@file, or --verdict='],
     ['session brief', [], 'needs brief text, @file, or --body='],
     ['telemetry', ['-n', '--errors'], '-n needs a positive number'],
     ['wrap', ['sid', '--body=@x'], 'task session brief --body=…'],
@@ -97,7 +97,7 @@ Deno.test('manual validation rejects loss-shaped arguments', () => {
     ['design', ['A title', '.project=P-19'], 'it takes .body='],
     ['remember', ['a fact', '.feddback=jeff'], 'does not take .feddback='],
     ['mail send', ['jeff', 'Subject', '.oops=1'], 'does not take .oops='],
-    ['comment', ['T-1', 'text', '.body=@x'], 'does not take .body='],
+    ['comment', ['T-1', 'text', '.oops=1'], 'does not take .oops='],
     ['claim', ['T-1', '.session=S-3'], 'does not take .session='],
     // An unscoped stop must never be read as "stop everything".
     ['role stop', [], 'name at least one role, or --all'],
@@ -114,6 +114,10 @@ Deno.test('manual validation accepts each supported option shape', () => {
   check('mail files', ['E-1', '--out', 'tmp'])()
   check('mail files', ['E-1', '--out=tmp'])()
   check('comment', ['T-1', '--verdict=approved'])()
+  // A comment body rides the same door a task body does, at either spelling —
+  // and it is a VALUE, so the id is still the one word the verb needs.
+  check('comment', ['T-1', '.body=@notes.md'])()
+  check('comment', ['T-1', '--body=@-'])()
   check('role stop', ['R-1'])()
   check('role stop', ['--all'])()
   check('role start', ['R-1', 'R-2'])()

@@ -1278,19 +1278,15 @@ let dep = async (args: string[]) => {
 let comment = async (args: string[]) => {
   let verdictArg = args.find((a) => a.startsWith('--verdict='))
   let verdict = verdictArg?.slice(10)
-  let [id, ...words] = args.filter((a) => !a.startsWith('--verdict='))
-  separated(words)
-  let body = words.join(' ')
-  // One token AND no whitespace in it is what inflate reads: a quoted
-  // sentence is still one argv token, so `task comment T-3 "@holdco look at
-  // this"` stays prose, and `@@` escapes a genuine one-word comment that
-  // starts with an @. A lone token that NAMES A FILE and forgot its @ is
-  // refused there too, rather than stored as the path.
-  if (words.length == 1 && /^\S+$/.test(body)) {
-    body = String(
-      inflate({ comp: 'doc', prop: 'body', value: body }, stdin, body).value,
-    )
-  }
+  // A comment body is a DOCUMENT, exactly like a task body — so it rides the
+  // SAME door: parts() peels the id and text words off the params, and bodyOf
+  // reads the body by preference (.body=/--body= through inflate — @- heredoc,
+  // @file — else the trailing words, keeping the bare single-@token
+  // back-compat). One reader, so a markdown heredoc is stored whole instead of
+  // the flat inline string the missing `.body=` door pushed authors toward.
+  let { words } = parts(args)
+  let [id, ...text] = words
+  let body = bodyOf(args, text)
   if (verdictArg != null && !verdict) {
     throw new Error('--verdict needs approved, rejected, or changes_requested')
   }

@@ -363,18 +363,23 @@ export let manuals: Record<string, Manual> = {
     words: [0, 0],
   },
   comment: {
-    usage:
-      'comment <id> [text...] [--verdict=approved|rejected|changes_requested]',
+    usage: 'comment <id> [text... | --body=@-|@file] ' +
+      '[--verdict=approved|rejected|changes_requested]',
     about: 'comment on any entity; a verdict makes it a review',
+    dots: ['body'],
     examples: [
       'task comment T-3 "blocked on the schema call"',
+      'task comment T-3 .body=@notes.md',
       'task comment S-31 "status?"',
       'task comment T-3 --verdict=approved',
       'task set C-13 .body="what it should have said"',
     ],
-    detail: 'A body that IS `@file` is read from that file (`@@` escapes a ' +
-      'comment that genuinely starts with an @). A comment is something ' +
-      'you WROTE, and it reaches whoever the entity concerns.\n\n' +
+    detail: 'The body is a DOCUMENT like a task body — `.body=@-` reads a ' +
+      'heredoc, `.body=@file` reads a file, and a lone trailing @token does ' +
+      'the same (`@@` escapes a comment that genuinely starts with an @). ' +
+      'Comments render markdown exactly as bodies do, so author a rich one ' +
+      'through the body door rather than as a flat inline string. A comment ' +
+      'is something you WROTE, and it reaches whoever the entity concerns.\n\n' +
       "Prints the comment's own id. A comment is an ordinary entity, so " +
       'REVISE a wrong one in place — `task set C-13 .body="…"` — rather ' +
       'than posting a correction beneath it. `task history C-13` keeps every ' +
@@ -382,6 +387,7 @@ export let manuals: Record<string, Manual> = {
       'comment only leaves the wrong text as the one read first.',
     root: true,
     options: [
+      body,
       value(
         '--verdict',
         'approved, rejected, or changes_requested',
@@ -391,9 +397,10 @@ export let manuals: Record<string, Manual> = {
     ],
     words: [1],
     check: (args, words) =>
-      words.length > 1 || args.some((a) => a.startsWith('--verdict='))
+      words.length > 1 || hasBody(args) ||
+        args.some((a) => a.startsWith('--verdict='))
         ? undefined
-        : 'needs comment text or --verdict=...',
+        : 'needs comment text, .body=@-|@file, or --verdict=...',
   },
   dep: {
     usage: 'dep <id> <type> <child> [--gone]',
