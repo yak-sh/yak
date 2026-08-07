@@ -38,6 +38,7 @@ import { present, reachable } from './door.ts'
 import { dispatch, trace } from './effects.ts'
 import { legacyWorktreesDir, worktreesDir } from './ground.ts'
 import { rows, wrapChanges } from './client.ts'
+import { type Unlanded, unlanded } from './land.ts'
 import { materialize } from './persona.ts'
 import { type Change, type LogRow, sessionActive } from './types.ts'
 
@@ -258,6 +259,13 @@ let followWrite = async (eid: string, write: () => void) => {
 // lands, whoever asked for the work deserves to hear it.
 let SETTLED = ['completed', 'failed', 'interrupted', 'lost']
 
+let gistOf = (text: unknown) => {
+  let gist = String(text ?? '').replace(/\s+/g, ' ').trim()
+  return gist.length <= 240
+    ? gist
+    : `${gist.slice(0, 80)} … ${gist.slice(-(240 - 83))}`
+}
+
 // The outcome, said as ordinary comments via the session: one on
 // the task for its trail, one on the spawning session so its caller hears
 // directly. created.via is that server-stamped instrument; created.by is
@@ -267,6 +275,7 @@ let report = (
   status: string,
   row: Row,
   failure?: string,
+  stranded?: Unlanded,
 ): Change[] => {
   let task = String(row.requested_task_eid ?? '')
   let spawner = db.prepare(`
@@ -283,13 +292,15 @@ let report = (
   let { num } = db.prepare('select num from entity where eid = ?').get(
     eid,
   ) as { num: number }
-  let gist = String(row.final_text ?? '').replace(/\s+/g, ' ').trim()
-    .slice(0, 240)
+  let gist = gistOf(row.final_text)
   let body = [
     `S-${num} ${status}${
       row.exit_code == null ? '' : ` · exit ${row.exit_code}`
     }`,
-    ...(failure ? [`error: ${failure.slice(0, 240)}`] : []),
+    ...(stranded ? [stranded.line] : []),
+    ...(failure && failure != stranded?.message
+      ? [`error: ${failure.slice(0, 240)}`]
+      : []),
     ...(gist ? [gist] : []),
   ].join('\n')
   return [...targets].flatMap((target) => {
@@ -319,6 +330,12 @@ let settled = (eid: string, status: string, cast: Cast) => {
     | Row
     | undefined
   if (!row || row.origin != 'managed') return
+  let verdict = status == 'completed' ? landStateOf(row) : undefined
+  let stranded = verdict ?? undefined
+  if (stranded) stamp(eid, { error: stranded.message }, cast)
+  else if (verdict === null && failureOf(row).startsWith('UNLANDED:')) {
+    stamp(eid, { error: null }, cast)
+  }
   let all = rows(snapshot(db))
   let sess = all.find((r) => r.eid == eid)
   let changes: Change[] = sess
@@ -331,7 +348,13 @@ let settled = (eid: string, status: string, cast: Cast) => {
     )
     : []
   changes.push(
-    ...report(eid, status, row, String(sess?.comps.error?.message ?? '')),
+    ...report(
+      eid,
+      status,
+      row,
+      String(sess?.comps.error?.message ?? ''),
+      stranded,
+    ),
   )
   if (changes.length) {
     try {
@@ -381,6 +404,61 @@ let repoOf = (row: Row) =>
   ).get(String(row.requested_task_eid)) as
     | { path: string; base_branch: string }
     | undefined
+
+let gitResult = (cwd: string, args: string[]) =>
+  new Deno.Command('git', {
+    args,
+    cwd,
+    stdout: 'piped',
+    stderr: 'piped',
+  }).outputSync()
+
+let failureOf = (row: Row) =>
+  (db.prepare('select message from error where eid = ?')
+    .get(String(row.eid)) as { message: string | null } | undefined)?.message ??
+    ''
+
+let landVerdict = (row: Row) => {
+  let prior = failureOf(row)
+  let split = prior.indexOf(' — ')
+  return prior.startsWith('UNLANDED:') && split >= 0
+    ? prior.slice(split + 3)
+    : String(row.final_text ?? '').replace(/\s+/g, ' ').trim().slice(-240)
+}
+
+// Only Git's ancestry answer proves health or stranding: null is contained,
+// a verdict is ahead, and undefined is unknowable. A missing tree or broken
+// ref preserves every source-time warning and settlement still finishes.
+let landStateOf = (row: Row): Unlanded | null | undefined => {
+  let cwd = String(row.cwd ?? '')
+  let branch = String(row.branch ?? '')
+  let repo = repoOf(row)
+  if (!cwd || !branch || !repo) return
+  try {
+    let ancestry = gitResult(cwd, [
+      'merge-base',
+      '--is-ancestor',
+      branch,
+      repo.base_branch,
+    ])
+    if (ancestry.code == 0) return null
+    if (ancestry.code != 1) {
+      throw new Error(new TextDecoder().decode(ancestry.stderr).trim())
+    }
+    let counted = gitResult(cwd, [
+      'rev-list',
+      '--count',
+      `${repo.base_branch}..${branch}`,
+    ])
+    let count = Number(new TextDecoder().decode(counted.stdout).trim())
+    if (counted.code || !Number.isInteger(count) || count < 1) {
+      throw new Error(new TextDecoder().decode(counted.stderr).trim())
+    }
+    return unlanded(branch, repo.base_branch, count, landVerdict(row))
+  } catch (e) {
+    console.warn(`session ${row.eid} land verdict unavailable —`, e)
+  }
+}
 
 // One worktree, considered and (maybe) removed. Every refusal is a
 // warning, never a throw. The row sheds its branch afterwards, but keeps cwd:

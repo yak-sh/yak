@@ -527,10 +527,49 @@ Deno.test('a settled session says so on its task', async () => {
   assertEquals(said.length, 1)
   assertMatch(said[0], /^S-\d+ completed · exit 0\n/)
   assertMatch(said[0], /done: /) // the final text's gist rides along
+  assert(!said[0].includes('UNLANDED'))
+  assertEquals(failure(eid), undefined)
   // The comment rode the CAST — clients heard graph data, not a stamp.
   assert(
     heard.some((c) => c.name == 'comment' && c.comp?.target_eid == t),
   )
+})
+
+Deno.test('a completed session reports and stamps its unlanded commits', async () => {
+  let verdict = 'project gate failed with exit 7'
+  let body = `delay:300 ${'context '.repeat(80)}${verdict}`
+  let { t } = seed(body)
+  heard = []
+  let { eid, done } = begin(t)
+  await until(() => row(eid)?.status == 'running', 'the init event')
+  let tree = String(row(eid)?.cwd)
+  Deno.writeTextFileSync(`${tree}/unlanded.txt`, 'committed\n')
+  let git = (...args: string[]) =>
+    new Deno.Command('git', {
+      args,
+      cwd: tree,
+      stdout: 'null',
+      stderr: 'null',
+    }).outputSync()
+  assert(git('add', 'unlanded.txt').success)
+  assert(git('commit', '-m', 'leave work unlanded').success)
+  await done
+
+  let branch = String(row(eid)?.branch)
+  let message = failure(eid) ?? ''
+  assertMatch(
+    message,
+    new RegExp(`^UNLANDED: 1 commit on ${branch} not in main`),
+  )
+  assertMatch(message, new RegExp(`${verdict}$`))
+  let said = settleComments(t, eid)
+  assertEquals(said.length, 1)
+  assertMatch(
+    said[0],
+    new RegExp(`⚠ UNLANDED: 1 commit on ${branch} not in main`),
+  )
+  assertMatch(said[0], new RegExp(`${verdict}$`))
+  assert(heard.some((c) => c.eid == eid && c.name == 'error'))
 })
 
 Deno.test('a failed spawn tells its task and its spawner — and only once', async () => {
@@ -746,6 +785,17 @@ Deno.test('boot: a child that died while we were away is read from its file', as
   assertEquals(JSON.parse(String(s.usage_json)).output_tokens, 7)
   assertEquals(s.exit_code, null) // we didn't spawn it: nobody's to read
   assertMatch(String(s.stop_reason), /unobserved/)
+})
+
+Deno.test('an unavailable land verdict preserves the source refusal', async () => {
+  let eid = plant([INIT, RESULT])
+  let message = 'UNLANDED: 1 commit on lost-branch not in main — gate red'
+  db.prepare('insert into error (eid, at, message) values (?, ?, ?)')
+    .run(eid, new Date().toISOString(), message)
+  recover(cast)
+  await running.get(eid)!.done
+  assertEquals(row(eid)?.status, 'completed')
+  assertEquals(failure(eid), message)
 })
 
 Deno.test('boot: external transcripts restore model facts missed at startup', () => {

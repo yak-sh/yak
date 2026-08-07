@@ -39,6 +39,28 @@ export type Landing = {
   push: boolean
 }
 
+export type Unlanded = { line: string; message: string }
+
+// One verdict, whether Git observes it at the refusal or settlement does.
+// The source can add the reason it heard; the backstop can add the closing
+// words the agent left behind.
+export let unlanded = (
+  branch: string,
+  base: string,
+  count: number,
+  verdict = '',
+): Unlanded => {
+  let work = `${count} commit${
+    count == 1 ? '' : 's'
+  } on ${branch} not in ${base}`
+  let line = `⚠ UNLANDED: ${work}`
+  let tail = verdict.replace(/\s+/g, ' ').trim().slice(-240)
+  return {
+    line,
+    message: `UNLANDED: ${work}${tail ? ` — ${tail}` : ''}`,
+  }
+}
+
 // A landed commit completes the task, releases the session's leases, and
 // records its receipt in one graph transaction. The exact receipt makes a
 // lost-response retry idempotent.
@@ -153,6 +175,7 @@ type LandOps = {
   retries?: number
   run?: Run
   record?: (sha: string) => Promise<void>
+  outcome?: (error?: string) => Promise<void>
   write?: (text: string, error?: boolean) => void
   gate?: (cwd: string, command: string) => Promise<number>
 }
@@ -284,6 +307,22 @@ export let land = async (spec: Landing, ops: LandOps = {}) => {
   await clean()
   await onBase()
 
+  let refuse = async (reason: string): Promise<never> => {
+    let count = Number(
+      await need(
+        'count unlanded commits',
+        spec.tree,
+        ['rev-list', '--count', `${spec.base}..${branch}`],
+      ),
+    )
+    await ops.outcome?.(
+      count > 0
+        ? unlanded(branch, spec.base, count, reason).message
+        : undefined,
+    )
+    throw new Error(reason)
+  }
+
   for (let attempt = 1; attempt <= retries; attempt++) {
     write(`land ${attempt}/${retries}: rebase onto ${spec.base}`)
     let rebased = await git(spec.tree, ['rebase', spec.base])
@@ -298,7 +337,7 @@ export let land = async (spec: Landing, ops: LandOps = {}) => {
         write(r.err, true)
         return r.code
       })
-    if (gate) throw new Error(`project gate failed with exit ${gate}`)
+    if (gate) await refuse(`project gate failed with exit ${gate}`)
     // A formatter or generator changing the tree means the tested filesystem
     // was not HEAD. Refuse it; the caller commits those bytes and lands again.
     await clean()
@@ -313,6 +352,7 @@ export let land = async (spec: Landing, ops: LandOps = {}) => {
     let merged = await git(spec.repo, ['merge', '--ff-only', branch])
     if (!merged.code) {
       await ops.record?.(sha)
+      await ops.outcome?.()
       await publish()
       // The tree and its branch SURVIVE the landing. The caller is standing
       // here and its closing bookkeeping comes after us — releasing the
@@ -342,14 +382,12 @@ export let land = async (spec: Landing, ops: LandOps = {}) => {
       ['merge-base', '--is-ancestor', spec.base, 'HEAD'],
       false,
     )
-    if (current.code == 0) throw new Error(message('git merge', merged))
+    if (current.code == 0) await refuse(message('git merge', merged))
     if (current.code != 1) {
       throw new Error(message('read merge contention', current))
     }
     if (attempt == retries) {
-      throw new Error(
-        `${spec.base} moved during ${retries} landing attempts`,
-      )
+      await refuse(`${spec.base} moved during ${retries} landing attempts`)
     }
   }
   throw new Error('land: retry bound must be positive')

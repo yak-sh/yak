@@ -4,7 +4,13 @@
 // budget. No remote anywhere — landing is a fast-forward of the project's
 // own checkout, and a test that needed a network would be testing the wrong
 // verb.
-import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertMatch,
+  assertRejects,
+  assertThrows,
+} from '@std/assert'
 import { type Row } from './client.ts'
 import { land, landedChanges, type Landing, landing } from './land.ts'
 
@@ -258,17 +264,27 @@ Deno.test('a red project gate never moves the base branch', async () => {
   let r = await setup()
   try {
     let before = await command(r.repo, 'rev-parse', 'main')
+    let outcome = ''
     r.spec.gate = "printf 'looks green\\n'; exit 7"
     await assertRejects(
       () =>
         land(r.spec, {
           ...quiet,
           cwd: r.spec.tree,
+          outcome: (error) => {
+            outcome = error ?? ''
+            return Promise.resolve()
+          },
         }),
       Error,
       'project gate failed with exit 7',
     )
     assertEquals(await command(r.repo, 'rev-parse', 'main'), before)
+    assertEquals(
+      outcome,
+      'UNLANDED: 1 commit on session/S-7 not in main — ' +
+        'project gate failed with exit 7',
+    )
     assert(exists(r.spec.tree))
   } finally {
     Deno.removeSync(r.root, { recursive: true })
@@ -315,7 +331,7 @@ Deno.test('a concurrent landing rebases, retests, records, and keeps the tree', 
   let r = await setup()
   try {
     let rival = `${r.root}/rival`
-    let gates = 0, recorded = ''
+    let gates = 0, recorded = '', outcomes: (string | undefined)[] = []
     let sha = await land(r.spec, {
       ...quiet,
       cwd: r.spec.tree,
@@ -337,9 +353,14 @@ Deno.test('a concurrent landing rebases, retests, records, and keeps the tree', 
         recorded = landed
         return Promise.resolve()
       },
+      outcome: (error) => {
+        outcomes.push(error)
+        return Promise.resolve()
+      },
     })
     assertEquals(gates, 2)
     assertEquals(recorded, sha)
+    assertEquals(outcomes, [undefined])
     assertEquals(await command(r.repo, 'rev-parse', 'main'), sha)
     assertEquals(Deno.readTextFileSync(`${r.repo}/rival.txt`), 'rival\n')
     assertEquals(
@@ -368,18 +389,26 @@ Deno.test('a merge refusal without contention does not rerun the gate', async ()
     Deno.writeTextFileSync(`${r.spec.tree}/base.txt`, 'rewritten\n')
     await command(r.spec.tree, 'commit', '-am', 'rewrite base')
     Deno.writeTextFileSync(`${r.repo}/base.txt`, 'being edited\n')
-    let gates = 0
+    let gates = 0, outcome = ''
     await assertRejects(
       () =>
         land(r.spec, {
           ...quiet,
           cwd: r.spec.tree,
           gate: () => Promise.resolve((gates++, 0)),
+          outcome: (error) => {
+            outcome = error ?? ''
+            return Promise.resolve()
+          },
         }),
       Error,
       'git merge failed with exit 1',
     )
     assertEquals(gates, 1)
+    assertMatch(
+      outcome,
+      /^UNLANDED: 2 commits on session\/S-7 not in main — git merge failed /,
+    )
     assert(exists(r.spec.tree))
     assertEquals(Deno.readTextFileSync(`${r.repo}/base.txt`), 'being edited\n')
   } finally {

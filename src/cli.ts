@@ -42,6 +42,7 @@ import {
   isUnread,
   journalRows,
   jsonOf,
+  landOutcome,
   mailAt,
   mailChanges,
   mailLine,
@@ -1039,6 +1040,7 @@ let land = async () => {
   let all = [...sessions, ...tasks, ...projects]
   let spec = landing(all, session)
   let sha = await landTree(spec, {
+    outcome: (error) => landOutcome(session, error),
     record: async (sha) => {
       let sess = await sessionRow(session)
       let current = [

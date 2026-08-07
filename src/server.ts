@@ -32,6 +32,7 @@ import {
   touch,
   vocabHash,
   vocabularyDoc,
+  writerVia,
 } from './db.ts'
 import { bodied, bodyless, gaps, spread, type Step, step } from './subs.ts'
 import { where } from './sql.ts'
@@ -39,7 +40,7 @@ import { dispatch, docs, on, relay, trace } from './effects.ts'
 import { vocabularyMd } from './schema.ts'
 import { freeze, serveFrozen, store } from './freeze.ts'
 import { filed } from './page.ts'
-import { PENDING } from './deliver.ts'
+import { errored, healthy, PENDING } from './deliver.ts'
 import { fanout, FANOUT_PENDING, mailed } from './mail.ts'
 import { native } from './mailer.ts'
 import { closingTask } from './closing.ts'
@@ -665,6 +666,33 @@ let clientError = async (req: Request) => {
   return new Response(null, { status: 204 })
 }
 
+// A land refusal belongs to the session that ran the verb. The caller may
+// report its reason, never choose a target; the stamped error remains a
+// server-owned facet. A later success clears only this action's own signal.
+let landOutcome = async (req: Request) => {
+  try {
+    let eid = writerVia(db, req.headers.get('x-via'))
+    if (!eid || !db.prepare('select 1 from session where eid = ?').get(eid)) {
+      return new Response('land: no session identity', { status: 400 })
+    }
+    let body = JSON.parse(await bounded(req, 4096)) as { error?: unknown }
+    if (body.error != null) {
+      let message = String(body.error).trim().slice(0, 2000)
+      if (!message.startsWith('UNLANDED:')) {
+        return new Response('land: invalid outcome', { status: 400 })
+      }
+      errored(eid, message, cast)
+    } else {
+      let failure = db.prepare('select message from error where eid = ?')
+        .get(eid) as { message: string | null } | undefined
+      if (failure?.message?.startsWith('UNLANDED:')) healthy(eid, cast)
+    }
+    return new Response(null, { status: 204 })
+  } catch (e) {
+    return new Response(String((e as Error).message ?? e), { status: 400 })
+  }
+}
+
 // The handoff supervisor starts the successor before asking this process to
 // drain. reusePort makes those listeners overlap; shutdown() keeps every
 // request on the process that accepted it until its response is complete.
@@ -906,6 +934,7 @@ let http = Deno.serve(
     }
     if (path == '/mcp' && req.method == 'POST') return mcp(req)
     if (path == '/error' && req.method == 'POST') return clientError(req)
+    if (path == '/land' && req.method == 'POST') return landOutcome(req)
     if (path == '/telemetry') {
       return Response.json(recent(db, {
         since: url.searchParams.get('since') ?? undefined,
