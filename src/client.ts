@@ -1244,7 +1244,7 @@ export let addressed = (who: Reader) => (r: Row): boolean => {
     if (!m.message_id) return false
     // A letter to your SESSION is direct address, so it lands whatever loop
     // you run — the same rule the comment and knock arms above already
-    // follow. Sessions are addressable by id (`S-31@bot.yak.sh`, resolved
+    // follow. Sessions are addressable by id (`S-31@<fleet domain>`, resolved
     // in src/mail.ts), and gating that on `operator` would resolve the
     // address perfectly and then tell nobody.
     if (who.session && String(m.target_eid) == who.session) return true

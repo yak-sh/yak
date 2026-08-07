@@ -8,17 +8,18 @@
 // seam), this path when the env pair is here, a stamped error when
 // neither.
 
-// Cloudflare Email Routing rejects an underscore in a bot.yak.sh
+// Cloudflare Email Routing rejects an underscore in the fleet domain's
 // local-part at RCPT — upstream of the inbox Worker, so such mail
 // bounces whatever the routing rules say. Canonicalizing at send
 // (lowercase, shed underscores) is the only reliable fix; every other
 // domain passes untouched.
 import { mdAbs } from './md.ts'
+import { fleetLocal, mailDomain } from './mailaddr.ts'
 
 export let canon = (to: string) => {
-  let m = /^([^@]+)@(bot\.yak\.sh)$/i.exec(to.trim())
-  return m
-    ? m[1].toLowerCase().replace(/_/g, '') + '@' + m[2].toLowerCase()
+  let local = fleetLocal(to)
+  return local != null
+    ? local.toLowerCase().replace(/_/g, '') + '@' + mailDomain()
     : to
 }
 

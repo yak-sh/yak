@@ -31,6 +31,7 @@ import { ancestorAt } from './client.ts'
 import { homeReads } from './persona.ts'
 import { matchQuery, parseQuery, resolveRefs, TEXT } from './query.ts'
 import { bodyCols, normalizeChanges, parseProp, propAt } from './props.ts'
+import { fleetLocal } from './mailaddr.ts'
 
 // The owner's live graph — the one path a test must never open (open() below
 // refuses it under `deno test`). A function, not a constant, so it re-reads
@@ -839,7 +840,7 @@ let ADDR = /@/
 let UUIDRE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // The entity already wearing this address: an address-book `email`, or an
-// id-shaped fleet address naming one by its human id (S-31@bot.yak.sh → that
+// id-shaped fleet address naming one by its human id (S-31@<fleet> → that
 // session). Mirrors mail.ts wearer()/named() — inlined because mail.ts imports
 // db.ts, and this is the pre-mint half of the same resolution: an address the
 // graph already knows must NOT get a second entity minted for it (that would
@@ -850,7 +851,7 @@ let addressed = (db: DatabaseSync, addr: string): string | undefined => {
     (db.prepare('select eid from email where address = ? collate nocase')
       .get(a) as { eid: string } | undefined)?.eid
   if (worn) return worn
-  let m = /^([A-Za-z]+-(\d+))@bot\.yak\.sh$/i.exec(a)
+  let m = /^([A-Za-z]+-(\d+))$/i.exec(fleetLocal(a) ?? '')
   if (!m) return undefined
   let row = db.prepare('select eid from entity where num = ?')
     .get(Number(m[2])) as { eid: string } | undefined
@@ -879,7 +880,7 @@ export let addressEntity = (db: DatabaseSync, addr: string): string => {
 // D-14945 phase 2: the per-type recipient columns become the shared
 // `deliver {to}`. knock/wake carried an eid (`to_eid`) — carry it straight.
 // mail carried a `to` that is an eid, an @-address, an alias slug, or bare
-// junk ('jeff', 'holdco', 'S-11310@bot.yak.sh'); since `deliver.to` is
+// junk ('jeff', 'holdco', 'S-11310@<fleet>'); since `deliver.to` is
 // strict-{eid}, resolve EVERY row or the wire would later refuse it — never
 // drop one. The ladder: a valid eid stays; an @-address find-or-mints an
 // `email` entity; else `ident()` (an alias/human-id/num); else the raw string

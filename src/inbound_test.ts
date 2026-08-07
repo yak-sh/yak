@@ -5,6 +5,7 @@
 import type { Change } from './types.ts'
 import type { FleetMsg, SpoolReq } from './inbound.ts'
 Deno.env.set('DB_PATH', ':memory:')
+Deno.env.set('TASKS_MAIL_DOMAIN', 'bot.test')
 let { apply, db, open } = await import('./db.ts')
 let {
   author,
@@ -70,9 +71,9 @@ let venture = (title: string, address: string) => {
   return eid
 }
 
-let cafecar = venture('CafeCar', 'cafecar@bot.yak.sh')
-let homelab = venture('Homelab', 'homelab@bot.yak.sh')
-let moonshot = venture('Moonshot', 'moonshot@bot.yak.sh')
+let cafecar = venture('CafeCar', 'cafecar@bot.test')
+let homelab = venture('Homelab', 'homelab@bot.test')
+let moonshot = venture('Moonshot', 'moonshot@bot.test')
 
 // The archive dialect, as rowToJson speaks it: from/to/text, boolean
 // verified, ISO received_at riding beside the epoch ts.
@@ -107,14 +108,14 @@ Deno.test('routeTo: an id names its entity; a wrong prefix names nobody', () => 
   let num = (db.prepare('select num from entity where eid = ?').get(s) as {
     num: number
   }).num
-  assertEquals(routeTo(`S-${num}@bot.yak.sh`), s)
-  assertEquals(routeTo(`s-${num}@bot.yak.sh`), s) // canon lowercases
+  assertEquals(routeTo(`S-${num}@bot.test`), s)
+  assertEquals(routeTo(`s-${num}@bot.test`), s) // canon lowercases
   // Same num, wrong prefix: it is a different id, so it names nothing and
   // falls to triage rather than delivering to the session by accident.
-  assertEquals(routeTo(`T-${num}@bot.yak.sh`), holdco)
+  assertEquals(routeTo(`T-${num}@bot.test`), holdco)
   // The derivation is scoped to the fleet domain.
   assertEquals(routeTo(`S-${num}@elsewhere.test`), holdco)
-  assertEquals(routeTo('S-999999@bot.yak.sh'), holdco) // no such entity
+  assertEquals(routeTo('S-999999@bot.test'), holdco) // no such entity
 })
 
 // Routing and ATTRIBUTION read the same book and must not share a fallback:
@@ -130,7 +131,7 @@ Deno.test('hookTo: the venture path routes, variants converge, misses fall back'
   let observer = uid()
   apply(db, [
     { eid: observer, name: 'doc', comp: { title: 'Observer' } },
-    { eid: observer, name: 'email', comp: { address: 'observer@bot.yak.sh' } },
+    { eid: observer, name: 'email', comp: { address: 'observer@bot.test' } },
   ])
   assertEquals(hookTo('/hook/cafecar/posthog'), cafecar)
   assertEquals(hookTo('/hook/cafe_car/posthog'), cafecar)
@@ -344,7 +345,7 @@ Deno.test('the sweep: an arriving letter is authored by its sender', async () =>
   let known = 'msg:1752000000001:known'
   await inboundSweep(
     cast,
-    fakeApi([msg({ id: known, from_header: 'cafecar@bot.yak.sh' })], null).api,
+    fakeApi([msg({ id: known, from_header: 'cafecar@bot.test' })], null).api,
   )
   assertEquals(by(known), cafecar)
 

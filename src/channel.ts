@@ -271,7 +271,7 @@ export let findSession = (
 // `operator` gates PROJECT mail to the operator loop. Missing identity fails
 // closed; direct comments, session knocks, and claimed-task replies are
 // selected independently.
-// A letter to the SESSION ITSELF (`S-31@bot.yak.sh`, resolved in
+// A letter to the SESSION ITSELF (`S-31@<fleet domain>`, resolved in
 // src/mail.ts) is direct address and rings whatever loop this is — the
 // operator gate belongs to project mail alone, exactly as it does in the
 // inbox predicate (client.ts `addressed`).

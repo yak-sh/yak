@@ -1,9 +1,9 @@
 // Outbound mail: the mail intent's effect and the comment relay.
 // A mail is a mail asked for as data — created (or re-driven by
 // the boot sweep), the effect here resolves the address and delivers
-// LOCAL-FIRST: a fleet recipient (a bot.yak.sh address the graph
-// address book knows) is stamped delivered in place, never leaving the
-// graph; only the boundary — external mailboxes — rides Cloudflare
+// LOCAL-FIRST: a fleet-domain recipient the graph address book knows is
+// stamped delivered in place, never leaving the graph; only the boundary —
+// external mailboxes — rides Cloudflare
 // Email Sending (mailer.ts), or $TASKS_MAIL_CMD when that's set (the
 // override/test seam). Either way the effect settles the outcome as the
 // shared delivered/error facet (deliver.ts) and denormalizes the resolved
@@ -16,6 +16,7 @@ import { apply, db, human } from './db.ts'
 import { delivered, errored, settled, toOf } from './deliver.ts'
 import { dispatch, trace } from './effects.ts'
 import { canon, type Letter, logOut, native, send } from './mailer.ts'
+import { atFleet, fleetAddress, fleetLocal } from './mailaddr.ts'
 import { type Change } from './types.ts'
 import { entityUrl } from './url.ts'
 
@@ -80,12 +81,12 @@ export let addressOf = (to: string): string => {
   // for entities too short-lived to carry an `email` comp. Anything else
   // genuinely has no address, and guessing one would misdeliver.
   if (db.prepare('select 1 from session where eid = ?').get(eid)) {
-    return `${human(db, eid)}@bot.yak.sh`
+    return fleetAddress(human(db, eid))
   }
   throw new Error(`no address on file for ${to} — give it an email comp`)
 }
 
-// The id grammar IS the address grammar: `S-31@bot.yak.sh` names S-31.
+// The id grammar IS the address grammar: `S-31@<fleet domain>` names S-31.
 // DERIVED, never stored — sessions mint and die constantly, so a book row
 // per session is bookkeeping nobody would keep true, and addressing one
 // should not require minting anything. `human()` is the single place that
@@ -93,7 +94,7 @@ export let addressOf = (to: string): string => {
 // PREFIX binding rather than decorative: T-31@ resolves to nothing when
 // 31 is a session, even though the two share a num.
 export let named = (to: string): string | null => {
-  let local = /^([A-Za-z]+-(\d+))@bot\.yak\.sh$/i.exec(to.trim())
+  let local = /^([A-Za-z]+-(\d+))$/i.exec(fleetLocal(to) ?? '')
   if (!local) return null
   let row = db.prepare('select eid from entity where num = ?')
     .get(Number(local[2])) as { eid: string } | undefined
@@ -104,7 +105,7 @@ export let named = (to: string): string | null => {
 }
 
 // The address book, reversed and strict — which fleet entity wears this
-// address? Only bot.yak.sh addresses count as fleet: an external
+// address? Only fleet-domain addresses count as fleet: an external
 // mailbox in the book (the owner's own, a customer's) must still ride
 // Cloudflare to reach its inbox. Both spellings are checked, resolved
 // and canon'd, so a book entry Cloudflare would bounce (underscores)
@@ -114,7 +115,7 @@ export let named = (to: string): string | null => {
 // decision, and an id-shaped address is only the fallback for the
 // entities too short-lived to carry one.
 let homeOf = (addr: string, to: string): string | null => {
-  if (!/@bot\.yak\.sh$/i.test(to)) return null
+  if (!atFleet(to)) return null
   let hit = (a: string) =>
     (db.prepare('select eid from email where address = ? collate nocase')
       .get(a) as { eid: string } | undefined)?.eid

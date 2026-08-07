@@ -114,6 +114,7 @@ import { projection, syncFiles } from './persona.ts'
 import { commit } from './git.ts'
 import { land as landTree, landedChanges, landing } from './land.ts'
 import { request } from './http.ts'
+import { atFleet, mailDomain } from './mailaddr.ts'
 import { commands, focusOf, run as runCommand } from './commands.ts'
 import {
   cliVerbs,
@@ -762,7 +763,7 @@ let mailDoctor = async () => {
         '  read-only routing token is ever minted.',
     )
   }
-  let bots = book.filter((e) => /@bot\.yak\.sh$/i.test(e.address))
+  let bots = book.filter((e) => atFleet(e.address))
   let bad = diagnose(book, rules)
   // '?' where the verdict came from the snapshot rather than Cloudflare.
   // A '✗' asserts a measurement, and one read off a stale constant was
@@ -773,7 +774,7 @@ let mailDoctor = async () => {
     print(`${mark} ${f.address} (${f.owner}) — ${f.problem}`)
   }
   print(
-    `${bots.length - bad.length}/${bots.length} bot.yak.sh addresses ` +
+    `${bots.length - bad.length}/${bots.length} ${mailDomain()} addresses ` +
       `deliverable (${book.length} in the book; rules: ` +
       `${rules.live ? 'live' : 'static'})`,
   )

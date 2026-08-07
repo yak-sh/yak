@@ -17,6 +17,7 @@ let { assertEquals, assertMatch, assertStringIncludes, assertThrows } =
 for (
   let k of [
     'TASKS_MAIL_CMD',
+    'TASKS_MAIL_DOMAIN',
     'TASKS_MAIL_FROM',
     'CLOUDFLARE_EMAIL_TOKEN',
     'HOLDCO_CF_ACCOUNT_ID',
@@ -25,6 +26,7 @@ for (
     'FLEET_MAIL_API_TOKEN',
   ]
 ) Deno.env.delete(k)
+Deno.env.set('TASKS_MAIL_DOMAIN', 'bot.test')
 
 open()
 let uid = () => crypto.randomUUID()
@@ -484,10 +486,12 @@ Deno.test('mailed: reply_to_eid resolves to --in-reply-to at delivery', async ()
   Deno.env.delete('TASKS_MAIL_CMD')
 })
 
-Deno.test('canon: bot.yak.sh sheds underscores; other domains pass', () => {
-  assertEquals(canon('cafe_car@bot.yak.sh'), 'cafecar@bot.yak.sh')
-  assertEquals(canon('Ops@Bot.Yak.Sh'), 'ops@bot.yak.sh')
+Deno.test('canon: the fleet domain sheds underscores; other domains pass', () => {
+  assertEquals(canon('cafe_car@bot.test'), 'cafecar@bot.test')
+  assertEquals(canon('Ops@Bot.Test'), 'ops@bot.test')
   assertEquals(canon('under_score@gmail.com'), 'under_score@gmail.com')
+  assertEquals(canon('under_score@sub.bot.test'), 'under_score@sub.bot.test')
+  assertEquals(canon('under_score@bot.test@'), 'under_score@bot.test@')
 })
 
 Deno.test('payload: text and rendered markdown, threading headers on mid', () => {
@@ -601,7 +605,7 @@ Deno.test('mailed: native send stamps sent_id, threads, logs dir=out', async () 
           name: 'mail',
           comp: { reply_to_eid: orig },
         },
-        // An external address (a bot.yak.sh one now resolves to its fleet
+        // An external address (a fleet-domain one now resolves to its fleet
         // entity and delivers in-graph) — this is the native Cloudflare path.
         { eid: m, name: 'deliver', comp: { to: 'cafe_car@partner.test' } },
       ],
@@ -718,7 +722,7 @@ Deno.test('mailed: a fleet recipient delivers locally — no send, no out-log', 
   Deno.env.set('TASKS_MAIL_CMD', mailer(dir))
   let { hits, restore } = netStub(() => ({ success: true }))
   try {
-    let ops = somebody('ops', 'ops@bot.yak.sh')
+    let ops = somebody('ops', 'ops@bot.test')
     let m = uid()
     apply(
       db,
@@ -734,7 +738,7 @@ Deno.test('mailed: a fleet recipient delivers locally — no send, no out-log', 
     await mailed((cs) => got.push(...cs))(m, {})
     let r = row(m)
     assertEquals(erow(m), undefined)
-    assertEquals(r.to_addr, 'ops@bot.yak.sh')
+    assertEquals(r.to_addr, 'ops@bot.test')
     assertMatch(String(r.message_id), /^local:\d+:/) // the never-send mark
     assertMatch(String(r.received_at), /T/) // arrived
     assertMatch(String(drow(m)?.at), /T/) // delivered, and when
@@ -777,15 +781,16 @@ Deno.test('named: an id names its entity, and only under its own prefix', () => 
   let n = (db.prepare('select num from entity where eid = ?').get(s) as {
     num: number
   }).num
-  assertEquals(named(`S-${n}@bot.yak.sh`), s)
-  assertEquals(named(`s-${n}@BOT.YAK.SH`), s) // canon lowercases the local part
+  assertEquals(addressOf(s), `S-${n}@bot.test`)
+  assertEquals(named(`S-${n}@bot.test`), s)
+  assertEquals(named(`s-${n}@BOT.TEST`), s) // canon lowercases the local part
   // The prefix is part of the id, not decoration: the same num under the
   // wrong prefix is a typo, and delivering it anyway would hand the letter
   // to an entity the sender never named.
-  assertEquals(named(`T-${n}@bot.yak.sh`), null)
+  assertEquals(named(`T-${n}@bot.test`), null)
   assertEquals(named(`S-${n}@example.test`), null) // fleet domain only
-  assertEquals(named('S-99999999@bot.yak.sh'), null)
-  assertEquals(named('holdco@bot.yak.sh'), null) // not id-shaped
+  assertEquals(named('S-99999999@bot.test'), null)
+  assertEquals(named('holdco@bot.test'), null) // not id-shaped
 })
 
 Deno.test('mailed: a letter to S-<n> delivers to that session, in-graph', async () => {
@@ -806,7 +811,7 @@ Deno.test('mailed: a letter to S-<n> delivers to that session, in-graph', async 
       [
         { eid: m, name: 'doc', comp: { title: 'ping', body: 'you there?' } },
         { eid: m, name: 'mail', comp: {} },
-        { eid: m, name: 'deliver', comp: { to: `S-${n}@bot.yak.sh` } },
+        { eid: m, name: 'deliver', comp: { to: `S-${n}@bot.test` } },
       ],
       undefined,
       author,
@@ -848,14 +853,14 @@ Deno.test('named: the address book outranks the derivation', async () => {
       num: number
     }).num
     // Somebody books the id-shaped address for themselves.
-    let squatter = somebody('squatter', `S-${n}@bot.yak.sh`)
+    let squatter = somebody('squatter', `S-${n}@bot.test`)
     let m = uid()
     apply(
       db,
       [
         { eid: m, name: 'doc', comp: { title: 'to whom', body: 'x' } },
         { eid: m, name: 'mail', comp: {} },
-        { eid: m, name: 'deliver', comp: { to: `S-${n}@bot.yak.sh` } },
+        { eid: m, name: 'deliver', comp: { to: `S-${n}@bot.test` } },
       ],
       undefined,
       author,
@@ -872,7 +877,7 @@ Deno.test('mailed: a book entry Cloudflare would bounce still lands at home', as
   nativeEnv()
   let { hits, restore } = netStub(() => ({ success: true }))
   try {
-    let p = somebody('under_bot', 'under_score@bot.yak.sh')
+    let p = somebody('under_bot', 'under_score@bot.test')
     let m = uid()
     apply(
       db,
@@ -883,7 +888,7 @@ Deno.test('mailed: a book entry Cloudflare would bounce still lands at home', as
           name: 'mail',
           comp: {},
         },
-        { eid: m, name: 'deliver', comp: { to: 'under_score@bot.yak.sh' } },
+        { eid: m, name: 'deliver', comp: { to: 'under_score@bot.test' } },
       ],
       undefined,
       author,
@@ -902,7 +907,7 @@ Deno.test('mailed: a book entry Cloudflare would bounce still lands at home', as
 
 Deno.test('mailed: local delivery keeps a relay mail aimed at its task', async () => {
   let t = uid()
-  somebody('relayed', 'relayed@bot.yak.sh')
+  somebody('relayed', 'relayed@bot.test')
   apply(db, [
     { eid: t, name: 'doc', comp: { title: 'the work' } },
     { eid: t, name: 'task', comp: { status: 'open' } },

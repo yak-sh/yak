@@ -13,6 +13,7 @@ import { apply, db } from './db.ts'
 import { dispatch, trace } from './effects.ts'
 import { named, rfcId } from './mail.ts'
 import { canon } from './mailer.ts'
+import { fleetAddress } from './mailaddr.ts'
 import { record } from './telemetry.ts'
 import { type Change, uuid } from './types.ts'
 
@@ -175,7 +176,7 @@ export let routeTo = (addr: string | null | undefined): string | null => {
 // the reversed address book remains the one venture registry.
 export let hookTo = (path: string | null | undefined): string | null => {
   let venture = /^\/hook\/([^/?#]+)/.exec(path ?? '')?.[1]
-  let address = venture ? canon(`${venture}@bot.yak.sh`) : null
+  let address = venture ? canon(fleetAddress(venture)) : null
   let project = address
     ? db.prepare(
       `select email.eid from email

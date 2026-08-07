@@ -7,6 +7,7 @@
 // degrade seam for when no token can read Email Routing, and it says
 // so loudly. CLIENT-SAFE: env + fetch only, no db.
 import { base, canon } from './mailer.ts'
+import { atFleet } from './mailaddr.ts'
 import { idOf } from './types.ts'
 import type { Row } from './client.ts'
 
@@ -42,7 +43,7 @@ export type Rules = { live: boolean; catchall: boolean; rules: Rule[] }
 // CLOUDFLARE_ROUTING_READ_TOKEN and live mode takes over.
 export let STATIC_RULES: Rules = {
   live: false,
-  // The zone catch-all is ENABLED and covers the bot.yak.sh subdomain,
+  // The zone catch-all is ENABLED and covers the fleet subdomain,
   // proven by a probe pair to one unruled local-part 88s apart: E-11328
   // (before the flip) never arrived, E-11329 (after) round-tripped in
   // 288ms, verified. The apex is not at risk and never was: yak.sh MX is
@@ -67,11 +68,11 @@ export let bookOf = (all: Row[]): Entry[] =>
       owner: `${idOf(r)} ${r.comps.doc?.title ?? ''}`.trim(),
     }))
 
-// The diagnosis, pure — the tested seam. Only bot.yak.sh addresses are
+// The diagnosis, pure — the tested seam. Only fleet-domain addresses are
 // ours to judge (external mailboxes route however their domain likes).
 // Deliverable = legal local-part AND (an enabled literal rule, or the
 // catch-all catching). Caveat the flip must verify (T-5837): a zone
-// catch-all has not covered the bot.yak.sh subdomain historically — if
+// catch-all has not covered the fleet subdomain historically — if
 // it reads enabled here, probe before trusting it.
 // `fromRules` says whether the verdict DEPENDS on the rule set, and it is
 // the whole difference between a measurement and a guess. A bad local-part
@@ -80,7 +81,7 @@ export let bookOf = (all: Row[]): Entry[] =>
 // is unverified, and the renderer must not dress it as a failure.
 export type Finding = Entry & { problem: string; fromRules: boolean }
 export let diagnose = (book: Entry[], r: Rules): Finding[] =>
-  book.filter((e) => /@bot\.yak\.sh$/i.test(e.address)).flatMap(
+  book.filter((e) => atFleet(e.address)).flatMap(
     (e): Finding[] => {
       if (canon(e.address) != e.address) {
         return [{
