@@ -425,7 +425,7 @@ Deno.test('task codex is discoverable with its own help', async () => {
   assertEquals(out.code, 0)
   assertMatch(
     text(out.stdout),
-    /task codex \[--operator\] \[codex args\.\.\.\][\s\S]*graph participant[\s\S]*task codex --operator resume --last/,
+    /task codex \[codex args…\] \[--operator\][\s\S]*graph participant[\s\S]*task codex --operator resume --last/,
   )
 })
 
@@ -434,7 +434,7 @@ Deno.test('task comment help teaches verdict-bearing comments', async () => {
   assertEquals(out.code, 0)
   assertMatch(
     text(out.stdout),
-    /--verdict=approved\|rejected\|changes_requested/,
+    /--verdict=VERDICT[\s\S]*one of approved, rejected, changes_requested/,
   )
 })
 
@@ -712,7 +712,7 @@ Deno.test('task set rejects surplus positional arguments', async () => {
   let out = await cli('set', 'T-1', '.status=open', 'surplus')
   assertEquals(out.code, 1)
   assertEquals(text(out.stdout), '')
-  assertMatch(text(out.stderr), /task set <id> \.prop=value \.\.\./)
+  assertMatch(text(out.stderr), /task set <id> \[--comment=TEXT\]/)
 })
 
 Deno.test('task dep rejects surplus positional arguments', async () => {

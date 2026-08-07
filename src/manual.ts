@@ -3,93 +3,99 @@
 // this module renders it directly, so neither vocabulary can drift.
 
 import { commands } from './commands.ts'
+import { providers } from './adapters.ts'
 import { FILTERS, GRAMMAR } from './grammar.ts'
-import { edges, kindOrder, plurals, statuses } from './types.ts'
+import { comps, edges, kindOrder, plurals, statuses } from './types.ts'
+import {
+  type Arg,
+  body as bodyKind,
+  enumOf,
+  id,
+  num,
+  of,
+  type Opt,
+  path,
+  text,
+  usageOf,
+  type Verb,
+  wordsOf,
+} from './verb.ts'
 
-type Opt = {
-  name: string
-  value?: RegExp
-  separate?: boolean
-  want?: string
-}
+export type Manual = Verb
 
-export type Manual = {
-  usage: string
-  about: string
-  deprecated?: string
-  examples?: string[]
-  detail?: string
-  root?: boolean
-  alias?: boolean
-  options?: Opt[]
-  // Flags this verb USED to take, and what to say instead. Out of `usage`
-  // and out of `options`, so nothing teaches them — but named here, because
-  // "does not take --type" answers the grammar question and leaves the
-  // caller's actual one open.
-  retired?: Record<string, string>
-  // The dot-params this verb takes: `true` when the grammar IS its argument
-  // list (list, set, inbox…), or the NAMES it reads beside its flags. Absent
-  // means none, and the default is the point — a verb whose trailing words
-  // are its title takes them by SUBTRACTION, so anything it does not know
-  // lands in the title rather than being refused: `task design "…"
-  // .body=@plan.md` stored the flag in the title, minted an empty body and
-  // printed its D-… receipt as if it had worked (T-14187). Refusing by
-  // default means the next verb written that way inherits the guard.
-  dots?: true | string[]
-  words?: [min: number, max?: number]
-  passthrough?: boolean
-  check?: (args: string[], words: string[]) => string | undefined
-}
+let arg = (
+  name: string,
+  kind = text,
+  rest = false,
+  need = true,
+): Arg => ({ name, kind, rest, need })
 
 let flag = (name: string): Opt => ({ name })
-let value = (
-  name: string,
-  want = 'a value',
-  separate = false,
-  accept = /.+/,
-): Opt => ({ name, value: accept, separate, want })
+let value = (name: string, kind = text, separate = false): Opt => ({
+  name,
+  kind,
+  separate,
+})
 
 let json = flag('--json')
-let body = value('--body', 'text, @file, - or @-')
+let body = value('--body', bodyKind)
 // Retired flags whose habit outlives them, said once each (Manual.retired).
 let BRIEF_BODY = "takes no --body — did you mean 'task session brief --body=…'?"
 let REMEMBER_TYPE =
   'takes no --type: the memory.type enum is retired (T-12585) — ' +
   '--scope=P-19 says project, --feedback=jeff says who gave it, and ' +
   'saying nothing IS a reference'
-let count = value('-n', 'a positive number', true, /^[1-9]\d*$/)
+let count = value('-n', num, true)
+let empty = { name: 'text', test: /.*/ }
+let minutes = { name: 'minutes', test: /^\d+$/ }
+let timestamp = { name: 'iso', test: /.+/ }
+let verdict = enumOf(comps.review.verdict, 'verdict')
+let provider = of('provider', () => providers().map((p) => p.name))
+let model = of(
+  'model',
+  () => [...new Set(providers().flatMap((p) => p.models))],
+)
+let effort = of(
+  'effort',
+  () => [...new Set(providers().flatMap((p) => p.efforts))],
+)
 
-// A body said at EITHER spelling. The checks below are readers too, and a
-// reader that knows only `--body=` answers "needs --body=" to a caller who
-// just gave it one at the dot door (T-14187).
-let hasBody = (args: string[]) => args.some((a) => /^(?:--|\.)body=/.test(a))
+let declare = (
+  all: Record<string, Omit<Manual, 'name' | 'door'>>,
+): Record<string, Manual> =>
+  Object.fromEntries(
+    Object.entries(all).map(([name, verb]) => [
+      name,
+      { name, door: ['cli'], ...verb },
+    ]),
+  )
 
-export let manuals: Record<string, Manual> = {
+export let manuals = declare({
   tui: {
-    usage: 'tui',
     about: 'open the terminal UI',
     root: true,
-    words: [0, 0],
+    args: [],
   },
   claude: {
-    usage: 'claude [--operator] [claude args...]',
     about:
       'interactive claude: graph participant; --operator adds project broadcasts',
     examples: ['task claude', 'task claude --operator --continue'],
     root: true,
+    args: [arg('claude args', text, true, false)],
+    opts: [flag('--operator')],
     passthrough: true,
   },
   codex: {
-    usage: 'codex [--operator] [codex args...]',
     about:
       'interactive codex: graph participant; --operator adds project broadcasts',
     examples: ['task codex', 'task codex --operator resume --last'],
     root: true,
+    args: [arg('codex args', text, true, false)],
+    opts: [flag('--operator')],
     passthrough: true,
   },
   list: {
-    usage: 'list [kind] [filters...] [--json]',
-    dots: true,
+    dots: 'any',
     about: 'list tasks — or any kind (filter grammar)',
     examples: [
       'task list .status=open .priority<=1',
@@ -103,11 +109,11 @@ export let manuals: Record<string, Manual> = {
       "column is the handle you can type: a task's status, everything " +
       `else's alias. Kinds: ${kindOrder.join(', ')}.`,
     root: true,
-    options: [json],
+    args: [arg('kind', text, false, false), arg('filters', text, true, false)],
+    opts: [json],
   },
   decided: {
-    usage: 'decided [filters...] [--all] [--json]',
-    dots: true,
+    dots: 'any',
     about: 'what has been settled here, newest decision first',
     examples: [
       'task decided',
@@ -124,11 +130,12 @@ export let manuals: Record<string, Manual> = {
       "scope the digest's `## decided` block uses. `.project=P-30` asks " +
       'about another one; `--all` asks about every project at once.',
     root: true,
-    options: [json, flag('--all')],
+    args: [arg('filters', text, true, false)],
+    opts: [flag('--all'), json],
   },
   new: {
-    usage: 'new .title="..." [...]',
     about: 'create a task (bare words become the title)',
+    body: 'body',
     examples: [
       'task new P1 .project=holdco Fix the flux capacitor',
       'task new .title="Write the digest" .body="Details..." .domain=Eng',
@@ -140,12 +147,12 @@ export let manuals: Record<string, Manual> = {
       'the column. `@@` escapes a value that genuinely starts with an @. ' +
       'stdin is consumable once: a second `@-` in one command is refused.',
     root: true,
+    args: [arg('title', text, true, false)],
     // create() owns the more useful --flag → .param correction.
     passthrough: true,
   },
   set: {
-    usage: 'set <id> .prop=value ... [--comment=words]',
-    dots: true,
+    dots: 'any',
     about: 'patch any entity; --comment says why, in the same batch',
     examples: [
       'task set T-3 .status=done --comment="verified end-to-end"',
@@ -157,39 +164,36 @@ export let manuals: Record<string, Manual> = {
       'file, and `-`/`@-` from piped stdin. The patch and the reason for ' +
       'it ride one atomic batch, so neither can land without the other.',
     root: true,
-    options: [value('--comment', 'comment text')],
+    args: [arg('id', id)],
+    opts: [value('--comment')],
   },
   show: {
-    usage: 'show <id> [--json]',
     about: 'one entity as a document (--json for scripts)',
     examples: ['task show T-3', 'task show T-3 --json'],
     root: true,
-    options: [json],
-    words: [1, 1],
+    args: [arg('id', id)],
+    opts: [json],
   },
   history: {
-    usage: 'history <id> [-n N] [--json]',
     about: "the entity's write history (journal)",
     examples: ['task history T-3 -n 10'],
     root: true,
-    options: [count, json],
-    words: [1, 1],
+    args: [arg('id', id)],
+    opts: [{ ...count, or: '50' }, json],
   },
   search: {
-    usage: 'search <words...> [--json]',
-    dots: true,
+    dots: 'any',
     about: 'full-text search (trailing * = prefix)',
     examples: [
       'task search flux capac*',
       'task search .project=holdco deploy',
     ],
     root: true,
-    options: [json],
-    words: [1],
+    args: [arg('words', text, true)],
+    opts: [json],
   },
   mail: {
-    usage: 'mail [filters...] [--json|--all|--sent]',
-    dots: true,
+    dots: 'any',
     about: 'the mail-only slice of your items',
     deprecated: 'superseded by task inbox, where mail is one kind of item',
     examples: [
@@ -199,61 +203,53 @@ export let manuals: Record<string, Manual> = {
     detail:
       '<to> is an address or graph reference (alias, P-9, eid); the address ' +
       'book resolves it at delivery. Filters speak `task help grammar`.',
-    options: [json, flag('--all'), flag('--sent')],
+    args: [arg('filters', text, true, false)],
+    opts: [json, flag('--all'), flag('--sent')],
   },
   'mail show': {
-    usage: 'mail show <id> [--json]',
     about: 'show the mail and thread; mark it opened',
-    options: [json],
-    words: [1, 1],
+    args: [arg('id', id)],
+    opts: [json],
   },
   'mail send': {
     // Root because `mail` itself is deprecated: sending a letter is not
     // superseded by the inbox, so it keeps its own door in the usage.
-    usage: 'mail send <to> <subject...> --body=@file|-|@-',
     dots: ['body'],
+    body: 'body',
     about: 'send a letter; - and @- read the body from stdin',
     root: true,
     // No --from: a letter is signed by whoever wrote it, derived from the
     // session's actor server-side (T-9511). Naming one is now an error,
     // which is the point — it used to be honoured.
-    options: [body],
-    words: [2],
-    check: (args) =>
-      hasBody(args) ? undefined : 'needs --body=@file, --body=-, or --body=@-',
+    args: [arg('to', id), arg('subject', text, true)],
+    opts: [body],
+    some: ['--body'],
   },
   'mail reply': {
     // A lone trailing @file reads the file, exactly as --body=@file does —
     // one @ convention per door, named here so the two spellings can't be
     // read as equal when only one works (T-10461).
-    usage: 'mail reply <id> [text... | @file | --body=@file|-|@-]',
     dots: ['body'],
+    body: 'text',
     about: 'reply in the existing mail thread; a lone @file is read',
-    options: [body],
-    words: [1],
-    check: (args, words) =>
-      words.length > 1 || hasBody(args)
-        ? undefined
-        : 'needs reply words, @file, or --body=@file|-|@-',
+    args: [arg('id', id), arg('text', text, true, false)],
+    opts: [body],
+    some: ['text', '--body'],
   },
   'mail search': {
-    usage: 'mail search <words...>',
     about: 'full-text search, limited to mail',
-    words: [1],
+    args: [arg('words', text, true)],
   },
   'mail files': {
-    usage: 'mail files <id> [--out DIR]',
     about: 'download attachments',
-    options: [value('--out', 'a directory', true)],
-    words: [1, 1],
+    args: [arg('id', id)],
+    opts: [value('--out', path, true)],
   },
   'mail doctor': {
-    usage: 'mail doctor',
     about: 'compare every book address with the Cloudflare routing rules',
-    words: [0, 0],
+    args: [],
   },
   watch: {
-    usage: 'watch <id> [--gone]',
     about: 'put an entity in your inbox even when nothing is aimed at you',
     examples: ['task watch T-3', 'task watch T-3 --gone'],
     detail:
@@ -261,11 +257,10 @@ export let manuals: Record<string, Manual> = {
       'knocks reach your inbox whether or not they were addressed to you. ' +
       '--gone clears it. Per-actor, resolved from your cwd like `task inbox`.',
     root: true,
-    options: [flag('--gone')],
-    words: [1, 1],
+    args: [arg('id', id)],
+    opts: [flag('--gone')],
   },
   mute: {
-    usage: 'mute <id> [--gone]',
     about: 'stop an entity reaching your inbox, even direct address',
     examples: ['task mute T-3', 'task mute T-3 --gone'],
     detail:
@@ -273,12 +268,11 @@ export let manuals: Record<string, Manual> = {
       'a thread you have declared finished stays out. Nothing is deleted — ' +
       '`task inbox --all` still shows it. --gone clears it.',
     root: true,
-    options: [flag('--gone')],
-    words: [1, 1],
+    args: [arg('id', id)],
+    opts: [flag('--gone')],
   },
   inbox: {
-    usage: 'inbox [filters...] [--json|--all|--sent]',
-    dots: true,
+    dots: 'any',
     about: 'everything addressed to you, unread first',
     examples: [
       'task inbox',
@@ -294,35 +288,32 @@ export let manuals: Record<string, Manual> = {
       'letters you sent. Filters speak `task help grammar` \u2014 the same one ' +
       'parser every list door uses.',
     root: true,
-    options: [json, flag('--all'), flag('--sent')],
+    args: [arg('filters', text, true, false)],
+    opts: [json, flag('--all'), flag('--sent')],
   },
   'inbox show': {
-    usage: 'inbox show <id> [--json]',
     about: 'show the item and mark it opened',
-    options: [json],
-    words: [1, 1],
+    args: [arg('id', id)],
+    opts: [json],
   },
   'inbox archive': {
-    usage: 'inbox archive <id>',
     about: 'hide the item from your inbox',
-    words: [1, 1],
+    args: [arg('id', id)],
   },
   claim: {
-    usage: 'claim <id> [session]',
     about: 'lease a task (default: your own session id)',
     examples: ['task claim T-3 my-session-id'],
     root: true,
-    words: [1, 2],
+    args: [arg('id', id), arg('session', text, false, false)],
   },
   release: {
-    usage: 'release <id>',
     about: 'drop the lease',
     examples: ['task release T-3'],
     root: true,
-    words: [1, 1],
+    args: [arg('id', id)],
   },
   subject: {
-    usage: '<id> [show|is|as|edge] …',
+    syntax: '<id> [show|is|as|edge] …',
     about: 'show or act on a subject',
     examples: [
       'task T-3',
@@ -331,26 +322,25 @@ export let manuals: Record<string, Manual> = {
       'task T-3 as json',
     ],
     root: true,
+    args: [arg('words', text, true, false)],
   },
   spawn: {
-    usage: 'spawn <id> [--provider=X] [--model=Y] [--effort=Z] [--persona=P-9]',
     dots: ['provider', 'model', 'effort', 'persona'],
     about: "dispatch a managed agent (defaults: your session's provider)",
     examples: [
       'task spawn T-3',
-      'task spawn T-3 --provider=codex --model=gpt-5.4',
+      'task spawn T-3 --provider=codex --model=gpt-5.6-sol',
     ],
     root: true,
-    options: [
-      value('--provider'),
-      value('--model'),
-      value('--effort'),
-      value('--persona'),
+    args: [arg('id', id)],
+    opts: [
+      value('--provider', provider),
+      value('--model', model),
+      { ...value('--effort', effort), or: 'high' },
+      value('--persona', id),
     ],
-    words: [1, 1],
   },
   land: {
-    usage: 'land',
     about: "rebase, gate, and land this session's worktree",
     examples: ['task land'],
     detail: "The session's task chooses the repo, base branch, worktree and " +
@@ -360,13 +350,12 @@ export let manuals: Record<string, Manual> = {
       'you can still release, comment and clean up. A later landing (or ' +
       '`task probes --reap`) removes it once nobody is inside.',
     root: true,
-    words: [0, 0],
+    args: [],
   },
   comment: {
-    usage: 'comment <id> [text... | --body=@-|@file] ' +
-      '[--verdict=approved|rejected|changes_requested]',
     about: 'comment on any entity; a verdict makes it a review',
     dots: ['body'],
+    body: 'text',
     examples: [
       'task comment T-3 "blocked on the schema call"',
       'task comment T-3 .body=@notes.md',
@@ -386,39 +375,27 @@ export let manuals: Record<string, Manual> = {
       'earlier version, so nothing is lost by fixing it; a correction ' +
       'comment only leaves the wrong text as the one read first.',
     root: true,
-    options: [
+    args: [arg('id', id), arg('text', text, true, false)],
+    opts: [
       body,
-      value(
-        '--verdict',
-        'approved, rejected, or changes_requested',
-        false,
-        /^(approved|rejected|changes_requested)$/,
-      ),
+      value('--verdict', verdict),
     ],
-    words: [1],
-    check: (args, words) =>
-      words.length > 1 || hasBody(args) ||
-        args.some((a) => a.startsWith('--verdict='))
-        ? undefined
-        : 'needs comment text, .body=@-|@file, or --verdict=...',
+    some: ['text', '--body', '--verdict'],
   },
   dep: {
-    usage: 'dep <id> <type> <child> [--gone]',
     about: 'link or unlink an edge',
     deprecated: 'superseded by task <id> <type> <child> [--gone]',
     examples: ['task T-3 requires T-9', 'task T-3 requires T-9 --gone'],
     root: true,
-    options: [flag('--gone')],
-    words: [3, 3],
+    args: [arg('id', id), arg('type'), arg('child', id)],
+    opts: [flag('--gone')],
   },
   backup: {
-    usage: 'backup',
     about: 'snapshot the db + commit/push the data dir',
     root: true,
-    words: [0, 0],
+    args: [],
   },
   sync: {
-    usage: 'sync [--no-commit] [--check]',
     about: "materialize personas into each project repo's .tasks/",
     examples: ['task sync', 'task sync --no-commit', 'task sync --check'],
     detail: 'Commits what it wrote in the repos that track it, and pushes ' +
@@ -429,12 +406,12 @@ export let manuals: Record<string, Manual> = {
       'any projection that drifts from its render and exits non-zero, the ' +
       "gate's guard against a hand-edit to a generated file.",
     root: true,
-    options: [flag('--no-commit'), flag('--check')],
-    words: [0, 0],
+    args: [],
+    opts: [flag('--no-commit'), flag('--check')],
   },
   design: {
-    usage: 'design <title...> [--body=…]',
     dots: ['body'],
+    body: 'body',
     about: 'record a design: the thinking that precedes a build, proposed',
     examples: [
       'task design "Mail is local-first for fleet recipients" .body=@plan.md',
@@ -452,12 +429,12 @@ export let manuals: Record<string, Manual> = {
       '`-`/`@-` reads piped stdin. Any other argument is refused rather ' +
       'than joined to the title.',
     root: true,
-    options: [body],
-    words: [1],
+    args: [arg('title', text, true)],
+    opts: [body],
   },
   remember: {
-    usage: 'remember <title...> [--body=…] [--feedback=who] [--scope=P-9]',
     dots: ['body', 'scope', 'feedback'],
+    body: 'body',
     about: 'save a memory: the title is the index line, the body the lesson',
     examples: [
       'task remember "pipe a gate, lose its exit code" .feedback=jeff',
@@ -472,16 +449,15 @@ export let manuals: Record<string, Manual> = {
       'source). There is no --type: the enum is retired, and saying ' +
       'nothing IS a reference.',
     root: true,
-    options: [
+    args: [arg('title', text, true)],
+    opts: [
       body,
-      value('--feedback', 'who gave it, or empty', false, /.*/),
-      value('--scope', 'a project reference'),
+      value('--feedback', empty),
+      value('--scope', id),
     ],
     retired: { '--type': REMEMBER_TYPE },
-    words: [1],
   },
   session: {
-    usage: 'session <context|wrap|brief|turn> …',
     about: 'the session lifecycle: boot digest, wrap, self-authored brief',
     examples: [
       'task session context',
@@ -491,39 +467,36 @@ export let manuals: Record<string, Manual> = {
       'task session wrap',
     ],
     root: true,
+    args: [arg('command', text, true, false)],
   },
   'session context': {
-    usage: 'session context [sid] [--hook] [--subagent]',
     about: 'reify and print the session digest',
-    options: [flag('--hook'), flag('--subagent')],
-    words: [0, 1],
+    args: [arg('sid', text, false, false)],
+    opts: [flag('--hook'), flag('--subagent')],
   },
   'session wrap': {
-    usage: 'session wrap [sid] [--hook]',
     about: 'release claims and preserve the session brief',
-    options: [flag('--hook')],
+    args: [arg('sid', text, false, false)],
+    opts: [flag('--hook')],
     retired: { '--body': BRIEF_BODY },
-    words: [0, 1],
   },
   'session brief': {
-    usage: 'session brief [text... | @file | --body=@file|-|@-]',
     dots: ['body'],
+    body: 'text',
     about: 'write your own session brief; a lone @file is read',
-    options: [body],
-    words: [0],
-    check: (args, words) =>
-      words.length || hasBody(args)
-        ? undefined
-        : 'needs brief text, @file, or --body=@file|-|@-',
+    args: [arg('text', text, true, false)],
+    opts: [body],
+    some: ['text', '--body'],
   },
   'session turn': {
-    usage: 'session turn <idle|busy> [sid] [--hook]',
     about: 'announce a native provider turn boundary',
-    options: [flag('--hook')],
-    words: [0, 2],
+    args: [
+      arg('idle|busy', of('state', () => ['idle', 'busy']), false, false),
+      arg('sid', text, false, false),
+    ],
+    opts: [flag('--hook')],
   },
   role: {
-    usage: 'role [--json] | role <stop|start> <id>… | --all',
     about: 'persistent roles: what should be running, and the off switch',
     examples: [
       'task role',
@@ -538,32 +511,24 @@ export let manuals: Record<string, Manual> = {
       'the desire itself, so it holds across daemon and machine restarts. ' +
       '`role stop --all` is the fleet-wide off switch.',
     root: true,
-    options: [json],
+    args: [arg('command', text, true, false)],
+    opts: [json],
   },
   'role stop': {
-    usage: 'role stop <id>… | --all',
     about: 'set roles to stopped — the durable off switch',
     examples: ['task role stop R-12', 'task role stop --all'],
-    options: [flag('--all')],
-    words: [0],
-    check: (args, words) =>
-      words.length || args.includes('--all')
-        ? undefined
-        : 'name at least one role, or --all',
+    args: [arg('ids', id, true, false)],
+    opts: [flag('--all')],
+    some: ['ids', '--all'],
   },
   'role start': {
-    usage: 'role start <id>… | --all',
     about: 'set roles to running — the reconciler launches them',
     examples: ['task role start R-12', 'task role start --all'],
-    options: [flag('--all')],
-    words: [0],
-    check: (args, words) =>
-      words.length || args.includes('--all')
-        ? undefined
-        : 'name at least one role, or --all',
+    args: [arg('ids', id, true, false)],
+    opts: [flag('--all')],
+    some: ['ids', '--all'],
   },
   probes: {
-    usage: 'probes [--all] [--reap] [--grace=MINUTES]',
     about: 'what dead sessions left running — browsers, servers, worktrees',
     detail:
       'Lists by default; --reap kills the orphans and removes the worktrees.\n' +
@@ -575,33 +540,35 @@ export let manuals: Record<string, Manual> = {
       'verb is the one door and nothing is killed unless you say so.',
     examples: ['task probes', 'task probes --all', 'task probes --reap'],
     root: true,
-    options: [
+    args: [],
+    opts: [
       flag('--all'),
       flag('--reap'),
-      value('--grace', 'minutes', false, /^\d+$/),
+      { ...value('--grace', minutes), or: '30' },
     ],
-    words: [0, 0],
   },
   telemetry: {
-    usage: 'telemetry [--errors] [--since=ISO] [-n N]',
     about: 'tool calls + crashes',
     examples: ['task telemetry --errors -n 20'],
     root: true,
-    options: [flag('--errors'), value('--since', 'an ISO timestamp'), count],
-    words: [0, 0],
+    args: [],
+    opts: [flag('--errors'), value('--since', timestamp), count],
   },
   wake: {
-    usage: 'wake <who> <when...> [target]',
     about: 'a knock on a timer',
     examples: [
       'task wake S-31 in 60m',
       'task wake homelab "9am tomorrow" T-42',
     ],
     root: true,
-    words: [2],
+    args: [
+      arg('who', id),
+      arg('when', text, true),
+      arg('target', id, false, false),
+    ],
   },
   ':': {
-    usage: ':<command> … | <id> :<command> …',
+    syntax: ':<command> … | <id> :<command> …',
     about: "the web bar's `:` vocabulary (task help : lists every command)",
     examples: [
       'task :fix T-42',
@@ -609,9 +576,9 @@ export let manuals: Record<string, Manual> = {
       'task T-42 :done',
     ],
     root: true,
+    args: [arg('words', text, true, false)],
   },
   help: {
-    usage: 'help [verb|nested verb|grammar|:]',
     about: 'this manual; grammar = filters + dot-params',
     examples: [
       'task help list',
@@ -620,37 +587,38 @@ export let manuals: Record<string, Manual> = {
       'task help :fix',
     ],
     root: true,
-    words: [0, 2],
+    args: [
+      arg('verb|grammar|:', text, false, false),
+      arg('nested verb', text, false, false),
+    ],
   },
   ls: {
-    usage: 'ls [filters...] [--json]',
-    dots: true,
+    dots: 'any',
     about: 'list tasks (filter grammar)',
     deprecated: 'superseded by task list',
     examples: ['task list .status=open'],
     alias: true,
-    options: [json],
+    args: [arg('filters', text, true, false)],
+    opts: [json],
   },
   context: {
-    usage: 'context [sid] [--hook] [--subagent]',
     about: 'reify and print the session digest',
     deprecated: 'superseded by task session context',
     examples: ['task session context'],
     alias: true,
-    options: [flag('--hook'), flag('--subagent')],
-    words: [0, 1],
+    args: [arg('sid', text, false, false)],
+    opts: [flag('--hook'), flag('--subagent')],
   },
   wrap: {
-    usage: 'wrap [sid] [--hook]',
     about: 'release claims and preserve the session brief',
     deprecated: 'superseded by task session wrap',
     examples: ['task session wrap'],
     alias: true,
-    options: [flag('--hook')],
+    args: [arg('sid', text, false, false)],
+    opts: [flag('--hook')],
     retired: { '--body': BRIEF_BODY },
-    words: [0, 1],
   },
-}
+})
 
 export let cliVerbs = new Set(
   Object.entries(manuals)
@@ -678,9 +646,9 @@ export let usage = () =>
 
 ${
     roots().map((m) =>
-      m.usage.length > 29
-        ? `  task ${m.usage}\n${' '.repeat(38)}${m.about}`
-        : `  task ${m.usage.padEnd(29)}  ${m.about}`
+      usageOf(m).length > 29
+        ? `  task ${usageOf(m)}\n${' '.repeat(38)}${m.about}`
+        : `  task ${usageOf(m).padEnd(29)}  ${m.about}`
     ).join('\n')
   }
 
@@ -697,14 +665,30 @@ let children = (name: string) =>
     )
     .map(([, m]) => m)
 
+let reference = (m: Manual) => {
+  let opts = (m.opts ?? []).filter((opt) => opt.kind?.of || opt.or)
+  if (!opts.length) return ''
+  let width = Math.max(...opts.map((opt) => opt.name.length))
+  return opts.map((opt) => {
+    let values = opt.kind?.of?.()
+    let accepts = values?.length
+      ? `one of ${values.join(', ')}`
+      : opt.kind?.name ?? ''
+    let fallback = opt.or ? ` — default ${opt.or}` : ''
+    return `  ${opt.name.padEnd(width)}  ${accepts}${fallback}`
+  }).join('\n')
+}
+
 let render = (name: string, m: Manual) => {
-  let out = `task ${m.usage}\n  ${m.about}`
+  let out = `task ${usageOf(m)}\n  ${m.about}`
   if (m.deprecated) out += `\n\nDeprecated: ${m.deprecated}`
   let subs = children(name)
   if (subs.length) {
     out += '\n\n' +
-      subs.map((s) => `  task ${s.usage.padEnd(58)} ${s.about}`).join('\n')
+      subs.map((s) => `  task ${usageOf(s).padEnd(58)} ${s.about}`).join('\n')
   }
+  let refs = reference(m)
+  if (refs) out += `\n\n${refs}`
   if (m.detail) out += `\n\n${m.detail}`
   if (m.examples?.length) {
     out += `\n\n${m.examples.map((e) => `  ${e}`).join('\n')}`
@@ -783,7 +767,7 @@ let option = (arg: string) =>
   arg != '--' && (arg.startsWith('--') || /^-[A-Za-z]/.test(arg))
 
 let match = (opt: Opt, arg: string) => {
-  if (!opt.value) return arg == opt.name
+  if (!opt.kind) return arg == opt.name
   if (arg == opt.name) return opt.separate
   if (opt.name.startsWith('--')) return arg.startsWith(`${opt.name}=`)
   return arg.startsWith(opt.name)
@@ -807,9 +791,40 @@ let takes = (manual: Manual) =>
 
 let usageError = (name: string, manual: Manual, message: string) =>
   new Error(
-    `${name} ${message}\nusage: task ${manual.usage}` +
+    `${name} ${message}\nusage: task ${usageOf(manual)}` +
       (manual.deprecated ? `\ndeprecated: ${manual.deprecated}` : ''),
   )
+
+let accepts = (kind: NonNullable<Opt['kind']>, value: string) => {
+  let values = kind.of?.()
+  if (values) return values.includes(value)
+  if (!kind.test) return true
+  kind.test.lastIndex = 0
+  return kind.test.test(value)
+}
+
+let wanted = (kind: NonNullable<Opt['kind']>) =>
+  kind == num
+    ? 'a positive number'
+    : kind == path
+    ? 'a directory'
+    : kind == bodyKind
+    ? 'text, @file, - or @-'
+    : kind == timestamp
+    ? 'an ISO timestamp'
+    : kind.name
+
+let some = (manual: Manual, present: Set<string>) => {
+  let missing = manual.some?.filter((name) => !present.has(name))
+  if (!missing || missing.length != manual.some?.length) return
+  let shape = (name: string) => {
+    let positional = manual.args?.find((arg) => arg.name == name)
+    if (positional) return `<${name}>`
+    let opt = manual.opts?.find((opt) => opt.name == name)
+    return `${name}${opt?.kind ? `=<${wanted(opt.kind)}>` : ''}`
+  }
+  return `needs ${missing.map(shape).join(' or ')}`
+}
 
 export let validate = (
   name: string,
@@ -818,6 +833,7 @@ export let validate = (
 ) => {
   if (manual.passthrough) return
   let words: string[] = []
+  let present = new Set<string>()
   let literal = false
   for (let i = 0; i < args.length; i++) {
     let arg = args[i]
@@ -827,11 +843,15 @@ export let validate = (
       continue
     }
     if (!option(arg)) {
-      let dot = manual.dots === true ? undefined : dotted(arg)
+      if (manual.dots == 'any' && arg.startsWith('.')) continue
+      let dot = manual.dots == 'any' ? undefined : dotted(arg)
       if (dot) {
         // A param the verb declares is a VALUE, so it never counts as one of
         // the words; anything else is refused by name rather than swallowed.
-        if (manual.dots !== true && manual.dots?.includes(dot)) continue
+        if (manual.dots != 'any' && manual.dots?.includes(dot)) {
+          present.add(`--${dot}`)
+          continue
+        }
         // A retired flag is retired at BOTH spellings: the habit that
         // outlives the mechanism reaches for whichever one it learned.
         let gone = manual.retired?.[`--${dot}`]
@@ -847,32 +867,38 @@ export let validate = (
       words.push(arg)
       continue
     }
-    let opt = manual.options?.find((o) => match(o, arg))
+    let opt = manual.opts?.find((o) => match(o, arg))
     if (!opt) {
       let gone = manual.retired?.[optionName(arg)]
       if (gone) throw usageError(name, manual, gone)
       throw usageError(name, manual, `does not take ${optionName(arg)}`)
     }
-    if (!opt.value) continue
+    present.add(opt.name)
+    if (!opt.kind) continue
     let got = opt.name.startsWith('--')
       ? arg.slice(opt.name.length + 1)
       : arg.slice(opt.name.length)
     if (arg == opt.name) {
       let next = args[i + 1]
       if (!opt.separate || !next || option(next)) {
-        throw usageError(name, manual, `${opt.name} needs ${opt.want}`)
+        throw usageError(name, manual, `${opt.name} needs ${wanted(opt.kind)}`)
       }
       got = next
       i++
     }
-    if (!opt.value.test(got)) {
-      throw usageError(name, manual, `${opt.name} needs ${opt.want}`)
+    if (!accepts(opt.kind, got)) {
+      throw usageError(name, manual, `${opt.name} needs ${wanted(opt.kind)}`)
     }
   }
-  if (!manual.words) return
-  let issue = manual.check?.(args, words)
+  let at = 0
+  for (let arg of manual.args ?? []) {
+    let has = arg.rest ? words.length > at : words[at] != null
+    if (has) present.add(arg.name)
+    at += arg.rest ? words.length - at : has ? 1 : 0
+  }
+  let issue = some(manual, present)
   if (issue) throw usageError(name, manual, issue)
-  let [min, max] = manual.words
+  let [min, max] = wordsOf(manual)
   if (words.length >= min && (max == null || words.length <= max)) return
   let want = max == null
     ? `at least ${min}`

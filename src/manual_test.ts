@@ -12,23 +12,83 @@ import {
   validate,
   validateCommand,
 } from './manual.ts'
+import { edges, plurals } from './types.ts'
+import { usageOf } from './verb.ts'
 
 Deno.test('every CLI route and palette command answers help from its table', () => {
-  for (let [name, manual] of Object.entries(manuals)) {
+  for (let name of Object.keys(manuals)) {
     let args = name == 'subject' ? ['T-3'] : name.split(' ')
     let out = requestedHelp([...args, '--help'])
     assert(out, `${name} has help`)
     assertMatch(out, /^task /)
-    for (let option of manual.options ?? []) {
-      assert(
-        manual.usage.includes(option.name),
-        `${name} documents ${option.name}`,
-      )
-    }
   }
   for (let name of Object.keys(commands)) {
     assertMatch(requestedHelp([`:${name}`, '--help']) ?? '', /^task :/)
   }
+})
+
+Deno.test('every verb usage is rendered from its declaration', () => {
+  assertEquals(
+    Object.fromEntries(
+      Object.entries(manuals).map(([name, manual]) => [
+        name,
+        usageOf(manual),
+      ]),
+    ),
+    {
+      tui: 'tui',
+      claude: 'claude [claude args…] [--operator]',
+      codex: 'codex [codex args…] [--operator]',
+      list: 'list [kind] [filters…] [--json]',
+      decided: 'decided [filters…] [--all] [--json]',
+      new: 'new [title…]',
+      set: 'set <id> [--comment=TEXT]',
+      show: 'show <id> [--json]',
+      history: 'history <id> [-n=50] [--json]',
+      search: 'search <words…> [--json]',
+      mail: 'mail [filters…] [--json] [--all] [--sent]',
+      'mail show': 'mail show <id> [--json]',
+      'mail send': 'mail send <to> <subject…> --body=BODY',
+      'mail reply': 'mail reply <id> [text…] [--body=BODY]',
+      'mail search': 'mail search <words…>',
+      'mail files': 'mail files <id> [--out=DIR]',
+      'mail doctor': 'mail doctor',
+      watch: 'watch <id> [--gone]',
+      mute: 'mute <id> [--gone]',
+      inbox: 'inbox [filters…] [--json] [--all] [--sent]',
+      'inbox show': 'inbox show <id> [--json]',
+      'inbox archive': 'inbox archive <id>',
+      claim: 'claim <id> [session]',
+      release: 'release <id>',
+      subject: '<id> [show|is|as|edge] …',
+      spawn: 'spawn <id> [--provider=claude|codex] [--model=MODEL] ' +
+        '[--effort=high] [--persona=ID]',
+      land: 'land',
+      comment: 'comment <id> [text…] [--body=BODY] [--verdict=VERDICT]',
+      dep: 'dep <id> <type> <child> [--gone]',
+      backup: 'backup',
+      sync: 'sync [--no-commit] [--check]',
+      design: 'design <title…> [--body=BODY]',
+      remember:
+        'remember <title…> [--body=BODY] [--feedback=TEXT] [--scope=ID]',
+      session: 'session [command…]',
+      'session context': 'session context [sid] [--hook] [--subagent]',
+      'session wrap': 'session wrap [sid] [--hook]',
+      'session brief': 'session brief [text…] [--body=BODY]',
+      'session turn': 'session turn [idle|busy] [sid] [--hook]',
+      role: 'role [command…] [--json]',
+      'role stop': 'role stop [ids…] [--all]',
+      'role start': 'role start [ids…] [--all]',
+      probes: 'probes [--all] [--reap] [--grace=30]',
+      telemetry: 'telemetry [--errors] [--since=ISO] [-n=N]',
+      wake: 'wake <who> <when…> [target]',
+      ':': ':<command> … | <id> :<command> …',
+      help: 'help [verb|grammar|:] [nested verb]',
+      ls: 'ls [filters…] [--json]',
+      context: 'context [sid] [--hook] [--subagent]',
+      wrap: 'wrap [sid] [--hook]',
+    },
+  )
 })
 
 Deno.test('help topics cover nested and colon vocabularies', () => {
@@ -44,12 +104,24 @@ Deno.test('help topics cover nested and colon vocabularies', () => {
   assertThrows(() => help([':fix', 'extra']), Error, 'no such help topic')
 })
 
+Deno.test('spawn help teaches only values its declaration accepts', () => {
+  let out = help(['spawn'])
+  assert(out.includes('--provider=claude|codex'))
+  assert(out.includes('gpt-5.6-sol'))
+  assertEquals(out.includes('gpt-5.4'), false)
+  assertThrows(
+    check('spawn', ['T-1', '--model=gpt-5.4']),
+    Error,
+    '--model needs model',
+  )
+})
+
 Deno.test('deprecated routes leave the index but keep their manuals', () => {
   let index = usage()
   for (let [name, manual] of Object.entries(manuals)) {
     if (!manual.deprecated) continue
     if (manual.root) {
-      assertEquals(index.includes(`task ${manual.usage}`), false, name)
+      assertEquals(index.includes(`task ${usageOf(manual)}`), false, name)
     }
     let direct = help(name.split(' '))
     assertMatch(direct, /^task /)
@@ -79,10 +151,26 @@ Deno.test('manual validation rejects loss-shaped arguments', () => {
     ['history', ['T-1', '-n'], '-n needs a positive number'],
     ['history', ['T-1', '-n0'], '-n needs a positive number'],
     ['mail files', ['E-1', '--out'], '--out needs a directory'],
-    ['mail reply', ['E-1'], 'needs reply words, @file, or --body='],
-    ['mail send', ['jeff', 'subject'], 'needs --body='],
-    ['comment', ['T-1'], 'needs comment text, .body=@-|@file, or --verdict='],
-    ['session brief', [], 'needs brief text, @file, or --body='],
+    [
+      'mail reply',
+      ['E-1'],
+      'needs <text> or --body=<text, @file, - or @->',
+    ],
+    [
+      'mail send',
+      ['jeff', 'subject'],
+      'needs --body=<text, @file, - or @->',
+    ],
+    [
+      'comment',
+      ['T-1'],
+      'needs <text> or --body=<text, @file, - or @-> or --verdict=<verdict>',
+    ],
+    [
+      'session brief',
+      [],
+      'needs <text> or --body=<text, @file, - or @->',
+    ],
     ['telemetry', ['-n', '--errors'], '-n needs a positive number'],
     ['wrap', ['sid', '--body=@x'], 'task session brief --body=…'],
     // A RETIRED flag names its replacement instead of "does not take": the
@@ -100,8 +188,8 @@ Deno.test('manual validation rejects loss-shaped arguments', () => {
     ['comment', ['T-1', 'text', '.oops=1'], 'does not take .oops='],
     ['claim', ['T-1', '.session=S-3'], 'does not take .session='],
     // An unscoped stop must never be read as "stop everything".
-    ['role stop', [], 'name at least one role, or --all'],
-    ['role start', [], 'name at least one role, or --all'],
+    ['role stop', [], 'needs <ids> or --all'],
+    ['role start', [], 'needs <ids> or --all'],
   ]
   for (let [name, args, message] of cases) {
     assertThrows(check(name, args), Error, message)
@@ -114,6 +202,7 @@ Deno.test('manual validation accepts each supported option shape', () => {
   check('mail files', ['E-1', '--out', 'tmp'])()
   check('mail files', ['E-1', '--out=tmp'])()
   check('comment', ['T-1', '--verdict=approved'])()
+  check('comment', ['T-1', '--verdict=approve'])()
   // A comment body rides the same door a task body does, at either spelling —
   // and it is a VALUE, so the id is still the one word the verb needs.
   check('comment', ['T-1', '.body=@notes.md'])()
@@ -138,6 +227,78 @@ Deno.test('manual validation accepts each supported option shape', () => {
   check('search', ['.project=P-19', 'deploy'])()
 })
 
+let shellWords = (line: string) => {
+  let words: string[] = []
+  let word = ''
+  let quote = ''
+  for (let i = 0; i < line.length; i++) {
+    let char = line[i]
+    if (quote) {
+      if (char == quote) quote = ''
+      else word += char
+      continue
+    }
+    if (char == '"' || char == "'") {
+      quote = char
+      continue
+    }
+    if (/\s/.test(char)) {
+      if (word) words.push(word)
+      word = ''
+      continue
+    }
+    // Redirection belongs to the shell, not to the verb's argv. A filter's
+    // `.priority<=1` keeps its operator because the token already started.
+    if (char == '<' && !word) break
+    word += char
+  }
+  if (word) words.push(word)
+  return words
+}
+
+let validateExample = (line: string) => {
+  let [binary, cmd, ...args] = shellWords(line)
+  assertEquals(binary, 'task', line)
+  let selected = route(cmd, args)
+  if (selected) {
+    validate(selected.name, selected.manual, selected.args)
+    return
+  }
+  if (cmd && plurals.has(cmd)) {
+    validate('list', manuals.list, [cmd, ...args])
+    return
+  }
+  if (cmd?.startsWith(':')) {
+    validateCommand(cmd.slice(1), args)
+    return
+  }
+  let [verb, ...rest] = args
+  if (verb?.startsWith(':')) {
+    validateCommand(verb.slice(1), rest)
+    return
+  }
+  if (!verb) return validate('show', manuals.show, [cmd])
+  if ((edges as readonly string[]).includes(verb)) {
+    return validate('dep', manuals.dep, [cmd, verb, ...rest])
+  }
+  if (verb == 'is') {
+    return validate('set', manuals.set, [cmd, `.status=${rest[0]}`])
+  }
+  if (verb == 'as') {
+    return validate('show', manuals.show, [
+      cmd,
+      ...(rest[0] == 'json' ? ['--json'] : []),
+    ])
+  }
+  throw new Error(`example has no route: ${line}`)
+}
+
+Deno.test('every manual example is valid through the verb it invokes', () => {
+  for (let manual of Object.values(manuals)) {
+    for (let example of manual.examples ?? []) validateExample(example)
+  }
+})
+
 // A verb that takes its title as "everything left over" turns any argument it
 // does not know into silent corruption, so the DEFAULT is refusal: a verb
 // declares the params it reads (`dots`), and everything else is named back to
@@ -153,7 +314,11 @@ Deno.test('a verb refuses any dot-param it does not declare, by name', () => {
       'does not take .zzz=',
     )
     // The usage line rides every refusal, so the working form is right there.
-    assertThrows(() => validate(name, manual, ['.zzz=1']), Error, manual.usage)
+    assertThrows(
+      () => validate(name, manual, ['.zzz=1']),
+      Error,
+      usageOf(manual),
+    )
   }
   // A word that merely opens with a dot is prose, and stays prose.
   validate('design', manuals.design, ['.gitignore', 'handling'])
