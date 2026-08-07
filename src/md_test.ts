@@ -29,7 +29,21 @@ Deno.test('md: gfm tables render', () => {
 
 Deno.test('md: fenced code with blank lines survives whole', () => {
   let html = md('```\none\n\ntwo\n```')
-  assertStringIncludes(html, '<pre><code>one\n\ntwo')
+  assertStringIncludes(html, '<pre><code class="hljs')
+  assertStringIncludes(html, '</span>\n\ntwo')
+})
+
+Deno.test('md: fenced code follows its language or detects one', () => {
+  let typed = md("```ts\nlet name: string = 'Ada'\n```")
+  assertStringIncludes(typed, '<code class="hljs language-ts">')
+  assertStringIncludes(typed, '<span class="hljs-keyword">let</span>')
+  assertStringIncludes(typed, '<span class="hljs-string">')
+
+  let detected = md(
+    '```\n#!/usr/bin/env python3\ndef greet(name):\n    print(name)\n```',
+  )
+  assertStringIncludes(detected, 'language-python')
+  assertStringIncludes(detected, '<span class="hljs-keyword">def</span>')
 })
 
 Deno.test('md: a bare id auto-links with data-ref', () => {
@@ -211,7 +225,7 @@ for (let [door, render] of Object.entries(doors)) {
     )
     assertStringIncludes(
       render('```js\n<script>x</script>\n```'),
-      '<pre><code class="language-js">&lt;script&gt;',
+      '<pre><code class="hljs language-js">&lt;script&gt;',
     )
     // marked escapes a link title; a body cannot break out of it
     assertStringIncludes(

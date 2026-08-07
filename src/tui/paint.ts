@@ -96,6 +96,21 @@ let sheet: Record<string, Style> = {
   Md_H: { bold: true, fg: '#a7c080' },
   Md_Q: { fg: '#9da9a0', italic: true },
   Md_Fence: { fg: '#7a8478' },
+  'hljs-keyword': { fg: '#e67e80' },
+  'hljs-selector-tag': { fg: '#e67e80' },
+  'hljs-literal': { fg: '#d699b6' },
+  'hljs-number': { fg: '#d699b6' },
+  'hljs-string': { fg: '#a7c080' },
+  'hljs-title': { fg: '#7fbbb3' },
+  'hljs-section': { fg: '#7fbbb3', bold: true },
+  'hljs-built_in': { fg: '#dbbc7f' },
+  'hljs-type': { fg: '#dbbc7f' },
+  'hljs-attr': { fg: '#e69875' },
+  'hljs-variable': { fg: '#e69875' },
+  'hljs-comment': { fg: '#7a8478', italic: true },
+  'hljs-meta': { fg: '#7a8478' },
+  'hljs-addition': { fg: '#a7c080' },
+  'hljs-deletion': { fg: '#e67e80' },
 }
 
 type Seg = { text: string; style: Style }
@@ -151,6 +166,7 @@ let blocks = (el: TElement, st: Style): Line[] => {
   let s = inherit(st, o)
   let lines: Line[] = []
   let cur: Seg[] = []
+  let packed = el.className.split(/\s+/).includes('Md_Code')
   let flush = () => {
     if (cur.length) lines.push(cur)
     cur = []
@@ -164,7 +180,7 @@ let blocks = (el: TElement, st: Style): Line[] => {
         if (!segs.length) continue
         // The gap between inline siblings, unless one side brought its own.
         if (
-          cur.length && !/\s$/.test(cur[cur.length - 1].text) &&
+          !packed && cur.length && !/\s$/.test(cur[cur.length - 1].text) &&
           !/^\s/.test(segs[0].text)
         ) {
           cur.push({ text: ' ', style: s })

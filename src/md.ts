@@ -32,6 +32,7 @@
 // `mdInline` is the title face: no block wrapper, links/images flattened
 // because the surrounding title is usually the link.
 import { Marked } from 'marked'
+import { highlight } from './highlight.ts'
 import { prefix } from './types.ts'
 import { entityUrl } from './url.ts'
 
@@ -40,7 +41,7 @@ type RefToken = { id?: unknown }
 type LinkToken = { href: string; tokens: unknown }
 type ImageToken = { href: string; text: string }
 type TextToken = { text: string }
-type CodeToken = { text: string }
+type CodeToken = { text: string; lang?: string }
 type Inline = { parser: { parseInline: (t: unknown) => string } }
 
 // `&` first, or the escapes escape.
@@ -119,6 +120,11 @@ let door = (ref: Ref, repo?: string | null, links = true) =>
         return href
           ? `<a href="${attr(href)}"><code>${esc(t.text)}</code></a>`
           : false
+      },
+      code: (t: CodeToken) => {
+        let lit = highlight(t.text, t.lang)
+        let language = lit.language ? ` language-${lit.language}` : ''
+        return `<pre><code class="hljs${language}">${lit.html}</code></pre>\n`
       },
     },
   })

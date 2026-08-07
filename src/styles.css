@@ -169,6 +169,38 @@ html {
   color: var(--muted);
 }
 
+/* Highlight.js names syntax; the app supplies the Everforest face. */
+:where(.hljs-keyword, .hljs-selector-tag) {
+  color: var(--red);
+}
+:where(.hljs-literal, .hljs-number) {
+  color: var(--purple);
+}
+:where(.hljs-string, .hljs-addition) {
+  color: var(--accent);
+}
+:where(.hljs-title, .hljs-section) {
+  color: var(--blue);
+}
+:where(.hljs-section) {
+  font-weight: 700;
+}
+:where(.hljs-built_in, .hljs-type) {
+  color: var(--yellow);
+}
+:where(.hljs-attr, .hljs-variable) {
+  color: var(--orange);
+}
+:where(.hljs-comment, .hljs-meta) {
+  color: var(--dim);
+}
+:where(.hljs-comment) {
+  font-style: italic;
+}
+:where(.hljs-deletion) {
+  color: var(--red);
+}
+
 /* The mono keepers: ids, chips, badges, edge verbs, timestamps, code,
    and every command/inspector/log surface. Prose everywhere else is
    var(--font) via body. :where keeps this overridable. */

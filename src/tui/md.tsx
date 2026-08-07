@@ -1,4 +1,5 @@
 import { type JSX } from 'preact'
+import { highlight, type Token } from '../highlight.ts'
 import { commitUrl } from '../md.ts'
 import { prefix } from '../types.ts'
 
@@ -51,24 +52,92 @@ let inline = (t: string, repo?: string): (string | JSX.Element)[] => {
 }
 
 export let Md = ({ text, repo }: { text: string; repo?: string }) => {
-  let fence = false
+  let lines = text.split('\n')
+  let code = (line: Token[], key: string) => (
+    <div key={key} class='Md_Code'>
+      {line.map((token, i) => (
+        <span key={i} class={token.classes.join(' ')}>{token.text}</span>
+      ))}
+    </div>
+  )
+  let out: JSX.Element[] = []
+  let fence:
+    | { mark: string; size: number; at: number; lang?: string }
+    | undefined
+  let body: string[] = []
+  let flush = (close?: string) => {
+    let lit = highlight(body.join('\n'), fence!.lang)
+    out.push(
+      <div key={`open-${fence!.at}`} class='Md_Fence'>{lines[fence!.at]}</div>,
+    )
+    lit.lines.forEach((line, i) =>
+      out.push(code(line, `code-${fence!.at}-${i}`))
+    )
+    if (close != null) {
+      out.push(
+        <div key={`close-${fence!.at}`} class='Md_Fence'>{close}</div>,
+      )
+    }
+    fence = undefined
+    body = []
+  }
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i]
+    if (fence) {
+      let close = line.match(/^ {0,3}(`+|~+)\s*$/)
+      if (
+        close && close[1][0] == fence.mark && close[1].length >= fence.size
+      ) {
+        flush(line)
+      } else body.push(line)
+      continue
+    }
+    let open = line.match(/^ {0,3}(`{3,}|~{3,})\s*(\S*)?.*$/)
+    if (open) {
+      fence = {
+        mark: open[1][0],
+        size: open[1].length,
+        at: i,
+        lang: open[2] || undefined,
+      }
+      continue
+    }
+    let indented = line.match(/^(?: {4}|\t)(.*)$/)
+    if (indented) {
+      let at = i
+      let source = [indented[1]]
+      while (i + 1 < lines.length) {
+        let next = lines[i + 1].match(/^(?: {4}|\t)(.*)$/)
+        if (next) {
+          source.push(next[1])
+          i++
+        } else if (!lines[i + 1].trim()) {
+          source.push('')
+          i++
+        } else break
+      }
+      highlight(source.join('\n')).lines.forEach((tokens, n) =>
+        out.push(code(tokens, `indent-${at}-${n}`))
+      )
+      continue
+    }
+    if (!line.trim()) out.push(<div key={i}>&#32;</div>)
+    else {
+      let h = line.match(/^#+\s+(.*)/)
+      let q = line.match(/^>\s?(.*)/)
+      let li = line.match(/^\s*[-*]\s+(.*)/)
+      if (h) out.push(<div key={i} class='Md_H'>{inline(h[1], repo)}</div>)
+      else if (q) {
+        out.push(<div key={i} class='Md_Q'>▎ {inline(q[1], repo)}</div>)
+      } else if (li) {
+        out.push(<div key={i} class='Md_Li'>• {inline(li[1], repo)}</div>)
+      } else out.push(<div key={i}>{inline(line, repo)}</div>)
+    }
+  }
+  if (fence) flush()
   return (
     <div class='Md'>
-      {text.split('\n').map((line, i) => {
-        if (line.trim().startsWith('```')) {
-          fence = !fence
-          return <div key={i} class='Md_Fence'>{line}</div>
-        }
-        if (fence) return <div key={i} class='Md_Code'>{line}</div>
-        if (!line.trim()) return <div key={i}>&#32;</div> // blank = content
-        let h = line.match(/^#+\s+(.*)/)
-        if (h) return <div key={i} class='Md_H'>{inline(h[1], repo)}</div>
-        let q = line.match(/^>\s?(.*)/)
-        if (q) return <div key={i} class='Md_Q'>▎ {inline(q[1], repo)}</div>
-        let li = line.match(/^\s*[-*]\s+(.*)/)
-        if (li) return <div key={i} class='Md_Li'>• {inline(li[1], repo)}</div>
-        return <div key={i}>{inline(line, repo)}</div>
-      })}
+      {out}
     </div>
   )
 }

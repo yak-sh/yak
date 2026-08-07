@@ -161,8 +161,9 @@ deno task test     # the suite
 The db lives at `~/.tasks/tasks.db` — outside the repo; set `DB_PATH` to move
 it. First boot plants the schema. No bundler, no node_modules: the server serves
 `src/` as-is, translating TS/JSX per request (sucrase), and the browser resolves
-preact/signals/marked to vendored ESM through the import map in `index.html`.
-There is no auth — the server is built to live on a private tailnet.
+preact/signals/marked/highlight.js to vendored ESM through the import map in
+`index.html`. There is no auth — the server is built to live on a private
+tailnet.
 
 ## Pointers
 
