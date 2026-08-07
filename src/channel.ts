@@ -256,7 +256,7 @@ export let findSession = (
   let hinted: ({ eid: string } & Sess) | undefined
   for (let [eid, row] of index) {
     if (!row.sess) continue
-    seats.push({ eid, num: row.num, pid: row.sess.pid })
+    seats.push({ eid, num: row.num, pid: row.sess.pid, id: row.sess.id })
     if (by.id && row.sess.id == by.id) hinted = { eid, ...row.sess }
   }
   let seat = served(seats, by.pid)

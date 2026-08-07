@@ -693,6 +693,25 @@ Deno.test('clearing a ghost row rotates service BACK to the live session', () =>
   assertEquals(findSession(idx, { pid: 4242 })?.eid, 'op')
 })
 
+Deno.test('a sid-less row on the pid does not shadow the conversation', () => {
+  // The T-15147 channel half: an artifact row (hand-reified probe, a
+  // malformed reify) wears the operator's pid with NO session id and a
+  // newer num. A conversation always has a sid — reify keys on it — so
+  // the seat is the newest sid-bearing row, and comments aimed at the
+  // operator keep injecting.
+  let idx = sessions(
+    [
+      ch('op', 'entity', { num: 10 }),
+      ch('op', 'session', { id: 'operator', pid: 4242 }),
+    ],
+    [
+      ch('bare', 'entity', { num: 11 }),
+      ch('bare', 'session', { pid: 4242 }),
+    ],
+  )
+  assertEquals(findSession(idx, { pid: 4242 })?.eid, 'op')
+})
+
 Deno.test('findSession: a pid match outranks the boot id hint', () => {
   let idx = sessions([
     ch('hinted', 'entity', { num: 1 }),

@@ -14,9 +14,24 @@
 // never heard it (T-7288). So the rule lives here, once, db-free so both
 // may import it.
 
-export type Seat = { eid: string; num: number; pid?: number | null }
+export type Seat = {
+  eid: string
+  num: number
+  pid?: number | null
+  id?: string | null
+}
 
-export let served = (seats: Seat[], pid?: number | null): Seat | undefined =>
-  pid == null ? undefined : seats
-    .filter((s) => s.pid == pid)
-    .sort((a, b) => b.num - a.num)[0]
+// A conversation row always carries the provider's session id — reify
+// keys on it (SessionStart, the managed launcher). A row wearing the pid
+// WITHOUT one is an artifact (a hand-reified probe row, a malformed
+// reify), and letting it win by recency shadows the live conversation:
+// everything aimed at the operator session goes invisible while the
+// channel serves a row nothing renders for (T-15147's channel half —
+// S-14232 sat sid-less on the operator's pid and ate its comments). So
+// the newest sid-bearing row is the seat; only a pid with no sid-bearing
+// rows at all falls back to bare recency.
+export let served = (seats: Seat[], pid?: number | null): Seat | undefined => {
+  if (pid == null) return undefined
+  let worn = seats.filter((s) => s.pid == pid).sort((a, b) => b.num - a.num)
+  return worn.find((s) => s.id) ?? worn[0]
+}
