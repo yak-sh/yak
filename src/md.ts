@@ -1,8 +1,9 @@
 // The one markdown door. marked (vendored, GFM) replaces snarkdown: real
 // <p> paragraphs, tables, strikethrough, task lists, and CommonMark's
 // intra-word-underscore rule natively — the two behaviors we'd been
-// patching in. breaks:true keeps the comment-app convention: a single
-// newline is a line break, like every task tracker people write in.
+// patching in. Line breaks are standard markdown (breaks off): a single
+// newline is a soft wrap that renders as a space, and a blank line makes
+// a new paragraph.
 //
 // A body is UNTRUSTED and this string goes straight to innerHTML.
 // "Our own data" stopped being true when the fleet took public mail:
@@ -79,7 +80,7 @@ let attr = (s: string) => esc(s).replace(/"/g, '&quot;')
 let door = (ref: Ref, repo?: string | null, links = true) =>
   new Marked({
     gfm: true,
-    breaks: true,
+    breaks: false,
     extensions: [{
       name: 'ref',
       level: 'inline',

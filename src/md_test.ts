@@ -16,10 +16,6 @@ Deno.test('md: paragraphs are <p>, not a wall of <br>', () => {
   assertEquals(md('one\n\ntwo').trim(), '<p>one</p>\n<p>two</p>')
 })
 
-Deno.test('md: a single newline is a line break (breaks: true)', () => {
-  assertStringIncludes(md('one\ntwo'), '<br')
-})
-
 Deno.test('md: intra-word underscores stay literal', () => {
   assertStringIncludes(md('foo_bar and bar_baz'), 'foo_bar and bar_baz')
   assertEquals(md('a _point_ made').trim(), '<p>a <em>point</em> made</p>')
