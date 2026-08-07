@@ -1,17 +1,16 @@
-// The wake: a knock held until its hour. One timer for the whole server,
+// The wake: an attention ask held until its hour. One timer for the whole
+// server,
 // armed at the earliest pending row and re-armed as each fires — never a
 // poller per wake, and never a process's own memory of when to come back.
 // That is the point: a wake is a ROW, so a restart (of the agent, of
 // tasksd, of the box) delays it at worst. Boot hands every unacted row
 // back through created() (the effects sweep), which is how a wake whose
 // hour passed while the server was down fires on startup instead of
-// vanishing. Firing MINTS A KNOCK and stops there — knock.ts owns the
-// ladder that finds a door, and a wake that re-implemented delivery
-// would be a second one to keep true. SERVER-ONLY (imports db).
-import { apply, db, human } from './db.ts'
-import { delivered, errored, PENDING } from './deliver.ts'
-import { dispatch, trace } from './effects.ts'
-import { type Change, uuid } from './types.ts'
+// vanishing. Firing walks the shared delivery ladder and settles this wake;
+// no knock artifact stands between the ask and its outcome. SERVER-ONLY.
+import { apply, db } from './db.ts'
+import { deliver, errored, PENDING, settle } from './deliver.ts'
+import { type Change } from './types.ts'
 import { instant } from './time.ts'
 
 type Cast = (changes: Change[]) => void
@@ -44,26 +43,23 @@ let pending = () =>
      where ${PENDING('wake')} order by wake.at`,
   ).all() as Row[]
 
-// The knock this wake was always going to be. No target means the wake
-// itself is the subject — its doc carries whatever the asker said.
+// No target means the wake itself is the subject. Its doc body is the asker's
+// reason; a named subject contributes its own title inside the ladder.
 let fire = (r: Row, cast: Cast) => {
-  let t = trace()
-  let ke = uuid()
-  let out = apply(db, [
-    {
-      eid: ke,
-      name: 'knock',
-      comp: { target_eid: r.target_eid ?? r.eid },
-    },
-    { eid: ke, name: 'deliver', comp: { to: r.to } },
-  ], t)
-  cast(out)
-  dispatch(out, t, (c, e) => console.warn(`wake ${c} —`, e))
-  // Settled DELIVERED after the mint: the wake did its one job, minting the
-  // knock that owns the ladder. `via` names it. A crash in the gap re-knocks
-  // at boot — a duplicate nudge is cheaper than the missed one this whole
-  // entity exists to prevent.
-  delivered(r.eid, `knock ${human(db, ke)}`, cast)
+  let doc = db.prepare(
+    `select d.body, c."by" from doc d
+     left join created c on c.eid = d.eid where d.eid = ?`,
+  ).get(r.eid) as { body?: string; by?: string | null } | undefined
+  settle(
+    r.eid,
+    deliver(
+      r.to,
+      r.target_eid ?? r.eid,
+      { body: String(doc?.body ?? ''), by: doc?.by },
+      cast,
+    ),
+    cast,
+  )
 }
 
 // Fire what is owed, then wait for the next. Idempotent by design — the
@@ -92,7 +88,7 @@ export let arm = (cast: Cast) => {
     try {
       fire(r, cast)
     } catch (e) {
-      // A wake that can't knock (its door tombstoned mid-flight) says so
+      // A wake that can't deliver (its door tombstoned mid-flight) says so
       // and is done — an unacted row would retry on every arm forever.
       errored(r.eid, String(e).slice(0, 500), cast)
     }

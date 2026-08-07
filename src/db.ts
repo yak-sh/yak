@@ -262,7 +262,7 @@ let schema = `
     eid        text primary key references entity(eid),
     target_eid text not null references entity(eid)
   );
-  -- A wake: mint that knock at 'at' (absolute, resolved at mint).
+  -- A wake: deliver its subject at 'at' (absolute, resolved at mint).
   -- wake.ts arms one timer at the earliest UNACTED row (no delivered/error)
   -- and reconciles at boot; WHO to wake is the shared deliver.to, the outcome
   -- the shared facet. target_eid is nullable — absent means the wake is its
@@ -1665,7 +1665,7 @@ let ventureAt = (db: DatabaseSync, cwd?: string | null): string | null => {
 //
 // A write that resolves to nobody stays BLANK. It used to fall back to the
 // box owner, which made every server-minted entity — an arriving letter, a
-// wake's knock, the scribe's desk — read as authored by them: 608 rows, one
+// delivery relay, the scribe's desk — read as authored by them: 608 rows, one
 // of which was holdco's comment relayed as a letter FROM the owner, to the
 // owner, about a residual he never raised (T-9934). Machinery is not a
 // person, and an unowned write says so by naming no one.

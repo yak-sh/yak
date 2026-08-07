@@ -18,6 +18,8 @@ import {
   learn,
   notifiedOf,
   printRun,
+  titleOf,
+  wakeOf,
 } from '../../src/channel.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
@@ -212,6 +214,75 @@ Deno.test('an inbox sweep deliberately reads an addressed settled knock', () => 
   assertEquals(channelEvents(batch, ctx({ mode: 'inbox' })), [
     { content: 'knock: look at T-9', meta: { kind: 'knock' }, eid: 'k1' },
   ])
+})
+
+// --- wakes -------------------------------------------------------------------
+
+let wakeCtx = (index: Index, over: Partial<Ctx> = {}): Ctx =>
+  ctx({
+    wakeOf: (eid) => wakeOf(index, eid),
+    titleOf: (eid) => titleOf(index, eid),
+    ...over,
+  })
+
+Deno.test('a pending wake is silent; its outcome frame carries the nudge', () => {
+  let index: Index = new Map()
+  let pending = [
+    ch('w1', 'entity', { num: 8 }),
+    ch('w1', 'doc', {
+      title: 'wake homelab at noon',
+      body: 'the key expires today',
+    }),
+    ch('w1', 'wake', { at: '2026-08-07T12:00:00Z', target_eid: 't9' }),
+    ch('w1', 'deliver', { to: 'sess' }),
+    ch('t9', 'entity', { num: 9 }),
+    ch('t9', 'doc', { title: 'Rotate the key', body: '' }),
+    ch('t9', 'task', { status: 'open' }),
+  ]
+  learn(index, pending)
+  assertEquals(channelEvents(pending, wakeCtx(index)), [])
+
+  let fired = ch('w1', 'delivered', {
+    at: '2026-08-07T12:00:00Z',
+    via: 'cast S-31',
+  })
+  learn(index, [fired])
+  let expected = [{
+    content: 'wake: T-9 — Rotate the key — the key expires today',
+    meta: { kind: 'wake' },
+    eid: 'w1',
+  }]
+  assertEquals(channelEvents([fired], wakeCtx(index)), expected)
+  assertEquals(
+    channelEvents([fired], wakeCtx(index, { mode: 'catchup' })),
+    expected,
+  )
+  assertEquals(
+    channelEvents([fired], wakeCtx(index, { mode: 'resume' })),
+    expected,
+  )
+})
+
+Deno.test('a fired self-wake reads from its own body', () => {
+  let index: Index = new Map()
+  learn(index, [
+    ch('w2', 'entity', { num: 10 }),
+    ch('w2', 'doc', {
+      title: 'wake homelab at noon',
+      body: 'check the deploy',
+    }),
+    ch('w2', 'wake', { at: '2026-08-07T12:00:00Z' }),
+    ch('w2', 'deliver', { to: 'sess' }),
+  ])
+  let fired = ch('w2', 'delivered', {
+    at: '2026-08-07T12:00:00Z',
+    via: 'cast S-31',
+  })
+  assertEquals(channelEvents([fired], wakeCtx(index)), [{
+    content: 'wake: check the deploy',
+    meta: { kind: 'wake' },
+    eid: 'w2',
+  }])
 })
 
 // --- mail --------------------------------------------------------------------

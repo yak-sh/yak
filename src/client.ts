@@ -1932,8 +1932,8 @@ export let contextDigest = (
 
 // The comms bus, read side. The Claude channel's own pure filter is reused over
 // a set of rows so every provider gets the same recipient and verification
-// rules: direct comments, claimed-task replies, knocks, and verified project
-// mail for an operator. `notified` is minted only for the bounded batch
+// rules: direct comments, claimed-task replies, knocks, fired wakes, and
+// verified project mail for an operator. `notified` is minted for the batch
 // rendered here; a tmux wake-up never calls this function and therefore drains
 // nothing.
 let noticeLine = (ev: InboxEvent, row?: Row) => {
@@ -1971,6 +1971,22 @@ export let notices = (all: Row[], who: Reader) => {
       return doc
         ? { title: String(doc.title ?? ''), body: String(doc.body ?? '') }
         : null
+    },
+    wakeOf: (eid) => {
+      let row = byEid.get(eid)
+      if (!row?.comps.wake || !row.comps.deliver) return null
+      return {
+        to: String(row.comps.deliver.to ?? ''),
+        targetEid: row.comps.wake.target_eid
+          ? String(row.comps.wake.target_eid)
+          : undefined,
+        title: String(row.comps.doc?.title ?? ''),
+        body: String(row.comps.doc?.body ?? ''),
+      }
+    },
+    titleOf: (eid) => {
+      let row = byEid.get(eid)
+      return row ? String(row.comps.doc?.title ?? '') : null
     },
     done: (eid) => {
       let row = byEid.get(eid)
@@ -2193,8 +2209,8 @@ export let projectionSnapshot = async (): Promise<Snapshot> => {
   return { changes: changesOf(all), deps: near.deps }
 }
 
-// The rows the bus's selector might pick, as index queries: a comment or a
-// knock aimed at this session or its actor or a task it claims, and mail
+// The rows the bus's selector might pick, as index queries: a comment, knock,
+// or fired wake aimed at this session or its actor or a task it claims, and mail
 // aimed at the session or its project. Unread is screened server-side —
 // `notified` for all three, plus `opened`/`archived`, which is the read-state
 // injects() calls `done`.
@@ -2216,18 +2232,22 @@ let busRows = async (who: Reader) => {
     .filter(Boolean).join(',')
   let [said, aimed, letters] = await Promise.all([
     query([`.comment.target_eid=${held}`, '.notified=']),
-    // WHO a knock is for is the shared deliver.to; the same facet a wake/mail
-    // wears, so keep only the knock rows the bus renders.
+    // WHO a nudge is for is the shared deliver.to. The type/outcome screen
+    // below drops pending wakes and outbound mail.
     query([`.deliver.to=${mine.join(',')}`, '.notified=']),
     query([`.mail.target_eid=${box}`, '.notified=', '.opened=', '.archived=']),
   ])
-  let knocks = aimed.filter((r) => r.comps.knock)
-  let seen = [...said, ...knocks, ...letters]
+  let nudges = aimed.filter((r) =>
+    r.comps.knock || (r.comps.wake && r.comps.delivered)
+  )
+  let seen = [...said, ...nudges, ...letters]
   if (!seen.length) return seen
-  // What rendering needs BESIDE the candidates: a knock's target (its id, and
-  // the comment carrying the words that rode with it) and each candidate's
-  // byline, which names a writer and the session it wrote through.
-  let at = knocks.map((r) => String(r.comps.knock.target_eid ?? ''))
+  // What rendering needs BESIDE the candidates: a nudge's target and each
+  // candidate's byline. Knock words still ride as a nearby comment; wake words
+  // live on the wake itself.
+  let at = nudges.map((r) =>
+    String(r.comps.knock?.target_eid ?? r.comps.wake?.target_eid ?? '')
+  )
     .filter(Boolean)
   let by = seen.flatMap((r) => [r.comps.created?.by, r.comps.created?.via])
     .filter(Boolean).map(String)

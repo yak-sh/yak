@@ -39,6 +39,8 @@ export type Ctx = {
   claimedEids?: Set<string>
   idOf: (eid: string) => string | null
   docOf?: (eid: string) => { title: string; body: string } | null
+  wakeOf?: (eid: string) => WakeDelivery | null
+  titleOf?: (eid: string) => string | null
   // The durable read-state (T-7006): true once a mail wears `opened` or
   // `archived`, read off the index — so a letter already dealt with never
   // re-rings across a reconnect.
@@ -110,12 +112,21 @@ export let cleanAttr = (s: string) =>
 export type Row = {
   num: number
   comps: Set<string>
+  title?: string
   doc?: { title: string; body: string }
+  wake?: { targetEid?: string }
+  to?: string
   // A session row's own fields, MERGED across patches — identity is read
   // off the index, not off one batch, so a patch that carries only `turn`
   // can't blank the actor and a rotation can't strand a stale one. `pid`
   // is the seat (findSession, below); the rest route delivery.
   sess?: Sess
+}
+export type WakeDelivery = {
+  to: string
+  targetEid?: string
+  title: string
+  body: string
 }
 export type Sess = {
   id?: string
@@ -170,6 +181,22 @@ export let learn = (index: Index, changes: Change[]) => {
       if (c.comp == null) row.sess = undefined
       else remember(row, c.comp)
     }
+    if (c.name == 'doc' && c.comp == null) {
+      row.title = undefined
+      row.doc = undefined
+    }
+    if (c.name == 'wake') {
+      if (c.comp == null) row.wake = undefined
+      else if ('target_eid' in c.comp) {
+        row.wake = {
+          targetEid: str(c.comp.target_eid) || undefined,
+        }
+      } else row.wake ??= {}
+    }
+    if (c.name == 'deliver') {
+      if (c.comp == null) row.to = undefined
+      else if ('to' in c.comp) row.to = str(c.comp.to) || undefined
+    }
     index.set(c.eid, row)
   }
   // Second pass, so a mint's doc is cached whichever side of its mail comp it
@@ -177,7 +204,9 @@ export let learn = (index: Index, changes: Change[]) => {
   for (let c of changes) {
     if (c.name != 'doc' || !c.comp) continue
     let row = index.get(c.eid)
-    if (!row?.comps.has('mail')) continue
+    if (!row) continue
+    if ('title' in c.comp) row.title = str(c.comp.title)
+    if (!row.comps.has('mail') && !row.comps.has('wake')) continue
     let doc = row.doc ?? { title: '', body: '' }
     if ('title' in c.comp) doc.title = str(c.comp.title)
     if ('body' in c.comp) doc.body = str(c.comp.body)
@@ -188,6 +217,22 @@ export let learn = (index: Index, changes: Change[]) => {
 // eid → the cached doc of a mail-wearer, or null — the Ctx.docOf the live
 // server wires in.
 export let docOf = (index: Index, eid: string) => index.get(eid)?.doc ?? null
+
+export let titleOf = (index: Index, eid: string) =>
+  index.get(eid)?.title ?? null
+
+// The envelope a delivered-only wake frame needs. The schedule was broadcast
+// when it was minted; the outcome frame is the moment it becomes attention.
+export let wakeOf = (index: Index, eid: string): WakeDelivery | null => {
+  let row = index.get(eid)
+  if (!row?.wake || !row.to) return null
+  return {
+    to: row.to,
+    targetEid: row.wake.targetEid,
+    title: row.doc?.title ?? '',
+    body: row.doc?.body ?? '',
+  }
+}
 
 // eid → done (T-7006): it wears `opened` or `archived`. learn() keeps the
 // comp set fresh from every broadcast, so this is restart-proof dedup —
@@ -389,7 +434,7 @@ let bornIn = (changes: Change[]) => {
 
 // The filter + format, pure. Given one broadcast batch and the session context,
 // return the channel events to emit — in batch order, so delivery is
-// deterministic. Three things are aimed at a session:
+// deterministic. Four things are aimed at a session:
 //
 //   1. a `comment` whose target_eid is this session's eid OR one of its CLAIMED
 //      tasks (commenting on a task you hold IS messaging you — the comms bus
@@ -400,7 +445,9 @@ let bornIn = (changes: Change[]) => {
 //      this session or its actor — and target_eid is what to look at; the
 //      words ride as a plain comment on the TARGET in the same batch (the
 //      :knock contract).
-//   3. a `mail` arrival for the session's home project — see the branch.
+//   3. a fired `wake`: its delivered frame is the signal, while the earlier
+//      wake/deliver/doc frames remain cached as its envelope.
+//   4. a `mail` arrival for the session's home project — see the branch.
 export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
   let docs = docsIn(changes)
   let created = createdIn(changes)
@@ -421,6 +468,33 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
     (ctx.mode != 'catchup' && !!ctx.notified?.(eid) && pushed(eid))
   for (let c of changes) {
     if (!c.comp) continue
+
+    if (c.name == 'delivered') {
+      let wake = ctx.wakeOf?.(c.eid)
+      if (!wake) continue
+      let mine = lost(str(c.comp.via), ctx)
+      if (ctx.mode != 'inbox' && !mine) continue
+      if (
+        wake.to != ctx.sessionEid &&
+        !(ctx.operator == true && wake.to == ctx.actorEid)
+      ) continue
+      if (told(c.eid)) continue
+      let target = wake.targetEid
+      let reason = cleanBody(wake.body).replace(/\s+/g, ' ').trim()
+      let content: string
+      if (target) {
+        let id = ctx.idOf(target) ?? target
+        let title = cleanBody(ctx.titleOf?.(target) ?? '').trim()
+        let subject = `${id}${title ? ` — ${title}` : ''}`
+        content = `wake: ${subject}${reason ? ` — ${reason}` : ''}`
+      } else {
+        let words = reason || cleanBody(wake.title).trim() ||
+          ctx.idOf(c.eid) || c.eid
+        content = `wake: ${words}`
+      }
+      out.push({ content, meta: { kind: 'wake' }, eid: c.eid })
+      continue
+    }
 
     if (c.name == 'comment') {
       let at = str(c.comp.target_eid)

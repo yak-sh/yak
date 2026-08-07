@@ -105,6 +105,21 @@ let knocked = (eid: string, num: number, to: string, target: string) =>
     delivered: { at: '2026-01-03', via: 'cast' },
   })
 
+let woke = (
+  eid: string,
+  num: number,
+  to: string,
+  target?: string,
+  delivered = true,
+) =>
+  ent(eid, num, {
+    created: { at: '2026-01-03', by: P, via: B },
+    doc: { title: 'wake homelab at noon', body: 'the key expires today' },
+    wake: { at: '2026-01-03', ...(target ? { target_eid: target } : {}) },
+    deliver: { to },
+    ...(delivered ? { delivered: { at: '2026-01-03', via: 'cast S-2' } } : {}),
+  })
+
 let letter = (
   eid: string,
   num: number,
@@ -171,6 +186,8 @@ let cases: [string, Snapshot, number][] = [
     2,
   ],
   ['a knock aimed at the actor', graph(knocked('k2', 27, P, T)), 1],
+  ['a fired wake aimed at the actor', graph(woke('w1', 72, P, T)), 1],
+  ['a pending wake stays silent', graph(woke('w2', 73, P, T, false)), 0],
   // The knock's words ride as a comment on its TARGET, which is nothing this
   // session holds — so nothing else in the gather would have pulled it in.
   [
@@ -332,6 +349,14 @@ for (let [what, snap, want] of cases) {
     assertEquals(seen.filter((line) => line.startsWith('/snapshot')), [])
   })
 }
+
+Deno.test('a fired wake names its target and carries its own reason', () => {
+  let got = noticesFor(graph(woke('w3', 74, S, T)), 'sess-x')
+  assertEquals(got.lines, [
+    'UNTRUSTED wake: wake: T-4 — Claimed work — the key expires today',
+  ])
+  assertEquals(got.ack.map((c) => c.eid), ['w3'])
+})
 
 Deno.test('context queries render the same digest as the whole graph', async () => {
   let snap = graph(said('context-note', 80, T, 'the narrow digest sees me'))

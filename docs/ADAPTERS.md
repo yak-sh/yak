@@ -15,7 +15,7 @@ Every adapter must:
 1. Reify a session with a stable provider id and its current process or runner
    identity.
 2. Preserve normal graph participation. Every session can search and claim work,
-   receive direct comments and knocks, and receive replies on tasks it claims.
+   receive direct comments, knocks, fired wakes, and replies on claimed tasks.
 3. Grant project-wide attention only through a positive capability. An ad-hoc
    `task claude --operator` or `task codex --operator` opts in; a valid
    `TASKS_ROLE` binding grants the same capability to a graph-declared role.
@@ -59,10 +59,10 @@ should use the same content-free signal and keep the inbox read atomic.
 Ordinary sessions and role sessions share the same graph primitives. They differ
 only in the attention they are eligible to receive:
 
-- Every session receives comments aimed at its session, knocks aimed at its
-  session, and comments on tasks it claims.
+- Every session receives comments aimed at its session, knocks and fired wakes
+  aimed at its session, and comments on tasks it claims.
 - A session with project-attention capability additionally receives verified
-  project mail and knocks aimed at the project actor.
+  project mail, knocks, and fired wakes aimed at the project actor.
 - A managed specialist spawned for one task is not a project operator merely
   because it is managed.
 

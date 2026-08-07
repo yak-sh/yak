@@ -1137,8 +1137,8 @@ on('wake', {
   // still owed, so an hour that passed while the server was down fires
   // now instead of vanishing.
   sweep: { pending: PENDING('wake') },
-  doc: 'the timed knock: hold until `at`, then mint the knock and let ' +
-    'the ladder deliver — one timer, re-armed at the earliest pending ' +
+  doc: 'timed attention: hold until `at`, then deliver through the shared ' +
+    'ladder — one timer, re-armed at the earliest pending ' +
     'wake and reconciled at boot',
 })
 on('mail', {

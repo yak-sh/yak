@@ -304,14 +304,14 @@ export let comps: Record<string, Record<string, PropType>> = {
   knock: {
     target_eid: { eid: '', death: 'cascade' }, // what to look at
   },
-  // A wake is a knock with a clock: the same sentence, said LATER. `at`
+  // A wake is attention with a clock: the same sentence, said LATER. `at`
   // is absolute — the caller writes a phrase ('in 60m', '9am tomorrow')
   // and it resolves once, at mint (query.ts instant), because a row that
   // still holds a phrase would mean something different every time it is
   // read. The server keeps one timer at the earliest pending wake and
   // reconciles at boot, so an hour of downtime delays a wake instead of
-  // eating it (wake.ts) — then mints the knock and lets that ladder
-  // deliver. No repeats: `every` waits for something that needs it. WHO
+  // eating it (wake.ts) — then calls the same ladder a deliberate knock uses.
+  // No repeats: `every` waits for something that needs it. WHO
   // to wake is the `deliver {to}` facet below.
   wake: {
     at: 'time',
@@ -1106,10 +1106,9 @@ export type Knock = {
   target_eid: string
 }
 
-// A knock waiting on the clock: `at` absolute (resolved at mint). WHO to
-// wake is the `deliver {to}` facet; the outcome — the timer fired and
-// minted the knock, or why it couldn't — is the shared `delivered`/`error`
-// facet. Neither a column here.
+// Attention waiting on the clock: `at` absolute (resolved at mint). WHO to
+// wake is the `deliver {to}` facet; the shared `delivered`/`error` outcome
+// says how the wake itself reached its destination. Neither is a column here.
 export type Wake = {
   eid: string
   at: string

@@ -566,7 +566,7 @@ export let manuals = declare({
     opts: [flag('--errors'), value('--since', timestamp), count],
   },
   wake: {
-    about: 'a knock on a timer',
+    about: 'attention on a timer',
     examples: [
       'task wake S-31 in 60m',
       'task wake homelab "9am tomorrow" T-42',

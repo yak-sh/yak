@@ -291,7 +291,7 @@ export let commands: Record<string, Command> = {
       }
     },
   },
-  // :wake is :knock with a clock: the same sentence, said later. First
+  // :wake is attention with a clock: the same sentence, said later. First
   // word is who; the rest is WHEN ('in 60m', 'after 8 hours', '9am
   // tomorrow', an ISO stamp) — unless its last word names an entity,
   // which is what to look at (else: where you stand). The phrase
@@ -299,7 +299,7 @@ export let commands: Record<string, Command> = {
   // so a time already past is visible rather than a silent knock now.
   wake: {
     args: 'homelab in 60m T-42',
-    about: 'a knock on a timer — wake someone at a time',
+    about: 'attention on a timer — wake someone at a time',
     run: (rest, ctx) => {
       let words = rest.trim().split(/\s+/).filter(Boolean)
       let to = words[0] ? find(ctx.rows, words[0]) : undefined
@@ -320,8 +320,8 @@ export let commands: Record<string, Command> = {
       let w = uuid()
       return {
         changes: [
-          // The doc is what the knock will show when the wake is its own
-          // subject — the ask, in the asker's words.
+          // The title makes a self-targeted wake legible; doc.body, when an
+          // asker adds a reason, is the prose the delivery carries.
           { eid: w, name: 'doc', comp: { title: `wake ${rest.trim()}` } },
           {
             eid: w,
