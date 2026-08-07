@@ -2070,7 +2070,7 @@ let sync = async (got: Got) => {
   for (let root of done.committed) print(`committed ${root}`)
   for (let root of done.pushed) print(`pushed ${root}`)
   for (let p of done.untracked) print(`untracked ${p} — git add to adopt`)
-  for (let f of done.failed) warn(`commit failed ${f}`)
+  for (let f of done.failed) warn(`sync failed ${f}`)
 }
 
 let backup = async () => {

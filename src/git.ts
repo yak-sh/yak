@@ -27,7 +27,13 @@
 
 let dec = new TextDecoder()
 
-let git = async (cwd: string, ...args: string[]) => {
+type Result = { ok: boolean; out: string; err: string }
+
+let run = async (
+  cwd: string,
+  args: string[],
+  signal?: AbortSignal,
+): Promise<Result> => {
   // No terminal prompts, ever: this runs from a server effect with no one
   // to answer, and a credential prompt would hang the whole sync.
   let cmd = new Deno.Command('git', {
@@ -35,24 +41,40 @@ let git = async (cwd: string, ...args: string[]) => {
     env: { GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '', SSH_ASKPASS: '' },
     stdout: 'piped',
     stderr: 'piped',
+    signal,
   })
-  let { success, stdout, stderr } = await cmd.output()
-  return {
-    ok: success,
-    out: dec.decode(stdout).trim(),
-    err: dec.decode(stderr).trim(),
+  try {
+    let { success, stdout, stderr } = await cmd.output()
+    return {
+      ok: success,
+      out: dec.decode(stdout).trim(),
+      err: dec.decode(stderr).trim(),
+    }
+  } catch (e) {
+    return { ok: false, out: '', err: String(e) }
   }
 }
+
+let git = (cwd: string, ...args: string[]) => run(cwd, args)
 
 let dir = (p: string) => p.slice(0, p.lastIndexOf('/'))
 
 let line = (s: string) => s.split('\n').find(Boolean)?.slice(0, 160) ?? ''
 
 // A refused push opens its stderr with `To <url>` and buries the verdict
-// in the `!` line — report that one, not the address it was sent to.
+// in the `!` line. A ref race is more precise one line earlier, though:
+// retain the cannot-lock reason rather than reducing it to "update failed".
+let pick = (s: string, asks: (line: string) => boolean) =>
+  line(s.split('\n').filter(asks).join('\n'))
 let why = (s: string) =>
-  line(s.split('\n').filter((l) => l.trimStart().startsWith('!')).join('\n')) ||
+  pick(s, (l) => l.includes('cannot lock ref')) ||
+  pick(s, (l) => l.trimStart().startsWith('!')) ||
+  pick(s, (l) => /^(remote: )?(error|fatal):/.test(l.trimStart())) ||
   line(s)
+let said = (done: Result, fallback: string) =>
+  line(done.err) || line(done.out) || fallback
+let refusal = (done: Result) =>
+  why(done.err) || line(done.out) || 'git push exited without a diagnostic'
 
 // The repo that tracks this path, or nothing. Asked from the file's own
 // directory so a path under a nested checkout answers for that checkout.
@@ -93,15 +115,15 @@ export let standing = async (root: string) => {
 // fetches, and nobody fetches these shared checkouts — which is exactly
 // why they all read `0 behind` while origin runs away from them. Bounded,
 // because a network that hangs must cost us a sync, not the server.
-let level = async (root: string, ms = 20_000) => {
-  let stop = AbortSignal.timeout(ms)
-  await new Deno.Command('git', {
-    args: ['-C', root, 'fetch', '--quiet', '--no-tags'],
-    env: { GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '', SSH_ASKPASS: '' },
-    stdout: 'null',
-    stderr: 'null',
-    signal: stop,
-  }).output().catch(() => {})
+let fetchUp = (root: string, remote?: string, ms = 20_000) =>
+  run(
+    root,
+    ['fetch', '--quiet', '--no-tags', ...(remote ? [remote] : [])],
+    AbortSignal.timeout(ms),
+  )
+
+let level = async (root: string) => {
+  await fetchUp(root)
   let at = await standing(root)
   // Behind and nothing of our own in the way: take theirs. Anything else
   // — level, ahead, diverged, no upstream — is left for the caller to read.
@@ -168,7 +190,10 @@ export let commit = async (
     if (dirty) {
       let done = await git(root, 'commit', '-q', '-m', msg, '--', ...paths)
       if (!done.ok) {
-        failed.push(`${root}: ${line(done.err)}`)
+        failed.push(
+          `${root}: commit failed (` +
+            `${said(done, 'git commit exited without a diagnostic')})`,
+        )
         continue
       }
       committed.push(root)
@@ -181,13 +206,44 @@ export let commit = async (
     if (!up) continue
     let to = `HEAD:${up.branch}`
     let sent = await git(root, 'push', '--quiet', up.remote, to)
-    if (sent.ok) pushed.push(root)
-    // Someone pushed between our fetch and this. Declined, not forced and
-    // not retried: the commits are safe on the branch, and the next sync
-    // starts over from a fetch that can see them.
-    else {failed.push(
-        `${root}: push refused (${why(sent.err)}); git pull --ff-only`,
-      )}
+    if (sent.ok) {
+      pushed.push(root)
+      continue
+    }
+    let first = refusal(sent)
+    // A ref may move after level() fetches but before this push updates it.
+    // Fetch again to distinguish that race from a policy refusal. Rebasing
+    // retains both commits; a failed rebase is aborted so the projection's
+    // correct local commit and the checkout both remain usable.
+    let fetched = await fetchUp(root, up.remote)
+    if (!fetched.ok) {
+      failed.push(
+        `${root}: push refused (${first}); refresh failed (` +
+          `${said(fetched, 'git fetch exited without a diagnostic')})`,
+      )
+      continue
+    }
+    let moved = await standing(root)
+    if (!moved?.behind) {
+      failed.push(`${root}: push refused (${first})`)
+      continue
+    }
+    let based = await git(root, 'rebase', '@{u}')
+    if (!based.ok) {
+      await git(root, 'rebase', '--abort')
+      failed.push(
+        `${root}: push refused (${first}); rebase failed (` +
+          `${said(based, 'git rebase exited without a diagnostic')})`,
+      )
+      continue
+    }
+    let retried = await git(root, 'push', '--quiet', up.remote, to)
+    if (retried.ok) pushed.push(root)
+    else {
+      failed.push(
+        `${root}: push retry refused (${refusal(retried)})`,
+      )
+    }
   }
   return { committed, pushed, untracked, failed }
 }

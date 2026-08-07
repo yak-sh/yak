@@ -36,6 +36,10 @@ let repo = async () => {
   return dir
 }
 let write = (p: string, body: string) => (Deno.writeTextFileSync(p, body), p)
+let script = (path: string, body: string) => {
+  Deno.writeTextFileSync(path, body)
+  Deno.chmodSync(path, 0o755)
+}
 
 // One projection file as commit() hears it. `push` unspoken is the
 // default every venture starts on: commit here, and nothing leaves.
@@ -339,19 +343,16 @@ Deno.test('commit: the grant drains a chain with nothing left to write', async (
   }
 })
 
-// Origin can refuse — a branch it protects, a hook, or the race we lose
-// when someone pushes between our fetch and ours. The commit is already
-// safe on the branch, so the answer is to say so and stop: no --force,
-// and exactly one attempt, which the counter is here to prove.
-Deno.test('commit: a refused push declines with the remedy, never forces, never retries', async () => {
+// A protected branch is not stale: fetching cannot make its policy change,
+// so retrying would only ask the same forbidden question twice.
+Deno.test('commit: a persistent refusal is reported without retrying', async () => {
   let w = await paired()
   try {
     let hook = `${w.origin}/hooks/pre-receive`
-    Deno.writeTextFileSync(
+    script(
       hook,
       '#!/bin/sh\nprintf x >> "$GIT_DIR/tries"\necho "fetch first" >&2\nexit 1\n',
     )
-    Deno.chmodSync(hook, 0o755)
     let was = await landed(w)
 
     let file = write(w.file, 'projected\n')
@@ -360,11 +361,83 @@ Deno.test('commit: a refused push declines with the remedy, never forces, never 
     assertEquals(out.pushed, [])
     assertEquals(out.failed.length, 1)
     assert(out.failed[0].includes('push refused'), out.failed[0])
-    assert(out.failed[0].includes('git pull --ff-only'), out.failed[0])
+    assert(!out.failed[0].endsWith('()'), out.failed[0])
 
     assertEquals(Deno.readTextFileSync(`${w.origin}/tries`), 'x')
     assertEquals(await landed(w), was)
     assertEquals(await standing(w.tree), { ahead: 1, behind: 0 })
+  } finally {
+    Deno.removeSync(w.base, { recursive: true })
+  }
+})
+
+// Move main from pre-push, after the caller reads the advertised ref but before
+// its update arrives. The next fetch sees the winner, and one rebase can retain
+// both commits before the retry publishes ours.
+Deno.test('commit: a stale push rebases and retries once', async () => {
+  let w = await paired()
+  try {
+    write(`${w.ship}/other.md`, 'the winning push\n')
+    await sh(w.ship, 'commit', '-qam', 'the winning push')
+    let winner = await sh(w.ship, 'rev-parse', 'HEAD')
+    let tried = `${w.base}/tried`
+    let tries = `${w.base}/tries`
+    script(
+      `${w.tree}/.git/hooks/pre-push`,
+      '#!/bin/sh\n' +
+        `printf x >> "${tries}"\n` +
+        `if test ! -e "${tried}"; then\n` +
+        `  touch "${tried}"\n` +
+        `  git -C "${w.ship}" push -q origin main\n` +
+        'fi\n' +
+        'exit 0\n',
+    )
+
+    let file = write(w.file, 'projected\n')
+    let out = await commit([one(file, true)], 'personas: materialize')
+    assertEquals(out.committed, [w.tree])
+    assertEquals(out.pushed, [w.tree])
+    assertEquals(out.failed, [])
+    assertEquals(Deno.readTextFileSync(tries), 'xx')
+    assertEquals(await standing(w.tree), { ahead: 0, behind: 0 })
+    assertEquals(await landed(w), await sh(w.tree, 'rev-parse', 'HEAD'))
+    assertEquals(await sh(w.tree, 'rev-parse', 'HEAD^'), winner)
+  } finally {
+    Deno.removeSync(w.base, { recursive: true })
+  }
+})
+
+Deno.test('commit: a second stale push reports its reason and stops', async () => {
+  let w = await paired()
+  try {
+    write(`${w.ship}/other.md`, 'the first winning push\n')
+    await sh(w.ship, 'commit', '-qam', 'the first winning push')
+    await sh(w.ship, 'branch', 'first')
+    write(`${w.ship}/other.md`, 'the second winning push\n')
+    await sh(w.ship, 'commit', '-qam', 'the second winning push')
+    let tried = `${w.base}/tried`
+    let tries = `${w.base}/tries`
+    script(
+      `${w.tree}/.git/hooks/pre-push`,
+      '#!/bin/sh\n' +
+        `printf x >> "${tries}"\n` +
+        `if test ! -e "${tried}"; then\n` +
+        `  touch "${tried}"\n` +
+        `  git -C "${w.ship}" push -q origin first:main\n` +
+        'else\n' +
+        `  git -C "${w.ship}" push -q origin main\n` +
+        'fi\n' +
+        'exit 0\n',
+    )
+
+    let file = write(w.file, 'projected\n')
+    let out = await commit([one(file, true)], 'personas: materialize')
+    assertEquals(out.committed, [w.tree])
+    assertEquals(out.pushed, [])
+    assertEquals(out.failed.length, 1)
+    assert(out.failed[0].startsWith(`${w.tree}: push retry refused (`))
+    assert(!out.failed[0].endsWith('()'), out.failed[0])
+    assertEquals(Deno.readTextFileSync(tries), 'xx')
   } finally {
     Deno.removeSync(w.base, { recursive: true })
   }
