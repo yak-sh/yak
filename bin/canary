@@ -164,7 +164,7 @@ let leg = (name: string, ok: boolean, note = '') => {
   log(`${ok ? 'GREEN' : 'RED'} ${name}${note ? ` — ${note}` : ''}`)
 }
 
-let mailLeg = async (): Promise<string | null> => {
+let mailLeg = async (op: { eid: string }): Promise<string | null> => {
   let r = await sh(['task', 'mail', 'send', ADDRESS, `CANARY ${token}`,
     `--body=Canary run ${token}. This is probe traffic; acknowledge in one short line, take no other action.`])
   if (!r.ok) {
@@ -186,16 +186,33 @@ let mailLeg = async (): Promise<string | null> => {
   // Consumption: the token in the operator's transcript as a channel event.
   // Generous window — instance churn (~15min cycles) makes short waits
   // false-alarm; a letter that cannot land inside this window IS the defect.
-  let injected = await until('mail injection', 300_000, async () =>
-    (await pane()).includes(token))
+  let injected = false
+  await until('mail consumption', 300_000, async () => {
+    injected = (await pane()).includes(token)
+    if (injected) return true
+    let n = id ? one(`select via from notified where eid = ?`, id) : undefined
+    return !!n && String(n?.via ?? '') == op.eid
+  })
   // On a miss, the notified row is the triage bit: an anonymous stamp means
   // the channel EMITTED and the client never rendered; no stamp means the
-  // instance was not connected (the churn class, T-15226).
+  // instance was not connected (the churn class, T-15226). And a stamp whose
+  // via IS the operator's own session means the comms bus served the letter
+  // into the operator's context (its boot digest wins this race on a fresh
+  // launch) — that is consumption too, just not pane-visible.
   let n = id
     ? one(`select "by", via from notified where eid = ?`, id)
     : undefined
+  let busServed = !!n && String(n.via ?? '') == op.eid
   let stamp = n ? `notified by=${n.by ?? 'ANON'} via=${n.via ?? 'ANON'}` : 'never notified'
-  leg('mail', injected, injected ? 'arrival + transcript injection' : `arrived but never injected (${stamp})`)
+  leg(
+    'mail',
+    injected || busServed,
+    injected
+      ? 'arrival + transcript injection'
+      : busServed
+      ? 'arrival + bus-served into the operator context (no channel push)'
+      : `arrived but never injected (${stamp})`,
+  )
   return id
 }
 
@@ -357,7 +374,7 @@ try {
   if (!op) {
     leg('operator', false, 'no live canary operator and launch failed')
   } else {
-    let letter = await mailLeg()
+    let letter = await mailLeg(op)
     await castLeg(project, op)
     await replyLeg(letter)
     await settleLeg(project)
