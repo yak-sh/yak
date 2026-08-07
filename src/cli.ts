@@ -96,6 +96,7 @@ import {
   STATIC_RULES,
 } from './doctor.ts'
 import {
+  type Change,
   type Edge,
   edges,
   kindOrder,
@@ -110,7 +111,12 @@ import {
 import type { Log } from './telemetry.ts'
 import type { JournalEntry } from './client.ts'
 import { local } from './time.ts'
-import { agentPid, claudePid, descends } from './proc.ts'
+import {
+  agentPid,
+  bornAt as processBornAt,
+  claudePid,
+  descends,
+} from './proc.ts'
 import { projection, syncFiles } from './persona.ts'
 import { commit } from './git.ts'
 import { land as landTree, landedChanges, landing } from './land.ts'
@@ -1513,6 +1519,43 @@ let heard = async (hook = false) => {
 export let hookOperator = (role?: string, pid?: number) =>
   !!role || operatorHook(pid)
 
+// A provider pid has one current conversation. clear/compact/resume are the
+// provider's explicit handoff signals; they transfer the seat in one batch.
+// Anything else trying to add a different sid is a second writer, so the hook
+// refuses it before sessionFor can mint an operator row. Process birth screens
+// old rows left behind by numeric pid reuse.
+export let hookSession = (
+  all: Row[],
+  sid: string,
+  cwd: string | undefined,
+  pid: number | undefined,
+  self: NonNullable<Parameters<typeof sessionFor>[4]>,
+  born = pid ? processBornAt(pid) : undefined,
+) => {
+  let worn = pid
+    ? all.filter((r) => {
+      let s = r.comps.session
+      if (!s || s.pid != pid || String(s.id) == sid) return false
+      let made = Date.parse(String(r.comps.created?.at ?? ''))
+      return !born || Number.isNaN(made) || made >= born
+    })
+    : []
+  let rotate = ['clear', 'compact', 'resume'].includes(self.source ?? '')
+  if (worn.length && !rotate) return
+  let session = sessionFor(all, sid, cwd, pid, self)
+  return {
+    eid: session.eid,
+    changes: [
+      ...worn.map((r): Change => ({
+        eid: r.eid,
+        name: 'session',
+        comp: { pid: null },
+      })),
+      ...session.changes,
+    ],
+  }
+}
+
 let context = async (input: Got) => {
   let hook = input.flags.has('--hook')
   // Subagent mode is DECLARED, never sniffed: explicit --subagent, or the
@@ -1632,19 +1675,24 @@ let context = async (input: Got) => {
       )
       let role = roleEid(all, Deno.env.get('TASKS_ROLE'))
       let pid = agentPid(provider)
+      // The digest snapshot is intentionally bounded and owes no complete
+      // session roster. PID ownership is its own indexed question; without
+      // this read the guard sees an arbitrary subset and a collision can mint.
+      if (pid) all.push(...await query([`.session.pid=${pid}`], 'session'))
       let external = prior?.comps.session?.origin != 'managed'
       let operator = external && hookOperator(role, pid)
+      let source = String(body.source ?? '') || undefined
       // The provider's transcript is the external session's durable log.
       // `provider` stays out of this CREATE: a new session carrying one is
       // a managed spawn request. It lands as a patch below.
-      let s = sessionFor(
+      let s = hookSession(
         all,
         sid,
         cwd,
         pid,
         {
           agent_type: String(body.agent_type ?? '') || undefined,
-          source: String(body.source ?? '') || undefined,
+          source,
           transcript,
           pane: external
             ? Deno.env.get('TMUX_PANE')?.trim() || null
@@ -1655,6 +1703,7 @@ let context = async (input: Got) => {
           role_eid: role,
         },
       )
+      if (!s) return
       if (s.changes.length) await send(s.changes)
       // Announce the provider after the create so this external session
       // cannot be mistaken for a spawn request.

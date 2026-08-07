@@ -14,6 +14,7 @@ import {
   hookDialect,
   hookOperator,
   hookProvider,
+  hookSession,
   hookTurn,
   jsonText,
   kindArg,
@@ -527,6 +528,83 @@ Deno.test('operator capability follows the explicit launcher marker', () => {
   )
   assertEquals(operatorHook(7, env({ TASKS_OPERATOR: '99' }), under), false)
   assertEquals(operatorHook(7, env({}), under), false)
+})
+
+Deno.test('SessionStart refuses collisions and rotates explicit handoffs', () => {
+  let incumbent = 'bbbbbbbb-0000-4000-8000-000000000071'
+  let resumed = 'bbbbbbbb-0000-4000-8000-000000000072'
+  let sess = (
+    eid: string,
+    num: number,
+    id: string,
+    pid: number,
+    at: string,
+  ): Snapshot['changes'] => [
+    { eid, name: 'entity', comp: { eid, num, created_at: '' } },
+    { eid, name: 'session', comp: { id, pid, source: 'startup', operator: 1 } },
+    { eid, name: 'created', comp: { at } },
+  ]
+  let all = rows({
+    changes: [
+      ...sess(resumed, 71, 'old-sid', 1111, '2026-08-06T12:00:00Z'),
+      ...sess(incumbent, 72, 'live-sid', 4242, '2026-08-06T12:05:00Z'),
+    ],
+  })
+  let start = { source: 'startup', operator: true }
+  assertEquals(
+    hookSession(all, 'phantom-sid', '/repo', 4242, start, 1),
+    undefined,
+  )
+  assertEquals(
+    hookSession(
+      all,
+      'reused-pid',
+      '/repo',
+      4242,
+      start,
+      Date.parse('2026-08-06T13:00:00Z'),
+    )?.changes[0].comp?.id,
+    'reused-pid',
+  )
+
+  let resume = hookSession(
+    all,
+    'old-sid',
+    '/repo',
+    4242,
+    { source: 'resume', operator: true },
+    1,
+  )!
+  assertEquals(resume.eid, resumed)
+  assertEquals(resume.changes, [
+    { eid: incumbent, name: 'session', comp: { pid: null } },
+    {
+      eid: resumed,
+      name: 'session',
+      comp: { cwd: '/repo', pid: 4242, source: 'resume' },
+    },
+  ])
+
+  let clear = hookSession(
+    all,
+    'clear-sid',
+    '/repo',
+    4242,
+    { source: 'clear', operator: true },
+    1,
+  )!
+  assertEquals(clear.changes[0], {
+    eid: incumbent,
+    name: 'session',
+    comp: { pid: null },
+  })
+  assertEquals(clear.changes[1].comp, {
+    id: 'clear-sid',
+    cwd: '/repo',
+    pid: 4242,
+    source: 'clear',
+    operator: 1,
+  })
 })
 
 Deno.test('role binding accepts only a live role entity', () => {
