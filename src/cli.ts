@@ -20,7 +20,9 @@ import {
   claimChanges,
   commentChanges,
   contextDigest,
+  contextSnapshot,
   decidedAt,
+  derefedChanges,
   derefedParams,
   designChanges,
   edgesOf,
@@ -47,13 +49,12 @@ import {
   me,
   memoryChanges,
   minted,
-  need,
   needed,
   noticeBlock,
-  noticesFor,
   type Param,
   param,
   patches,
+  projectionSnapshot,
   query,
   readerFor,
   readerRows,
@@ -70,7 +71,6 @@ import {
   sessionRow,
   showMd,
   similarHint,
-  snapshot,
   spawnChanges,
   spawnDefaults,
   stdin,
@@ -1177,16 +1177,48 @@ let colon = async (focus: string | undefined, argv: string[]) => {
     throw new Error(`not a command: :${name} — 'task help :' lists them all`)
   }
   let session = me()
-  let all = rows(await snapshot())
+  let all = await readerRows(session)
   let eid: string | undefined
   if (focus) {
-    let r = need(all, focus)
+    let r = await needed(focus)
+    all.push(r)
     eid = r.eid
   } else eid = focusOf(all, session)
+  let rest = line.trim().split(/\s+/).slice(1)
+  let one = async (id?: string) => {
+    if (!id) return
+    let row = await got(id)
+    if (row) all.push(row)
+  }
+  if (name == 'open' || name == 'reply') await one(rest[0])
+  if (name == 'fix') {
+    if (/^[A-Za-z]+-\d+$/.test(line.slice(name.length).trim())) {
+      await one(line.slice(name.length).trim())
+    } else {
+      all.push(...await query(['.repo!'], 'project'))
+      await one('home')
+    }
+  }
+  if (name == 'knock') await one(rest[0])
+  if (name == 'wake') {
+    await Promise.all([one(rest[0]), one(rest.at(-1))])
+  }
+  if (name == 'claim' && rest[0]) {
+    let sess = await sessionRow(rest[0])
+    if (sess) all.push(sess)
+  }
+  if (name == 'scribe') {
+    await Promise.all([one(rest[0]), one('scribe-desk'), one('scribe')])
+    let desk = find(all, 'scribe-desk')
+    if (desk) {
+      all.push(...await query([`.session.requested_task_eid=${desk.eid}`]))
+    }
+  }
+  all = [...new Map(all.map((r) => [r.eid, r])).values()]
   // A shell has a filesystem, so a dot-param value here reads @file and
   // @- exactly as `task set` does — one convention across the CLI's doors.
   let out = runCommand(line, { eid, rows: all, session, read: inflate })
-  if (out.changes?.length) await send(out.changes)
+  if (out.changes?.length) await send(await derefedChanges(out.changes))
   if (out.msg) print(out.msg)
   if (out.spawn) await launch(out.spawn, {})
   if (out.go) {
@@ -1601,6 +1633,21 @@ let context = async (args: string[]) => {
   // reifies a normal graph participant.
   let sub = args.includes('--subagent')
   let sid = args.find((a) => !a.startsWith('--')) ?? me()
+  let read = (
+    session?: string,
+    cwd = Deno.cwd(),
+    named: string[] = [],
+  ) =>
+    contextSnapshot(
+      session,
+      cwd,
+      undefined,
+      [
+        ...named,
+        Deno.env.get('TASKS_TASK'),
+        Deno.env.get('TASKS_ROLE'),
+      ].filter(Boolean) as string[],
+    )
   // The digest plus the comms bus: unseen comments ride along, and the
   // session's ack cursor advances exactly when they're printed. A reified
   // session's own meta leads as frontmatter (T-4554) — the S-num is how
@@ -1609,7 +1656,7 @@ let context = async (args: string[]) => {
     let fm = sessionMeta(rows(snap), sid)
     let out = contextDigest(snap, sid, Date.now(), scope)
     if (fm) out = `${fm}\n${out}`
-    let n = noticesFor(snap, sid)
+    let n = await bus(sid)
     told = true // this digest IS the serving; heard() must not repeat it
     if (n.lines.length) {
       await send(n.ack)
@@ -1636,12 +1683,11 @@ let context = async (args: string[]) => {
         sid && sid != inherited &&
         Deno.env.get('CLAUDE_CODE_CHILD_SESSION') == '1'
       ) {
-        let snap = await snapshot()
-        let all = rows(snap)
-        let parent = all.find((r) =>
-          r.comps.session && String(r.comps.session.id) == inherited
-        )
         let cwd = String(body.cwd ?? '') || Deno.cwd()
+        let snap = await read(sid, cwd, [inherited])
+        let all = rows(snap)
+        let parent = await sessionRow(inherited)
+        if (parent) all.push(parent)
         let agentType = String(body.agent_type ?? '') || undefined
         let s = sessionFor(all, sid, cwd, undefined, {
           agent_type: agentType,
@@ -1651,12 +1697,12 @@ let context = async (args: string[]) => {
         })
         if (s.changes.length) {
           await send(s.changes)
-          snap = await snapshot()
+          snap = await read(sid, cwd, [inherited])
         }
         let hc = hookClaim(rows(snap), Deno.env.get('TASKS_TASK'), sid, cwd)
         if (hc.length) {
           await send(hc)
-          snap = await snapshot()
+          snap = await read(sid, cwd, [inherited])
         }
         print(subagentDigest(snap, sid, agentType))
         return
@@ -1671,8 +1717,8 @@ let context = async (args: string[]) => {
         // operator's unseen comments. Then emit its lone task block, if any.
         let subId = String(body.agent_id ?? body.session_id ?? '')
         if (!subId) return
-        let snap = await snapshot()
         let cwd = String(body.cwd ?? '') || undefined
+        let snap = await read(subId, cwd)
         let agentType = String(body.agent_type ?? '') || undefined
         let s = sessionFor(rows(snap), subId, cwd, undefined, {
           agent_type: agentType,
@@ -1680,18 +1726,18 @@ let context = async (args: string[]) => {
         })
         if (s.changes.length) {
           await send(s.changes)
-          snap = await snapshot() // the block should see the reify
+          snap = await read(subId, cwd) // the block should see the reify
         }
         print(subagentDigest(snap, subId, agentType))
         return
       }
       sid ??= String(body.session_id ?? '')
       if (!sid) return
-      let snap = await snapshot()
       // The generated hook names its provider; old configs recover it from
       // process ancestry. Payload model fields are metadata, never identity.
       let { model, provider, transcript } = hookDialect(body, hookProvider())
       let cwd = String(body.cwd ?? '') || undefined
+      let snap = await read(sid, cwd)
       let all = rows(snap)
       let prior = all.find((r) =>
         r.comps.session && String(r.comps.session.id) == sid
@@ -1743,7 +1789,7 @@ let context = async (args: string[]) => {
       if (hc.length) await send(hc)
       // One fresh read after the writes: the digest — and its frontmatter,
       // which needs the row a first boot just reified — sees this very boot.
-      if (s.changes.length || model || hc.length) snap = await snapshot()
+      if (s.changes.length || model || hc.length) snap = await read(sid, cwd)
       // The cwd names the scope directly — the reified session row may
       // not have landed in this snap yet.
       await tell(snap, sid, repoAt(rows(snap), cwd)?.eid)
@@ -1760,7 +1806,7 @@ let context = async (args: string[]) => {
   // (T-9394). A subagent is told what it is; it is not guessed from the
   // environment.
   if (sub && sid) {
-    let snap = await snapshot()
+    let snap = await read(sid)
     let sess = rows(snap).find((r) =>
       r.comps.session && String(r.comps.session.id) == sid
     )
@@ -1772,13 +1818,16 @@ let context = async (args: string[]) => {
   // Bare = the preview: what a fresh session would boot with, scoped to
   // the repo you stand in — or to a named project (task context P-20).
   // Read-only — no session is reified, no bus cursor moves.
-  let snap = await snapshot()
-  let all = rows(snap)
-  let named = sid ? find(all, sid) : undefined
+  let named = sid ? await got(sid) : undefined
   if (named?.comps.project) {
+    let snap = await contextSnapshot(undefined, Deno.cwd(), named.eid, [
+      named.eid,
+    ])
     return print(contextDigest(snap, undefined, Date.now(), named.eid))
   }
   if (!sid) {
+    let snap = await read()
+    let all = rows(snap)
     let at = repoAt(all, Deno.cwd())
     return print(contextDigest(snap, undefined, Date.now(), at?.eid))
   }
@@ -1787,10 +1836,13 @@ let context = async (args: string[]) => {
   // mistake — and a ref-shaped miss (T-99) is a typo, never a new
   // session's name.
   if (named?.comps.session) {
+    let snap = await read(String(named.comps.session.id))
     return await tell(snap, String(named.comps.session.id))
   }
   if (named) throw new Error(`${sid} is a ${named.kind}, not a session`)
   if (/^[A-Za-z]+-\d+$/.test(sid)) throw new Error(`no entity: ${sid}`)
+  let snap = await read(sid)
+  let all = rows(snap)
   // A raw sid REIFIES (T-4554): a hand-made session — codex, a foreign
   // harness — gets its entity and digest without simulating the hook's
   // JSON. An existing session stays a pure read: refreshing cwd/pid from
@@ -1811,7 +1863,7 @@ let context = async (args: string[]) => {
       { role_eid: role },
     )
     await send(s.changes)
-    snap = await snapshot()
+    snap = await read(sid)
   }
   await tell(snap, sid)
 }
@@ -2104,7 +2156,7 @@ let sync = async (args: string[]) => {
   let check = args.includes('--check')
   let snap
   try {
-    snap = await snapshot()
+    snap = await projectionSnapshot()
   } catch (e) {
     // A dead server can't answer, and a check that can't run must not wedge
     // the gate — skip rather than fail. The normal verb still surfaces it.

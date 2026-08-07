@@ -5,7 +5,7 @@
 // ignored a predicate would let a narrow read pass by being answered broadly,
 // which is exactly the mistake these tests exist to catch.
 
-import { idOf, jsonOf, rows } from './client.ts'
+import { find, jsonOf, rows } from './client.ts'
 import { matchQuery, parseQuery } from './query.ts'
 import type { Change, Snapshot } from './types.ts'
 
@@ -22,6 +22,7 @@ export let answers = (snap: Snapshot) => {
     let edged = segs.includes('deps=1')
     let named = segs.filter((s) => s.startsWith('id='))
       .flatMap((s) => s.slice(3).split(',')).filter(Boolean)
+    let eids = new Set(named.map((id) => find(all, id)?.eid).filter(Boolean))
     let preds = parseQuery(
       segs.filter((s) =>
         !s.startsWith('id=') && !s.startsWith('kind=') &&
@@ -31,7 +32,7 @@ export let answers = (snap: Snapshot) => {
     return all.filter((r) =>
       matchQuery(r.comps, preds, (e) => byEid.get(e)?.comps) &&
       (!kind || r.kind == kind) &&
-      (!named.length || named.includes(r.eid) || named.includes(idOf(r)))
+      (!named.length || eids.has(r.eid))
     ).map((r) => edged ? { ...jsonOf(r), deps: edgesOf(r.eid) } : jsonOf(r))
   }
 }

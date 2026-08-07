@@ -10,7 +10,8 @@ import {
   assertThrows,
 } from '@std/assert'
 import { type Dep, type Edge, kindOf } from './types.ts'
-import { type Row } from './client.ts'
+import { projectionSnapshot, type Row, rows } from './client.ts'
+import { fakeGraph } from './graph_fake.ts'
 import {
   commonOf,
   DIALECT,
@@ -93,6 +94,50 @@ Deno.test('materialize: header, core, tiers in warmth order', () => {
   assertStringIncludes(md, '---\n\n## Memory Index\n\n*Recall a body by id')
   assertStringIncludes(md, 'delegation discipline')
   assert(!md.includes('Worktrees only.'))
+})
+
+Deno.test('projection queries only persona neighborhoods', async () => {
+  let project = row({
+    doc: { title: 'Venture', body: '' },
+    project: {},
+    repo: { path: '/tmp/persona-query-test', push: 0 },
+  })
+  let voice = row({
+    doc: { title: 'Voice', body: 'Core.' },
+    persona: { home_eid: project.eid },
+    alias: { slug: 'voice' },
+  })
+  let lesson = doc('Lesson', 'Keep it small.')
+  let deps = [
+    edge(project, 'contains', voice),
+    edge(voice, 'contains', lesson),
+  ]
+  let all = [project, voice, lesson]
+  let snap = {
+    changes: all.flatMap((r) =>
+      Object.entries(r.comps).map(([name, comp]) => ({
+        eid: r.eid,
+        name,
+        comp: name == 'entity' ? { ...comp, eid: r.eid } : comp,
+      }))
+    ),
+    deps,
+  }
+  let { server, seen, host } = fakeGraph(snap)
+  let was = Deno.env.get('TASKS_HOST')
+  Deno.env.set('TASKS_HOST', host)
+  try {
+    let narrow = await projectionSnapshot()
+    assertEquals(
+      filesFor(rows(narrow), narrow.deps, NOW),
+      filesFor(all, deps, NOW),
+    )
+    assertEquals(seen.some((path) => path.startsWith('/snapshot')), false)
+  } finally {
+    if (was) Deno.env.set('TASKS_HOST', was)
+    else Deno.env.delete('TASKS_HOST')
+    await server.shutdown()
+  }
 })
 
 // Nesting: a persona that contains another persona inherits its memories.

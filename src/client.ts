@@ -427,7 +427,7 @@ export let historyBy = async (via: string, limit = 500) => {
 // The entities a journal excerpt names, for ledger humanization. Both the
 // changed eid and every typed reference may speak in ledger(), so gather the
 // vocabulary-derived set rather than falling back to a graph snapshot.
-export let journalRows = async (entries: JournalEntry[]) =>
+export let journalRows = (entries: JournalEntry[]) =>
   fetched([
     ...new Set(entries.flatMap((e) =>
       e.changes.flatMap((c) => [
@@ -684,6 +684,29 @@ export let around = async (id: string) => {
   return { deps, all, row }
 }
 
+// Several entities' dependency neighborhoods in one keyed read. The rows the
+// edges name ride back too, including their typed refs (claim sessions), so a
+// renderer can humanize every endpoint without opening the corpus.
+export let neighborhoods = async (ids: string[]) => {
+  if (!ids.length) return { deps: [] as Dep[], rows: [] as Row[] }
+  let res = await request(
+    `http://${host()}/query?id=${encodeURIComponent(ids.join(','))}&deps=1`,
+  )
+  if (!res.ok) throw new Error(`server said ${res.status}`)
+  let raw = await res.json() as (Record<string, unknown> & { deps?: Dep[] })[]
+  let deps = raw.flatMap((hit) => hit.deps ?? [])
+  let hits = raw.map((hit) => {
+    let { deps: _deps, ...rest } = hit
+    return rowOf(rest)
+  })
+  let want = new Set(hits.flatMap(refsIn))
+  for (let d of deps) want.add(d.parent), want.add(d.child)
+  for (let r of hits) want.delete(r.eid)
+  let ends = await fetched([...want])
+  let refs = await fetched(ends.flatMap(refsIn))
+  return { deps, rows: uniq([...hits, ...ends, ...refs]) }
+}
+
 export let deref = (all: Row[], v: string, where = '', comp = '') =>
   !v || UUID.test(v) ? v : need(all, v, where, comp).eid
 
@@ -791,6 +814,19 @@ export let needsDeref = (changes: Change[]) =>
       refOf(c.name, prop) != null && named(value)
     )
   )
+
+export let derefedChanges = async (changes: Change[]) => {
+  if (!needsDeref(changes)) return changes
+  let ids = changes.flatMap((c) => [
+    ...(named(c.eid) ? [String(c.eid)] : []),
+    ...Object.entries(c.comp ?? {})
+      .filter(([prop, value]) => refOf(c.name, prop) != null && named(value))
+      .map(([, value]) => String(value)),
+  ])
+  let all = await fetched(ids)
+  if (ids.every((id) => find(all, id))) return derefChanges(all, changes)
+  return derefChanges(rows(await snapshot()), changes)
+}
 
 // Group routed params into per-component patches.
 export let patches = (params: Param[]) => {
@@ -2027,6 +2063,101 @@ export let inboxRows = async (
     ask('mail.target_eid', watched),
   ])
   return { who, rows: uniq(found.flat()) }
+}
+
+// The bounded graph a context digest reads. The renderer remains pure over a
+// Snapshot-shaped value; this supplier asks the index for each semantic arm
+// and only chases dependencies for the task lines the 48-line digest can show.
+export let contextSnapshot = async (
+  session?: string,
+  cwd?: string,
+  scope?: string,
+  named: string[] = [],
+): Promise<Snapshot> => {
+  let [base, explicit] = await Promise.all([
+    readerRows(session),
+    fetched([scope, ...named].filter(Boolean) as string[]),
+  ])
+  let seed = uniq([...base, ...explicit])
+  let who = readerFor(seed, session, cwd, scope)
+  scope = who.scope
+  let since = new Date(Date.now() - 7 * DAY).toISOString()
+  let open = statuses.filter((s) => !settled(s)).join(',')
+  let actor = who.actor
+  let claims = [...(who.claims ?? [])]
+  let [tasks, touched, decisions, memories, sessions, inbox, comments] =
+    await Promise.all([
+      query([`.task.status=${open}`], 'task'),
+      scope
+        ? Promise.all([
+          query(
+            [`.task.project_eid=${scope}`, `.updated.at>=${since}`],
+            'task',
+          ),
+          query(
+            [`.task.project_eid=${scope}`, `.created.at>=${since}`],
+            'task',
+          ),
+        ]).then((sets) => sets.flat())
+        : [],
+      query(['.decided!']),
+      query(['.memory.scope_eid='], 'memory'),
+      actor ? query([`.session.actor_eid=${actor}`], 'session') : [],
+      inboxRows(session, cwd),
+      claims.length ? query([`.comment.target_eid=${claims.join(',')}`]) : [],
+    ])
+  let preliminary = uniq([
+    ...seed,
+    ...tasks,
+    ...touched,
+    ...decisions,
+    ...memories,
+    ...sessions,
+    ...inbox.rows,
+    ...comments,
+  ])
+  let sess = preliminary.find((r) =>
+    r.comps.session && String(r.comps.session.id) == session
+  )
+  let mine = sess
+    ? preliminary.filter((r) => r.comps.claim?.session_eid == sess.eid)
+    : []
+  let available = preliminary
+    .filter((r) => r.comps.task && !settled(String(r.comps.task.status)))
+    .filter((r) => !r.comps.claim)
+  let local = scope ? available.filter((r) => belongs(r, scope)) : available
+  if (!local.length) local = available
+  let shown = mine.length ? mine.slice(0, 4) : local.sort(byBoard).slice(0, 5)
+  shown = uniq([...shown, ...explicit.filter((r) => r.comps.task)])
+  let near = await neighborhoods(shown.map((r) => r.eid))
+  let recent = sessions
+    .filter((r) =>
+      r.eid != sess?.eid && Date.now() - Date.parse(editedAt(r)) < 7 * DAY
+    )
+    .sort((a, b) => editedAt(b).localeCompare(editedAt(a)))
+    .slice(0, 5)
+  let unheardRows = recent.length
+    ? await query([`.comment.target_eid=${recent.map((r) => r.eid).join(',')}`])
+    : []
+  let refs = await fetched(
+    [...comments, ...unheardRows].flatMap(refsIn),
+  )
+  let all = uniq([...preliminary, ...near.rows, ...unheardRows, ...refs])
+  return { changes: changesOf(all), deps: near.deps }
+}
+
+// Persona projection is graph-shaped but small: managed projects, every
+// persona, and the tier edges touching those personas. Asking all persona
+// neighborhoods at once includes recursive persona bases because each base is
+// already a root in the same keyed read.
+export let projectionSnapshot = async (): Promise<Snapshot> => {
+  let [projects, personas] = await Promise.all([
+    query(['.repo!'], 'project'),
+    query([], 'persona'),
+  ])
+  let near = await neighborhoods(personas.map((r) => r.eid))
+  let all = uniq([...projects, ...personas, ...near.rows])
+  return { changes: changesOf(all), deps: near.deps }
 }
 
 // The rows the bus's selector might pick, as index queries: a comment or a

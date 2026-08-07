@@ -977,6 +977,11 @@ let busServer = () => fakeGraph(busGraph)
 
 let graphServer = (snap = graph) => fakeGraph(snap)
 
+Deno.test('the CLI has no whole-graph read path', () => {
+  let source = Deno.readTextFileSync(new URL('./cli.ts', import.meta.url))
+  assertEquals(source.includes('await snapshot()'), false)
+})
+
 Deno.test('inbox asks only for its reader and candidate rows', async () => {
   let actor = 'bbbbbbbb-0000-4000-8000-000000000051'
   let far = 'bbbbbbbb-0000-4000-8000-000000000052'
@@ -1326,7 +1331,7 @@ Deno.test('a hook never serves the bus, because nobody is there to read it', asy
 // The one hook that DOES serve, and must keep serving: its stdout is the
 // digest the session boots into, so the lines are delivered by definition.
 Deno.test('the boot digest is the hook that delivers, on stdout', async () => {
-  let { server, acked, host } = busServer()
+  let { server, acked, seen, host } = busServer()
   try {
     let out = await new Deno.Command(Deno.execPath(), {
       args: [
@@ -1339,9 +1344,11 @@ Deno.test('the boot digest is the hook that delivers, on stdout', async () => {
       clearEnv: true,
       env: { TASKS_HOST: host },
     }).output()
+    assertEquals(out.code, 0, text(out.stderr))
     assertMatch(text(out.stdout), /pending messages/)
     assertMatch(text(out.stdout), /the ask you missed/)
     assertEquals(acked.map((c) => `${c.name} ${c.eid}`), [`notified ${C}`])
+    assertEquals(seen.some((path) => path.startsWith('/snapshot')), false)
   } finally {
     await server.shutdown()
   }

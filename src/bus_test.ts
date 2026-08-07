@@ -12,7 +12,7 @@
 // is answered as narrowly as the server would answer it (graph_fake.ts).
 
 import { assertEquals } from '@std/assert'
-import { bus, noticesFor } from './client.ts'
+import { bus, contextDigest, contextSnapshot, noticesFor } from './client.ts'
 import { fakeGraph } from './graph_fake.ts'
 import type { Change, Snapshot } from './types.ts'
 
@@ -327,6 +327,25 @@ for (let [what, snap, want] of cases) {
     assertEquals(seen.filter((line) => line.startsWith('/snapshot')), [])
   })
 }
+
+Deno.test('context queries render the same digest as the whole graph', async () => {
+  let snap = graph(said('context-note', 80, T, 'the narrow digest sees me'))
+  let { server, seen, host } = fakeGraph(snap)
+  let was = Deno.env.get('TASKS_HOST')
+  Deno.env.set('TASKS_HOST', host)
+  try {
+    let narrow = await contextSnapshot('sess-x', '/w')
+    assertEquals(
+      contextDigest(narrow, 'sess-x', Date.now()),
+      contextDigest(snap, 'sess-x', Date.now()),
+    )
+    assertEquals(seen.some((line) => line.startsWith('/snapshot')), false)
+  } finally {
+    if (was) Deno.env.set('TASKS_HOST', was)
+    else Deno.env.delete('TASKS_HOST')
+    await server.shutdown()
+  }
+})
 
 Deno.test('bus: a session id naming nothing is silent, and asks nothing more', async () => {
   let { got, seen } = await against(graph(said('c1', 20, T, 'hi')), 'nobody')
