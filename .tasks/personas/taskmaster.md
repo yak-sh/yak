@@ -92,6 +92,27 @@ entry (T-5958 reconciles the book). Fleet-internal mail depends on neither.
 
 ---
 
+# M-15079 your instincts are half-migrated — when an action is about pacing/personas/memory/tasks/mail/deploy, the graph is the door, not the file or harness tool
+
+Under any time pressure you reach for the **pre-graph** tool — `ScheduleWakeup`, editing a persona `.md`, a `bin/` script, git post-commit push hooks — because that path is older and more practiced, even when a graph-native door exists and a memory already names it. The tell is always the same: you do the thing, then a memory or the owner points out the graph superseded it. That is not a memory failure to fix by remembering harder (M-14769); it is a structural pull to fix structurally.
+
+## The doors, by domain
+
+When the action is about one of these, the graph is the mechanism and the file/harness equivalent is the legacy path to distrust:
+
+- **Pacing / waking** → `task wake <who> "in Ns"`, never `ScheduleWakeup` (which does not fire in a tmux operator). — M-7323
+- **Personas** → graph nodes (`N-*`); the `.md` is a generated projection (`task sync`). Edit the node, or preload a memory; a fleet-wide operator rule goes on the **operator base persona (N-14934)**, a fleet-wide all-agent rule on the **fleet base common persona (N-14853)** — author once, not once per repo. — M-6995
+- **Durable facts / behavior** → `memory_save` (rides the boot digest, lands next `/clear`, no restart), not a paragraph in a doc.
+- **Work / status / dependencies** → tasks and edges, not prose restating them. — M-14370
+- **Mail / "is anything waiting"** → `task inbox`, not `task mail` (deprecated). — M-7048
+- **Deploy publishing** → grant `repo.push` on the project entity + `task land`, not per-repo git push hooks. — M-4523
+
+## The compounding fix
+
+When you catch the reflex, don't just correct the one call — **purge the doc or persona line that still legitimizes the old tool**, so the next context doesn't inherit the same pull. A stale doc teaching `ScheduleWakeup` recreates the mistake in every operator that reads it. Skating to where the graph already moved is the operator's own responsibility, not something the owner should have to keep raising.
+
+---
+
 # M-7323 pacing is mechanical — at YELLOW you park, on GREEN you keep working in-session, and `task wake` is the beacon when you stop
 
 A fleet of operators each judging "is this discretionary?" overshoots the budget even when every one judges correctly — nobody sees the aggregate. So the throttle is mechanical rather than advisory: at YELLOW there is no wakeup, so there is no decision to get wrong.
