@@ -2632,10 +2632,14 @@ a[data-ref]:hover {
   border-top: 1px solid var(--border);
   padding: var(--half-gap) var(--gap);
 }
-/* Task and role give out first; their own titles paint the ellipsis. */
-.Session_Head > .Inline {
+/* Task, role and lifecycle share the head's flexible lane. Titles give out
+   first and paint their own ellipsis; the timestamp never claims a lane. */
+.Session_Summary {
   flex: 1;
   min-width: 0;
+}
+.Session_Summary > .Inline {
+  display: block;
   overflow: hidden;
 }
 .Session_Stop {

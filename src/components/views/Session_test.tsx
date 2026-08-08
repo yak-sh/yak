@@ -1,8 +1,10 @@
 // A session row keeps the actor it works for visible in every shared list.
-import { type VNode } from 'preact'
+import { h, render, type VNode } from 'preact'
 import { assertEquals } from '@std/assert'
+import { parseHTML } from 'linkedom'
 import { cache, ent } from '../../live.ts'
 import { resolve } from '../Entity.tsx'
+import { SessionSummary } from './Session.tsx'
 
 let children = (v: VNode) =>
   (Array.isArray(v.props.children) ? v.props.children : [v.props.children])
@@ -50,4 +52,47 @@ Deno.test('session title names model and effort', () => {
   let title = resolve(e, 'Card.Title').Render({ e })!
   let text = children(title)[2]
   assertEquals(text.props.children, ['GPT 5.6', ' · high'])
+})
+
+Deno.test('session lifecycle shares the task summary lane', () => {
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let { document } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  cache.value = {
+    task: {
+      entity: { eid: 'task', num: 1 },
+      doc: { eid: 'task', title: 'The task', body: '' },
+      task: { eid: 'task', status: 'wip', priority: 1 },
+    },
+    session: {
+      entity: { eid: 'session', num: 2 },
+      session: {
+        eid: 'session',
+        id: 'session-id',
+        requested_task_eid: 'task',
+      },
+    },
+  }
+
+  let root = document.querySelector('main')!
+  try {
+    render(
+      h(SessionSummary, { e: ent('session'), gist: 'started 2m ago' }),
+      root,
+    )
+    let summary = root.querySelector('.Session_Summary')!
+    assertEquals(summary.querySelector('.Inline') != null, true)
+    assertEquals(
+      summary.querySelector('.Session_Facts')?.parentElement == summary,
+      true,
+    )
+  } finally {
+    render(null, root)
+    cache.value = {}
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else delete (globalThis as { document?: unknown }).document
+  }
 })

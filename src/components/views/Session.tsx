@@ -44,6 +44,7 @@ import { title } from '../title.tsx'
 
 let Frame = block('div', 'Session', {
   Head: 'div',
+  Summary: 'div',
   Stop: 'button',
   Body: 'div',
   Facts: 'details',
@@ -86,6 +87,7 @@ let Frame = block('div', 'Session', {
 })
 let {
   Head,
+  Summary,
   Stop,
   Body: Panel,
   Facts,
@@ -207,6 +209,38 @@ let Fact = ({ k, v }: { k: string; v?: string | null }) =>
       </>
     )
     : null
+
+// Task, role and lifecycle are one summary lane. The timestamp sits below
+// what the session serves instead of reserving a header column of its own.
+export let SessionSummary = ({ e, gist }: { e: Ent; gist: string }) => {
+  let s = e.session!
+  return (
+    <Summary>
+      {s.requested_task_eid && (
+        <Entity eid={s.requested_task_eid} view='Inline' />
+      )}
+      {s.role_eid && <Entity eid={s.role_eid} view='Inline' />}
+      <Facts>
+        <Gist>{gist}</Gist>
+        <Kv>
+          <Fact k='id' v={s.id} />
+          <Fact k='branch' v={s.branch} />
+          <Fact k='cwd' v={s.cwd} />
+          {
+            /* The one irreducible difference, said rather than left blank:
+            a session we watch is a pid, not a child — so no exit code. */
+          }
+          {s.origin != 'managed' && (
+            <Fact k='pid' v={s.pid ? `${s.pid}` : null} />
+          )}
+          <Fact k='started' v={when(s.started_at)} />
+          <Fact k='finished' v={when(s.finished_at)} />
+        </Kv>
+        <Stamp e={e} />
+      </Facts>
+    </Summary>
+  )
+}
 
 // Usage, said the compact way: ↑ everything sent up (input plus both
 // cache lanes), ↓ what came back.
@@ -460,31 +494,7 @@ export let Session = ({ e }: { e: Ent }) => {
     <Frame elRef={frame}>
       <Head>
         <Dot status={status} />
-        {s.requested_task_eid && (
-          <Entity eid={s.requested_task_eid} view='Inline' />
-        )}
-        {s.role_eid && <Entity eid={s.role_eid} view='Inline' />}
-        <Facts>
-          <Gist>{gist}</Gist>
-          <Kv>
-            <Fact k='id' v={s.id} />
-            <Fact k='branch' v={s.branch} />
-            <Fact k='cwd' v={s.cwd} />
-            {
-              /* The one irreducible difference, said rather than left blank:
-              a session we watch is a pid, not a child — so no exit code. */
-            }
-            {s.origin != 'managed' && (
-              <Fact
-                k='pid'
-                v={s.pid ? `${s.pid}` : null}
-              />
-            )}
-            <Fact k='started' v={when(s.started_at)} />
-            <Fact k='finished' v={when(s.finished_at)} />
-          </Kv>
-          <Stamp e={e} />
-        </Facts>
+        <SessionSummary e={e} gist={gist} />
         {
           /* No brake on a process we never forked — apply() refuses a
             stop_request at anything but a managed run, and the button
