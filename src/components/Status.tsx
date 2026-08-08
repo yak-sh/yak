@@ -28,6 +28,7 @@ import { block } from './ui.tsx'
 import { Id } from './views/Inline.tsx'
 import { title } from './title.tsx'
 import { spawnHit } from './Canvas.tsx'
+import { useComplete } from './Complete.tsx'
 
 let Frame = block('footer', 'Status', {
   Mode: 'span',
@@ -264,6 +265,7 @@ let WhoAmI = () => {
 // always returns to normal (and blurs whatever was being typed in).
 export let Status = () => {
   let input = useRef<HTMLTextAreaElement>(null)
+  let complete = useComplete()
 
   useEffect(() => {
     let key = (e: KeyboardEvent) => {
@@ -367,6 +369,7 @@ export let Status = () => {
   }
 
   let cmdKey = (e: KeyboardEvent & { currentTarget: HTMLTextAreaElement }) => {
+    if (complete.key(e)) return
     // shift+Enter is the textarea's own newline — spec() reads line 2 on
     // as the body, so a : line can file a task with prose attached.
     let multi = e.currentTarget.value.includes('\n')
@@ -426,13 +429,17 @@ export let Status = () => {
                 elRef={input}
                 onKeyDown={cmdKey}
                 onInput={(e: InputEvent) => {
-                  let v = (e.currentTarget as HTMLTextAreaElement).value
+                  let el = e.currentTarget as HTMLTextAreaElement
+                  let v = el.value
                   v ? save('cmd', v) : drop('cmd')
                   setLine(v)
                   setPick(0)
+                  complete.track(el)
                 }}
+                onBlur={() => complete.close()}
               />
             </Line>
+            {complete.list}
             {hints.length > 0 && (
               <Hints>
                 {hints.slice(0, 8).map(([name, c], i) => (

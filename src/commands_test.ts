@@ -93,8 +93,24 @@ Deno.test('basic card commands mint the smallest editable entities', () => {
     if (name == 'session') {
       assertEquals(UUID.test(String(made.changes![0].comp!.id)), true)
     }
-    assertThrows(() => run(`${name} words`, ctx()), Error, `usage :${name}`)
   }
+})
+
+Deno.test('basic card properties use the standard dot-param grammar', () => {
+  assertEquals(comps('task .title=Next step .priority=2 .status=wip'), {
+    doc: { title: 'Next step', body: '' },
+    task: { status: 'wip', priority: 2 },
+  })
+  assertEquals(comps('session .id=review'), { session: { id: 'review' } })
+  assertEquals(comps('doc .title=Notes .body=some words'), {
+    doc: { title: 'Notes', body: 'some words' },
+  })
+  assertEquals(comps('memory .title=Lesson .memory.scope_eid=P-2'), {
+    doc: { title: 'Lesson', body: '' },
+    memory: { scope_eid: 'P-2' },
+  })
+  assertThrows(() => run('doc words', ctx()), Error, 'not a param')
+  assertThrows(() => run('doc .status=open', ctx()), Error, 'cannot set task')
 })
 
 Deno.test('new: a task, inheriting where you stand', () => {

@@ -167,7 +167,7 @@ Deno.test('an entity link opens its target menu', () => {
 
 Deno.test('a point menu carries only the actions its host gives it', () => {
   let handled = 0
-  let acts = [{ label: ':doc', run: () => {} }]
+  let acts = [{ label: 'doc', run: () => {} }]
   let ev = {
     clientX: 12,
     clientY: 34,

@@ -146,20 +146,52 @@ export type Command = {
 // components are facets or machinery, not things that stand alone.
 export let cardCommands = ['task', 'session', 'doc', 'memory'] as const
 
+let readParams = (args: string[], ctx: Ctx) => {
+  let read = ctx.read ?? ((p: Param) => p)
+  return args.map((arg) => {
+    let p = param(arg)
+    if (!p) throw new Error(`not a param: ${arg}`)
+    return read(p)
+  })
+}
+
 let card = (kind: typeof cardCommands[number]): Command => ({
-  args: '',
-  about: `add a blank ${kind} card`,
-  words: [0, 0],
-  run: () => {
+  args: {
+    task: '[.title=Next .priority=1]',
+    session: '[.id=review]',
+    doc: '[.title=Notes .body=…]',
+    memory: '[.title=Lesson .memory.scope_eid=home]',
+  }[kind],
+  about: `add a ${kind} card`,
+  run: (rest, ctx) => {
+    let args = rest.trim() ? rest.trim().split(/\s+(?=\.)/) : []
+    let ps = readParams(args, ctx)
+    let allowed = kind == 'task'
+      ? ['doc', 'task']
+      : kind == 'memory'
+      ? ['doc', 'memory']
+      : [kind]
+    for (let p of ps) {
+      if (!allowed.includes(p.comp)) {
+        throw new Error(`${kind}: cannot set ${p.comp}.${p.prop}`)
+      }
+    }
+    let grouped = patches(ps)
     let eid = uuid()
     let changes: Change[] = kind == 'session'
-      ? [{ eid, name: 'session', comp: { id: uuid() } }]
+      ? [{ eid, name: 'session', comp: { id: uuid(), ...grouped.session } }]
       : [
-        { eid, name: 'doc', comp: { title: '', body: '' } },
+        {
+          eid,
+          name: 'doc',
+          comp: { title: '', body: '', ...grouped.doc },
+        },
         ...(kind == 'doc' ? [] : [{
           eid,
           name: kind,
-          comp: kind == 'task' ? { status: 'open' } : { scope_eid: null },
+          comp: kind == 'task'
+            ? { status: 'open', ...grouped.task }
+            : { scope_eid: null, ...grouped.memory },
         }]),
       ]
     return { changes, card: eid, msg: `new ${kind}` }
@@ -473,12 +505,7 @@ export let commands: Record<string, Command> = {
       let r = here(ctx)
       let args = rest.trim().split(/\s+(?=\.)/).filter(Boolean)
       if (!args.length) throw new Error('set: needs .prop=value')
-      let read = ctx.read ?? ((p: Param) => p)
-      let ps = args.map((a) => {
-        let p = param(a)
-        if (!p) throw new Error(`not a param: ${a}`)
-        return read(p)
-      })
+      let ps = readParams(args, ctx)
       return {
         changes: Object.entries(patches(ps))
           .map(([name, comp]) => ({ eid: r.eid, name, comp })),

@@ -563,7 +563,7 @@ export let Canvas = ({ eid }: { eid: string }) => {
   let context = (e: MouseEvent) => {
     if (e.target instanceof Element && e.target.closest('.Pin')) return
     actionsAt(cardCommands.map((name) => ({
-      label: `:${name}`,
+      label: name,
       run: () => {
         let made = run(name, { eid, rows: rows() })
         spawnAt(
