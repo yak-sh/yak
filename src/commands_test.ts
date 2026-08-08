@@ -1,6 +1,7 @@
 // The : command line's pure half: every verb, the :open disambiguation,
 // and what a bad line says. No wire, no DOM — a Ctx is just data.
 import {
+  cardCommands,
   type Command,
   commands,
   focusOf,
@@ -70,6 +71,32 @@ let comps = (line: string, eid?: string, session?: string) =>
   Object.fromEntries(
     (run(line, ctx(eid, session)).changes ?? []).map((c) => [c.name, c.comp]),
   )
+
+Deno.test('basic card commands mint the smallest editable entities', () => {
+  let expected: Record<string, Record<string, unknown>[]> = {
+    task: [{ title: '', body: '' }, { status: 'open' }],
+    session: [{ id: '' }],
+    doc: [{ title: '', body: '' }],
+    memory: [{ title: '', body: '' }, { scope_eid: null }],
+  }
+  for (let name of cardCommands) {
+    let made = run(name, ctx())
+    assertEquals(made.card, made.changes![0].eid)
+    assertEquals(made.changes!.every((c) => c.eid == made.card), true)
+    assertEquals(
+      made.changes!.map((c) =>
+        name == 'session' ? { ...c.comp, id: '' } : c.comp
+      ),
+      expected[name],
+    )
+    assertEquals(UUID.test(made.card!), true)
+    if (name == 'session') {
+      assertEquals(UUID.test(String(made.changes![0].comp!.id)), true)
+    }
+    assertThrows(() => run(`${name} words`, ctx()), Error, `usage :${name}`)
+  }
+})
+
 Deno.test('new: a task, inheriting where you stand', () => {
   // On a board: the query's scalar equalities ride along, so it JOINS it.
   assertEquals(comps('new Ship it', B), {

@@ -3,7 +3,7 @@ import { useRef } from 'preact/hooks'
 import { block, copy, setFollow } from './ui.tsx'
 import { usePlaceAt } from './overlay.tsx'
 import { cache, census, ent, peek, rootCanvas, trail } from '../live.ts'
-import { actionsFor, resolve } from './registry.ts'
+import { type Action, actionsFor, resolve } from './registry.ts'
 import { type Ent, idOf } from '../types.ts'
 import { dragData } from './drag.ts'
 
@@ -244,15 +244,36 @@ export let restore = () => {
 // a task offers its status moves, a claim its release, …). align
 // 'right' hangs the menu leftward from x — the titlebar dropdown
 // anchors at the screen's far edge.
-export let menu = signal<
-  { x: number; y: number; href: string; eid: string; align?: 'right' } | null
->(null)
+type MenuState = {
+  x: number
+  y: number
+  href: string
+  eid: string
+  acts?: never
+  align?: 'right'
+} | {
+  x: number
+  y: number
+  acts: Action[]
+  href?: never
+  eid?: never
+  align?: 'right'
+}
+export let menu = signal<MenuState | null>(null)
 
 // Right-click serving the entity's app menu instead of the browser's.
 export let menuAt = (e: Ent) => (ev: MouseEvent) => {
   ev.preventDefault()
   ev.stopPropagation()
   menu.value = { x: ev.clientX, y: ev.clientY, href: `/${idOf(e)}`, eid: e.eid }
+}
+
+// A point on empty canvas has no entity navigation, only the verbs its host
+// gives it. The shared Menu still owns placement, dismissal and row styling.
+export let actionsAt = (acts: Action[]) => (ev: MouseEvent) => {
+  ev.preventDefault()
+  ev.stopPropagation()
+  menu.value = { x: ev.clientX, y: ev.clientY, acts }
 }
 
 // A card is the menu target except where a nested control or link owns
@@ -276,48 +297,52 @@ export let Menu = () => {
   let close = () => {
     menu.value = null
   }
-  let acts = actionsFor(ent(m.eid))
+  let acts = m.acts ?? actionsFor(ent(m.eid))
   return (
     <Frame
       elRef={root}
       onPointerDown={(e: Event) => e.stopPropagation()}
     >
-      <Item
-        type='button'
-        onClick={() => {
-          navigate(m.href)
-          close()
-        }}
-      >
-        open here
-      </Item>
-      <Item
-        type='button'
-        onClick={() => {
-          globalThis.open?.(m.href)
-          close()
-        }}
-      >
-        open in new tab
-      </Item>
-      <Item
-        type='button'
-        onClick={() => {
-          copy(location.origin + m.href)
-          close()
-        }}
-      >
-        copy link
-      </Item>
-      <Item
-        type='button'
-        onClick={() => {
-          copy(idOf(ent(m.eid)))
-          close()
-        }}
-      >
-        copy id
-      </Item>
+      {m.eid && (
+        <>
+          <Item
+            type='button'
+            onClick={() => {
+              navigate(m.href)
+              close()
+            }}
+          >
+            open here
+          </Item>
+          <Item
+            type='button'
+            onClick={() => {
+              globalThis.open?.(m.href)
+              close()
+            }}
+          >
+            open in new tab
+          </Item>
+          <Item
+            type='button'
+            onClick={() => {
+              copy(location.origin + m.href)
+              close()
+            }}
+          >
+            copy link
+          </Item>
+          <Item
+            type='button'
+            onClick={() => {
+              copy(idOf(ent(m.eid)))
+              close()
+            }}
+          >
+            copy id
+          </Item>
+        </>
+      )}
       {acts.map((a, i) => (
         <Item
           key={i}

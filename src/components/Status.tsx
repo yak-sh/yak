@@ -27,6 +27,7 @@ import { Tray } from './Tray.tsx'
 import { block } from './ui.tsx'
 import { Id } from './views/Inline.tsx'
 import { title } from './title.tsx'
+import { spawnHit } from './Canvas.tsx'
 
 let Frame = block('footer', 'Status', {
   Mode: 'span',
@@ -209,6 +210,11 @@ let exec = async (line: string) => {
     if (r.spawn) changes = [...changes, ...scene(r.spawn)]
     if (changes.length) mutate(...changes)
     if (r.go) navigate(`/${idOf(ent(r.go))}`)
+    if (r.card) {
+      let root = screenTarget()
+      if (root && ent(root.eid).canvas) spawnHit(root.eid, r.card)
+      else navigate(`/${idOf(ent(r.card))}`)
+    }
     if (r.spawn) {
       launching = true
       msg.value = r.msg ?? ''

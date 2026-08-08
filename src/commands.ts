@@ -63,6 +63,7 @@ export type Ctx = {
 export type Result = {
   changes?: Change[]
   go?: string // an eid to open — the platform picks the form (url, trail)
+  card?: string // a minted entity to place on a canvas, or open elsewhere
   spawn?: string // a task eid to start an agent on — platforms that can, do
   msg?: string
 }
@@ -139,6 +140,31 @@ export type Command = {
   run: Verb
   words?: [min: number, max: number]
 }
+
+// Blank cards are the canvas's scratch paper: mint the smallest sound entity
+// and let its own title/editor take the next words. Curated on purpose — most
+// components are facets or machinery, not things that stand alone.
+export let cardCommands = ['task', 'session', 'doc', 'memory'] as const
+
+let card = (kind: typeof cardCommands[number]): Command => ({
+  args: '',
+  about: `add a blank ${kind} card`,
+  words: [0, 0],
+  run: () => {
+    let eid = uuid()
+    let changes: Change[] = kind == 'session'
+      ? [{ eid, name: 'session', comp: { id: uuid() } }]
+      : [
+        { eid, name: 'doc', comp: { title: '', body: '' } },
+        ...(kind == 'doc' ? [] : [{
+          eid,
+          name: kind,
+          comp: kind == 'task' ? { status: 'open' } : { scope_eid: null },
+        }]),
+      ]
+    return { changes, card: eid, msg: `new ${kind}` }
+  },
+})
 
 export let commands: Record<string, Command> = {
   // :new speaks the spec grammar (client.ts): 'P1 .domain=Eng Ship it'
@@ -460,6 +486,10 @@ export let commands: Record<string, Command> = {
       }
     },
   },
+  task: card('task'),
+  session: card('session'),
+  doc: card('doc'),
+  memory: card('memory'),
 }
 
 export let run = (

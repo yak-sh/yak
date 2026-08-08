@@ -10,16 +10,19 @@ import {
   mutate,
   myCamera,
   pinned,
+  rows,
   toFront,
   toPlane,
   topZ,
   uuid,
 } from '../live.ts'
 import { type Change } from '../types.ts'
+import { cardCommands, run } from '../commands.ts'
 import { pasted } from '../paste.ts'
 import { block } from './ui.tsx'
 import { resolve } from './registry.ts'
 import { Card } from './Card.tsx'
+import { actionsAt } from './nav.tsx'
 
 let Frame = block('div', 'Canvas', { Plane: 'div' })
 let { Plane } = Frame
@@ -557,6 +560,24 @@ export let Canvas = ({ eid }: { eid: string }) => {
     }
   }
 
+  let context = (e: MouseEvent) => {
+    if (e.target instanceof Element && e.target.closest('.Pin')) return
+    actionsAt(cardCommands.map((name) => ({
+      label: `:${name}`,
+      run: () => {
+        let made = run(name, { eid, rows: rows() })
+        spawnAt(
+          made.changes ?? [],
+          made.card!,
+          undefined,
+          0,
+          e.clientX,
+          e.clientY,
+        )
+      },
+    })))(e)
+  }
+
   return (
     <Frame
       elRef={el}
@@ -570,6 +591,7 @@ export let Canvas = ({ eid }: { eid: string }) => {
       onWheel={wheel}
       onDragOver={(e: DragEvent) => e.preventDefault()}
       onDrop={drop}
+      onContextMenu={context}
       // Double-click a board row: the task leaps out as its own card at
       // the mouse — the click-shaped twin of dragging the row out. Links
       // and buttons inside the row keep their own double-clicks.

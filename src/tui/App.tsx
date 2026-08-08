@@ -358,6 +358,7 @@ let exec = (line: string) => {
     let r = run(line, ctx(), local)
     if (r.changes?.length) mutate(...r.changes)
     if (r.go) trail.value = [...trail.value, r.go]
+    if (r.card) trail.value = [...trail.value, r.card]
     msg.value = r.msg ?? ''
   } catch (e) {
     msg.value = e instanceof Error ? e.message : String(e)

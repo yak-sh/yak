@@ -4,7 +4,14 @@ import { parseHTML } from 'linkedom'
 import { assertEquals, assertStrictEquals } from '@std/assert'
 import { peek as shellPeek } from '../live.ts'
 import { type Ent } from '../types.ts'
-import { cardMenuAt, clickProps, menu, openAt, peek } from './nav.tsx'
+import {
+  actionsAt,
+  cardMenuAt,
+  clickProps,
+  menu,
+  openAt,
+  peek,
+} from './nav.tsx'
 
 let e: Ent = {
   eid: 'task',
@@ -153,6 +160,26 @@ Deno.test('an entity link opens its target menu', () => {
     clickProps(e).onContextMenu(ev)
     assertEquals([prevented, stopped], [true, true])
     assertEquals(menu.value?.eid, e.eid)
+  } finally {
+    menu.value = null
+  }
+})
+
+Deno.test('a point menu carries only the actions its host gives it', () => {
+  let handled = 0
+  let acts = [{ label: ':doc', run: () => {} }]
+  let ev = {
+    clientX: 12,
+    clientY: 34,
+    preventDefault: () => handled++,
+    stopPropagation: () => handled++,
+  } as unknown as MouseEvent
+
+  try {
+    actionsAt(acts)(ev)
+    assertEquals(handled, 2)
+    assertStrictEquals(menu.value?.acts, acts)
+    assertEquals(menu.value?.eid, undefined)
   } finally {
     menu.value = null
   }
