@@ -731,6 +731,44 @@ Deno.test('board membership sleeps through an unrelated row patch', () => {
   }
 })
 
+Deno.test('a hot board sleeps through card births and deaths', () => {
+  cache.value = {
+    board_hot: {
+      entity: { eid: 'board_hot', num: 1 },
+      board: { eid: 'board_hot', query: '.status=open&.order=hot' },
+    },
+    task_hot: {
+      entity: { eid: 'task_hot', num: 2 },
+      task: { eid: 'task_hot', status: 'open', priority: 1 },
+    },
+  }
+  deps.value = []
+  let runs = 0
+  let stop = effect(() => {
+    boardTasks(ent('board_hot'))
+    runs++
+  })
+  try {
+    applyLocal([
+      { eid: 'card_hot', name: 'entity', comp: { eid: 'card_hot', num: 3 } },
+      {
+        eid: 'card_hot',
+        name: 'card',
+        comp: { target_eid: 'task_hot', view: 'Full' },
+      },
+    ])
+    assertEquals(runs, 1)
+
+    applyLocal([{ eid: 'card_hot', name: 'entity', comp: null }])
+    assertEquals(runs, 1)
+
+    applyLocal([{ eid: 'task_hot', name: 'task', comp: { priority: 2 } }])
+    assertEquals(runs, 2)
+  } finally {
+    stop()
+  }
+})
+
 Deno.test('applyLocal: a camera birth still publishes the cache', () => {
   cache.value = {}
   let before = cache.value

@@ -22,7 +22,7 @@ import {
   stamped,
 } from './types.ts'
 import { inboxItem, isUnread, readerAt, type Row } from './client.ts'
-import { matchQuery, orderOf, parseQuery, resolveRefs, warm } from './query.ts'
+import { matchQuery, parseQuery, resolveRefs, warm } from './query.ts'
 import { normalizeChanges } from './props.ts'
 import * as idb from './idb.ts'
 import { topology } from './leader.ts'
@@ -1059,7 +1059,10 @@ let scanBoard = (set: BoardSet, e: Ent) => {
   let hits = boardHits(e, set.tasks, preds)
   set.q = q
   set.preds = preds
-  set.complex = preds.some((p) => !!p.at) || orderOf(parsed) == 'hot'
+  // A path can make one row's membership depend on another. Hot ordering
+  // cannot: membership is still row-local, and a touched member already
+  // republishes the ids below so the view can re-sort its warmth.
+  set.complex = preds.some((p) => !!p.at)
   set.graph = cache.value
   set.error = undefined
   agree(set, e, q, hits)
