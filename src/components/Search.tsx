@@ -71,10 +71,28 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
     if (d?.v && !box.current.value) {
       box.current.value = d.v
       setQ(d.v)
-      seek(d.v)
     }
     box.current.focus()
   }, [searchOpen.value])
+
+  // FTS shares the server's one event loop with keypress delivery. Search
+  // only after the line settles: a request per letter queues stale work ahead
+  // of the word the typist is still entering. Cleanup also keeps a late answer
+  // from repainting a closed or newer palette.
+  useEffect(() => {
+    if (!searchOpen.value) return
+    if (!q.trim()) {
+      setHits([])
+      setErr('')
+      return
+    }
+    let abort = new AbortController()
+    let timer = setTimeout(() => seek(q, abort.signal), 150)
+    return () => {
+      clearTimeout(timer)
+      abort.abort()
+    }
+  }, [q, searchOpen.value])
   if (!searchOpen.value) return null
 
   // The kind-grouped list, flattened: the selection index and every key
@@ -82,6 +100,7 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
   let ordered = group(hits)
 
   let close = () => {
+    seq.current++
     searchOpen.value = false
     drop('search')
     setHits([])
@@ -89,14 +108,17 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
     setQ('')
     setDrag(false)
   }
-  let seek = async (q: string) => {
+  let seek = async (q: string, signal: AbortSignal) => {
     let mine = ++seq.current
     let found: Hit[] = []
     let bad = ''
-    if (q.trim()) {
-      let r = await fetch(`/search?q=${encodeURIComponent(q)}`)
+    try {
+      let r = await fetch(`/search?q=${encodeURIComponent(q)}`, { signal })
       if (r.ok) found = await r.json()
       else bad = await r.text() // a malformed filter, said where you typed
+    } catch (e) {
+      if (signal.aborted) return
+      throw e
     }
     if (mine != seq.current) return // a newer keystroke owns the list
     setHits(found)
@@ -163,7 +185,6 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
               let el = e.currentTarget as HTMLInputElement
               el.value ? save('search', el.value) : drop('search')
               setQ(el.value)
-              seek(el.value)
               c.track(el)
             }}
             onKeyDown={key}
