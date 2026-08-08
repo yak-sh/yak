@@ -1072,10 +1072,13 @@ export type Role = {
 export let awake = (s: Session) =>
   sessionActive.includes(String(s.status)) || (!!s.pid && !s.finished_at)
 
-// The word a session's pip and label wear. A session we spawned has a
-// lifecycle to say it with; an external one has none, so its liveness IS
-// its status — a live one is running, a settled one keeps the dim default.
-export let standing = (s: Session) => s.status || (awake(s) ? 'running' : '')
+// The word a session's pip and label wear. Between turns an awake session is
+// idle; otherwise a session we spawned says its lifecycle, while an external
+// one borrows `running` from its open door. A settled one keeps its ending.
+export let standing = (s: Session) =>
+  awake(s) && s.turn == 'idle'
+    ? 'idle'
+    : s.status || (awake(s) ? 'running' : '')
 
 // A session's lease on an entity — claims point at the session ENTITY.
 // One claim per entity; taking one over another session's is a CONFLICT

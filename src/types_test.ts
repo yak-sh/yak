@@ -149,3 +149,12 @@ Deno.test('standing: an external session borrows the word from its door', () => 
   assertEquals(standing(sess({ pid: 9, finished_at: 'x' })), '') // dim again
   assertEquals(standing(sess({})), '')
 })
+
+Deno.test('standing: an awake idle turn rests without hiding its ending', () => {
+  assertEquals(standing(sess({ status: 'running', turn: 'idle' })), 'idle')
+  assertEquals(standing(sess({ pid: 9, turn: 'idle' })), 'idle')
+  assertEquals(
+    standing(sess({ status: 'completed', turn: 'idle', finished_at: 'x' })),
+    'completed',
+  )
+})

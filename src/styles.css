@@ -1714,7 +1714,8 @@ html {
 .Dot-unread {
   --dot: var(--accent);
 }
-.Dot-wip {
+.Dot-wip,
+.Dot-idle {
   --dot: var(--wip);
   background: linear-gradient(90deg, var(--dot) 50%, transparent 0);
 }
