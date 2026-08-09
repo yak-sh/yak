@@ -11,6 +11,7 @@
 // doors; a title is not allowed to speak markup any more than it is in
 // the app itself.
 import { file, host, refs, setHost } from './tasks.js'
+import { filed, recall, remember } from './draft.js'
 
 let $ = (id) => document.getElementById(id)
 let tab = null
@@ -70,12 +71,13 @@ let grab = async () => {
 
 let submit = async () => {
   if (!filable(tab?.url)) return
-  let line = $('line').value.trim()
+  let typed = $('line').value
+  let line = typed.trim()
   try {
     say('filing…')
     let html = $('capture').checked ? await grab() : undefined
     let out = await file({ url: tab.url, title: tab.title, line, html })
-    $('line').value = ''
+    $('line').value = filed(localStorage, tab.url, typed, $('line').value)
     say([out.filed.join(' '), out.msg].filter(Boolean).join(' — ') || out.page)
     chrome.runtime.sendMessage({ filed: tab.id })
     load()
@@ -84,13 +86,16 @@ let submit = async () => {
   }
 }
 
+$('line').addEventListener(
+  'input',
+  (ev) => remember(localStorage, tab.url, ev.target.value),
+)
 $('line').addEventListener('keydown', (ev) => {
   if (ev.key == 'Enter' && !ev.shiftKey) {
     ev.preventDefault()
     submit()
   } else if (ev.key == 'Escape') close()
 })
-$('file').addEventListener('click', submit)
 $('capture').addEventListener(
   'change',
   (ev) => chrome.storage.local.set({ [pref(tab.url)]: ev.target.checked }),
@@ -111,9 +116,12 @@ let boot = async () => {
   $('url').textContent = tab?.url ?? ''
   $('host').value = await host()
   if (!filable(tab?.url)) {
-    $('line').disabled = $('file').disabled = $('capture').disabled = true
+    $('line').disabled = $('capture').disabled = true
     return say('nothing to file here — this is not a web page')
   }
+  $('line').value = recall(localStorage, tab.url)
+  $('line').disabled = false
+  $('line').focus()
   let saved = await chrome.storage.local.get(pref(tab.url))
   $('capture').checked = !!saved[pref(tab.url)]
   load()
