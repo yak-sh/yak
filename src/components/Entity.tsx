@@ -188,8 +188,8 @@ define([
   { view: 'Dependency', match: () => true, Render: Dependency },
 ], [
   'Canvas',
-  'List',
   'Board',
+  'List',
   'Layout',
   'Persona',
   // After Inbox on purpose: the fullscreen bar opens a bare URL on

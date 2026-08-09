@@ -2,8 +2,20 @@
 // flag.
 import { assertEquals } from '@std/assert'
 import { backlinks, cache, ent } from '../live.ts'
-import { actionsFor, resolve } from './registry.ts'
+import { actionsFor, applicable, resolve } from './registry.ts'
 import './Entity.tsx'
+
+Deno.test('boards open on Board with List still available', () => {
+  cache.value = {
+    board: {
+      entity: { eid: 'board', num: 1 },
+      doc: { eid: 'board', title: 'Board', body: '' },
+      board: { eid: 'board' },
+    },
+  }
+  assertEquals(applicable(ent('board')).slice(0, 2), ['Board', 'List'])
+  cache.value = {}
+})
 
 Deno.test('release names the session by its chip id', () => {
   cache.value = {

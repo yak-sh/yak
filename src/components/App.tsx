@@ -162,13 +162,13 @@ export let App = () => {
   }
   let e = ent(t.eid)
   let tabs = applicable(e)
-  // A coarse pointer with no explicit view defaults to List: the spatial
-  // Canvas eagerly renders every pinned card and floods a phone (the mobile
-  // door, views/List.tsx). An explicit ?v= and every fine pointer are untouched.
+  // A coarse pointer with no explicit view defaults a Canvas to List: its
+  // spatial face eagerly renders every pinned card and floods a phone (the
+  // mobile door, views/List.tsx). Other roots keep their first face.
   let coarse = globalThis.matchMedia?.('(pointer: coarse)').matches
   let view = t.view && tabs.includes(t.view)
     ? t.view
-    : coarse && tabs.includes('List')
+    : coarse && tabs[0] == 'Canvas' && tabs.includes('List')
     ? 'List'
     : tabs[0]
   let show = (v: string) => {
