@@ -2775,19 +2775,19 @@ a[data-ref]:hover {
   color: var(--text);
   overflow-wrap: anywhere;
 }
-/* What the human said — a soft prompt block, `› ` leading the line. */
+/* Human prompts and shell commands share one transcript surface; the accent
+   says who spoke or how the command ended. */
+:is(.Session_User, .Session_Exec) {
+  min-width: 0;
+  padding: var(--half-gap) var(--gap);
+  border-left: 2px solid var(--border2);
+  background: var(--soft);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
 .Session_User {
   color: var(--text);
-  background: var(--soft);
-  border-radius: var(--radius);
-  padding: var(--half-gap) var(--gap);
-  white-space: pre-wrap;
+  border-color: var(--blue);
   overflow-wrap: anywhere;
-}
-.Session_User::before {
-  content: '› ';
-  color: var(--blue);
-  font-family: var(--mono);
 }
 /* The model thinking out loud — dim, skippable. */
 .Session_Reason {
@@ -2837,11 +2837,6 @@ a[data-ref]:hover {
 .Session_Exec {
   display: grid;
   gap: 2px;
-  min-width: 0;
-  padding: var(--half-gap) var(--gap);
-  border-left: 2px solid var(--border2);
-  background: var(--soft);
-  border-radius: 0 var(--radius) var(--radius) 0;
 }
 .Session_Exec-ok {
   border-color: var(--accent);

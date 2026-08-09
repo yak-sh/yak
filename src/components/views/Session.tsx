@@ -272,7 +272,7 @@ let bareType = (line: string) => {
 // (adapters.ts). JSON the adapter left out is provider machinery, not a
 // chat item. Non-JSON bytes stay visible because they are evidence of a
 // broken stream, not a dialect the adapter deliberately ignored.
-let Body = ({ x, repo }: { x: Entry; repo?: string }) => {
+export let SessionBody = ({ x, repo }: { x: Entry; repo?: string }) => {
   let r = x.row
   if (!r) {
     let t = bareType(x.line)
@@ -282,7 +282,7 @@ let Body = ({ x, repo }: { x: Entry; repo?: string }) => {
     case 'say':
       // markdown, escaped of any markup by md.ts — as with a task body
       return r.role == 'user'
-        ? <User>{r.text}</User>
+        ? <User dangerouslySetInnerHTML={{ __html: md(r.text, repo) }} />
         : <Agent dangerouslySetInnerHTML={{ __html: md(r.text, repo) }} />
     case 'reason':
       return <Reason>{r.text}</Reason>
@@ -360,7 +360,7 @@ let Row = ({ x, repo }: { x: Entry; repo?: string }) => {
       >
         {x.seq}
       </Seq>
-      <Body x={x} repo={repo} />
+      <SessionBody x={x} repo={repo} />
       {at && <When data-tip={pretty(at)}>{ago(at)}</When>}
       {open && <Json>{prettyJson(x.line)}</Json>}
     </Line>

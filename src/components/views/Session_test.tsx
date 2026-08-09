@@ -4,7 +4,7 @@ import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { cache, ent } from '../../live.ts'
 import { resolve } from '../Entity.tsx'
-import { SessionSummary } from './Session.tsx'
+import { SessionBody, SessionSummary } from './Session.tsx'
 
 let children = (v: VNode) =>
   (Array.isArray(v.props.children) ? v.props.children : [v.props.children])
@@ -52,6 +52,36 @@ Deno.test('session title names model and effort', () => {
   let title = resolve(e, 'Card.Title').Render({ e })!
   let text = children(title)[2]
   assertEquals(text.props.children, ['GPT 5.6', ' · high'])
+})
+
+Deno.test('session user messages render as markdown', () => {
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let { document } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  let root = document.querySelector('main')!
+  try {
+    render(
+      h(SessionBody, {
+        x: {
+          seq: 1,
+          line: '',
+          row: { kind: 'say', role: 'user', text: '**hello**' },
+        },
+      }),
+      root,
+    )
+    assertEquals(
+      root.innerHTML,
+      '<div class="Session_User"><p><strong>hello</strong></p>\n</div>',
+    )
+  } finally {
+    render(null, root)
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else delete (globalThis as { document?: unknown }).document
+  }
 })
 
 Deno.test('session lifecycle shares the task summary lane', () => {
