@@ -2143,6 +2143,7 @@ html {
   flex: 1;
   position: relative;
   display: flex;
+  align-self: start; /* the tap floor must not center it below the colon */
 }
 /* A textarea so shift+Enter can hold a newline (line 2 on becomes the
    task body). The in-flow ghost below is what SIZES the line — its copy
