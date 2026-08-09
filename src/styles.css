@@ -3494,7 +3494,6 @@ a[data-ref]:hover {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
   gap: var(--gap);
-  align-items: start;
 }
 .Dash_Cell {
   --density: summary;
