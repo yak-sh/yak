@@ -61,3 +61,44 @@ Deno.test('a knock names and opens its target', () => {
     else delete (globalThis as { document?: unknown }).document
   }
 })
+
+Deno.test('reading an inbox item keeps the order', () => {
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let { document } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  cache.value = {
+    person: {
+      entity: { eid: 'person', num: 1 },
+      person: { eid: 'person' },
+    },
+    older: {
+      entity: { eid: 'older', num: 2 },
+      doc: { eid: 'older', title: 'Older', body: '' },
+      comment: { eid: 'older', target_eid: 'person' },
+      created: { eid: 'older', at: '2026-08-07T12:00:00.000Z' },
+    },
+    newer: {
+      entity: { eid: 'newer', num: 3 },
+      doc: { eid: 'newer', title: 'Newer', body: '' },
+      comment: { eid: 'newer', target_eid: 'person' },
+      created: { eid: 'newer', at: '2026-08-07T13:00:00.000Z' },
+      opened: { eid: 'newer' },
+    },
+  }
+  let root = document.querySelector('main')!
+  try {
+    render(<Inbox e={ent('person')} />, root)
+    assertEquals(
+      [...root.querySelectorAll('.ListTile_Title')].map((e) => e.textContent),
+      ['Newer', 'Older'],
+    )
+  } finally {
+    render(null, root)
+    cache.value = {}
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else delete (globalThis as { document?: unknown }).document
+  }
+})

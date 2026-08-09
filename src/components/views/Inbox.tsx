@@ -7,8 +7,8 @@ import { Id } from './Inline.tsx'
 import { Entity } from '../Entity.tsx'
 import { ListFrame } from '../ListFrame.tsx'
 
-// The inbox on the canvas: everything addressed to this entity, unread
-// first. The membership test is client.ts's `inboxItem` — the SAME
+// The inbox on the canvas: everything addressed to this entity. The
+// membership test is client.ts's `inboxItem` — the SAME
 // predicate `task inbox` and the context digest read — so a row here and
 // a line there cannot disagree about what was addressed to you. Nothing is
 // stored: an item is in the inbox because it matches, exactly like a
@@ -26,10 +26,8 @@ let doorOf = (r: Row) =>
 
 let at = (r: Row) => String(r.comps.created?.at ?? '')
 
-// Unread first, then newest: the order an inbox is READ in, which is not
-// the order things happened in.
-let order = (a: Row, b: Row) =>
-  Number(isUnread(b)) - Number(isUnread(a)) || at(b).localeCompare(at(a))
+// Reading an item must not move it away from its place in the chronology.
+let order = (a: Row, b: Row) => at(b).localeCompare(at(a))
 
 // One line. A real anchor, with the Id chip's navigation and entity-menu
 // contract applied to the whole row.

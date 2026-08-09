@@ -1076,7 +1076,7 @@ Deno.test('the CLI has no whole-graph read path', () => {
   assertEquals(source.includes('await snapshot()'), false)
 })
 
-Deno.test('inbox asks only for its reader and candidate rows', async () => {
+Deno.test('inbox asks only for its reader and keeps order when read', async () => {
   let actor = 'bbbbbbbb-0000-4000-8000-000000000051'
   let far = 'bbbbbbbb-0000-4000-8000-000000000052'
   let watched = 'bbbbbbbb-0000-4000-8000-000000000053'
@@ -1105,6 +1105,17 @@ Deno.test('inbox asks only for its reader and candidate rows', async () => {
       ...item(muted, 54, T, 'muted words'),
       ...item(direct, 55, S, 'direct words'),
       ...item(archived, 56, S, 'archived words'),
+      {
+        eid: direct,
+        name: 'created',
+        comp: { at: '2026-08-07T12:00:00.000Z' },
+      },
+      {
+        eid: watched,
+        name: 'created',
+        comp: { at: '2026-08-07T13:00:00.000Z' },
+      },
+      { eid: watched, name: 'opened', comp: {} },
       { eid: archived, name: 'archived', comp: { at: 'now' } },
       { eid: watch, name: 'entity', comp: { eid: watch, num: 57 } },
       {
@@ -1136,7 +1147,7 @@ Deno.test('inbox asks only for its reader and candidate rows', async () => {
     }).output()
     assertEquals(out.code, 0, text(out.stderr))
     let got = JSON.parse(text(out.stdout)) as { doc: { body: string } }[]
-    assertEquals(got.map((r) => r.doc.body), ['watched words', 'direct words'])
+    assertEquals(got.map((r) => r.doc.body), ['direct words', 'watched words'])
     assertEquals(seen.some((path) => path.startsWith('/snapshot')), false)
   } finally {
     await server.shutdown()

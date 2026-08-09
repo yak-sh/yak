@@ -811,8 +811,8 @@ let inboxLine = (r: Row) => {
   return `${dot} ${idOf(r)} ${r.kind}${body ? ` — ${body}` : ''}`
 }
 
-// The inbox list: addressed to me, NOT archived, unread weighted (unread
-// first, then oldest→newest so the freshest sits at the bottom, like mail).
+// The inbox list: addressed to me, NOT archived, oldest→newest so the
+// freshest sits at the bottom, like mail. Reading a line never moves it.
 // --all keeps the archived (`×`), which is what makes archiving safe to
 // automate: closing a task hides its correspondence, and this is the way
 // back to it.
@@ -850,10 +850,7 @@ let inboxList = async (got: Got) => {
     ? addressed(gathered.who!)
     : inboxItem(gathered.who!)
   let items = gathered.rows.filter(mine)
-    .sort((a, b) =>
-      (isUnread(b) ? 1 : 0) - (isUnread(a) ? 1 : 0) ||
-      bornAt(a).localeCompare(bornAt(b))
-    )
+    .sort((a, b) => bornAt(a).localeCompare(bornAt(b)))
   if (json) return print(jsonText(items.map((r) => jsonOf(r))))
   if (!items.length) {
     return warn(
