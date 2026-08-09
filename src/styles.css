@@ -1128,6 +1128,19 @@ html {
   content-visibility: auto;
   contain-intrinsic-size: auto 4rem;
 }
+.Board_More {
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--soft);
+  color: var(--dim);
+  font: 11px var(--mono);
+  min-height: var(--tap);
+  padding: 0 var(--half-gap);
+  cursor: pointer;
+}
+.Board_More:hover {
+  color: var(--text);
+}
 
 /* The board's card for a task, Trello-shaped: dot + wrapping title, then the
    shared meta line at dense scale. */

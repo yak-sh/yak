@@ -29,11 +29,21 @@ let Frame = block('div', 'Board', {
   Scroll: 'div',
   Item: 'div',
   Add: 'div',
+  More: 'button',
   New: 'textarea',
   Chips: 'div',
   Chip: 'span',
 })
-let { Col, ColName, Count, Scroll, Item, Add, New, Chips, Chip } = Frame
+let { Col, ColName, Count, Scroll, Item, Add, More, New, Chips, Chip } = Frame
+
+// Bound the initial DOM, not the board: every task remains one explicit click
+// away. A large project otherwise builds tens of thousands of nodes before the
+// operator can interact with its first card.
+export let CAP = 100
+export let visible = <T,>(rows: T[], expanded: boolean) => ({
+  rows: expanded ? rows : rows.slice(0, CAP),
+  more: expanded ? 0 : Math.max(0, rows.length - CAP),
+})
 
 // A board as kanban over its saved QUERY (board.query, query.ts grammar):
 // membership is never stored, a task is here because it matches. Columns
@@ -121,6 +131,7 @@ export let Board = ({ e }: { e: Ent }) => {
   let [adding, setAdding] = useState(() =>
     statuses.find((s) => peek(addKey(e.eid, s))) ?? ''
   )
+  let [expanded, setExpanded] = useState<Record<string, boolean>>({})
   // A board that says .order=hot ranks its columns by warmth, not
   // priority — the Front page: attention IS the ordering. Drag-drop
   // still writes priorities (adopt semantics unchanged); the ranking is
@@ -242,6 +253,8 @@ export let Board = ({ e }: { e: Ent }) => {
     <Frame>
       {statuses.map((s) => {
         let list = tasks.filter((k) => k.task?.status == s).sort(order)
+        let pageKey = `${e.eid}:${s}`
+        let page = visible(list, !!expanded[pageKey])
         return (
           <Col
             key={s}
@@ -271,7 +284,7 @@ export let Board = ({ e }: { e: Ent }) => {
             )}
             {!folded.has(s) && (
               <Scroll>
-                {list.map((k) => (
+                {page.rows.map((k) => (
                   <Item
                     key={k.eid}
                     draggable
@@ -281,6 +294,15 @@ export let Board = ({ e }: { e: Ent }) => {
                     <Entity eid={k.eid} view='Board.List.Tile' />
                   </Item>
                 ))}
+                {page.more > 0 && (
+                  <More
+                    type='button'
+                    onClick={() =>
+                      setExpanded((seen) => ({ ...seen, [pageKey]: true }))}
+                  >
+                    +{page.more} more
+                  </More>
+                )}
               </Scroll>
             )}
           </Col>
