@@ -32,6 +32,15 @@ let importMap = async (root: URL): Promise<Set<string>> => {
 
 let isRelative = (s: string) => s.startsWith('./') || s.startsWith('../')
 
+Deno.test('the mobile viewport does not scale the app shell', async () => {
+  let html = await Deno.readTextFile(new URL('index.html', import.meta.url))
+  let viewport = html.match(/<meta\s+name="viewport"\s+content="([^"]+)"/)
+  assert(viewport, 'index.html has no viewport metadata')
+  let content = new Set(viewport[1].split(',').map((part) => part.trim()))
+  assert(content.has('maximum-scale=1'))
+  assert(content.has('user-scalable=no'))
+})
+
 Deno.test('the browser graph stays in src/ and names only mapped bare imports', async () => {
   let root = new URL('.', import.meta.url)
   let mapped = await importMap(root)
