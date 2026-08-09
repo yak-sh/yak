@@ -2082,6 +2082,15 @@ html {
   margin: var(--half-gap) 0 0;
   color: var(--muted);
 }
+/* An edge is reading content, not a dense row: let its linked identity flow
+   through lines while the shared Inline role stays compact everywhere else. */
+.Dependency .Inline {
+  display: inline;
+  overflow-wrap: anywhere;
+}
+.Dependency .Inline_Title {
+  white-space: normal;
+}
 /* the verb is a small label; the name keeps the body's normal size */
 .Dependency_Type {
   font-size: 11px;
