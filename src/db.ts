@@ -22,6 +22,8 @@ import {
   idOf,
   kindOrder,
   sessionActive,
+  SHORT,
+  shortId,
   type Snapshot,
   stamped,
   uuid,
@@ -497,19 +499,47 @@ let schema = `
   end;
 `
 
-// Insert an entity spine row: the eid arrives (or is minted) as a UUID, the
-// num is minted HERE — one global counter, safe inside a transaction.
-// The max spans the graves too: nums are monotonic forever, or a deleted
-// T-3889's number is reborn on a stranger and every old reference lies.
-// No kind: an entity is what its components make it.
-// Birth time is the `created` component's business (T-6670), stamped by
-// apply() from the batch's one clock — never a second one taken here.
+// Insert a bare entity spine — the eid, and nothing else. num is NOT minted
+// here (T-3684): it is a kind-driven UI label, and this fires at FIRST-TOUCH,
+// before any component says what KIND the entity is. mintNum() assigns it
+// once the components land (apply()'s late pass, seed(), addressEntity()), or
+// leaves it NULL for a numberless kind. No kind column: an entity is what its
+// components make it. Birth time is the `created` component's business
+// (T-6670), stamped by apply() from the batch's one clock — not taken here.
 let spine = (db: DatabaseSync, eid: string) =>
-  db.prepare(`
-    insert or ignore into entity (eid, num)
-    values (?, (select coalesce(max(num), 0) + 1 from
-      (select num from entity union all select num from tombstone)))
-  `).run(eid)
+  db.prepare('insert or ignore into entity (eid) values (?)').run(eid)
+
+// The kinds that get a human number. The exclusion is EMPTY today, so every
+// kind is numbered and part 1 changes nothing about WHICH entities get a num
+// (T-3684). Cheap/bulk kinds — log lines, lazy-partition rows (T-3683) — join
+// `unnumbered` as they arrive, and only then does a NULL num appear.
+let unnumbered = new Set<string>()
+export let numbered = (kind: string) => !unnumbered.has(kind)
+
+// Assign the next human number to a newly-created entity — the allocator
+// spine() used to run at first-touch, moved here where the entity's KIND is
+// finally knowable (its component rows exist). Same max+1 over the living AND
+// the graves (tombstone.num keeps a dead entity's number), so a number is
+// never reused and ids stay monotonic. A no-op if the entity is already
+// numbered, is gone (deleted later in the same batch), or wears an unnumbered
+// kind — the kind is derived only when the exclusion is non-empty, so part 1
+// pays nothing for the lookup.
+let mintNum = (db: DatabaseSync, eid: string) => {
+  if (unnumbered.size) {
+    let kind = kindOrder.find((k) =>
+      db.prepare(`select 1 from ${k} where eid = ?`).get(eid)
+    ) ?? 'entity'
+    if (!numbered(kind)) {
+      return
+    }
+  }
+  let { n } = db.prepare(
+    `select coalesce(max(num), 0) + 1 as n from
+       (select num from entity union all select num from tombstone)`,
+  ).get() as { n: number }
+  db.prepare('update entity set num = ? where eid = ? and num is null')
+    .run(n, eid)
+}
 
 // Mint a bare entity; components hang off the returned eid.
 let ent = (db: DatabaseSync) => {
@@ -611,6 +641,14 @@ let seed = (db: DatabaseSync) => {
   db.prepare('insert into canvas (eid) values (?)').run(canvas)
   pin(db, canvas, addCard(db, board, 'Board'), 0, 0, 640, 0)
   pin(db, canvas, addCard(db, view, 'Full'), 664, 0, 320, 0)
+  // These direct inserts bypass apply()'s late mint pass, so number the demo
+  // entities now their components exist — in creation (rowid) order, so the
+  // ids read 1, 2, 3… exactly as spine() used to hand them out (T-3684).
+  for (
+    let { eid } of db.prepare(
+      'select eid from entity where num is null order by rowid',
+    ).all() as { eid: string }[]
+  ) mintNum(db, eid)
 }
 
 // A baked constraint can't be changed in place: rebuild the table around
@@ -1034,20 +1072,61 @@ export let migrateDelivery = (db: DatabaseSync) => {
   drop('stop_request', 'acted_at')
 }
 
-// Resolve a human id / bare num / alias slug to its eid (the write doors'
-// reference resolver). Defined here — ahead of the module-level `open()` — so
-// the boot migration below may lean on it without a TDZ trap.
-let ident = (db: DatabaseSync, id: string): string | undefined => {
-  let m = id.match(/^[A-Za-z]+-(\d+)$/) ?? id.match(/^(\d+)$/)
-  if (m) {
-    return (db.prepare('select eid from entity where num = ?').get(+m[1]) as
+// The one id resolver: a token → its eid, across every read door (T-3684).
+// Order is deliberate. A human number FIRST (`T-3` / bare `3`), so a small
+// decimal is never shadowed by a hex handle. Then a full uuid, exact. Then a
+// SHORT-eid handle — a 6–8 hex PREFIX of the uuid, matched on the PK as a
+// sargable range (`eid >= p and eid < succ(p)`, succ = last char bumped), so
+// it's an index seek not a scan; unique resolves, ambiguous THROWS naming the
+// collision (git-style). Then an alias slug. A bare all-decimal token that is
+// no known num falls THROUGH to short/slug, so a num-less entity whose handle
+// reads decimal still resolves. undefined names nothing; the throw is only for
+// an ambiguous prefix. Defined ahead of `open()` so the boot migration may
+// lean on it without a TDZ trap.
+let succ = (p: string) =>
+  p.slice(0, -1) + String.fromCharCode(p.charCodeAt(p.length - 1) + 1)
+export let resolveId = (
+  db: DatabaseSync,
+  id: string,
+): string | undefined => {
+  let numOf = (n: number) =>
+    (db.prepare('select eid from entity where num = ?').get(n) as
       | { eid: string }
       | undefined)?.eid
+  let pre = id.match(/^[A-Za-z]+-(\d+)$/)
+  if (pre) return numOf(+pre[1]) // a prefixed num is num-only
+  let bare = id.match(/^(\d+)$/)
+  if (bare) {
+    let hit = numOf(+bare[1])
+    if (hit) return hit // else fall through — a bare token may be a short eid
+  }
+  let low = id.toLowerCase()
+  if (UUIDRE.test(id)) {
+    return (db.prepare('select eid from entity where eid = ?').get(low) as
+      | { eid: string }
+      | undefined)?.eid
+  }
+  if (SHORT.test(id)) {
+    let hits = db.prepare(
+      'select eid from entity where eid >= ? and eid < ? limit 2',
+    ).all(low, succ(low)) as { eid: string }[]
+    if (hits.length > 1) {
+      throw new Error(
+        `${id} is an ambiguous id — matches ${
+          hits.map((h) => shortId(h.eid)).join(', ')
+        } and more; use more characters`,
+      )
+    }
+    if (hits.length == 1) return hits[0].eid
   }
   return (db.prepare('select eid from alias where slug = ?').get(id) as
     | { eid: string }
     | undefined)?.eid
 }
+
+// The write doors' reference resolver — resolveId under its old name, kept
+// because the boot migration and apply()'s normalize both reach for it.
+let ident = resolveId
 
 // ident's inverse: eid → the human id every other door speaks (T-7) — the
 // raw eid when there is none to speak. Every agent-facing message owes
@@ -1061,12 +1140,12 @@ export let human = (db: DatabaseSync, eid: string): string => {
   let row = db.prepare('select num from entity where eid = ?').get(eid) as
     | { num: number }
     | undefined
-  if (!row?.num) return eid
+  if (!row?.num) return shortId(eid)
   let kind =
     kindOrder.find((k) =>
       db.prepare(`select 1 from ${k} where eid = ?`).get(eid)
     ) ?? 'entity'
-  return idOf({ kind, num: row.num })
+  return idOf({ eid, kind, num: row.num })
 }
 
 let ADDR = /@/
@@ -1107,6 +1186,7 @@ export let addressEntity = (db: DatabaseSync, addr: string): string => {
   let eid = uuid()
   spine(db, eid)
   db.prepare('insert into email (eid, address) values (?, ?)').run(eid, a)
+  mintNum(db, eid) // spine no longer numbers at birth (T-3684); email is numbered
   return eid
 }
 
@@ -1326,6 +1406,18 @@ export let open = (path = file) => {
     if (hasCol(db, table, col)) {
       db.exec(`alter table ${table} drop column ${col}`)
     }
+  }
+  // num is a UI label, not identity (T-3684): a cheap/bulk entity (T-3683)
+  // needs none, so the spine's num goes NULLABLE. One in-place ALTER on SQLite
+  // 3.53+ (ALTER COLUMN landed in 3.53.0), guarded on the notnull flag so it
+  // runs once. UNIQUE stays — SQLite treats NULLs as distinct, so num-less
+  // entities coexist. No rebuild, no backfill: existing nums are untouched.
+  if (
+    (db.prepare(
+      `select "notnull" as nn from pragma_table_info('entity') where name = 'num'`,
+    ).get() as { nn: number } | undefined)?.nn
+  ) {
+    db.exec('alter table entity alter column num drop not null')
   }
   // Retired by the per-comment `notified` stamp, which is per item and so
   // cannot advance past an unserved sibling the way a cursor could.
@@ -2382,6 +2474,12 @@ export let apply = (
         throw refusal ?? e // the outer catch rolls the whole batch back
       }
     }
+    // Components have landed, so each new spine's KIND is finally knowable —
+    // assign the human number spine() no longer mints at birth (T-3684). Only
+    // the spines born in THIS batch, still inside the transaction, so every
+    // downstream reader here (the proposed-not-decided check, effects, the
+    // journal) and the births echo below all see the num rather than a NULL.
+    for (let eid of minted) mintNum(db, eid)
     for (let [ref, eid] of refWrites.values()) {
       let refusal = refRefused(db, ref, eid)
       if (refusal) throw refusal
@@ -2610,6 +2708,7 @@ export let apply = (
           `insert into conflict (eid, target, loser, holder)
            values (?, ?, ?, ?)`,
         ).run(ceid, bounced.target, bounced.loser, bounced.holder)
+        mintNum(db, ceid) // spine no longer numbers at birth (T-3684)
         db.exec('commit')
       } catch (audit) {
         db.exec('rollback')
@@ -2870,15 +2969,11 @@ export let touch = (
 // the rest narrow the candidates BEFORE the result cap, then screen each hit
 // against its components. A line of ONLY filters is a listing, newest touched
 // first. A malformed filter throws; the doors show the message.
-// Resolve a reference value server-side: an alias slug, or a prefix-num /
-// bare num against the spine — the db's half of client.ts find().
-export let findEid = (db: DatabaseSync, id: string): string | undefined => {
-  let num = id.match(/^[A-Za-z]+-(\d+)$/)?.[1] ?? id.match(/^(\d+)$/)?.[1]
-  let hit = num
-    ? db.prepare('select eid from entity where num = ?').get(Number(num))
-    : db.prepare('select eid from alias where slug = ?').get(id)
-  return (hit as { eid: string } | undefined)?.eid
-}
+// Resolve a reference value server-side — the db's half of client.ts find().
+// One grammar for every door: num, full uuid, short-eid handle, alias slug
+// (resolveId, T-3684).
+export let findEid = (db: DatabaseSync, id: string): string | undefined =>
+  resolveId(db, id)
 
 export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
   let preds = parseQuery(q)
@@ -3114,23 +3209,14 @@ if (import.meta.main) {
   )
 }
 
-// An id to an eid, through the index — client.ts `find()`'s three rules
-// (X-123 or a bare number by num, an eid verbatim, an alias slug) asked of
-// SQLite instead of of a materialized graph. It exists so a query can resolve
-// its own references without anyone building a snapshot first; keep the two
-// readings of "what names an entity" in step.
-export let locate = (db: DatabaseSync, id: string): string | undefined => {
-  let m = id.match(/^[A-Za-z]+-(\d+)$/) ?? id.match(/^(\d+)$/)
-  if (m) {
-    return (db.prepare('select eid from entity where num = ?')
-      .get(Number(m[1])) as { eid: string } | undefined)?.eid
-  }
-  let self = db.prepare('select eid from entity where eid = ?')
-    .get(id) as { eid: string } | undefined
-  return self?.eid ??
-    (db.prepare('select eid from alias where slug = ?')
-      .get(id) as { eid: string } | undefined)?.eid
-}
+// An id to an eid, through the index — client.ts `find()`'s rules (X-123 or a
+// bare number by num, an eid verbatim or by its short handle, an alias slug)
+// asked of SQLite instead of of a materialized graph. It exists so a query can
+// resolve its own references without anyone building a snapshot first; keep the
+// two readings of "what names an entity" in step. resolveId is that one
+// reading (T-3684).
+export let locate = (db: DatabaseSync, id: string): string | undefined =>
+  resolveId(db, id)
 
 let clear = (db: DatabaseSync) => {
   db.exec('create temp table if not exists hit (eid text primary key)')

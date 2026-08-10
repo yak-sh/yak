@@ -14,11 +14,14 @@ let {
   journalBy,
   journalOf,
   liveDb,
+  locate,
   mendCalls,
   mendMail,
   migrateErrors,
+  numbered,
   open,
   refsOf,
+  resolveId,
   retireMemoryType,
   search,
   senderActor,
@@ -35,7 +38,7 @@ let {
 let { assertEquals, assertMatch, assertNotEquals, assertThrows } = await import(
   '@std/assert'
 )
-let { comps, stamped } = await import('./types.ts')
+let { comps, kindOrder, shortId, stamped } = await import('./types.ts')
 
 let fresh = () => open() // each test file shares one :memory: handle; use eids per test
 let uid = () => crypto.randomUUID()
@@ -3309,4 +3312,71 @@ Deno.test('healInboundDeliver: a stranded inbound letter mends; outbound is left
     db.prepare('select count(*) c from deliver where eid = ?').get(out),
     { c: 1 },
   )
+})
+
+// ── T-3684: num is a nullable, kind-driven label ───────────────────────────
+
+Deno.test('num moved off first-touch: a new task still mints the next number', () => {
+  let a = uid(), b = uid()
+  apply(db, [{ eid: a, name: 'doc', comp: { title: 'first' } }])
+  apply(db, [{ eid: b, name: 'doc', comp: { title: 'second' } }])
+  let na = Number(comp(a, 'entity')?.num)
+  let nb = Number(comp(b, 'entity')?.num)
+  assertEquals(na > 0 && nb == na + 1, true) // consecutive, minted after comps landed
+})
+
+Deno.test('every current kind is numbered — part 1 changes nothing', () => {
+  for (let k of kindOrder) assertEquals(numbered(k), true)
+})
+
+Deno.test('the wire cannot set num — it stays server-owned', () => {
+  let e = uid()
+  apply(db, [
+    { eid: e, name: 'doc', comp: { title: 'x' } },
+    { eid: e, name: 'entity', comp: { num: 999999 } }, // dropped by admitted()
+  ])
+  assertNotEquals(Number(comp(e, 'entity')?.num), 999999)
+})
+
+Deno.test('a deleted number is never reused — remint is strictly higher', () => {
+  let a = uid()
+  apply(db, [{ eid: a, name: 'doc', comp: { title: 'high' } }])
+  let n1 = Number(comp(a, 'entity')?.num)
+  apply(db, [{ eid: a, name: 'entity', comp: null }]) // delete the highest
+  let b = uid()
+  apply(db, [{ eid: b, name: 'doc', comp: { title: 'next' } }])
+  assertEquals(Number(comp(b, 'entity')?.num) > n1, true) // tombstone.num holds the high-water
+})
+
+// A num-less entity stands in for a future cheap kind (T-3683): spine() with no
+// num, no mint pass. It must be addressable by uuid, render a short-eid handle
+// (not T-0), and resolve back through every read door.
+Deno.test('a num-less entity: short-eid handle renders and resolves', () => {
+  let e = 'dead1234-0000-4000-8000-00000000cafe'
+  db.prepare('insert into entity (eid) values (?)').run(e)
+  db.prepare('insert into doc (eid, title) values (?, ?)').run(e, 'cheap')
+  assertEquals(human(db, e), 'dead1234') // the 8-hex handle, never T-0
+  assertEquals(human(db, e), shortId(e))
+  // the handle round-trips through the shared resolver and its doors
+  assertEquals(resolveId(db, 'dead1234'), e)
+  assertEquals(locate(db, 'dead1234'), e)
+  // a full uuid still exact-matches
+  assertEquals(resolveId(db, e), e)
+})
+
+Deno.test('an ambiguous short-eid prefix is refused, naming the collision', () => {
+  let a = 'abcabc11-0000-4000-8000-000000000001'
+  let b = 'abcabc22-0000-4000-8000-000000000002'
+  db.prepare('insert into entity (eid) values (?)').run(a)
+  db.prepare('insert into entity (eid) values (?)').run(b)
+  assertThrows(() => resolveId(db, 'abcabc'), Error, 'ambiguous')
+  assertEquals(resolveId(db, 'abcabc11'), a) // a longer, unique prefix resolves
+})
+
+Deno.test('num order is preserved: T-3 and a bare num still resolve', () => {
+  let t = uid()
+  apply(db, [{ eid: t, name: 'doc', comp: { title: 'addressed' } }])
+  let n = Number(comp(t, 'entity')?.num)
+  assertEquals(resolveId(db, `T-${n}`), t) // prefixed num
+  assertEquals(resolveId(db, String(n)), t) // bare num, never shadowed by hex
 })

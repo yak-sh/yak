@@ -830,8 +830,20 @@ export let prefix: Record<string, string> = {
   knock: 'K',
   wake: 'W',
 }
-export let idOf = (e: { kind: string; num: number }) =>
-  `${prefix[e.kind] ?? e.kind[0].toUpperCase()}-${e.num}`
+// The short handle a NUM-LESS entity wears: the uuid's leading 8 hex — its
+// first group, already dashless. Honest that there is no human number, and
+// still RESOLVABLE: the id doors prefix-match it back to the eid (db.ts
+// resolveId, nav eidOf, client find). A tombstone with no live kind wears it
+// too. `human()` (server) renders the same handle.
+export let shortId = (eid: string) => eid.slice(0, 8)
+// A short-eid TOKEN: 6–8 hex, dashless. Its own prefix of the uuid's first
+// group, so a case-folded string prefix-match (or a sargable PK range) finds
+// the entity. Min 6 so a stray one- or two-char token doesn't "resolve".
+export let SHORT = /^[0-9a-f]{6,8}$/i
+export let idOf = (e: { eid: string; kind: string; num?: number | null }) =>
+  e.num
+    ? `${prefix[e.kind] ?? e.kind[0].toUpperCase()}-${e.num}`
+    : shortId(e.eid)
 
 // A model's short name — 'claude-fable-5' is fable, 'gpt-5.6-sol' is sol:
 // drop the vendor word and anything wearing a digit, keep what's left.

@@ -18,6 +18,7 @@ import {
   type Pinned,
   type Session,
   settled,
+  SHORT,
   type Snapshot,
   stamped,
 } from './types.ts'
@@ -1007,8 +1008,23 @@ export let repoUrl = (start: Ent): string | undefined => {
 
 export let findEid = (id: string): string | undefined => {
   let num = id.match(/^[A-Za-z]+-(\d+)$/)?.[1] ?? id.match(/^(\d+)$/)?.[1]
+  if (num) {
+    for (let [eid, r] of Object.entries(cache.value)) {
+      if (r.entity?.num == +num) return eid
+    }
+    return
+  }
+  if (cache.value[id]) return id // a full eid, verbatim
+  // A SHORT-eid handle: the 6–8 hex prefix a num-less entity wears (T-3684).
+  if (SHORT.test(id)) {
+    let hits = Object.keys(cache.value).filter((eid) =>
+      eid.startsWith(id.toLowerCase())
+    )
+    if (hits.length == 1) return hits[0]
+    if (hits.length > 1) return // ambiguous
+  }
   for (let [eid, r] of Object.entries(cache.value)) {
-    if (num ? r.entity?.num == +num : r.alias?.slug == id) return eid
+    if (r.alias?.slug == id) return eid
   }
 }
 // The same query over the WHOLE graph — the board's List face. No task

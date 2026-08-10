@@ -20,7 +20,7 @@ import {
   uuid,
   verdictName,
 } from './types.ts'
-import { idOf } from './types.ts'
+import { idOf, SHORT, shortId } from './types.ts'
 import { formatProp, parseProp, propAt, refOf } from './props.ts'
 import { local } from './time.ts'
 import { nearest, offer } from './near.ts'
@@ -921,12 +921,26 @@ export let taskChanges = (
     .map(([name, comp]) => ({ eid, name, comp })),
 ]
 
-// Resolve 'T-3' / a bare num / an eid to a row.
+// Resolve 'T-3' / a bare num / a full eid / a SHORT-eid handle / an alias slug
+// to a row — the cache-side twin of db.ts resolveId (T-3684). Num first, then
+// exact eid, then a 6–8 hex prefix (unique or it throws, git-style), then slug.
 export let find = (all: Row[], id: string) => {
   let m = id.match(/^[A-Za-z]+-(\d+)$/) ?? id.match(/^(\d+)$/)
   if (m) return all.find((r) => r.num == +m![1])
-  return all.find((r) => r.eid == id) ??
-    all.find((r) => r.comps.alias?.slug == id)
+  let exact = all.find((r) => r.eid == id)
+  if (exact) return exact
+  if (SHORT.test(id)) {
+    let hits = all.filter((r) => r.eid.startsWith(id.toLowerCase()))
+    if (hits.length > 1) {
+      throw new Error(
+        `${id} is an ambiguous id — matches ${
+          hits.slice(0, 3).map((r) => shortId(r.eid)).join(', ')
+        } and more; use more characters`,
+      )
+    }
+    if (hits.length == 1) return hits[0]
+  }
+  return all.find((r) => r.comps.alias?.slug == id)
 }
 
 // The board sort: status column order, then priority, then num.

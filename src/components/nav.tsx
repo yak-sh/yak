@@ -4,7 +4,7 @@ import { block, copy, setFollow } from './ui.tsx'
 import { usePlaceAt } from './overlay.tsx'
 import { cache, census, ent, peek, rootCanvas, trail } from '../live.ts'
 import { type Action, actionsFor, resolve } from './registry.ts'
-import { type Ent, idOf } from '../types.ts'
+import { type Ent, idOf, SHORT } from '../types.ts'
 import { dragData } from './drag.ts'
 
 export { peek, trail }
@@ -62,13 +62,18 @@ export let openAt = (eid: string, ev: MouseEvent) => {
   } else navigate(`/${idOf(ent(eid))}`)
 }
 
-// An id in the wild — T-num, bare num, or raw eid — resolved against the
-// live cache; undefined when unloaded or dead.
+// An id in the wild — T-num, bare num, raw eid, or a SHORT-eid handle (the
+// 6–8 hex prefix a num-less entity wears, T-3684) — resolved against the live
+// cache; undefined when unloaded, dead, or an ambiguous prefix.
 export let eidOf = (id: string) => {
   let eids = census.value
   let m = id.match(/^[A-Za-z]+-(\d+)$/) ?? id.match(/^(\d+)$/)
-  if (!m) return eids.includes(id) ? id : undefined
-  return eids.find((eid) => cache.peek()[eid]?.entity?.num == +m![1])
+  if (m) return eids.find((eid) => cache.peek()[eid]?.entity?.num == +m![1])
+  if (eids.includes(id)) return id // a full eid, verbatim
+  if (SHORT.test(id)) {
+    let hits = eids.filter((eid) => eid.startsWith(id.toLowerCase()))
+    return hits.length == 1 ? hits[0] : undefined // ambiguous → no navigation
+  }
 }
 
 // The plain-click half of an in-app anchor: modifiers and middle-click keep

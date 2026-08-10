@@ -772,7 +772,9 @@ let http = Deno.serve(
         let kind = kindOf(comps)
         return {
           ...h,
-          id: entity ? idOf({ kind, num: Number(entity.num) }) : h.eid,
+          id: entity
+            ? idOf({ eid: h.eid, kind, num: Number(entity.num) })
+            : h.eid,
           kind,
           title: String(comps.doc?.title ?? ''),
         }

@@ -232,7 +232,7 @@ export let humanId = (index: Index, eid: string): string | null => {
   if (!row || !row.num) return null
   let has: Record<string, true> = {}
   for (let c of row.comps) has[c] = true
-  return idOf({ kind: kindOf(has), num: row.num })
+  return idOf({ eid, kind: kindOf(has), num: row.num })
 }
 
 // A print-mode claude (`-p`/`--print` — every managed spawn and every
