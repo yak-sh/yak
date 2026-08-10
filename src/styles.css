@@ -2400,12 +2400,24 @@ a[data-ref]:hover {
   gap: var(--half-gap);
   font-size: 12px;
 }
+.Debug_Lens {
+  display: grid;
+  gap: var(--half-gap);
+}
+.Debug_Head {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+}
+.Debug_Head > .Debug_Item {
+  flex: 1;
+  min-width: 0;
+}
 .Debug_Tabs {
   display: flex;
-  justify-content: end;
   gap: var(--gap);
-  padding-bottom: var(--half-gap);
-  border-bottom: 1px solid var(--border);
+  margin-left: auto;
+  flex: none;
 }
 .Debug_Item {
   display: flex;

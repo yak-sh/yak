@@ -31,6 +31,8 @@ let priority = propAt('task', 'priority')!
 // else the generic one; the inspector's own head is its ListTile too.
 
 let Frame = block('div', 'Debug', {
+  Lens: 'div',
+  Head: 'div',
   Props: 'div',
   Tabs: 'div',
   Key: 'span',
@@ -52,6 +54,8 @@ let Frame = block('div', 'Debug', {
   Via: 'span',
 })
 let {
+  Lens,
+  Head,
   Props: Grid,
   Tabs,
   Key,
@@ -78,36 +82,47 @@ let Tab = el('button', 'Tab')
 // They remain draggable here because the same gesture is how a browser hands
 // the serialized bytes to the desktop.
 export let DebugTabs = (
-  { e, children }: { e: Ent; children?: ComponentChildren },
+  { e, head, children }: {
+    e: Ent
+    head?: ComponentChildren
+    children?: ComponentChildren
+  },
 ) => {
   let [view, setView] = useState('Debug')
   let views = ['Debug', ...(e.doc ? ['Markdown'] : []), 'JSON']
   return (
-    <>
-      <Tabs>
-        {views.map((v) => (
-          <Tab
-            key={v}
-            type='button'
-            mod={v == view && 'on'}
-            draggable={v != 'Debug'}
-            onDragStart={(ev: DragEvent) => dragData(ev, e.eid, v)}
-            onClick={() => setView(v)}
-            aria-label={v == 'Debug' ? 'Components' : v}
-            data-tip={v == 'Debug' ? 'Components' : v}
-          >
-            <Icon
-              name={v == 'Debug' ? 'bug' : v == 'Markdown' ? 'hash' : 'braces'}
-            />
-          </Tab>
-        ))}
-      </Tabs>
+    <Lens>
+      <Head>
+        {head}
+        <Tabs>
+          {views.map((v) => (
+            <Tab
+              key={v}
+              type='button'
+              mod={v == view && 'on'}
+              draggable={v != 'Debug'}
+              onDragStart={(ev: DragEvent) => dragData(ev, e.eid, v)}
+              onClick={() => setView(v)}
+              aria-label={v == 'Debug' ? 'Components' : v}
+              data-tip={v == 'Debug' ? 'Components' : v}
+            >
+              <Icon
+                name={v == 'Debug'
+                  ? 'bug'
+                  : v == 'Markdown'
+                  ? 'hash'
+                  : 'braces'}
+              />
+            </Tab>
+          ))}
+        </Tabs>
+      </Head>
       {view == 'Markdown'
         ? <Md e={e} />
         : view == 'JSON'
         ? <Json e={e} />
         : children}
-    </>
+    </Lens>
   )
 }
 
@@ -254,9 +269,9 @@ export let Debug = ({ e, project }: { e: Ent; project?: boolean }) => {
   // which prop brought it (live.ts backlinks, derived from the typed
   // vocabulary — sessions on their task, cards on their target, …).
   let links = backlinks(e.eid)
+  let head = <Entity eid={e.eid} view='Debug.Tile' />
   let body = (
     <>
-      <Entity eid={e.eid} view='Debug.Tile' />
       <AllProps e={e} />
       {browser && <AddComp e={e} />}
       {parents(e.eid).map((d) => (
@@ -292,7 +307,9 @@ export let Debug = ({ e, project }: { e: Ent; project?: boolean }) => {
   )
   return (
     <Frame>
-      {browser ? <DebugTabs e={e}>{body}</DebugTabs> : body}
+      {browser
+        ? <DebugTabs e={e} head={head}>{body}</DebugTabs>
+        : <>{head}{body}</>}
     </Frame>
   )
 }
