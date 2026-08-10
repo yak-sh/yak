@@ -38,7 +38,7 @@
 // is the explicit spelling. A component name by itself tests the facet:
 // `.proposed=` means absent, `.proposed!` present. `.num` routes to the entity
 // spine; `at`/`by` are shared by the stamps — created, updated, decided,
-// proposed — so spell those out (`.created.at`, `.decided.at`).
+// proposed, archived — so spell those out (`.created.at`, `.archived.at`).
 //
 // References are ordinary props: `.assignee=jeff`; the VALUE resolves like
 // any id (alias, T-3, raw eid) at whichever door or evaluator holds the graph
@@ -67,8 +67,8 @@ type Comps = Record<string, Record<string, unknown> | undefined>
 // The routing table: every component's columns, plus the spine's.
 // Server-stamped columns join HERE from the `stamped` declaration, not
 // comps — filterable ('.count>=5') without ever joining the write
-// allowlist (cols() reads comps alone). Four stamped comps today, not
-// all of them: stamped.session's status would make bare `.status`
+// allowlist (cols() reads comps alone). Only selected stamped comps join:
+// stamped.session's status would make bare `.status`
 // ambiguous with task's, so widening is a routing question (does the
 // wire-writable column win a tie?), not a list edit. Mail joined for the
 // mail door — its filters live on arrival columns ('.verified=0',
@@ -91,6 +91,7 @@ let routes: Record<string, readonly string[]> = {
   // the spelling `## decided` and `task decided` both answer.
   decided: [...Object.keys(comps.decided), ...Object.keys(stamped.decided)],
   proposed: [...Object.keys(comps.proposed), ...Object.keys(stamped.proposed)],
+  archived: Object.keys(stamped.archived),
 }
 
 // The dot-param shape, sketched — the tail of every strict rejection
@@ -610,9 +611,10 @@ export let sunk = (
   c: Comps,
   ent?: (eid: string) => Comps | undefined,
 ): boolean => {
-  if (c.project?.retired_at) return true
+  if (c.project && c.archived) return true
   let p = c.task?.project
-  return !!(p && ent?.(String(p))?.project?.retired_at)
+  let project = p ? ent?.(String(p)) : undefined
+  return !!(project?.project && project.archived)
 }
 export let warm = (
   c: Comps,

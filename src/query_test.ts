@@ -661,32 +661,33 @@ Deno.test('filter bar: extra preds AND into a saved query', () => {
 Deno.test('sunk: own stamp, or the project the task is filed under', () => {
   let P = 'p-eid'
   let look = (eid: string) =>
-    eid == P ? { project: { retired_at: '2026-01-01' } } : undefined
-  assertEquals(sunk({ project: { retired_at: 'x' } }), true)
+    eid == P ? { project: {}, archived: { at: '2026-01-01' } } : undefined
+  assertEquals(sunk({ project: {}, archived: { at: 'x' } }), true)
   assertEquals(sunk({ project: {} }), false)
+  assertEquals(sunk({ archived: { at: 'x' } }), false)
   assertEquals(sunk({ task: { project: P } }, look), true)
   assertEquals(sunk({ task: { project: 'live' } }, look), false)
   assertEquals(sunk({ task: {} }, look), false)
 })
 
 Deno.test('warm: retirement damps the rank, never zeroes it', () => {
-  let c = { created: { at: ago(H) }, project: { retired_at: 'x' } }
+  let c = { created: { at: ago(H) }, project: {}, archived: { at: 'x' } }
   assert(rank(c, T0) > 0) // sunk, not erased
   assertEquals(rank(c, T0), hot(c, T0) * SUNK)
   // fresh-but-retired sinks beneath merely-idle live work
   assert(rank(c, T0) < hot({ created: { at: ago(2 * D) } }, T0))
 })
 
-Deno.test('.project.retired_at is the explicit spelling, and = means live', () => {
-  let ps = parseQuery('.project.retired_at=')
+Deno.test('.archived.at is filterable, and = means live', () => {
+  let ps = parseQuery('.archived.at=')
   assertEquals(ps[0], {
-    comp: 'project',
-    prop: 'retired_at',
+    comp: 'archived',
+    prop: 'at',
     op: '',
     value: '',
   })
   assert(matchQuery({ project: {} }, ps)) // a live project
-  assert(!matchQuery({ project: { retired_at: 'x' } }, ps))
+  assert(!matchQuery({ project: {}, archived: { at: 'x' } }, ps))
 })
 
 // T-10611: a VALID pred naming another kind's column matches nothing and

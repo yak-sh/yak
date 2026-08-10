@@ -116,16 +116,12 @@ export let comps: Record<string, Record<string, PropType>> = {
     assignee: { eid: 'entity', death: 'detach' },
     domain: { text: 'domains' }, // free text; the graph suggests
   },
-  // retired_at: the project is over, not erased. Wire-writable — stamping
-  // it IS the retirement (like the `opened` stamp, no effect needed);
-  // everything filed under it stays referenceable but sinks (search,
-  // .order=hot).
   // color: the venture's tmux window colour, and whatever else comes to want
   // one. Any tmux colour spelling (`cyan`, `brightblue`, `colour45`,
   // `#5fafd7`). Empty means DERIVE it — roles.ts hashes the venture id over
   // the fleet palette, so a venture that never sets one still gets a stable
   // colour of its own rather than the default.
-  project: { retired_at: 'time', color: 'text' },
+  project: { color: 'text' },
   // the project's checkout and public repository URL. `gate` names its one
   // complete test command;
   // `push` is the venture's standing permission for the projection to push
@@ -898,9 +894,9 @@ export type Task = {
 }
 
 // A tag: "this doc fronts a project" (a venture, a workstream). Its name
-// is its doc.title — one naming mechanism, no drift. retired_at set means
-// the venture is over — kept, referenceable, sunk in every ranking.
-export type ProjectTag = { eid: string; retired_at?: string | null }
+// is its doc.title — one naming mechanism, no drift. An archived project is
+// over — kept, referenceable, sunk in every ranking.
+export type ProjectTag = { eid: string }
 
 // Where a project's code lives: a checkout on this box and the branch a
 // session's worktree grows from. A tag like project — it never names an

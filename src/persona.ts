@@ -183,7 +183,7 @@ export let homeReads = (
 // them (deleting them would dangle a CLAUDE.md symlink). filesFor and
 // taskRoots share this so the two can't disagree on who is managed.
 let managed = (r: Row) =>
-  !!(r.comps.project && r.comps.repo?.path && !r.comps.project.retired_at)
+  !!(r.comps.project && r.comps.repo?.path && !r.comps.archived)
 
 // Every file materialization owes the fleet: for each project with a
 // checkout, the common persona (if any) as .tasks/AGENTS.md and each

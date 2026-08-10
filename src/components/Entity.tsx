@@ -306,19 +306,18 @@ defineActions([
     // under the project stays — it just stops coming up first.
     match: has('project'),
     acts: (e) => [
-      e.project!.retired_at
+      e.archived
         ? {
           label: 'unretire',
-          run: () =>
-            mutate({ eid: e.eid, name: 'project', comp: { retired_at: null } }),
+          run: () => mutate({ eid: e.eid, name: 'archived', comp: null }),
         }
         : {
           label: 'retire',
           run: () =>
             mutate({
               eid: e.eid,
-              name: 'project',
-              comp: { retired_at: new Date().toISOString() },
+              name: 'archived',
+              comp: {},
             }),
         },
     ],

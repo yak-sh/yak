@@ -62,7 +62,9 @@ export let STATIC_RULES: Rules = {
 export type Entry = { address: string; owner: string }
 export let bookOf = (all: Row[]): Entry[] =>
   all
-    .filter((r) => r.comps.email?.address && !r.comps.project?.retired_at)
+    .filter((r) =>
+      r.comps.email?.address && !(r.comps.project && r.comps.archived)
+    )
     .map((r) => ({
       address: String(r.comps.email.address),
       owner: `${idOf(r)} ${r.comps.doc?.title ?? ''}`.trim(),

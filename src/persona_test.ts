@@ -444,7 +444,8 @@ Deno.test('syncFiles: writes changes, skips fresh, isolates failures', () => {
 
 Deno.test('filesFor / taskRoots: a retired venture is neither written nor swept', () => {
   let proj = row({
-    project: { retired_at: day(1) },
+    project: {},
+    archived: { at: day(1) },
     doc: { title: 'V' },
     repo: { path: '/repo' },
   })

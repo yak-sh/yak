@@ -19,7 +19,7 @@ let row = (
   kind: 'project',
   comps: {
     doc: { title: `p${num}` },
-    project: { retired_at: null },
+    project: {},
     email: { address },
     ...extra,
   },
@@ -34,10 +34,18 @@ let rules = (values: string[], catchall = false): Rules => ({
 Deno.test('bookOf: email wearers in play; retired projects are history', () => {
   let all = [
     row(1, 'a@bot.test'),
-    row(2, 'gone@bot.test', { project: { retired_at: '2026-07-21' } }),
-    { eid: 'e-3', num: 3, kind: 'task', comps: { doc: { title: 't' } } },
+    row(2, 'gone@bot.test', { archived: { at: '2026-07-21' } }),
+    {
+      eid: 'e-3',
+      num: 3,
+      kind: 'person',
+      comps: { email: { address: 'kept@bot.test' }, archived: { at: 'now' } },
+    },
   ]
-  assertEquals(bookOf(all), [{ address: 'a@bot.test', owner: 'P-1 p1' }])
+  assertEquals(bookOf(all), [
+    { address: 'a@bot.test', owner: 'P-1 p1' },
+    { address: 'kept@bot.test', owner: 'U-3' },
+  ])
 })
 
 Deno.test('diagnose: a ruled address is deliverable', () => {

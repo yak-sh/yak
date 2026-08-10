@@ -57,6 +57,6 @@ Reference filters resolve aliases and human ids ('.assignee=jeff',
 '.project=P-19'),
 and a DOTTED path walks one reference: '.assignee.title~=jeff' — but a
 first segment naming a component stays the explicit spelling ('.pin.x=12',
-'.project.retired_at=' — absent means live), it never dereferences. Bare words
+'.archived.at=' — absent means live), it never dereferences. Bare words
 are text terms (doc contains). Boards persist these same queries
 (board.query).`

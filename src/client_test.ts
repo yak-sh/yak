@@ -136,11 +136,6 @@ let CASES: [string, { comp: string; prop: string; value: unknown } | RegExp][] =
       prop: 'provider',
       value: 'fake',
     }],
-    ['.project.retired_at=2026-07-01T00:00:00Z', {
-      comp: 'project',
-      prop: 'retired_at',
-      value: '2026-07-01T00:00:00.000Z',
-    }],
     ['.priority=1.5', { comp: 'task', prop: 'priority', value: 1.5 }],
     // priority speaks P<n> at the write door too (T-6741/T-7143): 'P2' and
     // '2' both store the integer 2; garbage is a loud error, not bad data.

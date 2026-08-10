@@ -135,7 +135,6 @@ let schema = `
   );
   create table if not exists project (
     eid text primary key references entity(eid),
-    retired_at text,
     color text
   );
   create table if not exists person (
@@ -861,6 +860,43 @@ export let retireProposal = (db: DatabaseSync) => {
   }
 }
 
+// A project's end is the same archived fact every entity can wear. Preserve
+// its clock exactly; authorship was never recorded, so invent none. The board
+// rewrite is independently guarded for a database interrupted after the drop.
+let retireFilter = (query: string) => {
+  let key = /(^|[&\s])\.(?:project\.)?retired_at(?=[.!<>=~])/g
+  return (query.match(/"[^"]*"|[^"]+/g) ?? [])
+    .map((part) =>
+      part.startsWith('"') ? part : part.replace(key, '$1.archived.at')
+    )
+    .join('')
+}
+
+export let retireProjectRetiredAt = (db: DatabaseSync) => {
+  let legacy = hasCol(db, 'project', 'retired_at')
+  let boards = db.prepare(
+    'select eid, query from board where query is not null',
+  )
+    .all() as { eid: string; query: string }[]
+  let stale = boards.map((r) => ({ ...r, next: retireFilter(r.query) }))
+    .filter((r) => r.next != r.query)
+  if (!legacy && !stale.length) return
+  db.exec('begin')
+  try {
+    if (legacy) {
+      db.exec(`insert or ignore into archived (eid, at)
+        select eid, retired_at from project where retired_at is not null`)
+    }
+    let write = db.prepare('update board set query = ? where eid = ?')
+    for (let r of stale) write.run(r.next, r.eid)
+    if (legacy) db.exec('alter table project drop column retired_at')
+    db.exec('commit')
+  } catch (e) {
+    db.exec('rollback')
+    throw e
+  }
+}
+
 // Give every session its canonical launch facet before graph-out can observe
 // the handle. The dormant aliases stay as rollback input; insert-or-ignore
 // makes the canonical row authoritative on every later open.
@@ -1347,7 +1383,6 @@ export let open = (path = file) => {
   // A board is a saved filter over tasks (query.ts grammar), not an edge
   // list — membership can't drift when it isn't stored.
   addCol('board', 'query', 'query text')
-  addCol('project', 'retired_at', 'retired_at text')
   // The venture's window colour, set by the owner; empty derives from the id.
   addCol('project', 'color', 'color text')
   // A live table's check constraint is frozen at create; when the edge
@@ -1445,6 +1480,7 @@ export let open = (path = file) => {
   // the retirements rather than the backfills above.
   retireMemoryType(db)
   retireProposal(db)
+  retireProjectRetiredAt(db)
   healStored(db)
   return db
 }
@@ -2889,9 +2925,9 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
   // renderers to mark.
   let sank = db.prepare(`
     select 1 from project p
+    join archived a on a.eid = p.eid
     left join task t on t.eid = ?1
-    where p.retired_at is not null
-      and p.eid in (?1, t.project)
+    where p.eid in (?1, t.project)
   `)
   let hits = rows.map((r) => {
     let kind = is.find(([, s]) => s.get(r.eid))?.[0] ?? 'entity'

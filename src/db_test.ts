@@ -305,11 +305,6 @@ Deno.test('apply canonicalizes every scalar and reference spelling', () => {
     },
     {
       eid: 'typed-subject',
-      name: 'project',
-      comp: { retired_at: '2026-07-01T00:00:00Z' },
-    },
-    {
-      eid: 'typed-subject',
       name: 'board',
       comp: { query: '.status=open' },
     },
@@ -319,7 +314,7 @@ Deno.test('apply canonicalizes every scalar and reference spelling', () => {
       comp: { url: 'HTTPS://Example.test/p/?utm_source=n#top' },
     },
   ])
-  assertEquals(out.slice(0, 5), [
+  assertEquals(out.slice(0, 4), [
     {
       eid: subject,
       name: 'task',
@@ -334,11 +329,6 @@ Deno.test('apply canonicalizes every scalar and reference spelling', () => {
       eid: subject,
       name: 'session',
       comp: { pid: 600, operator: 1, pane: '%7', turn: 'idle' },
-    },
-    {
-      eid: subject,
-      name: 'project',
-      comp: { retired_at: '2026-07-01T00:00:00.000Z' },
     },
     {
       eid: subject,
@@ -357,7 +347,6 @@ Deno.test('apply canonicalizes every scalar and reference spelling', () => {
     'select batch from journal order by rowid desc',
   ).get() as { batch: string }).batch
   assertEquals(logged.includes('P02'), false)
-  assertEquals(logged.includes('2026-07-01T00:00:00.000Z'), true)
 
   let num = Number(comp(target, 'entity')?.num)
   let [edge] = apply(db, [{
@@ -2290,6 +2279,58 @@ Deno.test('open retires proposal into a stamp and rewrites stale boards', () => 
   Deno.removeSync(root, { recursive: true })
 })
 
+Deno.test('open retires project timestamps into the archived stamp', () => {
+  let root = Deno.makeTempDirSync({
+    prefix: 'tasks-retired-project-',
+    suffix: '.db',
+  })
+  let path = `${root}/tasks.db`
+  let legacy = open(path)
+  let retired = uid(), both = uid(), board = uid()
+  apply(legacy, [
+    { eid: retired, name: 'project', comp: {} },
+    { eid: both, name: 'project', comp: {} },
+    { eid: both, name: 'archived', comp: {} },
+    { eid: board, name: 'board', comp: { query: '' } },
+  ])
+  legacy.exec('alter table project add column retired_at text')
+  legacy.prepare('update project set retired_at = ? where eid = ?')
+    .run('2026-07-01T00:00:00.000Z', retired)
+  legacy.prepare('update project set retired_at = ? where eid = ?')
+    .run('2026-06-01T00:00:00.000Z', both)
+  legacy.prepare('update archived set at = ? where eid = ?')
+    .run('2026-06-15T00:00:00.000Z', both)
+  legacy.prepare('update board set query = ? where eid = ?').run(
+    '.project.retired_at=&.retired_at>=2026-01-01 ' +
+      '"literal .retired_at=value"',
+    board,
+  )
+  legacy.close()
+
+  let healed = open(path)
+  assertEquals(hasCol(healed, 'project', 'retired_at'), false)
+  assertEquals(
+    compOf(healed, retired, 'archived')?.at,
+    '2026-07-01T00:00:00.000Z',
+  )
+  assertEquals(
+    compOf(healed, both, 'archived')?.at,
+    '2026-06-15T00:00:00.000Z',
+  )
+  assertEquals(
+    compOf(healed, board, 'board')?.query,
+    '.archived.at=&.archived.at>=2026-01-01 "literal .retired_at=value"',
+  )
+  healed.prepare('update board set query = ? where eid = ?')
+    .run('.retired_at=', board)
+  healed.close()
+
+  let again = open(path)
+  assertEquals(compOf(again, board, 'board')?.query, '.archived.at=')
+  again.close()
+  Deno.removeSync(root, { recursive: true })
+})
+
 Deno.test('open heals canonical stored values once and preserves failures', () => {
   let root = Deno.makeTempDirSync({ prefix: 'tasks-heal-' })
   let path = `${root}/tasks.db`
@@ -2313,6 +2354,7 @@ Deno.test('open heals canonical stored values once and preserves failures', () =
   legacy.prepare(`update created set at = ? where eid = ?`)
     .run('2026-07-26T12:34:56Z', task)
   legacy.prepare(`update task set status = 'gone' where eid = ?`).run(bad)
+  legacy.exec('alter table project add column retired_at text')
   legacy.prepare(`update project set retired_at = 'never' where eid = ?`)
     .run(project)
   let stable = legacy.prepare(
@@ -2356,9 +2398,9 @@ Deno.test('open heals canonical stored values once and preserves failures', () =
       { status: 'gone' },
     )
     assertEquals(
-      first.prepare('select retired_at from project where eid = ?')
+      first.prepare('select at from archived where eid = ?')
         .get(project),
-      { retired_at: 'never' },
+      { at: 'never' },
     )
     first.close()
 
@@ -2383,7 +2425,7 @@ Deno.test('open heals canonical stored values once and preserves failures', () =
     2,
   )
   assertEquals(
-    warnings.filter((w) => w.includes(`${project} retired_at is a time`))
+    warnings.filter((w) => w.includes(`${project} archived.at is a time`))
       .length,
     2,
   )
@@ -2766,7 +2808,8 @@ Deno.test('search: retired-project hits sink to the tail, flagged', () => {
   let p = uid(), sunk = uid(), live = uid()
   apply(db, [
     { eid: p, name: 'doc', comp: { title: 'Quagga venture' } },
-    { eid: p, name: 'project', comp: { retired_at: '2026-07-21' } },
+    { eid: p, name: 'project', comp: {} },
+    { eid: p, name: 'archived', comp: {} },
     { eid: sunk, name: 'doc', comp: { title: 'Quagga sunk chore' } },
     { eid: sunk, name: 'task', comp: { status: 'open', project: p } },
     { eid: live, name: 'doc', comp: { title: 'Quagga live chore' } },
@@ -2779,7 +2822,7 @@ Deno.test('search: retired-project hits sink to the tail, flagged', () => {
   assertEquals(hits.slice(1).map((h) => h.retired), [true, true])
   assertEquals(new Set(hits.slice(1).map((h) => h.eid)), new Set([p, sunk]))
   // unretiring floats them back
-  apply(db, [{ eid: p, name: 'project', comp: { retired_at: null } }])
+  apply(db, [{ eid: p, name: 'archived', comp: null }])
   assertEquals(search(db, 'quagga').every((h) => !h.retired), true)
 })
 

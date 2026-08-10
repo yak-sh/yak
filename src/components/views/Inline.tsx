@@ -13,7 +13,7 @@ import { title } from '../title.tsx'
 // and the Surround stack keeps the Chip a span. `Id` is the bare chip for
 // dense rows whose surround already says the title (meta lines, titlebars).
 
-let retired = (e: Ent) => (e.project?.retired_at ? 'retired' : undefined)
+let retired = (e: Ent) => (e.project && e.archived ? 'retired' : undefined)
 
 export let Id = ({ e }: { e: Ent }) => (
   <Chip {...linkProps(e)} mod={retired(e)}>{idOf(e)}</Chip>
