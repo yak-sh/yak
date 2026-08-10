@@ -1,6 +1,7 @@
 import { type ComponentChildren, createContext, h } from 'preact'
 import { useContext } from 'preact/hooks'
 import { signal } from '@preact/signals'
+import { relative } from '../time.ts'
 
 // The one place that speaks our CSS naming (Block, Block_Element,
 // Block-modifier). el('span', 'Dot') bakes the class into a component; its
@@ -109,23 +110,7 @@ export let Chip = el('span', 'Id')
 // data-tip={pretty(iso)} for the full stamp on hover.
 let tick = signal(Date.now())
 if (globalThis.document) setInterval(() => (tick.value = Date.now()), 60_000)
-let SIZES: [Intl.RelativeTimeFormatUnit, number][] = [
-  ['year', 31_536_000],
-  ['month', 2_592_000],
-  ['week', 604_800],
-  ['day', 86_400],
-  ['hour', 3_600],
-  ['minute', 60],
-]
-let rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
-export let ago = (iso?: string | null, now = tick.value) => {
-  if (!iso) return ''
-  let s = (now - Date.parse(iso)) / 1000
-  for (let [unit, size] of SIZES) {
-    if (Math.abs(s) >= size) return rtf.format(Math.round(-s / size), unit)
-  }
-  return 'just now'
-}
+export let ago = (iso?: string | null, now = tick.value) => relative(iso, now)
 export let pretty = (iso?: string | null) =>
   iso ? new Date(iso).toLocaleString() : ''
 

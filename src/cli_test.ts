@@ -1198,6 +1198,42 @@ Deno.test('list strips terminal controls from graph text', async () => {
   }
 })
 
+Deno.test('list shows the wake title derived by the UI', async () => {
+  let wake = 'bbbbbbbb-0000-4000-8000-000000000061'
+  let recipient = 'bbbbbbbb-0000-4000-8000-000000000062'
+  let at = new Date(Date.now() + 7_200_000).toISOString()
+  let snap: Snapshot = {
+    changes: [
+      { eid: wake, name: 'entity', comp: { eid: wake, num: 61 } },
+      { eid: wake, name: 'wake', comp: { at } },
+      { eid: wake, name: 'deliver', comp: { to: recipient } },
+      { eid: recipient, name: 'entity', comp: { eid: recipient, num: 62 } },
+      { eid: recipient, name: 'project', comp: {} },
+    ],
+    deps: [],
+  }
+  let { server, seen, host } = graphServer(snap)
+  try {
+    let out = await new Deno.Command(Deno.execPath(), {
+      args: [
+        'run',
+        '-A',
+        new URL('./cli.ts', import.meta.url).pathname,
+        'list',
+        'kind=wake',
+        '.wake.at>=now',
+      ],
+      clearEnv: true,
+      env: { TASKS_HOST: host },
+    }).output()
+    assertEquals(out.code, 0, text(out.stderr))
+    assertMatch(text(out.stdout), /^W-61\s+wake P-62 · in 2 hours$/m)
+    assertEquals(seen.some((path) => path.startsWith('/snapshot')), false)
+  } finally {
+    await server.shutdown()
+  }
+})
+
 Deno.test('entity JSON has one component-shaped contract across CLI doors', async () => {
   let task = 'bbbbbbbb-0000-4000-8000-000000000041'
   let comment = 'bbbbbbbb-0000-4000-8000-000000000042'

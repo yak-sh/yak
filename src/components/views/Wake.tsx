@@ -1,7 +1,8 @@
 // A wake's two faces: a title derived from its recipient and clock, and a
 // quiet summary that makes the scheduled moment and people visible.
-import { type Ent, idOf } from '../../types.ts'
+import { type Ent } from '../../types.ts'
 import { ent } from '../../live.ts'
+import { wakeTitle } from '../../title.ts'
 import { ago, block, pretty } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
 import { Entity } from '../Entity.tsx'
@@ -24,15 +25,12 @@ let state = (e: Ent) =>
   e.delivered ? 'delivered' : e.error ? 'failed' : 'pending'
 
 export let WakeTitle = ({ e }: { e: Ent }) => {
-  let to = e.deliver?.to
   let status = state(e)
   return (
     <Title>
       <Id e={e} />
       <Dot status={status == 'delivered' ? 'done' : status} />
-      <Title.Text>
-        wake {to ? idOf(ent(to)) : 'someone'} · {ago(e.wake!.at)}
-      </Title.Text>
+      <Title.Text>{wakeTitle(e, ent)}</Title.Text>
     </Title>
   )
 }

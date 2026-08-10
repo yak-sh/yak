@@ -3,13 +3,31 @@
 
 export type Span = { start: number; end: number }
 
+let SIZES: [Intl.RelativeTimeFormatUnit, number][] = [
+  ['year', 31_536_000],
+  ['month', 2_592_000],
+  ['week', 604_800],
+  ['day', 86_400],
+  ['hour', 3_600],
+  ['minute', 60],
+]
+let rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
+
+export let relative = (iso?: string | null, now = Date.now()) => {
+  if (!iso) return ''
+  let s = (now - Date.parse(iso)) / 1000
+  for (let [unit, size] of SIZES) {
+    if (Math.abs(s) >= size) return rtf.format(Math.round(-s / size), unit)
+  }
+  return 'just now'
+}
+
 // A stored UTC stamp SHOWN in the running machine's local zone: ISO-8601
 // with the local offset where the `Z` was, so `wake.at` reads as the wall
 // clock an operator keeps while storage and wire stay Zulu. THE display face
 // of a `time` prop — formatProp routes every stamp through here, and the CLI
 // surfaces that print a stamp outside a prop (created/modified, comments, the
-// journal) call it directly; the web keeps its own relative face (ui.tsx),
-// which re-parses this back to the same instant, so its output is unchanged.
+// journal) call it directly; the web feeds relative() from its minute tick.
 // A non-stamp passes through untouched, so a malformed value never vanishes.
 let pad = (n: number) => String(n).padStart(2, '0')
 export let local = (iso: string): string => {

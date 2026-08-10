@@ -7,7 +7,7 @@ import { ago, pretty } from '../ui.tsx'
 import { applicable, resolve } from '../Entity.tsx'
 import { Wake, WakeTitle } from './Wake.tsx'
 
-let at = new Date(Date.now() + 3_600_000).toISOString()
+let at = new Date(Date.now() + 7_200_000).toISOString()
 let data = (by: string, outcome: Record<string, unknown> = {}) => ({
   wake: {
     entity: { eid: 'wake', num: 1 },
@@ -39,7 +39,7 @@ Deno.test('wake owns the default view and derives its title', () => {
   let text = Array.isArray(title.props.children)
     ? title.props.children[2]
     : undefined
-  assertEquals(text?.props.children, ['wake ', 'P-2', ' · ', ago(at)])
+  assertEquals(text?.props.children, `wake P-2 · ${ago(at)}`)
   cache.value = {}
 })
 

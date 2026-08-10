@@ -111,6 +111,7 @@ import {
 import type { Log } from './telemetry.ts'
 import type { JournalEntry } from './client.ts'
 import { local } from './time.ts'
+import { wakeTitle } from './title.ts'
 import {
   agentPid,
   bornAt as processBornAt,
@@ -297,12 +298,14 @@ let list = async (got: Got) => {
   // resolveRefs is forgiving (a saved board must not throw), so the strict
   // reading rides a keyed check here (client.ts checkedRefs).
   await checkedRefs(preds)
-  // The server matches and kind-filters; byBoard stays local. The ⚑ column
-  // reads each hit's own claim.session, resolved to its id by a second
-  // keyed read over just those sessions.
+  // The server matches and kind-filters; byBoard stays local. Derived titles
+  // and the ⚑ column resolve their named entities through one bounded read.
   let hits = (await query(line, kind)).sort(byBoard)
-  let sessions = await fetched(
-    hits.map((r) => String(r.comps.claim?.session ?? '')).filter((s) => s),
+  let refs = await fetched(
+    hits.flatMap((r) => [
+      String(r.comps.claim?.session ?? ''),
+      String(r.comps.deliver?.to ?? ''),
+    ]).filter((s) => s),
   )
   if (json) return print(jsonText(hits.map((r) => jsonOf(r))))
   // Ids alone do not disambiguate — two projects are both titled `holdco`
@@ -318,12 +321,13 @@ let list = async (got: Got) => {
   )
   let wide = Math.max(5, ...lines.map(([, handle]) => handle.length))
   for (let [r, handle] of lines) {
-    let who = claimant(sessions, r)
+    let who = claimant(refs, r)
     let flag = who ? `  \u2691 ${who}` : ''
+    let title = r.comps.wake
+      ? wakeTitle(r.comps, (eid) => refs.find((x) => x.eid == eid))
+      : String(r.comps.doc?.title ?? '')
     print(
-      `${idOf(r).padEnd(6)} ${handle.padEnd(wide)} ${
-        String(r.comps.doc?.title ?? '')
-      }${flag}`,
+      `${idOf(r).padEnd(6)} ${handle.padEnd(wide)} ${title}${flag}`,
     )
   }
   if (!hits.length) {
