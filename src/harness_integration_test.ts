@@ -10,7 +10,7 @@ import { managedCodex } from './managed_codex.ts'
 import { type IO } from './mcp.ts'
 import { responses } from './responses.ts'
 import { attentionPrompt } from './runner.ts'
-import { type Change, uuid } from './types.ts'
+import { uuid } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 
