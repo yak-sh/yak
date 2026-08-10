@@ -69,7 +69,7 @@ let tag = (comps: Record<string, unknown>, view: string) =>
 
 Deno.test('suffix walk: qualifiers fall leftward', () => {
   let task = { doc: {}, task: {} }
-  // stale place-specific names heal to the one Tile role
+  // place-qualified requests keep walking when no place specializes them
   assertEquals(tag(task, 'List.Tile'), 'task-tile')
   assertEquals(tag(task, 'Board.List.Tile'), 'task-tile')
   // no match at a level → keep walking to Tile

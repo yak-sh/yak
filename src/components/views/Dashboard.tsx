@@ -16,7 +16,7 @@ import { Entity } from '../Entity.tsx'
 // same order on every project, so the eye learns one layout. Every cell is
 // a LIVE QUERY rendered through the shared rows at summary density
 // (--density, styles.css): membership is never stored, exactly as a
-// board's isn't, and each row keeps Tile's click and menu contract —
+// board's isn't, and each row keeps List.Tile's click and menu contract —
 // the cockpit arranges renderers, it adds none.
 
 let Frame = block('div', 'Dash', {
@@ -44,7 +44,7 @@ let Facet = (
       ? (
         <Rows>
           {ids.slice(0, CAP).map((id) => (
-            <Entity key={id} eid={id} view='Tile' />
+            <Entity key={id} eid={id} view='List.Tile' />
           ))}
           {ids.length > CAP && <More>+{ids.length - CAP} more</More>}
         </Rows>

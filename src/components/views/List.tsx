@@ -33,7 +33,7 @@ export let List = ({ e }: { e: Ent }) => {
             onDragStart={(ev: DragEvent) =>
               dragData(ev, p.target_eid, p.view, p.w, p.eid)}
           >
-            <Entity eid={p.target_eid} view='Tile' />
+            <Entity eid={p.target_eid} view='List.Tile' />
           </Row>
         ))}
     </ListFrame>
@@ -71,7 +71,7 @@ export let BoardList = ({ e }: { e: Ent }) => {
           draggable
           onDragStart={(ev: DragEvent) => dragData(ev, t.eid, 'Full')}
         >
-          <Entity eid={t.eid} view='Tile' />
+          <Entity eid={t.eid} view='List.Tile' />
         </Row>
       ))}
       {more > 0 && <Row mod='more'>+{more} more</Row>}
@@ -82,8 +82,8 @@ export let BoardList = ({ e }: { e: Ent }) => {
 // The default list line: title (or kind) + the id chip. The whole tile
 // is the LINK — clickProps on the el: click peeks, double click
 // navigates — and right-click serves the app menu (menuAt): navigation
-// plus the entity's verbs. Entity shapes specialize Tile in the registry
-// (TaskTile).
+// plus the entity's verbs. With no special List.Tile renderer, the registry
+// falls through to each entity shape's plain Tile face.
 let Line = block('div', 'ListTile', { Title: 'span' })
 let summary = (e: Ent) =>
   (e.mail ? unmime(e.doc?.title ?? '') : e.doc?.title) ||

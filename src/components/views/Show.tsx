@@ -360,7 +360,7 @@ export let Runs = ({ e }: { e: Ent }) => {
   if (!ids.size) return null
   return (
     <RunsEl>
-      {[...ids].map((s) => <Entity key={s} eid={s} view='Tile' />)}
+      {[...ids].map((s) => <Entity key={s} eid={s} view='List.Tile' />)}
     </RunsEl>
   )
 }
@@ -373,7 +373,7 @@ export let Boards = ({ e }: { e: Ent }) => {
   if (!ids.length) return null
   return (
     <BoardsEl>
-      {ids.map((b) => <Entity key={b} eid={b} view='Tile' />)}
+      {ids.map((b) => <Entity key={b} eid={b} view='List.Tile' />)}
     </BoardsEl>
   )
 }
@@ -394,7 +394,7 @@ export let Tasks = ({ e }: { e: Ent }) => {
   if (!ids.length) return null
   return (
     <TasksEl>
-      {ids.map((t) => <Entity key={t.eid} eid={t.eid} view='Tile' />)}
+      {ids.map((t) => <Entity key={t.eid} eid={t.eid} view='List.Tile' />)}
     </TasksEl>
   )
 }
@@ -470,19 +470,26 @@ let tallies = (e: Ent): [string, number, number][] => [
 // frame the titlebar carries title, pip, and id, so an empty line renders
 // nothing; the document face and dense tile pass `id` to keep its chip here.
 export let Meta = (
-  { e, id, children }: { e: Ent; id?: boolean; children?: ComponentChildren },
+  { e, id, before, children }: {
+    e: Ent
+    id?: boolean
+    before?: ComponentChildren
+    children?: ComponentChildren
+  },
 ) => {
   let talk = commentCount(e.eid).value
   let edges = tallies(e)
   let hasEdges = edges.some(([, open, done]) => open > 0 || done > 0)
   if (
-    !id && !children && !e.task && !talk && !e.claim && !e.created?.at &&
+    !id && !before && !children && !e.task && !talk && !e.claim &&
+    !e.created?.at &&
     !hasEdges
   ) {
     return null
   }
   return (
     <MetaEl>
+      {before}
       {e.task && (
         <>
           <Rank e={e} />

@@ -24,17 +24,17 @@ export let BoardMeta = (
   } catch {
     return <Meta e={e} id={id}>{children}</Meta>
   }
-  return (
-    <Meta e={e} id={id}>
+  let stats = (
+    <>
       {statuses.map((status) => (
         <Stat key={status}>
           <Dot status={status} />
           {tasks.filter((task) => task.task?.status == status).length}
         </Stat>
       ))}
-      {children}
-    </Meta>
+    </>
   )
+  return <Meta e={e} id={id} before={stats}>{children}</Meta>
 }
 
 export let BoardTile = ({ e, slots, onOpen }: TileProps) => (

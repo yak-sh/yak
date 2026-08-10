@@ -111,9 +111,8 @@ let json = () => registry.find((r) => r.view == 'JSON')!
 export let alias: Record<string, string> = {
   'Show': 'Full',
   'Id': 'Inline',
-  'List.Tile': 'Tile',
-  'List.Item': 'Tile',
-  'Task.Row': 'Tile',
+  'List.Item': 'List.Tile',
+  'Task.Row': 'Board.List.Tile',
   'Debug.ListItem': 'Debug.Tile',
 }
 

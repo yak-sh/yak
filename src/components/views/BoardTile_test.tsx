@@ -35,7 +35,9 @@ Deno.test('board tile carries status counts in its meta row', () => {
   let root = document.querySelector('main')!
   try {
     let board = ent('board')
-    assertEquals(resolve(board, 'Tile').Render, BoardTile)
+    let tile = resolve(board, 'List.Tile')
+    assertEquals(tile.view, 'Tile')
+    assertEquals(tile.Render, BoardTile)
     render(<BoardTile e={board} />, root)
     assertEquals(root.querySelector('.Tile-board') != null, true)
     assertEquals(root.querySelector('.Tile_Title')?.textContent, 'Work')
@@ -43,7 +45,9 @@ Deno.test('board tile carries status counts in its meta row', () => {
       [...root.querySelectorAll('.BoardStat')].map((e) => e.textContent),
       ['1', '0', '1', '0'],
     )
-    assertEquals(root.querySelector('.Show_Meta') != null, true)
+    let meta = [...root.querySelector('.Show_Meta')!.children]
+    assertEquals(meta[0].classList.contains('BoardStat'), true)
+    assertEquals(meta.at(-1)?.classList.contains('Id'), true)
   } finally {
     render(null, root)
     cache.value = {}
