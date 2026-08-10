@@ -12,7 +12,7 @@ import {
   type LeaseToken,
   readEntries,
   readyEntries,
-  reclaimGeneration,
+  reclaimEntry,
   settleCall,
   settleGeneration,
   takeEntry,
@@ -324,7 +324,11 @@ export let managedCodex = (options: ManagedCodexOptions) => {
   }
 
   let expire = () => {
-    let retries: { session: string; token: LeaseToken }[] = []
+    let retries: {
+      session: string
+      token: LeaseToken
+      kind: 'generation' | 'call'
+    }[] = []
     for (let lease of expiredLeases(db, clock().toISOString())) {
       if (flights.has(lease.eid)) continue
       if (
@@ -340,14 +344,6 @@ export let managedCodex = (options: ManagedCodexOptions) => {
           continue
         }
       }
-      if (db.prepare('select 1 from generation where eid = ?').get(lease.eid)) {
-        let won = reclaimGeneration(db, lease, runner, leaseMs, clock)
-        if (won) {
-          cast(won.changes)
-          retries.push({ session: lease.session, token: won.token })
-          continue
-        }
-      }
       if (
         db.prepare('select 1 from call where eid = ?').get(lease.eid) &&
         db.prepare('select 1 from result where call = ? limit 1').get(
@@ -360,6 +356,16 @@ export let managedCodex = (options: ManagedCodexOptions) => {
           sessionError(db, lease.session, null, cast, clock)
           continue
         }
+      }
+      let won = reclaimEntry(db, lease, runner, leaseMs, clock)
+      if (won) {
+        cast(won.changes)
+        retries.push({
+          session: lease.session,
+          token: won.token,
+          kind: won.kind,
+        })
+        continue
       }
       let message = 'runner disappeared; operation outcome is ambiguous'
       cast(failEntry(db, lease, message, clock))
@@ -388,7 +394,9 @@ export let managedCodex = (options: ManagedCodexOptions) => {
         ? []
         : readyEntries(db, session).map((entry) => ({ session, ...entry }))
     )
-    let jobs = recovered.map(({ session, token }) => generation(token, session))
+    let jobs = recovered.map(({ session, token, kind }) =>
+      kind == 'generation' ? generation(token, session) : call(token, session)
+    )
     jobs.push(...ready.flatMap(({ session, eid }) => {
       let won = takeEntry(db, eid, runner, leaseMs, clock)
       if (!won) return []

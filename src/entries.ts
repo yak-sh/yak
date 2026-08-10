@@ -134,17 +134,19 @@ export let takeEntry = (
   }
 }
 
-// A provider generation is pure graph advancement: replay may repeat provider
-// work or billing, but it cannot repeat a hosted side effect. Reclaim only
-// that class in place, under the expired lease's full CAS; calls remain
-// ambiguous and are never admitted here.
-export let reclaimGeneration = (
+// Generations and graph_query calls only read external state. Replaying either
+// may repeat provider work, billing, or a graph read, but cannot repeat a
+// hosted side effect. Reclaim only those classes under the expired lease's
+// full CAS; every other call remains ambiguous.
+export let reclaimEntry = (
   db: DatabaseSync,
   stale: LeaseToken,
   holder: string,
   ttl = 30_000,
   clock = () => new Date(),
-): { token: LeaseToken; changes: Change[] } | undefined => {
+):
+  | { token: LeaseToken; kind: 'generation' | 'call'; changes: Change[] }
+  | undefined => {
   let now = clock()
   let token: LeaseToken = {
     eid: stale.eid,
@@ -156,14 +158,28 @@ export let reclaimGeneration = (
   db.exec('begin immediate')
   try {
     let safe = db.prepare(
-      `select 1 from lease l join generation g on g.eid = l.eid
+      `select case
+         when exists (select 1 from generation g where g.eid = l.eid)
+           then 'generation'
+         else 'call'
+       end as kind
+       from lease l
        where l.eid = ? and l.holder = ? and l.at = ? and l.until = ?
          and l.until <= ?
-         and not exists (select 1 from output o where o.source = l.eid)
-         and not exists (select 1 from delivered d where d.eid = l.eid)
          and not exists (select 1 from error x where x.eid = l.eid)
-         and not exists (select 1 from cancel c where c.target = l.eid)`,
-    ).get(stale.eid, stale.holder, stale.at, stale.until, token.at)
+         and not exists (select 1 from cancel c where c.target = l.eid)
+         and (
+           (exists (select 1 from generation g where g.eid = l.eid)
+             and not exists (select 1 from output o where o.source = l.eid)
+             and not exists (select 1 from delivered d where d.eid = l.eid))
+           or
+           (exists (select 1 from call c join graph_query q on q.eid = c.eid
+             where c.eid = l.eid)
+             and not exists (select 1 from result r where r.call = l.eid))
+         )`,
+    ).get(stale.eid, stale.holder, stale.at, stale.until, token.at) as
+      | { kind: 'generation' | 'call' }
+      | undefined
     let runner = db.prepare('select 1 from runner where eid = ?').get(holder)
     if (!safe || !runner) {
       db.exec('rollback')
@@ -174,7 +190,7 @@ export let reclaimGeneration = (
     ).run(holder, token.at, token.until, token.eid)
     record(db, [change], holder)
     db.exec('commit')
-    return { token, changes: [change] }
+    return { token, kind: safe.kind, changes: [change] }
   } catch (error) {
     db.exec('rollback')
     throw error

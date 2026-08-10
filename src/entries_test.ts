@@ -6,7 +6,7 @@ import {
   failEntry,
   readEntries,
   readyEntries,
-  reclaimGeneration,
+  reclaimEntry,
   settleGeneration,
   takeEntry,
 } from './entries.ts'
@@ -144,7 +144,7 @@ Deno.test('lease and usage facets are server-owned and one runner wins', () => {
   db.close()
 })
 
-Deno.test('only an expired generation lease can be reclaimed', () => {
+Deno.test('only expired generation and graph_query leases can be reclaimed', () => {
   let db = open(':memory:')
   let sid = session(db), old = uuid(), next = uuid()
   apply(db, [
@@ -163,7 +163,7 @@ Deno.test('only an expired generation lease can be reclaimed', () => {
     () => new Date('2026-08-10T12:00:00Z'),
   )!
   assertEquals(
-    reclaimGeneration(
+    reclaimEntry(
       db,
       stale.token,
       next,
@@ -172,7 +172,7 @@ Deno.test('only an expired generation lease can be reclaimed', () => {
     ),
     undefined,
   )
-  let won = reclaimGeneration(
+  let won = reclaimEntry(
     db,
     stale.token,
     next,
@@ -181,7 +181,30 @@ Deno.test('only an expired generation lease can be reclaimed', () => {
   )!
   assertEquals(won.token.eid, generation)
   assertEquals(won.token.holder, next)
+  assertEquals(won.kind, 'generation')
   assertEquals(settleGeneration(db, stale.token), [])
+
+  let query = append(db, sid, [{
+    output: { source: generation },
+    call: { key: 'read-only' },
+    graph_query: { query: '.task.status=open' },
+  }]).eids[0]
+  let queryLease = takeEntry(
+    db,
+    query,
+    old,
+    100,
+    () => new Date('2026-08-10T12:00:00Z'),
+  )!
+  let queryRetry = reclaimEntry(
+    db,
+    queryLease.token,
+    next,
+    100,
+    () => new Date('2026-08-10T12:00:00.200Z'),
+  )!
+  assertEquals(queryRetry.token.eid, query)
+  assertEquals(queryRetry.kind, 'call')
 
   append(db, sid, [{
     output: { source: generation },
@@ -197,7 +220,7 @@ Deno.test('only an expired generation lease can be reclaimed', () => {
     () => new Date('2026-08-10T12:00:00Z'),
   )!
   assertEquals(
-    reclaimGeneration(
+    reclaimEntry(
       db,
       sideEffect.token,
       next,

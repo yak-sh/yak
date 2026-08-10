@@ -598,6 +598,69 @@ Deno.test('restart reclaims a lost generation without minting another', async ()
   db.close()
 })
 
+Deno.test('restart reclaims graph_query on the same call entry', async () => {
+  let db = open(':memory:')
+  let tree = Deno.makeTempDirSync()
+  let sid = session(db, tree), old = uuid(), calls = 0
+  db.prepare('update session set base_revision = ? where eid = ?')
+    .run('base', sid)
+  apply(db, [{ eid: old, name: 'runner', comp: { name: 'old' } }])
+  let input = append(db, sid, [{ message: { role: 'user' } }]).eids[0]
+  let generation = append(db, sid, [{
+    generation: { through: input, provider: 'codex', model: 'gpt-requested' },
+  }]).eids[0]
+  let generationLease = takeEntry(db, generation, old)!
+  let query = append(db, sid, [{
+    output: { source: generation },
+    call: { key: 'recovered-query' },
+    graph_query: { query: '.task.status=open' },
+  }], old).eids[0]
+  settleGeneration(db, generationLease.token)
+  takeEntry(
+    db,
+    query,
+    old,
+    100,
+    () => new Date('2026-08-10T12:00:00Z'),
+  )
+  let service = managedCodex({
+    db,
+    cast: () => {},
+    clock: () => new Date('2026-08-10T12:00:01Z'),
+    transport: {
+      run: () =>
+        Promise.resolve(result([{
+          type: 'message',
+          content: [{ type: 'output_text', text: 'continued after query' }],
+        }])),
+    },
+    tools: () =>
+      Promise.resolve({
+        tools: [],
+        call: (name) => {
+          calls++
+          assertEquals(name, 'graph_query')
+          return Promise.resolve({ output: 'one graph result' })
+        },
+      }),
+    prepare: () => Promise.resolve(),
+  })
+  await service.sweep()
+
+  let rows = readEntries(db, sid)
+  assertEquals(calls, 1)
+  assertEquals(rows.filter((row) => row.eid == query).length, 1)
+  assertEquals(
+    rows.filter((row) => row.comps.result?.call == query).length,
+    1,
+  )
+  assertEquals(
+    rows.find((row) => row.comps.result?.call == query)?.comps.content.body,
+    'one graph result',
+  )
+  db.close()
+})
+
 Deno.test('restart leaves an uncertain side-effecting call ambiguous', async () => {
   let db = open(':memory:')
   let tree = Deno.makeTempDirSync()
