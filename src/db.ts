@@ -32,10 +32,10 @@ import { homeReads } from './persona.ts'
 import { matchQuery, parseQuery, resolveRefs, TEXT } from './query.ts'
 import {
   bodyCols,
+  isRef,
   normalizeChanges,
   parseProp,
   propAt,
-  refOf,
 } from './props.ts'
 import { fleetLocal } from './mailaddr.ts'
 
@@ -3012,14 +3012,15 @@ export let depsOf = (db: DatabaseSync, eids: string[]): Dep[] => {
 // statement per column in the readable vocabulary (`stamped` included, so an
 // association nobody may write still says who made it), where the graph-out
 // reading walks every column of every row. `via` names the column. A column
-// is a reference by its PropType, not its name, so `created.by` and `deliver.to`
-// count as surely as `project_eid` — refOf reads the type the _eid suffix hinted.
+// is a reference by its PropType, not its name, so `created.by` and
+// `deliver.to` count as surely as `project_eid` — isRef reads the type the
+// _eid suffix only hinted at.
 export let refsOf = (db: DatabaseSync, eids: string[]) => {
   if (!eids.length) return []
   stage(db, eids)
   let out: { from: string; via: string; to: string }[] = []
   for (let [name, cols] of Object.entries(readable)) {
-    for (let col of cols.filter((c) => refOf(name, c) !== undefined)) {
+    for (let col of cols.filter((c) => isRef(name, c))) {
       let rows = db.prepare(
         `select eid, ${sqlName(col)} as at from ${sqlName(name)}
           where ${sqlName(col)} in (select eid from hit)`,

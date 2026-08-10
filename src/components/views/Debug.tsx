@@ -1,6 +1,6 @@
 import { type ComponentChildren, Fragment } from 'preact'
 import { useState } from 'preact/hooks'
-import { formatProp, propAt, refOf } from '../../props.ts'
+import { formatProp, isRef, propAt } from '../../props.ts'
 import { comps as vocab, type Ent, idOf, plural } from '../../types.ts'
 import { backlinks, ent, mutate, parents } from '../../live.ts'
 import { up } from './Show.tsx'
@@ -202,7 +202,7 @@ let cells = (e: Ent, name: string, comp: Record<string, unknown>) => {
     // The reference detector reads the PropType, so `created.by` and a bare
     // `to` are associations as surely as `project_eid` — the _eid suffix is
     // just a hint we strip off the key when it wears one.
-    let assoc = refOf(name, k) !== undefined
+    let assoc = isRef(name, k)
     let editable = k in (vocab[name] ?? {})
     return (
       <Fragment key={`${name}.${k}`}>

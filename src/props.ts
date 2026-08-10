@@ -58,6 +58,12 @@ export let refOf = (comp: string, prop: string): string | undefined => {
   return typeof t == 'object' && 'eid' in t ? t.eid : undefined
 }
 
+// Just the yes/no of it, without the footgun: refOf answers a reference to
+// ANY entity with '' (a falsy but present target), so truthiness misreads
+// the commonest reference as a scalar — ask isRef, never `if (refOf(...))`.
+export let isRef = (comp: string, prop: string): boolean =>
+  refOf(comp, prop) != null
+
 // The columns a component declares as BODIES — the long markdown that no
 // board, list or dot view reads, and the one slice a payload may leave
 // behind (subs.ts `bodyless`). Derived from the vocabulary, so a new body

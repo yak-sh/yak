@@ -2,10 +2,12 @@
 import { assertEquals, assertThrows } from '@std/assert'
 import {
   formatProp,
+  isRef,
   normalizeChanges,
   parseProp,
   type Prop,
   propAt,
+  refOf,
 } from './props.ts'
 import { type PropType } from './types.ts'
 
@@ -177,6 +179,20 @@ Deno.test('propAt: types and unambiguous error names come from schema', () => {
   assertEquals(parseProp(verdict, 'reject'), 'rejected')
   assertEquals(parseProp(verdict, 'changes'), 'changes_requested')
   assertEquals(propAt('task', 'missing'), undefined)
+})
+
+Deno.test('isRef: an any-entity ref reads true where truthiness would not', () => {
+  // card.target_eid targets ANY entity, so refOf answers '' — a falsy but
+  // present target. isRef is the guard that survives that: truthiness on
+  // refOf misreads the commonest reference as a plain scalar.
+  assertEquals(refOf('card', 'target_eid'), '')
+  assertEquals(isRef('card', 'target_eid'), true)
+  // A kind-constrained ref answers its kind; a bare non-suffixed ref counts.
+  assertEquals(refOf('task', 'project_eid'), 'project')
+  assertEquals(isRef('deliver', 'to'), true)
+  // A scalar and an unknown column are not references.
+  assertEquals(isRef('task', 'status'), false)
+  assertEquals(isRef('task', 'missing'), false)
 })
 
 Deno.test('normalizeChanges: component values, ids, and edges canonicalize', () => {

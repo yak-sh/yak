@@ -47,7 +47,7 @@
 // dotted first segment that names a COMPONENT is the explicit spelling
 // (`.pin.x=12`); any other first segment is a PATH — `.assignee.title~=j`
 // dereferences the eid column and predicates the target's prop. Depth 1.
-import { bareType, parseProp, type Prop, propAt, refOf } from './props.ts'
+import { bareType, isRef, parseProp, type Prop, propAt } from './props.ts'
 import { comps, kindOrder, stamped } from './types.ts'
 import { type Span, span } from './time.ts'
 
@@ -487,10 +487,6 @@ let test = (v: unknown, p: Pred, now?: number): boolean => {
 // equality-shaped ops resolve; each part of an any-of list resolves
 // alone; a miss stays as typed and matches nothing, because a board
 // mid-render is no place to throw.
-// Is (comp, prop) an entity reference? Its PropType decides — so a
-// differently-named ref like created.by resolves its sugar value
-// ('.created.by=jeff') exactly as `project_eid` does.
-let isRef = (comp: string, prop: string) => refOf(comp, prop) != null
 export let resolveRefs = (
   preds: Pred[],
   lookup: (id: string) => string | undefined,
@@ -704,9 +700,7 @@ let bares = (): Cand[] => {
     // The suffix-strip short form (.assignee for assignee_eid) needs both a
     // strippable suffix and a reference type — the latter read from the
     // vocabulary, never assumed from the name.
-    if (
-      p.endsWith('_eid') && refOf('', p) != null && !owners.has(p.slice(0, -4))
-    ) {
+    if (p.endsWith('_eid') && isRef('', p) && !owners.has(p.slice(0, -4))) {
       out.push({
         text: `.${p.slice(0, -4)}`,
         kind: cs.length == 1 ? `${cs[0]} · ref` : 'ref',
