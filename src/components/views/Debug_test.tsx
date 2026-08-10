@@ -5,6 +5,58 @@ import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
 import { compTone } from '../comp.ts'
 import { cache, ent } from '../../live.ts'
+import { applicable } from '../registry.ts'
+
+Deno.test('raw formats are nested under Debug', async () => {
+  await import('../Entity.tsx')
+  let { DebugTabs } = await import('./Debug.tsx')
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let { document } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  let root = document.querySelector('main')!
+  let e = {
+    eid: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    num: 1,
+    kind: 'doc',
+    refs: [],
+    kids: [],
+    doc: {
+      eid: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      title: 'Nested',
+      body: 'source',
+    },
+  }
+  try {
+    assertEquals(applicable(e).includes('Markdown'), false)
+    assertEquals(applicable(e).includes('JSON'), false)
+    render(h(DebugTabs, { e }, h('i', {}, 'components')), root)
+    let tabs = [...root.querySelectorAll<HTMLButtonElement>('.Debug_Tabs .Tab')]
+    assertEquals(tabs.map((tab) => tab.getAttribute('aria-label')), [
+      'Components',
+      'Markdown',
+      'JSON',
+    ])
+    tabs[1].click()
+    await Promise.resolve()
+    assertEquals(
+      root.querySelector('.Md')?.textContent.includes('source'),
+      true,
+    )
+    tabs[2].click()
+    await Promise.resolve()
+    assertEquals(
+      root.querySelector('.Json')?.textContent.includes('Nested'),
+      true,
+    )
+  } finally {
+    render(null, root)
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else delete (globalThis as { document?: unknown }).document
+  }
+})
 
 Deno.test('addable components keep their component tones', async () => {
   await import('../Entity.tsx')

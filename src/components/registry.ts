@@ -80,8 +80,8 @@ let all = () => (overrides.length ? [...overrides, ...registry] : registry)
 
 // The views that may appear as card tabs, in tab order. A view tabs for
 // an entity iff some renderer serves it; Debug's catch-all means every
-// card gets a Debug tab. Views not listed (Inline, Dependency) are internal —
-// reachable only by explicit name.
+// card gets a Debug tab. Views not listed (Inline, Dependency, the raw file
+// forms) are internal — reachable only by explicit name.
 export let applicable = (e: Ent) =>
   tabs.filter((v) => all().some((r) => r.view == v && score(r, e) > 0))
 

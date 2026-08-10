@@ -205,8 +205,6 @@ define([
   'Full',
   'Web',
   'Session',
-  'Markdown',
-  'JSON',
   'Schema',
   'Debug',
 ])

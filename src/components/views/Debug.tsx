@@ -1,10 +1,10 @@
-import { Fragment } from 'preact'
+import { type ComponentChildren, Fragment } from 'preact'
 import { useState } from 'preact/hooks'
 import { formatProp, propAt } from '../../props.ts'
 import { comps as vocab, type Ent, idOf, plural } from '../../types.ts'
 import { backlinks, ent, mutate, parents } from '../../live.ts'
 import { up } from './Show.tsx'
-import { block } from '../ui.tsx'
+import { block, el } from '../ui.tsx'
 import { Prop } from '../editors.tsx'
 import { Id } from './Inline.tsx'
 import { Entity } from '../Entity.tsx'
@@ -12,6 +12,10 @@ import { viaName } from '../Comments.tsx'
 import { title } from '../title.tsx'
 import { follow } from '../nav.tsx'
 import { compTone } from '../comp.ts'
+import { Icon } from '../icons.tsx'
+import { dragData } from '../drag.ts'
+import { Md } from './Md.tsx'
+import { Json } from './Json.tsx'
 
 // Adding/removing comps is a browser power tool — the TUI paints Debug as
 // static lines with no live events, so the controls stay web-only. typeof
@@ -28,6 +32,7 @@ let priority = propAt('task', 'priority')!
 
 let Frame = block('div', 'Debug', {
   Props: 'div',
+  Tabs: 'div',
   Key: 'span',
   Comp: 'span',
   Val: 'span',
@@ -48,6 +53,7 @@ let Frame = block('div', 'Debug', {
 })
 let {
   Props: Grid,
+  Tabs,
   Key,
   Comp,
   Val,
@@ -66,6 +72,44 @@ let {
   Linked,
   Via,
 } = Frame
+let Tab = el('button', 'Tab')
+
+// Raw file forms belong to the inspector, not every card's primary tab row.
+// They remain draggable here because the same gesture is how a browser hands
+// the serialized bytes to the desktop.
+export let DebugTabs = (
+  { e, children }: { e: Ent; children?: ComponentChildren },
+) => {
+  let [view, setView] = useState('Debug')
+  let views = ['Debug', ...(e.doc ? ['Markdown'] : []), 'JSON']
+  return (
+    <>
+      <Tabs>
+        {views.map((v) => (
+          <Tab
+            key={v}
+            type='button'
+            mod={v == view && 'on'}
+            draggable={v != 'Debug'}
+            onDragStart={(ev: DragEvent) => dragData(ev, e.eid, v)}
+            onClick={() => setView(v)}
+            aria-label={v == 'Debug' ? 'Components' : v}
+            data-tip={v == 'Debug' ? 'Components' : v}
+          >
+            <Icon
+              name={v == 'Debug' ? 'bug' : v == 'Markdown' ? 'hash' : 'braces'}
+            />
+          </Tab>
+        ))}
+      </Tabs>
+      {view == 'Markdown'
+        ? <Md e={e} />
+        : view == 'JSON'
+        ? <Json e={e} />
+        : children}
+    </>
+  )
+}
 
 // The comps an entity actually carries, minus the spine — the raw payload.
 // Provenance (created/updated) rides in `rest` now like any component, so
@@ -210,8 +254,8 @@ export let Debug = ({ e, project }: { e: Ent; project?: boolean }) => {
   // which prop brought it (live.ts backlinks, derived from the typed
   // vocabulary — sessions on their task, cards on their target, …).
   let links = backlinks(e.eid)
-  return (
-    <Frame>
+  let body = (
+    <>
       <Entity eid={e.eid} view='Debug.Tile' />
       <AllProps e={e} />
       {browser && <AddComp e={e} />}
@@ -244,6 +288,11 @@ export let Debug = ({ e, project }: { e: Ent; project?: boolean }) => {
           ))}
         </Kids>
       )}
+    </>
+  )
+  return (
+    <Frame>
+      {browser ? <DebugTabs e={e}>{body}</DebugTabs> : body}
     </Frame>
   )
 }

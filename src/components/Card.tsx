@@ -72,7 +72,8 @@ export let pinStyle = (live: Signal<Pinned>) => {
 // patch and a titlebar drag is pin patches — local first (instant), wire on
 // drop. Tabs are native draggables: dropped on the canvas they spawn a new
 // card with that view (Canvas owns the drop); dragged to the desktop they
-// become a file when the view's renderer has a file form (JSON, Markdown).
+// become a file when the view's renderer has a file form (the raw formats
+// nested under Debug use the same drag contract).
 // The scroller (not the card) owns the padding, so the scrollbar rides the
 // card border and the padding scrolls away with the content.
 export let Card = ({ p }: { p: Pinned }) => {

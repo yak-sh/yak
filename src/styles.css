@@ -2400,6 +2400,13 @@ a[data-ref]:hover {
   gap: var(--half-gap);
   font-size: 12px;
 }
+.Debug_Tabs {
+  display: flex;
+  justify-content: end;
+  gap: var(--gap);
+  padding-bottom: var(--half-gap);
+  border-bottom: 1px solid var(--border);
+}
 .Debug_Item {
   display: flex;
   align-items: center;
