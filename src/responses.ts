@@ -320,6 +320,16 @@ export let responses = (options: ResponseOptions) => {
   let retries = Math.max(0, options.retries ?? 2)
   let pause = options.pause ?? sleep
   let id = options.id ?? (() => crypto.randomUUID())
+  // Refresh replaces the credential at the HTTP edge, but completed provider
+  // items from later turns may still echo something seen before the refresh.
+  // Keep every credential this transport has held as a redaction term for its
+  // whole lifetime; none of them leave this closure.
+  let secrets: string[] = []
+  let remember = (auth: Credential) => {
+    for (let value of [auth.token, auth.account ?? '']) {
+      if (value && !secrets.includes(value)) secrets.push(value)
+    }
+  }
 
   let run = async (
     value: ResponseRequest,
@@ -329,7 +339,7 @@ export let responses = (options: ResponseOptions) => {
       options.credentials.get,
       'responses: credential unavailable',
     )
-    let secrets = [auth.token, auth.account ?? '']
+    remember(auth)
     let refreshed = false
     let failures = 0
     let requestId = id()
@@ -368,7 +378,7 @@ export let responses = (options: ResponseOptions) => {
           options.credentials.refresh,
           'responses: credential refresh failed',
         )
-        secrets.push(auth.token, auth.account ?? '')
+        remember(auth)
         refreshed = true
         continue
       }

@@ -467,7 +467,17 @@ with the same stable session identifier you claim with.`,
     { session: z.string() },
     async ({ session }: { session: string }) => {
       let snap = await io.read()
-      return bus(contextDigest(snap, session), session, snap)
+      let pending = noticesFor(snap, session)
+      let digest = contextDigest(
+        snap,
+        session,
+        Date.now(),
+        undefined,
+        new Set(pending.ack.map((change) => change.eid)),
+      )
+      if (!pending.lines.length) return text(digest)
+      await io.write(pending.ack, session)
+      return text(digest + noticeBlock(pending.lines))
     },
   )
 

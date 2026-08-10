@@ -5,6 +5,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
+import { rows } from './client.ts'
 import { type IO, mcpServer } from './mcp.ts'
 
 export type ToolDefinition = {
@@ -297,7 +298,9 @@ let resultText = (result: CallToolResult) => {
   let blocks = result.content.flatMap((
     part: CallToolResult['content'][number],
   ) => part.type == 'text' ? [part.text] : [])
-  if (result.structuredContent != null) {
+  // MCP mirrors textual output into structuredContent for typed clients. The
+  // model input is one transcript, so never append the mirror a second time.
+  if (!blocks.length && result.structuredContent != null) {
     blocks.push(JSON.stringify(result.structuredContent, null, 2))
   }
   return blocks.join('\n')
@@ -346,6 +349,10 @@ let taskDefinitions = (listed: Tool[]): ToolDefinition[] => {
 // D-15656. MCP sugar remains available through native doors; every hosted call
 // here has a typed entry facet from which crash recovery can redispatch it.
 export let tasksTools = async (io: IO, session: string): Promise<ToolHost> => {
+  let identity = String(
+    rows(await io.read()).find((row) => row.eid == session)?.comps.session
+      ?.id ?? session,
+  )
   let [mine, theirs] = InMemoryTransport.createLinkedPair()
   let server = mcpServer(io)
   let client = new Client({ name: 'tasks-runner', version: '0.1.0' })
@@ -362,7 +369,7 @@ export let tasksTools = async (io: IO, session: string): Promise<ToolHost> => {
           : [name == 'graph_apply' ? 'change' : 'query'],
       )
       let call = name == 'task_context'
-        ? { name, arguments: { session } }
+        ? { name, arguments: { session: identity } }
         : name == 'graph_query'
         ? { name, arguments: { query: args.query } }
         : name == 'graph_apply'

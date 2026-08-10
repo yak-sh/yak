@@ -1684,6 +1684,7 @@ let onMine = (
   sess: Row | undefined,
   now: number,
   budget: number,
+  skip = new Set<string>(),
 ) => {
   if (!sess || budget < 1) return []
   let mine = new Set(
@@ -1701,7 +1702,7 @@ let onMine = (
   let hits = all
     .filter((r) => {
       let c = r.comps.comment
-      return c && r.comps.created?.via != sess.eid &&
+      return c && !skip.has(r.eid) && r.comps.created?.via != sess.eid &&
         mine.has(String(c.target)) && now - Date.parse(bornAt(r)) < 7 * DAY
     })
     .sort((a, b) => bornAt(b).localeCompare(bornAt(a)))
@@ -1854,6 +1855,7 @@ export let contextDigest = (
   session?: string,
   now = Date.now(),
   scope?: string,
+  skip = new Set<string>(),
 ) => {
   let all = rows(snap)
   let byEid = new Map(all.map((r) => [r.eid, r]))
@@ -1930,7 +1932,7 @@ export let contextDigest = (
   // headroom is what makes the project layer render identically with or
   // without a session (parity).
   let room = () => 48 - lines.length
-  lines.push(...onMine(all, sess, now, Math.min(4, room())))
+  lines.push(...onMine(all, sess, now, Math.min(4, room()), skip))
   lines.push(...pulse(all, now, room(), scope))
   lines.push(...decisions(all, Math.min(6, room()), scope))
   lines.push(...fleetMemory(all, now, Math.min(6, room())))
