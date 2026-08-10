@@ -112,6 +112,7 @@ Deno.test('provider items become typed entries and unknown evidence stays opaque
   assertEquals(work.specs[0].content.body, 'thinking')
   assertEquals(work.specs[1].bash.command, 'pwd')
   assertEquals(work.specs[1].timeout.ms, 500)
+  assertEquals(work.specs[1].opaque.format, 'openai:function_call')
   assertEquals(work.specs[2].checkpoint.through, 'generation-1')
   assertEquals(work.specs[3].opaque.format, 'openai:future_item')
   assertEquals(
@@ -119,6 +120,7 @@ Deno.test('provider items become typed entries and unknown evidence stays opaque
     'openai:event:response.future.delta',
   )
   assertEquals(work.finalText, 'done')
+  assertEquals(work.specs[4].opaque.format, 'openai:message')
   assertEquals(work.usage, { input: 10, cached: 3, output: 5, reasoning: 2 })
 })
 
@@ -143,6 +145,77 @@ Deno.test('malformed and unsupported calls remain evidence and receive errors', 
   assertMatch(work.calls[0].error ?? '', /valid JSON/)
   assertMatch(work.calls[1].error ?? '', /unsupported tool/)
   assertEquals(work.specs.every((spec) => !!spec.opaque), true)
+})
+
+Deno.test('refusals stay typed and replay their provider shape', () => {
+  let work = generationEntries(
+    result([{
+      type: 'message',
+      id: 'refusal-1',
+      role: 'assistant',
+      content: [{ type: 'refusal', refusal: 'I cannot do that.' }],
+    }]),
+    'generation-old',
+  )
+  assertEquals(work.specs[0].content.body, 'I cannot do that.')
+  assertEquals(work.finalText, 'I cannot do that.')
+  let input = project([
+    row('user', 1, {
+      message: { role: 'user' },
+      content: { body: 'begin' },
+    }),
+    row('generation-old', 2, {
+      generation: { through: 'user', provider: 'codex', model: 'old' },
+    }),
+    row('refusal', 3, work.specs[0]),
+    row('current', 4, {
+      generation: { through: 'refusal', provider: 'codex', model: 'new' },
+    }),
+  ], 'current')
+  assertEquals(input.at(-1), {
+    type: 'message',
+    id: 'refusal-1',
+    role: 'assistant',
+    content: [{ type: 'refusal', refusal: 'I cannot do that.' }],
+  })
+})
+
+Deno.test('same-provider messages and calls replay their complete items', () => {
+  let message = {
+    type: 'message',
+    id: 'message-opaque',
+    role: 'assistant',
+    status: 'completed',
+    content: [{ type: 'output_text', text: 'call next' }],
+  }
+  let call = {
+    type: 'function_call',
+    id: 'call-opaque',
+    call_id: 'call-key',
+    name: 'shell',
+    arguments: '{"command":"pwd"}',
+    status: 'completed',
+  }
+  let work = generationEntries(result([message, call]), 'old')
+  let input = project([
+    row('user', 1, {
+      message: { role: 'user' },
+      content: { body: 'begin' },
+    }),
+    row('old', 2, {
+      generation: { through: 'user', provider: 'codex', model: 'old' },
+    }),
+    row('message', 3, work.specs[0]),
+    row('call', 4, work.specs[1]),
+    row('result', 5, {
+      result: { call: 'call' },
+      content: { body: '/workspace' },
+    }),
+    row('current', 6, {
+      generation: { through: 'result', provider: 'codex', model: 'new' },
+    }),
+  ], 'current')
+  assertEquals(input.slice(1, 3), [message, call])
 })
 
 Deno.test('projection keeps opaque keys provider-local and typed history portable', () => {

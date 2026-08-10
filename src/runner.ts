@@ -153,6 +153,7 @@ let callShape = (
       ...typeof item.phase == 'string' ? { phase: item.phase } : {},
     },
     call: { key },
+    opaque: { format: 'openai:function_call', data: json(item) },
   }
   try {
     if (!key) throw new Error('tool call has no correlation key')
@@ -220,10 +221,7 @@ let callShape = (
   } catch (error) {
     let message = (error as Error).message
     return {
-      spec: {
-        ...base,
-        opaque: { format: 'openai:function_call', data: json(item) },
-      },
+      spec: base,
       request: { name, args: {}, error: message },
     }
   }
@@ -239,10 +237,12 @@ let contentText = (item: ResponseItem) => {
       continue
     }
     if (
-      (part.type == 'output_text' || part.type == 'text' ||
-        part.type == 'refusal') && typeof part.text == 'string'
+      (part.type == 'output_text' || part.type == 'text') &&
+      typeof part.text == 'string'
     ) body.push(part.text)
-    else unknown = true
+    else if (part.type == 'refusal' && typeof part.refusal == 'string') {
+      body.push(part.refusal)
+    } else unknown = true
   }
   return { body: body.join(''), unknown }
 }
@@ -278,9 +278,7 @@ let itemSpec = (
         output,
         message: { role: 'agent' },
         content: { body: content.body },
-        ...content.unknown
-          ? { opaque: { format: 'openai:message', data: json(item) } }
-          : {},
+        opaque: { format: 'openai:message', data: json(item) },
       },
       final: content.body,
     }
@@ -475,14 +473,19 @@ export let project = (entries: EntryRow[], generation: string): unknown[] => {
       continue
     }
     if (comps.output && comps.message?.role == 'agent') {
-      out.push({
-        type: 'message',
-        role: 'assistant',
-        content: [{
-          type: 'output_text',
-          text: String(comps.content?.body ?? ''),
-        }],
-      })
+      let source = byEid.get(String(comps.output.source))
+      let opaque = opaqueItem(row)
+      if (providerOf(source) == provider && opaque) out.push(opaque)
+      else {
+        out.push({
+          type: 'message',
+          role: 'assistant',
+          content: [{
+            type: 'output_text',
+            text: String(comps.content?.body ?? ''),
+          }],
+        })
+      }
       continue
     }
     if (comps.output && comps.reasoning) {
@@ -502,7 +505,7 @@ export let project = (entries: EntryRow[], generation: string): unknown[] => {
       let opaque = opaqueItem(row)
       if (providerOf(source) == provider) {
         out.push(
-          callName(row) == 'tool' && opaque ? opaque : {
+          opaque ?? {
             type: 'function_call',
             ...comps.output.key != null ? { id: comps.output.key } : {},
             call_id: String(comps.call.key),
