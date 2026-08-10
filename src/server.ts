@@ -71,7 +71,8 @@ import {
   tidy,
   watched,
 } from './sessions.ts'
-import { codexCredentials } from './codex_auth.ts'
+import { codexIssuer, codexStore } from './codex_auth.ts'
+import { accountHttp, accountService } from './accounts.ts'
 import { combineTools, localTools, tasksTools } from './harness_tools.ts'
 import { managedCodex } from './managed_codex.ts'
 import { responses } from './responses.ts'
@@ -610,13 +611,12 @@ let graphIO: IO = {
   providers: async () => providers(),
 }
 
-let account = codexCredentials()
+let codexAccount = accountService(codexStore(), codexIssuer())
 let managed = managedCodex({
   db,
   cast,
   transport: responses({
-    base: 'https://chatgpt.com/backend-api/codex',
-    credentials: account,
+    credentials: codexAccount.credentials,
     headers: { originator: 'tasks', version: '0' },
     retries: 1,
   }),
@@ -768,6 +768,9 @@ let http = Deno.serve(
     // must hear whose graph is here without waiting out our migrations.
     if (path == '/graph') return Response.json(serving)
     await boot
+    if (path.startsWith('/accounts/codex')) {
+      return accountHttp(codexAccount, req, path)
+    }
     if (path == '/ws') return ws(req)
     if (path == '/snapshot') return Response.json(snapshot(db))
     if (path == '/body') {
@@ -1536,6 +1539,7 @@ let drain = async () => {
   draining = true
   for (let c of clients) c.close(1012, 'server restart')
   await http.shutdown()
+  await codexAccount.close()
   ownership.close()
   Deno.exit(0)
 }

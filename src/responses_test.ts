@@ -37,7 +37,9 @@ let complete = (
     },
   )
 
-let auth = (refresh?: () => Promise<{ token: string; account?: string }>) => ({
+let auth = (
+  refresh?: () => Promise<{ token: string; account?: string; base?: string }>,
+) => ({
   get: () => Promise.resolve({ token: 'secret-old', account: 'acct-1' }),
   refresh,
 })
@@ -281,14 +283,26 @@ Deno.test('responses refreshes once on 401 and never returns credentials', async
   let calls = 0
   let refreshed = 0
   let client = responses({
-    credentials: auth(() => {
-      refreshed++
-      return Promise.resolve({ token: 'secret-new', account: 'acct-2' })
-    }),
-    fetch: (_input, init) => {
+    credentials: {
+      get: () =>
+        Promise.resolve({
+          token: 'secret-old',
+          account: 'acct-1',
+          base: 'https://chatgpt.example/codex',
+        }),
+      refresh: () => {
+        refreshed++
+        return Promise.resolve({
+          token: 'secret-new',
+          base: 'https://api.example/v1',
+        })
+      },
+    },
+    fetch: (input, init) => {
       calls++
       let headers = new Headers(init?.headers)
       if (calls == 1) {
+        assertEquals(input, 'https://chatgpt.example/codex/responses')
         assertEquals(headers.get('authorization'), 'Bearer secret-old')
         return Promise.resolve(
           new Response(
@@ -297,8 +311,9 @@ Deno.test('responses refreshes once on 401 and never returns credentials', async
           ),
         )
       }
+      assertEquals(input, 'https://api.example/v1/responses')
       assertEquals(headers.get('authorization'), 'Bearer secret-new')
-      assertEquals(headers.get('chatgpt-account-id'), 'acct-2')
+      assertEquals(headers.get('chatgpt-account-id'), null)
       return Promise.resolve(complete())
     },
   })

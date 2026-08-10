@@ -5,6 +5,7 @@
 export type Credential = {
   token: string
   account?: string
+  base?: string
 }
 
 export type CredentialSource = {
@@ -315,7 +316,7 @@ let request = (value: ResponseRequest) => {
 
 export let responses = (options: ResponseOptions) => {
   let fetcher = options.fetch ?? fetch
-  let base = (options.base ?? 'https://api.openai.com/v1').replace(/\/$/, '')
+  let base = options.base?.replace(/\/$/, '')
   let retries = Math.max(0, options.retries ?? 2)
   let pause = options.pause ?? sleep
   let id = options.id ?? (() => crypto.randomUUID())
@@ -342,7 +343,9 @@ export let responses = (options: ResponseOptions) => {
 
       let response: Response
       try {
-        response = await fetcher(`${base}/responses`, {
+        let endpoint = (base ?? auth.base ?? 'https://api.openai.com/v1')
+          .replace(/\/$/, '')
+        response = await fetcher(`${endpoint}/responses`, {
           method: 'POST',
           headers,
           body: JSON.stringify(request(value)),
