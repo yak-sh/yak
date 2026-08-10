@@ -149,6 +149,21 @@ let CASES: [string, { comp: string; prop: string; value: unknown } | RegExp][] =
       prop: 'provider',
       value: 'fake',
     }],
+    ['.cwd=/tmp/tree', {
+      comp: 'session',
+      prop: 'cwd',
+      value: '/tmp/tree',
+    }],
+    ['.worktree.cwd=/tmp/tree', {
+      comp: 'worktree',
+      prop: 'cwd',
+      value: '/tmp/tree',
+    }],
+    ['.runtime.pid=42', {
+      comp: 'runtime',
+      prop: 'pid',
+      value: 42,
+    }],
     ['.priority=1.5', { comp: 'task', prop: 'priority', value: 1.5 }],
     // priority speaks P<n> at the write door too (T-6741/T-7143): 'P2' and
     // '2' both store the integer 2; garbage is a loud error, not bad data.

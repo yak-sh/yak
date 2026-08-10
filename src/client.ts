@@ -13,6 +13,7 @@ import {
   type Dep,
   type Hit,
   kindOf,
+  sessionFacetNames,
   settled,
   type Snapshot,
   stamped,
@@ -574,9 +575,11 @@ export let historyLine = (e: JournalEntry) => {
 
 export type Param = { comp: string; prop: string; value: unknown }
 
-let legacySpawnProp = (name: string) => {
-  return name in comps.spawn && name in comps.session ? name : undefined
-}
+let legacySessionProp = (name: string) =>
+  name in comps.session &&
+    sessionFacetNames.some((facet) => name in comps[facet])
+    ? name
+    : undefined
 
 // '.title=Hello' | '.doc.title=Hello' → {comp, prop, value}; null if the
 // argument isn't a dot-param at all (a bare word). Bare props ride
@@ -599,9 +602,9 @@ export let param = (arg: string): Param | null => {
     }
     p = { comp: a, prop: b, value: raw }
   } else {
-    // Bare launch props keep speaking the legacy session frame until every
-    // writer is capability-gated. Canonical task hints spell `.spawn.*`.
-    let legacy = legacySpawnProp(a)
+    // Bare split props keep speaking the legacy session frame until every
+    // writer is capability-gated. Canonical writes spell their component.
+    let legacy = legacySessionProp(a)
     let r = legacy ? { comp: 'session', prop: legacy } : route(a)
     // route()'s any-of ('' comp) serves FILTERS; a write must aim at one
     // component, so demand the explicit spelling.

@@ -528,13 +528,21 @@ Deno.test('a reference name shared by several comps is any-of', () => {
   assertEquals(adopt(ps, 'client'), {})
 })
 
-Deno.test('spawn compatibility fields filter across both homes', () => {
+Deno.test('session compatibility fields filter across both homes', () => {
   assertEquals(route('provider'), { comp: '', prop: 'provider' })
   let ps = parseQuery('.provider=fake')
   assert(matchQuery({ session: { provider: 'fake' } }, ps))
   assert(matchQuery({ spawn: { provider: 'fake' } }, ps))
   assert(!matchQuery({ session: { provider: 'claude' } }, ps))
   assertEquals(route('persona'), { comp: '', prop: 'persona' })
+  assertEquals(route('cwd'), { comp: '', prop: 'cwd' })
+  let cwd = parseQuery('.cwd=/tmp/tree')
+  assert(matchQuery({ session: { cwd: '/tmp/tree' } }, cwd))
+  assert(matchQuery({ worktree: { cwd: '/tmp/tree' } }, cwd))
+  assertEquals(route('pid'), { comp: '', prop: 'pid' })
+  let pid = parseQuery('.pid=42')
+  assert(matchQuery({ session: { pid: 42 } }, pid))
+  assert(matchQuery({ runtime: { pid: 42 } }, pid))
 })
 
 Deno.test('paths: a component first segment stays the explicit spelling', () => {

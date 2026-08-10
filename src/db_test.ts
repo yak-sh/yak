@@ -38,7 +38,9 @@ let {
 let { assertEquals, assertMatch, assertNotEquals, assertThrows } = await import(
   '@std/assert'
 )
-let { comps, kindOrder, shortId, stamped } = await import('./types.ts')
+let { comps, kindOrder, sessionOf, shortId, stamped } = await import(
+  './types.ts'
+)
 
 let fresh = () => open() // each test file shares one :memory: handle; use eids per test
 let uid = () => crypto.randomUUID()
@@ -663,6 +665,99 @@ Deno.test('canonical session launch fields dual-materialize', () => {
   )
 })
 
+Deno.test('session execution facets dual-materialize in both directions', () => {
+  let d = fresh()
+  let legacy = uid(), canonical = uid()
+  apply(d, [{
+    eid: legacy,
+    name: 'session',
+    comp: {
+      id: uid(),
+      cwd: '/legacy',
+      pid: 17,
+      pane: '%17',
+      transcript: '/tmp/legacy.jsonl',
+    },
+  }])
+  assertEquals(compOf(d, legacy, 'worktree')?.cwd, '/legacy')
+  assertEquals(compOf(d, legacy, 'runtime')?.pid, 17)
+  assertEquals(compOf(d, legacy, 'runtime')?.pane, '%17')
+  assertEquals(
+    compOf(d, legacy, 'runtime')?.transcript,
+    '/tmp/legacy.jsonl',
+  )
+
+  apply(d, [
+    { eid: canonical, name: 'session', comp: { id: uid() } },
+    { eid: canonical, name: 'worktree', comp: { cwd: '/canonical' } },
+    {
+      eid: canonical,
+      name: 'runtime',
+      comp: { pid: 23, pane: '%23', transcript: '/tmp/canonical.jsonl' },
+    },
+  ])
+  assertEquals(compOf(d, canonical, 'session')?.cwd, '/canonical')
+  assertEquals(compOf(d, canonical, 'session')?.pid, 23)
+  assertEquals(compOf(d, canonical, 'session')?.pane, '%23')
+  assertEquals(
+    compOf(d, canonical, 'session')?.transcript,
+    '/tmp/canonical.jsonl',
+  )
+})
+
+Deno.test('canonical null wins either session-facet batch order', () => {
+  let d = fresh()
+  for (let canonicalFirst of [false, true]) {
+    let eid = uid()
+    apply(d, [{
+      eid,
+      name: 'session',
+      comp: { id: uid(), cwd: '/old', pid: 7 },
+    }])
+    let legacy = {
+      eid,
+      name: 'session',
+      comp: { cwd: '/stale', pid: 9 },
+    }
+    let canonical = [
+      { eid, name: 'worktree', comp: { cwd: null } },
+      { eid, name: 'runtime', comp: { pid: null } },
+    ]
+    apply(
+      d,
+      (canonicalFirst
+        ? [...canonical, legacy]
+        : [legacy, ...canonical]) as import('./types.ts').Change[],
+    )
+    let parts = Object.fromEntries(
+      ['session', 'spawn', 'worktree', 'runtime'].flatMap((name) => {
+        let comp = compOf(d, eid, name)
+        return comp ? [[name, comp]] : []
+      }),
+    )
+    assertEquals(compOf(d, eid, 'worktree')?.cwd, null)
+    assertEquals(compOf(d, eid, 'runtime')?.pid, null)
+    assertEquals(compOf(d, eid, 'session')?.cwd, null)
+    assertEquals(compOf(d, eid, 'session')?.pid, null)
+    assertEquals(sessionOf(parts)?.cwd, null)
+    assertEquals(sessionOf(parts)?.pid, null)
+  }
+})
+
+Deno.test('work type and execution model remain independent', () => {
+  let d = fresh()
+  let coding = uid(), chat = uid()
+  apply(d, [
+    { eid: coding, name: 'session', comp: { id: uid() } },
+    { eid: coding, name: 'worktree', comp: { cwd: '/code' } },
+    { eid: chat, name: 'session', comp: { id: uid() } },
+  ])
+  assertEquals(compOf(d, coding, 'worktree')?.cwd, '/code')
+  assertEquals(compOf(d, coding, 'runtime'), undefined)
+  assertEquals(compOf(d, chat, 'worktree'), undefined)
+  assertEquals(compOf(d, chat, 'runtime'), undefined)
+})
+
 Deno.test('spawn refuses an undecided proposal and allows an atomic decision', () => {
   let d = fresh()
   let task = uid(), refused = uid(), accepted = uid()
@@ -794,7 +889,7 @@ Deno.test('old snapshot readers keep the legacy session view', async () => {
     comp: { id: uid(), provider: 'fake', model: 'fake-fast' },
   }])
   let snap = snapshot(d)
-  assertEquals(snap.capabilities, ['spawn'])
+  assertEquals(snap.capabilities, ['spawn', 'session-facets'])
   let old = {
     changes: snap.changes.filter((c) => c.name != 'spawn'),
     deps: snap.deps,
@@ -1579,6 +1674,56 @@ Deno.test('open backfills every pre-spawn session, once', () => {
   assertEquals(compOf(d, legacy, 'spawn')?.model, null)
   assertEquals(compOf(d, legacy, 'session')?.provider, null)
   assertEquals(compOf(d, legacy, 'session')?.model, null)
+  d.close()
+  Deno.removeSync(path)
+})
+
+Deno.test('open backfills optional session facets without reviving nulls', () => {
+  let path = Deno.makeTempFileSync({
+    prefix: 'tasks-session-facets-',
+    suffix: '.db',
+  })
+  let legacy = uid(), canonical = uid()
+  let d = open(path)
+  apply(d, [
+    { eid: legacy, name: 'session', comp: { id: uid() } },
+    { eid: canonical, name: 'session', comp: { id: uid() } },
+  ])
+  d.exec('drop table worktree')
+  d.exec('drop table runtime')
+  d.prepare(`
+    update session set cwd = '/old', branch = 'session/old',
+      base_revision = 'abc', pid = 17, pane = '%17',
+      transcript = '/tmp/old.jsonl', provider_session_id = 'thread-old',
+      serving_model = 'model-old' where eid = ?
+  `).run(legacy)
+  d.close()
+
+  d = open(path)
+  assertEquals(d.prepare('select * from worktree where eid = ?').get(legacy), {
+    eid: legacy,
+    cwd: '/old',
+    branch: 'session/old',
+    base_revision: 'abc',
+  })
+  assertEquals(d.prepare('select * from runtime where eid = ?').get(legacy), {
+    eid: legacy,
+    pid: 17,
+    pane: '%17',
+    transcript: '/tmp/old.jsonl',
+    provider_session_id: 'thread-old',
+    serving_model: 'model-old',
+  })
+  d.prepare(
+    `insert into worktree (eid, cwd, branch, base_revision)
+     values (?, null, null, null)`,
+  ).run(canonical)
+  d.prepare("update session set cwd = '/stale' where eid = ?").run(canonical)
+  d.close()
+
+  d = open(path)
+  assertEquals(compOf(d, canonical, 'worktree')?.cwd, null)
+  assertEquals(compOf(d, canonical, 'session')?.cwd, null)
   d.close()
   Deno.removeSync(path)
 })

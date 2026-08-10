@@ -47,7 +47,13 @@
 // (`.pin.x=12`); any other first segment is a PATH — `.assignee.title~=j`
 // dereferences the eid column and predicates the target's prop. Depth 1.
 import { bareType, isRef, parseProp, type Prop, propAt } from './props.ts'
-import { comps, kindOrder, sessionComps, stamped } from './types.ts'
+import {
+  comps,
+  kindOrder,
+  sessionComps,
+  sessionFacetNames,
+  stamped,
+} from './types.ts'
 import { type Span, span } from './time.ts'
 
 export type Pred = {
@@ -108,9 +114,11 @@ export let edgeish = /block|depend|require|parent|child|subtask/i
 export let EDGE_DOOR = 'a dependency is an EDGE, not a prop: ' +
   "link one with 'task <parent> requires <child>'"
 
-let spawnTwin = (prop: string, owners: string[]) =>
-  prop in comps.spawn && owners.length == 2 &&
-  owners.every((name) => name == 'session' || name == 'spawn')
+let sessionFacets = new Set<string>(sessionFacetNames)
+let sessionTwin = (owners: string[]) =>
+  owners.includes('session') &&
+  owners.some((name) => sessionFacets.has(name)) &&
+  owners.every((name) => name == 'session' || sessionFacets.has(name))
 
 // These associations already had one bare filter across several suffixed
 // columns. Keep that reading after the columns take their canonical names;
@@ -139,7 +147,7 @@ export let route = (prop: string): { comp: string; prop: string } => {
   if (own.length == 1) return { comp: own[0], prop }
   // Spawn's legacy session aliases are one concept during the rolling
   // window: filters read either home, while write routing chooses explicitly.
-  if (spawnTwin(prop, own)) return { comp: '', prop }
+  if (sessionTwin(own)) return { comp: '', prop }
   if (sharedRef(prop, own)) return { comp: '', prop }
   if (own.length > 1) {
     throw new Error(
@@ -711,7 +719,7 @@ let bares = (): Cand[] => {
   let out: Cand[] = []
   for (let [p, cs] of owners) {
     if (edgeish.test(p)) continue
-    if (cs.length == 1 || sharedRef(p, cs)) {
+    if (cs.length == 1 || sessionTwin(cs) || sharedRef(p, cs)) {
       out.push({
         text: `.${p}`,
         kind: isRef('', p)

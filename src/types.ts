@@ -312,12 +312,10 @@ export let comps: Record<string, Record<string, PropType>> = {
   // survives as a plain canvas — the binding was the client's, the
   // contents aren't.
   shelf: { client: { eid: 'client', death: 'release' } },
-  // What a session may say about ITSELF — wire-writable because forging any
-  // of it only misdirects your own session. What it has SEEN is not here: it
-  // is the per-item `notified` stamp, so no cursor can sweep past an item
-  // that was never actually served. The four launch aliases stay writable
-  // during the spawn compatibility window; apply() mirrors them into the
-  // canonical spawn comp before effects run.
+  // A session's identity and configuration. The launch/worktree/runtime
+  // columns below are rolling aliases: old doors may still write them while
+  // apply() mirrors them into their canonical optional facets. Keeping the
+  // aliases here admits old clients without making them the read model.
   session: {
     id: 'text',
     cwd: 'text',
@@ -362,6 +360,16 @@ export let comps: Record<string, Record<string, PropType>> = {
     // link is what makes the board legible about who spawned whom; a dead
     // parent detaches it, the child lives on.
     parent: { eid: 'session', death: 'detach' },
+  },
+  // Where code work happens, independently of how the model runs. A coding
+  // session wears this; chat may omit it. Branch facts are server-stamped.
+  worktree: { cwd: 'text' },
+  // A provider process binding, independently of whether code needs a
+  // checkout. Graph-native sessions omit it; process-backed sessions wear it.
+  runtime: {
+    pid: 'number',
+    pane: 'text',
+    transcript: 'text',
   },
   // A Session's ordered log composes these independent facets; entry.seq and
   // lease/usage columns join through stamped below.
@@ -751,6 +759,8 @@ export let stamped: Record<string, Record<string, PropType>> = {
     final_text: 'body',
     usage_json: 'text',
   },
+  worktree: { branch: 'text', base_revision: 'text' },
+  runtime: { provider_session_id: 'text', serving_model: 'text' },
   entry: { seq: 'number' },
   generation: { serving_model: 'text' },
   lease: {
@@ -808,7 +818,8 @@ export let sessionActive = ['starting', 'running', 'stopping']
 // tells a client to send only legacy session aliases. The token survives
 // alias retirement: those aliases may leave only after every writer gates
 // canonical frames on this signal and the rollout has soaked.
-export let capabilities = ['spawn']
+export let capabilities = ['spawn', 'session-facets']
+export let sessionFacetNames = ['spawn', 'worktree', 'runtime'] as const
 
 // One log line, in the vocabulary the RENDERER speaks — flat and small, the
 // same six shapes whatever provider wrote it. Adapters own the dialects
@@ -1146,9 +1157,9 @@ export type Fold = {
 // entity (the entity stays a canvas), so it stays out of kindOrder.
 export type Shelf = { eid: string; client: string }
 
-// An agent session, reified: `id` is its external identity (a Claude
-// session id, an operator name) and `cwd` where it runs — what a session
-// may say about itself. What it has seen lives on the items, not here.
+// An agent session's identity and the aspects whose later splits are owned by
+// T-16410/T-16411/T-16412. The launch/worktree/runtime fields at the tail are
+// rolling aliases: sessionOf() overlays their canonical facets for readers.
 //
 // Everything below is the LIFECYCLE of a session we spawned (origin
 // 'managed'; an 'external' session just announces itself and carries
@@ -1194,6 +1205,22 @@ export type Session = {
   stop_reason?: string | null
   final_text?: string | null
   usage_json?: string | null
+}
+
+export type Worktree = {
+  eid: string
+  cwd?: string | null
+  branch?: string | null
+  base_revision?: string | null
+}
+
+export type Runtime = {
+  eid: string
+  pid?: number | null
+  pane?: string | null
+  transcript?: string | null
+  provider_session_id?: string | null
+  serving_model?: string | null
 }
 
 // One ordered Session-log entity. Every other log shape is a facet on this
@@ -1257,6 +1284,23 @@ export type Spawn = {
   effort?: string | null
   persona?: string | null
 }
+
+// Rolling compatibility is a projection, never a second source of truth.
+// Start with legacy aliases, then spread each canonical component: presence
+// and explicit null both win, so a cleared canonical value cannot revive from
+// a stale session column.
+export let sessionOf = (e: {
+  session?: Session
+  spawn?: Spawn
+  worktree?: Worktree
+  runtime?: Runtime
+}): Session | undefined =>
+  e.session && {
+    ...e.session,
+    ...e.spawn,
+    ...e.worktree,
+    ...e.runtime,
+  }
 
 // Desired fleet capacity. Runtime facts are server-stamped on the same row;
 // sessions point back through role instead of a mutable current pointer.
@@ -1499,6 +1543,8 @@ export type Ent = {
   fold?: Fold
   shelf?: Shelf
   session?: Session
+  worktree?: Worktree
+  runtime?: Runtime
   entry?: Entry
   content?: Content
   message?: Message

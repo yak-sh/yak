@@ -249,6 +249,20 @@ let schema = `
     id  text not null unique,
     cwd text
   );
+  create table if not exists worktree (
+    eid           text primary key references entity(eid),
+    cwd           text,
+    branch        text,
+    base_revision text
+  );
+  create table if not exists runtime (
+    eid                 text primary key references entity(eid),
+    pid                 integer,
+    pane                text,
+    transcript          text,
+    provider_session_id text,
+    serving_model       text
+  );
   -- A Session's ordered graph-native log (D-15656). seq is assigned inside
   -- apply()'s write transaction; every other table below is an independent
   -- facet worn by the same entry entity.
@@ -1127,6 +1141,61 @@ export let backfillSpawn = (db: DatabaseSync) =>
        select eid, provider, model, effort, persona from session`,
   )
 
+// Lift the execution axes without inventing facets for sessions that never
+// carried either one. An existing canonical row wins — including its nulls —
+// so an interrupted rolling deploy can never revive a cleared legacy alias.
+export let backfillSessionFacets = (db: DatabaseSync) => {
+  db.exec('begin')
+  try {
+    db.exec(`
+      insert or ignore into worktree (eid, cwd, branch, base_revision)
+      select eid, cwd, branch, base_revision from session
+      where cwd is not null or branch is not null or base_revision is not null
+    `)
+    db.exec(`
+      insert or ignore into runtime (
+        eid, pid, pane, transcript, provider_session_id, serving_model
+      )
+      select eid, pid, pane, transcript, provider_session_id, serving_model
+      from session
+      where pid is not null or pane is not null or transcript is not null
+        or provider_session_id is not null or serving_model is not null
+    `)
+    let facets = {
+      worktree: ['cwd', 'branch', 'base_revision'],
+      runtime: [
+        'pid',
+        'pane',
+        'transcript',
+        'provider_session_id',
+        'serving_model',
+      ],
+    }
+    for (let [table, cols] of Object.entries(facets)) {
+      db.exec(
+        `update session set ${
+          cols.map((col) =>
+            `${sqlName(col)} = (select ${sqlName(col)} from ${table}
+            where ${table}.eid = session.eid)`
+          ).join(', ')
+        } where exists (select 1 from ${table} where ${table}.eid = session.eid)`,
+      )
+      let different = cols.map((col) =>
+        `s.${sqlName(col)} is not f.${sqlName(col)}`
+      ).join(' or ')
+      let missed = db.prepare(`
+        select 1 from session s join ${table} f on f.eid = s.eid
+        where ${different} limit 1
+      `).get()
+      if (missed) throw new Error(`${table} backfill did not verify`)
+    }
+    db.exec('commit')
+  } catch (e) {
+    db.exec('rollback')
+    throw e
+  }
+}
+
 // D-14945 phase 4: role/session diagnostics become the shared error facet.
 // Add every component first, verify the legacy messages all arrived, and only
 // then contract the old columns. A mismatch rolls the transaction back with
@@ -1635,6 +1704,7 @@ export let open = (path = file) => {
     ]
   ) addCol('session', ddl.split(' ')[0], ddl)
   backfillSpawn(db)
+  backfillSessionFacets(db)
   // The identity chain (types.ts): instruments point at who they act for.
   addCol('client', 'actor', 'actor text references entity(eid)')
   // Inbound provenance (inbound.ts): the fleet sweep's idempotency key
@@ -1904,6 +1974,134 @@ let dualSpawn = (db: DatabaseSync, changes: Change[]): Change[] => {
     if (spawn != null) out[spawn].comp = { ...out[spawn].comp, ...spec }
   }
   return out
+}
+
+let facetCols = (name: 'worktree' | 'runtime') => [
+  ...Object.keys(comps[name]),
+  ...Object.keys(stamped[name]),
+]
+
+// Old and new session doors overlap during a rolling release. Apply sees the
+// whole batch under one lock, so it can make the canonical facet win without
+// making order significant, then write the same projection back to aliases
+// for a rollback server. A canonical component delete clears every alias.
+let dualFacet = (
+  db: DatabaseSync,
+  changes: Change[],
+  name: 'worktree' | 'runtime',
+): Change[] => {
+  let out = changes.map((change) => ({
+    ...change,
+    comp: change.comp && { ...change.comp },
+  }))
+  let cols = facetCols(name)
+  let eids = new Set(
+    out.filter((c) => c.name == 'session' || c.name == name)
+      .map((c) => c.eid),
+  )
+  let sessions = new Set(
+    [...eids].filter((eid) =>
+      db.prepare('select 1 from session where eid = ?').get(eid)
+    ),
+  )
+  let killed = new Set<string>()
+  for (let change of out) {
+    if (change.name == 'entity' && change.comp == null) {
+      killed.add(change.eid)
+      sessions.delete(change.eid)
+    }
+    if (killed.has(change.eid) || change.name != 'session') continue
+    if (change.comp == null) sessions.delete(change.eid)
+    else sessions.add(change.eid)
+  }
+  for (let eid of sessions) {
+    let current = db.prepare(
+      `select ${cols.map(sqlName).join(', ')} from ${sqlName(name)}
+       where eid = ?`,
+    ).get(eid) as Record<string, unknown> | undefined
+    let si: number[] = [], fi: number[] = []
+    let legacy: Record<string, unknown> = {}
+    let canonical: Record<string, unknown> = {}
+    let legacyTouched = false, canonicalTouched = false, gone = false
+    out.forEach((change, i) => {
+      if (change.eid != eid) return
+      if (change.name == 'session' && change.comp) {
+        si.push(i)
+        for (let col of cols) {
+          if (!(col in change.comp)) continue
+          legacy[col] = change.comp[col]
+          legacyTouched = true
+        }
+      }
+      if (change.name != name) return
+      fi.push(i)
+      canonicalTouched = true
+      if (change.comp) {
+        for (let col of cols) {
+          if (col in change.comp) canonical[col] = change.comp[col]
+        }
+        gone = false
+      } else {
+        canonical = Object.fromEntries(cols.map((col) => [col, null]))
+        gone = true
+      }
+    })
+    if (!legacyTouched && !canonicalTouched) continue
+    let spec = { ...current, ...legacy, ...canonical }
+    for (let i of si) for (let col of cols) delete out[i].comp?.[col]
+    let aliases = Object.fromEntries(
+      Object.keys(comps.session).filter((col) => col in spec)
+        .map((col) => [col, spec[col]]),
+    )
+    let session = si.at(-1)
+    if (session == null) {
+      session = out.push({ eid, name: 'session', comp: {} }) - 1
+    }
+    out[session].comp = { ...out[session].comp, ...aliases }
+    let facet = fi.at(-1)
+    if (gone) {
+      if (facet != null) out[facet].comp = null
+      continue
+    }
+    if (facet == null) facet = out.push({ eid, name, comp: {} }) - 1
+    let writable = Object.fromEntries(
+      Object.keys(comps[name]).filter((col) => col in spec)
+        .map((col) => [col, spec[col]]),
+    )
+    out[facet].comp = { ...out[facet].comp, ...writable }
+  }
+  return out
+}
+
+let syncFacetAliases = (
+  db: DatabaseSync,
+  changes: Change[],
+  extra: Change[],
+) => {
+  for (let name of ['worktree', 'runtime'] as const) {
+    let cols = facetCols(name)
+    let eids = new Set(
+      changes.filter((c) => c.name == name).map((c) => c.eid),
+    )
+    for (let eid of eids) {
+      if (!db.prepare('select 1 from session where eid = ?').get(eid)) continue
+      let row = db.prepare(
+        `select ${cols.map(sqlName).join(', ')} from ${sqlName(name)}
+         where eid = ?`,
+      ).get(eid) as Record<string, unknown> | undefined
+      let spec = row ?? Object.fromEntries(cols.map((col) => [col, null]))
+      db.prepare(
+        `update session set ${
+          cols.map((col) => `${sqlName(col)} = ?`).join(', ')
+        }
+         where eid = ?`,
+      ).run(
+        ...cols.map((col) => spec[col] as string | number | null ?? null),
+        eid,
+      )
+      extra.push({ eid, name: 'session', comp: spec })
+    }
+  }
 }
 
 // Graph-out is the declared readable vocabulary, never the table's migration
@@ -2322,6 +2520,8 @@ export let apply = (
   try {
     changes = replaceWakes(db, changes)
     changes = dualSpawn(db, changes)
+    changes = dualFacet(db, changes, 'worktree')
+    changes = dualFacet(db, changes, 'runtime')
     // A log entry is an append-only fact. Every request/content facet is
     // born in the same batch as entry membership and can never be revised,
     // removed, or attached later. Outcomes use server-owned facets instead.
@@ -2695,6 +2895,10 @@ export let apply = (
         throw refusal ?? e // the outer catch rolls the whole batch back
       }
     }
+    // Canonical session facets are the read truth. Mirror their final state
+    // after every component patch, including a deletion, so a rollback server
+    // and an old client see the same values without gaining stamp authority.
+    syncFacetAliases(db, changes, extra)
     // Components have landed, so each new spine's KIND is finally knowable —
     // assign the human number spine() no longer mints at birth (T-3684). Only
     // the spines born in THIS batch, still inside the transaction, so every
