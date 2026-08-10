@@ -16,8 +16,11 @@
 //                     face is a link
 //   {enum: [...]}     a closed set; aliases are input spellings only
 //   {eid: 'project',  an association; the name says which component the
-//    death: …}        target carries ('' = any entity), the death word
-//                     what the reference means when the target dies
+//    death: …}        target carries ('entity' = any entity — the spine is
+//                     a real component, so 'entity' names it like any
+//                     other, never a falsy '' that truthiness misreads),
+//                     the death word what the reference means when the
+//                     target dies
 //   {text: 'domains'} open text, suggestions from a named WELL the
 //                     browser registers (the schema stays declarative —
 //                     it can't reach a live cache from here)
@@ -110,7 +113,7 @@ export let comps: Record<string, Record<string, PropType>> = {
     // Whose PLATE this is — durable routing to any entity (a person, a
     // project standing in for its operator). Orthogonal to claim, which
     // is who holds it NOW; a dead assignee detaches, never takes the task.
-    assignee_eid: { eid: '', death: 'detach' },
+    assignee_eid: { eid: 'entity', death: 'detach' },
     domain: { text: 'domains' }, // free text; the graph suggests
   },
   // retired_at: the project is over, not erased. Wire-writable — stamping
@@ -165,7 +168,7 @@ export let comps: Record<string, Record<string, PropType>> = {
     size: 'number',
     order: 'number',
     dir: { enum: dirs },
-    content_eid: { eid: '', death: 'detach' },
+    content_eid: { eid: 'entity', death: 'detach' },
     view: 'text',
   },
   // The thinking that precedes a build. A tag, because the doc already
@@ -176,9 +179,9 @@ export let comps: Record<string, Record<string, PropType>> = {
   design: {},
   canvas: {},
   web: { url: 'url' }, // frozen_at is server-stamped, never wire-writable
-  card: { target_eid: { eid: '', death: 'cascade' }, view: 'text' },
+  card: { target_eid: { eid: 'entity', death: 'cascade' }, view: 'text' },
   pin: {
-    canvas_eid: { eid: '', death: 'cascade' },
+    canvas_eid: { eid: 'entity', death: 'cascade' },
     x: 'number',
     y: 'number',
     w: 'number',
@@ -188,14 +191,14 @@ export let comps: Record<string, Record<string, PropType>> = {
   // actor_eid is the identity CHAIN: a client is one browser's presence,
   // a session one agent's run — instruments, not identities — and the
   // actor is who the instrument acts for (a person, or a project standing
-  // in for its operator; {eid: ''} because the pool is shared). The
+  // in for its operator; {eid: 'entity'} because the pool is shared). The
   // universal provenance stamp keeps both levels directly queryable
   // (`.created.by=jeff`, `.created.via=S-31`). An assertion, not
   // authentication — forging it only garbles your own attribution.
-  client: { user_agent: 'text', actor_eid: { eid: '', death: 'detach' } }, // ip is server-stamped too
+  client: { user_agent: 'text', actor_eid: { eid: 'entity', death: 'detach' } }, // ip is server-stamped too
   camera: {
     client_eid: { eid: 'client', death: 'cascade' },
-    canvas_eid: { eid: '', death: 'cascade' },
+    canvas_eid: { eid: 'entity', death: 'cascade' },
     x: 'number',
     y: 'number',
     zoom: 'number',
@@ -249,12 +252,12 @@ export let comps: Record<string, Record<string, PropType>> = {
     provider: 'text',
     model: 'text',
     effort: 'text',
-    requested_task_eid: { eid: '', death: 'detach' },
+    requested_task_eid: { eid: 'entity', death: 'detach' },
     // Role membership is launch history. A deleted role closes its process,
     // but the sessions that served it keep saying which role they served.
     role_eid: { eid: 'role', death: 'keep' },
-    persona_eid: { eid: '', death: 'detach' },
-    actor_eid: { eid: '', death: 'detach' }, // who this run acts for — see client above
+    persona_eid: { eid: 'entity', death: 'detach' },
+    actor_eid: { eid: 'entity', death: 'detach' }, // who this run acts for — see client above
     // The session that spawned this one: a delegated agent shares its
     // operator's inherited session id but is its OWN context in its own
     // worktree (client.ts me()), so it reifies as a CHILD of the operator
@@ -272,7 +275,7 @@ export let comps: Record<string, Record<string, PropType>> = {
     provider: 'text',
     model: 'text',
     effort: 'text',
-    persona_eid: { eid: '', death: 'detach' },
+    persona_eid: { eid: 'entity', death: 'detach' },
   },
   // 'release' is the claim's word exactly: when the session dies the
   // LEASE vanishes (row deleted, claim-null on the wire) but the claimed
@@ -284,8 +287,8 @@ export let comps: Record<string, Record<string, PropType>> = {
   // task or venture, the inbox items are the letters and comments ABOUT
   // it. Both ends cascade: a muted thread's subscription dies with it.
   subscription: {
-    actor_eid: { eid: '', death: 'cascade' },
-    target_eid: { eid: '', death: 'cascade' },
+    actor_eid: { eid: 'entity', death: 'cascade' },
+    target_eid: { eid: 'entity', death: 'cascade' },
     mode: { enum: subModes },
   },
   // The brake, pulled as data: creating one asks the server to stop the
@@ -302,7 +305,7 @@ export let comps: Record<string, Record<string, PropType>> = {
   // onto the target, a person gets mail — and stamps what it did. WHO
   // should look is the `deliver {to}` facet below, not a column here.
   knock: {
-    target_eid: { eid: '', death: 'cascade' }, // what to look at
+    target_eid: { eid: 'entity', death: 'cascade' }, // what to look at
   },
   // A wake is a knock with a clock: the same sentence, said LATER. `at`
   // is absolute — the caller writes a phrase ('in 60m', '9am tomorrow')
@@ -316,7 +319,7 @@ export let comps: Record<string, Record<string, PropType>> = {
   wake: {
     at: 'time',
     // What to look at on waking — absent means the wake itself.
-    target_eid: { eid: '', death: 'cascade' },
+    target_eid: { eid: 'entity', death: 'cascade' },
   },
   // Outbound mail, asked for as data: creating one requests delivery (the
   // mailer effect sends and settles the outcome as the shared `delivered`/
@@ -334,7 +337,7 @@ export let comps: Record<string, Record<string, PropType>> = {
   mail: {
     // What the mail is ABOUT. A sent mail is history — its subject's
     // death doesn't unsend it (the provenance byline rule).
-    target_eid: { eid: '', death: 'keep' },
+    target_eid: { eid: 'entity', death: 'keep' },
     // The mail this one ANSWERS — reference at authoring, resolved to an
     // RFC Message-ID at delivery (mail.ts). History like target_eid: a
     // reply outlives the mail it answered.
@@ -351,7 +354,7 @@ export let comps: Record<string, Record<string, PropType>> = {
   // mail comp.
   hook: {},
   comment: {
-    target_eid: { eid: '', death: 'cascade' },
+    target_eid: { eid: 'entity', death: 'cascade' },
   },
   review: {
     verdict: {
@@ -412,7 +415,7 @@ export let comps: Record<string, Record<string, PropType>> = {
   // times, that a project said something a person said. Absent means the
   // source was not recorded, which is true; it is never a claim about
   // anyone. Death 'keep': the source outlives their tombstone, like a byline.
-  feedback: { by: { eid: '', death: 'keep' } },
+  feedback: { by: { eid: 'entity', death: 'keep' } },
   // Server-minted recall aggregates — count·first_at·last_at is the
   // decay model's whole memory (query.ts hot() derives rank at read).
   // Nothing is wire-writable; db.ts touch() is the one writer. Keyed by
@@ -430,8 +433,8 @@ export let comps: Record<string, Record<string, PropType>> = {
   // Both are death 'keep' — provenance outlives the actor's or instrument's
   // tombstone. NOT in kindOrder: a facet every entity wears, never its
   // identity (like recall).
-  created: { by: { eid: '', death: 'keep' } },
-  updated: { by: { eid: '', death: 'keep' } },
+  created: { by: { eid: 'entity', death: 'keep' } },
+  updated: { by: { eid: 'entity', death: 'keep' } },
   // Notification lifecycle — the inbox's read-state, denormalized into the
   // same register as created/updated (T-7006). Each is a PRESENCE stamp: the
   // wire writes the bare component to REQUEST the act, the server freezes the
@@ -455,7 +458,7 @@ export let comps: Record<string, Record<string, PropType>> = {
   // mail history and a knock's audit outlive their recipient's tombstone, and
   // the effects stay inert on a dead `to`. Wire-writable (unlike delivered/
   // error): naming the recipient IS the ask. NOT in kindOrder — a facet.
-  deliver: { to: { eid: '', death: 'keep' } },
+  deliver: { to: { eid: 'entity', death: 'keep' } },
   // Outcome and health (D-14945): `delivered` says an entity reached its
   // destination; `error` says an effect failed. Deliverables are tri-state —
   // delivered, error, or neither (pending) — while role/session/freeze wear
@@ -482,11 +485,11 @@ export let comps: Record<string, Record<string, PropType>> = {
   // Deliberately NOT decay-exempt: recall is keyed by eid for any entity, so
   // heat and decidedness are two facts about one row. The hot index and the
   // ordered `## decided` digest section are two queries, not a special case.
-  decided: { at: 'time', by: { eid: '', death: 'keep' } },
+  decided: { at: 'time', by: { eid: 'entity', death: 'keep' } },
   // An idea from the fleet awaiting acceptance. It mirrors `decided`: the
   // proposer and proposal date may be recorded after the fact, while the
   // instrument stays server-owned. Absence is self-authorizing work.
-  proposed: { at: 'time', by: { eid: '', death: 'keep' } },
+  proposed: { at: 'time', by: { eid: 'entity', death: 'keep' } },
 }
 
 // Server-stamped columns — never wire-writable (cols() reads `comps`
@@ -503,8 +506,8 @@ export let stamped: Record<string, Record<string, PropType>> = {
   entity: { num: 'number' },
   // The frozen twins of each provenance component's wire-writable `by`
   // (comps above) — stamped in apply(), never on the wire.
-  created: { at: 'time', via: { eid: '', death: 'keep' } },
-  updated: { at: 'time', via: { eid: '', death: 'keep' } },
+  created: { at: 'time', via: { eid: 'entity', death: 'keep' } },
+  updated: { at: 'time', via: { eid: 'entity', death: 'keep' } },
   // The frozen twins of the notification-lifecycle presence comps (above):
   // `at` when the moment happened (default-stamped, then frozen in apply()),
   // `by` the resolved writing actor and `via` its instrument — the SAME
@@ -513,25 +516,25 @@ export let stamped: Record<string, Record<string, PropType>> = {
   // stampedPresence loop, which re-reads the whole stamp onto the return.
   notified: {
     at: 'time',
-    by: { eid: '', death: 'keep' },
-    via: { eid: '', death: 'keep' },
+    by: { eid: 'entity', death: 'keep' },
+    via: { eid: 'entity', death: 'keep' },
   },
   opened: {
     at: 'time',
-    by: { eid: '', death: 'keep' },
-    via: { eid: '', death: 'keep' },
+    by: { eid: 'entity', death: 'keep' },
+    via: { eid: 'entity', death: 'keep' },
   },
   archived: {
     at: 'time',
-    by: { eid: '', death: 'keep' },
-    via: { eid: '', death: 'keep' },
+    by: { eid: 'entity', death: 'keep' },
+    via: { eid: 'entity', death: 'keep' },
   },
   // `decided`'s server half is the instrument ALONE — its `at` and `by` ride
   // the wire (comps above), which is why this stamp is the one that is split.
   // A caller may say when a decision was taken and who took it; nothing may
   // say what wrote it down.
-  decided: { via: { eid: '', death: 'keep' } },
-  proposed: { via: { eid: '', death: 'keep' } },
+  decided: { via: { eid: 'entity', death: 'keep' } },
+  proposed: { via: { eid: 'entity', death: 'keep' } },
   web: { frozen_at: 'time' }, // the freeze finished (freeze.ts)
   client: { ip: 'text' },
   claim: { claimed_at: 'time' },
@@ -595,7 +598,7 @@ export let stamped: Record<string, Record<string, PropType>> = {
   // strings by design (db.ts says why), and the target reference stands
   // even after the target dies — contention history keeps its subject.
   conflict: {
-    target_eid: { eid: '', death: 'keep' },
+    target_eid: { eid: 'entity', death: 'keep' },
     loser: 'text',
     holder: 'text',
     at: 'time',

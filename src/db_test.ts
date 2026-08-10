@@ -953,9 +953,11 @@ Deno.test('task project_eid accepts projects created anywhere in its batch', () 
 })
 
 Deno.test('typed eid contracts are the complete vocabulary set', () => {
+  // Kind-constrained refs only — an any-entity ref (target 'entity') is not
+  // an apply-time contract, so it stays out, exactly as the empty sentinel did.
   let declared = Object.entries(comps).flatMap(([name, props]) =>
     Object.entries(props).flatMap(([col, type]) =>
-      typeof type == 'object' && 'eid' in type && type.eid
+      typeof type == 'object' && 'eid' in type && type.eid != 'entity'
         ? [`${name}.${col}:${type.eid}`]
         : []
     )

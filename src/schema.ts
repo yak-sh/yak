@@ -33,7 +33,7 @@ export let typeWord = (t: PropType): string =>
       ...Object.entries(t.aliases ?? {}).map(([a, v]) => `${a} → ${v}`),
     ].join('; ')
     : 'eid' in t
-    ? `→ ${t.eid || 'any'}`
+    ? `→ ${t.eid == 'entity' ? 'any' : t.eid}`
     : `text (${t.text})`
 
 // Every component with every column — wire-writable first, then the

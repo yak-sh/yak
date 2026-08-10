@@ -1572,9 +1572,16 @@ type Ref = {
   target: string
 }
 
+// The refs whose target apply() validates exists on write and whose drop it
+// audits on death. Only KIND-CONSTRAINED references (`target` a specific
+// component): an any-entity reference (target 'entity') is trusted here —
+// a session's requested_task_eid is validated by its spawn effect, not a
+// 400, and a card/comment aimed anywhere may outrun its target's sync. So
+// `target != 'entity'`, the renamed spelling of the old "truthy target"
+// gate — the same set, now that the any-entity sentinel is a word.
 let refs = Object.entries(comps).flatMap(([name, props]) =>
   Object.entries(props).flatMap(([col, type]) =>
-    typeof type == 'object' && 'eid' in type && type.eid
+    typeof type == 'object' && 'eid' in type && type.eid != 'entity'
       ? [{ name, col, target: type.eid }]
       : []
   )
@@ -1586,7 +1593,7 @@ let refRefused = (
   eid?: string,
   target?: string,
 ) => {
-  let to = ref.target || 'entity'
+  let to = ref.target // always a specific component table (refs excludes 'entity')
   let args: string[] = []
   if (eid) args.push(eid)
   if (target) args.push(target)

@@ -181,11 +181,10 @@ Deno.test('propAt: types and unambiguous error names come from schema', () => {
   assertEquals(propAt('task', 'missing'), undefined)
 })
 
-Deno.test('isRef: an any-entity ref reads true where truthiness would not', () => {
-  // card.target_eid targets ANY entity, so refOf answers '' — a falsy but
-  // present target. isRef is the guard that survives that: truthiness on
-  // refOf misreads the commonest reference as a plain scalar.
-  assertEquals(refOf('card', 'target_eid'), '')
+Deno.test('refOf: an any-entity ref answers entity, kind-constrained its kind', () => {
+  // 'entity' (the spine) names the any-entity target like any other kind —
+  // truthy, so isRef and refOf agree without a falsy sentinel to trip on.
+  assertEquals(refOf('card', 'target_eid'), 'entity')
   assertEquals(isRef('card', 'target_eid'), true)
   // A kind-constrained ref answers its kind; a bare non-suffixed ref counts.
   assertEquals(refOf('task', 'project_eid'), 'project')

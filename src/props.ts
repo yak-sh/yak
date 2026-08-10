@@ -58,9 +58,9 @@ export let refOf = (comp: string, prop: string): string | undefined => {
   return typeof t == 'object' && 'eid' in t ? t.eid : undefined
 }
 
-// Just the yes/no of it, without the footgun: refOf answers a reference to
-// ANY entity with '' (a falsy but present target), so truthiness misreads
-// the commonest reference as a scalar — ask isRef, never `if (refOf(...))`.
+// Just the yes/no of it: refOf answers with a target kind ('entity' = any),
+// which is truthy for every reference, so this is a thin name over the
+// intent — ask isRef when the kind doesn't matter, refOf when it does.
 export let isRef = (comp: string, prop: string): boolean =>
   refOf(comp, prop) != null
 
@@ -214,7 +214,7 @@ let ref = (name: string): Prop => ({
   comp: 'entity',
   prop: name,
   name,
-  type: { eid: '', death: 'keep' },
+  type: { eid: 'entity', death: 'keep' },
 })
 let dep: Record<string, Prop> = {
   type: {

@@ -14,7 +14,7 @@ Deno.test('typeWord: one spelling per type', () => {
     'open; todo → open',
   )
   assertEquals(typeWord({ eid: 'project', death: 'detach' }), '→ project')
-  assertEquals(typeWord({ eid: '', death: 'cascade' }), '→ any')
+  assertEquals(typeWord({ eid: 'entity', death: 'cascade' }), '→ any')
   assertEquals(typeWord({ text: 'domains' }), 'text (domains)')
 })
 
