@@ -491,6 +491,21 @@ makes one of these seams wider or leakier, that's the wrong direction.
 
 ---
 
+# M-3715 delegation discipline
+
+Delegation in the fleet, so that if our system breaks the work still continues on the floor and the board stays the truth about who is doing what:
+
+- **Worktree-only, one writer per worktree.** Every agent — harness spawns and the coordinator's own session — works in its own git worktree and lands with `task land`; use the Agent tool's `isolation: "worktree"` for spawns. Never let two agents share an index. **Isolation can silently fail — verify, don't assume.** An `isolation: worktree` spawn has landed in the SHARED main checkout and committed straight to `main` when the parent's cwd was that checkout. A brief saying "you are in your own worktree" is a claim to CHECK: direct the agent to confirm it is not on the main checkout (`git worktree list`; its cwd is a session worktree) before committing, and to land via `task land` — never a raw commit on `main`.
+- **Respect dependencies; handle claimed work gracefully.** A spawn brief directs the agent to check its task's `requires` blockers and existing claims before working. The mechanism is already there — the boot digest surfaces open blockers with status, and a second claim bounces (a `conflict` entity) — so the agent must act on what it can already see: never duplicate a blocker that is claimed/in-progress; coordinate or wait for its completion. This is discipline, not a feature; the automated park-until-clear version belongs to the harness dispatch (D-16328).
+- **Harness spawns are the default and must integrate fully.** Every spawn brief directs the agent to reify a session entity, claim its task under that identity, comment progress and completion (with sha), and release when done. The task body carries the full spec — the prompt is delivery, the task is the record.
+- **Internal spawns** (wire-created sessions, `task spawn`) are for codex/other providers and well-specified cold-context work; at parity with the harness since T-3698 (auto-claim, session_peek, settle→bus). The harness remains the reliability floor.
+- **Communication flows through the graph**, not harness-native channels, wherever possible: comment on a session to steer it, comment on the task for the record; the comms bus delivers on the next tool call. Harness push notifications remain the wake channel until the graph grows one.
+- **Verify a spawn's claim.** A reported sha counts only if it is an ancestor of the shared checkout's `main` — `git merge-base --is-ancestor <sha> main`.
+
+Every Agent-tool spawn gets `isolation: worktree` + the claim-discipline paragraph in its brief; prefer task bodies over prompt-only specs.
+
+---
+
 # M-14769 a mistake is a systems bug — fix the context or the tools, never promise to change
 
 There is no point owning up to a mistake and promising to change: you cannot actually commit to change, because you forget it once your context ends. Your behavior comes from your prompts and your tools, not from personal accountability.
@@ -522,20 +537,6 @@ What does the reader need in order to act? Write that. Everything else is noise 
 ## This is enforced mechanically, not just remembered
 
 This principle sat in context (materialized into holdco's `CLAUDE.md`) and still got violated twice — a raw ~200-line log pasted into a `task_comment` body. A memory in context is guidance an agent can apply; it isn't a stop at the moment of the mistake. `holdco/.claude/hooks/task-comment-size-gate.sh` (a PreToolUse hook on `task_comment`, wired in `holdco/.claude/settings.json`) now denies any comment body over 40 lines with a reason pointing back here. If this keeps happening anyway, the fix is a better hook (smarter detection, different threshold), not a stronger version of this memory.
-
----
-
-# M-3715 delegation discipline
-
-Delegation in the fleet, so that if our system breaks the work still continues on the floor and the board stays the truth about who is doing what:
-
-- **Worktree-only, one writer per worktree.** Every agent — harness spawns and the coordinator's own session — works in its own git worktree and lands with `task land`; use the Agent tool's `isolation: "worktree"` for spawns. Never let two agents share an index.
-- **Harness spawns are the default and must integrate fully.** Every spawn brief directs the agent to reify a session entity, claim its task under that identity, comment progress and completion (with sha), and release when done. The task body carries the full spec — the prompt is delivery, the task is the record.
-- **Internal spawns** (wire-created sessions, `task spawn`) are for codex/other providers and well-specified cold-context work; at parity with the harness since T-3698 (auto-claim, session_peek, settle→bus). The harness remains the reliability floor.
-- **Communication flows through the graph**, not harness-native channels, wherever possible: comment on a session to steer it, comment on the task for the record; the comms bus delivers on the next tool call. Harness push notifications remain the wake channel until the graph grows one.
-- **Verify a spawn's claim.** A reported sha counts only if it is an ancestor of the shared checkout's `main` — `git merge-base --is-ancestor <sha> main`.
-
-Every Agent-tool spawn gets `isolation: worktree` + the claim-discipline paragraph in its brief; prefer task bodies over prompt-only specs.
 
 ---
 
