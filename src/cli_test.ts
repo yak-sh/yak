@@ -128,6 +128,14 @@ Deno.test('subject: sentences route through the existing CLI verbs', () => {
     cmd: 'show',
     args: ['T-3', '--json'],
   })
+  assertEquals(route('T-3 --quarantined'), {
+    cmd: 'show',
+    args: ['T-3', '--quarantined'],
+  })
+  assertEquals(route('T-3 show --json --quarantined'), {
+    cmd: 'show',
+    args: ['T-3', '--json', '--quarantined'],
+  })
   assertEquals(route('T-3 as markdown'), { cmd: 'show', args: ['T-3'] })
   assertEquals(route('T-3 as json'), {
     cmd: 'show',

@@ -61,6 +61,7 @@ import {
   taskChanges,
 } from './client.ts'
 import {
+  listed,
   matchQuery,
   noFilter,
   orderOf,
@@ -297,7 +298,7 @@ filters must ALL match. ${FILTERS} ${BUS}`,
       { filters = [], session }: { filters?: string[]; session?: string },
     ) => {
       let now = Date.now()
-      let all = rows(await io.read())
+      let all = rows(await io.read(), true)
       let ps = resolveRefs(
         parseFilters(filters),
         (id) => find(all, id)?.eid,
@@ -306,6 +307,7 @@ filters must ALL match. ${FILTERS} ${BUS}`,
       let byEid = new Map(all.map((r) => [r.eid, r.comps]))
       let hits = all
         .filter((r) => r.comps.task)
+        .filter((r) => listed(r.comps, ps))
         .filter((r) => matchQuery(r.comps, ps, (e) => byEid.get(e)))
         .sort(
           orderOf(ps) == 'hot'
@@ -1039,7 +1041,7 @@ ${GRAMMAR} ${FILTERS}`,
       },
     ) => {
       let now = Date.now()
-      let all = rows(await io.read())
+      let all = rows(await io.read(), true)
       let ps = resolveRefs(
         parseFilters(filters),
         (id) => find(all, id)?.eid,
@@ -1048,6 +1050,7 @@ ${GRAMMAR} ${FILTERS}`,
       let byEid = new Map(all.map((r) => [r.eid, r.comps]))
       let hits = all
         .filter((r) => !kind || r.kind == kind)
+        .filter((r) => listed(r.comps, ps))
         .filter((r) => matchQuery(r.comps, ps, (e) => byEid.get(e)))
       if (orderOf(ps) == 'hot') {
         hits.sort((a, b) =>
@@ -1433,11 +1436,21 @@ integer execution deadline in milliseconds (default 10000, maximum
     'task_show',
     `One entity, whole: {kind, entity:{eid,num}, ...components}, plus its
 edges (refs out, backrefs in) and comments in the same entity shape. id:
-T-3, bare num, or eid. ${BUS}`,
-    { id: z.string(), session: z.string().optional() },
-    async ({ id, session }: { id: string; session?: string }) => {
+T-3, bare num, or eid. Quarantined content requires quarantined: true. ${BUS}`,
+    {
+      id: z.string(),
+      quarantined: z.boolean().optional(),
+      session: z.string().optional(),
+    },
+    async (
+      { id, quarantined, session }: {
+        id: string
+        quarantined?: boolean
+        session?: string
+      },
+    ) => {
       let snap = await io.read()
-      let all = rows(snap)
+      let all = rows(snap, !!quarantined)
       let row = find(all, id)
       if (!row) return err(`no entity: ${id}`)
       let comments = all.filter((r) => r.comps.comment?.target == row.eid)

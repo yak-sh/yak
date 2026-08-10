@@ -1,5 +1,5 @@
 import { subChanges } from '../client.ts'
-import { ent, mutate, myActor, myMode, rows } from '../live.ts'
+import { ent, mutate, myActor, myMode, reveal, rows, shown } from '../live.ts'
 import { type Action, define, defineActions, has, resolve } from './registry.ts'
 import { memo } from './memo.ts'
 import {
@@ -53,6 +53,7 @@ import { Role } from './views/Role.tsx'
 import { Wake, WakeTitle } from './views/Wake.tsx'
 import { openRun } from './Run.tsx'
 import { viaName } from './Comments.tsx'
+import { block } from './ui.tsx'
 
 // Convenience re-exports: Entity.tsx is the front door, registry.ts the
 // engine room — importers of either get the same bindings.
@@ -324,6 +325,20 @@ defineActions([
   },
   {
     match: () => true,
+    acts: (e) => [
+      e.quarantined
+        ? {
+          label: 'unquarantine',
+          run: () => mutate({ eid: e.eid, name: 'quarantined', comp: null }),
+        }
+        : {
+          label: 'quarantine',
+          run: () => mutate({ eid: e.eid, name: 'quarantined', comp: {} }),
+        },
+    ],
+  },
+  {
+    match: () => true,
     acts: (e) => [{
       label: 'delete',
       mod: 'danger',
@@ -334,6 +349,7 @@ defineActions([
 
 // The one front door: render an entity (straight out of the live cache)
 // through a view. Extra props flow through to the renderer.
+let Veil = block('section', 'Quarantine', { Reveal: 'button' })
 let EntityFace = (
   { eid, view, ...rest }: {
     eid: string
@@ -342,6 +358,16 @@ let EntityFace = (
   },
 ) => {
   let e = ent(eid)
+  if (!shown(eid)) {
+    return (
+      <Veil>
+        Quarantined content
+        <Veil.Reveal type='button' onClick={() => reveal(eid)}>
+          Reveal
+        </Veil.Reveal>
+      </Veil>
+    )
+  }
   let r = resolve(e, view)
   return <r.Render e={e} {...rest} />
 }

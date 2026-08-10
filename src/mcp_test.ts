@@ -705,6 +705,43 @@ Deno.test('task_list and graph_query refuse a handle that names nothing', async 
   }
 })
 
+Deno.test('MCP lists hide quarantine and task_show requires an opt-in', async () => {
+  let g = graph()
+  try {
+    let eid = '51000000-0000-4000-8000-000000000001'
+    apply(g.db, [
+      {
+        eid,
+        name: 'doc',
+        comp: { title: 'unsafe title', body: 'unsafe body' },
+      },
+      { eid, name: 'task', comp: { status: 'open' } },
+      { eid, name: 'quarantined', comp: {} },
+    ])
+    await protocol(g.io, async (client) => {
+      let hidden = await client.callTool({ name: 'task_list', arguments: {} })
+      assertEquals(said(hidden).includes('unsafe title'), false)
+      let explicit = await client.callTool({
+        name: 'task_list',
+        arguments: { filters: ['.quarantined!'] },
+      })
+      assertMatch(said(explicit), /unsafe title/)
+      let refused = await client.callTool({
+        name: 'task_show',
+        arguments: { id: eid },
+      })
+      assertEquals(refused.isError, true)
+      let shown = await client.callTool({
+        name: 'task_show',
+        arguments: { id: eid, quarantined: true },
+      })
+      assertMatch(said(shown), /unsafe body/)
+    })
+  } finally {
+    g.db.close()
+  }
+})
+
 Deno.test('graph_apply reports the authoritative effective batch', async () => {
   let g = graph()
   try {

@@ -44,7 +44,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       decided: 'decided [filters…] [--all] [--json]',
       new: 'new [title…]',
       set: 'set <id> [--comment=TEXT]',
-      show: 'show <id> [--json]',
+      show: 'show <id> [--json] [--quarantined]',
       history: 'history <id> [-n=50] [--json]',
       search: 'search <words…> [--json]',
       mail: 'mail [filters…] [--json] [--all] [--sent]',

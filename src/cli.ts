@@ -196,13 +196,21 @@ export let subject = (id: string | undefined, args: string[]) => {
   if (args.includes('--help') || args.includes('-h')) {
     return { cmd: 'help', args: ['subject', id] }
   }
-  if (verb == '--json') {
-    if (objects.length) throw new Error(`task ${id} [show] [--json]`)
-    return { cmd: 'show', args: [id, verb] }
+  if (verb == '--json' || verb == '--quarantined') {
+    if (
+      objects.length > 1 ||
+      objects.some((x) => x != '--json' && x != '--quarantined')
+    ) {
+      throw new Error(`task ${id} [show] [--json] [--quarantined]`)
+    }
+    return { cmd: 'show', args: [id, verb, ...objects] }
   }
   if (verb == 'show') {
-    if (objects.length > 1 || objects.some((x) => x != '--json')) {
-      throw new Error(`task ${id} [show] [--json]`)
+    if (
+      objects.length > 2 ||
+      objects.some((x) => x != '--json' && x != '--quarantined')
+    ) {
+      throw new Error(`task ${id} [show] [--json] [--quarantined]`)
     }
     return { cmd: 'show', args: [id, ...objects] }
   }
@@ -1294,13 +1302,14 @@ let comment = async (got: Got) => {
 
 let show = async (got: Got) => {
   let json = got.flags.has('--json')
+  let quarantined = got.flags.has('--quarantined')
   let id = got.args.id
   if (!id) throw new Error('task show <id> [--json]')
   // The reading neighborhood, not the whole graph: `show` names one entity's
   // edges and comments, so it fetches one entity's set (client.ts around) —
   // keyed reads, not a 31 MB /snapshot. A miss falls to needed(), whose error
   // path is the only place the graph is worth pulling (for "did you mean?").
-  let found = await around(id)
+  let found = await around(id, quarantined)
   if (!found) return void await needed(id)
   let { deps, all, row } = found
   let snap = { deps }

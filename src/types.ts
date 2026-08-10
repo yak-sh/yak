@@ -441,7 +441,12 @@ export let comps: Record<string, Record<string, PropType>> = {
   // facets any entity wears (a comment, a knock, a mail), never its identity.
   notified: {}, // the operator has been told (inject or sweep) — never hides
   opened: {}, //   the operator has looked — NOT opened == unread; never hides
-  archived: {}, // the operator is done — the ONE stamp that hides an item
+  archived: {}, // the operator is done — hides an inbox item
+  // A safety boundary over ANY entity. Presence hides it from every list and
+  // replaces direct rendering with an explicit reveal; the server signs the
+  // whole stamp so graph content cannot forge who quarantined it or when.
+  // NOT in kindOrder: quarantine never changes what the entity is.
+  quarantined: {},
   // Addressing as a facet (D-14945): WHERE a deliverable goes. `to` names a
   // graph ENTITY — a session or actor (knock/wake), an address-book entity
   // (mail) — never a raw string: an external address IS an `email` entity, so
@@ -521,6 +526,11 @@ export let stamped: Record<string, Record<string, PropType>> = {
     via: { eid: 'entity', death: 'keep' },
   },
   archived: {
+    at: 'time',
+    by: { eid: 'entity', death: 'keep' },
+    via: { eid: 'entity', death: 'keep' },
+  },
+  quarantined: {
     at: 'time',
     by: { eid: 'entity', death: 'keep' },
     via: { eid: 'entity', death: 'keep' },
@@ -1322,6 +1332,7 @@ export type Ent = {
   notified?: Stamp
   opened?: Stamp
   archived?: Stamp
+  quarantined?: Stamp
   decided?: Stamp
   proposed?: Stamp
   delivered?: Delivered

@@ -406,6 +406,12 @@ let schema = `
     "by" text,
     via text
   );
+  create table if not exists quarantined (
+    eid text primary key references entity(eid),
+    at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    "by" text,
+    via text
+  );
   -- A fleet proposal awaiting a decision: like decided, its authored time
   -- and byline ride the wire while the server alone names the instrument.
   create table if not exists proposed (
@@ -2977,15 +2983,30 @@ export let findEid = (db: DatabaseSync, id: string): string | undefined =>
 
 export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
   let preds = parseQuery(q)
+  let reveal = preds.some((p) =>
+    p.comp == 'quarantined' || p.at?.comp == 'quarantined'
+  )
   let filters = resolveRefs(
     preds.filter((p) => p.op != TEXT),
     (id) => findEid(db, id),
   )
+  if (!reveal) {
+    filters.unshift({ comp: 'quarantined', prop: '', op: '', value: '' })
+  }
   let built = where(filters)
   // A sparse facet may sit outside any fixed candidate window. Compile the
   // filter into the selection when possible; an exactness decline reads every
   // candidate so the JS definition below still decides before the result cap.
   let screen = built ? `and d.eid in (${built.sql})` : ''
+  // A visible comment aimed at quarantined content is another route into the
+  // same content. Keep it out before LIMIT so hidden hits cannot displace
+  // visible ones.
+  if (!reveal) {
+    screen += ` and not exists (
+      select 1 from comment c join quarantined q on q.eid = c.target
+      where c.eid = d.eid
+    )`
+  }
   let cap = built ? 'limit ?' : ''
   let params = built?.params ?? []
   let match = preds.filter((p) => p.op == TEXT)

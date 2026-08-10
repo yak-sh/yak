@@ -3,6 +3,7 @@ import {
   adopt,
   complete,
   hot,
+  listed,
   matchQuery,
   noFilter,
   orderOf,
@@ -39,6 +40,14 @@ let row = (
 
 let hit = (q: string, task: Record<string, unknown> = {}) =>
   matchQuery(row(task), parseQuery(q))
+
+Deno.test('quarantine needs an explicit facet before a row is listed', () => {
+  let hidden = row({}, { quarantined: { at: '2026-08-10' } })
+  assertEquals(listed(hidden, parseQuery('')), false)
+  assertEquals(listed(hidden, parseQuery('.status=open')), false)
+  assertEquals(listed(hidden, parseQuery('.quarantined!')), true)
+  assertEquals(listed(hidden, parseQuery('.quarantined.at>=today')), true)
+})
 
 Deno.test('the shared error facet is a fleet-wide health predicate', () => {
   let failed = row({}, { error: { message: 'boom' } })

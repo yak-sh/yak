@@ -88,6 +88,19 @@ Deno.test('rows: merge, derived kind, ids', () => {
   assertEquals(kindOf({}), 'entity')
 })
 
+Deno.test('rows hide quarantine unless the caller explicitly reveals it', () => {
+  let snap = {
+    changes: [
+      { eid: T1, name: 'entity', comp: { eid: T1, num: 2 } },
+      { eid: T1, name: 'doc', comp: { title: 'unsafe', body: 'hidden' } },
+      { eid: T1, name: 'quarantined', comp: { at: 'now' } },
+    ],
+    deps: [],
+  }
+  assertEquals(rows(snap), [])
+  assertEquals(rows(snap, true)[0].comps.doc.body, 'hidden')
+})
+
 Deno.test('jsonOf: an entity is its components without SQL join keys', () => {
   let r: Row = {
     eid: T1,

@@ -53,14 +53,17 @@ Deno.test('stale: unembedded and text-moved docs owe; fresh do not', () => {
   assertEquals(owed.includes(c), true)
 })
 
-Deno.test('stale: comments and empty docs never owe', () => {
-  let [c, e] = [uid(), uid()]
+Deno.test('stale: comments, empty docs, and quarantine never owe', () => {
+  let [c, e, q] = [uid(), uid(), uid()]
   doc(c, 'a comment body')
   db.prepare('insert into comment (eid, target) values (?, ?)').run(c, c)
   doc(e, '', '')
+  doc(q, 'unsafe')
+  db.prepare('insert into quarantined (eid) values (?)').run(q)
   let owed = stale(db).map((r) => r.eid)
   assertEquals(owed.includes(c), false)
   assertEquals(owed.includes(e), false)
+  assertEquals(owed.includes(q), false)
 })
 
 // Pruning used to ask only whether a doc row existed, while stale() asked
@@ -103,15 +106,21 @@ Deno.test('prune: every route out of eligibility takes its vector along', () => 
 // section screens hits through the live cache; the dupe hint cannot, so it
 // saw bare UUIDs for entities that were already gone.
 Deno.test('similar: an ineligible row never answers, swept or not', () => {
-  let [alive, gone] = [uid(), uid()]
+  let [alive, gone, quarantined] = [uid(), uid(), uid()]
   doc(alive, 'a living neighbour')
   doc(gone, 'a doomed neighbour')
+  doc(quarantined, 'an unsafe neighbour')
   put(alive, 'a living neighbour', vec(1, 0))
   put(gone, 'a doomed neighbour', vec(1, 0))
+  put(quarantined, 'an unsafe neighbour', vec(1, 0))
   db.prepare('delete from doc where eid = ?').run(gone)
+  db.prepare('insert into quarantined (eid) values (?)').run(quarantined)
 
   let hits = similar(db, vec(1, 0), 99, 0.5).map((h) => h.eid)
-  assertEquals([hits.includes(alive), hits.includes(gone)], [true, false])
+  assertEquals(
+    [hits.includes(alive), hits.includes(gone), hits.includes(quarantined)],
+    [true, false, false],
+  )
 })
 
 Deno.test('stored: exact text reuses a doc vector; edits and misses do not', () => {

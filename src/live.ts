@@ -23,7 +23,7 @@ import {
   stamped,
 } from './types.ts'
 import { inboxItem, isUnread, readerAt, type Row } from './client.ts'
-import { matchQuery, parseQuery, resolveRefs, warm } from './query.ts'
+import { listed, matchQuery, parseQuery, resolveRefs, warm } from './query.ts'
 import { normalizeChanges } from './props.ts'
 import * as idb from './idb.ts'
 import { topology } from './leader.ts'
@@ -46,6 +46,12 @@ let rowSignals = new Map<string, Signal<Comps | undefined>>()
 let relationSignals = new Map<string, Signal<Dep[]>>()
 let childSignals = new Map<string, Signal<Dep[]>>()
 export let census = signal<string[]>([])
+export let revealed = signal<Set<string>>(new Set())
+export let reveal = (eid: string) => {
+  revealed.value = new Set([...revealed.peek(), eid])
+}
+export let shown = (eid: string) =>
+  !cache.value[eid]?.quarantined || revealed.value.has(eid)
 let canvasVersion = signal(0)
 let noRelations: Dep[] = []
 let refreshBoards = (_ids: Set<string>) => {}
@@ -1066,6 +1072,7 @@ let boardHits = (
   preds: ReturnType<typeof parseQuery>,
 ) =>
   boardPost(e, tasks, Object.keys(cache.value))
+    .filter((eid) => listed(cache.value[eid], preds))
     .filter((eid) => matchQuery(cache.value[eid], preds, (t) => cache.value[t]))
 
 let scanBoard = (set: BoardSet, e: Ent) => {
@@ -1137,7 +1144,8 @@ refreshBoards = (eids: Set<string>) => {
       let had = next.includes(eid)
       let row = cache.peek()[eid]
       let candidate = !!row &&
-        (set.tasks ? !!row.task : eid != set.eid && !chrome(row))
+        (set.tasks ? !!row.task : eid != set.eid && !chrome(row)) &&
+        listed(row, set.preds)
       let wants = candidate &&
         matchQuery(row, set.preds, (t) => cache.peek()[t])
       if (had != wants) {
@@ -1192,7 +1200,9 @@ export let sieve = (line: string): (eid: string) => boolean => {
 // (find, the change builders, the command line's Ctx), so an id lookup or
 // a claim batch is written once and serves the CLI, the web and the TUI.
 export let rows = (): Row[] =>
-  Object.entries(cache.value).map(([eid, r]) => ({
+  Object.entries(cache.value).filter(([, r]) => !r.quarantined).map((
+    [eid, r],
+  ) => ({
     eid,
     num: r.entity?.num ?? 0,
     kind: kindOf(r),

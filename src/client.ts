@@ -115,7 +115,8 @@ export let minted = async (eid: string) => {
 }
 
 // The graph as rows: one per entity, components merged in; kind derived.
-export let rows = ({ changes }: { changes: Change[] }) => {
+// Quarantine is absent unless the caller takes the explicit reveal branch.
+export let rows = ({ changes }: { changes: Change[] }, quarantined = false) => {
   let out = new Map<string, Row>()
   for (let { eid, name, comp } of changes) {
     if (!comp) continue
@@ -126,7 +127,8 @@ export let rows = ({ changes }: { changes: Change[] }) => {
     out.set(eid, row)
   }
   for (let r of out.values()) r.kind = kindOf(r.comps)
-  return [...out.values()]
+  let rows = [...out.values()]
+  return quarantined ? rows : rows.filter((r) => !r.comps.quarantined)
 }
 
 // The graph as changes — rows() read backwards. A row IS its components, so
@@ -692,9 +694,11 @@ export let refsIn = (r: Row): string[] => {
 // queries, not a 31 MB /snapshot. undefined when the id names nothing; the
 // caller owns that error path (needed() pulls the graph there for a "did you
 // mean?"). (T-14926)
-export let around = async (id: string) => {
+export let around = async (id: string, quarantined = false) => {
   let res = await request(
-    `http://${host()}/query?id=${encodeURIComponent(id)}&deps=1`,
+    `http://${host()}/query?id=${encodeURIComponent(id)}&deps=1${
+      quarantined ? '&quarantined=1' : ''
+    }`,
   )
   if (!res.ok) throw new Error(`server said ${res.status}`)
   let [hit] = await res.json() as Record<string, unknown>[]
@@ -2536,14 +2540,19 @@ export let recallIndex = (
 // lie without them (an edge is data about the entity that lives in no
 // component row, so rows() alone can never surface it).
 export let edgesOf = (snap: { deps: Dep[] }, all: Row[], eid: string) => {
+  let visible = new Set(all.map((r) => r.eid))
   let name = (e: string) => {
     let r = all.find((x) => x.eid == e)
     return r ? idOf(r) : e
   }
   return {
-    refs: snap.deps.filter((d) => d.parent == eid)
+    refs: snap.deps.filter((d) =>
+      d.parent == eid && visible.has(d.parent) && visible.has(d.child)
+    )
       .map((d) => ({ type: d.type, child: name(d.child) })),
-    backrefs: snap.deps.filter((d) => d.child == eid)
+    backrefs: snap.deps.filter((d) =>
+      d.child == eid && visible.has(d.parent) && visible.has(d.child)
+    )
       .map((d) => ({ type: d.type, parent: name(d.parent) })),
   }
 }

@@ -92,6 +92,7 @@ let routes: Record<string, readonly string[]> = {
   decided: [...Object.keys(comps.decided), ...Object.keys(stamped.decided)],
   proposed: [...Object.keys(comps.proposed), ...Object.keys(stamped.proposed)],
   archived: Object.keys(stamped.archived),
+  quarantined: Object.keys(stamped.quarantined),
 }
 
 // The dot-param shape, sketched — the tail of every strict rejection
@@ -178,6 +179,14 @@ let OPS: Record<string, string> = {
 export let ORDER = 'order'
 
 export let orderOf = (preds: Pred[]) => preds.find((p) => p.op == ORDER)?.value
+
+// Quarantine is invisible by default, but mentioning the facet is the
+// deliberate extra step that lets a list ask about it. This stays beside
+// matchQuery rather than inside it: writers and keyed internals still need to
+// reason about a row without silently changing the question they asked.
+export let listed = (comps: Comps, preds: Pred[]) =>
+  !comps.quarantined ||
+  preds.some((p) => p.comp == 'quarantined' || p.at?.comp == 'quarantined')
 
 // kind=K as a filter, not a JS screen. kindOf is "the first kindOrder
 // component present", so kind=K is K present AND every earlier component

@@ -75,6 +75,7 @@ import { serverFile } from './reload.ts'
 import { find, jsonOf, type Row, rows } from './client.ts'
 import {
   kindPreds,
+  listed,
   matchQuery,
   ORDER,
   orderOf,
@@ -231,7 +232,11 @@ let evalFast = (q: string, kind?: string) => {
   if (!narrows(preds)) return null
   let built = where(preds)
   if (!built) return null
-  return { preds, hits: matching(db, built).map(rowed) }
+  return {
+    preds,
+    hits: matching(db, built).map(rowed)
+      .filter((r) => listed(r.comps, preds)),
+  }
 }
 
 // The query pipeline shared by /query and a subscription's initial set: the
@@ -240,10 +245,13 @@ let evalFast = (q: string, kind?: string) => {
 // backlinks on top (design §10.2).
 let evalQuery = (q: string) => {
   let snap = snapshot(db)
-  let all = rows(snap)
+  let all = rows(snap, true)
   let preds = resolveRefs(parseQuery(q), (id) => find(all, id)?.eid)
   let byEid = new Map(all.map((r) => [r.eid, r.comps]))
-  let hits = all.filter((r) => matchQuery(r.comps, preds, (e) => byEid.get(e)))
+  let hits = all.filter((r) =>
+    listed(r.comps, preds) &&
+    matchQuery(r.comps, preds, (e) => byEid.get(e))
+  )
   return { snap, all, preds, byEid, hits }
 }
 
@@ -313,7 +321,8 @@ let maintain = (batch: Change[]) => {
       for (let eid of touched) {
         let c = gone.has(eid) ? {} : comps(eid)
         let alive = !gone.has(eid) && !!c.entity
-        let hit = alive && matchQuery(c, sub.preds, comps)
+        let hit = alive && listed(c, sub.preds) &&
+          matchQuery(c, sub.preds, comps)
         let s: Step = step(sub.members, eid, alive, hit)
         if (s == 'add') changes.push(...payload(sub, eid, c))
         // A standing match tells a shadow sub nothing: membership did not
@@ -372,7 +381,8 @@ export let aged = (now = Date.now()) => {
       for (let eid of [...sub.members]) {
         let c = comps(eid)
         let alive = !!c.entity
-        let hit = alive && matchQuery(c, sub.preds, comps, now)
+        let hit = alive && listed(c, sub.preds) &&
+          matchQuery(c, sub.preds, comps, now)
         let s: Step = step(sub.members, eid, alive, hit)
         if (s == 'remove') drop.push(eid)
         else if (s == 'dead') changes.push({ eid, name: 'entity', comp: null })
@@ -792,6 +802,7 @@ let http = Deno.serve(
           .map(decodeURIComponent)
         let backs = segs.includes('backlinks=1')
         let edged = segs.includes('deps=1')
+        let reveal = segs.includes('quarantined=1')
         let kind = segs.find((s) => s.startsWith('kind='))?.slice(5)
         // `id=` FETCHES rather than filters: each value is an ADDRESS — T-3, a
         // bare num, an alias slug, a uuid — and locate() is the index's own
@@ -812,7 +823,8 @@ let http = Deno.serve(
           )
           : null
         segs = segs.filter((s) =>
-          s != 'backlinks=1' && s != 'deps=1' && !s.startsWith('kind=') &&
+          s != 'backlinks=1' && s != 'deps=1' && s != 'quarantined=1' &&
+          !s.startsWith('kind=') &&
           !s.startsWith('id=')
         )
         let q = segs.join('&')
@@ -837,7 +849,11 @@ let http = Deno.serve(
         let layers = (hits: Row[]) => {
           if (!backs && !edged) return hits.map((r) => jsonOf(r))
           let eids = hits.map((r) => r.eid)
-          let deps = depsOf(db, eids)
+          let deps = depsOf(db, eids).filter((d) =>
+            reveal ||
+            (!eager(db, d.parent).quarantined &&
+              !eager(db, d.child).quarantined)
+          )
           let mine = new Map<string, Dep[]>()
           for (let d of deps) {
             for (let e of [d.parent, d.child]) {
@@ -853,7 +869,9 @@ let http = Deno.serve(
             let wanted = new Set(eids)
             // An edge is a reference like any other; its verb IS the `via`.
             let refs = [
-              ...refsOf(db, eids),
+              ...refsOf(db, eids).filter((r) =>
+                reveal || !eager(db, r.from).quarantined
+              ),
               ...deps.filter((d) => wanted.has(d.child))
                 .map((d) => ({ from: d.parent, via: d.type, to: d.child })),
             ]
@@ -894,6 +912,7 @@ let http = Deno.serve(
           let hits = [...only].map((eid) =>
             rowed({ eid, comps: eager(db, eid) })
           )
+            .filter((r) => reveal || listed(r.comps, preds))
             .filter((r) => matchQuery(r.comps, preds, (e) => eager(db, e)))
           return Response.json(
             layers(screen(hits).sort((a, b) => a.num - b.num)),

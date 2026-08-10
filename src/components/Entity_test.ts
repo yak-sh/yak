@@ -1,7 +1,7 @@
 // The action menu names claim holders with the same chip id as every claim
 // flag.
 import { assertEquals } from '@std/assert'
-import { backlinks, cache, ent } from '../live.ts'
+import { backlinks, cache, ent, reveal, revealed, shown } from '../live.ts'
 import { actionsFor, applicable, resolve } from './registry.ts'
 import './Entity.tsx'
 
@@ -34,6 +34,27 @@ Deno.test('release names the session by its chip id', () => {
     'release S-31',
   )
   cache.value = {}
+})
+
+Deno.test('quarantine is hidden until revealed and can be cleared', () => {
+  cache.value = {
+    task: {
+      entity: { eid: 'task', num: 1 },
+      doc: { eid: 'task', title: 'unsafe', body: 'hidden' },
+      task: { eid: 'task', status: 'open', priority: 0 },
+      quarantined: { eid: 'task', at: 'now' },
+    },
+  }
+  revealed.value = new Set()
+  assertEquals(shown('task'), false)
+  reveal('task')
+  assertEquals(shown('task'), true)
+  assertEquals(
+    actionsFor(ent('task')).some((a) => a.label == 'unquarantine'),
+    true,
+  )
+  cache.value = {}
+  revealed.value = new Set()
 })
 
 Deno.test('a pending proposal keeps deletion named as deletion', () => {

@@ -537,6 +537,35 @@ Deno.test('query: id= fetches by every form a name takes', alone, async () => {
   assertEquals(await byId(`${a.eid},${b.eid}`), [a.eid], 'tombstone absent')
 })
 
+Deno.test(
+  'query and subscriptions require an explicit quarantine read',
+  alone,
+  async () => {
+    let a = task({ status: 'open' })
+    let q = `.doc.title~=${a.eid.slice(0, 8)}`
+    await post(a.born)
+    let client = await subscriber()
+    let ordinary = `ordinary:${a.eid}`, explicit = `explicit:${a.eid}`
+    try {
+      await client.open(ordinary, q)
+      await client.open(explicit, `${q}&.quarantined!`)
+      assertEquals(client.members(ordinary), [a.eid])
+      assertEquals(client.members(explicit), [])
+
+      await post([{ eid: a.eid, name: 'quarantined', comp: {} }])
+      await client.settle()
+      assertEquals(await queried(q), [])
+      assertEquals(await queried(`${q}&.quarantined!`), [a.eid])
+      assertEquals(client.members(ordinary), [])
+      assertEquals(client.members(explicit), [a.eid])
+      assertEquals(await byId(a.eid), [])
+      assertEquals(await byId(a.eid, '&quarantined=1'), [a.eid])
+    } finally {
+      client.close()
+    }
+  },
+)
+
 // `deps=1` is the only door outside /snapshot that carries an entity's OWN
 // edges — `task show` prints its requires:/referenced by: blocks out of them,
 // and could not be narrowed without it. It reads the edge table keyed by the

@@ -1249,6 +1249,13 @@ Deno.test('lifecycle stamps: bare presence server-stamps provenance; the wire ca
   assertEquals(rode?.comp?.by, jeff)
   assertEquals(rode?.comp?.via, client)
 
+  let q = uid()
+  apply(d, [{ eid: q, name: 'doc', comp: { title: 'unsafe' } }])
+  apply(d, [{ eid: q, name: 'quarantined', comp: {} }], undefined, client)
+  assertMatch(String(stamp(q, 'quarantined')?.at), /^\d{4}-/)
+  assertEquals(stamp(q, 'quarantined')?.by, jeff)
+  assertEquals(stamp(q, 'quarantined')?.via, client)
+
   // Monotonic: a re-write never moves at/by (insert-or-ignore + by-is-null).
   apply(d, [{ eid: t, name: 'opened', comp: {} }])
   assertEquals(stamp(t, 'opened')?.at, at1)
@@ -1299,7 +1306,7 @@ Deno.test('lifecycle stamps: one-list — snapshot, showMd, and GRAMMAR pick the
   let row = all.find((r) => r.eid == t)!
   assertMatch(showMd(snap, all, row), /opened\.by: /)
   // MCP/CLI grammar teaches each as a tag comp
-  for (let n of ['notified', 'opened', 'archived']) {
+  for (let n of ['notified', 'opened', 'archived', 'quarantined']) {
     assertMatch(GRAMMAR, new RegExp(`${n}: \\(tag\\)`))
   }
   // The stampedPresence derive is {at,by}-shaped ONLY: `conflict` is also an
@@ -2879,6 +2886,34 @@ Deno.test('search: retired-project hits sink to the tail, flagged', () => {
   // unretiring floats them back
   apply(db, [{ eid: p, name: 'archived', comp: null }])
   assertEquals(search(db, 'quagga').every((h) => !h.retired), true)
+})
+
+Deno.test('search hides quarantined content until the query names the facet', () => {
+  let hidden = uid(), visible = uid(), comment = uid()
+  apply(db, [
+    {
+      eid: hidden,
+      name: 'doc',
+      comp: { title: 'Xqzquarantine hidden', body: '' },
+    },
+    { eid: hidden, name: 'quarantined', comp: {} },
+    {
+      eid: visible,
+      name: 'doc',
+      comp: { title: 'Xqzquarantine visible', body: '' },
+    },
+    {
+      eid: comment,
+      name: 'doc',
+      comp: { title: '', body: 'Xqzquarantine reply' },
+    },
+    { eid: comment, name: 'comment', comp: { target: hidden } },
+  ])
+  assertEquals(search(db, 'xqzquarantine').map((h) => h.eid), [visible])
+  assertEquals(
+    search(db, 'xqzquarantine .quarantined!').map((h) => h.eid),
+    [hidden],
+  )
 })
 
 // Land changes into a plain {cache, deps} the same way live.ts applyLocal

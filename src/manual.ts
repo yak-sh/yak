@@ -47,6 +47,7 @@ let value = (name: string, kind = text, separate = false): Opt => ({
 })
 
 let json = flag('--json')
+let quarantined = flag('--quarantined')
 let body = value('--body', bodyKind)
 let bodyText = { ...bodyKind, name: 'text' }
 // Retired flags whose habit outlives them, said once each (Manual.retired).
@@ -117,7 +118,8 @@ export let manuals = declare({
       '`.kind=project` and `kind=project` all name it, and the plural is a ' +
       'verb of its own (`task projects`). Tasks are the default. The second ' +
       "column is the handle you can type: a task's status, everything " +
-      `else's alias. Kinds: ${kindOrder.join(', ')}.`,
+      `else's alias. Quarantined rows require an explicit ` +
+      `'.quarantined!' filter. Kinds: ${kindOrder.join(', ')}.`,
     root: true,
     args: [arg('kind', text, false, false), arg('filters', text, true, false)],
     opts: [json],
@@ -179,11 +181,15 @@ export let manuals = declare({
     opts: [value('--comment', bodyText)],
   },
   show: {
-    about: 'one entity as a document (--json for scripts)',
-    examples: ['task show T-3', 'task show T-3 --json'],
+    about: 'one entity as a document (--quarantined explicitly reveals)',
+    examples: [
+      'task show T-3',
+      'task show T-3 --json',
+      'task show T-3 --quarantined',
+    ],
     root: true,
     args: [arg('id', id)],
-    opts: [json],
+    opts: [json, quarantined],
   },
   history: {
     about: "the entity's write history (journal)",

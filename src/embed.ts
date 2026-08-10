@@ -81,6 +81,9 @@ let WS = ' \t\n\r\v\f'
 // row at hand, so the same clause is cheap swept over every doc AND asked of
 // a single eid — one rule, never a second phrasing to fall out of step.
 let ELIGIBLE = `not exists (select 1 from comment where comment.eid = doc.eid)
+       and not exists (
+         select 1 from quarantined where quarantined.eid = doc.eid
+       )
        and trim(coalesce(doc.title,'') || coalesce(doc.body,''), ?) != ''`
 
 let lives = (db: DatabaseSync, eid: string) =>
