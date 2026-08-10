@@ -8,12 +8,13 @@ import { applicable, resolve } from '../Entity.tsx'
 import { Wake, WakeTitle } from './Wake.tsx'
 
 let at = new Date(Date.now() + 3_600_000).toISOString()
-let data = (by: string) => ({
+let data = (by: string, outcome: Record<string, unknown> = {}) => ({
   wake: {
     entity: { eid: 'wake', num: 1 },
     wake: { eid: 'wake', at },
     deliver: { eid: 'wake', to: 'recipient' },
     created: { eid: 'wake', by },
+    ...outcome,
   },
   recipient: {
     entity: { eid: 'recipient', num: 2 },
@@ -36,10 +37,89 @@ Deno.test('wake owns the default view and derives its title', () => {
 
   let title = WakeTitle({ e })
   let text = Array.isArray(title.props.children)
-    ? title.props.children[1]
+    ? title.props.children[2]
     : undefined
   assertEquals(text?.props.children, ['wake ', 'P-2', ' · ', ago(at)])
   cache.value = {}
+})
+
+Deno.test('wake coordinates pending, delivered, and failed states', () => {
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let { document } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  let root = document.querySelector('main')!
+  let face = () => ({
+    moment: root.querySelector('.Wake_Moment')?.className,
+    state: root.querySelector('.Wake_Status')?.textContent,
+    detail: root.querySelector('.Wake_Detail')?.textContent,
+    dot: root.querySelector('.Dot')?.className,
+  })
+  try {
+    cache.value = data('recipient')
+    render(
+      <>
+        <WakeTitle e={ent('wake')} />
+        <Wake e={ent('wake')} />
+      </>,
+      root,
+    )
+    assertEquals(face(), {
+      moment: 'Wake_Moment Wake_Moment-pending',
+      state: 'pending',
+      detail: undefined,
+      dot: 'Dot Dot-pending',
+    })
+
+    cache.value = data('recipient', {
+      delivered: {
+        eid: 'wake',
+        at: '2026-08-10T14:00:00Z',
+        via: 'knock K-9',
+      },
+    })
+    render(
+      <>
+        <WakeTitle e={ent('wake')} />
+        <Wake e={ent('wake')} />
+      </>,
+      root,
+    )
+    assertEquals(face(), {
+      moment: 'Wake_Moment Wake_Moment-delivered',
+      state: 'delivered',
+      detail: 'via knock K-9',
+      dot: 'Dot Dot-done',
+    })
+
+    cache.value = data('recipient', {
+      error: {
+        eid: 'wake',
+        at: '2026-08-10T14:00:00Z',
+        message: 'no door',
+      },
+    })
+    render(
+      <>
+        <WakeTitle e={ent('wake')} />
+        <Wake e={ent('wake')} />
+      </>,
+      root,
+    )
+    assertEquals(face(), {
+      moment: 'Wake_Moment Wake_Moment-failed',
+      state: 'failed',
+      detail: 'no door',
+      dot: 'Dot Dot-failed',
+    })
+  } finally {
+    render(null, root)
+    cache.value = {}
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else delete (globalThis as { document?: unknown }).document
+  }
 })
 
 Deno.test('wake shows its relative and exact time and addressed people', () => {

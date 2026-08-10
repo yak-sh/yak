@@ -3,6 +3,7 @@
 import { type Ent, idOf } from '../../types.ts'
 import { ent } from '../../live.ts'
 import { ago, block, pretty } from '../ui.tsx'
+import { Dot } from '../Dot.tsx'
 import { Entity } from '../Entity.tsx'
 import { Id } from './Inline.tsx'
 
@@ -11,16 +12,24 @@ let Frame = block('section', 'Wake', {
   Moment: 'div',
   Relative: 'strong',
   Exact: 'time',
+  Outcome: 'div',
+  Status: 'strong',
+  Detail: 'span',
   People: 'div',
   Party: 'div',
   Label: 'span',
 })
 
+let state = (e: Ent) =>
+  e.delivered ? 'delivered' : e.error ? 'failed' : 'pending'
+
 export let WakeTitle = ({ e }: { e: Ent }) => {
   let to = e.deliver?.to
+  let status = state(e)
   return (
     <Title>
       <Id e={e} />
+      <Dot status={status == 'delivered' ? 'done' : status} />
       <Title.Text>
         wake {to ? idOf(ent(to)) : 'someone'} · {ago(e.wake!.at)}
       </Title.Text>
@@ -32,11 +41,23 @@ export let Wake = ({ e }: { e: Ent }) => {
   let at = e.wake!.at
   let to = e.deliver?.to
   let by = e.created?.by
+  let status = state(e)
+  let outcome = e.delivered ?? e.error
   return (
     <Frame>
-      <Frame.Moment>
+      <Frame.Moment mod={status}>
         <Frame.Relative>{ago(at)}</Frame.Relative>
         <Frame.Exact dateTime={at}>{pretty(at)}</Frame.Exact>
+        <Frame.Outcome>
+          <Frame.Status>{status}</Frame.Status>
+          {outcome?.at && (
+            <span data-tip={pretty(outcome.at)}>{ago(outcome.at)}</span>
+          )}
+          {e.delivered?.via && (
+            <Frame.Detail>via {e.delivered.via}</Frame.Detail>
+          )}
+          {e.error?.message && <Frame.Detail>{e.error.message}</Frame.Detail>}
+        </Frame.Outcome>
       </Frame.Moment>
       {to && (
         <Frame.People>
