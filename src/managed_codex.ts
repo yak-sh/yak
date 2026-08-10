@@ -512,8 +512,12 @@ export let managedCodex = (options: ManagedCodexOptions) => {
     return true
   }
 
-  let comment = (eid: string, ceid: string) => {
-    if (!graphSession(db, eid)) return false
+  let comment = (target: string, ceid: string) => {
+    let held = db.prepare('select session from claim where eid = ?').get(
+      target,
+    ) as { session: string } | undefined
+    let eid = graphSession(db, target) ? target : held?.session
+    if (!eid || !graphSession(db, eid)) return false
     let made = db.prepare('select via from created where eid = ?').get(ceid) as
       | { via: string | null }
       | undefined
@@ -521,7 +525,9 @@ export let managedCodex = (options: ManagedCodexOptions) => {
     let row = db.prepare('select role from session where eid = ?').get(eid) as
       | { role: string | null }
       | undefined
-    if (row?.role) return true
+    // Role reconciliation owns direct role inbox wake-ups. Claimed work is
+    // narrower and belongs to the holder immediately, role or not.
+    if (target == eid && row?.role) return true
     attention(db, eid, cast, runner)
     sweep()
     return true

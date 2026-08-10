@@ -325,6 +325,10 @@ Deno.test('a new Codex spawn routes to the graph-native lifecycle', async () => 
   assertEquals(row(eid)?.status, null)
   assertEquals(running.has(eid), false)
   assertEquals(pending(), false)
+  assertEquals(
+    db.prepare('select session from claim where eid = ?').get(t),
+    { session: eid },
+  )
 
   let legacy = uid()
   apply(db, [{

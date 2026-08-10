@@ -37,7 +37,7 @@ import { delivered, errorChange, healthChange } from './deliver.ts'
 import { present, reachable } from './door.ts'
 import { dispatch, trace } from './effects.ts'
 import { legacyWorktreesDir, worktreesDir } from './ground.ts'
-import { rows, wrapChanges } from './client.ts'
+import { hookClaim, rows, wrapChanges } from './client.ts'
 import { type Unlanded, unlanded } from './land.ts'
 import { materialize } from './persona.ts'
 import { type Change, type LogRow, sessionActive } from './types.ts'
@@ -1237,7 +1237,16 @@ export let spawned =
       // stamped before its worktree exists, so no .git link can place it yet.
       ...(row.actor ? {} : { actor: project }),
     }, cast)
-    if (native && row.spawn_provider == 'codex') return native(eid, job)
+    if (native && row.spawn_provider == 'codex') {
+      let claim = hookClaim(
+        rows(snapshot(db)),
+        job.task,
+        String(row.id),
+        tree,
+      )
+      if (claim.length) cast(apply(db, claim, undefined, eid))
+      return native(eid, job)
+    }
     stamp(eid, { status: 'starting' }, cast)
     // The fs and the child are the SLOW half — the returned promise is
     // the whole run, riding the dispatch for callers that await it

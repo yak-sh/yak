@@ -327,6 +327,91 @@ Deno.test('attention during a generation waits for its next boundary', async () 
   db.close()
 })
 
+Deno.test('comments on claimed work wake its graph-native holder', async () => {
+  let db = open(':memory:')
+  let tree = Deno.makeTempDirSync(), sid = session(db, tree)
+  let called: string[] = [], requests: Record<string, unknown>[] = []
+  let queue = [
+    result([{
+      type: 'message',
+      content: [{ type: 'output_text', text: 'idle' }],
+    }]),
+    result([{
+      type: 'function_call',
+      call_id: 'claimed-context',
+      name: 'task_context',
+      arguments: '{}',
+    }]),
+    result([{
+      type: 'message',
+      content: [{ type: 'output_text', text: 'heard claimed work' }],
+    }]),
+  ]
+  let service = managedCodex({
+    db,
+    cast: () => {},
+    transport: {
+      run: (request) => {
+        requests.push(request)
+        return Promise.resolve(queue.shift()!)
+      },
+    },
+    tools: () => Promise.resolve(tools(called)),
+    prepare: () => Promise.resolve(),
+  })
+  await service.start(sid, job(tree))
+  let task = uuid(), comment = uuid()
+  apply(db, [{
+    eid: task,
+    name: 'task',
+    comp: { status: 'wip' },
+  }, {
+    eid: task,
+    name: 'claim',
+    comp: { session: sid },
+  }, {
+    eid: comment,
+    name: 'doc',
+    comp: { title: '', body: 'claimed task words' },
+  }, {
+    eid: comment,
+    name: 'comment',
+    comp: { target: task },
+  }])
+  service.comment(task, comment)
+  await service.sweep()
+
+  let rows = readEntries(db, sid)
+  assertEquals(rows.filter((row) => row.comps.attention).length, 1)
+  assertEquals(called, ['task_context'])
+  let replay = JSON.stringify(requests[1].input)
+  assertMatch(replay, /Task Graph has pending messages/)
+  assertEquals(replay.includes('claimed task words'), false)
+
+  let own = uuid()
+  apply(
+    db,
+    [{
+      eid: own,
+      name: 'doc',
+      comp: { title: '', body: 'my own update' },
+    }, {
+      eid: own,
+      name: 'comment',
+      comp: { target: task },
+    }],
+    undefined,
+    sid,
+  )
+  service.comment(task, own)
+  await service.sweep()
+  assertEquals(
+    readEntries(db, sid).filter((row) => row.comps.attention).length,
+    1,
+  )
+  db.close()
+})
+
 Deno.test('a failed generation consumes its wake and accepts the next', async () => {
   let db = open(':memory:')
   let tree = Deno.makeTempDirSync(), sid = session(db, tree), calls = 0
