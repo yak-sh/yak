@@ -11,11 +11,14 @@ import {
   base,
   commentsOn,
   ent,
+  entrySub,
   jobOf,
   mutate,
   repoUrl,
+  subEids,
   uuid,
 } from '../../live.ts'
+import { type EntryRow, type GraphLog, graphLog } from '../../entry_log.ts'
 import { slot, tileLink, type TileProps } from '../Tile.tsx'
 import { ago, block, pretty, Stamp } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
@@ -32,15 +35,9 @@ import { Markdown } from '../Markdown.tsx'
 // the pinned composer (Comments.tsx), which is the way to talk TO the
 // agent.
 //
-// The log is the FILE (src/sessions.ts): we read it back over
-// /sessions/:eid/logs, where each line already carries its renderer `row`
-// (the server's adapter normalized the provider's dialect — the browser
-// never learns one). We match on row.kind, so a say is markdown, a tool a
-// chip, reasoning dim — the pane reads like a transcript, not a dump. A
-// line with no row (a heartbeat, a torn frame) falls back to its bare type.
-// The WHOLE log, always: the first read takes every line, and the poll
-// asks only for what came after (useLog) — so showing all of it costs one
-// read, not one per tick.
+// Both durable logs normalize to one renderer row: process-backed Sessions
+// page their JSONL over /logs, while graph-native Sessions subscribe to their
+// ordered entry partition. The browser never learns a provider dialect.
 
 let Frame = block('div', 'Session', {
   Head: 'div',
@@ -313,7 +310,11 @@ export let SessionBody = ({ x, repo }: { x: Entry; repo?: string }) => {
     case 'turn':
       return (
         <Turn>
-          {[r.ms != null && span(r.ms), usage(r.usage)]
+          {[
+            r.model && friendly(r.model),
+            r.ms != null && span(r.ms),
+            usage(r.usage),
+          ]
             .filter(Boolean).join(' · ')}
         </Turn>
       )
@@ -411,6 +412,37 @@ let useLog = (eid: string, live: boolean) => {
   return log
 }
 
+let entryRow = (e: Ent): EntryRow | undefined => {
+  if (!e.entry?.seq) return undefined
+  let {
+    eid,
+    num: _num,
+    kind: _kind,
+    refs: _refs,
+    kids: _kids,
+    ...comps
+  } = e
+  return {
+    eid,
+    seq: e.entry.seq,
+    comps: comps as unknown as EntryRow['comps'],
+  }
+}
+
+// The initial subscription frame is the historical partition; the complete
+// live stream carries later entry patches. Reading ent() here subscribes this
+// render to every member's component signals.
+let useEntryLog = (eid: string): GraphLog | undefined => {
+  useEffect(() => entrySub(eid), [eid])
+  let eids = subEids(`entries:${eid}`)
+  if (!eids) return undefined
+  let rows = [...eids].flatMap((id) => {
+    let row = entryRow(ent(id))
+    return row ? [row] : []
+  })
+  return graphLog(rows)
+}
+
 // The host's scroller — a card's Card_Scroll, the fullscreen App_Body —
 // found by walking up to the nearest ancestor that scrolls. Null in the
 // TUI's fake DOM (no parentElement), which switches the feature off there.
@@ -459,9 +491,13 @@ export let Session = ({ e }: { e: Ent }) => {
   // it's going in its status, one that only announced itself is going while
   // its door is open. `standing` is that answer as a word, so an external
   // run's pip and label read `running` instead of a blank lifecycle.
-  let live = awake(s)
-  let status = standing(s)
-  let log = useLog(e.eid, live)
+  let entries = useEntryLog(e.eid)
+  let native = s.origin == 'managed' && s.status == null &&
+    e.spawn?.provider == 'codex'
+  let live = native ? !s.base_revision || !!entries?.busy : awake(s)
+  let status = native ? live ? 'running' : 'idle' : standing(s)
+  let file = useLog(e.eid, !native && live)
+  let log = native ? entries ?? graphLog([]) : file
   let frame = useTail(log.entries.at(-1)?.seq)
   // The Final block IS the last agent say — don't print it twice. Only a
   // session whose log grew no say row (an external one, a torn log) still
@@ -471,7 +507,13 @@ export let Session = ({ e }: { e: Ent }) => {
   )
   let rows = squeeze(log.entries.filter((x) => x.row || !bareType(x.line)))
   // The facts fold behind the one lifecycle fact worth keeping in the bar.
-  let gist = s.started_at ? `started ${ago(s.started_at)}` : 'not started'
+  let gist = live
+    ? s.started_at ? `started ${ago(s.started_at)}` : 'starting'
+    : native && log.entries.length
+    ? 'idle'
+    : s.started_at
+    ? `started ${ago(s.started_at)}`
+    : 'not started'
   // A comment joins the thread once the session has HEARD it: a managed
   // resume prints the words as its own `session.input` line (the log IS
   // the delivery — the comment would double it, so it hides), and the

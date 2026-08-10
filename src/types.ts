@@ -843,7 +843,7 @@ export type LogRow =
       exit?: number
       status?: string
     }
-    | { kind: 'turn'; usage?: string; ms?: number }
+    | { kind: 'turn'; model?: string; usage?: string; ms?: number }
     | { kind: 'error'; text: string }
     | { kind: 'sys'; tag: string; text?: string }
   )

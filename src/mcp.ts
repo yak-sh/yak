@@ -93,6 +93,9 @@ export type IO = {
   logs: (eid: string, q: URLSearchParams) => Promise<{
     entries: { seq: number; line: string; row?: unknown }[]
     stderr?: string
+    busy?: boolean
+    latest?: number
+    model?: string
   }>
   // An entity's slice of the journal (db.ts journalOf in-process; GET
   // /journal over stdio) — the wire's write record, newest first.
@@ -671,17 +674,6 @@ running or settled; stderr rides along when the child wrote any. ${BUS}`,
       let row = find(all, id)
       if (!row?.comps.session) return err(`no session: ${id}`)
       let s = row.comps.session
-      let head = [
-        `${idOf(row)} ${s.status ?? 'external'}`,
-        `${s.provider ?? '?'} ${s.serving_model ?? s.model ?? ''}`.trim(),
-        `seq ${s.latest_seq ?? 0}`,
-        ...(s.started_at ? [`started ${s.started_at}`] : []),
-        ...(s.finished_at ? [`finished ${s.finished_at}`] : []),
-        ...(s.exit_code == null ? [] : [`exit ${s.exit_code}`]),
-        ...(row.comps.error?.message
-          ? [`error: ${String(row.comps.error.message).slice(0, 200)}`]
-          : []),
-      ].join(' · ')
       // The cap is PEEK's, not the door's: /logs serves a whole log to a
       // reader that wants one (the web pane does), so a glance clamps for
       // itself rather than dropping a transcript into an agent's context.
@@ -691,6 +683,23 @@ running or settled; stderr rides along when the child wrote any. ${BUS}`,
           tail: String(Math.min(Math.max(tail ?? 20, 1), 500)),
         }),
       )
+      let status = out.busy == null
+        ? s.status ?? 'external'
+        : out.busy
+        ? 'running'
+        : 'idle'
+      let head = [
+        `${idOf(row)} ${status}`,
+        `${s.provider ?? '?'} ${out.model ?? s.serving_model ?? s.model ?? ''}`
+          .trim(),
+        `seq ${out.latest ?? s.latest_seq ?? 0}`,
+        ...(s.started_at ? [`started ${s.started_at}`] : []),
+        ...(s.finished_at ? [`finished ${s.finished_at}`] : []),
+        ...(s.exit_code == null ? [] : [`exit ${s.exit_code}`]),
+        ...(row.comps.error?.message
+          ? [`error: ${String(row.comps.error.message).slice(0, 200)}`]
+          : []),
+      ].join(' · ')
       let lines = out.entries.map(peekLine)
       return bus(
         [head, ...lines, ...(out.stderr ? [`stderr:\n${out.stderr}`] : [])]

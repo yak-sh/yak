@@ -74,8 +74,10 @@ import {
 import { codexIssuer, codexStore } from './codex_auth.ts'
 import { accountHttp, accountService } from './accounts.ts'
 import { combineTools, localTools, tasksTools } from './harness_tools.ts'
-import { managedCodex } from './managed_codex.ts'
+import { graphSession, managedCodex } from './managed_codex.ts'
 import { responses } from './responses.ts'
+import { readEntries } from './entries.ts'
+import { graphLogPage } from './entry_log.ts'
 import { outcome, recent, record, toolCall } from './telemetry.ts'
 import { stamp } from './hot.ts'
 import { obeyed } from './obey.ts'
@@ -191,6 +193,7 @@ type Sub = {
   shadow: boolean
   moving: boolean
   bodies: boolean
+  details: boolean
 }
 let subs = new Map<WebSocket, Map<string, Sub>>()
 let filtered = new Set<WebSocket>()
@@ -302,11 +305,11 @@ let payload = (
   eid: string,
   comps: Record<string, Record<string, unknown>>,
 ): Change[] =>
-  sub.shadow
+  sub.shadow && !sub.details
     ? [{ eid, name: 'entity', comp: comps.entity as Change['comp'] }]
     : carry(sub, spread(eid, comps))
 
-let maintain = (batch: Change[]) => {
+export let maintain = (batch: Change[]) => {
   if (!subs.size) return
   let cur = cursorOf(db)
   let gone = new Set(
@@ -335,7 +338,7 @@ let maintain = (batch: Change[]) => {
         if (s == 'add') changes.push(...payload(sub, eid, c))
         // A standing match tells a shadow sub nothing: membership did not
         // move, and the client heard the patch on the complete stream.
-        else if (s == 'update' && !sub.shadow) {
+        else if (s == 'update' && (!sub.shadow || sub.details)) {
           changes.push(...carry(sub, patch.get(eid) ?? []))
         } else if (s == 'remove') drop.push(eid)
         else if (s == 'dead') changes.push({ eid, name: 'entity', comp: null })
@@ -431,6 +434,9 @@ let control = (
       shadow: !!f.shadow,
       moving: gaps(preds).includes('moving-time'),
       bodies: bodied(f.sub),
+      // Entry partitions are absent from both the root snapshot and root live
+      // stream, so their shadow owns bodies and standing-match updates too.
+      details: f.sub.startsWith('entries:'),
     })
     let sub = map.get(f.sub)!
     let changes = hits.flatMap((r) => payload(sub, r.eid, r.comps))
@@ -579,6 +585,20 @@ let ws = (req: Request) => {
 // Every tools/call is timed and recorded on the way through (telemetry.ts
 // classifies the body — this route is the only place that sees both the
 // request and its reply).
+let partition = (eid: string) => {
+  let rows = []
+  let after = 0
+  while (true) {
+    let page = readEntries(db, eid, after, 5000)
+    rows.push(...page)
+    if (page.length < 5000) return rows
+    after = page.at(-1)!.seq
+  }
+}
+
+let sessionLog = (eid: string, q: URLSearchParams) =>
+  graphSession(db, eid) ? graphLogPage(partition(eid), q) : logs(eid, q)
+
 let graphIO: IO = {
   // deno-lint-ignore require-await
   read: async () => snapshot(db),
@@ -604,7 +624,7 @@ let graphIO: IO = {
     if (out.length) cast(out)
   },
   // deno-lint-ignore require-await
-  logs: async (eid, q) => logs(eid, q),
+  logs: async (eid, q) => sessionLog(eid, q),
   // deno-lint-ignore require-await
   history: async (eid, limit) => journalOf(db, eid, limit),
   // deno-lint-ignore require-await
@@ -1086,12 +1106,10 @@ let http = Deno.serve(
         files: await res.json(),
       })
     }
-    // Managed sessions are DRIVEN through the graph (create a session
-    // with a provider, create a stop_request, comment at a settled one —
-    // the effects below); the log file is the one thing still read here,
-    // because logs are log data, not graph.
+    // Both session substrates speak the same normalized log door: process
+    // runs project their JSONL, graph runs project their ordered entries.
     let session = path.match(/^\/sessions\/([0-9a-f-]{36})\/logs$/)
-    if (session) return Response.json(logs(session[1], url.searchParams))
+    if (session) return Response.json(sessionLog(session[1], url.searchParams))
     // The wire's record, per entity (?eid=) or instrument (?via= — a
     // session's whole day, for the wrap ledger). Newest first. Raw eids
     // only — id resolution is a client concern.

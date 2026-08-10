@@ -752,6 +752,7 @@ export let assertAgree = (
 }
 
 let boardUses = new Map<string, { n: number; q: string }>()
+let entryUses = new Map<string, number>()
 
 let ownBoard = (sub: string, q: string) =>
   owner ? owner.use(sub, q) : shadow(sub, q)
@@ -772,6 +773,22 @@ export let boardSub = (e: Ent) => {
     let held = boardUses.get(sub)
     if (!held || --held.n > 0) return
     boardUses.delete(sub)
+    dropBoard(sub)
+  }
+}
+
+// Entry entities are intentionally absent from the root snapshot. A Session
+// view asks for only its ordered partition; ownership is shared across views
+// and tabs just like a board subscription.
+export let entrySub = (session: string) => {
+  let sub = `entries:${session}`
+  let n = entryUses.get(sub) ?? 0
+  entryUses.set(sub, n + 1)
+  if (!n) ownBoard(sub, `.entry.session=${session}`)
+  return () => {
+    let held = (entryUses.get(sub) ?? 1) - 1
+    if (held > 0) return void entryUses.set(sub, held)
+    entryUses.delete(sub)
     dropBoard(sub)
   }
 }

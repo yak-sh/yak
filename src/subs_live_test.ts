@@ -28,7 +28,9 @@ let port = (seat.addr as Deno.NetAddr).port
 seat.close()
 Deno.env.set('PORT', String(port))
 Deno.env.set('DB_PATH', ':memory:')
-let { aged } = await import('./server.ts')
+let { aged, maintain } = await import('./server.ts')
+let { db } = await import('./db.ts')
+let { append, settleGeneration, takeEntry } = await import('./entries.ts')
 
 let U = `127.0.0.1:${port}`
 let uid = () => crypto.randomUUID()
@@ -98,6 +100,7 @@ let subscriber = async () => {
   let n = 0
   return {
     open: (sub: string, q: string) => reply(sub, { sub, q }),
+    shadow: (sub: string, q: string) => reply(sub, { sub, q, shadow: true }),
     // What a frame CARRIED, not just which eids it named — the projection is
     // a claim about columns, so a test of it has to read them.
     carried: (sub: string) => seen.get(sub) ?? [],
@@ -337,6 +340,113 @@ Deno.test('bodies ride only where a body is read', alone, async () => {
     client.close()
   }
 })
+
+// Entry entities do not ride the root snapshot, so a membership-only shadow
+// would leave a Session with ids it could never render. Its initial frame is
+// the one exception: the ordered partition carries all facets and bodies.
+Deno.test('entry shadows carry the lazy partition', alone, async () => {
+  let session = uid(), entry = uid()
+  let client = await subscriber()
+  try {
+    await post([{
+      eid: session,
+      name: 'session',
+      comp: { id: `entry-shadow-${session}` },
+    }, {
+      eid: entry,
+      name: 'entry',
+      comp: { session },
+    }, {
+      eid: entry,
+      name: 'message',
+      comp: { role: 'agent' },
+    }, {
+      eid: entry,
+      name: 'content',
+      comp: { body: 'visible from the partition' },
+    }])
+    let sub = `entries:${session}`
+    await client.shadow(sub, `.entry.session=${session}`)
+    let carried = client.carried(sub).filter((c) => c.eid == entry)
+    assertEquals(
+      carried.map((c) => c.name).sort(),
+      ['content', 'created', 'entity', 'entry', 'message'],
+    )
+    assertEquals(
+      carried.find((c) => c.name == 'content')?.comp?.body,
+      'visible from the partition',
+    )
+  } finally {
+    client.close()
+  }
+})
+
+Deno.test(
+  'entry shadows carry lease and settlement updates',
+  alone,
+  async () => {
+    let session = uid(), runner = uid(), input = uid(), generation = uid()
+    let client = await subscriber()
+    try {
+      await post([{
+        eid: session,
+        name: 'session',
+        comp: { id: `entry-updates-${session}` },
+      }, {
+        eid: runner,
+        name: 'runner',
+        comp: { name: `entry-updates-${runner}` },
+      }])
+      let made = append(
+        db,
+        session,
+        [{
+          message: { role: 'user' },
+          content: { body: 'begin' },
+        }, {
+          generation: {
+            through: input,
+            provider: 'codex',
+            model: 'gpt-requested',
+          },
+        }],
+        runner,
+        [input, generation],
+      )
+      maintain(made.changes)
+      let sub = `entries:${session}`
+      await client.shadow(sub, `.entry.session=${session}`)
+
+      let won = takeEntry(db, generation, runner)!
+      maintain(won.changes)
+      let done = settleGeneration(
+        db,
+        won.token,
+        { input: 3, cached: 1, output: 2, reasoning: 1 },
+        () => new Date('2026-08-10T12:00:00.000Z'),
+        'gpt-served',
+      )
+      maintain(done)
+      await client.settle()
+
+      let changes = client.carried(sub).filter((c) => c.eid == generation)
+      assertEquals(
+        changes.filter((c) => c.name == 'lease').map((c) => c.comp != null),
+        [true, false],
+      )
+      assertEquals(changes.some((c) => c.name == 'delivered'), true)
+      assertEquals(changes.some((c) => c.name == 'usage'), true)
+      assertEquals(
+        changes.some((c) =>
+          c.name == 'generation' && c.comp?.serving_model == 'gpt-served'
+        ),
+        true,
+      )
+    } finally {
+      client.close()
+    }
+  },
+)
 
 // Every case above moves membership by WRITING. A moving time window moves it
 // by doing nothing at all: the window advances, the row's timestamp does not,
