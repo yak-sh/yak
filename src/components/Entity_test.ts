@@ -36,7 +36,7 @@ Deno.test('release names the session by its chip id', () => {
   cache.value = {}
 })
 
-Deno.test('a pending proposal offers acceptance or rejection', () => {
+Deno.test('a pending proposal keeps deletion named as deletion', () => {
   cache.value = {
     design: {
       entity: { eid: 'design', num: 45 },
@@ -47,8 +47,17 @@ Deno.test('a pending proposal offers acceptance or rejection', () => {
   }
   let labels = () => actionsFor(ent('design')).map((a) => a.label)
   assertEquals(labels().includes('accept'), true)
-  assertEquals(labels().includes('reject'), true)
-  assertEquals(labels().includes('delete'), false)
+  assertEquals(labels().includes('reject'), false)
+  assertEquals(labels().includes('delete'), true)
+
+  cache.value = {
+    design: {
+      ...cache.value.design,
+      task: { eid: 'design', status: 'cancelled', priority: 1 },
+    },
+  }
+  assertEquals(labels().includes('accept'), false)
+  assertEquals(labels().includes('delete'), true)
 
   cache.value = {
     design: {

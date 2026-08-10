@@ -36,7 +36,7 @@ Deno.test('empty document meta remains a first-class null', () => {
   assertEquals(resolve(e, 'Meta').Render({ e }), null)
 })
 
-Deno.test('proposal meta distinguishes proposals from approvals', () => {
+Deno.test('proposal meta distinguishes pending, cancelled, and approved', () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {
@@ -57,6 +57,20 @@ Deno.test('proposal meta distinguishes proposals from approvals', () => {
     assertEquals(
       root.querySelector('.Show_Proposal')?.getAttribute('aria-label'),
       'proposed',
+    )
+
+    cache.value = {
+      proposal: {
+        ...proposal,
+        task: { eid: 'proposal', status: 'cancelled', priority: 1 },
+      },
+    }
+    e = ent('proposal')
+    render(resolve(e, 'Meta').Render({ e })!, root)
+    assertExists(root.querySelector('.Show_Proposal-cancelled .Icon'))
+    assertEquals(
+      root.querySelector('.Show_Proposal')?.getAttribute('aria-label'),
+      'cancelled',
     )
 
     cache.value = {

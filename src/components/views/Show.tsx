@@ -470,10 +470,11 @@ let tallies = (e: Ent): [string, number, number][] => [
 let ProposalState = ({ e }: { e: Ent }) => {
   if (!e.proposed) return null
   let approved = !!e.decided
-  let state = approved ? 'approved' : 'proposed'
+  let cancelled = !approved && e.task?.status == 'cancelled'
+  let state = approved ? 'approved' : cancelled ? 'cancelled' : 'proposed'
   return (
     <Proposal mod={state} aria-label={state} data-tip={state}>
-      <Icon name={approved ? 'stamp' : 'lightbulb'} />
+      <Icon name={approved ? 'stamp' : cancelled ? 'circle-x' : 'lightbulb'} />
     </Proposal>
   )
 }

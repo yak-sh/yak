@@ -219,7 +219,7 @@ define([
 // (the red row at the end).
 defineActions([
   {
-    match: (e) => !!e.proposed && !e.decided,
+    match: (e) => !!e.proposed && !e.decided && e.task?.status != 'cancelled',
     acts: (e) => [{
       label: 'accept',
       run: () => mutate({ eid: e.eid, name: 'decided', comp: {} }),
@@ -326,9 +326,7 @@ defineActions([
   {
     match: () => true,
     acts: (e) => [{
-      // A rejected proposal dies. Dropping only its proposed stamp would
-      // turn it into ordinary, self-authorizing work.
-      label: e.proposed && !e.decided ? 'reject' : 'delete',
+      label: 'delete',
       mod: 'danger',
       run: () => mutate({ eid: e.eid, name: 'entity', comp: null }),
     }],

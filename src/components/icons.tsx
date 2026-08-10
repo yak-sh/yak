@@ -20,6 +20,13 @@ let glyphs: Record<string, JSX.Element> = {
       <path d='m9 12 2 2 4-4' />
     </>
   ),
+  'circle-x': (
+    <>
+      <circle cx='12' cy='12' r='10' />
+      <path d='m15 9-6 6' />
+      <path d='m9 9 6 6' />
+    </>
+  ),
   lightbulb: (
     <>
       <path d='M9 18h6' />
