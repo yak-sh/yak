@@ -1,0 +1,380 @@
+// The first-party loop against fake transport, fake tools, and an in-memory
+// ordered log. Tests pin projection, provider boundaries, concurrency, errors,
+// unknown evidence, instructions, and graph-native correlation.
+import { assert, assertEquals, assertMatch, assertRejects } from '@std/assert'
+import { type EntrySpec, type UsageValue } from './entries.ts'
+import { type ToolHost } from './harness_tools.ts'
+import {
+  type ResponseEvent,
+  type ResponseItem,
+  type ResponseResult,
+} from './responses.ts'
+import {
+  type EntryRow,
+  executeCall,
+  generationEntries,
+  instructions,
+  project,
+  runTurn,
+  type TurnLog,
+} from './runner.ts'
+
+let result = (
+  items: ResponseItem[],
+  unknown: ResponseEvent[] = [],
+): ResponseResult => ({
+  model: 'gpt-5.6-sol-serving',
+  items,
+  unknown,
+  unknownItems: items.filter((item) => item.type == 'future_item'),
+  usage: { input: 10, cached: 3, output: 5, reasoning: 2, raw: {} },
+  response: { status: 'completed' },
+  limits: {},
+})
+
+let row = (
+  eid: string,
+  seq: number,
+  comps: Record<string, Record<string, unknown>>,
+): EntryRow => ({ eid, seq, comps })
+
+Deno.test('instructions load the applicable hierarchy and refuse weaker posture', async () => {
+  let tree = await Deno.makeTempDir({ prefix: 'tasks-runner-' })
+  let outside = await Deno.makeTempDir({ prefix: 'tasks-runner-out-' })
+  try {
+    await Deno.mkdir(`${tree}/a/b`, { recursive: true })
+    await Deno.writeTextFile(`${tree}/AGENTS.md`, 'root voice')
+    await Deno.writeTextFile(`${tree}/a/AGENTS.md`, 'near voice')
+    let body = await instructions({
+      tree,
+      cwd: 'a/b',
+      persona: 'patient persona',
+      prompt: 'finish T-1',
+    })
+    assert(body.indexOf('root voice') < body.indexOf('near voice'))
+    assertMatch(body, /patient persona/)
+    assertMatch(body, /finish T-1/)
+    assertMatch(body, /\/workspace/)
+    await assertRejects(
+      () => instructions({ tree, cwd: outside }),
+      Error,
+      'leaves worktree',
+    )
+    await assertRejects(
+      () => instructions({ tree, authority: 'host' }),
+      Error,
+      'unsupported authority',
+    )
+  } finally {
+    await Deno.remove(tree, { recursive: true })
+    await Deno.remove(outside, { recursive: true })
+  }
+})
+
+Deno.test('provider items become typed entries and unknown evidence stays opaque', () => {
+  let work = generationEntries(
+    result([
+      {
+        type: 'reasoning',
+        id: 'reason-1',
+        summary: [{ type: 'summary_text', text: 'thinking' }],
+        encrypted_content: 'ciphertext',
+      },
+      {
+        type: 'function_call',
+        id: 'item-1',
+        call_id: 'call-1',
+        name: 'shell',
+        arguments: '{"command":"pwd","timeout_ms":500}',
+      },
+      {
+        type: 'compaction',
+        id: 'compact-1',
+        summary: [{ type: 'summary_text', text: 'portable summary' }],
+        encrypted_content: 'compact-ciphertext',
+      },
+      { type: 'future_item', id: 'future-1', payload: { x: 1 } },
+      {
+        type: 'message',
+        id: 'message-1',
+        content: [{ type: 'output_text', text: 'done' }],
+      },
+    ], [{ type: 'response.future.delta', value: 1 }]),
+    'generation-1',
+  )
+
+  assertEquals(work.calls, [{
+    index: 1,
+    name: 'shell',
+    args: { command: 'pwd', timeout_ms: 500 },
+  }])
+  assertEquals(work.specs[0].reasoning, {})
+  assertEquals(work.specs[0].content.body, 'thinking')
+  assertEquals(work.specs[1].bash.command, 'pwd')
+  assertEquals(work.specs[1].timeout.ms, 500)
+  assertEquals(work.specs[2].checkpoint.through, 'generation-1')
+  assertEquals(work.specs[3].opaque.format, 'openai:future_item')
+  assertEquals(
+    work.specs.at(-1)?.opaque.format,
+    'openai:event:response.future.delta',
+  )
+  assertEquals(work.finalText, 'done')
+  assertEquals(work.usage, { input: 10, cached: 3, output: 5, reasoning: 2 })
+})
+
+Deno.test('malformed and unsupported calls remain evidence and receive errors', () => {
+  let work = generationEntries(
+    result([
+      {
+        type: 'function_call',
+        call_id: 'bad-1',
+        name: 'shell',
+        arguments: '{no',
+      },
+      {
+        type: 'function_call',
+        call_id: 'bad-2',
+        name: 'future_tool',
+        arguments: '{}',
+      },
+    ]),
+    'generation-1',
+  )
+  assertMatch(work.calls[0].error ?? '', /valid JSON/)
+  assertMatch(work.calls[1].error ?? '', /unsupported tool/)
+  assertEquals(work.specs.every((spec) => !!spec.opaque), true)
+})
+
+Deno.test('projection keeps opaque keys provider-local and typed history portable', () => {
+  let entries = [
+    row('user', 1, {
+      message: { role: 'user' },
+      content: { body: 'start' },
+    }),
+    row('claude-generation', 2, {
+      generation: { through: 'user', provider: 'claude', model: 'claude' },
+    }),
+    row('claude-call', 3, {
+      output: { source: 'claude-generation' },
+      call: { key: 'claude-secret-key' },
+      bash: { command: 'pwd' },
+      opaque: {
+        format: 'anthropic:call',
+        data: '{"type":"provider_secret","key":"claude-secret-key"}',
+      },
+    }),
+    row('claude-result', 4, {
+      result: { call: 'claude-call' },
+      content: { body: '/workspace' },
+    }),
+    row('codex-reason', 5, {
+      output: { source: 'codex-generation-old' },
+      reasoning: {},
+      opaque: {
+        format: 'openai:reasoning',
+        data: '{"type":"reasoning","encrypted_content":"codex-cipher"}',
+      },
+    }),
+    row('codex-generation-old', 6, {
+      generation: { through: 'claude-result', provider: 'codex', model: 'old' },
+    }),
+    row('through', 7, {
+      message: { role: 'user' },
+      content: { body: 'continue' },
+    }),
+    row('current', 8, {
+      generation: { through: 'through', provider: 'codex', model: 'new' },
+    }),
+  ]
+  let input = project(entries, 'current')
+  let body = JSON.stringify(input)
+  assertMatch(body, /Tool call: shell/)
+  assertMatch(body, /Tool result for shell/)
+  assertEquals(body.includes('claude-secret-key'), false)
+  assertMatch(body, /codex-cipher/)
+})
+
+let memoryLog = (initial: EntryRow[]) => {
+  let entries = [...initial]
+  let settled: { generation: string; usage: UsageValue }[] = []
+  let failures: { generation: string; message: string }[] = []
+  let next = 1
+  let log: TurnLog = {
+    read: () => Promise.resolve(entries.map((entry) => structuredClone(entry))),
+    append: (specs: EntrySpec[]) => {
+      let eids = specs.map((spec) => {
+        let eid = `entry-${next++}`
+        entries.push(row(eid, entries.length + 1, structuredClone(spec)))
+        return eid
+      })
+      return Promise.resolve(eids)
+    },
+    settle: (generation, usage) => {
+      settled.push({ generation, usage })
+      return Promise.resolve()
+    },
+    fail: (generation, message) => {
+      failures.push({ generation, message })
+      return Promise.resolve()
+    },
+  }
+  return { log, entries, settled, failures }
+}
+
+Deno.test('the loop runs independent tools concurrently and feeds results back', async () => {
+  let state = memoryLog([
+    row('input', 1, {
+      message: { role: 'user' },
+      content: { body: 'run both' },
+    }),
+  ])
+  let requests: Record<string, unknown>[] = []
+  let replies = [
+    result([
+      {
+        type: 'function_call',
+        id: 'tool-item-1',
+        call_id: 'call-1',
+        name: 'shell',
+        arguments: '{"command":"one"}',
+      },
+      {
+        type: 'function_call',
+        id: 'tool-item-2',
+        call_id: 'call-2',
+        name: 'shell',
+        arguments: '{"command":"two"}',
+      },
+      { type: 'future_item', id: 'future-1', payload: true },
+    ]),
+    result([{
+      type: 'message',
+      id: 'answer',
+      content: [{ type: 'output_text', text: 'both finished' }],
+    }]),
+  ]
+  let active = 0, peak = 0
+  let tools: ToolHost = {
+    tools: [{
+      type: 'function',
+      name: 'shell',
+      description: 'fake shell',
+      parameters: {},
+      strict: true,
+    }],
+    call: async (_name, args) => {
+      active++
+      peak = Math.max(peak, active)
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      active--
+      return {
+        output: `out:${args.command}`,
+        facets: { exit: { code: 0 } },
+      }
+    },
+  }
+  let out = await runTurn({
+    log: state.log,
+    through: 'input',
+    provider: 'codex',
+    model: 'gpt-5.6-sol',
+    effort: 'high',
+    instructions: 'developer words',
+    transport: {
+      run: (request) => {
+        requests.push(request)
+        return Promise.resolve(replies.shift()!)
+      },
+    },
+    tools,
+    cacheKey: 'session-1',
+  })
+  assertEquals(out.finalText, 'both finished')
+  assertEquals(peak, 2)
+  assertEquals(state.settled.length, 2)
+  assertEquals(
+    state.entries.filter((entry) => entry.comps.result).length,
+    2,
+  )
+  let replay = JSON.stringify(requests[1].input)
+  assertMatch(replay, /function_call_output/)
+  assertMatch(replay, /out:one/)
+  assertMatch(replay, /out:two/)
+  assertEquals(requests[0].instructions, 'developer words')
+  assertEquals(requests[0].reasoning, { effort: 'high' })
+  assertEquals(requests[0].prompt_cache_key, 'session-1')
+  assertEquals(
+    state.entries.some((entry) =>
+      entry.comps.opaque?.format == 'openai:future_item'
+    ),
+    true,
+  )
+})
+
+Deno.test('executeCall recovers typed dispatch and records tool failures as results', async () => {
+  let call = row('call', 1, {
+    call: { key: 'call-1' },
+    output: { source: 'generation' },
+    apply: {
+      change: '{"eid":"e1","name":"doc","comp":{"title":"x"}}',
+    },
+  })
+  let seen: Record<string, unknown> | undefined
+  let tools: ToolHost = {
+    tools: [],
+    call: (_name, args) => {
+      seen = args
+      throw new Error('refused')
+    },
+  }
+  let spec = await executeCall(call, tools)
+  assertEquals(seen, {
+    change: { eid: 'e1', name: 'doc', comp: { title: 'x' } },
+  })
+  assertEquals(spec.result.call, 'call')
+  assertMatch(String(spec.content.body), /tool failed: refused/)
+})
+
+Deno.test('a failed generation keeps partial items as inert evidence', async () => {
+  let state = memoryLog([
+    row('input', 1, {
+      message: { role: 'user' },
+      content: { body: 'start' },
+    }),
+  ])
+  let fault = Object.assign(new Error('responses: failed'), {
+    items: [{
+      type: 'function_call',
+      call_id: 'partial-call',
+      name: 'shell',
+      arguments: '{"command":"must-not-run"}',
+    }],
+    evidence: [{ type: 'response.failed', code: 'provider_error' }],
+  })
+  let called = false
+  await assertRejects(
+    () =>
+      runTurn({
+        log: state.log,
+        through: 'input',
+        provider: 'codex',
+        model: 'gpt-test',
+        instructions: 'words',
+        transport: { run: () => Promise.reject(fault) },
+        tools: {
+          tools: [],
+          call: () => {
+            called = true
+            return Promise.resolve({ output: 'wrong' })
+          },
+        },
+      }),
+    Error,
+    'responses: failed',
+  )
+  assertEquals(called, false)
+  let evidence = state.entries.filter((entry) => entry.comps.opaque)
+  assertEquals(evidence.length, 2)
+  assertEquals(evidence.some((entry) => entry.comps.call), false)
+  assertEquals(state.failures.length, 1)
+})

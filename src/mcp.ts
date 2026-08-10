@@ -1027,6 +1027,7 @@ entity whole; full: true returns every byte. kind screens on the
 entity's derived display kind (task, project, comment, and so on).
 ${GRAMMAR} ${FILTERS}`,
     {
+      query: z.string().optional(),
       filters: z.array(z.string()).optional(),
       kind: z.string()
         .describe('Derived entity kind to return.')
@@ -1034,16 +1035,20 @@ ${GRAMMAR} ${FILTERS}`,
       full: z.boolean().optional(),
     },
     async (
-      { filters = [], kind, full }: {
+      { query, filters = [], kind, full }: {
+        query?: string
         filters?: string[]
         kind?: string
         full?: boolean
       },
     ) => {
+      if (query != null && filters.length) {
+        return err('query cannot be combined with filters')
+      }
       let now = Date.now()
       let all = rows(await io.read(), true)
       let ps = resolveRefs(
-        parseFilters(filters),
+        query != null ? parseQuery(query) : parseFilters(filters),
         (id) => find(all, id)?.eid,
       )
       checkRefs(all, ps)
@@ -1102,11 +1107,14 @@ authoritative effective batch returned by apply(). ${GRAMMAR}`,
           comp: z.record(z.unknown()).nullable(),
         }).strict(),
       ).min(1),
+      session: z.string().optional(),
     },
-    async ({ changes }: { changes: Change[] }) => {
+    async (
+      { changes, session }: { changes: Change[]; session?: string },
+    ) => {
       let effective
       try {
-        effective = await io.write(changes)
+        effective = await io.write(changes, session)
       } catch (e) {
         return err(`apply failed: ${(e as Error).message}`)
       }
