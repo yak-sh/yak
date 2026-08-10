@@ -55,8 +55,10 @@ Deno.test('spread turns comps into a Change batch, entity riding too', () => {
   )
 })
 
-Deno.test('only card and route subscriptions carry bodies', () => {
-  for (let sub of ['card:e1', 'route:T-3']) assertEquals(bodied(sub), true, sub)
+Deno.test('only whole-entity subscriptions carry bodies', () => {
+  for (let sub of ['card:e1', 'route:T-3', 'entries:S-3']) {
+    assertEquals(bodied(sub), true, sub)
+  }
   for (
     let sub of ['board:e1', 'shape:canvas', 'refs:e1', 'canvas=e1', '', 'card']
   ) assertEquals(bodied(sub), false, sub)

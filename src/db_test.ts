@@ -85,12 +85,14 @@ let contract = (
   target: string,
   rest: Props | ((db: Local) => Props) = {},
   before?: (db: Local, eid: string) => void,
+  entry = false,
 ) => ({
   name,
   col,
   target,
   rest: typeof rest == 'function' ? rest : () => rest,
   before,
+  entry,
 })
 
 let contracts = [
@@ -116,6 +118,18 @@ let contracts = [
   contract('stop_request', 'target', 'session'),
   contract('session', 'role', 'role', { id: 'role-session' }),
   contract('session', 'parent', 'session', { id: 'child-session' }),
+  contract('entry', 'session', 'session'),
+  contract(
+    'generation',
+    'through',
+    'entry',
+    { provider: 'codex', model: 'gpt-test' },
+    undefined,
+    true,
+  ),
+  contract('output', 'source', 'generation', {}, undefined, true),
+  contract('result', 'call', 'call', {}, undefined, true),
+  contract('checkpoint', 'through', 'entry', {}, undefined, true),
   contract('mail', 'reply_to', 'mail'),
   contract('persona', 'home', 'project'),
   contract('memory', 'scope', 'project'),
@@ -966,13 +980,17 @@ Deno.test('every typed eid rejects a target missing its component', () => {
     let wrong = tag(local, 'doc', { title: 'wrong kind' })
     let source = uid()
     c.before?.(local, source)
+    let changes = [{
+      eid: source,
+      name: c.name,
+      comp: { ...c.rest(local), [c.col]: wrong },
+    }]
+    if (c.entry) {
+      let sid = tag(local, 'session', { id: uid() })
+      changes.unshift({ eid: source, name: 'entry', comp: { session: sid } })
+    }
     let err = assertThrows(
-      () =>
-        apply(local, [{
-          eid: source,
-          name: c.name,
-          comp: { ...c.rest(local), [c.col]: wrong },
-        }]),
+      () => apply(local, changes),
       Error,
       c.name == 'stop_request' ? 'gone' : c.col,
     )
@@ -3360,8 +3378,8 @@ Deno.test('num moved off first-touch: a new task still mints the next number', (
   assertEquals(na > 0 && nb == na + 1, true) // consecutive, minted after comps landed
 })
 
-Deno.test('every current kind is numbered — part 1 changes nothing', () => {
-  for (let k of kindOrder) assertEquals(numbered(k), true)
+Deno.test('entry is the one current num-less kind', () => {
+  for (let k of kindOrder) assertEquals(numbered(k), k != 'entry')
 })
 
 Deno.test('the wire cannot set num — it stays server-owned', () => {

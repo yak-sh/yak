@@ -54,8 +54,8 @@ export let spread = (
 // subscription ships (10.3 MB of 23.4, measured on a copy of the live graph)
 // and no board, canvas or shape view reads one — a body is read when a card
 // is open. So every subscription defers the declared body columns except the
-// two that exist to show one entity whole: `card:<eid>` and `route:<id>`.
-export let bodied = (sub: string) => /^(card|route):/.test(sub)
+// doors that exist to show entities whole: cards, routes, and Session entries.
+export let bodied = (sub: string) => /^(card|route|entries):/.test(sub)
 
 let without = (row: Record<string, unknown>, cut: string[]) =>
   Object.fromEntries(Object.entries(row).filter(([k]) => !cut.includes(k)))

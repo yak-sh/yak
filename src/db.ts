@@ -22,6 +22,7 @@ import {
   idOf,
   kindOrder,
   sessionActive,
+  sessionComps,
   SHORT,
   shortId,
   type Snapshot,
@@ -247,6 +248,135 @@ let schema = `
     eid text primary key references entity(eid),
     id  text not null unique,
     cwd text
+  );
+  -- A Session's ordered graph-native log (D-15656). seq is assigned inside
+  -- apply()'s write transaction; every other table below is an independent
+  -- facet worn by the same entry entity.
+  create table if not exists entry (
+    eid     text primary key references entity(eid),
+    session text not null references entity(eid),
+    seq     integer not null,
+    unique (session, seq)
+  );
+  create index if not exists entry_session_seq on entry (session, seq);
+  create table if not exists content (
+    eid  text primary key references entity(eid),
+    body text not null default ''
+  );
+  create table if not exists message (
+    eid  text primary key references entity(eid),
+    role text not null
+  );
+  create table if not exists attention (
+    eid text primary key references entity(eid)
+  );
+  create table if not exists generation (
+    eid      text primary key references entity(eid),
+    through  text not null,
+    provider text not null,
+    model    text not null,
+    effort   text
+  );
+  create unique index if not exists generation_through
+    on generation (through);
+  create table if not exists output (
+    eid    text primary key references entity(eid),
+    source text not null,
+    key    text,
+    phase  text
+  );
+  create unique index if not exists output_source_key
+    on output (source, key) where key is not null;
+  create table if not exists call (
+    eid text primary key references entity(eid),
+    key text not null
+  );
+  create table if not exists bash (
+    eid     text primary key references entity(eid),
+    command text not null,
+    cwd     text
+  );
+  create table if not exists fetch (
+    eid    text primary key references entity(eid),
+    url    text not null,
+    method text not null
+  );
+  create table if not exists patch (
+    eid  text primary key references entity(eid),
+    path text not null,
+    diff text not null
+  );
+  create table if not exists task_context (
+    eid text primary key references entity(eid)
+  );
+  create table if not exists graph_query (
+    eid   text primary key references entity(eid),
+    query text not null default ''
+  );
+  create table if not exists "apply" (
+    eid    text primary key references entity(eid),
+    change text not null
+  );
+  create table if not exists result (
+    eid  text primary key references entity(eid),
+    call text not null
+  );
+  create unique index if not exists result_call on result (call);
+  create table if not exists exit (
+    eid  text primary key references entity(eid),
+    code integer not null
+  );
+  create table if not exists response (
+    eid    text primary key references entity(eid),
+    status integer not null
+  );
+  create table if not exists headers (
+    eid  text primary key references entity(eid),
+    data text not null
+  );
+  create table if not exists stderr (
+    eid  text primary key references entity(eid),
+    text text not null
+  );
+  create table if not exists timeout (
+    eid text primary key references entity(eid),
+    ms  integer not null
+  );
+  create table if not exists checkpoint (
+    eid     text primary key references entity(eid),
+    through text not null
+  );
+  create table if not exists cancel (
+    eid    text primary key references entity(eid),
+    target text not null
+  );
+  create table if not exists reasoning (
+    eid text primary key references entity(eid)
+  );
+  create table if not exists opaque (
+    eid    text primary key references entity(eid),
+    format text not null,
+    data   text not null
+  );
+  create table if not exists runner (
+    eid  text primary key references entity(eid),
+    name text not null
+  );
+  -- Runtime ownership and usage are server-only outcome facets. Their refs
+  -- deliberately carry no FK: runner/generation history survives a target's
+  -- tombstone, like every death:'keep' association.
+  create table if not exists lease (
+    eid    text primary key references entity(eid),
+    holder text not null,
+    at     text not null,
+    until  text not null
+  );
+  create table if not exists usage (
+    eid       text primary key references entity(eid),
+    input     integer not null,
+    cached    integer not null,
+    output    integer not null,
+    reasoning integer not null
   );
   create table if not exists spawn (
     eid         text primary key references entity(eid),
@@ -530,7 +660,7 @@ let spine = (db: DatabaseSync, eid: string) =>
 // kind is numbered and part 1 changes nothing about WHICH entities get a num
 // (T-3684). Cheap/bulk kinds — log lines, lazy-partition rows (T-3683) — join
 // `unnumbered` as they arrive, and only then does a NULL num appear.
-let unnumbered = new Set<string>()
+let unnumbered = new Set(['entry'])
 export let numbered = (kind: string) => !unnumbered.has(kind)
 
 // Assign the next human number to a newly-created entity — the allocator
@@ -1675,6 +1805,10 @@ let admitted = (change: Change): Change | undefined => {
   let table = change.name
   let cols = table == 'dependency' ? edgeCols : cmps[table]
   if (!cols) return
+  // These component rows are outcomes minted by the runner. Empty writable
+  // declarations keep them in generic read/delete machinery, but never grant
+  // the wire authority to create, patch, or remove one.
+  if (table == 'lease' || table == 'usage') return
   if (change.comp == null) return change
   let sent = Object.entries(change.comp)
   let real = columnsOf(table)
@@ -2183,6 +2317,32 @@ export let apply = (
   try {
     changes = replaceWakes(db, changes)
     changes = dualSpawn(db, changes)
+    // A log entry is an append-only fact. Every request/content facet is
+    // born in the same batch as entry membership and can never be revised,
+    // removed, or attached later. Outcomes use server-owned facets instead.
+    let facts = new Set(
+      Object.keys(sessionComps)
+        .filter((name) =>
+          name != 'runner' && name != 'lease' && name != 'usage'
+        ),
+    )
+    let appends = new Set(
+      changes.filter((c) => c.name == 'entry' && c.comp?.session)
+        .map((c) => c.eid),
+    )
+    let existed = db.prepare('select 1 from entry where eid = ?')
+    for (let { eid, name, comp } of changes) {
+      if (!facts.has(name)) continue
+      if (existed.get(eid)) {
+        throw new Error(`entry ${shortId(eid)} is immutable`)
+      }
+      if (name == 'entry' && !comp?.session) {
+        throw new Error(`entry ${shortId(eid)} needs a session`)
+      }
+      if (name != 'entry' && !appends.has(eid)) {
+        throw new Error(`${name} ${shortId(eid)} needs entry in its batch`)
+      }
+    }
     // Mint spines in first-touch order before writing components. A typed
     // reference may then precede its target component without pre-minting that
     // target out of order. An entity-null still voids every later touch.
@@ -2275,7 +2435,9 @@ export let apply = (
       // keeps NEITHER: partial application is how you end up with a body
       // from one writer and a title from another.
       if (was) {
-        let row = db.prepare(`select * from ${name} where eid = ?`).get(eid) as
+        let row = db.prepare(
+          `select * from ${sqlName(name)} where eid = ?`,
+        ).get(eid) as
           | Record<string, unknown>
           | undefined
         let real = columnsOf(name)
@@ -2355,7 +2517,8 @@ export let apply = (
       if (comp == null) {
         if (name != 'entity') {
           if (
-            db.prepare(`delete from ${name} where eid = ?`).run(eid).changes
+            db.prepare(`delete from ${sqlName(name)} where eid = ?`).run(eid)
+              .changes
           ) {
             took(eid, name)
           }
@@ -2448,7 +2611,9 @@ export let apply = (
       if (sent.length) {
         try {
           hit = db.prepare(
-            `update ${name} set ${sent.map((c) => `"${c}" = ?`).join(', ')}
+            `update ${sqlName(name)} set ${
+              sent.map((c) => `${sqlName(c)} = ?`).join(', ')
+            }
              where eid = ?`,
           ).run(...vals, eid).changes
         } catch (e) {
@@ -2464,9 +2629,23 @@ export let apply = (
       db.exec('savepoint change')
       try {
         if (spine(db, eid).changes) minted.add(eid)
-        if (sent.length) {
+        if (name == 'entry' && sent.length) {
+          let session = String(comp.session)
+          let { seq } = db.prepare(
+            `select coalesce(max(seq), 0) + 1 as seq from entry
+             where session = ?`,
+          ).get(session) as { seq: number }
           db.prepare(
-            `insert into ${name} (eid${sent.map((c) => `, "${c}"`).join('')})
+            'insert into entry (eid, session, seq) values (?, ?, ?)',
+          ).run(eid, session, seq)
+          createdComps.add(`${name} ${eid}`)
+          t?.created.add(`${name} ${eid}`)
+          extra.push({ eid, name: 'entry', comp: { eid, seq } })
+        } else if (sent.length) {
+          db.prepare(
+            `insert into ${sqlName(name)} (eid${
+              sent.map((c) => `, ${sqlName(c)}`).join('')
+            })
              values (?${', ?'.repeat(sent.length)})`,
           ).run(eid, ...vals)
           createdComps.add(`${name} ${eid}`)
@@ -2474,7 +2653,7 @@ export let apply = (
         } else {
           // A bare {} touch: create with defaults if possible, else no-op.
           let made = db.prepare(
-            `insert or ignore into ${name} (eid) values (?)`,
+            `insert or ignore into ${sqlName(name)} (eid) values (?)`,
           ).run(eid).changes
           if (made) {
             createdComps.add(`${name} ${eid}`)
@@ -2842,6 +3021,22 @@ export let journalBy = (
       changes: canonicalChanges(JSON.parse(r.batch) as Change[]),
     }))
 
+// Session entries are a lazy graph partition: root clients never receive
+// their eids or any facets/provenance hung from them. A Session subscription
+// still sees the unfiltered batch through maintain(), and keyed readers stay
+// complete. A creation in this batch marks the eid even if a later batch has
+// already deleted it — important when filtering a journal window.
+export let rootChanges = (db: DatabaseSync, changes: Change[]): Change[] => {
+  let hidden = new Set(
+    changes.filter((c) => c.name == 'entry' && c.comp).map((c) => c.eid),
+  )
+  let isEntry = db.prepare('select 1 from entry where eid = ?')
+  for (let eid of new Set(changes.map((c) => c.eid))) {
+    if (isEntry.get(eid)) hidden.add(eid)
+  }
+  return changes.filter((c) => !hidden.has(c.eid))
+}
+
 // The journal replayed as a delta: every batch since `since` (an EXCLUSIVE
 // rowid cursor) concatenated in apply order. A client holding the graph up
 // to `since` lands exactly what changed — cascade tombstones, freed claims,
@@ -2923,7 +3118,7 @@ export let delta = (
       })
     }
   }
-  return { changes, cursor }
+  return { changes: rootChanges(db, changes), cursor }
 }
 
 // A recall touch — the server-minted aggregate behind ranked retrieval
@@ -3210,13 +3405,17 @@ export let snapshot = (db: DatabaseSync): Snapshot => {
   let changes: Change[] = []
   for (let name of Object.keys(readable)) {
     for (
-      let row of db.prepare(select(name)).all() as Record<string, unknown>[]
+      let row of db.prepare(
+        `${select(name)} where eid not in (select eid from entry)`,
+      ).all() as Record<string, unknown>[]
     ) {
       changes.push({ eid: row.eid as string, name, comp: row })
     }
   }
   let deps = db.prepare(
-    'select parent as parent, type, child as child from dependency',
+    `select parent as parent, type, child as child from dependency
+     where parent not in (select eid from entry)
+       and child not in (select eid from entry)`,
   ).all() as Dep[]
   // A project's specialist personas ride derived `reads` edges (homeReads):
   // home is the one truth, so these compute here on the graph-out door
@@ -3317,6 +3516,28 @@ export let rowsOf = (db: DatabaseSync, eids: string[]) => {
   if (!eids.length) return []
   stage(db, eids)
   return staged(db)
+}
+
+// One Session's lazy log partition, ordered by its server-minted sequence.
+// Keyed reads remain full even though snapshot() deliberately omits these
+// entities from the root cache.
+export let entriesOf = (
+  db: DatabaseSync,
+  session: string,
+  after = 0,
+  limit = 500,
+) => {
+  let index = db.prepare(
+    `select eid, seq from entry where session = ? and seq > ?
+     order by seq limit ?`,
+  ).all(session, after, Math.max(1, Math.min(limit, 5000))) as {
+    eid: string
+    seq: number
+  }[]
+  if (!index.length) return []
+  stage(db, index.map((e) => e.eid))
+  let byEid = new Map(staged(db).map((e) => [e.eid, e.comps]))
+  return index.map(({ eid, seq }) => ({ eid, seq, comps: byEid.get(eid)! }))
 }
 
 // Every edge touching these entities, both directions — the narrow reading of

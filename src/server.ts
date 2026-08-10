@@ -26,6 +26,7 @@ import {
   locate,
   matching,
   refsOf,
+  rootChanges,
   rowsOf,
   search,
   snapshot,
@@ -445,6 +446,8 @@ let control = (
 // old clients keep their bare arrays while new browser leaders get the cursor
 // needed for an atomic IDB checkpoint.
 let sendLive = (changes: Change[], except?: WebSocket) => {
+  changes = rootChanges(db, changes)
+  if (!changes.length) return
   let cursor = cursorOf(db)
   let bare = JSON.stringify(liveFrame(changes, cursor, false))
   let framed = JSON.stringify(liveFrame(changes, cursor, true))

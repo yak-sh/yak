@@ -62,6 +62,18 @@ export let statuses = ['open', 'wip', 'done', 'cancelled'] as const
 // this positive boundary instead of guessing from terminal animation.
 export let turnStates = ['idle', 'busy'] as const
 
+// Session-log messages and provider HTTP calls each keep one canonical
+// spelling. These lists feed the graph schema, editors, and MCP grammar.
+export let messageRoles = ['user', 'agent'] as const
+export let httpMethods = [
+  'GET',
+  'HEAD',
+  'POST',
+  'PUT',
+  'PATCH',
+  'DELETE',
+] as const
+
 // A role is desired capacity. Native owns an interactive provider TUI;
 // managed owns a resumable Tasks session. `held` is the crash-loop breaker's
 // verdict — the reconciler stopped relaunching a burning role and waits for an
@@ -110,6 +122,54 @@ export let verdicts = [
 ] as const
 export let verdictName = (verdict?: string | null) =>
   String(verdict ?? '').replaceAll('_', ' ')
+
+// The graph-native Session-log vocabulary. Grouping it here keeps its column
+// declarations in the one schema while letting the ordinary dot-param door
+// require explicit `.component.prop` spellings for this lazy partition.
+export let sessionComps: Record<string, Record<string, PropType>> = {
+  entry: { session: { eid: 'session', death: 'cascade' } },
+  content: { body: 'body' },
+  message: { role: { enum: messageRoles } },
+  attention: {},
+  generation: {
+    through: { eid: 'entry', death: 'keep' },
+    provider: 'text',
+    model: 'text',
+    effort: 'text',
+  },
+  output: {
+    source: { eid: 'generation', death: 'keep' },
+    key: 'text',
+    phase: 'text',
+  },
+  call: { key: 'text' },
+  bash: { command: 'body', cwd: 'text' },
+  fetch: { url: 'url', method: { enum: httpMethods } },
+  patch: { path: 'text', diff: 'body' },
+  task_context: {},
+  graph_query: { query: 'query' },
+  // One graph Change, serialized. Keeping one mutation facet preserves the
+  // graph's existing vocabulary instead of cloning every task_* verb here.
+  apply: { change: 'body' },
+  result: { call: { eid: 'call', death: 'keep' } },
+  exit: { code: 'number' },
+  response: { status: 'number' },
+  headers: { data: 'body' },
+  stderr: { text: 'body' },
+  timeout: { ms: 'number' },
+  checkpoint: { through: { eid: 'entry', death: 'keep' } },
+  cancel: { target: { eid: 'entity', death: 'keep' } },
+  reasoning: {},
+  // Same-provider replay evidence only: encrypted reasoning and provider
+  // shapes the typed vocabulary does not yet know.
+  opaque: { format: 'text', data: 'body' },
+  runner: { name: 'text' },
+  // Whole components are server-owned. Their empty writable declarations
+  // keep generic graph deletion/read machinery complete; apply() refuses
+  // clients at the component boundary.
+  lease: {},
+  usage: {},
+}
 
 // Settled = no longer open work, whether it finished or was called off.
 // Gating, board defaults, and lease-lapse audits all key off this
@@ -303,6 +363,9 @@ export let comps: Record<string, Record<string, PropType>> = {
     // parent detaches it, the child lives on.
     parent: { eid: 'session', death: 'detach' },
   },
+  // A Session's ordered log composes these independent facets; entry.seq and
+  // lease/usage columns join through stamped below.
+  ...sessionComps,
   // One launch vocabulary, worn two ways: on a session it records the
   // request that launched it; on a task it is the hint for its next run.
   // Partial on purpose — doors fill the gaps from their caller and the
@@ -688,6 +751,18 @@ export let stamped: Record<string, Record<string, PropType>> = {
     final_text: 'body',
     usage_json: 'text',
   },
+  entry: { seq: 'number' },
+  lease: {
+    holder: { eid: 'runner', death: 'keep' },
+    at: 'time',
+    until: 'time',
+  },
+  usage: {
+    input: 'number',
+    cached: 'number',
+    output: 'number',
+    reasoning: 'number',
+  },
 }
 
 // A component's wire-writable column names — what most consumers of the
@@ -798,6 +873,8 @@ export let kindOrder = [
   'fold',
   'role',
   'session',
+  'entry',
+  'runner',
   'claim',
   'subscription',
   'stop_request',
@@ -1118,6 +1195,58 @@ export type Session = {
   usage_json?: string | null
 }
 
+// One ordered Session-log entity. Every other log shape is a facet on this
+// entity; seq is minted by the server within the Session partition.
+export type Entry = { eid: string; session: string; seq: number }
+export type Content = { eid: string; body: string }
+export type Message = { eid: string; role: typeof messageRoles[number] }
+export type Generation = {
+  eid: string
+  through: string
+  provider: string
+  model: string
+  effort?: string | null
+}
+export type Output = {
+  eid: string
+  source: string
+  key?: string | null
+  phase?: string | null
+}
+export type Call = { eid: string; key: string }
+export type Bash = { eid: string; command: string; cwd?: string | null }
+export type Fetch = {
+  eid: string
+  url: string
+  method: typeof httpMethods[number]
+}
+export type Patch = { eid: string; path: string; diff: string }
+export type GraphQuery = { eid: string; query?: string | null }
+export type ApplyComp = { eid: string; change: string }
+export type Result = { eid: string; call: string }
+export type Exit = { eid: string; code: number }
+export type ResponseComp = { eid: string; status: number }
+export type Headers = { eid: string; data: string }
+export type Stderr = { eid: string; text: string }
+export type Timeout = { eid: string; ms: number }
+export type Checkpoint = { eid: string; through: string }
+export type Cancel = { eid: string; target: string }
+export type Opaque = { eid: string; format: string; data: string }
+export type Runner = { eid: string; name: string }
+export type Lease = {
+  eid: string
+  holder: string
+  at: string
+  until: string
+}
+export type Usage = {
+  eid: string
+  input: number
+  cached: number
+  output: number
+  reasoning: number
+}
+
 // A launch request on a session, or its reusable hint on a task.
 export type Spawn = {
   eid: string
@@ -1368,6 +1497,32 @@ export type Ent = {
   fold?: Fold
   shelf?: Shelf
   session?: Session
+  entry?: Entry
+  content?: Content
+  message?: Message
+  attention?: { eid: string }
+  generation?: Generation
+  output?: Output
+  call?: Call
+  bash?: Bash
+  fetch?: Fetch
+  patch?: Patch
+  task_context?: { eid: string }
+  graph_query?: GraphQuery
+  apply?: ApplyComp
+  result?: Result
+  exit?: Exit
+  response?: ResponseComp
+  headers?: Headers
+  stderr?: Stderr
+  timeout?: Timeout
+  checkpoint?: Checkpoint
+  cancel?: Cancel
+  reasoning?: { eid: string }
+  opaque?: Opaque
+  runner?: Runner
+  lease?: Lease
+  usage?: Usage
   spawn?: Spawn
   claim?: Claim
   stop_request?: StopRequest

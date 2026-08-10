@@ -69,6 +69,8 @@ Deno.test('death words: every reference declares, the sets hold', () => {
       'camera.canvas',
       'fold.client',
       'fold.board',
+      // the lazy partition has no life after its owning Session
+      'entry.session',
     ]),
   )
   assertEquals(
@@ -104,6 +106,12 @@ Deno.test('death words: every reference declares, the sets hold', () => {
       'deliver.to',
       'created.by',
       'updated.by',
+      // A Session log keeps correlation after the referenced entry dies.
+      'generation.through',
+      'output.source',
+      'result.call',
+      'checkpoint.through',
+      'cancel.target',
       // Proposal, decision, and feedback bylines outlive their tombstones.
       'decided.by',
       'proposed.by',

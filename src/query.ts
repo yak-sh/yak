@@ -47,7 +47,7 @@
 // (`.pin.x=12`); any other first segment is a PATH — `.assignee.title~=j`
 // dereferences the eid column and predicates the target's prop. Depth 1.
 import { bareType, isRef, parseProp, type Prop, propAt } from './props.ts'
-import { comps, kindOrder, stamped } from './types.ts'
+import { comps, kindOrder, sessionComps, stamped } from './types.ts'
 import { type Span, span } from './time.ts'
 
 export type Pred = {
@@ -127,6 +127,10 @@ export let route = (prop: string): { comp: string; prop: string } => {
     Object.entries(routes)
       .filter(([, cols]) => cols.includes(p))
       .map(([name]) => name)
+      // Session-log columns are an explicitly addressed lazy partition.
+      // Bare graph props keep their shipped meanings; log predicates say
+      // `.response.status`, `.content.body`, `.generation.provider`, etc.
+      .filter((name) => !(name in sessionComps))
   let own = hits(prop)
   // Parent/child words are the dependency vocabulary. Their component refs
   // remain available through `.pane.parent` / `.session.parent`; bare keeps
@@ -701,6 +705,7 @@ let tryRoute = (p: string) => {
 let bares = (): Cand[] => {
   let owners = new Map<string, string[]>()
   for (let [c, cols] of Object.entries(routes)) {
+    if (c in sessionComps) continue
     for (let p of cols) owners.set(p, [...owners.get(p) ?? [], c])
   }
   let out: Cand[] = []
