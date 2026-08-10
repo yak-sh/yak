@@ -2056,7 +2056,7 @@ Deno.test('open renames every reference key, its filters, and its history', () =
   let path = `${root}/tasks.db`
   let legacy = open(path)
   let project = uid(), task = uid(), first = uid(), reply = uid()
-  let sub = uid(), board = uid()
+  let sub = uid(), board = uid(), memory = uid(), persona = uid()
   apply(legacy, [
     { eid: project, name: 'doc', comp: { title: 'project' } },
     { eid: project, name: 'project', comp: {} },
@@ -2069,6 +2069,25 @@ Deno.test('open renames every reference key, its filters, and its history', () =
       comp: { actor: project, target: task, mode: 'watch' },
     },
     { eid: board, name: 'board', comp: { query: '.status=open' } },
+    {
+      eid: memory,
+      name: 'doc',
+      comp: {
+        title: 'memory.scope_eid guide',
+        body: 'Use session.parent_eid and envelope.to_eid.',
+      },
+    },
+    { eid: memory, name: 'memory', comp: {} },
+    {
+      eid: persona,
+      name: 'doc',
+      comp: {
+        title: 'persona',
+        body: '`eid`/`*_eid` values; the `_eid` sugar in `route()`; ' +
+          'a `<name>_eid` column elsewhere',
+      },
+    },
+    { eid: persona, name: 'persona', comp: {} },
     {
       eid: project,
       name: 'dependency',
@@ -2150,6 +2169,22 @@ Deno.test('open renames every reference key, its filters, and its history', () =
     {
       query: `.project=${project}&.task.assignee=` +
         `&.title~="literal .project_eid=value"`,
+    },
+  )
+  assertEquals(
+    healed.prepare('select title, body from doc where eid = ?').get(memory),
+    {
+      title: 'memory.scope guide',
+      body: 'Use session.parent and envelope.to.',
+    },
+  )
+  assertEquals(
+    healed.prepare('select title, body from doc where eid = ?').get(persona),
+    {
+      title: 'persona',
+      body:
+        '`eid` and reference values; the reference property in `route()`; ' +
+        'a same-named reference column elsewhere',
     },
   )
   assertEquals(

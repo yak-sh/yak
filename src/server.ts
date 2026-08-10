@@ -1238,6 +1238,10 @@ on('doc', {
   },
   doc: 'a doc edit on a persona or a tiered memory re-renders its files',
 })
+// Boot migrations may reshape those graph-owned teachings without an apply
+// trace. Reconcile once here too, or the source migrates while its generated
+// persona files keep teaching the retired vocabulary.
+syncSoon()
 
 // Managed children are detached (setsid) and this process restarts on every
 // server-file edit — so booting means picking them back up: adopt the ones

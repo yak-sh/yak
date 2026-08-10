@@ -682,6 +682,21 @@ let renameFilter = (query: string) => {
   return out
 }
 
+// Memories and personas teach the vocabulary back to every later session, so
+// their prose is schema data too. Identifier-shaped keys all lose the suffix;
+// standalone explanations are frozen here with the cutover they name.
+let renameTeaching = (text: string) =>
+  text.replace(/\b([A-Za-z][A-Za-z0-9_]*)_eid\b/g, '$1')
+    .replaceAll('`eid`/`*_eid` values', '`eid` and reference values')
+    .replaceAll(
+      'the `_eid` sugar in `route()`',
+      'the reference property in `route()`',
+    )
+    .replaceAll(
+      'a `<name>_eid` column elsewhere',
+      'a same-named reference column elsewhere',
+    )
+
 export let migrateRefs = (db: DatabaseSync) => {
   let renames = refRenames.filter((r) => hasCol(db, r.table, r.old))
   let boards = hasCol(db, 'board', 'query')
@@ -691,9 +706,24 @@ export let migrateRefs = (db: DatabaseSync) => {
         query: string
       }[]
     : []
-  let stale = boards.map((r) => ({ ...r, next: renameFilter(r.query) }))
+  let staleBoards = boards.map((r) => ({ ...r, next: renameFilter(r.query) }))
     .filter((r) => r.next != r.query)
-  if (!renames.length && !stale.length) return
+  let kinds = ['memory', 'persona'].filter((table) => hasCol(db, table, 'eid'))
+  let teachings = hasCol(db, 'doc', 'body') && kinds.length
+    ? db.prepare(
+      `select eid, title, body from doc where ${
+        kinds.map((table) =>
+          `exists (select 1 from ${table} where ${table}.eid = doc.eid)`
+        ).join(' or ')
+      }`,
+    ).all() as { eid: string; title: string; body: string }[]
+    : []
+  let staleDocs = teachings.map((r) => ({
+    ...r,
+    nextTitle: renameTeaching(r.title),
+    nextBody: renameTeaching(r.body),
+  })).filter((r) => r.nextTitle != r.title || r.nextBody != r.body)
+  if (!renames.length && !staleBoards.length && !staleDocs.length) return
   db.exec('begin')
   try {
     for (let { table, old, col } of renames) {
@@ -708,8 +738,12 @@ export let migrateRefs = (db: DatabaseSync) => {
         }`,
       )
     }
-    let write = db.prepare('update board set query = ? where eid = ?')
-    for (let r of stale) write.run(r.next, r.eid)
+    let writeBoard = db.prepare('update board set query = ? where eid = ?')
+    for (let r of staleBoards) writeBoard.run(r.next, r.eid)
+    let writeDoc = db.prepare(
+      'update doc set title = ?, body = ? where eid = ?',
+    )
+    for (let r of staleDocs) writeDoc.run(r.nextTitle, r.nextBody, r.eid)
     db.exec('commit')
   } catch (e) {
     db.exec('rollback')
