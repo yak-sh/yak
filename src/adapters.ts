@@ -242,8 +242,8 @@ export let adapters: Record<string, Adapter> = {
     // barred, so opus is pinned to claude-opus-4-8 — the bare `opus` alias
     // is neither offered nor accepted, and a request for `opus` or
     // `claude-opus-5` is refused outright, never silently downgraded.
-    // claude-opus-4-8 leads, so it is the house default every door reads as
-    // models[0] (:fix, spawn, the Run form). Probed live against the CLI.
+    // claude-opus-4-8 leads, so it is the default when a caller explicitly
+    // names Claude without a model. Probed live against the CLI.
     models: [
       'claude-opus-4-8',
       'sonnet',
@@ -254,8 +254,7 @@ export let adapters: Record<string, Adapter> = {
       'claude-haiku-4-5',
     ],
     efforts: [],
-    // The MENU is the labels map, first entry the house default (offers()[0]
-    // — what the Run form preselects for this provider). Opus is the pinned
+    // The MENU is the labels map. Opus is the pinned
     // 4-8; the other lines ride their alias, so the menu needs no edit when a
     // non-opus line ships a new latest.
     labels: {

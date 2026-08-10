@@ -150,7 +150,7 @@ Deno.test('claude: opus-5 and the bare opus alias are barred; 4-8 is the default
   // decoy: nothing the adapter accepts may be opus-5 or the poison alias.
   assertEquals(claude.models.includes('claude-opus-5'), false)
   assertEquals(claude.models.includes('opus'), false)
-  // claude-opus-4-8 leads, so it is the house default every door reads.
+  // claude-opus-4-8 leads, so an explicit Claude request defaults to it.
   assertEquals(claude.models[0], 'claude-opus-4-8')
   // The menu offers Opus, and the model behind it is the pinned 4-8.
   assertEquals(claude.labels['claude-opus-4-8'], 'Opus')

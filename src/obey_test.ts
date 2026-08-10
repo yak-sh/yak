@@ -138,3 +138,12 @@ Deno.test('the answer rides the wire, so every screen sees it', () => {
   assertEquals(heard.some((c) => c.name == 'task'), true)
   assertEquals(heard.some((c) => c.name == 'comment'), true)
 })
+
+Deno.test('a sessionless :fix comment uses the shared Sol default', () => {
+  let t = task()
+  say(t, ':fix')
+  let spawned = db.prepare(
+    `select provider, model from session where requested_task_eid = ?`,
+  ).get(t) as { provider: string; model: string }
+  assertEquals(spawned, { provider: 'codex', model: 'gpt-5.6-sol' })
+})

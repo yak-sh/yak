@@ -72,6 +72,7 @@ import {
 } from './query.ts'
 import { commandOut, commands, focusOf } from './commands.ts'
 import { request } from './http.ts'
+import { spawnDefault } from './providers.ts'
 import { entityUrl } from './url.ts'
 
 // How the tools reach the graph — in-process on the server, HTTP here.
@@ -511,7 +512,7 @@ session_peek checks on it, task_comment at the SETTLED session says more
 to it, and when the run settles the server comments the outcome on the
 task AND your spawning session, so you hear it directly. provider/model
 default to YOUR session's own (pass the same session id you claim with),
-then the provider table's first entry. persona names the persona entity
+then the shared anonymous default. persona names the persona entity
 (id or alias) the spawned session should wear. ${BUS}`,
     {
       id: z.string(),
@@ -536,15 +537,16 @@ then the provider table's first entry. persona names the persona entity
       let snap = await io.read()
       let all = rows(snap)
       // A spawn begets its own kind: unnamed provider/model inherit the
-      // CALLER's (its session row), then the provider table's first entry.
+      // CALLER's (its session row), then the shared anonymous default.
       // A caller's model never rides a different explicit provider.
       let mine = spawnDefaults(all, session)
       provider ??= mine.provider
       model ??= provider == mine.provider ? mine.model : undefined
       if (!provider || !model) {
         let table = await io.providers()
-        provider ??= table[0]?.name
-        model ??= table.find((p) => p.name == provider)?.models[0]
+        let fallback = spawnDefault(table, { provider, model })
+        provider = fallback.provider
+        model = fallback.model
         if (!provider || !model) return err('no provider to default to')
       }
       // Pre-flight the allowlist here, at the tool boundary: a bad model is
@@ -620,8 +622,9 @@ ${
         let { provider, model } = mine
         if (!provider || !model) {
           let table = await io.providers()
-          provider ??= table[0]?.name
-          model ??= table.find((p) => p.name == provider)?.models[0]
+          let fallback = spawnDefault(table, { provider, model })
+          provider = fallback.provider
+          model = fallback.model
           if (!provider || !model) return err('no provider to default to')
         }
         let made = spawnChanges(now, {

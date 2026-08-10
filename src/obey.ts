@@ -16,6 +16,7 @@ import { apply, db, snapshot } from './db.ts'
 import { dispatch, trace } from './effects.ts'
 import { providers } from './adapters.ts'
 import { commandOut, orderIn } from './commands.ts'
+import { spawnDefault } from './providers.ts'
 import { type Change, idOf, type Snapshot } from './types.ts'
 import { find, type Row, rows, spawnChanges, spawnDefaults } from './client.ts'
 
@@ -52,9 +53,7 @@ export let order = (
     if (out.spawn) {
       let mine = spawnDefaults(all, session)
       let table = providers()
-      let provider = mine.provider ?? table[0]?.name
-      let model = mine.model ??
-        table.find((p) => p.name == provider)?.models[0]
+      let { provider, model } = spawnDefault(table, mine)
       if (!provider || !model) throw new Error('no provider to default to')
       let made = spawnChanges(all, {
         task: out.spawn,

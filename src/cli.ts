@@ -121,6 +121,7 @@ import { projection, syncFiles } from './persona.ts'
 import { commit } from './git.ts'
 import { land as landTree, landedChanges, landing } from './land.ts'
 import { request } from './http.ts'
+import { spawnDefault } from './providers.ts'
 import { atFleet, mailDomain } from './mailaddr.ts'
 import { commands, focusOf, run as runCommand } from './commands.ts'
 import {
@@ -966,7 +967,7 @@ let launch = async (
   ])
   let all = [task, ...(caller ? [caller] : []), ...(persona?.all ?? [])]
   // Unnamed provider/model inherit: the calling session's own (a spawn
-  // begets its own kind), then the provider table's first entry.
+  // begets its own kind), then the shared anonymous default.
   let mine = spawnDefaults(all, by)
   let provider = flags.provider ?? mine.provider
   let model = flags.model ?? (flags.provider ? undefined : mine.model)
@@ -975,8 +976,9 @@ let launch = async (
       name: string
       models: string[]
     }[]
-    provider ??= table[0]?.name
-    model ??= table.find((p) => p.name == provider)?.models[0]
+    let fallback = spawnDefault(table, { provider, model })
+    provider = fallback.provider
+    model = fallback.model
     if (!provider || !model) throw new Error('no provider to default to')
   }
   let made = spawnChanges(all, {

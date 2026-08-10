@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { signal } from '@preact/signals'
 import { base, ent, mutate, toPlane, topZ, uuid } from '../live.ts'
+import { modelOrder } from '../providers.ts'
 import { block } from './ui.tsx'
 import { menu, navigate, screenTarget } from './nav.tsx'
 import { usePlaceAt } from './overlay.tsx'
@@ -34,10 +35,7 @@ export let offers = (ps: Provider[]) =>
   ps.flatMap((p) =>
     Object.entries(p.labels).map(([model, label]) => ({ model, label, p }))
   ).filter((o, i, all) => all.findIndex((x) => x.model == o.model) == i)
-    .sort((a, b) =>
-      Number(b.model == 'gpt-5.6-sol') -
-      Number(a.model == 'gpt-5.6-sol')
-    )
+    .sort((a, b) => modelOrder(a.model, b.model))
 
 let Frame = block('div', 'Run', {
   Row: 'label',
