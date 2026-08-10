@@ -20,6 +20,9 @@ let Frame = block('div', 'Peek', { Head: 'div', Body: 'div' })
 let { Head, Body } = Frame
 let Tab = el('button', 'Tab')
 
+export let peekKey = (key: string, typing: boolean) =>
+  !typing && (key == 'Escape' || key == 'q')
+
 export let Peek = () => {
   let p = peek.value
   let root = useRef<HTMLDivElement>(null)
@@ -45,7 +48,7 @@ export let Peek = () => {
     let key = (ev: KeyboardEvent) => {
       let typing = ev.target instanceof HTMLElement &&
         ev.target.matches('input, textarea, [contenteditable]')
-      if (ev.key == 'Escape' || (ev.key == 'q' && !typing)) {
+      if (peekKey(ev.key, typing)) {
         ev.stopPropagation()
         peek.value = null
       }
