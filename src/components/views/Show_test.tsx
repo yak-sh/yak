@@ -36,6 +36,50 @@ Deno.test('empty document meta remains a first-class null', () => {
   assertEquals(resolve(e, 'Meta').Render({ e }), null)
 })
 
+Deno.test('proposal meta distinguishes proposals from approvals', () => {
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let { document } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  let root = document.querySelector('main')!
+  let proposal = {
+    entity: { eid: 'proposal', num: 1 },
+    doc: { eid: 'proposal', title: 'A proposal', body: '' },
+    proposed: { eid: 'proposal', at: '2026-08-10T12:00:00Z' },
+  }
+  try {
+    cache.value = { proposal }
+    let e = ent('proposal')
+    render(resolve(e, 'Meta').Render({ e })!, root)
+    assertExists(root.querySelector('.Show_Proposal-proposed .Icon'))
+    assertEquals(
+      root.querySelector('.Show_Proposal')?.getAttribute('aria-label'),
+      'proposed',
+    )
+
+    cache.value = {
+      proposal: {
+        ...proposal,
+        decided: { eid: 'proposal', at: '2026-08-10T13:00:00Z' },
+      },
+    }
+    e = ent('proposal')
+    render(resolve(e, 'Meta').Render({ e })!, root)
+    assertExists(root.querySelector('.Show_Proposal-approved .Icon'))
+    assertEquals(
+      root.querySelector('.Show_Proposal')?.getAttribute('aria-label'),
+      'approved',
+    )
+  } finally {
+    render(null, root)
+    cache.value = {}
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else delete (globalThis as { document?: unknown }).document
+  }
+})
+
 Deno.test('task meta carries both full facts and compact edge tallies', () => {
   let project = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   let person = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'

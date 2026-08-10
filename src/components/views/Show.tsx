@@ -28,6 +28,7 @@ import { editorFor, Prop } from '../editors.tsx'
 import { Relate } from './Relate.tsx'
 import { Id } from './Inline.tsx'
 import { Entity } from '../Entity.tsx'
+import { Icon } from '../icons.tsx'
 
 // The lego box. A SECTION is an internal view ('Body', 'Meta',
 // 'Dependencies', 'Runs', 'Comments' — registered in Entity.tsx like 'Id'
@@ -47,6 +48,7 @@ let Frame = block('div', 'Show', {
   Project: 'a',
   Assignee: 'a',
   Meta: 'div',
+  Proposal: 'span',
   Deps: 'span',
   Done: 's',
   Mail: 'div',
@@ -70,6 +72,7 @@ let {
   Project,
   Assignee,
   Meta: MetaEl,
+  Proposal,
   Deps,
   Done,
   Mail: MailEl,
@@ -464,6 +467,17 @@ let tallies = (e: Ent): [string, number, number][] => [
   ],
 ]
 
+let ProposalState = ({ e }: { e: Ent }) => {
+  if (!e.proposed) return null
+  let approved = !!e.decided
+  let state = approved ? 'approved' : 'proposed'
+  return (
+    <Proposal mod={state} aria-label={state} data-tip={state}>
+      <Icon name={approved ? 'stamp' : 'lightbulb'} />
+    </Proposal>
+  )
+}
+
 // The meta line — the union of the board row and Full's facts: prio · project
 // · domain · edge tallies · comments · assignee · claim · age. Every field
 // uses the same face everywhere and renders nothing when absent. In a card
@@ -481,7 +495,8 @@ export let Meta = (
   let edges = tallies(e)
   let hasEdges = edges.some(([, open, done]) => open > 0 || done > 0)
   if (
-    !id && !before && !children && !e.task && !talk && !e.claim &&
+    !id && !before && !children && !e.task && !e.proposed && !talk &&
+    !e.claim &&
     !e.created?.at &&
     !hasEdges
   ) {
@@ -490,6 +505,7 @@ export let Meta = (
   return (
     <MetaEl>
       {before}
+      <ProposalState e={e} />
       {e.task && (
         <>
           <Rank e={e} />

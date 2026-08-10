@@ -1554,6 +1554,16 @@ html {
 .Show_Meta > .Stamp {
   display: var(--meta-stamp, inline-flex);
 }
+.Show_Proposal {
+  display: inline-flex;
+  align-items: center;
+}
+.Show_Proposal-proposed {
+  color: var(--yellow);
+}
+.Show_Proposal-approved {
+  color: var(--accent);
+}
 .Show_Meta .Prio {
   background: transparent;
   font-size: 11px;
