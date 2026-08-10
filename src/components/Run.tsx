@@ -5,6 +5,8 @@ import { modelOrder } from '../providers.ts'
 import { block } from './ui.tsx'
 import { menu, navigate, screenTarget } from './nav.tsx'
 import { usePlaceAt } from './overlay.tsx'
+import { codexAccount } from '../account_client.ts'
+import { openAccount } from './Account.tsx'
 
 // The Run door: a task's "run session…" verb opens this over the point
 // the menu stood on — model, effort; the provider is never asked, it is
@@ -40,9 +42,11 @@ export let offers = (ps: Provider[]) =>
 let Frame = block('div', 'Run', {
   Row: 'label',
   Name: 'span',
+  State: 'span',
+  Account: 'button',
   Go: 'button',
 })
-let { Row, Name, Go } = Frame
+let { Row, Name, State, Account, Go } = Frame
 
 // The table, fetched once per page: it changes when the server changes.
 export let providers = signal<Provider[]>([])
@@ -86,6 +90,10 @@ let Form = ({ a }: { a: Ask }) => {
   let ms = offers(providers.value)
   let m = ms.find((x) => x.model == model) ?? ms[0]
   let ef = m?.p.efforts.includes(effort) ? effort : m?.p.efforts[0]
+  let av = codexAccount.view.value
+  useEffect(() => {
+    if (m?.p.name == 'codex') codexAccount.read()
+  }, [m?.p.name])
 
   let go = () => {
     if (!m) return
@@ -158,6 +166,21 @@ let Form = ({ a }: { a: Ask }) => {
           >
             {m.p.efforts.map((x) => <option key={x} value={x}>{x}</option>)}
           </select>
+        </Row>
+      )}
+      {m?.p.name == 'codex' && (
+        <Row>
+          <Name>account</Name>
+          <State mod={av.status?.state}>
+            {av.status?.ready
+              ? `ready${av.status.plan ? ` · ${av.status.plan}` : ''}`
+              : av.busy == 'read' && !av.status
+              ? 'checking…'
+              : av.status?.state.replace('_', ' ') ?? 'not checked'}
+          </State>
+          <Account type='button' onClick={openAccount}>
+            {av.status?.ready ? 'manage' : 'log in'}
+          </Account>
         </Row>
       )}
       <Go type='button' disabled={!m} onClick={go}>▶ start</Go>

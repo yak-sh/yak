@@ -38,6 +38,16 @@ let sheet: Record<string, Style> = {
   TKeys_Title: { bold: true, gap: true },
   TKeys_Key: { fg: '#dbbc7f' },
   TKeys_Hint: { fg: '#7a8478', dim: true },
+  TAccount_Title: { bold: true, gap: true },
+  TAccount_State: { fg: '#9da9a0' },
+  'TAccount_State-ready': { fg: '#a7c080' },
+  'TAccount_State-error': { fg: '#e67e80' },
+  'TAccount_State-unavailable': { fg: '#e67e80' },
+  TAccount_Url: { fg: '#7fbbb3', underline: true },
+  TAccount_Code: { fg: '#dbbc7f', bold: true },
+  TAccount_Error: { fg: '#e67e80' },
+  TAccount_Key: { fg: '#dbbc7f' },
+  TAccount_Hint: { fg: '#7a8478', dim: true },
 
   // shared views, styled by the same class names the web uses. The web's
   // glyph pips speak character here: ring open, half-moon wip — a full

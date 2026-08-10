@@ -43,12 +43,18 @@ import { eidOf } from '../components/nav.tsx'
 import { clipboard, link } from './paint.ts'
 import { root, touch } from './dom.ts'
 import { Md } from './md.tsx'
+import {
+  type AccountControl,
+  type AccountView,
+  codexAccount,
+} from '../account_client.ts'
 
 export let sel = signal({ col: 0, row: 0 })
 export let quit = signal(false)
 let msg = signal('')
 let buf = signal('') // the : command line
 export let help = signal(false)
+export let accountOpen = signal(false)
 let priority = propAt('task', 'priority')!
 
 // The first board is the one we browse — v0 has exactly one.
@@ -365,14 +371,50 @@ let exec = (line: string) => {
   }
 }
 
+// The account panel is terminal-native: keys are its buttons. Device login
+// leads because a browser on another box cannot reach app-server's localhost
+// callback; neither flow shells out or turns provider URLs into OSC links.
+export let accountKey = (
+  k: string,
+  control: AccountControl = codexAccount,
+) => {
+  if (!accountOpen.value) {
+    if (mode.value != 'normal' || k != 'a') return false
+    help.value = false
+    accountOpen.value = true
+    control.read()
+    return true
+  }
+  if (k == 'a' || k == 'q' || k == '\x1b') {
+    accountOpen.value = false
+    return true
+  }
+  let view = control.view.peek()
+  if (view.busy) return true
+  let state = view.status?.state
+  let login = state == 'signed_out' || state == 'error' ||
+    state == 'unavailable'
+  if (k == 'l' && login) control.login('device')
+  else if (k == 'b' && login) control.login('browser')
+  else if (k == 'c' && state == 'pending') control.cancel()
+  else if (k == 'o' && view.status?.ready) control.logout()
+  else if (k == 'r') control.read()
+  return true
+}
+
 // Raw stdin, one key at a time. Normal mode is vim; : opens the command
 // line, which owns every key until Enter or Escape. Ctrl-d backs out of
 // the current entity from ANY mode; everything else is per-mode.
 export let key = (k: string) => {
+  if (accountOpen.value) {
+    accountKey(k)
+    return
+  }
   if (help.value) {
     if (k == '?' || k == '\x1b' || k == 'q') help.value = false
     return
   }
+  if (accountKey(k)) return
   if (k == '\x04') {
     if (mode.value == 'insert') endEdit() // commit, then out — no data loss
     return back()
@@ -425,6 +467,89 @@ export let TKeys = () => (
     <div class='TKeys_Hint'>press ? or Esc to close</div>
   </div>
 )
+
+export let TAccount = (
+  { view = codexAccount.view.value }: { view?: AccountView },
+) => {
+  let status = view.status
+  let busy = view.busy
+  let state = busy == 'login'
+    ? 'starting login…'
+    : busy == 'cancel'
+    ? 'cancelling…'
+    : busy == 'logout'
+    ? 'logging out…'
+    : busy == 'read' && !status
+    ? 'checking…'
+    : status?.ready
+    ? 'ready'
+    : status?.state == 'pending'
+    ? `${status.login ?? 'Codex'} login pending`
+    : status?.state.replace('_', ' ') ?? 'not checked'
+  let error = view.error ?? status?.error?.message
+  let ceremony = view.ceremony
+  let login = !busy && status &&
+    ['signed_out', 'error', 'unavailable'].includes(status.state)
+  return (
+    <div class='TAccount'>
+      <div class='TAccount_Title'>Codex account</div>
+      <div
+        class={`TAccount_State TAccount_State-${status?.state ?? 'unknown'}`}
+      >
+        {state}
+      </div>
+      {status?.ready && (
+        <div class='TAccount_Detail'>
+          {status.auth == 'chatgpt' ? 'ChatGPT' : 'API key'}
+          {status.plan && ` · ${status.plan}`}
+        </div>
+      )}
+      {error && <div class='TAccount_Error'>{error}</div>}
+      {ceremony?.method == 'device' && (
+        <div class='TAccount_Ceremony'>
+          <span class='TAccount_Url'>{ceremony.verificationUrl}</span>
+          <span class='TAccount_Code'>{ceremony.userCode}</span>
+          <div class='TAccount_Hint'>enter the code in the page above</div>
+        </div>
+      )}
+      {ceremony?.method == 'browser' && (
+        <div class='TAccount_Ceremony'>
+          <span class='TAccount_Url'>{ceremony.authorizationUrl}</span>
+          <div class='TAccount_Hint'>
+            use device login when this daemon's callback is unreachable
+          </div>
+        </div>
+      )}
+      {status?.state == 'pending' && !ceremony && (
+        <div class='TAccount_Hint'>login began in another Tasks client</div>
+      )}
+      <div class='TAccount_Actions'>
+        {login && (
+          <>
+            <span class='TAccount_Key'>l</span> device login ·{' '}
+            <span class='TAccount_Key'>b</span> browser login
+          </>
+        )}
+        {!busy && status?.state == 'pending' && (
+          <>
+            <span class='TAccount_Key'>c</span> cancel login
+          </>
+        )}
+        {!busy && status?.ready && (
+          <>
+            <span class='TAccount_Key'>o</span> log out
+          </>
+        )}
+        {status && (
+          <>
+            · <span class='TAccount_Key'>r</span> refresh
+          </>
+        )}
+      </div>
+      <div class='TAccount_Hint'>a / q / Esc close</div>
+    </div>
+  )
+}
 
 let TStatus = () => {
   // the verb greens once it names a command — the web bar does the same
@@ -494,7 +619,9 @@ export let App = () => {
   return (
     <div class='TApp'>
       <div class='TTitle'>{['tasks', ...crumbs].join(' · ')}</div>
-      {help.value
+      {accountOpen.value
+        ? <TAccount />
+        : help.value
         ? <TKeys />
         : here
         ? <Entity eid={here} view={views.value[here]} />

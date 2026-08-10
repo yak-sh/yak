@@ -17,6 +17,7 @@ export let webKeys: Keybinding[] = [
 
 export let tuiKeys: Keybinding[] = [
   { keys: ['?'], about: 'show or close keybindings' },
+  { keys: ['a'], about: 'open the Codex account' },
   { keys: ['j', 'k'], about: 'browse' },
   { keys: ['l', 'Enter'], about: 'enter' },
   { keys: ['h', 'Ctrl-D'], about: 'go back' },

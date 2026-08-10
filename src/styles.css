@@ -2132,6 +2132,114 @@ html {
   color: var(--muted);
 }
 
+/* Provider account: one server-owned status with short-lived ceremony data.
+   The modal sits beside keyboard help; Run only points into this door. */
+.Account {
+  position: fixed;
+  inset: 0;
+  z-index: 115;
+  display: grid;
+  place-items: start center;
+  padding-top: 12vh;
+  background: color-mix(in srgb, var(--bg) 45%, transparent);
+}
+.Account_Box {
+  width: min(440px, 92vw);
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px color-mix(in srgb, #000 45%, transparent);
+  overflow: hidden;
+  outline: 0;
+}
+.Account_Head,
+.Account_Actions {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  padding: var(--half-gap) var(--gap);
+}
+.Account_Head {
+  border-bottom: 1px solid var(--border);
+}
+.Account_Title {
+  flex: 1;
+  margin: 0;
+  font-size: 1rem;
+}
+.Account_Close {
+  padding: 0 var(--half-gap);
+  color: var(--dim);
+  background: none;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+}
+.Account_Body {
+  display: grid;
+  gap: var(--half-gap);
+  padding: var(--gap);
+}
+.Account_State,
+.Account_Detail,
+.Account_Error,
+.Account_Hint {
+  margin: 0;
+}
+.Account_State {
+  color: var(--muted);
+  text-transform: capitalize;
+}
+.Account_State-ready {
+  color: var(--accent);
+}
+.Account_State-error,
+.Account_State-unavailable,
+.Account_Error {
+  color: var(--red);
+}
+.Account_Detail,
+.Account_Hint {
+  color: var(--dim);
+  font-size: 12px;
+}
+.Account_Ceremony {
+  display: grid;
+  gap: var(--half-gap);
+  overflow-wrap: anywhere;
+}
+.Account_Code {
+  width: fit-content;
+  padding: var(--half-gap);
+  color: var(--text);
+  font-size: 1.15rem;
+  letter-spacing: 0.08em;
+}
+.Account_Actions {
+  flex-wrap: wrap;
+  border-top: 1px solid var(--border);
+}
+.Account_Action,
+.Run_Account {
+  min-height: var(--tap);
+  padding: 3px var(--half-gap);
+  color: var(--accent);
+  background: none;
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  font: inherit;
+  cursor: pointer;
+}
+.Account_Action:disabled,
+.Run_Account:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.AccountTab {
+  margin-left: auto;
+}
+
 /* The completion dropdown (Complete.tsx): the grammar's own candidates
    under whatever input is teaching — the palette line, a filter bar,
    the query editor. Portaled into an .Overlay so every door gets the
@@ -3154,6 +3262,14 @@ a[data-ref]:hover {
   color: var(--dim);
   font-size: 11px;
   min-width: 4rem;
+}
+.Run_State {
+  flex: 1;
+  color: var(--dim);
+  font-size: 11px;
+}
+.Run_State-ready {
+  color: var(--accent);
 }
 .Run select {
   flex: 1;

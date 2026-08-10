@@ -2,8 +2,10 @@
 import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
 import { type Ent } from '../types.ts'
-import { config } from '../live.ts'
+import { config, mode } from '../live.ts'
 import {
+  accountKey,
+  accountOpen,
   fit,
   help,
   key,
@@ -11,11 +13,14 @@ import {
   quit,
   spot,
   spots,
+  TAccount,
   TKeys,
   trail,
 } from './App.tsx'
 import { TElement } from './dom.ts'
-import { pane } from './paint.ts'
+import { ansi, pane } from './paint.ts'
+import { account, type AccountDoor } from '../account_client.ts'
+import type { AccountStatus } from '../accounts.ts'
 
 // deno-lint-ignore no-explicit-any
 let find = (node: any, cls: string): any => {
@@ -120,8 +125,131 @@ Deno.test('the TUI keybinding card teaches its navigation keys', () => {
   assertEquals(lines.slice(0, 4), [
     'Keybindings',
     '? show or close keybindings',
+    'a open the Codex account',
     'j / k browse',
-    'l / Enter enter',
   ])
+  render(null, target)
+})
+
+let signedOut = (): AccountStatus => ({
+  provider: 'codex',
+  state: 'signed_out',
+  ready: false,
+  auth: null,
+})
+
+Deno.test('the TUI account keys are device-first and capture the panel', async () => {
+  let calls: string[] = []
+  let status = signedOut()
+  let door: AccountDoor = {
+    status: () => {
+      calls.push('read')
+      return Promise.resolve(status)
+    },
+    login: (method) => {
+      calls.push(method)
+      status = {
+        provider: 'codex',
+        state: 'pending',
+        ready: false,
+        auth: null,
+        login: method,
+      }
+      return Promise.resolve(
+        method == 'device'
+          ? {
+            method,
+            verificationUrl: 'https://auth.example/device',
+            userCode: 'ABCD-1234',
+          }
+          : { method, authorizationUrl: 'https://auth.example/login' },
+      )
+    },
+    cancel: () => {
+      calls.push('cancel')
+      status = signedOut()
+      return Promise.resolve(status)
+    },
+    logout: () => {
+      calls.push('logout')
+      status = signedOut()
+      return Promise.resolve(status)
+    },
+  }
+  let control = account(door)
+  accountOpen.value = false
+  mode.value = 'normal'
+  assertEquals(accountKey('a', control), true)
+  await Promise.resolve()
+  assertEquals(calls, ['read'])
+  accountKey('l', control)
+  accountKey('l', control) // a repeated key cannot start a second ceremony
+  await Promise.resolve()
+  await Promise.resolve()
+  assertEquals(calls, ['read', 'device', 'read'])
+  accountKey('c', control)
+  await Promise.resolve()
+  assertEquals(calls, ['read', 'device', 'read', 'cancel'])
+  control.view.value = {
+    status: {
+      provider: 'codex',
+      state: 'ready',
+      ready: true,
+      auth: 'chatgpt',
+    },
+  }
+  accountKey('o', control)
+  await Promise.resolve()
+  assertEquals(calls, ['read', 'device', 'read', 'cancel', 'logout'])
+
+  trail.value = ['one']
+  spots.value = { one: 2 }
+  key('j')
+  assertEquals(spot(), 2)
+  key('q')
+  assertEquals({ open: accountOpen.value, quit: quit.value }, {
+    open: false,
+    quit: false,
+  })
+  control.close()
+  trail.value = []
+})
+
+Deno.test('the TUI account paints ceremony and hostile errors as plain text', () => {
+  let root = new TElement('root')
+  let target = root as unknown as Parameters<typeof render>[1]
+  let message = 'bad\x1b]52;c;clipboard\x07\x9b31m'
+  render(
+    h(
+      'div',
+      null,
+      h(TAccount, {
+        view: {
+          status: {
+            provider: 'codex',
+            state: 'pending',
+            ready: false,
+            auth: null,
+            login: 'device',
+            error: { code: 'bad', message },
+          },
+          ceremony: {
+            method: 'device',
+            verificationUrl: 'https://auth.example/device',
+            userCode: 'ABCD-1234',
+          },
+        },
+      }),
+      h('footer', null, 'status'),
+    ),
+    target,
+  )
+  let lines = pane(root).lines
+  let output = lines.map(ansi).join('\n')
+  assertEquals(lines.flat().some((part) => part.style.href), false)
+  assertEquals(output.includes('\x1b]52'), false)
+  assertEquals(output.includes('\x07'), false)
+  assertEquals(output.includes('ABCD-1234'), true)
+  assertEquals(output.includes('https://auth.example/device'), true)
   render(null, target)
 })

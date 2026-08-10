@@ -23,6 +23,7 @@ import { Status } from './Status.tsx'
 import { Entity } from './Entity.tsx'
 import { tips } from './overlay.tsx'
 import { Keybindings } from './Keybindings.tsx'
+import { Account, AccountTab } from './Account.tsx'
 
 tips() // mount the one delegated [data-tip] tooltip (idempotent)
 
@@ -124,6 +125,7 @@ export let App = () => {
       >
         <Bar>
           <Brand href='/'>Tasks</Brand>
+          <AccountTab />
         </Bar>
         <Body mod='admin'>
           <Admin />
@@ -131,6 +133,7 @@ export let App = () => {
         <Menu />
         <Peek />
         <Search open={goto} />
+        <Account />
         <Keybindings />
         <Status />
       </Frame>
@@ -146,6 +149,7 @@ export let App = () => {
       >
         <Bar>
           <Brand href='/'>Tasks</Brand>
+          <AccountTab />
         </Bar>
         <Body>
           <Lost />
@@ -153,6 +157,7 @@ export let App = () => {
         <Menu />
         <Peek />
         <Search open={goto} />
+        <Account />
         <Keybindings />
         <Status />
       </Frame>
@@ -199,6 +204,7 @@ export let App = () => {
             <TabFace view={v} eid={e.eid} />
           </Tab>
         ))}
+        <AccountTab />
         <Tab
           type='button'
           aria-label='Admin'
@@ -242,6 +248,7 @@ export let App = () => {
       <Peek />
       <Run />
       <Search open={goto} />
+      <Account />
       <Keybindings />
       <Status />
     </Frame>
