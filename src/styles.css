@@ -1859,12 +1859,14 @@ html {
 }
 .Search_Box {
   width: min(600px, 92vw);
+  max-height: 76dvh;
   margin: 12vh auto 0;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: 0 12px 40px color-mix(in srgb, #000 45%, transparent);
-  overflow: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
 }
 .Search_Line {
   display: flex;
