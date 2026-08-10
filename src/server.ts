@@ -236,7 +236,7 @@ let rowed = (
   comps,
 })
 
-let evalFast = (q: string, kind?: string) => {
+let evalFast = (q: string, kind?: string, entries = false) => {
   let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
   let kp = kind ? kindPreds(kind) : null
   if (kp) preds = [...kp, ...preds]
@@ -246,6 +246,7 @@ let evalFast = (q: string, kind?: string) => {
   return {
     preds,
     hits: matching(db, built).map(rowed)
+      .filter((r) => entries || !r.comps.entry)
       .filter((r) => listed(r.comps, preds)),
   }
 }
@@ -427,7 +428,9 @@ let control = (
   if (typeof f.unsub == 'string') return void map.delete(f.unsub)
   if (typeof f.sub != 'string') return
   try {
-    let { preds, hits } = evalFast(f.q ?? '') ?? evalQuery(f.q ?? '')
+    let details = f.sub.startsWith('entries:')
+    let { preds, hits } = evalFast(f.q ?? '', undefined, details) ??
+      evalQuery(f.q ?? '')
     map.set(f.sub, {
       preds,
       members: new Set(hits.map((r) => r.eid)),
@@ -436,7 +439,7 @@ let control = (
       bodies: bodied(f.sub),
       // Entry partitions are absent from both the root snapshot and root live
       // stream, so their shadow owns bodies and standing-match updates too.
-      details: f.sub.startsWith('entries:'),
+      details,
     })
     let sub = map.get(f.sub)!
     let changes = hits.flatMap((r) => payload(sub, r.eid, r.comps))

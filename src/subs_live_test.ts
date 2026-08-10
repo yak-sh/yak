@@ -376,6 +376,11 @@ Deno.test('entry shadows carry the lazy partition', alone, async () => {
       carried.find((c) => c.name == 'content')?.comp?.body,
       'visible from the partition',
     )
+    let root = await fetch(
+      `http://${U}/query?${encodeURIComponent(`.entry.session=${session}`)}`,
+    )
+    assertEquals(root.ok, true)
+    assertEquals(await root.json(), [])
   } finally {
     client.close()
   }
