@@ -157,15 +157,24 @@ let readParams = (args: string[], ctx: Ctx) => {
 
 let card = (kind: typeof cardCommands[number]): Command => ({
   args: {
-    task: '[.title=Next .priority=1]',
+    task: '[P1 .domain=Eng title…]',
     session: '[.id=review]',
     doc: '[.title=Notes .body=…]',
     memory: '[.title=Lesson .memory.scope=home]',
   }[kind],
   about: `add a ${kind} card`,
   run: (rest, ctx) => {
-    let args = rest.trim() ? rest.trim().split(/\s+(?=\.)/) : []
+    let [line, ...lines] = rest.split('\n')
+    // A leading doc setter is the card property's explicit spelling; its
+    // value may contain spaces. Otherwise a task speaks the typed-task
+    // grammar: first line title, following lines body.
+    let explicit = kind == 'task' && /^\s*\./.test(line) &&
+      /(?:^|\s)\.(?:doc\.)?(?:title|body)=/.test(line)
+    let typed = kind == 'task' && !explicit ? spec(rest, ctx.read) : undefined
+    let text = kind == 'task' && explicit ? line : rest.trim()
+    let args = typed || !text ? [] : text.split(/\s+(?=\.)/)
     let ps = readParams(args, ctx)
+    let grouped = typed?.grouped ?? patches(ps)
     let allowed = kind == 'task'
       ? ['doc', 'task']
       : kind == 'memory'
@@ -176,7 +185,11 @@ let card = (kind: typeof cardCommands[number]): Command => ({
         throw new Error(`${kind}: cannot set ${p.comp}.${p.prop}`)
       }
     }
-    let grouped = patches(ps)
+    for (let name of Object.keys(typed?.grouped ?? {})) {
+      if (!allowed.includes(name)) {
+        throw new Error(`${kind}: cannot set ${name}`)
+      }
+    }
     let eid = uuid()
     let changes: Change[] = kind == 'session'
       ? [{ eid, name: 'session', comp: { id: uuid(), ...grouped.session } }]
@@ -184,7 +197,11 @@ let card = (kind: typeof cardCommands[number]): Command => ({
         {
           eid,
           name: 'doc',
-          comp: { title: '', body: '', ...grouped.doc },
+          comp: {
+            title: typed?.title ?? '',
+            body: typed?.body ?? (explicit ? lines.join('\n').trim() : ''),
+            ...grouped.doc,
+          },
         },
         ...(kind == 'doc' ? [] : [{
           eid,

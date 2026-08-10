@@ -111,6 +111,21 @@ Deno.test('basic card properties use the standard dot-param grammar', () => {
   })
   assertThrows(() => run('doc words', ctx()), Error, 'not a param')
   assertThrows(() => run('doc .status=open', ctx()), Error, 'cannot set task')
+  assertThrows(
+    () => run('task .session.id=review Ship it', ctx()),
+    Error,
+    'cannot set session',
+  )
+})
+
+Deno.test('task cards take their title first and body below', () => {
+  let made = run('task Ship it\nwhy and how', ctx(B))
+  assertEquals(comps('task Ship it\nwhy and how', B), {
+    doc: { title: 'Ship it', body: 'why and how' },
+    task: { status: 'open' },
+  })
+  assertEquals(made.card, made.changes![0].eid)
+  assertEquals(made.spawn, undefined)
 })
 
 Deno.test('new: a task, inheriting where you stand', () => {
