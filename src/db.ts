@@ -1133,13 +1133,38 @@ export let retireProjectRetiredAt = (db: DatabaseSync) => {
 }
 
 // Give every session its canonical launch facet before graph-out can observe
-// the handle. The dormant aliases stay as rollback input; insert-or-ignore
-// makes the canonical row authoritative on every later open.
-export let backfillSpawn = (db: DatabaseSync) =>
-  db.exec(
-    `insert or ignore into spawn (eid, provider, model, effort, persona)
-       select eid, provider, model, effort, persona from session`,
-  )
+// the handle, then mirror canonical values back for a rollback process. An
+// existing canonical row wins — including explicit null — on every open.
+export let backfillSpawn = (db: DatabaseSync) => {
+  let cols = ['provider', 'model', 'effort', 'persona']
+  db.exec('begin')
+  try {
+    db.exec(
+      `insert or ignore into spawn (eid, provider, model, effort, persona)
+         select eid, provider, model, effort, persona from session`,
+    )
+    db.exec(
+      `update session set ${
+        cols.map((col) =>
+          `${sqlName(col)} = (select ${sqlName(col)} from spawn
+            where spawn.eid = session.eid)`
+        ).join(', ')
+      } where exists (select 1 from spawn where spawn.eid = session.eid)`,
+    )
+    let different = cols.map((col) =>
+      `s.${sqlName(col)} is not p.${sqlName(col)}`
+    ).join(' or ')
+    let missed = db.prepare(`
+      select 1 from session s join spawn p on p.eid = s.eid
+      where ${different} limit 1
+    `).get()
+    if (missed) throw new Error('spawn backfill did not verify')
+    db.exec('commit')
+  } catch (e) {
+    db.exec('rollback')
+    throw e
+  }
+}
 
 // Lift the execution axes without inventing facets for sessions that never
 // carried either one. An existing canonical row wins — including its nulls —

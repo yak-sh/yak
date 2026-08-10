@@ -1660,12 +1660,15 @@ Deno.test('open backfills every pre-spawn session, once', () => {
   )
   assertEquals(compOf(d, legacy, 'spawn')?.model, 'fake-fast')
   assertEquals(compOf(d, external, 'spawn')?.provider, null)
-  d.prepare("update spawn set model = 'canonical' where eid = ?").run(legacy)
+  d.prepare(
+    "update spawn set provider = null, model = 'canonical' where eid = ?",
+  ).run(legacy)
   d.close()
 
   d = open(path)
   assertEquals(compOf(d, legacy, 'spawn')?.model, 'canonical')
-  assertEquals(compOf(d, legacy, 'session')?.model, 'fake-fast')
+  assertEquals(compOf(d, legacy, 'session')?.provider, null)
+  assertEquals(compOf(d, legacy, 'session')?.model, 'canonical')
   apply(d, [{ eid: legacy, name: 'spawn', comp: null }])
   d.close()
 
