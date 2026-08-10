@@ -227,17 +227,12 @@ html {
 :where(body) {
   margin: 0;
   height: 100dvh;
-  /* The home indicator owns the strip at the bottom — reserve it here so
-     the app's floor (and the tappable statusbar on it) stops above the
-     gesture region, and body's own background paints the strip. */
-  padding-bottom: env(safe-area-inset-bottom, 0px);
   display: flex;
   flex-direction: column;
   font: 14px/1.5 var(--font);
-  /* Surface, not --bg: the phone's bands — the notch above, that strip
-     below — take their color from BODY (observed on-device; the html
-     background never shows there). The app's dark floor lives on .App
-     instead — same pixels everywhere else. */
+  /* Surface, not --bg: the phone's notch band takes its color from BODY
+     (observed on-device; the html background never shows there). The app's
+     dark floor lives on .App instead — same pixels everywhere else. */
   background: var(--surface);
   color: var(--text);
 }
@@ -2236,11 +2231,8 @@ html {
   color: var(--dim);
 }
 
-/* The vim statusbar: NORMAL / -- INSERT -- / the : command line. Body
-   reserves the home-indicator strip, so the whole bar sits above the
-   gesture region and every inch of it is tappable — and riding that high
-   also lifts its text clear of the screen's corner arc, which is why no
-   portrait dodge is needed. The side insets are the landscape notch. */
+/* The vim statusbar: NORMAL / -- INSERT -- / the : command line. The side
+   insets keep its text clear of the landscape notch. */
 .Status {
   display: flex;
   align-items: center;
