@@ -14,6 +14,11 @@ import { dispatch, trace } from './effects.ts'
 import { noticesFor, rows } from './client.ts'
 import { materialize } from './persona.ts'
 import { childPath, continueSession } from './sessions.ts'
+import {
+  attention as graphAttention,
+  graphBusy,
+  graphSession,
+} from './managed_codex.ts'
 import { tmuxRun } from './tmux.ts'
 import { type Change, sessionActive, uuid } from './types.ts'
 
@@ -557,7 +562,7 @@ let latest = (eid: string) =>
 let active = (s?: DbRow) =>
   !!s &&
   (sessionActive.includes(String(s.status)) ||
-    (!!s.pid && !s.finished_at))
+    (!!s.pid && !s.finished_at) || graphBusy(db, String(s.eid)))
 
 // ---- the crash-loop breaker + spawn idempotency (pure, so roles_test can
 // drive the whole decision without a db or a tmux). ----
@@ -753,20 +758,30 @@ let reconcileManaged = async (
   let row = db.prepare('select applied_hash from role where eid = ?').get(
     c.eid,
   ) as { applied_hash: string | null }
-  if (active(session)) return
-  if (!session || row.applied_hash != hash) {
-    startManaged(c, hash, cast, deps)
-    return
+  let graph = !!session && graphSession(db, String(session.eid))
+  if (graph) {
+    if (row.applied_hash != hash) {
+      if (graphBusy(db, String(session!.eid))) stopManaged(session!, cast)
+      else startManaged(c, hash, cast, deps)
+      return
+    }
+  } else {
+    if (active(session)) return
+    if (!session || row.applied_hash != hash) {
+      startManaged(c, hash, cast, deps)
+      return
+    }
+    if (session.status == 'failed') {
+      stamp(
+        c.eid,
+        { error: String(session.error_message ?? 'managed launch failed') },
+        cast,
+      )
+      return
+    }
+    if (session.status != 'completed' || !session.provider_session_id) return
   }
-  if (session.status == 'failed') {
-    stamp(
-      c.eid,
-      { error: String(session.error_message ?? 'managed launch failed') },
-      cast,
-    )
-    return
-  }
-  if (session.status != 'completed' || !session.provider_session_id) return
+  if (!session) return
   let pending = noticesFor(snapshot(db), String(session.id))
   if (!pending.lines.length) return
   let newest =
@@ -793,11 +808,14 @@ let reconcileManaged = async (
     notice_accepted_at: null,
     notice_token: uuid(),
   }, cast)
-  continueSession(
-    String(session.eid),
-    'You have pending Tasks messages. Call task_context now.',
-    cast,
-  ).catch((e) => stamp(c.eid, { error: String(e).slice(0, 2000) }, cast))
+  if (graph) graphAttention(db, String(session.eid), cast)
+  else {
+    continueSession(
+      String(session.eid),
+      'You have pending Tasks messages. Call task_context now.',
+      cast,
+    ).catch((e) => stamp(c.eid, { error: String(e).slice(0, 2000) }, cast))
+  }
 }
 
 let flights = new Set<string>()
@@ -836,7 +854,11 @@ let reconcile = async (eid: string, cast: Cast, deps: RoleDeps) => {
       }, cast)
       return
     }
-    if (starting(lives[0], now)) return
+    let current = latest(eid)
+    if (
+      starting(lives[0], now) &&
+      !graphSession(db, String(current?.eid ?? ''))
+    ) return
     let c = config(eid)
     let hash = roleHash(c)
     if (c.surface == 'native') {

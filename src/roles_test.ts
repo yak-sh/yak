@@ -16,6 +16,7 @@ Deno.writeTextFileSync(`${tasksHome}/.deno/bin/task`, '')
 Deno.chmodSync(`${tasksHome}/.deno/bin/task`, 0o755)
 
 let { apply, db, journalOf } = await import('./db.ts')
+let { append, readEntries } = await import('./entries.ts')
 let {
   nativeProviderArgs,
   nativeTmuxArgs,
@@ -431,6 +432,53 @@ Deno.test('managed attention resumes once with no graph content', async () => {
     Deno.readTextFileSync(path).match(/"type":"session.input"/g)?.length,
     inputs,
   )
+})
+
+Deno.test('graph-native role attention is content-free and coalesced', async () => {
+  let { role } = seed('managed', 'codex')
+  let runner = uid()
+  apply(db, [{ eid: runner, name: 'runner', comp: { name: 'tasksd' } }])
+  await rolesSweep(cast, deps)
+  let run = db.prepare(
+    'select eid from session where role = ? order by rowid desc limit 1',
+  ).get(role) as { eid: string }
+  db.prepare("update session set origin = 'managed' where eid = ?")
+    .run(run.eid)
+  let input = append(db, run.eid, [{ message: { role: 'user' } }]).eids[0]
+  let generation = append(db, run.eid, [{
+    generation: {
+      through: input,
+      provider: 'codex',
+      model: 'gpt-5.6-sol',
+    },
+  }]).eids[0]
+  db.prepare(
+    "insert into delivered (eid, at, via) values (?, datetime('now'), 'test')",
+  ).run(generation)
+  let message = uid()
+  apply(db, [
+    {
+      eid: message,
+      name: 'doc',
+      comp: { title: '', body: 'SECRET ROLE WORDS' },
+    },
+    { eid: message, name: 'comment', comp: { target: run.eid } },
+  ])
+
+  await rolesSweep(cast, { ...deps, now: () => new Date().toISOString() })
+  await rolesSweep(cast, { ...deps, now: () => new Date().toISOString() })
+  let entries = readEntries(db, run.eid)
+  assertEquals(entries.filter((row) => row.comps.attention).length, 1)
+  assertEquals(
+    entries.some((row) => row.comps.content?.body == 'SECRET ROLE WORDS'),
+    false,
+  )
+  assertEquals(
+    db.prepare('select 1 from notified where eid = ?').get(message),
+    undefined,
+  )
+  let wake = entries.find((row) => row.comps.attention)!
+  assertEquals(journalOf(db, wake.eid)[0].via, runner)
 })
 
 // The colour must be a pure function of the VENTURE, matching holdco's own

@@ -32,12 +32,15 @@ export let append = (
   session: string,
   specs: EntrySpec[],
   writer?: string | null,
+  ids?: string[],
 ) => {
-  let eids: string[] = []
+  if (ids && ids.length != specs.length) {
+    throw new Error('entry ids must match specs')
+  }
+  let eids = ids ?? specs.map(() => uuid())
   let changes: Change[] = []
-  for (let spec of specs) {
-    let eid = uuid()
-    eids.push(eid)
+  for (let [i, spec] of specs.entries()) {
+    let eid = eids[i]
     changes.push({ eid, name: 'entry', comp: { session } })
     for (let [name, comp] of Object.entries(spec)) {
       if (forbidden.has(name)) throw new Error(`entry facet refused: ${name}`)
@@ -148,14 +151,28 @@ let runnerName = (db: DatabaseSync, eid: string) =>
 export let settleGeneration = (
   db: DatabaseSync,
   token: LeaseToken,
-  value: UsageValue,
+  value?: UsageValue,
   clock = () => new Date(),
+  model?: string,
 ): Change[] => {
   let at = clock().toISOString()
-  let usage = normalizedUsage(value)
+  let usage = value ? normalizedUsage(value) : undefined
   let via = `runner:${runnerName(db, token.holder)}`
   let changes: Change[] = [
-    { eid: token.eid, name: 'usage', comp: { eid: token.eid, ...usage } },
+    ...(model
+      ? [{
+        eid: token.eid,
+        name: 'generation',
+        comp: { serving_model: model },
+      } as Change]
+      : []),
+    ...(usage
+      ? [{
+        eid: token.eid,
+        name: 'usage',
+        comp: { eid: token.eid, ...usage },
+      } as Change]
+      : []),
     {
       eid: token.eid,
       name: 'delivered',
@@ -172,16 +189,22 @@ export let settleGeneration = (
       db.exec('rollback')
       return []
     }
-    db.prepare(
-      `insert into usage (eid, input, cached, output, reasoning)
-       values (?, ?, ?, ?, ?)`,
-    ).run(
-      token.eid,
-      usage.input,
-      usage.cached,
-      usage.output,
-      usage.reasoning,
-    )
+    if (usage) {
+      db.prepare(
+        `insert into usage (eid, input, cached, output, reasoning)
+         values (?, ?, ?, ?, ?)`,
+      ).run(
+        token.eid,
+        usage.input,
+        usage.cached,
+        usage.output,
+        usage.reasoning,
+      )
+    }
+    if (model) {
+      db.prepare('update generation set serving_model = ? where eid = ?')
+        .run(model, token.eid)
+    }
     db.prepare(
       'insert into delivered (eid, at, via) values (?, ?, ?)',
     ).run(token.eid, at, via)
@@ -189,6 +212,33 @@ export let settleGeneration = (
     record(db, changes, token.holder)
     db.exec('commit')
     return changes
+  } catch (e) {
+    db.exec('rollback')
+    throw e
+  }
+}
+
+// Cancellation has already landed as an immutable audit entry. Releasing the
+// matching lease prevents a late provider/tool result from settling while
+// preserving the request that stopped it.
+export let cancelEntry = (
+  db: DatabaseSync,
+  token: LeaseToken,
+): Change[] => {
+  let change: Change = { eid: token.eid, name: 'lease', comp: null }
+  db.exec('begin immediate')
+  try {
+    if (
+      !owns(db, token) ||
+      !db.prepare('select 1 from cancel where target = ?').get(token.eid)
+    ) {
+      db.exec('rollback')
+      return []
+    }
+    db.prepare('delete from lease where eid = ?').run(token.eid)
+    record(db, [change], token.holder)
+    db.exec('commit')
+    return [change]
   } catch (e) {
     db.exec('rollback')
     throw e

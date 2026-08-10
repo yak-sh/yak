@@ -275,7 +275,8 @@ let schema = `
     through  text not null,
     provider text not null,
     model    text not null,
-    effort   text
+    effort   text,
+    serving_model text
   );
   create unique index if not exists generation_through
     on generation (through);
@@ -1582,6 +1583,7 @@ export let open = (path = file) => {
   addCol('repo', 'gate', 'gate text')
   // The crash-loop breaker's fresh-start fence (types.ts, src/roles.ts).
   addCol('role', 'retry_at', 'retry_at text')
+  addCol('generation', 'serving_model', 'serving_model text')
   addCol('session', 'cwd', 'cwd text')
   addCol('session', 'pid', 'pid integer')
   addCol('session', 'pane', 'pane text')
@@ -2155,8 +2157,8 @@ export let senderActor = (
 ): string | null => actorFor(db, writer, false)
 
 // The instrument stopped one step before writerActor's principal: a session
-// label or eid resolves to that session, a client eid to that client. Direct
-// actor writes have no reified instrument.
+// label/eid, client eid, or runner eid resolves to that graph-visible writer.
+// Direct actor writes have no reified instrument.
 export let writerVia = (
   db: DatabaseSync,
   writer?: string | null,
@@ -2167,7 +2169,10 @@ export let writerVia = (
   if (s) return s.eid
   let c = db.prepare('select eid from client where eid = ?')
     .get(writer) as { eid: string } | undefined
-  return c?.eid ?? null
+  if (c) return c.eid
+  let r = db.prepare('select eid from runner where eid = ?')
+    .get(writer) as { eid: string } | undefined
+  return r?.eid ?? null
 }
 
 // Apply a batch atomically. Unknown component names are ignored (a newer
@@ -2489,9 +2494,29 @@ export let apply = (
           .get(String(comp.target)) as
             | { origin: string; status: string | null }
             | undefined
+        let graph = !!db.prepare(
+          `select 1 from entry e where e.session = ? and (
+             exists (select 1 from lease l where l.eid = e.eid)
+             or (
+               not exists (select 1 from error x where x.eid = e.eid)
+               and not exists (select 1 from cancel z where z.target = e.eid)
+               and (
+                 (exists (select 1 from generation g where g.eid = e.eid)
+                  and not exists (
+                    select 1 from delivered d where d.eid = e.eid
+                  ))
+                 or
+                 (exists (select 1 from call c where c.eid = e.eid)
+                  and not exists (
+                    select 1 from result r where r.call = e.eid
+                  ))
+               )
+             )
+           ) limit 1`,
+        ).get(String(comp.target))
         if (
           !s || s.origin != 'managed' ||
-          !sessionActive.includes(String(s.status))
+          (!sessionActive.includes(String(s.status)) && !graph)
         ) {
           throw new Error(
             `stop_request refused: session is ${

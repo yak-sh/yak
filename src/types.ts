@@ -752,6 +752,7 @@ export let stamped: Record<string, Record<string, PropType>> = {
     usage_json: 'text',
   },
   entry: { seq: 'number' },
+  generation: { serving_model: 'text' },
   lease: {
     holder: { eid: 'runner', death: 'keep' },
     at: 'time',
@@ -1206,6 +1207,7 @@ export type Generation = {
   provider: string
   model: string
   effort?: string | null
+  serving_model?: string | null
 }
 export type Output = {
   eid: string

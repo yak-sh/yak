@@ -56,19 +56,25 @@ import {
 } from './inbound.ts'
 import { scribeSweep } from './scribe.ts'
 import { embedSweep, similarTo } from './embed.ts'
-import { mcpServer } from './mcp.ts'
+import { type IO, mcpServer } from './mcp.ts'
 import { projection, syncFiles } from './persona.ts'
 import { commit } from './git.ts'
 import {
+  codexPending,
   commented,
   deleted,
   logs,
+  prepareWorktree,
   recover,
   spawned,
   stopped,
   tidy,
   watched,
 } from './sessions.ts'
+import { codexCredentials } from './codex_auth.ts'
+import { combineTools, localTools, tasksTools } from './harness_tools.ts'
+import { managedCodex } from './managed_codex.ts'
+import { responses } from './responses.ts'
 import { outcome, recent, record, toolCall } from './telemetry.ts'
 import { stamp } from './hot.ts'
 import { obeyed } from './obey.ts'
@@ -459,6 +465,8 @@ let sendLive = (changes: Change[], except?: WebSocket) => {
   }
 }
 
+let runnerSoon = () => {}
+
 // Broadcast a committed batch to every full-graph client (subscription
 // sockets hear only their own frames, via maintain), then fold it into subs.
 // The one door every non-/ws write path (MCP, /apply, effects, touch, freeze)
@@ -468,6 +476,7 @@ let cast = (changes: Change[], except?: WebSocket) => {
   maintain(changes)
   nativeSoon(cast)
   rolesSoon(cast)
+  runnerSoon()
 }
 
 // The effect half of a write, run AFTER the casts: a slow or failing
@@ -569,6 +578,62 @@ let ws = (req: Request) => {
 // Every tools/call is timed and recorded on the way through (telemetry.ts
 // classifies the body — this route is the only place that sees both the
 // request and its reply).
+let graphIO: IO = {
+  // deno-lint-ignore require-await
+  read: async () => snapshot(db),
+  // deno-lint-ignore require-await
+  write: async (changes, via) => {
+    let t = trace()
+    let out = apply(db, changes, t, via)
+    cast(out)
+    effect(out, t)
+    return out
+  },
+  // deno-lint-ignore require-await
+  find: async (q, limit) => search(db, q, limit),
+  upload: async (eid, html) => {
+    let res = await store(eid, html, cast)
+    if (!res.ok) throw new Error(await res.text())
+  },
+  // The one writer of recall stats: stamp, then cast, so every cache hears
+  // the new warmth (the apply wire refuses these rows).
+  // deno-lint-ignore require-await
+  touch: async (eids, confirm) => {
+    let out = touch(db, eids, confirm)
+    if (out.length) cast(out)
+  },
+  // deno-lint-ignore require-await
+  logs: async (eid, q) => logs(eid, q),
+  // deno-lint-ignore require-await
+  history: async (eid, limit) => journalOf(db, eid, limit),
+  // deno-lint-ignore require-await
+  providers: async () => providers(),
+}
+
+let account = codexCredentials()
+let managed = managedCodex({
+  db,
+  cast,
+  transport: responses({
+    base: 'https://chatgpt.com/backend-api/codex',
+    credentials: account,
+    headers: { originator: 'tasks', version: '0' },
+    retries: 1,
+  }),
+  tools: async (tree, session) => {
+    let tasks = await tasksTools(graphIO, session)
+    try {
+      return combineTools(await localTools({ tree }), tasks)
+    } catch (error) {
+      await tasks.close?.()
+      throw error
+    }
+  },
+  prepare: prepareWorktree,
+})
+runnerSoon = () =>
+  managed.sweep().catch((e) => console.warn('Codex runner sweep —', e))
+
 let mcp = async (req: Request) => {
   let call: ReturnType<typeof toolCall> = null
   let t0 = performance.now()
@@ -578,37 +643,7 @@ let mcp = async (req: Request) => {
     if (body.id == null) return new Response(null, { status: 202 }) // notification
     call = toolCall(body)
     let [mine, theirs] = InMemoryTransport.createLinkedPair()
-    let server = mcpServer({
-      // deno-lint-ignore require-await
-      read: async () => snapshot(db),
-      // deno-lint-ignore require-await
-      write: async (changes, via) => {
-        let t = trace()
-        let out = apply(db, changes, t, via)
-        cast(out)
-        effect(out, t)
-        return out
-      },
-      // deno-lint-ignore require-await
-      find: async (q, limit) => search(db, q, limit),
-      upload: async (eid, html) => {
-        let res = await store(eid, html, cast)
-        if (!res.ok) throw new Error(await res.text())
-      },
-      // The one writer of recall stats: stamp, then cast, so every
-      // cache hears the new warmth (the apply wire refuses these rows).
-      // deno-lint-ignore require-await
-      touch: async (eids, confirm) => {
-        let out = touch(db, eids, confirm)
-        if (out.length) cast(out)
-      },
-      // deno-lint-ignore require-await
-      logs: async (eid, q) => logs(eid, q),
-      // deno-lint-ignore require-await
-      history: async (eid, limit) => journalOf(db, eid, limit),
-      // deno-lint-ignore require-await
-      providers: async () => providers(),
-    })
+    let server = mcpServer(graphIO)
     await server.connect(theirs)
     let reply = new Promise((resolve) => mine.onmessage = resolve)
     await mine.start()
@@ -1104,10 +1139,14 @@ bound(ownership)
 // session resumes it; a deleted session's process dies with its row.
 // A future plugin contributes rows here the same way it would renderers.
 on('session', {
-  created: spawned(cast),
-  removed: deleted,
+  created: spawned(cast, managed.start),
+  removed: (eid) => {
+    managed.remove(eid)
+    deleted(eid)
+  },
+  sweep: { pending: codexPending },
   doc: 'a session created with a spawn spec is a launch request — validate, ' +
-    'launch the agent; a deleted session kills its process',
+    'launch the agent; a deleted session stops its runner or process',
 })
 on('session', {
   created: watched(cast),
@@ -1126,6 +1165,12 @@ on('stop_request', {
   sweep: { pending: PENDING('stop_request') },
   doc: 'the brake: signal the targeted session to stop, settle delivered',
 })
+on('stop_request', {
+  created: (eid, comp) => managed.stop(eid, String(comp.target)),
+  sweep: { pending: PENDING('stop_request') },
+  doc: 'a graph-native Codex stop appends cancellation, aborts its leased ' +
+    'operation, and settles the stop request without a process signal',
+})
 on('role', {
   removed: roleRemoved(cast),
   doc: 'a removed persistent role closes its deterministic native tmux door; ' +
@@ -1135,6 +1180,11 @@ on('comment', {
   created: commented(cast),
   doc: 'a comment at a settled session resumes that agent with its ' +
     'unheard backlog',
+})
+on('comment', {
+  created: (eid, comp) => managed.comment(String(comp.target), eid),
+  doc: 'a comment at a graph-native Codex session appends content-free ' +
+    'attention; task_context owns retrieval and acknowledgement',
 })
 on('comment', {
   created: obeyed(cast),
@@ -1306,6 +1356,8 @@ tick('native', () => nativeSweep(cast), 2_000)
 // Persistent roles are desired state: boot and the short tick heal a daemon
 // restart or dead native TUI, while every graph cast debounces a faster pass.
 tick('roles', () => rolesSweep(cast), 2_000)
+
+tick('codex-runner', () => managed.sweep(), 300)
 
 // What sessions leave running (probes.ts): a headless browser squatting on a
 // CDP port, a probe server on a scratch db, a worktree with nothing left in

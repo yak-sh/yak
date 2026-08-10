@@ -27,11 +27,13 @@ let { apply, db, delta, journalOf, snapshot } = await import('./db.ts')
 let { noticesFor } = await import('./client.ts')
 let {
   childPath,
+  codexPending,
   commented,
   continueSession,
   deleted,
   logs,
   logsDir,
+  prepareWorktree,
   recover,
   running,
   spawned,
@@ -267,6 +269,108 @@ Deno.test('a spawn the graph cannot honor is a failed session, not a 400', async
     )
     assert(failed?.changes.some((c) => c.name == 'error'))
   }
+})
+
+Deno.test('a new Codex spawn routes to the graph-native lifecycle', async () => {
+  let { t } = seed()
+  let eid = uid(), routed = 0
+  apply(db, [{
+    eid,
+    name: 'session',
+    comp: {
+      id: uid(),
+      provider: 'codex',
+      model: 'gpt-5.6-sol',
+      requested_task: t,
+    },
+  }])
+  let pending = () =>
+    !!db.prepare(`select 1 from session where eid = ? and ${codexPending}`)
+      .get(eid)
+  assertEquals(pending(), true)
+  await spawned(cast, (got, launch) => {
+    routed++
+    assertEquals(got, eid)
+    assertEquals(
+      launch.task,
+      `T-${
+        (db.prepare('select num from entity where eid = ?').get(t) as {
+          num: number
+        }).num
+      }`,
+    )
+    assertEquals(launch.model, 'gpt-5.6-sol')
+    db.prepare('update session set base_revision = ? where eid = ?')
+      .run('prepared', eid)
+    let input = uid(), generation = uid()
+    apply(db, [
+      { eid: input, name: 'entry', comp: { session: eid } },
+      { eid: input, name: 'message', comp: { role: 'user' } },
+      { eid: generation, name: 'entry', comp: { session: eid } },
+      {
+        eid: generation,
+        name: 'generation',
+        comp: {
+          through: input,
+          provider: 'codex',
+          model: 'gpt-5.6-sol',
+        },
+      },
+    ])
+    return Promise.resolve()
+  })(eid, {})
+
+  assertEquals(routed, 1)
+  assertEquals(row(eid)?.origin, 'managed')
+  assertEquals(row(eid)?.status, null)
+  assertEquals(running.has(eid), false)
+  assertEquals(pending(), false)
+
+  let legacy = uid()
+  apply(db, [{
+    eid: legacy,
+    name: 'session',
+    comp: {
+      id: uid(),
+      provider: 'codex',
+      model: 'gpt-5.6-sol',
+      requested_task: t,
+    },
+  }])
+  db.prepare(
+    "update session set origin = 'managed', status = 'running', pid = 123 " +
+      'where eid = ?',
+  ).run(legacy)
+  assertEquals(
+    !!db.prepare(`select 1 from session where eid = ? and ${codexPending}`)
+      .get(legacy),
+    false,
+  )
+})
+
+Deno.test('worktree preparation adopts its matching crash remnant', async () => {
+  let eid = uid(), tree = `${tmp}/replayed-${eid}`, branch = `session/${eid}`
+  apply(db, [{ eid, name: 'session', comp: { id: uid() } }])
+  let launch = {
+    instruction: '',
+    session_id: uid(),
+    repo: { path: scratch, base_branch: 'main' },
+    tree,
+    branch,
+    model: 'gpt-5.6-sol',
+  }
+  await prepareWorktree(eid, launch, cast)
+  let base = row(eid)?.base_revision
+  db.prepare('update session set base_revision = null where eid = ?').run(eid)
+  await prepareWorktree(eid, launch, cast)
+
+  assertEquals(row(eid)?.base_revision, base)
+  let found = await new Deno.Command('git', {
+    cwd: tree,
+    args: ['branch', '--show-current'],
+    stdout: 'piped',
+  }).output()
+  assertEquals(new TextDecoder().decode(found.stdout).trim(), branch)
 })
 
 Deno.test('a fake session runs end to end', async () => {
