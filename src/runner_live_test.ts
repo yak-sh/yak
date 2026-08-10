@@ -21,6 +21,8 @@ Deno.test({
   name: 'live runner executes and resumes one hosted shell call',
   ignore: !authFile,
   fn: async () => {
+    let tree = await Deno.makeTempDir({ prefix: 'tasks-runner-live-' })
+    let credential = auth()
     let entries: EntryRow[] = [{
       eid: 'input',
       seq: 1,
@@ -33,7 +35,7 @@ Deno.test({
       },
     }]
     let next = 1
-    let tools = await localTools({ tree: Deno.cwd() })
+    let tools = await localTools({ tree })
     try {
       let out = await runTurn({
         log: {
@@ -55,7 +57,7 @@ Deno.test({
           'Use the shell tool exactly as requested. After its result, return only the requested final marker.',
         transport: responses({
           base: 'https://chatgpt.com/backend-api/codex',
-          credentials: { get: () => Promise.resolve(auth()) },
+          credentials: { get: () => Promise.resolve(credential) },
           headers: {
             originator: 'tasks',
             version: Deno.env.get('TASKS_CODEX_CANARY_VERSION') ?? '0',
@@ -70,8 +72,14 @@ Deno.test({
         entries.some((entry) => entry.comps.result?.call),
         true,
       )
+      let durable = JSON.stringify(entries)
+      for (
+        let secret of [credential.token, credential.account, authFile]
+          .filter(Boolean) as string[]
+      ) assertEquals(durable.includes(secret), false)
     } finally {
       await tools.close?.()
+      await Deno.remove(tree, { recursive: true })
     }
   },
 })
