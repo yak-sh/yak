@@ -20,7 +20,7 @@ column — an entity _is_ what its components make it:
 - a **task** is `doc` (title/body) + `task` (status/priority/project)
 - a **board** is `doc` + `board(query)` — a saved filter over tasks; a
   **project** is `doc` + `project`
-- a **comment** is `doc` + `comment(target_eid)` — aimed at ANY entity
+- a **comment** is `doc` + `comment(target)` — aimed at ANY entity
 - a **claim** is a session's lease on any entity; a **session** is an agent
 
 `kindOf()` derives a display name; renderers never check it — they pattern-
@@ -60,7 +60,7 @@ registered in server.ts, that DO things about committed data — a session creat
 with a provider spawns an agent, a stop_request signals it, a deleted session's
 process dies with its row. At-most-once, reconciled at boot; a failing effect is
 telemetry, never a broken batch. Edges use name `dependency`: a triple has no
-row key, so the comp names the whole sentence — `{type, child_eid}` links
+row key, so the comp names the whole sentence — `{type, child}` links
 eid→child, the same sentence with `gone: true` unlinks; both endpoints must
 exist.
 
@@ -146,7 +146,7 @@ canvas offers a `List` view — the mobile door — whose rows resolve through
   `readable` is the union `snapshot()` selects. Both halves are load-bearing — a
   column in neither is stamped correctly and invisible to every client, which is
   how `mail.from` silently misrouted every reply. A session's REQUEST columns
-  (provider, model, effort, requested_task_eid, persona_eid) are the
+  (provider, model, effort, requested_task, persona) are the
   wire-writable exception on purpose: creating a session with them IS the spawn
   request, validated by the created(session) effect — every failure is a failed
   Session on the board, never a 400. Stop is a `stop_request` entity; input is a
@@ -224,7 +224,7 @@ canvas offers a `List` view — the mobile door — whose rows resolve through
   `requires` dep turns the Dot red (`gated()` in live.ts); resolve the blocker
   or drop the edge.
 - **A board is a saved QUERY, not an edge list** (`board.query`, src/query.ts
-  grammar: `.project_eid=…&.status=open,wip`; empty = every task). Membership is
+  grammar: `.project=…&.status=open,wip`; empty = every task). Membership is
   never stored — a task is on a board because it matches, so it can't drift.
   Never add board→task `contains` edges. A board drop patches status/priority
   plus the query's scalar equalities (`adopt()`), so the dropped task JOINS the
@@ -259,7 +259,7 @@ canvas offers a `List` view — the mobile door — whose rows resolve through
   stamp cannot. Serve lines and mark them in the same breath, never mark
   unserved ones.
 - MCP ergonomics are load-bearing: `task_new` batches via `tasks:[…]`, and
-  `eid`/`*_eid` values accept human ids (T-3, P-19) everywhere — an agent should
+  `eid` and reference values accept human ids (T-3, P-19) everywhere — an agent should
   never need the num→eid lookup dance. The rule has two halves: inputs accept
   both spellings, and **outputs speak human** — every agent-facing message names
   an entity by its id (db.ts `human()`), never a uuid the caller never typed.
@@ -372,7 +372,7 @@ These hold everywhere in this repo, whoever — or whatever — writes the code:
   captures the transcript's last assistant message — the closing summary the
   operator already wrote — as the session doc (a hand-written doc is never
   clobbered), and the next digest opens with `## previously` — the newest brief
-  by the same operator (`session.actor_eid`). Only a session that captured
+  by the same operator (`session.actor`). Only a session that captured
   nothing gets the ledger STUB, which queues the scribe's sweep — an
   enrichment, never the continuity path; `:scribe S-31` summons the desk
   deliberately for a marathon a final message can't cover. SessionStart also
@@ -619,7 +619,7 @@ The entity-component model exists for exactly this. Read-state (`notified`/`open
 
 - `delivered {at, via}` — reached its destination, and how (replaces the per-type `acted_at`, `received_at`, `delivery` on knock/wake/mail).
 - `error {at, message}` — an attempt failed, and why (today littered as a column on knock, wake, mail, role, session — all the same aspect).
-- `envelope {to_eid}` — where a deliverable goes (today reinvented as `to_eid`/`to` per type).
+- `envelope {to}` — where a deliverable goes (today reinvented as `to`/`to` per type).
 
 ## The tell
 
@@ -635,7 +635,7 @@ Factor by aspect and sharing falls out: one query spans every type (`.error` is 
 
 Your persona, and every memory preloaded into it, are **entities in the Task Graph** — not the `.md` file you are reading. That file (`AGENTS.md`, `.claude/agents/*`) is a **generated projection**: a materializer renders it from the graph and overwrites it on the next sync, so a hand-edit to the file is lost. The banner at the top of each file names its source node (`N-…`).
 
-**The shape.** A **persona** is a node (`kind: persona`, id `N-…`) whose doc body is the persona text. A **memory** is an entity (`kind: memory`, id `M-…`) — one distilled fact, scoped to a project by `scope_eid` (unscoped = a principle every operator carries) and tagged `feedback` when it records someone's correction, with `feedback.by` naming who gave it. A persona **preloads** a memory by holding a `contains` edge to it; the materializer renders each contained memory's whole body into that persona's `## Preloaded` block, warmest first. One memory can be preloaded by many personas.
+**The shape.** A **persona** is a node (`kind: persona`, id `N-…`) whose doc body is the persona text. A **memory** is an entity (`kind: memory`, id `M-…`) — one distilled fact, scoped to a project by `scope` (unscoped = a principle every operator carries) and tagged `feedback` when it records someone's correction, with `feedback.by` naming who gave it. A persona **preloads** a memory by holding a `contains` edge to it; the materializer renders each contained memory's whole body into that persona's `## Preloaded` block, warmest first. One memory can be preloaded by many personas.
 
 **Changing it — in the graph, never the file:**
 
