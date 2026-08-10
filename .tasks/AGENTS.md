@@ -525,23 +525,17 @@ This principle sat in context (materialized into holdco's `CLAUDE.md`) and still
 
 ---
 
-# M-14942 a component describes a single aspect of an entity — cohesion is the test, sharing is the payoff
+# M-3715 delegation discipline
 
-When modeling in the graph, the test is **cohesion**: each component describes a single aspect of an entity — even if only one type ever wears it. "Does this fact apply to more than one type?" is the symptom, not the criterion: `wake` carrying `acted_at`/`error` was wrong before any second type existed, because "when to fire" and "how the attempt went" are two aspects mashed into one component.
+Delegation in the fleet, so that if our system breaks the work still continues on the floor and the board stays the truth about who is doing what:
 
-The entity-component model exists for exactly this. Read-state (`notified`/`opened`/`archived`), provenance (`created`/`updated`), and decision (`decided`/`proposed`) are each one aspect, factored out. Delivery, failure, and addressing are aspects too:
+- **Worktree-only, one writer per worktree.** Every agent — harness spawns and the coordinator's own session — works in its own git worktree and lands with `task land`; use the Agent tool's `isolation: "worktree"` for spawns. Never let two agents share an index.
+- **Harness spawns are the default and must integrate fully.** Every spawn brief directs the agent to reify a session entity, claim its task under that identity, comment progress and completion (with sha), and release when done. The task body carries the full spec — the prompt is delivery, the task is the record.
+- **Internal spawns** (wire-created sessions, `task spawn`) are for codex/other providers and well-specified cold-context work; at parity with the harness since T-3698 (auto-claim, session_peek, settle→bus). The harness remains the reliability floor.
+- **Communication flows through the graph**, not harness-native channels, wherever possible: comment on a session to steer it, comment on the task for the record; the comms bus delivers on the next tool call. Harness push notifications remain the wake channel until the graph grows one.
+- **Verify a spawn's claim.** A reported sha counts only if it is an ancestor of the shared checkout's `main` — `git merge-base --is-ancestor <sha> main`.
 
-- `delivered {at, via}` — reached its destination, and how (replaces the per-type `acted_at`, `received_at`, `delivery` on knock/wake/mail).
-- `error {at, message}` — an attempt failed, and why (today littered as a column on knock, wake, mail, role, session — all the same aspect).
-- `envelope {to_eid}` — where a deliverable goes (today reinvented as `to_eid`/`to` per type).
-
-## The tell
-
-The reflex to catch is baking a field onto whatever component you happen to be editing — `error` onto `delivered`, `delivery` onto `wake`. Before adding a column, ask: **is this the same aspect the component already describes, or a different one riding along?** A different aspect is its own component. (A column that means the same thing as a column on another type is the loudest form of this signal.)
-
-## The payoff
-
-Factor by aspect and sharing falls out: one query spans every type (`.error` is a fleet-wide health report, `.delivered.at>=today` is every delivery), and the next type inherits the facet for free. Success = `delivered`, failure = `error`, pending = neither — the same tri-state the inbox marks already have.
+Every Agent-tool spawn gets `isolation: worktree` + the claim-discipline paragraph in its brief; prefer task bodies over prompt-only specs.
 
 ---
 
@@ -556,20 +550,6 @@ So when you learn something about your own behavior:
 - **Keep a small, firm floor.** A few things are policy on purpose — always do what is right; never lie; the moral and secrets bright lines. They hold firm *because* your judgment can be wrong or under attack, and the cost of crossing them is irreversible. Small floor held firm; open field above it, held with open hands.
 
 Use your memories to be what you are, freely.
-
----
-
-# M-3715 delegation discipline
-
-Delegation in the fleet, so that if our system breaks the work still continues on the floor and the board stays the truth about who is doing what:
-
-- **Worktree-only, one writer per worktree.** Every agent — harness spawns and the coordinator's own session — works in its own git worktree and lands with `task land`; use the Agent tool's `isolation: "worktree"` for spawns. Never let two agents share an index.
-- **Harness spawns are the default and must integrate fully.** Every spawn brief directs the agent to reify a session entity, claim its task under that identity, comment progress and completion (with sha), and release when done. The task body carries the full spec — the prompt is delivery, the task is the record.
-- **Internal spawns** (wire-created sessions, `task spawn`) are for codex/other providers and well-specified cold-context work; at parity with the harness since T-3698 (auto-claim, session_peek, settle→bus). The harness remains the reliability floor.
-- **Communication flows through the graph**, not harness-native channels, wherever possible: comment on a session to steer it, comment on the task for the record; the comms bus delivers on the next tool call. Harness push notifications remain the wake channel until the graph grows one.
-- **Verify a spawn's claim.** A reported sha counts only if it is an ancestor of the shared checkout's `main` — `git merge-base --is-ancestor <sha> main`.
-
-Every Agent-tool spawn gets `isolation: worktree` + the claim-discipline paragraph in its brief; prefer task bodies over prompt-only specs.
 
 ---
 
@@ -631,13 +611,23 @@ Every session's `task context` opens with `## inbox — N unread (task inbox)`. 
 
 ---
 
-# M-12915 Use idiomatic language
+# M-14942 a component describes a single aspect of an entity — cohesion is the test, sharing is the payoff
 
-**Stick to idiomatic terms for things.** Avoid approximations, house shorthand, and slang. Use the terms that are typical for a tool. LLMs often drift to analogous terms over repeated cycles. This drift can cause a degradation of meaning over time and make it difficult for others to understand. Especially if they are already familiar with the typical terminology.
+When modeling in the graph, the test is **cohesion**: each component describes a single aspect of an entity — even if only one type ever wears it. "Does this fact apply to more than one type?" is the symptom, not the criterion: `wake` carrying `acted_at`/`error` was wrong before any second type existed, because "when to fire" and "how the attempt went" are two aspects mashed into one component.
 
-This applies when talking about git, SQL, HTTP, systemd, DNS, programming languages, and any other similar tool.
+The entity-component model exists for exactly this. Read-state (`notified`/`opened`/`archived`), provenance (`created`/`updated`), and decision (`decided`/`proposed`) are each one aspect, factored out. Delivery, failure, and addressing are aspects too:
 
-For example, when talking about git, don't say "drain" in place of "push", or "chain" in place of "commits" or "branch".
+- `delivered {at, via}` — reached its destination, and how (replaces the per-type `acted_at`, `received_at`, `delivery` on knock/wake/mail).
+- `error {at, message}` — an attempt failed, and why (today littered as a column on knock, wake, mail, role, session — all the same aspect).
+- `envelope {to_eid}` — where a deliverable goes (today reinvented as `to_eid`/`to` per type).
+
+## The tell
+
+The reflex to catch is baking a field onto whatever component you happen to be editing — `error` onto `delivered`, `delivery` onto `wake`. Before adding a column, ask: **is this the same aspect the component already describes, or a different one riding along?** A different aspect is its own component. (A column that means the same thing as a column on another type is the loudest form of this signal.)
+
+## The payoff
+
+Factor by aspect and sharing falls out: one query spans every type (`.error` is a fleet-wide health report, `.delivered.at>=today` is every delivery), and the next type inherits the facet for free. Success = `delivered`, failure = `error`, pending = neither — the same tri-state the inbox marks already have.
 
 ---
 
@@ -652,6 +642,16 @@ Your persona, and every memory preloaded into it, are **entities in the Task Gra
 - **Add or edit a memory:** `memory_save` (MCP `tasks`) — new content mints an `M-…`; passing `id` confirms and patches an existing one. Replacing a body also needs the `was:` token `memory_recall` prints above it, so a concurrent edit is refused rather than silently lost.
 - **Preload / unpreload:** add (or `gone: true` to remove) a `contains` edge from the `N-…` to the `M-…`, via `graph_apply` or the web UI.
 - **Reach everyone in a repo:** preload into that repo's `* common persona` (which projects to `AGENTS.md`, read by every agent there) — not a single role's persona.
+
+---
+
+# M-12915 Use idiomatic language
+
+**Stick to idiomatic terms for things.** Avoid approximations, house shorthand, and slang. Use the terms that are typical for a tool. LLMs often drift to analogous terms over repeated cycles. This drift can cause a degradation of meaning over time and make it difficult for others to understand. Especially if they are already familiar with the typical terminology.
+
+This applies when talking about git, SQL, HTTP, systemd, DNS, programming languages, and any other similar tool.
+
+For example, when talking about git, don't say "drain" in place of "push", or "chain" in place of "commits" or "branch".
 
 ---
 
