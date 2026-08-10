@@ -6,7 +6,6 @@ import { block, Chip, el } from './ui.tsx'
 import { filterable, FilterInput } from './Filter.tsx'
 import { applicable } from './registry.ts'
 import { TabFace } from './Card.tsx'
-import { spawnHit } from './Canvas.tsx'
 import { Icon } from './icons.tsx'
 import {
   follow,
@@ -97,9 +96,8 @@ let Crumbs = () => {
 export let App = () => {
   // `/` raises the search palette over ANY root — canvas, doc, board,
   // admin. The shell owns the hotkey and the one <Search> mount so a
-  // fullscreened card can search; what a pick does is the open callback:
-  // a canvas root spawns the hit as a card, everything else navigates —
-  // the hit opens as the root, default view.
+  // fullscreened card can search; a pick opens the hit as the root in its
+  // default view.
   useEffect(() => {
     let key = (e: KeyboardEvent) => {
       if (mode.value != 'normal' || e.repeat || e.key != '/') return
@@ -243,7 +241,7 @@ export let App = () => {
       <Menu />
       <Peek />
       <Run />
-      <Search open={view == 'Canvas' ? (h) => spawnHit(e.eid, h) : goto} />
+      <Search open={goto} />
       <Keybindings />
       <Status />
     </Frame>

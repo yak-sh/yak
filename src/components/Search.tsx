@@ -228,7 +228,7 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
         {
           /* Each hit is a real anchor: cmd/middle-click opens a new tab,
             right-click opens the target entity's menu, and a plain click
-            keeps the palette's own open — a card spawned on the canvas. */
+            follows the palette's open callback. */
         }
         {ordered.flatMap((h, i) => {
           // A header opens each kind's run; the tail kinds (mail, comment)
