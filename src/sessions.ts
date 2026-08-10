@@ -1105,6 +1105,34 @@ let runRow = (eid: string) =>
      from session s left join spawn p on p.eid = s.eid where s.eid = ?`,
   ).get(eid) as Row | undefined
 
+// A launch plans its claim from a snapshot, then commits it. If another
+// Session wins in between, that held lease is the answer: preserve it and
+// continue launching. Any other refusal still belongs to the caller.
+export let landSpawnClaim = (
+  session: string,
+  target: string | undefined,
+  changes: Change[],
+  cast: Cast,
+) => {
+  if (!changes.length) return
+  try {
+    cast(apply(db, changes, undefined, session))
+  } catch (error) {
+    let planned = target &&
+      changes.some((change) =>
+        change.eid == target && change.name == 'claim' &&
+        change.comp?.session == session
+      )
+    let held = target
+      ? db.prepare('select session from claim where eid = ?').get(target) as
+        | { session: string }
+        | undefined
+      : undefined
+    if (planned && held && held.session != session) return
+    throw error
+  }
+}
+
 // Boot reconciliation for a Codex launch request whose created(session)
 // effect was lost. Lifecycle-bearing Codex rows belong to the process
 // compatibility door; a graph-native request stays statusless.
@@ -1244,7 +1272,12 @@ export let spawned =
         String(row.id),
         tree,
       )
-      if (claim.length) cast(apply(db, claim, undefined, eid))
+      landSpawnClaim(
+        eid,
+        row.requested_task ? String(row.requested_task) : undefined,
+        claim,
+        cast,
+      )
       return native(eid, job)
     }
     stamp(eid, { status: 'starting' }, cast)

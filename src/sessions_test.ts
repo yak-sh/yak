@@ -24,7 +24,7 @@ Deno.env.set('POLL_MS', '10') // tests wait on facts, never on the clock
 Deno.env.set('STOP_GRACE_MS', '1000')
 
 let { apply, db, delta, journalOf, snapshot } = await import('./db.ts')
-let { noticesFor } = await import('./client.ts')
+let { hookClaim, noticesFor, rows } = await import('./client.ts')
 let {
   childPath,
   codexPending,
@@ -33,6 +33,7 @@ let {
   deleted,
   logs,
   logsDir,
+  landSpawnClaim,
   prepareWorktree,
   recover,
   running,
@@ -349,6 +350,33 @@ Deno.test('a new Codex spawn routes to the graph-native lifecycle', async () => 
     !!db.prepare(`select 1 from session where eid = ? and ${codexPending}`)
       .get(legacy),
     false,
+  )
+})
+
+Deno.test('a stale spawn claim preserves the session that won', () => {
+  let { t } = seed()
+  let mine = uid(), other = uid()
+  apply(db, [{ eid: mine, name: 'session', comp: { id: 'stale-mine' } }, {
+    eid: other,
+    name: 'session',
+    comp: { id: 'stale-other' },
+  }])
+  let planned = hookClaim(rows(snapshot(db)), t, 'stale-mine')
+  apply(db, [{ eid: t, name: 'claim', comp: { session: other } }])
+  landSpawnClaim(mine, t, planned, cast)
+  assertEquals(
+    db.prepare('select session from claim where eid = ?').get(t),
+    { session: other },
+  )
+  assertThrows(
+    () =>
+      landSpawnClaim(mine, undefined, [{
+        eid: t,
+        name: 'task',
+        comp: { status: 'unknown' },
+      }], cast),
+    Error,
+    'task.status',
   )
 })
 
