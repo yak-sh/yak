@@ -31,7 +31,7 @@ Deno.test('task tile delegates its dense meta row to the registry', () => {
   let parts = children(tile)
   let meta = parts[3]
   let props = meta.props as unknown as Record<string, unknown>
-  assertEquals(tile.props.mod, 'dense')
+  assertEquals(tile.props.mod, ['task', 'dense'])
   assertEquals(parts[0].type === TileSlot, true)
   assertEquals(parts[0].props.children, before)
   assertEquals(props.eid, 'task')

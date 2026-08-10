@@ -7,7 +7,7 @@ import { title } from '../title.tsx'
 // A memory in a list: index line, confirmation age, id — with `feedback`
 // ahead of it when the memory records someone's correction, the one thing
 // the retired type enum said that the line did not already carry. The
-// existing ListTile shell keeps it at home beside every other feed row;
+// existing tile shell keeps it at home beside every other feed row;
 // only the content is specific to memory.
 let Line = block('div', 'ListTile', { Title: 'span' })
 let Type = el('span', 'MemoryType')

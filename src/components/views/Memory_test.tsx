@@ -29,7 +29,7 @@ let children = (v: VNode) =>
 let text = (v: VNode): ComponentChildren => v.props.children
 
 Deno.test('memory owns its list tile', () => {
-  assertEquals(resolve(memory, 'List.Tile').Render, MemoryTile)
+  assertEquals(resolve(memory, 'Tile').Render, MemoryTile)
 })
 
 Deno.test('memory tile says feedback, index, confirmation age, and id', () => {

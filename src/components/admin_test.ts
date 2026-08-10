@@ -148,8 +148,8 @@ Deno.test('the index is a typed grid and grid mode is bare tiles', async () => {
       new document.defaultView!.Event('click', { bubbles: true }),
     )
     await Promise.resolve()
-    assertEquals(root.querySelector('.Admin_Grid > .TaskTile') != null, true)
-    assertEquals(root.querySelector('.Admin_Grid > div > .TaskTile'), null)
+    assertEquals(root.querySelector('.Admin_Grid > .Tile') != null, true)
+    assertEquals(root.querySelector('.Admin_Grid > div > .Tile'), null)
   } finally {
     render(null, root)
     cache.value = {}

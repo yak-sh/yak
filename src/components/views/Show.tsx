@@ -360,7 +360,7 @@ export let Runs = ({ e }: { e: Ent }) => {
   if (!ids.size) return null
   return (
     <RunsEl>
-      {[...ids].map((s) => <Entity key={s} eid={s} view='List.Tile' />)}
+      {[...ids].map((s) => <Entity key={s} eid={s} view='Tile' />)}
     </RunsEl>
   )
 }
@@ -373,7 +373,7 @@ export let Boards = ({ e }: { e: Ent }) => {
   if (!ids.length) return null
   return (
     <BoardsEl>
-      {ids.map((b) => <Entity key={b} eid={b} view='List.Tile' />)}
+      {ids.map((b) => <Entity key={b} eid={b} view='Tile' />)}
     </BoardsEl>
   )
 }
@@ -394,7 +394,7 @@ export let Tasks = ({ e }: { e: Ent }) => {
   if (!ids.length) return null
   return (
     <TasksEl>
-      {ids.map((t) => <Entity key={t.eid} eid={t.eid} view='List.Tile' />)}
+      {ids.map((t) => <Entity key={t.eid} eid={t.eid} view='Tile' />)}
     </TasksEl>
   )
 }

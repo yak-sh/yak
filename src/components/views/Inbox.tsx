@@ -40,7 +40,7 @@ let Line = ({ r }: { r: Row }) => {
     <ListFrame.Row mod={fresh && 'unread'}>
       <Entity
         eid={subject.eid}
-        view='List.Tile'
+        view='Tile'
         onOpen={() => {
           // Opening it IS reading it — the same `opened` stamp that
           // `task inbox show` writes, so both doors agree on what you have

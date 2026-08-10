@@ -33,6 +33,7 @@ import { Persona } from './views/Persona.tsx'
 import { Inbox } from './views/Inbox.tsx'
 import { MemoryTile } from './views/Memory.tsx'
 import { TaskTile } from './views/TaskTile.tsx'
+import { BoardMeta, BoardTile } from './views/BoardTile.tsx'
 import { BoardList, List, ListTile } from './views/List.tsx'
 import { Canvas } from './Canvas.tsx'
 import { Inline, TaskInline } from './views/Inline.tsx'
@@ -75,16 +76,17 @@ define([
   },
   { view: 'List', match: has('canvas'), Render: List },
   { view: 'List', match: has('board'), Render: BoardList },
-  { view: 'List.Tile', match: has('doc', 'memory'), Render: MemoryTile },
+  { view: 'Tile', match: has('doc', 'memory'), Render: MemoryTile },
   // TaskTile walks back through Entity for its Meta row; defer the binding
   // for the same reason as Canvas above.
   {
-    view: 'List.Tile',
+    view: 'Tile',
     match: has('doc', 'task'),
     Render: (props) => <TaskTile {...props} />,
   },
-  { view: 'List.Tile', match: has('session'), Render: SessionRow },
-  { view: 'List.Tile', match: () => true, Render: ListTile },
+  { view: 'Tile', match: has('doc', 'board'), Render: BoardTile },
+  { view: 'Tile', match: has('session'), Render: SessionRow },
+  { view: 'Tile', match: () => true, Render: ListTile },
   { view: 'Full', match: has('doc'), Render: Show },
   { view: 'Card.Full', match: has('doc'), Render: CardFull },
   { view: 'Board', match: has('doc', 'board'), Render: Board },
@@ -133,6 +135,7 @@ define([
   // absent, and a specialized look for an entity shape is a higher-
   // scoring entry above these, never an edit to Full.
   { view: 'Body', match: () => true, Render: Body },
+  { view: 'Meta', match: has('board'), Render: BoardMeta },
   { view: 'Meta', match: () => true, Render: Meta },
   { view: 'Mail', match: () => true, Render: Mail },
   {

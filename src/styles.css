@@ -1144,7 +1144,7 @@ html {
 
 /* The board's card for a task, Trello-shaped: dot + wrapping title, then the
    shared meta line at dense scale. */
-.TaskTile {
+.Tile {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 2px var(--half-gap);
@@ -1157,15 +1157,15 @@ html {
   text-decoration: none;
   container-type: inline-size;
 }
-.TaskTile:has(> .TileSlot-before) {
+.Tile-task:has(> .TileSlot-before) {
   grid-template-columns: auto auto 1fr;
 }
-.TaskTile:has(> .TileSlot-before) > .Show_Meta {
+.Tile-task:has(> .TileSlot-before) > .Show_Meta {
   grid-column: 3;
 }
 /* Density changes metrics, never the shared Meta markup. Provenance gives
    out first; the narrower container rungs below retire assignee, then project. */
-.TaskTile-dense {
+.Tile-dense {
   --meta-wrap: nowrap;
   --meta-gap: var(--half-gap);
   --meta-margin: 0;
@@ -1176,39 +1176,64 @@ html {
   --meta-hand: none;
   --meta-stamp: none;
 }
-.TaskTile > .Dot {
+.Tile-task > .Dot {
   align-self: start;
   margin-top: calc((1lh - 0.72em) / 2); /* pinned to the title's first line */
 }
-.TaskTile_Title {
+.Tile_Title {
   min-width: 0; /* wraps freely — a board card reads, it doesn't truncate */
 }
-.TaskTile > .Show_Meta {
+.Tile-task > .Show_Meta {
   grid-column: 2;
   min-width: 0;
   overflow: hidden;
 }
-.TaskTile > .Show_Meta .Id {
+.Tile > .Show_Meta .Id {
   margin-left: auto;
 }
-.TaskTile > .Show_Meta > .Prop:has(.Show_Assignee) {
+.Tile > .Show_Meta > .Prop:has(.Show_Assignee) {
   flex-shrink: 8;
 }
-.TaskTile > .Show_Meta > .Prop:has(.Show_Project) {
+.Tile > .Show_Meta > .Prop:has(.Show_Project) {
   flex-shrink: 2;
 }
-.TaskTile > .Show_Meta > .Show_Claim {
+.Tile > .Show_Meta > .Show_Claim {
   flex-shrink: 4;
 }
 @container (max-width: 20rem) {
-  .TaskTile > .Show_Meta > .Prop:has(.Show_Assignee) {
+  .Tile > .Show_Meta > .Prop:has(.Show_Assignee) {
     display: none;
   }
 }
 @container (max-width: 14rem) {
-  .TaskTile > .Show_Meta > .Prop:has(.Show_Project) {
+  .Tile > .Show_Meta > .Prop:has(.Show_Project) {
     display: none;
   }
+}
+.Tile-board {
+  grid-template-columns: 1fr;
+}
+.Tile_Head {
+  display: flex;
+  min-width: 0;
+  gap: var(--half-gap);
+}
+.Tile_Head > .Tile_Title {
+  flex: 1;
+}
+.Tile-board > .Show_Meta {
+  grid-column: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+.BoardStat {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.BoardStat > .Dot {
+  width: 0.6em;
+  height: 0.6em;
 }
 
 /* The document face sits borderless on the floor — the card frame
@@ -3481,16 +3506,16 @@ a[data-ref]:hover {
 /* Density: one renderer, three sizes. A composite view sets --density on a
    cell and the shared row components answer through style queries — metrics
    and elisions only, never markup, so one renderer serves every tier (the
-   .TaskTile-dense var set, made selectable by a value). Unset = full: each
+   .Tile-dense var set, made selectable by a value). Unset = full: each
    rule here is inert outside a container that sets the property, which is
    what keeps boards, lists and inboxes elsewhere untouched. */
 @container style(--density: summary) {
   .ListTile,
-  .TaskTile {
+  .Tile {
     padding: 2px var(--half-gap);
     font-size: 12px;
   }
-  .TaskTile {
+  .Tile {
     --meta-stamp: none; /* provenance is the full tier's luxury */
   }
   .List_Label {
@@ -3501,21 +3526,21 @@ a[data-ref]:hover {
    the prose and provenance yield. The Fleet Grid's tier (D-14587). */
 @container style(--density: glance) {
   .ListTile,
-  .TaskTile,
+  .Tile,
   .SessionRow {
     padding: 0 2px;
     border: 0;
     background: none;
     font-size: 11px;
   }
-  .TaskTile > .Show_Meta,
+  .Tile > .Show_Meta,
   .SessionRow_Actor,
   .SessionRow_Task,
   .List_Label,
   .Stamp {
     display: none;
   }
-  .TaskTile_Title {
+  .Tile_Title {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

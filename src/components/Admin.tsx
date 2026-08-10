@@ -138,9 +138,7 @@ let Index = ({ kind, query }: { kind: string; query: string }) => {
       {grid
         ? (
           <Grid>
-            {shown.map((e) => (
-              <Entity key={e.eid} eid={e.eid} view='List.Tile' />
-            ))}
+            {shown.map((e) => <Entity key={e.eid} eid={e.eid} view='Tile' />)}
           </Grid>
         )
         : (

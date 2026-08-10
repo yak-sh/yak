@@ -1,10 +1,10 @@
-// The List.Tile composition contract. A caller may adorn any tile before or
+// The Tile composition contract. A caller may adorn any tile before or
 // after its own face, and hear its ordinary activation, without knowing which
 // entity-specific renderer the registry chose.
 import { type ComponentChildren } from 'preact'
 import { type Ent } from '../types.ts'
 import { clickProps } from './nav.tsx'
-import { el } from './ui.tsx'
+import { block, el } from './ui.tsx'
 
 export type TileSlots = {
   before?: ComponentChildren
@@ -16,6 +16,8 @@ export type TileProps = {
   slots?: TileSlots
   onOpen?: () => void
 }
+
+export let TileFrame = block('div', 'Tile', { Head: 'span', Title: 'span' })
 
 let Part = el('span', 'TileSlot')
 export let TileSlot = (

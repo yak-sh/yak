@@ -30,7 +30,7 @@ Deno.test('session row names its actor', () => {
   }
 
   let e = ent('session')
-  let row = resolve(e, 'List.Tile').Render({ e })!
+  let row = resolve(e, 'Tile').Render({ e })!
   let actor = children(row)[2]
   assertEquals(actor.props.children, 'Task Graph')
 })

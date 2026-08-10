@@ -22,7 +22,6 @@ define([
   R('Card.Title', has('doc', 'task'), 'task-title'),
   R('Card.Title', has('doc'), 'doc-title'),
   R('Card.Title', () => true, 'any-title'),
-  R('List.Tile', has('doc', 'task'), 'list-tile'),
   R('Tile', has('doc', 'task'), 'task-tile'),
   R('Tile', has('doc'), 'doc-tile'),
   R('JSON', () => true, 'json'),
@@ -70,12 +69,10 @@ let tag = (comps: Record<string, unknown>, view: string) =>
 
 Deno.test('suffix walk: qualifiers fall leftward', () => {
   let task = { doc: {}, task: {} }
-  // exact match wins over its own suffix
-  assertEquals(tag(task, 'List.Tile'), 'list-tile')
-  // A.B.C → B.C → C; the first matching level ends the walk, so
-  // List.Tile (place) beats the equally-matching bare Tile (shape)
-  assertEquals(tag(task, 'Board.List.Tile'), 'list-tile')
-  // no match at a level → keep walking (doc-only misses List.Tile)
+  // stale place-specific names heal to the one Tile role
+  assertEquals(tag(task, 'List.Tile'), 'task-tile')
+  assertEquals(tag(task, 'Board.List.Tile'), 'task-tile')
+  // no match at a level → keep walking to Tile
   assertEquals(tag({ doc: {} }, 'Board.List.Tile'), 'doc-tile')
   // component specificity still breaks ties within a level
   assertEquals(tag(task, 'Kanban.Tile'), 'task-tile')
@@ -84,9 +81,9 @@ Deno.test('suffix walk: qualifiers fall leftward', () => {
   // alias heals an old stored name at ANY level: bare, and after a strip
   // (the card frame prefixes its ask, so Card.Show must land on the heal)
   let was = alias['Show']
-  alias['Show'] = 'Board.List.Tile'
-  assertEquals(tag(task, 'Show'), 'list-tile')
-  assertEquals(tag(task, 'Card.Show'), 'list-tile')
+  alias['Show'] = 'Board.Tile'
+  assertEquals(tag(task, 'Show'), 'task-tile')
+  assertEquals(tag(task, 'Card.Show'), 'task-tile')
   alias['Show'] = was
 })
 

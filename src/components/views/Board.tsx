@@ -291,7 +291,7 @@ export let Board = ({ e }: { e: Ent }) => {
                     data-eid={k.eid}
                     onDragStart={(ev: DragEvent) => dragData(ev, k.eid, 'Full')}
                   >
-                    <Entity eid={k.eid} view='Board.List.Tile' />
+                    <Entity eid={k.eid} view='Tile' />
                   </Item>
                 ))}
                 {page.more > 0 && (
