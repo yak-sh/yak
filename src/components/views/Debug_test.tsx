@@ -102,6 +102,50 @@ Deno.test('addable components keep their component tones', async () => {
   }
 })
 
+Deno.test('a reference reads as one association row, eid and all', async () => {
+  await import('../Entity.tsx')
+  let { Debug } = await import('./Debug.tsx')
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let { document } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  let owner = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
+  let job = 'ffffffff-ffff-4fff-8fff-ffffffffffff'
+  cache.value = {
+    [owner]: {
+      entity: { eid: owner, num: 7 },
+      doc: { eid: owner, title: 'Owner', body: '' },
+    },
+    [job]: {
+      entity: { eid: job, num: 8 },
+      doc: { eid: job, title: 'Job', body: '' },
+      task: { eid: job, status: 'open', priority: 1, assignee_eid: owner },
+    },
+  }
+  let root = document.querySelector('main')!
+  try {
+    render(h(Debug, { e: ent(job) }), root)
+    let keys = [...root.querySelectorAll('.Debug_Props .Debug_Key')]
+      .map((k) => k.textContent)
+    // The association name, once — never the raw column beside it.
+    assertEquals(keys.includes('task.assignee'), true)
+    assertEquals(keys.includes('task.assignee_eid'), false)
+    // The row carries the target and the eid it stored.
+    let ids = [...root.querySelectorAll('.Debug_Val-id')].map((v) =>
+      v.textContent
+    )
+    assertEquals(ids.includes(owner), true)
+    assertEquals(root.textContent.includes('Owner'), true)
+  } finally {
+    render(null, root)
+    cache.value = {}
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else delete (globalThis as { document?: unknown }).document
+  }
+})
+
 Deno.test('project backlinks omit attribution and cap associations', async () => {
   await import('../Entity.tsx')
   let { ProjectDebug } = await import('./Debug.tsx')

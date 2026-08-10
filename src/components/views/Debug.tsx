@@ -1,6 +1,6 @@
 import { type ComponentChildren, Fragment } from 'preact'
 import { useState } from 'preact/hooks'
-import { formatProp, propAt } from '../../props.ts'
+import { formatProp, propAt, refOf } from '../../props.ts'
 import { comps as vocab, type Ent, idOf, plural } from '../../types.ts'
 import { backlinks, ent, mutate, parents } from '../../live.ts'
 import { up } from './Show.tsx'
@@ -158,6 +158,19 @@ let Row = ({ comp, k, v }: { comp?: string; k: string; v: unknown }) => (
   </>
 )
 
+// A reference reads as its ASSOCIATION, not its raw column: the entity's
+// chip + title, then the eid it stored. One row, not two — the column
+// (assignee_eid, a uuid) and the association (assignee, the entity) said
+// together. The chip is a link; the rest of the value opens the eid editor
+// where the reference is wire-writable.
+let refFace = (v: unknown) =>
+  v == null || v === '' ? null : (
+    <>
+      <Id e={ent(String(v))} /> {ent(String(v)).doc?.title ?? ''}{' '}
+      <Val mod='id'>{String(v)}</Val>
+    </>
+  )
+
 // EVERY prop as a key → value grid row — the spine (eid, num), then each
 // component whole ('pin.x  664'). kind is NOT here: it's derived, not
 // data, and the summary line above already says it. Wire-writable props
@@ -175,7 +188,7 @@ let cells = (e: Ent, name: string, comp: Record<string, unknown>) => {
   let keys = [
     ...new Set([...Object.keys(comp), ...Object.keys(vocab[name] ?? {})]),
   ]
-  return keys.flatMap((k, i) => {
+  return keys.map((k, i) => {
     let v = comp[k]
     let rm = browser && i == 0 && name in vocab && (
       <Rm
@@ -186,36 +199,35 @@ let cells = (e: Ent, name: string, comp: Record<string, unknown>) => {
         ×
       </Rm>
     )
-    return [
+    // The reference detector reads the PropType, so `created.by` and a bare
+    // `to` are associations as surely as `project_eid` — the _eid suffix is
+    // just a hint we strip off the key when it wears one.
+    let assoc = refOf(name, k) !== undefined
+    let editable = k in (vocab[name] ?? {})
+    return (
       <Fragment key={`${name}.${k}`}>
         <Key>
           <Comp mod={compTone(name)}>{name}.</Comp>
-          {k}
+          {assoc ? k.replace(/_eid$/, '') : k}
           {rm}
         </Key>
-        {k in (vocab[name] ?? {})
+        {assoc
+          ? (
+            <Prop
+              eid={e.eid}
+              comp={name}
+              prop={k}
+              editable={editable}
+              show={(_, val) => refFace(val)}
+            />
+          )
+          : editable
           ? <Prop eid={e.eid} comp={name} prop={k} editable />
           : v == null || v === ''
           ? <Val mod='nil'>{v === '' ? '""' : 'null'}</Val>
           : <Val mod={shape(v)}>{String(v)}</Val>}
-      </Fragment>,
-      // The Rails idiom, reified: assignee_eid is the COLUMN (uuid,
-      // above); assignee is the ASSOCIATION — the entity itself, said as
-      // its chip + name. Derived, so read-only and dim-keyed.
-      ...(k.endsWith('_eid') && v
-        ? [
-          <Fragment key={`${name}.${k}.assoc`}>
-            <Key mod='drv'>
-              <Comp mod={compTone(name)}>{name}.</Comp>
-              {k.slice(0, -4)}
-            </Key>
-            <Val mod='ent'>
-              <Id e={ent(String(v))} /> {ent(String(v)).doc?.title ?? ''}
-            </Val>
-          </Fragment>,
-        ]
-        : []),
-    ]
+      </Fragment>
+    )
   })
 }
 

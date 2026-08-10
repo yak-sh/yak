@@ -18,6 +18,7 @@ let {
   mendMail,
   migrateErrors,
   open,
+  refsOf,
   retireMemoryType,
   search,
   senderActor,
@@ -171,6 +172,27 @@ Deno.test('review: a comment carries one canonical verdict', () => {
     Error,
     "verdict is one of approved, rejected, changes_requested — got 'maybe'",
   )
+})
+
+// refsOf reads each column's PropType, not its name: a reference wearing no
+// _eid suffix (deliver.to, created.by) is walked as surely as project_eid,
+// so graph-out backlinks can't skip a whole class of edge.
+Deno.test('refsOf walks references by type, suffix or not', () => {
+  let d = fresh()
+  let target = tag(d, 'doc', { title: 'target' })
+  let suffixed = uid()
+  let bare = uid()
+  apply(d, [
+    { eid: suffixed, name: 'card', comp: { target_eid: target, view: 'text' } },
+    { eid: bare, name: 'deliver', comp: { to: target } },
+  ])
+  let vias = refsOf(d, [target]).filter((r) => r.to == target)
+  assertEquals(
+    vias.find((r) => r.via == 'card.target_eid')?.from,
+    suffixed,
+  )
+  assertEquals(vias.find((r) => r.via == 'deliver.to')?.from, bare)
+  d.close()
 })
 
 Deno.test('graph-out carries declared columns only', () => {
