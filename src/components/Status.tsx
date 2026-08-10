@@ -31,6 +31,8 @@ import { spawnHit } from './Canvas.tsx'
 import { useComplete } from './Complete.tsx'
 
 let Frame = block('footer', 'Status', {
+  Left: 'div',
+  Right: 'div',
   Mode: 'span',
   Colon: 'span',
   Line: 'span',
@@ -48,6 +50,8 @@ let Frame = block('footer', 'Status', {
   Person: 'button',
 })
 let {
+  Left,
+  Right,
   Mode,
   Colon,
   Line,
@@ -91,16 +95,16 @@ export let FixMessage = (
   )
 }
 
-// A thumb has no `:` key, so the BAR is the door — a tap opens the command
-// line, another shuts it. And the keyboard WAITS: under a coarse pointer
-// the line opens unfocused, which leaves the hints standing as a palette
-// of verbs to TAP; picking one writes it in and takes the keyboard then,
-// for the arguments it actually needs.
+// A thumb has no `:` key, so the bar's left side is the door. The keyboard
+// WAITS: under a coarse pointer the line opens unfocused, which leaves the
+// hints standing as a palette of verbs to TAP; picking one writes it in and
+// takes the keyboard then, for the arguments it actually needs.
 let thumb = () => !!globalThis.matchMedia?.('(pointer: coarse)').matches
-// What in the bar owns its own tap, and so never works the door.
-let own = 'button, a, input, textarea, .Status_Hints'
-export let owned = (target: EventTarget | null) =>
-  target instanceof Element && !!target.closest(own)
+
+export let commandMode = () => {
+  msg.value = ''
+  mode.value = 'command'
+}
 
 // A command line can lose focus to the canvas without spending its draft.
 // `:` takes it back, but remains ordinary text when the line already owns it.
@@ -357,17 +361,6 @@ export let Status = () => {
     if (v) input.current?.focus() // a picked verb takes the keyboard
   }
 
-  // The bar's tap, both ways. Escape is the desktop's exit and a phone has
-  // none, so opening must also close — otherwise a thumb that opened the
-  // line by accident is stuck in it.
-  let door = (e: MouseEvent) => {
-    if (owned(e.target)) return
-    if (!globalThis.getSelection?.()?.isCollapsed) return // a drag isn't a tap
-    if (mode.value == 'command') put('')
-    else msg.value = ''
-    mode.value = mode.value == 'command' ? 'normal' : 'command'
-  }
-
   let cmdKey = (e: KeyboardEvent & { currentTarget: HTMLTextAreaElement }) => {
     if (complete.key(e)) return
     // shift+Enter is the textarea's own newline — spec() reads line 2 on
@@ -399,89 +392,92 @@ export let Status = () => {
   }
 
   return (
-    <Frame onClick={door}>
-      {mode.value == 'command'
-        ? (
-          <>
-            <Colon>:</Colon>
-            <Line>
-              {
-                /* the ghost sits UNDER the input and paints the line: the
+    <Frame>
+      <Left onClick={mode.value == 'command' ? undefined : commandMode}>
+        {mode.value == 'command'
+          ? (
+            <>
+              <Colon>:</Colon>
+              <Line>
+                {
+                  /* the ghost sits UNDER the input and paints the line: the
                 copy shows the typed text (the verb greens once it names a
                 command), the faded completion follows — the input above
                 keeps only the caret and the selection */
-              }
-              <Ghost aria-hidden>
-                <Was>
-                  {verb
-                    ? (
-                      <>
-                        {pre}
-                        <Verb mod={all[verb] && 'known'}>{verb}</Verb>
-                        {rest}
-                      </>
-                    )
-                    : line}
-                </Was>
-                {ghost(line, all)}
-              </Ghost>
-              <Cmd
-                elRef={input}
-                onKeyDown={cmdKey}
-                onInput={(e: InputEvent) => {
-                  let el = e.currentTarget as HTMLTextAreaElement
-                  let v = el.value
-                  v ? save('cmd', v) : drop('cmd')
-                  setLine(v)
-                  setPick(0)
-                  complete.track(el)
-                }}
-                onBlur={() => complete.close()}
-              />
-            </Line>
-            {complete.list}
-            {hints.length > 0 && (
-              <Hints>
-                {hints.slice(0, 8).map(([name, c], i) => (
-                  <Hint
-                    key={name}
-                    mod={i == pick && 'pick'}
-                    onMouseEnter={() => setPick(i)}
-                    onMouseDown={(e: MouseEvent) => {
-                      e.preventDefault() // keep the input's focus
-                      put(`${name} `)
-                    }}
-                  >
-                    <Name>{name}</Name>
-                    {c.args && <Args>{c.args}</Args>}
-                    <About>{c.about}</About>
-                  </Hint>
-                ))}
-              </Hints>
-            )}
-          </>
-        )
-        : (
-          <>
-            <Mode mod={mode.value}>
-              {mode.value == 'insert'
-                ? '-- INSERT --'
-                : mode.value == 'visual'
-                ? '-- VISUAL --'
-                : 'NORMAL'}
-            </Mode>
-            {(msg.value || problem.value) && (
-              <Msg>
-                {typeof msg.value == 'string'
-                  ? msg.value || problem.value
-                  : <FixMessage {...msg.value} />}
-              </Msg>
-            )}
-          </>
-        )}
-      {/* the bar's right end is the Tray: live runs + the shelf */}
-      <WhoAmI />
-      <Tray />
+                }
+                <Ghost aria-hidden>
+                  <Was>
+                    {verb
+                      ? (
+                        <>
+                          {pre}
+                          <Verb mod={all[verb] && 'known'}>{verb}</Verb>
+                          {rest}
+                        </>
+                      )
+                      : line}
+                  </Was>
+                  {ghost(line, all)}
+                </Ghost>
+                <Cmd
+                  elRef={input}
+                  onKeyDown={cmdKey}
+                  onInput={(e: InputEvent) => {
+                    let el = e.currentTarget as HTMLTextAreaElement
+                    let v = el.value
+                    v ? save('cmd', v) : drop('cmd')
+                    setLine(v)
+                    setPick(0)
+                    complete.track(el)
+                  }}
+                  onBlur={() => complete.close()}
+                />
+              </Line>
+              {complete.list}
+              {hints.length > 0 && (
+                <Hints>
+                  {hints.slice(0, 8).map(([name, c], i) => (
+                    <Hint
+                      key={name}
+                      mod={i == pick && 'pick'}
+                      onMouseEnter={() => setPick(i)}
+                      onMouseDown={(e: MouseEvent) => {
+                        e.preventDefault() // keep the input's focus
+                        put(`${name} `)
+                      }}
+                    >
+                      <Name>{name}</Name>
+                      {c.args && <Args>{c.args}</Args>}
+                      <About>{c.about}</About>
+                    </Hint>
+                  ))}
+                </Hints>
+              )}
+            </>
+          )
+          : (
+            <>
+              <Mode mod={mode.value}>
+                {mode.value == 'insert'
+                  ? '-- INSERT --'
+                  : mode.value == 'visual'
+                  ? '-- VISUAL --'
+                  : 'NORMAL'}
+              </Mode>
+              {(msg.value || problem.value) && (
+                <Msg>
+                  {typeof msg.value == 'string'
+                    ? msg.value || problem.value
+                    : <FixMessage {...msg.value} />}
+                </Msg>
+              )}
+            </>
+          )}
+      </Left>
+      <Right>
+        <WhoAmI />
+        <Tray />
+      </Right>
     </Frame>
   )
 }

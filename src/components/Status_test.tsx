@@ -1,27 +1,15 @@
-// The statusbar's owned controls and graph-backed spawn answer: clicks stay at
-// their controls; session messages follow server-minted ids and lifecycle.
+// The statusbar's command door and graph-backed spawn answer: its left side
+// enters command mode; session messages follow server-minted ids and lifecycle.
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
 import { assertEquals } from '@std/assert'
-import { applyLocal, cache } from '../live.ts'
-import { commandFocus, FixMessage, owned } from './Status.tsx'
+import { applyLocal, cache, mode } from '../live.ts'
+import { commandFocus, commandMode, FixMessage } from './Status.tsx'
 
-Deno.test('SVG controls own their statusbar clicks', () => {
-  let prior = Object.getOwnPropertyDescriptor(globalThis, 'Element')
-  let { document, window } = parseHTML(
-    '<footer><button><svg><path /></svg></button><span /></footer>',
-  )
-  Object.defineProperty(globalThis, 'Element', {
-    value: window.Element,
-    configurable: true,
-  })
-  try {
-    assertEquals(owned(document.querySelector('path')), true)
-    assertEquals(owned(document.querySelector('span')), false)
-  } finally {
-    if (prior) Object.defineProperty(globalThis, 'Element', prior)
-    else delete (globalThis as { Element?: unknown }).Element
-  }
+Deno.test('the statusbar left side enters command mode', () => {
+  mode.value = 'normal'
+  commandMode()
+  assertEquals(mode.value, 'command')
 })
 
 Deno.test('colon refocuses an open command without consuming its own text', () => {

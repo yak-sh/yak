@@ -2145,6 +2145,22 @@ html {
   position: relative; /* the hints panel anchors to the bar */
   z-index: 2; /* shell chrome clears sticky content (z1) */
 }
+.Status_Left {
+  flex: 1 1 auto;
+  min-width: 0;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  cursor: pointer;
+}
+.Status_Right {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+}
 .Status_Mode {
   color: var(--dim);
   font-weight: 600;
@@ -3137,7 +3153,6 @@ a[data-ref]:hover {
    icons sits IN the bar; the panel with the full rows anchors above it. */
 .Tray {
   position: relative;
-  margin-left: auto; /* the bar's right end is ours */
   display: flex;
   align-items: center;
   font-size: 12px;
