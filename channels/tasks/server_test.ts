@@ -32,7 +32,7 @@ let ch = (
 // A knock is a knock comp + the shared deliver.to (D-14945): WHO it is for no
 // longer rides the knock comp, so the batch carries a deliver change beside it.
 let knock = (eid: string, to: string, target?: string): Change[] => [
-  ch(eid, 'knock', target ? { target_eid: target } : {}),
+  ch(eid, 'knock', target ? { target: target } : {}),
   ch(eid, 'deliver', { to }),
 ]
 
@@ -51,11 +51,11 @@ let idOf = (eid: string): string | null =>
 
 let comment = (
   eid: string,
-  target_eid: string,
+  target: string,
   by = 'p1',
   via = 's1',
 ): Change[] => [
-  ch(eid, 'comment', { target_eid }),
+  ch(eid, 'comment', { target }),
   ch(eid, 'created', { by, via }),
 ]
 
@@ -224,7 +224,7 @@ let stamp = (over: Record<string, unknown> = {}) =>
   ch('m1', 'mail', {
     to_addr: 'taskmaster@bot.test',
     from: 'jeff@yak.sh',
-    target_eid: 'home',
+    target: 'home',
     message_id: 'msg:1:x',
     received_at: '2026-07-22T00:00:00Z',
     verified: 1,
@@ -258,7 +258,7 @@ Deno.test('unverified mail never injects — it waits for triage', () => {
 // project mail alone. Without this the address resolves perfectly and the
 // session it names never hears about it.
 Deno.test('mail addressed to this session injects without operator', () => {
-  let mine = stamp({ to: 'S-31@bot.test', target_eid: 'sess' })
+  let mine = stamp({ to: 'S-31@bot.test', target: 'sess' })
   let out = channelEvents([mine], ctx({ docOf: letter, operator: false }))
   assertEquals(out.length, 1)
   assertEquals(out[0].meta.kind, 'mail')
@@ -290,7 +290,7 @@ Deno.test('a specialist session gets no project mail (T-7006)', () => {
 })
 
 Deno.test("mail aimed at another project isn't this session's", () => {
-  let batch = [stamp({ target_eid: 'elsewhere' })]
+  let batch = [stamp({ target: 'elsewhere' })]
   assertEquals(channelEvents(batch, ctx({ docOf: letter })), [])
 })
 
@@ -302,7 +302,7 @@ Deno.test('no resolved home project, no mail delivery', () => {
 Deno.test("a mint's wire frame (no received_at) is not the arrival", () => {
   let batch = [
     ch('m1', 'doc', { title: 'hello', body: 'a letter' }),
-    ch('m1', 'mail', { from: 'jeff@yak.sh', target_eid: 'home' }),
+    ch('m1', 'mail', { from: 'jeff@yak.sh', target: 'home' }),
   ]
   assertEquals(channelEvents(batch, ctx()), [])
 })
@@ -465,7 +465,7 @@ Deno.test('a catch-up comment keeps its actor and instrument byline', () => {
     {
       eid: writer,
       name: 'session',
-      comp: { id: writerId, actor_eid: actor },
+      comp: { id: writerId, actor: actor },
     },
     { eid: target, name: 'session', comp: { id: crypto.randomUUID() } },
   ])
@@ -475,7 +475,7 @@ Deno.test('a catch-up comment keeps its actor and instrument byline', () => {
     db,
     [
       { eid, name: 'doc', comp: { title: '', body: 'inside the gap' } },
-      { eid, name: 'comment', comp: { target_eid: target } },
+      { eid, name: 'comment', comp: { target: target } },
     ],
     undefined,
     writerId,
@@ -545,12 +545,12 @@ Deno.test('a resume sweep carries the words that rode THAT knock', () => {
   // picked by time — the knock's own minute — not by scan order.
   let born = (eid: string, at: string) => ch(eid, 'created', { eid, at })
   let batch: Change[] = [
-    ch('old', 'comment', { target_eid: 't9' }),
+    ch('old', 'comment', { target: 't9' }),
     ch('old', 'doc', { title: '', body: 'last tuesday' }),
     born('old', '2026-07-20T00:00:00Z'),
     ...cast(),
     born('k7', '2026-07-25T00:17:58Z'),
-    ch('new', 'comment', { target_eid: 't9' }),
+    ch('new', 'comment', { target: 't9' }),
     ch('new', 'doc', { title: '', body: 'the wake words' }),
     born('new', '2026-07-25T00:17:57.900Z'),
   ]
@@ -606,7 +606,7 @@ Deno.test("learn caches a mail's doc for the stamp frame that follows", () => {
     ch('m1', 'entity', { num: 5 }),
     // doc BEFORE mail in the same batch — the second pass still catches it.
     ch('m1', 'doc', { title: 'hello', body: 'a letter' }),
-    ch('m1', 'mail', { from: 'jeff@yak.sh', target_eid: 'home' }),
+    ch('m1', 'mail', { from: 'jeff@yak.sh', target: 'home' }),
   ])
   assertEquals(docOf(idx, 'm1'), { title: 'hello', body: 'a letter' })
   let out = channelEvents([stamp()], ctx({ docOf: (e) => docOf(idx, e) }))
@@ -666,13 +666,13 @@ let sessions = (...batches: Change[][]) => {
 Deno.test('findSession resolves by the claude pid', () => {
   let idx = sessions([
     ch('e9', 'entity', { num: 9 }),
-    ch('e9', 'session', { id: 'other', pid: 111, actor_eid: 'x' }),
+    ch('e9', 'session', { id: 'other', pid: 111, actor: 'x' }),
     ch('e1', 'entity', { num: 1 }),
     ch('e1', 'session', {
       id: 'mine',
       pid: 4242,
-      actor_eid: 'p1',
-      persona_eid: 'n1',
+      actor: 'p1',
+      persona: 'n1',
     }),
   ])
   assertEquals(findSession(idx, { pid: 4242 }), {
@@ -784,7 +784,7 @@ Deno.test('findSession: a pid match outranks the boot id hint', () => {
 Deno.test('findSession falls back to the boot id when no pid stamp exists', () => {
   let idx = sessions([
     ch('e1', 'entity', { num: 1 }),
-    ch('e1', 'session', { id: 'boot-id', actor_eid: 'p1' }),
+    ch('e1', 'session', { id: 'boot-id', actor: 'p1' }),
   ])
   assertEquals(findSession(idx, { pid: 4242, id: 'boot-id' }), {
     eid: 'e1',
@@ -801,7 +801,7 @@ Deno.test('a session patch merges — a later frame never blanks the actor', () 
       ch('e1', 'session', {
         id: 'mine',
         pid: 4242,
-        actor_eid: 'p1',
+        actor: 'p1',
       }),
     ],
     [ch('e1', 'session', { acked_at: 'now' })],
@@ -817,7 +817,7 @@ Deno.test('findSession reads the operator/specialist marks off the reify', () =>
       pid: 4242,
       operator: 1,
       origin: 'managed',
-      requested_task_eid: 't7',
+      requested_task: 't7',
     }),
   ])
   let s = findSession(idx, { pid: 4242 })

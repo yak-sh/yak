@@ -102,7 +102,7 @@ export let prompt = (e: Ent) => {
     !sessionActive.includes(String(s.status))
   // Persona, model nick, graph chip: provider ids never face people.
   let who = s &&
-    ((s.persona_eid && ent(s.persona_eid).doc?.title) ||
+    ((s.persona && ent(s.persona).doc?.title) ||
       nick(s.serving_model ?? s.model) || idOf(e))
   return settled
     ? `send to ${who}… (resumes the session)`
@@ -153,7 +153,7 @@ export let Composer = ({ eid }: { eid: string }) => {
       {
         eid: c,
         name: 'comment',
-        comp: { target_eid: eid },
+        comp: { target: eid },
       },
     )
     box.current!.value = ''

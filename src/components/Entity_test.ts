@@ -22,7 +22,7 @@ Deno.test('release names the session by its chip id', () => {
     task: {
       entity: { eid: 'task', num: 1 },
       task: { eid: 'task', status: 'open', priority: 0 },
-      claim: { eid: 'task', session_eid: 'session' },
+      claim: { eid: 'task', session: 'session' },
     },
     session: {
       entity: { eid: 'session', num: 31 },
@@ -80,12 +80,12 @@ Deno.test('a role owns its lifecycle face, actions, and linked sessions', () => 
         eid: 'role',
         state: 'running',
         surface: 'native',
-        scope_eid: 'project',
+        scope: 'project',
       },
     },
     session: {
       entity: { eid: 'session', num: 31 },
-      session: { eid: 'session', id: 'thread', role_eid: 'role' },
+      session: { eid: 'session', id: 'thread', role: 'role' },
     },
   }
   let role = ent('role')
@@ -95,7 +95,7 @@ Deno.test('a role owns its lifecycle face, actions, and linked sessions', () => 
     'stop role',
   )
   assertEquals(
-    backlinks(role.eid).some((b) => b.via == 'session.role_eid'),
+    backlinks(role.eid).some((b) => b.via == 'session.role'),
     true,
   )
   cache.value = {}

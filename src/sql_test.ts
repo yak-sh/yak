@@ -45,21 +45,21 @@ let put = (eid: string, rows: Record<string, Record<string, Cell>>) => {
   }
 }
 
-// project_eid is a real reference, so its target has to exist.
+// project is a real reference, so its target has to exist.
 put('p1', { doc: { title: 'a project' }, project: {} })
 
 put('e1', {
   doc: { title: 'alpha widget', body: 'the first one' },
-  task: { status: 'open', priority: 1, domain: 'Eng', project_eid: 'p1' },
+  task: { status: 'open', priority: 1, domain: 'Eng', project: 'p1' },
   proposed: { at: '2026-08-01T00:00:00.000Z', by: null, via: null },
 })
 put('e2', {
   doc: { title: 'beta WIDGET', body: '100% sure' },
-  task: { status: 'wip', priority: 2, domain: 'Ops', project_eid: 'p1' },
+  task: { status: 'wip', priority: 2, domain: 'Ops', project: 'p1' },
 })
 put('e3', {
   doc: { title: 'gamma', body: 'under_score' },
-  task: { status: 'done', priority: 0, domain: '', project_eid: null },
+  task: { status: 'done', priority: 0, domain: '', project: null },
 })
 put('e4', { doc: { title: 'delta', body: '' } }) // no task component at all
 put('e5', {
@@ -148,7 +148,7 @@ let COMPILES = [
   '.task.priority=0,10',
   '.task.status=open,wip,done',
   // absent-or-empty, over a null column, an empty string, and a missing comp
-  '.task.project_eid=',
+  '.task.project=',
   '.task.domain=',
   '.task.status=',
   // facet presence is the component row itself, not one nullable column
@@ -159,7 +159,7 @@ let COMPILES = [
   // negation
   '.task.status!=done',
   '.task.priority!=1',
-  '.task.project_eid!=',
+  '.task.project!=',
   // contains, including the characters LIKE would have read as wildcards
   '.doc.title~=widget',
   '.doc.title~=WIDGET',

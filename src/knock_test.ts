@@ -39,7 +39,7 @@ let task = (() => {
   let eid = uid()
   apply(db, [
     { eid, name: 'doc', comp: { title: 'mint an api key' } },
-    { eid, name: 'task', comp: { status: 'open', project_eid: project } },
+    { eid, name: 'task', comp: { status: 'open', project: project } },
   ])
   return eid
 })()
@@ -47,7 +47,7 @@ let task = (() => {
 let knock = (target: string, to: string) => {
   let eid = uid()
   let out = apply(db, [
-    { eid, name: 'knock', comp: { target_eid: target } },
+    { eid, name: 'knock', comp: { target: target } },
     { eid, name: 'deliver', comp: { to } },
   ])
   let comp = out.find((c) => c.name == 'knock')!.comp!
@@ -59,11 +59,11 @@ Deno.test('awake operator actor: the cast is the delivery', () => {
   let s = uid(), role = uid()
   apply(db, [
     { eid: role, name: 'doc', comp: { title: 'operator' } },
-    { eid: role, name: 'role', comp: { scope_eid: project } },
+    { eid: role, name: 'role', comp: { scope: project } },
     {
       eid: s,
       name: 'session',
-      comp: { id: 'op-1', actor_eid: project, operator: true, role_eid: role },
+      comp: { id: 'op-1', actor: project, operator: true, role: role },
     },
   ])
   db.prepare(
@@ -84,11 +84,11 @@ Deno.test('a managed spawn wearing the actor does not take the cast', () => {
   apply(db, [{
     eid: s,
     name: 'session',
-    comp: { id: 'spawn-1', actor_eid: project },
+    comp: { id: 'spawn-1', actor: project },
   }])
   db.prepare(
     `update session set origin = 'managed', status = 'running',
-     requested_task_eid = ? where eid = ?`,
+     requested_task = ? where eid = ?`,
   ).run(task, s)
   let k = knock(task, project)
   assertMatch(String(drow(k)?.via), /^spawned S-\d+$/)
@@ -100,7 +100,7 @@ Deno.test('nobody awake at a project: spawn onto the target task', () => {
   assertMatch(String(drow(k)?.via), /^spawned S-\d+$/)
   // the spawn request rides the graph: a session asking for the task
   let s = db.prepare(
-    'select * from session where requested_task_eid = ? order by rowid desc',
+    'select * from session where requested_task = ? order by rowid desc',
   ).get(task) as Record<string, string>
   assertEquals(Boolean(s.provider && s.model), true)
   // a knock about something unspawnable says so
@@ -118,7 +118,7 @@ Deno.test('an addressed person: the knock rides mail, words and all', () => {
     { eid: jeff, name: 'email', comp: { address: 'jeff@test' } },
     // the words rode the batch as a plain comment on the target
     { eid: c, name: 'doc', comp: { title: '', body: 'need this today' } },
-    { eid: c, name: 'comment', comp: { target_eid: task } },
+    { eid: c, name: 'comment', comp: { target: task } },
   ])
   let k = knock(task, jeff)
   assertMatch(String(drow(k)?.via), /^mailed U-\d+$/)
@@ -137,7 +137,7 @@ Deno.test('an operator is a door: external claude hears it, its child does not',
   apply(db, [{
     eid: op,
     name: 'session',
-    comp: { id: 'op-2', actor_eid: project, pid: c.pid, operator: true },
+    comp: { id: 'op-2', actor: project, pid: c.pid, operator: true },
   }])
   // A subagent it spawned, reified LATER (so it sorts first) — a tool
   // call inside the operator's process, which is why it never claims the
@@ -145,7 +145,7 @@ Deno.test('an operator is a door: external claude hears it, its child does not',
   apply(db, [{
     eid: uid(),
     name: 'session',
-    comp: { id: 'kid-1', actor_eid: project },
+    comp: { id: 'kid-1', actor: project },
   }])
   // And the live hijack shape (T-15147): a REACHABLE managed spawn
   // reified newer than the operator. Recency must not outrank the loop.
@@ -153,11 +153,11 @@ Deno.test('an operator is a door: external claude hears it, its child does not',
   apply(db, [{
     eid: spawn,
     name: 'session',
-    comp: { id: 'spawn-2', actor_eid: project },
+    comp: { id: 'spawn-2', actor: project },
   }])
   db.prepare(
     `update session set origin = 'managed', status = 'running',
-     requested_task_eid = ? where eid = ?`,
+     requested_task = ? where eid = ?`,
   ).run(task, spawn)
   let k = knock(task, project)
   let { num } = db.prepare('select num from entity where eid = ?').get(op) as {
@@ -184,14 +184,14 @@ Deno.test('an actor knock prefers the operator over a newer worktree agent', asy
   apply(db, [{
     eid: op,
     name: 'session',
-    comp: { id: 'op-op', actor_eid: project, pid: opProc.pid, operator: true },
+    comp: { id: 'op-op', actor: project, pid: opProc.pid, operator: true },
   }])
   // A worktree agent: a SEPARATE reachable claude wearing the same actor,
   // reified LATER (higher num), not an operator. Recency would pick it.
   apply(db, [{
     eid: uid(),
     name: 'session',
-    comp: { id: 'agent-op', actor_eid: project, pid: agentProc.pid },
+    comp: { id: 'agent-op', actor: project, pid: agentProc.pid },
   }])
   let k = knock(task, project)
   let { num } = db.prepare('select num from entity where eid = ?').get(op) as {
@@ -222,7 +222,7 @@ Deno.test('a settled managed session: the knock rides its input door', () => {
       name: 'doc',
       comp: { title: '', body: 'the key expires today' },
     },
-    { eid: said, name: 'comment', comp: { target_eid: task } },
+    { eid: said, name: 'comment', comp: { target: task } },
   ])
 
   let k = knock(task, sess)
@@ -231,7 +231,7 @@ Deno.test('a settled managed session: the knock rides its input door', () => {
   // The comment landed ON the session — that IS the input.
   let input = db.prepare(
     `select d.body from comment c join doc d on d.eid = c.eid
-     where c.target_eid = ? order by c.rowid desc limit 1`,
+     where c.target = ? order by c.rowid desc limit 1`,
   ).get(sess) as { body: string }
   assertMatch(input.body, /^knock: T-\d+ — the key expires today$/)
 })

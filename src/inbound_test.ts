@@ -190,7 +190,7 @@ Deno.test('mailChanges: subject and body land verbatim, provenance stamps', () =
   assertEquals(mail.from, undefined) // off the wire
   assertEquals(stamp.to_addr, 'venture@bot.test') // the address it arrived at
   assertEquals(stamp.from, 'sender@x.test')
-  assertEquals(mail.target_eid, operator)
+  assertEquals(mail.target, operator)
   assertEquals(stamp.message_id, 'msg:1752000000000:abc')
   assertEquals(stamp.verified, 1) // boolean in the dialect, 1/0 in the row
   assertEquals(stamp.received_at, '2025-07-08T18:40:00.000Z')
@@ -229,7 +229,7 @@ Deno.test('hookChanges: event derives; captured request stays verbatim', () => {
   assertEquals(doc.title, 'github: issues')
   let edge = named.wire.find((c) => c.name == 'dependency')!.comp!
   assertEquals(edge.type, 'about')
-  assertEquals(edge.child_eid, holdco)
+  assertEquals(edge.child, holdco)
   // a JSON body's own word, when no header names it
   let bodied = hookChanges({
     ...base,
@@ -296,7 +296,7 @@ Deno.test('the sweep: mints once, stamps back, and dir=out never lands', async (
   assertEquals(mailCount(), 1) // the outbound archive row stayed out
   let minted = db.prepare('select * from mail where message_id = ?')
     .get('msg:1752000000000:abc') as Record<string, string | null>
-  assertEquals(minted.target_eid, operator) // routed through the address book
+  assertEquals(minted.target, operator) // routed through the address book
   assertEquals(minted.verified as unknown as number, 1)
   // only the ingested id stamps back: the sweep never writes facts
   // about rows it refused (.dir=in should keep them out upstream anyway)
@@ -314,10 +314,10 @@ Deno.test('the sweep: mints once, stamps back, and dir=out never lands', async (
   assertEquals(hooks[0].payload, '{"action":"ping"}')
   assertEquals(hooks[0].sig_ok, 1)
   let aimed = db.prepare(
-    `select child_eid from dependency
-     where parent_eid = ? and type = 'about'`,
-  ).get(hooks[0].eid) as { child_eid: string }
-  assertEquals(aimed.child_eid, cafecar)
+    `select child from dependency
+     where parent = ? and type = 'about'`,
+  ).get(hooks[0].eid) as { child: string }
+  assertEquals(aimed.child, cafecar)
   // sweep again: idempotent on the provenance keys, stamps still answer
   await inboundSweep(cast, api)
   assertEquals(mailCount(), 1)
@@ -384,7 +384,7 @@ Deno.test('the sweep: an echo arrives on the sent entity, once', async () => {
   assertEquals(row.message_id, 'msg:1752000000001:echo-1@bot.test')
   assertEquals(row.received_at, '2025-07-08T18:40:00.000Z')
   assertEquals(row.verified, 1)
-  assertEquals(row.target_eid, operator) // routed like a fresh mint
+  assertEquals(row.target, operator) // routed like a fresh mint
   assertEquals(row.from, 'holdco@bot.test') // the header, not the envelope
   assertEquals(opened(letter), 0) // unread for the recipient (T-7006)
   // re-sweep: arrival is already recorded — idempotent, still no twin
@@ -409,7 +409,7 @@ Deno.test('the echo keeps an aimed target and a stamped from', async () => {
     {
       eid: letter,
       name: 'mail',
-      comp: { target_eid: holdco },
+      comp: { target: holdco },
     },
     { eid: letter, name: 'deliver', comp: { to: 'venture@bot.test' } },
   ])
@@ -423,7 +423,7 @@ Deno.test('the echo keeps an aimed target and a stamped from', async () => {
   )
   let row = mailRow(letter)
   assertEquals(row.message_id, 'msg:1752000000003:echo-2@bot.test')
-  assertEquals(row.target_eid, holdco) // the relay still aims at its task
+  assertEquals(row.target, holdco) // the relay still aims at its task
   assertEquals(row.from, 'me@bot.test')
 })
 
@@ -559,7 +559,7 @@ Deno.test('the sweep preserves In-Reply-To and links its graph mail', async () =
   let row = db.prepare('select * from mail where message_id = ?')
     .get(reply.id) as Record<string, string | null>
   assertEquals(row.in_reply_to, 'opener@bot.test')
-  assertEquals(row.reply_to_eid, orig)
+  assertEquals(row.reply_to, orig)
 })
 
 Deno.test('mailChanges links an earlier inbound RFC id when present', () => {
@@ -576,7 +576,7 @@ Deno.test('mailChanges links an earlier inbound RFC id when present', () => {
     operator,
   )
   let mail = wire.find((c) => c.name == 'mail')!.comp!
-  assertEquals(mail.reply_to_eid, orig)
+  assertEquals(mail.reply_to, orig)
   assertEquals(stamp.in_reply_to, 'first@x.test')
 })
 

@@ -31,12 +31,12 @@ let graph = (extra: Snapshot['changes'] = []): Snapshot => ({
     }),
     ...mk(DESK, 2, ago(9999), {
       doc: { title: 'the desk' },
-      task: { status: 'open', priority: 3, project_eid: P },
+      task: { status: 'open', priority: 3, project: P },
       alias: { slug: 'scribe-desk' },
     }),
     ...mk(PERSONA, 3, ago(9999), {
       doc: { title: 'scribe', body: 'you write' },
-      persona: { home_eid: P },
+      persona: { home: P },
       alias: { slug: 'scribe' },
     }),
     ...mk(S1, 4, ago(30), {
@@ -71,19 +71,19 @@ Deno.test('deskFree: an unsettled or recent desk session blocks', () => {
   assertEquals(deskFree(free, desk, NOW), true)
   let running = rows(graph(
     mk(S2, 5, ago(999), {
-      session: { id: 'sc-1', requested_task_eid: DESK, status: 'running' },
+      session: { id: 'sc-1', requested_task: DESK, status: 'running' },
     }),
   ))
   assertEquals(deskFree(running, desk, NOW), false)
   let recent = rows(graph(
     mk(S2, 5, ago(20), {
-      session: { id: 'sc-2', requested_task_eid: DESK, status: 'completed' },
+      session: { id: 'sc-2', requested_task: DESK, status: 'completed' },
     }),
   ))
   assertEquals(deskFree(recent, desk, NOW), false)
   let done = rows(graph(
     mk(S2, 5, ago(90), {
-      session: { id: 'sc-3', requested_task_eid: DESK, status: 'completed' },
+      session: { id: 'sc-3', requested_task: DESK, status: 'completed' },
     }),
   ))
   assertEquals(deskFree(done, desk, NOW), true)
@@ -95,8 +95,8 @@ Deno.test('scribeSpawn: haiku wearing the scribe persona, or nothing, or a shout
   let sess = changes.find((c) => c.name == 'session')!.comp!
   assertEquals(sess.provider, 'claude')
   assertEquals(sess.model, 'haiku')
-  assertEquals(sess.persona_eid, PERSONA)
-  assertEquals(sess.requested_task_eid, DESK)
+  assertEquals(sess.persona, PERSONA)
+  assertEquals(sess.requested_task, DESK)
   // no stubs = no spawn, quietly
   let quiet: Snapshot = {
     changes: graph().changes.filter((c) => c.eid != S1),
@@ -119,7 +119,7 @@ Deno.test('the desk never scribes itself: its own wrap stubs are exempt', () => 
   let ours = rows(graph(
     mk(S2, 5, ago(120), {
       doc: { title: 'scribe shift', body: `${STUB} — a stub` },
-      session: { id: 'sc-old', requested_task_eid: DESK, status: 'completed' },
+      session: { id: 'sc-old', requested_task: DESK, status: 'completed' },
     }),
   ))
   assertEquals(stubs(ours, NOW, DESK).map((r) => r.eid), [S1])
@@ -131,7 +131,7 @@ Deno.test('the desk never scribes itself: its own wrap stubs are exempt', () => 
         doc: { title: 'scribe shift', body: `${STUB} — a stub` },
         session: {
           id: 'sc-old',
-          requested_task_eid: DESK,
+          requested_task: DESK,
           status: 'completed',
         },
       }),

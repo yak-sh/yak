@@ -20,7 +20,7 @@ let all = rows({
   changes: [
     { eid: N, name: 'entity', comp: { eid: N, num: 9 } },
     { eid: N, name: 'doc', comp: { title: 'operator', body: long } },
-    { eid: N, name: 'persona', comp: { home_eid: null } },
+    { eid: N, name: 'persona', comp: { home: null } },
     { eid: P, name: 'entity', comp: { eid: P, num: 19 } },
     { eid: P, name: 'doc', comp: { title: 'Home', body: '' } },
     { eid: P, name: 'project', comp: {} },
@@ -39,25 +39,25 @@ Deno.test('elide: long text cuts with a marker naming the whole-doc door', () =>
   assertEquals(body.startsWith('x'.repeat(CUT)), true)
   // short values, non-strings, and titles ride untouched
   assertEquals(c.doc.title, 'operator')
-  assertEquals(c.persona.home_eid, null)
+  assertEquals(c.persona.home, null)
   assertEquals(c.entity.num, 9)
 })
 
 Deno.test('command: set resolves a human reference before the write', () => {
-  let out = commandOut(all, ':set .project_eid=P-19', T)
+  let out = commandOut(all, ':set .project=P-19', T)
   assertEquals(out.changes, [
-    { eid: T, name: 'task', comp: { project_eid: P } },
+    { eid: T, name: 'task', comp: { project: P } },
   ])
 })
 
 Deno.test('command: generated references resolve aliases and reject misses', () => {
-  let out = commandOut(all, ':new .project_eid=home Ship it', T)
+  let out = commandOut(all, ':new .project=home Ship it', T)
   let task = out.changes!.find((c) => c.name == 'task')
-  assertEquals(task?.comp?.project_eid, P)
+  assertEquals(task?.comp?.project, P)
   assertThrows(
-    () => commandOut(all, ':set .project_eid=missing', T),
+    () => commandOut(all, ':set .project=missing', T),
     Error,
-    'no entity: missing (.project_eid)',
+    'no entity: missing (.project)',
   )
 })
 
@@ -88,7 +88,7 @@ Deno.test('task_context surfaces and acknowledges one atomic inbox batch', async
   apply(db, [
     { eid: s, name: 'session', comp: { id: 'inbox-reader' } },
     { eid: c, name: 'doc', comp: { title: '', body: 'please review' } },
-    { eid: c, name: 'comment', comp: { target_eid: s } },
+    { eid: c, name: 'comment', comp: { target: s } },
   ])
   let writes: Change[][] = []
   let write = io.write
@@ -143,7 +143,7 @@ Deno.test('task_spawn refuses an undecided proposal without minting a session', 
   })
   assertEquals(
     db.prepare(
-      'select count(*) as n from session where requested_task_eid = ?',
+      'select count(*) as n from session where requested_task = ?',
     ).get(task),
     { n: 0 },
   )
@@ -262,7 +262,7 @@ Deno.test('MCP entity JSON shares the component-shaped contract', async () => {
         {
           eid: comment,
           name: 'comment',
-          comp: { eid: comment, target_eid: task },
+          comp: { eid: comment, target: task },
         },
       ],
       deps: [],
@@ -291,7 +291,7 @@ Deno.test('MCP entity JSON shares the component-shaped contract', async () => {
         kind: 'comment',
         entity: { eid: comment, num: 42 },
         doc: { title: '', body: 'Looks right' },
-        comment: { target_eid: task },
+        comment: { target: task },
       }],
     })
   })
@@ -541,7 +541,7 @@ Deno.test('MCP modes apply every accepted field and reject conflicts', async () 
         { eid: project, name: 'doc', comp: { title: 'Project' } },
         { eid: project, name: 'project', comp: {} },
         { eid: memory, name: 'doc', comp: { title: 'Memory', body: 'Fact' } },
-        { eid: memory, name: 'memory', comp: { scope_eid: null } },
+        { eid: memory, name: 'memory', comp: { scope: null } },
       ])
 
       let confirmed = await client.callTool({
@@ -557,7 +557,7 @@ Deno.test('MCP modes apply every accepted field and reject conflicts', async () 
       assertEquals(confirmed.isError, undefined)
       let remembered = rows(snapshot(g.db)).find((row) => row.eid == memory)
       assertEquals(remembered?.comps.doc?.title, 'Confirmed')
-      assertEquals(remembered?.comps.memory?.scope_eid, project)
+      assertEquals(remembered?.comps.memory?.scope, project)
       assert(remembered?.comps.feedback) // tagged, source unknown
       // The retired enum is refused, not dropped — a silently ignored
       // argument would file the memory wrong and say nothing (T-12585).
@@ -592,7 +592,7 @@ Deno.test('MCP modes apply every accepted field and reject conflicts', async () 
         rows(snapshot(g.db)).some((row) =>
           row.comps.doc?.title == 'Remember <source> & output' &&
           row.comps.doc?.body == 'Keep <source> & output' &&
-          row.comps.memory?.scope_eid == project
+          row.comps.memory?.scope == project
         ),
       )
 
@@ -756,7 +756,7 @@ Deno.test('code_run throws and rejected batches are MCP errors', async () => {
             eid: '40000000-0000-4000-8000-000000000001',
             name: 'task',
             comp: {
-              project_eid: '40000000-0000-4000-8000-000000000002'
+              project: '40000000-0000-4000-8000-000000000002'
             }
           }); return 'queued'`,
         },
@@ -782,7 +782,7 @@ Deno.test('memory_save guards the body it replaces', async () => {
     await protocol(g.io, async (client) => {
       apply(g.db, [
         { eid: M, name: 'doc', comp: { title: 'Memory', body: 'ONE' } },
-        { eid: M, name: 'memory', comp: { scope_eid: null } },
+        { eid: M, name: 'memory', comp: { scope: null } },
       ])
       let save = (args: Record<string, unknown>) =>
         client.callTool({

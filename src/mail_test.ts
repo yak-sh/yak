@@ -194,10 +194,10 @@ Deno.test('the envelope data never rides the wire', () => {
       {
         eid: m,
         name: 'mail',
-        // target_eid is a real writable column (so the row lands); to_addr and
+        // target is a real writable column (so the row lands); to_addr and
         // sent_id are server-owned envelope DATA and must be dropped.
         comp: {
-          target_eid: author,
+          target: author,
           to_addr: 'forged@x',
           sent_id: 'forged@send',
         },
@@ -224,7 +224,7 @@ let fixture = () => {
     { eid: proj, name: 'project', comp: {} },
     { eid: proj, name: 'email', comp: { address: 'venture@x.test' } },
     { eid: task, name: 'doc', comp: { title: 'the work' } },
-    { eid: task, name: 'task', comp: { status: 'open', project_eid: proj } },
+    { eid: task, name: 'task', comp: { status: 'open', project: proj } },
   ])
   // A standing task, not one being filed this instant: commenting on it is
   // correspondence. Birth commentary is its own case and builds its own
@@ -241,7 +241,7 @@ let comment = (target: string, writer?: string) => {
     db,
     [
       { eid: c, name: 'doc', comp: { title: '', body: 'a note' } },
-      { eid: c, name: 'comment', comp: { target_eid: target } },
+      { eid: c, name: 'comment', comp: { target: target } },
     ],
     undefined,
     writer,
@@ -251,19 +251,19 @@ let comment = (target: string, writer?: string) => {
 let mintedFor = (c: string) =>
   db.prepare(`
     select s.*, dl."to" as deliver_to from dependency d
-    join mail s on s.eid = d.parent_eid
+    join mail s on s.eid = d.parent
     left join deliver dl on dl.eid = s.eid
-    where d.type = 'about' and d.child_eid = ?
+    where d.type = 'about' and d.child = ?
   `).all(c) as Record<string, string>[]
 
 Deno.test('fanout: mints to the project REFERENCE, once, with the receipt', () => {
   let { proj, task } = fixture()
   let c = comment(task)
-  fanout(cast)(c, { target_eid: task })
+  fanout(cast)(c, { target: task })
   let made = mintedFor(c)
   assertEquals(made.length, 1)
   assertEquals(made[0].deliver_to, proj) // the reference — resolved at delivery
-  assertEquals(made[0].target_eid, task)
+  assertEquals(made[0].target, task)
   let num = (db.prepare('select num from entity where eid = ?').get(task) as {
     num: number
   }).num
@@ -273,7 +273,7 @@ Deno.test('fanout: mints to the project REFERENCE, once, with the receipt', () =
   assertMatch(doc.title, new RegExp(`\\[T-${num}\\] the work`))
   assertMatch(doc.body, /a note/)
   assertMatch(doc.body, new RegExp(`https://tasks\\.yak\\.sh/T-${num}`))
-  fanout(cast)(c, { target_eid: task }) // the receipt makes it idempotent
+  fanout(cast)(c, { target: task }) // the receipt makes it idempotent
   assertEquals(mintedFor(c).length, 1)
 })
 
@@ -283,20 +283,20 @@ Deno.test('fanout: self-echo and the unaddressed stay home', () => {
   apply(db, [{
     eid: sess,
     name: 'session',
-    comp: { id: `op-${sess}`, actor_eid: proj },
+    comp: { id: `op-${sess}`, actor: proj },
   }])
   let mine = comment(task, sess)
-  fanout(cast)(mine, { target_eid: task })
+  fanout(cast)(mine, { target: task })
   assertEquals(mintedFor(mine).length, 0) // the operator's own words
   let bare = uid(), t2 = uid()
   apply(db, [
     { eid: bare, name: 'doc', comp: { title: 'NoMail' } },
     { eid: bare, name: 'project', comp: {} },
     { eid: t2, name: 'doc', comp: { title: 'quiet work' } },
-    { eid: t2, name: 'task', comp: { status: 'open', project_eid: bare } },
+    { eid: t2, name: 'task', comp: { status: 'open', project: bare } },
   ])
   let c2 = comment(t2)
-  fanout(cast)(c2, { target_eid: t2 })
+  fanout(cast)(c2, { target: t2 })
   assertEquals(mintedFor(c2).length, 0) // no address, no mail
 })
 
@@ -308,12 +308,12 @@ Deno.test('fanout: commentary born with a task stays in its filing event', () =>
     {
       eid: filed,
       name: 'task',
-      comp: { status: 'open', project_eid: proj },
+      comp: { status: 'open', project: proj },
     },
     { eid: c, name: 'doc', comp: { title: '', body: 'filed T-1' } },
-    { eid: c, name: 'comment', comp: { target_eid: filed } },
+    { eid: c, name: 'comment', comp: { target: filed } },
   ])
-  fanout(cast)(c, { target_eid: filed })
+  fanout(cast)(c, { target: filed })
   assertEquals(mintedFor(c).length, 0)
 
   let pending = db.prepare(`select eid from comment where ${FANOUT_PENDING}`)
@@ -330,9 +330,9 @@ Deno.test('fanout: commentary born with a task stays in its filing event', () =>
   apply(db, [
     { eid: filed, name: 'task', comp: { status: 'wip' } },
     { eid: later, name: 'doc', comp: { title: '', body: 'new words' } },
-    { eid: later, name: 'comment', comp: { target_eid: filed } },
+    { eid: later, name: 'comment', comp: { target: filed } },
   ])
-  fanout(cast)(later, { target_eid: filed })
+  fanout(cast)(later, { target: filed })
   assertEquals(mintedFor(later).length, 1)
 })
 
@@ -344,11 +344,11 @@ Deno.test('fanout: the birth window is one second, either side of it', () => {
   let target = uid(), inside = uid(), outside = uid()
   apply(db, [
     { eid: target, name: 'doc', comp: { title: 'the work' } },
-    { eid: target, name: 'task', comp: { status: 'open', project_eid: proj } },
+    { eid: target, name: 'task', comp: { status: 'open', project: proj } },
     { eid: inside, name: 'doc', comp: { title: '', body: 'born beside it' } },
-    { eid: inside, name: 'comment', comp: { target_eid: target } },
+    { eid: inside, name: 'comment', comp: { target: target } },
     { eid: outside, name: 'doc', comp: { title: '', body: 'said after' } },
-    { eid: outside, name: 'comment', comp: { target_eid: target } },
+    { eid: outside, name: 'comment', comp: { target: target } },
   ])
   // Two seconds is the nearest gap the graph actually holds — inside the
   // window nothing sits between one second and it.
@@ -357,8 +357,8 @@ Deno.test('fanout: the birth window is one second, either side of it', () => {
     where eid = ?
   `).run(outside)
 
-  fanout(cast)(inside, { target_eid: target })
-  fanout(cast)(outside, { target_eid: target })
+  fanout(cast)(inside, { target: target })
+  fanout(cast)(outside, { target: target })
   assertEquals(mintedFor(inside).length, 0)
   assertEquals(mintedFor(outside).length, 1)
 })
@@ -366,7 +366,7 @@ Deno.test('fanout: the birth window is one second, either side of it', () => {
 Deno.test('the sweep predicate finds unreceipted recent comments only', () => {
   let { task } = fixture()
   let fresh = comment(task)
-  fanout(cast)(fresh, { target_eid: task }) // receipted
+  fanout(cast)(fresh, { target: task }) // receipted
   let missed = comment(task) // committed, effect never fired
   // past the horizon: history when the address arrived, not undelivered mail
   let old = comment(task)
@@ -392,7 +392,7 @@ Deno.test('rfcId: store wrappers unwrap, raw ids pass, brackets shed', () => {
 // The threading seam end-to-end: a reply names its subject by eid, and
 // delivery resolves that to --in-reply-to — the inbound row's unwrapped
 // store id, or an outbound row's sent_id.
-Deno.test('mailed: reply_to_eid resolves to --in-reply-to at delivery', async () => {
+Deno.test('mailed: reply_to resolves to --in-reply-to at delivery', async () => {
   let dir = Deno.makeTempDirSync()
   Deno.env.set('TASKS_MAIL_CMD', mailer(dir))
   let orig = uid()
@@ -421,7 +421,7 @@ Deno.test('mailed: reply_to_eid resolves to --in-reply-to at delivery', async ()
       {
         eid: reply,
         name: 'mail',
-        comp: { reply_to_eid: orig },
+        comp: { reply_to: orig },
       },
       { eid: reply, name: 'deliver', comp: { to: 'them@y.test' } },
     ],
@@ -456,7 +456,7 @@ Deno.test('mailed: reply_to_eid resolves to --in-reply-to at delivery', async ()
       {
         eid: follow,
         name: 'mail',
-        comp: { reply_to_eid: sent },
+        comp: { reply_to: sent },
       },
       { eid: follow, name: 'deliver', comp: { to: 'them@y.test' } },
     ],
@@ -471,7 +471,7 @@ Deno.test('mailed: reply_to_eid resolves to --in-reply-to at delivery', async ()
     db,
     [
       { eid: dark, name: 'doc', comp: { title: 'unthreadable', body: 'd' } },
-      { eid: dark, name: 'mail', comp: { reply_to_eid: sent } },
+      { eid: dark, name: 'mail', comp: { reply_to: sent } },
       { eid: dark, name: 'deliver', comp: { to: 'x@y.test' } },
     ],
     undefined,
@@ -603,7 +603,7 @@ Deno.test('mailed: native send stamps sent_id, threads, logs dir=out', async () 
         {
           eid: m,
           name: 'mail',
-          comp: { reply_to_eid: orig },
+          comp: { reply_to: orig },
         },
         // An external address (a fleet-domain one now resolves to its fleet
         // entity and delivers in-graph) — this is the native Cloudflare path.
@@ -743,7 +743,7 @@ Deno.test('mailed: a fleet recipient delivers locally — no send, no out-log', 
     assertMatch(String(r.received_at), /T/) // arrived
     assertMatch(String(drow(m)?.at), /T/) // delivered, and when
     assertEquals(Number(r.verified), 1) // apply() authenticated the author
-    assertEquals(r.target_eid, ops) // aimed at the recipient's inbox
+    assertEquals(r.target, ops) // aimed at the recipient's inbox
     // The author signs it, even though TASKS_MAIL_FROM is set — the env
     // default no longer speaks for anyone (T-9489).
     assertEquals(r.from, 'sender@bot.test')
@@ -820,7 +820,7 @@ Deno.test('mailed: a letter to S-<n> delivers to that session, in-graph', async 
     await mailed((cs) => got.push(...cs))(m, {})
     let r = row(m)
     assertEquals(erow(m), undefined)
-    assertEquals(r.target_eid, s) // aimed at the session it named
+    assertEquals(r.target, s) // aimed at the session it named
     assertMatch(String(r.message_id), /^local:\d+:/) // never left the graph
     assertEquals(Number(r.verified), 1)
     assertEquals(hits.length, 0) // no Cloudflare, so no rule to depend on
@@ -866,7 +866,7 @@ Deno.test('named: the address book outranks the derivation', async () => {
       author,
     )
     await mailed(cast)(m, {})
-    assertEquals(row(m).target_eid, squatter)
+    assertEquals(row(m).target, squatter)
   } finally {
     restore()
     nativeEnvOff()
@@ -896,7 +896,7 @@ Deno.test('mailed: a book entry Cloudflare would bounce still lands at home', as
     await mailed(cast)(m, {})
     let r = row(m)
     assertEquals(erow(m), undefined)
-    assertEquals(r.target_eid, p) // the pre-canon spelling found the book
+    assertEquals(r.target, p) // the pre-canon spelling found the book
     assertEquals(r.from, 'sender@bot.test') // signed by its author
     assertEquals(hits.length, 0)
   } finally {
@@ -917,14 +917,14 @@ Deno.test('mailed: local delivery keeps a relay mail aimed at its task', async (
     db,
     [
       { eid: m, name: 'doc', comp: { title: '[T] the work', body: 'a note' } },
-      { eid: m, name: 'mail', comp: { target_eid: t } },
+      { eid: m, name: 'mail', comp: { target: t } },
       { eid: m, name: 'deliver', comp: { to: 'relayed' } },
     ],
     undefined,
     author,
   )
   await mailed(cast)(m, {})
-  assertEquals(row(m).target_eid, t) // the arrive() precedent holds
+  assertEquals(row(m).target, t) // the arrive() precedent holds
   assertMatch(String(row(m).message_id), /^local:/)
 })
 
@@ -1004,7 +1004,7 @@ Deno.test('the sender is the author, in both directions and unborrowable', () =>
       {
         eid: back,
         name: 'mail',
-        comp: { reply_to_eid: out },
+        comp: { reply_to: out },
       },
       { eid: back, name: 'deliver', comp: { to: 'alpha@bot.test' } },
     ],
@@ -1027,7 +1027,7 @@ Deno.test('nothing signs by fallback: the relay, and the unattributed write', as
   // A relay carries someone's words, so it is signed by whoever wrote them.
   let { task } = fixture()
   let c = comment(task, voice)
-  fanout(cast)(c, { target_eid: task })
+  fanout(cast)(c, { target: task })
   assertEquals(mintedFor(c)[0].from, 'venture@bot.test')
 
   // An unattributed write signs nothing at all, and delivery refuses it

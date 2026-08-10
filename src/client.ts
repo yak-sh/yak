@@ -52,7 +52,7 @@ export let jsonOf = (
     Object.entries(source)
       .filter(([name]) => name != 'kind')
       .map(([name, comp]) => {
-        let { eid: _eid, ...props } = comp
+        let { eid: _id, ...props } = comp
         return [name, name == 'entity' ? { eid: r.eid, ...props } : props]
       }),
   ),
@@ -510,7 +510,7 @@ export let ledger = (entries: JournalEntry[], all: Row[]): string[] => {
         let first = cut(comps.doc?.body)
         let verdict = verdictName(comps.review?.verdict as string | undefined)
         lines.push(
-          `- ${verdict ? '✓' : '💬'} on ${name(comps.comment.target_eid)}${
+          `- ${verdict ? '✓' : '💬'} on ${name(comps.comment.target)}${
             verdict ? ` · ${verdict}` : ''
           }${first ? `: ${first}` : ''}`,
         )
@@ -538,7 +538,7 @@ export let ledger = (entries: JournalEntry[], all: Row[]): string[] => {
       } else if (c.name == 'dependency' && c.comp) {
         let verb = c.comp.gone ? 'unlinked' : 'linked'
         lines.push(
-          `- ∴ ${verb} ${name(c.eid)} ${c.comp.type} ${name(c.comp.child_eid)}`,
+          `- ∴ ${verb} ${name(c.eid)} ${c.comp.type} ${name(c.comp.child)}`,
         )
       } else if (c.comp && c.name != 'entity' && c.name != 'journal') {
         let cols = Object.keys(c.comp).filter((k) => k != 'eid').join(' ')
@@ -573,15 +573,13 @@ export let historyLine = (e: JournalEntry) => {
 export type Param = { comp: string; prop: string; value: unknown }
 
 let legacySpawnProp = (name: string) => {
-  let prop = name == 'persona' ? 'persona_eid' : name
-  return prop in comps.spawn && prop in comps.session ? prop : undefined
+  return name in comps.spawn && name in comps.session ? name : undefined
 }
 
 // '.title=Hello' | '.doc.title=Hello' → {comp, prop, value}; null if the
 // argument isn't a dot-param at all (a bare word). Bare props ride
-// query.ts route(), so the reference sugar holds for writes too:
-// '.assignee=jeff' patches task.assignee_eid (derefParams turns the
-// value into an eid at the door).
+// query.ts route(), so '.assignee=jeff' patches task.assignee and
+// derefParams turns the value into an eid at the door.
 // A hyphen is admitted into the NAME so a hyphenated spelling reaches
 // route() and earns the same `unknown prop` error as any other unknown.
 // No column is hyphenated, so nothing new routes — but before this, a
@@ -672,8 +670,8 @@ export let needed = async (id: string, where = '', comp = '') => {
   return need(rows(await snapshot()), id, where, comp)
 }
 // The eids a row NAMES through its typed columns — every {eid} prop across
-// its components (created.by/via and *_eid alike), read off the vocabulary so
-// a new reference column is picked up with no edit here. This is the set a
+// its components, read off the vocabulary so a new reference column is picked
+// up with no edit here. This is the set a
 // reader must fetch to render an id + title instead of a bare uuid.
 export let refsIn = (r: Row): string[] => {
   let out: string[] = []
@@ -689,7 +687,7 @@ export let refsIn = (r: Row): string[] => {
 
 // One entity's reading NEIGHBORHOOD without the whole-graph snapshot: the
 // entity and its edges (deps=1), the comments aimed at it, and every row those
-// NAME (edge endpoints, *_eid columns, comment authors, the claim's session) —
+// NAME (edge endpoints, typed refs, comment authors, the claim's session) —
 // exactly the set showMd resolves ids against. A page costs a handful of keyed
 // queries, not a 31 MB /snapshot. undefined when the id names nothing; the
 // caller owns that error path (needed() pulls the graph there for a "did you
@@ -704,7 +702,7 @@ export let around = async (id: string) => {
   let { deps: raw, ...rest } = hit
   let deps = (raw ?? []) as Dep[]
   let row = rowOf(rest)
-  let comments = await query([`.comment.target_eid=${row.eid}`])
+  let comments = await query([`.comment.target=${row.eid}`])
   let want = new Set<string>()
   for (let r of [row, ...comments]) for (let e of refsIn(r)) want.add(e)
   for (let d of deps) want.add(d.parent), want.add(d.child)
@@ -752,7 +750,7 @@ export let deref = (all: Row[], v: string, where = '', comp = '') =>
 // calls this, so a renamed or deleted project still leaves its board total.
 //
 // Each ref carries the prop it rode and the kind it targets — what deref
-// needs for `no entity: bindry (.project_eid) — did you mean …?`. Shared by
+// needs for `no entity: bindry (.project) — did you mean …?`. Shared by
 // the strict check and its keyed sibling below.
 let filterRefs = (preds: Pred[]) => {
   let out: { v: string; prop: string; target: string }[] = []
@@ -953,11 +951,11 @@ export let sessionFor = (
     source?: string
     transcript?: string
     operator?: boolean
-    actor_eid?: string
+    actor?: string
     pane?: string | null
     turn?: string
-    role_eid?: string
-    parent_eid?: string
+    role?: string
+    parent?: string
   },
 ) => {
   let s = all.find((r) => r.comps.session && r.comps.session.id == session)
@@ -968,8 +966,8 @@ export let sessionFor = (
   for (let k of ['agent_type', 'source', 'transcript', 'turn'] as const) {
     if (self?.[k] && s?.comps.session[k] != self[k]) comp[k] = self[k]
   }
-  if (self?.role_eid && s?.comps.session.role_eid != self.role_eid) {
-    comp.role_eid = self.role_eid
+  if (self?.role && s?.comps.session.role != self.role) {
+    comp.role = self.role
   }
   if (self?.pane !== undefined && s?.comps.session.pane != self.pane) {
     comp.pane = self.pane
@@ -983,13 +981,13 @@ export let sessionFor = (
   }
   // A tool-only session has no cwd to place it. Its first task interaction
   // anchors it to that venture; an identity it already wears always wins.
-  if (self?.actor_eid && !s?.comps.session.actor_eid) {
-    comp.actor_eid = self.actor_eid
+  if (self?.actor && !s?.comps.session.actor) {
+    comp.actor = self.actor
   }
   // Who spawned this run — set once, at birth: lineage is history, not a
   // field a later reify should relabel.
-  if (self?.parent_eid && !s?.comps.session.parent_eid) {
-    comp.parent_eid = self.parent_eid
+  if (self?.parent && !s?.comps.session.parent) {
+    comp.parent = self.parent
   }
   let changes: Change[] = Object.keys(comp).length
     ? [{ eid, name: 'session', comp }]
@@ -998,7 +996,7 @@ export let sessionFor = (
 }
 
 let taskActor = (all: Row[], target: string) =>
-  String(all.find((r) => r.eid == target)?.comps.task?.project_eid ?? '') ||
+  String(all.find((r) => r.eid == target)?.comps.task?.project ?? '') ||
   undefined
 
 // The claim pointing at a session entity — one batch, atomic on the server.
@@ -1015,8 +1013,8 @@ export let subChanges = (
 ): Change[] => {
   let had = all.find((r) =>
     r.comps.subscription &&
-    String(r.comps.subscription.actor_eid) == actor &&
-    String(r.comps.subscription.target_eid) == target
+    String(r.comps.subscription.actor) == actor &&
+    String(r.comps.subscription.target) == target
   )
   if (!mode) {
     return had ? [{ eid: had.eid, name: 'entity', comp: null }] : []
@@ -1024,7 +1022,7 @@ export let subChanges = (
   return [{
     eid: had?.eid ?? uuid(),
     name: 'subscription',
-    comp: { actor_eid: actor, target_eid: target, mode },
+    comp: { actor: actor, target: target, mode },
   }]
 }
 
@@ -1035,11 +1033,11 @@ export let claimChanges = (
   cwd?: string,
 ): Change[] => {
   let s = sessionFor(all, session, cwd, undefined, {
-    actor_eid: taskActor(all, target),
+    actor: taskActor(all, target),
   })
   return [
     ...s.changes,
-    { eid: target, name: 'claim', comp: { session_eid: s.eid } },
+    { eid: target, name: 'claim', comp: { session: s.eid } },
   ]
 }
 
@@ -1100,7 +1098,7 @@ export let spawnChanges = (
   let caller = s.by
     ? all.find((r) => String(r.comps.session?.id) == s.by)?.comps.session
     : undefined
-  let actor = owner?.eid ?? task.comps.task.project_eid ?? caller?.actor_eid
+  let actor = owner?.eid ?? task.comps.task.project ?? caller?.actor
   let eid = uuid()
   let changes: Change[] = [{
     eid,
@@ -1110,9 +1108,9 @@ export let spawnChanges = (
       provider: s.provider,
       model: s.model,
       ...(s.effort ? { effort: s.effort } : {}),
-      requested_task_eid: task.eid,
-      ...(persona ? { persona_eid: persona.eid } : {}),
-      ...(actor ? { actor_eid: actor } : {}),
+      requested_task: task.eid,
+      ...(persona ? { persona: persona.eid } : {}),
+      ...(actor ? { actor: actor } : {}),
     },
   }]
   return { eid, changes }
@@ -1147,7 +1145,7 @@ export let commentChanges = (
 ): Change[] => {
   let s = session
     ? sessionFor(all, session, undefined, undefined, {
-      actor_eid: taskActor(all, target),
+      actor: taskActor(all, target),
     })
     : undefined
   let eid = uuid()
@@ -1157,7 +1155,7 @@ export let commentChanges = (
     {
       eid,
       name: 'comment',
-      comp: { target_eid: target },
+      comp: { target: target },
     },
     ...(mark.verdict == null
       ? []
@@ -1171,8 +1169,8 @@ export let commentChanges = (
 // means a deliberate preview/bare view, which keeps showing project mail.
 export let isOperator = (s?: Record<string, unknown>) =>
   !s ||
-  (s.operator == true && !s.requested_task_eid &&
-    (String(s.origin ?? '') != 'managed' || !!s.role_eid))
+  (s.operator == true && !s.requested_task &&
+    (String(s.origin ?? '') != 'managed' || !!s.role))
 
 // The notification lifecycle (T-7006), read as pure Row-predicates over
 // the stamp components: presence is the fact, absence the earlier state.
@@ -1210,8 +1208,8 @@ export type Reader = {
 // watch/mute sets are asked about.
 export let aboutOf = (r: Row) =>
   String(
-    r.comps.comment?.target_eid ?? r.comps.mail?.target_eid ??
-      r.comps.knock?.target_eid ?? '',
+    r.comps.comment?.target ?? r.comps.mail?.target ??
+      r.comps.knock?.target ?? '',
   )
 
 // Every entity this actor has said something about, split by mode.
@@ -1220,8 +1218,8 @@ export let subsOf = (all: Row[], actor?: string) => {
   if (actor) {
     for (let r of all) {
       let sub = r.comps.subscription
-      if (!sub || String(sub.actor_eid) != actor) continue
-      ;(sub.mode == 'mute' ? muting : watching).add(String(sub.target_eid))
+      if (!sub || String(sub.actor) != actor) continue
+      ;(sub.mode == 'mute' ? muting : watching).add(String(sub.target))
     }
   }
   return { watching, muting }
@@ -1235,7 +1233,7 @@ export let subsOf = (all: Row[], actor?: string) => {
 export let addressed = (who: Reader) => (r: Row): boolean => {
   let c = r.comps.comment
   if (c) {
-    let t = String(c.target_eid ?? '')
+    let t = String(c.target ?? '')
     // Said TO the actor, not just to one of its sessions: an operator loop
     // outlives the session that happened to be running when someone spoke
     // to the venture, so a comment on P-19 must reach whoever runs P-19 —
@@ -1262,7 +1260,7 @@ export let addressed = (who: Reader) => (r: Row): boolean => {
     // follow. Sessions are addressable by id (`S-31@<fleet domain>`, resolved
     // in src/mail.ts), and gating that on `operator` would resolve the
     // address perfectly and then tell nobody.
-    if (who.session && String(m.target_eid) == who.session) return true
+    if (who.session && String(m.target) == who.session) return true
     // Project mail reaches only the operator loop, never a specialist.
     if (who.operator != true) return false
     // Two ways a letter is yours, and the FIRST is what a person has: it
@@ -1272,7 +1270,7 @@ export let addressed = (who: Reader) => (r: Row): boolean => {
     // (1338 arrived letters in a week: the wrong default is a firehose,
     // not an inconvenience).
     return (!!who.addrs?.size && who.addrs.has(String(m.to_addr ?? ''))) ||
-      (!!who.scope && String(m.target_eid) == who.scope)
+      (!!who.scope && String(m.target) == who.scope)
   }
   return false
 }
@@ -1334,7 +1332,7 @@ export let readerFor = (
   let sess = session
     ? all.find((r) => r.comps.session && String(r.comps.session.id) == session)
     : undefined
-  let actor = String(sess?.comps.session?.actor_eid ?? '') || undefined
+  let actor = String(sess?.comps.session?.actor ?? '') || undefined
   return {
     session: sess?.eid,
     actor,
@@ -1347,7 +1345,7 @@ export let readerFor = (
     ),
     operator: isOperator(sess?.comps.session),
     claims: new Set(
-      all.filter((r) => sess && r.comps.claim?.session_eid == sess.eid)
+      all.filter((r) => sess && r.comps.claim?.session == sess.eid)
         .map((r) => r.eid),
     ),
     ...subsOf(all, actor),
@@ -1416,10 +1414,10 @@ export let scopeFor = (
   let byPath = repoAt(all, cwd)?.eid
   if (byPath) return byPath
   let byEid = new Map(all.map((r) => [r.eid, r]))
-  let worn = byEid.get(String(sess?.comps.session?.persona_eid ?? ''))
-  let home = String(worn?.comps.persona?.home_eid ?? '')
+  let worn = byEid.get(String(sess?.comps.session?.persona ?? ''))
+  let home = String(worn?.comps.persona?.home ?? '')
   if (home && byEid.get(home)?.comps.project) return home
-  let actor = byEid.get(String(sess?.comps.session?.actor_eid ?? ''))
+  let actor = byEid.get(String(sess?.comps.session?.actor ?? ''))
   return actor?.comps.project ? actor.eid : undefined
 }
 
@@ -1446,7 +1444,7 @@ export let mailChanges = (m: {
     {
       eid,
       name: 'mail',
-      comp: m.replyTo ? { reply_to_eid: m.replyTo } : {},
+      comp: m.replyTo ? { reply_to: m.replyTo } : {},
     },
   ]
   return { eid, changes }
@@ -1458,7 +1456,7 @@ export let reSubject = (s: string) =>
 
 // The reply batch: answer goes to the far side — an inbound row's
 // sender, your own sent row's recipient — subject prefilled Re: …, and
-// reply_to_eid records the thread at authoring (delivery resolves it).
+// reply_to records the thread at authoring (delivery resolves it).
 // Whom a reply is FOR: the sender of a letter that arrived, the same
 // recipient for one we sent. Never a fallback BETWEEN those two — the
 // near miss is our own inbox (the address the letter was delivered to),
@@ -1482,7 +1480,7 @@ export let replyChanges = (row: Row, body: string) => {
   })
 }
 
-// A mail's THREAD: ancestors up the reply_to_eid chain, descendants by
+// A mail's THREAD: ancestors up the reply_to chain, descendants by
 // growing the set with whatever answers it — chronological, the way a
 // mail client shows one.
 export let threadOf = (all: Row[], eid: string): Row[] => {
@@ -1490,12 +1488,12 @@ export let threadOf = (all: Row[], eid: string): Row[] => {
   let seen = new Set<string>()
   for (let r = byEid.get(eid); r && !seen.has(r.eid);) {
     seen.add(r.eid)
-    r = byEid.get(String(r.comps.mail?.reply_to_eid ?? ''))
+    r = byEid.get(String(r.comps.mail?.reply_to ?? ''))
   }
   for (let grew = true; grew;) {
     grew = false
     for (let r of all) {
-      let p = String(r.comps.mail?.reply_to_eid ?? '')
+      let p = String(r.comps.mail?.reply_to ?? '')
       if (p && seen.has(p) && !seen.has(r.eid)) {
         seen.add(r.eid)
         grew = true
@@ -1511,16 +1509,16 @@ export let threadOf = (all: Row[], eid: string): Row[] => {
 // found, so a thread costs its own rows rather than every letter ever sent.
 export let mailThread = async (row: Row) => {
   let found = [row]
-  let parent = String(row.comps.mail?.reply_to_eid ?? '')
+  let parent = String(row.comps.mail?.reply_to ?? '')
   while (parent) {
     let [up] = await fetched([parent])
     if (!up || found.some((r) => r.eid == up.eid)) break
     found.push(up)
-    parent = String(up.comps.mail?.reply_to_eid ?? '')
+    parent = String(up.comps.mail?.reply_to ?? '')
   }
   let frontier = found.map((r) => r.eid)
   while (frontier.length) {
-    let down = await query([`.mail.reply_to_eid=${frontier.join(',')}`], 'mail')
+    let down = await query([`.mail.reply_to=${frontier.join(',')}`], 'mail')
     down = down.filter((r) => !found.some((x) => x.eid == r.eid))
     found.push(...down)
     frontier = down.map((r) => r.eid)
@@ -1568,11 +1566,11 @@ let snip = (s: string, n = 72) => s.length > n ? `${s.slice(0, n)}…` : s
 // answer.
 export let belongs = (r: Row, scope?: string) => {
   if (!scope) return true
-  if (r.comps.task) return r.comps.task.project_eid == scope
+  if (r.comps.task) return r.comps.task.project == scope
   if (r.comps.memory) {
-    return !r.comps.memory.scope_eid || r.comps.memory.scope_eid == scope
+    return !r.comps.memory.scope || r.comps.memory.scope == scope
   }
-  if (r.comps.persona) return r.comps.persona.home_eid == scope
+  if (r.comps.persona) return r.comps.persona.home == scope
   if (r.comps.project) return r.eid == scope
   return true
 }
@@ -1592,12 +1590,12 @@ let briefOf = (r: Row) => {
 // last ack, or after its birth if it never acked. Machine events and
 // the actor's own words don't count.
 let unheard = (all: Row[], sess: Row | undefined, now: number) => {
-  let actor = String(sess?.comps.session?.actor_eid ?? '')
+  let actor = String(sess?.comps.session?.actor ?? '')
   if (!actor) return []
   let recent = all
     .filter((r) =>
       r.comps.session && r.eid != sess?.eid &&
-      r.comps.session.actor_eid == actor &&
+      r.comps.session.actor == actor &&
       now - Date.parse(editedAt(r)) < 7 * DAY
     )
     .sort((a, b) => editedAt(b).localeCompare(editedAt(a)))
@@ -1610,7 +1608,7 @@ let unheard = (all: Row[], sess: Row | undefined, now: number) => {
       // session that did not exist when it was written.
       let n = all.filter((r) => {
         let c = r.comps.comment
-        return c && c.target_eid == s.eid &&
+        return c && c.target == s.eid &&
           r.comps.created?.by != actor && !r.comps.notified &&
           bornAt(r) > bornAt(s)
       }).length
@@ -1630,7 +1628,7 @@ let unheard = (all: Row[], sess: Row | undefined, now: number) => {
   return [`## unheard — comments after they wrapped: ${ids} (task show)`]
 }
 // PROJECT layer — the pulse: tasks that MOVED in the scope you stand in,
-// newest touch first, selected by task.project_eid so no foreign entity
+// newest touch first, selected by task.project so no foreign entity
 // rides in on a catch-all. This reads the same with or without a session,
 // which is what lets a bare `task context` in a repo show exactly what that
 // project's operator sees. Empty scope means an unplaceable caller: a small
@@ -1640,7 +1638,7 @@ let pulse = (all: Row[], now: number, budget: number, scope?: string) => {
   let age = (r: Row) => now - Date.parse(editedAt(r))
   let mine = scope
     ? all.filter((r) =>
-      r.comps.task && String(r.comps.task.project_eid) == scope &&
+      r.comps.task && String(r.comps.task.project) == scope &&
       age(r) < 7 * DAY
     )
     : all.filter((r) => r.comps.task && !settled(String(r.comps.task.status)))
@@ -1671,7 +1669,7 @@ let onMine = (
 ) => {
   if (!sess || budget < 1) return []
   let mine = new Set(
-    all.filter((r) => r.comps.claim?.session_eid == sess.eid).map((r) => r.eid),
+    all.filter((r) => r.comps.claim?.session == sess.eid).map((r) => r.eid),
   )
   if (!mine.size) return []
   let byEid = new Map(all.map((r) => [r.eid, r]))
@@ -1686,7 +1684,7 @@ let onMine = (
     .filter((r) => {
       let c = r.comps.comment
       return c && r.comps.created?.via != sess.eid &&
-        mine.has(String(c.target_eid)) && now - Date.parse(bornAt(r)) < 7 * DAY
+        mine.has(String(c.target)) && now - Date.parse(bornAt(r)) < 7 * DAY
     })
     .sort((a, b) => bornAt(b).localeCompare(bornAt(a)))
     .slice(0, budget)
@@ -1700,7 +1698,7 @@ let onMine = (
       let words = [verdict ? `[${verdict}]` : '', body].filter(Boolean).join(
         ' ',
       )
-      return `- ${idOf(byEid.get(String(c.target_eid))!)} 💬 ${
+      return `- ${idOf(byEid.get(String(c.target))!)} 💬 ${
         name(r.comps.created?.by ?? r.comps.created?.via)
       }: ${words}`
     }),
@@ -1742,14 +1740,14 @@ let decisions = (all: Row[], budget: number, scope?: string) => {
 // PROJECT layer — the fleet's shared mind, surfaced: the warmest UNSCOPED
 // memories (scoped ones ride their own project), listed for recognition
 // under a standing directive to read and adopt. recallIndex ranks and
-// formats; a `scope_eid=` (empty = absent) pred keeps it to the principles
+// formats; a `scope=` (empty = absent) pred keeps it to the principles
 // every operator shares. Recognition, not retrieval — the recall bump rides
 // deliberate expansion (memory_recall), never this listing.
 let fleetMemory = (all: Row[], now: number, budget: number) => {
   if (budget < 3) return []
   let global: Pred[] = [{
     comp: 'memory',
-    prop: 'scope_eid',
+    prop: 'scope',
     op: '',
     value: '',
   }]
@@ -1796,9 +1794,7 @@ export let sessionMeta = (all: Row[], sid: string) => {
   )
   if (!sess) return ''
   let s = sess.comps.session
-  let persona = s.persona_eid
-    ? all.find((r) => r.eid == s.persona_eid)
-    : undefined
+  let persona = s.persona ? all.find((r) => r.eid == s.persona) : undefined
   let meta: [string, unknown][] = [
     ['session', idOf(sess)],
     ['sid', sid],
@@ -1849,9 +1845,7 @@ export let contextDigest = (
   let cwd = String(sess?.comps.session?.cwd ?? '')
   scope = scopeFor(all, sess, cwd, scope)
   let here = scope ? byEid.get(scope) : undefined
-  let mine = sess
-    ? all.filter((r) => r.comps.claim?.session_eid == sess.eid)
-    : []
+  let mine = sess ? all.filter((r) => r.comps.claim?.session == sess.eid) : []
   let lines = [
     '# ' + (session ? `tasks · session ${session}` : 'tasks · a preview') +
     (here ? ` · ${idOf(here)} ${here.comps.doc?.title ?? ''}` : ''),
@@ -1891,12 +1885,12 @@ export let contextDigest = (
   // The thread from last time: the newest brief by the SAME operator —
   // the final message wrap captured, or a hand-written doc, never a
   // stub — so a session wakes knowing where its predecessor left off.
-  let actor = String(sess?.comps.session?.actor_eid ?? '') || scope
+  let actor = String(sess?.comps.session?.actor ?? '') || scope
   let prev = actor
     ? all
       .filter((r) =>
         r.comps.session && r.eid != sess?.eid &&
-        r.comps.session.actor_eid == actor && briefOf(r)
+        r.comps.session.actor == actor && briefOf(r)
       )
       .sort((a, b) => editedAt(b).localeCompare(editedAt(a)))[0]
     : undefined
@@ -2023,15 +2017,15 @@ export let noticesFor = (snap: Snapshot, session: string) => {
 // rather than "never looked". It rides the same parallel round anyway.
 let readerSet = async (sess?: Row) => {
   let s = sess?.comps.session ?? {}
-  let actor = String(s.actor_eid ?? '')
+  let actor = String(s.actor ?? '')
   let [kin, claims, subs, repos] = await Promise.all([
-    fetched([actor, String(s.persona_eid ?? '')].filter(Boolean)),
-    sess ? query([`.claim.session_eid=${sess.eid}`]) : [],
-    actor ? query([`.subscription.actor_eid=${actor}`]) : [],
+    fetched([actor, String(s.persona ?? '')].filter(Boolean)),
+    sess ? query([`.claim.session=${sess.eid}`]) : [],
+    actor ? query([`.subscription.actor=${actor}`]) : [],
     query(['.repo!']),
   ])
   let home = String(
-    kin.find((r) => r.comps.persona)?.comps.persona.home_eid ?? '',
+    kin.find((r) => r.comps.persona)?.comps.persona.home ?? '',
   )
   return [
     ...(sess ? [sess] : []),
@@ -2084,16 +2078,16 @@ export let inboxRows = async (
       : Promise.resolve([] as Row[])
   let directMail = ['.mail.message_id!']
   let found = await Promise.all([
-    ask('comment.target_eid', comments),
+    ask('comment.target', comments),
     // WHO a knock is for is the shared deliver.to now; wakes/outbound mail
     // it also returns are screened back out by inboxItem (no wake arm, and
     // the mail arm demands an inbound message_id).
     ask('deliver.to', knocks),
-    ask('mail.target_eid', boxes, directMail),
+    ask('mail.target', boxes, directMail),
     ask('mail.to_addr', addrs, directMail),
-    ask('comment.target_eid', watched),
-    ask('knock.target_eid', watched),
-    ask('mail.target_eid', watched),
+    ask('comment.target', watched),
+    ask('knock.target', watched),
+    ask('mail.target', watched),
   ])
   return { who, rows: uniq(found.flat()) }
 }
@@ -2124,20 +2118,20 @@ export let contextSnapshot = async (
       scope
         ? Promise.all([
           query(
-            [`.task.project_eid=${scope}`, `.updated.at>=${since}`],
+            [`.task.project=${scope}`, `.updated.at>=${since}`],
             'task',
           ),
           query(
-            [`.task.project_eid=${scope}`, `.created.at>=${since}`],
+            [`.task.project=${scope}`, `.created.at>=${since}`],
             'task',
           ),
         ]).then((sets) => sets.flat())
         : [],
       query(['.decided!']),
-      query(['.memory.scope_eid='], 'memory'),
-      actor ? query([`.session.actor_eid=${actor}`], 'session') : [],
+      query(['.memory.scope='], 'memory'),
+      actor ? query([`.session.actor=${actor}`], 'session') : [],
       inboxRows(session, cwd),
-      claims.length ? query([`.comment.target_eid=${claims.join(',')}`]) : [],
+      claims.length ? query([`.comment.target=${claims.join(',')}`]) : [],
     ])
   let preliminary = uniq([
     ...seed,
@@ -2153,7 +2147,7 @@ export let contextSnapshot = async (
     r.comps.session && String(r.comps.session.id) == session
   )
   let mine = sess
-    ? preliminary.filter((r) => r.comps.claim?.session_eid == sess.eid)
+    ? preliminary.filter((r) => r.comps.claim?.session == sess.eid)
     : []
   let available = preliminary
     .filter((r) => r.comps.task && !settled(String(r.comps.task.status)))
@@ -2170,7 +2164,7 @@ export let contextSnapshot = async (
     .sort((a, b) => editedAt(b).localeCompare(editedAt(a)))
     .slice(0, 5)
   let unheardRows = recent.length
-    ? await query([`.comment.target_eid=${recent.map((r) => r.eid).join(',')}`])
+    ? await query([`.comment.target=${recent.map((r) => r.eid).join(',')}`])
     : []
   let refs = await fetched(
     [...comments, ...unheardRows].flatMap(refsIn),
@@ -2207,7 +2201,7 @@ export let projectionSnapshot = async (): Promise<Snapshot> => {
 // No watch arm, because the bus has no watch rule: `inboxItem` overrides
 // address with the standing instruction, but the bus reads through
 // channelEvents, which never asks. Teach the bus to honour a watch and this
-// gather needs `.comment.target_eid=<watched…>` and its siblings the same
+// gather needs `.comment.target=<watched…>` and its siblings the same
 // day, or the rule lands with nothing to decide about.
 let busRows = async (who: Reader) => {
   let mine = [who.session, ...(who.operator ? [who.actor] : [])].filter(Boolean)
@@ -2215,11 +2209,11 @@ let busRows = async (who: Reader) => {
   let box = [who.session, ...(who.operator ? [who.scope] : [])]
     .filter(Boolean).join(',')
   let [said, aimed, letters] = await Promise.all([
-    query([`.comment.target_eid=${held}`, '.notified=']),
+    query([`.comment.target=${held}`, '.notified=']),
     // WHO a knock is for is the shared deliver.to; the same facet a wake/mail
     // wears, so keep only the knock rows the bus renders.
     query([`.deliver.to=${mine.join(',')}`, '.notified=']),
-    query([`.mail.target_eid=${box}`, '.notified=', '.opened=', '.archived=']),
+    query([`.mail.target=${box}`, '.notified=', '.opened=', '.archived=']),
   ])
   let knocks = aimed.filter((r) => r.comps.knock)
   let seen = [...said, ...knocks, ...letters]
@@ -2227,13 +2221,13 @@ let busRows = async (who: Reader) => {
   // What rendering needs BESIDE the candidates: a knock's target (its id, and
   // the comment carrying the words that rode with it) and each candidate's
   // byline, which names a writer and the session it wrote through.
-  let at = knocks.map((r) => String(r.comps.knock.target_eid ?? ''))
+  let at = knocks.map((r) => String(r.comps.knock.target ?? ''))
     .filter(Boolean)
   let by = seen.flatMap((r) => [r.comps.created?.by, r.comps.created?.via])
     .filter(Boolean).map(String)
   let [kin, notes] = await Promise.all([
     fetched([...new Set([...at, ...by])]),
-    at.length ? query([`.comment.target_eid=${at.join(',')}`]) : [],
+    at.length ? query([`.comment.target=${at.join(',')}`]) : [],
   ])
   return [...seen, ...kin, ...notes]
 }
@@ -2274,7 +2268,7 @@ export let releaseChange = (row: Row): Change => ({
 export let lapseChanges = (all: Row[], sess: Row): Change[] => {
   let id = String(sess.comps.session?.id ?? '')
   let name = idOf(sess)
-  return all.filter((r) => r.comps.claim?.session_eid == sess.eid)
+  return all.filter((r) => r.comps.claim?.session == sess.eid)
     .flatMap((r): Change[] => [
       ...(settled(String(r.comps.task?.status)) ? [] : commentChanges(
         all,
@@ -2298,7 +2292,7 @@ export let wrapChanges = (
     r.comps.session && String(r.comps.session.id) == session
   )
   if (!sess) return []
-  let held = all.filter((r) => r.comps.claim?.session_eid == sess.eid)
+  let held = all.filter((r) => r.comps.claim?.session == sess.eid)
   return [
     ...lapseChanges(all, sess),
     ...brief(all, sess, held, now, entries, final),
@@ -2325,7 +2319,7 @@ let brief = (
   let spoke = all.some((r) =>
     r.comps.comment && r.comps.created?.via == sess.eid
   )
-  let tasked = !!sess.comps.session?.requested_task_eid
+  let tasked = !!sess.comps.session?.requested_task
   if (!tasked && !held.length && !spoke && !entries.length) return []
   let day = new Date(now).toISOString().slice(0, 10)
   let title = String(sess.comps.doc?.title || `Work session ${day}`)
@@ -2491,7 +2485,7 @@ export let memoryChanges = (
   let changes: Change[] = [
     ...s.changes,
     { eid, name: 'doc', comp: { title: m.title, body: m.body ?? '' } },
-    { eid, name: 'memory', comp: { scope_eid: scope?.eid ?? null } },
+    { eid, name: 'memory', comp: { scope: scope?.eid ?? null } },
   ]
   if (m.feedback != null) changes.push(feedbackChange(all, eid, m.feedback))
   if (m.decided != null) changes.push(decidedChange(eid, m.decided))
@@ -2573,11 +2567,11 @@ export let showMd = (snap: { deps: Dep[] }, all: Row[], row: Row) => {
       let v = row.comps[comp][prop]
       if (v == null || v === '') {
         // A missing memory scope is a fleet-wide choice, not missing data.
-        if (comp == 'memory' && prop == 'scope_eid') fm.push('scope: shared')
+        if (comp == 'memory' && prop == 'scope') fm.push('scope: shared')
         continue
       }
       let p = propAt(comp, prop)!
-      let key = p.name.replace(/_eid$/, '')
+      let key = p.name
       let face = formatProp(p, v, { describe: said })
       fm.push(`${key}: ${face}`)
     }
@@ -2608,7 +2602,7 @@ export let showMd = (snap: { deps: Dep[] }, all: Row[], row: Row) => {
   if (title) out.push('', `# ${title}`)
   if (body) out.push('', body)
   let comments = all
-    .filter((r) => r.comps.comment?.target_eid == row.eid)
+    .filter((r) => r.comps.comment?.target == row.eid)
     .sort((a, b) => bornAt(a).localeCompare(bornAt(b)))
   if (comments.length) {
     out.push('', '## Comments')
@@ -2635,7 +2629,7 @@ export let showMd = (snap: { deps: Dep[] }, all: Row[], row: Row) => {
 }
 
 export let claimant = (all: Row[], r: Row) => {
-  let seid = r.comps.claim?.session_eid
+  let seid = r.comps.claim?.session
   if (!seid) return undefined
   let s = all.find((x) => x.eid == seid)
   return String(s?.comps.session?.id ?? seid)

@@ -25,15 +25,15 @@ export let List = ({ e }: { e: Ent }) => {
     <ListFrame>
       {pinned(e.eid)
         .toSorted((a, b) => b.z - a.z)
-        .filter((p) => pass(p.target_eid))
+        .filter((p) => pass(p.target))
         .map((p) => (
           <Row
             key={p.eid}
             draggable
             onDragStart={(ev: DragEvent) =>
-              dragData(ev, p.target_eid, p.view, p.w, p.eid)}
+              dragData(ev, p.target, p.view, p.w, p.eid)}
           >
-            <Entity eid={p.target_eid} view='List.Tile' />
+            <Entity eid={p.target} view='List.Tile' />
           </Row>
         ))}
     </ListFrame>

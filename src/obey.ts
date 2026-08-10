@@ -86,7 +86,7 @@ let speaker = (via: string) =>
 
 export let obeyed =
   (cast: Cast) => (ceid: string, comp: Record<string, unknown>) => {
-    let target = String(comp.target_eid ?? '')
+    let target = String(comp.target ?? '')
     if (!target) return
     let doc = db.prepare('select body from doc where eid = ?').get(ceid) as
       | { body: string | null }
@@ -132,6 +132,6 @@ let receipt = (target: string, body: string): Change[] => {
   let cid = crypto.randomUUID()
   return [
     { eid: cid, name: 'doc', comp: { title: '', body: inert(body) } },
-    { eid: cid, name: 'comment', comp: { target_eid: target } },
+    { eid: cid, name: 'comment', comp: { target: target } },
   ]
 }

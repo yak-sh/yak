@@ -37,7 +37,7 @@ export let refs = async (url) => {
   let hits = await door(`/query?${q}&kind=web&backlinks=1`)
   return hits.flatMap((h) => h.backlinks ?? [])
     // An EDGE backlink is a sentence someone wrote (about, reads); a
-    // dotted one is a column (card.target_eid — a card left open on the
+    // dotted one is a column (card.target — a card left open on the
     // canvas), which is furniture, not a reference.
     .filter((b) => !b.via.includes('.'))
 }

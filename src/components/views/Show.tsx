@@ -179,7 +179,7 @@ let Plate = ({ e }: { e: Ent }) => (
   <Prop
     eid={e.eid}
     comp='task'
-    prop='assignee_eid'
+    prop='assignee'
     editable
     handle
     name='assignee'
@@ -195,7 +195,7 @@ let Home = ({ e }: { e: Ent }) => (
   <Prop
     eid={e.eid}
     comp='task'
-    prop='project_eid'
+    prop='project'
     editable
     handle
     name='project'
@@ -339,7 +339,7 @@ export let Dependencies = ({ e }: { e: Ent }) => (
 export let CommentDependencies = ({ e }: { e: Ent }) => (
   <>
     <Entity
-      eid={e.comment!.target_eid}
+      eid={e.comment!.target}
       view='Dependency'
       type='comment'
       label='on'
@@ -354,12 +354,10 @@ export let CommentDependencies = ({ e }: { e: Ent }) => (
 export let Runs = ({ e }: { e: Ent }) => {
   let ids = new Set(
     backlinks(e.eid)
-      .filter((b) =>
-        ['session.requested_task_eid', 'session.role_eid'].includes(b.via)
-      )
+      .filter((b) => ['session.requested_task', 'session.role'].includes(b.via))
       .map((b) => b.from),
   )
-  if (e.claim) ids.add(e.claim.session_eid)
+  if (e.claim) ids.add(e.claim.session)
   if (!ids.size) return null
   return (
     <RunsEl>
@@ -381,12 +379,12 @@ export let Boards = ({ e }: { e: Ent }) => {
   )
 }
 
-// The tasks homed here — every task whose project_eid names this entity.
+// The tasks homed here — every task whose project names this entity.
 // Open work only, board-ordered (status column, then rank): the project
 // page is a working view; the full history lives on its boards.
 export let Tasks = ({ e }: { e: Ent }) => {
   let ids = backlinks(e.eid)
-    .filter((b) => b.via == 'task.project_eid')
+    .filter((b) => b.via == 'task.project')
     .map((b) => ent(b.from))
     .filter((t) => t.task && !settled(t.task.status))
     .sort((a, b) =>
@@ -531,8 +529,8 @@ export let Meta = (
       {talk > 0 && <Talk>💬 {talk}</Talk>}
       {e.task && <Plate e={e} />}
       {e.claim && (
-        <Claim {...linkProps(ent(e.claim.session_eid))}>
-          ⚑ {viaName(e.claim.session_eid)}
+        <Claim {...linkProps(ent(e.claim.session))}>
+          ⚑ {viaName(e.claim.session)}
         </Claim>
       )}
       <Stamp e={e} by={(comp) => <By e={e} comp={comp} />} />

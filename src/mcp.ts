@@ -280,7 +280,7 @@ paging graph_query.`,
       return text(
         hits.map((h) =>
           `${idOf(h)} ${h.kind}: ${h.title || '(untitled)'}` +
-          `${h.open_eid != h.eid ? ` → on ${h.open_id ?? h.open_eid}` : ''}` +
+          `${h.open != h.eid ? ` → on ${h.open_id ?? h.open}` : ''}` +
           ` — ${h.snip.replaceAll('\x01', '[').replaceAll('\x02', ']')}` +
           `${h.retired ? ' · retired' : ''}`
         ).join('\n') || '(no hits)',
@@ -332,8 +332,8 @@ filters must ALL match. ${FILTERS} ${BUS}`,
 params?}]. The single-task fields and tasks mode are exclusive. A
 task's dedicated title/body/status wins over the same property in its
 params; params carries every other writable property. The whole batch
-lands in one atomic apply. *_eid param values accept human ids
-(.project_eid=P-19). ${GRAMMAR} ${BUS}`,
+lands in one atomic apply. Reference param values accept human ids
+(.project=P-19). ${GRAMMAR} ${BUS}`,
     {
       title: title().optional(),
       body: body().optional(),
@@ -416,7 +416,7 @@ lands in one atomic apply. *_eid param values accept human ids
     `Patch an entity by id (T-3, bare num, or eid) with dot-params, e.g.
 [".status=done"] or [".body=notes..."]. Only the named props change.
 comment optionally lands a plain comment in the same atomic batch.
-*_eid values accept human ids. Cancelling (".status=cancelled") calls off
+Reference values accept human ids. Cancelling (".status=cancelled") calls off
 work without pretending it finished; use comment to say why. ${DOC}
 ${GRAMMAR} ${BUS}`,
     {
@@ -874,7 +874,7 @@ your read is refused, with their text and a fresh token. ${BUS}`,
           patch.push({
             eid: row.eid,
             name: 'memory',
-            comp: { scope_eid: project.eid },
+            comp: { scope: project.eid },
           })
         }
         if (feedback != null) {
@@ -936,7 +936,7 @@ what you actually use. ids mode cannot be combined with query,
 feedback, or limit. In index mode, feedback: true keeps only memories
 recording someone's correction, and limit caps returned index lines
 (default 20). query mixes text terms with dot-param filters
-('.scope_eid=P-19', '.feedback.by=jeff', '.count>=3',
+('.scope=P-19', '.feedback.by=jeff', '.count>=3',
 '.last_confirmed_at<"last month"'); rank is recency vs earned stability
 — recalled often and spread out decays slowest. ${BUS}`,
     {
@@ -1083,9 +1083,9 @@ ${GRAMMAR} ${FILTERS}`,
     `Raw wire access: apply a batch of changes atomically. A change is
 {eid, name, comp} — comp is a PATCH (omitted columns untouched), comp:
 null deletes the component, {name:'entity', comp:null} deletes the
-entity. Mint uuids for new entities. eid and *_eid comp values accept
+entity. Mint uuids for new entities. eid and reference comp values accept
 human ids (T-3, P-19) for EXISTING entities. Edges: name 'dependency',
-comp {type: ${edges.join('|')}, child_eid} links eid→child; add gone:
+comp {type: ${edges.join('|')}, child} links eid→child; add gone:
 true to unlink (a triple has no row key, so the comp names the whole
 edge). Unknown component names are forward-compatible no-ops. Same
 allowlist and claim-lease rules as every other client; writes broadcast
@@ -1139,14 +1139,14 @@ as ~240px for visibility.`,
         let hh = (Number(c.h) || 0) / 2 / (Number(c.zoom) || 1)
         return {
           camera: idOf(r),
-          client: String(c.client_eid),
+          client: String(c.client),
           // WHO this viewport is: the client's browser, and when the
           // camera last moved — a live human reads recent, a ghost stale.
           agent: String(
-            byEid.get(String(c.client_eid))?.comps.client?.user_agent ?? '?',
+            byEid.get(String(c.client))?.comps.client?.user_agent ?? '?',
           ),
           moved_at: r.comps.updated?.at ?? r.comps.created?.at ?? null,
-          canvas: String(c.canvas_eid),
+          canvas: String(c.canvas),
           zoom: c.zoom,
           viewport: { x0: c.x - hw, y0: c.y - hh, x1: c.x + hw, y1: c.y + hh },
         }
@@ -1157,7 +1157,7 @@ as ~240px for visibility.`,
         let h = Number(p.h) || 240
         let seen = cams
           .filter((v) =>
-            String(p.canvas_eid) == v.canvas &&
+            String(p.canvas) == v.canvas &&
             p.x < v.viewport.x1 && p.x + Number(p.w) > v.viewport.x0 &&
             p.y < v.viewport.y1 && Number(p.y) + h > v.viewport.y0
           )
@@ -1166,7 +1166,7 @@ as ~240px for visibility.`,
           card: idOf(r),
           moved_at: r.comps.updated?.at ?? r.comps.created?.at ?? null,
           eid: r.eid,
-          target: title(c.target_eid),
+          target: title(c.target),
           view: c.view,
           x: p.x,
           y: p.y,
@@ -1208,7 +1208,7 @@ card id (close it with card_close, move it with card_move).`,
       if (x == null || y == null) {
         // The LIVELIEST viewport, not the newest-minted: a camera moves
         // whenever its human pans, so updated.at names who's looking.
-        let cam = all.filter((r) => r.comps.camera?.canvas_eid == canvas.eid)
+        let cam = all.filter((r) => r.comps.camera?.canvas == canvas.eid)
           .sort((a, b) =>
             String(b.comps.updated?.at ?? '').localeCompare(
               String(a.comps.updated?.at ?? ''),
@@ -1239,14 +1239,14 @@ card id (close it with card_close, move it with card_move).`,
           eid,
           name: 'card',
           comp: {
-            target_eid: row.eid,
+            target: row.eid,
             view: view ?? views[row.kind] ?? 'JSON',
           },
         },
         {
           eid,
           name: 'pin',
-          comp: { canvas_eid: canvas.eid, x, y, w: 0, h: 0, z }, // w 0 = auto
+          comp: { canvas: canvas.eid, x, y, w: 0, h: 0, z }, // w 0 = auto
         },
       ])
       let made = rows(await io.read()).find((r) => r.eid == eid)
@@ -1440,7 +1440,7 @@ T-3, bare num, or eid. ${BUS}`,
       let all = rows(snap)
       let row = find(all, id)
       if (!row) return err(`no entity: ${id}`)
-      let comments = all.filter((r) => r.comps.comment?.target_eid == row.eid)
+      let comments = all.filter((r) => r.comps.comment?.target == row.eid)
       let edges = edgesOf(snap, all, row.eid)
       return bus(
         JSON.stringify(

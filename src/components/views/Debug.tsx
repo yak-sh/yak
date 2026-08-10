@@ -160,7 +160,7 @@ let Row = ({ comp, k, v }: { comp?: string; k: string; v: unknown }) => (
 
 // A reference reads as its ASSOCIATION, not its raw column: the entity's
 // chip + title, then the eid it stored. One row, not two — the column
-// (assignee_eid, a uuid) and the association (assignee, the entity) said
+// (assignee, a uuid) and the association (assignee, the entity) said
 // together. The chip is a link; the rest of the value opens the eid editor
 // where the reference is wire-writable.
 let refFace = (v: unknown) =>
@@ -181,7 +181,7 @@ let refFace = (v: unknown) =>
 // A component's rows are the UNION of its stored columns and its
 // vocabulary columns: a freshly-added comp lands in the cache empty
 // (mutate({name, comp:{}})), so the vocab keys are what surface its
-// editable Prop rows before any value exists — set memory.scope_eid the
+// editable Prop rows before any value exists — set memory.scope the
 // moment you add memory. For an entity loaded whole (snapshot carries every
 // column) this union is exactly its stored keys.
 let cells = (e: Ent, name: string, comp: Record<string, unknown>) => {
@@ -199,16 +199,15 @@ let cells = (e: Ent, name: string, comp: Record<string, unknown>) => {
         ×
       </Rm>
     )
-    // The reference detector reads the PropType, so `created.by` and a bare
-    // `to` are associations as surely as `project_eid` — the _eid suffix is
-    // just a hint we strip off the key when it wears one.
+    // The reference detector reads the PropType, so `created.by`, `to`, and
+    // `project` are associations without a second naming convention.
     let assoc = isRef(name, k)
     let editable = k in (vocab[name] ?? {})
     return (
       <Fragment key={`${name}.${k}`}>
         <Key>
           <Comp mod={compTone(name)}>{name}.</Comp>
-          {assoc ? k.replace(/_eid$/, '') : k}
+          {k}
           {rm}
         </Key>
         {assoc
@@ -388,7 +387,7 @@ export let DebugTaskItem = ({ e }: { e: Ent }) => (
     <Id e={e} />
     <Kind>{e.kind}</Kind>
     <Title {...title(e.doc?.title ?? '')} />
-    {e.claim && <Claim>⚑ {viaName(e.claim.session_eid)}</Claim>}
+    {e.claim && <Claim>⚑ {viaName(e.claim.session)}</Claim>}
     <Prio>{formatProp(priority, e.task!.priority)}</Prio>
     <Status mod={e.task!.status}>{e.task!.status}</Status>
   </Item>

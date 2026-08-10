@@ -62,9 +62,9 @@ let sessionsOf = (e: Ent) =>
     .map((r) => ent(r.eid))
     .filter((s) => {
       let job = jobOf(s)
-      let role = s.session?.role_eid
-      return (job != null && ent(job).task?.project_eid == e.eid) ||
-        (!!role && ent(role).role?.scope_eid == e.eid)
+      let role = s.session?.role
+      return (job != null && ent(job).task?.project == e.eid) ||
+        (!!role && ent(role).role?.scope == e.eid)
     })
     .sort((a, b) =>
       Number(awake(b.session!)) - Number(awake(a.session!)) || b.num - a.num
@@ -73,7 +73,7 @@ let sessionsOf = (e: Ent) =>
 // The roles scoped here, running first.
 let rolesOf = (e: Ent) =>
   backlinks(e.eid)
-    .filter((b) => b.via == 'role.scope_eid')
+    .filter((b) => b.via == 'role.scope')
     .map((b) => ent(b.from))
     .sort((a, b) =>
       Number(b.role?.state == 'running') -
@@ -84,7 +84,7 @@ let rolesOf = (e: Ent) =>
 // settled ones included, because recent work IS the news.
 let latelyOf = (e: Ent) =>
   backlinks(e.eid)
-    .filter((b) => b.via == 'task.project_eid')
+    .filter((b) => b.via == 'task.project')
     .map((b) => ent(b.from))
     .filter((t) => !!t.task)
     .sort(byWarmth(Date.now()))

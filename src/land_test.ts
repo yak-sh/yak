@@ -31,12 +31,12 @@ Deno.test('landing reads the session task and its project from the graph', () =>
     },
   })
   let task = row('t', 42, 'task', {
-    task: { status: 'open', project_eid: project.eid },
+    task: { status: 'open', project: project.eid },
   })
   let session = row('s', 7, 'session', {
     session: {
       id: 'thread',
-      requested_task_eid: task.eid,
+      requested_task: task.eid,
       cwd: '/worktrees/S-7',
       branch: 'session/S-7',
     },
@@ -71,8 +71,8 @@ let graph = () => {
   })
   let task = (eid: string, num: number, claimed = false) =>
     row(eid, num, 'task', {
-      task: { status: 'open', project_eid: project.eid },
-      ...(claimed ? { claim: { session_eid: session.eid } } : {}),
+      task: { status: 'open', project: project.eid },
+      ...(claimed ? { claim: { session: session.eid } } : {}),
     })
   return { project, session, task }
 }
@@ -89,7 +89,7 @@ Deno.test('a claimed task is the session task when nothing requested one', () =>
 Deno.test('the request wins over the claim it agrees with', () => {
   let g = graph()
   let claimed = g.task('t', 42, true)
-  g.session.comps.session.requested_task_eid = claimed.eid
+  g.session.comps.session.requested_task = claimed.eid
   assertEquals(
     landing([g.project, claimed, g.session], 'thread').task,
     claimed,
@@ -126,15 +126,15 @@ Deno.test('a landing completes and releases in one idempotent batch', () => {
   let other = row('o', 8, 'session', { session: { id: 'other' } })
   let task = row('t', 42, 'task', {
     task: { status: 'wip' },
-    claim: { session_eid: session.eid },
+    claim: { session: session.eid },
   })
   let extra = row('x', 43, 'task', {
     task: { status: 'open' },
-    claim: { session_eid: session.eid },
+    claim: { session: session.eid },
   })
   let foreign = row('f', 44, 'task', {
     task: { status: 'open' },
-    claim: { session_eid: other.eid },
+    claim: { session: other.eid },
   })
   let changes = landedChanges(
     [task, extra, foreign, session, other],
@@ -155,7 +155,7 @@ Deno.test('a landing completes and releases in one idempotent batch', () => {
   ])
   let receipt = row(doc.eid, 8, 'comment', {
     doc: doc.comp!,
-    comment: { target_eid: task.eid },
+    comment: { target: task.eid },
   })
   delete task.comps.claim
   delete extra.comps.claim

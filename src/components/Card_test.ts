@@ -6,8 +6,8 @@ import { pinStyle } from './Card.tsx'
 
 let pin = (x: number, y: number, z: number) => ({
   eid: 'card-style',
-  canvas_eid: 'canvas',
-  target_eid: 'target',
+  canvas: 'canvas',
+  target: 'target',
   view: 'Full',
   x,
   y,
@@ -20,7 +20,7 @@ Deno.test('card style follows moved coordinates without a z change', () => {
   cache.value = {
     'card-style': {
       pin: pin(10, 20, 1),
-      card: { eid: 'card-style', target_eid: 'target', view: 'Full' },
+      card: { eid: 'card-style', target: 'target', view: 'Full' },
     },
   }
   let live = signal(pin(10, 20, 1))

@@ -68,7 +68,7 @@ let snap: Snapshot = {
     { eid: T1, name: 'entity', comp: { eid: T1, num: 2, created_at: '' } },
     { eid: T1, name: 'doc', comp: { title: 'First', body: '' } },
     { eid: T1, name: 'task', comp: { status: 'wip', priority: 0 } },
-    { eid: T1, name: 'claim', comp: { session_eid: S } },
+    { eid: T1, name: 'claim', comp: { session: S } },
     { eid: T2, name: 'entity', comp: { eid: T2, num: 3, created_at: '' } },
     { eid: T2, name: 'doc', comp: { title: 'Second', body: '' } },
     { eid: T2, name: 'task', comp: { status: 'open', priority: 1 } },
@@ -128,7 +128,7 @@ let CASES: [string, { comp: string; prop: string; value: unknown } | RegExp][] =
     }],
     ['.persona=N-1', {
       comp: 'session',
-      prop: 'persona_eid',
+      prop: 'persona',
       value: 'N-1',
     }],
     ['.spawn.provider=fake', {
@@ -151,12 +151,12 @@ let CASES: [string, { comp: string; prop: string; value: unknown } | RegExp][] =
     ['.priority=banana', /priority is a number/],
     ['.priority=P', /priority is a number/],
     ['.pin.x=12', { comp: 'pin', prop: 'x', value: 12 }],
-    ['.assignee=jeff', { comp: 'task', prop: 'assignee_eid', value: 'jeff' }],
+    ['.assignee=jeff', { comp: 'task', prop: 'assignee', value: 'jeff' }],
     // a shared ref name filters as any-of, but a WRITE must aim
     ['.actor=jeff', /ambiguous for writes/],
-    ['.session.actor_eid=jeff', {
+    ['.session.actor=jeff', {
       comp: 'session',
-      prop: 'actor_eid',
+      prop: 'actor',
       value: 'jeff',
     }],
     ['.x=12', /ambiguous/],
@@ -203,7 +203,7 @@ Deno.test('notices: unseen comments on claimed tasks + messages to the session',
     { eid, name: 'entity', comp: { eid, num: 90 } },
     { eid, name: 'created', comp: { at, by: P, via } },
     { eid, name: 'doc', comp: { title: '', body } },
-    { eid, name: 'comment', comp: { target_eid: target } },
+    { eid, name: 'comment', comp: { target: target } },
   ]
   let busSnap: Snapshot = {
     changes: [
@@ -214,10 +214,10 @@ Deno.test('notices: unseen comments on claimed tasks + messages to the session',
       {
         eid: S,
         name: 'session',
-        comp: { id: 'sess-x', cwd: '/w', actor_eid: P },
+        comp: { id: 'sess-x', cwd: '/w', actor: P },
       },
       { eid: B, name: 'entity', comp: { eid: B, num: 80, created_at: '' } },
-      { eid: B, name: 'session', comp: { id: 'sess-b', actor_eid: P } },
+      { eid: B, name: 'session', comp: { id: 'sess-b', actor: P } },
       // on the claimed task, after the cutoff: heard
       ...mk('c-1', T1, B, '2026-01-02', 'heads up'),
       { eid: 'c-1', name: 'review', comp: { verdict: 'approved' } },
@@ -299,15 +299,15 @@ Deno.test('notices: comments, acted knocks, and verified operator mail surface t
       {
         eid: S,
         name: 'session',
-        comp: { id: 'sess-x', cwd: '/w', actor_eid: P, operator: 1 },
+        comp: { id: 'sess-x', cwd: '/w', actor: P, operator: 1 },
       },
       { eid: C, name: 'entity', comp: { eid: C, num: 43 } },
       { eid: C, name: 'created', comp: { at: '2026-01-02', by: P, via: B } },
       { eid: C, name: 'doc', comp: { title: '', body: 'review this' } },
-      { eid: C, name: 'comment', comp: { target_eid: T1 } },
+      { eid: C, name: 'comment', comp: { target: T1 } },
       { eid: K, name: 'entity', comp: { eid: K, num: 44 } },
       { eid: K, name: 'created', comp: { at: '2026-01-03' } },
-      { eid: K, name: 'knock', comp: { target_eid: T1 } },
+      { eid: K, name: 'knock', comp: { target: T1 } },
       { eid: K, name: 'deliver', comp: { to: S } }, // WHO — the shared facet
       // The outcome is the shared error facet now (D-14945); the inbox
       // surfaces the knock regardless, the same as its old acted_at receipt.
@@ -323,7 +323,7 @@ Deno.test('notices: comments, acted knocks, and verified operator mail surface t
         eid: M,
         name: 'mail',
         comp: {
-          target_eid: P,
+          target: P,
           from: 'friend@example.test',
           received_at: '2026-01-04',
           message_id: 'm-1',
@@ -337,7 +337,7 @@ Deno.test('notices: comments, acted knocks, and verified operator mail surface t
         eid: U,
         name: 'mail',
         comp: {
-          target_eid: P,
+          target: P,
           received_at: '2026-01-05',
           message_id: 'm-2',
           verified: 0,
@@ -393,7 +393,7 @@ Deno.test('notices: overflow remains pending until a later read', () => {
         comp: { at: `2026-01-${String(i + 1).padStart(2, '0')}` },
       },
       { eid, name: 'doc', comp: { title: '', body: `message ${i}` } },
-      { eid, name: 'comment', comp: { target_eid: S } },
+      { eid, name: 'comment', comp: { target: S } },
     ]
   }).flat()
   let g: Snapshot = { changes: [...snap.changes, ...comments], deps: snap.deps }
@@ -429,7 +429,7 @@ Deno.test('notices: per-item stamp is drain-proof (a served ack cannot hide a si
     { eid, name: 'entity', comp: { eid, num: 90 } },
     { eid, name: 'created', comp: { at, via: B } },
     { eid, name: 'doc', comp: { title: '', body } },
-    { eid, name: 'comment', comp: { target_eid: S } },
+    { eid, name: 'comment', comp: { target: S } },
   ]
   let g: Snapshot = {
     changes: [
@@ -471,13 +471,13 @@ Deno.test('rows filter through the query grammar + byBoard', () => {
   assertEquals(matchQuery(by(T1).comps, parseQuery('.status=wip')), true)
   assertEquals(matchQuery(by(T1).comps, parseQuery('.status=done')), false)
   let review = {
-    comment: { target_eid: T1 },
+    comment: { target: T1 },
     review: { verdict: 'approved' },
   }
   assertEquals(
     matchQuery(
       review,
-      parseQuery(`.comment.target_eid=${T1}&.verdict=approved`),
+      parseQuery(`.comment.target=${T1}&.verdict=approved`),
     ),
     true,
   )
@@ -509,9 +509,9 @@ Deno.test('sessionFor: reuse, mint, cwd + pid refresh', () => {
 Deno.test('sessionFor: task context fills only a missing actor', () => {
   let actor = 'aaaaaaaa-0000-4000-8000-000000000004'
   assertEquals(
-    sessionFor(all, 'sess-x', undefined, undefined, { actor_eid: actor })
+    sessionFor(all, 'sess-x', undefined, undefined, { actor: actor })
       .changes,
-    [{ eid: S, name: 'session', comp: { actor_eid: actor } }],
+    [{ eid: S, name: 'session', comp: { actor: actor } }],
   )
   let worn = rows({
     changes: [
@@ -519,12 +519,12 @@ Deno.test('sessionFor: task context fills only a missing actor', () => {
       {
         eid: S,
         name: 'session',
-        comp: { id: 'sess-x', cwd: '/w', actor_eid: T2 },
+        comp: { id: 'sess-x', cwd: '/w', actor: T2 },
       },
     ],
   })
   assertEquals(
-    sessionFor(worn, 'sess-x', undefined, undefined, { actor_eid: actor })
+    sessionFor(worn, 'sess-x', undefined, undefined, { actor: actor })
       .changes,
     [],
   )
@@ -613,8 +613,8 @@ Deno.test('worktreeRoot: a linked worktree resolves, a main checkout does not', 
 Deno.test('sessionFor: a child records its operator parent, once', () => {
   // a fresh child carries the parent it was born under
   assertEquals(
-    (sessionFor(all, 'child-1', '/wt', undefined, { parent_eid: S })
-      .changes[0].comp as Record<string, unknown>).parent_eid,
+    (sessionFor(all, 'child-1', '/wt', undefined, { parent: S })
+      .changes[0].comp as Record<string, unknown>).parent,
     S,
   )
   // an existing session keeps the parent it already wears — a later reify
@@ -625,12 +625,12 @@ Deno.test('sessionFor: a child records its operator parent, once', () => {
       {
         eid: S,
         name: 'session',
-        comp: { id: 'child-1', parent_eid: 'op-eid' },
+        comp: { id: 'child-1', parent: 'op-eid' },
       },
     ],
   })
   assertEquals(
-    sessionFor(worn, 'child-1', undefined, undefined, { parent_eid: 'other' })
+    sessionFor(worn, 'child-1', undefined, undefined, { parent: 'other' })
       .changes,
     [],
   )
@@ -638,7 +638,7 @@ Deno.test('sessionFor: a child records its operator parent, once', () => {
 
 Deno.test('claimChanges points at the session entity', () => {
   let cs = claimChanges(all, T2, 'sess-x')
-  assertEquals(cs, [{ eid: T2, name: 'claim', comp: { session_eid: S } }])
+  assertEquals(cs, [{ eid: T2, name: 'claim', comp: { session: S } }])
 })
 
 Deno.test('spawnChanges: one session change carrying the request', () => {
@@ -655,8 +655,8 @@ Deno.test('spawnChanges: one session change carrying the request', () => {
   assertEquals(c.comp?.provider, 'claude')
   assertEquals(c.comp?.model, 'claude-fable-5')
   assertEquals(c.comp?.effort, 'high')
-  assertEquals(c.comp?.requested_task_eid, T2)
-  assertEquals(c.comp?.persona_eid, T2)
+  assertEquals(c.comp?.requested_task, T2)
+  assertEquals(c.comp?.persona, T2)
   assertMatch(String(c.comp?.id), /^[0-9a-f-]{36}$/)
   assertThrows(() =>
     spawnChanges(all, { task: 'T-99', provider: 'x', model: 'y' })
@@ -700,7 +700,7 @@ Deno.test("spawnChanges: the actor chain — owner, then the task's project, the
       { eid: R, name: 'entity', comp: { eid: R, num: 25, created_at: '' } },
       { eid: R, name: 'doc', comp: { title: 'Drifter', body: '' } },
       { eid: W, name: 'entity', comp: { eid: W, num: 26, created_at: '' } },
-      { eid: W, name: 'session', comp: { id: 'sess-w', actor_eid: J } },
+      { eid: W, name: 'session', comp: { id: 'sess-w', actor: J } },
       { eid: T, name: 'entity', comp: { eid: T, num: 27, created_at: '' } },
       { eid: T, name: 'doc', comp: { title: 'work', body: '' } },
       { eid: T, name: 'task', comp: { status: 'open', priority: 0 } },
@@ -715,7 +715,7 @@ Deno.test("spawnChanges: the actor chain — owner, then the task's project, the
         comp: {
           status: 'open',
           priority: 0,
-          project_eid: V,
+          project: V,
         },
       },
     ],
@@ -735,24 +735,24 @@ Deno.test("spawnChanges: the actor chain — owner, then the task's project, the
       ...o,
     }).changes[0].comp
   // a projectless task: the child works for whoever the caller works for
-  assertEquals(spawn()?.actor_eid, J)
+  assertEquals(spawn()?.actor, J)
   // a persona owned by an operator: the spawn acts AS the operator,
   // whichever way the ownership edge is spelled
-  assertEquals(spawn({ persona: P })?.actor_eid, O)
-  assertEquals(spawn({ persona: Q })?.actor_eid, O)
+  assertEquals(spawn({ persona: P })?.actor, O)
+  assertEquals(spawn({ persona: Q })?.actor, O)
   // an unowned persona changes nothing — inheritance still holds
-  assertEquals(spawn({ persona: R })?.actor_eid, J)
+  assertEquals(spawn({ persona: R })?.actor, J)
   // a task WITH a project: the run acts for the project, not the person
   // who pressed spawn (T-7081) — a persona's owner still outranks it
-  assertEquals(spawn({ task: 'T-29' })?.actor_eid, V)
-  assertEquals(spawn({ task: 'T-29', persona: P })?.actor_eid, O)
+  assertEquals(spawn({ task: 'T-29' })?.actor, V)
+  assertEquals(spawn({ task: 'T-29', persona: P })?.actor, O)
   // no caller, no owner, no project: the spawn stays unattributed
-  assertEquals('actor_eid' in (spawn({ by: undefined }) ?? {}), false)
+  assertEquals('actor' in (spawn({ by: undefined }) ?? {}), false)
 })
 
 Deno.test('hookClaim: an unclaimed task claims, anything else is quiet', () => {
   assertEquals(hookClaim(all, 'T-3', 'sess-x', '/w'), [
-    { eid: T2, name: 'claim', comp: { session_eid: S } },
+    { eid: T2, name: 'claim', comp: { session: S } },
   ])
   assertEquals(hookClaim(all, 'T-2', 'sess-x'), []) // already held
   assertEquals(hookClaim(all, 'T-99', 'sess-x'), []) // no such task
@@ -762,13 +762,13 @@ Deno.test('hookClaim: an unclaimed task claims, anything else is quiet', () => {
 Deno.test('commentChanges: doc + aim, session reified for server stamping', () => {
   let cs = commentChanges(all, T1, 'hi', 'sess-x')
   assertEquals(cs.length, 2)
-  assertEquals(cs[1].comp, { target_eid: T1 })
-  assertEquals(commentChanges(all, T1, 'hi')[1].comp, { target_eid: T1 })
+  assertEquals(cs[1].comp, { target: T1 })
+  assertEquals(commentChanges(all, T1, 'hi')[1].comp, { target: T1 })
   let review = commentChanges(all, T1, '', 'sess-x', {
     verdict: 'approved',
   })
   assertEquals(review.slice(-2), [
-    { eid: review[0].eid, name: 'comment', comp: { target_eid: T1 } },
+    { eid: review[0].eid, name: 'comment', comp: { target: T1 } },
     { eid: review[0].eid, name: 'review', comp: { verdict: 'approved' } },
   ])
 })
@@ -779,13 +779,13 @@ Deno.test('task interaction anchors a tool-only session to the project', () => {
     changes: [
       ...snap.changes,
       { eid: project, name: 'project', comp: {} },
-      { eid: T2, name: 'task', comp: { project_eid: project } },
+      { eid: T2, name: 'task', comp: { project: project } },
     ],
   })
-  let actor = { eid: S, name: 'session', comp: { actor_eid: project } }
+  let actor = { eid: S, name: 'session', comp: { actor: project } }
   assertEquals(claimChanges(g, T2, 'sess-x'), [
     actor,
-    { eid: T2, name: 'claim', comp: { session_eid: S } },
+    { eid: T2, name: 'claim', comp: { session: S } },
   ])
   assertEquals(commentChanges(g, T2, 'project words', 'sess-x')[0], actor)
 })
@@ -803,7 +803,7 @@ Deno.test('wrapChanges: unfinished gets the trail, done goes quiet', () => {
     cs.find((c) => c.name == 'doc')?.comp?.body,
     '⚑ lease lapsed: session S-1 ended before this was done',
   )
-  assertEquals(cs.find((c) => c.name == 'comment')?.comp, { target_eid: T1 })
+  assertEquals(cs.find((c) => c.name == 'comment')?.comp, { target: T1 })
   let done = structuredClone(snap)
   done.changes.find((c) => c.eid == T1 && c.name == 'task')!.comp!.status =
     'done'
@@ -925,7 +925,7 @@ Deno.test('sessionMeta: the YAML lead — known fields only, or nothing', () => 
           provider: 'claude',
           model: 'claude-opus-4-8',
           effort: 'high',
-          persona_eid: PN,
+          persona: PN,
         },
       },
       { eid: PN, name: 'entity', comp: { eid: PN, num: 22, created_at: '' } },
@@ -986,7 +986,7 @@ Deno.test('unreadMail + digest: unread counts, read/outbound stay quiet', () => 
       {
         eid: S,
         name: 'session',
-        comp: { id: 'sess-x', cwd: '/w', operator: 1, actor_eid: A },
+        comp: { id: 'sess-x', cwd: '/w', operator: 1, actor: A },
       },
       { eid: A, name: 'entity', comp: { eid: A, num: 26, created_at: '' } },
       { eid: A, name: 'doc', comp: { title: 'Operator', body: '' } },
@@ -997,22 +997,22 @@ Deno.test('unreadMail + digest: unread counts, read/outbound stay quiet', () => 
       ...mk(M1, 21, {
         to_addr: 'v@x.test',
         message_id: 'msg:1:<a@x>',
-        target_eid: P,
+        target: P,
       }),
       ...mk(M2, 22, {
         to_addr: 'v@x.test',
         message_id: 'msg:2:<b@x>',
-        target_eid: P,
+        target: P,
       }),
       // read-state now rides the `opened` stamp (T-7006), not mail.read_at
       { eid: M2, name: 'opened', comp: { at: '2026-07-22T00:00:00Z' } },
       ...mk(M3, 23, {}), // outbound, born read
       // addressed to ME by address, ABOUT some other entity — the case
-      // the old target_eid-only screen dropped on the floor
+      // the old target-only screen dropped on the floor
       ...mk(M4, 25, {
         to_addr: 'me@x.test',
         message_id: 'msg:4:<d@x>',
-        target_eid: T2,
+        target: T2,
       }),
     ],
     deps: snap.deps,
@@ -1069,29 +1069,29 @@ Deno.test('inbox: every source, archived hides, opened marks read', () => {
       {
         eid: Sx,
         name: 'session',
-        comp: { id: 'me', actor_eid: A, cwd: '/w', operator: 1 },
+        comp: { id: 'me', actor: A, cwd: '/w', operator: 1 },
       },
       { eid: P, name: 'entity', comp: { eid: P, num: 103, created_at: '' } },
       { eid: P, name: 'project', comp: {} },
       { eid: TC, name: 'entity', comp: { eid: TC, num: 104, created_at: '' } },
       { eid: TC, name: 'task', comp: { status: 'open' } },
-      { eid: TC, name: 'claim', comp: { session_eid: Sx } },
-      { eid: c1, name: 'comment', comp: { target_eid: Sx } },
-      { eid: c2, name: 'comment', comp: { target_eid: TC } },
-      { eid: kn, name: 'knock', comp: { target_eid: TC } },
+      { eid: TC, name: 'claim', comp: { session: Sx } },
+      { eid: c1, name: 'comment', comp: { target: Sx } },
+      { eid: c2, name: 'comment', comp: { target: TC } },
+      { eid: kn, name: 'knock', comp: { target: TC } },
       { eid: kn, name: 'deliver', comp: { to: A } },
       {
         eid: ml,
         name: 'mail',
-        comp: { to_addr: 'm@x', message_id: 'm:1', target_eid: P },
+        comp: { to_addr: 'm@x', message_id: 'm:1', target: P },
       },
-      { eid: cAc, name: 'comment', comp: { target_eid: A } }, // said to the venture
-      { eid: cO, name: 'comment', comp: { target_eid: P } }, // not addressed to me
-      { eid: cA, name: 'comment', comp: { target_eid: Sx } },
+      { eid: cAc, name: 'comment', comp: { target: A } }, // said to the venture
+      { eid: cO, name: 'comment', comp: { target: P } }, // not addressed to me
+      { eid: cA, name: 'comment', comp: { target: Sx } },
       { eid: cA, name: 'archived', comp: { at: 'now' } },
-      { eid: cR, name: 'comment', comp: { target_eid: Sx } },
+      { eid: cR, name: 'comment', comp: { target: Sx } },
       { eid: cR, name: 'opened', comp: { at: 'now' } },
-      { eid: cN, name: 'comment', comp: { target_eid: Sx } },
+      { eid: cN, name: 'comment', comp: { target: Sx } },
       { eid: cN, name: 'notified', comp: { at: 'now' } }, // told, not dealt with
     ],
   })
@@ -1151,12 +1151,12 @@ Deno.test("readerAt: a person hears their own letters, not the fleet's", () => {
       {
         eid: theirs,
         name: 'mail',
-        comp: { to_addr: 'v@x', message_id: 'm:3', target_eid: VENTURE },
+        comp: { to_addr: 'v@x', message_id: 'm:3', target: VENTURE },
       },
       { eid: sent, name: 'mail', comp: { to_addr: 'me@x' } },
-      { eid: kn, name: 'knock', comp: { target_eid: VENTURE } },
+      { eid: kn, name: 'knock', comp: { target: VENTURE } },
       { eid: kn, name: 'deliver', comp: { to: ME } },
-      { eid: said, name: 'comment', comp: { target_eid: ME } },
+      { eid: said, name: 'comment', comp: { target: ME } },
     ],
   })
   let who = readerAt(g, ME)
@@ -1180,7 +1180,7 @@ Deno.test('readerAt: a project reads its own project mail', () => {
       {
         eid: ml,
         name: 'mail',
-        comp: { to_addr: 'p@x', message_id: 'm:9', target_eid: P2 },
+        comp: { to_addr: 'p@x', message_id: 'm:9', target: P2 },
       },
     ],
   })
@@ -1203,13 +1203,13 @@ Deno.test('addressed: a letter to my session reaches me without operator', () =>
       {
         eid: mine,
         name: 'mail',
-        comp: { to_addr: 'S-31@bot.test', message_id: 'm:31', target_eid: S },
+        comp: { to_addr: 'S-31@bot.test', message_id: 'm:31', target: S },
       },
       // Project mail stays operator-only — this arm is unchanged.
       {
         eid: theirs,
         name: 'mail',
-        comp: { to_addr: 'p@x', message_id: 'm:32', target_eid: P3 },
+        comp: { to_addr: 'p@x', message_id: 'm:32', target: P3 },
       },
     ],
   })
@@ -1231,7 +1231,7 @@ Deno.test('addressed: an unsent letter to my session is not in my inbox', () => 
   let S = 'bbbbbbbb-0000-4000-8000-000000000341'
   let out = 'bbbbbbbb-0000-4000-8000-000000000342'
   let g = rows({
-    changes: [{ eid: out, name: 'mail', comp: { to: 'x', target_eid: S } }],
+    changes: [{ eid: out, name: 'mail', comp: { to: 'x', target: S } }],
   })
   assertEquals(g.filter(inboxItem({ session: S, operator: false })).length, 0)
 })
@@ -1246,11 +1246,11 @@ Deno.test('isOperator: only an explicit eligible session is an operator', () => 
   assertEquals(isOperator({ origin: 'external', operator: true }), true)
   assertEquals(isOperator({ origin: 'managed', operator: true }), false)
   assertEquals(
-    isOperator({ origin: 'managed', operator: true, role_eid: 'R' }),
+    isOperator({ origin: 'managed', operator: true, role: 'R' }),
     true,
   )
   assertEquals(
-    isOperator({ requested_task_eid: 'T', operator: true }),
+    isOperator({ requested_task: 'T', operator: true }),
     false,
   )
 })
@@ -1269,7 +1269,7 @@ Deno.test('project mail reaches the operator, not a specialist; direct address a
       {
         eid: Op,
         name: 'session',
-        comp: { id: 'op', actor_eid: P, cwd: '/w', operator: 1 },
+        comp: { id: 'op', actor: P, cwd: '/w', operator: 1 },
       },
       { eid: Sp, name: 'entity', comp: { eid: Sp, num: 202, created_at: '' } },
       {
@@ -1278,10 +1278,10 @@ Deno.test('project mail reaches the operator, not a specialist; direct address a
         // a managed spawn: origin stamped, started on a task
         comp: {
           id: 'sp',
-          actor_eid: P,
+          actor: P,
           cwd: '/w',
           origin: 'managed',
-          requested_task_eid: 'aaaaaaaa-0000-4000-8000-000000000299',
+          requested_task: 'aaaaaaaa-0000-4000-8000-000000000299',
         },
       },
       { eid: P, name: 'entity', comp: { eid: P, num: 203, created_at: '' } },
@@ -1289,9 +1289,9 @@ Deno.test('project mail reaches the operator, not a specialist; direct address a
       {
         eid: ml,
         name: 'mail',
-        comp: { to_addr: 'm@x', message_id: 'm:1', target_eid: P },
+        comp: { to_addr: 'm@x', message_id: 'm:1', target: P },
       },
-      { eid: cm, name: 'comment', comp: { target_eid: Sp } }, // aimed at the specialist
+      { eid: cm, name: 'comment', comp: { target: Sp } }, // aimed at the specialist
       { eid: ka, name: 'knock', comp: {} },
       { eid: ka, name: 'deliver', comp: { to: P } },
       { eid: kd, name: 'knock', comp: {} },
@@ -1329,13 +1329,13 @@ Deno.test('watch adds, mute subtracts, absent leaves addressed() alone', () => {
   let base: Change[] = [
     { eid: A, name: 'doc', comp: { title: 'Operator' } },
     { eid: A, name: 'project', comp: {} },
-    { eid: Sx, name: 'session', comp: { id: 'me', operator: 1, actor_eid: A } },
+    { eid: Sx, name: 'session', comp: { id: 'me', operator: 1, actor: A } },
     { eid: far, name: 'task', comp: { status: 'open', priority: 0 } },
     { eid: mine, name: 'task', comp: { status: 'open', priority: 0 } },
-    { eid: mine, name: 'claim', comp: { session_eid: Sx } },
-    { eid: cFar, name: 'comment', comp: { target_eid: far } },
-    { eid: cMine, name: 'comment', comp: { target_eid: mine } },
-    { eid: cDirect, name: 'comment', comp: { target_eid: Sx } },
+    { eid: mine, name: 'claim', comp: { session: Sx } },
+    { eid: cFar, name: 'comment', comp: { target: far } },
+    { eid: cMine, name: 'comment', comp: { target: mine } },
+    { eid: cDirect, name: 'comment', comp: { target: Sx } },
   ]
   let seen = (extra: Change[]) => {
     let g = rows({ changes: [...base, ...extra] })
@@ -1349,7 +1349,7 @@ Deno.test('watch adds, mute subtracts, absent leaves addressed() alone', () => {
     seen([{
       eid: sub,
       name: 'subscription',
-      comp: { actor_eid: A, target_eid: far, mode: 'watch' },
+      comp: { actor: A, target: far, mode: 'watch' },
     }]),
     [cFar, cMine, cDirect].sort(),
   )
@@ -1358,7 +1358,7 @@ Deno.test('watch adds, mute subtracts, absent leaves addressed() alone', () => {
     seen([{
       eid: sub,
       name: 'subscription',
-      comp: { actor_eid: A, target_eid: mine, mode: 'mute' },
+      comp: { actor: A, target: mine, mode: 'mute' },
     }]),
     [cDirect],
   )
@@ -1367,7 +1367,7 @@ Deno.test('watch adds, mute subtracts, absent leaves addressed() alone', () => {
     seen([{
       eid: sub,
       name: 'subscription',
-      comp: { actor_eid: A, target_eid: Sx, mode: 'mute' },
+      comp: { actor: A, target: Sx, mode: 'mute' },
     }]),
     [cMine],
   )
@@ -1376,7 +1376,7 @@ Deno.test('watch adds, mute subtracts, absent leaves addressed() alone', () => {
     seen([{
       eid: sub,
       name: 'subscription',
-      comp: { actor_eid: far, target_eid: mine, mode: 'mute' },
+      comp: { actor: far, target: mine, mode: 'mute' },
     }]),
     [cMine, cDirect].sort(),
   )
@@ -1391,12 +1391,12 @@ Deno.test('subChanges: one row per (actor, target), --gone removes it', () => {
   let none = rows({ changes: [] })
   let first = subChanges(none, A, T, 'watch')
   assertEquals(first.length, 1)
-  assertEquals(first[0].comp, { actor_eid: A, target_eid: T, mode: 'watch' })
+  assertEquals(first[0].comp, { actor: A, target: T, mode: 'watch' })
   let had = rows({
     changes: [{
       eid: sub,
       name: 'subscription',
-      comp: { actor_eid: A, target_eid: T, mode: 'watch' },
+      comp: { actor: A, target: T, mode: 'watch' },
     }],
   })
   assertEquals(subChanges(had, A, T, 'mute')[0].eid, sub) // the same row
@@ -1413,7 +1413,7 @@ Deno.test('sessionFor: hook identity round-trips and refreshes only on change', 
     operator: false,
     pane: '%42',
     turn: 'idle',
-    role_eid: 'role',
+    role: 'role',
   }
   let minted = sessionFor(all, 'sess-new', '/w2', 4242, self)
   assertEquals(minted.changes[0].comp, {
@@ -1425,7 +1425,7 @@ Deno.test('sessionFor: hook identity round-trips and refreshes only on change', 
     turn: 'idle',
     pane: '%42',
     operator: 0,
-    role_eid: 'role',
+    role: 'role',
   })
   // a known session already wearing the same agent_type is silent for it;
   // only the still-absent source patches.
@@ -1442,7 +1442,7 @@ Deno.test('sessionFor: hook identity round-trips and refreshes only on change', 
           pane: '%42',
           turn: 'idle',
           operator: false,
-          role_eid: 'role',
+          role: 'role',
         },
       },
     ],
@@ -1535,7 +1535,7 @@ Deno.test('scopeFor: arg > cwd-repo > persona-home > actor-project > none', () =
       { eid: R, name: 'entity', comp: { eid: R, num: 3, created_at: '' } },
       { eid: R, name: 'project', comp: {} }, // the actor, standing for a project
       { eid: PER, name: 'entity', comp: { eid: PER, num: 4, created_at: '' } },
-      { eid: PER, name: 'persona', comp: { home_eid: Q } },
+      { eid: PER, name: 'persona', comp: { home: Q } },
       {
         eid: SESS,
         name: 'entity',
@@ -1544,7 +1544,7 @@ Deno.test('scopeFor: arg > cwd-repo > persona-home > actor-project > none', () =
       {
         eid: SESS,
         name: 'session',
-        comp: { id: 's', persona_eid: PER, actor_eid: R },
+        comp: { id: 's', persona: PER, actor: R },
       },
     ],
   })
@@ -1558,7 +1558,7 @@ Deno.test('scopeFor: arg > cwd-repo > persona-home > actor-project > none', () =
   // cwd places nothing: the worn persona's home (Q)
   assertEquals(scopeFor(g, sess, '/nowhere'), Q)
   // no persona: the actor, since it IS a project (R)
-  let noPer = { ...sess!, comps: { session: { id: 's', actor_eid: R } } }
+  let noPer = { ...sess!, comps: { session: { id: 's', actor: R } } }
   assertEquals(scopeFor(g, noPer, '/nowhere'), R)
   // nothing places it: undefined
   let bare = { ...sess!, comps: { session: { id: 's' } } }
@@ -1581,7 +1581,7 @@ Deno.test('mailChanges/replyChanges: to as given, Re: derived, thread edge set',
     replyTo: 'some-eid',
   })
   assertEquals(full.changes[1].comp, { to: 'x@y.test' })
-  assertEquals(full.changes[2].comp, { reply_to_eid: 'some-eid' })
+  assertEquals(full.changes[2].comp, { reply_to: 'some-eid' })
   assertEquals(reSubject('question'), 'Re: question')
   assertEquals(reSubject('Re: Re: question'), 'Re: question')
   assertEquals(reSubject('FWD: fw: re: question'), 'Re: question')
@@ -1600,7 +1600,7 @@ Deno.test('mailChanges/replyChanges: to as given, Re: derived, thread edge set',
   }
   let r = replyChanges(inbound, 'answer')
   assertEquals(r.changes[1].comp?.to, 'them@y.test') // the sender → deliver.to
-  assertEquals(r.changes[2].comp?.reply_to_eid, 'm1')
+  assertEquals(r.changes[2].comp?.reply_to, 'm1')
   assertEquals(r.changes[0].comp?.title, 'Re: asked')
   // our own sent letter: the far side is its recipient, the shared deliver.to
   let sent = {
@@ -1655,8 +1655,8 @@ Deno.test('threadOf: both directions, in time order', () => {
     },
   })
   let a = mk('a', 1, '2026-07-20T00:00:00Z', {})
-  let b = mk('b', 2, '2026-07-21T00:00:00Z', { reply_to_eid: 'a' })
-  let c = mk('c', 3, '2026-07-22T00:00:00Z', { reply_to_eid: 'b' })
+  let b = mk('b', 2, '2026-07-21T00:00:00Z', { reply_to: 'a' })
+  let c = mk('c', 3, '2026-07-22T00:00:00Z', { reply_to: 'b' })
   let lone = mk('d', 4, '2026-07-22T01:00:00Z', {})
   let g = [c, lone, a, b] // scrambled on purpose
   for (let start of ['a', 'b', 'c']) {
@@ -1754,12 +1754,12 @@ Deno.test('contextDigest: pulse — scoped tasks that moved, no foreign bleed', 
       ...mk(PF, ago(1), { doc: { title: 'Theirs' }, project: {} }),
       ...mk(eid(1), ago(2), {
         doc: { title: 'Ours moved', body: '' },
-        task: { status: 'wip', priority: 0, project_eid: P },
+        task: { status: 'wip', priority: 0, project: P },
       }),
       // foreign-project task: must NOT bleed into our pulse
       ...mk(eid(2), ago(1), {
         doc: { title: 'Foreign task', body: '' },
-        task: { status: 'wip', priority: 0, project_eid: PF },
+        task: { status: 'wip', priority: 0, project: PF },
       }),
       // a mail letter — doc but no task comp: never pulse material
       ...mk(eid(3), ago(1), {
@@ -1781,8 +1781,8 @@ Deno.test('contextDigest: pulse — scoped tasks that moved, no foreign bleed', 
       // pulse's age gate alone, nothing else.
       ...mk(eid(6), ago(24 * 9), {
         doc: { title: 'Ours stale', body: '' },
-        task: { status: 'wip', priority: 1, project_eid: P },
-        claim: { session_eid: eid(7) },
+        task: { status: 'wip', priority: 1, project: P },
+        claim: { session: eid(7) },
       }),
     ],
     deps: [],
@@ -1824,23 +1824,23 @@ Deno.test('contextDigest: ## decided — by decision date, stamp-only', () => {
       ...mk(P, '2026-07-01T00:00:00Z', { doc: { title: 'Ours' }, project: {} }),
       ...mk(eid(1), '2026-07-19T00:00:00Z', {
         doc: { title: 'Ship weekly' },
-        task: { status: 'done', priority: 0, project_eid: P },
+        task: { status: 'done', priority: 0, project: P },
         decided: { at: '2026-05-04T00:00:00Z' },
       }),
       ...mk(eid(2), '2026-07-02T00:00:00Z', {
         doc: { title: 'Bill quarterly' },
-        memory: { type: 'project', scope_eid: P },
+        memory: { type: 'project', scope: P },
         decided: { at: '2026-06-30T00:00:00Z' },
       }),
       // no stamp: absent from the section, whatever its age
       ...mk(eid(3), '2026-07-19T00:00:00Z', {
         doc: { title: 'Still arguing' },
-        task: { status: 'open', priority: 0, project_eid: P },
+        task: { status: 'open', priority: 0, project: P },
       }),
       // decided in another project: not ours
       ...mk(eid(4), '2026-07-19T00:00:00Z', {
         doc: { title: 'Their call' },
-        task: { status: 'done', priority: 0, project_eid: eid(8) },
+        task: { status: 'done', priority: 0, project: eid(8) },
         decided: { at: '2026-07-01T00:00:00Z' },
       }),
     ],
@@ -1868,8 +1868,8 @@ Deno.test('belongs: a project reads each kind, and the fleet rides along', () =>
     kind: 'thing',
     comps,
   })
-  let task = row({ task: { project_eid: P } })
-  let mine = row({ memory: { scope_eid: P } })
+  let task = row({ task: { project: P } })
+  let mine = row({ memory: { scope: P } })
   let fleet = row({ memory: {} })
   let doc = row({ doc: { title: 'a note' } })
   assertEquals([task, mine, fleet, doc].map((r) => belongs(r, P)), [
@@ -1889,7 +1889,7 @@ Deno.test('belongs: a project reads each kind, and the fleet rides along', () =>
   // A project entity is its own scope; a persona belongs to its home.
   assertEquals(belongs({ ...row({ project: {} }), eid: P }, P), true)
   assertEquals(belongs({ ...row({ project: {} }), eid: P }, Q), false)
-  assertEquals(belongs(row({ persona: { home_eid: Q } }), Q), true)
+  assertEquals(belongs(row({ persona: { home: Q } }), Q), true)
 })
 
 Deno.test('spec: a typed task — leading P, params anywhere, body below', () => {
@@ -1942,7 +1942,7 @@ Deno.test('memoryChanges: doc face + memory comp, session writer and scope', () 
   assertEquals(changes.length, 2) // the session exists: nothing minted
   assertEquals(changes[0].comp?.title, 'Prefers terse tests')
   assertEquals(changes[1].name, 'memory')
-  assertEquals(changes[1].comp, { scope_eid: T2 })
+  assertEquals(changes[1].comp, { scope: T2 })
   assertThrows(() =>
     memoryChanges(all, { title: 'x', scope: 'P-99', session: 'sess-x' })
   )
@@ -1978,7 +1978,7 @@ Deno.test('memoryChanges: an unknown session is minted alongside', () => {
   let { changes } = memoryChanges(all, { title: 'x', session: 'newcomer' })
   assertEquals(changes.length, 3)
   assertEquals(changes[0].name, 'session')
-  assertEquals(changes[2].comp, { scope_eid: null })
+  assertEquals(changes[2].comp, { scope: null })
 })
 
 // ---- the design door's pure half ----
@@ -2032,7 +2032,7 @@ Deno.test('recallIndex: warmest first, index lines only, filtered', () => {
     changes: [
       { eid: M1, name: 'entity', comp: { eid: M1, num: 11, created_at: '' } },
       { eid: M1, name: 'doc', comp: { title: 'cold fact', body: 'long ago' } },
-      { eid: M1, name: 'memory', comp: { scope_eid: null } },
+      { eid: M1, name: 'memory', comp: { scope: null } },
       {
         eid: M1,
         name: 'recall',
@@ -2078,7 +2078,7 @@ Deno.test('derefParams: reference values resolve at the door', () => {
   assertThrows(
     () => one('.assignee=ghost'),
     Error,
-    'assignee_eid is a human id / alias / UUID',
+    'assignee is a human id / alias / UUID',
   )
 })
 
@@ -2115,7 +2115,7 @@ Deno.test('checkRefs: an unresolvable handle in a filter is a typo, not an empty
   assertThrows(
     () => ask('.project=bindry'),
     Error,
-    "no entity: bindry (.project_eid) — did you mean 'bindery' (P-30, bindery)?",
+    "no entity: bindry (.project) — did you mean 'bindery' (P-30, bindery)?",
   )
   assertThrows(() => ask('.project=zzzznope'), Error, 'no entity: zzzznope')
   // lists check every part; != is the same claim about the same handle
@@ -2138,7 +2138,7 @@ Deno.test('checkRefs: an unresolvable handle in a filter is a typo, not an empty
 Deno.test('resolveRefs stays total for a handle that is gone', () => {
   let preds = resolveRefs(parseQuery('.project=vanished'), () => undefined)
   assertEquals(preds[0].value, 'vanished') // as typed, matching nothing
-  assertEquals(matchQuery({ task: { project_eid: 'x' } }, preds), false)
+  assertEquals(matchQuery({ task: { project: 'x' } }, preds), false)
 })
 
 // The failure fires exactly when someone reasons from the fleet id: the
@@ -2177,7 +2177,7 @@ Deno.test('derefParams: a failed project names the alias that would work', () =>
   assertThrows(
     () => one('.project=flux'),
     Error,
-    "project_eid is a human id / alias / UUID — got 'flux'",
+    "project is a human id / alias / UUID — got 'flux'",
   )
   // Two things keep a task out of the answer. The declared target narrows
   // `.project=` to projects; and a task's TITLE is a sentence about work,
@@ -2234,18 +2234,18 @@ Deno.test('showMd: memories name their scope and persona memberships', () => {
       { eid: P, name: 'project', comp: {} },
       { eid: N, name: 'entity', comp: { eid: N, num: 21 } },
       { eid: N, name: 'doc', comp: { title: 'Operator' } },
-      { eid: N, name: 'persona', comp: { home_eid: P } },
+      { eid: N, name: 'persona', comp: { home: P } },
       { eid: M1, name: 'entity', comp: { eid: M1, num: 22 } },
       {
         eid: M1,
         name: 'memory',
-        comp: { type: 'feedback', scope_eid: null },
+        comp: { type: 'feedback', scope: null },
       },
       { eid: M2, name: 'entity', comp: { eid: M2, num: 23 } },
       {
         eid: M2,
         name: 'memory',
-        comp: { type: 'project', scope_eid: P },
+        comp: { type: 'project', scope: P },
       },
     ],
     deps: [
@@ -2274,7 +2274,7 @@ Deno.test('showMd: comments ride as a section, oldest first', () => {
       { eid: C, name: 'entity', comp: { eid: C, num: 9 } },
       { eid: C, name: 'created', comp: { at: '2t', via: S } },
       { eid: C, name: 'doc', comp: { title: '', body: 'a remark' } },
-      { eid: C, name: 'comment', comp: { target_eid: T1 } },
+      { eid: C, name: 'comment', comp: { target: T1 } },
       { eid: C, name: 'review', comp: { verdict: 'changes_requested' } },
     ],
     deps: snap.deps,
@@ -2312,7 +2312,7 @@ let DAY: import('./client.ts').JournalEntry[] = [
         name: 'doc',
         comp: { title: '', body: 'status: wip → done — verified\nmore' },
       },
-      { eid: 'c-1', name: 'comment', comp: { target_eid: T1 } },
+      { eid: 'c-1', name: 'comment', comp: { target: T1 } },
       { eid: 'c-1', name: 'entity', comp: { num: 9, created_at: '' } },
     ],
   },
@@ -2323,14 +2323,14 @@ let DAY: import('./client.ts').JournalEntry[] = [
       {
         eid: T1,
         name: 'dependency',
-        comp: { type: 'requires', child_eid: T2 },
+        comp: { type: 'requires', child: T2 },
       },
     ],
   },
   {
     ts: '2026-07-20T10:00:00Z',
     actor: 'sess-x',
-    changes: [{ eid: T1, name: 'claim', comp: { session_eid: S } }],
+    changes: [{ eid: T1, name: 'claim', comp: { session: S } }],
   },
   {
     ts: '2026-07-20T09:00:00Z',
@@ -2409,7 +2409,7 @@ Deno.test('notices: bylines read actor and instrument from the stamp', () => {
     { eid, name: 'entity', comp: { eid, num: 91 } },
     { eid, name: 'created', comp: { at: '2026-01-02', by: actor, via } },
     { eid, name: 'doc', comp: { title: '', body: 'from the operator' } },
-    { eid, name: 'comment', comp: { target_eid: T1 } },
+    { eid, name: 'comment', comp: { target: T1 } },
   ]
   let s: Snapshot = {
     changes: [
@@ -2418,7 +2418,7 @@ Deno.test('notices: bylines read actor and instrument from the stamp', () => {
       { eid: P, name: 'doc', comp: { title: 'Task Graph', body: '' } },
       { eid: P, name: 'project', comp: {} },
       { eid: B, name: 'entity', comp: { eid: B, num: 82, created_at: '' } },
-      { eid: B, name: 'session', comp: { id: 'sess-b', actor_eid: P } },
+      { eid: B, name: 'session', comp: { id: 'sess-b', actor: P } },
       ...mk('c-9', P, B),
     ],
     deps: snap.deps,
@@ -2467,19 +2467,19 @@ Deno.test('contextDigest: scope — local work, principle memory, cwd derives', 
       }),
       ...mk(TA, 3, {
         doc: { title: 'A work' },
-        task: { status: 'open', priority: 1, project_eid: PA },
+        task: { status: 'open', priority: 1, project: PA },
       }),
       ...mk(TB, 4, {
         doc: { title: 'B work' },
-        task: { status: 'open', priority: 1, project_eid: PB },
+        task: { status: 'open', priority: 1, project: PB },
       }),
       ...mk(MA, 5, {
         doc: { title: 'A lesson' },
-        memory: { type: 'project', scope_eid: PA },
+        memory: { type: 'project', scope: PA },
       }),
       ...mk(MB, 6, {
         doc: { title: 'B lesson' },
-        memory: { type: 'project', scope_eid: PB },
+        memory: { type: 'project', scope: PB },
       }),
       ...mk(MF, 7, {
         doc: { title: 'A principle' },
@@ -2554,7 +2554,7 @@ Deno.test('contextDigest: from the fleet — unscoped only, warmth order, no bum
       }),
       ...mk(MS, 4, ago(1), { // scoped: never on the front page
         doc: { title: 'Scoped lesson' },
-        memory: { type: 'project', scope_eid: P },
+        memory: { type: 'project', scope: P },
       }),
     ],
     deps: [],
@@ -2599,11 +2599,11 @@ Deno.test('contextDigest: preview parity — project layer matches with/without 
       ...mk(P, 1, ago(1), { doc: { title: 'Proj' }, project: {} }),
       ...mk(T1p, 2, ago(2), {
         doc: { title: 'First move' },
-        task: { status: 'wip', priority: 0, project_eid: P },
+        task: { status: 'wip', priority: 0, project: P },
       }),
       ...mk(T2p, 3, ago(5), {
         doc: { title: 'Second move' },
-        task: { status: 'open', priority: 1, project_eid: P },
+        task: { status: 'open', priority: 1, project: P },
       }),
       ...mk(M1p, 4, ago(1), {
         doc: { title: 'A principle' },
@@ -2612,7 +2612,7 @@ Deno.test('contextDigest: preview parity — project layer matches with/without 
       // a session that CLAIMS a project task — its digest gains the session
       // layer (claimed-by-you, onMine); the project layer must not shift.
       ...mk(SESS, 5, ago(0), { session: { id: 'sess-p' } }),
-      { eid: T1p, name: 'claim', comp: { session_eid: SESS } },
+      { eid: T1p, name: 'claim', comp: { session: SESS } },
     ],
     deps: [],
   }
@@ -2732,21 +2732,21 @@ Deno.test("contextDigest: previously — the same operator's last brief", () => 
   let late: Snapshot = {
     changes: [
       ...mk(eid(1), ago(20), {
-        session: { id: 'ws-old', actor_eid: OP },
+        session: { id: 'ws-old', actor: OP },
         doc: {
           title: 'Work session',
           body: 'landed: everything\nnext: polish',
         },
       }),
       ...mk(eid(2), ago(30), {
-        session: { id: 'ws-older', actor_eid: OP },
+        session: { id: 'ws-older', actor: OP },
         doc: { title: 'Older', body: 'stale' },
       }),
       ...mk(eid(3), ago(4), {
-        session: { id: 'ws-other', actor_eid: eid(8) },
+        session: { id: 'ws-other', actor: eid(8) },
         doc: { title: 'Other op', body: 'not yours' },
       }),
-      ...mk(eid(4), ago(0), { session: { id: 'ws-new', actor_eid: OP } }),
+      ...mk(eid(4), ago(0), { session: { id: 'ws-new', actor: OP } }),
     ],
     deps: [],
   }
@@ -2806,16 +2806,16 @@ Deno.test('contextDigest: unheard — comments after a past session stopped list
     mk(eid, at, {
       created: { by },
       doc: { title: '', body: 'words' },
-      comment: { target_eid: target },
+      comment: { target: target },
     })
   let base = [
-    ...mk(eid(2), ago(0), { session: { id: 'u-new', actor_eid: OP } }),
-    ...mk(eid(1), ago(50), { session: { id: 'u-other', actor_eid: OTHER } }),
+    ...mk(eid(2), ago(0), { session: { id: 'u-new', actor: OP } }),
+    ...mk(eid(1), ago(50), { session: { id: 'u-other', actor: OTHER } }),
     // wrapped 20h ago — birth floors what can be owed to it
-    ...mk(eid(3), ago(20), { session: { id: 'u-old', actor_eid: OP } }),
-    ...mk(eid(4), ago(30), { session: { id: 'u-older', actor_eid: OP } }),
+    ...mk(eid(3), ago(20), { session: { id: 'u-old', actor: OP } }),
+    ...mk(eid(4), ago(30), { session: { id: 'u-older', actor: OP } }),
     // beyond the week: out of "recent"
-    ...mk(eid(5), ago(24 * 8), { session: { id: 'u-stale', actor_eid: OP } }),
+    ...mk(eid(5), ago(24 * 8), { session: { id: 'u-stale', actor: OP } }),
   ]
   let g = (extra: Snapshot['changes']): Snapshot => ({
     changes: [...base, ...extra],

@@ -40,11 +40,11 @@ export let Persona = ({ e }: { e: Ent }) => {
   let tiered = new Set([...pre, ...idx].map((r) => r.eid))
   // In scope = memories sharing the persona's home (fleet personas draw
   // from unscoped memories); already-tiered ones show in their tier.
-  let home = e.persona?.home_eid ?? null
+  let home = e.persona?.home ?? null
   let loose = Object.keys(cache.value).map(ent)
     .filter((r) =>
       r.memory && r.doc && !tiered.has(r.eid) &&
-      (r.memory.scope_eid ?? null) == home
+      (r.memory.scope ?? null) == home
     )
     .toSorted(byWarmth(now))
   let both = pre.filter((r) => idx.some((x) => x.eid == r.eid))
@@ -52,19 +52,18 @@ export let Persona = ({ e }: { e: Ent }) => {
   let drop = (ev: DragEvent, tier: 'contains' | 'reads' | null) => {
     let data = ev.dataTransfer?.getData('application/x-tasks-card')
     if (!data) return
-    let { target_eid } = JSON.parse(data)
-    if (target_eid == e.eid || !ent(target_eid).doc) return // nothing to say
+    let { target } = JSON.parse(data)
+    if (target == e.eid || !ent(target).doc) return // nothing to say
     ev.preventDefault()
     ev.stopPropagation()
-    let has = (t: string) =>
-      mine.some((d) => d.type == t && d.child == target_eid)
+    let has = (t: string) => mine.some((d) => d.type == t && d.child == target)
     let batch: Change[] = []
     for (let t of ['contains', 'reads']) {
       if (t != tier && has(t)) {
         batch.push({
           eid: e.eid,
           name: 'dependency',
-          comp: { type: t, child_eid: target_eid, gone: true },
+          comp: { type: t, child: target, gone: true },
         })
       }
     }
@@ -72,7 +71,7 @@ export let Persona = ({ e }: { e: Ent }) => {
       batch.push({
         eid: e.eid,
         name: 'dependency',
-        comp: { type: tier, child_eid: target_eid },
+        comp: { type: tier, child: target },
       })
     }
     if (batch.length) mutate(...batch)

@@ -277,7 +277,7 @@ let report = (
   failure?: string,
   stranded?: Unlanded,
 ): Change[] => {
-  let task = String(row.requested_task_eid ?? '')
+  let task = String(row.requested_task ?? '')
   let spawner = db.prepare(`
     select s.eid from created c join session s on s.eid = c.via
     where c.eid = ?
@@ -312,7 +312,7 @@ let report = (
         name: 'comment',
         // event: the server speaking, not the agent (M-4062) — the bus
         // delivers it, the mail relay must not.
-        comp: { target_eid: target },
+        comp: { target: target },
       },
     ]
   })
@@ -375,7 +375,7 @@ let settled = (eid: string, status: string, cast: Cast) => {
   // wakes them.
   // A persistent role has its own content-free attention door in roles.ts.
   // Never copy its pending graph words into a provider continuation here.
-  if (status == 'completed' && !row.role_eid) {
+  if (status == 'completed' && !row.role) {
     resume(eid, cast).catch((e) => console.warn('settle resume —', e))
   }
 }
@@ -400,8 +400,8 @@ export let tidy = async (cast: Cast) => {
 let repoOf = (row: Row) =>
   db.prepare(
     `select r.path, r.base_branch from repo r
-     join task t on t.project_eid = r.eid where t.eid = ?`,
-  ).get(String(row.requested_task_eid)) as
+     join task t on t.project = r.eid where t.eid = ?`,
+  ).get(String(row.requested_task)) as
     | { path: string; base_branch: string }
     | undefined
 
@@ -1084,7 +1084,7 @@ let CONTRACT = `House rules for this run:
 let runRow = (eid: string) =>
   db.prepare(
     `select s.*, p.provider as spawn_provider, p.model as spawn_model,
-            p.effort as spawn_effort, p.persona_eid as spawn_persona_eid
+            p.effort as spawn_effort, p.persona as spawn_persona
      from session s left join spawn p on p.eid = s.eid where s.eid = ?`,
   ).get(eid) as Row | undefined
 
@@ -1113,39 +1113,39 @@ export let spawned =
     if (row.spawn_effort && !ad.efforts.includes(String(row.spawn_effort))) {
       return fail(`unknown effort: ${row.spawn_effort}`)
     }
-    let task = row.requested_task_eid
+    let task = row.requested_task
       ? db.prepare(`
-      select t.project_eid, e.num, d.title, d.body from task t
+      select t.project, e.num, d.title, d.body from task t
       join entity e on e.eid = t.eid
       left join doc d on d.eid = t.eid
       where t.eid = ?
-    `).get(String(row.requested_task_eid)) as
+    `).get(String(row.requested_task)) as
         | {
-          project_eid: string | null
+          project: string | null
           num: number
           title: string
           body: string
         }
         | undefined
       : undefined
-    let role = row.role_eid
+    let role = row.role
       ? db.prepare(`
-        select r.scope_eid, e.num, d.title, d.body from role r
+        select r.scope, e.num, d.title, d.body from role r
         join entity e on e.eid = r.eid
         left join doc d on d.eid = r.eid
         where r.eid = ?
-      `).get(String(row.role_eid)) as
-        | { scope_eid: string | null; num: number; title: string; body: string }
+      `).get(String(row.role)) as
+        | { scope: string | null; num: number; title: string; body: string }
         | undefined
       : undefined
-    if (row.requested_task_eid && !task) {
-      return fail(`no such task: ${human(db, String(row.requested_task_eid))}`)
+    if (row.requested_task && !task) {
+      return fail(`no such task: ${human(db, String(row.requested_task))}`)
     }
-    if (row.role_eid && !role) {
-      return fail(`no such role: ${human(db, String(row.role_eid))}`)
+    if (row.role && !role) {
+      return fail(`no such role: ${human(db, String(row.role))}`)
     }
     if (!task && !role) return fail('a managed session needs a task or role')
-    let project = task?.project_eid ?? role?.scope_eid
+    let project = task?.project ?? role?.scope
     // The workspace comes from the GRAPH, never the request: the task's
     // or role's project says which checkout, and that's the only path we'll
     // run in.
@@ -1163,12 +1163,10 @@ export let spawned =
     // say the same thing. The house rider stays independent: that is what
     // makes one landing contract reach every persona.
     let worn: string | undefined
-    if (row.spawn_persona_eid) {
+    if (row.spawn_persona) {
       let snap = snapshot(db)
       let all = rows(snap)
-      let p = all.find((r) =>
-        r.eid == String(row.spawn_persona_eid) && r.comps.doc
-      )
+      let p = all.find((r) => r.eid == String(row.spawn_persona) && r.comps.doc)
       if (p) worn = materialize(all, snap.deps, p, Date.now())
     }
     let { num } = db.prepare('select num from entity where eid = ?')
@@ -1183,7 +1181,7 @@ export let spawned =
       started_at: now(),
       // A request that named no actor acts for the task's project. The cwd is
       // stamped before its worktree exists, so no .git link can place it yet.
-      ...(row.actor_eid ? {} : { actor_eid: project }),
+      ...(row.actor ? {} : { actor: project }),
     }, cast)
     let instruction = [
       worn,
@@ -1203,7 +1201,7 @@ export let spawned =
       instruction,
       session_id: String(row.id),
       task: task ? `T-${task.num}` : undefined,
-      role: row.role_eid ? String(row.role_eid) : undefined,
+      role: row.role ? String(row.role) : undefined,
       repo,
       tree,
       branch: `session/${sid}`,
@@ -1351,7 +1349,7 @@ let track = (
 // `delivered` (via 'signalled') and stays as audit, like conflict.
 export let stopped =
   (cast: Cast) => async (eid: string, comp: Record<string, unknown>) => {
-    let target = String(comp.target_eid)
+    let target = String(comp.target)
     let acted = () => delivered(eid, 'signalled', cast)
     let lost = (stop_reason: string) =>
       stamp(target, {
@@ -1435,7 +1433,7 @@ let refuse = (eid: string, why: string, cast: Cast) => {
           name: 'doc',
           comp: { title: '', body: `can't resume — ${why}` },
         },
-        { eid: cid, name: 'comment', comp: { target_eid: eid } },
+        { eid: cid, name: 'comment', comp: { target: eid } },
       ],
       t,
       eid,
@@ -1458,7 +1456,7 @@ let unheard = (eid: string) =>
      join doc d on d.eid = c.eid
      join created b on b.eid = c.eid
      left join notified n on n.eid = c.eid
-     where c.target_eid = ? and n.eid is null
+     where c.target = ? and n.eid is null
        and b.via is not ? and trim(d.body) != ''
      order by b.at`,
   ).all(eid, eid) as { eid: string; body: string }[]
@@ -1603,7 +1601,7 @@ let resume = async (
     childEnv(
       job.session_id,
       String(row.cwd),
-      row.role_eid ? String(row.role_eid) : undefined,
+      row.role ? String(row.role) : undefined,
     ),
     cast,
     from,
@@ -1686,21 +1684,21 @@ let steer = (eid: string, cast: Cast) => {
 // reply out of this gate, since it is written as the session.
 export let commented =
   (cast: Cast) => (ceid: string, comp: Record<string, unknown>) => {
-    let eid = String(comp.target_eid)
+    let eid = String(comp.target)
     let stamp = db.prepare('select via from created where eid = ?').get(
       ceid,
     ) as { via: string | null } | undefined
     if (stamp?.via == eid) return // the session talking about itself
     let row = db.prepare(
-      'select origin, status, role_eid from session where eid = ?',
+      'select origin, status, role from session where eid = ?',
     ).get(eid) as
-      | { origin: string; status: string | null; role_eid: string | null }
+      | { origin: string; status: string | null; role: string | null }
       | undefined
     if (!row) return
     // Role sessions hear only the fixed roles.ts wake-up and retrieve the
     // comment through task_context. A busy role finishes naturally; the graph
     // item remains durable until the reconciler sees the settled thread.
-    if (row.role_eid) return
+    if (row.role) return
     if (
       row.origin == 'managed' &&
       sessionActive.includes(String(row.status))

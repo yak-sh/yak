@@ -2,7 +2,7 @@
 // native provider TUI in tmux or the existing managed session runner.
 //
 // The role row is desired state. A deterministic tmux session prevents native
-// duplicates across daemon restarts; session.role_eid is the durable history
+// duplicates across daemon restarts; session.role is the durable history
 // and membership fact for both surfaces. No notification words cross this
 // module: a settled managed thread receives only a fixed instruction to call
 // task_context, whose atomic inbox owns retrieval and acknowledgement.
@@ -434,21 +434,21 @@ let personaFor = (eid: string): string => {
 let config = (eid: string): RoleConfig => {
   let row = db.prepare(`
     select r.*, d.title, d.body, p.provider, p.model, p.effort,
-           p.persona_eid, repo.path, repo.base_branch,
+           p.persona, repo.path, repo.base_branch,
            scope.title as venture_title, venture.color as venture_color
     from role r
     left join doc d on d.eid = r.eid
-    left join doc scope on scope.eid = r.scope_eid
-    left join project venture on venture.eid = r.scope_eid
+    left join doc scope on scope.eid = r.scope
+    left join project venture on venture.eid = r.scope
     left join spawn p on p.eid = r.eid
-    left join repo on repo.eid = r.scope_eid
+    left join repo on repo.eid = r.scope
     where r.eid = ?
   `).get(eid) as DbRow | undefined
   if (!row) throw new Error('role no longer exists')
-  if (!row.scope_eid) throw new Error('role has no project scope')
+  if (!row.scope) throw new Error('role has no project scope')
   if (
     !db.prepare('select 1 from project where eid = ?').get(
-      String(row.scope_eid),
+      String(row.scope),
     )
   ) {
     throw new Error('role scope is not a project')
@@ -466,13 +466,13 @@ let config = (eid: string): RoleConfig => {
   let effort = String(row.effort ?? '') || undefined
   let bad = trouble({ provider, model, effort })
   if (bad) throw new Error(bad)
-  let persona = String(row.persona_eid ?? '') || undefined
+  let persona = String(row.persona ?? '') || undefined
   let personaText = persona ? personaFor(persona) : undefined
   return {
     eid,
     state: String(row.state),
     surface: String(row.surface),
-    scope: String(row.scope_eid),
+    scope: String(row.scope),
     venture: String(row.venture_title ?? '') || undefined,
     color: String(row.venture_color ?? '') || undefined,
     title: String(row.title ?? ''),
@@ -551,7 +551,7 @@ let latest = (eid: string) =>
     select s.*, x.message as error_message from session s
     join entity e on e.eid = s.eid
     left join error x on x.eid = s.eid
-    where s.role_eid = ? order by e.num desc limit 1
+    where s.role = ? order by e.num desc limit 1
   `).get(eid) as DbRow | undefined
 
 let active = (s?: DbRow) =>
@@ -617,7 +617,7 @@ let livesOf = (eid: string): Launch[] =>
   db.prepare(`
     select s.started_at, s.finished_at from session s
     join entity e on e.eid = s.eid
-    where s.role_eid = ? order by e.num desc limit 20
+    where s.role = ? order by e.num desc limit 20
   `).all(eid) as Launch[]
 
 // What the owner sees on a held role, and how to revive it.
@@ -638,7 +638,7 @@ let stopManaged = (s: DbRow, cast: Cast) => {
   applyGraph([{
     eid,
     name: 'stop_request',
-    comp: { target_eid: String(s.eid) },
+    comp: { target: String(s.eid) },
   }], cast)
 }
 
@@ -655,12 +655,12 @@ let startManaged = (
     comp: {
       id: uuid(),
       operator: 1,
-      role_eid: c.eid,
-      actor_eid: c.scope,
+      role: c.eid,
+      actor: c.scope,
       provider: c.provider,
       model: c.model,
       ...(c.effort ? { effort: c.effort } : {}),
-      ...(c.persona ? { persona_eid: c.persona } : {}),
+      ...(c.persona ? { persona: c.persona } : {}),
     },
   }], cast)
   stamp(c.eid, {

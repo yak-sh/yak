@@ -144,13 +144,13 @@ export let materialize = (
 // other personas the common one is what lands as .tasks/AGENTS.md.
 export let commonOf = (all: Row[], deps: Dep[], projectEid: string) =>
   all.find((r) =>
-    r.comps.persona?.home_eid == projectEid &&
+    r.comps.persona?.home == projectEid &&
     deps.some((d) =>
       d.parent == projectEid && d.type == 'contains' && d.child == r.eid
     )
   )
 
-// A project's SPECIALIST personas, surfaced as edges. `home_eid` is the
+// A project's SPECIALIST personas, surfaced as edges. `home` is the
 // one truth for ownership (commonOf and filesFor derive from it); these
 // project→persona `reads` edges are DERIVED from it — never stored — so a
 // specialist shows on its project's card and navigates, and the two facts
@@ -208,7 +208,7 @@ export let filesFor = (all: Row[], deps: Dep[], now: number) => {
     }
     for (
       let p of all.filter((r) =>
-        r.comps.persona?.home_eid == proj.eid && r.eid != base?.eid
+        r.comps.persona?.home == proj.eid && r.eid != base?.eid
       )
     ) {
       let slug = String(p.comps.alias?.slug ?? idOf(p))

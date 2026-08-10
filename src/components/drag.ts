@@ -35,7 +35,7 @@ export let dragData = (
   ev.dataTransfer.setData(
     'application/x-tasks-card',
     JSON.stringify({
-      target_eid: eid,
+      target: eid,
       view,
       w,
       ox: ev.clientX - box.left,

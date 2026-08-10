@@ -23,12 +23,15 @@ export type Prop = {
 
 let types = (comp: string) => ({ ...comps[comp], ...stamped[comp] })
 
+export let propOwners = (prop: string) =>
+  [...new Set([...Object.keys(comps), ...Object.keys(stamped)])]
+    .filter((comp) => prop in types(comp))
+
 // The qualified name is only noise until two components share the column.
 export let propAt = (comp: string, prop: string): Prop | undefined => {
   let type = types(comp)[prop]
   if (!type) return
-  let owners = [...new Set([...Object.keys(comps), ...Object.keys(stamped)])]
-    .filter((c) => prop in types(c))
+  let owners = propOwners(prop)
   return {
     comp,
     prop,
@@ -37,22 +40,20 @@ export let propAt = (comp: string, prop: string): Prop | undefined => {
   }
 }
 
-// The declared type of a prop whose owning component isn't named — a
-// shared reference routed to comp '' (route()'s any-of), or a bare filter.
-// Every component sharing a name declares it identically, so the first hit
-// is authoritative. The vocabulary by name, in place of the _eid suffix.
+// The declared type of a prop whose owning component isn't named — a shared
+// reference routed to comp '' (route()'s any-of), or a bare filter. Every
+// component sharing a name declares it identically, so the first hit is
+// authoritative.
 export let bareType = (prop: string): PropType | undefined => {
-  for (let c of new Set([...Object.keys(comps), ...Object.keys(stamped)])) {
+  for (let c of propOwners(prop)) {
     let t = types(c)[prop]
     if (t) return t
   }
 }
 
 // THE reference detector: is (comp, prop) an entity reference, and to what
-// kind? '' target = any entity; undefined = not a reference. A named comp
-// reads its own declaration; comp '' searches the vocabulary. The _eid
-// suffix is a naming convention — this reads the PropType, so `created.by`
-// and a bare `to` are references as surely as `project_eid` is.
+// kind? 'entity' target = any entity; undefined = not a reference. A named
+// comp reads its own declaration; comp '' searches the vocabulary.
 export let refOf = (comp: string, prop: string): string | undefined => {
   let t = comp ? types(comp)[prop] : bareType(prop)
   return typeof t == 'object' && 'eid' in t ? t.eid : undefined
@@ -136,8 +137,8 @@ let oneOf = (p: Prop, v: unknown): string => {
 // under an alias that diverges. When a near match resolves, naming it is
 // the whole message — the grammar is not what the caller got wrong, and
 // it is spelled by the noun the column carries ('no project', not 'no
-// project_eid'). Nothing close: the grammar line, plainly, no guess.
-let noun = (p: Prop) => p.prop == 'eid' ? 'entity' : p.prop.replace(/_eid$/, '')
+// project'). Nothing close: the grammar line, plainly, no guess.
+let noun = (p: Prop) => p.prop == 'eid' ? 'entity' : p.prop
 let eid = (p: Prop, v: unknown, ctx: PropContext): string => {
   let s = String(v).trim()
   if (UUID.test(s)) return s.toLowerCase()
@@ -223,7 +224,7 @@ let dep: Record<string, Prop> = {
     name: 'dependency.type',
     type: { enum: [...edges] },
   },
-  child_eid: ref('child_eid'),
+  child: ref('child'),
   gone: {
     comp: 'dependency',
     prop: 'gone',
@@ -260,7 +261,7 @@ export let normalizeChanges = (
             ? propAt(change.name, name)
             : undefined)
         if (!p) return [name, value]
-        if (change.name == 'dependency' && name == 'child_eid') {
+        if (change.name == 'dependency' && name == 'child') {
           return [name, requiredRef(p, value, ctx)]
         }
         return [name, parseProp(p, value, ctx)]

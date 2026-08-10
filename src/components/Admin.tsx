@@ -162,7 +162,7 @@ let Index = ({ kind, query }: { kind: string; query: string }) => {
                         : { key: c.key, dir: 1 },
                     )}
                 >
-                  {c.key.replace(/_eid$/, '')}
+                  {c.key}
                 </Th>
               ))}
             </Row>
@@ -319,7 +319,7 @@ let NewForm = ({ kind }: { kind: string }) => {
         </Field>
         {Object.entries(props).map(([prop, t]) => (
           <Field key={prop}>
-            <Key>{prop.replace(/_eid$/, '')}</Key>
+            <Key>{prop}</Key>
             <Control
               t={t}
               value={vals[prop]}

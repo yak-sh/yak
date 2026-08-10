@@ -75,12 +75,12 @@ export let Relate = ({ e }: { e: Ent }) => {
       ? {
         eid: e.eid,
         name: 'dependency',
-        comp: { type: v.type, child_eid: other },
+        comp: { type: v.type, child: other },
       }
       : {
         eid: other,
         name: 'dependency',
-        comp: { type: v.type, child_eid: e.eid },
+        comp: { type: v.type, child: e.eid },
       }
   let link = (other: string) => {
     if (verb) mutate(edge(verb, other))
@@ -96,7 +96,7 @@ export let Relate = ({ e }: { e: Ent }) => {
         ...grouped,
         doc: { title, body, ...grouped.doc },
         task: {
-          project_eid: e.task?.project_eid ?? null,
+          project: e.task?.project ?? null,
           domain: e.task?.domain ?? null,
           ...grouped.task,
         },

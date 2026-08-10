@@ -47,14 +47,14 @@ let childSignals = new Map<string, Signal<Dep[]>>()
 export let census = signal<string[]>([])
 let canvasVersion = signal(0)
 let noRelations: Dep[] = []
-let refreshBoards = (_eids: Set<string>) => {}
-let refreshPins = (_eids: Set<string>) => {}
-let refreshComments = (_eids: Set<string>) => {}
-let refreshFolds = (_eids: Set<string>) => {}
-let refreshBacklinks = (_eids: Set<string>) => {}
-let refreshJobs = (_eids: Set<string>) => {}
-let refreshBoardLinks = (_eids: Set<string>) => {}
-let refreshFacets = (_eids: Set<string>) => {}
+let refreshBoards = (_ids: Set<string>) => {}
+let refreshPins = (_ids: Set<string>) => {}
+let refreshComments = (_ids: Set<string>) => {}
+let refreshFolds = (_ids: Set<string>) => {}
+let refreshBacklinks = (_ids: Set<string>) => {}
+let refreshJobs = (_ids: Set<string>) => {}
+let refreshBoardLinks = (_ids: Set<string>) => {}
+let refreshFacets = (_ids: Set<string>) => {}
 
 // One pass over deps gives every parent a stable seed. The narrow signals
 // below own render invalidation; this computed only avoids an edge-list scan
@@ -248,7 +248,7 @@ export let gated = (e: Ent) =>
 // that need one simply aren't offered.
 export let myActor = () => {
   let c = config.client ? cache.value[config.client] : undefined
-  return String(c?.client?.actor_eid ?? '') || undefined
+  return String(c?.client?.actor ?? '') || undefined
 }
 
 // What this viewer has said about an entity: 'watch', 'mute', or nothing.
@@ -257,8 +257,8 @@ export let myMode = (target: string) => {
   if (!me) return undefined
   let hit = rows().find((r) =>
     r.comps.subscription &&
-    String(r.comps.subscription.actor_eid) == me &&
-    String(r.comps.subscription.target_eid) == target
+    String(r.comps.subscription.actor) == me &&
+    String(r.comps.subscription.target) == target
   )
   return hit?.comps.subscription?.mode as 'watch' | 'mute' | undefined
 }
@@ -276,7 +276,7 @@ export let unreadFor = (eid: string) => {
 // run still going, or an external door still open. The wip pip pulses
 // on this instead of sitting half-filled; a stale claim doesn't count.
 export let crewed = (e: Ent) => {
-  let s = e.claim && ent(e.claim.session_eid).session
+  let s = e.claim && ent(e.claim.session).session
   return !!s && awake(s)
 }
 
@@ -353,7 +353,7 @@ export let applyLocal = (changes: Change[]) => {
       let d = {
         parent: eid,
         type: comp.type as Dep['type'],
-        child: String(comp.child_eid),
+        child: String(comp.child),
       }
       edges.push(d)
       let same = (x: Dep) =>
@@ -998,9 +998,9 @@ export let repoUrl = (start: Ent): string | undefined => {
   while (e && !seen.has(e.eid)) {
     seen.add(e.eid)
     if (e.repo?.url) return e.repo.url
-    let next: string | null | undefined = e.task?.project_eid ??
-      e.comment?.target_eid ??
-      e.session?.requested_task_eid ?? e.role?.scope_eid ?? e.memory?.scope_eid
+    let next: string | null | undefined = e.task?.project ??
+      e.comment?.target ??
+      e.session?.requested_task ?? e.role?.scope ?? e.memory?.scope
     e = next ? ent(next) : undefined
   }
 }
@@ -1235,7 +1235,7 @@ export let sessionRows = (): [string, Session][] => {
 }
 export let shelfFor = (client: string) => {
   facets()
-  return shelfIds.find((eid) => cache.peek()[eid]?.shelf?.client_eid == client)
+  return shelfIds.find((eid) => cache.peek()[eid]?.shelf?.client == client)
 }
 
 refreshFacets = (eids: Set<string>) => {
@@ -1247,7 +1247,7 @@ refreshFacets = (eids: Set<string>) => {
       ((!!before?.project || !!after?.project) &&
         before?.entity?.num != after?.entity?.num) ||
       !!before?.session != !!after?.session ||
-      before?.shelf?.client_eid != after?.shelf?.client_eid
+      before?.shelf?.client != after?.shelf?.client
   })
   facetGraph = cache.peek()
   if (!changed) return
@@ -1269,7 +1269,7 @@ let commentSets = new Map<string, CommentSet>()
 let commentIndex = computed(() => {
   let found = new Map<string, CommentIds>()
   for (let [eid, r] of Object.entries(cache.value)) {
-    let target = r.comment?.target_eid
+    let target = r.comment?.target
     if (!target) continue
     let ids = found.get(target)
     if (!ids) found.set(target, ids = { ids: new Set(), talk: new Set() })
@@ -1323,7 +1323,7 @@ refreshComments = (eids: Set<string>) => {
       let had = set.ids.has(eid)
       let spoke = set.talk.has(eid)
       let c = cache.peek()[eid]?.comment
-      let wants = c?.target_eid == target
+      let wants = c?.target == target
       let talks = wants
       if (had != wants) {
         wants ? set.ids.add(eid) : set.ids.delete(eid)
@@ -1349,7 +1349,7 @@ let foldSets = new Map<string, FoldSet>()
 let foldKey = (client: string, board: string) => `${client}:${board}`
 let scanFold = (client: string, board: string): Folded | undefined => {
   let found = Object.entries(cache.value).find(([, r]) =>
-    r.fold?.client_eid == client && r.fold.board_eid == board
+    r.fold?.client == client && r.fold.board == board
   )
   return found && {
     eid: found[0],
@@ -1405,7 +1405,7 @@ type PinSet = {
 let pinSets = new Map<string, PinSet>()
 let scanPins = (canvas: string) =>
   Object.entries(cache.value)
-    .filter(([, r]) => r.pin?.canvas_eid == canvas && r.card)
+    .filter(([, r]) => r.pin?.canvas == canvas && r.card)
     .map(([eid]) => eid)
 
 let pinSet = (canvas: string) => {
@@ -1430,7 +1430,7 @@ refreshPins = (eids: Set<string>) => {
     for (let eid of eids) {
       let had = next.includes(eid)
       let r = cache.peek()[eid]
-      let wants = !!r?.card && r.pin?.canvas_eid == canvas
+      let wants = !!r?.card && r.pin?.canvas == canvas
       if (had != wants) {
         next = wants ? [...next, eid] : next.filter((x) => x != eid)
       } else if (had) next = [...next]
@@ -1450,14 +1450,14 @@ export let pinned = (canvas: string): Pinned[] =>
       // carries no eid inside its comp, and a Pinned without one aims
       // every raise/drag write at eid undefined (T-7437).
       eid,
-      target_eid: r.card!.target_eid,
+      target: r.card!.target,
       view: r.card!.view,
     }))
     .sort((a, b) => (a.z - b.z) || (a.eid < b.eid ? -1 : 1))
 
 // Who points HERE, and via what: every eid-typed prop in the SCHEMA —
 // the wire-writable vocabulary UNION the server-stamped columns (a
-// session's requested_task_eid is an edge even though no client may
+// session's requested_task is an edge even though no client may
 // write it) — scanned over the cache. A new association shows up in
 // backlinks with no second edit: this is how a task finds its sessions
 // and Debug lists whatever holds a reference to the entity on screen.
@@ -1510,7 +1510,7 @@ refreshBacklinks = (eids: Set<string>) => {
 
 let scanJob = (session: string): string | null =>
   Object.entries(cache.value)
-    .filter(([, r]) => r.task && r.claim?.session_eid == session)
+    .filter(([, r]) => r.task && r.claim?.session == session)
     .toSorted(([, a], [, b]) =>
       String(b.claim?.claimed_at ?? '').localeCompare(
         String(a.claim?.claimed_at ?? ''),
@@ -1537,7 +1537,7 @@ export let jobOf = (e: Ent): string | null => {
     found.graph = cache.peek()
     found.value.value = untracked(() => scanJob(e.eid))
   }
-  return found.value.value ?? e.session?.requested_task_eid ?? null
+  return found.value.value ?? e.session?.requested_task ?? null
 }
 
 refreshJobs = (eids: Set<string>) => {
@@ -1545,8 +1545,8 @@ refreshJobs = (eids: Set<string>) => {
     let changed = [...eids].some((eid) => {
       let before = set.graph[eid]
       let after = cache.peek()[eid]
-      let mine = before?.claim?.session_eid == session ||
-        after?.claim?.session_eid == session
+      let mine = before?.claim?.session == session ||
+        after?.claim?.session == session
       return mine &&
         (before?.claim !== after?.claim || !!before?.task != !!after?.task)
     })
@@ -1605,7 +1605,7 @@ export let topZ = (canvas: string) =>
   Math.max(
     0,
     ...Object.values(cache.value)
-      .filter((r) => r.pin && r.pin.canvas_eid == canvas)
+      .filter((r) => r.pin && r.pin.canvas == canvas)
       .map((r) => r.pin!.z),
   )
 
@@ -1619,7 +1619,7 @@ export let toFront = (pin: string) => {
   let top = Math.max(
     -1,
     ...Object.entries(cache.value)
-      .filter(([eid, r]) => eid != pin && r.pin?.canvas_eid == p.canvas_eid)
+      .filter(([eid, r]) => eid != pin && r.pin?.canvas == p.canvas)
       .map(([, r]) => r.pin!.z),
   )
   if (p.z <= top) mutate({ eid: pin, name: 'pin', comp: { z: top + 1 } })
@@ -1637,7 +1637,7 @@ export let toPlane = (clientX: number, clientY: number, rect: DOMRect) => {
 // This client's camera over one canvas, if it exists yet.
 export let myCamera = (client: string, canvas: string) =>
   Object.values(cache.value).find((r) =>
-    r.camera?.client_eid == client && r.camera?.canvas_eid == canvas
+    r.camera?.client == client && r.camera?.canvas == canvas
   )?.camera
 
 // Who this browser is: a client entity, its uuid minted into localStorage on

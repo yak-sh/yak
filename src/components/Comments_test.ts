@@ -53,7 +53,7 @@ Deno.test('byline reads actor and instrument from the created stamp', () => {
     comment: {
       entity: { eid: 'comment', num: 9 },
       created: { eid: 'comment', at: '', by: 'actor', via: 'session' },
-      comment: { eid: 'comment', target_eid: 'target' },
+      comment: { eid: 'comment', target: 'target' },
     },
   }
   assertEquals(byline(ent('comment')), 'jeff · via S-31')

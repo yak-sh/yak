@@ -33,13 +33,13 @@ let snap: Snapshot = {
     { eid: P, name: 'repo', comp: { path: '/x', base_branch: 'main' } },
     { eid: B, name: 'entity', comp: { eid: B, num: 3 } },
     { eid: B, name: 'doc', comp: { title: 'Board', body: '' } },
-    { eid: B, name: 'board', comp: { query: `.project_eid=${P}&.domain=Eng` } },
+    { eid: B, name: 'board', comp: { query: `.project=${P}&.domain=Eng` } },
     { eid: T, name: 'entity', comp: { eid: T, num: 4 } },
     { eid: T, name: 'doc', comp: { title: 'A task', body: '' } },
     {
       eid: T,
       name: 'task',
-      comp: { status: 'open', priority: 0, project_eid: P },
+      comp: { status: 'open', priority: 0, project: P },
     },
     { eid: D, name: 'entity', comp: { eid: D, num: 5 } },
     { eid: D, name: 'doc', comp: { title: 'Scribe desk', body: '' } },
@@ -77,7 +77,7 @@ Deno.test('basic card commands mint the smallest editable entities', () => {
     task: [{ title: '', body: '' }, { status: 'open' }],
     session: [{ id: '' }],
     doc: [{ title: '', body: '' }],
-    memory: [{ title: '', body: '' }, { scope_eid: null }],
+    memory: [{ title: '', body: '' }, { scope: null }],
   }
   for (let name of cardCommands) {
     let made = run(name, ctx())
@@ -105,9 +105,9 @@ Deno.test('basic card properties use the standard dot-param grammar', () => {
   assertEquals(comps('doc .title=Notes .body=some words'), {
     doc: { title: 'Notes', body: 'some words' },
   })
-  assertEquals(comps('memory .title=Lesson .memory.scope_eid=P-2'), {
+  assertEquals(comps('memory .title=Lesson .memory.scope=P-2'), {
     doc: { title: 'Lesson', body: '' },
-    memory: { scope_eid: 'P-2' },
+    memory: { scope: 'P-2' },
   })
   assertThrows(() => run('doc words', ctx()), Error, 'not a param')
   assertThrows(() => run('doc .status=open', ctx()), Error, 'cannot set task')
@@ -117,10 +117,10 @@ Deno.test('new: a task, inheriting where you stand', () => {
   // On a board: the query's scalar equalities ride along, so it JOINS it.
   assertEquals(comps('new Ship it', B), {
     doc: { body: '', title: 'Ship it' },
-    task: { status: 'open', project_eid: P, domain: 'Eng' },
+    task: { status: 'open', project: P, domain: 'Eng' },
   })
-  assertEquals(comps('new Ship it', P).task, { status: 'open', project_eid: P })
-  assertEquals(comps('new Ship it', T).task, { status: 'open', project_eid: P })
+  assertEquals(comps('new Ship it', P).task, { status: 'open', project: P })
+  assertEquals(comps('new Ship it', T).task, { status: 'open', project: P })
   assertEquals(comps('new Ship it').task, { status: 'open' }) // no context
   // the spec grammar tokenizes, so runs of spaces normalize to one
   assertEquals(
@@ -135,7 +135,7 @@ Deno.test('new: a task, inheriting where you stand', () => {
   // …and setters in the line win over what the context hands down
   assertEquals(comps('new P2 .domain=Ops Ship it', B).task, {
     status: 'open',
-    project_eid: P,
+    project: P,
     domain: 'Ops',
     priority: 2,
   })
@@ -158,7 +158,7 @@ Deno.test('fix: a bare id spawns, words file a task first', () => {
   assertEquals(f.spawn, f.changes![0].eid)
   assertEquals(
     Object.fromEntries(f.changes!.map((c) => [c.name, c.comp])).task,
-    { status: 'open', project_eid: P },
+    { status: 'open', project: P },
   )
   // shift+enter's ask: line 2 on rides as the filed task's body
   assertEquals(comps('fix the bar clips\nrepro: shrink the window').doc, {
@@ -170,7 +170,7 @@ Deno.test('fix: a bare id spawns, words file a task first', () => {
   // repo projects the `home` alias names the deployment's own
   assertEquals(comps('fix Ship it', B).task, {
     status: 'open',
-    project_eid: P,
+    project: P,
   })
   let H = 'aaaaaaaa-0000-4000-8000-000000000008'
   let many = rows({
@@ -185,12 +185,12 @@ Deno.test('fix: a bare id spawns, words file a task first', () => {
   })
   let routed = run('fix Ship it', { rows: many, eid: B }).changes!
   assertEquals(
-    routed.find((c) => c.name == 'task')!.comp!.project_eid,
+    routed.find((c) => c.name == 'task')!.comp!.project,
     H, // home wins over the focused board's project
   )
   // …but a typed .project= always outranks home
   let told = run(`fix .project=${P} Ship it`, { rows: many }).changes!
-  assertEquals(told.find((c) => c.name == 'task')!.comp!.project_eid, P)
+  assertEquals(told.find((c) => c.name == 'task')!.comp!.project, P)
   // bare :fix means HERE — the focused task is the target
   assertEquals(run('fix', ctx(T)), { spawn: T, msg: 'T-4 → agent' })
   assertThrows(() => run('fix', ctx(B)), Error, 'B-3 is not a task')
@@ -221,8 +221,8 @@ Deno.test('cancel: trailing words become a plain comment, same batch', () => {
   assertEquals(move, { eid: T, name: 'task', comp: { status: 'cancelled' } })
   assertEquals(doc.comp?.body, 'superseded by T-9')
   assertEquals(comment.name, 'comment')
-  assertEquals(comment.comp?.target_eid, T)
-  assertEquals(comment.comp, { target_eid: T })
+  assertEquals(comment.comp?.target, T)
+  assertEquals(comment.comp, { target: T })
   assertEquals(why.msg, 'T-4 → cancelled — superseded by T-9')
   assertThrows(() => run('cancel', ctx(B)), Error, 'B-3 is not a task')
 })
@@ -240,15 +240,15 @@ Deno.test('open: an argument navigates, none is the status move', () => {
 
 Deno.test('claim: names a session, or takes the ambient one', () => {
   assertEquals(run('claim sess-x', ctx(T)).changes, [
-    { eid: S, name: 'session', comp: { actor_eid: P } },
-    { eid: T, name: 'claim', comp: { session_eid: S } }, // known: no mint
+    { eid: S, name: 'session', comp: { actor: P } },
+    { eid: T, name: 'claim', comp: { session: S } }, // known: no mint
   ])
   // An unknown session is minted, and the claim points at the new entity.
   let minted = run('claim sess-new', ctx(T)).changes!
   assertEquals(minted[0].name, 'session')
-  assertEquals(minted[0].comp, { id: 'sess-new', actor_eid: P })
+  assertEquals(minted[0].comp, { id: 'sess-new', actor: P })
   assertEquals(UUID.test(minted[0].eid), true)
-  assertEquals(minted[1].comp, { session_eid: minted[0].eid })
+  assertEquals(minted[1].comp, { session: minted[0].eid })
   assertEquals(run('claim', ctx(T, 'sess-x')).changes!.length, 2) // ambient
   assertThrows(() => run('claim', ctx(T)), Error, 'name a session')
   assertThrows(
@@ -355,7 +355,7 @@ Deno.test('focusOf: one claim is "here"; none, several, or no session is not', (
         ...eids.map((eid) => ({
           eid,
           name: 'claim',
-          comp: { session_eid: S },
+          comp: { session: S },
         })),
       ],
     })
@@ -372,13 +372,13 @@ Deno.test('knock: recipient resolves, words ride as plain comment, project defau
   let deliver = k.changes!.find((c) => c.name == 'deliver')!
   let doc = k.changes!.find((c) => c.name == 'doc')!
   let comment = k.changes!.find((c) => c.name == 'comment')!
-  assertEquals(knock.comp, { target_eid: T }) // the subject
+  assertEquals(knock.comp, { target: T }) // the subject
   assertEquals(deliver.comp, { to: B }) // WHO — the shared deliver.to
   assertEquals(doc.comp?.body, 'need it today')
-  assertEquals(comment.comp?.target_eid, T)
+  assertEquals(comment.comp?.target, T)
   // no recipient word: a task asks its own project
   let p = run('knock', ctx(T))
-  assertEquals(p.changes![0].comp, { target_eid: T })
+  assertEquals(p.changes![0].comp, { target: T })
   assertEquals(p.changes![1].comp, { to: P })
   // a doc with no project and no name: nowhere to aim
   assertThrows(() => run('knock', ctx(B)), Error, 'name a recipient')
@@ -403,7 +403,7 @@ Deno.test('knock: an unresolvable recipient is refused, never made body', () => 
   // the bare form is untouched: nothing was said, so nothing is mistaken.
   // WHO to knock rides the shared deliver.to now (D-14945).
   let bare = run('knock', ctx(T)).changes!
-  assertEquals(bare[0].comp, { target_eid: T })
+  assertEquals(bare[0].comp, { target: T })
   assertEquals(bare[1].comp, { to: P })
 })
 
@@ -412,18 +412,18 @@ Deno.test('wake: who, when, and a trailing id is what to look at', () => {
   let [wake, deliver] = r.changes!
   assertEquals(r.changes!.map((c) => c.name), ['wake', 'deliver'])
   assertEquals(deliver.comp?.to, B) // WHO to wake — the shared deliver.to
-  assertEquals(wake.comp?.target_eid, T) // the trailing id wins the subject
+  assertEquals(wake.comp?.target, T) // the trailing id wins the subject
   // the phrase resolves HERE, at mint — an hour out, within the second
   let at = Date.parse(String(wake.comp?.at))
   assertEquals(Math.abs(at - (Date.now() + 3_600_000)) < 1000, true)
   // no trailing id: where you stand is what to look at
   assertEquals(
-    run('wake B-3 9am tomorrow', ctx(T)).changes![0].comp?.target_eid,
+    run('wake B-3 9am tomorrow', ctx(T)).changes![0].comp?.target,
     T,
   )
   // …and standing nowhere, the wake is its own subject
   assertEquals(
-    run('wake B-3 8pm', ctx()).changes![0].comp?.target_eid,
+    run('wake B-3 8pm', ctx()).changes![0].comp?.target,
     undefined,
   )
   assertThrows(() => run('wake', ctx(T)), Error, 'name who to wake')
@@ -458,12 +458,12 @@ Deno.test('reply: answers the named mail — or the focused one', () => {
   // the far side: an inbound row answers its sender, threaded at authoring.
   // WHERE it goes is the shared deliver.to; the thread stays on mail.
   assertEquals(deliver.comp, { to: 'jeff@yak.sh' })
-  assertEquals(mail.comp, { reply_to_eid: M })
+  assertEquals(mail.comp, { reply_to: M })
   assertEquals(r.msg, 'E-7 ← reply → jeff@yak.sh')
   // standing on the mail, every word is the page
   let f = run('reply on it', ctx(M))
   assertEquals(f.changes![0].comp?.body, 'on it')
-  assertEquals(f.changes![2].comp?.reply_to_eid, M)
+  assertEquals(f.changes![2].comp?.reply_to, M)
   assertThrows(() => run('reply E-7', ctx()), Error, 'needs words')
   assertThrows(() => run('reply on it', ctx(T)), Error, 'T-4 is not a mail')
   assertThrows(() => run('reply on it', ctx()), Error, 'nothing focused')
@@ -513,11 +513,11 @@ Deno.test('scribe: summon the desk onto a session brief', () => {
   let out = run('scribe S-1', ctx())
   // the ask is a comment on the desk task…
   let comment = out.changes!.find((c) => c.name == 'comment')
-  assertEquals(comment?.comp?.target_eid, D)
+  assertEquals(comment?.comp?.target, D)
   // …and the pinned desk spawn rides the same batch
   let spawn = out.changes!.find((c) => c.name == 'session' && c.comp?.provider)
   assertEquals(spawn?.comp?.model, 'haiku')
-  assertEquals(spawn?.comp?.requested_task_eid, D)
+  assertEquals(spawn?.comp?.requested_task, D)
   assertEquals(out.msg, 'S-1 → scribe')
   // a focused session needs no argument
   assertEquals(run('scribe', ctx(S)).msg, 'S-1 → scribe')
@@ -539,7 +539,7 @@ Deno.test('scribe: a busy desk queues the ask without a second spawn', () => {
       {
         eid: W,
         name: 'session',
-        comp: { requested_task_eid: D, status: 'running' },
+        comp: { requested_task: D, status: 'running' },
       },
     ],
   })

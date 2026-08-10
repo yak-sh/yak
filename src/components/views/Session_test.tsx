@@ -23,7 +23,7 @@ Deno.test('session row names its actor', () => {
       session: {
         eid: 'session',
         id: 'session-id',
-        actor_eid: 'project',
+        actor: 'project',
         model: 'gpt-5.6',
       },
     },
@@ -102,7 +102,7 @@ Deno.test('session lifecycle shares the task summary lane', () => {
       session: {
         eid: 'session',
         id: 'session-id',
-        requested_task_eid: 'task',
+        requested_task: 'task',
       },
     },
   }

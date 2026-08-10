@@ -18,8 +18,8 @@ project, `S-31` session, `M-40` memory, `E-9` mail…).
 - a **board** is `doc` + `board(query)` — a saved filter over tasks, never a
   stored list: a task is on a board because it matches, so membership can't
   drift
-- a **comment** is `doc` + `comment(target_eid)` — aimed at ANY entity;
-  commenting on a session IS messaging that agent
+- a **comment** is `doc` + `comment(target)` — aimed at ANY entity; commenting
+  on a session IS messaging that agent
 - a **session** is an agent run, reified; a **claim** is its lease on a task —
   the server refuses to hand a held lease to another session
 - mail, memories, personas, people, webhook deliveries are entities too — one

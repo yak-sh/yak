@@ -19,7 +19,7 @@ Deno.test('a knock names and opens its target', () => {
     },
     knock: {
       entity: { eid: 'knock', num: 2 },
-      knock: { eid: 'knock', target_eid: 'project' },
+      knock: { eid: 'knock', target: 'project' },
       deliver: { eid: 'knock', to: 'person' },
       created: { eid: 'knock', at: '2026-08-07T12:00:00.000Z' },
     },
@@ -77,13 +77,13 @@ Deno.test('reading an inbox item keeps the order', () => {
     older: {
       entity: { eid: 'older', num: 2 },
       doc: { eid: 'older', title: 'Older', body: '' },
-      comment: { eid: 'older', target_eid: 'person' },
+      comment: { eid: 'older', target: 'person' },
       created: { eid: 'older', at: '2026-08-07T12:00:00.000Z' },
     },
     newer: {
       entity: { eid: 'newer', num: 3 },
       doc: { eid: 'newer', title: 'Newer', body: '' },
-      comment: { eid: 'newer', target_eid: 'person' },
+      comment: { eid: 'newer', target: 'person' },
       created: { eid: 'newer', at: '2026-08-07T13:00:00.000Z' },
       opened: { eid: 'newer' },
     },

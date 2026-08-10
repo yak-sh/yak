@@ -121,7 +121,7 @@ Deno.test('a reference reads as one association row, eid and all', async () => {
     [job]: {
       entity: { eid: job, num: 8 },
       doc: { eid: job, title: 'Job', body: '' },
-      task: { eid: job, status: 'open', priority: 1, assignee_eid: owner },
+      task: { eid: job, status: 'open', priority: 1, assignee: owner },
     },
   }
   let root = document.querySelector('main')!
@@ -129,9 +129,7 @@ Deno.test('a reference reads as one association row, eid and all', async () => {
     render(h(Debug, { e: ent(job) }), root)
     let keys = [...root.querySelectorAll('.Debug_Props .Debug_Key')]
       .map((k) => k.textContent)
-    // The association name, once — never the raw column beside it.
-    assertEquals(keys.includes('task.assignee'), true)
-    assertEquals(keys.includes('task.assignee_eid'), false)
+    assertEquals(keys.filter((k) => k == 'task.assignee').length, 1)
     // The row carries the target and the eid it stored.
     let ids = [...root.querySelectorAll('.Debug_Val-id')].map((v) =>
       v.textContent
@@ -170,7 +168,7 @@ Deno.test('project backlinks omit attribution and cap associations', async () =>
       [eid]: {
         entity: { eid, num: n },
         doc: { eid, title: `Task ${n}`, body: '' },
-        task: { eid, status: 'open', priority: n, project_eid: project },
+        task: { eid, status: 'open', priority: n, project: project },
       },
     }
   }
@@ -191,7 +189,7 @@ Deno.test('project backlinks omit attribution and cap associations', async () =>
       ...cache.value,
       [eid]: {
         entity: { eid, num: n + 30 },
-        session: { eid, id: `session-${n}`, actor_eid: project },
+        session: { eid, id: `session-${n}`, actor: project },
       },
     }
   }
@@ -208,12 +206,12 @@ Deno.test('project backlinks omit attribution and cap associations', async () =>
     assertEquals(more[0].textContent.includes('+2 more tasks'), true)
     assertEquals(
       more[0].getAttribute('href'),
-      '/admin/task?q=.task.project_eid%3DP-19',
+      '/admin/task?q=.task.project%3DP-19',
     )
     assertEquals(more[1].textContent.includes('+1 more session'), true)
     assertEquals(
       more[1].getAttribute('href'),
-      '/admin/session?q=.session.actor_eid%3DP-19',
+      '/admin/session?q=.session.actor%3DP-19',
     )
   } finally {
     render(null, root)

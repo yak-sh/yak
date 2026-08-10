@@ -27,7 +27,7 @@ vocabulary (${
     ).join('; ')
   }). A prop unique to one component routes bare ('.title=x' → doc); for the
 few collisions (pin/camera x,y,w,h) use '.comp.prop=x'. References go
-sugar-free: '.assignee=jeff' routes to task.assignee_eid, and any *_eid
+by their property names: '.assignee=jeff' routes to task.assignee, and any reference
 value may be an alias, a human id (T-3, P-19), or an eid. Numeric-looking
 text stays text; typed scalars parse by their grammar ('.pin.x=01',
 '.verified=yes', '.priority=p02'). Statuses: ${statuses.join(', ')}.`
@@ -53,7 +53,8 @@ queue), while '.proposed!' means present (the idea backlog).
 Quotes hold a value together against BOTH separators, whitespace and '&':
 '.web.url="https://x.test/p?a=1&b=2"' is one predicate, where unquoted the
 '&' would start a second one.
-Reference filters take the same sugar ('.assignee=jeff', '.project=P-19'),
+Reference filters resolve aliases and human ids ('.assignee=jeff',
+'.project=P-19'),
 and a DOTTED path walks one reference: '.assignee.title~=jeff' — but a
 first segment naming a component stays the explicit spelling ('.pin.x=12',
 '.project.retired_at=' — absent means live), it never dereferences. Bare words

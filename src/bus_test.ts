@@ -24,7 +24,7 @@ let T = U(4) // a task this session claims
 let X = U(5) // a task it does not
 let N = U(6) // the persona it wears
 let Y = U(8) // a PERSON, an actor that is not itself a project
-let H = U(9) // a project with no checkout — reachable only through N.home_eid
+let H = U(9) // a project with no checkout — reachable only through N.home
 
 let ent = (
   eid: string,
@@ -45,14 +45,14 @@ let world = (sess: Record<string, unknown> = {}): Change[] => [
     project: {},
     repo: { path: '/w' },
   }),
-  ...ent(N, 6, { doc: { title: 'voice', body: '' }, persona: { home_eid: H } }),
+  ...ent(N, 6, { doc: { title: 'voice', body: '' }, persona: { home: H } }),
   ...ent(S, 2, {
     doc: { title: 'Work session', body: '' },
     session: {
       id: 'sess-x',
       cwd: '/w',
-      actor_eid: P,
-      persona_eid: N,
+      actor: P,
+      persona: N,
       operator: 1,
       ...sess,
     },
@@ -65,12 +65,12 @@ let world = (sess: Record<string, unknown> = {}): Change[] => [
   }),
   ...ent(B, 3, {
     doc: { title: 'Other session', body: '' },
-    session: { id: 'sess-b', actor_eid: P },
+    session: { id: 'sess-b', actor: P },
   }),
   ...ent(T, 4, {
     doc: { title: 'Claimed work', body: '' },
     task: { status: 'wip' },
-    claim: { session_eid: S },
+    claim: { session: S },
     created: { at: '2026-01-01', by: P },
   }),
   ...ent(X, 5, {
@@ -91,13 +91,13 @@ let said = (
   ent(eid, num, {
     created: { at, by: P, via },
     doc: { title: '', body },
-    comment: { target_eid: target },
+    comment: { target: target },
   })
 
 let knocked = (eid: string, num: number, to: string, target: string) =>
   ent(eid, num, {
     created: { at: '2026-01-03', by: P, via: B },
-    knock: { target_eid: target },
+    knock: { target: target },
     // WHO it is for rides the shared deliver.to now (D-14945).
     deliver: { to },
     // Settled delivered (D-14945) — the inbox sweep surfaces it regardless,
@@ -115,7 +115,7 @@ let letter = (
     created: { at: '2026-01-04', by: P, via: B },
     doc: { title: 'hello', body: 'mail body' },
     mail: {
-      target_eid: target,
+      target: target,
       from: 'friend@example.test',
       received_at: '2026-01-04',
       message_id: `m-${num}`,
@@ -132,7 +132,7 @@ let instruction = (
 ) =>
   ent(eid, num, {
     created: { at: '2026-01-01', by: P },
-    subscription: { actor_eid: P, target_eid: target, mode },
+    subscription: { actor: P, target: target, mode },
   })
 
 let graph = (...extra: Change[][]): Snapshot => ({
@@ -264,7 +264,7 @@ let cases: [string, Snapshot, number][] = [
     'a persona whose home is not the actor',
     {
       changes: [
-        ...world({ cwd: '/elsewhere', actor_eid: Y }),
+        ...world({ cwd: '/elsewhere', actor: Y }),
         ...letter('m11', 48, H),
       ],
       deps: [],
@@ -277,7 +277,7 @@ let cases: [string, Snapshot, number][] = [
   // through channelEvents, whose Ctx has no watching/muting field at all — so
   // a watch admits nothing here and a mute silences nothing. That is why the
   // candidate gather gathers from the address columns alone; the day the
-  // selector grows a watch rule, busRows needs `.comment.target_eid=<watched>`
+  // selector grows a watch rule, busRows needs `.comment.target=<watched>`
   // in the same commit, and these two counts are what will change.
   [
     'a watch on something nothing here is aimed at',
@@ -300,7 +300,7 @@ let cases: [string, Snapshot, number][] = [
     'a session acting for nobody',
     {
       changes: [
-        ...world({ actor_eid: undefined, persona_eid: undefined }),
+        ...world({ actor: undefined, persona: undefined }),
         ...said('c11', 44, T, 'heads up'),
         ...letter('m10', 45, P),
       ],

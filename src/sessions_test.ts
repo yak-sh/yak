@@ -109,7 +109,7 @@ let seed = (body = '', repo: string | null = scratch) => {
     { eid: p, name: 'project', comp: {} },
     ...(repo ? [{ eid: p, name: 'repo', comp: { path: repo } }] : []),
     { eid: t, name: 'doc', comp: { title: 'Do the thing', body } },
-    { eid: t, name: 'task', comp: { status: 'open', project_eid: p } },
+    { eid: t, name: 'task', comp: { status: 'open', project: p } },
   ])
   return { p, t }
 }
@@ -129,7 +129,7 @@ let begin = (
       id: uid(),
       provider: 'fake',
       model: 'fake-fast',
-      requested_task_eid: task,
+      requested_task: task,
       ...extra,
     },
   }], via)
@@ -145,7 +145,7 @@ let beginCanonical = (
     {
       eid,
       name: 'session',
-      comp: { id: uid(), requested_task_eid: task },
+      comp: { id: uid(), requested_task: task },
     },
     {
       eid,
@@ -165,7 +165,7 @@ let say = (target: string, body: string) => {
   let c = uid()
   return [
     { eid: c, name: 'doc', comp: { title: '', body } },
-    { eid: c, name: 'comment', comp: { target_eid: target } },
+    { eid: c, name: 'comment', comp: { target: target } },
   ]
 }
 
@@ -176,7 +176,7 @@ let refusals = (target: string) =>
   (db.prepare(
     `select d.body from comment c join doc d on d.eid = c.eid
      join created cr on cr.eid = c.eid
-     where c.target_eid = ? and cr.via = ?`,
+     where c.target = ? and cr.via = ?`,
   ).all(target, target) as { body: string }[]).map((c) => c.body)
 
 // The delivery ledger: a comment wears `notified` once some ear took it.
@@ -250,8 +250,8 @@ Deno.test('a spawn the graph cannot honor is a failed session, not a 400', async
     [{ provider: 'oracle' }, /unknown provider/],
     [{ model: 'gpt-9' }, /unknown model/],
     [{ effort: 'heroic' }, /unknown effort/],
-    [{ requested_task_eid: uid() }, /no such task/],
-    [{ requested_task_eid: no.t }, /no repo/],
+    [{ requested_task: uid() }, /no such task/],
+    [{ requested_task: no.t }, /no repo/],
   ]
   for (let [extra, says] of cases) {
     let { eid, done } = begin(t, extra)
@@ -284,22 +284,22 @@ Deno.test('a fake session runs end to end', async () => {
         provider: 'fake',
         model: 'fake-fast',
         effort: 'low',
-        requested_task_eid: t,
+        requested_task: t,
       },
     },
     // The card and pin ride the SAME batch — the client mints them, the
     // server never learns how to place a card.
-    { eid: card, name: 'card', comp: { target_eid: eid, view: 'Session' } },
+    { eid: card, name: 'card', comp: { target: eid, view: 'Session' } },
     {
       eid: card,
       name: 'pin',
-      comp: { canvas_eid: canvas, x: 10, y: 20, w: 420, h: 0, z: 1 },
+      comp: { canvas: canvas, x: 10, y: 20, w: 420, h: 0, z: 1 },
     },
   ])
   // Visible from its first moment: the batch itself carried the session,
   // card and pin; the effect's sync half has already stamped 'starting'.
   assert(heard.some((c) => c.eid == eid && c.name == 'session'))
-  assertEquals(heard.find((c) => c.name == 'pin')?.comp?.canvas_eid, canvas)
+  assertEquals(heard.find((c) => c.name == 'pin')?.comp?.canvas, canvas)
   assertEquals(heard.find((c) => c.name == 'card')?.comp?.view, 'Session')
   assertEquals(row(eid)?.status, 'starting')
 
@@ -311,7 +311,7 @@ Deno.test('a fake session runs end to end', async () => {
   assertEquals(s.provider_session_id, s.id) // the child was told who it is
   assertEquals(s.serving_model, 'fake-fast')
   assertEquals(s.latest_seq, 5) // the prompt line, then the child's four
-  assertEquals(s.requested_task_eid, t)
+  assertEquals(s.requested_task, t)
   assertEquals(spawnRow(eid)?.provider, 'fake')
   assertEquals(spawnRow(eid)?.model, 'fake-fast')
   assertEquals(s.provider, 'fake') // dormant old-reader alias
@@ -371,7 +371,7 @@ Deno.test('a managed role runs in its project and resumes content-free', async (
     {
       eid: role,
       name: 'role',
-      comp: { state: 'running', surface: 'managed', scope_eid: project },
+      comp: { state: 'running', surface: 'managed', scope: project },
     },
     {
       eid,
@@ -380,15 +380,15 @@ Deno.test('a managed role runs in its project and resumes content-free', async (
         id,
         provider: 'fake',
         model: 'fake-fast',
-        role_eid: role,
+        role: role,
         operator: 1,
       },
     },
   ])
   await done
   assertEquals(row(eid)?.status, 'completed', JSON.stringify(row(eid)))
-  assertEquals(row(eid)?.actor_eid, project)
-  assertEquals(row(eid)?.requested_task_eid, null)
+  assertEquals(row(eid)?.actor, project)
+  assertEquals(row(eid)?.requested_task, null)
   let events = Deno.readTextFileSync(log(eid)).split('\n').filter(Boolean)
   assert(
     events.some((line) => line.includes(`"text":"role:${role}"`)),
@@ -452,10 +452,10 @@ Deno.test('a worn persona rides the prompt whole — tiers and all', async () =>
     {
       eid: per,
       name: 'dependency',
-      comp: { type: 'contains', child_eid: mem },
+      comp: { type: 'contains', child: mem },
     },
   ])
-  let { eid, done } = begin(t, { persona_eid: per })
+  let { eid, done } = begin(t, { persona: per })
   await done
   let first = logs(eid, new URLSearchParams('after=0&limit=1')).entries[0]
   let text = JSON.parse(first.line).text
@@ -514,7 +514,7 @@ let settleComments = (task: string, via: string) =>
   (db.prepare(
     `select d.body from comment c join doc d on d.eid = c.eid
      join created b on b.eid = c.eid
-     where c.target_eid = ? and b.via = ?`,
+     where c.target = ? and b.via = ?`,
   ).all(task, via) as { body: string }[]).map((c) => c.body)
 
 Deno.test('a settled session says so on its task', async () => {
@@ -531,7 +531,7 @@ Deno.test('a settled session says so on its task', async () => {
   assertEquals(failure(eid), undefined)
   // The comment rode the CAST — clients heard graph data, not a stamp.
   assert(
-    heard.some((c) => c.name == 'comment' && c.comp?.target_eid == t),
+    heard.some((c) => c.name == 'comment' && c.comp?.target == t),
   )
 })
 
@@ -592,7 +592,7 @@ Deno.test('a failed spawn tells its task and its spawner — and only once', asy
     spawner,
   )
   assert(
-    heard.some((c) => c.name == 'comment' && c.comp?.target_eid == spawner),
+    heard.some((c) => c.name == 'comment' && c.comp?.target == spawner),
   )
   let bus = noticesFor(snapshot(db), sid)
   assertEquals(bus.lines.length, 1)
@@ -629,8 +629,8 @@ Deno.test('a settling session releases its leases — a live one keeps its own',
   let live = uid()
   apply(db, [
     { eid: live, name: 'session', comp: { id: uid() } },
-    { eid: t, name: 'claim', comp: { session_eid: eid } },
-    { eid: kept, name: 'claim', comp: { session_eid: live } },
+    { eid: t, name: 'claim', comp: { session: eid } },
+    { eid: kept, name: 'claim', comp: { session: live } },
   ])
   heard = []
   recover(cast)
@@ -658,7 +658,7 @@ Deno.test('stop: a stop_request signals the group, the ending is OBSERVED', asyn
   let c0 = snapshot(db).cursor ?? 0
   heard = []
   let sr = uid()
-  await write([{ eid: sr, name: 'stop_request', comp: { target_eid: eid } }])
+  await write([{ eid: sr, name: 'stop_request', comp: { target: eid } }])
   let s = row(eid)!
   assertEquals(s.status, 'interrupted') // never stamped before the exit
   assert(s.stop_requested_at)
@@ -682,7 +682,7 @@ Deno.test('stop: a stop_request signals the group, the ending is OBSERVED', asyn
   assertThrows(
     () =>
       apply(db, [
-        { eid: uid(), name: 'stop_request', comp: { target_eid: eid } },
+        { eid: uid(), name: 'stop_request', comp: { target: eid } },
       ]),
     Error,
     'stop_request refused',
@@ -697,7 +697,7 @@ Deno.test('sweep: an unacted stop_request re-fires at boot and kills', async () 
   // the target is running) but its effect never fires.
   let sr = uid()
   cast(apply(db, [
-    { eid: sr, name: 'stop_request', comp: { target_eid: eid } },
+    { eid: sr, name: 'stop_request', comp: { target: eid } },
   ]))
   assertEquals(acted(sr), null)
   // Boot: the relay finds it and drives the stop to an observed ending.
@@ -717,7 +717,7 @@ Deno.test('sweep: a target that settled on its own is acted, not errored', async
   await until(() => row(eid)?.status == 'running', 'the init event')
   let sr = uid()
   cast(apply(db, [
-    { eid: sr, name: 'stop_request', comp: { target_eid: eid } },
+    { eid: sr, name: 'stop_request', comp: { target: eid } },
   ]))
   await done // the child finishes on its own; the request outlives the run
   assertEquals(row(eid)!.status, 'completed')
@@ -739,7 +739,7 @@ Deno.test('the rule refuses sessions that are not ours to end', () => {
   assertThrows(
     () =>
       apply(db, [
-        { eid: uid(), name: 'stop_request', comp: { target_eid: ext } },
+        { eid: uid(), name: 'stop_request', comp: { target: ext } },
       ]),
     Error,
     'external',
@@ -747,7 +747,7 @@ Deno.test('the rule refuses sessions that are not ours to end', () => {
   assertThrows(
     () =>
       apply(db, [
-        { eid: uid(), name: 'stop_request', comp: { target_eid: uid() } },
+        { eid: uid(), name: 'stop_request', comp: { target: uid() } },
       ]),
     Error,
     'gone',
@@ -1064,7 +1064,7 @@ Deno.test('a comment resumes nothing it should not', async () => {
   assertEquals(
     (db.prepare(
       `select cr.via from comment c join created cr on cr.eid = c.eid
-       where c.target_eid = ? order by c.rowid desc limit 1`,
+       where c.target = ? order by c.rowid desc limit 1`,
     ).get(bare) as { via: string | null }).via,
     bare,
   )
@@ -1077,7 +1077,7 @@ Deno.test('a comment resumes nothing it should not', async () => {
       name: 'role',
       comp: { state: 'running', surface: 'managed' },
     },
-    { eid: roleRun, name: 'session', comp: { role_eid: role } },
+    { eid: roleRun, name: 'session', comp: { role: role } },
   ])
   db.prepare("update session set status = 'completed' where eid = ?")
     .run(roleRun)

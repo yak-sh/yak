@@ -102,7 +102,7 @@ keystroke race by accepting an attention event only in an explicit idle state.
 
 A role declares desired `running` or `stopped` state, a native or managed
 surface, project scope, provider configuration, and optional persona. Sessions
-point back through `session.role_eid`; the newest such session is current, while
+point back through `session.role`; the newest such session is current, while
 older sessions remain history.
 
 For native roles, Tasks owns one deterministic tmux session per role. It

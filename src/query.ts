@@ -40,10 +40,9 @@
 // spine; `at`/`by` are shared by the stamps — created, updated, decided,
 // proposed — so spell those out (`.created.at`, `.decided.at`).
 //
-// References go sugar-free: `.assignee=jeff` — a prop with no column of
-// its own, where exactly one component carries `prop_eid`, routes to
-// that reference; the VALUE resolves like any id (alias, T-3, raw eid)
-// at whichever door or evaluator holds the graph (resolveRefs). And a
+// References are ordinary props: `.assignee=jeff`; the VALUE resolves like
+// any id (alias, T-3, raw eid) at whichever door or evaluator holds the graph
+// (resolveRefs). And a
 // dotted first segment that names a COMPONENT is the explicit spelling
 // (`.pin.x=12`); any other first segment is a PATH — `.assignee.title~=j`
 // dereferences the eid column and predicates the target's prop. Depth 1.
@@ -56,7 +55,7 @@ export type Pred = {
   prop: string
   op: string
   value: string
-  // A path predicate's far side: deref `comp.prop` (an _eid column),
+  // A path predicate's far side: deref the reference at `comp.prop`,
   // then test the TARGET's `at.comp[at.prop]` against op/value.
   at?: { comp: string; prop: string }
 }
@@ -111,37 +110,36 @@ let spawnTwin = (prop: string, owners: string[]) =>
   prop in comps.spawn && owners.length == 2 &&
   owners.every((name) => name == 'session' || name == 'spawn')
 
-// Route a bare prop to its component; ambiguity is an error that names
-// the candidates rather than a guess. The sugar rule rides here: a prop
-// with no column of its own, where exactly ONE component carries
-// `prop_eid`, routes to that reference — so `.assignee=jeff` IS
-// `.assignee_eid=jeff`, and every ref column gets the short form free.
+// These associations already had one bare filter across several suffixed
+// columns. Keep that reading after the columns take their canonical names;
+// other collisions (`by`, `at`) remain explicit as before.
+let sharedRefs = new Set(['actor', 'canvas', 'client', 'scope', 'target'])
+let sharedRef = (prop: string, owners: string[]) =>
+  owners.length > 1 && sharedRefs.has(prop) && isRef('', prop)
+
+// Route a bare prop to its component; ambiguity is an error that names the
+// candidates rather than a guess. Same-named references are one read concept:
+// comp '' makes a filter scan every owner, while writes demand a component.
 export let route = (prop: string): { comp: string; prop: string } => {
   let hits = (p: string) =>
     Object.entries(routes)
       .filter(([, cols]) => cols.includes(p))
       .map(([name]) => name)
   let own = hits(prop)
+  // Parent/child words are the dependency vocabulary. Their component refs
+  // remain available through `.pane.parent` / `.session.parent`; bare keeps
+  // teaching the edge door instead of silently changing an old mistake.
+  if (edgeish.test(prop)) own = []
   if (own.length == 1) return { comp: own[0], prop }
   // Spawn's legacy session aliases are one concept during the rolling
   // window: filters read either home, while write routing chooses explicitly.
   if (spawnTwin(prop, own)) return { comp: '', prop }
+  if (sharedRef(prop, own)) return { comp: '', prop }
   if (own.length > 1) {
     throw new Error(
       `.${prop} is ambiguous (${own.join(', ')}) — use .${own[0]}.${prop}`,
     )
   }
-  // The _eid sugar never fires for an EDGE word: bare `.parent` means the
-  // dependency edge, never session.parent_eid — reach that ref by its full
-  // name (`.parent_eid`) or its comp (`.session.parent_eid`), so the short
-  // form stays the edge door it has always taught.
-  let ref = edgeish.test(prop) ? [] : hits(`${prop}_eid`)
-  if (ref.length == 1) return { comp: ref[0], prop: `${prop}_eid` }
-  // Several comps sharing a ref name (actor_eid on client AND session)
-  // stay one CONCEPT: comp '' means any-of, and matchQuery scans every
-  // comp for the prop. Writes can't aim at "any" — param() rejects the
-  // bare form and asks for the explicit spelling.
-  if (ref.length > 1) return { comp: '', prop: `${prop}_eid` }
   // A facet is itself filterable. Scalar and reference columns win above,
   // preserving `.project=P-3`; a component with no namesake column gets the
   // presence grammar (`=` absent, `~=` present) without a second vocabulary.
@@ -229,11 +227,7 @@ export let resolution = (preds: Pred[], kind?: string) => {
   // name a spelling that parses — an error naming a door owes that much.
   let alt = (prop: string) => {
     let cols = (kind ? routes[kind] : undefined) ?? []
-    return cols.includes(prop)
-      ? `.${kind}.${prop}`
-      : cols.includes(`${prop}_eid`)
-      ? `.${kind}.${prop}_eid`
-      : ''
+    return cols.includes(prop) ? `.${kind}.${prop}` : ''
   }
   return crossed
     .map((p) => {
@@ -243,7 +237,7 @@ export let resolution = (preds: Pred[], kind?: string) => {
     .join(', ')
 }
 
-// Shared-reference sugar has no one owning component, but its type is still
+// A shared reference has no one owning component, but its type is still
 // known: the vocabulary is searched by name. All other aims come straight
 // from the vocabulary, including a path's far side.
 let typed = (comp: string, prop: string): Prop | undefined => {
@@ -540,16 +534,17 @@ export let matchQuery = (
     }
     if (!p.prop) return p.op == '~' || p.op == EXISTS ? !!c[p.comp] : !c[p.comp]
     if (p.at) {
-      let ref = read(c, p.comp, p.prop)
-      let t = ref ? ent?.(String(ref)) : undefined
-      return test(t && read(t, p.at.comp, p.at.prop), p, now)
+      return reads(c, p.comp, p.prop).some((ref) => {
+        let t = ref ? ent?.(String(ref)) : undefined
+        return reads(t ?? {}, p.at!.comp, p.at!.prop)
+          .some((value) => test(value, p, now))
+      })
     }
-    return test(read(c, p.comp, p.prop), p, now)
+    return reads(c, p.comp, p.prop).some((value) => test(value, p, now))
   })
 
-// One column read, honoring route()'s any-of: comp '' means the prop is
-// a shared ref name (actor_eid), so take the first value any comp holds
-// — an entity carries at most one of the sharing comps in practice.
+// One column read. A shared route has no component, so reads() below tests
+// every component carrying that property; an entity may wear several.
 //
 // `updated.at` falls back to `created.at`, because the `updated` row is only
 // stamped by a LATER write: an entity made and never touched since carries
@@ -563,11 +558,15 @@ export let matchQuery = (
 // entity is a different question about authorship, and nothing is broken by
 // leaving it alone.
 let read = (c: Comps, comp: string, prop: string): unknown => {
-  if (!comp) {
-    return Object.values(c).map((v) => v?.[prop]).find((v) => v != null)
-  }
   let v = c[comp]?.[prop]
   return v == null && comp == 'updated' && prop == 'at' ? c.created?.at : v
+}
+
+let reads = (c: Comps, comp: string, prop: string): unknown[] => {
+  if (comp) return [read(c, comp, prop)]
+  let values = Object.values(c).map((v) => v?.[prop])
+    .filter((v) => v != null)
+  return values.length ? values : [undefined]
 }
 
 // The warmth of an entity, on (0,1] — the rank behind '.order=hot'.
@@ -612,7 +611,7 @@ export let sunk = (
   ent?: (eid: string) => Comps | undefined,
 ): boolean => {
   if (c.project?.retired_at) return true
-  let p = c.task?.project_eid
+  let p = c.task?.project
   return !!(p && ent?.(String(p))?.project?.retired_at)
 }
 export let warm = (
@@ -687,8 +686,7 @@ let tryRoute = (p: string) => {
   }
 }
 
-// every '.prop' route() accepts bare: unique columns plus the _eid sugar
-// names (.assignee for assignee_eid — shared refs too, route()'s any-of)
+// Every unique prop and every shared reference has a bare completion.
 let bares = (): Cand[] => {
   let owners = new Map<string, string[]>()
   for (let [c, cols] of Object.entries(routes)) {
@@ -696,14 +694,13 @@ let bares = (): Cand[] => {
   }
   let out: Cand[] = []
   for (let [p, cs] of owners) {
-    if (cs.length == 1) out.push({ text: `.${p}`, kind: mark(cs[0], p) })
-    // The suffix-strip short form (.assignee for assignee_eid) needs both a
-    // strippable suffix and a reference type — the latter read from the
-    // vocabulary, never assumed from the name.
-    if (p.endsWith('_eid') && isRef('', p) && !owners.has(p.slice(0, -4))) {
+    if (edgeish.test(p)) continue
+    if (cs.length == 1 || sharedRef(p, cs)) {
       out.push({
-        text: `.${p.slice(0, -4)}`,
-        kind: cs.length == 1 ? `${cs[0]} · ref` : 'ref',
+        text: `.${p}`,
+        kind: isRef('', p)
+          ? cs.length == 1 ? `${cs[0]} · ref` : 'ref'
+          : mark(cs[0], p),
       })
     }
   }

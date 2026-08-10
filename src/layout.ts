@@ -13,11 +13,11 @@ let by = (panes: Pane[], eid: string) => panes.find((p) => p.eid == eid)
 
 // Siblings in paint order. The eid tiebreak keeps two panes minted with
 // one order value stable across renders.
-/// kids([{eid: 'b', parent_eid: 'r', order: 1},
-///       {eid: 'a', parent_eid: 'r', order: 0}], 'r').map(p => p.eid)
+/// kids([{eid: 'b', parent: 'r', order: 1},
+///       {eid: 'a', parent: 'r', order: 0}], 'r').map(p => p.eid)
 ///   -> ['a', 'b']
 export let kids = (panes: Pane[], parent: string) =>
-  panes.filter((p) => p.parent_eid == parent)
+  panes.filter((p) => p.parent == parent)
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || (a.eid < b.eid ? -1 : 1))
 
 let mint = (eid: string, comp: Record<string, unknown>): Change => ({
@@ -36,7 +36,7 @@ let mint = (eid: string, comp: Record<string, unknown>): Change => ({
 export let split = (panes: Pane[], eid: string, dir: Dir): Change[] => {
   let p = by(panes, eid)
   if (!p) return []
-  let parent = p.parent_eid ? by(panes, p.parent_eid) : undefined
+  let parent = p.parent ? by(panes, p.parent) : undefined
   if (parent?.dir == dir) {
     let sibs = kids(panes, parent.eid)
     let next = sibs[sibs.findIndex((s) => s.eid == eid) + 1]
@@ -44,8 +44,8 @@ export let split = (panes: Pane[], eid: string, dir: Dir): Change[] => {
       ? ((p.order ?? 0) + (next.order ?? 0)) / 2
       : (p.order ?? 0) + 1
     return [mint(uuid(), {
-      layout_eid: p.layout_eid,
-      parent_eid: parent.eid,
+      layout: p.layout,
+      parent: parent.eid,
       size: p.size ?? 1,
       order,
     })]
@@ -54,8 +54,8 @@ export let split = (panes: Pane[], eid: string, dir: Dir): Change[] => {
     // A container split along its own axis: one more child at the end.
     let last = kids(panes, eid).at(-1)
     return [mint(uuid(), {
-      layout_eid: p.layout_eid,
-      parent_eid: eid,
+      layout: p.layout,
+      parent: eid,
       size: last?.size ?? 1,
       order: (last?.order ?? 0) + 1,
     })]
@@ -63,20 +63,20 @@ export let split = (panes: Pane[], eid: string, dir: Dir): Change[] => {
   let held = p.dir ? kids(panes, eid) : []
   let a = uuid()
   return [
-    { eid, name: 'pane', comp: { dir, content_eid: null, view: null } },
-    ...held.map((k) => mint(k.eid, { parent_eid: a })),
+    { eid, name: 'pane', comp: { dir, content: null, view: null } },
+    ...held.map((k) => mint(k.eid, { parent: a })),
     mint(a, {
-      layout_eid: p.layout_eid,
-      parent_eid: eid,
+      layout: p.layout,
+      parent: eid,
       size: 1,
       order: 0,
       ...(p.dir
         ? { dir: p.dir }
-        : { content_eid: p.content_eid ?? null, view: p.view ?? null }),
+        : { content: p.content ?? null, view: p.view ?? null }),
     }),
     mint(uuid(), {
-      layout_eid: p.layout_eid,
-      parent_eid: eid,
+      layout: p.layout,
+      parent: eid,
       size: 1,
       order: 1,
     }),
@@ -91,30 +91,30 @@ export let split = (panes: Pane[], eid: string, dir: Dir): Change[] => {
 export let close = (panes: Pane[], eid: string): Change[] => {
   let p = by(panes, eid)
   if (!p) return []
-  if (!p.parent_eid) {
+  if (!p.parent) {
     return [
       ...kids(panes, eid).map((k) =>
         ({ eid: k.eid, name: 'entity', comp: null }) as Change
       ),
-      { eid, name: 'pane', comp: { dir: null, content_eid: null, view: null } },
+      { eid, name: 'pane', comp: { dir: null, content: null, view: null } },
     ]
   }
   let del: Change = { eid, name: 'entity', comp: null }
-  let sibs = kids(panes, p.parent_eid).filter((s) => s.eid != eid)
+  let sibs = kids(panes, p.parent).filter((s) => s.eid != eid)
   if (sibs.length != 1) return [del]
   let s = sibs[0]
-  let parent = p.parent_eid
+  let parent = p.parent
   return [
     del,
     ...(s.dir
       ? [
-        ...kids(panes, s.eid).map((k) => mint(k.eid, { parent_eid: parent })),
+        ...kids(panes, s.eid).map((k) => mint(k.eid, { parent: parent })),
         mint(parent, { dir: s.dir }),
       ]
       : [
         mint(parent, {
           dir: null,
-          content_eid: s.content_eid ?? null,
+          content: s.content ?? null,
           view: s.view ?? null,
         }),
       ]),
@@ -129,8 +129,8 @@ let MIN = 0.05
 // Transfer weight between two adjacent siblings: a grows by delta, b
 // shrinks. Delta is in WEIGHT units — the caller converts pixels against
 // the siblings' total. One batch on settle, never per pixel.
-/// resize([{eid: 'a', parent_eid: 'r', size: 1},
-///         {eid: 'b', parent_eid: 'r', size: 1}], 'a', 'b', 0.5)
+/// resize([{eid: 'a', parent: 'r', size: 1},
+///         {eid: 'b', parent: 'r', size: 1}], 'a', 'b', 0.5)
 ///   -> [{eid: 'a', name: 'pane', comp: {size: 1.5}},
 ///       {eid: 'b', name: 'pane', comp: {size: 0.5}}]
 export let resize = (
@@ -141,7 +141,7 @@ export let resize = (
 ): Change[] => {
   let pa = by(panes, a)
   let pb = by(panes, b)
-  if (!pa || !pb || pa.parent_eid != pb.parent_eid) return []
+  if (!pa || !pb || pa.parent != pb.parent) return []
   let wa = pa.size ?? 1
   let wb = pb.size ?? 1
   let d = Math.max(Math.min(delta, wb - MIN), MIN - wa)
@@ -162,7 +162,7 @@ export let setContent = (
   target: string | null,
   view?: string | null,
 ): Change[] =>
-  by(panes, eid) ? [mint(eid, { content_eid: target, view: view ?? null })] : []
+  by(panes, eid) ? [mint(eid, { content: target, view: view ?? null })] : []
 
 // Exchange two leaves' content — the panes keep their place and size.
 export let swap = (panes: Pane[], a: string, b: string): Change[] => {
@@ -170,8 +170,8 @@ export let swap = (panes: Pane[], a: string, b: string): Change[] => {
   let pb = by(panes, b)
   if (!pa || !pb) return []
   return [
-    mint(a, { content_eid: pb.content_eid ?? null, view: pb.view ?? null }),
-    mint(b, { content_eid: pa.content_eid ?? null, view: pa.view ?? null }),
+    mint(a, { content: pb.content ?? null, view: pb.view ?? null }),
+    mint(b, { content: pa.content ?? null, view: pa.view ?? null }),
   ]
 }
 
@@ -179,21 +179,21 @@ export let swap = (panes: Pane[], a: string, b: string): Change[] => {
 // IS the root; more make the root an h-container with equal children.
 export let mintLayout = (
   title: string,
-  leaves: { content_eid?: string | null; view?: string | null }[] = [],
+  leaves: { content?: string | null; view?: string | null }[] = [],
 ): { eid: string; changes: Change[] } => {
   let eid = uuid()
   let root = uuid()
   let changes: Change[] = [
     { eid, name: 'doc', comp: { title, body: '' } },
-    { eid, name: 'layout', comp: { root_eid: root } },
+    { eid, name: 'layout', comp: { root: root } },
     ...(leaves.length < 2
-      ? [mint(root, { layout_eid: eid, ...(leaves[0] ?? {}) })]
+      ? [mint(root, { layout: eid, ...(leaves[0] ?? {}) })]
       : [
-        mint(root, { layout_eid: eid, dir: 'h' }),
+        mint(root, { layout: eid, dir: 'h' }),
         ...leaves.map((leaf, i) =>
           mint(uuid(), {
-            layout_eid: eid,
-            parent_eid: root,
+            layout: eid,
+            parent: root,
             size: 1,
             order: i,
             ...leaf,

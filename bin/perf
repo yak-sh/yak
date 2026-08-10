@@ -757,14 +757,14 @@ let seed = async () => {
       {
         eid,
         name: 'card',
-        comp: { target_eid: tasks[i], view: 'Full' },
+        comp: { target: tasks[i], view: 'Full' },
       },
       {
         eid,
         name: 'pin',
         comp: {
           eid,
-          canvas_eid: panCanvas,
+          canvas: panCanvas,
           x: (i % 8) * 360,
           y: Math.floor(i / 8) * 300,
           w: 320,
@@ -778,13 +778,13 @@ let seed = async () => {
     let eid = uuid()
     mountedCards.push(eid)
     cards.push(
-      { eid, name: 'card', comp: { target_eid: target, view: 'Board' } },
+      { eid, name: 'card', comp: { target: target, view: 'Board' } },
       {
         eid,
         name: 'pin',
         comp: {
           eid,
-          canvas_eid: canvasEid,
+          canvas: canvasEid,
           x: (i % 5) * 520,
           y: Math.floor(i / 5) * 760,
           w: 480,

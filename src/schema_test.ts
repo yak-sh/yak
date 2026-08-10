@@ -21,7 +21,7 @@ Deno.test('typeWord: one spelling per type', () => {
 Deno.test('schema(): stamped marked, death words carried, tags empty', () => {
   let rows = Object.fromEntries(schema().map((s) => [s.comp, s.cols]))
   assertEquals(
-    rows.claim.find((c) => c.col == 'session_eid')?.death,
+    rows.claim.find((c) => c.col == 'session')?.death,
     'release',
   )
   assertEquals(rows.claim.find((c) => c.col == 'claimed_at')?.stamped, true)
@@ -38,7 +38,7 @@ Deno.test('schema(): stamped marked, death words carried, tags empty', () => {
   assert(session.includes('provider') && session.includes('exit_code'))
   assertEquals(
     rows.spawn.map((c) => c.col),
-    ['provider', 'model', 'effort', 'persona_eid'],
+    ['provider', 'model', 'effort', 'persona'],
   )
 })
 
@@ -49,7 +49,7 @@ Deno.test('vocabularyMd: components, death words, effects — all present', () =
     doc: 'spawns the agent',
   }])
   assert(md.includes('### task'))
-  assert(md.includes('`project_eid` → project (detach)'))
+  assert(md.includes('`project` → project (detach)'))
   assert(md.includes('`claimed_at` time ⚙'))
   assert(md.includes('- parent requires child'))
   assert(md.includes('open → wip → done → cancelled'))

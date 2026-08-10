@@ -287,7 +287,7 @@ let TuiTask = ({ e }: { e: Ent }) => (
       <span class='Task_Prio'>{formatProp(priority, e.task!.priority)}</span>
       {e.claim && (
         <span class='Task_Claim'>
-          ⚑ {viaName(e.claim.session_eid)}
+          ⚑ {viaName(e.claim.session)}
         </span>
       )}
       <Id e={e} />

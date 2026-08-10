@@ -113,11 +113,11 @@ Deno.test('task meta carries both full facts and compact edge tallies', () => {
         eid: 'task',
         status: 'open',
         priority: 1,
-        project_eid: project,
-        assignee_eid: person,
+        project: project,
+        assignee: person,
         domain: 'Eng',
       },
-      claim: { eid: 'task', session_eid: session },
+      claim: { eid: 'task', session: session },
       created: { eid: 'task', at: now, by: person },
     },
     [project]: {
@@ -149,7 +149,7 @@ Deno.test('task meta carries both full facts and compact edge tallies', () => {
     comment: {
       entity: { eid: 'comment', num: 8 },
       doc: { eid: 'comment', title: '', body: 'Watching' },
-      comment: { eid: 'comment', target_eid: 'task' },
+      comment: { eid: 'comment', target: 'task' },
     },
   }
   deps.value = [
@@ -329,7 +329,7 @@ Deno.test('comment dependencies lead with the entity commented on', () => {
     comment: {
       entity: { eid: 'comment', num: 2 },
       doc: { eid: 'comment', title: '', body: 'A note' },
-      comment: { eid: 'comment', target_eid: 'target' },
+      comment: { eid: 'comment', target: 'target' },
     },
     target: {
       entity: { eid: 'target', num: 1 },

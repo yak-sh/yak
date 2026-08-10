@@ -1,5 +1,5 @@
 // The knock resolver: a knock is the artifact of an attention ask —
-// bring target_eid to to_eid's attention NOW — and this effect is the
+// bring target to deliver.to's attention NOW — and this effect is the
 // ladder that makes "now" true, stamping what it did (delivery) so
 // every knock debugs itself. The cast is the first rung for free: a
 // running session's channel plugin hears the broadcast the moment the
@@ -22,7 +22,7 @@ let wordsFor = (target: string): string => {
     `select d.body from comment c
      join doc d on d.eid = c.eid
      join created cr on cr.eid = c.eid
-     where c.target_eid = ?
+     where c.target = ?
      and cr.at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 minute')
      order by cr.at desc limit 1`,
   ).get(target) as { body: string } | undefined
@@ -43,10 +43,10 @@ let wordsFor = (target: string): string => {
 // /clear leaves the old row behind and the higher num is the live one.
 let awake = (to: string): { eid: string; num: number } | undefined =>
   (db.prepare(
-    `select s.eid, e.num, s.operator, s.requested_task_eid, s.origin,
-            s.role_eid
+    `select s.eid, e.num, s.operator, s.requested_task, s.origin,
+            s.role
      from session s join entity e on e.eid = s.eid
-     where s.eid = ? or s.actor_eid = ?
+     where s.eid = ? or s.actor = ?
      order by e.num desc`,
   ).all(to, to) as ({ eid: string; num: number } & Record<string, unknown>)[])
     .filter((s) => s.eid == to || isOperator(s))
@@ -57,7 +57,7 @@ let awake = (to: string): { eid: string; num: number } | undefined =>
 export let knocked =
   (cast: Cast) => (eid: string, comp: Record<string, unknown>) => {
     let to = toOf(eid)
-    let target = String(comp.target_eid ?? '')
+    let target = String(comp.target ?? '')
     let done = (via: string) => delivered(eid, via, cast)
     let fail = (error: string) => errored(eid, error, cast)
     // A knock with no recipient is inert — settle the miss and stop. A kept
@@ -104,7 +104,7 @@ export let knocked =
             // Not an event: these are the knocker's own words relayed, the
             // same reason rung 3's letter is a letter (M-4062). An event
             // would also be ignored by commented(), so nothing would wake.
-            { eid: c, name: 'comment', comp: { target_eid: to } },
+            { eid: c, name: 'comment', comp: { target: to } },
           ],
           t,
           knocker(),
@@ -155,7 +155,7 @@ export let knocked =
                 body: words || `You are asked to look at ${human(db, target)}.`,
               },
             },
-            { eid: m, name: 'mail', comp: { target_eid: target } },
+            { eid: m, name: 'mail', comp: { target: target } },
             { eid: m, name: 'deliver', comp: { to } },
             // Signed by whoever knocked — the letter carries their words.
             // An unnamed writer would sign it by fallback, as the owner.

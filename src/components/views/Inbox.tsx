@@ -34,7 +34,7 @@ let order = (a: Row, b: Row) => at(b).localeCompare(at(a))
 let Line = ({ r }: { r: Row }) => {
   let e: Ent = ent(r.eid)
   // A knock is the envelope; its target is what the reader came to see.
-  let subject = r.comps.knock ? ent(String(r.comps.knock.target_eid)) : e
+  let subject = r.comps.knock ? ent(String(r.comps.knock.target)) : e
   let fresh = isUnread(r)
   return (
     <ListFrame.Row mod={fresh && 'unread'}>

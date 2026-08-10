@@ -30,7 +30,7 @@ let row = (
   task: {
     status: 'open',
     priority: 1,
-    project_eid: 'p1',
+    project: 'p1',
     domain: 'Ops',
     ...task,
   },
@@ -161,24 +161,24 @@ Deno.test('query: quotes hold a value that carries the separator', () => {
 
 Deno.test('query: adopt pins down scalar equalities only', () => {
   let preds = parseQuery(
-    '.project_eid=p1&.priority=2&.domain=Ops,Eng&.status!=done&.num=1..9&.title~=x',
+    '.project=p1&.priority=2&.domain=Ops,Eng&.status!=done&.num=1..9&.title~=x',
   )
   // lists, ranges, negations, contains and other comps pin nothing down
-  assertEquals(adopt(preds, 'task'), { project_eid: 'p1', priority: 2 })
+  assertEquals(adopt(preds, 'task'), { project: 'p1', priority: 2 })
   assertEquals(adopt(preds, 'doc'), {})
   assertEquals(adopt(parseQuery(''), 'task'), {})
   // assignee rides the same generality: a board of Jeff's plate adopts
   assertEquals(
-    adopt(parseQuery('.assignee_eid=u1&.status=open'), 'task'),
-    { assignee_eid: 'u1', status: 'open' },
+    adopt(parseQuery('.assignee=u1&.status=open'), 'task'),
+    { assignee: 'u1', status: 'open' },
   )
 })
 
-Deno.test('query: assignee_eid routes bare and filters', () => {
-  let p = pred('.assignee_eid=u1')!
-  assertEquals([p.comp, p.prop, p.op], ['task', 'assignee_eid', ''])
-  assert(matchQuery(row({ status: 'open', assignee_eid: 'u1' }), [p]))
-  assert(!matchQuery(row({ status: 'open', assignee_eid: 'u2' }), [p]))
+Deno.test('query: assignee routes bare and filters', () => {
+  let p = pred('.assignee=u1')!
+  assertEquals([p.comp, p.prop, p.op], ['task', 'assignee', ''])
+  assert(matchQuery(row({ status: 'open', assignee: 'u1' }), [p]))
+  assert(!matchQuery(row({ status: 'open', assignee: 'u2' }), [p]))
   assert(!matchQuery(row({ status: 'open' }), [p]))
 })
 
@@ -464,34 +464,36 @@ Deno.test('mail arrival columns route bare and filter (the mail door)', () => {
   assert(!matchQuery({ mail: { to: 'x', verified: 1 } }, ps))
 })
 
-// ---- reference sugar + path predicates ----
+// ---- references + path predicates ----
 
-Deno.test('sugar: .assignee is .assignee_eid', () => {
+Deno.test('references route and filter by their own names', () => {
   assertEquals(pred('.assignee=u1'), {
     comp: 'task',
-    prop: 'assignee_eid',
+    prop: 'assignee',
     op: '',
     value: 'u1',
   })
-  assert(hit('.assignee=u1', { assignee_eid: 'u1' }))
-  assert(!hit('.assignee=u1', { assignee_eid: 'u2' }))
+  assert(hit('.assignee=u1', { assignee: 'u1' }))
+  assert(!hit('.assignee=u1', { assignee: 'u2' }))
 })
 
-Deno.test('sugar: misses and own-column collisions stay loud', () => {
+Deno.test('reference misses stay loud', () => {
   assertThrows(() => route('hovercraft'), Error, 'unknown prop')
-  assertThrows(() => route('target_eid'), Error, 'ambiguous')
 })
 
-Deno.test('sugar: a ref name several comps share is any-of', () => {
-  // actor_eid lives on client AND session — one concept, so the bare
+Deno.test('a reference name shared by several comps is any-of', () => {
+  // actor lives on client AND session — one concept, so the bare
   // form filters across both comps; writes must name one (client.ts).
-  assertEquals(route('actor'), { comp: '', prop: 'actor_eid' })
-  assertEquals(route('client'), { comp: '', prop: 'client_eid' })
+  assertEquals(route('actor'), { comp: '', prop: 'actor' })
+  assertEquals(route('client'), { comp: '', prop: 'client' })
+  assertEquals(route('target'), { comp: '', prop: 'target' })
   let ps = parseQuery('.actor=u1')
-  assert(matchQuery({ client: { actor_eid: 'u1' } }, ps))
-  assert(matchQuery({ session: { id: 's', actor_eid: 'u1' } }, ps))
-  assert(!matchQuery({ session: { id: 's', actor_eid: 'u2' } }, ps))
+  assert(matchQuery({ client: { actor: 'u1' } }, ps))
+  assert(matchQuery({ session: { id: 's', actor: 'u1' } }, ps))
+  assert(matchQuery({ client: { actor: 'u2' }, session: { actor: 'u1' } }, ps))
+  assert(!matchQuery({ session: { id: 's', actor: 'u2' } }, ps))
   assert(!matchQuery({ session: { id: 's' } }, ps))
+  assertThrows(() => route('by'), Error, 'ambiguous')
   // adopt() pins only comp-named equalities — any-of pins nothing
   assertEquals(adopt(ps, 'client'), {})
 })
@@ -502,7 +504,7 @@ Deno.test('spawn compatibility fields filter across both homes', () => {
   assert(matchQuery({ session: { provider: 'fake' } }, ps))
   assert(matchQuery({ spawn: { provider: 'fake' } }, ps))
   assert(!matchQuery({ session: { provider: 'claude' } }, ps))
-  assertEquals(route('persona'), { comp: '', prop: 'persona_eid' })
+  assertEquals(route('persona'), { comp: '', prop: 'persona' })
 })
 
 Deno.test('paths: a component first segment stays the explicit spelling', () => {
@@ -517,7 +519,7 @@ Deno.test('paths: a component first segment stays the explicit spelling', () => 
 Deno.test('paths: .assignee.title walks the reference', () => {
   assertEquals(pred('.assignee.title~=jeff'), {
     comp: 'task',
-    prop: 'assignee_eid',
+    prop: 'assignee',
     op: '~',
     value: 'jeff',
     at: { comp: 'doc', prop: 'title' },
@@ -532,8 +534,8 @@ Deno.test('paths: the pred tests the TARGET through ent', () => {
   }
   let ent = (e: string) => world[e]
   let ps = parseQuery('.assignee.title~=jeff')
-  assert(matchQuery(row({ assignee_eid: 'u1' }), ps, ent))
-  assert(!matchQuery(row({ assignee_eid: 'ghost' }), ps, ent))
+  assert(matchQuery(row({ assignee: 'u1' }), ps, ent))
+  assert(!matchQuery(row({ assignee: 'ghost' }), ps, ent))
   assert(!matchQuery(row({}), ps, ent)) // absent ref: '=' shapes miss
   assert(matchQuery(row({}), parseQuery('.assignee.title!=jeff'), ent))
 })
@@ -574,10 +576,10 @@ let has: [string, string, string, string][] = [
   ['doc prop', '.', '.title', 'doc'],
   ['spine is stamped', '.', '.num', 'entity · stamped'],
   ['recall bare + stamped', '.', '.count', 'recall · stamped'],
-  ['ref sugar', '.', '.assignee', 'task · ref'],
-  ['shared ref sugar', '.', '.actor', 'ref'],
+  ['reference', '.', '.assignee', 'task · ref'],
+  ['shared reference', '.', '.actor', 'ref'],
   ['prefix keeps the comp', '.mem', '.memory.', 'comp'],
-  ['comp columns', '.memory.', '.memory.scope_eid', 'memory'],
+  ['comp columns', '.memory.', '.memory.scope', 'memory'],
   [
     'stamped column, dimmed',
     '.memory.',
@@ -662,8 +664,8 @@ Deno.test('sunk: own stamp, or the project the task is filed under', () => {
     eid == P ? { project: { retired_at: '2026-01-01' } } : undefined
   assertEquals(sunk({ project: { retired_at: 'x' } }), true)
   assertEquals(sunk({ project: {} }), false)
-  assertEquals(sunk({ task: { project_eid: P } }, look), true)
-  assertEquals(sunk({ task: { project_eid: 'live' } }, look), false)
+  assertEquals(sunk({ task: { project: P } }, look), true)
+  assertEquals(sunk({ task: { project: 'live' } }, look), false)
   assertEquals(sunk({ task: {} }, look), false)
 })
 

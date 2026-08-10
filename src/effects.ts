@@ -112,7 +112,7 @@ export let dispatch = (
     if (name == 'dependency') {
       // Edges are data too: a handler registered on 'dependency' hears
       // every sentence spoken or unsaid (the comp carries type,
-      // child_eid, and gone when unlinking). created() is the one hook —
+      // child, and gone when unlinking). created() is the one hook —
       // an edge has no columns to patch and no row to remove.
       for (let e of registry.dependency ?? []) {
         if (e.created) fire('dependency', () => e.created!(eid, comp!))

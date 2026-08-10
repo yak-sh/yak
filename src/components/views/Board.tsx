@@ -179,8 +179,8 @@ export let Board = ({ e }: { e: Ent }) => {
       eid: row?.eid ?? crypto.randomUUID(),
       name: 'fold',
       comp: {
-        client_eid: me,
-        board_eid: e.eid,
+        client: me,
+        board: e.eid,
         statuses: [...folded].join(','),
       },
     })
@@ -191,17 +191,17 @@ export let Board = ({ e }: { e: Ent }) => {
   ) => {
     let data = ev.dataTransfer?.getData('application/x-tasks-card')
     if (!data) return
-    let { target_eid } = JSON.parse(data)
-    if (!ent(target_eid).task) return // not a task: let the canvas spawn it
+    let { target } = JSON.parse(data)
+    if (!ent(target).task) return // not a task: let the canvas spawn it
     ev.preventDefault()
     ev.stopPropagation()
     // The new neighbours: this column's tasks (minus the dragged one), in
     // render order; the drop's insertion index comes from the row midpoints.
     let list = tasks
-      .filter((k) => k.task?.status == status && k.eid != target_eid)
+      .filter((k) => k.task?.status == status && k.eid != target)
       .sort(byPriority)
     let rows = [...ev.currentTarget.querySelectorAll('.Board_Item')]
-      .filter((r) => (r as HTMLElement).dataset.eid != target_eid)
+      .filter((r) => (r as HTMLElement).dataset.eid != target)
     let i = rows.findIndex((r) => {
       let box = r.getBoundingClientRect()
       return ev.clientY < box.top + box.height / 2
@@ -217,7 +217,7 @@ export let Board = ({ e }: { e: Ent }) => {
       ? prev + 1
       : (prev + next) / 2
     mutate({
-      eid: target_eid,
+      eid: target,
       name: 'task',
       comp: {
         ...adopt(parseQuery(String(e.board?.query ?? '')), 'task'),

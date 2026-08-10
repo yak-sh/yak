@@ -99,7 +99,7 @@ let seed = (
     {
       eid: role,
       name: 'role',
-      comp: { state: 'running', surface, scope_eid: project },
+      comp: { state: 'running', surface, scope: project },
     },
     {
       eid: role,
@@ -127,7 +127,7 @@ let failure = (eid: string) =>
 let live = { ...deps, now: () => new Date().toISOString() }
 let launch = (role: string, endAgo: number | null, life = 1_300) => {
   let e = uid()
-  apply(db, [{ eid: e, name: 'session', comp: { id: uid(), role_eid: role } }])
+  apply(db, [{ eid: e, name: 'session', comp: { id: uid(), role: role } }])
   let t = Date.now()
   db.prepare('update session set started_at = ?, finished_at = ? where eid = ?')
     .run(
@@ -330,11 +330,11 @@ Deno.test('managed role mints one operator session and stops through the graph',
   await rolesSweep(cast, deps)
   await rolesSweep(cast, deps)
   let runs = db.prepare(
-    'select * from session where role_eid = ?',
+    'select * from session where role = ?',
   ).all(role) as Record<string, unknown>[]
   assertEquals(runs.length, 1)
   assertEquals(runs[0].operator, 1)
-  assertEquals(runs[0].actor_eid, project)
+  assertEquals(runs[0].actor, project)
   let runEid = String(runs[0].eid)
   assertEquals(
     db.prepare('select provider from spawn where eid = ?').get(runEid),
@@ -351,16 +351,16 @@ Deno.test('managed role mints one operator session and stops through the graph',
   }])
   await rolesSweep(cast, deps)
   let stop = db.prepare(
-    'select target_eid from stop_request order by rowid desc limit 1',
+    'select target from stop_request order by rowid desc limit 1',
   ).get()
-  assertEquals(stop, { target_eid: runEid })
+  assertEquals(stop, { target: runEid })
 })
 
 Deno.test('deleting a managed role keeps history and requests a stop', async () => {
   let { role } = seed('managed')
   await rolesSweep(cast, deps)
   let run = db.prepare(
-    'select eid from session where role_eid = ? order by rowid desc limit 1',
+    'select eid from session where role = ? order by rowid desc limit 1',
   ).get(role) as { eid: string }
   db.prepare(
     `update session set origin = 'managed', status = 'running' where eid = ?`,
@@ -368,14 +368,14 @@ Deno.test('deleting a managed role keeps history and requests a stop', async () 
   apply(db, [{ eid: role, name: 'entity', comp: null }])
   await roleRemoved(cast, deps)(role)
   assertEquals(
-    db.prepare('select role_eid from session where eid = ?').get(run.eid),
-    { role_eid: role },
+    db.prepare('select role from session where eid = ?').get(run.eid),
+    { role: role },
   )
   assertEquals(
     db.prepare(
-      'select target_eid from stop_request order by rowid desc limit 1',
+      'select target from stop_request order by rowid desc limit 1',
     ).get(),
-    { target_eid: run.eid },
+    { target: run.eid },
   )
   assert(removed.has(`${tasksHome}/.tasks/roles/${role}`))
 })
@@ -384,7 +384,7 @@ Deno.test('managed attention resumes once with no graph content', async () => {
   let { role } = seed('managed')
   await rolesSweep(cast, deps)
   let run = db.prepare(
-    'select eid, id from session where role_eid = ? order by rowid desc limit 1',
+    'select eid, id from session where role = ? order by rowid desc limit 1',
   ).get(role) as { eid: string; id: string }
   db.prepare(`
     update session set origin = 'managed', status = 'completed',
@@ -401,7 +401,7 @@ Deno.test('managed attention resumes once with no graph content', async () => {
     {
       eid: message,
       name: 'comment',
-      comp: { target_eid: run.eid },
+      comp: { target: run.eid },
     },
   ])
   let wakeDeps = { ...deps, now: () => new Date().toISOString() }

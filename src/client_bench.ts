@@ -20,7 +20,7 @@ for (let i = 0; i < 2000; i++) {
       comp: { status: i % 4 ? 'open' : 'done', priority: i % 3 },
     },
   )
-  if (i < 5) changes.push({ eid, name: 'claim', comp: { session_eid: S } })
+  if (i < 5) changes.push({ eid, name: 'claim', comp: { session: S } })
 }
 let snap: Snapshot = { changes, deps: [] }
 let all = rows(snap)

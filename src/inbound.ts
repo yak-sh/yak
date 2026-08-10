@@ -235,8 +235,8 @@ export let mailChanges = (m: FleetMsg, target: string | null) => {
       eid,
       name: 'mail',
       comp: {
-        ...(target ? { target_eid: target } : {}),
-        ...(reply ? { reply_to_eid: reply } : {}),
+        ...(target ? { target: target } : {}),
+        ...(reply ? { reply_to: reply } : {}),
       },
     },
   ]
@@ -300,7 +300,7 @@ export let hookChanges = (r: SpoolReq, target: string | null) => {
         {
           eid,
           name: 'dependency',
-          comp: { type: 'about', child_eid: target },
+          comp: { type: 'about', child: target },
         } satisfies Change,
       ]
       : []),
@@ -365,14 +365,14 @@ let mint = (
 // duplicate delivery, recorded once and never twice.
 let arrive = (m: FleetMsg, cast: Cast): boolean => {
   let r = db.prepare(
-    `select eid, message_id, target_eid, reply_to_eid, "from" author
+    `select eid, message_id, target, reply_to, "from" author
      from mail where sent_id = ?`,
   ).get(rfcId(m.id)) as
     | {
       eid: string
       message_id: string | null
-      target_eid: string | null
-      reply_to_eid: string | null
+      target: string | null
+      reply_to: string | null
       author: string | null
     }
     | undefined
@@ -383,8 +383,8 @@ let arrive = (m: FleetMsg, cast: Cast): boolean => {
       received_at: arrivedAt(m),
       verified: m.verified ? 1 : 0,
       in_reply_to: m.in_reply_to ?? null,
-      ...(r.target_eid ? {} : { target_eid: routeTo(m.to) }),
-      ...(r.reply_to_eid ? {} : { reply_to_eid: replyOf(m.in_reply_to) }),
+      ...(r.target ? {} : { target: routeTo(m.to) }),
+      ...(r.reply_to ? {} : { reply_to: replyOf(m.in_reply_to) }),
       ...(r.author ? {} : { from: author(m) }),
     }, cast)
   }

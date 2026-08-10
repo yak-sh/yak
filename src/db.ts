@@ -36,6 +36,7 @@ import {
   normalizeChanges,
   parseProp,
   propAt,
+  propOwners,
 } from './props.ts'
 import { fleetLocal } from './mailaddr.ts'
 
@@ -55,17 +56,17 @@ export let file = Deno.env.get('DB_PATH') ?? liveDb()
 // from `schema` because open() also needs it to REBUILD a live table
 // whose baked check has fallen behind — a check can't be widened in place.
 let depDdl = `create table if not exists dependency (
-    parent_eid text not null references entity(eid),
+    parent text not null references entity(eid),
     type       text not null check (type in (${
   edges.map((e) => `'${e}'`).join(',')
 })),
-    child_eid  text not null references entity(eid),
-    primary key (parent_eid, type, child_eid)
+    child  text not null references entity(eid),
+    primary key (parent, type, child)
   )`
 
 // Outbound mail. "to"/"from" are SQL keywords — quoted here and by the
 // generic builders in apply(), which quote every column so the vocabulary
-// never bends to SQL's reserved words. target_eid deliberately wears NO
+// never bends to SQL's reserved words. target deliberately wears NO
 // FK: it is a death-'keep' column (types.ts) and tombstoning deletes the
 // spine row, so a reference to entity(eid) would veto the delete. Named
 // apart from `schema` because open() must REBUILD a live table that
@@ -80,12 +81,12 @@ let depDdl = `create table if not exists dependency (
 let mailDdl = `create table if not exists mail (
     eid         text primary key references entity(eid),
     "from"      text,
-    target_eid  text,
+    target  text,
     to_addr     text,
     message_id  text,
     received_at text,
     verified    integer,
-    reply_to_eid text,
+    reply_to text,
     sent_id     text,
     in_reply_to text
   )`
@@ -142,7 +143,7 @@ let schema = `
   );
   create table if not exists persona (
     eid text primary key references entity(eid),
-    home_eid text references entity(eid)
+    home text references entity(eid)
   );
   create table if not exists repo (
     eid  text primary key references entity(eid),
@@ -156,7 +157,7 @@ let schema = `
     eid          text primary key references entity(eid),
     state        text not null default 'stopped',
     surface      text not null default 'native',
-    scope_eid    text references entity(eid),
+    scope    text references entity(eid),
     applied_hash text,
     applied_at   text,
     stopped_at   text,
@@ -165,21 +166,21 @@ let schema = `
   create table if not exists board (
     eid text primary key references entity(eid)
   );
-  -- A tiling layout (D-14718): the doc names it, root_eid its top pane.
+  -- A tiling layout (D-14718): the doc names it, root its top pane.
   create table if not exists layout (
     eid      text primary key references entity(eid),
-    root_eid text references entity(eid)
+    root text references entity(eid)
   );
-  -- One pane: container (dir) or leaf (content_eid/view). size is a
+  -- One pane: container (dir) or leaf (content/view). size is a
   -- weight among siblings; "order" quoted — an SQL keyword, like "to".
   create table if not exists pane (
     eid         text primary key references entity(eid),
-    layout_eid  text references entity(eid),
-    parent_eid  text references entity(eid),
+    layout  text references entity(eid),
+    parent  text references entity(eid),
     size        real not null default 1,
     "order"     real not null default 0,
     dir         text,
-    content_eid text references entity(eid),
+    content text references entity(eid),
     view        text
   );
   create table if not exists web (
@@ -189,12 +190,12 @@ let schema = `
   );
   create table if not exists card (
     eid        text primary key references entity(eid),
-    target_eid text not null references entity(eid),
+    target text not null references entity(eid),
     view       text not null
   );
   create table if not exists pin (
     eid        text primary key references card(eid),
-    canvas_eid text not null references entity(eid),
+    canvas text not null references entity(eid),
     x integer not null,
     y integer not null,
     w integer not null,
@@ -208,26 +209,26 @@ let schema = `
   );
   create table if not exists camera (
     eid        text primary key references entity(eid),
-    client_eid text not null references entity(eid),
-    canvas_eid text not null references entity(eid),
+    client text not null references entity(eid),
+    canvas text not null references entity(eid),
     x    real not null default 0,
     y    real not null default 0,
     zoom real not null default 1,
     w    real not null default 0,
     h    real not null default 0,
-    unique (client_eid, canvas_eid)
+    unique (client, canvas)
   );
   create table if not exists fold (
     eid        text primary key references entity(eid),
-    client_eid text not null references entity(eid),
-    board_eid  text not null references entity(eid),
+    client text not null references entity(eid),
+    board  text not null references entity(eid),
     statuses   text not null default '',
-    unique (client_eid, board_eid)
+    unique (client, board)
   );
   create table if not exists shelf (
     eid        text primary key references entity(eid),
-    client_eid text not null references entity(eid),
-    unique (client_eid)
+    client text not null references entity(eid),
+    unique (client)
   );
   create table if not exists session (
     eid text primary key references entity(eid),
@@ -239,11 +240,11 @@ let schema = `
     provider    text,
     model       text,
     effort      text,
-    persona_eid text references entity(eid)
+    persona text references entity(eid)
   );
   create table if not exists claim (
     eid         text primary key references entity(eid),
-    session_eid text not null references entity(eid),
+    session text not null references entity(eid),
     claimed_at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
   -- An actor's standing instruction about one entity (watch / mute).
@@ -251,36 +252,36 @@ let schema = `
   -- it twice idempotent rather than a pile.
   create table if not exists subscription (
     eid        text primary key references entity(eid),
-    actor_eid  text not null references entity(eid),
-    target_eid text not null references entity(eid),
+    actor  text not null references entity(eid),
+    target text not null references entity(eid),
     mode       text not null
   );
   create unique index if not exists subscription_one
-    on subscription (actor_eid, target_eid);
+    on subscription (actor, target);
   create table if not exists stop_request (
     eid        text primary key references entity(eid),
-    target_eid text not null references entity(eid)
+    target text not null references entity(eid)
   );
   -- A knock: bring target to the recipient's attention now (knock.ts
   -- resolves; WHO looks is the shared deliver.to below, the outcome the
   -- shared delivered/error facet — neither a column here).
   create table if not exists knock (
     eid        text primary key references entity(eid),
-    target_eid text not null references entity(eid)
+    target text not null references entity(eid)
   );
   -- A wake: mint that knock at 'at' (absolute, resolved at mint).
   -- wake.ts arms one timer at the earliest UNACTED row (no delivered/error)
   -- and reconciles at boot; WHO to wake is the shared deliver.to, the outcome
-  -- the shared facet. target_eid is nullable — absent means the wake is its
+  -- the shared facet. target is nullable — absent means the wake is its
   -- own subject.
   create table if not exists wake (
     eid        text primary key references entity(eid),
     at         text not null,
-    target_eid text references entity(eid)
+    target text references entity(eid)
   );
   -- Addressing (D-14945): WHERE a deliverable goes. deliver.to names a graph
   -- entity — knock/wake/outbound-mail wear one. death 'keep', so like mail's
-  -- target_eid it carries NO FK: a kept ref outlives its recipient's
+  -- target it carries NO FK: a kept ref outlives its recipient's
   -- tombstone (an FK would veto the delete). Keyed by the deliverable's eid.
   create table if not exists deliver (
     eid text primary key references entity(eid),
@@ -324,14 +325,14 @@ let schema = `
   );
   create table if not exists conflict (
     eid        text primary key references entity(eid),
-    target_eid text not null,
+    target text not null,
     loser      text not null,
     holder     text not null,
     at         text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
   create table if not exists comment (
     eid        text primary key references entity(eid),
-    target_eid text not null references entity(eid)
+    target text not null references entity(eid)
   );
   create table if not exists review (
     eid     text primary key references entity(eid),
@@ -343,7 +344,7 @@ let schema = `
   );
   create table if not exists memory (
     eid         text primary key references entity(eid),
-    scope_eid   text,
+    scope   text,
     last_confirmed_at text
   );
   -- The retired memory.type enum's one surviving value, as a tag (T-12585).
@@ -545,7 +546,7 @@ let addBoard = (db: DatabaseSync, title: string) => {
 // A card views one entity through one lens; pinning places it on a canvas.
 let addCard = (db: DatabaseSync, target: string, view: string) => {
   let eid = ent(db)
-  db.prepare('insert into card (eid, target_eid, view) values (?, ?, ?)')
+  db.prepare('insert into card (eid, target, view) values (?, ?, ?)')
     .run(eid, target, view)
   return eid
 }
@@ -560,12 +561,12 @@ let pin = (
   h: number,
 ) =>
   db.prepare(
-    'insert into pin (eid, canvas_eid, x, y, w, h) values (?, ?, ?, ?, ?, ?)',
+    'insert into pin (eid, canvas, x, y, w, h) values (?, ?, ?, ?, ?, ?)',
   ).run(card, canvas, x, y, w, h)
 
 let link = (db: DatabaseSync, parent: string, type: string, child: string) =>
   db.prepare(
-    'insert into dependency (parent_eid, type, child_eid) values (?, ?, ?)',
+    'insert into dependency (parent, type, child) values (?, ?, ?)',
   ).run(parent, type, child)
 
 // A handful of neutral demo rows — a board containing tasks, one edge of
@@ -604,7 +605,7 @@ let seed = (db: DatabaseSync) => {
   for (let t of [schema, view, keys, readme]) link(db, board, 'contains', t)
 
   let proj = addProject(db, 'Demo project')
-  db.prepare('update task set project_eid = ?').run(proj)
+  db.prepare('update task set project = ?').run(proj)
 
   let canvas = ent(db)
   db.prepare('insert into canvas (eid) values (?)').run(canvas)
@@ -622,6 +623,121 @@ export let hasCol = (db: DatabaseSync, table: string, col: string) =>
   (db.prepare(`select name from pragma_table_info('${table}')`)
     .all() as { name: string }[]).some((c) => c.name == col)
 
+// References used to repeat their representation in every column name. The
+// PropType now carries that fact alone; this is the one cutover from the old
+// spellings. A migration is history, so this list is deliberately frozen — a
+// future ref must never make an unrelated old column start moving.
+let refRenames = [
+  { table: 'task', old: 'project_eid', col: 'project' },
+  { table: 'task', old: 'assignee_eid', col: 'assignee' },
+  { table: 'role', old: 'scope_eid', col: 'scope' },
+  { table: 'layout', old: 'root_eid', col: 'root' },
+  { table: 'pane', old: 'layout_eid', col: 'layout' },
+  { table: 'pane', old: 'parent_eid', col: 'parent' },
+  { table: 'pane', old: 'content_eid', col: 'content' },
+  { table: 'card', old: 'target_eid', col: 'target' },
+  { table: 'pin', old: 'canvas_eid', col: 'canvas' },
+  { table: 'client', old: 'actor_eid', col: 'actor' },
+  { table: 'camera', old: 'client_eid', col: 'client' },
+  { table: 'camera', old: 'canvas_eid', col: 'canvas' },
+  { table: 'fold', old: 'client_eid', col: 'client' },
+  { table: 'fold', old: 'board_eid', col: 'board' },
+  { table: 'shelf', old: 'client_eid', col: 'client' },
+  { table: 'session', old: 'requested_task_eid', col: 'requested_task' },
+  { table: 'session', old: 'role_eid', col: 'role' },
+  { table: 'session', old: 'persona_eid', col: 'persona' },
+  { table: 'session', old: 'actor_eid', col: 'actor' },
+  { table: 'session', old: 'parent_eid', col: 'parent' },
+  { table: 'spawn', old: 'persona_eid', col: 'persona' },
+  { table: 'claim', old: 'session_eid', col: 'session' },
+  { table: 'subscription', old: 'actor_eid', col: 'actor' },
+  { table: 'subscription', old: 'target_eid', col: 'target' },
+  { table: 'stop_request', old: 'target_eid', col: 'target' },
+  { table: 'knock', old: 'target_eid', col: 'target' },
+  { table: 'wake', old: 'target_eid', col: 'target' },
+  { table: 'mail', old: 'target_eid', col: 'target' },
+  { table: 'mail', old: 'reply_to_eid', col: 'reply_to' },
+  { table: 'conflict', old: 'target_eid', col: 'target' },
+  { table: 'comment', old: 'target_eid', col: 'target' },
+  { table: 'persona', old: 'home_eid', col: 'home' },
+  { table: 'memory', old: 'scope_eid', col: 'scope' },
+  { table: 'dependency', old: 'parent_eid', col: 'parent' },
+  { table: 'dependency', old: 'child_eid', col: 'child' },
+]
+
+let renameFilter = (query: string) => {
+  let out = query
+  let names = new Map(refRenames.map((r) => [r.old, r.col]))
+  for (let [old, col] of names) {
+    let key = new RegExp(
+      `(^|[&\\s])((?:\\.[A-Za-z_]+)?\\.)${old}(?=[.!<>=~])`,
+      'g',
+    )
+    out = (out.match(/"[^"]*"|[^"]+/g) ?? [])
+      .map((part) =>
+        part.startsWith('"') ? part : part.replace(key, `$1$2${col}`)
+      )
+      .join('')
+  }
+  return out
+}
+
+export let migrateRefs = (db: DatabaseSync) => {
+  let renames = refRenames.filter((r) => hasCol(db, r.table, r.old))
+  let boards = hasCol(db, 'board', 'query')
+    ? db.prepare('select eid, query from board where query is not null')
+      .all() as {
+        eid: string
+        query: string
+      }[]
+    : []
+  let stale = boards.map((r) => ({ ...r, next: renameFilter(r.query) }))
+    .filter((r) => r.next != r.query)
+  if (!renames.length && !stale.length) return
+  db.exec('begin')
+  try {
+    for (let { table, old, col } of renames) {
+      if (hasCol(db, table, col)) {
+        throw new Error(
+          `reference migration found both ${table}.${old} and ${col}`,
+        )
+      }
+      db.exec(
+        `alter table ${sqlName(table)} rename column ${sqlName(old)} to ${
+          sqlName(col)
+        }`,
+      )
+    }
+    let write = db.prepare('update board set query = ? where eid = ?')
+    for (let r of stale) write.run(r.next, r.eid)
+    db.exec('commit')
+  } catch (e) {
+    db.exec('rollback')
+    throw e
+  }
+}
+
+// Journal bytes are audit history, so the migration never rewrites them. A
+// reader translates former active keys at the boundary, keeping history and
+// replay on the vocabulary spoken by this process.
+let canonicalChanges = (changes: Change[]): Change[] => {
+  let names = new Map(
+    refRenames.map((r) => [`${r.table}.${r.old}`, r.col]),
+  )
+  let record = (name: string, value: Record<string, unknown>) =>
+    Object.fromEntries(
+      Object.entries(value).map((
+        [key, v],
+      ) => [names.get(`${name}.${key}`) ?? key, v]),
+    )
+  return changes.map((change) => ({
+    ...change,
+    ...(change.comp && { comp: record(change.name, change.comp) }),
+    ...(change.was &&
+      { was: record(change.name, change.was) as Change['was'] }),
+  }))
+}
+
 let ddlOf = (db: DatabaseSync, name: string) =>
   (db.prepare(
     `select sql from sqlite_master where type = 'table' and name = ?`,
@@ -635,12 +751,12 @@ let rebuild = (db: DatabaseSync, name: string, ddl: string) => {
   db.exec('commit')
 }
 
-// mail.target_eid shipped wearing an FK to entity(eid) — but it's a
+// mail.target shipped wearing an FK to entity(eid) — but it's a
 // death-'keep' column, and tombstoning deletes the spine row, so the
 // kept reference vetoed the whole delete batch (T-4593). Rebuild around
 // the FK-free ddl; no-ops once healed. Exported as the migration's seam.
 export let mendMail = (db: DatabaseSync) => {
-  if (ddlOf(db, 'mail')?.includes('target_eid text references')) {
+  if (ddlOf(db, 'mail')?.includes('target text references')) {
     rebuild(db, 'mail', mailDdl)
   }
 }
@@ -696,7 +812,7 @@ export let backfillVia = (db: DatabaseSync) => {
 }
 
 // memory.type → the `feedback` tag (T-12585). The enum said four things the
-// graph already knew: `project` restated scope_eid, `user` had zero rows,
+// graph already knew: `project` restated scope, `user` had zero rows,
 // `reference` was the absence of anything else. Only `feedback` carried a
 // fact, so only `feedback` becomes a row — with a NULL source, because
 // `created.by` names the recorder (a venture, in 81 of 87 rows), not who
@@ -750,8 +866,8 @@ export let retireProposal = (db: DatabaseSync) => {
 // makes the canonical row authoritative on every later open.
 export let backfillSpawn = (db: DatabaseSync) =>
   db.exec(
-    `insert or ignore into spawn (eid, provider, model, effort, persona_eid)
-       select eid, provider, model, effort, persona_eid from session`,
+    `insert or ignore into spawn (eid, provider, model, effort, persona)
+       select eid, provider, model, effort, persona from session`,
   )
 
 // D-14945 phase 4: role/session diagnostics become the shared error facet.
@@ -1100,10 +1216,8 @@ export let healStored = (db: DatabaseSync) => {
   return { changed: fixes.length, invalid }
 }
 
-// Open the file, plant the schema, seed once if the graph is empty.
-// Returns a live handle; the process holds it open for the server's
-// lifetime. No real migrations: NEW columns are added in place (additive,
-// no data moves); anything shapier still means export/reseed.
+// Open the file, migrate it in place, plant missing schema, and seed once if
+// the graph is empty. Returns a live handle held for the process lifetime.
 export let open = (path = file) => {
   // A test must NEVER open the owner's live graph. Under `deno test` the main
   // module is always a *_test.ts file; reaching the live path there means a
@@ -1125,6 +1239,9 @@ export let open = (path = file) => {
   // brief boot/write collision; waiting keeps a mutation on its accepting
   // process instead of making the caller guess whether to replay it.
   db.exec('pragma busy_timeout = 5000')
+  // This must precede schema: an old table may not yet have the canonical
+  // columns named by a newly added index in the current DDL.
+  migrateRefs(db)
   db.exec(schema)
   let addCol = (table: string, col: string, ddl: string) => {
     if (!hasCol(db, table, col)) {
@@ -1142,8 +1259,8 @@ export let open = (path = file) => {
   // Retired by the per-comment `notified` stamp, which is per item and so
   // cannot advance past an unserved sibling the way a cursor could.
   dropCol('session', 'acked_at')
-  addCol('task', 'project_eid', 'project_eid text references entity(eid)')
-  addCol('task', 'assignee_eid', 'assignee_eid text references entity(eid)')
+  addCol('task', 'project', 'project text references entity(eid)')
+  addCol('task', 'assignee', 'assignee text references entity(eid)')
   addCol('task', 'domain', 'domain text')
   addCol('repo', 'url', 'url text')
   // Off for every checkout the graph already knows: the permission to push
@@ -1170,7 +1287,7 @@ export let open = (path = file) => {
   addCol('session', 'operator', 'operator integer')
   // The operator session a delegated agent descends from (types.ts): a child
   // reifies as its own row rather than a second writer on the operator's.
-  addCol('session', 'parent_eid', 'parent_eid text references entity(eid)')
+  addCol('session', 'parent', 'parent text references entity(eid)')
   for (let table of ['created', 'updated', 'notified', 'opened', 'archived']) {
     addCol(table, 'via', 'via text')
   }
@@ -1186,9 +1303,9 @@ export let open = (path = file) => {
       'provider text',
       'model text',
       'effort text',
-      'persona_eid text',
-      'requested_task_eid text',
-      'role_eid text',
+      'persona text',
+      'requested_task text',
+      'role text',
       'branch text',
       'base_revision text',
       'status text',
@@ -1207,7 +1324,7 @@ export let open = (path = file) => {
   ) addCol('session', ddl.split(' ')[0], ddl)
   backfillSpawn(db)
   // The identity chain (types.ts): instruments point at who they act for.
-  addCol('client', 'actor_eid', 'actor_eid text references entity(eid)')
+  addCol('client', 'actor', 'actor text references entity(eid)')
   // Inbound provenance (inbound.ts): the fleet sweep's idempotency key
   // (and the never-send mark), arrival time, and the edge's DKIM verdict
   // — see stamped.mail in types.ts.
@@ -1215,9 +1332,9 @@ export let open = (path = file) => {
   addCol('mail', 'received_at', 'received_at text')
   addCol('mail', 'verified', 'verified integer')
   // Threading (mail.ts): the mail this one answers — no FK, like
-  // target_eid (death 'keep' + tombstoned spines veto FK'd deletes,
+  // target (death 'keep' + tombstoned spines veto FK'd deletes,
   // T-4593). sent_id is the sender-assigned Message-ID, server-stamped.
-  addCol('mail', 'reply_to_eid', 'reply_to_eid text')
+  addCol('mail', 'reply_to', 'reply_to text')
   addCol('mail', 'sent_id', 'sent_id text')
   addCol('mail', 'in_reply_to', 'in_reply_to text')
   // The hook row keeps the edge's captured request facts intact.
@@ -1226,7 +1343,7 @@ export let open = (path = file) => {
   addCol('hook', 'path', 'path text')
   addCol('hook', 'headers', 'headers text')
   addCol('hook', 'sig_ok', 'sig_ok integer')
-  addCol('session', 'actor_eid', 'actor_eid text references entity(eid)')
+  addCol('session', 'actor', 'actor text references entity(eid)')
   // A board is a saved filter over tasks (query.ts grammar), not an edge
   // list — membership can't drift when it isn't stored.
   addCol('board', 'query', 'query text')
@@ -1346,7 +1463,7 @@ let cmps: Record<string, string[]> = {
   ),
 }
 
-let edgeCols = ['type', 'child_eid', 'gone']
+let edgeCols = ['type', 'child', 'gone']
 
 // What the SCHEMA has, as opposed to what the wire may write — the
 // authority for telling a name that EXISTS from a name that doesn't.
@@ -1692,14 +1809,14 @@ let actorFor = (
 ): string | null => {
   if (!writer) return null
   let s = db.prepare(
-    'select cwd, actor_eid from session where id = ? or eid = ?',
+    'select cwd, actor from session where id = ? or eid = ?',
   ).get(writer, writer) as
-    | { cwd: string | null; actor_eid: string | null }
+    | { cwd: string | null; actor: string | null }
     | undefined
-  if (s) return s.actor_eid ?? ventureAt(db, s.cwd) ?? null
-  let c = db.prepare('select actor_eid from client where eid = ?')
-    .get(writer) as { actor_eid: string | null } | undefined
-  if (c) return c.actor_eid ?? (human ? ownerActor(db) : null)
+  if (s) return s.actor ?? ventureAt(db, s.cwd) ?? null
+  let c = db.prepare('select actor from client where eid = ?')
+    .get(writer) as { actor: string | null } | undefined
+  if (c) return c.actor ?? (human ? ownerActor(db) : null)
   // A writer naming an actor entity (person or project) directly stands
   // for itself — the CLI's own operator eid, or a hand-set x-via.
   let a = db.prepare(
@@ -1820,7 +1937,7 @@ let replaceWakes = (db: DatabaseSync, changes: Change[]): Change[] => {
   // batch, since a fresh self-wake always mints its deliver alongside.
   let pending = db.prepare(`
     select wake.eid from wake join deliver on deliver.eid = wake.eid
-    where deliver."to" = ? and wake.target_eid is null and wake.eid != ?
+    where deliver."to" = ? and wake.target is null and wake.eid != ?
       and not exists (select 1 from delivered where delivered.eid = wake.eid)
       and not exists (select 1 from error where error.eid = wake.eid)
   `)
@@ -1834,7 +1951,7 @@ let replaceWakes = (db: DatabaseSync, changes: Change[]): Change[] => {
     let to = toOf.get(change.eid)
     if (
       change.name != 'wake' || !change.comp ||
-      change.comp.target_eid != null || !to ||
+      change.comp.target != null || !to ||
       exists.get(change.eid)
     ) return [change]
     let drops = pending.all(to, change.eid) as { eid: string }[]
@@ -1903,13 +2020,13 @@ export let apply = (
     }
     for (let { eid, name, comp, was } of changes) {
       // An edge is a TRIPLE, not a row keyed by eid: the comp names the
-      // whole (parent=eid, type, child_eid) sentence, so linking is
+      // whole (parent=eid, type, child) sentence, so linking is
       // insert-or-ignore, and unlinking says the same sentence with
       // gone: true — comp: null could never name WHICH edge to drop.
       // Both endpoints must be live; a bad edge (unknown type, missing
       // spine) drops alone in its savepoint like any malformed create.
       if (name == 'dependency') {
-        if (!comp || dead.get(eid) || dead.get(String(comp.child_eid))) {
+        if (!comp || dead.get(eid) || dead.get(String(comp.child))) {
           continue
         }
         // Both spines checked HERE for the friendlier message (node:sqlite
@@ -1917,7 +2034,7 @@ export let apply = (
         // edge may only join entities that exist.
         let spines = db.prepare(
           'select count(*) as n from entity where eid in (?, ?)',
-        ).get(eid, String(comp.child_eid)) as { n: number }
+        ).get(eid, String(comp.child)) as { n: number }
         if (spines.n != 2) {
           console.warn(`sync: edge for ${eid} dropped — missing endpoint`)
           continue
@@ -1927,17 +2044,17 @@ export let apply = (
           if (comp.gone) {
             db.prepare(`
               delete from dependency
-              where parent_eid = ? and type = ? and child_eid = ?
-            `).run(eid, String(comp.type), String(comp.child_eid))
+              where parent = ? and type = ? and child = ?
+            `).run(eid, String(comp.type), String(comp.child))
           } else {
             db.prepare(`
-              insert or ignore into dependency (parent_eid, type, child_eid)
+              insert or ignore into dependency (parent, type, child)
               values (?, ?, ?)
-            `).run(eid, String(comp.type), String(comp.child_eid))
+            `).run(eid, String(comp.type), String(comp.child))
           }
           db.exec('release change')
           touched.add(eid) // a moved edge is news at both ends
-          touched.add(String(comp.child_eid))
+          touched.add(String(comp.child))
         } catch (e) {
           db.exec('rollback to change')
           db.exec('release change')
@@ -1999,24 +2116,24 @@ export let apply = (
       // the one db handle, so check-then-write here IS the atomic take.
       if (name == 'claim' && comp) {
         let cur = db.prepare(`
-          select c.session_eid, s.id from claim c
-          left join session s on s.eid = c.session_eid
+          select c.session, s.id from claim c
+          left join session s on s.eid = c.session
           where c.eid = ?
-        `).get(eid) as { session_eid: string; id: string | null } | undefined
-        if (cur && cur.session_eid != comp.session_eid) {
+        `).get(eid) as { session: string; id: string | null } | undefined
+        if (cur && cur.session != comp.session) {
           let loser = db.prepare('select id from session where eid = ?')
-            .get(String(comp.session_eid)) as { id: string } | undefined
+            .get(String(comp.session)) as { id: string } | undefined
           bounced = {
             target: eid,
-            loser: loser?.id ?? String(comp.session_eid),
-            holder: cur.id ?? cur.session_eid,
+            loser: loser?.id ?? String(comp.session),
+            holder: cur.id ?? cur.session,
           }
           // The holder is named by its session LABEL when it has one —
           // that's a name someone chose, not an eid; only the fallback
           // needs speaking.
           throw new Error(
             `${human(db, eid)} already claimed by ${
-              cur.id ?? human(db, cur.session_eid)
+              cur.id ?? human(db, cur.session)
             }`,
           )
         }
@@ -2025,9 +2142,9 @@ export let apply = (
       // managed session that is still going — anything else is refused
       // loudly, like a bounced claim. (The stop itself is an EFFECT,
       // post-commit; this gate is the rule half.)
-      if (name == 'stop_request' && comp?.target_eid) {
+      if (name == 'stop_request' && comp?.target) {
         let s = db.prepare('select origin, status from session where eid = ?')
-          .get(String(comp.target_eid)) as
+          .get(String(comp.target)) as
             | { origin: string; status: string | null }
             | undefined
         if (
@@ -2121,7 +2238,7 @@ export let apply = (
             }
           }
           db.prepare(
-            'delete from dependency where parent_eid = ? or child_eid = ?',
+            'delete from dependency where parent = ? or child = ?',
           ).run(d, d)
         }
         for (let d of doomed) {
@@ -2207,7 +2324,7 @@ export let apply = (
     // commit so every door — including a raw session request — gets the same
     // refusal.
     let request = db.prepare(
-      'select requested_task_eid from session where eid = ?',
+      'select requested_task from session where eid = ?',
     )
     let pending = db.prepare(`
       select 1 from proposed p
@@ -2218,9 +2335,9 @@ export let apply = (
       if (!key.startsWith('session ')) continue
       let eid = key.slice('session '.length)
       let row = request.get(eid) as
-        | { requested_task_eid: string | null }
+        | { requested_task: string | null }
         | undefined
-      let target = row?.requested_task_eid
+      let target = row?.requested_task
       if (!target || !pending.get(target)) continue
       let id = human(db, target)
       throw new Error(
@@ -2237,21 +2354,21 @@ export let apply = (
     // from the session row's CURRENT cwd (not a client's stale snapshot,
     // the bug that left real sessions blank when cwd and reify split across
     // batches): the venture whose repo holds the cwd, else the box owner.
-    // actor_eid stays wire-writable — a batch that named an actor keeps it;
+    // actor stays wire-writable — a batch that named an actor keeps it;
     // the server only fills the gap, and only for a session with a cwd (a
     // real run, never an abstract fixture), so the fill heals old blanks on
     // their next touch. It rides the return so caches hear it.
-    let fill = db.prepare('update session set actor_eid = ? where eid = ?')
-    let has = db.prepare('select cwd, actor_eid from session where eid = ?')
+    let fill = db.prepare('update session set actor = ? where eid = ?')
+    let has = db.prepare('select cwd, actor from session where eid = ?')
     for (let eid of touched) {
       let s = has.get(eid) as
-        | { cwd: string | null; actor_eid: string | null }
+        | { cwd: string | null; actor: string | null }
         | undefined
-      if (!s || s.actor_eid || !s.cwd) continue
+      if (!s || s.actor || !s.cwd) continue
       let a = ventureAt(db, s.cwd)
       if (a) {
         fill.run(a, eid)
-        extra.push({ eid, name: 'session', comp: { actor_eid: a } })
+        extra.push({ eid, name: 'session', comp: { actor: a } })
       }
     }
     // Provenance components (T-6670): who + when, paired. `created` is set
@@ -2419,7 +2536,7 @@ export let apply = (
         let ceid = crypto.randomUUID()
         spine(db, ceid)
         db.prepare(
-          `insert into conflict (eid, target_eid, loser, holder)
+          `insert into conflict (eid, target, loser, holder)
            values (?, ?, ?, ?)`,
         ).run(ceid, bounced.target, bounced.loser, bounced.holder)
         db.exec('commit')
@@ -2510,7 +2627,8 @@ export let journalOf = (
       ts: r.ts,
       actor: r.actor,
       via: r.via,
-      changes: (JSON.parse(r.batch) as Change[]).filter((c) => c.eid == eid),
+      changes: canonicalChanges(JSON.parse(r.batch) as Change[])
+        .filter((c) => c.eid == eid),
     }))
 
 // The same record cut by instrument instead of what: every batch a session
@@ -2534,7 +2652,7 @@ export let journalBy = (
       ts: r.ts,
       actor: r.actor,
       via: r.via,
-      changes: JSON.parse(r.batch) as Change[],
+      changes: canonicalChanges(JSON.parse(r.batch) as Change[]),
     }))
 
 // The journal replayed as a delta: every batch since `since` (an EXCLUSIVE
@@ -2567,7 +2685,7 @@ export let delta = (
   let cursor = since
   for (let r of log) {
     cursor = r.rowid
-    let batch = JSON.parse(r.batch) as Change[]
+    let batch = canonicalChanges(JSON.parse(r.batch) as Change[])
     for (let c of batch) changes.push(c)
     // Sort the batch's eids the way apply() did to stamp provenance: a
     // birth is a server-minted spine (an `entity` change carrying num — a
@@ -2585,7 +2703,7 @@ export let delta = (
       if (c.name == 'entity') (c.comp ? born : dead).add(c.eid)
       else if (c.name == 'dependency') {
         touched.add(c.eid)
-        if (c.comp) touched.add(String(c.comp.child_eid))
+        if (c.comp) touched.add(String(c.comp.child))
       } else {
         touched.add(c.eid)
         if (c.name == 'created') saidCreated.add(c.eid)
@@ -2674,14 +2792,14 @@ export let touch = (
 // over body hits) with recency — what you touched today is what you're
 // looking for — matching the house recall bias. Snippets mark matches
 // with \x01…\x02 so renderers can highlight without trusting HTML. A comment hit points
-// open_eid at its target — you open the conversation, not the aside —
+// open at its target — you open the conversation, not the aside —
 // and wears the target's title (the aside has none of its own).
 // A search line mixes FTS terms with dot-param filters (query.ts —
 // 'runner .status=done .updated.at=today'): the TEXT preds drive FTS,
 // the rest screen each hit against its components, and a line of ONLY
 // filters is a listing, newest touched first. A malformed filter throws;
 // the doors show the message.
-// Resolve a sugar value server-side: an alias slug, or a prefix-num /
+// Resolve a reference value server-side: an alias slug, or a prefix-num /
 // bare num against the spine — the db's half of client.ts find().
 export let findEid = (db: DatabaseSync, id: string): string | undefined => {
   let num = id.match(/^[A-Za-z]+-(\d+)$/)?.[1] ?? id.match(/^(\d+)$/)?.[1]
@@ -2718,7 +2836,7 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
         limit ?
     `).all(match, filters.length ? limit * 10 : limit) as (Omit<
       Hit,
-      'kind' | 'open_eid' | 'retired'
+      'kind' | 'open' | 'retired'
     >)[]
     : db.prepare(`
       select d.eid, d.title, '' as snip, e.num
@@ -2727,17 +2845,22 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
       left join updated up on up.eid = e.eid
       left join created cr on cr.eid = e.eid
       order by coalesce(up.at, cr.at) desc limit ?
-    `).all(limit * 10) as (Omit<Hit, 'kind' | 'open_eid' | 'retired'>)[]
+    `).all(limit * 10) as (Omit<Hit, 'kind' | 'open' | 'retired'>)[]
   if (filters.length) {
-    // Sugar values in the filters ('.assignee=jeff') resolve against the
+    // Reference values in the filters ('.assignee=jeff') resolve against the
     // db — alias slug or human num, same forms find() speaks.
     filters = resolveRefs(filters, (id) => findEid(db, id))
     // Each hit's components, only the ones the filters actually read —
     // matchQuery sees the same shape a live cache row has. A path pred
     // reads its TARGET through the same fetcher (compsOf doubles as the
     // ent argument), so `.assignee.title~=j` walks one row further.
+    let owners = (comp: string, prop: string) =>
+      comp ? [comp] : propOwners(prop)
     let names = [
-      ...new Set(filters.flatMap((p) => p.at ? [p.comp, p.at.comp] : [p.comp])),
+      ...new Set(filters.flatMap((p) => [
+        ...owners(p.comp, p.prop),
+        ...(p.at ? owners(p.at.comp, p.at.prop) : []),
+      ])),
     ]
     let get = new Map(
       names.map((c) => [c, db.prepare(`select * from ${c} where eid = ?`)]),
@@ -2756,8 +2879,8 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
     [k, db.prepare(`select 1 from ${k} where eid = ?`)] as const
   )
   let aim = db.prepare(`
-    select c.target_eid, d.title from comment c
-    left join doc d on d.eid = c.target_eid
+    select c.target, d.title from comment c
+    left join doc d on d.eid = c.target
     where c.eid = ?
   `)
   // Retirement sinks a hit, never hides it: a hit that IS a retired
@@ -2768,21 +2891,21 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
     select 1 from project p
     left join task t on t.eid = ?1
     where p.retired_at is not null
-      and p.eid in (?1, t.project_eid)
+      and p.eid in (?1, t.project)
   `)
   let hits = rows.map((r) => {
     let kind = is.find(([, s]) => s.get(r.eid))?.[0] ?? 'entity'
     let at = aim.get(r.eid) as
-      | { target_eid: string; title: string | null }
+      | { target: string; title: string | null }
       | undefined
     return {
       ...r,
       title: r.title || at?.title || '',
       kind,
-      open_eid: at?.target_eid ?? r.eid,
+      open: at?.target ?? r.eid,
       // What a comment hit points AT, spoken: the line already says
       // `→ on …`, and a uuid there is unpasteable in every other door.
-      ...(at?.target_eid ? { open_id: human(db, at.target_eid) } : {}),
+      ...(at?.target ? { open_id: human(db, at.target) } : {}),
       ...(sank.get(r.eid) ? { retired: true } : {}),
     }
   })
@@ -2862,7 +2985,7 @@ export let bodies = (db: DatabaseSync, eids: string[]): Change[] => {
 // its own table, where reading it out of a materialized graph costs the graph.
 // `only` is a where clause, so the narrow door asks the same question keyed.
 let homes = (db: DatabaseSync, only = '') =>
-  db.prepare(`select eid, home_eid as home from persona ${only}`)
+  db.prepare(`select eid, home as home from persona ${only}`)
     .all() as { eid: string; home: unknown }[]
 
 // The whole graph as one batch (plus edges) — what a fresh client cache eats.
@@ -2884,10 +3007,10 @@ export let snapshot = (db: DatabaseSync): Snapshot => {
     }
   }
   let deps = db.prepare(
-    'select parent_eid as parent, type, child_eid as child from dependency',
+    'select parent as parent, type, child as child from dependency',
   ).all() as Dep[]
   // A project's specialist personas ride derived `reads` edges (homeReads):
-  // home_eid is the one truth, so these compute here on the graph-out door
+  // home is the one truth, so these compute here on the graph-out door
   // and can never drift from ownership — nothing to store, nothing to sync.
   return {
     changes,
@@ -3006,12 +3129,12 @@ export let depsOf = (db: DatabaseSync, eids: string[]): Dep[] => {
   stage(db, eids)
   let mine = `in (select eid from hit)`
   let deps = db.prepare(
-    `select parent_eid as parent, type, child_eid as child from dependency
-      where parent_eid ${mine} or child_eid ${mine}`,
+    `select parent as parent, type, child as child from dependency
+      where parent ${mine} or child ${mine}`,
   ).all() as Dep[]
   return [
     ...deps,
-    ...homeReads(homes(db, `where home_eid ${mine} or eid ${mine}`), deps),
+    ...homeReads(homes(db, `where home ${mine} or eid ${mine}`), deps),
   ]
 }
 
@@ -3020,8 +3143,7 @@ export let depsOf = (db: DatabaseSync, eids: string[]): Dep[] => {
 // association nobody may write still says who made it), where the graph-out
 // reading walks every column of every row. `via` names the column. A column
 // is a reference by its PropType, not its name, so `created.by` and
-// `deliver.to` count as surely as `project_eid` — isRef reads the type the
-// _eid suffix only hinted at.
+// `deliver.to` counts as surely as `project` — isRef reads the declared type.
 export let refsOf = (db: DatabaseSync, eids: string[]) => {
   if (!eids.length) return []
   stage(db, eids)

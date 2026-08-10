@@ -77,7 +77,7 @@ export let focusOf = (rows: Row[], session?: string): string | undefined => {
   if (!session) return undefined
   let me = rows.find((r) => String(r.comps.session?.id ?? '') == session)
   if (!me) return undefined
-  let mine = rows.filter((r) => r.comps.claim?.session_eid == me.eid)
+  let mine = rows.filter((r) => r.comps.claim?.session == me.eid)
   return mine.length == 1 ? mine[0].eid : undefined
 }
 
@@ -127,9 +127,9 @@ let inherit = (ctx: Ctx): Record<string, unknown> => {
   if (r.comps.board) {
     return adopt(parseQuery(String(r.comps.board.query ?? '')), 'task')
   }
-  if (r.comps.project) return { project_eid: r.eid }
-  let p = r.comps.task?.project_eid
-  return p ? { project_eid: p } : {}
+  if (r.comps.project) return { project: r.eid }
+  let p = r.comps.task?.project
+  return p ? { project: p } : {}
 }
 
 // A command carries its own manual and any finite word count, so every
@@ -160,7 +160,7 @@ let card = (kind: typeof cardCommands[number]): Command => ({
     task: '[.title=Next .priority=1]',
     session: '[.id=review]',
     doc: '[.title=Notes .body=…]',
-    memory: '[.title=Lesson .memory.scope_eid=home]',
+    memory: '[.title=Lesson .memory.scope=home]',
   }[kind],
   about: `add a ${kind} card`,
   run: (rest, ctx) => {
@@ -191,7 +191,7 @@ let card = (kind: typeof cardCommands[number]): Command => ({
           name: kind,
           comp: kind == 'task'
             ? { status: 'open', ...grouped.task }
-            : { scope_eid: null, ...grouped.memory },
+            : { scope: null, ...grouped.memory },
         }]),
       ]
     return { changes, card: eid, msg: `new ${kind}` }
@@ -250,12 +250,12 @@ export let commands: Record<string, Command> = {
       let { title, body, grouped } = spec(text, ctx.read)
       if (!title) throw new Error('fix: needs a title')
       let task = { ...grouped.task }
-      if (!task.project_eid) {
+      if (!task.project) {
         let home = find(ctx.rows, 'home')
-        if (home?.comps.project) task.project_eid = home.eid
+        if (home?.comps.project) task.project = home.eid
         else {
           let repos = ctx.rows.filter((r) => r.comps.repo && r.comps.project)
-          if (repos.length == 1) task.project_eid = repos[0].eid
+          if (repos.length == 1) task.project = repos[0].eid
         }
       }
       let eid = uuid()
@@ -334,14 +334,14 @@ export let commands: Record<string, Command> = {
         )
       }
       let words = more.filter(Boolean).join(' ')
-      let toEid = to?.eid ?? (r.comps.task?.project_eid as string | undefined)
+      let toEid = to?.eid ?? (r.comps.task?.project as string | undefined)
       if (!toEid) {
         throw new Error('knock: name a recipient (:knock homelab …)')
       }
       let k = uuid()
       return {
         changes: [
-          { eid: k, name: 'knock', comp: { target_eid: r.eid } },
+          { eid: k, name: 'knock', comp: { target: r.eid } },
           { eid: k, name: 'deliver', comp: { to: toEid } },
           ...(words ? commentChanges(ctx.rows, r.eid, words, ctx.session) : []),
         ],
@@ -383,7 +383,7 @@ export let commands: Record<string, Command> = {
             name: 'wake',
             comp: {
               at: new Date(at).toISOString(),
-              ...(about ? { target_eid: about.eid } : {}),
+              ...(about ? { target: about.eid } : {}),
             },
           },
           { eid: w, name: 'deliver', comp: { to: to.eid } },
@@ -422,7 +422,7 @@ export let commands: Record<string, Command> = {
   // :reply answers a mail where you stand — or the E-id the line leads
   // with. The words ARE the page (a lone @file is that page — see
   // `page`); replyChanges aims at the far side and records the thread at
-  // authoring (reply_to_eid), delivery resolves it to a Message-ID.
+  // authoring (reply_to), delivery resolves it to a Message-ID.
   reply: {
     args: '[E-9] the answer…',
     about: 'answer the mail — Re: threads at delivery',
@@ -458,7 +458,7 @@ export let commands: Record<string, Command> = {
       let desk = find(ctx.rows, DESK.task)
       if (!desk?.comps.task) throw new Error('no scribe-desk task in the graph')
       let busy = ctx.rows.some((r) =>
-        r.comps.session?.requested_task_eid == desk.eid &&
+        r.comps.session?.requested_task == desk.eid &&
         ['starting', 'running'].includes(String(r.comps.session.status))
       )
       return {
@@ -558,7 +558,7 @@ export let filing = (text: string) => {
 }
 
 // The door every non-typing caller enters by: the line with or without
-// its colon, and the changes deref'd — any *_eid value a verb produced may
+// its colon, and the changes deref'd — any reference a verb produced may
 // be a human id (T-3, P-19) or an alias (jeff), and client.ts resolves
 // them HERE rather than letting a miss fail as an FK later.
 //

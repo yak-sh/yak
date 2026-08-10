@@ -655,7 +655,7 @@ let clientError = async (req: Request) => {
     record(db, {
       source: 'web',
       name: 'error',
-      session_id: b.client_eid ?? null,
+      session_id: b.client ?? null,
       ok: false,
       error: String(b.message ?? 'error'),
       detail: [b.stack, b.url].filter(Boolean).join('\n\n'),
@@ -1213,23 +1213,22 @@ let personaish = (...eids: (string | undefined)[]) =>
     e && db.prepare(
       `select 1 from persona where eid = :e
        union select 1 from dependency d
-         join persona p on p.eid = d.parent_eid where d.child_eid = :e`,
+         join persona p on p.eid = d.parent where d.child = :e`,
     ).get({ e })
   )
 on('persona', {
   created: syncSoon,
-  // home_eid is the persona's home project — re-homing it moves which
-  // repo the file lands in, so it must re-render. NOT project_eid: the
+  // home is the persona's home project — re-homing it moves which
+  // repo the file lands in, so it must re-render. NOT project: the
   // persona component has no such column (types.ts), and a changed
   // handler naming a column that isn't there never fires.
-  changed: { home_eid: syncSoon },
+  changed: { home: syncSoon },
   removed: syncSoon,
   doc: "materialize personas into their projects' .tasks/ files " +
     '(write-if-changed; task sync --commit is the deliberate commit)',
 })
 on('dependency', {
-  created: (eid, comp) =>
-    personaish(eid, comp.child_eid as string) && syncSoon(),
+  created: (eid, comp) => personaish(eid, comp.child as string) && syncSoon(),
   doc: 'a tier edge (or common flip) at a persona re-renders its files',
 })
 on('doc', {

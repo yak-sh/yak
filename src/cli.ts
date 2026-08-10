@@ -172,7 +172,7 @@ let bare = async () => {
   if (!session) return
   let [sess] = await query([`.session.id=${session}`], 'session')
   if (!sess) return
-  let mine = await query([`.claim.session_eid=${sess.eid}`], 'task')
+  let mine = await query([`.claim.session=${sess.eid}`], 'task')
   let digest = claimedDigest(mine)
   if (digest) print(`\n${digest}`)
 }
@@ -290,11 +290,11 @@ let list = async (got: Got) => {
   // reading rides a keyed check here (client.ts checkedRefs).
   await checkedRefs(preds)
   // The server matches and kind-filters; byBoard stays local. The ⚑ column
-  // reads each hit's own claim.session_eid, resolved to its id by a second
+  // reads each hit's own claim.session, resolved to its id by a second
   // keyed read over just those sessions.
   let hits = (await query(line, kind)).sort(byBoard)
   let sessions = await fetched(
-    hits.map((r) => String(r.comps.claim?.session_eid ?? '')).filter((s) => s),
+    hits.map((r) => String(r.comps.claim?.session ?? '')).filter((s) => s),
   )
   if (json) return print(jsonText(hits.map((r) => jsonOf(r))))
   // Ids alone do not disambiguate — two projects are both titled `holdco`
@@ -346,7 +346,7 @@ let list = async (got: Got) => {
 // there is no one place in it to stand.
 export let place = (preds: Pred[]) =>
   preds.find((p) =>
-    p.comp == 'task' && p.prop == 'project_eid' && p.op == '' && p.value &&
+    p.comp == 'task' && p.prop == 'project' && p.op == '' && p.value &&
     !p.value.includes(',')
   )
 
@@ -364,12 +364,12 @@ let scopeOf = async (named?: string): Promise<string | undefined> => {
     : undefined
   let people = await fetched(
     [
-      String(sess?.comps.session?.persona_eid ?? ''),
-      String(sess?.comps.session?.actor_eid ?? ''),
+      String(sess?.comps.session?.persona ?? ''),
+      String(sess?.comps.session?.actor ?? ''),
     ].filter((e) => e),
   )
-  let worn = people.find((r) => r.eid == sess?.comps.session?.persona_eid)
-  let home = String(worn?.comps.persona?.home_eid ?? '')
+  let worn = people.find((r) => r.eid == sess?.comps.session?.persona)
+  let home = String(worn?.comps.persona?.home ?? '')
   let all = [
     ...(sess ? [sess] : []),
     ...await query(['.repo.path!']),
@@ -575,7 +575,7 @@ let seek = async (got: Got) => {
   if (json) return print(jsonText(hits))
   if (!hits.length) return print('(no hits)')
   for (let h of hits) {
-    let aim = h.open_eid != h.eid ? ` → on ${h.open_id ?? h.open_eid}` : ''
+    let aim = h.open != h.eid ? ` → on ${h.open_id ?? h.open}` : ''
     let snip = h.snip.replaceAll('\x01', '[').replaceAll('\x02', ']')
     let sunk = h.retired ? ' · retired' : ''
     print(
@@ -915,7 +915,7 @@ let subscribe = (mode: 'watch' | 'mute') => async (input: Got) => {
     )
   }
   if (actor != who.actor) {
-    all.push(...await query([`.subscription.actor_eid=${actor}`]))
+    all.push(...await query([`.subscription.actor=${actor}`]))
   }
   let changes = subChanges(all, actor, row.eid, gone ? null : mode)
   let said = mode == 'watch' ? 'watching' : 'muting'
@@ -1036,11 +1036,11 @@ let land = async () => {
   if (!session) throw new Error('land: no session identity')
   let sessions = await query([], 'session')
   let sess = sessions.find((r) => String(r.comps.session?.id ?? '') == session)
-  let claims = sess ? await query([`.claim.session_eid=${sess.eid}`]) : []
-  let requested = String(sess?.comps.session?.requested_task_eid ?? '')
+  let claims = sess ? await query([`.claim.session=${sess.eid}`]) : []
+  let requested = String(sess?.comps.session?.requested_task ?? '')
   let tasks = requested ? [...claims, ...await fetched([requested])] : claims
   let projects = await fetched(
-    tasks.map((r) => String(r.comps.task?.project_eid ?? '')).filter(Boolean),
+    tasks.map((r) => String(r.comps.task?.project ?? '')).filter(Boolean),
   )
   let all = [...sessions, ...tasks, ...projects]
   let spec = landing(all, session)
@@ -1051,8 +1051,8 @@ let land = async () => {
       let current = [
         spec.task,
         ...(sess ? [sess] : []),
-        ...(sess ? await query([`.claim.session_eid=${sess.eid}`]) : []),
-        ...await query([`.comment.target_eid=${spec.task.eid}`]),
+        ...(sess ? await query([`.claim.session=${sess.eid}`]) : []),
+        ...await query([`.comment.target=${spec.task.eid}`]),
       ]
       let changes = landedChanges(current, spec.task, sha, session)
       if (changes.length) await send(changes)
@@ -1113,7 +1113,7 @@ let colon = async (focus: string | undefined, argv: string[]) => {
     await Promise.all([one(rest[0]), one('scribe-desk'), one('scribe')])
     let desk = find(all, 'scribe-desk')
     if (desk) {
-      all.push(...await query([`.session.requested_task_eid=${desk.eid}`]))
+      all.push(...await query([`.session.requested_task=${desk.eid}`]))
     }
   }
   all = [...new Map(all.map((r) => [r.eid, r])).values()]
@@ -1150,12 +1150,12 @@ let neededRole = async (id: string) => {
 }
 
 let roleSession = (all: Row[], eid: string) =>
-  all.filter((r) => r.comps.session?.role_eid == eid)
+  all.filter((r) => r.comps.session?.role == eid)
     .sort((a, b) => a.num - b.num).at(-1)
 
 let roleLine = (all: Row[], r: Row) => {
   let role = r.comps.role, spawn = r.comps.spawn ?? {}
-  let scope = all.find((x) => x.eid == role.scope_eid)
+  let scope = all.find((x) => x.eid == role.scope)
   let live = roleSession(all, r.eid)
   let cells = [
     idOf(r).padEnd(7),
@@ -1174,8 +1174,8 @@ let roleLine = (all: Row[], r: Row) => {
 let roleState = async (sub: string, got: Got) => {
   let want = sub == 'stop' ? 'stopped' : 'running'
   let ids = got.many.ids ?? []
-  // `.role.state!`, not `.role!` — bare `.role` is _eid sugar for
-  // session.role_eid (route()'s any-of), which would list sessions. state
+  // `.role.state!`, not `.role!` — bare `.role` is session.role, which would
+  // list sessions. state
   // is NOT NULL on every role, so its presence IS the component's.
   let targets = got.flags.has('--all')
     ? (await query(['.role.state!'])).sort((a, b) => a.num - b.num)
@@ -1205,15 +1205,15 @@ let role = async (got: Got) => {
     throw new Error(`not a role verb: ${sub}\n\n${help(['role'])}`)
   }
   // Three keyed queries stand in for the corpus: the roles, the entities
-  // they scope, and every session carrying a role_eid (roleSession picks
+  // they scope, and every session carrying a role (roleSession picks
   // the newest per role). roleLine/roleSession read them as one set.
   // `.role.state!` (state is NOT NULL on every role), not `.role!` — bare
-  // `.role` is _eid sugar for session.role_eid and would list sessions.
+  // `.role` is session.role and would list sessions.
   let roles = (await query(['.role.state!'])).sort((a, b) => a.num - b.num)
   let scopes = await fetched(
-    roles.map((r) => String(r.comps.role.scope_eid ?? '')).filter(Boolean),
+    roles.map((r) => String(r.comps.role.scope ?? '')).filter(Boolean),
   )
-  let all = [...roles, ...scopes, ...await query(['.session.role_eid!'])]
+  let all = [...roles, ...scopes, ...await query(['.session.role!'])]
   if (got.flags.has('--json')) {
     return print(jsonText(
       roles.map((r) => ({
@@ -1246,7 +1246,7 @@ let dep = async (got: Got) => {
   await send([{
     eid: row.eid,
     name: 'dependency',
-    comp: { type, child_eid: child.eid, ...(gone ? { gone: true } : {}) },
+    comp: { type, child: child.eid, ...(gone ? { gone: true } : {}) },
   }])
   print(`${idOf(row)} ${type} ${idOf(child)}${gone ? ' — unlinked' : ''}`)
 }
@@ -1306,7 +1306,7 @@ let show = async (got: Got) => {
   let snap = { deps }
   if (json) {
     // Edges and comments surround the same entity shape every list door uses.
-    let comments = all.filter((r) => r.comps.comment?.target_eid == row.eid)
+    let comments = all.filter((r) => r.comps.comment?.target == row.eid)
     let edges = edgesOf(snap, all, row.eid)
     print(jsonText({
       ...jsonOf(row),
@@ -1446,7 +1446,7 @@ export let subagentDigest = (
   let want = Deno.env.get('TASKS_TASK')
   let task = want ? find(all, want) : undefined
   if (!task && sess) {
-    task = all.find((r) => r.comps.claim?.session_eid == sess.eid)
+    task = all.find((r) => r.comps.claim?.session == sess.eid)
   }
   let head = `# subagent${agentType ? ` ${agentType}` : ''} · ${sid}`
   return task ? taskBlock(all, snap.deps, task).join('\n') : head
@@ -1622,7 +1622,7 @@ let context = async (input: Got) => {
         let s = sessionFor(all, sid, cwd, undefined, {
           agent_type: agentType,
           source: String(body.source ?? '') || undefined,
-          parent_eid: parent?.eid,
+          parent: parent?.eid,
           operator: false,
         })
         if (s.changes.length) {
@@ -1699,7 +1699,7 @@ let context = async (input: Got) => {
           // Project-wide attention is the one positive capability. Every
           // session gets the normal graph digest and direct notifications.
           operator: external ? operator : undefined,
-          role_eid: role,
+          role: role,
         },
       )
       if (!s) return
@@ -1796,7 +1796,7 @@ let context = async (input: Got) => {
       sid,
       Deno.cwd(),
       own ? claudePid() : undefined,
-      { role_eid: role },
+      { role: role },
     )
     await send(s.changes)
     snap = await read(sid)
@@ -1926,7 +1926,7 @@ let wrap = async (got: Got) => {
     let all = sess
       ? [
         sess,
-        ...await query([`.claim.session_eid=${sess.eid}`]),
+        ...await query([`.claim.session=${sess.eid}`]),
         ...await query(['.comment!', `.created.via=${sess.eid}`]),
         ...await journalRows(entries),
       ]

@@ -41,7 +41,7 @@ Deno.test('columnsFor: stamped columns render too', () => {
 Deno.test('derivation: a new comp needs zero admin edits', () => {
   ;(comps as Record<string, Record<string, unknown>>).gadget = {
     size: 'number',
-    owner_eid: { eid: '' },
+    owner: { eid: '' },
   }
   kindOrder.push('gadget')
   try {
@@ -50,7 +50,7 @@ Deno.test('derivation: a new comp needs zero admin edits', () => {
       'id',
       'title',
       'size',
-      'owner_eid',
+      'owner',
       'modified',
     ])
     assertEquals(cols[2].t, 'number')
@@ -125,8 +125,8 @@ Deno.test('the index is a typed grid and grid mode is bare tiles', async () => {
         eid: task,
         status: 'open',
         priority: 1,
-        project_eid: project,
-        assignee_eid: null,
+        project: project,
+        assignee: null,
         domain: null,
       },
     },
@@ -184,15 +184,15 @@ Deno.test('an admin query deep link filters the index', async () => {
     [mine]: {
       entity: { eid: mine, num: 21 },
       doc: { eid: mine, title: 'Mine', body: '' },
-      task: { eid: mine, status: 'open', priority: 1, project_eid: home },
+      task: { eid: mine, status: 'open', priority: 1, project: home },
     },
     [other]: {
       entity: { eid: other, num: 22 },
       doc: { eid: other, title: 'Other', body: '' },
-      task: { eid: other, status: 'open', priority: 1, project_eid: away },
+      task: { eid: other, status: 'open', priority: 1, project: away },
     },
   }
-  route.value = '/admin/task?q=.task.project_eid%3DP-19'
+  route.value = '/admin/task?q=.task.project%3DP-19'
   let root = document.querySelector('main')!
   try {
     render(h(Admin, {}), root)

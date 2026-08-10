@@ -19,7 +19,7 @@ type Row = {
   eid: string
   at: string
   to: string
-  target_eid: string | null
+  target: string | null
   minted: string | null
 }
 
@@ -37,7 +37,7 @@ let timer: ReturnType<typeof setTimeout> | undefined
 // neither delivered nor error present (D-14945).
 let pending = () =>
   db.prepare(
-    `select wake.eid, wake.at, deliver."to" as "to", wake.target_eid,
+    `select wake.eid, wake.at, deliver."to" as "to", wake.target,
        c.at as minted
      from wake join deliver on deliver.eid = wake.eid
      left join created c on c.eid = wake.eid
@@ -53,7 +53,7 @@ let fire = (r: Row, cast: Cast) => {
     {
       eid: ke,
       name: 'knock',
-      comp: { target_eid: r.target_eid ?? r.eid },
+      comp: { target: r.target ?? r.eid },
     },
     { eid: ke, name: 'deliver', comp: { to: r.to } },
   ], t)

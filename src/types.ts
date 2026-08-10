@@ -109,11 +109,11 @@ export let comps: Record<string, Record<string, PropType>> = {
   task: {
     status: { enum: statuses },
     priority: 'priority',
-    project_eid: { eid: 'project', death: 'detach' },
+    project: { eid: 'project', death: 'detach' },
     // Whose PLATE this is — durable routing to any entity (a person, a
     // project standing in for its operator). Orthogonal to claim, which
     // is who holds it NOW; a dead assignee detaches, never takes the task.
-    assignee_eid: { eid: 'entity', death: 'detach' },
+    assignee: { eid: 'entity', death: 'detach' },
     domain: { text: 'domains' }, // free text; the graph suggests
   },
   // retired_at: the project is over, not erased. Wire-writable — stamping
@@ -142,7 +142,7 @@ export let comps: Record<string, Record<string, PropType>> = {
   role: {
     state: { enum: roleStates },
     surface: { enum: roleSurfaces },
-    scope_eid: { eid: 'project', death: 'detach' },
+    scope: { eid: 'project', death: 'detach' },
     // The crash-loop breaker's fresh-start boundary: `task role start` stamps
     // it, and the breaker counts only deaths after it (roles.ts). Set by the
     // owner's retry so a fixed role's stale burst can't re-trip it; the
@@ -150,25 +150,25 @@ export let comps: Record<string, Record<string, PropType>> = {
     retry_at: 'time',
   },
   board: { query: 'query' }, // saved filter (query.ts grammar); '' = all
-  // A tiling layout (D-14718): the doc names it, root_eid its top pane.
+  // A tiling layout (D-14718): the doc names it, root its top pane.
   // Shared like a board — fork is an explicit gesture, never copy-on-write.
   // death 'detach' on purpose: deleting the root pane directly orphans the
   // layout to an empty state instead of chaining a second cascade back
   // through it (gestures never do this — close() on the last pane clears).
-  layout: { root_eid: { eid: 'pane', death: 'detach' } },
+  layout: { root: { eid: 'pane', death: 'detach' } },
   // One pane of a layout: a CONTAINER when dir is set (children are the
-  // panes whose parent_eid names it, ordered by `order`), a LEAF otherwise
-  // (content_eid + view, card's pair; both absent = empty → the palette).
+  // panes whose parent names it, ordered by `order`), a LEAF otherwise
+  // (content + view, card's pair; both absent = empty → the palette).
   // size is a WEIGHT among siblings — renderers divide by the siblings'
   // sum, so closing a pane renormalizes the rest with no array to splice.
-  // content_eid is a SOFT ref: the shown entity's death empties the pane.
+  // content is a SOFT ref: the shown entity's death empties the pane.
   pane: {
-    layout_eid: { eid: 'layout', death: 'cascade' },
-    parent_eid: { eid: 'pane', death: 'cascade' },
+    layout: { eid: 'layout', death: 'cascade' },
+    parent: { eid: 'pane', death: 'cascade' },
     size: 'number',
     order: 'number',
     dir: { enum: dirs },
-    content_eid: { eid: 'entity', death: 'detach' },
+    content: { eid: 'entity', death: 'detach' },
     view: 'text',
   },
   // The thinking that precedes a build. A tag, because the doc already
@@ -179,26 +179,26 @@ export let comps: Record<string, Record<string, PropType>> = {
   design: {},
   canvas: {},
   web: { url: 'url' }, // frozen_at is server-stamped, never wire-writable
-  card: { target_eid: { eid: 'entity', death: 'cascade' }, view: 'text' },
+  card: { target: { eid: 'entity', death: 'cascade' }, view: 'text' },
   pin: {
-    canvas_eid: { eid: 'entity', death: 'cascade' },
+    canvas: { eid: 'entity', death: 'cascade' },
     x: 'number',
     y: 'number',
     w: 'number',
     h: 'number',
     z: 'number',
   },
-  // actor_eid is the identity CHAIN: a client is one browser's presence,
+  // actor is the identity CHAIN: a client is one browser's presence,
   // a session one agent's run — instruments, not identities — and the
   // actor is who the instrument acts for (a person, or a project standing
   // in for its operator; {eid: 'entity'} because the pool is shared). The
   // universal provenance stamp keeps both levels directly queryable
   // (`.created.by=jeff`, `.created.via=S-31`). An assertion, not
   // authentication — forging it only garbles your own attribution.
-  client: { user_agent: 'text', actor_eid: { eid: 'entity', death: 'detach' } }, // ip is server-stamped too
+  client: { user_agent: 'text', actor: { eid: 'entity', death: 'detach' } }, // ip is server-stamped too
   camera: {
-    client_eid: { eid: 'client', death: 'cascade' },
-    canvas_eid: { eid: 'entity', death: 'cascade' },
+    client: { eid: 'client', death: 'cascade' },
+    canvas: { eid: 'entity', death: 'cascade' },
     x: 'number',
     y: 'number',
     zoom: 'number',
@@ -206,15 +206,15 @@ export let comps: Record<string, Record<string, PropType>> = {
     h: 'number',
   },
   fold: {
-    client_eid: { eid: 'client', death: 'cascade' },
-    board_eid: { eid: 'board', death: 'cascade' },
+    client: { eid: 'client', death: 'cascade' },
+    board: { eid: 'board', death: 'cascade' },
     statuses: 'text',
   },
   // Binds a client to their tray canvas. 'release' on purpose: a dead
   // client's shelf sheds the tag, the canvas (and whatever it holds)
   // survives as a plain canvas — the binding was the client's, the
   // contents aren't.
-  shelf: { client_eid: { eid: 'client', death: 'release' } },
+  shelf: { client: { eid: 'client', death: 'release' } },
   // What a session may say about ITSELF — wire-writable because forging any
   // of it only misdirects your own session. What it has SEEN is not here: it
   // is the per-item `notified` stamp, so no cursor can sweep past an item
@@ -252,19 +252,19 @@ export let comps: Record<string, Record<string, PropType>> = {
     provider: 'text',
     model: 'text',
     effort: 'text',
-    requested_task_eid: { eid: 'entity', death: 'detach' },
+    requested_task: { eid: 'entity', death: 'detach' },
     // Role membership is launch history. A deleted role closes its process,
     // but the sessions that served it keep saying which role they served.
-    role_eid: { eid: 'role', death: 'keep' },
-    persona_eid: { eid: 'entity', death: 'detach' },
-    actor_eid: { eid: 'entity', death: 'detach' }, // who this run acts for — see client above
+    role: { eid: 'role', death: 'keep' },
+    persona: { eid: 'entity', death: 'detach' },
+    actor: { eid: 'entity', death: 'detach' }, // who this run acts for — see client above
     // The session that spawned this one: a delegated agent shares its
     // operator's inherited session id but is its OWN context in its own
     // worktree (client.ts me()), so it reifies as a CHILD of the operator
     // rather than a second writer on one row. Lineage, not capability — the
     // link is what makes the board legible about who spawned whom; a dead
     // parent detaches it, the child lives on.
-    parent_eid: { eid: 'session', death: 'detach' },
+    parent: { eid: 'session', death: 'detach' },
   },
   // One launch vocabulary, worn two ways: on a session it records the
   // request that launched it; on a task it is the hint for its next run.
@@ -275,27 +275,27 @@ export let comps: Record<string, Record<string, PropType>> = {
     provider: 'text',
     model: 'text',
     effort: 'text',
-    persona_eid: { eid: 'entity', death: 'detach' },
+    persona: { eid: 'entity', death: 'detach' },
   },
   // 'release' is the claim's word exactly: when the session dies the
   // LEASE vanishes (row deleted, claim-null on the wire) but the claimed
   // entity — somebody's task — survives, freed. claimed_at server-stamped.
-  claim: { session_eid: { eid: 'session', death: 'release' } },
+  claim: { session: { eid: 'session', death: 'release' } },
   // An actor's standing instruction about ONE entity: watch it even
   // though nothing is aimed at me, or mute it though something is. Read
   // as an override on the item's TARGET — a subscription is aimed at the
   // task or venture, the inbox items are the letters and comments ABOUT
   // it. Both ends cascade: a muted thread's subscription dies with it.
   subscription: {
-    actor_eid: { eid: 'entity', death: 'cascade' },
-    target_eid: { eid: 'entity', death: 'cascade' },
+    actor: { eid: 'entity', death: 'cascade' },
+    target: { eid: 'entity', death: 'cascade' },
     mode: { enum: subModes },
   },
   // The brake, pulled as data: creating one asks the server to stop the
   // session it targets. Valid only against an ACTIVE managed session
   // (apply() refuses the rest); the row stays as audit, like conflict, and
   // wears `delivered` once the signals are sent (deliver.ts).
-  stop_request: { target_eid: { eid: 'session', death: 'cascade' } },
+  stop_request: { target: { eid: 'session', death: 'cascade' } },
   // A knock: bring THIS entity to THAT actor's attention, NOW. The
   // artifact of an attention ask (always minted, GC-able later — the
   // record is what makes delivery debuggable); words ride as a plain
@@ -305,7 +305,7 @@ export let comps: Record<string, Record<string, PropType>> = {
   // onto the target, a person gets mail — and stamps what it did. WHO
   // should look is the `deliver {to}` facet below, not a column here.
   knock: {
-    target_eid: { eid: 'entity', death: 'cascade' }, // what to look at
+    target: { eid: 'entity', death: 'cascade' }, // what to look at
   },
   // A wake is a knock with a clock: the same sentence, said LATER. `at`
   // is absolute — the caller writes a phrase ('in 60m', '9am tomorrow')
@@ -319,7 +319,7 @@ export let comps: Record<string, Record<string, PropType>> = {
   wake: {
     at: 'time',
     // What to look at on waking — absent means the wake itself.
-    target_eid: { eid: 'entity', death: 'cascade' },
+    target: { eid: 'entity', death: 'cascade' },
   },
   // Outbound mail, asked for as data: creating one requests delivery (the
   // mailer effect sends and settles the outcome as the shared `delivered`/
@@ -337,11 +337,11 @@ export let comps: Record<string, Record<string, PropType>> = {
   mail: {
     // What the mail is ABOUT. A sent mail is history — its subject's
     // death doesn't unsend it (the provenance byline rule).
-    target_eid: { eid: 'entity', death: 'keep' },
+    target: { eid: 'entity', death: 'keep' },
     // The mail this one ANSWERS — reference at authoring, resolved to an
-    // RFC Message-ID at delivery (mail.ts). History like target_eid: a
+    // RFC Message-ID at delivery (mail.ts). History like target: a
     // reply outlives the mail it answered.
-    reply_to_eid: { eid: 'mail', death: 'keep' },
+    reply_to: { eid: 'mail', death: 'keep' },
     // Read-state is the `opened` stamp (T-7006), not a column here: one
     // vocabulary for every item the inbox carries. Unread still derives —
     // message_id set (it arrived) and no `opened` — so outbound is born read.
@@ -354,7 +354,7 @@ export let comps: Record<string, Record<string, PropType>> = {
   // mail comp.
   hook: {},
   comment: {
-    target_eid: { eid: 'entity', death: 'cascade' },
+    target: { eid: 'entity', death: 'cascade' },
   },
   review: {
     verdict: {
@@ -369,19 +369,19 @@ export let comps: Record<string, Record<string, PropType>> = {
   alias: { slug: 'text' },
   // A durable identity — the owner, an operator. The doc carries the
   // name, an alias the handle (jeff), and tasks point at it through
-  // assignee_eid; sessions stay what they are (one run), a person is who
+  // assignee; sessions stay what they are (one run), a person is who
   // they run FOR.
   person: {},
   // A voice a session can wear: the doc is its irreducible core text,
   // and its TIERS are edges — persona `contains` X preloads X's whole
   // body, persona `reads` X carries only X's index line; everything else
-  // in scope stays searchable. home_eid is its home project (the
+  // in scope stays searchable. home is its home project (the
   // project's common persona is the one the project `contains`);
   // null = fleet-shared (graybeard reviews every venture). NOT
-  // project_eid, same reason as memory.scope_eid: bare '.project_eid'
-  // must keep routing to task. Worn ≠ speaking-for: persona_eid names
-  // the voice, actor_eid who it acts for.
-  persona: { home_eid: { eid: 'project', death: 'detach' } },
+  // project, same reason as memory.scope: bare '.project'
+  // must keep routing to task. Worn ≠ speaking-for: persona names
+  // the voice, actor who it acts for.
+  persona: { home: { eid: 'project', death: 'detach' } },
   // An address is a FACET, not a person-column: any entity may wear one —
   // a person, a project (its operator's inbox), someday a webhook source.
   // The whole address book is this comp; send-resolution is one rule:
@@ -389,7 +389,7 @@ export let comps: Record<string, Record<string, PropType>> = {
   email: { address: 'text' },
   // A distilled fact worth keeping — content rides the doc (title = the
   // index line, body = the fact), provenance the universal created stamp.
-  // The scope column is scope_eid, NOT project_eid: bare '.project_eid'
+  // The scope column is scope, NOT project: bare '.project'
   // must keep routing to task (live board queries depend on it), and a
   // collision would make it ambiguous. last_confirmed_at is server-stamped
   // by the confirm door, never wire-set.
@@ -397,12 +397,12 @@ export let comps: Record<string, Record<string, PropType>> = {
   // There is no `type` column (T-12585). It was a kind column hiding inside
   // a component, in a graph whose whole premise is that an entity IS what
   // its components make it — and the four values said nothing the graph did
-  // not already hold: `project` restated `scope_eid`, `user` had zero rows
+  // not already hold: `project` restated `scope`, `user` had zero rows
   // in 222, `reference` was what remained when nothing was said, and
   // `feedback` is now the tag below, which records WHO gave it.
   memory: {
     // Scope is history — a fact outlives the project it was learned for.
-    scope_eid: { eid: 'project', death: 'keep' },
+    scope: { eid: 'project', death: 'keep' },
   },
   // This entity records feedback, and `by` is who GAVE it. A facet like the
   // stamps: a memory usually wears it, but a comment or a doc may. Not in
@@ -570,10 +570,10 @@ export let stamped: Record<string, Record<string, PropType>> = {
     // The Message-ID the SENDER assigned to an outbound mail — stamped by
     // the delivery effect when it can know one (the native sender; a
     // $TASKS_MAIL_CMD mailer's output names none), so replies-to-replies
-    // thread: reply_to_eid resolves to message_id (inbound) or this.
+    // thread: reply_to resolves to message_id (inbound) or this.
     sent_id: 'text',
     // The inbound RFC header, preserved even when its named mail has not
-    // reached this graph. inbound.ts derives reply_to_eid when it has.
+    // reached this graph. inbound.ts derives reply_to when it has.
     in_reply_to: 'text',
   },
   // Webhook provenance (inbound.ts): source names the edge route;
@@ -598,7 +598,7 @@ export let stamped: Record<string, Record<string, PropType>> = {
   // strings by design (db.ts says why), and the target reference stands
   // even after the target dies — contention history keeps its subject.
   conflict: {
-    target_eid: { eid: 'entity', death: 'keep' },
+    target: { eid: 'entity', death: 'keep' },
     loser: 'text',
     holder: 'text',
     at: 'time',
@@ -890,8 +890,8 @@ export type Task = {
   eid: string
   status: string
   priority: number // board order within a status column; lower sorts first
-  project_eid?: string | null // the project (venture) this task belongs to
-  assignee_eid?: string | null // whose plate — durable; claim is who's on it now
+  project?: string | null // the project (venture) this task belongs to
+  assignee?: string | null // whose plate — durable; claim is who's on it now
   // Cross-project facet (Eng, Legal, Ops, …), free text by convention; a
   // picker derives its options from distinct values.
   domain?: string | null
@@ -921,32 +921,32 @@ export type Repo = {
 }
 
 // A board is a saved filter over tasks: `query` speaks the query.ts
-// grammar ('.project_eid=…&.status=open,wip'); empty/null means every task.
+// grammar ('.project=…&.status=open,wip'); empty/null means every task.
 export type BoardTag = { eid: string; query?: string | null }
 
-// A tiling layout (D-14718): the doc names it, root_eid its top pane.
-export type LayoutTag = { eid: string; root_eid?: string | null }
+// A tiling layout (D-14718): the doc names it, root its top pane.
+export type LayoutTag = { eid: string; root?: string | null }
 
-// One pane: container (dir set, children point here via parent_eid) or
-// leaf (content_eid + view). size is its weight among siblings.
+// One pane: container (dir set, children point here via parent) or
+// leaf (content + view). size is its weight among siblings.
 export type Pane = {
   eid: string
-  layout_eid?: string | null
-  parent_eid?: string | null
+  layout?: string | null
+  parent?: string | null
   size?: number
   order?: number
   dir?: string | null
-  content_eid?: string | null
+  content?: string | null
   view?: string | null
 }
 // An external page. The URL is what was pasted; the rendered thing is the
 // server's frozen archive of it (one self-contained HTML file on disk),
 // stamped frozen_at when ready — frozen_at is server-owned, never wire-set.
 export type Web = { eid: string; url: string; frozen_at?: string | null }
-export type CardComp = { eid: string; target_eid: string; view: string }
+export type CardComp = { eid: string; target: string; view: string }
 export type Pin = {
   eid: string
-  canvas_eid: string
+  canvas: string
   x: number
   y: number
   w: number
@@ -960,7 +960,7 @@ export type Client = {
   eid: string
   user_agent: string
   ip: string
-  actor_eid?: string | null // who this browser acts for (comps comment)
+  actor?: string | null // who this browser acts for (comps comment)
 }
 
 // A camera joins a client to a canvas: per-client pan/zoom, one row per
@@ -969,8 +969,8 @@ export type Client = {
 // screen px, stored so other clients can render each other's viewports.
 export type Camera = {
   eid: string
-  client_eid: string
-  canvas_eid: string
+  client: string
+  canvas: string
   x: number
   y: number
   zoom: number
@@ -983,15 +983,15 @@ export type Camera = {
 // statuses is a comma-joined list of folded column names.
 export type Fold = {
   eid: string
-  client_eid: string
-  board_eid: string
+  client: string
+  board: string
   statuses: string
 }
 
 // The Shelf: a per-client scratch canvas the Tray hangs cards on. A tag
 // like repo — it binds a client to their one shelf without naming the
 // entity (the entity stays a canvas), so it stays out of kindOrder.
-export type Shelf = { eid: string; client_eid: string }
+export type Shelf = { eid: string; client: string }
 
 // An agent session, reified: `id` is its external identity (a Claude
 // session id, an operator name) and `cwd` where it runs — what a session
@@ -1022,10 +1022,11 @@ export type Session = {
   provider?: string | null // adapters.ts key
   model?: string | null
   effort?: string | null
-  persona_eid?: string | null
-  actor_eid?: string | null // who this run acts for (comps comment)
-  requested_task_eid?: string | null // provenance: what it was started on
-  role_eid?: string | null // persistent role this run serves
+  persona?: string | null
+  actor?: string | null // who this run acts for (comps comment)
+  requested_task?: string | null // provenance: what it was started on
+  role?: string | null // persistent role this run serves
+  parent?: string | null // the session that spawned this one
   branch?: string | null
   base_revision?: string | null
   status?: string | null // starting|running|stopping|completed|failed|interrupted|lost
@@ -1048,16 +1049,16 @@ export type Spawn = {
   provider?: string | null // adapters.ts key
   model?: string | null
   effort?: string | null
-  persona_eid?: string | null
+  persona?: string | null
 }
 
 // Desired fleet capacity. Runtime facts are server-stamped on the same row;
-// sessions point back through role_eid instead of a mutable current pointer.
+// sessions point back through role instead of a mutable current pointer.
 export type Role = {
   eid: string
   state: string
   surface: string
-  scope_eid: string | null
+  scope: string | null
   applied_hash?: string | null
   applied_at?: string | null
   stopped_at?: string | null
@@ -1085,14 +1086,14 @@ export let standing = (s: Session) =>
 // A session's lease on an entity — claims point at the session ENTITY.
 // One claim per entity; taking one over another session's is a CONFLICT
 // the server rejects — release first (comp: null), then claim.
-export type Claim = { eid: string; session_eid: string; claimed_at?: string }
+export type Claim = { eid: string; session: string; claimed_at?: string }
 
 // A request to stop the session it targets — the graph-native stop
 // button. Created over the wire, acted on by the server's effect, kept
 // as audit; acted_at is stamped when the signals have been sent.
 // A stop signal, sent. It settles into `delivered` once the signals leave
 // (deliver.ts) — no receipt column of its own; the audit row is the request.
-export type StopRequest = { eid: string; target_eid: string }
+export type StopRequest = { eid: string; target: string }
 
 // An entity's mail address — the address-book facet, one comp for all.
 export type Email = { eid: string; address: string }
@@ -1108,7 +1109,7 @@ export type Deliver = { eid: string; to: string }
 // facet (deliver.ts) — neither a column here.
 export type Knock = {
   eid: string
-  target_eid: string
+  target: string
 }
 
 // A knock waiting on the clock: `at` absolute (resolved at mint). WHO to
@@ -1118,7 +1119,7 @@ export type Knock = {
 export type Wake = {
   eid: string
   at: string
-  target_eid?: string | null
+  target?: string | null
 }
 
 // Mail, either direction: the request columns are the ask; the send
@@ -1129,8 +1130,8 @@ export type Wake = {
 export type Mail = {
   eid: string
   from?: string | null
-  target_eid?: string | null
-  reply_to_eid?: string | null
+  target?: string | null
+  reply_to?: string | null
   to_addr?: string | null
   message_id?: string | null
   received_at?: string | null
@@ -1165,12 +1166,12 @@ export type Hook = {
   sig_ok?: number | null
 }
 
-// A comment is a doc AIMED at something — and since target_eid is any
+// A comment is a doc AIMED at something — and since target is any
 // entity, ANYTHING is commentable: tasks, boards, frozen pages, other
 // comments. Its actor and instrument ride the universal created stamp.
 export type Comment = {
   eid: string
-  target_eid: string
+  target: string
 }
 
 // A verdict-bearing comment. The aim, rationale, and authorship stay on
@@ -1187,7 +1188,7 @@ export type Review = {
 // graph_query kind=conflict.
 export type Conflict = {
   eid: string
-  target_eid: string
+  target: string
   loser: string
   holder: string
   at?: string
@@ -1198,16 +1199,16 @@ export type Conflict = {
 export type Alias = { eid: string; slug: string }
 
 // A wearable voice: core text in the doc, tiers in the edges, home in
-// home_eid (null = fleet-shared).
-export type Persona = { eid: string; home_eid?: string | null }
+// home (null = fleet-shared).
+export type Persona = { eid: string; home?: string | null }
 
 // A distilled fact the fleet keeps: content in the doc, provenance in
-// created, scope in scope_eid (the project it belongs to; absent = a
+// created, scope in scope (the project it belongs to; absent = a
 // principle every operator carries). last_confirmed_at is the last explicit
 // re-confirmation — server-stamped, like every recall statistic.
 export type Memory = {
   eid: string
-  scope_eid?: string | null
+  scope?: string | null
   last_confirmed_at?: string | null
 }
 
@@ -1247,7 +1248,7 @@ export type Updated = Created
 export type Stamp = Created
 
 // A full-text search hit. snip marks matches with \x01…\x02 (renderers
-// highlight without trusting HTML); open_eid is what to OPEN — the entity
+// highlight without trusting HTML); open is what to OPEN — the entity
 // itself, or a comment's target.
 export type Hit = {
   eid: string
@@ -1255,8 +1256,8 @@ export type Hit = {
   kind: string
   title: string
   snip: string
-  open_eid: string
-  open_id?: string // open_eid spoken (T-7) — only when it isn't the hit
+  open: string
+  open_id?: string // open spoken (T-7) — only when it isn't the hit
   retired?: boolean // its project is over — the hit sank to the tail
 }
 
@@ -1322,7 +1323,7 @@ export type Ent = {
 }
 
 // A pin row joined to its card: where the card sits and what it shows.
-export type Pinned = Pin & { target_eid: string; view: string }
+export type Pinned = Pin & { target: string; view: string }
 
 // The sync unit — one component patch landing on (or leaving) an entity. A
 // batch is a flat array; a comp is a PATCH: omitted columns are untouched
@@ -1333,7 +1334,7 @@ export type Pinned = Pin & { target_eid: string; view: string }
 // spine (and its num) appears on first touch.
 //
 // Edges ride the same shape with name 'dependency', but a triple has no
-// row key, so the comp names the WHOLE sentence: {type, child_eid} links
+// row key, so the comp names the WHOLE sentence: {type, child} links
 // eid→child, and the same sentence with gone: true unlinks it (comp: null
 // could never say which edge). Both endpoints must exist.
 // `was` is a PRECONDITION — the graph's --ff-only. It names the value the

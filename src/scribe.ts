@@ -36,7 +36,7 @@ let age = (r: Row, now: number, comp: 'created' | 'updated') => {
 export let stubs = (all: Row[], now: number, deskEid?: string) =>
   all.filter((r) =>
     r.comps.session && String(r.comps.doc?.body ?? '').startsWith(STUB) &&
-    !(deskEid && r.comps.session.requested_task_eid == deskEid) &&
+    !(deskEid && r.comps.session.requested_task == deskEid) &&
     age(r, now, 'updated') > QUIET
   )
 
@@ -44,7 +44,7 @@ export let stubs = (all: Row[], now: number, deskEid?: string) =>
 // unsettled blocks regardless of age (never two writers on the queue).
 export let deskFree = (all: Row[], desk: Row, now: number) =>
   !all.some((r) =>
-    r.comps.session?.requested_task_eid == desk.eid &&
+    r.comps.session?.requested_task == desk.eid &&
     (['starting', 'running'].includes(String(r.comps.session.status)) ||
       age(r, now, 'created') < THROTTLE)
   )

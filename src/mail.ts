@@ -55,7 +55,7 @@ let settle = (
 let UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // A reference the address book can hold: an eid, a human id (U-1, P-26),
-// or an alias slug — the same shapes every *_eid door takes.
+// or an alias slug — the same shapes every reference door takes.
 let eidOf = (ref: string): string | undefined => {
   let hit = (sql: string, v: string | number) =>
     (db.prepare(sql).get(v) as { eid: string } | undefined)?.eid
@@ -131,10 +131,10 @@ export let rfcId = (stored: string) =>
     .replace(/[<>]/g, '').trim()
 
 // Threading resolves at delivery (reference at authoring — the row's
-// reply_to_eid names the mail being answered; what the WORLD needs is
+// reply_to names the mail being answered; what the WORLD needs is
 // that mail's Message-ID): inbound rows carry it in message_id (store-
 // wrapped), our own sent rows in sent_id. Nothing resolvable = deliver
-// unthreaded — the reply_to_eid edge still records the intent in the
+// unthreaded — the reply_to edge still records the intent in the
 // graph, and a lost thread is not a lost letter.
 let threadId = (eid: string) => {
   let r = db.prepare('select message_id, sent_id from mail where eid = ?')
@@ -148,7 +148,7 @@ let threadId = (eid: string) => {
 let repoUrl = (target: string | null) =>
   target
     ? (db.prepare(
-      `select repo.url from task join repo on repo.eid = task.project_eid
+      `select repo.url from task join repo on repo.eid = task.project
        where task.eid = ?`,
     ).get(target) as { url: string | null } | undefined)?.url ?? undefined
     : undefined
@@ -224,14 +224,14 @@ export let mailed =
           message_id: `local:${Date.now()}:${eid}`,
           received_at: now(),
           verified: 1,
-          ...(row.target_eid ? {} : { target_eid: home }),
+          ...(row.target ? {} : { target: home }),
           ...(row.from || !from ? {} : { from }),
         },
         { via: 'local' },
         cast,
       )
     }
-    let mid = row.reply_to_eid ? threadId(String(row.reply_to_eid)) : undefined
+    let mid = row.reply_to ? threadId(String(row.reply_to)) : undefined
     let cmd = Deno.env.get('TASKS_MAIL_CMD')
     if (cmd) {
       let [bin, ...pre] = cmd.split(/\s+/)
@@ -288,7 +288,7 @@ export let mailed =
       subject: String(doc?.title ?? ''),
       body: String(doc?.body ?? ''),
       mid,
-      repo: repoUrl(row.target_eid == null ? null : String(row.target_eid)),
+      repo: repoUrl(row.target == null ? null : String(row.target)),
     }
     let id: string | undefined
     try {
@@ -326,7 +326,7 @@ let BORN_WITH_TARGET = `
   exists (
     select 1 from created c, created t
     where c.eid = comment.eid
-      and t.eid = comment.target_eid
+      and t.eid = comment.target
       and c.at >= t.at
       and c.at <= strftime('%Y-%m-%dT%H:%M:%fZ', t.at, '+1 second'))
 `.trim()
@@ -345,22 +345,22 @@ let bornWithTarget = (eid: string) =>
 export let fanout =
   (cast: Cast) => (eid: string, comp: Record<string, unknown>) => {
     if (bornWithTarget(eid)) return
-    let target = String(comp.target_eid ?? '')
-    let t = db.prepare('select project_eid from task where eid = ?').get(
+    let target = String(comp.target ?? '')
+    let t = db.prepare('select project from task where eid = ?').get(
       target,
-    ) as { project_eid: string | null } | undefined
-    if (!t?.project_eid) return
+    ) as { project: string | null } | undefined
+    if (!t?.project) return
     if (
-      !db.prepare('select 1 from email where eid = ?').get(t.project_eid)
+      !db.prepare('select 1 from email where eid = ?').get(t.project)
     ) return
     let actor = db.prepare('select "by" from created where eid = ?').get(
       eid,
     ) as { by: string | null } | undefined
-    if (String(actor?.by ?? '') == t.project_eid) return
+    if (String(actor?.by ?? '') == t.project) return
     if (
       db.prepare(`
-      select 1 from dependency d join mail s on s.eid = d.parent_eid
-      where d.type = 'about' and d.child_eid = ?
+      select 1 from dependency d join mail s on s.eid = d.parent
+      where d.type = 'about' and d.child = ?
     `).get(eid)
     ) return
     let num = (db.prepare('select num from entity where eid = ?').get(
@@ -386,14 +386,14 @@ export let fanout =
               body: `${said}\n\n${entityUrl(`T-${num}`)}`,
             },
           },
-          { eid: sid, name: 'mail', comp: { target_eid: target } },
+          { eid: sid, name: 'mail', comp: { target: target } },
           // WHERE it goes rides the shared deliver.to — the project reference,
           // resolved to its address at delivery like any other.
-          { eid: sid, name: 'deliver', comp: { to: t.project_eid } },
+          { eid: sid, name: 'deliver', comp: { to: t.project } },
           {
             eid: sid,
             name: 'dependency',
-            comp: { type: 'about', child_eid: eid },
+            comp: { type: 'about', child: eid },
           },
           // The relay carries someone's WORDS, so it is signed by whoever
           // wrote them. Without a writer named here the sender would resolve
@@ -427,8 +427,8 @@ export let FANOUT_PENDING = `
     where cr.at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour'))
   and
   not exists (
-    select 1 from dependency d join mail s on s.eid = d.parent_eid
-    where d.type = 'about' and d.child_eid = comment.eid)
+    select 1 from dependency d join mail s on s.eid = d.parent
+    where d.type = 'about' and d.child = comment.eid)
   and
   not ${BORN_WITH_TARGET}
 `.trim()

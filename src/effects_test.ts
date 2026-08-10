@@ -74,7 +74,7 @@ Deno.test('an edge fires dependency handlers, spoken or unsaid', async () => {
     { eid: b, name: 'doc', comp: { title: 'b' } },
   ]).done
   heard = []
-  let comp = { type: 'reads', child_eid: b }
+  let comp = { type: 'reads', child: b }
   await write([{ eid: a, name: 'dependency', comp }]).done
   assertEquals(heard, [[a, comp]])
   // unlinking is the same sentence with gone — the handler hears it too

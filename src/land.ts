@@ -72,11 +72,11 @@ export let landedChanges = (
 ): Change[] => {
   let body = `Landed \`${sha}\`.`
   let recorded = all.some((r) =>
-    r.comps.comment?.target_eid == task.eid && r.comps.doc?.body == body
+    r.comps.comment?.target == task.eid && r.comps.doc?.body == body
   )
   let sess = all.find((r) => String(r.comps.session?.id ?? '') == session)
   let releases = sess
-    ? all.filter((r) => r.comps.claim?.session_eid == sess.eid)
+    ? all.filter((r) => r.comps.claim?.session == sess.eid)
       .map(releaseChange)
     : []
   let completion: Change[] = recorded ? [] : [
@@ -89,19 +89,19 @@ export let landedChanges = (
 // A session's task is the one it is WORKING, however it came by it: the
 // spawn builder's request when the graph named one, otherwise the task the
 // session holds a claim on. Only a managed spawn ever writes
-// requested_task_eid, so the claim is the sole coordinate a harness-spawned
+// requested_task, so the claim is the sole coordinate a harness-spawned
 // agent has — reading the request alone refused this verb to exactly the
 // callers it exists for. Several claims name no single task: say which ones
 // and stop, because guessing lands the work under the wrong ticket and
 // closes it in the same transaction.
 let taskFor = (all: Row[], session: Row): Row => {
   let requested = all.find((r) =>
-    r.eid == String(session.comps.session?.requested_task_eid ?? '') &&
+    r.eid == String(session.comps.session?.requested_task ?? '') &&
     r.comps.task
   )
   if (requested) return requested
   let claimed = all
-    .filter((r) => r.comps.task && r.comps.claim?.session_eid == session.eid)
+    .filter((r) => r.comps.task && r.comps.claim?.session == session.eid)
     .sort((a, b) => a.num - b.num)
   if (claimed.length > 1) {
     throw new Error(
@@ -123,9 +123,7 @@ export let landing = (
   let session = all.find((r) => String(r.comps.session?.id ?? '') == sid)
   if (!session) throw new Error(`land: no session entity for ${sid}`)
   let task = taskFor(all, session)
-  let project = all.find((r) =>
-    r.eid == String(task.comps.task?.project_eid ?? '')
-  )
+  let project = all.find((r) => r.eid == String(task.comps.task?.project ?? ''))
   if (!project?.comps.repo) {
     throw new Error(`${idOf(task)}: the task's project has no repo`)
   }

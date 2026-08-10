@@ -92,7 +92,7 @@ export let shelfMint = () => {
   let eid = uuid()
   mutate(
     { eid, name: 'canvas', comp: { eid } },
-    { eid, name: 'shelf', comp: { eid, client_eid: clientId() } },
+    { eid, name: 'shelf', comp: { eid, client: clientId() } },
   )
   return eid
 }
@@ -116,24 +116,24 @@ let dropIn = (ev: DragEvent) => {
   let data = ev.dataTransfer?.getData('application/x-tasks-card')
   if (!data) return
   ev.preventDefault()
-  let { target_eid, view, pin } = JSON.parse(data)
+  let { target, view, pin } = JSON.parse(data)
   let sh = shelf() ?? shelfMint()
   let z = topZ(sh) + 1
   if (pin && cache.value[pin]?.pin) {
     mutate({
       eid: pin,
       name: 'pin',
-      comp: { canvas_eid: sh, x: 0, y: 0, w: 0, h: 0, z },
+      comp: { canvas: sh, x: 0, y: 0, w: 0, h: 0, z },
     })
     return
   }
   let card = uuid()
   mutate(
-    { eid: card, name: 'card', comp: { eid: card, target_eid, view } },
+    { eid: card, name: 'card', comp: { eid: card, target, view } },
     {
       eid: card,
       name: 'pin',
-      comp: { eid: card, canvas_eid: sh, x: 0, y: 0, w: 0, h: 0, z },
+      comp: { eid: card, canvas: sh, x: 0, y: 0, w: 0, h: 0, z },
     },
   )
 }
@@ -225,9 +225,9 @@ export let Tray = () => {
                   key={p.eid}
                   draggable
                   onDragStart={(e: DragEvent) =>
-                    dragData(e, p.target_eid, p.view, p.w, p.eid)}
+                    dragData(e, p.target, p.view, p.w, p.eid)}
                 >
-                  <Entity eid={p.target_eid} view='List.Tile' />
+                  <Entity eid={p.target} view='List.Tile' />
                   <X
                     type='button'
                     aria-label='remove'

@@ -68,7 +68,7 @@ let spot = (a: Ask) => {
   let box = document.querySelector('.Canvas')?.getBoundingClientRect()
   if (!t || !box || !ent(t.eid).canvas) return null
   let at = toPlane(a.x, a.y, box)
-  return { canvas_eid: t.eid, x: Math.round(at.x), y: Math.round(at.y) }
+  return { canvas: t.eid, x: Math.round(at.x), y: Math.round(at.y) }
 }
 
 let Form = ({ a }: { a: Ask }) => {
@@ -101,7 +101,7 @@ let Form = ({ a }: { a: Ask }) => {
           provider: m.p.name,
           model: m.model,
           ...(ef ? { effort: ef } : {}),
-          requested_task_eid: a.eid,
+          requested_task: a.eid,
         },
       },
       ...(at
@@ -109,18 +109,18 @@ let Form = ({ a }: { a: Ask }) => {
           {
             eid: card,
             name: 'card',
-            comp: { target_eid: eid, view: 'Session' },
+            comp: { target: eid, view: 'Session' },
           },
           {
             eid: card,
             name: 'pin',
             comp: {
-              canvas_eid: at.canvas_eid,
+              canvas: at.canvas,
               x: at.x,
               y: at.y,
               w: 420,
               h: 0,
-              z: topZ(at.canvas_eid) + 1,
+              z: topZ(at.canvas) + 1,
             },
           },
         ]

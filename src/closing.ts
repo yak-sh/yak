@@ -34,10 +34,10 @@ let terminal = new Set(['done', 'cancelled'])
 // this is `archived`, the one stamp that hides, and nothing else.
 let waiting = (task: string): string[] =>
   (db.prepare(
-    `select eid from comment where target_eid = ?1
+    `select eid from comment where target = ?1
        and eid not in (select eid from archived)
      union
-     select eid from mail where target_eid = ?1
+     select eid from mail where target = ?1
        and eid not in (select eid from archived)`,
   ).all(task) as { eid: string }[]).map((r) => r.eid)
 

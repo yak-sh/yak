@@ -68,11 +68,11 @@ Deno.test(
       }),
       ...ent(S, 2, {
         doc: { title: 'Work session', body: '' },
-        session: { id: 'sess-real', cwd: '/w', actor_eid: P, operator: 1 },
+        session: { id: 'sess-real', cwd: '/w', actor: P, operator: 1 },
       }),
       ...ent(B, 3, {
         doc: { title: 'Other session', body: '' },
-        session: { id: 'sess-b', actor_eid: P },
+        session: { id: 'sess-b', actor: P },
       }),
       // The claim is the trigger: the arm that read the dropped column only fired
       // for a session that held one, which is why the bug hid from claim-less
@@ -80,21 +80,21 @@ Deno.test(
       ...ent(T, 4, {
         doc: { title: 'Claimed work', body: '' },
         task: { status: 'wip' },
-        claim: { session_eid: S },
+        claim: { session: S },
         created: { at: '2026-01-01', by: P },
       }),
       // A knock aimed at S — WHO rides the shared deliver.to (D-14945), the very
       // facet that replaced knock.to_eid.
       ...ent(K, 5, {
         created: { at: '2026-01-03', by: P, via: B },
-        knock: { target_eid: T },
+        knock: { target: T },
         deliver: { to: S },
         delivered: { at: '2026-01-03', via: 'cast' },
       }),
       ...ent(C, 6, {
         created: { at: '2026-01-03', by: P, via: B },
         doc: { title: '', body: 'look here' },
-        comment: { target_eid: T },
+        comment: { target: T },
       }),
     ])
 

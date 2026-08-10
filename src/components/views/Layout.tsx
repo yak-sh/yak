@@ -32,7 +32,7 @@ let { Pane, Gutter: GutterEl, Acts, Act, Fill: FillEl, Row, Empty } = Frame
 // inside itself — the Pinned precedent), so eid is restamped here.
 let panesOf = (layout: string) =>
   backlinks(layout)
-    .filter((b) => b.via == 'pane.layout_eid')
+    .filter((b) => b.via == 'pane.layout')
     .flatMap((b) => {
       let p = ent(b.from).pane
       return p ? [{ ...p, eid: b.from }] : []
@@ -55,7 +55,7 @@ let Gutter = ({ dir, a, b }: { dir: string; a: string; b: string }) => {
     let start = horiz ? e.clientX : e.clientY
     let pa = { ...ent(a).pane!, eid: a }
     let pb = { ...ent(b).pane!, eid: b }
-    let sibs = kids(panesOf(pa.layout_eid!), pa.parent_eid!)
+    let sibs = kids(panesOf(pa.layout!), pa.parent!)
     let total = sibs.reduce((n, s) => n + (s.size ?? 1), 0) || 1
     let prev = g.previousElementSibling as HTMLElement
     let next = g.nextElementSibling as HTMLElement
@@ -121,8 +121,8 @@ let Fill = ({ eid, layout }: { eid: string; layout: string }) => {
     mutate(...setContent(
       panesOf(layout),
       eid,
-      h.open_eid,
-      resolve(ent(h.open_eid)).view,
+      h.open,
+      resolve(ent(h.open)).view,
     ))
   return (
     <FillEl>
@@ -165,8 +165,8 @@ let PaneView = ({ eid, layout }: { eid: string; layout: string }) => {
             : []),
           <PaneView key={k.eid} eid={k.eid} layout={layout} />,
         ])
-        : p.content_eid
-        ? <Entity eid={p.content_eid} view={p.view || undefined} />
+        : p.content
+        ? <Entity eid={p.content} view={p.view || undefined} />
         : <Fill eid={eid} layout={layout} />}
       {!p.dir && <PaneActs eid={eid} layout={layout} />}
     </Pane>
@@ -174,7 +174,7 @@ let PaneView = ({ eid, layout }: { eid: string; layout: string }) => {
 }
 
 export let Layout = ({ e }: { e: Ent }) => {
-  let root = e.layout?.root_eid
+  let root = e.layout?.root
   if (root && ent(root).pane) {
     return (
       <Frame>
@@ -182,13 +182,13 @@ export let Layout = ({ e }: { e: Ent }) => {
       </Frame>
     )
   }
-  // A rootless layout (its root pane was deleted directly — root_eid
+  // A rootless layout (its root pane was deleted directly — root
   // detaches by design): offer to re-root rather than render a dead end.
   let reroot = () => {
     let pane = uuid()
     mutate(
-      { eid: pane, name: 'pane', comp: { layout_eid: e.eid } },
-      { eid: e.eid, name: 'layout', comp: { root_eid: pane } },
+      { eid: pane, name: 'pane', comp: { layout: e.eid } },
+      { eid: e.eid, name: 'layout', comp: { root: pane } },
     )
   }
   return (

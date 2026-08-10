@@ -20,7 +20,7 @@ let report = (message: string, stack?: string) => {
         message,
         stack: stack?.slice(0, 2000),
         url: location.href,
-        client_eid: clientId(),
+        client: clientId(),
       }),
     }).catch(() => {})
   } catch { /* no localStorage, no fetch — nothing worth a second crash */ }

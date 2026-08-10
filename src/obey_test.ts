@@ -17,7 +17,7 @@ let obey = obeyed(cast)
 // with the comp apply() committed.
 let say = (target: string, body: string, via?: string) => {
   let eid = uid()
-  let comp: Record<string, unknown> = { target_eid: target }
+  let comp: Record<string, unknown> = { target: target }
   apply(
     db,
     [
@@ -50,7 +50,7 @@ let status = (eid: string) =>
 let replies = (target: string) =>
   db.prepare(
     `select d.body from comment c join doc d on d.eid = c.eid
-     where c.target_eid = ? order by c.rowid`,
+     where c.target = ? order by c.rowid`,
   ).all(target) as { body: string }[]
 
 Deno.test('a comment that says :done closes the task it was said on', () => {
@@ -143,7 +143,7 @@ Deno.test('a sessionless :fix comment uses the shared Sol default', () => {
   let t = task()
   say(t, ':fix')
   let spawned = db.prepare(
-    `select provider, model from session where requested_task_eid = ?`,
+    `select provider, model from session where requested_task = ?`,
   ).get(t) as { provider: string; model: string }
   assertEquals(spawned, { provider: 'codex', model: 'gpt-5.6-sol' })
 })

@@ -51,11 +51,11 @@ let edge = (parent: Row, type: Edge, child: Row): Dep => ({
 // homeReads takes the homes, not the graph — off the persona table in the
 // server, off a hand-made graph here.
 let homes = (all: Row[]) =>
-  all.map((r) => ({ eid: r.eid, home: r.comps.persona?.home_eid }))
+  all.map((r) => ({ eid: r.eid, home: r.comps.persona?.home }))
 
 let persona = row({
   doc: { title: 'graybeard', body: 'Review sternly.' },
-  persona: { home_eid: null },
+  persona: { home: null },
 })
 let warm = doc('fresh lesson', 'Use the front door.', 1)
 let cold = doc(
@@ -104,7 +104,7 @@ Deno.test('projection queries only persona neighborhoods', async () => {
   })
   let voice = row({
     doc: { title: 'Voice', body: 'Core.' },
-    persona: { home_eid: project.eid },
+    persona: { home: project.eid },
     alias: { slug: 'voice' },
   })
   let lesson = doc('Lesson', 'Keep it small.')
@@ -144,7 +144,7 @@ Deno.test('projection queries only persona neighborhoods', async () => {
 let base = () =>
   row({
     doc: { title: 'fleet base', body: 'shared' },
-    persona: { home_eid: null },
+    persona: { home: null },
   })
 let mem = (title: string, body: string, daysOld = 0) =>
   doc(title, body, daysOld)
@@ -152,7 +152,7 @@ let mem = (title: string, body: string, daysOld = 0) =>
 Deno.test('materialize: a contained persona inherits its tiers, association kept', () => {
   let host = row({
     doc: { title: 'host', body: 'core.' },
-    persona: { home_eid: null },
+    persona: { home: null },
   })
   let b = base()
   let pre = mem('bundled preload', 'Preload body.')
@@ -182,7 +182,7 @@ Deno.test('materialize: a contained persona inherits its tiers, association kept
 Deno.test('materialize: nesting is transitive — a base may contain a base', () => {
   let host = row({
     doc: { title: 'host', body: 'c' },
-    persona: { home_eid: null },
+    persona: { home: null },
   })
   let mid = base()
   let deep = base()
@@ -200,7 +200,7 @@ Deno.test('materialize: nesting is transitive — a base may contain a base', ()
 Deno.test('materialize: a memory reachable by two paths is deduped', () => {
   let host = row({
     doc: { title: 'host', body: 'c' },
-    persona: { home_eid: null },
+    persona: { home: null },
   })
   let b1 = base()
   let b2 = base()
@@ -220,7 +220,7 @@ Deno.test('materialize: a memory reachable by two paths is deduped', () => {
 Deno.test('materialize: preload wins over index for the same memory', () => {
   let host = row({
     doc: { title: 'host', body: 'c' },
-    persona: { home_eid: null },
+    persona: { home: null },
   })
   let b = base()
   let m = mem('both tiers', 'FULLBODY.')
@@ -238,8 +238,8 @@ Deno.test('materialize: preload wins over index for the same memory', () => {
 })
 
 Deno.test('materialize: a persona cycle terminates', () => {
-  let a = row({ doc: { title: 'a', body: 'ca' }, persona: { home_eid: null } })
-  let b = row({ doc: { title: 'b', body: 'cb' }, persona: { home_eid: null } })
+  let a = row({ doc: { title: 'a', body: 'ca' }, persona: { home: null } })
+  let b = row({ doc: { title: 'b', body: 'cb' }, persona: { home: null } })
   let m = mem('in the loop', 'LOOPBODY.')
   let all = [a, b, m]
   let deps = [
@@ -264,7 +264,7 @@ Deno.test('materialize: frontmatter stays at byte 0, header rides after it', () 
       title: 'operator',
       body: '---\nname: operator\ntools: Read, Grep\n---\n\nYou run the fleet.',
     },
-    persona: { home_eid: null },
+    persona: { home: null },
   })
   // a preloaded memory's separator rule must not read as frontmatter
   let md = materialize([fm, warm], [edge(fm, 'contains', warm)], fm, NOW)
@@ -337,11 +337,11 @@ Deno.test('commonOf: the persona its project contains', () => {
   let proj = row({ project: {}, doc: { title: 'Holdco' } })
   let base = row({
     doc: { title: 'base', body: 'b' },
-    persona: { home_eid: proj.eid },
+    persona: { home: proj.eid },
   })
   let other = row({
     doc: { title: 'other', body: 'o' },
-    persona: { home_eid: proj.eid },
+    persona: { home: proj.eid },
   })
   let all = [proj, base, other]
   assertEquals(commonOf(all, [edge(proj, 'contains', base)], proj.eid), base)
@@ -349,14 +349,14 @@ Deno.test('commonOf: the persona its project contains', () => {
   assertEquals(commonOf(all, [], proj.eid), undefined)
 })
 
-Deno.test('homeReads: specialists derive project→persona reads from home_eid', () => {
+Deno.test('homeReads: specialists derive project→persona reads from home', () => {
   let proj = row({ project: {}, doc: { title: 'Holdco' } })
-  let base = row({ doc: { title: 'base' }, persona: { home_eid: proj.eid } })
+  let base = row({ doc: { title: 'base' }, persona: { home: proj.eid } })
   let spec = row({
     doc: { title: 'reviewer' },
-    persona: { home_eid: proj.eid },
+    persona: { home: proj.eid },
   })
-  let fleet = row({ doc: { title: 'graybeard' }, persona: { home_eid: null } })
+  let fleet = row({ doc: { title: 'graybeard' }, persona: { home: null } })
   let all = [proj, base, spec, fleet]
   // base is the common persona (contains), so only the specialist derives an
   // edge; a homeless fleet persona is nobody's specialist.
@@ -369,10 +369,10 @@ Deno.test('homeReads: a stored edge from home is left alone (no double sentence)
   let proj = row({ project: {}, doc: { title: 'Holdco' } })
   let spec = row({
     doc: { title: 'reviewer' },
-    persona: { home_eid: proj.eid },
+    persona: { home: proj.eid },
   })
   // whether the stored edge is the common `contains` or a hand-made `reads`,
-  // the derivation must not add a duplicate — home_eid stays the one truth.
+  // the derivation must not add a duplicate — home stays the one truth.
   assertEquals(homeReads(homes([proj, spec]), [edge(proj, 'reads', spec)]), [])
   assertEquals(
     homeReads(homes([proj, spec]), [edge(proj, 'contains', spec)]),
@@ -389,20 +389,20 @@ Deno.test('filesFor: common → AGENTS.md, others → personas/<slug>.md, fleet 
   let homeless = row({ project: {}, doc: { title: 'no checkout' } })
   let base = row({
     doc: { title: 'base', body: 'b' },
-    persona: { home_eid: proj.eid },
+    persona: { home: proj.eid },
   })
   let other = row({
     doc: { title: 'other', body: 'o' },
-    persona: { home_eid: proj.eid },
+    persona: { home: proj.eid },
     alias: { slug: 'reviewer' },
   })
   let fleet = row({
     doc: { title: 'graybeard', body: 'g' },
-    persona: { home_eid: null },
+    persona: { home: null },
   })
   let stray = row({
     doc: { title: 'stray', body: 's' },
-    persona: { home_eid: homeless.eid },
+    persona: { home: homeless.eid },
   })
   let files = filesFor(
     [proj, homeless, base, other, fleet, stray],
@@ -450,7 +450,7 @@ Deno.test('filesFor / taskRoots: a retired venture is neither written nor swept'
   })
   let base = row({
     doc: { title: 'base', body: 'b' },
-    persona: { home_eid: proj.eid },
+    persona: { home: proj.eid },
   })
   let deps = [edge(proj, 'contains', base)]
   assertEquals(filesFor([proj, base], deps, NOW), [])
@@ -519,11 +519,11 @@ Deno.test('projection: a renamed slug orphans the old file; sync removes it', ()
     let proj = row({ project: {}, doc: { title: 'V' }, repo: { path: dir } })
     let base = row({
       doc: { title: 'base', body: 'b' },
-      persona: { home_eid: proj.eid },
+      persona: { home: proj.eid },
     })
     let spec = row({
       doc: { title: 'rev', body: 'r' },
-      persona: { home_eid: proj.eid },
+      persona: { home: proj.eid },
       alias: { slug: 'old' },
     })
     let all = [proj, base, spec]
@@ -552,11 +552,11 @@ Deno.test('projection: a deleted persona orphans its file; AGENTS.md untouched',
     let proj = row({ project: {}, doc: { title: 'V' }, repo: { path: dir } })
     let base = row({
       doc: { title: 'base', body: 'b' },
-      persona: { home_eid: proj.eid },
+      persona: { home: proj.eid },
     })
     let spec = row({
       doc: { title: 'rev', body: 'r' },
-      persona: { home_eid: proj.eid },
+      persona: { home: proj.eid },
       alias: { slug: 'spec' },
     })
     let deps = [edge(proj, 'contains', base)]

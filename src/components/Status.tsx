@@ -158,7 +158,7 @@ let scene = (task: string): Change[] => {
       .toSorted((a, b) => b.z - a.z)
       .slice(0, 12)
       .map((p) => {
-        let t = ent(p.target_eid)
+        let t = ent(p.target)
         return `${idOf(t)} "${t.doc?.title ?? t.kind}" (${p.view})`
       })
     : []
@@ -173,7 +173,7 @@ let scene = (task: string): Change[] => {
   let c = uuid()
   return [
     { eid: c, name: 'doc', comp: { title: '', body } },
-    { eid: c, name: 'comment', comp: { target_eid: task } },
+    { eid: c, name: 'comment', comp: { target: task } },
   ]
 }
 
@@ -199,7 +199,7 @@ let launch = async (task: string) => {
           effort: m.p.efforts.includes('medium') ? 'medium' : m.p.efforts[0],
         }
         : {}),
-      requested_task_eid: task,
+      requested_task: task,
     },
   })
   return eid
@@ -244,7 +244,7 @@ let exec = async (line: string) => {
 // quiet.
 let WhoAmI = () => {
   let me = ent(clientId())
-  if (!me.client || me.client.actor_eid) return null
+  if (!me.client || me.client.actor) return null
   let people = rows().filter((r) => r.comps.person)
   if (people.length < 2) return null
   return (
@@ -256,7 +256,7 @@ let WhoAmI = () => {
             mutate({
               eid: me.eid,
               name: 'client',
-              comp: { actor_eid: p.eid },
+              comp: { actor: p.eid },
             })}
           {...title(String(p.comps.doc?.title ?? '') || idOf(p))}
         />

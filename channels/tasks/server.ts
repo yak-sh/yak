@@ -97,7 +97,7 @@ let personaEid: string | undefined
 let homeEid: string | undefined
 // The operator/specialist marks (T-7006), read off the served row like the
 // actor: origin is server-stamped 'managed' on a spawn (arrives in a later
-// patch), requested_task_eid rides the reify. A specialist gets no project
+// patch), requested_task rides the reify. A specialist gets no project
 // mail — only direct address.
 let origin: string | undefined
 let requestedTaskEid: string | undefined
@@ -112,7 +112,7 @@ let homes = new Map<string, string>()
 // (a claim lives ON the claimed entity's row). A comment on a task this session
 // claims is a message to it, so the served session's claimed-task eids feed the
 // filter the same way notices()'s `mine` does. Release/detach (comp or
-// session_eid null) or a tombstone drops the eid.
+// session null) or a tombstone drops the eid.
 let claims = new Map<string, string>()
 
 // The entities this session holds right now — the filter's `mine` set, and
@@ -125,7 +125,7 @@ let ours = () => {
 
 // Fold a batch into what identity is made of — persona homes, claim
 // holders — and re-derive the session we serve. The home project —
-// where the session's mail lands (mail.target_eid, routed by the address
+// where the session's mail lands (mail.target, routed by the address
 // book) — is the persona's home when the session wears one, else the actor
 // itself when the actor IS a project (an interactive session's actor is the
 // venture it works in).
@@ -133,15 +133,15 @@ let resolve = (changes: Change[]) => {
   for (let c of changes) {
     if (c.name == 'entity' && c.comp == null) claims.delete(c.eid) // tombstone
     if (c.name != 'persona') continue
-    let home = c.comp && 'home_eid' in c.comp ? c.comp.home_eid : undefined
+    let home = c.comp && 'home' in c.comp ? c.comp.home : undefined
     if (home === null || c.comp == null) homes.delete(c.eid)
     else if (typeof home == 'string' && home) homes.set(c.eid, home)
   }
   for (let c of changes) {
     if (c.name != 'claim') continue
-    // A patch that doesn't touch session_eid (e.g. the claimed_at stamp) leaves
+    // A patch that doesn't touch session (e.g. the claimed_at stamp) leaves
     // the holder as it was — merge, don't clobber.
-    let s = c.comp && 'session_eid' in c.comp ? c.comp.session_eid : undefined
+    let s = c.comp && 'session' in c.comp ? c.comp.session : undefined
     if (c.comp == null || s === null) claims.delete(c.eid)
     else if (typeof s == 'string' && s) claims.set(c.eid, s)
   }
@@ -167,7 +167,7 @@ let resolve = (changes: Change[]) => {
     }
     // The marks come off the merged row, so a patch that carries none
     // leaves them as they were and a rotation adopts what the new row
-    // declares (a /clear reify may drop requested_task_eid, becoming an
+    // declares (a /clear reify may drop requested_task, becoming an
     // operator).
     actorEid = s?.actorEid
     personaEid = s?.personaEid
@@ -245,7 +245,7 @@ let mcp = new Server(
 
 // eid names the entity to stamp `notified` — the plugin's business, not the
 // client's — so it is stripped here, never riding the notification params.
-let flush = ({ eid: _eid, ...ev }: Event) =>
+let flush = ({ eid: _id, ...ev }: Event) =>
   mcp.notification({ method: 'notifications/claude/channel', params: ev })
 
 // The channel's ONE write: stamp `notified` on what it just delivered — a bare

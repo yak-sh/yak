@@ -144,7 +144,7 @@ export let Card = ({ p }: { p: Pinned }) => {
         mutate({
           eid: p.eid,
           name: 'pin',
-          comp: { canvas_eid: sh, x: 0, y: 0, w: 0, h: 0, z: topZ(sh) + 1 },
+          comp: { canvas: sh, x: 0, y: 0, w: 0, h: 0, z: topZ(sh) + 1 },
         })
         return
       }
@@ -237,18 +237,18 @@ export let Card = ({ p }: { p: Pinned }) => {
       // The CARD is the right-click target — "open here" (make this the
       // root card) and "open in new tab" for its target. Links, inputs,
       // and selectable text keep the browser's own menu.
-      onContextMenu={cardMenuAt(ent(p.target_eid))}
+      onContextMenu={cardMenuAt(ent(p.target))}
     >
       <Frame>
         <Tabs>
-          <Entity eid={p.target_eid} view='Card.Title' />
-          {filterable.has(p.view) && <FilterInput eid={p.target_eid} />}
-          {applicable(ent(p.target_eid)).map((v) => (
+          <Entity eid={p.target} view='Card.Title' />
+          {filterable.has(p.view) && <FilterInput eid={p.target} />}
+          {applicable(ent(p.target)).map((v) => (
             <Tab
               type='button'
               mod={v == p.view && 'on'}
               draggable
-              onDragStart={(e: DragEvent) => dragData(e, p.target_eid, v, p.w)}
+              onDragStart={(e: DragEvent) => dragData(e, p.target, v, p.w)}
               onClick={() =>
                 v != p.view &&
                 mutate({ eid: p.eid, name: 'card', comp: { view: v } })}
@@ -256,7 +256,7 @@ export let Card = ({ p }: { p: Pinned }) => {
               aria-label={v}
               data-tip={v}
             >
-              <TabFace view={v} eid={p.target_eid} />
+              <TabFace view={v} eid={p.target} />
             </Tab>
           ))}
           <X
@@ -272,7 +272,7 @@ export let Card = ({ p }: { p: Pinned }) => {
               face (Card.Full) serves it, anything else walks to the plain
               role — the titlebar above already shows the head. */
           }
-          <Entity eid={p.target_eid} view={`Card.${p.view}`} />
+          <Entity eid={p.target} view={`Card.${p.view}`} />
         </Scroll>
       </Frame>
       {handles.map((d) => (

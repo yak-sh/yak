@@ -1,6 +1,7 @@
 import {
   awake,
   cols,
+  comps,
   deaths,
   friendly,
   nick,
@@ -10,6 +11,14 @@ import {
   standing,
 } from './types.ts'
 import { assertEquals } from '@std/assert'
+
+Deno.test('the current vocabulary carries no representation suffixes', () => {
+  for (let [comp, props] of Object.entries({ ...comps, ...stamped })) {
+    for (let prop of Object.keys(props)) {
+      assertEquals(prop.endsWith('_eid'), false, `${comp}.${prop}`)
+    }
+  }
+})
 
 Deno.test('nick: the model word, vendor and versions dropped', () => {
   assertEquals(nick('claude-fable-5'), 'fable')
@@ -43,55 +52,55 @@ Deno.test('death words: every reference declares, the sets hold', () => {
   assertEquals(
     words('cascade'),
     new Set([
-      'card.target_eid',
-      'comment.target_eid',
+      'card.target',
+      'comment.target',
       // both ends: a standing instruction is meaningless without the
       // actor who gave it or the thread it is about
-      'subscription.actor_eid',
-      'subscription.target_eid',
-      'stop_request.target_eid',
-      'knock.target_eid',
-      'wake.target_eid',
-      'pin.canvas_eid',
+      'subscription.actor',
+      'subscription.target',
+      'stop_request.target',
+      'knock.target',
+      'wake.target',
+      'pin.canvas',
       // a pane dies with its layout and with its container (D-14718)
-      'pane.layout_eid',
-      'pane.parent_eid',
-      'camera.client_eid',
-      'camera.canvas_eid',
-      'fold.client_eid',
-      'fold.board_eid',
+      'pane.layout',
+      'pane.parent',
+      'camera.client',
+      'camera.canvas',
+      'fold.client',
+      'fold.board',
     ]),
   )
   assertEquals(
     words('detach'),
     new Set([
-      'task.project_eid',
-      'task.assignee_eid',
-      'client.actor_eid',
-      'session.actor_eid',
-      'session.parent_eid',
-      'session.requested_task_eid',
-      'session.persona_eid',
-      'spawn.persona_eid',
-      'role.scope_eid',
-      'persona.home_eid',
+      'task.project',
+      'task.assignee',
+      'client.actor',
+      'session.actor',
+      'session.parent',
+      'session.requested_task',
+      'session.persona',
+      'spawn.persona',
+      'role.scope',
+      'persona.home',
       // a shown entity's death only empties its pane; a directly deleted
       // root orphans the layout rather than cascading through it
-      'pane.content_eid',
-      'layout.root_eid',
+      'pane.content',
+      'layout.root',
     ]),
   )
   assertEquals(
     words('release'),
-    new Set(['claim.session_eid', 'shelf.client_eid']),
+    new Set(['claim.session', 'shelf.client']),
   )
   assertEquals(
     words('keep'),
     new Set([
-      'memory.scope_eid',
-      'session.role_eid',
-      'mail.target_eid',
-      'mail.reply_to_eid',
+      'memory.scope',
+      'session.role',
+      'mail.target',
+      'mail.reply_to',
       'deliver.to',
       'created.by',
       'updated.by',

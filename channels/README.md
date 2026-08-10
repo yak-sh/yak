@@ -10,7 +10,7 @@ push delivery with no polling.
 the tasks server's `/ws` sync socket (the same broadcast every browser tab
 hears) and emits the activity aimed at ITS session:
 
-- **`comment`** — a comment whose `target_eid` is this session's entity (someone
+- **`comment`** — a comment whose `target` is this session's entity (someone
   messaging the session) or a task it claims. Rendered
   `kind="comment" from="<byline>"`, content = the comment's words. Only
   mint-time comments (the batch also carries the doc that holds the words) are

@@ -28,7 +28,7 @@ Deno.test('parseProp: text and optional scalar empties stay distinct', () => {
   for (let t of ['number', 'priority', 'bool', 'time'] as PropType[]) {
     assertEquals(parse('value', t, ''), null)
   }
-  assertEquals(parse('target_eid', { eid: '', death: 'keep' }, ''), null)
+  assertEquals(parse('target', { eid: '', death: 'keep' }, ''), null)
   assertEquals(parse('status', { enum: ['open'] }, null), null)
 })
 
@@ -117,9 +117,9 @@ Deno.test('parseProp: a url has one spelling, and only when it is one', () => {
 Deno.test('parseProp: references resolve and every rejection teaches', () => {
   let type: PropType = { eid: '', death: 'keep' }
   let id = 'AAAAAAAA-0000-4000-8000-000000000001'
-  assertEquals(parseProp(p('target_eid', type), id), id.toLowerCase())
+  assertEquals(parseProp(p('target', type), id), id.toLowerCase())
   assertEquals(
-    parseProp(p('target_eid', type), 'T-3', { resolve: () => id }),
+    parseProp(p('target', type), 'T-3', { resolve: () => id }),
     id.toLowerCase(),
   )
   assertThrows(
@@ -133,9 +133,9 @@ Deno.test('parseProp: references resolve and every rejection teaches', () => {
     "ready is a boolean (true, false, 1, 0, yes, no) — got 'maybe'",
   )
   assertThrows(
-    () => parseProp(p('target_eid', type), 'missing'),
+    () => parseProp(p('target', type), 'missing'),
     Error,
-    "target_eid is a human id / alias / UUID — got 'missing'",
+    "target is a human id / alias / UUID — got 'missing'",
   )
 })
 
@@ -157,7 +157,7 @@ Deno.test('formatProp: every semantic type has one face', () => {
   assertEquals(formatProp(p('priority', 'priority'), 1.5), 'P1.5')
   assertEquals(formatProp(p('ready', 'bool'), 'YES'), 'true')
   assertEquals(
-    formatProp(p('target_eid', { eid: '', death: 'keep' }), id, {
+    formatProp(p('target', { eid: '', death: 'keep' }), id, {
       describe: () => 'T-3 — Ship',
     }),
     'T-3 — Ship',
@@ -184,10 +184,10 @@ Deno.test('propAt: types and unambiguous error names come from schema', () => {
 Deno.test('refOf: an any-entity ref answers entity, kind-constrained its kind', () => {
   // 'entity' (the spine) names the any-entity target like any other kind —
   // truthy, so isRef and refOf agree without a falsy sentinel to trip on.
-  assertEquals(refOf('card', 'target_eid'), 'entity')
-  assertEquals(isRef('card', 'target_eid'), true)
+  assertEquals(refOf('card', 'target'), 'entity')
+  assertEquals(isRef('card', 'target'), true)
   // A kind-constrained ref answers its kind; a bare non-suffixed ref counts.
-  assertEquals(refOf('task', 'project_eid'), 'project')
+  assertEquals(refOf('task', 'project'), 'project')
   assertEquals(isRef('deliver', 'to'), true)
   // A scalar and an unknown column are not references.
   assertEquals(isRef('task', 'status'), false)
@@ -204,24 +204,24 @@ Deno.test('normalizeChanges: component values, ids, and edges canonicalize', () 
       {
         eid: 'parent',
         name: 'task',
-        comp: { status: 'WIP', priority: 'P02', assignee_eid: '2' },
+        comp: { status: 'WIP', priority: 'P02', assignee: '2' },
       },
       {
         eid: 'parent',
         name: 'dependency',
-        comp: { type: 'REQUIRES', child_eid: 'T-2', gone: 'no' },
+        comp: { type: 'REQUIRES', child: 'T-2', gone: 'no' },
       },
     ], { resolve }),
     [
       {
         eid: parent,
         name: 'task',
-        comp: { status: 'wip', priority: 2, assignee_eid: child },
+        comp: { status: 'wip', priority: 2, assignee: child },
       },
       {
         eid: parent,
         name: 'dependency',
-        comp: { type: 'requires', child_eid: child, gone: 0 },
+        comp: { type: 'requires', child: child, gone: 0 },
       },
     ],
   )

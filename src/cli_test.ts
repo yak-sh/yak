@@ -178,7 +178,7 @@ Deno.test('place: one project is somewhere to stand, a predicate is not', () => 
   let named = (q: string) => place(parseQuery(q))?.value
   assertEquals(named('.project=P-30'), 'P-30')
   assertEquals(named('.project=P-30 .status=done'), 'P-30')
-  assertEquals(named('.project_eid=P-30'), 'P-30')
+  assertEquals(named('.project=P-30'), 'P-30')
   assertEquals(named('.status=done'), undefined)
   assertEquals(named('.project!=P-30'), undefined)
   assertEquals(named('.project=P-30,P-19'), undefined)
@@ -1019,7 +1019,7 @@ let sub: Snapshot = {
     { eid: T, name: 'entity', comp: { eid: T, num: 2, created_at: '' } },
     { eid: T, name: 'doc', comp: { title: 'Child work', body: '' } },
     { eid: T, name: 'task', comp: { status: 'wip', priority: 0 } },
-    { eid: T, name: 'claim', comp: { session_eid: S } },
+    { eid: T, name: 'claim', comp: { session: S } },
   ],
   deps: [],
 }
@@ -1056,7 +1056,7 @@ let busGraph: Snapshot = {
         body: 'the ask you missed\x1b]52;c;QQ==\x07\x9b2J\x7f',
       },
     },
-    { eid: C, name: 'comment', comp: { target_eid: T } },
+    { eid: C, name: 'comment', comp: { target: T } },
     {
       eid: C,
       name: 'created',
@@ -1093,12 +1093,12 @@ Deno.test('inbox asks only for its reader and keeps order when read', async () =
   ): Snapshot['changes'] => [
     { eid, name: 'entity', comp: { eid, num, created_at: '' } },
     { eid, name: 'doc', comp: { title: '', body } },
-    { eid, name: 'comment', comp: { target_eid: target } },
+    { eid, name: 'comment', comp: { target: target } },
   ]
   let snap: Snapshot = {
     changes: [
       ...sub.changes,
-      { eid: S, name: 'session', comp: { id: 'sub-1', actor_eid: actor } },
+      { eid: S, name: 'session', comp: { id: 'sub-1', actor: actor } },
       { eid: actor, name: 'entity', comp: { eid: actor, num: 51 } },
       { eid: far, name: 'entity', comp: { eid: far, num: 52 } },
       ...item(watched, 53, far, 'watched words'),
@@ -1121,13 +1121,13 @@ Deno.test('inbox asks only for its reader and keeps order when read', async () =
       {
         eid: watch,
         name: 'subscription',
-        comp: { actor_eid: actor, target_eid: far, mode: 'watch' },
+        comp: { actor: actor, target: far, mode: 'watch' },
       },
       { eid: mute, name: 'entity', comp: { eid: mute, num: 58 } },
       {
         eid: mute,
         name: 'subscription',
-        comp: { actor_eid: actor, target_eid: T, mode: 'mute' },
+        comp: { actor: actor, target: T, mode: 'mute' },
       },
     ],
     deps: [],
@@ -1220,7 +1220,7 @@ Deno.test('entity JSON has one component-shaped contract across CLI doors', asyn
       {
         eid: comment,
         name: 'comment',
-        comp: { eid: comment, target_eid: task },
+        comp: { eid: comment, target: task },
       },
     ],
     deps: [],
@@ -1260,7 +1260,7 @@ Deno.test('entity JSON has one component-shaped contract across CLI doors', asyn
         kind: 'comment',
         entity: { eid: comment, num: 42 },
         doc: { title: '', body: 'Looks right' },
-        comment: { target_eid: task },
+        comment: { target: task },
       }],
     })
   } finally {
@@ -1347,15 +1347,15 @@ Deno.test('bare task appends the current claimed task digest', async () => {
     assertMatch(text(out.stdout), /task —[\s\S]*- T-2 wip — Child work/)
     assertEquals(seen, [
       '/query?kind=session&.session.id=sub-1',
-      `/query?kind=task&.claim.session_eid=${S}`,
+      `/query?kind=task&.claim.session=${S}`,
       // then the bus, on its own bounded queries (client.ts bus()) — the
       // reader's rows, then the candidates its selector might pick
       '/query?kind=session&.session.id=sub-1',
-      `/query?.claim.session_eid=${S}`,
+      `/query?.claim.session=${S}`,
       '/query?.repo!',
-      `/query?.comment.target_eid=${S},${T}&.notified=`,
+      `/query?.comment.target=${S},${T}&.notified=`,
       `/query?.deliver.to=${S}&.notified=`,
-      `/query?.mail.target_eid=${S}&.notified=&.opened=&.archived=`,
+      `/query?.mail.target=${S}&.notified=&.opened=&.archived=`,
     ])
   } finally {
     await server.shutdown()
@@ -1524,7 +1524,7 @@ Deno.test('task done/cancel <id> act on the named task, never the focused one', 
       comp: { status: 'cancelled' },
     }])
     let comment = acked.find((c) => c.name == 'comment')
-    assertEquals(comment?.comp, { target_eid: O })
+    assertEquals(comment?.comp, { target: O })
     assertEquals(seen.some((path) => path.startsWith('/snapshot')), false)
   } finally {
     await server.shutdown()

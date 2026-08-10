@@ -297,7 +297,7 @@ defineActions([
   {
     match: has('claim'),
     acts: (e) => [{
-      label: `release ${viaName(e.claim!.session_eid)}`,
+      label: `release ${viaName(e.claim!.session)}`,
       run: () => mutate({ eid: e.eid, name: 'claim', comp: null }),
     }],
   },

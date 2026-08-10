@@ -219,11 +219,11 @@ Deno.test(
     let tag = a.eid.slice(0, 8)
     await post([{ eid: home, name: 'doc', comp: { title: 'probe home' } }])
     await post([{ eid: home, name: 'project', comp: {} }])
-    await walk(`.task.project_eid=&.doc.title~=${tag}`, [
+    await walk(`.task.project=&.doc.title~=${tag}`, [
       a.born, // no project — in
-      [{ eid: a.eid, name: 'task', comp: { project_eid: home } }], // out
+      [{ eid: a.eid, name: 'task', comp: { project: home } }], // out
       [{ eid: a.eid, name: 'task', comp: { priority: 1 } }], // untouched — still out
-      [{ eid: a.eid, name: 'task', comp: { project_eid: null } }], // in
+      [{ eid: a.eid, name: 'task', comp: { project: null } }], // in
     ])
   },
 )
@@ -543,7 +543,7 @@ Deno.test('query: id= fetches by every form a name takes', alone, async () => {
 // hits, where /snapshot returns every edge in the graph; so what it says about
 // one entity must be edge for edge what the graph-out door says.
 //
-// Derived `reads` are the half that would go missing quietly: home_eid is the
+// Derived `reads` are the half that would go missing quietly: home is the
 // one truth, so snapshot() computes a project→persona edge on its way OUT
 // rather than storing it, and a narrow door reading only the `dependency`
 // table drops it with nothing to see anywhere.
@@ -573,18 +573,18 @@ Deno.test(
       { eid: proj, name: 'doc', comp: { title: 'probe venture' } },
       { eid: proj, name: 'project', comp: {} },
       { eid: common, name: 'doc', comp: { title: 'probe common' } },
-      { eid: common, name: 'persona', comp: { home_eid: proj } },
+      { eid: common, name: 'persona', comp: { home: proj } },
       { eid: spec, name: 'doc', comp: { title: 'probe specialist' } },
-      { eid: spec, name: 'persona', comp: { home_eid: proj } },
+      { eid: spec, name: 'persona', comp: { home: proj } },
       {
         eid: a.eid,
         name: 'dependency',
-        comp: { type: 'requires', child_eid: b.eid },
+        comp: { type: 'requires', child: b.eid },
       },
       {
         eid: proj,
         name: 'dependency',
-        comp: { type: 'contains', child_eid: common },
+        comp: { type: 'contains', child: common },
       },
     ])
     for (let eid of [a.eid, b.eid, proj, common, spec]) {
@@ -607,7 +607,7 @@ Deno.test(
         .backlinks.map((b) => b.via).sort()
     assertEquals(await backs(spec), ['reads'])
     assertEquals(await backs(common), ['contains'])
-    // the project is pointed at by both personas' home_eid column
-    assertEquals(await backs(proj), ['persona.home_eid', 'persona.home_eid'])
+    // the project is pointed at by both personas' home column
+    assertEquals(await backs(proj), ['persona.home', 'persona.home'])
   },
 )

@@ -2,7 +2,7 @@
 // (unique port, throwaway DB_PATH — never the live db), then proves BOTH doors:
 //   A. legacy — an unadvertised socket gets bare arrays while an advertised
 //      socket gets cursor envelopes; both still hear full broadcasts.
-//   B. subscription — a `.comment.target_eid=<S>` socket hears exactly its
+//   B. subscription — a `.comment.target=<S>` socket hears exactly its
 //      matches (add via HTTP/cast AND via /ws), not unrelated writes, gets a
 //      `drop` when a member re-points away, and an entity-null when a member
 //      dies. Cleans up every entity it mints.
@@ -136,7 +136,7 @@ try {
   let S = uuid()
   await apply([{ eid: S, name: 'doc', comp: { title: 'target-S' } }])
   let c = await open()
-  send(c.s, { sub: 'b1', q: `.comment.target_eid=${S}` })
+  send(c.s, { sub: 'b1', q: `.comment.target=${S}` })
   let init = await c.want(subFrame('b1'))
   ok('B: subscribe returns an initial {sub} frame', !!init)
 
@@ -147,7 +147,7 @@ try {
   let cm = uuid()
   await apply([
     { eid: cm, name: 'doc', comp: { title: '', body: 'hello S' } },
-    { eid: cm, name: 'comment', comp: { target_eid: S } },
+    { eid: cm, name: 'comment', comp: { target: S } },
   ])
   let addF = await c.want((f) =>
     subFrame('b1')(f) &&
@@ -177,11 +177,11 @@ try {
   ok('B: an unrelated write does NOT reach the subscriber', !leaked)
 
   // Re-point the comment at a DIFFERENT entity — it leaves the query but
-  // still exists (target_eid FKs to a live spine, so the new aim must exist).
+  // still exists (target FKs to a live spine, so the new aim must exist).
   let S2 = uuid()
   await apply([{ eid: S2, name: 'doc', comp: { title: 'target-S2' } }])
   c.frames.length = 0
-  await apply([{ eid: cm, name: 'comment', comp: { target_eid: S2 } }])
+  await apply([{ eid: cm, name: 'comment', comp: { target: S2 } }])
   let dropF = await c.want((f) =>
     subFrame('b1')(f) &&
     (f as { drop: string[] }).drop.includes(cm)
@@ -190,7 +190,7 @@ try {
 
   // Re-point back (re-add), then delete it — the death reaches the subscriber
   // as an entity-null inside `changes`.
-  await apply([{ eid: cm, name: 'comment', comp: { target_eid: S } }])
+  await apply([{ eid: cm, name: 'comment', comp: { target: S } }])
   await c.want((f) =>
     subFrame('b1')(f) &&
     (f as { changes: { eid: string }[] }).changes.some((x) => x.eid == cm)

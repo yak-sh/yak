@@ -134,8 +134,8 @@ let remember = (row: Row, comp: Record<string, unknown>) => {
   let s = row.sess ?? (row.sess = {})
   if ('id' in comp) s.id = str(comp.id) || undefined
   if ('pid' in comp) s.pid = typeof comp.pid == 'number' ? comp.pid : undefined
-  if ('actor_eid' in comp) s.actorEid = str(comp.actor_eid) || undefined
-  if ('persona_eid' in comp) s.personaEid = str(comp.persona_eid) || undefined
+  if ('actor' in comp) s.actorEid = str(comp.actor) || undefined
+  if ('persona' in comp) s.personaEid = str(comp.persona) || undefined
   if ('operator' in comp) {
     s.operator = comp.operator == true || comp.operator == 1
       ? true
@@ -144,8 +144,8 @@ let remember = (row: Row, comp: Record<string, unknown>) => {
       : undefined
   }
   if ('origin' in comp) s.origin = str(comp.origin) || undefined
-  if ('requested_task_eid' in comp) {
-    s.requestedTaskEid = str(comp.requested_task_eid) || undefined
+  if ('requested_task' in comp) {
+    s.requestedTaskEid = str(comp.requested_task) || undefined
   }
 }
 
@@ -300,7 +300,7 @@ export let injects = (
   sessionEid?: string | null,
 ): boolean => {
   if (!m.verified || done) return false
-  let at = str(m.target_eid)
+  let at = str(m.target)
   if (sessionEid && at == sessionEid) return true
   return operator && !!homeEid && at == homeEid
 }
@@ -391,13 +391,13 @@ let bornIn = (changes: Change[]) => {
 // return the channel events to emit — in batch order, so delivery is
 // deterministic. Three things are aimed at a session:
 //
-//   1. a `comment` whose target_eid is this session's eid OR one of its CLAIMED
+//   1. a `comment` whose target is this session's eid OR one of its CLAIMED
 //      tasks (commenting on a task you hold IS messaging you — the comms bus
 //      rule) — but ONLY at mint, when the batch also carries the doc that holds
 //      the words (a bodiless later patch is skipped). A comment on a claimed
 //      task names that task in `on=` so the operator knows which one.
 //   2. a `knock` (types.ts): the shared `deliver {to}` is the recipient —
-//      this session or its actor — and target_eid is what to look at; the
+//      this session or its actor — and target is what to look at; the
 //      words ride as a plain comment on the TARGET in the same batch (the
 //      :knock contract).
 //   3. a `mail` arrival for the session's home project — see the branch.
@@ -423,7 +423,7 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
     if (!c.comp) continue
 
     if (c.name == 'comment') {
-      let at = str(c.comp.target_eid)
+      let at = str(c.comp.target)
       let mine = at == ctx.sessionEid || !!ctx.claimedEids?.has(at)
       if (!mine) continue
       let content = words(docs.get(c.eid))
@@ -464,7 +464,7 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
         !(ctx.operator == true && recipient == ctx.actorEid)
       ) continue
       if (told(c.eid)) continue
-      let at = str(c.comp.target_eid)
+      let at = str(c.comp.target)
       let atId = at ? ctx.idOf(at) ?? at : null
       let when = Date.parse(str(won?.at))
       let note = commentOn(
@@ -533,7 +533,7 @@ let commentOn = (
   let bestAt = 0
   for (let c of changes) {
     if (c.name != 'comment' || !c.comp) continue
-    if (str(c.comp.target_eid) != target) continue
+    if (str(c.comp.target) != target) continue
     let w = words(docs.get(c.eid))
     if (!w) continue
     if (!near) return w

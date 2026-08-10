@@ -2,7 +2,7 @@
 // REAL column of its component. A changed handler fires only when its
 // column is `in` the applied comp (effects.ts dispatch), so one naming a
 // column that doesn't exist can never fire — it looks live and isn't,
-// the same decoy class that let persona sync watch `project_eid` (a
+// the same decoy class that let persona sync watch `project` (a
 // column personas never had) and silently never re-render a re-home.
 //
 // The check derives from the registrations + the vocabulary, not a

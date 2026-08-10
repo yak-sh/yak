@@ -50,7 +50,7 @@ let wake = (at: string, target?: string) => {
     {
       eid,
       name: 'wake',
-      comp: { at, ...(target ? { target_eid: target } : {}) },
+      comp: { at, ...(target ? { target: target } : {}) },
     },
     { eid, name: 'deliver', comp: { to: jeff } },
   ])
@@ -60,7 +60,7 @@ let wake = (at: string, target?: string) => {
 Deno.test('an hour already past fires, and mints the knock', () => {
   let w = wake(new Date(Date.now() - 60_000).toISOString())
   arm(cast)
-  let k = knocks().find((k) => k.target_eid == w)!
+  let k = knocks().find((k) => k.target == w)!
   assertEquals(toOf(k.eid), jeff)
   assertMatch(String(drow(w)?.at), /^\d{4}-/)
 })
@@ -69,20 +69,20 @@ Deno.test('a wake still owed waits, and fires once when it comes', () => {
   let w = wake(new Date(Date.now() + 3_600_000).toISOString())
   arm(cast)
   assertEquals(drow(w), undefined)
-  assertEquals(knocks().filter((k) => k.target_eid == w).length, 0)
+  assertEquals(knocks().filter((k) => k.target == w).length, 0)
   // the hour arrives (the row is the clock, so move the row)
   db.prepare('update wake set at = ? where eid = ?')
     .run(new Date(Date.now() - 1000).toISOString(), w)
   arm(cast)
-  assertEquals(knocks().filter((k) => k.target_eid == w).length, 1)
+  assertEquals(knocks().filter((k) => k.target == w).length, 1)
   arm(cast) // a stamped wake is done — a second pass never re-knocks
-  assertEquals(knocks().filter((k) => k.target_eid == w).length, 1)
+  assertEquals(knocks().filter((k) => k.target == w).length, 1)
 })
 
 Deno.test('no target: the wake is its own subject', () => {
   let w = wake(new Date(Date.now() - 1000).toISOString())
   arm(cast)
-  assertEquals(toOf(knocks().find((k) => k.target_eid == w)!.eid), jeff)
+  assertEquals(toOf(knocks().find((k) => k.target == w)!.eid), jeff)
 })
 
 Deno.test('a new untargeted wake replaces only the pending untargeted one', () => {
@@ -93,8 +93,8 @@ Deno.test('a new untargeted wake replaces only the pending untargeted one', () =
   let first = wake(at)
   let reminder = wake(at, jeff)
   let second = wake(at)
-  assertEquals(wrow(targeted).target_eid, jeff)
-  assertEquals(wrow(reminder).target_eid, jeff)
+  assertEquals(wrow(targeted).target, jeff)
+  assertEquals(wrow(reminder).target, jeff)
   assertMatch(String(drow(acted)?.at), /^\d{4}-/)
   assertEquals(wrow(first), undefined)
   assertEquals(drow(second), undefined)

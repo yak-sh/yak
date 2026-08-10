@@ -91,34 +91,34 @@ let contract = (
 })
 
 let contracts = [
-  contract('task', 'project_eid', 'project', { status: 'open' }),
-  contract('role', 'scope_eid', 'project'),
-  contract('camera', 'client_eid', 'client', (d) => ({
-    canvas_eid: tag(d, 'canvas'),
+  contract('task', 'project', 'project', { status: 'open' }),
+  contract('role', 'scope', 'project'),
+  contract('camera', 'client', 'client', (d) => ({
+    canvas: tag(d, 'canvas'),
   })),
-  contract('fold', 'client_eid', 'client', (d) => ({
-    board_eid: tag(d, 'board'),
+  contract('fold', 'client', 'client', (d) => ({
+    board: tag(d, 'board'),
   })),
-  contract('fold', 'board_eid', 'board', (d) => ({
-    client_eid: tag(d, 'client'),
+  contract('fold', 'board', 'board', (d) => ({
+    client: tag(d, 'client'),
   })),
-  contract('shelf', 'client_eid', 'client'),
+  contract('shelf', 'client', 'client'),
   contract(
     'claim',
-    'session_eid',
+    'session',
     'session',
     {},
     (d, eid) => apply(d, [{ eid, name: 'doc', comp: { title: 'claimed' } }]),
   ),
-  contract('stop_request', 'target_eid', 'session'),
-  contract('session', 'role_eid', 'role', { id: 'role-session' }),
-  contract('session', 'parent_eid', 'session', { id: 'child-session' }),
-  contract('mail', 'reply_to_eid', 'mail'),
-  contract('persona', 'home_eid', 'project'),
-  contract('memory', 'scope_eid', 'project'),
-  contract('layout', 'root_eid', 'pane'),
-  contract('pane', 'layout_eid', 'layout'),
-  contract('pane', 'parent_eid', 'pane'),
+  contract('stop_request', 'target', 'session'),
+  contract('session', 'role', 'role', { id: 'role-session' }),
+  contract('session', 'parent', 'session', { id: 'child-session' }),
+  contract('mail', 'reply_to', 'mail'),
+  contract('persona', 'home', 'project'),
+  contract('memory', 'scope', 'project'),
+  contract('layout', 'root', 'pane'),
+  contract('pane', 'layout', 'layout'),
+  contract('pane', 'parent', 'pane'),
 ]
 
 Deno.test('create + patch + column clear', () => {
@@ -134,8 +134,8 @@ Deno.test('create + patch + column clear', () => {
     {
       status: 'open',
       priority: 0,
-      project_eid: null,
-      assignee_eid: null,
+      project: null,
+      assignee: null,
       domain: null,
     },
   ) // the live batch carries the same defaults as a snapshot
@@ -158,7 +158,7 @@ Deno.test('review: a comment carries one canonical verdict', () => {
   apply(db, [
     { eid: t, name: 'doc', comp: { title: 'work' } },
     { eid: c, name: 'doc', comp: { title: '', body: '' } },
-    { eid: c, name: 'comment', comp: { target_eid: t } },
+    { eid: c, name: 'comment', comp: { target: t } },
     { eid: c, name: 'review', comp: { verdict: 'approve' } },
   ])
   assertEquals(comp(c, 'review')?.verdict, 'approved')
@@ -175,20 +175,20 @@ Deno.test('review: a comment carries one canonical verdict', () => {
 })
 
 // refsOf reads each column's PropType, not its name: a reference wearing no
-// _eid suffix (deliver.to, created.by) is walked as surely as project_eid,
-// so graph-out backlinks can't skip a whole class of edge.
-Deno.test('refsOf walks references by type, suffix or not', () => {
+// A reference with any name (deliver.to, created.by, project) is walked, so
+// graph-out backlinks can't skip a whole class of edge.
+Deno.test('refsOf walks references by type', () => {
   let d = fresh()
   let target = tag(d, 'doc', { title: 'target' })
   let suffixed = uid()
   let bare = uid()
   apply(d, [
-    { eid: suffixed, name: 'card', comp: { target_eid: target, view: 'text' } },
+    { eid: suffixed, name: 'card', comp: { target: target, view: 'text' } },
     { eid: bare, name: 'deliver', comp: { to: target } },
   ])
   let vias = refsOf(d, [target]).filter((r) => r.to == target)
   assertEquals(
-    vias.find((r) => r.via == 'card.target_eid')?.from,
+    vias.find((r) => r.via == 'card.target')?.from,
     suffixed,
   )
   assertEquals(vias.find((r) => r.via == 'deliver.to')?.from, bare)
@@ -294,7 +294,7 @@ Deno.test('apply canonicalizes every scalar and reference spelling', () => {
       comp: {
         status: 'WIP',
         priority: 'P02',
-        assignee_eid: 'typed-target',
+        assignee: 'typed-target',
         domain: 'Eng',
       },
     },
@@ -326,7 +326,7 @@ Deno.test('apply canonicalizes every scalar and reference spelling', () => {
       comp: {
         status: 'wip',
         priority: 2,
-        assignee_eid: target,
+        assignee: target,
         domain: 'Eng',
       },
     },
@@ -363,12 +363,12 @@ Deno.test('apply canonicalizes every scalar and reference spelling', () => {
   let [edge] = apply(db, [{
     eid: 'typed-subject',
     name: 'dependency',
-    comp: { type: 'ABOUT', child_eid: String(num), gone: 'no' },
+    comp: { type: 'ABOUT', child: String(num), gone: 'no' },
   }])
   assertEquals(edge, {
     eid: subject,
     name: 'dependency',
-    comp: { type: 'about', child_eid: target, gone: 0 },
+    comp: { type: 'about', child: target, gone: 0 },
   })
 })
 
@@ -534,9 +534,9 @@ Deno.test('shelf tags a canvas to a client; rides the snapshot', () => {
   apply(db, [
     { eid: c, name: 'client', comp: { user_agent: 'x' } },
     { eid: canvas, name: 'canvas', comp: {} },
-    { eid: canvas, name: 'shelf', comp: { client_eid: c } },
+    { eid: canvas, name: 'shelf', comp: { client: c } },
   ])
-  assertEquals(comp(canvas, 'shelf')?.client_eid, c)
+  assertEquals(comp(canvas, 'shelf')?.client, c)
   assertEquals(comp(canvas, 'canvas') != null, true) // still a canvas, not a kind
 })
 
@@ -598,14 +598,14 @@ Deno.test('legacy session launch fields dual-materialize', () => {
       provider: 'fake',
       model: 'fake-fast',
       effort: 'low',
-      persona_eid: persona,
+      persona: persona,
     },
   }])
   let spec = {
     provider: 'fake',
     model: 'fake-fast',
     effort: 'low',
-    persona_eid: persona,
+    persona: persona,
   }
   assertEquals(
     Object.fromEntries(
@@ -637,7 +637,7 @@ Deno.test('canonical session launch fields dual-materialize', () => {
       name: 'session',
       comp: {
         id: uid(),
-        requested_task_eid: task,
+        requested_task: task,
         provider: 'claude',
         model: 'claude-sonnet-4-5',
         effort: 'low',
@@ -650,7 +650,7 @@ Deno.test('canonical session launch fields dual-materialize', () => {
   assertEquals(compOf(d, s, 'session')?.provider, 'fake')
   assertEquals(compOf(d, s, 'session')?.model, 'fake-fast')
   assertEquals(compOf(d, s, 'session')?.effort, 'high')
-  assertEquals(compOf(d, s, 'session')?.requested_task_eid, task)
+  assertEquals(compOf(d, s, 'session')?.requested_task, task)
   assertEquals(
     out.filter((c) => c.eid == s && c.name == 'session').length,
     1,
@@ -671,7 +671,7 @@ Deno.test('spawn refuses an undecided proposal and allows an atomic decision', (
       apply(d, [{
         eid: refused,
         name: 'session',
-        comp: { id: uid(), requested_task_eid: task },
+        comp: { id: uid(), requested_task: task },
       }]),
     Error,
     `${id} is proposed but not decided — accept it with ` +
@@ -685,10 +685,10 @@ Deno.test('spawn refuses an undecided proposal and allows an atomic decision', (
     {
       eid: accepted,
       name: 'session',
-      comp: { id: uid(), requested_task_eid: task },
+      comp: { id: uid(), requested_task: task },
     },
   ])
-  assertEquals(compOf(d, accepted, 'session')?.requested_task_eid, task)
+  assertEquals(compOf(d, accepted, 'session')?.requested_task, task)
 })
 
 Deno.test('a task spawn hint never becomes a session', () => {
@@ -764,17 +764,17 @@ Deno.test('canonical mirrors roll back with a refused batch', () => {
         {
           eid: bad,
           name: 'task',
-          comp: { status: 'open', project_eid: ghost },
+          comp: { status: 'open', project: ghost },
         },
       ]),
     Error,
-    'project_eid',
+    'project',
   )
   assertEquals(compOf(d, s, 'spawn')?.model, 'fake-fast')
   assertEquals(compOf(d, s, 'session')?.model, 'fake-fast')
   assertEquals(compOf(d, s, 'session')?.cwd, null)
-  assertEquals(compOf(d, s, 'spawn')?.persona_eid, null)
-  assertEquals(compOf(d, s, 'session')?.persona_eid, null)
+  assertEquals(compOf(d, s, 'spawn')?.persona, null)
+  assertEquals(compOf(d, s, 'session')?.persona, null)
   assertEquals(compOf(d, bad, 'entity'), undefined)
 })
 
@@ -805,26 +805,26 @@ Deno.test('claim is a lease: conflict throws + audits, same session refreshes', 
     { eid: task, name: 'doc', comp: { title: 'contested' } },
     { eid: a, name: 'session', comp: { id: 'sess-a' } },
     { eid: b, name: 'session', comp: { id: 'sess-b' } },
-    { eid: task, name: 'claim', comp: { session_eid: a } },
+    { eid: task, name: 'claim', comp: { session: a } },
   ])
   assertThrows(
-    () => apply(db, [{ eid: task, name: 'claim', comp: { session_eid: b } }]),
+    () => apply(db, [{ eid: task, name: 'claim', comp: { session: b } }]),
     Error,
     'already claimed by sess-a',
   )
   // the bounce left an audit row naming both sides
   let audit = snapshot(db).changes.filter((c) =>
-    c.name == 'conflict' && c.comp?.target_eid == task
+    c.name == 'conflict' && c.comp?.target == task
   )
   assertEquals(audit.length, 1)
   assertEquals(audit[0].comp?.loser, 'sess-b')
   assertEquals(audit[0].comp?.holder, 'sess-a')
   // same session again: no-op, no throw, no extra audit
-  apply(db, [{ eid: task, name: 'claim', comp: { session_eid: a } }])
+  apply(db, [{ eid: task, name: 'claim', comp: { session: a } }])
   // release, then the other side may take it
   apply(db, [{ eid: task, name: 'claim', comp: null }])
-  apply(db, [{ eid: task, name: 'claim', comp: { session_eid: b } }])
-  assertEquals(comp(task, 'claim')?.session_eid, b)
+  apply(db, [{ eid: task, name: 'claim', comp: { session: b } }])
+  assertEquals(comp(task, 'claim')?.session, b)
 })
 
 Deno.test('a failing claim voids its whole batch', () => {
@@ -832,12 +832,12 @@ Deno.test('a failing claim voids its whole batch', () => {
   apply(db, [
     { eid: task, name: 'doc', comp: { title: 'atomic' } },
     { eid: a, name: 'session', comp: { id: 'sess-atomic' } },
-    { eid: task, name: 'claim', comp: { session_eid: a } },
+    { eid: task, name: 'claim', comp: { session: a } },
   ])
   assertThrows(() =>
     apply(db, [
       { eid: c, name: 'doc', comp: { title: 'rides along' } },
-      { eid: task, name: 'claim', comp: { session_eid: uid() } },
+      { eid: task, name: 'claim', comp: { session: uid() } },
     ])
   )
   assertEquals(comp(c, 'doc'), undefined) // rolled back with the claim
@@ -849,10 +849,10 @@ Deno.test('an FK refusal fails the whole batch loudly, naming the column', () =>
     () =>
       apply(db, [
         { eid: rider, name: 'doc', comp: { title: 'rides along' } },
-        { eid: s, name: 'session', comp: { id: 'sess-fk', actor_eid: ghost } },
+        { eid: s, name: 'session', comp: { id: 'sess-fk', actor: ghost } },
       ]),
     Error,
-    'actor_eid',
+    'actor',
   )
   assertMatch(err.message, /no such entity/)
   assertEquals(comp(s, 'session'), undefined) // the row never landed
@@ -860,7 +860,7 @@ Deno.test('an FK refusal fails the whole batch loudly, naming the column', () =>
   assertEquals(comp(rider, 'doc'), undefined) // the whole batch rolled back
 })
 
-Deno.test('task project_eid requires a project and fails atomically', () => {
+Deno.test('task project requires a project and fails atomically', () => {
   let bare = uid(), task = uid(), rider = uid()
   apply(db, [{ eid: bare, name: 'doc', comp: { title: 'not a project' } }])
   let err = assertThrows(
@@ -870,7 +870,7 @@ Deno.test('task project_eid requires a project and fails atomically', () => {
         {
           eid: task,
           name: 'task',
-          comp: { status: 'open', project_eid: bare },
+          comp: { status: 'open', project: bare },
         },
       ]),
     Error,
@@ -882,7 +882,7 @@ Deno.test('task project_eid requires a project and fails atomically', () => {
   assertMatch(err.message, /^task T-\d+ refused: /)
   assertMatch(
     err.message,
-    new RegExp(`project_eid → D-${comp(bare, 'entity')?.num} \\(no such`),
+    new RegExp(`project → D-${comp(bare, 'entity')?.num} \\(no such`),
   )
   assertEquals(comp(task, 'entity'), undefined)
   assertEquals(comp(rider, 'doc'), undefined)
@@ -893,16 +893,16 @@ Deno.test('task project_eid requires a project and fails atomically', () => {
     {
       eid: existing,
       name: 'task',
-      comp: { status: 'open', project_eid: project },
+      comp: { status: 'open', project: project },
     },
   ])
   assertThrows(() =>
     apply(db, [
       { eid: patchRider, name: 'doc', comp: { title: 'also rides' } },
-      { eid: existing, name: 'task', comp: { project_eid: bare } },
+      { eid: existing, name: 'task', comp: { project: bare } },
     ])
   )
-  assertEquals(comp(existing, 'task')?.project_eid, project)
+  assertEquals(comp(existing, 'task')?.project, project)
   assertEquals(comp(patchRider, 'doc'), undefined)
 
   let ghost = uid()
@@ -911,10 +911,10 @@ Deno.test('task project_eid requires a project and fails atomically', () => {
       apply(db, [{
         eid: uid(),
         name: 'task',
-        comp: { status: 'open', project_eid: ghost },
+        comp: { status: 'open', project: ghost },
       }]),
     Error,
-    'project_eid',
+    'project',
   )
 })
 
@@ -930,26 +930,26 @@ Deno.test('a later project does not reorder unrelated births', () => {
   )
 })
 
-Deno.test('task project_eid accepts projects created anywhere in its batch', () => {
+Deno.test('task project accepts projects created anywhere in its batch', () => {
   let before = uid(), after = uid(), a = uid(), b = uid()
   apply(db, [
     { eid: before, name: 'project', comp: {} },
     {
       eid: a,
       name: 'task',
-      comp: { status: 'open', project_eid: before },
+      comp: { status: 'open', project: before },
     },
   ])
   apply(db, [
     {
       eid: b,
       name: 'task',
-      comp: { status: 'open', project_eid: after },
+      comp: { status: 'open', project: after },
     },
     { eid: after, name: 'project', comp: {} },
   ])
-  assertEquals(comp(a, 'task')?.project_eid, before)
-  assertEquals(comp(b, 'task')?.project_eid, after)
+  assertEquals(comp(a, 'task')?.project, before)
+  assertEquals(comp(b, 'task')?.project, after)
 })
 
 Deno.test('typed eid contracts are the complete vocabulary set', () => {
@@ -1004,7 +1004,7 @@ Deno.test('typed refs may precede their targets without reordering births', () =
     {
       eid: memory,
       name: 'memory',
-      comp: { scope_eid: project },
+      comp: { scope: project },
     },
     { eid: middle, name: 'doc', comp: { title: 'middle' } },
     { eid: project, name: 'project', comp: {} },
@@ -1026,7 +1026,7 @@ Deno.test('a target component cannot leave typed references dangling', () => {
   apply(local, [{
     eid: task,
     name: 'task',
-    comp: { status: 'open', project_eid: project },
+    comp: { status: 'open', project: project },
   }])
   assertThrows(
     () =>
@@ -1035,7 +1035,7 @@ Deno.test('a target component cannot leave typed references dangling', () => {
         { eid: project, name: 'project', comp: null },
       ]),
     Error,
-    'project_eid',
+    'project',
   )
   let changes = snapshot(local).changes
   assertEquals(
@@ -1070,10 +1070,10 @@ Deno.test('a comment aimed at a ghost refuses the same way', () => {
     () =>
       apply(db, [
         { eid: c, name: 'doc', comp: { title: '', body: 'into the void' } },
-        { eid: c, name: 'comment', comp: { target_eid: uid() } },
+        { eid: c, name: 'comment', comp: { target: uid() } },
       ]),
     Error,
-    'target_eid',
+    'target',
   )
   assertEquals(comp(c, 'doc'), undefined)
 })
@@ -1082,9 +1082,9 @@ Deno.test('one batch creates referent then referrer: both land', () => {
   let who = uid(), s = uid()
   apply(db, [
     { eid: who, name: 'doc', comp: { title: 'an actor' } },
-    { eid: s, name: 'session', comp: { id: 'sess-pair', actor_eid: who } },
+    { eid: s, name: 'session', comp: { id: 'sess-pair', actor: who } },
   ])
-  assertEquals(comp(s, 'session')?.actor_eid, who)
+  assertEquals(comp(s, 'session')?.actor, who)
 })
 
 Deno.test('a tombstoned referent refuses and says so', () => {
@@ -1094,7 +1094,7 @@ Deno.test('a tombstoned referent refuses and says so', () => {
   assertThrows(
     () =>
       apply(db, [
-        { eid: s, name: 'session', comp: { id: 'sess-grave', actor_eid: t } },
+        { eid: s, name: 'session', comp: { id: 'sess-grave', actor: t } },
       ]),
     Error,
     'tombstoned',
@@ -1105,11 +1105,11 @@ Deno.test('an FK refusal on the patch path bounces too', () => {
   let s = uid()
   apply(db, [{ eid: s, name: 'session', comp: { id: 'sess-patch' } }])
   assertThrows(
-    () => apply(db, [{ eid: s, name: 'session', comp: { actor_eid: uid() } }]),
+    () => apply(db, [{ eid: s, name: 'session', comp: { actor: uid() } }]),
     Error,
-    'actor_eid',
+    'actor',
   )
-  assertEquals(comp(s, 'session')?.actor_eid, null) // untouched
+  assertEquals(comp(s, 'session')?.actor, null) // untouched
 })
 
 Deno.test('spine mints once, num is monotonic', () => {
@@ -1203,7 +1203,7 @@ Deno.test('provenance: via resolves session ids and eids, never direct actors', 
     {
       eid: session,
       name: 'session',
-      comp: { id: sid, actor_eid: actor },
+      comp: { id: sid, actor: actor },
     },
   ])
   let stamp = (eid: string) =>
@@ -1233,7 +1233,7 @@ Deno.test('lifecycle stamps: bare presence server-stamps provenance; the wire ca
   let jeff = uid(), client = uid()
   apply(d, [
     { eid: jeff, name: 'person', comp: {} },
-    { eid: client, name: 'client', comp: { actor_eid: jeff } },
+    { eid: client, name: 'client', comp: { actor: jeff } },
   ])
   let t = uid()
   apply(d, [{ eid: t, name: 'doc', comp: { title: 'a letter' } }])
@@ -1330,7 +1330,7 @@ Deno.test('decided: the wire dates and signs it, the server names the instrument
   apply(d, [
     { eid: jeff, name: 'person', comp: {} },
     { eid: amy, name: 'person', comp: {} },
-    { eid: client, name: 'client', comp: { actor_eid: jeff } },
+    { eid: client, name: 'client', comp: { actor: jeff } },
   ])
   // A TASK wears it: the stamp is a facet, not a memory column.
   let t = uid()
@@ -1395,7 +1395,7 @@ Deno.test('proposed: any entity wears the authored, server-signed stamp', () => 
   let proposer = uid(), client = uid(), subject = uid()
   apply(d, [
     { eid: proposer, name: 'person', comp: {} },
-    { eid: client, name: 'client', comp: { actor_eid: proposer } },
+    { eid: client, name: 'client', comp: { actor: proposer } },
     { eid: subject, name: 'doc', comp: { title: 'an idea' } },
   ])
   let out = apply(
@@ -1419,7 +1419,7 @@ Deno.test('proposed: any entity wears the authored, server-signed stamp', () => 
 })
 
 // memory.type → the `feedback` tag (T-12585). Only `feedback` becomes a row:
-// `project` said what scope_eid says, `reference` was the absence of anything
+// `project` said what scope says, `reference` was the absence of anything
 // else, and `user` was worn by nothing. The source is NOT inferred —
 // created.by names the recorder, and 81 of the live graph's 87 feedback rows
 // were recorded by a venture rather than a person.
@@ -1598,7 +1598,7 @@ Deno.test('backfill: comment instruments move into created.via', () => {
     { eid: target, name: 'doc', comp: { title: 'target' } },
     { eid: author, name: 'session', comp: { id: uid() } },
     { eid: comment, name: 'doc', comp: { title: '', body: 'old words' } },
-    { eid: comment, name: 'comment', comp: { target_eid: target } },
+    { eid: comment, name: 'comment', comp: { target: target } },
   ])
   // a pre-migration graph: the retired column, still naming the author
   d.exec('alter table comment add column author_eid text')
@@ -1607,7 +1607,7 @@ Deno.test('backfill: comment instruments move into created.via', () => {
   assertEquals(
     snapshot(d).changes.find((c) => c.eid == comment && c.name == 'comment')
       ?.comp,
-    { eid: comment, target_eid: target },
+    { eid: comment, target: target },
   ) // dormant migration input never rides graph-out
   d.prepare('update created set via = null where eid = ?').run(comment)
   backfillVia(d)
@@ -1639,7 +1639,7 @@ Deno.test('backfill: memory instruments move into created.via', () => {
   assertEquals(
     snapshot(d).changes.find((c) => c.eid == memory && c.name == 'memory')
       ?.comp,
-    { eid: memory, scope_eid: null, last_confirmed_at: null },
+    { eid: memory, scope: null, last_confirmed_at: null },
   )
   backfillVia(d)
   let via = snapshot(d).changes.find((c) =>
@@ -1673,9 +1673,9 @@ Deno.test('fts: search finds, follows edits, forgets the dead', () => {
   // a comment hit opens its TARGET, not itself
   apply(db, [
     { eid: c, name: 'doc', comp: { title: '', body: 'the quincunx angle' } },
-    { eid: c, name: 'comment', comp: { target_eid: t } },
+    { eid: c, name: 'comment', comp: { target: t } },
   ])
-  assertEquals(search(db, 'quincunx')[0]?.open_eid, t)
+  assertEquals(search(db, 'quincunx')[0]?.open, t)
   // …and wears the target's title — the aside has none of its own
   assertEquals(search(db, 'quincunx')[0]?.title, 'Glockenspiel repair')
   apply(db, [{ eid: t, name: 'entity', comp: null }])
@@ -1690,12 +1690,12 @@ Deno.test('entity delete cascades to aimed entities, detaches soft refs', () => 
     { eid: p, name: 'doc', comp: { title: 'proj' } },
     { eid: p, name: 'project', comp: {} },
     { eid: t, name: 'doc', comp: { title: 'doomed' } },
-    { eid: t, name: 'task', comp: { status: 'open', project_eid: p } },
+    { eid: t, name: 'task', comp: { status: 'open', project: p } },
     { eid: t2, name: 'doc', comp: { title: 'survivor' } },
-    { eid: t2, name: 'task', comp: { status: 'open', project_eid: p } },
-    { eid: card, name: 'card', comp: { target_eid: t, view: 'Task' } },
+    { eid: t2, name: 'task', comp: { status: 'open', project: p } },
+    { eid: card, name: 'card', comp: { target: t, view: 'Task' } },
     { eid: note, name: 'doc', comp: { title: '', body: 'aimed at doomed' } },
-    { eid: note, name: 'comment', comp: { target_eid: t } },
+    { eid: note, name: 'comment', comp: { target: t } },
   ])
   let out = apply(db, [{ eid: t, name: 'entity', comp: null }])
   // the cascade rides the returned batch, so every cache hears about it
@@ -1708,11 +1708,11 @@ Deno.test('entity delete cascades to aimed entities, detaches soft refs', () => 
   }
   // deleting the project detaches its surviving tasks, kills nothing
   apply(db, [{ eid: p, name: 'entity', comp: null }])
-  assertEquals(comp(t2, 'task')?.project_eid, null)
+  assertEquals(comp(t2, 'task')?.project, null)
   assertEquals(comp(t2, 'doc')?.title, 'survivor')
 })
 
-// mail.target_eid is death-'keep' (a sent mail is history — its subject's
+// mail.target is death-'keep' (a sent mail is history — its subject's
 // death doesn't unsend it), so deleting the subject must succeed and the
 // mail row must keep pointing at the grave.
 Deno.test('mail survives its subject: death keeps the reference', () => {
@@ -1720,51 +1720,51 @@ Deno.test('mail survives its subject: death keeps the reference', () => {
   apply(db, [
     { eid: t, name: 'doc', comp: { title: 'subject' } },
     { eid: m, name: 'doc', comp: { title: 'sent word' } },
-    { eid: m, name: 'mail', comp: { target_eid: t } },
+    { eid: m, name: 'mail', comp: { target: t } },
     { eid: m, name: 'deliver', comp: { to: 'jeff@x.test' } },
   ])
   apply(db, [{ eid: t, name: 'entity', comp: null }])
   assertEquals(comp(t, 'doc'), undefined) // the subject is gone
-  assertEquals(comp(m, 'mail')?.target_eid, t) // history stands
+  assertEquals(comp(m, 'mail')?.target, t) // history stands
 })
 
 // The FK-era mail table vetoed that delete (T-4593); open() heals a live
 // db through mendMail — rebuild once, then never again.
 Deno.test('mendMail: rebuilds the FK-era table, no-ops when healed', () => {
   let d = fresh()
-  // regress mail to the shape live dbs shipped with (FK on target_eid)
+  // regress mail to the shape live dbs shipped with (FK on target)
   d.exec('drop table mail')
   // The FK-era shape, already trimmed of acted_at/error/to the way open()'s
   // migrateDelivery + migrateDeliver leave it before mendMail runs (D-14945);
-  // the FK on target_eid is the bug this rebuild heals.
+  // the FK on target is the bug this rebuild heals.
   d.exec(`create table mail (
     eid        text primary key references entity(eid),
     "from"     text,
-    target_eid text references entity(eid),
+    target text references entity(eid),
     to_addr    text,
     message_id text, received_at text, verified integer)`)
   // open() appends the post-FK-era columns (addCol) BEFORE mendMail runs,
   // so the stale table always matches the rebuild ddl's shipping order.
-  d.exec('alter table mail add column reply_to_eid text')
+  d.exec('alter table mail add column reply_to text')
   d.exec('alter table mail add column sent_id text')
   d.exec('alter table mail add column in_reply_to text')
   let t = uid(), m = uid()
   apply(d, [
     { eid: t, name: 'doc', comp: { title: 'subject' } },
-    { eid: m, name: 'mail', comp: { target_eid: t } },
+    { eid: m, name: 'mail', comp: { target: t } },
     { eid: m, name: 'deliver', comp: { to: 'jeff@x.test' } },
   ])
   assertThrows(() => apply(d, [{ eid: t, name: 'entity', comp: null }])) // the bug
   mendMail(d)
   apply(d, [{ eid: t, name: 'entity', comp: null }]) // healed
-  let row = () => d.prepare('select target_eid from mail where eid = ?').get(m)
-  assertEquals(row(), { target_eid: t }) // rows copied whole, ref kept
+  let row = () => d.prepare('select target from mail where eid = ?').get(m)
+  assertEquals(row(), { target: t }) // rows copied whole, ref kept
   let ddl = () =>
     d.prepare(`select sql from sqlite_master where name = 'mail'`).get()
   let healed = ddl()
   mendMail(d) // already-fixed db: a no-op
   assertEquals(ddl(), healed)
-  assertEquals(row(), { target_eid: t })
+  assertEquals(row(), { target: t })
 })
 
 // The same frozen-check disease on tool_call: a live db's source list
@@ -1802,15 +1802,15 @@ Deno.test('death broadcasts its soft-detaches: no ghost claims', async () => {
   apply(db, [
     { eid: s, name: 'session', comp: { id: 'sess-ghost' } },
     { eid: t, name: 'doc', comp: { title: 'leased' } },
-    { eid: t, name: 'claim', comp: { session_eid: s } },
+    { eid: t, name: 'claim', comp: { session: s } },
     { eid: p, name: 'doc', comp: { title: 'home' } },
     { eid: p, name: 'project', comp: {} },
     { eid: t2, name: 'doc', comp: { title: 'homed' } },
-    { eid: t2, name: 'task', comp: { status: 'open', project_eid: p } },
+    { eid: t2, name: 'task', comp: { status: 'open', project: p } },
     { eid: who, name: 'doc', comp: { title: 'holder' } },
     { eid: who, name: 'person', comp: {} },
     { eid: t3, name: 'doc', comp: { title: 'plated' } },
-    { eid: t3, name: 'task', comp: { status: 'open', assignee_eid: who } },
+    { eid: t3, name: 'task', comp: { status: 'open', assignee: who } },
   ])
   // dead session: the freed lease rides the return AND the Trace
   let tr = trace()
@@ -1824,7 +1824,7 @@ Deno.test('death broadcasts its soft-detaches: no ghost claims', async () => {
   out = apply(db, [{ eid: p, name: 'entity', comp: null }])
   assertEquals(
     out.some((c) =>
-      c.eid == t2 && c.name == 'task' && c.comp?.project_eid === null
+      c.eid == t2 && c.name == 'task' && c.comp?.project === null
     ),
     true,
   )
@@ -1832,7 +1832,7 @@ Deno.test('death broadcasts its soft-detaches: no ghost claims', async () => {
   out = apply(db, [{ eid: who, name: 'entity', comp: null }])
   assertEquals(
     out.some((c) =>
-      c.eid == t3 && c.name == 'task' && c.comp?.assignee_eid === null
+      c.eid == t3 && c.name == 'task' && c.comp?.assignee === null
     ),
     true,
   )
@@ -1844,12 +1844,12 @@ Deno.test('assignee: whose plate round-trips, a dead assignee detaches', () => {
     { eid: who, name: 'doc', comp: { title: 'Jeff' } },
     { eid: who, name: 'person', comp: {} },
     { eid: t, name: 'doc', comp: { title: 'chore' } },
-    { eid: t, name: 'task', comp: { status: 'open', assignee_eid: who } },
+    { eid: t, name: 'task', comp: { status: 'open', assignee: who } },
   ])
-  assertEquals(comp(t, 'task')?.assignee_eid, who)
+  assertEquals(comp(t, 'task')?.assignee, who)
   // the person dies; the task stays, unassigned — soft ref, never cascade
   apply(db, [{ eid: who, name: 'entity', comp: null }])
-  assertEquals(comp(t, 'task')?.assignee_eid, null)
+  assertEquals(comp(t, 'task')?.assignee, null)
   assertEquals(comp(t, 'doc')?.title, 'chore')
 })
 
@@ -1858,27 +1858,25 @@ Deno.test('actor: instruments say who they act for; a dead actor detaches both',
   apply(db, [
     { eid: jeff, name: 'doc', comp: { title: 'Jeff' } },
     { eid: jeff, name: 'person', comp: {} },
-    { eid: c, name: 'client', comp: { user_agent: 'probe', actor_eid: jeff } },
-    { eid: s, name: 'session', comp: { id: 'sess-for', actor_eid: jeff } },
+    { eid: c, name: 'client', comp: { user_agent: 'probe', actor: jeff } },
+    { eid: s, name: 'session', comp: { id: 'sess-for', actor: jeff } },
   ])
-  assertEquals(comp(c, 'client')?.actor_eid, jeff)
-  assertEquals(comp(s, 'session')?.actor_eid, jeff)
+  assertEquals(comp(c, 'client')?.actor, jeff)
+  assertEquals(comp(s, 'session')?.actor, jeff)
   // the actor dies; instruments survive unattributed, and the wire hears it
   let out = apply(db, [{ eid: jeff, name: 'entity', comp: null }])
   assertEquals(
-    out.some((x) =>
-      x.eid == c && x.name == 'client' && x.comp?.actor_eid === null
-    ),
+    out.some((x) => x.eid == c && x.name == 'client' && x.comp?.actor === null),
     true,
   )
   assertEquals(
     out.some((x) =>
-      x.eid == s && x.name == 'session' && x.comp?.actor_eid === null
+      x.eid == s && x.name == 'session' && x.comp?.actor === null
     ),
     true,
   )
-  assertEquals(comp(c, 'client')?.actor_eid, null)
-  assertEquals(comp(s, 'session')?.actor_eid, null)
+  assertEquals(comp(c, 'client')?.actor, null)
+  assertEquals(comp(s, 'session')?.actor, null)
 })
 
 // The death words made real by derivation (types.ts deaths → db.ts):
@@ -1893,21 +1891,21 @@ Deno.test('detach: a dead task or persona lets its sessions go', () => {
     {
       eid: s,
       name: 'session',
-      comp: { id: `dw-${s}`, requested_task_eid: task, persona_eid: muse },
+      comp: { id: `dw-${s}`, requested_task: task, persona: muse },
     },
   ])
   let out = apply(db, [{ eid: task, name: 'entity', comp: null }])
-  assertEquals(comp(s, 'session')?.requested_task_eid, null)
+  assertEquals(comp(s, 'session')?.requested_task, null)
   // and the wire hears the release — no ghost provenance in any cache
   assertEquals(
     out.some((x) =>
-      x.eid == s && x.name == 'session' && x.comp?.requested_task_eid === null
+      x.eid == s && x.name == 'session' && x.comp?.requested_task === null
     ),
     true,
   )
   apply(db, [{ eid: muse, name: 'entity', comp: null }])
-  assertEquals(comp(s, 'session')?.persona_eid, null)
-  assertEquals(comp(s, 'spawn')?.persona_eid, null)
+  assertEquals(comp(s, 'session')?.persona, null)
+  assertEquals(comp(s, 'spawn')?.persona, null)
 })
 
 Deno.test('keep: a session remembers the role it served after deletion', () => {
@@ -1921,11 +1919,11 @@ Deno.test('keep: a session remembers the role it served after deletion', () => {
     {
       eid: s,
       name: 'session',
-      comp: { id: `role-history-${s}`, role_eid: role },
+      comp: { id: `role-history-${s}`, role: role },
     },
   ])
   apply(db, [{ eid: role, name: 'entity', comp: null }])
-  assertEquals(comp(s, 'session')?.role_eid, role)
+  assertEquals(comp(s, 'session')?.role, role)
 })
 
 Deno.test('release: a dead client sheds its shelf, the canvas survives', () => {
@@ -1933,7 +1931,7 @@ Deno.test('release: a dead client sheds its shelf, the canvas survives', () => {
   apply(db, [
     { eid: c, name: 'client', comp: { user_agent: 'probe' } },
     { eid: canvas, name: 'canvas', comp: {} },
-    { eid: canvas, name: 'shelf', comp: { client_eid: c } },
+    { eid: canvas, name: 'shelf', comp: { client: c } },
   ])
   let out = apply(db, [{ eid: c, name: 'entity', comp: null }])
   assertEquals(comp(canvas, 'shelf'), undefined) // the binding was the client's
@@ -1954,7 +1952,7 @@ Deno.test('keep: a dead instrument leaves the provenance standing', () => {
     db,
     [
       { eid: c, name: 'doc', comp: { title: '', body: 'said once' } },
-      { eid: c, name: 'comment', comp: { target_eid: target } },
+      { eid: c, name: 'comment', comp: { target: target } },
     ],
     undefined,
     who,
@@ -1988,8 +1986,8 @@ Deno.test('edges: link once, unlink by the same sentence', () => {
   apply(db, [
     { eid: p, name: 'doc', comp: { title: 'epic' } },
     { eid: c, name: 'doc', comp: { title: 'step' } },
-    { eid: p, name: 'dependency', comp: { type: 'contains', child_eid: c } },
-    { eid: p, name: 'dependency', comp: { type: 'contains', child_eid: c } },
+    { eid: p, name: 'dependency', comp: { type: 'contains', child: c } },
+    { eid: p, name: 'dependency', comp: { type: 'contains', child: c } },
   ])
   let edges = () =>
     snapshot(db).deps.filter((d) => d.parent == p && d.child == c)
@@ -1997,7 +1995,7 @@ Deno.test('edges: link once, unlink by the same sentence', () => {
   apply(db, [{
     eid: p,
     name: 'dependency',
-    comp: { type: 'contains', child_eid: c, gone: true },
+    comp: { type: 'contains', child: c, gone: true },
   }])
   assertEquals(edges(), [])
 })
@@ -2012,7 +2010,7 @@ Deno.test('edges: every vocabulary verb round-trips', async () => {
     apply(db, [
       { eid: p, name: 'doc', comp: { title: `parent ${type}` } },
       { eid: c, name: 'doc', comp: { title: `child ${type}` } },
-      { eid: p, name: 'dependency', comp: { type, child_eid: c } },
+      { eid: p, name: 'dependency', comp: { type, child: c } },
     ])
     assertEquals(
       snapshot(db).deps.filter((d) => d.parent == p),
@@ -2030,7 +2028,7 @@ Deno.test('edges: a bad type rejects its batch; a missing endpoint drops', () =>
   assertThrows(
     () =>
       apply(db, [
-        { eid: p, name: 'dependency', comp: { type: 'blocks', child_eid: c } },
+        { eid: p, name: 'dependency', comp: { type: 'blocks', child: c } },
         { eid: p, name: 'doc', comp: { body: 'rolled back' } },
       ]),
     Error,
@@ -2038,7 +2036,7 @@ Deno.test('edges: a bad type rejects its batch; a missing endpoint drops', () =>
   )
   assertEquals(comp(p, 'doc')?.body, '')
   apply(db, [
-    { eid: p, name: 'dependency', comp: { type: 'reads', child_eid: uid() } },
+    { eid: p, name: 'dependency', comp: { type: 'reads', child: uid() } },
     { eid: p, name: 'doc', comp: { body: 'survives' } }, // batch lives on
   ])
   assertEquals(snapshot(db).deps.some((d) => d.parent == p), false)
@@ -2050,18 +2048,156 @@ Deno.test('edges: a dead endpoint voids the link; delete prunes edges', () => {
   apply(db, [
     { eid: p, name: 'doc', comp: { title: 'parent' } },
     { eid: c, name: 'doc', comp: { title: 'child' } },
-    { eid: p, name: 'dependency', comp: { type: 'requires', child_eid: c } },
+    { eid: p, name: 'dependency', comp: { type: 'requires', child: c } },
   ])
   apply(db, [{ eid: c, name: 'entity', comp: null }])
   assertEquals(snapshot(db).deps.some((d) => d.parent == p), false) // pruned
   apply(db, [
-    { eid: p, name: 'dependency', comp: { type: 'requires', child_eid: c } },
+    { eid: p, name: 'dependency', comp: { type: 'requires', child: c } },
   ])
   assertEquals(snapshot(db).deps.some((d) => d.parent == p), false) // voided
 })
 
 Deno.test('open() is idempotent and additive on live files', () => {
   assertMatch(String(fresh().prepare('select 1 as ok').get()?.ok), /1/)
+})
+
+Deno.test('open renames every reference key, its filters, and its history', () => {
+  let root = Deno.makeTempDirSync({ prefix: 'tasks-refs-' })
+  let path = `${root}/tasks.db`
+  let legacy = open(path)
+  let project = uid(), task = uid(), first = uid(), reply = uid()
+  let sub = uid(), board = uid()
+  apply(legacy, [
+    { eid: project, name: 'doc', comp: { title: 'project' } },
+    { eid: project, name: 'project', comp: {} },
+    { eid: task, name: 'task', comp: { status: 'open', project } },
+    { eid: first, name: 'mail', comp: { target: task } },
+    { eid: reply, name: 'mail', comp: { target: task, reply_to: first } },
+    {
+      eid: sub,
+      name: 'subscription',
+      comp: { actor: project, target: task, mode: 'watch' },
+    },
+    { eid: board, name: 'board', comp: { query: '.status=open' } },
+    {
+      eid: project,
+      name: 'dependency',
+      comp: { type: 'about', child: task },
+    },
+  ])
+  legacy.prepare('update board set query = ? where eid = ?').run(
+    `.project_eid=${project}&.task.assignee_eid=` +
+      `&.title~="literal .project_eid=value"`,
+    board,
+  )
+  legacy.prepare('insert into journal (actor, batch) values (?, ?)').run(
+    project,
+    JSON.stringify([{
+      eid: reply,
+      name: 'mail',
+      comp: { target_eid: task, reply_to_eid: first },
+    }]),
+  )
+  let renames = [
+    ['task', 'project', 'project_eid'],
+    ['task', 'assignee', 'assignee_eid'],
+    ['role', 'scope', 'scope_eid'],
+    ['layout', 'root', 'root_eid'],
+    ['pane', 'layout', 'layout_eid'],
+    ['pane', 'parent', 'parent_eid'],
+    ['pane', 'content', 'content_eid'],
+    ['card', 'target', 'target_eid'],
+    ['pin', 'canvas', 'canvas_eid'],
+    ['client', 'actor', 'actor_eid'],
+    ['camera', 'client', 'client_eid'],
+    ['camera', 'canvas', 'canvas_eid'],
+    ['fold', 'client', 'client_eid'],
+    ['fold', 'board', 'board_eid'],
+    ['shelf', 'client', 'client_eid'],
+    ['session', 'requested_task', 'requested_task_eid'],
+    ['session', 'role', 'role_eid'],
+    ['session', 'persona', 'persona_eid'],
+    ['session', 'actor', 'actor_eid'],
+    ['session', 'parent', 'parent_eid'],
+    ['spawn', 'persona', 'persona_eid'],
+    ['claim', 'session', 'session_eid'],
+    ['subscription', 'actor', 'actor_eid'],
+    ['subscription', 'target', 'target_eid'],
+    ['stop_request', 'target', 'target_eid'],
+    ['knock', 'target', 'target_eid'],
+    ['wake', 'target', 'target_eid'],
+    ['mail', 'target', 'target_eid'],
+    ['mail', 'reply_to', 'reply_to_eid'],
+    ['conflict', 'target', 'target_eid'],
+    ['comment', 'target', 'target_eid'],
+    ['persona', 'home', 'home_eid'],
+    ['memory', 'scope', 'scope_eid'],
+    ['dependency', 'parent', 'parent_eid'],
+    ['dependency', 'child', 'child_eid'],
+  ]
+  for (let [table, col, old] of renames) {
+    legacy.exec(`alter table ${table} rename column ${col} to ${old}`)
+  }
+  legacy.close()
+
+  let healed = open(path)
+  for (let [table, col, old] of renames) {
+    assertEquals(hasCol(healed, table, col), true, `${table}.${col}`)
+    assertEquals(hasCol(healed, table, old), false, `${table}.${old}`)
+  }
+  assertEquals(
+    healed.prepare('select project from task where eid = ?').get(task),
+    { project },
+  )
+  assertEquals(
+    healed.prepare('select target, reply_to from mail where eid = ?').get(
+      reply,
+    ),
+    { target: task, reply_to: first },
+  )
+  assertEquals(
+    healed.prepare('select query from board where eid = ?').get(board),
+    {
+      query: `.project=${project}&.task.assignee=` +
+        `&.title~="literal .project_eid=value"`,
+    },
+  )
+  assertEquals(
+    snapshot(healed).deps.some((d) =>
+      d.parent == project && d.child == task && d.type == 'about'
+    ),
+    true,
+  )
+  assertEquals(healed.prepare('pragma foreign_key_check').all(), [])
+  assertMatch(
+    String(
+      (healed.prepare(
+        `select sql from sqlite_master where name = 'subscription_one'`,
+      ).get() as { sql: string }).sql,
+    ),
+    /subscription \("actor", "target"\)/,
+  )
+  assertEquals(
+    journalOf(healed, reply)[0].changes[0].comp,
+    { target: task, reply_to: first },
+  )
+  assertThrows(() =>
+    apply(healed, [{
+      eid: uid(),
+      name: 'subscription',
+      comp: { actor: project, target: task, mode: 'watch' },
+    }])
+  )
+  healed.close()
+
+  let reopened = open(path)
+  assertEquals(
+    reopened.prepare('select project from task where eid = ?').get(task),
+    { project },
+  )
+  reopened.close()
+  Deno.removeSync(root, { recursive: true })
 })
 
 Deno.test('open refuses the live graph under a test, before touching disk', () => {
@@ -2164,7 +2300,7 @@ Deno.test('open heals canonical stored values once and preserves failures', () =
     {
       eid: task,
       name: 'task',
-      comp: { status: 'open', priority: 2, project_eid: project },
+      comp: { status: 'open', priority: 2, project: project },
     },
     { eid: bad, name: 'task', comp: { status: 'open' } },
     {
@@ -2182,8 +2318,8 @@ Deno.test('open heals canonical stored values once and preserves failures', () =
   let stable = legacy.prepare(
     `select quote(status) as status, typeof(status) as status_type,
             quote(priority) as priority, typeof(priority) as priority_type,
-            quote(project_eid) as project_eid,
-            typeof(project_eid) as project_eid_type
+            quote(project) as project,
+            typeof(project) as project_type
      from task where eid = ?`,
   ).get(task)
   legacy.close()
@@ -2209,8 +2345,8 @@ Deno.test('open heals canonical stored values once and preserves failures', () =
         `select quote(status) as status, typeof(status) as status_type,
                 quote(priority) as priority,
                 typeof(priority) as priority_type,
-                quote(project_eid) as project_eid,
-                typeof(project_eid) as project_eid_type
+                quote(project) as project,
+                typeof(project) as project_type
          from task where eid = ?`,
       ).get(task),
       stable,
@@ -2230,9 +2366,9 @@ Deno.test('open heals canonical stored values once and preserves failures', () =
     let second = open(path)
     assertEquals(
       second.prepare(
-        `select status, priority, project_eid from task where eid = ?`,
+        `select status, priority, project from task where eid = ?`,
       ).get(task),
-      { status: 'open', priority: 2, project_eid: project },
+      { status: 'open', priority: 2, project: project },
     )
     second.close()
     assertEquals(Deno.readFileSync(path), before)
@@ -2271,16 +2407,30 @@ Deno.test('search: terms and filters mix in one line', () => {
   assertEquals(eids('.status=done .created.at>=today').includes(b), false)
 })
 
-Deno.test('search: reference sugar + paths screen the hits', () => {
-  let u = uid(), t = uid(), t2 = uid()
+Deno.test('search: references and paths screen the hits', () => {
+  let u = uid(), other = uid(), t = uid(), t2 = uid(), instrument = uid()
   apply(db, [
     { eid: u, name: 'doc', comp: { title: 'Jeff Peterson' } },
     { eid: u, name: 'person', comp: {} },
     { eid: u, name: 'alias', comp: { slug: 'jeffp' } },
+    { eid: other, name: 'doc', comp: { title: 'Alice Jones' } },
+    { eid: other, name: 'person', comp: {} },
+    { eid: other, name: 'alias', comp: { slug: 'alicej' } },
     { eid: t, name: 'doc', comp: { title: 'Wurlitzer tuning' } },
-    { eid: t, name: 'task', comp: { status: 'open', assignee_eid: u } },
+    { eid: t, name: 'task', comp: { status: 'open', assignee: u } },
     { eid: t2, name: 'doc', comp: { title: 'Wurlitzer restringing' } },
     { eid: t2, name: 'task', comp: { status: 'open' } },
+    { eid: instrument, name: 'doc', comp: { title: 'Wurlitzer console' } },
+    {
+      eid: instrument,
+      name: 'client',
+      comp: { user_agent: 'test', actor: u },
+    },
+    {
+      eid: instrument,
+      name: 'session',
+      comp: { id: `search-${instrument}`, actor: other },
+    },
   ])
   let eids = (q: string) => search(db, q).map((h) => h.eid)
   // the value resolves server-side: alias slug or human num, like find()
@@ -2291,8 +2441,10 @@ Deno.test('search: reference sugar + paths screen the hits', () => {
   // a path pred walks the reference into the assignee's doc
   assertEquals(eids('wurlitzer .assignee.title~=peterson'), [t])
   assertEquals(eids('wurlitzer .assignee.title~=nobody'), [])
-  // filters alone still list — sugar included
+  // filters alone still list; a shared reference checks every owner
   assertEquals(eids('.assignee=jeffp'), [t])
+  assertEquals(eids('wurlitzer .actor=jeffp'), [instrument])
+  assertEquals(eids('wurlitzer .actor=alicej'), [instrument])
 })
 
 // ---- memory + recall: the decay model's storage half ----
@@ -2311,14 +2463,14 @@ Deno.test('memory: scope rides in, provenance and confirmation are stamped', () 
       {
         eid: m,
         name: 'memory',
-        comp: { scope_eid: p, last_confirmed_at: 'FAKE' },
+        comp: { scope: p, last_confirmed_at: 'FAKE' },
       },
     ],
     undefined,
     `sess-${s}`,
   )
   let row = comp(m, 'memory')
-  assertEquals(row?.scope_eid, p)
+  assertEquals(row?.scope, p)
   assertEquals(row?.last_confirmed_at, null) // server-owned
   // Retired to created.via (T-7113) and dropped: naming it is now a loud
   // refusal, not a silent drop — the vocabulary is the whole truth.
@@ -2383,7 +2535,7 @@ Deno.test('journal: one row per batch, resolved to the writing actor; a rollback
   apply(db, [
     { eid: who, name: 'doc', comp: { title: 'operator' } },
     { eid: who, name: 'project', comp: {} },
-    { eid: s, name: 'session', comp: { id: `jw-${s}`, actor_eid: who } },
+    { eid: s, name: 'session', comp: { id: `jw-${s}`, actor: who } },
   ])
   let before = journalCount()
   apply(
@@ -2403,11 +2555,11 @@ Deno.test('journal: one row per batch, resolved to the writing actor; a rollback
   apply(db, [
     { eid: s1, name: 'session', comp: { id: `s1-${s1}` } },
     { eid: s2, name: 'session', comp: { id: `s2-${s2}` } },
-    { eid: t, name: 'claim', comp: { session_eid: s1 } },
+    { eid: t, name: 'claim', comp: { session: s1 } },
   ])
   let held = journalCount()
   assertThrows(() =>
-    apply(db, [{ eid: t, name: 'claim', comp: { session_eid: s2 } }])
+    apply(db, [{ eid: t, name: 'claim', comp: { session: s2 } }])
   )
   assertEquals(journalCount(), held)
 })
@@ -2416,8 +2568,8 @@ Deno.test('journalBy: cuts the ledger by session, not its resolved actor', () =>
   let actor = uid(), one = uid(), two = uid(), first = uid(), second = uid()
   apply(db, [
     { eid: actor, name: 'person', comp: {} },
-    { eid: one, name: 'session', comp: { id: `one-${one}`, actor_eid: actor } },
-    { eid: two, name: 'session', comp: { id: `two-${two}`, actor_eid: actor } },
+    { eid: one, name: 'session', comp: { id: `one-${one}`, actor: actor } },
+    { eid: two, name: 'session', comp: { id: `two-${two}`, actor: actor } },
   ])
   apply(
     db,
@@ -2456,11 +2608,9 @@ Deno.test('actor fill: a session that ran in a repo resolves to its venture', ()
       comp: { id: `v-${s}`, cwd: '/srv/venture-abc/wt/a' },
     },
   ])
-  assertEquals(comp(s, 'session')?.actor_eid, proj) // stamped from cwd → repo
+  assertEquals(comp(s, 'session')?.actor, proj) // stamped from cwd → repo
   assertEquals(
-    out.some((x) =>
-      x.eid == s && x.name == 'session' && x.comp?.actor_eid == proj
-    ),
+    out.some((x) => x.eid == s && x.name == 'session' && x.comp?.actor == proj),
     true,
   )
   // Wire-writable: a session that NAMES its actor keeps it, no override.
@@ -2473,9 +2623,9 @@ Deno.test('actor fill: a session that ran in a repo resolves to its venture', ()
   apply(db, [{
     eid: s2,
     name: 'session',
-    comp: { id: `v2-${s2}`, cwd: '/srv/venture-abc/wt/b', actor_eid: who },
+    comp: { id: `v2-${s2}`, cwd: '/srv/venture-abc/wt/b', actor: who },
   }])
-  assertEquals(comp(s2, 'session')?.actor_eid, who) // named actor untouched
+  assertEquals(comp(s2, 'session')?.actor, who) // named actor untouched
 })
 
 Deno.test('actor fill: a linked worktree resolves through its main repo', () => {
@@ -2500,7 +2650,7 @@ Deno.test('actor fill: a linked worktree resolves through its main repo', () => 
         comp: { id: sid, cwd: `${tree}/deep`, origin: 'external' },
       },
     ])
-    assertEquals(comp(s, 'session')?.actor_eid, proj)
+    assertEquals(comp(s, 'session')?.actor, proj)
     apply(
       db,
       [{ eid: comment, name: 'doc', comp: { title: '', body: 'agent word' } }],
@@ -2518,7 +2668,7 @@ Deno.test('journal: cascade casualties ride the record', () => {
   apply(db, [
     { eid: a, name: 'doc', comp: { title: 'doomed' } },
     { eid: c, name: 'doc', comp: { title: '' } },
-    { eid: c, name: 'comment', comp: { target_eid: a } },
+    { eid: c, name: 'comment', comp: { target: a } },
   ])
   apply(db, [{ eid: a, name: 'entity', comp: null }])
   let last = JSON.parse(
@@ -2545,7 +2695,7 @@ Deno.test('a change and its commentary land in one atomic batch', () => {
     [
       { eid: t, name: 'task', comp: { status: 'done' } },
       { eid: c, name: 'doc', comp: { title: '', body: 'proof landed' } },
-      { eid: c, name: 'comment', comp: { target_eid: t } },
+      { eid: c, name: 'comment', comp: { target: t } },
     ],
     undefined,
     s,
@@ -2618,7 +2768,7 @@ Deno.test('search: retired-project hits sink to the tail, flagged', () => {
     { eid: p, name: 'doc', comp: { title: 'Quagga venture' } },
     { eid: p, name: 'project', comp: { retired_at: '2026-07-21' } },
     { eid: sunk, name: 'doc', comp: { title: 'Quagga sunk chore' } },
-    { eid: sunk, name: 'task', comp: { status: 'open', project_eid: p } },
+    { eid: sunk, name: 'task', comp: { status: 'open', project: p } },
     { eid: live, name: 'doc', comp: { title: 'Quagga live chore' } },
     { eid: live, name: 'task', comp: { status: 'open' } },
   ])
@@ -2655,7 +2805,7 @@ let land = (b: Bag, changes: Wire[]) => {
       let d = {
         parent: eid,
         type: String(comp.type),
-        child: String(comp.child_eid),
+        child: String(comp.child),
       }
       let same = (x: typeof d) =>
         x.parent == d.parent && x.type == d.type && x.child == d.child
@@ -2700,16 +2850,16 @@ Deno.test('delta: snapshot@C0 + delta(C0) matches the live broadcast stream, cas
     [{ eid: s, name: 'session', comp: { id: `d-${s}` } }],
     [
       { eid: cm, name: 'doc', comp: { title: '', body: 're: doomed' } },
-      { eid: cm, name: 'comment', comp: { target_eid: t } },
+      { eid: cm, name: 'comment', comp: { target: t } },
     ],
-    [{ eid: t, name: 'claim', comp: { session_eid: s } }],
+    [{ eid: t, name: 'claim', comp: { session: s } }],
     [
       { eid: other, name: 'doc', comp: { title: 'blocker' } },
       { eid: other, name: 'task', comp: { status: 'open' } },
       {
         eid: other,
         name: 'dependency',
-        comp: { type: 'requires', child_eid: t },
+        comp: { type: 'requires', child: t },
       },
     ],
     [{ eid: t, name: 'doc', comp: { title: 'doomed', body: 'v2 edit' } }],
@@ -2921,18 +3071,18 @@ Deno.test('precondition: null is a value — expected-absent compares', () => {
     { eid: p, name: 'doc', comp: { title: 'a scope' } },
     { eid: p, name: 'project', comp: {} },
     { eid: m, name: 'doc', comp: { title: 'a memory' } },
-    { eid: m, name: 'memory', comp: {} }, // scope_eid null
+    { eid: m, name: 'memory', comp: {} }, // scope null
   ])
   // Guarding a genuinely absent column, expecting absent, applies.
   apply(db, [
     {
       eid: m,
       name: 'memory',
-      comp: { scope_eid: p },
-      was: { scope_eid: null },
+      comp: { scope: p },
+      was: { scope: null },
     },
   ])
-  assertEquals(comp(m, 'memory')?.scope_eid, p)
+  assertEquals(comp(m, 'memory')?.scope, p)
   // Expecting absent where a value now stands refuses — the write that
   // would otherwise clobber a scope set since the caller read.
   assertThrows(
@@ -2941,13 +3091,13 @@ Deno.test('precondition: null is a value — expected-absent compares', () => {
         {
           eid: m,
           name: 'memory',
-          comp: { scope_eid: null },
-          was: { scope_eid: null },
+          comp: { scope: null },
+          was: { scope: null },
         },
       ]),
     Stale,
   )
-  assertEquals(comp(m, 'memory')?.scope_eid, p)
+  assertEquals(comp(m, 'memory')?.scope, p)
 })
 
 Deno.test('precondition: per column — an unrelated edit does not refuse', () => {

@@ -56,7 +56,7 @@ Deno.test('stale: unembedded and text-moved docs owe; fresh do not', () => {
 Deno.test('stale: comments and empty docs never owe', () => {
   let [c, e] = [uid(), uid()]
   doc(c, 'a comment body')
-  db.prepare('insert into comment (eid, target_eid) values (?, ?)').run(c, c)
+  db.prepare('insert into comment (eid, target) values (?, ?)').run(c, c)
   doc(e, '', '')
   let owed = stale(db).map((r) => r.eid)
   assertEquals(owed.includes(c), false)
@@ -82,7 +82,7 @@ Deno.test('prune: every route out of eligibility takes its vector along', () => 
   ) put(eid, text, vec(1, 0))
 
   db.prepare("update doc set title = '', body = '' where eid = ?").run(emptied)
-  db.prepare('insert into comment (eid, target_eid) values (?, ?)').run(
+  db.prepare('insert into comment (eid, target) values (?, ?)').run(
     spoke,
     spoke,
   )

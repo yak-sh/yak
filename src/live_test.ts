@@ -59,16 +59,16 @@ Deno.test('repoUrl follows task, comment, and session ownership', () => {
         eid: 'task',
         status: 'open',
         priority: 1,
-        project_eid: 'project',
+        project: 'project',
       },
     },
     session: {
       entity: { eid: 'session', num: 3 },
-      session: { eid: 'session', id: 'run', requested_task_eid: 'task' },
+      session: { eid: 'session', id: 'run', requested_task: 'task' },
     },
     comment: {
       entity: { eid: 'comment', num: 4 },
-      comment: { eid: 'comment', target_eid: 'session' },
+      comment: { eid: 'comment', target: 'session' },
     },
   }
   for (let eid of ['project', 'task', 'session', 'comment']) {
@@ -220,8 +220,8 @@ Deno.test('projects: project rows only, oldest first, named by doc', () => {
 })
 
 Deno.test('commentCount: every comment aimed at a target counts', () => {
-  let comment = (eid: string, target_eid: string) => ({
-    comment: { eid, target_eid },
+  let comment = (eid: string, target: string) => ({
+    comment: { eid, target },
   })
   cache.value = {
     one: comment('one', 'talk'),
@@ -236,8 +236,8 @@ Deno.test('commentCount: every comment aimed at a target counts', () => {
 Deno.test('commentCount: cold targets share one graph scan', () => {
   let scans = 0
   cache.value = new Proxy({
-    one: { comment: { eid: 'one', target_eid: 'cold_one' } },
-    two: { comment: { eid: 'two', target_eid: 'cold_two' } },
+    one: { comment: { eid: 'one', target: 'cold_one' } },
+    two: { comment: { eid: 'two', target: 'cold_two' } },
   }, {
     ownKeys: (target) => {
       scans++
@@ -249,7 +249,7 @@ Deno.test('commentCount: cold targets share one graph scan', () => {
   assertEquals(scans, 1)
 })
 
-// Backlinks read the SCHEMA — every declared *_eid association points back at
+// Backlinks read the SCHEMA — every declared association points back at
 // its target, whoever is allowed to write the column.
 Deno.test('backlinks: stamped associations count', () => {
   cache.value = {
@@ -259,18 +259,18 @@ Deno.test('backlinks: stamped associations count', () => {
     },
     s1: {
       entity: { eid: 's1', num: 2 },
-      session: { eid: 's1', id: 'x', requested_task_eid: 't1' },
+      session: { eid: 's1', id: 'x', requested_task: 't1' },
     },
     c1: {
       entity: { eid: 'c1', num: 3 },
-      claim: { eid: 'c1', session_eid: 's1' },
+      claim: { eid: 'c1', session: 's1' },
     },
   }
   assertEquals(backlinks('t1'), [{
     from: 's1',
-    via: 'session.requested_task_eid',
+    via: 'session.requested_task',
   }])
-  assertEquals(backlinks('s1'), [{ from: 'c1', via: 'claim.session_eid' }])
+  assertEquals(backlinks('s1'), [{ from: 'c1', via: 'claim.session' }])
 })
 
 Deno.test('relationship indices wake only their affected targets', () => {
@@ -331,27 +331,27 @@ Deno.test('relationship indices wake only their affected targets', () => {
       {
         eid: 'index_comment',
         name: 'comment',
-        comp: { target_eid: 'index_target' },
+        comp: { target: 'index_target' },
       },
       {
         eid: 'index_other',
         name: 'task',
-        comp: { assignee_eid: 'index_target' },
+        comp: { assignee: 'index_target' },
       },
       {
         eid: 'index_parent',
         name: 'dependency',
-        comp: { type: 'reads', child_eid: 'index_target' },
+        comp: { type: 'reads', child: 'index_target' },
       },
       {
         eid: 'index_target',
         name: 'claim',
-        comp: { session_eid: 'index_session' },
+        comp: { session: 'index_session' },
       },
       {
         eid: 'index_board',
         name: 'board',
-        comp: { query: '.project_eid=index_target' },
+        comp: { query: '.project=index_target' },
       },
     ])
     assertEquals(runs, {
@@ -455,8 +455,8 @@ Deno.test('camera motion and card stacking stay off the graph signal', () => {
       entity: { eid: 'cam', num: 3 },
       camera: {
         eid: 'cam',
-        client_eid: 'client',
-        canvas_eid: 'canvas',
+        client: 'client',
+        canvas: 'canvas',
         x: 0,
         y: 0,
         zoom: 1,
@@ -466,10 +466,10 @@ Deno.test('camera motion and card stacking stay off the graph signal', () => {
     },
     card: {
       entity: { eid: 'card', num: 4 },
-      card: { eid: 'card', target_eid: 'task', view: 'Full' },
+      card: { eid: 'card', target: 'task', view: 'Full' },
       pin: {
         eid: 'card',
-        canvas_eid: 'canvas',
+        canvas: 'canvas',
         x: 0,
         y: 0,
         w: 0,
@@ -552,7 +552,7 @@ Deno.test('applyLocal: reports touched eids and edges', () => {
     {
       eid: 'a',
       name: 'dependency',
-      comp: { type: 'requires', child_eid: 'b' },
+      comp: { type: 'requires', child: 'b' },
     },
   ])
   assertEquals(t2.eids, [])
@@ -644,7 +644,7 @@ Deno.test('applyLocal: narrow signals wake only touched graph slices', () => {
     applyLocal([{
       eid: 'narrow_a',
       name: 'dependency',
-      comp: { type: 'reads', child_eid: 'narrow_b' },
+      comp: { type: 'reads', child: 'narrow_b' },
     }])
     assertEquals(runs, { a: 2, b: 1, pa: 2, pb: 1 })
 
@@ -754,7 +754,7 @@ Deno.test('a hot board sleeps through card births and deaths', () => {
       {
         eid: 'card_hot',
         name: 'card',
-        comp: { target_eid: 'task_hot', view: 'Full' },
+        comp: { target: 'task_hot', view: 'Full' },
       },
     ])
     assertEquals(runs, 1)
@@ -775,7 +775,7 @@ Deno.test('applyLocal: a camera birth still publishes the cache', () => {
   applyLocal([{
     eid: 'cam',
     name: 'camera',
-    comp: { client_eid: 'client', canvas_eid: 'canvas' },
+    comp: { client: 'client', canvas: 'canvas' },
   }])
   assertNotStrictEquals(cache.value, before)
 })
@@ -848,14 +848,14 @@ Deno.test('boardAll: whole-graph match, chrome/comments/self excluded', async ()
     mem: {
       entity: spine('mem', 4),
       doc: { eid: 'mem', title: 'a fact', body: '' },
-      memory: { eid: 'mem', scope_eid: null },
+      memory: { eid: 'mem', scope: null },
     },
     cam: {
       entity: spine('cam', 5),
       camera: {
         eid: 'cam',
-        client_eid: 'x',
-        canvas_eid: 'y',
+        client: 'x',
+        canvas: 'y',
         x: 0,
         y: 0,
         zoom: 1,
@@ -866,25 +866,25 @@ Deno.test('boardAll: whole-graph match, chrome/comments/self excluded', async ()
     note: {
       entity: spine('note', 6),
       doc: { eid: 'note', title: 'aimed words', body: '' },
-      comment: { eid: 'note', target_eid: 'task' },
+      comment: { eid: 'note', target: 'task' },
     },
     card: {
       entity: spine('card', 7),
-      card: { eid: 'card', target_eid: 'task', view: 'Full' },
+      card: { eid: 'card', target: 'task', view: 'Full' },
     },
     fold: {
       entity: spine('fold', 8),
       fold: {
         eid: 'fold',
-        client_eid: 'client',
-        board_eid: 'board',
+        client: 'client',
+        board: 'board',
         statuses: 'done',
       },
     },
     shelf: {
       entity: spine('shelf', 9),
       canvas: { eid: 'shelf' },
-      shelf: { eid: 'shelf', client_eid: 'client' },
+      shelf: { eid: 'shelf', client: 'client' },
     },
     client: {
       entity: spine('client', 10),
@@ -914,9 +914,9 @@ Deno.test('pinned: the cache key is the eid, a cast comp carries none', () => {
   cache.value = {
     c1: {
       entity: { eid: 'c1', num: 1 },
-      card: { eid: 'c1', target_eid: 'w1', view: 'Web' },
+      card: { eid: 'c1', target: 'w1', view: 'Web' },
       // exactly what /ws delivers for an MCP card_open: no eid inside
-      pin: { canvas_eid: 'cv', x: 0, y: 0, w: 0, h: 0, z: 1 },
+      pin: { canvas: 'cv', x: 0, y: 0, w: 0, h: 0, z: 1 },
     } as unknown as (typeof cache)['value'][string],
   }
   assertEquals(pinned('cv').map((p) => p.eid), ['c1'])
@@ -932,8 +932,8 @@ Deno.test('topZ: pinless rows never ride, whatever the canvas', () => {
     },
     c1: {
       entity: { eid: 'c1', num: 2 },
-      card: { eid: 'c1', target_eid: 't1', view: 'Full' },
-      pin: { eid: 'c1', canvas_eid: 'cv', x: 0, y: 0, w: 0, h: 0, z: 3 },
+      card: { eid: 'c1', target: 't1', view: 'Full' },
+      pin: { eid: 'c1', canvas: 'cv', x: 0, y: 0, w: 0, h: 0, z: 3 },
     },
   }
   assertEquals(topZ('cv'), 3)
@@ -944,10 +944,10 @@ Deno.test('pinned sleeps through an unrelated row patch', () => {
   cache.value = {
     pin_narrow: {
       entity: { eid: 'pin_narrow', num: 1 },
-      card: { eid: 'pin_narrow', target_eid: 'target', view: 'Full' },
+      card: { eid: 'pin_narrow', target: 'target', view: 'Full' },
       pin: {
         eid: 'pin_narrow',
-        canvas_eid: 'canvas_narrow',
+        canvas: 'canvas_narrow',
         x: 0,
         y: 0,
         w: 0,

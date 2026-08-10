@@ -126,10 +126,10 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
     setSel(0)
   }
   let pick = (h: Hit) => {
-    open(h.open_eid)
+    open(h.open)
     close()
   }
-  let href = (h: Hit) => `/${idOf(h.open_eid == h.eid ? h : ent(h.open_eid))}`
+  let href = (h: Hit) => `/${idOf(h.open == h.eid ? h : ent(h.open))}`
   // The board chip's click: the search BECOMES a board — the line is
   // already a query (terms are text preds, query.ts), so the board saves
   // it verbatim and stays live. Named by the line; retitle it in place.
@@ -240,7 +240,7 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
               href={href(h)}
               mod={i == sel ? 'sel' : undefined}
               onMouseEnter={() => setSel(i)}
-              onContextMenu={menuAt(ent(h.open_eid))}
+              onContextMenu={menuAt(ent(h.open))}
               onClick={(e: MouseEvent) => {
                 if (e.metaKey || e.ctrlKey || e.shiftKey || e.button != 0) {
                   return

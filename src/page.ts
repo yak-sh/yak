@@ -86,7 +86,7 @@ export let filed = async (body: Filing, cast: Cast) => {
       ...filed.map((from) => ({
         eid: from,
         name: 'dependency',
-        comp: { type: 'about', child_eid: eid },
+        comp: { type: 'about', child: eid },
       })),
     )
   }

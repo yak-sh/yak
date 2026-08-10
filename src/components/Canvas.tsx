@@ -61,14 +61,14 @@ export let spawnHit = (canvas: string, target: string) => {
     {
       eid: card,
       name: 'card',
-      comp: { eid: card, target_eid: target, view: resolve(ent(target)).view },
+      comp: { eid: card, target: target, view: resolve(ent(target)).view },
     },
     {
       eid: card,
       name: 'pin',
       comp: {
         eid: card,
-        canvas_eid: canvas,
+        canvas: canvas,
         // half a nominal card wide, titlebar under the point — the same
         // landing spawnAt gives a centered drop.
         x: Math.round(x - 240),
@@ -222,8 +222,8 @@ export let Canvas = ({ eid }: { eid: string }) => {
           name: 'camera',
           comp: {
             eid: cam.current,
-            client_eid: id,
-            canvas_eid: eid,
+            client: id,
+            canvas: eid,
             ...camera.value,
           },
         },
@@ -234,14 +234,14 @@ export let Canvas = ({ eid }: { eid: string }) => {
     // bind the client to them on sight. Any other census (none, many)
     // leaves the choice to the status row: identity is an assertion, and
     // with candidates the user does the asserting.
-    if (!cache.value[id]?.client?.actor_eid) {
+    if (!cache.value[id]?.client?.actor) {
       let people = Object.keys(cache.value)
         .filter((k) => cache.value[k].person)
       if (people.length == 1) {
         mutate({
           eid: id,
           name: 'client',
-          comp: { eid: id, actor_eid: people[0] },
+          comp: { eid: id, actor: people[0] },
         })
       }
     }
@@ -480,7 +480,7 @@ export let Canvas = ({ eid }: { eid: string }) => {
         name: 'card',
         comp: {
           eid: card,
-          target_eid: target,
+          target: target,
           view: view ?? resolve(ent(target)).view,
         },
       },
@@ -489,7 +489,7 @@ export let Canvas = ({ eid }: { eid: string }) => {
         name: 'pin',
         comp: {
           eid: card,
-          canvas_eid: eid,
+          canvas: eid,
           // w=0 is auto (the Pin-auto clamp finds the width); center on a
           // nominal card so the drop point still feels like the middle.
           x: Math.round(at.x - (ox != null ? ox / zoom : (w || 480) / 2)),
@@ -513,7 +513,7 @@ export let Canvas = ({ eid }: { eid: string }) => {
     let sy = e.clientY
     let data = dt.getData('application/x-tasks-card')
     if (data) {
-      let { target_eid, view, w, ox, oy, pin } = JSON.parse(data)
+      let { target, view, w, ox, oy, pin } = JSON.parse(data)
       // A Tray row carries its pin: MOVE that card here instead of cloning a
       // new one — it lands under the ghost like a spawn does.
       if (pin && cache.value[pin]?.pin) {
@@ -523,7 +523,7 @@ export let Canvas = ({ eid }: { eid: string }) => {
           eid: pin,
           name: 'pin',
           comp: {
-            canvas_eid: eid,
+            canvas: eid,
             x: Math.round(at.x - (ox != null ? ox / zoom : (w || 480) / 2)),
             y: Math.round(at.y - (oy != null ? oy / zoom : 15)),
             w: w || 0,
@@ -532,7 +532,7 @@ export let Canvas = ({ eid }: { eid: string }) => {
         })
         return
       }
-      spawnAt([], target_eid, view, w, sx, sy, ox, oy)
+      spawnAt([], target, view, w, sx, sy, ox, oy)
       return
     }
     let texts: string[] = []

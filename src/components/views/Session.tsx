@@ -216,10 +216,8 @@ export let SessionSummary = ({ e, gist }: { e: Ent; gist: string }) => {
   let s = e.session!
   return (
     <Summary>
-      {s.requested_task_eid && (
-        <Entity eid={s.requested_task_eid} view='Inline' />
-      )}
-      {s.role_eid && <Entity eid={s.role_eid} view='Inline' />}
+      {s.requested_task && <Entity eid={s.requested_task} view='Inline' />}
+      {s.role && <Entity eid={s.role} view='Inline' />}
       <Facts>
         <Gist>{gist}</Gist>
         <Kv>
@@ -509,7 +507,7 @@ export let Session = ({ e }: { e: Ent }) => {
               mutate({
                 eid: uuid(),
                 name: 'stop_request',
-                comp: { target_eid: e.eid },
+                comp: { target: e.eid },
               })}
           >
             ■ stop
@@ -578,9 +576,7 @@ export let SessionRow = ({ e, slots, onOpen }: TileProps) => {
       {slot(slots, 'before')}
       <Dot status={standing(s)} />
       {model && <RowLine.Model>{friendly(model)}</RowLine.Model>}
-      {s.actor_eid && (
-        <RowLine.Actor {...title(ent(s.actor_eid).doc?.title ?? '')} />
-      )}
+      {s.actor && <RowLine.Actor {...title(ent(s.actor).doc?.title ?? '')} />}
       {job && <RowLine.Task {...title(ent(job).doc?.title ?? '')} />}
       <Id e={e} />
       {slot(slots, 'after')}
