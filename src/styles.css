@@ -2186,6 +2186,20 @@ html {
   align-items: center;
   gap: var(--half-gap);
 }
+.Status_Close {
+  align-self: stretch;
+  min-width: 1.5rem;
+  padding: 0 var(--half-gap);
+  border: 0;
+  background: none;
+  color: var(--dim);
+  font: inherit;
+  font-size: 16px;
+  cursor: pointer;
+}
+.Status_Close:hover {
+  color: var(--text);
+}
 .Status_Mode {
   color: var(--dim);
   font-weight: 600;
@@ -2196,9 +2210,7 @@ html {
 .Status_Mode-visual {
   color: var(--purple);
 }
-/* The colon is also the line's handle: with the line covering the rest of
-   the bar, this is the strip a thumb taps to shut it again — so it takes
-   the tap floor too. */
+/* The colon gives a thumb-sized lead to the command line. */
 .Status_Colon {
   color: var(--text);
   min-width: var(--tap);

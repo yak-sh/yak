@@ -33,6 +33,7 @@ import { useComplete } from './Complete.tsx'
 let Frame = block('footer', 'Status', {
   Left: 'div',
   Right: 'div',
+  Close: 'button',
   Mode: 'span',
   Colon: 'span',
   Line: 'span',
@@ -52,6 +53,7 @@ let Frame = block('footer', 'Status', {
 let {
   Left,
   Right,
+  Close,
   Mode,
   Colon,
   Line,
@@ -360,6 +362,10 @@ export let Status = () => {
     setPick(0)
     if (v) input.current?.focus() // a picked verb takes the keyboard
   }
+  let close = () => {
+    put('')
+    mode.value = 'normal'
+  }
 
   let cmdKey = (e: KeyboardEvent & { currentTarget: HTMLTextAreaElement }) => {
     if (complete.key(e)) return
@@ -370,11 +376,9 @@ export let Status = () => {
       e.preventDefault()
       last.value = e.currentTarget.value.trim() || last.value
       exec(e.currentTarget.value)
-      put('')
-      mode.value = 'normal'
+      close()
     } else if (e.key == 'Escape') {
-      put('')
-      mode.value = 'normal'
+      close()
     } else if (e.key == 'Tab') {
       // completion is the PICKED hint's name (0 = best match)
       e.preventDefault()
@@ -476,7 +480,13 @@ export let Status = () => {
       </Left>
       <Right>
         <WhoAmI />
-        <Tray />
+        {mode.value == 'command'
+          ? (
+            <Close type='button' aria-label='exit command mode' onClick={close}>
+              ×
+            </Close>
+          )
+          : <Tray />}
       </Right>
     </Frame>
   )
