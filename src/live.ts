@@ -17,6 +17,7 @@ import {
   type Live,
   type Pinned,
   type Session,
+  sessionOf,
   settled,
   SHORT,
   type Snapshot,
@@ -992,10 +993,12 @@ export let boot = async () => {
 export let ent = (eid: string): Ent => {
   let { entity, ...comps } = row(eid).value ?? {}
   if (comps.pin) comps.pin = { ...comps.pin, z: pinZ(eid, comps.pin.z).value }
+  let session = sessionOf(comps)
   let mine = relations(eid).value
   return {
     ...comps, // whatever components the entity carries, verbatim —
     // created/updated (provenance) ride here like any other component now
+    ...(session ? { session } : {}),
     eid,
     num: entity?.num ?? 0,
     kind: kindOf(comps), // derived — the display convention, not data
@@ -1272,7 +1275,7 @@ export let projects = (): Ent[] => {
 export let sessionRows = (): [string, Session][] => {
   facets()
   return sessionIds.flatMap((eid) => {
-    let s = row(eid).value?.session
+    let s = sessionOf(row(eid).value ?? {})
     return s ? [[eid, s]] : []
   })
 }

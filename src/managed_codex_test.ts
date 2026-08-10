@@ -5,6 +5,7 @@ import { apply, journalOf, open } from './db.ts'
 import { append, readEntries, settleGeneration, takeEntry } from './entries.ts'
 import { managedCodex } from './managed_codex.ts'
 import { type ResponseResult } from './responses.ts'
+import { writeSession } from './session_store.ts'
 import { type ToolHost } from './harness_tools.ts'
 import { type Change, uuid } from './types.ts'
 
@@ -170,8 +171,7 @@ Deno.test('replayed starts finish preparation without duplicating input', async 
     tools: () => Promise.resolve(tools([])),
     prepare: (eid: string) => {
       prepares++
-      db.prepare('update session set base_revision = ? where eid = ?')
-        .run('base', eid)
+      writeSession(db, eid, { base_revision: 'base' })
       return Promise.resolve()
     },
   })
@@ -548,8 +548,7 @@ Deno.test('restart reclaims a lost generation without minting another', async ()
   let db = open(':memory:')
   let tree = Deno.makeTempDirSync()
   let sid = session(db, tree), old = uuid(), calls = 0
-  db.prepare('update session set base_revision = ? where eid = ?')
-    .run('base', sid)
+  writeSession(db, sid, { base_revision: 'base' })
   apply(db, [{ eid: old, name: 'runner', comp: { name: 'old' } }])
   let input = append(db, sid, [{ message: { role: 'user' } }]).eids[0]
   let generation = append(db, sid, [{
@@ -602,8 +601,7 @@ Deno.test('restart reclaims graph_query on the same call entry', async () => {
   let db = open(':memory:')
   let tree = Deno.makeTempDirSync()
   let sid = session(db, tree), old = uuid(), calls = 0
-  db.prepare('update session set base_revision = ? where eid = ?')
-    .run('base', sid)
+  writeSession(db, sid, { base_revision: 'base' })
   apply(db, [{ eid: old, name: 'runner', comp: { name: 'old' } }])
   let input = append(db, sid, [{ message: { role: 'user' } }]).eids[0]
   let generation = append(db, sid, [{
@@ -665,8 +663,7 @@ Deno.test('restart leaves an uncertain side-effecting call ambiguous', async () 
   let db = open(':memory:')
   let tree = Deno.makeTempDirSync()
   let sid = session(db, tree), old = uuid(), calls = 0
-  db.prepare('update session set base_revision = ? where eid = ?')
-    .run('base', sid)
+  writeSession(db, sid, { base_revision: 'base' })
   apply(db, [{ eid: old, name: 'runner', comp: { name: 'old' } }])
   let input = append(db, sid, [{ message: { role: 'user' } }]).eids[0]
   let generation = append(db, sid, [{
@@ -720,8 +717,7 @@ Deno.test('restart settles durable generation and call evidence', async () => {
   let db = open(':memory:')
   let tree = Deno.makeTempDirSync(), sid = session(db, tree)
   let old = uuid(), calls = 0
-  db.prepare('update session set base_revision = ? where eid = ?')
-    .run('base', sid)
+  writeSession(db, sid, { base_revision: 'base' })
   apply(db, [{ eid: old, name: 'runner', comp: { name: 'old' } }])
   let input = append(db, sid, [{ message: { role: 'user' } }]).eids[0]
   let generation = append(db, sid, [{

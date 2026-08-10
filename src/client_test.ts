@@ -88,6 +88,25 @@ Deno.test('rows: merge, derived kind, ids', () => {
   assertEquals(kindOf({}), 'entity')
 })
 
+Deno.test('rows: canonical Session facets win, including null', () => {
+  let projected = rows({
+    changes: [
+      { eid: S, name: 'entity', comp: { eid: S, num: 1 } },
+      {
+        eid: S,
+        name: 'session',
+        comp: { id: 'sess-x', provider: 'claude', cwd: '/stale', pid: 7 },
+      },
+      { eid: S, name: 'spawn', comp: { provider: 'codex' } },
+      { eid: S, name: 'worktree', comp: { cwd: null } },
+      { eid: S, name: 'runtime', comp: { pid: null } },
+    ],
+  })[0].comps.session
+  assertEquals(projected?.provider, 'codex')
+  assertEquals(projected?.cwd, null)
+  assertEquals(projected?.pid, null)
+})
+
 Deno.test('rows hide quarantine unless the caller explicitly reveals it', () => {
   let snap = {
     changes: [
@@ -516,16 +535,24 @@ Deno.test('taskChanges: defaults + grouped comps ride along', () => {
 
 Deno.test('sessionFor: reuse, mint, cwd + pid refresh', () => {
   assertEquals(sessionFor(all, 'sess-x').changes, []) // known, same cwd
-  assertEquals(sessionFor(all, 'sess-x', '/elsewhere').changes.length, 1) // cwd moved
+  assertEquals(sessionFor(all, 'sess-x', '/elsewhere').changes, [
+    { eid: S, name: 'session', comp: { cwd: '/elsewhere' } },
+    { eid: S, name: 'worktree', comp: { cwd: '/elsewhere' } },
+  ])
   let minted = sessionFor(all, 'sess-new', '/w2', 4242)
-  assertEquals(minted.changes[0].comp, {
-    id: 'sess-new',
-    cwd: '/w2',
-    pid: 4242,
-  })
+  assertEquals(minted.changes, [
+    {
+      eid: minted.eid,
+      name: 'session',
+      comp: { id: 'sess-new', cwd: '/w2', pid: 4242 },
+    },
+    { eid: minted.eid, name: 'worktree', comp: { cwd: '/w2' } },
+    { eid: minted.eid, name: 'runtime', comp: { pid: 4242 } },
+  ])
   // an unstamped row gains its pid; a re-run with the same pid is silent
   assertEquals(sessionFor(all, 'sess-x', '/w', 4242).changes, [
     { eid: S, name: 'session', comp: { pid: 4242 } },
+    { eid: S, name: 'runtime', comp: { pid: 4242 } },
   ])
 })
 
@@ -664,7 +691,7 @@ Deno.test('claimChanges points at the session entity', () => {
   assertEquals(cs, [{ eid: T2, name: 'claim', comp: { session: S } }])
 })
 
-Deno.test('spawnChanges: one session change carrying the request', () => {
+Deno.test('spawnChanges: request speaks canonical and rollback frames', () => {
   let made = spawnChanges(all, {
     task: 'T-3', // human id resolves
     provider: 'claude',
@@ -672,7 +699,7 @@ Deno.test('spawnChanges: one session change carrying the request', () => {
     effort: 'high',
     persona: 'old-board-slug', // aliases resolve too
   })
-  assertEquals(made.changes.length, 1)
+  assertEquals(made.changes.length, 2)
   let c = made.changes[0]
   assertEquals(c.name, 'session')
   assertEquals(c.comp?.provider, 'claude')
@@ -681,6 +708,16 @@ Deno.test('spawnChanges: one session change carrying the request', () => {
   assertEquals(c.comp?.requested_task, T2)
   assertEquals(c.comp?.persona, T2)
   assertMatch(String(c.comp?.id), /^[0-9a-f-]{36}$/)
+  assertEquals(made.changes[1], {
+    eid: made.eid,
+    name: 'spawn',
+    comp: {
+      provider: 'claude',
+      model: 'claude-fable-5',
+      effort: 'high',
+      persona: T2,
+    },
+  })
   assertThrows(() =>
     spawnChanges(all, { task: 'T-99', provider: 'x', model: 'y' })
   )
@@ -1475,7 +1512,10 @@ Deno.test('sessionFor: hook identity round-trips and refreshes only on change', 
   ])
   assertEquals(
     sessionFor(g, 'sess-x', '/w', undefined, { pane: null }).changes,
-    [{ eid: S, name: 'session', comp: { pane: null } }],
+    [
+      { eid: S, name: 'session', comp: { pane: null } },
+      { eid: S, name: 'runtime', comp: { pane: null } },
+    ],
   )
 })
 

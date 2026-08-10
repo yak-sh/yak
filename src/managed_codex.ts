@@ -25,6 +25,7 @@ import {
   type ResponseTransport,
 } from './runner.ts'
 import { type ToolHost } from './harness_tools.ts'
+import { sessionRow } from './session_store.ts'
 import { type Change, uuid } from './types.ts'
 
 type Cast = (changes: Change[]) => void
@@ -265,9 +266,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
     flights.set(token.eid, { session, control })
     let tools: ToolHost | undefined
     try {
-      let row = db.prepare('select cwd from session where eid = ?').get(
-        session,
-      ) as { cwd: string | null } | undefined
+      let row = sessionRow(db, session)
       if (!row?.cwd) throw new Error('managed Codex session has no worktree')
       tools = await options.tools(String(row.cwd), session)
       let work = await generate({
@@ -303,9 +302,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
     flights.set(token.eid, { session, control })
     let tools: ToolHost | undefined
     try {
-      let row = db.prepare('select cwd from session where eid = ?').get(
-        session,
-      ) as { cwd: string | null } | undefined
+      let row = sessionRow(db, session)
       if (!row?.cwd) throw new Error('managed Codex session has no worktree')
       tools = await options.tools(String(row.cwd), session)
       let spec = await executeCall(rowOf(db, token.eid), tools, control.signal)
@@ -376,9 +373,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
 
   let runnable = (session: string) =>
     prepared.has(session) ||
-    !!db.prepare(
-      'select 1 from session where eid = ? and base_revision is not null',
-    ).get(session)
+    !!sessionRow(db, session)?.base_revision
 
   let pass = async () => {
     let recovered = expire()
@@ -467,8 +462,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
       cast(made.changes)
     }
     try {
-      let state = db.prepare('select base_revision from session where eid = ?')
-        .get(eid) as { base_revision: string | null } | undefined
+      let state = sessionRow(db, eid)
       if (!state?.base_revision) await options.prepare(eid, job, cast)
       prepared.add(eid)
     } catch (error) {

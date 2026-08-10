@@ -15,6 +15,7 @@ import { type Change } from './types.ts'
 import { dispatch, on, relay, trace } from './effects.ts'
 import { PENDING } from './deliver.ts'
 import { fakeClaude, fakeCodex } from './door_fake.ts'
+import { sessionRow, writeSession } from './session_store.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let tmp = Deno.makeTempDirSync({ prefix: 'tasks-sessions-' })
@@ -46,10 +47,7 @@ let {
 let uid = () => crypto.randomUUID()
 let heard: Change[] = []
 let cast = (c: Change[]) => heard.push(...c)
-let row = (eid: string) =>
-  db.prepare('select * from session where eid = ?').get(eid) as
-    | Record<string, string | number | null>
-    | undefined
+let row = (eid: string) => sessionRow(db, eid)
 let failure = (eid: string) =>
   (db.prepare('select message from error where eid = ?').get(eid) as
     | { message: string }
@@ -190,10 +188,11 @@ let told = (eid: string) =>
 let plant = (lines: string[], provider = 'fake') => {
   let eid = uid()
   apply(db, [{ eid, name: 'session', comp: { id: uid() } }])
-  db.prepare(
-    `update session set origin = 'managed', status = 'running', provider = ?
-     where eid = ?`,
-  ).run(provider, eid)
+  writeSession(db, eid, {
+    origin: 'managed',
+    status: 'running',
+    provider,
+  })
   Deno.mkdirSync(logsDir(), { recursive: true })
   Deno.writeTextFileSync(log(eid), lines.map((l) => `${l}\n`).join(''))
   return eid
@@ -301,8 +300,7 @@ Deno.test('a new Codex spawn routes to the graph-native lifecycle', async () => 
       }`,
     )
     assertEquals(launch.model, 'gpt-5.6-sol')
-    db.prepare('update session set base_revision = ? where eid = ?')
-      .run('prepared', eid)
+    writeSession(db, eid, { base_revision: 'prepared' })
     let input = uid(), generation = uid()
     apply(db, [
       { eid: input, name: 'entry', comp: { session: eid } },
@@ -342,10 +340,11 @@ Deno.test('a new Codex spawn routes to the graph-native lifecycle', async () => 
       requested_task: t,
     },
   }])
-  db.prepare(
-    "update session set origin = 'managed', status = 'running', pid = 123 " +
-      'where eid = ?',
-  ).run(legacy)
+  writeSession(db, legacy, {
+    origin: 'managed',
+    status: 'running',
+    pid: 123,
+  })
   assertEquals(
     !!db.prepare(`select 1 from session where eid = ? and ${codexPending}`)
       .get(legacy),
@@ -393,7 +392,7 @@ Deno.test('worktree preparation adopts its matching crash remnant', async () => 
   }
   await prepareWorktree(eid, launch, cast)
   let base = row(eid)?.base_revision
-  db.prepare('update session set base_revision = null where eid = ?').run(eid)
+  writeSession(db, eid, { base_revision: null })
   await prepareWorktree(eid, launch, cast)
 
   assertEquals(row(eid)?.base_revision, base)
@@ -1098,11 +1097,12 @@ Deno.test('boot: a live child is adopted, its file followed from where it is', a
 
 Deno.test('boot: a pending live comment completes its interrupted handoff', async () => {
   let eid = plant([INIT])
-  db.prepare(`
-    update session set provider_session_id = 'sid-1', model = 'fake-fast',
-      cwd = ?, input_at = '2026-07-27T12:00:00Z'
-    where eid = ?
-  `).run(scratch, eid)
+  writeSession(db, eid, {
+    provider_session_id: 'sid-1',
+    model: 'fake-fast',
+    cwd: scratch,
+    input_at: '2026-07-27T12:00:00Z',
+  })
   let pending = say(eid, 'heard after restart')
   apply(db, pending)
   let child = new Deno.Command('setsid', {
@@ -1179,8 +1179,7 @@ Deno.test('boot: a session whose provider is gone fails loudly', () => {
 Deno.test('a comment resumes nothing it should not', async () => {
   // active: the bus delivers, the effect stays out of it
   let active = plant([INIT]) // status 'running'
-  db.prepare('update session set provider_session_id = ? where eid = ?')
-    .run('sid-1', active)
+  writeSession(db, active, { provider_session_id: 'sid-1' })
   await write(say(active, 'hi'))
   assertEquals(row(active)?.status, 'running') // untouched
   assertEquals(refusals(active), []) // delivery, not a failure to say
@@ -1413,7 +1412,7 @@ Deno.test('a comment after the sweep regrows the worktree and resumes', async ()
   // deterministic, so they still resume on the ground where their thread was
   // born instead of silently moving it.
   await tidy(cast)
-  db.prepare('update session set cwd = null where eid = ?').run(eid)
+  writeSession(db, eid, { cwd: null })
   let legacy = write(say(eid, 'from the old root'))
   await until(() => row(eid)?.status == 'running', 'the legacy regrow')
   assertEquals(row(eid)?.cwd, tree)
@@ -1421,7 +1420,7 @@ Deno.test('a comment after the sweep regrows the worktree and resumes', async ()
   assertEquals(row(eid)?.status, 'completed')
 
   // and when the graph can't place a tree, the refusal is said
-  db.prepare('update session set cwd = null where eid = ?').run(eid)
+  writeSession(db, eid, { cwd: null })
   db.prepare('delete from repo where eid = ?').run(p)
   await write(say(eid, 'hello?'))
   assertEquals(row(eid)?.status, 'completed')
@@ -1487,7 +1486,7 @@ Deno.test("external session logs read each provider's confined transcript", asyn
   })
   // Older Claude rows predate provider stamping; their store still names
   // the dialect. A contradictory provider cannot cross into another store.
-  db.prepare('update session set provider = null where eid = ?').run(eid)
+  writeSession(db, eid, { provider: null })
   assertEquals(logs(eid, new URLSearchParams()).entries.length, 1)
   let crossed = announce(c.pid, [], path, 'codex')
   assertEquals(logs(crossed.eid, new URLSearchParams()).entries, [])

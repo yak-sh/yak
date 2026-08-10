@@ -40,6 +40,11 @@ import { legacyWorktreesDir, worktreesDir } from './ground.ts'
 import { hookClaim, rows, wrapChanges } from './client.ts'
 import { type Unlanded, unlanded } from './land.ts'
 import { materialize } from './persona.ts'
+import {
+  sessionRow as storedSession,
+  sessionRows as storedSessions,
+  writeSession,
+} from './session_store.ts'
 import { type Change, type LogRow, sessionActive } from './types.ts'
 
 type Cast = (changes: Change[]) => void
@@ -73,11 +78,7 @@ let confined = (path: string, store: string) => {
 }
 
 let transcriptOf = (eid: string) => {
-  let s = db.prepare(
-    'select provider, transcript from session where eid = ?',
-  ).get(eid) as
-    | { provider: string | null; transcript: string | null }
-    | undefined
+  let s = storedSession(db, eid)
   if (!s?.transcript) return
   let stores = transcriptStores()
   let providers = stores[String(s.provider)]
@@ -94,8 +95,7 @@ let transcriptOf = (eid: string) => {
 // identified by the confined store carrying its transcript. Derived rather
 // than stamped, because `provider` on CREATE is a spawn request.
 let dialectOf = (eid: string) => {
-  let s = db.prepare('select provider, transcript from session where eid = ?')
-    .get(eid) as { provider: string | null; transcript: string | null } | null
+  let s = storedSession(db, eid)
   return adapters[String(s?.provider)] ??
     adapters[transcriptOf(eid)?.provider ?? '']
 }
@@ -131,9 +131,7 @@ let transcriptLines = (eid: string) => {
 // whole story either way. Origin is exactly the right question here (unlike
 // liveness, door.ts): it names who forked the process.
 let logOf = (eid: string) =>
-  (db.prepare('select origin from session where eid = ?').get(eid) as
-      | { origin: string }
-      | undefined)?.origin == 'managed'
+  storedSession(db, eid)?.origin == 'managed'
     ? logFile(eid)
     : transcriptOf(eid)?.path ?? logFile(eid)
 
@@ -166,17 +164,12 @@ let publish = (eid: string, comp: Row, cast: Cast, table = 'session') => {
 
 // Update summary columns and tell everyone. A deleted row updates
 // nothing and says nothing — the tombstone wins, as everywhere else.
-// Almost always the session row; a stop_request's acted_at goes through
-// the same door.
 let stamp = (
   eid: string,
   patch: Summary | Row,
   cast: Cast,
-  table = 'session',
 ) => {
-  let failure = table == 'session' && Object.hasOwn(patch, 'error')
-    ? (patch as Row).error
-    : undefined
+  let failure = Object.hasOwn(patch, 'error') ? (patch as Row).error : undefined
   let body = Object.fromEntries(
     Object.entries(patch).filter(([col]) => col != 'error'),
   )
@@ -187,37 +180,30 @@ let stamp = (
   // transition — the writer that stamps an ending is the only observer
   // there is. Prior row read first, so a re-stamp of the same ending
   // never says it twice.
-  let was = db.prepare(`select * from ${table} where eid = ?`).get(eid) as
-    | Row
-    | undefined
+  let was = storedSession(db, eid)
   if (!was) return
-  let ending = table == 'session' && SETTLED.includes(String(body.status))
-  let moved = Object.fromEntries(
-    cols
-      .filter((c) => c != 'latest_seq' && body[c] != was[c])
-      .map((c) => [c, body[c]]),
-  )
+  let ending = SETTLED.includes(String(body.status))
   let changes: Change[] = []
   db.exec('begin')
   try {
-    if (cols.length) {
-      let vals = cols.map((c) => body[c] as string | number | null)
-      db.prepare(
-        `update ${table} set ${cols.map((c) => `${c} = ?`).join(', ')}
-         where eid = ?`,
-      ).run(...vals, eid)
-    }
-    if (Object.keys(moved).length) {
-      changes.push({ eid, name: table, comp: moved })
-    }
+    changes.push(...writeSession(db, eid, body))
     if (failure !== undefined) {
       let change = failure
         ? errorChange(eid, String(failure))
         : healthChange(eid)
       if (change) changes.push(change)
     }
-    if (changes.length) record(db, changes)
+    let visible = changes.flatMap((change) => {
+      if (
+        change.name != 'session' || !change.comp ||
+        !('latest_seq' in change.comp)
+      ) return [change]
+      let { latest_seq: _, ...comp } = change.comp
+      return Object.keys(comp).length ? [{ ...change, comp }] : []
+    })
+    if (visible.length) record(db, visible)
     db.exec('commit')
+    changes = visible
   } catch (e) {
     db.exec('rollback')
     throw e
@@ -326,9 +312,7 @@ let report = (
 // cache holding a ghost claim. Telling must never break the ending it
 // reports, so a refusal is a warning, not a throw.
 let settled = (eid: string, status: string, cast: Cast) => {
-  let row = db.prepare('select * from session where eid = ?').get(eid) as
-    | Row
-    | undefined
+  let row = storedSession(db, eid)
   if (!row || row.origin != 'managed') return
   let verdict = status == 'completed' ? landStateOf(row) : undefined
   let stranded = verdict ?? undefined
@@ -387,11 +371,11 @@ let settled = (eid: string, status: string, cast: Cast) => {
 // stays for inspection. Removal never closes the resume window: a later
 // comment regrows the tree at the same path (regrow, below).
 export let tidy = async (cast: Cast) => {
-  let rows = db.prepare(
-    `select * from session
-     where origin = 'managed' and status = 'completed'
+  let rows = storedSessions(
+    db,
+    `where origin = 'managed' and status = 'completed'
        and cwd is not null and branch is not null`,
-  ).all() as Row[]
+  )
   for (let row of rows) await cleanup(row, cast)
 }
 
@@ -673,14 +657,7 @@ let following = (eid: string, ad: Adapter, cast: Cast, from?: Tail) => {
 // A stop we asked for and then OBSERVED is interrupted — stop() never stamps
 // that itself, because a signal sent is not a process ended.
 let finish = async (eid: string, t: Tail, run: Run, cast: Cast) => {
-  let row = db.prepare(
-    `select stop_requested_at, input_at, provider_session_id
-     from session where eid = ?`,
-  ).get(eid) as {
-    stop_requested_at: string | null
-    input_at: string | null
-    provider_session_id: string | null
-  } | undefined
+  let row = storedSession(db, eid)
   if (!row) return // deleted mid-run
   // The wrapper reports a beat AFTER the child vanishes (wait, then the
   // echo into the code file) — give it that beat before calling the code
@@ -797,9 +774,7 @@ let betweenTurns = (eid: string) => {
 // starts being followed again without this code knowing it was woken.
 export let watched = (cast: Cast) => (eid: string, comp: Row) => {
   if (!comp.pid || watching.has(eid)) return
-  let was = db.prepare(
-    'select origin, started_at, finished_at from session where eid = ?',
-  ).get(eid) as Watch | undefined
+  let was = storedSession(db, eid) as Watch | undefined
   if (!was || was.origin == 'managed') return // follow() owns our children
   // Ask the PROCESS, not the transcript or message door. A provider may have
   // a growing transcript without a delivery channel, as interactive Codex
@@ -887,8 +862,7 @@ let rowOf = (
 }
 
 let readerOf = (eid: string) => {
-  let origin = (db.prepare('select origin from session where eid = ?')
-    .get(eid) as { origin: string | null } | undefined)?.origin
+  let origin = storedSession(db, eid)?.origin
   let ad = dialectOf(eid)
   return origin == 'managed' ? ad?.row : ad?.transcript ?? ad?.row
 }
@@ -1098,12 +1072,15 @@ let CONTRACT = `House rules for this run:
 
 // Session runtime beside its normalized launch spec. Explicit aliases avoid
 // duplicate column names and keep validation on the canonical component.
-let runRow = (eid: string) =>
-  db.prepare(
+let runRow = (eid: string) => {
+  let row = db.prepare(
     `select s.*, p.provider as spawn_provider, p.model as spawn_model,
             p.effort as spawn_effort, p.persona as spawn_persona
      from session s left join spawn p on p.eid = s.eid where s.eid = ?`,
   ).get(eid) as Row | undefined
+  let session = storedSession(db, eid)
+  return row && session ? { ...row, ...session } : row
+}
 
 // A launch plans its claim from a snapshot, then commits it. If another
 // Session wins in between, that held lease is the answer: preserve it and
@@ -1602,9 +1579,7 @@ let resume = async (
   active = false,
   prompt?: string,
 ) => {
-  let row = db.prepare('select * from session where eid = ?').get(eid) as
-    | Row
-    | undefined
+  let row = storedSession(db, eid)
   if (!row) return
   if (!active && reachable(eid)) return // somebody is home — the cast delivers
   let msgs = prompt ? [] : unheard(eid)
@@ -1736,13 +1711,7 @@ export let continueSession = (eid: string, prompt: string, cast: Cast) =>
 // with the durable unheard backlog. The input_at stamp makes the handoff
 // survive a server restart and distinguishes it from the operator's stop.
 let interrupt = async (eid: string) => {
-  let row = db.prepare(`
-    select origin, status, provider_session_id from session where eid = ?
-  `).get(eid) as {
-    origin: string
-    status: string | null
-    provider_session_id: string | null
-  } | undefined
+  let row = storedSession(db, eid)
   if (
     row?.origin != 'managed' ||
     !sessionActive.includes(String(row.status)) ||
@@ -1777,9 +1746,7 @@ let interrupt = async (eid: string) => {
 }
 
 let steer = (eid: string, cast: Cast) => {
-  let row = db.prepare(
-    'select input_at from session where eid = ?',
-  ).get(eid) as { input_at: string | null } | undefined
+  let row = storedSession(db, eid)
   if (!row?.input_at) stamp(eid, { input_at: now() }, cast)
   return interrupt(eid)
 }
@@ -1801,11 +1768,7 @@ export let commented =
       ceid,
     ) as { via: string | null } | undefined
     if (stamp?.via == eid) return // the session talking about itself
-    let row = db.prepare(
-      'select origin, status, role from session where eid = ?',
-    ).get(eid) as
-      | { origin: string; status: string | null; role: string | null }
-      | undefined
+    let row = storedSession(db, eid)
     if (!row) return
     // Role sessions hear only the fixed roles.ts wake-up and retrieve the
     // comment through task_context. A busy role finishes naturally; the graph
@@ -1850,15 +1813,13 @@ export let deleted = (eid: string) => {
 // behind and an ending derived from that. Called from server.ts, not
 // open(): db.ts stays pure.
 export let recover = (cast: Cast) => {
-  let rows = db.prepare(`
-    select eid, provider, input_at from session
-    where origin = 'managed' and status in ('starting', 'running', 'stopping')
+  let rows = storedSessions(
+    db,
+    `where origin = 'managed'
+      and status in ('starting', 'running', 'stopping')
       and not exists (select 1 from entry where entry.session = session.eid)
-  `).all() as {
-    eid: string
-    provider: string | null
-    input_at: string | null
-  }[]
+    `,
+  )
   for (let { eid, provider, input_at } of rows) {
     let ad = adapters[String(provider)]
     if (!ad) {
@@ -1889,21 +1850,22 @@ export let recover = (cast: Cast) => {
   // SessionStart cannot yet see a model. Reconcile the transcript at boot too:
   // this heals finished rows as well as any live door a restart re-adopts.
   for (
-    let s of db.prepare(`
-      select eid from session
-      where origin != 'managed' and transcript is not null
-        and (provider is null or serving_model is null)
-    `).all() as { eid: string }[]
+    let s of storedSessions(
+      db,
+      `where origin != 'managed' and transcript is not null
+        and (provider is null or serving_model is null)`,
+    )
   ) stamp(s.eid, observed(s.eid, transcriptLines(s.eid)), cast)
   // The other half of boot: sessions we never spawned but were watching.
   // A restart drops every trail, and an operator's terminal doesn't
   // re-announce itself for us — so ask the door directly, and stamp the
   // ending of anyone who left while we were away.
   for (
-    let s of db.prepare(`
-      select eid, pid from session
-      where origin != 'managed' and pid is not null and finished_at is null
-    `).all() as { eid: string; pid: number }[]
+    let s of storedSessions(
+      db,
+      `where origin != 'managed' and pid is not null
+        and finished_at is null`,
+    )
   ) watched(cast)(s.eid, s)
   return rows.map((r) => r.eid)
 }

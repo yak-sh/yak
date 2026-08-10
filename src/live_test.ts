@@ -76,6 +76,19 @@ Deno.test('repoUrl follows task, comment, and session ownership', () => {
   }
 })
 
+Deno.test('ent projects canonical Session facets over aliases', () => {
+  cache.value = {
+    session: {
+      entity: { eid: 'session', num: 1 },
+      session: { eid: 'session', id: 'run', cwd: '/stale', pid: 7 },
+      worktree: { eid: 'session', cwd: null },
+      runtime: { eid: 'session', pid: null },
+    },
+  }
+  assertEquals(ent('session').session?.cwd, null)
+  assertEquals(ent('session').session?.pid, null)
+})
+
 // A cache of task/project rows: `['T', 'Ops']` is a task in domain Ops
 // (null = the column is absent), `['P', 'Fable']` a project by title.
 let fill = (rows: [string, string | null][]) => {

@@ -14,6 +14,7 @@ import {
   type Hit,
   kindOf,
   sessionFacetNames,
+  sessionOf,
   settled,
   type Snapshot,
   stamped,
@@ -127,7 +128,11 @@ export let rows = ({ changes }: { changes: Change[] }, quarantined = false) => {
     row.comps[name] = comp // entity rides too (eid, num); provenance is created/updated
     out.set(eid, row)
   }
-  for (let r of out.values()) r.kind = kindOf(r.comps)
+  for (let r of out.values()) {
+    let session = sessionOf(r.comps)
+    if (session) r.comps.session = session
+    r.kind = kindOf(r.comps)
+  }
   let rows = [...out.values()]
   return quarantined ? rows : rows.filter((r) => !r.comps.quarantined)
 }
@@ -957,6 +962,22 @@ export let byBoard = (a: Row, b: Row) =>
   (Number(a.comps.task?.priority ?? 0) - Number(b.comps.task?.priority ?? 0)) ||
   (a.num - b.num)
 
+// A rolling client speaks both homes in one batch: an older server keeps the
+// session aliases, while a current server makes the canonical facet win.
+let sessionFrames = (
+  eid: string,
+  comp: Record<string, unknown>,
+): Change[] => [
+  { eid, name: 'session', comp },
+  ...sessionFacetNames.flatMap((name) => {
+    let facet = Object.fromEntries(
+      Object.keys(comps[name]).filter((key) => key in comp)
+        .map((key) => [key, comp[key]]),
+    )
+    return Object.keys(facet).length ? [{ eid, name, comp: facet }] : []
+  }),
+]
+
 // Find-or-mint the session entity for an external session id: its eid
 // plus the change that creates or refreshes it. cwd is where it runs; pid
 // is the provider process it runs IN (the SessionStart hook walks /proc for
@@ -1011,7 +1032,7 @@ export let sessionFor = (
     comp.parent = self.parent
   }
   let changes: Change[] = Object.keys(comp).length
-    ? [{ eid, name: 'session', comp }]
+    ? sessionFrames(eid, comp)
     : []
   return { eid, changes }
 }
@@ -1121,19 +1142,15 @@ export let spawnChanges = (
     : undefined
   let actor = owner?.eid ?? task.comps.task.project ?? caller?.actor
   let eid = uuid()
-  let changes: Change[] = [{
-    eid,
-    name: 'session',
-    comp: {
-      id: uuid(),
-      provider: s.provider,
-      model: s.model,
-      ...(s.effort ? { effort: s.effort } : {}),
-      requested_task: task.eid,
-      ...(persona ? { persona: persona.eid } : {}),
-      ...(actor ? { actor: actor } : {}),
-    },
-  }]
+  let changes = sessionFrames(eid, {
+    id: uuid(),
+    provider: s.provider,
+    model: s.model,
+    ...(s.effort ? { effort: s.effort } : {}),
+    requested_task: task.eid,
+    ...(persona ? { persona: persona.eid } : {}),
+    ...(actor ? { actor: actor } : {}),
+  })
   return { eid, changes }
 }
 
