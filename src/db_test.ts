@@ -2449,6 +2449,23 @@ Deno.test('search: terms and filters mix in one line', () => {
   assertEquals(eids('.status=done .created.at>=today').includes(b), false)
 })
 
+Deno.test('search: component filters select before limiting', () => {
+  let settled = uid()
+  apply(db, [
+    { eid: settled, name: 'doc', comp: { title: 'A settled choice' } },
+    { eid: settled, name: 'decided', comp: { at: '2026-01-01' } },
+  ])
+  db.prepare('update created set at = ? where eid = ?')
+    .run('2026-01-01T00:00:00.000Z', settled)
+  for (let i = 0; i < 11; i++) {
+    let eid = uid()
+    apply(db, [{ eid, name: 'doc', comp: { title: `Newer choice ${i}` } }])
+    db.prepare('update created set at = ? where eid = ?')
+      .run(`2026-02-${String(i + 1).padStart(2, '0')}T00:00:00.000Z`, eid)
+  }
+  assertEquals(search(db, '.decided!', 1).map((h) => h.eid), [settled])
+})
+
 Deno.test('search: references and paths screen the hits', () => {
   let u = uid(), other = uid(), t = uid(), t2 = uid(), instrument = uid()
   apply(db, [

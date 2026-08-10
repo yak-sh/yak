@@ -30,6 +30,7 @@ import { type Trace } from './effects.ts'
 import { ancestorAt } from './client.ts'
 import { homeReads } from './persona.ts'
 import { matchQuery, parseQuery, resolveRefs, TEXT } from './query.ts'
+import { where } from './sql.ts'
 import {
   bodyCols,
   isRef,
@@ -2832,9 +2833,9 @@ export let touch = (
 // and wears the target's title (the aside has none of its own).
 // A search line mixes FTS terms with dot-param filters (query.ts —
 // 'runner .status=done .updated.at=today'): the TEXT preds drive FTS,
-// the rest screen each hit against its components, and a line of ONLY
-// filters is a listing, newest touched first. A malformed filter throws;
-// the doors show the message.
+// the rest narrow the candidates BEFORE the result cap, then screen each hit
+// against its components. A line of ONLY filters is a listing, newest touched
+// first. A malformed filter throws; the doors show the message.
 // Resolve a reference value server-side: an alias slug, or a prefix-num /
 // bare num against the spine — the db's half of client.ts find().
 export let findEid = (db: DatabaseSync, id: string): string | undefined => {
@@ -2847,7 +2848,17 @@ export let findEid = (db: DatabaseSync, id: string): string | undefined => {
 
 export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
   let preds = parseQuery(q)
-  let filters = preds.filter((p) => p.op != TEXT)
+  let filters = resolveRefs(
+    preds.filter((p) => p.op != TEXT),
+    (id) => findEid(db, id),
+  )
+  let built = where(filters)
+  // A sparse facet may sit outside any fixed candidate window. Compile the
+  // filter into the selection when possible; an exactness decline reads every
+  // candidate so the JS definition below still decides before the result cap.
+  let screen = built ? `and d.eid in (${built.sql})` : ''
+  let cap = built ? 'limit ?' : ''
+  let params = built?.params ?? []
   let match = preds.filter((p) => p.op == TEXT)
     .map((p) => {
       let word = p.value.replace(/\*+$/, '').replaceAll('"', '')
@@ -2866,11 +2877,11 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
       join entity e on e.eid = d.eid
       left join updated up on up.eid = e.eid
       left join created cr on cr.eid = e.eid
-      where doc_fts match ?
+      where doc_fts match ? ${screen}
       order by bm25(doc_fts, 8.0, 1.0)
         - 2.0 / (1 + julianday('now') - julianday(coalesce(up.at, cr.at)))
-        limit ?
-    `).all(match, filters.length ? limit * 10 : limit) as (Omit<
+        ${cap}
+    `).all(match, ...params, ...(cap ? [limit] : [])) as (Omit<
       Hit,
       'kind' | 'open' | 'retired'
     >)[]
@@ -2880,12 +2891,13 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
       join entity e on e.eid = d.eid
       left join updated up on up.eid = e.eid
       left join created cr on cr.eid = e.eid
-      order by coalesce(up.at, cr.at) desc limit ?
-    `).all(limit * 10) as (Omit<Hit, 'kind' | 'open' | 'retired'>)[]
+      where 1 ${screen}
+      order by coalesce(up.at, cr.at) desc ${cap}
+    `).all(...params, ...(cap ? [limit] : [])) as (Omit<
+      Hit,
+      'kind' | 'open' | 'retired'
+    >)[]
   if (filters.length) {
-    // Reference values in the filters ('.assignee=jeff') resolve against the
-    // db — alias slug or human num, same forms find() speaks.
-    filters = resolveRefs(filters, (id) => findEid(db, id))
     // Each hit's components, only the ones the filters actually read —
     // matchQuery sees the same shape a live cache row has. A path pred
     // reads its TARGET through the same fetcher (compsOf doubles as the
