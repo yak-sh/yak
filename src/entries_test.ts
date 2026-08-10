@@ -6,6 +6,7 @@ import {
   failEntry,
   readEntries,
   readyEntries,
+  reclaimGeneration,
   settleGeneration,
   takeEntry,
 } from './entries.ts'
@@ -140,6 +141,71 @@ Deno.test('lease and usage facets are server-owned and one runner wins', () => {
   })
   assertEquals(row.lease, undefined)
   assertEquals(readyEntries(db, sid), [])
+  db.close()
+})
+
+Deno.test('only an expired generation lease can be reclaimed', () => {
+  let db = open(':memory:')
+  let sid = session(db), old = uuid(), next = uuid()
+  apply(db, [
+    { eid: old, name: 'runner', comp: { name: 'old' } },
+    { eid: next, name: 'runner', comp: { name: 'next' } },
+  ])
+  let input = append(db, sid, [{ message: { role: 'user' } }]).eids[0]
+  let generation = append(db, sid, [{
+    generation: { through: input, provider: 'codex', model: 'gpt-test' },
+  }]).eids[0]
+  let stale = takeEntry(
+    db,
+    generation,
+    old,
+    100,
+    () => new Date('2026-08-10T12:00:00Z'),
+  )!
+  assertEquals(
+    reclaimGeneration(
+      db,
+      stale.token,
+      next,
+      100,
+      () => new Date('2026-08-10T12:00:00.050Z'),
+    ),
+    undefined,
+  )
+  let won = reclaimGeneration(
+    db,
+    stale.token,
+    next,
+    100,
+    () => new Date('2026-08-10T12:00:00.200Z'),
+  )!
+  assertEquals(won.token.eid, generation)
+  assertEquals(won.token.holder, next)
+  assertEquals(settleGeneration(db, stale.token), [])
+
+  append(db, sid, [{
+    output: { source: generation },
+    call: { key: 'side-effect' },
+    bash: { command: 'echo once' },
+  }])
+  let call = readEntries(db, sid).at(-1)!.eid
+  let sideEffect = takeEntry(
+    db,
+    call,
+    old,
+    100,
+    () => new Date('2026-08-10T12:00:00Z'),
+  )!
+  assertEquals(
+    reclaimGeneration(
+      db,
+      sideEffect.token,
+      next,
+      100,
+      () => new Date('2026-08-10T12:00:00.200Z'),
+    ),
+    undefined,
+  )
   db.close()
 })
 

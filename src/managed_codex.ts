@@ -12,6 +12,7 @@ import {
   type LeaseToken,
   readEntries,
   readyEntries,
+  reclaimGeneration,
   settleCall,
   settleGeneration,
   takeEntry,
@@ -323,6 +324,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
   }
 
   let expire = () => {
+    let retries: { session: string; token: LeaseToken }[] = []
     for (let lease of expiredLeases(db, clock().toISOString())) {
       if (flights.has(lease.eid)) continue
       if (
@@ -335,6 +337,14 @@ export let managedCodex = (options: ManagedCodexOptions) => {
         if (settled.length) {
           cast(settled)
           sessionError(db, lease.session, null, cast, clock)
+          continue
+        }
+      }
+      if (db.prepare('select 1 from generation where eid = ?').get(lease.eid)) {
+        let won = reclaimGeneration(db, lease, runner, leaseMs, clock)
+        if (won) {
+          cast(won.changes)
+          retries.push({ session: lease.session, token: won.token })
           continue
         }
       }
@@ -355,6 +365,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
       cast(failEntry(db, lease, message, clock))
       sessionError(db, lease.session, message, cast, clock)
     }
+    return retries
   }
 
   let runnable = (session: string) =>
@@ -364,7 +375,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
     ).get(session)
 
   let pass = async () => {
-    expire()
+    let recovered = expire()
     let moved = false
     for (let session of sessions(db)) {
       if (!blocked.has(session) && runnable(session)) {
@@ -377,13 +388,14 @@ export let managedCodex = (options: ManagedCodexOptions) => {
         ? []
         : readyEntries(db, session).map((entry) => ({ session, ...entry }))
     )
-    let jobs = ready.flatMap(({ session, eid }) => {
+    let jobs = recovered.map(({ session, token }) => generation(token, session))
+    jobs.push(...ready.flatMap(({ session, eid }) => {
       let won = takeEntry(db, eid, runner, leaseMs, clock)
       if (!won) return []
       cast(won.changes)
       let kind = db.prepare('select 1 from generation where eid = ?').get(eid)
       return [kind ? generation(won.token, session) : call(won.token, session)]
-    })
+    }))
     await Promise.all(jobs)
     return moved || jobs.length > 0
   }

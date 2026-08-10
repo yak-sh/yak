@@ -134,6 +134,53 @@ export let takeEntry = (
   }
 }
 
+// A provider generation is pure graph advancement: replay may repeat provider
+// work or billing, but it cannot repeat a hosted side effect. Reclaim only
+// that class in place, under the expired lease's full CAS; calls remain
+// ambiguous and are never admitted here.
+export let reclaimGeneration = (
+  db: DatabaseSync,
+  stale: LeaseToken,
+  holder: string,
+  ttl = 30_000,
+  clock = () => new Date(),
+): { token: LeaseToken; changes: Change[] } | undefined => {
+  let now = clock()
+  let token: LeaseToken = {
+    eid: stale.eid,
+    holder,
+    at: now.toISOString(),
+    until: new Date(now.getTime() + Math.max(1, ttl)).toISOString(),
+  }
+  let change: Change = { eid: stale.eid, name: 'lease', comp: { ...token } }
+  db.exec('begin immediate')
+  try {
+    let safe = db.prepare(
+      `select 1 from lease l join generation g on g.eid = l.eid
+       where l.eid = ? and l.holder = ? and l.at = ? and l.until = ?
+         and l.until <= ?
+         and not exists (select 1 from output o where o.source = l.eid)
+         and not exists (select 1 from delivered d where d.eid = l.eid)
+         and not exists (select 1 from error x where x.eid = l.eid)
+         and not exists (select 1 from cancel c where c.target = l.eid)`,
+    ).get(stale.eid, stale.holder, stale.at, stale.until, token.at)
+    let runner = db.prepare('select 1 from runner where eid = ?').get(holder)
+    if (!safe || !runner) {
+      db.exec('rollback')
+      return undefined
+    }
+    db.prepare(
+      'update lease set holder = ?, at = ?, until = ? where eid = ?',
+    ).run(holder, token.at, token.until, token.eid)
+    record(db, [change], holder)
+    db.exec('commit')
+    return { token, changes: [change] }
+  } catch (error) {
+    db.exec('rollback')
+    throw error
+  }
+}
+
 let normalizedUsage = (value: UsageValue) => ({
   input: Math.max(0, Math.trunc(value.input)),
   cached: Math.max(0, Math.trunc(value.cached)),

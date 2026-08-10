@@ -2,7 +2,7 @@
 // provider/tools. No process, credential, or owner graph participates.
 import { assert, assertEquals, assertMatch } from '@std/assert'
 import { apply, journalOf, open } from './db.ts'
-import { append, readEntries, takeEntry } from './entries.ts'
+import { append, readEntries, settleGeneration, takeEntry } from './entries.ts'
 import { managedCodex } from './managed_codex.ts'
 import { type ResponseResult } from './responses.ts'
 import { type ToolHost } from './harness_tools.ts'
@@ -544,7 +544,7 @@ Deno.test('deleting a Session aborts its flight after entry cascades', async () 
   db.close()
 })
 
-Deno.test('restart expires a lost lease without repeating its operation', async () => {
+Deno.test('restart reclaims a lost generation without minting another', async () => {
   let db = open(':memory:')
   let tree = Deno.makeTempDirSync()
   let sid = session(db, tree), old = uuid(), calls = 0
@@ -583,21 +583,73 @@ Deno.test('restart expires a lost lease without repeating its operation', async 
     prepare: () => Promise.resolve(),
   })
   await service.sweep()
-  let row = readEntries(db, sid).find((row) => row.eid == generation)!
+  let rows = readEntries(db, sid)
+  assertEquals(calls, 1)
+  assertEquals(rows.filter((row) => row.comps.generation).length, 1)
+  assertEquals(
+    rows.find((row) => row.eid == generation)?.comps.error,
+    undefined,
+  )
+  assertEquals(
+    rows.find((row) => row.eid == generation)?.comps.delivered?.via,
+    'runner:tasksd',
+  )
+  assertEquals(rows.at(-1)?.comps.content?.body, 'recovered deliberately')
+  db.close()
+})
+
+Deno.test('restart leaves an uncertain side-effecting call ambiguous', async () => {
+  let db = open(':memory:')
+  let tree = Deno.makeTempDirSync()
+  let sid = session(db, tree), old = uuid(), calls = 0
+  db.prepare('update session set base_revision = ? where eid = ?')
+    .run('base', sid)
+  apply(db, [{ eid: old, name: 'runner', comp: { name: 'old' } }])
+  let input = append(db, sid, [{ message: { role: 'user' } }]).eids[0]
+  let generation = append(db, sid, [{
+    generation: { through: input, provider: 'codex', model: 'gpt-requested' },
+  }]).eids[0]
+  let lease = takeEntry(db, generation, old)!
+  append(db, sid, [{
+    output: { source: generation },
+    call: { key: 'uncertain-shell' },
+    bash: { command: 'do-not-repeat' },
+  }], old)
+  settleGeneration(db, lease.token)
+  let call = readEntries(db, sid).at(-1)!.eid
+  takeEntry(
+    db,
+    call,
+    old,
+    100,
+    () => new Date('2026-08-10T12:00:00Z'),
+  )
+  let service = managedCodex({
+    db,
+    cast: () => {},
+    clock: () => new Date('2026-08-10T12:00:01Z'),
+    transport: {
+      run: () =>
+        Promise.resolve(result([{
+          type: 'message',
+          content: [{ type: 'output_text', text: 'continued safely' }],
+        }])),
+    },
+    tools: () =>
+      Promise.resolve({
+        ...tools([]),
+        call: () => {
+          calls++
+          return Promise.resolve({ output: 'repeated' })
+        },
+      }),
+    prepare: () => Promise.resolve(),
+  })
+  await service.sweep()
+  let row = readEntries(db, sid).find((row) => row.eid == call)!
   assertMatch(String(row.comps.error.message), /outcome is ambiguous/)
   assertEquals(row.comps.lease, undefined)
   assertEquals(calls, 0)
-  let comment = uuid()
-  apply(db, [
-    { eid: comment, name: 'doc', comp: { title: '', body: 'try again' } },
-    { eid: comment, name: 'comment', comp: { target: sid } },
-  ])
-  service.comment(sid, comment)
-  await service.sweep()
-  let rows = readEntries(db, sid)
-  assertEquals(calls, 1)
-  assertEquals(rows.filter((row) => row.comps.generation).length, 2)
-  assertEquals(rows.at(-1)?.comps.content?.body, 'recovered deliberately')
   db.close()
 })
 
