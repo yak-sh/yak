@@ -13,6 +13,7 @@ import { overTray, shelf, shelfMint } from './Tray.tsx'
 // Each tab view wears an icon; the name moves into an anchored tooltip.
 // Exported: the fullscreen Screen bar (App.tsx) draws the same tabs.
 export let icons: Record<string, string> = {
+  Wake: 'alarm-clock',
   Canvas: 'map',
   List: 'list',
   Full: 'file-text',

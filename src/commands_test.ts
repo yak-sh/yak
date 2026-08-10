@@ -409,9 +409,8 @@ Deno.test('knock: an unresolvable recipient is refused, never made body', () => 
 
 Deno.test('wake: who, when, and a trailing id is what to look at', () => {
   let r = run('wake B-3 in 60m T-4', ctx(P, 'sess-x'))
-  let [doc, wake, deliver] = r.changes!
-  assertEquals(doc.comp?.title, 'wake B-3 in 60m T-4')
-  assertEquals(wake.name, 'wake')
+  let [wake, deliver] = r.changes!
+  assertEquals(r.changes!.map((c) => c.name), ['wake', 'deliver'])
   assertEquals(deliver.comp?.to, B) // WHO to wake — the shared deliver.to
   assertEquals(wake.comp?.target_eid, T) // the trailing id wins the subject
   // the phrase resolves HERE, at mint — an hour out, within the second
@@ -419,12 +418,12 @@ Deno.test('wake: who, when, and a trailing id is what to look at', () => {
   assertEquals(Math.abs(at - (Date.now() + 3_600_000)) < 1000, true)
   // no trailing id: where you stand is what to look at
   assertEquals(
-    run('wake B-3 9am tomorrow', ctx(T)).changes![1].comp?.target_eid,
+    run('wake B-3 9am tomorrow', ctx(T)).changes![0].comp?.target_eid,
     T,
   )
   // …and standing nowhere, the wake is its own subject
   assertEquals(
-    run('wake B-3 8pm', ctx()).changes![1].comp?.target_eid,
+    run('wake B-3 8pm', ctx()).changes![0].comp?.target_eid,
     undefined,
   )
   assertThrows(() => run('wake', ctx(T)), Error, 'name who to wake')

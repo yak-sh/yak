@@ -50,6 +50,7 @@ import { Md, mdText } from './views/Md.tsx'
 import { Web } from './views/Web.tsx'
 import { Session, SessionRow } from './views/Session.tsx'
 import { Role } from './views/Role.tsx'
+import { Wake, WakeTitle } from './views/Wake.tsx'
 import { openRun } from './Run.tsx'
 import { viaName } from './Comments.tsx'
 
@@ -87,6 +88,7 @@ define([
   { view: 'Tile', match: has('doc', 'board'), Render: BoardTile },
   { view: 'Tile', match: has('session'), Render: SessionRow },
   { view: 'Tile', match: () => true, Render: ListTile },
+  { view: 'Wake', match: has('wake'), Render: Wake },
   { view: 'Full', match: has('doc'), Render: Show },
   { view: 'Card.Full', match: has('doc'), Render: CardFull },
   { view: 'Board', match: has('doc', 'board'), Render: Board },
@@ -150,6 +152,7 @@ define([
   { view: 'Runs', match: () => true, Render: Runs },
   { view: 'Similar', match: () => true, Render: Similar },
   { view: 'Comments', match: () => true, Render: Talkback },
+  { view: 'Card.Title', match: has('wake', 'deliver'), Render: WakeTitle },
   { view: 'Card.Title', match: has('doc', 'task'), Render: TaskTitle },
   { view: 'Card.Title', match: has('doc', 'board'), Render: BoardTitle },
   { view: 'Card.Title', match: has('doc', 'role'), Render: RoleTitle },
@@ -190,6 +193,7 @@ define([
   { view: 'Inline', match: () => true, Render: Inline },
   { view: 'Dependency', match: () => true, Render: Dependency },
 ], [
+  'Wake',
   'Canvas',
   'Board',
   'List',

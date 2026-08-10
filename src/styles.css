@@ -1236,6 +1236,51 @@ html {
   height: 0.6em;
 }
 
+/* A wake is one moment and the people on either side of it. The clock gets
+   the quiet card; entity tiles keep their ordinary linked face below. */
+.Wake {
+  display: grid;
+  gap: calc(2 * var(--gap));
+  width: min(100%, 32rem);
+  margin: auto;
+  padding: clamp(var(--gap), 5vw, calc(3 * var(--gap)));
+}
+.Wake_Moment {
+  display: grid;
+  gap: var(--half-gap);
+  padding: calc(2 * var(--gap));
+  border: 1px solid var(--border);
+  border-radius: calc(2 * var(--radius));
+  background: linear-gradient(145deg, var(--soft), var(--card));
+  box-shadow: 0 12px 36px color-mix(in srgb, #000 18%, transparent);
+  text-align: center;
+}
+.Wake_Relative {
+  color: var(--accent);
+  font-size: clamp(1.6rem, 7vw, 2.6rem);
+  font-weight: 600;
+  line-height: 1.1;
+}
+.Wake_Exact {
+  color: var(--muted);
+  font: 12px var(--mono);
+}
+.Wake_People,
+.Wake_Party {
+  display: grid;
+  gap: var(--half-gap);
+}
+.Wake_People {
+  gap: var(--gap);
+}
+.Wake_Label {
+  color: var(--dim);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 /* The document face sits borderless on the floor — the card frame
    belongs to windows (canvas cards), not to the page you're reading.
    Only the root Full face renders div.Show; the card face (Card.Full)

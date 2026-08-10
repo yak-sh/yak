@@ -45,7 +45,7 @@ let pending = () =>
   ).all() as Row[]
 
 // The knock this wake was always going to be. No target means the wake
-// itself is the subject — its doc carries whatever the asker said.
+// itself is the subject.
 let fire = (r: Row, cast: Cast) => {
   let t = trace()
   let ke = uuid()

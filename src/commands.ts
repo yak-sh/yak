@@ -378,9 +378,6 @@ export let commands: Record<string, Command> = {
       let w = uuid()
       return {
         changes: [
-          // The doc is what the knock will show when the wake is its own
-          // subject — the ask, in the asker's words.
-          { eid: w, name: 'doc', comp: { title: `wake ${rest.trim()}` } },
           {
             eid: w,
             name: 'wake',

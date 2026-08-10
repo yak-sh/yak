@@ -315,8 +315,7 @@ export let comps: Record<string, Record<string, PropType>> = {
   // to wake is the `deliver {to}` facet below.
   wake: {
     at: 'time',
-    // What to look at on waking — absent means the wake itself, so the
-    // words in its doc are what arrives.
+    // What to look at on waking — absent means the wake itself.
     target_eid: { eid: '', death: 'cascade' },
   },
   // Outbound mail, asked for as data: creating one requests delivery (the
