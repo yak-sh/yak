@@ -1665,12 +1665,17 @@ export let mode = signal<'normal' | 'insert' | 'command' | 'visual'>('normal')
 // component graph can't shut it mid-search (Search.tsx owns the rest).
 export let searchOpen = signal(false)
 
-// Desktop opens entity links as a floating card at the pointer. This is
-// shell state: a component hot swap replaces nav.tsx, but the card the
-// operator is reading must stay open. view is its own optional tab choice.
-export let peek = signal<
-  { eid: string; x: number; y: number; view?: string; from?: Element } | null
->(null)
+// Desktop opens entity links as floating cards at the pointer, oldest first.
+// This is shell state: a component hot swap replaces nav.tsx, but the cards
+// the operator is reading must stay open. view is its own optional tab choice.
+export type Peeked = {
+  eid: string
+  x: number
+  y: number
+  view?: string
+  from?: Element
+}
+export let peek = signal<Peeked[]>([])
 
 // The roots passed through, oldest first — the App bar wears the last few
 // as breadcrumbs. Shell state for the same reason as peek: where the

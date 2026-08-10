@@ -27,7 +27,7 @@ globalThis.addEventListener?.('popstate', () => {
 
 export let navigate = (to: string) => {
   if (!his) return
-  peek.value = null // a real root change dismisses any floating peek
+  peek.value = [] // a real root change dismisses every floating peek
   let was = screenTarget()?.eid
   his.pushState(null, '', to)
   route.value = to
@@ -50,11 +50,15 @@ let linkAt = (ev: MouseEvent) => {
 export let openAt = (eid: string, ev: MouseEvent) => {
   if (globalThis.matchMedia?.('(pointer: fine)').matches) {
     let from = linkAt(ev)
+    let stack = peek.peek()
+    let current = stack.at(-1)
     // The peek already shows this entity. Its own id's clicks must leave
     // it mounted long enough for the deliberate double-click to navigate.
-    if (peek.value?.eid == eid && from?.closest('.Peek')) return
-    let same = peek.value?.eid == eid && peek.value.from == from
-    peek.value = same ? null : { eid, x: ev.clientX, y: ev.clientY, from }
+    if (current?.eid == eid && from?.closest('.Peek')) return
+    let same = current?.eid == eid && current.from == from
+    peek.value = same
+      ? stack.slice(0, -1)
+      : [...stack, { eid, x: ev.clientX, y: ev.clientY, from }]
   } else navigate(`/${idOf(ent(eid))}`)
 }
 

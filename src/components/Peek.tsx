@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from 'preact/hooks'
-import { ent } from '../live.ts'
+import { ent, type Peeked } from '../live.ts'
 import { block, el } from './ui.tsx'
 import { cardMenuAt, peek } from './nav.tsx'
 import { applicable, resolve } from './registry.ts'
@@ -23,46 +23,23 @@ let Tab = el('button', 'Tab')
 export let peekKey = (key: string, typing: boolean) =>
   !typing && (key == 'Escape' || key == 'q')
 
-export let Peek = () => {
-  let p = peek.value
+export let popPeek = (stack: Peeked[]) => stack.slice(0, -1)
+
+let PeekCard = ({ p }: { p: Peeked }) => {
   let root = useRef<HTMLDivElement>(null)
 
   useLayoutEffect(() => {
-    if (!p) return
     let el = root.current!
     let anchor = new DOMRect(p.x - 8, p.y - 8, 16, 16)
     let put = () => place(el, anchor, 'above')
     put()
     let ro = new ResizeObserver(put)
     ro.observe(el)
-    let away = (ev: PointerEvent) => {
-      // popout editors portal into a body-mounted .Overlay (overlay.tsx),
-      // so containment can't see them — pressing one is USING the peek,
-      // and dismissing here would unmount the control before its click.
-      if (
-        ev.target instanceof Element && !el.contains(ev.target) &&
-        !p.from?.contains(ev.target) &&
-        !ev.target.closest('.Overlay')
-      ) peek.value = null
-    }
-    let key = (ev: KeyboardEvent) => {
-      let typing = ev.target instanceof HTMLElement &&
-        ev.target.matches('input, textarea, [contenteditable]')
-      if (peekKey(ev.key, typing)) {
-        ev.stopPropagation()
-        peek.value = null
-      }
-    }
-    addEventListener('pointerdown', away)
-    addEventListener('keydown', key, true)
     return () => {
       ro.disconnect()
-      removeEventListener('pointerdown', away)
-      removeEventListener('keydown', key, true)
     }
   }, [p])
 
-  if (!p) return null
   let e = ent(p.eid)
   let tabs = applicable(e)
   let view = p.view && tabs.includes(p.view) ? p.view : resolve(e).view
@@ -71,7 +48,9 @@ export let Peek = () => {
   // drop means the peek lives on the canvas now, so it closes; a
   // cancelled drag keeps it floating.
   let flown = (ev: DragEvent) => {
-    if (ev.dataTransfer?.dropEffect != 'none') peek.value = null
+    if (ev.dataTransfer?.dropEffect != 'none') {
+      peek.value = peek.peek().filter((v) => v != p)
+    }
   }
 
   return (
@@ -91,14 +70,19 @@ export let Peek = () => {
             // overwriting the payload with the current one
             onDragStart={(ev: DragEvent) => {
               ev.stopPropagation()
-              dragData(ev, p!.eid, v)
+              dragData(ev, p.eid, v)
             }}
-            onClick={() => v != view && (peek.value = { ...p!, view: v })}
+            onClick={() => {
+              if (v == view) return
+              peek.value = peek.peek().map((x) =>
+                x == p ? { ...p, view: v } : x
+              )
+            }}
             key={v}
             aria-label={v}
             data-tip={v}
           >
-            <TabFace view={v} eid={p!.eid} />
+            <TabFace view={v} eid={p.eid} />
           </Tab>
         ))}
       </Head>
@@ -107,4 +91,37 @@ export let Peek = () => {
       </Body>
     </Frame>
   )
+}
+
+export let Peek = () => {
+  let stack = peek.value
+
+  useLayoutEffect(() => {
+    if (!stack.length) return
+    let away = (ev: PointerEvent) => {
+      // Popout editors portal into a body-mounted .Overlay (overlay.tsx),
+      // so containment can't see them — pressing one is USING the stack,
+      // and dismissing here would unmount the control before its click.
+      if (
+        ev.target instanceof Element && !ev.target.closest('.Peek, .Overlay') &&
+        !stack.some((p) => p.from?.contains(ev.target as Node))
+      ) peek.value = []
+    }
+    let key = (ev: KeyboardEvent) => {
+      let typing = ev.target instanceof HTMLElement &&
+        ev.target.matches('input, textarea, [contenteditable]')
+      if (peekKey(ev.key, typing)) {
+        ev.stopPropagation()
+        peek.value = popPeek(peek.peek())
+      }
+    }
+    addEventListener('pointerdown', away)
+    addEventListener('keydown', key, true)
+    return () => {
+      removeEventListener('pointerdown', away)
+      removeEventListener('keydown', key, true)
+    }
+  }, [stack])
+
+  return <>{stack.map((p, i) => <PeekCard p={p} key={`${p.eid}:${i}`} />)}</>
 }

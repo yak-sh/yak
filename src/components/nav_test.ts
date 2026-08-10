@@ -21,7 +21,7 @@ let e: Ent = {
   kids: [],
 }
 
-let from = () => peek.value?.from
+let from = () => peek.value.at(-1)?.from
 
 Deno.test('peek state lives above the hot-swap boundary', () => {
   assertStrictEquals(peek, shellPeek)
@@ -49,17 +49,19 @@ Deno.test('only the same opener toggles its peek closed', () => {
     }) as unknown as MouseEvent
 
   try {
-    peek.value = null
+    peek.value = []
     openAt(e.eid, ev(a))
     assertEquals(from(), a)
 
     openAt(e.eid, ev(b))
     assertEquals(from(), b)
+    assertEquals(peek.value.length, 2)
 
     openAt(e.eid, ev(b))
-    assertEquals(peek.value, null)
+    assertEquals(peek.value.length, 1)
+    assertEquals(from(), a)
   } finally {
-    peek.value = null
+    peek.value = []
     if (priorMedia) Object.defineProperty(globalThis, 'matchMedia', priorMedia)
     else delete (globalThis as { matchMedia?: unknown }).matchMedia
     if (priorElement) {
@@ -91,12 +93,12 @@ Deno.test('the current peek id stays mounted for double-click navigation', () =>
   } as unknown as MouseEvent
 
   try {
-    peek.value = { eid: e.eid, x: 1, y: 2, from: opener }
+    peek.value = [{ eid: e.eid, x: 1, y: 2, from: opener }]
     openAt(e.eid, ev)
     openAt(e.eid, ev)
-    assertEquals(peek.value?.from, opener)
+    assertEquals(peek.value.at(-1)?.from, opener)
   } finally {
-    peek.value = null
+    peek.value = []
     if (priorMedia) Object.defineProperty(globalThis, 'matchMedia', priorMedia)
     else delete (globalThis as { matchMedia?: unknown }).matchMedia
     if (priorElement) {
@@ -191,8 +193,8 @@ Deno.test('link props do not subscribe to peek state', () => {
     clickProps(e)
     runs++
   })
-  peek.value = { eid: e.eid, x: 1, y: 2 }
+  peek.value = [{ eid: e.eid, x: 1, y: 2 }]
   assertEquals(runs, 1)
   stop()
-  peek.value = null
+  peek.value = []
 })
