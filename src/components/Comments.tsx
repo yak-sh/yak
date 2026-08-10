@@ -1,12 +1,12 @@
 import { useRef, useState } from 'preact/hooks'
 import { commands, orderIn, suggest } from '../commands.ts'
-import { md } from '../md.ts'
 import { commentsOn, ent, mutate, pending, repoUrl, uuid } from '../live.ts'
 import { ago, block, pretty } from './ui.tsx'
 import { useDraft } from './drafts.ts'
 import { type Ent, idOf, nick, sessionActive, verdictName } from '../types.ts'
 import { linkProps } from './nav.tsx'
 import { title } from './title.tsx'
+import { Markdown } from './Markdown.tsx'
 
 let Frame = block('div', 'Comments', {
   Item: 'div',
@@ -81,13 +81,9 @@ export let Note = ({ c }: { c: Ent }) => {
         /* A comment IS its body, so an unshipped one paints the wait rather
           than an empty note (pending() is the ask). */
       }
-      {pending(c) ? <Body>…</Body> : (
-        <Body
-          dangerouslySetInnerHTML={{
-            __html: md(c.doc?.body ?? '', repoUrl(c)),
-          }}
-        />
-      )}
+      {pending(c)
+        ? <Body>…</Body>
+        : <Markdown as={Body} text={c.doc?.body ?? ''} repo={repoUrl(c)} />}
     </Item>
   )
 }

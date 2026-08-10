@@ -4,7 +4,6 @@ import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
 import { cache, config } from '../live.ts'
-import { mdInline } from '../md.ts'
 import { type Change } from '../types.ts'
 import { Edit } from './Edit.tsx'
 
@@ -37,7 +36,7 @@ Deno.test('double-click selects words while already editing', () => {
         eid,
         comp: 'doc',
         prop: 'title',
-        html: mdInline,
+        inline: true,
       }),
       root,
     )

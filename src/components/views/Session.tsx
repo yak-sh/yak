@@ -1,5 +1,4 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
-import { md } from '../../md.ts'
 import {
   awake,
   type Ent,
@@ -24,6 +23,7 @@ import { Composer, Note } from '../Comments.tsx'
 import { Id } from './Inline.tsx'
 import { Entity } from '../Entity.tsx'
 import { title } from '../title.tsx'
+import { Markdown } from '../Markdown.tsx'
 
 // An agent session, watched — the console (W-3676 #5): a sticky slim bar
 // (task, lifecycle summary, stop — server-owned columns riding
@@ -282,8 +282,8 @@ export let SessionBody = ({ x, repo }: { x: Entry; repo?: string }) => {
     case 'say':
       // markdown, escaped of any markup by md.ts — as with a task body
       return r.role == 'user'
-        ? <User dangerouslySetInnerHTML={{ __html: md(r.text, repo) }} />
-        : <Agent dangerouslySetInnerHTML={{ __html: md(r.text, repo) }} />
+        ? <Markdown as={User} text={r.text} repo={repo} />
+        : <Markdown as={Agent} text={r.text} repo={repo} />
     case 'reason':
       return <Reason>{r.text}</Reason>
     case 'tool':
@@ -519,9 +519,7 @@ export let Session = ({ e }: { e: Ent }) => {
       <Panel>
         {/* markdown, escaped of any markup by md.ts — as with a task body */}
         {!said && s.final_text && (
-          <Final
-            dangerouslySetInnerHTML={{ __html: md(s.final_text, repo) }}
-          />
+          <Markdown as={Final} text={s.final_text} repo={repo} />
         )}
         {e.error?.message && <Fault mod='error'>{e.error.message}</Fault>}
         {s.stop_reason && <Fault>{s.stop_reason}</Fault>}

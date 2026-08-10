@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { type ComponentChildren } from 'preact'
-import { md } from '../../md.ts'
 import { comps, type Ent } from '../../types.ts'
 import { FLOOR, textOf } from '../../embed.ts'
 import {
@@ -23,6 +22,7 @@ import { Comments, viaName } from '../Comments.tsx'
 import { Dot } from '../Dot.tsx'
 import { Prio } from '../Prio.tsx'
 import { Edit } from '../Edit.tsx'
+import { Markdown } from '../Markdown.tsx'
 import { title, TitleEdit } from '../title.tsx'
 import { editorFor, Prop } from '../editors.tsx'
 import { Relate } from './Relate.tsx'
@@ -288,12 +288,12 @@ export let Body = ({ e, mod }: { e: Ent; mod?: string }) => {
       </BodyEl>
     )
     : (
-      <BodyEl
+      <Markdown
+        as={BodyEl}
         mod={mod}
         onDblClick={() => setSrc(true)}
-        dangerouslySetInnerHTML={{
-          __html: md(e.doc?.body ?? '', repoUrl(e)),
-        }}
+        text={e.doc?.body ?? ''}
+        repo={repoUrl(e)}
       />
     )
 }

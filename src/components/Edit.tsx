@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'preact/hooks'
 import { ent, mode, mutate, problem, want } from '../live.ts'
 import { propAt } from '../props.ts'
 import { drop, peek, save } from './drafts.ts'
+import { markdown, markup } from './Markdown.tsx'
 import { el } from './ui.tsx'
 
 let Span = el('span', 'Edit')
@@ -17,18 +18,18 @@ let Span = el('span', 'Edit')
 // open: mount already editing — for hosts that swap rendered content for
 // source (the markdown body), where there's no same-node dblclick to
 // start from. onClose fires when the edit ends, commit or revert.
-// html: show rendered markup at rest, but edit and save its source.
+// inline: show inline markdown at rest, but edit and save its source.
 // Keystrokes save a draft; blur spends it — so a hot swap mid-edit
 // remounts, finds the draft, and resumes editing where typing stopped.
 export let Edit = (
-  { eid, comp, prop, multi, open, onClose, html }: {
+  { eid, comp, prop, multi, open, onClose, inline }: {
     eid: string
     comp: string
     prop: string
     multi?: boolean
     open?: boolean
     onClose?: () => void
-    html?: (value: string) => string
+    inline?: boolean
   },
 ) => {
   let comps = ent(eid) as unknown as Record<
@@ -44,16 +45,14 @@ export let Edit = (
   let value = String(held ?? '')
   let ref = useRef<HTMLElement>(null)
   let dkey = `${eid}.${comp}.${prop}`
-  let rendered = html
-    ? { dangerouslySetInnerHTML: { __html: html(value) } }
-    : {}
+  let rendered = inline ? markdown(value, undefined, true) : {}
 
   let begin = (t: HTMLElement) => {
     if (unloaded || t.isContentEditable) return
     let row = t.closest<HTMLElement>('[draggable="true"]')
     if (row) row.draggable = false
     t.dataset.was = value
-    if (html) t.textContent = value
+    if (inline) t.textContent = value
     t.contentEditable = 'plaintext-only'
     t.focus()
     getSelection()?.setPosition(t, t.childNodes.length) // caret at the end
@@ -106,7 +105,7 @@ export let Edit = (
         problem.value = e instanceof Error ? e.message : String(e)
       }
     }
-    if (html) t.innerHTML = html(shown)
+    if (inline) t.innerHTML = markup(shown, undefined, true)
     else t.textContent = shown
     onClose?.()
   }
@@ -121,7 +120,7 @@ export let Edit = (
       onBlur={blur}
       {...rendered}
     >
-      {html ? null : value}
+      {inline ? null : value}
     </Span>
   )
 }
