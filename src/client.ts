@@ -60,6 +60,14 @@ export let jsonOf = (
   ),
 })
 
+let projectSession = (
+  comps: Record<string, Record<string, unknown>>,
+) => {
+  let session = sessionOf(comps)
+  if (session) comps.session = session
+  return comps
+}
+
 let rowOf = (r: Record<string, unknown>): Row => {
   let { kind, ...comps } = r
   let entity = comps.entity as Record<string, unknown>
@@ -67,7 +75,7 @@ let rowOf = (r: Record<string, unknown>): Row => {
     eid: String(entity.eid),
     num: Number(entity.num ?? 0),
     kind: String(kind),
-    comps: comps as Record<string, Record<string, unknown>>,
+    comps: projectSession(comps as Record<string, Record<string, unknown>>),
   }
 }
 
@@ -129,8 +137,7 @@ export let rows = ({ changes }: { changes: Change[] }, quarantined = false) => {
     out.set(eid, row)
   }
   for (let r of out.values()) {
-    let session = sessionOf(r.comps)
-    if (session) r.comps.session = session
+    projectSession(r.comps)
     r.kind = kindOf(r.comps)
   }
   let rows = [...out.values()]

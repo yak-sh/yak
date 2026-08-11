@@ -10,7 +10,7 @@ import { transform } from 'sucrase'
 import { bound, guard, type Serving } from './bind.ts'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { providers } from './adapters.ts'
-import { type Change, type Dep, idOf, kindOf } from './types.ts'
+import { type Change, type Dep, idOf, kindOf, sessionOf } from './types.ts'
 import {
   apply,
   bodies,
@@ -229,12 +229,16 @@ let rowed = (
     eid: string
     comps: Record<string, Record<string, unknown>>
   },
-): Row => ({
-  eid,
-  num: Number(comps.entity?.num ?? 0),
-  kind: kindOf(comps),
-  comps,
-})
+): Row => {
+  let session = sessionOf(comps)
+  if (session) comps.session = session
+  return {
+    eid,
+    num: Number(comps.entity?.num ?? 0),
+    kind: kindOf(comps),
+    comps,
+  }
+}
 
 let evalFast = (q: string, kind?: string, entries = false) => {
   let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))

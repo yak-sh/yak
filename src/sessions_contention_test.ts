@@ -11,6 +11,7 @@ Deno.env.set('POLL_MS', '5')
 
 let { apply, db } = await import('./db.ts')
 let { logsDir, recover, running } = await import('./sessions.ts')
+let { writeSession } = await import('./session_store.ts')
 
 let uid = () => crypto.randomUUID()
 let heard: Change[] = []
@@ -27,10 +28,11 @@ let RESULT = '{"type":"result","final_text":"done"}'
 let plant = () => {
   let eid = uid()
   apply(db, [{ eid, name: 'session', comp: { id: uid() } }])
-  db.prepare(
-    `update session set origin = 'managed', status = 'running',
-     provider = 'fake' where eid = ?`,
-  ).run(eid)
+  writeSession(db, eid, {
+    origin: 'managed',
+    status: 'running',
+    provider: 'fake',
+  })
   Deno.mkdirSync(logsDir(), { recursive: true })
   Deno.writeTextFileSync(log(eid), `${INIT}\n${RESULT}\n`)
   return eid

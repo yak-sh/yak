@@ -64,6 +64,31 @@ let queried = async (q: string): Promise<string[]> => {
   return hits.map((r) => r.entity.eid).sort()
 }
 
+Deno.test(
+  'query projects canonical Session nulls over stale aliases',
+  alone,
+  async () => {
+    let eid = uid()
+    await post([{
+      eid,
+      name: 'session',
+      comp: { id: uid(), cwd: '/canonical' },
+    }])
+    db.prepare("update session set cwd = '/stale' where eid = ?").run(eid)
+    db.prepare('update worktree set cwd = null where eid = ?').run(eid)
+    try {
+      let res = await fetch(`http://${U}/query?id=${eid}`)
+      if (!res.ok) throw new Error(`query refused: ${await res.text()}`)
+      let [hit] = await res.json() as {
+        session: { cwd: string | null }
+      }[]
+      assertEquals(hit.session.cwd, null)
+    } finally {
+      await post([{ eid, name: 'entity', comp: null }])
+    }
+  },
+)
+
 // A subscribing socket that folds frames into member sets exactly as the wire
 // says to: a replace frame supersedes the set, a maintenance frame adds every
 // eid it carries changes for, and removes every eid in `drop` plus every death

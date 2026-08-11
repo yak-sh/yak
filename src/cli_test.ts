@@ -591,6 +591,8 @@ Deno.test('SessionStart refuses collisions and rotates explicit handoffs', () =>
       name: 'session',
       comp: { cwd: '/repo', pid: 4242, source: 'resume' },
     },
+    { eid: resumed, name: 'worktree', comp: { cwd: '/repo' } },
+    { eid: resumed, name: 'runtime', comp: { pid: 4242 } },
   ])
 
   let clear = hookSession(
@@ -601,18 +603,22 @@ Deno.test('SessionStart refuses collisions and rotates explicit handoffs', () =>
     { source: 'clear', operator: true },
     1,
   )!
-  assertEquals(clear.changes[0], {
-    eid: incumbent,
-    name: 'session',
-    comp: { pid: null },
-  })
-  assertEquals(clear.changes[1].comp, {
-    id: 'clear-sid',
-    cwd: '/repo',
-    pid: 4242,
-    source: 'clear',
-    operator: 1,
-  })
+  assertEquals(clear.changes, [
+    { eid: incumbent, name: 'session', comp: { pid: null } },
+    {
+      eid: clear.eid,
+      name: 'session',
+      comp: {
+        id: 'clear-sid',
+        cwd: '/repo',
+        pid: 4242,
+        source: 'clear',
+        operator: 1,
+      },
+    },
+    { eid: clear.eid, name: 'worktree', comp: { cwd: '/repo' } },
+    { eid: clear.eid, name: 'runtime', comp: { pid: 4242 } },
+  ])
 })
 
 Deno.test('role binding accepts only a live role entity', () => {
