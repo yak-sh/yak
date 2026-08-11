@@ -76,6 +76,7 @@ import {
   taskBlock,
   taskChanges,
   unreadMail,
+  unreadPipe,
   wrapChanges,
 } from './client.ts'
 import { entityUrl } from './url.ts'
@@ -1886,6 +1887,18 @@ let remember = async (got: Got) => {
   let session = me()
   if (!session) throw new Error('remember: no session identity (attribution)')
   let body = got.body
+  // A heredoc piped without the `.body=@-` door used to vanish, minting a
+  // title-only memory with exit 0 (M-14370). We cannot read it here — an
+  // implicit slurp of an inherited open pipe is the T-5854 hang — so refuse
+  // the unread pipe and name the door. `body == null` is "no body door at
+  // all"; an explicit `.body=` (empty string) is a deliberate title-only
+  // memory from a non-tty context and passes through.
+  if (body == null && unreadPipe()) {
+    throw new Error(
+      'task remember: stdin is a pipe no body door read — pass the lesson ' +
+        'with .body=@- (a heredoc/file), or .body= for a title-only memory',
+    )
+  }
   let [sess, refs] = await Promise.all([
     sessionRow(session),
     fetched(

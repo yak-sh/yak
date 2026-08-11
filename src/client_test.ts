@@ -49,6 +49,7 @@ import {
   taskChanges,
   threadOf,
   unreadMail,
+  unreadPipe,
   worktreeRoot,
   wrapChanges,
 } from './client.ts'
@@ -2767,6 +2768,19 @@ Deno.test('inflate: the refusal names the token that drank the pipe', () => {
 Deno.test('inflate: an empty pipe is refused, never a silent clear', () => {
   let io = { terminal: () => false, read: () => '  \n' }
   assertThrows(() => inflate(p('@-'), io), Error, '.body=@-: stdin was empty')
+})
+
+Deno.test('unreadPipe: a piped stdin no door drank — never a TTY, never a read', () => {
+  let read = 0
+  let io = { terminal: () => false, read: () => (read++, 'x') }
+  // A heredoc piped without .body=@- — the drop this catches.
+  assertEquals(unreadPipe(io), true)
+  // A door already drank it: not unread.
+  assertEquals(unreadPipe({ ...io, taken: '.body=@-' }), false)
+  // A TTY is not a pipe, so nothing was dropped.
+  assertEquals(unreadPipe({ ...io, terminal: () => true }), false)
+  // It decides by looking, never by reading — a slurp here is the T-5854 hang.
+  assertEquals(read, 0)
 })
 
 Deno.test('inflate: errors name the token the caller typed', () => {

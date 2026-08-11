@@ -328,6 +328,16 @@ let piped = (io: Stdin, as: string) => {
   return v
 }
 
+// A pipe on stdin that no @- door drank. Since stdin is never read implicitly
+// (above), a verb cannot ADOPT a piped body — it would have to slurp to see
+// one, and that slurp is the T-5854 hang (an inherited open pipe never gives
+// EOF). So a verb whose trailing words are its TITLE instead REFUSES a
+// piped-but-unread stdin, turning a silent drop (a heredoc lost with exit 0,
+// which mis-minted M-14370) into a loud, recoverable error naming the @- door.
+// Never reads, so it cannot block; a TTY is not a pipe.
+export let unreadPipe = (io: Stdin = stdin) =>
+  !io.terminal() && io.taken == null
+
 // A value starting with @ is read by the tool itself: @file is a FILE,
 // @- is piped stdin — the safe doors for long bodies. Shell substitution
 // offers the same and fails silently ($(cat) in a zsh pipeline reads
