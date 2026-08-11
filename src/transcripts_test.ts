@@ -6,7 +6,7 @@ import { codexTranscript } from './transcripts.ts'
 let event = (type: string, payload: Record<string, unknown>) =>
   codexTranscript({ timestamp: '2026-07-26T12:00:00Z', type, payload })
 
-Deno.test('Codex transcript says each turn once and keeps context quiet', () => {
+Deno.test('Codex transcript says each turn once and keeps injected context quiet', () => {
   assertEquals(
     event('event_msg', {
       type: 'user_message',
@@ -52,7 +52,7 @@ Deno.test('Codex transcript says each turn once and keeps context quiet', () => 
   )
 })
 
-Deno.test('Codex transcript narrates reasoning, tools, and turn boundaries', () => {
+Deno.test('Codex transcript narrates activity and reports request context', () => {
   assertEquals(
     event('response_item', {
       type: 'reasoning',
@@ -95,6 +95,21 @@ Deno.test('Codex transcript narrates reasoning, tools, and turn boundaries', () 
     {
       kind: 'turn',
       ms: 1250,
+    },
+  )
+  assertEquals(
+    event('event_msg', {
+      type: 'token_count',
+      info: {
+        total_token_usage: { input_tokens: 530632 },
+        last_token_usage: { input_tokens: 75009 },
+        model_context_window: 258400,
+      },
+    }),
+    {
+      kind: 'sys',
+      tag: 'tokens',
+      context: 75009,
     },
   )
   assertEquals(event('event_msg', { type: 'token_count', info: {} }), {

@@ -55,7 +55,7 @@ let usage = (comps: EntryRow['comps']) =>
   comps.usage
     ? JSON.stringify({
       input_tokens: Number(comps.usage.input ?? 0),
-      cache_read_input_tokens: Number(comps.usage.cached ?? 0),
+      cached_input_tokens: Number(comps.usage.cached ?? 0),
       output_tokens: Number(comps.usage.output ?? 0),
       reasoning_tokens: Number(comps.usage.reasoning ?? 0),
     })
@@ -151,6 +151,10 @@ export let graphLog = (source: EntryRow[]): GraphLog => {
     .generation
   let entries = rows.map((source) => {
     let row = shown(source, byEid)
+    if (row?.kind == 'turn' && source.comps.usage) {
+      let context = Number(source.comps.usage.input ?? 0)
+      if (context > 0) row = { ...row, context }
+    }
     return {
       seq: source.seq,
       line: raw(source),

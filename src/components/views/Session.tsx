@@ -44,6 +44,7 @@ import { Markdown } from '../Markdown.tsx'
 let Frame = block('div', 'Session', {
   Head: 'div',
   Summary: 'div',
+  Context: 'span',
   Stop: 'button',
   Body: 'div',
   Facts: 'details',
@@ -88,6 +89,7 @@ let Frame = block('div', 'Session', {
 let {
   Head,
   Summary,
+  Context,
   Stop,
   Body: Panel,
   Facts,
@@ -262,6 +264,9 @@ export let SessionSummary = ({ e, gist }: { e: Ent; gist: string }) => {
     </Summary>
   )
 }
+
+export let SessionContext = ({ tokens }: { tokens?: number }) =>
+  tokens ? <Context>{kilo(tokens)} context</Context> : null
 
 // Usage, said the compact way: ↑ everything sent up (input plus both
 // cache lanes), ↓ what came back.
@@ -525,6 +530,7 @@ export let Session = ({ e }: { e: Ent }) => {
   let status = native ? live ? 'running' : 'idle' : standing(s)
   let file = useLog(e.eid, !native && live)
   let log = native ? entries ?? graphLog([]) : file
+  let context = log.entries.findLast((x) => x.row?.context)?.row?.context
   let frame = useTail(`${log.entries.at(-1)?.seq ?? 0}:${stream?.rev ?? 0}`)
   // The Final block IS the last agent say — don't print it twice. Only a
   // session whose log grew no say row (an external one, a torn log) still
@@ -562,6 +568,7 @@ export let Session = ({ e }: { e: Ent }) => {
       <Head>
         <Dot status={status} />
         <SessionSummary e={e} gist={gist} />
+        <SessionContext tokens={context} />
         {
           /* No brake on a process we never forked — apply() refuses a
             stop_request at anything but a managed run, and the button

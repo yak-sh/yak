@@ -2919,6 +2919,12 @@ a[data-ref]:hover {
   display: block;
   overflow: hidden;
 }
+.Session_Context {
+  flex: none;
+  font-size: 11px;
+  color: var(--dim);
+  white-space: nowrap;
+}
 .Session_Stop {
   font: inherit;
   font-size: 11px;

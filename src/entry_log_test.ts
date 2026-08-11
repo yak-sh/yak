@@ -51,10 +51,11 @@ Deno.test('graph log renders ordered calls, results, model, and usage', () => {
     model: 'served',
     usage: JSON.stringify({
       input_tokens: 8,
-      cache_read_input_tokens: 3,
+      cached_input_tokens: 3,
       output_tokens: 5,
       reasoning_tokens: 2,
     }),
+    context: 8,
   })
   assertEquals(log.entries[2].row, {
     kind: 'exec',
@@ -68,6 +69,27 @@ Deno.test('graph log renders ordered calls, results, model, and usage', () => {
     ok: true,
   })
   assertMatch(log.entries[4].line, /"message":\{"role":"agent"\}/)
+})
+
+Deno.test('graph log reports each request input as its context', () => {
+  let rows = [
+    row('first', 1, {
+      generation: { model: 'gpt' },
+      usage: { input: 8000, cached: 3000, output: 5, reasoning: 2 },
+      delivered: { at: 'then' },
+    }),
+    row('second', 2, {
+      generation: { model: 'gpt' },
+      usage: { input: 21000, cached: 14000, output: 9, reasoning: 4 },
+      delivered: { at: 'now' },
+    }),
+  ]
+  assertEquals(
+    graphLog(rows).entries.map((entry) =>
+      entry.row?.kind == 'turn' ? entry.row.context : undefined
+    ),
+    [8000, 21000],
+  )
 })
 
 Deno.test('graph log derives busy and pages by sequence', () => {

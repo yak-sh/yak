@@ -4,7 +4,12 @@ import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { cache, ent } from '../../live.ts'
 import { resolve } from '../Entity.tsx'
-import { SessionBody, SessionObservation, SessionSummary } from './Session.tsx'
+import {
+  SessionBody,
+  SessionContext,
+  SessionObservation,
+  SessionSummary,
+} from './Session.tsx'
 
 let children = (v: VNode) =>
   (Array.isArray(v.props.children) ? v.props.children : [v.props.children])
@@ -76,6 +81,30 @@ Deno.test('session user messages render as markdown', () => {
     assertEquals(
       root.innerHTML,
       '<div class="Session_User"><p><strong>hello</strong></p>\n</div>',
+    )
+  } finally {
+    render(null, root)
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else delete (globalThis as { document?: unknown }).document
+  }
+})
+
+Deno.test('session context renders compactly for the sticky head', () => {
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let { document } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  let root = document.querySelector('main')!
+  try {
+    render(
+      h(SessionContext, { tokens: 75009 }),
+      root,
+    )
+    assertEquals(
+      root.querySelector('.Session_Context')?.textContent,
+      '75k context',
     )
   } finally {
     render(null, root)

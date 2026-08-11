@@ -105,11 +105,19 @@ let message = (e: Event, p: Event): LogRow => {
       text: [p.kind, p.agent_path].filter(Boolean).join(' · '),
     }
   }
+  if (type == 'token_count') {
+    let info = p.info as Event | undefined
+    let last = info?.last_token_usage as Event | undefined
+    let context = Number(last?.input_tokens ?? 0)
+    return {
+      kind: 'sys',
+      tag: 'tokens',
+      ...(context > 0 ? { context } : {}),
+    }
+  }
   return {
     kind: 'sys',
-    tag: type == 'token_count'
-      ? 'tokens'
-      : type == 'task_started'
+    tag: type == 'task_started'
       ? 'turn'
       : type == 'context_compacted'
       ? 'compact'

@@ -836,7 +836,7 @@ export let sessionFacetNames = ['spawn', 'worktree', 'runtime'] as const
 //          A view may squeeze a run of same-tag frames into one line.
 // `at` is the event's clock when the dialect (or our own writer) carries one.
 export type LogRow =
-  & { at?: string }
+  & { at?: string; context?: number }
   & (
     | { kind: 'say'; role: 'agent' | 'user'; text: string }
     | { kind: 'reason'; text: string }
