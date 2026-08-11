@@ -3,7 +3,31 @@
 import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
-import { Search, searchOpen } from './Search.tsx'
+import { group, Search, searchOpen } from './Search.tsx'
+
+let hit = (num: number, kind: string, title: string) => ({
+  eid: `${num}`,
+  num,
+  kind,
+  title,
+  snip: '',
+  open: `${num}`,
+})
+
+Deno.test('search keeps exact ids and titles above kind groups', () => {
+  let task = hit(1, 'task', 'mentions fleet base common persona')
+  let memory = hit(2, 'memory', 'another mention')
+  let persona = hit(3, 'persona', 'fleet base common persona')
+  assertEquals(
+    group([persona, memory, task], 'fleet base common persona'),
+    [persona, task, memory],
+  )
+  assertEquals(group([persona, memory, task], 'N-3')[0], persona)
+  assertEquals(
+    group([persona, memory, task], '"fleet base common persona"')[0],
+    persona,
+  )
+})
 
 Deno.test('search sends only the settled query while typing', async () => {
   let prior = Object.entries({

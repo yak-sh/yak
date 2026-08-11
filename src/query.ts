@@ -324,7 +324,12 @@ export let pred = (token: string): Pred | null => {
     return { comp: '', prop: 'order', op: ORDER, value }
   }
   let p: Pred
-  if (b) {
+  // A trailing bang completes a component sentence. This must win over a
+  // same-named column (`persona` is both a facet and a session reference);
+  // the column's explicit spelling remains `.session.persona!`.
+  if (!b && !value && op == '!' && a in comps) {
+    p = { comp: a, prop: '', op: OPS[op], value }
+  } else if (b) {
     // The collision rule: a first segment naming a COMPONENT is the
     // explicit spelling (.pin.x); anything else walks a reference.
     if (routes[a]) {

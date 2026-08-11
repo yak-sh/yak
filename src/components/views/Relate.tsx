@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { type Ent, uuid } from '../../types.ts'
-import { cache, ent, mutate } from '../../live.ts'
+import { cache, ent, mutate, sieve } from '../../live.ts'
 import { spec, taskChanges } from '../../client.ts'
 import { peek, useDraft } from '../drafts.ts'
 import { block } from '../ui.tsx'
@@ -30,8 +30,8 @@ let verbs = [
 type V = (typeof verbs)[number]
 
 // Add an edge by finishing its sentence: pick a verb chip, then type —
-// the list is a live search over tasks; Enter (or a click) links the
-// pick, and text that matches nothing becomes a NEW task, spec-parsed
+// the list is a live search over documented entities; Enter (or a click)
+// links the pick, and text that matches nothing becomes a NEW task, spec-parsed
 // (`P1 .domain=Eng title` works here), created and linked in one atomic
 // apply, inheriting the host's project and domain. The list overlays —
 // nothing below it moves.
@@ -62,10 +62,16 @@ export let Relate = ({ e }: { e: Ent }) => {
     ...e.refs.map((r) => r.child),
     ...e.kids.map((k) => k.eid),
   ])
+  let query = (_eid: string) => false
+  try {
+    query = sieve(q)
+  } catch { /* a half-typed filter simply has no query matches yet */ }
   let hits = !verb ? [] : Object.keys(cache.value)
     .map(ent)
-    .filter((t) => t.task && !taken.has(t.eid))
-    .filter((t) => suggest.match(q, t))
+    .filter((t) => t.doc && !taken.has(t.eid))
+    // Human ids are labels, while terms and dot-filters are the shared query
+    // language. Either vocabulary can name the entity being linked.
+    .filter((t) => suggest.match(q, t) || query(t.eid))
     .sort(suggest.order(q))
     .slice(0, 6)
   let fresh = q.trim() ? spec(q).title : ''
@@ -147,7 +153,7 @@ export let Relate = ({ e }: { e: Ent }) => {
       <Anchor>
         <Find
           elRef={find}
-          placeholder='task…'
+          placeholder='entity…'
           onInput={(ev: InputEvent) => {
             sync(ev.currentTarget as HTMLInputElement)
             setPick(0)

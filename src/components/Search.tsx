@@ -6,7 +6,6 @@ import { drop, peek, save } from './drafts.ts'
 import { block } from './ui.tsx'
 import { Icon } from './icons.tsx'
 import { useComplete } from './Complete.tsx'
-import { title } from './title.tsx'
 
 // `/` in normal mode opens the palette (the App shell owns the hotkey
 // and the mount, so any root can search; the `open` callback decides
@@ -41,10 +40,19 @@ let rank = (kind: string) => {
   let j = tail.indexOf(kind)
   return j >= 0 ? 900 + j : 100 + kindOrder.indexOf(kind)
 }
-// Stable sort by section rank keeps each kind's hits in the order db.ts
-// ranked them; the flattened result is what the selection walks.
-let group = (hits: Hit[]) =>
-  [...hits].sort((a, b) => rank(a.kind) - rank(b.kind))
+let exact = (h: Hit, q: string) => {
+  let sought = q.trim().replace(/^"(.*)"$/s, '$1').toLowerCase()
+  return idOf(h).toLowerCase() == sought ||
+    h.title.trim().toLowerCase() == sought
+}
+
+// An exact address or title stays first; section grouping must not bury the
+// thing the operator named. Every other hit keeps the db's rank within its
+// kind, and the flattened result is what the selection walks.
+export let group = (hits: Hit[], q: string) =>
+  [...hits].sort((a, b) =>
+    Number(exact(b, q)) - Number(exact(a, q)) || rank(a.kind) - rank(b.kind)
+  )
 
 // Matches arrive marked \x01…\x02 — rendered as <mark> WITHOUT parsing
 // any HTML out of the data.
@@ -97,7 +105,7 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
 
   // The kind-grouped list, flattened: the selection index and every key
   // walk THIS order, so arrowing crosses sections in the order they paint.
-  let ordered = group(hits)
+  let ordered = group(hits, q)
 
   let close = () => {
     seq.current++
@@ -249,7 +257,7 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
                 pick(h)
               }}
             >
-              <Title {...title(h.title || '(untitled)')} />
+              <Title>{marked(h.title_hit || h.title || '(untitled)')}</Title>
               <Id>{idOf(h)}</Id>
               <Snip>{marked(h.snip)}{h.retired && ' · retired'}</Snip>
             </Row>

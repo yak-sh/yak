@@ -140,6 +140,21 @@ Deno.test('query: component names test facet absence and presence', () => {
   )
 })
 
+Deno.test('query: a trailing bang names a facet before its namesake prop', () => {
+  assertEquals(parseQuery('.persona!'), [{
+    comp: 'persona',
+    prop: '',
+    op: 'exists',
+    value: '',
+  }])
+  assertEquals(parseQuery('.session.persona!'), [{
+    comp: 'session',
+    prop: 'persona',
+    op: 'exists',
+    value: '',
+  }])
+})
+
 Deno.test('query: bad tokens are loud, bare words are terms', () => {
   assertThrows(() => parseQuery('.hovercraft=eels'), Error, 'unknown prop')
   assertThrows(() => parseQuery('.task.eels=9'), Error, 'no such prop')

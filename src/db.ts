@@ -3443,6 +3443,9 @@ export let findEid = (db: DatabaseSync, id: string): string | undefined =>
 
 export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
   let preds = parseQuery(q)
+  let addressed = preds.length == 1 && preds[0].op == TEXT
+    ? findEid(db, preds[0].value)
+    : undefined
   let reveal = preds.some((p) =>
     p.comp == 'quarantined' || p.at?.comp == 'quarantined'
   )
@@ -3480,6 +3483,7 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
   let rows = match
     ? db.prepare(`
       select d.eid, d.title,
+        highlight(doc_fts, 0, char(1), char(2)) as title_hit,
         snippet(doc_fts, 1, char(1), char(2), '…', 10) as snip,
         e.num
       from doc_fts
@@ -3496,7 +3500,7 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
       'kind' | 'open' | 'retired'
     >)[]
     : db.prepare(`
-      select d.eid, d.title, '' as snip, e.num
+      select d.eid, d.title, d.title as title_hit, '' as snip, e.num
       from doc d
       join entity e on e.eid = d.eid
       left join updated up on up.eid = e.eid
@@ -3507,6 +3511,22 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
       Hit,
       'kind' | 'open' | 'retired'
     >)[]
+  // An address is identity, not prose. Keep textual mentions behind the
+  // entity the operator named, without giving ids a second search index.
+  if (addressed) {
+    let direct = db.prepare(`
+      select d.eid, d.title, d.title as title_hit, '' as snip, e.num
+      from doc d
+      join entity e on e.eid = d.eid
+      where d.eid = ? ${screen}
+    `).get(addressed, ...params) as
+      | Omit<Hit, 'kind' | 'open' | 'retired'>
+      | undefined
+    if (direct) {
+      rows = [direct, ...rows.filter((r) => r.eid != direct.eid)]
+        .slice(0, limit)
+    }
+  }
   if (filters.length) {
     // Each hit's components, only the ones the filters actually read —
     // matchQuery sees the same shape a live cache row has. A path pred

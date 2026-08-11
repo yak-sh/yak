@@ -1505,6 +1505,7 @@ export type Hit = {
   num: number
   kind: string
   title: string
+  title_hit?: string
   snip: string
   open: string
   open_id?: string // open spoken (T-7) — only when it isn't the hit

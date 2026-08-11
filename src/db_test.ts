@@ -1828,6 +1828,10 @@ Deno.test('fts: search finds, follows edits, forgets the dead', () => {
     { eid: t, name: 'task', comp: { status: 'open' } },
   ])
   assertEquals(search(db, 'xylophone')[0]?.eid, t)
+  assertEquals(
+    search(db, 'xylophone')[0]?.title_hit,
+    '\x01Xylophone\x02 repair',
+  )
   assertEquals(search(db, 'xylo*')[0]?.kind, 'task') // prefix + derived kind
   // every term prefix-matches unasked — search is typed live
   assertEquals(search(db, 'xylo')[0]?.eid, t)
@@ -1847,6 +1851,36 @@ Deno.test('fts: search finds, follows edits, forgets the dead', () => {
   assertEquals(search(db, 'glockenspiel').length, 0) // tombstoned = unfindable
   assertEquals(search(db, 'quincunx').length, 0) // the comment died with it
   assertEquals(search(db, '"broken (syntax'), []) // user words, not operators
+})
+
+Deno.test('search leads with an entity named by its human id', () => {
+  let memory = uid(), mention = uid()
+  apply(db, [
+    { eid: memory, name: 'doc', comp: { title: 'Quiet principle', body: '' } },
+    { eid: memory, name: 'memory', comp: {} },
+  ])
+  let id = human(db, memory)
+  apply(db, [
+    { eid: memory, name: 'doc', comp: { body: `Self reference ${id}` } },
+    { eid: mention, name: 'doc', comp: { title: `Notes about ${id}` } },
+  ])
+  let hits = search(db, id)
+  assertEquals(hits[0]?.eid, memory)
+  assertEquals(hits.filter((h) => h.eid == memory).length, 1)
+  assertEquals(hits.some((h) => h.eid == mention), true)
+})
+
+Deno.test('search facet bangs find the component, not its namesake prop', () => {
+  let persona = uid(), session = uid()
+  apply(db, [
+    { eid: persona, name: 'doc', comp: { title: 'Quiet persona' } },
+    { eid: persona, name: 'persona', comp: {} },
+    { eid: session, name: 'doc', comp: { title: 'Wears quiet persona' } },
+    { eid: session, name: 'session', comp: { id: uid(), persona } },
+  ])
+  let hits = search(db, '.persona!', 100)
+  assertEquals(hits.some((h) => h.eid == persona), true)
+  assertEquals(hits.some((h) => h.eid == session), false)
 })
 
 Deno.test('entity delete cascades to aimed entities, detaches soft refs', () => {
