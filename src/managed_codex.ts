@@ -37,19 +37,29 @@ export type ManagedJob = {
   session_id: string
   task?: string
   role?: string
+  repo?: { path: string; base_branch: string }
+  tree?: string
+  branch?: string
+  model: string
+  effort?: string
+}
+
+type ManagedWorkspaceJob = ManagedJob & {
   repo: { path: string; base_branch: string }
   tree: string
   branch: string
-  model: string
-  effort?: string
 }
 
 export type ManagedCodexOptions = {
   db: DatabaseSync
   cast: Cast
   transport: ResponseTransport
-  tools: (tree: string, session: string) => Promise<ToolHost>
-  prepare: (eid: string, job: ManagedJob, cast: Cast) => Promise<void>
+  tools: (tree: string | undefined, session: string) => Promise<ToolHost>
+  prepare: (
+    eid: string,
+    job: ManagedWorkspaceJob,
+    cast: Cast,
+  ) => Promise<void>
   clock?: () => Date
   leaseMs?: number
   runner?: string
@@ -281,12 +291,12 @@ export let managedCodex = (options: ManagedCodexOptions) => {
     let clear = false
     try {
       let row = sessionRow(db, session)
-      if (!row?.cwd) throw new Error('managed Codex session has no worktree')
-      tools = await options.tools(String(row.cwd), session)
+      let tree = row?.cwd ? String(row.cwd) : undefined
+      tools = await options.tools(tree, session)
       let work = await generate({
         entries: readEntries(db, session),
         generation: token.eid,
-        instructions: await instructions({ tree: String(row.cwd) }),
+        instructions: await instructions({ tree }),
         transport: options.transport,
         tools: tools.tools,
         signal: control.signal,
@@ -327,8 +337,8 @@ export let managedCodex = (options: ManagedCodexOptions) => {
     let tools: ToolHost | undefined
     try {
       let row = sessionRow(db, session)
-      if (!row?.cwd) throw new Error('managed Codex session has no worktree')
-      tools = await options.tools(String(row.cwd), session)
+      let tree = row?.cwd ? String(row.cwd) : undefined
+      tools = await options.tools(tree, session)
       let spec = await executeCall(rowOf(db, token.eid), tools, control.signal)
       if (!valid(db, token)) return
       cast(append(db, session, [spec], runner).changes)
@@ -487,7 +497,19 @@ export let managedCodex = (options: ManagedCodexOptions) => {
     }
     try {
       let state = sessionRow(db, eid)
-      if (!state?.base_revision) await options.prepare(eid, job, cast)
+      if (job.tree || job.repo || job.branch) {
+        if (!job.tree || !job.repo || !job.branch) {
+          throw new Error('managed Codex workspace is incomplete')
+        }
+        if (!state?.base_revision) {
+          await options.prepare(eid, {
+            ...job,
+            tree: job.tree,
+            repo: job.repo,
+            branch: job.branch,
+          }, cast)
+        }
+      }
       prepared.add(eid)
     } catch (error) {
       let won = takeEntry(db, generation!, runner, leaseMs, clock)

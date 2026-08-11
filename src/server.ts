@@ -671,6 +671,7 @@ let managed = managedCodex({
   }),
   tools: async (tree, session) => {
     let tasks = await tasksTools(graphIO, session)
+    if (!tree) return tasks
     try {
       return combineTools(await localTools({ tree }), tasks)
     } catch (error) {

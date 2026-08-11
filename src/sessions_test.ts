@@ -373,6 +373,58 @@ Deno.test('a new Codex spawn routes to the graph-native lifecycle', async () => 
   )
 })
 
+Deno.test('a projectless Codex task starts as a no-code graph session', async () => {
+  let task = uid(), eid = uid(), routed = 0
+  apply(db, [
+    { eid: task, name: 'doc', comp: { title: 'Triage the graph' } },
+    { eid: task, name: 'task', comp: { status: 'open' } },
+    {
+      eid,
+      name: 'session',
+      comp: {
+        id: uid(),
+        provider: 'codex',
+        model: 'gpt-5.6-sol',
+        requested_task: task,
+      },
+    },
+  ])
+
+  await spawned(cast, (got, launch) => {
+    routed++
+    assertEquals(got, eid)
+    assertEquals(launch.repo, undefined)
+    assertEquals(launch.tree, undefined)
+    assertEquals(launch.branch, undefined)
+    assertMatch(launch.instruction, /no repo-backed project/)
+    assertEquals(launch.instruction.includes('task land'), false)
+    return Promise.resolve()
+  })(eid, {})
+
+  assertEquals(routed, 1)
+  assertEquals(row(eid)?.cwd, null)
+  assertEquals(row(eid)?.branch, null)
+  assertEquals(failure(eid), undefined)
+  assertEquals(
+    db.prepare('select session from claim where eid = ?').get(task),
+    { session: eid },
+  )
+})
+
+Deno.test('a process provider names its projectless-task requirement', async () => {
+  let task = uid()
+  apply(db, [
+    { eid: task, name: 'doc', comp: { title: 'Triage the graph' } },
+    { eid: task, name: 'task', comp: { status: 'open' } },
+  ])
+  let { eid, done } = begin(task)
+  await done
+  assertMatch(
+    failure(eid) ?? '',
+    /T-\d+ has no project; fake requires a repo-backed project/,
+  )
+})
+
 Deno.test('Codex routing keeps both process fallback doors explicit', () => {
   assertEquals(graphCodex('codex', undefined), true)
   assertEquals(graphCodex('codex-cli', undefined), false)

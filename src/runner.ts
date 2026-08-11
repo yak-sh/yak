@@ -33,7 +33,7 @@ export type ResponseTransport = {
 }
 
 export type InstructionOptions = {
-  tree: string
+  tree?: string
   cwd?: string
   persona?: string
   prompt?: string
@@ -51,11 +51,27 @@ let paragraphs = (parts: (string | undefined)[]) =>
 // hierarchy native Codex reads. The hosted runner never reads Codex settings,
 // auth files, hooks, or a home-directory instruction source.
 export let instructions = async (options: InstructionOptions) => {
-  if ((options.authority ?? 'worktree') != 'worktree') {
+  let authority = options.authority ?? (options.tree ? 'worktree' : 'tasks')
+  if (!['worktree', 'tasks'].includes(authority)) {
     throw new Error(`unsupported authority: ${options.authority}`)
   }
   if ((options.approval ?? 'unattended') != 'unattended') {
     throw new Error(`unsupported approval mode: ${options.approval}`)
+  }
+  if (!options.tree) {
+    if (authority != 'tasks') throw new Error('worktree authority needs a tree')
+    return paragraphs([
+      `You are running in Tasks' first-party Codex harness. This is a no-code
+session: no filesystem workspace, shell, or patch tool is available. Work only
+through the hosted Tasks graph tools. If the work requires repository changes,
+explain that the task needs a repo-backed project. Provider credentials are
+unavailable to tools and must never enter content, task data, or diagnostics.`,
+      options.persona ? `## Persona\n\n${options.persona}` : undefined,
+      options.prompt ? `## Work\n\n${options.prompt}` : undefined,
+    ])
+  }
+  if (authority != 'worktree') {
+    throw new Error('tasks authority has no worktree')
   }
   let tree = await Deno.realPath(options.tree)
   let wanted = resolve(tree, options.cwd ?? '.')

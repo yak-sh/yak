@@ -71,6 +71,20 @@ Deno.test('instructions load the applicable hierarchy and refuse weaker posture'
   }
 })
 
+Deno.test('instructions describe a Tasks-only session without a worktree', async () => {
+  let body = await instructions({ prompt: 'triage the graph' })
+  assertMatch(body, /no-code\s+session/)
+  assertMatch(body, /Tasks graph tools/)
+  assertMatch(body, /triage the graph/)
+  assertEquals(body.includes('/workspace'), false)
+  assertEquals(body.includes('task land'), false)
+  await assertRejects(
+    () => instructions({ authority: 'worktree' }),
+    Error,
+    'needs a tree',
+  )
+})
+
 Deno.test('provider items become typed entries and unknown evidence stays opaque', () => {
   let work = generationEntries(
     result([

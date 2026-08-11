@@ -1131,6 +1131,11 @@ let CONTRACT = `House rules for this run:
 - File discoveries as new tasks linked to yours instead of widening scope.
 - When the work is committed, land it with task land.`
 
+let NO_CODE = `This task has no repo-backed project. Work only through the
+Tasks graph tools; no filesystem, shell, patch, commit, or landing operation is
+available. If repository changes are required, explain that the task needs a
+repo-backed project.`
+
 // Session runtime beside its normalized launch spec. Explicit aliases avoid
 // duplicate column names and keep validation on the canonical component.
 let runRow = (eid: string) => {
@@ -1255,17 +1260,25 @@ export let spawned =
     }
     if (!task && !role) return fail('a managed session needs a task or role')
     let project = task?.project ?? role?.scope
+    let nativeRun = !!native && graphCodex(String(row.spawn_provider))
     // The workspace comes from the GRAPH, never the request: the task's
-    // or role's project says which checkout, and that's the only path we'll
-    // run in.
+    // or role's project says which checkout. A graph-native no-code run is the
+    // one worktree-less composition; process providers still need a checkout.
     let repo = project
       ? db.prepare('select path, base_branch from repo where eid = ?')
         .get(project) as
           | { path: string; base_branch: string }
           | undefined
       : undefined
-    if (!repo) {
-      return fail("the session's project has no repo — set repo.path first")
+    if (project && !repo) {
+      return fail(`${human(db, project)} has no repo — set repo.path first`)
+    }
+    if (!project && !nativeRun) {
+      let subject = task ? `T-${task.num}` : `R-${role!.num}`
+      return fail(
+        `${subject} has no project; ${row.spawn_provider} requires a ` +
+          'repo-backed project',
+      )
     }
     // The worn persona rides whole — core text plus its tiers, rendered
     // by materialize() so the spawn's prompt and the repo's .tasks files
@@ -1281,11 +1294,17 @@ export let spawned =
     let { num } = db.prepare('select num from entity where eid = ?')
       .get(eid) as { num: number }
     let sid = `S-${num}`
-    let tree = `${worktreesDir()}/${basename(repo.path)}/${sid}`
+    let workspace = repo
+      ? {
+        repo,
+        tree: `${worktreesDir()}/${basename(repo.path)}/${sid}`,
+        branch: `session/${sid}`,
+      }
+      : undefined
     let job: Launch = {
       instruction: [
         worn,
-        CONTRACT,
+        repo ? CONTRACT : NO_CODE,
         task && `T-${task.num}: ${task.title}`,
         task?.body,
         role && `# R-${role.num} ${role.title ?? ''}`,
@@ -1297,27 +1316,24 @@ export let spawned =
       session_id: String(row.id),
       task: task ? `T-${task.num}` : undefined,
       role: row.role ? String(row.role) : undefined,
-      repo,
-      tree,
-      branch: `session/${sid}`,
+      ...workspace,
       model,
       effort: row.spawn_effort ? String(row.spawn_effort) : undefined,
     }
     stamp(eid, {
       origin: 'managed',
-      branch: `session/${sid}`,
-      cwd: tree,
+      ...(workspace ? { branch: workspace.branch, cwd: workspace.tree } : {}),
       ...(row.started_at ? {} : { started_at: now() }),
       // A request that named no actor acts for the task's project. The cwd is
       // stamped before its worktree exists, so no .git link can place it yet.
-      ...(row.actor ? {} : { actor: project }),
+      ...(row.actor || !project ? {} : { actor: project }),
     }, cast)
-    if (native && graphCodex(String(row.spawn_provider))) {
+    if (native && nativeRun) {
       let claim = hookClaim(
         rows(snapshot(db)),
         job.task,
         String(row.id),
-        tree,
+        workspace?.tree,
       )
       landSpawnClaim(
         eid,
@@ -1327,11 +1343,19 @@ export let spawned =
       )
       return native(eid, job)
     }
+    if (!job.repo || !job.tree || !job.branch) {
+      return fail('process-backed session has no worktree')
+    }
     stamp(eid, { status: 'starting' }, cast)
     // The fs and the child are the SLOW half — the returned promise is
     // the whole run, riding the dispatch for callers that await it
     // (tests); the wire never does.
-    return launch(eid, ad, job, cast)
+    return launch(eid, ad, {
+      ...job,
+      repo: job.repo,
+      tree: job.tree,
+      branch: job.branch,
+    }, cast)
   }
 
 export type Launch = {
@@ -1339,16 +1363,22 @@ export type Launch = {
   session_id: string
   task?: string
   role?: string
-  repo: { path: string; base_branch: string }
-  tree: string
-  branch: string
+  repo?: { path: string; base_branch: string }
+  tree?: string
+  branch?: string
   model: string
   effort?: string
 }
 
+type WorktreeLaunch = Launch & {
+  repo: { path: string; base_branch: string }
+  tree: string
+  branch: string
+}
+
 export let prepareWorktree = async (
   eid: string,
-  j: Launch,
+  j: WorktreeLaunch,
   cast: Cast,
 ) => {
   Deno.mkdirSync(dirname(j.tree), { recursive: true })
@@ -1388,7 +1418,12 @@ export let prepareWorktree = async (
 
 // Worktree, then child, then tailer. Every failure lands in the same
 // place: a failed session that says why.
-let launch = async (eid: string, ad: Adapter, j: Launch, cast: Cast) => {
+let launch = async (
+  eid: string,
+  ad: Adapter,
+  j: WorktreeLaunch,
+  cast: Cast,
+) => {
   try {
     Deno.mkdirSync(logsDir(), { recursive: true })
     // What we SENT is line 1: argv carries the instruction to the

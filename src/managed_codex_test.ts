@@ -86,6 +86,13 @@ let job = (tree: string) => ({
   effort: 'high',
 })
 
+let noCodeJob = () => ({
+  instruction: 'Triage the graph.',
+  session_id: uuid(),
+  model: 'gpt-requested',
+  effort: 'high',
+})
+
 Deno.test('managed Codex starts, runs tools, and settles in ordered entries', async () => {
   let db = open(':memory:')
   let tree = Deno.makeTempDirSync(), sid = session(db, tree)
@@ -373,6 +380,57 @@ Deno.test('replayed starts finish preparation without duplicating input', async 
   assertEquals(rows.filter((row) => row.comps.generation).length, 1)
   assertEquals(prepares, 2)
   assertEquals(requests, 2)
+  db.close()
+})
+
+Deno.test('projectless starts use Tasks tools without preparing a worktree', async () => {
+  let db = open(':memory:')
+  let sid = session(db), prepares = 0, requests = 0
+  let trees: (string | undefined)[] = []
+  let options = () => ({
+    db,
+    cast: () => {},
+    transport: {
+      run: () => {
+        requests++
+        return Promise.resolve(result([{
+          type: 'message',
+          content: [{ type: 'output_text', text: 'triaged' }],
+        }]))
+      },
+    },
+    tools: (tree: string | undefined) => {
+      trees.push(tree)
+      return Promise.resolve({
+        tools: [{
+          type: 'function' as const,
+          name: 'task_context',
+          description: 'test context',
+          parameters: { type: 'object' },
+          strict: true,
+        }],
+        call: () => Promise.resolve({ output: 'context' }),
+      })
+    },
+    prepare: () => {
+      prepares++
+      return Promise.resolve()
+    },
+  })
+
+  let first = managedCodex(options())
+  await first.start(sid, noCodeJob())
+  let entries = readEntries(db, sid)
+  assertEquals(prepares, 0)
+  assertEquals(requests, 1)
+  assertEquals(trees, [undefined])
+  assertEquals(entries.at(-1)?.comps.content.body, 'triaged')
+
+  let restarted = managedCodex(options())
+  await restarted.start(sid, noCodeJob())
+  assertEquals(readEntries(db, sid).length, entries.length)
+  assertEquals(prepares, 0)
+  assertEquals(requests, 1)
   db.close()
 })
 
