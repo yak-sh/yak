@@ -777,6 +777,21 @@ let lastHeard = (eid: string) =>
     where s.eid = ?
   `).get(eid) as { at: string } | undefined)?.at || now()
 
+// A between-turns lull is not an ending. Codex's provider process is
+// PER-TURN — it exits at every turn boundary while the pane stays open and
+// the conversation waits — so an ABSENT codex whose `turn` hook last said
+// `idle` is idle, not finished. Claude's process is one-per-session, where
+// leaving IS the end; a codex that vanished mid-turn (`busy`) is a real
+// ending too. Reading the door's absence as the end froze S-15625 at its
+// first turn's `finished_at` while the owner kept steering it for an hour
+// (T-16360). The log-native path (D-15656) removes the guess by deriving
+// state from a seq-ordered entry log.
+let betweenTurns = (eid: string) => {
+  let s = db.prepare('select provider, turn from session where eid = ?')
+    .get(eid) as { provider: string | null; turn: string | null } | undefined
+  return s?.provider == 'codex' && s.turn == 'idle'
+}
+
 // Re-armed by the graph, never by a timer: each interactive provider stamps
 // session.pid at SessionStart. A resumed Claude does too, so a woken session
 // starts being followed again without this code knowing it was woken.
@@ -794,6 +809,8 @@ export let watched = (cast: Cast) => (eid: string, comp: Row) => {
   watching.add(eid)
   let done = open
     ? watch(eid, was, cast)
+    : betweenTurns(eid)
+    ? Promise.resolve() // idle between turns, not ended — leave it awake
     : followWrite(eid, () => stamp(eid, { finished_at: lastHeard(eid) }, cast))
   // Detached on purpose: a heartbeat outlives the batch that armed it.
   done
@@ -823,7 +840,7 @@ let trail = async (eid: string, cast: Cast) => {
       stamp(eid, {
         ...(lines.length ? observed(eid, lines) : {}),
         latest_seq: t.seq,
-        ...(shut ? { finished_at: now() } : {}),
+        ...(shut && !betweenTurns(eid) ? { finished_at: now() } : {}),
       }, cast))
     if (shut) return
     await sleep(poll())

@@ -1421,6 +1421,34 @@ Deno.test('an external Codex transcript follows its provider process', async () 
   await until(() => !!row(eid)?.finished_at, 'the Codex process to leave')
 })
 
+// T-16360: Codex's provider process is per-turn, so an absent codex that
+// last reported `turn: idle` is idle between turns, not ended. Reading the
+// door's absence as the end froze S-15625 at its first turn while its owner
+// kept steering it — so an idle codex whose process left keeps waiting, no
+// finished_at, and re-arms when its next turn stamps a pid.
+Deno.test('an idle Codex between turns is not ended when its process leaves', async () => {
+  let c = await fakeCodex()
+  let { eid } = announce(c.pid, undefined, '', 'codex')
+  db.prepare("update session set turn = 'idle' where eid = ?").run(eid)
+  c.kill('SIGKILL')
+  await c.status
+  watched(cast)(eid, { pid: c.pid })
+  assertEquals(row(eid)?.finished_at, null) // idle, not finished
+  assertEquals(row(eid)?.started_at, null) // no watch began
+})
+
+// A codex that vanished MID-turn (`busy`) crashed: that door shutting is a
+// real ending, stamped like any other. Only the between-turns lull is spared.
+Deno.test('a Codex that left mid-turn ends like any other door', async () => {
+  let c = await fakeCodex()
+  let { eid } = announce(c.pid, undefined, '', 'codex')
+  db.prepare("update session set turn = 'busy' where eid = ?").run(eid)
+  c.kill('SIGKILL')
+  await c.status
+  watched(cast)(eid, { pid: c.pid })
+  assertEquals(!!row(eid)?.finished_at, true) // a mid-turn exit is the end
+})
+
 Deno.test('a session we never forked is watched by its door, not its exit code', async () => {
   let c = await fakeClaude()
   let { eid } = announce(c.pid, [SAID])
