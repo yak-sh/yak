@@ -30,14 +30,17 @@ type Provider = {
 }
 type Ask = { eid: string; x: number; y: number }
 
-// The offers: every provider's labeled models, flattened — the form
-// shows models, not providers. When two providers offer the same model,
-// the first keeps it (the whole heuristic, for now).
+// The offers: every provider's labeled models, flattened. A fallback may
+// deliberately offer the same model through another substrate, so provider
+// and model together identify a choice even though the friendly label is what
+// the form shows.
 export let offers = (ps: Provider[]) =>
   ps.flatMap((p) =>
     Object.entries(p.labels).map(([model, label]) => ({ model, label, p }))
-  ).filter((o, i, all) => all.findIndex((x) => x.model == o.model) == i)
-    .sort((a, b) => modelOrder(a.model, b.model))
+  ).sort((a, b) => modelOrder(a.model, b.model))
+
+let offerId = (offer: ReturnType<typeof offers>[number]) =>
+  `${offer.p.name}:${offer.model}`
 
 let Frame = block('div', 'Run', {
   Row: 'label',
@@ -76,7 +79,7 @@ let spot = (a: Ask) => {
 }
 
 let Form = ({ a }: { a: Ask }) => {
-  let [model, setModel] = useState('')
+  let [choice, setChoice] = useState('')
   let [effort, setEffort] = useState('')
   let root = useRef<HTMLDivElement>(null)
   usePlaceAt(root, a)
@@ -88,7 +91,7 @@ let Form = ({ a }: { a: Ask }) => {
   // menu no longer offers falls back to its first entry, and effort to
   // the picked provider's first, with nothing to keep in sync.
   let ms = offers(providers.value)
-  let m = ms.find((x) => x.model == model) ?? ms[0]
+  let m = ms.find((x) => offerId(x) == choice) ?? ms[0]
   let ef = m?.p.efforts.includes(effort) ? effort : m?.p.efforts[0]
   let av = codexAccount.view.value
   useEffect(() => {
@@ -146,12 +149,12 @@ let Form = ({ a }: { a: Ask }) => {
       <Row>
         <Name>model</Name>
         <select
-          value={m?.model}
+          value={m && offerId(m)}
           onChange={(e: Event) =>
-            setModel((e.target as HTMLSelectElement).value)}
+            setChoice((e.target as HTMLSelectElement).value)}
         >
           {ms.map((x) => (
-            <option key={x.model} value={x.model}>{x.label}</option>
+            <option key={offerId(x)} value={offerId(x)}>{x.label}</option>
           ))}
         </select>
       </Row>

@@ -135,6 +135,15 @@ Deno.test('providers: every adapter but fake, allowlists only — no argv', () =
     ps.find((p) => p.name == 'codex')?.efforts,
     adapters.codex.efforts,
   )
+  let fallback = ps.find((p) => p.name == 'codex-cli')!
+  assertEquals(fallback.models, adapters.codex.models)
+  assertEquals(
+    Object.values(fallback.labels).every((label) =>
+      label.endsWith('(CLI fallback)')
+    ),
+    true,
+  )
+  assertEquals('argv' in fallback, false)
 })
 
 Deno.test('claude: opus-5 and the bare opus alias are barred; 4-8 is the default', () => {
@@ -177,6 +186,22 @@ Deno.test('codex: the probed celestial line, with Sol as the default', () => {
     'gpt-5.6-luna': 'GPT-5.6 Luna',
   })
   assertEquals(codex.models[0], 'gpt-5.6-sol')
+})
+
+Deno.test('codex-cli is the same process adapter under an explicit offer', () => {
+  let fallback = adapters['codex-cli']
+  let job = {
+    instruction: 'use the process floor',
+    session_id: 'session',
+    model: 'gpt-5.6-sol',
+    effort: 'high',
+  }
+  assertEquals(fallback.argv(job), codex.argv(job))
+  assertEquals(
+    fallback.resume(job, 'thread', 'continue'),
+    codex.resume(job, 'thread', 'continue'),
+  )
+  assertEquals(fallback.row, codex.row)
 })
 
 Deno.test('trouble: unknown provider/model/effort each name the valid ones', () => {

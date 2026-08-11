@@ -1118,13 +1118,22 @@ export let codexPending = `
   and (requested_task is not null or role is not null)
   and exists (
     select 1 from spawn where spawn.eid = session.eid
-      and spawn.provider = 'codex'
+      and spawn.provider in ('codex', 'codex-cli')
   )
   and not exists (select 1 from error where error.eid = session.eid)
   and (
     base_revision is null
     or not exists (select 1 from entry where entry.session = session.eid)
   )`
+
+// `codex` is the shipped graph-native default. `codex-cli` is an explicit
+// process request; the environment switch changes the default at process
+// birth without relabelling durable sessions. The graph sweep still owns any
+// ordered partitions that predate the rollback.
+export let graphCodex = (
+  provider: string,
+  mode = Deno.env.get('TASKS_CODEX_RUNNER'),
+) => provider == 'codex' && mode != 'cli'
 
 // created(session) reads the committed spawn request. The session is already
 // committed and broadcast, so every way this can fail is a failed Session on
@@ -1242,7 +1251,7 @@ export let spawned =
       // stamped before its worktree exists, so no .git link can place it yet.
       ...(row.actor ? {} : { actor: project }),
     }, cast)
-    if (native && row.spawn_provider == 'codex') {
+    if (native && graphCodex(String(row.spawn_provider))) {
       let claim = hookClaim(
         rows(snapshot(db)),
         job.task,
@@ -1360,7 +1369,7 @@ export let childPath = (home: string, path: string) => {
   return rest ? `${bin}:${rest}` : bin
 }
 
-let childEnv = (session: string, tree: string, role?: string) => ({
+export let childEnv = (session: string, tree: string, role?: string) => ({
   PATH: childPath(
     Deno.env.get('HOME') ?? '',
     Deno.env.get('PATH') ?? '',

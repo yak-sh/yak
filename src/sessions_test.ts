@@ -12,6 +12,7 @@
 import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
 import { existsSync } from 'node:fs'
 import { type Change } from './types.ts'
+import { adapters } from './adapters.ts'
 import { dispatch, on, relay, trace } from './effects.ts'
 import { PENDING } from './deliver.ts'
 import { fakeClaude, fakeCodex } from './door_fake.ts'
@@ -28,12 +29,14 @@ let { apply, db, delta, journalOf, snapshot } = await import('./db.ts')
 let { hookClaim, noticesFor, rows } = await import('./client.ts')
 let {
   childPath,
+  childEnv,
   codexPending,
   commented,
   continueSession,
   deleted,
   logs,
   logsDir,
+  graphCodex,
   landSpawnClaim,
   prepareWorktree,
   recover,
@@ -245,6 +248,23 @@ Deno.test('child PATH leads with the task CLI and preserves the service', () => 
   assertEquals(childPath('', '/usr/bin'), '/usr/bin')
 })
 
+Deno.test('managed child environment excludes provider credentials', () => {
+  let marker = `credential-${uid()}`
+  let names = ['OPENAI_API_KEY', 'CODEX_HOME', 'CHATGPT_ACCOUNT_ID']
+  let before = names.map((name) => Deno.env.get(name))
+  try {
+    for (let name of names) Deno.env.set(name, `${marker}-${name}`)
+    let env = childEnv('session', '/scratch/tree')
+    assertEquals(names.some((name) => name in env), false)
+    assertEquals(JSON.stringify(env).includes(marker), false)
+  } finally {
+    for (let [i, name] of names.entries()) {
+      if (before[i] == null) Deno.env.delete(name)
+      else Deno.env.set(name, before[i]!)
+    }
+  }
+})
+
 Deno.test('a spawn the graph cannot honor is a failed session, not a 400', async () => {
   let { t } = seed()
   let no = seed('', null) // a project with no repo comp
@@ -350,6 +370,13 @@ Deno.test('a new Codex spawn routes to the graph-native lifecycle', async () => 
       .get(legacy),
     false,
   )
+})
+
+Deno.test('Codex routing keeps both process fallback doors explicit', () => {
+  assertEquals(graphCodex('codex', undefined), true)
+  assertEquals(graphCodex('codex-cli', undefined), false)
+  assertEquals(graphCodex('codex', 'cli'), false)
+  assertEquals(graphCodex('claude', undefined), false)
 })
 
 Deno.test('a stale spawn claim preserves the session that won', () => {
@@ -486,6 +513,52 @@ Deno.test('a fake session runs end to end', async () => {
     [1, 2, 3, 4, 5],
   )
   assertMatch(String(page.stderr), /stderr noise/) // diagnostics, unordered
+})
+
+Deno.test('both Codex rollback names run through process JSONL', async () => {
+  let oldCodex = adapters.codex
+  let oldFallback = adapters['codex-cli']
+  let oldMode = Deno.env.get('TASKS_CODEX_RUNNER')
+  let routed = 0
+  try {
+    adapters.codex = adapters.fake
+    adapters['codex-cli'] = adapters.fake
+    for (let provider of ['codex-cli', 'codex']) {
+      if (provider == 'codex') Deno.env.set('TASKS_CODEX_RUNNER', 'cli')
+      let { t } = seed()
+      let eid = uid()
+      apply(db, [{
+        eid,
+        name: 'session',
+        comp: {
+          id: uid(),
+          provider,
+          model: 'fake-fast',
+          requested_task: t,
+        },
+      }])
+      await spawned(cast, () => {
+        routed++
+        return Promise.resolve()
+      })(eid, {})
+      assertEquals(row(eid)?.status, 'completed')
+      assertEquals(spawnRow(eid)?.provider, provider)
+      assertEquals(
+        Number(
+          (db.prepare('select count(*) as n from entry where session = ?')
+            .get(eid) as { n: number }).n,
+        ),
+        0,
+      )
+      assertEquals(logs(eid, new URLSearchParams()).entries.length > 1, true)
+    }
+    assertEquals(routed, 0)
+  } finally {
+    adapters.codex = oldCodex
+    adapters['codex-cli'] = oldFallback
+    if (oldMode == null) Deno.env.delete('TASKS_CODEX_RUNNER')
+    else Deno.env.set('TASKS_CODEX_RUNNER', oldMode)
+  }
 })
 
 Deno.test('a managed role runs in its project and resumes content-free', async () => {

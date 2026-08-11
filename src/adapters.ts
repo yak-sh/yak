@@ -6,8 +6,10 @@
 // vendor's dialect: it asks the adapter "is this the init?", "is this the
 // end?" and stamps whatever comes back.
 //
-// `fake` ships in-repo for tests; `claude` and `codex` shell the installed
+// `fake` ships in-repo for tests; `claude` and `codex-cli` shell the installed
 // CLIs (subscription auth rides HOME — no keys in argv, no keys in env).
+// `codex` keeps this process adapter as the reliability floor even though
+// managed requests bearing that name normally route to the graph runner.
 // Event shapes below are copied from live probes of both CLIs, not docs.
 import { kilo, type LogRow, type Session } from './types.ts'
 import { codexTranscript } from './transcripts.ts'
@@ -565,6 +567,19 @@ export let adapters: Record<string, Adapter> = {
       return null // thread.started, turn.started, item.started
     },
   },
+}
+
+// The direct runner owns `codex`; naming the substrate is the deliberate
+// per-session escape hatch. Both process spellings share one implementation
+// so the fallback cannot drift from the path a process-wide rollback uses.
+adapters['codex-cli'] = {
+  ...adapters.codex,
+  labels: Object.fromEntries(
+    Object.entries(adapters.codex.labels).map(([model, label]) => [
+      model,
+      `${label} (CLI fallback)`,
+    ]),
+  ),
 }
 
 // A codex item, as much of it as row() reads.
