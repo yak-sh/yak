@@ -140,6 +140,17 @@ let schema = `
     eid text primary key references entity(eid),
     color text
   );
+  create table if not exists venture (
+    eid         text primary key references entity(eid),
+    phase       text,
+    paused_from text,
+    hold_from   text,
+    run_mode    text,
+    agent_model text,
+    operated_by text,
+    tagline     text,
+    site        text
+  );
   create table if not exists person (
     eid text primary key references entity(eid)
   );

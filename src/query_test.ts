@@ -473,6 +473,27 @@ Deno.test('mail arrival columns route bare and filter (the mail door)', () => {
   assert(!matchQuery({ mail: { to: 'x', verified: 1 } }, ps))
 })
 
+// The venture facet's columns were renamed off the bare slots four other
+// comps already own, so venture reads qualified while the incumbents keep
+// their bare names — no new ambiguity throw.
+Deno.test('venture columns route qualified; incumbents keep bare', () => {
+  assertEquals(route('phase'), { comp: 'venture', prop: 'phase' })
+  assertEquals(pred('.venture.phase=live'), {
+    comp: 'venture',
+    prop: 'phase',
+    op: '',
+    value: 'live',
+  })
+  assertEquals(route('run_mode'), { comp: 'venture', prop: 'run_mode' })
+  // the incumbents venture deliberately dodged are unchanged: three still
+  // route bare, `.url` stays exactly as ambiguous as it already was (repo,
+  // web) — `site` added no third owner.
+  assertEquals(route('state'), { comp: 'role', prop: 'state' })
+  assertEquals(route('mode'), { comp: 'subscription', prop: 'mode' })
+  assertEquals(route('operator'), { comp: 'session', prop: 'operator' })
+  assertThrows(() => route('url'), Error, '.url is ambiguous (repo, web)')
+})
+
 // ---- references + path predicates ----
 
 Deno.test('references route and filter by their own names', () => {

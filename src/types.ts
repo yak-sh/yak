@@ -70,6 +70,27 @@ export let turnStates = ['idle', 'busy'] as const
 export let roleStates = ['running', 'stopped', 'held'] as const
 export let roleSurfaces = ['native', 'managed'] as const
 
+// A venture's lifecycle, from a glimmer to its end. `hold` and `paused` are
+// reversible stops — the venture remembers where it came from (hold_from,
+// paused_from) so unhold/unpause restores the phase; `shuttered` and `killed`
+// are terminal. Two verbs because a hold is operational (wait for a blocker)
+// and a pause is a deliberate rest of the work.
+export let ventureStates = [
+  'incubating',
+  'idea',
+  'building',
+  'launching',
+  'live',
+  'hold',
+  'paused',
+  'shuttered',
+  'killed',
+] as const
+
+// How a venture is run: long-loop keeps a session alive across turns, cold
+// spawns fresh each time, cron wakes it on a schedule.
+export let ventureModes = ['long-loop', 'cold', 'cron'] as const
+
 // A container pane lays its children along this axis: h = side by side,
 // v = stacked.
 export let dirs = ['h', 'v'] as const
@@ -134,6 +155,26 @@ export let comps: Record<string, Record<string, PropType>> = {
     base_branch: 'text',
     gate: 'text',
     push: 'bool',
+  },
+  // A project's venture facet: lifecycle phase + operating config. A facet,
+  // not an identity — a doc+project+venture is still a project (kindOf stays
+  // 'project'), so it stays out of kindOrder. Every column is wire-writable;
+  // the owner sets phase and config from the UI or CLI. The four names dodge
+  // bare dot-param collisions (phase↚state, run_mode↚mode, agent_model↚model,
+  // operated_by↚operator, site↚url) — venture access is always qualified
+  // `.venture.<col>`, so nothing bare had to move. `paused_from`/`hold_from`
+  // remember the phase a reversible stop came from, restored on unpause/unhold.
+  // `run_mode`/`agent_model`/`operated_by` are an interim operator↔venture
+  // binding — orchestration topology (T-8855/T-3906) subsumes them later.
+  venture: {
+    phase: { enum: ventureStates },
+    paused_from: { enum: ventureStates },
+    hold_from: { enum: ventureStates },
+    run_mode: { enum: ventureModes },
+    agent_model: 'text',
+    operated_by: 'text',
+    tagline: 'text',
+    site: 'url',
   },
   role: {
     state: { enum: roleStates },
@@ -938,6 +979,22 @@ export type Repo = {
   push?: boolean
 }
 
+// A project's venture facet: where it sits in its lifecycle and how it's run.
+// A tag like project/repo — it never names an entity alone, so it stays out
+// of kindOrder. paused_from/hold_from carry the phase a reversible stop will
+// restore; run_mode/agent_model/operated_by are the interim operator binding.
+export type Venture = {
+  eid: string
+  phase?: string | null
+  paused_from?: string | null
+  hold_from?: string | null
+  run_mode?: string | null
+  agent_model?: string | null
+  operated_by?: string | null
+  tagline?: string | null
+  site?: string | null
+}
+
 // A board is a saved filter over tasks: `query` speaks the query.ts
 // grammar ('.project=…&.status=open,wip'); empty/null means every task.
 export type BoardTag = { eid: string; query?: string | null }
@@ -1295,6 +1352,7 @@ export type Ent = {
   design?: { eid: string }
   task?: Task
   project?: ProjectTag
+  venture?: Venture
   role?: Role
   person?: { eid: string }
   repo?: Repo
