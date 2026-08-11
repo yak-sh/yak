@@ -10,6 +10,7 @@ import { managedCodex } from './managed_codex.ts'
 import { type IO } from './mcp.ts'
 import { responses } from './responses.ts'
 import { attentionPrompt } from './runner.ts'
+import { writeSession } from './session_store.ts'
 import { uuid } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
@@ -110,10 +111,19 @@ Deno.test('managed Codex runs the production tool chain without credential resid
       name: 'comment',
       comp: { target: other },
     }])
-    db.prepare(
-      "update session set origin = 'managed', base_revision = 'base' " +
-        'where eid = ?',
-    ).run(session)
+    writeSession(db, session, {
+      origin: 'managed',
+      base_revision: 'base',
+    })
+    assertEquals(
+      db.prepare('select cwd, base_revision from worktree where eid = ?')
+        .get(session),
+      { cwd: tree, base_revision: 'base' },
+    )
+    assertEquals(
+      db.prepare('select 1 from runtime where eid = ?').get(session),
+      undefined,
+    )
 
     let replies = [
       {
@@ -305,6 +315,10 @@ Deno.test('managed Codex runs the production tool chain without credential resid
       'gpt-served',
     )
     assertEquals(bodies.every((body) => body.store === false), true)
+    assertEquals(
+      db.prepare('select 1 from runtime where eid = ?').get(session),
+      undefined,
+    )
 
     let journal = db.prepare('select batch, via from journal order by rowid')
       .all()

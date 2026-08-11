@@ -555,6 +555,15 @@ Deno.test('a canonical fake session dual-materializes and runs', async () => {
   assertEquals(spawnRow(eid)?.provider, 'fake')
   assertEquals(spawnRow(eid)?.model, 'fake-fast')
   assertEquals(spawnRow(eid)?.effort, 'high')
+  assertEquals(
+    db.prepare('select cwd from worktree where eid = ?').get(eid),
+    { cwd: String(row(eid)?.cwd) },
+  )
+  assertEquals(
+    db.prepare('select provider_session_id from runtime where eid = ?')
+      .get(eid),
+    { provider_session_id: String(row(eid)?.id) },
+  )
   assertEquals(logs(eid, new URLSearchParams()).entries.length, 5)
 })
 
