@@ -4,6 +4,7 @@ import { h, render } from 'preact'
 import { type Ent } from '../types.ts'
 import { config, mode } from '../live.ts'
 import {
+  accountCallback,
   accountKey,
   accountOpen,
   fit,
@@ -165,6 +166,7 @@ Deno.test('the TUI account keys are device-first and capture the panel', async (
           : { method, authorizationUrl: 'https://auth.example/login' },
       )
     },
+    complete: () => Promise.resolve(status),
     cancel: () => {
       calls.push('cancel')
       status = signedOut()
@@ -215,6 +217,56 @@ Deno.test('the TUI account keys are device-first and capture the panel', async (
   trail.value = []
 })
 
+Deno.test('the TUI paste mode clears callback input before submission', async () => {
+  let callback = ''
+  let browser: AccountStatus = {
+    provider: 'codex',
+    state: 'pending',
+    ready: false,
+    auth: null,
+    login: 'browser',
+  }
+  let status = browser
+  let control = account({
+    status: () => Promise.resolve(status),
+    login: () => Promise.resolve(status),
+    complete: (value) => {
+      callback = value
+      status = {
+        provider: 'codex',
+        state: 'ready',
+        ready: true,
+        auth: 'chatgpt',
+      }
+      return Promise.resolve(status)
+    },
+    cancel: () => Promise.resolve(signedOut()),
+    logout: () => Promise.resolve(signedOut()),
+  })
+  control.view.value = { status }
+  accountOpen.value = true
+  accountCallback.value = null
+  accountKey('p', control)
+  let value = 'http://localhost/callback?code=grant&state=opaque'
+  for (let char of value) {
+    accountKey(char, control)
+  }
+  assertEquals(accountCallback.peek(), value)
+  accountKey('\r', control)
+  assertEquals(accountCallback.value, null)
+  assertEquals(callback, value)
+  await Promise.resolve()
+
+  control.view.value = { status: browser }
+  accountKey('p', control)
+  accountKey('x', control)
+  accountKey('\x1b', control)
+  assertEquals(accountCallback.value, null)
+  assertEquals(accountOpen.value, true)
+  accountOpen.value = false
+  control.close()
+})
+
 Deno.test('the TUI account paints ceremony and hostile errors as plain text', () => {
   let root = new TElement('root')
   let target = root as unknown as Parameters<typeof render>[1]
@@ -251,5 +303,6 @@ Deno.test('the TUI account paints ceremony and hostile errors as plain text', ()
   assertEquals(output.includes('\x07'), false)
   assertEquals(output.includes('ABCD-1234'), true)
   assertEquals(output.includes('https://auth.example/device'), true)
+  assertEquals(output.includes('workspace permissions'), true)
   render(null, target)
 })

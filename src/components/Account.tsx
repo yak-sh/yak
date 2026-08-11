@@ -2,7 +2,7 @@
 // ceremonies, cancel and logout. Ceremony data lives only in the mounted
 // client and every provider string reaches the DOM as text.
 import { signal } from '@preact/signals'
-import { useEffect, useRef } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import {
   type AccountControl,
   type Ceremony,
@@ -27,6 +27,8 @@ let Frame = block('div', 'Account', {
   Url: 'a',
   Code: 'code',
   Hint: 'p',
+  Callback: 'form',
+  Input: 'input',
   Actions: 'footer',
   Action: 'button',
 })
@@ -43,6 +45,8 @@ let {
   Url,
   Code,
   Hint,
+  Callback,
+  Input,
   Actions,
   Action,
 } = Frame
@@ -88,8 +92,9 @@ export let accountKey = (event: AccountKey) => {
   } | null
   let activates = (event.key == 'Enter' || event.key == ' ') &&
     target?.matches?.('button, a[href]') === true
+  let writes = target?.matches?.('input, textarea') === true
   if (event.key == 'Escape') accountOpen.value = false
-  if (event.key != 'Tab' && !activates) event.preventDefault()
+  if (event.key != 'Tab' && !activates && !writes) event.preventDefault()
   return true
 }
 
@@ -119,6 +124,15 @@ export let browserLogin = async (
   return ceremony
 }
 
+export let finishLogin = (
+  control: AccountControl,
+  callback: string,
+  clear: () => void,
+) => {
+  clear()
+  if (callback) return control.complete(callback)
+}
+
 let Ceremony = ({ ceremony }: { ceremony?: Ceremony }) => {
   if (!ceremony) return null
   let href = ceremony.method == 'browser'
@@ -132,8 +146,8 @@ let Ceremony = ({ ceremony }: { ceremony?: Ceremony }) => {
       {ceremony.method == 'device' && <Code>{ceremony.userCode}</Code>}
       <Hint>
         {ceremony.method == 'device'
-          ? 'Enter this one-time code in the page above.'
-          : 'Complete sign in in the browser window.'}
+          ? 'Enter the code above. Device login must be enabled in ChatGPT settings or workspace permissions.'
+          : 'Complete sign in in the browser window, then return here.'}
       </Hint>
     </CeremonyBox>
   )
@@ -143,9 +157,14 @@ export let Account = (
   { control = codexAccount }: { control?: AccountControl },
 ) => {
   let box = useRef<HTMLElement>(null)
+  let [callback, setCallback] = useState('')
   let view = control.view.value
   let status = view.status
   let busy = view.busy
+
+  useEffect(() => {
+    if (status?.state != 'pending' || status.login != 'browser') setCallback('')
+  }, [status?.state, status?.login])
 
   useEffect(() => {
     if (!accountOpen.value) return
@@ -165,6 +184,8 @@ export let Account = (
   let pending = status?.state == 'pending' ? status : undefined
   let state = busy == 'login'
     ? 'starting login…'
+    : busy == 'complete'
+    ? 'finishing login…'
     : busy == 'cancel'
     ? 'cancelling…'
     : busy == 'logout'
@@ -209,6 +230,34 @@ export let Account = (
           )}
           {error && <ErrorText>{error}</ErrorText>}
           <Ceremony ceremony={view.ceremony} />
+          {pending?.login == 'browser' && (
+            <Callback
+              onSubmit={(event: SubmitEvent) => {
+                event.preventDefault()
+                finishLogin(control, callback, () => setCallback(''))
+              }}
+            >
+              <Hint>
+                If the browser cannot reach this daemon, paste the full
+                localhost callback URL from its address bar.
+              </Hint>
+              <Input
+                type='url'
+                name='callback'
+                value={callback}
+                required
+                autocomplete='off'
+                spellcheck={false}
+                placeholder='http://localhost:…/auth/callback?code=…&state=…'
+                aria-label='Codex callback URL'
+                onInput={(event: InputEvent) =>
+                  setCallback((event.currentTarget as HTMLInputElement).value)}
+              />
+              <Action type='submit' disabled={!!busy || !callback}>
+                finish login
+              </Action>
+            </Callback>
+          )}
           {pending && !view.ceremony && (
             <Hint>This login began in another Tasks client.</Hint>
           )}

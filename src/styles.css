@@ -2209,6 +2209,20 @@ html {
   gap: var(--half-gap);
   overflow-wrap: anywhere;
 }
+.Account_Callback {
+  display: grid;
+  gap: var(--half-gap);
+}
+.Account_Input {
+  width: 100%;
+  min-height: var(--tap);
+  padding: var(--half-gap);
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  font: inherit;
+}
 .Account_Code {
   width: fit-content;
   padding: var(--half-gap);

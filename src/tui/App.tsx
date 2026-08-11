@@ -55,6 +55,7 @@ let msg = signal('')
 let buf = signal('') // the : command line
 export let help = signal(false)
 export let accountOpen = signal(false)
+export let accountCallback = signal<string | null>(null)
 let priority = propAt('task', 'priority')!
 
 // The first board is the one we browse — v0 has exactly one.
@@ -381,11 +382,26 @@ export let accountKey = (
   if (!accountOpen.value) {
     if (mode.value != 'normal' || k != 'a') return false
     help.value = false
+    accountCallback.value = null
     accountOpen.value = true
     control.read()
     return true
   }
+  if (accountCallback.value != null) {
+    if (k == '\x1b') accountCallback.value = null
+    else if (k == '\r') {
+      let callback = accountCallback.value
+      accountCallback.value = null
+      if (callback) control.complete(callback)
+    } else if (k == '\x7f') {
+      accountCallback.value = accountCallback.value.slice(0, -1)
+    } else if (k >= ' ' && accountCallback.value.length < 4096) {
+      accountCallback.value += k
+    }
+    return true
+  }
   if (k == 'a' || k == 'q' || k == '\x1b') {
+    accountCallback.value = null
     accountOpen.value = false
     return true
   }
@@ -396,6 +412,9 @@ export let accountKey = (
     state == 'unavailable'
   if (k == 'l' && login) control.login('device')
   else if (k == 'b' && login) control.login('browser')
+  else if (
+    k == 'p' && state == 'pending' && view.status?.login == 'browser'
+  ) accountCallback.value = ''
   else if (k == 'c' && state == 'pending') control.cancel()
   else if (k == 'o' && view.status?.ready) control.logout()
   else if (k == 'r') control.read()
@@ -475,6 +494,8 @@ export let TAccount = (
   let busy = view.busy
   let state = busy == 'login'
     ? 'starting login…'
+    : busy == 'complete'
+    ? 'finishing login…'
     : busy == 'cancel'
     ? 'cancelling…'
     : busy == 'logout'
@@ -510,18 +531,29 @@ export let TAccount = (
           <span class='TAccount_Url'>{ceremony.verificationUrl}</span>
           <span class='TAccount_Code'>{ceremony.userCode}</span>
           <div class='TAccount_Hint'>enter the code in the page above</div>
+          <div class='TAccount_Hint'>
+            device login must be enabled in ChatGPT settings or workspace
+            permissions
+          </div>
         </div>
       )}
       {ceremony?.method == 'browser' && (
         <div class='TAccount_Ceremony'>
           <span class='TAccount_Url'>{ceremony.authorizationUrl}</span>
           <div class='TAccount_Hint'>
-            use device login when this daemon's callback is unreachable
+            paste the localhost callback when this daemon is remote
           </div>
         </div>
       )}
       {status?.state == 'pending' && !ceremony && (
         <div class='TAccount_Hint'>login began in another Tasks client</div>
+      )}
+      {accountCallback.value != null && (
+        <div class='TAccount_Input'>
+          paste callback URL:{' '}
+          {'•'.repeat(Math.min(accountCallback.value.length, 32))}█
+          <div class='TAccount_Hint'>Enter submit · Esc cancel input</div>
+        </div>
       )}
       <div class='TAccount_Actions'>
         {login && (
@@ -532,6 +564,11 @@ export let TAccount = (
         )}
         {!busy && status?.state == 'pending' && (
           <>
+            {status.login == 'browser' && (
+              <>
+                <span class='TAccount_Key'>p</span> paste callback ·{' '}
+              </>
+            )}
             <span class='TAccount_Key'>c</span> cancel login
           </>
         )}

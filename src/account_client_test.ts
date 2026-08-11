@@ -55,6 +55,11 @@ let fixture = () => {
           },
       )
     },
+    complete: (callback) => {
+      calls.push(`complete:${callback}`)
+      status = ready()
+      return Promise.resolve(status)
+    },
     cancel: () => {
       calls.push('cancel')
       status = signedOut()
@@ -137,6 +142,7 @@ Deno.test('account mutations serialize a deferred login', async () => {
       calls.push('cancel')
       return Promise.resolve(signedOut())
     },
+    complete: () => Promise.resolve(ready()),
     logout: () => Promise.resolve(signedOut()),
   }
   let control = account(door)
@@ -172,6 +178,7 @@ Deno.test('a ceremony keeps polling and cancellable across a failed read', async
           verificationUrl: 'https://auth.example/device',
           userCode: 'ABCD-1234',
         }),
+      complete: () => Promise.resolve(ready()),
       cancel: () => {
         cancelled = true
         return Promise.resolve(signedOut())
@@ -205,6 +212,36 @@ Deno.test('a ceremony keeps polling and cancellable across a failed read', async
   assertEquals(cancelled, false)
 })
 
+Deno.test('account completion retains its ceremony only on failure', async () => {
+  let run = fixture()
+  await run.control.login('browser')
+  await run.control.complete('http://localhost/callback?code=x&state=y')
+  assertEquals(run.control.view.value, { status: ready() })
+  assertEquals(run.calls, [
+    'login:browser',
+    'status',
+    'complete:http://localhost/callback?code=x&state=y',
+  ])
+
+  let status = pending('browser')
+  let control = account({
+    status: () => Promise.resolve(status),
+    login: () =>
+      Promise.resolve({
+        method: 'browser',
+        authorizationUrl: 'https://auth.example/login',
+      }),
+    complete: () => Promise.reject(Error('relay failed')),
+    cancel: () => Promise.resolve(signedOut()),
+    logout: () => Promise.resolve(signedOut()),
+  })
+  await control.login('browser')
+  await control.complete('http://localhost/callback?code=x&state=y')
+  assertEquals(control.view.value.ceremony?.method, 'browser')
+  assertEquals(control.view.value.error, 'relay failed')
+  control.close()
+})
+
 Deno.test('account client rejects unsafe ceremony and inconsistent status', () => {
   for (
     let value of [
@@ -236,7 +273,7 @@ Deno.test('account client rejects unsafe ceremony and inconsistent status', () =
   }
 })
 
-Deno.test('account HTTP door sends only browser and device ceremony inputs', async () => {
+Deno.test('account HTTP door sends only short-lived ceremony inputs', async () => {
   let requests: { url: string; init?: RequestInit }[] = []
   let run = (input: string | URL | Request, init?: RequestInit) => {
     requests.push({ url: String(input), init })
@@ -249,11 +286,16 @@ Deno.test('account HTTP door sends only browser and device ceremony inputs', asy
   let door = accountDoor(run, () => 'http://tasks.test')
   await door.status()
   await door.login('browser')
+  await door.complete('http://localhost/callback?code=x&state=y')
   assertEquals(requests.map((x) => [x.url, x.init?.body]), [
     ['http://tasks.test/accounts/codex', undefined],
     [
       'http://tasks.test/accounts/codex/login',
       JSON.stringify({ method: 'browser' }),
+    ],
+    [
+      'http://tasks.test/accounts/codex/complete',
+      JSON.stringify({ callback: 'http://localhost/callback?code=x&state=y' }),
     ],
   ])
 })

@@ -11,6 +11,7 @@ export type Ceremony = Exclude<LoginStart, AccountStatus>
 export type AccountDoor = {
   status: () => Promise<AccountStatus>
   login: (method: LoginMethod) => Promise<LoginStart>
+  complete: (callback: string) => Promise<AccountStatus>
   cancel: () => Promise<AccountStatus>
   logout: () => Promise<AccountStatus>
 }
@@ -18,7 +19,7 @@ export type AccountDoor = {
 export type AccountView = {
   status?: AccountStatus
   ceremony?: Ceremony
-  busy?: 'read' | 'login' | 'cancel' | 'logout'
+  busy?: 'read' | 'login' | 'complete' | 'cancel' | 'logout'
   error?: string
 }
 
@@ -150,6 +151,7 @@ export let accountDoor = (
   return {
     status: () => ask().then(accountStatus),
     login: (method) => ask('/login', { method }).then(loginStart),
+    complete: (callback) => ask('/complete', { callback }).then(accountStatus),
     cancel: () => action('cancel'),
     logout: () => action('logout'),
   }
@@ -260,10 +262,29 @@ export let account = (
       fail(error, mine)
     }
   }
+  let complete = async (callback: string) => {
+    if (
+      locked() || view.peek().status?.state != 'pending' ||
+      view.peek().status?.login != 'browser'
+    ) return
+    let mine = ++generation
+    stop()
+    view.value = {
+      ...view.peek(),
+      busy: 'complete',
+      error: undefined,
+    }
+    try {
+      land(await door.complete(callback), mine)
+    } catch (error) {
+      fail(error, mine)
+    }
+  }
   return {
     view,
     read: () => read(),
     login,
+    complete,
     cancel: () =>
       view.peek().status?.state == 'pending'
         ? act('cancel', door.cancel)

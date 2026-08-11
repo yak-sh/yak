@@ -5,7 +5,13 @@ import { parseHTML } from 'linkedom'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { account, type AccountDoor } from '../account_client.ts'
 import type { AccountStatus } from '../accounts.ts'
-import { Account, accountKey, accountOpen, browserLogin } from './Account.tsx'
+import {
+  Account,
+  accountKey,
+  accountOpen,
+  browserLogin,
+  finishLogin,
+} from './Account.tsx'
 
 let signedOut = (): AccountStatus => ({
   provider: 'codex',
@@ -20,6 +26,7 @@ let door = (
 ): AccountDoor => ({
   status: () => Promise.resolve(status),
   login: start ?? (() => Promise.resolve(status)),
+  complete: () => Promise.resolve(status),
   cancel: () => Promise.resolve(signedOut()),
   logout: () => Promise.resolve(signedOut()),
 })
@@ -97,6 +104,59 @@ Deno.test('browser login detaches its pre-opened window before navigation', asyn
   control.close()
 })
 
+Deno.test('browser callback paste clears before it finishes login', () => {
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let { document } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  let status: AccountStatus = {
+    provider: 'codex',
+    state: 'pending',
+    ready: false,
+    auth: null,
+    login: 'browser',
+  }
+  let callback = 'http://localhost/callback?code=grant&state=opaque'
+  let received = ''
+  let accountDoor = door(status)
+  accountDoor.complete = (value) => {
+    received = value
+    assertEquals(callback, '')
+    return new Promise(() => {})
+  }
+  let control = account(accountDoor)
+  control.view.value = {
+    status,
+    ceremony: {
+      method: 'browser',
+      authorizationUrl: 'https://auth.example/login',
+    },
+  }
+  let root = document.querySelector('main')!
+  try {
+    accountOpen.value = true
+    render(h(Account, { control }), root)
+    assertEquals(
+      root.querySelector('.Account_Input')?.getAttribute('type'),
+      'url',
+    )
+    finishLogin(control, callback, () => callback = '')
+    assertEquals(callback, '')
+    assertEquals(
+      received,
+      'http://localhost/callback?code=grant&state=opaque',
+    )
+  } finally {
+    accountOpen.value = false
+    control.close()
+    render(null, root)
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else delete (globalThis as { document?: unknown }).document
+  }
+})
+
 Deno.test('account dialog owns shortcuts but preserves focus and activation', () => {
   let stopped = 0, prevented = 0
   let event = (key: string, matches = false) => ({
@@ -114,10 +174,11 @@ Deno.test('account dialog owns shortcuts but preserves focus and activation', ()
   })
   accountKey(event('Tab'))
   accountKey(event('Enter', true))
-  assertEquals({ stopped, prevented }, { stopped: 3, prevented: 1 })
+  accountKey(event('x', true))
+  assertEquals({ stopped, prevented }, { stopped: 4, prevented: 1 })
   accountKey(event('Escape'))
   assertEquals({ stopped, prevented, open: accountOpen.value }, {
-    stopped: 4,
+    stopped: 5,
     prevented: 2,
     open: false,
   })

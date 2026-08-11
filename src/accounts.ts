@@ -45,6 +45,7 @@ export type LoginStart =
 export type AccountService = {
   status: () => Promise<AccountStatus>
   login: (input: LoginInput) => Promise<LoginStart>
+  complete: (callback: string) => Promise<AccountStatus>
   cancel: () => Promise<AccountStatus>
   logout: () => Promise<AccountStatus>
   refresh: () => Promise<AccountStatus>
@@ -60,6 +61,9 @@ let faults = {
   pending: ['login_pending', 'A Codex login is already pending.', 409],
   idle: ['no_login', 'No Codex login is pending.', 409],
   invalid: ['invalid_request', 'Invalid Codex account request.', 400],
+  browser: ['no_browser_login', 'No browser login is pending.', 409],
+  callback: ['invalid_callback', 'Invalid Codex login callback.', 400],
+  relay: ['callback_failed', 'Codex login callback failed.', 502],
   login: ['login_failed', 'Codex login failed.', 502],
   refresh: ['refresh_failed', 'Codex account refresh failed.', 502],
 } as const
@@ -234,13 +238,77 @@ type Pending = {
   rpc: Rpc
   stored: Stored
   before: AccountStatus
+  redirect?: { origin: string; path: string; state: string }
   cancelled: boolean
   done: Promise<void>
+}
+
+type Relay = (
+  input: string | URL,
+  init: RequestInit,
+) => Promise<Response>
+
+let loopback = (host: string) =>
+  host == 'localhost' || host == '127.0.0.1' || host == '[::1]'
+
+let browser = (value: unknown) => {
+  let authorizationUrl = safeUrl(value)
+  let auth = new URL(authorizationUrl)
+  let redirects = auth.searchParams.getAll('redirect_uri')
+  let states = auth.searchParams.getAll('state')
+  if (
+    redirects.length != 1 || states.length != 1 || !states[0] ||
+    states[0].length > 4096
+  ) throw fault(faults.login)
+  try {
+    let redirect = new URL(redirects[0])
+    if (
+      redirect.protocol != 'http:' || !loopback(redirect.hostname) ||
+      redirect.username || redirect.password || redirect.search || redirect.hash
+    ) throw Error()
+    return {
+      authorizationUrl,
+      redirect: {
+        origin: redirect.origin,
+        path: redirect.pathname,
+        state: states[0],
+      },
+    }
+  } catch {
+    throw fault(faults.login)
+  }
+}
+
+let callback = (
+  value: unknown,
+  redirect: NonNullable<Pending['redirect']>,
+) => {
+  if (typeof value != 'string' || !value || value.length > 4096) {
+    throw fault(faults.callback)
+  }
+  try {
+    let url = new URL(value)
+    let code = url.searchParams.getAll('code')
+    let state = url.searchParams.getAll('state')
+    if (
+      url.protocol != 'http:' || url.username || url.password || url.hash ||
+      url.origin != redirect.origin || url.pathname != redirect.path ||
+      code.length != 1 || !code[0] || state.length != 1 ||
+      state[0] != redirect.state || [...url.searchParams.keys()].length != 2
+    ) throw Error()
+    let target = new URL(redirect.path, redirect.origin)
+    target.searchParams.set('code', code[0])
+    target.searchParams.set('state', state[0])
+    return target
+  } catch {
+    throw fault(faults.callback)
+  }
 }
 
 export let accountService = (
   store: AuthStore,
   issuer: Issuer,
+  relay: Relay = fetch,
 ): AccountService => {
   let cache: AccountStatus | undefined
   let current: Credential | undefined
@@ -339,7 +407,11 @@ export let accountService = (
   }
 
   let finish = async (mine: Pending) => {
+    let timer: ReturnType<typeof setTimeout> | undefined
     try {
+      // Codex announces completion before reloading its account cache. The
+      // following update is the barrier that makes account/read current.
+      let updated = mine.rpc.wait('account/updated').catch(() => undefined)
       let note = await mine.rpc.wait('account/login/completed')
       if (pending != mine) return
       if (mine.cancelled) {
@@ -347,6 +419,16 @@ export let accountService = (
         return
       }
       if (note.loginId != mine.id || note.success !== true) {
+        cache = failed()
+        return
+      }
+      let account = await Promise.race([
+        updated,
+        new Promise<undefined>((resolve) => {
+          timer = setTimeout(() => resolve(undefined), 30_000)
+        }),
+      ])
+      if (account?.authMode != 'chatgpt') {
         cache = failed()
         return
       }
@@ -361,6 +443,7 @@ export let accountService = (
     } catch {
       if (pending == mine && !mine.cancelled) cache = failed()
     } finally {
+      clearTimeout(timer)
       if (pending == mine) pending = undefined
       await mine.rpc.close().catch(() => {})
       await mine.stored.close().catch(() => {})
@@ -402,11 +485,11 @@ export let accountService = (
       )
       let id = result.loginId
       if (typeof id != 'string' || !id) throw fault(faults.login)
-      let ceremony: LoginStart = input.method == 'browser'
-        ? {
-          method: 'browser',
-          authorizationUrl: safeUrl(result.authUrl),
-        }
+      let browserLogin = input.method == 'browser'
+        ? browser(result.authUrl)
+        : undefined
+      let ceremony: LoginStart = browserLogin
+        ? { method: 'browser', authorizationUrl: browserLogin.authorizationUrl }
         : {
           method: 'device',
           verificationUrl: safeUrl(result.verificationUrl),
@@ -418,6 +501,7 @@ export let accountService = (
         rpc,
         stored,
         before,
+        ...(browserLogin ? { redirect: browserLogin.redirect } : {}),
         cancelled: false,
         done: Promise.resolve(),
       }
@@ -435,6 +519,22 @@ export let accountService = (
         await stored?.close().catch(() => {})
       }
     }
+  }
+
+  let complete = async (value: string) => {
+    let mine = pending
+    if (!mine || mine.method != 'browser' || !mine.redirect) {
+      throw fault(faults.browser)
+    }
+    let target = callback(value, mine.redirect)
+    try {
+      let response = await relay(target, { redirect: 'manual' })
+      await response.body?.cancel().catch(() => {})
+    } catch {
+      throw fault(faults.relay)
+    }
+    await mine.done
+    return status()
   }
 
   let cancel = async () => {
@@ -479,6 +579,7 @@ export let accountService = (
   return {
     status,
     login,
+    complete,
     cancel,
     logout,
     refresh: refreshed,
@@ -547,6 +648,13 @@ let input = (value: Record<string, unknown>): LoginInput => {
   throw fault(faults.invalid)
 }
 
+let callbackInput = (value: Record<string, unknown>) => {
+  if (typeof value.callback != 'string' || Object.keys(value).length != 1) {
+    throw fault(faults.invalid)
+  }
+  return value.callback
+}
+
 export let accountHttp = async (
   service: AccountService,
   req: Request,
@@ -557,12 +665,15 @@ export let accountHttp = async (
       return json(await service.status())
     }
     let action = path.match(
-      /^\/accounts\/codex\/(login|cancel|logout|refresh)$/,
+      /^\/accounts\/codex\/(login|complete|cancel|logout|refresh)$/,
     )
     if (!action) return json({ error: 'not_found' }, 404)
     if (req.method != 'POST') return json({ error: 'method_not_allowed' }, 405)
     let value = await body(req)
     if (action[1] == 'login') return json(await service.login(input(value)))
+    if (action[1] == 'complete') {
+      return json(await service.complete(callbackInput(value)))
+    }
     empty(value)
     if (action[1] == 'cancel') return json(await service.cancel())
     if (action[1] == 'logout') return json(await service.logout())

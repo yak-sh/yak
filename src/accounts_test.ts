@@ -12,6 +12,7 @@ let jwt = (account: string) => {
 }
 
 type Call = { method: string; params: Record<string, unknown> }
+type Relay = (input: string | URL, init: RequestInit) => Promise<Response>
 
 let fixture = (initial?: Record<string, unknown>) => {
   let account = initial
@@ -22,7 +23,9 @@ let fixture = (initial?: Record<string, unknown>) => {
   let login: {
     id: string
     emit: (params: Record<string, unknown>) => void
+    update: (params: Record<string, unknown>) => void
   } | undefined
+  let relay: Relay = () => Promise.resolve(new Response(null, { status: 302 }))
   let store: AuthStore = {
     begin: () => {
       begins++
@@ -85,6 +88,7 @@ let fixture = (initial?: Record<string, unknown>) => {
             login = {
               id,
               emit: (value) => emit('account/login/completed', value),
+              update: (value) => emit('account/updated', value),
             }
             return params.type == 'chatgptDeviceCode'
               ? {
@@ -94,7 +98,9 @@ let fixture = (initial?: Record<string, unknown>) => {
               }
               : {
                 loginId: id,
-                authUrl: 'https://auth.example/authorize?state=opaque',
+                authUrl:
+                  'https://auth.example/authorize?state=opaque&redirect_uri=' +
+                  'http%3A%2F%2Flocalhost%3A1455%2Fauth%2Fcallback',
               }
           }
           if (method == 'account/login/cancel') return {}
@@ -124,8 +130,13 @@ let fixture = (initial?: Record<string, unknown>) => {
       return Promise.resolve(rpc)
     },
   }
+  let service = accountService(
+    store,
+    issuer,
+    (input, init) => relay(input, init),
+  )
   return {
-    service: accountService(store, issuer),
+    service,
     calls,
     counts: () => ({ begins, closes, commits, refreshes }),
     setToken: (value: string | undefined) => {
@@ -134,7 +145,11 @@ let fixture = (initial?: Record<string, unknown>) => {
     },
     complete: (success = true, id = login?.id) => {
       if (!login) throw Error('no login')
-      if (success) {
+      login.emit({ loginId: id, success })
+    },
+    updated: (authMode = 'chatgpt') => {
+      if (!login) throw Error('no login')
+      if (authMode == 'chatgpt') {
         account = {
           type: 'chatgpt',
           email: 'person@example.com',
@@ -142,8 +157,9 @@ let fixture = (initial?: Record<string, unknown>) => {
         }
         token = jwt('account-secret')
       }
-      login.emit({ loginId: id, success })
+      login.update({ authMode })
     },
+    onRelay: (run: Relay) => relay = run,
   }
 }
 
@@ -221,17 +237,23 @@ Deno.test('Codex credential failures clear cached readiness and bearer', async (
   )
 })
 
-Deno.test('Codex browser login commits only a matching completion', async () => {
+Deno.test('Codex login waits for its account update before commit', async () => {
   let run = fixture()
   let start = await run.service.login({ method: 'browser' })
   assertEquals(start, {
     method: 'browser',
-    authorizationUrl: 'https://auth.example/authorize?state=opaque',
+    authorizationUrl:
+      'https://auth.example/authorize?state=opaque&redirect_uri=' +
+      'http%3A%2F%2Flocalhost%3A1455%2Fauth%2Fcallback',
   })
   assertEquals(JSON.stringify(start).includes('login-'), false)
   assertEquals((await run.service.status()).state, 'pending')
 
   run.complete()
+  await Promise.resolve()
+  assertEquals((await run.service.status()).state, 'pending')
+  assertEquals(run.counts().commits, 0)
+  run.updated()
   let ready = await settle(run.service.status, 'ready')
   assertEquals(ready.auth, 'chatgpt')
   assertEquals(run.counts().commits, 1)
@@ -243,6 +265,102 @@ Deno.test('Codex browser login commits only a matching completion', async () => 
     auth: null,
   })
   assertEquals(run.counts().commits, 2)
+})
+
+Deno.test('Codex browser login relays only its exact callback', async () => {
+  let run = fixture()
+  await run.service.login({ method: 'browser' })
+  let request: { url: string; init: RequestInit } | undefined
+  run.onRelay((input, init) => {
+    request = { url: String(input), init }
+    run.complete()
+    run.updated()
+    return Promise.resolve(
+      new Response('provider body', {
+        status: 302,
+        headers: { location: 'https://provider.example/secret' },
+      }),
+    )
+  })
+  let response = await accountHttp(
+    run.service,
+    new Request('http://tasks/accounts/codex/complete', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        callback: 'http://localhost:1455/auth/callback?code=grant&state=opaque',
+      }),
+    }),
+  )
+  let text = await response.text()
+  let status: AccountStatus = JSON.parse(text)
+  assertEquals(response.status, 200)
+  assertEquals(status.state, 'ready')
+  assertEquals(request, {
+    url: 'http://localhost:1455/auth/callback?code=grant&state=opaque',
+    init: { redirect: 'manual' },
+  })
+  assertEquals(text.includes('grant'), false)
+  assertEquals(text.includes('opaque'), false)
+})
+
+Deno.test('Codex callback relay rejects every shape outside its ceremony', async () => {
+  let absent = fixture()
+  await assertRejects(
+    () => absent.service.complete('http://localhost/callback?code=x&state=y'),
+    Error,
+    'No browser login is pending.',
+  )
+  await absent.service.login({ method: 'device' })
+  await assertRejects(
+    () => absent.service.complete('http://localhost/callback?code=x&state=y'),
+    Error,
+    'No browser login is pending.',
+  )
+  await absent.service.cancel()
+
+  for (
+    let value of [
+      'https://localhost:1455/auth/callback?code=grant&state=opaque',
+      'http://other:1455/auth/callback?code=grant&state=opaque',
+      'http://localhost:1455/other?code=grant&state=opaque',
+      'http://localhost:1455/auth/callback?code=grant&state=wrong',
+      'http://localhost:1455/auth/callback?code=&state=opaque',
+      'http://localhost:1455/auth/callback?code=a&code=b&state=opaque',
+      'http://localhost:1455/auth/callback?code=a&state=opaque&state=opaque',
+      'http://localhost:1455/auth/callback?code=a&state=opaque&scope=openid',
+      'http://user@localhost:1455/auth/callback?code=a&state=opaque',
+      'http://localhost:1455/auth/callback?code=a&state=opaque#token',
+    ]
+  ) {
+    let run = fixture()
+    await run.service.login({ method: 'browser' })
+    let relays = 0
+    run.onRelay(() => {
+      relays++
+      return Promise.resolve(new Response())
+    })
+    await assertRejects(
+      () => run.service.complete(value),
+      Error,
+      'Invalid Codex login callback.',
+    )
+    assertEquals(relays, 0)
+    await run.service.cancel()
+  }
+})
+
+Deno.test('Codex browser login rejects an unrelated account update', async () => {
+  let run = fixture()
+  await run.service.login({ method: 'browser' })
+  run.complete()
+  run.updated('apiKey')
+  let status = await settle(run.service.status, 'error')
+  assertEquals(status.error, {
+    code: 'login_failed',
+    message: 'Codex login failed.',
+  })
+  assertEquals(run.counts().commits, 0)
 })
 
 Deno.test('Codex device login cancellation discards its transaction', async () => {
