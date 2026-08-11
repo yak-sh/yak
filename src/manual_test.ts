@@ -46,7 +46,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       set: 'set <id> [--comment=TEXT]',
       show: 'show <id> [--json] [--quarantined]',
       history: 'history <id> [-n=50] [--json]',
-      search: 'search <words…> [--json]',
+      search: 'search [words…] [--json]',
       mail: 'mail [filters…] [--json] [--all] [--sent]',
       'mail show': 'mail show <id> [--json]',
       'mail send': 'mail send <to> <subject…> --body=BODY',
@@ -226,6 +226,7 @@ Deno.test('manual validation accepts each supported option shape', () => {
   check('list', ['.status=open', '.priority<=1'])()
   check('set', ['T-1', '.status=done'])()
   check('search', ['.project=P-19', 'deploy'])()
+  check('search', ['.status=open'])()
 })
 
 Deno.test('parse names positionals, resolves options, and applies defaults', () => {

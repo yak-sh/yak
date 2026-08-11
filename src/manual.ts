@@ -206,7 +206,9 @@ export let manuals = declare({
       'task search .project=holdco deploy',
     ],
     root: true,
-    args: [arg('words', text, true)],
+    // Filters ride words but not positional slots; seek rejects a query with
+    // neither, after both forms have reached it.
+    args: [arg('words', text, true, false)],
     opts: [json],
   },
   mail: {
