@@ -1111,7 +1111,7 @@ let colon = async (focus: string | undefined, argv: string[]) => {
       await one(line.slice(name.length).trim())
     } else {
       all.push(...await query(['.repo!'], 'project'))
-      await one('home')
+      await one('tasks')
     }
   }
   if (name == 'knock') await one(rest[0])

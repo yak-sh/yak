@@ -244,7 +244,7 @@ export let commands: Record<string, Command> = {
   // that task; anything else is a spec line that FILES the task first.
   // A fix without a named task is a fix for the TOOL you're typing into
   // — whatever card you're looking at — so it routes to the deployment's
-  // own project (alias `home`; the sole repo-bearing project when no
+  // own project (venture alias `tasks`; the sole repo-bearing project when no
   // alias stands). Explicit .project= always wins. The spawn is an
   // INTENT like go: this module never touches the wire.
   fix: {
@@ -268,8 +268,8 @@ export let commands: Record<string, Command> = {
       if (!title) throw new Error('fix: needs a title')
       let task = { ...grouped.task }
       if (!task.project) {
-        let home = find(ctx.rows, 'home')
-        if (home?.comps.project) task.project = home.eid
+        let tasks = find(ctx.rows, 'tasks')
+        if (tasks?.comps.project) task.project = tasks.eid
         else {
           let repos = ctx.rows.filter((r) => r.comps.repo && r.comps.project)
           if (repos.length == 1) task.project = repos[0].eid

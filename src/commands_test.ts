@@ -182,7 +182,7 @@ Deno.test('fix: a bare id spawns, words file a task first', () => {
   })
   // a worded fix is about the TOOL, not where you stand: the board's
   // context does NOT ride along (its domain stays out), and with many
-  // repo projects the `home` alias names the deployment's own
+  // repo projects the `tasks` venture alias names the deployment's own
   assertEquals(comps('fix Ship it', B).task, {
     status: 'open',
     project: P,
@@ -195,15 +195,15 @@ Deno.test('fix: a bare id spawns, words file a task first', () => {
       { eid: H, name: 'doc', comp: { title: 'Tool', body: '' } },
       { eid: H, name: 'project', comp: {} },
       { eid: H, name: 'repo', comp: { path: '/tool', base_branch: 'main' } },
-      { eid: H, name: 'alias', comp: { slug: 'home' } },
+      { eid: H, name: 'alias', comp: { slug: 'tasks' } },
     ],
   })
   let routed = run('fix Ship it', { rows: many, eid: B }).changes!
   assertEquals(
     routed.find((c) => c.name == 'task')!.comp!.project,
-    H, // home wins over the focused board's project
+    H, // the canonical venture wins over the focused board's project
   )
-  // …but a typed .project= always outranks home
+  // …but a typed .project= always outranks the deployment identity
   let told = run(`fix .project=${P} Ship it`, { rows: many }).changes!
   assertEquals(told.find((c) => c.name == 'task')!.comp!.project, P)
   // bare :fix means HERE — the focused task is the target
