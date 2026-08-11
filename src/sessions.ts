@@ -64,7 +64,9 @@ let codeFile = (eid: string) => `${logsDir()}/${eid}.code`
 // readable through it, or an unauthed /logs would become a file-read oracle.
 let transcriptStores = (): Record<string, string> => ({
   claude: `${Deno.env.get('HOME')}/.claude/projects`,
-  codex: `${Deno.env.get('HOME')}/.codex/sessions`,
+  codex: `${
+    Deno.env.get('CODEX_HOME') ?? `${Deno.env.get('HOME')}/.codex`
+  }/sessions`,
 })
 
 let confined = (path: string, store: string) => {
@@ -87,6 +89,43 @@ let transcriptOf = (eid: string) => {
   for (let provider of providers) {
     let path = confined(s.transcript, stores[provider])
     if (path) return { path, provider }
+  }
+}
+
+// Codex files by the provider's local calendar while Tasks stamps UTC. The
+// neighboring days cover either side of midnight without walking the store.
+let rolloutDays = (at: string) => {
+  let ms = Date.parse(at)
+  if (!Number.isFinite(ms)) return []
+  return [-1, 0, 1].map((n) =>
+    new Date(ms + n * 86_400_000).toISOString().slice(0, 10)
+      .replaceAll('-', '/')
+  )
+}
+
+let rollouts = new Map<string, string>()
+let rolloutOf = (eid: string) => {
+  let s = storedSession(db, eid)
+  if (
+    s?.origin != 'managed' || s.provider != 'codex' ||
+    !s.provider_session_id || !s.started_at
+  ) return
+  let store = transcriptStores().codex
+  let was = rollouts.get(eid)
+  if (was && confined(was, store)) return was
+  let suffix = `-${s.provider_session_id}.jsonl`
+  for (let day of rolloutDays(s.started_at)) {
+    let dir = resolve(store, day)
+    try {
+      for (let entry of Deno.readDirSync(dir)) {
+        if (!entry.isFile || !entry.name.endsWith(suffix)) continue
+        let path = confined(resolve(dir, entry.name), store)
+        if (path) {
+          rollouts.set(eid, path)
+          return path
+        }
+      }
+    } catch { /* the provider has not made this day's store */ }
   }
 }
 
@@ -551,6 +590,23 @@ let readLines = (path: string, t: Tail) => {
   }
 }
 
+let contexts = new Map<string, { tail: Tail; value?: number }>()
+let rolloutContext = (eid: string) => {
+  let path = rolloutOf(eid)
+  if (!path) return
+  let state = contexts.get(path) ?? {
+    tail: { at: 0, seq: 0, ended: false, errs: [] },
+  }
+  contexts.set(path, state)
+  for (let line of readLines(path, state.tail)) {
+    try {
+      let row = adapters.codex.transcript?.(JSON.parse(line))
+      if (row?.context) state.value = row.context
+    } catch { /* a malformed provider line carries no context */ }
+  }
+  return state.value
+}
+
 // One pass over the new lines: count them, ask the adapter what they mean,
 // stamp what we learned. Everything the adapter doesn't recognize is just
 // log — it lives in the file, not in the summary.
@@ -896,7 +952,12 @@ export let logs = (eid: string, q: URLSearchParams) => {
       return { seq: from + i + 1, line: shown, ...(row ? { row } : {}) }
     })
   let err = errTail(eid)
-  return { entries, ...(err ? { stderr: err } : {}) }
+  let context = rolloutContext(eid)
+  return {
+    entries,
+    ...(err ? { stderr: err } : {}),
+    ...(context ? { context } : {}),
+  }
 }
 
 let errTail = (eid: string) => {

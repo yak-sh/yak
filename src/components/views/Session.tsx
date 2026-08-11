@@ -133,7 +133,7 @@ let {
 } = Frame
 
 type Entry = { seq: number; line: string; row?: LogRow; n?: number }
-type Log = { entries: Entry[]; stderr?: string }
+type Log = { entries: Entry[]; stderr?: string; context?: number }
 
 // A run of same-tag sys frames is one fact told many times (the
 // thinking-token stream grows an estimate frame by frame): keep the
@@ -430,6 +430,7 @@ let useLog = (eid: string, live: boolean) => {
             ? [...was.entries, ...l.entries]
             : was.entries,
           stderr: l.stderr,
+          context: l.context ?? was.context,
         }))
       } catch { /* a server that's away comes back — the next tick reads */ }
     }
@@ -530,7 +531,8 @@ export let Session = ({ e }: { e: Ent }) => {
   let status = native ? live ? 'running' : 'idle' : standing(s)
   let file = useLog(e.eid, !native && live)
   let log = native ? entries ?? graphLog([]) : file
-  let context = log.entries.findLast((x) => x.row?.context)?.row?.context
+  let context = log.context ??
+    log.entries.findLast((x) => x.row?.context)?.row?.context
   let frame = useTail(`${log.entries.at(-1)?.seq ?? 0}:${stream?.rev ?? 0}`)
   // The Final block IS the last agent say — don't print it twice. Only a
   // session whose log grew no say row (an external one, a torn log) still

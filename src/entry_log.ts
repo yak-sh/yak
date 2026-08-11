@@ -21,6 +21,7 @@ export type GraphLog = {
   latest: number
   model?: string
   stderr?: string
+  context?: number
 }
 
 let text = (value: unknown) => String(value ?? '')
@@ -161,10 +162,12 @@ export let graphLog = (source: EntryRow[]): GraphLog => {
       ...(row ? { row } : {}),
     }
   })
+  let context = entries.findLast((entry) => entry.row?.context)?.row?.context
   return {
     entries,
     busy,
     latest: rows.at(-1)?.seq ?? 0,
+    ...(context ? { context } : {}),
     ...model ? { model: text(model.serving_model || model.model) } : {},
   }
 }

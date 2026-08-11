@@ -22,6 +22,7 @@ Deno.env.set('DB_PATH', ':memory:')
 let tmp = Deno.makeTempDirSync({ prefix: 'tasks-sessions-' })
 Deno.env.set('LOGS_DIR', `${tmp}/logs`)
 Deno.env.set('WORKTREES_DIR', `${tmp}/worktrees`)
+Deno.env.set('CODEX_HOME', `${tmp}/codex`)
 Deno.env.set('POLL_MS', '10') // tests wait on facts, never on the clock
 Deno.env.set('STOP_GRACE_MS', '1000')
 
@@ -1517,7 +1518,7 @@ Deno.test('a comment after the sweep regrows the worktree and resumes', async ()
 // and a door all the same.
 let stores = {
   claude: `${Deno.env.get('HOME')}/.claude/projects/tasks-test`,
-  codex: `${Deno.env.get('HOME')}/.codex/sessions/tasks-test`,
+  codex: `${Deno.env.get('CODEX_HOME')}/sessions`,
 }
 for (let store of Object.values(stores)) {
   try {
@@ -1619,6 +1620,35 @@ Deno.test("external session logs read each provider's confined transcript", asyn
   Deno.removeSync(outside)
   c.kill('SIGKILL')
   await c.status
+})
+
+Deno.test('managed Codex logs summarize context from their confined rollout', () => {
+  let eid = uid(), thread = uid()
+  let started = '2026-07-26T12:00:00Z'
+  apply(db, [{
+    eid,
+    name: 'session',
+    comp: { id: uid(), provider: 'codex', model: 'gpt-5.6-sol' },
+  }])
+  writeSession(db, eid, {
+    origin: 'managed',
+    provider_session_id: thread,
+    started_at: started,
+  })
+  Deno.mkdirSync(`${stores.codex}/2026/07/26`, { recursive: true })
+  let path = `${stores.codex}/2026/07/26/rollout-now-${thread}.jsonl`
+  let token = (input: number) =>
+    JSON.stringify({
+      type: 'event_msg',
+      payload: {
+        type: 'token_count',
+        info: { last_token_usage: { input_tokens: input } },
+      },
+    }) + '\n'
+  Deno.writeTextFileSync(path, token(75009))
+  assertEquals(logs(eid, new URLSearchParams()).context, 75009)
+  Deno.writeTextFileSync(path, token(81234), { append: true })
+  assertEquals(logs(eid, new URLSearchParams()).context, 81234)
 })
 
 Deno.test('an external Codex transcript follows its provider process', async () => {

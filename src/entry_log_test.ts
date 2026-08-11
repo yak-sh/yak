@@ -43,6 +43,7 @@ Deno.test('graph log renders ordered calls, results, model, and usage', () => {
   ]
   let log = graphLog(rows.toReversed())
   assertEquals(log.latest, 5)
+  assertEquals(log.context, 8)
   assertEquals(log.model, 'served')
   assertEquals(log.busy, false)
   assertEquals(log.entries.map((entry) => entry.seq), [1, 2, 3, 4, 5])
