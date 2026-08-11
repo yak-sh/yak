@@ -28,7 +28,7 @@ let port = (seat.addr as Deno.NetAddr).port
 seat.close()
 Deno.env.set('PORT', String(port))
 Deno.env.set('DB_PATH', ':memory:')
-let { aged, maintain } = await import('./server.ts')
+let { aged, broadcastObservation, maintain } = await import('./server.ts')
 let { db } = await import('./db.ts')
 let { append, settleGeneration, takeEntry } = await import('./entries.ts')
 
@@ -39,10 +39,17 @@ let alone = { sanitizeOps: false, sanitizeResources: false }
 type Comp = Record<string, unknown> | null
 type Change = { eid: string; name: string; comp: Comp }
 type Frame = {
-  sub: string
-  changes: Change[]
+  sub?: string
+  changes?: Change[]
   drop?: string[]
   replace?: boolean
+  observe?: {
+    session: string
+    generation: string
+    kind: string
+    text?: string
+  }
+  cursor?: number
 }
 
 let post = async (changes: Change[]) => {
@@ -99,13 +106,21 @@ let subscriber = async () => {
   let socket = new WebSocket(`ws://${U}/ws`)
   let sets = new Map<string, Set<string>>()
   let seen = new Map<string, Change[]>()
+  let observations: NonNullable<Frame['observe']>[] = []
   let waiting = new Map<string, () => void>()
   socket.onmessage = (m) => {
     let f = JSON.parse(String(m.data)) as Frame
+    if (f.observe) {
+      observations.push(f.observe)
+      return
+    }
     if (!f || typeof f.sub != 'string') return
     let mine = f.replace ? new Set<string>() : sets.get(f.sub) ?? new Set()
     sets.set(f.sub, mine)
-    seen.set(f.sub, [...(f.replace ? [] : seen.get(f.sub) ?? []), ...f.changes])
+    seen.set(f.sub, [
+      ...(f.replace ? [] : seen.get(f.sub) ?? []),
+      ...(f.changes ?? []),
+    ])
     for (let c of f.changes ?? []) {
       if (c.name == 'entity' && c.comp == null) mine.delete(c.eid)
       else mine.add(c.eid)
@@ -138,9 +153,58 @@ let subscriber = async () => {
       return reply(sub, { sub, q: '.doc.title~=__barrier_matches_nothing__' })
     },
     members: (sub: string) => [...(sets.get(sub) ?? [])].sort(),
+    observations: () => [...observations],
     close: () => socket.close(),
   }
 }
+
+Deno.test(
+  'Session observations reach only partition watchers and write no graph',
+  alone,
+  async () => {
+    let session = uid(), generation = uid()
+    let watching = await subscriber(), elsewhere = await subscriber()
+    try {
+      await watching.open(`entries:${session}`, `.entry.session=${session}`)
+      await elsewhere.open('entries:elsewhere', `.entry.session=${uid()}`)
+      let before = db.prepare('select count(*) n from journal').get() as {
+        n: number
+      }
+      assertEquals(
+        broadcastObservation({
+          session,
+          generation,
+          kind: 'model',
+          text: 'x'.repeat(3000),
+        }),
+        1,
+      )
+      // A reply on each socket is an ordering barrier after the transient send.
+      await watching.settle()
+      await elsewhere.settle()
+      assertEquals(watching.observations(), [{
+        session,
+        generation,
+        kind: 'model',
+        text: 'x'.repeat(2048),
+      }])
+      assertEquals(elsewhere.observations(), [])
+      assertEquals(
+        db.prepare('select count(*) n from journal').get(),
+        before,
+      )
+      assertEquals(
+        JSON.stringify(watching.observations()).includes('cursor'),
+        false,
+      )
+      let snap = await (await fetch(`http://${U}/snapshot`)).text()
+      assertEquals(snap.includes(generation), false)
+    } finally {
+      watching.close()
+      elsewhere.close()
+    }
+  },
+)
 
 // One predicate class, walked through its transitions. `writes` is a list of
 // batches; after EACH the subscription's maintained set must equal the oracle's

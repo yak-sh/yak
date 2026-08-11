@@ -78,6 +78,7 @@ import { graphSession, managedCodex } from './managed_codex.ts'
 import { responses } from './responses.ts'
 import { readEntries } from './entries.ts'
 import { graphLogPage } from './entry_log.ts'
+import { type Observation, safeObservation } from './observations.ts'
 import { outcome, recent, record, toolCall } from './telemetry.ts'
 import { stamp } from './hot.ts'
 import { obeyed } from './obey.ts'
@@ -197,6 +198,27 @@ type Sub = {
 }
 let subs = new Map<WebSocket, Map<string, Sub>>()
 let filtered = new Set<WebSocket>()
+
+// Observations belong only to connected readers of this Session partition.
+// No cursor means no journal position, and this path never reaches apply(),
+// cast(), snapshot(), or the browser's persistent landing branch.
+export let broadcastObservation = (value: Observation) => {
+  let observation = safeObservation(value)
+  if (!observation) return 0
+  let frame = JSON.stringify({ observe: observation })
+  let sent = 0
+  for (let [sock, map] of subs) {
+    if (
+      sock.readyState != WebSocket.OPEN ||
+      !map.has(`entries:${observation.session}`)
+    ) continue
+    try {
+      sock.send(frame)
+      sent++
+    } catch { /* a closing watcher loses an optional hint */ }
+  }
+  return sent
+}
 
 // A filter of only rankings — or of nothing at all — selects EVERY entity, and
 // there the index has nothing to offer: matching() would read all 12,530 rows
@@ -657,6 +679,7 @@ let managed = managedCodex({
     }
   },
   prepare: prepareWorktree,
+  observe: broadcastObservation,
 })
 runnerSoon = () =>
   managed.sweep().catch((e) => console.warn('Codex runner sweep —', e))

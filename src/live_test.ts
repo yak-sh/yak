@@ -20,7 +20,9 @@ import {
   ent,
   gated,
   jobOf,
+  landObservation,
   landSub,
+  observation,
   parents,
   pinned,
   projects,
@@ -163,6 +165,57 @@ Deno.test('a replacement frame forgets the prior query set', () => {
     shadow: true,
   })
   assertEquals([...(subEids('board:replace') ?? [])], ['new'])
+})
+
+Deno.test('transient observations yield to the durable Session partition', () => {
+  assertEquals(
+    landObservation({
+      session: 'watched-session',
+      generation: 'generation',
+      kind: 'model',
+      text: 'partial ',
+    }),
+    true,
+  )
+  landObservation({
+    session: 'watched-session',
+    generation: 'generation',
+    kind: 'model',
+    text: 'answer',
+  })
+  assertEquals(observation('watched-session')?.model, 'partial answer')
+  assertEquals(
+    landObservation({
+      session: 7,
+      generation: 'generation',
+      kind: 'model',
+      text: 'invalid',
+    }),
+    false,
+  )
+
+  landSub({
+    sub: 'entries:watched-session',
+    changes: [{
+      eid: 'answer',
+      name: 'output',
+      comp: { source: 'generation' },
+    }],
+  })
+  assertEquals(observation('watched-session'), undefined)
+
+  landObservation({
+    session: 'watched-session',
+    generation: 'next',
+    kind: 'reasoning',
+    text: 'not replay state',
+  })
+  landSub({
+    sub: 'entries:watched-session',
+    changes: [],
+    replace: true,
+  })
+  assertEquals(observation('watched-session'), undefined)
 })
 
 // Closing the last consumer is the only moment the cache can leak: the

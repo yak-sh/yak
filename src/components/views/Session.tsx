@@ -14,11 +14,13 @@ import {
   entrySub,
   jobOf,
   mutate,
+  observation,
   repoUrl,
   subEids,
   uuid,
 } from '../../live.ts'
 import { type EntryRow, type GraphLog, graphLog } from '../../entry_log.ts'
+import { type ObservationState } from '../../observations.ts'
 import { slot, tileLink, type TileProps } from '../Tile.tsx'
 import { ago, block, pretty, Stamp } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
@@ -51,6 +53,7 @@ let Frame = block('div', 'Session', {
   Key: 'span',
   Val: 'span',
   Think: 'div',
+  Transient: 'div',
   Final: 'div',
   Fault: 'p',
   Log: 'div',
@@ -94,6 +97,7 @@ let {
   Key,
   Val,
   Think,
+  Transient,
   Final,
   Fault,
   Log,
@@ -195,6 +199,28 @@ let doing = (r?: LogRow) =>
     : r?.kind == 'sys' && r.tag == 'thinking'
     ? (r.text ? `thinking · ${r.text}` : 'thinking…')
     : 'working…'
+
+export let SessionObservation = ({ state }: { state: ObservationState }) => (
+  <Transient>
+    {state.reasoning && <Reason>{state.reasoning}</Reason>}
+    {state.tools.map((name) => (
+      <Tool key={name}>
+        <ToolName>{name}</ToolName>
+        <ToolStatus>preparing…</ToolStatus>
+      </Tool>
+    ))}
+    {state.model && <Agent>{state.model}</Agent>}
+  </Transient>
+)
+
+let observing = (state?: ObservationState) =>
+  state?.tools.at(-1)
+    ? `preparing ${state.tools.at(-1)}…`
+    : state?.model
+    ? 'responding…'
+    : state?.reasoning
+    ? 'thinking…'
+    : undefined
 
 // A named fact, present only when there IS one — absence says enough.
 let Fact = ({ k, v }: { k: string; v?: string | null }) =>
@@ -459,7 +485,7 @@ let scrollerOf = (n: HTMLElement | null) => {
 // BEFORE new rows land, because right after a render the end has already
 // moved and measuring would always say "not at end". The programmatic
 // pin fires a scroll event too, re-arming itself.
-let useTail = (seq?: number) => {
+let useTail = (tail?: string | number) => {
   let frame = useRef<HTMLDivElement>(null)
   // Every session opens at the END of its log — the newest lines are the
   // news, and now that the whole transcript loads, the top is a thousand
@@ -480,7 +506,7 @@ let useTail = (seq?: number) => {
     if (!stuck.current) return
     let s = scrollerOf(frame.current)
     if (s) s.scrollTop = s.scrollHeight
-  }, [seq])
+  }, [tail])
   return frame
 }
 
@@ -494,11 +520,12 @@ export let Session = ({ e }: { e: Ent }) => {
   let entries = useEntryLog(e.eid)
   let native = s.origin == 'managed' && s.status == null &&
     e.spawn?.provider == 'codex'
+  let stream = native ? observation(e.eid) : undefined
   let live = native ? !s.base_revision || !!entries?.busy : awake(s)
   let status = native ? live ? 'running' : 'idle' : standing(s)
   let file = useLog(e.eid, !native && live)
   let log = native ? entries ?? graphLog([]) : file
-  let frame = useTail(log.entries.at(-1)?.seq)
+  let frame = useTail(`${log.entries.at(-1)?.seq ?? 0}:${stream?.rev ?? 0}`)
   // The Final block IS the last agent say — don't print it twice. Only a
   // session whose log grew no say row (an external one, a torn log) still
   // leans on final_text.
@@ -569,7 +596,10 @@ export let Session = ({ e }: { e: Ent }) => {
               ? <Row key={x.seq} x={x} repo={repo} />
               : <Note key={x.eid} c={x} />
           )}
-          {live && <Think>✳ {doing(rows.at(-1)?.row)}</Think>}
+          {stream && <SessionObservation state={stream} />}
+          {live && (
+            <Think>✳ {observing(stream) ?? doing(rows.at(-1)?.row)}</Think>
+          )}
         </Log>
         {
           /* stderr is durable evidence, not transcript: it has no seqs and

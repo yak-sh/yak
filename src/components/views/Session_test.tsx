@@ -4,7 +4,7 @@ import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { cache, ent } from '../../live.ts'
 import { resolve } from '../Entity.tsx'
-import { SessionBody, SessionSummary } from './Session.tsx'
+import { SessionBody, SessionObservation, SessionSummary } from './Session.tsx'
 
 let children = (v: VNode) =>
   (Array.isArray(v.props.children) ? v.props.children : [v.props.children])
@@ -77,6 +77,45 @@ Deno.test('session user messages render as markdown', () => {
       root.innerHTML,
       '<div class="Session_User"><p><strong>hello</strong></p>\n</div>',
     )
+  } finally {
+    render(null, root)
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else delete (globalThis as { document?: unknown }).document
+  }
+})
+
+Deno.test('transient Session progress renders as plain provider-neutral text', () => {
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let { document } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  let root = document.querySelector('main')!
+  try {
+    render(
+      h(SessionObservation, {
+        state: {
+          generation: 'generation',
+          model: '**answer** <b>raw</b>',
+          reasoning: '[reason](javascript:alert(1))',
+          tools: ['shell'],
+          rev: 3,
+        },
+      }),
+      root,
+    )
+    assertEquals(
+      root.querySelector('.Session_Agent')?.textContent,
+      '**answer** <b>raw</b>',
+    )
+    assertEquals(
+      root.querySelector('.Session_Reason')?.textContent,
+      '[reason](javascript:alert(1))',
+    )
+    assertEquals(root.querySelector('a'), null)
+    assertEquals(root.querySelector('b'), null)
+    assertEquals(root.querySelector('.Session_ToolName')?.textContent, 'shell')
   } finally {
     render(null, root)
     if (prior) Object.defineProperty(globalThis, 'document', prior)

@@ -30,6 +30,12 @@ import * as idb from './idb.ts'
 import { topology } from './leader.ts'
 import { liveChanges } from './wire.ts'
 import { diff, gaps } from './subs.ts'
+import {
+  foldObservation,
+  type ObservationState,
+  observedBy,
+  safeObservation,
+} from './observations.ts'
 
 // A cache row: the spine plus whichever components the entity carries.
 // Derived from Ent so a new component (types.ts) threads through here —
@@ -510,12 +516,49 @@ export type Sub = {
   cursor?: number
   shadow?: boolean
 }
+type Observed = { observe: unknown }
 type Hot = 'reload' | { hmr: number } | { css: number }
 
 let owner: ReturnType<typeof topology<unknown>> | null = null
 let ws: WebSocket | null = null
 let polling = false
 let serial = Promise.resolve()
+
+// Observations never join cache or IDB. One bounded state per watched Session
+// is enough to paint its unfinished generation; the partition replaces it at
+// the first durable output or reconnect frame.
+let observations = signal<Record<string, ObservationState>>({})
+export let observation = (session: string) => observations.value[session]
+export let clearObservations = (session?: string) => {
+  if (session == null) return void (observations.value = {})
+  if (!observations.peek()[session]) return
+  let next = { ...observations.peek() }
+  delete next[session]
+  observations.value = next
+}
+export let landObservation = (raw: unknown) => {
+  let value = safeObservation(raw)
+  if (!value) return false
+  let was = observations.peek()[value.session]
+  let state = foldObservation(was, value)
+  if (state == was) return true
+  let next = { ...observations.peek() }
+  if (state) next[value.session] = state
+  else delete next[value.session]
+  observations.value = next
+  return true
+}
+let settleObservations = (changes: Change[]) => {
+  let next = observations.peek()
+  let changed = false
+  for (let [session, state] of Object.entries(next)) {
+    if (!observedBy(state, changes)) continue
+    if (!changed) next = { ...next }
+    delete next[session]
+    changed = true
+  }
+  if (changed) observations.value = next
+}
 
 let hot = (data: unknown): data is Hot => {
   if (data == 'reload') return true
@@ -557,7 +600,10 @@ let connect = () => {
     })
   }
   socket.onclose = () => {
-    if (ws == socket) ws = null
+    if (ws != socket) return
+    ws = null
+    clearObservations()
+    owner?.fan({ observe: null })
     if (polling) return
     polling = true
     let poll = setInterval(async () => {
@@ -601,7 +647,11 @@ let shadows = new Set<string>()
 // evicted from the cache. A control reply replaces the prior set wholesale;
 // maintenance frames patch it.
 export let landSub = (f: Sub) => {
+  if (f.replace && f.sub.startsWith('entries:')) {
+    clearObservations(f.sub.slice('entries:'.length))
+  }
   let touched = applyLocal(f.changes)
+  settleObservations(f.changes)
   // The server marks shadow-ness on every frame it sends, so believe the
   // frame: the local `shadows` set only knows what THIS client asked for,
   // and the two must not be able to disagree about who owns the cache.
@@ -685,6 +735,9 @@ let forget = (sub: string) => {
   shadows.delete(sub)
   subMembers.delete(sub)
   agreement?.checked.delete(sub)
+  if (sub.startsWith('entries:')) {
+    clearObservations(sub.slice('entries:'.length))
+  }
   if (leaving.length) evict(leaving)
   subVersion.value++
 }
@@ -810,6 +863,7 @@ export let boardQuery = (e: Ent) => {
 // held cursor, and seed IDB — seed() is a `full` forward-only commit that
 // wins across a changed epoch and clears the stale rows in the same txn.
 let seedFrom = (snap: Snapshot, write = true) => {
+  clearObservations()
   pinZs.clear()
   cache.value = {}
   deps.value = snap.deps
@@ -865,9 +919,16 @@ let land = async (data: unknown, mode: Land) => {
     } else config.css?.(data.css)
     return
   }
+  if (data && typeof data == 'object' && 'observe' in data) {
+    let value = (data as Observed).observe
+    if (value == null) clearObservations()
+    else landObservation(value)
+    return
+  }
   let changes = liveChanges(data)
   if (changes) {
     let touched = applyLocal(changes)
+    settleObservations(changes)
     let cursor = Array.isArray(data)
       ? undefined
       : (data as Partial<Live>).cursor
