@@ -695,11 +695,12 @@ Deno.test('deprecated routes leave root help but teach at their door', async () 
   )
 })
 
-// The signpost belongs to the spelling typed, not the handler reached —
-// the subject-first sentence IS the successor `dep` points at. Both forms
-// need a server to answer (a dead host costs 6s of backoff), so they run
-// against an empty graph and die on `no entity` instead.
-Deno.test('the deprecation notice follows the spelling, not the handler', async () => {
+// A deprecated spelling HARD-ERRORS — it points at its replacement and
+// refuses to run, so print-and-continue can't hide a partial run (T-16375).
+// The gate follows the spelling typed, not the handler reached: the
+// subject-first sentence IS the successor `dep` points at, so it runs on
+// (and, against an empty graph, dies on `no entity`).
+Deno.test('a deprecated spelling hard-errors before its handler runs', async () => {
   // /query answers with a JSON ARRAY (a narrowed verb resolves its id
   // there first); everything else gets the empty-snapshot shape.
   let empty = Deno.serve(
@@ -720,9 +721,14 @@ Deno.test('the deprecation notice follows the spelling, not the handler', async 
       env: { TASKS_HOST: `127.0.0.1:${empty.addr.port}` },
     }).output()
   try {
+    // The deprecated verb exits non-zero with the notice and never reaches
+    // its handler — no `no entity` from a lookup it must not attempt.
     let typed = await run('dep', 'T-3', 'requires', 'T-9')
+    assertEquals(typed.code, 1)
     assertMatch(text(typed.stderr), /task dep: deprecated — superseded by/)
+    assertEquals(/no entity/.test(text(typed.stderr)), false)
 
+    // The successor sentence runs its handler and dies on the empty graph.
     let sentence = await run('T-3', 'requires', 'T-9')
     assertMatch(text(sentence.stderr), /no entity: T-3/)
     assertEquals(/deprecated/.test(text(sentence.stderr)), false)
@@ -1487,6 +1493,7 @@ Deno.test('the boot digest is the hook that delivers, on stdout', async () => {
         'run',
         '-A',
         new URL('./cli.ts', import.meta.url).pathname,
+        'session',
         'context',
         'sub-1',
       ],

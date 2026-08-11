@@ -2493,20 +2493,21 @@ if (import.meta.main) {
       if (selected) {
         let got = parse(selected.name, selected.manual, selected.args)
         hook = got.flags.has('--hook')
-        // A deprecated verb still WORKS — this is a signpost, not a gate.
-        // It has to fire on the RUN: the only people still typing one are
-        // acting from habit, and they never read the help. stderr, because
-        // stdout is what the caller asked for and is usually piped.
-        // The signpost belongs to the SPELLING, not the handler it lands in:
+        // A deprecated verb hard-errors — it points at its replacement and
+        // REFUSES to run, because print-and-continue hides a partial run: the
+        // `dep` alias forwarded its args wrong and dropped `--gone` silently,
+        // so the edge survived while the caller assumed success (T-16375).
+        // Exiting non-zero forces the caller onto the current form. stderr,
+        // because stdout is what the caller asked for and is usually piped.
+        // The gate belongs to the SPELLING, not the handler it lands in:
         // subject-first sentences merely reuse the old verb's code, so
-        // `task T-3 requires T-9` was told the form it just used is obsolete.
+        // `task T-3 requires T-9` — the successor `dep` points at — runs on.
         let spelled = selected.name == 'help' && rest[0] == 'help'
           ? manuals[cmd]
           : selected.manual
         if (spelled.deprecated && !routed) {
-          warn(
-            `task ${spelled.name}: deprecated — ${spelled.deprecated}`,
-          )
+          warn(`task ${spelled.name}: deprecated — ${spelled.deprecated}`)
+          Deno.exit(1)
         }
         await selected.manual.run(got)
       } else if (cmd.startsWith(':')) {
