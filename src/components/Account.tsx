@@ -13,6 +13,10 @@ import { Icon } from './icons.tsx'
 
 export let accountOpen = signal(false)
 export let openAccount = () => accountOpen.value = true
+export let dismissAccount = (control: AccountControl = codexAccount) => {
+  accountOpen.value = false
+  control.dismiss()
+}
 
 let Frame = block('div', 'Account', {
   Box: 'section',
@@ -84,7 +88,10 @@ type AccountKey = {
   stopImmediatePropagation: () => void
 }
 
-export let accountKey = (event: AccountKey) => {
+export let accountKey = (
+  event: AccountKey,
+  control: AccountControl = codexAccount,
+) => {
   if (!accountOpen.value) return false
   event.stopImmediatePropagation()
   let target = event.target as {
@@ -93,7 +100,7 @@ export let accountKey = (event: AccountKey) => {
   let activates = (event.key == 'Enter' || event.key == ' ') &&
     target?.matches?.('button, a[href]') === true
   let writes = target?.matches?.('input, textarea') === true
-  if (event.key == 'Escape') accountOpen.value = false
+  if (event.key == 'Escape') dismissAccount(control)
   if (event.key != 'Tab' && !activates && !writes) event.preventDefault()
   return true
 }
@@ -172,35 +179,37 @@ export let Account = (
   }, [accountOpen.value])
   useEffect(() => {
     if (!accountOpen.value) return
-    let key = (event: KeyboardEvent) => accountKey(event)
+    let key = (event: KeyboardEvent) => accountKey(event, control)
     addEventListener('keydown', key, true)
     box.current?.focus()
     return () => removeEventListener('keydown', key, true)
   }, [accountOpen.value])
 
   if (!accountOpen.value) return null
-  let error = view.error ?? status?.error?.message
+  let error = view.error ?? status?.error
   let ready = status?.ready ? status : undefined
   let pending = status?.state == 'pending' ? status : undefined
   let state = busy == 'login'
-    ? 'starting login…'
+    ? 'asking Codex to start login…'
     : busy == 'complete'
-    ? 'finishing login…'
+    ? 'delivering the callback and checking the Codex account…'
     : busy == 'cancel'
-    ? 'cancelling…'
+    ? 'asking Codex to cancel login…'
     : busy == 'logout'
-    ? 'logging out…'
-    : busy == 'read' && !status
-    ? 'checking…'
+    ? 'asking Codex to sign out…'
+    : busy == 'read'
+    ? 'checking Codex account status…'
     : ready
     ? 'ready'
     : pending
     ? `${pending.login ?? 'Codex'} login pending`
+    : status?.state == 'error'
+    ? 'last login failed'
     : status?.state.replace('_', ' ') ?? 'not checked'
   return (
     <Frame
       onMouseDown={(event: MouseEvent) =>
-        event.target == event.currentTarget && (accountOpen.value = false)}
+        event.target == event.currentTarget && dismissAccount(control)}
       onPointerDown={(event: PointerEvent) => event.stopPropagation()}
     >
       <Box
@@ -215,7 +224,7 @@ export let Account = (
           <Close
             type='button'
             aria-label='Close account'
-            onClick={() => accountOpen.value = false}
+            onClick={() => dismissAccount(control)}
           >
             ×
           </Close>
@@ -228,7 +237,7 @@ export let Account = (
               {ready.plan && ` · ${ready.plan}`}
             </Detail>
           )}
-          {error && <ErrorText>{error}</ErrorText>}
+          {error && <ErrorText>{error.code} — {error.message}</ErrorText>}
           <Ceremony ceremony={view.ceremony} />
           {pending?.login == 'browser' && (
             <Callback

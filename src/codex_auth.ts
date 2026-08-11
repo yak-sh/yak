@@ -1,6 +1,6 @@
 // Codex account storage and RPC: one opaque credential blob moves through a
 // locked staging CODEX_HOME, while app-server alone speaks OAuth and refresh.
-// Nothing here parses auth.json or lets provider output cross as an error.
+// Nothing here parses auth.json; provider errors cross only after redaction.
 import { join } from 'node:path'
 
 export type Rpc = {
@@ -26,6 +26,12 @@ export type Stored = {
 export type AuthStore = {
   begin: () => Promise<Stored>
 }
+
+export type CodexRpcError = Error & { codexRpc: true }
+
+export let isCodexRpcError = (value: unknown): value is CodexRpcError =>
+  value instanceof Error &&
+  (value as Partial<CodexRpcError>).codexRpc === true
 
 type Env = (name: string) => string | undefined
 
@@ -189,6 +195,49 @@ export let bootstrapCodexAuth = async (
 let record = (value: unknown): value is Record<string, unknown> =>
   value != null && typeof value == 'object' && !Array.isArray(value)
 
+// OAuth failures have to remain useful without turning the error surface into
+// a second credential channel. Every caller gets the same bounded scrub.
+export let codexMessage = (value: unknown) => {
+  if (typeof value != 'string') return
+  let clean = value.replace(/[\p{Cc}\p{Cf}]/gu, ' ')
+  clean = clean.replace(/https?:\/\/[^\s<>"']+/gi, '[redacted URL]')
+  clean = clean.replace(
+    /\b[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g,
+    '[redacted token]',
+  )
+  clean = clean.replace(/\b(?:sk|sess|pk)-[A-Za-z0-9_-]{8,}\b/gi, '[redacted]')
+  clean = clean.replace(
+    /\b(?:bearer|basic)\s+\S+/gi,
+    '[redacted authorization]',
+  )
+  clean = clean.replace(
+    /\b(?:access|refresh|id|auth)?[ _-]?token["']?\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi,
+    (raw) => raw.replace(/([:=]\s*).*$/, '$1[redacted]'),
+  )
+  clean = clean.replace(
+    /\b(?:api[ _-]?key|(?:(?:authorization|auth|device|user)[ _-]?)?(?:code|state|verifier)|(?:chatgpt[ _-]?)?account[ _-]?id)["']?\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi,
+    (raw) => raw.replace(/([:=]\s*).*$/, '$1[redacted]'),
+  )
+  clean = clean.replace(
+    /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi,
+    '[redacted id]',
+  )
+  clean = clean.replace(
+    /\b(?:org|acct|account)-[A-Za-z0-9_-]{6,}\b/gi,
+    '[redacted account]',
+  )
+  clean = clean.replace(/\b[A-Za-z0-9_-]{40,}\b/g, '[redacted]')
+  clean = clean.replace(/\s+/g, ' ').trim()
+  return clean ? clean.slice(0, 240) : undefined
+}
+
+let rpcError = (value: unknown, fallback: Error) => {
+  let message = record(value) ? codexMessage(value.message) : undefined
+  return message
+    ? Object.assign(new Error(message), { codexRpc: true as const })
+    : fallback
+}
+
 let appEnv = (home: string, env: Env) => {
   let out: Record<string, string> = {
     CODEX_HOME: home,
@@ -260,8 +309,9 @@ export let codexIssuer = (
         let pending = calls.get(value.id)
         if (!pending) return
         calls.delete(value.id)
-        if (value.error || !record(value.result)) pending.reject(why)
-        else pending.resolve(value.result)
+        if (value.error || !record(value.result)) {
+          pending.reject(rpcError(value.error, why))
+        } else pending.resolve(value.result)
         return
       }
       if (typeof value.method != 'string' || !record(value.params)) return

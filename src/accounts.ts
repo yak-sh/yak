@@ -3,6 +3,8 @@
 // the browser sees ceremony data, never the credential or its account id.
 import {
   type AuthStore,
+  codexMessage,
+  isCodexRpcError,
   type Issuer,
   type Rpc,
   type Stored,
@@ -62,14 +64,19 @@ let faults = {
   idle: ['no_login', 'No Codex login is pending.', 409],
   invalid: ['invalid_request', 'Invalid Codex account request.', 400],
   browser: ['no_browser_login', 'No browser login is pending.', 409],
-  callback: ['invalid_callback', 'Invalid Codex login callback.', 400],
-  relay: ['callback_failed', 'Codex login callback failed.', 502],
-  login: ['login_failed', 'Codex login failed.', 502],
+  callback: [
+    'invalid_callback',
+    'The callback does not match this Codex login. Paste the full localhost callback URL from this login.',
+    400,
+  ],
   refresh: ['refresh_failed', 'Codex account refresh failed.', 502],
 } as const
 
 let fault = (value: readonly [string, string, number]) =>
   Object.assign(new Error(value[1]), { code: value[0], status: value[2] })
+
+let accountFault = (value: AccountError, status = 502) =>
+  Object.assign(new Error(value.message), { code: value.code, status })
 
 let isFault = (value: unknown): value is Fault =>
   value instanceof Error &&
@@ -94,15 +101,61 @@ let unavailable = (): AccountStatus => ({
   error: { code: faults.unavailable[0], message: faults.unavailable[1] },
 })
 
-let failed = (
-  value: readonly [string, string, number] = faults.login,
-): AccountStatus => ({
+let problem = (code: string, message: string): AccountError => ({
+  code,
+  message,
+})
+
+let failed = (error: AccountError): AccountStatus => ({
   provider: 'codex',
   state: 'error',
   ready: false,
   auth: null,
-  error: { code: value[0], message: value[1] },
+  error,
 })
+
+let detail = (lead: string, error: unknown) => {
+  let message = isCodexRpcError(error) ? error.message : undefined
+  return message ? `${lead} Codex said: ${message}` : lead
+}
+
+let loginStartError = (
+  method: LoginInput['method'],
+  error: unknown,
+): AccountError => {
+  let message = isCodexRpcError(error) ? error.message : ''
+  let lower = message.toLowerCase()
+  if (
+    method == 'device' && lower.includes('device') &&
+    (lower.includes('disabled') || lower.includes('not enabled'))
+  ) {
+    return problem(
+      'device_login_disabled',
+      'Codex device login is disabled. Enable it in ChatGPT Security settings or ask the workspace administrator to allow it, then retry.',
+    )
+  }
+  if (
+    lower.includes('chatgpt') &&
+    (lower.includes('disabled') || lower.includes('not enabled') ||
+      lower.includes('not allowed'))
+  ) {
+    return problem(
+      'chatgpt_login_disabled',
+      'ChatGPT login is disabled for this account or workspace. Enable Codex login or ask the workspace administrator to allow it, then retry.',
+    )
+  }
+  if (method == 'apiKey') {
+    return problem(
+      'api_key_login_failed',
+      detail('Codex could not complete API-key login.', error),
+    )
+  }
+  let name = method == 'browser' ? 'browser' : 'device-code'
+  return problem(
+    `${method}_login_start_failed`,
+    detail(`Codex could not start ${name} login.`, error),
+  )
+}
 
 let number = (value: unknown) =>
   typeof value == 'number' && Number.isFinite(value) ? value : undefined
@@ -214,20 +267,20 @@ let credential = async (
 
 let safeUrl = (value: unknown) => {
   if (typeof value != 'string' || value.length > 4096) {
-    throw fault(faults.login)
+    throw Error('unsafe login result')
   }
   try {
     let url = new URL(value)
     if (url.protocol != 'https:' || url.username || url.password) throw Error()
     return url.href
   } catch {
-    throw fault(faults.login)
+    throw Error('unsafe login result')
   }
 }
 
 let safeCode = (value: unknown) => {
   if (typeof value != 'string' || !/^[A-Za-z0-9-]{4,32}$/.test(value)) {
-    throw fault(faults.login)
+    throw Error('unsafe login result')
   }
   return value
 }
@@ -239,6 +292,7 @@ type Pending = {
   stored: Stored
   before: AccountStatus
   redirect?: { origin: string; path: string; state: string }
+  error?: AccountError
   cancelled: boolean
   done: Promise<void>
 }
@@ -259,7 +313,7 @@ let browser = (value: unknown) => {
   if (
     redirects.length != 1 || states.length != 1 || !states[0] ||
     states[0].length > 4096
-  ) throw fault(faults.login)
+  ) throw Error('unsafe browser login result')
   try {
     let redirect = new URL(redirects[0])
     if (
@@ -275,7 +329,7 @@ let browser = (value: unknown) => {
       },
     }
   } catch {
-    throw fault(faults.login)
+    throw Error('unsafe browser login result')
   }
 }
 
@@ -309,6 +363,7 @@ export let accountService = (
   store: AuthStore,
   issuer: Issuer,
   relay: Relay = fetch,
+  updateTimeout = 30_000,
 ): AccountService => {
   let cache: AccountStatus | undefined
   let current: Credential | undefined
@@ -354,6 +409,7 @@ export let accountService = (
         ready: false,
         auth: pending.before.auth,
         login: pending.method,
+        ...(pending.error ? { error: pending.error } : {}),
       })
     }
     if (cache) return Promise.resolve(cache)
@@ -387,7 +443,7 @@ export let accountService = (
         throw error
       }
       let next = refresh ? faults.refresh : faults.unavailable
-      cache = refresh ? failed(next) : unavailable()
+      cache = refresh ? failed(problem(next[0], next[1])) : unavailable()
       throw fault(next)
     }
   }
@@ -411,37 +467,114 @@ export let accountService = (
     try {
       // Codex announces completion before reloading its account cache. The
       // following update is the barrier that makes account/read current.
-      let updated = mine.rpc.wait('account/updated').catch(() => undefined)
-      let note = await mine.rpc.wait('account/login/completed')
+      let updated = mine.rpc.wait('account/updated').then(
+        (value) => ({ kind: 'updated' as const, value }),
+        () => ({ kind: 'failed' as const }),
+      )
+      let note: Record<string, unknown>
+      try {
+        note = await mine.rpc.wait('account/login/completed')
+      } catch {
+        if (pending == mine && !mine.cancelled) {
+          cache = failed(problem(
+            'login_interrupted',
+            'Codex stopped the login before reporting a result. Start a new login and complete the authorization again.',
+          ))
+        }
+        return
+      }
       if (pending != mine) return
       if (mine.cancelled) {
         cache = mine.before
         return
       }
-      if (note.loginId != mine.id || note.success !== true) {
-        cache = failed()
+      if (note.loginId != mine.id) {
+        cache = failed(problem(
+          'login_mismatched',
+          'Codex completed a different login attempt. Start a new login from this Tasks client.',
+        ))
+        return
+      }
+      if (note.success !== true) {
+        let said = codexMessage(note.error)
+        cache = failed(problem(
+          'login_rejected',
+          said
+            ? `Codex rejected the login. Codex said: ${said}`
+            : 'Codex rejected the login. Start a new login and complete the authorization before it expires.',
+        ))
         return
       }
       let account = await Promise.race([
         updated,
-        new Promise<undefined>((resolve) => {
-          timer = setTimeout(() => resolve(undefined), 30_000)
+        new Promise<{ kind: 'timed_out' }>((resolve) => {
+          timer = setTimeout(
+            () => resolve({ kind: 'timed_out' }),
+            updateTimeout,
+          )
         }),
       ])
-      if (account?.authMode != 'chatgpt') {
-        cache = failed()
+      if (account.kind == 'failed') {
+        cache = failed(problem(
+          'account_update_failed',
+          'Codex authorized the login but stopped before publishing the account update. Start a new login and try again.',
+        ))
         return
       }
-      let next = await publicAccount(mine.rpc)
+      if (account.kind == 'timed_out') {
+        cache = failed(problem(
+          'account_update_timed_out',
+          `Codex authorized the login but did not publish the account update within ${
+            Math.ceil(updateTimeout / 1000)
+          } seconds. Start a new login and try again.`,
+        ))
+        return
+      }
+      if (account.value.authMode != 'chatgpt') {
+        cache = failed(problem(
+          'account_mode_mismatch',
+          'Codex authorized the login in a mode other than ChatGPT. Start a new ChatGPT login and try again.',
+        ))
+        return
+      }
+      let next: AccountStatus
+      try {
+        next = await publicAccount(mine.rpc)
+      } catch (error) {
+        cache = failed(problem(
+          'account_read_failed',
+          detail(
+            'Codex authorized the login, but Tasks could not read the signed-in account.',
+            error,
+          ),
+        ))
+        return
+      }
       if (!next.ready) {
-        cache = failed()
+        cache = failed(problem(
+          'account_missing',
+          'Codex authorized the login, but no signed-in account was available. Start a new login and try again.',
+        ))
         return
       }
-      await mine.stored.commit()
+      try {
+        await mine.stored.commit()
+      } catch {
+        cache = failed(problem(
+          'credential_save_failed',
+          'Codex authorized the login, but Tasks could not save its credentials. Check that the Tasks account directory is writable, then retry.',
+        ))
+        return
+      }
       current = undefined
       cache = next
     } catch {
-      if (pending == mine && !mine.cancelled) cache = failed()
+      if (pending == mine && !mine.cancelled) {
+        cache = failed(problem(
+          'login_interrupted',
+          'Codex stopped the login before Tasks could finish it. Start a new login and try again.',
+        ))
+      }
     } finally {
       clearTimeout(timer)
       if (pending == mine) pending = undefined
@@ -458,18 +591,39 @@ export let accountService = (
         input.apiKey.length > 4096)
     ) throw fault(faults.invalid)
     let before = await status()
+    if (before.state == 'error') before = signedOut()
     let stored: Stored | undefined
     let rpc: Rpc | undefined
     try {
-      stored = await store.begin()
-      rpc = await issuer.open(stored.home)
+      try {
+        stored = await store.begin()
+      } catch {
+        let error = problem(
+          'credential_store_unavailable',
+          'Tasks could not open its Codex credential store. Check that the Tasks account directory exists and is writable, then retry.',
+        )
+        cache = failed(error)
+        throw accountFault(error)
+      }
+      try {
+        rpc = await issuer.open(stored.home)
+      } catch {
+        let error = problem(
+          'codex_app_server_unavailable',
+          'Tasks could not start Codex app-server. Confirm that codex is installed and available to the tasksd service, then retry.',
+        )
+        cache = failed(error)
+        throw accountFault(error)
+      }
       if (input.method == 'apiKey') {
         await rpc.call('account/login/start', {
           type: 'apiKey',
           apiKey: input.apiKey,
         })
         let next = await publicAccount(rpc)
-        if (!next.ready || next.auth != 'apiKey') throw fault(faults.login)
+        if (!next.ready || next.auth != 'apiKey') {
+          throw Error('API-key account missing')
+        }
         await stored.commit()
         current = undefined
         cache = next
@@ -484,7 +638,7 @@ export let accountService = (
         },
       )
       let id = result.loginId
-      if (typeof id != 'string' || !id) throw fault(faults.login)
+      if (typeof id != 'string' || !id) throw Error('login id missing')
       let browserLogin = input.method == 'browser'
         ? browser(result.authUrl)
         : undefined
@@ -512,7 +666,9 @@ export let accountService = (
       await rpc?.close().catch(() => {})
       await stored?.close().catch(() => {})
       if (isFault(error)) throw error
-      throw fault(faults.login)
+      let next = loginStartError(input.method, error)
+      cache = failed(next)
+      throw accountFault(next)
     } finally {
       if (input.method == 'apiKey') {
         await rpc?.close().catch(() => {})
@@ -526,12 +682,26 @@ export let accountService = (
     if (!mine || mine.method != 'browser' || !mine.redirect) {
       throw fault(faults.browser)
     }
-    let target = callback(value, mine.redirect)
+    mine.error = undefined
     try {
+      let target = callback(value, mine.redirect)
       let response = await relay(target, { redirect: 'manual' })
       await response.body?.cancel().catch(() => {})
-    } catch {
-      throw fault(faults.relay)
+      if (response.status < 200 || response.status >= 400) {
+        throw accountFault(problem(
+          'callback_rejected',
+          `Codex's localhost listener rejected the callback with HTTP ${response.status}. The authorization may have expired; start a new login and try again.`,
+        ))
+      }
+    } catch (error) {
+      let safe = isFault(error) ? error : accountFault(problem(
+        'callback_unreachable',
+        'Tasks could not reach Codex’s localhost callback listener. Keep this login pending and paste its callback URL again, or start a new login if the listener stopped.',
+      ))
+      if (pending == mine && !mine.cancelled) {
+        mine.error = problem(safe.code, safe.message)
+      }
+      throw safe
     }
     await mine.done
     return status()

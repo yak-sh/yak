@@ -10,6 +10,7 @@ import {
   accountKey,
   accountOpen,
   browserLogin,
+  dismissAccount,
   finishLogin,
 } from './Account.tsx'
 
@@ -64,6 +65,7 @@ Deno.test('account dialog keeps provider text inert and device links safe', () =
     render(h(Account, { control }), root)
     assertEquals(root.querySelector('img'), null)
     assertStringIncludes(root.textContent, '<img src=x onerror=alert(1)>')
+    assertStringIncludes(root.textContent, 'provider —')
     assertEquals(
       root.querySelector('.Account_Url')?.getAttribute('href'),
       'https://auth.example/device',
@@ -76,6 +78,91 @@ Deno.test('account dialog keeps provider text inert and device links safe', () =
     if (prior) Object.defineProperty(globalThis, 'document', prior)
     else delete (globalThis as { document?: unknown }).document
   }
+})
+
+Deno.test('account progress says what Tasks is asking Codex to do', () => {
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let { document } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  let status: AccountStatus = {
+    provider: 'codex',
+    state: 'pending',
+    ready: false,
+    auth: null,
+    login: 'browser',
+  }
+  let control = account(door(status))
+  let root = document.querySelector('main')!
+  let cases = [
+    ['login', 'asking Codex to start login…'],
+    [
+      'complete',
+      'delivering the callback and checking the Codex account…',
+    ],
+    ['cancel', 'asking Codex to cancel login…'],
+    ['logout', 'asking Codex to sign out…'],
+    ['read', 'checking Codex account status…'],
+  ] as const
+  try {
+    accountOpen.value = true
+    for (let [busy, message] of cases) {
+      control.view.value = { status, busy }
+      render(h(Account, { control }), root)
+      assertEquals(root.querySelector('.Account_State')?.textContent, message)
+    }
+  } finally {
+    accountOpen.value = false
+    control.close()
+    render(null, root)
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else delete (globalThis as { document?: unknown }).document
+  }
+})
+
+Deno.test('dismissing the web account cancels only this client ceremony', async () => {
+  let status: AccountStatus = {
+    provider: 'codex',
+    state: 'pending',
+    ready: false,
+    auth: null,
+    login: 'browser',
+  }
+  let cancels = 0
+  let accountDoor = door(status)
+  accountDoor.cancel = () => {
+    cancels++
+    return Promise.resolve(signedOut())
+  }
+  let owner = account(accountDoor)
+  owner.view.value = {
+    status,
+    ceremony: {
+      method: 'browser',
+      authorizationUrl: 'https://auth.example/login',
+    },
+  }
+  accountOpen.value = true
+  dismissAccount(owner)
+  await Promise.resolve()
+  assertEquals({ open: accountOpen.value, cancels }, {
+    open: false,
+    cancels: 1,
+  })
+
+  let observer = account(accountDoor)
+  observer.view.value = { status }
+  accountOpen.value = true
+  dismissAccount(observer)
+  await Promise.resolve()
+  assertEquals({ open: accountOpen.value, cancels }, {
+    open: false,
+    cancels: 1,
+  })
+  owner.close()
+  observer.close()
 })
 
 Deno.test('browser login detaches its pre-opened window before navigation', async () => {

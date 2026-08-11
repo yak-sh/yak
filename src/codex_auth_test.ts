@@ -5,11 +5,43 @@ import {
   bootstrapCodexAuth,
   codexEnv,
   codexHome,
+  codexMessage,
   codexStore,
   nativeCodexAuth,
 } from './codex_auth.ts'
 
 let env = (values: Record<string, string>) => (name: string) => values[name]
+
+Deno.test('Codex diagnostics retain the cause and redact credential shapes', () => {
+  let cases: [string, string[]][] = [
+    [
+      'https://localhost/auth/callback?code=url-secret#token',
+      ['url-secret'],
+    ],
+    ['Bearer bearer-secret', ['bearer-secret']],
+    ['Basic basic-secret', ['basic-secret']],
+    ['token="token secret suffix"', ['token secret suffix']],
+    ['"access_token":"short-secret"', ['short-secret']],
+    ['"code":"short-secret"', ['short-secret']],
+    ['state=state-secret', ['state-secret']],
+    ['verifier=verifier-secret', ['verifier-secret']],
+    ['api_key=sk-api-secret-value', ['sk-api-secret-value']],
+    ['account_id=account-secret', ['account-secret']],
+    ['550e8400-e29b-41d4-a716-446655440000', ['550e8400']],
+    ['org-organization-secret', ['organization-secret']],
+    [
+      'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzZWNyZXQifQ.signature-secret',
+      ['eyJzdWIiOiJzZWNyZXQifQ'],
+    ],
+    ['\x1b]52;c;clipboard\x07', ['\x1b', '\x07']],
+  ]
+  for (let [input, secrets] of cases) {
+    let clean = codexMessage(`workspace denied device login · ${input}`)!
+    assertEquals(clean.includes('workspace denied device login'), true)
+    for (let secret of secrets) assertEquals(clean.includes(secret), false)
+    assertEquals(clean.length <= 240, true)
+  }
+})
 
 Deno.test('Codex account roots stay outside scratch graphs and environments', () => {
   assertEquals(

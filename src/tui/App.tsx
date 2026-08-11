@@ -403,6 +403,7 @@ export let accountKey = (
   if (k == 'a' || k == 'q' || k == '\x1b') {
     accountCallback.value = null
     accountOpen.value = false
+    control.dismiss()
     return true
   }
   let view = control.view.peek()
@@ -493,21 +494,23 @@ export let TAccount = (
   let status = view.status
   let busy = view.busy
   let state = busy == 'login'
-    ? 'starting login…'
+    ? 'asking Codex to start login…'
     : busy == 'complete'
-    ? 'finishing login…'
+    ? 'delivering the callback and checking the Codex account…'
     : busy == 'cancel'
-    ? 'cancelling…'
+    ? 'asking Codex to cancel login…'
     : busy == 'logout'
-    ? 'logging out…'
-    : busy == 'read' && !status
-    ? 'checking…'
+    ? 'asking Codex to sign out…'
+    : busy == 'read'
+    ? 'checking Codex account status…'
     : status?.ready
     ? 'ready'
     : status?.state == 'pending'
     ? `${status.login ?? 'Codex'} login pending`
+    : status?.state == 'error'
+    ? 'last login failed'
     : status?.state.replace('_', ' ') ?? 'not checked'
-  let error = view.error ?? status?.error?.message
+  let error = view.error ?? status?.error
   let ceremony = view.ceremony
   let login = !busy && status &&
     ['signed_out', 'error', 'unavailable'].includes(status.state)
@@ -525,7 +528,8 @@ export let TAccount = (
           {status.plan && ` · ${status.plan}`}
         </div>
       )}
-      {error && <div class='TAccount_Error'>{error}</div>}
+      {error && <div class='TAccount_Error'>{error.code} — {error.message}
+      </div>}
       {ceremony?.method == 'device' && (
         <div class='TAccount_Ceremony'>
           <span class='TAccount_Url'>{ceremony.verificationUrl}</span>

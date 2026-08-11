@@ -267,6 +267,49 @@ Deno.test('the TUI paste mode clears callback input before submission', async ()
   control.close()
 })
 
+Deno.test('closing the TUI account cancels only its own ceremony', async () => {
+  let status: AccountStatus = {
+    provider: 'codex',
+    state: 'pending',
+    ready: false,
+    auth: null,
+    login: 'device',
+  }
+  let cancels = 0
+  let door: AccountDoor = {
+    status: () => Promise.resolve(status),
+    login: () => Promise.resolve(status),
+    complete: () => Promise.resolve(status),
+    cancel: () => {
+      cancels++
+      return Promise.resolve(signedOut())
+    },
+    logout: () => Promise.resolve(signedOut()),
+  }
+  let owner = account(door)
+  owner.view.value = {
+    status,
+    ceremony: {
+      method: 'device',
+      verificationUrl: 'https://auth.example/device',
+      userCode: 'ABCD-1234',
+    },
+  }
+  accountOpen.value = true
+  accountKey('q', owner)
+  await Promise.resolve()
+  assertEquals(cancels, 1)
+
+  let observer = account(door)
+  observer.view.value = { status }
+  accountOpen.value = true
+  accountKey('q', observer)
+  await Promise.resolve()
+  assertEquals(cancels, 1)
+  owner.close()
+  observer.close()
+})
+
 Deno.test('the TUI account paints ceremony and hostile errors as plain text', () => {
   let root = new TElement('root')
   let target = root as unknown as Parameters<typeof render>[1]
@@ -283,7 +326,7 @@ Deno.test('the TUI account paints ceremony and hostile errors as plain text', ()
             ready: false,
             auth: null,
             login: 'device',
-            error: { code: 'bad', message },
+            error: { code: 'provider_error', message },
           },
           ceremony: {
             method: 'device',
@@ -304,5 +347,42 @@ Deno.test('the TUI account paints ceremony and hostile errors as plain text', ()
   assertEquals(output.includes('ABCD-1234'), true)
   assertEquals(output.includes('https://auth.example/device'), true)
   assertEquals(output.includes('workspace permissions'), true)
+  assertEquals(output.includes('provider_error'), true)
+  render(null, target)
+})
+
+Deno.test('the TUI account names each Codex request in progress', () => {
+  let root = new TElement('root')
+  let target = root as unknown as Parameters<typeof render>[1]
+  let status: AccountStatus = {
+    provider: 'codex',
+    state: 'pending',
+    ready: false,
+    auth: null,
+    login: 'browser',
+  }
+  let cases = [
+    ['login', 'asking Codex to start login…'],
+    [
+      'complete',
+      'delivering the callback and checking the Codex account…',
+    ],
+    ['cancel', 'asking Codex to cancel login…'],
+    ['logout', 'asking Codex to sign out…'],
+    ['read', 'checking Codex account status…'],
+  ] as const
+  for (let [busy, message] of cases) {
+    render(
+      h(
+        'div',
+        null,
+        h(TAccount, { view: { status, busy } }),
+        h('footer', null),
+      ),
+      target,
+    )
+    let output = pane(root).lines.flat().map((part) => part.text).join('\n')
+    assertEquals(output.includes(message), true)
+  }
   render(null, target)
 })

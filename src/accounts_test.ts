@@ -14,12 +14,14 @@ let jwt = (account: string) => {
 type Call = { method: string; params: Record<string, unknown> }
 type Relay = (input: string | URL, init: RequestInit) => Promise<Response>
 
-let fixture = (initial?: Record<string, unknown>) => {
+let fixture = (initial?: Record<string, unknown>, updateTimeout = 30_000) => {
   let account = initial
   let token = account?.type == 'chatgpt' ? jwt('account-secret') : undefined
   let rotate = true
   let calls: Call[] = []
   let commits = 0, closes = 0, begins = 0, refreshes = 0
+  let commitError = false, readError = false
+  let startError: Error | undefined
   let login: {
     id: string
     emit: (params: Record<string, unknown>) => void
@@ -32,6 +34,7 @@ let fixture = (initial?: Record<string, unknown>) => {
       return Promise.resolve({
         home: `/account/${begins}`,
         commit: () => {
+          if (commitError) return Promise.reject(Error('store path secret'))
           commits++
           return Promise.resolve()
         },
@@ -57,7 +60,10 @@ let fixture = (initial?: Record<string, unknown>) => {
       let rpc: Rpc = {
         call: async (method, params = {}) => {
           calls.push({ method, params })
-          if (method == 'account/read') return { account }
+          if (method == 'account/read') {
+            if (readError) throw Error('account read failed')
+            return { account }
+          }
           if (method == 'account/rateLimits/read') {
             return {
               rateLimits: {
@@ -79,6 +85,7 @@ let fixture = (initial?: Record<string, unknown>) => {
             return { authToken: token }
           }
           if (method == 'account/login/start') {
+            if (startError) throw startError
             if (params.type == 'apiKey') {
               token = String(params.apiKey)
               account = { type: 'apiKey' }
@@ -134,6 +141,7 @@ let fixture = (initial?: Record<string, unknown>) => {
     store,
     issuer,
     (input, init) => relay(input, init),
+    updateTimeout,
   )
   return {
     service,
@@ -143,9 +151,9 @@ let fixture = (initial?: Record<string, unknown>) => {
       token = value
       rotate = false
     },
-    complete: (success = true, id = login?.id) => {
+    complete: (success = true, id = login?.id, error?: string) => {
       if (!login) throw Error('no login')
-      login.emit({ loginId: id, success })
+      login.emit({ loginId: id, success, ...(error ? { error } : {}) })
     },
     updated: (authMode = 'chatgpt') => {
       if (!login) throw Error('no login')
@@ -160,6 +168,13 @@ let fixture = (initial?: Record<string, unknown>) => {
       login.update({ authMode })
     },
     onRelay: (run: Relay) => relay = run,
+    failCommit: () => commitError = true,
+    failRead: () => readError = true,
+    failStart: (message: string) => {
+      startError = Object.assign(new Error(message), {
+        codexRpc: true as const,
+      })
+    },
   }
 }
 
@@ -343,11 +358,85 @@ Deno.test('Codex callback relay rejects every shape outside its ceremony', async
     await assertRejects(
       () => run.service.complete(value),
       Error,
-      'Invalid Codex login callback.',
+      'The callback does not match this Codex login.',
     )
+    assertEquals((await run.service.status()).error?.code, 'invalid_callback')
     assertEquals(relays, 0)
     await run.service.cancel()
   }
+})
+
+Deno.test('Codex callback delivery failures are named without provider bodies', async () => {
+  let unreachable = fixture()
+  await unreachable.service.login({ method: 'browser' })
+  unreachable.onRelay(() => Promise.reject(Error('callback?code=secret')))
+  try {
+    await unreachable.service.complete(
+      'http://localhost:1455/auth/callback?code=grant&state=opaque',
+    )
+    throw Error('accepted')
+  } catch (error) {
+    let value = error as Error & { code?: string }
+    assertEquals(value.code, 'callback_unreachable')
+    assertEquals(value.message.includes('secret'), false)
+  }
+  assertEquals(
+    (await unreachable.service.status()).error?.code,
+    'callback_unreachable',
+  )
+  await unreachable.service.cancel()
+
+  let rejected = fixture()
+  await rejected.service.login({ method: 'browser' })
+  rejected.onRelay(() =>
+    Promise.resolve(
+      new Response('provider-body-secret', {
+        status: 401,
+        headers: { location: 'https://provider.example/location-secret' },
+      }),
+    )
+  )
+  try {
+    await rejected.service.complete(
+      'http://localhost:1455/auth/callback?code=grant&state=opaque',
+    )
+    throw Error('accepted')
+  } catch (error) {
+    let value = error as Error & { code?: string }
+    assertEquals(value.code, 'callback_rejected')
+    assertEquals(value.message.includes('HTTP 401'), true)
+    assertEquals(value.message.includes('provider-body-secret'), false)
+    assertEquals(value.message.includes('location-secret'), false)
+  }
+  assertEquals(
+    (await rejected.service.status()).error?.code,
+    'callback_rejected',
+  )
+  await rejected.service.cancel()
+})
+
+Deno.test('retrying a callback clears its prior error while delivery runs', async () => {
+  let run = fixture()
+  await run.service.login({ method: 'browser' })
+  run.onRelay(() => Promise.reject(Error('offline')))
+  await assertRejects(() =>
+    run.service.complete(
+      'http://localhost:1455/auth/callback?code=first&state=opaque',
+    )
+  )
+  assertEquals((await run.service.status()).error?.code, 'callback_unreachable')
+
+  let delivery = Promise.withResolvers<Response>()
+  run.onRelay(() => delivery.promise)
+  let completing = run.service.complete(
+    'http://localhost:1455/auth/callback?code=second&state=opaque',
+  )
+  await Promise.resolve()
+  assertEquals((await run.service.status()).error, undefined)
+  run.complete()
+  run.updated()
+  delivery.resolve(new Response(null, { status: 302 }))
+  assertEquals((await completing).state, 'ready')
 })
 
 Deno.test('Codex browser login rejects an unrelated account update', async () => {
@@ -357,10 +446,65 @@ Deno.test('Codex browser login rejects an unrelated account update', async () =>
   run.updated('apiKey')
   let status = await settle(run.service.status, 'error')
   assertEquals(status.error, {
-    code: 'login_failed',
-    message: 'Codex login failed.',
+    code: 'account_mode_mismatch',
+    message:
+      'Codex authorized the login in a mode other than ChatGPT. Start a new ChatGPT login and try again.',
   })
   assertEquals(run.counts().commits, 0)
+})
+
+Deno.test('Codex login failures keep a sanitized phase and explanation', async () => {
+  let rejected = fixture()
+  await rejected.service.login({ method: 'device' })
+  rejected.complete(
+    false,
+    undefined,
+    'Workspace denied device login; code=grant-secret ' +
+      'account_id=account-secret',
+  )
+  let status = await settle(rejected.service.status, 'error')
+  assertEquals(status.error?.code, 'login_rejected')
+  assertEquals(status.error?.message.includes('Workspace denied'), true)
+  assertEquals(JSON.stringify(status).includes('grant-secret'), false)
+  assertEquals(JSON.stringify(status).includes('account-secret'), false)
+
+  let disabled = fixture()
+  disabled.failStart(
+    'Device code login is disabled by workspace; token=provider-secret',
+  )
+  await assertRejects(
+    () => disabled.service.login({ method: 'device' }),
+    Error,
+    'Codex device login is disabled.',
+  )
+  status = await disabled.service.status()
+  assertEquals(status.error?.code, 'device_login_disabled')
+  assertEquals(JSON.stringify(status).includes('provider-secret'), false)
+})
+
+Deno.test('Codex login names update, read, and credential-save failures', async () => {
+  let timedOut = fixture(undefined, 1)
+  await timedOut.service.login({ method: 'browser' })
+  timedOut.complete()
+  let status = await settle(timedOut.service.status, 'error')
+  assertEquals(status.error?.code, 'account_update_timed_out')
+
+  let unreadable = fixture()
+  await unreadable.service.login({ method: 'browser' })
+  unreadable.complete()
+  unreadable.failRead()
+  unreadable.updated()
+  status = await settle(unreadable.service.status, 'error')
+  assertEquals(status.error?.code, 'account_read_failed')
+
+  let unsaved = fixture()
+  await unsaved.service.login({ method: 'browser' })
+  unsaved.complete()
+  unsaved.failCommit()
+  unsaved.updated()
+  status = await settle(unsaved.service.status, 'error')
+  assertEquals(status.error?.code, 'credential_save_failed')
+  assertEquals(JSON.stringify(status).includes('store path secret'), false)
 })
 
 Deno.test('Codex device login cancellation discards its transaction', async () => {
@@ -381,8 +525,9 @@ Deno.test('Codex login rejects a completion for another ceremony', async () => {
   run.complete(true, 'other-login')
   let status = await settle(run.service.status, 'error')
   assertEquals(status.error, {
-    code: 'login_failed',
-    message: 'Codex login failed.',
+    code: 'login_mismatched',
+    message:
+      'Codex completed a different login attempt. Start a new login from this Tasks client.',
   })
   assertEquals(run.counts().commits, 0)
 })
@@ -402,6 +547,17 @@ Deno.test('Codex API-key login exposes no key and selects public Responses', asy
     token: secret,
     base: 'https://api.openai.com/v1',
   })
+
+  let unsaved = fixture()
+  unsaved.failCommit()
+  await assertRejects(
+    () => unsaved.service.login({ method: 'apiKey', apiKey: secret }),
+    Error,
+    'Codex could not complete API-key login.',
+  )
+  let failure = await unsaved.service.status()
+  assertEquals(failure.error?.code, 'api_key_login_failed')
+  assertEquals(JSON.stringify(failure).includes('store path secret'), false)
 })
 
 Deno.test('Codex account HTTP surface is JSON-only, bounded, and no-store', async () => {

@@ -161,6 +161,39 @@ Deno.test('account mutations serialize a deferred login', async () => {
   assertEquals(control.view.value, { status: signedOut() })
 })
 
+Deno.test('dismissing an in-flight login cancels after the server owns it', async () => {
+  let started = Promise.withResolvers<
+    Awaited<ReturnType<AccountDoor['login']>>
+  >()
+  let calls: string[] = []
+  let control = account({
+    status: () => {
+      calls.push('status')
+      return Promise.resolve(pending('browser'))
+    },
+    login: () => {
+      calls.push('login')
+      return started.promise
+    },
+    complete: () => Promise.resolve(ready()),
+    cancel: () => {
+      calls.push('cancel')
+      return Promise.resolve(signedOut())
+    },
+    logout: () => Promise.resolve(signedOut()),
+  })
+  let login = control.login('browser')
+  let dismiss = control.dismiss()
+  assertEquals(calls, ['login'])
+  started.resolve({
+    method: 'browser',
+    authorizationUrl: 'https://auth.example/login',
+  })
+  await Promise.all([login, dismiss])
+  assertEquals(calls, ['login', 'cancel'])
+  assertEquals(control.view.value, { status: signedOut() })
+})
+
 Deno.test('a ceremony keeps polling and cancellable across a failed read', async () => {
   let reads = 0
   let cancelled = false
@@ -194,7 +227,11 @@ Deno.test('a ceremony keeps polling and cancellable across a failed read', async
 
   await control.login('device')
   assertEquals(control.view.value.status, pending('device'))
-  assertEquals(control.view.value.error, 'offline')
+  assertEquals(control.view.value.error, {
+    code: 'account_request_failed',
+    message:
+      'The Codex account request stopped before Tasks received a response. Retry the request.',
+  })
   await control.cancel()
   assertEquals(cancelled, true)
   assertEquals(control.view.value, { status: signedOut() })
@@ -206,10 +243,51 @@ Deno.test('a ceremony keeps polling and cancellable across a failed read', async
   ticks.shift()?.()
   await Promise.resolve()
   assertEquals(control.view.value.status, pending('device'))
+  assertEquals(control.view.value.error?.code, 'account_request_failed')
   ticks.shift()?.()
   await Promise.resolve()
   assertEquals(control.view.value, { status: ready() })
   assertEquals(cancelled, false)
+})
+
+Deno.test('server callback errors replace stale polling failures', async () => {
+  let reads = 0
+  let ticks: (() => void)[] = []
+  let server = {
+    ...pending('browser'),
+    error: {
+      code: 'callback_rejected',
+      message: 'Codex rejected the callback with HTTP 401.',
+    },
+  } satisfies AccountStatus
+  let control = account(
+    {
+      status: () =>
+        ++reads == 1
+          ? Promise.reject(Error('offline'))
+          : Promise.resolve(server),
+      login: () =>
+        Promise.resolve({
+          method: 'browser',
+          authorizationUrl: 'https://auth.example/login',
+        }),
+      complete: () => Promise.resolve(ready()),
+      cancel: () => Promise.resolve(signedOut()),
+      logout: () => Promise.resolve(signedOut()),
+    },
+    (run) => {
+      ticks.push(run)
+      return ticks.length as unknown as ReturnType<typeof setTimeout>
+    },
+    () => {},
+  )
+  await control.login('browser')
+  assertEquals(control.view.value.error?.code, 'account_request_failed')
+  ticks.shift()?.()
+  await Promise.resolve()
+  assertEquals(control.view.value.error, undefined)
+  assertEquals(control.view.value.status?.error?.code, 'callback_rejected')
+  control.close()
 })
 
 Deno.test('account completion retains its ceremony only on failure', async () => {
@@ -238,7 +316,46 @@ Deno.test('account completion retains its ceremony only on failure', async () =>
   await control.login('browser')
   await control.complete('http://localhost/callback?code=x&state=y')
   assertEquals(control.view.value.ceremony?.method, 'browser')
-  assertEquals(control.view.value.error, 'relay failed')
+  assertEquals(control.view.value.error?.code, 'account_request_failed')
+  control.close()
+})
+
+Deno.test('callback retry clears the prior error while progress is visible', async () => {
+  let done = Promise.withResolvers<AccountStatus>()
+  let status: AccountStatus = {
+    ...pending('browser'),
+    error: {
+      code: 'callback_unreachable',
+      message: 'Tasks could not reach the callback listener.',
+    },
+  }
+  let control = account({
+    status: () => Promise.resolve(status),
+    login: () => Promise.resolve(status),
+    complete: () => done.promise,
+    cancel: () => Promise.resolve(signedOut()),
+    logout: () => Promise.resolve(signedOut()),
+  })
+  control.view.value = {
+    status,
+    ceremony: {
+      method: 'browser',
+      authorizationUrl: 'https://auth.example/login',
+    },
+    error: {
+      code: 'account_service_unreachable',
+      message: 'The last poll failed.',
+    },
+  }
+  let completing = control.complete(
+    'http://localhost/callback?code=x&state=y',
+  )
+  assertEquals(control.view.value.busy, 'complete')
+  assertEquals(control.view.value.error, undefined)
+  assertEquals(control.view.value.status?.error, undefined)
+  done.resolve(ready())
+  await completing
+  assertEquals(control.view.value, { status: ready() })
   control.close()
 })
 
@@ -298,4 +415,29 @@ Deno.test('account HTTP door sends only short-lived ceremony inputs', async () =
       JSON.stringify({ callback: 'http://localhost/callback?code=x&state=y' }),
     ],
   ])
+})
+
+Deno.test('account HTTP errors keep their stable identity', async () => {
+  let door = accountDoor(
+    () =>
+      Promise.resolve(Response.json({
+        error: {
+          code: 'device_login_disabled',
+          message: 'Enable device login in ChatGPT Security settings.',
+        },
+      }, { status: 502 })),
+    () => 'http://tasks.test',
+  )
+  try {
+    await door.login('device')
+    throw Error('accepted')
+  } catch (error) {
+    let value = error as Error & {
+      account?: { code: string; message: string }
+    }
+    assertEquals(value.account, {
+      code: 'device_login_disabled',
+      message: 'Enable device login in ChatGPT Security settings.',
+    })
+  }
 })
