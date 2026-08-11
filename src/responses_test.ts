@@ -451,6 +451,28 @@ Deno.test('responses retries bounded server failures before reading events', asy
   assertEquals(pauses, [200, 400])
 })
 
+Deno.test('responses fails a network interruption once with bounded evidence', async () => {
+  let calls = 0
+  let client = responses({
+    credentials: auth(),
+    retries: 1,
+    pause: () => Promise.resolve(),
+    fetch: () => {
+      calls++
+      return Promise.reject(Error('secret-old acct-1 socket reset'))
+    },
+  })
+  let error = await assertRejects(
+    () => client.run({ model: 'm', input: [] }),
+  ) as ResponseFault
+  // A request may have reached the provider before the socket failed. Retrying
+  // here could bill or advance twice; a durable graph wake starts the next try.
+  assertEquals(calls, 1)
+  assertEquals(error.message, 'responses: transport failed')
+  assertEquals(JSON.stringify(error).includes('secret-old'), false)
+  assertEquals(JSON.stringify(error).includes('acct-1'), false)
+})
+
 Deno.test('responses aborts an active stream without retrying', async () => {
   let controller = new AbortController()
   let calls = 0
