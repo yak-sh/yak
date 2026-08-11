@@ -220,11 +220,13 @@ Deno.test('managed Codex runs the production tool chain without credential resid
       db,
       cast: () => {},
       transport,
-      tools: async (cwd, sid) =>
-        combineTools(
+      tools: async (cwd, sid) => {
+        if (!cwd) throw new Error('integration run needs a worktree')
+        return combineTools(
           await localTools({ tree: cwd }),
           await tasksTools(io, sid),
-        ),
+        )
+      },
       prepare: () => Promise.resolve(),
     })
     await service.start(session, {
