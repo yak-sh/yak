@@ -62,7 +62,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       claim: 'claim <id> [session]',
       release: 'release <id>',
       subject: '<id> [show|is|as|edge] …',
-      spawn: 'spawn <id> [--provider=claude|codex] [--model=MODEL] ' +
+      spawn: 'spawn <id> [--provider=claude|codex|codex-cli] [--model=MODEL] ' +
         '[--effort=high] [--persona=ID]',
       land: 'land',
       comment: 'comment <id> [text…] [--body=BODY] [--verdict=VERDICT]',
