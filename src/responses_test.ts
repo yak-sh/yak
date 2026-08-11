@@ -1,7 +1,12 @@
 // The Responses client against scripted SSE: provider drift and secret
 // boundaries are transport facts, so every case stops before runner logic.
 import { assertEquals, assertRejects } from '@std/assert'
-import { ResponseEvent, ResponseFault, responses } from './responses.ts'
+import {
+  ResponseEvent,
+  ResponseFault,
+  responseObservation,
+  responses,
+} from './responses.ts'
 
 let sse = (...events: unknown[]) =>
   new Response(
@@ -139,6 +144,50 @@ Deno.test('responses keeps completed items, replay state, usage, and deltas', as
     },
   })
   assertEquals(out.limits, { 'x-ratelimit-remaining-requests': '9' })
+})
+
+Deno.test('responses normalizes only useful typed observation fields', () => {
+  assertEquals(
+    responseObservation({
+      type: 'response.output_text.delta',
+      delta: 'hello',
+      provider_payload: { hidden: true },
+    }),
+    { kind: 'model', text: 'hello' },
+  )
+  assertEquals(
+    responseObservation({
+      type: 'response.reasoning_summary_text.delta',
+      delta: 'checking',
+    }),
+    { kind: 'reasoning', text: 'checking' },
+  )
+  assertEquals(
+    responseObservation({
+      type: 'response.output_item.added',
+      item: {
+        type: 'function_call',
+        name: 'shell',
+        arguments: 'do not relay',
+        call_id: 'provider-id',
+      },
+    }),
+    { kind: 'tool', name: 'shell' },
+  )
+  assertEquals(
+    responseObservation({
+      type: 'response.function_call_arguments.delta',
+      delta: '{"secret":"not observed"}',
+    }),
+    undefined,
+  )
+  assertEquals(
+    responseObservation({
+      type: 'response.future.delta',
+      payload: 'not observed',
+    }),
+    undefined,
+  )
 })
 
 Deno.test('responses round trips a correlated function result without provider state', async () => {
@@ -282,6 +331,7 @@ Deno.test('responses scrubs failed-stream evidence and credential errors', async
 Deno.test('responses refreshes once on 401 and never returns credentials', async () => {
   let calls = 0
   let refreshed = 0
+  let observed: ResponseEvent[] = []
   let client = responses({
     credentials: {
       get: () =>
@@ -314,14 +364,32 @@ Deno.test('responses refreshes once on 401 and never returns credentials', async
       assertEquals(input, 'https://api.example/v1/responses')
       assertEquals(headers.get('authorization'), 'Bearer secret-new')
       assertEquals(headers.get('chatgpt-account-id'), null)
-      return Promise.resolve(complete())
+      return Promise.resolve(sse(
+        {
+          type: 'response.output_text.delta',
+          delta: 'secret-old secret-new acct-1 safe',
+        },
+        {
+          type: 'response.completed',
+          response: { status: 'completed', model: 'served' },
+        },
+      ))
     },
   })
-  let out = await client.run({ model: 'm', input: [] })
+  let out = await client.run(
+    { model: 'm', input: [] },
+    { event: (event) => observed.push(event) },
+  )
   assertEquals(calls, 2)
   assertEquals(refreshed, 1)
   assertEquals(JSON.stringify(out).includes('secret-'), false)
   assertEquals(JSON.stringify(out).includes('acct-'), false)
+  assertEquals(JSON.stringify(observed).includes('secret-'), false)
+  assertEquals(JSON.stringify(observed).includes('acct-'), false)
+  assertEquals(
+    responseObservation(observed[0]),
+    { kind: 'model', text: '[redacted] [redacted] [redacted] safe' },
+  )
 })
 
 Deno.test('responses names 429 limits without retrying or echoing errors', async () => {

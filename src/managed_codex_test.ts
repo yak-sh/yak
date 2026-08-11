@@ -4,7 +4,8 @@ import { assert, assertEquals, assertMatch } from '@std/assert'
 import { apply, journalOf, open } from './db.ts'
 import { append, readEntries, settleGeneration, takeEntry } from './entries.ts'
 import { managedCodex } from './managed_codex.ts'
-import { type ResponseResult } from './responses.ts'
+import { type Observation } from './observations.ts'
+import { type ResponseEvent, type ResponseResult } from './responses.ts'
 import { writeSession } from './session_store.ts'
 import { type ToolHost } from './harness_tools.ts'
 import { type Change, uuid } from './types.ts'
@@ -149,6 +150,160 @@ Deno.test('managed Codex starts, runs tools, and settles in ordered entries', as
     { status: null },
   )
   assert(heard.some((change) => change.name == 'result'))
+  db.close()
+})
+
+Deno.test('managed Codex relays typed progress until durable settlement', async () => {
+  let db = open(':memory:')
+  let tree = Deno.makeTempDirSync(), sid = session(db, tree)
+  let timeline: string[] = []
+  let observed: unknown[] = []
+  let service = managedCodex({
+    db,
+    cast: (changes) => {
+      if (changes.some((change) => change.name == 'output')) {
+        timeline.push('durable')
+      }
+    },
+    transport: {
+      run: (_request, options) => {
+        options?.event?.({
+          type: 'response.reasoning_summary_text.delta',
+          delta: 'checking',
+          hidden: 'provider detail',
+        })
+        options?.event?.({
+          type: 'response.output_item.added',
+          item: {
+            type: 'function_call',
+            name: 'shell',
+            arguments: 'not relayed',
+          },
+        })
+        options?.event?.({
+          type: 'response.output_text.delta',
+          delta: 'almost done',
+        })
+        return Promise.resolve(result([{
+          type: 'message',
+          content: [{ type: 'output_text', text: 'done' }],
+        }]))
+      },
+    },
+    tools: () => Promise.resolve(tools([])),
+    prepare: () => Promise.resolve(),
+    observe: (value) => {
+      observed.push(value)
+      timeline.push(value.kind)
+    },
+  })
+
+  await service.start(sid, job(tree))
+  assertEquals(observed, [{
+    session: sid,
+    generation: readEntries(db, sid)[1].eid,
+    kind: 'reasoning',
+    text: 'checking',
+  }, {
+    session: sid,
+    generation: readEntries(db, sid)[1].eid,
+    kind: 'tool',
+    name: 'shell',
+  }, {
+    session: sid,
+    generation: readEntries(db, sid)[1].eid,
+    kind: 'model',
+    text: 'almost done',
+  }, {
+    session: sid,
+    generation: readEntries(db, sid)[1].eid,
+    kind: 'clear',
+  }])
+  assertEquals(timeline, ['reasoning', 'tool', 'model', 'durable', 'clear'])
+  assertEquals(JSON.stringify(observed).includes('provider detail'), false)
+  assertEquals(JSON.stringify(observed).includes('not relayed'), false)
+  db.close()
+})
+
+Deno.test('a reclaimed generation rejects its former lease observations', async () => {
+  let db = open(':memory:')
+  let tree = Deno.makeTempDirSync(), sid = session(db, tree)
+  writeSession(db, sid, { base_revision: 'base' })
+  let oldResult = Promise.withResolvers<ResponseResult>()
+  let newResult = Promise.withResolvers<ResponseResult>()
+  let oldStarted = Promise.withResolvers<void>()
+  let newStarted = Promise.withResolvers<void>()
+  let stale: ((event: ResponseEvent) => void) | undefined
+  let observed: ({ source: string } & Observation)[] = []
+  let old = managedCodex({
+    db,
+    cast: () => {},
+    clock: () => new Date('2026-08-10T12:00:00Z'),
+    leaseMs: 100,
+    transport: {
+      run: (_request, options) => {
+        stale = options?.event
+        oldStarted.resolve()
+        return oldResult.promise
+      },
+    },
+    tools: () => Promise.resolve(tools([])),
+    prepare: () => Promise.resolve(),
+    observe: (value) => observed.push({ source: 'old', ...value }),
+  })
+  let first = old.start(sid, job(tree))
+  await oldStarted.promise
+
+  let replacement = managedCodex({
+    db,
+    cast: () => {},
+    clock: () => new Date('2026-08-10T12:00:01Z'),
+    leaseMs: 100,
+    transport: {
+      run: (_request, options) => {
+        options?.event?.({
+          type: 'response.output_text.delta',
+          delta: 'winner progress',
+        })
+        newStarted.resolve()
+        return newResult.promise
+      },
+    },
+    tools: () => Promise.resolve(tools([])),
+    prepare: () => Promise.resolve(),
+    observe: (value) => observed.push({ source: 'new', ...value }),
+  })
+  let second = replacement.sweep()
+  await newStarted.promise
+  stale?.({ type: 'response.output_text.delta', delta: 'stale progress' })
+  oldResult.resolve(result([{
+    type: 'message',
+    content: [{ type: 'output_text', text: 'stale result' }],
+  }]))
+  await first
+  assertEquals(observed, [{
+    source: 'new',
+    session: sid,
+    generation: readEntries(db, sid)[1].eid,
+    kind: 'model',
+    text: 'winner progress',
+  }])
+
+  newResult.resolve(result([{
+    type: 'message',
+    content: [{ type: 'output_text', text: 'winner result' }],
+  }]))
+  await second
+  assertEquals(observed.at(-1), {
+    source: 'new',
+    session: sid,
+    generation: readEntries(db, sid)[1].eid,
+    kind: 'clear',
+  })
+  assertEquals(
+    readEntries(db, sid).at(-1)?.comps.content?.body,
+    'winner result',
+  )
   db.close()
 })
 

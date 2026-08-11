@@ -25,6 +25,8 @@ import {
   type ResponseTransport,
 } from './runner.ts'
 import { type ToolHost } from './harness_tools.ts'
+import { type Observation } from './observations.ts'
+import { responseObservation } from './responses.ts'
 import { sessionRow } from './session_store.ts'
 import { type Change, uuid } from './types.ts'
 
@@ -51,6 +53,7 @@ export type ManagedCodexOptions = {
   clock?: () => Date
   leaseMs?: number
   runner?: string
+  observe?: (observation: Observation) => void
 }
 
 let now = () => new Date()
@@ -253,6 +256,16 @@ export let managedCodex = (options: ManagedCodexOptions) => {
   let starting = new Map<string, Promise<void>>()
   let wake = false
 
+  // Watching is auxiliary: a broken observer must never break or retry the
+  // provider operation whose durable outcome the graph still needs.
+  let observe = (value: Observation) => {
+    try {
+      options.observe?.(value)
+    } catch (error) {
+      console.warn('Codex observation dropped —', error)
+    }
+  }
+
   if (!db.prepare('select 1 from runner where eid = ?').get(runner)) {
     cast(apply(db, [{
       eid: runner,
@@ -265,6 +278,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
     let control = new AbortController()
     flights.set(token.eid, { session, control })
     let tools: ToolHost | undefined
+    let clear = false
     try {
       let row = sessionRow(db, session)
       if (!row?.cwd) throw new Error('managed Codex session has no worktree')
@@ -277,6 +291,13 @@ export let managedCodex = (options: ManagedCodexOptions) => {
         tools: tools.tools,
         signal: control.signal,
         cacheKey: session,
+        event: (event) => {
+          if (!valid(db, token)) return
+          let delta = responseObservation(event)
+          if (delta) {
+            observe({ session, generation: token.eid, ...delta })
+          }
+        },
       })
       if (!valid(db, token)) return
       if (work.specs.length) {
@@ -284,6 +305,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
       }
       cast(settleGeneration(db, token, work.usage, clock, work.model))
       sessionError(db, session, null, cast, clock)
+      clear = true
     } catch (error) {
       if (!valid(db, token)) return
       let evidence = (error as GenerationFault).entrySpecs ?? []
@@ -291,7 +313,9 @@ export let managedCodex = (options: ManagedCodexOptions) => {
       let message = String((error as Error).message).slice(0, 2000)
       cast(failEntry(db, token, message, clock))
       sessionError(db, session, message, cast, clock)
+      clear = true
     } finally {
+      if (clear) observe({ session, generation: token.eid, kind: 'clear' })
       flights.delete(token.eid)
       await tools?.close?.()
     }
@@ -520,7 +544,14 @@ export let managedCodex = (options: ManagedCodexOptions) => {
       let lease = db.prepare('select * from lease where eid = ?').get(
         row.eid,
       ) as LeaseToken | undefined
-      if (lease) cast(cancelEntry(db, lease))
+      if (lease) {
+        let cancelled = cancelEntry(db, lease)
+        cast(cancelled)
+        if (
+          cancelled.length &&
+          db.prepare('select 1 from generation where eid = ?').get(row.eid)
+        ) observe({ session, generation: row.eid, kind: 'clear' })
+      }
     }
     delivered(db, request, 'cancelled', cast, clock)
     return true

@@ -1,6 +1,7 @@
 // The direct Responses transport: credentials go in at the HTTP edge and
 // completed provider items come out. Session replay, tools, and graph writes
 // belong to the runner; this file owns no conversation or process state.
+import { type ObservationDelta } from './observations.ts'
 
 export type Credential = {
   token: string
@@ -86,6 +87,10 @@ let knownEvents = new Set([
   'response.output_text.done',
   'response.refusal.delta',
   'response.refusal.done',
+  'response.reasoning_summary_part.added',
+  'response.reasoning_summary_part.done',
+  'response.reasoning_summary_text.delta',
+  'response.reasoning_summary_text.done',
   'response.function_call_arguments.delta',
   'response.function_call_arguments.done',
   'error',
@@ -104,6 +109,37 @@ let sleep = (ms: number) =>
 
 let record = (value: unknown): value is Record<string, unknown> =>
   value != null && typeof value == 'object' && !Array.isArray(value)
+
+// Only named scalar fields cross from the OpenAI dialect into the Tasks
+// observation vocabulary. Completed items take the durable runner path;
+// these deltas are hints for a watcher who is connected right now.
+export let responseObservation = (
+  event: ResponseEvent,
+): ObservationDelta | undefined => {
+  if (
+    event.type == 'response.output_text.delta' ||
+    event.type == 'response.refusal.delta'
+  ) {
+    return typeof event.delta == 'string' && event.delta
+      ? { kind: 'model', text: event.delta }
+      : undefined
+  }
+  if (event.type == 'response.reasoning_summary_text.delta') {
+    return typeof event.delta == 'string' && event.delta
+      ? { kind: 'reasoning', text: event.delta }
+      : undefined
+  }
+  if (event.type == 'response.output_item.added' && record(event.item)) {
+    let item = event.item
+    if (item.type == 'function_call' || item.type == 'custom_tool_call') {
+      return {
+        kind: 'tool',
+        name: typeof item.name == 'string' ? item.name : 'tool',
+      }
+    }
+  }
+  return undefined
+}
 
 let fault = (
   message: string,
