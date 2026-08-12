@@ -74,7 +74,10 @@ let shown = (
       text: text(c.content?.body),
     }
   }
-  if (c.reasoning) return { kind: 'reason', text: text(c.content?.body) }
+  if (c.reasoning) {
+    let body = text(c.content?.body)
+    return body ? { kind: 'reason', text: body } : undefined
+  }
   if (c.generation) {
     let model = text(c.generation.serving_model || c.generation.model)
     if (c.delivered || c.usage) {

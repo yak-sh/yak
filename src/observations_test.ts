@@ -64,6 +64,12 @@ Deno.test('observation state is bounded and a new generation replaces it', () =>
     model: 'first',
     reasoning: 'thinking',
     tools: ['shell'],
+    items: [
+      { kind: 'model', text: 'first' },
+      { kind: 'reasoning', text: 'thinking' },
+      { kind: 'tool', name: 'shell' },
+      { kind: 'tool', name: 'shell' },
+    ],
     rev: 4,
   })
   for (let i = 0; i < 8; i++) {
@@ -71,12 +77,33 @@ Deno.test('observation state is bounded and a new generation replaces it', () =>
   }
   assertEquals(state?.model.length, 12_000)
   assertEquals(state?.model.startsWith('…'), true)
+  assertEquals(
+    state?.items.reduce(
+      (n, item) => n + (item.kind == 'tool' ? 0 : item.text.length),
+      0,
+    ),
+    12_000,
+  )
   state = foldObservation(state, {
     ...sight('model', { text: 'next' }),
     generation: 'next',
   })
   assertEquals(state?.generation, 'next')
   assertEquals(state?.model, 'next')
+})
+
+Deno.test('observation state keeps narration beside tool activity', () => {
+  let state = foldObservation(undefined, sight('model', { text: 'I will ' }))
+  state = foldObservation(state, sight('model', { text: 'inspect it.' }))
+  state = foldObservation(state, sight('tool', { name: 'shell' }))
+  state = foldObservation(state, sight('model', { text: 'That failed.' }))
+  state = foldObservation(state, sight('tool', { name: 'apply_patch' }))
+  assertEquals(state?.items, [
+    { kind: 'model', text: 'I will inspect it.' },
+    { kind: 'tool', name: 'shell' },
+    { kind: 'model', text: 'That failed.' },
+    { kind: 'tool', name: 'apply_patch' },
+  ])
 })
 
 Deno.test('durable generation evidence clears its transient preview', () => {

@@ -45,6 +45,11 @@ let within = (root: string, path: string) =>
 let paragraphs = (parts: (string | undefined)[]) =>
   parts.map((part) => part?.trim()).filter(Boolean).join('\n\n')
 
+let visible = `Keep the user informed with concise assistant messages before
+meaningful tool work and after material results. During long work, say what the
+system is doing at least once a minute. These are normal user-facing progress
+updates; reserve the final answer for the handoff.`
+
 // Applicable AGENTS.md files run from the worktree root down to cwd, the same
 // hierarchy native Codex reads. The hosted runner never reads Codex settings,
 // auth files, hooks, or a home-directory instruction source.
@@ -56,6 +61,7 @@ session: no filesystem workspace, shell, or patch tool is available. Work only
 through the hosted Tasks graph tools. If the work requires repository changes,
 explain that the task needs a repo-backed project. Provider credentials are
 unavailable to tools and must never enter content, task data, or diagnostics.`,
+      visible,
       options.persona ? `## Persona\n\n${options.persona}` : undefined,
       options.prompt ? `## Work\n\n${options.prompt}` : undefined,
     ])
@@ -91,6 +97,7 @@ start in the dedicated worktree; treat it as the default place for repository
 changes, not as a permission boundary. Use the hosted tools directly without
 waiting for approval. Do not seek, read, expose, or copy provider credentials
 into content, commands, patches, task data, or diagnostics.`,
+    visible,
     ...agents,
     options.persona ? `## Persona\n\n${options.persona}` : undefined,
     options.prompt ? `## Work\n\n${options.prompt}` : undefined,

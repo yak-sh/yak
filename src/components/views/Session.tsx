@@ -290,16 +290,22 @@ let doing = (r?: LogRow) =>
     ? (r.text ? `thinking · ${r.text}` : 'thinking…')
     : 'working…'
 
-export let SessionObservation = ({ state }: { state: ObservationState }) => (
+export let SessionObservation = (
+  { state, repo }: { state: ObservationState; repo?: string },
+) => (
   <Transient>
-    {state.reasoning && <Reason>{state.reasoning}</Reason>}
-    {state.tools.map((name) => (
-      <Tool key={name}>
-        <ToolName>{name}</ToolName>
-        <ToolStatus>preparing…</ToolStatus>
-      </Tool>
-    ))}
-    {state.model && <Agent>{state.model}</Agent>}
+    {(state.items ?? []).map((item, i) =>
+      item.kind == 'reasoning'
+        ? <Reason key={i}>{item.text}</Reason>
+        : item.kind == 'tool'
+        ? (
+          <Tool key={i}>
+            <ToolName>{item.name}</ToolName>
+            <ToolStatus>preparing…</ToolStatus>
+          </Tool>
+        )
+        : <Markdown key={i} as={Agent} text={item.text} repo={repo} />
+    )}
   </Transient>
 )
 
@@ -705,7 +711,7 @@ export let Session = ({ e }: { e: Ent }) => {
               ? <Row key={x.seq} x={x} repo={repo} />
               : <Note key={x.eid} c={x} />
           )}
-          {stream && <SessionObservation state={stream} />}
+          {stream && <SessionObservation state={stream} repo={repo} />}
           {live && (
             <Think>✳ {observing(stream) ?? doing(rows.at(-1)?.row)}</Think>
           )}
@@ -732,7 +738,7 @@ export let Session = ({ e }: { e: Ent }) => {
           TO it (Comments.tsx knows which sessions can take words) */
       }
       <Foot>
-        <Composer eid={e.eid} />
+        <Composer eid={e.eid} entry={native} />
       </Foot>
     </Frame>
   )

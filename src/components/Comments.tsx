@@ -3,7 +3,14 @@ import { commands, orderIn, suggest } from '../commands.ts'
 import { commentsOn, ent, mutate, pending, repoUrl, uuid } from '../live.ts'
 import { ago, block, pretty } from './ui.tsx'
 import { useDraft } from './drafts.ts'
-import { type Ent, idOf, nick, sessionActive, verdictName } from '../types.ts'
+import {
+  type Change,
+  type Ent,
+  idOf,
+  nick,
+  sessionActive,
+  verdictName,
+} from '../types.ts'
 import { linkProps } from './nav.tsx'
 import { title } from './title.tsx'
 import { Markdown } from './Markdown.tsx'
@@ -91,12 +98,9 @@ export let Note = ({ c }: { c: Ent }) => {
 // The box that says more — Enter posts (Shift+Enter for a newline), and
 // the instrument is this browser's client entity.
 //
-// On a session the comment IS the way to talk to the agent — no side
-// channel: the server's created(comment) effect resumes a settled
-// managed session with the words, and an active one hears them on its
-// next tool call through the bus. To leave a note ABOUT the run without
-// waking it, comment on its task instead.
-export let prompt = (e: Ent) => {
+// Process-backed sessions hear comments through their provider door. A
+// graph-native Session uses the ordered entry partition directly.
+export let prompt = (e: Ent, entry = false) => {
   let s = e.session
   let settled = !!s && s.origin == 'managed' && !!s.provider_session_id &&
     !sessionActive.includes(String(s.status))
@@ -104,6 +108,7 @@ export let prompt = (e: Ent) => {
   let who = s &&
     ((s.persona && ent(s.persona).doc?.title) ||
       nick(s.serving_model ?? s.model) || idOf(e))
+  if (entry) return `send to ${who || idOf(e)}…`
   return settled
     ? `send to ${who}… (resumes the session)`
     : s
@@ -111,9 +116,30 @@ export let prompt = (e: Ent) => {
     : 'comment…'
 }
 
-export let Composer = ({ eid }: { eid: string }) => {
+// Session entries are already a wire vocabulary: the browser names the
+// partition and message; apply() mints order and freezes the whole batch.
+export let composerChanges = (
+  eid: string,
+  body: string,
+  entry: boolean,
+  id = uuid(),
+): Change[] =>
+  entry && !orderIn(body.split('\n')[0])
+    ? [
+      { eid: id, name: 'entry', comp: { session: eid } },
+      { eid: id, name: 'message', comp: { role: 'user' } },
+      { eid: id, name: 'content', comp: { body } },
+    ]
+    : [
+      { eid: id, name: 'doc', comp: { title: '', body } },
+      { eid: id, name: 'comment', comp: { target: eid } },
+    ]
+
+export let Composer = (
+  { eid, entry = false }: { eid: string; entry?: boolean },
+) => {
   let box = useRef<HTMLTextAreaElement>(null)
-  let dkey = `${eid}.comment`
+  let dkey = `${eid}.${entry ? 'input' : 'comment'}`
   // The typed line, mirrored for the hints (the DOM textarea stays the
   // owner, exactly as the palette does it) and which hint is picked.
   let [line, setLine] = useState('')
@@ -147,15 +173,7 @@ export let Composer = ({ eid }: { eid: string }) => {
   let post = () => {
     let body = box.current!.value.trim()
     if (!body) return
-    let c = uuid()
-    mutate(
-      { eid: c, name: 'doc', comp: { title: '', body } },
-      {
-        eid: c,
-        name: 'comment',
-        comp: { target: eid },
-      },
-    )
+    mutate(...composerChanges(eid, body, entry))
     box.current!.value = ''
     setLine('')
     setPick(0)
@@ -216,7 +234,7 @@ export let Composer = ({ eid }: { eid: string }) => {
           setLine(el.value)
           setPick(0)
         }}
-        placeholder={prompt(ent(eid))}
+        placeholder={prompt(ent(eid), entry)}
         onKeyDown={key}
       />
     </Box>

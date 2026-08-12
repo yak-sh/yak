@@ -3,9 +3,12 @@
 // graph entries remain the only replayable transcript.
 import { type Change } from './types.ts'
 
-export type ObservationDelta =
+export type ObservationItem =
   | { kind: 'model' | 'reasoning'; text: string }
   | { kind: 'tool'; name: string }
+
+export type ObservationDelta =
+  | ObservationItem
   | { kind: 'clear' }
 
 export type Observation = {
@@ -18,6 +21,7 @@ export type ObservationState = {
   model: string
   reasoning: string
   tools: string[]
+  items: ObservationItem[]
   rev: number
 }
 
@@ -25,6 +29,7 @@ let FRAME_TEXT = 2048
 let FRAME_NAME = 120
 let HELD_TEXT = 12_000
 let HELD_TOOLS = 8
+let HELD_ITEMS = 12
 
 let record = (value: unknown): value is Record<string, unknown> =>
   value != null && typeof value == 'object' && !Array.isArray(value)
@@ -86,6 +91,37 @@ let tail = (was: string, delta: string) => {
   return next.length <= HELD_TEXT ? next : `…${next.slice(-(HELD_TEXT - 1))}`
 }
 
+// Adjacent text frames are one utterance. A tool starts a new place in the
+// live transcript, so narration on either side stays beside that tool.
+let ordered = (was: ObservationItem[], value: ObservationItem) => {
+  let items = [...was]
+  let last = items.at(-1)
+  if (value.kind != 'tool' && last?.kind == value.kind) {
+    items[items.length - 1] = {
+      kind: value.kind,
+      text: tail(last.text, value.text),
+    }
+  } else if (value.kind == 'tool') {
+    items.push({ kind: 'tool', name: value.name })
+  } else items.push({ kind: value.kind, text: value.text })
+  let held = items.slice(-HELD_ITEMS)
+  let left = HELD_TEXT
+  for (let i = held.length - 1; i >= 0; i--) {
+    let item = held[i]
+    if (item.kind == 'tool') continue
+    if (item.text.length <= left) {
+      left -= item.text.length
+    } else if (left > 0) {
+      held[i] = {
+        kind: item.kind,
+        text: left == 1 ? '…' : `…${item.text.slice(-(left - 1))}`,
+      }
+      left = 0
+    } else held.splice(i, 1)
+  }
+  return held
+}
+
 export let foldObservation = (
   was: ObservationState | undefined,
   value: Observation,
@@ -98,11 +134,13 @@ export let foldObservation = (
     model: '',
     reasoning: '',
     tools: [],
+    items: [],
     rev: 0,
   }
   let model = state.model
   let reasoning = state.reasoning
   let tools = state.tools
+  let items = state.items ?? []
   if (value.kind == 'model') model = tail(model, value.text)
   if (value.kind == 'reasoning') {
     reasoning = tail(reasoning, value.text)
@@ -111,7 +149,8 @@ export let foldObservation = (
     let name = value.name
     tools = [...tools.filter((held) => held != name), name].slice(-HELD_TOOLS)
   }
-  return { ...state, model, reasoning, tools, rev: state.rev + 1 }
+  items = ordered(items, value)
+  return { ...state, model, reasoning, tools, items, rev: state.rev + 1 }
 }
 
 // A completed output or terminal generation facet supersedes its transient

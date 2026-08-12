@@ -490,6 +490,52 @@ Deno.test('a comment continues through one content-free attention entry', async 
   db.close()
 })
 
+Deno.test('an appended user message continues in the ordered log', async () => {
+  let db = open(':memory:')
+  let tree = Deno.makeTempDirSync(), sid = session(db, tree)
+  let requests: Record<string, unknown>[] = []
+  let queue = [
+    result([{
+      type: 'message',
+      content: [{ type: 'output_text', text: 'idle' }],
+    }]),
+    result([{
+      type: 'message',
+      content: [{ type: 'output_text', text: 'continued' }],
+    }]),
+  ]
+  let service = managedCodex({
+    db,
+    cast: () => {},
+    transport: {
+      run: (request) => {
+        requests.push(request)
+        return Promise.resolve(queue.shift()!)
+      },
+    },
+    tools: () => Promise.resolve(tools([])),
+    prepare: () => Promise.resolve(),
+  })
+  await service.start(sid, job(tree))
+  let input = uuid()
+  apply(db, [
+    { eid: input, name: 'entry', comp: { session: sid } },
+    { eid: input, name: 'message', comp: { role: 'user' } },
+    { eid: input, name: 'content', comp: { body: 'keep going directly' } },
+  ])
+  await service.sweep()
+
+  let rows = readEntries(db, sid)
+  assertEquals(rows.filter((row) => row.comps.attention).length, 0)
+  assertEquals(
+    rows.find((row) => row.eid == input)?.comps.content?.body,
+    'keep going directly',
+  )
+  assertMatch(JSON.stringify(requests[1].input), /keep going directly/)
+  assertEquals(rows.at(-1)?.comps.content?.body, 'continued')
+  db.close()
+})
+
 Deno.test('attention during a generation waits for its next boundary', async () => {
   let db = open(':memory:')
   let tree = Deno.makeTempDirSync(), sid = session(db, tree)

@@ -117,6 +117,36 @@ Deno.test('graph log derives busy and pages by sequence', () => {
   )
 })
 
+Deno.test('assistant progress stays beside tools and empty reasoning hides', () => {
+  let log = graphLog([
+    row('progress', 1, {
+      output: { source: 'generation', phase: 'commentary' },
+      message: { role: 'agent' },
+      content: { body: 'Checking the worktree.' },
+    }),
+    row('call', 2, {
+      output: { source: 'generation' },
+      call: { key: 'call-1' },
+      bash: { command: 'git status --short' },
+    }),
+    row('result', 3, {
+      result: { call: 'call' },
+      content: { body: '' },
+      exit: { code: 0 },
+    }),
+    row('reasoning', 4, {
+      output: { source: 'generation' },
+      reasoning: {},
+    }),
+  ])
+  assertEquals(log.entries.map((entry) => entry.row?.kind), [
+    'say',
+    'exec',
+    'tool',
+    undefined,
+  ])
+})
+
 Deno.test('output evidence without a lease is not ready twice', () => {
   let rows = [
     row('generation', 1, {

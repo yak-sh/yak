@@ -2,7 +2,7 @@
 // handles.
 import { assertEquals } from '@std/assert'
 import { cache, ent } from '../live.ts'
-import { byline, prompt, viaName } from './Comments.tsx'
+import { byline, composerChanges, prompt, viaName } from './Comments.tsx'
 
 Deno.test('viaName names a session by its chip id, never its harness uuid', () => {
   cache.value = {
@@ -37,6 +37,18 @@ Deno.test('composer names an unnamed session by its chip id', () => {
   }
   assertEquals(prompt(ent('session')), 'send to S-31… (resumes the session)')
   cache.value = {}
+})
+
+Deno.test('graph-native prose is one ordered user entry', () => {
+  assertEquals(composerChanges('session', 'keep going', true, 'input'), [
+    { eid: 'input', name: 'entry', comp: { session: 'session' } },
+    { eid: 'input', name: 'message', comp: { role: 'user' } },
+    { eid: 'input', name: 'content', comp: { body: 'keep going' } },
+  ])
+  assertEquals(
+    composerChanges('session', ':fix T-1', true, 'command').map((c) => c.name),
+    ['doc', 'comment'],
+  )
 })
 
 Deno.test('byline reads actor and instrument from the created stamp', () => {

@@ -56,6 +56,7 @@ Deno.test('instructions load the hierarchy and describe host authority', async (
     assertMatch(body, /finish T-1/)
     assertMatch(body, /host filesystem and network access/)
     assertMatch(body, /default place for repository\s+changes/)
+    assertMatch(body, /concise assistant messages/)
     await assertRejects(
       () => instructions({ tree, cwd: outside }),
       Error,
@@ -71,6 +72,7 @@ Deno.test('instructions describe a Tasks-only session without a worktree', async
   let body = await instructions({ prompt: 'triage the graph' })
   assertMatch(body, /no-code\s+session/)
   assertMatch(body, /Tasks graph tools/)
+  assertMatch(body, /concise assistant messages/)
   assertMatch(body, /triage the graph/)
   assertEquals(body.includes('/workspace'), false)
   assertEquals(body.includes('task land'), false)
