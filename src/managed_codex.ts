@@ -215,10 +215,19 @@ let rowOf = (db: DatabaseSync, eid: string) =>
     ),
   ).find((row) => row.eid == eid)!
 
-let sessions = (db: DatabaseSync) =>
-  (db.prepare('select distinct session from entry order by session').all() as {
-    session: string
-  }[]).map((row) => row.session)
+// A runner pass starts from generations: startOne() mints one before it makes
+// a Session runnable, and every later generation advances from that chain.
+// Imported generations are file history, never work. Driving this from every
+// entry partition makes an archive import multiply each 300 ms pass by every
+// historical Session even though none can produce a runnable operation.
+export let runnerSessions = (db: DatabaseSync) =>
+  (db.prepare(
+    `select distinct e.session
+     from generation g cross join entry e
+     left join imported i on i.eid = g.eid
+     where e.eid = g.eid and i.eid is null
+     order by e.session`,
+  ).all() as { session: string }[]).map((row) => row.session)
 
 let laterGeneration = (
   db: DatabaseSync,
@@ -495,12 +504,13 @@ export let managedCodex = (options: ManagedCodexOptions) => {
     if (draining) return false
     let recovered = expire()
     let moved = false
-    for (let session of sessions(db)) {
+    let sessions = runnerSessions(db)
+    for (let session of sessions) {
       if (!blocked.has(session) && runnable(session)) {
         moved = advance(db, session, cast, runner) || moved
       }
     }
-    let ready = sessions(db).flatMap((session) =>
+    let ready = sessions.flatMap((session) =>
       blocked.has(session) ||
         !runnable(session)
         ? []

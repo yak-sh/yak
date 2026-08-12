@@ -11,7 +11,11 @@ import {
   takeEntry,
 } from './entries.ts'
 import { graphLog } from './entry_log.ts'
-import { managedCodex, type ManagedCodexOptions } from './managed_codex.ts'
+import {
+  managedCodex,
+  type ManagedCodexOptions,
+  runnerSessions,
+} from './managed_codex.ts'
 import { type Observation } from './observations.ts'
 import {
   type ResponseEvent,
@@ -120,6 +124,36 @@ let shellCall = (command: string) => ({
   call_id: 'call-1',
   name: 'shell',
   arguments: JSON.stringify({ command, cwd: null, timeout_ms: 1000 }),
+})
+
+Deno.test('the runner ignores imported-only session partitions', () => {
+  let db = freshDb()
+  let history = session(db)
+  let old = uuid()
+  append(
+    db,
+    history,
+    [{ message: { role: 'user' } }, {
+      generation: { through: old, provider: 'codex', model: 'old' },
+    }],
+    null,
+    [old, uuid()],
+    { source: 'managed', line: 1 },
+  )
+  let managed = session(db)
+  let input = uuid()
+  append(
+    db,
+    managed,
+    [{ message: { role: 'user' } }, {
+      generation: { through: input, provider: 'codex', model: 'current' },
+    }],
+    null,
+    [input, uuid()],
+  )
+
+  assertEquals(runnerSessions(db), [managed])
+  db.close()
 })
 
 Deno.test('managed Codex starts, runs tools, and settles in ordered entries', async () => {
