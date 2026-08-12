@@ -17,6 +17,7 @@ Deno.env.set('HOME', tmp)
 Deno.env.set('DB_PATH', ':memory:')
 
 let { apply, db } = await import('./db.ts')
+let { on } = await import('./effects.ts')
 let { readEntries } = await import('./entries.ts')
 let { drainNative } = await import('./sessions.ts')
 let { graphLog } = await import('./entry_log.ts')
@@ -248,4 +249,50 @@ Deno.test('native: a source that vanishes after being read leaves a diagnostic',
   assertEquals(readEntries(db, eid).length, 1) // history intact
   let err = errorOf(eid)
   assert(err.includes('gone'), err)
+})
+
+// ---- the live-edge effect-dispatch seam (T-17306)
+
+// A message-entry birth as the effect dispatcher sees it: the exact created()
+// signal auto-recall rides. A spy stands in for recall so the test needs no
+// embedder — it proves WHEN the seam fires, which is the whole reopened bug.
+let births: string[] = []
+on('message', { created: (eid) => void births.push(eid) })
+let userAt = (content: unknown, at: string) =>
+  JSON.stringify({
+    type: 'user',
+    timestamp: at,
+    message: { role: 'user', content },
+  })
+
+Deno.test('native: the live edge dispatches message effects; catch-up and stale do not', async () => {
+  let path = `${claudeStore}/${uuid()}.jsonl`
+  // A pre-existing tail: the FIRST drain is the initial catch-up (history), and
+  // must dispatch nothing — the bug was that it (and everything) dispatched
+  // nothing, so the live edge below is the other half of the proof.
+  let eid = native('claude', path, [
+    user('pre-existing one'),
+    asst([{ type: 'text', text: 'pre-existing two' }]),
+  ])
+  let t = fresh() // the ONE live Tail across polls, as trail() keeps it
+  let base = births.length
+  await drainNative(eid, t, cast)
+  assertEquals(readEntries(db, eid).length, 2) // both lines ingested as history
+  assertEquals(
+    births.length - base,
+    0,
+    'the initial catch-up dispatched effects',
+  )
+
+  // Now the session thinks in real time: a fresh append dispatches its effects.
+  appendLine(path, userAt('a live thought', new Date().toISOString()))
+  await drainNative(eid, t, cast)
+  assertEquals(births.length - base, 1, 'the live append did not dispatch')
+
+  // An hours-old line that slips past the live flag (a catch-up burst spanning
+  // passes) is history, not a thought — the recency backstop drops it.
+  appendLine(path, userAt('a stale line', '2020-01-01T00:00:00.000Z'))
+  await drainNative(eid, t, cast)
+  assertEquals(readEntries(db, eid).length, 4) // still ingested as history
+  assertEquals(births.length - base, 1, 'a stale live append dispatched')
 })

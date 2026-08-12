@@ -634,6 +634,13 @@ type Tail = {
   ended: boolean
   errs: string[]
   imp?: Imp
+  // The live-edge gate (T-17306): false while a tailer consumes the pre-existing
+  // tail (initial catch-up) or a bulk backfill re-reads a finished file —
+  // history, appended effect-free. A live tail loop flips it TRUE once its first
+  // pass has drained to EOF, so every later append is real-time thinking and
+  // dispatches its effects (created(message) → auto-recall). Backfill/recover
+  // build a Tail without it, so their appends stay effect-free.
+  live?: boolean
 }
 
 // A file-first Session's JSONL is one stable source stream; its ingested
@@ -652,27 +659,58 @@ let imp = (eid: string, source: string): Imp => ({
   state: { calls: callKeys(db, eid) },
 })
 
+// A live append fires its effects only if the transcript said it was written
+// recently (T-17306). The `live` flag is the precise gate; this recency check is
+// the belt-and-suspenders: a catch-up burst that spans passes can flip `live`
+// mid-stream, and an hours-old provider line arriving as "live" is history, not
+// a thought — its effects must not storm (e.g. re-embedding a woken session's
+// whole backlog through recall). No timestamp = trust the live flag.
+let LIVE_WINDOW = 5 * 60_000
+let fresh = (at?: string): boolean => {
+  if (!at) return true
+  let t = Date.parse(at)
+  return Number.isNaN(t) || Date.now() - t < LIVE_WINDOW
+}
+
+// A source line's own clock, when its dialect carries one — the recency signal
+// for the live-edge gate above. Our synthetic prompt markers have none, and are
+// live turns by construction, so absence reads as fresh.
+let timeOf = (e: { timestamp?: unknown }): string | undefined =>
+  e.timestamp ? String(e.timestamp) : undefined
+
 // One source line's entry batch, appended atomically with its coordinate and
 // skip-if-present so a re-drain (restart, --watch reload) re-adds nothing
 // (D-16704). A single line's append failure is diagnosed and stepped over —
 // never a broken tail — and the restart re-drain (its coordinate absent)
 // completes it. Shared by the managed stdout tailer and the native transcript
 // tailer; the mapper that built the batch is all that differs between them.
+// At the LIVE edge (`live`, a fresh transcript `at`) the appended batch's
+// effects DISPATCH — created(message) fires auto-recall (T-17306) — isolated as
+// telemetry so a failing effect never breaks the tail; history appends silently.
 let ingestLine = (
   eid: string,
   state: Imp,
   line: number,
   batch: Batch,
   errs: string[],
+  live = false,
+  at?: string,
 ) => {
   if (!batch.specs.length || state.lines.has(line)) return
   try {
-    append(db, eid, batch.specs, null, batch.ids, {
+    let { changes, trace } = append(db, eid, batch.specs, null, batch.ids, {
       source: state.source,
       line,
     })
     state.lines.add(line)
     for (let [key, id] of batch.calls) state.state.calls.set(key, id)
+    if (live && fresh(at)) {
+      dispatch(
+        changes,
+        trace,
+        (comp, e) => console.warn(`entry effect ${comp} —`, e),
+      )
+    }
   } catch (e) {
     errs.push(`line ${line}: entry ingest failed — ${String(e)}`)
   }
@@ -733,9 +771,13 @@ let rolloutContext = (eid: string) => {
 // durable cursor. Everything the adapter doesn't recognize is just log.
 export let drain = async (eid: string, ad: Adapter, t: Tail, cast: Cast) => {
   let lines = readLines(logFile(eid), t)
-  if (!lines.length) return
+  if (!lines.length) {
+    t.live = true // an empty/exhausted pass is still EOF reached
+    return
+  }
   let state = (t.imp ??= imp(eid, MANAGED))
-  let emit = (batch: Batch) => ingestLine(eid, state, t.seq, batch, t.errs)
+  let emit = (batch: Batch, at?: string) =>
+    ingestLine(eid, state, t.seq, batch, t.errs, t.live, at)
   let patch: Summary = {}
   for (let line of lines) {
     t.seq++
@@ -791,10 +833,15 @@ export let drain = async (eid: string, ad: Adapter, t: Tail, cast: Cast) => {
     }
     // Transcript rows: usage/lifecycle events map to nothing here (they stay
     // summary), so only genuine history lands as entries.
-    emit(ingestEntries(ad.dialect, e, state.state))
+    emit(ingestEntries(ad.dialect, e, state.state), timeOf(e))
   }
   patch.latest_seq = t.seq
   if (t.errs.length) patch.error = diagnosis(t)
+  // This pass drained to EOF: whatever follows is real-time. A follow() loop
+  // reuses this Tail, so the NEXT pass's appends dispatch their effects; the
+  // first pass (this one) stays history. recover()/backfill hand a one-shot
+  // Tail they discard, so their catch-up never flips a reused flag.
+  t.live = true
   await followWrite(eid, () => stamp(eid, patch, cast))
 }
 
@@ -1093,6 +1140,8 @@ let ingestNative = (
       t.seq,
       ingestTranscript(ad.dialect, e, state.state),
       t.errs,
+      t.live,
+      timeOf(e),
     )
   }
 }
@@ -1181,6 +1230,10 @@ export let drainNative = async (
   sourceHealth(path, t)
   let lines = readLines(path, t)
   ingestNative(eid, ad, t, lines)
+  // Drained to EOF: trail() reuses this Tail, so the NEXT pass's appends are
+  // live thinking and dispatch their effects (created(message) → recall). This
+  // first pass — the pre-existing transcript — stays effect-free history.
+  t.live = true
   await followWrite(eid, () =>
     stamp(eid, {
       ...(lines.length ? observed(eid, lines) : {}),

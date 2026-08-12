@@ -4,6 +4,7 @@
 // sessions stay in sessions.ts.
 import { DatabaseSync } from 'node:sqlite'
 import { apply, entriesOf, entryOf, record } from './db.ts'
+import { trace } from './effects.ts'
 import { checkpointValid, type EntryRow } from './replay.ts'
 import { type Change, uuid } from './types.ts'
 
@@ -38,7 +39,11 @@ let forbidden = new Set(['entity', 'entry', 'lease', 'usage', 'imported'])
 // authoritative entry stamp beside these changes. `coord` (when the specs are
 // IMPORTED from a source line) stamps `imported{source,line}` on every entry
 // this call mints, in the same transaction — so the entry and its cursor
-// coordinate commit together or not at all (D-16704).
+// coordinate commit together or not at all (D-16704). The `trace` is filled in
+// as apply() runs (which comps this batch created) and returned beside the
+// changes, so a caller at the LIVE edge can dispatch() the created effects —
+// e.g. created(message) → auto-recall (T-17306). Callers ingesting history
+// (backfill, initial catch-up) ignore it and no effect fires.
 export let append = (
   db: DatabaseSync,
   session: string,
@@ -61,7 +66,8 @@ export let append = (
     }
   }
   let imports = coord ? new Map(eids.map((eid) => [eid, coord])) : undefined
-  return { eids, changes: apply(db, changes, undefined, writer, imports) }
+  let t = trace()
+  return { eids, changes: apply(db, changes, t, writer, imports), trace: t }
 }
 
 // The durable cursor, derived (D-16704): the (source, line) coordinates already
