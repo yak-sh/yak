@@ -2916,7 +2916,7 @@ a[data-ref]:hover {
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior-y: contain;
   scroll-snap-align: start;
   padding: var(--half-gap) var(--gap) var(--gap);
 }
@@ -2925,7 +2925,7 @@ a[data-ref]:hover {
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior-y: contain;
   scroll-snap-align: start;
   padding: var(--gap);
   border-left: 1px solid var(--border);
@@ -2961,7 +2961,7 @@ a[data-ref]:hover {
 .Session_Reference .Inline {
   max-width: 100%;
 }
-@media (min-width: 60rem) {
+@container (min-width: 50rem) {
   .Session {
     grid-template-columns: minmax(0, 1fr) auto;
     overflow-x: hidden;

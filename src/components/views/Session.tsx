@@ -235,11 +235,8 @@ export let sessionMentions = (
   return out
 }
 
-let desktop = () =>
-  globalThis.matchMedia?.('(min-width: 60rem)').matches ?? true
-
 export let SessionReferences = ({ items }: { items: Mentioned[] }) => {
-  let [open, setOpen] = useState(desktop)
+  let [open, setOpen] = useState(true)
   if (!items.length) return null
   return (
     <References
