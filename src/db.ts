@@ -34,6 +34,7 @@ import { ancestorAt } from './client.ts'
 import { homeReads } from './persona.ts'
 import { leafOf, matchQuery, parseQuery, resolveRefs, TEXT } from './query.ts'
 import { where } from './sql.ts'
+import { derivedCols, indexDdl, tableDdl } from './ddl.ts'
 import {
   bodyCols,
   isRef,
@@ -114,18 +115,15 @@ let callDdl = `create table if not exists tool_call (
 // The star: an entity spine plus one component table per kind, plus the edge
 // table. `if not exists` makes this idempotent — safe to run every boot.
 // A canvas is an entity with no component (yet) — its geometry lives in `pin`.
+// This holds the HAND-written tables: the spine, the non-component logs (journal,
+// tool_call, embedding), the FTS/gram virtual tables, and every component whose
+// shape exceeds PropType (a NOT NULL, a default, a CHECK, a non-entity key). The
+// plain per-component tables are DERIVED from the vocabulary instead — see
+// `derived` below, generated in open() beside this string.
 let schema = `
   create table if not exists entity (
     eid         text primary key,
     num         integer not null unique
-  );
-  create table if not exists canvas (
-    eid text primary key references entity(eid)
-  );
-  -- A design is a doc wearing this tag; its life is the proposed/decided
-  -- stamps below, so the tag itself has nothing to say but its name.
-  create table if not exists design (
-    eid text primary key references entity(eid)
   );
   create table if not exists doc (
     eid   text primary key references entity(eid),
@@ -136,28 +134,6 @@ let schema = `
     eid    text primary key references entity(eid),
     status text not null default 'open',
     priority real not null default 0
-  );
-  create table if not exists project (
-    eid text primary key references entity(eid),
-    color text
-  );
-  create table if not exists venture (
-    eid         text primary key references entity(eid),
-    phase       text,
-    paused_from text,
-    hold_from   text,
-    run_mode    text,
-    agent_model text,
-    operated_by text,
-    tagline     text,
-    site        text
-  );
-  create table if not exists person (
-    eid text primary key references entity(eid)
-  );
-  create table if not exists persona (
-    eid text primary key references entity(eid),
-    home text references entity(eid)
   );
   create table if not exists repo (
     eid  text primary key references entity(eid),
@@ -176,14 +152,6 @@ let schema = `
     applied_at   text,
     stopped_at   text,
     retry_at     text
-  );
-  create table if not exists board (
-    eid text primary key references entity(eid)
-  );
-  -- A tiling layout (D-14718): the doc names it, root its top pane.
-  create table if not exists layout (
-    eid      text primary key references entity(eid),
-    root text references entity(eid)
   );
   -- One pane: container (dir) or leaf (content/view). size is a
   -- weight among siblings; "order" quoted — an SQL keyword, like "to".
@@ -249,12 +217,6 @@ let schema = `
     id  text not null unique,
     cwd text
   );
-  create table if not exists worktree (
-    eid           text primary key references entity(eid),
-    cwd           text,
-    branch        text,
-    base_revision text
-  );
   create table if not exists runtime (
     eid                 text primary key references entity(eid),
     pid                 integer,
@@ -292,9 +254,6 @@ let schema = `
   create table if not exists message (
     eid  text primary key references entity(eid),
     role text not null
-  );
-  create table if not exists attention (
-    eid text primary key references entity(eid)
   );
   create table if not exists generation (
     eid      text primary key references entity(eid),
@@ -342,9 +301,6 @@ let schema = `
     name   text not null,
     detail text
   );
-  create table if not exists task_context (
-    eid text primary key references entity(eid)
-  );
   create table if not exists graph_query (
     eid   text primary key references entity(eid),
     query text not null default ''
@@ -386,9 +342,6 @@ let schema = `
     eid    text primary key references entity(eid),
     target text not null
   );
-  create table if not exists reasoning (
-    eid text primary key references entity(eid)
-  );
   create table if not exists opaque (
     eid    text primary key references entity(eid),
     format text not null,
@@ -413,13 +366,6 @@ let schema = `
     cached    integer not null,
     output    integer not null,
     reasoning integer not null
-  );
-  create table if not exists spawn (
-    eid         text primary key references entity(eid),
-    provider    text,
-    model       text,
-    effort      text,
-    persona text references entity(eid)
   );
   create table if not exists claim (
     eid         text primary key references entity(eid),
@@ -458,43 +404,6 @@ let schema = `
     at         text not null,
     target text references entity(eid)
   );
-  -- Addressing (D-14945): WHERE a deliverable goes. deliver.to names a graph
-  -- entity — knock/wake/outbound-mail wear one. death 'keep', so like mail's
-  -- target it carries NO FK: a kept ref outlives its recipient's
-  -- tombstone (an FK would veto the delete). Keyed by the deliverable's eid.
-  create table if not exists deliver (
-    eid text primary key references entity(eid),
-    "to" text
-  );
-  -- The delivery lifecycle (D-14945): the two outcome components any
-  -- deliverable (knock/wake/mail/stop_request) settles into — delivered
-  -- {at, via} reached its destination and how, error {at, message} an
-  -- attempt failed and why. Server-owned/effect-written (deliver.ts), keyed
-  -- by the deliverable's own eid. No FK on eid beyond the spine: the parent
-  -- entity IS the spine, and the entity-death cascade deletes both rows.
-  create table if not exists delivered (
-    eid text primary key references entity(eid),
-    at  text,
-    via text
-  );
-  create table if not exists error (
-    eid     text primary key references entity(eid),
-    at      text,
-    message text
-  );
-  -- The BREAK facet (D-17077, deliver.ts): our code/process hit something
-  -- UNEXPECTED (a bug) -- error's sibling and the self-healing trigger. stack
-  -- is optional (a JS throw has one; a died process may not). Server-owned/
-  -- effect-written, keyed by the broken entity's own eid; the entity-death
-  -- cascade takes the row. A wholly new table, so create-if-not-exists (which
-  -- open() runs every boot) is the additive, in-place add -- no alter guard,
-  -- those are for adding columns to a table that already exists.
-  create table if not exists exception (
-    eid     text primary key references entity(eid),
-    at      text,
-    message text,
-    stack   text
-  );
   -- Self-healing's diagnosis facet (D-17077, heal.ts): a task auto-filed
   -- about a break. fault (kind + normalized message + stack head) is the dedup
   -- key a storm keys to; hits/last tally its recurrences in place. Column names
@@ -505,18 +414,6 @@ let schema = `
     fault text,
     hits  integer,
     last  text
-  );
-  -- Self-healing phase 2 (D-17077, heal.ts): fixer marks a session the graph
-  -- AUTO-spawned to fix a bug (presence alone, like design); nofix is the
-  -- auto-spawn mute worn by a project (per-venture) or the home project P-19
-  -- (global). Both are pure-presence marker tables, wholly new, so the additive
-  -- create-if-not-exists is the in-place add; the entity-death cascade takes
-  -- the row.
-  create table if not exists fixer (
-    eid text primary key references entity(eid)
-  );
-  create table if not exists nofix (
-    eid text primary key references entity(eid)
   );
   -- The BLOCK facet (D-17094): this task is stuck on something EXTERNAL — no
   -- entity, so a requires edge can't name it. "on" (a SQL keyword, so quoted)
@@ -530,21 +427,6 @@ let schema = `
     since  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
   ${mailDdl};
-  -- Inbound webhook deliveries, derived from the edge's raw request
-  -- spool (inbound.ts). Every column is server-stamped; the wire can
-  -- only aim docs and comments at a hook, never write one.
-  create table if not exists hook (
-    eid         text primary key references entity(eid),
-    source      text,
-    event       text,
-    payload     text,
-    spool_id    text,
-    received_at text,
-    method      text,
-    path        text,
-    headers     text,
-    sig_ok      integer
-  );
   create table if not exists email (
     eid     text primary key references entity(eid),
     address text not null
@@ -567,18 +449,6 @@ let schema = `
   create table if not exists alias (
     eid  text primary key references entity(eid),
     slug text not null unique
-  );
-  create table if not exists memory (
-    eid         text primary key references entity(eid),
-    scope   text,
-    last_confirmed_at text
-  );
-  -- The retired memory.type enum's one surviving value, as a tag (T-12585).
-  -- "by" is who GAVE the feedback — no FK and no default (types.ts says
-  -- why: the recorder is not the source), quoted because BY is a keyword.
-  create table if not exists feedback (
-    eid  text primary key references entity(eid),
-    "by" text
   );
   -- recall's not-null columns have no defaults ON PURPOSE: they refuse
   -- even apply()'s bare {} touch, so touch() below stays the one writer.
@@ -728,6 +598,42 @@ let schema = `
     values (new.rowid, new.title, new.body);
   end;
 `
+
+// The component tables DERIVED from the vocabulary (T-12764) rather than
+// hand-written in `schema` above — the last twin of `comps` closed, generated at
+// open() beside it the way `cmps`/`readable` already are. A comp qualifies when
+// its WHOLE shape is expressible in PropType: every column nullable, text/real/
+// integer affinity, an entity-keyed spine, `{eid}` FKs by death word. The rest
+// stay in `schema` because they carry a NOT NULL, a default, a CHECK, a
+// non-entity key (pin→card), an integer-affine number, or a column ORDER a
+// migration reads — none of which a PropType (and so no plugin comps fragment)
+// can say. ddl_test.ts holds the split honest: a fresh db's table for a derived
+// comp equals its vocabulary columns exactly, and every OTHER comp still carries
+// every column it declares.
+export let derived = [
+  'project',
+  'venture',
+  'board',
+  'layout',
+  'design',
+  'canvas',
+  'worktree',
+  'attention',
+  'task_context',
+  'reasoning',
+  'spawn',
+  'hook',
+  'person',
+  'persona',
+  'memory',
+  'feedback',
+  'deliver',
+  'delivered',
+  'error',
+  'exception',
+  'fixer',
+  'nofix',
+]
 
 // Insert a bare entity spine — the eid, and nothing else. num is NOT minted
 // here (T-3684): it is a kind-driven UI label, and this fires at FIRST-TOUCH,
@@ -1743,6 +1649,18 @@ export let open = (path = file) => {
       db.exec(`alter table ${table} drop column ${col}`)
     }
   }
+  // The DERIVED component tables (T-12764), planted beside the hand-written
+  // `schema` above from the same vocabulary `cmps`/`readable` read. Tables
+  // first — a fresh db gets them; then the additive column fill, the SAME alter
+  // path addCol runs for the hand tables, so a live db that predates a
+  // vocabulary edit grows the new column in place; then the indexes, which may
+  // name a column that fill just added. `migrateDelivery`/`migrateErrors` below
+  // pour into deliver/delivered/error, so those tables must already stand here.
+  for (let comp of derived) db.exec(tableDdl(comp) + ';')
+  for (let comp of derived) {
+    for (let { prop, ddl } of derivedCols(comp)) addCol(comp, prop, ddl)
+  }
+  for (let comp of derived) for (let ix of indexDdl(comp)) db.exec(ix + ';')
   // num is a UI label, not identity (T-3684): a cheap/bulk entity (T-3683)
   // needs none, so the spine's num goes NULLABLE. One in-place ALTER on SQLite
   // 3.53+ (ALTER COLUMN landed in 3.53.0), guarded on the notnull flag so it
@@ -1838,18 +1756,10 @@ export let open = (path = file) => {
   addCol('mail', 'reply_to', 'reply_to text')
   addCol('mail', 'sent_id', 'sent_id text')
   addCol('mail', 'in_reply_to', 'in_reply_to text')
-  // The hook row keeps the edge's captured request facts intact.
-  // Routing reads path but never rewrites it or upgrades sig_ok.
-  addCol('hook', 'method', 'method text')
-  addCol('hook', 'path', 'path text')
-  addCol('hook', 'headers', 'headers text')
-  addCol('hook', 'sig_ok', 'sig_ok integer')
   addCol('session', 'actor', 'actor text references entity(eid)')
-  // A board is a saved filter over tasks (query.ts grammar), not an edge
-  // list — membership can't drift when it isn't stored.
-  addCol('board', 'query', 'query text')
-  // The venture's window colour, set by the owner; empty derives from the id.
-  addCol('project', 'color', 'color text')
+  // board.query, project.color and the hook request columns (method/path/
+  // headers/sig_ok) were planted here before their tables were derived
+  // (T-12764); the addDerivedCols pass above now fills them from the vocabulary.
   // A live table's check constraint is frozen at create; when the edge
   // vocabulary outgrows the baked list (the 'about' verb shipped without
   // this once — every about edge bounced off the old check), rebuild the
