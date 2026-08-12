@@ -33,8 +33,9 @@ let imported = (src: string): string[] => {
 // createLucideIcon appends `lucide-${rawName}` after the normalized one (they
 // differ for names like Columns3 → "columns-3", equal ones dedupe to one).
 let describe = (
-  Component: (p: unknown) => { props: Record<string, unknown> },
+  Component: unknown,
 ) => {
+  if (typeof Component != 'function') throw new Error('not a lucide icon')
   let { iconNode, class: cls } = Component({}).props
   let name = String(cls).split(/\s+/).at(-1)!.replace('lucide-', '')
   return { name, node: iconNode }
@@ -82,10 +83,7 @@ let runtime = [
 
 let src = await Deno.readTextFile(iconsTsx)
 let names = imported(src)
-let lucide = await import('lucide-preact') as Record<
-  string,
-  (p: unknown) => never
->
+let lucide: Record<string, unknown> = await import('lucide-preact')
 
 let bodies = await Promise.all(
   runtime.map(async (p) => strip(await Deno.readTextFile(new URL(p, esm)))),
