@@ -1741,3 +1741,67 @@ Deno.test('graph-native compaction bounds replay across a restart and a later tu
   )
   db.close()
 })
+
+Deno.test('provider execution reads only a checkpoint tail after a long prefix', async () => {
+  let db = freshDb()
+  let sid = session(db)
+  writeSession(db, sid, { base_revision: 'base' })
+  let begin = uuid(), source = uuid()
+  append(
+    db,
+    sid,
+    [
+      { message: { role: 'user' }, content: { body: 'old prefix' } },
+      {
+        generation: { through: begin, provider: 'codex', model: 'old' },
+      },
+    ],
+    undefined,
+    [begin, source],
+  )
+  append(db, sid, Array.from({ length: 5_001 }, () => ({ attention: {} })))
+  let checkpoint = append(db, sid, [{
+    output: { source },
+    checkpoint: { through: source },
+    opaque: {
+      format: 'openai:compaction',
+      data: JSON.stringify({ type: 'compaction', encrypted_content: 'cut' }),
+    },
+  }]).eids[0]
+  let tail = append(db, sid, [{
+    message: { role: 'user' },
+    content: { body: 'small tail' },
+  }]).eids[0]
+  let current = append(db, sid, [{
+    generation: { through: tail, provider: 'codex', model: 'new' },
+  }]).eids[0]
+  let consumed: string[] = []
+  let service = managedCodex({
+    db,
+    cast: () => {},
+    transport: { run: () => Promise.resolve(result([])) },
+    tools: () => Promise.resolve(tools([])),
+    prepare: () => Promise.resolve(),
+    generators: {
+      codex: (ctx) => {
+        consumed = ctx.entries.map((row) => row.eid)
+        return Promise.resolve({
+          specs: [{
+            output: { source: ctx.generation },
+            message: { role: 'agent' },
+            content: { body: 'done' },
+          }],
+          calls: [],
+          usage: { input: 1, cached: 0, output: 1, reasoning: 0 },
+          model: 'new',
+          finalText: 'done',
+        })
+      },
+    },
+  })
+
+  await service.sweep()
+  assertEquals(new Set(consumed), new Set([source, checkpoint, tail, current]))
+  assertEquals(readEntries(db, sid).length, 5_007)
+  db.close()
+})

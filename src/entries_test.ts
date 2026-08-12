@@ -9,6 +9,8 @@ import {
   failEntry,
   importedLines,
   readEntries,
+  readEntry,
+  readReplay,
   readyEntries,
   reclaimEntry,
   renewEntry,
@@ -378,6 +380,76 @@ Deno.test('readEntries returns the whole partition past the pagination cap', () 
   let [gen, call] = tail.eids
   assert(rows.find((e) => e.eid == gen)?.comps.generation)
   assert(rows.find((e) => e.eid == call)?.comps.call)
+  assertEquals(readEntry(db, call)?.comps.call.key, 'call_tail')
+  db.close()
+})
+
+Deno.test('replay selects the newest provider-valid checkpoint tail', () => {
+  let db = freshDb()
+  let sid = session(db)
+  let begin = uuid(), source = uuid(), checkpoint = uuid()
+  append(
+    db,
+    sid,
+    [
+      { message: { role: 'user' }, content: { body: 'old prefix' } },
+      {
+        generation: { through: begin, provider: 'codex', model: 'old' },
+      },
+    ],
+    undefined,
+    [begin, source],
+  )
+  append(db, sid, Array.from({ length: 5 }, () => ({ attention: {} })))
+  append(
+    db,
+    sid,
+    [{
+      output: { source },
+      checkpoint: { through: source },
+      opaque: {
+        format: 'openai:compaction',
+        data: JSON.stringify({ type: 'compaction', encrypted_content: 'cut' }),
+      },
+    }],
+    undefined,
+    [checkpoint],
+  )
+  let foreignSource = append(db, sid, [{
+    generation: { through: checkpoint, provider: 'claude', model: 'other' },
+  }]).eids[0]
+  let foreign = append(db, sid, [{
+    output: { source: foreignSource },
+    checkpoint: { through: foreignSource },
+    opaque: {
+      format: 'openai:compaction',
+      data: JSON.stringify({ type: 'compaction', encrypted_content: 'other' }),
+    },
+  }]).eids[0]
+  let bad = append(db, sid, [{
+    output: { source },
+    checkpoint: { through: source },
+    opaque: { format: 'openai:compaction', data: '{bad json' },
+  }]).eids[0]
+  let tail = append(db, sid, [{
+    message: { role: 'user' },
+    content: { body: 'bounded tail' },
+  }]).eids[0]
+  let current = append(db, sid, [{
+    generation: { through: tail, provider: 'codex', model: 'new' },
+  }]).eids[0]
+
+  let replay = readReplay(db, current)
+  assertEquals(replay.map((row) => row.eid), [
+    checkpoint,
+    foreignSource,
+    foreign,
+    bad,
+    tail,
+    source,
+    current,
+  ])
+  assertEquals(readEntries(db, sid).length, 13)
   db.close()
 })
 

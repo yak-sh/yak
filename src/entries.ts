@@ -3,7 +3,8 @@
 // Model projection and tool execution live in runner.ts; process-backed JSONL
 // sessions stay in sessions.ts.
 import { DatabaseSync } from 'node:sqlite'
-import { apply, entriesOf, record } from './db.ts'
+import { apply, entriesOf, entryOf, record } from './db.ts'
+import { checkpointValid, type EntryRow } from './replay.ts'
 import { type Change, uuid } from './types.ts'
 
 export type EntrySpec = Record<string, Record<string, unknown>>
@@ -96,12 +97,8 @@ export let callKeys = (
     ),
   )
 
-// Generation replay and rowOf() still read a Session's whole ordered
-// partition. entriesOf paginates (its cap serves
-// peek and lazy queries), so a session past one page would silently lose its
-// tail — the newest generation reads back as "no generation entry" and a fresh
-// call's row comes back undefined ("reading 'comps'"). Page to exhaustion so
-// the runner's view is always the complete partition, however long it grows.
+// UI and audit reads retain the complete immutable partition. entriesOf
+// paginates for lazy clients, so this door pages to exhaustion.
 export let readEntries = (db: DatabaseSync, session: string) => {
   let all: ReturnType<typeof entriesOf> = []
   for (let after = 0;;) {
@@ -110,6 +107,83 @@ export let readEntries = (db: DatabaseSync, session: string) => {
     if (page.length < 5000) return all
     after = page.at(-1)!.seq
   }
+}
+
+export let readEntry = (db: DatabaseSync, eid: string) => entryOf(db, eid)
+
+type CheckpointRow = {
+  eid: string
+  seq: number
+  source: string
+  provider: string
+  format: string
+  data: string
+}
+
+let checkpoint = (
+  db: DatabaseSync,
+  session: string,
+  through: number,
+  provider: string,
+) => {
+  let rows = db.prepare(`
+    select e.eid, e.seq, o.source, g.provider, p.format, p.data
+    from entry e
+    join checkpoint c on c.eid = e.eid
+    join output o on o.eid = e.eid
+    join entry s on s.eid = o.source and s.session = e.session
+    join generation g on g.eid = o.source
+    join opaque p on p.eid = e.eid
+    where e.session = ? and e.seq <= ? and g.provider = ?
+    order by e.seq desc
+  `).all(session, through, provider) as CheckpointRow[]
+  return rows.find((value) => {
+    let source: EntryRow = {
+      eid: value.source,
+      seq: 0,
+      comps: { generation: { provider: value.provider } },
+    }
+    let row: EntryRow = {
+      eid: value.eid,
+      seq: value.seq,
+      comps: {
+        checkpoint: {},
+        output: { source: value.source },
+        opaque: { format: value.format, data: value.data },
+      },
+    }
+    return checkpointValid(row, new Map([[source.eid, source]]), provider)
+  })
+}
+
+// A provider executes one frozen generation prefix. Its newest replayable
+// checkpoint replaces everything before it; projection needs only that
+// checkpoint's source generation, the closed tail through generation.through,
+// and the generation row itself.
+export let readReplay = (db: DatabaseSync, generation: string) => {
+  let current = readEntry(db, generation)
+  if (!current?.comps.generation) throw new Error('no generation entry')
+  let provider = String(current.comps.generation.provider ?? '')
+  let session = String(current.comps.entry.session)
+  let through = String(current.comps.generation.through)
+  let target = db.prepare(
+    'select seq from entry where eid = ? and session = ?',
+  ).get(through, session) as { seq: number } | undefined
+  if (!target) throw new Error('generation prefix is missing')
+  let point = checkpoint(db, session, target.seq, provider)
+  let rows: EntryRow[] = []
+  for (let after = (point?.seq ?? 1) - 1;;) {
+    let page = entriesOf(db, session, after, 5000, target.seq)
+    rows.push(...page)
+    if (page.length < 5000) break
+    after = page.at(-1)!.seq
+  }
+  if (point) {
+    let source = readEntry(db, point.source)
+    if (source) rows.push(source)
+  }
+  rows.push(current)
+  return [...new Map(rows.map((row) => [row.eid, row])).values()]
 }
 
 // An `imported` entry is ingested history, never runnable work (D-16704): it

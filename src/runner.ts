@@ -18,12 +18,14 @@ import {
   type ToolHost,
   type ToolOutcome,
 } from './harness_tools.ts'
+import {
+  checkpointValid,
+  type EntryRow,
+  opaqueItem,
+  providerOf,
+} from './replay.ts'
 
-export type EntryRow = {
-  eid: string
-  seq: number
-  comps: Record<string, Record<string, unknown>>
-}
+export type { EntryRow } from './replay.ts'
 
 export type ResponseTransport = {
   run: (
@@ -398,24 +400,6 @@ export let generationEntries = (
   }
 }
 
-let providerOf = (row: EntryRow | undefined) =>
-  String(row?.comps.generation?.provider ?? '')
-
-let opaqueItem = (row: EntryRow) => {
-  let format = row.comps.opaque?.format
-  let raw = row.comps.opaque?.data
-  if (typeof format != 'string' || typeof raw != 'string') return undefined
-  try {
-    let value = JSON.parse(raw)
-    return object(value) && typeof value.type == 'string' &&
-        format == `openai:${value.type}`
-      ? value
-      : undefined
-  } catch {
-    return undefined
-  }
-}
-
 let callName = (row: EntryRow) =>
   row.comps.bash
     ? 'shell'
@@ -492,22 +476,6 @@ let interruptedResult = (row: EntryRow) => {
   let why = typeof message == 'string' && message ? `: ${message}` : ''
   return `Tool call interrupted before its result was recorded${why}. ` +
     'The outcome is unknown; assume it may not have completed.'
-}
-
-// A checkpoint entry is a replay boundary only when this provider can replay
-// its opaque compaction item: it must carry both output+checkpoint, its source
-// generation must be the same provider, and its opaque must round-trip
-// (opaqueItem enforces format == openai:${type}). A provider switch, a
-// malformed checkpoint, or failed-compaction evidence (no checkpoint comp,
-// openai:failed:* format) all fail this and are never chosen as a boundary.
-let checkpointValid = (
-  row: EntryRow,
-  byEid: Map<string, EntryRow>,
-  provider: string,
-) => {
-  if (!row.comps.output || !row.comps.checkpoint) return false
-  let source = byEid.get(String(row.comps.output.source))
-  return providerOf(source) == provider && !!opaqueItem(row)
 }
 
 // Project only the generation's frozen prefix, bounded at its newest valid

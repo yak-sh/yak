@@ -14,6 +14,8 @@ import {
   failEntry,
   type LeaseToken,
   readEntries,
+  readEntry,
+  readReplay,
   readyEntries,
   reclaimEntry,
   renewEntry,
@@ -205,16 +207,6 @@ let sessionFault = (
   }
 }
 
-let rowOf = (db: DatabaseSync, eid: string) =>
-  readEntries(
-    db,
-    String(
-      (db.prepare('select session from entry where eid = ?').get(eid) as {
-        session: string
-      }).session,
-    ),
-  ).find((row) => row.eid == eid)!
-
 // A runner pass starts from generations: startOne() mints one before it makes
 // a Session runnable, and every later generation advances from that chain.
 // Imported generations are file history, never work. Driving this from every
@@ -399,7 +391,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
     let tools: ToolHost | undefined
     let clear = false
     try {
-      let entries = readEntries(db, session)
+      let entries = readReplay(db, token.eid)
       let provider = String(
         entries.find((row) => row.eid == token.eid)?.comps.generation
           ?.provider ?? '',
@@ -456,7 +448,9 @@ export let managedCodex = (options: ManagedCodexOptions) => {
       let row = sessionRow(db, session)
       let tree = row?.cwd ? String(row.cwd) : undefined
       tools = await options.tools(tree, session)
-      let spec = await executeCall(rowOf(db, token.eid), tools, control.signal)
+      let entry = readEntry(db, token.eid)
+      if (!entry) throw new Error('no call entry')
+      let spec = await executeCall(entry, tools, control.signal)
       if (!valid(db, token)) return
       cast(append(db, session, [spec], runner).changes)
       cast(settleCall(db, token))

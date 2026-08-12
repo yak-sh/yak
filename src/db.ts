@@ -3875,26 +3875,51 @@ export let rowsOf = (db: DatabaseSync, eids: string[]) => {
   return staged(db)
 }
 
+let entryRows = (
+  db: DatabaseSync,
+  index: { eid: string; seq: number }[],
+) => {
+  if (!index.length) return []
+  stage(db, index.map((e) => e.eid))
+  let byEid = new Map(staged(db).map((e) => [e.eid, e.comps]))
+  return index.map(({ eid, seq }) => ({ eid, seq, comps: byEid.get(eid)! }))
+}
+
+// One entry by identity. Hosted work names its call directly; its Session
+// partition is unrelated to locating or hydrating that immutable row.
+export let entryOf = (db: DatabaseSync, eid: string) => {
+  let row = db.prepare('select eid, seq from entry where eid = ?').get(eid) as
+    | { eid: string; seq: number }
+    | undefined
+  return row ? entryRows(db, [row])[0] : undefined
+}
+
 // One Session's lazy log partition, ordered by its server-minted sequence.
 // Keyed reads remain full even though snapshot() deliberately omits these
-// entities from the root cache.
+// entities from the root cache. `through` gives replay a closed upper bound;
+// ordinary UI and audit reads omit it and retain the complete tail.
 export let entriesOf = (
   db: DatabaseSync,
   session: string,
   after = 0,
   limit = 500,
+  through?: number,
 ) => {
-  let index = db.prepare(
-    `select eid, seq from entry where session = ? and seq > ?
-     order by seq limit ?`,
-  ).all(session, after, Math.max(1, Math.min(limit, 5000))) as {
-    eid: string
-    seq: number
-  }[]
-  if (!index.length) return []
-  stage(db, index.map((e) => e.eid))
-  let byEid = new Map(staged(db).map((e) => [e.eid, e.comps]))
-  return index.map(({ eid, seq }) => ({ eid, seq, comps: byEid.get(eid)! }))
+  let cap = Math.max(1, Math.min(limit, 5000))
+  let index = (through == null
+    ? db.prepare(
+      `select eid, seq from entry where session = ? and seq > ?
+       order by seq limit ?`,
+    ).all(session, after, cap)
+    : db.prepare(
+      `select eid, seq from entry
+       where session = ? and seq > ? and seq <= ?
+       order by seq limit ?`,
+    ).all(session, after, through, cap)) as {
+      eid: string
+      seq: number
+    }[]
+  return entryRows(db, index)
 }
 
 // The lazy partition scanned ACROSS sessions, ordered (session, seq) and
