@@ -17,6 +17,7 @@ import { uuid } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, delta, numbered, open, snapshot } = await import('./db.ts')
+let { freshDb } = await import('./testdb.ts')
 
 let session = (db: ReturnType<typeof open>, id = uuid()) => {
   let eid = uuid()
@@ -25,7 +26,7 @@ let session = (db: ReturnType<typeof open>, id = uuid()) => {
 }
 
 Deno.test('entries append in partition order and stay out of the root graph', () => {
-  let db = open(':memory:')
+  let db = freshDb()
   let a = session(db), b = session(db)
   let before = snapshot(db).cursor ?? 0
   let first = append(db, a, [
@@ -49,7 +50,7 @@ Deno.test('entries append in partition order and stay out of the root graph', ()
 })
 
 Deno.test('entry facets are born together and immutable thereafter', () => {
-  let db = open(':memory:')
+  let db = freshDb()
   let sid = session(db)
   let { eids } = append(db, sid, [
     { message: { role: 'user' }, content: { body: 'fixed' } },
@@ -81,7 +82,7 @@ Deno.test('entry facets are born together and immutable thereafter', () => {
 })
 
 Deno.test('the keyword-named apply facet round trips as one graph change', () => {
-  let db = open(':memory:')
+  let db = freshDb()
   let sid = session(db)
   let change = JSON.stringify({
     eid: uuid(),
@@ -94,7 +95,7 @@ Deno.test('the keyword-named apply facet round trips as one graph change', () =>
 })
 
 Deno.test('lease and usage facets are server-owned and one runner wins', () => {
-  let db = open(':memory:')
+  let db = freshDb()
   let sid = session(db)
   let runner = uuid(), rival = uuid()
   apply(db, [
@@ -148,7 +149,7 @@ Deno.test('lease and usage facets are server-owned and one runner wins', () => {
 })
 
 Deno.test('only expired generation and graph_query leases can be reclaimed', () => {
-  let db = open(':memory:')
+  let db = freshDb()
   let sid = session(db), old = uuid(), next = uuid()
   apply(db, [
     { eid: old, name: 'runner', comp: { name: 'old' } },
@@ -236,7 +237,7 @@ Deno.test('only expired generation and graph_query leases can be reclaimed', () 
 })
 
 Deno.test('a held lease renews forward, blocking a successor reclaim', () => {
-  let db = open(':memory:')
+  let db = freshDb()
   let sid = session(db), old = uuid(), next = uuid()
   apply(db, [
     { eid: old, name: 'runner', comp: { name: 'old' } },
@@ -288,7 +289,7 @@ Deno.test('a held lease renews forward, blocking a successor reclaim', () => {
 })
 
 Deno.test('renewal refuses a cancelled or absent lease', () => {
-  let db = open(':memory:')
+  let db = freshDb()
   let sid = session(db), runner = uuid()
   apply(db, [{ eid: runner, name: 'runner', comp: { name: 'one' } }])
   let input = append(db, sid, [{ message: { role: 'user' } }]).eids[0]
@@ -304,7 +305,7 @@ Deno.test('renewal refuses a cancelled or absent lease', () => {
 })
 
 Deno.test('cancellation rejects late generation settlement', () => {
-  let db = open(':memory:')
+  let db = freshDb()
   let sid = session(db), runner = uuid()
   apply(db, [{ eid: runner, name: 'runner', comp: { name: 'one' } }])
   let input = append(db, sid, [{ message: { role: 'user' } }]).eids[0]
@@ -331,7 +332,7 @@ Deno.test('cancellation rejects late generation settlement', () => {
 })
 
 Deno.test('failed leased work stays visible and cannot rerun', () => {
-  let db = open(':memory:')
+  let db = freshDb()
   let sid = session(db), runner = uuid()
   apply(db, [{ eid: runner, name: 'runner', comp: { name: 'one' } }])
   let input = append(db, sid, [{ message: { role: 'user' } }]).eids[0]
@@ -353,7 +354,7 @@ Deno.test('failed leased work stays visible and cannot rerun', () => {
 })
 
 Deno.test('readEntries returns the whole partition past the pagination cap', () => {
-  let db = open(':memory:')
+  let db = freshDb()
   let sid = session(db)
   // A long-lived Session outgrows one entriesOf page. The runner reads the
   // WHOLE partition every operation, so the newest generation and a late call
@@ -379,7 +380,7 @@ Deno.test('readEntries returns the whole partition past the pagination cap', () 
 })
 
 Deno.test('deleting a Session cascades its lazy entries', () => {
-  let db = open(':memory:')
+  let db = freshDb()
   let sid = session(db)
   append(db, sid, [{ message: { role: 'user' } }, { attention: {} }])
   apply(db, [{ eid: sid, name: 'entity', comp: null }])

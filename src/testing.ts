@@ -5,7 +5,9 @@
 // fixed span: it yields with `tick` and waits on a fact with `until`, both
 // deterministic, so nothing pads for a settle that a loaded box would stretch
 // past the pad. A fixed sleep lives only behind `slow()`, where the real
-// process it waits on is the point.
+// process it waits on is the point. The migrated-db clone (freshDb) lives in
+// testdb.ts, not here, so importing these primitives never pulls in db.ts —
+// this module stays free of the DB_PATH import-order discipline db.ts carries.
 
 // A heavy test: skipped unless TASKS_SLOW opts in. Takes the same two shapes
 // Deno.test does — (name, fn) and (name, opts, fn) — and folds in the ignore.

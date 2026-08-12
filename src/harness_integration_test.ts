@@ -14,6 +14,7 @@ import { attentionPrompt } from './runner.ts'
 import { sessionRow, writeSession } from './session_store.ts'
 import { uuid } from './types.ts'
 import { slow } from './testing.ts'
+import { freshDb } from './testdb.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 
@@ -57,7 +58,7 @@ let ioFor = (db: ReturnType<typeof open>): IO => ({
 slow(
   'managed Codex runs the production tool chain without credential residue',
   async () => {
-    let db = open(':memory:')
+    let db = freshDb()
     let tree = await Deno.makeTempDir({ prefix: 'tasks-harness-' })
     let authRoot = await Deno.makeTempDir({ prefix: 'tasks-harness-auth-' })
     let oldToken = 'credential-access-old'

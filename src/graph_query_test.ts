@@ -12,6 +12,7 @@ import { evalGraph } from './graph_query.ts'
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, open } = await import('./db.ts')
 let { append } = await import('./entries.ts')
+let { freshDb } = await import('./testdb.ts')
 
 let session = (db: ReturnType<typeof open>) => {
   let eid = uuid()
@@ -23,7 +24,7 @@ let seqs = (hits: { comps: Record<string, Record<string, unknown>> }[]) =>
   hits.map((h) => Number(h.comps.entry?.seq))
 
 let world = () => {
-  let db = open(':memory:')
+  let db = freshDb()
   let a = session(db)
   let b = session(db) // stays empty — the genuinely-empty scope
   // Appended one at a time so a generation can point `through` the prior entry,

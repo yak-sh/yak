@@ -41,8 +41,13 @@ let { assertEquals, assertMatch, assertNotEquals, assertThrows } = await import(
 let { comps, kindOrder, sessionOf, shortId, stamped } = await import(
   './types.ts'
 )
+let { freshDb } = await import('./testdb.ts')
 
-let fresh = () => open() // each test file shares one :memory: handle; use eids per test
+// A migrated, seeded db per test, cloned from a snapshot (see freshDb) — the
+// apply/snapshot suite just needs a working graph, not a fresh DDL replay. The
+// open()-idempotency and migration tests below still call open() directly,
+// since replaying the DDL is the thing they check.
+let fresh = () => freshDb()
 let uid = () => crypto.randomUUID()
 
 let vocab = (props: Record<string, import('./types.ts').PropType>) => ({

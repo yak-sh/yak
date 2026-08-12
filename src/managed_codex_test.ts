@@ -22,6 +22,7 @@ import { writeSession } from './session_store.ts'
 import { type ToolHost } from './harness_tools.ts'
 import { type Change, uuid } from './types.ts'
 import { slow } from './testing.ts'
+import { freshDb } from './testdb.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 
@@ -122,7 +123,7 @@ let shellCall = (command: string) => ({
 })
 
 Deno.test('managed Codex starts, runs tools, and settles in ordered entries', async () => {
-  let db = open(':memory:')
+  let db = freshDb()
   let tree = Deno.makeTempDirSync(), sid = session(db, tree)
   let heard: Change[] = [], called: string[] = []
   let queue = [
@@ -189,7 +190,7 @@ Deno.test('managed Codex starts, runs tools, and settles in ordered entries', as
 })
 
 Deno.test('a Session past one entry page still runs its next turn', async () => {
-  let db = open(':memory:')
+  let db = freshDb()
   let sid = session(db)
   // 501 turns of prior transcript push the new turn's generation past one
   // entriesOf page. The runner must read the WHOLE partition or the fresh
@@ -231,7 +232,7 @@ Deno.test('a Session past one entry page still runs its next turn', async () => 
 })
 
 Deno.test('managed Codex relays typed progress until durable settlement', async () => {
-  let db = open(':memory:')
+  let db = freshDb()
   let tree = Deno.makeTempDirSync(), sid = session(db, tree)
   let timeline: string[] = []
   let observed: unknown[] = []
@@ -303,7 +304,7 @@ Deno.test('managed Codex relays typed progress until durable settlement', async 
 })
 
 Deno.test('a reclaimed generation rejects its former lease observations', async () => {
-  let db = open(':memory:')
+  let db = freshDb()
   let tree = Deno.makeTempDirSync(), sid = session(db, tree)
   writeSession(db, sid, { base_revision: 'base' })
   let oldResult = Promise.withResolvers<ResponseResult>()
@@ -385,7 +386,7 @@ Deno.test('a reclaimed generation rejects its former lease observations', async 
 })
 
 Deno.test('replayed starts finish preparation without duplicating input', async () => {
-  let db = open(':memory:')
+  let db = freshDb()
   let tree = Deno.makeTempDirSync(), sid = session(db, tree)
   let prepares = 0, requests = 0
   let options = () => ({
@@ -454,7 +455,7 @@ Deno.test('replayed starts finish preparation without duplicating input', async 
 })
 
 Deno.test('projectless starts use Tasks tools without preparing a worktree', async () => {
-  let db = open(':memory:')
+  let db = freshDb()
   let sid = session(db), prepares = 0, requests = 0
   let trees: (string | undefined)[] = []
   let options = () => ({
@@ -505,7 +506,7 @@ Deno.test('projectless starts use Tasks tools without preparing a worktree', asy
 })
 
 Deno.test('a comment continues through one content-free attention entry', async () => {
-  let db = open(':memory:')
+  let db = freshDb()
   let tree = Deno.makeTempDirSync(),
     sid = session(db, tree),
     called: string[] = []
@@ -561,7 +562,7 @@ Deno.test('a comment continues through one content-free attention entry', async 
 })
 
 Deno.test('an appended user message continues in the ordered log', async () => {
-  let db = open(':memory:')
+  let db = freshDb()
   let tree = Deno.makeTempDirSync(), sid = session(db, tree)
   let requests: Record<string, unknown>[] = []
   let queue = [
@@ -607,7 +608,7 @@ Deno.test('an appended user message continues in the ordered log', async () => {
 })
 
 Deno.test('attention during a generation waits for its next boundary', async () => {
-  let db = open(':memory:')
+  let db = freshDb()
   let tree = Deno.makeTempDirSync(), sid = session(db, tree)
   let started = Promise.withResolvers<void>()
   let first = Promise.withResolvers<ResponseResult>()
@@ -657,7 +658,7 @@ Deno.test('attention during a generation waits for its next boundary', async () 
 })
 
 Deno.test('comments on claimed work wake its graph-native holder', async () => {
-  let db = open(':memory:')
+  let db = freshDb()
   let tree = Deno.makeTempDirSync(), sid = session(db, tree)
   let called: string[] = [], requests: Record<string, unknown>[] = []
   let queue = [
@@ -742,7 +743,7 @@ Deno.test('comments on claimed work wake its graph-native holder', async () => {
 })
 
 Deno.test('a failed generation consumes its wake and accepts the next', async () => {
-  let db = open(':memory:')
+  let db = freshDb()
   let tree = Deno.makeTempDirSync(), sid = session(db, tree), calls = 0
   let service = managedCodex({
     db,
@@ -788,7 +789,7 @@ Deno.test('a failed generation persists the provider reason, not the bare status
   // End to end through the real Responses transport: a 400 whose complaint
   // lives only in the body `message` must reach the session error, or a
   // graph-native failure reads as the useless `responses: HTTP 400` (T-16887).
-  let db = open(':memory:')
+  let db = freshDb()
   let sid = session(db)
   let transport = responses({
     credentials: { get: () => Promise.resolve({ token: 'secret-token' }) },
@@ -825,7 +826,7 @@ Deno.test('a failed generation persists the provider reason, not the bare status
 })
 
 Deno.test('stop aborts the leased generation and refuses its late output', async () => {
-  let db = open(':memory:')
+  let db = freshDb()
   let tree = Deno.makeTempDirSync(),
     sid = session(db, tree),
     started = Promise.withResolvers<void>(),
@@ -882,7 +883,7 @@ Deno.test('stop aborts the leased generation and refuses its late output', async
 })
 
 Deno.test('deleting a Session aborts its flight after entry cascades', async () => {
-  let db = open(':memory:')
+  let db = freshDb()
   let tree = Deno.makeTempDirSync(), sid = session(db, tree)
   let started = Promise.withResolvers<void>(), aborted = false
   let service = managedCodex({
@@ -914,7 +915,7 @@ Deno.test('deleting a Session aborts its flight after entry cascades', async () 
 })
 
 Deno.test('restart reclaims a lost generation without minting another', async () => {
-  let db = open(':memory:')
+  let db = freshDb()
   let tree = Deno.makeTempDirSync()
   let sid = session(db, tree), old = uuid(), calls = 0
   writeSession(db, sid, { base_revision: 'base' })
@@ -967,7 +968,7 @@ Deno.test('restart reclaims a lost generation without minting another', async ()
 })
 
 Deno.test('restart reclaims graph_query on the same call entry', async () => {
-  let db = open(':memory:')
+  let db = freshDb()
   let tree = Deno.makeTempDirSync()
   let sid = session(db, tree), old = uuid(), calls = 0
   writeSession(db, sid, { base_revision: 'base' })
@@ -1029,7 +1030,7 @@ Deno.test('restart reclaims graph_query on the same call entry', async () => {
 })
 
 Deno.test('restart leaves an uncertain side-effecting call ambiguous', async () => {
-  let db = open(':memory:')
+  let db = freshDb()
   let tree = Deno.makeTempDirSync()
   let sid = session(db, tree), old = uuid(), calls = 0
   writeSession(db, sid, { base_revision: 'base' })
@@ -1089,7 +1090,7 @@ Deno.test('a killed in-flight call recovers: replay pairs the orphaned call with
   // resume returned HTTP 400. Drive the whole path — reconciliation, advance,
   // project, transport — and assert the input the provider sees is valid and the
   // session recovers.
-  let db = open(':memory:')
+  let db = freshDb()
   let tree = Deno.makeTempDirSync()
   let sid = session(db, tree), old = uuid()
   writeSession(db, sid, { base_revision: 'base' })
@@ -1162,7 +1163,7 @@ Deno.test('a killed in-flight call recovers: replay pairs the orphaned call with
 })
 
 Deno.test('restart settles durable generation and call evidence', async () => {
-  let db = open(':memory:')
+  let db = freshDb()
   let tree = Deno.makeTempDirSync(), sid = session(db, tree)
   let old = uuid(), calls = 0
   writeSession(db, sid, { base_revision: 'base' })
@@ -1231,7 +1232,7 @@ Deno.test('restart settles durable generation and call evidence', async () => {
 })
 
 Deno.test('drain settles the in-flight generation and leaves new work ready', async () => {
-  let db = open(':memory:')
+  let db = freshDb()
   let tree = Deno.makeTempDirSync(), sid = session(db, tree)
   writeSession(db, sid, { base_revision: 'base' })
   let started = Promise.withResolvers<void>()
@@ -1282,7 +1283,7 @@ Deno.test('drain settles the in-flight generation and leaves new work ready', as
 slow(
   'the heartbeat keeps a generation outliving its lease TTL fresh',
   async () => {
-    let db = open(':memory:')
+    let db = freshDb()
     let tree = Deno.makeTempDirSync(), sid = session(db, tree)
     writeSession(db, sid, { base_revision: 'base' })
     let started = Promise.withResolvers<void>()
@@ -1399,7 +1400,7 @@ slow(
 )
 
 Deno.test('graph-native compaction bounds replay across a restart and a later turn', async () => {
-  let db = open(':memory:')
+  let db = freshDb()
   let tree = Deno.makeTempDirSync(), sid = session(db, tree)
   // A preset base_revision makes the Session runnable for any daemon instance,
   // so the restart picks up pending work straight from the graph.

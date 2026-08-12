@@ -12,7 +12,8 @@ import { type Change, edges, statuses, uuid, verdicts } from './types.ts'
 import { slow } from './testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, journalOf, open, snapshot, touch } = await import('./db.ts')
+let { apply, journalOf, snapshot, touch } = await import('./db.ts')
+let { freshDb } = await import('./testdb.ts')
 let { append } = await import('./entries.ts')
 
 let N = 'aaaaaaaa-0000-4000-8000-000000000001'
@@ -234,7 +235,7 @@ let blank = (): IO => ({
 })
 
 let graph = () => {
-  let db = open(':memory:')
+  let db = freshDb()
   let pages = new Map<string, string>()
   let io: IO = {
     read: () => Promise.resolve(snapshot(db)),

@@ -1,13 +1,14 @@
 // Split Session persistence: canonical projection and the one server writer.
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, open } = await import('./db.ts')
+let { apply } = await import('./db.ts')
 let { sessionRow, writeSession } = await import('./session_store.ts')
+let { freshDb } = await import('./testdb.ts')
 let { assertEquals } = await import('@std/assert')
 
 let uid = () => crypto.randomUUID()
 
 Deno.test('sessionRow overlays canonical nulls on stale aliases', () => {
-  let db = open()
+  let db = freshDb()
   let eid = uid()
   apply(db, [{
     eid,
@@ -24,7 +25,7 @@ Deno.test('sessionRow overlays canonical nulls on stale aliases', () => {
 })
 
 Deno.test('writeSession moves one patch through canonical and alias homes', () => {
-  let db = open()
+  let db = freshDb()
   let eid = uid()
   apply(db, [{ eid, name: 'session', comp: { id: uid() } }])
   db.exec('begin')
