@@ -19,6 +19,7 @@
 // writes before it enqueued.
 
 import { assertEquals } from '@std/assert'
+import { slow } from './testing.ts'
 
 // The server reads its port from the environment, so claim an ephemeral one and
 // give the seat back before it boots (precondition_test.ts does the same — a
@@ -71,7 +72,7 @@ let queried = async (q: string): Promise<string[]> => {
   return hits.map((r) => r.entity.eid).sort()
 }
 
-Deno.test(
+slow(
   'query projects canonical Session nulls over stale aliases',
   alone,
   async () => {
@@ -158,7 +159,7 @@ let subscriber = async () => {
   }
 }
 
-Deno.test(
+slow(
   'Session observations reach only partition watchers and write no graph',
   alone,
   async () => {
@@ -238,7 +239,7 @@ let task = (comp: Record<string, unknown>) => {
   }
 }
 
-Deno.test(
+slow(
   'subscription: equality pred through add/update/remove/dead',
   alone,
   async () => {
@@ -255,7 +256,7 @@ Deno.test(
   },
 )
 
-Deno.test(
+slow(
   'subscription: list pred keeps a member moving within the list',
   alone,
   async () => {
@@ -270,7 +271,7 @@ Deno.test(
   },
 )
 
-Deno.test('subscription: range and comparison preds', alone, async () => {
+slow('subscription: range and comparison preds', alone, async () => {
   let a = task({})
   let tag = a.eid.slice(0, 8)
   await walk(`.task.priority=0..1&.doc.title~=${tag}`, [
@@ -285,7 +286,7 @@ Deno.test('subscription: range and comparison preds', alone, async () => {
   ])
 })
 
-Deno.test('subscription: negation and contains preds', alone, async () => {
+slow('subscription: negation and contains preds', alone, async () => {
   let a = task({})
   let tag = a.eid.slice(0, 8)
   await walk(`.task.status!=done&.doc.title~=${tag}`, [
@@ -302,7 +303,7 @@ Deno.test('subscription: negation and contains preds', alone, async () => {
 // `.prop=` with an empty value means ABSENT, so clearing a column is an ADD and
 // setting one is a REMOVE — the transition table run backwards, and the one
 // class where a patch that omits the column must leave membership alone.
-Deno.test(
+slow(
   'subscription: absence pred adds on clear, removes on set',
   alone,
   async () => {
@@ -320,7 +321,7 @@ Deno.test(
   },
 )
 
-Deno.test(
+slow(
   'subscription: presence pred follows a stamped column',
   alone,
   async () => {
@@ -338,7 +339,7 @@ Deno.test(
 // A component deleted whole is not a column cleared: the row is gone, so every
 // pred over it must stop matching — including a `!=` that a missing column
 // might otherwise be read as satisfying.
-Deno.test(
+slow(
   'subscription: deleting the component drops the member',
   alone,
   async () => {
@@ -354,7 +355,7 @@ Deno.test(
 
 // Two subscriptions on ONE socket must not share a member set: the same write
 // lands in whichever of them it belongs to, and the frames are keyed by sub id.
-Deno.test(
+slow(
   'subscription: two subs on one socket stay separate',
   alone,
   async () => {
@@ -385,7 +386,7 @@ Deno.test(
 // 2c card/route path) and /body (what a client asks when it holds a doc it
 // was shipped no body for). A placeholder that neither could end would be
 // permanent, so this walks all three in one sentence.
-Deno.test('bodies ride only where a body is read', alone, async () => {
+slow('bodies ride only where a body is read', alone, async () => {
   let a = task({})
   let q = `.doc.title~=${a.eid.slice(0, 8)}`
   let board = `board:${uid()}`
@@ -433,7 +434,7 @@ Deno.test('bodies ride only where a body is read', alone, async () => {
 // Entry entities do not ride the root snapshot, so a membership-only shadow
 // would leave a Session with ids it could never render. Its initial frame is
 // the one exception: the ordered partition carries all facets and bodies.
-Deno.test('entry shadows carry the lazy partition', alone, async () => {
+slow('entry shadows carry the lazy partition', alone, async () => {
   let session = uid(), entry = uid()
   let client = await subscriber()
   try {
@@ -485,7 +486,7 @@ Deno.test('entry shadows carry the lazy partition', alone, async () => {
   }
 })
 
-Deno.test(
+slow(
   'entry shadows carry lease and settlement updates',
   alone,
   async () => {
@@ -558,7 +559,7 @@ Deno.test(
 // So these hand the sweep a later clock instead of waiting a minute for the
 // real one, and prove the drop came from the CLOCK — the oracle, asked at the
 // true present, still returns the member.
-Deno.test(
+slow(
   'sweep: a member ages out of a moving window with no write',
   alone,
   async () => {
@@ -591,7 +592,7 @@ Deno.test(
 // maintain() alone, and no clock the sweep is handed — however absurd — may
 // disturb it. (That the sweep also SKIPS such a sub is a cost property, not a
 // visible one; this holds whether it skips or re-tests.)
-Deno.test(
+slow(
   'sweep: leaves a subscription with no moving window alone',
   alone,
   async () => {
@@ -645,7 +646,7 @@ let bothWays = async (q: string) => {
   ]
 }
 
-Deno.test(
+slow(
   'query: index and snapshot answer alike, order included',
   alone,
   async () => {
@@ -694,7 +695,7 @@ let byId = async (ids: string, extra = '') => {
     .map((r) => r.entity.eid)
 }
 
-Deno.test('query: id= fetches by every form a name takes', alone, async () => {
+slow('query: id= fetches by every form a name takes', alone, async () => {
   let a = task({ status: 'open' })
   let b = task({ status: 'done' })
   await post([
@@ -751,7 +752,7 @@ Deno.test('query: id= fetches by every form a name takes', alone, async () => {
   assertEquals(await byId(`${a.eid},${b.eid}`), [a.eid], 'tombstone absent')
 })
 
-Deno.test(
+slow(
   'query and subscriptions require an explicit quarantine read',
   alone,
   async () => {
@@ -803,7 +804,7 @@ let bothEdges = async (eid: string) => {
   return [sentences(hits[0].deps, eid), sentences(snap.deps, eid)]
 }
 
-Deno.test(
+slow(
   'query: deps= reports the edges /snapshot reports, derived reads included',
   alone,
   async () => {

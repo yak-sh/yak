@@ -2,6 +2,7 @@
 // Native tests exercise idempotence, drift, death, and stop without launching
 // a provider; managed tests prove one role session and graph-native stopping.
 import { assert, assertEquals, assertMatch } from '@std/assert'
+import { until } from './testing.ts'
 import { type Change } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
@@ -407,13 +408,13 @@ Deno.test('managed attention resumes once with no graph content', async () => {
   ])
   let wakeDeps = { ...deps, now: () => new Date().toISOString() }
   await rolesSweep(cast, wakeDeps)
-  for (let i = 0; i < 400; i++) {
-    let status = db.prepare('select status from session where eid = ?').get(
-      run.eid,
-    ) as { status: string }
-    if (status.status == 'completed') break
-    await new Promise((go) => setTimeout(go, 5))
-  }
+  await until(
+    () =>
+      (db.prepare('select status from session where eid = ?').get(
+        run.eid,
+      ) as { status: string }).status == 'completed',
+    { label: 'the native role session to complete' },
+  )
   assertEquals(
     db.prepare('select status from session where eid = ?').get(run.eid),
     { status: 'completed' },

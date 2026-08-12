@@ -3,6 +3,7 @@
 // lifecycle suite cannot.
 import { assert, assertEquals, assertMatch, assertRejects } from '@std/assert'
 import { type Change } from './types.ts'
+import { slow } from './testing.ts'
 
 let tmp = Deno.makeTempDirSync({ prefix: 'tasks-session-lock-' })
 Deno.env.set('DB_PATH', `${tmp}/tasks.db`)
@@ -59,7 +60,7 @@ let locker = async (ms: number) => {
   return child
 }
 
-Deno.test('a graph mutation waits out a handoff writer', async () => {
+slow('a graph mutation waits out a handoff writer', async () => {
   let child = await locker(80)
   let eid = uid()
   let began = Date.now()
@@ -76,7 +77,7 @@ Deno.test('a graph mutation waits out a handoff writer', async () => {
   apply(db, [{ eid, name: 'entity', comp: null }])
 })
 
-Deno.test('a failed follower is observed without hiding its rejection', async () => {
+slow('a failed follower is observed without hiding its rejection', async () => {
   let eid = plant()
   let warned: unknown[][] = []
   let warn = console.warn
@@ -96,7 +97,7 @@ Deno.test('a failed follower is observed without hiding its rejection', async ()
   assertMatch(warned.flat().join(' '), /follower stopped.*cast broke/)
 })
 
-Deno.test('a follower waits out a brief SQLite lock', async () => {
+slow('a follower waits out a brief SQLite lock', async () => {
   let eid = plant()
   db.exec('pragma busy_timeout = 10')
   let child = await locker(80)

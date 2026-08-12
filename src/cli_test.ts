@@ -37,6 +37,7 @@ import { manuals, parse } from './manual.ts'
 import { parseQuery } from './query.ts'
 import { fakeGraph } from './graph_fake.ts'
 import type { Snapshot } from './types.ts'
+import { slow } from './testing.ts'
 
 let transcript = (...events: unknown[]) => {
   let path = Deno.makeTempFileSync()
@@ -230,7 +231,7 @@ Deno.test('subject: malformed sentences teach the contextual grammar', () => {
   )
 })
 
-Deno.test('task subject help is contextual and needs no server', async () => {
+slow('task subject help is contextual and needs no server', async () => {
   let out = await cli('T-3', '--help')
   assertEquals(out.code, 0)
   let stdout = text(out.stdout)
@@ -445,7 +446,7 @@ Deno.test('hookProvider: invocation name wins; ancestry recovers old hooks', () 
   assertEquals(hookProvider('', () => undefined), undefined)
 })
 
-Deno.test('task codex is discoverable with its own help', async () => {
+slow('task codex is discoverable with its own help', async () => {
   let out = await cli('codex', '--help')
   assertEquals(out.code, 0)
   assertMatch(
@@ -454,7 +455,7 @@ Deno.test('task codex is discoverable with its own help', async () => {
   )
 })
 
-Deno.test('task comment help teaches verdict-bearing comments', async () => {
+slow('task comment help teaches verdict-bearing comments', async () => {
   let out = await cli('comment', '--help')
   assertEquals(out.code, 0)
   assertMatch(
@@ -661,7 +662,7 @@ Deno.test('Codex turn hooks announce only busy and idle boundaries', () => {
 
 // The launcher is the global `operate` CLI; its dry run prints the exact argv it
 // would exec, so the --operator opt-in is checked against the real thing.
-Deno.test('the canonical operator launcher opts into work injection', async () => {
+slow('the canonical operator launcher opts into work injection', async () => {
   let repo = new URL('..', import.meta.url).pathname
   let out = await new Deno.Command('operate', {
     args: ['run'],
@@ -672,7 +673,7 @@ Deno.test('the canonical operator launcher opts into work injection', async () =
   assertMatch(text(out.stdout), /^task claude --operator /)
 })
 
-Deno.test('task wrap help documents the legacy alias', async () => {
+slow('task wrap help documents the legacy alias', async () => {
   let out = await cli('wrap', '--help')
   assertEquals(out.code, 0)
   assertMatch(
@@ -681,7 +682,7 @@ Deno.test('task wrap help documents the legacy alias', async () => {
   )
 })
 
-Deno.test('deprecated routes leave root help but teach at their door', async () => {
+slow('deprecated routes leave root help but teach at their door', async () => {
   let root = await cli('--help')
   assertEquals(root.code, 0)
   assertEquals(/^\s+task dep\b/m.test(text(root.stdout)), false)
@@ -706,7 +707,7 @@ Deno.test('deprecated routes leave root help but teach at their door', async () 
 // The gate follows the spelling typed, not the handler reached: the
 // subject-first sentence IS the successor `dep` points at, so it runs on
 // (and, against an empty graph, dies on `no entity`).
-Deno.test('a deprecated spelling hard-errors before its handler runs', async () => {
+slow('a deprecated spelling hard-errors before its handler runs', async () => {
   // /query answers with a JSON ARRAY (a narrowed verb resolves its id
   // there first); everything else gets the empty-snapshot shape.
   let empty = Deno.serve(
@@ -743,7 +744,7 @@ Deno.test('a deprecated spelling hard-errors before its handler runs', async () 
   }
 })
 
-Deno.test('the --blocked-by refusal names the current edge door', async () => {
+slow('the --blocked-by refusal names the current edge door', async () => {
   let out = await cli('new', 'Title', '--blocked-by=T-1')
   assertEquals(out.code, 1)
   assertMatch(text(out.stderr), /an EDGE, not a prop/)
@@ -753,7 +754,7 @@ Deno.test('the --blocked-by refusal names the current edge door', async () => {
 
 // Both grammars carry one mistake — the dot-param spelling used to earn
 // the filter sketch, correct and silent about the edge it was reaching for.
-Deno.test('.blocked-by names the same edge door as --blocked-by', async () => {
+slow('.blocked-by names the same edge door as --blocked-by', async () => {
   let out = await cli('new', 'Title', '.blocked-by=T-1')
   assertEquals(out.code, 1)
   assertMatch(text(out.stderr), /an EDGE, not a prop/)
@@ -761,13 +762,13 @@ Deno.test('.blocked-by names the same edge door as --blocked-by', async () => {
   assertEquals(/filters are dot-params/.test(text(out.stderr)), false)
 })
 
-Deno.test('task session wrap help never runs the hook verb', async () => {
+slow('task session wrap help never runs the hook verb', async () => {
   let out = await cli('session', 'wrap', '--help')
   assertEquals(out.code, 0)
   assertMatch(text(out.stdout), /task session wrap \[sid\] \[--hook\]/)
 })
 
-Deno.test('nested and palette help always resolves before effects', async () => {
+slow('nested and palette help always resolves before effects', async () => {
   let cases: [string[], RegExp][] = [
     [['mail', 'show', '--help'], /^task mail show/],
     [['inbox', 'archive', '--help'], /^task inbox archive/],
@@ -783,7 +784,7 @@ Deno.test('nested and palette help always resolves before effects', async () => 
   }
 })
 
-Deno.test('task wrap rejects body before touching the session', async () => {
+slow('task wrap rejects body before touching the session', async () => {
   let out = await cli('wrap', 'test-session', '--body=@brief.md')
   assertEquals(out.code, 1)
   assertEquals(text(out.stdout), '')
@@ -793,7 +794,7 @@ Deno.test('task wrap rejects body before touching the session', async () => {
   )
 })
 
-Deno.test('task verbs reject unknown flags before their effects', async () => {
+slow('task verbs reject unknown flags before their effects', async () => {
   let out = await cli('release', 'T-1', '--wat')
   assertEquals(out.code, 1)
   assertEquals(text(out.stdout), '')
@@ -803,33 +804,36 @@ Deno.test('task verbs reject unknown flags before their effects', async () => {
   )
 })
 
-Deno.test('task verbs reject surplus words and missing values before effects', async () => {
-  let cases: [string[], RegExp][] = [
-    [['claim', 'T-1', 'sess', 'extra'], /claim expected 1–2 arguments/],
-    [['inbox', 'archive', 'E-1', 'extra'], /expected 1 argument, got 2/],
-    // The inbox takes filters now, so a bare word is no longer surplus —
-    // it is a bad FILTER, and it teaches the verb instead of guessing
-    // (T-10767). Refused before the snapshot, like every arity check.
-    [['inbox', 'notafilter'], /not an inbox filter/],
-    [['backup', 'extra'], /backup expected 0 arguments/],
-    [['history', 'T-1', '-n'], /-n needs a positive number/],
-  ]
-  for (let [args, expected] of cases) {
-    let out = await cli(...args)
-    assertEquals(out.code, 1)
-    assertEquals(text(out.stdout), '')
-    assertMatch(text(out.stderr), expected)
-  }
-})
+slow(
+  'task verbs reject surplus words and missing values before effects',
+  async () => {
+    let cases: [string[], RegExp][] = [
+      [['claim', 'T-1', 'sess', 'extra'], /claim expected 1–2 arguments/],
+      [['inbox', 'archive', 'E-1', 'extra'], /expected 1 argument, got 2/],
+      // The inbox takes filters now, so a bare word is no longer surplus —
+      // it is a bad FILTER, and it teaches the verb instead of guessing
+      // (T-10767). Refused before the snapshot, like every arity check.
+      [['inbox', 'notafilter'], /not an inbox filter/],
+      [['backup', 'extra'], /backup expected 0 arguments/],
+      [['history', 'T-1', '-n'], /-n needs a positive number/],
+    ]
+    for (let [args, expected] of cases) {
+      let out = await cli(...args)
+      assertEquals(out.code, 1)
+      assertEquals(text(out.stdout), '')
+      assertMatch(text(out.stderr), expected)
+    }
+  },
+)
 
-Deno.test('task set rejects surplus positional arguments', async () => {
+slow('task set rejects surplus positional arguments', async () => {
   let out = await cli('set', 'T-1', '.status=open', 'surplus')
   assertEquals(out.code, 1)
   assertEquals(text(out.stdout), '')
   assertMatch(text(out.stderr), /task set <id> \[--comment=TEXT\]/)
 })
 
-Deno.test('task dep rejects surplus positional arguments', async () => {
+slow('task dep rejects surplus positional arguments', async () => {
   let out = await cli('dep', 'T-1', 'requires', 'T-2', 'surplus')
   assertEquals(out.code, 1)
   assertEquals(text(out.stdout), '')
@@ -1096,7 +1100,7 @@ Deno.test('the CLI has no whole-graph read path', () => {
   assertEquals(source.includes('await snapshot()'), false)
 })
 
-Deno.test('inbox asks only for its reader and keeps order when read', async () => {
+slow('inbox asks only for its reader and keeps order when read', async () => {
   let actor = 'bbbbbbbb-0000-4000-8000-000000000051'
   let far = 'bbbbbbbb-0000-4000-8000-000000000052'
   let watched = 'bbbbbbbb-0000-4000-8000-000000000053'
@@ -1174,7 +1178,7 @@ Deno.test('inbox asks only for its reader and keeps order when read', async () =
   }
 })
 
-Deno.test('list strips terminal controls from graph text', async () => {
+slow('list strips terminal controls from graph text', async () => {
   let poisoned: Snapshot = {
     ...graph,
     changes: graph.changes.map((change) =>
@@ -1210,7 +1214,7 @@ Deno.test('list strips terminal controls from graph text', async () => {
   }
 })
 
-Deno.test('list shows the wake title derived by the UI', async () => {
+slow('list shows the wake title derived by the UI', async () => {
   let wake = 'bbbbbbbb-0000-4000-8000-000000000061'
   let recipient = 'bbbbbbbb-0000-4000-8000-000000000062'
   let at = new Date(Date.now() + 7_200_000).toISOString()
@@ -1246,85 +1250,88 @@ Deno.test('list shows the wake title derived by the UI', async () => {
   }
 })
 
-Deno.test('entity JSON has one component-shaped contract across CLI doors', async () => {
-  let task = 'bbbbbbbb-0000-4000-8000-000000000041'
-  let comment = 'bbbbbbbb-0000-4000-8000-000000000042'
-  let snap: Snapshot = {
-    changes: [
-      { eid: task, name: 'entity', comp: { eid: task, num: 41 } },
-      {
-        eid: task,
-        name: 'doc',
-        comp: { eid: task, title: 'Structured', body: 'One shape' },
-      },
-      {
-        eid: task,
-        name: 'task',
-        comp: { eid: task, status: 'done', priority: 2 },
-      },
-      {
-        eid: task,
-        name: 'decided',
-        comp: { eid: task, at: '2026-08-03T00:00:00.000Z' },
-      },
-      { eid: comment, name: 'entity', comp: { eid: comment, num: 42 } },
-      {
-        eid: comment,
-        name: 'doc',
-        comp: { eid: comment, title: '', body: 'Looks right' },
-      },
-      {
-        eid: comment,
-        name: 'comment',
-        comp: { eid: comment, target: task },
-      },
-    ],
-    deps: [],
-  }
-  let { server, host } = graphServer(snap)
-  let run = (...args: string[]) =>
-    new Deno.Command(Deno.execPath(), {
-      args: [
-        'run',
-        '-A',
-        new URL('./cli.ts', import.meta.url).pathname,
-        ...args,
+slow(
+  'entity JSON has one component-shaped contract across CLI doors',
+  async () => {
+    let task = 'bbbbbbbb-0000-4000-8000-000000000041'
+    let comment = 'bbbbbbbb-0000-4000-8000-000000000042'
+    let snap: Snapshot = {
+      changes: [
+        { eid: task, name: 'entity', comp: { eid: task, num: 41 } },
+        {
+          eid: task,
+          name: 'doc',
+          comp: { eid: task, title: 'Structured', body: 'One shape' },
+        },
+        {
+          eid: task,
+          name: 'task',
+          comp: { eid: task, status: 'done', priority: 2 },
+        },
+        {
+          eid: task,
+          name: 'decided',
+          comp: { eid: task, at: '2026-08-03T00:00:00.000Z' },
+        },
+        { eid: comment, name: 'entity', comp: { eid: comment, num: 42 } },
+        {
+          eid: comment,
+          name: 'doc',
+          comp: { eid: comment, title: '', body: 'Looks right' },
+        },
+        {
+          eid: comment,
+          name: 'comment',
+          comp: { eid: comment, target: task },
+        },
       ],
-      env: { TASKS_HOST: host },
-    }).output()
-  let entity = {
-    kind: 'task',
-    entity: { eid: task, num: 41 },
-    doc: { title: 'Structured', body: 'One shape' },
-    task: { status: 'done', priority: 2 },
-    decided: { at: '2026-08-03T00:00:00.000Z' },
-  }
-  try {
-    let listed = await run('list', '--json')
-    let decided = await run('decided', '--all', '--json')
-    let shown = await run('show', 'T-41', '--json')
-    assertEquals(listed.code, 0)
-    assertEquals(decided.code, 0)
-    assertEquals(shown.code, 0)
-    assertEquals(JSON.parse(text(listed.stdout)), [entity])
-    assertEquals(JSON.parse(text(decided.stdout)), [entity])
-    assertEquals(JSON.parse(text(shown.stdout)), {
-      ...entity,
-      refs: [],
-      backrefs: [],
-      comments: [{
-        kind: 'comment',
-        entity: { eid: comment, num: 42 },
-        doc: { title: '', body: 'Looks right' },
-        comment: { target: task },
-      }],
-    })
-  } finally {
-    await server.shutdown()
-  }
-})
+      deps: [],
+    }
+    let { server, host } = graphServer(snap)
+    let run = (...args: string[]) =>
+      new Deno.Command(Deno.execPath(), {
+        args: [
+          'run',
+          '-A',
+          new URL('./cli.ts', import.meta.url).pathname,
+          ...args,
+        ],
+        env: { TASKS_HOST: host },
+      }).output()
+    let entity = {
+      kind: 'task',
+      entity: { eid: task, num: 41 },
+      doc: { title: 'Structured', body: 'One shape' },
+      task: { status: 'done', priority: 2 },
+      decided: { at: '2026-08-03T00:00:00.000Z' },
+    }
+    try {
+      let listed = await run('list', '--json')
+      let decided = await run('decided', '--all', '--json')
+      let shown = await run('show', 'T-41', '--json')
+      assertEquals(listed.code, 0)
+      assertEquals(decided.code, 0)
+      assertEquals(shown.code, 0)
+      assertEquals(JSON.parse(text(listed.stdout)), [entity])
+      assertEquals(JSON.parse(text(decided.stdout)), [entity])
+      assertEquals(JSON.parse(text(shown.stdout)), {
+        ...entity,
+        refs: [],
+        backrefs: [],
+        comments: [{
+          kind: 'comment',
+          entity: { eid: comment, num: 42 },
+          doc: { title: '', body: 'Looks right' },
+          comment: { target: task },
+        }],
+      })
+    } finally {
+      await server.shutdown()
+    }
+  },
+)
 
-Deno.test('colon open prints the public entity URL', async () => {
+slow('colon open prints the public entity URL', async () => {
   let { server, host } = graphServer()
   try {
     let out = await new Deno.Command(Deno.execPath(), {
@@ -1443,7 +1450,7 @@ Deno.test('bare task never reads or prints the open board', async () => {
 // A verb that never READ the graph now serves the bus too — that is the whole
 // point of asking its own bounded question rather than riding a snapshot.
 // `help` touches nothing and still hands over what is waiting.
-Deno.test('a verb that reads nothing serves the bus all the same', async () => {
+slow('a verb that reads nothing serves the bus all the same', async () => {
   let { server, acked, seen, host } = busServer()
   try {
     let out = await new Deno.Command(Deno.execPath(), {
@@ -1470,34 +1477,37 @@ Deno.test('a verb that reads nothing serves the bus all the same', async () => {
 // will read and stamps every line `notified`, which is how an unread message
 // disappears without ever being delivered — worst of all at SessionEnd, which
 // is what `wrap --hook` is. So a hook serves nothing and stamps nothing.
-Deno.test('a hook never serves the bus, because nobody is there to read it', async () => {
-  for (
-    let args of [['wrap', '--hook'], ['session', 'turn', 'idle', '--hook']]
-  ) {
-    let { server, acked, host } = busServer()
-    try {
-      let out = await new Deno.Command(Deno.execPath(), {
-        args: [
-          'run',
-          '-A',
-          new URL('./cli.ts', import.meta.url).pathname,
-          ...args,
-        ],
-        clearEnv: true,
-        env: { TASKS_HOST: host, TASKS_SESSION: 'sub-1' },
-        stdin: 'null',
-      }).output()
-      assertEquals(/pending messages/.test(text(out.stderr)), false)
-      assertEquals(acked.filter((c) => c.name == 'notified'), [])
-    } finally {
-      await server.shutdown()
+slow(
+  'a hook never serves the bus, because nobody is there to read it',
+  async () => {
+    for (
+      let args of [['wrap', '--hook'], ['session', 'turn', 'idle', '--hook']]
+    ) {
+      let { server, acked, host } = busServer()
+      try {
+        let out = await new Deno.Command(Deno.execPath(), {
+          args: [
+            'run',
+            '-A',
+            new URL('./cli.ts', import.meta.url).pathname,
+            ...args,
+          ],
+          clearEnv: true,
+          env: { TASKS_HOST: host, TASKS_SESSION: 'sub-1' },
+          stdin: 'null',
+        }).output()
+        assertEquals(/pending messages/.test(text(out.stderr)), false)
+        assertEquals(acked.filter((c) => c.name == 'notified'), [])
+      } finally {
+        await server.shutdown()
+      }
     }
-  }
-})
+  },
+)
 
 // The one hook that DOES serve, and must keep serving: its stdout is the
 // digest the session boots into, so the lines are delivered by definition.
-Deno.test('the boot digest is the hook that delivers, on stdout', async () => {
+slow('the boot digest is the hook that delivers, on stdout', async () => {
   let { server, acked, seen, host } = busServer()
   try {
     let out = await new Deno.Command(Deno.execPath(), {
@@ -1522,7 +1532,7 @@ Deno.test('the boot digest is the hook that delivers, on stdout', async () => {
   }
 })
 
-Deno.test('any graph-reading verb serves the bus, on stderr', async () => {
+slow('any graph-reading verb serves the bus, on stderr', async () => {
   let { server, acked, host } = busServer()
   try {
     let out = await new Deno.Command(Deno.execPath(), {
@@ -1559,110 +1569,122 @@ Deno.test('any graph-reading verb serves the bus, on stderr', async () => {
 // name the TARGET, never ride along as text. `task done T-4` used to fail
 // outright (`usage: task :done`, since :done takes zero words) rather than
 // act on T-4 at all.
-Deno.test('task done/cancel <id> act on the named task, never the focused one', async () => {
-  let { server, acked, seen, host } = graphServer(graph)
-  try {
-    let out = await new Deno.Command(Deno.execPath(), {
-      args: [
-        'run',
-        '-A',
-        new URL('./cli.ts', import.meta.url).pathname,
-        'cancel',
-        'T-4',
-        'duplicate of the umbrella',
-      ],
-      clearEnv: true,
-      env: { TASKS_HOST: host, TASKS_SESSION: 'sub-1' }, // sub-1 has T-2 claimed
-    }).output()
-    assertEquals(text(out.stderr), '')
-    assertEquals(out.code, 0)
-    assertMatch(
-      text(out.stdout),
-      /^T-4 → cancelled — duplicate of the umbrella/,
-    )
-    let task = acked.filter((c) => c.name == 'task')
-    assertEquals(task, [{
-      eid: O,
-      name: 'task',
-      comp: { status: 'cancelled' },
-    }])
-    let comment = acked.find((c) => c.name == 'comment')
-    assertEquals(comment?.comp, { target: O })
-    assertEquals(seen.some((path) => path.startsWith('/snapshot')), false)
-  } finally {
-    await server.shutdown()
-  }
-})
+slow(
+  'task done/cancel <id> act on the named task, never the focused one',
+  async () => {
+    let { server, acked, seen, host } = graphServer(graph)
+    try {
+      let out = await new Deno.Command(Deno.execPath(), {
+        args: [
+          'run',
+          '-A',
+          new URL('./cli.ts', import.meta.url).pathname,
+          'cancel',
+          'T-4',
+          'duplicate of the umbrella',
+        ],
+        clearEnv: true,
+        env: { TASKS_HOST: host, TASKS_SESSION: 'sub-1' }, // sub-1 has T-2 claimed
+      }).output()
+      assertEquals(text(out.stderr), '')
+      assertEquals(out.code, 0)
+      assertMatch(
+        text(out.stdout),
+        /^T-4 → cancelled — duplicate of the umbrella/,
+      )
+      let task = acked.filter((c) => c.name == 'task')
+      assertEquals(task, [{
+        eid: O,
+        name: 'task',
+        comp: { status: 'cancelled' },
+      }])
+      let comment = acked.find((c) => c.name == 'comment')
+      assertEquals(comment?.comp, { target: O })
+      assertEquals(seen.some((path) => path.startsWith('/snapshot')), false)
+    } finally {
+      await server.shutdown()
+    }
+  },
+)
 
-Deno.test('task done <id> targets the id even with no comment, past its 0-word palette form', async () => {
-  let { server, acked, host } = graphServer(graph)
-  try {
-    let out = await new Deno.Command(Deno.execPath(), {
-      args: [
-        'run',
-        '-A',
-        new URL('./cli.ts', import.meta.url).pathname,
-        'done',
-        'T-4',
-      ],
-      clearEnv: true,
-      env: { TASKS_HOST: host, TASKS_SESSION: 'sub-1' },
-    }).output()
-    assertEquals(text(out.stderr), '')
-    assertEquals(out.code, 0)
-    assertEquals(text(out.stdout).trim(), 'T-4 → done')
-    assertEquals(
-      acked.filter((c) => c.name == 'task'),
-      [{ eid: O, name: 'task', comp: { status: 'done' } }],
-    )
-  } finally {
-    await server.shutdown()
-  }
-})
+slow(
+  'task done <id> targets the id even with no comment, past its 0-word palette form',
+  async () => {
+    let { server, acked, host } = graphServer(graph)
+    try {
+      let out = await new Deno.Command(Deno.execPath(), {
+        args: [
+          'run',
+          '-A',
+          new URL('./cli.ts', import.meta.url).pathname,
+          'done',
+          'T-4',
+        ],
+        clearEnv: true,
+        env: { TASKS_HOST: host, TASKS_SESSION: 'sub-1' },
+      }).output()
+      assertEquals(text(out.stderr), '')
+      assertEquals(out.code, 0)
+      assertEquals(text(out.stdout).trim(), 'T-4 → done')
+      assertEquals(
+        acked.filter((c) => c.name == 'task'),
+        [{ eid: O, name: 'task', comp: { status: 'done' } }],
+      )
+    } finally {
+      await server.shutdown()
+    }
+  },
+)
 
 // The non-id spellings are untouched: `task cancel <prose>` with no
 // id-shaped first word still means the FOCUSED task, exactly as `task
 // :cancel <prose>` always has.
-Deno.test('task cancel with no id-shaped word still targets the focused task', async () => {
-  let { server, acked, host } = graphServer(graph)
-  try {
-    let out = await new Deno.Command(Deno.execPath(), {
-      args: [
-        'run',
-        '-A',
-        new URL('./cli.ts', import.meta.url).pathname,
-        'cancel',
-        'duplicate',
-        'of',
-        'the',
-        'umbrella',
-      ],
-      clearEnv: true,
-      env: { TASKS_HOST: host, TASKS_SESSION: 'sub-1' },
-    }).output()
-    assertEquals(text(out.stderr), '')
-    assertEquals(out.code, 0)
-    assertMatch(
-      text(out.stdout),
-      /^T-2 → cancelled — duplicate of the umbrella/,
-    )
-    assertEquals(
-      acked.filter((c) => c.name == 'task'),
-      [{ eid: T, name: 'task', comp: { status: 'cancelled' } }],
-    )
-  } finally {
-    await server.shutdown()
-  }
-})
+slow(
+  'task cancel with no id-shaped word still targets the focused task',
+  async () => {
+    let { server, acked, host } = graphServer(graph)
+    try {
+      let out = await new Deno.Command(Deno.execPath(), {
+        args: [
+          'run',
+          '-A',
+          new URL('./cli.ts', import.meta.url).pathname,
+          'cancel',
+          'duplicate',
+          'of',
+          'the',
+          'umbrella',
+        ],
+        clearEnv: true,
+        env: { TASKS_HOST: host, TASKS_SESSION: 'sub-1' },
+      }).output()
+      assertEquals(text(out.stderr), '')
+      assertEquals(out.code, 0)
+      assertMatch(
+        text(out.stdout),
+        /^T-2 → cancelled — duplicate of the umbrella/,
+      )
+      assertEquals(
+        acked.filter((c) => c.name == 'task'),
+        [{ eid: T, name: 'task', comp: { status: 'cancelled' } }],
+      )
+    } finally {
+      await server.shutdown()
+    }
+  },
+)
 
 // An id-shaped word past the 0-word palette form used to be a bare, unhelpful
 // `usage: task :done` — it still refuses (:done is still argument-less from
 // the focus door), but only when the word does NOT name a task.
-Deno.test('task done <non-id-word> keeps refusing loudly, not silently', async () => {
-  let out = await cli('done', 'because')
-  assertEquals(out.code, 1)
-  assertMatch(text(out.stderr), /:done expected 0–0 arguments/)
-})
+slow(
+  'task done <non-id-word> keeps refusing loudly, not silently',
+  async () => {
+    let out = await cli('done', 'because')
+    assertEquals(out.code, 1)
+    assertMatch(text(out.stderr), /:done expected 0–0 arguments/)
+  },
+)
 
 // The same guard through the positional and --body= doors, since the
 // mistake transfers between verbs (T-10612).

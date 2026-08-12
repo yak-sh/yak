@@ -16,6 +16,7 @@
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { normalizeChanges } from './props.ts'
 import { derefChanges } from './client.ts'
+import { slow } from './testing.ts'
 
 // The server reads its port from the environment, so claim an ephemeral one
 // and give the seat back before it boots. A fixed port would collide with
@@ -73,7 +74,7 @@ let stale = async () => {
   return { eid, was: { body: sha('ONE') } }
 }
 
-Deno.test('POST /apply carries a precondition to the rule', alone, async () => {
+slow('POST /apply carries a precondition to the rule', alone, async () => {
   let { eid, was } = await stale()
   let refused = await post([{
     eid,
@@ -92,7 +93,7 @@ Deno.test('POST /apply carries a precondition to the rule', alone, async () => {
 // unpasteable in every other door. The uuid is right to carry (Stale.eid);
 // only the message is agent-facing. `stale()` mints a doc-only entity, so
 // its spoken id is D-<num> (T-10277).
-Deno.test('a refusal speaks the human id, not the eid', alone, async () => {
+slow('a refusal speaks the human id, not the eid', alone, async () => {
   let { eid, was } = await stale()
   let refused = await post([{
     eid,
@@ -105,7 +106,7 @@ Deno.test('a refusal speaks the human id, not the eid', alone, async () => {
   assertEquals(refused.text.includes(eid), false)
 })
 
-Deno.test(
+slow(
   'POST /apply without a precondition still writes',
   alone,
   async () => {
@@ -154,14 +155,14 @@ let sync = async (changes: unknown[]) => {
   }
 }
 
-Deno.test('/ws carries a precondition to the rule', alone, async () => {
+slow('/ws carries a precondition to the rule', alone, async () => {
   let { eid, was } = await stale()
   let frame = await sync([{ eid, name: 'doc', comp: { body: 'CLOBBER' }, was }])
   assertStringIncludes(String(frame.error), 'has moved since you read it')
   assertEquals(await stored(eid), 'TWO')
 })
 
-Deno.test('/ws without a precondition still writes', alone, async () => {
+slow('/ws without a precondition still writes', alone, async () => {
   let { eid } = await stale()
   let frame = await sync([{ eid, name: 'doc', comp: { body: 'CLOBBER' } }])
   assertEquals(frame.error, undefined)
@@ -170,7 +171,7 @@ Deno.test('/ws without a precondition still writes', alone, async () => {
 
 // The in-process hops, named one by one so a failure says WHICH rebuilt the
 // change rather than only that the doors stopped refusing.
-Deno.test('normalizeChanges keeps a precondition', () => {
+slow('normalizeChanges keeps a precondition', () => {
   let was = { body: sha('ONE') }
   let [out] = normalizeChanges([{
     eid: uid(),
@@ -181,7 +182,7 @@ Deno.test('normalizeChanges keeps a precondition', () => {
   assertEquals(out.was, was)
 })
 
-Deno.test('normalizeChanges keeps a precondition on a comp delete', () => {
+slow('normalizeChanges keeps a precondition on a comp delete', () => {
   let was = { body: sha('ONE') }
   let [out] = normalizeChanges([{ eid: uid(), name: 'doc', comp: null, was }])
   assertEquals(out.was, was)
@@ -191,7 +192,7 @@ Deno.test('normalizeChanges keeps a precondition on a comp delete', () => {
 // hop most likely to be rewritten field by field. No door sends a guarded
 // change through it today; this keeps that survivable by construction rather
 // than by nobody having tried it yet.
-Deno.test('derefChanges keeps a precondition', () => {
+slow('derefChanges keeps a precondition', () => {
   let was = { body: sha('ONE') }
   let [out] = derefChanges([], [{
     eid: uid(),

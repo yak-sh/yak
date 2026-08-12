@@ -9,6 +9,7 @@ import { CUT, elide, type IO, mcpServer } from './mcp.ts'
 import { commandOut } from './commands.ts'
 import { sha } from './sha.ts'
 import { type Change, edges, statuses, uuid, verdicts } from './types.ts'
+import { slow } from './testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, journalOf, open, snapshot, touch } = await import('./db.ts')
@@ -520,7 +521,7 @@ Deno.test('MCP refusals are error results', async () => {
   })
 })
 
-Deno.test('MCP modes apply every accepted field and reject conflicts', async () => {
+slow('MCP modes apply every accepted field and reject conflicts', async () => {
   let g = graph()
   let duplicate = Deno.serve({
     hostname: '127.0.0.1',

@@ -5,6 +5,7 @@
 // needed except the two publish cases, which wire a real bare upstream.
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { land } from './land.ts'
+import { slow } from './testing.ts'
 
 let command = async (cwd: string, ...args: string[]) => {
   let r = await new Deno.Command('git', {
@@ -97,165 +98,189 @@ let withUpstream = async (r: Repo, reachable = true) => {
 
 let quiet = { write: () => {} }
 
-Deno.test('land fast-forwards a branch whose base has not moved — no graph, no rebase', async () => {
-  let r = await setup()
-  try {
-    let out: string[] = []
-    let outcome = await land({ cwd: r.tree, write: (t) => out.push(t) })
-    assert('landed' in outcome, JSON.stringify(outcome))
-    assertEquals(await command(r.repo, 'rev-parse', 'main'), outcome.landed)
-    assertEquals(
-      await command(outcome.root, 'rev-parse', '--show-toplevel'),
-      await command(r.repo, 'rev-parse', '--show-toplevel'),
-    )
-    assertEquals(
-      Deno.readTextFileSync(`${r.repo}/candidate.txt`),
-      'candidate\n',
-    )
-    // Nothing was rebased: land never mentions a moved base.
-    assert(!out.join('\n').includes('moved'), out.join('\n'))
-  } finally {
-    Deno.removeSync(r.root, { recursive: true })
-  }
-})
+slow(
+  'land fast-forwards a branch whose base has not moved — no graph, no rebase',
+  async () => {
+    let r = await setup()
+    try {
+      let out: string[] = []
+      let outcome = await land({ cwd: r.tree, write: (t) => out.push(t) })
+      assert('landed' in outcome, JSON.stringify(outcome))
+      assertEquals(await command(r.repo, 'rev-parse', 'main'), outcome.landed)
+      assertEquals(
+        await command(outcome.root, 'rev-parse', '--show-toplevel'),
+        await command(r.repo, 'rev-parse', '--show-toplevel'),
+      )
+      assertEquals(
+        Deno.readTextFileSync(`${r.repo}/candidate.txt`),
+        'candidate\n',
+      )
+      // Nothing was rebased: land never mentions a moved base.
+      assert(!out.join('\n').includes('moved'), out.join('\n'))
+    } finally {
+      Deno.removeSync(r.root, { recursive: true })
+    }
+  },
+)
 
-Deno.test('landing leaves the checkout holding the work it landed, dirt untouched', async () => {
-  let r = await setup()
-  try {
-    // Dirt the merge does not touch stays put: the shared checkout is a tree
-    // people work in, and landing is not entitled to a spotless one.
-    Deno.writeTextFileSync(`${r.repo}/scratch.txt`, 'mine\n')
-    let outcome = await land({ cwd: r.tree, ...quiet })
-    assert('landed' in outcome)
-    assertEquals(await command(r.repo, 'rev-parse', 'main'), outcome.landed)
-    assertEquals(
-      Deno.readTextFileSync(`${r.repo}/candidate.txt`),
-      'candidate\n',
-    )
-    assertEquals(Deno.readTextFileSync(`${r.repo}/scratch.txt`), 'mine\n')
-    // The worktree and its branch survive the landing, unlocked for whoever
-    // collects it once nobody is inside.
-    assert(exists(r.tree))
-    assert(
-      (await result(r.repo, 'show-ref', '--verify', 'refs/heads/session/S-7'))
-        .success,
-    )
-    await command(r.repo, 'worktree', 'remove', r.tree)
-  } finally {
-    Deno.removeSync(r.root, { recursive: true })
-  }
-})
+slow(
+  'landing leaves the checkout holding the work it landed, dirt untouched',
+  async () => {
+    let r = await setup()
+    try {
+      // Dirt the merge does not touch stays put: the shared checkout is a tree
+      // people work in, and landing is not entitled to a spotless one.
+      Deno.writeTextFileSync(`${r.repo}/scratch.txt`, 'mine\n')
+      let outcome = await land({ cwd: r.tree, ...quiet })
+      assert('landed' in outcome)
+      assertEquals(await command(r.repo, 'rev-parse', 'main'), outcome.landed)
+      assertEquals(
+        Deno.readTextFileSync(`${r.repo}/candidate.txt`),
+        'candidate\n',
+      )
+      assertEquals(Deno.readTextFileSync(`${r.repo}/scratch.txt`), 'mine\n')
+      // The worktree and its branch survive the landing, unlocked for whoever
+      // collects it once nobody is inside.
+      assert(exists(r.tree))
+      assert(
+        (await result(r.repo, 'show-ref', '--verify', 'refs/heads/session/S-7'))
+          .success,
+      )
+      await command(r.repo, 'worktree', 'remove', r.tree)
+    } finally {
+      Deno.removeSync(r.root, { recursive: true })
+    }
+  },
+)
 
-Deno.test('a moved base makes land rebase and RETURN without merging; a second land fast-forwards', async () => {
-  let r = await setup()
-  try {
-    let before = await command(r.repo, 'rev-parse', 'main')
-    await rivalLands(r, 'rival.txt', 'rival\n')
-    let moved = await command(r.repo, 'rev-parse', 'main')
-    assert(moved != before)
+slow(
+  'a moved base makes land rebase and RETURN without merging; a second land fast-forwards',
+  async () => {
+    let r = await setup()
+    try {
+      let before = await command(r.repo, 'rev-parse', 'main')
+      await rivalLands(r, 'rival.txt', 'rival\n')
+      let moved = await command(r.repo, 'rev-parse', 'main')
+      assert(moved != before)
 
-    let out: string[] = []
-    let first = await land({ cwd: r.tree, write: (t) => out.push(t) })
-    assert('diverged' in first && !first.conflict, JSON.stringify(first))
-    // The base is UNTOUCHED — land did not merge.
-    assertEquals(await command(r.repo, 'rev-parse', 'main'), moved)
-    let text = out.join('\n')
-    assert(text.includes('moved'), text)
-    // The `git diff --stat` names what the base pulled in.
-    assert(text.includes('rival.txt'), text)
-    // The branch was rebased: the moved base is now its ancestor.
-    assert(
-      (await result(r.tree, 'merge-base', '--is-ancestor', 'main', 'HEAD'))
-        .success,
-    )
+      let out: string[] = []
+      let first = await land({ cwd: r.tree, write: (t) => out.push(t) })
+      assert('diverged' in first && !first.conflict, JSON.stringify(first))
+      // The base is UNTOUCHED — land did not merge.
+      assertEquals(await command(r.repo, 'rev-parse', 'main'), moved)
+      let text = out.join('\n')
+      assert(text.includes('moved'), text)
+      // The `git diff --stat` names what the base pulled in.
+      assert(text.includes('rival.txt'), text)
+      // The branch was rebased: the moved base is now its ancestor.
+      assert(
+        (await result(r.tree, 'merge-base', '--is-ancestor', 'main', 'HEAD'))
+          .success,
+      )
 
-    let second = await land({ cwd: r.tree, ...quiet })
-    assert('landed' in second, JSON.stringify(second))
-    assertEquals(await command(r.repo, 'rev-parse', 'main'), second.landed)
-    assertEquals(Deno.readTextFileSync(`${r.repo}/rival.txt`), 'rival\n')
-    assertEquals(
-      Deno.readTextFileSync(`${r.repo}/candidate.txt`),
-      'candidate\n',
-    )
-  } finally {
-    Deno.removeSync(r.root, { recursive: true })
-  }
-})
+      let second = await land({ cwd: r.tree, ...quiet })
+      assert('landed' in second, JSON.stringify(second))
+      assertEquals(await command(r.repo, 'rev-parse', 'main'), second.landed)
+      assertEquals(Deno.readTextFileSync(`${r.repo}/rival.txt`), 'rival\n')
+      assertEquals(
+        Deno.readTextFileSync(`${r.repo}/candidate.txt`),
+        'candidate\n',
+      )
+    } finally {
+      Deno.removeSync(r.root, { recursive: true })
+    }
+  },
+)
 
-Deno.test("a rebase conflict returns with git's conflict output, leaving the rebase to resolve", async () => {
-  let r = await setup()
-  try {
-    // Our branch and the moved base both rewrite base.txt, so the rebase can't
-    // replay cleanly.
-    Deno.writeTextFileSync(`${r.tree}/base.txt`, 'candidate edit\n')
-    await command(r.tree, 'commit', '-am', 'edit base on branch')
-    await rivalLands(r, 'base.txt', 'rival edit\n')
-    let moved = await command(r.repo, 'rev-parse', 'main')
+slow(
+  "a rebase conflict returns with git's conflict output, leaving the rebase to resolve",
+  async () => {
+    let r = await setup()
+    try {
+      // Our branch and the moved base both rewrite base.txt, so the rebase can't
+      // replay cleanly.
+      Deno.writeTextFileSync(`${r.tree}/base.txt`, 'candidate edit\n')
+      await command(r.tree, 'commit', '-am', 'edit base on branch')
+      await rivalLands(r, 'base.txt', 'rival edit\n')
+      let moved = await command(r.repo, 'rev-parse', 'main')
 
-    let out: string[] = []
-    let outcome = await land({ cwd: r.tree, write: (t) => out.push(t) })
-    assert('diverged' in outcome && outcome.conflict, JSON.stringify(outcome))
-    assertEquals(await command(r.repo, 'rev-parse', 'main'), moved)
-    let text = out.join('\n')
-    assert(/CONFLICT|conflict/.test(text), text)
-    // The rebase is left in progress for the agent to resolve: conflict markers
-    // sit in the tree, and `git rebase --continue` is the way out.
-    assert(Deno.readTextFileSync(`${r.tree}/base.txt`).includes('<<<<<<<'))
-  } finally {
-    Deno.removeSync(r.root, { recursive: true })
-  }
-})
+      let out: string[] = []
+      let outcome = await land({ cwd: r.tree, write: (t) => out.push(t) })
+      assert('diverged' in outcome && outcome.conflict, JSON.stringify(outcome))
+      assertEquals(await command(r.repo, 'rev-parse', 'main'), moved)
+      let text = out.join('\n')
+      assert(/CONFLICT|conflict/.test(text), text)
+      // The rebase is left in progress for the agent to resolve: conflict markers
+      // sit in the tree, and `git rebase --continue` is the way out.
+      assert(Deno.readTextFileSync(`${r.tree}/base.txt`).includes('<<<<<<<'))
+    } finally {
+      Deno.removeSync(r.root, { recursive: true })
+    }
+  },
+)
 
-Deno.test("a fast-forward refused without the base moving surfaces git's error, never a rebase", async () => {
-  let r = await setup()
-  try {
-    // The candidate rewrites base.txt while the checkout has an uncommitted
-    // edit to it, so git refuses the fast-forward though main never moved.
-    Deno.writeTextFileSync(`${r.tree}/base.txt`, 'rewritten\n')
-    await command(r.tree, 'commit', '-am', 'rewrite base')
-    Deno.writeTextFileSync(`${r.repo}/base.txt`, 'being edited\n')
-    let before = await command(r.repo, 'rev-parse', 'main')
-    let out: string[] = []
-    await assertRejects(
-      () => land({ cwd: r.tree, write: (t) => out.push(t) }),
-      Error,
-      'git merge failed',
-    )
-    // The base is untouched, the local edit preserved, and NO rebase happened.
-    assertEquals(await command(r.repo, 'rev-parse', 'main'), before)
-    assertEquals(Deno.readTextFileSync(`${r.repo}/base.txt`), 'being edited\n')
-    assert(!out.join('\n').includes('moved'), out.join('\n'))
-  } finally {
-    Deno.removeSync(r.root, { recursive: true })
-  }
-})
+slow(
+  "a fast-forward refused without the base moving surfaces git's error, never a rebase",
+  async () => {
+    let r = await setup()
+    try {
+      // The candidate rewrites base.txt while the checkout has an uncommitted
+      // edit to it, so git refuses the fast-forward though main never moved.
+      Deno.writeTextFileSync(`${r.tree}/base.txt`, 'rewritten\n')
+      await command(r.tree, 'commit', '-am', 'rewrite base')
+      Deno.writeTextFileSync(`${r.repo}/base.txt`, 'being edited\n')
+      let before = await command(r.repo, 'rev-parse', 'main')
+      let out: string[] = []
+      await assertRejects(
+        () => land({ cwd: r.tree, write: (t) => out.push(t) }),
+        Error,
+        'git merge failed',
+      )
+      // The base is untouched, the local edit preserved, and NO rebase happened.
+      assertEquals(await command(r.repo, 'rev-parse', 'main'), before)
+      assertEquals(
+        Deno.readTextFileSync(`${r.repo}/base.txt`),
+        'being edited\n',
+      )
+      assert(!out.join('\n').includes('moved'), out.join('\n'))
+    } finally {
+      Deno.removeSync(r.root, { recursive: true })
+    }
+  },
+)
 
-Deno.test('land refuses to run in the shared checkout, not a session worktree', async () => {
-  let r = await setup()
-  try {
-    await assertRejects(
-      () => land({ cwd: r.repo, ...quiet }),
-      Error,
-      'not the shared checkout',
-    )
-  } finally {
-    Deno.removeSync(r.root, { recursive: true })
-  }
-})
+slow(
+  'land refuses to run in the shared checkout, not a session worktree',
+  async () => {
+    let r = await setup()
+    try {
+      await assertRejects(
+        () => land({ cwd: r.repo, ...quiet }),
+        Error,
+        'not the shared checkout',
+      )
+    } finally {
+      Deno.removeSync(r.root, { recursive: true })
+    }
+  },
+)
 
-Deno.test('a landing publishes to the base branch upstream when it has one', async () => {
-  let r = await setup()
-  try {
-    let bare = await withUpstream(r)
-    let outcome = await land({ cwd: r.tree, ...quiet })
-    assert('landed' in outcome)
-    assertEquals(await command(bare, 'rev-parse', 'main'), outcome.landed)
-  } finally {
-    Deno.removeSync(r.root, { recursive: true })
-  }
-})
+slow(
+  'a landing publishes to the base branch upstream when it has one',
+  async () => {
+    let r = await setup()
+    try {
+      let bare = await withUpstream(r)
+      let outcome = await land({ cwd: r.tree, ...quiet })
+      assert('landed' in outcome)
+      assertEquals(await command(bare, 'rev-parse', 'main'), outcome.landed)
+    } finally {
+      Deno.removeSync(r.root, { recursive: true })
+    }
+  },
+)
 
-Deno.test('land does not publish when the base has no upstream', async () => {
+slow('land does not publish when the base has no upstream', async () => {
   let r = await setup()
   try {
     let outcome = await land({ cwd: r.tree, ...quiet })
@@ -270,21 +295,24 @@ Deno.test('land does not publish when the base has no upstream', async () => {
   }
 })
 
-Deno.test('a publish refusal lands anyway — publishing is best-effort, never a failed land', async () => {
-  let r = await setup()
-  try {
-    await withUpstream(r, false)
-    let warned = ''
-    let outcome = await land({
-      cwd: r.tree,
-      write: (text, error) => {
-        if (error && text.includes('publish')) warned = text
-      },
-    })
-    assert('landed' in outcome)
-    assertEquals(await command(r.repo, 'rev-parse', 'main'), outcome.landed)
-    assert(warned.includes('landed locally, publish separately'), warned)
-  } finally {
-    Deno.removeSync(r.root, { recursive: true })
-  }
-})
+slow(
+  'a publish refusal lands anyway — publishing is best-effort, never a failed land',
+  async () => {
+    let r = await setup()
+    try {
+      await withUpstream(r, false)
+      let warned = ''
+      let outcome = await land({
+        cwd: r.tree,
+        write: (text, error) => {
+          if (error && text.includes('publish')) warned = text
+        },
+      })
+      assert('landed' in outcome)
+      assertEquals(await command(r.repo, 'rev-parse', 'main'), outcome.landed)
+      assert(warned.includes('landed locally, publish separately'), warned)
+    } finally {
+      Deno.removeSync(r.root, { recursive: true })
+    }
+  },
+)

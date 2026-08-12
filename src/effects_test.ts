@@ -4,6 +4,7 @@
 // dispatch promise always resolves). db.ts comes in dynamically, AFTER
 // the env points it at :memory:.
 import { assert, assertEquals } from '@std/assert'
+import { tick } from './testing.ts'
 import { type Change } from './types.ts'
 import { dispatch, docs, on, relay, trace } from './effects.ts'
 
@@ -98,7 +99,7 @@ Deno.test('async handler results ride the dispatch promise', async () => {
   let landed = false
   on('doc', {
     created: async () => {
-      await new Promise((go) => setTimeout(go, 10))
+      await tick()
       landed = true
     },
   })

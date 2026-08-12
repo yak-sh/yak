@@ -17,6 +17,7 @@ import { dispatch, on, relay, trace } from './effects.ts'
 import { PENDING } from './deliver.ts'
 import { fakeClaude, fakeCodex } from './door_fake.ts'
 import { sessionRow, writeSession } from './session_store.ts'
+import { slow } from './testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let tmp = Deno.makeTempDirSync({ prefix: 'tasks-sessions-' })
@@ -234,7 +235,7 @@ let INIT = '{"type":"init","session_id":"sid-1","model":"fake-fast"}'
 let RESULT =
   '{"type":"result","final_text":"first","usage":{"output_tokens":7}}'
 
-Deno.test('child PATH leads with the task CLI and preserves the service', () => {
+slow('child PATH leads with the task CLI and preserves the service', () => {
   let bin = '/home/agent/.deno/bin'
   assertEquals(
     childPath('/home/agent', '/usr/bin:/opt/bin'),
@@ -249,7 +250,7 @@ Deno.test('child PATH leads with the task CLI and preserves the service', () => 
   assertEquals(childPath('', '/usr/bin'), '/usr/bin')
 })
 
-Deno.test('managed child environment excludes provider credentials', () => {
+slow('managed child environment excludes provider credentials', () => {
   let marker = `credential-${uid()}`
   let names = ['OPENAI_API_KEY', 'CODEX_HOME', 'CHATGPT_ACCOUNT_ID']
   let before = names.map((name) => Deno.env.get(name))
@@ -266,33 +267,36 @@ Deno.test('managed child environment excludes provider credentials', () => {
   }
 })
 
-Deno.test('a spawn the graph cannot honor is a failed session, not a 400', async () => {
-  let { t } = seed()
-  let no = seed('', null) // a project with no repo comp
-  let cases: [Record<string, unknown>, RegExp][] = [
-    [{ provider: 'oracle' }, /unknown provider/],
-    [{ model: 'gpt-9' }, /unknown model/],
-    [{ effort: 'heroic' }, /unknown effort/],
-    [{ requested_task: uid() }, /no such task/],
-    [{ requested_task: no.t }, /no repo/],
-  ]
-  for (let [extra, says] of cases) {
-    let { eid, done } = begin(t, extra)
-    await done
-    let s = row(eid)!
-    assertEquals(s.status, 'failed', JSON.stringify(extra))
-    assertEquals(s.origin, 'managed')
-    assertMatch(failure(eid) ?? '', says)
-    let failed = journalOf(db, eid).find((entry) =>
-      entry.changes.some((c) =>
-        c.name == 'session' && c.comp?.status == 'failed'
+slow(
+  'a spawn the graph cannot honor is a failed session, not a 400',
+  async () => {
+    let { t } = seed()
+    let no = seed('', null) // a project with no repo comp
+    let cases: [Record<string, unknown>, RegExp][] = [
+      [{ provider: 'oracle' }, /unknown provider/],
+      [{ model: 'gpt-9' }, /unknown model/],
+      [{ effort: 'heroic' }, /unknown effort/],
+      [{ requested_task: uid() }, /no such task/],
+      [{ requested_task: no.t }, /no repo/],
+    ]
+    for (let [extra, says] of cases) {
+      let { eid, done } = begin(t, extra)
+      await done
+      let s = row(eid)!
+      assertEquals(s.status, 'failed', JSON.stringify(extra))
+      assertEquals(s.origin, 'managed')
+      assertMatch(failure(eid) ?? '', says)
+      let failed = journalOf(db, eid).find((entry) =>
+        entry.changes.some((c) =>
+          c.name == 'session' && c.comp?.status == 'failed'
+        )
       )
-    )
-    assert(failed?.changes.some((c) => c.name == 'error'))
-  }
-})
+      assert(failed?.changes.some((c) => c.name == 'error'))
+    }
+  },
+)
 
-Deno.test('a new Codex spawn routes to the graph-native lifecycle', async () => {
+slow('a new Codex spawn routes to the graph-native lifecycle', async () => {
   let { t } = seed()
   let eid = uid(), routed = 0
   apply(db, [{
@@ -373,7 +377,7 @@ Deno.test('a new Codex spawn routes to the graph-native lifecycle', async () => 
   )
 })
 
-Deno.test('a projectless Codex task starts as a no-code graph session', async () => {
+slow('a projectless Codex task starts as a no-code graph session', async () => {
   let task = uid(), eid = uid(), routed = 0
   apply(db, [
     { eid: task, name: 'doc', comp: { title: 'Triage the graph' } },
@@ -411,7 +415,7 @@ Deno.test('a projectless Codex task starts as a no-code graph session', async ()
   )
 })
 
-Deno.test('a process provider names its projectless-task requirement', async () => {
+slow('a process provider names its projectless-task requirement', async () => {
   let task = uid()
   apply(db, [
     { eid: task, name: 'doc', comp: { title: 'Triage the graph' } },
@@ -425,14 +429,14 @@ Deno.test('a process provider names its projectless-task requirement', async () 
   )
 })
 
-Deno.test('Codex routing keeps both process fallback doors explicit', () => {
+slow('Codex routing keeps both process fallback doors explicit', () => {
   assertEquals(graphCodex('codex', undefined), true)
   assertEquals(graphCodex('codex-cli', undefined), false)
   assertEquals(graphCodex('codex', 'cli'), false)
   assertEquals(graphCodex('claude', undefined), false)
 })
 
-Deno.test('a stale spawn claim preserves the session that won', () => {
+slow('a stale spawn claim preserves the session that won', () => {
   let { t } = seed()
   let mine = uid(), other = uid()
   apply(db, [{ eid: mine, name: 'session', comp: { id: 'stale-mine' } }, {
@@ -459,7 +463,7 @@ Deno.test('a stale spawn claim preserves the session that won', () => {
   )
 })
 
-Deno.test('worktree preparation adopts its matching crash remnant', async () => {
+slow('worktree preparation adopts its matching crash remnant', async () => {
   let eid = uid(), tree = `${tmp}/replayed-${eid}`, branch = `session/${eid}`
   apply(db, [{ eid, name: 'session', comp: { id: uid() } }])
   let launch = {
@@ -488,143 +492,149 @@ let gitIn = (cwd: string, ...args: string[]) =>
   new Deno.Command('git', { args, cwd, stdout: 'null', stderr: 'null' })
     .outputSync()
 
-Deno.test('recoverWorktree regrows a reaped checkout, and no-ops a live one', async () => {
-  let { t } = seed()
-  let eid = uid(), tree = `${tmp}/gone-${eid}`, branch = `session/${eid}`
-  apply(db, [{
-    eid,
-    name: 'session',
-    comp: { id: uid(), requested_task: t, cwd: tree, branch },
-  }])
-  await prepareWorktree(eid, {
-    instruction: '',
-    session_id: uid(),
-    repo: { path: scratch, base_branch: 'main' },
-    tree,
-    branch,
-    model: 'gpt-5.6-sol',
-  }, cast)
-  assert(existsSync(tree))
-  // A live checkout is left untouched.
-  assertEquals(await recoverWorktree(eid, cast), undefined)
-  // Reap it exactly as probes.prune does: worktree, then branch.
-  gitIn(scratch, 'worktree', 'remove', '--force', tree)
-  gitIn(scratch, 'branch', '-D', branch)
-  assert(!existsSync(tree))
-  // The next turn regrows it at the recorded path.
-  let back = await recoverWorktree(eid, cast)
-  assertEquals(back?.cwd, tree)
-  assert(existsSync(tree))
-  assertEquals(row(eid)?.cwd, tree)
-})
+slow(
+  'recoverWorktree regrows a reaped checkout, and no-ops a live one',
+  async () => {
+    let { t } = seed()
+    let eid = uid(), tree = `${tmp}/gone-${eid}`, branch = `session/${eid}`
+    apply(db, [{
+      eid,
+      name: 'session',
+      comp: { id: uid(), requested_task: t, cwd: tree, branch },
+    }])
+    await prepareWorktree(eid, {
+      instruction: '',
+      session_id: uid(),
+      repo: { path: scratch, base_branch: 'main' },
+      tree,
+      branch,
+      model: 'gpt-5.6-sol',
+    }, cast)
+    assert(existsSync(tree))
+    // A live checkout is left untouched.
+    assertEquals(await recoverWorktree(eid, cast), undefined)
+    // Reap it exactly as probes.prune does: worktree, then branch.
+    gitIn(scratch, 'worktree', 'remove', '--force', tree)
+    gitIn(scratch, 'branch', '-D', branch)
+    assert(!existsSync(tree))
+    // The next turn regrows it at the recorded path.
+    let back = await recoverWorktree(eid, cast)
+    assertEquals(back?.cwd, tree)
+    assert(existsSync(tree))
+    assertEquals(row(eid)?.cwd, tree)
+  },
+)
 
 // The whole point of the chain: a graph-native session whose checkout was
 // reaped comes back and USES LOCAL TOOLS on the next user entry — across a
 // daemon restart (a fresh runner over the same graph). Without recovery,
 // localTools' realPath dies on the missing directory before a tool ever runs.
-Deno.test('a graph-native session recovers a reaped checkout and runs local tools', async () => {
-  let { managedCodex } = await import('./managed_codex.ts')
-  let { localTools } = await import('./harness_tools.ts')
-  let { readEntries, append } = await import('./entries.ts')
+slow(
+  'a graph-native session recovers a reaped checkout and runs local tools',
+  async () => {
+    let { managedCodex } = await import('./managed_codex.ts')
+    let { localTools } = await import('./harness_tools.ts')
+    let { readEntries, append } = await import('./entries.ts')
 
-  let { t } = seed()
-  let eid = uid(), id = uid()
-  let tree = `${tmp}/native-${eid}`, branch = `session/${eid}`
-  apply(db, [{
-    eid,
-    name: 'session',
-    comp: { id, requested_task: t, cwd: tree, branch },
-  }])
-  db.prepare("update session set origin = 'managed' where eid = ?").run(eid)
+    let { t } = seed()
+    let eid = uid(), id = uid()
+    let tree = `${tmp}/native-${eid}`, branch = `session/${eid}`
+    apply(db, [{
+      eid,
+      name: 'session',
+      comp: { id, requested_task: t, cwd: tree, branch },
+    }])
+    db.prepare("update session set origin = 'managed' where eid = ?").run(eid)
 
-  // The provider: each turn asks for one shell call, then answers. `printf %s
-  // "$PWD"` proves WHERE the tool ran — the regrown checkout, not a stray cwd.
-  let shell = () => ({
-    model: 'gpt-serving',
-    items: [{
-      type: 'function_call' as const,
-      id: 'c',
-      call_id: `call-${uid()}`,
-      name: 'shell',
-      arguments: JSON.stringify({
-        command: 'printf %s "$PWD"',
-        cwd: null,
-        timeout_ms: 4000,
-      }),
-    }],
-    unknown: [],
-    unknownItems: [],
-    usage: { input: 1, cached: 0, output: 1, reasoning: 0, raw: {} },
-    response: {},
-    limits: {},
-  })
-  let answer = (text: string) => ({
-    ...shell(),
-    items: [{
-      type: 'message' as const,
-      id: 'm',
-      content: [{ type: 'output_text' as const, text }],
-    }],
-  })
-  let turns = [shell(), answer('one'), shell(), answer('two')]
-  let make = () =>
-    managedCodex({
-      db,
-      cast,
-      // Hermetic against a shared graph: the runner sweeps every runnable
-      // session, so any OTHER session left ready by an earlier test gets a
-      // plain final answer and settles, leaving this session's script intact.
-      transport: {
-        run: (request) =>
-          Promise.resolve(
-            request.prompt_cache_key == eid ? turns.shift()! : answer('idle'),
-          ),
-      },
-      prepare: prepareWorktree,
-      tools: async (into: string | undefined, session: string) => {
-        await recoverWorktree(session, cast)
-        return localTools({ tree: String(into) })
-      },
+    // The provider: each turn asks for one shell call, then answers. `printf %s
+    // "$PWD"` proves WHERE the tool ran — the regrown checkout, not a stray cwd.
+    let shell = () => ({
+      model: 'gpt-serving',
+      items: [{
+        type: 'function_call' as const,
+        id: 'c',
+        call_id: `call-${uid()}`,
+        name: 'shell',
+        arguments: JSON.stringify({
+          command: 'printf %s "$PWD"',
+          cwd: null,
+          timeout_ms: 4000,
+        }),
+      }],
+      unknown: [],
+      unknownItems: [],
+      usage: { input: 1, cached: 0, output: 1, reasoning: 0, raw: {} },
+      response: {},
+      limits: {},
     })
+    let answer = (text: string) => ({
+      ...shell(),
+      items: [{
+        type: 'message' as const,
+        id: 'm',
+        content: [{ type: 'output_text' as const, text }],
+      }],
+    })
+    let turns = [shell(), answer('one'), shell(), answer('two')]
+    let make = () =>
+      managedCodex({
+        db,
+        cast,
+        // Hermetic against a shared graph: the runner sweeps every runnable
+        // session, so any OTHER session left ready by an earlier test gets a
+        // plain final answer and settles, leaving this session's script intact.
+        transport: {
+          run: (request) =>
+            Promise.resolve(
+              request.prompt_cache_key == eid ? turns.shift()! : answer('idle'),
+            ),
+        },
+        prepare: prepareWorktree,
+        tools: async (into: string | undefined, session: string) => {
+          await recoverWorktree(session, cast)
+          return localTools({ tree: String(into) })
+        },
+      })
 
-  // Turn one: a normal first run grows the checkout and runs its shell there.
-  await make().start(eid, {
-    instruction: 'go',
-    session_id: id,
-    repo: { path: scratch, base_branch: 'main' },
-    tree,
-    branch,
-    model: 'gpt-requested',
-  })
-  assert(existsSync(tree))
-  let real = Deno.realPathSync(tree)
-  let shellOut = (session: string) =>
-    readEntries(db, session).filter((r) => r.comps.result)
-      .map((r) => ({ body: r.comps.content?.body, code: r.comps.exit?.code }))
-  assertEquals(shellOut(eid), [{ body: real, code: 0 }])
+    // Turn one: a normal first run grows the checkout and runs its shell there.
+    await make().start(eid, {
+      instruction: 'go',
+      session_id: id,
+      repo: { path: scratch, base_branch: 'main' },
+      tree,
+      branch,
+      model: 'gpt-requested',
+    })
+    assert(existsSync(tree))
+    let real = Deno.realPathSync(tree)
+    let shellOut = (session: string) =>
+      readEntries(db, session).filter((r) => r.comps.result)
+        .map((r) => ({ body: r.comps.content?.body, code: r.comps.exit?.code }))
+    assertEquals(shellOut(eid), [{ body: real, code: 0 }])
 
-  // Reap the clean, merged checkout, then simulate a daemon restart.
-  gitIn(scratch, 'worktree', 'remove', '--force', tree)
-  gitIn(scratch, 'branch', '-D', branch)
-  assert(!existsSync(tree))
+    // Reap the clean, merged checkout, then simulate a daemon restart.
+    gitIn(scratch, 'worktree', 'remove', '--force', tree)
+    gitIn(scratch, 'branch', '-D', branch)
+    assert(!existsSync(tree))
 
-  // A later user entry arrives directly in the graph; the fresh runner picks
-  // it up, recovers the workspace, and the shell runs in the regrown tree.
-  let fresh = make()
-  append(db, eid, [{
-    message: { role: 'user' },
-    content: { body: 'again' },
-  }], fresh.runner)
-  await fresh.sweep()
+    // A later user entry arrives directly in the graph; the fresh runner picks
+    // it up, recovers the workspace, and the shell runs in the regrown tree.
+    let fresh = make()
+    append(db, eid, [{
+      message: { role: 'user' },
+      content: { body: 'again' },
+    }], fresh.runner)
+    await fresh.sweep()
 
-  assert(existsSync(tree))
-  assertEquals(shellOut(eid), [
-    { body: real, code: 0 },
-    { body: Deno.realPathSync(tree), code: 0 },
-  ])
-})
+    assert(existsSync(tree))
+    assertEquals(shellOut(eid), [
+      { body: real, code: 0 },
+      { body: Deno.realPathSync(tree), code: 0 },
+    ])
+  },
+)
 
-Deno.test('a fake session runs end to end', async () => {
+slow('a fake session runs end to end', async () => {
   let { t } = seed('noise') // tell the fake to write to stderr too
   let canvas = uid(), card = uid()
   apply(db, [{ eid: canvas, name: 'canvas', comp: {} }])
@@ -708,7 +718,7 @@ Deno.test('a fake session runs end to end', async () => {
   assertMatch(String(page.stderr), /stderr noise/) // diagnostics, unordered
 })
 
-Deno.test('both Codex rollback names run through process JSONL', async () => {
+slow('both Codex rollback names run through process JSONL', async () => {
   let oldCodex = adapters.codex
   let oldFallback = adapters['codex-cli']
   let oldMode = Deno.env.get('TASKS_CODEX_RUNNER')
@@ -754,63 +764,66 @@ Deno.test('both Codex rollback names run through process JSONL', async () => {
   }
 })
 
-Deno.test('a managed role runs in its project and resumes content-free', async () => {
-  let project = uid(), role = uid(), eid = uid(), id = uid()
-  let done = write([
-    { eid: project, name: 'doc', comp: { title: 'Project', body: '' } },
-    { eid: project, name: 'project', comp: {} },
-    {
-      eid: project,
-      name: 'repo',
-      comp: { path: scratch, base_branch: 'main' },
-    },
-    {
-      eid: role,
-      name: 'doc',
-      comp: { title: 'Coordinator', body: 'report-role-env' },
-    },
-    {
-      eid: role,
-      name: 'role',
-      comp: { state: 'running', surface: 'managed', scope: project },
-    },
-    {
-      eid,
-      name: 'session',
-      comp: {
-        id,
-        provider: 'fake',
-        model: 'fake-fast',
-        role: role,
-        operator: 1,
+slow(
+  'a managed role runs in its project and resumes content-free',
+  async () => {
+    let project = uid(), role = uid(), eid = uid(), id = uid()
+    let done = write([
+      { eid: project, name: 'doc', comp: { title: 'Project', body: '' } },
+      { eid: project, name: 'project', comp: {} },
+      {
+        eid: project,
+        name: 'repo',
+        comp: { path: scratch, base_branch: 'main' },
       },
-    },
-  ])
-  await done
-  assertEquals(row(eid)?.status, 'completed', JSON.stringify(row(eid)))
-  assertEquals(row(eid)?.actor, project)
-  assertEquals(row(eid)?.requested_task, null)
-  let events = Deno.readTextFileSync(log(eid)).split('\n').filter(Boolean)
-  assert(
-    events.some((line) => line.includes(`"text":"role:${role}"`)),
-  )
+      {
+        eid: role,
+        name: 'doc',
+        comp: { title: 'Coordinator', body: 'report-role-env' },
+      },
+      {
+        eid: role,
+        name: 'role',
+        comp: { state: 'running', surface: 'managed', scope: project },
+      },
+      {
+        eid,
+        name: 'session',
+        comp: {
+          id,
+          provider: 'fake',
+          model: 'fake-fast',
+          role: role,
+          operator: 1,
+        },
+      },
+    ])
+    await done
+    assertEquals(row(eid)?.status, 'completed', JSON.stringify(row(eid)))
+    assertEquals(row(eid)?.actor, project)
+    assertEquals(row(eid)?.requested_task, null)
+    let events = Deno.readTextFileSync(log(eid)).split('\n').filter(Boolean)
+    assert(
+      events.some((line) => line.includes(`"text":"role:${role}"`)),
+    )
 
-  await continueSession(
-    eid,
-    'You have pending Tasks messages. Call task_context now.',
-    cast,
-  )
-  assertEquals(row(eid)?.status, 'completed')
-  let inputs = Deno.readTextFileSync(log(eid)).split('\n').filter(Boolean)
-    .map((line) => JSON.parse(line) as { type?: string; text?: string })
-    .filter((event) => event.type == 'session.input')
-  assertEquals(
-    inputs.at(-1)?.text,
-    'You have pending Tasks messages. Call task_context now.',
-  )
-})
+    await continueSession(
+      eid,
+      'You have pending Tasks messages. Call task_context now.',
+      cast,
+    )
+    assertEquals(row(eid)?.status, 'completed')
+    let inputs = Deno.readTextFileSync(log(eid)).split('\n').filter(Boolean)
+      .map((line) => JSON.parse(line) as { type?: string; text?: string })
+      .filter((event) => event.type == 'session.input')
+    assertEquals(
+      inputs.at(-1)?.text,
+      'You have pending Tasks messages. Call task_context now.',
+    )
+  },
+)
 
-Deno.test('a canonical fake session dual-materializes and runs', async () => {
+slow('a canonical fake session dual-materializes and runs', async () => {
   let { t } = seed()
   let { eid, done } = beginCanonical(t, { effort: 'high' })
   await done
@@ -833,7 +846,7 @@ Deno.test('a canonical fake session dual-materializes and runs', async () => {
   assertEquals(logs(eid, new URLSearchParams()).entries.length, 5)
 })
 
-Deno.test('an external provider patch is not a launch request', async () => {
+slow('an external provider patch is not a launch request', async () => {
   let eid = uid()
   await write([{
     eid,
@@ -852,7 +865,7 @@ Deno.test('an external provider patch is not a launch request', async () => {
   assertEquals(logs(eid, new URLSearchParams()).entries, [])
 })
 
-Deno.test('a worn persona rides the prompt whole — tiers and all', async () => {
+slow('a worn persona rides the prompt whole — tiers and all', async () => {
   let { t } = seed()
   let per = uid(), mem = uid()
   apply(db, [
@@ -876,7 +889,7 @@ Deno.test('a worn persona rides the prompt whole — tiers and all', async () =>
   assertMatch(text, /task land/)
 })
 
-Deno.test('a child that exits nonzero failed, whatever it said', async () => {
+slow('a child that exits nonzero failed, whatever it said', async () => {
   let { t } = seed('fail:3')
   let { eid, done } = begin(t)
   await done
@@ -888,48 +901,54 @@ Deno.test('a child that exits nonzero failed, whatever it said', async () => {
 // exits 0 — so the only witness is the stderr file and the pidfile that
 // never appeared. Shadowing systemd-run with a refusal replays the whole
 // class (a scope name still held, an unreachable user bus) exactly.
-Deno.test('a launch that never starts is stillborn, and says what refused', async () => {
-  let { t } = seed()
-  let path = Deno.env.get('PATH')!
-  Deno.mkdirSync(`${tmp}/bin`, { recursive: true })
-  Deno.writeTextFileSync(
-    `${tmp}/bin/systemd-run`,
-    '#!/bin/sh\necho "Failed to start transient scope unit: ' +
-      'Unit already exists." >&2\nexit 1\n',
-  )
-  Deno.chmodSync(`${tmp}/bin/systemd-run`, 0o755)
-  Deno.env.set('PATH', `${tmp}/bin:${path}`)
-  Deno.env.set('BIRTH_GRACE_MS', '400')
-  let eid: string
-  try {
-    let run = begin(t)
-    eid = run.eid
-    await run.done
-  } finally {
-    Deno.env.set('PATH', path)
-    Deno.env.delete('BIRTH_GRACE_MS')
-  }
-  let s = row(eid)!
-  assertEquals(s.status, 'failed')
-  assertEquals(s.exit_code, null)
-  // Not 'the wrapper died before reporting': no wrapper ever ran to die.
-  assertMatch(String(s.stop_reason), /^stillborn/)
-  assertMatch(failure(eid) ?? '', /transient scope unit/)
-})
+slow(
+  'a launch that never starts is stillborn, and says what refused',
+  async () => {
+    let { t } = seed()
+    let path = Deno.env.get('PATH')!
+    Deno.mkdirSync(`${tmp}/bin`, { recursive: true })
+    Deno.writeTextFileSync(
+      `${tmp}/bin/systemd-run`,
+      '#!/bin/sh\necho "Failed to start transient scope unit: ' +
+        'Unit already exists." >&2\nexit 1\n',
+    )
+    Deno.chmodSync(`${tmp}/bin/systemd-run`, 0o755)
+    Deno.env.set('PATH', `${tmp}/bin:${path}`)
+    Deno.env.set('BIRTH_GRACE_MS', '400')
+    let eid: string
+    try {
+      let run = begin(t)
+      eid = run.eid
+      await run.done
+    } finally {
+      Deno.env.set('PATH', path)
+      Deno.env.delete('BIRTH_GRACE_MS')
+    }
+    let s = row(eid)!
+    assertEquals(s.status, 'failed')
+    assertEquals(s.exit_code, null)
+    // Not 'the wrapper died before reporting': no wrapper ever ran to die.
+    assertMatch(String(s.stop_reason), /^stillborn/)
+    assertMatch(failure(eid) ?? '', /transient scope unit/)
+  },
+)
 
 // A run that exits 0 but never emits its terminal event failed (no
 // completion was signalled), and the reason it broke lives only on stderr —
 // the provider's dying words, like Codex's `tool call output is missing`
 // loop when a tool process vanishes mid-call. A failed session must say WHY,
 // so the stderr tail becomes its error rather than an empty string.
-Deno.test('a run that exits clean but never finished says why from stderr', async () => {
-  let { t } = seed('quiet noise')
-  let { eid, done } = begin(t)
-  await done
-  assertEquals(row(eid)?.status, 'failed')
-  assertEquals(row(eid)?.exit_code, 0) // clean OS exit, unfinished work
-  assertMatch(failure(eid) ?? '', /stderr noise/)
-})
+slow(
+  'a run that exits clean but never finished says why from stderr',
+  async () => {
+    let { t } = seed('quiet noise')
+    let { eid, done } = begin(t)
+    await done
+    assertEquals(row(eid)?.status, 'failed')
+    assertEquals(row(eid)?.exit_code, 0) // clean OS exit, unfinished work
+    assertMatch(failure(eid) ?? '', /stderr noise/)
+  },
+)
 
 // The settle broadcast: whoever holds the task hears the ending on the
 // bus, because the ending IS a comment on the task, via the
@@ -941,7 +960,7 @@ let settleComments = (task: string, via: string) =>
      where c.target = ? and b.via = ?`,
   ).all(task, via) as { body: string }[]).map((c) => c.body)
 
-Deno.test('a settled session says so on its task', async () => {
+slow('a settled session says so on its task', async () => {
   let { t } = seed()
   heard = []
   let { eid, done } = begin(t)
@@ -959,74 +978,80 @@ Deno.test('a settled session says so on its task', async () => {
   )
 })
 
-Deno.test('a completed session reports and stamps its unlanded commits', async () => {
-  let verdict = 'project gate failed with exit 7'
-  let body = `delay:300 ${'context '.repeat(80)}${verdict}`
-  let { t } = seed(body)
-  heard = []
-  let { eid, done } = begin(t)
-  await until(() => row(eid)?.status == 'running', 'the init event')
-  let tree = String(row(eid)?.cwd)
-  Deno.writeTextFileSync(`${tree}/unlanded.txt`, 'committed\n')
-  let git = (...args: string[]) =>
-    new Deno.Command('git', {
-      args,
-      cwd: tree,
-      stdout: 'null',
-      stderr: 'null',
-    }).outputSync()
-  assert(git('add', 'unlanded.txt').success)
-  assert(git('commit', '-m', 'leave work unlanded').success)
-  await done
+slow(
+  'a completed session reports and stamps its unlanded commits',
+  async () => {
+    let verdict = 'project gate failed with exit 7'
+    let body = `delay:300 ${'context '.repeat(80)}${verdict}`
+    let { t } = seed(body)
+    heard = []
+    let { eid, done } = begin(t)
+    await until(() => row(eid)?.status == 'running', 'the init event')
+    let tree = String(row(eid)?.cwd)
+    Deno.writeTextFileSync(`${tree}/unlanded.txt`, 'committed\n')
+    let git = (...args: string[]) =>
+      new Deno.Command('git', {
+        args,
+        cwd: tree,
+        stdout: 'null',
+        stderr: 'null',
+      }).outputSync()
+    assert(git('add', 'unlanded.txt').success)
+    assert(git('commit', '-m', 'leave work unlanded').success)
+    await done
 
-  let branch = String(row(eid)?.branch)
-  let message = failure(eid) ?? ''
-  assertMatch(
-    message,
-    new RegExp(`^UNLANDED: 1 commit on ${branch} not in main`),
-  )
-  assertMatch(message, new RegExp(`${verdict}$`))
-  let said = settleComments(t, eid)
-  assertEquals(said.length, 1)
-  assertMatch(
-    said[0],
-    new RegExp(`⚠ UNLANDED: 1 commit on ${branch} not in main`),
-  )
-  assertMatch(said[0], new RegExp(`${verdict}$`))
-  assert(heard.some((c) => c.eid == eid && c.name == 'error'))
-})
+    let branch = String(row(eid)?.branch)
+    let message = failure(eid) ?? ''
+    assertMatch(
+      message,
+      new RegExp(`^UNLANDED: 1 commit on ${branch} not in main`),
+    )
+    assertMatch(message, new RegExp(`${verdict}$`))
+    let said = settleComments(t, eid)
+    assertEquals(said.length, 1)
+    assertMatch(
+      said[0],
+      new RegExp(`⚠ UNLANDED: 1 commit on ${branch} not in main`),
+    )
+    assertMatch(said[0], new RegExp(`${verdict}$`))
+    assert(heard.some((c) => c.eid == eid && c.name == 'error'))
+  },
+)
 
-Deno.test('a failed spawn tells its task and its spawner — and only once', async () => {
-  let { t } = seed()
-  let spawner = uid(), sid = uid()
-  apply(db, [{ eid: spawner, name: 'session', comp: { id: sid } }])
-  heard = []
-  let { eid, done } = begin(t, { model: 'no-such-model' }, sid)
-  await done
-  assertEquals(row(eid)?.status, 'failed')
-  let said = settleComments(t, eid)
-  assertEquals(said.length, 1)
-  assertMatch(said[0], /^S-\d+ failed\n/)
-  assertMatch(said[0], /unknown model/)
-  assertEquals(settleComments(spawner, eid), said)
-  assertEquals(
-    (db.prepare('select via from created where eid = ?').get(eid) as {
-      via: string
-    }).via,
-    spawner,
-  )
-  assert(
-    heard.some((c) => c.name == 'comment' && c.comp?.target == spawner),
-  )
-  let bus = noticesFor(snapshot(db), sid)
-  assertEquals(bus.lines.length, 1)
-  assertMatch(bus.lines[0], /S-\d+ failed/)
-  spawned(cast)(eid, { provider: 'fake' })
-  assertEquals(settleComments(t, eid).length, 1)
-  assertEquals(settleComments(spawner, eid).length, 1)
-})
+slow(
+  'a failed spawn tells its task and its spawner — and only once',
+  async () => {
+    let { t } = seed()
+    let spawner = uid(), sid = uid()
+    apply(db, [{ eid: spawner, name: 'session', comp: { id: sid } }])
+    heard = []
+    let { eid, done } = begin(t, { model: 'no-such-model' }, sid)
+    await done
+    assertEquals(row(eid)?.status, 'failed')
+    let said = settleComments(t, eid)
+    assertEquals(said.length, 1)
+    assertMatch(said[0], /^S-\d+ failed\n/)
+    assertMatch(said[0], /unknown model/)
+    assertEquals(settleComments(spawner, eid), said)
+    assertEquals(
+      (db.prepare('select via from created where eid = ?').get(eid) as {
+        via: string
+      }).via,
+      spawner,
+    )
+    assert(
+      heard.some((c) => c.name == 'comment' && c.comp?.target == spawner),
+    )
+    let bus = noticesFor(snapshot(db), sid)
+    assertEquals(bus.lines.length, 1)
+    assertMatch(bus.lines[0], /S-\d+ failed/)
+    spawned(cast)(eid, { provider: 'fake' })
+    assertEquals(settleComments(t, eid).length, 1)
+    assertEquals(settleComments(spawner, eid).length, 1)
+  },
+)
 
-Deno.test('a client-launched session reports only on its task', async () => {
+slow('a client-launched session reports only on its task', async () => {
   let { t } = seed()
   let client = uid()
   apply(db, [{
@@ -1046,74 +1071,80 @@ Deno.test('a client-launched session reports only on its task', async () => {
   assertEquals(settleComments(client, eid), [])
 })
 
-Deno.test('a settling session releases its leases — a live one keeps its own', async () => {
-  let { t } = seed()
-  let { t: kept } = seed()
-  let eid = plant([INIT]) // died before its terminal event → failed
-  let live = uid()
-  apply(db, [
-    { eid: live, name: 'session', comp: { id: uid() } },
-    { eid: t, name: 'claim', comp: { session: eid } },
-    { eid: kept, name: 'claim', comp: { session: live } },
-  ])
-  heard = []
-  recover(cast)
-  await running.get(eid)!.done
-  assertEquals(row(eid)?.status, 'failed')
-  // The dead session's lease is gone and the lapse is on the task's
-  // trail — the same words task wrap leaves for an interactive end.
-  assertEquals(
-    db.prepare('select 1 from claim where eid = ?').get(t),
-    undefined,
-  )
-  let said = settleComments(t, eid)
-  assertEquals(said.length, 1)
-  assertMatch(said[0], /lease lapsed/)
-  // The release rode the CAST — no client cache keeps the ghost claim.
-  assert(heard.some((c) => c.eid == t && c.name == 'claim' && c.comp == null))
-  // The bystander's lease is not ours to lapse.
-  assert(db.prepare('select 1 from claim where eid = ?').get(kept))
-})
+slow(
+  'a settling session releases its leases — a live one keeps its own',
+  async () => {
+    let { t } = seed()
+    let { t: kept } = seed()
+    let eid = plant([INIT]) // died before its terminal event → failed
+    let live = uid()
+    apply(db, [
+      { eid: live, name: 'session', comp: { id: uid() } },
+      { eid: t, name: 'claim', comp: { session: eid } },
+      { eid: kept, name: 'claim', comp: { session: live } },
+    ])
+    heard = []
+    recover(cast)
+    await running.get(eid)!.done
+    assertEquals(row(eid)?.status, 'failed')
+    // The dead session's lease is gone and the lapse is on the task's
+    // trail — the same words task wrap leaves for an interactive end.
+    assertEquals(
+      db.prepare('select 1 from claim where eid = ?').get(t),
+      undefined,
+    )
+    let said = settleComments(t, eid)
+    assertEquals(said.length, 1)
+    assertMatch(said[0], /lease lapsed/)
+    // The release rode the CAST — no client cache keeps the ghost claim.
+    assert(heard.some((c) => c.eid == t && c.name == 'claim' && c.comp == null))
+    // The bystander's lease is not ours to lapse.
+    assert(db.prepare('select 1 from claim where eid = ?').get(kept))
+  },
+)
 
-Deno.test('stop: a stop_request signals the group, the ending is OBSERVED', async () => {
-  let { t } = seed('delay:9000')
-  let { eid, done } = begin(t)
-  await until(() => row(eid)?.status == 'running', 'the init event')
-  let c0 = snapshot(db).cursor ?? 0
-  heard = []
-  let sr = uid()
-  await write([{ eid: sr, name: 'stop_request', comp: { target: eid } }])
-  let s = row(eid)!
-  assertEquals(s.status, 'interrupted') // never stamped before the exit
-  assert(s.stop_requested_at)
-  assertEquals(s.exit_code, 143) // SIGTERM, from a child that was ours
-  let stopping: Change = {
-    eid,
-    name: 'session',
-    comp: {
-      status: 'stopping',
-      stop_requested_at: s.stop_requested_at,
-    },
-  }
-  let isStopping = (c: Change) =>
-    c.eid == eid && c.name == 'session' && c.comp?.status == 'stopping'
-  assertEquals(heard.filter(isStopping), [stopping])
-  assertEquals(delta(db, c0).changes.filter(isStopping), [stopping])
-  // The request stays as audit, settled delivered when the signals were sent.
-  assert(acted(sr))
-  await done
-  // A second pull on a settled session bounces off the RULE.
-  assertThrows(
-    () =>
-      apply(db, [
-        { eid: uid(), name: 'stop_request', comp: { target: eid } },
-      ]),
-    Error,
-    'stop_request refused',
-  )
-})
+slow(
+  'stop: a stop_request signals the group, the ending is OBSERVED',
+  async () => {
+    let { t } = seed('delay:9000')
+    let { eid, done } = begin(t)
+    await until(() => row(eid)?.status == 'running', 'the init event')
+    let c0 = snapshot(db).cursor ?? 0
+    heard = []
+    let sr = uid()
+    await write([{ eid: sr, name: 'stop_request', comp: { target: eid } }])
+    let s = row(eid)!
+    assertEquals(s.status, 'interrupted') // never stamped before the exit
+    assert(s.stop_requested_at)
+    assertEquals(s.exit_code, 143) // SIGTERM, from a child that was ours
+    let stopping: Change = {
+      eid,
+      name: 'session',
+      comp: {
+        status: 'stopping',
+        stop_requested_at: s.stop_requested_at,
+      },
+    }
+    let isStopping = (c: Change) =>
+      c.eid == eid && c.name == 'session' && c.comp?.status == 'stopping'
+    assertEquals(heard.filter(isStopping), [stopping])
+    assertEquals(delta(db, c0).changes.filter(isStopping), [stopping])
+    // The request stays as audit, settled delivered when the signals were sent.
+    assert(acted(sr))
+    await done
+    // A second pull on a settled session bounces off the RULE.
+    assertThrows(
+      () =>
+        apply(db, [
+          { eid: uid(), name: 'stop_request', comp: { target: eid } },
+        ]),
+      Error,
+      'stop_request refused',
+    )
+  },
+)
 
-Deno.test('sweep: an unacted stop_request re-fires at boot and kills', async () => {
+slow('sweep: an unacted stop_request re-fires at boot and kills', async () => {
   let { t } = seed('delay:9000')
   let { eid, done } = begin(t)
   await until(() => row(eid)?.status == 'running', 'the init event')
@@ -1135,29 +1166,32 @@ Deno.test('sweep: an unacted stop_request re-fires at boot and kills', async () 
   assertEquals((await relay(pending)).length, 0)
 })
 
-Deno.test('sweep: a target that settled on its own is acted, not errored', async () => {
-  let { t } = seed('delay:500')
-  let { eid, done } = begin(t)
-  await until(() => row(eid)?.status == 'running', 'the init event')
-  let sr = uid()
-  cast(apply(db, [
-    { eid: sr, name: 'stop_request', comp: { target: eid } },
-  ]))
-  await done // the child finishes on its own; the request outlives the run
-  assertEquals(row(eid)!.status, 'completed')
-  heard = []
-  let c0 = snapshot(db).cursor ?? 0
-  await relay(pending)
-  assert(acted(sr)) // nothing to stop IS acted
-  let s = row(eid)!
-  assertEquals(s.status, 'completed') // never re-stamped, never 'lost'
-  assertEquals(s.exit_code, 0)
-  let session = (c: Change) => c.eid == eid && c.name == 'session'
-  assertEquals(heard.filter(session), [])
-  assertEquals(delta(db, c0).changes.filter(session), [])
-})
+slow(
+  'sweep: a target that settled on its own is acted, not errored',
+  async () => {
+    let { t } = seed('delay:500')
+    let { eid, done } = begin(t)
+    await until(() => row(eid)?.status == 'running', 'the init event')
+    let sr = uid()
+    cast(apply(db, [
+      { eid: sr, name: 'stop_request', comp: { target: eid } },
+    ]))
+    await done // the child finishes on its own; the request outlives the run
+    assertEquals(row(eid)!.status, 'completed')
+    heard = []
+    let c0 = snapshot(db).cursor ?? 0
+    await relay(pending)
+    assert(acted(sr)) // nothing to stop IS acted
+    let s = row(eid)!
+    assertEquals(s.status, 'completed') // never re-stamped, never 'lost'
+    assertEquals(s.exit_code, 0)
+    let session = (c: Change) => c.eid == eid && c.name == 'session'
+    assertEquals(heard.filter(session), [])
+    assertEquals(delta(db, c0).changes.filter(session), [])
+  },
+)
 
-Deno.test('the rule refuses sessions that are not ours to end', () => {
+slow('the rule refuses sessions that are not ours to end', () => {
   let ext = uid()
   apply(db, [{ eid: ext, name: 'session', comp: { id: 'announced' } }])
   assertThrows(
@@ -1178,7 +1212,7 @@ Deno.test('the rule refuses sessions that are not ours to end', () => {
   )
 })
 
-Deno.test('deleting a running session takes its process with it', async () => {
+slow('deleting a running session takes its process with it', async () => {
   let { t } = seed('delay:9000')
   let { eid, done } = begin(t)
   await until(() => row(eid)?.status == 'running', 'the init event')
@@ -1198,20 +1232,23 @@ Deno.test('deleting a running session takes its process with it', async () => {
   await done // the orphaned tailer settles without a row to stamp
 })
 
-Deno.test('boot: a child that died while we were away is read from its file', async () => {
-  let eid = plant([INIT, '{"type":"message","text":"hi"}', RESULT])
-  recover(cast)
-  await running.get(eid)!.done
-  let s = row(eid)!
-  assertEquals(s.status, 'completed')
-  assertEquals(s.latest_seq, 3)
-  assertEquals(s.final_text, 'first')
-  assertEquals(JSON.parse(String(s.usage_json)).output_tokens, 7)
-  assertEquals(s.exit_code, null) // we didn't spawn it: nobody's to read
-  assertMatch(String(s.stop_reason), /unobserved/)
-})
+slow(
+  'boot: a child that died while we were away is read from its file',
+  async () => {
+    let eid = plant([INIT, '{"type":"message","text":"hi"}', RESULT])
+    recover(cast)
+    await running.get(eid)!.done
+    let s = row(eid)!
+    assertEquals(s.status, 'completed')
+    assertEquals(s.latest_seq, 3)
+    assertEquals(s.final_text, 'first')
+    assertEquals(JSON.parse(String(s.usage_json)).output_tokens, 7)
+    assertEquals(s.exit_code, null) // we didn't spawn it: nobody's to read
+    assertMatch(String(s.stop_reason), /unobserved/)
+  },
+)
 
-Deno.test('an unavailable land verdict preserves the source refusal', async () => {
+slow('an unavailable land verdict preserves the source refusal', async () => {
   let eid = plant([INIT, RESULT])
   let message = 'UNLANDED: 1 commit on lost-branch not in main — gate red'
   db.prepare('insert into error (eid, at, message) values (?, ?, ?)')
@@ -1222,7 +1259,7 @@ Deno.test('an unavailable land verdict preserves the source refusal', async () =
   assertEquals(failure(eid), message)
 })
 
-Deno.test('boot: external transcripts restore model facts missed at startup', () => {
+slow('boot: external transcripts restore model facts missed at startup', () => {
   let eid = uid()
   let path = `${stores.claude}/${uid()}.jsonl`
   Deno.mkdirSync(stores.claude, { recursive: true })
@@ -1254,7 +1291,7 @@ Deno.test('boot: external transcripts restore model facts missed at startup', ()
   ))
 })
 
-Deno.test('a settled lifecycle stamp is one replayable moved patch', async () => {
+slow('a settled lifecycle stamp is one replayable moved patch', async () => {
   let eid = plant([])
   let c0 = snapshot(db).cursor ?? 0
   heard = []
@@ -1285,7 +1322,7 @@ Deno.test('a settled lifecycle stamp is one replayable moved patch', async () =>
   )
 })
 
-Deno.test('tail diagnoses never override a successful ending', async () => {
+slow('tail diagnoses never override a successful ending', async () => {
   let eid = plant([
     INIT,
     '{"type":"message", this is not json',
@@ -1304,7 +1341,7 @@ Deno.test('tail diagnoses never override a successful ending', async () => {
   assertMatch(failure(eid) ?? '', /line 5: output after the terminal event/)
 })
 
-Deno.test('an oversized line is truncated and the tail reaches exit 0', async () => {
+slow('an oversized line is truncated and the tail reaches exit 0', async () => {
   let huge = JSON.stringify({ type: 'message', text: 'x'.repeat(1_100_000) })
   let eid = plant([
     INIT,
@@ -1332,7 +1369,7 @@ Deno.test('an oversized line is truncated and the tail reaches exit 0', async ()
   assertEquals(JSON.parse(entries[3].line).final_text, 'done after truncation')
 })
 
-Deno.test('boot: a resumed log re-opens at its input marker', async () => {
+slow('boot: a resumed log re-opens at its input marker', async () => {
   let eid = plant([
     INIT,
     RESULT,
@@ -1348,76 +1385,82 @@ Deno.test('boot: a resumed log re-opens at its input marker', async () => {
   assertEquals(failure(eid), undefined) // resume's shape is not a violation
 })
 
-Deno.test('boot: a live child is adopted, its file followed from where it is', async () => {
-  let eid = plant([INIT])
-  // A stand-in for the agent: detached, in its own group, with a pidfile —
-  // all boot recovery has to go on.
-  let child = new Deno.Command('setsid', {
-    args: ['sleep', '9'],
-    stdout: 'null',
-    stderr: 'null',
-  }).spawn()
-  Deno.writeTextFileSync(`${logsDir()}/${eid}.pid`, String(child.pid))
-  recover(cast)
-  let done = running.get(eid)!.done
-  // The adopted tailer re-reads the file from byte 0: the row is planted
-  // 'running', so what proves adoption is the summary it re-derives.
-  await until(
-    () => row(eid)?.provider_session_id == 'sid-1',
-    'the adopted init',
-  )
-  assertEquals(row(eid)?.latest_seq, 1)
+slow(
+  'boot: a live child is adopted, its file followed from where it is',
+  async () => {
+    let eid = plant([INIT])
+    // A stand-in for the agent: detached, in its own group, with a pidfile —
+    // all boot recovery has to go on.
+    let child = new Deno.Command('setsid', {
+      args: ['sleep', '9'],
+      stdout: 'null',
+      stderr: 'null',
+    }).spawn()
+    Deno.writeTextFileSync(`${logsDir()}/${eid}.pid`, String(child.pid))
+    recover(cast)
+    let done = running.get(eid)!.done
+    // The adopted tailer re-reads the file from byte 0: the row is planted
+    // 'running', so what proves adoption is the summary it re-derives.
+    await until(
+      () => row(eid)?.provider_session_id == 'sid-1',
+      'the adopted init',
+    )
+    assertEquals(row(eid)?.latest_seq, 1)
 
-  // A half-written line is not a line yet — it waits for its newline.
-  let f = Deno.openSync(log(eid), { append: true, write: true })
-  f.writeSync(new TextEncoder().encode('{"type":"tool"'))
-  await new Promise((go) => setTimeout(go, 30))
-  assertEquals(row(eid)?.latest_seq, 1)
-  f.writeSync(new TextEncoder().encode(`,"name":"read"}\n${RESULT}\n`))
-  f.close()
-  await until(() => row(eid)?.final_text == 'first', 'the terminal event')
-  assertEquals(row(eid)?.latest_seq, 3)
+    // A half-written line is not a line yet — it waits for its newline.
+    let f = Deno.openSync(log(eid), { append: true, write: true })
+    f.writeSync(new TextEncoder().encode('{"type":"tool"'))
+    await new Promise((go) => setTimeout(go, 30))
+    assertEquals(row(eid)?.latest_seq, 1)
+    f.writeSync(new TextEncoder().encode(`,"name":"read"}\n${RESULT}\n`))
+    f.close()
+    await until(() => row(eid)?.final_text == 'first', 'the terminal event')
+    assertEquals(row(eid)?.latest_seq, 3)
 
-  child.kill('SIGKILL')
-  await child.status
-  await done
-  assertEquals(row(eid)?.status, 'completed')
-})
+    child.kill('SIGKILL')
+    await child.status
+    await done
+    assertEquals(row(eid)?.status, 'completed')
+  },
+)
 
-Deno.test('boot: a pending live comment completes its interrupted handoff', async () => {
-  let eid = plant([INIT])
-  writeSession(db, eid, {
-    provider_session_id: 'sid-1',
-    model: 'fake-fast',
-    cwd: scratch,
-    input_at: '2026-07-27T12:00:00Z',
-  })
-  let pending = say(eid, 'heard after restart')
-  apply(db, pending)
-  let child = new Deno.Command('setsid', {
-    args: ['sleep', '9'],
-    stdout: 'null',
-    stderr: 'null',
-  }).spawn()
-  Deno.writeTextFileSync(`${logsDir()}/${eid}.pid`, String(child.pid))
+slow(
+  'boot: a pending live comment completes its interrupted handoff',
+  async () => {
+    let eid = plant([INIT])
+    writeSession(db, eid, {
+      provider_session_id: 'sid-1',
+      model: 'fake-fast',
+      cwd: scratch,
+      input_at: '2026-07-27T12:00:00Z',
+    })
+    let pending = say(eid, 'heard after restart')
+    apply(db, pending)
+    let child = new Deno.Command('setsid', {
+      args: ['sleep', '9'],
+      stdout: 'null',
+      stderr: 'null',
+    }).spawn()
+    Deno.writeTextFileSync(`${logsDir()}/${eid}.pid`, String(child.pid))
 
-  recover(cast)
-  await until(
-    () => told(pending[1].eid) && row(eid)?.status == 'completed',
-    'the recovered input handoff',
-  )
-  await child.status
-  let events = Deno.readTextFileSync(log(eid)).split('\n').filter(Boolean)
-    .map((line) => JSON.parse(line) as { type: string; text?: string })
-  assertEquals(
-    events.some((e) =>
-      e.type == 'session.input' && e.text == 'heard after restart'
-    ),
-    true,
-  )
-})
+    recover(cast)
+    await until(
+      () => told(pending[1].eid) && row(eid)?.status == 'completed',
+      'the recovered input handoff',
+    )
+    await child.status
+    let events = Deno.readTextFileSync(log(eid)).split('\n').filter(Boolean)
+      .map((line) => JSON.parse(line) as { type: string; text?: string })
+    assertEquals(
+      events.some((e) =>
+        e.type == 'session.input' && e.text == 'heard after restart'
+      ),
+      true,
+    )
+  },
+)
 
-Deno.test('a tail tick that only moves the counter stays off the wire', async () => {
+slow('a tail tick that only moves the counter stays off the wire', async () => {
   let eid = plant([INIT])
   let child = new Deno.Command('setsid', {
     args: ['sleep', '9'],
@@ -1458,14 +1501,14 @@ Deno.test('a tail tick that only moves the counter stays off the wire', async ()
   await done
 })
 
-Deno.test('boot: a session whose provider is gone fails loudly', () => {
+slow('boot: a session whose provider is gone fails loudly', () => {
   let eid = plant([INIT], 'oracle')
   recover(cast)
   assertEquals(row(eid)?.status, 'failed')
   assertMatch(failure(eid) ?? '', /no adapter/)
 })
 
-Deno.test('a comment resumes nothing it should not', async () => {
+slow('a comment resumes nothing it should not', async () => {
   // active: the bus delivers, the effect stays out of it
   let active = plant([INIT]) // status 'running'
   writeSession(db, active, { provider_session_id: 'sid-1' })
@@ -1511,40 +1554,45 @@ Deno.test('a comment resumes nothing it should not', async () => {
   assertEquals(told(pending[1].eid), false)
 })
 
-Deno.test('a comment at a settled session joins the log and resumes it', async () => {
-  // A real end-to-end run leaves a settled session with a worktree + thread.
-  let { t } = seed()
-  let { eid, done } = begin(t)
-  await done
-  assertEquals(row(eid)?.status, 'completed')
-  let before = row(eid)!.latest_seq as number
+slow(
+  'a comment at a settled session joins the log and resumes it',
+  async () => {
+    // A real end-to-end run leaves a settled session with a worktree + thread.
+    let { t } = seed()
+    let { eid, done } = begin(t)
+    await done
+    assertEquals(row(eid)?.status, 'completed')
+    let before = row(eid)!.latest_seq as number
 
-  heard = []
-  let resumed = write(say(eid, 'and one more thing'))
-  // Flipped running straight away — the effect's synchronous half.
-  assertEquals(row(eid)?.status, 'running')
-  assertEquals(row(eid)?.finished_at, null)
-  assert(heard.some((c) => c.name == 'session' && c.comp?.status == 'running'))
-  // The synthetic line is now in the file, as the next seq, a user say.
-  let page = logs(eid, new URLSearchParams(`after=${before}&limit=1`))
-  assertEquals(page.entries[0].seq, before + 1)
-  assertEquals(JSON.parse(page.entries[0].line).type, 'session.input')
-  // the writer stamps its clock; the transcript shows when it landed
-  let { at, ...said } = page.entries[0].row as { at?: string }
-  assert(at && !Number.isNaN(Date.parse(at)))
-  assertEquals(said, {
-    kind: 'say',
-    role: 'user',
-    text: 'and one more thing',
-  })
+    heard = []
+    let resumed = write(say(eid, 'and one more thing'))
+    // Flipped running straight away — the effect's synchronous half.
+    assertEquals(row(eid)?.status, 'running')
+    assertEquals(row(eid)?.finished_at, null)
+    assert(
+      heard.some((c) => c.name == 'session' && c.comp?.status == 'running'),
+    )
+    // The synthetic line is now in the file, as the next seq, a user say.
+    let page = logs(eid, new URLSearchParams(`after=${before}&limit=1`))
+    assertEquals(page.entries[0].seq, before + 1)
+    assertEquals(JSON.parse(page.entries[0].line).type, 'session.input')
+    // the writer stamps its clock; the transcript shows when it landed
+    let { at, ...said } = page.entries[0].row as { at?: string }
+    assert(at && !Number.isNaN(Date.parse(at)))
+    assertEquals(said, {
+      kind: 'say',
+      role: 'user',
+      text: 'and one more thing',
+    })
 
-  // The continuation appends and the tailer settles it again — seq only grew.
-  await resumed
-  assertEquals(row(eid)?.status, 'completed')
-  assert((row(eid)!.latest_seq as number) > before + 1)
-})
+    // The continuation appends and the tailer settles it again — seq only grew.
+    await resumed
+    assertEquals(row(eid)?.status, 'completed')
+    assert((row(eid)!.latest_seq as number) > before + 1)
+  },
+)
 
-Deno.test('a session commenting on itself never resumes it', async () => {
+slow('a session commenting on itself never resumes it', async () => {
   let { t } = seed()
   let { eid, done } = begin(t)
   await done
@@ -1554,52 +1602,55 @@ Deno.test('a session commenting on itself never resumes it', async () => {
   assertEquals(row(eid)?.latest_seq, before) // the log never heard it
 })
 
-Deno.test('a comment steers a live managed session without settling it', async () => {
-  let { t } = seed()
-  let { eid, done } = begin(t)
-  await done
-  let reports = settleComments(t, eid).length
-  // The resumed turn dawdles long enough for a comment to steer it.
-  let resumed = write(say(eid, 'delay:1000 keep going'))
-  assertEquals(row(eid)?.status, 'running')
-  let steer = say(eid, 'also: rename it')
-  await write(steer)
-  await resumed
-  await until(
-    () => told(steer[1].eid) && row(eid)?.status == 'completed',
-    // Both halves named: if this ever times out again, the message says
-    // whether the steer went undelivered or the run never settled — a
-    // stalled fact and a slow one want opposite fixes.
-    () =>
-      `the steered continuation to settle (steer delivered=${
-        told(steer[1].eid)
-      }, status=${row(eid)?.status}, exit=${row(eid)?.exit_code}, error=${
-        failure(eid)
-      }, stop=${row(eid)?.stop_reason}, seq=${row(eid)?.latest_seq})`,
-  )
-  let events = Deno.readTextFileSync(log(eid)).split('\n').filter(Boolean)
-    .map((l) =>
-      JSON.parse(l) as { type: string; text?: string; final_text?: string }
+slow(
+  'a comment steers a live managed session without settling it',
+  async () => {
+    let { t } = seed()
+    let { eid, done } = begin(t)
+    await done
+    let reports = settleComments(t, eid).length
+    // The resumed turn dawdles long enough for a comment to steer it.
+    let resumed = write(say(eid, 'delay:1000 keep going'))
+    assertEquals(row(eid)?.status, 'running')
+    let steer = say(eid, 'also: rename it')
+    await write(steer)
+    await resumed
+    await until(
+      () => told(steer[1].eid) && row(eid)?.status == 'completed',
+      // Both halves named: if this ever times out again, the message says
+      // whether the steer went undelivered or the run never settled — a
+      // stalled fact and a slow one want opposite fixes.
+      () =>
+        `the steered continuation to settle (steer delivered=${
+          told(steer[1].eid)
+        }, status=${row(eid)?.status}, exit=${row(eid)?.exit_code}, error=${
+          failure(eid)
+        }, stop=${row(eid)?.stop_reason}, seq=${row(eid)?.latest_seq})`,
     )
-  assertEquals(
-    events.filter((e) => e.type == 'session.input').map((e) => e.text),
-    ['delay:1000 keep going', 'also: rename it'],
-  )
-  assertEquals(
-    events.some((e) => e.text == 'working: also: rename it'),
-    true,
-  )
-  assertEquals(
-    events.some((e) =>
-      e.type == 'result' && e.final_text?.includes('delay:1000 keep going')
-    ),
-    false,
-  )
-  // Steering is one continuous session, not an interrupted settlement.
-  assertEquals(settleComments(t, eid).length, reports + 1)
-})
+    let events = Deno.readTextFileSync(log(eid)).split('\n').filter(Boolean)
+      .map((l) =>
+        JSON.parse(l) as { type: string; text?: string; final_text?: string }
+      )
+    assertEquals(
+      events.filter((e) => e.type == 'session.input').map((e) => e.text),
+      ['delay:1000 keep going', 'also: rename it'],
+    )
+    assertEquals(
+      events.some((e) => e.text == 'working: also: rename it'),
+      true,
+    )
+    assertEquals(
+      events.some((e) =>
+        e.type == 'result' && e.final_text?.includes('delay:1000 keep going')
+      ),
+      false,
+    )
+    // Steering is one continuous session, not an interrupted settlement.
+    assertEquals(settleComments(t, eid).length, reports + 1)
+  },
+)
 
-Deno.test('a failed run stays down until the next word resumes it', async () => {
+slow('a failed run stays down until the next word resumes it', async () => {
   let { t } = seed()
   let { eid, done } = begin(t)
   await done
@@ -1611,7 +1662,7 @@ Deno.test('a failed run stays down until the next word resumes it', async () => 
   assertEquals(told(wake[1].eid), true)
 })
 
-Deno.test('refused words stay owed, never marked told', async () => {
+slow('refused words stay owed, never marked told', async () => {
   let bare = plant([INIT])
   db.prepare("update session set status = 'completed' where eid = ?").run(bare)
   let s = say(bare, 'hello?')
@@ -1625,36 +1676,39 @@ let inTree = (cwd: string, ...args: string[]) =>
   new Deno.Command('git', { args, cwd, stdout: 'null', stderr: 'null' })
     .outputSync()
 
-Deno.test('tidy: a merged clean tree goes at boot, unmerged work stays', async () => {
-  let a = begin(seed().t)
-  await a.done
-  let b = begin(seed().t)
-  await b.done
-  let treeA = String(row(a.eid)!.cwd), branchA = String(row(a.eid)!.branch)
-  let treeB = String(row(b.eid)!.cwd)
-  // b runs ahead of main: a commit on its branch that never merged
-  Deno.writeTextFileSync(`${treeB}/ahead.txt`, 'unmerged')
-  inTree(treeB, 'add', '-A')
-  inTree(treeB, 'commit', '-m', 'ahead')
-  heard = []
-  await tidy(cast)
-  // a: its branch tip IS the base tip, tree clean — worktree and branch go.
-  // The row keeps its cwd for thread identity and sheds the branch marker.
-  assertThrows(() => Deno.statSync(treeA))
-  assertEquals(row(a.eid)?.cwd, treeA)
-  assertEquals(row(a.eid)?.branch, null)
-  assertEquals(
-    inTree(scratch, 'rev-parse', '--verify', branchA).success,
-    false,
-  )
-  assert(heard.some((c) => c.eid == a.eid && c.name == 'session'))
-  // b: kept, untouched — main does not contain its commit
-  assert(Deno.statSync(treeB).isDirectory)
-  assert(row(b.eid)?.cwd)
-  assert(row(b.eid)?.branch)
-})
+slow(
+  'tidy: a merged clean tree goes at boot, unmerged work stays',
+  async () => {
+    let a = begin(seed().t)
+    await a.done
+    let b = begin(seed().t)
+    await b.done
+    let treeA = String(row(a.eid)!.cwd), branchA = String(row(a.eid)!.branch)
+    let treeB = String(row(b.eid)!.cwd)
+    // b runs ahead of main: a commit on its branch that never merged
+    Deno.writeTextFileSync(`${treeB}/ahead.txt`, 'unmerged')
+    inTree(treeB, 'add', '-A')
+    inTree(treeB, 'commit', '-m', 'ahead')
+    heard = []
+    await tidy(cast)
+    // a: its branch tip IS the base tip, tree clean — worktree and branch go.
+    // The row keeps its cwd for thread identity and sheds the branch marker.
+    assertThrows(() => Deno.statSync(treeA))
+    assertEquals(row(a.eid)?.cwd, treeA)
+    assertEquals(row(a.eid)?.branch, null)
+    assertEquals(
+      inTree(scratch, 'rev-parse', '--verify', branchA).success,
+      false,
+    )
+    assert(heard.some((c) => c.eid == a.eid && c.name == 'session'))
+    // b: kept, untouched — main does not contain its commit
+    assert(Deno.statSync(treeB).isDirectory)
+    assert(row(b.eid)?.cwd)
+    assert(row(b.eid)?.branch)
+  },
+)
 
-Deno.test('tidy: a dirty tree stays, whatever its branch says', async () => {
+slow('tidy: a dirty tree stays, whatever its branch says', async () => {
   let { eid, done } = begin(seed().t)
   await done
   let tree = String(row(eid)!.cwd)
@@ -1664,7 +1718,7 @@ Deno.test('tidy: a dirty tree stays, whatever its branch says', async () => {
   assert(row(eid)?.cwd)
 })
 
-Deno.test('tidy: an absent tree is reconciled once', async () => {
+slow('tidy: an absent tree is reconciled once', async () => {
   let { eid, done } = begin(seed().t)
   await done
   let tree = String(row(eid)!.cwd)
@@ -1680,7 +1734,7 @@ Deno.test('tidy: an absent tree is reconciled once', async () => {
   )
 })
 
-Deno.test('a comment after the sweep regrows the worktree and resumes', async () => {
+slow('a comment after the sweep regrows the worktree and resumes', async () => {
   let { p, t } = seed()
   let { eid, done } = begin(t)
   await done
@@ -1764,71 +1818,74 @@ let SAID = JSON.stringify({
   message: { content: [{ type: 'text', text: 'hello from a tty' }] },
 })
 
-Deno.test("external session logs read each provider's confined transcript", async () => {
-  let c = await fakeClaude()
-  let { eid, path } = announce(c.pid, [SAID])
-  assertEquals(logs(eid, new URLSearchParams()).entries[0].row, {
-    kind: 'say',
-    role: 'agent',
-    text: 'hello from a tty',
-    at: '2026-07-26T12:00:00Z',
-  })
-  // Older Claude rows predate provider stamping; their store still names
-  // the dialect. A contradictory provider cannot cross into another store.
-  writeSession(db, eid, { provider: null })
-  assertEquals(logs(eid, new URLSearchParams()).entries.length, 1)
-  let crossed = announce(c.pid, [], path, 'codex')
-  assertEquals(logs(crossed.eid, new URLSearchParams()).entries, [])
-  let codex = announce(
-    c.pid,
-    [JSON.stringify({
-      timestamp: '2026-07-26T12:00:00Z',
-      type: 'event_msg',
-      payload: { type: 'user_message', message: 'hello Codex' },
-    })],
-    '',
-    'codex',
-  )
-  assertEquals(logs(codex.eid, new URLSearchParams()).entries[0].row, {
-    kind: 'say',
-    role: 'user',
-    text: 'hello Codex',
-    at: '2026-07-26T12:00:00Z',
-  })
-  let clocked = announce(
-    c.pid,
-    [JSON.stringify({
-      timestamp: '2026-07-26T12:01:00Z',
-      type: 'response_item',
-      payload: {
-        type: 'reasoning',
-        summary: [{ type: 'summary_text', text: 'thinking' }],
-      },
-    })],
-    '',
-    'codex',
-  )
-  assertEquals(logs(clocked.eid, new URLSearchParams()).entries[0].row, {
-    kind: 'reason',
-    text: 'thinking',
-    at: '2026-07-26T12:01:00Z',
-  })
-  // A transcript is a reference, never a capability: traversal and a
-  // symlink out of either provider's store both read nothing.
-  let sneak = announce(c.pid, [], `${logsDir()}/../../etc/hostname`)
-  assertEquals(logs(sneak.eid, new URLSearchParams()).entries, [])
-  let outside = Deno.makeTempFileSync({ suffix: '.jsonl' })
-  let link = `${stores.codex}/escape.jsonl`
-  Deno.symlinkSync(outside, link)
-  let escaped = announce(c.pid, [], link, 'codex')
-  assertEquals(logs(escaped.eid, new URLSearchParams()).entries, [])
-  Deno.removeSync(link)
-  Deno.removeSync(outside)
-  c.kill('SIGKILL')
-  await c.status
-})
+slow(
+  "external session logs read each provider's confined transcript",
+  async () => {
+    let c = await fakeClaude()
+    let { eid, path } = announce(c.pid, [SAID])
+    assertEquals(logs(eid, new URLSearchParams()).entries[0].row, {
+      kind: 'say',
+      role: 'agent',
+      text: 'hello from a tty',
+      at: '2026-07-26T12:00:00Z',
+    })
+    // Older Claude rows predate provider stamping; their store still names
+    // the dialect. A contradictory provider cannot cross into another store.
+    writeSession(db, eid, { provider: null })
+    assertEquals(logs(eid, new URLSearchParams()).entries.length, 1)
+    let crossed = announce(c.pid, [], path, 'codex')
+    assertEquals(logs(crossed.eid, new URLSearchParams()).entries, [])
+    let codex = announce(
+      c.pid,
+      [JSON.stringify({
+        timestamp: '2026-07-26T12:00:00Z',
+        type: 'event_msg',
+        payload: { type: 'user_message', message: 'hello Codex' },
+      })],
+      '',
+      'codex',
+    )
+    assertEquals(logs(codex.eid, new URLSearchParams()).entries[0].row, {
+      kind: 'say',
+      role: 'user',
+      text: 'hello Codex',
+      at: '2026-07-26T12:00:00Z',
+    })
+    let clocked = announce(
+      c.pid,
+      [JSON.stringify({
+        timestamp: '2026-07-26T12:01:00Z',
+        type: 'response_item',
+        payload: {
+          type: 'reasoning',
+          summary: [{ type: 'summary_text', text: 'thinking' }],
+        },
+      })],
+      '',
+      'codex',
+    )
+    assertEquals(logs(clocked.eid, new URLSearchParams()).entries[0].row, {
+      kind: 'reason',
+      text: 'thinking',
+      at: '2026-07-26T12:01:00Z',
+    })
+    // A transcript is a reference, never a capability: traversal and a
+    // symlink out of either provider's store both read nothing.
+    let sneak = announce(c.pid, [], `${logsDir()}/../../etc/hostname`)
+    assertEquals(logs(sneak.eid, new URLSearchParams()).entries, [])
+    let outside = Deno.makeTempFileSync({ suffix: '.jsonl' })
+    let link = `${stores.codex}/escape.jsonl`
+    Deno.symlinkSync(outside, link)
+    let escaped = announce(c.pid, [], link, 'codex')
+    assertEquals(logs(escaped.eid, new URLSearchParams()).entries, [])
+    Deno.removeSync(link)
+    Deno.removeSync(outside)
+    c.kill('SIGKILL')
+    await c.status
+  },
+)
 
-Deno.test('managed Codex logs summarize context from their confined rollout', () => {
+slow('managed Codex logs summarize context from their confined rollout', () => {
   let eid = uid(), thread = uid()
   let started = '2026-07-26T12:00:00Z'
   apply(db, [{
@@ -1857,7 +1914,7 @@ Deno.test('managed Codex logs summarize context from their confined rollout', ()
   assertEquals(logs(eid, new URLSearchParams()).context, 81234)
 })
 
-Deno.test('an external Codex transcript follows its provider process', async () => {
+slow('an external Codex transcript follows its provider process', async () => {
   let c = await fakeCodex()
   let line = JSON.stringify({
     type: 'event_msg',
@@ -1879,20 +1936,23 @@ Deno.test('an external Codex transcript follows its provider process', async () 
 // door's absence as the end froze S-15625 at its first turn while its owner
 // kept steering it — so an idle codex whose process left keeps waiting, no
 // finished_at, and re-arms when its next turn stamps a pid.
-Deno.test('an idle Codex between turns is not ended when its process leaves', async () => {
-  let c = await fakeCodex()
-  let { eid } = announce(c.pid, undefined, '', 'codex')
-  db.prepare("update session set turn = 'idle' where eid = ?").run(eid)
-  c.kill('SIGKILL')
-  await c.status
-  watched(cast)(eid, { pid: c.pid })
-  assertEquals(row(eid)?.finished_at, null) // idle, not finished
-  assertEquals(row(eid)?.started_at, null) // no watch began
-})
+slow(
+  'an idle Codex between turns is not ended when its process leaves',
+  async () => {
+    let c = await fakeCodex()
+    let { eid } = announce(c.pid, undefined, '', 'codex')
+    db.prepare("update session set turn = 'idle' where eid = ?").run(eid)
+    c.kill('SIGKILL')
+    await c.status
+    watched(cast)(eid, { pid: c.pid })
+    assertEquals(row(eid)?.finished_at, null) // idle, not finished
+    assertEquals(row(eid)?.started_at, null) // no watch began
+  },
+)
 
 // A codex that vanished MID-turn (`busy`) crashed: that door shutting is a
 // real ending, stamped like any other. Only the between-turns lull is spared.
-Deno.test('a Codex that left mid-turn ends like any other door', async () => {
+slow('a Codex that left mid-turn ends like any other door', async () => {
   let c = await fakeCodex()
   let { eid } = announce(c.pid, undefined, '', 'codex')
   db.prepare("update session set turn = 'busy' where eid = ?").run(eid)
@@ -1902,27 +1962,30 @@ Deno.test('a Codex that left mid-turn ends like any other door', async () => {
   assertEquals(!!row(eid)?.finished_at, true) // a mid-turn exit is the end
 })
 
-Deno.test('a session we never forked is watched by its door, not its exit code', async () => {
-  let c = await fakeClaude()
-  let { eid } = announce(c.pid, [SAID])
-  watched(cast)(eid, { pid: c.pid })
-  await until(() => !!row(eid)?.started_at, 'the watch to start')
-  assertEquals(row(eid)?.finished_at, null) // still at the keyboard
-  assertEquals(row(eid)?.latest_seq, 1)
-  c.kill('SIGKILL')
-  await c.status
-  await until(() => !!row(eid)?.finished_at, 'the door to shut')
-  // The irreducible difference, said rather than faked.
-  assertEquals(row(eid)?.exit_code, null)
-  assertEquals(row(eid)?.status, null)
-})
+slow(
+  'a session we never forked is watched by its door, not its exit code',
+  async () => {
+    let c = await fakeClaude()
+    let { eid } = announce(c.pid, [SAID])
+    watched(cast)(eid, { pid: c.pid })
+    await until(() => !!row(eid)?.started_at, 'the watch to start')
+    assertEquals(row(eid)?.finished_at, null) // still at the keyboard
+    assertEquals(row(eid)?.latest_seq, 1)
+    c.kill('SIGKILL')
+    await c.status
+    await until(() => !!row(eid)?.finished_at, 'the door to shut')
+    // The irreducible difference, said rather than faked.
+    assertEquals(row(eid)?.exit_code, null)
+    assertEquals(row(eid)?.status, null)
+  },
+)
 
 // The bug the tray wore (T-7461): watching asked the TRANSCRIPT whether to
 // bother, so a session that never reported one was never asked about and
 // never stamped — forever pid-and-no-finished_at, indistinguishable from a
 // live operator. Following and liveness are two questions; only the door
 // answers the second.
-Deno.test('a transcript-less session is watched by its door too', async () => {
+slow('a transcript-less session is watched by its door too', async () => {
   let c = await fakeClaude()
   let { eid } = announce(c.pid)
   watched(cast)(eid, { pid: c.pid })
@@ -1939,7 +2002,7 @@ Deno.test('a transcript-less session is watched by its door too', async () => {
 // ending is the last time we HEARD from it, not the moment we noticed —
 // a restart that stamped now() would parade every ghost through the tray's
 // "finished recently" digest.
-Deno.test('a ghost row ends when it was last heard from, unwatched', async () => {
+slow('a ghost row ends when it was last heard from, unwatched', async () => {
   let c = await fakeClaude()
   let { eid } = announce(c.pid)
   c.kill('SIGKILL')
@@ -1952,17 +2015,20 @@ Deno.test('a ghost row ends when it was last heard from, unwatched', async () =>
   assertEquals(row(eid)?.started_at, null) // no watch began, so none is told
 })
 
-Deno.test('a comment wakes an external session only when nobody is home', async () => {
-  let c = await fakeClaude()
-  let { eid } = announce(c.pid, [SAID], '', 'fake')
-  await write(say(eid, 'still there?'))
-  assertEquals(refusals(eid), []) // its channel delivered — nothing to do
-  assertEquals(existsSync(log(eid)), false) // and nothing was spawned
-  c.kill('SIGKILL')
-  await c.status
-  // Dead: the words go back in by the door the CLI left open — the
-  // session's own id IS the thread `--resume` takes.
-  await write(say(eid, 'anyone there?'))
-  await until(() => existsSync(log(eid)), 'the resumed run to start')
-  assertEquals(refusals(eid), [])
-})
+slow(
+  'a comment wakes an external session only when nobody is home',
+  async () => {
+    let c = await fakeClaude()
+    let { eid } = announce(c.pid, [SAID], '', 'fake')
+    await write(say(eid, 'still there?'))
+    assertEquals(refusals(eid), []) // its channel delivered — nothing to do
+    assertEquals(existsSync(log(eid)), false) // and nothing was spawned
+    c.kill('SIGKILL')
+    await c.status
+    // Dead: the words go back in by the door the CLI left open — the
+    // session's own id IS the thread `--resume` takes.
+    await write(say(eid, 'anyone there?'))
+    await until(() => existsSync(log(eid)), 'the resumed run to start')
+    assertEquals(refusals(eid), [])
+  },
+)

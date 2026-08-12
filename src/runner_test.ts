@@ -2,6 +2,7 @@
 // ordered log. Tests pin projection, provider boundaries, concurrency, errors,
 // unknown evidence, instructions, and graph-native correlation.
 import { assert, assertEquals, assertMatch, assertRejects } from '@std/assert'
+import { tick } from './testing.ts'
 import { type EntrySpec, type UsageValue } from './entries.ts'
 import { type ToolHost } from './harness_tools.ts'
 import {
@@ -436,7 +437,9 @@ Deno.test('the loop runs independent tools concurrently and feeds results back',
     call: async (_name, args) => {
       active++
       peak = Math.max(peak, active)
-      await new Promise((resolve) => setTimeout(resolve, 10))
+      // A yield holds every concurrent call open together so peak measures the
+      // overlap, without a span that a loaded box would smear.
+      await tick()
       active--
       return {
         output: `out:${args.command}`,

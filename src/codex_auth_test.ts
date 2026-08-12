@@ -1,6 +1,7 @@
 // Codex account storage tests hold the opaque-file, isolation, and locking
 // boundary. They never need a provider credential or a network call.
 import { assertEquals, assertRejects } from '@std/assert'
+import { tick } from './testing.ts'
 import {
   bootstrapCodexAuth,
   codexEnv,
@@ -166,11 +167,11 @@ Deno.test('Codex account store serializes refresh rotation across callers', asyn
     let store = codexStore(root)
     let first = await store.begin()
     let opening = store.begin()
+    // A yield, not a span: if begin() is serialized, opening stays pending
+    // across one macrotask, so 'waiting' wins deterministically.
     let state = await Promise.race([
       opening.then(() => 'opened'),
-      new Promise<'waiting'>((resolve) =>
-        setTimeout(() => resolve('waiting'), 20)
-      ),
+      tick().then(() => 'waiting' as const),
     ])
     assertEquals(state, 'waiting')
     await first.close()

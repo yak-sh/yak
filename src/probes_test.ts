@@ -3,6 +3,7 @@
 // orphans — it is that it declines everything else, one bright line per test.
 
 import { assert, assertEquals } from '@std/assert'
+import { slow } from './testing.ts'
 import {
   browser,
   judge,
@@ -105,19 +106,22 @@ Deno.test('a live session keeps its probe, by id and by ground', () => {
   assertEquals(verdict(proc({ pid: 504, session: 'dead-1' }), it).reap, true)
 })
 
-Deno.test('a live session owns its scratch graph after env and ancestry are gone', () => {
-  let sid = 'abc-123'
-  let it = live([{ id: sid, pid: 999 }], () => 'claude')
-  let server = proc({
-    pid: 505,
-    cwd: '/tmp/orphaned',
-    db: `/tmp/claude-1000/-home-yaks-code-tasks/${sid}/scratchpad/tasks.db`,
-  })
-  let v = verdict(server, it)
-  assertEquals(v.reap, false)
-  assertEquals(v.why, `session ${sid} owns its scratch graph`)
-  assertEquals(verdict(server).reap, true)
-})
+Deno.test(
+  'a live session owns its scratch graph after env and ancestry are gone',
+  () => {
+    let sid = 'abc-123'
+    let it = live([{ id: sid, pid: 999 }], () => 'claude')
+    let server = proc({
+      pid: 505,
+      cwd: '/tmp/orphaned',
+      db: `/tmp/claude-1000/-home-yaks-code-tasks/${sid}/scratchpad/tasks.db`,
+    })
+    let v = verdict(server, it)
+    assertEquals(v.reap, false)
+    assertEquals(v.why, `session ${sid} owns its scratch graph`)
+    assertEquals(verdict(server).reap, true)
+  },
+)
 
 Deno.test("both ends of a live agent's line are spared", () => {
   let it: Live = { sessions: new Set(), pids: [999], cwds: [] }
@@ -262,43 +266,46 @@ Deno.test('a graph-native session is live by the graph, never a pid', () => {
   assertEquals(verdict(proc({ pid: 700, cwd: '/w/S-5/src' }), it).reap, false)
 })
 
-Deno.test('an open graph-native checkout is spared; a settled one is swept', async () => {
-  let root = Deno.makeTempDirSync({ prefix: 'tasks-native-' })
-  let git = async (cwd: string, ...args: string[]) => {
-    let r = await new Deno.Command('git', { args, cwd, stderr: 'piped' })
-      .output()
-    if (r.code) {
-      throw new Error(
-        `git ${args.join(' ')}: ${new TextDecoder().decode(r.stderr)}`,
-      )
+slow(
+  'an open graph-native checkout is spared; a settled one is swept',
+  async () => {
+    let root = Deno.makeTempDirSync({ prefix: 'tasks-native-' })
+    let git = async (cwd: string, ...args: string[]) => {
+      let r = await new Deno.Command('git', { args, cwd, stderr: 'piped' })
+        .output()
+      if (r.code) {
+        throw new Error(
+          `git ${args.join(' ')}: ${new TextDecoder().decode(r.stderr)}`,
+        )
+      }
     }
-  }
-  try {
-    let repo = `${root}/repo`
-    Deno.mkdirSync(repo)
-    await git(repo, 'init', '--initial-branch=main')
-    await git(repo, 'config', 'user.email', 'test@example.com')
-    await git(repo, 'config', 'user.name', 'Test')
-    Deno.writeTextFileSync(`${repo}/base.txt`, 'base\n')
-    await git(repo, 'add', 'base.txt')
-    await git(repo, 'commit', '-m', 'base')
-    // A clean, merged session worktree — otherwise reapable on all three locks.
-    let tree = `${repo}/tasks-worktrees/tasks/S-9`
-    await git(repo, 'worktree', 'add', '-b', 'session/S-9', tree, 'main')
+    try {
+      let repo = `${root}/repo`
+      Deno.mkdirSync(repo)
+      await git(repo, 'init', '--initial-branch=main')
+      await git(repo, 'config', 'user.email', 'test@example.com')
+      await git(repo, 'config', 'user.name', 'Test')
+      Deno.writeTextFileSync(`${repo}/base.txt`, 'base\n')
+      await git(repo, 'add', 'base.txt')
+      await git(repo, 'commit', '-m', 'base')
+      // A clean, merged session worktree — otherwise reapable on all three locks.
+      let tree = `${repo}/tasks-worktrees/tasks/S-9`
+      await git(repo, 'worktree', 'add', '-b', 'session/S-9', tree, 'main')
 
-    let row = { id: 'sid', cwd: tree, pid: null }
-    // grace 0 defeats the idle guard: the worktree was just touched by git.
-    let forest = (it: Live) => trees(repo, it, [], Date.now(), 0)
-    let open = forest(live([{ ...row, active: true }], () => 'nginx'))
-    let settled = forest(live([row], () => 'nginx'))
-    let at = (forest: Tree[]) => forest.find((f) => f.path == tree)!
-    assertEquals(at(open).busy, 'a live session works here')
-    assertEquals(judgeTree(at(open)).prune, false)
-    assertEquals(judgeTree(at(settled)).prune, true)
-  } finally {
-    Deno.removeSync(root, { recursive: true })
-  }
-})
+      let row = { id: 'sid', cwd: tree, pid: null }
+      // grace 0 defeats the idle guard: the worktree was just touched by git.
+      let forest = (it: Live) => trees(repo, it, [], Date.now(), 0)
+      let open = forest(live([{ ...row, active: true }], () => 'nginx'))
+      let settled = forest(live([row], () => 'nginx'))
+      let at = (forest: Tree[]) => forest.find((f) => f.path == tree)!
+      assertEquals(at(open).busy, 'a live session works here')
+      assertEquals(judgeTree(at(open)).prune, false)
+      assertEquals(judgeTree(at(settled)).prune, true)
+    } finally {
+      Deno.removeSync(root, { recursive: true })
+    }
+  },
+)
 
 Deno.test('containment is a path test, never a sibling prefix match', () => {
   assert(within('/w/T-1', '/w/T-1'))
@@ -321,7 +328,7 @@ Deno.test('a worktree is pruned only when all three locks open', () => {
 // question: a fork's checkout lives under the repo's own `.claude/worktrees/`
 // and a landing now leaves it standing, so a sweep that only knew the fleet
 // roots would be no collector at all (T-13942).
-Deno.test('the forest is every throwaway checkout, wherever it hangs', async () => {
+slow('the forest is every throwaway checkout, wherever it hangs', async () => {
   let root = Deno.makeTempDirSync({ prefix: 'tasks-trees-' })
   let git = async (cwd: string, ...args: string[]) => {
     let r = await new Deno.Command('git', { args, cwd, stderr: 'piped' })

@@ -4,6 +4,7 @@ import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
 import { group, Search, searchOpen } from './Search.tsx'
+import { until } from '../testing.ts'
 
 let hit = (num: number, kind: string, title: string) => ({
   eid: `${num}`,
@@ -60,7 +61,11 @@ Deno.test('search sends only the settled query while typing', async () => {
     }
     assertEquals(input.value, 'type')
     assertEquals(asked, [])
-    await new Promise((resolve) => setTimeout(resolve, 225))
+    // Poll the debounce instead of guessing its window: only the settled
+    // query is ever sent, so the first ask is the whole story.
+    await until(() => asked.length ? asked : undefined, {
+      label: 'the settled query to be sent',
+    })
     assertEquals(asked, ['type'])
   } finally {
     searchOpen.value = false

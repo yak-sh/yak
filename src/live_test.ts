@@ -45,6 +45,7 @@ import {
   assertNotStrictEquals,
   assertStrictEquals,
 } from '@std/assert'
+import { until } from './testing.ts'
 
 Deno.test('findEid indexes human ids, aliases, and short handles', () => {
   cache.value = {
@@ -1246,8 +1247,11 @@ Deno.test('the agreement counter counts on the incremental path', async () => {
       name: 'task',
       comp: { eid: 't1', status: 'open', priority: 0 },
     }])
-    await new Promise((r) => setTimeout(r, 40))
-    let counts = subscriptionChecks()
+    // Poll the off-thread agreement counter instead of guessing its latency.
+    let counts = await until(() => {
+      let c = subscriptionChecks()
+      return c && (c.agreements ?? 0) > 0 ? c : undefined
+    }, { label: 'the agreement counter to count' })
     assertEquals(counts?.divergences, 0)
     assertEquals((counts?.agreements ?? 0) > 0, true, 'the counter counted')
   } finally {

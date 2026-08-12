@@ -21,6 +21,7 @@ import {
 import { writeSession } from './session_store.ts'
 import { type ToolHost } from './harness_tools.ts'
 import { type Change, uuid } from './types.ts'
+import { slow } from './testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 
@@ -1236,117 +1237,124 @@ Deno.test('drain settles the in-flight generation and leaves new work ready', as
   db.close()
 })
 
-Deno.test('the heartbeat keeps a generation outliving its lease TTL fresh', async () => {
-  let db = open(':memory:')
-  let tree = Deno.makeTempDirSync(), sid = session(db, tree)
-  writeSession(db, sid, { base_revision: 'base' })
-  let started = Promise.withResolvers<void>()
-  let gate = Promise.withResolvers<ResponseResult>()
-  let service = managedCodex({
-    db,
-    cast: () => {},
-    leaseMs: 200,
-    transport: {
-      run: () => {
-        started.resolve()
-        return gate.promise
+slow(
+  'the heartbeat keeps a generation outliving its lease TTL fresh',
+  async () => {
+    let db = open(':memory:')
+    let tree = Deno.makeTempDirSync(), sid = session(db, tree)
+    writeSession(db, sid, { base_revision: 'base' })
+    let started = Promise.withResolvers<void>()
+    let gate = Promise.withResolvers<ResponseResult>()
+    let service = managedCodex({
+      db,
+      cast: () => {},
+      leaseMs: 200,
+      transport: {
+        run: () => {
+          started.resolve()
+          return gate.promise
+        },
       },
-    },
-    tools: () => Promise.resolve(tools([])),
-    prepare: () => Promise.resolve(),
-  })
-  let running = service.start(sid, job(tree))
-  await started.promise
-  let generation = readEntries(db, sid).find((row) => row.comps.generation)!.eid
-  let until0 = leaseUntil(db, generation)!
-  // Hold the turn well past the 200ms TTL; the heartbeat renews it.
-  await delay(500)
-  assertEquals(expiredLeases(db, new Date().toISOString()).length, 0)
-  assert(leaseUntil(db, generation)! > until0)
-  gate.resolve(result([{
-    type: 'message',
-    content: [{ type: 'output_text', text: 'done' }],
-  }]))
-  await running
-  assertEquals(leaseUntil(db, generation), undefined)
-  db.close()
-})
+      tools: () => Promise.resolve(tools([])),
+      prepare: () => Promise.resolve(),
+    })
+    let running = service.start(sid, job(tree))
+    await started.promise
+    let generation =
+      readEntries(db, sid).find((row) => row.comps.generation)!.eid
+    let until0 = leaseUntil(db, generation)!
+    // Hold the turn well past the 200ms TTL; the heartbeat renews it.
+    await delay(500)
+    assertEquals(expiredLeases(db, new Date().toISOString()).length, 0)
+    assert(leaseUntil(db, generation)! > until0)
+    gate.resolve(result([{
+      type: 'message',
+      content: [{ type: 'output_text', text: 'done' }],
+    }]))
+    await running
+    assertEquals(leaseUntil(db, generation), undefined)
+    db.close()
+  },
+)
 
-Deno.test('a restart mid-generation: predecessor drains, successor resumes clean', async () => {
-  let dir = Deno.makeTempDirSync(), path = `${dir}/graph.db`
-  let db1 = open(path), db2 = open(path)
-  let tree = Deno.makeTempDirSync(), sid = session(db1, tree)
-  writeSession(db1, sid, { base_revision: 'base' })
+slow(
+  'a restart mid-generation: predecessor drains, successor resumes clean',
+  async () => {
+    let dir = Deno.makeTempDirSync(), path = `${dir}/graph.db`
+    let db1 = open(path), db2 = open(path)
+    let tree = Deno.makeTempDirSync(), sid = session(db1, tree)
+    writeSession(db1, sid, { base_revision: 'base' })
 
-  let started = Promise.withResolvers<void>()
-  let gate = Promise.withResolvers<ResponseResult>()
-  // Predecessor holds one generation in flight, blocked on the gate.
-  let pre = managedCodex({
-    db: db1,
-    cast: () => {},
-    leaseMs: 200,
-    transport: {
-      run: () => {
-        started.resolve()
-        return gate.promise
+    let started = Promise.withResolvers<void>()
+    let gate = Promise.withResolvers<ResponseResult>()
+    // Predecessor holds one generation in flight, blocked on the gate.
+    let pre = managedCodex({
+      db: db1,
+      cast: () => {},
+      leaseMs: 200,
+      transport: {
+        run: () => {
+          started.resolve()
+          return gate.promise
+        },
       },
-    },
-    tools: () => Promise.resolve(tools([])),
-    prepare: () => Promise.resolve(),
-  })
-  let running = pre.start(sid, job(tree))
-  await started.promise
-  let generation =
-    readEntries(db1, sid).find((row) => row.comps.generation)!.eid
+      tools: () => Promise.resolve(tools([])),
+      prepare: () => Promise.resolve(),
+    })
+    let running = pre.start(sid, job(tree))
+    await started.promise
+    let generation =
+      readEntries(db1, sid).find((row) => row.comps.generation)!.eid
 
-  // Successor boots on the same graph and sweeps across a window longer than
-  // the 200ms TTL. The heartbeated lease must keep it from reclaiming or
-  // failing the predecessor's live turn.
-  let sucCalls = 0
-  let suc = managedCodex({
-    db: db2,
-    cast: () => {},
-    leaseMs: 200,
-    transport: {
-      run: () => {
-        sucCalls++
-        return Promise.resolve(result([{
-          type: 'message',
-          content: [{ type: 'output_text', text: 'resumed and finished' }],
-        }]))
+    // Successor boots on the same graph and sweeps across a window longer than
+    // the 200ms TTL. The heartbeated lease must keep it from reclaiming or
+    // failing the predecessor's live turn.
+    let sucCalls = 0
+    let suc = managedCodex({
+      db: db2,
+      cast: () => {},
+      leaseMs: 200,
+      transport: {
+        run: () => {
+          sucCalls++
+          return Promise.resolve(result([{
+            type: 'message',
+            content: [{ type: 'output_text', text: 'resumed and finished' }],
+          }]))
+        },
       },
-    },
-    tools: () => Promise.resolve(tools([])),
-    prepare: () => Promise.resolve(),
-  })
-  for (let i = 0; i < 4; i++) {
+      tools: () => Promise.resolve(tools([])),
+      prepare: () => Promise.resolve(),
+    })
+    for (let i = 0; i < 4; i++) {
+      await suc.sweep()
+      await delay(100)
+    }
+    assertEquals(sucCalls, 0)
+    let held = readEntries(db2, sid).find((row) => row.eid == generation)!
+    assert(held.comps.lease)
+    assertEquals(held.comps.error, undefined)
+
+    // The predecessor drains: the in-flight generation completes and settles.
+    let drained = pre.settle(5000)
+    gate.resolve(result([shellCall('printf hi')]))
+    await drained
+    await running
+    let after = readEntries(db1, sid).find((row) => row.eid == generation)!
+    assert(after.comps.delivered)
+    assertEquals(after.comps.error, undefined)
+
+    // The successor resumes from the settled boundary and finishes the session.
     await suc.sweep()
-    await delay(100)
-  }
-  assertEquals(sucCalls, 0)
-  let held = readEntries(db2, sid).find((row) => row.eid == generation)!
-  assert(held.comps.lease)
-  assertEquals(held.comps.error, undefined)
-
-  // The predecessor drains: the in-flight generation completes and settles.
-  let drained = pre.settle(5000)
-  gate.resolve(result([shellCall('printf hi')]))
-  await drained
-  await running
-  let after = readEntries(db1, sid).find((row) => row.eid == generation)!
-  assert(after.comps.delivered)
-  assertEquals(after.comps.error, undefined)
-
-  // The successor resumes from the settled boundary and finishes the session.
-  await suc.sweep()
-  let rows = readEntries(db2, sid)
-  assertEquals(rows.at(-1)?.comps.content?.body, 'resumed and finished')
-  assertEquals(rows.some((row) => row.comps.error), false)
-  assertEquals(rows.some((row) => row.comps.result), true)
-  assert(sucCalls >= 1)
-  db1.close()
-  db2.close()
-})
+    let rows = readEntries(db2, sid)
+    assertEquals(rows.at(-1)?.comps.content?.body, 'resumed and finished')
+    assertEquals(rows.some((row) => row.comps.error), false)
+    assertEquals(rows.some((row) => row.comps.result), true)
+    assert(sucCalls >= 1)
+    db1.close()
+    db2.close()
+  },
+)
 
 Deno.test('graph-native compaction bounds replay across a restart and a later turn', async () => {
   let db = open(':memory:')

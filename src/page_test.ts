@@ -6,6 +6,7 @@
 // campaign-tagged address, a fragment, a trailing slash) and asserts the
 // two halves meet.
 import { assertEquals, assertMatch } from '@std/assert'
+import { slow } from './testing.ts'
 
 // A temp HOME before the import: freeze.ts fixes ~/.tasks/frozen at load,
 // and a test must never write an archive into the owner's.
@@ -59,7 +60,7 @@ let badge = async (url: string): Promise<Hit[]> => {
 // character the filter grammar separates on.
 let PAGE = 'https://witness.test/article?id=7&page=2'
 
-Deno.test(
+slow(
   'filing a page mints it once, however the tab spells it',
   alone,
   async () => {
@@ -93,7 +94,7 @@ Deno.test(
   },
 )
 
-Deno.test('a page with no line is just the page', alone, async () => {
+slow('a page with no line is just the page', alone, async () => {
   let out = await file({ url: 'https://witness.test/bare', title: 'Bare' })
   assertEquals(out.filed, [])
   let hits = await badge('https://witness.test/bare/')
@@ -101,7 +102,7 @@ Deno.test('a page with no line is just the page', alone, async () => {
   assertEquals(hits[0].backlinks, [])
 })
 
-Deno.test(
+slow(
   'the line is the one vocabulary, and its refusal is words',
   alone,
   async () => {
@@ -114,7 +115,7 @@ Deno.test(
   },
 )
 
-Deno.test(
+slow(
   'a captured DOM archives as witnessed, dated and attributed',
   alone,
   async () => {
@@ -146,7 +147,7 @@ Deno.test(
   },
 )
 
-Deno.test("a non-page address is the typist's news", alone, async () => {
+slow("a non-page address is the typist's news", alone, async () => {
   let res = await fetch(`http://${U}/page`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

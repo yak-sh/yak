@@ -4,6 +4,7 @@
 // are load-bearing too — a refusal-only suite would brick the deploy handoff.
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import { alone, bound, guard, peer, same } from './bind.ts'
+import { slow } from './testing.ts'
 
 let answers = (body: unknown, status = 200) => {
   let http = Deno.serve({
@@ -23,7 +24,7 @@ let free = () => {
 
 let finding = <T>(value: T) => () => Promise.resolve(value)
 
-Deno.test('same: a path holds one graph, :memory: holds none', () => {
+slow('same: a path holds one graph, :memory: holds none', () => {
   assertEquals(same('/t/tasks.db', '/t/tasks.db'), true)
   assertEquals(same('/t/tasks.db', '/t/./tasks.db'), true)
   assertEquals(same('/t/tasks.db', '/other/tasks.db'), false)
@@ -31,7 +32,7 @@ Deno.test('same: a path holds one graph, :memory: holds none', () => {
   assertEquals(same(':memory:', ':memory:'), false)
 })
 
-Deno.test('peer: an empty address and a stranger both read as nobody', async () => {
+slow('peer: an empty address and a stranger both read as nobody', async () => {
   assertEquals(await peer(free()), null)
   let { port, http } = answers({ not: 'a graph' }, 404)
   try {
@@ -41,7 +42,7 @@ Deno.test('peer: an empty address and a stranger both read as nobody', async () 
   }
 })
 
-Deno.test('alone: --join takes the same file — the deploy handoff', async () => {
+slow('alone: --join takes the same file — the deploy handoff', async () => {
   let { port, http } = answers({ db: '/t/tasks.db', epoch: 'e', pid: 7 })
   try {
     assertEquals((await alone(port, '/t/tasks.db', true))?.pid, 7)
@@ -50,24 +51,30 @@ Deno.test('alone: --join takes the same file — the deploy handoff', async () =
   }
 })
 
-Deno.test('alone: the same file without --join is refused, naming the way in', async () => {
-  let { port, http } = answers({ db: '/t/tasks.db', epoch: 'e', pid: 7 })
-  try {
-    let e = await assertRejects(() => alone(port, '/t/tasks.db'))
-    assertStringIncludes((e as Error).message, '/t/tasks.db')
-    assertStringIncludes((e as Error).message, 'DB_PATH')
-    assertStringIncludes((e as Error).message, '--join')
-  } finally {
-    await http.shutdown()
-  }
-})
+slow(
+  'alone: the same file without --join is refused, naming the way in',
+  async () => {
+    let { port, http } = answers({ db: '/t/tasks.db', epoch: 'e', pid: 7 })
+    try {
+      let e = await assertRejects(() => alone(port, '/t/tasks.db'))
+      assertStringIncludes((e as Error).message, '/t/tasks.db')
+      assertStringIncludes((e as Error).message, 'DB_PATH')
+      assertStringIncludes((e as Error).message, '--join')
+    } finally {
+      await http.shutdown()
+    }
+  },
+)
 
-Deno.test('alone: an empty address admits a first boot, not a successor', async () => {
-  assertEquals(await alone(free(), '/t/tasks.db'), null)
-  await assertRejects(() => alone(free(), '/t/tasks.db', true))
-})
+slow(
+  'alone: an empty address admits a first boot, not a successor',
+  async () => {
+    assertEquals(await alone(free(), '/t/tasks.db'), null)
+    await assertRejects(() => alone(free(), '/t/tasks.db', true))
+  },
+)
 
-Deno.test('alone: a peer over another file is refused, naming both', async () => {
+slow('alone: a peer over another file is refused, naming both', async () => {
   let { port, http } = answers({ db: '/live/tasks.db', epoch: 'e', pid: 7 })
   try {
     let e = await assertRejects(() => alone(port, '/probe/tasks.db'))
@@ -79,7 +86,7 @@ Deno.test('alone: a peer over another file is refused, naming both', async () =>
   }
 })
 
-Deno.test('alone: --join is no licence to sit beside a stranger', async () => {
+slow('alone: --join is no licence to sit beside a stranger', async () => {
   let { port, http } = answers({ db: '/live/tasks.db', epoch: 'e', pid: 7 })
   try {
     await assertRejects(() => alone(port, '/probe/tasks.db', true))
@@ -88,29 +95,34 @@ Deno.test('alone: --join is no licence to sit beside a stranger', async () => {
   }
 })
 
-Deno.test('guard: simultaneous boots cannot both check an empty address', async () => {
-  let port = free()
-  let entered = Promise.withResolvers<void>()
-  let resume = Promise.withResolvers<void>()
-  let first = guard(port, '/t/tasks.db', false, async () => {
-    entered.resolve()
-    await resume.promise
-    return null
-  })
-  await entered.promise
-  try {
-    for (let mine of ['/t/tasks.db', '/other/tasks.db']) {
-      let e = await assertRejects(() => guard(port, mine, false, finding(null)))
-      assertStringIncludes((e as Error).message, 'already being claimed')
+slow(
+  'guard: simultaneous boots cannot both check an empty address',
+  async () => {
+    let port = free()
+    let entered = Promise.withResolvers<void>()
+    let resume = Promise.withResolvers<void>()
+    let first = guard(port, '/t/tasks.db', false, async () => {
+      entered.resolve()
+      await resume.promise
+      return null
+    })
+    await entered.promise
+    try {
+      for (let mine of ['/t/tasks.db', '/other/tasks.db']) {
+        let e = await assertRejects(() =>
+          guard(port, mine, false, finding(null))
+        )
+        assertStringIncludes((e as Error).message, 'already being claimed')
+      }
+      using _other = await guard(free(), '/t/tasks.db', false, finding(null))
+    } finally {
+      resume.resolve()
     }
-    using _other = await guard(free(), '/t/tasks.db', false, finding(null))
-  } finally {
-    resume.resolve()
-  }
-  using _first = await first
-})
+    using _first = await first
+  },
+)
 
-Deno.test('guard: the successor keeps the lock through the handoff', async () => {
+slow('guard: the successor keeps the lock through the handoff', async () => {
   let port = free()
   let serving = { db: '/t/tasks.db', epoch: 'e', pid: 7 }
   let first = await guard(port, '/t/tasks.db', false, finding(null))
