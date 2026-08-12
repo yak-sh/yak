@@ -77,6 +77,10 @@ Deno.test('command and output summaries show one line and a more control', () =>
       [...root.querySelectorAll('.Entry_Line')].map((x) => x.textContent),
       ['printf one', 'one'],
     )
+    assertEquals(
+      root.querySelector('.Entry_Line-command')?.textContent,
+      'printf one',
+    )
     assertEquals(root.querySelector('.Entry_More')?.textContent, '…')
 
     let result = ent(answer)

@@ -54,7 +54,7 @@ export let CommandSummary = (
   let text = body(out ?? e) || out?.stderr?.text || ''
   return (
     <Frame mod={out && failed(out) && 'fail'}>
-      <Name>$</Name> <Line>{first(e.bash?.command)}</Line>
+      <Name>$</Name> <Line mod='command'>{first(e.bash?.command)}</Line>
       {text && <Line>{first(text)}</Line>}
       {more(
         onOpen,

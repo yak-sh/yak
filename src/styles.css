@@ -3182,7 +3182,6 @@ a[data-ref]:hover {
   gap: var(--half-gap);
   min-width: 0;
   color: var(--muted);
-  font-size: 12px;
 }
 .Entry_Line {
   flex: 1 1 auto;
@@ -3190,6 +3189,10 @@ a[data-ref]:hover {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.Entry_Line-command {
+  font-family: var(--mono);
+  white-space: pre;
 }
 .Entry_More {
   flex: none;
