@@ -78,17 +78,21 @@ thorough; a paragraph is almost always the wrong size.
 - Managed fleet worktrees live under `~/tasks-worktrees/`. Keep their root
   visible: some tools interpret any hidden ancestor as an instruction to use a
   different file set, even when the checkout itself contains no hidden path.
-- Work in a worktree; land with `task land`. It is mechanical and task-free: it
-  rebases the worktree you stand in onto `main`, re-runs the gate on the rebased
-  commit, fast-forward merges it into the shared checkout — the tree the server
-  runs from — and best-effort publishes where `repo.push` is granted. It does
-  NOT close the task or release your claims; that is your next step
-  (`task done <id>`; `task release <id>`). `task land --no-gate` lands despite a
-  red or absent gate; it never bypasses the ff-only merge. That merge is the
-  compare-and-swap: another lander moving `main` first makes it no longer a
-  fast-forward and git refuses, so rebase, re-gate and land again, never git
-  `--force`. Pushing to origin publishes; it never lands.
-- Gates before every land, strictly `&&`-chained so a failure stops the line:
+- Work in a worktree; land with `task land`. It is a pure git primitive: it
+  reads NOTHING from the graph and runs NO gate. `git worktree list` names the
+  shared checkout and its base branch, and land does at most ONE thing — it
+  fast-forwards your branch into the base (landed — the tree the server runs
+  from moves; then a best-effort push if the base has a git upstream), or, if
+  the base MOVED, it rebases your branch onto it and RETURNS WITHOUT MERGING,
+  printing what happened, a `git diff --stat` of what the base pulled in, and
+  any rebase conflict verbatim. It does NOT close the task or release your
+  claims; that is your next step (`task done <id>`; `task release <id>`).
+  ff-only is the compare-and-swap: another lander moving the base first makes it
+  no longer a fast-forward, so land rebases and returns; re-gate if the diff
+  could affect you, then `task land` again — never git `--force`. Pushing to a
+  remote publishes; it never lands.
+- Run the gate YOURSELF before landing, and again after a rebase if the incoming
+  diff could affect you — strictly `&&`-chained so a failure stops the line:
   `deno fmt src/ && deno task check && DB_PATH=:memory: deno task test`. Read
   the output; never trust a log a skipped command "wrote".
 - "Did it land?" reads the shared checkout's `main` — readable from your

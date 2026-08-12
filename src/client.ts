@@ -266,21 +266,6 @@ export let send = async (changes: Change[], via = me()) => {
   return out.changes
 }
 
-// Landing is the one local action whose failure is itself graph health.
-// The server resolves the session from x-via and owns the stamped facet;
-// neither its eid nor error columns cross the writable graph vocabulary.
-export let landOutcome = async (session: string, error?: string) => {
-  let res = await request(`http://${host()}/land`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-via': session,
-    },
-    body: JSON.stringify({ error: error ?? null }),
-  })
-  if (!res.ok) throw new Error(`land outcome failed: ${await res.text()}`)
-}
-
 // The pipe, as a seam. Reading is sync because inflate is, and `taken`
 // rides the seam because consumability is a fact about the resource, not
 // about the caller — every door that asks for stdin in one command asks

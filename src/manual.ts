@@ -386,22 +386,26 @@ export let manuals = declare({
     ],
   },
   land: {
-    about: 'rebase and fast-forward the worktree you stand in onto its base',
-    examples: ['task land', 'task land --no-gate'],
-    detail: 'MECHANICAL and task-free: the worktree you run it in names what ' +
-      'to land, and the project that owns its checkout supplies the base ' +
-      'branch, repo.gate command, and push grant — no task or claim needed. ' +
-      'Rebase onto the base, run the gate, fast-forward merge into it, and ' +
-      'best-effort publish where repo.push is granted; a concurrent ' +
-      'fast-forward makes the verb rebase and retest, up to five times. ' +
-      'Landing does NOT close the task or release claims — that is your next ' +
-      'step (task done <id>; task release <id>). --no-gate lands despite a ' +
-      'red or absent gate; it never bypasses the ff-only merge. The worktree ' +
-      'is unlocked but kept — a later landing (or `task probes --reap`) ' +
-      'removes it once nobody is inside.',
+    about: 'fast-forward the worktree you stand in into its base branch',
+    examples: ['task land'],
+    detail: 'A pure git primitive — reads NOTHING from the graph and runs NO ' +
+      'gate. The worktree you run it in names what to land; `git worktree ' +
+      'list` names the shared checkout and the base branch it holds. It does ' +
+      'at most ONE thing: fast-forward the branch into the base (landed — ' +
+      'then a best-effort push if the base has a git upstream); or, if the ' +
+      'base MOVED, rebase the branch onto it and RETURN WITHOUT MERGING, ' +
+      'printing what happened, a `git diff --stat` of what the base pulled ' +
+      'in, and any rebase conflict verbatim. Run your gate (deno task check ' +
+      '&& deno task test) BEFORE landing, and again after a rebase if the ' +
+      'incoming diff could affect you, then `task land` again — it now ' +
+      "fast-forwards cleanly. Output is git's own so you can always tell " +
+      'what happened. Landing does NOT close the task or release claims — ' +
+      'that is your next step (task done <id>; task release <id>). The ' +
+      'worktree is unlocked but kept — a later landing (or `task probes ' +
+      '--reap`) removes it once nobody is inside.',
     root: true,
     args: [],
-    opts: [flag('--no-gate')],
+    opts: [],
   },
   comment: {
     about: 'comment on any entity; a verdict makes it a review',

@@ -42,7 +42,6 @@ import {
   isUnread,
   journalRows,
   jsonOf,
-  landOutcome,
   mailAt,
   mailChanges,
   mailLine,
@@ -121,8 +120,7 @@ import {
 } from './proc.ts'
 import { projection, syncFiles } from './persona.ts'
 import { commit } from './git.ts'
-import { land as landTree, landing } from './land.ts'
-import { dirname } from 'node:path'
+import { land as landTree } from './land.ts'
 import { request } from './http.ts'
 import { spawnDefault } from './providers.ts'
 import { atFleet, mailDomain } from './mailaddr.ts'
@@ -1041,68 +1039,31 @@ let sessionsOf = (all: Row[]) =>
     active: !!r.comps.session!.latest_seq,
   }))
 
-// One line of git output from where the caller stands — land needs only the
-// worktree it is in and the checkout that worktree belongs to.
-let gitLine = async (cwd: string, args: string[]) => {
-  let r = await new Deno.Command('git', {
-    args,
-    cwd,
-    env: { GIT_TERMINAL_PROMPT: '0' },
-    stdout: 'piped',
-    stderr: 'piped',
-  }).output()
-  if (r.code) {
-    throw new Error(
-      `land: git ${args.join(' ')}: ${
-        new TextDecoder().decode(r.stderr).trim()
-      }`,
-    )
-  }
-  return new TextDecoder().decode(r.stdout).trim()
-}
-
-// The one landing door — MECHANICAL and task-free. The worktree you stand in
-// names what to land; the project that owns its checkout supplies the base
-// branch, gate, and push grant (land.ts). No task, claim, or session is
-// required. Closing the task and releasing claims is YOUR next step; land no
-// longer touches the graph beyond clearing the session's own UNLANDED signal
-// (T-16680). --no-gate lands despite a red or absent gate; it never bypasses
-// the ff-only merge.
+// The one landing door — a pure git primitive. The worktree you stand in names
+// what to land; `git worktree list` names the shared checkout and its base
+// branch (land.ts). No graph read, no gate, no task or claim required — running
+// the gate and closing the task are YOUR steps around this one. Land either
+// fast-forwards the branch into the base (landed) or, if the base moved,
+// rebases and returns for you to re-gate and re-land; land.ts prints git's own
+// account either way.
 //
-// The caller keeps its worktree (land.ts), so each landing collects what
-// EARLIER ones left: whoever comes next is, reliably, the next lander.
-// Checkouts only — killing processes stays behind `task probes --reap`,
+// On a landing the caller keeps its worktree (land.ts), so each landing
+// collects what EARLIER ones left: whoever comes next is, reliably, the next
+// lander. Checkouts only — killing processes stays behind `task probes --reap`,
 // where an operator reads the reasons first. This tree is never a candidate
 // while the verb runs in it: judgeTree spares a worktree with a process
 // inside, and that process is us.
-let land = async (force = false) => {
-  let cwd = Deno.cwd()
-  let tree = await gitLine(cwd, ['rev-parse', '--show-toplevel'])
-  let root = dirname(
-    await gitLine(cwd, [
-      'rev-parse',
-      '--path-format=absolute',
-      '--git-common-dir',
-    ]),
-  )
-  let projects = await query(['.repo!'], 'project')
-  let spec = landing(projects, tree, root)
-  // The UNLANDED health signal belongs to a session; skip it when the caller
-  // has no session entity (a human at a terminal, a bare worktree) rather than
-  // failing an otherwise-good land on a 400.
-  let session = me()
-  let sess = session ? await sessionRow(session) : undefined
-  let sha = await landTree(spec, {
-    force,
-    outcome: sess ? (error) => landOutcome(session!, error) : undefined,
-  })
+let land = async () => {
+  let outcome = await landTree()
+  // The base moved: land.ts already rebased and told the agent what to do.
+  if (!('landed' in outcome)) return
   console.log(
-    `landed ${sha} — now close the task and release your claims ` +
+    `landed ${outcome.landed} — now close the task and release your claims ` +
       '(task done <id>; task release <id>)',
   )
   let sessions = await query([], 'session')
-  for (let t of sweep(sessionsOf(sessions), spec.repo).trees) {
-    if (t.prune && prune(spec.repo, t.tree)) warn(`swept ${t.tree.path}`)
+  for (let t of sweep(sessionsOf(sessions), outcome.root).trees) {
+    if (t.prune && prune(outcome.root, t.tree)) warn(`swept ${t.tree.path}`)
   }
 }
 
@@ -2540,7 +2501,7 @@ export let verbs = bind({
   claim,
   release,
   spawn,
-  land: (got) => land(got.flags.has('--no-gate')),
+  land: () => land(),
   comment,
   dep,
   backup: () => backup(),
