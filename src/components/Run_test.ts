@@ -1,25 +1,27 @@
-// The Run form's offers are one ordered menu: Sol leads, every other
-// provider/model keeps its declared place.
+// The Run form's menu is one unified catalog: Sol leads, every compatible
+// model appears ONCE, and the CLI fallback rides a model's transports instead
+// of minting a duplicate entry.
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
 import { assertEquals } from '@std/assert'
 import { providers } from '../adapters.ts'
+import { catalog } from '../providers.ts'
 import { codexAccount } from '../account_client.ts'
-import { offers, providers as loaded, Run, run } from './Run.tsx'
+import { providers as loaded, Run, run } from './Run.tsx'
 
-Deno.test('offers keep direct and CLI Codex choices distinct', () => {
-  assertEquals(offers(providers()).map((x) => [x.p.name, x.model, x.label]), [
-    ['codex', 'gpt-5.6-sol', 'GPT-5.6 Sol'],
-    ['codex-cli', 'gpt-5.6-sol', 'GPT-5.6 Sol (CLI fallback)'],
-    ['claude', 'claude-opus-4-8', 'Opus'],
-    ['claude', 'fable', 'Fable'],
-    ['claude', 'sonnet', 'Sonnet'],
-    ['claude', 'haiku', 'Haiku'],
-    ['codex', 'gpt-5.6-terra', 'GPT-5.6 Terra'],
-    ['codex', 'gpt-5.6-luna', 'GPT-5.6 Luna'],
-    ['codex-cli', 'gpt-5.6-terra', 'GPT-5.6 Terra (CLI fallback)'],
-    ['codex-cli', 'gpt-5.6-luna', 'GPT-5.6 Luna (CLI fallback)'],
-  ])
+Deno.test('the catalog offers each model once, Sol first, fallback as a transport', () => {
+  assertEquals(
+    catalog(providers()).map((c) => [c.model, c.label, c.transports]),
+    [
+      ['gpt-5.6-sol', 'GPT-5.6 Sol', ['codex', 'codex-cli']],
+      ['claude-opus-4-8', 'Opus', ['claude']],
+      ['fable', 'Fable', ['claude']],
+      ['sonnet', 'Sonnet', ['claude']],
+      ['haiku', 'Haiku', ['claude']],
+      ['gpt-5.6-terra', 'GPT-5.6 Terra', ['codex', 'codex-cli']],
+      ['gpt-5.6-luna', 'GPT-5.6 Luna', ['codex', 'codex-cli']],
+    ],
+  )
 })
 
 Deno.test('signed-out Codex offers login without blocking a raw spawn', async () => {

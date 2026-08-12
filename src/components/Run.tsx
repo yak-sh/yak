@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { signal } from '@preact/signals'
 import { base, ent, mutate, toPlane, topZ, uuid } from '../live.ts'
-import { modelOrder } from '../providers.ts'
+import { catalog, type Pick, type Provider, transport } from '../providers.ts'
 import { block } from './ui.tsx'
 import { menu, navigate, screenTarget } from './nav.tsx'
 import { usePlaceAt } from './overlay.tsx'
@@ -10,7 +10,7 @@ import { openAccount } from './Account.tsx'
 
 // The Run door: a task's "run session…" verb opens this over the point
 // the menu stood on — model, effort; the provider is never asked, it is
-// the pick's own — and writes ONE batch: a
+// chosen for the pick by readiness — and writes ONE batch: a
 // session carrying the request columns (the server's created(session)
 // effect validates and launches it), plus its card and pin when we're
 // over a canvas, minted here like any other card the browser spawns.
@@ -22,25 +22,21 @@ import { openAccount } from './Account.tsx'
 // Off a canvas (or on the List door, which has no plane) there's nothing
 // to pin, so we navigate to the session instead.
 
-type Provider = {
-  name: string
-  models: string[]
-  efforts: string[]
-  labels: Record<string, string>
-}
 type Ask = { eid: string; x: number; y: number }
 
-// The offers: every provider's labeled models, flattened. A fallback may
-// deliberately offer the same model through another substrate, so provider
-// and model together identify a choice even though the friendly label is what
-// the form shows.
-export let offers = (ps: Provider[]) =>
-  ps.flatMap((p) =>
-    Object.entries(p.labels).map(([model, label]) => ({ model, label, p }))
-  ).sort((a, b) => modelOrder(a.model, b.model))
-
-let offerId = (offer: ReturnType<typeof offers>[number]) =>
-  `${offer.p.name}:${offer.model}`
+// The live transport for a picked model: graph-native Codex only when its
+// account is signed in, else the permanent CLI fallback. Reads the account
+// first when the pick could use graph-native Codex, so an unread status never
+// forces the fallback on a signed-in owner.
+export let choose = async (pick: Pick): Promise<string> => {
+  if (pick.transports.includes('codex') && !codexAccount.view.peek().status) {
+    await codexAccount.read()
+  }
+  return transport(
+    pick,
+    (name) => name == 'codex' && !codexAccount.view.peek().status?.ready,
+  )
+}
 
 let Frame = block('div', 'Run', {
   Row: 'label',
@@ -89,17 +85,20 @@ let Form = ({ a }: { a: Ask }) => {
 
   // Every choice is DERIVED, never stored beside the menu: a pick the
   // menu no longer offers falls back to its first entry, and effort to
-  // the picked provider's first, with nothing to keep in sync.
-  let ms = offers(providers.value)
-  let m = ms.find((x) => offerId(x) == choice) ?? ms[0]
-  let ef = m?.p.efforts.includes(effort) ? effort : m?.p.efforts[0]
+  // the picked model's first, with nothing to keep in sync. Each model is
+  // offered ONCE — the transport is chosen at start by readiness.
+  let ms = catalog(providers.value)
+  let m = ms.find((x) => x.model == choice) ?? ms[0]
+  let ef = m?.efforts.includes(effort) ? effort : m?.efforts[0]
+  let native = !!m?.transports.includes('codex')
   let av = codexAccount.view.value
   useEffect(() => {
-    if (m?.p.name == 'codex') codexAccount.read()
-  }, [m?.p.name])
+    if (native) codexAccount.read()
+  }, [native])
 
-  let go = () => {
+  let go = async () => {
     if (!m) return
+    let provider = await choose(m)
     let at = spot(a)
     let eid = uuid()
     let card = uuid()
@@ -109,7 +108,7 @@ let Form = ({ a }: { a: Ask }) => {
         name: 'session',
         comp: {
           id: uuid(),
-          provider: m.p.name,
+          provider,
           model: m.model,
           ...(ef ? { effort: ef } : {}),
           requested_task: a.eid,
@@ -149,17 +148,17 @@ let Form = ({ a }: { a: Ask }) => {
       <Row>
         <Name>model</Name>
         <select
-          value={m && offerId(m)}
+          value={m?.model}
           onChange={(e: Event) =>
             setChoice((e.target as HTMLSelectElement).value)}
         >
           {ms.map((x) => (
-            <option key={offerId(x)} value={offerId(x)}>{x.label}</option>
+            <option key={x.model} value={x.model}>{x.label}</option>
           ))}
         </select>
       </Row>
       {/* effort is a provider's own axis — claude has none, so no row */}
-      {!!m?.p.efforts.length && (
+      {!!m?.efforts.length && (
         <Row>
           <Name>effort</Name>
           <select
@@ -167,11 +166,11 @@ let Form = ({ a }: { a: Ask }) => {
             onChange={(e: Event) =>
               setEffort((e.target as HTMLSelectElement).value)}
           >
-            {m.p.efforts.map((x) => <option key={x} value={x}>{x}</option>)}
+            {m.efforts.map((x) => <option key={x} value={x}>{x}</option>)}
           </select>
         </Row>
       )}
-      {m?.p.name == 'codex' && (
+      {native && (
         <Row>
           <Name>account</Name>
           <State mod={av.status?.state}>

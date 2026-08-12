@@ -657,11 +657,19 @@ let graphIO: IO = {
   logs: async (eid, q) => sessionLog(eid, q),
   // deno-lint-ignore require-await
   history: async (eid, limit) => journalOf(db, eid, limit),
-  // deno-lint-ignore require-await
-  providers: async () => providers(),
+  providers: () => readyProviders(),
 }
 
 let codexAccount = accountService(codexStore(), codexIssuer())
+
+// The adapter table stamped with live readiness: the graph-native Codex
+// transport is ready only when its account is signed in, so every server-side
+// spawn default (obey, MCP, CLI) routes graph-native → CLI fallback off this
+// one probe instead of reading the account again at each door.
+let readyProviders = async () => {
+  let ok = await codexAccount.status().then((s) => s.ready).catch(() => false)
+  return providers((name) => name != 'codex' || ok)
+}
 let managed = managedCodex({
   db,
   cast,
@@ -1095,7 +1103,7 @@ let http = Deno.serve(
     }
     // The adapter table, for a browser that must offer what a spawn
     // request will be checked against (adapters.ts is server-only).
-    if (path == '/providers') return Response.json(providers())
+    if (path == '/providers') return Response.json(await readyProviders())
     // Mail attachments, proxied read-only: the fleet-mail worker holds
     // them in R2 behind a token that stays in THIS process — clients
     // name the mail ENTITY; the spool's message_id is server business.
@@ -1241,7 +1249,7 @@ on('comment', {
     'attention; task_context owns retrieval and acknowledgement',
 })
 on('comment', {
-  created: obeyed(cast),
+  created: obeyed(cast, () => codexAccount.status().then((s) => s.ready)),
   doc: 'a comment whose first line opens with `:` is a command line — ' +
     'run against its target, as its author, answered by an event comment',
 })

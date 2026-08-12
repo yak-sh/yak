@@ -40,8 +40,12 @@ export type Adapter = {
   efforts: string[]
   // The spawn menu: offered model → friendly name. A subset of models —
   // short aliases stay accepted but unoffered, so a form never shows the
-  // same model twice.
+  // same model twice. A fallback transport (below) carries no menu at all.
   labels: Record<string, string>
+  // A CLI fallback transport: valid and directly requestable, but never a menu
+  // entry of its own and always ranked behind the graph-native provider, so a
+  // model it shares never appears twice in a picker.
+  fallback?: boolean
   argv: (job: Job) => string[]
   // Resume a settled thread with more to say: the same flags as argv, but
   // pointed at an existing provider session and carrying the new prompt.
@@ -116,7 +120,10 @@ let at = (e: Event) => e.timestamp ? { at: String(e.timestamp) } : {}
 // no second edit.
 // fake is a test rig, not an offer — it stays callable (tests, API smoke
 // runs) but never shows up in a Run form.
-export let providers = () =>
+// `ready` stamps per-provider readiness when the server passes an account
+// probe; the default spawn blocker routes around any provider it marks unready,
+// so a stamped /providers picks the graph-native → CLI transport for free.
+export let providers = (ready?: (name: string) => boolean) =>
   Object.entries(adapters)
     .filter(([name]) => name != 'fake')
     .map(([name, a]) => ({
@@ -124,6 +131,8 @@ export let providers = () =>
       models: a.models,
       efforts: a.efforts,
       labels: a.labels,
+      ...(a.fallback ? { fallback: true } : {}),
+      ...(ready ? { ready: ready(name) } : {}),
     }))
 
 // A start request weighed against a provider's allowlists — the friendly
@@ -572,14 +581,13 @@ export let adapters: Record<string, Adapter> = {
 // The direct runner owns `codex`; naming the substrate is the deliberate
 // per-session escape hatch. Both process spellings share one implementation
 // so the fallback cannot drift from the path a process-wide rollback uses.
+// It carries no menu (`labels: {}`) — the same models are already offered once
+// through graph-native `codex`, and this transport is chosen by readiness, not
+// picked by name from a list. `fallback` ranks it behind `codex` everywhere.
 adapters['codex-cli'] = {
   ...adapters.codex,
-  labels: Object.fromEntries(
-    Object.entries(adapters.codex.labels).map(([model, label]) => [
-      model,
-      `${label} (CLI fallback)`,
-    ]),
-  ),
+  labels: {},
+  fallback: true,
 }
 
 // A codex item, as much of it as row() reads.

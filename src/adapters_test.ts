@@ -110,15 +110,17 @@ Deno.test('providers: every adapter but fake, allowlists only — no argv', () =
     ps.map((p) => p.name),
     Object.keys(adapters).filter((n) => n != 'fake'),
   )
-  assertEquals(
-    ps.map((p) => Object.keys(p)),
-    ps.map(() => [
-      'name',
-      'models',
-      'efforts',
-      'labels',
-    ]),
-  )
+  // Every non-fallback provider projects the four allowlist fields; the CLI
+  // fallback adds only its `fallback` marker — never argv, never a `ready`
+  // (unstamped table).
+  for (let p of ps) {
+    assertEquals(
+      Object.keys(p),
+      p.name == 'codex-cli'
+        ? ['name', 'models', 'efforts', 'labels', 'fallback']
+        : ['name', 'models', 'efforts', 'labels'],
+    )
+  }
   // the browser offers exactly what a start request is checked against
   assertEquals(
     ps.find((p) => p.name == 'claude')?.models,
@@ -135,15 +137,21 @@ Deno.test('providers: every adapter but fake, allowlists only — no argv', () =
     ps.find((p) => p.name == 'codex')?.efforts,
     adapters.codex.efforts,
   )
+  // The fallback carries the models (a valid, directly-requestable transport)
+  // but NO menu of its own — the same models are already offered once through
+  // graph-native codex, so a picker never shows them twice.
   let fallback = ps.find((p) => p.name == 'codex-cli')!
   assertEquals(fallback.models, adapters.codex.models)
-  assertEquals(
-    Object.values(fallback.labels).every((label) =>
-      label.endsWith('(CLI fallback)')
-    ),
-    true,
-  )
+  assertEquals(fallback.labels, {})
+  assertEquals(fallback.fallback, true)
   assertEquals('argv' in fallback, false)
+})
+
+Deno.test('providers: a readiness probe stamps ready per provider', () => {
+  let ps = providers((name) => name != 'codex')
+  assertEquals(ps.find((p) => p.name == 'codex')?.ready, false)
+  assertEquals(ps.find((p) => p.name == 'codex-cli')?.ready, true)
+  assertEquals(ps.find((p) => p.name == 'claude')?.ready, true)
 })
 
 Deno.test('claude: opus-5 and the bare opus alias are barred; 4-8 is the default', () => {
@@ -188,7 +196,7 @@ Deno.test('codex: the probed celestial line, with Sol as the default', () => {
   assertEquals(codex.models[0], 'gpt-5.6-sol')
 })
 
-Deno.test('codex-cli is the same process adapter under an explicit offer', () => {
+Deno.test('codex-cli is the same process adapter under an explicit request', () => {
   let fallback = adapters['codex-cli']
   let job = {
     instruction: 'use the process floor',
@@ -202,6 +210,10 @@ Deno.test('codex-cli is the same process adapter under an explicit offer', () =>
     codex.resume(job, 'thread', 'continue'),
   )
   assertEquals(fallback.row, codex.row)
+  // Same models, but no menu of its own and marked as the fallback transport.
+  assertEquals(fallback.models, codex.models)
+  assertEquals(fallback.labels, {})
+  assertEquals(fallback.fallback, true)
 })
 
 Deno.test('trouble: unknown provider/model/effort each name the valid ones', () => {

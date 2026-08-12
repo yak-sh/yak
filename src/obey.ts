@@ -38,6 +38,10 @@ export let order = (
   line: string,
   focus?: string,
   session?: string,
+  // Routes the default transport by readiness: a comment `:fix` chooses
+  // graph-native Codex only when its account is signed in, else the CLI
+  // fallback. Absent means graph-native by table order (the pure-command path).
+  blocked?: (name: string) => boolean,
 ) => {
   let changes: Change[] = []
   let said = ''
@@ -53,7 +57,7 @@ export let order = (
     if (out.spawn) {
       let mine = spawnDefaults(all, session)
       let table = providers()
-      let { provider, model } = spawnDefault(table, mine)
+      let { provider, model } = spawnDefault(table, mine, blocked)
       if (!provider || !model) throw new Error('no provider to default to')
       let made = spawnChanges(all, {
         task: out.spawn,
@@ -85,7 +89,8 @@ let speaker = (via: string) =>
     .get(via, via) as { id: string } | undefined)?.id
 
 export let obeyed =
-  (cast: Cast) => (ceid: string, comp: Record<string, unknown>) => {
+  (cast: Cast, ready?: () => Promise<boolean>) =>
+  async (ceid: string, comp: Record<string, unknown>) => {
     let target = String(comp.target ?? '')
     if (!target) return
     let doc = db.prepare('select body from doc where eid = ?').get(ceid) as
@@ -100,11 +105,23 @@ export let obeyed =
     )
     let session = via ? speaker(via) : undefined
 
+    // Only the graph-native Codex transport is account-gated; a `:fix` here
+    // routes around it to the CLI fallback when the account isn't ready.
+    let ok = ready ? await ready().catch(() => false) : true
+    let blocked = (name: string) => name == 'codex' && !ok
+
     let snap = snapshot(db)
     // Teach at the point of failure: order() hands back the refusal as
     // words, and the receipt below says them where the order was given,
     // so the next line typed is a better one.
-    let { changes, said } = order(rows(snap), snap, line, target, session)
+    let { changes, said } = order(
+      rows(snap),
+      snap,
+      line,
+      target,
+      session,
+      blocked,
+    )
     if (!said && !changes.length) return // `:open` moves a viewport we don't have
     if (said) changes.push(...receipt(target, said))
     try {

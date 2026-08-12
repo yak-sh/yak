@@ -26,6 +26,7 @@ import {
   rows as graph,
   send,
   statuses,
+  uuid,
 } from '../live.ts'
 import { type Command, commands, type Ctx, run } from '../commands.ts'
 import { inflate } from '../client.ts'
@@ -48,6 +49,8 @@ import {
   type AccountView,
   codexAccount,
 } from '../account_client.ts'
+import { catalog } from '../providers.ts'
+import { choose, load, providers } from '../components/Run.tsx'
 
 export let sel = signal({ col: 0, row: 0 })
 export let quit = signal(false)
@@ -360,6 +363,30 @@ let bye: Command = {
 }
 let local: Record<string, Command> = { q: bye, quit: bye }
 
+// :fix in the TUI spawns through the SAME unified catalog the web and CLI use:
+// the default model once, its transport chosen by readiness (graph-native Codex
+// when signed in, else the CLI fallback). No canvas here, so the session is a
+// lone graph write — created(session) validates and launches it.
+let spawn = async (task: string) => {
+  if (!providers.value.length) await load()
+  let m = catalog(providers.value)[0]
+  if (!m) throw new Error('no providers')
+  let provider = await choose(m)
+  mutate({
+    eid: uuid(),
+    name: 'session',
+    comp: {
+      id: uuid(),
+      provider,
+      model: m.model,
+      ...(m.efforts.length
+        ? { effort: m.efforts.includes('medium') ? 'medium' : m.efforts[0] }
+        : {}),
+      requested_task: task,
+    },
+  })
+}
+
 let exec = (line: string) => {
   try {
     let r = run(line, ctx(), local)
@@ -367,6 +394,11 @@ let exec = (line: string) => {
     if (r.go) trail.value = [...trail.value, r.go]
     if (r.card) trail.value = [...trail.value, r.card]
     msg.value = r.msg ?? ''
+    if (r.spawn) {
+      spawn(r.spawn).catch((e) => {
+        msg.value = e instanceof Error ? e.message : String(e)
+      })
+    }
   } catch (e) {
     msg.value = e instanceof Error ? e.message : String(e)
   }

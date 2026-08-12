@@ -22,7 +22,8 @@ import {
 } from '../commands.ts'
 import { navigate, screenTarget } from './nav.tsx'
 import { drop, peek, save } from './drafts.ts'
-import { load, offers, providers } from './Run.tsx'
+import { choose, load, providers } from './Run.tsx'
+import { catalog } from '../providers.ts'
 import { Tray } from './Tray.tsx'
 import { block } from './ui.tsx'
 import { Id } from './views/Inline.tsx'
@@ -177,27 +178,27 @@ let scene = (task: string): Change[] => {
   ]
 }
 
-// The spawn intent (:fix): defaults are the first offer, medium effort
-// when its provider has the axis — the same list the Run form shows.
-// The session is one graph write on the same socket
-// the task just rode, so ordering is free. The bar narrates from the graph;
-// anything it can't honor lands as a failed Session.
+// The spawn intent (:fix): the default is the first model in the one unified
+// catalog, its transport chosen by readiness (graph-native → CLI fallback),
+// medium effort when the model has the axis — the same list and rule the Run
+// form shows. The session is one graph write on the same socket the task just
+// rode, so ordering is free. The bar narrates from the graph; anything it
+// can't honor lands as a failed Session.
 let launch = async (task: string) => {
   if (!providers.value.length) await load()
-  let m = offers(providers.value)[0]
+  let m = catalog(providers.value)[0]
   if (!m) throw new Error('no providers')
+  let provider = await choose(m)
   let eid = uuid()
   mutate({
     eid,
     name: 'session',
     comp: {
       id: uuid(),
-      provider: m.p.name,
+      provider,
       model: m.model,
-      ...(m.p.efforts.length
-        ? {
-          effort: m.p.efforts.includes('medium') ? 'medium' : m.p.efforts[0],
-        }
+      ...(m.efforts.length
+        ? { effort: m.efforts.includes('medium') ? 'medium' : m.efforts[0] }
         : {}),
       requested_task: task,
     },
