@@ -1,7 +1,10 @@
-// Graph-native managed Codex sessions. A Session is an ordered entry
-// partition; this service leases one ready generation or call, performs one
-// bounded operation, and appends its outcome. Process-backed compatibility
-// remains in sessions.ts and the Codex transport remains in responses.ts.
+// The provider-neutral graph-native Session scheduler. A Session is an ordered
+// entry partition; this service leases one ready generation or call, performs
+// one bounded operation, and appends its outcome. A generation dispatches by
+// its `generation.provider` to a GenerationRunner (runner.ts) — today only
+// Codex; a bounded `claude -p` is a sibling entry. Everything else — entry
+// readiness, leases, hosted calls, worktree preparation, attention, and stop —
+// is provider-agnostic. Process-backed compatibility remains in sessions.ts.
 import { DatabaseSync } from 'node:sqlite'
 import { apply, record } from './db.ts'
 import {
@@ -19,15 +22,14 @@ import {
   takeEntry,
 } from './entries.ts'
 import {
+  codexGeneration,
   executeCall,
-  generate,
   type GenerationFault,
-  instructions,
+  type GenerationRunner,
   type ResponseTransport,
 } from './runner.ts'
 import { type ToolHost } from './harness_tools.ts'
 import { type Observation } from './observations.ts'
-import { responseObservation } from './responses.ts'
 import { sessionRow } from './session_store.ts'
 import { type Change, uuid } from './types.ts'
 
@@ -114,7 +116,7 @@ export let attention = (
   let source = writer ?? (db.prepare(
     "select eid from runner where name = 'tasksd' order by rowid limit 1",
   ).get() as { eid: string } | undefined)?.eid
-  if (!source) throw new Error('managed Codex runner unavailable')
+  if (!source) throw new Error('managed session runner unavailable')
   let out = append(db, session, [{ attention: {} }], source).changes
   cast(out)
   return out
@@ -294,7 +296,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
         if (renewed) cast(renewed.changes)
         else clearInterval(timer)
       } catch (error) {
-        console.warn('Codex lease renewal —', error)
+        console.warn('managed lease renewal —', error)
       }
     }, Math.max(50, Math.floor(leaseMs / 2)))
     return () => clearInterval(timer)
@@ -306,7 +308,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
     try {
       options.observe?.(value)
     } catch (error) {
-      console.warn('Codex observation dropped —', error)
+      console.warn('managed observation dropped —', error)
     }
   }
 
@@ -318,6 +320,14 @@ export let managedCodex = (options: ManagedCodexOptions) => {
     }]))
   }
 
+  // The generation dispatcher: one entry per provider, selected by a
+  // generation's `provider`. Codex is the sole entry today; a bounded
+  // `claude -p` runner (T-16814) plugs in as a second one without touching a
+  // line of the scheduling below.
+  let generators: Record<string, GenerationRunner> = {
+    codex: codexGeneration(options.transport),
+  }
+
   let generation = async (token: LeaseToken, session: string) => {
     let control = new AbortController()
     flights.set(token.eid, { session, control })
@@ -325,23 +335,26 @@ export let managedCodex = (options: ManagedCodexOptions) => {
     let tools: ToolHost | undefined
     let clear = false
     try {
+      let entries = readEntries(db, session)
+      let provider = String(
+        entries.find((row) => row.eid == token.eid)?.comps.generation
+          ?.provider ?? '',
+      )
+      let run = generators[provider]
+      if (!run) throw new Error(`no managed runner for provider '${provider}'`)
       let row = sessionRow(db, session)
       let tree = row?.cwd ? String(row.cwd) : undefined
       tools = await options.tools(tree, session)
-      let work = await generate({
-        entries: readEntries(db, session),
+      let work = await run({
+        entries,
         generation: token.eid,
-        instructions: await instructions({ tree }),
-        transport: options.transport,
-        tools: tools.tools,
+        tree,
+        tools,
         signal: control.signal,
         cacheKey: session,
-        event: (event) => {
+        emit: (delta) => {
           if (!valid(db, token)) return
-          let delta = responseObservation(event)
-          if (delta) {
-            observe({ session, generation: token.eid, ...delta })
-          }
+          observe({ session, generation: token.eid, ...delta })
         },
       })
       if (!valid(db, token)) return
@@ -519,6 +532,10 @@ export let managedCodex = (options: ManagedCodexOptions) => {
 
   let startOne = async (eid: string, job: ManagedJob) => {
     blocked.add(eid)
+    let state = sessionRow(db, eid)
+    // The first generation carries the session's requested provider, so the
+    // dispatcher routes every later turn (advance() copies it forward).
+    let provider = String(state?.provider ?? 'codex')
     let rows = readEntries(db, eid)
     let input = rows.find((row) =>
       row.comps.message?.role == 'user' && !row.comps.output
@@ -536,7 +553,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
         }, {
           generation: {
             through: input,
-            provider: 'codex',
+            provider,
             model: job.model,
             ...job.effort ? { effort: job.effort } : {},
           },
@@ -549,7 +566,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
       let made = append(db, eid, [{
         generation: {
           through: input,
-          provider: 'codex',
+          provider,
           model: job.model,
           ...job.effort ? { effort: job.effort } : {},
         },
@@ -558,10 +575,9 @@ export let managedCodex = (options: ManagedCodexOptions) => {
       cast(made.changes)
     }
     try {
-      let state = sessionRow(db, eid)
       if (job.tree || job.repo || job.branch) {
         if (!job.tree || !job.repo || !job.branch) {
-          throw new Error('managed Codex workspace is incomplete')
+          throw new Error('managed session workspace is incomplete')
         }
         if (!state?.base_revision) {
           await options.prepare(eid, {

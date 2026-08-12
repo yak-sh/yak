@@ -189,6 +189,63 @@ Deno.test('managed Codex starts, runs tools, and settles in ordered entries', as
   db.close()
 })
 
+Deno.test('the generation dispatcher routes by provider to its runner', async () => {
+  let db = freshDb()
+  // A codex generation reaches the Responses transport and settles clean.
+  let sid = session(db)
+  let ran = 0
+  let codex = managedCodex({
+    db,
+    cast: () => {},
+    transport: {
+      run: () => {
+        ran++
+        return Promise.resolve(result([{
+          type: 'message',
+          id: 'm',
+          content: [{ type: 'output_text', text: 'ok' }],
+        }]))
+      },
+    },
+    tools: () => Promise.resolve(tools([])),
+    prepare: () => Promise.resolve(),
+  })
+  await codex.start(sid, noCodeJob())
+  assertEquals(ran, 1)
+  assert(!readEntries(db, sid).some((row) => row.comps.error))
+
+  // A provider with no registered runner never reaches the transport; the
+  // dispatch miss becomes a clear failed entry instead of a silent no-op.
+  let cid = uuid()
+  apply(db, [{
+    eid: cid,
+    name: 'session',
+    comp: { id: uuid(), provider: 'claude', model: 'sonnet' },
+  }])
+  db.prepare("update session set origin = 'managed' where eid = ?").run(cid)
+  let reached = 0
+  let scheduler = managedCodex({
+    db,
+    cast: () => {},
+    transport: {
+      run: () => {
+        reached++
+        return Promise.resolve(result([]))
+      },
+    },
+    tools: () => Promise.resolve(tools([])),
+    prepare: () => Promise.resolve(),
+  })
+  await scheduler.start(cid, { ...noCodeJob(), model: 'sonnet' })
+  assertEquals(reached, 0)
+  let generation = readEntries(db, cid).find((row) => row.comps.generation)!
+  let error = db.prepare('select message from error where eid = ?').get(
+    generation.eid,
+  ) as { message: string } | undefined
+  assertMatch(String(error?.message), /no managed runner for provider 'claude'/)
+  db.close()
+})
+
 Deno.test('a Session past one entry page still runs its next turn', async () => {
   let db = freshDb()
   let sid = session(db)

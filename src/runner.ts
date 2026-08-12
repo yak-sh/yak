@@ -5,9 +5,11 @@
 import { dirname, relative, resolve, sep } from 'node:path'
 import { compactionPolicy } from './compaction.ts'
 import { type EntrySpec, type UsageValue } from './entries.ts'
+import { type ObservationDelta } from './observations.ts'
 import {
   type ResponseEvent,
   type ResponseItem,
+  responseObservation,
   type ResponseRequest,
   type ResponseResult,
 } from './responses.ts'
@@ -703,6 +705,45 @@ export let generate = async (options: GenerateOptions) => {
   }
   return generationEntries(result, options.generation)
 }
+
+// The provider boundary behind the managed scheduler. The scheduler owns
+// leases, validity, worktrees, and the graph writes; a runner owns only the
+// one bounded provider call — turning a leased generation into completed entry
+// specs, usage, and the serving model, and emitting transient observations
+// along the way. It may throw a GenerationFault carrying inert failed evidence.
+export type GenerationContext = {
+  entries: EntryRow[]
+  generation: string
+  tree: string | undefined
+  tools: ToolHost
+  signal: AbortSignal
+  cacheKey: string
+  emit: (delta: ObservationDelta) => void
+}
+
+export type GenerationRunner = (
+  ctx: GenerationContext,
+) => Promise<GenerationWork>
+
+// The Codex entry in the generation dispatcher: the Responses transport plus
+// this repo's hosted tools and instruction hierarchy. A sibling runner (a
+// bounded `claude -p`, T-16814) plugs into the same contract, selected by
+// generation.provider.
+export let codexGeneration =
+  (transport: ResponseTransport): GenerationRunner => async (ctx) =>
+    generate({
+      entries: ctx.entries,
+      generation: ctx.generation,
+      instructions: await instructions({ tree: ctx.tree }),
+      transport,
+      tools: ctx.tools.tools,
+      signal: ctx.signal,
+      cacheKey: ctx.cacheKey,
+      event: (event) => {
+        let delta = responseObservation(event)
+        if (delta) ctx.emit(delta)
+      },
+    })
 
 let requestOf = (row: EntryRow) => {
   if (!row.comps.call) throw new Error('entry is not a tool call')
