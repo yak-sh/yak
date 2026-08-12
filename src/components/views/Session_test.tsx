@@ -180,7 +180,7 @@ Deno.test('session references use the usual entity and URL faces', () => {
   }
 })
 
-Deno.test('transient Session progress renders as plain provider-neutral text', () => {
+Deno.test('transient Session model progress renders through safe Markdown', () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {
@@ -196,14 +196,19 @@ Deno.test('transient Session progress renders as plain provider-neutral text', (
           model: '**answer** <b>raw</b>',
           reasoning: '[reason](javascript:alert(1))',
           tools: ['shell'],
+          items: [
+            { kind: 'model', text: '**answer** <b>raw</b>' },
+            { kind: 'reasoning', text: '[reason](javascript:alert(1))' },
+            { kind: 'tool', name: 'shell' },
+          ],
           rev: 3,
         },
       }),
       root,
     )
     assertEquals(
-      root.querySelector('.Session_Agent')?.textContent,
-      '**answer** <b>raw</b>',
+      root.querySelector('.Session_Agent')?.textContent.trim(),
+      'answer <b>raw</b>',
     )
     assertEquals(
       root.querySelector('.Session_Reason')?.textContent,
