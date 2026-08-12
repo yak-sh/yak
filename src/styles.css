@@ -2864,7 +2864,15 @@ a[data-ref]:hover {
 .Card_Scroll:has(> .Session),
 .Peek_Body:has(> .Session) {
   padding: 0;
+  min-height: 0;
   overflow: hidden;
+}
+.Peek_Body:has(> .Session) {
+  display: flex;
+  flex-direction: column;
+}
+.Peek_Body > .Session {
+  flex: 1;
 }
 .App_Body > .Session {
   padding: 0;
