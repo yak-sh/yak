@@ -2888,6 +2888,13 @@ export let apply = (
           db.prepare(
             'insert into entry (eid, session, seq) values (?, ?, ?)',
           ).run(eid, session, seq)
+          // A graph-native session has no log FILE to tail, so its summary
+          // is advanced here at the single door that assigns seq — same
+          // transaction, so entry.seq and session.latest_seq cannot drift.
+          // Not cast (like the JSONL tail, T-7063): it rides the snapshot's
+          // whole-row select, not a per-entry broadcast.
+          db.prepare('update session set latest_seq = ? where eid = ?')
+            .run(seq, session)
           createdComps.add(`${name} ${eid}`)
           t?.created.add(`${name} ${eid}`)
           extra.push({ eid, name: 'entry', comp: { eid, seq } })

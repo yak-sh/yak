@@ -594,6 +594,25 @@ Deno.test('session lifecycle columns are server-owned', () => {
   assertEquals(comp(s, 'session')?.status, null)
 })
 
+Deno.test('graph-native entries advance session.latest_seq', () => {
+  let s = uid()
+  apply(db, [{ eid: s, name: 'session', comp: { id: 'seq-native' } }])
+  assertEquals(comp(s, 'session')?.latest_seq, 0) // no entries: no lie
+  let entry = () =>
+    apply(db, [{ eid: uid(), name: 'entry', comp: { session: s } }])
+  entry()
+  assertEquals(comp(s, 'session')?.latest_seq, 1) // tracks the top entry seq
+  entry()
+  entry()
+  assertEquals(comp(s, 'session')?.latest_seq, 3)
+  // A different session's entries never touch this summary.
+  let other = uid()
+  apply(db, [{ eid: other, name: 'session', comp: { id: 'seq-other' } }])
+  apply(db, [{ eid: uid(), name: 'entry', comp: { session: other } }])
+  assertEquals(comp(other, 'session')?.latest_seq, 1)
+  assertEquals(comp(s, 'session')?.latest_seq, 3)
+})
+
 Deno.test('legacy session launch fields dual-materialize', () => {
   let d = fresh()
   let s = uid(), persona = uid()

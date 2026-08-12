@@ -1166,8 +1166,10 @@ export type Shelf = { eid: string; client: string }
 // none of it). Those columns are server-owned — absent from comps.session,
 // so no client can fake a status, a branch, or a final answer, same as
 // frozen_at/claimed_at. They ride the snapshot (it selects whole rows), so
-// the live cache gets the summary for free. latest_seq is the line count
-// of the log FILE, which is the durable log (src/sessions.ts).
+// the live cache gets the summary for free. latest_seq is the log's latest
+// sequence: the file's line count for a process-backed session (the tailer,
+// src/sessions.ts), the top entry seq for a graph-native one (advanced in
+// db.ts apply() as entries append).
 export type Session = {
   eid: string
   id: string
