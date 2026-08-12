@@ -1401,18 +1401,24 @@ Deno.test('bare task appends the current claimed task digest', async () => {
     let out = await bareCli({ TASKS_HOST: host, TASKS_SESSION: 'sub-1' })
     assertEquals(out.code, 0)
     assertMatch(text(out.stdout), /task —[\s\S]*- T-2 wip — Child work/)
-    assertEquals(seen, [
-      '/query?kind=session&.session.id=sub-1',
-      `/query?kind=task&.claim.session=${S}`,
-      // then the bus, on its own bounded queries (client.ts bus()) — the
-      // reader's rows, then the candidates its selector might pick
-      '/query?kind=session&.session.id=sub-1',
-      `/query?.claim.session=${S}`,
-      '/query?.repo!',
-      `/query?.comment.target=${S},${T}&.notified=`,
-      `/query?.deliver.to=${S}&.notified=`,
-      `/query?.mail.target=${S}&.notified=&.opened=&.archived=`,
-    ])
+    // The digest resolves the session and its claimed task, then the bus
+    // reads its own bounded queries (client.ts bus()) — the reader's rows,
+    // then the candidates its selector might pick. Several arms dispatch
+    // CONCURRENTLY (readerSet + bus() Promise.all), so arrival order is
+    // unspecified: the contract is the multiset of queries, not its order.
+    assertEquals(
+      [...seen].sort(),
+      [
+        '/query?kind=session&.session.id=sub-1',
+        `/query?kind=task&.claim.session=${S}`,
+        '/query?kind=session&.session.id=sub-1',
+        `/query?.claim.session=${S}`,
+        '/query?.repo!',
+        `/query?.comment.target=${S},${T}&.notified=`,
+        `/query?.deliver.to=${S}&.notified=`,
+        `/query?.mail.target=${S}&.notified=&.opened=&.archived=`,
+      ].sort(),
+    )
   } finally {
     await server.shutdown()
   }
