@@ -43,6 +43,11 @@ type ImageToken = { href: string; text: string }
 type TextToken = { text: string }
 type CodeToken = { text: string; lang?: string }
 type Inline = { parser: { parseInline: (t: unknown) => string } }
+type Token = { type: string; id?: unknown; href?: string; text?: string }
+
+export type Mention =
+  | { kind: 'entity'; id: string }
+  | { kind: 'link'; href: string }
 
 // `&` first, or the escapes escape.
 let esc = (s: string) =>
@@ -157,3 +162,26 @@ export let mdAbs = (s: string, repo?: string | null): string =>
   parser(awayRef, repo).parse(s) as string
 export let mdInline = (s: string): string =>
   parser(titleRef).parseInline(s) as string
+
+// References are the other reading of markdown: the same lexer that decides
+// what becomes a link also feeds a session's aside. Code stays literal, a
+// written entity link stays an entity, and refused hrefs never get promoted.
+export let mdMentions = (s: string, repo?: string | null): Mention[] => {
+  let p = parser(canvasRef, repo)
+  let out: Mention[] = []
+  p.walkTokens(p.lexer(s), (token: unknown) => {
+    let t = token as Token
+    if (t.type == 'ref') {
+      out.push({ kind: 'entity', id: String(t.id) })
+    } else if ((t.type == 'link' || t.type == 'image') && t.href) {
+      let href = t.href.trim()
+      if (/^[A-Za-z]+-\d+$/.test(href)) {
+        out.push({ kind: 'entity', id: href })
+      } else if (LINKABLE.test(href)) out.push({ kind: 'link', href })
+    } else if (t.type == 'codespan' && t.text) {
+      let href = commitUrl(repo, t.text)
+      if (href) out.push({ kind: 'link', href })
+    }
+  })
+  return out
+}

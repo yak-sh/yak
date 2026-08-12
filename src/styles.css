@@ -2886,6 +2886,7 @@ a[data-ref]:hover {
      log, which is the whole distance the head has to cover. min-height
      still fills the host when the log is short. */
   flex-shrink: 0;
+  container-type: inline-size;
 }
 .Session_Head {
   position: sticky;
@@ -2905,6 +2906,54 @@ a[data-ref]:hover {
   align-content: start;
   min-width: 0;
   padding: var(--half-gap) var(--gap) var(--gap);
+}
+.Session_Main {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+}
+.Session_References {
+  padding: var(--gap);
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+}
+.Session_ReferencesGist {
+  color: var(--dim);
+  cursor: pointer;
+  font: 11px var(--mono);
+  list-style: none;
+  text-transform: uppercase;
+}
+.Session_ReferencesGist::-webkit-details-marker {
+  display: none;
+}
+.Session_ReferencesGist::after {
+  content: ' ▸';
+}
+.Session_References[open] .Session_ReferencesGist::after {
+  content: ' ▾';
+}
+.Session_ReferencesList {
+  display: grid;
+  gap: var(--half-gap);
+  padding-top: var(--gap);
+}
+.Session_Reference {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.Session_Reference .Inline {
+  max-width: 100%;
+}
+@container (min-width: 50rem) {
+  .Session_Main-referenced {
+    grid-template-columns: minmax(0, 1fr) minmax(14rem, 22rem);
+  }
+  .Session_References {
+    border-top: 0;
+    border-left: 1px solid var(--border);
+  }
 }
 /* Said but not yet heard — waiting under the log for the agent's next
    tool call (or resume) to take it into the thread. */

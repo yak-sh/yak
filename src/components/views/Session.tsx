@@ -12,6 +12,7 @@ import {
   commentsOn,
   ent,
   entrySub,
+  findEid,
   jobOf,
   mutate,
   observation,
@@ -29,6 +30,8 @@ import { Id } from './Inline.tsx'
 import { Entity } from '../Entity.tsx'
 import { title } from '../title.tsx'
 import { Markdown } from '../Markdown.tsx'
+import { mdMentions } from '../../md.ts'
+import { UrlVal } from '../editors.tsx'
 
 // An agent session, watched — the console (W-3676 #5): a sticky slim bar
 // (task, lifecycle summary, stop — server-owned columns riding
@@ -47,6 +50,11 @@ let Frame = block('div', 'Session', {
   Context: 'span',
   Stop: 'button',
   Body: 'div',
+  Main: 'div',
+  References: 'details',
+  ReferencesGist: 'summary',
+  ReferencesList: 'div',
+  Reference: 'div',
   Facts: 'details',
   Diagnostics: 'details',
   Gist: 'summary',
@@ -92,6 +100,11 @@ let {
   Context,
   Stop,
   Body: Panel,
+  Main,
+  References,
+  ReferencesGist,
+  ReferencesList,
+  Reference,
   Facts,
   Diagnostics,
   Gist,
@@ -134,6 +147,9 @@ let {
 
 type Entry = { seq: number; line: string; row?: LogRow; n?: number }
 type Log = { entries: Entry[]; stderr?: string; context?: number }
+type Mentioned =
+  | { kind: 'entity'; eid: string }
+  | { kind: 'link'; href: string }
 
 // A run of same-tag sys frames is one fact told many times (the
 // thinking-token stream grows an estimate frame by frame): keep the
@@ -190,6 +206,80 @@ let weave = (rows: Entry[], cs: Ent[]) => {
     out.push(x)
   }
   return [...out, ...cs.slice(i)]
+}
+
+let mentionText = (x: { row?: LogRow } | Ent) => {
+  if ('eid' in x) return [x.doc?.body ?? '']
+  let r = x.row
+  if (!r) return []
+  switch (r.kind) {
+    case 'say':
+    case 'reason':
+    case 'error':
+      return [r.text]
+    case 'tool':
+      return [r.detail, r.error].filter((v): v is string => !!v)
+    case 'exec':
+      return [r.desc, r.command].filter((v): v is string => !!v)
+    case 'sys':
+      return r.text ? [r.text] : []
+    case 'turn':
+      return []
+  }
+}
+
+// The first mention wins its place. Entity spellings dedupe by the entity
+// they resolve to, so a labeled link and a later bare id still make one row.
+export let sessionMentions = (
+  thread: ({ row?: LogRow } | Ent)[],
+  repo?: string,
+): Mentioned[] => {
+  let out: Mentioned[] = []
+  let seen = new Set<string>()
+  for (let text of thread.flatMap(mentionText)) {
+    for (let mention of mdMentions(text, repo)) {
+      let item: Mentioned | undefined
+      if (mention.kind == 'entity') {
+        let eid = findEid(mention.id)
+        if (eid) item = { kind: 'entity', eid }
+      } else item = mention
+      if (!item) continue
+      let key = item.kind == 'entity'
+        ? `entity:${item.eid}`
+        : `link:${item.href}`
+      if (!seen.has(key)) {
+        seen.add(key)
+        out.push(item)
+      }
+    }
+  }
+  return out
+}
+
+let desktop = () =>
+  globalThis.matchMedia?.('(min-width: 60rem)').matches ?? true
+
+export let SessionReferences = ({ items }: { items: Mentioned[] }) => {
+  let [open, setOpen] = useState(desktop)
+  if (!items.length) return null
+  return (
+    <References
+      open={open}
+      onToggle={(ev: Event) =>
+        setOpen((ev.currentTarget as HTMLDetailsElement).open)}
+    >
+      <ReferencesGist>references · {items.length}</ReferencesGist>
+      <ReferencesList>
+        {items.map((item) => (
+          <Reference key={item.kind == 'entity' ? item.eid : item.href}>
+            {item.kind == 'entity'
+              ? <Entity eid={item.eid} view='Inline' />
+              : UrlVal(item.href)}
+          </Reference>
+        ))}
+      </ReferencesList>
+    </References>
+  )
 }
 
 // The tail thinks out loud: what the run is doing right now, read off
@@ -565,6 +655,18 @@ export let Session = ({ e }: { e: Ent }) => {
   let heard = (c: Ent) => c.created?.via == e.eid || !!c.notified
   let thread = weave(rows, cs.filter(heard))
   let unsent = cs.filter((c) => !heard(c))
+  let mentions = sessionMentions([
+    ...(!said && s.final_text
+      ? [{
+        row: {
+          kind: 'say' as const,
+          role: 'agent' as const,
+          text: s.final_text,
+        },
+      }]
+      : []),
+    ...thread,
+  ], repo)
   return (
     <Frame elRef={frame}>
       <Head>
@@ -592,40 +694,43 @@ export let Session = ({ e }: { e: Ent }) => {
           </Stop>
         )}
       </Head>
-      <Panel>
-        {/* markdown, escaped of any markup by md.ts — as with a task body */}
-        {!said && s.final_text && (
-          <Markdown as={Final} text={s.final_text} repo={repo} />
-        )}
-        {e.error?.message && <Fault mod='error'>{e.error.message}</Fault>}
-        {s.stop_reason && <Fault>{s.stop_reason}</Fault>}
-        <Log>
-          {thread.map((x) =>
-            'seq' in x
-              ? <Row key={x.seq} x={x} repo={repo} />
-              : <Note key={x.eid} c={x} />
+      <Main mod={mentions.length > 0 && 'referenced'}>
+        <Panel>
+          {/* markdown, escaped of any markup by md.ts — as with a task body */}
+          {!said && s.final_text && (
+            <Markdown as={Final} text={s.final_text} repo={repo} />
           )}
-          {stream && <SessionObservation state={stream} />}
-          {live && (
-            <Think>✳ {observing(stream) ?? doing(rows.at(-1)?.row)}</Think>
-          )}
-        </Log>
-        {
-          /* stderr is durable evidence, not transcript: it has no seqs and
+          {e.error?.message && <Fault mod='error'>{e.error.message}</Fault>}
+          {s.stop_reason && <Fault>{s.stop_reason}</Fault>}
+          <Log>
+            {thread.map((x) =>
+              'seq' in x
+                ? <Row key={x.seq} x={x} repo={repo} />
+                : <Note key={x.eid} c={x} />
+            )}
+            {stream && <SessionObservation state={stream} />}
+            {live && (
+              <Think>✳ {observing(stream) ?? doing(rows.at(-1)?.row)}</Think>
+            )}
+          </Log>
+          {
+            /* stderr is durable evidence, not transcript: it has no seqs and
             resumes append to it. Routine noise folds; failed runs show it. */
-        }
-        {log.stderr && (
-          <Diagnostics open={status == 'failed'}>
-            <Gist>diagnostics · {lineLabel(log.stderr)}</Gist>
-            <Err>{log.stderr}</Err>
-          </Diagnostics>
-        )}
-        {unsent.length > 0 && (
-          <Unsent>
-            {unsent.map((c) => <Note key={c.eid} c={c} />)}
-          </Unsent>
-        )}
-      </Panel>
+          }
+          {log.stderr && (
+            <Diagnostics open={status == 'failed'}>
+              <Gist>diagnostics · {lineLabel(log.stderr)}</Gist>
+              <Err>{log.stderr}</Err>
+            </Diagnostics>
+          )}
+          {unsent.length > 0 && (
+            <Unsent>
+              {unsent.map((c) => <Note key={c.eid} c={c} />)}
+            </Unsent>
+          )}
+        </Panel>
+        <SessionReferences items={mentions} />
+      </Main>
       {
         /* the one composer, pinned like the bar: comment about it, or say
           TO it (Comments.tsx knows which sessions can take words) */

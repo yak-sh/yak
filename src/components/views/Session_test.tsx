@@ -7,7 +7,9 @@ import { resolve } from '../Entity.tsx'
 import {
   SessionBody,
   SessionContext,
+  sessionMentions,
   SessionObservation,
+  SessionReferences,
   SessionSummary,
 } from './Session.tsx'
 
@@ -108,6 +110,71 @@ Deno.test('session context renders compactly for the sticky head', () => {
     )
   } finally {
     render(null, root)
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else delete (globalThis as { document?: unknown }).document
+  }
+})
+
+Deno.test('session references dedupe entities and links in mention order', () => {
+  cache.value = {
+    task: {
+      entity: { eid: 'task', num: 2 },
+      doc: { eid: 'task', title: 'The task', body: '' },
+      task: { eid: 'task', status: 'open', priority: 1 },
+    },
+  }
+  assertEquals(
+    sessionMentions([
+      { row: { kind: 'say', role: 'user', text: 'T-2 https://x.test' } },
+      { row: { kind: 'reason', text: '[same](T-2) then https://y.test' } },
+      { row: { kind: 'exec', command: 'curl https://x.test' } },
+    ]),
+    [
+      { kind: 'entity', eid: 'task' },
+      { kind: 'link', href: 'https://x.test' },
+      { kind: 'link', href: 'https://y.test' },
+    ],
+  )
+  cache.value = {}
+})
+
+Deno.test('session references use the usual entity and URL faces', () => {
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let { document } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  cache.value = {
+    task: {
+      entity: { eid: 'task', num: 2 },
+      doc: { eid: 'task', title: 'The task', body: '' },
+      task: { eid: 'task', status: 'open', priority: 1 },
+    },
+  }
+  let root = document.querySelector('main')!
+  try {
+    render(
+      h(SessionReferences, {
+        items: [
+          { kind: 'entity', eid: 'task' },
+          { kind: 'link', href: 'https://x.test' },
+        ],
+      }),
+      root,
+    )
+    assertEquals(root.querySelector('details')?.hasAttribute('open'), true)
+    assertEquals(
+      root.querySelector('.Session_ReferencesGist')?.textContent,
+      'references · 2',
+    )
+    assertEquals(root.querySelector('.Inline_Title')?.textContent, 'The task')
+    let links = root.querySelectorAll('.Session_Reference > a')
+    assertEquals(links[0]?.getAttribute('href'), '/T-2')
+    assertEquals(links[1]?.getAttribute('href'), 'https://x.test')
+  } finally {
+    render(null, root)
+    cache.value = {}
     if (prior) Object.defineProperty(globalThis, 'document', prior)
     else delete (globalThis as { document?: unknown }).document
   }

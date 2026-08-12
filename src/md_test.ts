@@ -1,7 +1,7 @@
 // The markdown door's contract — the behaviors the app leans on. If a
 // re-vendored marked or a config change breaks one, this says so.
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { md, mdAbs, mdInline } from './md.ts'
+import { md, mdAbs, mdInline, mdMentions } from './md.ts'
 
 Deno.test('mdInline: title markup has no block wrapper or nested links', () => {
   assertEquals(
@@ -61,6 +61,20 @@ Deno.test('md: a written link aims at an id', () => {
   )
   // a real url keeps marked's own anchor, untouched
   assertStringIncludes(md('[x](https://y.z)'), 'href="https://y.z"')
+})
+
+Deno.test('mdMentions follows markdown link semantics in written order', () => {
+  assertEquals(
+    mdMentions(
+      'T-2 then [site](https://x.test) then T-2 and `T-3` ![pic](/p.png)',
+    ),
+    [
+      { kind: 'entity', id: 'T-2' },
+      { kind: 'link', href: 'https://x.test' },
+      { kind: 'entity', id: 'T-2' },
+      { kind: 'link', href: '/p.png' },
+    ],
+  )
 })
 
 Deno.test('md: ids in code stay literal; mid-word letters stay words', () => {
