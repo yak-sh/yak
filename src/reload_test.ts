@@ -7,12 +7,46 @@
 // this claim but sampled eight paths that all happened to be present, which is
 // how eight modules went missing beneath a green suite.)
 import { assert, assertEquals } from '@std/assert'
-import { devFile, serverClassifier, serverFile } from './reload.ts'
+import { devFile, imports, serverClassifier, serverFile } from './reload.ts'
 
 // A second, independent copy of the walk — the oracle. If reload.ts's graph()
-// ever under-walks, this still finds the module and the assert below fails.
-let specifiers = /\bimport\b(\s+type\b)?(?:[^'"]*?\bfrom\s*)?(["'])([^"']+)\2/g
+// ever under-walks, this still finds the module and the assert below fails. Its
+// regex mirrors reload.ts's, covering every import form the grammar test pins.
+let specifiers =
+  /\bimport\b(\s+type\b)?\s*(?:\(\s*|(?:[^'"]*?\bfrom\s*)?)(["'])([^"']+)\2/g
 let isRelative = (s: string) => s.startsWith('./') || s.startsWith('../')
+
+// The grammar itself, driven by strings — the teeth of this file. A path-
+// sampling test can pass while a whole import FORM goes unrecognized (side-
+// effect and dynamic imports both matched nothing until T-16648); only feeding
+// every form and asserting the exact specifier set proves the coverage.
+Deno.test('imports: every import form yields its specifier', () => {
+  for (
+    let [source, want] of [
+      // The named/default/namespace forms the walker always handled.
+      [`import { a } from './named'`, ['./named']],
+      [`import x from './default'`, ['./default']],
+      [`import * as ns from './ns'`, ['./ns']],
+      [`import x, { a, b } from './mixed'`, ['./mixed']],
+      // A multiline binding list — [^'"] spans the newlines.
+      [`import {\n  a,\n  b,\n} from './multi'`, ['./multi']],
+      // The two forms T-16648 taught it: side-effect and dynamic.
+      [`import './side'`, ['./side']],
+      [`import "./side2"`, ['./side2']],
+      [`import('./dyn')`, ['./dyn']],
+      [`await import("./dyn2")`, ['./dyn2']],
+      [`import ( './spaced' )`, ['./spaced']],
+      // Two dynamic imports on one line — matchAll keeps walking.
+      [`import('./a'); import('./b')`, ['./a', './b']],
+      // A bare specifier is still a value import; graph() filters it, not this.
+      [`import { x } from '@std/assert'`, ['@std/assert']],
+      // Erased before anything runs, so never a dependency.
+      [`import type { T } from './typed'`, []],
+      // import.meta is not an import statement.
+      [`let u = import.meta.url`, []],
+    ] as [string, string[]][]
+  ) assertEquals(imports(source), want, source)
+})
 
 let walk = async (entry: string, root: URL): Promise<Set<string>> => {
   let queue = [new URL(entry, root)]

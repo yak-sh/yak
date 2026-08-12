@@ -9,11 +9,32 @@
 // later edit to a newly imported child look client-only, leaving old server
 // code behind a freshly served browser.
 
-// A module specifier — the same shape browser_test.ts matches. Group 1 is a
-// type-only clause's ` type`, which sucrase erases before the file is served or
-// run, so it is skipped; group 3 is the specifier. The `from`-less forms
-// (`import 'x'`, `import('x')`) carry no `type` and are always followed.
-let specifiers = /\bimport\b(\s+type\b)?(?:[^'"]*?\bfrom\s*)?(["'])([^"']+)\2/g
+// A module specifier — every import form that carries a string literal. Group 1
+// is a type-only clause's ` type`, which sucrase erases before the file is
+// served or run, so it is skipped; group 3 is the specifier. The connector
+// between `import` and the quote is one of three shapes: a dynamic call
+// (`import('x')`, `await import('x')`), a binding + `from`
+// (`import x from 'x'`), or nothing at all (a side-effect `import 'x'`). The
+// last two `from`-less forms carry no `type` and are always followed.
+let specifiers =
+  /\bimport\b(\s+type\b)?\s*(?:\(\s*|(?:[^'"]*?\bfrom\s*)?)(["'])([^"']+)\2/g
+
+// Every value-import specifier `source` names, in order — match[3] of each
+// import whose clause is not `type`. Lifted out of graph() so the grammar can
+// be driven by a string alone: a walk over sampled files can never prove a form
+// is covered, only a walk over the forms themselves can. Returns bare and
+// relative specifiers alike; graph() keeps only the relative ones.
+///   imports("import a from './a'\nimport './b'\nimport('./c')")
+///     -> ['./a', './b', './c']
+///   imports("import type { T } from './t'") -> []
+export let imports = (source: string): string[] => {
+  let out: string[] = []
+  for (let match of source.matchAll(specifiers)) {
+    if (match[1]) continue // import type … — erased by sucrase, never runs
+    out.push(match[3])
+  }
+  return out
+}
 
 let isRelative = (s: string) => s.startsWith('./') || s.startsWith('../')
 
@@ -39,9 +60,7 @@ export let graph = (
     } catch {
       continue // a specifier the walk can't read is not a source file we own
     }
-    for (let match of source.matchAll(specifiers)) {
-      if (match[1]) continue // import type … — erased by sucrase, never runs
-      let spec = match[3]
+    for (let spec of imports(source)) {
       if (!isRelative(spec)) continue
       let child = new URL(spec, file)
       child.search = ''
