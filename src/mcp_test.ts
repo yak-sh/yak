@@ -349,6 +349,7 @@ let bases: Record<string, Record<string, unknown>> = {
   task_spawn: { id: 'T-1' },
   command: { line: ':help' },
   session_peek: { id: 'S-1' },
+  transcript: { id: 'S-1' },
   history: { id: 'T-1' },
   task_comment: { id: 'T-1', session: 'test' },
   memory_save: { session: 'test' },

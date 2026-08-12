@@ -74,6 +74,13 @@ import {
   warm,
 } from './query.ts'
 import { commandOut, commands, focusOf } from './commands.ts'
+import {
+  type LogEntry,
+  renderEntry,
+  seqRange,
+  type Sift,
+  transcribe,
+} from './log_text.ts'
 import { request } from './http.ts'
 import { spawnDefault } from './providers.ts'
 import { entityUrl } from './url.ts'
@@ -102,7 +109,7 @@ export type IO = {
   // A session's log tail (sessions.ts logs() in-process; the HTTP route
   // over stdio) — entries carry the renderer row when the line has one.
   logs: (eid: string, q: URLSearchParams) => Promise<{
-    entries: { seq: number; line: string; row?: unknown }[]
+    entries: LogEntry[]
     stderr?: string
     busy?: boolean
     latest?: number
@@ -120,30 +127,11 @@ export type IO = {
 // The teaching text lives in grammar.ts — derived from the vocabulary,
 // shared with `task help grammar`, so the two doors cannot disagree.
 
-// One log entry, said small: the renderer row when the line carries one
-// (adapters normalized it), else the raw line — either way one bounded
-// line per seq, so a peek stays a glance.
-let peekLine = (e: { seq: number; line: string; row?: unknown }) => {
-  let r = e.row as Record<string, unknown> | undefined
-  let clip = (s: unknown) =>
-    String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, 200)
-  let said = !r
-    ? clip(e.line)
-    : r.kind == 'say'
-    ? `${r.role}: ${clip(r.text)}`
-    : r.kind == 'reason'
-    ? `… ${clip(r.text)}`
-    : r.kind == 'exec'
-    ? `$ ${clip(r.command)}`
-    : r.kind == 'tool'
-    ? `[${r.name}] ${clip(r.error ?? r.detail ?? '')}`
-    : r.kind == 'turn'
-    ? '— turn —'
-    : r.kind == 'error'
-    ? `ERROR ${clip(r.text)}`
-    : `(${clip((r as { tag?: unknown }).tag ?? r.kind)})`
-  return `${String(e.seq).padStart(4)}  ${said}`
-}
+// A peek line is one entry rendered small: renderEntry (log_text.ts, the door
+// the whole `transcript` shares) clips to a glance at width 200 and drops the
+// rowless provider machinery a graph-native log carries — so a generation or
+// empty-reasoning entry no longer dumps its raw `{"eid":…}` JSON mid-peek.
+let PEEK = 200
 
 let line = (all: Row[], r: Row) => {
   let who = claimant(all, r)
@@ -721,10 +709,85 @@ running or settled; stderr rides along when the child wrote any. ${BUS}`,
           ? [`error: ${String(row.comps.error.message).slice(0, 200)}`]
           : []),
       ].join(' · ')
-      let lines = out.entries.map(peekLine)
+      let lines = out.entries.flatMap((e) => {
+        let l = renderEntry(e, PEEK)
+        return l == null ? [] : [l]
+      })
       return bus(
         [head, ...lines, ...(out.stderr ? [`stderr:\n${out.stderr}`] : [])]
           .join('\n'),
+        session,
+      )
+    },
+  )
+
+  tool(
+    'transcript',
+    `The WHOLE session (S-12) as a clean, ordered transcript — what was
+said and thought, every command and its result, turn boundaries — with
+no raw-JSON noise. session_peek is a tail; this is the dump you want
+first when debugging a session. Pages by after (an entry-seq cursor) +
+limit; filter to prose (say + reason) with prose, a seq range (\`40..80\`),
+or a created-at window (since/until, ISO). ${BUS}`,
+    {
+      id: z.string(),
+      after: z.number().int().nonnegative().optional(),
+      limit: count.optional(),
+      prose: z.boolean().optional(),
+      seq: z.string().optional(),
+      since: z.string().optional(),
+      until: z.string().optional(),
+      session: z.string().optional(),
+    },
+    async (
+      { id, after, limit, prose, seq, since, until, session }: {
+        id: string
+        after?: number
+        limit?: number
+        prose?: boolean
+        seq?: string
+        since?: string
+        until?: string
+        session?: string
+      },
+    ) => {
+      let all = rows(await io.read())
+      let row = find(all, id)
+      if (!row?.comps.session) return err(`no session: ${id}`)
+      let s = row.comps.session
+      // A default page bounds what lands in an agent's context; a filled page
+      // hints the next cursor. The whole partition is read either way (the
+      // renderer needs it to resolve calls) — the page bounds the OUTPUT.
+      let page = Math.min(Math.max(limit ?? 400, 1), 5000)
+      let q = new URLSearchParams({ limit: String(page) })
+      if (after) q.set('after', String(after))
+      let out = await io.logs(row.eid, q)
+      let sift: Sift = {
+        ...(prose ? { prose: true } : {}),
+        ...(seq ? seqRange(seq) : {}),
+        ...(since ? { since } : {}),
+        ...(until ? { until } : {}),
+      }
+      let lines = transcribe(out.entries, sift)
+      let last = out.entries.at(-1)?.seq ?? 0
+      let more = out.entries.length >= page && last < (out.latest ?? last)
+      let head = [
+        `${idOf(row)} ${
+          out.busy == null
+            ? s.status ?? 'external'
+            : out.busy
+            ? 'running'
+            : 'idle'
+        }`,
+        `${s.provider ?? '?'} ${out.model ?? s.serving_model ?? s.model ?? ''}`
+          .trim(),
+        `seq ${out.latest ?? s.latest_seq ?? 0}`,
+      ].join(' · ')
+      let foot = more
+        ? `… more — transcript id=${idOf(row)} after=${last}`
+        : undefined
+      return bus(
+        [head, ...lines, ...(foot ? [foot] : [])].join('\n'),
         session,
       )
     },

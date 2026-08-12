@@ -198,6 +198,32 @@ export let manuals = declare({
     args: [arg('id', id)],
     opts: [{ ...count, or: '50' }, json],
   },
+  transcript: {
+    about: "a session's whole log as a clean, ordered transcript",
+    examples: [
+      'task transcript S-16872',
+      'task transcript S-16872 --prose',
+      'task transcript S-16872 --seq 40..80',
+      'task transcript S-16872 --after 60 --limit 40',
+    ],
+    detail:
+      'session_peek is a tail; this is the dump. It renders the authoritative ' +
+      "entry partition with no raw-JSON noise, sharing session_peek's line " +
+      'renderer. --prose keeps only what was said and thought; --seq A..B a ' +
+      'seq range; --since/--until an ISO created-at window; --after/--limit ' +
+      'page.',
+    root: true,
+    args: [arg('id', id)],
+    opts: [
+      flag('--prose'),
+      value('--seq', { name: 'range', test: /^\d*\.\.\d*$/ }, true),
+      value('--after', num, true),
+      value('--limit', num, true),
+      value('--since', timestamp, true),
+      value('--until', timestamp, true),
+      json,
+    ],
+  },
   search: {
     dots: 'filters',
     about: 'full-text search (trailing * = prefix)',

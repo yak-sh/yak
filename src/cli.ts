@@ -127,6 +127,7 @@ import { request } from './http.ts'
 import { spawnDefault } from './providers.ts'
 import { atFleet, mailDomain } from './mailaddr.ts'
 import { commands, focusOf, run as runCommand } from './commands.ts'
+import { type LogEntry, seqRange, type Sift, transcribe } from './log_text.ts'
 import {
   cliVerbs,
   help,
@@ -1372,6 +1373,53 @@ let past = async (got: Got) => {
   for (let e of entries) print(historyLine(e))
 }
 
+// A session's WHOLE log as a clean, ordered transcript — the dump you want
+// first when debugging one. Reads the same /logs door session_peek does (the
+// authoritative entry partition for a graph-native session), renders through
+// the shared log_text formatter, and screens with --prose / --seq / since /
+// until. Pages by --after (a seq cursor) + --limit; default is the whole log.
+let transcript = async (got: Got) => {
+  let json = got.flags.has('--json')
+  let id = got.args.id
+  if (!id) {
+    throw new Error(
+      'task transcript <S> [--prose] [--seq A..B] [--after N] [--limit N]',
+    )
+  }
+  let row = await needed(id)
+  if (!row.comps.session) throw new Error(`not a session: ${idOf(row)}`)
+  let q = new URLSearchParams()
+  let after = got.opts['--after']
+  let limit = got.opts['--limit']
+  if (after) q.set('after', String(Number(after)))
+  if (limit) q.set('limit', String(Number(limit)))
+  let res = await request(`http://${host()}/sessions/${row.eid}/logs?${q}`)
+  let log = await res.json() as {
+    entries: LogEntry[]
+    latest?: number
+    model?: string
+    busy?: boolean
+  }
+  let sift: Sift = {
+    ...(got.flags.has('--prose') ? { prose: true } : {}),
+    ...(got.opts['--seq'] ? seqRange(got.opts['--seq']) : {}),
+    ...(got.opts['--since'] ? { since: got.opts['--since'] } : {}),
+    ...(got.opts['--until'] ? { until: got.opts['--until'] } : {}),
+  }
+  let entries = log.entries
+  if (json) return print(jsonText({ ...log, lines: transcribe(entries, sift) }))
+  let s = row.comps.session
+  print(
+    [
+      `${idOf(row)} ${log.busy ? 'running' : s.status ?? 'idle'}`,
+      `${s.provider ?? '?'} ${log.model ?? s.serving_model ?? s.model ?? ''}`
+        .trim(),
+      `seq ${log.latest ?? s.latest_seq ?? 0}`,
+    ].join(' · '),
+  )
+  for (let line of transcribe(entries, sift)) print(line)
+}
+
 // The injection loop's front door. Plain: print the digest for a session
 // id. --hook: SessionStart mode — session_id arrives as hook JSON on
 // stdin, and NOTHING may fail loudly (a hook must never wedge a session;
@@ -2475,6 +2523,7 @@ export let verbs = bind({
   set,
   show,
   history: past,
+  transcript,
   search: seek,
   mail: mailList,
   'mail show': mailShow,
