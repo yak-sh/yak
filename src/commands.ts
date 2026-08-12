@@ -20,12 +20,14 @@
 // language both faces speak, and each adds only what the other can't do.
 import { type Change, idOf, uuid } from './types.ts'
 import {
+  cascade,
   claimChanges,
   commentChanges,
   derefChanges,
   DESK,
   find,
   mailChanges,
+  need,
   type Param,
   param,
   patches,
@@ -130,6 +132,37 @@ let inherit = (ctx: Ctx): Record<string, unknown> => {
   if (r.comps.project) return { project: r.eid }
   let p = r.comps.task?.project
   return p ? { project: p } : {}
+}
+
+// :delete tombstones the focused entity — or the one the line names. The one
+// warm verb that REMOVES, so the graph can shrink and not only grow. Death
+// CASCADES (db.ts apply()): comments aimed at it, cards and knocks/wakes
+// viewing it die with it. A leaf goes quietly; a target with dependents
+// REFUSES without --cascade, naming what it would take, so the blast radius is
+// never a surprise. `:forget` is the same verb, said the way a memory wants to
+// hear it. This pass sees only the rows in hand (a palette is wire-free); the
+// shell's `task delete` queries the graph for the authoritative set.
+let del: Verb = (rest, ctx) => {
+  let words = rest.trim().split(/\s+/).filter(Boolean)
+  let ok = words.some((w) => w == '--cascade' || w == '--force')
+  let named = words.find((w) => !w.startsWith('--'))
+  let r = named ? need(ctx.rows, named) : here(ctx)
+  let victims = cascade(ctx.rows, r.eid)
+  if (victims.length && !ok) {
+    throw new Error(
+      `${idOf(r)} would also delete ${victims.length} dependent${
+        victims.length == 1 ? '' : 's'
+      } (${victims.map(idOf).join(', ')}) — add --cascade to take them too`,
+    )
+  }
+  return {
+    changes: [{ eid: r.eid, name: 'entity', comp: null }],
+    msg: `deleted ${idOf(r)}${
+      victims.length
+        ? ` (+${victims.length} dependent${victims.length == 1 ? '' : 's'})`
+        : ''
+    }`,
+  }
 }
 
 // A command carries its own manual and any finite word count, so every
@@ -526,6 +559,16 @@ export let commands: Record<string, Command> = {
         msg: `${idOf(r)} ${args.join(' ')}`,
       }
     },
+  },
+  delete: {
+    args: '[T-42] [--cascade]',
+    about: 'tombstone an entity — the cascade takes its dependents (--cascade)',
+    run: del,
+  },
+  forget: {
+    args: '[M-7] [--cascade]',
+    about: 'tombstone a memory (delete, said for memories)',
+    run: del,
   },
   task: card('task'),
   session: card('session'),

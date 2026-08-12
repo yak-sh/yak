@@ -10,6 +10,7 @@ import {
   byName,
   type Change,
   comps,
+  deaths,
   type Dep,
   type Hit,
   kindOf,
@@ -704,6 +705,58 @@ export let refsIn = (r: Row): string[] => {
     }
   }
   return out
+}
+
+// The collateral of a delete: the entities db.ts apply() tombstones ALONGSIDE
+// the target, because they exist ABOUT it — comments aimed at it, cards and
+// knocks/wakes viewing it — walked transitively down the same
+// `deaths('cascade')` worklist the reaper uses, so a delete guard names
+// exactly what the wire would take. The target itself is never in the list:
+// it's the thing you asked to delete; this is what rides along.
+//
+// Two doors read this: a PURE pass over rows already in hand (the palette
+// verb, which is wire-free), and an async pass that QUERIES the live graph
+// (the CLI, whose reader diet is bounded and so can't see every comment on an
+// arbitrary target). Same closure, two sources.
+export let cascade = (all: Row[], eid: string): Row[] => {
+  let aimed = deaths('cascade')
+  let doomed = [eid]
+  for (let i = 0; i < doomed.length; i++) {
+    for (let [comp, col] of aimed) {
+      for (let r of all) {
+        if (r.comps[comp]?.[col] == doomed[i] && !doomed.includes(r.eid)) {
+          doomed.push(r.eid)
+        }
+      }
+    }
+  }
+  return doomed.slice(1).flatMap((d) => all.find((r) => r.eid == d) ?? [])
+}
+
+// cascade() against the LIVE graph: one keyed query per (comp, col) pair per
+// frontier entity, transitively. A delete is rare and deliberate, so the
+// handful of round-trips buys an authoritative guard that a bounded reader
+// snapshot can't. Every hit is deduped; the target is never returned.
+export let dependents = async (eid: string): Promise<Row[]> => {
+  let aimed = deaths('cascade')
+  let found = new Map<string, Row>()
+  let frontier = [eid]
+  while (frontier.length) {
+    let hits = await Promise.all(
+      frontier.flatMap((d) =>
+        aimed.map(([comp, col]) => query([`.${comp}.${col}=${d}`]))
+      ),
+    )
+    frontier = []
+    for (let rows of hits) {
+      for (let r of rows) {
+        if (r.eid == eid || found.has(r.eid)) continue
+        found.set(r.eid, r)
+        frontier.push(r.eid)
+      }
+    }
+  }
+  return [...found.values()]
 }
 
 // One entity's reading NEIGHBORHOOD without the whole-graph snapshot: the

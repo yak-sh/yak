@@ -374,6 +374,28 @@ export let manuals = declare({
     root: true,
     args: [arg('id', id)],
   },
+  delete: {
+    about: 'tombstone an entity — the one warm path that REMOVES',
+    detail: 'Reuses the entity tombstone every death rides: apply() cascades ' +
+      'to the entities that exist ABOUT the target — comments aimed at it, ' +
+      'cards and knocks/wakes viewing it — and tombstones them too (a ' +
+      'tombstone is permanent; nothing resurrects an eid). A leaf deletes ' +
+      'quietly; a target with dependents REFUSES and NAMES them, so the blast ' +
+      'radius is never a surprise — pass --cascade to take them too. Human ' +
+      'ids resolve (task delete C-17310), never a uuid.',
+    examples: ['task delete C-17310', 'task delete T-42 --cascade'],
+    root: true,
+    args: [arg('id', id)],
+    opts: [flag('--cascade'), flag('--force')],
+  },
+  forget: {
+    about:
+      'tombstone a memory (delete, said the way a memory wants to hear it)',
+    examples: ['task forget M-7'],
+    root: true,
+    args: [arg('id', id)],
+    opts: [flag('--cascade'), flag('--force')],
+  },
   subject: {
     syntax: '<id> [show|is|as|edge] …',
     about: 'show or act on a subject',

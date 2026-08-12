@@ -22,6 +22,7 @@ import {
   contextDigest,
   contextSnapshot,
   decidedAt,
+  dependents,
   derefedChanges,
   derefedParams,
   designChanges,
@@ -600,6 +601,41 @@ let unblock = async (got: Got) => {
   let row = await needed(id)
   await send([{ eid: row.eid, name: 'blocked', comp: null }])
   print(`${idOf(row)} unblocked`)
+}
+
+// The one warm path that REMOVES: tombstone an entity through the same
+// {entity: null} death every reaper rides, so apply() cascades to the
+// dependents that exist ABOUT it (comments aimed at it, cards and knocks/wakes
+// viewing it). The guard is authoritative — dependents() QUERIES the live
+// graph, not the bounded reader diet — so a target that would take collateral
+// REFUSES and names it; --cascade (or --force) takes them too. `forget` is the
+// same verb, said for a memory. A leaf goes quietly.
+let del = async (got: Got) => {
+  let id = got.args.id
+  if (!id) throw new Error('task delete <id>')
+  let ok = got.flags.has('--cascade') || got.flags.has('--force')
+  let row = await needed(id)
+  let victims = await dependents(row.eid)
+  if (victims.length && !ok) {
+    throw new Error(
+      `${idOf(row)} has ${victims.length} dependent${
+        victims.length == 1 ? '' : 's'
+      } the cascade would delete too:\n${
+        victims.map((v) =>
+          `  ${idOf(v)}  ${v.comps.doc?.title ?? ''}`.trimEnd()
+        )
+          .join('\n')
+      }\nadd --cascade to delete them all, or detach them first`,
+    )
+  }
+  await send([{ eid: row.eid, name: 'entity', comp: null }])
+  print(
+    `deleted ${idOf(row)}${
+      victims.length
+        ? ` (+${victims.length} dependent${victims.length == 1 ? '' : 's'})`
+        : ''
+    }`,
+  )
 }
 
 // Full-text search — every doc in the graph, ranked, matches bracketed.
@@ -2533,6 +2569,8 @@ export let verbs = bind({
   release,
   block,
   unblock,
+  delete: del,
+  forget: del,
   spawn,
   land: () => land(),
   comment,

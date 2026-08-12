@@ -10,7 +10,7 @@ import {
   run,
   suggest,
 } from './commands.ts'
-import { inflate, rows } from './client.ts'
+import { cascade, inflate, rows } from './client.ts'
 import { type Snapshot } from './types.ts'
 import { assertEquals, assertThrows } from '@std/assert'
 
@@ -579,4 +579,51 @@ Deno.test('only a first line that opens with a colon is an order', () => {
   assertEquals(orderIn('sure: done'), '')
   assertEquals(orderIn('the plan:\n:done'), '') // only the FIRST line commands
   assertEquals(orderIn(': done'), '') // a colon alone is punctuation
+})
+
+// A tiny graph where one comment (C-41) is aimed at one task (T-40): the
+// single dependent the cascade would take, so the guard has something to see.
+let X = 'aaaaaaaa-0000-4000-8000-0000000000a1'
+let C = 'aaaaaaaa-0000-4000-8000-0000000000a2'
+let aimed = rows({
+  changes: [
+    { eid: X, name: 'entity', comp: { eid: X, num: 40 } },
+    { eid: X, name: 'doc', comp: { title: 'target', body: '' } },
+    { eid: X, name: 'task', comp: { status: 'open' } },
+    { eid: C, name: 'entity', comp: { eid: C, num: 41 } },
+    { eid: C, name: 'doc', comp: { title: '', body: 'aimed at T-40' } },
+    { eid: C, name: 'comment', comp: { target: X } },
+  ],
+})
+
+Deno.test('cascade: the aimed closure over rows in hand, minus the target', () => {
+  assertEquals(cascade(aimed, X).map((r) => r.eid), [C]) // the comment rides
+  assertEquals(cascade(aimed, C), []) // a leaf takes nothing with it
+})
+
+Deno.test('delete/forget: leaf goes quietly, a target with dependents guards', () => {
+  let at = (line: string, eid?: string) => run(line, { eid, rows: aimed })
+  // The comment is a leaf: bare :delete tombstones it, one entity-null change.
+  assertEquals(at('delete', C).changes, [{
+    eid: C,
+    name: 'entity',
+    comp: null,
+  }])
+  // The task has a dependent comment — bare delete REFUSES and names it.
+  assertThrows(() => at('delete', X), Error, 'C-41')
+  assertThrows(() => at('delete', X), Error, '--cascade')
+  // --cascade (or --force) takes it; the change is still just the target's own
+  // death — apply() synthesizes the cascade victims server-side.
+  assertEquals(at('delete --cascade', X).changes, [
+    { eid: X, name: 'entity', comp: null },
+  ])
+  assertEquals(at('delete --force', X).msg, 'deleted T-40 (+1 dependent)')
+  // forget is the same verb; a named human id resolves without a focus.
+  assertEquals(at('forget T-40 --force').changes, [
+    { eid: X, name: 'entity', comp: null },
+  ])
+  // A leaf named by id needs no flag and reports no collateral.
+  assertEquals(at('forget C-41').msg, 'deleted C-41')
+  // An unknown id teaches at the door rather than deleting nothing silently.
+  assertThrows(() => at('delete T-999'), Error, 'no entity')
 })
