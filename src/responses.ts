@@ -315,7 +315,7 @@ let terminal = async (
   }
   if (!completed) {
     let status = ended?.type?.replace('response.', '') ?? 'disconnected'
-    let reason = incomplete(ended)
+    let reason = incomplete(ended) ?? eventCode(ended)
     throw fault(`responses: ${status}${reason ? ` — ${reason}` : ''}`, {
       code: eventCode(ended) ?? reason,
       evidence: ended ? [...unknown, ended] : unknown,

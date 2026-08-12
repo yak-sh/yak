@@ -310,7 +310,7 @@ Deno.test('responses scrubs failed-stream evidence and credential errors', async
   let error = await assertRejects(
     () => failed.run({ model: 'm', input: [] }),
   ) as ResponseFault
-  assertEquals(error.message, 'responses: failed')
+  assertEquals(error.message, 'responses: failed — schema_changed')
   assertEquals(error.code, 'schema_changed')
   assertEquals(error.items?.length, 1)
   assertEquals(JSON.stringify(error.evidence).includes('secret-old'), false)
