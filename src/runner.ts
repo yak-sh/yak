@@ -3,6 +3,7 @@
 // entry specs, and executes typed calls through hosted tools. Scheduling,
 // leases, credentials, and database broadcasts stay outside this module.
 import { dirname, relative, resolve, sep } from 'node:path'
+import { compactionPolicy } from './compaction.ts'
 import { type EntrySpec, type UsageValue } from './entries.ts'
 import {
   type ResponseEvent,
@@ -480,7 +481,27 @@ let interruptedResult = (row: EntryRow) => {
     'The outcome is unknown; assume it may not have completed.'
 }
 
-// Project only the generation's frozen prefix. Typed content crosses provider
+// A checkpoint entry is a replay boundary only when this provider can replay
+// its opaque compaction item: it must carry both output+checkpoint, its source
+// generation must be the same provider, and its opaque must round-trip
+// (opaqueItem enforces format == openai:${type}). A provider switch, a
+// malformed checkpoint, or failed-compaction evidence (no checkpoint comp,
+// openai:failed:* format) all fail this and are never chosen as a boundary.
+let checkpointValid = (
+  row: EntryRow,
+  byEid: Map<string, EntryRow>,
+  provider: string,
+) => {
+  if (!row.comps.output || !row.comps.checkpoint) return false
+  let source = byEid.get(String(row.comps.output.source))
+  return providerOf(source) == provider && !!opaqueItem(row)
+}
+
+// Project only the generation's frozen prefix, bounded at its newest valid
+// checkpoint: the compaction item stands in for everything it summarized, so
+// the provider input is [checkpoint … cut] rather than the whole history. The
+// immutable entries before the checkpoint stay in the graph, queryable and
+// rendered — only the provider window narrows. Typed content crosses provider
 // boundaries; correlation keys and opaque replay evidence stay with the
 // provider that minted them.
 export let project = (entries: EntryRow[], generation: string): unknown[] => {
@@ -492,14 +513,22 @@ export let project = (entries: EntryRow[], generation: string): unknown[] => {
   if (cut == null) throw new Error('generation prefix is missing')
   let provider = providerOf(current)
   let byEid = new Map(ordered.map((row) => [row.eid, row]))
-  let prefix = ordered.filter((entry) => entry.seq <= cut)
+  // The newest checkpoint we can replay from bounds the window; its own row is
+  // included so its opaque compaction item is what replaces the prefix.
+  let start =
+    ordered.findLast((row) =>
+      row.seq <= cut && checkpointValid(row, byEid, provider)
+    )?.seq ?? 0
+  let window = ordered.filter((entry) => entry.seq >= start && entry.seq <= cut)
+  // A call whose result never landed within the window still owes a synthetic
+  // function_call_output so the replay stays a valid Responses input.
   let resulted = new Set(
-    prefix.flatMap((row) =>
+    window.flatMap((row) =>
       row.comps.result ? [String(row.comps.result.call)] : []
     ),
   )
   let out: unknown[] = []
-  for (let row of prefix) {
+  for (let row of window) {
     let comps = row.comps
     if (comps.attention) {
       out.push({
@@ -639,6 +668,11 @@ export let generate = async (options: GenerateOptions) => {
   let row = options.entries.find((entry) => entry.eid == options.generation)
   let value = row?.comps.generation
   if (!value) throw new Error('no generation entry')
+  // Ask the provider to compact its own replay state once the running input
+  // crosses the serving model's threshold; an unknown model gets no policy and
+  // stays usable. The returned compaction item lands as a checkpoint entry that
+  // project() replays from next turn.
+  let policy = compactionPolicy(String(value.model))
   let request: ResponseRequest = {
     model: String(value.model),
     instructions: options.instructions,
@@ -646,6 +680,7 @@ export let generate = async (options: GenerateOptions) => {
     tools: options.tools,
     parallel_tool_calls: true,
     ...value.effort ? { reasoning: { effort: value.effort } } : {},
+    ...policy ? { context_management: policy } : {},
     ...options.cacheKey ? { prompt_cache_key: options.cacheKey } : {},
   }
   let result: ResponseResult

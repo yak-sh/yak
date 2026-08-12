@@ -10,7 +10,8 @@ import {
   settleGeneration,
   takeEntry,
 } from './entries.ts'
-import { managedCodex } from './managed_codex.ts'
+import { graphLog } from './entry_log.ts'
+import { managedCodex, type ManagedCodexOptions } from './managed_codex.ts'
 import { type Observation } from './observations.ts'
 import {
   type ResponseEvent,
@@ -1345,4 +1346,147 @@ Deno.test('a restart mid-generation: predecessor drains, successor resumes clean
   assert(sucCalls >= 1)
   db1.close()
   db2.close()
+})
+
+Deno.test('graph-native compaction bounds replay across a restart and a later turn', async () => {
+  let db = open(':memory:')
+  let tree = Deno.makeTempDirSync(), sid = session(db, tree)
+  // A preset base_revision makes the Session runnable for any daemon instance,
+  // so the restart picks up pending work straight from the graph.
+  writeSession(db, sid, { base_revision: 'base' })
+  let instructionMark = `ORIGINAL_INSTRUCTION_${uuid()}`
+  let compactionMark = `COMPACTION_BLOB_${uuid()}`
+
+  // One provider result carrying explicit usage, so context telemetry is
+  // traceable per turn.
+  let reply = (
+    items: ResponseResult['items'],
+    input: number,
+  ): ResponseResult => ({
+    model: 'gpt-serving',
+    items,
+    unknown: [],
+    unknownItems: [],
+    usage: { input, cached: 0, output: 5, reasoning: 2, raw: {} },
+    response: {},
+    limits: {},
+  })
+  let shell = (id: string, command: string) => ({
+    type: 'function_call',
+    id,
+    call_id: id,
+    name: 'shell',
+    arguments: JSON.stringify({ command, cwd: null, timeout_ms: 1000 }),
+  })
+  let compaction = {
+    type: 'compaction',
+    id: 'compact-1',
+    summary: [{ type: 'summary_text', text: 'portable running summary' }],
+    encrypted_content: compactionMark,
+  }
+
+  // Requests and replies are shared closures, so the second daemon instance
+  // continues the same provider conversation a restart would.
+  let requests: Record<string, unknown>[] = []
+  let replies = [
+    reply([shell('call-1', 'printf one')], 250_000), // pre-compaction, large
+    reply([compaction, shell('call-2', 'printf two')], 260_000), // compacts
+    reply([{
+      type: 'message',
+      id: 'phase-one',
+      content: [{ type: 'output_text', text: 'phase one done' }],
+    }], 42_000), // post-compaction, bounded
+  ]
+  let options = (): ManagedCodexOptions => ({
+    db,
+    cast: () => {},
+    transport: {
+      run: (request) => {
+        requests.push(request)
+        return Promise.resolve(replies.shift()!)
+      },
+    },
+    tools: () => Promise.resolve(tools([])),
+    prepare: () => Promise.resolve(),
+  })
+
+  let service = managedCodex(options())
+  await service.start(sid, {
+    ...job(tree),
+    instruction: `${instructionMark} run the long chain`,
+  })
+  assertEquals(
+    readEntries(db, sid).filter((row) => row.comps.message?.role == 'agent')
+      .at(-1)?.comps.content.body,
+    'phase one done',
+  )
+  // A checkpoint entry was retained from the compaction item, its immutable
+  // audit prefix untouched.
+  let checkpoint = readEntries(db, sid).find((row) => row.comps.checkpoint)!
+  assertEquals(checkpoint.comps.opaque.format, 'openai:compaction')
+
+  // The request that ran the generation AFTER the compaction is bounded: it
+  // carries the compaction item, not the original instruction.
+  let bounded = requests.at(-1)!
+  let boundedInput = JSON.stringify(bounded.input)
+  assertEquals(boundedInput.includes(compactionMark), true)
+  assertEquals(boundedInput.includes(instructionMark), false)
+  // The first request, before any checkpoint existed, did carry the original.
+  assertEquals(
+    JSON.stringify(requests[0].input).includes(instructionMark),
+    true,
+  )
+
+  // A DIFFERENT daemon instance (restart) with no shared in-memory state, plus
+  // a later user turn, still replays a bounded request derived from entries.
+  replies.push(reply([{
+    type: 'message',
+    id: 'phase-two',
+    content: [{ type: 'output_text', text: 'phase two done' }],
+  }], 44_000))
+  let restarted = managedCodex(options())
+  append(db, sid, [{
+    message: { role: 'user' },
+    content: { body: 'now do phase two' },
+  }], restarted.runner)
+  await restarted.sweep()
+
+  let afterRestart = requests.at(-1)!
+  let restartInput = JSON.stringify(afterRestart.input)
+  assertEquals(restartInput.includes(compactionMark), true)
+  assertEquals(restartInput.includes(instructionMark), false)
+  assertEquals(restartInput.includes('now do phase two'), true)
+  assertEquals(
+    readEntries(db, sid).filter((row) => row.comps.message?.role == 'agent')
+      .at(-1)?.comps.content.body,
+    'phase two done',
+  )
+
+  // The full transcript still renders from entries: the original instruction,
+  // both tool calls, and the checkpoint are all present.
+  let log = graphLog(readEntries(db, sid))
+  let rendered = JSON.stringify(log.entries)
+  assertEquals(rendered.includes(instructionMark), true)
+  assertEquals(
+    log.entries.some((entry) =>
+      entry.row?.kind == 'sys' &&
+      entry.row.tag == 'checkpoint'
+    ),
+    true,
+  )
+  assertEquals(
+    log.entries.filter((entry) => entry.row?.kind == 'exec').length,
+    2,
+  )
+  // Context telemetry reflects the post-compaction request, not the pre.
+  assertEquals(log.context, 44_000)
+
+  // Every provider request kept store:false is not the concern here; every
+  // usage the graph recorded came from its own bounded turn.
+  assertEquals(
+    readEntries(db, sid).filter((row) => row.comps.usage)
+      .map((row) => Number(row.comps.usage.input)),
+    [250_000, 260_000, 42_000, 44_000],
+  )
+  db.close()
 })

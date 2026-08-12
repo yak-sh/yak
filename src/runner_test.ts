@@ -474,6 +474,12 @@ Deno.test('the loop runs independent tools concurrently and feeds results back',
   assertEquals(requests[0].instructions, 'developer words')
   assertEquals(requests[0].reasoning, { effort: 'high' })
   assertEquals(requests[0].prompt_cache_key, 'session-1')
+  // A known serving model carries the compaction policy so the provider
+  // compacts its own replay state past the threshold.
+  assertEquals(requests[0].context_management, [{
+    type: 'compaction',
+    compact_threshold: 300_000,
+  }])
   assertEquals(
     state.entries.some((entry) =>
       entry.comps.opaque?.format == 'openai:future_item'
@@ -599,4 +605,153 @@ Deno.test('failed provider evidence never re-enters a later generation', () => {
     role: 'user',
     content: [{ type: 'input_text', text: 'continue' }],
   })
+})
+
+// A compaction item the provider returned, stored as a checkpoint entry.
+let checkpointItem = {
+  type: 'compaction',
+  id: 'compact-1',
+  enc: 'summary-blob',
+}
+
+// A history whose codex generation emitted a compaction item at seq 5, then a
+// new user turn and a fresh generation. Shared by the bounding/portability
+// cases below.
+let compacted = (
+  {
+    source = 'gen-early',
+    format = 'openai:compaction',
+    through = 'gen-early',
+  } = {},
+) => [
+  row('begin', 1, {
+    message: { role: 'user' },
+    content: { body: 'the original instruction' },
+  }),
+  row('gen-early', 2, {
+    generation: { through: 'begin', provider: 'codex', model: 'old' },
+  }),
+  row('early-call', 3, {
+    output: { source: 'gen-early' },
+    call: { key: 'call-early' },
+    bash: { command: 'ls' },
+  }),
+  row('early-result', 4, {
+    result: { call: 'early-call' },
+    content: { body: 'a b c' },
+  }),
+  row('checkpoint', 5, {
+    output: { source },
+    checkpoint: { through },
+    content: { body: 'portable summary of the work so far' },
+    opaque: { format, data: JSON.stringify(checkpointItem) },
+  }),
+  row('resume', 6, {
+    message: { role: 'user' },
+    content: { body: 'keep going' },
+  }),
+]
+
+Deno.test('projection bounds the input at the newest valid checkpoint', () => {
+  let input = project([
+    ...compacted(),
+    row('current', 7, {
+      generation: { through: 'resume', provider: 'codex', model: 'new' },
+    }),
+  ], 'current')
+  // The summarized prefix (instruction, its calls) is gone from the provider
+  // input; the compaction item stands in for it, followed by the new turn.
+  assertEquals(input, [
+    checkpointItem,
+    { role: 'user', content: [{ type: 'input_text', text: 'keep going' }] },
+  ])
+  assertEquals(JSON.stringify(input).includes('original instruction'), false)
+})
+
+Deno.test('a daemon derives the identical bounded request from ordered entries', () => {
+  let entries = [
+    ...compacted(),
+    row('current', 7, {
+      generation: { through: 'resume', provider: 'codex', model: 'new' },
+    }),
+  ]
+  // project() holds no state: a restarted daemon replays the same entries and
+  // computes the same request, checkpoint boundary and all.
+  assertEquals(
+    project(entries, 'current'),
+    project(entries.toReversed(), 'current'),
+  )
+})
+
+Deno.test('a provider switch ignores the checkpoint and replays typed history', () => {
+  let input = project([
+    ...compacted(),
+    row('current', 7, {
+      generation: { through: 'resume', provider: 'claude', model: 'new' },
+    }),
+  ], 'current')
+  // Claude cannot replay codex's opaque compaction, so the whole prefix is
+  // rebuilt from portable typed content — instruction, tool call, and the
+  // checkpoint's own summary as a user note.
+  let body = JSON.stringify(input)
+  assertEquals(body.includes('the original instruction'), true)
+  assertEquals(body.includes('portable summary of the work so far'), true)
+  assertEquals(body.includes('summary-blob'), false)
+})
+
+Deno.test('failed compaction evidence never bounds or re-enters replay', () => {
+  // Failed evidence carries no checkpoint component and an openai:failed:*
+  // format, so it is neither a boundary nor a replayable item.
+  let input = project([
+    row('begin', 1, {
+      message: { role: 'user' },
+      content: { body: 'the original instruction' },
+    }),
+    row('gen-early', 2, {
+      generation: { through: 'begin', provider: 'codex', model: 'old' },
+    }),
+    row('failed-compaction', 3, {
+      output: { source: 'gen-early' },
+      opaque: {
+        format: 'openai:failed:compaction',
+        data: JSON.stringify({ type: 'compaction', enc: 'inert-blob' }),
+      },
+    }),
+    row('resume', 4, {
+      message: { role: 'user' },
+      content: { body: 'keep going' },
+    }),
+    row('current', 5, {
+      generation: { through: 'resume', provider: 'codex', model: 'new' },
+    }),
+  ], 'current')
+  // The window was not bounded: the original instruction still replays, and
+  // the failed blob is absent from the provider input.
+  let body = JSON.stringify(input)
+  assertEquals(body.includes('the original instruction'), true)
+  assertEquals(body.includes('inert-blob'), false)
+})
+
+Deno.test('a malformed checkpoint falls back to the previous valid one', () => {
+  let input = project([
+    ...compacted(),
+    // A second, malformed checkpoint after the valid one: its opaque data does
+    // not round-trip, so it cannot bound the window.
+    row('bad-checkpoint', 7, {
+      output: { source: 'gen-early' },
+      checkpoint: { through: 'gen-early' },
+      opaque: { format: 'openai:compaction', data: '{not json' },
+    }),
+    row('current', 8, {
+      generation: {
+        through: 'bad-checkpoint',
+        provider: 'codex',
+        model: 'new',
+      },
+    }),
+  ], 'current')
+  // The newest VALID checkpoint (seq 5) still bounds the window; the malformed
+  // one neither bounds nor appears as a replayable item.
+  assertEquals(input[0], checkpointItem)
+  assertEquals(JSON.stringify(input).includes('original instruction'), false)
 })
