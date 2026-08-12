@@ -148,9 +148,11 @@ export let sessionComps: Record<string, Record<string, PropType>> = {
   patch: { path: 'text', diff: 'body' },
   task_context: {},
   graph_query: { query: 'query' },
-  // One graph Change, serialized. Keeping one mutation facet preserves the
-  // graph's existing vocabulary instead of cloning every task_* verb here.
-  apply: { change: 'body' },
+  // A graph Change[] batch, serialized. One mutation facet preserves the
+  // graph's existing vocabulary instead of cloning every task_* verb here, and
+  // holding the whole array keeps the hosted apply atomic — two dependent
+  // patches ride one write, not two (T-16716).
+  apply: { changes: 'body' },
   result: { call: { eid: 'call', death: 'keep' } },
   exit: { code: 'number' },
   response: { status: 'number' },
@@ -1295,7 +1297,7 @@ export type Fetch = {
 }
 export type Patch = { eid: string; path: string; diff: string }
 export type GraphQuery = { eid: string; query?: string | null }
-export type ApplyComp = { eid: string; change: string }
+export type ApplyComp = { eid: string; changes: string }
 export type Result = { eid: string; call: string }
 export type Exit = { eid: string; code: number }
 export type ResponseComp = { eid: string; status: number }

@@ -81,16 +81,16 @@ Deno.test('entry facets are born together and immutable thereafter', () => {
   db.close()
 })
 
-Deno.test('the keyword-named apply facet round trips as one graph change', () => {
+Deno.test('the keyword-named apply facet round trips as one graph batch', () => {
   let db = freshDb()
   let sid = session(db)
-  let change = JSON.stringify({
-    eid: uuid(),
-    name: 'doc',
-    comp: { title: 'x' },
-  })
-  append(db, sid, [{ apply: { change } }])
-  assertEquals(readEntries(db, sid)[0].comps.apply.change, change)
+  let eid = uuid()
+  let changes = JSON.stringify([
+    { eid, name: 'doc', comp: { title: 'x' } },
+    { eid, name: 'task', comp: { status: 'open' } },
+  ])
+  append(db, sid, [{ apply: { changes } }])
+  assertEquals(readEntries(db, sid)[0].comps.apply.changes, changes)
   db.close()
 })
 

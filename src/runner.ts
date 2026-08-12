@@ -221,10 +221,15 @@ let callShape = (
       }
     }
     if (name == 'graph_apply') {
-      exact(args, ['change'])
-      if (!object(args.change)) throw new Error('change is required')
+      exact(args, ['changes'])
+      let changes = args.changes
+      if (
+        !Array.isArray(changes) || !changes.length || !changes.every(object)
+      ) {
+        throw new Error('changes must be a non-empty array of changes')
+      }
       return {
-        spec: { ...base, apply: { change: json(args.change) } },
+        spec: { ...base, apply: { changes: json(changes) } },
         request: { name, args },
       }
     }
@@ -440,7 +445,7 @@ let callArgs = (row: EntryRow): Record<string, unknown> => {
   }
   if (row.comps.apply) {
     try {
-      return { change: JSON.parse(String(row.comps.apply.change)) }
+      return { changes: JSON.parse(String(row.comps.apply.changes)) }
     } catch {
       return {}
     }
@@ -704,7 +709,7 @@ let requestOf = (row: EntryRow) => {
   let name = callName(row)
   if (name == 'tool') throw new Error('unsupported recorded tool')
   let args = callArgs(row)
-  if (name == 'graph_apply' && !object(args.change)) {
+  if (name == 'graph_apply' && !Array.isArray(args.changes)) {
     throw new Error('recorded graph change is malformed')
   }
   return { name, args }

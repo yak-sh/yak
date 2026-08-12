@@ -3,6 +3,7 @@
 // scripted provider drives context → shell → patch → final while every durable
 // and replayable surface is scanned for credential markers.
 import { assertEquals, assertMatch } from '@std/assert'
+import { rows } from './client.ts'
 import { apply, journalOf, open, snapshot } from './db.ts'
 import { readEntries } from './entries.ts'
 import { evalGraph } from './graph_query.ts'
@@ -357,6 +358,54 @@ slow(
       db.close()
       await Deno.remove(tree, { recursive: true })
       await Deno.remove(authRoot, { recursive: true })
+    }
+  },
+)
+
+slow(
+  'hosted graph_apply lands a dependent Change batch in one atomic write',
+  async () => {
+    let db = freshDb()
+    let session = uuid()
+    let identity = `managed-${uuid()}`
+    apply(db, [{ eid: session, name: 'session', comp: { id: identity } }])
+    let tasks = await tasksTools(ioFor(db), session)
+    try {
+      // Two dependent component patches on one new entity: the entity is only
+      // a well-formed task once BOTH its doc and its task component land. The
+      // hosted tool submits them as one Change[] batch, so apply() writes both
+      // in a single transaction — the write the single-`change` schema could
+      // never express (T-16716).
+      let eid = uuid()
+      let ok = await tasks.call('graph_apply', {
+        changes: [
+          { eid, name: 'doc', comp: { title: 'batched' } },
+          { eid, name: 'task', comp: { status: 'open' } },
+        ],
+      })
+      assertEquals(ok.failed, false)
+      let landed = rows(snapshot(db)).find((row) => row.eid == eid)
+      assertEquals(landed?.comps.doc?.title, 'batched')
+      assertEquals(landed?.comps.task?.status, 'open')
+
+      // Atomic means both-or-NEITHER: a later change apply() refuses (an
+      // unparseable board query fails the whole batch) must roll the earlier
+      // doc patch back with it, leaving no half-written entity behind.
+      let poisoned = uuid()
+      let bad = await tasks.call('graph_apply', {
+        changes: [
+          { eid: poisoned, name: 'doc', comp: { title: 'never' } },
+          { eid: poisoned, name: 'board', comp: { query: '.zzz=1' } },
+        ],
+      })
+      assertEquals(bad.failed, true)
+      assertEquals(
+        rows(snapshot(db)).find((row) => row.eid == poisoned),
+        undefined,
+      )
+    } finally {
+      await tasks.close?.()
+      db.close()
     }
   },
 )

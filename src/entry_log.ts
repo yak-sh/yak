@@ -51,7 +51,7 @@ let detail = (comps: EntryRow['comps']) =>
     : comps.graph_query
     ? clip(comps.graph_query.query)
     : comps.apply
-    ? clip(comps.apply.change)
+    ? clip(comps.apply.changes)
     : undefined
 
 let usage = (comps: EntryRow['comps']) =>

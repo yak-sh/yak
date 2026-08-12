@@ -329,8 +329,8 @@ let schema = `
     query text not null default ''
   );
   create table if not exists "apply" (
-    eid    text primary key references entity(eid),
-    change text not null
+    eid     text primary key references entity(eid),
+    changes text not null
   );
   create table if not exists result (
     eid  text primary key references entity(eid),
@@ -1037,6 +1037,24 @@ export let mendMail = (db: DatabaseSync) => {
 export let mendCalls = (db: DatabaseSync) => {
   if (!ddlOf(db, 'tool_call')?.includes("'srv'")) {
     rebuild(db, 'tool_call', callDdl)
+  }
+}
+
+// The hosted graph_apply once persisted a single serialized Change; it now
+// persists the whole atomic Change[] batch (T-16716). Wrap each existing
+// single-object body into a one-element array and rename the column, so a
+// legacy row and a batch read back under one name. Guarded on the old
+// column, so it runs once and no-ops thereafter.
+export let mendApply = (db: DatabaseSync) => {
+  if (!hasCol(db, 'apply', 'change')) return
+  db.exec('begin')
+  try {
+    db.exec('update apply set change = json_array(json(change))')
+    db.exec('alter table apply rename column change to changes')
+    db.exec('commit')
+  } catch (e) {
+    db.exec('rollback')
+    throw e
   }
 }
 
@@ -1818,6 +1836,7 @@ export let open = (path = file) => {
   // (T-15110). After mendMail so it reads the rebuilt mail table.
   healInboundDeliver(db)
   mendCalls(db)
+  mendApply(db)
   // A mail was briefly a 'send_request' (the intent idiom over-applied —
   // the artifact deserved its name). Adopt the old table's rows once;
   // `create if not exists mail` above already made the empty successor,

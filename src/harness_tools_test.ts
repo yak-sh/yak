@@ -164,13 +164,37 @@ slow(
       )
       let queried = await tasks.call('graph_query', { query: '' })
       assertMatch(queried.output, /\[\]/)
-      let change: Change = {
-        eid: 'aaaaaaaa-0000-4000-8000-000000000001',
-        name: 'doc',
-        comp: { title: 'hello' },
-      }
-      await tasks.call('graph_apply', { change })
-      assertEquals(writes, [{ changes: [change], via: 'managed-session-1' }])
+      // Two dependent component patches on one new entity: a doc + a task on
+      // the same eid, an entity that is only a well-formed task if both land.
+      // The hosted tool threads the whole array to one io.write — never one
+      // write per change — so the batch stays atomic and the injected Session
+      // identity rides beside it, outside model input.
+      let batch: Change[] = [
+        {
+          eid: 'aaaaaaaa-0000-4000-8000-000000000001',
+          name: 'doc',
+          comp: { title: 'hello' },
+        },
+        {
+          eid: 'aaaaaaaa-0000-4000-8000-000000000001',
+          name: 'task',
+          comp: { status: 'open' },
+        },
+      ]
+      await tasks.call('graph_apply', { changes: batch })
+      assertEquals(writes, [{ changes: batch, via: 'managed-session-1' }])
+      // The old single-`change` shape and a non-array are refused at the door,
+      // so a batch can never silently collapse to one change.
+      await assertRejects(
+        () => tasks.call('graph_apply', { change: batch[0] }),
+        Error,
+        'unknown tool argument',
+      )
+      await assertRejects(
+        () => tasks.call('graph_apply', { changes: batch[0] }),
+        Error,
+        'non-empty array',
+      )
     } finally {
       await tasks.close?.()
     }

@@ -496,7 +496,8 @@ Deno.test('executeCall recovers typed dispatch and records tool failures as resu
     call: { key: 'call-1' },
     output: { source: 'generation' },
     apply: {
-      change: '{"eid":"e1","name":"doc","comp":{"title":"x"}}',
+      changes: '[{"eid":"e1","name":"doc","comp":{"title":"x"}},' +
+        '{"eid":"e1","name":"task","comp":{"status":"open"}}]',
     },
   })
   let seen: Record<string, unknown> | undefined
@@ -508,8 +509,13 @@ Deno.test('executeCall recovers typed dispatch and records tool failures as resu
     },
   }
   let spec = await executeCall(call, tools)
+  // Crash recovery reconstructs the whole batch from the durable evidence, so
+  // a redispatched apply replays the same atomic write, not a lone change.
   assertEquals(seen, {
-    change: { eid: 'e1', name: 'doc', comp: { title: 'x' } },
+    changes: [
+      { eid: 'e1', name: 'doc', comp: { title: 'x' } },
+      { eid: 'e1', name: 'task', comp: { status: 'open' } },
+    ],
   })
   assertEquals(spec.result.call, 'call')
   assertMatch(String(spec.content.body), /tool failed: refused/)
