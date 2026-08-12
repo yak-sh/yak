@@ -3758,7 +3758,12 @@ export let snapshot = (db: DatabaseSync): Snapshot => {
   for (let name of Object.keys(readable)) {
     for (
       let row of db.prepare(
-        `${select(name)} where eid not in (select eid from entry)`,
+        // Exclude entry-partition rows. NOT EXISTS with entry's PK index is
+        // O(rows) — a plain `eid not in (select eid from entry)` degrades to
+        // O(rows × entries) and, once the entry table grew to 100k+, froze
+        // boot (snapshot) for the whole fleet (incident 2026-08-12).
+        `${select(name)} where not exists ` +
+          `(select 1 from entry where entry.eid = ${sqlName(name)}.eid)`,
       ).all() as Record<string, unknown>[]
     ) {
       changes.push({ eid: row.eid as string, name, comp: row })
@@ -3766,8 +3771,8 @@ export let snapshot = (db: DatabaseSync): Snapshot => {
   }
   let deps = db.prepare(
     `select parent as parent, type, child as child from dependency
-     where parent not in (select eid from entry)
-       and child not in (select eid from entry)`,
+     where not exists (select 1 from entry where entry.eid = dependency.parent)
+       and not exists (select 1 from entry where entry.eid = dependency.child)`,
   ).all() as Dep[]
   // A project's specialist personas ride derived `reads` edges (homeReads):
   // home is the one truth, so these compute here on the graph-out door
