@@ -1,5 +1,6 @@
-// Hosted-tool contracts: confinement is enforced by the host, Tasks identity
-// is injected out of model arguments, and every call returns durable facets.
+// Hosted-tool contracts: local calls receive host authority with an allowlisted
+// environment, Tasks identity stays outside model arguments, and calls return
+// durable facets.
 import { assertEquals, assertMatch, assertRejects } from '@std/assert'
 import { combineTools, localTools, tasksTools } from './harness_tools.ts'
 import { type IO } from './mcp.ts'
@@ -7,14 +8,12 @@ import { type Change, type Snapshot } from './types.ts'
 
 let scratch = async () => await Deno.makeTempDir({ prefix: 'tasks-tools-' })
 
-Deno.test('local tools confine writes and strip the owner environment', async () => {
+Deno.test('local tools use Bash with host authority and managed identity', async () => {
   let tree = await scratch()
   let sibling = await scratch()
   try {
-    await Deno.writeTextFile(`${tree}/seen.txt`, 'inside')
     await Deno.writeTextFile(`${sibling}/secret.txt`, 'outside')
-    Deno.env.set('TASKS_TOOL_SECRET', 'credential-marker')
-    let tools = await localTools({ tree })
+    let tools = await localTools({ tree, session: 'managed-session' })
     for (let tool of tools.tools.filter((tool) => tool.strict)) {
       let shape = tool.parameters as {
         properties: Record<string, unknown>
@@ -26,42 +25,69 @@ Deno.test('local tools confine writes and strip the owner environment', async ()
       )
     }
     let out = await tools.call('shell', {
-      command: `printf '%s|%s|%s' "$HOME" "${'$'}{TASKS_TOOL_SECRET-unset}" ` +
-        `"$(test -e ${sibling}/secret.txt && echo leaked || echo confined)" && ` +
-        `printf changed > made.txt`,
+      command:
+        `values=(zero one); [[ "${'$'}{values[1]}" == one ]] || exit 9; ` +
+        `printf '%s|%s|%s|%s|%s' "$HOME" "$(cat ${sibling}/secret.txt)" ` +
+        `"$(command -v git)" "$TASKS_SESSION" "$TASKS_TREE"`,
     })
-    assertEquals(out.output, '/home/agent|unset|confined')
+    assertEquals(
+      out.output,
+      `${Deno.env.get('HOME')}|outside|/usr/bin/git|managed-session|${tree}`,
+    )
     assertEquals(out.facets?.exit.code, 0)
-    assertEquals(await Deno.readTextFile(`${tree}/made.txt`), 'changed')
   } finally {
-    Deno.env.delete('TASKS_TOOL_SECRET')
     await Deno.remove(tree, { recursive: true })
     await Deno.remove(sibling, { recursive: true })
   }
 })
 
-Deno.test('local patch records stdout, stderr, exit, and refuses weaker posture', async () => {
-  let tree = await scratch()
+Deno.test('local Git opens linked-worktree metadata on the host', async () => {
+  let root = await scratch()
+  let repo = `${root}/repo`, tree = `${root}/tree`
+  let git = async (args: string[], cwd = repo) => {
+    let out = await new Deno.Command('/usr/bin/git', {
+      args,
+      cwd,
+      stdout: 'piped',
+      stderr: 'piped',
+    }).output()
+    if (!out.success) throw new Error(new TextDecoder().decode(out.stderr))
+  }
   try {
-    await Deno.writeTextFile(`${tree}/note.txt`, 'before\n')
+    await Deno.mkdir(repo)
+    await git(['init', '-q', '-b', 'main'])
+    await git(['config', 'user.email', 'agent@example.test'])
+    await git(['config', 'user.name', 'Agent'])
+    await Deno.writeTextFile(`${repo}/note.txt`, 'base\n')
+    await git(['add', 'note.txt'])
+    await git(['commit', '-q', '-m', 'base'])
+    await git(['worktree', 'add', '-q', '-b', 'session/test', tree])
+    let tools = await localTools({ tree })
+    let out = await tools.call('shell', {
+      command: 'git rev-parse --show-toplevel',
+    })
+    assertEquals(out.output.trim(), tree)
+    assertEquals(out.facets?.exit.code, 0)
+  } finally {
+    await Deno.remove(root, { recursive: true })
+  }
+})
+
+Deno.test('local patch accepts a host working directory and records facets', async () => {
+  let tree = await scratch()
+  let sibling = await scratch()
+  try {
+    await Deno.writeTextFile(`${sibling}/note.txt`, 'before\n')
     let tools = await localTools({ tree })
     let out = await tools.call('apply_patch', {
       diff: `--- a/note.txt\n+++ b/note.txt\n@@ -1 +1 @@\n-before\n+after\n`,
+      cwd: sibling,
     })
     assertEquals(out.facets?.exit.code, 0)
-    assertEquals(await Deno.readTextFile(`${tree}/note.txt`), 'after\n')
-    await assertRejects(
-      () => localTools({ tree, authority: 'host' }),
-      Error,
-      'unsupported authority',
-    )
-    await assertRejects(
-      () => localTools({ tree, approval: 'ask' }),
-      Error,
-      'unsupported approval',
-    )
+    assertEquals(await Deno.readTextFile(`${sibling}/note.txt`), 'after\n')
   } finally {
     await Deno.remove(tree, { recursive: true })
+    await Deno.remove(sibling, { recursive: true })
   }
 })
 

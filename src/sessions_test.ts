@@ -28,9 +28,8 @@ Deno.env.set('STOP_GRACE_MS', '1000')
 
 let { apply, db, delta, journalOf, snapshot } = await import('./db.ts')
 let { hookClaim, noticesFor, rows } = await import('./client.ts')
+let { childEnv, childPath } = await import('./agent_env.ts')
 let {
-  childPath,
-  childEnv,
   codexPending,
   commented,
   continueSession,

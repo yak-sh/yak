@@ -75,6 +75,7 @@ import { codexIssuer, codexStore } from './codex_auth.ts'
 import { accountHttp, accountService } from './accounts.ts'
 import { combineTools, localTools, tasksTools } from './harness_tools.ts'
 import { graphSession, managedCodex } from './managed_codex.ts'
+import { sessionRow as storedSession } from './session_store.ts'
 import { responses } from './responses.ts'
 import { readEntries } from './entries.ts'
 import { graphLogPage } from './entry_log.ts'
@@ -673,7 +674,8 @@ let managed = managedCodex({
     let tasks = await tasksTools(graphIO, session)
     if (!tree) return tasks
     try {
-      return combineTools(await localTools({ tree }), tasks)
+      let identity = String(storedSession(db, session)?.id ?? session)
+      return combineTools(await localTools({ tree, session: identity }), tasks)
     } catch (error) {
       await tasks.close?.()
       throw error

@@ -31,6 +31,7 @@
 //    return takes — server-constructed, post-commit, so every cache hears
 //    the truth exactly once and none of it ever rode the wire inbound.
 import { basename, dirname, resolve } from 'node:path'
+import { childEnv } from './agent_env.ts'
 import { type Adapter, adapters, type Event, type Summary } from './adapters.ts'
 import { apply, db, human, record, snapshot } from './db.ts'
 import { delivered, errorChange, healthChange } from './deliver.ts'
@@ -1453,35 +1454,6 @@ let launch = async (
     }, cast)
   }
 }
-
-// A minimal env by allowlist: what a program needs to run, plus its own
-// coordinates. Nothing of this server's environment rides along by
-// accident — TASKS_HOST does, because a child reports its life through
-// the `task` CLI, and it must report to the graph that spawned it.
-export let childPath = (home: string, path: string) => {
-  if (!home) return path
-  let bin = `${home}/.deno/bin`
-  let rest = path.split(':').filter((part) => part != bin).join(':')
-  return rest ? `${bin}:${rest}` : bin
-}
-
-export let childEnv = (session: string, tree: string, role?: string) => ({
-  PATH: childPath(
-    Deno.env.get('HOME') ?? '',
-    Deno.env.get('PATH') ?? '',
-  ),
-  HOME: Deno.env.get('HOME') ?? '',
-  TERM: Deno.env.get('TERM') ?? 'dumb',
-  TASKS_SESSION: session,
-  // The tree half of the launcher's voucher: claude marks a managed spawn's
-  // own tools CHILD_SESSION=1, so me() (client.ts) needs the planted
-  // worktree to tell the spawn itself from an agent delegated inside it.
-  TASKS_TREE: tree,
-  ...(role ? { TASKS_ROLE: role } : {}),
-  ...(Deno.env.get('TASKS_HOST')
-    ? { TASKS_HOST: Deno.env.get('TASKS_HOST')! }
-    : {}),
-})
 
 // Spawn a detached child, record its pid, and follow its output into the
 // row until it exits. The seam a fresh launch and a resume share — the only

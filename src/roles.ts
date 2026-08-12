@@ -7,13 +7,14 @@
 // module: a settled managed thread receives only a fixed instruction to call
 // task_context, whose atomic inbox owns retrieval and acknowledgement.
 import { createHash } from 'node:crypto'
+import { childPath } from './agent_env.ts'
 import { trouble } from './adapters.ts'
 import { apply, cursorOf, db, record, snapshot } from './db.ts'
 import { errorChange, healthChange } from './deliver.ts'
 import { dispatch, trace } from './effects.ts'
 import { noticesFor, rows } from './client.ts'
 import { materialize } from './persona.ts'
-import { childPath, continueSession } from './sessions.ts'
+import { continueSession } from './sessions.ts'
 import {
   attention as graphAttention,
   graphBusy,

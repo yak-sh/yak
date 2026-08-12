@@ -1,6 +1,6 @@
 // Gated end-to-end canary: the direct provider loop calls a hosted local tool
 // and resumes without Codex CLI state. Auth is read from a file by the HTTP
-// edge; the bubblewrap child receives neither its path nor its contents.
+// edge; the command environment receives neither its path nor its contents.
 import { assertEquals } from '@std/assert'
 import { type EntrySpec } from './entries.ts'
 import { localTools } from './harness_tools.ts'

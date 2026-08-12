@@ -1,5 +1,5 @@
 // The graph-native harness through its production seams: Responses transport,
-// durable scheduler, MCP-backed Tasks tools, and bubblewrap local tools. A
+// durable scheduler, MCP-backed Tasks tools, and host-backed local tools. A
 // scripted provider drives context → shell → patch → final while every durable
 // and replayable surface is scanned for credential markers.
 import { assertEquals, assertMatch } from '@std/assert'
@@ -10,7 +10,7 @@ import { managedCodex } from './managed_codex.ts'
 import { type IO } from './mcp.ts'
 import { responses } from './responses.ts'
 import { attentionPrompt } from './runner.ts'
-import { writeSession } from './session_store.ts'
+import { sessionRow, writeSession } from './session_store.ts'
 import { uuid } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
@@ -146,7 +146,7 @@ Deno.test('managed Codex runs the production tool chain without credential resid
         name: 'shell',
         arguments: JSON.stringify({
           command:
-            `printf 'before\\n' > note.txt; printf '%s|%s|%s' "${'$'}{TASKS_ACCESS_PROBE-unset}" "${'$'}{CODEX_HOME-unset}" "$(test -e "${'$'}{CODEX_HOME-unset}/auth.json" && echo leaked || echo confined)" > env.txt`,
+            `printf 'before\\n' > note.txt; printf '%s|%s|%s' "${'$'}{TASKS_ACCESS_PROBE-unset}" "${'$'}{CODEX_HOME-unset}" "$TASKS_SESSION" > env.txt`,
           cwd: null,
           timeout_ms: 10_000,
         }),
@@ -222,8 +222,9 @@ Deno.test('managed Codex runs the production tool chain without credential resid
       transport,
       tools: async (cwd, sid) => {
         if (!cwd) throw new Error('integration run needs a worktree')
+        let identity = String(sessionRow(db, sid)?.id ?? sid)
         return combineTools(
-          await localTools({ tree: cwd }),
+          await localTools({ tree: cwd, session: identity }),
           await tasksTools(io, sid),
         )
       },
@@ -304,7 +305,7 @@ Deno.test('managed Codex runs the production tool chain without credential resid
     assertEquals(await Deno.readTextFile(`${tree}/note.txt`), 'after\n')
     assertEquals(
       await Deno.readTextFile(`${tree}/env.txt`),
-      'unset|unset|confined',
+      `unset|unset|${identity}`,
     )
     assertEquals(
       entries.filter((row) => row.comps.message?.role == 'agent').at(-1)

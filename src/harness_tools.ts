@@ -1,10 +1,11 @@
-// Tools hosted by the first-party runner. Local commands enter a worktree-only
-// bubblewrap sandbox with an empty environment; Tasks calls use the in-process
-// MCP registry with the managed Session identity injected outside model input.
+// Tools hosted by the first-party runner. Local commands start in the Session
+// worktree with the same host authority as process-backed agents; Tasks calls
+// use the in-process MCP registry with managed identity outside model input.
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js'
-import { isAbsolute, relative, resolve, sep } from 'node:path'
+import { resolve } from 'node:path'
+import { childEnv } from './agent_env.ts'
 import { rows } from './client.ts'
 import { type IO, mcpServer } from './mcp.ts'
 
@@ -52,12 +53,13 @@ let localDefinitions: ToolDefinition[] = [
     type: 'function',
     name: 'shell',
     description:
-      'Run one shell command inside the writable worktree. Network, parent paths, the owner home, and provider credentials are unavailable.',
+      'Run one Bash command on the host. The working directory defaults to the Session worktree.',
     parameters: schema({
       command: { type: 'string' },
       cwd: {
         type: ['string', 'null'],
-        description: 'Existing directory relative to the worktree root.',
+        description:
+          'Existing host directory. Relative paths start at the Session worktree.',
       },
       timeout_ms: {
         type: ['integer', 'null'],
@@ -71,12 +73,13 @@ let localDefinitions: ToolDefinition[] = [
     type: 'function',
     name: 'apply_patch',
     description:
-      'Apply one unified diff inside the writable worktree. Paths outside the worktree are refused.',
+      'Apply one unified diff on the host. The working directory defaults to the Session worktree.',
     parameters: schema({
       diff: { type: 'string' },
       cwd: {
         type: ['string', 'null'],
-        description: 'Existing directory relative to the worktree root.',
+        description:
+          'Existing host directory. Relative paths start at the Session worktree.',
       },
       timeout_ms: {
         type: ['integer', 'null'],
@@ -87,9 +90,6 @@ let localDefinitions: ToolDefinition[] = [
     strict: true,
   },
 ]
-
-let inside = (root: string, path: string) =>
-  path == root || path.startsWith(root + sep)
 
 let text = (bytes: Uint8Array[], total: number, limit: number) => {
   let size = Math.min(total, limit)
@@ -138,25 +138,14 @@ let words = (args: Record<string, unknown>, allowed: string[]) => {
 
 export type LocalToolOptions = {
   tree: string
-  authority?: string
-  approval?: string
-  bwrap?: string
+  session?: string
   outputLimit?: number
 }
 
 export let localTools = async (
   options: LocalToolOptions,
 ): Promise<ToolHost> => {
-  if ((options.authority ?? 'worktree') != 'worktree') {
-    throw new Error(`unsupported authority: ${options.authority}`)
-  }
-  if ((options.approval ?? 'unattended') != 'unattended') {
-    throw new Error(`unsupported approval mode: ${options.approval}`)
-  }
   let tree = await Deno.realPath(options.tree)
-  let bwrap = options.bwrap ?? '/usr/bin/bwrap'
-  let stat = await Deno.stat(bwrap).catch(() => undefined)
-  if (!stat?.isFile) throw new Error('worktree sandbox unavailable: no bwrap')
   let limit = Math.max(1024, options.outputLimit ?? 1024 * 1024)
 
   let run = async (
@@ -171,53 +160,14 @@ export let localTools = async (
       throw new Error('tool cwd must be text')
     }
     let rel = cwdValue ?? '.'
-    if (isAbsolute(rel)) throw new Error('tool cwd must be worktree-relative')
     let cwd = await Deno.realPath(resolve(tree, rel)).catch(() => '')
-    if (!cwd || !inside(tree, cwd)) throw new Error('tool cwd leaves worktree')
-    let sandboxCwd = resolve('/workspace', relative(tree, cwd))
+    if (!cwd) throw new Error('tool cwd does not exist')
     let timeout = bounded(timeoutValue)
-    let args = [
-      '--die-with-parent',
-      '--new-session',
-      '--unshare-all',
-      '--ro-bind',
-      '/usr',
-      '/usr',
-      '--symlink',
-      'usr/bin',
-      '/bin',
-      '--symlink',
-      'usr/lib',
-      '/lib',
-      '--symlink',
-      'usr/lib64',
-      '/lib64',
-      '--proc',
-      '/proc',
-      '--dev',
-      '/dev',
-      '--tmpfs',
-      '/tmp',
-      '--dir',
-      '/home/agent',
-      '--setenv',
-      'HOME',
-      '/home/agent',
-      '--setenv',
-      'PATH',
-      '/usr/local/bin:/usr/bin:/bin',
-      '--bind',
-      tree,
-      '/workspace',
-      '--chdir',
-      sandboxCwd,
-      '/bin/sh',
-      '-c',
-      command,
-    ]
-    let child = new Deno.Command(bwrap, {
-      args,
+    let child = new Deno.Command('/bin/bash', {
+      args: ['-c', command],
+      cwd,
       clearEnv: true,
+      env: childEnv(options.session, tree),
       stdin: 'piped',
       stdout: 'piped',
       stderr: 'piped',

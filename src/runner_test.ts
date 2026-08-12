@@ -38,7 +38,7 @@ let row = (
   comps: Record<string, Record<string, unknown>>,
 ): EntryRow => ({ eid, seq, comps })
 
-Deno.test('instructions load the applicable hierarchy and refuse weaker posture', async () => {
+Deno.test('instructions load the hierarchy and describe host authority', async () => {
   let tree = await Deno.makeTempDir({ prefix: 'tasks-runner-' })
   let outside = await Deno.makeTempDir({ prefix: 'tasks-runner-out-' })
   try {
@@ -54,16 +54,12 @@ Deno.test('instructions load the applicable hierarchy and refuse weaker posture'
     assert(body.indexOf('root voice') < body.indexOf('near voice'))
     assertMatch(body, /patient persona/)
     assertMatch(body, /finish T-1/)
-    assertMatch(body, /\/workspace/)
+    assertMatch(body, /host filesystem and network access/)
+    assertMatch(body, /default place for repository\s+changes/)
     await assertRejects(
       () => instructions({ tree, cwd: outside }),
       Error,
       'leaves worktree',
-    )
-    await assertRejects(
-      () => instructions({ tree, authority: 'host' }),
-      Error,
-      'unsupported authority',
     )
   } finally {
     await Deno.remove(tree, { recursive: true })
@@ -78,11 +74,6 @@ Deno.test('instructions describe a Tasks-only session without a worktree', async
   assertMatch(body, /triage the graph/)
   assertEquals(body.includes('/workspace'), false)
   assertEquals(body.includes('task land'), false)
-  await assertRejects(
-    () => instructions({ authority: 'worktree' }),
-    Error,
-    'needs a tree',
-  )
 })
 
 Deno.test('provider items become typed entries and unknown evidence stays opaque', () => {

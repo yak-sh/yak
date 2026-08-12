@@ -37,8 +37,6 @@ export type InstructionOptions = {
   cwd?: string
   persona?: string
   prompt?: string
-  authority?: string
-  approval?: string
 }
 
 let within = (root: string, path: string) =>
@@ -51,15 +49,7 @@ let paragraphs = (parts: (string | undefined)[]) =>
 // hierarchy native Codex reads. The hosted runner never reads Codex settings,
 // auth files, hooks, or a home-directory instruction source.
 export let instructions = async (options: InstructionOptions) => {
-  let authority = options.authority ?? (options.tree ? 'worktree' : 'tasks')
-  if (!['worktree', 'tasks'].includes(authority)) {
-    throw new Error(`unsupported authority: ${options.authority}`)
-  }
-  if ((options.approval ?? 'unattended') != 'unattended') {
-    throw new Error(`unsupported approval mode: ${options.approval}`)
-  }
   if (!options.tree) {
-    if (authority != 'tasks') throw new Error('worktree authority needs a tree')
     return paragraphs([
       `You are running in Tasks' first-party Codex harness. This is a no-code
 session: no filesystem workspace, shell, or patch tool is available. Work only
@@ -69,9 +59,6 @@ unavailable to tools and must never enter content, task data, or diagnostics.`,
       options.persona ? `## Persona\n\n${options.persona}` : undefined,
       options.prompt ? `## Work\n\n${options.prompt}` : undefined,
     ])
-  }
-  if (authority != 'worktree') {
-    throw new Error('tasks authority has no worktree')
   }
   let tree = await Deno.realPath(options.tree)
   let wanted = resolve(tree, options.cwd ?? '.')
@@ -98,12 +85,12 @@ unavailable to tools and must never enter content, task data, or diagnostics.`,
     }
   }
   return paragraphs([
-    `You are running in Tasks' first-party Codex harness. The only writable
-filesystem authority is the dedicated worktree exposed to tools as /workspace.
-This run is unattended: use the hosted tools directly. If a requested action
-needs broader authority or an approval posture, stop and explain the refusal.
-Provider credentials are unavailable to tools and must never enter content,
-commands, patches, task data, or diagnostics.`,
+    `You are running in Tasks' first-party Codex harness. Hosted Bash and patch
+tools run as the tasksd user with host filesystem and network access. Commands
+start in the dedicated worktree; treat it as the default place for repository
+changes, not as a permission boundary. Use the hosted tools directly without
+waiting for approval. Do not seek, read, expose, or copy provider credentials
+into content, commands, patches, task data, or diagnostics.`,
     ...agents,
     options.persona ? `## Persona\n\n${options.persona}` : undefined,
     options.prompt ? `## Work\n\n${options.prompt}` : undefined,
