@@ -1762,6 +1762,54 @@ let onMine = (
   ]
 }
 
+// SESSION layer — the actor's interrupted work, not the project's heat.
+// A parked task wears resume; a live claim held by another one of the actor's
+// sessions still belongs in the working set. Current-session claims already
+// lead the digest, so repeating them here would hide the next thing to pop.
+let resumptions = (
+  all: Row[],
+  sess: Row | undefined,
+  budget: number,
+) => {
+  let actor = String(sess?.comps.session?.actor ?? '')
+  if (!actor || budget < 2) return []
+  let mine = new Set(
+    all.filter((r) => r.comps.claim?.session == sess?.eid).map((r) => r.eid),
+  )
+  let sessions = new Map(
+    all.filter((r) => r.comps.session)
+      .map((r) => [r.eid, r] as const),
+  )
+  let at = (r: Row) =>
+    String(r.comps.resume?.at ?? r.comps.claim?.claimed_at ?? editedAt(r))
+  let hits = all
+    .filter((r) => r.comps.task && !settled(String(r.comps.task.status)))
+    .filter((r) => !mine.has(r.eid))
+    .filter((r) => {
+      let holder = sessions.get(String(r.comps.claim?.session ?? ''))
+      if (r.comps.claim) return holder?.comps.session?.actor == actor
+      return r.comps.resume?.actor == actor ||
+        r.comps.updated?.by == actor || r.comps.created?.by == actor
+    })
+    .sort((a, b) => {
+      let rank = Number(b.comps.resume?.rank ?? 0) -
+        Number(a.comps.resume?.rank ?? 0)
+      return rank || at(b).localeCompare(at(a))
+    })
+    .slice(0, budget - 1)
+  if (!hits.length) return []
+  return [
+    '## resume — pop your stack',
+    ...hits.map((r) => {
+      let holder = sessions.get(String(r.comps.claim?.session ?? ''))
+      let held = holder ? ` · ⚑ ${idOf(holder)}` : ''
+      return `- ${idOf(r)} ${r.comps.task?.status}${held} — ${
+        snip(String(r.comps.doc?.title ?? ''))
+      }`
+    }),
+  ]
+}
+
 // When a decision was taken — '' for an entity wearing no stamp, which
 // sorts last and reads as "nothing settled". The digest and `task decided`
 // order by the same string, so the section and the listing agree.
@@ -1904,6 +1952,11 @@ export let contextDigest = (
   scope = scopeFor(all, sess, cwd, scope)
   let here = scope ? byEid.get(scope) : undefined
   let mine = sess ? all.filter((r) => r.comps.claim?.session == sess.eid) : []
+  mine.sort((a, b) =>
+    String(b.comps.claim?.claimed_at ?? '').localeCompare(
+      String(a.comps.claim?.claimed_at ?? ''),
+    )
+  )
   let lines = [
     '# ' + (session ? `tasks · session ${session}` : 'tasks · a preview') +
     (here ? ` · ${idOf(here)} ${here.comps.doc?.title ?? ''}` : ''),
@@ -1940,6 +1993,10 @@ export let contextDigest = (
   // What your past selves were told after they stopped listening —
   // history on one line, never re-injected as live conversation.
   lines.push(...unheard(all, sess, now))
+  // The actor's own interruption stack comes before narrative memory: these
+  // are live tasks the operator can claim and pop without reconstructing a
+  // yak chain from prose. A bare preview has no actor and therefore no stack.
+  lines.push(...resumptions(all, sess, Math.min(5, 48 - lines.length)))
   // The thread from last time: the newest brief by the SAME operator —
   // the final message wrap captured, or a hand-written doc, never a
   // stub — so a session wakes knowing where its predecessor left off.
@@ -2170,27 +2227,46 @@ export let contextSnapshot = async (
   let open = statuses.filter((s) => !settled(s)).join(',')
   let actor = who.actor
   let claims = [...(who.claims ?? [])]
-  let [tasks, touched, decisions, memories, sessions, inbox, comments] =
-    await Promise.all([
-      query([`.task.status=${open}`], 'task'),
-      scope
-        ? Promise.all([
-          query(
-            [`.task.project=${scope}`, `.updated.at>=${since}`],
-            'task',
-          ),
-          query(
-            [`.task.project=${scope}`, `.created.at>=${since}`],
-            'task',
-          ),
-        ]).then((sets) => sets.flat())
-        : [],
-      query(['.decided!']),
-      query(['.memory.scope='], 'memory'),
-      actor ? query([`.session.actor=${actor}`], 'session') : [],
-      inboxRows(session, cwd),
-      claims.length ? query([`.comment.target=${claims.join(',')}`]) : [],
-    ])
+  let [
+    tasks,
+    touched,
+    decisions,
+    memories,
+    sessions,
+    resumed,
+    actorTouched,
+    inbox,
+    comments,
+  ] = await Promise.all([
+    query([`.task.status=${open}`], 'task'),
+    scope
+      ? Promise.all([
+        query(
+          [`.task.project=${scope}`, `.updated.at>=${since}`],
+          'task',
+        ),
+        query(
+          [`.task.project=${scope}`, `.created.at>=${since}`],
+          'task',
+        ),
+      ]).then((sets) => sets.flat())
+      : [],
+    query(['.decided!']),
+    query(['.memory.scope='], 'memory'),
+    actor ? query([`.session.actor=${actor}`], 'session') : [],
+    actor ? query([`.resume.actor=${actor}`], 'task') : [],
+    actor
+      ? Promise.all([
+        query([`.updated.by=${actor}`, `.updated.at>=${since}`], 'task'),
+        query([`.created.by=${actor}`, `.created.at>=${since}`], 'task'),
+      ]).then((sets) => sets.flat())
+      : [],
+    inboxRows(session, cwd),
+    claims.length ? query([`.comment.target=${claims.join(',')}`]) : [],
+  ])
+  let actorClaims = sessions.length
+    ? await query([`.claim.session=${sessions.map((r) => r.eid).join(',')}`])
+    : []
   let preliminary = uniq([
     ...seed,
     ...tasks,
@@ -2198,6 +2274,9 @@ export let contextSnapshot = async (
     ...decisions,
     ...memories,
     ...sessions,
+    ...resumed,
+    ...actorTouched,
+    ...actorClaims,
     ...inbox.rows,
     ...comments,
   ])

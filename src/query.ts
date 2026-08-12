@@ -108,6 +108,7 @@ let routes: Record<string, readonly string[]> = {
   // `.created.at`, `.updated.by`, the pin/camera precedent.
   created: [...Object.keys(comps.created), ...Object.keys(stamped.created)],
   updated: [...Object.keys(comps.updated), ...Object.keys(stamped.updated)],
+  resume: Object.keys(stamped.resume),
   // `decided` splits the same stamp the other way — `at`/`by` on the wire,
   // `via` stamped — so its routes are the same union, and `.decided.at` is
   // the spelling `## decided` and `task decided` both answer.

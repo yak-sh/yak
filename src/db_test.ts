@@ -1023,6 +1023,54 @@ Deno.test('claim is a lease: conflict throws + audits, same session refreshes', 
   assertEquals(comp(task, 'claim')?.session, b)
 })
 
+Deno.test('claim release pushes the actor stack; reclaim and settle pop it', () => {
+  let actor = uid(), session = uid(), a = uid(), b = uid(), c = uid()
+  apply(db, [
+    { eid: actor, name: 'person', comp: {} },
+    {
+      eid: session,
+      name: 'session',
+      comp: { id: `resume-${session}`, actor },
+    },
+    ...[a, b, c].map((eid) => ({
+      eid,
+      name: 'task',
+      comp: { status: 'wip' },
+    })),
+  ])
+  for (let eid of [a, b, c]) {
+    apply(db, [{ eid, name: 'claim', comp: { session } }])
+  }
+  let out = apply(
+    db,
+    [a, b, c].map((eid) => ({
+      eid,
+      name: 'claim',
+      comp: null,
+    })),
+  )
+  let pushed = out.filter((x) => x.name == 'resume')
+  assertEquals(pushed.map((x) => x.eid), [a, b, c])
+  assertEquals(pushed.every((x) => x.comp?.actor == actor), true)
+  assertEquals(
+    pushed.map((x) => Number(x.comp?.rank)).toSorted((x, y) => x - y),
+    pushed.map((x) => Number(x.comp?.rank)),
+  )
+
+  let take = apply(db, [{ eid: c, name: 'claim', comp: { session } }])
+  assertEquals(
+    take.some((x) => x.eid == c && x.name == 'resume' && x.comp == null),
+    true,
+  )
+  apply(db, [{ eid: b, name: 'task', comp: { status: 'done' } }])
+  assertEquals(comp(b, 'resume'), undefined)
+  assertEquals(comp(a, 'resume')?.actor, actor)
+
+  // The stack is a server outcome, never a client assertion.
+  apply(db, [{ eid: a, name: 'resume', comp: { actor, rank: 999 } }])
+  assertNotEquals(comp(a, 'resume')?.rank, 999)
+})
+
 Deno.test('a failing claim voids its whole batch', () => {
   let task = uid(), a = uid(), c = uid()
   apply(db, [

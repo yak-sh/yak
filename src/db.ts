@@ -23,6 +23,7 @@ import {
   kindOrder,
   sessionActive,
   sessionComps,
+  settled,
   SHORT,
   shortId,
   slugsOf,
@@ -637,6 +638,7 @@ export let derived = [
   'persona',
   'memory',
   'feedback',
+  'resume',
   'deliver',
   'delivered',
   'error',
@@ -1941,7 +1943,10 @@ let admitted = (change: Change): Change | undefined => {
   // ingest coordinate — server-stamped through apply()'s `imports` path in
   // the same transaction as its entry (D-16704), refused here so no wire
   // client can pre-stamp a coordinate and poison the ingester's dedup.
-  if (table == 'lease' || table == 'usage' || table == 'imported') return
+  if (
+    table == 'lease' || table == 'usage' || table == 'imported' ||
+    table == 'resume'
+  ) return
   if (change.comp == null) return change
   let sent = Object.entries(change.comp)
   let real = columnsOf(table)
@@ -2586,6 +2591,19 @@ export let apply = (
   // a deferred read transaction can fail immediately to avoid a deadlock.
   db.exec('begin immediate')
   try {
+    // Claim release is the interruption event. Capture the holder before the
+    // row can vanish — including through a session cascade — then derive the
+    // durable actor stack from the transaction's final state below.
+    let priorClaims = db.prepare(`
+      select c.eid, c.claimed_at, c.rowid as claim_order, s.actor, s.cwd
+      from claim c left join session s on s.eid = c.session
+    `).all() as {
+      eid: string
+      claimed_at: string
+      claim_order: number
+      actor: string | null
+      cwd: string | null
+    }[]
     changes = replaceWakes(db, changes)
     changes = dualSpawn(db, changes)
     changes = dualFacet(db, changes, 'worktree')
@@ -3046,6 +3064,55 @@ export let apply = (
     // so a birth and the edits beside it agree instead of drifting by the
     // milliseconds between two `new Date()` calls (T-6670).
     let now = new Date().toISOString()
+    // Taking a task again pops it; settling one removes it. Releasing an
+    // unsettled task pushes it for the holder's actor. A wrap releases several
+    // claims in one batch, so claimed_at supplies their nested order and rank
+    // preserves it after those lease rows are gone.
+    let finalClaims = new Set(
+      (db.prepare('select eid from claim').all() as { eid: string }[])
+        .map((r) => r.eid),
+    )
+    let status = db.prepare('select status from task where eid = ?')
+    let clear = new Set(
+      changes.filter((c) => c.name == 'claim' || c.name == 'task')
+        .map((c) => c.eid),
+    )
+    for (let eid of clear) {
+      let task = status.get(eid) as { status: string } | undefined
+      if (!finalClaims.has(eid) && task && !settled(task.status)) continue
+      if (db.prepare('delete from resume where eid = ?').run(eid).changes) {
+        took(eid, 'resume')
+        extra.push({ eid, name: 'resume', comp: null })
+      }
+    }
+    let released = priorClaims
+      .filter((c) => !finalClaims.has(c.eid))
+      .filter((c) => {
+        let task = status.get(c.eid) as { status: string } | undefined
+        return task && !settled(task.status)
+      })
+      .map((c) => ({ ...c, actor: c.actor ?? ventureAt(db, c.cwd) }))
+      .filter((c) => c.actor)
+      .sort((a, b) =>
+        a.claimed_at.localeCompare(b.claimed_at) ||
+        a.claim_order - b.claim_order
+      )
+    let top = Number(
+      (db.prepare('select coalesce(max(rank), 0) as rank from resume')
+        .get() as {
+          rank: number
+        }).rank,
+    )
+    let push = db.prepare(`
+      insert into resume (eid, actor, at, rank) values (?, ?, ?, ?)
+      on conflict(eid) do update set actor = excluded.actor,
+        at = excluded.at, rank = excluded.rank
+    `)
+    for (let item of released) {
+      let comp = { actor: String(item.actor), at: now, rank: ++top }
+      push.run(item.eid, comp.actor, comp.at, comp.rank)
+      extra.push({ eid: item.eid, name: 'resume', comp })
+    }
     // A session that RAN somewhere but names no actor gets one from where
     // it stands — the writing identity is never blank (T-6669). Resolved
     // from the session row's CURRENT cwd (not a client's stale snapshot,

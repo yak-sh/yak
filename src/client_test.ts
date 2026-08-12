@@ -960,6 +960,24 @@ Deno.test('contextDigest: claimed set with gates, or open board', () => {
   assertEquals(d.includes('## lately'), false)
 })
 
+Deno.test('contextDigest: current claims lead newest first', () => {
+  let current = structuredClone(snap)
+  current.changes.push(
+    {
+      eid: T1,
+      name: 'claim',
+      comp: { session: S, claimed_at: '2026-07-18' },
+    },
+    {
+      eid: T2,
+      name: 'claim',
+      comp: { session: S, claimed_at: '2026-07-20' },
+    },
+  )
+  let d = contextDigest(current, 'sess-x')
+  assertEquals(d.indexOf('T-3') < d.indexOf('T-2'), true)
+})
+
 Deno.test('contextDigest: a non-operator remains a normal graph participant', () => {
   let target = structuredClone(snap)
   target.changes.find((c) => c.eid == S && c.name == 'session')!.comp = {
@@ -2858,6 +2876,82 @@ Deno.test("contextDigest: previously — the same operator's last brief", () => 
     contextDigest(late, 'ws-other', NOW).includes('previously'),
     false,
   )
+})
+
+Deno.test('contextDigest: resume pops this actor stack before narrative memory', () => {
+  let id = (n: number) =>
+    `eeeeeeee-0000-4000-8000-${String(n).padStart(12, '0')}`
+  let [actor, other, current, past, top, lower, foreign, active, touched] = [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+  ].map(id)
+  let task = (
+    eid: string,
+    num: number,
+    title: string,
+    resume?: Record<string, unknown>,
+    claim?: Record<string, unknown>,
+  ) => [
+    { eid, name: 'entity', comp: { eid, num } },
+    { eid, name: 'doc', comp: { title, body: '' } },
+    { eid, name: 'task', comp: { status: 'wip', priority: num } },
+    ...(resume ? [{ eid, name: 'resume', comp: resume }] : []),
+    ...(claim ? [{ eid, name: 'claim', comp: claim }] : []),
+  ]
+  let g: Snapshot = {
+    changes: [
+      { eid: actor, name: 'entity', comp: { eid: actor, num: 1 } },
+      { eid: other, name: 'entity', comp: { eid: other, num: 2 } },
+      { eid: current, name: 'entity', comp: { eid: current, num: 3 } },
+      {
+        eid: current,
+        name: 'session',
+        comp: { id: 'resume-now', actor },
+      },
+      { eid: past, name: 'entity', comp: { eid: past, num: 4 } },
+      {
+        eid: past,
+        name: 'session',
+        comp: { id: 'resume-past', actor },
+      },
+      { eid: past, name: 'doc', comp: { title: 'Last time', body: 'brief' } },
+      ...task(top, 5, 'Incident C', { actor, at: '2026-07-20', rank: 3 }),
+      ...task(lower, 6, 'Original A', { actor, at: '2026-07-18', rank: 1 }),
+      ...task(foreign, 7, 'Not my yak', {
+        actor: other,
+        at: '2026-07-21',
+        rank: 9,
+      }),
+      ...task(active, 8, 'Still held elsewhere', undefined, {
+        session: past,
+        claimed_at: '2026-07-19',
+      }),
+      ...task(touched, 9, 'Recently touched'),
+      {
+        eid: touched,
+        name: 'updated',
+        comp: { at: '2026-07-20', by: actor },
+      },
+    ],
+    deps: [],
+  }
+  let d = contextDigest(g, 'resume-now')
+  let resume = section(d, '## resume')
+  assertEquals(resume[0], '## resume — pop your stack')
+  assertEquals(resume.some((l) => l.includes('Not my yak')), false)
+  assertMatch(resume[1], /Incident C/)
+  assertMatch(resume[2], /Original A/)
+  assertMatch(resume[3], /Recently touched/)
+  assertMatch(resume[4], /Still held elsewhere/)
+  assertMatch(resume[4], /⚑ S-4/)
+  assertEquals(d.indexOf('## resume') < d.indexOf('## previously'), true)
 })
 
 Deno.test('contextDigest: unheard — comments after a past session stopped listening', () => {

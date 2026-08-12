@@ -422,6 +422,10 @@ export let comps: Record<string, Record<string, PropType>> = {
   // LEASE vanishes (row deleted, claim-null on the wire) but the claimed
   // entity — somebody's task — survives, freed. claimed_at server-stamped.
   claim: { session: { eid: 'session', death: 'release' } },
+  // An operator's interrupted work stack is server-owned. Claim release
+  // pushes; another claim or a settled task pops. The empty writable half
+  // only puts the component in the graph vocabulary — apply() refuses it.
+  resume: {},
   // An actor's standing instruction about ONE entity: watch it even
   // though nothing is aimed at me, or mute it though something is. Read
   // as an override on the item's TARGET — a subscription is aimed at the
@@ -762,6 +766,11 @@ export let stamped: Record<string, Record<string, PropType>> = {
   web: { frozen_at: 'time' }, // the freeze finished (freeze.ts)
   client: { ip: 'text' },
   claim: { claimed_at: 'time' },
+  resume: {
+    actor: { eid: 'entity', death: 'keep' },
+    at: 'time',
+    rank: 'number',
+  },
   // Shared outcome and health (D-14945, deliver.ts): `delivered.at` = reached
   // its destination, `via` = how it went out (cast S-9 / spawned S-9 /
   // local / a mail's Message-ID) — descriptive text, not an eid. `error.at`
@@ -1487,6 +1496,15 @@ export let standing = (s: Session) =>
 // the server rejects — release first (comp: null), then claim.
 export type Claim = { eid: string; session: string; claimed_at?: string }
 
+// One task parked on one actor's interruption stack. rank preserves the
+// nested claim order when one wrap releases several leases at the same time.
+export type Resume = {
+  eid: string
+  actor: string
+  at: string
+  rank: number
+}
+
 // A request to stop the session it targets — the graph-native stop
 // button. Created over the wire, acted on by the server's effect, kept
 // as audit; acted_at is stamped when the signals have been sent.
@@ -1762,6 +1780,7 @@ export type Ent = {
   usage?: Usage
   spawn?: Spawn
   claim?: Claim
+  resume?: Resume
   stop_request?: StopRequest
   knock?: Knock
   wake?: Wake
