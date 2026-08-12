@@ -2,7 +2,15 @@ import { signal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
 import { block, copy, setFollow } from './ui.tsx'
 import { usePlaceAt } from './overlay.tsx'
-import { cache, census, ent, peek, rootCanvas, trail } from '../live.ts'
+import {
+  cache,
+  census,
+  ent,
+  findEid,
+  peek,
+  rootCanvas,
+  trail,
+} from '../live.ts'
 import { type Action, actionsFor, resolve } from './registry.ts'
 import { type Ent, idOf, SHORT } from '../types.ts'
 import { dragData } from './drag.ts'
@@ -62,9 +70,12 @@ export let openAt = (eid: string, ev: MouseEvent) => {
   } else navigate(`/${idOf(ent(eid))}`)
 }
 
-// An id in the wild — T-num, bare num, raw eid, or a SHORT-eid handle (the
-// 6–8 hex prefix a num-less entity wears, T-3684) — resolved against the live
-// cache; undefined when unloaded, dead, or an ambiguous prefix.
+// An id in the wild — T-num, bare num, raw eid, a SHORT-eid handle (the
+// 6–8 hex prefix a num-less entity wears, T-3684), or an alias slug (any of
+// an entity's handles) — resolved against the live cache in db.ts resolveId's
+// order; undefined when unloaded, dead, or an ambiguous prefix. The slug
+// fallback is what lets a URL name an entity by handle (/home), matching the
+// CLI and MCP id doors.
 export let eidOf = (id: string) => {
   let eids = census.value
   let m = id.match(/^[A-Za-z]+-(\d+)$/) ?? id.match(/^(\d+)$/)
@@ -72,8 +83,10 @@ export let eidOf = (id: string) => {
   if (eids.includes(id)) return id // a full eid, verbatim
   if (SHORT.test(id)) {
     let hits = eids.filter((eid) => eid.startsWith(id.toLowerCase()))
-    return hits.length == 1 ? hits[0] : undefined // ambiguous → no navigation
+    if (hits.length > 1) return undefined // ambiguous → no navigation
+    if (hits.length == 1) return hits[0]
   }
+  return findEid(id) // an alias slug — resolves through every handle
 }
 
 // The plain-click half of an in-app anchor: modifiers and middle-click keep

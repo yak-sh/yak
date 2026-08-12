@@ -60,13 +60,25 @@ Deno.test('findEid indexes human ids, aliases, and short handles', () => {
       alias: {
         eid: 'abcdef10-0000-4000-8000-000000000001',
         slug: 'indexed',
+        slugs: 'extra more',
       },
     },
   }
   assertEquals(findEid('T-31'), 'abcdef10-0000-4000-8000-000000000001')
   assertEquals(findEid('31'), 'abcdef10-0000-4000-8000-000000000001')
   assertEquals(findEid('indexed'), 'abcdef10-0000-4000-8000-000000000001')
+  // Every additional slug resolves to the same entity, not just the primary.
+  assertEquals(findEid('extra'), 'abcdef10-0000-4000-8000-000000000001')
+  assertEquals(findEid('more'), 'abcdef10-0000-4000-8000-000000000001')
   assertEquals(findEid('abcdef'), 'abcdef10-0000-4000-8000-000000000001')
+
+  // An incremental patch that grows the set indexes the new member live.
+  applyLocal([{
+    eid: 'abcdef10-0000-4000-8000-000000000001',
+    name: 'alias',
+    comp: { slug: 'indexed', slugs: 'extra more fresh' },
+  }])
+  assertEquals(findEid('fresh'), 'abcdef10-0000-4000-8000-000000000001')
 
   applyLocal([{
     eid: 'abcdef10-0000-4000-8000-000000000002',
