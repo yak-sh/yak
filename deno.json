@@ -1,6 +1,6 @@
 {
   "tasks": {
-    "check": "deno fmt --check . && deno lint . && deno check src/ channels/",
+    "check": "deno fmt --check && deno lint && deno check",
     "gate": "deno fmt src/ && deno task check && deno task test:all && deno run -A src/cli.ts sync --check",
     "dev": "sh -c 'while :; do deno run -A --unstable-net --unstable-worker-options src/dev.ts && break; [ $? -eq 42 ] || break; done'",
     "tui": "sh -c 'while :; do deno run -A src/tui/main.tsx && break; [ $? -eq 42 ] || break; done'",
