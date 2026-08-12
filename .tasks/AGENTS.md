@@ -491,12 +491,6 @@ makes one of these seams wider or leakier, that's the wrong direction.
 
 ---
 
-# M-16612 respect users with specific progress and durable errors
-
-A system respects its users by making its state legible. Say what is currently loading, what work is underway, and how it is progressing; do not substitute a spinner or a generic loading indicator for that explanation. When work fails, tell the user what went wrong, why it failed when known, and what successful completion was supposed to look like. Preserve each error durably under a stable identity, visible to both user and operator, so they can return to it and discuss it later. Errors must never be ephemeral or opaque.
-
----
-
 # M-3715 delegation discipline
 
 Delegation in the fleet, so that if our system breaks the work still continues on the floor and the board stays the truth about who is doing what:
@@ -509,6 +503,12 @@ Delegation in the fleet, so that if our system breaks the work still continues o
 - **Verify a spawn's claim.** A reported sha counts only if it is an ancestor of the shared checkout's `main` — `git merge-base --is-ancestor <sha> main`.
 
 Every Agent-tool spawn gets `isolation: worktree` + the claim-discipline paragraph in its brief; prefer task bodies over prompt-only specs.
+
+---
+
+# M-16612 respect users with specific progress and durable errors
+
+A system respects its users by making its state legible. Say what is currently loading, what work is underway, and how it is progressing; do not substitute a spinner or a generic loading indicator for that explanation. When work fails, tell the user what went wrong, why it failed when known, and what successful completion was supposed to look like. Preserve each error durably under a stable identity, visible to both user and operator, so they can return to it and discuss it later. Errors must never be ephemeral or opaque.
 
 ---
 

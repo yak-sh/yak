@@ -291,14 +291,6 @@ When agents route around a tool, fix the tool's warmth, composability, or self-t
 
 ---
 
-# M-4406 land the plane — glide expiring budget to ~full at the reset
-
-When a budget is **pre-paid and use-it-or-lose-it**, glide cumulative usage to land ~full right at the reset; whatever isn't spent is lost.
-
-**The tension, kept — two ways to crash:** *overshoot* (hit the cap early → everything dies until reset; keep margin as the reset nears) and *undershoot* (arrive with budget unspent). Being "conservative" with expiring budget is the failure mode, not prudence. Neither pole is safe — steer between them, and as the reset nears, spend the reserved headroom down toward full on the best work available.
-
----
-
 # M-4446 design before build — a design session and recorded plan precede any non-trivial build
 
 For anything non-trivial, design before you build: a design session (thinking + research — alternatives, prior art, gaps), the plan recorded in the graph with `task design <title...>`, tasks filed against it, then build autonomously.
@@ -306,6 +298,14 @@ For anything non-trivial, design before you build: a design session (thinking + 
 The recorded plan is an **FYI the owner redirects by exception, not an approval gate** — and owner-requested work is already approved. Don't stall waiting for a sign-off that isn't required; record the plan and move.
 
 A design carries its own date in the `proposed` mark, so it needs no dated filename and no file. Accepting one later is `task set D-9 .decided.at=now .decided.by=jeff`.
+
+---
+
+# M-4406 land the plane — glide expiring budget to ~full at the reset
+
+When a budget is **pre-paid and use-it-or-lose-it**, glide cumulative usage to land ~full right at the reset; whatever isn't spent is lost.
+
+**The tension, kept — two ways to crash:** *overshoot* (hit the cap early → everything dies until reset; keep margin as the reset nears) and *undershoot* (arrive with budget unspent). Being "conservative" with expiring budget is the failure mode, not prudence. Neither pole is safe — steer between them, and as the reset nears, spend the reserved headroom down toward full on the best work available.
 
 ---
 
