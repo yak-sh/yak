@@ -37,6 +37,14 @@ import {
 } from './query.ts'
 import { anchor, emptyIndex, indexAll, reindex, reindexEdge } from './index.ts'
 import { type MemoryResolver, memoryResolver } from './resolver.ts'
+import {
+  clearIdb,
+  type IdbResolver,
+  idbResolver,
+  openIdb,
+  putBags,
+  seedIdb,
+} from './schema/idb.ts'
 import { normalizeChanges } from './props.ts'
 import * as idb from './idb.ts'
 import { topology } from './leader.ts'
@@ -108,15 +116,14 @@ let syncIx = () => {
 // The reactive query layer — the store-agnostic door for "which entities match
 // this query". The mechanics live behind the Resolver seam (resolver.ts): a
 // query is a value (Pred[], the query.ts grammar boards and graph_query already
-// speak), resolved to a NARROW signal of matching eids. The in-memory backing
-// this browser drives reads the cache through the store below — its initial fill
+// speak), resolved to a NARROW signal of matching eids. `mem` is the in-memory
+// realization: it reads the cache through the store below — its initial fill
 // anchors on the derived index (index.ts — O(result), never O(graph)), and
 // `refresh` re-tests ONLY the eids each patch touched, so an unrelated patch
-// never wakes a subscriber. This is the seam T-17046 keeps: the backing can move
-// from this in-memory realization to an IDB indexed cursor with no call-site
-// churn. Never `Object.values(cache.value).filter` in a render: that scans the
-// whole graph AND subscribes to every patch (T-17036, the 16ms frame budget).
-let resolver: MemoryResolver = memoryResolver({
+// never wakes a subscriber. Never `Object.values(cache.value).filter` in a
+// render: that scans the whole graph AND subscribes to every patch (T-17036,
+// the 16ms frame budget).
+let mem: MemoryResolver = memoryResolver({
   read: (eid) => cache.peek()[eid],
   keys: () => Object.keys(cache.peek()),
   // Heal the derived index before narrowing — the same guard querySet held.
@@ -126,13 +133,101 @@ let resolver: MemoryResolver = memoryResolver({
   },
 })
 
+// The durable query surface (T-17126, slice e of D-17120). Where IndexedDB is
+// present (the browser), `store` is the store-backed idbResolver (schema/idb.ts)
+// and queryEids reads THROUGH it — the generated per-component indexes answer a
+// query, not the in-memory mirror. The mirror (cache) STAYS: ~90 sites still
+// scan it directly (T-17064, held off so this diff owns live.ts), and it is this
+// resolver's SYNCHRONOUS prime (mem.resolve — anchored, O(result)) so a board
+// paints on the frame it mounts rather than empty-then-filled. Absent IDB (the
+// TUI, private mode, a blocked upgrade) `store` stays null and `mem` drives
+// queries exactly as before — the seam's whole point, no call-site churn.
+let store: IdbResolver | null = null
+let storeDb: IDBDatabase | null = null
+// During a wholesale (re)seed the per-row mirror below is skipped — resetQueries
+// writes the whole graph in one bulk pass instead of one put per change.
+let seeding = false
+
+// All durable-store work runs on one chain, in order: a mirror's write settles
+// before its refresh reads, and a reset's clear+seed can't interleave with a
+// live frame's put. The signal fills on settle — the async bridge the seam
+// documents — so the frame is never blocked on IDB.
+let storeWork = Promise.resolve()
+let queueStore = (fn: () => Promise<void>): Promise<void> =>
+  storeWork = storeWork.then(fn).catch((e) => {
+    console.warn('durable query store —', e)
+  })
+
+// Mirror the touched eids into the durable store: an eid absent from the cache
+// (deleted/evicted) carries an empty bag, so putBags deletes it from every
+// store. Then re-test just those eids against every held query.
+let mirror = (eids: string[]) =>
+  putBags(
+    storeDb!,
+    eids.map((eid) => [eid, cache.peek()[eid] ?? {}] as const),
+  )
+
+// A patch's touched eids: write them through, then re-test. `mem` still drives
+// the signals where there is no durable store (the TUI).
+let refreshQueries = (eids: Set<string>) => {
+  if (!store) return void mem.refresh(eids)
+  if (seeding || !eids.size) return
+  let ids = [...eids]
+  queueStore(async () => {
+    await mirror(ids)
+    await store!.refresh(new Set(ids))
+  })
+}
+
+// A wholesale cache replacement (seed / snapshot reset): clear the store, seed
+// the fresh graph, then re-scan every held query from it.
+let resetQueries = () => {
+  if (!store) return void mem.reset()
+  queueStore(async () => {
+    await clearIdb(storeDb!)
+    await seedIdb(storeDb!, cache.peek())
+    await store!.reset()
+  })
+}
+
 // Read a query's result signal (get-or-create; the render half of the hook).
 export let queryEids = (preds: Pred[]): Signal<string[]> =>
-  resolver.subscribe(preds)
+  (store ?? mem).subscribe(preds)
 // Ref-count a query for a component's lifetime (the hook's effect half); the
 // last release drops the set so distinct queries don't accumulate.
-export let holdQuery = (preds: Pred[]): Signal<string[]> => resolver.hold(preds)
-export let dropQuery = (preds: Pred[]) => resolver.drop(preds)
+export let holdQuery = (preds: Pred[]): Signal<string[]> =>
+  (store ?? mem).hold(preds)
+export let dropQuery = (preds: Pred[]) => (store ?? mem).drop(preds)
+
+// Open and populate the durable query store, then make it the query surface.
+// Awaited inside boot BEFORE the first render, so queryEids never sees a
+// half-open store and the first paint has the store's answers (primed from the
+// cache). A distinct db name from idb.ts's 'tasks' — that store is the boot
+// hydration shadow, this one the query index; two shapes, two databases. Any
+// failure leaves `store` null and `mem` in charge — the graceful degrade idb.ts
+// already models. Only a socket-owning tab (solo/leader) attaches; a follower
+// keeps `mem` so two tabs never contend to write one origin-shared store (the
+// multi-writer store is future work, like idb.ts's leader-only write path).
+let attachStore = async () => {
+  if (store || !config.store) return
+  if (!(globalThis as { indexedDB?: IDBFactory }).indexedDB) return
+  try {
+    let db = await openIdb('tasks-graph')
+    storeDb = db
+    // Seed the whole graph in the BACKGROUND — boot never blocks on it, and
+    // mem.resolve (the prime, reading the full in-memory cache) answers every
+    // query instantly meanwhile. The store's own reads wait on this gate, so a
+    // half-seeded store never overwrites a primed answer with a short one. On
+    // storeWork so a live frame's mirror lands after the seed, not inside it.
+    let gate = queueStore(async () => {
+      await clearIdb(db)
+      await seedIdb(db, cache.peek())
+    })
+    store = idbResolver(db, undefined, (preds) => mem.resolve(preds), gate)
+  } catch (e) {
+    console.warn('durable query store unavailable —', e)
+  }
+}
 
 let indexId = (eid: string, r?: Comps) => {
   if (!r) return
@@ -253,7 +348,7 @@ let resetSignals = () =>
     for (let [eid, found] of childSignals) {
       found.value = ix.byChild.get(eid) ?? noRelations
     }
-    resolver.reset()
+    resetQueries()
     refreshBoards(touched)
     refreshPins(touched)
     refreshComments(touched)
@@ -302,6 +397,14 @@ export let config: {
   // Stage-2 migration probes compare shadow sets to scans. Deployed clients
   // maintain the shadow without carrying agreement telemetry.
   agreement: boolean
+  // Make the durable IDB store the query surface (T-17126). OFF by default:
+  // real-browser measurement (~58s whole-graph seed, 75–450ms cold resolve at
+  // 15.5k entities) shows the async store can't yet be the LIVE surface while
+  // the full in-memory cache remains the escape hatch — the fast in-memory
+  // resolver stays the surface until the cache shrinks (T-17064) and a
+  // persistent delta-synced store lands. The flip mechanism is wired and
+  // parity-proven; a probe (?store=idb) turns it on to exercise and measure it.
+  store: boolean
   reload: () => void
   swap?: (gen: number) => void
   css?: (gen: number) => void
@@ -312,10 +415,13 @@ export let config: {
   secure: loc?.protocol == 'https:',
   shared: true,
   agreement: false,
+  store: false,
   reload: () => loc?.reload(),
 }
 export let agreementProbe = (search: string) =>
   new URLSearchParams(search).get('probe') == 'subscriptions'
+export let storeProbe = (search: string) =>
+  new URLSearchParams(search).get('store') == 'idb'
 export let base = () => `http${config.secure ? 's' : ''}://${config.host}`
 
 // The column sort: priority first (lower sorts higher), num as tiebreak.
@@ -546,7 +652,7 @@ export let applyLocal = (changes: Change[]) => {
     refreshFolds(changedRows)
     refreshBacklinks(changedRows)
     refreshJobs(changedRows)
-    resolver.refresh(changedRows)
+    refreshQueries(changedRows)
     refreshBoardLinks(changedRows)
     refreshFacets(changedRows)
     for (let [eid, z] of zs) {
@@ -837,7 +943,7 @@ let evict = (eids: string[]) => {
       refreshFolds(gone)
       refreshBacklinks(gone)
       refreshJobs(gone)
-      resolver.refresh(gone)
+      refreshQueries(gone)
       refreshBoardLinks(gone)
       refreshFacets(gone)
     })
@@ -1032,8 +1138,12 @@ let seedFrom = (snap: Snapshot, write = true) => {
   pinZs.clear()
   cache.value = {}
   deps.value = snap.deps
+  // A wholesale replacement: skip the per-change durable mirror below and let
+  // resetSignals → resetQueries seed the store in one bulk pass instead.
+  seeding = true
   applyLocal(snap.changes)
   resetSignals()
+  seeding = false
   held = {
     cursor: snap.cursor,
     epoch: snap.epoch,
@@ -1157,8 +1267,14 @@ let canShare = () => {
 // follower cannot miss a leader frame during hydration. The gate's fallback
 // is exactly slice 2.1: boot locally and open this tab's socket.
 export let boot = async () => {
+  // Opt into the durable IDB query surface from the URL (?store=idb) — a probe
+  // switch, OFF by default (see config.store).
+  let search = (globalThis as { location?: { search?: string } }).location
+    ?.search ?? ''
+  config.store ||= storeProbe(search)
   if (!canShare()) {
     await once(true)
+    await attachStore()
     connect()
     return
   }
@@ -1177,11 +1293,13 @@ export let boot = async () => {
     {
       lead: async () => {
         await once(true)
+        await attachStore()
         connect()
       },
       follow: () => once(false),
       solo: async () => {
         await once(true)
+        await attachStore()
         connect()
       },
       receive: (frame) => {
@@ -1212,6 +1330,39 @@ export let boot = async () => {
   socket: ws?.readyState ?? null,
   cursor: held.cursor,
 })
+// Probe hooks (T-17126) — for eyes (a CDP probe, the console) to verify the
+// durable flip took and measure the real-browser subscribe/resolve latency the
+// fake-indexeddb shim can only approximate. `store()` tells whether the IDB
+// resolver is the surface; `resolve` times a one-shot indexed resolve; `hold`/
+// `held` prove a HELD subscription's signal updates on a patch (the live
+// reactivity path useQuery rides). Each mirrors exactly what the hook does —
+// parse, ref-resolve, then the active resolver. Not load-bearing.
+let probeHeld = new Map<string, Signal<string[]>>()
+let probe = globalThis as {
+  __probe?: {
+    store: () => boolean
+    resolve: (
+      line: string,
+    ) => Promise<{ store: boolean; ms: number; n: number }>
+    hold: (line: string) => number
+    held: (line: string) => number
+  }
+}
+probe.__probe = {
+  store: () => !!store,
+  resolve: async (line) => {
+    let preds = resolveRefs(parseQuery(line), findEid)
+    let t0 = performance.now()
+    let ids = store ? await store.ready(preds) : mem.resolve(preds)
+    return { store: !!store, ms: performance.now() - t0, n: ids.length }
+  },
+  hold: (line) => {
+    let preds = resolveRefs(parseQuery(line), findEid)
+    probeHeld.set(line, holdQuery(preds))
+    return probeHeld.get(line)!.value.length
+  },
+  held: (line) => probeHeld.get(line)?.value.length ?? -1,
+}
 
 // The whole entity, assembled for a renderer: spine, components present,
 // outgoing edge sentences, contained children (recursive — graphs stay

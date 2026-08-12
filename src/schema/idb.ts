@@ -147,31 +147,80 @@ let strip = (row: Record<string, unknown>): Record<string, unknown> => {
 // ---- writes (cache → durable store) ----
 
 // Mirror one entity's merged bag into the per-component stores: put where a
-// component is present, delete where it is absent. The write path a future sync
-// (slice e) drives; the tests seed through it.
-export let putBag = async (
+// component is present, delete where it is absent. The write path slice (e)
+// drives from applyLocal's touched eids; the tests seed through putBags.
+export let putBag = (
   db: IDBDatabase,
   eid: string,
   bag: Row,
   names: string[] = storeNames(),
+): Promise<void> => putBags(db, [[eid, bag]], names)
+
+// The batched write: many bags in ONE transaction, so a live frame touching a
+// handful of eids pays one commit, not one per eid. Absent components are
+// deleted from their store (a removed component must leave the durable store,
+// not linger), which is why every store name rides the transaction even when a
+// bag names none of them.
+export let putBags = async (
+  db: IDBDatabase,
+  entries: (readonly [string, Row])[],
+  names: string[] = storeNames(),
 ): Promise<void> => {
+  if (!entries.length) return
   let tx = db.transaction(names, 'readwrite')
-  for (let name of names) {
-    let comp = bag[name]
-    let store = tx.objectStore(name)
-    if (comp) store.put({ eid, ...comp })
-    else store.delete(eid)
+  let stores = new Map(names.map((n) => [n, tx.objectStore(n)]))
+  for (let [eid, bag] of entries) {
+    for (let name of names) {
+      let comp = bag[name]
+      let store = stores.get(name)!
+      if (comp) store.put({ eid, ...comp })
+      else store.delete(eid)
+    }
   }
   await done(tx)
 }
 
+// Empty every store — the wholesale-reset first half, before a fresh seed
+// replaces the graph (a snapshot reset, an epoch change).
+export let clearIdb = async (
+  db: IDBDatabase,
+  names: string[] = storeNames(),
+): Promise<void> => {
+  let tx = db.transaction(names, 'readwrite')
+  for (let name of names) tx.objectStore(name).clear()
+  await done(tx)
+}
+
+// Seed the whole graph, chunked so one transaction never carries the entire
+// cache. PUT-ONLY, and only over the stores a chunk actually writes: seed always
+// runs on a cleared or fresh store, so the delete-absent putBags does for a live
+// patch is pure cost here — the killer at graph scale, one delete per absent
+// component per entity (~40× the real work). A re-seed is paired with clearIdb
+// (resetQueries) so nothing stale survives it.
 export let seedIdb = async (
   db: IDBDatabase,
   graph: Record<string, Row>,
   names: string[] = storeNames(),
 ): Promise<void> => {
-  for (let [eid, bag] of Object.entries(graph)) {
-    await putBag(db, eid, bag, names)
+  let allow = new Set(names)
+  let entries = Object.entries(graph)
+  for (let i = 0; i < entries.length; i += 1000) {
+    let chunk = entries.slice(i, i + 1000)
+    let touched = new Set<string>()
+    for (let [, bag] of chunk) {
+      for (let name of Object.keys(bag)) if (allow.has(name)) touched.add(name)
+    }
+    if (!touched.size) continue
+    let only = [...touched]
+    let tx = db.transaction(only, 'readwrite')
+    let stores = new Map(only.map((n) => [n, tx.objectStore(n)]))
+    for (let [eid, bag] of chunk) {
+      for (let name of only) {
+        let comp = bag[name]
+        if (comp) stores.get(name)!.put({ eid, ...comp })
+      }
+    }
+    await done(tx)
   }
 }
 
@@ -237,9 +286,30 @@ export type IdbResolver = Resolver & {
   drop: (preds: Pred[]) => void
 }
 
+// Same-set, order-insensitive: whether two eid lists hold the same members, so
+// the async scan skips re-publishing a signal a synchronous prime already
+// filled with the identical answer (a redundant reference change would wake
+// every subscriber for nothing).
+let sameSet = (a: string[], b: string[]): boolean => {
+  if (a.length != b.length) return false
+  let s = new Set(a)
+  return b.every((x) => s.has(x))
+}
+
 export let idbResolver = (
   db: IDBDatabase,
   stores: IdbStore[] = idbStores(),
+  // A synchronous first value for a freshly-created query signal, so a live UI
+  // paints its rows on the mounting frame rather than empty-then-filled. live.ts
+  // supplies the in-memory resolver's anchored scan (O(result), never a
+  // full-cache scan); the async IDB scan then confirms the identical set on
+  // settle. Absent (the tests), a new signal starts empty.
+  prime?: (preds: Pred[]) => string[],
+  // A gate the store's OWN reads wait on — the background seed. Until it
+  // settles the store is only partly filled, so a scan would overwrite a correct
+  // primed answer with a short one; awaiting it here means every read reflects
+  // the whole graph. Absent (the tests, a pre-seeded db), reads run immediately.
+  gate?: Promise<unknown>,
 ): IdbResolver => {
   let names = stores.map((s) => s.name)
   let sets = new Map<
@@ -352,6 +422,7 @@ export let idbResolver = (
   // pool and every path target, then screen with the SAME listed + matchQuery
   // the in-memory resolver uses — which is what makes the two answers identical.
   let scan = async (preds: Pred[]): Promise<string[]> => {
+    if (gate) await gate
     let only = touched(preds) ?? names
     let [cand, qs] = await Promise.all([candidates(preds), quarantinedKeys()])
     let pool = cand ? [...cand] : await allEntityKeys()
@@ -369,8 +440,13 @@ export let idbResolver = (
     let key = queryKey(preds)
     let found = sets.get(key)
     if (!found) {
-      sets.set(key, found = { preds, ids: signal<string[]>([]), n: 0 })
-      scan(preds).then((r) => found!.ids.value = r)
+      sets.set(
+        key,
+        found = { preds, ids: signal<string[]>(prime?.(preds) ?? []), n: 0 },
+      )
+      scan(preds).then((r) => {
+        if (!sameSet(found!.ids.peek(), r)) found!.ids.value = r
+      })
     }
     return found
   }
@@ -405,6 +481,7 @@ export let idbResolver = (
     preds: Pred[],
     eids: string[],
   ): Promise<(eid: string) => boolean> => {
+    if (gate) await gate
     let only = touched(preds) ?? names
     let bags = new Map<string, Row>()
     let qs = await quarantinedKeys()

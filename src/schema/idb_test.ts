@@ -10,10 +10,12 @@ import { parseQuery, type Pred } from '../query.ts'
 import { memoryResolver, type Store } from '../resolver.ts'
 import { indexes } from '../types.ts'
 import {
+  clearIdb,
   idbResolver,
   idbStore,
   idbStores,
   openIdb,
+  putBags,
   schemaShape,
   schemaVersion,
   seedIdb,
@@ -127,6 +129,52 @@ Deno.test('IDB and in-memory resolvers answer one query set identically', async 
       ),
       ['c1', 'c3'],
     )
+  } finally {
+    db.close()
+  }
+})
+
+Deno.test('putBags writes a batch, deleting where a component is absent (slice e mirror)', async () => {
+  let g = graph()
+  let db = await fresh(g)
+  let idb = idbResolver(db)
+  try {
+    assertEquals(sorted(await idb.ready(q('.assignee=p1'))), ['t1', 't3'])
+    // The applyLocal mirror: t3 drops its task component, t1 gains p2 — one
+    // batched write, the same shape live.ts drives from a patch's touched eids.
+    await putBags(db, [
+      ['t3', { entity: { num: 6 }, doc: { title: 'baz' } }],
+      ['t1', {
+        entity: { num: 4 },
+        task: { status: 'open', priority: 1, project: 'proj', assignee: 'p2' },
+        doc: { title: 'foo task' },
+      }],
+    ])
+    assertEquals(sorted(await idb.ready(q('.assignee=p1'))), [])
+    assertEquals(sorted(await idb.ready(q('.assignee=p2'))), ['t1', 't2'])
+    // clearIdb empties every store — the wholesale-reset first half.
+    await clearIdb(db)
+    assertEquals(await idb.ready(q('.status=open')), [])
+  } finally {
+    db.close()
+  }
+})
+
+Deno.test('prime seeds a new query signal synchronously, before the async scan', async () => {
+  let g = graph()
+  let db = await fresh(g)
+  // The prime live.ts supplies: the in-memory resolver's anchored answer, so a
+  // freshly-mounted board paints its rows on the same frame.
+  let mem = memoryResolver(storeOver(g))
+  let idb = idbResolver(db, idbStores(), (preds) => mem.resolve(preds))
+  try {
+    // No await: the signal already carries the primed set the instant a board
+    // mounts, rather than empty-then-filled.
+    let ids = idb.subscribe(q('.assignee=p1'))
+    assertEquals(sorted(ids.value), ['t1', 't3'])
+    // The durable scan then confirms the identical membership on settle.
+    assertEquals(sorted(await idb.ready(q('.assignee=p1'))), ['t1', 't3'])
+    assertEquals(sorted(ids.value), ['t1', 't3'])
   } finally {
     db.close()
   }
