@@ -165,6 +165,7 @@ html {
 :where(pre code) {
   display: block;
   padding: var(--half-gap);
+  overflow: auto;
 }
 :where(table) {
   border-collapse: collapse;
