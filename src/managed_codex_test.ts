@@ -5,7 +5,11 @@ import { apply, journalOf, open } from './db.ts'
 import { append, readEntries, settleGeneration, takeEntry } from './entries.ts'
 import { managedCodex } from './managed_codex.ts'
 import { type Observation } from './observations.ts'
-import { type ResponseEvent, type ResponseResult } from './responses.ts'
+import {
+  type ResponseEvent,
+  type ResponseResult,
+  responses,
+} from './responses.ts'
 import { writeSession } from './session_store.ts'
 import { type ToolHost } from './harness_tools.ts'
 import { type Change, uuid } from './types.ts'
@@ -710,6 +714,46 @@ Deno.test('a failed generation consumes its wake and accepts the next', async ()
   assertEquals(
     db.prepare('select 1 from error where eid = ?').get(sid),
     undefined,
+  )
+  db.close()
+})
+
+Deno.test('a failed generation persists the provider reason, not the bare status', async () => {
+  // End to end through the real Responses transport: a 400 whose complaint
+  // lives only in the body `message` must reach the session error, or a
+  // graph-native failure reads as the useless `responses: HTTP 400` (T-16887).
+  let db = open(':memory:')
+  let sid = session(db)
+  let transport = responses({
+    credentials: { get: () => Promise.resolve({ token: 'secret-token' }) },
+    fetch: () =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            error: {
+              message: 'No tool output found for function call call_7.',
+              type: 'invalid_request_error',
+              code: null,
+            },
+          }),
+          { status: 400 },
+        ),
+      ),
+  })
+  let service = managedCodex({
+    db,
+    cast: () => {},
+    transport,
+    tools: () => Promise.resolve(tools([])),
+    prepare: () => Promise.resolve(),
+  })
+  await service.start(sid, noCodeJob())
+  let error = db.prepare('select message from error where eid = ?').get(sid) as
+    | { message: string }
+    | undefined
+  assertEquals(
+    error?.message,
+    'responses: HTTP 400 — No tool output found for function call call_7.',
   )
   db.close()
 })

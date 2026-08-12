@@ -167,22 +167,30 @@ let safe = (value: unknown, secrets: string[]) => {
   return clean
 }
 
-let code = (body: string, secrets: string[]) => {
+// An HTTP-error body carries both a short machine `code` and the human
+// `message` naming what it rejected ("No tool output for function call …").
+// A failed session stamps only the fault's .message, so the reason is the
+// half that makes the failure diagnosable — carry both through, redacted.
+let explain = (body: string, secrets: string[]) => {
   let parsed: unknown
   try {
     parsed = scrub(JSON.parse(body), secrets)
   } catch {
-    return undefined
+    return {}
   }
-  if (!record(parsed)) return undefined
-  let value = record(parsed.error)
-    ? parsed.error.code
+  if (!record(parsed)) return {}
+  let error = record(parsed.error)
+    ? parsed.error
     : record(parsed.detail)
-    ? parsed.detail.code
-    : parsed.code
-  return typeof value == 'string' && /^[\w.:-]{1,64}$/.test(value)
-    ? value
+    ? parsed.detail
+    : parsed
+  let code = typeof error.code == 'string' && /^[\w.:-]{1,64}$/.test(error.code)
+    ? error.code
     : undefined
+  let reason = typeof error.message == 'string' && error.message.trim()
+    ? error.message.trim()
+    : undefined
+  return { code, reason }
 }
 
 let eventCode = (frame: ResponseEvent | undefined) => {
@@ -439,11 +447,11 @@ export let responses = (options: ResponseOptions) => {
       if (!response.ok) {
         let body = await response.text()
         let status = response.status
-        throw fault(`responses: HTTP ${status}`, {
-          status,
-          code: code(body, secrets),
-          limits: limits(response.headers),
-        })
+        let { code, reason } = explain(body, secrets)
+        throw fault(
+          `responses: HTTP ${status}${reason ? ` — ${reason}` : ''}`,
+          { status, code, limits: limits(response.headers) },
+        )
       }
       return await terminal(response, secrets, run.event)
     }

@@ -436,7 +436,8 @@ Deno.test('responses names 429 limits without retrying or echoing errors', async
     () => client.run({ model: 'm', input: [] }),
   ) as ResponseFault
   assertEquals(calls, 1)
-  assertEquals(error.message, 'responses: HTTP 429')
+  // The body message rides into the fault message, redacted along the way.
+  assertEquals(error.message, 'responses: HTTP 429 — [redacted]')
   assertEquals(error.code, 'rate_limit')
   assertEquals(error.limits, {
     'retry-after': '2',
@@ -444,6 +445,40 @@ Deno.test('responses names 429 limits without retrying or echoing errors', async
   })
   assertEquals(JSON.stringify(error).includes('secret-old'), false)
   assertEquals(JSON.stringify(error).includes('private-trace'), false)
+})
+
+Deno.test('responses carries a 400 body reason into the fault message', async () => {
+  // The poisoned-session 400: the machine `code` is null and the whole
+  // complaint lives in `message`. The stamp keeps only .message, so the
+  // reason must ride there or the failure is undiagnosable (T-16887).
+  let client = responses({
+    credentials: auth(),
+    fetch: () =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            error: {
+              message:
+                'No tool output found for function call call_9 (acct-1).',
+              type: 'invalid_request_error',
+              code: null,
+            },
+          }),
+          { status: 400 },
+        ),
+      ),
+  })
+  let error = await assertRejects(
+    () => client.run({ model: 'm', input: [] }),
+  ) as ResponseFault
+  assertEquals(
+    error.message,
+    'responses: HTTP 400 — No tool output found for function call ' +
+      'call_9 ([redacted]).',
+  )
+  assertEquals(error.status, 400)
+  assertEquals(error.code, undefined)
+  assertEquals(JSON.stringify(error).includes('acct-1'), false)
 })
 
 Deno.test('responses retries bounded server failures before reading events', async () => {
