@@ -76,6 +76,14 @@ overrides (same views, painted as terminal lines). That's also the seam a
 future renderer plugin would use. `registry.ts` imports no views, so
 anything may import matchers from it without cycles.
 
+A **Renderer's `Render` is a Preact COMPONENT, never a plain function**:
+several hold hooks (Session, Show, Board, Entry, Debug, Relate, Layout), so
+`Render` is typed `FunctionComponent` and only works MOUNTED through Preact
+— `<r.Render e={e}/>` or `h(r.Render, props)`, where the hook dispatcher is
+live. A bare `r.Render({ e })` call bypasses it and only appears to work for
+the hook-free ones. Tests mount through the same door via `components/mount.ts`
+(`mount(h(resolve(e, view).Render, props))` → the container to assert on).
+
 **To add a view**: add its component file under `components/views/`, then add
 an entry to `Entity.tsx`'s `define()` list. To make it a card tab, add its name
 to the tabs array there, map it to an icon in `Card.tsx`, and add the glyph in
