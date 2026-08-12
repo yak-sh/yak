@@ -5,6 +5,7 @@ import {
   applyLocal,
   assertAgree,
   backlinks,
+  boardAll,
   boardPost,
   boardsOver,
   boardSub,
@@ -213,6 +214,42 @@ Deno.test('agreement diagnostics are inert until explicitly enabled', () => {
     (globalThis as { __subscriptions?: unknown }).__subscriptions,
     undefined,
   )
+})
+
+// The render half of T-16929: once a lazy board's entries are in the cache
+// (its entrySub streams them there), boardAll — the tasks=false face — matches
+// and lists them. `.entry.session=X` is satisfiable only by entries, so a hit
+// is proof the partition rendered; the eager path (tasks=true) still excludes
+// them, since an entry has no `task` component.
+Deno.test('a board naming the lazy partition lists its entries', () => {
+  cache.value = {
+    lazyboard: {
+      entity: { eid: 'lazyboard', num: 1 },
+      board: { eid: 'lazyboard', query: '.entry.session=sess' },
+    },
+    sess: {
+      entity: { eid: 'sess', num: 2 },
+      session: { eid: 'sess', id: 'abc' },
+    },
+    e1: {
+      entity: { eid: 'e1', num: 3 },
+      entry: { eid: 'e1', session: 'sess', seq: 1 },
+    },
+    e2: {
+      entity: { eid: 'e2', num: 4 },
+      entry: { eid: 'e2', session: 'sess', seq: 2 },
+    },
+    elsewhere: {
+      entity: { eid: 'elsewhere', num: 5 },
+      entry: { eid: 'elsewhere', session: 'other', seq: 1 },
+    },
+  }
+  assertEquals(boardAll(ent('lazyboard')).map((e) => e.eid).sort(), [
+    'e1',
+    'e2',
+  ])
+  // The kanban (tasks=true) face carries no non-task entities.
+  assertEquals(boardTasks(ent('lazyboard')).map((e) => e.eid), [])
 })
 
 Deno.test('agreement diagnostics opt in through the named browser probe', () => {

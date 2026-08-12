@@ -24,7 +24,15 @@ import {
   stamped,
 } from './types.ts'
 import { inboxItem, isUnread, readerAt, type Row } from './client.ts'
-import { listed, matchQuery, parseQuery, resolveRefs, warm } from './query.ts'
+import {
+  listed,
+  matchQuery,
+  namesLazy,
+  parseQuery,
+  resolveRefs,
+  scopedSessions,
+  warm,
+} from './query.ts'
 import { normalizeChanges } from './props.ts'
 import * as idb from './idb.ts'
 import { topology } from './leader.ts'
@@ -873,6 +881,15 @@ export let assertAgree = (
 
 let boardUses = new Map<string, { n: number; q: string }>()
 let entryUses = new Map<string, number>()
+// A board whose query NAMES the lazy partition (`.entry.session=S-3`) can't be
+// answered from the root cache — entries are omitted from the snapshot. So the
+// board holds an entry subscription per scoped session (the same door a Session
+// view opens), which streams those entries into the cache for boardHits to
+// match. Keyed by board sub → session eid → its unsubscribe. A cross-session
+// lazy board (no `.entry.session=`, e.g. `.generation.provider=codex`) has no
+// single session to subscribe and stays unrenderable in the cache; the server
+// query door answers it, board rendering waits on server-paged membership.
+let boardEntrySubs = new Map<string, Map<string, () => void>>()
 
 let ownBoard = (sub: string, q: string) =>
   owner ? owner.use(sub, q) : shadow(sub, q)
@@ -888,12 +905,14 @@ export let boardSub = (e: Ent) => {
   else {
     boardUses.set(sub, { n: 1, q })
     ownBoard(sub, q)
+    syncEntrySubs(sub, q)
   }
   return () => {
     let held = boardUses.get(sub)
     if (!held || --held.n > 0) return
     boardUses.delete(sub)
     dropBoard(sub)
+    syncEntrySubs(sub, '')
   }
 }
 
@@ -913,6 +932,28 @@ export let entrySub = (session: string) => {
   }
 }
 
+// Bring a lazy board's scoped-session entry subscriptions into line with its
+// query `q` (`''` closes them all). Reuses the ref-counted entrySub, so a board
+// and an open Session view of the same session share one subscription. Sessions
+// are resolved to eids by resolveRefs, matching the Session view's own key.
+let syncEntrySubs = (sub: string, q: string) => {
+  let want = new Set<string>()
+  if (q) {
+    let preds = resolveRefs(parseQuery(q), findEid)
+    if (namesLazy(preds)) { for (let s of scopedSessions(preds)) want.add(s) }
+  }
+  let held = boardEntrySubs.get(sub) ?? new Map<string, () => void>()
+  for (let [s, off] of held) {
+    if (!want.has(s)) {
+      off()
+      held.delete(s)
+    }
+  }
+  for (let s of want) if (!held.has(s)) held.set(s, entrySub(s))
+  if (held.size) boardEntrySubs.set(sub, held)
+  else boardEntrySubs.delete(sub)
+}
+
 // Query edits replace the installed name without tearing down its ownership.
 export let boardQuery = (e: Ent) => {
   let sub = `board:${e.eid}`
@@ -921,6 +962,7 @@ export let boardQuery = (e: Ent) => {
   if (!use || use.q == q) return
   use.q = q
   ownBoard(sub, q)
+  syncEntrySubs(sub, q)
 }
 
 // Fetch the whole graph, fill the signals, seed IDB — the first-visit path
