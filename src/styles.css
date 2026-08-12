@@ -2913,8 +2913,15 @@ a[data-ref]:hover {
   align-content: start;
 }
 .Session_References {
+  position: sticky;
+  top: 3rem;
+  z-index: 1;
+  align-self: start;
+  max-height: calc(100dvh - 7rem);
+  overflow-y: auto;
   padding: var(--gap);
-  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
   color: var(--muted);
   font-size: 12px;
 }
@@ -2947,12 +2954,21 @@ a[data-ref]:hover {
   max-width: 100%;
 }
 @container (min-width: 50rem) {
-  .Session_Main-referenced {
+  .Session_Main:has(> .Session_References[open]) {
     grid-template-columns: minmax(0, 1fr) minmax(14rem, 22rem);
+    grid-template-areas: 'body references';
   }
-  .Session_References {
-    border-top: 0;
+  .Session_Main:has(> .Session_References[open]) > .Session_Body {
+    grid-area: body;
+  }
+  .Session_References[open] {
+    grid-area: references;
+    border-bottom: 0;
     border-left: 1px solid var(--border);
+  }
+  .Session_References:not([open]) {
+    justify-self: end;
+    border-left: 0;
   }
 }
 /* Said but not yet heard — waiting under the log for the agent's next
