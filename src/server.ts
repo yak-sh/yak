@@ -96,7 +96,15 @@ import {
 import { evalFast, evalGraph, evalQuery, rowed } from './graph_query.ts'
 import { liveFrame } from './wire.ts'
 import { nativeSoon, nativeSweep, noticeAccepted } from './tmux.ts'
-import { roleRemoved, rolesSoon, rolesSweep } from './roles.ts'
+import {
+  roleAttention,
+  roleBoot,
+  roleConfig,
+  roleDoc,
+  rolePersona,
+  roleRemoved,
+  roleSession,
+} from './roles.ts'
 import { prune as pruneTree, reap as reapProbes, sweep } from './probes.ts'
 
 // The last line of defence. A rejection nobody handled ends a Deno process,
@@ -463,7 +471,6 @@ let cast = (changes: Change[], except?: WebSocket) => {
   sendLive(changes, except)
   maintain(changes)
   nativeSoon(cast)
-  rolesSoon(cast)
 }
 
 // The effect half of a write, run AFTER the casts: a slow or failing
@@ -1155,14 +1162,71 @@ on('stop_request', {
     'operation, and settles the stop request without a process signal',
 })
 on('role', {
+  created: roleBoot(cast),
+  changed: {
+    state: roleConfig(cast),
+    surface: roleConfig(cast),
+    scope: roleConfig(cast),
+    retry_at: roleConfig(cast),
+  },
   removed: roleRemoved(cast),
-  doc: 'a removed persistent role closes its deterministic native tmux door; ' +
-    'desired state reconciliation owns starts, stops, and configuration drift',
+  sweep: { pending: '1' },
+  doc: 'a desired-state change wakes its role; a removed role closes its ' +
+    'deterministic native tmux door',
+})
+on('doc', {
+  created: roleDoc(cast),
+  changed: {
+    title: roleDoc(cast),
+    body: roleDoc(cast),
+  },
+  doc: 'role and project instructions changing re-drive only their roles',
+})
+on('repo', {
+  created: roleConfig(cast),
+  changed: {
+    path: roleConfig(cast),
+    base_branch: roleConfig(cast),
+  },
+  doc: 'a role scope repo change re-drives that scope’s roles',
+})
+on('project', {
+  created: roleConfig(cast),
+  changed: { color: roleConfig(cast) },
+  doc: 'a role scope palette change re-drives that scope’s native roles',
+})
+on('spawn', {
+  created: roleConfig(cast),
+  changed: {
+    provider: roleConfig(cast),
+    model: roleConfig(cast),
+    effort: roleConfig(cast),
+    persona: rolePersona(cast),
+  },
+  doc: 'role launch configuration changes wake only the role that owns it',
+})
+on('session', {
+  created: roleSession(cast),
+  changed: {
+    status: roleSession(cast),
+    origin: roleSession(cast),
+    finished_at: roleSession(cast),
+    notice_at: roleSession(cast),
+  },
+  doc: 'a persistent role run changing re-drives only its owning role',
 })
 on('comment', {
   created: commented(cast),
   doc: 'a comment at a settled session resumes that agent with its ' +
     'unheard backlog',
+})
+on('comment', {
+  created: (_eid, comp) => roleAttention(cast)(String(comp.target)),
+  doc: 'a comment wakes only the role that owns or scopes its target',
+})
+on('knock', {
+  created: (_eid, comp) => roleAttention(cast)(String(comp.target)),
+  doc: 'a knock wakes only the role that owns or scopes its target',
 })
 on('comment', {
   created: (eid, comp) => managed.comment(String(comp.target), eid),
@@ -1369,10 +1433,6 @@ let tick = (name: string, sweep: () => unknown, ms: number, boot = true) => {
 tick('subs', () => aged(), 30_000, false)
 
 tick('native', () => nativeSweep(cast), 2_000)
-
-// Persistent roles are desired state: boot and the short tick heal a daemon
-// restart or dead native TUI, while every graph cast debounces a faster pass.
-tick('roles', () => rolesSweep(cast), 2_000)
 
 // What sessions leave running (probes.ts): a headless browser squatting on a
 // CDP port, a probe server on a scratch db, a worktree with nothing left in

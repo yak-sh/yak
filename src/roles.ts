@@ -882,21 +882,127 @@ export let rolesSweep = async (cast: Cast, deps: RoleDeps = defaults) => {
   await Promise.all(roles.map((r) => reconcile(r.eid, cast, deps)))
 }
 
-let timer: ReturnType<typeof setTimeout> | undefined
-let nextCast: Cast | undefined
+let timers = new Map<string, ReturnType<typeof setTimeout>>()
+let deadlines = new Map<string, ReturnType<typeof setTimeout>>()
 
-export let rolesSoon = (cast: Cast) => {
-  nextCast = cast
+let clear = (
+  timers: Map<string, ReturnType<typeof setTimeout>>,
+  eid: string,
+) => {
+  let timer = timers.get(eid)
   if (timer != undefined) clearTimeout(timer)
-  timer = setTimeout(() => {
-    timer = undefined
-    let run = nextCast
-    if (run) rolesSweep(run).catch((e) => console.warn('roles sweep —', e))
-  }, 50)
+  timers.delete(eid)
 }
+
+// A cast speaks about one role at a time. Coalescing by eid keeps a burst of
+// its own session receipts from turning back into a graph-wide reconciliation.
+export let roleSoon = (eid: string, cast: Cast, deps: RoleDeps = defaults) => {
+  clear(timers, eid)
+  timers.set(
+    eid,
+    setTimeout(() => {
+      timers.delete(eid)
+      reconcile(eid, cast, deps)
+        .catch((e) => console.warn('role reconcile —', e))
+        .finally(() => deadline(eid, cast))
+    }, 50),
+  )
+}
+
+let deadline = (eid: string, cast: Cast) => {
+  clear(deadlines, eid)
+  let role = db.prepare('select state, surface from role where eid = ?')
+    .get(eid) as { state: string; surface: string } | undefined
+  if (!role || role.state != 'running' || role.surface != 'native') return
+  deadlines.set(
+    eid,
+    setTimeout(() => {
+      deadlines.delete(eid)
+      reconcile(eid, cast, defaults)
+        .catch((e) => console.warn('role liveness —', e))
+        .finally(() => deadline(eid, cast))
+    }, 2_000),
+  )
+}
+
+let rolesFor = (
+  sql: string,
+  values: string[],
+  cast: Cast,
+  deps: RoleDeps,
+) => {
+  let roles = db.prepare(sql).all(...values) as { eid: string }[]
+  for (let { eid } of roles) roleSoon(eid, cast, deps)
+}
+
+let roleNow = (eid: string, cast: Cast) =>
+  reconcile(eid, cast, defaults)
+    .catch((e) => console.warn('role boot —', e))
+    .finally(() => deadline(eid, cast))
+
+// These are deliberately narrow SQL reads rather than snapshot/notices work:
+// the registry tells us which role can observe each fact before reconciliation
+// asks whether there is anything to say.
+export let roleConfig =
+  (cast: Cast, deps: RoleDeps = defaults) => (eid: string) =>
+    rolesFor(
+      'select eid from role where eid = ? or scope = ? order by eid',
+      [eid, eid],
+      cast,
+      deps,
+    )
+
+// The boot relay deliberately re-drives every desired row once. Live changes
+// go through roleSoon(), so a registry replay closes only the crash gap.
+export let roleBoot = (cast: Cast) => (eid: string) => roleNow(eid, cast)
+
+export let rolePersona =
+  (cast: Cast, deps: RoleDeps = defaults) => (eid: string) =>
+    rolesFor(
+      `select r.eid from role r join spawn s on s.eid = r.eid
+     where s.persona = ? order by r.eid`,
+      [eid],
+      cast,
+      deps,
+    )
+
+export let roleDoc =
+  (cast: Cast, deps: RoleDeps = defaults) => (eid: string) => {
+    roleConfig(cast, deps)(eid)
+    rolePersona(cast, deps)(eid)
+  }
+
+export let roleSession =
+  (cast: Cast, deps: RoleDeps = defaults) => (eid: string) =>
+    rolesFor(
+      'select role as eid from session where eid = ? and role is not null',
+      [eid],
+      cast,
+      deps,
+    )
+
+export let roleAttention = (
+  cast: Cast,
+  deps: RoleDeps = defaults,
+) =>
+(eid: string) =>
+  rolesFor(
+    `select eid from role where eid = ? or scope = ?
+     union
+     select r.eid from role r join task t on t.project = r.scope
+     where t.eid = ?
+     union
+     select role as eid from session where eid = ? and role is not null
+     order by eid`,
+    [eid, eid, eid, eid],
+    cast,
+    deps,
+  )
 
 export let roleRemoved =
   (cast: Cast, deps: RoleDeps = defaults) => (eid: string) => {
+    clear(timers, eid)
+    clear(deadlines, eid)
     let session = latest(eid)
     if (active(session) && session?.origin == 'managed') {
       try {
