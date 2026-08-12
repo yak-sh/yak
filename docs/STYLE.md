@@ -63,6 +63,16 @@ thorough; a paragraph is almost always the wrong size.
 - Every write goes through `mutate()` — optimistic local, broadcast wire. No
   view talks to the db, and the browser never learns a provider dialect
   (adapters normalize server-side).
+- **Never scan the cache in a render — 16ms, never drop a frame.**
+  `Object.values(cache.value).filter/some(...)` walks the whole graph AND
+  subscribes a component to every patch; it is the recurring render regression.
+  Ask "which entities match X?" through the query door — `useQuery(q)` /
+  `useQueryEids(q)` (`components/useQuery.ts`) — which returns a narrow signal
+  that re-renders only when the RESULT changes. A single entity is `row(eid)` /
+  `ent(eid)`; a saved query is a board. The query grammar is `query.ts` (the one
+  boards, `task list`, and `graph_query` speak), resolved over the auto-derived
+  index (`index.ts`, from the `{eid}` props in `comps`) — never a second,
+  hand-rolled index for something that is already an eid reference.
 
 ## Tests
 

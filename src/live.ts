@@ -29,10 +29,12 @@ import {
   matchQuery,
   namesLazy,
   parseQuery,
+  type Pred,
   resolveRefs,
   scopedSessions,
   warm,
 } from './query.ts'
+import { anchor, emptyIndex, indexAll, reindex, reindexEdge } from './index.ts'
 import { normalizeChanges } from './props.ts'
 import * as idb from './idb.ts'
 import { topology } from './leader.ts'
@@ -84,72 +86,93 @@ let idGraph = cache.peek()
 let numEids = new Map<number, string>()
 let aliasEids = new Map<string, string>()
 let shortEids = new Map<string, Set<string>>()
-let wakeGraph = cache.peek()
-let wakeEids = new Map<string, Set<string>>()
-let wakeSignals = new Map<string, Signal<boolean>>()
-
-let wakeTarget = (r?: Comps) =>
-  r?.wake && r.deliver?.to && !r.delivered && !r.error
-    ? String(r.deliver.to)
-    : undefined
-
-let indexWake = (eid: string, r?: Comps) => {
-  let target = wakeTarget(r)
-  if (!target) return
-  let found = wakeEids.get(target)
-  if (found) found.add(eid)
-  else wakeEids.set(target, new Set([eid]))
-}
-
-let unindexWake = (eid: string, r?: Comps) => {
-  let target = wakeTarget(r)
-  if (!target) return
-  let found = wakeEids.get(target)
-  found?.delete(eid)
-  if (!found?.size) wakeEids.delete(target)
-}
-
-let indexWakes = (graph: Record<string, Comps>) => {
-  wakeEids.clear()
-  for (let [eid, r] of Object.entries(graph)) indexWake(eid, r)
-  wakeGraph = graph
-  for (let [target, found] of wakeSignals) {
-    found.value = !!wakeEids.get(target)?.size
+// The cache's derived indexes (index.ts) — the reverse `{eid}` views, by-
+// component-presence, and edge endpoints, all flowing from the `comps`
+// vocabulary. Maintained incrementally by applyLocal/evict below; the query
+// layer (queryEids) anchors on it. A wholesale cache/deps replacement (tests,
+// host integrations) is healed lazily: ixGraph/ixDeps mark the last-indexed
+// refs, so a mismatch rebuilds once rather than per patch.
+let ix = emptyIndex()
+let ixGraph = cache.peek()
+let ixDeps = deps.peek()
+let syncIx = () => {
+  if (ixGraph != cache.peek() || ixDeps != deps.peek()) {
+    indexAll(ix, cache.peek(), deps.peek())
+    ixGraph = cache.peek()
+    ixDeps = deps.peek()
   }
 }
 
-let syncWakes = () => {
-  let graph = cache.peek()
-  if (graph != wakeGraph) indexWakes(graph)
+// The reactive query layer — the store-agnostic door for "which entities match
+// this query". A query is a value (Pred[], the query.ts grammar boards and
+// graph_query already speak), resolved to a NARROW signal of matching eids: the
+// initial fill anchors on the derived index (index.ts — O(result), never
+// O(graph)), and maintenance re-tests ONLY the eids each patch touched, so an
+// unrelated patch never wakes it. This is the seam T-17046 keeps — callers get
+// a subscribed result set, and the backing can move from this in-memory
+// realization to an IDB indexed cursor with no call-site churn. Never
+// `Object.values(cache.value).filter` in a render: that scans the whole graph
+// AND subscribes to every patch (T-17036, the 16ms frame budget).
+type QuerySet = { preds: Pred[]; ids: Signal<string[]>; n: number }
+let querySets = new Map<string, QuerySet>()
+let queryKey = (preds: Pred[]) => JSON.stringify(preds)
+
+let matches = (eid: string, preds: Pred[]) => {
+  let r = cache.peek()[eid]
+  return !!r && listed(r, preds) && matchQuery(r, preds, (t) => cache.peek()[t])
 }
 
-// Session dots hold one recipient signal; unrelated graph patches cannot
-// wake them, and rendering never scans the graph.
-export let pendingWake = (session: string) => {
-  syncWakes()
-  let found = wakeSignals.get(session)
-  if (!found) {
-    found = signal(!!wakeEids.get(session)?.size)
-    wakeSignals.set(session, found)
-  }
-  return found.value
+// One resolution pass: the index narrows to a candidate set (or the whole cache
+// when no pred anchors — the board fallback), then matchQuery + listed filter.
+let scanQuery = (preds: Pred[]): string[] => {
+  let cand = anchor(ix, preds)
+  let pool: Iterable<string> = cand ?? Object.keys(cache.peek())
+  let out: string[] = []
+  for (let eid of pool) if (matches(eid, preds)) out.push(eid)
+  return out
 }
 
-let refreshWakes = (eids: Set<string>) => {
-  let touched = new Set<string>()
-  for (let eid of eids) {
-    let before = wakeTarget(wakeGraph[eid])
-    let after = wakeTarget(cache.peek()[eid])
-    if (before == after) continue
-    unindexWake(eid, wakeGraph[eid])
-    indexWake(eid, cache.peek()[eid])
-    if (before) touched.add(before)
-    if (after) touched.add(after)
+let querySet = (preds: Pred[]): QuerySet => {
+  syncIx()
+  let key = queryKey(preds)
+  let set = querySets.get(key)
+  if (!set) {
+    set = { preds, ids: signal(untracked(() => scanQuery(preds))), n: 0 }
+    querySets.set(key, set)
   }
-  wakeGraph = cache.peek()
-  for (let target of touched) {
-    let found = wakeSignals.get(target)
-    if (found) found.value = !!wakeEids.get(target)?.size
+  return set
+}
+
+// Read a query's result signal (get-or-create; the render half of the hook).
+export let queryEids = (preds: Pred[]): Signal<string[]> => querySet(preds).ids
+// Ref-count a query for a component's lifetime (the hook's effect half); the
+// last release drops the set so distinct queries don't accumulate.
+export let holdQuery = (preds: Pred[]): Signal<string[]> => {
+  let set = querySet(preds)
+  set.n++
+  return set.ids
+}
+export let dropQuery = (preds: Pred[]) => {
+  let key = queryKey(preds)
+  let set = querySets.get(key)
+  if (!set || --set.n > 0) return
+  querySets.delete(key)
+}
+
+// Membership is row-local, so a patch tests only its touched rows — a stable
+// result keeps its subscribers asleep while an unrelated entity changes.
+let refreshQueries = (eids: Set<string>) => {
+  for (let set of querySets.values()) {
+    let ids = set.ids.peek()
+    let next = ids
+    for (let eid of eids) {
+      let had = next.includes(eid)
+      let wants = matches(eid, set.preds)
+      if (had != wants) {
+        next = wants ? [...next, eid] : next.filter((x) => x != eid)
+      }
+    }
+    if (next != ids) set.ids.value = next
   }
 }
 
@@ -198,28 +221,6 @@ let syncIds = () => {
   if (graph != idGraph) indexIds(graph)
 }
 
-// One pass over deps gives every parent a stable seed. The narrow signals
-// below own render invalidation; this computed only avoids an edge-list scan
-// for every entity mounted during first render.
-let relationIndex = computed(() => {
-  let found = new Map<string, Dep[]>()
-  for (let d of deps.value) {
-    let mine = found.get(d.parent)
-    if (mine) mine.push(d)
-    else found.set(d.parent, [d])
-  }
-  return found
-})
-let childIndex = computed(() => {
-  let found = new Map<string, Dep[]>()
-  for (let d of deps.value) {
-    let mine = found.get(d.child)
-    if (mine) mine.push(d)
-    else found.set(d.child, [d])
-  }
-  return found
-})
-
 // Renderers hold these narrow signals; the complete cache remains the
 // persistence and query door. A signal is minted once per eid so a patch
 // cannot wake an unrelated entity.
@@ -232,8 +233,13 @@ export let row = (eid: string) => {
   return found
 }
 
+// Edges by endpoint come from the derived index (index.ts byParent/byChild),
+// not a bespoke computed: the same `{eid}`-derived mechanism that indexes
+// references indexes the `dependency` triples, maintained incrementally rather
+// than rebuilt per edge patch. syncIx heals a wholesale deps replacement.
 export let relations = (eid: string) => {
-  let current = untracked(() => relationIndex.value.get(eid)) ?? noRelations
+  syncIx()
+  let current = ix.byParent.get(eid) ?? noRelations
   let found = relationSignals.get(eid)
   if (!found) {
     relationSignals.set(eid, found = signal(current))
@@ -242,7 +248,8 @@ export let relations = (eid: string) => {
 }
 
 let childRelations = (eid: string) => {
-  let current = untracked(() => childIndex.value.get(eid)) ?? noRelations
+  syncIx()
+  let current = ix.byChild.get(eid) ?? noRelations
   let found = childSignals.get(eid)
   if (!found) {
     childSignals.set(eid, found = signal(current))
@@ -263,28 +270,33 @@ let publish = (
     for (let eid of parentEids) {
       let found = relationSignals.get(eid)
       if (found) {
-        found.value = relationIndex.value.get(eid) ?? noRelations
+        found.value = ix.byParent.get(eid) ?? noRelations
       }
     }
     for (let eid of childEids) {
       let found = childSignals.get(eid)
-      if (found) found.value = childIndex.value.get(eid) ?? noRelations
+      if (found) found.value = ix.byChild.get(eid) ?? noRelations
     }
   })
 
 let resetSignals = () =>
   batch(() => {
     syncIds()
-    indexWakes(cache.peek())
+    indexAll(ix, cache.peek(), deps.peek())
+    ixGraph = cache.peek()
+    ixDeps = deps.peek()
     let touched = new Set([...census.peek(), ...Object.keys(cache.value)])
     census.value = Object.keys(cache.value)
     canvasVersion.value++
     for (let [eid, found] of rowSignals) found.value = cache.value[eid]
     for (let [eid, found] of relationSignals) {
-      found.value = relationIndex.value.get(eid) ?? noRelations
+      found.value = ix.byParent.get(eid) ?? noRelations
     }
     for (let [eid, found] of childSignals) {
-      found.value = childIndex.value.get(eid) ?? noRelations
+      found.value = ix.byChild.get(eid) ?? noRelations
+    }
+    for (let set of querySets.values()) {
+      set.ids.value = untracked(() => scanQuery(set.preds))
     }
     refreshBoards(touched)
     refreshPins(touched)
@@ -439,7 +451,7 @@ let mark = (path: string) => ((globalThis as { __boot?: string }).__boot = path)
 // into IDB, no diff of the whole cache.
 export let applyLocal = (changes: Change[]) => {
   syncIds()
-  syncWakes()
+  syncIx()
   let graph = cache.peek()
   let eids = new Set<string>()
   let edges: Dep[] = []
@@ -484,6 +496,7 @@ export let applyLocal = (changes: Change[]) => {
       for (let d of deps.value) {
         if (d.parent == eid || d.child == eid) {
           edges.push(d)
+          reindexEdge(ix, d, true)
           changedParents.add(d.parent)
           changedChildren.add(d.child)
         }
@@ -512,6 +525,7 @@ export let applyLocal = (changes: Change[]) => {
         : [...deps.value, d]
       if (nextDeps != deps.value) {
         deps.value = nextDeps
+        reindexEdge(ix, d, !!comp.gone)
         changedParents.add(eid)
         changedChildren.add(d.child)
       }
@@ -552,10 +566,13 @@ export let applyLocal = (changes: Change[]) => {
     for (let eid of changedRows) {
       unindexId(eid, graph[eid])
       indexId(eid, next[eid])
+      reindex(ix, eid, graph[eid], next[eid])
     }
     cache.value = next
     idGraph = next
   }
+  ixGraph = cache.peek()
+  ixDeps = deps.peek()
   batch(() => {
     if (changedCensus) census.value = Object.keys(next)
     if (changedCanvas) canvasVersion.value++
@@ -566,7 +583,7 @@ export let applyLocal = (changes: Change[]) => {
     refreshFolds(changedRows)
     refreshBacklinks(changedRows)
     refreshJobs(changedRows)
-    refreshWakes(changedRows)
+    refreshQueries(changedRows)
     refreshBoardLinks(changedRows)
     refreshFacets(changedRows)
     for (let [eid, z] of zs) {
@@ -822,7 +839,7 @@ export let landSub = (f: Sub) => {
 // live "you no longer see this" that only this layer expresses.
 let evict = (eids: string[]) => {
   syncIds()
-  syncWakes()
+  syncIx()
   let graph = cache.peek()
   let held = (eid: string) => [...subMembers.values()].some((s) => s.has(eid))
   let next = { ...cache.value }
@@ -840,9 +857,13 @@ let evict = (eids: string[]) => {
     }
   }
   if (changed) {
-    for (let eid of gone) unindexId(eid, graph[eid])
+    for (let eid of gone) {
+      unindexId(eid, graph[eid])
+      reindex(ix, eid, graph[eid], undefined)
+    }
     cache.value = next
     idGraph = next
+    ixGraph = next
     batch(() => {
       census.value = Object.keys(next)
       if (changedCanvas) canvasVersion.value++
@@ -853,7 +874,7 @@ let evict = (eids: string[]) => {
       refreshFolds(gone)
       refreshBacklinks(gone)
       refreshJobs(gone)
-      refreshWakes(gone)
+      refreshQueries(gone)
       refreshBoardLinks(gone)
       refreshFacets(gone)
     })

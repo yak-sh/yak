@@ -18,15 +18,16 @@ import {
   config,
   deps,
   domains,
+  dropQuery,
   ent,
   findEid,
   gated,
+  holdQuery,
   jobOf,
   landObservation,
   landSub,
   observation,
   parents,
-  pendingWake,
   pinned,
   projects,
   relations,
@@ -38,6 +39,7 @@ import {
   topZ,
   unsubscribe,
 } from './live.ts'
+import { parseQuery, resolveRefs } from './query.ts'
 import { type Ent } from './types.ts'
 import { effect } from '@preact/signals'
 import {
@@ -120,42 +122,95 @@ Deno.test('findEid does not scan or subscribe after indexing', () => {
   }
 })
 
-Deno.test('pendingWake indexes recipients and subscribes narrowly', () => {
-  let scans = 0
-  cache.value = new Proxy({
+// The pending-wake membership, now a query over the derived deliver.to reverse
+// index (no bespoke wake index). The result anchors on the index — one candidate
+// read, not a whole-graph scan — and its signal wakes ONLY when this session's
+// wake membership changes: an unrelated patch (another session's wake included)
+// triggers zero re-render (T-17036, the whole point).
+let pendingWakeQ = (session: string) =>
+  resolveRefs(
+    parseQuery(`.wake! .deliver.to=${session} .delivered= .error=`),
+    findEid,
+  )
+
+Deno.test('queryEids resolves pending wakes off the reverse index, narrowly', () => {
+  cache.value = {
+    session: {
+      entity: { eid: 'session', num: 1 },
+      session: { eid: 'session', id: 's' },
+    },
+    other_session: {
+      entity: { eid: 'other_session', num: 2 },
+      session: { eid: 'other_session', id: 'o' },
+    },
     wake: {
-      entity: { eid: 'wake', num: 1 },
+      entity: { eid: 'wake', num: 3 },
       wake: { eid: 'wake', at: 'soon' },
       deliver: { eid: 'wake', to: 'session' },
     },
-  }, {
-    ownKeys: (target) => {
-      scans++
-      return Reflect.ownKeys(target)
-    },
-  })
-  assertEquals(pendingWake('session'), true)
-  assertEquals(scans, 1)
-  for (let i = 0; i < 100; i++) pendingWake('session')
-  assertEquals(scans, 1)
+  }
+  deps.value = []
+  let mine = holdQuery(pendingWakeQ('session'))
+  assertEquals(mine.value, ['wake'])
 
   let runs = 0
   let stop = effect(() => {
-    pendingWake('session')
+    mine.value
     runs++
   })
   try {
-    applyLocal([{ eid: 'other', name: 'doc', comp: { title: 'other' } }])
+    // A wake for a DIFFERENT session — membership unchanged, zero re-render.
+    applyLocal([
+      { eid: 'other_wake', name: 'wake', comp: { at: 'soon' } },
+      { eid: 'other_wake', name: 'deliver', comp: { to: 'other_session' } },
+    ])
     assertEquals(runs, 1)
+    // An unrelated doc edit — likewise nothing.
+    applyLocal([{ eid: 'other_session', name: 'doc', comp: { title: 'x' } }])
+    assertEquals(runs, 1)
+    // THIS wake is delivered — membership drops, the dot re-renders once.
     applyLocal([{
       eid: 'wake',
       name: 'delivered',
       comp: { at: 'now', via: 'test' },
     }])
-    assertEquals(pendingWake('session'), false)
+    assertEquals(mine.value, [])
     assertEquals(runs, 2)
   } finally {
     stop()
+    dropQuery(pendingWakeQ('session'))
+  }
+})
+
+// The auto-derivation proof: task.assignee is an {eid} reference with NO
+// hand-written index anywhere — yet it is queryable through the same reverse
+// index, because refCols flows from comps. Adding an {eid} field needs no
+// index code (T-17036 done-when).
+Deno.test('queryEids indexes any {eid} reference with no bespoke index', () => {
+  cache.value = {
+    person: { entity: { eid: 'person', num: 1 }, person: { eid: 'person' } },
+    t1: {
+      entity: { eid: 't1', num: 2 },
+      task: { eid: 't1', status: 'open', priority: 1, assignee: 'person' },
+    },
+    t2: {
+      entity: { eid: 't2', num: 3 },
+      task: { eid: 't2', status: 'open', priority: 1, assignee: 'other' },
+    },
+  }
+  deps.value = []
+  let q = resolveRefs(parseQuery('.assignee=person'), findEid)
+  let held = holdQuery(q)
+  try {
+    assertEquals(held.value, ['t1'])
+    // Reassigning t2 to person joins it — the reverse index maintains live.
+    applyLocal([{ eid: 't2', name: 'task', comp: { assignee: 'person' } }])
+    assertEquals(held.value.toSorted(), ['t1', 't2'])
+    // Reassigning t1 away drops it.
+    applyLocal([{ eid: 't1', name: 'task', comp: { assignee: 'other' } }])
+    assertEquals(held.value, ['t2'])
+  } finally {
+    dropQuery(q)
   }
 })
 

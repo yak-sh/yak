@@ -2,10 +2,20 @@
 // lazy partition; wakes stay in the root graph because their timer and outcome
 // are ordinary shared facets.
 import { useEffect } from 'preact/hooks'
-import { ent, entrySub, pendingWake, subEids } from '../live.ts'
+import { ent, entrySub, subEids } from '../live.ts'
 import { type Ent, standing } from '../types.ts'
 import { type EntryRow, type GraphLog, graphLog } from '../entry_log.ts'
+import { useQueryEids } from './useQuery.ts'
 import { Dot } from './Dot.tsx'
+
+// A wake still pending for this session: a `wake` entity aimed at it (the
+// derived `deliver.to` reverse index) that is neither `delivered` nor `error` —
+// the same tri-state pending-wake fact, now expressed as a query rather than a
+// bespoke index. The dot re-renders only when ITS wake membership changes; a
+// patch to any other entity (another session's wake included) triggers zero
+// re-render (T-17036).
+export let usePendingWake = (session: string): boolean =>
+  useQueryEids(`.wake! .deliver.to=${session} .delivered= .error=`).length > 0
 
 let entryRow = (e: Ent): EntryRow | undefined => {
   if (!e.entry?.seq) return undefined
@@ -42,7 +52,7 @@ export let useEntryLog = (
 export let graphStanding = (
   e: Ent,
   log?: GraphLog,
-  waking = pendingWake(e.eid),
+  waking = false,
 ) => {
   let s = e.session!
   let native = s.origin == 'managed' && s.status == null &&
@@ -58,7 +68,7 @@ export let useSessionStanding = (e: Ent) => {
   let native = e.session?.origin == 'managed' && e.session.status == null &&
     e.spawn?.provider == 'codex'
   let log = useEntryLog(e.eid, native)
-  return { log, status: graphStanding(e, log) }
+  return { log, status: graphStanding(e, log, usePendingWake(e.eid)) }
 }
 
 export let SessionDot = ({ e }: { e: Ent }) => (
