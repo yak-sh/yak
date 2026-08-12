@@ -255,6 +255,67 @@ Deno.test('tool replay includes stdout, stderr, and exit status', () => {
   )
 })
 
+Deno.test('an interrupted call replays a synthesized function_call_output', () => {
+  // The runner died mid-execution; reconciliation errored the call and no result
+  // ever landed. Replay must still pair the call with an output, or the Responses
+  // API rejects the whole input as an orphaned function_call.
+  let input = project([
+    row('user', 1, {
+      message: { role: 'user' },
+      content: { body: 'begin' },
+    }),
+    row('old', 2, {
+      generation: { through: 'user', provider: 'codex', model: 'old' },
+    }),
+    row('call', 3, {
+      output: { source: 'old', key: 'call-item' },
+      call: { key: 'call-key' },
+      bash: { command: 'git commit' },
+      error: { message: 'runner disappeared; operation outcome is ambiguous' },
+    }),
+    row('current', 4, {
+      generation: { through: 'call', provider: 'codex', model: 'new' },
+    }),
+  ], 'current') as { type?: string; call_id?: string; output?: string }[]
+  let call = input.find((item) => item.type == 'function_call')
+  let output = input.find((item) => item.type == 'function_call_output')
+  assertEquals(call?.call_id, 'call-key')
+  assertEquals(output?.call_id, 'call-key')
+  assertMatch(String(output?.output), /interrupted/)
+  assertMatch(String(output?.output), /ambiguous/)
+  // No orphaned call: every function_call is matched by an output.
+  let calls = input.filter((item) => item.type == 'function_call')
+  let outputs = input.filter((item) => item.type == 'function_call_output')
+  assertEquals(calls.length, outputs.length)
+})
+
+Deno.test('a completed call is not double-sealed with an interrupted output', () => {
+  let input = project([
+    row('user', 1, {
+      message: { role: 'user' },
+      content: { body: 'begin' },
+    }),
+    row('old', 2, {
+      generation: { through: 'user', provider: 'codex', model: 'old' },
+    }),
+    row('call', 3, {
+      output: { source: 'old' },
+      call: { key: 'call-key' },
+      bash: { command: 'pwd' },
+    }),
+    row('result', 4, {
+      result: { call: 'call' },
+      content: { body: '/workspace' },
+    }),
+    row('current', 5, {
+      generation: { through: 'result', provider: 'codex', model: 'new' },
+    }),
+  ], 'current') as { type?: string; output?: string }[]
+  let outputs = input.filter((item) => item.type == 'function_call_output')
+  assertEquals(outputs.length, 1)
+  assertEquals(outputs[0].output, '/workspace')
+})
+
 Deno.test('projection keeps opaque keys provider-local and typed history portable', () => {
   let entries = [
     row('user', 1, {

@@ -1016,6 +1016,85 @@ Deno.test('restart leaves an uncertain side-effecting call ambiguous', async () 
   db.close()
 })
 
+Deno.test('a killed in-flight call recovers: replay pairs the orphaned call with an output', async () => {
+  // The real poison (S-16840/S-16872): a hosted shell call in flight when the
+  // runner died, reconciled to an error with no result. Before the fix the next
+  // generation's Responses input carried an orphaned function_call and every
+  // resume returned HTTP 400. Drive the whole path — reconciliation, advance,
+  // project, transport — and assert the input the provider sees is valid and the
+  // session recovers.
+  let db = open(':memory:')
+  let tree = Deno.makeTempDirSync()
+  let sid = session(db, tree), old = uuid()
+  writeSession(db, sid, { base_revision: 'base' })
+  apply(db, [{ eid: old, name: 'runner', comp: { name: 'old' } }])
+  let input = append(db, sid, [{ message: { role: 'user' } }]).eids[0]
+  let generation = append(db, sid, [{
+    generation: { through: input, provider: 'codex', model: 'gpt-requested' },
+  }]).eids[0]
+  let lease = takeEntry(db, generation, old)!
+  append(db, sid, [{
+    output: { source: generation },
+    call: { key: 'call_orphan' },
+    bash: { command: 'git commit -m rescue-me' },
+  }], old)
+  settleGeneration(db, lease.token)
+  let call = readEntries(db, sid).at(-1)!.eid
+  // The call is leased by the dead runner and its lease has already expired.
+  takeEntry(db, call, old, 100, () => new Date('2026-08-10T12:00:00Z'))
+
+  let inputs: unknown[][] = []
+  let service = managedCodex({
+    db,
+    cast: () => {},
+    clock: () => new Date('2026-08-10T12:00:01Z'),
+    transport: {
+      run: (request) => {
+        let items = request.input as { type?: string; call_id?: string }[]
+        inputs.push(items)
+        let calls = items.filter((item) => item.type == 'function_call')
+        let outputs = new Set(
+          items.filter((item) => item.type == 'function_call_output')
+            .map((item) => item.call_id),
+        )
+        let orphan = calls.find((item) => !outputs.has(item.call_id))
+        if (orphan) {
+          throw new Error(`orphaned function_call ${orphan.call_id} in input`)
+        }
+        return Promise.resolve(result([{
+          type: 'message',
+          content: [{ type: 'output_text', text: 'recovered and landed' }],
+        }]))
+      },
+    },
+    tools: () => Promise.resolve(tools([])),
+    prepare: () => Promise.resolve(),
+  })
+  await service.sweep()
+
+  let rows = readEntries(db, sid)
+  // Reconciliation happened: the orphaned call is errored, no fabricated result.
+  let callRow = rows.find((row) => row.eid == call)!
+  assertMatch(String(callRow.comps.error.message), /outcome is ambiguous/)
+  assertEquals(rows.some((row) => row.comps.result?.call == call), false)
+  // The provider saw a valid input: the orphaned call paired with an output.
+  let replay = inputs.at(-1)! as { type?: string; call_id?: string }[]
+  assertEquals(replay.some((item) => item.type == 'function_call'), true)
+  assertEquals(
+    replay.some((item) =>
+      item.type == 'function_call_output' && item.call_id == 'call_orphan'
+    ),
+    true,
+  )
+  // The session recovered end to end, with no lingering error.
+  assertEquals(rows.at(-1)?.comps.content?.body, 'recovered and landed')
+  assertEquals(
+    db.prepare('select 1 from error where eid = ?').get(sid),
+    undefined,
+  )
+  db.close()
+})
+
 Deno.test('restart settles durable generation and call evidence', async () => {
   let db = open(':memory:')
   let tree = Deno.makeTempDirSync(), sid = session(db, tree)
