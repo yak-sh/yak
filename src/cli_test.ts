@@ -663,14 +663,20 @@ Deno.test('Codex turn hooks announce only busy and idle boundaries', () => {
 // The launcher is the global `operate` CLI; its dry run prints the exact argv it
 // would exec, so the --operator opt-in is checked against the real thing.
 slow('the canonical operator launcher opts into work injection', async () => {
-  let repo = new URL('..', import.meta.url).pathname
-  let out = await new Deno.Command('operate', {
-    args: ['run'],
-    cwd: repo,
-    env: { DRY_RUN: '1' },
-  }).output()
-  assertEquals(out.code, 0)
-  assertMatch(text(out.stdout), /^task claude --operator /)
+  let repo = await Deno.makeTempDir()
+  try {
+    await Deno.mkdir(`${repo}/.claude/agents`, { recursive: true })
+    await Deno.writeTextFile(`${repo}/.claude/agents/operator.md`, 'persona')
+    let out = await new Deno.Command('operate', {
+      args: ['run'],
+      cwd: repo,
+      env: { DRY_RUN: '1' },
+    }).output()
+    assertEquals(out.code, 0)
+    assertMatch(text(out.stdout), /^task claude --operator /)
+  } finally {
+    await Deno.remove(repo, { recursive: true })
+  }
 })
 
 slow('task wrap help documents the legacy alias', async () => {
