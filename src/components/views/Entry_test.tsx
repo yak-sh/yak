@@ -72,7 +72,7 @@ Deno.test('command and output summaries show one line and a more control', () =>
     rows()
     let [call, answer] = Object.keys(cache.value)
     let command = ent(call)
-    render(resolve(command, 'Entry.Summary').Render({ e: command }), root)
+    render(h(resolve(command, 'Entry.Summary').Render, { e: command }), root)
     assertEquals(
       [...root.querySelectorAll('.Entry_Line')].map((x) => x.textContent),
       ['printf one', 'one'],
@@ -80,7 +80,7 @@ Deno.test('command and output summaries show one line and a more control', () =>
     assertEquals(root.querySelector('.Entry_More')?.textContent, '…')
 
     let result = ent(answer)
-    render(resolve(result, 'Entry.Summary').Render({ e: result }), root)
+    render(h(resolve(result, 'Entry.Summary').Render, { e: result }), root)
     assertEquals(root.querySelector('.Entry_Line')?.textContent, 'one')
     assertEquals(root.querySelector('.Entry-fail'), null)
   }))
@@ -122,11 +122,11 @@ Deno.test('expanded entries offer only specifically rendered faces', () =>
     assertEquals(root.querySelector('.Entry_Output')?.textContent, 'one\ntwo')
     assertEquals(root.querySelector('.Entry_Err-fail'), null)
     let result = ent(answer)
-    render(resolve(result, 'Entry.JSON').Render({ e: result }), root)
+    render(h(resolve(result, 'Entry.JSON').Render, { e: result }), root)
     assertEquals(
       root.querySelector('.Json')?.textContent.includes('warning'),
       true,
     )
-    render(resolve(result, 'Entry.Debug').Render({ e: result }), root)
+    render(h(resolve(result, 'Entry.Debug').Render, { e: result }), root)
     assertEquals(root.querySelector('.Debug_Props') != null, true)
   }))

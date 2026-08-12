@@ -1,15 +1,13 @@
 // The full document face's section renderers — especially the meta line,
-// where an absent field must paint nothing.
-import { render, type VNode } from 'preact'
+// where an absent field must paint nothing. A renderer is a component: every
+// case mounts it through Preact (mount.ts) and asserts on the resulting DOM,
+// never on a bare call's vnode tree.
+import { h } from 'preact'
 import { assertEquals, assertExists } from '@std/assert'
-import { parseHTML } from 'linkedom'
 import { cache, deps, ent } from '../../live.ts'
 import { resolve } from '../registry.ts'
+import { mount } from '../mount.ts'
 import '../Entity.tsx'
-
-let raw = (v: VNode) =>
-  (Array.isArray(v.props.children) ? v.props.children : [v.props.children])
-    .flat()
 
 Deno.test('document meta paints no tally when it has no comments', () => {
   cache.value = {
@@ -20,8 +18,10 @@ Deno.test('document meta paints no tally when it has no comments', () => {
   }
 
   let e = ent('doc')
-  let meta = resolve(e, 'Meta').Render({ e, id: true })!
-  assertEquals(raw(meta).filter((c) => typeof c == 'number'), [])
+  let { root, free } = mount(h(resolve(e, 'Meta').Render, { e, id: true }))
+  assertEquals(root.querySelector('.Show_Comments'), null)
+  free()
+  cache.value = {}
 })
 
 Deno.test('empty document meta remains a first-class null', () => {
@@ -33,77 +33,65 @@ Deno.test('empty document meta remains a first-class null', () => {
   }
 
   let e = ent('doc')
-  assertEquals(resolve(e, 'Meta').Render({ e }), null)
+  let { root, free } = mount(h(resolve(e, 'Meta').Render, { e }))
+  assertEquals(root.innerHTML, '')
+  free()
+  cache.value = {}
 })
 
 Deno.test('proposal meta distinguishes pending, cancelled, and approved', () => {
-  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
-  let { document } = parseHTML('<main></main>')
-  Object.defineProperty(globalThis, 'document', {
-    value: document,
-    configurable: true,
-  })
-  let root = document.querySelector('main')!
   let proposal = {
     entity: { eid: 'proposal', num: 1 },
     doc: { eid: 'proposal', title: 'A proposal', body: '' },
     proposed: { eid: 'proposal', at: '2026-08-10T12:00:00Z' },
   }
-  try {
-    cache.value = { proposal }
-    let e = ent('proposal')
-    render(resolve(e, 'Meta').Render({ e })!, root)
-    assertExists(root.querySelector('.Show_Proposal-proposed .Icon'))
-    assertEquals(
-      root.querySelector('.Show_Proposal')?.getAttribute('aria-label'),
-      'proposed',
-    )
 
-    cache.value = {
-      proposal: {
-        ...proposal,
-        task: { eid: 'proposal', status: 'cancelled', priority: 1 },
-      },
-    }
-    e = ent('proposal')
-    render(resolve(e, 'Meta').Render({ e })!, root)
-    assertExists(root.querySelector('.Show_Proposal-cancelled .Icon'))
-    assertEquals(
-      root.querySelector('.Show_Proposal')?.getAttribute('aria-label'),
-      'cancelled',
-    )
+  cache.value = { proposal }
+  let e = ent('proposal')
+  let a = mount(h(resolve(e, 'Meta').Render, { e }))
+  assertExists(a.root.querySelector('.Show_Proposal-proposed .Icon'))
+  assertEquals(
+    a.root.querySelector('.Show_Proposal')?.getAttribute('aria-label'),
+    'proposed',
+  )
+  a.free()
 
-    cache.value = {
-      proposal: {
-        ...proposal,
-        decided: { eid: 'proposal', at: '2026-08-10T13:00:00Z' },
-      },
-    }
-    e = ent('proposal')
-    render(resolve(e, 'Meta').Render({ e })!, root)
-    assertExists(root.querySelector('.Show_Proposal-approved .Icon'))
-    assertEquals(
-      root.querySelector('.Show_Proposal')?.getAttribute('aria-label'),
-      'approved',
-    )
-  } finally {
-    render(null, root)
-    cache.value = {}
-    if (prior) Object.defineProperty(globalThis, 'document', prior)
-    else delete (globalThis as { document?: unknown }).document
+  cache.value = {
+    proposal: {
+      ...proposal,
+      task: { eid: 'proposal', status: 'cancelled', priority: 1 },
+    },
   }
+  e = ent('proposal')
+  let b = mount(h(resolve(e, 'Meta').Render, { e }))
+  assertExists(b.root.querySelector('.Show_Proposal-cancelled .Icon'))
+  assertEquals(
+    b.root.querySelector('.Show_Proposal')?.getAttribute('aria-label'),
+    'cancelled',
+  )
+  b.free()
+
+  cache.value = {
+    proposal: {
+      ...proposal,
+      decided: { eid: 'proposal', at: '2026-08-10T13:00:00Z' },
+    },
+  }
+  e = ent('proposal')
+  let c = mount(h(resolve(e, 'Meta').Render, { e }))
+  assertExists(c.root.querySelector('.Show_Proposal-approved .Icon'))
+  assertEquals(
+    c.root.querySelector('.Show_Proposal')?.getAttribute('aria-label'),
+    'approved',
+  )
+  c.free()
+  cache.value = {}
 })
 
 Deno.test('task meta carries both full facts and compact edge tallies', () => {
   let project = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   let person = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
   let session = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
-  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
-  let { document } = parseHTML('<main></main>')
-  Object.defineProperty(globalThis, 'document', {
-    value: document,
-    configurable: true,
-  })
   let now = new Date().toISOString()
   cache.value = {
     task: {
@@ -158,10 +146,9 @@ Deno.test('task meta carries both full facts and compact edge tallies', () => {
     { parent: 'task', type: 'contains', child: 'child' },
     { parent: 'task', type: 'reads', child: 'done' },
   ]
-  let root = document.querySelector('main')!
+  let e = ent('task')
+  let { root, free } = mount(h(resolve(e, 'Meta').Render, { e, id: true }))
   try {
-    let e = ent('task')
-    render(resolve(e, 'Meta').Render({ e, id: true })!, root)
     assertEquals(root.querySelector('.Show_Project')?.textContent, 'Task Graph')
     assertEquals(root.querySelector('.Show_Domain')?.textContent, 'Eng')
     assertEquals(root.querySelector('.Show_Assignee')?.textContent, 'Jeff')
@@ -189,21 +176,13 @@ Deno.test('task meta carries both full facts and compact edge tallies', () => {
     assertExists(root.querySelector('.Stamp'))
     assertEquals(root.querySelector('.Id')?.textContent, 'T-1')
   } finally {
-    render(null, root)
+    free()
     deps.value = []
     cache.value = {}
-    if (prior) Object.defineProperty(globalThis, 'document', prior)
-    else delete (globalThis as { document?: unknown }).document
   }
 })
 
 Deno.test('mail Full section shows its envelope and delivery receipt', () => {
-  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
-  let { document } = parseHTML('<main></main>')
-  Object.defineProperty(globalThis, 'document', {
-    value: document,
-    configurable: true,
-  })
   cache.value = {
     mail: {
       entity: { eid: 'mail', num: 1 },
@@ -225,63 +204,50 @@ Deno.test('mail Full section shows its envelope and delivery receipt', () => {
       },
     },
   }
-  let root = document.querySelector('main')!
-  try {
-    let e = ent('mail')
-    render(resolve(e, 'Mail').Render({ e })!, root)
-    assertEquals(
-      [...root.querySelectorAll('.Show_MailKey')].map((x) => x.textContent),
-      ['from', 'requested', 'to', 'sent'],
-    )
-    assertEquals(
-      [...root.querySelectorAll('.Show_MailVal')].slice(0, 3).map((x) =>
-        x.textContent
-      ),
-      ['sender@x.test', 'P-2', 'desk@x.test'],
-    )
-    assertEquals(root.querySelector('.Stamp') != null, true)
+  let a = mount(h(resolve(ent('mail'), 'Mail').Render, { e: ent('mail') }))
+  assertEquals(
+    [...a.root.querySelectorAll('.Show_MailKey')].map((x) => x.textContent),
+    ['from', 'requested', 'to', 'sent'],
+  )
+  assertEquals(
+    [...a.root.querySelectorAll('.Show_MailVal')].slice(0, 3).map((x) =>
+      x.textContent
+    ),
+    ['sender@x.test', 'P-2', 'desk@x.test'],
+  )
+  assertEquals(a.root.querySelector('.Stamp') != null, true)
+  a.free()
 
-    cache.value = {
+  cache.value = {
+    mail: {
+      entity: { eid: 'mail', num: 1 },
+      doc: { eid: 'mail', title: 'Hello', body: '' },
       mail: {
-        entity: { eid: 'mail', num: 1 },
-        doc: { eid: 'mail', title: 'Hello', body: '' },
-        mail: {
-          eid: 'mail',
-          to_addr: 'desk@x.test',
-          from: 'stranger@x.test',
-          message_id: 'received@x.test',
-          received_at: '2026-07-30T13:00:00Z',
-          verified: 0,
-        },
+        eid: 'mail',
+        to_addr: 'desk@x.test',
+        from: 'stranger@x.test',
+        message_id: 'received@x.test',
+        received_at: '2026-07-30T13:00:00Z',
+        verified: 0,
       },
-    }
-    e = ent('mail')
-    render(resolve(e, 'Mail').Render({ e })!, root)
-    assertEquals(
-      [...root.querySelectorAll('.Show_MailKey')].map((x) => x.textContent),
-      ['from', 'to', 'received', 'verified'],
-    )
-    assertEquals(
-      root.querySelector('.Show_MailVal-unverified')?.textContent,
-      'no',
-    )
-  } finally {
-    render(null, root)
-    cache.value = {}
-    if (prior) Object.defineProperty(globalThis, 'document', prior)
-    else delete (globalThis as { document?: unknown }).document
+    },
   }
+  let b = mount(h(resolve(ent('mail'), 'Mail').Render, { e: ent('mail') }))
+  assertEquals(
+    [...b.root.querySelectorAll('.Show_MailKey')].map((x) => x.textContent),
+    ['from', 'to', 'received', 'verified'],
+  )
+  assertEquals(
+    b.root.querySelector('.Show_MailVal-unverified')?.textContent,
+    'no',
+  )
+  b.free()
+  cache.value = {}
 })
 
 Deno.test('document meta names its creator and editor after their ages', () => {
   let jeff = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   let robin = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
-  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
-  let { document } = parseHTML('<main></main>')
-  Object.defineProperty(globalThis, 'document', {
-    value: document,
-    configurable: true,
-  })
   let now = Date.now()
   cache.value = {
     doc: {
@@ -309,10 +275,9 @@ Deno.test('document meta names its creator and editor after their ages', () => {
       person: { eid: robin },
     },
   }
-  let root = document.querySelector('main')!
+  let e = ent('doc')
+  let { root, free } = mount(h(resolve(e, 'Meta').Render, { e }))
   try {
-    let e = ent('doc')
-    render(resolve(e, 'Meta').Render({ e })!, root)
     assertEquals(
       root.querySelector('.Stamp')?.textContent,
       '2 days ago by Jeff· edited 18 hours ago by Robin',
@@ -322,11 +287,27 @@ Deno.test('document meta names its creator and editor after their ages', () => {
       ['/U-2', '/U-3'],
     )
   } finally {
-    render(null, root)
+    free()
     cache.value = {}
-    if (prior) Object.defineProperty(globalThis, 'document', prior)
-    else delete (globalThis as { document?: unknown }).document
   }
+})
+
+Deno.test('a hook-using renderer mounts through the helper', () => {
+  // The task title's Pip holds useState — a hook-using renderer only works
+  // mounted through Preact. A bare call would throw here; the helper mounts it.
+  cache.value = {
+    task: {
+      entity: { eid: 'task', num: 1 },
+      doc: { eid: 'task', title: 'Hooked', body: '' },
+      task: { eid: 'task', status: 'open', priority: 1 },
+    },
+  }
+  let e = ent('task')
+  let { root, free } = mount(h(resolve(e, 'Card.Title').Render, { e }))
+  assertExists(root.querySelector('.CardTitle'))
+  assertEquals(root.querySelector('.Id')?.textContent, 'T-1')
+  free()
+  cache.value = {}
 })
 
 Deno.test('comment dependencies lead with the entity commented on', () => {
@@ -343,12 +324,10 @@ Deno.test('comment dependencies lead with the entity commented on', () => {
   }
 
   let e = ent('comment')
-  let renderer = resolve(e, 'Dependencies')
-  let target = raw(renderer.Render({ e })!)[0]
-  assertEquals(target.props, {
-    eid: 'target',
-    view: 'Dependency',
-    type: 'comment',
-    label: 'on',
-  })
+  let { root, free } = mount(h(resolve(e, 'Dependencies').Render, { e }))
+  // The first edge sentence is the target, verbed 'on'.
+  assertEquals(root.querySelector('.Dependency_Type')?.textContent, 'on')
+  assertEquals(root.querySelector('.Inline_Title')?.textContent, 'The subject')
+  free()
+  cache.value = {}
 })

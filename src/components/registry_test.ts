@@ -1,5 +1,6 @@
 // Scored resolution: the most specific renderer wins, ties go to
 // registration order, platform overrides beat the shared list on ties.
+import { h } from 'preact'
 import {
   actionsFor,
   alias,
@@ -10,11 +11,18 @@ import {
   has,
   resolve,
 } from './registry.ts'
+import { mount } from './mount.ts'
 import { type Ent } from '../types.ts'
 import { assertEquals } from '@std/assert'
 
-let R = (view: string, match: (e: Ent) => number | boolean, tag: string) => // deno-lint-ignore no-explicit-any
-({ view, match, Render: (() => tag) as any })
+// A fixture renderer is a component like any other — it just paints its tag
+// as text. Resolution picks the winner; mounting through Preact reads which
+// tag it painted (tag() below), never a bare call.
+let R = (view: string, match: (e: Ent) => number | boolean, tag: string) => ({
+  view,
+  match,
+  Render: () => tag,
+})
 
 define([
   R('Task', has('doc', 'task'), 'task'),
@@ -29,6 +37,16 @@ define([
 
 let ent = (comps: Record<string, unknown>) =>
   ({ eid: 'x', num: 1, kind: '?', refs: [], kids: [], ...comps }) as Ent
+
+// Mount the renderer resolution picks and read the tag it painted — the
+// renderer is a component, so it goes through Preact, never a bare call.
+let tag = (comps: Record<string, unknown>, view: string) => {
+  let e = ent(comps)
+  let { root, free } = mount(h(resolve(e, view).Render, { e }))
+  let text = root.textContent
+  free()
+  return text
+}
 
 let CASES: [string, Record<string, unknown>, string | undefined, string][] = [
   ['doc+task outranks doc', { doc: {}, task: {} }, undefined, 'Task'],
@@ -48,24 +66,10 @@ Deno.test('resolution', () => {
     assertEquals(resolve(ent(comps), view).view, want, name)
   }
   // title tier: the 2-scorer, then the 1-scorer, then the catch-all
-  assertEquals(
-    (resolve(ent({ doc: {}, task: {} }), 'Card.Title')
-      .Render as unknown as () => string)(),
-    'task-title',
-  )
-  assertEquals(
-    (resolve(ent({ doc: {} }), 'Card.Title').Render as unknown as () =>
-      string)(),
-    'doc-title',
-  )
-  assertEquals(
-    (resolve(ent({}), 'Card.Title').Render as unknown as () => string)(),
-    'any-title',
-  )
+  assertEquals(tag({ doc: {}, task: {} }, 'Card.Title'), 'task-title')
+  assertEquals(tag({ doc: {} }, 'Card.Title'), 'doc-title')
+  assertEquals(tag({}, 'Card.Title'), 'any-title')
 })
-
-let tag = (comps: Record<string, unknown>, view: string) =>
-  (resolve(ent(comps), view).Render as unknown as () => string)()
 
 Deno.test('suffix walk: qualifiers fall leftward', () => {
   let task = { doc: {}, task: {} }
@@ -112,9 +116,5 @@ Deno.test('actions union across matching contributors, in order', () => {
 
 Deno.test('override wins its tie', () => {
   extend([R('Task', has('doc', 'task'), 'tui-task')])
-  assertEquals(
-    (resolve(ent({ doc: {}, task: {} }), 'Task').Render as unknown as () =>
-      string)(),
-    'tui-task',
-  )
+  assertEquals(tag({ doc: {}, task: {} }, 'Task'), 'tui-task')
 })

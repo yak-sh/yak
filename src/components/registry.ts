@@ -1,4 +1,4 @@
-import { type JSX } from 'preact'
+import { type FunctionComponent } from 'preact'
 import { type Ent } from '../types.ts'
 
 // The renderer registry MACHINERY — no view imports, so anything (a view
@@ -23,9 +23,15 @@ import { type Ent } from '../types.ts'
 // walk falls to the plain role when no card face exists.
 // null is a first-class render: a section view with nothing to say
 // renders nothing (the Full stack relies on it).
-export type Render = (
-  p: { e: Ent; [x: string]: unknown },
-) => JSX.Element | null
+//
+// A renderer is a Preact COMPONENT, never a plain function. Several hold
+// hooks (Session, Show, Board, Entry, Debug, Relate, Layout use
+// useState/useMemo/useSignal), so they only work MOUNTED through Preact —
+// `<r.Render e={e}/>` or `h(r.Render, props)` — where the hook dispatcher is
+// live. Calling one as a bare function `r.Render({ e })` bypasses that
+// dispatcher; it only appears to work for the hook-free renderers. Tests mount
+// through the same door (see components/mount.ts).
+export type Render = FunctionComponent<{ e: Ent; [x: string]: unknown }>
 export type Renderer = {
   view: string
   match: (e: Ent) => number | boolean

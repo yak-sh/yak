@@ -1,9 +1,10 @@
 // A session row keeps the actor it works for visible in every shared list.
-import { h, render, type VNode } from 'preact'
+import { h, render } from 'preact'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { cache, ent } from '../../live.ts'
 import { resolve } from '../Entity.tsx'
+import { mount } from '../mount.ts'
 import {
   SessionBody,
   SessionContext,
@@ -13,11 +14,6 @@ import {
   SessionReferences,
   SessionSummary,
 } from './Session.tsx'
-
-let children = (v: VNode) =>
-  (Array.isArray(v.props.children) ? v.props.children : [v.props.children])
-    .flat()
-    .filter(Boolean) as VNode[]
 
 Deno.test('session row names its actor', () => {
   cache.value = {
@@ -38,9 +34,13 @@ Deno.test('session row names its actor', () => {
   }
 
   let e = ent('session')
-  let row = resolve(e, 'List.Tile').Render({ e })!
-  let actor = children(row)[2]
-  assertEquals(actor.props.children, 'Task Graph')
+  let { root, free } = mount(h(resolve(e, 'List.Tile').Render, { e }))
+  assertEquals(
+    root.querySelector('.SessionRow_Actor')?.textContent,
+    'Task Graph',
+  )
+  free()
+  cache.value = {}
 })
 
 Deno.test('session title names model and effort', () => {
@@ -57,9 +57,13 @@ Deno.test('session title names model and effort', () => {
   }
 
   let e = ent('session')
-  let title = resolve(e, 'Card.Title').Render({ e })!
-  let text = children(title)[2]
-  assertEquals(text.props.children, ['GPT 5.6', ' · high'])
+  let { root, free } = mount(h(resolve(e, 'Card.Title').Render, { e }))
+  assertEquals(
+    root.querySelector('.CardTitle_Text')?.textContent,
+    'GPT 5.6 · high',
+  )
+  free()
+  cache.value = {}
 })
 
 Deno.test('session user messages render as markdown', () => {

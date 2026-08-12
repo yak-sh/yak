@@ -23,19 +23,6 @@ import { ansi, pane } from './paint.ts'
 import { account, type AccountDoor } from '../account_client.ts'
 import type { AccountStatus } from '../accounts.ts'
 
-// deno-lint-ignore no-explicit-any
-let find = (node: any, cls: string): any => {
-  if (Array.isArray(node)) {
-    for (let child of node) {
-      let hit = find(child, cls)
-      if (hit) return hit
-    }
-  }
-  if (!node?.props) return
-  if (node.props.class == cls) return node
-  return find(node.props.children, cls)
-}
-
 let eid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 let task = (body?: string): Ent => ({
   eid,
@@ -46,11 +33,24 @@ let task = (body?: string): Ent => ({
   refs: [],
   kids: [],
 })
-let full = (e: Ent) =>
-  overrides.find((r) => r.view == 'Full' && r.match(e))!.Render({ e })
+// Mount the TUI's Full override through Preact — a renderer is a component,
+// never a bare call — and read the painted terminal text back. The footer
+// stands in for the app's pinned statusbar, which pane() pops off the bottom.
+let paint = (e: Ent) => {
+  let root = new TElement('root')
+  let target = root as unknown as Parameters<typeof render>[1]
+  let r = overrides.find((x) => x.view == 'Full' && x.match(e))!
+  render(
+    h('div', null, h(r.Render, { e }), h('footer', null, 'status')),
+    target,
+  )
+  let out = pane(root).lines.flat().map((p) => p.text).join('\n')
+  render(null, target)
+  return out
+}
 
 Deno.test('the TUI task heading formats priority through its type', () => {
-  assertEquals(find(full(task('')), 'Task_Prio').props.children, 'P1.5')
+  assertEquals(paint(task('')).includes('P1.5'), true)
 })
 
 // A body this client was never shipped is not an empty one: the terminal
@@ -60,8 +60,8 @@ Deno.test('the TUI paints the wait for a body it does not have', () => {
   globalThis.fetch = () => Promise.reject(new Error('no server')) // pending() asks
   config.host = '127.0.0.1:0' // and nothing it queues may reach a real one
   try {
-    assertEquals(find(full(task('')), 'Task_Body'), undefined)
-    assertEquals(find(full(task(undefined)), 'Task_Body').props.children, '…')
+    assertEquals(paint(task('')).includes('…'), false)
+    assertEquals(paint(task(undefined)).includes('…'), true)
   } finally {
     globalThis.fetch = prior
   }
