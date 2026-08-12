@@ -694,7 +694,8 @@ export let Session = ({ e }: { e: Ent }) => {
           </Stop>
         )}
       </Head>
-      <Main mod={mentions.length > 0 && 'referenced'}>
+      <Main>
+        <SessionReferences items={mentions} />
         <Panel>
           {/* markdown, escaped of any markup by md.ts — as with a task body */}
           {!said && s.final_text && (
@@ -729,7 +730,6 @@ export let Session = ({ e }: { e: Ent }) => {
             </Unsent>
           )}
         </Panel>
-        <SessionReferences items={mentions} />
       </Main>
       {
         /* the one composer, pinned like the bar: comment about it, or say
