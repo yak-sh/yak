@@ -667,6 +667,31 @@ export let comps: Record<string, Record<string, PropType>> = {
   proposed: { at: 'time', by: { eid: 'entity', death: 'keep' } },
 }
 
+// The other half of "the vocabulary is one list": what to INDEX, not what a
+// column IS. An index is a component's ACCESS PATTERN, not a field's aspect
+// (M-14942 cohesion), so it rides its own map beside `comps`, never a `PropType`
+// marker. Listed here is ONLY what the {eid} derivation can't reach: composite
+// indexes, and the uniqueness/partiality a lone ref column wants — a
+// single-column entry OVERRIDES its auto-derived plain index (shelf.client,
+// result.call, generation.through earn `unique` this way). Every other {eid}
+// reference gets its single-column index for free from `refCols`; `indexesFor`
+// (index.ts) merges the two into the ONE set the cache, SQL DDL (T-12764) and
+// IDB stores (T-17125) all read. This re-expresses the hand-written
+// `create index` + inline `unique(...)` in db.ts exactly; single-column uniques
+// on NON-reference columns (session.id, alias.slug, entity.num) stay hand-DDL
+// exceptions, out of this map. Inert until a backend generates from it.
+export type Idx = { cols: string[]; unique?: boolean; where?: string }
+export let indexes: Record<string, Idx[]> = {
+  camera: [{ cols: ['client', 'canvas'], unique: true }],
+  fold: [{ cols: ['client', 'board'], unique: true }],
+  shelf: [{ cols: ['client'], unique: true }],
+  entry: [{ cols: ['session', 'seq'], unique: true }],
+  generation: [{ cols: ['through'], unique: true }],
+  output: [{ cols: ['source', 'key'], unique: true, where: 'key is not null' }],
+  result: [{ cols: ['call'], unique: true }],
+  subscription: [{ cols: ['actor', 'target'], unique: true }],
+}
+
 // Server-stamped columns — never wire-writable (cols() reads `comps`
 // alone, so these never join the apply allowlist), but part of the
 // SCHEMA: backlinks and any reader of associations take the union, so an
