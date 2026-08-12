@@ -52,8 +52,6 @@ import { Session, SessionRow } from './views/Session.tsx'
 import {
   CommandFull,
   CommandSummary,
-  EntryFull,
-  EntryMd,
   EntrySummary,
   MessageFull,
   MessageSummary,
@@ -157,8 +155,6 @@ define([
   { view: 'Full', match: has('entry', 'call', 'bash'), Render: CommandFull },
   { view: 'Full', match: has('entry', 'result'), Render: ResultFull },
   { view: 'Full', match: has('entry', 'message'), Render: MessageFull },
-  { view: 'Full', match: has('entry'), Render: EntryFull },
-  { view: 'Markdown', match: has('entry'), Render: EntryMd },
   {
     view: 'Entry.Debug',
     match: has('entry'),

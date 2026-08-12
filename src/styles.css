@@ -3177,16 +3177,22 @@ a[data-ref]:hover {
   gap: var(--gap);
 }
 .Entry {
+  display: flex;
+  align-items: baseline;
+  gap: var(--half-gap);
   min-width: 0;
   color: var(--muted);
   font-size: 12px;
 }
 .Entry_Line {
+  flex: 1 1 auto;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .Entry_More {
+  flex: none;
   padding: 0 var(--half-gap);
   border: 0;
   background: none;
@@ -3195,8 +3201,30 @@ a[data-ref]:hover {
 }
 .Entry_Name,
 .Entry_Status {
+  flex: none;
   color: var(--accent);
   font-family: var(--mono);
+}
+.Entry-meta {
+  display: block;
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.Entry-user {
+  display: block;
+  padding: var(--half-gap) var(--gap);
+  border-left: 2px solid var(--blue);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: var(--soft);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.Entry-agent {
+  display: block;
+  color: var(--text);
+  overflow-wrap: anywhere;
 }
 .Entry_Code,
 .Entry_Err {

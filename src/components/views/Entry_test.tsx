@@ -3,12 +3,15 @@
 import { h, render } from 'preact'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
+import { type Ent } from '../../types.ts'
 import { cache, ent } from '../../live.ts'
 import { resolve } from '../Entity.tsx'
 import {
   CommandFull,
   CommandSummary,
   EntryLens,
+  EntrySummary,
+  MessageSummary,
   ResultFull,
   ResultSummary,
 } from './Entry.tsx'
@@ -82,7 +85,30 @@ Deno.test('command and output summaries show one line and a more control', () =>
     assertEquals(root.querySelector('.Entry-fail'), null)
   }))
 
-Deno.test('expanded entries offer full, MD, JSON, and Debug faces', () =>
+Deno.test('generic entry summaries are metadata variants', () =>
+  withDom((root) => {
+    let e = {
+      eid: '00000000-0000-4000-8000-000000000004',
+      entry: { session: '00000000-0000-4000-8000-000000000001', seq: 3 },
+      attention: {},
+    } as Ent
+    render(<EntrySummary e={e} />, root)
+    assertEquals(root.querySelector('.Entry-meta')?.textContent, 'attention')
+    assertEquals(root.querySelector('.Entry_Meta'), null)
+  }))
+
+Deno.test('message summaries preserve who spoke', () =>
+  withDom((root) => {
+    let e = {
+      eid: '00000000-0000-4000-8000-000000000004',
+      message: { role: 'user' },
+      content: { body: 'hello' },
+    } as Ent
+    render(<MessageSummary e={e} />, root)
+    assertEquals(root.querySelector('.Entry-user')?.textContent.trim(), 'hello')
+  }))
+
+Deno.test('expanded entries offer only specifically rendered faces', () =>
   withDom((root) => {
     rows()
     let [, answer] = Object.keys(cache.value)
@@ -90,7 +116,6 @@ Deno.test('expanded entries offer full, MD, JSON, and Debug faces', () =>
     let tabs = [...root.querySelectorAll<HTMLButtonElement>('.Entry_Tabs .Tab')]
     assertEquals(tabs.map((tab) => tab.getAttribute('aria-label')), [
       'Full',
-      'MD',
       'JSON',
       'Debug',
     ])

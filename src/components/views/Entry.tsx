@@ -5,6 +5,7 @@ import { type Ent } from '../../types.ts'
 import { backlinks, ent } from '../../live.ts'
 import { block, el } from '../ui.tsx'
 import { Entity } from '../Entity.tsx'
+import { resolve } from '../registry.ts'
 import { Icon } from '../icons.tsx'
 import { Ansi } from '../Ansi.tsx'
 import { Markdown } from '../Markdown.tsx'
@@ -19,11 +20,9 @@ let Frame = block('div', 'Entry', {
   Code: 'pre',
   Output: 'div',
   Err: 'pre',
-  Meta: 'div',
 })
-let { Lens, Tabs, Line, More, Name, Status, Code, Output, Err, Meta } = Frame
+let { Lens, Tabs, Line, More, Name, Status, Code, Output, Err } = Frame
 let Tab = el('button', 'Tab')
-let Pre = el('pre', 'Md')
 
 let lines = (text = '') => text.replace(/\n$/, '').split('\n')
 let first = (text = '') => lines(text)[0]
@@ -40,12 +39,12 @@ let result = (e: Ent) => {
 }
 
 export let EntrySummary = ({ e }: { e: Ent }) => (
-  <Meta>
+  <Frame mod='meta'>
     {Object.keys(e).filter((k) =>
       e[k as keyof Ent] &&
       !['eid', 'num', 'kind', 'refs', 'kids', 'entry'].includes(k)
     ).join(' · ')}
-  </Meta>
+  </Frame>
 )
 
 export let CommandSummary = (
@@ -78,7 +77,11 @@ export let ResultSummary = (
   </Frame>
 )
 
-export let MessageSummary = ({ e }: { e: Ent }) => <Markdown text={body(e)} />
+export let MessageSummary = ({ e }: { e: Ent }) => (
+  <Frame mod={e.message?.role}>
+    <Markdown text={body(e)} />
+  </Frame>
+)
 
 export let CommandFull = ({ e }: { e: Ent }) => {
   let out = result(e)
@@ -119,17 +122,12 @@ export let ResultFull = ({ e }: { e: Ent }) => (
   </Frame>
 )
 
-export let MessageFull = ({ e }: { e: Ent }) => <Markdown text={body(e)} />
-
-export let EntryFull = ({ e }: { e: Ent }) => (
-  <Code>{JSON.stringify(e, null, 2)}</Code>
+export let MessageFull = ({ e }: { e: Ent }) => (
+  <Frame mod={e.message?.role}>
+    <Markdown text={body(e)} />
+  </Frame>
 )
 
-export let EntryMd = ({ e }: { e: Ent }) => (
-  <Pre>{body(e) || JSON.stringify(e, null, 2)}</Pre>
-)
-
-let views = ['Full', 'Markdown', 'JSON', 'Debug']
 let icon = (view: string) =>
   view == 'Full'
     ? 'file-text'
@@ -142,7 +140,12 @@ let icon = (view: string) =>
 // Entry rows are not cards, but expansion has the same view choice at its
 // top-right edge. Qualifying the ask keeps this lens in the entry vocabulary.
 export let EntryLens = ({ eid }: { eid: string }) => {
-  let [view, setView] = useState('Full')
+  let e = ent(eid)
+  let full = resolve(e, 'Entry.Full').view != 'JSON'
+  let markdown = resolve(e, 'Entry.Markdown').view != 'JSON'
+  let views = [full && 'Full', markdown && 'Markdown', 'JSON', 'Debug']
+    .filter(Boolean) as string[]
+  let [view, setView] = useState(views[0])
   return (
     <Lens>
       <Tabs>
