@@ -3089,6 +3089,11 @@ a[data-ref]:hover {
   flex: 1 1 0;
   min-width: 0;
 }
+.Session_Content::after {
+  content: '';
+  display: block;
+  clear: both;
+}
 .Session_Seq {
   flex: none;
   text-align: right;
@@ -3113,10 +3118,11 @@ a[data-ref]:hover {
 .Session_Seq:focus-visible {
   color: var(--accent);
 }
-/* When the message landed — dim, kept at the line's right edge (the
-   transcript face beside it takes the slack). */
+/* The clock belongs to the entry rather than its own lane: prose may wrap
+   beneath it instead of surrendering the right edge for every line. */
 .Session_When {
-  flex: none;
+  float: right;
+  margin-left: var(--half-gap);
   font-size: 11px;
   color: var(--dim);
 }

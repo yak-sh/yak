@@ -160,6 +160,8 @@ export let graphLog = (source: EntryRow[]): GraphLog => {
     .generation
   let entries = rows.map((source) => {
     let row = shown(source, byEid)
+    let at = text(source.comps.created?.at)
+    if (row && at && !row.at) row = { ...row, at }
     if (row?.kind == 'turn' && source.comps.usage) {
       let context = Number(source.comps.usage.input ?? 0)
       if (context > 0) row = { ...row, context }

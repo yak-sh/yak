@@ -67,6 +67,7 @@ let Frame = block('div', 'Session', {
   Fault: 'p',
   Log: 'div',
   Line: 'div',
+  Content: 'div',
   Seq: 'button',
   When: 'time',
   Raw: 'span',
@@ -116,6 +117,7 @@ let {
   Fault,
   Log,
   Line,
+  Content,
   Seq,
   When,
   Raw,
@@ -517,8 +519,10 @@ let Row = ({ x, repo }: { x: Entry; repo?: string }) => {
       >
         {x.seq}
       </Seq>
-      <SessionBody x={x} repo={repo} />
-      {at && <When data-tip={pretty(at)}>{ago(at)}</When>}
+      <Content>
+        {at && <When data-tip={pretty(at)}>{ago(at)}</When>}
+        <SessionBody x={x} repo={repo} />
+      </Content>
       {open && <Json>{prettyJson(x.line)}</Json>}
     </Line>
   )

@@ -14,6 +14,7 @@ Deno.test('graph log renders ordered calls, results, model, and usage', () => {
     row('input', 1, {
       message: { role: 'user' },
       content: { body: 'do it' },
+      created: { at: '2026-08-12T00:00:00Z' },
     }),
     row('generation', 2, {
       generation: {
@@ -47,6 +48,7 @@ Deno.test('graph log renders ordered calls, results, model, and usage', () => {
   assertEquals(log.model, 'served')
   assertEquals(log.busy, false)
   assertEquals(log.entries.map((entry) => entry.seq), [1, 2, 3, 4, 5])
+  assertEquals(log.entries[0].row?.at, '2026-08-12T00:00:00Z')
   assertEquals(log.entries[1].row, {
     kind: 'turn',
     model: 'served',
