@@ -138,30 +138,43 @@ let delivered = (
   cast([change])
 }
 
-let sessionError = (
+// A managed Session's health (D-17077, T-17081). A fault reaching here is
+// always a genuine BREAK — a generation or call that threw PAST the cancel gate
+// (valid() screens a stop before this), a vanished runner, a failed prepare —
+// so it wears the `exception` facet (the self-healing trigger), never `error`.
+// No live heal fires from here: excepted()'s dispatch door reads deliver.ts's
+// SINGLETON db, which this runner is not under test, so the break rides the
+// narrow table door and the boot sweep (HEAL_PENDING) files its deduped bug.
+// That is the RIGHT floor, not a shortcut — a break that self-recovers clears
+// the facet (below) before any boot, so only an UNRECOVERED one is ever filed.
+// A clean turn sheds both facets so a recovered Session reads well.
+let sessionFault = (
   db: DatabaseSync,
   eid: string,
-  message: string | null,
+  fault: string | null,
   cast: Cast,
   clock: () => Date,
 ) => {
   let changes: Change[] = []
-  if (message == null) {
+  if (fault == null) {
     if (db.prepare('delete from error where eid = ?').run(eid).changes) {
       changes.push({ eid, name: 'error', comp: null })
     }
+    if (db.prepare('delete from exception where eid = ?').run(eid).changes) {
+      changes.push({ eid, name: 'exception', comp: null })
+    }
   } else {
-    let old = db.prepare('select message from error where eid = ?').get(eid) as
-      | { message: string }
-      | undefined
-    if (old?.message == message) return
-    let comp = { eid, at: clock().toISOString(), message }
+    let old = db.prepare('select message from exception where eid = ?').get(
+      eid,
+    ) as { message: string } | undefined
+    if (old?.message == fault) return
+    let comp = { eid, at: clock().toISOString(), message: fault, stack: null }
     db.prepare(
-      `insert into error (eid, at, message) values (?, ?, ?)
+      `insert into exception (eid, at, message, stack) values (?, ?, ?, null)
        on conflict(eid) do update set at = excluded.at,
          message = excluded.message`,
-    ).run(eid, comp.at, message)
-    changes.push({ eid, name: 'error', comp })
+    ).run(eid, comp.at, fault)
+    changes.push({ eid, name: 'exception', comp })
   }
   if (changes.length) {
     record(db, changes)
@@ -336,7 +349,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
         cast(append(db, session, work.specs, runner).changes)
       }
       cast(settleGeneration(db, token, work.usage, clock, work.model))
-      sessionError(db, session, null, cast, clock)
+      sessionFault(db, session, null, cast, clock)
       clear = true
     } catch (error) {
       if (!valid(db, token)) return
@@ -344,7 +357,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
       if (evidence.length) cast(append(db, session, evidence, runner).changes)
       let message = String((error as Error).message).slice(0, 2000)
       cast(failEntry(db, token, message, clock))
-      sessionError(db, session, message, cast, clock)
+      sessionFault(db, session, message, cast, clock)
       clear = true
     } finally {
       stop()
@@ -371,7 +384,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
       if (!valid(db, token)) return
       let message = String((error as Error).message).slice(0, 2000)
       cast(failEntry(db, token, message, clock))
-      sessionError(db, session, message, cast, clock)
+      sessionFault(db, session, message, cast, clock)
     } finally {
       stop()
       flights.delete(token.eid)
@@ -396,7 +409,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
         let settled = settleGeneration(db, lease, undefined, clock)
         if (settled.length) {
           cast(settled)
-          sessionError(db, lease.session, null, cast, clock)
+          sessionFault(db, lease.session, null, cast, clock)
           continue
         }
       }
@@ -409,7 +422,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
         let settled = settleCall(db, lease)
         if (settled.length) {
           cast(settled)
-          sessionError(db, lease.session, null, cast, clock)
+          sessionFault(db, lease.session, null, cast, clock)
           continue
         }
       }
@@ -425,7 +438,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
       }
       let message = 'runner disappeared; operation outcome is ambiguous'
       cast(failEntry(db, lease, message, clock))
-      sessionError(db, lease.session, message, cast, clock)
+      sessionFault(db, lease.session, message, cast, clock)
     }
     return retries
   }
@@ -567,7 +580,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
         cast(won.changes)
         cast(failEntry(db, won.token, message, clock))
       }
-      sessionError(db, eid, message, cast, clock)
+      sessionFault(db, eid, message, cast, clock)
       return
     } finally {
       blocked.delete(eid)

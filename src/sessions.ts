@@ -34,7 +34,12 @@ import { basename, dirname, resolve } from 'node:path'
 import { childEnv } from './agent_env.ts'
 import { type Adapter, adapters, type Event, type Summary } from './adapters.ts'
 import { apply, db, human, record, snapshot } from './db.ts'
-import { delivered, errorChange, healthChange } from './deliver.ts'
+import {
+  delivered,
+  errorChange,
+  exceptionChange,
+  healthChange,
+} from './deliver.ts'
 import { present, reachable } from './door.ts'
 import { dispatch, trace } from './effects.ts'
 import { legacyWorktreesDir, worktreesDir } from './ground.ts'
@@ -210,11 +215,19 @@ let stamp = (
   cast: Cast,
 ) => {
   let failure = Object.hasOwn(patch, 'error') ? (patch as Row).error : undefined
+  // A BREAK rides beside the status (D-17081): `error` is a known/expected
+  // failure state, `exception` is a bug the self-healing effect fixes. Both are
+  // pseudo-columns stamp() routes to their own facet, not session columns.
+  let broke = Object.hasOwn(patch, 'exception')
+    ? (patch as Summary).exception
+    : undefined
   let body = Object.fromEntries(
-    Object.entries(patch).filter(([col]) => col != 'error'),
+    Object.entries(patch).filter(([col]) =>
+      col != 'error' && col != 'exception'
+    ),
   )
   let cols = Object.keys(body)
-  if (!cols.length && failure === undefined) return
+  if (!cols.length && failure === undefined && broke === undefined) return
   // The settle broadcast hangs off the ONE WRITER: lifecycle columns
   // never cross apply(), so the effects dispatcher cannot see this
   // transition — the writer that stamps an ending is the only observer
@@ -224,6 +237,7 @@ let stamp = (
   if (!was) return
   let ending = SETTLED.includes(String(body.status))
   let changes: Change[] = []
+  let exc: Change | undefined
   db.exec('begin')
   try {
     changes.push(...writeSession(db, eid, body))
@@ -232,6 +246,10 @@ let stamp = (
         ? errorChange(eid, String(failure))
         : healthChange(eid)
       if (change) changes.push(change)
+    }
+    if (broke) {
+      let change = exceptionChange(eid, broke.message, broke.stack ?? null)
+      if (change) changes.push(exc = change)
     }
     let visible = changes.flatMap((change) => {
       if (
@@ -253,6 +271,15 @@ let stamp = (
   // shows, and a long run freezes every open canvas (T-7063). Only a
   // column whose value actually moved is worth telling everyone.
   if (changes.length) cast(changes)
+  // A break stamped: fire the heal effect LIVE (deliver.ts excepted()'s door).
+  // A launch/finish failure is terminal — it won't self-recover — so the ticket
+  // should file now, not wait for a boot reconcile. A throwing filer is telemetry
+  // (dispatch isolates it), never a break in this settle.
+  if (exc) {
+    let t = trace()
+    t.created.add(`exception ${exc.eid}`)
+    dispatch([exc], t, (comp, e) => console.warn(`heal ${comp} —`, e))
+  }
   if (ending && was.status != body.status) {
     settled(eid, String(body.status), cast)
   }
@@ -376,7 +403,11 @@ let settled = (eid: string, status: string, cast: Cast) => {
       eid,
       status,
       row,
-      String(sess?.comps.error?.message ?? ''),
+      // The WHY for the spawn-back comment: a known `error` (unlanded work) or
+      // an `exception` break (a failed run) — a failed session wears the latter.
+      String(
+        sess?.comps.error?.message ?? sess?.comps.exception?.message ?? '',
+      ),
       stranded,
     ),
   )
@@ -758,11 +789,42 @@ let finish = async (eid: string, t: Tail, run: Run, cast: Cast) => {
   // vanishes mid-call). Either way it otherwise sits in a file nobody reads,
   // so a failed session shows no WHY. Only on failure — a clean run must not
   // wear benign stderr as an error.
-  let error = t.errs.length
+  // The WHY beside the status: the stdout stream's own diagnosis, else — on a
+  // failure — the stderr tail. The status is the domain fact; this names it.
+  let why = t.errs.length
     ? diagnosis(t)
     : !ok
     ? errTail(eid).trim().slice(-2000)
     : ''
+  let status = row.stop_requested_at
+    ? 'interrupted'
+    : ok
+    ? 'completed'
+    : 'failed'
+  let reason = code == null ? run.why(reported) : null
+  // A launch that never produced a wrapper is stillborn — a failed LAUNCH, a
+  // genuine break. Every OTHER unobservable exit (a child that outlived a server
+  // restart, a wrapper SIGKILLed before reporting) is an observability gap of
+  // the detach design, not a bug.
+  let stillborn = reason?.startsWith('stillborn') ?? false
+  // Three-way sort of that WHY (D-17081): an interruption we ASKED for is normal
+  // machinery — the `interrupted` status is the whole truth, so no fault facet.
+  // A break wears `exception`, the self-healing trigger: a READ non-zero exit
+  // (127, a crash, a clean exit with no terminal event — the provider died
+  // mid-call) or a stillborn launch. An unobservable exit that is NOT stillborn
+  // is a known operational end — surfaced as `error` if it left words, never
+  // healed. A completed run that merely muttered on its way out is `error` too.
+  let broke = status == 'failed' && (code != null || stillborn)
+  let health = status == 'interrupted' ? {} : broke
+    ? {
+      exception: {
+        message: why ||
+          `session failed${code == null ? '' : ` (exit ${code})`}`,
+      },
+    }
+    : why
+    ? { error: why }
+    : {}
   // Bookkeeping BEFORE the ending is said: stamp() fires settled(), whose
   // unheard flush may wake the session right back up — and the new run's
   // `running` entry and pidfile must not be swept by this one's epilogue.
@@ -785,17 +847,13 @@ let finish = async (eid: string, t: Tail, run: Run, cast: Cast) => {
   }
   await followWrite(eid, () =>
     stamp(eid, {
-      status: row.stop_requested_at
-        ? 'interrupted'
-        : ok
-        ? 'completed'
-        : 'failed',
+      status,
       exit_code: code,
-      stop_reason: code == null ? run.why(reported) : null,
+      stop_reason: reason,
       input_at: null,
       finished_at: now(),
       latest_seq: t.seq,
-      ...(error ? { error } : {}),
+      ...health,
     }, cast))
 }
 
@@ -1472,10 +1530,15 @@ let launch = async (
       ...(j.task ? { TASKS_TASK: j.task } : {}),
     }, cast)
   } catch (e) {
+    // Worktree, child, or tailer refused: the launch never ran (D-17081). A
+    // failed launch is a genuine break → `exception` with the throw's stack.
     running.delete(eid)
     stamp(eid, {
       status: 'failed',
-      error: String(e).slice(0, 2000),
+      exception: {
+        message: String(e).slice(0, 2000),
+        stack: (e as Error).stack ?? null,
+      },
       finished_at: now(),
     }, cast)
   }
@@ -1793,10 +1856,15 @@ let resume = async (
     cast,
     from,
   ).catch((e) => {
+    // The continuation child never started — a failed launch, a genuine break
+    // (D-17081) → `exception` with the throw's stack, the self-healing trigger.
     running.delete(eid)
     stamp(eid, {
       status: 'failed',
-      error: String(e).slice(0, 2000),
+      exception: {
+        message: String(e).slice(0, 2000),
+        stack: (e as Error).stack ?? null,
+      },
       finished_at: now(),
     }, cast)
   })

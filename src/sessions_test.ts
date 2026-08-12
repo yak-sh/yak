@@ -57,6 +57,12 @@ let failure = (eid: string) =>
   (db.prepare('select message from error where eid = ?').get(eid) as
     | { message: string }
     | undefined)?.message
+// The break facet's message: a failed run wears `exception`, not `error`
+// (T-17081), so a genuine crash/failed-launch reads here, not through failure().
+let broke = (eid: string) =>
+  (db.prepare('select message from exception where eid = ?').get(eid) as
+    | { message: string }
+    | undefined)?.message
 let spawnRow = (eid: string) =>
   db.prepare('select * from spawn where eid = ?').get(eid) as
     | Record<string, string | number | null>
@@ -929,7 +935,9 @@ slow(
     assertEquals(s.exit_code, null)
     // Not 'the wrapper died before reporting': no wrapper ever ran to die.
     assertMatch(String(s.stop_reason), /^stillborn/)
-    assertMatch(failure(eid) ?? '', /transient scope unit/)
+    // A stillborn launch is a genuine break → the `exception` facet (T-17081).
+    assertMatch(broke(eid) ?? '', /transient scope unit/)
+    assertEquals(failure(eid), undefined)
   },
 )
 
@@ -946,7 +954,8 @@ slow(
     await done
     assertEquals(row(eid)?.status, 'failed')
     assertEquals(row(eid)?.exit_code, 0) // clean OS exit, unfinished work
-    assertMatch(failure(eid) ?? '', /stderr noise/)
+    // Failed without a terminal event is a break → `exception` (T-17081).
+    assertMatch(broke(eid) ?? '', /stderr noise/)
   },
 )
 
@@ -1132,6 +1141,11 @@ slow(
     // The request stays as audit, settled delivered when the signals were sent.
     assert(acted(sr))
     await done
+    // An interruption we ASKED for is normal machinery, never a break: the
+    // `interrupted` status is the whole truth, so neither health facet is stamped
+    // (T-17081) — nothing for self-healing to fix.
+    assertEquals(broke(eid), undefined)
+    assertEquals(failure(eid), undefined)
     // A second pull on a settled session bounces off the RULE.
     assertThrows(
       () =>

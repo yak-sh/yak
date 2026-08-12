@@ -7,7 +7,7 @@
 // comment on the target in the same batch. SERVER-ONLY (imports db).
 import { apply, db, human, snapshot } from './db.ts'
 import { reachable } from './door.ts'
-import { delivered, errored, toOf } from './deliver.ts'
+import { delivered, errored, excepted, toOf } from './deliver.ts'
 import { dispatch, trace } from './effects.ts'
 import { type Change, uuid } from './types.ts'
 import { isOperator, rows, spawnChanges } from './client.ts'
@@ -171,6 +171,9 @@ export let knocked =
       // resumes it (sessions.ts commented); the knock records the miss.
       fail(`no door: ${human(db, to)} is not awake, spawnable-at, or addressed`)
     } catch (e) {
-      fail(String(e).slice(0, 500))
+      // A ladder rung THREW — an unexpected break (a spawn/apply that blew up),
+      // not the known "no door reachable" miss above (D-17081). Stamp the
+      // `exception` facet with its stack; excepted() files the deduped bug live.
+      excepted(eid, String(e).slice(0, 500), (e as Error).stack ?? null, cast)
     }
   }

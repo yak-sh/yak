@@ -778,8 +778,14 @@ Deno.test('a failed generation consumes its wake and accepts the next', async ()
   assertEquals(rows.filter((row) => row.comps.attention).length, 2)
   assertEquals(rows.filter((row) => row.comps.generation).length, 3)
   assertEquals(rows.at(-1)?.comps.content?.body, 'recovered')
+  // The break stamped an `exception` (T-17081); recovering the next turn shed
+  // it, so a healed Session carries neither health facet.
   assertEquals(
     db.prepare('select 1 from error where eid = ?').get(sid),
+    undefined,
+  )
+  assertEquals(
+    db.prepare('select 1 from exception where eid = ?').get(sid),
     undefined,
   )
   db.close()
@@ -787,8 +793,9 @@ Deno.test('a failed generation consumes its wake and accepts the next', async ()
 
 Deno.test('a failed generation persists the provider reason, not the bare status', async () => {
   // End to end through the real Responses transport: a 400 whose complaint
-  // lives only in the body `message` must reach the session error, or a
+  // lives only in the body `message` must reach the session as a BREAK, or a
   // graph-native failure reads as the useless `responses: HTTP 400` (T-16887).
+  // The fault is our own malformed request → the `exception` facet (T-17081).
   let db = freshDb()
   let sid = session(db)
   let transport = responses({
@@ -815,12 +822,17 @@ Deno.test('a failed generation persists the provider reason, not the bare status
     prepare: () => Promise.resolve(),
   })
   await service.start(sid, noCodeJob())
-  let error = db.prepare('select message from error where eid = ?').get(sid) as
-    | { message: string }
-    | undefined
+  let broke = db.prepare('select message from exception where eid = ?').get(
+    sid,
+  ) as { message: string } | undefined
   assertEquals(
-    error?.message,
+    broke?.message,
     'responses: HTTP 400 — No tool output found for function call call_7.',
+  )
+  // A break, not a known error: it wears `exception`, not `error`.
+  assertEquals(
+    db.prepare('select 1 from error where eid = ?').get(sid),
+    undefined,
   )
   db.close()
 })
@@ -865,6 +877,14 @@ Deno.test('stop aborts the leased generation and refuses its late output', async
   let rows = readEntries(db, sid)
   assertEquals(rows.filter((row) => row.comps.cancel).length, 1)
   assertEquals(rows.some((row) => row.comps.output), false)
+  // A stop is normal machinery, NEVER a break (T-17081): the aborted generation
+  // is screened by valid() before sessionFault, so neither the Session nor its
+  // cancelled entry wears an `exception` — nothing for self-healing to fix.
+  assertEquals(
+    db.prepare('select 1 from exception where eid = ?').get(sid),
+    undefined,
+  )
+  assertEquals(rows.some((row) => row.comps.exception), false)
   assertEquals(
     !!db.prepare('select 1 from delivered where eid = ?').get(request),
     true,
