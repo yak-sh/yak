@@ -49,7 +49,6 @@ let session = (): Ent => ({
     eid: 'session',
     id: 'run',
     origin: 'managed',
-    base_revision: 'abc',
   },
   spawn: { eid: 'session', provider: 'codex' },
   refs: [],
@@ -59,6 +58,7 @@ let session = (): Ent => ({
 Deno.test('graph-native status follows work, final answers, and wakes', () => {
   let e = session()
   let log = { entries: [], busy: true, terminal: false, latest: 1 }
+  assertEquals(graphStanding(e, undefined, false), 'running')
   assertEquals(graphStanding(e, log, false), 'running')
   assertEquals(graphStanding(e, { ...log, busy: false }, false), 'idle')
   assertEquals(

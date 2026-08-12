@@ -54,7 +54,7 @@ export let graphStanding = (
     e.spawn?.provider == 'codex'
   if (!native) return standing(s)
   if (e.error) return 'failed'
-  if (!s.base_revision || log?.busy) return 'running'
+  if (!log || log.busy) return 'running'
   if (waking) return 'idle'
   return log?.terminal ? 'completed' : 'idle'
 }
