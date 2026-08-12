@@ -632,6 +632,7 @@ export let derived = [
   'attention',
   'task_context',
   'reasoning',
+  'recalled',
   'spawn',
   'hook',
   'person',

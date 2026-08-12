@@ -517,6 +517,56 @@ Deno.test('what THIS run injected is never re-rung, even by a catch-up', () => {
   )
 })
 
+// --- recall (T-17306) --------------------------------------------------------
+// A recall entry (recall.ts) lands in a session's OWN log — the delivery address
+// is its `entry.session` partition, no recipient facet. The `recalled` component
+// is the marker; the floater lines ride the `content` body.
+
+let recalled = (
+  eid: string,
+  session: string,
+  body: string,
+  source = 'msg',
+): Change[] => [
+  ch(eid, 'entry', { session }),
+  ch(eid, 'content', { body }),
+  ch(eid, 'recalled', { source }),
+]
+
+Deno.test('a recall entry in this session emits kind=recall with its floaters', () => {
+  let batch = recalled('r1', 'sess', 'M-17299 · escalation is a bug report')
+  assertEquals(channelEvents(batch, ctx()), [{
+    content: 'M-17299 · escalation is a bug report',
+    meta: { kind: 'recall' },
+    eid: 'r1',
+  }])
+})
+
+Deno.test("a recall entry in another session's log isn't this session's", () => {
+  let batch = recalled('r1', 'elsewhere', 'M-1 · not for us')
+  assertEquals(channelEvents(batch, ctx()), [])
+})
+
+Deno.test('a bodiless recall entry is skipped', () => {
+  let batch = [
+    ch('r1', 'entry', { session: 'sess' }),
+    ch('r1', 'recalled', {
+      source: 'msg',
+    }),
+  ]
+  assertEquals(channelEvents(batch, ctx()), [])
+})
+
+Deno.test('an already-notified recall entry is not re-injected', () => {
+  let batch = recalled('r1', 'sess', 'M-5 · a floated thought')
+  let told = new Set<string>()
+  let c = ctx({ notified: (e) => told.has(e) })
+  let first = channelEvents(batch, c)
+  assertEquals(first.length, 1)
+  told.add(first[0].eid) // the plugin's post-inject stamp
+  assertEquals(channelEvents(batch, c), [])
+})
+
 // --- the reconnect sweep (T-7302) --------------------------------------------
 // A knock that commits while the socket is down is INSIDE the snapshot the
 // reconnect fetches, so no {since} window replays it. The resume pass reads

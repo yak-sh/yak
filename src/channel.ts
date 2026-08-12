@@ -356,6 +356,26 @@ let docsIn = (changes: Change[]) => {
 let words = (doc?: { title: string; body: string }) =>
   doc ? cleanBody(doc.body || doc.title) : ''
 
+// A recall entry lands in a session's OWN log (recall.ts) — no target, no
+// recipient facet: the delivery address IS its `entry.session` partition. So
+// index the batch's entry→session and eid→content(body), the way docsIn indexes
+// a comment's words. The `recalled` component is the entry's unique marker (an
+// ordinary message entry carries `message`, never `recalled`).
+let sessionsIn = (changes: Change[]) => {
+  let s = new Map<string, string>()
+  for (let c of changes) {
+    if (c.name == 'entry' && c.comp) s.set(c.eid, str(c.comp.session))
+  }
+  return s
+}
+let bodiesIn = (changes: Change[]) => {
+  let b = new Map<string, string>()
+  for (let c of changes) {
+    if (c.name == 'content' && c.comp) b.set(c.eid, str(c.comp.body))
+  }
+  return b
+}
+
 let createdIn = (changes: Change[]) => {
   let made = new Map<string, Record<string, unknown>>()
   for (let c of changes) {
@@ -389,7 +409,7 @@ let bornIn = (changes: Change[]) => {
 
 // The filter + format, pure. Given one broadcast batch and the session context,
 // return the channel events to emit — in batch order, so delivery is
-// deterministic. Three things are aimed at a session:
+// deterministic. Four things are aimed at a session:
 //
 //   1. a `comment` whose target is this session's eid OR one of its CLAIMED
 //      tasks (commenting on a task you hold IS messaging you — the comms bus
@@ -401,11 +421,16 @@ let bornIn = (changes: Change[]) => {
 //      words ride as a plain comment on the TARGET in the same batch (the
 //      :knock contract).
 //   3. a `mail` arrival for the session's home project — see the branch.
+//   4. a `recall` (recall.ts): memories that floated up as this session
+//      thought, written into its OWN log — addressed by the entry's session
+//      partition, not a recipient facet.
 export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
   let docs = docsIn(changes)
   let created = createdIn(changes)
   let { delivered, errored } = outcomesIn(changes)
   let recipients = toIn(changes)
+  let sessions = sessionsIn(changes)
+  let bodies = bodiesIn(changes)
   // Only the resume sweep needs birthdays (commentOn) — a live batch is one
   // moment, so everything in it rode together.
   let born = ctx.mode == 'resume' || ctx.mode == 'inbox'
@@ -511,6 +536,21 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
       if (subj) meta.subj = subj
       if (id) meta.id = id
       out.push({ content, meta, eid: c.eid })
+      continue
+    }
+
+    // A `recall` (recall.ts): memories that floated up as this session thought,
+    // written into its own log. The delivery address is the entry's session
+    // partition — no recipient facet — so it rings whatever loop this is, like a
+    // comment on the session itself, never gated on operator/mail. The content
+    // is the floater lines (M-id · title); the `notified` gate dedups a replay.
+    if (c.name == 'recalled') {
+      if (sessions.get(c.eid) != ctx.sessionEid) continue
+      let content = cleanBody(bodies.get(c.eid) ?? '')
+      if (!content) continue
+      if (told(c.eid)) continue
+      out.push({ content, meta: { kind: 'recall' }, eid: c.eid })
+      continue
     }
   }
   return out

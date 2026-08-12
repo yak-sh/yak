@@ -160,6 +160,7 @@ let contracts = [
   contract('output', 'source', 'generation', {}, undefined, true),
   contract('result', 'call', 'call', {}, undefined, true),
   contract('checkpoint', 'through', 'entry', {}, undefined, true),
+  contract('recalled', 'source', 'entry', {}, undefined, true),
   contract('mail', 'reply_to', 'mail'),
   contract('persona', 'home', 'project'),
   contract('memory', 'scope', 'project'),

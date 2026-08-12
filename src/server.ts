@@ -41,6 +41,7 @@ import { freeze, serveFrozen, store } from './freeze.ts'
 import { filed } from './page.ts'
 import { PENDING } from './deliver.ts'
 import { ensureFixer, fileBug, FIXER_PENDING, HEAL_PENDING } from './heal.ts'
+import { recallEntry } from './recall.ts'
 import { fanout, FANOUT_PENDING, mailed } from './mail.ts'
 import { native } from './mailer.ts'
 import { closingTask } from './closing.ts'
@@ -1127,6 +1128,14 @@ on('entry', {
   created: runnerSoon,
   doc: 'a new Session entry wakes the graph-native runner; ' +
     'its indexed candidate query decides whether there is work',
+})
+on('message', {
+  created: recallEntry(cast),
+  doc: 'memory auto-recall (T-17306): a new message entry surfaces the ' +
+    "nearest memories by title into the session's own log as a `recalled` " +
+    'entry (deduped per session), which the channel delivers as kind=recall; ' +
+    'new messages only, no history sweep, and a recall entry carries no ' +
+    'message facet so it never recalls itself',
 })
 on('session', {
   created: spawned(cast, managed.start),

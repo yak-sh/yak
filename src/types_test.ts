@@ -114,6 +114,9 @@ Deno.test('death words: every reference declares, the sets hold', () => {
       'result.call',
       'checkpoint.through',
       'cancel.target',
+      // A recall floater keeps naming its source message and memories after
+      // either dies — the dedup ledger and provenance survive.
+      'recalled.source',
       // Proposal, decision, and feedback bylines outlive their tombstones.
       'decided.by',
       'proposed.by',

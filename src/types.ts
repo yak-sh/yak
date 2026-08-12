@@ -180,6 +180,13 @@ export let sessionComps: Record<string, Record<string, PropType>> = {
   checkpoint: { through: { eid: 'entry', death: 'keep' } },
   cancel: { target: { eid: 'entity', death: 'keep' } },
   reasoning: {},
+  // Memory auto-recall (T-17306): a recall-floater entry — the memories the
+  // graph surfaced for the message named by `source`. It carries no `message`
+  // facet, so the recall effect (which fires on message) never fires on a
+  // recall entry: recall cannot recall itself. The floated memories ride
+  // `recalled`-type dependency edges off this entry, so a session's earlier
+  // floaters stay queryable for per-session dedup.
+  recalled: { source: { eid: 'entry', death: 'keep' } },
   // Same-provider replay evidence only: encrypted reasoning and provider
   // shapes the typed vocabulary does not yet know.
   opaque: { format: 'text', data: 'body' },
@@ -1155,6 +1162,8 @@ export let friendly = (model?: string | null) => {
 // The LIST is the source of truth: db.ts bakes it into the dependency
 // table's check constraint (and rebuilds a live table whose baked list
 // has fallen behind), so a new verb here is a new verb everywhere.
+// parent recalled child (a recall-floater entry names the memories it
+// surfaced — the per-session dedup ledger; never gates).
 export let edges = [
   'requires',
   'contains',
@@ -1162,6 +1171,7 @@ export let edges = [
   'about',
   'supervises',
   'delegates',
+  'recalled',
 ] as const
 export type Edge = (typeof edges)[number]
 
@@ -1409,6 +1419,7 @@ export type Headers = { eid: string; data: string }
 export type Stderr = { eid: string; text: string }
 export type Timeout = { eid: string; ms: number }
 export type Checkpoint = { eid: string; through: string }
+export type Recalled = { eid: string; source: string }
 export type Cancel = { eid: string; target: string }
 export type Opaque = { eid: string; format: string; data: string }
 export type Runner = { eid: string; name: string }
@@ -1774,6 +1785,7 @@ export type Ent = {
   checkpoint?: Checkpoint
   cancel?: Cancel
   reasoning?: { eid: string }
+  recalled?: Recalled
   opaque?: Opaque
   runner?: Runner
   lease?: Lease
