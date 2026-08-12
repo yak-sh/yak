@@ -197,6 +197,41 @@ export let reclaimEntry = (
   }
 }
 
+// A lease is a liveness lease: while its holder is alive and still working an
+// operation that outlives the base TTL, renewal pushes `until` forward so no
+// successor mistakes a long generation or command for a dead runner and
+// reclaims (double-run) or fails it. The CAS matches the held lease exactly
+// (eid+holder+at, unchanged by renewal, so the holder's own settle/valid path
+// is untouched) and refuses a cancelled one. undefined means the lease is gone
+// — the caller's heartbeat simply stops.
+export let renewEntry = (
+  db: DatabaseSync,
+  token: LeaseToken,
+  ttl = 30_000,
+  clock = () => new Date(),
+): { token: LeaseToken; changes: Change[] } | undefined => {
+  let until = new Date(clock().getTime() + Math.max(1, ttl)).toISOString()
+  let next: LeaseToken = { ...token, until }
+  let change: Change = { eid: token.eid, name: 'lease', comp: { ...next } }
+  db.exec('begin immediate')
+  try {
+    let n = db.prepare(
+      `update lease set until = ? where eid = ? and holder = ? and at = ?
+       and not exists (select 1 from cancel c where c.target = lease.eid)`,
+    ).run(until, token.eid, token.holder, token.at).changes
+    if (!n) {
+      db.exec('rollback')
+      return undefined
+    }
+    record(db, [change], token.holder)
+    db.exec('commit')
+    return { token: next, changes: [change] }
+  } catch (e) {
+    db.exec('rollback')
+    throw e
+  }
+}
+
 let normalizedUsage = (value: UsageValue) => ({
   input: Math.max(0, Math.trunc(value.input)),
   cached: Math.max(0, Math.trunc(value.cached)),

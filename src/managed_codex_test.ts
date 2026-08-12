@@ -2,7 +2,14 @@
 // provider/tools. No process, credential, or owner graph participates.
 import { assert, assertEquals, assertMatch } from '@std/assert'
 import { apply, journalOf, open } from './db.ts'
-import { append, readEntries, settleGeneration, takeEntry } from './entries.ts'
+import {
+  append,
+  expiredLeases,
+  readEntries,
+  readyEntries,
+  settleGeneration,
+  takeEntry,
+} from './entries.ts'
 import { managedCodex } from './managed_codex.ts'
 import { type Observation } from './observations.ts'
 import {
@@ -95,6 +102,21 @@ let noCodeJob = () => ({
   session_id: uuid(),
   model: 'gpt-requested',
   effort: 'high',
+})
+
+let delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+
+let leaseUntil = (db: ReturnType<typeof open>, eid: string) =>
+  (db.prepare('select until from lease where eid = ?').get(eid) as
+    | { until: string }
+    | undefined)?.until
+
+let shellCall = (command: string) => ({
+  type: 'function_call' as const,
+  id: 'item-1',
+  call_id: 'call-1',
+  name: 'shell',
+  arguments: JSON.stringify({ command, cwd: null, timeout_ms: 1000 }),
 })
 
 Deno.test('managed Codex starts, runs tools, and settles in ordered entries', async () => {
@@ -1162,4 +1184,165 @@ Deno.test('restart settles durable generation and call evidence', async () => {
   assertEquals(rows.at(-1)?.comps.content?.body, 'after recovered call')
   assertEquals(calls, 1)
   db.close()
+})
+
+Deno.test('drain settles the in-flight generation and leaves new work ready', async () => {
+  let db = open(':memory:')
+  let tree = Deno.makeTempDirSync(), sid = session(db, tree)
+  writeSession(db, sid, { base_revision: 'base' })
+  let started = Promise.withResolvers<void>()
+  let gate = Promise.withResolvers<ResponseResult>()
+  let calls = 0
+  let service = managedCodex({
+    db,
+    cast: () => {},
+    transport: {
+      run: () => {
+        if (!calls++) {
+          started.resolve()
+          return gate.promise
+        }
+        return Promise.resolve(result([{
+          type: 'message',
+          content: [{ type: 'output_text', text: 'unreached' }],
+        }]))
+      },
+    },
+    tools: () => Promise.resolve(tools([])),
+    prepare: () => Promise.resolve(),
+  })
+  let running = service.start(sid, job(tree))
+  await started.promise
+  // Drain, then let the held generation complete with a follow-on tool call.
+  let drained = service.settle(5000)
+  gate.resolve(result([shellCall('printf hi')]))
+  await drained
+  await running
+
+  let rows = readEntries(db, sid)
+  let generation = rows.find((row) => row.comps.generation)!
+  // The in-flight generation reached a settled boundary.
+  assert(generation.comps.delivered)
+  assertEquals(generation.comps.lease, undefined)
+  assertEquals(generation.comps.error, undefined)
+  // Its follow-on tool call was never started: it sits ready for the successor.
+  let call = rows.find((row) => row.comps.call)!
+  assertEquals(call.comps.lease, undefined)
+  assertEquals(call.comps.result, undefined)
+  assertEquals(call.comps.error, undefined)
+  assertEquals(readyEntries(db, sid).map((e) => e.eid), [call.eid])
+  assertEquals(calls, 1)
+  db.close()
+})
+
+Deno.test('the heartbeat keeps a generation outliving its lease TTL fresh', async () => {
+  let db = open(':memory:')
+  let tree = Deno.makeTempDirSync(), sid = session(db, tree)
+  writeSession(db, sid, { base_revision: 'base' })
+  let started = Promise.withResolvers<void>()
+  let gate = Promise.withResolvers<ResponseResult>()
+  let service = managedCodex({
+    db,
+    cast: () => {},
+    leaseMs: 200,
+    transport: {
+      run: () => {
+        started.resolve()
+        return gate.promise
+      },
+    },
+    tools: () => Promise.resolve(tools([])),
+    prepare: () => Promise.resolve(),
+  })
+  let running = service.start(sid, job(tree))
+  await started.promise
+  let generation = readEntries(db, sid).find((row) => row.comps.generation)!.eid
+  let until0 = leaseUntil(db, generation)!
+  // Hold the turn well past the 200ms TTL; the heartbeat renews it.
+  await delay(500)
+  assertEquals(expiredLeases(db, new Date().toISOString()).length, 0)
+  assert(leaseUntil(db, generation)! > until0)
+  gate.resolve(result([{
+    type: 'message',
+    content: [{ type: 'output_text', text: 'done' }],
+  }]))
+  await running
+  assertEquals(leaseUntil(db, generation), undefined)
+  db.close()
+})
+
+Deno.test('a restart mid-generation: predecessor drains, successor resumes clean', async () => {
+  let dir = Deno.makeTempDirSync(), path = `${dir}/graph.db`
+  let db1 = open(path), db2 = open(path)
+  let tree = Deno.makeTempDirSync(), sid = session(db1, tree)
+  writeSession(db1, sid, { base_revision: 'base' })
+
+  let started = Promise.withResolvers<void>()
+  let gate = Promise.withResolvers<ResponseResult>()
+  // Predecessor holds one generation in flight, blocked on the gate.
+  let pre = managedCodex({
+    db: db1,
+    cast: () => {},
+    leaseMs: 200,
+    transport: {
+      run: () => {
+        started.resolve()
+        return gate.promise
+      },
+    },
+    tools: () => Promise.resolve(tools([])),
+    prepare: () => Promise.resolve(),
+  })
+  let running = pre.start(sid, job(tree))
+  await started.promise
+  let generation =
+    readEntries(db1, sid).find((row) => row.comps.generation)!.eid
+
+  // Successor boots on the same graph and sweeps across a window longer than
+  // the 200ms TTL. The heartbeated lease must keep it from reclaiming or
+  // failing the predecessor's live turn.
+  let sucCalls = 0
+  let suc = managedCodex({
+    db: db2,
+    cast: () => {},
+    leaseMs: 200,
+    transport: {
+      run: () => {
+        sucCalls++
+        return Promise.resolve(result([{
+          type: 'message',
+          content: [{ type: 'output_text', text: 'resumed and finished' }],
+        }]))
+      },
+    },
+    tools: () => Promise.resolve(tools([])),
+    prepare: () => Promise.resolve(),
+  })
+  for (let i = 0; i < 4; i++) {
+    await suc.sweep()
+    await delay(100)
+  }
+  assertEquals(sucCalls, 0)
+  let held = readEntries(db2, sid).find((row) => row.eid == generation)!
+  assert(held.comps.lease)
+  assertEquals(held.comps.error, undefined)
+
+  // The predecessor drains: the in-flight generation completes and settles.
+  let drained = pre.settle(5000)
+  gate.resolve(result([shellCall('printf hi')]))
+  await drained
+  await running
+  let after = readEntries(db1, sid).find((row) => row.eid == generation)!
+  assert(after.comps.delivered)
+  assertEquals(after.comps.error, undefined)
+
+  // The successor resumes from the settled boundary and finishes the session.
+  await suc.sweep()
+  let rows = readEntries(db2, sid)
+  assertEquals(rows.at(-1)?.comps.content?.body, 'resumed and finished')
+  assertEquals(rows.some((row) => row.comps.error), false)
+  assertEquals(rows.some((row) => row.comps.result), true)
+  assert(sucCalls >= 1)
+  db1.close()
+  db2.close()
 })

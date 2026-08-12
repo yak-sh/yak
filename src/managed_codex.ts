@@ -13,6 +13,7 @@ import {
   readEntries,
   readyEntries,
   reclaimEntry,
+  renewEntry,
   settleCall,
   settleGeneration,
   takeEntry,
@@ -265,6 +266,26 @@ export let managedCodex = (options: ManagedCodexOptions) => {
   let sweeping: Promise<void> | undefined
   let starting = new Map<string, Promise<void>>()
   let wake = false
+  let draining = false
+
+  // While an operation is in flight, keep its lease fresh so a booting
+  // successor (the reusePort handoff runs both processes at once) never
+  // mistakes a turn that outlives the base TTL for a dead runner and reclaims
+  // or fails an operation this process is still running. Renewal leaves the
+  // holder+at CAS untouched, so this runner's own settle/valid path is
+  // unaffected; the interval is cleared the moment the operation settles.
+  let beat = (token: LeaseToken) => {
+    let timer = setInterval(() => {
+      try {
+        let renewed = renewEntry(db, token, leaseMs, clock)
+        if (renewed) cast(renewed.changes)
+        else clearInterval(timer)
+      } catch (error) {
+        console.warn('Codex lease renewal —', error)
+      }
+    }, Math.max(50, Math.floor(leaseMs / 2)))
+    return () => clearInterval(timer)
+  }
 
   // Watching is auxiliary: a broken observer must never break or retry the
   // provider operation whose durable outcome the graph still needs.
@@ -287,6 +308,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
   let generation = async (token: LeaseToken, session: string) => {
     let control = new AbortController()
     flights.set(token.eid, { session, control })
+    let stop = beat(token)
     let tools: ToolHost | undefined
     let clear = false
     try {
@@ -325,6 +347,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
       sessionError(db, session, message, cast, clock)
       clear = true
     } finally {
+      stop()
       if (clear) observe({ session, generation: token.eid, kind: 'clear' })
       flights.delete(token.eid)
       await tools?.close?.()
@@ -334,6 +357,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
   let call = async (token: LeaseToken, session: string) => {
     let control = new AbortController()
     flights.set(token.eid, { session, control })
+    let stop = beat(token)
     let tools: ToolHost | undefined
     try {
       let row = sessionRow(db, session)
@@ -349,6 +373,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
       cast(failEntry(db, token, message, clock))
       sessionError(db, session, message, cast, clock)
     } finally {
+      stop()
       flights.delete(token.eid)
       await tools?.close?.()
     }
@@ -410,6 +435,11 @@ export let managedCodex = (options: ManagedCodexOptions) => {
     !!sessionRow(db, session)?.base_revision
 
   let pass = async () => {
+    // Draining acquires no new work: the in-flight jobs of the pass that
+    // started them are still awaited by that pass, so the current sweep drains
+    // to a settled boundary and stops, leaving any newly-ready entry for the
+    // successor. Every acquisition point below is gated by this one return.
+    if (draining) return false
     let recovered = expire()
     let moved = false
     for (let session of sessions(db)) {
@@ -453,6 +483,25 @@ export let managedCodex = (options: ManagedCodexOptions) => {
       }
     })()
     return sweeping
+  }
+
+  // Shutdown drain: stop taking new work, then let every in-flight generation
+  // and call finish and release its lease, so a restart hands the successor a
+  // settled boundary instead of an operation killed mid-flight. Bounded so a
+  // wedged stream cannot hold the process exit open forever — that residue
+  // falls to crash recovery (T-16886), which no drain can prevent anyway.
+  let settle = async (timeoutMs = 300_000) => {
+    draining = true
+    if (!sweeping) return
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let bound = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, Math.max(0, timeoutMs))
+    })
+    try {
+      await Promise.race([sweeping, bound])
+    } finally {
+      if (timer) clearTimeout(timer)
+    }
   }
 
   let startOne = async (eid: string, job: ManagedJob) => {
@@ -606,5 +655,5 @@ export let managedCodex = (options: ManagedCodexOptions) => {
     }
   }
 
-  return { runner, start, stop, comment, remove, sweep }
+  return { runner, start, stop, comment, remove, sweep, settle }
 }

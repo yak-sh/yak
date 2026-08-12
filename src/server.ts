@@ -1590,6 +1590,10 @@ let drain = async () => {
   draining = true
   for (let c of clients) c.close(1012, 'server restart')
   await http.shutdown()
+  // Let in-flight graph-native generations/calls finish and settle before we
+  // go: the supervisor already has a successor serving the port, so this drain
+  // is what keeps a source-edit handoff from killing a live codex turn.
+  await managed.settle()
   await codexAccount.close()
   ownership.close()
   Deno.exit(0)

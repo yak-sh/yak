@@ -1,12 +1,15 @@
 // Graph-native Session entries: ordered append, immutable facts, lazy root
 // sync, and server-owned runner outcomes.
-import { assertEquals, assertMatch, assertThrows } from '@std/assert'
+import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
 import {
   append,
+  cancelEntry,
+  expiredLeases,
   failEntry,
   readEntries,
   readyEntries,
   reclaimEntry,
+  renewEntry,
   settleGeneration,
   takeEntry,
 } from './entries.ts'
@@ -229,6 +232,74 @@ Deno.test('only expired generation and graph_query leases can be reclaimed', () 
     ),
     undefined,
   )
+  db.close()
+})
+
+Deno.test('a held lease renews forward, blocking a successor reclaim', () => {
+  let db = open(':memory:')
+  let sid = session(db), old = uuid(), next = uuid()
+  apply(db, [
+    { eid: old, name: 'runner', comp: { name: 'old' } },
+    { eid: next, name: 'runner', comp: { name: 'next' } },
+  ])
+  let input = append(db, sid, [{ message: { role: 'user' } }]).eids[0]
+  let generation = append(db, sid, [{
+    generation: { through: input, provider: 'codex', model: 'gpt-test' },
+  }]).eids[0]
+  let held = takeEntry(
+    db,
+    generation,
+    old,
+    100,
+    () => new Date('2026-08-10T12:00:00Z'),
+  )!
+  // The lease would lapse at 12:00:00.100; renew past it before it does.
+  let renewed = renewEntry(
+    db,
+    held.token,
+    100,
+    () => new Date('2026-08-10T12:00:00.050Z'),
+  )!
+  assertEquals(renewed.token.until, '2026-08-10T12:00:00.150Z')
+  assertEquals(renewed.token.holder, old)
+  assertEquals(renewed.token.at, held.token.at)
+  // A successor sees no expired lease and cannot reclaim it.
+  assertEquals(expiredLeases(db, '2026-08-10T12:00:00.120Z'), [])
+  assertEquals(
+    reclaimEntry(
+      db,
+      held.token,
+      next,
+      100,
+      () => new Date('2026-08-10T12:00:00.120Z'),
+    ),
+    undefined,
+  )
+  // The holder's own settle still owns it: renewal left holder+at untouched.
+  assert(
+    settleGeneration(
+      db,
+      held.token,
+      undefined,
+      () => new Date('2026-08-10T12:00:00.130Z'),
+    ).length,
+  )
+  db.close()
+})
+
+Deno.test('renewal refuses a cancelled or absent lease', () => {
+  let db = open(':memory:')
+  let sid = session(db), runner = uuid()
+  apply(db, [{ eid: runner, name: 'runner', comp: { name: 'one' } }])
+  let input = append(db, sid, [{ message: { role: 'user' } }]).eids[0]
+  let generation = append(db, sid, [{
+    generation: { through: input, provider: 'codex', model: 'gpt-test' },
+  }]).eids[0]
+  let held = takeEntry(db, generation, runner, 1000)!
+  append(db, sid, [{ cancel: { target: generation } }])
+  assertEquals(renewEntry(db, held.token, 1000), undefined)
+  cancelEntry(db, held.token)
+  assertEquals(renewEntry(db, held.token, 1000), undefined)
   db.close()
 })
 
