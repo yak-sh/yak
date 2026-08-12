@@ -14,7 +14,14 @@
 // a deliverable that never settles. `via` is descriptive text (`cast S-9`,
 // `spawned S-9`, `local`, a mail's Message-ID), not an eid — how it went
 // out, said the way the ladder said it. SERVER-ONLY (imports db).
+//
+// It also owns `exception {at, message, stack?}` (D-17077) — `error`'s sibling
+// by aspect: `error` is a known/expected failure state, `exception` is a BUG
+// (something unexpected broke), and it is the self-healing trigger. excepted()
+// stamps it and fires the heal effect on the spot.
 import { db, record } from './db.ts'
+import { record as telemetry } from './telemetry.ts'
+import { dispatch, trace } from './effects.ts'
 import { type Change } from './types.ts'
 
 type Cast = (changes: Change[]) => void
@@ -41,6 +48,12 @@ export let delivered = (eid: string, via: string, cast: Cast) => {
 // sessions, and freezes use this same writer, which is what makes `.error`
 // the fleet health query. An unchanged failure stays put so a reconcile tick
 // cannot turn one incident into an endless stream of new timestamps.
+//
+// `error` is a KNOWN/expected failure state (D-17077) — a handled condition
+// worth surfacing but not a bug — so it does NOT trigger self-healing. The
+// break facet is `exception` (below); a subsystem that hit something
+// UNEXPECTED calls excepted(), and the T-17081 audit reclassifies each
+// current error writer into one or the other.
 export let errored = (
   eid: string,
   message: string,
@@ -70,6 +83,63 @@ export let errorChange = (
      on conflict(eid) do update set at = excluded.at, message = excluded.message`,
   ).run(eid, at, message)
   return { eid, name: 'error', comp: { eid, at, message } }
+}
+
+// The BREAK facet (D-17077): something the code/process hit that it did not
+// expect — a thrown exception, exit 127, a died process, a violated
+// invariant. This is the self-healing TRIGGER, `error`'s sibling by aspect
+// (M-14942): `error` is a known state, `exception` is a bug. `stack` is
+// optional (a JS throw carries one; a died process may not) and rides ON the
+// facet — it describes this same fault, the machine "where" to message's "why".
+// Server-owned and effect-written like error; a re-stamp with the same
+// message+stack stays put so a reconcile tick cannot storm the timestamp.
+export let exceptionChange = (
+  eid: string,
+  message: string,
+  stack: string | null = null,
+  at = now(),
+): Change | undefined => {
+  let prior = db.prepare(
+    'select at, message, stack from exception where eid = ?',
+  )
+    .get(eid) as
+      | { at: string | null; message: string | null; stack: string | null }
+      | undefined
+  if (prior?.message == message && prior.stack == stack && prior.at) return
+  db.prepare(
+    `insert into exception (eid, at, message, stack) values (?, ?, ?, ?)
+     on conflict(eid) do update set
+       at = excluded.at, message = excluded.message, stack = excluded.stack`,
+  ).run(eid, at, message, stack)
+  return { eid, name: 'exception', comp: { eid, at, message, stack } }
+}
+
+// Stamp the break facet AND fire its created() effects — the self-healing
+// ticket filer (heal.ts) chief among them. This is the ONE live seam: a
+// break-site that hit something unexpected calls excepted(), and the effect
+// files a deduped bug ticket at once. Dispatch isolates a throwing handler
+// into telemetry, so a broken filer can never break this stamp or the wire
+// (the effects.ts contract). Breaks written straight to the table by a
+// narrower door are caught by the boot sweep instead.
+export let excepted = (
+  eid: string,
+  message: string,
+  stack: string | null = null,
+  cast: Cast,
+  at = now(),
+) => {
+  let change = exceptionChange(eid, message, stack, at)
+  if (!change) return
+  publish([change], cast)
+  let t = trace()
+  t.created.add(`exception ${change.eid}`)
+  dispatch([change], t, (comp, e) =>
+    telemetry(db, {
+      source: 'srv',
+      name: `effect:${comp}`,
+      ok: false,
+      error: String(e),
+    }))
 }
 
 // Absence is healthy. Delete the facet through the same journal + cast door

@@ -39,6 +39,7 @@ import { vocabularyMd } from './schema.ts'
 import { freeze, serveFrozen, store } from './freeze.ts'
 import { filed } from './page.ts'
 import { PENDING } from './deliver.ts'
+import { fileBug, HEAL_PENDING } from './heal.ts'
 import { fanout, FANOUT_PENDING, mailed } from './mail.ts'
 import { native } from './mailer.ts'
 import { closingTask } from './closing.ts'
@@ -1178,6 +1179,16 @@ on('comment', {
   sweep: { pending: FANOUT_PENDING },
   doc: "a comment on an addressed project's task fans out as a " +
     'mail to that project (the about edge is the receipt)',
+})
+on('exception', {
+  created: fileBug(cast),
+  // Boot reconcile: every exception no bug yet points at re-drives the filer,
+  // which dedups by key regardless — at-least-once, storm-proof (D-17077).
+  sweep: { pending: HEAL_PENDING },
+  doc: 'self-healing phase 1: an exception (break) facet files ONE deduped ' +
+    'bug ticket per distinct fault (kind + normalized message + stack head); ' +
+    'recurrences annotate the open ticket instead of multiplying it — no ' +
+    'spawn yet (D-17077)',
 })
 
 // Personas follow the graph into each repo's .tasks/ files: any change

@@ -581,7 +581,30 @@ export let comps: Record<string, Record<string, PropType>> = {
   // only the empty presence. NOT in kindOrder: these are facets, never an
   // entity's identity.
   delivered: {}, // reached its destination — {at, via} in stamped
+  // `error` is a KNOWN/expected failure state (bad address, unavailable
+  // dependency, rate-limit) — worth surfacing, NOT a bug — so it does not
+  // trigger self-healing. The BREAK facet is `exception` below; the T-17081
+  // audit sorts each current error writer into one or the other.
   error: {}, //     an attempt failed — {at, message} in stamped
+  // The BREAK facet (D-17077): our code/process hit something UNEXPECTED — a
+  // thrown exception, exit 127, a died process, a violated invariant. This is
+  // the self-healing trigger (heal.ts). `stack` optional (a JS throw carries
+  // one; a died process may not) and rides ON the facet — it describes this
+  // same fault, the same aspect as message (M-14942), never its own comp.
+  // Server-owned/effect-written, mirroring error: {at, message, stack} in
+  // stamped, only the empty presence here. NOT in kindOrder — a facet.
+  exception: {},
+  // Self-healing's diagnosis facet (D-17077): a task wearing `bug` was
+  // auto-filed about an `exception` somewhere in the graph. `fault` is the
+  // stable dedup key (kind + normalized message + stack head) so a storm of
+  // the same break finds its one open ticket by query, not scan; `hits`/`last`
+  // tally recurrences in place. Column names are unique on purpose — dot-param
+  // routing keys on them (a plain `count`/`key` would collide with recall/call
+  // and make `.count` ambiguous). Wire-writable — the effect (heal.ts)
+  // populates it through apply() like any other write, and forging a bug tally
+  // harms nobody. NOT in kindOrder: a bug IS a task, this only says the task is
+  // a filed break.
+  bug: { fault: 'text', hits: 'number', last: 'time' },
   // A decision was TAKEN about this entity — a task, a memory, a doc,
   // anything; like its three neighbours a facet, never an identity. It is
   // the same {at, by, via} stamp, split differently: `at` and `by` are
@@ -665,6 +688,10 @@ export let stamped: Record<string, Record<string, PropType>> = {
   // roles, sessions, and freezes use error as their common health facet.
   delivered: { at: 'time', via: 'text' },
   error: { at: 'time', message: 'text' },
+  // The break facet's server half (D-17077): `at` when it broke, `message`
+  // the fault, `stack` the optional trace. Same register as error — the wire
+  // writes none of them, the break-site stamps them through excepted().
+  exception: { at: 'time', message: 'text', stack: 'text' },
   // The resolved envelope, denormalized onto the mail row as DATA (mail.ts):
   // to_addr = the address the delivery actually used (so later address-book
   // edits never rewrite it), sent_id = the Message-ID our native send was
@@ -1403,6 +1430,24 @@ export type Failure = {
   message?: string | null
 }
 
+// The break facet (D-17077): an unexpected fault, the self-healing trigger.
+// `stack` optional — a JS throw carries one, a died process may not.
+export type Exception = {
+  eid: string
+  at?: string | null
+  message?: string | null
+  stack?: string | null
+}
+
+// The self-healing diagnosis facet (D-17077): a task auto-filed about an
+// error, keyed for dedup and tallying its recurrences in place.
+export type Bug = {
+  eid: string
+  fault?: string | null
+  hits?: number | null
+  last?: string | null
+}
+
 // A webhook delivery, pulled apart from the edge's raw request spool —
 // all server-stamped (see `stamped`), payload kept verbatim.
 export type Hook = {
@@ -1601,6 +1646,8 @@ export type Ent = {
   proposed?: Stamp
   delivered?: Delivered
   error?: Failure
+  exception?: Exception
+  bug?: Bug
   refs: Ref[]
   kids: Ent[]
 }

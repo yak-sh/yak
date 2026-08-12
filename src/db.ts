@@ -461,6 +461,30 @@ let schema = `
     at      text,
     message text
   );
+  -- The BREAK facet (D-17077, deliver.ts): our code/process hit something
+  -- UNEXPECTED (a bug) -- error's sibling and the self-healing trigger. stack
+  -- is optional (a JS throw has one; a died process may not). Server-owned/
+  -- effect-written, keyed by the broken entity's own eid; the entity-death
+  -- cascade takes the row. A wholly new table, so create-if-not-exists (which
+  -- open() runs every boot) is the additive, in-place add -- no alter guard,
+  -- those are for adding columns to a table that already exists.
+  create table if not exists exception (
+    eid     text primary key references entity(eid),
+    at      text,
+    message text,
+    stack   text
+  );
+  -- Self-healing's diagnosis facet (D-17077, heal.ts): a task auto-filed
+  -- about a break. fault (kind + normalized message + stack head) is the dedup
+  -- key a storm keys to; hits/last tally its recurrences in place. Column names
+  -- are unique so dot-param routing stays unambiguous. Wire-writable, so it
+  -- rides the ordinary apply() insert path like task/doc.
+  create table if not exists bug (
+    eid   text primary key references entity(eid),
+    fault text,
+    hits  integer,
+    last  text
+  );
   ${mailDdl};
   -- Inbound webhook deliveries, derived from the edge's raw request
   -- spool (inbound.ts). Every column is server-stamped; the wire can

@@ -1,0 +1,229 @@
+// Self-healing, phase 1 (D-17077): the moment an `exception` facet lands on
+// any entity — our code/process hit something UNEXPECTED (a bug) — file ONE
+// bug ticket about it, and only one. `exception` is the trigger, not `error`:
+// `error` is a known/expected failure state, `exception` is a break (a thrown
+// exception, exit 127, a died process, a violated invariant). Dedup by a
+// stable KEY (the broken entity's kind + a normalized message + the stack
+// head) is what makes it storm-proof: a flapping runner breaking every 300ms
+// annotates one open ticket instead of minting thousands. No agent spawn here
+// — that is phase 2; this half only has to prove it can't storm.
+//
+// SERVER-ONLY (imports db). The created() handler fires live off every break
+// stamp (deliver.ts excepted() dispatches it), and the boot sweep re-drives
+// every exception that has no bug filed yet — so an effect lost to a crash
+// between the stamp and here heals at the next boot. Both paths run the SAME
+// handler, and the handler re-reads the graph, so it is idempotent: dedup and
+// the tri-state recovery check hold whoever calls it.
+import { apply, db, human } from './db.ts'
+import { type Change, kindOf } from './types.ts'
+
+type Cast = (changes: Change[]) => void
+let now = () => new Date().toISOString()
+
+// The volatile tokens a storm varies while the fault stays the same: uuids,
+// human ids (T-3, S-45), iso timestamps, absolute paths, :line:col, hex blobs,
+// and bare numbers all collapse to one placeholder. What is left is the shape
+// of the fault.
+let normalize = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g,
+      '#',
+    )
+    .replace(/\b[a-z]-\d+\b/g, '#') // T-3, S-45 (already lowercased)
+    .replace(/\d{4}-\d{2}-\d{2}t[\d:.]+z?/g, '#') // iso timestamps
+    .replace(/\/[^\s:]+/g, '#') // absolute paths
+    .replace(/:\d+(:\d+)?/g, '#') // :line:col
+    .replace(/\b[0-9a-f]{6,}\b/g, '#') // hex blobs / short hashes
+    .replace(/\b\d+\b/g, '#') // bare numbers
+    .replace(/#+/g, '#')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+// The head of a stack — the first frame that actually names our code, so two
+// breaks at the same site key together even when their messages differ, and
+// the same fault raised from two ids does not split. Empty when absent (a
+// died process carries no stack); then the key rests on kind + message alone.
+let stackHead = (stack?: string | null) => {
+  if (!stack) return ''
+  let line = stack.split('\n').map((l) => l.trim())
+    .find((l) => l.startsWith('at ')) ?? stack.split('\n')[0] ?? ''
+  return normalize(line)
+}
+
+// The dedup key: kind + normalized message + normalized stack head. Exported
+// for phase 2's spawn, which keys its concurrency cap and per-key cooldown off
+// the same string.
+export let faultKey = (kind: string, message: string, stack?: string | null) =>
+  `${kind}:${normalize(message)}${
+    stackHead(stack) ? `@${stackHead(stack)}` : ''
+  }`
+
+// The actionability predicate — ONE tunable function, kept tiny on purpose
+// (M-17062: a heavy allowlist is how a gate becomes a straitjacket). Known
+// transient classes clear on their own, so filing a ticket is noise. Add a
+// matcher to teach it a new transient; nothing here is load-bearing shape.
+let transient = [
+  /timed? ?out|timeout/i,
+  /temporarily unavailable|try again|rate limit/i,
+  /econnreset|econnrefused|socket hang up|network/i,
+]
+export let actionable = (_kind: string, message: string) =>
+  !transient.some((re) => re.test(message))
+
+// Read one entity's components as a name→row map, so kindOf and the project
+// derivation see the whole entity the way every renderer does.
+let has = (eid: string): Record<string, Record<string, unknown>> => {
+  let out: Record<string, Record<string, unknown>> = {}
+  for (
+    let name of [
+      'doc',
+      'task',
+      'project',
+      'session',
+      'role',
+      'mail',
+      'knock',
+      'wake',
+      'web',
+      'entry',
+      'comment',
+    ]
+  ) {
+    let row = db.prepare(`select * from ${name} where eid = ?`).get(eid) as
+      | Record<string, unknown>
+      | undefined
+    if (row) out[name] = row
+  }
+  return out
+}
+
+// The home project (P-19) as a fallback owner, resolved by its number so the
+// filer does not carry a baked eid — and only if num 19 is really a PROJECT
+// (the join), never whatever else happens to wear that number. Undefined in a
+// graph with no such project (a bare test db); then the bug files with no
+// project, which is legal.
+let home = (): string | undefined =>
+  (db.prepare(
+    `select p.eid as eid from project p
+     join entity e on e.eid = p.eid where e.num = 19`,
+  ).get() as { eid: string } | undefined)?.eid
+
+// Where the bug belongs: the broken entity's own project, else the project of
+// the session's requested task, else the home project. "venture/actor" reduces
+// to a project reference — an owner the ticket lands in front of.
+let projectFor = (comps: Record<string, Record<string, unknown>>) => {
+  let p = comps.task?.project as string | undefined
+  if (p) return p
+  let req = comps.session?.requested_task as string | undefined
+  if (req) {
+    let t = db.prepare('select project from task where eid = ?').get(req) as
+      | { project?: string }
+      | undefined
+    if (t?.project) return t.project
+  }
+  return home()
+}
+
+// Severity → priority: a fault that reads fatal (a missing binary, a non-zero
+// exit, "cannot"/"failed to") jumps the queue; the rest file at the ordinary
+// bug priority. Lower sorts first, so severe is the smaller number.
+let severity = (message: string) =>
+  /exit (?!0\b)\d|not found|127|cannot |failed to |unable to /i.test(message)
+    ? 1
+    : 2
+
+// The recurrence footer, refreshed in place: one line, never N. On each
+// recurrence the count and last-seen advance; stripping the old footer before
+// re-appending keeps the body bounded through a storm.
+let MARK = '\n\n— ↻ '
+let footer = (body: string, count: number, at: string) => {
+  let i = body.indexOf(MARK)
+  let base = i < 0 ? body : body.slice(0, i)
+  return `${base}${MARK}recurred ${count}× · last seen ${at}`
+}
+
+// The open bug already carrying this key, if any — the query the stored key
+// buys, so dedup is a lookup and never a scan.
+let openBug = (key: string) =>
+  db.prepare(
+    `select b.eid as eid, b.hits as hits, d.body as body
+     from bug b join task t on t.eid = b.eid join doc d on d.eid = b.eid
+     where b.fault = ? and t.status in ('open', 'wip') limit 1`,
+  ).get(key) as { eid: string; hits: number; body: string } | undefined
+
+// The created() handler, curried over cast like every effect. Re-reads the
+// graph each call: if the exception was already cleared (healed) or the
+// deliverable recovered (delivered stamped), the tri-state says resolved and
+// nothing files; if a transient, nothing files; if an open bug already wears
+// the key, the recurrence is annotated, not multiplied; else one ticket.
+export let fileBug =
+  (cast: Cast) => (eid: string, comp: Record<string, unknown>) => {
+    // Recovery wins over the stamp: a break cleared before this ran, or a
+    // deliverable that also succeeded, is resolved — do not file it.
+    let live = db.prepare('select message, stack from exception where eid = ?')
+      .get(eid) as { message: string | null; stack: string | null } | undefined
+    if (!live) return
+    if (db.prepare('select 1 from delivered where eid = ?').get(eid)) return
+
+    let message = String(live.message ?? comp.message ?? '').trim()
+    if (!message) return
+    let stack = (live.stack ?? comp.stack ?? null) as string | null
+    let comps = has(eid)
+    let kind = kindOf(comps)
+    if (!actionable(kind, message)) return
+
+    let key = faultKey(kind, message, stack)
+    let at = now()
+    let open = openBug(key)
+    if (open) {
+      let count = (open.hits ?? 1) + 1
+      cast(apply(db, [
+        { eid: open.eid, name: 'bug', comp: { hits: count, last: at } },
+        {
+          eid: open.eid,
+          name: 'doc',
+          comp: { body: footer(open.body, count, at) },
+        },
+        // Every affected entity links to the one ticket, so the sweep can tell
+        // a filed break from an unfiled one purely by the about edge.
+        {
+          eid: open.eid,
+          name: 'dependency',
+          comp: { type: 'about', child: eid },
+        },
+      ]))
+      return
+    }
+
+    let bug = crypto.randomUUID()
+    let title = `${kind} exception: ${message.split('\n')[0]}`.slice(0, 100)
+    let project = projectFor(comps)
+    let body = `Auto-filed by self-healing (D-17077).\n\n` +
+      `**${human(db, eid)}** (${kind}) raised:\n\n> ${message}\n` +
+      (stack ? `\n\`\`\`\n${stack}\n\`\`\`\n` : '') +
+      `\nBroken entity: ${human(db, eid)} · stamped ${comp.at ?? at}`
+    cast(apply(db, [
+      { eid: bug, name: 'doc', comp: { title, body } },
+      {
+        eid: bug,
+        name: 'task',
+        comp: {
+          status: 'open',
+          priority: severity(message),
+          project: project ?? null,
+        },
+      },
+      { eid: bug, name: 'bug', comp: { fault: key, hits: 1, last: at } },
+      { eid: bug, name: 'dependency', comp: { type: 'about', child: eid } },
+    ]))
+  }
+
+// The boot sweep predicate over the `exception` table: a break that no bug
+// task yet points at (via the about edge every filing lands). Idempotent to
+// re-drive — the handler dedups by key regardless — so this only spares the
+// already-ticketed from a needless re-check.
+export let HEAL_PENDING =
+  `not exists (select 1 from dependency d join bug b on b.eid = d.parent
+     where d.type = 'about' and d.child = exception.eid)`
