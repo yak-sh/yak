@@ -506,6 +506,18 @@ let schema = `
     hits  integer,
     last  text
   );
+  -- Self-healing phase 2 (D-17077, heal.ts): fixer marks a session the graph
+  -- AUTO-spawned to fix a bug (presence alone, like design); nofix is the
+  -- auto-spawn mute worn by a project (per-venture) or the home project P-19
+  -- (global). Both are pure-presence marker tables, wholly new, so the additive
+  -- create-if-not-exists is the in-place add; the entity-death cascade takes
+  -- the row.
+  create table if not exists fixer (
+    eid text primary key references entity(eid)
+  );
+  create table if not exists nofix (
+    eid text primary key references entity(eid)
+  );
   -- The BLOCK facet (D-17094): this task is stuck on something EXTERNAL — no
   -- entity, so a requires edge can't name it. "on" (a SQL keyword, so quoted)
   -- is the free-text reason and rides the wire; "since" is server-owned — the

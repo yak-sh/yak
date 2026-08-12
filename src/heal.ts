@@ -14,8 +14,11 @@
 // between the stamp and here heals at the next boot. Both paths run the SAME
 // handler, and the handler re-reads the graph, so it is idempotent: dedup and
 // the tri-state recovery check hold whoever calls it.
-import { apply, db, human } from './db.ts'
-import { type Change, kindOf } from './types.ts'
+import { apply, db, human, snapshot } from './db.ts'
+import { type Change, kindOf, sessionActive } from './types.ts'
+import { rows, spawnChanges } from './client.ts'
+import { dispatch, trace } from './effects.ts'
+import { record as telemetry } from './telemetry.ts'
 
 type Cast = (changes: Change[]) => void
 let now = () => new Date().toISOString()
@@ -153,6 +156,150 @@ let openBug = (key: string) =>
      where b.fault = ? and t.status in ('open', 'wip') limit 1`,
   ).get(key) as { eid: string; hits: number; body: string } | undefined
 
+// --- Phase 2: the fixer spawn, behind guardrails (D-17077) -----------------
+// A NEW bug ticket also mints ONE managed fixer session aimed at it; the
+// existing created(session) effect launches it and it boots into the ticket
+// through the injection loop. This is the RISKY half, so every spawn passes
+// three graph-checkable gates first — a mute lever, a hard concurrency cap,
+// and a per-fault cooldown — and the ticket ALWAYS files whether or not the
+// spawn is allowed. A gate that says no is not an error: the break is on the
+// board, and the boot sweep (ensureFixer over open, un-spawned bugs) re-drives
+// the spawn once the gate clears. There is no in-graph budget/pace signal to
+// read here (`operate tokens` is a holdco CLI, not a graph entity), and an
+// effect must not shell out — so the hard cap is the cost bound, and budget-
+// gating is a follow-up (D-17077 acceptance leaves it to the cap otherwise).
+
+// The fixer's provider/model — a capable coding model, ONE obvious constant.
+// Env-overridable so an operator can retune it (or a probe can point it at the
+// in-repo `fake` provider) without a code edit, the TASKS_CODEX_RUNNER way.
+export let FIXER = {
+  provider: Deno.env.get('TASKS_FIXER_PROVIDER') || 'claude',
+  model: Deno.env.get('TASKS_FIXER_MODEL') || 'sonnet',
+}
+
+// The hard concurrency cap: never more than this many fixers running at once,
+// so an error STORM across distinct faults cannot become an agent storm. At
+// the cap the ticket files and the boot sweep re-drives when a slot frees.
+export let FIXER_CAP = Number(Deno.env.get('TASKS_FIXER_CAP')) || 2
+
+// Per-fault cooldown: once a fixer is spawned for a fault key, that key is
+// suppressed for this window — a fixer that closes its bug prematurely while
+// the fault keeps firing re-opens a ticket, but does not re-spawn a fixer each
+// cycle. 30 minutes: long enough for a fixer to land, short enough to retry.
+export let FIXER_COOLDOWN_MS = 30 * 60 * 1000
+
+// Auto-spawn muted for this scope? `nofix` on the bug's project mutes that
+// venture; `nofix` on the self-healing home (P-19) is the global switch.
+let hasNofix = (eid: string) =>
+  !!db.prepare('select 1 from nofix where eid = ?').get(eid)
+let muted = (project?: string): boolean => {
+  let h = home()
+  if (h && hasNofix(h)) return true // global
+  return !!(project && hasNofix(project)) // per-venture
+}
+
+// How many fixers are running right now (starting/running/stopping). A failed
+// or finished fixer has freed its slot, so it does not count against the cap.
+let activeFixers = (): number =>
+  (db.prepare(
+    `select count(*) as n from fixer f join session s on s.eid = f.eid
+     where s.status in (${sessionActive.map(() => '?').join(',')})`,
+  ).get(...sessionActive) as { n: number }).n
+
+// Was a fixer already spawned for this fault key within the cooldown window?
+// The fault is reached through the fixer's requested_task → bug.fault, so it
+// lives in exactly one place (M-14942) and the marker stays presence-only.
+let coolingDown = (key: string): boolean =>
+  !!db.prepare(
+    `select 1 from fixer f
+       join session s on s.eid = f.eid
+       join bug b on b.eid = s.requested_task
+       join created c on c.eid = f.eid
+     where b.fault = ? and c.at >= ? limit 1`,
+  ).get(key, new Date(Date.now() - FIXER_COOLDOWN_MS).toISOString())
+
+// The one gate: why a fixer won't spawn for this bug, or null to spawn. Pure
+// over graph state, so the guardrails are unit-testable without launching an
+// agent. Cheapest check first; the reason is telemetry, never an exception.
+export let fixerBlocked = (
+  project: string | undefined,
+  key: string,
+): string | null =>
+  muted(project)
+    ? 'muted'
+    : activeFixers() >= FIXER_CAP
+    ? `at cap (${FIXER_CAP})`
+    : coolingDown(key)
+    ? 'cooling down'
+    : null
+
+// Has a fixer EVER been spawned for this bug? Idempotency for the boot sweep
+// and the live path alike — a bug that already summoned a fixer never summons
+// a second, whatever became of the first.
+let hasFixer = (bug: string): boolean =>
+  !!db.prepare(
+    `select 1 from fixer f join session s on s.eid = f.eid
+     where s.requested_task = ? limit 1`,
+  ).get(bug)
+
+// Mint one managed fixer session aimed at a bug ticket, if the guardrails
+// allow — the boot sweep's created(bug) handler AND fileBug's inline call,
+// one door. Idempotent (skips a bug that already has a fixer); re-reads the
+// graph so the cap/cooldown/mute hold whoever calls it. A launch failure is
+// telemetry, never a thrown effect (effects.ts contract): the bug is already
+// on the board. cast() alone would never launch the session (it does not
+// dispatch), so this fires created(session) = spawned() itself.
+export let ensureFixer =
+  (cast: Cast) => (bug: string, _comp?: Record<string, unknown>) => {
+    let task = db.prepare(
+      `select t.project as project, t.status as status, b.fault as fault
+       from task t join bug b on b.eid = t.eid where t.eid = ?`,
+    ).get(bug) as
+      | { project: string | null; status: string; fault: string | null }
+      | undefined
+    if (!task) return // no bug row (deleted in its own batch)
+    if (task.status != 'open' && task.status != 'wip') return // closed ticket
+    if (hasFixer(bug)) return // already summoned one
+    let why = fixerBlocked(task.project ?? undefined, String(task.fault ?? ''))
+    if (why) return // ticket stands; the boot sweep re-drives when it clears
+    try {
+      let { eid, changes } = spawnChanges(rows(snapshot(db)), {
+        task: bug,
+        provider: FIXER.provider,
+        model: FIXER.model,
+      })
+      let t = trace()
+      // The `fixer` mark rides the same batch: what the cap counts, the
+      // cooldown reaches, and how the sweep tells spawned from un-spawned.
+      let out = apply(db, [...changes, { eid, name: 'fixer', comp: {} }], t)
+      cast(out)
+      dispatch(out, t, (comp, e) =>
+        telemetry(db, {
+          source: 'srv',
+          name: `effect:${comp}`,
+          ok: false,
+          error: String(e),
+        }))
+    } catch (e) {
+      telemetry(db, {
+        source: 'srv',
+        name: 'fixer spawn',
+        ok: false,
+        error: String(e),
+      })
+    }
+  }
+
+// The boot sweep predicate over the `bug` table: an OPEN bug ticket no fixer
+// has been spawned for yet. Idempotent to re-drive — ensureFixer re-checks and
+// the guardrails hold — so a restart re-drives only the un-spawned and never
+// doubles one that launched. This is the reconcile that eventually spawns a
+// bug the cap or a mute suppressed live, once the pressure clears.
+export let FIXER_PENDING = `exists (select 1 from task t
+     where t.eid = bug.eid and t.status in ('open', 'wip'))
+   and not exists (select 1 from session s join fixer f on f.eid = s.eid
+     where s.requested_task = bug.eid)`
+
 // The created() handler, curried over cast like every effect. Re-reads the
 // graph each call: if the exception was already cleared (healed) or the
 // deliverable recovered (delivered stamped), the tri-state says resolved and
@@ -218,6 +365,10 @@ export let fileBug =
       { eid: bug, name: 'bug', comp: { fault: key, hits: 1, last: at } },
       { eid: bug, name: 'dependency', comp: { type: 'about', child: eid } },
     ]))
+    // Phase 2: a NEW ticket also summons a fixer, behind the guardrails. The
+    // cast above does not dispatch, so the spawn is minted here — the same
+    // door the boot sweep uses (created(bug)), idempotent and gated alike.
+    ensureFixer(cast)(bug)
   }
 
 // The boot sweep predicate over the `exception` table: a break that no bug

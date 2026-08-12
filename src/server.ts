@@ -39,7 +39,7 @@ import { vocabularyMd } from './schema.ts'
 import { freeze, serveFrozen, store } from './freeze.ts'
 import { filed } from './page.ts'
 import { PENDING } from './deliver.ts'
-import { fileBug, HEAL_PENDING } from './heal.ts'
+import { ensureFixer, fileBug, FIXER_PENDING, HEAL_PENDING } from './heal.ts'
 import { fanout, FANOUT_PENDING, mailed } from './mail.ts'
 import { native } from './mailer.ts'
 import { closingTask } from './closing.ts'
@@ -1187,8 +1187,18 @@ on('exception', {
   sweep: { pending: HEAL_PENDING },
   doc: 'self-healing phase 1: an exception (break) facet files ONE deduped ' +
     'bug ticket per distinct fault (kind + normalized message + stack head); ' +
-    'recurrences annotate the open ticket instead of multiplying it — no ' +
-    'spawn yet (D-17077)',
+    'recurrences annotate the open ticket instead of multiplying it (D-17077)',
+})
+on('bug', {
+  created: ensureFixer(cast),
+  // Boot reconcile: every open bug no fixer was spawned for re-drives the
+  // spawn, gated the same way — so a ticket the cap or a mute suppressed live
+  // gets its fixer once the pressure clears, and a restart never doubles one.
+  sweep: { pending: FIXER_PENDING },
+  doc: 'self-healing phase 2: a newly filed bug ticket summons ONE managed ' +
+    'fixer session (requested_task = the bug), behind a mute lever, a hard ' +
+    'concurrency cap, and a per-fault cooldown — the boot sweep re-drives an ' +
+    'open, un-spawned ticket once a gate clears (D-17077)',
 })
 
 // Personas follow the graph into each repo's .tasks/ files: any change

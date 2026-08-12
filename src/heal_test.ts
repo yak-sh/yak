@@ -10,11 +10,25 @@ import { type Change } from './types.ts'
 import { on } from './effects.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
+// The fixer spawns the in-repo `fake` provider, so no phase-2 test launches a
+// real agent — and these unit tests never register created(session), so the
+// mint stops at the graph (the session + fixer marker) without a subprocess.
+Deno.env.set('TASKS_FIXER_PROVIDER', 'fake')
+Deno.env.set('TASKS_FIXER_MODEL', 'fake-fast')
 let { apply, db } = await import('./db.ts')
 let { exceptionChange, excepted, delivered } = await import('./deliver.ts')
-let { fileBug, faultKey, HEAL_PENDING } = await import('./heal.ts')
+let {
+  ensureFixer,
+  faultKey,
+  fileBug,
+  FIXER_CAP,
+  FIXER_PENDING,
+  fixerBlocked,
+  HEAL_PENDING,
+} = await import('./heal.ts')
 
 let uid = () => crypto.randomUUID()
+let now = () => new Date().toISOString()
 
 // A no-op collector: fileBug's apply() has already persisted before cast, so a
 // test only needs to swallow the broadcast.
@@ -159,4 +173,184 @@ Deno.test('faultKey folds the stack head and strips volatile bits', () => {
   assert(faultKey('session', 'boom', s1) !== faultKey('session', 'boom', null))
   // no stack → the key rests on kind + message alone, no trailing @
   assert(!faultKey('session', 'plain', null).includes('@'))
+})
+
+// ---- Phase 2: the fixer spawn and its guardrails (D-17077) ----------------
+
+// The fixers a bug summoned — a session marked `fixer` aimed at it. Empty when
+// a guardrail suppressed the spawn.
+let fixersFor = (bug: string) =>
+  db.prepare(
+    `select s.eid as eid from session s join fixer f on f.eid = s.eid
+     where s.requested_task = ?`,
+  ).all(bug) as { eid: string }[]
+
+// A minimal OPEN bug ticket carrying a fault key — the spawn's subject.
+let makeBug = (key: string, project?: string) => {
+  let eid = uid()
+  apply(db, [
+    { eid, name: 'doc', comp: { title: 'a bug', body: 'broke' } },
+    {
+      eid,
+      name: 'task',
+      comp: { status: 'open', priority: 2, project: project ?? null },
+    },
+    { eid, name: 'bug', comp: { fault: key, hits: 1, last: now() } },
+  ])
+  return eid
+}
+
+// A fixer session already aimed at a bug, at a given lifecycle status — what
+// the cap counts (running) and the cooldown reaches (its bug's fault).
+let makeFixer = (bug: string, status = 'running') => {
+  let eid = uid()
+  apply(db, [
+    { eid, name: 'session', comp: { id: uid(), requested_task: bug } },
+    { eid, name: 'fixer', comp: {} },
+  ])
+  db.prepare('update session set status = ? where eid = ?').run(status, eid)
+  return eid
+}
+
+// A project entity; num forces it into the P-19 home slot for the global mute
+// (parking whoever already holds that num at a free one — the shared :memory:
+// db has minted plenty by now).
+let makeProject = (num?: number) => {
+  let eid = uid()
+  apply(db, [
+    { eid, name: 'doc', comp: { title: 'a project', body: '' } },
+    { eid, name: 'project', comp: {} },
+  ])
+  if (num) {
+    let free = (db.prepare('select coalesce(max(num), 0) + 1 as n from entity')
+      .get() as { n: number }).n
+    db.prepare('update entity set num = ? where num = ?').run(free, num)
+    db.prepare('update entity set num = ? where eid = ?').run(num, eid)
+  }
+  return eid
+}
+
+// Clear the levers between guardrail tests: the shared :memory: db persists, so
+// leftover fixers would keep the cap full and a leftover nofix would mute.
+let reset = () => {
+  db.exec('delete from fixer')
+  db.exec('delete from nofix')
+}
+
+Deno.test('a new break files a ticket AND mints exactly one fixer', () => {
+  reset()
+  let eid = session()
+  let msg = 'widget pipeline exploded mid-run'
+  exceptionChange(eid, msg)
+  file(eid, {})
+
+  let key = faultKey('session', msg, null)
+  let bug = (db.prepare('select eid from bug where fault = ?').get(key) as {
+    eid: string
+  }).eid
+  let fixers = fixersFor(bug)
+  assertEquals(fixers.length, 1) // exactly one, not zero and not many
+
+  // it is a managed fixer running the configured provider (fake here)
+  let sp = db.prepare('select provider, model from spawn where eid = ?')
+    .get(fixers[0].eid) as { provider: string; model: string }
+  assertEquals(sp.provider, 'fake')
+})
+
+Deno.test('a storm files ONE ticket and mints ONE fixer', () => {
+  reset()
+  let line = (r: number) => `cache miss storm after ${r} tries`
+  for (let i = 0; i < 6; i++) {
+    let e = session()
+    exceptionChange(e, line(i))
+    file(e, {})
+  }
+  let key = faultKey('session', line(0), null)
+  let bugs = db.prepare('select eid from bug where fault = ?').all(key) as {
+    eid: string
+  }[]
+  assertEquals(bugs.length, 1) // dedup: one ticket
+  assertEquals(fixersFor(bugs[0].eid).length, 1) // and one fixer, not six
+})
+
+Deno.test('at the concurrency cap the ticket files but no fixer spawns', () => {
+  reset()
+  // Fill the cap with running fixers on throwaway bugs.
+  for (let i = 0; i < FIXER_CAP; i++) makeFixer(makeBug(`filler-${i}`))
+  assertEquals(fixerBlocked(undefined, 'anything'), `at cap (${FIXER_CAP})`)
+
+  let eid = session()
+  let msg = 'a distinct break that arrives while the cap is full'
+  exceptionChange(eid, msg)
+  file(eid, {})
+
+  let key = faultKey('session', msg, null)
+  let bug = (db.prepare('select eid from bug where fault = ?').get(key) as {
+    eid: string
+  }).eid
+  assert(bug, 'the ticket still files at the cap')
+  assertEquals(fixersFor(bug).length, 0) // but no fixer spawned
+})
+
+Deno.test('a per-venture mute suppresses the spawn, ticket still files', () => {
+  reset()
+  let project = makeProject()
+  db.prepare('insert into nofix (eid) values (?)').run(project)
+  assertEquals(fixerBlocked(project, 'k'), 'muted')
+
+  let bug = makeBug('venture-muted-key', project)
+  ensureFixer(cast)(bug)
+  assertEquals(fixersFor(bug).length, 0)
+})
+
+Deno.test('a global mute (nofix on P-19) suppresses every venture', () => {
+  reset()
+  let hp = makeProject(19) // the self-healing home
+  db.prepare('insert into nofix (eid) values (?)').run(hp)
+  let other = makeProject()
+  assertEquals(fixerBlocked(other, 'k'), 'muted') // a different venture too
+
+  let bug = makeBug('global-muted-key', other)
+  ensureFixer(cast)(bug)
+  assertEquals(fixersFor(bug).length, 0)
+  reset() // drop the global mute so later tests are not silenced
+})
+
+Deno.test('a per-fault cooldown suppresses a re-spawn for the same key', () => {
+  reset()
+  let key = 'flaky-fault-that-reopens'
+  let bug1 = makeBug(key)
+  makeFixer(bug1) // a fixer just spawned for this fault (created now)
+  assertEquals(fixerBlocked(undefined, key), 'cooling down')
+  // a different fault is not cooling
+  assertEquals(fixerBlocked(undefined, 'a-cold-key'), null)
+
+  // the fault recurs after its ticket closed: a new ticket, but no new fixer
+  db.prepare("update task set status = 'done' where eid = ?").run(bug1)
+  let bug2 = makeBug(key)
+  ensureFixer(cast)(bug2)
+  assertEquals(fixersFor(bug2).length, 0)
+})
+
+Deno.test('ensureFixer is idempotent — never a second fixer for one bug', () => {
+  reset()
+  let bug = makeBug('idempotent-key')
+  ensureFixer(cast)(bug)
+  ensureFixer(cast)(bug) // a re-drive (boot sweep, or a duplicate created)
+  assertEquals(fixersFor(bug).length, 1)
+})
+
+Deno.test('the boot sweep re-drives only open, un-spawned tickets', () => {
+  reset()
+  let unspawned = makeBug('sweep-unspawned')
+  let spawned = makeBug('sweep-spawned')
+  makeFixer(spawned) // already has a fixer
+  let closed = makeBug('sweep-closed')
+  db.prepare("update task set status = 'cancelled' where eid = ?").run(closed)
+
+  let pending = (db.prepare(`select eid from bug where ${FIXER_PENDING}`)
+    .all() as { eid: string }[]).map((r) => r.eid)
+  assert(pending.includes(unspawned), 'an un-spawned open bug is pending')
+  assert(!pending.includes(spawned), 'a bug with a fixer drops out')
+  assert(!pending.includes(closed), 'a closed bug drops out')
 })

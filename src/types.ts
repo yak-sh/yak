@@ -619,6 +619,21 @@ export let comps: Record<string, Record<string, PropType>> = {
   // harms nobody. NOT in kindOrder: a bug IS a task, this only says the task is
   // a filed break.
   bug: { fault: 'text', hits: 'number', last: 'time' },
+  // Self-healing phase 2 (D-17077): `fixer` marks a session AUTO-spawned to
+  // fix a bug ticket — presence alone, the way `design` tags a doc. The cap
+  // counts active fixers and the cooldown reaches the fault it heals through
+  // the session's requested_task → bug.fault, so nothing is duplicated here
+  // (M-14942: the fixer's one aspect is "this run is an auto-fixer"). Wire-
+  // writable presence, minted by heal.ts through apply(). NOT in kindOrder —
+  // a fixer IS a session; this only says the graph spawned it to heal.
+  fixer: {},
+  // The auto-spawn mute (D-17077): `nofix` on a PROJECT silences fixer spawns
+  // for that venture's bugs; on the self-healing HOME project (P-19, heal.ts
+  // home()) it is the GLOBAL switch. The break still files a ticket — this
+  // suppresses only the agent, and the boot sweep re-drives once it clears. A
+  // pure-presence marker a human sets/clears (graph_apply / the card menu).
+  // NOT in kindOrder — a lever, not an identity.
+  nofix: {},
   // The BLOCK facet (D-17094): this task is stuck on something EXTERNAL — a
   // vendor, an owner decision, a registration — that has no entity, so a
   // `requires` edge can't name it. `on` is that free-text reason and rides
