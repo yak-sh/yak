@@ -1603,6 +1603,9 @@ html {
   overflow-wrap: anywhere;
 }
 .Show_Comments {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
   white-space: nowrap;
 }
 /* Edge tallies wear their edge colors, dimmed to meta-line volume. */

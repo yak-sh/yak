@@ -528,7 +528,8 @@ export let Meta = (
       )}
       {talk > 0 && (
         <Talk>
-          <Icon name='message-circle' /> {talk}
+          <Icon name='message-circle' />
+          {talk}
         </Talk>
       )}
       {e.task && <Plate e={e} />}
