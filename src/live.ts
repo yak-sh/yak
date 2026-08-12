@@ -35,6 +35,7 @@ import {
   warm,
 } from './query.ts'
 import { anchor, emptyIndex, indexAll, reindex, reindexEdge } from './index.ts'
+import { type MemoryResolver, memoryResolver } from './resolver.ts'
 import { normalizeChanges } from './props.ts'
 import * as idb from './idb.ts'
 import { topology } from './leader.ts'
@@ -104,77 +105,33 @@ let syncIx = () => {
 }
 
 // The reactive query layer — the store-agnostic door for "which entities match
-// this query". A query is a value (Pred[], the query.ts grammar boards and
-// graph_query already speak), resolved to a NARROW signal of matching eids: the
-// initial fill anchors on the derived index (index.ts — O(result), never
-// O(graph)), and maintenance re-tests ONLY the eids each patch touched, so an
-// unrelated patch never wakes it. This is the seam T-17046 keeps — callers get
-// a subscribed result set, and the backing can move from this in-memory
-// realization to an IDB indexed cursor with no call-site churn. Never
-// `Object.values(cache.value).filter` in a render: that scans the whole graph
-// AND subscribes to every patch (T-17036, the 16ms frame budget).
-type QuerySet = { preds: Pred[]; ids: Signal<string[]>; n: number }
-let querySets = new Map<string, QuerySet>()
-let queryKey = (preds: Pred[]) => JSON.stringify(preds)
-
-let matches = (eid: string, preds: Pred[]) => {
-  let r = cache.peek()[eid]
-  return !!r && listed(r, preds) && matchQuery(r, preds, (t) => cache.peek()[t])
-}
-
-// One resolution pass: the index narrows to a candidate set (or the whole cache
-// when no pred anchors — the board fallback), then matchQuery + listed filter.
-let scanQuery = (preds: Pred[]): string[] => {
-  let cand = anchor(ix, preds)
-  let pool: Iterable<string> = cand ?? Object.keys(cache.peek())
-  let out: string[] = []
-  for (let eid of pool) if (matches(eid, preds)) out.push(eid)
-  return out
-}
-
-let querySet = (preds: Pred[]): QuerySet => {
-  syncIx()
-  let key = queryKey(preds)
-  let set = querySets.get(key)
-  if (!set) {
-    set = { preds, ids: signal(untracked(() => scanQuery(preds))), n: 0 }
-    querySets.set(key, set)
-  }
-  return set
-}
+// this query". The mechanics live behind the Resolver seam (resolver.ts): a
+// query is a value (Pred[], the query.ts grammar boards and graph_query already
+// speak), resolved to a NARROW signal of matching eids. The in-memory backing
+// this browser drives reads the cache through the store below — its initial fill
+// anchors on the derived index (index.ts — O(result), never O(graph)), and
+// `refresh` re-tests ONLY the eids each patch touched, so an unrelated patch
+// never wakes a subscriber. This is the seam T-17046 keeps: the backing can move
+// from this in-memory realization to an IDB indexed cursor with no call-site
+// churn. Never `Object.values(cache.value).filter` in a render: that scans the
+// whole graph AND subscribes to every patch (T-17036, the 16ms frame budget).
+let resolver: MemoryResolver = memoryResolver({
+  read: (eid) => cache.peek()[eid],
+  keys: () => Object.keys(cache.peek()),
+  // Heal the derived index before narrowing — the same guard querySet held.
+  anchor: (preds) => {
+    syncIx()
+    return anchor(ix, preds)
+  },
+})
 
 // Read a query's result signal (get-or-create; the render half of the hook).
-export let queryEids = (preds: Pred[]): Signal<string[]> => querySet(preds).ids
+export let queryEids = (preds: Pred[]): Signal<string[]> =>
+  resolver.subscribe(preds)
 // Ref-count a query for a component's lifetime (the hook's effect half); the
 // last release drops the set so distinct queries don't accumulate.
-export let holdQuery = (preds: Pred[]): Signal<string[]> => {
-  let set = querySet(preds)
-  set.n++
-  return set.ids
-}
-export let dropQuery = (preds: Pred[]) => {
-  let key = queryKey(preds)
-  let set = querySets.get(key)
-  if (!set || --set.n > 0) return
-  querySets.delete(key)
-}
-
-// Membership is row-local, so a patch tests only its touched rows — a stable
-// result keeps its subscribers asleep while an unrelated entity changes.
-let refreshQueries = (eids: Set<string>) => {
-  for (let set of querySets.values()) {
-    let ids = set.ids.peek()
-    let next = ids
-    for (let eid of eids) {
-      let had = next.includes(eid)
-      let wants = matches(eid, set.preds)
-      if (had != wants) {
-        next = wants ? [...next, eid] : next.filter((x) => x != eid)
-      }
-    }
-    if (next != ids) set.ids.value = next
-  }
-}
+export let holdQuery = (preds: Pred[]): Signal<string[]> => resolver.hold(preds)
+export let dropQuery = (preds: Pred[]) => resolver.drop(preds)
 
 let indexId = (eid: string, r?: Comps) => {
   if (!r) return
@@ -295,9 +252,7 @@ let resetSignals = () =>
     for (let [eid, found] of childSignals) {
       found.value = ix.byChild.get(eid) ?? noRelations
     }
-    for (let set of querySets.values()) {
-      set.ids.value = untracked(() => scanQuery(set.preds))
-    }
+    resolver.reset()
     refreshBoards(touched)
     refreshPins(touched)
     refreshComments(touched)
@@ -590,7 +545,7 @@ export let applyLocal = (changes: Change[]) => {
     refreshFolds(changedRows)
     refreshBacklinks(changedRows)
     refreshJobs(changedRows)
-    refreshQueries(changedRows)
+    resolver.refresh(changedRows)
     refreshBoardLinks(changedRows)
     refreshFacets(changedRows)
     for (let [eid, z] of zs) {
@@ -881,7 +836,7 @@ let evict = (eids: string[]) => {
       refreshFolds(gone)
       refreshBacklinks(gone)
       refreshJobs(gone)
-      refreshQueries(gone)
+      resolver.refresh(gone)
       refreshBoardLinks(gone)
       refreshFacets(gone)
     })
