@@ -98,6 +98,21 @@ Deno.test('a comment aimed elsewhere is ignored', () => {
   assertEquals(channelEvents(batch, ctx()), [])
 })
 
+Deno.test('a meta-tagged comment on the session is NOT delivered live (T-17319)', () => {
+  // The load-bearing half: a :meta memo that falls back to anchoring on the
+  // session entity would otherwise deliver as an ordinary comment aimed at
+  // that session. The `meta` tag rides the same batch and suppresses it, so
+  // the doer is never knocked — the dream harvests it later instead.
+  let batch = [
+    ch('c1', 'doc', { title: '', body: 'a note for the dream' }),
+    ...comment('c1', 'sess'),
+    ch('c1', 'meta', {}),
+  ]
+  for (let mode of [undefined, 'catchup', 'resume', 'inbox'] as const) {
+    assertEquals(channelEvents(batch, ctx({ mode })), [])
+  }
+})
+
 Deno.test('a comment on a CLAIMED task is delivered, naming the task', () => {
   let batch = [
     ch('c1', 'doc', { title: '', body: 'take a look' }),

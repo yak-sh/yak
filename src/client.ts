@@ -125,6 +125,28 @@ export let sessionRow = async (sid: string) =>
   (await query([`.session.id=${sid}`], 'session'))
     .find((r) => String(r.comps.session?.id) == sid)
 
+// A session's NEWEST message entry — the transcript position a :meta memo
+// anchors to (T-17319). Pages the lazy entry partition (message facet only,
+// ascending by seq) to its tail; the last row of the last page is the highest
+// seq. Undefined when the session has spoken nothing yet, so the caller falls
+// back to the session entity.
+export let latestMessage = async (session: string) => {
+  let after = 0
+  let last: Row | undefined
+  for (;;) {
+    let page = await query(
+      [`.entry.session=${session}`, '.message.role!'],
+      'entry',
+      { after, limit: 500 },
+    )
+    if (!page.length) break
+    last = page.at(-1)
+    if (page.length < 500) break
+    after = Number(last!.comps.entry?.seq ?? 0)
+  }
+  return last
+}
+
 // The human id of a just-minted entity, read back by its eid for the num
 // the server stamped — /apply is synchronous against the same db, so the
 // row is already there; the eid stands in on the rare miss. One keyed

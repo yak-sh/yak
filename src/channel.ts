@@ -356,6 +356,17 @@ let docsIn = (changes: Change[]) => {
 let words = (doc?: { title: string; body: string }) =>
   doc ? cleanBody(doc.body || doc.title) : ''
 
+// The comments in this batch tagged `meta` (T-17319) — a quiet transcript
+// memo for the dream, never a live knock. The tag rides the same batch as
+// the comment it marks (the :meta mint is atomic; a resume/inbox snapshot
+// carries every component), so a batch scan is the whole test. The comment
+// branch skips these, which is the load-bearing half: a meta memo that
+// falls back to anchoring on the SESSION entity would otherwise deliver as
+// an ordinary comment aimed at that session — the exact distraction it exists
+// to avoid.
+let metasIn = (changes: Change[]) =>
+  new Set(changes.filter((c) => c.name == 'meta' && c.comp).map((c) => c.eid))
+
 // A recall entry lands in a session's OWN log (recall.ts) — no target, no
 // recipient facet: the delivery address IS its `entry.session` partition. So
 // index the batch's entry→session and eid→content(body), the way docsIn indexes
@@ -431,6 +442,7 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
   let recipients = toIn(changes)
   let sessions = sessionsIn(changes)
   let bodies = bodiesIn(changes)
+  let metas = metasIn(changes)
   // Only the resume sweep needs birthdays (commentOn) — a live batch is one
   // moment, so everything in it rode together.
   let born = ctx.mode == 'resume' || ctx.mode == 'inbox'
@@ -451,6 +463,7 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
       let at = str(c.comp.target)
       let mine = at == ctx.sessionEid || !!ctx.claimedEids?.has(at)
       if (!mine) continue
+      if (metas.has(c.eid)) continue // a meta memo is harvested, never injected live
       let content = words(docs.get(c.eid))
       if (!content) continue // bodiless mint or a later comp-only patch
       if (told(c.eid)) continue

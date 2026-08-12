@@ -72,6 +72,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
         '[--effort=high] [--persona=ID]',
       land: 'land',
       comment: 'comment <id> [text…] [--body=BODY] [--verdict=VERDICT]',
+      meta: 'meta [text…] [--body=BODY]',
       dep: 'dep <id> <type> <child> [--gone]',
       backup: 'backup',
       sync: 'sync [--no-commit] [--check]',

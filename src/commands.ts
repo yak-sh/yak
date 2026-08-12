@@ -354,6 +354,39 @@ export let commands: Record<string, Command> = {
       }
     },
   },
+  // :meta leaves a quiet transcript memo — a comment TAGGED `meta`, anchored
+  // at the caller session's newest MESSAGE entry, for the dream (T-12800) to
+  // harvest at consolidation. The tag is the whole point: channel.ts excludes
+  // a meta comment from live delivery, so the note never knocks the doer —
+  // read later, never injected live (contrast a bare comment on a session,
+  // which IS a live message to that agent). A fresh session with no message
+  // yet anchors on the session entity, so a memo never fails for want of a
+  // transcript position.
+  meta: {
+    args: 'the observation to leave for the dream',
+    about:
+      'leave a quiet meta memo in the transcript (harvested by the dream, not live)',
+    run: (rest, ctx) => {
+      let text = page(rest.trim(), ctx)
+      if (!text) throw new Error('meta: needs words (:meta the observation)')
+      let me = ctx.rows.find(
+        (r) => String(r.comps.session?.id ?? '') == ctx.session,
+      )
+      if (!me) throw new Error('meta: run under a session')
+      let anchor = ctx.rows
+        .filter((r) => r.comps.entry?.session == me.eid && r.comps.message)
+        .sort((a, b) =>
+          Number(a.comps.entry!.seq ?? 0) - Number(b.comps.entry!.seq ?? 0)
+        )
+        .at(-1) ?? me
+      let made = commentChanges(ctx.rows, anchor.eid, text, ctx.session)
+      let eid = made.find((c) => c.name == 'comment')!.eid
+      return {
+        changes: [...made, { eid, name: 'meta', comp: {} }],
+        msg: `meta → ${idOf(anchor)}`,
+      }
+    },
+  },
   // :knock is the attention lever: bring the focused entity to someone's
   // attention NOW. The first word IS the recipient (alias, id) and must
   // resolve; the rest ride as a plain comment on the target — the knock

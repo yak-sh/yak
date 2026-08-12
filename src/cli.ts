@@ -43,6 +43,7 @@ import {
   isUnread,
   journalRows,
   jsonOf,
+  latestMessage,
   mailAt,
   mailChanges,
   mailLine,
@@ -1161,6 +1162,17 @@ let colon = async (focus: string | undefined, argv: string[]) => {
     } else {
       all.push(...await query(['.repo!'], 'project'))
       await one('tasks')
+    }
+  }
+  if (name == 'meta' && session) {
+    // The anchor the memo lands on: the caller session and its newest message
+    // entry (client.ts pages to the tail). The verb picks the max-seq message
+    // entry among these, or falls back to the session row.
+    let sess = await sessionRow(session)
+    if (sess) {
+      all.push(sess)
+      let latest = await latestMessage(sess.eid)
+      if (latest) all.push(latest)
     }
   }
   if (name == 'knock') await one(rest[0])
@@ -2574,6 +2586,7 @@ export let verbs = bind({
   spawn,
   land: () => land(),
   comment,
+  meta: (got) => colon(undefined, ['meta', got.body ?? '']),
   dep,
   backup: () => backup(),
   sync,

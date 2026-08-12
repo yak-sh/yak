@@ -508,6 +508,13 @@ export let comps: Record<string, Record<string, PropType>> = {
   comment: {
     target: { eid: 'entity', death: 'cascade' },
   },
+  // A quiet transcript memo (T-17319): a bare tag a comment wears to say
+  // "harvest at consolidation, never inject live". channel.ts excludes a
+  // meta-tagged comment from live delivery, so the note reaches the dream
+  // (T-12800) combing the session — never the doer mid-task. A marker like
+  // `design`: the doc carries the words, the tag carries the intent. Not in
+  // kindOrder — a comment that carries meta is still a comment.
+  meta: {},
   review: {
     verdict: {
       enum: verdicts,
@@ -1802,6 +1809,7 @@ export type Ent = {
   email?: Email
   conflict?: Conflict
   comment?: Comment
+  meta?: { eid: string }
   review?: Review
   alias?: Alias
   memory?: Memory

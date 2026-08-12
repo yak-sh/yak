@@ -476,6 +476,28 @@ export let manuals = declare({
     ],
     some: ['text', '--body', '--verdict'],
   },
+  meta: {
+    about:
+      'leave a quiet meta memo in the transcript for the dream (not delivered live)',
+    dots: ['body'],
+    body: 'text',
+    examples: [
+      'task meta "the retry path here is a tooling gap"',
+      'task meta .body=@note.md',
+      'task meta - < observation.txt',
+    ],
+    detail: 'A meta memo is a comment TAGGED `meta`, anchored at your ' +
+      "session's newest message entry, for the dream (T-12800) to harvest " +
+      'at consolidation — it is NEVER delivered to the live session, so it ' +
+      'never knocks the doer. Use it to leave an observation for later ' +
+      '(a tooling gap, a note that belongs in dreams) instead of interrupting ' +
+      'the work in progress. The body is a DOCUMENT like a comment: `@file`, ' +
+      '`--body=@-`, and a lone trailing @token read a file or piped stdin.',
+    root: true,
+    args: [arg('text', text, true, false)],
+    opts: [body],
+    some: ['text', '--body'],
+  },
   dep: {
     about: 'link or unlink an edge',
     deprecated: 'superseded by task <id> <type> <child> [--gone]',

@@ -242,6 +242,43 @@ Deno.test('cancel: trailing words become a plain comment, same batch', () => {
   assertThrows(() => run('cancel', ctx(B)), Error, 'B-3 is not a task')
 })
 
+Deno.test('meta: anchors on the newest message entry and tags the comment', () => {
+  // Two message entries for the session, plus a bare (non-message) entry with
+  // the highest seq — the anchor is the newest MESSAGE, not the newest entry.
+  let e1 = 'aaaaaaaa-0000-4000-8000-0000000000e1'
+  let e2 = 'aaaaaaaa-0000-4000-8000-0000000000e2'
+  let e3 = 'aaaaaaaa-0000-4000-8000-0000000000e3'
+  let withEntries = rows({
+    changes: [
+      ...snap.changes,
+      { eid: e1, name: 'entry', comp: { session: S, seq: 1 } },
+      { eid: e1, name: 'message', comp: { role: 'user' } },
+      { eid: e2, name: 'entry', comp: { session: S, seq: 2 } },
+      { eid: e2, name: 'message', comp: { role: 'assistant' } },
+      { eid: e3, name: 'entry', comp: { session: S, seq: 3 } },
+    ],
+  })
+  let out = run('meta the retry path here is a tooling gap', {
+    rows: withEntries,
+    session: 'sess-x',
+  })
+  let comment = out.changes!.find((c) => c.name == 'comment')!
+  let doc = out.changes!.find((c) => c.name == 'doc')!
+  let tag = out.changes!.find((c) => c.name == 'meta')!
+  assertEquals(comment.comp!.target, e2) // newest MESSAGE, not e3
+  assertEquals(doc.comp!.body, 'the retry path here is a tooling gap')
+  assertEquals(tag.eid, comment.eid) // the tag rides the comment entity
+  assertEquals(tag.comp, {})
+  assertEquals(out.msg!.startsWith('meta → '), true)
+
+  // A session with no message entry yet falls back to the session itself.
+  let bare = run('meta first note', { rows: all, session: 'sess-x' })
+  assertEquals(bare.changes!.find((c) => c.name == 'comment')!.comp!.target, S)
+
+  assertThrows(() => run('meta hi', ctx()), Error, 'run under a session')
+  assertThrows(() => run('meta', ctx(T, 'sess-x')), Error, 'needs words')
+})
+
 Deno.test('open: an argument navigates, none is the status move', () => {
   assertEquals(run('open T-4', ctx()).go, T) // no focus needed to navigate
   assertEquals(run('open 4', ctx()).go, T) // bare num

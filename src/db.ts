@@ -639,6 +639,7 @@ export let derived = [
   'persona',
   'memory',
   'feedback',
+  'meta',
   'resume',
   'deliver',
   'delivered',
