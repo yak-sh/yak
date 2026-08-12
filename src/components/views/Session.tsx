@@ -362,6 +362,24 @@ export let SessionSummary = ({ e, gist }: { e: Ent; gist: string }) => {
 export let SessionContext = ({ tokens }: { tokens?: number }) =>
   tokens ? <Context>{kilo(tokens)} context</Context> : null
 
+export let SessionDiagnostics = ({
+  stderr,
+  exit,
+  open,
+}: {
+  stderr?: string
+  exit?: number | null
+  open?: boolean
+}) =>
+  stderr
+    ? (
+      <Diagnostics open={open}>
+        <Gist>diagnostics · {lineLabel(stderr)}</Gist>
+        <Err mod={exit != null && exit != 0 && 'fail'}>{stderr}</Err>
+      </Diagnostics>
+    )
+    : null
+
 // Usage, said the compact way: ↑ everything sent up (input plus both
 // cache lanes), ↓ what came back.
 let usage = (json?: string) => {
@@ -720,12 +738,11 @@ export let Session = ({ e }: { e: Ent }) => {
           /* stderr is durable evidence, not transcript: it has no seqs and
             resumes append to it. Routine noise folds; failed runs show it. */
         }
-        {log.stderr && (
-          <Diagnostics open={status == 'failed'}>
-            <Gist>diagnostics · {lineLabel(log.stderr)}</Gist>
-            <Err>{log.stderr}</Err>
-          </Diagnostics>
-        )}
+        <SessionDiagnostics
+          stderr={log.stderr}
+          exit={s.exit_code}
+          open={status == 'failed'}
+        />
         {unsent.length > 0 && (
           <Unsent>
             {unsent.map((c) => <Note key={c.eid} c={c} />)}

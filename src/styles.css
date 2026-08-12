@@ -3301,14 +3301,19 @@ a[data-ref]:hover {
   overflow-wrap: anywhere;
 }
 .Session_Err {
+  --err: var(--dim);
+
   margin: var(--half-gap) 0 0;
   padding: var(--half-gap);
   font-size: 11px;
-  color: var(--dim); /* unordered diagnostics, dim beside the ordered log */
+  color: var(--err);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   max-height: 12lh;
   overflow: auto;
+}
+.Session_Err-fail {
+  --err: var(--red);
 }
 /* The reply box: a sunken box at the pane's foot, the comment rail's twin. */
 /* A session as a list line — the task row's grammar, one line. */

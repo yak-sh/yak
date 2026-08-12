@@ -7,6 +7,7 @@ import { resolve } from '../Entity.tsx'
 import {
   SessionBody,
   SessionContext,
+  SessionDiagnostics,
   sessionMentions,
   SessionObservation,
   SessionReferences,
@@ -108,6 +109,26 @@ Deno.test('session context renders compactly for the sticky head', () => {
       root.querySelector('.Session_Context')?.textContent,
       '75k context',
     )
+  } finally {
+    render(null, root)
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else delete (globalThis as { document?: unknown }).document
+  }
+})
+
+Deno.test('session stderr is an error only for a non-zero exit', () => {
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let { document } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  let root = document.querySelector('main')!
+  try {
+    render(h(SessionDiagnostics, { stderr: 'noise', exit: 0 }), root)
+    assertEquals(root.querySelector('.Session_Err-fail'), null)
+    render(h(SessionDiagnostics, { stderr: 'broken', exit: 2 }), root)
+    assertEquals(root.querySelector('.Session_Err-fail')?.textContent, 'broken')
   } finally {
     render(null, root)
     if (prior) Object.defineProperty(globalThis, 'document', prior)
