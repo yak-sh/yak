@@ -18,6 +18,7 @@ import {
   deps,
   domains,
   ent,
+  findEid,
   gated,
   jobOf,
   landObservation,
@@ -42,6 +43,79 @@ import {
   assertNotStrictEquals,
   assertStrictEquals,
 } from '@std/assert'
+
+Deno.test('findEid indexes human ids, aliases, and short handles', () => {
+  cache.value = {
+    'abcdef10-0000-4000-8000-000000000001': {
+      entity: {
+        eid: 'abcdef10-0000-4000-8000-000000000001',
+        num: 31,
+      },
+      alias: {
+        eid: 'abcdef10-0000-4000-8000-000000000001',
+        slug: 'indexed',
+      },
+    },
+  }
+  assertEquals(findEid('T-31'), 'abcdef10-0000-4000-8000-000000000001')
+  assertEquals(findEid('31'), 'abcdef10-0000-4000-8000-000000000001')
+  assertEquals(findEid('indexed'), 'abcdef10-0000-4000-8000-000000000001')
+  assertEquals(findEid('abcdef'), 'abcdef10-0000-4000-8000-000000000001')
+
+  applyLocal([{
+    eid: 'abcdef10-0000-4000-8000-000000000002',
+    name: 'entity',
+    comp: { eid: 'abcdef10-0000-4000-8000-000000000002', num: 32 },
+  }])
+  assertEquals(findEid('abcdef'), undefined)
+
+  applyLocal([{
+    eid: 'abcdef10-0000-4000-8000-000000000002',
+    name: 'entity',
+    comp: null,
+  }, {
+    eid: 'abcdef10-0000-4000-8000-000000000001',
+    name: 'alias',
+    comp: { slug: 'renamed' },
+  }])
+  assertEquals(findEid('abcdef'), 'abcdef10-0000-4000-8000-000000000001')
+  assertEquals(findEid('indexed'), undefined)
+  assertEquals(findEid('renamed'), 'abcdef10-0000-4000-8000-000000000001')
+})
+
+Deno.test('findEid does not scan or subscribe after indexing', () => {
+  let scans = 0
+  cache.value = new Proxy({
+    indexed: {
+      entity: { eid: 'indexed', num: 41 },
+    },
+  }, {
+    ownKeys: (target) => {
+      scans++
+      return Reflect.ownKeys(target)
+    },
+  })
+  assertEquals(findEid('T-41'), 'indexed')
+  assertEquals(scans, 1)
+  for (let i = 0; i < 100; i++) assertEquals(findEid('T-41'), 'indexed')
+  assertEquals(scans, 1)
+
+  let runs = 0
+  let stop = effect(() => {
+    findEid('T-41')
+    runs++
+  })
+  try {
+    applyLocal([{
+      eid: 'other',
+      name: 'entity',
+      comp: { eid: 'other', num: 42 },
+    }])
+    assertEquals(runs, 1)
+  } finally {
+    stop()
+  }
+})
 
 Deno.test('repoUrl follows task, comment, and session ownership', () => {
   cache.value = {

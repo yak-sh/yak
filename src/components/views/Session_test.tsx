@@ -147,7 +147,13 @@ Deno.test('session references dedupe entities and links in mention order', () =>
   assertEquals(
     sessionMentions([
       { row: { kind: 'say', role: 'user', text: 'T-2 https://x.test' } },
-      { row: { kind: 'reason', text: '[same](T-2) then https://y.test' } },
+      {
+        row: {
+          kind: 'say',
+          role: 'agent',
+          text: '[same](T-2) then https://y.test',
+        },
+      },
       { row: { kind: 'exec', command: 'curl https://x.test' } },
     ]),
     [
@@ -157,6 +163,37 @@ Deno.test('session references dedupe entities and links in mention order', () =>
     ],
   )
   cache.value = {}
+})
+
+Deno.test('session references read conversation prose only', () => {
+  assertEquals(
+    sessionMentions([
+      { row: { kind: 'reason', text: 'https://reason.test' } },
+      {
+        row: {
+          kind: 'tool',
+          name: 'fetch',
+          detail: 'https://tool.test',
+        },
+      },
+      {
+        row: {
+          kind: 'exec',
+          command: 'curl https://exec.test',
+          status: '0',
+        },
+      },
+      { row: { kind: 'sys', tag: 'notice', text: 'https://sys.test' } },
+      {
+        row: {
+          kind: 'say',
+          role: 'agent',
+          text: 'Read https://message.test',
+        },
+      },
+    ]),
+    [{ kind: 'link', href: 'https://message.test' }],
+  )
 })
 
 Deno.test('session references use the usual entity and URL faces', () => {

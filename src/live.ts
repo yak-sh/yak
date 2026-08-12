@@ -70,6 +70,58 @@ let refreshJobs = (_ids: Set<string>) => {}
 let refreshBoardLinks = (_ids: Set<string>) => {}
 let refreshFacets = (_ids: Set<string>) => {}
 
+// Human ids are a hot lookup vocabulary, not a query. Keep them beside the
+// cache so rendering one reference never scans or subscribes to the graph.
+let idGraph = cache.peek()
+let numEids = new Map<number, string>()
+let aliasEids = new Map<string, string>()
+let shortEids = new Map<string, Set<string>>()
+
+let indexId = (eid: string, r?: Comps) => {
+  if (!r) return
+  if (r.entity) numEids.set(r.entity.num, eid)
+  if (r.alias?.slug != null) aliasEids.set(r.alias.slug, eid)
+  for (let n = 6; n <= Math.min(8, eid.length); n++) {
+    let key = eid.slice(0, n).toLowerCase()
+    if (!SHORT.test(key)) continue
+    let hits = shortEids.get(key)
+    if (hits) hits.add(eid)
+    else shortEids.set(key, new Set([eid]))
+  }
+}
+
+let unindexId = (eid: string, r?: Comps) => {
+  if (!r) return
+  if (r.entity && numEids.get(r.entity.num) == eid) {
+    numEids.delete(r.entity.num)
+  }
+  if (r.alias?.slug != null && aliasEids.get(r.alias.slug) == eid) {
+    aliasEids.delete(r.alias.slug)
+  }
+  for (let n = 6; n <= Math.min(8, eid.length); n++) {
+    let key = eid.slice(0, n).toLowerCase()
+    let hits = shortEids.get(key)
+    if (!hits) continue
+    hits.delete(eid)
+    if (!hits.size) shortEids.delete(key)
+  }
+}
+
+let indexIds = (graph: Record<string, Comps>) => {
+  numEids.clear()
+  aliasEids.clear()
+  shortEids.clear()
+  for (let [eid, r] of Object.entries(graph)) indexId(eid, r)
+  idGraph = graph
+}
+
+// Tests and host integrations may replace the exported cache directly. The
+// browser stays incremental; an outside replacement pays one rebuild.
+let syncIds = () => {
+  let graph = cache.peek()
+  if (graph != idGraph) indexIds(graph)
+}
+
 // One pass over deps gives every parent a stable seed. The narrow signals
 // below own render invalidation; this computed only avoids an edge-list scan
 // for every entity mounted during first render.
@@ -146,6 +198,7 @@ let publish = (
 
 let resetSignals = () =>
   batch(() => {
+    syncIds()
     let touched = new Set([...census.peek(), ...Object.keys(cache.value)])
     census.value = Object.keys(cache.value)
     canvasVersion.value++
@@ -308,6 +361,8 @@ let mark = (path: string) => ((globalThis as { __boot?: string }).__boot = path)
 // persist tail — and boot's explicit delta write — mirror exactly those keys
 // into IDB, no diff of the whole cache.
 export let applyLocal = (changes: Change[]) => {
+  syncIds()
+  let graph = cache.peek()
   let eids = new Set<string>()
   let edges: Dep[] = []
   let changedRows = new Set<string>()
@@ -415,7 +470,14 @@ export let applyLocal = (changes: Change[]) => {
     changed = true
     changedRows.add(eid)
   }
-  if (changed && !quiet) cache.value = next
+  if (changed && !quiet) {
+    for (let eid of changedRows) {
+      unindexId(eid, graph[eid])
+      indexId(eid, next[eid])
+    }
+    cache.value = next
+    idGraph = next
+  }
   batch(() => {
     if (changedCensus) census.value = Object.keys(next)
     if (changedCanvas) canvasVersion.value++
@@ -680,6 +742,8 @@ export let landSub = (f: Sub) => {
 // already removed itself via applyLocal (harmless to revisit), a drop is the
 // live "you no longer see this" that only this layer expresses.
 let evict = (eids: string[]) => {
+  syncIds()
+  let graph = cache.peek()
   let held = (eid: string) => [...subMembers.values()].some((s) => s.has(eid))
   let next = { ...cache.value }
   let changed = false
@@ -696,7 +760,9 @@ let evict = (eids: string[]) => {
     }
   }
   if (changed) {
+    for (let eid of gone) unindexId(eid, graph[eid])
     cache.value = next
+    idGraph = next
     batch(() => {
       census.value = Object.keys(next)
       if (changedCanvas) canvasVersion.value++
@@ -1094,25 +1160,17 @@ export let repoUrl = (start: Ent): string | undefined => {
 }
 
 export let findEid = (id: string): string | undefined => {
+  syncIds()
   let num = id.match(/^[A-Za-z]+-(\d+)$/)?.[1] ?? id.match(/^(\d+)$/)?.[1]
-  if (num) {
-    for (let [eid, r] of Object.entries(cache.value)) {
-      if (r.entity?.num == +num) return eid
-    }
-    return
-  }
-  if (cache.value[id]) return id // a full eid, verbatim
+  if (num) return numEids.get(+num)
+  if (cache.peek()[id]) return id // a full eid, verbatim
   // A SHORT-eid handle: the 6–8 hex prefix a num-less entity wears (T-3684).
   if (SHORT.test(id)) {
-    let hits = Object.keys(cache.value).filter((eid) =>
-      eid.startsWith(id.toLowerCase())
-    )
-    if (hits.length == 1) return hits[0]
-    if (hits.length > 1) return // ambiguous
+    let hits = shortEids.get(id.toLowerCase())
+    if (hits?.size == 1) return hits.values().next().value
+    if (hits?.size) return // ambiguous
   }
-  for (let [eid, r] of Object.entries(cache.value)) {
-    if (r.alias?.slug == id) return eid
-  }
+  return aliasEids.get(id)
 }
 // The same query over the WHOLE graph — the board's List face. No task
 // gate: sessions, memories, docs, web, people — anything that matches.

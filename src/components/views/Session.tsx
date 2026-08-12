@@ -209,21 +209,7 @@ let weave = (rows: Entry[], cs: Ent[]) => {
 let mentionText = (x: { row?: LogRow } | Ent) => {
   if ('eid' in x) return [x.doc?.body ?? '']
   let r = x.row
-  if (!r) return []
-  switch (r.kind) {
-    case 'say':
-    case 'reason':
-    case 'error':
-      return [r.text]
-    case 'tool':
-      return [r.detail, r.error].filter((v): v is string => !!v)
-    case 'exec':
-      return [r.desc, r.command].filter((v): v is string => !!v)
-    case 'sys':
-      return r.text ? [r.text] : []
-    case 'turn':
-      return []
-  }
+  return r?.kind == 'say' ? [r.text] : []
 }
 
 // The first mention wins its place. Entity spellings dedupe by the entity
