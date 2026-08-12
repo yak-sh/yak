@@ -5,6 +5,7 @@ import {
   Bot,
   Braces,
   Bug,
+  CircleAlert,
   CircleX,
   Columns3,
   Drama,
@@ -30,6 +31,7 @@ import {
 let glyphs: Record<string, LucideIcon> = {
   'alarm-clock': AlarmClock,
   'square-check': SquareCheck,
+  'circle-alert': CircleAlert,
   'circle-x': CircleX,
   lightbulb: Lightbulb,
   stamp: Stamp,

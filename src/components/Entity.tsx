@@ -286,6 +286,28 @@ defineActions([
     },
   },
   {
+    // The external-block facet (D-17094): unblock is trivial everywhere;
+    // block needs a free-text reason, so it's offered only where a prompt
+    // exists (the browser) — the TUI blocks via `task block`. This is what
+    // reddens the Dot, orthogonal to the status moves above.
+    match: has('task'),
+    acts: (e) =>
+      e.blocked
+        ? [{
+          label: 'unblock',
+          run: () => mutate({ eid: e.eid, name: 'blocked', comp: null }),
+        }]
+        : typeof globalThis.prompt == 'function'
+        ? [{
+          label: 'block…',
+          run: () => {
+            let on = globalThis.prompt('Blocked on? (external reason)')?.trim()
+            if (on) mutate({ eid: e.eid, name: 'blocked', comp: { on } })
+          },
+        }]
+        : [],
+  },
+  {
     match: has('role'),
     acts: (e) => [{
       label: e.role!.state == 'running' ? 'stop role' : 'start role',

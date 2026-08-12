@@ -27,6 +27,7 @@ import {
   landObservation,
   landSub,
   observation,
+  openDeps,
   parents,
   pinned,
   projects,
@@ -657,23 +658,32 @@ Deno.test('byWarmth: recalled-often beats merely-new beats faded', () => {
   )
 })
 
-// gated() burns red only for an open `requires` child — a cancelled one
-// settles the gate exactly like done, same as an unmet blocker changing
-// its mind rather than finishing.
-Deno.test('gated: a cancelled requires child releases the gate', () => {
-  let mk = (status: string) => ({
+// The alarm is decoupled from deps (D-17094): gated() burns red ONLY on the
+// `blocked` facet — an external stuck. Open `requires` edges are normal work,
+// so they never redden the Dot; they surface as the calm openDeps() count.
+Deno.test('gated: red keys on the blocked facet, never an open requires', () => {
+  let mk = (status: string, extra = {}) => ({
     entity: { eid: `x`, num: 0, created_at: '' },
     task: { eid: 'x', status, priority: 1 },
+    ...extra,
   })
+  // An open requires child: calm, not red — one open dep, no alarm.
   cache.value = { parent: mk('open'), blocker: mk('open') }
   deps.value = [{ parent: 'parent', type: 'requires', child: 'blocker' }]
+  assertEquals(gated(ent('parent')), false)
+  assertEquals(openDeps(ent('parent')), 1)
+
+  // The blocked facet IS the alarm — independent of any edge.
+  cache.value = {
+    parent: mk('open', { blocked: { eid: 'parent', on: "Jeff's call" } }),
+    blocker: mk('done'),
+  }
   assertEquals(gated(ent('parent')), true)
 
+  // A settled child stops counting as an open dep; still no alarm.
   cache.value = { parent: mk('open'), blocker: mk('cancelled') }
   assertEquals(gated(ent('parent')), false)
-
-  cache.value = { parent: mk('open'), blocker: mk('done') }
-  assertEquals(gated(ent('parent')), false)
+  assertEquals(openDeps(ent('parent')), 0)
 })
 
 // ent(): edges partition into refs (non-contains, {type, child}) and kids

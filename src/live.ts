@@ -387,16 +387,23 @@ export let warmth = (e: Ent, now: number) =>
 export let byWarmth = (now: number) => (a: Ent, b: Ent) =>
   (warmth(b, now) - warmth(a, now)) || (b.num - a.num)
 
-// Gated = any `requires` edge whose child is an unsettled task. Blocked is
-// this FACT about the edges — there is no 'blocked' status to maintain. A
-// cancelled blocker settles the gate too: it either releases the parent or
-// the parent's own status is the thing that needs rethinking, and the red
-// dot can't tell which.
-export let gated = (e: Ent) =>
-  e.refs.some((r) => {
-    let c = ent(r.child)
-    return r.type == 'requires' && c.task && !settled(c.task.status)
-  })
+// Gated = the red alarm on the Dot: this task is BLOCKED on something
+// external (D-17094), the `blocked` facet present. That is the only thing
+// that burns red now. Open `requires`/`contains` edges are NORMAL work —
+// decomposition and queuing — so they render as the calm deps tally (the
+// Meta line's "requires N"), never the alarm. A block is a fact stamped by
+// `task block`, orthogonal to status: a task is blocked AND open/wip.
+export let gated = (e: Ent) => e.blocked != null
+
+// The calm deps affordance: how many `requires`/`contains` children are
+// still unsettled — the "N open deps" count that used to (wrongly) burn red.
+// A non-task child can't settle, so it counts as open. Zero renders nothing.
+export let openDeps = (e: Ent) => {
+  let requires = e.refs.filter((r) => r.type == 'requires').map((r) =>
+    ent(r.child)
+  )
+  return [...requires, ...e.kids].filter((c) => !settled(c.task?.status)).length
+}
 
 // Who this viewer IS, for the verbs that are per-actor. A browser has no
 // session — its identity is the actor its client entity names — and a

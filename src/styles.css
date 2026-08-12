@@ -1625,6 +1625,16 @@ html {
 .Show_Deps-reads {
   color: var(--blue);
 }
+/* The block signal (D-17094): an EXTERNAL stuck, red like the Dot's alarm —
+   distinct from the calm deps tally above. Carries the free-text reason. */
+.Show_Blocked {
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--red);
+}
+.Show_Blocked .Icon {
+  vertical-align: -2px;
+}
 /* The session lease badge — who's working this, in fleet purple. */
 .Show_Claim,
 .Debug_Claim {
@@ -1906,7 +1916,7 @@ html {
   transform: translate(-50%, -50%) rotate(-45deg);
 }
 .Dot-gated {
-  --dot: var(--red); /* open requires deps: blocked in fact, not in status */
+  --dot: var(--red); /* the blocked facet: stuck on an external reason, not in status (D-17094) */
 }
 .Dot-gated::before {
   content: '';

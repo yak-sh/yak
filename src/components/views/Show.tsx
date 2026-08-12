@@ -51,6 +51,7 @@ let Frame = block('div', 'Show', {
   Proposal: 'span',
   Deps: 'span',
   Done: 's',
+  Blocked: 'span',
   Mail: 'div',
   MailKey: 'span',
   MailVal: 'span',
@@ -75,6 +76,7 @@ let {
   Proposal,
   Deps,
   Done,
+  Blocked,
   Mail: MailEl,
   MailKey,
   MailVal,
@@ -442,8 +444,9 @@ export let Similar = ({ e }: { e: Ent }) => {
 
 // Each tally reads as a sentence, verb first — "requires ~2~ 1": two
 // blockers already settled (struck — done or cancelled), one still open. A
-// child that isn't a task can't be settled, so it counts as open. gated()
-// tells the same story on the dot: only an open requires burns red.
+// child that isn't a task can't be settled, so it counts as open. This is
+// the CALM deps affordance (D-17094): open deps live here, never on the Dot
+// — only the `blocked` facet reddens it (gated()).
 let split = (kids: Ent[]): [number, number] => {
   let done = kids.filter((k) => settled(k.task?.status)).length
   return [kids.length - done, done]
@@ -525,6 +528,19 @@ export let Meta = (
             {open > 0 && ` ${open}`}
           </Deps>
         )
+      )}
+      {e.blocked && (
+        <Blocked data-tip='blocked on an external reason'>
+          <Icon name='circle-alert' />{' '}
+          <Prop
+            eid={e.eid}
+            comp='blocked'
+            prop='on'
+            editable
+            name='blocked'
+            show={(face) => <>blocked{face ? ` — ${face}` : ''}</>}
+          />
+        </Blocked>
       )}
       {talk > 0 && (
         <Talk>

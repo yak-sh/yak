@@ -59,7 +59,7 @@ let sheet: Record<string, Style> = {
   'Dot-live': { glyph: '●' },
   'Dot-done': { glyph: '✓', fg: '#a7c080' },
   'Dot-cancelled': { glyph: '✕', fg: '#7a8478' },
-  'Dot-gated': { glyph: '!', fg: '#e67e80', bold: true }, // open requires deps: blocked in fact
+  'Dot-gated': { glyph: '!', fg: '#e67e80', bold: true }, // the blocked facet: stuck on an external reason (D-17094)
   Id: { fg: '#7a8478' },
   'Id-retired': { fg: '#7a8478', dim: true, strike: true },
   MemoryType: { fg: '#a7c080' },

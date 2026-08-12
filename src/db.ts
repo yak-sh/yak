@@ -485,6 +485,17 @@ let schema = `
     hits  integer,
     last  text
   );
+  -- The BLOCK facet (D-17094): this task is stuck on something EXTERNAL — no
+  -- entity, so a requires edge can't name it. "on" (a SQL keyword, so quoted)
+  -- is the free-text reason and rides the wire; "since" is server-owned — the
+  -- clock default stamps it on insert and it stays put on a re-word, so it
+  -- reads as when the block began. A wholly new table = create-if-not-exists
+  -- is the additive add; the entity-death cascade takes the row.
+  create table if not exists blocked (
+    eid    text primary key references entity(eid),
+    "on"   text,
+    since  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  );
   ${mailDdl};
   -- Inbound webhook deliveries, derived from the edge's raw request
   -- spool (inbound.ts). Every column is server-stamped; the wire can

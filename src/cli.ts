@@ -579,6 +579,29 @@ let finish = (status: 'done' | 'cancelled') => async (args: string[]) => {
 let done = finish('done')
 let cancel = finish('cancelled')
 
+// External block: a task stuck on something with no entity (a vendor, an
+// owner decision). Writes the `blocked` facet's free-text `on`; apply()
+// stamps `since`. This is what reddens the Dot — status is untouched.
+let block = async (got: Got) => {
+  let id = got.args.id
+  let reason = (got.args.reason ?? '').trim()
+  if (!id) throw new Error('task block <id> "<reason>"')
+  if (!reason) throw new Error('task block <id> "<reason>" (reason required)')
+  let row = await needed(id)
+  await send([{ eid: row.eid, name: 'blocked', comp: { on: reason } }])
+  print(`${idOf(row)} blocked — ${reason}`)
+}
+
+// Clear the block facet: the external reason is resolved. Deleting the
+// component (comp null) drops the whole facet, `since` with it.
+let unblock = async (got: Got) => {
+  let id = got.args.id
+  if (!id) throw new Error('task unblock <id>')
+  let row = await needed(id)
+  await send([{ eid: row.eid, name: 'blocked', comp: null }])
+  print(`${idOf(row)} unblocked`)
+}
+
 // Full-text search — every doc in the graph, ranked, matches bracketed.
 let seek = async (got: Got) => {
   let json = got.flags.has('--json')
@@ -2500,6 +2523,8 @@ export let verbs = bind({
   'inbox archive': inboxArchive,
   claim,
   release,
+  block,
+  unblock,
   spawn,
   land: () => land(),
   comment,

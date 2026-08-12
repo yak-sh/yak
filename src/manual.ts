@@ -357,6 +357,23 @@ export let manuals = declare({
     root: true,
     args: [arg('id', id)],
   },
+  block: {
+    about: 'mark a task stuck on an EXTERNAL reason (not a task→task dep)',
+    detail: 'The reason is free text — the outside thing being waited on ' +
+      "(a vendor, an owner decision, a registration). It stamps the task's " +
+      '`blocked` facet, which is what reddens the Dot; open `requires` edges ' +
+      'stay a calm affordance. Orthogonal to status: a blocked task is still ' +
+      'open/wip. `task list .blocked` lists everything externally stuck.',
+    examples: ['task block T-3 "Jeff\'s Stripe decision"'],
+    root: true,
+    args: [arg('id', id), arg('reason', text, true, false)],
+  },
+  unblock: {
+    about: 'clear the block facet (the external reason is resolved)',
+    examples: ['task unblock T-3'],
+    root: true,
+    args: [arg('id', id)],
+  },
   subject: {
     syntax: '<id> [show|is|as|edge] …',
     about: 'show or act on a subject',

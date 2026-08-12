@@ -7,8 +7,10 @@ let Pip = el('span', 'Dot')
 // settles. `live` says someone is on the work RIGHT NOW (live.ts
 // crewed: the claim's session is awake) — the wip pip fills and
 // breathes instead of sitting half; liveness is a FACT about the claim,
-// as gated (open `requires` deps, burns red whatever the status says)
-// is a fact about the edges — neither is a status anyone maintains.
+// as gated (the `blocked` facet — stuck on an external reason, burns red
+// whatever the status says, D-17094) is a fact about the entity — neither
+// is a status anyone maintains. Open `requires` deps are NOT gated: they
+// are normal work, the calm deps tally (live.ts openDeps), never the alarm.
 // The pip is paint; everything else (a click, a title, a class) flows
 // through — whether it's also a CONTROL is the host's business.
 export let Dot = (

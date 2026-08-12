@@ -605,6 +605,16 @@ export let comps: Record<string, Record<string, PropType>> = {
   // harms nobody. NOT in kindOrder: a bug IS a task, this only says the task is
   // a filed break.
   bug: { fault: 'text', hits: 'number', last: 'time' },
+  // The BLOCK facet (D-17094): this task is stuck on something EXTERNAL — a
+  // vendor, an owner decision, a registration — that has no entity, so a
+  // `requires` edge can't name it. `on` is that free-text reason and rides
+  // the WIRE (`task block <id> "<reason>"` writes it); `since` is server-
+  // stamped (in `stamped`). Orthogonal to status — a task is blocked AND
+  // open/wip — so it is a facet, NOT a status and NOT in kindOrder. This is
+  // the ONLY thing that reddens the Dot now (live.ts `blocked()`); open
+  // `requires` edges are normal decomposition, a calm affordance. `.blocked`
+  // is the fleet query for what is actually stuck, and on what.
+  blocked: { on: 'text' },
   // A decision was TAKEN about this entity — a task, a memory, a doc,
   // anything; like its three neighbours a facet, never an identity. It is
   // the same {at, by, via} stamp, split differently: `at` and `by` are
@@ -692,6 +702,11 @@ export let stamped: Record<string, Record<string, PropType>> = {
   // the fault, `stack` the optional trace. Same register as error — the wire
   // writes none of them, the break-site stamps them through excepted().
   exception: { at: 'time', message: 'text', stack: 'text' },
+  // The block facet's server half (D-17094): `since` is when the task became
+  // blocked — the wire writes `blocked.on`, apply() stamps `since` from the
+  // column's clock default and freezes it on re-word (unblock+reblock resets
+  // it, since the row is deleted and reborn). Server-owned, so out of comps.
+  blocked: { since: 'time' },
   // The resolved envelope, denormalized onto the mail row as DATA (mail.ts):
   // to_addr = the address the delivery actually used (so later address-book
   // edits never rewrite it), sent_id = the Message-ID our native send was
@@ -1448,6 +1463,15 @@ export type Bug = {
   last?: string | null
 }
 
+// The block facet (D-17094): this task is stuck on an EXTERNAL thing with no
+// entity. `on` is that free-text reason (wire-written); `since` is when it
+// became blocked (server-stamped). The only thing that reddens the Dot.
+export type Blocked = {
+  eid: string
+  on?: string | null
+  since?: string | null
+}
+
 // A webhook delivery, pulled apart from the edge's raw request spool —
 // all server-stamped (see `stamped`), payload kept verbatim.
 export type Hook = {
@@ -1648,6 +1672,7 @@ export type Ent = {
   error?: Failure
   exception?: Exception
   bug?: Bug
+  blocked?: Blocked
   refs: Ref[]
   kids: Ent[]
 }
