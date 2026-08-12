@@ -2,6 +2,7 @@ import { type Ent, idOf, kindOf } from '../../types.ts'
 import { cache, deps, ent, pending } from '../../live.ts'
 import { el } from '../ui.tsx'
 import { materialize } from '../../persona.ts'
+import { highlight } from '../../highlight.ts'
 import type { Row } from '../../client.ts'
 
 // A doc as markdown with frontmatter — the file a dragged Markdown tab drops on
@@ -44,4 +45,14 @@ export let mdText = (e: Ent) => {
 
 let Pre = el('pre', 'Md')
 
-export let Md = ({ e }: { e: Ent }) => <Pre>{mdText(e)}</Pre>
+export let Md = ({ e }: { e: Ent }) => {
+  let lit = highlight(mdText(e), 'markdown')
+  return (
+    <Pre>
+      <code
+        class='hljs language-markdown'
+        dangerouslySetInnerHTML={{ __html: lit.html }}
+      />
+    </Pre>
+  )
+}

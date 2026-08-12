@@ -2583,15 +2583,10 @@ html {
 .Json,
 .Md {
   margin: 0;
+  min-width: 0;
+  width: 100%;
   font-size: 12px;
   white-space: pre;
-}
-/* prose lines run long; the raw-file view wraps instead of scrolling, and
-   caps at the reading measure like the rendered body — it is one wrapped
-   block, so the measure rides the pre itself */
-.Md {
-  white-space: pre-wrap;
-  max-width: var(--measure);
 }
 
 /* A graph id in rendered prose (md.ts data-ref anchors): said in the
