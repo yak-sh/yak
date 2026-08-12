@@ -12,16 +12,16 @@
     "test:all": "TASKS_SLOW=1 DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 TASKS_BACKOFF= deno test --frozen -A --unstable-net --unstable-worker-options src channels",
     "bench": "deno bench -A src"
   },
+  "exclude": [
+    "src/vendor",
+    ".tasks",
+    ".claude",
+    "AGENTS.md",
+    "CLAUDE.md"
+  ],
   "fmt": {
     "semiColons": false,
-    "singleQuote": true,
-    "exclude": [
-      "src/vendor",
-      ".tasks",
-      ".claude/agents",
-      "AGENTS.md",
-      "CLAUDE.md"
-    ]
+    "singleQuote": true
   },
   "lint": {
     "rules": {
@@ -31,10 +31,7 @@
       "exclude": [
         "prefer-const"
       ]
-    },
-    "exclude": [
-      "src/vendor"
-    ]
+    }
   },
   "imports": {
     "@huggingface/transformers": "npm:@huggingface/transformers@^3",
