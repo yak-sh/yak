@@ -32,7 +32,7 @@ import {
 import { type Trace } from './effects.ts'
 import { ancestorAt } from './client.ts'
 import { homeReads } from './persona.ts'
-import { matchQuery, parseQuery, resolveRefs, TEXT } from './query.ts'
+import { leafOf, matchQuery, parseQuery, resolveRefs, TEXT } from './query.ts'
 import { where } from './sql.ts'
 import {
   bodyCols,
@@ -3549,7 +3549,7 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
     ? findEid(db, preds[0].value)
     : undefined
   let reveal = preds.some((p) =>
-    p.comp == 'quarantined' || p.at?.comp == 'quarantined'
+    p.comp == 'quarantined' || leafOf(p).comp == 'quarantined'
   )
   let filters = resolveRefs(
     preds.filter((p) => p.op != TEXT),
@@ -3633,13 +3633,14 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
     // Each hit's components, only the ones the filters actually read —
     // matchQuery sees the same shape a live cache row has. A path pred
     // reads its TARGET through the same fetcher (compsOf doubles as the
-    // ent argument), so `.assignee.title~=j` walks one row further.
+    // ent argument), so `.comment.target.doc.title~=j` walks every hop's
+    // component one row further.
     let owners = (comp: string, prop: string) =>
       comp ? [comp] : propOwners(prop)
     let names = [
       ...new Set(filters.flatMap((p) => [
         ...owners(p.comp, p.prop),
-        ...(p.at ? owners(p.at.comp, p.at.prop) : []),
+        ...(p.at ?? []).flatMap((h) => owners(h.comp, h.prop)),
       ])),
     ]
     let get = new Map(

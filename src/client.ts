@@ -26,7 +26,7 @@ import { idOf, SHORT, shortId } from './types.ts'
 import { formatProp, parseProp, propAt, refOf } from './props.ts'
 import { local } from './time.ts'
 import { nearest, offer } from './near.ts'
-import { hot, matchQuery, type Pred, route } from './query.ts'
+import { hot, leafOf, matchQuery, type Pred, route } from './query.ts'
 import { FLOOR } from './embed.ts'
 import { request } from './http.ts'
 import { unmime } from './rfc2047.ts'
@@ -778,8 +778,7 @@ export let deref = (all: Row[], v: string, where = '', comp = '') =>
 let filterRefs = (preds: Pred[]) => {
   let out: { v: string; prop: string; target: string }[] = []
   for (let p of preds) {
-    let comp = p.at?.comp ?? p.comp
-    let prop = p.at?.prop ?? p.prop
+    let { comp, prop } = leafOf(p)
     // route()'s any-of: comp '' means a ref name several comps share, so
     // refOf reads the type from whichever comp declares it.
     let target = refOf(comp, prop)

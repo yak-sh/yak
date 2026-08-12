@@ -45,7 +45,10 @@
 // (resolveRefs). And a
 // dotted first segment that names a COMPONENT is the explicit spelling
 // (`.pin.x=12`); any other first segment is a PATH — `.assignee.title~=j`
-// dereferences the eid column and predicates the target's prop. Depth 1.
+// dereferences the eid column and predicates the target's prop. A path is an
+// N-hop CHAIN: each `{eid}` deref moves to the target entity and the next
+// segment(s) read there, so `.comment.target.doc.title~=foo` walks
+// comment→target then tests doc.title, arbitrarily deep (groupsOf).
 import { bareType, isRef, parseProp, type Prop, propAt } from './props.ts'
 import {
   comps,
@@ -56,15 +59,28 @@ import {
 } from './types.ts'
 import { type Span, span } from './time.ts'
 
+// One rung of a path predicate: a component's column read on the entity this
+// hop lands on. Every hop but the last is an `{eid}` deref; the last is the
+// leaf tested against op/value.
+export type Hop = { comp: string; prop: string }
+
 export type Pred = {
   comp: string
   prop: string
   op: string
   value: string
-  // A path predicate's far side: deref the reference at `comp.prop`,
-  // then test the TARGET's `at.comp[at.prop]` against op/value.
-  at?: { comp: string; prop: string }
+  // A path predicate's chain: deref the reference at `comp.prop`, then follow
+  // each hop in `at` in turn — every hop but the LAST is another `{eid}` deref
+  // — and test the final hop's column against op/value. A single-element `at`
+  // is one deref, the depth-1 path `.assignee.title`; `.comment.target.doc.title`
+  // is that same deref spelled with explicit `comp.prop` on both sides.
+  at?: Hop[]
 }
+
+// A path's leaf — the far column op/value tests — is the last hop; a plain
+// pred is its own leaf. Every reader resolving the tested column (its type,
+// ref-resolution, quarantine reveal) reads THROUGH this, never `p.comp`.
+export let leafOf = (p: Pred): Hop => p.at ? p.at[p.at.length - 1] : p
 
 // What a pred evaluates against: an entity's components, merged — the
 // shape of both a live-cache row and a client Row's `.comps`.
@@ -113,6 +129,13 @@ let SKETCH =
 export let edgeish = /block|depend|require|parent|child|subtask/i
 export let EDGE_DOOR = 'a dependency is an EDGE, not a prop: ' +
   "link one with 'task <parent> requires <child>'"
+
+// An edge word used as a path HOP: walking `dependency` triples is one-to-many
+// (any/all semantics), a different traversal than this {eid}-column deref, and
+// its own ticket. The refusal names it so the two are never conflated.
+export let EDGE_HOP = (word: string) =>
+  `.${word} walks dependency edges, not an {eid} column — edge-hop traversal ` +
+  'is T-14078; a column path derefs reference props (.comment.target.doc.title)'
 
 let sessionFacets = new Set<string>(sessionFacetNames)
 let sessionTwin = (owners: string[]) =>
@@ -217,7 +240,7 @@ export let scopedSessions = (preds: Pred[]): string[] =>
 // reason about a row without silently changing the question they asked.
 export let listed = (comps: Comps, preds: Pred[]) =>
   !comps.quarantined ||
-  preds.some((p) => p.comp == 'quarantined' || p.at?.comp == 'quarantined')
+  preds.some((p) => p.comp == 'quarantined' || leafOf(p).comp == 'quarantined')
 
 // kind=K as a filter, not a JS screen. kindOf is "the first kindOrder
 // component present", so kind=K is K present AND every earlier component
@@ -323,6 +346,37 @@ let range = (p: Prop, value: string): string => {
 let typedValue = (p: Prop, value: string): string =>
   value.split(',').map((v) => range(p, v)).join(',')
 
+// Dotted segments to the hops they name, applying ONE rule at each step: a
+// segment that names a COMPONENT with another segment behind it is the explicit
+// `comp.prop` spelling and eats two (.comment.target); anything else is a bare
+// prop routed by name and eats one (.assignee). The final group is the leaf
+// tested against op/value; every earlier group is a deref the caller checks is
+// an `{eid}` column. So `.comment.target.doc.title` is [(comment,target)] then
+// (doc,title), and `.assignee.title` is [(task,assignee)] then (doc,title) —
+// one traversal, two spellings.
+let groupsOf = (segs: string[]): Hop[] => {
+  let out: Hop[] = []
+  for (let i = 0; i < segs.length;) {
+    // A component consumes its next segment as the explicit `comp.prop`
+    // spelling; a component with nothing behind it is a bare facet (route()).
+    if (routes[segs[i]] && i + 1 < segs.length) {
+      let [a, b] = [segs[i], segs[i + 1]]
+      if (!routes[a].includes(b)) throw new Error(`no such prop: .${a}.${b}`)
+      out.push({ comp: a, prop: b })
+      i += 2
+    } else {
+      // A bare word that isn't the final segment is a deref hop; an edge word
+      // there is an edge-HOP (T-14078), never an {eid}-column deref.
+      if (i + 1 < segs.length && edgeish.test(segs[i])) {
+        throw new Error(EDGE_HOP(segs[i]))
+      }
+      out.push(route(segs[i]))
+      i += 1
+    }
+  }
+  return out
+}
+
 // A hyphen is admitted into the NAME so a hyphenated spelling reaches
 // route() and earns the same refusal writes give it (client.ts param()).
 // No column is hyphenated, so nothing new routes — but before this,
@@ -330,41 +384,47 @@ let typedValue = (p: Prop, value: string): string =>
 // term, silently searching for the filter the caller thought they wrote.
 export let pred = (token: string): Pred | null => {
   let m = token.match(
-    /^\.([A-Za-z_-]+)(?:\.([A-Za-z_-]+))?(!=|~=|<=|>=|<|>|=|!)(.*)$/s,
+    /^\.([A-Za-z_-]+(?:\.[A-Za-z_-]+)*)(!=|~=|<=|>=|<|>|=|!)(.*)$/s,
   )
   if (!m) return null
-  let [, a, b, op, value] = m
+  let [, path, op, value] = m
+  let segs = path.split('.')
   if (op == '!' && value) {
-    throw new Error(`presence filters end at !: .${a}${b ? `.${b}` : ''}!`)
+    throw new Error(`presence filters end at !: .${path}!`)
   }
   // a quoted value is the escape hatch for spaces where whitespace splits
   value = value.replace(/^"(.*)"$/s, '$1')
-  if (a == 'order' && !b && op == '=') {
+  if (path == 'order' && op == '=') {
     return { comp: '', prop: 'order', op: ORDER, value }
   }
   let p: Pred
   // A trailing bang completes a component sentence. This must win over a
   // same-named column (`persona` is both a facet and a session reference);
   // the column's explicit spelling remains `.session.persona!`.
-  if (!b && !value && op == '!' && a in comps) {
-    p = { comp: a, prop: '', op: OPS[op], value }
-  } else if (b) {
-    // The collision rule: a first segment naming a COMPONENT is the
-    // explicit spelling (.pin.x); anything else walks a reference.
-    if (routes[a]) {
-      if (!routes[a].includes(b)) throw new Error(`no such prop: .${a}.${b}`)
-      p = { comp: a, prop: b, op: OPS[op], value }
-    } else {
-      let r = route(a)
-      if (!isRef(r.comp, r.prop)) {
+  if (segs.length == 1 && !value && op == '!' && segs[0] in comps) {
+    p = { comp: segs[0], prop: '', op: OPS[op], value }
+  } else {
+    let groups = groupsOf(segs)
+    let leaf = groups[groups.length - 1]
+    let derefs = groups.slice(0, -1)
+    for (let d of derefs) {
+      if (!isRef(d.comp, d.prop)) {
         throw new Error(
-          `.${a} is not a reference — paths walk reference columns`,
+          `.${
+            d.prop || d.comp
+          } is not a reference — paths walk reference columns`,
         )
       }
-      p = { ...r, op: OPS[op], value, at: route(b) }
     }
-  } else {
-    p = { ...route(a), op: OPS[op], value }
+    p = derefs.length
+      ? {
+        comp: derefs[0].comp,
+        prop: derefs[0].prop,
+        op: OPS[op],
+        value,
+        at: [...derefs.slice(1), leaf],
+      }
+      : { comp: leaf.comp, prop: leaf.prop, op: OPS[op], value }
   }
   if (!p.prop) {
     if (p.value || (p.op != '' && p.op != '~' && p.op != EXISTS)) {
@@ -376,10 +436,9 @@ export let pred = (token: string): Pred | null => {
     return p
   }
   // Contains is deliberately literal. Absence has no scalar atom. Every
-  // other form parses each scalar/list/range atom against the near or far
+  // other form parses each scalar/list/range atom against the leaf
   // property's type before a row is scanned.
-  let tgt = p.at ?? p
-  let type = typed(tgt.comp, tgt.prop)
+  let type = typed(leafOf(p).comp, leafOf(p).prop)
   if (type && p.op != '~' && p.value != '') {
     p.value = typedValue(type, p.value)
   }
@@ -491,7 +550,7 @@ let inTime = (v: string, p: Pred, s: Span): boolean => {
 
 let test = (v: unknown, p: Pred, now?: number): boolean => {
   if (p.op == EXISTS) return v != null
-  let target = p.at ?? p
+  let target = leafOf(p)
   let type = typed(target.comp, target.prop)
   if (p.op != '~' && type && kind(type) == 'time' && typeof v == 'string') {
     let spans = p.value.split(',').map((value) => span(value, now))
@@ -532,8 +591,7 @@ export let resolveRefs = (
   lookup: (id: string) => string | undefined,
 ): Pred[] =>
   preds.map((p) => {
-    let target = p.at ? p.at.prop : p.prop
-    let comp = p.at ? p.at.comp : p.comp
+    let { comp, prop: target } = leafOf(p)
     if (!isRef(comp, target) || (p.op != '' && p.op != '!')) return p
     if (!p.value || /\.\./.test(p.value)) return p
     let type = typed(comp, target)
@@ -553,8 +611,9 @@ export let resolveRefs = (
 
 // Does an entity satisfy every pred? A TEXT pred reads the doc itself —
 // one pred, either column. A path pred dereferences through `ent` (the
-// evaluator's graph); no ent, no ref, or no target reads as an absent
-// value — so `.assignee.title=x` misses and `!=x` holds, same as any
+// evaluator's graph), folding hop after hop; no ent, no ref, or no target
+// anywhere along the chain reads as an absent value — so `.assignee.title=x`
+// (and `.comment.target.doc.title=x`) misses and `!=x` holds, same as any
 // null column.
 //
 // `now` is the clock a time phrase reads. It defaults to the wall clock,
@@ -580,11 +639,24 @@ export let matchQuery = (
     }
     if (!p.prop) return p.op == '~' || p.op == EXISTS ? !!c[p.comp] : !c[p.comp]
     if (p.at) {
-      return reads(c, p.comp, p.prop).some((ref) => {
-        let t = ref ? ent?.(String(ref)) : undefined
-        return reads(t ?? {}, p.at!.comp, p.at!.prop)
-          .some((value) => test(value, p, now))
-      })
+      // Deref the near ref, then every intermediate hop, carrying the set of
+      // component-bags forward; test the leaf on each. A broken link yields one
+      // absent bag so absence tests still hold — the null-column reading.
+      let hops = [{ comp: p.comp, prop: p.prop }, ...p.at.slice(0, -1)]
+      let leaf = p.at[p.at.length - 1]
+      let bags: (Comps | undefined)[] = [c]
+      for (let h of hops) {
+        bags = bags.flatMap((b) =>
+          reads(b ?? {}, h.comp, h.prop).map((ref) =>
+            ref != null ? ent?.(String(ref)) : undefined
+          )
+        )
+      }
+      return bags.some((b) =>
+        reads(b ?? {}, leaf.comp, leaf.prop).some((value) =>
+          test(value, p, now)
+        )
+      )
     }
     return reads(c, p.comp, p.prop).some((value) => test(value, p, now))
   })
@@ -767,14 +839,14 @@ let presenceOps = (base: string): Cand[] => [
   { text: base + '~=', kind: 'present' },
 ]
 
-// which column a token's base names — the same resolution pred() does,
-// silent instead of thrown (mid-keystroke is no place to error)
-let aim = (a: string, b?: string): { comp: string; prop: string } | null => {
+// which column a whole dotted path's LEAF names — the same resolution pred()
+// does, silent instead of thrown (mid-keystroke is no place to error). null
+// when a non-leaf hop isn't a reference, so the value can't be completed.
+let aimPath = (path: string): Hop | null => {
   try {
-    if (!b) return route(a)
-    if (routes[a]) return routes[a].includes(b) ? { comp: a, prop: b } : null
-    let r = route(a)
-    return isRef(r.comp, r.prop) ? route(b) : null
+    let g = groupsOf(path.split('.'))
+    if (g.slice(0, -1).some((d) => !isRef(d.comp, d.prop))) return null
+    return g[g.length - 1]
   } catch {
     return null
   }
@@ -786,7 +858,7 @@ let aim = (a: string, b?: string): { comp: string; prop: string } | null => {
 let values = (
   base: string,
   op: string,
-  at: { comp: string; prop: string },
+  at: Hop,
   value: string,
   wells?: Record<string, string[]>,
 ): Cand[] => {
@@ -811,46 +883,63 @@ export let complete = (
   wells?: Record<string, string[]>,
 ): Cand[] => {
   // a half-typed op ('.p!', '.p~') wants its '='
-  let half = token.match(/^(\.[A-Za-z_]+(?:\.[A-Za-z_]+)?)([!~])$/)
+  let half = token.match(/^(\.[A-Za-z_]+(?:\.[A-Za-z_]+)*)([!~])$/)
   if (half) {
     return OP_WORDS.filter(([op]) => op != half[2] && op.startsWith(half[2]))
       .map(([op, kind]) => ({ text: half[1] + op, kind }))
   }
 
-  // value position: an op is present — complete the value by its type
+  // value position: an op is present — complete the value by the leaf's type
   let m = token.match(
-    /^\.([A-Za-z_]+)(?:\.([A-Za-z_]+))?(!=|~=|<=|>=|<|>|=)(.*)$/s,
+    /^\.([A-Za-z_]+(?:\.[A-Za-z_]+)*)(!=|~=|<=|>=|<|>|=)(.*)$/s,
   )
   if (m) {
-    let [, a, b, op, value] = m
-    if (a == ORDER && !b) {
+    let [, path, op, value] = m
+    if (path == ORDER) {
       return starts('hot', value) && value != 'hot'
         ? [{ text: '.order=hot', kind: 'rank' }]
         : []
     }
-    let at = aim(a, b)
-    return at ? values(`.${a}` + (b ? `.${b}` : ''), op, at, value, wells) : []
+    let at = aimPath(path)
+    return at ? values(`.${path}`, op, at, value, wells) : []
   }
 
-  // second segment: the explicit spelling lists the comp's columns; a
-  // path lists the far side — any bare-routable prop of the TARGET
-  let seg = token.match(/^\.([A-Za-z_]+)\.([A-Za-z_]*)$/)
+  // an Nth segment: walk the settled prefix; a trailing lone component dangles
+  // for its prop (the explicit spelling lists its columns), else the tail
+  // begins a fresh hop off the far side (bare-routable props of the TARGET).
+  let seg = token.match(/^\.([A-Za-z_]+(?:\.[A-Za-z_]+)*)\.([A-Za-z_]*)$/)
   if (seg) {
-    let [, a, pre] = seg
-    if (routes[a]) {
+    let [, prefix, pre] = seg
+    let segs = prefix.split('.')
+    let dangling: string | null = null
+    let ok = true
+    for (let i = 0; ok && i < segs.length;) {
+      if (routes[segs[i]] && i + 1 < segs.length) {
+        if (!isRef(segs[i], segs[i + 1])) ok = false
+        i += 2
+      } else if (routes[segs[i]]) {
+        dangling = segs[i] // a component awaiting its prop
+        i += 1
+      } else {
+        let r = tryRoute(segs[i])
+        if (!r || !isRef(r.comp, r.prop)) ok = false
+        i += 1
+      }
+    }
+    if (!ok) return []
+    if (dangling) {
+      let a = dangling
       return [
-        ...routes[a].includes(pre) ? opsFor(`.${a}.${pre}`) : [],
+        ...routes[a].includes(pre) ? opsFor(`.${prefix}.${pre}`) : [],
         ...routes[a].filter((p) => starts(p, pre) && p != pre).toSorted()
-          .map((p) => ({ text: `.${a}.${p}`, kind: mark(a, p) })),
+          .map((p) => ({ text: `.${prefix}.${p}`, kind: mark(a, p) })),
       ]
     }
-    let r = tryRoute(a)
-    if (!r || !isRef(r.comp, r.prop)) return []
     return [
-      ...pre && tryRoute(pre) ? opsFor(`.${a}.${pre}`) : [],
+      ...pre && tryRoute(pre) ? opsFor(`.${prefix}.${pre}`) : [],
       ...bares()
         .filter((c) => starts(c.text.slice(1), pre) && c.text.slice(1) != pre)
-        .map((c) => ({ text: `.${a}${c.text}`, kind: c.kind })),
+        .map((c) => ({ text: `.${prefix}${c.text}`, kind: c.kind })),
     ]
   }
 

@@ -93,3 +93,19 @@ Deno.test('anchor falls back to component presence, and to nothing', () => {
   // a pure absence pred implies no presence -> whole-cache fallback
   assertEquals(anchor(ix, parseQuery('.delivered=')), undefined)
 })
+
+Deno.test('anchor narrows a multi-hop path to its NEAR component', () => {
+  let ix = emptyIndex()
+  indexAll(ix, {
+    c1: { comment: { target: 't1' } },
+    c2: { comment: { target: 't2' } },
+    t1: { task: { status: 'open' }, doc: { title: 'foo' } },
+    t2: { task: { status: 'open' }, doc: { title: 'bar' } },
+  }, [])
+  // The chain's result rows are the COMMENTS, so the candidate set is
+  // byComp[comment] — the far doc.title is tested by the matcher, not anchored.
+  assertEquals(
+    anchor(ix, parseQuery('.comment.target.doc.title~=foo')),
+    new Set(['c1', 'c2']),
+  )
+})

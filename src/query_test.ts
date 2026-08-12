@@ -575,7 +575,7 @@ Deno.test('paths: .assignee.title walks the reference', () => {
     prop: 'assignee',
     op: '~',
     value: 'jeff',
-    at: { comp: 'doc', prop: 'title' },
+    at: [{ comp: 'doc', prop: 'title' }],
   })
   assertThrows(() => pred('.status.title=x'), Error, 'not a reference')
   assertThrows(() => pred('.assignee.eels=x'), Error, 'unknown prop')
@@ -591,6 +591,103 @@ Deno.test('paths: the pred tests the TARGET through ent', () => {
   assert(!matchQuery(row({ assignee: 'ghost' }), ps, ent))
   assert(!matchQuery(row({}), ps, ent)) // absent ref: '=' shapes miss
   assert(matchQuery(row({}), parseQuery('.assignee.title!=jeff'), ent))
+})
+
+// ---- multi-hop traversal (T-17123) ----
+
+Deno.test('paths: an explicit comp.prop.comp.prop chain parses to one deref', () => {
+  // The owner's headline example: `.comment.target.doc.title` — one `{eid}`
+  // deref (comment.target) with an EXPLICIT leaf (doc.title), the same shape
+  // `.assignee.title` reaches through the bare spelling.
+  assertEquals(pred('.comment.target.doc.title~=foo'), {
+    comp: 'comment',
+    prop: 'target',
+    op: '~',
+    value: 'foo',
+    at: [{ comp: 'doc', prop: 'title' }],
+  })
+})
+
+Deno.test('paths: the owner example resolves through a target entity', () => {
+  let world: Record<string, Record<string, Record<string, unknown>>> = {
+    t1: { doc: { title: 'the foobar task' } },
+  }
+  let ent = (e: string) => world[e]
+  let comment = (target: unknown) => ({
+    comment: { target },
+    doc: { title: 'nice work', body: '' },
+  })
+  let ps = parseQuery('.comment.target.doc.title~=foo')
+  assert(matchQuery(comment('t1'), ps, ent))
+  assert(!matchQuery(comment('t9'), ps, ent)) // target has no doc here
+  assert(!matchQuery(comment(null), ps, ent)) // no target at all
+  // A broken link reads as an absent value, so `!=` holds — the null-column
+  // rule, folded over the chain.
+  assert(
+    matchQuery(
+      comment(null),
+      parseQuery('.comment.target.doc.title!=foo'),
+      ent,
+    ),
+  )
+})
+
+Deno.test('paths: a chain derefs each reference in turn (two hops)', () => {
+  // comment → target (a task) → task.project → doc.title: two `{eid}` derefs
+  // then the leaf. `.project` names a component, so the explicit `.task.project`
+  // spelling is how a chain derefs it — the escape hatch for any ref whose
+  // name collides with a component's.
+  let world: Record<string, Record<string, Record<string, unknown>>> = {
+    task1: { doc: { title: 't' }, task: { status: 'open', project: 'proj1' } },
+    proj1: { doc: { title: 'Task Graph' }, project: {} },
+    proj2: { doc: { title: 'Other' }, project: {} },
+  }
+  let ent = (e: string) => world[e]
+  let comment = (target: string) => ({ comment: { target } })
+  let ps = parseQuery('.comment.target.task.project.doc.title~=graph')
+  assertEquals(ps[0].at, [
+    { comp: 'task', prop: 'project' },
+    { comp: 'doc', prop: 'title' },
+  ])
+  assert(matchQuery(comment('task1'), ps, ent))
+  world.task1.task!.project = 'proj2'
+  assert(!matchQuery(comment('task1'), ps, ent))
+})
+
+Deno.test('paths: a bare non-colliding ref chains too (assignee)', () => {
+  // comment → target (task) → assignee (a user) → doc.title, where `assignee`
+  // is a bare ref hop (no component wears its name), mixed with explicit hops.
+  let world: Record<string, Record<string, Record<string, unknown>>> = {
+    task1: { task: { assignee: 'u1' } },
+    u1: { doc: { title: 'Jeff Peterson' } },
+  }
+  let ent = (e: string) => world[e]
+  let ps = parseQuery('.comment.target.assignee.title~=jeff')
+  assertEquals(ps[0].at, [
+    { comp: 'task', prop: 'assignee' },
+    { comp: 'doc', prop: 'title' },
+  ])
+  assert(matchQuery({ comment: { target: 'task1' } }, ps, ent))
+  assert(!matchQuery({ comment: { target: 'u1' } }, ps, ent))
+})
+
+Deno.test('paths: a non-reference middle hop is refused', () => {
+  // `.status` is not an `{eid}` column, so it cannot be dereferenced.
+  assertThrows(
+    () => pred('.comment.target.status.doc.title=x'),
+    Error,
+    'not a reference',
+  )
+})
+
+Deno.test('paths: an edge word as a hop points at the edge-hop ticket', () => {
+  assertThrows(
+    () => pred('.dependency.child.task.status=open'),
+    Error,
+    'T-14078',
+  )
+  // A single-segment edge word keeps teaching the link door, not traversal.
+  assertThrows(() => pred('.depends_on=T-9'), Error, 'link one')
 })
 
 Deno.test('provenance: .created.via filters by instrument', () => {
@@ -662,6 +759,25 @@ let has: [string, string, string, string][] = [
   ['path far side', '.assignee.', '.assignee.title', 'doc'],
   ['path far side, any comp', '.assignee.', '.assignee.status', 'task'],
   ['path value', '.assignee.status=', '.assignee.status=open', 'status'],
+  // multi-hop chains complete the same way, at any depth (T-17123)
+  [
+    'chain far columns',
+    '.comment.target.doc.',
+    '.comment.target.doc.title',
+    'doc',
+  ],
+  [
+    'chain fresh far side',
+    '.comment.target.',
+    '.comment.target.assignee',
+    'task · ref',
+  ],
+  [
+    'chain leaf value',
+    '.comment.target.task.status=',
+    '.comment.target.task.status=open',
+    'status',
+  ],
   ['time phrases on _at', '.updated.at=', '.updated.at=today', 'time'],
   ['rank value', '.orde', '.order=hot', 'rank'],
   ['rank value completes', '.order=h', '.order=hot', 'rank'],

@@ -11,7 +11,7 @@
 // another's query — centralizing the matcher on the server is what makes it
 // expressible (design §2).
 import { bodyCols, propAt } from './props.ts'
-import { type Pred } from './query.ts'
+import { leafOf, type Pred } from './query.ts'
 import { span } from './time.ts'
 import { type Change } from './types.ts'
 
@@ -93,7 +93,7 @@ let atoms = (value: string) =>
 let fixed = (value: string) => /^\d{4}-\d{2}-\d{2}(?:[t ].*)?$/i.test(value)
 
 let moving = (p: Pred) => {
-  let target = p.at ?? p
+  let target = leafOf(p)
   if (propAt(target.comp, target.prop)?.type != 'time') return false
   return atoms(p.value).some((v) => !fixed(v) && !!span(v))
 }
