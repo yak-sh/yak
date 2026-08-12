@@ -2870,6 +2870,7 @@ a[data-ref]:hover {
 .Peek_Body:has(> .Session) {
   display: flex;
   flex-direction: column;
+  container-type: inline-size;
 }
 .Peek_Body > .Session {
   flex: 1;
@@ -3645,6 +3646,10 @@ a[data-ref]:hover {
   border-radius: var(--radius);
   box-shadow: 0 6px 24px rgb(0 0 0 / 0.35);
   overflow: hidden;
+}
+.Peek:has(> .Peek_Body > .Session) {
+  width: min(60rem, calc(100vw - 2 * var(--gap)));
+  max-width: none;
 }
 /* A titlebar like a card's: the title flexes, the view tabs cluster
    right (the shared .Tab chips assume the --gap row), and the whole
