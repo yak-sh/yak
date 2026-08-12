@@ -352,6 +352,32 @@ Deno.test('failed leased work stays visible and cannot rerun', () => {
   db.close()
 })
 
+Deno.test('readEntries returns the whole partition past the pagination cap', () => {
+  let db = open(':memory:')
+  let sid = session(db)
+  // A long-lived Session outgrows one entriesOf page. The runner reads the
+  // WHOLE partition every operation, so the newest generation and a late call
+  // must both stay visible: a truncated tail is what stamped a live session
+  // "no generation entry" (generate() found no generation row) and "reading
+  // 'comps'" (rowOf() returned undefined for a call it could not see) — T-16793.
+  let bulk = Array.from({ length: 504 }, () => ({
+    message: { role: 'user' as const },
+  }))
+  let base = append(db, sid, bulk)
+  let tail = append(db, sid, [
+    {
+      generation: { through: base.eids.at(-1)!, provider: 'codex', model: 'x' },
+    },
+    { call: { key: 'call_tail' }, bash: { command: 'echo hi' } },
+  ])
+  let rows = readEntries(db, sid)
+  assertEquals(rows.length, 506)
+  let [gen, call] = tail.eids
+  assert(rows.find((e) => e.eid == gen)?.comps.generation)
+  assert(rows.find((e) => e.eid == call)?.comps.call)
+  db.close()
+})
+
 Deno.test('deleting a Session cascades its lazy entries', () => {
   let db = open(':memory:')
   let sid = session(db)

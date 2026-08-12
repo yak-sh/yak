@@ -188,6 +188,48 @@ Deno.test('managed Codex starts, runs tools, and settles in ordered entries', as
   db.close()
 })
 
+Deno.test('a Session past one entry page still runs its next turn', async () => {
+  let db = open(':memory:')
+  let sid = session(db)
+  // 501 turns of prior transcript push the new turn's generation past one
+  // entriesOf page. The runner must read the WHOLE partition or the fresh
+  // generation reads back as "no generation entry" (T-16793): before the fix
+  // readEntries capped at 500 and the runner never saw the entry it minted.
+  append(
+    db,
+    sid,
+    Array.from({ length: 501 }, (_, i) => ({
+      message: { role: 'agent' as const },
+      content: { body: `turn ${i}` },
+    })),
+  )
+  let heard: Change[] = []
+  let service = managedCodex({
+    db,
+    cast: (changes) => heard.push(...changes),
+    transport: {
+      run: () =>
+        Promise.resolve(result([{
+          type: 'message',
+          id: 'm',
+          content: [{ type: 'output_text', text: 'fresh answer' }],
+        }])),
+    },
+    tools: () => Promise.resolve(tools([])),
+    prepare: () => Promise.resolve(),
+  })
+
+  await service.start(sid, noCodeJob())
+  let rows = readEntries(db, sid)
+  assertEquals(rows.at(-1)!.comps.content?.body, 'fresh answer')
+  assert(!rows.some((row) => row.comps.error))
+  assertEquals(
+    db.prepare('select message from error where eid = ?').get(sid),
+    undefined,
+  )
+  db.close()
+})
+
 Deno.test('managed Codex relays typed progress until durable settlement', async () => {
   let db = open(':memory:')
   let tree = Deno.makeTempDirSync(), sid = session(db, tree)

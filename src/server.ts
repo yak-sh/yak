@@ -542,16 +542,7 @@ let ws = (req: Request) => {
 // Every tools/call is timed and recorded on the way through (telemetry.ts
 // classifies the body — this route is the only place that sees both the
 // request and its reply).
-let partition = (eid: string) => {
-  let rows = []
-  let after = 0
-  while (true) {
-    let page = readEntries(db, eid, after, 5000)
-    rows.push(...page)
-    if (page.length < 5000) return rows
-    after = page.at(-1)!.seq
-  }
-}
+let partition = (eid: string) => readEntries(db, eid)
 
 let sessionLog = (eid: string, q: URLSearchParams) =>
   graphSession(db, eid) ? graphLogPage(partition(eid), q) : logs(eid, q)

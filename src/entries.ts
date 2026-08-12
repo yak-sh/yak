@@ -50,7 +50,23 @@ export let append = (
   return { eids, changes: apply(db, changes, undefined, writer) }
 }
 
-export let readEntries = entriesOf
+// The runner reads a Session's WHOLE ordered partition on every operation:
+// project() must find the leased generation and its `through`, advance() the
+// true last entry, rowOf() the exact call. entriesOf paginates (its cap serves
+// peek and lazy queries), so a session past one page would silently lose its
+// tail — the newest generation reads back as "no generation entry" and a fresh
+// call's row comes back undefined ("reading 'comps'"), while advance() minted
+// past a call it could not see. Page to exhaustion so the runner's view is
+// always the complete partition, however long the session grows.
+export let readEntries = (db: DatabaseSync, session: string) => {
+  let all: ReturnType<typeof entriesOf> = []
+  for (let after = 0;;) {
+    let page = entriesOf(db, session, after, 5000)
+    all.push(...page)
+    if (page.length < 5000) return all
+    after = page.at(-1)!.seq
+  }
+}
 
 let readySql = `
   select e.eid, e.seq from entry e
