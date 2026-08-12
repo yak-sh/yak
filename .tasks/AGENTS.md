@@ -516,12 +516,6 @@ This is M-4066 (adoption is structural, not exhortation) turned inward: exhortat
 
 ---
 
-# M-16612 respect users with specific progress and durable errors
-
-A system respects its users by making its state legible. Say what is currently loading, what work is underway, and how it is progressing; do not substitute a spinner or a generic loading indicator for that explanation. When work fails, tell the user what went wrong, why it failed when known, and what successful completion was supposed to look like. Preserve each error durably under a stable identity, visible to both user and operator, so they can return to it and discuss it later. Errors must never be ephemeral or opaque.
-
----
-
 # M-14370 tickets carry signal — file the irreducible ask and pointers, never derived restatement
 
 The owner reads the board with a full queue. Most tickets are too long to read at all, and a ticket nobody reads carries zero signal. Worse: **derived information is a snapshot, and snapshots rot** — restated code analysis, current-behavior descriptions, and copied measurements quietly disagree with reality the moment the repo moves. A pointer never rots.
@@ -543,6 +537,12 @@ What does the reader need in order to act? Write that. Everything else is noise 
 ## This is enforced mechanically, not just remembered
 
 This principle sat in context (materialized into holdco's `CLAUDE.md`) and still got violated twice — a raw ~200-line log pasted into a `task_comment` body. A memory in context is guidance an agent can apply; it isn't a stop at the moment of the mistake. `holdco/.claude/hooks/task-comment-size-gate.sh` (a PreToolUse hook on `task_comment`, wired in `holdco/.claude/settings.json`) now denies any comment body over 40 lines with a reason pointing back here. If this keeps happening anyway, the fix is a better hook (smarter detection, different threshold), not a stronger version of this memory.
+
+---
+
+# M-16612 respect users with specific progress and durable errors
+
+A system respects its users by making its state legible. Say what is currently loading, what work is underway, and how it is progressing; do not substitute a spinner or a generic loading indicator for that explanation. When work fails, tell the user what went wrong, why it failed when known, and what successful completion was supposed to look like. Preserve each error durably under a stable identity, visible to both user and operator, so they can return to it and discuss it later. Errors must never be ephemeral or opaque.
 
 ---
 
