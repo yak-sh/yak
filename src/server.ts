@@ -58,6 +58,7 @@ import { type IO, mcpServer } from './mcp.ts'
 import { projection, syncFiles } from './persona.ts'
 import { commit } from './git.ts'
 import {
+  backfill,
   codexPending,
   commented,
   deleted,
@@ -1292,6 +1293,14 @@ syncSoon()
 // still alive, finalize the ones that died while we were away. Nothing here
 // reaps a child; the watcher below must never learn how.
 recover(cast)
+
+// The historical counterpart (T-16822): reconcile the file-first Sessions that
+// ended BEFORE live ingestion into the same entry partitions recover() fills
+// for the live ones. Backgrounded — it sweeps all of owner data, so it must not
+// hold boot — and incremental, so once the backlog is drained a restart re-checks
+// it in one query per remaining session. It touches only finished/inactive
+// sessions (no live tailer), so it is safe beside recover()'s live loops.
+backfill(cast).catch((e) => console.warn('session backfill —', e))
 
 // Every reconciler runs on a timer, which means nothing is holding its
 // promise — and in Deno a rejection nobody handled ENDS THE PROCESS. A sweep
