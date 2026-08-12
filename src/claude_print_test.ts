@@ -76,7 +76,7 @@ Deno.test('a full turn parses to the generation contract', async () => {
   assertEquals((tool as { name: string }).name, 'Bash')
 })
 
-Deno.test('a tool_use and tool_result become an atomic, unrunnable pair', async () => {
+Deno.test('a tool_use and tool_result become a typed, unrunnable pair', async () => {
   let turn = await printFixture(claudeStream)
   let db = freshDb()
   let sid = uuid()
@@ -94,32 +94,34 @@ Deno.test('a tool_use and tool_result become an atomic, unrunnable pair', async 
   }]).eids
   let work = claudeWork(turn, gen)
 
-  // The pair is adjacent in the single specs batch, correlated by the one tool
-  // id carried in each opaque payload (the seam T-16815 pairs on).
-  let useAt = work.specs.findIndex((s) =>
-    s.opaque?.format == 'anthropic:tool_use'
-  )
-  let resultAt = work.specs.findIndex((s) =>
-    s.opaque?.format == 'anthropic:tool_result'
-  )
-  assert(useAt >= 0 && resultAt == useAt + 1)
-  assertMatch(String(work.specs[useAt].opaque.data), /toolu-scrubbed/)
-  assertMatch(String(work.specs[resultAt].opaque.data), /toolu-scrubbed/)
-  // Claude ran its own tools: the runner returns nothing for the scheduler to
-  // execute, and no `call` facet exists to be re-run.
+  // The tool_use is a typed call carrying the Bash command; its tool_result is
+  // the very next spec, a `result` naming that call — the pair the shared mapper
+  // correlates across the two stream lines by Claude's tool id.
+  let useAt = work.specs.findIndex((s) => s.call)
+  assert(useAt >= 0)
+  assertEquals(work.specs[useAt].bash?.command, 'echo hello-from-probe')
+  let result = work.specs[useAt + 1]
+  assertEquals(result.exit?.code, 0)
+  assertEquals(result.content?.body, 'hello-from-probe')
+  // A tool_use/tool_result is NOT a generation-output request; only the agent's
+  // own message/reasoning name the generation via `output`.
+  assertEquals(work.specs[useAt].output, undefined)
+  assertEquals(result.output, undefined)
+  // Claude ran its own tools: the runner hands the scheduler nothing to execute.
   assertEquals(work.calls.length, 0)
 
-  append(db, sid, work.specs)
+  // Appended WITH the pre-minted ids, so result → call resolves to the appended
+  // call entry (without them append re-mints and the call looks answerless).
+  append(db, sid, work.specs, null, work.ids)
   let rows = readEntries(db, sid)
-  assert(rows.every((row) => !row.comps.call))
-  // Nothing appended is a runnable call; the ready-call SQL can never re-run
-  // the Bash Claude already executed.
-  let ready = new Set(readyEntries(db, sid).map((r) => r.eid))
-  assert(rows.every((row) => !row.comps.call || !ready.has(row.eid)))
-  assert(rows.some((row) => row.comps.opaque?.format == 'anthropic:tool_use'))
-  assert(
-    rows.some((row) => row.comps.opaque?.format == 'anthropic:tool_result'),
-  )
+  let call = rows.find((row) => row.comps.call)
+  assert(call)
+  assertEquals(call.comps.call.key, 'toolu-scrubbed')
+  assert(rows.some((row) => row.comps.result?.call == call.eid))
+  // The invariant: nothing in the settled turn is runnable — the ready-call SQL
+  // never re-runs the Bash Claude already executed, and the generation is
+  // consumed by its own outputs.
+  assertEquals(readyEntries(db, sid).length, 0)
   db.close()
 })
 
@@ -128,15 +130,49 @@ Deno.test('a text answer maps to an agent message, thinking to reasoning', async
   let work = claudeWork(turn, 'gen-1')
   let message = work.specs.find((s) => s.message?.role == 'agent')
   assertEquals(message?.content?.body, 'It printed hello-from-probe.')
+  // Agent output names the generation that produced it.
+  assertEquals(message?.output?.source, 'gen-1')
   let reasoning = work.specs.find((s) => s.reasoning)
   assert(reasoning)
-  assertEquals(reasoning?.opaque?.format, 'anthropic:thinking')
+  // Thinking is now a typed reasoning entry with visible content, not opaque.
+  assertEquals(reasoning?.content?.body, '<scrubbed reasoning>')
+  assertEquals(reasoning?.output?.source, 'gen-1')
+  assert(!reasoning?.opaque)
+  // The init line survives as named opaque evidence for provenance/replay.
+  assert(work.specs.some((s) => s.opaque?.format == 'anthropic:init'))
   // Housekeeping (hooks, thinking-token estimates, rate limits) and the terminal
   // `result` line never become durable entries — exactly five specs remain:
-  // init, thinking, tool_use, tool_result, message.
+  // init, reasoning, tool_use, tool_result, message.
   assertEquals(work.specs.length, 5)
+  // One pre-minted id per spec, so an intra-batch reference survives append.
+  assertEquals(work.ids?.length, work.specs.length)
   assert(!work.specs.some((s) => s.opaque?.format == 'anthropic:result'))
   assert(!work.specs.some((s) => s.opaque?.format == 'anthropic:hook_started'))
+})
+
+Deno.test('usage stays settlement, an unknown line stays opaque evidence', async () => {
+  let turn = await printFixture([
+    { type: 'system', subtype: 'init', model: 'haiku', uuid: 'i' },
+    { type: 'wibble', note: 'an event the mapper does not model', uuid: 'w' },
+    {
+      type: 'result',
+      subtype: 'success',
+      is_error: false,
+      result: 'done',
+      usage: { input_tokens: 3, output_tokens: 5 },
+      uuid: 'r',
+    },
+  ])
+  // usage rides the settlement (settleGeneration reads turn.usage), never a row.
+  assertEquals(turn.usage, { input: 3, cached: 0, output: 5, reasoning: 0 })
+  let work = claudeWork(turn, 'gen-1')
+  // init and the unknown line survive as named opaque evidence; the terminal
+  // result is settlement, not a transcript row.
+  assertEquals(
+    work.specs.map((s) => s.opaque?.format).sort(),
+    ['anthropic:init', 'anthropic:wibble'],
+  )
+  assert(work.specs.every((s) => s.output?.source == 'gen-1'))
 })
 
 Deno.test('an auth failure scrubs to a known string, never the credential', async () => {

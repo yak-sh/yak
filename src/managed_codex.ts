@@ -383,7 +383,10 @@ export let managedCodex = (options: ManagedCodexOptions) => {
       })
       if (!valid(db, token)) return
       if (work.specs.length) {
-        cast(append(db, session, work.specs, runner).changes)
+        // work.ids preserves a runner's pre-minted eids so an intra-batch
+        // reference (Claude's tool_result → its tool_use) survives the append;
+        // codex omits them and append mints.
+        cast(append(db, session, work.specs, runner, work.ids).changes)
       }
       cast(settleGeneration(db, token, work.usage, clock, work.model))
       sessionFault(db, session, null, cast, clock)

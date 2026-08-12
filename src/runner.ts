@@ -334,6 +334,12 @@ let itemSpec = (
 
 export type GenerationWork = {
   specs: EntrySpec[]
+  // Pre-minted entry eids, 1:1 with `specs`, when a runner mints its own — the
+  // Claude transport pairs a tool_result to its tool_use by naming the call's
+  // eid, so those refs only survive if append reuses these ids instead of
+  // minting fresh ones (claude_print.ts). Omitted by runners whose specs carry
+  // no intra-batch reference (codex); then append mints.
+  ids?: string[]
   calls: CallRequest[]
   usage: UsageValue
   model: string

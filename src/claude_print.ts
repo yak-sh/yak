@@ -9,12 +9,16 @@
 //
 // Claude Code runs its OWN built-in tools INSIDE the subprocess (T-16812): a
 // tool_use and its tool_result arrive as two separate stream lines, already
-// executed. So the transport records them as inert `opaque` evidence carrying
-// their correlation key and returns NO `call` facet and an empty `calls` list —
-// the generic ready-call SQL (entries.ts readySql) keys on a `call` component
-// with no `result`, so with none produced it can never re-run a tool Claude
-// already ran. T-16815 promotes these opaque pairs to typed call+result facets;
-// until then the pair is durable, atomic (one work.specs append), and unrunnable.
+// executed. The mapping seam below drives the shared Claude dialect mapper
+// (ingest.ts `claudeEntries`, T-16823) so each completed block becomes its typed
+// entry (T-16815) — the tool_use a `call` + bash/tool facet, the tool_result a
+// `result` naming that call. The pair lands atomically (one work.specs append)
+// with the result already present, so the generic ready-call SQL (entries.ts
+// readySql, which keys on a `call` with no `result`) can never re-run a tool
+// Claude already ran, and the runner returns an empty `calls` list so the
+// scheduler dispatches nothing. A tool observed WITHOUT its result (an aborted
+// turn) never reaches this path: the fault carries the events to failedEvidence,
+// which keeps them inert opaque evidence, never a runnable call.
 //
 // Secrets: `claude` reads subscription auth from HOME; Tasks never passes a
 // credential in argv or env. But a stream/stderr/error line can still ECHO one,
@@ -22,7 +26,9 @@
 // and an auth failure normalizes to a short known string, never the raw line.
 import { childEnv } from './agent_env.ts'
 import { type EntrySpec, type UsageValue } from './entries.ts'
+import { claudeEntries, type IngestState } from './ingest.ts'
 import { type ObservationDelta } from './observations.ts'
+import { uuid } from './types.ts'
 import {
   type EntryRow,
   type GenerationContext,
@@ -379,22 +385,21 @@ export let claudePrint = async (o: PrintOptions): Promise<ClaudeTurn> => {
 }
 
 // --- turn → GenerationWork (the mapping seam) ----------------------------
-// A minimal, faithful mapping until T-16815's typed mapper lands. Assistant
-// text and thinking take the existing compositions (message/reasoning + opaque
-// evidence); a tool_use and its tool_result stay INERT opaque evidence keyed by
-// their correlation id — no `call` facet, so entries.ts readySql never re-runs
-// them — which is the atomic, unrunnable pair T-16815 promotes to typed
-// call+result. Housekeeping lines (hooks, thinking-token estimates, rate
-// limits) are transient noise, dropped from the durable log; every other
-// well-formed line is preserved as named opaque evidence.
+// The typed mapping (T-16815). The shared Claude dialect mapper (ingest.ts
+// `claudeEntries`) — the SAME block→entry rules the file-ingest tail runs — turns
+// each completed block into its typed entry: text → message + content, thinking
+// → reasoning + content, tool_use → call + bash/tool, tool_result → result +
+// content + exit. So a live generation and an imported transcript render
+// identically, and this promotes the pre-T-16815 opaque tool pair to typed
+// call+result. Housekeeping lines (hooks, thinking-token estimates, rate limits)
+// are transient noise, dropped; the terminal result and usage are the settlement
+// (settleGeneration), never transcript rows; every other unmapped line (init, an
+// unknown system subtype) is preserved as named opaque evidence.
 let noise = new Set(['hook_started', 'hook_response', 'thinking_tokens'])
 
-// The correlation ids (message id, tool_use id, the event uuid) stay inside the
-// opaque `data` JSON — the seam T-16815 reads to pair a tool_use with its
-// result and to dedup. `output.key` is left unset here: the stream carries no
-// key that is unique per entry AND stable (the scrubbed fixture reuses one
-// uuid), and a generation's specs append exactly once, so no dedup key is owed
-// yet. `output` still names the source generation for provenance and replay.
+// Named opaque evidence for a line the typed mapper does not model. `output`
+// names the source generation for provenance and replay; the correlation ids
+// stay inside the opaque `data` JSON.
 let opaque = (
   event: ClaudeEvent,
   generation: string,
@@ -404,46 +409,27 @@ let opaque = (
   opaque: { format: `anthropic:${tag ?? event.type}`, data: json(event) },
 })
 
-let eventSpecs = (event: ClaudeEvent, generation: string): EntrySpec[] => {
+// The non-assistant/user lines: housekeeping is dropped, the terminal result and
+// rate-limit notices are settlement not history, and every other well-formed
+// line is preserved as named opaque evidence.
+let evidence = (event: ClaudeEvent, generation: string): EntrySpec[] => {
   if (event.type == 'system') {
     if (noise.has(String(event.subtype ?? ''))) return []
-    if (event.subtype == 'init') return [opaque(event, generation, 'init')]
-    return [opaque(event, generation)]
+    let tag = event.subtype == 'init' ? 'init' : undefined
+    return [opaque(event, generation, tag)]
   }
-  if (event.type == 'rate_limit_event') return []
-  if (event.type == 'result') return [] // the terminal is the settlement
-  let block = blockOf(event)
-  if (event.type == 'assistant' && block) {
-    if (block.type == 'text') {
-      let body = typeof block.text == 'string' ? block.text : ''
-      return [{
-        output: { source: generation },
-        message: { role: 'agent' },
-        content: { body },
-        opaque: { format: 'anthropic:message', data: json(event) },
-      }]
-    }
-    if (block.type == 'thinking') {
-      // `signature` is an opaque replay token — kept as evidence, never text.
-      let body = typeof block.thinking == 'string' ? block.thinking : ''
-      return [{
-        output: { source: generation },
-        reasoning: {},
-        ...body.trim() ? { content: { body } } : {},
-        opaque: { format: 'anthropic:thinking', data: json(event) },
-      }]
-    }
-    // Claude already RAN this tool in-subprocess; record it inert (the tool id
-    // is in the opaque data for T-16815 to pair with the result). NO `call`
-    // facet, so entries.ts readySql never re-runs it.
-    if (block.type == 'tool_use') return [opaque(event, generation, 'tool_use')]
-    return [opaque(event, generation)]
-  }
-  if (event.type == 'user' && block?.type == 'tool_result') {
-    return [opaque(event, generation, 'tool_result')]
-  }
+  if (event.type == 'rate_limit_event' || event.type == 'result') return []
   return [opaque(event, generation)]
 }
+
+// An agent's own output (a message or its reasoning) names the generation that
+// produced it — the provenance the scheduler's completion check and portable
+// replay read (output.source). A tool_use/tool_result pair is NOT a request to
+// the scheduler: Claude already ran the tool, so the pair stays an inert record
+// correlated only to itself (result → call), never a pending generation-output
+// call the scheduler would run or continue past.
+let owned = (spec: EntrySpec, generation: string): EntrySpec =>
+  spec.call || spec.result ? spec : { output: { source: generation }, ...spec }
 
 // Inert failed evidence: the completed items observed before a fault, excluded
 // from replay (the Codex poison rule). Named `anthropic:failed:*` so a later
@@ -460,17 +446,45 @@ export let failedEvidence = (
     },
   }))
 
+// The successful turn → the atomic GenerationWork the scheduler appends. Drive
+// `claudeEntries` over the events in order, folding each line's new call
+// correlations into one shared IngestState so a tool_result (a later `user`
+// line) names the tool_use from an earlier line. The pre-minted entry ids ride
+// on `ids` so that intra-batch result → call reference survives the append —
+// append mints its own eids otherwise, orphaning the reference and leaving the
+// call with no result, which readySql would read as runnable and re-execute.
 export let claudeWork = (
   turn: ClaudeTurn,
   generation: string,
-): GenerationWork => ({
-  specs: turn.events.flatMap((event) => eventSpecs(event, generation)),
-  // Claude ran its own tools; the scheduler must never execute anything.
-  calls: [],
-  usage: turn.usage,
-  model: turn.model,
-  finalText: turn.finalText,
-})
+): GenerationWork => {
+  let state: IngestState = { calls: new Map() }
+  let specs: EntrySpec[] = []
+  let ids: string[] = []
+  for (let event of turn.events) {
+    if (event.type == 'assistant' || event.type == 'user') {
+      let batch = claudeEntries(event, state)
+      for (let [i, spec] of batch.specs.entries()) {
+        specs.push(owned(spec, generation))
+        ids.push(batch.ids[i])
+      }
+      for (let [key, id] of batch.calls) state.calls.set(key, id)
+    } else {
+      for (let spec of evidence(event, generation)) {
+        specs.push(spec)
+        ids.push(uuid())
+      }
+    }
+  }
+  return {
+    specs,
+    ids,
+    // Claude ran its own tools; the scheduler must never execute anything.
+    calls: [],
+    usage: turn.usage,
+    model: turn.model,
+    finalText: turn.finalText,
+  }
+}
 
 // --- the generation runner -----------------------------------------------
 // The prompt for a fresh bounded turn: the newest user input entry
