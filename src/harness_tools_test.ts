@@ -73,16 +73,35 @@ Deno.test('local Git opens linked-worktree metadata on the host', async () => {
   }
 })
 
-Deno.test('local patch accepts a host working directory and records facets', async () => {
+Deno.test('local patch delegates Codex grammar unchanged and records facets', async () => {
   let tree = await scratch()
   let sibling = await scratch()
   try {
     await Deno.writeTextFile(`${sibling}/note.txt`, 'before\n')
-    let tools = await localTools({ tree })
+    let diff = `*** Begin Patch
+*** Update File: note.txt
+@@
+-before
++after
+*** End Patch`
+    await Deno.writeTextFile(`${sibling}/expected.patch`, diff)
+    let codex = `${tree}/codex`
+    await Deno.writeTextFile(
+      codex,
+      `#!/bin/bash
+[[ "$1" == '--codex-run-as-apply-patch' ]] || exit 91
+[[ "$2" == "$(<expected.patch)" ]] || exit 92
+printf 'after\\n' > note.txt
+printf 'Success. Updated note.txt\\n'
+`,
+    )
+    await Deno.chmod(codex, 0o755)
+    let tools = await localTools({ tree, codex })
     let out = await tools.call('apply_patch', {
-      diff: `--- a/note.txt\n+++ b/note.txt\n@@ -1 +1 @@\n-before\n+after\n`,
+      diff,
       cwd: sibling,
     })
+    assertEquals(out.output, 'Success. Updated note.txt\n')
     assertEquals(out.facets?.exit.code, 0)
     assertEquals(await Deno.readTextFile(`${sibling}/note.txt`), 'after\n')
   } finally {

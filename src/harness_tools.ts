@@ -73,7 +73,7 @@ let localDefinitions: ToolDefinition[] = [
     type: 'function',
     name: 'apply_patch',
     description:
-      'Apply one unified diff on the host. The working directory defaults to the Session worktree.',
+      'Apply a Codex patch on the host. Use the *** Begin Patch format. The working directory defaults to the Session worktree.',
     parameters: schema({
       diff: { type: 'string' },
       cwd: {
@@ -139,6 +139,7 @@ let words = (args: Record<string, unknown>, allowed: string[]) => {
 export type LocalToolOptions = {
   tree: string
   session?: string
+  codex?: string
   outputLimit?: number
 }
 
@@ -150,6 +151,7 @@ export let localTools = async (
 
   let run = async (
     command: string,
+    args: string[],
     cwdValue: unknown,
     timeoutValue: unknown,
     stdin: string,
@@ -163,8 +165,8 @@ export let localTools = async (
     let cwd = await Deno.realPath(resolve(tree, rel)).catch(() => '')
     if (!cwd) throw new Error('tool cwd does not exist')
     let timeout = bounded(timeoutValue)
-    let child = new Deno.Command('/bin/bash', {
-      args: ['-c', command],
+    let child = new Deno.Command(command, {
+      args,
       cwd,
       clearEnv: true,
       env: childEnv(options.session, tree),
@@ -201,6 +203,7 @@ export let localTools = async (
       }
       return {
         output: stdout,
+        failed: !status.success,
         facets: {
           exit: { code: status.code },
           ...stderr ? { stderr: { text: stderr } } : {},
@@ -221,7 +224,8 @@ export let localTools = async (
           throw new Error('command is required')
         }
         return await run(
-          args.command,
+          '/bin/bash',
+          ['-c', args.command],
           args.cwd,
           args.timeout_ms,
           '',
@@ -232,10 +236,11 @@ export let localTools = async (
         words(args, ['diff', 'cwd', 'timeout_ms'])
         if (typeof args.diff != 'string') throw new Error('diff is required')
         return await run(
-          '/usr/bin/patch -p1 --batch --forward',
+          options.codex ?? Deno.env.get('TASKS_CODEX_BIN') ?? 'codex',
+          ['--codex-run-as-apply-patch', args.diff],
           args.cwd,
           args.timeout_ms,
-          args.diff,
+          '',
           context,
         )
       }

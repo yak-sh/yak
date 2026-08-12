@@ -223,6 +223,36 @@ Deno.test('same-provider messages and calls replay their complete items', () => 
   assertEquals(input.slice(1, 3), [message, call])
 })
 
+Deno.test('tool replay includes stdout, stderr, and exit status', () => {
+  let input = project([
+    row('user', 1, {
+      message: { role: 'user' },
+      content: { body: 'begin' },
+    }),
+    row('old', 2, {
+      generation: { through: 'user', provider: 'codex', model: 'old' },
+    }),
+    row('call', 3, {
+      output: { source: 'old' },
+      call: { key: 'call-key' },
+      patch: { path: '.', diff: '*** Begin Patch' },
+    }),
+    row('result', 4, {
+      result: { call: 'call' },
+      content: { body: 'partial output' },
+      stderr: { text: 'patch refused' },
+      exit: { code: 2 },
+    }),
+    row('current', 5, {
+      generation: { through: 'result', provider: 'codex', model: 'new' },
+    }),
+  ], 'current') as { type?: string; output?: string }[]
+  assertEquals(
+    input.find((item) => item.type == 'function_call_output')?.output,
+    'partial output\nstderr:\npatch refused\nexit code: 2',
+  )
+})
+
 Deno.test('projection keeps opaque keys provider-local and typed history portable', () => {
   let entries = [
     row('user', 1, {
