@@ -80,9 +80,9 @@ export let bodyless = (changes: Change[]): Change[] =>
     return Object.keys(comp).length ? [{ ...c, comp }] : []
   })
 
-// Agreement is hard while membership depends only on the row being changed.
-// Paths need the far-side change index; moving time needs a clock sweep.
-export type Gap = 'path' | 'moving-time'
+// Agreement is hard for moving time: membership can change with no write.
+// Path membership is maintained from far-side reference invalidation.
+export type Gap = 'moving-time'
 
 let atoms = (value: string) =>
   value.split(',').flatMap((v) => {
@@ -99,7 +99,6 @@ let moving = (p: Pred) => {
 }
 
 export let gaps = (preds: Pred[]): Gap[] => [
-  ...preds.some((p) => !!p.at) ? ['path' as Gap] : [],
   ...preds.some(moving) ? ['moving-time' as Gap] : [],
 ]
 

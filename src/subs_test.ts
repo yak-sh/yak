@@ -99,7 +99,7 @@ Deno.test('the projection carries a precondition through', () => {
   )
 })
 
-Deno.test('agreement gaps are only paths and moving time', () => {
+Deno.test('the only agreement gap is moving time', () => {
   let cases: [string, string[]][] = [
     ['.status=open', []],
     ['.domain=Ops,Eng', []],
@@ -108,7 +108,7 @@ Deno.test('agreement gaps are only paths and moving time', () => {
     ['.title~=flux', []],
     ['.created.at=2026-07-01', []],
     ['.order=hot', []],
-    ['.assignee.title~=jeff', ['path']],
+    ['.assignee.title~=jeff', []],
     ['.updated.at=today', ['moving-time']],
     ['.updated.at>="1 hour ago"', ['moving-time']],
   ]

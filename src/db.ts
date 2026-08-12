@@ -3958,3 +3958,28 @@ export let refsOf = (db: DatabaseSync, eids: string[]) => {
   }
   return out
 }
+
+// Who points AT these entities through the named reference columns. Unlike
+// refsOf(), this is the narrow reverse walk query subscriptions need: a
+// far-side change re-tests only sources reachable through that predicate's
+// own path, not every row that happens to reference the same entity.
+export let referrersOf = (
+  db: DatabaseSync,
+  eids: string[],
+  { comp, prop }: { comp: string; prop: string },
+): string[] => {
+  if (!eids.length) return []
+  stage(db, eids)
+  let names = (comp ? [comp] : propOwners(prop)).filter(
+    (name) => readable[name]?.includes(prop) && isRef(name, prop),
+  )
+  let out = new Set<string>()
+  for (let name of names) {
+    let rows = db.prepare(
+      `select eid from ${sqlName(name)}
+        where ${sqlName(prop)} in (select eid from hit)`,
+    ).all() as { eid: string }[]
+    for (let row of rows) out.add(row.eid)
+  }
+  return [...out]
+}

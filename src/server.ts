@@ -24,6 +24,7 @@ import {
   journalBy,
   journalOf,
   locate,
+  referrersOf,
   refsOf,
   rootChanges,
   rowsOf,
@@ -225,13 +226,11 @@ export let broadcastObservation = (value: Observation) => {
 
 // Fold a committed batch into every subscription (design §2), synchronously —
 // no await between apply and these frames, so snapshot-then-updates stays
-// gapless. Per touched eid × sub: one eager keyed read (batch-cached), then
+// gapless. Per candidate eid × sub: one eager keyed read (batch-cached), then
 // the §2 transition — ADD queues full comps, UPDATE queues the batch's own
-// patches, REMOVE pushes a drop, a death forwards entity-null. Stage 1 tests
-// own-comp equality preds; path/time preds still evaluate (matchQuery derefs
-// through the same eager read) but their far-side changes aren't indexed yet,
-// so a path-pred sub only re-checks members a batch actually touched — the
-// staged gap (design §2), not a silent wrong answer.
+// patches, REMOVE pushes a drop, a death forwards entity-null. Ordinary preds
+// use the batch's touched eids; path preds add sources reached by walking the
+// touched rows backward through their declared reference chain.
 // What a subscription frame has to CARRY. A live subscription owns its
 // client's view of these rows, so it ships the components. A SHADOW one does
 // not: it never flips the socket into `filtered`, so the same client is still
@@ -266,6 +265,26 @@ let payload = (
     ? [{ eid, name: 'entity', comp: comps.entity as Change['comp'] }]
     : carry(sub, spread(eid, comps))
 
+// A path member can move when any row along its reference chain changes, not
+// only when the source itself changes. Walk each possible touched rung back to
+// the source through the predicate's own columns. The reverse queries are
+// component-keyed; ordinary subscriptions keep the touched-eid fast path.
+let pathSources = (preds: Pred[], touched: string[]) => {
+  let out = new Set(touched)
+  for (let p of preds) {
+    if (!p.at) continue
+    let refs = [{ comp: p.comp, prop: p.prop }, ...p.at.slice(0, -1)]
+    for (let depth = 1; depth <= refs.length; depth++) {
+      let found = touched
+      for (let at = depth - 1; at >= 0 && found.length; at--) {
+        found = referrersOf(db, found, refs[at])
+      }
+      for (let eid of found) out.add(eid)
+    }
+  }
+  return [...out]
+}
+
 export let maintain = (batch: Change[]) => {
   if (!subs.size) return
   let cur = cursorOf(db)
@@ -286,7 +305,10 @@ export let maintain = (batch: Change[]) => {
     for (let [id, sub] of map) {
       let changes: Change[] = []
       let drop: string[] = []
-      for (let eid of touched) {
+      let candidates = sub.preds.some((p) => p.at)
+        ? pathSources(sub.preds, touched)
+        : touched
+      for (let eid of candidates) {
         let c = gone.has(eid) ? {} : comps(eid)
         let alive = !gone.has(eid) && !!c.entity
         let hit = alive && listed(c, sub.preds) &&

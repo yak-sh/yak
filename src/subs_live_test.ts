@@ -279,6 +279,75 @@ slow(
   },
 )
 
+slow(
+  'subscription: a one-hop path follows far-side edits and death',
+  alone,
+  async () => {
+    let source = uid(), assignee = uid(), mark = `path-${uid().slice(0, 8)}`
+    let q = `.task.assignee.doc.title~=${mark}&.doc.title~=${
+      source.slice(0, 8)
+    }`
+    await walk(q, [
+      [
+        { eid: assignee, name: 'doc', comp: { title: 'elsewhere' } },
+        { eid: assignee, name: 'person', comp: {} },
+        {
+          eid: source,
+          name: 'doc',
+          comp: { title: `source ${source.slice(0, 8)}` },
+        },
+        {
+          eid: source,
+          name: 'task',
+          comp: { status: 'open', priority: 1, assignee },
+        },
+      ],
+      [{ eid: assignee, name: 'doc', comp: { title: mark } }], // add
+      [{ eid: assignee, name: 'doc', comp: { title: 'elsewhere' } }], // drop
+      [{ eid: assignee, name: 'doc', comp: { title: mark } }], // add
+      [{ eid: assignee, name: 'entity', comp: null }], // detach + drop
+    ])
+  },
+)
+
+slow(
+  'subscription: an N-hop path follows leaf edits and an intermediate retarget',
+  alone,
+  async () => {
+    let source = uid(), target = uid(), left = uid(), right = uid()
+    let mark = `path-${uid().slice(0, 8)}`
+    let q = `.comment.target.task.project.doc.title~=${mark}&.doc.title~=${
+      source.slice(0, 8)
+    }`
+    await walk(q, [
+      [
+        { eid: left, name: 'doc', comp: { title: 'left' } },
+        { eid: left, name: 'project', comp: {} },
+        { eid: right, name: 'doc', comp: { title: 'right' } },
+        { eid: right, name: 'project', comp: {} },
+        { eid: target, name: 'doc', comp: { title: 'target' } },
+        {
+          eid: target,
+          name: 'task',
+          comp: { status: 'open', priority: 1, project: left },
+        },
+        {
+          eid: source,
+          name: 'doc',
+          comp: { title: `source ${source.slice(0, 8)}` },
+        },
+        { eid: source, name: 'comment', comp: { target } },
+      ],
+      [{ eid: left, name: 'doc', comp: { title: mark } }], // add from leaf
+      [{ eid: target, name: 'task', comp: { project: right } }], // retarget + drop
+      [{ eid: right, name: 'doc', comp: { title: mark } }], // add from new leaf
+      [{ eid: target, name: 'task', comp: { project: null } }], // clear + drop
+      [{ eid: target, name: 'task', comp: { project: right } }], // restore + add
+      [{ eid: right, name: 'entity', comp: null }], // detach + drop
+    ])
+  },
+)
+
 slow('subscription: range and comparison preds', alone, async () => {
   let a = task({})
   let tag = a.eid.slice(0, 8)
