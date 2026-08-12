@@ -2867,10 +2867,17 @@ a[data-ref]:hover {
   min-height: 0;
   overflow: hidden;
 }
+/* Every host of a session is its width container: the responsive grid
+   below keys off the room the session actually has, not the viewport —
+   so a session peeked or carded narrow on a wide screen still pages. */
+.App_Body:has(> .Session),
+.Card_Scroll:has(> .Session),
+.Peek_Body:has(> .Session) {
+  container-type: inline-size;
+}
 .Peek_Body:has(> .Session) {
   display: flex;
   flex-direction: column;
-  container-type: inline-size;
 }
 .Peek_Body > .Session {
   flex: 1;
