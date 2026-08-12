@@ -657,16 +657,6 @@ Your persona, and every memory preloaded into it, are **entities in the Task Gra
 
 ---
 
-# M-12915 Use idiomatic language
-
-**Stick to idiomatic terms for things.** Avoid approximations, house shorthand, and slang. Use the terms that are typical for a tool. LLMs often drift to analogous terms over repeated cycles. This drift can cause a degradation of meaning over time and make it difficult for others to understand. Especially if they are already familiar with the typical terminology.
-
-This applies when talking about git, SQL, HTTP, systemd, DNS, programming languages, and any other similar tool.
-
-For example, when talking about git, don't say "drain" in place of "push", or "chain" in place of "commits" or "branch".
-
----
-
 # M-4474 document new fleet tooling in a memory so the fleet discovers it
 
 When you build or discover new fleet tooling — a CLI verb, an MCP tool, a hook, a workflow, a colon-command — write a memory for it immediately (reference or feedback, unscoped so it rides every operator's `task context` digest).
@@ -674,6 +664,16 @@ When you build or discover new fleet tooling — a CLI verb, an MCP tool, a hook
 Tooling nobody memorializes is invisible: the next operator learns it by accident, or the owner has to tell them. A one-line index in the digest is how the fleet finds out **passively** — put the knowledge where the need arises.
 
 Applies to what you ship AND to what you notice someone else shipped.
+
+---
+
+# M-12915 Use idiomatic language
+
+**Stick to idiomatic terms for things.** Avoid approximations, house shorthand, and slang. Use the terms that are typical for a tool. LLMs often drift to analogous terms over repeated cycles. This drift can cause a degradation of meaning over time and make it difficult for others to understand. Especially if they are already familiar with the typical terminology.
+
+This applies when talking about git, SQL, HTTP, systemd, DNS, programming languages, and any other similar tool.
+
+For example, when talking about git, don't say "drain" in place of "push", or "chain" in place of "commits" or "branch".
 
 ---
 
