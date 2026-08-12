@@ -25,6 +25,9 @@ Deno.test('request waits through a graph restart', async () => {
       waits.push(ms)
       return Promise.resolve()
     },
+    // The schedule under test, named here so the suite's own TASKS_BACKOFF
+    // (empty, to fail fast against dead hosts) can't rewrite the assertion.
+    [100, 200, 400, 800, 1600, 3200],
   )
   assertEquals(res.status, 200)
   assertEquals(fetch.calls(), 4)
@@ -82,6 +85,7 @@ Deno.test('request names an outage after the retry window', async () => {
           waits.push(ms)
           return Promise.resolve()
         },
+        [100, 200, 400, 800, 1600, 3200],
       ),
     Error,
     'tasks server unavailable after 7 attempts over 6.3s: refused',

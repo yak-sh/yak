@@ -66,12 +66,23 @@ thorough; a paragraph is almost always the wrong size.
 
 ## Tests
 
-- Fast and terse — the whole suite runs in seconds, always against
-  `DB_PATH=:memory:`. Write helpers that let one line assert one case; a test
-  reads as a list of facts, not a script.
+- Fast and terse — a test reads as a list of facts, not a script. Write helpers
+  that let one line assert one case, always against `DB_PATH=:memory:`.
 - Test names are full sentences stating the behavior ("search finds, follows
   edits, forgets the dead").
 - Never delete a test to make the suite fast or green.
+- **Two tiers.** `deno task test` is the fast, pure-seam tier — the dev inner
+  loop. A test that spawns a subprocess, boots a real server, drives a git
+  worktree, or waits on wall-clock time is heavy: wrap it in `slow(...)` from
+  `./testing.ts` (same shape as `Deno.test`), which runs it only under
+  `TASKS_SLOW`. `deno task test:all` runs both tiers; the land gate runs
+  `test:all`, so tiering segregates for speed without dropping coverage.
+- **No fixed sleeps in the fast tier.** A pad-and-hope `sleep(n)`/`delay(n)` or
+  `setTimeout(fn, n)` in a `Deno.test` body is refused by `deno task sleepcheck`
+  (folded into `deno task check`). Wait deterministically instead: `until(cond)`
+  polls for a fact, `tick()` yields one macrotask — both from `./testing.ts`. A
+  fixed sleep lives only behind `slow()`, where the real process it waits on is
+  the point.
 
 ## Workflow
 
@@ -93,8 +104,9 @@ thorough; a paragraph is almost always the wrong size.
   remote publishes; it never lands.
 - Run the gate YOURSELF before landing, and again after a rebase if the incoming
   diff could affect you — strictly `&&`-chained so a failure stops the line:
-  `deno fmt src/ && deno task check && DB_PATH=:memory: deno task test`. Read
-  the output; never trust a log a skipped command "wrote".
+  `deno fmt src/ && deno task check && deno task test:all` — test:all runs both
+  the fast and the heavy tier, so nothing heavy escapes a land. Read the output;
+  never trust a log a skipped command "wrote".
 - "Did it land?" reads the shared checkout's `main` — readable from your
   worktree, since worktrees share one ref store:
 

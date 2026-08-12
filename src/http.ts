@@ -36,11 +36,12 @@ export let request = async (
   init?: RequestInit,
   run: Fetch = fetch,
   pause: (ms: number) => Promise<void> = sleep,
+  backoff: number[] = BACKOFF,
 ) => {
   // A rejected write may have committed before its response vanished.
   if (!replayable(init)) return run(input, init)
   let last: unknown
-  for (let ms of [0, ...BACKOFF]) {
+  for (let ms of [0, ...backoff]) {
     if (ms) await pause(ms)
     try {
       return await run(input, init)
@@ -48,9 +49,9 @@ export let request = async (
       last = e
     }
   }
-  let waited = BACKOFF.reduce((sum, ms) => sum + ms, 0) / 1000
+  let waited = backoff.reduce((sum, ms) => sum + ms, 0) / 1000
   throw new Error(
-    `tasks server unavailable after ${BACKOFF.length + 1} attempts over ` +
+    `tasks server unavailable after ${backoff.length + 1} attempts over ` +
       `${waited}s: ${message(last)}`,
     { cause: last },
   )
