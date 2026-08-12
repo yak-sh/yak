@@ -2,7 +2,7 @@
 // shortcuts before it toggles the tray state.
 import { assertEquals } from '@std/assert'
 import { mode } from '../live.ts'
-import { trayKey, trayOpen } from './Tray.tsx'
+import { trayKey, trayOpen, trayRecent } from './Tray.tsx'
 
 Deno.test('t opens and closes the tray only from normal mode', () => {
   trayOpen.value = false
@@ -17,4 +17,24 @@ Deno.test('t opens and closes the tray only from normal mode', () => {
   assertEquals(trayOpen.value, true)
   assertEquals(trayKey('t'), true)
   assertEquals(trayOpen.value, false)
+})
+
+Deno.test('the tray keeps a newly started session visible', () => {
+  let now = Date.parse('2026-08-12T00:30:00-04:00')
+  assertEquals(
+    trayRecent({
+      eid: 'session',
+      id: 'run',
+      started_at: '2026-08-12T00:20:00-04:00',
+    }, now),
+    true,
+  )
+  assertEquals(
+    trayRecent({
+      eid: 'session',
+      id: 'run',
+      started_at: '2026-08-11T12:00:00-04:00',
+    }, now),
+    false,
+  )
 })

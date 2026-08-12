@@ -58,8 +58,13 @@ export let overTray = (x: number, y: number) => {
     .some((r) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom)
 }
 
-// A run stays worth showing for a while after it ends.
+// A run stays worth showing for a while around its latest activity.
 let RECENT = 6 * 60 * 60 * 1000
+
+export let trayRecent = (s: Session, now = Date.now()) => {
+  let at = s.finished_at || s.started_at
+  return !!at && now - Date.parse(at) < RECENT
+}
 
 // Dismissed rows — "seen", per browser. The ✕ on a settled row lands its
 // eid here; the session entity is history and never touched. A signal so
@@ -74,11 +79,11 @@ let dismiss = (eid: string) => {
 
 // Worth a slot: somebody is home (awake — the operator's own terminal
 // counts, which is the point of asking the door and never the origin), or
-// it settled recently and nobody has dismissed it.
+// it moved recently and nobody has dismissed it. Graph-native sessions rest
+// between turns without a process status, so their start is activity too.
 let shown = (eid: string, s: Session) =>
   awake(s) ||
-  (!!s.finished_at && Date.now() - Date.parse(s.finished_at) < RECENT &&
-    !seen.value.includes(eid))
+  (trayRecent(s) && !seen.value.includes(eid))
 
 // LIVE: the digest a human wants without opening every session.
 let live = () => sessionRows().filter(([eid, session]) => shown(eid, session))
