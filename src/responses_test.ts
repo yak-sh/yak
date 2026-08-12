@@ -328,6 +328,25 @@ Deno.test('responses scrubs failed-stream evidence and credential errors', async
   )
 })
 
+Deno.test('responses preserves an incomplete reason', async () => {
+  let client = responses({
+    credentials: auth(),
+    fetch: () =>
+      Promise.resolve(sse({
+        type: 'response.incomplete',
+        response: {
+          status: 'incomplete',
+          incomplete_details: { reason: 'max_output_tokens' },
+        },
+      })),
+  })
+  let error = await assertRejects(
+    () => client.run({ model: 'm', input: [] }),
+  ) as ResponseFault
+  assertEquals(error.message, 'responses: incomplete — max_output_tokens')
+  assertEquals(error.code, 'max_output_tokens')
+})
+
 Deno.test('responses refreshes once on 401 and never returns credentials', async () => {
   let calls = 0
   let refreshed = 0

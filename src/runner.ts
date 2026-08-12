@@ -388,11 +388,15 @@ let providerOf = (row: EntryRow | undefined) =>
   String(row?.comps.generation?.provider ?? '')
 
 let opaqueItem = (row: EntryRow) => {
+  let format = row.comps.opaque?.format
   let raw = row.comps.opaque?.data
-  if (typeof raw != 'string') return undefined
+  if (typeof format != 'string' || typeof raw != 'string') return undefined
   try {
     let value = JSON.parse(raw)
-    return object(value) && typeof value.type == 'string' ? value : undefined
+    return object(value) && typeof value.type == 'string' &&
+        format == `openai:${value.type}`
+      ? value
+      : undefined
   } catch {
     return undefined
   }

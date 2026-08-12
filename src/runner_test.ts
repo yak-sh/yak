@@ -488,3 +488,54 @@ Deno.test('a failed generation keeps partial items as inert evidence', async () 
   assertEquals(evidence.some((entry) => entry.comps.call), false)
   assertEquals(state.failures.length, 1)
 })
+
+Deno.test('failed provider evidence never re-enters a later generation', () => {
+  let partial = {
+    type: 'function_call',
+    status: 'incomplete',
+    call_id: 'cut-off',
+    name: 'shell',
+    arguments: '{"command":"unfinished',
+  }
+  let ended = {
+    type: 'response.incomplete',
+    response: { incomplete_details: { reason: 'max_output_tokens' } },
+  }
+  let input = project([
+    row('user', 1, {
+      message: { role: 'user' },
+      content: { body: 'begin' },
+    }),
+    row('failed', 2, {
+      generation: { through: 'user', provider: 'codex', model: 'old' },
+      error: { message: 'responses: incomplete — max_output_tokens' },
+    }),
+    row('partial', 3, {
+      output: { source: 'failed' },
+      opaque: {
+        format: 'openai:failed:function_call',
+        data: JSON.stringify(partial),
+      },
+    }),
+    row('ended', 4, {
+      output: { source: 'failed' },
+      opaque: {
+        format: 'openai:failed:response.incomplete',
+        data: JSON.stringify(ended),
+      },
+    }),
+    row('next', 5, {
+      message: { role: 'user' },
+      content: { body: 'continue' },
+    }),
+    row('current', 6, {
+      generation: { through: 'next', provider: 'codex', model: 'new' },
+    }),
+  ], 'current')
+  assertEquals(JSON.stringify(input).includes('cut-off'), false)
+  assertEquals(JSON.stringify(input).includes('response.incomplete'), false)
+  assertEquals(input.at(-1), {
+    role: 'user',
+    content: [{ type: 'input_text', text: 'continue' }],
+  })
+})

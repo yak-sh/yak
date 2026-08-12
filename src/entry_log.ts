@@ -67,6 +67,7 @@ let shown = (
   byEid: Map<string, EntryRow>,
 ): LogRow | undefined => {
   let c = row.comps
+  if (c.error) return { kind: 'error', text: text(c.error.message) }
   if (c.message) {
     return {
       kind: 'say',
@@ -116,8 +117,12 @@ let shown = (
   if (c.cancel) {
     return { kind: 'sys', tag: 'cancel', text: text(c.cancel.target) }
   }
-  if (c.error) return { kind: 'error', text: text(c.error.message) }
-  if (c.opaque) return { kind: 'sys', tag: text(c.opaque.format) }
+  if (c.opaque) {
+    let format = text(c.opaque.format)
+    return format.startsWith('openai:failed:')
+      ? undefined
+      : { kind: 'sys', tag: format }
+  }
   return undefined
 }
 

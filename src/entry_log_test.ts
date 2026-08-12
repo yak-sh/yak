@@ -147,6 +147,26 @@ Deno.test('assistant progress stays beside tools and empty reasoning hides', () 
   ])
 })
 
+Deno.test('failed generations show their reason, not opaque evidence tags', () => {
+  let log = graphLog([
+    row('generation', 1, {
+      generation: { through: 'input', provider: 'codex', model: 'gpt' },
+      error: { message: 'responses: incomplete — max_output_tokens' },
+    }),
+    row('partial', 2, {
+      output: { source: 'generation' },
+      opaque: {
+        format: 'openai:failed:function_call',
+        data: '{"type":"function_call"}',
+      },
+    }),
+  ])
+  assertEquals(log.entries.map((entry) => entry.row), [
+    { kind: 'error', text: 'responses: incomplete — max_output_tokens' },
+    undefined,
+  ])
+})
+
 Deno.test('output evidence without a lease is not ready twice', () => {
   let rows = [
     row('generation', 1, {

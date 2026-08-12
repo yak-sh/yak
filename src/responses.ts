@@ -195,6 +195,18 @@ let eventCode = (frame: ResponseEvent | undefined) => {
     : undefined
 }
 
+let incomplete = (frame: ResponseEvent | undefined) => {
+  if (frame?.type != 'response.incomplete') return undefined
+  let response = record(frame.response) ? frame.response : {}
+  let details = record(response.incomplete_details)
+    ? response.incomplete_details
+    : {}
+  let reason = details.reason
+  return typeof reason == 'string' && /^[\w.:-]{1,64}$/.test(reason)
+    ? reason
+    : undefined
+}
+
 let limitNames = new Set([
   'retry-after',
   'x-ratelimit-limit-requests',
@@ -303,8 +315,9 @@ let terminal = async (
   }
   if (!completed) {
     let status = ended?.type?.replace('response.', '') ?? 'disconnected'
-    throw fault(`responses: ${status}`, {
-      code: eventCode(ended),
+    let reason = incomplete(ended)
+    throw fault(`responses: ${status}${reason ? ` — ${reason}` : ''}`, {
+      code: eventCode(ended) ?? reason,
       evidence: ended ? [...unknown, ended] : unknown,
       items,
     })
