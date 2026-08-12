@@ -419,15 +419,20 @@ These hold everywhere in this repo, whoever — or whatever — writes the code:
 - Git: **worktree-only** — never edit the main checkout directly. Every agent
   (interactive sessions included) works in its OWN worktree and lands with
   **`task land`**; focused commits. One writer per worktree: two agents sharing
-  an index stomp each other's staging. `task land` rebases your branch on
-  `main`, re-runs the gate on the rebased commit, and fast-forward merges it
-  into the shared checkout — the tree the server runs from, so landing is what
-  makes a change take effect. ff-only is the compare-and-swap: if another lander
-  moved `main` first the merge is no longer a fast-forward and git refuses, so
-  rebase, re-gate and land again — never `--force`. Pushing to origin publishes
-  bytes; it never lands. And **"did this land?" names the shared checkout's
-  `main`** — `git merge-base --is-ancestor <sha> main`, readable from your
-  worktree because worktrees share one ref store.
+  an index stomp each other's staging. `task land` is MECHANICAL and task-free:
+  it rebases the worktree you stand in onto `main`, re-runs the gate on the
+  rebased commit, fast-forward merges it into the shared checkout — the tree the
+  server runs from, so landing is what makes a change take effect — and
+  best-effort publishes where `repo.push` is granted. It does NOT close the task
+  or release your claims: that is YOUR next step (`task done <id>`;
+  `task release <id>`), and landing no longer needs a task at all. **`task land
+  --no-gate`** lands despite a red or absent gate, for when you have decided to;
+  it never bypasses the ff-only merge. That merge is the compare-and-swap: if
+  another lander moved `main` first it is no longer a fast-forward and git
+  refuses, so rebase, re-gate and land again — never git `--force`. Pushing to
+  origin publishes bytes; it never lands. And **"did this land?" names the
+  shared checkout's `main`** — `git merge-base --is-ancestor <sha> main`,
+  readable from your worktree because worktrees share one ref store.
 
 ## Backups
 
