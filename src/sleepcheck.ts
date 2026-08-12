@@ -93,6 +93,21 @@ let bodyFrom = (s: string, open: number): { body: string; end: number } => {
   return { body: s.slice(start), end: s.length }
 }
 
+// Blank every string/template/comment span to spaces so the ban regexes see
+// code only — a `delay(N)` named inside a string or a comment is not a fixed
+// sleep. Newlines survive the blanking so line numbers and offsets hold.
+let strip = (s: string): string => {
+  let out = '', i = 0
+  while (i < s.length) {
+    let k = skip(s, i)
+    if (k > i) {
+      for (let j = i; j < k; j++) out += s[j] == '\n' ? '\n' : ' '
+      i = k
+    } else out += s[i++]
+  }
+  return out
+}
+
 // The name string right after the call's `(` (or `{ name: '...' }` form).
 let nameAt = (s: string, open: number): string => {
   let m = s.slice(open, open + 200).match(
@@ -126,24 +141,32 @@ let BANS: [RegExp, string][] = [
   [/\bsetTimeout\s*\([^,)]*,\s*([1-9]\d*|0[.\d]*[1-9])/, 'setTimeout(fn, N)'],
 ]
 
+// The fixed sleeps in one source file's fast tests, each as a report line.
+// `where` names the file in the message; slow() bodies are exempt.
+export let scan = (src: string, where = ''): string[] => {
+  let bad: string[] = []
+  for (let b of blocks(src)) {
+    if (b.kind == 'slow') continue // the heavy tier may sleep — that's its job
+    let code = strip(b.body)
+    for (let [re, what] of BANS) {
+      let hit = code.match(re)
+      if (hit) {
+        bad.push(
+          `${where}:${b.at}  «${b.name}» — fixed ${what}: ${
+            hit[0].trim()
+          }\n    use until()/tick() from ./testing.ts, or wrap the test in slow()`,
+        )
+      }
+    }
+  }
+  return bad
+}
+
 let violations = (roots = ['src', 'channels']) => {
   let bad: string[] = []
   for (let root of roots) {
     for (let path of testFiles(root)) {
-      let src = Deno.readTextFileSync(path)
-      for (let b of blocks(src)) {
-        if (b.kind == 'slow') continue // the heavy tier may sleep — that's its job
-        for (let [re, what] of BANS) {
-          let hit = b.body.match(re)
-          if (hit) {
-            bad.push(
-              `${path}:${b.at}  «${b.name}» — fixed ${what}: ${
-                hit[0].trim()
-              }\n    use until()/tick() from ./testing.ts, or wrap the test in slow()`,
-            )
-          }
-        }
-      }
+      bad.push(...scan(Deno.readTextFileSync(path), path))
     }
   }
   return bad
