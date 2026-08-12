@@ -3,9 +3,11 @@
 import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
 import {
   append,
+  callKeys,
   cancelEntry,
   expiredLeases,
   failEntry,
+  importedLines,
   readEntries,
   readyEntries,
   reclaimEntry,
@@ -376,6 +378,46 @@ Deno.test('readEntries returns the whole partition past the pagination cap', () 
   let [gen, call] = tail.eids
   assert(rows.find((e) => e.eid == gen)?.comps.generation)
   assert(rows.find((e) => e.eid == call)?.comps.call)
+  db.close()
+})
+
+Deno.test('append with a coord stamps imported on every entry it mints; the wire cannot', () => {
+  let db = freshDb()
+  let sid = session(db)
+  let { eids } = append(
+    db,
+    sid,
+    [{ call: { key: 'c1' }, bash: { command: 'ls' } }, {
+      message: { role: 'agent' },
+      content: { body: 'ok' },
+    }],
+    null,
+    undefined,
+    { source: 'managed', line: 7 },
+  )
+  let rows = readEntries(db, sid)
+  // both entries of the one source line share its coordinate — the derived
+  // cursor, all-or-nothing per line.
+  for (let e of rows) {
+    assertEquals(
+      [e.comps.imported.source, e.comps.imported.line],
+      ['managed', 7],
+    )
+  }
+  assertEquals([...importedLines(db, sid, 'managed')], [7])
+  assertEquals(callKeys(db, sid).get('c1'), eids[0])
+
+  // A WIRE client naming imported in its own entry batch is refused: the entry
+  // is created but the coordinate is dropped, so no client can pre-stamp one to
+  // poison the ingester's dedup.
+  let wireEid = uuid()
+  apply(db, [
+    { eid: wireEid, name: 'entry', comp: { session: sid } },
+    { eid: wireEid, name: 'imported', comp: { source: 'evil', line: 99 } },
+  ])
+  let made = readEntries(db, sid).find((e) => e.eid == wireEid)!
+  assert(made) // the entry itself landed
+  assertEquals(made.comps.imported, undefined) // but its coordinate did not
   db.close()
 })
 

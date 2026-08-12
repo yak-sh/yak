@@ -8,6 +8,11 @@ import { type Change, uuid } from './types.ts'
 
 export type EntrySpec = Record<string, Record<string, unknown>>
 
+// Where an imported entry came from — the ingest coordinate (D-16704). One
+// coord marks every entry a single source line produced, so the whole batch
+// shares a collision-free position: (session, source, line).
+export type Coord = { source: string; line: number }
+
 export type LeaseToken = {
   eid: string
   holder: string
@@ -22,17 +27,24 @@ export type UsageValue = {
   reasoning: number
 }
 
-let forbidden = new Set(['entity', 'entry', 'lease', 'usage'])
+// `imported` never rides a spec: it is server-stamped through apply()'s
+// `imports` path (below), so a spec that names it is a caller confusing
+// history with its coordinate.
+let forbidden = new Set(['entity', 'entry', 'lease', 'usage', 'imported'])
 
 // Append order is spec order, then component insertion order within a spec.
 // apply() assigns seq while holding its write transaction and returns the
-// authoritative entry stamp beside these changes.
+// authoritative entry stamp beside these changes. `coord` (when the specs are
+// IMPORTED from a source line) stamps `imported{source,line}` on every entry
+// this call mints, in the same transaction — so the entry and its cursor
+// coordinate commit together or not at all (D-16704).
 export let append = (
   db: DatabaseSync,
   session: string,
   specs: EntrySpec[],
   writer?: string | null,
   ids?: string[],
+  coord?: Coord,
 ) => {
   if (ids && ids.length != specs.length) {
     throw new Error('entry ids must match specs')
@@ -47,8 +59,42 @@ export let append = (
       changes.push({ eid, name, comp })
     }
   }
-  return { eids, changes: apply(db, changes, undefined, writer) }
+  let imports = coord ? new Map(eids.map((eid) => [eid, coord])) : undefined
+  return { eids, changes: apply(db, changes, undefined, writer, imports) }
 }
+
+// The durable cursor, derived (D-16704): the (source, line) coordinates already
+// present in a Session's partition ARE its ingest position — there is no
+// mutable cursor row. Loaded once when a tailer starts so a re-drain skips
+// every line it already ingested in memory, appending only the gaps.
+export let importedLines = (
+  db: DatabaseSync,
+  session: string,
+  source: string,
+): Set<number> =>
+  new Set(
+    (db.prepare(
+      `select i.line from entry e join imported i on i.eid = e.eid
+       where e.session = ? and i.source = ?`,
+    ).all(session, source) as { line: number }[]).map((r) => r.line),
+  )
+
+// The tool-call correlation map, rebuilt from durable evidence: a provider
+// call_id → the call entry's eid, so a tool RESULT arriving on a later source
+// line (claude's tool_result references an earlier tool_use) can name the call
+// it answers even across a daemon restart, when the in-memory map was lost.
+export let callKeys = (
+  db: DatabaseSync,
+  session: string,
+): Map<string, string> =>
+  new Map(
+    (db.prepare(
+      `select c.eid, c.key from entry e join call c on c.eid = e.eid
+       where e.session = ? and c.key is not null`,
+    ).all(session) as { eid: string; key: string }[]).map(
+      (r) => [r.key, r.eid],
+    ),
+  )
 
 // The runner reads a Session's WHOLE ordered partition on every operation:
 // project() must find the leased generation and its `through`, advance() the

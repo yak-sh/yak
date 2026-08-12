@@ -1909,8 +1909,11 @@ let admitted = (change: Change): Change | undefined => {
   if (!cols) return
   // These component rows are outcomes minted by the runner. Empty writable
   // declarations keep them in generic read/delete machinery, but never grant
-  // the wire authority to create, patch, or remove one.
-  if (table == 'lease' || table == 'usage') return
+  // the wire authority to create, patch, or remove one. `imported` is the
+  // ingest coordinate — server-stamped through apply()'s `imports` path in
+  // the same transaction as its entry (D-16704), refused here so no wire
+  // client can pre-stamp a coordinate and poison the ingester's dedup.
+  if (table == 'lease' || table == 'usage' || table == 'imported') return
   if (change.comp == null) return change
   let sent = Object.entries(change.comp)
   let real = columnsOf(table)
@@ -2514,6 +2517,13 @@ export let apply = (
   changes: Change[],
   t?: Trace,
   writer?: string | null,
+  // The ingest coordinate, server-stamped (D-16704). Keyed by the entry eid
+  // it marks; the trusted append path (entries.ts) is the only caller that
+  // supplies it, so `imported` is written in the SAME transaction as its
+  // entry — atomic append-and-advance — while every WIRE caller passes
+  // nothing and the column stays unwritable from the wire (admitted refuses
+  // it too, belt and suspenders).
+  imports?: Map<string, { source: string; line: number }>,
 ): Change[] => {
   // A raw @-address in `deliver.to` names no eid the parser could resolve —
   // fold it into its address-book entity (find-or-mint) before normalize.
@@ -2728,7 +2738,8 @@ export let apply = (
           `select 1 from entry e where e.session = ? and (
              exists (select 1 from lease l where l.eid = e.eid)
              or (
-               not exists (select 1 from error x where x.eid = e.eid)
+               not exists (select 1 from imported i where i.eid = e.eid)
+               and not exists (select 1 from error x where x.eid = e.eid)
                and not exists (select 1 from cancel z where z.target = e.eid)
                and (
                  (exists (select 1 from generation g where g.eid = e.eid)
@@ -3042,6 +3053,21 @@ export let apply = (
       else uSet.run(eid, now, actor, via)
       let row = uRow.get(eid) as Change['comp'] | undefined
       if (row) extra.push({ eid, name: 'updated', comp: row })
+    }
+    // The ingest coordinate (D-16704), stamped beside the entry it marks so
+    // the pair (entry, imported) commits atomically. Only the trusted append
+    // path passes `imports`; the wire never does. It rides `extra` (not the
+    // `echoed` set below), so it reaches the journal and every replaying
+    // cache — the coordinate is the durable cursor and must not be lost.
+    if (imports) {
+      let stampImported = db.prepare(
+        'insert into imported (eid, source, line) values (?, ?, ?)',
+      )
+      for (let [eid, coord] of imports) {
+        if (!alive.get(eid)) continue
+        stampImported.run(eid, coord.source, coord.line)
+        extra.push({ eid, name: 'imported', comp: { eid, ...coord } })
+      }
     }
     // The stamp family (notified/opened/archived/decided/proposed): fill the
     // actor GAP

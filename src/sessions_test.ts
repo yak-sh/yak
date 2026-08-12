@@ -752,13 +752,16 @@ slow('both Codex rollback names run through process JSONL', async () => {
       })(eid, {})
       assertEquals(row(eid)?.status, 'completed')
       assertEquals(spawnRow(eid)?.provider, provider)
-      assertEquals(
-        Number(
-          (db.prepare('select count(*) as n from entry where session = ?')
-            .get(eid) as { n: number }).n,
-        ),
-        0,
-      )
+      // The process JSONL path now ALSO ingests its transcript as entries
+      // (T-16823) — but every one wears `imported` (file history), so the
+      // session stays process-backed: no runner-minted entry, never handed to
+      // the graph runner, and its log still reads from the file.
+      let ents = db.prepare(
+        `select i.eid as imported from entry e
+         left join imported i on i.eid = e.eid where e.session = ?`,
+      ).all(eid) as { imported: string | null }[]
+      assert(ents.length > 0) // the transcript was ingested
+      assertEquals(ents.filter((e) => !e.imported).length, 0) // all imported
       assertEquals(logs(eid, new URLSearchParams()).entries.length > 1, true)
     }
     assertEquals(routed, 0)
@@ -1491,7 +1494,9 @@ slow('a tail tick that only moves the counter stays off the wire', async () => {
 
   // Chatter that changes no summary column: the row counts it, the wire
   // stays silent — a run's whole transcript must not re-render every
-  // client per poll tick (T-7063).
+  // client per poll tick (T-7063). The lines are now ALSO ingested as entries
+  // (T-16823): they journal (so the cursor advances) but are omitted from the
+  // root delta, so a catch-up client still sees no changes to re-render.
   heard = []
   let c0 = snapshot(db).cursor ?? 0
   let f = Deno.openSync(log(eid), { append: true, write: true })
@@ -1500,7 +1505,7 @@ slow('a tail tick that only moves the counter stays off the wire', async () => {
   ))
   await until(() => row(eid)?.latest_seq == 3, 'the counted lines')
   assertEquals(heard.filter((c) => c.name == 'session'), [])
-  assertEquals(delta(db, c0), { changes: [], cursor: c0 })
+  assertEquals(delta(db, c0).changes, [])
 
   // The terminal event is news — its summary rides the wire.
   f.writeSync(new TextEncoder().encode(`${RESULT}\n`))

@@ -41,6 +41,12 @@ export type Job = {
 }
 
 export type Adapter = {
+  // The ingest dialect this provider's stream speaks (ingest.ts) — how the
+  // file tailer turns each JSONL line into graph entries. Distinct from the
+  // provider NAME: codex and its codex-cli fallback share one 'codex' dialect.
+  // A plain string keeps this module free of the server-only ingest graph, so
+  // the browser can still import the adapter table.
+  dialect: 'claude' | 'codex' | 'fake'
   models: string[]
   efforts: string[]
   // The spawn menu: offered model → friendly name. A subset of models —
@@ -176,6 +182,7 @@ let fake = new URL('./fake-provider.ts', import.meta.url).pathname
 
 export let adapters: Record<string, Adapter> = {
   fake: {
+    dialect: 'fake',
     models: ['fake-fast', 'fake-slow'],
     efforts: ['low', 'medium', 'high'],
     labels: { 'fake-fast': 'Fake Fast', 'fake-slow': 'Fake Slow' },
@@ -250,6 +257,7 @@ export let adapters: Record<string, Adapter> = {
   // --session-id hands the CLI OUR session uuid, so the provider's id and
   // ours are the same string — correlation for free.
   claude: {
+    dialect: 'claude',
     // Pinned full ids ARE the offer — the version is part of it, so a
     // pinned id can't silently move when Anthropic ships. The CLI natively
     // resolves a short alias to the latest of its line (`sonnet`→latest
@@ -464,6 +472,7 @@ export let adapters: Record<string, Adapter> = {
   // agent_message as it lands (drain merges every pass; the last one
   // standing is the final text) and turn.completed closes with usage.
   codex: {
+    dialect: 'codex',
     // The celestial line, all probed live against the CLI.
     models: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'],
     efforts: ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'],

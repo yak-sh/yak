@@ -76,16 +76,32 @@ export type ManagedCodexOptions = {
 
 let now = () => new Date()
 
+// A session is graph-native when a RUNNER or composer minted an entry for it —
+// never merely because file history was IMPORTED into its partition. An
+// imported entry (D-16704) wears `imported`; a file-backed managed or native
+// session whose transcript is ingested still owns its liveness through the
+// summary columns, not the runner's lease machinery. So the substrate is
+// decided by a NON-imported entry — else ingesting a managed session's log
+// would flip it to graph-native and route its liveness down the runner's path.
 export let graphSession = (db: DatabaseSync, eid: string) =>
-  !!db.prepare('select 1 from entry where session = ? limit 1').get(eid)
+  !!db.prepare(
+    `select 1 from entry e where e.session = ?
+       and not exists (select 1 from imported i where i.eid = e.eid)
+     limit 1`,
+  ).get(eid)
 
+// Ready-or-leased runner work, imported history excluded on both arms — an
+// imported call without a correlated result (a claude tool_use whose result
+// line hasn't landed, a codex web_search that has none) is settled file
+// history, never a pending operation for the runner to lease.
 export let graphBusy = (db: DatabaseSync, eid: string) =>
   !!db.prepare(
     `select 1 from entry e
      where e.session = ? and (
        exists (select 1 from lease l where l.eid = e.eid)
        or (
-         not exists (select 1 from error x where x.eid = e.eid)
+         not exists (select 1 from imported i where i.eid = e.eid)
+         and not exists (select 1 from error x where x.eid = e.eid)
          and not exists (select 1 from cancel z where z.target = e.eid)
          and (
            (exists (select 1 from generation g where g.eid = e.eid)

@@ -41,6 +41,9 @@ import {
   healthChange,
 } from './deliver.ts'
 import { present, reachable } from './door.ts'
+import { append, callKeys, type EntrySpec, importedLines } from './entries.ts'
+import { ingestEntries, type IngestState, scrub } from './ingest.ts'
+import { graphSession } from './managed_codex.ts'
 import { dispatch, trace } from './effects.ts'
 import { legacyWorktreesDir, worktreesDir } from './ground.ts'
 import { hookClaim, rows, wrapChanges } from './client.ts'
@@ -51,7 +54,7 @@ import {
   sessionRows as storedSessions,
   writeSession,
 } from './session_store.ts'
-import { type Change, type LogRow, sessionActive } from './types.ts'
+import { type Change, type LogRow, sessionActive, uuid } from './types.ts'
 
 type Cast = (changes: Change[]) => void
 type Row = Record<string, unknown>
@@ -610,8 +613,29 @@ export let recoverWorktree = async (
 // ---- following the file ----
 
 // Where a tailer is in the file and what it has learned. `at` is a BYTE
-// offset (resume is a seek, not a re-read) and seq the line count.
-type Tail = { at: number; seq: number; ended: boolean; errs: string[] }
+// offset (resume is a seek, not a re-read) and seq the line count. `imp` is
+// the entry-ingest half (D-16704), lazily attached on the first drain so the
+// summary tail and the transcript ingest share one pass over the file.
+type Tail = {
+  at: number
+  seq: number
+  ended: boolean
+  errs: string[]
+  imp?: Imp
+}
+
+// The managed-CLI JSONL is one stable source stream; its ingested entries wear
+// `imported{source:'managed', line}`, and the set of lines already present IS
+// the durable cursor (no sidecar row). `lines` is that set, loaded once so a
+// re-drain skips what it already ingested; `state` carries the tool-call
+// correlation, seeded from durable evidence so it survives a daemon restart.
+let MANAGED = 'managed'
+type Imp = { source: string; lines: Set<number>; state: IngestState }
+let imp = (eid: string): Imp => ({
+  source: MANAGED,
+  lines: importedLines(db, eid, MANAGED),
+  state: { calls: callKeys(db, eid) },
+})
 
 // Read the complete lines written since `t.at`. A half-written tail stays
 // unread until its newline lands — so no line is ever seen twice, split in
@@ -660,12 +684,30 @@ let rolloutContext = (eid: string) => {
   return state.value
 }
 
-// One pass over the new lines: count them, ask the adapter what they mean,
-// stamp what we learned. Everything the adapter doesn't recognize is just
-// log — it lives in the file, not in the summary.
-let drain = async (eid: string, ad: Adapter, t: Tail, cast: Cast) => {
+// One pass over the new lines does BOTH halves (D-16704): it stamps the
+// summary columns (liveness) AND appends each recognized line's transcript
+// rows as graph entries (history). The two are independent — the summary is
+// stamped once at the end; each source line's entries commit in their own
+// atomic append, carrying the `imported{source,line}` coordinate that IS the
+// durable cursor. Everything the adapter doesn't recognize is just log.
+export let drain = async (eid: string, ad: Adapter, t: Tail, cast: Cast) => {
   let lines = readLines(logFile(eid), t)
   if (!lines.length) return
+  let state = (t.imp ??= imp(eid))
+  // One source line → one atomic entry batch, skip-if-present so a re-drain
+  // (restart, --watch reload) re-adds nothing. A single line's append failure
+  // is diagnosed and stepped over — never a broken tail — and the restart
+  // re-drain (its coordinate absent) completes it.
+  let emit = (specs: EntrySpec[], ids: string[], calls: [string, string][]) => {
+    if (!specs.length || state.lines.has(t.seq)) return
+    try {
+      append(db, eid, specs, null, ids, { source: state.source, line: t.seq })
+      state.lines.add(t.seq)
+      for (let [key, id] of calls) state.state.calls.set(key, id)
+    } catch (e) {
+      t.errs.push(`line ${t.seq}: entry ingest failed — ${String(e)}`)
+    }
+  }
   let patch: Summary = {}
   for (let line of lines) {
     t.seq++
@@ -684,21 +726,26 @@ let drain = async (eid: string, ad: Adapter, t: Tail, cast: Cast) => {
       t.errs.push(`line ${t.seq}: malformed`)
       continue
     }
-    // The prompt line is ours — launch() writes what it sent as line 1,
-    // context for a debugger, not provider output.
-    if ((e as { type?: unknown }).type == 'session.prompt') continue
-    // A resumption re-OPENS the log: input() appends this marker before
-    // spawning the continuation, so a terminal event behind it was a
-    // previous run's ending, not this one's. The live tail never re-reads
-    // a settled run — but recover() drains whole files, and must not
-    // flag the shape resume writes by design.
-    if ((e as { type?: unknown }).type == 'session.input') {
-      t.ended = false
+    // The prompt/input markers are ours — the assembled instruction launch()
+    // wrote as line 1, and each resume's continuation. They are not provider
+    // output (so no summary), but they ARE the user's turn in the transcript.
+    let type = (e as { type?: unknown }).type
+    if (type == 'session.prompt' || type == 'session.input') {
+      emit(
+        [{ message: { role: 'user' }, content: { body: scrub(e.text) } }],
+        [uuid()],
+        [],
+      )
+      // A resumption re-OPENS the log: a terminal event behind this marker was
+      // a previous run's ending, not this one's. The live tail never re-reads
+      // a settled run — but recover() drains whole files, and must not flag
+      // the shape resume writes by design.
+      if (type == 'session.input') t.ended = false
       continue
     }
-    // The terminal event is the last word: an agent that keeps talking
-    // after it doesn't get to rewrite its own ending, but the noise is
-    // diagnosed rather than swallowed.
+    // The terminal event is the last word: an agent that keeps talking after
+    // it doesn't get to rewrite its own ending or extend the transcript, but
+    // the noise is diagnosed rather than swallowed.
     if (t.ended) {
       if (!t.errs.some((x) => x.includes('after the terminal'))) {
         t.errs.push(`line ${t.seq}: output after the terminal event`)
@@ -711,6 +758,10 @@ let drain = async (eid: string, ad: Adapter, t: Tail, cast: Cast) => {
       Object.assign(patch, end)
       t.ended = true
     }
+    // Transcript rows: usage/lifecycle events map to nothing here (they stay
+    // summary), so only genuine history lands as entries.
+    let batch = ingestEntries(ad.dialect, e, state.state)
+    emit(batch.specs, batch.ids, batch.calls)
   }
   patch.latest_seq = t.seq
   if (t.errs.length) patch.error = diagnosis(t)
@@ -1274,7 +1325,10 @@ export let codexPending = `
   and not exists (select 1 from error where error.eid = session.eid)
   and (
     base_revision is null
-    or not exists (select 1 from entry where entry.session = session.eid)
+    or not exists (
+      select 1 from entry e where e.session = session.eid
+        and not exists (select 1 from imported i where i.eid = e.eid)
+    )
   )`
 
 // `codex` is the shipped graph-native default. `codex-cli` is an explicit
@@ -1597,11 +1651,10 @@ let track = (
 export let stopped =
   (cast: Cast) => async (eid: string, comp: Record<string, unknown>) => {
     let target = String(comp.target)
-    if (
-      db.prepare('select 1 from entry where session = ? limit 1').get(target)
-    ) {
-      return
-    }
+    // Graph-native stop is the runner's; imported entries are file history and
+    // leave the process stop door in charge (D-16704) — graphSession excludes
+    // them.
+    if (graphSession(db, target)) return
     let acted = () => delivered(eid, 'signalled', cast)
     let lost = (stop_reason: string) =>
       stamp(target, {
@@ -1932,9 +1985,11 @@ let steer = (eid: string, cast: Cast) => {
 export let commented =
   (cast: Cast) => (ceid: string, comp: Record<string, unknown>) => {
     let eid = String(comp.target)
-    if (db.prepare('select 1 from entry where session = ? limit 1').get(eid)) {
-      return
-    }
+    // A graph-native session's comments are the runner's to serve — but an
+    // IMPORTED entry is file history, not runner ownership (D-16704), so a
+    // managed session whose transcript was ingested still steers/resumes
+    // through this process door. graphSession excludes imported.
+    if (graphSession(db, eid)) return
     let stamp = db.prepare('select via from created where eid = ?').get(
       ceid,
     ) as { via: string | null } | undefined
@@ -1988,7 +2043,10 @@ export let recover = (cast: Cast) => {
     db,
     `where origin = 'managed'
       and status in ('starting', 'running', 'stopping')
-      and not exists (select 1 from entry where entry.session = session.eid)
+      and not exists (
+        select 1 from entry e where e.session = session.eid
+          and not exists (select 1 from imported i where i.eid = e.eid)
+      )
     `,
   )
   for (let { eid, provider, input_at } of rows) {
