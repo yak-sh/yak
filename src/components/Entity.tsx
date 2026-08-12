@@ -49,6 +49,17 @@ import { Json } from './views/Json.tsx'
 import { Md, mdText } from './views/Md.tsx'
 import { Web } from './views/Web.tsx'
 import { Session, SessionRow } from './views/Session.tsx'
+import {
+  CommandFull,
+  CommandSummary,
+  EntryFull,
+  EntryMd,
+  EntrySummary,
+  MessageFull,
+  MessageSummary,
+  ResultFull,
+  ResultSummary,
+} from './views/Entry.tsx'
 import { Role } from './views/Role.tsx'
 import { Wake, WakeTitle } from './views/Wake.tsx'
 import { openRun } from './Run.tsx'
@@ -133,6 +144,26 @@ define([
   },
   { view: 'Web', match: has('web'), Render: Web },
   { view: 'Session', match: has('session'), Render: Session },
+  // Entry faces use the same specificity rules as every entity view. The
+  // generic entry is the floor; facets such as bash and result override it.
+  {
+    view: 'Summary',
+    match: has('entry', 'call', 'bash'),
+    Render: CommandSummary,
+  },
+  { view: 'Summary', match: has('entry', 'result'), Render: ResultSummary },
+  { view: 'Summary', match: has('entry', 'message'), Render: MessageSummary },
+  { view: 'Summary', match: has('entry'), Render: EntrySummary },
+  { view: 'Full', match: has('entry', 'call', 'bash'), Render: CommandFull },
+  { view: 'Full', match: has('entry', 'result'), Render: ResultFull },
+  { view: 'Full', match: has('entry', 'message'), Render: MessageFull },
+  { view: 'Full', match: has('entry'), Render: EntryFull },
+  { view: 'Markdown', match: has('entry'), Render: EntryMd },
+  {
+    view: 'Entry.Debug',
+    match: has('entry'),
+    Render: ({ e }) => <Debug e={e} tabs={false} />,
+  },
   // The sections — Full's legos, internal views like Inline and Dependency.
   // Catch-all matchers on purpose: each renders nothing when its data is
   // absent, and a specialized look for an entity shape is a higher-

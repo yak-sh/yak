@@ -25,6 +25,7 @@ import { mdMentions } from '../../md.ts'
 import { UrlVal } from '../editors.tsx'
 import { Ansi } from '../Ansi.tsx'
 import { SessionDot, useSessionStanding } from '../session_status.tsx'
+import { EntryLens } from './Entry.tsx'
 
 // An agent session, watched — the console (W-3676 #5): a sticky slim bar
 // (task, lifecycle summary, stop — server-owned columns riding
@@ -138,7 +139,13 @@ let {
   Foot,
 } = Frame
 
-type Entry = { seq: number; line: string; row?: LogRow; n?: number }
+type Entry = {
+  eid?: string
+  seq: number
+  line: string
+  row?: LogRow
+  n?: number
+}
 type Log = { entries: Entry[]; stderr?: string; context?: number }
 type Mentioned =
   | { kind: 'entity'; eid: string }
@@ -490,11 +497,8 @@ let prettyJson = (line: string) => {
   }
 }
 
-// One log line: a seq gutter, the transcript face, and — a click on the
-// seq away — the raw event. The log lines aren't entities on purpose
-// (the FILE is the durable log), so this is where inspection lives: any
-// row, a system frame or a truncated tool chip alike, opens to the full
-// JSON the provider actually wrote.
+// Process logs have only bytes, while graph-native entries have an eid and
+// therefore take every face through the renderer registry.
 let Row = ({ x, repo }: { x: Entry; repo?: string }) => {
   let [open, setOpen] = useState(false)
   let at = x.row?.at
@@ -510,9 +514,18 @@ let Row = ({ x, repo }: { x: Entry; repo?: string }) => {
       </Seq>
       <Content>
         {at && <When data-tip={pretty(at)}>{ago(at)}</When>}
-        <SessionBody x={x} repo={repo} />
+        {x.eid
+          ? (
+            <Entity
+              eid={x.eid}
+              view='Entry.Summary'
+              onOpen={() => setOpen(true)}
+            />
+          )
+          : <SessionBody x={x} repo={repo} />}
       </Content>
-      {open && <Json>{prettyJson(x.line)}</Json>}
+      {open &&
+        (x.eid ? <EntryLens eid={x.eid} /> : <Json>{prettyJson(x.line)}</Json>)}
     </Line>
   )
 }

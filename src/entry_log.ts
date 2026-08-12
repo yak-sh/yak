@@ -10,6 +10,7 @@ export type EntryRow = {
 }
 
 export type GraphLogEntry = {
+  eid: string
   seq: number
   line: string
   row?: LogRow
@@ -181,6 +182,7 @@ export let graphLog = (source: EntryRow[]): GraphLog => {
       if (context > 0) row = { ...row, context }
     }
     return {
+      eid: source.eid,
       seq: source.seq,
       line: raw(source),
       ...(row ? { row } : {}),

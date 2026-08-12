@@ -275,7 +275,9 @@ export let AddComp = ({ e }: { e: Ent }) => {
   )
 }
 
-export let Debug = ({ e, project }: { e: Ent; project?: boolean }) => {
+export let Debug = (
+  { e, project, tabs = true }: { e: Ent; project?: boolean; tabs?: boolean },
+) => {
   // Incoming references too: whatever in the cache points here, said by
   // which prop brought it (live.ts backlinks, derived from the typed
   // vocabulary — sessions on their task, cards on their target, …).
@@ -318,7 +320,7 @@ export let Debug = ({ e, project }: { e: Ent; project?: boolean }) => {
   )
   return (
     <Frame>
-      {browser
+      {browser && tabs
         ? <DebugTabs e={e} head={head}>{body}</DebugTabs>
         : <>{head}{body}</>}
     </Frame>

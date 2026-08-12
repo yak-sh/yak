@@ -3163,6 +3163,61 @@ a[data-ref]:hover {
   max-height: 24lh;
   overflow-y: auto;
 }
+/* An expanded graph entry is a small card lens: its picker owns the top-right
+   edge, while every face below comes back through Entity. */
+.Session_Line > .Entry_Lens {
+  flex-basis: 100%;
+}
+.Entry_Lens {
+  display: grid;
+  gap: var(--half-gap);
+  min-width: 0;
+  padding: var(--half-gap);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.Entry_Tabs {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--gap);
+}
+.Entry {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.Entry_Line {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.Entry_More {
+  padding: 0 var(--half-gap);
+  border: 0;
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+}
+.Entry_Name,
+.Entry_Status {
+  color: var(--accent);
+  font-family: var(--mono);
+}
+.Entry_Code,
+.Entry_Err {
+  margin: var(--half-gap) 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.Entry_Output {
+  margin-top: var(--half-gap);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.Entry-fail .Entry_Status,
+.Entry_Err-fail {
+  color: var(--red);
+}
 /* What the agent said: its markdown, in the normal text color. */
 .Session_Agent {
   color: var(--text);
