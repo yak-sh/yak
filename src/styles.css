@@ -1508,7 +1508,7 @@ html {
   width: 4.5rem; /* the spinners are the stepper — leave them room */
 }
 /* The card-context meta line — the board row's grammar on the full card:
-   prio · domain · 💬 · ⚑, under the titlebar, above the body. */
+   prio · domain · comments · claim, under the titlebar, above the body. */
 .Show_Meta {
   display: flex;
   flex-wrap: var(--meta-wrap, wrap);

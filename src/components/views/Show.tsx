@@ -526,7 +526,11 @@ export let Meta = (
           </Deps>
         )
       )}
-      {talk > 0 && <Talk>💬 {talk}</Talk>}
+      {talk > 0 && (
+        <Talk>
+          <Icon name='message-circle' /> {talk}
+        </Talk>
+      )}
       {e.task && <Plate e={e} />}
       {e.claim && (
         <Claim {...linkProps(ent(e.claim.session))}>

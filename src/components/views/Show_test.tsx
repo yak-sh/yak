@@ -165,7 +165,12 @@ Deno.test('task meta carries both full facts and compact edge tallies', () => {
     assertEquals(root.querySelector('.Show_Project')?.textContent, 'Task Graph')
     assertEquals(root.querySelector('.Show_Domain')?.textContent, 'Eng')
     assertEquals(root.querySelector('.Show_Assignee')?.textContent, 'Jeff')
-    assertEquals(root.querySelector('.Show_Comments')?.textContent, '💬 1')
+    let comments = root.querySelector('.Show_Comments')!
+    assertEquals(comments.textContent.trim(), '1')
+    assertEquals(
+      comments.querySelector('svg')?.getAttribute('class'),
+      'lucide lucide-message-circle Icon',
+    )
     assertEquals(
       root.querySelector('.Show_Deps-requires')?.textContent,
       'requires 1 1',
