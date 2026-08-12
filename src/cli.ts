@@ -1033,6 +1033,11 @@ let sessionsOf = (all: Row[]) =>
     id: String(r.comps.session!.id ?? ''),
     cwd: r.comps.session!.cwd as string | null,
     pid: r.comps.session!.pid as number | null,
+    // A graph-native session has an ordered log but no provider pid. The CLI
+    // holds no entry log to tell a settled one from an open one, so it spares
+    // every such checkout and leaves trimming the settled ones to the server
+    // sweep, which does hold the log. Half 2 regrows any it collects (T-16761).
+    active: !!r.comps.session!.latest_seq,
   }))
 
 // One line of git output from where the caller stands — land needs only the

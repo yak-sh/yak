@@ -45,9 +45,16 @@ export type Proc = {
   db?: string // DB_PATH — a server pointed at a scratch graph is a probe
 }
 
-// A session as the graph records it. Only these three columns matter here:
-// the id a probe carries, the directory it worked in, the pid it ran as.
-export type Session = { id: string; cwd?: string | null; pid?: number | null }
+// A session as the graph records it. Only these columns matter here: the id a
+// probe carries, the directory it worked in, the pid it ran as, and — for a
+// graph-native session running on the in-process runner with no provider pid —
+// whether the graph vouches its ground is still in use.
+export type Session = {
+  id: string
+  cwd?: string | null
+  pid?: number | null
+  active?: boolean
+}
 
 export type Live = {
   sessions: Set<string>
@@ -103,15 +110,18 @@ export let within = (path: string, root: string) =>
 
 // The graph maps, /proc decides: a row is live only when its pid is alive AND
 // still running a provider. The comm check is the pid-reuse guard — six days
-// on, that number belongs to somebody else.
+// on, that number belongs to somebody else. A graph-native session runs on the
+// in-process runner with no provider pid, so /proc cannot see it; its caller
+// vouches for it with `active`, and its ground is spared the same way a live
+// process's is.
 export let liveSessions = (sessions: Session[], comm = commOf) =>
-  sessions.filter((s) => s.pid && AGENTS.includes(comm(s.pid)))
+  sessions.filter((s) => s.active || (s.pid && AGENTS.includes(comm(s.pid))))
 
 export let live = (sessions: Session[], comm = commOf): Live => {
   let alive = liveSessions(sessions, comm)
   return {
     sessions: new Set(alive.map((s) => s.id)),
-    pids: alive.map((s) => s.pid as number),
+    pids: alive.map((s) => s.pid).filter((p): p is number => !!p),
     cwds: alive.map((s) => s.cwd ?? '').filter((c) => c != ''),
   }
 }

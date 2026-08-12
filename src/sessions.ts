@@ -555,6 +555,27 @@ let directory = (path: unknown) => {
   }
 }
 
+// A worktree-backed session may have had its checkout collected while it sat
+// clean, merged and idle (probes.ts) even though it stayed resumable. The
+// provider thread outlives the checkout, so the next turn regrows it at the
+// recorded path before anything runs there — otherwise a tool's realPath dies
+// on the missing directory. Returns the restored {cwd, branch} when it acted,
+// so a caller holding a session row can carry the new values; a live checkout
+// (or a worktree-less session) is a no-op. This is the graph-native runner's
+// counterpart to the process resume's inline regrow below.
+export let recoverWorktree = async (
+  eid: string,
+  cast: Cast,
+): Promise<{ cwd: string; branch: string } | undefined> => {
+  let row = db.prepare('select * from session where eid = ?').get(eid) as
+    | Row
+    | undefined
+  if (!row?.cwd || directory(row.cwd)) return
+  let back = await regrow(row)
+  stamp(eid, back, cast)
+  return back
+}
+
 // ---- following the file ----
 
 // Where a tailer is in the file and what it has learned. `at` is a BYTE

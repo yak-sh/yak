@@ -64,6 +64,7 @@ import {
   logs,
   prepareWorktree,
   recover,
+  recoverWorktree,
   spawned,
   stopped,
   tidy,
@@ -76,7 +77,7 @@ import { graphSession, managedCodex } from './managed_codex.ts'
 import { sessionRow as storedSession } from './session_store.ts'
 import { responses } from './responses.ts'
 import { readEntries } from './entries.ts'
-import { graphLogPage } from './entry_log.ts'
+import { graphLog, graphLogPage } from './entry_log.ts'
 import { type Observation, safeObservation } from './observations.ts'
 import { outcome, recent, record, toolCall } from './telemetry.ts'
 import { stamp } from './hot.ts'
@@ -614,6 +615,10 @@ let managed = managedCodex({
     let tasks = await tasksTools(graphIO, session)
     if (!tree) return tasks
     try {
+      // A reaped checkout regrows before any tool runs in it (T-16761): the
+      // provider thread outlives its worktree, so a later turn recreates the
+      // recorded path from the base rather than dying at localTools' realPath.
+      await recoverWorktree(session, cast)
       let identity = String(storedSession(db, session)?.id ?? session)
       return combineTools(await localTools({ tree, session: identity }), tasks)
     } catch (error) {
@@ -1357,12 +1362,25 @@ if (mayStamp() && Deno.env.get('TASKS_SWEEP') == '1') {
   let repo = Deno.cwd()
   setInterval(async () => {
     try {
-      let sessions = db.prepare('select id, cwd, pid from session').all() as {
-        id: string
-        cwd: string | null
-        pid: number | null
-      }[]
-      let seen = sweep(sessions, repo)
+      let sessions = db.prepare('select eid, id, cwd, pid from session')
+        .all() as {
+          eid: string
+          id: string
+          cwd: string | null
+          pid: number | null
+        }[]
+      // A graph-native session stays resumable until its log is terminal (a
+      // final answer, nothing pending). The server holds the entry log, so it
+      // spares a busy or waiting checkout and lets a settled one be collected —
+      // regrown on the next turn if it comes back (T-16761).
+      let resumable = (eid: string) => {
+        let rows = readEntries(db, eid)
+        return rows.length > 0 && !graphLog(rows).terminal
+      }
+      let seen = sweep(
+        sessions.map((s) => ({ ...s, active: resumable(s.eid) })),
+        repo,
+      )
       let killed = await reapProbes(seen.verdicts)
       let gone = seen.trees.filter((t) => t.prune && pruneTree(repo, t.tree))
       for (let v of seen.verdicts.filter((v) => v.reap)) {

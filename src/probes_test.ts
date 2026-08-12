@@ -247,6 +247,59 @@ Deno.test('liveness is the pid plus its comm, never the row', () => {
   assertEquals(it.pids, [1407412])
 })
 
+Deno.test('a graph-native session is live by the graph, never a pid', () => {
+  // No provider pid — it runs on the in-process runner — but the caller
+  // vouches for it with `active`, so its id and ground count as live while it
+  // contributes no pid to spare (T-16761).
+  let it = live([
+    { id: 'open', cwd: '/w/S-5', pid: null, active: true },
+    { id: 'settled', cwd: '/w/S-6', pid: null },
+  ], () => 'nginx')
+  assertEquals([...it.sessions], ['open'])
+  assertEquals(it.pids, [])
+  assertEquals(it.cwds, ['/w/S-5'])
+  // A process standing in the open session's checkout is its business.
+  assertEquals(verdict(proc({ pid: 700, cwd: '/w/S-5/src' }), it).reap, false)
+})
+
+Deno.test('an open graph-native checkout is spared; a settled one is swept', async () => {
+  let root = Deno.makeTempDirSync({ prefix: 'tasks-native-' })
+  let git = async (cwd: string, ...args: string[]) => {
+    let r = await new Deno.Command('git', { args, cwd, stderr: 'piped' })
+      .output()
+    if (r.code) {
+      throw new Error(
+        `git ${args.join(' ')}: ${new TextDecoder().decode(r.stderr)}`,
+      )
+    }
+  }
+  try {
+    let repo = `${root}/repo`
+    Deno.mkdirSync(repo)
+    await git(repo, 'init', '--initial-branch=main')
+    await git(repo, 'config', 'user.email', 'test@example.com')
+    await git(repo, 'config', 'user.name', 'Test')
+    Deno.writeTextFileSync(`${repo}/base.txt`, 'base\n')
+    await git(repo, 'add', 'base.txt')
+    await git(repo, 'commit', '-m', 'base')
+    // A clean, merged session worktree — otherwise reapable on all three locks.
+    let tree = `${repo}/tasks-worktrees/tasks/S-9`
+    await git(repo, 'worktree', 'add', '-b', 'session/S-9', tree, 'main')
+
+    let row = { id: 'sid', cwd: tree, pid: null }
+    // grace 0 defeats the idle guard: the worktree was just touched by git.
+    let forest = (it: Live) => trees(repo, it, [], Date.now(), 0)
+    let open = forest(live([{ ...row, active: true }], () => 'nginx'))
+    let settled = forest(live([row], () => 'nginx'))
+    let at = (forest: Tree[]) => forest.find((f) => f.path == tree)!
+    assertEquals(at(open).busy, 'a live session works here')
+    assertEquals(judgeTree(at(open)).prune, false)
+    assertEquals(judgeTree(at(settled)).prune, true)
+  } finally {
+    Deno.removeSync(root, { recursive: true })
+  }
+})
+
 Deno.test('containment is a path test, never a sibling prefix match', () => {
   assert(within('/w/T-1', '/w/T-1'))
   assert(within('/w/T-1/src/db.ts', '/w/T-1'))

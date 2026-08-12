@@ -40,6 +40,7 @@ let {
   landSpawnClaim,
   prepareWorktree,
   recover,
+  recoverWorktree,
   running,
   spawned,
   stopped,
@@ -481,6 +482,146 @@ Deno.test('worktree preparation adopts its matching crash remnant', async () => 
     stdout: 'piped',
   }).output()
   assertEquals(new TextDecoder().decode(found.stdout).trim(), branch)
+})
+
+let gitIn = (cwd: string, ...args: string[]) =>
+  new Deno.Command('git', { args, cwd, stdout: 'null', stderr: 'null' })
+    .outputSync()
+
+Deno.test('recoverWorktree regrows a reaped checkout, and no-ops a live one', async () => {
+  let { t } = seed()
+  let eid = uid(), tree = `${tmp}/gone-${eid}`, branch = `session/${eid}`
+  apply(db, [{
+    eid,
+    name: 'session',
+    comp: { id: uid(), requested_task: t, cwd: tree, branch },
+  }])
+  await prepareWorktree(eid, {
+    instruction: '',
+    session_id: uid(),
+    repo: { path: scratch, base_branch: 'main' },
+    tree,
+    branch,
+    model: 'gpt-5.6-sol',
+  }, cast)
+  assert(existsSync(tree))
+  // A live checkout is left untouched.
+  assertEquals(await recoverWorktree(eid, cast), undefined)
+  // Reap it exactly as probes.prune does: worktree, then branch.
+  gitIn(scratch, 'worktree', 'remove', '--force', tree)
+  gitIn(scratch, 'branch', '-D', branch)
+  assert(!existsSync(tree))
+  // The next turn regrows it at the recorded path.
+  let back = await recoverWorktree(eid, cast)
+  assertEquals(back?.cwd, tree)
+  assert(existsSync(tree))
+  assertEquals(row(eid)?.cwd, tree)
+})
+
+// The whole point of the chain: a graph-native session whose checkout was
+// reaped comes back and USES LOCAL TOOLS on the next user entry — across a
+// daemon restart (a fresh runner over the same graph). Without recovery,
+// localTools' realPath dies on the missing directory before a tool ever runs.
+Deno.test('a graph-native session recovers a reaped checkout and runs local tools', async () => {
+  let { managedCodex } = await import('./managed_codex.ts')
+  let { localTools } = await import('./harness_tools.ts')
+  let { readEntries, append } = await import('./entries.ts')
+
+  let { t } = seed()
+  let eid = uid(), id = uid()
+  let tree = `${tmp}/native-${eid}`, branch = `session/${eid}`
+  apply(db, [{
+    eid,
+    name: 'session',
+    comp: { id, requested_task: t, cwd: tree, branch },
+  }])
+  db.prepare("update session set origin = 'managed' where eid = ?").run(eid)
+
+  // The provider: each turn asks for one shell call, then answers. `printf %s
+  // "$PWD"` proves WHERE the tool ran — the regrown checkout, not a stray cwd.
+  let shell = () => ({
+    model: 'gpt-serving',
+    items: [{
+      type: 'function_call' as const,
+      id: 'c',
+      call_id: `call-${uid()}`,
+      name: 'shell',
+      arguments: JSON.stringify({
+        command: 'printf %s "$PWD"',
+        cwd: null,
+        timeout_ms: 4000,
+      }),
+    }],
+    unknown: [],
+    unknownItems: [],
+    usage: { input: 1, cached: 0, output: 1, reasoning: 0, raw: {} },
+    response: {},
+    limits: {},
+  })
+  let answer = (text: string) => ({
+    ...shell(),
+    items: [{
+      type: 'message' as const,
+      id: 'm',
+      content: [{ type: 'output_text' as const, text }],
+    }],
+  })
+  let turns = [shell(), answer('one'), shell(), answer('two')]
+  let make = () =>
+    managedCodex({
+      db,
+      cast,
+      // Hermetic against a shared graph: the runner sweeps every runnable
+      // session, so any OTHER session left ready by an earlier test gets a
+      // plain final answer and settles, leaving this session's script intact.
+      transport: {
+        run: (request) =>
+          Promise.resolve(
+            request.prompt_cache_key == eid ? turns.shift()! : answer('idle'),
+          ),
+      },
+      prepare: prepareWorktree,
+      tools: async (into: string | undefined, session: string) => {
+        await recoverWorktree(session, cast)
+        return localTools({ tree: String(into) })
+      },
+    })
+
+  // Turn one: a normal first run grows the checkout and runs its shell there.
+  await make().start(eid, {
+    instruction: 'go',
+    session_id: id,
+    repo: { path: scratch, base_branch: 'main' },
+    tree,
+    branch,
+    model: 'gpt-requested',
+  })
+  assert(existsSync(tree))
+  let real = Deno.realPathSync(tree)
+  let shellOut = (session: string) =>
+    readEntries(db, session).filter((r) => r.comps.result)
+      .map((r) => ({ body: r.comps.content?.body, code: r.comps.exit?.code }))
+  assertEquals(shellOut(eid), [{ body: real, code: 0 }])
+
+  // Reap the clean, merged checkout, then simulate a daemon restart.
+  gitIn(scratch, 'worktree', 'remove', '--force', tree)
+  gitIn(scratch, 'branch', '-D', branch)
+  assert(!existsSync(tree))
+
+  // A later user entry arrives directly in the graph; the fresh runner picks
+  // it up, recovers the workspace, and the shell runs in the regrown tree.
+  let fresh = make()
+  append(db, eid, [{
+    message: { role: 'user' },
+    content: { body: 'again' },
+  }], fresh.runner)
+  await fresh.sweep()
+
+  assert(existsSync(tree))
+  assertEquals(shellOut(eid), [
+    { body: real, code: 0 },
+    { body: Deno.realPathSync(tree), code: 0 },
+  ])
 })
 
 Deno.test('a fake session runs end to end', async () => {
