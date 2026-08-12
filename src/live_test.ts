@@ -26,6 +26,7 @@ import {
   landSub,
   observation,
   parents,
+  pendingWake,
   pinned,
   projects,
   relations,
@@ -113,6 +114,45 @@ Deno.test('findEid does not scan or subscribe after indexing', () => {
       comp: { eid: 'other', num: 42 },
     }])
     assertEquals(runs, 1)
+  } finally {
+    stop()
+  }
+})
+
+Deno.test('pendingWake indexes recipients and subscribes narrowly', () => {
+  let scans = 0
+  cache.value = new Proxy({
+    wake: {
+      entity: { eid: 'wake', num: 1 },
+      wake: { eid: 'wake', at: 'soon' },
+      deliver: { eid: 'wake', to: 'session' },
+    },
+  }, {
+    ownKeys: (target) => {
+      scans++
+      return Reflect.ownKeys(target)
+    },
+  })
+  assertEquals(pendingWake('session'), true)
+  assertEquals(scans, 1)
+  for (let i = 0; i < 100; i++) pendingWake('session')
+  assertEquals(scans, 1)
+
+  let runs = 0
+  let stop = effect(() => {
+    pendingWake('session')
+    runs++
+  })
+  try {
+    applyLocal([{ eid: 'other', name: 'doc', comp: { title: 'other' } }])
+    assertEquals(runs, 1)
+    applyLocal([{
+      eid: 'wake',
+      name: 'delivered',
+      comp: { at: 'now', via: 'test' },
+    }])
+    assertEquals(pendingWake('session'), false)
+    assertEquals(runs, 2)
   } finally {
     stop()
   }

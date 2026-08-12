@@ -2,7 +2,7 @@
 // lazy partition; wakes stay in the root graph because their timer and outcome
 // are ordinary shared facets.
 import { useEffect } from 'preact/hooks'
-import { cache, ent, entrySub, subEids } from '../live.ts'
+import { ent, entrySub, pendingWake, subEids } from '../live.ts'
 import { type Ent, standing } from '../types.ts'
 import { type EntryRow, type GraphLog, graphLog } from '../entry_log.ts'
 import { Dot } from './Dot.tsx'
@@ -38,11 +38,6 @@ export let useEntryLog = (
   })
   return graphLog(rows)
 }
-
-export let pendingWake = (session: string) =>
-  Object.values(cache.value).some((e) =>
-    e.wake && e.deliver?.to == session && !e.delivered && !e.error
-  )
 
 export let graphStanding = (
   e: Ent,

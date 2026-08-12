@@ -84,6 +84,74 @@ let idGraph = cache.peek()
 let numEids = new Map<number, string>()
 let aliasEids = new Map<string, string>()
 let shortEids = new Map<string, Set<string>>()
+let wakeGraph = cache.peek()
+let wakeEids = new Map<string, Set<string>>()
+let wakeSignals = new Map<string, Signal<boolean>>()
+
+let wakeTarget = (r?: Comps) =>
+  r?.wake && r.deliver?.to && !r.delivered && !r.error
+    ? String(r.deliver.to)
+    : undefined
+
+let indexWake = (eid: string, r?: Comps) => {
+  let target = wakeTarget(r)
+  if (!target) return
+  let found = wakeEids.get(target)
+  if (found) found.add(eid)
+  else wakeEids.set(target, new Set([eid]))
+}
+
+let unindexWake = (eid: string, r?: Comps) => {
+  let target = wakeTarget(r)
+  if (!target) return
+  let found = wakeEids.get(target)
+  found?.delete(eid)
+  if (!found?.size) wakeEids.delete(target)
+}
+
+let indexWakes = (graph: Record<string, Comps>) => {
+  wakeEids.clear()
+  for (let [eid, r] of Object.entries(graph)) indexWake(eid, r)
+  wakeGraph = graph
+  for (let [target, found] of wakeSignals) {
+    found.value = !!wakeEids.get(target)?.size
+  }
+}
+
+let syncWakes = () => {
+  let graph = cache.peek()
+  if (graph != wakeGraph) indexWakes(graph)
+}
+
+// Session dots hold one recipient signal; unrelated graph patches cannot
+// wake them, and rendering never scans the graph.
+export let pendingWake = (session: string) => {
+  syncWakes()
+  let found = wakeSignals.get(session)
+  if (!found) {
+    found = signal(!!wakeEids.get(session)?.size)
+    wakeSignals.set(session, found)
+  }
+  return found.value
+}
+
+let refreshWakes = (eids: Set<string>) => {
+  let touched = new Set<string>()
+  for (let eid of eids) {
+    let before = wakeTarget(wakeGraph[eid])
+    let after = wakeTarget(cache.peek()[eid])
+    if (before == after) continue
+    unindexWake(eid, wakeGraph[eid])
+    indexWake(eid, cache.peek()[eid])
+    if (before) touched.add(before)
+    if (after) touched.add(after)
+  }
+  wakeGraph = cache.peek()
+  for (let target of touched) {
+    let found = wakeSignals.get(target)
+    if (found) found.value = !!wakeEids.get(target)?.size
+  }
+}
 
 let indexId = (eid: string, r?: Comps) => {
   if (!r) return
@@ -207,6 +275,7 @@ let publish = (
 let resetSignals = () =>
   batch(() => {
     syncIds()
+    indexWakes(cache.peek())
     let touched = new Set([...census.peek(), ...Object.keys(cache.value)])
     census.value = Object.keys(cache.value)
     canvasVersion.value++
@@ -370,6 +439,7 @@ let mark = (path: string) => ((globalThis as { __boot?: string }).__boot = path)
 // into IDB, no diff of the whole cache.
 export let applyLocal = (changes: Change[]) => {
   syncIds()
+  syncWakes()
   let graph = cache.peek()
   let eids = new Set<string>()
   let edges: Dep[] = []
@@ -496,6 +566,7 @@ export let applyLocal = (changes: Change[]) => {
     refreshFolds(changedRows)
     refreshBacklinks(changedRows)
     refreshJobs(changedRows)
+    refreshWakes(changedRows)
     refreshBoardLinks(changedRows)
     refreshFacets(changedRows)
     for (let [eid, z] of zs) {
@@ -751,6 +822,7 @@ export let landSub = (f: Sub) => {
 // live "you no longer see this" that only this layer expresses.
 let evict = (eids: string[]) => {
   syncIds()
+  syncWakes()
   let graph = cache.peek()
   let held = (eid: string) => [...subMembers.values()].some((s) => s.has(eid))
   let next = { ...cache.value }
@@ -781,6 +853,7 @@ let evict = (eids: string[]) => {
       refreshFolds(gone)
       refreshBacklinks(gone)
       refreshJobs(gone)
+      refreshWakes(gone)
       refreshBoardLinks(gone)
       refreshFacets(gone)
     })
