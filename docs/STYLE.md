@@ -77,10 +77,10 @@ thorough; a paragraph is almost always the wrong size.
   `./testing.ts` (same shape as `Deno.test`), which runs it only under
   `TASKS_SLOW`. `deno task test:all` runs both tiers; the land gate runs
   `test:all`, so tiering segregates for speed without dropping coverage.
-- **No fixed sleeps in the fast tier.** A pad-and-hope `sleep(n)`/`delay(n)` or
-  `setTimeout(fn, n)` in a `Deno.test` body is refused by `deno task sleepcheck`
-  (folded into `deno task check`). Wait deterministically instead: `until(cond)`
-  polls for a fact, `tick()` yields one macrotask — both from `./testing.ts`. A
+- **No fixed sleeps in the fast tier.** A fast test is deterministic: it waits
+  on a fact with `until(cond)` or yields one macrotask with `tick()` — both from
+  `./testing.ts` — never a pad-and-hope
+  `sleep(n)`/`delay(n)`/`setTimeout(fn, n)` that a loaded box stretches past. A
   fixed sleep lives only behind `slow()`, where the real process it waits on is
   the point.
 

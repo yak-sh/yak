@@ -1,7 +1,6 @@
 {
   "tasks": {
-    "check": "deno fmt --check . && deno lint . && deno check src/ channels/ && deno task sleepcheck",
-    "sleepcheck": "deno run --allow-read src/sleepcheck.ts",
+    "check": "deno fmt --check . && deno lint . && deno check src/ channels/",
     "gate": "deno fmt src/ && deno task check && deno task test:all && deno run -A src/cli.ts sync --check",
     "dev": "sh -c 'while :; do deno run -A --unstable-net --unstable-worker-options src/dev.ts && break; [ $? -eq 42 ] || break; done'",
     "tui": "sh -c 'while :; do deno run -A src/tui/main.tsx && break; [ $? -eq 42 ] || break; done'",

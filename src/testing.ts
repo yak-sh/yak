@@ -4,8 +4,8 @@
 // seconds and `deno task test:all` runs everything. A fast test never sleeps a
 // fixed span: it yields with `tick` and waits on a fact with `until`, both
 // deterministic, so nothing pads for a settle that a loaded box would stretch
-// past the pad. sleepcheck.ts enforces that — a raw sleep/delay/setTimeout in a
-// fast (non-slow) test body is refused.
+// past the pad. A fixed sleep lives only behind `slow()`, where the real
+// process it waits on is the point.
 
 // A heavy test: skipped unless TASKS_SLOW opts in. Takes the same two shapes
 // Deno.test does — (name, fn) and (name, opts, fn) — and folds in the ignore.
