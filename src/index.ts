@@ -162,8 +162,10 @@ export let indexAll = (ix: Index, graph: Record<string, Row>, deps: Dep[]) => {
 
 // Does satisfying this pred REQUIRE its component be present? Then byComp is a
 // valid candidate superset. Absence tests (`= ''`, `!=`, a component `=`) match
-// rows WITHOUT the component, so they anchor nothing.
-let implies = (p: Pred): boolean => {
+// rows WITHOUT the component, so they anchor nothing. Exported so the durable
+// backends (the IDB resolver, T-17125) make the SAME presence decision this
+// in-memory anchor does — one anchoring predicate, every store.
+export let implies = (p: Pred): boolean => {
   if (!p.prop) return p.op == EXISTS || p.op == '~' // .comp! / .comp~ present
   switch (p.op) {
     case '!':
