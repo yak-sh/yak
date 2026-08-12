@@ -323,6 +323,152 @@ export let codexEntries = (e: Event, _state: IngestState): Batch => {
   return empty() // todo_list, error, and other housekeeping are not transcript rows
 }
 
+// ---- codex: the interactive rollout transcript ----
+//
+// Native `codex` writes ~/.codex/sessions/**/rollout-*.jsonl, and those lines
+// are a DIFFERENT dialect than `codex exec --json` (codexEntries above): each
+// is an `event_msg` or `response_item` envelope carrying a `payload`, never an
+// `item.completed`. User and agent narration ride `event_msg`
+// (user_message / agent_message); the tool calls ride `response_item`
+// (`function_call` then a LATER `function_call_output`, correlated by call_id
+// like claude's cross-line pair). `response_item:message` repeats that
+// narration (and carries the developer/system instructions) — skipped, exactly
+// as transcripts.ts already decided for the LogRow, which keeps the instruction
+// text out of the graph too.
+
+let payloadOf = (e: Event) => e.payload as Record<string, unknown> | undefined
+
+// A shell command out of a codex tool call — `cmd` (exec_command), `command`
+// (string or argv array), or a `local_shell` action's `command` argv.
+let shellCommand = (v: unknown): string | undefined => {
+  let o = v as Record<string, unknown> | null
+  if (!o || typeof o != 'object') return
+  let action = o.action as Record<string, unknown> | undefined
+  let cmd = o.cmd ?? o.command ?? action?.command
+  if (typeof cmd == 'string') return cmd
+  if (Array.isArray(cmd)) return cmd.map((x) => String(x)).join(' ')
+}
+
+// A codex tool call's arguments arrive as a JSON string; parse it so gist() can
+// find the one field worth previewing, else keep the raw text.
+let parseArgs = (raw: unknown): unknown => {
+  if (typeof raw != 'string') return raw
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return raw
+  }
+}
+
+// The exit code a shell output announces in its own "exited with code N" line —
+// the outcome without a separate event, mirrored from the managed stream's
+// inline code (nonzero is a normal completed result, never error{}).
+let exitOf = (text: string): number | undefined => {
+  let m = text.match(/exited with code (\d+)/)
+  return m ? Number(m[1]) : undefined
+}
+
+// A tool name that names a shell: exec_command, local_shell, a bare shell/bash.
+// The command extraction is the real gate (a match with no command falls to a
+// generic tool chip), so this staying loose never mislabels a non-shell tool.
+let SHELL = /exec|shell|bash|command/i
+
+let codexCall = (
+  p: Record<string, unknown>,
+  _state: IngestState,
+): Batch => {
+  let key = String(p.call_id ?? '')
+  let name = String(p.name ?? '')
+  let args = parseArgs(p.arguments ?? p.input)
+  let command = SHELL.test(name)
+    ? shellCommand(args) ?? shellCommand(p)
+    : undefined
+  let id = uuid()
+  let spec: EntrySpec = command != null
+    ? { call: { key }, bash: { command: scrub(command) } }
+    : { call: { key }, tool: { name: name || 'tool', detail: gist(args) } }
+  return { specs: [spec], ids: [id], calls: key ? [[key, id]] : [] }
+}
+
+let codexOutput = (
+  p: Record<string, unknown>,
+  state: IngestState,
+): Batch => {
+  let key = String(p.call_id ?? '')
+  let call = state.calls.get(key)
+  let out = p.output
+  let obj = out && typeof out == 'object'
+    ? out as Record<string, unknown>
+    : undefined
+  let body = obj ? textOf(obj.content) : String(out ?? '')
+  // A tool that reports its own success, or a shell that printed its exit code:
+  // the outcome rides exit{} (never error{}), so the chip reads ✓/✗.
+  let code = obj
+    ? (obj.success == null ? undefined : obj.success === false ? 1 : 0)
+    : exitOf(body)
+  let spec: EntrySpec = {
+    result: call ? { call } : {},
+    content: { body: scrub(body) },
+    ...(code == null ? {} : { exit: { code } }),
+  }
+  return { specs: [spec], ids: [uuid()], calls: [] }
+}
+
+export let codexTranscriptEntries = (e: Event, state: IngestState): Batch => {
+  if (e.type == 'event_msg') {
+    let p = payloadOf(e)
+    if (!p) return empty()
+    if (p.type == 'user_message') {
+      return {
+        specs: [{
+          message: { role: 'user' },
+          content: { body: scrub(p.message) },
+        }],
+        ids: [uuid()],
+        calls: [],
+      }
+    }
+    if (p.type == 'agent_message') {
+      return {
+        specs: [{
+          message: { role: 'agent' },
+          content: { body: scrub(p.message) },
+        }],
+        ids: [uuid()],
+        calls: [],
+      }
+    }
+    return empty() // task_started/task_complete/token_count → summary, not history
+  }
+  if (e.type == 'response_item') {
+    let p = payloadOf(e)
+    if (!p) return empty()
+    let type = String(p.type ?? '')
+    if (type == 'reasoning') {
+      let text = textOf(p.summary)
+      return {
+        specs: [
+          text.trim()
+            ? { reasoning: {}, content: { body: scrub(text) } }
+            : { reasoning: {} },
+        ],
+        ids: [uuid()],
+        calls: [],
+      }
+    }
+    if (
+      type == 'function_call' || type == 'custom_tool_call' ||
+      type == 'local_shell_call'
+    ) return codexCall(p, state)
+    if (
+      type == 'function_call_output' || type == 'custom_tool_call_output' ||
+      type == 'local_shell_call_output'
+    ) return codexOutput(p, state)
+    return empty() // message (dup narration + instructions) and others: not a row
+  }
+  return empty()
+}
+
 // ---- fake: the in-repo test provider ----
 
 let fakeEntries = (e: Event, _state: IngestState): Batch => {
@@ -361,6 +507,25 @@ export let ingestEntries = (
     ? claudeEntries(e, state)
     : dialect == 'codex'
     ? codexEntries(e, state)
+    : dialect == 'fake'
+    ? fakeEntries(e, state)
+    : empty()
+
+// The other door: an INTERACTIVE session's own provider transcript (sessions.ts
+// trail()), a file the provider owns and whose dialect can differ from the
+// managed stream's. Claude persists the same shape it prints, so claudeEntries
+// serves both; codex's rollout is a distinct dialect, so it gets its own mapper.
+// Same source-coordinate, cursor, and dedup as ingestEntries — only the line
+// grammar differs.
+export let ingestTranscript = (
+  dialect: string | undefined,
+  e: Event,
+  state: IngestState,
+): Batch =>
+  dialect == 'claude'
+    ? claudeEntries(e, state)
+    : dialect == 'codex'
+    ? codexTranscriptEntries(e, state)
     : dialect == 'fake'
     ? fakeEntries(e, state)
     : empty()

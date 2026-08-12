@@ -41,8 +41,14 @@ import {
   healthChange,
 } from './deliver.ts'
 import { present, reachable } from './door.ts'
-import { append, callKeys, type EntrySpec, importedLines } from './entries.ts'
-import { ingestEntries, type IngestState, scrub } from './ingest.ts'
+import { append, callKeys, importedLines } from './entries.ts'
+import {
+  type Batch,
+  ingestEntries,
+  type IngestState,
+  ingestTranscript,
+  scrub,
+} from './ingest.ts'
 import { graphSession } from './managed_codex.ts'
 import { dispatch, trace } from './effects.ts'
 import { legacyWorktreesDir, worktreesDir } from './ground.ts'
@@ -624,18 +630,47 @@ type Tail = {
   imp?: Imp
 }
 
-// The managed-CLI JSONL is one stable source stream; its ingested entries wear
-// `imported{source:'managed', line}`, and the set of lines already present IS
+// A file-first Session's JSONL is one stable source stream; its ingested
+// entries wear `imported{source, line}`, and the set of lines already present IS
 // the durable cursor (no sidecar row). `lines` is that set, loaded once so a
 // re-drain skips what it already ingested; `state` carries the tool-call
-// correlation, seeded from durable evidence so it survives a daemon restart.
+// correlation, seeded from durable evidence so it survives a daemon restart. The
+// two substrates key their source differently: a managed run's own stdout is
+// `'managed'`, an interactive provider's own transcript is `'native'`.
 let MANAGED = 'managed'
+let NATIVE = 'native'
 type Imp = { source: string; lines: Set<number>; state: IngestState }
-let imp = (eid: string): Imp => ({
-  source: MANAGED,
-  lines: importedLines(db, eid, MANAGED),
+let imp = (eid: string, source: string): Imp => ({
+  source,
+  lines: importedLines(db, eid, source),
   state: { calls: callKeys(db, eid) },
 })
+
+// One source line's entry batch, appended atomically with its coordinate and
+// skip-if-present so a re-drain (restart, --watch reload) re-adds nothing
+// (D-16704). A single line's append failure is diagnosed and stepped over —
+// never a broken tail — and the restart re-drain (its coordinate absent)
+// completes it. Shared by the managed stdout tailer and the native transcript
+// tailer; the mapper that built the batch is all that differs between them.
+let ingestLine = (
+  eid: string,
+  state: Imp,
+  line: number,
+  batch: Batch,
+  errs: string[],
+) => {
+  if (!batch.specs.length || state.lines.has(line)) return
+  try {
+    append(db, eid, batch.specs, null, batch.ids, {
+      source: state.source,
+      line,
+    })
+    state.lines.add(line)
+    for (let [key, id] of batch.calls) state.state.calls.set(key, id)
+  } catch (e) {
+    errs.push(`line ${line}: entry ingest failed — ${String(e)}`)
+  }
+}
 
 // Read the complete lines written since `t.at`. A half-written tail stays
 // unread until its newline lands — so no line is ever seen twice, split in
@@ -693,21 +728,8 @@ let rolloutContext = (eid: string) => {
 export let drain = async (eid: string, ad: Adapter, t: Tail, cast: Cast) => {
   let lines = readLines(logFile(eid), t)
   if (!lines.length) return
-  let state = (t.imp ??= imp(eid))
-  // One source line → one atomic entry batch, skip-if-present so a re-drain
-  // (restart, --watch reload) re-adds nothing. A single line's append failure
-  // is diagnosed and stepped over — never a broken tail — and the restart
-  // re-drain (its coordinate absent) completes it.
-  let emit = (specs: EntrySpec[], ids: string[], calls: [string, string][]) => {
-    if (!specs.length || state.lines.has(t.seq)) return
-    try {
-      append(db, eid, specs, null, ids, { source: state.source, line: t.seq })
-      state.lines.add(t.seq)
-      for (let [key, id] of calls) state.state.calls.set(key, id)
-    } catch (e) {
-      t.errs.push(`line ${t.seq}: entry ingest failed — ${String(e)}`)
-    }
-  }
+  let state = (t.imp ??= imp(eid, MANAGED))
+  let emit = (batch: Batch) => ingestLine(eid, state, t.seq, batch, t.errs)
   let patch: Summary = {}
   for (let line of lines) {
     t.seq++
@@ -731,11 +753,14 @@ export let drain = async (eid: string, ad: Adapter, t: Tail, cast: Cast) => {
     // output (so no summary), but they ARE the user's turn in the transcript.
     let type = (e as { type?: unknown }).type
     if (type == 'session.prompt' || type == 'session.input') {
-      emit(
-        [{ message: { role: 'user' }, content: { body: scrub(e.text) } }],
-        [uuid()],
-        [],
-      )
+      emit({
+        specs: [{
+          message: { role: 'user' },
+          content: { body: scrub(e.text) },
+        }],
+        ids: [uuid()],
+        calls: [],
+      })
       // A resumption re-OPENS the log: a terminal event behind this marker was
       // a previous run's ending, not this one's. The live tail never re-reads
       // a settled run — but recover() drains whole files, and must not flag
@@ -760,8 +785,7 @@ export let drain = async (eid: string, ad: Adapter, t: Tail, cast: Cast) => {
     }
     // Transcript rows: usage/lifecycle events map to nothing here (they stay
     // summary), so only genuine history lands as entries.
-    let batch = ingestEntries(ad.dialect, e, state.state)
-    emit(batch.specs, batch.ids, batch.calls)
+    emit(ingestEntries(ad.dialect, e, state.state))
   }
   patch.latest_seq = t.seq
   if (t.errs.length) patch.error = diagnosis(t)
@@ -994,21 +1018,115 @@ let watch = async (eid: string, was: Watch, cast: Cast) => {
   await trail(eid, cast)
 }
 
-// Sit beside the provider process, counting whatever log there is. Explicit
-// provider facts ride with the count; lifecycle still comes only from the
-// process, never from interpreting conversation.
+let noteOnce = (t: Tail, msg: string) => {
+  if (!t.errs.includes(msg)) t.errs.push(msg)
+}
+
+// A provider transcript is append-only JSONL — that is what makes the
+// (source,line) coordinate a stable cursor. If the file SHRINKS (rotated or
+// truncated under us) or VANISHES after we had read from it, the coordinate can
+// no longer be trusted for the new bytes, so we record a durable, actionable
+// diagnostic (M-16612) and leave every already-ingested entry intact: readLines
+// returns nothing until the file passes the old offset again, so no misaligned
+// coordinate is ever minted. A file we have not read yet (at == 0) that is
+// simply absent is normal — the provider has not written it — and stays quiet.
+let sourceHealth = (path: string, t: Tail) => {
+  let size: number | null
+  try {
+    size = Deno.statSync(path).size
+  } catch {
+    size = null
+  }
+  if (size == null) {
+    if (t.at > 0) {
+      noteOnce(t, `transcript source is gone (had read ${t.at} bytes)`)
+    }
+    return
+  }
+  if (size < t.at) {
+    noteOnce(t, `transcript truncated or rotated (size ${size} < read ${t.at})`)
+  }
+}
+
+// The native transcript's HISTORY half (D-16704): one provider-owned transcript
+// line → its entry batch, source 'native', skip-if-present — the ordered entry
+// partition beside the summary stamp trail() keeps for liveness. The line count
+// (t.seq) is the source coordinate and advances over EVERY line, blank or
+// malformed alike, so it stays stable across a re-read; only recognized lines
+// become entries. A dialect-less session (no adapter, no confined transcript)
+// ingests nothing and keeps only its summary trail.
+let ingestNative = (
+  eid: string,
+  ad: Adapter | undefined,
+  t: Tail,
+  lines: string[],
+) => {
+  for (let line of lines) {
+    t.seq++
+    if (!line.trim()) continue // a blank line is a line, not a fault
+    let size = byteLength(line)
+    if (size > lineCap) {
+      noteOnce(
+        t,
+        `line ${t.seq}: truncated (${size} bytes; ${lineCap} byte cap)`,
+      )
+      continue
+    }
+    if (!ad) continue
+    let e: Event
+    try {
+      e = JSON.parse(line)
+    } catch {
+      noteOnce(t, `line ${t.seq}: malformed`)
+      continue
+    }
+    let state = (t.imp ??= imp(eid, NATIVE))
+    ingestLine(
+      eid,
+      state,
+      t.seq,
+      ingestTranscript(ad.dialect, e, state.state),
+      t.errs,
+    )
+  }
+}
+
+// One pass of the native tailer: check the source is still the append-only file
+// we've been reading, read whatever complete lines are new, ingest each into the
+// Session's ordered entry partition (HISTORY), and stamp the summary (LIVENESS).
+// The two halves are independent — the summary is one stamp at the end; each
+// source line's entries commit in their own atomic append carrying the
+// `imported{source,line}` coordinate that IS the durable cursor. `shut` folds
+// the ending into that same stamp. trail() loops this beside the process
+// heartbeat; the ingest test drives it directly against a fixture transcript.
+export let drainNative = async (
+  eid: string,
+  t: Tail,
+  cast: Cast,
+  shut = false,
+) => {
+  let ad = dialectOf(eid)
+  let path = logOf(eid)
+  sourceHealth(path, t)
+  let lines = readLines(path, t)
+  ingestNative(eid, ad, t, lines)
+  await followWrite(eid, () =>
+    stamp(eid, {
+      ...(lines.length ? observed(eid, lines) : {}),
+      latest_seq: t.seq,
+      ...(t.errs.length ? { error: diagnosis(t) } : {}),
+      ...(shut && !betweenTurns(eid) ? { finished_at: now() } : {}),
+    }, cast))
+}
+
+// Sit beside the provider process, counting whatever log there is AND ingesting
+// each transcript line into the Session's ordered entry partition. Lifecycle
+// still comes only from the process, never from interpreting conversation.
 let trail = async (eid: string, cast: Cast) => {
   let t: Tail = { at: 0, seq: 0, ended: false, errs: [] }
   for (;;) {
     let shut = !present(eid)
-    let lines = readLines(logOf(eid), t)
-    t.seq += lines.length
-    await followWrite(eid, () =>
-      stamp(eid, {
-        ...(lines.length ? observed(eid, lines) : {}),
-        latest_seq: t.seq,
-        ...(shut && !betweenTurns(eid) ? { finished_at: now() } : {}),
-      }, cast))
+    await drainNative(eid, t, cast, shut)
     if (shut) return
     await sleep(poll())
   }
@@ -2085,6 +2203,28 @@ export let recover = (cast: Cast) => {
         and (provider is null or serving_model is null)`,
     )
   ) stamp(s.eid, observed(s.eid, transcriptLines(s.eid)), cast)
+  // The native transcript substrate, reconciled at boot (D-16704): ingest any
+  // un-ingested transcript lines into each native Session's entry partition,
+  // skip-if-present on the derived coordinate — so a session whose tail (or
+  // whole run) landed during an outage is complete and readable, exactly once.
+  // History only; watched() below owns liveness. Runs BEFORE that loop re-arms
+  // any trail, so recovery and the live tailer never write one partition at
+  // once; readLines is the SAME reader the live trail uses, so a coordinate
+  // minted here and one minted there always agree. Bounded to unfinished rows:
+  // a cleanly-ended session already drained to EOF at exit.
+  for (
+    let s of storedSessions(
+      db,
+      `where origin != 'managed' and transcript is not null
+        and finished_at is null`,
+    )
+  ) {
+    let ad = dialectOf(s.eid)
+    let t: Tail = { at: 0, seq: 0, ended: false, errs: [] }
+    sourceHealth(logOf(s.eid), t)
+    ingestNative(s.eid, ad, t, readLines(logOf(s.eid), t))
+    if (t.errs.length) stamp(s.eid, { error: diagnosis(t) }, cast)
+  }
   // The other half of boot: sessions we never spawned but were watching.
   // A restart drops every trail, and an operator's terminal doesn't
   // re-announce itself for us — so ask the door directly, and stamp the

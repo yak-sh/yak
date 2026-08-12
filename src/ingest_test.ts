@@ -5,8 +5,10 @@ import { assert, assertEquals } from '@std/assert'
 import {
   claudeEntries,
   codexEntries,
+  codexTranscriptEntries,
   ingestEntries,
   type IngestState,
+  ingestTranscript,
   scrub,
 } from './ingest.ts'
 
@@ -301,6 +303,191 @@ Deno.test('codex: usage and lifecycle events produce no entries', () => {
     codexEntries({ type: 'item.started', item: { type: 'x' } }, s).specs,
     [],
   )
+})
+
+// ---- native codex: the interactive rollout dialect (event_msg/response_item)
+
+// One event_msg / response_item envelope, as the rollout writes it.
+let msg = (payload: unknown) => ({ type: 'event_msg', payload })
+let ri = (payload: unknown) => ({ type: 'response_item', payload })
+
+Deno.test('native codex: user and agent narration ride event_msg', () => {
+  let s = fresh()
+  assertEquals(
+    codexTranscriptEntries(msg({ type: 'user_message', message: 'hello' }), s)
+      .specs,
+    [{ message: { role: 'user' }, content: { body: 'hello' } }],
+  )
+  assertEquals(
+    codexTranscriptEntries(
+      msg({
+        type: 'agent_message',
+        message: 'hi there',
+        phase: 'final_answer',
+      }),
+      s,
+    ).specs,
+    [{ message: { role: 'agent' }, content: { body: 'hi there' } }],
+  )
+})
+
+Deno.test('native codex: response_item message (dup narration + instructions) is not a row', () => {
+  let s = fresh()
+  // the developer/system instructions and the assistant text repeat here —
+  // skipped, so neither doubles the transcript nor leaks the instructions.
+  assertEquals(
+    codexTranscriptEntries(
+      ri({
+        type: 'message',
+        role: 'developer',
+        content: [{ text: 'SECRETS' }],
+      }),
+      s,
+    ).specs,
+    [],
+  )
+  assertEquals(
+    codexTranscriptEntries(
+      ri({ type: 'message', role: 'assistant', content: [{ text: 'hi' }] }),
+      s,
+    ).specs,
+    [],
+  )
+})
+
+Deno.test('native codex: reasoning summary becomes a reason entry, empty is bare', () => {
+  let s = fresh()
+  assertEquals(
+    codexTranscriptEntries(
+      ri({
+        type: 'reasoning',
+        summary: [{ type: 'summary_text', text: 'thinking it through' }],
+      }),
+      s,
+    ).specs,
+    [{ reasoning: {}, content: { body: 'thinking it through' } }],
+  )
+  // codex often writes an empty summary — a bare reasoning entry (renders no row)
+  assertEquals(
+    codexTranscriptEntries(ri({ type: 'reasoning', summary: [] }), s).specs,
+    [{ reasoning: {} }],
+  )
+})
+
+Deno.test('native codex: a function_call shell correlates to its later output', () => {
+  let s = fresh()
+  let call = codexTranscriptEntries(
+    ri({
+      type: 'function_call',
+      name: 'exec_command',
+      call_id: 'call_9',
+      arguments: JSON.stringify({ cmd: 'ls -la', workdir: '/x' }),
+    }),
+    s,
+  )
+  assertEquals(call.specs, [{
+    call: { key: 'call_9' },
+    bash: { command: 'ls -la' },
+  }])
+  // the output arrives on a LATER line and names the call across the map
+  let [key, id] = call.calls[0]
+  s.calls.set(key, id)
+  let out = codexTranscriptEntries(
+    ri({
+      type: 'function_call_output',
+      call_id: 'call_9',
+      output: 'Process exited with code 0\nOutput:\ntotal 0',
+    }),
+    s,
+  )
+  assertEquals(out.specs[0].result, { call: id })
+  assertEquals(out.specs[0].exit, { code: 0 })
+  assert(!('error' in out.specs[0]))
+})
+
+Deno.test('native codex: a nonzero shell exit is a normal result, not error{}', () => {
+  let s = fresh()
+  let out = codexTranscriptEntries(
+    ri({
+      type: 'function_call_output',
+      call_id: 'x',
+      output: 'exited with code 127\nnot found',
+    }),
+    s,
+  )
+  assertEquals(out.specs[0].exit, { code: 127 })
+  assert(!('error' in out.specs[0]))
+})
+
+Deno.test('native codex: a non-shell function_call keeps its name and a detail', () => {
+  let s = fresh()
+  let b = codexTranscriptEntries(
+    ri({
+      type: 'function_call',
+      name: 'apply_patch',
+      call_id: 'p1',
+      arguments: JSON.stringify({ path: 'src/a.ts', patch: '@@' }),
+    }),
+    s,
+  )
+  assertEquals(b.specs[0].call, { key: 'p1' })
+  assertEquals(b.specs[0].tool.name, 'apply_patch')
+  assert(!('bash' in b.specs[0]))
+})
+
+Deno.test('native codex: lifecycle events produce no entries', () => {
+  let s = fresh()
+  for (
+    let e of [
+      msg({ type: 'task_started', turn_id: 't' }),
+      msg({ type: 'task_complete', duration_ms: 10 }),
+      msg({ type: 'token_count', info: {} }),
+      { type: 'session_meta', payload: {} },
+      { type: 'turn_context', payload: {} },
+    ]
+  ) assertEquals(codexTranscriptEntries(e, s).specs, [])
+})
+
+Deno.test('native codex: a credential in an output never reaches an entry', () => {
+  let s = fresh()
+  let out = codexTranscriptEntries(
+    ri({
+      type: 'function_call_output',
+      call_id: 'z',
+      output: 'exported api_key=SUPERSECRETVALUE ok',
+    }),
+    s,
+  )
+  let body = String(out.specs[0].content.body)
+  assert(!body.includes('SUPERSECRETVALUE'), 'the api key leaked')
+  assert(body.includes('[redacted]'))
+})
+
+Deno.test('ingestTranscript: claude shares its mapper, codex takes the rollout dialect', () => {
+  let s = fresh()
+  // claude persists the same shape it prints, so the managed mapper serves both
+  assertEquals(
+    ingestTranscript('claude', {
+      type: 'assistant',
+      message: { content: 'hi' },
+    }, s).specs.length,
+    1,
+  )
+  // codex's rollout is the DISTINCT dialect — a managed item.completed is not a
+  // native line, and a native event_msg is not a managed one
+  assertEquals(
+    ingestTranscript('codex', {
+      type: 'item.completed',
+      item: { type: 'agent_message', text: 'hi' },
+    }, s).specs,
+    [],
+  )
+  assertEquals(
+    ingestTranscript('codex', msg({ type: 'agent_message', message: 'hi' }), s)
+      .specs.length,
+    1,
+  )
+  assertEquals(ingestTranscript(undefined, { type: 'x' }, s).specs, [])
 })
 
 Deno.test('scrub: credential shapes are redacted, ordinary text survives', () => {
