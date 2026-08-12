@@ -28,6 +28,7 @@ import {
   type GenerationRunner,
   type ResponseTransport,
 } from './runner.ts'
+import { claudeGeneration } from './claude_print.ts'
 import { type ToolHost } from './harness_tools.ts'
 import { type Observation } from './observations.ts'
 import { sessionRow } from './session_store.ts'
@@ -67,6 +68,10 @@ export type ManagedCodexOptions = {
   leaseMs?: number
   runner?: string
   observe?: (observation: Observation) => void
+  // Provider runners layered over the built-in dispatch (codex + claude). A
+  // seam for routing (T-16817) and the acceptance canary (T-16818) to inject a
+  // claude runner with a stubbed subprocess; absent, the defaults stand.
+  generators?: Record<string, GenerationRunner>
 }
 
 let now = () => new Date()
@@ -321,11 +326,14 @@ export let managedCodex = (options: ManagedCodexOptions) => {
   }
 
   // The generation dispatcher: one entry per provider, selected by a
-  // generation's `provider`. Codex is the sole entry today; a bounded
-  // `claude -p` runner (T-16814) plugs in as a second one without touching a
-  // line of the scheduling below.
+  // generation's `provider`. Codex runs the Responses transport + hosted tools;
+  // Claude runs a bounded `claude -p` subprocess that executes its OWN tools
+  // in-process (claude_print.ts, T-16814). Both satisfy one GenerationRunner
+  // contract, so nothing in the scheduling below learns a provider's dialect.
   let generators: Record<string, GenerationRunner> = {
     codex: codexGeneration(options.transport),
+    claude: claudeGeneration(),
+    ...options.generators,
   }
 
   let generation = async (token: LeaseToken, session: string) => {

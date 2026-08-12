@@ -220,7 +220,7 @@ Deno.test('the generation dispatcher routes by provider to its runner', async ()
   apply(db, [{
     eid: cid,
     name: 'session',
-    comp: { id: uuid(), provider: 'claude', model: 'sonnet' },
+    comp: { id: uuid(), provider: 'gemini', model: 'flash' },
   }])
   db.prepare("update session set origin = 'managed' where eid = ?").run(cid)
   let reached = 0
@@ -236,13 +236,64 @@ Deno.test('the generation dispatcher routes by provider to its runner', async ()
     tools: () => Promise.resolve(tools([])),
     prepare: () => Promise.resolve(),
   })
-  await scheduler.start(cid, { ...noCodeJob(), model: 'sonnet' })
+  await scheduler.start(cid, { ...noCodeJob(), model: 'flash' })
   assertEquals(reached, 0)
   let generation = readEntries(db, cid).find((row) => row.comps.generation)!
   let error = db.prepare('select message from error where eid = ?').get(
     generation.eid,
   ) as { message: string } | undefined
-  assertMatch(String(error?.message), /no managed runner for provider 'claude'/)
+  assertMatch(String(error?.message), /no managed runner for provider 'gemini'/)
+
+  // A claude generation routes to the claude runner (its bounded `claude -p`
+  // transport, injected here as a spy so no subprocess launches). It never
+  // reaches the Responses transport.
+  let clid = uuid()
+  apply(db, [{
+    eid: clid,
+    name: 'session',
+    comp: { id: uuid(), provider: 'claude', model: 'sonnet' },
+  }])
+  db.prepare("update session set origin = 'managed' where eid = ?").run(clid)
+  let claudeSaw: string[] = []
+  let claude = managedCodex({
+    db,
+    cast: () => {},
+    transport: {
+      run: () => {
+        reached++
+        return Promise.resolve(result([]))
+      },
+    },
+    tools: () => Promise.resolve(tools([])),
+    prepare: () => Promise.resolve(),
+    generators: {
+      claude: (ctx) => {
+        claudeSaw.push(ctx.generation)
+        return Promise.resolve({
+          specs: [{
+            output: { source: ctx.generation },
+            message: { role: 'agent' },
+            content: { body: 'from claude' },
+          }],
+          calls: [],
+          usage: { input: 1, cached: 0, output: 1, reasoning: 0 },
+          model: 'claude-sonnet-5',
+          finalText: 'from claude',
+        })
+      },
+    },
+  })
+  await claude.start(clid, { ...noCodeJob(), model: 'sonnet' })
+  assertEquals(reached, 0) // the Responses transport is never touched
+  assertEquals(claudeSaw.length, 1)
+  let claudeGen = readEntries(db, clid).find((row) => row.comps.generation)!
+  assertEquals(claudeSaw[0], claudeGen.eid)
+  assert(!readEntries(db, clid).some((row) => row.comps.error))
+  assert(
+    readEntries(db, clid).some((row) =>
+      row.comps.content?.body == 'from claude'
+    ),
+  )
   db.close()
 })
 
