@@ -3315,6 +3315,24 @@ a[data-ref]:hover {
 .Session_Err-fail {
   --err: var(--red);
 }
+.Ansi-bold {
+  font-weight: 700;
+}
+.Ansi-dim {
+  opacity: 0.65;
+}
+.Ansi-italic {
+  font-style: italic;
+}
+.Ansi-underline {
+  text-decoration: underline;
+}
+.Ansi-strike {
+  text-decoration: line-through;
+}
+.Ansi-underline.Ansi-strike {
+  text-decoration: underline line-through;
+}
 /* The reply box: a sunken box at the pane's foot, the comment rail's twin. */
 /* A session as a list line — the task row's grammar, one line. */
 .SessionRow {

@@ -32,6 +32,7 @@ import { title } from '../title.tsx'
 import { Markdown } from '../Markdown.tsx'
 import { mdMentions } from '../../md.ts'
 import { UrlVal } from '../editors.tsx'
+import { Ansi } from '../Ansi.tsx'
 
 // An agent session, watched — the console (W-3676 #5): a sticky slim bar
 // (task, lifecycle summary, stop — server-owned columns riding
@@ -361,7 +362,9 @@ export let SessionDiagnostics = ({
     ? (
       <Diagnostics open={open}>
         <Gist>diagnostics · {lineLabel(stderr)}</Gist>
-        <Err mod={exit != null && exit != 0 && 'fail'}>{stderr}</Err>
+        <Err mod={exit != null && exit != 0 && 'fail'}>
+          <Ansi text={stderr} />
+        </Err>
       </Diagnostics>
     )
     : null
@@ -400,7 +403,11 @@ export let SessionBody = ({ x, repo }: { x: Entry; repo?: string }) => {
   let r = x.row
   if (!r) {
     let t = bareType(x.line)
-    return t ? null : <Raw>{x.line}</Raw>
+    return t ? null : (
+      <Raw>
+        <Ansi text={x.line} />
+      </Raw>
+    )
   }
   switch (r.kind) {
     case 'say':
@@ -409,16 +416,28 @@ export let SessionBody = ({ x, repo }: { x: Entry; repo?: string }) => {
         ? <Markdown as={User} text={r.text} repo={repo} />
         : <Markdown as={Agent} text={r.text} repo={repo} />
     case 'reason':
-      return <Reason>{r.text}</Reason>
+      return (
+        <Reason>
+          <Ansi text={r.text} />
+        </Reason>
+      )
     case 'tool':
       return (
         <Tool mod={r.ok === false && 'fail'}>
           <ToolName>{r.name}</ToolName>
-          {r.detail && <ToolDetail>{r.detail}</ToolDetail>}
+          {r.detail && (
+            <ToolDetail>
+              <Ansi text={r.detail} />
+            </ToolDetail>
+          )}
           {r.ok != null && (
             <ToolStatus>{r.ok ? '✓ done' : '✗ failed'}</ToolStatus>
           )}
-          {r.error && <ToolErr>{r.error}</ToolErr>}
+          {r.error && (
+            <ToolErr>
+              <Ansi text={r.error} />
+            </ToolErr>
+          )}
         </Tool>
       )
     case 'exec': {
@@ -432,7 +451,9 @@ export let SessionBody = ({ x, repo }: { x: Entry; repo?: string }) => {
             <ExecDesc>{r.desc || 'Command'}</ExecDesc>
             {status && <ExecStatus>{status}</ExecStatus>}
           </ExecHead>
-          <ExecCommand>$ {r.command}</ExecCommand>
+          <ExecCommand>
+            $ <Ansi text={r.command} />
+          </ExecCommand>
         </Exec>
       )
     }
@@ -448,12 +469,20 @@ export let SessionBody = ({ x, repo }: { x: Entry; repo?: string }) => {
         </Turn>
       )
     case 'error':
-      return <Oops>{r.text}</Oops>
+      return (
+        <Oops>
+          <Ansi text={r.text} />
+        </Oops>
+      )
     case 'sys':
       return (
         <Sys>
           <SysTag>{r.tag}</SysTag>
-          {r.text && <SysText>{r.text}</SysText>}
+          {r.text && (
+            <SysText>
+              <Ansi text={r.text} />
+            </SysText>
+          )}
           {(x.n ?? 1) > 1 && <SysCount>×{x.n}</SysCount>}
         </Sys>
       )
