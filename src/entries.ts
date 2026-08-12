@@ -68,6 +68,10 @@ export let readEntries = (db: DatabaseSync, session: string) => {
   }
 }
 
+// An `imported` entry is ingested history, never runnable work (D-16704): it
+// carries no lease and, structurally, no live generation/call the runner should
+// touch. Excluding it on both arms is defense-in-depth — a mis-scheduled
+// imported generation or call can never be leased, run, advanced, or settled.
 let readySql = `
   select e.eid, e.seq from entry e
   where e.session = ?
@@ -76,10 +80,12 @@ let readySql = `
     and not exists (select 1 from cancel c where c.target = e.eid)
     and (
       (exists (select 1 from generation g where g.eid = e.eid)
+       and not exists (select 1 from imported i where i.eid = e.eid)
        and not exists (select 1 from delivered d where d.eid = e.eid)
        and not exists (select 1 from output o where o.source = e.eid))
       or
       (exists (select 1 from call c where c.eid = e.eid)
+       and not exists (select 1 from imported i where i.eid = e.eid)
        and not exists (select 1 from result r where r.call = e.eid))
     )
   order by e.seq`

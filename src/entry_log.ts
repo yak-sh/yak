@@ -43,6 +43,8 @@ let toolName = (comps: EntryRow['comps']) =>
     ? 'graph_query'
     : comps.apply
     ? 'graph_apply'
+    : comps.tool
+    ? text(comps.tool.name)
     : 'tool'
 
 let detail = (comps: EntryRow['comps']) =>
@@ -97,7 +99,11 @@ let shown = (
         desc: 'Command',
       }
     }
-    return { kind: 'tool', name: toolName(c), detail: detail(c) }
+    return {
+      kind: 'tool',
+      name: toolName(c),
+      detail: c.tool ? clip(c.tool.detail) : detail(c),
+    }
   }
   if (c.result) {
     let call = byEid.get(text(c.result.call))

@@ -273,6 +273,18 @@ let schema = `
     unique (session, seq)
   );
   create index if not exists entry_session_seq on entry (session, seq);
+  -- The ingest coordinate (D-16704): where an imported entry came from. Both
+  -- columns are server-owned (stamped through the trusted append path, refused
+  -- from the wire) and immutable. source is a stable stream key (managed/
+  -- native/an archive key, never a filesystem path); line is the 1-based
+  -- SOURCE line, distinct from entry.seq. The set of (entry.session, source,
+  -- line) present IS the durable ingest cursor — no mutable cursor row. A
+  -- wholly new table, so create-if-not-exists is the additive add.
+  create table if not exists imported (
+    eid    text primary key references entity(eid),
+    source text not null,
+    line   integer not null
+  );
   create table if not exists content (
     eid  text primary key references entity(eid),
     body text not null default ''
@@ -320,6 +332,15 @@ let schema = `
     eid  text primary key references entity(eid),
     path text not null,
     diff text not null
+  );
+  -- Provider-neutral named-tool facet (D-16704): an imported tool call with no
+  -- first-class facet (bash/patch/fetch/task_context/graph_query/apply) keeps
+  -- its real name and a one-line arg detail here. Wire-writable like the
+  -- other tool facets; a wholly new table = create-if-not-exists.
+  create table if not exists tool (
+    eid    text primary key references entity(eid),
+    name   text not null,
+    detail text
   );
   create table if not exists task_context (
     eid text primary key references entity(eid)

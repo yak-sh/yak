@@ -75,6 +75,22 @@ Deno.test('graph log renders ordered calls, results, model, and usage', () => {
   assertMatch(log.entries[4].line, /"message":\{"role":"agent"\}/)
 })
 
+Deno.test('an imported tool call keeps its real name and arg preview', () => {
+  // A tool facet with no first-class kind (bash/patch/…): toolName() reads
+  // c.tool.name and the bare-call arm renders its one-line detail (D-16704).
+  let log = graphLog([
+    row('call', 1, {
+      call: { key: 'call-1' },
+      tool: { name: 'web_search', detail: 'query: everforest palette' },
+    }),
+  ])
+  assertEquals(log.entries[0].row, {
+    kind: 'tool',
+    name: 'web_search',
+    detail: 'query: everforest palette',
+  })
+})
+
 Deno.test('graph log reports each request input as its context', () => {
   let rows = [
     row('first', 1, {

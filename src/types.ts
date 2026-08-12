@@ -146,6 +146,11 @@ export let sessionComps: Record<string, Record<string, PropType>> = {
   bash: { command: 'body', cwd: 'text' },
   fetch: { url: 'url', method: { enum: httpMethods } },
   patch: { path: 'text', diff: 'body' },
+  // Provider-neutral named-tool facet (D-16704): an imported tool call with no
+  // first-class facet (bash/patch/fetch/task_context/graph_query/apply) keeps
+  // its real `name` and a one-line arg `detail` here, so entry_log renders it
+  // through the ordinary call path. Wire-writable — an importer names the tool.
+  tool: { name: 'text', detail: 'text' },
   task_context: {},
   graph_query: { query: 'query' },
   // A graph Change[] batch, serialized. One mutation facet preserves the
@@ -171,6 +176,13 @@ export let sessionComps: Record<string, Record<string, PropType>> = {
   // clients at the component boundary.
   lease: {},
   usage: {},
+  // The ingest coordinate (D-16704): where an imported entry came from —
+  // {source, line} in `stamped` below. Server-owned like lease/usage: the
+  // trusted append path stamps it in the same transaction as the entry, and
+  // apply() refuses it from the wire, so no client can pre-stamp a coordinate
+  // to make the ingester skip a real line. The set of (session, source, line)
+  // present IS the durable cursor — there is no mutable cursor row.
+  imported: {},
 }
 
 // Settled = no longer open work, whether it finished or was called off.
@@ -807,6 +819,13 @@ export let stamped: Record<string, Record<string, PropType>> = {
   runtime: { provider_session_id: 'text', serving_model: 'text' },
   entry: { seq: 'number' },
   generation: { serving_model: 'text' },
+  // The ingest coordinate's server half (D-16704): `source` the stable stream
+  // key (managed/native/an archive key — never a filesystem path), `line` the
+  // 1-based source line this entry came from. Both server-owned — the wire
+  // writes neither; the ingester stamps them through the trusted append path.
+  // `imported.line` is the SOURCE line, not entry.seq (seq is apply()-minted
+  // per session). Immutable, like every entry fact.
+  imported: { source: 'text', line: 'number' },
   lease: {
     holder: { eid: 'runner', death: 'keep' },
     at: 'time',
@@ -1272,6 +1291,9 @@ export type Runtime = {
 // One ordered Session-log entity. Every other log shape is a facet on this
 // entity; seq is minted by the server within the Session partition.
 export type Entry = { eid: string; session: string; seq: number }
+// The ingest coordinate (D-16704): where an imported entry came from. `line`
+// is the 1-based SOURCE line, distinct from entry.seq. Server-owned/immutable.
+export type Imported = { eid: string; source: string; line: number }
 export type Content = { eid: string; body: string }
 export type Message = { eid: string; role: typeof messageRoles[number] }
 export type Generation = {
@@ -1289,6 +1311,9 @@ export type Output = {
   phase?: string | null
 }
 export type Call = { eid: string; key: string }
+// Provider-neutral named tool (D-16704): an imported tool call with no
+// first-class facet keeps its real name and a one-line arg preview.
+export type Tool = { eid: string; name: string; detail?: string | null }
 export type Bash = { eid: string; command: string; cwd?: string | null }
 export type Fetch = {
   eid: string
@@ -1620,12 +1645,14 @@ export type Ent = {
   worktree?: Worktree
   runtime?: Runtime
   entry?: Entry
+  imported?: Imported
   content?: Content
   message?: Message
   attention?: { eid: string }
   generation?: Generation
   output?: Output
   call?: Call
+  tool?: Tool
   bash?: Bash
   fetch?: Fetch
   patch?: Patch
