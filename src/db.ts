@@ -25,6 +25,7 @@ import {
   sessionComps,
   SHORT,
   shortId,
+  slugsOf,
   type Snapshot,
   stamped,
   uuid,
@@ -447,8 +448,9 @@ let schema = `
     verdict text not null
   );
   create table if not exists alias (
-    eid  text primary key references entity(eid),
-    slug text not null unique
+    eid   text primary key references entity(eid),
+    slug  text not null unique,
+    slugs text
   );
   -- recall's not-null columns have no defaults ON PURPOSE: they refuse
   -- even apply()'s bare {} touch, so touch() below stays the one writer.
@@ -1353,7 +1355,14 @@ export let resolveId = (
     }
     if (hits.length == 1) return hits[0].eid
   }
-  return (db.prepare('select eid from alias where slug = ?').get(id) as
+  // Membership, not equality: a slug matches the primary or any word of the
+  // space-delimited `slugs` set. instr on a space-padded column matches whole
+  // tokens only ('task' never hits inside 'tasks'); the alias table is tiny,
+  // so the scan is free.
+  return (db.prepare(
+    `select eid from alias where slug = ?
+       or instr(' ' || coalesce(slugs, '') || ' ', ' ' || ? || ' ') > 0`,
+  ).get(id, id) as
     | { eid: string }
     | undefined)?.eid
 }
@@ -1687,6 +1696,9 @@ export let open = (path = file) => {
   // A missing gate refuses landing. There is no safe cross-language default,
   // so the project names one complete command explicitly (src/land.ts).
   addCol('repo', 'gate', 'gate text')
+  // Additional resolvable-only handles beside the primary `slug` (T-16673):
+  // a space-delimited set, every member globally unique (enforced in apply()).
+  addCol('alias', 'slugs', 'slugs text')
   // The crash-loop breaker's fresh-start fence (types.ts, src/roles.ts).
   addCol('role', 'retry_at', 'retry_at text')
   addCol('generation', 'serving_model', 'serving_model text')
@@ -2764,6 +2776,33 @@ export let apply = (
               s ? s.status ?? 'external' : 'gone'
             }`,
           )
+        }
+      }
+      // A slug names exactly ONE entity, so every member of an alias's set
+      // (the primary `slug` plus each word of `slugs`) must be free or already
+      // this eid's — the write-time generalization of the old single-column
+      // unique index, now that one entity wears several handles. A patch that
+      // touches only `slugs` merges over the stored `slug` so the check sees
+      // the whole set; a slug already worn by another entity bounces the batch,
+      // the way a taken claim does.
+      if (name == 'alias' && comp) {
+        let cur = db.prepare('select slug, slugs from alias where eid = ?')
+          .get(eid) as { slug: string; slugs: string | null } | undefined
+        let slug = (comp.slug ?? cur?.slug ?? null) as string | null
+        let extra = (comp.slugs !== undefined ? comp.slugs : cur?.slugs) as
+          | string
+          | null
+        let seen = new Set<string>()
+        for (let s of slugsOf({ slug, slugs: extra })) {
+          if (seen.has(s)) throw new Error(`alias ${s} is listed twice`)
+          seen.add(s)
+          let owner = db.prepare(
+            `select eid from alias where eid != ? and (slug = ?
+               or instr(' ' || coalesce(slugs, '') || ' ', ' ' || ? || ' ') > 0)`,
+          ).get(eid, s, s) as { eid: string } | undefined
+          if (owner) {
+            throw new Error(`alias ${s} already names ${human(db, owner.eid)}`)
+          }
         }
       }
       // A board IS its query (membership is never stored), so a query the

@@ -73,7 +73,11 @@ let snap: Snapshot = {
     { eid: T2, name: 'entity', comp: { eid: T2, num: 3, created_at: '' } },
     { eid: T2, name: 'doc', comp: { title: 'Second', body: '' } },
     { eid: T2, name: 'task', comp: { status: 'open', priority: 1 } },
-    { eid: T2, name: 'alias', comp: { slug: 'old-board-slug' } },
+    {
+      eid: T2,
+      name: 'alias',
+      comp: { slug: 'old-board-slug', slugs: 'extra' },
+    },
   ],
   deps: [{ parent: T1, type: 'requires', child: T2 }],
 }
@@ -230,6 +234,7 @@ Deno.test('find: T-num, bare num, eid, alias slug', () => {
   assertEquals(find(all, '3')?.eid, T2)
   assertEquals(find(all, T1)?.eid, T1)
   assertEquals(find(all, 'old-board-slug')?.eid, T2)
+  assertEquals(find(all, 'extra')?.eid, T2) // an additional slug resolves too
   assertEquals(find(all, 'T-99'), undefined)
 })
 

@@ -20,6 +20,7 @@ import {
   sessionOf,
   settled,
   SHORT,
+  slugsOf,
   type Snapshot,
   stamped,
 } from './types.ts'
@@ -136,7 +137,7 @@ export let dropQuery = (preds: Pred[]) => resolver.drop(preds)
 let indexId = (eid: string, r?: Comps) => {
   if (!r) return
   if (r.entity) numEids.set(r.entity.num, eid)
-  if (r.alias?.slug != null) aliasEids.set(r.alias.slug, eid)
+  for (let s of slugsOf(r.alias)) aliasEids.set(s, eid)
   for (let n = 6; n <= Math.min(8, eid.length); n++) {
     let key = eid.slice(0, n).toLowerCase()
     if (!SHORT.test(key)) continue
@@ -151,8 +152,8 @@ let unindexId = (eid: string, r?: Comps) => {
   if (r.entity && numEids.get(r.entity.num) == eid) {
     numEids.delete(r.entity.num)
   }
-  if (r.alias?.slug != null && aliasEids.get(r.alias.slug) == eid) {
-    aliasEids.delete(r.alias.slug)
+  for (let s of slugsOf(r.alias)) {
+    if (aliasEids.get(s) == eid) aliasEids.delete(s)
   }
   for (let n = 6; n <= Math.min(8, eid.length); n++) {
     let key = eid.slice(0, n).toLowerCase()

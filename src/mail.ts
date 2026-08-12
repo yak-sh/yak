@@ -62,7 +62,12 @@ let eidOf = (ref: string): string | undefined => {
   if (UUID.test(ref)) return hit('select eid from entity where eid = ?', ref)
   let m = ref.match(/^[A-Za-z]+-(\d+)$/)
   if (m) return hit('select eid from entity where num = ?', Number(m[1]))
-  return hit('select eid from alias where slug = ?', ref)
+  // Any of the entity's handles resolve, not just the primary — a whole-token
+  // membership over the space-delimited `slugs` set (db.ts resolveId).
+  return (db.prepare(
+    `select eid from alias where slug = ?
+       or instr(' ' || coalesce(slugs, '') || ' ', ' ' || ? || ' ') > 0`,
+  ).get(ref, ref) as { eid: string } | undefined)?.eid
 }
 
 // The address book is one rule: a raw address (it has an @) passes

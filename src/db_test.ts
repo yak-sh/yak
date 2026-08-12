@@ -385,6 +385,54 @@ Deno.test('apply canonicalizes every scalar and reference spelling', () => {
   })
 })
 
+Deno.test('alias: every slug resolves, one primary, each globally unique', () => {
+  let a = uid(), b = uid()
+  apply(db, [
+    { eid: a, name: 'doc', comp: { title: 'Alpha' } },
+    { eid: a, name: 'alias', comp: { slug: 'home', slugs: 'tasks graph' } },
+    { eid: b, name: 'doc', comp: { title: 'Beta' } },
+  ])
+  // Primary and every additional name resolve to the same entity.
+  assertEquals(resolveId(db, 'home'), a)
+  assertEquals(resolveId(db, 'tasks'), a)
+  assertEquals(resolveId(db, 'graph'), a)
+  // Whole-token membership: a substring of a member never hits.
+  assertEquals(resolveId(db, 'task'), undefined)
+  // Display stays the primary — never ambiguous.
+  assertEquals(comp(a, 'alias')?.slug, 'home')
+
+  // A second entity cannot claim a taken member, whether it lands as another's
+  // primary or additional name — the write-time uniqueness generalization.
+  assertThrows(
+    () => apply(db, [{ eid: b, name: 'alias', comp: { slug: 'tasks' } }]),
+    Error,
+    'already names',
+  )
+  assertThrows(
+    () =>
+      apply(db, [
+        { eid: b, name: 'alias', comp: { slug: 'beta', slugs: 'graph' } },
+      ]),
+    Error,
+    'already names',
+  )
+  // A set that repeats a member is refused before it can shadow itself.
+  assertThrows(
+    () =>
+      apply(db, [
+        { eid: b, name: 'alias', comp: { slug: 'beta', slugs: 'beta' } },
+      ]),
+    Error,
+    'listed twice',
+  )
+  // Free names land; a patch touching only `slugs` keeps the stored primary
+  // and its own members stay valid on a re-apply (self is excluded).
+  apply(db, [{ eid: b, name: 'alias', comp: { slug: 'beta' } }])
+  apply(db, [{ eid: b, name: 'alias', comp: { slugs: 'second' } }])
+  assertEquals(comp(b, 'alias')?.slug, 'beta')
+  assertEquals(resolveId(db, 'second'), b)
+})
+
 Deno.test('typed rejection rolls back; optional empty scalars clear', () => {
   let s = uid()
   apply(db, [{

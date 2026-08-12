@@ -1,6 +1,6 @@
 import { render } from 'preact'
 import { agreementProbe, boot, cache, clientId, config, ent } from './live.ts'
-import { idOf } from './types.ts'
+import { idOf, slugsOf } from './types.ts'
 import { restore, route } from './components/nav.tsx'
 import { App } from './components/App.tsx'
 
@@ -43,7 +43,7 @@ await boot()
 let legacy = new URLSearchParams(location.search).get('task')
 if (legacy) {
   let hit = Object.entries(cache.value).find(([eid, c]) =>
-    c.alias?.slug == legacy || idOf(ent(eid)) == legacy
+    slugsOf(c.alias).includes(legacy) || idOf(ent(eid)) == legacy
   )
   if (hit) {
     history.replaceState(null, '', `/${idOf(ent(hit[0]))}`)

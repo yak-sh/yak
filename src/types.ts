@@ -488,7 +488,7 @@ export let comps: Record<string, Record<string, PropType>> = {
       },
     },
   },
-  alias: { slug: 'text' },
+  alias: { slug: 'text', slugs: 'text' },
   // A durable identity — the owner, an operator. The doc carries the
   // name, an alias the handle (jeff), and tasks point at it through
   // assignee; sessions stay what they are (one run), a person is who
@@ -1583,8 +1583,18 @@ export type Conflict = {
 }
 
 // A stable external name for an entity — a slug from a previous system, a
-// human handle. find() resolves it like any id; unique graph-wide.
-export type Alias = { eid: string; slug: string }
+// human handle. An entity may wear several: `slug` is the PRIMARY handle
+// (the display name, db.ts human()), `slugs` a space-delimited set of
+// additional resolvable-only names. find() resolves any of them like an id;
+// every member is unique graph-wide, enforced at write in apply().
+export type Alias = { eid: string; slug: string; slugs?: string | null }
+
+// The names an alias resolves by, primary first: `slug` then each word of
+// `slugs`. One reading for every resolution door (client.ts find, live.ts
+// cache, db.ts resolveId) and the write-time uniqueness rule — display
+// still reads `slug` alone, so the primary is never ambiguous.
+export let slugsOf = (a?: { slug?: string | null; slugs?: string | null }) =>
+  a?.slug ? [a.slug, ...(a.slugs?.split(/\s+/).filter(Boolean) ?? [])] : []
 
 // A wearable voice: core text in the doc, tiers in the edges, home in
 // home (null = fleet-shared).

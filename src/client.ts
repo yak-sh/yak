@@ -22,7 +22,7 @@ import {
   uuid,
   verdictName,
 } from './types.ts'
-import { idOf, SHORT, shortId } from './types.ts'
+import { idOf, SHORT, shortId, slugsOf } from './types.ts'
 import { formatProp, parseProp, propAt, refOf } from './props.ts'
 import { local } from './time.ts'
 import { nearest, offer } from './near.ts'
@@ -970,7 +970,7 @@ export let find = (all: Row[], id: string) => {
     }
     if (hits.length == 1) return hits[0]
   }
-  return all.find((r) => r.comps.alias?.slug == id)
+  return all.find((r) => slugsOf(r.comps.alias).includes(id))
 }
 
 // The board sort: status column order, then priority, then num.
