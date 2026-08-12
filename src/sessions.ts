@@ -729,12 +729,17 @@ let finish = async (eid: string, t: Tail, run: Run, cast: Cast) => {
     }
   }
   let ok = t.ended && (code ?? 0) == 0
-  // A stillborn launch wrote no log to diagnose — its only witness is the
-  // launcher's own stderr (systemd's refusal, an unreachable user bus),
-  // which otherwise sits in a file nobody thinks to read.
+  // A failed run whose stdout stream named no fault still has a witness: the
+  // stderr file. A stillborn launch left the launcher's refusal there
+  // (systemd's, an unreachable user bus); a run that exited without its
+  // terminal event left the provider's own dying words (Codex's
+  // `write_stdin failed` / `tool call output is missing` when a tool process
+  // vanishes mid-call). Either way it otherwise sits in a file nobody reads,
+  // so a failed session shows no WHY. Only on failure — a clean run must not
+  // wear benign stderr as an error.
   let error = t.errs.length
     ? diagnosis(t)
-    : code == null && !reported
+    : !ok
     ? errTail(eid).trim().slice(-2000)
     : ''
   // Bookkeeping BEFORE the ending is said: stamp() fires settled(), whose

@@ -776,6 +776,20 @@ Deno.test('a launch that never starts is stillborn, and says what refused', asyn
   assertMatch(failure(eid) ?? '', /transient scope unit/)
 })
 
+// A run that exits 0 but never emits its terminal event failed (no
+// completion was signalled), and the reason it broke lives only on stderr —
+// the provider's dying words, like Codex's `tool call output is missing`
+// loop when a tool process vanishes mid-call. A failed session must say WHY,
+// so the stderr tail becomes its error rather than an empty string.
+Deno.test('a run that exits clean but never finished says why from stderr', async () => {
+  let { t } = seed('quiet noise')
+  let { eid, done } = begin(t)
+  await done
+  assertEquals(row(eid)?.status, 'failed')
+  assertEquals(row(eid)?.exit_code, 0) // clean OS exit, unfinished work
+  assertMatch(failure(eid) ?? '', /stderr noise/)
+})
+
 // The settle broadcast: whoever holds the task hears the ending on the
 // bus, because the ending IS a comment on the task, via the
 // session — cast like any wire write, exactly once per settle.
