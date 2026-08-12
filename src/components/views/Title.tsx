@@ -1,9 +1,10 @@
-import { type Ent, friendly, standing } from '../../types.ts'
+import { type Ent, friendly } from '../../types.ts'
 import { block } from '../ui.tsx'
 import { title, TitleEdit } from '../title.tsx'
 import { Pip } from './Show.tsx'
 import { Dot } from '../Dot.tsx'
 import { Id } from './Inline.tsx'
+import { SessionDot } from '../session_status.tsx'
 
 let Frame = block('div', 'CardTitle', { Text: 'span' })
 let { Text } = Frame
@@ -74,7 +75,7 @@ export let SessionTitle = ({ e }: { e: Ent }) => {
   return (
     <Frame>
       <Id e={e} />
-      <Dot status={standing(s)} />
+      <SessionDot e={e} />
       <Text>
         {friendly(s.serving_model || s.model) ?? 'session'}
         {s.effort && ` · ${s.effort}`}

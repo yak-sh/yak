@@ -44,6 +44,7 @@ Deno.test('graph log renders ordered calls, results, model, and usage', () => {
   ]
   let log = graphLog(rows.toReversed())
   assertEquals(log.latest, 5)
+  assertEquals(log.terminal, false)
   assertEquals(log.context, 8)
   assertEquals(log.model, 'served')
   assertEquals(log.busy, false)
@@ -116,6 +117,26 @@ Deno.test('graph log derives busy and pages by sequence', () => {
       e.seq
     ),
     [2],
+  )
+})
+
+Deno.test('a drained final answer is terminal until new input arrives', () => {
+  let rows = [
+    row('input', 1, { message: { role: 'user' } }),
+    row('generation', 2, {
+      generation: { through: 'input', provider: 'codex', model: 'asked' },
+      delivered: { at: 'now' },
+    }),
+    row('final', 3, {
+      output: { source: 'generation', phase: 'final_answer' },
+      message: { role: 'agent' },
+    }),
+  ]
+  assertEquals(graphLog(rows).terminal, true)
+  assertEquals(
+    graphLog([...rows, row('next', 4, { message: { role: 'user' } })])
+      .terminal,
+    false,
   )
 })
 

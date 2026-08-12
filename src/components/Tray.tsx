@@ -3,6 +3,7 @@ import { signal } from '@preact/signals'
 import {
   cache,
   clientId,
+  ent,
   mode,
   mutate,
   pinned,
@@ -11,14 +12,14 @@ import {
   topZ,
   uuid,
 } from '../live.ts'
-import { awake, type Session, standing } from '../types.ts'
+import { awake, type Session } from '../types.ts'
 import { block } from './ui.tsx'
-import { Dot } from './Dot.tsx'
 import { Icon } from './icons.tsx'
 import { icons } from './Card.tsx'
 import { openAt } from './nav.tsx'
 import { dragData } from './drag.ts'
 import { Entity } from './Entity.tsx'
+import { SessionDot } from './session_status.tsx'
 
 // The Tray ("the Shelf"): the statusbar's right end. The strip — one
 // status dot per LIVE session, one view icon per shelved card — lives IN
@@ -178,7 +179,7 @@ export let Tray = () => {
         aria-label={trayOpen.value ? 'close tray' : 'open tray'}
         onClick={() => toggle(!trayOpen.value)}
       >
-        {ls.map(([eid, s]) => <Dot key={eid} status={standing(s)} />)}
+        {ls.map(([eid]) => <SessionDot key={eid} e={ent(eid)} />)}
         {ps.map((p) => (
           <Icon
             key={p.eid}

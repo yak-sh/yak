@@ -1,26 +1,17 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
-import {
-  awake,
-  type Ent,
-  friendly,
-  kilo,
-  type LogRow,
-  standing,
-} from '../../types.ts'
+import { awake, type Ent, friendly, kilo, type LogRow } from '../../types.ts'
 import {
   base,
   commentsOn,
   ent,
-  entrySub,
   findEid,
   jobOf,
   mutate,
   observation,
   repoUrl,
-  subEids,
   uuid,
 } from '../../live.ts'
-import { type EntryRow, type GraphLog, graphLog } from '../../entry_log.ts'
+import { graphLog } from '../../entry_log.ts'
 import { type ObservationState } from '../../observations.ts'
 import { slot, tileLink, type TileProps } from '../Tile.tsx'
 import { ago, block, pretty, Stamp } from '../ui.tsx'
@@ -33,6 +24,7 @@ import { Markdown } from '../Markdown.tsx'
 import { mdMentions } from '../../md.ts'
 import { UrlVal } from '../editors.tsx'
 import { Ansi } from '../Ansi.tsx'
+import { SessionDot, useSessionStanding } from '../session_status.tsx'
 
 // An agent session, watched — the console (W-3676 #5): a sticky slim bar
 // (task, lifecycle summary, stop — server-owned columns riding
@@ -575,37 +567,6 @@ let useLog = (eid: string, live: boolean) => {
   return log
 }
 
-let entryRow = (e: Ent): EntryRow | undefined => {
-  if (!e.entry?.seq) return undefined
-  let {
-    eid,
-    num: _num,
-    kind: _kind,
-    refs: _refs,
-    kids: _kids,
-    ...comps
-  } = e
-  return {
-    eid,
-    seq: e.entry.seq,
-    comps: comps as unknown as EntryRow['comps'],
-  }
-}
-
-// The initial subscription frame is the historical partition; the complete
-// live stream carries later entry patches. Reading ent() here subscribes this
-// render to every member's component signals.
-let useEntryLog = (eid: string): GraphLog | undefined => {
-  useEffect(() => entrySub(eid), [eid])
-  let eids = subEids(`entries:${eid}`)
-  if (!eids) return undefined
-  let rows = [...eids].flatMap((id) => {
-    let row = entryRow(ent(id))
-    return row ? [row] : []
-  })
-  return graphLog(rows)
-}
-
 // The transcript's scroller, or the nearest host still owning that job.
 // Null in the TUI's fake DOM (no parentElement), which switches the feature
 // off there.
@@ -654,12 +615,13 @@ export let Session = ({ e }: { e: Ent }) => {
   // it's going in its status, one that only announced itself is going while
   // its door is open. `standing` is that answer as a word, so an external
   // run's pip and label read `running` instead of a blank lifecycle.
-  let entries = useEntryLog(e.eid)
+  let state = useSessionStanding(e)
+  let entries = state.log
   let native = s.origin == 'managed' && s.status == null &&
     e.spawn?.provider == 'codex'
   let stream = native ? observation(e.eid) : undefined
   let live = native ? !s.base_revision || !!entries?.busy : awake(s)
-  let status = native ? live ? 'running' : 'idle' : standing(s)
+  let status = state.status
   let file = useLog(e.eid, !native && live)
   let log = native ? entries ?? graphLog([]) : file
   let context = log.context ??
@@ -798,7 +760,7 @@ export let SessionRow = ({ e, slots, onOpen }: TileProps) => {
   return (
     <RowLine {...tileLink(e, onOpen)}>
       {slot(slots, 'before')}
-      <Dot status={standing(s)} />
+      <SessionDot e={e} />
       {model && <RowLine.Model>{friendly(model)}</RowLine.Model>}
       {s.actor && <RowLine.Actor {...title(ent(s.actor).doc?.title ?? '')} />}
       {job && <RowLine.Task {...title(ent(job).doc?.title ?? '')} />}

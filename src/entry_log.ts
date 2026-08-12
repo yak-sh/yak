@@ -18,6 +18,7 @@ export type GraphLogEntry = {
 export type GraphLog = {
   entries: GraphLogEntry[]
   busy: boolean
+  terminal: boolean
   latest: number
   model?: string
   stderr?: string
@@ -156,8 +157,21 @@ export let graphLog = (source: EntryRow[]): GraphLog => {
     }
     return !!c.call && !results.has(row.eid)
   })
-  let model = rows.filter((row) => row.comps.generation).at(-1)?.comps
-    .generation
+  let generation = rows.filter((row) => row.comps.generation).at(-1)
+  let edge =
+    rows.find((row) => row.eid == generation?.comps.generation?.through)?.seq ??
+      generation?.seq ?? 0
+  let input = rows.some((row) =>
+    row.seq > edge && (row.comps.attention ||
+      (row.comps.message?.role == 'user' && !row.comps.output))
+  )
+  let terminal = !busy && !input &&
+    rows.some((row) =>
+      row.comps.output?.source == generation?.eid &&
+      row.comps.output?.phase == 'final_answer' &&
+      row.comps.message?.role == 'agent'
+    )
+  let model = generation?.comps.generation
   let entries = rows.map((source) => {
     let row = shown(source, byEid)
     let at = text(source.comps.created?.at)
@@ -176,6 +190,7 @@ export let graphLog = (source: EntryRow[]): GraphLog => {
   return {
     entries,
     busy,
+    terminal,
     latest: rows.at(-1)?.seq ?? 0,
     ...(context ? { context } : {}),
     ...model ? { model: text(model.serving_model || model.model) } : {},
