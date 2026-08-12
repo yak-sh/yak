@@ -21,19 +21,27 @@
 import { assertEquals } from '@std/assert'
 import { slow } from './testing.ts'
 
-// The server reads its port from the environment, so claim an ephemeral one and
-// give the seat back before it boots (precondition_test.ts does the same — a
-// fixed port collides with whatever else runs on a shared box).
-let seat = Deno.listen({ hostname: '127.0.0.1', port: 0 })
-let port = (seat.addr as Deno.NetAddr).port
-seat.close()
-Deno.env.set('PORT', String(port))
 Deno.env.set('DB_PATH', ':memory:')
-let { aged, broadcastObservation, maintain } = await import('./server.ts')
 let { db } = await import('./db.ts')
 let { append, settleGeneration, takeEntry } = await import('./entries.ts')
 
-let U = `127.0.0.1:${port}`
+// The server serves on import — the one heavy boot in this file. Every test
+// here is slow(), so the fast run (which ignores them all) must not pay that
+// boot, nor claim a socket a parallel worker would collide on. Bind the server
+// and its port only under the heavy tier: claim an ephemeral port and give the
+// seat back before the server takes it — a fixed port collides on a shared box.
+let U = ''
+let aged!: typeof import('./server.ts').aged
+let broadcastObservation!: typeof import('./server.ts').broadcastObservation
+let maintain!: typeof import('./server.ts').maintain
+if (Deno.env.get('TASKS_SLOW')) {
+  let seat = Deno.listen({ hostname: '127.0.0.1', port: 0 })
+  let port = (seat.addr as Deno.NetAddr).port
+  seat.close()
+  Deno.env.set('PORT', String(port))
+  ;({ aged, broadcastObservation, maintain } = await import('./server.ts'))
+  U = `127.0.0.1:${port}`
+}
 let uid = () => crypto.randomUUID()
 let alone = { sanitizeOps: false, sanitizeResources: false }
 

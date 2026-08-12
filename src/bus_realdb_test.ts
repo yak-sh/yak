@@ -14,20 +14,25 @@
 
 import { assertEquals } from '@std/assert'
 import { bus } from './client.ts'
+import { slow } from './testing.ts'
 import type { Change } from './types.ts'
 
-// An ephemeral port, handed back before the server claims it — a fixed port
-// collides on a shared box (the same dance precondition_test does).
-let seat = Deno.listen({ hostname: '127.0.0.1', port: 0 })
-let port = (seat.addr as Deno.NetAddr).port
-seat.close()
-Deno.env.set('PORT', String(port))
+// This case drives a REAL server over HTTP, so it is slow(): the fast run skips
+// it — and must not boot the server or claim a socket a parallel worker would
+// collide on. Boot only under the heavy tier: an ephemeral port, handed back
+// before the server claims it (a fixed port collides on a shared box).
 Deno.env.set('DB_PATH', ':memory:')
-await import('./server.ts')
-let U = `127.0.0.1:${port}`
-Deno.env.set('TASKS_HOST', U)
-// The server is a module-level singleton outliving the case; it never idles.
+let U = ''
 let alone = { sanitizeOps: false, sanitizeResources: false }
+if (Deno.env.get('TASKS_SLOW')) {
+  let seat = Deno.listen({ hostname: '127.0.0.1', port: 0 })
+  let port = (seat.addr as Deno.NetAddr).port
+  seat.close()
+  Deno.env.set('PORT', String(port))
+  await import('./server.ts')
+  U = `127.0.0.1:${port}`
+  Deno.env.set('TASKS_HOST', U)
+}
 
 let post = async (changes: Change[]) => {
   let res = await fetch(`http://${U}/apply`, {
@@ -56,7 +61,7 @@ let T = uid(4) // the task S claims
 let K = uid(5) // a knock aimed at S
 let C = uid(6) // the words the knock carried, as a comment on T
 
-Deno.test(
+slow(
   'bus: a claim-holder with an addressed knock resolves, never 400s',
   alone,
   async () => {

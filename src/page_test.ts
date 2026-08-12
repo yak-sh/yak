@@ -12,16 +12,22 @@ import { slow } from './testing.ts'
 // and a test must never write an archive into the owner's.
 let home = Deno.makeTempDirSync({ prefix: 'tasks-page-home-' })
 Deno.env.set('HOME', home)
-// The server reads its port from the environment, so claim an ephemeral one
-// and give the seat back before it boots (subs_live_test.ts does the same).
-let seat = Deno.listen({ hostname: '127.0.0.1', port: 0 })
-let port = (seat.addr as Deno.NetAddr).port
-seat.close()
-Deno.env.set('PORT', String(port))
 Deno.env.set('DB_PATH', ':memory:')
-await import('./server.ts')
 
-let U = `127.0.0.1:${port}`
+// The server serves on import — the one heavy boot here, reached only over HTTP.
+// Every test is slow(), so the fast run (which ignores them all) must not pay
+// that boot, nor claim a socket a parallel worker would collide on. Boot it
+// only under the heavy tier: claim an ephemeral port and give the seat back
+// before the server takes it — a fixed port collides on a shared box.
+let U = ''
+if (Deno.env.get('TASKS_SLOW')) {
+  let seat = Deno.listen({ hostname: '127.0.0.1', port: 0 })
+  let port = (seat.addr as Deno.NetAddr).port
+  seat.close()
+  Deno.env.set('PORT', String(port))
+  await import('./server.ts')
+  U = `127.0.0.1:${port}`
+}
 let alone = { sanitizeOps: false, sanitizeResources: false }
 
 type Filed = { page: string; url: string; filed: string[]; msg: string }

@@ -18,20 +18,24 @@ import { normalizeChanges } from './props.ts'
 import { derefChanges } from './client.ts'
 import { slow } from './testing.ts'
 
-// The server reads its port from the environment, so claim an ephemeral one
-// and give the seat back before it boots. A fixed port would collide with
-// whatever else is running on a shared box.
-let seat = Deno.listen({ hostname: '127.0.0.1', port: 0 })
-let port = (seat.addr as Deno.NetAddr).port
-seat.close()
-Deno.env.set('PORT', String(port))
 Deno.env.set('DB_PATH', ':memory:')
-await import('./server.ts')
 let { sha } = await import('./db.ts')
 
-let U = `127.0.0.1:${port}`
+// The server serves on import — the one heavy boot here, reached only over HTTP.
+// Every test is slow(), so the fast run (which ignores them all) must not pay
+// that boot, nor claim a socket a parallel worker would collide on. Boot it
+// only under the heavy tier: claim an ephemeral port and give the seat back
+// before the server takes it — a fixed port collides on a shared box.
+let U = ''
+if (Deno.env.get('TASKS_SLOW')) {
+  let seat = Deno.listen({ hostname: '127.0.0.1', port: 0 })
+  let port = (seat.addr as Deno.NetAddr).port
+  seat.close()
+  Deno.env.set('PORT', String(port))
+  await import('./server.ts')
+  U = `127.0.0.1:${port}`
+}
 let uid = () => crypto.randomUUID()
-// The server is a module-level singleton outliving every case here.
 let alone = { sanitizeOps: false, sanitizeResources: false }
 
 let post = async (changes: unknown[]) => {
