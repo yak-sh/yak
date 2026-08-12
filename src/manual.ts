@@ -360,16 +360,22 @@ export let manuals = declare({
     ],
   },
   land: {
-    about: "rebase, gate, and land this session's worktree",
-    examples: ['task land'],
-    detail: "The session's task chooses the repo, base branch, worktree and " +
-      'repo.gate command from the graph. A concurrent fast-forward makes the ' +
-      'verb rebase and retest, up to five times. Success comments the landed ' +
-      'sha on the task and unlocks the worktree — you keep standing in it, so ' +
-      'you can still release, comment and clean up. A later landing (or ' +
-      '`task probes --reap`) removes it once nobody is inside.',
+    about: 'rebase and fast-forward the worktree you stand in onto its base',
+    examples: ['task land', 'task land --no-gate'],
+    detail: 'MECHANICAL and task-free: the worktree you run it in names what ' +
+      'to land, and the project that owns its checkout supplies the base ' +
+      'branch, repo.gate command, and push grant — no task or claim needed. ' +
+      'Rebase onto the base, run the gate, fast-forward merge into it, and ' +
+      'best-effort publish where repo.push is granted; a concurrent ' +
+      'fast-forward makes the verb rebase and retest, up to five times. ' +
+      'Landing does NOT close the task or release claims — that is your next ' +
+      'step (task done <id>; task release <id>). --no-gate lands despite a ' +
+      'red or absent gate; it never bypasses the ff-only merge. The worktree ' +
+      'is unlocked but kept — a later landing (or `task probes --reap`) ' +
+      'removes it once nobody is inside.',
     root: true,
     args: [],
+    opts: [flag('--no-gate')],
   },
   comment: {
     about: 'comment on any entity; a verdict makes it a review',

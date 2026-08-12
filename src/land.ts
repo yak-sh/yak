@@ -1,7 +1,17 @@
-// The worktree landing protocol: resolve no coordinates from the shell, test
-// the exact rebased commit, and fast-forward the project's own checkout onto
-// it. Git exit codes decide every transition; its prose is only diagnostics,
-// never control flow.
+// The worktree landing protocol: rebase the tree you stand in onto its base,
+// test the exact rebased commit, and fast-forward the project's own checkout
+// onto it. Git exit codes decide every transition; its prose is only
+// diagnostics, never control flow.
+//
+// Landing is MECHANICAL and task-free: the worktree you run it in — not a
+// task, claim, or session — names what to land, and the project that owns the
+// checkout that worktree belongs to supplies the base branch, gate, and push
+// grant. Any worktree of a graphed project can be fast-forwarded into its
+// base; closing the task and releasing claims is the agent's own step
+// afterward, not this verb's side effect (T-16680). `--no-gate` lands despite
+// a red gate for an operator who has decided to; it never bypasses the
+// ff-only merge, which is the compare-and-swap that protects concurrent
+// landers.
 //
 // Landing means the shared checkout — the tree the server RUNS from. Pushing
 // to origin publishes bytes and changes nothing anyone is executing on ITS
@@ -27,15 +37,14 @@
 // not subject to it. That guard stops an agent from editing a tree it does not
 // own — not the project's own landing verb from fast-forwarding a branch.
 import { resolve } from 'node:path'
-import { commentChanges, releaseChange, type Row } from './client.ts'
-import { type Change, idOf } from './types.ts'
+import { type Row } from './client.ts'
+import { idOf } from './types.ts'
 
 export type Landing = {
   repo: string
   base: string
   gate: string
   tree: string
-  task: Row
   push: boolean
 }
 
@@ -61,90 +70,29 @@ export let unlanded = (
   }
 }
 
-// A landed commit completes the task, releases the session's leases, and
-// records its receipt in one graph transaction. The exact receipt makes a
-// lost-response retry idempotent.
-export let landedChanges = (
-  all: Row[],
-  task: Row,
-  sha: string,
-  session: string,
-): Change[] => {
-  let body = `Landed \`${sha}\`.`
-  let recorded = all.some((r) =>
-    r.comps.comment?.target == task.eid && r.comps.doc?.body == body
+// The worktree — not a task — names what to land, so the project supplying
+// the base branch, gate, and push grant is the one whose checkout that
+// worktree belongs to. `root` is the shared checkout the tree sits under (the
+// caller reads it from git); the project claims it by `repo.path`. The gate
+// may be absent here — land() decides whether that is fatal, since --no-gate
+// makes a missing gate irrelevant.
+export let landing = (all: Row[], tree: string, root: string): Landing => {
+  let project = all.find((r) =>
+    r.comps.repo && resolve(String(r.comps.repo.path ?? '')) == resolve(root)
   )
-  let sess = all.find((r) => String(r.comps.session?.id ?? '') == session)
-  let releases = sess
-    ? all.filter((r) => r.comps.claim?.session == sess.eid)
-      .map(releaseChange)
-    : []
-  let completion: Change[] = recorded ? [] : [
-    { eid: task.eid, name: 'task', comp: { status: 'done' } },
-    ...commentChanges(all, task.eid, body, session),
-  ]
-  return [...completion, ...releases]
-}
-
-// A session's task is the one it is WORKING, however it came by it: the
-// spawn builder's request when the graph named one, otherwise the task the
-// session holds a claim on. Only a managed spawn ever writes
-// requested_task, so the claim is the sole coordinate a harness-spawned
-// agent has — reading the request alone refused this verb to exactly the
-// callers it exists for. Several claims name no single task: say which ones
-// and stop, because guessing lands the work under the wrong ticket and
-// closes it in the same transaction.
-let taskFor = (all: Row[], session: Row): Row => {
-  let requested = all.find((r) =>
-    r.eid == String(session.comps.session?.requested_task ?? '') &&
-    r.comps.task
-  )
-  if (requested) return requested
-  let claimed = all
-    .filter((r) => r.comps.task && r.comps.claim?.session == session.eid)
-    .sort((a, b) => a.num - b.num)
-  if (claimed.length > 1) {
-    throw new Error(
-      `land: this session claims ${claimed.map(idOf).join(', ')} — release ` +
-        'the ones you are not landing (task release <id>)',
-    )
+  if (!project) {
+    throw new Error(`land: no project has a checkout at ${root}`)
   }
-  if (!claimed.length) throw new Error('land: this session has no task')
-  return claimed[0]
-}
-
-// A session can land only the task and worktree the graph assigned it. The
-// project owns every variable capable of aiming a push or choosing its gate.
-export let landing = (
-  all: Row[],
-  sid: string | undefined,
-): Landing => {
-  if (!sid) throw new Error('land: no session identity')
-  let session = all.find((r) => String(r.comps.session?.id ?? '') == sid)
-  if (!session) throw new Error(`land: no session entity for ${sid}`)
-  let task = taskFor(all, session)
-  let project = all.find((r) => r.eid == String(task.comps.task?.project ?? ''))
-  if (!project?.comps.repo) {
-    throw new Error(`${idOf(task)}: the task's project has no repo`)
-  }
-  let repo = String(project.comps.repo.path ?? '')
-  let base = String(project.comps.repo.base_branch ?? '')
-  let gate = String(project.comps.repo.gate ?? '').trim()
-  let push = !!project.comps.repo.push
+  let repo = String(project.comps.repo!.path ?? '')
+  let base = String(project.comps.repo!.base_branch ?? '')
+  let gate = String(project.comps.repo!.gate ?? '').trim()
+  let push = !!project.comps.repo!.push
   if (!repo || !base) {
     throw new Error(
       `${idOf(project)}: repo.path and repo.base_branch are required`,
     )
   }
-  if (!gate) {
-    throw new Error(
-      `${idOf(project)}: repo.gate is required — set it to one project ` +
-        'command that runs the whole gate',
-    )
-  }
-  let tree = String(session.comps.session?.cwd ?? '')
-  if (!tree) throw new Error('land: this session has no worktree')
-  return { repo, base, gate, tree, task, push }
+  return { repo, base, gate, tree, push }
 }
 
 type Result = { code: number; out: string; err: string }
@@ -172,6 +120,10 @@ type LandOps = {
   cwd?: string
   retries?: number
   run?: Run
+  // Skip the project gate and land the rebased tree anyway — the operator's
+  // deliberate `--no-gate` override for a red or absent gate. It never touches
+  // the ff-only merge; a non-fast-forward still refuses.
+  force?: boolean
   record?: (sha: string) => Promise<void>
   outcome?: (error?: string) => Promise<void>
   write?: (text: string, error?: boolean) => void
@@ -304,6 +256,15 @@ export let land = async (spec: Landing, ops: LandOps = {}) => {
   }
   await clean()
   await onBase()
+  // An unconfigured gate must never masquerade as green (`sh -c ''` exits 0),
+  // so a missing repo.gate is fatal — unless the operator waived it with
+  // --no-gate, which makes the gate irrelevant.
+  if (!ops.force && !spec.gate) {
+    throw new Error(
+      'land: this project has no repo.gate — set repo.gate, or pass ' +
+        '--no-gate to land without a gate',
+    )
+  }
 
   let refuse = async (reason: string): Promise<never> => {
     let count = Number(
@@ -327,18 +288,22 @@ export let land = async (spec: Landing, ops: LandOps = {}) => {
     if (rebased.code) throw new Error(message('git rebase', rebased))
     await clean()
 
-    write(`land ${attempt}/${retries}: ${spec.gate}`)
-    let gate = ops.gate
-      ? await ops.gate(spec.tree, spec.gate)
-      : await command('sh', ['-c', spec.gate], spec.tree).then((r) => {
-        write(r.out)
-        write(r.err, true)
-        return r.code
-      })
-    if (gate) await refuse(`project gate failed with exit ${gate}`)
-    // A formatter or generator changing the tree means the tested filesystem
-    // was not HEAD. Refuse it; the caller commits those bytes and lands again.
-    await clean()
+    if (ops.force) {
+      write(`land ${attempt}/${retries}: --no-gate — skipping the project gate`)
+    } else {
+      write(`land ${attempt}/${retries}: ${spec.gate}`)
+      let gate = ops.gate
+        ? await ops.gate(spec.tree, spec.gate)
+        : await command('sh', ['-c', spec.gate], spec.tree).then((r) => {
+          write(r.out)
+          write(r.err, true)
+          return r.code
+        })
+      if (gate) await refuse(`project gate failed with exit ${gate}`)
+      // A formatter or generator changing the tree means the tested filesystem
+      // was not HEAD. Refuse it; the caller commits those bytes and lands again.
+      await clean()
+    }
     let sha = await need('read tested commit', spec.tree, ['rev-parse', 'HEAD'])
 
     write(`land ${attempt}/${retries}: merge ${sha} into ${spec.base}`)

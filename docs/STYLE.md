@@ -78,11 +78,15 @@ thorough; a paragraph is almost always the wrong size.
 - Managed fleet worktrees live under `~/tasks-worktrees/`. Keep their root
   visible: some tools interpret any hidden ancestor as an instruction to use a
   different file set, even when the checkout itself contains no hidden path.
-- Work in a worktree; land with `task land`. It rebases your branch on `main`,
-  re-runs the gate on the rebased commit, and fast-forward merges it into the
-  shared checkout — the tree the server runs from. ff-only is the
-  compare-and-swap: another lander moving `main` first makes the merge no longer
-  a fast-forward and git refuses, so rebase, re-gate and land again, never
+- Work in a worktree; land with `task land`. It is mechanical and task-free: it
+  rebases the worktree you stand in onto `main`, re-runs the gate on the rebased
+  commit, fast-forward merges it into the shared checkout — the tree the server
+  runs from — and best-effort publishes where `repo.push` is granted. It does
+  NOT close the task or release your claims; that is your next step
+  (`task done <id>`; `task release <id>`). `task land --no-gate` lands despite a
+  red or absent gate; it never bypasses the ff-only merge. That merge is the
+  compare-and-swap: another lander moving `main` first makes it no longer a
+  fast-forward and git refuses, so rebase, re-gate and land again, never git
   `--force`. Pushing to origin publishes; it never lands.
 - Gates before every land, strictly `&&`-chained so a failure stops the line:
   `deno fmt src/ && deno task check && DB_PATH=:memory: deno task test`. Read

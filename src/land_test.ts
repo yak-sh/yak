@@ -12,7 +12,7 @@ import {
   assertThrows,
 } from '@std/assert'
 import { type Row } from './client.ts'
-import { land, landedChanges, type Landing, landing } from './land.ts'
+import { land, type Landing, landing } from './land.ts'
 
 let row = (
   eid: string,
@@ -21,7 +21,7 @@ let row = (
   comps: Row['comps'],
 ): Row => ({ eid, num, kind, comps })
 
-Deno.test('landing reads the session task and its project from the graph', () => {
+Deno.test('landing reads the project that owns the worktree checkout', () => {
   let project = row('p', 19, 'project', {
     project: {},
     repo: {
@@ -30,144 +30,44 @@ Deno.test('landing reads the session task and its project from the graph', () =>
       gate: 'deno task gate',
     },
   })
-  let task = row('t', 42, 'task', {
-    task: { status: 'open', project: project.eid },
+  let other = row('q', 20, 'project', {
+    project: {},
+    repo: { path: '/code/other', base_branch: 'main', gate: 'g' },
   })
-  let session = row('s', 7, 'session', {
-    session: {
-      id: 'thread',
-      requested_task: task.eid,
-      cwd: '/worktrees/S-7',
-      branch: 'session/S-7',
-    },
-  })
-  assertEquals(landing([project, task, session], 'thread'), {
+  assertEquals(landing([other, project], '/worktrees/S-7', '/code/tasks'), {
     repo: '/code/tasks',
     base: 'main',
     gate: 'deno task gate',
     tree: '/worktrees/S-7',
-    task,
     push: false,
   })
   project.comps.repo.push = 1
-  assertEquals(landing([project, task, session], 'thread').push, true)
-  delete project.comps.repo.gate
-  assertThrows(
-    () => landing([project, task, session], 'thread'),
-    Error,
-    'P-19: repo.gate is required',
+  assertEquals(
+    landing([project], '/worktrees/S-7', '/code/tasks').push,
+    true,
   )
 })
 
-// The graph names a session's task two ways and the harness only ever uses
-// the second, so every combination is a case this verb meets in the field.
-let graph = () => {
+Deno.test('landing refuses a checkout no project owns', () => {
   let project = row('p', 19, 'project', {
     project: {},
-    repo: { path: '/code/tasks', base_branch: 'main', gate: 'deno task gate' },
+    repo: { path: '/code/tasks', base_branch: 'main', gate: 'g' },
   })
-  let session = row('s', 7, 'session', {
-    session: { id: 'thread', cwd: '/worktrees/S-7' },
-  })
-  let task = (eid: string, num: number, claimed = false) =>
-    row(eid, num, 'task', {
-      task: { status: 'open', project: project.eid },
-      ...(claimed ? { claim: { session: session.eid } } : {}),
-    })
-  return { project, session, task }
-}
-
-Deno.test('a claimed task is the session task when nothing requested one', () => {
-  let g = graph()
-  let claimed = g.task('t', 42, true)
-  assertEquals(
-    landing([g.project, claimed, g.session], 'thread').task,
-    claimed,
-  )
-})
-
-Deno.test('the request wins over the claim it agrees with', () => {
-  let g = graph()
-  let claimed = g.task('t', 42, true)
-  g.session.comps.session.requested_task = claimed.eid
-  assertEquals(
-    landing([g.project, claimed, g.session], 'thread').task,
-    claimed,
-  )
-})
-
-Deno.test('several claims are refused by name, never guessed at', () => {
-  let g = graph()
-  let rows = [
-    g.project,
-    g.task('a', 42, true),
-    g.task('b', 41, true),
-    g.session,
-  ]
   assertThrows(
-    () => landing(rows, 'thread'),
+    () => landing([project], '/worktrees/x', '/code/unknown'),
     Error,
-    'land: this session claims T-41, T-42 — release the ones you are not ' +
-      'landing (task release <id>)',
+    'land: no project has a checkout at /code/unknown',
   )
 })
 
-Deno.test('a session working nothing lands nothing', () => {
-  let g = graph()
-  assertThrows(
-    () => landing([g.project, g.task('t', 42), g.session], 'thread'),
-    Error,
-    'land: this session has no task',
-  )
-})
-
-Deno.test('a landing completes and releases in one idempotent batch', () => {
-  let session = row('s', 7, 'session', { session: { id: 'thread' } })
-  let other = row('o', 8, 'session', { session: { id: 'other' } })
-  let task = row('t', 42, 'task', {
-    task: { status: 'wip' },
-    claim: { session: session.eid },
+// A missing gate is not fatal at resolve time — land() decides, because
+// --no-gate makes it irrelevant. Absent stays absent for the caller to see.
+Deno.test('landing leaves a missing gate empty rather than throwing', () => {
+  let project = row('p', 19, 'project', {
+    project: {},
+    repo: { path: '/code/tasks', base_branch: 'main' },
   })
-  let extra = row('x', 43, 'task', {
-    task: { status: 'open' },
-    claim: { session: session.eid },
-  })
-  let foreign = row('f', 44, 'task', {
-    task: { status: 'open' },
-    claim: { session: other.eid },
-  })
-  let changes = landedChanges(
-    [task, extra, foreign, session, other],
-    task,
-    'abc123',
-    'thread',
-  )
-  assertEquals(changes[0], {
-    eid: task.eid,
-    name: 'task',
-    comp: { status: 'done' },
-  })
-  let doc = changes.find((c) => c.name == 'doc')!
-  assertEquals(doc.comp?.body, 'Landed `abc123`.')
-  assertEquals(changes.filter((c) => c.name == 'claim'), [
-    { eid: task.eid, name: 'claim', comp: null },
-    { eid: extra.eid, name: 'claim', comp: null },
-  ])
-  let receipt = row(doc.eid, 8, 'comment', {
-    doc: doc.comp!,
-    comment: { target: task.eid },
-  })
-  delete task.comps.claim
-  delete extra.comps.claim
-  assertEquals(
-    landedChanges(
-      [task, extra, foreign, session, other, receipt],
-      task,
-      'abc123',
-      'thread',
-    ),
-    [],
-  )
+  assertEquals(landing([project], '/worktrees/S-7', '/code/tasks').gate, '')
 })
 
 type Repo = { root: string; repo: string; spec: Landing }
@@ -221,7 +121,6 @@ let setup = async (): Promise<Repo> => {
   Deno.writeTextFileSync(`${tree}/candidate.txt`, 'candidate\n')
   await command(tree, 'add', 'candidate.txt')
   await command(tree, 'commit', '-m', 'candidate')
-  let task = row('t', 42, 'task', { task: { status: 'open' } })
   return {
     root,
     repo,
@@ -230,7 +129,6 @@ let setup = async (): Promise<Repo> => {
       base: 'main',
       gate: 'the project gate',
       tree,
-      task,
       push: false,
     },
   }
@@ -286,6 +184,42 @@ Deno.test('a red project gate never moves the base branch', async () => {
         'project gate failed with exit 7',
     )
     assert(exists(r.spec.tree))
+  } finally {
+    Deno.removeSync(r.root, { recursive: true })
+  }
+})
+
+Deno.test('--no-gate lands a red gate without ever running it', async () => {
+  let r = await setup()
+  try {
+    let ran = 0
+    let sha = await land(r.spec, {
+      ...quiet,
+      cwd: r.spec.tree,
+      force: true,
+      // A gate that would fail — force must never reach it.
+      gate: () => Promise.resolve((ran++, 7)),
+    })
+    assertEquals(ran, 0)
+    assertEquals(await command(r.repo, 'rev-parse', 'main'), sha)
+  } finally {
+    Deno.removeSync(r.root, { recursive: true })
+  }
+})
+
+Deno.test('an absent gate refuses unless --no-gate waives it', async () => {
+  let r = await setup()
+  try {
+    r.spec.gate = ''
+    let before = await command(r.repo, 'rev-parse', 'main')
+    await assertRejects(
+      () => land(r.spec, { ...quiet, cwd: r.spec.tree }),
+      Error,
+      'land: this project has no repo.gate',
+    )
+    assertEquals(await command(r.repo, 'rev-parse', 'main'), before)
+    let sha = await land(r.spec, { ...quiet, cwd: r.spec.tree, force: true })
+    assertEquals(await command(r.repo, 'rev-parse', 'main'), sha)
   } finally {
     Deno.removeSync(r.root, { recursive: true })
   }
