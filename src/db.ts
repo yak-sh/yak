@@ -2771,6 +2771,20 @@ export let apply = (
             }`,
           )
         }
+        // A claim implies wip (T-17330, reversing T-3449): a task read `open`
+        // while someone holds a claim misrepresents active work as available.
+        // So a landing claim drags an OPEN task to wip in the same
+        // transaction — every claim path flows through apply(), so no caller
+        // can claim-without-wip. Only open→wip; a stray claim never reopens a
+        // done/cancelled task. The synthesized `task` change rides `extra` so
+        // every client cache hears the status move.
+        let tk = db.prepare('select status from task where eid = ?')
+          .get(eid) as { status: string } | undefined
+        if (tk?.status == 'open') {
+          db.prepare("update task set status = 'wip' where eid = ?").run(eid)
+          touched.add(eid)
+          extra.push({ eid, name: 'task', comp: { status: 'wip' } })
+        }
       }
       // A stop_request is a lever, not a note: it may only be pulled on a
       // managed session that is still going — anything else is refused

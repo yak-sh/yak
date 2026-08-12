@@ -1024,6 +1024,37 @@ Deno.test('claim is a lease: conflict throws + audits, same session refreshes', 
   assertEquals(comp(task, 'claim')?.session, b)
 })
 
+Deno.test('a claim implies wip: open→wip, done stays, wip unchanged', () => {
+  let s = uid()
+  let todo = uid(), done = uid(), busy = uid()
+  apply(db, [
+    { eid: s, name: 'session', comp: { id: 'sess-c' } },
+    { eid: todo, name: 'task', comp: { status: 'open' } },
+    { eid: done, name: 'task', comp: { status: 'done' } },
+    { eid: busy, name: 'task', comp: { status: 'wip' } },
+  ])
+  // claiming an open task drags it to wip in the same batch, and the wire
+  // hears the status move as a synthesized task change
+  let out = apply(db, [{ eid: todo, name: 'claim', comp: { session: s } }])
+  assertEquals(comp(todo, 'task')?.status, 'wip')
+  assertEquals(
+    out.some((c) =>
+      c.eid == todo && c.name == 'task' && c.comp?.status == 'wip'
+    ),
+    true,
+  )
+  // a stray claim never reopens a closed task
+  apply(db, [{ eid: done, name: 'claim', comp: { session: s } }])
+  assertEquals(comp(done, 'task')?.status, 'done')
+  // an already-wip task is untouched (no spurious status write)
+  let busyOut = apply(db, [{ eid: busy, name: 'claim', comp: { session: s } }])
+  assertEquals(comp(busy, 'task')?.status, 'wip')
+  assertEquals(
+    busyOut.some((c) => c.eid == busy && c.name == 'task'),
+    false,
+  )
+})
+
 Deno.test('claim release pushes the actor stack; reclaim and settle pop it', () => {
   let actor = uid(), session = uid(), a = uid(), b = uid(), c = uid()
   apply(db, [
