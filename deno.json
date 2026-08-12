@@ -7,6 +7,7 @@
     "install": "sh -c 'cd \"$(git worktree list --porcelain | head -1 | cut -c 10-)\" && git config core.hooksPath .githooks && deno install -g -f --name task -A --config deno.json src/cli.ts'",
     "mcp": "deno run -A --unstable-worker-options src/mcp.ts",
     "seed": "deno run -A src/db.ts",
+    "icons": "deno run -A bin/gen-icons.ts",
     "test": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 TASKS_BACKOFF= deno test --frozen -A --unstable-net --unstable-worker-options src channels",
     "test:all": "TASKS_SLOW=1 DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 TASKS_BACKOFF= deno test --frozen -A --unstable-net --unstable-worker-options src channels",
     "bench": "deno bench -A src"
