@@ -48,7 +48,9 @@ import {
   noticesFor,
   param,
   patches,
+  query as queryHttp,
   recallIndex,
+  refHandles,
   RETIRED_TYPE,
   type Row,
   rows,
@@ -79,6 +81,15 @@ import { entityUrl } from './url.ts'
 // How the tools reach the graph — in-process on the server, HTTP here.
 export type IO = {
   read: () => Promise<Snapshot>
+  // The authoritative filter-query — the whole graph, INCLUDING the lazy entry
+  // partition when the filter names it (`.entry.session=…`), paged by seq. This
+  // is why graph_query reads the graph and not just snapshot()'s eager slice.
+  // In-process it runs the server's evalGraph; over stdio it is the /query GET.
+  query: (
+    q: string,
+    kind?: string,
+    opts?: { after?: number; limit?: number },
+  ) => Promise<Row[]>
   // `via` is journal attribution — the calling session's id, when the
   // tool knows it. Never auth.
   write: (changes: Change[], via?: string) => Promise<Change[]>
@@ -1044,7 +1055,11 @@ LIST door: long text values (persona bodies, mail, final_text) are cut
 at ${CUT} chars with a marker naming the rest — task_show reads one
 entity whole; full: true returns every byte. kind screens on the
 entity's derived display kind (task, project, comment, and so on).
-${GRAMMAR} ${FILTERS}`,
+Session-log ENTRIES are a lazy partition, omitted from an unscoped query;
+name it to read it — .entry.session=S-31 (or .generation.provider=…,
+.response.status>=400) returns those entries in seq order, paged by
+after/limit (default 500). An empty result means the requested scope is
+empty. ${GRAMMAR} ${FILTERS}`,
     {
       query: z.string().optional(),
       filters: z.array(z.string()).optional(),
@@ -1052,36 +1067,37 @@ ${GRAMMAR} ${FILTERS}`,
         .describe('Derived entity kind to return.')
         .optional(),
       full: z.boolean().optional(),
+      after: z.number()
+        .describe('Entry-partition paging: return entries after this seq.')
+        .optional(),
+      limit: z.number()
+        .describe('Max rows; the entry-partition page size (default 500).')
+        .optional(),
     },
     async (
-      { query, filters = [], kind, full }: {
+      { query, filters = [], kind, full, after, limit }: {
         query?: string
         filters?: string[]
         kind?: string
         full?: boolean
+        after?: number
+        limit?: number
       },
     ) => {
       if (query != null && filters.length) {
         return err('query cannot be combined with filters')
       }
-      let now = Date.now()
-      let all = rows(await io.read(), true)
-      let ps = resolveRefs(
-        query != null ? parseQuery(query) : parseFilters(filters),
-        (id) => find(all, id)?.eid,
-      )
-      checkRefs(all, ps)
-      let byEid = new Map(all.map((r) => [r.eid, r.comps]))
-      let hits = all
-        .filter((r) => !kind || r.kind == kind)
-        .filter((r) => listed(r.comps, ps))
-        .filter((r) => matchQuery(r.comps, ps, (e) => byEid.get(e)))
-      if (orderOf(ps) == 'hot') {
-        hits.sort((a, b) =>
-          warm(b.comps, now, (e) => byEid.get(e)) -
-          warm(a.comps, now, (e) => byEid.get(e))
-        )
-      }
+      // The routed preds — for the no-rows diagnostic, and to refuse a filter
+      // that names a reference HANDLE resolving to nothing (`.project=bindry`),
+      // which would otherwise read as "no matches". Only a non-uuid handle needs
+      // the graph to validate it, so a `.entry.session=<uuid>` stays off it.
+      let ps = query != null ? parseQuery(query) : parseFilters(filters)
+      if (refHandles(ps).length) checkRefs(rows(await io.read(), true), ps)
+      // The authoritative matching happens in io.query (evalGraph in-process,
+      // /query over stdio), which reads the full graph including the lazy entry
+      // partition — not the snapshot()-only slice this tool used to screen.
+      let q = query != null ? query : filters.join('&')
+      let hits = await io.query(q, kind, { after, limit })
       let out = JSON.stringify(
         hits.map((r) => jsonOf(r, full ? r.comps : elide(r))),
         null,
@@ -1504,6 +1520,12 @@ T-3, bare num, or eid. Quarantined content requires quarantined: true. ${BUS}`,
 if (import.meta.main) {
   await mcpServer({
     read: snapshot,
+    // The authoritative filter-query is the /query GET, which runs the same
+    // evalGraph the in-process mount does — so the lazy entry partition is
+    // reachable over stdio too. A filter LINE splits into its `&` tokens, the
+    // encoding-safe unit client.query already speaks.
+    query: (q, kind, opts) =>
+      queryHttp(q.split('&').filter(Boolean), kind, opts),
     write: send,
     find: search,
     upload: async (eid, html) => {

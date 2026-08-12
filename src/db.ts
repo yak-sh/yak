@@ -3821,6 +3821,25 @@ export let entriesOf = (
   return index.map(({ eid, seq }) => ({ eid, seq, comps: byEid.get(eid)! }))
 }
 
+// The lazy partition scanned ACROSS sessions, ordered (session, seq) and
+// capped — the fallback universe for a lazy query that names no single session
+// and whose predicate the index declined to compile. entriesOf is the keyed,
+// per-session read; this is its unscoped sibling, bounded so an all-sessions
+// scan can never be unbounded.
+export let entriesScan = (db: DatabaseSync, after = 0, limit = 500) => {
+  let index = db.prepare(
+    `select eid, seq from entry where seq > ?
+     order by session, seq limit ?`,
+  ).all(after, Math.max(1, Math.min(limit, 5000))) as {
+    eid: string
+    seq: number
+  }[]
+  if (!index.length) return []
+  stage(db, index.map((e) => e.eid))
+  let byEid = new Map(staged(db).map((e) => [e.eid, e.comps]))
+  return index.map(({ eid, seq }) => ({ eid, seq, comps: byEid.get(eid)! }))
+}
+
 // Every edge touching these entities, both directions — the narrow reading of
 // `snap.deps`, derived `reads` included. Losing those would make this door
 // disagree with the graph-out one about what an entity's edges ARE, so the

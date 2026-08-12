@@ -10,7 +10,7 @@ import { transform } from 'sucrase'
 import { bound, guard, type Serving } from './bind.ts'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { providers } from './adapters.ts'
-import { type Change, type Dep, idOf, kindOf, sessionOf } from './types.ts'
+import { type Change, type Dep, idOf, kindOf } from './types.ts'
 import {
   apply,
   bodies,
@@ -24,7 +24,6 @@ import {
   journalBy,
   journalOf,
   locate,
-  matching,
   refsOf,
   rootChanges,
   rowsOf,
@@ -36,7 +35,6 @@ import {
   writerVia,
 } from './db.ts'
 import { bodied, bodyless, gaps, spread, type Step, step } from './subs.ts'
-import { where } from './sql.ts'
 import { dispatch, docs, on, relay, trace } from './effects.ts'
 import { vocabularyMd } from './schema.ts'
 import { freeze, serveFrozen, store } from './freeze.ts'
@@ -84,18 +82,15 @@ import { outcome, recent, record, toolCall } from './telemetry.ts'
 import { stamp } from './hot.ts'
 import { obeyed } from './obey.ts'
 import { serverFile } from './reload.ts'
-import { find, jsonOf, type Row, rows } from './client.ts'
+import { jsonOf, type Row, rows } from './client.ts'
 import {
-  kindPreds,
   listed,
   matchQuery,
-  ORDER,
-  orderOf,
   parseQuery,
   type Pred,
   resolveRefs,
-  warm,
 } from './query.ts'
+import { evalFast, evalGraph, evalQuery, rowed } from './graph_query.ts'
 import { liveFrame } from './wire.ts'
 import { nativeSoon, nativeSweep, noticeAccepted } from './tmux.ts'
 import { roleRemoved, rolesSoon, rolesSweep } from './roles.ts'
@@ -221,78 +216,10 @@ export let broadcastObservation = (value: Observation) => {
   return sent
 }
 
-// A filter of only rankings — or of nothing at all — selects EVERY entity, and
-// there the index has nothing to offer: matching() would read all 12,530 rows
-// through the same per-table statements snapshot() uses, pay a temp table on
-// top, and hand back a set the caller narrows in JS anyway. Measured slower
-// than the path it replaces, so it declines for the second reason a compiler
-// can decline: not "I cannot say this" but "saying it buys nothing". A lone
-// kind= is no longer this shape — evalFast folds it into kindPreds (K present,
-// every earlier comp absent), so the index answers what a JS screen over the
-// whole snapshot used to.
-let narrows = (preds: Pred[]) => preds.some((p) => p.op != ORDER)
-
-// The same question answered by the INDEX, when the filter compiles. This is
-// the whole point of sql.ts: evalQuery below builds a 22 MB snapshot and
-// matches 10,618 rows in JS, synchronously, so every subscribe stalls the
-// server for ~330ms — long enough that a browser's own subscribe has been seen
-// to go unanswered. Here nothing is materialized but the rows that matched.
-//
-// null means the filter declined, and the caller falls back to evalQuery. The
-// two must not disagree: `sql_test.ts` holds them against each other per
-// predicate class, and the hits carry `eager()` comps, which walk the same
-// `readable` union `snapshot()` selects — so a subscriber cannot tell which
-// path answered it. `hits` are full Rows for the same reason: a caller must
-// not be able to tell by their shape either.
-// A keyed read wearing the shape a materialized graph hands out: kind is
-// derived, num rides the spine, and a caller must not be able to tell which
-// door read the row.
-let rowed = (
-  { eid, comps }: {
-    eid: string
-    comps: Record<string, Record<string, unknown>>
-  },
-): Row => {
-  let session = sessionOf(comps)
-  if (session) comps.session = session
-  return {
-    eid,
-    num: Number(comps.entity?.num ?? 0),
-    kind: kindOf(comps),
-    comps,
-  }
-}
-
-let evalFast = (q: string, kind?: string, entries = false) => {
-  let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
-  let kp = kind ? kindPreds(kind) : null
-  if (kp) preds = [...kp, ...preds]
-  if (!narrows(preds)) return null
-  let built = where(preds)
-  if (!built) return null
-  return {
-    preds,
-    hits: matching(db, built).map(rowed)
-      .filter((r) => entries || !r.comps.entry)
-      .filter((r) => listed(r.comps, preds)),
-  }
-}
-
-// The query pipeline shared by /query and a subscription's initial set: the
-// current graph parsed, ref-resolved, matched. `hits` are every row matching
-// the preds; `preds`/`all`/`byEid`/`snap` ride out for whoever ranks or
-// backlinks on top (design §10.2).
-let evalQuery = (q: string) => {
-  let snap = snapshot(db)
-  let all = rows(snap, true)
-  let preds = resolveRefs(parseQuery(q), (id) => find(all, id)?.eid)
-  let byEid = new Map(all.map((r) => [r.eid, r.comps]))
-  let hits = all.filter((r) =>
-    listed(r.comps, preds) &&
-    matchQuery(r.comps, preds, (e) => byEid.get(e))
-  )
-  return { snap, all, preds, byEid, hits }
-}
+// The filter-query pipeline lives in graph_query.ts, parameterized by db so a
+// test drives it without booting the server; here every call closes over the
+// one live db. evalFast/evalQuery back the /ws initial set; evalGraph is the
+// whole answer the /query door and the in-process graph_query tool share.
 
 // Fold a committed batch into every subscription (design §2), synchronously —
 // no await between apply and these frames, so snapshot-then-updates stays
@@ -456,8 +383,8 @@ let control = (
   if (typeof f.sub != 'string') return
   try {
     let details = f.sub.startsWith('entries:')
-    let { preds, hits } = evalFast(f.q ?? '', undefined, details) ??
-      evalQuery(f.q ?? '')
+    let { preds, hits } = evalFast(db, f.q ?? '', undefined, details) ??
+      evalQuery(db, f.q ?? '')
     map.set(f.sub, {
       preds,
       members: new Set(hits.map((r) => r.eid)),
@@ -632,6 +559,11 @@ let sessionLog = (eid: string, q: URLSearchParams) =>
 let graphIO: IO = {
   // deno-lint-ignore require-await
   read: async () => snapshot(db),
+  // The authoritative filter-query, in-process: the same evalGraph the /query
+  // door runs, so graph_query reaches the lazy entry partition instead of the
+  // snapshot()-only truth it read before.
+  // deno-lint-ignore require-await
+  query: async (q, kind, opts) => evalGraph(db, q, kind, opts).hits,
   // deno-lint-ignore require-await
   write: async (changes, via) => {
     let t = trace()
@@ -906,6 +838,16 @@ let http = Deno.serve(
         let edged = segs.includes('deps=1')
         let reveal = segs.includes('quarantined=1')
         let kind = segs.find((s) => s.startsWith('kind='))?.slice(5)
+        // Paging for the lazy entry partition: `after=` is an entry.seq cursor,
+        // `limit=` the page size. Ignored by an eager query, which the snapshot
+        // path already answers whole in num order.
+        let after = Number(
+          segs.find((s) => s.startsWith('after='))?.slice(6),
+        ) ||
+          0
+        let limit = Number(
+          segs.find((s) => s.startsWith('limit='))?.slice(6),
+        ) || undefined
         // `id=` FETCHES rather than filters: each value is an ADDRESS — T-3, a
         // bare num, an alias slug, a uuid — and locate() is the index's own
         // reading of "what names an entity", the same four rules find() spells
@@ -926,7 +868,8 @@ let http = Deno.serve(
           : null
         segs = segs.filter((s) =>
           s != 'backlinks=1' && s != 'deps=1' && s != 'quarantined=1' &&
-          !s.startsWith('kind=') &&
+          !s.startsWith('kind=') && !s.startsWith('after=') &&
+          !s.startsWith('limit=') &&
           !s.startsWith('id=')
         )
         let q = segs.join('&')
@@ -1020,36 +963,13 @@ let http = Deno.serve(
             layers(screen(hits).sort((a, b) => a.num - b.num)),
           )
         }
-        // One pipeline with the subscription initial-set; hot-ranking layers
-        // on top of its matches. The index answers first — a one-row question
-        // cost a 27 MB snapshot and 0.29s before this, 100x what the same
-        // question costs through sql.ts. kind rides IN now, folded to kindPreds
-        // so a lone kind= (sessions, memories, boards) is answered by the index
-        // too, not built whole and screened. Only hot ranking holds it back:
-        // it resolves each hit's refs through byEid, which is every row the
-        // filter never matched. screen() still runs for the derived `entity`
-        // kind, which no pred can name.
-        let fast = evalFast(q, kind)
-        if (fast && orderOf(fast.preds) != 'hot') {
-          // Unranked hits come back oldest first. That is what the snapshot
-          // path has always answered — it walks the entity table, whose rowid
-          // order IS num order — but there it was the query plan's accident;
-          // here it is said out loud, so the two paths cannot drift apart on
-          // the one thing sql_test.ts does not compare (it sorts before it
-          // asserts, because a subscription's set has no order to keep).
-          return Response.json(
-            layers(screen(fast.hits).sort((a, b) => a.num - b.num)),
-          )
-        }
-        let { preds, byEid, hits } = evalQuery(q)
-        let now = Date.now()
-        hits = screen(hits)
-        if (orderOf(preds) == 'hot') {
-          hits.sort((a, b) =>
-            warm(b.comps, now, (e) => byEid.get(e)) -
-            warm(a.comps, now, (e) => byEid.get(e))
-          )
-        }
+        // The authoritative pipeline (evalGraph): the index answers when it can
+        // (a one-row question cost a 27 MB snapshot and 0.29s before sql.ts,
+        // 100x), else the JS matcher over the full universe — which now carries
+        // the lazy entry partition whenever the query names it. kind screening,
+        // hot ranking, and entry ordering/paging all settle inside evalGraph, so
+        // this door and the in-process graph_query tool read one answer.
+        let { hits } = evalGraph(db, q, kind, { after, limit })
         return Response.json(layers(hits))
       } catch (e) {
         return new Response(String((e as Error).message ?? e), { status: 400 })

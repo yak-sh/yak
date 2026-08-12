@@ -81,6 +81,27 @@ put('e8', { proposed: { at: '', by: null, via: null } })
 // drops.
 put('pt', { task: { status: 'open', priority: 1, domain: '' }, project: {} })
 
+// The lazy entry partition lives in the entity table like everything else, so
+// the index and the matcher must agree over its facets too — the exactness the
+// rest of this file proves for eager rows, held for entries. A session, then its
+// ordered log rows carrying the columns a `.entry.session=`/`.generation.*`/
+// `.response.*` query screens on.
+put('s1', { doc: { title: 'a session' }, session: { id: 'sql-sess' } })
+put('en1', {
+  entry: { session: 's1', seq: 1 },
+  message: { role: 'user' },
+  content: { body: 'kick it off' },
+})
+put('en2', {
+  entry: { session: 's1', seq: 2 },
+  generation: { provider: 'codex', model: 'gpt-5', through: 'en1' },
+})
+put('en3', {
+  entry: { session: 's1', seq: 3 },
+  response: { status: 500 },
+  content: { body: 'boom' },
+})
+
 // The JS side reads the same shape live.ts and client.ts hand matchQuery:
 // eid → { comp → { col → value } }, absent components simply missing.
 let graph = () => {
@@ -93,10 +114,12 @@ let graph = () => {
   ) {
     out[r.eid] = { entity: { eid: r.eid, num: r.num } }
   }
-  // Every kindOrder comp plus proposed: kindOf reads which components an
-  // entity carries, so the JS world must mirror the DB or it names a seeded
-  // board a doc. The SQL side reads the DB directly, and the two must agree.
-  for (let comp of [...new Set([...kindOrder, 'proposed'])]) {
+  // Every kindOrder comp plus proposed and the lazy entry facets: kindOf reads
+  // which components an entity carries, so the JS world must mirror the DB or it
+  // names a seeded board a doc — and a query naming the entry partition must see
+  // the same rows on both sides. The SQL side reads the DB directly.
+  let facets = ['entry', 'content', 'message', 'generation', 'response']
+  for (let comp of [...new Set([...kindOrder, 'proposed', ...facets])]) {
     for (
       let r of db.prepare(`select * from "${comp}"`).all() as Record<
         string,
@@ -218,6 +241,20 @@ let COMPILES = [
   // wants sit behind two of them
   '.doc.body~=rich',
   'rich',
+  // the lazy entry partition: an eid reference, an enum, text and numeric
+  // columns on the log facets, and compounds — the index reaches entries and
+  // must still agree with the matcher over them
+  '.entry.session=s1',
+  '.entry.session=nope',
+  '.message.role=user',
+  '.generation.provider=codex',
+  '.generation.provider=codex,claude',
+  '.response.status=500',
+  '.response.status>=400',
+  '.response.status<400',
+  '.entry.session=s1&.message.role=user',
+  '.generation!',
+  '.entry!',
 ]
 
 for (let q of COMPILES) {
@@ -248,6 +285,9 @@ let DECLINES = [
   '.doc.body~=café',
   '.doc.title~=café',
   'café',
+  // a body substring on a NON-doc body: sql.ts only ever narrows doc.body, so a
+  // content-body scan declines and the matcher answers it over the partition
+  '.content.body~=boom',
 ]
 
 for (let q of DECLINES) {

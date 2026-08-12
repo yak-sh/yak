@@ -85,8 +85,17 @@ export let snapshot = async () => {
   return res.json() as Promise<Snapshot>
 }
 
-export let query = async (filters: string[], kind?: string) => {
-  let args = [...(kind ? [`kind=${kind}`] : []), ...filters]
+export let query = async (
+  filters: string[],
+  kind?: string,
+  opts?: { after?: number; limit?: number },
+) => {
+  let args = [
+    ...(kind ? [`kind=${kind}`] : []),
+    ...(opts?.after ? [`after=${opts.after}`] : []),
+    ...(opts?.limit ? [`limit=${opts.limit}`] : []),
+    ...filters,
+  ]
   let url = args.map(encodeURIComponent).join('&')
   let res = await request(`http://${host()}/query?${url}`)
   if (!res.ok) throw new Error(`server said ${res.status}`)
@@ -795,6 +804,14 @@ let filterRefs = (preds: Pred[]) => {
   }
   return out
 }
+// The reference HANDLES a filter would have an interactive door validate — the
+// non-uuid ref values, since a raw uuid derefs to itself (deref) and names
+// whatever it names without a lookup. Empty means there is nothing to check, so
+// a door can skip reading the graph at all — which is how graph_query stays off
+// snapshot() for a `.entry.session=<uuid>` while still refusing `.project=bindry`.
+export let refHandles = (preds: Pred[]) =>
+  filterRefs(preds).map((r) => r.v).filter((v) => !UUID.test(v))
+
 export let checkRefs = (all: Row[], preds: Pred[]) => {
   for (let { v, prop, target } of filterRefs(preds)) {
     deref(all, v, ` (.${prop})`, target)

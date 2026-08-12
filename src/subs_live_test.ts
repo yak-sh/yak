@@ -465,11 +465,21 @@ Deno.test('entry shadows carry the lazy partition', alone, async () => {
       carried.find((c) => c.name == 'content')?.comp?.body,
       'visible from the partition',
     )
+    // The root SNAPSHOT still omits the partition — that transport optimization
+    // is preserved (T-16847 keeps root-snapshot partitioning intact).
+    let snap = await (await fetch(`http://${U}/snapshot`)).json() as {
+      changes: { eid: string }[]
+    }
+    assertEquals(snap.changes.some((c) => c.eid == entry), false)
+    // But the root /query now REACHES the partition when the query names it —
+    // the whole point of T-16847; the empty root of old was the bug that made
+    // graph_query answer `.entry.session=X` with [] over hundreds of entries.
     let root = await fetch(
       `http://${U}/query?${encodeURIComponent(`.entry.session=${session}`)}`,
     )
     assertEquals(root.ok, true)
-    assertEquals(await root.json(), [])
+    let hits = await root.json() as { entry?: { session: string } }[]
+    assertEquals(hits.map((h) => h.entry?.session), [session])
   } finally {
     client.close()
   }

@@ -5,6 +5,7 @@
 import { assertEquals, assertMatch } from '@std/assert'
 import { apply, journalOf, open, snapshot } from './db.ts'
 import { readEntries } from './entries.ts'
+import { evalGraph } from './graph_query.ts'
 import { combineTools, localTools, tasksTools } from './harness_tools.ts'
 import { managedCodex } from './managed_codex.ts'
 import { type IO } from './mcp.ts'
@@ -42,6 +43,7 @@ let complete = (item: Record<string, unknown>, leak: string) =>
 
 let ioFor = (db: ReturnType<typeof open>): IO => ({
   read: () => Promise.resolve(snapshot(db)),
+  query: (q, kind, opts) => Promise.resolve(evalGraph(db, q, kind, opts).hits),
   write: (changes, via) => Promise.resolve(apply(db, changes, undefined, via)),
   find: () => Promise.resolve([]),
   upload: () => Promise.resolve(),

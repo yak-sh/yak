@@ -4,6 +4,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
 import { rows } from './client.ts'
+import { evalGraph } from './graph_query.ts'
 import { CUT, elide, type IO, mcpServer } from './mcp.ts'
 import { commandOut } from './commands.ts'
 import { sha } from './sha.ts'
@@ -11,6 +12,7 @@ import { type Change, edges, statuses, verdicts } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, journalOf, open, snapshot, touch } = await import('./db.ts')
+let { append } = await import('./entries.ts')
 
 let N = 'aaaaaaaa-0000-4000-8000-000000000001'
 let P = 'aaaaaaaa-0000-4000-8000-000000000002'
@@ -121,6 +123,40 @@ Deno.test('task_context surfaces and acknowledges one atomic inbox batch', async
   })
 })
 
+Deno.test('graph_query reads the lazy entry partition, ordered and by human id', async () => {
+  let { db, io } = graph()
+  let s = crypto.randomUUID()
+  apply(db, [{ eid: s, name: 'session', comp: { id: 'runner-1' } }])
+  let { eids: [e1] } = append(db, s, [
+    { message: { role: 'user' }, content: { body: 'go' } },
+  ])
+  append(db, s, [{
+    generation: { provider: 'codex', model: 'x', through: e1 },
+  }])
+  let num = (db.prepare('select num from entity where eid = ?').get(s) as {
+    num: number
+  }).num
+  await protocol(io, async (client) => {
+    // Named by human id at the boundary; snapshot() omits these entities, so a
+    // [] here would be the S-16837 bug. Ordered by seq.
+    let out = await client.callTool({
+      name: 'graph_query',
+      arguments: { query: `.entry.session=S-${num}` },
+    }) as ToolResult
+    let hits = JSON.parse(said(out)) as { entry: { session: string } }[]
+    assertEquals(hits.length, 2)
+    assertEquals(hits.every((h) => h.entry.session == s), true)
+    // An empty session is empty, not a dropped partition.
+    let empty = crypto.randomUUID()
+    apply(db, [{ eid: empty, name: 'session', comp: { id: 'runner-2' } }])
+    let none = await client.callTool({
+      name: 'graph_query',
+      arguments: { query: `.entry.session=${empty}` },
+    }) as ToolResult
+    assertEquals(JSON.parse(said(none).split('\n')[0]).length, 0)
+  })
+})
+
 Deno.test('task_spawn refuses an undecided proposal without minting a session', async () => {
   let { db, io } = graph()
   let task = crypto.randomUUID()
@@ -186,6 +222,7 @@ let byName = (tools: Tool[], name: string) =>
 
 let blank = (): IO => ({
   read: () => Promise.resolve({ changes: [], deps: [] }),
+  query: () => Promise.resolve([]),
   write: (changes) => Promise.resolve(changes),
   find: () => Promise.resolve([]),
   upload: () => Promise.resolve(),
@@ -200,6 +237,8 @@ let graph = () => {
   let pages = new Map<string, string>()
   let io: IO = {
     read: () => Promise.resolve(snapshot(db)),
+    query: (q, kind, opts) =>
+      Promise.resolve(evalGraph(db, q, kind, opts).hits),
     write: (changes, via) =>
       Promise.resolve(apply(db, changes, undefined, via)),
     find: () => Promise.resolve([]),
@@ -239,34 +278,36 @@ Deno.test('MCP entity JSON shares the component-shaped contract', async () => {
   let task = 'aaaaaaaa-0000-4000-8000-000000000041'
   let comment = 'aaaaaaaa-0000-4000-8000-000000000042'
   let io = blank()
-  io.read = () =>
-    Promise.resolve({
-      changes: [
-        { eid: task, name: 'entity', comp: { eid: task, num: 41 } },
-        {
-          eid: task,
-          name: 'doc',
-          comp: { eid: task, title: 'Structured', body: 'One shape' },
-        },
-        {
-          eid: task,
-          name: 'task',
-          comp: { eid: task, status: 'done', priority: 2 },
-        },
-        { eid: comment, name: 'entity', comp: { eid: comment, num: 42 } },
-        {
-          eid: comment,
-          name: 'doc',
-          comp: { eid: comment, title: '', body: 'Looks right' },
-        },
-        {
-          eid: comment,
-          name: 'comment',
-          comp: { eid: comment, target: task },
-        },
-      ],
-      deps: [],
-    })
+  let changes = [
+    { eid: task, name: 'entity', comp: { eid: task, num: 41 } },
+    {
+      eid: task,
+      name: 'doc',
+      comp: { eid: task, title: 'Structured', body: 'One shape' },
+    },
+    {
+      eid: task,
+      name: 'task',
+      comp: { eid: task, status: 'done', priority: 2 },
+    },
+    { eid: comment, name: 'entity', comp: { eid: comment, num: 42 } },
+    {
+      eid: comment,
+      name: 'doc',
+      comp: { eid: comment, title: '', body: 'Looks right' },
+    },
+    {
+      eid: comment,
+      name: 'comment',
+      comp: { eid: comment, target: task },
+    },
+  ]
+  io.read = () => Promise.resolve({ changes, deps: [] })
+  // graph_query reads io.query now (the authoritative pipeline), not io.read —
+  // so the injected graph rides that door; task_show still reads io.read.
+  let graphRows = rows({ changes })
+  io.query = (_q, kind) =>
+    Promise.resolve(kind ? graphRows.filter((r) => r.kind == kind) : graphRows)
   let entity = {
     kind: 'task',
     entity: { eid: task, num: 41 },

@@ -192,6 +192,25 @@ export let ORDER = 'order'
 
 export let orderOf = (preds: Pred[]) => preds.find((p) => p.op == ORDER)?.value
 
+// A query addresses the LAZY entry partition when it names any session-log
+// component (sessionComps) — `.entry.session`, `.generation.provider`,
+// `.response.status`, and the rest. Those entities are omitted from the root
+// snapshot, so a door reaches them only when the query OPTS IN by naming the
+// partition; that is an explicit scope, not a silent boundary. Every query
+// door reads this one predicate to decide whether entries are in its universe.
+export let namesLazy = (preds: Pred[]) =>
+  preds.some((p) => p.comp in sessionComps)
+
+// The sessions an entry query is scoped to — the eids of every `.entry.session=`
+// equality (a comma list is any-of). A keyed, bounded read (entriesOf) serves
+// these; a lazy query without one is a global scan. resolveRefs has already
+// turned S-16765 into its eid by the time a door asks.
+export let scopedSessions = (preds: Pred[]): string[] =>
+  preds
+    .filter((p) => p.comp == 'entry' && p.prop == 'session' && p.op == '')
+    .flatMap((p) => p.value.split(','))
+    .filter(Boolean)
+
 // Quarantine is invisible by default, but mentioning the facet is the
 // deliberate extra step that lets a list ask about it. This stays beside
 // matchQuery rather than inside it: writers and keyed internals still need to
