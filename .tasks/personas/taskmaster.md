@@ -90,6 +90,26 @@ entry (T-5958 reconciles the book). Fleet-internal mail depends on neither.
 
 ---
 
+# M-4523 git workflow — work in a worktree, land with `task land`
+
+- **Work in your own worktree, and land with `task land`.** The worktree means no two writers ever share a tree. `task land` is a PURE GIT PRIMITIVE: it reads NOTHING from the graph and runs NO gate. `git worktree list` names the shared checkout and its base branch; from your worktree land does at most ONE thing — it fast-forwards your branch into the base (landed), or, if the base MOVED, it rebases your branch onto the base and RETURNS WITHOUT MERGING. It does NOT close the task or release your claims — that is YOUR next step (`task done <id>`; `task release <id>`), and landing needs no task at all (T-16680).
+- **You run the gate, not land.** `deno task check` and `DB_PATH=:memory: deno task test` are YOUR responsibility before landing, and again after land rebases you if the incoming diff could affect you. There is no `--no-gate` — land has no gate to skip. Land's output stays git's own (merge / rebase / `--stat` / conflict), never a black box.
+- **On divergence land rebases and hands back — it never auto-merges.** A base that moved out from under you is not a fast-forward, so land rebases your branch onto it and returns, printing what happened, a `git diff --stat` of what the base pulled in (so you can judge whether a re-gate matters — docs-only vs code that touches you), and — on a rebase conflict — git's conflict output verbatim (resolve it, `git rebase --continue`, then `task land` again). A clean rebase leaves you to re-gate if needed and re-land, which then fast-forwards.
+- **Landing publishes where the base has a git UPSTREAM.** After a successful merge, land makes one best-effort push of the base branch to its configured git upstream (`@{u}` — a git fact, NOT the graph's `repo.push` grant). So a push-to-deploy venture whose base tracks `origin/main` gets land+publish in one motion: land it, and `origin/main` moves too. A refusal or missing upstream warns, never fails the land — the merge already took effect locally. A venture that deploys on `wrangler deploy`, `bin/promote`, or anything else non-push still needs that step by hand — read its persona/AGENTS.md for the command. (`repo.push` now governs only whether the PERSONA/.tasks sync commit is pushed — a separate thing from land's publish.)
+- **The per-repo `post-commit`/`post-merge` push hooks some ventures carry (`cafe_car`, `bindery`, `coloring-book-maker`) are now redundant with land's own upstream push** — a stopgap from before land published. T-14783 tracks retiring them and sweeping the fleet.
+- **A fleet-wide backstop: `operate self-clear` refuses when HEAD is ahead of `@{upstream}`** (`operate/src/self-clear.ts`). Every self-looping session ends its pass with `self-clear`; it declines a dirty tree, and also a clean tree sitting unpushed — a net under the auto-push for any venture whose base has no upstream configured.
+- **ff-only is the compare-and-swap.** If another lander moved the base between your gate and your merge, the merge is no longer a fast-forward: land rebases you onto their work and hands back. Re-gate if the diff could affect you, then land again. Never git `--force`/`-f`, and never `--force-with-lease` past a refusal — someone landed first, so read their work (the `--stat` names it) and re-land on top.
+- **"Did it land?" asks the shared checkout's `main`** — not "is it live." Worktrees share one ref store, so it is readable from yours:
+
+  ```sh
+  git merge-base --is-ancestor <sha> main && echo landed || echo not-landed
+  ```
+
+  For a push-to-deploy venture, "is it live" is `git merge-base --is-ancestor <sha> origin/main`.
+- Keep commits focused — don't bundle unrelated changes.
+
+---
+
 # M-15079 your instincts are half-migrated — when an action is about pacing/personas/memory/tasks/mail/deploy, the graph is the door, not the file or harness tool
 
 Under any time pressure you reach for the **pre-graph** tool — `ScheduleWakeup`, editing a persona `.md`, a `bin/` script, git post-commit push hooks — because that path is older and more practiced, even when a graph-native door exists and a memory already names it. The tell is always the same: you do the thing, then a memory or the owner points out the graph superseded it. That is not a memory failure to fix by remembering harder (M-14769); it is a structural pull to fix structurally.
@@ -108,26 +128,6 @@ When the action is about one of these, the graph is the mechanism and the file/h
 ## The compounding fix
 
 When you catch the reflex, don't just correct the one call — **purge the doc or persona line that still legitimizes the old tool**, so the next context doesn't inherit the same pull. A stale doc teaching `ScheduleWakeup` recreates the mistake in every operator that reads it. Skating to where the graph already moved is the operator's own responsibility, not something the owner should have to keep raising.
-
----
-
-# M-4523 git workflow — work in a worktree, land with `task land`
-
-- **Work in your own worktree, and land with `task land`.** The worktree means no two writers ever share a tree. `task land` is a PURE GIT PRIMITIVE: it reads NOTHING from the graph and runs NO gate. `git worktree list` names the shared checkout and its base branch; from your worktree land does at most ONE thing — it fast-forwards your branch into the base (landed), or, if the base MOVED, it rebases your branch onto the base and RETURNS WITHOUT MERGING. It does NOT close the task or release your claims — that is YOUR next step (`task done <id>`; `task release <id>`), and landing needs no task at all (T-16680).
-- **You run the gate, not land.** `deno task check` and `DB_PATH=:memory: deno task test` are YOUR responsibility before landing, and again after land rebases you if the incoming diff could affect you. There is no `--no-gate` — land has no gate to skip. Land's output stays git's own (merge / rebase / `--stat` / conflict), never a black box.
-- **On divergence land rebases and hands back — it never auto-merges.** A base that moved out from under you is not a fast-forward, so land rebases your branch onto it and returns, printing what happened, a `git diff --stat` of what the base pulled in (so you can judge whether a re-gate matters — docs-only vs code that touches you), and — on a rebase conflict — git's conflict output verbatim (resolve it, `git rebase --continue`, then `task land` again). A clean rebase leaves you to re-gate if needed and re-land, which then fast-forwards.
-- **Landing publishes where the base has a git UPSTREAM.** After a successful merge, land makes one best-effort push of the base branch to its configured git upstream (`@{u}` — a git fact, NOT the graph's `repo.push` grant). So a push-to-deploy venture whose base tracks `origin/main` gets land+publish in one motion: land it, and `origin/main` moves too. A refusal or missing upstream warns, never fails the land — the merge already took effect locally. A venture that deploys on `wrangler deploy`, `bin/promote`, or anything else non-push still needs that step by hand — read its persona/AGENTS.md for the command. (`repo.push` now governs only whether the PERSONA/.tasks sync commit is pushed — a separate thing from land's publish.)
-- **The per-repo `post-commit`/`post-merge` push hooks some ventures carry (`cafe_car`, `bindery`, `coloring-book-maker`) are now redundant with land's own upstream push** — a stopgap from before land published. T-14783 tracks retiring them and sweeping the fleet.
-- **A fleet-wide backstop: `operate self-clear` refuses when HEAD is ahead of `@{upstream}`** (`operate/src/self-clear.ts`). Every self-looping session ends its pass with `self-clear`; it declines a dirty tree, and also a clean tree sitting unpushed — a net under the auto-push for any venture whose base has no upstream configured.
-- **ff-only is the compare-and-swap.** If another lander moved the base between your gate and your merge, the merge is no longer a fast-forward: land rebases you onto their work and hands back. Re-gate if the diff could affect you, then land again. Never git `--force`/`-f`, and never `--force-with-lease` past a refusal — someone landed first, so read their work (the `--stat` names it) and re-land on top.
-- **"Did it land?" asks the shared checkout's `main`** — not "is it live." Worktrees share one ref store, so it is readable from yours:
-
-  ```sh
-  git merge-base --is-ancestor <sha> main && echo landed || echo not-landed
-  ```
-
-  For a push-to-deploy venture, "is it live" is `git merge-base --is-ancestor <sha> origin/main`.
-- Keep commits focused — don't bundle unrelated changes.
 
 ---
 
