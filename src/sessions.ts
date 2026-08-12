@@ -2374,10 +2374,19 @@ export let backfill = async (cast: Cast, full = false) => {
     }
   }
   // Every DB hop here is synchronous, so a boot-time sweep of all of owner data
-  // would jank the event loop for seconds. Yield every few sessions so incoming
-  // requests and the rest of boot keep flowing while the backlog drains.
-  let breathe = (i: number) =>
-    i % 20 == 0 ? new Promise<void>((r) => setTimeout(r)) : Promise.resolve()
+  // would jank the event loop — a single big transcript is thousands of apply()
+  // calls in a tight loop. Yield to the macrotask queue (setTimeout, not a bare
+  // microtask) so pending HTTP/ws work is actually serviced: once per session,
+  // and again inside a large one every CHUNK lines, so the migration is a
+  // responsive background trickle rather than a saturating burst. The importer
+  // advances `t` (seq, ended, imp) statefully, so feeding it slices is exact.
+  let breathe = () => new Promise<void>((r) => setTimeout(r))
+  let inChunks = async (lines: string[], step: (chunk: string[]) => void) => {
+    for (let j = 0; j < lines.length; j += 250) {
+      step(lines.slice(j, j + 250))
+      if (j + 250 < lines.length) await breathe()
+    }
+  }
 
   // MANAGED — finished file-first runs. `not exists non-imported entry` keeps
   // graph-native runner sessions (direct appends) out; the active set is
@@ -2397,7 +2406,7 @@ export let backfill = async (cast: Cast, full = false) => {
   )
   console.log(`backfill: ${managed.length} managed sessions to sweep`)
   for (let [i, s] of managed.entries()) {
-    await breathe(i)
+    await breathe()
     if (running.has(s.eid)) continue // a live tailer owns this partition
     seen++
     let t: Tail = { at: 0, seq: 0, ended: false, errs: [] }
@@ -2405,7 +2414,8 @@ export let backfill = async (cast: Cast, full = false) => {
     if (!ad) t.errs.push(`no adapter for provider ${s.provider}`)
     else if (statSize(logFile(s.eid)) == null) {
       if (ranManaged(s)) t.errs.push('managed log source is gone')
-    } else ingestManaged(s.eid, ad, t, readLines(logFile(s.eid), t))
+    } else {await inChunks(readLines(logFile(s.eid), t), (c) =>
+        ingestManaged(s.eid, ad, t, c))}
     commit(s.eid, t)
     step('managed', i + 1, managed.length)
   }
@@ -2424,18 +2434,17 @@ export let backfill = async (cast: Cast, full = false) => {
   )
   console.log(`backfill: ${native.length} native sessions to sweep`)
   for (let [i, s] of native.entries()) {
-    await breathe(i)
+    await breathe()
     if (running.has(s.eid)) continue
     seen++
     let t: Tail = { at: 0, seq: 0, ended: false, errs: [] }
     let resolved = transcriptOf(s.eid)
     if (!resolved) t.errs.push('native transcript source is gone')
     else {
-      ingestNative(
-        s.eid,
-        adapters[resolved.provider],
-        t,
+      let ad = adapters[resolved.provider]
+      await inChunks(
         readLines(resolved.path, t),
+        (c) => ingestNative(s.eid, ad, t, c),
       )
     }
     commit(s.eid, t)
