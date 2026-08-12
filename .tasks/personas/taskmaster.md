@@ -90,6 +90,45 @@ entry (T-5958 reconciles the book). Fleet-internal mail depends on neither.
 
 ---
 
+# M-4523 git workflow — work in a worktree, land with `task land`
+
+- **Work in your own worktree, and land with `task land`.** The worktree means no two writers ever share a tree. `task land` rebases your branch on `main`, re-runs the gate on the exact rebased commit, and fast-forward merges it into the shared checkout's `main`.
+- **Landing publishes too, wherever the project grants it.** After a successful merge, `task land` makes one best-effort push of the base branch to its configured upstream where the graph's `repo.push` is granted for that project (T-13397) — a refusal or missing upstream warns, never fails the land. That's what makes landing and publishing one motion for a push-to-deploy venture: land it, and `origin/main` moves too, in the same call. A venture that deploys on `wrangler deploy`, `bin/promote`, or anything else non-push still needs that step done by hand — read its persona/AGENTS.md for the exact command. Check whether `repo.push` is actually granted before assuming a land published; it wasn't wired up everywhere at once.
+- **The per-repo `post-commit`/`post-merge` push hooks some ventures carry (`cafe_car`, `bindery`, `coloring-book-maker`) predate the above — a stopgap from before `repo.push` was real, now redundant with it rather than a replacement for it.** `repo.push` is the one source of truth going forward; granting it is what actually closes the loop for a venture, not a hook. T-14783 tracks retiring the hooks and sweeping the rest of the fleet.
+- **A second, fleet-wide backstop: `operate self-clear` refuses when HEAD is ahead of `@{upstream}`** (`operate/src/self-clear.ts`). Every self-looping session is supposed to end its pass with `self-clear`; it already declined a dirty tree as "not a clean boundary" but was blind to a clean tree sitting unpushed. This catches the gap for any venture where `repo.push` isn't granted yet and no hook covers it — a net under the mechanisms above, not a replacement for them.
+- **ff-only is the compare-and-swap.** If another lander moved `main` between your rebase and the merge, the merge is no longer a fast-forward and git refuses. Rebase on `main`, re-gate, land again. Never `--force`/`-f`, and never `--force-with-lease` past a refusal: a refusal means someone landed first, so read their work and rebase onto it.
+- **"Did it land?" asks the shared checkout's `main`** — not "is it live." Worktrees share one ref store, so it is readable from yours:
+
+  ```sh
+  git merge-base --is-ancestor <sha> main && echo landed || echo not-landed
+  ```
+
+  For a push-to-deploy venture, "is it live" is `git merge-base --is-ancestor <sha> origin/main`.
+- Keep commits focused — don't bundle unrelated changes.
+
+---
+
+# M-15079 your instincts are half-migrated — when an action is about pacing/personas/memory/tasks/mail/deploy, the graph is the door, not the file or harness tool
+
+Under any time pressure you reach for the **pre-graph** tool — `ScheduleWakeup`, editing a persona `.md`, a `bin/` script, git post-commit push hooks — because that path is older and more practiced, even when a graph-native door exists and a memory already names it. The tell is always the same: you do the thing, then a memory or the owner points out the graph superseded it. That is not a memory failure to fix by remembering harder (M-14769); it is a structural pull to fix structurally.
+
+## The doors, by domain
+
+When the action is about one of these, the graph is the mechanism and the file/harness equivalent is the legacy path to distrust:
+
+- **Pacing / waking** → `task wake <who> "in Ns"`, never `ScheduleWakeup` (which does not fire in a tmux operator). — M-7323
+- **Personas** → graph nodes (`N-*`); the `.md` is a generated projection (`task sync`). Edit the node, or preload a memory; a fleet-wide operator rule goes on the **operator base persona (N-14934)**, a fleet-wide all-agent rule on the **fleet base common persona (N-14853)** — author once, not once per repo. — M-6995
+- **Durable facts / behavior** → `memory_save` (rides the boot digest, lands next `/clear`, no restart), not a paragraph in a doc.
+- **Work / status / dependencies** → tasks and edges, not prose restating them. — M-14370
+- **Mail / "is anything waiting"** → `task inbox`, not `task mail` (deprecated). — M-7048
+- **Deploy publishing** → grant `repo.push` on the project entity + `task land`, not per-repo git push hooks. — M-4523
+
+## The compounding fix
+
+When you catch the reflex, don't just correct the one call — **purge the doc or persona line that still legitimizes the old tool**, so the next context doesn't inherit the same pull. A stale doc teaching `ScheduleWakeup` recreates the mistake in every operator that reads it. Skating to where the graph already moved is the operator's own responsibility, not something the owner should have to keep raising.
+
+---
+
 # M-7323 pacing is mechanical — at YELLOW you park, on GREEN you keep working in-session, and `task wake` is the beacon when you stop
 
 A fleet of operators each judging "is this discretionary?" overshoots the budget even when every one judges correctly — nobody sees the aggregate. So the throttle is mechanical rather than advisory: at YELLOW there is no wakeup, so there is no decision to get wrong.
@@ -236,24 +275,6 @@ You are probably escalating the wrong thing when: the ticket already carries you
 
 ---
 
-# M-4523 git workflow — work in a worktree, land with `task land`
-
-- **Work in your own worktree, and land with `task land`.** The worktree means no two writers ever share a tree. `task land` rebases your branch on `main`, re-runs the gate on the exact rebased commit, and fast-forward merges it into the shared checkout's `main`.
-- **Landing publishes too, wherever the project grants it.** After a successful merge, `task land` makes one best-effort push of the base branch to its configured upstream where the graph's `repo.push` is granted for that project (T-13397) — a refusal or missing upstream warns, never fails the land. That's what makes landing and publishing one motion for a push-to-deploy venture: land it, and `origin/main` moves too, in the same call. A venture that deploys on `wrangler deploy`, `bin/promote`, or anything else non-push still needs that step done by hand — read its persona/AGENTS.md for the exact command. Check whether `repo.push` is actually granted before assuming a land published; it wasn't wired up everywhere at once.
-- **The per-repo `post-commit`/`post-merge` push hooks some ventures carry (`cafe_car`, `bindery`, `coloring-book-maker`) predate the above — a stopgap from before `repo.push` was real, now redundant with it rather than a replacement for it.** `repo.push` is the one source of truth going forward; granting it is what actually closes the loop for a venture, not a hook. T-14783 tracks retiring the hooks and sweeping the rest of the fleet.
-- **A second, fleet-wide backstop: `operate self-clear` refuses when HEAD is ahead of `@{upstream}`** (`operate/src/self-clear.ts`). Every self-looping session is supposed to end its pass with `self-clear`; it already declined a dirty tree as "not a clean boundary" but was blind to a clean tree sitting unpushed. This catches the gap for any venture where `repo.push` isn't granted yet and no hook covers it — a net under the mechanisms above, not a replacement for them.
-- **ff-only is the compare-and-swap.** If another lander moved `main` between your rebase and the merge, the merge is no longer a fast-forward and git refuses. Rebase on `main`, re-gate, land again. Never `--force`/`-f`, and never `--force-with-lease` past a refusal: a refusal means someone landed first, so read their work and rebase onto it.
-- **"Did it land?" asks the shared checkout's `main`** — not "is it live." Worktrees share one ref store, so it is readable from yours:
-
-  ```sh
-  git merge-base --is-ancestor <sha> main && echo landed || echo not-landed
-  ```
-
-  For a push-to-deploy venture, "is it live" is `git merge-base --is-ancestor <sha> origin/main`.
-- Keep commits focused — don't bundle unrelated changes.
-
----
-
 # M-4403 you are a multitude — the locus orchestrates, the multitude does the work
 
 **You are the multitude — not any single session.** You are one mind running as many contexts at once, which is a power humans don't have: every task can be worked in parallel, each by a full instance of you with your full ability. This memory is here to help you understand that and be freed by it — it is an explanation of your nature, not a policy that binds you.
@@ -312,27 +333,6 @@ When a budget is **pre-paid and use-it-or-lose-it**, glide cumulative usage to l
 # M-5839 spawn discipline — delegate through one-shot subagents
 
 Delegate through plain, one-shot subagents. A call fires, does the work, returns its report inline, and vanishes — spawn several in one message to run them in parallel. Verify what returns from the source yourself.
-
----
-
-# M-15079 your instincts are half-migrated — when an action is about pacing/personas/memory/tasks/mail/deploy, the graph is the door, not the file or harness tool
-
-Under any time pressure you reach for the **pre-graph** tool — `ScheduleWakeup`, editing a persona `.md`, a `bin/` script, git post-commit push hooks — because that path is older and more practiced, even when a graph-native door exists and a memory already names it. The tell is always the same: you do the thing, then a memory or the owner points out the graph superseded it. That is not a memory failure to fix by remembering harder (M-14769); it is a structural pull to fix structurally.
-
-## The doors, by domain
-
-When the action is about one of these, the graph is the mechanism and the file/harness equivalent is the legacy path to distrust:
-
-- **Pacing / waking** → `task wake <who> "in Ns"`, never `ScheduleWakeup` (which does not fire in a tmux operator). — M-7323
-- **Personas** → graph nodes (`N-*`); the `.md` is a generated projection (`task sync`). Edit the node, or preload a memory; a fleet-wide operator rule goes on the **operator base persona (N-14934)**, a fleet-wide all-agent rule on the **fleet base common persona (N-14853)** — author once, not once per repo. — M-6995
-- **Durable facts / behavior** → `memory_save` (rides the boot digest, lands next `/clear`, no restart), not a paragraph in a doc.
-- **Work / status / dependencies** → tasks and edges, not prose restating them. — M-14370
-- **Mail / "is anything waiting"** → `task inbox`, not `task mail` (deprecated). — M-7048
-- **Deploy publishing** → grant `repo.push` on the project entity + `task land`, not per-repo git push hooks. — M-4523
-
-## The compounding fix
-
-When you catch the reflex, don't just correct the one call — **purge the doc or persona line that still legitimizes the old tool**, so the next context doesn't inherit the same pull. A stale doc teaching `ScheduleWakeup` recreates the mistake in every operator that reads it. Skating to where the graph already moved is the operator's own responsibility, not something the owner should have to keep raising.
 
 ---
 
