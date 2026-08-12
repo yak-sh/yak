@@ -39,6 +39,14 @@ let dead = false
 let boot: Promise<void> | null = null
 let init = () =>
   boot ??= (async () => {
+    // The model is 400MB and ~6s to load. A test never wants it (embed_test
+    // uses precomputed vectors), so TASKS_EMBED=0 marks the embedder dead
+    // before the import — every dupe-hint path degrades to silence, exactly
+    // as it does on a box that lacks the package. Production leaves it unset.
+    if (Deno.env.get('TASKS_EMBED') === '0') {
+      dead = true
+      return
+    }
     try {
       let { env, pipeline } = await import('@huggingface/transformers') // The default model cache is INSIDE the npm package dir — a cache
        // clean or a version bump silently costs a 34MB re-download at

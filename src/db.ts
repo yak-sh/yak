@@ -1632,6 +1632,14 @@ export let open = (path = file) => {
   // brief boot/write collision; waiting keeps a mutation on its accepting
   // process instead of making the caller guess whether to replay it.
   db.exec('pragma busy_timeout = 5000')
+  // Durability is tunable for throwaway graphs (TASKS_SYNC, like TASKS_BACKOFF):
+  // the default (unset) leaves SQLite's own `full`, which fsyncs every DDL
+  // statement — and open() runs ~200 of them (schema + migrations), so a
+  // fresh file on real disk costs ~2s. A test graph is ephemeral and never
+  // survives a crash, so the test task sets `off` and every file-backed open
+  // drops from ~2s to ~10ms. Production never sets it and stays fully durable.
+  let sync = Deno.env.get('TASKS_SYNC')
+  if (sync) db.exec(`pragma synchronous = ${sync}`)
   // This must precede schema: an old table may not yet have the canonical
   // columns named by a newly added index in the current DDL.
   migrateRefs(db)
