@@ -3752,8 +3752,28 @@ let homes = (db: DatabaseSync, only = '') =>
 // client resumes its delta from here (T-6823). Read FIRST, before walking
 // the tables: apply() is atomic and the server single-threaded, so nothing
 // commits between max(rowid) and the rows the loop sees.
+// Reconciliation asks for the same whole graph once per role, so share one walk
+// until the database moves. total_changes() sees every write through this
+// handle, including stamps that deliberately do not journal; data_version sees
+// commits through another handle. Per-db keeps probe graphs apart.
+type SnapHit = { local: number; remote: number; snap: Snapshot }
+let snapCache = new WeakMap<DatabaseSync, SnapHit>()
+
+let snapKey = (db: DatabaseSync) => ({
+  local: Number(
+    (db.prepare('select total_changes() as n').get() as { n: number }).n,
+  ),
+  remote: Number(
+    (db.prepare('pragma data_version').get() as { data_version: number })
+      .data_version,
+  ),
+})
+
 export let snapshot = (db: DatabaseSync): Snapshot => {
   let cursor = cursorOf(db)
+  let key = snapKey(db)
+  let hit = snapCache.get(db)
+  if (hit?.local == key.local && hit.remote == key.remote) return hit.snap
   let changes: Change[] = []
   for (let name of Object.keys(readable)) {
     for (
@@ -3777,7 +3797,7 @@ export let snapshot = (db: DatabaseSync): Snapshot => {
   // A project's specialist personas ride derived `reads` edges (homeReads):
   // home is the one truth, so these compute here on the graph-out door
   // and can never drift from ownership — nothing to store, nothing to sync.
-  return {
+  let snap: Snapshot = {
     changes,
     deps: [...deps, ...homeReads(homes(db), deps)],
     cursor,
@@ -3785,6 +3805,8 @@ export let snapshot = (db: DatabaseSync): Snapshot => {
     vocabHash,
     capabilities,
   }
+  snapCache.set(db, { ...key, snap })
+  return snap
 }
 
 // `deno task seed` (or a direct run) bootstraps the file without the server.

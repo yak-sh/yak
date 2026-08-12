@@ -69,6 +69,30 @@ Deno.test('vocabHash: writable declarations still invalidate a cache', () => {
   )
 })
 
+Deno.test('snapshot shares a walk until either database handle writes', () => {
+  let path = Deno.makeTempFileSync({ suffix: '.db' })
+  let one = open(path)
+  let eid = uid()
+  apply(one, [{ eid, name: 'doc', comp: { title: 'one', body: '' } }])
+  let first = snapshot(one)
+  assertEquals(snapshot(one) === first, true)
+
+  one.prepare('update doc set title = ? where eid = ?').run('two', eid)
+  let local = snapshot(one)
+  assertEquals(local === first, false)
+  assertEquals(compOf(one, eid, 'doc')?.title, 'two')
+
+  let two = open(path)
+  two.prepare('update doc set title = ? where eid = ?').run('three', eid)
+  let remote = snapshot(one)
+  assertEquals(remote === local, false)
+  assertEquals(compOf(one, eid, 'doc')?.title, 'three')
+
+  two.close()
+  one.close()
+  Deno.removeSync(path)
+})
+
 let compOf = (d: ReturnType<typeof open>, eid: string, name: string) =>
   snapshot(d).changes.find((c) => c.eid == eid && c.name == name)?.comp
 let comp = (eid: string, name: string) => compOf(db, eid, name)
