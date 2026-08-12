@@ -442,7 +442,6 @@ let cast = (changes: Change[], except?: WebSocket) => {
   maintain(changes)
   nativeSoon(cast)
   rolesSoon(cast)
-  runnerSoon()
 }
 
 // The effect half of a write, run AFTER the casts: a slow or failing
@@ -1089,6 +1088,17 @@ bound(ownership)
 // request; a stop_request is the brake; a comment at a settled managed
 // session resumes it; a deleted session's process dies with its row.
 // A future plugin contributes rows here the same way it would renderers.
+on('runner', {
+  created: runnerSoon,
+  sweep: { pending: "name = 'tasksd'" },
+  doc: 'boot the graph-native runner through the ordinary effect relay; ' +
+    'live entry births wake it through their own hook',
+})
+on('entry', {
+  created: runnerSoon,
+  doc: 'a new Session entry wakes the graph-native runner; ' +
+    'its indexed candidate query decides whether there is work',
+})
 on('session', {
   created: spawned(cast, managed.start),
   removed: (eid) => {
@@ -1341,8 +1351,6 @@ tick('native', () => nativeSweep(cast), 2_000)
 // Persistent roles are desired state: boot and the short tick heal a daemon
 // restart or dead native TUI, while every graph cast debounces a faster pass.
 tick('roles', () => rolesSweep(cast), 2_000)
-
-tick('codex-runner', () => managed.sweep(), 300)
 
 // What sessions leave running (probes.ts): a headless browser squatting on a
 // CDP port, a probe server on a scratch db, a worktree with nothing left in

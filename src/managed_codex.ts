@@ -229,61 +229,91 @@ export let runnerSessions = (db: DatabaseSync) =>
      order by e.session`,
   ).all() as { session: string }[]).map((row) => row.session)
 
-let laterGeneration = (
-  db: DatabaseSync,
-  session: string,
-  seq: number,
-) =>
-  !!db.prepare(
-    `select 1 from entry e join generation g on g.eid = e.eid
-     where e.session = ? and e.seq > ? limit 1`,
-  ).get(session, seq)
+export let advanceable = (db: DatabaseSync) =>
+  db.prepare(`
+    with latest as (
+      select e.session, max(e.seq) as seq
+      from generation g cross join entry e
+      left join imported i on i.eid = g.eid
+      where e.eid = g.eid and i.eid is null
+      group by e.session
+    ), current as (
+      select e.session, e.eid, e.seq, g.through,
+             g.provider, g.model, g.effort
+      from latest l
+      join entry e on e.session = l.session and e.seq = l.seq
+      join generation g on g.eid = e.eid
+    )
+    select c.session, c.provider, c.model, c.effort,
+           (select z.eid from entry z where z.session = c.session
+            order by z.seq desc limit 1) as through
+    from current c
+    where not exists (select 1 from lease l where l.eid = c.eid)
+      and (
+        exists (select 1 from delivered d where d.eid = c.eid)
+        or exists (select 1 from error x where x.eid = c.eid)
+        or exists (select 1 from cancel z where z.target = c.eid)
+      )
+      and not exists (
+        select 1 from output o join call k on k.eid = o.eid
+        where o.source = c.eid
+          and not exists (select 1 from result r where r.call = k.eid)
+          and not exists (select 1 from error x where x.eid = k.eid)
+          and not exists (select 1 from cancel z where z.target = k.eid)
+      )
+      and (
+        exists (
+          select 1 from entry n
+          where n.session = c.session
+            and n.seq > coalesce(
+              (select t.seq from entry t where t.eid = c.through), c.seq
+            )
+            and (
+              exists (select 1 from attention a where a.eid = n.eid)
+              or (
+                exists (select 1 from message m
+                        where m.eid = n.eid and m.role = 'user')
+                and not exists (select 1 from output o where o.eid = n.eid)
+              )
+            )
+        )
+        or (
+          not exists (select 1 from error x where x.eid = c.eid)
+          and not exists (select 1 from cancel z where z.target = c.eid)
+          and exists (
+            select 1 from output o join call k on k.eid = o.eid
+            where o.source = c.eid
+          )
+        )
+      )
+    order by c.session
+  `).all() as {
+    session: string
+    through: string
+    provider: string
+    model: string
+    effort: string | null
+  }[]
 
 let advance = (
   db: DatabaseSync,
-  session: string,
   cast: Cast,
   writer: string,
+  eligible: (session: string) => boolean,
 ) => {
-  let entries = readEntries(db, session)
-  let generation = entries.filter((row) => row.comps.generation).at(-1)
-  if (!generation || laterGeneration(db, session, generation.seq)) return false
-  if (generation.comps.lease) return false
-  let cancelled = entries.some((row) =>
-    row.comps.cancel?.target == generation.eid
-  )
-  let failed = !!generation.comps.error || cancelled
-  if (!generation.comps.delivered && !failed) return false
-  let outputs = entries.filter((row) =>
-    row.comps.output?.source == generation.eid
-  )
-  let calls = outputs.filter((row) => row.comps.call)
-  let done = calls.every((call) =>
-    entries.some((row) => row.comps.result?.call == call.eid) ||
-    call.comps.error ||
-    entries.some((row) => row.comps.cancel?.target == call.eid)
-  )
-  let edge =
-    entries.find((row) => row.eid == generation.comps.generation.through)
-      ?.seq ?? generation.seq
-  let input = entries.some((row) =>
-    row.seq > edge &&
-    (row.comps.attention ||
-      (row.comps.message?.role == 'user' && !row.comps.output))
-  )
-  if (!done || (!input && (failed || !calls.length))) return false
-  let through = entries.at(-1)!.eid
-  let value = generation.comps.generation
-  let out = append(db, session, [{
-    generation: {
-      through,
-      provider: value.provider,
-      model: value.model,
-      ...value.effort ? { effort: value.effort } : {},
-    },
-  }], writer).changes
-  cast(out)
-  return true
+  let ready = advanceable(db).filter((row) => eligible(row.session))
+  for (let row of ready) {
+    let out = append(db, row.session, [{
+      generation: {
+        through: row.through,
+        provider: row.provider,
+        model: row.model,
+        ...row.effort ? { effort: row.effort } : {},
+      },
+    }], writer).changes
+    cast(out)
+  }
+  return ready.length > 0
 }
 
 let valid = (db: DatabaseSync, token: LeaseToken) =>
@@ -312,6 +342,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
   let starting = new Map<string, Promise<void>>()
   let wake = false
   let draining = false
+  let expiry: ReturnType<typeof setTimeout> | undefined
 
   // While an operation is in flight, keep its lease fresh so a booting
   // successor (the reusePort handoff runs both processes at once) never
@@ -496,6 +527,27 @@ export let managedCodex = (options: ManagedCodexOptions) => {
     prepared.has(session) ||
     !!sessionRow(db, session)?.base_revision
 
+  // Writes drive the runner immediately. Time only matters for abandoned
+  // leases, so arm one deadline for the next lease this process does not own
+  // instead of polling every partition to ask whether time passed.
+  let arm = () => {
+    clearTimeout(expiry)
+    expiry = undefined
+    if (draining || !db.isOpen) return
+    let leases = db.prepare('select eid, until from lease order by until')
+      .all() as { eid: string; until: string }[]
+    let next = leases.find((row) => !flights.has(row.eid))
+    if (!next) return
+    let delay = Math.max(0, Date.parse(next.until) - clock().getTime())
+    expiry = setTimeout(() => {
+      expiry = undefined
+      if (db.isOpen) {
+        sweep().catch((error) => console.warn('managed lease expiry —', error))
+      }
+    }, Math.min(delay, 2_147_483_647))
+    Deno.unrefTimer(expiry)
+  }
+
   let pass = async () => {
     // Draining acquires no new work: the in-flight jobs of the pass that
     // started them are still awaited by that pass, so the current sweep drains
@@ -503,13 +555,13 @@ export let managedCodex = (options: ManagedCodexOptions) => {
     // successor. Every acquisition point below is gated by this one return.
     if (draining) return false
     let recovered = expire()
-    let moved = false
+    let moved = advance(
+      db,
+      cast,
+      runner,
+      (session) => !blocked.has(session) && runnable(session),
+    )
     let sessions = runnerSessions(db)
-    for (let session of sessions) {
-      if (!blocked.has(session) && runnable(session)) {
-        moved = advance(db, session, cast, runner) || moved
-      }
-    }
     let ready = sessions.flatMap((session) =>
       blocked.has(session) ||
         !runnable(session)
@@ -543,6 +595,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
         } while (wake)
       } finally {
         sweeping = undefined
+        arm()
       }
     })()
     return sweeping
@@ -555,6 +608,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
   // falls to crash recovery (T-16886), which no drain can prevent anyway.
   let settle = async (timeoutMs = 300_000) => {
     draining = true
+    clearTimeout(expiry)
     if (!sweeping) return
     let timer: ReturnType<typeof setTimeout> | undefined
     let bound = new Promise<void>((resolve) => {

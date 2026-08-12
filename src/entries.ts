@@ -96,14 +96,12 @@ export let callKeys = (
     ),
   )
 
-// The runner reads a Session's WHOLE ordered partition on every operation:
-// project() must find the leased generation and its `through`, advance() the
-// true last entry, rowOf() the exact call. entriesOf paginates (its cap serves
+// Generation replay and rowOf() still read a Session's whole ordered
+// partition. entriesOf paginates (its cap serves
 // peek and lazy queries), so a session past one page would silently lose its
 // tail — the newest generation reads back as "no generation entry" and a fresh
-// call's row comes back undefined ("reading 'comps'"), while advance() minted
-// past a call it could not see. Page to exhaustion so the runner's view is
-// always the complete partition, however long the session grows.
+// call's row comes back undefined ("reading 'comps'"). Page to exhaustion so
+// the runner's view is always the complete partition, however long it grows.
 export let readEntries = (db: DatabaseSync, session: string) => {
   let all: ReturnType<typeof entriesOf> = []
   for (let after = 0;;) {

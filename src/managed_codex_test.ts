@@ -25,7 +25,7 @@ import {
 import { writeSession } from './session_store.ts'
 import { type ToolHost } from './harness_tools.ts'
 import { type Change, uuid } from './types.ts'
-import { slow } from './testing.ts'
+import { slow, until } from './testing.ts'
 import { freshDb } from './testdb.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
@@ -1242,6 +1242,44 @@ Deno.test('restart leaves an uncertain side-effecting call ambiguous', async () 
   assertMatch(String(row.comps.error.message), /outcome is ambiguous/)
   assertEquals(row.comps.lease, undefined)
   assertEquals(calls, 0)
+  db.close()
+})
+
+slow('an abandoned lease wakes the runner at its deadline', async () => {
+  let db = freshDb()
+  let sid = session(db), old = uuid(), calls = 0
+  writeSession(db, sid, { base_revision: 'base' })
+  apply(db, [{ eid: old, name: 'runner', comp: { name: 'old' } }])
+  let input = append(db, sid, [{ message: { role: 'user' } }]).eids[0]
+  let generation = append(db, sid, [{
+    generation: { through: input, provider: 'codex', model: 'gpt-requested' },
+  }]).eids[0]
+  takeEntry(db, generation, old, 100)
+  let service = managedCodex({
+    db,
+    cast: () => {},
+    leaseMs: 100,
+    transport: {
+      run: () => {
+        calls++
+        return Promise.resolve(result([{
+          type: 'message',
+          content: [{ type: 'output_text', text: 'recovered on time' }],
+        }]))
+      },
+    },
+    tools: () => Promise.resolve(tools([])),
+    prepare: () => Promise.resolve(),
+  })
+
+  await service.sweep()
+  assertEquals(calls, 0)
+  await until(() => calls, { label: 'the lease deadline' })
+  await service.sweep()
+  assertEquals(
+    readEntries(db, sid).at(-1)?.comps.content?.body,
+    'recovered on time',
+  )
   db.close()
 })
 
