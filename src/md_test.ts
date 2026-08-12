@@ -77,6 +77,15 @@ Deno.test('mdMentions follows markdown link semantics in written order', () => {
   )
 })
 
+Deno.test('mdMentions refuses quote and escape debris in URLs', () => {
+  assertEquals(
+    mdMentions(
+      'https://x.test/"quote https://x.test/\\escape https://x.test/clean',
+    ),
+    [{ kind: 'link', href: 'https://x.test/clean' }],
+  )
+})
+
 Deno.test('md: ids in code stay literal; mid-word letters stay words', () => {
   assertEquals(md('`T-123`').includes('data-ref'), false)
   assertEquals(md('```\nT-123\n```').includes('data-ref'), false)

@@ -50,7 +50,6 @@ let Frame = block('div', 'Session', {
   Context: 'span',
   Stop: 'button',
   Body: 'div',
-  Main: 'div',
   References: 'details',
   ReferencesGist: 'summary',
   ReferencesList: 'div',
@@ -100,7 +99,6 @@ let {
   Context,
   Stop,
   Body: Panel,
-  Main,
   References,
   ReferencesGist,
   ReferencesList,
@@ -565,11 +563,11 @@ let useEntryLog = (eid: string): GraphLog | undefined => {
   return graphLog(rows)
 }
 
-// The host's scroller — a card's Card_Scroll, the fullscreen App_Body —
-// found by walking up to the nearest ancestor that scrolls. Null in the
-// TUI's fake DOM (no parentElement), which switches the feature off there.
+// The transcript's scroller, or the nearest host still owning that job.
+// Null in the TUI's fake DOM (no parentElement), which switches the feature
+// off there.
 let scrollerOf = (n: HTMLElement | null) => {
-  for (let s = n?.parentElement; s; s = s.parentElement) {
+  for (let s = n; s; s = s.parentElement) {
     if (/auto|scroll/.test(getComputedStyle(s).overflowY)) return s
   }
   return null
@@ -668,7 +666,7 @@ export let Session = ({ e }: { e: Ent }) => {
     ...thread,
   ], repo)
   return (
-    <Frame elRef={frame}>
+    <Frame>
       <Head>
         <Dot status={status} />
         <SessionSummary e={e} gist={gist} />
@@ -694,43 +692,41 @@ export let Session = ({ e }: { e: Ent }) => {
           </Stop>
         )}
       </Head>
-      <Main>
-        <SessionReferences items={mentions} />
-        <Panel>
-          {/* markdown, escaped of any markup by md.ts — as with a task body */}
-          {!said && s.final_text && (
-            <Markdown as={Final} text={s.final_text} repo={repo} />
+      <Panel elRef={frame}>
+        {/* markdown, escaped of any markup by md.ts — as with a task body */}
+        {!said && s.final_text && (
+          <Markdown as={Final} text={s.final_text} repo={repo} />
+        )}
+        {e.error?.message && <Fault mod='error'>{e.error.message}</Fault>}
+        {s.stop_reason && <Fault>{s.stop_reason}</Fault>}
+        <Log>
+          {thread.map((x) =>
+            'seq' in x
+              ? <Row key={x.seq} x={x} repo={repo} />
+              : <Note key={x.eid} c={x} />
           )}
-          {e.error?.message && <Fault mod='error'>{e.error.message}</Fault>}
-          {s.stop_reason && <Fault>{s.stop_reason}</Fault>}
-          <Log>
-            {thread.map((x) =>
-              'seq' in x
-                ? <Row key={x.seq} x={x} repo={repo} />
-                : <Note key={x.eid} c={x} />
-            )}
-            {stream && <SessionObservation state={stream} />}
-            {live && (
-              <Think>✳ {observing(stream) ?? doing(rows.at(-1)?.row)}</Think>
-            )}
-          </Log>
-          {
-            /* stderr is durable evidence, not transcript: it has no seqs and
+          {stream && <SessionObservation state={stream} />}
+          {live && (
+            <Think>✳ {observing(stream) ?? doing(rows.at(-1)?.row)}</Think>
+          )}
+        </Log>
+        {
+          /* stderr is durable evidence, not transcript: it has no seqs and
             resumes append to it. Routine noise folds; failed runs show it. */
-          }
-          {log.stderr && (
-            <Diagnostics open={status == 'failed'}>
-              <Gist>diagnostics · {lineLabel(log.stderr)}</Gist>
-              <Err>{log.stderr}</Err>
-            </Diagnostics>
-          )}
-          {unsent.length > 0 && (
-            <Unsent>
-              {unsent.map((c) => <Note key={c.eid} c={c} />)}
-            </Unsent>
-          )}
-        </Panel>
-      </Main>
+        }
+        {log.stderr && (
+          <Diagnostics open={status == 'failed'}>
+            <Gist>diagnostics · {lineLabel(log.stderr)}</Gist>
+            <Err>{log.stderr}</Err>
+          </Diagnostics>
+        )}
+        {unsent.length > 0 && (
+          <Unsent>
+            {unsent.map((c) => <Note key={c.eid} c={c} />)}
+          </Unsent>
+        )}
+      </Panel>
+      <SessionReferences items={mentions} />
       {
         /* the one composer, pinned like the bar: comment about it, or say
           TO it (Comments.tsx knows which sessions can take words) */

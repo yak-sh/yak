@@ -173,7 +173,10 @@ export let mdMentions = (s: string, repo?: string | null): Mention[] => {
     let t = token as Token
     if (t.type == 'ref') {
       out.push({ kind: 'entity', id: String(t.id) })
-    } else if ((t.type == 'link' || t.type == 'image') && t.href) {
+    } else if (
+      (t.type == 'link' || t.type == 'image') && t.href &&
+      !/["'\\]/.test(t.href)
+    ) {
       let href = t.href.trim()
       if (/^[A-Za-z]+-\d+$/.test(href)) {
         out.push({ kind: 'entity', id: href })

@@ -2858,41 +2858,48 @@ a[data-ref]:hover {
   color: var(--dim);
 }
 
-/* A session: summary head, a conversational transcript, then its composer.
-   Machine activity stays compact; prose reads at the house size. */
-/* The console (W-3676 #5): a sticky slim bar, facts behind a disclosure,
-   the transcript straight on the card. The hosts drop their padding so
-   the bar can pin edge-to-edge (the well pattern, as Board does) and the
-   body re-pads itself. */
+/* A session is one console grid: shared head and composer around two
+   independently scrolling middle cells. Narrow hosts swipe between the
+   full-width transcript and references; wide hosts show them together. */
 .Card_Scroll:has(> .Session),
 .Peek_Body:has(> .Session) {
   padding: 0;
+  overflow: hidden;
 }
 .App_Body > .Session {
   padding: 0;
 }
-/* bar / body / composer: the body takes the slack, so the foot hugs the
-   bottom even when the log is short — and pins there when it isn't. */
 .Session {
   display: grid;
   gap: 0;
-  grid-template-rows: auto 1fr auto;
+  grid-template-columns: 100% 100%;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'head head'
+    'body references'
+    'foot foot';
+  height: 100%;
   min-height: 100%;
   min-width: 0;
-  /* The hosts are COLUMN flex containers, so height is the main axis and a
-     flex item shrinks to fit by default — which capped this at one viewport
-     while the transcript inside ran thousands of pixels longer. A sticky
-     child can only travel inside its own box, so the head unstuck after
-     exactly one screen. Refusing to shrink lets the box be as tall as the
-     log, which is the whole distance the head has to cover. min-height
-     still fills the host when the log is short. */
-  flex-shrink: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
   container-type: inline-size;
 }
+.Session:not(:has(> .Session_References)) {
+  grid-template-columns: 100%;
+  grid-template-areas:
+    'head'
+    'body'
+    'foot';
+}
 .Session_Head {
+  grid-area: head;
   position: sticky;
-  top: 0;
+  left: 0;
   z-index: 1;
+  box-sizing: border-box;
+  width: 100cqw;
   display: flex;
   align-items: center;
   gap: var(--half-gap);
@@ -2902,26 +2909,26 @@ a[data-ref]:hover {
   border-bottom: 1px solid var(--border);
 }
 .Session_Body {
+  grid-area: body;
   display: grid;
   gap: var(--gap);
   align-content: start;
   min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-snap-align: start;
   padding: var(--half-gap) var(--gap) var(--gap);
 }
-.Session_Main {
-  display: grid;
-  min-width: 0;
-  align-content: start;
-}
 .Session_References {
-  position: sticky;
-  top: 3rem;
-  z-index: 1;
-  align-self: start;
-  max-height: calc(100dvh - 7rem);
+  grid-area: references;
+  min-width: 0;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-snap-align: start;
   padding: var(--gap);
-  border-bottom: 1px solid var(--border);
+  border-left: 1px solid var(--border);
   background: var(--card);
   color: var(--muted);
   font-size: 12px;
@@ -2955,21 +2962,19 @@ a[data-ref]:hover {
   max-width: 100%;
 }
 @container (min-width: 50rem) {
-  .Session_Main:has(> .Session_References[open]) {
+  .Session {
+    grid-template-columns: minmax(0, 1fr) auto;
+    overflow-x: hidden;
+    scroll-snap-type: none;
+  }
+  .Session:has(> .Session_References[open]) {
     grid-template-columns: minmax(0, 1fr) minmax(14rem, 22rem);
-    grid-template-areas: 'body references';
   }
-  .Session_Main:has(> .Session_References[open]) > .Session_Body {
-    grid-area: body;
-  }
-  .Session_References[open] {
-    grid-area: references;
-    border-bottom: 0;
-    border-left: 1px solid var(--border);
+  .Session:not(:has(> .Session_References)) {
+    grid-template-columns: 100%;
   }
   .Session_References:not([open]) {
     justify-self: end;
-    border-left: 0;
   }
 }
 /* Said but not yet heard — waiting under the log for the agent's next
@@ -2981,9 +2986,12 @@ a[data-ref]:hover {
 }
 /* The composer, pinned like the bar. */
 .Session_Foot {
+  grid-area: foot;
   position: sticky;
-  bottom: 0;
+  left: 0;
   z-index: 1;
+  box-sizing: border-box;
+  width: 100cqw;
   display: grid;
   background: var(--surface);
   border-top: 1px solid var(--border);
