@@ -1380,15 +1380,19 @@ its page and title instead.`,
     `Code mode: run JS against the graph in a sandboxed worker (no fs, no
 net, no env — its ONLY capability is the graph). In scope: graph
 ({changes, deps, rows} — rows is [{eid, num, kind, comps}]), apply(
-...changes) to QUEUE writes, log(...) for debug output. The script's
-return value comes back to you. Queued changes apply atomically after
-the script finishes — unless dry_run, which returns the batch without
-applying (preview a layout before committing it). Example — grid the
-cards: const pins = graph.rows.filter(r => r.comps.pin); pins.forEach(
-(p, i) => apply({eid: p.eid, name: 'pin', comp: {x: (i%4)*360, y:
-Math.floor(i/4)*280}})); return pins.length. timeout_ms is the positive
-integer execution deadline in milliseconds (default 10000, maximum
-30000).`,
+...changes) to QUEUE writes, log(...) for debug output. graph.rows is the
+EAGER snapshot; it omits the lazy entry partition (session logs). Reach
+that partition with await graph.query(filters, kind?, {after, limit}) —
+the authoritative whole-graph query, entries included when the filter
+names them — or await graph.entries(sessionEid, {after, limit}) for one
+Session's ordered seq partition. The script's return value comes back to
+you. Queued changes apply atomically after the script finishes — unless
+dry_run, which returns the batch without applying (preview a layout
+before committing it). Example — grid the cards: const pins =
+graph.rows.filter(r => r.comps.pin); pins.forEach((p, i) => apply({eid:
+p.eid, name: 'pin', comp: {x: (i%4)*360, y: Math.floor(i/4)*280}}));
+return pins.length. timeout_ms is the positive integer execution deadline
+in milliseconds (default 10000, maximum 30000).`,
     {
       js: z.string(),
       dry_run: z.boolean().optional(),
@@ -1422,7 +1426,23 @@ integer execution deadline in milliseconds (default 10000, maximum
             () => reject(new Error('code timed out')),
             timeout_ms ?? 10_000,
           )
-          worker.onmessage = (m) => {
+          worker.onmessage = async (m) => {
+            // A graph.query/entries round-trip: answer from the authoritative
+            // pipeline (io.query — the whole graph, lazy entries included) and
+            // post it back. The overall timeout still bounds the run.
+            let ask = m.data?.ask
+            if (ask) {
+              try {
+                let hits = await io.query(ask.q, ask.kind, ask.opts)
+                worker.postMessage({ res: ask.req, rows: hits })
+              } catch (e) {
+                worker.postMessage({
+                  res: ask.req,
+                  error: (e as Error).message,
+                })
+              }
+              return
+            }
             clearTimeout(t)
             resolve(m.data as Out)
           }

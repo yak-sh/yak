@@ -8,7 +8,7 @@ import { evalGraph } from './graph_query.ts'
 import { CUT, elide, type IO, mcpServer } from './mcp.ts'
 import { commandOut } from './commands.ts'
 import { sha } from './sha.ts'
-import { type Change, edges, statuses, verdicts } from './types.ts'
+import { type Change, edges, statuses, uuid, verdicts } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, journalOf, open, snapshot, touch } = await import('./db.ts')
@@ -841,6 +841,65 @@ Deno.test('code_run throws and rejected batches are MCP errors', async () => {
       })
       assertEquals(rejected.isError, true)
       assertMatch(said(rejected), /batch REJECTED/)
+    })
+  } finally {
+    g.db.close()
+  }
+})
+
+// The sandbox is the last agent-facing door that could not reach the lazy
+// entry partition: its worker holds only the eager snapshot. graph.query /
+// graph.entries round-trip to the host's io.query, so a script sees the same
+// authoritative graph every other query door now does (T-16928, S-16889).
+Deno.test('code_run reaches the lazy entry partition via graph.entries/query', async () => {
+  let g = graph()
+  try {
+    let a = uuid()
+    let b = uuid() // stays empty — the genuinely-empty scope
+    apply(g.db, [{ eid: a, name: 'session', comp: { id: uuid() } }])
+    apply(g.db, [{ eid: b, name: 'session', comp: { id: uuid() } }])
+    let { eids: [e1] } = append(g.db, a, [
+      { message: { role: 'user' }, content: { body: 'go' } },
+    ])
+    append(g.db, a, [{
+      generation: { provider: 'codex', model: 'gpt-5', through: e1 },
+    }])
+    append(g.db, a, [{ response: { status: 500 }, content: { body: 'boom' } }])
+
+    let result = (out: ToolResult) => JSON.parse(said(out)).result
+    await protocol(g.io, async (client) => {
+      let run = (js: string) =>
+        client.callTool({ name: 'code_run', arguments: { js } })
+      // The eager snapshot omits entries …
+      assertEquals(
+        result(
+          await run('return graph.rows.filter(r => r.comps.entry).length'),
+        ),
+        0,
+      )
+      // … graph.entries reaches the partition, seq-ordered …
+      assertEquals(
+        result(
+          await run(
+            `return (await graph.entries('${a}')).map(r => r.comps.entry.seq)`,
+          ),
+        ),
+        [1, 2, 3],
+      )
+      // … graph.query names it through the filter grammar …
+      assertEquals(
+        result(
+          await run(
+            `return (await graph.query(['.entry.session=${a}'])).length`,
+          ),
+        ),
+        3,
+      )
+      // … and a real, empty scope is [] — empty means empty, not dropped.
+      assertEquals(
+        result(await run(`return (await graph.entries('${b}')).length`)),
+        0,
+      )
     })
   } finally {
     g.db.close()
