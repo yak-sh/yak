@@ -158,7 +158,7 @@ Deno.test('managed Codex runs the production tool chain without credential resid
         name: 'apply_patch',
         arguments: JSON.stringify({
           diff:
-            '--- a/note.txt\n+++ b/note.txt\n@@ -1 +1 @@\n-before\n+after\n',
+            '*** Begin Patch\n*** Update File: note.txt\n@@\n-before\n+after\n*** End Patch',
           cwd: null,
           timeout_ms: 10_000,
         }),
