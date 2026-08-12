@@ -506,12 +506,6 @@ Every Agent-tool spawn gets `isolation: worktree` + the claim-discipline paragra
 
 ---
 
-# M-16612 respect users with specific progress and durable errors
-
-A system respects its users by making its state legible. Say what is currently loading, what work is underway, and how it is progressing; do not substitute a spinner or a generic loading indicator for that explanation. When work fails, tell the user what went wrong, why it failed when known, and what successful completion was supposed to look like. Preserve each error durably under a stable identity, visible to both user and operator, so they can return to it and discuss it later. Errors must never be ephemeral or opaque.
-
----
-
 # M-14769 a mistake is a systems bug — fix the context or the tools, never promise to change
 
 There is no point owning up to a mistake and promising to change: you cannot actually commit to change, because you forget it once your context ends. Your behavior comes from your prompts and your tools, not from personal accountability.
@@ -519,6 +513,12 @@ There is no point owning up to a mistake and promising to change: you cannot act
 So view yourself the way you would view any other system: when you make a mistake, find the root cause, then adjust your context (a persona, a memory) or fix your tools — the thing that generated the behavior — rather than owning the mistake and committing to a habit change without adjusting the personas that create the habits. Automate your own fix.
 
 This is M-4066 (adoption is structural, not exhortation) turned inward: exhortation does not work on yourself either.
+
+---
+
+# M-16612 respect users with specific progress and durable errors
+
+A system respects its users by making its state legible. Say what is currently loading, what work is underway, and how it is progressing; do not substitute a spinner or a generic loading indicator for that explanation. When work fails, tell the user what went wrong, why it failed when known, and what successful completion was supposed to look like. Preserve each error durably under a stable identity, visible to both user and operator, so they can return to it and discuss it later. Errors must never be ephemeral or opaque.
 
 ---
 
