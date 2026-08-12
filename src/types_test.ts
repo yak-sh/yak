@@ -85,6 +85,8 @@ Deno.test('death words: every reference declares, the sets hold', () => {
       'session.persona',
       'spawn.persona',
       'role.scope',
+      'role.checkout',
+      'role.wake_target',
       'persona.home',
       // a shown entity's death only empties its pane; a directly deleted
       // root orphans the layout rather than cascading through it

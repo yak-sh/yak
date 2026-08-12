@@ -134,7 +134,16 @@ task role                  # what should be running, what is, and any launch err
 task role stop R-12        # this role stays down — across daemon and machine restarts
 task role stop --all       # the fleet-wide off switch
 task role start R-12       # hand it back to the reconciler
+task role pause R-12       # reversible operator pause
+task role resume R-12      # return paused capacity to reconciliation
 ```
+
+Role scope may be any entity; `role.checkout` separately names execution ground
+when the scoped entity is not a repo-bearing project. Optional schedule, wake
+policy, and wake target facts express activation without a registry.
+`supervises` and `delegates` edges add hierarchy only where an installation
+wants it. The role's decision, reason, observed session, and decision time are
+the reconciler receipt shown beside desired state.
 
 `task role stop` with nothing named is refused rather than treated as "stop
 everything"; the fleet-wide form has to be spelled `--all`.

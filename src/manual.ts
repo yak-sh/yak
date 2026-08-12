@@ -575,6 +575,8 @@ export let manuals = declare({
       'task role stop R-12',
       'task role stop --all',
       'task role start R-12',
+      'task role pause R-12',
+      'task role resume R-12',
     ],
     detail:
       'A role is DESIRED capacity — the reconciler drives real processes ' +
@@ -596,6 +598,30 @@ export let manuals = declare({
   'role start': {
     about: 'set roles to running — the reconciler launches them',
     examples: ['task role start R-12', 'task role start --all'],
+    args: [arg('ids', id, true, false)],
+    opts: [flag('--all')],
+    some: ['ids', '--all'],
+  },
+  'role pause': {
+    about: 'pause roles until an operator resumes them',
+    args: [arg('ids', id, true, false)],
+    opts: [flag('--all')],
+    some: ['ids', '--all'],
+  },
+  'role resume': {
+    about: 'resume paused roles',
+    args: [arg('ids', id, true, false)],
+    opts: [flag('--all')],
+    some: ['ids', '--all'],
+  },
+  'role disable': {
+    about: 'disable roles until explicitly started',
+    args: [arg('ids', id, true, false)],
+    opts: [flag('--all')],
+    some: ['ids', '--all'],
+  },
+  'role retire': {
+    about: 'retire roles while preserving their history',
     args: [arg('ids', id, true, false)],
     opts: [flag('--all')],
     some: ['ids', '--all'],

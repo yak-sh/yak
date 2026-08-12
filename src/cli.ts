@@ -1198,7 +1198,15 @@ let roleLine = (all: Row[], r: Row) => {
 }
 
 let roleState = async (sub: string, got: Got) => {
-  let want = sub == 'stop' ? 'stopped' : 'running'
+  let want = sub == 'start' || sub == 'resume'
+    ? 'running'
+    : sub == 'stop'
+    ? 'stopped'
+    : sub == 'pause'
+    ? 'paused'
+    : sub == 'disable'
+    ? 'disabled'
+    : 'retired'
   let ids = got.many.ids ?? []
   // `.role.state!`, not `.role!` — bare `.role` is session.role, which would
   // list sessions. state
@@ -2541,6 +2549,10 @@ export let verbs = bind({
   role,
   'role stop': (got) => roleState('stop', got),
   'role start': (got) => roleState('start', got),
+  'role pause': (got) => roleState('pause', got),
+  'role resume': (got) => roleState('resume', got),
+  'role disable': (got) => roleState('disable', got),
+  'role retire': (got) => roleState('retire', got),
   probes,
   telemetry,
   wake: (got) => colon(undefined, ['wake', ...got.words]),

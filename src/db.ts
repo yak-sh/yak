@@ -149,10 +149,18 @@ let schema = `
     state        text not null default 'stopped',
     surface      text not null default 'native',
     scope    text references entity(eid),
+    checkout text references entity(eid),
+    schedule text,
+    wake_policy text not null default 'always',
+    wake_target text references entity(eid),
     applied_hash text,
     applied_at   text,
     stopped_at   text,
-    retry_at     text
+    retry_at     text,
+    decision     text,
+    reason       text,
+    observed     text,
+    decided_at   text
   );
   -- One pane: container (dir) or leaf (content/view). size is a
   -- weight among siblings; "order" quoted — an SQL keyword, like "to".
@@ -1701,6 +1709,14 @@ export let open = (path = file) => {
   addCol('alias', 'slugs', 'slugs text')
   // The crash-loop breaker's fresh-start fence (types.ts, src/roles.ts).
   addCol('role', 'retry_at', 'retry_at text')
+  addCol('role', 'checkout', 'checkout text references entity(eid)')
+  addCol('role', 'schedule', 'schedule text')
+  addCol('role', 'wake_policy', "wake_policy text not null default 'always'")
+  addCol('role', 'wake_target', 'wake_target text references entity(eid)')
+  addCol('role', 'decision', 'decision text')
+  addCol('role', 'reason', 'reason text')
+  addCol('role', 'observed', 'observed text')
+  addCol('role', 'decided_at', 'decided_at text')
   addCol('generation', 'serving_model', 'serving_model text')
   addCol('session', 'cwd', 'cwd text')
   addCol('session', 'pid', 'pid integer')

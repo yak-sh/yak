@@ -146,7 +146,16 @@ Deno.test('subject: sentences route through the existing CLI verbs', () => {
     cmd: 'set',
     args: ['T-3', '.status=wip'],
   })
-  for (let edge of ['requires', 'contains', 'reads', 'about']) {
+  for (
+    let edge of [
+      'requires',
+      'contains',
+      'reads',
+      'about',
+      'supervises',
+      'delegates',
+    ]
+  ) {
     assertEquals(route(`T-3 ${edge} T-9 --gone`), {
       cmd: 'dep',
       args: ['T-3', edge, 'T-9', '--gone'],
@@ -236,7 +245,10 @@ slow('task subject help is contextual and needs no server', async () => {
   assertEquals(out.code, 0)
   let stdout = text(out.stdout)
   assertMatch(stdout, /task T-3 — subject-first verbs/)
-  assertMatch(stdout, /requires\|contains\|reads\|about <id> \[--gone\]/)
+  assertMatch(
+    stdout,
+    /requires\|contains\|reads\|about\|supervises\|delegates <id> \[--gone\]/,
+  )
   assertMatch(stdout, /task T-3 is open\|wip\|done\|cancelled/)
   assertEquals(subjectUsage('T-3').trim(), stdout.trim())
 })

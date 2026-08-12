@@ -54,17 +54,25 @@ export let Role = ({ e }: { e: Ent }) => {
         {r.applied_at && <Stamp at={r.applied_at} label='applied' />}
         {r.stopped_at && <Stamp at={r.stopped_at} label='stopped' />}
         {r.applied_hash && <span>{r.applied_hash.slice(0, 8)}</span>}
+        {r.decision && <span>{r.decision}</span>}
+        {r.observed && <span>{r.observed}</span>}
+        {r.decided_at && <Stamp at={r.decided_at} label='decided' />}
       </Meta>
       <Grid>
         <Config e={e} comp='role' prop='state' name='state' />
         <Config e={e} comp='role' prop='surface' name='surface' />
-        <Config e={e} comp='role' prop='scope' name='project' />
+        <Config e={e} comp='role' prop='scope' name='scope' />
+        <Config e={e} comp='role' prop='checkout' name='checkout' />
+        <Config e={e} comp='role' prop='schedule' name='schedule' />
+        <Config e={e} comp='role' prop='wake_policy' name='wake policy' />
+        <Config e={e} comp='role' prop='wake_target' name='wake target' />
         <Config e={e} comp='spawn' prop='provider' name='provider' />
         <Config e={e} comp='spawn' prop='model' name='model' />
         <Config e={e} comp='spawn' prop='effort' name='effort' />
         <Config e={e} comp='spawn' prop='persona' name='persona' />
       </Grid>
       {e.error?.message && <Fault>{e.error.message}</Fault>}
+      {r.reason && <Fault>{r.reason}</Fault>}
       <Entity eid={e.eid} view='Body' />
       <Entity eid={e.eid} view='Dependencies' />
       <Entity eid={e.eid} view='Relate' />

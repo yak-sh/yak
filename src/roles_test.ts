@@ -311,6 +311,23 @@ Deno.test('native role dedupes, rolls drift, heals death, and stops exactly', as
   )
 })
 
+Deno.test('paused disabled and retired roles stay down with a receipt', async () => {
+  for (let state of ['paused', 'disabled', 'retired']) {
+    commands = []
+    sessions.clear()
+    let { role } = seed('native')
+    apply(db, [{ eid: role, name: 'role', comp: { state } }])
+    await rolesSweep(cast, deps)
+    assertEquals(spawns(role), 0)
+    assertEquals(
+      db.prepare(
+        'select decision, reason from role where eid = ?',
+      ).get(role),
+      { decision: 'stop', reason: 'desired state is not running' },
+    )
+  }
+})
+
 Deno.test('invalid native drift closes the stale door and stamps the cause', async () => {
   commands = []
   sessions.clear()
@@ -694,6 +711,10 @@ Deno.test('a still-starting native run gets no second spawn; a dead one is relau
   let s = launch(role, null, 30_000) // started 30s ago, no finished_at
   await rolesSweep(cast, live)
   assertEquals(spawns(role), 0) // idempotent: no racer for a booting run
+  assertEquals(
+    db.prepare('select decision, observed from role where eid = ?').get(role),
+    { decision: 'refuse duplicate', observed: s },
+  )
   db.prepare('update session set finished_at = ? where eid = ?')
     .run(new Date().toISOString(), s) // it died
   await rolesSweep(cast, live)

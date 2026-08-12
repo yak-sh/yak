@@ -310,18 +310,22 @@ defineActions([
   {
     match: has('role'),
     acts: (e) => [{
-      label: e.role!.state == 'running' ? 'stop role' : 'start role',
+      label: e.role!.state == 'running' ? 'pause role' : 'resume role',
       // Start also fences the crash-loop breaker (retry_at). Reconciliation
       // clears the shared error only after the role starts successfully.
       run: () =>
         mutate({
           eid: e.eid,
           name: 'role',
-          comp: e.role!.state == 'running' ? { state: 'stopped' } : {
+          comp: e.role!.state == 'running' ? { state: 'paused' } : {
             state: 'running',
             retry_at: new Date().toISOString(),
           },
         }),
+    }, {
+      label: 'stop role',
+      run: () =>
+        mutate({ eid: e.eid, name: 'role', comp: { state: 'stopped' } }),
     }],
   },
   {

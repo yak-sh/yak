@@ -79,8 +79,21 @@ export let httpMethods = [
 // verdict — the reconciler stopped relaunching a burning role and waits for an
 // owner `task role start`. Distinct from `stopped` (an owner's off switch) so
 // the two read apart and `held` keeps its error component across every tick.
-export let roleStates = ['running', 'stopped', 'held'] as const
+export let roleStates = [
+  'running',
+  'stopped',
+  'paused',
+  'disabled',
+  'retired',
+  'held',
+] as const
 export let roleSurfaces = ['native', 'managed'] as const
+export let wakePolicies = [
+  'always',
+  'attention',
+  'scheduled',
+  'manual',
+] as const
 
 // A venture's lifecycle, from a glimmer to its end. `hold` and `paused` are
 // reversible stops — the venture remembers where it came from (hold_from,
@@ -253,7 +266,13 @@ export let comps: Record<string, Record<string, PropType>> = {
   role: {
     state: { enum: roleStates },
     surface: { enum: roleSurfaces },
-    scope: { eid: 'project', death: 'detach' },
+    // Scope is attachment, not execution ground: a role may serve any graph
+    // entity. checkout names the repo-bearing entity when scope is not one.
+    scope: { eid: 'entity', death: 'detach' },
+    checkout: { eid: 'entity', death: 'detach' },
+    schedule: 'text',
+    wake_policy: { enum: wakePolicies },
+    wake_target: { eid: 'entity', death: 'detach' },
     // The crash-loop breaker's fresh-start boundary: `task role start` stamps
     // it, and the breaker counts only deaths after it (roles.ts). Set by the
     // owner's retry so a fixed role's stale burst can't re-trip it; the
@@ -821,6 +840,10 @@ export let stamped: Record<string, Record<string, PropType>> = {
     applied_hash: 'text',
     applied_at: 'time',
     stopped_at: 'time',
+    decision: 'text',
+    reason: 'text',
+    observed: { eid: 'entity', death: 'keep' },
+    decided_at: 'time',
   },
   // The managed-session lifecycle (sessions.ts owns every write; the
   // wire-writable launch spec lives in comps.spawn, with session aliases
@@ -1123,7 +1146,14 @@ export let friendly = (model?: string | null) => {
 // The LIST is the source of truth: db.ts bakes it into the dependency
 // table's check constraint (and rebuilds a live table whose baked list
 // has fallen behind), so a new verb here is a new verb everywhere.
-export let edges = ['requires', 'contains', 'reads', 'about'] as const
+export let edges = [
+  'requires',
+  'contains',
+  'reads',
+  'about',
+  'supervises',
+  'delegates',
+] as const
 export type Edge = (typeof edges)[number]
 
 // The written face of an entity — title and markdown body. Anything can
@@ -1420,10 +1450,18 @@ export type Role = {
   state: string
   surface: string
   scope: string | null
+  checkout?: string | null
+  schedule?: string | null
+  wake_policy?: string | null
+  wake_target?: string | null
   applied_hash?: string | null
   applied_at?: string | null
   stopped_at?: string | null
   retry_at?: string | null
+  decision?: string | null
+  reason?: string | null
+  observed?: string | null
+  decided_at?: string | null
 }
 
 // Is anybody home? The client's half of door.ts `present()`, from

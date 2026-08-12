@@ -31,6 +31,10 @@ export type RoleConfig = {
   state: string
   surface: string
   scope: string
+  checkout?: string
+  schedule?: string
+  wakePolicy?: string
+  wakeTarget?: string
   venture?: string
   color?: string
   title: string
@@ -396,12 +400,17 @@ let roleText = (c: RoleConfig) =>
     c.body,
     'This role is persistent fleet capacity managed by Tasks. The graph is ' +
     'the coordination source of truth.',
+    c.wakeTarget ? `Wake target: ${c.wakeTarget}` : undefined,
   ].filter(Boolean).join('\n\n') + '\n'
 
 export let roleHash = (c: RoleConfig) =>
   createHash('sha256').update(JSON.stringify({
     surface: c.surface,
     scope: c.scope,
+    checkout: c.checkout ?? c.scope,
+    schedule: c.schedule ?? null,
+    wakePolicy: c.wakePolicy ?? 'always',
+    wakeTarget: c.wakeTarget ?? null,
     repo: c.repo,
     provider: c.provider,
     model: c.model,
@@ -447,19 +456,12 @@ let config = (eid: string): RoleConfig => {
     left join doc scope on scope.eid = r.scope
     left join project venture on venture.eid = r.scope
     left join spawn p on p.eid = r.eid
-    left join repo on repo.eid = r.scope
+    left join repo on repo.eid = coalesce(r.checkout, r.scope)
     where r.eid = ?
   `).get(eid) as DbRow | undefined
   if (!row) throw new Error('role no longer exists')
-  if (!row.scope) throw new Error('role has no project scope')
-  if (
-    !db.prepare('select 1 from project where eid = ?').get(
-      String(row.scope),
-    )
-  ) {
-    throw new Error('role scope is not a project')
-  }
-  if (!row.path) throw new Error("the role's project has no repo")
+  if (!row.scope) throw new Error('role has no scope')
+  if (!row.path) throw new Error("the role's checkout has no repo")
   try {
     if (!Deno.statSync(String(row.path)).isDirectory) {
       throw new Error('not a directory')
@@ -479,6 +481,10 @@ let config = (eid: string): RoleConfig => {
     state: String(row.state),
     surface: String(row.surface),
     scope: String(row.scope),
+    checkout: String(row.checkout ?? row.scope),
+    schedule: String(row.schedule ?? '') || undefined,
+    wakePolicy: String(row.wake_policy ?? 'always'),
+    wakeTarget: String(row.wake_target ?? '') || undefined,
     venture: String(row.venture_title ?? '') || undefined,
     color: String(row.venture_color ?? '') || undefined,
     title: String(row.title ?? ''),
@@ -500,6 +506,10 @@ let stamp = (eid: string, patch: DbRow, cast: Cast) => {
     | DbRow
     | undefined
   if (!prior) return
+  if (
+    patch.decision === prior.decision && patch.reason === prior.reason &&
+    patch.observed === prior.observed
+  ) delete patch.decided_at
   let failure = Object.hasOwn(patch, 'error') ? patch.error : undefined
   let role = Object.fromEntries(
     Object.entries(patch).filter(([key]) => key != 'error'),
@@ -673,6 +683,10 @@ let startManaged = (
     applied_hash: hash,
     applied_at: deps.now(),
     stopped_at: null,
+    decision: 'launch',
+    reason: 'desired session was missing',
+    observed: eid,
+    decided_at: deps.now(),
     error: null,
   }, cast)
 }
@@ -709,6 +723,10 @@ let reconcileStopped = async (eid: string, cast: Cast, deps: RoleDeps) => {
   stamp(eid, {
     applied_hash: null,
     ...(!row.stopped_at || row.applied_hash ? { stopped_at: deps.now() } : {}),
+    decision: 'stop',
+    reason: 'desired state is not running',
+    observed: session ? String(session.eid) : null,
+    decided_at: deps.now(),
     error: null,
   }, cast)
 }
@@ -732,7 +750,13 @@ let reconcileNative = async (
     c.eid,
   ) as { applied_hash: string | null }
   if (has && row.applied_hash == hash) {
-    stamp(c.eid, { error: null, stopped_at: null }, cast)
+    stamp(c.eid, {
+      decision: 'adopt',
+      reason: 'matching native session is active',
+      decided_at: deps.now(),
+      error: null,
+      stopped_at: null,
+    }, cast)
     return
   }
   if (has) await tmuxKill(c.eid, deps)
@@ -743,6 +767,9 @@ let reconcileNative = async (
     applied_hash: hash,
     applied_at: deps.now(),
     stopped_at: null,
+    decision: 'launch',
+    reason: 'desired native session was missing or stale',
+    decided_at: deps.now(),
     error: null,
   }, cast)
 }
@@ -835,7 +862,7 @@ let reconcile = async (eid: string, cast: Cast, deps: RoleDeps) => {
       await reconcileHeld(eid, cast, deps)
       return
     }
-    if (wanted.state == 'stopped') {
+    if (wanted.state != 'running') {
       await reconcileStopped(eid, cast, deps)
       return
     }
@@ -859,7 +886,15 @@ let reconcile = async (eid: string, cast: Cast, deps: RoleDeps) => {
     if (
       starting(lives[0], now) &&
       !graphSession(db, String(current?.eid ?? ''))
-    ) return
+    ) {
+      stamp(eid, {
+        decision: 'refuse duplicate',
+        reason: 'newest session is still starting',
+        observed: current ? String(current.eid) : null,
+        decided_at: deps.now(),
+      }, cast)
+      return
+    }
     let c = config(eid)
     let hash = roleHash(c)
     if (c.surface == 'native') {
@@ -946,8 +981,9 @@ let roleNow = (eid: string, cast: Cast) =>
 export let roleConfig =
   (cast: Cast, deps: RoleDeps = defaults) => (eid: string) =>
     rolesFor(
-      'select eid from role where eid = ? or scope = ? order by eid',
-      [eid, eid],
+      `select eid from role
+       where eid = ? or scope = ? or checkout = ? order by eid`,
+      [eid, eid, eid],
       cast,
       deps,
     )

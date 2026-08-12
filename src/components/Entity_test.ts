@@ -113,8 +113,9 @@ Deno.test('a role owns its lifecycle face, actions, and linked sessions', () => 
   assertEquals(resolve(role).view, 'Role')
   assertEquals(
     actionsFor(role).find((a) => a.label.includes('role'))?.label,
-    'stop role',
+    'pause role',
   )
+  assertEquals(actionsFor(role).some((a) => a.label == 'stop role'), true)
   assertEquals(
     backlinks(role.eid).some((b) => b.via == 'session.role'),
     true,

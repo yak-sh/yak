@@ -128,7 +128,6 @@ let contract = (
 
 let contracts = [
   contract('task', 'project', 'project', { status: 'open' }),
-  contract('role', 'scope', 'project'),
   contract('camera', 'client', 'client', (d) => ({
     canvas: tag(d, 'canvas'),
   })),
