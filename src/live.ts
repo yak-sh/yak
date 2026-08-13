@@ -26,7 +26,6 @@ import {
 } from './types.ts'
 import { inboxItem, isUnread, readerAt, type Row } from './client.ts'
 import {
-  EXISTS,
   listed,
   matchQuery,
   namesLazy,
@@ -86,8 +85,11 @@ let canvasVersion = signal(0)
 let noRelations: Dep[] = []
 let refreshBoards = (_ids: Set<string>) => {}
 let refreshPins = (_ids: Set<string>) => {}
+let refreshComments = (_ids: Set<string>) => {}
 let refreshFolds = (_ids: Set<string>) => {}
 let refreshBacklinks = (_ids: Set<string>) => {}
+let refreshJobs = (_ids: Set<string>) => {}
+let refreshBoardLinks = (_ids: Set<string>) => {}
 let refreshFacets = (_ids: Set<string>) => {}
 
 // Human ids are a hot lookup vocabulary, not a query. Keep them beside the
@@ -248,30 +250,6 @@ export let queryEids = (preds: Pred[]): Signal<string[]> =>
 export let holdQuery = (preds: Pred[]): Signal<string[]> =>
   (store ?? mem).hold(preds)
 export let dropQuery = (preds: Pred[]) => (store ?? mem).drop(preds)
-
-// The reverse-index reads the vocabulary already answers as queries: an eid
-// EQUALITY anchors on the derived refs index (index.ts), a component PRESENCE
-// on byComp, a CONTAINS on the component's key pool. Each helper builds the
-// `Pred[]` the query layer caches per-shape, so a face reading one of the
-// functions below (commentsOn, pinned, jobOf, boardsOver, projects, …) wakes
-// only when ITS result changes — never on an unrelated patch — with no bespoke
-// per-relation set to maintain (T-17064, collapsing the reverse-index machinery
-// into the one query door). Values are eids the caller already holds, so no
-// ref-resolution pass is needed; the arrays are structurally stable, so equal
-// shapes hit the same cached signal.
-let eq = (comp: string, prop: string, value: string): Pred => ({
-  comp,
-  prop,
-  op: '',
-  value,
-})
-let has = (comp: string): Pred => ({ comp, prop: '', op: EXISTS, value: '' })
-let contains = (comp: string, prop: string, value: string): Pred => ({
-  comp,
-  prop,
-  op: '~',
-  value,
-})
 
 // Open and populate the durable query store, then make it the query surface.
 // Awaited inside boot BEFORE the first render, so queryEids never sees a
@@ -455,8 +433,11 @@ let resetSignals = () =>
     resetQueries()
     refreshBoards(touched)
     refreshPins(touched)
+    refreshComments(touched)
     refreshFolds(touched)
     refreshBacklinks(touched)
+    refreshJobs(touched)
+    refreshBoardLinks(touched)
     refreshFacets(touched)
   })
 
@@ -753,9 +734,12 @@ export let applyLocal = (changes: Change[], checkpoint?: number) => {
     publish(changedRows, changedParents, changedChildren)
     refreshBoards(changedRows)
     refreshPins(changedPins)
+    refreshComments(changedRows)
     refreshFolds(changedRows)
     refreshBacklinks(changedRows)
+    refreshJobs(changedRows)
     refreshQueries(changedRows, checkpoint)
+    refreshBoardLinks(changedRows)
     refreshFacets(changedRows)
     for (let [eid, z] of zs) {
       let live = pinZs.get(eid)
@@ -1046,9 +1030,12 @@ let evict = (eids: string[]) => {
       publish(gone, new Set(), new Set())
       refreshBoards(gone)
       refreshPins(gone)
+      refreshComments(gone)
       refreshFolds(gone)
       refreshBacklinks(gone)
+      refreshJobs(gone)
       refreshQueries(gone)
+      refreshBoardLinks(gone)
       refreshFacets(gone)
     })
   }
@@ -1786,17 +1773,90 @@ refreshFacets = (eids: Set<string>) => {
   facetVersion.value++
 }
 
-// The comments aimed HERE — every entity whose `comment.target` is this eid,
-// an eid EQUALITY the refs index answers in O(result). A face subscribes to its
-// own list (num-ordered) and tally; birth, death and retargeting update only
-// the targets they affect. `.map(ent)` rides each note's own row signal, so a
-// note edit wakes only the thread it is in.
+type CommentSet = {
+  graph: Record<string, Comps>
+  ids: Set<string>
+  talk: Set<string>
+  list: Signal<string[]>
+  count: Signal<number>
+}
+type CommentIds = { ids: Set<string>; talk: Set<string> }
+let commentSets = new Map<string, CommentSet>()
+// One pass seeds every cold face. Per-target sets below own later live
+// invalidation, so mounting a board never turns into one graph scan per tile.
+let commentIndex = computed(() => {
+  let found = new Map<string, CommentIds>()
+  for (let [eid, r] of Object.entries(cache.value)) {
+    let target = r.comment?.target
+    if (!target) continue
+    let ids = found.get(target)
+    if (!ids) found.set(target, ids = { ids: new Set(), talk: new Set() })
+    ids.ids.add(eid)
+    ids.talk.add(eid)
+  }
+  return found
+})
+let commentIds = (target: string) => {
+  let found = commentIndex.value.get(target)
+  return {
+    ids: new Set(found?.ids),
+    talk: new Set(found?.talk),
+  }
+}
+
+let commentSet = (target: string) => {
+  let found = commentSets.get(target)
+  if (!found) {
+    let { ids, talk } = untracked(() => commentIds(target))
+    found = {
+      graph: cache.peek(),
+      ids,
+      talk,
+      list: signal([...ids]),
+      count: signal(talk.size),
+    }
+    commentSets.set(target, found)
+  } else if (found.graph != cache.peek()) {
+    let { ids, talk } = untracked(() => commentIds(target))
+    found.ids = ids
+    found.talk = talk
+    found.graph = cache.peek()
+    found.list.value = [...ids]
+    found.count.value = talk.size
+  }
+  return found
+}
+
+// A face subscribes to its own comment list and tally. Birth, death,
+// retargeting, and event changes update only the targets they affect.
 export let commentsOn = (target: string): Ent[] =>
-  queryEids([eq('comment', 'target', target)]).value
-    .map(ent)
-    .sort((a, b) => a.num - b.num)
-export let commentCount = (target: string): Signal<number> =>
-  computed(() => queryEids([eq('comment', 'target', target)]).value.length)
+  commentSet(target).list.value.map(ent).sort((a, b) => a.num - b.num)
+export let commentCount = (target: string) => commentSet(target).count
+
+refreshComments = (eids: Set<string>) => {
+  for (let [target, set] of commentSets) {
+    let listed = false
+    let counted = false
+    for (let eid of eids) {
+      let had = set.ids.has(eid)
+      let spoke = set.talk.has(eid)
+      let c = cache.peek()[eid]?.comment
+      let wants = c?.target == target
+      let talks = wants
+      if (had != wants) {
+        wants ? set.ids.add(eid) : set.ids.delete(eid)
+        listed = true
+      }
+      if (spoke != talks) {
+        talks ? set.talk.add(eid) : set.talk.delete(eid)
+        counted = true
+      }
+    }
+    set.graph = cache.peek()
+    if (listed) set.list.value = [...set.ids]
+    if (counted) set.count.value = set.talk.size
+  }
+}
 
 type Folded = { eid: string; statuses: string }
 type FoldSet = {
@@ -1856,12 +1916,6 @@ export let rootCanvas = () => {
     ?.[0]
 }
 
-// The cards pinned to a canvas. Not yet on the query door (T-17064): a Pinned
-// carries live x/y/w/h off the pin comp, so the list must re-render on those
-// field edits — but NOT on z (bound straight to pinZ). queryEids is
-// membership-only, and a per-row subscription can't split z from the rest of one
-// comp, so the projection stays a bespoke set until the query result can carry
-// live fields with z excluded.
 type PinSet = {
   graph: Record<string, Comps>
   ids: Signal<string[]>
@@ -1972,19 +2026,51 @@ refreshBacklinks = (eids: Set<string>) => {
   }
 }
 
-// The task a session is ON: the newest task it holds a claim over, else its
-// managed request. A claim.session EQUALITY (the refs index) narrows to just
-// the rows this session claims; the newest by claimed_at wins. The session
-// watches only its own claim-bearing rows, never an unrelated claim.
-export let jobOf = (e: Ent): string | null => {
-  let held = queryEids([has('task'), eq('claim', 'session', e.eid)]).value
-    .map((eid) => [eid, cache.peek()[eid]] as const)
+let scanJob = (session: string): string | null =>
+  Object.entries(cache.value)
+    .filter(([, r]) => r.task && r.claim?.session == session)
     .toSorted(([, a], [, b]) =>
-      String(b?.claim?.claimed_at ?? '').localeCompare(
-        String(a?.claim?.claimed_at ?? ''),
+      String(b.claim?.claimed_at ?? '').localeCompare(
+        String(a.claim?.claimed_at ?? ''),
       )
-    )[0]?.[0]
-  return held ?? e.session?.requested_task ?? null
+    )[0]?.[0] ?? null
+
+type JobSet = {
+  graph: Record<string, Comps>
+  value: Signal<string | null>
+}
+let jobSets = new Map<string, JobSet>()
+
+// The task a session is ON: the newest task it holds a claim over, else
+// its managed request. Each session watches only claim-bearing rows.
+export let jobOf = (e: Ent): string | null => {
+  let found = jobSets.get(e.eid)
+  if (!found) {
+    found = {
+      graph: cache.peek(),
+      value: signal(untracked(() => scanJob(e.eid))),
+    }
+    jobSets.set(e.eid, found)
+  } else if (found.graph != cache.peek()) {
+    found.graph = cache.peek()
+    found.value.value = untracked(() => scanJob(e.eid))
+  }
+  return found.value.value ?? e.session?.requested_task ?? null
+}
+
+refreshJobs = (eids: Set<string>) => {
+  for (let [session, set] of jobSets) {
+    let changed = [...eids].some((eid) => {
+      let before = set.graph[eid]
+      let after = cache.peek()[eid]
+      let mine = before?.claim?.session == session ||
+        after?.claim?.session == session
+      return mine &&
+        (before?.claim !== after?.claim || !!before?.task != !!after?.task)
+    })
+    set.graph = cache.peek()
+    if (changed) set.value.value = scanJob(session)
+  }
 }
 
 // The edges that hold an entity FROM ABOVE — every dependency whose child
@@ -1992,11 +2078,43 @@ export let jobOf = (e: Ent): string | null => {
 // task names the parents that contain or require it.
 export let parents = (eid: string) => childRelations(eid).value
 
-// A board query carries refs as text, outside the schema's eid columns, so a
-// CONTAINS over `board.query` names every board mentioning this target. The
-// target face watches only board rows that gain or lose its eid.
-export let boardsOver = (target: string): string[] =>
-  queryEids([contains('board', 'query', target)]).value
+type BoardLinks = {
+  graph: Record<string, Comps>
+  value: Signal<string[]>
+}
+let boardLinks = new Map<string, BoardLinks>()
+let scanBoardLinks = (target: string) =>
+  Object.keys(cache.value).filter((eid) =>
+    cache.value[eid].board?.query?.includes(target)
+  )
+
+// A board query carries refs as text, outside the schema's eid columns.
+// The target face watches only board query rows that gain or lose its eid.
+export let boardsOver = (target: string) => {
+  let found = boardLinks.get(target)
+  if (!found) {
+    found = {
+      graph: cache.peek(),
+      value: signal(untracked(() => scanBoardLinks(target))),
+    }
+    boardLinks.set(target, found)
+  } else if (found.graph != cache.peek()) {
+    found.graph = cache.peek()
+    found.value.value = untracked(() => scanBoardLinks(target))
+  }
+  return found.value.value
+}
+
+refreshBoardLinks = (eids: Set<string>) => {
+  for (let [target, set] of boardLinks) {
+    let changed = [...eids].some((eid) =>
+      !!set.graph[eid]?.board?.query?.includes(target) !=
+        !!cache.peek()[eid]?.board?.query?.includes(target)
+    )
+    set.graph = cache.peek()
+    if (changed) set.value.value = scanBoardLinks(target)
+  }
+}
 
 // The highest stacking order on a canvas — a raised card gets topZ + 1.
 // The pin presence test is load-bearing: with `?.` alone a nullish canvas
