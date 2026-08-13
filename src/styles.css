@@ -330,10 +330,16 @@ html {
 }
 /* Ordinary roots just get breathing room; every root fills the floor —
    a board or canvas paints its own. */
-.App_Body > :not(.Canvas, .Board, .Admin) {
+.App_Body > :not(.Canvas, .Board, .Admin, .Split) {
   padding: var(--gap);
 }
-.App_Body > .Board {
+/* The two-pane Split paints its own floor, like a board or canvas. */
+.App_Body > .Split {
+  flex: 1;
+  min-height: 0;
+}
+.App_Body > .Board,
+.Split_Left > .Board {
   /* vertical padding rides INSIDE the columns (the header band carries
      the top, the scroller's padding the bottom), so rows scroll clear
      to both edges instead of clipping mid-air */
@@ -1019,7 +1025,8 @@ html {
    (App_Body) or a canvas card (Card_Scroll). Content without snap-align
    defines no snap areas, so every other page scrolls exactly as before. */
 .App_Body,
-.Card_Scroll {
+.Card_Scroll,
+.Split_Left {
   scroll-snap-type: x mandatory;
   scroll-padding-inline: calc(var(--gap) + env(safe-area-inset-left, 0px))
     calc(var(--gap) + env(safe-area-inset-right, 0px));
@@ -2999,6 +3006,61 @@ a[data-ref]:hover {
   }
   .Session_References:not([open]) {
     justify-self: end;
+  }
+}
+/* The two-pane inbox (Split view, T-17321). Same responsive shape as the
+   Session console: two panes that snap side-to-side on a narrow host and
+   sit side-by-side once the container is wide. The left pane is also the
+   board's scroll host (see .Split_Left in the board-snap rule above), so a
+   board's columns snap within it exactly as they do fullscreen. */
+/* Every host of a Split is its width container — the grid below keys off the
+   room it actually has, not the viewport, so a Split carded or peeked narrow
+   on a wide screen still pages (an element can't query its OWN container). */
+.App_Body:has(> .Split),
+.Card_Scroll:has(> .Split),
+.Peek_Body:has(> .Split) {
+  container-type: inline-size;
+}
+.Split {
+  display: grid;
+  grid-template-columns: 100% 100%;
+  grid-template-rows: minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  container-type: inline-size;
+}
+.Split_Left {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scroll-snap-align: start;
+}
+.Split_Right {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scroll-snap-align: start;
+  border-left: 1px solid var(--border);
+  padding: var(--gap);
+}
+.Split_Empty {
+  color: var(--muted);
+  padding: var(--gap);
+  font-size: 13px;
+}
+@container (min-width: 50rem) {
+  .Split {
+    grid-template-columns: minmax(0, 1fr) minmax(20rem, 34rem);
+    overflow-x: hidden;
+    scroll-snap-type: none;
   }
 }
 /* Said but not yet heard — waiting under the log for the agent's next

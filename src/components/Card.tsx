@@ -18,6 +18,7 @@ export let icons: Record<string, string> = {
   List: 'list',
   Full: 'file-text',
   Board: 'kanban',
+  Split: 'columns-2',
   Layout: 'columns-3',
   Persona: 'drama',
   Dashboard: 'layout-dashboard',

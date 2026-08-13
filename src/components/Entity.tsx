@@ -27,6 +27,7 @@ import {
   WebTitle,
 } from './views/Title.tsx'
 import { Board } from './views/Board.tsx'
+import { Split } from './views/Split.tsx'
 import { Layout } from './views/Layout.tsx'
 import { Dashboard } from './views/Dashboard.tsx'
 import { Persona } from './views/Persona.tsx'
@@ -102,6 +103,14 @@ define([
   { view: 'Full', match: has('doc'), Render: Show },
   { view: 'Card.Full', match: has('doc'), Render: CardFull },
   { view: 'Board', match: has('doc', 'board'), Render: Board },
+  // The two-pane inbox: list left, opened entity right. A view of anything
+  // with a list face (a board/project, or a canvas), never a default face —
+  // it sits after Board/List in the tabs list so it is a chosen tab.
+  {
+    view: 'Split',
+    match: (e) => has('board')(e) || has('canvas')(e),
+    Render: Split,
+  },
   // The tiling container (D-14718) — a layout's default face. Its leaves
   // walk back through Entity, so defer the binding like Canvas above.
   {
@@ -225,6 +234,7 @@ define([
   'Canvas',
   'Board',
   'List',
+  'Split',
   'Layout',
   'Persona',
   // After Inbox on purpose: the fullscreen bar opens a bare URL on
