@@ -14,7 +14,7 @@
 // session of its own — its run-record is telemetry, its output the graph
 // edits. SERVER-ONLY (imports db). The model call is injectable so tests never
 // spawn a provider (like recall.ts's recallFn).
-import { apply, db, human, snapshot } from './db.ts'
+import { apply, db, human, snapshot, touch } from './db.ts'
 import { type Change, uuid } from './types.ts'
 import { dispatch, trace } from './effects.ts'
 import { record as telemetry } from './telemetry.ts'
@@ -25,6 +25,7 @@ import { transcribe } from './log_text.ts'
 import { complete } from './complete.ts'
 import { memoryChanges, rows } from './client.ts'
 import { normalize } from './heal.ts'
+import { embed, FLOOR, similar, textOf } from './embed.ts'
 
 type Cast = (changes: Change[]) => void
 
@@ -256,27 +257,52 @@ export let namesResolved = (f: Finding): boolean => {
   return false
 }
 
+// The semantic gate (T-17422): a finding whose MEANING already lives in a
+// memory — reworded, so the key-dedup (kind + normalized TITLE) slid past it —
+// is a re-notice, not news. Rank the finding's vector against stored vectors at
+// the dupe-hint floor (embed.ts FLOOR: near-identical, the same bar the
+// creation-time dupe hint uses) and keep the nearest hit that is a MEMORY.
+// Pure over a query vector like recall.ts's recallFrom, so a test drives it with
+// precomputed vectors and never loads the embedder. NET is wide because
+// memories are sparse among all doc-bearing entities (recall.ts's reasoning) — a
+// few near tasks must not crowd out the memory the finding restates.
+let NET = 60
+export let nearestMemory = (
+  q: Float32Array,
+  floor = FLOOR,
+): string | undefined => {
+  for (let h of similar(db, q, NET, floor)) {
+    if (db.prepare('select 1 from memory where eid = ?').get(h.eid)) {
+      return h.eid
+    }
+  }
+  return undefined
+}
+
 // Route by kind (T-17407 gate 3): a decision or a reflex/lesson becomes a
 // MEMORY (a decision dated when taken; a reflex a venture-scoped lesson), not a
 // vague open "consider" task. Only actionable, unaddressed drift — a missing
 // warm path, ticket entropy, super-linear complexity — becomes a task.
 let MEMORY_KINDS = new Set(['decision', 'reflex'])
 
-type Fate = 'filed' | 'recur' | 'skip'
+type Fate = 'filed' | 'recur' | 'reinforce' | 'skip'
 
-// File ONE finding, or don't — the three gates in one place. Dedup against what
+// File ONE finding, or don't — the four gates in one place. Dedup against what
 // this dream already filed (an OPEN artifact recurs and is hit-counted, a
 // resolved or already-captured one is skipped), skip a finding that points at
-// closed work, then route by kind and mark the artifact with its key. Returns
+// closed work, reinforce (never re-file) a finding whose MEANING already lives
+// in a memory, then route by kind and mark the artifact with its key. Returns
 // what happened, for the run tally. Called in session order so two sessions'
-// same-shape findings in one run also collapse (each land re-reads).
-let fileFinding = (
+// same-shape findings in one run also collapse (each land re-reads). Async for
+// the one embed the semantic gate needs; embedFn is injected so tests drive it.
+let fileFinding = async (
   f: Finding,
   project: string | null,
   s: { eid: string; id: string | null },
   ceil: string,
   cast: Cast,
-): Fate => {
+  embedFn: typeof embed,
+): Promise<Fate> => {
   let key = findingKey(f)
   let seen = filed(key)
   if (seen) {
@@ -294,6 +320,20 @@ let fileFinding = (
     return 'skip'
   }
   if (namesResolved(f)) return 'skip'
+  // Semantic gate: a finding near an existing memory restates a documented
+  // lesson in fresh words — reinforce that memory (a re-notice IS a re-
+  // confirmation) and don't file a redundant twin. A box with no embedder
+  // returns null and the gate degrades to silence, like every similar door.
+  // touch() is the one writer of recall stats and returns cast-able changes —
+  // the apply() wire refuses them, so cast, never land.
+  let vec = await embedFn(textOf(f.title, f.body))
+  if (vec) {
+    let mem = nearestMemory(vec)
+    if (mem) {
+      cast(touch(db, [mem], true))
+      return 'reinforce'
+    }
+  }
   let mark = (eid: string): Change => ({
     eid,
     name: 'finding',
@@ -348,9 +388,10 @@ let comb = async (
   d: { scope: string | null; floor: string | null },
   cast: Cast,
   completeFn: typeof complete,
+  embedFn: typeof embed,
 ) => {
   let project = d.scope
-  let base = { combed: 0, filed: 0, recurred: 0, skipped: 0 }
+  let base = { combed: 0, filed: 0, recurred: 0, reinforced: 0, skipped: 0 }
   if (!project) return { ...base, floor: d.floor ?? '' }
   let repo = pathOf(project)
   let now = Date.now()
@@ -374,9 +415,10 @@ let comb = async (
     if (combed) tally.combed++
     if (!reply) continue // nothing found, or no model — never an error
     for (let f of parseFindings(reply)) {
-      let fate = fileFinding(f, project, s, ceil, cast)
+      let fate = await fileFinding(f, project, s, ceil, cast, embedFn)
       if (fate == 'filed') tally.filed++
       else if (fate == 'recur') tally.recurred++
+      else if (fate == 'reinforce') tally.reinforced++
       else tally.skipped++
     }
   }
@@ -406,22 +448,25 @@ let rearm = (to: string, cast: Cast) => {
 // the window next cadence rather than storming the boot sweep), combs, and
 // ALWAYS re-arms.
 export let dreamComb =
-  (cast: Cast, completeFn = complete) => async (eid: string) => {
+  (cast: Cast, completeFn = complete, embedFn = embed) =>
+  async (
+    eid: string,
+  ) => {
     let to = toOf(eid)
     let d = dreamOf(to)
     if (!d) return // not a dream knock — abstain
     delivered(eid, 'dream comb', cast)
     let at = Date.now()
     try {
-      let r = await comb(to, d, cast, completeFn)
+      let r = await comb(to, d, cast, completeFn, embedFn)
       telemetry(db, {
         source: 'srv',
         name: 'dream',
         ok: true,
         ms: Date.now() - at,
         detail: `${human(db, to)}: combed ${r.combed}, filed ${r.filed}, ` +
-          `recurred ${r.recurred}, skipped ${r.skipped}, ` +
-          `floor→${r.floor.slice(0, 10)}`,
+          `recurred ${r.recurred}, reinforced ${r.reinforced}, ` +
+          `skipped ${r.skipped}, floor→${r.floor.slice(0, 10)}`,
       })
     } catch (e) {
       telemetry(db, {

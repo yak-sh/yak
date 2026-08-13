@@ -11,10 +11,12 @@ let {
   dreamComb,
   findingKey,
   namesResolved,
+  nearestMemory,
   parseFindings,
   seedWake,
   unwoken,
 } = await import('./dream.ts')
+let { hash, MODEL } = await import('./embed.ts')
 let { assertEquals } = await import('@std/assert')
 
 let uid = () => crypto.randomUUID()
@@ -77,6 +79,32 @@ let task = (title: string, status: string) => {
     num: number
   }).num
   return { eid, num }
+}
+// Precomputed vectors for the semantic gate, the embed_test/recall_test way —
+// the embedder never loads. A distinctive negative-y direction keeps these
+// clear of every other test's first-quadrant vectors above the 0.78 dupe floor.
+let vec = (...xs: number[]) => {
+  let n = Math.hypot(...xs)
+  return Float32Array.from(xs.map((x) => x / n))
+}
+let putVec = (eid: string, v: Float32Array) =>
+  db.prepare(
+    'insert into embedding (eid, model, hash, vec) values (?, ?, ?, ?)',
+  ).run(eid, MODEL, hash(eid), new Uint8Array(v.buffer))
+let memWithVec = (title: string, v: Float32Array) => {
+  let eid = uid()
+  apply(db, [
+    { eid, name: 'doc', comp: { title, body: '' } },
+    { eid, name: 'memory', comp: { scope: null } },
+  ])
+  putVec(eid, v)
+  return eid
+}
+let docWithVec = (title: string, v: Float32Array) => {
+  let eid = uid()
+  apply(db, [{ eid, name: 'doc', comp: { title, body: '' } }])
+  putVec(eid, v)
+  return eid
 }
 
 Deno.test('parseFindings: parses JSON Lines, skips junk, unknown kinds, and titleless', () => {
@@ -358,5 +386,66 @@ Deno.test('dreamComb: two sessions, one shared finding — filed once (batch + w
   // Both sessions combed, but the shared finding lands ONE task, not two.
   let considers = db.prepare('select count(*) as n from doc where title = ?')
     .get('consider: unify the widget path') as { n: number }
+  assertEquals(considers.n, 1)
+})
+
+Deno.test('nearestMemory: the nearest MEMORY above the dupe floor, never a plain task', () => {
+  let m = memWithVec('a documented principle', vec(-1, 0))
+  let t = docWithVec('a task in the same words', vec(-1, 0)) // near, not a memory
+  // The query direction returns the MEMORY, skipping the equally-near task.
+  assertEquals(nearestMemory(vec(-1, 0)), m)
+  assertEquals(nearestMemory(vec(-1, 0)) == t, false)
+  // A query far from every memory returns nothing — no reinforcement to make.
+  assertEquals(nearestMemory(vec(-1, -1)), undefined)
+})
+
+Deno.test('dreamComb: a finding restating a memory in new words reinforces it, files nothing', async () => {
+  let p = proj('Reinforce venture')
+  let d = dreamEnt(p, ago(30))
+  let s = sess(p, ago(2))
+  msg(s.eid, 'leaned on a principle the fleet already wrote down')
+  let m = memWithVec('escalate only the irreversible', vec(0, -1))
+  // The WORDS differ (key-dedup slides past), but embedFn maps the finding onto
+  // the memory's vector — a semantic twin the title-key can never catch.
+  let title = 'decide reversible calls yourself, escalate what cannot be undone'
+  let reply = says(JSON.stringify({
+    kind: 'reflex',
+    title,
+    body: 'a reversible call parked costs more than a wrong one corrected',
+    priority: 2,
+  }))
+  let near = () => Promise.resolve(vec(0, -1))
+  await dreamComb(noop, reply as never, near as never)(knock(d))
+  // Nothing new filed under the finding's title — no twin memory, no task.
+  let filed = db.prepare('select count(*) as n from doc where title = ?')
+    .get(title) as { n: number }
+  assertEquals(filed.n, 0)
+  // The matched memory was reinforced: recall bumped, last_confirmed_at stamped.
+  let rc = db.prepare('select count from recall where eid = ?').get(m) as
+    | { count: number }
+    | undefined
+  assertEquals(rc?.count, 1)
+  let mm = db.prepare('select last_confirmed_at as c from memory where eid = ?')
+    .get(m) as { c: string | null }
+  assertEquals(!!mm.c, true)
+})
+
+Deno.test('dreamComb: a genuinely novel finding still files despite the semantic gate', async () => {
+  let p = proj('Novel venture')
+  let d = dreamEnt(p, ago(30))
+  let s = sess(p, ago(2))
+  msg(s.eid, 'hit a wall nobody had written down')
+  memWithVec('an unrelated documented lesson', vec(-1, 0))
+  let reply = says(JSON.stringify({
+    kind: 'gap',
+    title: 'add a widget-purge verb',
+    body: 'no warm path to purge widgets',
+    priority: 3,
+  }))
+  let far = () => Promise.resolve(vec(-1, -1)) // near no memory
+  await dreamComb(noop, reply as never, far as never)(knock(d))
+  // The gate let it through: a consider task filed, exactly one.
+  let considers = db.prepare('select count(*) as n from doc where title = ?')
+    .get('consider: add a widget-purge verb') as { n: number }
   assertEquals(considers.n, 1)
 })
