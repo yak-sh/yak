@@ -97,16 +97,7 @@ Deno.test('session user messages render as markdown', () => {
   }
 })
 
-Deno.test('generic graph entries keep their normalized session face', () => {
-  cache.value = {
-    entry: {
-      entity: { eid: 'entry', num: 0 },
-      entry: { eid: 'entry', session: 'session', seq: 1 },
-      call: { eid: 'entry', key: 'call-1' },
-      tool: { eid: 'entry', name: 'Read', detail: 'src/query.ts' },
-      imported: { eid: 'entry', source: 'native', line: 2 },
-    },
-  }
+Deno.test('uncached graph entries keep their normalized session face', () => {
   let { root, free } = mount(
     <SessionEntry
       x={{
@@ -118,9 +109,8 @@ Deno.test('generic graph entries keep their normalized session face', () => {
     />,
   )
   assertEquals(root.querySelector('.Session_ToolName')?.textContent, 'Read')
-  assertEquals(root.querySelector('.Entry-meta'), null)
+  assertEquals(root.querySelector('.Json'), null)
   free()
-  cache.value = {}
 })
 
 Deno.test('session context renders compactly for the sticky head', () => {

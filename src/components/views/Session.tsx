@@ -505,7 +505,7 @@ export let SessionEntry = (
   if (!x.eid) return <SessionBody x={x} repo={repo} />
   let e = ent(x.eid)
   let face = resolve(e, 'Entry.Summary')
-  return face.Render == EntrySummary && x.row
+  return x.row && (face.Render == EntrySummary || face.view == 'JSON')
     ? <SessionBody x={x} repo={repo} />
     : <face.Render e={e} onOpen={onOpen} />
 }
