@@ -660,11 +660,11 @@ export let derived = [
 let spine = (db: DatabaseSync, eid: string) =>
   db.prepare('insert or ignore into entity (eid) values (?)').run(eid)
 
-// The kinds that get a human number. The exclusion is EMPTY today, so every
-// kind is numbered and part 1 changes nothing about WHICH entities get a num
-// (T-3684). Cheap/bulk kinds — log lines, lazy-partition rows (T-3683) — join
-// `unnumbered` as they arrive, and only then does a NULL num appear.
-let unnumbered = new Set(['entry'])
+// The kinds that get a human number. Cheap/bulk/ephemeral kinds stay out:
+// `entry` (log lines), `wake` (one per pace cycle, read only by kind=wake and
+// self-replaced per actor — never typed by a human, so a num is pure overload).
+// Their spines carry a NULL num; every other kind is numbered (T-3684).
+let unnumbered = new Set(['entry', 'wake'])
 export let numbered = (kind: string) => !unnumbered.has(kind)
 
 // Assign the next human number to a newly-created entity — the allocator

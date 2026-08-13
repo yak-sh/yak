@@ -44,8 +44,9 @@ let pending = () =>
      where ${PENDING('wake')} order by wake.at`,
   ).all() as Row[]
 
-// The knock this wake was always going to be. No target means the wake
-// itself is the subject.
+// The knock this wake was always going to be. No target (a cadence wake)
+// means the woken actor is the subject — "look at your own board" — not the
+// wake row itself, which is unnumbered and says nothing.
 let fire = (r: Row, cast: Cast) => {
   let t = trace()
   let ke = uuid()
@@ -53,7 +54,7 @@ let fire = (r: Row, cast: Cast) => {
     {
       eid: ke,
       name: 'knock',
-      comp: { target: r.target ?? r.eid },
+      comp: { target: r.target ?? r.to },
     },
     { eid: ke, name: 'deliver', comp: { to: r.to } },
   ], t)

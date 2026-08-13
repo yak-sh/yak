@@ -44,7 +44,20 @@ let jeff = (() => {
   return eid
 })()
 
-let wake = (at: string, target?: string) => {
+// A fresh person to be woken. A targetless wake's knock points at whoever it
+// wakes, so a unique recipient per test uniquely identifies that knock in the
+// shared db.
+let person = (name: string) => {
+  let eid = uid()
+  apply(db, [{ eid, name: 'doc', comp: { title: name } }, {
+    eid,
+    name: 'person',
+    comp: {},
+  }])
+  return eid
+}
+
+let wake = (at: string, target?: string, to = jeff) => {
   let eid = uid()
   landed = apply(db, [
     {
@@ -52,37 +65,45 @@ let wake = (at: string, target?: string) => {
       name: 'wake',
       comp: { at, ...(target ? { target: target } : {}) },
     },
-    { eid, name: 'deliver', comp: { to: jeff } },
+    { eid, name: 'deliver', comp: { to } },
   ])
   return eid
 }
 
 Deno.test('an hour already past fires, and mints the knock', () => {
-  let w = wake(new Date(Date.now() - 60_000).toISOString())
+  let bob = person('bob')
+  let w = wake(new Date(Date.now() - 60_000).toISOString(), undefined, bob)
   arm(cast)
-  let k = knocks().find((k) => k.target == w)!
-  assertEquals(toOf(k.eid), jeff)
+  let k = knocks().find((k) => k.target == bob)!
+  assertEquals(toOf(k.eid), bob)
   assertMatch(String(drow(w)?.at), /^\d{4}-/)
 })
 
 Deno.test('a wake still owed waits, and fires once when it comes', () => {
-  let w = wake(new Date(Date.now() + 3_600_000).toISOString())
+  let carol = person('carol')
+  let w = wake(new Date(Date.now() + 3_600_000).toISOString(), undefined, carol)
   arm(cast)
   assertEquals(drow(w), undefined)
-  assertEquals(knocks().filter((k) => k.target == w).length, 0)
+  assertEquals(knocks().filter((k) => k.target == carol).length, 0)
   // the hour arrives (the row is the clock, so move the row)
   db.prepare('update wake set at = ? where eid = ?')
     .run(new Date(Date.now() - 1000).toISOString(), w)
   arm(cast)
-  assertEquals(knocks().filter((k) => k.target == w).length, 1)
+  assertEquals(knocks().filter((k) => k.target == carol).length, 1)
   arm(cast) // a stamped wake is done — a second pass never re-knocks
-  assertEquals(knocks().filter((k) => k.target == w).length, 1)
+  assertEquals(knocks().filter((k) => k.target == carol).length, 1)
 })
 
-Deno.test('no target: the wake is its own subject', () => {
-  let w = wake(new Date(Date.now() - 1000).toISOString())
+Deno.test('no target: the woken actor is the subject', () => {
+  let dave = person('dave')
+  let w = wake(new Date(Date.now() - 1000).toISOString(), undefined, dave)
   arm(cast)
-  assertEquals(toOf(knocks().find((k) => k.target == w)!.eid), jeff)
+  // The cadence knock points at the actor ("look at your own board"), never
+  // the wake row itself (unnumbered, and it says nothing).
+  let k = knocks().find((k) => k.target == dave)!
+  assertEquals(k.target, dave)
+  assertEquals(k.target == w, false)
+  assertEquals(toOf(k.eid), dave)
 })
 
 Deno.test('a new untargeted wake replaces only the pending untargeted one', () => {

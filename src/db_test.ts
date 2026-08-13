@@ -3736,8 +3736,9 @@ Deno.test('num moved off first-touch: a new task still mints the next number', (
   assertEquals(na > 0 && nb == na + 1, true) // consecutive, minted after comps landed
 })
 
-Deno.test('entry is the one current num-less kind', () => {
-  for (let k of kindOrder) assertEquals(numbered(k), k != 'entry')
+Deno.test('entry and wake are the num-less kinds', () => {
+  let numless = new Set(['entry', 'wake'])
+  for (let k of kindOrder) assertEquals(numbered(k), !numless.has(k))
 })
 
 Deno.test('the wire cannot set num — it stays server-owned', () => {
