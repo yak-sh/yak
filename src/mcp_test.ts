@@ -749,6 +749,52 @@ Deno.test('task_list and graph_query refuse a handle that names nothing', async 
   }
 })
 
+// graph_apply is the raw wire, so it must carry the wire's --ff-only guard:
+// a `was` beside comp reaches apply() only because the schema stops stripping
+// it. A stale hash is refused with the newer value intact; a matching hash
+// lands; and no `was` writes unguarded, as every caller does today.
+Deno.test('graph_apply carries a Change.was precondition to apply()', async () => {
+  let g = graph()
+  let eid = '52000000-0000-4000-8000-000000000001'
+  let body = () =>
+    snapshot(g.db).changes.find((c) => c.eid == eid && c.name == 'doc')
+      ?.comp?.body
+  try {
+    await protocol(g.io, async (client) => {
+      let apply_ = (changes: Change[]) =>
+        client.callTool({ name: 'graph_apply', arguments: { changes } })
+      // Read ONE, someone writes TWO — now ONE's hash is stale.
+      await apply_([{
+        eid,
+        name: 'doc',
+        comp: { title: 'guard', body: 'ONE' },
+      }])
+      await apply_([{ eid, name: 'doc', comp: { body: 'TWO' } }])
+
+      let refused = await apply_([{
+        eid,
+        name: 'doc',
+        comp: { body: 'CLOBBER' },
+        was: { body: sha('ONE') },
+      }])
+      assertEquals(refused.isError, true)
+      assertMatch(said(refused), /has moved since you read it/)
+      assertEquals(body(), 'TWO')
+
+      let ok = await apply_([{
+        eid,
+        name: 'doc',
+        comp: { body: 'MERGED' },
+        was: { body: sha('TWO') },
+      }])
+      assertEquals(ok.isError, undefined)
+      assertEquals(body(), 'MERGED')
+    })
+  } finally {
+    g.db.close()
+  }
+})
+
 Deno.test('MCP lists hide quarantine and task_show requires an opt-in', async () => {
   let g = graph()
   try {

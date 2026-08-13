@@ -1193,16 +1193,26 @@ entity. Mint uuids for new entities. eid and reference comp values accept
 human ids (T-3, P-19) for EXISTING entities. Edges: name 'dependency',
 comp {type: ${edges.join('|')}, child} links eid→child; add gone:
 true to unlink (a triple has no row key, so the comp names the whole
-edge). Unknown component names are forward-compatible no-ops. Same
-allowlist and claim-lease rules as every other client; writes broadcast
-live to all screens. The result reports submitted intent and the
-authoritative effective batch returned by apply(). ${GRAMMAR}`,
+edge). Unknown component names are forward-compatible no-ops. Optional
+was is a PRECONDITION — the graph's --ff-only: a map of column → the
+SHA-256 of the value you read (or null for "I read no value"), and
+apply() refuses the WHOLE batch if any named column has moved since. It
+rides beside comp (never inside it), per column, so a stale guarded write
+is rejected while the newer value is preserved. Same allowlist and
+claim-lease rules as every other client; writes broadcast live to all
+screens. The result reports submitted intent and the authoritative
+effective batch returned by apply(). ${GRAMMAR}`,
     {
       changes: z.array(
         z.object({
           eid: z.string(),
           name: z.string(),
           comp: z.record(z.unknown()).nullable(),
+          // The optimistic-concurrency guard, beside comp because `admitted`
+          // refuses alien keys INSIDE it. Per column: SHA-256 of the value
+          // read, or null for "absent". Omit it and the write is unguarded,
+          // which is every caller's behavior today.
+          was: z.record(z.string().nullable()).optional(),
         }).strict(),
       ).min(1),
       session: z.string().optional(),
