@@ -425,6 +425,15 @@ let schema = `
     hits  integer,
     last  text
   );
+  -- The dream's dedup marker (T-17407), bug's consolidation twin: a filed
+  -- finding's shape key + recurrence, riding on the consider-task or memory it
+  -- became so one keyed lookup dedups across both.
+  create table if not exists finding (
+    eid  text primary key references entity(eid),
+    key  text,
+    hits integer,
+    last text
+  );
   -- The BLOCK facet (D-17094): this task is stuck on something EXTERNAL — no
   -- entity, so a requires edge can't name it. "on" (a SQL keyword, so quoted)
   -- is the free-text reason and rides the wire; "since" is server-owned — the

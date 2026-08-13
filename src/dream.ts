@@ -24,6 +24,7 @@ import { graphLog } from './entry_log.ts'
 import { transcribe } from './log_text.ts'
 import { complete } from './complete.ts'
 import { memoryChanges, rows } from './client.ts'
+import { normalize } from './heal.ts'
 
 type Cast = (changes: Change[]) => void
 
@@ -40,6 +41,12 @@ export let DREAM_MODEL = Deno.env.get('TASKS_DREAM_MODEL') || 'gpt-5.6-luna'
 // log won't fit, and the tail is where the meta lives (what the doer reached
 // for last, what it wrapped with). Take the tail past the cap.
 let TAIL = Number(Deno.env.get('TASKS_DREAM_TAIL')) || 48_000
+
+// How many session combs run at once (T-17407 gate 4). A 7-day window is
+// dozens of sessions and one complete() apiece run in series is minutes of
+// wall clock; bounded so a wide window never fires dozens of provider
+// processes at once. Env-tunable, the CADENCE/TAIL way.
+export let CONCURRENCY = Number(Deno.env.get('TASKS_DREAM_CONCURRENCY')) || 8
 
 // The charge (T-12800), asked for as JSON Lines so parsing stays tolerant: one
 // object per line, unparseable lines skipped. The five kinds are the doctrine's
@@ -210,8 +217,132 @@ let land = (changes: Change[], cast: Cast, writer?: string | null) => {
   dispatch(out, t, oops)
 }
 
-// Comb the window: one complete() per session, land its findings, advance the
-// floor. Returns the run summary for telemetry.
+// The dedup key of a finding (T-17407 gate 1): its kind + normalized title,
+// the heal.ts faultKey pattern. The 7-day re-comb window guarantees a recurring
+// drift is re-surfaced daily, so two runs' findings of the same shape must
+// collapse. Title is a finding's stable identity (a short imperative); body
+// varies more, so it stays out of the key. normalize() is heal.ts's — uuids,
+// ids, dates, paths, numbers all fold to one placeholder.
+export let findingKey = (f: Finding) => `${f.kind}:${normalize(f.title)}`
+
+// An artifact this dream already filed for a key, and the status of the task it
+// became (null for a memory). The stored key makes dedup a lookup, never a scan
+// (heal.ts openBug). One row per key.
+let filed = (key: string) =>
+  db.prepare(
+    `select fd.eid as eid, fd.hits as hits, t.status as status
+       from finding fd left join task t on t.eid = fd.eid
+      where fd.key = ? limit 1`,
+  ).get(key) as
+    | { eid: string; hits: number | null; status: string | null }
+    | undefined
+
+// Does a finding point at work already CLOSED (T-17407 gate 2)? A finding whose
+// title/body names a done or cancelled task is restating resolved drift — the
+// thing it asks for is handled — so it must not become a new task. Ids are
+// human (T-17354); num→status. Checks graph state, never the session narrative
+// (the miss was T-17402 self-declaring "tracked as T-17354" — done — yet filed).
+let CLOSED = new Set(['done', 'cancelled'])
+export let namesResolved = (f: Finding): boolean => {
+  let ids = (f.title + ' ' + f.body).match(/\bT-\d+\b/g)
+  if (!ids) return false
+  for (let id of new Set(ids)) {
+    let row = db.prepare(
+      `select t.status as status from task t join entity e on e.eid = t.eid
+        where e.num = ?`,
+    ).get(Number(id.slice(2))) as { status: string } | undefined
+    if (row && CLOSED.has(row.status)) return true
+  }
+  return false
+}
+
+// Route by kind (T-17407 gate 3): a decision or a reflex/lesson becomes a
+// MEMORY (a decision dated when taken; a reflex a venture-scoped lesson), not a
+// vague open "consider" task. Only actionable, unaddressed drift — a missing
+// warm path, ticket entropy, super-linear complexity — becomes a task.
+let MEMORY_KINDS = new Set(['decision', 'reflex'])
+
+type Fate = 'filed' | 'recur' | 'skip'
+
+// File ONE finding, or don't — the three gates in one place. Dedup against what
+// this dream already filed (an OPEN artifact recurs and is hit-counted, a
+// resolved or already-captured one is skipped), skip a finding that points at
+// closed work, then route by kind and mark the artifact with its key. Returns
+// what happened, for the run tally. Called in session order so two sessions'
+// same-shape findings in one run also collapse (each land re-reads).
+let fileFinding = (
+  f: Finding,
+  project: string | null,
+  s: { eid: string; id: string | null },
+  ceil: string,
+  cast: Cast,
+): Fate => {
+  let key = findingKey(f)
+  let seen = filed(key)
+  if (seen) {
+    // Already filed this shape. An OPEN/wip task recurs — count it, a stronger
+    // signal it is worth doing. Anything else (a resolved task, a captured
+    // memory) is handled — skip without re-filing.
+    if (seen.status == 'open' || seen.status == 'wip') {
+      land([{
+        eid: seen.eid,
+        name: 'finding',
+        comp: { hits: (seen.hits ?? 1) + 1, last: iso(Date.now()) },
+      }], cast)
+      return 'recur'
+    }
+    return 'skip'
+  }
+  if (namesResolved(f)) return 'skip'
+  let mark = (eid: string): Change => ({
+    eid,
+    name: 'finding',
+    comp: { key, hits: 1, last: iso(Date.now()) },
+  })
+  if (MEMORY_KINDS.has(f.kind)) {
+    // A decision/reflex is a memory, attributed to the session it rose from —
+    // its `id` (not eid: sessionFor keys on session.id, so an eid would mint a
+    // spurious session). No id, no attribution to make — skip.
+    if (!s.id) return 'skip'
+    let made = memoryChanges(rows(snapshot(db)), {
+      title: f.title,
+      body: f.body,
+      session: s.id,
+      ...(f.kind == 'decision'
+        ? { decided: f.decided ?? ceil.slice(0, 10) }
+        : { scope: project ?? undefined }),
+    })
+    land([...made.changes, mark(made.eid)], cast, s.id)
+  } else {
+    let cs = considerChanges(f, project, s.eid) // all three share one eid
+    land([...cs, mark(cs[0].eid)], cast)
+  }
+  return 'filed'
+}
+
+// Run `fn` over items with at most `n` in flight (T-17407 gate 4). Results
+// match input order; a wide window batches instead of firing one provider
+// process at a time in series.
+let pool = async <T, R>(
+  items: T[],
+  n: number,
+  fn: (x: T) => Promise<R>,
+): Promise<R[]> => {
+  let out: R[] = new Array(items.length)
+  let i = 0
+  let worker = async () => {
+    while (i < items.length) {
+      let j = i++
+      out[j] = await fn(items[j])
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, worker))
+  return out
+}
+
+// Comb the window: complete() each session in a bounded batch, then file its
+// findings in session order (dedup, gate, route), and advance the floor.
+// Returns the run tally for telemetry.
 let comb = async (
   to: string,
   d: { scope: string | null; floor: string | null },
@@ -219,45 +350,39 @@ let comb = async (
   completeFn: typeof complete,
 ) => {
   let project = d.scope
-  if (!project) return { combed: 0, filed: 0, floor: d.floor ?? '' }
+  let base = { combed: 0, filed: 0, recurred: 0, skipped: 0 }
+  if (!project) return { ...base, floor: d.floor ?? '' }
   let repo = pathOf(project)
   let now = Date.now()
   let ceil = iso(now)
   let floor = d.floor ?? iso(now - 7 * DAY)
-  let combed = 0
-  let filed = 0
-  for (let s of sessionsSince(project, floor, ceil)) {
+  let sessions = sessionsSince(project, floor, ceil)
+  // Gate 4: the model calls run concurrently (bounded), the graph writes stay
+  // sequential below so same-shape findings across sessions dedup in one run.
+  let replies = await pool(sessions, CONCURRENCY, async (s) => {
     let text = transcriptOf(s.eid)
-    if (!text.trim()) continue
-    combed++
+    if (!text.trim()) return { s, combed: false, reply: null as string | null }
     let reply = await completeFn(DREAM_MODEL, DREAM_SYSTEM, text, {
       effort: 'low',
       deadline: 120_000,
       ...(repo ? { cwd: repo } : {}),
     })
+    return { s, combed: true, reply }
+  })
+  let tally = { ...base }
+  for (let { s, combed, reply } of replies) {
+    if (combed) tally.combed++
     if (!reply) continue // nothing found, or no model — never an error
     for (let f of parseFindings(reply)) {
-      if (f.kind == 'decision') {
-        // A decision is a memory, attributed to the session that took it — its
-        // `id` (not eid: sessionFor keys on session.id, so an eid would mint a
-        // spurious session). No id, no attribution to make — skip.
-        if (!s.id) continue
-        let made = memoryChanges(rows(snapshot(db)), {
-          title: f.title,
-          body: f.body,
-          decided: f.decided ?? ceil.slice(0, 10),
-          session: s.id,
-        })
-        land(made.changes, cast, s.id)
-      } else {
-        land(considerChanges(f, project, s.eid), cast)
-      }
-      filed++
+      let fate = fileFinding(f, project, s, ceil, cast)
+      if (fate == 'filed') tally.filed++
+      else if (fate == 'recur') tally.recurred++
+      else tally.skipped++
     }
   }
   let next = advance(project, floor, now)
   land([{ eid: to, name: 'dream', comp: { floor: next } }], cast)
-  return { combed, filed, floor: next }
+  return { ...tally, floor: next }
 }
 
 // Re-arm the next dream: an UNTARGETED cadence wake with deliver.to = the
@@ -295,6 +420,7 @@ export let dreamComb =
         ok: true,
         ms: Date.now() - at,
         detail: `${human(db, to)}: combed ${r.combed}, filed ${r.filed}, ` +
+          `recurred ${r.recurred}, skipped ${r.skipped}, ` +
           `floor→${r.floor.slice(0, 10)}`,
       })
     } catch (e) {

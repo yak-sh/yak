@@ -669,6 +669,16 @@ export let comps: Record<string, Record<string, PropType>> = {
   // harms nobody. NOT in kindOrder: a bug IS a task, this only says the task is
   // a filed break.
   bug: { fault: 'text', hits: 'number', last: 'time' },
+  // The dream's dedup marker (T-17407), the consolidation twin of `bug`: an
+  // artifact the dream FILED wears it so the next run's 7-day re-comb finds
+  // the same drift already tracked and hit-counts instead of re-filing. `key`
+  // is the finding's stable shape (kind + normalized title, dream.ts
+  // findingKey); `hits`/`last` count recurrence. Rides on whatever the finding
+  // became — a consider TASK or a MEMORY — so one keyed lookup dedups across
+  // both (M-14942: its one aspect is "this artifact is a deduped dream
+  // finding"). NOT in kindOrder — a task/memory carrying it is still a
+  // task/memory. All wire-writable; dream.ts writes it through apply().
+  finding: { key: 'text', hits: 'number', last: 'time' },
   // Self-healing phase 2 (D-17077): `fixer` marks a session AUTO-spawned to
   // fix a bug ticket — presence alone, the way `design` tags a doc. The cap
   // counts active fixers and the cooldown reaches the fault it heals through
@@ -1629,6 +1639,15 @@ export type Bug = {
   last?: string | null
 }
 
+// The dream's dedup marker (T-17407): the shape key of a filed finding and its
+// recurrence tally, riding on the consider-task or memory the finding became.
+export type Finding = {
+  eid: string
+  key?: string | null
+  hits?: number | null
+  last?: string | null
+}
+
 // The block facet (D-17094): this task is stuck on an EXTERNAL thing with no
 // entity. `on` is that free-text reason (wire-written); `since` is when it
 // became blocked (server-stamped). The only thing that reddens the Dot.
@@ -1854,6 +1873,7 @@ export type Ent = {
   error?: Failure
   exception?: Exception
   bug?: Bug
+  finding?: Finding
   blocked?: Blocked
   refs: Ref[]
   kids: Ent[]

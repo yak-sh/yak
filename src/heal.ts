@@ -27,7 +27,7 @@ let now = () => new Date().toISOString()
 // human ids (T-3, S-45), iso timestamps, absolute paths, :line:col, hex blobs,
 // and bare numbers all collapse to one placeholder. What is left is the shape
 // of the fault.
-let normalize = (text: string) =>
+export let normalize = (text: string) =>
   text
     .toLowerCase()
     .replace(

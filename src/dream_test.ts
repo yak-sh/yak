@@ -5,8 +5,16 @@
 // to the eids this test made.
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, db } = await import('./db.ts')
-let { advance, considerChanges, dreamComb, parseFindings, seedWake, unwoken } =
-  await import('./dream.ts')
+let {
+  advance,
+  considerChanges,
+  dreamComb,
+  findingKey,
+  namesResolved,
+  parseFindings,
+  seedWake,
+  unwoken,
+} = await import('./dream.ts')
 let { assertEquals } = await import('@std/assert')
 
 let uid = () => crypto.randomUUID()
@@ -58,6 +66,17 @@ let knock = (to: string) => {
     { eid, name: 'deliver', comp: { to } },
   ])
   return eid
+}
+let task = (title: string, status: string) => {
+  let eid = uid()
+  apply(db, [
+    { eid, name: 'doc', comp: { title, body: '' } },
+    { eid, name: 'task', comp: { status } },
+  ])
+  let num = (db.prepare('select num from entity where eid = ?').get(eid) as {
+    num: number
+  }).num
+  return { eid, num }
 }
 
 Deno.test('parseFindings: parses JSON Lines, skips junk, unknown kinds, and titleless', () => {
@@ -217,4 +236,127 @@ Deno.test('dreamComb: a decision finding is captured as a memory, dated when tak
   ).get('ADAPT complete() over batch') as { decided: string } | undefined
   assertEquals(!!mem, true)
   assertEquals(mem!.decided.startsWith('2026-08-10'), true)
+})
+
+Deno.test('findingKey: kind + normalized title — ids/nums fold, kind splits', () => {
+  let a = findingKey({
+    kind: 'gap',
+    title: 'add T-3 delete verb 5',
+    body: 'x',
+    priority: 3,
+  })
+  let b = findingKey({
+    kind: 'gap',
+    title: 'add T-99 delete verb 12',
+    body: 'y',
+    priority: 3,
+  })
+  assertEquals(a, b) // ids and bare numbers normalize to the same shape
+  let c = findingKey({
+    kind: 'entropy',
+    title: 'add delete verb',
+    body: '',
+    priority: 3,
+  })
+  assertEquals(a == c, false) // kind is part of the key
+})
+
+Deno.test('namesResolved: true only when a finding names a closed task', () => {
+  let done = task('a settled thing', 'done')
+  let open = task('an open thing', 'open')
+  let f = (body: string) => ({ kind: 'gap', title: 'x', body, priority: 3 })
+  assertEquals(namesResolved(f(`already tracked as T-${done.num}`)), true)
+  assertEquals(namesResolved(f(`see T-${open.num}`)), false)
+  assertEquals(namesResolved(f('no ids in this body at all')), false)
+})
+
+Deno.test('dreamComb: dedup — a recurring finding hit-counts, never re-files', async () => {
+  let p = proj('Dedup venture')
+  let d = dreamEnt(p, ago(30))
+  let s = sess(p, ago(2))
+  msg(s.eid, 'reached for a frobnicate verb that did not exist')
+  let reply = says(JSON.stringify({
+    kind: 'gap',
+    title: 'add a frobnicate verb',
+    body: 'no warm path',
+    priority: 3,
+  }))
+  // Two runs re-comb the same session (the floor clamps back inside 7 days).
+  await dreamComb(noop, reply as never)(knock(d))
+  await dreamComb(noop, reply as never)(knock(d))
+  // Exactly ONE consider task about this session, its finding hit-counted to 2.
+  let hits = db.prepare(
+    `select fd.hits as hits from finding fd
+       join dependency dep on dep.parent = fd.eid
+      where dep.type = 'about' and dep.child = ?`,
+  ).all(s.eid) as { hits: number }[]
+  assertEquals(hits.length, 1)
+  assertEquals(hits[0].hits, 2)
+})
+
+Deno.test('dreamComb: skip — a finding naming a resolved task is not filed', async () => {
+  let p = proj('Skip venture')
+  let d = dreamEnt(p, ago(30))
+  let s = sess(p, ago(2))
+  let done = task('the work this finding restates', 'done')
+  msg(s.eid, 'we should verify through the production door')
+  let reply = says(JSON.stringify({
+    kind: 'gap',
+    title: 'verify through the production door',
+    body: `already tracked as T-${done.num}`,
+    priority: 3,
+  }))
+  await dreamComb(noop, reply as never)(knock(d))
+  // No consider task filed about this session — the finding named closed work.
+  let n = db.prepare(
+    `select count(*) as n from dependency dep
+      where dep.type = 'about' and dep.child = ?
+        and exists (select 1 from task t where t.eid = dep.parent)`,
+  ).get(s.eid) as { n: number }
+  assertEquals(n.n, 0)
+})
+
+Deno.test('dreamComb: a reflex finding becomes a venture memory, not a consider task', async () => {
+  let p = proj('Reflex venture')
+  let d = dreamEnt(p, ago(30))
+  let s = sess(p, ago(2))
+  msg(s.eid, 'escalated a decidable question again')
+  let title = 'stop escalating reversible decisions'
+  let reply = says(JSON.stringify({
+    kind: 'reflex',
+    title,
+    body: 'a reversible call parked is costlier than a wrong one corrected',
+    priority: 2,
+  }))
+  await dreamComb(noop, reply as never)(knock(d))
+  // A memory, scoped to the venture; no "consider:" task with that title.
+  let mem = db.prepare(
+    `select m.scope as scope from memory m join doc on doc.eid = m.eid
+      where doc.title = ?`,
+  ).get(title) as { scope: string } | undefined
+  assertEquals(!!mem, true)
+  assertEquals(mem!.scope, p)
+  let considers = db.prepare('select count(*) as n from doc where title = ?')
+    .get(`consider: ${title}`) as { n: number }
+  assertEquals(considers.n, 0)
+})
+
+Deno.test('dreamComb: two sessions, one shared finding — filed once (batch + within-run dedup)', async () => {
+  let p = proj('Batch venture')
+  let d = dreamEnt(p, ago(30))
+  let s1 = sess(p, ago(3))
+  msg(s1.eid, 'first session touched the widget path')
+  let s2 = sess(p, ago(2))
+  msg(s2.eid, 'second session touched the widget path')
+  let reply = says(JSON.stringify({
+    kind: 'gap',
+    title: 'unify the widget path',
+    body: 'both sessions reinvented it',
+    priority: 3,
+  }))
+  await dreamComb(noop, reply as never)(knock(d))
+  // Both sessions combed, but the shared finding lands ONE task, not two.
+  let considers = db.prepare('select count(*) as n from doc where title = ?')
+    .get('consider: unify the widget path') as { n: number }
+  assertEquals(considers.n, 1)
 })
