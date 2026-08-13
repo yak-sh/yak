@@ -7,7 +7,7 @@
 import { comps, type PropType, stamped } from '../types.ts'
 import { type Row } from '../client.ts'
 
-export let censusComps = () => Object.keys(comps)
+export let censusComps = () => Object.keys(comps).sort()
 
 // A section lists by component PRESENCE, not primary kind: an entity
 // appears under EVERY component it carries. A facet (alias, email) always

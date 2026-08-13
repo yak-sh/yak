@@ -86,7 +86,7 @@ Deno.test('countsByPresence: each entity counts under every component', () => {
 })
 
 Deno.test('censusComps: every vocabulary component gets a section', () => {
-  assertEquals(censusComps(), Object.keys(comps))
+  assertEquals(censusComps(), Object.keys(comps).sort())
   assertEquals(censusComps().includes('task'), true)
   assertEquals(censusComps().includes('alias'), true)
   assertEquals(censusComps().includes('created'), true)
