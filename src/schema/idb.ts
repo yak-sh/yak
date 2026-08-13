@@ -38,12 +38,6 @@ export type IdbIndex = {
 }
 export type IdbStore = { name: string; keyPath: 'eid'; indexes: IdbIndex[] }
 
-// The infrastructure store beside the generated component stores: fixed-key
-// rows carrying the delta cursor the mirror has advanced to (see graphMeta). It
-// is NOT a component — storeNames/putBags/seedIdb never touch it — so it is
-// named here and threaded only through openIdb/applySchema and the meta reads.
-export let META = '_meta'
-
 // An index's name within its store: the component and its columns, the same
 // `comp_col` shape db.ts spells its SQL indexes with.
 let idxName = (comp: string, cols: string[]) => `${comp}_${cols.join('_')}`
@@ -71,16 +65,13 @@ export let idbStore = (comp: string): IdbStore => ({
 export let idbStores = (): IdbStore[] => storeNames().map(idbStore)
 
 // The generated shape, canonicalized — store names and their index
-// name/keyPath/unique, plus the fixed META store so its presence is part of the
-// version (a client without it upgrades to create it). What the version hashes
-// over.
+// name/keyPath/unique. What the version hashes over.
 export let schemaShape = (stores: IdbStore[] = idbStores()): string =>
-  JSON.stringify([
-    META,
+  JSON.stringify(
     stores.map((
       s,
     ) => [s.name, s.indexes.map((i) => [i.name, i.keyPath, i.unique])]),
-  ])
+  )
 
 // FNV-1a over the shape → a positive integer version. Any store or index change
 // moves it, which is exactly the signal onupgradeneeded waits for.
@@ -105,7 +96,6 @@ export let applySchema = (
   tx: IDBTransaction,
   stores: IdbStore[] = idbStores(),
 ) => {
-  if (!db.objectStoreNames.contains(META)) db.createObjectStore(META)
   for (let s of stores) {
     let store = db.objectStoreNames.contains(s.name)
       ? tx.objectStore(s.name)
@@ -198,44 +188,6 @@ export let clearIdb = async (
 ): Promise<void> => {
   let tx = db.transaction(names, 'readwrite')
   for (let name of names) tx.objectStore(name).clear()
-  await done(tx)
-}
-
-// ---- the durable cursor (delta-sync high-water mark) ----
-
-// Which cache cursor — and server epoch — the per-component stores currently
-// reflect. A returning boot reads this to decide whether the store is already a
-// faithful mirror of the just-hydrated cache (skip the whole-graph reseed) or
-// must be re-seeded. Kept in lockstep with the hydration store's cursor
-// (idb.ts) so a graceful reload finds them equal. Empty ⇒ never seeded ⇒ reseed.
-export type GraphMeta = { cursor?: number; epoch?: string }
-
-export let graphMeta = async (db: IDBDatabase): Promise<GraphMeta> => {
-  let tx = db.transaction(META, 'readonly')
-  let ms = tx.objectStore(META)
-  let [cursor, epoch] = await Promise.all([
-    req(ms.get('cursor')),
-    req(ms.get('epoch')),
-  ])
-  return {
-    cursor: cursor as number | undefined,
-    epoch: epoch as string | undefined,
-  }
-}
-
-// Stamp the high-water mark. The caller advances it ONLY after the matching
-// delta write has settled (same storeWork callback, after the mirror), so the
-// cursor is never ahead of the data it claims — the boot skip decision can trust
-// it, and a failed mirror simply leaves the cursor behind (a safe reseed next
-// boot).
-export let putGraphMeta = async (
-  db: IDBDatabase,
-  meta: GraphMeta,
-): Promise<void> => {
-  let tx = db.transaction(META, 'readwrite')
-  let ms = tx.objectStore(META)
-  if (meta.cursor !== undefined) ms.put(meta.cursor, 'cursor')
-  if (meta.epoch !== undefined) ms.put(meta.epoch, 'epoch')
   await done(tx)
 }
 
