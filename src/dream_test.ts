@@ -5,9 +5,8 @@
 // to the eids this test made.
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, db } = await import('./db.ts')
-let { advance, considerChanges, dreamComb, parseFindings } = await import(
-  './dream.ts'
-)
+let { advance, considerChanges, dreamComb, parseFindings, seedWake, unwoken } =
+  await import('./dream.ts')
 let { assertEquals } = await import('@std/assert')
 
 let uid = () => crypto.randomUUID()
@@ -119,6 +118,19 @@ Deno.test('considerChanges: a drift finding becomes a consider task about its so
   let edge = cs.find((c) => c.name == 'dependency')!.comp!
   assertEquals(edge.type, 'about')
   assertEquals(edge.child, 's-eid')
+})
+
+Deno.test('unwoken/seedWake: a dream with no pending wake is seeded once, then left alone', () => {
+  let p = proj('Seed venture')
+  let d = dreamEnt(p, ago(30))
+  // The boot seed lists it and hands one wake.
+  assertEquals(unwoken().includes(d), true)
+  let seed = seedWake(d)
+  assertEquals(seed.length, 2) // the wake and its deliver.to, one shared eid
+  apply(db, seed)
+  // Now it has a pending wake — no longer unwoken, and seedWake declines.
+  assertEquals(unwoken().includes(d), false)
+  assertEquals(seedWake(d).length, 0)
 })
 
 Deno.test('dreamComb: a dream knock combs the venture, files a consider task, advances the floor, re-arms', async () => {

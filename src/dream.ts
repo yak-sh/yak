@@ -324,8 +324,10 @@ export let DREAM_PENDING =
 // `task dream` verb's first arm. One near-term wake; replaceWakes keeps it from
 // stacking. Returns the changes so the caller lands them on its own clock.
 export let seedWake = (to: string, at = iso(Date.now() + 1000)): Change[] => {
+  // wake is UNaliased on purpose: PENDING('wake') names `wake.eid`, which an
+  // alias would not resolve (the boot-crash that shipped once).
   let has = db.prepare(
-    `select 1 from wake w join deliver dv on dv.eid = w.eid
+    `select 1 from wake join deliver dv on dv.eid = wake.eid
      where dv."to" = ? and ${PENDING('wake')}`,
   ).get(to)
   if (has) return []
@@ -342,6 +344,6 @@ export let seedWake = (to: string, at = iso(Date.now() + 1000)): Change[] => {
 export let unwoken = (): string[] =>
   (db.prepare(
     `select dr.eid from dream dr
-     where not exists (select 1 from wake w join deliver dv on dv.eid = w.eid
+     where not exists (select 1 from wake join deliver dv on dv.eid = wake.eid
        where dv."to" = dr.eid and ${PENDING('wake')})`,
   ).all() as { eid: string }[]).map((r) => r.eid)
