@@ -9,6 +9,7 @@ import {
   SessionBody,
   SessionContext,
   SessionDiagnostics,
+  SessionEntry,
   sessionMentions,
   SessionObservation,
   SessionReferences,
@@ -94,6 +95,32 @@ Deno.test('session user messages render as markdown', () => {
     if (prior) Object.defineProperty(globalThis, 'document', prior)
     else delete (globalThis as { document?: unknown }).document
   }
+})
+
+Deno.test('generic graph entries keep their normalized session face', () => {
+  cache.value = {
+    entry: {
+      entity: { eid: 'entry', num: 0 },
+      entry: { eid: 'entry', session: 'session', seq: 1 },
+      call: { eid: 'entry', key: 'call-1' },
+      tool: { eid: 'entry', name: 'Read', detail: 'src/query.ts' },
+      imported: { eid: 'entry', source: 'native', line: 2 },
+    },
+  }
+  let { root, free } = mount(
+    <SessionEntry
+      x={{
+        eid: 'entry',
+        seq: 1,
+        line: '{}',
+        row: { kind: 'tool', name: 'Read', detail: 'src/query.ts' },
+      }}
+    />,
+  )
+  assertEquals(root.querySelector('.Session_ToolName')?.textContent, 'Read')
+  assertEquals(root.querySelector('.Entry-meta'), null)
+  free()
+  cache.value = {}
 })
 
 Deno.test('session context renders compactly for the sticky head', () => {

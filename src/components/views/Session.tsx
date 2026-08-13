@@ -18,14 +18,14 @@ import { ago, block, pretty, Stamp } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
 import { Composer, Note } from '../Comments.tsx'
 import { Id } from './Inline.tsx'
-import { Entity } from '../Entity.tsx'
+import { Entity, resolve } from '../Entity.tsx'
 import { title } from '../title.tsx'
 import { Markdown } from '../Markdown.tsx'
 import { mdMentions } from '../../md.ts'
 import { UrlVal } from '../editors.tsx'
 import { Ansi } from '../Ansi.tsx'
 import { SessionDot, useSessionStanding } from '../session_status.tsx'
-import { EntryLens } from './Entry.tsx'
+import { EntryLens, EntrySummary } from './Entry.tsx'
 
 // An agent session, watched — the console (W-3676 #5): a sticky slim bar
 // (task, lifecycle summary, stop — server-owned columns riding
@@ -499,6 +499,17 @@ let prettyJson = (line: string) => {
 
 // Process logs have only bytes, while graph-native entries have an eid and
 // therefore take every face through the renderer registry.
+export let SessionEntry = (
+  { x, repo, onOpen }: { x: Entry; repo?: string; onOpen?: () => void },
+) => {
+  if (!x.eid) return <SessionBody x={x} repo={repo} />
+  let e = ent(x.eid)
+  let face = resolve(e, 'Entry.Summary')
+  return face.Render == EntrySummary && x.row
+    ? <SessionBody x={x} repo={repo} />
+    : <face.Render e={e} onOpen={onOpen} />
+}
+
 let Row = ({ x, repo }: { x: Entry; repo?: string }) => {
   let [open, setOpen] = useState(false)
   let at = x.row?.at
@@ -514,15 +525,7 @@ let Row = ({ x, repo }: { x: Entry; repo?: string }) => {
       </Seq>
       <Content>
         {at && <When data-tip={pretty(at)}>{ago(at)}</When>}
-        {x.eid
-          ? (
-            <Entity
-              eid={x.eid}
-              view='Entry.Summary'
-              onOpen={() => setOpen(true)}
-            />
-          )
-          : <SessionBody x={x} repo={repo} />}
+        <SessionEntry x={x} repo={repo} onOpen={() => setOpen(true)} />
       </Content>
       {open &&
         (x.eid ? <EntryLens eid={x.eid} /> : <Json>{prettyJson(x.line)}</Json>)}
