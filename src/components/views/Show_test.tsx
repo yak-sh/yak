@@ -88,6 +88,39 @@ Deno.test('proposal meta distinguishes pending, cancelled, and approved', () => 
   cache.value = {}
 })
 
+Deno.test('a superseded entity is marked on its face with what replaced it', () => {
+  cache.value = {
+    old: {
+      entity: { eid: 'old', num: 12 },
+      doc: { eid: 'old', title: '8.5×8.5 square', body: '' },
+    },
+    cur: {
+      entity: { eid: 'cur', num: 13 },
+      doc: { eid: 'cur', title: '8×10 portrait', body: '' },
+    },
+  }
+  deps.value = [{ parent: 'cur', type: 'supersedes', child: 'old' }]
+
+  // The superseded end wears the mark — visible on its own face, pointing
+  // to the current one; a bare doc with no other meta still renders it.
+  let e = ent('old')
+  let a = mount(h(resolve(e, 'Meta').Render, { e }))
+  let mark = a.root.querySelector('.Show_Superseded')
+  assertExists(mark)
+  assertEquals(mark!.textContent?.includes('superseded by'), true)
+  assertExists(a.root.querySelector('.Show_Superseded .Id')) // links the successor
+  a.free()
+
+  // The current end is not marked — it did the replacing.
+  let c = ent('cur')
+  let b = mount(h(resolve(c, 'Meta').Render, { e: c }))
+  assertEquals(b.root.querySelector('.Show_Superseded'), null)
+  b.free()
+
+  deps.value = []
+  cache.value = {}
+})
+
 Deno.test('task meta carries both full facts and compact edge tallies', () => {
   let project = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   let person = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'

@@ -1642,6 +1642,16 @@ html {
 .Show_Blocked .Icon {
   vertical-align: -2px;
 }
+/* Superseded: a newer entity replaced this one. Marked, never hidden — a
+   quiet historical tone, pointing to what's current. */
+.Show_Superseded {
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--dim);
+}
+.Show_Superseded .Icon {
+  vertical-align: -2px;
+}
 /* The session lease badge — who's working this, in fleet purple. */
 .Show_Claim,
 .Debug_Claim {
@@ -2371,6 +2381,10 @@ html {
 }
 /* similarity is a derived edge — quieter than the authored ones */
 .Dependency_Type-similar {
+  color: var(--dim);
+}
+/* supersession is a historical edge — the same quiet tone as the mark */
+.Dependency_Type-supersedes {
   color: var(--dim);
 }
 

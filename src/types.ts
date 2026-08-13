@@ -1196,6 +1196,9 @@ export let friendly = (model?: string | null) => {
 // has fallen behind), so a new verb here is a new verb everywhere.
 // parent recalled child (a recall-floater entry names the memories it
 // surfaced — the per-session dedup ledger; never gates).
+// parent supersedes child (the current entity replaces an older one — a
+// reshaped ticket, a redecided memory; the superseded end stays visible and
+// marked with what replaced it, never hidden or aged out; never gates).
 export let edges = [
   'requires',
   'contains',
@@ -1204,6 +1207,7 @@ export let edges = [
   'supervises',
   'delegates',
   'recalled',
+  'supersedes',
 ] as const
 export type Edge = (typeof edges)[number]
 

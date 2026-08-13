@@ -2434,6 +2434,52 @@ Deno.test('edges: a dead endpoint voids the link; delete prunes edges', () => {
   assertEquals(snapshot(db).deps.some((d) => d.parent == p), false) // voided
 })
 
+// Supersession is a plain edge, but the invariant is its own: the replaced
+// entity stays VISIBLE and MARKED (never hidden or aged out), and either end
+// answers "what is current?" — the successor via its refs, the superseded via
+// its backrefs. gone unlinks; deleting the successor leaves the survivor
+// coherent (the edge prunes, the old entity remains).
+Deno.test('edges: supersedes marks the old, never hides it; both ends answer', () => {
+  let old = uid(), cur = uid()
+  apply(db, [
+    { eid: old, name: 'doc', comp: { title: '8.5×8.5 square' } },
+    { eid: cur, name: 'doc', comp: { title: '8×10 portrait' } },
+    { eid: cur, name: 'dependency', comp: { type: 'supersedes', child: old } },
+  ])
+  let deps = () => snapshot(db).deps
+  // The current end answers "what did I replace?" (its outgoing ref); the
+  // superseded end answers "what replaced me?" (its incoming backref).
+  assertEquals(
+    deps().filter((d) => d.parent == cur),
+    [{ parent: cur, type: 'supersedes', child: old }],
+  )
+  assertEquals(
+    deps().filter((d) => d.child == old),
+    [{ parent: cur, type: 'supersedes', child: old }],
+  )
+  // Marked, not hidden: the superseded entity is still fully present.
+  assertEquals(comp(old, 'doc')?.title, '8.5×8.5 square')
+
+  // gone unlinks the same sentence.
+  apply(db, [{
+    eid: cur,
+    name: 'dependency',
+    comp: { type: 'supersedes', child: old, gone: true },
+  }])
+  assertEquals(deps().some((d) => d.child == old), false)
+
+  // Deleting the successor prunes the edge; the survivor stays coherent
+  // rather than erroring or resurrecting — the chain degrades to "gone".
+  apply(db, [{
+    eid: cur,
+    name: 'dependency',
+    comp: { type: 'supersedes', child: old },
+  }])
+  apply(db, [{ eid: cur, name: 'entity', comp: null }])
+  assertEquals(deps().some((d) => d.child == old), false) // pruned
+  assertEquals(comp(old, 'doc')?.title, '8.5×8.5 square') // survivor intact
+})
+
 Deno.test('open() is idempotent and additive on live files', () => {
   assertMatch(String(fresh().prepare('select 1 as ok').get()?.ok), /1/)
 })

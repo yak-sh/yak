@@ -52,6 +52,7 @@ let Frame = block('div', 'Show', {
   Deps: 'span',
   Done: 's',
   Blocked: 'span',
+  Superseded: 'span',
   Mail: 'div',
   MailKey: 'span',
   MailVal: 'span',
@@ -77,6 +78,7 @@ let {
   Deps,
   Done,
   Blocked,
+  Superseded,
   Mail: MailEl,
   MailKey,
   MailVal,
@@ -309,6 +311,7 @@ export let up: Record<string, string> = {
   requires: 'required by',
   reads: 'read by',
   about: 'subject of',
+  supersedes: 'superseded by',
 }
 
 // Every edge sentence an entity speaks, top-down: what holds it (reversed
@@ -496,11 +499,14 @@ export let Meta = (
   let talk = commentCount(e.eid).value
   let edges = tallies(e)
   let hasEdges = edges.some(([, open, done]) => open > 0 || done > 0)
+  // What replaced this — the incoming supersedes edges. A superseded entity
+  // is marked on its own face (never hidden), pointing to the current one.
+  let replacedBy = parents(e.eid).filter((d) => d.type == 'supersedes')
   if (
     !id && !before && !children && !e.task && !e.proposed && !talk &&
     !e.claim &&
     !e.created?.at &&
-    !hasEdges
+    !hasEdges && !replacedBy.length
   ) {
     return null
   }
@@ -542,6 +548,15 @@ export let Meta = (
           />
         </Blocked>
       )}
+      {replacedBy.map((d) => (
+        <Superseded
+          key={d.parent}
+          data-tip='superseded — a newer entity replaced this'
+        >
+          <Icon name='history' /> superseded by{' '}
+          <Entity eid={d.parent} view='Inline' />
+        </Superseded>
+      ))}
       {talk > 0 && (
         <Talk>
           <Icon name='message-circle' />

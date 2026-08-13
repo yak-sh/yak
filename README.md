@@ -26,7 +26,9 @@ project, `S-31` session, `M-40` memory, `E-9` mail…).
   vocabulary (`comps` in `src/types.ts`) that every door derives from
 
 **Edges** are typed sentences between entities: `requires` (hard gate),
-`contains` (decomposition), `reads` (read-first), `about` (subject reference).
+`contains` (decomposition), `reads` (read-first), `about` (subject reference),
+`supersedes` (a current entity replaces an older one, which stays visible and
+marked).
 
 The wire is a flat batch of patches — `{eid, name, comp}`: omitted columns
 untouched, `comp: null` deletes the component, `{name:'entity', comp:null}`
