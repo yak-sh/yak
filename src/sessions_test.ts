@@ -9,7 +9,13 @@
 // an assertion function only narrows when it's declared, not destructured);
 // db.ts and sessions.ts come in dynamically, AFTER the env below points them
 // at :memory: and the temp dirs.
-import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertMatch,
+  assertStringIncludes,
+  assertThrows,
+} from '@std/assert'
 import { existsSync } from 'node:fs'
 import { type Change } from './types.ts'
 import { adapters } from './adapters.ts'
@@ -497,6 +503,56 @@ slow('worktree preparation adopts its matching crash remnant', async () => {
 let gitIn = (cwd: string, ...args: string[]) =>
   new Deno.Command('git', { args, cwd, stdout: 'null', stderr: 'null' })
     .outputSync()
+let gitOut = (cwd: string, ...args: string[]) =>
+  new TextDecoder().decode(
+    new Deno.Command('git', { args, cwd, stdout: 'piped', stderr: 'null' })
+      .outputSync().stdout,
+  ).trim()
+
+slow(
+  'every provider self-attributes: a worktree commit carries the trailer',
+  async () => {
+    let { t } = seed()
+    let eid = uid(), tree = `${tmp}/trailer-${eid}`, branch = `session/${eid}`
+    apply(db, [{
+      eid,
+      name: 'session',
+      comp: { id: uid(), requested_task: t, cwd: tree, branch },
+    }])
+    await prepareWorktree(eid, {
+      instruction: '',
+      session_id: uid(),
+      repo: { path: scratch, base_branch: 'main' },
+      tree,
+      branch,
+      model: 'gpt-5.6-sol',
+    }, cast)
+    let { num } = db.prepare('select num from entity where eid = ?')
+      .get(eid) as { num: number }
+    Deno.writeTextFileSync(`${tree}/work.txt`, 'attributed\n')
+    gitIn(tree, 'add', '-A')
+    gitIn(tree, 'commit', '-m', 'do the thing')
+    // The git-side link: `git show <sha>` names the session, no agent needed.
+    assertMatch(
+      gitOut(tree, 'log', '-1', '--format=%B'),
+      new RegExp(`^Tasks-Session: S-${num} ${eid}$`, 'm'),
+    )
+    // Idempotent: a second commit stamps exactly one trailer, not two.
+    Deno.writeTextFileSync(`${tree}/more.txt`, 'again\n')
+    gitIn(tree, 'add', '-A')
+    gitIn(tree, 'commit', '-m', 'again')
+    assertEquals(
+      gitOut(tree, 'log', '-1', '--format=%B').match(/Tasks-Session:/g)?.length,
+      1,
+    )
+    // The hook is per-worktree: core.hooksPath points into this worktree's
+    // own gitdir, so the shared checkout and other worktrees are untouched.
+    assertMatch(
+      gitOut(tree, 'config', '--worktree', '--get', 'core.hooksPath'),
+      /\/tasks-hooks$/,
+    )
+  },
+)
 
 slow(
   'recoverWorktree regrows a reaped checkout, and no-ops a live one',
@@ -1027,6 +1083,14 @@ slow(
     )
     assertMatch(said[0], new RegExp(`${verdict}$`))
     assert(heard.some((c) => c.eid == eid && c.name == 'error'))
+    // The commit self-attributes: the trailer is in the message (git-side)
+    // and its sha rides the settle comment (graph-side) → `task search <sha>`.
+    let sha = gitOut(tree, 'log', '-1', '--format=%h')
+    assertStringIncludes(
+      gitOut(tree, 'log', '-1', '--format=%B'),
+      'Tasks-Session: S-',
+    )
+    assertMatch(said[0], new RegExp(`commits: ${sha}`))
   },
 )
 

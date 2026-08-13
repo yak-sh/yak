@@ -361,10 +361,12 @@ let report = (
     eid,
   ) as { num: number }
   let gist = gistOf(row.final_text)
+  let commits = commitShas(row)
   let body = [
     `S-${num} ${status}${
       row.exit_code == null ? '' : ` · exit ${row.exit_code}`
     }`,
+    ...(commits.length ? [`commits: ${commits.join(' ')}`] : []),
     ...(stranded ? [stranded.line] : []),
     ...(failure && failure != stranded?.message
       ? [`error: ${failure.slice(0, 240)}`]
@@ -483,6 +485,35 @@ let gitResult = (cwd: string, args: string[]) =>
     stderr: 'piped',
   }).outputSync()
 
+// The session's own commits, named by the trailer installTrailer plants — so a
+// sha resolves to this session (and its task) through the GRAPH too: report()
+// rides them into the settle comment, which FTS indexes, so `task search <sha>`
+// answers automatically. base_revision..branch bounds the scan and the trailer
+// grep keeps only THIS session's commits, so a rebase that pulled base commits
+// in cannot misattribute them. Best effort — a missing tree yields nothing.
+let commitShas = (row: Row): string[] => {
+  try {
+    let cwd = String(row.cwd ?? '')
+    let branch = String(row.branch ?? '')
+    let base = String(row.base_revision ?? '')
+    if (!cwd || !branch || !base) return []
+    let num = (db.prepare('select num from entity where eid = ?')
+      .get(String(row.eid)) as { num: number } | undefined)?.num
+    if (num == null) return []
+    let out = gitResult(cwd, [
+      'log',
+      '--format=%h',
+      `--grep=Tasks-Session: S-${num} `,
+      `${base}..${branch}`,
+    ])
+    if (out.code) return []
+    return new TextDecoder().decode(out.stdout).trim().split('\n')
+      .filter(Boolean)
+  } catch {
+    return []
+  }
+}
+
 let failureOf = (row: Row) =>
   (db.prepare('select message from error where eid = ?')
     .get(String(row.eid)) as { message: string | null } | undefined)?.message ??
@@ -590,6 +621,7 @@ let regrow = async (row: Row) => {
     `session/${sid}`,
     repo.base_branch,
   ])
+  await installTrailer(tree, String(row.eid))
   return { cwd: tree, branch: `session/${sid}` }
 }
 
@@ -1757,6 +1789,61 @@ type WorktreeLaunch = Launch & {
   branch: string
 }
 
+// Every commit a managed session makes names the session that made it: a
+// prepare-commit-msg hook, planted in the worktree, appends
+// `Tasks-Session: S-N <eid>` — so `git show <sha>` resolves to the session and,
+// through session.requested_task, its task, for EVERY provider and without the
+// agent's cooperation. S-N and eid are baked here at plant time: known, and
+// proof against a stripped env. core.hooksPath is all-or-nothing and per
+// worktree needs the worktreeConfig extension, so we mirror the repo's own
+// hooks beside ours and chain its prepare-commit-msg — nothing the repo
+// installed is lost. Best effort: a hook we could not write is an unattributed
+// commit, never a broken launch, so every failure is a warning.
+let installTrailer = async (tree: string, eid: string) => {
+  try {
+    let gitDir = await git(tree, ['rev-parse', '--absolute-git-dir'])
+    let dir = `${gitDir}/tasks-hooks`
+    let hook = `${dir}/prepare-commit-msg`
+    // Already planted (a resume re-preps the same worktree): leave it, and
+    // never recompute `orig` from a hooksPath that now points at ourselves.
+    try {
+      if (Deno.statSync(hook).isFile) return
+    } catch { /* not planted yet */ }
+    let orig = resolve(
+      tree,
+      await git(tree, ['rev-parse', '--git-path', 'hooks']),
+    )
+    let { num } = db.prepare('select num from entity where eid = ?')
+      .get(eid) as { num: number }
+    Deno.mkdirSync(dir, { recursive: true })
+    // Preserve the repo's other hooks (pre-commit, pre-push, …) beside ours.
+    try {
+      for (let e of Deno.readDirSync(orig)) {
+        if (e.name.endsWith('.sample') || e.name == 'prepare-commit-msg') {
+          continue
+        }
+        try {
+          Deno.removeSync(`${dir}/${e.name}`)
+        } catch { /* fresh */ }
+        Deno.symlinkSync(`${orig}/${e.name}`, `${dir}/${e.name}`)
+      }
+    } catch { /* no existing hooks dir to mirror */ }
+    Deno.writeTextFileSync(
+      hook,
+      `#!/bin/sh\n` +
+        `grep -q '^Tasks-Session: ' "$1" || ` +
+        `printf '\\nTasks-Session: S-${num} ${eid}\\n' >> "$1"\n` +
+        `[ -x '${orig}/prepare-commit-msg' ] && ` +
+        `exec '${orig}/prepare-commit-msg' "$@"\n:\n`,
+    )
+    Deno.chmodSync(hook, 0o755)
+    await git(tree, ['config', 'extensions.worktreeConfig', 'true'])
+    await git(tree, ['config', '--worktree', 'core.hooksPath', dir])
+  } catch (e) {
+    console.warn(`session ${eid} commit trailer not installed —`, e)
+  }
+}
+
 export let prepareWorktree = async (
   eid: string,
   j: WorktreeLaunch,
@@ -1790,6 +1877,7 @@ export let prepareWorktree = async (
       j.repo.base_branch,
     ])
   }
+  await installTrailer(j.tree, eid)
   stamp(
     eid,
     { base_revision: await git(j.tree, ['rev-parse', 'HEAD']) },
