@@ -130,3 +130,26 @@ Deno.test('an unscoped eager query never drags the lazy partition in', () => {
   assertEquals(hits.filter((h) => h.comps.session).length, 2)
   db.close()
 })
+
+Deno.test('kind= selects an eager kind past a lazy comp in kindOrder (T-17354)', () => {
+  let { db, a } = world()
+  // kindPreds emits a synthetic `.entry absent` clause for every kindOrder
+  // component earlier than the queried kind — so any kind past `entry` (comment,
+  // wake, …) carried one. namesLazy must NOT read that absence as a lazy opt-in:
+  // the bug flipped the query into entry-partition mode and orderedEntries then
+  // dropped every row without an entry.seq, so kind=comment / kind=wake said [].
+  let c = uuid()
+  apply(db, [
+    { eid: c, name: 'comment', comp: { target: a } },
+    { eid: c, name: 'doc', comp: { title: '', body: 'a note' } },
+  ])
+  let w = uuid()
+  apply(db, [{ eid: w, name: 'wake', comp: { at: '2099-01-01T00:00:00Z' } }])
+
+  assertEquals(evalGraph(db, '', 'comment').hits.map((h) => h.eid), [c])
+  assertEquals(evalGraph(db, '', 'wake').hits.map((h) => h.eid), [w])
+  // A genuinely-lazy kind (a POSITIVE `entry` presence) still routes into the
+  // partition — the guard narrows to absence assertions only.
+  assertEquals(evalGraph(db, '', 'entry').hits.length, 4)
+  db.close()
+})

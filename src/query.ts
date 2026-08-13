@@ -222,8 +222,15 @@ export let orderOf = (preds: Pred[]) => preds.find((p) => p.op == ORDER)?.value
 // snapshot, so a door reaches them only when the query OPTS IN by naming the
 // partition; that is an explicit scope, not a silent boundary. Every query
 // door reads this one predicate to decide whether entries are in its universe.
+//
+// A component-ABSENCE assertion (`p.prop == '' && p.op == ''`) does not opt in:
+// it selects eager entities that LACK the comp, the opposite of wanting entries.
+// kindPreds emits one per kindOrder-earlier comp, so `kind=comment` carries a
+// synthetic `.entry absent` — without this guard it flipped every eager kind
+// past `entry` into entry-partition mode and orderedEntries dropped every row.
+// A positive reference (`.entry` EXISTS, `.entry.session=S-1`) still scopes in.
 export let namesLazy = (preds: Pred[]) =>
-  preds.some((p) => p.comp in sessionComps)
+  preds.some((p) => p.comp in sessionComps && !(p.prop == '' && p.op == ''))
 
 // The sessions an entry query is scoped to — the eids of every `.entry.session=`
 // equality (a comma list is any-of). A keyed, bounded read (entriesOf) serves
