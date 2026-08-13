@@ -17,6 +17,7 @@ let {
   locate,
   mendCalls,
   mendMail,
+  migrateBoardsToProjects,
   migrateErrors,
   numbered,
   open,
@@ -3791,4 +3792,76 @@ Deno.test('num order is preserved: T-3 and a bare num still resolve', () => {
   let n = Number(comp(t, 'entity')?.num)
   assertEquals(resolveId(db, `T-${n}`), t) // prefixed num
   assertEquals(resolveId(db, String(n)), t) // bare num, never shadowed by hex
+})
+
+// T-17322: a project SHOULD BE its own board. migrateBoardsToProjects folds a
+// legacy separate `.project=<uuid>` board into its project, repoints any
+// card/fold that viewed it, and tombstones the board — leaving real filtered
+// views alone, and a re-run a no-op.
+Deno.test('migrateBoardsToProjects: a whole-project board collapses into its project', () => {
+  let d = fresh()
+  let project = uid()
+  apply(d, [
+    { eid: project, name: 'doc', comp: { title: 'Widgets', body: '' } },
+    { eid: project, name: 'project', comp: {} },
+  ])
+  let board = uid()
+  apply(d, [
+    { eid: board, name: 'doc', comp: { title: 'widgets', body: '' } },
+    { eid: board, name: 'board', comp: { query: `.project=${project}` } },
+  ])
+  let card = uid()
+  apply(d, [
+    { eid: card, name: 'card', comp: { target: board, view: 'Board' } },
+  ])
+
+  migrateBoardsToProjects(d)
+
+  // the project now IS the board, carrying the same query
+  assertEquals(compOf(d, project, 'board')?.query, `.project=${project}`)
+  // the card was repointed onto the project — view preserved (patch, not rebuild)
+  assertEquals(compOf(d, card, 'card')?.target, project)
+  assertEquals(compOf(d, card, 'card')?.view, 'Board')
+  // the redundant board entity is tombstoned
+  assertEquals(compOf(d, board, 'board'), undefined)
+  assertEquals(
+    !!d.prepare('select 1 from tombstone where eid = ?').get(board),
+    true,
+  )
+
+  // idempotent: a second run finds no mirror and changes nothing
+  let before = snapshot(d).changes.length
+  migrateBoardsToProjects(d)
+  assertEquals(snapshot(d).changes.length, before)
+})
+
+Deno.test('migrateBoardsToProjects: a filtered board is left alone', () => {
+  let d = fresh()
+  let project = uid()
+  apply(d, [
+    { eid: project, name: 'doc', comp: { title: 'Widgets', body: '' } },
+    { eid: project, name: 'project', comp: {} },
+  ])
+  // a real filtered view: project AND a status — not a whole-project mirror
+  let filtered = uid()
+  apply(d, [
+    { eid: filtered, name: 'doc', comp: { title: 'open widgets', body: '' } },
+    {
+      eid: filtered,
+      name: 'board',
+      comp: { query: `.project=${project}&.status=open` },
+    },
+  ])
+  // a whole-project board whose target isn't a live project: also left alone
+  let orphan = uid()
+  apply(d, [
+    { eid: orphan, name: 'doc', comp: { title: 'ghost', body: '' } },
+    { eid: orphan, name: 'board', comp: { query: `.project=${uid()}` } },
+  ])
+
+  migrateBoardsToProjects(d)
+
+  assertEquals(compOf(d, project, 'board'), undefined) // project untouched
+  assertEquals(!!compOf(d, filtered, 'board'), true) // filtered survives
+  assertEquals(!!compOf(d, orphan, 'board'), true) // orphan survives
 })

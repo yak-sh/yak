@@ -1515,6 +1515,73 @@ export let migrateDeliver = (db: DatabaseSync) => {
   }
 }
 
+// T-17322: a project SHOULD BE its own main board. A board whose query is
+// exactly a single `.project=<uuid>` is a whole-project mirror — redundant
+// with the project it names. Give that project the board comp, repoint every
+// card/fold that viewed the board onto the project, then bury the board. A
+// board with ANY other predicate is a real filtered view and is left alone.
+// Raw SQL, not apply(): this runs from open() during module evaluation, before
+// apply() is initialized (the other migrations use raw SQL for the same
+// reason). Cards are repointed FIRST, so the board has no cascade victims when
+// it is buried — the same reaper shape (drop every comp row, sever edges, keep
+// the num in the grave). Idempotent: a project already carrying a board comp is
+// skipped, so once every mirror is folded in a re-run finds nothing (this also
+// skips P-19, already board+project via `.project=<own eid>`).
+export let migrateBoardsToProjects = (db: DatabaseSync) => {
+  let boards = db.prepare('select eid, query from board').all() as {
+    eid: string
+    query: string | null
+  }[]
+  let now = new Date().toISOString()
+  db.exec('begin')
+  try {
+    for (let { eid, query } of boards) {
+      if (!query) continue
+      let preds
+      try {
+        preds = parseQuery(query)
+      } catch {
+        continue // an unparseable query is not a clean project mirror
+      }
+      if (preds.length != 1) continue
+      let p = preds[0]
+      // op '' is equality (query.ts OPS['=']); a list/range value or a deref
+      // path is not a single whole-project mirror.
+      if (p.comp != 'task' || p.prop != 'project' || p.op != '' || !p.value) {
+        continue
+      }
+      if (p.at || p.value.includes(',')) continue
+      let project = p.value
+      if (!db.prepare('select 1 from project where eid = ?').get(project)) {
+        continue
+      }
+      if (db.prepare('select 1 from board where eid = ?').get(project)) continue
+      // (1) the project becomes the board
+      db.prepare('insert into board (eid, query) values (?, ?)')
+        .run(project, query)
+      // (2) repoint every view BEFORE the bury, so nothing cascades
+      db.prepare('update card set target = ? where target = ?')
+        .run(project, eid)
+      db.prepare('update fold set board = ? where board = ?').run(project, eid)
+      // (3) bury the now-unreferenced board — the reaper's shape
+      for (let c of Object.keys(comps)) {
+        db.prepare(`delete from ${c} where eid = ?`).run(eid)
+      }
+      db.prepare('delete from dependency where parent = ? or child = ?')
+        .run(eid, eid)
+      db.prepare(
+        `insert or ignore into tombstone (eid, num, deleted_at)
+         values (?, (select num from entity where eid = ?), ?)`,
+      ).run(eid, eid, now)
+      db.prepare('delete from entity where eid = ?').run(eid)
+    }
+    db.exec('commit')
+  } catch (e) {
+    db.exec('rollback')
+    throw e
+  }
+}
+
 // The heal for the graphs migrateDeliver already stranded before the split
 // above existed (T-15110): every inbound letter migrated then wears a
 // deliver{to} naming the venue it ARRIVED at, with to_addr empty — invisible
@@ -1822,6 +1889,10 @@ export let open = (path = file) => {
   healInboundDeliver(db)
   mendCalls(db)
   mendApply(db)
+  // A legacy separate project-main-board collapses into its project — the
+  // project becomes its own board (T-17322). Idempotent; a no-op once every
+  // mirror is folded in.
+  migrateBoardsToProjects(db)
   // A mail was briefly a 'send_request' (the intent idiom over-applied —
   // the artifact deserved its name). Adopt the old table's rows once;
   // `create if not exists mail` above already made the empty successor,
