@@ -39,10 +39,12 @@ import { anchor, emptyIndex, indexAll, reindex, reindexEdge } from './index.ts'
 import { type MemoryResolver, memoryResolver } from './resolver.ts'
 import {
   clearIdb,
+  graphMeta,
   type IdbResolver,
   idbResolver,
   openIdb,
   putBags,
+  putGraphMeta,
   seedIdb,
 } from './schema/idb.ts'
 import { normalizeChanges } from './props.ts'
@@ -144,6 +146,12 @@ let mem: MemoryResolver = memoryResolver({
 // queries exactly as before — the seam's whole point, no call-site churn.
 let store: IdbResolver | null = null
 let storeDb: IDBDatabase | null = null
+// The durable store's cursor as attachStore found it — the high-water mark the
+// per-component stores were left at. The boot socket handshake opens from the
+// MIN of this and the hydration store's cursor, so the catch-up refills whichever
+// store is behind (they advance on separate async chains and can differ at a
+// reload instant). undefined until attachStore reads it.
+let storeCursor: number | undefined
 // During a wholesale (re)seed the per-row mirror below is skipped — resetQueries
 // writes the whole graph in one bulk pass instead of one put per change.
 let seeding = false
@@ -168,25 +176,69 @@ let mirror = (eids: string[]) =>
   )
 
 // A patch's touched eids: write them through, then re-test. `mem` still drives
-// the signals where there is no durable store (the TUI).
-let refreshQueries = (eids: Set<string>) => {
+// the signals where there is no durable store (the TUI). A `checkpoint` — the
+// server cursor of a CONFIRMED, durably-persisted frame (a leader live/sub
+// frame) — advances the store's high-water mark in the SAME callback, AFTER the
+// mirror settles: so the cursor never claims data a failed mirror left unwritten.
+// The mirror is async (this queued chain), while the hydration store's persist
+// (idb.ts) is awaited on the live frame, so the two cursors can differ at a
+// reload instant — the boot handshake (min of both) and the catch-up reconcile
+// close that gap rather than an exact-match skip requiring lockstep.
+let refreshQueries = (eids: Set<string>, checkpoint?: number) => {
   if (!store) return void mem.refresh(eids)
-  if (seeding || !eids.size) return
+  if (seeding) return
+  if (!eids.size && checkpoint === undefined) return
   let ids = [...eids]
   queueStore(async () => {
-    await mirror(ids)
-    await store!.refresh(new Set(ids))
+    if (ids.length) {
+      await mirror(ids)
+      await store!.refresh(new Set(ids))
+    }
+    if (checkpoint !== undefined) {
+      await putGraphMeta(storeDb!, { cursor: checkpoint, epoch: held.epoch })
+    }
   })
 }
 
 // A wholesale cache replacement (seed / snapshot reset): clear the store, seed
-// the fresh graph, then re-scan every held query from it.
+// the fresh graph, then re-scan every held query from it — and stamp the new
+// high-water mark last, so a returning boot after an epoch change finds the
+// store already mirroring the fresh graph. held is read at callback time (set
+// synchronously by seedFrom before it yields, as this queued fn is a microtask).
 let resetQueries = () => {
   if (!store) return void mem.reset()
   queueStore(async () => {
     await clearIdb(storeDb!)
     await seedIdb(storeDb!, cache.peek())
     await store!.reset()
+    await putGraphMeta(storeDb!, { cursor: held.cursor, epoch: held.epoch })
+  })
+}
+
+// A catch-up frame (boot / reconnect) can carry eids the cache ALREADY holds:
+// its state hydrated from the tasks store AHEAD of the graph store's cursor, so
+// applyLocal's per-row mirror sees no change and skips them (sameProps), leaving
+// the durable store behind. Re-mirror the WHOLE frame from the current cache to
+// close that gap, refresh the held queries, then stamp the cursor. Boot and
+// reconnect are the only callers, so the superset re-mirror (it overlaps
+// applyLocal's changed-row mirror) is a rare, bounded cost — a delta, never the
+// 15k-entity reseed. Absent from the cache ⇒ an empty bag ⇒ putBags deletes it.
+let reconcileStore = (changes: Change[], checkpoint?: number) => {
+  if (!store || seeding) return
+  let eids = [
+    ...new Set(
+      changes.map((c) => c.eid).filter((e): e is string => !!e),
+    ),
+  ]
+  if (!eids.length && checkpoint === undefined) return
+  queueStore(async () => {
+    if (eids.length) {
+      await mirror(eids)
+      await store!.refresh(new Set(eids))
+    }
+    if (checkpoint !== undefined) {
+      await putGraphMeta(storeDb!, { cursor: checkpoint, epoch: held.epoch })
+    }
   })
 }
 
@@ -214,16 +266,46 @@ let attachStore = async () => {
   try {
     let db = await openIdb('tasks-graph')
     storeDb = db
-    // Seed the whole graph in the BACKGROUND — boot never blocks on it, and
-    // mem.resolve (the prime, reading the full in-memory cache) answers every
-    // query instantly meanwhile. The store's own reads wait on this gate, so a
-    // half-seeded store never overwrites a primed answer with a short one. On
-    // storeWork so a live frame's mirror lands after the seed, not inside it.
-    let gate = queueStore(async () => {
+    // The store is durable across reloads. If it left the previous session with
+    // data under the SAME server epoch, it is reusable — skip the whole-graph
+    // reseed (the ~58s cost). Its cursor need NOT equal the cache's: they advance
+    // on separate async chains, so the store may sit a few frames behind (or, in
+    // solo mode, ahead). The boot handshake opens the socket from the MIN of the
+    // two cursors and reconcileStore re-mirrors that catch-up into the store, so
+    // any gap closes incrementally. Only a first visit or an epoch change (a db
+    // reset — the stored graph is now void) forces the one-time reseed.
+    let meta = await graphMeta(db)
+    let fresh = meta.cursor !== undefined && meta.epoch === held.epoch
+    // The cursor the socket opens from: the store's own if it is reused (so the
+    // catch-up refills its gap), the cache's if we reseed to it.
+    storeCursor = fresh ? meta.cursor : held.cursor
+    // Seed in the BACKGROUND — boot never blocks on it, and mem.resolve (the
+    // prime, reading the full in-memory cache) answers every query instantly
+    // meanwhile. The store's own reads wait on this gate, so a half-seeded store
+    // never overwrites a primed answer with a short one. On reuse there is no
+    // gate: the store is already whole. On storeWork so a live frame's mirror
+    // lands after the seed, not inside it.
+    let stamp = { cursor: held.cursor, epoch: held.epoch }
+    let t0 = performance.now()
+    let gate = fresh ? undefined : queueStore(async () => {
       await clearIdb(db)
       await seedIdb(db, cache.peek())
+      await putGraphMeta(db, stamp)
     })
     store = idbResolver(db, undefined, (preds) => mem.resolve(preds), gate)
+    // Probe telemetry (T-17194): whether this boot reseeded and how long the
+    // seed took — the wall-clock number the returning-boot measurement reads,
+    // with the decision inputs (the hydrated cursor/epoch vs the store's).
+    let bootMark = () => ((globalThis as { __store?: unknown }).__store = {
+      reseeded: !fresh,
+      ms: performance.now() - t0,
+      cursor: held.cursor,
+      epoch: held.epoch,
+      gcursor: meta.cursor,
+      gepoch: meta.epoch,
+    })
+    if (gate) gate.then(bootMark)
+    else bootMark()
   } catch (e) {
     console.warn('durable query store unavailable —', e)
   }
@@ -517,8 +599,12 @@ let mark = (path: string) => ((globalThis as { __boot?: string }).__boot = path)
 // deletes the entity and every edge touching it. Returns the eids and edges
 // it touched (an entity death touches the eid AND every edge it swept) so the
 // persist tail — and boot's explicit delta write — mirror exactly those keys
-// into IDB, no diff of the whole cache.
-export let applyLocal = (changes: Change[]) => {
+// into IDB, no diff of the whole cache. `checkpoint` (the confirmed server
+// cursor of a durably-persisted frame) advances the durable query store's
+// high-water mark at the same sites idb.ts persist advances the hydration
+// store's — omitted for optimistic and solo-tab frames, which mirror data
+// without moving the cursor.
+export let applyLocal = (changes: Change[], checkpoint?: number) => {
   syncIds()
   syncIx()
   let graph = cache.peek()
@@ -652,7 +738,7 @@ export let applyLocal = (changes: Change[]) => {
     refreshFolds(changedRows)
     refreshBacklinks(changedRows)
     refreshJobs(changedRows)
-    refreshQueries(changedRows)
+    refreshQueries(changedRows, checkpoint)
     refreshBoardLinks(changedRows)
     refreshFacets(changedRows)
     for (let [eid, z] of zs) {
@@ -805,10 +891,15 @@ let connect = () => {
   )
   ws = socket
   // The catch-up handshake: send the held cursor first, so every later live
-  // frame the server broadcasts arrives AFTER the catch-up it just sent.
+  // frame the server broadcasts arrives AFTER the catch-up it just sent. When a
+  // durable query store is attached, open from the MIN of the cache's cursor and
+  // the store's — so the catch-up refills whichever store is behind (reconciled
+  // into the graph store below), and neither is left with a silent gap.
+  let since = held.cursor ?? 0
+  if (store && storeCursor !== undefined) since = Math.min(since, storeCursor)
   socket.onopen = () =>
     socket.send(JSON.stringify({
-      since: held.cursor ?? 0,
+      since,
       epoch: held.epoch,
       vocab: held.vocabHash,
       live: 1,
@@ -873,11 +964,11 @@ let shadows = new Set<string>()
 // only). Either way it leaves the sub's set, and an eid now in no set is
 // evicted from the cache. A control reply replaces the prior set wholesale;
 // maintenance frames patch it.
-export let landSub = (f: Sub) => {
+export let landSub = (f: Sub, checkpoint?: number) => {
   if (f.replace && f.sub.startsWith('entries:')) {
     clearObservations(f.sub.slice('entries:'.length))
   }
-  let touched = applyLocal(f.changes)
+  let touched = applyLocal(f.changes, checkpoint)
   settleObservations(f.changes)
   // The server marks shadow-ness on every frame it sends, so believe the
   // frame: the local `shadows` set only knows what THIS client asked for,
@@ -1202,11 +1293,14 @@ let land = async (data: unknown, mode: Land) => {
   }
   let changes = liveChanges(data)
   if (changes) {
-    let touched = applyLocal(changes)
-    settleObservations(changes)
     let cursor = Array.isArray(data)
       ? undefined
       : (data as Partial<Live>).cursor
+    // The leader is the durable writer for a live frame (idb.ts persist); its
+    // cursor also checkpoints the query store, keeping the two in lockstep.
+    let checkpoint = mode == 'leader' ? cursor : undefined
+    let touched = applyLocal(changes, checkpoint)
+    settleObservations(changes)
     if (cursor !== undefined) {
       held = { ...held, cursor }
       if (mode == 'leader') await persist(touched, cursor)
@@ -1218,7 +1312,15 @@ let land = async (data: unknown, mode: Land) => {
   let frame = data as Partial<Live & Catchup & Reset & Sub>
   if (frame.error) problem.value = String(frame.error)
   if (frame.catchup !== undefined) {
+    // Catch-up persists in solo mode too (the 2.1 boot write), so both the
+    // hydration store and the query store advance it — anyone but a follower.
+    // The query store's advance is the reconcile (re-mirror the WHOLE frame, not
+    // just applyLocal's changed rows): a boot catch-up re-delivers state the
+    // cache already holds, which applyLocal skips but the durable store still
+    // needs. applyLocal itself carries no checkpoint here — the reconcile owns it.
+    let checkpoint = mode != 'follower' ? frame.cursor : undefined
     let touched = applyLocal(frame.catchup)
+    reconcileStore(frame.catchup, checkpoint)
     if (frame.cursor !== undefined) {
       held = { ...held, cursor: frame.cursor }
       if (mode != 'follower') await persist(touched, frame.cursor)
@@ -1227,7 +1329,8 @@ let land = async (data: unknown, mode: Land) => {
     mark('reset')
     await seedFrom(frame.snapshot, mode != 'follower')
   } else if (typeof frame.sub == 'string') {
-    let touched = landSub(frame as Sub)
+    let checkpoint = mode == 'leader' ? frame.cursor : undefined
+    let touched = landSub(frame as Sub, checkpoint)
     if (frame.cursor !== undefined) {
       held = { ...held, cursor: frame.cursor }
       if (mode == 'leader') await persist(touched, frame.cursor)

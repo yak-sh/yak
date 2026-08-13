@@ -11,11 +11,14 @@ import { memoryResolver, type Store } from '../resolver.ts'
 import { indexes } from '../types.ts'
 import {
   clearIdb,
+  graphMeta,
   idbResolver,
   idbStore,
   idbStores,
+  META,
   openIdb,
   putBags,
+  putGraphMeta,
   schemaShape,
   schemaVersion,
   seedIdb,
@@ -247,6 +250,63 @@ Deno.test('every component has a store and every index entry is generated', () =
   )!
   assertEquals(camera.keyPath, ['client', 'canvas'])
   assertEquals(camera.unique, true)
+})
+
+Deno.test('graphMeta round-trips the delta cursor; META rides the schema shape', async () => {
+  let db = await fresh(graph())
+  try {
+    // Fresh store: no cursor stamped yet ⇒ a returning boot would reseed.
+    assertEquals(await graphMeta(db), { cursor: undefined, epoch: undefined })
+    await putGraphMeta(db, { cursor: 42, epoch: 'e1' })
+    assertEquals(await graphMeta(db), { cursor: 42, epoch: 'e1' })
+    // Advancing the high-water mark overwrites in place.
+    await putGraphMeta(db, { cursor: 43, epoch: 'e1' })
+    assertEquals((await graphMeta(db)).cursor, 43)
+  } finally {
+    db.close()
+  }
+  // The fixed META store is part of the versioned shape, so a client without it
+  // upgrades to create it rather than reading a store that isn't there.
+  assert(schemaShape().includes(META))
+})
+
+Deno.test('the store persists across a reopen and delta-syncs — a returning boot catches up, never reseeds', async () => {
+  let g = graph()
+  let name = `t-${crypto.randomUUID()}`
+  // First boot: the one-time whole-graph seed, then a live delta (t2 → p1),
+  // each stamping the cursor AFTER its write — the lockstep the mirror keeps.
+  let db1 = await openIdb(name)
+  await seedIdb(db1, g)
+  await putGraphMeta(db1, { cursor: 100, epoch: 'e1' })
+  await putBags(db1, [['t2', {
+    ...g.t2!,
+    task: { ...g.t2!.task, assignee: 'p1' },
+  }]])
+  await putGraphMeta(db1, { cursor: 101, epoch: 'e1' })
+  db1.close()
+
+  // Returning boot: reopen the SAME db — no seedIdb. The cursor says where the
+  // store is (101), and every row, including the delta, is still on disk.
+  let db2 = await openIdb(name)
+  try {
+    assertEquals(await graphMeta(db2), { cursor: 101, epoch: 'e1' })
+    let idb = idbResolver(db2)
+    let ids = idb.subscribe(q('.assignee=p1'))
+    await idb.ready(q('.assignee=p1'))
+    assertEquals(sorted(ids.value), ['t1', 't2', 't3'])
+    // A catch-up delta lands incrementally on the returning store: t1 drops its
+    // task, the held signal updates row-locally, the cursor advances.
+    await putBags(db2, [['t1', {
+      entity: { num: 4 },
+      doc: { title: 'foo task' },
+    }]])
+    await idb.refresh(new Set(['t1']))
+    await putGraphMeta(db2, { cursor: 102, epoch: 'e1' })
+    assertEquals(sorted(ids.value), ['t2', 't3'])
+    assertEquals((await graphMeta(db2)).cursor, 102)
+  } finally {
+    db2.close()
+  }
 })
 
 Deno.test('the schema version is a positive int, moved by any shape change', () => {
