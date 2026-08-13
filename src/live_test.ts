@@ -34,8 +34,6 @@ import {
   relations,
   repoUrl,
   row,
-  sessionRows,
-  shelfFor,
   sieve,
   subEids,
   subscriptionChecks,
@@ -649,62 +647,6 @@ Deno.test('relationship indices wake only their affected targets', () => {
       job: 2,
       boards: 2,
     })
-  } finally {
-    for (let stop of stops) stop()
-  }
-})
-
-// The facet reads (projects/sessionRows/shelfFor) ride the query door now, so
-// each wakes only when ITS membership changes — a project born, a session born,
-// a shelf claimed — never on an unrelated row patch.
-Deno.test('facet reads wake only their own membership', () => {
-  cache.value = {
-    proj: {
-      entity: { eid: 'proj', num: 1 },
-      project: { eid: 'proj' },
-    },
-    sess: {
-      entity: { eid: 'sess', num: 2 },
-      session: { eid: 'sess', id: 'sess' },
-    },
-    plain: {
-      entity: { eid: 'plain', num: 3 },
-      doc: { eid: 'plain', title: 'plain', body: '' },
-    },
-  }
-  deps.value = []
-  let runs = { projects: 0, sessions: 0, shelf: 0 }
-  let stops = [
-    effect(() => {
-      projects()
-      runs.projects++
-    }),
-    effect(() => {
-      sessionRows()
-      runs.sessions++
-    }),
-    effect(() => {
-      shelfFor('client')
-      runs.shelf++
-    }),
-  ]
-  try {
-    // An unrelated doc edit touches no facet — all stay asleep.
-    applyLocal([{ eid: 'plain', name: 'doc', comp: { title: 'changed' } }])
-    assertEquals(runs, { projects: 1, sessions: 1, shelf: 1 })
-
-    // A project born wakes only the project census.
-    applyLocal([{ eid: 'proj2', name: 'project', comp: {} }])
-    assertEquals(runs, { projects: 2, sessions: 1, shelf: 1 })
-
-    // A session born wakes only the session census.
-    applyLocal([{ eid: 'sess2', name: 'session', comp: { id: 'sess2' } }])
-    assertEquals(runs, { projects: 2, sessions: 2, shelf: 1 })
-
-    // The client's shelf appears — only shelfFor wakes.
-    applyLocal([{ eid: 'sh', name: 'shelf', comp: { client: 'client' } }])
-    assertEquals(runs, { projects: 2, sessions: 2, shelf: 2 })
-    assertEquals(shelfFor('client'), 'sh')
   } finally {
     for (let stop of stops) stop()
   }

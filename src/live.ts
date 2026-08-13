@@ -1714,58 +1714,77 @@ export let rows = (): Row[] =>
     comps: r as Record<string, Record<string, unknown>>,
   }))
 
-// The distinct domain census — the one facet the query door can't answer, since
-// it aggregates DISTINCT VALUES (a task moving Eng→Ops keeps its `.task.domain!`
-// membership but changes the census), not membership. So it stays a value scan,
-// woken only when a task's domain actually changes (T-17064: distinct/aggregate
-// grammar would retire this too — T-17046).
 let facetGraph = cache.peek()
 let facetVersion = signal(0)
 let domainList: string[] = []
-let scanDomains = () => {
+let projectIds: string[] = []
+let sessionIds: string[] = []
+let shelfIds: string[] = []
+let scanFacets = () => {
   domainList = [
     ...new Set(
       Object.values(cache.peek()).flatMap((r) => r.task?.domain || []),
     ),
   ].sort()
+  projectIds = Object.entries(cache.peek())
+    .filter(([, r]) => r.project)
+    .sort(([, a], [, b]) =>
+      (a.entity?.num ?? Infinity) - (b.entity?.num ?? Infinity)
+    )
+    .map(([eid]) => eid)
+  sessionIds = Object.entries(cache.peek())
+    .filter(([, r]) => r.session)
+    .map(([eid]) => eid)
+  shelfIds = Object.entries(cache.peek())
+    .filter(([, r]) => r.shelf)
+    .map(([eid]) => eid)
   facetGraph = cache.peek()
 }
+let facets = () => {
+  facetVersion.value
+  if (facetGraph != cache.peek()) scanFacets()
+}
+
+// Pickers watch the domain/project census, then each returned project row.
+// An unrelated patch changes neither and leaves an open editor asleep.
 export let domains = {
   get value() {
-    facetVersion.value
-    if (facetGraph != cache.peek()) scanDomains()
+    facets()
     return domainList
   },
 }
-
-refreshFacets = (eids: Set<string>) => {
-  let changed = [...eids].some((eid) =>
-    facetGraph[eid]?.task?.domain != cache.peek()[eid]?.task?.domain
-  )
-  facetGraph = cache.peek()
-  if (!changed) return
-  scanDomains()
-  facetVersion.value++
+export let projects = (): Ent[] => {
+  facets()
+  return projectIds.map(ent)
+}
+export let sessionRows = (): [string, Session][] => {
+  facets()
+  return sessionIds.flatMap((eid) => {
+    let s = sessionOf(row(eid).value ?? {})
+    return s ? [[eid, s]] : []
+  })
+}
+export let shelfFor = (client: string) => {
+  facets()
+  return shelfIds.find((eid) => cache.peek()[eid]?.shelf?.client == client)
 }
 
-// Presence/reference reads the query door answers directly: every project (by
-// num, unknown last), every managed session (each riding its own row signal so
-// a status change wakes it), and a client's single shelf (a unique client
-// equality). No bespoke census to keep — refreshQueries maintains all three.
-export let projects = (): Ent[] =>
-  queryEids([has('project')]).value
-    .toSorted((a, b) =>
-      (cache.peek()[a]?.entity?.num ?? Infinity) -
-      (cache.peek()[b]?.entity?.num ?? Infinity)
-    )
-    .map(ent)
-export let sessionRows = (): [string, Session][] =>
-  queryEids([has('session')]).value.flatMap((eid) => {
-    let s = sessionOf(row(eid).value ?? {})
-    return s ? [[eid, s] as [string, Session]] : []
+refreshFacets = (eids: Set<string>) => {
+  let changed = [...eids].some((eid) => {
+    let before = facetGraph[eid]
+    let after = cache.peek()[eid]
+    return before?.task?.domain != after?.task?.domain ||
+      !!before?.project != !!after?.project ||
+      ((!!before?.project || !!after?.project) &&
+        before?.entity?.num != after?.entity?.num) ||
+      !!before?.session != !!after?.session ||
+      before?.shelf?.client != after?.shelf?.client
   })
-export let shelfFor = (client: string): string | undefined =>
-  queryEids([eq('shelf', 'client', client)]).value[0]
+  facetGraph = cache.peek()
+  if (!changed) return
+  scanFacets()
+  facetVersion.value++
+}
 
 // The comments aimed HERE — every entity whose `comment.target` is this eid,
 // an eid EQUALITY the refs index answers in O(result). A face subscribes to its
