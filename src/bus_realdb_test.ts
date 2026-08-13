@@ -112,3 +112,48 @@ slow(
     assertEquals(got.lines.length, 2)
   },
 )
+
+// A recall floater has NO recipient facet — it lands in the session's own log
+// keyed only by entry.session (recall.ts). busRows must have its own arm for it
+// or the bus goes quiet: pre-fix (T-17476) recall entries were written but
+// never supplied to channelEvents, so 47 wrote and 0 injected. Drop the
+// `.recalled.source!` arm from busRows and this test goes red.
+let RS = uid(11) // a fresh session that owns a recall floater
+let RM = uid(12) // the source message the floater rose from
+let RF = uid(13) // the recall-floater entry itself
+
+slow(
+  'bus: a recall floater in a session own log reaches that session',
+  alone,
+  async () => {
+    await post([
+      ...ent(RS, 11, {
+        doc: { title: 'Reader session', body: '' },
+        session: { id: 'sess-recall', cwd: '/w', actor: P, operator: 1 },
+      }),
+      // The message the recall rose from — an ordinary entry, never itself a
+      // floater (no `recalled`), so it is not delivered, only pointed at.
+      ...ent(RM, 12, {
+        entry: { session: RS, seq: 1 },
+        content: { body: 'should I escalate this?' },
+        message: {},
+      }),
+      // The floater: the memories that surfaced, in the session's OWN log.
+      // created.via is null (the effect writes it unattributed), so it passes
+      // notices()' own-write self-filter and reaches its own session.
+      ...ent(RF, 13, {
+        entry: { session: RS, seq: 2 },
+        content: { body: 'M-1 · escalation is a bug report, not a decision' },
+        recalled: { source: RM },
+        created: { at: '2026-01-05', by: null, via: null },
+      }),
+    ])
+
+    let got = await bus('sess-recall', '/w')
+    // Exactly the floater, rendered as a recall line — the injection that was
+    // silently missing.
+    assertEquals(got.lines.length, 1)
+    assertEquals(got.lines[0].includes('recall'), true)
+    assertEquals(got.lines[0].includes('escalation is a bug report'), true)
+  },
+)

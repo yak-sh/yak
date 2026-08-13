@@ -1442,6 +1442,7 @@ Deno.test('bare task appends the current claimed task digest', async () => {
         `/query?.comment.target=${S},${T}&.notified=`,
         `/query?.deliver.to=${S}&.notified=`,
         `/query?.mail.target=${S}&.notified=&.opened=&.archived=`,
+        `/query?.recalled.source!&.entry.session=${S}&.notified=`,
       ].sort(),
     )
   } finally {

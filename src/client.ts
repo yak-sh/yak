@@ -2420,15 +2420,22 @@ let busRows = async (who: Reader) => {
   let held = [...mine, ...(who.claims ?? [])].join(',')
   let box = [who.session, ...(who.operator ? [who.scope] : [])]
     .filter(Boolean).join(',')
-  let [said, aimed, letters] = await Promise.all([
+  let [said, aimed, letters, floated] = await Promise.all([
     query([`.comment.target=${held}`, '.notified=']),
     // WHO a knock is for is the shared deliver.to; the same facet a wake/mail
     // wears, so keep only the knock rows the bus renders.
     query([`.deliver.to=${mine.join(',')}`, '.notified=']),
     query([`.mail.target=${box}`, '.notified=', '.opened=', '.archived=']),
+    // A recall floater (recall.ts) lands in the session's OWN log with NO
+    // recipient facet — keyed only by entry.session — so it needs its own arm
+    // or channelEvents' recall branch is never supplied and the bus goes quiet
+    // on exactly the case T-17306 added (the SUPERSET invariant above). Unread
+    // only; a recall entry's created.via is null, so it passes notices()'
+    // own-write self-filter and reaches its own session.
+    query([`.recalled.source!`, `.entry.session=${who.session}`, '.notified=']),
   ])
   let knocks = aimed.filter((r) => r.comps.knock)
-  let seen = [...said, ...knocks, ...letters]
+  let seen = [...said, ...knocks, ...letters, ...floated]
   if (!seen.length) return seen
   // What rendering needs BESIDE the candidates: a knock's target (its id, and
   // the comment carrying the words that rode with it) and each candidate's
