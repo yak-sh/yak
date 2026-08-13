@@ -247,7 +247,7 @@ slow('task subject help is contextual and needs no server', async () => {
   assertMatch(stdout, /task T-3 — subject-first verbs/)
   assertMatch(
     stdout,
-    /requires\|contains\|reads\|about\|supervises\|delegates <id> \[--gone\]/,
+    /requires\|contains\|reads\|about\|supervises\|delegates\|recalled <id> \[--gone\]/,
   )
   assertMatch(stdout, /task T-3 is open\|wip\|done\|cancelled/)
   assertEquals(subjectUsage('T-3').trim(), stdout.trim())
