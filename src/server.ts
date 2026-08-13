@@ -47,6 +47,7 @@ import { native } from './mailer.ts'
 import { closingTask } from './closing.ts'
 import { knocked } from './knock.ts'
 import { waking } from './wake.ts'
+import { DREAM_PENDING, dreamComb, seedWake, unwoken } from './dream.ts'
 import {
   fleetApi,
   fleetRaw,
@@ -1264,6 +1265,15 @@ on('knock', {
     'spawn a project operator onto the target, or mail an addressed ' +
     'person — settle delivered/error either way',
 })
+on('knock', {
+  created: dreamComb(cast),
+  // Boot reconcile: a dream knock whose comb never ran (a crash in the gap)
+  // re-drives — the same outbox pattern as the ladder above (D-17362).
+  sweep: { pending: DREAM_PENDING },
+  doc: 'the dream: a cadence knock to a venture dream combs its sessions ' +
+    'finished since the floor cursor, flagging drift as consider tasks and ' +
+    'capturing owner decisions as memories — FLAG-only, never a fix (T-12800)',
+})
 on('wake', {
   created: waking(cast),
   changed: { at: waking(cast) }, // a moved hour re-arms the timer
@@ -1402,6 +1412,20 @@ syncSoon()
 // still alive, finalize the ones that died while we were away. Nothing here
 // reaps a child; the watcher below must never learn how.
 recover(cast)
+
+// Self-start each dream that has no pending wake — a fresh dream, or one whose
+// cadence wake fired-and-consumed while the server was down (a dream re-arms at
+// each run's end, so this only fills the gaps). Near-term, so the first comb
+// runs shortly after boot; the wake's created effect arms the one timer.
+for (let d of unwoken()) {
+  let seed = seedWake(d)
+  if (seed.length) {
+    let t = trace()
+    let out = apply(db, seed, t)
+    cast(out)
+    dispatch(out, t)
+  }
+}
 
 // The historical counterpart (T-16822): reconcile the file-first Sessions that
 // ended BEFORE live ingestion into the same entry partitions recover() fills

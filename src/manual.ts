@@ -548,6 +548,24 @@ export let manuals = declare({
     args: [arg('title', text, true)],
     opts: [body],
   },
+  dream: {
+    about: 'start a venture dreaming: the graph-native consolidation cycle',
+    examples: [
+      'task dream P-19',
+    ],
+    detail: 'A dream is a per-venture consolidation cursor (T-12800). It ' +
+      'mints one `dream` entity scoped to the project and arms a cadence ' +
+      'wake; each run combs the sessions the venture finished since a sliding ' +
+      'floor, asks a cheap model what META the doer missed — a warm path ' +
+      'gone missing, duplicate tickets, a reflex recurring across sessions, ' +
+      'complexity outgrowing size, an owner decision taken — and FLAGS it as ' +
+      "a 'consider' task or a memory. Flag, never fix. The dream re-arms " +
+      'itself, so this is a one-time opt-in; a second dream on the same ' +
+      'venture is refused.',
+    root: true,
+    args: [arg('project', text)],
+    opts: [],
+  },
   remember: {
     dots: ['body', 'scope', 'feedback'],
     body: 'body',

@@ -2704,6 +2704,36 @@ export let memoryChanges = (
   return { eid, changes }
 }
 
+// The dream batch (T-12800): a venture's consolidation cursor plus the first
+// cadence wake that starts it. `scope` is the project the dream combs; `floor`
+// starts a week back so the first run has a window. The wake is UNTARGETED
+// (deliver.to = the dream), so replaceWakes keeps one cadence clock and the
+// server arms it on apply; its knock hooks dreamComb (dream.ts), which re-arms
+// the next at each run's end. One dream per venture — a second on the same
+// project is refused, so `task dream` is safe to run twice.
+export let dreamChanges = (
+  all: Row[],
+  d: { project: string; floor?: string },
+) => {
+  let project = find(all, d.project)
+  if (!project?.comps.project) throw new Error(`not a project: ${d.project}`)
+  let had = all.find((r) => r.comps.dream?.scope == project.eid)
+  if (had) throw new Error(`${idOf(had)} already dreams ${idOf(project)}`)
+  let eid = uuid()
+  let w = uuid()
+  let floor = d.floor ?? new Date(Date.now() - 7 * 86_400_000).toISOString()
+  let changes: Change[] = [
+    { eid, name: 'dream', comp: { scope: project.eid, floor } },
+    {
+      eid: w,
+      name: 'wake',
+      comp: { at: new Date(Date.now() + 1000).toISOString() },
+    },
+    { eid: w, name: 'deliver', comp: { to: eid } },
+  ]
+  return { eid, changes }
+}
+
 // The recall INDEX: memories screened by preds, warmest first — one
 // line each, no bodies. Expansion (and the recall bump that rides it)
 // stays behind the ids door: recognition is not retrieval.

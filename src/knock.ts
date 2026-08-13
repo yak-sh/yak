@@ -64,6 +64,10 @@ export let knocked =
     // `to` at a tombstone isn't empty (death 'keep' holds the dead eid); the
     // ladder finds no door for it and fails the same way, never firing.
     if (!to) return fail('no recipient')
+    // A dream knock is combed by dreamComb (dream.ts), which owns its own
+    // delivered stamp — this ladder has no door for it, so abstain rather than
+    // descend to rung 4 and stamp a spurious "no door" error every cadence.
+    if (db.prepare('select 1 from dream where eid = ?').get(to)) return
     // Who asked. The knock's own provenance is the author of anything it
     // sends on their behalf.
     let knocker = () =>

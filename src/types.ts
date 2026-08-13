@@ -473,6 +473,19 @@ export let comps: Record<string, Record<string, PropType>> = {
     // What to look at on waking — absent means the wake itself.
     target: { eid: 'entity', death: 'cascade' },
   },
+  // A dream: a venture's consolidation cursor (T-12800, D-17362). One per
+  // venture, its own entity rather than a mark on the project, so its cadence
+  // clock (a self-armed wake) and its cursor are the venture's alone — a
+  // venture can pause or retune its dream without touching the project.
+  // `scope` names the venture project the comb consolidates; `floor` is the
+  // sliding cursor over sessions finished since, advanced one calendar day per
+  // run and clamped to a max(20 entries, 7 days) window (dream.ts). The comb
+  // itself is a post-commit effect fired by the cadence wake's knock. A
+  // distinct kind (kindOrder), so `graph_query kind=dream` lists them.
+  dream: {
+    scope: { eid: 'project', death: 'cascade' },
+    floor: 'time',
+  },
   // Outbound mail, asked for as data: creating one requests delivery (the
   // mailer effect sends and settles the outcome as the shared `delivered`/
   // `error` components — see deliver.ts — and denormalizes the resolved
@@ -1041,6 +1054,7 @@ export let kindOrder = [
   'stop_request',
   'knock',
   'wake',
+  'dream',
   'mail',
   'hook',
   'conflict',
@@ -1118,6 +1132,7 @@ export let prefix: Record<string, string> = {
   hook: 'H',
   knock: 'K',
   wake: 'W',
+  dream: 'Z', // Z for sleep — the venture's consolidation cursor
 }
 // The short handle a NUM-LESS entity wears: the uuid's leading 8 hex — its
 // first group, already dashless. Honest that there is no human number, and
@@ -1557,6 +1572,16 @@ export type Wake = {
   target?: string | null
 }
 
+// A dream: a venture's consolidation cursor (dream.ts). `scope` is the
+// venture project it combs; `floor` the sliding cursor over sessions
+// finished since. Both wire-writable — `task dream <project>` mints the
+// entity; the comb advances the floor.
+export type Dream = {
+  eid: string
+  scope?: string | null
+  floor?: string | null
+}
+
 // Mail, either direction: the request columns are the ask; the send
 // outcome is the shared `delivered`/`error` facet (deliver.ts). to_addr is
 // the envelope copy — what delivery resolved and used. An INBOUND mail
@@ -1803,6 +1828,7 @@ export type Ent = {
   stop_request?: StopRequest
   knock?: Knock
   wake?: Wake
+  dream?: Dream
   mail?: Mail
   deliver?: Deliver
   hook?: Hook

@@ -641,6 +641,7 @@ export let derived = [
   'feedback',
   'meta',
   'resume',
+  'dream',
   'deliver',
   'delivered',
   'error',

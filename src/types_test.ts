@@ -61,6 +61,8 @@ Deno.test('death words: every reference declares, the sets hold', () => {
       'stop_request.target',
       'knock.target',
       'wake.target',
+      // a dream is meaningless without the venture it consolidates
+      'dream.scope',
       'pin.canvas',
       // a pane dies with its layout and with its container (D-14718)
       'pane.layout',

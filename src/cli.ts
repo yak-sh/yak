@@ -26,6 +26,7 @@ import {
   derefedChanges,
   derefedParams,
   designChanges,
+  dreamChanges,
   edgesOf,
   fetched,
   find,
@@ -1994,6 +1995,26 @@ let design = async (got: Got) => {
   if (hint) print(hint)
 }
 
+// Mint a venture's dream: the consolidation cursor and its first cadence wake
+// (client.ts dreamChanges). This is how a venture opts into the graph-native
+// dream cycle — the wake fires shortly, its knock hooks dreamComb, and the
+// dream self-arms from there. Idempotent per venture (a second is refused).
+let dream = async (input: Got) => {
+  let ref = input.args.project
+  if (!ref) {
+    throw new Error('task dream <project> (the venture to consolidate)')
+  }
+  let project = await got(ref)
+  if (!project?.comps.project) throw new Error(`not a project: ${ref}`)
+  let made = dreamChanges([project, ...await query([], 'dream')], {
+    project: project.eid,
+  })
+  await send(made.changes)
+  print(
+    `${await minted(made.eid)} dreaming ${idOf(project)} — first comb shortly`,
+  )
+}
+
 // Save a memory: doc + memory comp, stamped via the calling session — the
 // CLI face of MCP memory_save, so headless agents (the scribe first) have
 // the door too.
@@ -2591,6 +2612,7 @@ export let verbs = bind({
   backup: () => backup(),
   sync,
   design,
+  dream,
   remember,
   session,
   'session context': context,

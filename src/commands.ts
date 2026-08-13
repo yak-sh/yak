@@ -25,6 +25,7 @@ import {
   commentChanges,
   derefChanges,
   DESK,
+  dreamChanges,
   find,
   mailChanges,
   need,
@@ -385,6 +386,21 @@ export let commands: Record<string, Command> = {
         changes: [...made, { eid, name: 'meta', comp: {} }],
         msg: `meta → ${idOf(anchor)}`,
       }
+    },
+  },
+  // :dream starts a venture's consolidation cycle (T-12800) — mint the
+  // per-venture `dream` cursor and arm its first cadence wake. A named project
+  // wins; otherwise the focused entity, which must be a project. Idempotent: a
+  // second dream on the same venture is refused by dreamChanges.
+  dream: {
+    args: 'P-19',
+    about: 'start a venture dreaming — the graph-native consolidation cycle',
+    run: (rest, ctx) => {
+      let first = rest.trim().split(/\s+/).filter(Boolean)[0]
+      let r = first ? find(ctx.rows, first) : here(ctx)
+      if (!r) throw new Error(`dream: no such project: ${first}`)
+      let made = dreamChanges(ctx.rows, { project: r.eid })
+      return { changes: made.changes, msg: `dreaming ${idOf(r)}` }
     },
   },
   // :knock is the attention lever: bring the focused entity to someone's
