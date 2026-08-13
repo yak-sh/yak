@@ -31,7 +31,11 @@ import { hot, leafOf, matchQuery, type Pred, route } from './query.ts'
 import { FLOOR } from './embed.ts'
 import { request } from './http.ts'
 import { unmime } from './rfc2047.ts'
-import { channelEvents, type Event as InboxEvent } from './channel.ts'
+import {
+  channelEvents,
+  type Event as InboxEvent,
+  recallWindowMin,
+} from './channel.ts'
 export { idOf }
 
 export let host = () => Deno.env.get('TASKS_HOST') ?? '127.0.0.1:5173'
@@ -2165,6 +2169,9 @@ export let notices = (all: Row[], who: Reader) => {
     // exists, and one does — who.session names it.
     operator: who.operator,
     mode: 'inbox',
+    // The clock the recall recency bound reads (T-17487): the whole-snapshot
+    // path drops a floater that missed its beat, matching busRows' query bound.
+    now: Date.now(),
   })
     // A session's own write is not a message back to itself.
     .filter((ev) => byEid.get(ev.eid)?.comps.created?.via != sessEid)
@@ -2432,7 +2439,21 @@ let busRows = async (who: Reader) => {
     // on exactly the case T-17306 added (the SUPERSET invariant above). Unread
     // only; a recall entry's created.via is null, so it passes notices()'
     // own-write self-filter and reaches its own session.
-    query([`.recalled.source!`, `.entry.session=${who.session}`, '.notified=']),
+    //
+    // BOUNDED TO RECENT (T-17487): a floater is ambient — relevant to the
+    // message that surfaced it and worthless later ("a thought that missed its
+    // beat is simply gone", recall.ts). Delivering only floaters born in the
+    // last window means a missed one stays missed and no historical backlog
+    // ever replays — the failure this fixes: a session that ran pre-fix held
+    // 60+ undelivered floaters, and notices()' 20-cap drained them 20-per-call,
+    // surfacing memories for messages hours stale. Any future delivery gap
+    // self-heals the same way, never by replay.
+    query([
+      `.recalled.source!`,
+      `.entry.session=${who.session}`,
+      '.notified=',
+      `.created.at>=${recallWindowMin}-minutes-ago`,
+    ]),
   ])
   let knocks = aimed.filter((r) => r.comps.knock)
   let seen = [...said, ...knocks, ...letters, ...floated]

@@ -81,7 +81,21 @@ export type Ctx = {
   // capability receives project mail or actor knocks; direct address and
   // claimed-task replies do not depend on it.
   operator?: boolean
+  // The clock the recall recency bound reads (T-17487). A catch-up sweep
+  // (inbox/resume) that scans accumulated rows must not replay a recall floater
+  // that missed its beat: any older than `recallWindowMin` before `now` is
+  // gone. A live frame sets neither `now` nor a birthday, so the bound is
+  // inert there — everything in one frame is current.
+  now?: number
 }
+
+// How recent a recall floater must be to still ring (T-17487). A floater is
+// ambient — relevant to the message that surfaced it and worthless later ("a
+// thought that missed its beat is simply gone", recall.ts). Both delivery
+// arms read this single window: busRows' `.created.at>=…` query (client.ts)
+// keeps the backlog off the wire, and channelEvents' born bound below keeps
+// the whole-snapshot path (noticesFor) in step, so the two never diverge.
+export let recallWindowMin = 10
 
 let str = (v: unknown) => (typeof v == 'string' ? v : '')
 
@@ -559,6 +573,15 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
     // is the floater lines (M-id · title); the `notified` gate dedups a replay.
     if (c.name == 'recalled') {
       if (sessions.get(c.eid) != ctx.sessionEid) continue
+      // Bounded to recent (T-17487): on a catch-up sweep — where `born` and
+      // `now` are both set — a floater older than the recall window is a missed
+      // beat, dropped so a backlog never floods the session. A live frame sets
+      // neither, so a fresh floater always rings.
+      let bornAt = born?.get(c.eid)
+      if (
+        ctx.now != null && bornAt != null &&
+        bornAt < ctx.now - recallWindowMin * 60_000
+      ) continue
       let content = cleanBody(bodies.get(c.eid) ?? '')
       if (!content) continue
       if (told(c.eid)) continue

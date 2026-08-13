@@ -140,12 +140,14 @@ slow(
       }),
       // The floater: the memories that surfaced, in the session's OWN log.
       // created.via is null (the effect writes it unattributed), so it passes
-      // notices()' own-write self-filter and reaches its own session.
+      // notices()' own-write self-filter and reaches its own session. Born NOW,
+      // because busRows bounds the recall arm to the recent window (T-17487) —
+      // a floater is worthless once its beat has passed.
       ...ent(RF, 13, {
         entry: { session: RS, seq: 2 },
         content: { body: 'M-1 · escalation is a bug report, not a decision' },
         recalled: { source: RM },
-        created: { at: '2026-01-05', by: null, via: null },
+        created: { at: new Date().toISOString(), by: null, via: null },
       }),
     ])
 

@@ -135,6 +135,23 @@ let instruction = (
     subscription: { actor: P, target: target, mode },
   })
 
+// A recall floater in the session's OWN log (recall.ts): no recipient facet,
+// keyed only by entry.session, its lines in `content`. `at` is its birth — a
+// fresh floater rings, one that missed its beat (older than the recall window,
+// T-17487) is gone. The default is right now; a stale case passes an old `at`.
+let floater = (
+  eid: string,
+  num: number,
+  body: string,
+  at = new Date().toISOString(),
+) =>
+  ent(eid, num, {
+    entry: { session: S, seq: num },
+    content: { body },
+    recalled: { source: T },
+    created: { at, by: null, via: null },
+  })
+
 let graph = (...extra: Change[][]): Snapshot => ({
   changes: [...world(), ...extra.flat()],
   deps: [],
@@ -180,6 +197,22 @@ let cases: [string, Snapshot, number][] = [
       said('c12', 47, X, 'look here', '2026-01-03'),
     ),
     1,
+  ],
+  // A recall floater born now rings, exactly like a comment on the session —
+  // the delivery T-17476 restored.
+  [
+    'a fresh recall floater',
+    graph(floater('rf1', 70, 'M-1 · fresh recall')),
+    1,
+  ],
+  // One that missed its beat is gone (T-17487): both suppliers must drop it, or
+  // the narrow bus and the whole-snapshot digest disagree — busRows' query
+  // bound excludes it, channelEvents' born bound excludes it, and this count
+  // pins them together. `world`'s clock is months back, so this `at` is stale.
+  [
+    'a stale recall floater',
+    graph(floater('rf2', 71, 'M-2 · stale recall', '2026-01-02')),
+    0,
   ],
   ['verified project mail', graph(letter('m1', 28, P)), 1],
   ['unverified project mail', graph(letter('m2', 29, P, { verified: 0 })), 0],
