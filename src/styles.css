@@ -3848,7 +3848,7 @@ a[data-ref]:hover {
   overscroll-behavior: contain;
 }
 
-/* ---- the census: /admin — sidebar of kinds, derived index tables ---- */
+/* ---- the census: /admin — component sidebar, derived index tables ---- */
 .Admin {
   flex: 1;
   min-height: 0;
@@ -3870,10 +3870,6 @@ a[data-ref]:hover {
   display: flex;
   flex-direction: column;
 }
-.Admin_Group-system {
-  border-top: 1px solid var(--border);
-  padding-top: var(--half-gap);
-}
 .Admin_Kind {
   display: flex;
   align-items: baseline;
@@ -3891,10 +3887,6 @@ a[data-ref]:hover {
 .Admin_Kind-on {
   background: var(--card);
   font-weight: 600;
-}
-.Admin_Kind-fold {
-  color: var(--dim);
-  font-size: 12px;
 }
 .Admin_Count {
   color: var(--dim);

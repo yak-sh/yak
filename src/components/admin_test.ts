@@ -7,15 +7,15 @@ import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
 import {
   adminRoute,
+  censusComps,
   columnsFor,
   countsByPresence,
-  groupedKinds,
   inSection,
 } from './admin.ts'
 import { Admin } from './Admin.tsx'
 import { route } from './nav.tsx'
 import { cache } from '../live.ts'
-import { comps, kindOrder, stamped } from '../types.ts'
+import { comps, stamped } from '../types.ts'
 import { assertEquals } from '@std/assert'
 
 Deno.test("columnsFor: a kind's columns ARE its vocabulary row", () => {
@@ -43,7 +43,6 @@ Deno.test('derivation: a new comp needs zero admin edits', () => {
     size: 'number',
     owner: { eid: '' },
   }
-  kindOrder.push('gadget')
   try {
     let cols = columnsFor('gadget')
     assertEquals(cols.map((c) => c.key), [
@@ -54,10 +53,9 @@ Deno.test('derivation: a new comp needs zero admin edits', () => {
       'modified',
     ])
     assertEquals(cols[2].t, 'number')
-    assertEquals(groupedKinds().content.includes('gadget'), true)
+    assertEquals(censusComps().includes('gadget'), true)
   } finally {
     delete (comps as Record<string, unknown>).gadget
-    kindOrder.pop()
   }
 })
 
@@ -87,18 +85,15 @@ Deno.test('countsByPresence: each entity counts under every component', () => {
   assertEquals(counts.task, 1)
 })
 
-Deno.test('groupedKinds: sessions are content and machinery folds', () => {
-  let { content, system } = groupedKinds()
-  assertEquals(content.includes('task'), true)
-  assertEquals(content.includes('memory'), true)
-  assertEquals(content.includes('session'), true)
-  assertEquals(system.includes('session'), false)
-  assertEquals(system.includes('claim'), true)
-  assertEquals(content.includes('claim'), false)
+Deno.test('censusComps: every vocabulary component gets a section', () => {
+  assertEquals(censusComps(), Object.keys(comps))
+  assertEquals(censusComps().includes('task'), true)
+  assertEquals(censusComps().includes('alias'), true)
+  assertEquals(censusComps().includes('created'), true)
 })
 
 Deno.test('adminRoute: bare, kind, and new forms', () => {
-  assertEquals(adminRoute('/admin'), { kind: 'task', form: false })
+  assertEquals(adminRoute('/admin'), { kind: censusComps()[0], form: false })
   assertEquals(adminRoute('/admin/memory'), { kind: 'memory', form: false })
   assertEquals(adminRoute('/admin/person/new'), { kind: 'person', form: true })
 })
@@ -150,6 +145,49 @@ Deno.test('the index is a typed grid and grid mode is bare tiles', async () => {
     await Promise.resolve()
     assertEquals(root.querySelector('.Admin_Grid > .Tile') != null, true)
     assertEquals(root.querySelector('.Admin_Grid > div > .Tile'), null)
+  } finally {
+    render(null, root)
+    cache.value = {}
+    route.value = '/'
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else delete (globalThis as { document?: unknown }).document
+  }
+})
+
+Deno.test('facet pages list their carriers without widening task', () => {
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let { document } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  let project = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  let task = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  cache.value = {
+    [project]: {
+      entity: { eid: project, num: 19 },
+      doc: { eid: project, title: 'Task Graph', body: '' },
+      project: { eid: project },
+      email: { eid: project, address: 'task@bot.yak.sh' },
+      alias: { eid: project, slug: 'tasks' },
+    },
+    [task]: {
+      entity: { eid: task, num: 20 },
+      doc: { eid: task, title: 'Ship it', body: '' },
+      task: { eid: task, status: 'open', priority: 1, project },
+    },
+  }
+  let root = document.querySelector('main')!
+  let texts = (kind: string) => {
+    route.value = `/admin/${kind}`
+    render(h(Admin, {}), root)
+    return [...root.querySelectorAll('.Admin_Row:not(.Admin_Row-head)')]
+      .map((x) => x.textContent)
+  }
+  try {
+    assertEquals(texts('email'), ['P-19Task Graphtask@bot.yak.sh'])
+    assertEquals(texts('alias'), ['P-19Task Graphtasks—'])
+    assertEquals(texts('task'), ['T-20Ship itopenP1Task Graph——'])
   } finally {
     render(null, root)
     cache.value = {}

@@ -1,29 +1,13 @@
 // The census's pure half: what the admin interface derives from the
 // vocabulary, kept DOM-free so tests can hold the derivation property —
 // a new comp in types.ts appears here with zero admin edits. The sidebar
-// is kindOrder split into content and system; a kind's table columns are
-// its own comp props (wire-writable AND stamped — outcomes belong on the
-// page) between the id/title lead and the entity timestamps.
-import { comps, kindOrder, type PropType, stamped } from '../types.ts'
+// is every vocabulary component; a component's table columns are its own
+// props (wire-writable AND stamped — outcomes belong on the page) between
+// the id/title lead and the entity timestamps.
+import { comps, type PropType, stamped } from '../types.ts'
 import { type Row } from '../client.ts'
 
-// The chrome kinds — the UI's own furniture and the machinery's audit
-// rows. Real to the graph, noise to a census; the sidebar folds them.
-let SYSTEM = new Set([
-  'card',
-  'client',
-  'camera',
-  'fold',
-  'claim',
-  'stop_request',
-  'send_request',
-  'conflict',
-])
-
-export let groupedKinds = () => ({
-  content: kindOrder.filter((k) => !SYSTEM.has(k)),
-  system: kindOrder.filter((k) => SYSTEM.has(k)),
-})
+export let censusComps = () => Object.keys(comps)
 
 // A section lists by component PRESENCE, not primary kind: an entity
 // appears under EVERY component it carries. A facet (alias, email) always
@@ -33,8 +17,8 @@ export let inSection = (rows: Row[], kind: string): Row[] =>
   rows.filter((r) => r.comps[kind])
 
 // The sidebar count is the same rule tallied: each entity increments every
-// kindOrder component it wears, so the counts and the sections agree.
-export let countsByPresence = (rows: Row[], order = kindOrder) => {
+// vocabulary component it wears, so the counts and sections agree.
+export let countsByPresence = (rows: Row[], order = censusComps()) => {
   let counts: Record<string, number> = {}
   for (let r of rows) {
     for (let k of order) if (r.comps[k]) counts[k] = (counts[k] ?? 0) + 1
@@ -66,7 +50,7 @@ export let adminRoute = (
 ): { kind: string; form: boolean } => {
   let [, , kind, verb] = path.split('/')
   return {
-    kind: kind || groupedKinds().content[0],
+    kind: kind || censusComps()[0],
     form: verb == 'new',
   }
 }

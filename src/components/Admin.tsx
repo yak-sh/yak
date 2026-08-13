@@ -1,5 +1,5 @@
 // The census — the canvas's counterpart. A traditional admin: sidebar of
-// kinds (derived from kindOrder), an index per kind whose columns ARE
+// components (derived from comps), an index per component whose columns ARE
 // the vocabulary row (admin.ts columnsFor), and a new-form whose fields
 // pick controls by PropType. Nothing here names a specific comp: add one
 // to types.ts and this interface grows a section, a column set, and a
@@ -10,10 +10,10 @@ import { ent, mutate, rows } from '../live.ts'
 import { block } from './ui.tsx'
 import {
   adminRoute,
+  censusComps,
   type Col,
   columnsFor,
   countsByPresence,
-  groupedKinds,
   inSection,
 } from './admin.ts'
 import { FilterInput, passOf } from './Filter.tsx'
@@ -340,8 +340,6 @@ export let Admin = () => {
   let { kind, form } = adminRoute(url.pathname)
   let query = url.searchParams.get('q') ?? ''
   let counts = countsByPresence(rows())
-  let { content, system } = groupedKinds()
-  let [folded, setFolded] = useState(true)
   let link = (k: string) => (
     <Kind
       key={k}
@@ -360,20 +358,7 @@ export let Admin = () => {
   return (
     <Frame>
       <Side>
-        <Group>{content.map(link)}</Group>
-        <Group mod='system'>
-          <Kind
-            href='#'
-            mod='fold'
-            onClick={(ev: MouseEvent) => {
-              ev.preventDefault()
-              setFolded(!folded)
-            }}
-          >
-            system {folded ? '▸' : '▾'}
-          </Kind>
-          {!folded && system.map(link)}
-        </Group>
+        <Group>{censusComps().map(link)}</Group>
       </Side>
       {form ? <NewForm kind={kind} /> : <Index kind={kind} query={query} />}
     </Frame>
