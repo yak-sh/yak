@@ -4,16 +4,15 @@
 // pick controls by PropType. Nothing here names a specific comp: add one
 // to types.ts and this interface grows a section, a column set, and a
 // form with zero edits — the same property every other surface holds.
-import { useState } from 'preact/hooks'
+import { useEffect, useState } from 'preact/hooks'
 import { comps, type Ent, idOf, type PropType, uuid } from '../types.ts'
-import { ent, mutate, rows } from '../live.ts'
+import { base, census, ent, mutate, rows } from '../live.ts'
 import { block } from './ui.tsx'
 import {
   adminRoute,
   censusComps,
   type Col,
   columnsFor,
-  countsByPresence,
   inSection,
 } from './admin.ts'
 import { FilterInput, passOf } from './Filter.tsx'
@@ -26,6 +25,7 @@ import { title } from './title.tsx'
 let Frame = block('div', 'Admin', {
   Side: 'nav',
   Group: 'div',
+  Note: 'small',
   Kind: 'a',
   Count: 'span',
   Main: 'section',
@@ -47,6 +47,7 @@ let Frame = block('div', 'Admin', {
 let {
   Side,
   Group,
+  Note,
   Kind,
   Count,
   Main,
@@ -94,7 +95,9 @@ let sortVal = (e: Ent, col: Col): string | number => {
   return typeof v == 'number' ? v : String(v ?? '')
 }
 
-let Index = ({ kind, query }: { kind: string; query: string }) => {
+let Index = (
+  { kind, query, total }: { kind: string; query: string; total?: number },
+) => {
   let [grid, setGrid] = useState(false)
   let [sort, setSort] = useState<{ key: string; dir: 1 | -1 } | null>(null)
   let cols = columnsFor(kind)
@@ -177,12 +180,27 @@ let Index = ({ kind, query }: { kind: string; query: string }) => {
             ))}
           </Table>
         )}
-      {all.length > CAP && (
-        <More>
-          showing {CAP} of {all.length}
-        </More>
-      )}
-      {!all.length && <More>nothing here yet</More>}
+      {
+        // The footer is honest about the cache being partial. `total` is the
+        // graph-true count (server /census); the cache omits the entry
+        // partition, so a listing of loaded rows can be a fraction of it.
+        // Never present the loaded subset as the whole.
+        total != null && total > all.length
+          ? (
+            <More>
+              {`${shown.length} of ${total} — ${all.length} loaded here, the rest live in the entry partition (off the cache)`}
+            </More>
+          )
+          : all.length > CAP
+          ? <More>showing {CAP} of {all.length}</More>
+          : !all.length
+          ? (
+            total
+              ? <More>{total} in the graph, none loaded in this view</More>
+              : <More>nothing here yet</More>
+          )
+          : null
+      }
     </Main>
   )
 }
@@ -339,7 +357,22 @@ export let Admin = () => {
   let url = new URL(route.value, 'http://x')
   let { kind, form } = adminRoute(url.pathname)
   let query = url.searchParams.get('q') ?? ''
-  let counts = countsByPresence(rows())
+  // Graph-true counts from the server (/census), not a scan of the loaded
+  // cache — the cache omits the entry partition, so a presence-tally
+  // understates every entry-borne component (recalled, message, …). Refetched
+  // when the cached set changes so eager edits move the numbers; a debounced
+  // timer coalesces bursts and never leaks (cleared on unmount).
+  let [counts, setCounts] = useState<Record<string, number>>({})
+  let cached = census.value.length
+  useEffect(() => {
+    let id = setTimeout(() => {
+      fetch(`${base()}/census`)
+        .then((r) => r.json())
+        .then((c: Record<string, number>) => setCounts(c))
+        .catch(() => {})
+    }, 120)
+    return () => clearTimeout(id)
+  }, [cached])
   let link = (k: string) => (
     <Kind
       key={k}
@@ -358,9 +391,14 @@ export let Admin = () => {
   return (
     <Frame>
       <Side>
+        <Note>
+          counts: direct db read (graph-true) — not the loaded cache
+        </Note>
         <Group>{censusComps().map(link)}</Group>
       </Side>
-      {form ? <NewForm kind={kind} /> : <Index kind={kind} query={query} />}
+      {form
+        ? <NewForm kind={kind} />
+        : <Index kind={kind} query={query} total={counts[kind]} />}
     </Frame>
   )
 }

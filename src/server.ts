@@ -14,6 +14,7 @@ import { type Change, type Dep, idOf, kindOf } from './types.ts'
 import {
   apply,
   bodies,
+  componentCounts,
   cursorOf,
   db,
   delta,
@@ -766,6 +767,9 @@ let http = Deno.serve(
     }
     if (path == '/ws') return ws(req)
     if (path == '/snapshot') return Response.json(snapshot(db))
+    // The admin census's graph-true counts: one COUNT per component table,
+    // authoritative for eager AND entry-partition components the cache omits.
+    if (path == '/census') return Response.json(componentCounts(db))
     if (path == '/body') {
       // The bodies a bodyless payload deferred, for the eids a view is about
       // to paint or edit (live.ts `want`). A Change batch, so it lands

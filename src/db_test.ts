@@ -5,6 +5,7 @@ let {
   apply,
   backfillOpened,
   backfillVia,
+  componentCounts,
   db,
   delta,
   eager,
@@ -91,6 +92,35 @@ Deno.test('snapshot shares a walk until either database handle writes', () => {
 
   two.close()
   one.close()
+  Deno.removeSync(path)
+})
+
+Deno.test('componentCounts: the graph, not the snapshot the cache mirrors', () => {
+  let path = Deno.makeTempFileSync({ suffix: '.db' })
+  let d = open(path)
+  // Entry-partition entities: each carries `entry` (so snapshot omits it) and
+  // `recalled` (the census section that undercounted). The browser cache is a
+  // mirror of the snapshot, so a presence-tally over it can only ever see the
+  // few that leaked in — the exact undercount T-17477 fixes.
+  let sess = uid()
+  apply(d, [{ eid: sess, name: 'session', comp: { id: uid() } }])
+  let n = 6
+  for (let i = 0; i < n; i++) {
+    let e = uid()
+    apply(d, [
+      { eid: e, name: 'entry', comp: { session: sess } },
+      { eid: e, name: 'recalled', comp: { source: e } },
+    ])
+  }
+  // Graph-true: every row in the component table is counted.
+  assertEquals(componentCounts(d).recalled, n)
+  assertEquals(componentCounts(d).entry, n)
+  // The snapshot deliberately excludes the entry partition, so anything
+  // scanning the cache would count 0 recalled — n vs 0 is the lie removed.
+  let snap = snapshot(d)
+  assertEquals(snap.changes.some((c) => c.name == 'recalled'), false)
+  assertEquals(snap.changes.some((c) => c.name == 'entry'), false)
+  d.close()
   Deno.removeSync(path)
 })
 

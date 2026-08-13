@@ -3984,6 +3984,29 @@ export let snapshot = (db: DatabaseSync): Snapshot => {
   return snap
 }
 
+// The census's honest denominator: one COUNT per component table, over the
+// WHOLE graph. The browser cache is a correct but partial view — snapshot()
+// deliberately omits the entry partition (110k+ log rows no browser loads),
+// so a presence-tally over the cache understates every entry-borne component
+// (recalled, message, reasoning, …). This counts the tables themselves, the
+// same way a board is a query against the graph rather than a cache scan.
+// Derived from `comps`, so a new component is counted here with zero edits;
+// a component whose table isn't present yet reports 0 rather than throwing.
+export let componentCounts = (db: DatabaseSync): Record<string, number> => {
+  let out: Record<string, number> = {}
+  for (let name of Object.keys(comps)) {
+    if (!columnsOf(name).size) {
+      out[name] = 0
+      continue
+    }
+    let { n } = db.prepare(`select count(*) as n from ${name}`).get() as {
+      n: number
+    }
+    out[name] = n
+  }
+  return out
+}
+
 // `deno task seed` (or a direct run) bootstraps the file without the server.
 if (import.meta.main) {
   let n = (q: string) => (db.prepare(q).get() as { n: number }).n
