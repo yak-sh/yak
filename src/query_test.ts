@@ -669,6 +669,31 @@ Deno.test('paths: a chain derefs each reference in turn (two hops)', () => {
   assert(!matchQuery(comment('task1'), ps, ent))
 })
 
+// A path-LEAF component-presence — `.task.project.archived!` — tests whether
+// the far entity WEARS the component, the counterpoint to the depth-0
+// `.blocked!` presence test one hop out. `!`/`~=` hold when it is present, `=`
+// when absent; a broken link reads as absent, same as any null column. (Before
+// T-17677 the leaf read a nonexistent column and silently tested false.)
+Deno.test('paths: a component-presence leaf tests the far entity (T-17677)', () => {
+  let world: Record<string, Record<string, Record<string, unknown>>> = {
+    open: { project: {} },
+    shelved: { project: {}, archived: { at: '2026-08-01' } },
+  }
+  let ent = (e: string) => world[e]
+  let task = (project: string) => ({ task: { project } })
+
+  let present = parseQuery('.task.project.archived!')
+  assertEquals(present[0].at, [{ comp: 'archived', prop: '' }])
+  assert(matchQuery(task('shelved'), present, ent)) // project wears archived
+  assert(!matchQuery(task('open'), present, ent)) // project lacks it
+  assert(!matchQuery(task('gone'), present, ent)) // broken link reads absent
+
+  let absent = parseQuery('.task.project.archived=')
+  assert(!matchQuery(task('shelved'), absent, ent))
+  assert(matchQuery(task('open'), absent, ent))
+  assert(matchQuery(task('gone'), absent, ent)) // no target counts as absent
+})
+
 Deno.test('paths: a bare non-colliding ref chains too (assignee)', () => {
   // comment → target (task) → assignee (a user) → doc.title, where `assignee`
   // is a bare ref hop (no component wears its name), mixed with explicit hops.

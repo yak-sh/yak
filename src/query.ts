@@ -634,6 +634,13 @@ export let resolveRefs = (
 // It is a parameter because a moving phrase names a window the clock moves
 // THROUGH, so the only way to state "this row has aged out" as a test is to
 // hand the matcher a later moment (see the subscription sweep).
+// A bare component name (empty prop) is a presence test: `!`/`~=` hold when the
+// bag wears the component, `=` when it does not — the same rule at depth 0 and
+// at a path leaf (`.blocked!` and `.task.project.archived!` mean the same thing
+// one hop apart). A broken link hands in an undefined bag, which reads as absent.
+let present = (bag: Comps | undefined, comp: string, op: string): boolean =>
+  op == '~' || op == EXISTS ? !!bag?.[comp] : !bag?.[comp]
+
 export let matchQuery = (
   c: Comps,
   preds: Pred[],
@@ -650,7 +657,7 @@ export let matchQuery = (
         String(d.body ?? '').toLowerCase().includes(needle)
       )
     }
-    if (!p.prop) return p.op == '~' || p.op == EXISTS ? !!c[p.comp] : !c[p.comp]
+    if (!p.prop) return present(c, p.comp, p.op)
     if (p.at) {
       // Deref the near ref, then every intermediate hop, carrying the set of
       // component-bags forward; test the leaf on each. A broken link yields one
@@ -665,10 +672,14 @@ export let matchQuery = (
           )
         )
       }
+      // A leaf with no prop is a component-presence test on the far entity —
+      // the depth-0 grammar one hop out, not a null column read that always fails.
       return bags.some((b) =>
-        reads(b ?? {}, leaf.comp, leaf.prop).some((value) =>
-          test(value, p, now)
-        )
+        leaf.prop
+          ? reads(b ?? {}, leaf.comp, leaf.prop).some((value) =>
+            test(value, p, now)
+          )
+          : present(b, leaf.comp, p.op)
       )
     }
     return reads(c, p.comp, p.prop).some((value) => test(value, p, now))
