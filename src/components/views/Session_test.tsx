@@ -2,7 +2,7 @@
 import { h, render } from 'preact'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { cache, ent } from '../../live.ts'
+import { cache, ent, repoUrl } from '../../live.ts'
 import { resolve } from '../Entity.tsx'
 import { mount } from '../mount.ts'
 import {
@@ -178,10 +178,54 @@ Deno.test('session references dedupe entities and links in mention order', () =>
       { row: { kind: 'exec', command: 'curl https://x.test' } },
     ]),
     [
-      { kind: 'entity', eid: 'task' },
+      { kind: 'entity', id: 'T-2', eid: 'task' },
       { kind: 'link', href: 'https://x.test' },
       { kind: 'link', href: 'https://y.test' },
     ],
+  )
+  cache.value = {}
+})
+
+Deno.test('session references keep entity ids missing from the cache', () => {
+  cache.value = {}
+  assertEquals(
+    sessionMentions([
+      { row: { kind: 'say', role: 'agent', text: 'See T-17123' } },
+    ]),
+    [{ kind: 'entity', id: 'T-17123' }],
+  )
+})
+
+Deno.test('session references link commits with actor repository context', () => {
+  cache.value = {
+    project: {
+      entity: { eid: 'project', num: 1 },
+      project: { eid: 'project' },
+      repo: {
+        eid: 'project',
+        path: '/tmp/widget',
+        url: 'https://github.com/acme/widget',
+        base_branch: 'main',
+      },
+    },
+    session: {
+      entity: { eid: 'session', num: 2 },
+      session: {
+        eid: 'session',
+        id: 'run',
+        requested_task: 'missing',
+        actor: 'project',
+      },
+    },
+  }
+  assertEquals(
+    sessionMentions([
+      { row: { kind: 'say', role: 'agent', text: 'landed `c0b1ff1`' } },
+    ], repoUrl(ent('session'))),
+    [{
+      kind: 'link',
+      href: 'https://github.com/acme/widget/commit/c0b1ff1',
+    }],
   )
   cache.value = {}
 })
@@ -236,7 +280,8 @@ Deno.test('session references use the usual entity and URL faces', () => {
     render(
       h(SessionReferences, {
         items: [
-          { kind: 'entity', eid: 'task' },
+          { kind: 'entity', id: 'T-2', eid: 'task' },
+          { kind: 'entity', id: 'T-17123' },
           { kind: 'link', href: 'https://x.test' },
         ],
       }),
@@ -245,12 +290,14 @@ Deno.test('session references use the usual entity and URL faces', () => {
     assertEquals(root.querySelector('details')?.hasAttribute('open'), true)
     assertEquals(
       root.querySelector('.Session_ReferencesGist')?.textContent,
-      'references · 2',
+      'references · 3',
     )
     assertEquals(root.querySelector('.Inline_Title')?.textContent, 'The task')
     let links = root.querySelectorAll('.Session_Reference > a')
     assertEquals(links[0]?.getAttribute('href'), '/T-2')
-    assertEquals(links[1]?.getAttribute('href'), 'https://x.test')
+    assertEquals(links[1]?.getAttribute('href'), 'https://tasks.yak.sh/T-17123')
+    assertEquals(links[1]?.getAttribute('data-ref'), 'T-17123')
+    assertEquals(links[2]?.getAttribute('href'), 'https://x.test')
   } finally {
     render(null, root)
     cache.value = {}

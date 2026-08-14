@@ -26,6 +26,7 @@ import { UrlVal } from '../editors.tsx'
 import { Ansi } from '../Ansi.tsx'
 import { SessionDot, useSessionStanding } from '../session_status.tsx'
 import { EntryLens, EntrySummary } from './Entry.tsx'
+import { entityUrl } from '../../url.ts'
 
 // An agent session, watched — the console (W-3676 #5): a sticky slim bar
 // (task, lifecycle summary, stop — server-owned columns riding
@@ -148,7 +149,7 @@ type Entry = {
 }
 type Log = { entries: Entry[]; stderr?: string; context?: number }
 type Mentioned =
-  | { kind: 'entity'; eid: string }
+  | { kind: 'entity'; id: string; eid?: string }
   | { kind: 'link'; href: string }
 
 // A run of same-tag sys frames is one fact told many times (the
@@ -227,11 +228,11 @@ export let sessionMentions = (
       let item: Mentioned | undefined
       if (mention.kind == 'entity') {
         let eid = findEid(mention.id)
-        if (eid) item = { kind: 'entity', eid }
+        item = { kind: 'entity', id: mention.id, ...(eid ? { eid } : {}) }
       } else item = mention
       if (!item) continue
       let key = item.kind == 'entity'
-        ? `entity:${item.eid}`
+        ? `entity:${item.eid ?? item.id}`
         : `link:${item.href}`
       if (!seen.has(key)) {
         seen.add(key)
@@ -254,9 +255,17 @@ export let SessionReferences = ({ items }: { items: Mentioned[] }) => {
       <ReferencesGist>references · {items.length}</ReferencesGist>
       <ReferencesList>
         {items.map((item) => (
-          <Reference key={item.kind == 'entity' ? item.eid : item.href}>
+          <Reference
+            key={item.kind == 'entity' ? item.eid ?? item.id : item.href}
+          >
             {item.kind == 'entity'
-              ? <Entity eid={item.eid} view='Inline' />
+              ? item.eid
+                ? <Entity eid={item.eid} view='Inline' />
+                : (
+                  <a href={entityUrl(item.id)} data-ref={item.id}>
+                    {item.id}
+                  </a>
+                )
               : UrlVal(item.href)}
           </Reference>
         ))}

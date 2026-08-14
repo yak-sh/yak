@@ -262,6 +262,31 @@ Deno.test('repoUrl follows task, comment, and session ownership', () => {
   }
 })
 
+Deno.test('repoUrl follows a session actor when its task is not loaded', () => {
+  cache.value = {
+    project: {
+      entity: { eid: 'project', num: 1 },
+      project: { eid: 'project' },
+      repo: {
+        eid: 'project',
+        path: '/tmp/widget',
+        url: 'https://github.com/acme/widget',
+        base_branch: 'main',
+      },
+    },
+    session: {
+      entity: { eid: 'session', num: 2 },
+      session: {
+        eid: 'session',
+        id: 'run',
+        requested_task: 'missing',
+        actor: 'project',
+      },
+    },
+  }
+  assertEquals(repoUrl(ent('session')), 'https://github.com/acme/widget')
+})
+
 Deno.test('ent projects canonical Session facets over aliases', () => {
   cache.value = {
     session: {
