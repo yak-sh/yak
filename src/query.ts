@@ -737,15 +737,16 @@ export let hot = (c: Comps, now: number): number => {
 // is the same comps fetcher matchQuery's path preds ride, so every
 // caller already holds one.
 export let SUNK = 0.1
+// The far arm — a task whose PROJECT is archived — is a forward deref
+// (task → its project → that project's archived stamp), so it IS the traversal
+// grammar. `.archived.at` is the canonical presence spelling: the column is
+// not-null, and db.ts rewrites `.retired_at` to it. The self arm (this row IS
+// an archived project) has no ref to deref, so it stays a direct test.
+let SUNK_PROJECT = parseQuery('.task.project.archived.at!')
 export let sunk = (
   c: Comps,
   ent?: (eid: string) => Comps | undefined,
-): boolean => {
-  if (c.project && c.archived) return true
-  let p = c.task?.project
-  let project = p ? ent?.(String(p)) : undefined
-  return !!(project?.project && project.archived)
-}
+): boolean => (!!c.project && !!c.archived) || matchQuery(c, SUNK_PROJECT, ent)
 export let warm = (
   c: Comps,
   now: number,

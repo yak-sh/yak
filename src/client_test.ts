@@ -2961,6 +2961,13 @@ Deno.test('contextDigest: resume pops this actor stack before narrative memory',
         name: 'updated',
         comp: { at: '2026-07-20', by: actor },
       },
+      // A claim held by ANOTHER actor's session — the `.claim.session.actor`
+      // deref must exclude it (the claim arm short-circuits the OR fallback).
+      { eid: other, name: 'session', comp: { id: 'other-sess', actor: other } },
+      ...task(id(10), 10, 'Held by another actor', undefined, {
+        session: other,
+        claimed_at: '2026-07-19',
+      }),
     ],
     deps: [],
   }
@@ -2968,6 +2975,7 @@ Deno.test('contextDigest: resume pops this actor stack before narrative memory',
   let resume = section(d, '## resume')
   assertEquals(resume[0], '## resume — pop your stack')
   assertEquals(resume.some((l) => l.includes('Not my yak')), false)
+  assertEquals(resume.some((l) => l.includes('Held by another actor')), false)
   assertMatch(resume[1], /Incident C/)
   assertMatch(resume[2], /Original A/)
   assertMatch(resume[3], /Recently touched/)

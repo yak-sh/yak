@@ -27,7 +27,14 @@ import { idOf, SHORT, shortId, slugsOf } from './types.ts'
 import { formatProp, parseProp, propAt, refOf } from './props.ts'
 import { local } from './time.ts'
 import { nearest, offer } from './near.ts'
-import { hot, leafOf, matchQuery, type Pred, route } from './query.ts'
+import {
+  hot,
+  leafOf,
+  matchQuery,
+  parseQuery,
+  type Pred,
+  route,
+} from './query.ts'
 import { FLOOR } from './embed.ts'
 import { request } from './http.ts'
 import { unmime } from './rfc2047.ts'
@@ -1861,12 +1868,17 @@ let resumptions = (
   )
   let at = (r: Row) =>
     String(r.comps.resume?.at ?? r.comps.claim?.claimed_at ?? editedAt(r))
+  // The claim arm is a forward deref — task's claim → its session → that
+  // session's actor — so it IS the traversal grammar: `.claim.session.actor`.
+  // The resume/updated/created fallback has no single ref column, so it stays
+  // JS/OR. `deref` is the pred's graph, keyed over the sessions already indexed.
+  let mineClaim = parseQuery('.claim.session.actor=' + actor)
+  let deref = (eid: string) => sessions.get(eid)?.comps
   let hits = all
     .filter((r) => r.comps.task && !settled(String(r.comps.task.status)))
     .filter((r) => !mine.has(r.eid))
     .filter((r) => {
-      let holder = sessions.get(String(r.comps.claim?.session ?? ''))
-      if (r.comps.claim) return holder?.comps.session?.actor == actor
+      if (r.comps.claim) return matchQuery(r.comps, mineClaim, deref)
       return r.comps.resume?.actor == actor ||
         r.comps.updated?.by == actor || r.comps.created?.by == actor
     })
