@@ -1044,6 +1044,11 @@ export let kilo = (n: number): string =>
 // specificity). This order is only the display/id convention: the most
 // specific component an entity carries names it.
 export let kindOrder = [
+  // Ahead of task: a design is a PROPOSAL, and may carry the same task facet
+  // (`.project`, `.priority`) the standard property grammar routes there — yet
+  // it stays a design until decided, so it outranks task and never lands on a
+  // kind=task board.
+  'design',
   'task',
   'project',
   'layout',
@@ -1073,8 +1078,6 @@ export let kindOrder = [
   'memory',
   'person',
   'persona',
-  // Ahead of doc: a design IS a doc, wearing a tag that says which kind.
-  'design',
   'doc',
   // An address is a facet like a handle: it names an entity only when
   // nothing else does (a bare address-book entry), same reasoning as

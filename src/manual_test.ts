@@ -191,11 +191,9 @@ Deno.test('manual validation rejects loss-shaped arguments', () => {
     // caller's question, not just the grammar's (T-12585).
     ['remember', ['a fact', '--type=feedback'], '--feedback=jeff says who'],
     ['remember', ['a fact', '--nonsense=1'], 'does not take --nonsense'],
-    // The dot spelling of the same mistake — the one a title door used to
-    // swallow (T-14187). The refusal names the argument AND the params the
-    // verb does take, so the correction is on the screen that refuses it.
-    ['design', ['A title', '.project=P-19'], 'does not take .project='],
-    ['design', ['A title', '.project=P-19'], 'it takes .body='],
+    // A creation verb that takes the standard property grammar still refuses a
+    // dot that names no prop (a typo), rather than joining it to the title.
+    ['design', ['A title', '.projct=P-19'], 'unknown prop: .projct'],
     ['remember', ['a fact', '.feddback=jeff'], 'does not take .feddback='],
     ['mail send', ['jeff', 'Subject', '.oops=1'], 'does not take .oops='],
     ['comment', ['T-1', 'text', '.oops=1'], 'does not take .oops='],
@@ -226,6 +224,8 @@ Deno.test('manual validation accepts each supported option shape', () => {
   // The body at the dot spelling, where the verb declares it — and it is a
   // VALUE, so it never counts toward the words the title needs.
   check('design', ['A title', '.body=@plan.md'])()
+  // A design takes the standard property grammar beside its body (M-15635).
+  check('design', ['A title', '.project=P-19', '.priority=2'])()
   check('remember', [
     'a fact',
     '.body=@m.md',

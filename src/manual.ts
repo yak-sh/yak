@@ -526,12 +526,13 @@ export let manuals = declare({
     opts: [flag('--no-commit'), flag('--check')],
   },
   design: {
-    dots: ['body'],
+    dots: 'params',
     body: 'body',
     about: 'record a design: the thinking that precedes a build, proposed',
     examples: [
       'task design "Mail is local-first for fleet recipients" .body=@plan.md',
       'task design "One graph, many doors" --body=@plan.md',
+      'task design "Local-first mail" .project=P-19 .priority=2',
       'task designs',
       'task designs .decided=',
     ],
@@ -540,10 +541,13 @@ export let manuals = declare({
       '.decided.at=now .decided.by=jeff`, the same stamp a task or a memory ' +
       'takes; both marks then stand, proposed on that day and decided on ' +
       'this one. `task designs` lists them, `.decided=` screens the ones ' +
-      'still waiting.\n\nThe words are the TITLE, so the writing rides its ' +
+      'still waiting.\n\nThe words are the TITLE; the standard property ' +
+      'grammar rides alongside, exactly as `task new` takes it — ' +
+      '`.project=P-19 .priority=2` set those props on the design, and it ' +
+      'stays a design (never a task) until decided. The writing rides its ' +
       'own door: `.body=@plan.md` or `--body=@plan.md` reads that file, ' +
-      '`-`/`@-` reads piped stdin. Any other argument is refused rather ' +
-      'than joined to the title.',
+      '`-`/`@-` reads piped stdin. A dot-param that names no prop is refused ' +
+      'rather than joined to the title.',
     root: true,
     args: [arg('title', text, true)],
     opts: [body],

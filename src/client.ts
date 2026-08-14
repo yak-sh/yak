@@ -2688,15 +2688,32 @@ export let decidedChange = (eid: string, at?: string): Change => ({
 // moved.
 export let designChanges = (
   all: Row[],
-  d: { title: string; body?: string; at?: string; session: string },
+  d: {
+    title: string
+    body?: string
+    at?: string
+    session: string
+    // The standard property grammar, grouped per component (patches()): a
+    // design accepts `.project`/`.priority` like `task new`, so any routed
+    // param rides onto the entity beside its tag and proposed mark.
+    props?: Record<string, Record<string, unknown>>
+  },
 ) => {
   let s = sessionFor(all, d.session)
   let eid = uuid()
+  let props = d.props ?? {}
   let changes: Change[] = [
     ...s.changes,
-    { eid, name: 'doc', comp: { title: d.title, body: d.body ?? '' } },
+    {
+      eid,
+      name: 'doc',
+      comp: { title: d.title, body: d.body ?? '', ...props.doc },
+    },
     { eid, name: 'design', comp: {} },
     { eid, name: 'proposed', comp: d.at ? { at: d.at } : {} },
+    ...Object.entries(props)
+      .filter(([n]) => n != 'doc' && n != 'design' && n != 'proposed')
+      .map(([name, comp]) => ({ eid, name, comp })),
   ]
   return { eid, changes }
 }

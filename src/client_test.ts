@@ -2109,6 +2109,28 @@ Deno.test('designChanges: an unknown session is minted alongside', () => {
   assertEquals(changes[0].name, 'session')
 })
 
+// The standard property grammar rides onto the design: `.project`/`.priority`
+// group under `task` (patches()) and land as one more component beside the
+// tag — the design outranks task in kindOrder, so it stays a design (M-15635).
+Deno.test('designChanges: routed props ride onto the entity', () => {
+  let { eid, changes } = designChanges(all, {
+    title: 'Local-first mail',
+    session: 'sess-x',
+    props: { task: { project: 'proj-eid', priority: 2 }, doc: { body: 'why' } },
+  })
+  let doc = changes.find((c) => c.name == 'doc')
+  assertEquals(doc?.comp, { title: 'Local-first mail', body: 'why' })
+  let task = changes.find((c) => c.name == 'task')
+  assertEquals(task, {
+    eid,
+    name: 'task',
+    comp: { project: 'proj-eid', priority: 2 },
+  })
+  // Tag and mark still stand, and nothing became a decided design.
+  assertEquals(changes.some((c) => c.name == 'design'), true)
+  assertEquals(changes.some((c) => c.name == 'proposed'), true)
+})
+
 Deno.test('recallIndex: warmest first, index lines only, filtered', () => {
   let M1 = 'aaaaaaaa-0000-4000-8000-000000000011'
   let M2 = 'aaaaaaaa-0000-4000-8000-000000000012'

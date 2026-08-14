@@ -1987,8 +1987,11 @@ let design = async (got: Got) => {
   let session = me()
   if (!session) throw new Error('design: no session identity (attribution)')
   let body = got.body
+  // The standard property grammar, same path `task new` routes through
+  // (M-15635): `.project=`/`.priority=` and friends set props on the design.
+  let props = patches(await derefedParams(got.params))
   let sess = await sessionRow(session)
-  let made = designChanges(sess ? [sess] : [], { title, body, session })
+  let made = designChanges(sess ? [sess] : [], { title, body, session, props })
   await send(made.changes)
   print(`${await minted(made.eid)} proposed`)
   let hint = await similarHint(`${title}\n${body ?? ''}`, made.eid)
