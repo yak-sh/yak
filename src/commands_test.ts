@@ -118,6 +118,37 @@ Deno.test('basic card properties use the standard dot-param grammar', () => {
   )
 })
 
+Deno.test('session cards inherit missing configuration, never run state', () => {
+  let source = structuredClone(snap)
+  source.changes.find((c) => c.eid == S && c.name == 'session')!.comp = {
+    id: 'sess-x',
+    cwd: '/worktree',
+    provider: 'codex',
+    model: 'gpt-source',
+    effort: 'high',
+    actor: P,
+    status: 'running',
+    transcript: '/tmp/source.jsonl',
+    latest_seq: 42,
+  }
+  let made = run('session .model=gpt-override .effort=', {
+    eid: S,
+    rows: rows(source),
+  })
+  let session = made.changes![0].comp!
+  assertEquals(session.provider, 'codex')
+  assertEquals(session.model, 'gpt-override')
+  assertEquals(session.effort, '')
+  assertEquals(session.cwd, '/worktree')
+  assertEquals(session.actor, P)
+  assertEquals('status' in session, false)
+  assertEquals('transcript' in session, false)
+  assertEquals('latest_seq' in session, false)
+
+  let called = run('session', { rows: rows(source), session: 'sess-x' })
+  assertEquals(called.changes![0].comp?.provider, 'codex')
+})
+
 Deno.test('task cards take their title first and body below', () => {
   let made = run('task Ship it\nwhy and how', ctx(B))
   assertEquals(comps('task Ship it\nwhy and how', B), {

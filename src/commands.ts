@@ -189,6 +189,35 @@ let readParams = (args: string[], ctx: Ctx) => {
   })
 }
 
+// A session card is a continuation recipe, not a copy of the run. Only the
+// configuration that makes another run usable rides forward; pid, transcript,
+// status, and the other lifecycle facts belong to the session that earned
+// them. The focused session is what a browser can name, while headless doors
+// name their calling session in the context.
+let sessionDefaults = (ctx: Ctx) => {
+  let source = ctx.rows.find((r) => r.eid == ctx.eid && r.comps.session) ??
+    ctx.rows.find((r) =>
+      String(r.comps.session?.id ?? '') == String(ctx.session ?? '')
+    )
+  let session = source?.comps.session
+  if (!session) return {}
+  let keys = [
+    'cwd',
+    'provider',
+    'model',
+    'effort',
+    'requested_task',
+    'role',
+    'persona',
+    'actor',
+  ]
+  return Object.fromEntries(
+    keys.filter((key) => session[key] != null).map((
+      key,
+    ) => [key, session[key]]),
+  )
+}
+
 let card = (kind: typeof cardCommands[number]): Command => ({
   args: {
     task: '[P1 .domain=Eng title…]',
@@ -226,7 +255,11 @@ let card = (kind: typeof cardCommands[number]): Command => ({
     }
     let eid = uuid()
     let changes: Change[] = kind == 'session'
-      ? [{ eid, name: 'session', comp: { id: uuid(), ...grouped.session } }]
+      ? [{
+        eid,
+        name: 'session',
+        comp: { id: uuid(), ...sessionDefaults(ctx), ...grouped.session },
+      }]
       : [
         {
           eid,
