@@ -24,14 +24,13 @@ let pending = new Map<number, (r: { rows?: Row[]; error?: string }) => void>()
 // Ask the host to answer a filter line against the authoritative graph.
 let ask = (
   q: string,
-  kind?: string,
   opts?: { after?: number; limit?: number },
 ) =>
   new Promise<Row[]>((resolve, reject) => {
     let req = ++seq
     pending.set(req, (r) =>
       r.error ? reject(new Error(r.error)) : resolve(r.rows ?? []))
-    self.postMessage({ ask: { req, q, kind, opts } })
+    self.postMessage({ ask: { req, q, opts } })
   })
 
 self.onmessage = async (e: MessageEvent) => {
@@ -55,15 +54,14 @@ self.onmessage = async (e: MessageEvent) => {
       args.map((a) => typeof a == 'string' ? a : JSON.stringify(a)).join(' '),
     )
   // Filters as an array or one line; both reach the host as the `&`-joined
-  // grammar io.query speaks.
+  // grammar io.query speaks (kind is a filter, `.kind=session`).
   let query = (
     filters: string | string[],
-    kind?: string,
     opts?: { after?: number; limit?: number },
-  ) => ask(Array.isArray(filters) ? filters.join('&') : filters, kind, opts)
+  ) => ask(Array.isArray(filters) ? filters.join('&') : filters, opts)
   // One Session's ordered log partition — the named-scope shorthand for query.
   let entries = (session: string, opts?: { after?: number; limit?: number }) =>
-    ask(`.entry.session=${session}`, undefined, opts)
+    ask(`.entry.session=${session}`, opts)
   try {
     // The script body runs async with the SDK in scope; its return value
     // travels back verbatim (JSON-cloneable values only).

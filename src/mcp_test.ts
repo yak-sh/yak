@@ -239,8 +239,7 @@ let graph = () => {
   let pages = new Map<string, string>()
   let io: IO = {
     read: () => Promise.resolve(snapshot(db)),
-    query: (q, kind, opts) =>
-      Promise.resolve(evalGraph(db, q, kind, opts).hits),
+    query: (q, opts) => Promise.resolve(evalGraph(db, q, opts).hits),
     write: (changes, via) =>
       Promise.resolve(apply(db, changes, undefined, via)),
     find: () => Promise.resolve([]),
@@ -308,8 +307,12 @@ Deno.test('MCP entity JSON shares the component-shaped contract', async () => {
   // graph_query reads io.query now (the authoritative pipeline), not io.read —
   // so the injected graph rides that door; task_show still reads io.read.
   let graphRows = rows({ changes })
-  io.query = (_q, kind) =>
-    Promise.resolve(kind ? graphRows.filter((r) => r.kind == kind) : graphRows)
+  io.query = (q) => {
+    let kind = q.match(/\.kind=(\w+)/)?.[1]
+    return Promise.resolve(
+      kind ? graphRows.filter((r) => r.kind == kind) : graphRows,
+    )
+  }
   let entity = {
     kind: 'task',
     entity: { eid: task, num: 41 },
@@ -319,7 +322,7 @@ Deno.test('MCP entity JSON shares the component-shaped contract', async () => {
   await protocol(io, async (client) => {
     let listed = await client.callTool({
       name: 'graph_query',
-      arguments: { kind: 'task', full: true },
+      arguments: { filters: ['.kind=task'], full: true },
     }) as ToolResult
     let shown = await client.callTool({
       name: 'task_show',
@@ -429,7 +432,7 @@ Deno.test('MCP schemas document parameters and derive closed vocabularies', asyn
         ['memory_save', 'title'],
         ['memory_recall', 'type'],
         ['memory_recall', 'limit'],
-        ['graph_query', 'kind'],
+        ['graph_query', 'after'],
         ['code_run', 'timeout_ms'],
       ]
     ) {
@@ -468,7 +471,7 @@ Deno.test('MCP tools declare and return their text output', async () => {
 
     let multi = await client.callTool({
       name: 'graph_query',
-      arguments: { kind: 'task', filters: ['.mail.from=x'] },
+      arguments: { filters: ['.kind=task', '.mail.from=x'] },
     })
     assertEquals(multi.content.length, 2)
     assertEquals(multi.structuredContent, { text: said(multi) })

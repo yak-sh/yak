@@ -418,7 +418,7 @@ let control = (
   if (typeof f.sub != 'string') return
   try {
     let details = f.sub.startsWith('entries:')
-    let { preds, hits } = evalFast(db, f.q ?? '', undefined, details) ??
+    let { preds, hits } = evalFast(db, f.q ?? '', details) ??
       evalQuery(db, f.q ?? '')
     map.set(f.sub, {
       preds,
@@ -587,7 +587,7 @@ let graphIO: IO = {
   // door runs, so graph_query reaches the lazy entry partition instead of the
   // snapshot()-only truth it read before.
   // deno-lint-ignore require-await
-  query: async (q, kind, opts) => evalGraph(db, q, kind, opts).hits,
+  query: async (q, opts) => evalGraph(db, q, opts).hits,
   // deno-lint-ignore require-await
   write: async (changes, via) => {
     let t = trace()
@@ -831,8 +831,9 @@ let http = Deno.serve(
     if (path == '/query') {
       // The graph over plain GET: the query string IS the filter line —
       // the same grammar boards and task_list speak — and hits come back
-      // Structured like every entity JSON door. `kind=` screens by derived
-      // kind; `backlinks=1` adds who points at each hit (eid columns + edges),
+      // Structured like every entity JSON door. Kind is a filter now, not a
+      // parameter: `.kind=project` screens by derived kind through the grammar.
+      // `backlinks=1` adds who points at each hit (eid columns + edges),
       // `deps=1` the hit's own edges both ways; `id=` names entities outright.
       // A malformed filter is the typist's news, not a server error.
       try {
@@ -841,7 +842,6 @@ let http = Deno.serve(
         let backs = segs.includes('backlinks=1')
         let edged = segs.includes('deps=1')
         let reveal = segs.includes('quarantined=1')
-        let kind = segs.find((s) => s.startsWith('kind='))?.slice(5)
         // Paging for the lazy entry partition: `after=` is an entry.seq cursor,
         // `limit=` the page size. Ignored by an eager query, which the snapshot
         // path already answers whole in num order.
@@ -855,10 +855,10 @@ let http = Deno.serve(
         // `id=` FETCHES rather than filters: each value is an ADDRESS — T-3, a
         // bare num, an alias slug, a uuid — and locate() is the index's own
         // reading of "what names an entity", the same four rules find() spells
-        // over a materialized graph. It is a parameter beside kind= and
-        // backlinks= rather than a predicate because addressing is not
-        // filtering: `.entity.eid~=abc` would be a substring search over
-        // uuids, legal and meaningless.
+        // over a materialized graph. It is a parameter beside backlinks=
+        // rather than a predicate because addressing is not filtering:
+        // `.entity.eid~=abc` would be a substring search over uuids, legal and
+        // meaningless.
         //
         // An id naming nothing is simply absent, the way a filter matching
         // nothing returns no rows — a caller asking for five and getting three
@@ -872,17 +872,15 @@ let http = Deno.serve(
           : null
         segs = segs.filter((s) =>
           s != 'backlinks=1' && s != 'deps=1' && s != 'quarantined=1' &&
-          !s.startsWith('kind=') && !s.startsWith('after=') &&
+          !s.startsWith('after=') &&
           !s.startsWith('limit=') &&
           !s.startsWith('id=')
         )
         let q = segs.join('&')
         // Any remaining filter line still screens, so `id=` composes with the
         // grammar rather than replacing it.
-        let screen = (hits: Row[]) => {
-          let out = kind ? hits.filter((r) => r.kind == kind) : hits
-          return only ? out.filter((r) => only.has(r.eid)) : out
-        }
+        let screen = (hits: Row[]) =>
+          only ? hits.filter((r) => only.has(r.eid)) : hits
         // What a hit carries BESIDE its components: its own edges (deps=1)
         // and who points at it (backlinks=1). Both are keyed off the hits —
         // depsOf and refsOf read the edge table and each typed eid column by
@@ -970,10 +968,11 @@ let http = Deno.serve(
         // The authoritative pipeline (evalGraph): the index answers when it can
         // (a one-row question cost a 27 MB snapshot and 0.29s before sql.ts,
         // 100x), else the JS matcher over the full universe — which now carries
-        // the lazy entry partition whenever the query names it. kind screening,
-        // hot ranking, and entry ordering/paging all settle inside evalGraph, so
-        // this door and the in-process graph_query tool read one answer.
-        let { hits } = evalGraph(db, q, kind, { after, limit })
+        // the lazy entry partition whenever the query names it. Kind is a filter
+        // in q now (`.kind=`), hot ranking and entry ordering/paging all settle
+        // inside evalGraph, so this door and the in-process graph_query tool
+        // read one answer.
+        let { hits } = evalGraph(db, q, { after, limit })
         return Response.json(layers(hits))
       } catch (e) {
         return new Response(String((e as Error).message ?? e), { status: 400 })

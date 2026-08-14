@@ -17,7 +17,6 @@ import { find, type Row, rows } from './client.ts'
 import { entriesOf, entriesScan, locate, matching, snapshot } from './db.ts'
 import { where } from './sql.ts'
 import {
-  kindPreds,
   listed,
   matchQuery,
   namesLazy,
@@ -35,7 +34,8 @@ import {
 // the same per-table statements snapshot() uses, pay a temp table on top, and
 // hand back a set the caller narrows in JS anyway. So it declines for the second
 // reason a compiler can: not "I cannot say this" but "saying it buys nothing". A
-// lone kind= is no longer this shape — evalFast folds it into kindPreds.
+// `.kind=K` filter narrows like any other pred — parseQuery expands the scope
+// to kindPreds, so this sees the presence clauses, never a lone ranking.
 let narrows = (preds: Pred[]) => preds.some((p) => p.op != ORDER)
 
 // A keyed read wearing the shape a materialized graph hands out: kind is
@@ -101,12 +101,9 @@ let orderedEntries = (hits: Row[], after: number, limit: number): Row[] =>
 export let evalFast = (
   db: DatabaseSync,
   q: string,
-  kind?: string,
   forceEntries = false,
 ) => {
   let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
-  let kp = kind ? kindPreds(kind) : null
-  if (kp) preds = [...kp, ...preds]
   if (!narrows(preds)) return null
   let built = where(preds)
   if (!built) return null
@@ -147,29 +144,28 @@ export let evalQuery = (
 
 // The authoritative filter-query answer. The index answers when it can (evalFast
 // over matching(), entries included); otherwise the JS matcher over the full
-// universe. Hot ranking, kind screening, and entry ordering/paging settle here,
-// so every caller reads one answer.
+// universe. Hot ranking and entry ordering/paging settle here, so every caller
+// reads one answer. Kind is no longer a parameter — `.kind=K` is an ordinary
+// pred inside q (query.ts scopes), so it screens through the same seam as
+// `.status`.
 export let evalGraph = (
   db: DatabaseSync,
   q: string,
-  kind?: string,
   opts: { after?: number; limit?: number } = {},
 ): { preds: Pred[]; hits: Row[] } => {
   let after = opts.after ?? 0
   let limit = opts.limit ?? ENTRY_PAGE
-  let kinded = (hits: Row[]) => kind ? hits.filter((r) => r.kind == kind) : hits
-  let fast = evalFast(db, q, kind)
+  let fast = evalFast(db, q)
   if (fast && orderOf(fast.preds) != 'hot') {
     return {
       preds: fast.preds,
       hits: fast.entries
-        ? orderedEntries(kinded(fast.hits), after, limit)
-        : kinded(fast.hits).sort((a, b) => a.num - b.num),
+        ? orderedEntries(fast.hits, after, limit)
+        : fast.hits.sort((a, b) => a.num - b.num),
     }
   }
   let { preds, byEid, hits } = evalQuery(db, q, after, limit)
   let now = Date.now()
-  hits = kinded(hits)
   if (orderOf(preds) == 'hot') {
     hits = hits.sort((a, b) =>
       warm(b.comps, now, (e) => byEid.get(e)) -

@@ -53,6 +53,7 @@ import { bareType, isRef, parseProp, type Prop, propAt } from './props.ts'
 import {
   comps,
   kindOrder,
+  kindWord,
   sessionComps,
   sessionFacetNames,
   stamped,
@@ -117,6 +118,12 @@ let routes: Record<string, readonly string[]> = {
   archived: Object.keys(stamped.archived),
   quarantined: Object.keys(stamped.quarantined),
 }
+
+// A name a column or component already routes — the real props pred() resolves
+// before any scope. A scope may not shadow one, so this is how the pred seam
+// gives `.status`/`.project` priority over a same-named virtual prop.
+let owned = (name: string) =>
+  name in comps || Object.values(routes).some((cols) => cols.includes(name))
 
 // The dot-param shape, sketched — the tail of every strict rejection
 // (FILTERS in grammar.ts spells the operators).
@@ -187,14 +194,11 @@ export let route = (prop: string): { comp: string; prop: string } => {
   // preserving `.project=P-3`; a component with no namesake column gets the
   // presence grammar (`=` absent, `~=` present) without a second vocabulary.
   if (prop in comps) return { comp: prop, prop: '' }
-  // The rejection is the teaching moment: agents keep reaching for kind
-  // and eid as filter props — name what the asker meant, one line each.
-  // (.id needs no branch: session.id owns it, so it routes.)
+  // The rejection is the teaching moment: agents keep reaching for eid as a
+  // filter prop — name what the asker meant. (.kind is a SCOPE handled before
+  // route() and .id routes through session.id, so neither reaches here.)
   throw new Error(
-    prop == 'kind'
-      ? 'kind selects what to LIST, it is not a filter prop — ' +
-        'task list projects, graph_query kind=project'
-      : prop == 'eid'
+    prop == 'eid'
       ? 'address entities by id directly (T-3, E-9) — filters match component props'
       : `unknown prop: .${prop} — ${edgeish.test(prop) ? EDGE_DOOR : SKETCH}`,
   )
@@ -276,6 +280,25 @@ export let kindPreds = (kind: string): Pred[] | null => {
       value: '',
     })),
   ]
+}
+
+// A SCOPE is a virtual/derived prop: a named `(value) => Pred[]` resolver that
+// folds into the AND-list and composes like any column filter — the
+// ActiveRecord-scope shape, one filter grammar. `.kind=memory` is the first
+// member: it resolves through kindPreds to the exact presence Pred[], which is
+// why the bespoke `kind` parameter that threaded five layers is gone. A
+// resolver returns null for a value it cannot name (`.kind=typo`); the pred
+// seam turns that into the refusal any bad filter earns. Real column/component
+// props resolve FIRST in pred(), so a scope never shadows `.status`/`.project`
+// — and a scope name colliding with a real prop is a registration error,
+// caught here at load rather than as a silent dead scope later.
+export let scopes: Record<string, (value: string) => Pred[] | null> = {
+  // kindWord folds the plural in (`.kind=projects` reads like `.kind=project`),
+  // the leniency the bare-word listing already granted.
+  kind: (value) => kindPreds(kindWord(value) ?? value),
+}
+for (let name in scopes) {
+  if (owned(name)) throw new Error(`scope .${name} shadows a real prop`)
 }
 
 // `doc` sits in kindOrder as the fallback NAME for a bare document, but
@@ -390,12 +413,18 @@ let groupsOf = (segs: string[]): Hop[] => {
   return out
 }
 
-// A hyphen is admitted into the NAME so a hyphenated spelling reaches
-// route() and earns the same refusal writes give it (client.ts param()).
-// No column is hyphenated, so nothing new routes — but before this,
-// '.blocked-by=T-1' failed the pattern and fell through to a bare TEXT
-// term, silently searching for the filter the caller thought they wrote.
-export let pred = (token: string): Pred | null => {
+// One filter token to the preds it contributes. A scalar filter is one pred; a
+// SCOPE (`.kind=memory`) expands to the Pred[] it splices into the AND-list —
+// the wrinkle that once made kind a bespoke parameter, resolved here so a
+// virtual prop reads exactly like a column. null: the token is no dot-param at
+// all (a bare word, an opless `.env`) — a text term to whoever parses the line.
+//
+// A hyphen is admitted into the NAME so a hyphenated spelling reaches route()
+// and earns the same refusal writes give it (client.ts param()). No column is
+// hyphenated, so nothing new routes — but before this, '.blocked-by=T-1' failed
+// the pattern and fell through to a bare TEXT term, silently searching for the
+// filter the caller thought they wrote.
+export let preds = (token: string): Pred[] | null => {
   let m = token.match(
     /^\.([A-Za-z_-]+(?:\.[A-Za-z_-]+)*)(!=|~=|<=|>=|<|>|=|!)(.*)$/s,
   )
@@ -408,7 +437,17 @@ export let pred = (token: string): Pred | null => {
   // a quoted value is the escape hatch for spaces where whitespace splits
   value = value.replace(/^"(.*)"$/s, '$1')
   if (path == 'order' && op == '=') {
-    return { comp: '', prop: 'order', op: ORDER, value }
+    return [{ comp: '', prop: 'order', op: ORDER, value }]
+  }
+  // A SCOPE resolves a virtual prop to the Pred[] it splices into the AND-list.
+  // Real props win: `owned` names a prop a column/component already routes, so
+  // only an unowned single-segment scope name reaches here and `.status` keeps
+  // its spelling. The resolver reads the value and returns null for one it
+  // cannot name (`.kind=typo`), refused like any bad filter.
+  if (segs.length == 1 && segs[0] in scopes && !owned(segs[0])) {
+    let out = scopes[segs[0]](value)
+    if (!out) throw new Error(`no such ${segs[0]}: ${value || '(empty)'}`)
+    return out
   }
   let p: Pred
   // A trailing bang completes a component sentence. This must win over a
@@ -446,7 +485,7 @@ export let pred = (token: string): Pred | null => {
           `.${p.comp}! is present`,
       )
     }
-    return p
+    return [p]
   }
   // Contains is deliberately literal. Absence has no scalar atom. Every
   // other form parses each scalar/list/range atom against the leaf
@@ -455,16 +494,24 @@ export let pred = (token: string): Pred | null => {
   if (type && p.op != '~' && p.value != '') {
     p.value = typedValue(type, p.value)
   }
-  return p
+  return [p]
 }
 
-// The rejection every strict door throws when pred() shrugs: the error
-// is the teaching moment, so it names where a stray predicate lives —
-// kind= is graph_query's parameter, not a filter — and sketches the
-// dot-param shape (FILTERS in grammar.ts spells the operators).
+// One scalar pred, or null — the door for writes' param check and unit
+// assertions, where a token names a single filter. A multi-pred SCOPE belongs
+// in a filter LIST (preds() is that door); this returns the scope's first pred.
+export let pred = (token: string): Pred | null => {
+  let out = preds(token)
+  return out ? out[0] : null
+}
+
+// The rejection every strict door throws when preds() shrugs: the error is the
+// teaching moment, so it names where a stray predicate lives — a bare `kind=K`
+// is the warm mistake, and the door says the dotted spelling that now works —
+// and sketches the dot-param shape (FILTERS in grammar.ts spells the operators).
 export let noFilter = (f: string) =>
   `not a filter: ${f} — ${
-    f.startsWith('kind=') ? "kind is graph_query's kind parameter; " : ''
+    f.startsWith('kind=') ? `write it dotted: .${f}; ` : ''
   }${SKETCH}`
 
 // A bare word: contains over the doc, title or body. comp/prop are for
@@ -493,15 +540,15 @@ let segments = (q: string) => q.match(/(?:"[^"]*"|[^&])+/g) ?? []
 export let parseQuery = (q: string): Pred[] =>
   segments(q).map((t) => t.trim()).filter(Boolean).flatMap((seg) => {
     if (seg.startsWith('.') && !/\s\./.test(seg)) {
-      let p = pred(seg) // null = an opless dot-word (.env) — a term
-      if (p) return [p]
+      let p = preds(seg) // null = an opless dot-word (.env) — a term
+      if (p) return p
     }
-    return (seg.match(/[^\s"]+"[^"]*"|"[^"]*"|\S+/g) ?? []).map((tok) => {
+    return (seg.match(/[^\s"]+"[^"]*"|"[^"]*"|\S+/g) ?? []).flatMap((tok) => {
       if (tok.startsWith('.')) {
-        let p = pred(tok)
+        let p = preds(tok)
         if (p) return p
       }
-      return text(tok.replace(/^"(.*)"$/s, '$1'))
+      return [text(tok.replace(/^"(.*)"$/s, '$1'))]
     })
   })
 

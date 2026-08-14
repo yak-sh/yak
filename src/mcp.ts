@@ -94,7 +94,6 @@ export type IO = {
   // In-process it runs the server's evalGraph; over stdio it is the /query GET.
   query: (
     q: string,
-    kind?: string,
     opts?: { after?: number; limit?: number },
   ) => Promise<Row[]>
   // `via` is journal attribution — the calling session's id, when the
@@ -1116,8 +1115,9 @@ entity:{eid,num}, ...components}, dot-param filtered. Cards, pins
 client is looking at), sessions, comments — all live here. A query is a
 LIST door: long text values (persona bodies, mail, final_text) are cut
 at ${CUT} chars with a marker naming the rest — task_show reads one
-entity whole; full: true returns every byte. kind screens on the
-entity's derived display kind (task, project, comment, and so on).
+entity whole; full: true returns every byte. .kind= screens on the
+entity's derived display kind (.kind=project, .kind=comment) — a filter
+like any other, composed in the one grammar (.kind=memory .project=P-19).
 Session-log ENTRIES are a lazy partition, omitted from an unscoped query;
 name it to read it — .entry.session=S-31 (or .generation.provider=…,
 .response.status>=400) returns those entries in seq order, paged by
@@ -1126,9 +1126,6 @@ empty. ${GRAMMAR} ${FILTERS}`,
     {
       query: z.string().optional(),
       filters: z.array(z.string()).optional(),
-      kind: z.string()
-        .describe('Derived entity kind to return.')
-        .optional(),
       full: z.boolean().optional(),
       after: z.number()
         .describe('Entry-partition paging: return entries after this seq.')
@@ -1138,10 +1135,9 @@ empty. ${GRAMMAR} ${FILTERS}`,
         .optional(),
     },
     async (
-      { query, filters = [], kind, full, after, limit }: {
+      { query, filters = [], full, after, limit }: {
         query?: string
         filters?: string[]
-        kind?: string
         full?: boolean
         after?: number
         limit?: number
@@ -1160,7 +1156,7 @@ empty. ${GRAMMAR} ${FILTERS}`,
       // /query over stdio), which reads the full graph including the lazy entry
       // partition — not the snapshot()-only slice this tool used to screen.
       let q = query != null ? query : filters.join('&')
-      let hits = await io.query(q, kind, { after, limit })
+      let hits = await io.query(q, { after, limit })
       let out = JSON.stringify(
         hits.map((r) => jsonOf(r, full ? r.comps : elide(r))),
         null,
@@ -1169,7 +1165,7 @@ empty. ${GRAMMAR} ${FILTERS}`,
       // An empty array is where a mis-routed filter reads as absence, so
       // the routing rides along — as its OWN content block, leaving the
       // first block byte-identical JSON for anyone who parses it.
-      let why = hits.length ? '' : resolution(ps, kind)
+      let why = hits.length ? '' : resolution(ps)
       return why
         ? {
           content: [
@@ -1455,9 +1451,10 @@ net, no env — its ONLY capability is the graph). In scope: graph
 ({changes, deps, rows} — rows is [{eid, num, kind, comps}]), apply(
 ...changes) to QUEUE writes, log(...) for debug output. graph.rows is the
 EAGER snapshot; it omits the lazy entry partition (session logs). Reach
-that partition with await graph.query(filters, kind?, {after, limit}) —
-the authoritative whole-graph query, entries included when the filter
-names them — or await graph.entries(sessionEid, {after, limit}) for one
+that partition with await graph.query(filters, {after, limit}) — the
+authoritative whole-graph query, entries included when the filter names
+them (kind is a filter, .kind=session) — or await
+graph.entries(sessionEid, {after, limit}) for one
 Session's ordered seq partition. The script's return value comes back to
 you. Queued changes apply atomically after the script finishes — unless
 dry_run, which returns the batch without applying (preview a layout
@@ -1506,7 +1503,7 @@ in milliseconds (default 10000, maximum 30000).`,
             let ask = m.data?.ask
             if (ask) {
               try {
-                let hits = await io.query(ask.q, ask.kind, ask.opts)
+                let hits = await io.query(ask.q, ask.opts)
                 worker.postMessage({ res: ask.req, rows: hits })
               } catch (e) {
                 worker.postMessage({
@@ -1617,8 +1614,7 @@ if (import.meta.main) {
     // evalGraph the in-process mount does — so the lazy entry partition is
     // reachable over stdio too. A filter LINE splits into its `&` tokens, the
     // encoding-safe unit client.query already speaks.
-    query: (q, kind, opts) =>
-      queryHttp(q.split('&').filter(Boolean), kind, opts),
+    query: (q, opts) => queryHttp(q.split('&').filter(Boolean), opts),
     write: send,
     find: search,
     upload: async (eid, html) => {

@@ -389,5 +389,5 @@ Deno.test('bus: a session id naming nothing is silent, and asks nothing more', a
   let { got, seen } = await against(graph(said('c1', 20, T, 'hi')), 'nobody')
   assertEquals(got, { lines: [], ack: [] })
   assertEquals(got, noticesFor(graph(said('c1', 20, T, 'hi')), 'nobody'))
-  assertEquals(seen, ['/query?kind=session&.session.id=nobody'])
+  assertEquals(seen, ['/query?.kind=session&.session.id=nobody'])
 })

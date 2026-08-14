@@ -46,7 +46,7 @@ let complete = (item: Record<string, unknown>, leak: string) =>
 
 let ioFor = (db: ReturnType<typeof open>): IO => ({
   read: () => Promise.resolve(snapshot(db)),
-  query: (q, kind, opts) => Promise.resolve(evalGraph(db, q, kind, opts).hits),
+  query: (q, opts) => Promise.resolve(evalGraph(db, q, opts).hits),
   write: (changes, via) => Promise.resolve(apply(db, changes, undefined, via)),
   find: () => Promise.resolve([]),
   upload: () => Promise.resolve(),

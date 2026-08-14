@@ -1,9 +1,10 @@
 // A read door over a fixed Snapshot, for tests that drive client.ts without a
 // database. It answers /query with the REAL grammar — the filter line parses
 // through query.ts and matches rows the way the server's own pipeline does,
-// plus the `id=` and `kind=` parameters that ride beside it. A stub that
-// ignored a predicate would let a narrow read pass by being answered broadly,
-// which is exactly the mistake these tests exist to catch.
+// plus the `id=` parameter that rides beside it. Kind is a filter now
+// (`.kind=session`), parsed like any pred. A stub that ignored a predicate
+// would let a narrow read pass by being answered broadly, which is exactly the
+// mistake these tests exist to catch.
 
 import { find, jsonOf, rows } from './client.ts'
 import { matchQuery, parseQuery } from './query.ts'
@@ -18,20 +19,18 @@ export let answers = (snap: Snapshot) => {
     snap.deps.filter((d) => d.parent == eid || d.child == eid)
   return (search: string) => {
     let segs = search.split('&').filter(Boolean)
-    let kind = segs.find((s) => s.startsWith('kind='))?.slice(5)
     let edged = segs.includes('deps=1')
     let named = segs.filter((s) => s.startsWith('id='))
       .flatMap((s) => s.slice(3).split(',')).filter(Boolean)
     let eids = new Set(named.map((id) => find(all, id)?.eid).filter(Boolean))
     let preds = parseQuery(
       segs.filter((s) =>
-        !s.startsWith('id=') && !s.startsWith('kind=') &&
+        !s.startsWith('id=') &&
         s != 'deps=1' && s != 'backlinks=1'
       ).join('&'),
     )
     return all.filter((r) =>
       matchQuery(r.comps, preds, (e) => byEid.get(e)?.comps) &&
-      (!kind || r.kind == kind) &&
       (!named.length || eids.has(r.eid))
     ).map((r) => edged ? { ...jsonOf(r), deps: edgesOf(r.eid) } : jsonOf(r))
   }

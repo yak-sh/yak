@@ -17,7 +17,6 @@ import {
   hookSession,
   hookTurn,
   jsonText,
-  kindArg,
   leadPrio,
   lifecycleHooks,
   listing,
@@ -161,31 +160,6 @@ Deno.test('subject: sentences route through the existing CLI verbs', () => {
       args: ['T-3', edge, 'T-9', '--gone'],
     })
   }
-})
-
-Deno.test('kindArg: every spelling of a kind names it, a filter is not one', () => {
-  for (
-    let spelling of [
-      'project',
-      'projects',
-      '.kind=project',
-      'kind=project',
-      '.kind=projects',
-    ]
-  ) assertEquals(kindArg(spelling), 'project')
-  assertEquals(kindArg('memories'), 'memory')
-  assertEquals(kindArg('canvases'), 'canvas')
-  assertEquals(kindArg('aliases'), 'alias')
-  // English's one irregular, and the naive plural still lands
-  assertEquals(kindArg('people'), 'person')
-  assertEquals(kindArg('persons'), 'person')
-  // A filter, a bare word that names nothing: not a kind, so it falls
-  // through to the filter parser rather than being guessed at.
-  assertEquals(kindArg('.status=open'), undefined)
-  assertEquals(kindArg('projekts'), undefined)
-  // Spelled as a kind and wrong: the door names the vocabulary.
-  assertThrows(() => kindArg('.kind=projekt'), Error, 'no such kind: projekt')
-  assertThrows(() => kindArg('kind=task,project'), Error, 'no such kind')
 })
 
 // `task decided` scopes itself to where you stand, so `.project=P-30` has to
@@ -1434,9 +1408,9 @@ Deno.test('bare task appends the current claimed task digest', async () => {
     assertEquals(
       [...seen].sort(),
       [
-        '/query?kind=session&.session.id=sub-1',
-        `/query?kind=task&.claim.session=${S}`,
-        '/query?kind=session&.session.id=sub-1',
+        '/query?.kind=session&.session.id=sub-1',
+        `/query?.kind=task&.claim.session=${S}`,
+        '/query?.kind=session&.session.id=sub-1',
         `/query?.claim.session=${S}`,
         '/query?.repo!',
         `/query?.comment.target=${S},${T}&.notified=`,

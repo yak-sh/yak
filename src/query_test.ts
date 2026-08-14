@@ -3,15 +3,18 @@ import {
   adopt,
   complete,
   hot,
+  kindPreds,
   listed,
   matchQuery,
   noFilter,
   orderOf,
   parseQuery,
   pred,
+  preds,
   resolution,
   resolveRefs,
   route,
+  scopes,
   SUNK,
   sunk,
   warm as rank, // the test file's own `warm` fixture predates the export
@@ -53,6 +56,62 @@ Deno.test('the shared error facet is a fleet-wide health predicate', () => {
   let failed = row({}, { error: { message: 'boom' } })
   assertEquals(matchQuery(failed, parseQuery('.error!')), true)
   assertEquals(matchQuery(row({}), parseQuery('.error!')), false)
+})
+
+// `.kind=` is the first SCOPE — a virtual prop resolving to the kindPreds
+// Pred[] the seam splices into the AND-list. It reads like a column: dotted,
+// composing, one grammar. The bespoke `kind` parameter is gone.
+Deno.test('query: .kind= filters like a column and composes', () => {
+  // A memory-shaped entity matches .kind=memory; the task row does not — the
+  // absence clauses make it EXACT, not a bare `.memory!` presence.
+  let mem = { entity: { num: 9 }, doc: { title: 'm', body: '' }, memory: {} }
+  assertEquals(matchQuery(mem, parseQuery('.kind=memory')), true)
+  assertEquals(hit('.kind=memory'), false) // a task is not a memory
+  assertEquals(hit('.kind=task'), true)
+
+  // The seam splices: a kind past the first in kindOrder yields SEVERAL preds
+  // (the kind present + every earlier one absent), spread into the list.
+  let spliced = preds('.kind=comment')!
+  assertEquals(spliced.length > 1, true)
+  assertEquals(spliced, kindPreds('comment'))
+  // parseQuery flattens the splice into its AND-list, not a nested node.
+  assertEquals(parseQuery('.kind=comment'), kindPreds('comment'))
+
+  // Composition is free — it ANDs with any other pred.
+  assertEquals(hit('.kind=task&.priority<=1'), true)
+  assertEquals(hit('.kind=task&.priority>=3'), false)
+  // The plural folds in, the leniency the bare-word listing already granted.
+  assertEquals(parseQuery('.kind=tasks'), kindPreds('task'))
+})
+
+Deno.test('query: bare kind= is not a filter; .kind=typo is a named refusal', () => {
+  // No leading dot: not a dot-param at all — a text term to the search line,
+  // and the strict doors refuse it (noFilter teaches the dotted spelling).
+  assertEquals(preds('kind=session'), null)
+  assertEquals(pred('kind=session'), null)
+  assert(noFilter('kind=session').includes('.kind=session'))
+  // Dotted and valid: a real filter. Dotted and unknown: a named refusal, not
+  // a silent empty result.
+  assertEquals(preds('.kind=session')!.length > 0, true)
+  assertThrows(() => preds('.kind=griffin'), Error, 'no such kind: griffin')
+})
+
+Deno.test('query: a real prop wins over a same-named scope', () => {
+  // The seam resolves owned column/component props FIRST, so a scope can never
+  // shadow `.status`. Register a colliding scope and prove `.status=open` still
+  // routes to the task column rather than the scope's Pred[].
+  scopes.status = () => [{ comp: 'x', prop: '', op: 'exists', value: '' }]
+  try {
+    assertEquals(pred('.status=open'), {
+      comp: 'task',
+      prop: 'status',
+      op: '',
+      value: 'open',
+    })
+    assertEquals(hit('.status=open'), true)
+  } finally {
+    delete scopes.status
+  }
 })
 
 let cases: [string, string, Record<string, unknown>, boolean][] = [
@@ -417,17 +476,20 @@ Deno.test('hot: no recalls yet — the last touch counts as a single touch', () 
 })
 
 Deno.test('noFilter teaches the door a stray predicate belongs to', () => {
+  // A bare `kind=K` is the warm mistake — the door names the dotted spelling
+  // that now works instead of a separate parameter to reach for.
   let m = noFilter('kind=session')
   assert(m.startsWith('not a filter: kind=session'))
-  assert(m.includes("graph_query's kind parameter"))
+  assert(m.includes('.kind=session')) // write it dotted — the filter form
   assert(m.includes('.status=open')) // the dot-param shape, sketched
   assert(!m.includes('\n')) // one line — it rides tool errors verbatim
-  assert(!noFilter('sessions').includes('graph_query')) // kind= only
+  assert(!noFilter('sessions').includes('dotted')) // kind= only
   assert(noFilter('sessions').includes('dot-params'))
-  // the dot forms reject at route() — one seam, every door inherits — and
-  // name the doors that DO select a kind (cli.ts kindArg, /query kind=)
-  assertThrows(() => route('kind'), Error, 'kind selects what to LIST')
-  assertThrows(() => route('kind'), Error, 'task list projects')
+  // `.kind=` is a SCOPE now — it parses to kindPreds, never reaching route(),
+  // so the dotted spelling is a real filter rather than a rejection.
+  assertEquals(parseQuery('.kind=session').length > 0, true)
+  // eid stays a near-miss the door names; route('kind') no longer special-cases
+  // (the scope intercepts before route), so a direct route() is a plain miss.
   assertThrows(() => route('eid'), Error, '(T-3, E-9)')
   assertEquals(route('id'), { comp: 'session', prop: 'id' }) // no near-miss
   assertThrows(

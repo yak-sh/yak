@@ -63,7 +63,7 @@ Deno.test('paging walks the partition by seq (after) and bounds it (limit)', () 
   let { db, a } = world()
   assertEquals(
     seqs(
-      evalGraph(db, `.entry.session=${a}`, undefined, {
+      evalGraph(db, `.entry.session=${a}`, {
         after: 2,
       }).hits,
     ),
@@ -71,7 +71,7 @@ Deno.test('paging walks the partition by seq (after) and bounds it (limit)', () 
   )
   assertEquals(
     seqs(
-      evalGraph(db, `.entry.session=${a}`, undefined, {
+      evalGraph(db, `.entry.session=${a}`, {
         limit: 2,
       }).hits,
     ),
@@ -79,7 +79,7 @@ Deno.test('paging walks the partition by seq (after) and bounds it (limit)', () 
   )
   assertEquals(
     seqs(
-      evalGraph(db, `.entry.session=${a}`, undefined, {
+      evalGraph(db, `.entry.session=${a}`, {
         after: 1,
         limit: 2,
       }).hits,
@@ -146,10 +146,10 @@ Deno.test('kind= selects an eager kind past a lazy comp in kindOrder (T-17354)',
   let w = uuid()
   apply(db, [{ eid: w, name: 'wake', comp: { at: '2099-01-01T00:00:00Z' } }])
 
-  assertEquals(evalGraph(db, '', 'comment').hits.map((h) => h.eid), [c])
-  assertEquals(evalGraph(db, '', 'wake').hits.map((h) => h.eid), [w])
+  assertEquals(evalGraph(db, '.kind=comment').hits.map((h) => h.eid), [c])
+  assertEquals(evalGraph(db, '.kind=wake').hits.map((h) => h.eid), [w])
   // A genuinely-lazy kind (a POSITIVE `entry` presence) still routes into the
   // partition — the guard narrows to absence assertions only.
-  assertEquals(evalGraph(db, '', 'entry').hits.length, 4)
+  assertEquals(evalGraph(db, '.kind=entry').hits.length, 4)
   db.close()
 })

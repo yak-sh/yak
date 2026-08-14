@@ -102,7 +102,6 @@ import {
   type Change,
   type Edge,
   edges,
-  kindOrder,
   kindWord,
   plural,
   plurals,
@@ -175,9 +174,9 @@ let bare = async () => {
   print(usage())
   let session = me()
   if (!session) return
-  let [sess] = await query([`.session.id=${session}`], 'session')
+  let [sess] = await query(['.kind=session', `.session.id=${session}`])
   if (!sess) return
-  let mine = await query([`.claim.session=${sess.eid}`], 'task')
+  let mine = await query(['.kind=task', `.claim.session=${sess.eid}`])
   let digest = claimedDigest(mine)
   if (digest) print(`\n${digest}`)
 }
@@ -251,22 +250,6 @@ export let subject = (id: string | undefined, args: string[]) => {
   throw new Error(`no subject verb: ${verb} (task ${id} --help)`)
 }
 
-// Which KIND a listing walks. It is a selector, not a filter — kind is
-// derived from an entity's components, so no row carries the column and
-// no pred could test it (route() says so to whoever writes `.kind` into a
-// board). Every spelling a caller reaches for names it: the bare word in
-// either number, the `/query` parameter, and the dot-param the filter
-// grammar makes them expect. Undefined = not a kind word at all, so the
-// argument falls through to the filter parser.
-export let kindArg = (arg: string) => {
-  let word = arg.replace(/^\.?kind=/, '')
-  let kind = kindWord(word)
-  if (!kind && word != arg) {
-    throw new Error(`no such kind: ${word} — one of ${kindOrder.join(', ')}`)
-  }
-  return kind
-}
-
 // Every argument at a listing door must BE a filter — the query grammar's
 // operators, lists and ranges ('.priority<=1', '.domain=Ops,Eng') — so a word
 // that isn't teaches instead of silently listing everything. `hint` says what
@@ -284,9 +267,10 @@ let predicates = (args: string[], hint: (a: string) => string = () => '') =>
 
 let list = async (got: Got) => {
   let json = got.flags.has('--json')
-  let words = got.words
-    .map((a) => [a, kindArg(a)] as const)
-  let kind = words.find(([, k]) => k)?.[1] ?? 'task'
+  // A bare word names the KIND to list (`task list projects`); `.kind=` is an
+  // ordinary filter now, so the dotted spelling rides `line` like any pred.
+  let words = got.words.map((a) => [a, kindWord(a)] as const)
+  let bare = words.find(([, k]) => k)?.[1]
   // Here a bare word is also a KIND, so one that is neither names both
   // doors rather than only the filter one.
   let line = words.filter(([, k]) => !k).map(([a]) => a)
@@ -302,9 +286,15 @@ let list = async (got: Got) => {
   // resolveRefs is forgiving (a saved board must not throw), so the strict
   // reading rides a keyed check here (client.ts checkedRefs).
   await checkedRefs(preds)
-  // The server matches and kind-filters; byBoard stays local. Derived titles
-  // and the ⚑ column resolve their named entities through one bounded read.
-  let hits = (await query(line, kind)).sort(byBoard)
+  // The kind this listing walks: a bare word, else the `.kind=` a filter
+  // already names, else task. It rides the filter line as `.kind=` —
+  // prepended for the bare word and the default, already present when the
+  // caller wrote it dotted (so `task list .kind=project` is not re-scoped to
+  // tasks). Derived titles and the ⚑ column resolve through one bounded read.
+  let named = line.map((a) => a.match(/^\.kind=(.+)$/)?.[1]).find(Boolean)
+  let kind = bare ?? (named ? kindWord(named) ?? 'task' : 'task')
+  let filters = named ? line : [`.kind=${kind}`, ...line]
+  let hits = (await query(filters)).sort(byBoard)
   let refs = await fetched(
     hits.flatMap((r) => [
       String(r.comps.claim?.session ?? ''),
@@ -376,7 +366,7 @@ let scopeOf = async (named?: string): Promise<string | undefined> => {
   if (named) return (await got(named))?.eid
   let sid = me()
   let sess = sid
-    ? (await query([`.session.id=${sid}`], 'session'))[0]
+    ? (await query(['.kind=session', `.session.id=${sid}`]))[0]
     : undefined
   let people = await fetched(
     [
@@ -691,10 +681,12 @@ let mailList = async (got: Got) => {
   // inbox and the boot digest, so the mail-only slice can never disagree
   // with the door it is a slice of.
   let gathered = every
-    ? { rows: await query(filters, 'mail'), who: undefined }
+    ? { rows: await query(['.kind=mail', ...filters]), who: undefined }
     : sent
     ? {
-      rows: await query(['.mail.to!', '.mail.message_id=', ...filters], 'mail'),
+      rows: await query(
+        ['.kind=mail', '.mail.to!', '.mail.message_id=', ...filters],
+      ),
       who: undefined,
     }
     : await inboxRows(me(), Deno.cwd(), filters)
@@ -908,7 +900,9 @@ let inboxList = async (got: Got) => {
   let filters = got.words
   let gathered = sent
     ? {
-      rows: await query(['.mail.to!', '.mail.message_id=', ...filters], 'mail'),
+      rows: await query(
+        ['.kind=mail', '.mail.to!', '.mail.message_id=', ...filters],
+      ),
       who: undefined,
     }
     : await inboxRows(
@@ -1122,7 +1116,7 @@ let land = async () => {
     `landed ${outcome.landed} — now close the task and release your claims ` +
       '(task done <id>; task release <id>)',
   )
-  let sessions = await query([], 'session')
+  let sessions = await query(['.kind=session'])
   for (let t of sweep(sessionsOf(sessions), outcome.root).trees) {
     if (t.prune && prune(outcome.root, t.tree)) warn(`swept ${t.tree.path}`)
   }
@@ -1161,7 +1155,7 @@ let colon = async (focus: string | undefined, argv: string[]) => {
     if (/^[A-Za-z]+-\d+$/.test(line.slice(name.length).trim())) {
       await one(line.slice(name.length).trim())
     } else {
-      all.push(...await query(['.repo!'], 'project'))
+      all.push(...await query(['.kind=project', '.repo!']))
       await one('tasks')
     }
   }
@@ -1811,7 +1805,9 @@ let context = async (input: Got) => {
       // The digest snapshot is intentionally bounded and owes no complete
       // session roster. PID ownership is its own indexed question; without
       // this read the guard sees an arbitrary subset and a collision can mint.
-      if (pid) all.push(...await query([`.session.pid=${pid}`], 'session'))
+      if (pid) {
+        all.push(...await query(['.kind=session', `.session.pid=${pid}`]))
+      }
       let external = prior?.comps.session?.origin != 'managed'
       let operator = external && hookOperator(role, pid)
       let source = String(body.source ?? '') || undefined
@@ -2012,7 +2008,7 @@ let dream = async (input: Got) => {
   }
   let project = await got(ref)
   if (!project?.comps.project) throw new Error(`not a project: ${ref}`)
-  let made = dreamChanges([project, ...await query([], 'dream')], {
+  let made = dreamChanges([project, ...await query(['.kind=dream'])], {
     project: project.eid,
   })
   await send(made.changes)
@@ -2171,7 +2167,7 @@ let repoRoot = () => {
 let probes = async (got: Got) => {
   let mins = Number(got.opts['--grace'])
   let repo = repoRoot()
-  let all = await query([], 'session')
+  let all = await query(['.kind=session'])
   let seen = sweep(
     sessionsOf(all),
     repo,

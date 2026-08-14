@@ -99,11 +99,9 @@ export let snapshot = async () => {
 
 export let query = async (
   filters: string[],
-  kind?: string,
   opts?: { after?: number; limit?: number },
 ) => {
   let args = [
-    ...(kind ? [`kind=${kind}`] : []),
     ...(opts?.after ? [`after=${opts.after}`] : []),
     ...(opts?.limit ? [`limit=${opts.limit}`] : []),
     ...filters,
@@ -133,7 +131,7 @@ export let got = async (id: string) => (await fetched([id]))[0]
 // a dropped read. sessionFor over this narrow row mints exactly when the
 // whole-snapshot find() would have — one session, on true first sight.
 export let sessionRow = async (sid: string) =>
-  (await query([`.session.id=${sid}`], 'session'))
+  (await query(['.kind=session', `.session.id=${sid}`]))
     .find((r) => String(r.comps.session?.id) == sid)
 
 // A session's NEWEST message entry — the transcript position a :meta memo
@@ -146,8 +144,7 @@ export let latestMessage = async (session: string) => {
   let last: Row | undefined
   for (;;) {
     let page = await query(
-      [`.entry.session=${session}`, '.message.role!'],
-      'entry',
+      ['.kind=entry', `.entry.session=${session}`, '.message.role!'],
       { after, limit: 500 },
     )
     if (!page.length) break
@@ -1660,7 +1657,10 @@ export let mailThread = async (row: Row) => {
   }
   let frontier = found.map((r) => r.eid)
   while (frontier.length) {
-    let down = await query([`.mail.reply_to=${frontier.join(',')}`], 'mail')
+    let down = await query([
+      '.kind=mail',
+      `.mail.reply_to=${frontier.join(',')}`,
+    ])
     down = down.filter((r) => !found.some((x) => x.eid == r.eid))
     found.push(...down)
     frontier = down.map((r) => r.eid)
@@ -2332,27 +2332,25 @@ export let contextSnapshot = async (
     inbox,
     comments,
   ] = await Promise.all([
-    query([`.task.status=${open}`], 'task'),
+    query(['.kind=task', `.task.status=${open}`]),
     scope
       ? Promise.all([
         query(
-          [`.task.project=${scope}`, `.updated.at>=${since}`],
-          'task',
+          ['.kind=task', `.task.project=${scope}`, `.updated.at>=${since}`],
         ),
         query(
-          [`.task.project=${scope}`, `.created.at>=${since}`],
-          'task',
+          ['.kind=task', `.task.project=${scope}`, `.created.at>=${since}`],
         ),
       ]).then((sets) => sets.flat())
       : [],
     query(['.decided!']),
-    query(['.memory.scope='], 'memory'),
-    actor ? query([`.session.actor=${actor}`], 'session') : [],
-    actor ? query([`.resume.actor=${actor}`], 'task') : [],
+    query(['.kind=memory', '.memory.scope=']),
+    actor ? query(['.kind=session', `.session.actor=${actor}`]) : [],
+    actor ? query(['.kind=task', `.resume.actor=${actor}`]) : [],
     actor
       ? Promise.all([
-        query([`.updated.by=${actor}`, `.updated.at>=${since}`], 'task'),
-        query([`.created.by=${actor}`, `.created.at>=${since}`], 'task'),
+        query(['.kind=task', `.updated.by=${actor}`, `.updated.at>=${since}`]),
+        query(['.kind=task', `.created.by=${actor}`, `.created.at>=${since}`]),
       ]).then((sets) => sets.flat())
       : [],
     inboxRows(session, cwd),
@@ -2410,8 +2408,8 @@ export let contextSnapshot = async (
 // already a root in the same keyed read.
 export let projectionSnapshot = async (): Promise<Snapshot> => {
   let [projects, personas] = await Promise.all([
-    query(['.repo!'], 'project'),
-    query([], 'persona'),
+    query(['.kind=project', '.repo!']),
+    query(['.kind=persona']),
   ])
   let near = await neighborhoods(personas.map((r) => r.eid))
   let all = uniq([...projects, ...personas, ...near.rows])
