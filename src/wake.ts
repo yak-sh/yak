@@ -21,6 +21,8 @@ type Row = {
   to: string
   target: string | null
   minted: string | null
+  note: string | null
+  by: string | null
 }
 
 let iso = (t: number) => new Date(t).toISOString()
@@ -37,8 +39,8 @@ let timer: ReturnType<typeof setTimeout> | undefined
 // neither delivered nor error present (D-14945).
 let pending = () =>
   db.prepare(
-    `select wake.eid, wake.at, deliver."to" as "to", wake.target,
-       c.at as minted
+    `select wake.eid, wake.at, deliver."to" as "to", wake.target, wake.note,
+       c.at as minted, c."by" as "by"
      from wake join deliver on deliver.eid = wake.eid
      left join created c on c.eid = wake.eid
      where ${PENDING('wake')} order by wake.at`,
@@ -46,18 +48,27 @@ let pending = () =>
 
 // The knock this wake was always going to be. No target (a cadence wake)
 // means the woken actor is the subject — "look at your own board" — not the
-// wake row itself, which is unnumbered and says nothing.
+// wake row itself, which is unnumbered and says nothing. A note set with the
+// wake rides as a plain comment on the target in the same batch — the very
+// seam a :knock's words use (knock.ts wordsFor, channel.ts commentOn) — so a
+// resumed session reads what it was mid-doing without a second mechanism. The
+// note is authored by whoever set the wake, so the relayed words are signed.
 let fire = (r: Row, cast: Cast) => {
   let t = trace()
   let ke = uuid()
-  let out = apply(db, [
-    {
-      eid: ke,
-      name: 'knock',
-      comp: { target: r.target ?? r.to },
-    },
+  let target = r.target ?? r.to
+  let batch: Change[] = [
+    { eid: ke, name: 'knock', comp: { target } },
     { eid: ke, name: 'deliver', comp: { to: r.to } },
-  ], t)
+  ]
+  if (r.note) {
+    let ce = uuid()
+    batch.push(
+      { eid: ce, name: 'doc', comp: { title: '', body: r.note } },
+      { eid: ce, name: 'comment', comp: { target } },
+    )
+  }
+  let out = apply(db, batch, t, r.by ?? undefined)
   cast(out)
   dispatch(out, t, (c, e) => console.warn(`wake ${c} —`, e))
   // Settled DELIVERED after the mint: the wake did its one job, minting the

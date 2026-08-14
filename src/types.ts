@@ -472,6 +472,11 @@ export let comps: Record<string, Record<string, PropType>> = {
     at: 'time',
     // What to look at on waking — absent means the wake itself.
     target: { eid: 'entity', death: 'cascade' },
+    // A note written when the wake was set — what the setter was mid-doing,
+    // why it will return. It rides through to the delivered knock's words (the
+    // same comment-on-target seam a :knock's words use), so a resumed session
+    // reconstitutes instead of guessing.
+    note: 'text',
   },
   // A dream: a venture's consolidation cursor (T-12800, D-17362). One per
   // venture, its own entity rather than a mark on the project, so its cadence
@@ -1587,6 +1592,7 @@ export type Wake = {
   eid: string
   at: string
   target?: string | null
+  note?: string | null
 }
 
 // A dream: a venture's consolidation cursor (dream.ts). `scope` is the

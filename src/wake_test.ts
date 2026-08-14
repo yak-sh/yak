@@ -57,18 +57,30 @@ let person = (name: string) => {
   return eid
 }
 
-let wake = (at: string, target?: string, to = jeff) => {
+let wake = (at: string, target?: string, to = jeff, note?: string) => {
   let eid = uid()
   landed = apply(db, [
     {
       eid,
       name: 'wake',
-      comp: { at, ...(target ? { target: target } : {}) },
+      comp: {
+        at,
+        ...(target ? { target: target } : {}),
+        ...(note ? { note } : {}),
+      },
     },
     { eid, name: 'deliver', comp: { to } },
   ])
   return eid
 }
+
+// The words on the target — the comment a note relays into, the same seam a
+// :knock's words use (knock.ts wordsFor, channel.ts commentOn).
+let saidOn = (target: string) =>
+  db.prepare(
+    `select d.body from comment c join doc d on d.eid = c.eid
+     where c.target = ? order by d.body`,
+  ).all(target) as { body: string }[]
 
 Deno.test('an hour already past fires, and mints the knock', () => {
   let bob = person('bob')
@@ -104,6 +116,33 @@ Deno.test('no target: the woken actor is the subject', () => {
   assertEquals(k.target, dave)
   assertEquals(k.target == w, false)
   assertEquals(toOf(k.eid), dave)
+})
+
+Deno.test('a note rides through to a comment on the woken subject', () => {
+  let erin = person('erin')
+  let w = wake(
+    new Date(Date.now() - 1000).toISOString(),
+    undefined,
+    erin,
+    'mid mail-loop port, T-7018 next',
+  )
+  arm(cast)
+  // The cadence knock points at the woken actor, and the note lands as a
+  // comment on that same target — where channel.ts commentOn picks it up.
+  let k = knocks().find((k) => k.target == erin)!
+  assertEquals(k.target, erin)
+  assertMatch(String(drow(w)?.at), /^\d{4}-/)
+  assertEquals(
+    saidOn(erin).some((r) => r.body == 'mid mail-loop port, T-7018 next'),
+    true,
+  )
+})
+
+Deno.test('no note means no comment rides the knock', () => {
+  let finn = person('finn')
+  wake(new Date(Date.now() - 1000).toISOString(), undefined, finn)
+  arm(cast)
+  assertEquals(saidOn(finn).length, 0)
 })
 
 Deno.test('a new untargeted wake replaces only the pending untargeted one', () => {

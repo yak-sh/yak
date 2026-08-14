@@ -412,7 +412,8 @@ let schema = `
   create table if not exists wake (
     eid        text primary key references entity(eid),
     at         text not null,
-    target text references entity(eid)
+    target text references entity(eid),
+    note   text
   );
   -- Self-healing's diagnosis facet (D-17077, heal.ts): a task auto-filed
   -- about a break. fault (kind + normalized message + stack head) is the dedup
@@ -1788,6 +1789,9 @@ export let open = (path = file) => {
   // Additional resolvable-only handles beside the primary `slug` (T-16673):
   // a space-delimited set, every member globally unique (enforced in apply()).
   addCol('alias', 'slugs', 'slugs text')
+  // A wake's note (T-17654): what the setter was mid-doing, relayed into the
+  // knock's words when it fires so a resumed session reconstitutes.
+  addCol('wake', 'note', 'note text')
   // The crash-loop breaker's fresh-start fence (types.ts, src/roles.ts).
   addCol('role', 'retry_at', 'retry_at text')
   addCol('role', 'checkout', 'checkout text references entity(eid)')

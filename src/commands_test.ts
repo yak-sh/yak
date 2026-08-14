@@ -511,6 +511,11 @@ Deno.test('wake: who, when, and a trailing id is what to look at', () => {
   )
   assertThrows(() => run('wake', ctx(T)), Error, 'name who to wake')
   assertThrows(() => run('wake B-3 whenever', ctx(T)), Error, 'when is')
+  // A `-- note` folds a note onto the wake (like :mail's `-- body`); the head
+  // before it is the ordinary who/when/target sentence.
+  let n = run('wake B-3 in 60m T-4 -- mid the mail-loop port', ctx(P))
+  assertEquals(n.changes![0].comp?.target, T)
+  assertEquals(n.changes![0].comp?.note, 'mid the mail-loop port')
 })
 
 Deno.test('mail: to, subject, -- body — one letter, minted whole', () => {

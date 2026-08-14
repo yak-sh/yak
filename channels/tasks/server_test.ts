@@ -160,13 +160,13 @@ Deno.test('a comment falls back to its title when the body is empty', () => {
 Deno.test('a knock at the session names its target as a human id', () => {
   let batch = knock('k1', 'sess', 't9')
   assertEquals(channelEvents(batch, ctx()), [
-    { content: 'knock: look at T-9', meta: { kind: 'knock' }, eid: 'k1' },
+    { content: 'look at T-9', meta: { kind: 'knock' }, eid: 'k1' },
   ])
 })
 
 Deno.test('an operator receives a knock at the session actor', () => {
   let batch = knock('k1', 'actor', 't9')
-  assertEquals(channelEvents(batch, ctx())[0].content, 'knock: look at T-9')
+  assertEquals(channelEvents(batch, ctx())[0].content, 'look at T-9')
 })
 
 Deno.test('a non-operator receives session knocks, not actor knocks', () => {
@@ -175,7 +175,7 @@ Deno.test('a non-operator receives session knocks, not actor knocks', () => {
   assertEquals(
     channelEvents([...direct, ...project], ctx({ operator: false })),
     [
-      { content: 'knock: look at T-9', meta: { kind: 'knock' }, eid: 'k1' },
+      { content: 'look at T-9', meta: { kind: 'knock' }, eid: 'k1' },
     ],
   )
 })
@@ -183,8 +183,40 @@ Deno.test('a non-operator receives session knocks, not actor knocks', () => {
 Deno.test('a knock naming only its recipient has no look-at target', () => {
   let batch = knock('k1', 'sess')
   assertEquals(channelEvents(batch, ctx()), [
-    { content: 'knock', meta: { kind: 'knock' }, eid: 'k1' },
+    { content: 'a knock', meta: { kind: 'knock' }, eid: 'k1' },
   ])
+})
+
+// A cadence wake fires a knock delivered to the operator's OWN home board,
+// pointed at that board — its own timer coming back. It reads as a return, not
+// as a stranger pointing you somewhere (T-17654). The operator hears it because
+// its actor IS its home board.
+let mine = ctx({ actorEid: 'p1', homeEid: 'p1', idOf })
+
+Deno.test('a cadence return names your own board, not "look at X"', () => {
+  let batch = knock('k1', 'p1', 'p1')
+  assertEquals(channelEvents(batch, mine), [
+    { content: 'your pass resumes on P-1', meta: { kind: 'knock' }, eid: 'k1' },
+  ])
+})
+
+Deno.test('a cadence return carries the note that rode its wake', () => {
+  let batch = [
+    ...knock('k1', 'p1', 'p1'),
+    ch('c1', 'doc', { title: '', body: 'mid mail-loop port, T-7018 next' }),
+    ...comment('c1', 'p1'),
+  ]
+  assertEquals(
+    channelEvents(batch, mine)[0].content,
+    'your pass resumes on P-1 — mid mail-loop port, T-7018 next',
+  )
+})
+
+Deno.test('a knock at another target is a nudge even for an operator at home', () => {
+  // Same operator (actor == home), but pointed elsewhere — a real ask, not a
+  // return, so it reads "look at X".
+  let batch = knock('k1', 'p1', 't9')
+  assertEquals(channelEvents(batch, mine)[0].content, 'look at T-9')
 })
 
 Deno.test('a knock carries the words of the comment on its TARGET', () => {
@@ -195,7 +227,7 @@ Deno.test('a knock carries the words of the comment on its TARGET', () => {
   ]
   let out = channelEvents(batch, ctx())
   assertEquals(out, [{
-    content: 'knock: look at T-9 — take a look',
+    content: 'look at T-9 — take a look',
     meta: { kind: 'knock' },
     eid: 'k1',
   }])
@@ -225,7 +257,7 @@ Deno.test('an inbox sweep deliberately reads an addressed settled knock', () => 
     }),
   ]
   assertEquals(channelEvents(batch, ctx({ mode: 'inbox' })), [
-    { content: 'knock: look at T-9', meta: { kind: 'knock' }, eid: 'k1' },
+    { content: 'look at T-9', meta: { kind: 'knock' }, eid: 'k1' },
   ])
 })
 
@@ -601,7 +633,7 @@ let cast = (over: { via?: string; at?: string } = {}): Change[] => [
 
 Deno.test('a resume sweep rings the knock the disconnect ate (T-7302)', () => {
   assertEquals(channelEvents(cast(), ctx({ mode: 'resume' })), [
-    { content: 'knock: look at T-9', meta: { kind: 'knock' }, eid: 'k7' },
+    { content: 'look at T-9', meta: { kind: 'knock' }, eid: 'k7' },
   ])
 })
 
@@ -621,7 +653,7 @@ Deno.test('a resume sweep carries the words that rode THAT knock', () => {
   ]
   assertEquals(
     channelEvents(batch, ctx({ mode: 'resume' }))[0].content,
-    'knock: look at T-9 — the wake words',
+    'look at T-9 — the wake words',
   )
   // Nothing in the window (a wake mints no comment at all) → bare nudge.
   assertEquals(
@@ -631,7 +663,7 @@ Deno.test('a resume sweep carries the words that rode THAT knock', () => {
         mode: 'resume',
       }),
     )[0].content,
-    'knock: look at T-9',
+    'look at T-9',
   )
 })
 

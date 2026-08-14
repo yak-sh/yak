@@ -723,13 +723,22 @@ export let manuals = declare({
     examples: [
       'task wake S-31 in 60m',
       'task wake homelab "9am tomorrow" T-42',
+      'task wake home "in 900s" --body="mid mail-loop port, T-7018 next"',
     ],
+    detail: 'The optional --body (or .body=@-, @file) is a NOTE — what you ' +
+      'were mid-doing, why you will return. It rides through to the knock the ' +
+      'wake mints, so a resumed session reconstitutes instead of guessing. A ' +
+      'cadence return (a wake at your own home board) reads "your pass ' +
+      'resumes"; any other target reads "look at <id>".',
     root: true,
+    dots: ['body'],
+    body: 'text',
     args: [
       arg('who', id),
       arg('when', text, true),
       arg('target', id, false, false),
     ],
+    opts: [body],
   },
   ':': {
     syntax: ':<command> … | <id> :<command> …',

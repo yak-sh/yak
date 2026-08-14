@@ -488,10 +488,17 @@ export let commands: Record<string, Command> = {
   // resolves HERE, at mint, and the line says the moment it landed on,
   // so a time already past is visible rather than a silent knock now.
   wake: {
-    args: 'homelab in 60m T-42',
-    about: 'a knock on a timer — wake someone at a time',
+    args: 'homelab in 60m T-42 -- what I was mid-doing',
+    about: 'a knock on a timer — wake someone at a time, with an optional note',
     run: (rest, ctx) => {
-      let words = rest.trim().split(/\s+/).filter(Boolean)
+      // `-- note` folds a note onto the wake (like :mail's `-- body`): what the
+      // setter was mid-doing, relayed into the knock's words when it fires so a
+      // resumed session reconstitutes. The head before it is the ordinary
+      // who / when / target sentence.
+      let m = rest.match(/^([\s\S]*?)\s+--\s+([\s\S]+)$/)
+      let head = m ? m[1] : rest
+      let note = m ? m[2].trim() : ''
+      let words = head.trim().split(/\s+/).filter(Boolean)
       let to = words[0] ? find(ctx.rows, words[0]) : undefined
       if (!to) throw new Error('wake: name who to wake (:wake homelab in 60m)')
       let more = words.slice(1)
@@ -516,6 +523,7 @@ export let commands: Record<string, Command> = {
             comp: {
               at: new Date(at).toISOString(),
               ...(about ? { target: about.eid } : {}),
+              ...(note ? { note } : {}),
             },
           },
           { eid: w, name: 'deliver', comp: { to: to.eid } },

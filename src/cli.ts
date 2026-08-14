@@ -1178,7 +1178,10 @@ let colon = async (focus: string | undefined, argv: string[]) => {
   }
   if (name == 'knock') await one(rest[0])
   if (name == 'wake') {
-    await Promise.all([one(rest[0]), one(rest.at(-1))])
+    // Pre-fetch who + target from the head only — a `-- note` fold must not
+    // let the note's last word masquerade as the target reference.
+    let head = line.split(/\s+--\s+/)[0].trim().split(/\s+/).slice(1)
+    await Promise.all([one(head[0]), one(head.at(-1))])
   }
   if (name == 'claim' && rest[0]) {
     let sess = await sessionRow(rest[0])
@@ -2631,7 +2634,14 @@ export let verbs = bind({
   'role retire': (got) => roleState('retire', got),
   probes,
   telemetry,
-  wake: (got) => colon(undefined, ['wake', ...got.words]),
+  // The note (what you were mid-doing) rides the body door and folds onto the
+  // colon line as `-- <note>`, the same `--` :mail uses for its body.
+  wake: (got) =>
+    colon(undefined, [
+      'wake',
+      ...got.words,
+      ...(got.body != null ? ['--', got.body] : []),
+    ]),
   help: (got) => print(help(got.words)),
   ls: list,
   context,

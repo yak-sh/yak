@@ -525,7 +525,17 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
         at,
         born && when ? { born, at: when } : undefined,
       )
-      let head = atId ? `knock: look at ${atId}` : 'knock'
+      // A knock delivered to your OWN home board and pointed at that board is a
+      // cadence RETURN — your own timer bringing you back, not a stranger's
+      // nudge. It says so and names the board as yours; every other target is
+      // "look at X". The `kind="knock"` frame already says it is a knock, so
+      // neither wording repeats the word.
+      let mine = at != '' && at == ctx.homeEid && recipient == ctx.homeEid
+      let head = mine
+        ? `your pass resumes on ${atId}`
+        : atId
+        ? `look at ${atId}`
+        : 'a knock'
       let content = note ? `${head} — ${note}` : head
       out.push({ content, meta: { kind: 'knock' }, eid: c.eid })
       continue
