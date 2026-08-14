@@ -5,7 +5,7 @@
 // declaration re-expresses EXACTLY the composite/unique indexes a fresh db
 // enforces, so a later generator (T-12764) is a no-op diff against the live db.
 Deno.env.set('DB_PATH', ':memory:')
-let { open, derived } = await import('./db.ts')
+let { open } = await import('./db.ts')
 import { indexesFor, refCols } from './index.ts'
 import { comps, indexes, stamped } from './types.ts'
 import { isRef } from './props.ts'
@@ -71,10 +71,11 @@ Deno.test('every {eid} ref yields exactly one single-column index', () => {
 // AND auto-{eid} indexes a freshly open()ed db enforces. Pk indexes and the
 // single-column uniques on NON-reference columns (session.id, alias.slug,
 // entity.num) are hand-DDL facts the DSL leaves alone. What remains must match
-// the declaration: the `indexes` map's composites/ref-uniques (on the hand-DDL
-// tables), plus — since T-12764 generates them — the auto single-column {eid}
-// indexes on the DERIVED tables. A drift here means the source of truth no
-// longer describes the schema it claims to.
+// the declaration: the `indexes` map's composites/ref-uniques, plus the auto
+// single-column {eid} indexes on EVERY component — derived and hand-written
+// alike, since open() now realizes indexDdl over the whole vocabulary (T-17678)
+// rather than only the DERIVED tables (T-12764). A drift here means the source
+// of truth no longer describes the schema it claims to.
 Deno.test('indexes map == the db’s declared composite/unique index set', () => {
   let d = open(':memory:')
   let tables = d.prepare(
@@ -103,10 +104,13 @@ Deno.test('indexes map == the db’s declared composite/unique index set', () =>
   for (let [comp, list] of Object.entries(indexes)) {
     for (let i of list) declared.set(`${comp}|${i.cols.join(',')}`, !!i.unique)
   }
-  // The derived tables now carry their auto single-column {eid} indexes in
-  // SQLite (T-12764); `indexesFor` yields them, so they belong in the declared
-  // set. The hand-DDL tables' {eid} refs are not indexed yet, so they stay out.
-  for (let comp of derived) {
+  // Every component now carries its auto single-column {eid} indexes in SQLite
+  // — derived (T-12764) and hand-written (T-17678) — over the same vocabulary
+  // universe open() walks, so `indexesFor` yields them and they belong in the
+  // declared set.
+  for (
+    let comp of new Set([...Object.keys(comps), ...Object.keys(stamped)])
+  ) {
     for (let i of indexesFor(comp)) {
       if (i.cols.length == 1) declared.set(`${comp}|${i.cols[0]}`, !!i.unique)
     }

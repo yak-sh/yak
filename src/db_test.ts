@@ -2660,10 +2660,10 @@ Deno.test('open renames every reference key, its filters, and its history', () =
   assertMatch(
     String(
       (healed.prepare(
-        `select sql from sqlite_master where name = 'subscription_one'`,
+        `select sql from sqlite_master where name = 'subscription_actor_target'`,
       ).get() as { sql: string }).sql,
     ),
-    /subscription \("actor", "target"\)/,
+    /"subscription" \("actor", "target"\)/,
   )
   assertEquals(
     journalOf(healed, reply)[0].changes[0].comp,

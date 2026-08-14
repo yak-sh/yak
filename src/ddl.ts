@@ -68,14 +68,17 @@ export let tableDdl = (comp: string): string =>
   ].join(',\n') +
   `\n  )`
 
+// One index's DDL, named `<comp>_<cols>` — the spelling that matches the
+// hand-DDL names it stands in for (entry_session_seq, …). Exported so open()
+// can realize a single index by name (guarding creates with hasIdx) without
+// re-parsing the name back out of the whole-comp string set.
+export let indexDdlOne = (comp: string, i: Idx): string =>
+  `create ${i.unique ? 'unique ' : ''}index if not exists ` +
+  `${comp}_${i.cols.join('_')} on ${quote(comp)} (${
+    i.cols.map(quote).join(', ')
+  })${i.where ? ` where ${i.where}` : ''}`
+
 // One component's indexes, from the ONE declared source (`indexesFor`: the
-// composite/unique declarations plus one auto index per `{eid}` reference),
-// named `<comp>_<cols>` — the spelling that matches the hand-DDL names it stands
-// in for (entry_session_seq, …).
+// composite/unique declarations plus one auto index per `{eid}` reference).
 export let indexDdl = (comp: string): string[] =>
-  indexesFor(comp).map((i: Idx) =>
-    `create ${i.unique ? 'unique ' : ''}index if not exists ` +
-    `${comp}_${i.cols.join('_')} on ${quote(comp)} (${
-      i.cols.map(quote).join(', ')
-    })${i.where ? ` where ${i.where}` : ''}`
-  )
+  indexesFor(comp).map((i) => indexDdlOne(comp, i))

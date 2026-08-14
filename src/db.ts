@@ -36,7 +36,8 @@ import { ancestorAt } from './client.ts'
 import { homeReads } from './persona.ts'
 import { leafOf, matchQuery, parseQuery, resolveRefs, TEXT } from './query.ts'
 import { where } from './sql.ts'
-import { derivedCols, indexDdl, tableDdl } from './ddl.ts'
+import { derivedCols, indexDdlOne, tableDdl } from './ddl.ts'
+import { indexesFor } from './index.ts'
 import {
   bodyCols,
   isRef,
@@ -244,7 +245,6 @@ let schema = `
     seq     integer not null,
     unique (session, seq)
   );
-  create index if not exists entry_session_seq on entry (session, seq);
   -- The ingest coordinate (D-16704): where an imported entry came from. Both
   -- columns are server-owned (stamped through the trusted append path, refused
   -- from the wire) and immutable. source is a stable stream key (managed/
@@ -273,16 +273,12 @@ let schema = `
     effort   text,
     serving_model text
   );
-  create unique index if not exists generation_through
-    on generation (through);
   create table if not exists output (
     eid    text primary key references entity(eid),
     source text not null,
     key    text,
     phase  text
   );
-  create unique index if not exists output_source_key
-    on output (source, key) where key is not null;
   create table if not exists call (
     eid text primary key references entity(eid),
     key text not null
@@ -323,7 +319,6 @@ let schema = `
     eid  text primary key references entity(eid),
     call text not null
   );
-  create unique index if not exists result_call on result (call);
   create table if not exists exit (
     eid  text primary key references entity(eid),
     code integer not null
@@ -383,16 +378,15 @@ let schema = `
     claimed_at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
   -- An actor's standing instruction about one entity (watch / mute).
-  -- One row per (actor, target); the unique index is what makes setting
-  -- it twice idempotent rather than a pile.
+  -- One row per (actor, target); the derived unique index
+  -- (subscription_actor_target, from the indexes map in types.ts) is what
+  -- makes setting it twice idempotent rather than a pile.
   create table if not exists subscription (
     eid        text primary key references entity(eid),
     actor  text not null references entity(eid),
     target text not null references entity(eid),
     mode       text not null
   );
-  create unique index if not exists subscription_one
-    on subscription (actor, target);
   create table if not exists stop_request (
     eid        text primary key references entity(eid),
     target text not null references entity(eid)
@@ -822,6 +816,16 @@ export let hasCol = (db: DatabaseSync, table: string, col: string) =>
   (db.prepare(`select name from pragma_table_info('${table}')`)
     .all() as { name: string }[]).some((c) => c.name == col)
 
+// The index twin of hasCol: is this named index already present? A bare
+// `create index if not exists` on an existing index opens an empty write
+// transaction that still bumps the file change counter, breaking open()'s
+// byte-idempotency — so the index realization guards each create with this,
+// the same shape addCol takes with hasCol.
+export let hasIdx = (db: DatabaseSync, name: string) =>
+  !!db.prepare(
+    `select 1 from sqlite_master where type = 'index' and name = ?`,
+  ).get(name)
+
 // References used to repeat their representation in every column name. The
 // PropType now carries that fact alone; this is the one cutover from the old
 // spellings. A migration is history, so this list is deliberately frozen — a
@@ -1160,13 +1164,24 @@ export let backfillSpawn = (db: DatabaseSync) => {
       `insert or ignore into spawn (eid, provider, model, effort, persona)
          select eid, provider, model, effort, persona from session`,
     )
+    // Only the sessions that actually DIFFER from their spawn row — so once the
+    // backfill has settled, this update matches nothing and writes nothing.
+    // Without the difference guard the copy re-fires identically every open;
+    // that was an invisible no-op page write until session's {eid} refs
+    // (persona, …) gained indexes (T-17678), which turn each redundant UPDATE
+    // into index maintenance that bumps the file change counter every boot.
+    let differ = cols.map((col) =>
+      `session.${sqlName(col)} is not spawn.${sqlName(col)}`
+    ).join(' or ')
     db.exec(
       `update session set ${
         cols.map((col) =>
           `${sqlName(col)} = (select ${sqlName(col)} from spawn
             where spawn.eid = session.eid)`
         ).join(', ')
-      } where exists (select 1 from spawn where spawn.eid = session.eid)`,
+      } where exists (
+        select 1 from spawn where spawn.eid = session.eid and (${differ})
+      )`,
     )
     let different = cols.map((col) =>
       `s.${sqlName(col)} is not p.${sqlName(col)}`
@@ -1214,13 +1229,23 @@ export let backfillSessionFacets = (db: DatabaseSync) => {
       ],
     }
     for (let [table, cols] of Object.entries(facets)) {
+      // Difference-guarded like backfillSpawn: touch only the sessions whose
+      // columns still disagree with the facet, so a settled backfill re-fires as
+      // a true no-op — no page write, and none of the per-boot index maintenance
+      // session's {eid} refs would otherwise incur (T-17678).
+      let differ = cols.map((col) =>
+        `session.${sqlName(col)} is not ${table}.${sqlName(col)}`
+      ).join(' or ')
       db.exec(
         `update session set ${
           cols.map((col) =>
             `${sqlName(col)} = (select ${sqlName(col)} from ${table}
             where ${table}.eid = session.eid)`
           ).join(', ')
-        } where exists (select 1 from ${table} where ${table}.eid = session.eid)`,
+        } where exists (
+          select 1 from ${table}
+          where ${table}.eid = session.eid and (${differ})
+        )`,
       )
       let different = cols.map((col) =>
         `s.${sqlName(col)} is not f.${sqlName(col)}`
@@ -1748,6 +1773,13 @@ export let open = (path = file) => {
       db.exec(`alter table ${table} drop column ${col}`)
     }
   }
+  // Retire an index whose name the derivation no longer spells — a hand-written
+  // `create index` line that has been superseded by its derived twin under a
+  // different name (subscription_one → subscription_actor_target). Guarded, so
+  // it runs once and a fresh db (which never had the legacy name) is a no-op.
+  let dropIdx = (name: string) => {
+    db.exec(`drop index if exists ${name}`)
+  }
   // The DERIVED component tables (T-12764), planted beside the hand-written
   // `schema` above from the same vocabulary `cmps`/`readable` read. Tables
   // first — a fresh db gets them; then the additive column fill, the SAME alter
@@ -1759,7 +1791,6 @@ export let open = (path = file) => {
   for (let comp of derived) {
     for (let { prop, ddl } of derivedCols(comp)) addCol(comp, prop, ddl)
   }
-  for (let comp of derived) for (let ix of indexDdl(comp)) db.exec(ix + ';')
   // num is a UI label, not identity (T-3684): a cheap/bulk entity (T-3683)
   // needs none, so the spine's num goes NULLABLE. One in-place ALTER on SQLite
   // 3.53+ (ALTER COLUMN landed in 3.53.0), guarded on the notnull flag so it
@@ -1975,6 +2006,33 @@ export let open = (path = file) => {
   retireProposal(db)
   retireProjectRetiredAt(db)
   healStored(db)
+  // Indexes LAST — over EVERY component, not just `derived` (T-17678). SQLite
+  // auto-indexes no foreign key, and the hand-written `schema` tables (comment,
+  // cancel, card, stop_request, review, camera, fold, mail, …) carry {eid} ref
+  // columns too, so realizing indexDdl only over `derived` left comment.target
+  // and its siblings unindexed — a server-side `.comment.target=x` full-SCANNED
+  // the table (the browser is unaffected: index.ts builds the reverse map in
+  // memory). indexDdl is the one vocabulary's index set (index.ts indexesFor),
+  // so this is the SQL realization the design always anticipated. Placed after
+  // every addCol/rebuild above: a ref column may be added by migration
+  // (task.project, role.checkout, mail.reply_to) and a table rebuild (mendMail,
+  // migrateDelivery) drops and recreates its rows without indexes. Guarded by
+  // hasIdx — a bare `create index if not exists` still opens an empty write
+  // transaction that bumps the file change counter (breaking open()'s byte-
+  // idempotency), so the guard makes a re-open pure reads, the SAME shape addCol
+  // takes with hasCol.
+  for (let comp of new Set([...Object.keys(comps), ...Object.keys(stamped)])) {
+    for (let i of indexesFor(comp)) {
+      let name = `${comp}_${i.cols.join('_')}`
+      if (!hasIdx(db, name)) db.exec(indexDdlOne(comp, i) + ';')
+    }
+  }
+  // The one hand index whose name diverges from its derived twin: `schema` used
+  // to name subscription(actor,target) `subscription_one`, but indexDdl derives
+  // `subscription_actor_target` from the columns, so both would coexist. Retire
+  // the legacy name once — the derived unique index above already holds the
+  // (actor,target) uniqueness the drop would otherwise lose.
+  dropIdx('subscription_one')
   return db
 }
 
