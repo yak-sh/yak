@@ -456,6 +456,21 @@ Deno.test('an edge-ish prop names the edge door, not the sketch', () => {
   assertThrows(() => route('hovercraft'), Error, 'filters are dot-params')
 })
 
+// The edge net is a substring match, so `blocked` (a real component) COLLIDES
+// with `block` — the facet must win, or `.blocked` teaches the edge door
+// instead of filtering what is stuck. Guarded at route(): a registered
+// component is never edge vocabulary, while `.blocked-by` (not a component)
+// still hits the door above.
+Deno.test('a component whose name contains an edge substring routes to presence', () => {
+  assertEquals(route('blocked'), { comp: 'blocked', prop: '' })
+  let stuck = row({}, { blocked: { on: 'waiting on the vendor' } })
+  assertEquals(matchQuery(stuck, parseQuery('.blocked!')), true)
+  assertEquals(matchQuery(stuck, parseQuery('.blocked~=')), true)
+  assertEquals(matchQuery(stuck, parseQuery('.blocked=')), false)
+  assertEquals(matchQuery(row({}), parseQuery('.blocked!')), false)
+  assertEquals(matchQuery(row({}), parseQuery('.blocked=')), true)
+})
+
 Deno.test('.order=hot is a ranking, not a filter', () => {
   let ps = parseQuery('.order=hot&.status=open')
   assertEquals(orderOf(ps), 'hot')

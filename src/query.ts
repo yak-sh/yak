@@ -167,7 +167,12 @@ export let route = (prop: string): { comp: string; prop: string } => {
   // Parent/child words are the dependency vocabulary. Their component refs
   // remain available through `.pane.parent` / `.session.parent`; bare keeps
   // teaching the edge door instead of silently changing an old mistake.
-  if (edgeish.test(prop)) own = []
+  // A real component is never edge vocabulary, though — `blocked` merely
+  // CONTAINS `block`, so the broad net would swallow a genuine facet. Guard
+  // it: a registered component keeps its owners and reaches the presence
+  // grammar below, so `.blocked!` filters what is stuck rather than teaching
+  // the edge door. Only NON-components fall to the door.
+  if (edgeish.test(prop) && !(prop in comps)) own = []
   if (own.length == 1) return { comp: own[0], prop }
   // Spawn's legacy session aliases are one concept during the rolling
   // window: filters read either home, while write routing chooses explicitly.
