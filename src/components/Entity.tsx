@@ -64,6 +64,7 @@ import { Wake, WakeTitle } from './views/Wake.tsx'
 import { openRun } from './Run.tsx'
 import { viaName } from './Comments.tsx'
 import { block } from './ui.tsx'
+import { favoriteChange, favoriteLabel } from '../navigation.ts'
 
 // Convenience re-exports: Entity.tsx is the front door, registry.ts the
 // engine room — importers of either get the same bindings.
@@ -256,6 +257,13 @@ define([
 // it, a live claim offers release, and anything at all can be deleted
 // (the red row at the end).
 defineActions([
+  {
+    match: () => true,
+    acts: (e) => [{
+      label: favoriteLabel(e),
+      run: () => mutate(favoriteChange(e)),
+    }],
+  },
   {
     match: (e) => !!e.proposed && !e.decided && e.task?.status != 'cancelled',
     acts: (e) => [{

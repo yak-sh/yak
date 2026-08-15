@@ -10,6 +10,8 @@ import {
   fit,
   help,
   key,
+  navigationKey,
+  navigationOpen,
   overrides,
   quit,
   spot,
@@ -126,7 +128,7 @@ Deno.test('the TUI keybinding card teaches its navigation keys', () => {
   assertEquals(lines.slice(0, 4), [
     'Keybindings',
     '? show or close keybindings',
-    'a open the Codex account',
+    'n open or close navigation',
     'j / k browse',
   ])
   render(null, target)
@@ -180,8 +182,10 @@ Deno.test('the TUI account keys are device-first and capture the panel', async (
   }
   let control = account(door)
   accountOpen.value = false
+  navigationOpen.value = false
   mode.value = 'normal'
-  assertEquals(accountKey('a', control), true)
+  assertEquals(navigationKey('n', control), true)
+  assertEquals(navigationKey('\r', control), true)
   await Promise.resolve()
   assertEquals(calls, ['read'])
   accountKey('l', control)

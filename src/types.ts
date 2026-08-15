@@ -352,6 +352,9 @@ export let comps: Record<string, Record<string, PropType>> = {
   // survives as a plain canvas — the binding was the client's, the
   // contents aren't.
   shelf: { client: { eid: 'client', death: 'release' } },
+  // Shared navigation is a graph fact, not one client's chrome. A favorite
+  // remains whatever kind it already was, so this tag stays out of kindOrder.
+  favorite: {},
   // A session's identity and configuration. The launch/worktree/runtime
   // columns below are rolling aliases: old doors may still write them while
   // apply() mirrors them into their canonical optional facets. Keeping the
@@ -1353,6 +1356,8 @@ export type Fold = {
 // entity (the entity stays a canvas), so it stays out of kindOrder.
 export type Shelf = { eid: string; client: string }
 
+export type Favorite = { eid: string }
+
 // An agent session's identity and the aspects whose later splits are owned by
 // T-16410/T-16411/T-16412. The launch/worktree/runtime fields at the tail are
 // rolling aliases: sessionOf() overlays their canonical facets for readers.
@@ -1822,6 +1827,7 @@ export type Ent = {
   camera?: Camera
   fold?: Fold
   shelf?: Shelf
+  favorite?: Favorite
   session?: Session
   worktree?: Worktree
   runtime?: Runtime

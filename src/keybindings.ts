@@ -6,8 +6,8 @@ export type Keybinding = { keys: string[]; about: string }
 export let webKeys: Keybinding[] = [
   { keys: ['?'], about: 'show or close keybindings' },
   { keys: ['/'], about: 'search the graph' },
+  { keys: ['n'], about: 'open or close navigation' },
   { keys: [':'], about: 'open the command line' },
-  { keys: ['t'], about: 'open or close the tray' },
   { keys: ['i'], about: 'enter insert mode' },
   { keys: ['Esc'], about: 'return to normal mode' },
   { keys: ['Space'], about: 'frame a canvas card' },
@@ -17,7 +17,7 @@ export let webKeys: Keybinding[] = [
 
 export let tuiKeys: Keybinding[] = [
   { keys: ['?'], about: 'show or close keybindings' },
-  { keys: ['a'], about: 'open the Codex account' },
+  { keys: ['n'], about: 'open or close navigation' },
   { keys: ['j', 'k'], about: 'browse' },
   { keys: ['l', 'Enter'], about: 'enter' },
   { keys: ['h', 'Ctrl-D'], about: 'go back' },

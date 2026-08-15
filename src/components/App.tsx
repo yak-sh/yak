@@ -23,7 +23,8 @@ import { Status } from './Status.tsx'
 import { Entity } from './Entity.tsx'
 import { tips } from './overlay.tsx'
 import { Keybindings } from './Keybindings.tsx'
-import { Account, AccountTab } from './Account.tsx'
+import { Account } from './Account.tsx'
+import { Navigation, NavigationToggle } from './Navigation.tsx'
 
 tips() // mount the one delegated [data-tip] tooltip (idempotent)
 
@@ -31,9 +32,10 @@ let Frame = block('main', 'App', {
   Bar: 'header',
   Brand: 'a',
   Trail: 'nav',
+  Main: 'div',
   Body: 'div',
 })
-let { Bar, Brand, Trail, Body } = Frame
+let { Bar, Brand, Trail, Main, Body } = Frame
 let Tab = el('button', 'Tab')
 
 // The URL named nothing the cache can resolve — a typo'd id, a dead
@@ -123,19 +125,22 @@ export let App = () => {
           if (menu.value) menu.value = null
         }}
       >
-        <Bar>
-          <Brand href='/'>Tasks</Brand>
-          <AccountTab />
-        </Bar>
-        <Body mod='admin'>
-          <Admin />
-        </Body>
+        <Navigation />
+        <Main>
+          <Bar>
+            <NavigationToggle />
+            <Brand href='/'>Tasks</Brand>
+          </Bar>
+          <Body mod='admin'>
+            <Admin />
+          </Body>
+          <Status />
+        </Main>
         <Menu />
         <Peek />
         <Search open={goto} />
         <Account />
         <Keybindings />
-        <Status />
       </Frame>
     )
   }
@@ -147,19 +152,22 @@ export let App = () => {
           if (menu.value) menu.value = null
         }}
       >
-        <Bar>
-          <Brand href='/'>Tasks</Brand>
-          <AccountTab />
-        </Bar>
-        <Body>
-          <Lost />
-        </Body>
+        <Navigation />
+        <Main>
+          <Bar>
+            <NavigationToggle />
+            <Brand href='/'>Tasks</Brand>
+          </Bar>
+          <Body>
+            <Lost />
+          </Body>
+          <Status />
+        </Main>
         <Menu />
         <Peek />
         <Search open={goto} />
         <Account />
         <Keybindings />
-        <Status />
       </Frame>
     )
   }
@@ -187,70 +195,73 @@ export let App = () => {
         if (run.value) run.value = null // a press outside is a cancel
       }}
     >
-      <Bar>
-        <Brand href='/'>Tasks</Brand>
-        <Crumbs />
-        <Entity eid={e.eid} view='Card.Title' />
-        {filterable.has(view) && <FilterInput eid={e.eid} />}
-        {tabs.map((v) => (
+      <Navigation />
+      <Main>
+        <Bar>
+          <NavigationToggle />
+          <Brand href='/'>Tasks</Brand>
+          <Crumbs />
+          <Entity eid={e.eid} view='Card.Title' />
+          {filterable.has(view) && <FilterInput eid={e.eid} />}
+          {tabs.map((v) => (
+            <Tab
+              type='button'
+              key={v}
+              mod={v == view && 'on'}
+              aria-label={v}
+              data-tip={v}
+              onClick={() => v != view && show(v)}
+            >
+              <TabFace view={v} eid={e.eid} />
+            </Tab>
+          ))}
           <Tab
             type='button'
-            key={v}
-            mod={v == view && 'on'}
-            aria-label={v}
-            data-tip={v}
-            onClick={() => v != view && show(v)}
+            aria-label='Admin'
+            data-tip='Admin'
+            onClick={() => navigate('/admin')}
           >
-            <TabFace view={v} eid={e.eid} />
+            <Icon name='table' />
           </Tab>
-        ))}
-        <AccountTab />
-        <Tab
-          type='button'
-          aria-label='Admin'
-          data-tip='Admin'
-          onClick={() => navigate('/admin')}
-        >
-          <Icon name='table' />
-        </Tab>
-        {
-          /* The root card's dropdown: the same menu a card's right-click
+          {
+            /* The root card's dropdown: the same menu a card's right-click
             serves, hung from the bar's far edge. Pointerdown must not
             bubble — the Frame's close-on-press would eat the toggle. */
-        }
-        <Tab
-          type='button'
-          aria-label='Menu'
-          data-tip='menu'
-          onPointerDown={(ev: Event) => ev.stopPropagation()}
-          onClick={(ev: MouseEvent & { currentTarget: HTMLElement }) => {
-            if (menu.value) {
-              menu.value = null
-              return
-            }
-            let r = ev.currentTarget.getBoundingClientRect()
-            menu.value = {
-              x: r.right,
-              y: r.bottom,
-              href: `/${idOf(e)}`,
-              eid: e.eid,
-              align: 'right',
-            }
-          }}
-        >
-          <Icon name='ellipsis-vertical' />
-        </Tab>
-      </Bar>
-      <Body>
-        <Entity eid={e.eid} view={view} />
-      </Body>
+          }
+          <Tab
+            type='button'
+            aria-label='Menu'
+            data-tip='menu'
+            onPointerDown={(ev: Event) => ev.stopPropagation()}
+            onClick={(ev: MouseEvent & { currentTarget: HTMLElement }) => {
+              if (menu.value) {
+                menu.value = null
+                return
+              }
+              let r = ev.currentTarget.getBoundingClientRect()
+              menu.value = {
+                x: r.right,
+                y: r.bottom,
+                href: `/${idOf(e)}`,
+                eid: e.eid,
+                align: 'right',
+              }
+            }}
+          >
+            <Icon name='ellipsis-vertical' />
+          </Tab>
+        </Bar>
+        <Body>
+          <Entity eid={e.eid} view={view} />
+        </Body>
+        <Status />
+      </Main>
       <Menu />
       <Peek />
       <Run />
       <Search open={goto} />
       <Account />
       <Keybindings />
-      <Status />
     </Frame>
   )
 }

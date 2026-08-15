@@ -65,7 +65,10 @@ let label = (control: AccountControl) => {
 }
 
 export let AccountTab = (
-  { control = codexAccount }: { control?: AccountControl },
+  { control = codexAccount, text = false }: {
+    control?: AccountControl
+    text?: boolean
+  },
 ) => (
   <Tab
     class='AccountTab'
@@ -76,6 +79,7 @@ export let AccountTab = (
     onClick={openAccount}
   >
     <Icon name='bot' />
+    {text && <span>{label(control)}</span>}
   </Tab>
 )
 

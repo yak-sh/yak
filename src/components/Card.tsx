@@ -1,5 +1,5 @@
 import { type Signal, useComputed, useSignal } from '@preact/signals'
-import { camera, ent, mutate, pinZ, toFront, topZ, unreadFor } from '../live.ts'
+import { camera, ent, mutate, pinZ, toFront, unreadFor } from '../live.ts'
 import { type Pinned } from '../types.ts'
 import { block, el } from './ui.tsx'
 import { applicable } from './registry.ts'
@@ -8,7 +8,6 @@ import { Entity } from './Entity.tsx'
 import { filterable, FilterInput } from './Filter.tsx'
 import { Icon } from './icons.tsx'
 import { cardMenuAt } from './nav.tsx'
-import { overTray, shelf, shelfMint } from './Tray.tsx'
 
 // Each tab view wears an icon; the name moves into an anchored tooltip.
 // Exported: the fullscreen Screen bar (App.tsx) draws the same tabs.
@@ -109,11 +108,7 @@ export let Card = ({ p }: { p: Pinned }) => {
     // event.
     let dx = 0
     let dy = 0
-    let px = 0 // last pointer position, in screen px — up() has no event
-    let py = 0
     let move = (e: PointerEvent) => {
-      px = e.clientX
-      py = e.clientY
       if (!dragging) {
         if (Math.hypot(e.clientX - sx, e.clientY - sy) < 3) return
         dragging = true
@@ -138,17 +133,6 @@ export let Card = ({ p }: { p: Pinned }) => {
     let up = () => {
       quit()
       if (!dragging) return
-      // Dropped over the Tray: the card leaves the canvas for the shelf
-      // (minted on first use) rather than settling at a new x/y.
-      if (overTray(px, py)) {
-        let sh = shelf() ?? shelfMint()
-        mutate({
-          eid: p.eid,
-          name: 'pin',
-          comp: { canvas: sh, x: 0, y: 0, w: 0, h: 0, z: topZ(sh) + 1 },
-        })
-        return
-      }
       mutate({
         eid: p.eid,
         name: 'pin',

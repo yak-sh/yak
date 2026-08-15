@@ -51,6 +51,8 @@ import {
 } from '../account_client.ts'
 import { catalog } from '../providers.ts'
 import { choose, load, providers } from '../components/Run.tsx'
+import { useQuery } from '../components/useQuery.ts'
+import { navigationQuery } from '../navigation.ts'
 
 export let sel = signal({ col: 0, row: 0 })
 export let quit = signal(false)
@@ -59,6 +61,8 @@ let buf = signal('') // the : command line
 export let help = signal(false)
 export let accountOpen = signal(false)
 export let accountCallback = signal<string | null>(null)
+export let navigationOpen = signal(false)
+export let navigationPick = signal(0)
 let priority = propAt('task', 'priority')!
 
 // The first board is the one we browse — v0 has exactly one.
@@ -412,12 +416,7 @@ export let accountKey = (
   control: AccountControl = codexAccount,
 ) => {
   if (!accountOpen.value) {
-    if (mode.value != 'normal' || k != 'a') return false
-    help.value = false
-    accountCallback.value = null
-    accountOpen.value = true
-    control.read()
-    return true
+    return false
   }
   if (accountCallback.value != null) {
     if (k == '\x1b') accountCallback.value = null
@@ -454,6 +453,45 @@ export let accountKey = (
   return true
 }
 
+let favoriteEids = () =>
+  Object.entries(cache.peek()).filter(([, row]) => row.favorite).map(([eid]) =>
+    eid
+  )
+
+export let navigationKey = (
+  k: string,
+  control: AccountControl = codexAccount,
+) => {
+  if (!navigationOpen.value) {
+    if (mode.value != 'normal' || k != 'n') return false
+    help.value = false
+    navigationPick.value = 0
+    navigationOpen.value = true
+    return true
+  }
+  let favorites = favoriteEids()
+  let size = favorites.length + 1 // Codex account is the anchored last row.
+  if (k == 'n' || k == 'q' || k == '\x1b' || k == 'h') {
+    navigationOpen.value = false
+  } else if (k == 'j') {
+    navigationPick.value = (navigationPick.value + 1) % size
+  } else if (k == 'k') {
+    navigationPick.value = (navigationPick.value + size - 1) % size
+  } else if (k == 'l' || k == '\r') {
+    if (navigationPick.value == favorites.length) {
+      navigationOpen.value = false
+      accountCallback.value = null
+      accountOpen.value = true
+      control.read()
+    } else {
+      let eid = favorites[navigationPick.value]
+      if (eid) trail.value = [...trail.value, eid]
+      navigationOpen.value = false
+    }
+  }
+  return true
+}
+
 // Raw stdin, one key at a time. Normal mode is vim; : opens the command
 // line, which owns every key until Enter or Escape. Ctrl-d backs out of
 // the current entity from ANY mode; everything else is per-mode.
@@ -466,6 +504,7 @@ export let key = (k: string) => {
     if (k == '?' || k == '\x1b' || k == 'q') help.value = false
     return
   }
+  if (navigationKey(k)) return
   if (accountKey(k)) return
   if (k == '\x04') {
     if (mode.value == 'insert') endEdit() // commit, then out — no data loss
@@ -519,6 +558,37 @@ export let TKeys = () => (
     <div class='TKeys_Hint'>press ? or Esc to close</div>
   </div>
 )
+
+export let TNavigation = () => {
+  let favorites = useQuery(navigationQuery)
+  let pick = Math.min(navigationPick.value, favorites.length)
+  return (
+    <div class='TNavigation'>
+      <div class='TNavigation_Title'>Navigation</div>
+      {favorites.map((e, i) => (
+        <div
+          class={`TNavigation_Row${i == pick ? ' TNavigation_Row-on' : ''}`}
+          key={e.eid}
+        >
+          <Entity eid={e.eid} view='List.Tile' />
+        </div>
+      ))}
+      {!favorites.length && (
+        <div class='TNavigation_Empty'>No favorites yet.</div>
+      )}
+      <div
+        class={`TNavigation_Account${
+          pick == favorites.length ? ' TNavigation_Account-on' : ''
+        }`}
+      >
+        Codex account
+      </div>
+      <div class='TNavigation_Hint'>
+        j/k choose · l/Enter open · n/Esc close
+      </div>
+    </div>
+  )
+}
 
 export let TAccount = (
   { view = codexAccount.view.value }: { view?: AccountView },
@@ -696,6 +766,8 @@ export let App = () => {
         ? <TAccount />
         : help.value
         ? <TKeys />
+        : navigationOpen.value
+        ? <TNavigation />
         : here
         ? <Entity eid={here} view={views.value[here]} />
         : p && (

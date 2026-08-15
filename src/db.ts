@@ -639,6 +639,7 @@ export let derived = [
   'layout',
   'design',
   'canvas',
+  'favorite',
   'worktree',
   'attention',
   'task_context',

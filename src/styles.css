@@ -276,11 +276,116 @@ html {
   flex: 1;
   min-height: 0;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   background: var(--bg); /* the dark floor body used to carry */
   /* Lift the document h1's view-timeline over the bar/body split, so the
      bar's compact title can listen (.CardTitle_Text below). */
   timeline-scope: --doc-title;
+}
+.App_Main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* One graph-backed wayfinding rail. It is ordinary layout on a wide screen;
+   on a phone it becomes a modal drawer so the current view keeps its width. */
+.Navigation {
+  width: 16rem;
+  flex: 0 0 16rem;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  z-index: 5;
+}
+.Navigation_Head {
+  padding: var(--gap);
+  border-bottom: 1px solid var(--border);
+}
+.Navigation_Title {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.Navigation_Items {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--half-gap);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.Navigation_Item {
+  min-width: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: var(--half-gap);
+  padding: var(--half-gap);
+  border-radius: var(--radius);
+  color: var(--text);
+  text-decoration: none;
+}
+.Navigation_Item:hover {
+  background: var(--soft);
+}
+.Navigation_Item > span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.Navigation_Item > code {
+  flex: none;
+  color: var(--dim);
+  background: none;
+}
+.Navigation_Empty {
+  margin: 0;
+  padding: var(--gap) var(--half-gap);
+  color: var(--dim);
+  font-size: 12px;
+}
+.Navigation_Foot {
+  padding: var(--half-gap);
+  border-top: 1px solid var(--border);
+}
+.Navigation_Foot .AccountTab {
+  width: 100%;
+  display: flex;
+  justify-content: flex-start;
+  gap: var(--half-gap);
+  padding: var(--half-gap);
+  color: var(--muted);
+}
+.Navigation_Shade {
+  display: none;
+}
+.NavigationToggle {
+  flex: none;
+}
+@media (max-width: 700px) {
+  .Navigation {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: min(85vw, 20rem);
+    padding-top: env(safe-area-inset-top, 0px);
+    box-shadow: 8px 0 28px rgb(0 0 0 / 0.4);
+  }
+  .Navigation_Shade {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 4;
+    border: 0;
+    background: rgb(0 0 0 / 0.45);
+  }
 }
 /* The page is a fullscreen card; this bar is its titlebar — brand,
    Card.Title, view tabs, same grammar as any pinned card's chrome. */
@@ -3732,8 +3837,7 @@ a[data-ref]:hover {
   white-space: nowrap;
 }
 
-/* The Shelf: the statusbar's right end. The strip of status dots + view
-   icons sits IN the bar; the panel with the full rows anchors above it. */
+/* The live-session tray: status dots sit in the bar; full rows open above. */
 .Tray {
   position: relative;
   display: flex;
