@@ -654,14 +654,23 @@ export let applyLocal = (changes: Change[]) => {
     changedRows.add(eid)
   }
   if (changed && !quiet) {
-    for (let eid of changedRows) {
-      unindexId(eid, graph[eid])
-      indexId(eid, next[eid])
-      reindex(ix, eid, graph[eid], next[eid])
-    }
     cache.value = next
-    idGraph = next
+    // During a wholesale (re)seed the resetSignals() that follows in seedFrom
+    // rebuilds the id-index and derived index in ONE pass (syncIds + indexAll)
+    // and refreshes every partition — so the per-row maintenance and the batch
+    // below are pure redundancy at seed, the dominant boot CPU (D-18055). Fill
+    // the cache only; leaving idGraph/ixGraph stale makes resetSignals' single
+    // build the one pass. Steady-state patches (!seeding) stay incremental.
+    if (!seeding) {
+      for (let eid of changedRows) {
+        unindexId(eid, graph[eid])
+        indexId(eid, next[eid])
+        reindex(ix, eid, graph[eid], next[eid])
+      }
+      idGraph = next
+    }
   }
+  if (seeding) return { eids: [...eids], edges }
   ixGraph = cache.peek()
   ixDeps = deps.peek()
   batch(() => {
