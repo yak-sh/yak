@@ -54,6 +54,12 @@ export type Row = {
   comps: Record<string, Record<string, unknown>>
 }
 
+// The slice of a Row the scope predicates read — eid and comps, never num or
+// kind. Widening belongs()/scopeFor()/repoAt() to this lets a server-side
+// caller reuse the ONE scope truth over db.ts rowsOf() output (which carries no
+// num/kind), instead of hand-rolling a second predicate that could drift.
+export type Scoped = { eid: string; comps: Row['comps'] }
+
 // Structured output mirrors the patch wire: eid addresses a component but is
 // not one of its columns. The entity spine is the exception — eid is its data.
 // `kind` owns its top-level name, so a component with that name is reserved.
@@ -1549,7 +1555,7 @@ export let worktreeAt = (roots: string[], path: string) => {
 
 // The project you stand in: a direct checkout first, then the fleet's linked
 // worktree layout. Every caller-aware door derives its scope from here.
-export let repoAt = (all: Row[], cwd?: string) => {
+export let repoAt = (all: Scoped[], cwd?: string) => {
   if (!cwd) return undefined
   let repos = all.filter((r) => r.comps.repo?.path)
   let roots = repos.map((r) => String(r.comps.repo.path))
@@ -1564,8 +1570,8 @@ export let repoAt = (all: Row[], cwd?: string) => {
 // project. Undefined only when nothing places it — then the digest shows a
 // hard-capped fleet peek, never a flood.
 export let scopeFor = (
-  all: Row[],
-  sess?: Row,
+  all: Scoped[],
+  sess?: Scoped,
   cwd?: string,
   arg?: string,
 ): string | undefined => {
@@ -1726,7 +1732,7 @@ let snip = (s: string, n = 72) => s.length > n ? `${s.slice(0, n)}…` : s
 // no such column belongs everywhere. The `## decided` block and `task
 // decided` share it, which is what keeps the section and the listing one
 // answer.
-export let belongs = (r: Row, scope?: string) => {
+export let belongs = (r: Scoped, scope?: string) => {
   if (!scope) return true
   if (r.comps.task) return r.comps.task.project == scope
   if (r.comps.memory) {

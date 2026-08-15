@@ -1,101 +1,167 @@
-// recall.ts's pure seam: which MEMORIES float up for a query vector — the memory
-// filter (never a plain doc), the noise floor, dedup against what a session has
-// already seen, and the top-N cap. Precomputed vectors only; the embedder never
-// loads (a test that downloads a model isn't one), mirroring embed_test. The
-// shared :memory: db holds other tests' vectors, so every assertion screens to
-// the eids this test made.
+// recall.ts's pure seam (v2, T-17470): which in-scope thoughts float for a query
+// vector — per-kind budgets + floors, the scope split (memories fleet-wide,
+// tasks scoped to the actor's project), dedup against what a session has seen.
+// Precomputed vectors only; the embedder never loads (a test that downloads a
+// model isn't one), mirroring embed_test. The selection tests run on an isolated
+// freshDb() so no other test's vectors crowd a per-kind budget; the effect tests
+// use the module db with an injected recall fn, so the embedder stays out.
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, db } = await import('./db.ts')
-let { hash } = await import('./embed.ts')
+let { hash, MODEL } = await import('./embed.ts')
 let { recallEntry, recallFrom } = await import('./recall.ts')
+let { freshDb } = await import('./testdb.ts')
 let { assertEquals } = await import('@std/assert')
+import type { DatabaseSync } from 'node:sqlite'
 
 let uid = (): string => crypto.randomUUID()
-let ent = (eid: string) =>
-  db.prepare('insert into entity (eid, num) values (?, ?)').run(
-    eid,
-    Math.floor(Math.random() * 1e9),
-  )
+// A unit vector — cosine against another unit vector is their dot product, so a
+// test places a candidate at a KNOWN score: same direction scores 1.0, and
+// vec(c, √(1−c²)) scores exactly c against vec(1, 0).
 let vec = (...xs: number[]) => {
   let n = Math.hypot(...xs)
   return Float32Array.from(xs.map((x) => x / n))
 }
-let put = (eid: string, text: string, v: Float32Array) =>
-  db.prepare(
-    'insert into embedding (eid, model, hash, vec) values (?, ?, ?, ?)',
-  ).run(eid, 'Xenova/bge-small-en-v1.5', hash(text), new Uint8Array(v.buffer))
-// A memory: a titled doc entity carrying the memory component + a vector.
-let mem = (title: string, v: Float32Array) => {
-  let eid = uid()
-  ent(eid)
-  db.prepare('insert into doc (eid, title, body) values (?, ?, ?)').run(
-    eid,
-    title,
-    '',
-  )
-  db.prepare('insert into memory (eid) values (?)').run(eid)
-  put(eid, title, v)
-  return eid
+let put = (d: DatabaseSync, eid: string, text: string, v: Float32Array) =>
+  d.prepare('insert into embedding (eid, model, hash, vec) values (?, ?, ?, ?)')
+    .run(eid, MODEL, hash(text), new Uint8Array(v.buffer))
+
+// Graph parts through apply() (the real writer mints the spine); the vector
+// beside it through put() (embeddings come from the sweep, never a patch).
+let mem = (d: DatabaseSync, title: string, v: Float32Array, scope?: string) => {
+  let e = uid()
+  apply(d, [
+    { eid: e, name: 'doc', comp: { title, body: '' } },
+    { eid: e, name: 'memory', comp: scope ? { scope } : {} },
+  ])
+  put(d, e, title, v)
+  return e
 }
-// A plain doc (task-like): titled + embedded but NOT a memory.
-let plain = (title: string, v: Float32Array) => {
-  let eid = uid()
-  ent(eid)
-  db.prepare('insert into doc (eid, title, body) values (?, ?, ?)').run(
-    eid,
-    title,
-    '',
-  )
-  put(eid, title, v)
-  return eid
+let proj = (d: DatabaseSync) => {
+  let e = uid()
+  apply(d, [{ eid: e, name: 'project', comp: {} }])
+  return e
+}
+let taskIn = (
+  d: DatabaseSync,
+  title: string,
+  v: Float32Array,
+  project: string,
+) => {
+  let e = uid()
+  apply(d, [
+    { eid: e, name: 'doc', comp: { title, body: '' } },
+    { eid: e, name: 'task', comp: { status: 'open', project } },
+  ])
+  put(d, e, title, v)
+  return e
+}
+// A plain doc (a design/persona/prior-session stands in the same catch-all
+// `doc` bucket): titled + embedded but neither task nor memory.
+let plain = (d: DatabaseSync, title: string, v: Float32Array) => {
+  let e = uid()
+  apply(d, [{ eid: e, name: 'doc', comp: { title, body: '' } }])
+  put(d, e, title, v)
+  return e
 }
 
-Deno.test('recallFrom: only memories float up, never plain docs', () => {
-  let m = mem('a memory due east', vec(1, 0))
-  let p = plain('a task due east', vec(1, 0)) // same direction, but not a memory
-  let ids = recallFrom(db, vec(1, 0), 8, 0.5).map((f) => f.eid)
+Deno.test('recallFrom: a memory, an in-scope task, and a doc each float', () => {
+  let d = freshDb()
+  let p = proj(d)
+  let m = mem(d, 'a memory due east', vec(1, 0))
+  let t = taskIn(d, 'a task due east', vec(1, 0), p)
+  let doc = plain(d, 'a doc due east', vec(1, 0))
+  let ids = recallFrom(d, vec(1, 0), p).map((f) => f.eid)
   assertEquals(ids.includes(m), true)
-  assertEquals(ids.includes(p), false)
+  assertEquals(ids.includes(t), true)
+  assertEquals(ids.includes(doc), true)
 })
 
-Deno.test('recallFrom: below the floor never floats', () => {
-  let orth = mem('orthogonal to the query', vec(0, 1)) // dot 0 with (1,0)
-  let ids = recallFrom(db, vec(1, 0), 8, 0.5).map((f) => f.eid)
-  assertEquals(ids.includes(orth), false)
+Deno.test('recallFrom: an out-of-scope task never floats', () => {
+  let d = freshDb()
+  let mine = proj(d)
+  let other = proj(d)
+  let m = mem(d, 'my fleet memory', vec(1, 0))
+  let t = taskIn(d, 'a task in another venture', vec(1, 0), other)
+  let ids = recallFrom(d, vec(1, 0), mine).map((f) => f.eid)
+  assertEquals(ids.includes(m), true) // recall still works
+  assertEquals(ids.includes(t), false) // but the foreign ticket stays down
 })
 
-Deno.test('recallFrom: a seen memory does not float again', () => {
-  let m = mem('already surfaced this session', vec(0.6, 0.8))
-  let ids = recallFrom(db, vec(0.6, 0.8), 8, 0.5, new Set([m])).map((f) =>
-    f.eid
-  )
+Deno.test('recallFrom: each kind screens at its own floor', () => {
+  let d = freshDb()
+  let p = proj(d)
+  // Both sit at cosine 0.65 to the query — above the memory floor (0.55),
+  // below the task floor (0.70). Same score, different verdict.
+  let at65 = vec(0.65, Math.sqrt(1 - 0.65 ** 2))
+  let m = mem(d, 'a memory at 0.65', at65)
+  let t = taskIn(d, 'a task at 0.65', at65, p)
+  let ids = recallFrom(d, vec(1, 0), p).map((f) => f.eid)
+  assertEquals(ids.includes(m), true) // clears the memory floor
+  assertEquals(ids.includes(t), false) // below the task floor — token noise
+})
+
+Deno.test('recallFrom: a per-kind budget caps that kind', () => {
+  let d = freshDb()
+  // Three near memories, one direction; the memory budget is 2, so one is left.
+  let ms = [
+    mem(d, 'budget a', vec(1, 0)),
+    mem(d, 'budget b', vec(1, 0)),
+    mem(d, 'budget c', vec(1, 0)),
+  ]
+  let got = recallFrom(d, vec(1, 0))
+  assertEquals(got.length, 2)
+  assertEquals(got.every((f) => ms.includes(f.eid)), true)
+})
+
+Deno.test('recallFrom: a seen thought does not float again', () => {
+  let d = freshDb()
+  let m = mem(d, 'already surfaced this session', vec(1, 0))
+  let ids = recallFrom(d, vec(1, 0), undefined, new Set([m])).map((f) => f.eid)
   assertEquals(ids.includes(m), false)
 })
 
-Deno.test('recallFrom: capped at limit', () => {
-  // A distinctive direction no other test uses (5,12), so only these three
-  // score near 1.0 — top-2 by score are ours, proving the cap without the
-  // shared db intruding.
-  let a = mem('cap a', vec(5, 12))
-  let b = mem('cap b', vec(5, 12))
-  let c = mem('cap c', vec(5, 12))
-  let got = recallFrom(db, vec(5, 12), 2, 0.9)
-  assertEquals(got.length, 2)
-  assertEquals(got.every((f) => [a, b, c].includes(f.eid)), true)
+Deno.test('recallFrom: an unplaced session floats globals only', () => {
+  let d = freshDb()
+  let p = proj(d)
+  let m = mem(d, 'a fleet-wide principle', vec(1, 0)) // unscoped memory
+  let t = taskIn(d, 'an in-project ticket', vec(1, 0), p)
+  let ids = recallFrom(d, vec(1, 0), undefined).map((f) => f.eid)
+  assertEquals(ids.includes(m), true) // a principle rides anywhere
+  assertEquals(ids.includes(t), false) // no project → no scoped ticket
 })
 
-Deno.test('recallFrom: a floater names its M-id and title', () => {
-  let m = mem('the graph is your mind', vec(0.8, 0.6))
-  let f = recallFrom(db, vec(0.8, 0.6), 8, 0.5).find((f) => f.eid == m)!
+Deno.test('recallFrom: a scoped memory floats only in its own project', () => {
+  let d = freshDb()
+  let mine = proj(d)
+  let other = proj(d)
+  let m = mem(d, 'a lesson learned elsewhere', vec(1, 0), other)
+  assertEquals(
+    recallFrom(d, vec(1, 0), mine).map((f) => f.eid).includes(m),
+    false,
+  )
+  assertEquals(
+    recallFrom(d, vec(1, 0), other).map((f) => f.eid).includes(m),
+    true,
+  )
+})
+
+Deno.test('recallFrom: a floater names its id and title', () => {
+  let d = freshDb()
+  let m = mem(d, 'the graph is your mind', vec(1, 0))
+  let f = recallFrom(d, vec(1, 0)).find((f) => f.eid == m)!
   assertEquals(f.title, 'the graph is your mind')
   assertEquals(f.id.startsWith('M-'), true)
 })
 
 // The effect's orchestration — driven with an injected recall fn so no embedder
-// loads; the selection itself is proven by the recallFrom tests above.
+// loads; the selection itself is proven by the recallFrom tests above. These use
+// the module db, because recallEntry closes over it.
 let sess = () => {
   let eid = uid()
-  ent(eid)
+  db.prepare('insert into entity (eid, num) values (?, ?)').run(
+    eid,
+    Math.floor(Math.random() * 1e9),
+  )
   db.prepare('insert into session (eid, id) values (?, ?)').run(eid, uid())
   return eid
 }
@@ -114,7 +180,7 @@ let saysM = (eid: string, id: string, title: string) => () =>
 
 Deno.test('recallEntry: a message writes a recall entry into its session, linked both ways', async () => {
   let s = sess()
-  let m = mem('escalation is a bug report', vec(0.9, 0.1))
+  let m = mem(db, 'escalation is a bug report', vec(0.9, 0.1))
   let msg = msgEntry(s, 'should I escalate this to the owner?')
   await recallEntry(noop, saysM(m, 'M-42', 'escalation is a bug report'))(msg)
 
@@ -136,7 +202,7 @@ Deno.test('recallEntry: a message writes a recall entry into its session, linked
 
 Deno.test('recallEntry: recall cannot recall itself — a recall entry carries no message facet', async () => {
   let s = sess()
-  let m = mem('a floating thought', vec(0.5, 0.5))
+  let m = mem(db, 'a floating thought', vec(0.5, 0.5))
   let msg = msgEntry(s, 'a thought that floats')
   await recallEntry(noop, saysM(m, 'M-7', 'a floating thought'))(msg)
   let rec = db.prepare('select eid from recalled where source = ?').get(msg) as
@@ -151,7 +217,7 @@ Deno.test('recallEntry: recall cannot recall itself — a recall entry carries n
 
 Deno.test('recallEntry: idempotent — a message already recalled is not doubled', async () => {
   let s = sess()
-  let m = mem('do not double me', vec(0.3, 0.7))
+  let m = mem(db, 'do not double me', vec(0.3, 0.7))
   let msg = msgEntry(s, 'a message that fires twice')
   let fn = saysM(m, 'M-9', 'do not double me')
   await recallEntry(noop, fn)(msg)
@@ -161,18 +227,18 @@ Deno.test('recallEntry: idempotent — a message already recalled is not doubled
   assertEquals(n.n, 1)
 })
 
-Deno.test('recallEntry: per-session dedup — a floated memory is passed as seen next time', async () => {
+Deno.test('recallEntry: per-session dedup — a floated thought is passed as seen next time', async () => {
   let s = sess()
-  let m = mem('surfaced once already', vec(0.2, 0.9))
+  let m = mem(db, 'surfaced once already', vec(0.2, 0.9))
   let first = msgEntry(s, 'first message')
   await recallEntry(noop, saysM(m, 'M-5', 'surfaced once already'))(first)
-  // the second message's recall must see the memory floated by the first
+  // the second message's recall must see the thought floated by the first —
+  // the seen set is the 4th arg now (db, text, scope, seen)
   let seenPassed: Set<string> | null = null
   let spy = (
     _db: unknown,
     _t: string,
-    _l: number,
-    _f: number,
+    _scope: string | undefined,
     seen: Set<string>,
   ) => {
     seenPassed = seen
