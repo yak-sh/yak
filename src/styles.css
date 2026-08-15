@@ -221,7 +221,7 @@ html {
 /* The mono keepers: ids, chips, badges, edge verbs, timestamps, code,
    and every command/inspector/log surface. Prose everywhere else is
    var(--font) via body. :where keeps this overridable. */
-:where(code, pre, kbd, .Id, .Prio, .Show_Domain, .Show_Project, .Show_Assignee, .Show_Claim, .Show_Deps, .Show_Mail, .Dependency_Type, .Relate_Verb, .Stamp, .Comments_When, .Comments_Who, .Comments_Via, .Board_ColName, .Board_Count, .Board_Chips, .Status, .Search_Box input, .Search_Id, .Debug, .Debug_Claim, .SessionRow, .Session_Facts, .Session_Tool, .Session_Exec, .Session_Turn, .Session_When, .Session_Err) {
+:where(code, pre, kbd, .Id, .Prio, .Show_Domain, .Show_Project, .Show_Assignee, .Show_Claim, .Show_Deps, .Show_Mail, .Dependency_Type, .Relate_Verb, .Stamp, .Comments_When, .Comments_Who, .Comments_Via, .Board_ColName, .Board_Count, .Board_Chips, .Status, .Search_Box input, .Search_Id, .Debug, .Debug_Claim, .SessionRow, .TrayLive, .Session_Facts, .Session_Tool, .Session_Exec, .Session_Turn, .Session_When, .Session_Err) {
   font-family: var(--mono);
 }
 
@@ -3764,10 +3764,52 @@ a[data-ref]:hover {
 .Tray_Row:hover {
   background: var(--soft);
 }
+.Tray_Row-live {
+  align-items: flex-start;
+}
 /* The summary row (a List.Tile) takes the width; the ✕ stays a thumbnail. */
 .Tray_Row > :first-child {
   flex: 1;
   min-width: 0;
+}
+.TrayLive {
+  min-width: 0;
+}
+.TrayLive_Head,
+.TrayLive_Task {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  min-width: 0;
+}
+.TrayLive_Head {
+  color: inherit;
+  text-decoration: none;
+}
+.TrayLive_Persona {
+  color: var(--text);
+}
+.TrayLive_Model,
+.TrayLive_Effort,
+.TrayLive_Head .Stamp {
+  color: var(--dim);
+}
+.TrayLive_Tasks {
+  display: grid;
+  gap: 1px;
+  padding: 1px 0 0 calc(8px + var(--half-gap));
+}
+.TrayLive_Task {
+  overflow: hidden;
+}
+.TrayLive_Task .Inline {
+  min-width: 0;
+  overflow: hidden;
+}
+.TrayLive_Task .Inline_Title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .Tray_X {
   color: var(--dim);
