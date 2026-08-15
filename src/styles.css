@@ -3364,12 +3364,13 @@ a[data-ref]:hover {
   gap: var(--gap);
 }
 .Entry {
+  --entry-font-size: 12px;
   display: flex;
   align-items: baseline;
   gap: var(--half-gap);
   min-width: 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--entry-font-size);
 }
 .Entry_Line {
   flex: 1 1 auto;
@@ -3407,6 +3408,10 @@ a[data-ref]:hover {
   font-family: var(--mono);
   font-size: 11px;
   overflow-wrap: anywhere;
+}
+.Entry-user,
+.Entry-agent {
+  --entry-font-size: 1em;
 }
 .Entry-user {
   display: block;
