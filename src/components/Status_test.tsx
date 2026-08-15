@@ -4,7 +4,7 @@ import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
 import { assertEquals } from '@std/assert'
 import { applyLocal, cache, mode } from '../live.ts'
-import { commandFocus, commandMode, FixMessage } from './Status.tsx'
+import { commandFocus, commandMode, FixMessage, mirrorTail } from './Status.tsx'
 
 Deno.test('the statusbar left side enters command mode', () => {
   mode.value = 'normal'
@@ -26,6 +26,12 @@ Deno.test('colon refocuses an open command without consuming its own text', () =
   assertEquals(commandFocus(key(':', input), input), false)
   assertEquals(commandFocus(key('x', null), input), false)
   assertEquals({ focused, prevented }, { focused: 1, prevented: 1 })
+})
+
+Deno.test('the command mirror retains the empty row after a newline', () => {
+  assertEquals(mirrorTail('fix T-1\n', ''), '\u200b')
+  assertEquals(mirrorTail('fix T-1\nbody', ''), '')
+  assertEquals(mirrorTail('fix T-1\n', 'hint'), 'hint')
 })
 
 Deno.test('fix status links minted ids and follows the session lifecycle', async () => {

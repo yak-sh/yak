@@ -121,6 +121,12 @@ export let commandFocus = (
   return true
 }
 
+// A final newline gives a textarea another caret row, but an inline mirror
+// needs content after the break to retain that row. Zero width keeps wrapping
+// identical while the mirror continues to size the textarea.
+export let mirrorTail = (line: string, faded: string) =>
+  faded || (line.endsWith('\n') ? '\u200b' : '')
+
 // The context a command runs in: what you're LOOKING at is what you're
 // commanding — the root card (the URL) is the focused entity. A browser
 // speaks for no session, so :claim must name one here.
@@ -356,6 +362,7 @@ export let Status = () => {
   }, [])
   let hints = mode.value == 'command' ? suggest(line, all) : []
   let [, pre, verb, rest] = line.match(/^(\s*)(\S+)(.*)$/s) ?? []
+  let faded = ghost(line, all)
   let put = (v: string) => {
     if (input.current) input.current.value = v
     v ? save('cmd', v) : drop('cmd')
@@ -422,7 +429,7 @@ export let Status = () => {
                       )
                       : line}
                   </Was>
-                  {ghost(line, all)}
+                  {mirrorTail(line, faded)}
                 </Ghost>
                 <Cmd
                   elRef={input}
