@@ -92,7 +92,10 @@ let atoms = (value: string) =>
 
 let fixed = (value: string) => /^\d{4}-\d{2}-\d{2}(?:[t ].*)?$/i.test(value)
 
-let moving = (p: Pred) => {
+let moving = (p: Pred): boolean => {
+  // A reverse hop moves when its SUB-filter has a moving-time leaf: a parent
+  // ages out of `.comments.created.at=today` with nobody writing to it.
+  if (p.rev) return p.rev.preds.some(moving)
   let target = leafOf(p)
   if (propAt(target.comp, target.prop)?.type != 'time') return false
   return atoms(p.value).some((v) => !fixed(v) && !!span(v))

@@ -207,6 +207,7 @@ let CMP: Record<string, string> = { '<': '<', '<=': '<=', '>': '>', '>=': '>=' }
 let one = (p: Pred): Sql | null => {
   if (p.op == ORDER) return { sql: '1', params: [] } // a ranking, not a filter
   if (p.op == TEXT) return text(p.value)
+  if (p.rev) return revSql(p) // a reverse hop: a correlated EXISTS/count
   if (p.at) return null // path preds need a second join
   if (!known(p.comp, p.prop)) return null
   if (!p.prop) {
@@ -247,11 +248,18 @@ let one = (p: Pred): Sql | null => {
   return null
 }
 
-// The whole filter as one statement, or null if any predicate declined.
-// Every component a pred names is LEFT JOINed, so "the column is absent"
-// and "the component is absent" are the same NULL — which is what query.ts's
-// `read()` already says by returning undefined for both.
-export let where = (preds: Pred[]): Sql | null => {
+// The LEFT JOINs and AND-condition for a set of preds over a base entity whose
+// component tables join on that base's eid. Shared by where() (base = the spine
+// `entity`) and a reverse EXISTS subquery (base = the child ref table), so the
+// same one() compiles a pred whether it screens the parent or a child. Declines
+// (null) the moment a pred does — the exactness contract, unbroken across the
+// join. The base table is the FROM, never re-joined; and a subquery may not join
+// `entity` (its name is the correlation to the OUTER row), so a child pred naming
+// the spine declines rather than silently shadow it.
+let build = (
+  preds: Pred[],
+  base: string,
+): { joins: string; cond: string; params: Bind[] } | null => {
   let parts: Sql[] = []
   for (let p of preds) {
     let s = one(p)
@@ -260,21 +268,71 @@ export let where = (preds: Pred[]): Sql | null => {
   }
   let tables = new Set<string>()
   for (let p of preds) {
+    if (p.rev) continue // its EXISTS is self-contained; nothing joins here
     if (p.op == TEXT) tables.add('doc')
     else if (p.comp && !p.at) tables.add(p.comp)
   }
-  // The spine is already the FROM table, so `.entity.num=13882` must not join
-  // it to itself: SQLite refuses the statement outright ("ambiguous column
-  // name: entity.eid"), and where() has no way to say so — it returns a Sql,
-  // the caller reads that as "compiled", and the throw surfaces at prepare
-  // time as a 400 where an answer belongs.
+  tables.delete(base)
+  if (base != 'entity' && tables.has('entity')) return null
+  let eid = col(base, 'eid')
   let joins = [...tables]
     .filter((t) => t != 'entity')
-    .map((t) => ` left join "${t}" on "${t}"."eid" = "entity"."eid"`)
+    .map((t) => ` left join "${t}" on "${t}"."eid" = ${eid}`)
     .join('')
   let cond = parts.length ? parts.map((p) => p.sql).join(' and ') : '1'
+  return { joins, cond, params: parts.flatMap((p) => p.params) }
+}
+
+// The correlated-EXISTS half of a reverse hop. `.comments…` compiles to an
+// EXISTS over the child ref table, correlated on the parent's eid and backed by
+// the {eid}-ref index (T-17678: comment.target is `comment_target`, so the EXISTS
+// is an index SEARCH, not a scan). The sub-filter rides the same build()/one()
+// the top level does, evaluated over the CHILD — so anything where() cannot
+// compile there (a time span, a nested path) declines the whole hop, exactness
+// preserved. `not` negates (NONE / ALL). Cardinality (`.comments>=5`) is a
+// correlated count() compared to the number.
+let COUNT_OPS: Record<string, string> = {
+  '': '=',
+  '!': '!=',
+  '<': '<',
+  '<=': '<=',
+  '>': '>',
+  '>=': '>=',
+}
+let revSql = (p: Pred): Sql | null => {
+  let r = p.rev!
+  let base = r.comp
+  let corr = `${col(base, r.prop)} = "entity"."eid"`
+  if (r.count) {
+    let op = COUNT_OPS[p.op]
+    if (op == null || !/^\d+$/.test(p.value)) return null
+    return {
+      sql: `(select count(*) from "${base}" where ${corr}) ${op} ?`,
+      params: [Number(p.value)],
+    }
+  }
+  let inner = build(r.preds, base)
+  if (!inner) return null
+  let tail = inner.cond == '1' ? '' : ` and ${inner.cond}`
   return {
-    sql: `select "entity"."eid" as eid from "entity"${joins} where ${cond}`,
-    params: parts.flatMap((p) => p.params),
+    sql: `${r.not ? 'not ' : ''}exists (select 1 from "${base}"${inner.joins}` +
+      ` where ${corr}${tail})`,
+    params: inner.params,
+  }
+}
+
+// The whole filter as one statement, or null if any predicate declined.
+// Every component a pred names is LEFT JOINed, so "the column is absent"
+// and "the component is absent" are the same NULL — which is what query.ts's
+// `read()` already says by returning undefined for both. The spine is already
+// the FROM table, so `.entity.num=13882` must not join it to itself (SQLite
+// refuses "ambiguous column name: entity.eid") — build() drops it.
+export let where = (preds: Pred[]): Sql | null => {
+  let built = build(preds, 'entity')
+  if (!built) return null
+  return {
+    sql: `select "entity"."eid" as eid from "entity"${built.joins}` +
+      ` where ${built.cond}`,
+    params: built.params,
   }
 }

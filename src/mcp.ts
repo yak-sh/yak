@@ -63,6 +63,7 @@ import {
   taskChanges,
 } from './client.ts'
 import {
+  kidsOf,
   listed,
   matchQuery,
   noFilter,
@@ -306,10 +307,13 @@ filters must ALL match. ${FILTERS} ${BUS}`,
       )
       checkRefs(all, ps)
       let byEid = new Map(all.map((r) => [r.eid, r.comps]))
+      let kids = kidsOf(byEid)
       let hits = all
         .filter((r) => r.comps.task)
         .filter((r) => listed(r.comps, ps))
-        .filter((r) => matchQuery(r.comps, ps, (e) => byEid.get(e)))
+        .filter((r) =>
+          matchQuery(r.comps, ps, (e) => byEid.get(e), undefined, kids)
+        )
         .sort(
           orderOf(ps) == 'hot'
             ? (a, b) =>

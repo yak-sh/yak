@@ -20,7 +20,15 @@
 // settled snapshot, and `ready` is the async one-shot the parity test awaits.
 import { comps, type Idx, stamped } from '../types.ts'
 import { implies, indexesFor } from '../index.ts'
-import { leafOf, listed, matchQuery, ORDER, type Pred, TEXT } from '../query.ts'
+import {
+  kidsOf,
+  leafOf,
+  listed,
+  matchQuery,
+  ORDER,
+  type Pred,
+  TEXT,
+} from '../query.ts'
 import { isRef } from '../props.ts'
 import type { Resolver } from '../resolver.ts'
 import { type Signal, signal } from '@preact/signals'
@@ -244,23 +252,36 @@ let refsAt = (bag: Row | undefined, comp: string, prop: string): unknown[] =>
 // (null), and quarantine already rides along.
 let touched = (preds: Pred[]): string[] | null => {
   let s = new Set<string>()
-  for (let p of preds) {
-    if (p.op == ORDER) continue
+  let ok = true
+  let visit = (p: Pred) => {
+    if (p.op == ORDER) return
     if (p.op == TEXT) {
       s.add('doc')
-      continue
+      return
     }
-    if (!p.comp) return null
+    // A reverse hop reads the child ref component and, recursively, whatever its
+    // sub-filter names — the stores the child bags must be hydrated from.
+    if (p.rev) {
+      s.add(p.rev.comp)
+      p.rev.preds.forEach(visit)
+      return
+    }
+    if (!p.comp) {
+      ok = false
+      return
+    }
     s.add(p.comp)
     for (let h of p.at ?? []) {
-      if (!h.comp) return null
-      s.add(h.comp)
+      if (!h.comp) ok = false
+      else s.add(h.comp)
     }
     let leaf = leafOf(p)
-    if (!leaf.comp) return null
-    s.add(leaf.comp)
+    if (!leaf.comp) ok = false
+    else s.add(leaf.comp)
     if (p.comp == 'updated' || leaf.comp == 'updated') s.add('created')
   }
+  for (let p of preds) visit(p)
+  if (!ok) return null
   // Empty (an ORDER-only query) → the full set, so the readonly transaction
   // never opens with an empty scope.
   return s.size ? [...s] : null
@@ -354,6 +375,23 @@ export let idbResolver = (
     let miss = seeds.filter((e) => !bags.has(e))
     if (miss.length) merge(bags, await readBags(miss, only))
     for (let p of preds) {
+      // A reverse hop: load the children pointing back at each seed through the
+      // auto {eid}-ref index, then recurse into the sub-filter off those
+      // children (its own forward paths, or a further reverse hop). Loaded into
+      // `bags`, they are what kidsOf reads to answer the EXISTS synchronously.
+      if (p.rev) {
+        let kidEids: string[] = []
+        let ix = db.transaction(p.rev.comp, 'readonly').objectStore(p.rev.comp)
+          .index(idxName(p.rev.comp, [p.rev.prop]))
+        for (let e of seeds) {
+          for (let k of await req(ix.getAllKeys(e))) kidEids.push(String(k))
+        }
+        let uniq = [...new Set(kidEids)]
+        let load = uniq.filter((e) => !bags.has(e))
+        if (load.length) merge(bags, await readBags(load, only))
+        await hydrate(p.rev.preds, uniq, only, bags)
+        continue
+      }
       if (!p.at) continue
       let hops = [{ comp: p.comp, prop: p.prop }, ...p.at.slice(0, -1)]
       let frontier = seeds
@@ -383,6 +421,10 @@ export let idbResolver = (
     }
     for (let p of preds) {
       if (p.op == TEXT || p.op == ORDER) continue
+      // A reverse hop's parents are not in any single store's key set — its
+      // component holds the CHILDREN — so it anchors nothing here; hydrate loads
+      // the children and matchQuery screens the whole pool.
+      if (p.rev) continue
       if (refEq(p)) {
         let tx = db.transaction(p.comp, 'readonly')
         let ix = tx.objectStore(p.comp).index(idxName(p.comp, [p.prop]))
@@ -430,9 +472,11 @@ export let idbResolver = (
     await hydrate(preds, pool, only, bags)
     markQuarantined(bags, qs)
     let ent = (eid: string) => bags.get(eid)
+    let kids = kidsOf(bags)
     return pool.filter((eid) => {
       let r = bags.get(eid)
-      return !!r && listed(r, preds) && matchQuery(r, preds, ent)
+      return !!r && listed(r, preds) &&
+        matchQuery(r, preds, ent, undefined, kids)
     })
   }
 
@@ -488,19 +532,44 @@ export let idbResolver = (
     await hydrate(preds, eids, only, bags)
     markQuarantined(bags, qs)
     let ent = (eid: string) => bags.get(eid)
+    let kids = kidsOf(bags)
     return (eid) => {
       let r = bags.get(eid)
-      return !!r && listed(r, preds) && matchQuery(r, preds, ent)
+      return !!r && listed(r, preds) &&
+        matchQuery(r, preds, ent, undefined, kids)
     }
+  }
+
+  // The parents a touched CHILD moves: a reverse-hop query re-tests the target of
+  // any touched child, since its membership turns on it. Read the child's ref
+  // column back to the parent — the forward complement of the hop.
+  let revParents = async (
+    preds: Pred[],
+    ids: string[],
+  ): Promise<string[]> => {
+    let comps = [...new Set(preds.filter((p) => p.rev).map((p) => p.rev!.comp))]
+    if (!comps.length) return []
+    let bags = await readBags(ids, comps)
+    let out: string[] = []
+    for (let p of preds) {
+      if (!p.rev) continue
+      for (let e of ids) {
+        let v = bags.get(e)?.[p.rev.comp]?.[p.rev.prop]
+        if (v != null) out.push(String(v))
+      }
+    }
+    return out
   }
 
   let refresh = async (eids: Set<string>) => {
     let ids = [...eids]
     for (let s of sets.values()) {
-      let test = await membership(s.preds, ids)
+      let extra = await revParents(s.preds, ids)
+      let list = extra.length ? [...new Set([...ids, ...extra])] : ids
+      let test = await membership(s.preds, list)
       let cur = s.ids.peek()
       let next = cur
-      for (let e of ids) {
+      for (let e of list) {
         let had = next.includes(e)
         let wants = test(e)
         if (had != wants) {

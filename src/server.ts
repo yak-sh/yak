@@ -27,6 +27,7 @@ import {
   locate,
   referrersOf,
   refsOf,
+  refValuesOf,
   rootChanges,
   rowsOf,
   search,
@@ -283,6 +284,20 @@ let payload = (
 let pathSources = (preds: Pred[], touched: string[]) => {
   let out = new Set(touched)
   for (let p of preds) {
+    // A reverse hop: a touched CHILD moves its PARENT — read the child's ref
+    // column back to the entity it points at. A touched grandchild (a child's
+    // own component, e.g. its created row) shares the child's eid, so this one
+    // hop reaches it too. The sub-filter's own hops are recomputed from the
+    // parent by matchQuery, so they need no separate invalidation here.
+    if (p.rev) {
+      for (
+        let eid of refValuesOf(db, touched, {
+          comp: p.rev.comp,
+          prop: p.rev.prop,
+        })
+      ) out.add(eid)
+      continue
+    }
     if (!p.at) continue
     let refs = [{ comp: p.comp, prop: p.prop }, ...p.at.slice(0, -1)]
     for (let depth = 1; depth <= refs.length; depth++) {
@@ -295,6 +310,14 @@ let pathSources = (preds: Pred[], touched: string[]) => {
   }
   return [...out]
 }
+
+// A reverse hop's Kids over the live db: the children referring at `eid` through
+// `comp.prop` (referrersOf), each hydrated to its eager bag by `read`. Bound per
+// maintain()/aged() pass to that pass's memoised `comps` fetcher.
+let dbKids =
+  (read: (eid: string) => Record<string, Record<string, unknown>>) =>
+  (eid: string, comp: string, prop: string) =>
+    referrersOf(db, [eid], { comp, prop }).map((k) => read(k))
 
 export let maintain = (batch: Change[]) => {
   if (!subs.size) return
@@ -316,14 +339,14 @@ export let maintain = (batch: Change[]) => {
     for (let [id, sub] of map) {
       let changes: Change[] = []
       let drop: string[] = []
-      let candidates = sub.preds.some((p) => p.at)
+      let candidates = sub.preds.some((p) => p.at || p.rev)
         ? pathSources(sub.preds, touched)
         : touched
       for (let eid of candidates) {
         let c = gone.has(eid) ? {} : comps(eid)
         let alive = !gone.has(eid) && !!c.entity
         let hit = alive && listed(c, sub.preds) &&
-          matchQuery(c, sub.preds, comps)
+          matchQuery(c, sub.preds, comps, undefined, dbKids(comps))
         let s: Step = step(sub.members, eid, alive, hit)
         if (s == 'add') changes.push(...payload(sub, eid, c))
         // A standing match tells a shadow sub nothing: membership did not
@@ -383,7 +406,7 @@ export let aged = (now = Date.now()) => {
         let c = comps(eid)
         let alive = !!c.entity
         let hit = alive && listed(c, sub.preds) &&
-          matchQuery(c, sub.preds, comps, now)
+          matchQuery(c, sub.preds, comps, now, dbKids(comps))
         let s: Step = step(sub.members, eid, alive, hit)
         if (s == 'remove') drop.push(eid)
         else if (s == 'dead') changes.push({ eid, name: 'entity', comp: null })
@@ -960,7 +983,15 @@ let http = Deno.serve(
             rowed({ eid, comps: eager(db, eid) })
           )
             .filter((r) => reveal || listed(r.comps, preds))
-            .filter((r) => matchQuery(r.comps, preds, (e) => eager(db, e)))
+            .filter((r) =>
+              matchQuery(
+                r.comps,
+                preds,
+                (e) => eager(db, e),
+                undefined,
+                dbKids((e) => eager(db, e)),
+              )
+            )
           return Response.json(
             layers(screen(hits).sort((a, b) => a.num - b.num)),
           )

@@ -35,7 +35,14 @@ import {
   scopedSessions,
   warm,
 } from './query.ts'
-import { anchor, emptyIndex, indexAll, reindex, reindexEdge } from './index.ts'
+import {
+  anchor,
+  children,
+  emptyIndex,
+  indexAll,
+  reindex,
+  reindexEdge,
+} from './index.ts'
 import { type MemoryResolver, memoryResolver } from './resolver.ts'
 import {
   clearIdb,
@@ -113,6 +120,17 @@ let syncIx = () => {
   }
 }
 
+// A reverse hop's Kids accessor over the live index: heal it, read the children
+// (index.ts `children`), resolve each to a bag through `get` — `cache.value` to
+// stay reactive inside a render, `cache.peek()` off it. One helper so every
+// matcher call site answers `.comments…` the same way.
+let kidsVia =
+  (get: (eid: string) => Comps | undefined) =>
+  (eid: string, comp: string, prop: string) => {
+    syncIx()
+    return children(ix, eid, comp, prop).map((k) => get(k))
+  }
+
 // The reactive query layer — the store-agnostic door for "which entities match
 // this query". The mechanics live behind the Resolver seam (resolver.ts): a
 // query is a value (Pred[], the query.ts grammar boards and graph_query already
@@ -131,6 +149,10 @@ let mem: MemoryResolver = memoryResolver({
     syncIx()
     return anchor(ix, preds)
   },
+  // A reverse hop's children, read off the same derived index the anchor uses —
+  // the reverse map IS the EXISTS engine (index.ts). Healed first, then each
+  // child eid resolved to its cache bag for the sub-filter.
+  kids: (eid, comp, prop) => kidsVia((k) => cache.peek()[k])(eid, comp, prop),
 })
 
 // The durable query surface (T-17126, slice e of D-17120). Where IndexedDB is
@@ -1469,7 +1491,15 @@ let boardHits = (
 ) =>
   boardPost(e, tasks, Object.keys(cache.value))
     .filter((eid) => listed(cache.value[eid], preds))
-    .filter((eid) => matchQuery(cache.value[eid], preds, (t) => cache.value[t]))
+    .filter((eid) =>
+      matchQuery(
+        cache.value[eid],
+        preds,
+        (t) => cache.value[t],
+        undefined,
+        kidsVia((t) => cache.value[t]),
+      )
+    )
 
 let scanBoard = (set: BoardSet, e: Ent) => {
   let q = String(e.board?.query ?? '')
@@ -1478,10 +1508,11 @@ let scanBoard = (set: BoardSet, e: Ent) => {
   let hits = boardHits(e, set.tasks, preds)
   set.q = q
   set.preds = preds
-  // A path can make one row's membership depend on another. Hot ordering
-  // cannot: membership is still row-local, and a touched member already
-  // republishes the ids below so the view can re-sort its warmth.
-  set.complex = preds.some((p) => !!p.at)
+  // A path OR a reverse hop can make one row's membership depend on another
+  // (a new comment moves its parent), so a touched row is not enough — the
+  // board rescans. Hot ordering cannot: membership is still row-local, and a
+  // touched member already republishes the ids below so the view re-sorts.
+  set.complex = preds.some((p) => !!p.at || !!p.rev)
   set.graph = cache.value
   set.error = undefined
   agree(set, e, q, hits)
@@ -1543,7 +1574,13 @@ refreshBoards = (eids: Set<string>) => {
         (set.tasks ? !!row.task : eid != set.eid && !chrome(row)) &&
         listed(row, set.preds)
       let wants = candidate &&
-        matchQuery(row, set.preds, (t) => cache.peek()[t])
+        matchQuery(
+          row,
+          set.preds,
+          (t) => cache.peek()[t],
+          undefined,
+          kidsVia((t) => cache.peek()[t]),
+        )
       if (had != wants) {
         next = wants ? [...next, eid] : next.filter((x) => x != eid)
       } else if (had) next = [...next]
@@ -1589,7 +1626,13 @@ export let sieve = (line: string): (eid: string) => boolean => {
   let preds = resolveRefs(parseQuery(line), findEid)
   if (!preds.length) return () => true
   return (eid) =>
-    matchQuery(cache.peek()[eid] ?? {}, preds, (t) => cache.peek()[t])
+    matchQuery(
+      cache.peek()[eid] ?? {},
+      preds,
+      (t) => cache.peek()[t],
+      undefined,
+      kidsVia((t) => cache.peek()[t]),
+    )
 }
 
 // The cache as client Rows — the shape the headless half's helpers speak

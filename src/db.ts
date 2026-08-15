@@ -34,7 +34,14 @@ import {
 import { type Trace } from './effects.ts'
 import { ancestorAt } from './client.ts'
 import { homeReads } from './persona.ts'
-import { leafOf, matchQuery, parseQuery, resolveRefs, TEXT } from './query.ts'
+import {
+  leafOf,
+  matchQuery,
+  parseQuery,
+  type Pred,
+  resolveRefs,
+  TEXT,
+} from './query.ts'
 import { where } from './sql.ts'
 import { derivedCols, indexDdlOne, tableDdl } from './ddl.ts'
 import { indexesFor } from './index.ts'
@@ -3854,12 +3861,15 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
     // component one row further.
     let owners = (comp: string, prop: string) =>
       comp ? [comp] : propOwners(prop)
-    let names = [
-      ...new Set(filters.flatMap((p) => [
+    // Every component a pred reads, forward path AND reverse hop (its child ref
+    // comp plus, recursively, its sub-filter's) — so compsOf can hydrate a hop's
+    // far side, whichever direction it walks.
+    let predComps = (p: Pred): string[] =>
+      p.rev ? [p.rev.comp, ...p.rev.preds.flatMap(predComps)] : [
         ...owners(p.comp, p.prop),
         ...(p.at ?? []).flatMap((h) => owners(h.comp, h.prop)),
-      ])),
-    ]
+      ]
+    let names = [...new Set(filters.flatMap(predComps))]
     let get = new Map(
       names.map((c) => [c, db.prepare(`select * from ${c} where eid = ?`)]),
     )
@@ -3870,7 +3880,18 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
       }
       return comps
     }
-    rows = rows.filter((r) => matchQuery(compsOf(r.eid), filters, compsOf))
+    // A reverse hop's children, hydrated the same way — referrersOf reads the
+    // {eid}-ref index (T-17678), and each child bag carries its eid so a nested
+    // hop can ask "who points at ME" in turn.
+    let kids = (eid: string, comp: string, prop: string) =>
+      referrersOf(db, [eid], { comp, prop }).map((k) => ({
+        entity: { eid: k },
+        ...compsOf(k),
+      }))
+    rows = rows
+      .filter((r) =>
+        matchQuery(compsOf(r.eid), filters, compsOf, undefined, kids)
+      )
       .slice(0, limit)
   }
   let is = kindOrder.map((k) =>
@@ -4289,4 +4310,22 @@ export let referrersOf = (
     for (let row of rows) out.add(row.eid)
   }
   return [...out]
+}
+
+// The forward complement of referrersOf: the `comp.prop` values these eids
+// carry — a touched CHILD's parent, for maintaining a reverse-hop subscription
+// (a comment moves; its comment.target parent must re-test). Only the given
+// component's own column, so a touched non-child yields nothing.
+export let refValuesOf = (
+  db: DatabaseSync,
+  eids: string[],
+  { comp, prop }: { comp: string; prop: string },
+): string[] => {
+  if (!eids.length || !readable[comp]?.includes(prop)) return []
+  stage(db, eids)
+  let rows = db.prepare(
+    `select ${sqlName(prop)} as v from ${sqlName(comp)}
+      where eid in (select eid from hit) and ${sqlName(prop)} is not null`,
+  ).all() as { v: string }[]
+  return [...new Set(rows.map((r) => String(r.v)))]
 }

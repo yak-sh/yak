@@ -57,6 +57,12 @@ Reference filters resolve aliases and human ids ('.assignee=jeff',
 '.project=P-19'),
 and a DOTTED path walks one reference: '.assignee.title~=jeff' — but a
 first segment naming a component stays the explicit spelling ('.pin.x=12',
-'.archived.at=' — absent means live), it never dereferences. Bare words
-are text terms (doc contains). Boards persist these same queries
-(board.query).`
+'.archived.at=' — absent means live), it never dereferences.
+A PLURAL first segment walks a reference the OTHER way — the entities
+pointing back at this one: '.comments.created.by=jeff' keeps every entity
+with a comment jeff wrote, ANY child matching (the default). '.comments!'
+has any comment, '.comments=' has none, '.comments>=5' counts them, and a
+'!' on the association negates — '.comments!.created.by=jeff' has NONE by
+jeff, '.comments!.created.by!=jeff' has EVERY comment by jeff (ALL, by De
+Morgan). Bare words are text terms (doc contains). Boards persist these
+same queries (board.query).`

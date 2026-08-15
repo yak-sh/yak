@@ -12,26 +12,19 @@
 // live.ts drives maintenance from the eids each patch touches, and `anchor()`
 // turns a query's `Pred[]` into the smallest candidate set. When the store
 // moves to IDB, `anchor` swaps its lookup; the derivation and callers stay put.
-import { comps, type Dep, type Idx, indexes, stamped } from './types.ts'
+import { type Dep, type Idx, indexes } from './types.ts'
 import { isRef } from './props.ts'
-import { EXISTS, ORDER, type Pred, TEXT } from './query.ts'
+import { EXISTS, ORDER, type Pred, refCols, TEXT } from './query.ts'
 
 // A row as the index reads it — the merged-components shape both the live cache
 // and a client Row speak. Kept structural so index.ts carries no cycle back to
 // live.ts's `Comps`.
 type Row = Record<string, Record<string, unknown> | undefined>
 
-// Every `{eid}` reference column in the vocabulary — wire-writable `comps`
-// UNION the server-stamped columns (a session's `requested_task` is a reference
-// even though the wire can't write it), the same union backlinks read. `[comp,
-// prop]` pairs; the reverse index keys off `comp.prop`.
-export let refCols: [string, string][] = [
-  ...new Set([...Object.keys(comps), ...Object.keys(stamped)]),
-].flatMap((c) =>
-  Object.keys({ ...comps[c], ...stamped[c] })
-    .filter((p) => isRef(c, p))
-    .map((p) => [c, p] as [string, string])
-)
+// The `{eid}` reference columns of the vocabulary live in query.ts (the reverse
+// grammar and this index derive from the one list); re-export so callers that
+// think of it as the INDEX derivation keep their import.
+export { refCols }
 
 // Every index a component declares — the ONE index vocabulary the cache, the
 // SQL DDL (T-12764) and the IDB stores (T-17125) all read, so no backend
@@ -191,6 +184,17 @@ export let anchor = (ix: Index, preds: Pred[]): Set<string> | undefined => {
   }
   for (let p of preds) {
     if (p.op == TEXT || p.op == ORDER) continue
+    if (p.rev) {
+      // A reverse hop needing ≥1 child anchors on the parents that HAVE one —
+      // the KEYS of the reverse map (a superset of the matching-child parents).
+      // A negated hop (NONE) or a count that admits zero also matches childless
+      // parents — not in the keys — so it anchors nothing, a full scan.
+      if (!p.rev.not && !p.rev.count) {
+        let m = ix.refs.get(refKey(p.rev.comp, p.rev.prop))
+        consider(new Set(m?.keys() ?? []))
+      }
+      continue
+    }
     if (
       !p.at && p.comp && p.prop && p.op == '' && p.value &&
       !p.value.includes(',') && !/\.\./.test(p.value) && isRef(p.comp, p.prop)
@@ -202,3 +206,13 @@ export let anchor = (ix: Index, preds: Pred[]): Set<string> | undefined => {
   }
   return best
 }
+
+// The children a reverse hop resolves: the eids referring at `eid` through
+// `comp.prop`. The reverse map IS this lookup — the whole reason index.ts keeps
+// it — so live's Kids accessor is one read over it (live.ts binds the cache).
+export let children = (
+  ix: Index,
+  eid: string,
+  comp: string,
+  prop: string,
+): string[] => [...ix.refs.get(refKey(comp, prop))?.get(eid) ?? []]

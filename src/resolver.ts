@@ -8,7 +8,7 @@
 // implementation behind the SAME interface with zero call-site churn — live.ts
 // (queryEids) and useQuery call the seam, never a concrete cache.
 import { type Signal, signal, untracked } from '@preact/signals'
-import { listed, matchQuery, type Pred } from './query.ts'
+import { type Kids, listed, matchQuery, type Pred } from './query.ts'
 
 // A row as the resolver reads it — the merged-components bag both the live cache
 // and a client Row speak (the same structural shape index.ts and query.ts use,
@@ -32,6 +32,11 @@ export type Store = {
   read: (eid: string) => Row | undefined
   keys: () => Iterable<string>
   anchor: (preds: Pred[]) => Set<string> | undefined
+  // The reverse-hop accessor: the children pointing back at an entity through a
+  // ref column (index.ts `children`, bound to the live Index). Absent leaves a
+  // reverse hop matching nothing, the same graceful absence a missing forward
+  // deref gives — a store without a reverse index simply cannot answer one.
+  kids?: Kids
 }
 
 // The in-memory resolver adds the maintenance the live cache drives it with:
@@ -57,7 +62,8 @@ export let memoryResolver = (store: Store): MemoryResolver => {
   // never .value — resolving a query must not subscribe the caller to the cache.
   let matches = (eid: string, preds: Pred[]) => {
     let r = store.read(eid)
-    return !!r && listed(r, preds) && matchQuery(r, preds, store.read)
+    return !!r && listed(r, preds) &&
+      matchQuery(r, preds, store.read, undefined, store.kids)
   }
 
   // One resolution pass: the index narrows to a candidate set (or the whole
@@ -96,13 +102,31 @@ export let memoryResolver = (store: Store): MemoryResolver => {
     sets.delete(key)
   }
 
+  // The parents a touched CHILD moves: a reverse hop makes a parent's membership
+  // depend on its children, so a new/edited comment must re-test its target. Read
+  // the child's ref column back to the parent — the forward complement of the hop.
+  let revParents = (preds: Pred[], eids: Set<string>): string[] => {
+    let out: string[] = []
+    for (let p of preds) {
+      if (!p.rev) continue
+      for (let e of eids) {
+        let v = store.read(e)?.[p.rev.comp]?.[p.rev.prop]
+        if (v != null) out.push(String(v))
+      }
+    }
+    return out
+  }
+
   // A patch tests only its touched rows — a stable result keeps its subscribers
-  // asleep while an unrelated entity changes.
+  // asleep while an unrelated entity changes. A reverse-hop query also re-tests
+  // the parents of any touched child, since their membership turns on it.
   let refresh = (eids: Set<string>) => {
     for (let s of sets.values()) {
+      let extra = revParents(s.preds, eids)
+      let test = extra.length ? new Set([...eids, ...extra]) : eids
       let ids = s.ids.peek()
       let next = ids
-      for (let eid of eids) {
+      for (let eid of test) {
         let had = next.includes(eid)
         let wants = matches(eid, s.preds)
         if (had != wants) {

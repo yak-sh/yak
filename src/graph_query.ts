@@ -17,6 +17,7 @@ import { find, type Row, rows } from './client.ts'
 import { entriesOf, entriesScan, locate, matching, snapshot } from './db.ts'
 import { where } from './sql.ts'
 import {
+  kidsOf,
   listed,
   matchQuery,
   namesLazy,
@@ -135,9 +136,13 @@ export let evalQuery = (
     all = [...all, ...entryUniverse(db, preds, after, limit)]
   }
   let byEid = new Map(all.map((r) => [r.eid, r.comps]))
+  // A reverse hop reads the children pointing back at each row; kidsOf builds
+  // that reverse view over the same universe, so the JS fallback answers a
+  // `.comments…` hop identically to the index EXISTS.
+  let kids = kidsOf(byEid)
   let hits = all.filter((r) =>
     listed(r.comps, preds) &&
-    matchQuery(r.comps, preds, (e) => byEid.get(e))
+    matchQuery(r.comps, preds, (e) => byEid.get(e), undefined, kids)
   )
   return { snap, all, preds, byEid, hits }
 }

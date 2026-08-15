@@ -76,6 +76,26 @@ export type Pred = {
   // is one deref, the depth-1 path `.assignee.title`; `.comment.target.doc.title`
   // is that same deref spelled with explicit `comp.prop` on both sides.
   at?: Hop[]
+  // A REVERSE hop: the entities whose `rev.comp.rev.prop` reference points BACK
+  // at this one (`.comments` = the comments whose comment.target is me). The
+  // mirror of `at` — one-to-many instead of one deref — so it carries the
+  // existential/count semantics `at` never needs. See Rev.
+  rev?: Rev
+}
+
+// A reverse hop resolved: the child component + ref column whose value the
+// parent's eid must equal, and how the many children collapse to a yes/no.
+// Existential (the default): keep the parent if ANY child matches `preds` —
+// `[]` is "any child at all". `not` flips it to NOT EXISTS, which is NONE, and
+// with a negated leaf it is ALL by De Morgan (`.comments!.status!=done` = no
+// child is un-done = every child is done). `count` instead compares the NUMBER
+// of children to the outer pred's op/value (`.comments>=5`), ignoring preds.
+export type Rev = {
+  comp: string
+  prop: string
+  preds: Pred[]
+  not: boolean
+  count?: boolean
 }
 
 // A path's leaf — the far column op/value tests — is the last hop; a plain
@@ -124,6 +144,44 @@ let routes: Record<string, readonly string[]> = {
 // gives `.status`/`.project` priority over a same-named virtual prop.
 let owned = (name: string) =>
   name in comps || Object.values(routes).some((cols) => cols.includes(name))
+
+// Every `{eid}` reference column in the vocabulary — wire-writable `comps`
+// UNION the server-stamped columns (a session's `requested_task` is a reference
+// even though the wire can't write it). `[comp, prop]` pairs; both the in-memory
+// reverse index (index.ts realizes it) and the reverse-hop grammar below key off
+// this ONE list, so a new ref column gets its reverse view for free (CLAUDE.md,
+// "the vocabulary is one list"). index.ts re-exports it as the index derivation.
+export let refCols: [string, string][] = [
+  ...new Set([...Object.keys(comps), ...Object.keys(stamped)]),
+].flatMap((c) =>
+  Object.keys({ ...comps[c], ...stamped[c] })
+    .filter((p) => isRef(c, p))
+    .map((p) => [c, p] as [string, string])
+)
+
+// A reverse ASSOCIATION: a component's `{eid}` ref column seen from the far side.
+// `.comments` are the entities whose comment.target points at me. One per ref
+// column, DERIVED from refCols — never hand-listed — named plural(comp) when the
+// comp has a single ref column, plural(comp)_{prop} when several ref columns
+// share the plural (the prop says which pointer). English is not the goal;
+// uniqueness is (shelf→shelfs is fine). A name colliding with a real prop is a
+// load error, so a real column always wins its spelling — the scopes discipline.
+export type Assoc = { comp: string; prop: string }
+let plural = (s: string) =>
+  s.endsWith('y') ? s.slice(0, -1) + 'ies' : s.endsWith('s') ? s : s + 's'
+export let reverseAssocs: Map<string, Assoc> = (() => {
+  let byComp = new Map<string, string[]>()
+  for (let [c, p] of refCols) byComp.set(c, [...(byComp.get(c) ?? []), p])
+  let m = new Map<string, Assoc>()
+  for (let [c, p] of refCols) {
+    let name = byComp.get(c)!.length == 1 ? plural(c) : `${plural(c)}_${p}`
+    m.set(name, { comp: c, prop: p })
+  }
+  return m
+})()
+for (let name of reverseAssocs.keys()) {
+  if (owned(name)) throw new Error(`reverse assoc .${name} shadows a real prop`)
+}
 
 // The dot-param shape, sketched — the tail of every strict rejection
 // (FILTERS in grammar.ts spells the operators).
@@ -413,11 +471,62 @@ let groupsOf = (segs: string[]): Hop[] => {
   return out
 }
 
+// A reverse hop: `.comments…`, where the FIRST segment names a reverse
+// association (reverseAssocs). `.comments.created.by=P-19` keeps every parent
+// with a child comment matching the sub-filter — ANY, the default. A `!` right
+// after the association (before its `.`) negates the existence: `.comments!.author=jeff`
+// is NONE by jeff, `.comments!.status!=done` is ALL done (De Morgan). A bare
+// association is presence (`.comments!`, ≥1), absence (`.comments=`, 0), or a
+// cardinality test (`.comments>=5`). null when the first segment is not a reverse
+// association, so preds() falls through to the ordinary column/path grammar.
+// The bang only binds when a `.` follows, so `.comments!=5` reads as a count.
+let REV =
+  /^\.([A-Za-z_]+)(!(?=\.))?((?:\.[A-Za-z_-]+)*)(!=|~=|<=|>=|<|>|=|!)(.*)$/s
+let revHop = (token: string): Pred | null => {
+  let m = token.match(REV)
+  if (!m) return null
+  let [, name, bang, sub, op, value] = m
+  let assoc = reverseAssocs.get(name)
+  if (!assoc) return null
+  value = value.replace(/^"(.*)"$/s, '$1')
+  let mk = (inner: Pred[], not: boolean, count?: boolean): Pred => ({
+    comp: assoc!.comp,
+    prop: assoc!.prop,
+    op: count ? OPS[op] : EXISTS,
+    value: count ? value : '',
+    rev: {
+      comp: assoc!.comp,
+      prop: assoc!.prop,
+      preds: inner,
+      not,
+      ...(count ? { count } : {}),
+    },
+  })
+  if (sub) {
+    // Existential with a sub-filter: op/value ride the sub-pred's leaf, which
+    // preds() parses — recursively, so a nested hop composes off the child.
+    let inner = preds('.' + sub.slice(1) + op + value)
+    if (!inner) {
+      throw new Error(`reverse filter needs a predicate: .${name}${sub}`)
+    }
+    return mk(inner, bang == '!')
+  }
+  if (op == '!' || (op == '~=' && !value)) return mk([], false) // present ≥1
+  if (op == '=' && !value) return mk([], true) // none (0)
+  if (!/^\d+$/.test(value)) {
+    throw new Error(
+      `.${name} needs a sub-path (.${name}.<prop>) or a count (.${name}>=N)`,
+    )
+  }
+  return mk([], false, true) // cardinality: count <op> value
+}
+
 // One filter token to the preds it contributes. A scalar filter is one pred; a
 // SCOPE (`.kind=memory`) expands to the Pred[] it splices into the AND-list —
 // the wrinkle that once made kind a bespoke parameter, resolved here so a
-// virtual prop reads exactly like a column. null: the token is no dot-param at
-// all (a bare word, an opless `.env`) — a text term to whoever parses the line.
+// virtual prop reads exactly like a column. A reverse hop (`.comments…`) resolves
+// first, above the column grammar. null: the token is no dot-param at all (a bare
+// word, an opless `.env`) — a text term to whoever parses the line.
 //
 // A hyphen is admitted into the NAME so a hyphenated spelling reaches route()
 // and earns the same refusal writes give it (client.ts param()). No column is
@@ -425,6 +534,8 @@ let groupsOf = (segs: string[]): Hop[] => {
 // the pattern and fell through to a bare TEXT term, silently searching for the
 // filter the caller thought they wrote.
 export let preds = (token: string): Pred[] | null => {
+  let r = revHop(token)
+  if (r) return [r]
   let m = token.match(
     /^\.([A-Za-z_-]+(?:\.[A-Za-z_-]+)*)(!=|~=|<=|>=|<|>|=|!)(.*)$/s,
   )
@@ -651,6 +762,14 @@ export let resolveRefs = (
   lookup: (id: string) => string | undefined,
 ): Pred[] =>
   preds.map((p) => {
+    // A reverse hop's own value is a count, never a ref — but its sub-filter
+    // carries the same typed values, so resolve THROUGH it (recursively).
+    if (p.rev) {
+      let inner = resolveRefs(p.rev.preds, lookup)
+      return inner == p.rev.preds
+        ? p
+        : { ...p, rev: { ...p.rev, preds: inner } }
+    }
     let { comp, prop: target } = leafOf(p)
     if (!isRef(comp, target) || (p.op != '' && p.op != '!')) return p
     if (!p.value || /\.\./.test(p.value)) return p
@@ -688,11 +807,79 @@ export let resolveRefs = (
 let present = (bag: Comps | undefined, comp: string, op: string): boolean =>
   op == '~' || op == EXISTS ? !!bag?.[comp] : !bag?.[comp]
 
+// The reverse-hop accessor: the children whose `comp.prop` reference equals
+// `eid`, as their component bags. The mirror of `ent` (forward deref) — a caller
+// with a reverse index (live's index.ts refs, a server snapshot) supplies it; a
+// caller without one leaves reverse hops matching nothing (the null reading, the
+// same graceful absence a missing `ent` gives a forward path).
+export type Kids = (
+  eid: string,
+  comp: string,
+  prop: string,
+) => (Comps | undefined)[]
+
+// A Kids accessor over an in-memory universe (a byEid map). Lazily builds and
+// caches the reverse map for each ref column a hop asks about, so a caller that
+// holds the whole graph (the server's snapshot fallback, mcp, tests) answers a
+// reverse hop the same way the live index and the SQL EXISTS do — one door, no
+// per-caller reverse index. Generic over the row so a Map<eid, comps> of any
+// exact shape passes without the Map-variance friction.
+export let kidsOf = <
+  R extends Record<string, Record<string, unknown> | undefined>,
+>(byEid: Map<string, R>): Kids => {
+  let cache = new Map<string, Map<string, string[]>>()
+  return (eid, comp, prop) => {
+    let key = `${comp}.${prop}`
+    let m = cache.get(key)
+    if (!m) {
+      m = new Map()
+      for (let [ce, cc] of byEid) {
+        let v = cc[comp]?.[prop]
+        if (v == null) continue
+        let k = String(v)
+        m.set(k, [...(m.get(k) ?? []), ce])
+      }
+      cache.set(key, m)
+    }
+    return (m.get(eid) ?? []).map((k) => byEid.get(k))
+  }
+}
+
+// An entity's own eid, read off any component bag it wears (every bag carries
+// `eid`, readable's first column). A reverse hop needs it to ask "who points at
+// ME"; the forward grammar never did, so matchQuery never took it as an argument.
+let eidOf = (c: Comps): string | undefined => {
+  let e = c.entity?.eid
+  if (e != null) return String(e)
+  for (let k in c) {
+    let v = c[k]?.eid
+    if (v != null) return String(v)
+  }
+}
+
+// A child count against the outer op/value — the cardinality half of a reverse
+// hop. Mirrors test()'s comparison ops; '' is '=', '!' is '!='.
+let cmpCount = (n: number, op: string, value: string): boolean => {
+  let m = Number(value)
+  return op == ''
+    ? n == m
+    : op == '!'
+    ? n != m
+    : op == '<'
+    ? n < m
+    : op == '<='
+    ? n <= m
+    : op == '>'
+    ? n > m
+    : n >= m
+}
+
 export let matchQuery = (
   c: Comps,
   preds: Pred[],
   ent?: (eid: string) => Comps | undefined,
   now?: number,
+  kids?: Kids,
 ) =>
   preds.every((p) => {
     if (p.op == ORDER) return true
@@ -703,6 +890,18 @@ export let matchQuery = (
         String(d.title ?? '').toLowerCase().includes(needle) ||
         String(d.body ?? '').toLowerCase().includes(needle)
       )
+    }
+    if (p.rev) {
+      // The reverse hop: resolve the children pointing back at me, then collapse
+      // the many to a yes/no — a count comparison, or ANY child matching the
+      // sub-filter (`not` flips that to NONE). No accessor → no children.
+      let self = eidOf(c)
+      let children = self && kids ? kids(self, p.rev.comp, p.rev.prop) : []
+      if (p.rev.count) return cmpCount(children.length, p.op, p.value)
+      let hit = children.some((k) =>
+        !!k && matchQuery(k, p.rev!.preds, ent, now, kids)
+      )
+      return p.rev.not ? !hit : hit
     }
     if (!p.prop) return present(c, p.comp, p.op)
     if (p.at) {

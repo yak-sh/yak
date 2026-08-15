@@ -11,7 +11,7 @@
 // string beside an absent column, a needle containing LIKE's wildcards.
 
 import { assertEquals } from '@std/assert'
-import { kindPreds, matchQuery, parseQuery } from './query.ts'
+import { kidsOf, kindPreds, matchQuery, parseQuery } from './query.ts'
 import { where } from './sql.ts'
 import { open } from './db.ts'
 import { kindOf, kindOrder } from './types.ts'
@@ -102,6 +102,27 @@ put('en3', {
   content: { body: 'boom' },
 })
 
+// Reverse hops: comments whose comment.target points BACK at a parent. e1 has
+// two (one by p1, one by e5), e2 one (by p1), e3 none — so ANY, NONE, ALL and a
+// cardinality count each have a row that proves and a row that disproves them.
+// created.by is an {eid} ref the sub-filter screens on, stored literal (the test
+// compares stored bytes, so no resolveRefs runs).
+put('c1', {
+  doc: { title: 'first note' },
+  comment: { target: 'e1' },
+  created: { by: 'p1', at: '2026-08-02T00:00:00.000Z', via: null },
+})
+put('c2', {
+  doc: { title: 'second note' },
+  comment: { target: 'e1' },
+  created: { by: 'e5', at: '2026-08-03T00:00:00.000Z', via: null },
+})
+put('c3', {
+  doc: { title: 'other note' },
+  comment: { target: 'e2' },
+  created: { by: 'p1', at: '2026-08-04T00:00:00.000Z', via: null },
+})
+
 // The JS side reads the same shape live.ts and client.ts hand matchQuery:
 // eid → { comp → { col → value } }, absent components simply missing.
 let graph = () => {
@@ -118,7 +139,14 @@ let graph = () => {
   // which components an entity carries, so the JS world must mirror the DB or it
   // names a seeded board a doc — and a query naming the entry partition must see
   // the same rows on both sides. The SQL side reads the DB directly.
-  let facets = ['entry', 'content', 'message', 'generation', 'response']
+  let facets = [
+    'entry',
+    'content',
+    'message',
+    'generation',
+    'response',
+    'created',
+  ]
   for (let comp of [...new Set([...kindOrder, 'proposed', ...facets])]) {
     for (
       let r of db.prepare(`select * from "${comp}"`).all() as Record<
@@ -134,10 +162,13 @@ let graph = () => {
 
 let world = graph()
 
+let kids = kidsOf(new Map(Object.entries(world)))
 let byJs = (q: string) => {
   let preds = parseQuery(q)
   return Object.entries(world)
-    .filter(([, comps]) => matchQuery(comps, preds))
+    .filter(([, comps]) =>
+      matchQuery(comps, preds, (e) => world[e], undefined, kids)
+    )
     .map(([eid]) => eid).sort()
 }
 
@@ -255,6 +286,22 @@ let COMPILES = [
   '.entry.session=s1&.message.role=user',
   '.generation!',
   '.entry!',
+  // reverse hops: the children pointing back through comment.target, collapsed
+  // existentially (ANY / NONE / ALL) or by count. The sub-filter rides the same
+  // compiler, so a ref-equality child pred compiles; a time one declines below.
+  '.comments!', // ANY: has a comment
+  '.comments=', // NONE: has no comment
+  '.comments.created.by=p1', // ANY matching: a comment by p1
+  '.comments!.created.by=p1', // NONE matching: no comment by p1
+  '.comments!.created.by!=p1', // ALL (De Morgan): every comment by p1
+  '.comments>=2', // cardinality: two or more comments
+  '.comments>=1',
+  '.comments=0',
+  '.comments!=0',
+  '.comments<2',
+  // composes with an ordinary column pred, ANDed
+  '.task.status=open&.comments!',
+  '.comments.created.by=p1&.task.status=wip',
 ]
 
 for (let q of COMPILES) {
@@ -288,6 +335,11 @@ let DECLINES = [
   // a body substring on a NON-doc body: sql.ts only ever narrows doc.body, so a
   // content-body scan declines and the matcher answers it over the partition
   '.content.body~=boom',
+  // a reverse hop whose SUB-filter is a moving span: the child pred declines
+  // (spans are their own pass), so the whole EXISTS declines and the matcher
+  // answers it — exactness-or-nothing across the correlated join.
+  '.comments.created.at=today',
+  '.comments.created.at>=1-week-ago',
 ]
 
 for (let q of DECLINES) {

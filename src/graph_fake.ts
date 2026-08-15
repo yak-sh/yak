@@ -7,12 +7,13 @@
 // mistake these tests exist to catch.
 
 import { find, jsonOf, rows } from './client.ts'
-import { matchQuery, parseQuery } from './query.ts'
+import { kidsOf, matchQuery, parseQuery } from './query.ts'
 import type { Change, Snapshot } from './types.ts'
 
 export let answers = (snap: Snapshot) => {
   let all = rows(snap)
   let byEid = new Map(all.map((r) => [r.eid, r]))
+  let kids = kidsOf(new Map(all.map((r) => [r.eid, r.comps])))
   // A hit's edges both ways — the `deps=1` layer the server attaches, read
   // off the fixed snapshot so the double agrees with the real /query.
   let edgesOf = (eid: string) =>
@@ -30,7 +31,7 @@ export let answers = (snap: Snapshot) => {
       ).join('&'),
     )
     return all.filter((r) =>
-      matchQuery(r.comps, preds, (e) => byEid.get(e)?.comps) &&
+      matchQuery(r.comps, preds, (e) => byEid.get(e)?.comps, undefined, kids) &&
       (!named.length || eids.has(r.eid))
     ).map((r) => edged ? { ...jsonOf(r), deps: edgesOf(r.eid) } : jsonOf(r))
   }

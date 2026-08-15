@@ -3,6 +3,7 @@ import {
   adopt,
   complete,
   hot,
+  kidsOf,
   kindPreds,
   listed,
   matchQuery,
@@ -13,6 +14,7 @@ import {
   preds,
   resolution,
   resolveRefs,
+  reverseAssocs,
   route,
   scopes,
   SUNK,
@@ -263,6 +265,96 @@ Deno.test('query: assignee routes bare and filters', () => {
   assert(matchQuery(row({ status: 'open', assignee: 'u1' }), [p]))
   assert(!matchQuery(row({ status: 'open', assignee: 'u2' }), [p]))
   assert(!matchQuery(row({ status: 'open' }), [p]))
+})
+
+// ---- reverse hops ----
+
+// A tiny graph: one parent task with two comments (one by jeff, one by sam), and
+// a project with none — the rows that prove and disprove each quantifier.
+let revGraph = () =>
+  ({
+    T1: {
+      entity: { eid: 'T1', num: 1 },
+      task: { eid: 'T1', status: 'open' },
+      doc: { eid: 'T1', title: 'parent' },
+    },
+    P1: {
+      entity: { eid: 'P1', num: 2 },
+      project: { eid: 'P1' },
+      doc: { eid: 'P1', title: 'proj' },
+    },
+    c1: {
+      entity: { eid: 'c1', num: 3 },
+      comment: { eid: 'c1', target: 'T1' },
+      created: { eid: 'c1', by: 'jeff' },
+    },
+    c2: {
+      entity: { eid: 'c2', num: 4 },
+      comment: { eid: 'c2', target: 'T1' },
+      created: { eid: 'c2', by: 'sam' },
+    },
+  }) as Record<string, Record<string, Record<string, unknown>>>
+
+let revHit = (q: string, eid: string) => {
+  let g = revGraph()
+  let kids = kidsOf(new Map(Object.entries(g)))
+  return matchQuery(g[eid], parseQuery(q), (e) => g[e], undefined, kids)
+}
+
+Deno.test('reverse hop: association names derive from the vocabulary', () => {
+  // a sole-ref component takes the bare plural; a multi-ref one qualifies by prop
+  assertEquals(reverseAssocs.get('comments'), {
+    comp: 'comment',
+    prop: 'target',
+  })
+  assertEquals(reverseAssocs.get('memories'), { comp: 'memory', prop: 'scope' })
+  assertEquals(reverseAssocs.get('tasks'), undefined) // task has two ref cols
+  assertEquals(reverseAssocs.get('tasks_project'), {
+    comp: 'task',
+    prop: 'project',
+  })
+  assertEquals(reverseAssocs.get('tasks_assignee'), {
+    comp: 'task',
+    prop: 'assignee',
+  })
+})
+
+Deno.test('reverse hop: a hop parses to a rev pred, not a column', () => {
+  let p = preds('.comments.created.by=jeff')![0]
+  assertEquals(p.rev, {
+    comp: 'comment',
+    prop: 'target',
+    not: false,
+    preds: [{ comp: 'created', prop: 'by', op: '', value: 'jeff' }],
+  })
+  // a singular component name is still the forward path, untouched
+  assert(!preds('.comment.target.doc.title~=x')![0].rev)
+})
+
+Deno.test('reverse hop: ANY is the default, NONE is the negation', () => {
+  assert(revHit('.comments!', 'T1')) // has comments
+  assert(!revHit('.comments!', 'P1'))
+  assert(!revHit('.comments=', 'T1')) // none
+  assert(revHit('.comments=', 'P1'))
+  assert(revHit('.comments.created.by=jeff', 'T1')) // ANY by jeff
+  assert(!revHit('.comments.created.by=jeff', 'P1'))
+  assert(!revHit('.comments!.created.by=jeff', 'T1')) // NONE by jeff: c1 is
+  assert(revHit('.comments!.created.by=jeff', 'P1')) // no comments at all
+})
+
+Deno.test('reverse hop: ALL falls out of De Morgan, count compares', () => {
+  // every comment by jeff = NOT EXISTS one NOT by jeff. c2 is by sam, so false.
+  assert(!revHit('.comments!.created.by!=jeff', 'T1'))
+  // a project with no comments vacuously satisfies ALL
+  assert(revHit('.comments!.created.by!=jeff', 'P1'))
+  assert(revHit('.comments>=2', 'T1'))
+  assert(!revHit('.comments>=3', 'T1'))
+  assert(revHit('.comments=2', 'T1'))
+  assert(revHit('.comments<1', 'P1'))
+})
+
+Deno.test('reverse hop: a bare association needs a sub-path or a count', () => {
+  assertThrows(() => preds('.comments~=foo'), Error)
 })
 
 Deno.test('query: pred routes and normalizes ops', () => {
