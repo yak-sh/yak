@@ -34,6 +34,8 @@ import {
   relations,
   repoUrl,
   row,
+  sessionRows,
+  shelfFor,
   sieve,
   subEids,
   subscriptionChecks,
@@ -317,6 +319,71 @@ let fill = (rows: [string, string | null][]) => {
       },
   ]))
 }
+
+// scanFacets derives its lists from the byComp index, not four whole-cache
+// scans (D-18055). Parity: every facet output must equal the old cache-scan
+// logic, computed inline here as the reference — order included.
+Deno.test('facets: byComp derivation matches the whole-cache scan', () => {
+  cache.value = {
+    // projects, nums OUT of order so the num-sort is exercised
+    pB: { entity: { eid: 'pB', num: 9 }, project: { eid: 'pB' } },
+    pA: { entity: { eid: 'pA', num: 2 }, project: { eid: 'pA' } },
+    // tasks: duplicate + distinct domains, and one with no domain
+    t1: {
+      entity: { eid: 't1', num: 3 },
+      task: { eid: 't1', status: 'open', priority: 1, domain: 'Ops' },
+    },
+    t2: {
+      entity: { eid: 't2', num: 4 },
+      task: { eid: 't2', status: 'open', priority: 1, domain: 'Eng' },
+    },
+    t3: {
+      entity: { eid: 't3', num: 5 },
+      task: { eid: 't3', status: 'open', priority: 1, domain: 'Ops' },
+    },
+    t4: {
+      entity: { eid: 't4', num: 6 },
+      task: { eid: 't4', status: 'open', priority: 1, domain: null },
+    },
+    // sessions + shelves + an unrelated doc that must touch no facet
+    s1: {
+      entity: { eid: 's1', num: 7 },
+      session: { eid: 's1', id: 'r1', cwd: '/a', pid: 1 },
+    },
+    s2: {
+      entity: { eid: 's2', num: 8 },
+      session: { eid: 's2', id: 'r2', cwd: '/b', pid: 2 },
+    },
+    sh1: {
+      entity: { eid: 'sh1', num: 10 },
+      shelf: { eid: 'sh1', client: 'c1' },
+    },
+    d1: {
+      entity: { eid: 'd1', num: 11 },
+      doc: { eid: 'd1', title: 'x', body: '' },
+    },
+  }
+  let g = cache.peek()
+  // The OLD whole-cache-scan logic, verbatim, as the reference.
+  let refDomains = [
+    ...new Set(Object.values(g).flatMap((r) => r.task?.domain || [])),
+  ].sort()
+  let refProjects = Object.entries(g).filter(([, r]) => r.project)
+    .sort(([, a], [, b]) =>
+      (a.entity?.num ?? Infinity) - (b.entity?.num ?? Infinity)
+    ).map(([eid]) => eid)
+  let refSessions = Object.entries(g).filter(([, r]) => r.session).map((
+    [eid],
+  ) => eid)
+
+  assertEquals(domains.value, refDomains)
+  assertEquals(domains.value, ['Eng', 'Ops'])
+  assertEquals(projects().map((e) => e.eid), refProjects)
+  assertEquals(projects().map((e) => e.eid), ['pA', 'pB'])
+  assertEquals(sessionRows().map(([eid]) => eid), refSessions)
+  assertEquals(shelfFor('c1'), 'sh1')
+  assertEquals(shelfFor('nope'), undefined)
+})
 
 Deno.test('agreement diagnostics are inert until explicitly enabled', () => {
   config.agreement = false

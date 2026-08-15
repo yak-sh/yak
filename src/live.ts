@@ -1663,25 +1663,27 @@ let domainList: string[] = []
 let projectIds: string[] = []
 let sessionIds: string[] = []
 let shelfIds: string[] = []
+// The facet lists are candidate sets a component's PRESENCE already names, so
+// read them off the derived byComp index (index.ts) instead of scanning the
+// whole cache four times (D-18055). project/session/shelf are present from an
+// entity's birth, so byComp's insertion order tracks cache order — no display
+// reorder. Only domains needs values, gathered in one pass over task rows (not
+// the whole graph). syncIx heals a stale index before the read.
 let scanFacets = () => {
-  domainList = [
-    ...new Set(
-      Object.values(cache.peek()).flatMap((r) => r.task?.domain || []),
-    ),
-  ].sort()
-  projectIds = Object.entries(cache.peek())
-    .filter(([, r]) => r.project)
-    .sort(([, a], [, b]) =>
-      (a.entity?.num ?? Infinity) - (b.entity?.num ?? Infinity)
-    )
-    .map(([eid]) => eid)
-  sessionIds = Object.entries(cache.peek())
-    .filter(([, r]) => r.session)
-    .map(([eid]) => eid)
-  shelfIds = Object.entries(cache.peek())
-    .filter(([, r]) => r.shelf)
-    .map(([eid]) => eid)
-  facetGraph = cache.peek()
+  syncIx()
+  let g = cache.peek()
+  let domains = new Set<string>()
+  for (let eid of ix.byComp.get('task') ?? []) {
+    let d = g[eid]?.task?.domain
+    if (d) domains.add(d) // '' is not a domain — matches the old `domain || []`
+  }
+  domainList = [...domains].sort()
+  projectIds = [...ix.byComp.get('project') ?? []].sort((a, b) =>
+    (g[a]?.entity?.num ?? Infinity) - (g[b]?.entity?.num ?? Infinity)
+  )
+  sessionIds = [...ix.byComp.get('session') ?? []]
+  shelfIds = [...ix.byComp.get('shelf') ?? []]
+  facetGraph = g
 }
 let facets = () => {
   facetVersion.value
