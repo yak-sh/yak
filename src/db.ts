@@ -54,6 +54,13 @@ import {
   propOwners,
 } from './props.ts'
 import { fleetLocal } from './mailaddr.ts'
+import {
+  compsOf,
+  hasSources,
+  sourceEntries,
+  sourceList,
+  sourceResolve,
+} from './source.ts'
 
 // Prepared-statement cache, per db handle. node:sqlite recompiles the SQL on
 // every prepare(); apply() alone recompiles ~35 statements per call (~318µs
@@ -1427,9 +1434,12 @@ export let resolveId = (
   }
   let low = id.toLowerCase()
   if (UUIDRE.test(id)) {
-    return (prep(db, 'select eid from entity where eid = ?').get(low) as
+    let hit = (prep(db, 'select eid from entity where eid = ?').get(low) as
       | { eid: string }
       | undefined)?.eid
+    if (hit) return hit
+    // else fall through — a uuid with no SQL row may be a pass-through
+    // entity's own (deterministic) eid, resolvable by a source below.
   }
   if (SHORT.test(id)) {
     let hits = prep(
@@ -1449,13 +1459,19 @@ export let resolveId = (
   // space-delimited `slugs` set. instr on a space-padded column matches whole
   // tokens only ('task' never hits inside 'tasks'); the alias table is tiny,
   // so the scan is free.
-  return (prep(
+  let alias = (prep(
     db,
     `select eid from alias where slug = ?
        or instr(' ' || coalesce(slugs, '') || ' ', ' ' || ? || ' ') > 0`,
   ).get(id, id) as
     | { eid: string }
     | undefined)?.eid
+  if (alias) return alias
+  // Pass-through sources: an ephemeral entity resolvable by handle (or its own
+  // deterministic eid). Consulted ONLY after every SQL lookup missed, so a
+  // persisted/graduated entity never reaches here.
+  if (hasSources()) return sourceResolve(id)?.[0]?.eid
+  return undefined
 }
 
 // The write doors' reference resolver — resolveId under its old name, kept
@@ -4096,7 +4112,14 @@ export let eager = (
 ): Record<string, Record<string, unknown>> => {
   let spine = prep(db, `${select('entity')} where eid = ?`)
     .get(eid) as Record<string, unknown> | undefined
-  if (!spine) return {}
+  if (!spine) {
+    // No persisted rows — a pass-through entity is hydrated from its source.
+    if (hasSources()) {
+      let batch = sourceResolve(eid)
+      if (batch) return compsOf(batch)
+    }
+    return {}
+  }
   let out: Record<string, Record<string, unknown>> = { entity: spine }
   for (let name of Object.keys(readable)) {
     if (name == 'entity') continue
@@ -4297,7 +4320,20 @@ export let matching = (
   clear(db)
   prep(db, `insert or ignore into hit (eid) ${filter.sql}`)
     .run(...filter.params)
-  return staged(db)
+  let out = staged(db)
+  // Union in pass-through entities the sources say match the same query — a
+  // board of ephemeral (e.g. legacy-session) entities. Skip any eid already in
+  // SQL (a graduated entity), so a match is never double-counted.
+  if (hasSources()) {
+    let have = new Set(out.map((e) => e.eid))
+    for (let batch of sourceList(filter)) {
+      let eid = batch[0]?.eid
+      if (!eid || have.has(eid)) continue
+      have.add(eid)
+      out.push({ eid, comps: compsOf(batch) })
+    }
+  }
+  return out
 }
 
 // The same rows for a KNOWN set of eids — what a backlinks layer needs to
@@ -4307,7 +4343,18 @@ export let matching = (
 export let rowsOf = (db: DatabaseSync, eids: string[]) => {
   if (!eids.length) return []
   stage(db, eids)
-  return staged(db)
+  let out = staged(db)
+  // Any requested eid SQL had no rows for may be a pass-through entity — hydrate
+  // it from its source. Graduated entities are in SQL, so they never double.
+  if (hasSources() && out.length < eids.length) {
+    let have = new Set(out.map((e) => e.eid))
+    for (let eid of eids) {
+      if (have.has(eid)) continue
+      let batch = sourceResolve(eid)
+      if (batch) out.push({ eid, comps: compsOf(batch) })
+    }
+  }
+  return out
 }
 
 let entryRows = (
@@ -4356,6 +4403,13 @@ export let entriesOf = (
       eid: string
       seq: number
     }[]
+  // A pass-through session has no persisted entry rows — its tail streams from
+  // the source's transcript file. (through-bounded replay stays a persisted
+  // concern; an ephemeral session serves its live tail.)
+  if (!index.length && hasSources() && through == null) {
+    let tail = sourceEntries(session, after, cap)
+    if (tail.length) return tail
+  }
   return entryRows(db, index)
 }
 
