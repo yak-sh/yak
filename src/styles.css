@@ -1076,13 +1076,15 @@ html {
 .Card:has(> .Card_Scroll > .Board) {
   background: var(--bg); /* app-bg well — reads almost transparent */
 }
-/* A card-hosted board scrolls exactly like fullscreen: the card scroller
-   owns x + snap, each COLUMN owns its own y. */
-.Card_Scroll:has(> .Board) {
+/* An embedded board scrolls exactly like fullscreen: its host owns x + snap,
+   each COLUMN owns its own y. */
+.Card_Scroll:has(> .Board),
+.Peek_Body:has(> .Board) {
   display: flex;
   overflow-y: hidden;
 }
-.Card_Scroll > .Board {
+.Card_Scroll > .Board,
+.Peek_Body > .Board {
   flex: 1;
   min-width: 0;
 }
@@ -1116,11 +1118,12 @@ html {
   gap: var(--half-gap);
   align-content: start;
 }
-/* The snap lives on whichever scroller hosts the board — fullscreen
-   (App_Body) or a canvas card (Card_Scroll). Content without snap-align
-   defines no snap areas, so every other page scrolls exactly as before. */
+/* The snap lives on whichever scroller hosts the board. Content without
+   snap-align defines no snap areas, so every other page scrolls exactly as
+   before. */
 .App_Body,
 .Card_Scroll,
+.Peek_Body,
 .Split_Left {
   scroll-snap-type: x mandatory;
   scroll-padding-inline: calc(var(--gap) + env(safe-area-inset-left, 0px))
