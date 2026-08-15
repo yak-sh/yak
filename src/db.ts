@@ -1949,6 +1949,7 @@ export let open = (path = file) => {
         'provider_session_id text',
         'serving_model text',
         'latest_seq integer not null default 0',
+        'standing text',
         'started_at text',
         'stop_requested_at text',
         'input_at text',

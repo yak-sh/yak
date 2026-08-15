@@ -918,6 +918,12 @@ export let stamped: Record<string, Record<string, PropType>> = {
     provider_session_id: 'text',
     serving_model: 'text',
     latest_seq: 'number',
+    // A native (managed-codex) session's log-derived standing —
+    // 'busy'|'terminal'|'idle', the entry_log standingOf() fact — MATERIALIZED
+    // here so SessionDot reads it O(1) instead of scanning the whole entry log
+    // per render (157ms/dot). Server-owned like latest_seq; maintained at the
+    // codex write edge (sessions.ts), null until first stamped.
+    standing: 'text',
     started_at: 'time',
     stop_requested_at: 'time',
     // A steer arrived mid-turn: a managed print run is yielding its current
@@ -1403,6 +1409,7 @@ export type Session = {
   provider_session_id?: string | null // the provider's own id, from its init event
   serving_model?: string | null // what the provider says it's actually serving
   latest_seq?: number // lines of log so far
+  standing?: string | null // native log-derived standing: busy|terminal|idle
   started_at?: string | null
   stop_requested_at?: string | null
   input_at?: string | null // a live managed turn is yielding to new words

@@ -137,9 +137,18 @@ let shown = (
 let raw = (row: EntryRow) =>
   JSON.stringify({ eid: row.eid, seq: row.seq, ...row.comps })
 
-export let graphLog = (source: EntryRow[]): GraphLog => {
+// The busy/terminal FACT a SessionDot needs, computed WITHOUT the entries
+// build — the per-row raw()/shown() mapping in graphLog that dominated the
+// 157ms dot render. busy and terminal are mutually exclusive (terminal
+// requires !busy), so one enum captures the log-derived standing: `busy` (a
+// generation/call in flight), `terminal` (the last generation delivered its
+// final answer, nothing pending), or `idle` (neither). graphLog reuses this,
+// so the dot's O(1) read and the full log can never drift. A server can
+// materialize this onto the session (a facet) so the dot never scans.
+export let standingOf = (
+  source: EntryRow[],
+): 'busy' | 'terminal' | 'idle' => {
   let rows = source.toSorted((a, b) => a.seq - b.seq)
-  let byEid = new Map(rows.map((row) => [row.eid, row]))
   let cancelled = new Set(
     rows.flatMap((row) =>
       row.comps.cancel?.target ? [text(row.comps.cancel.target)] : []
@@ -164,6 +173,7 @@ export let graphLog = (source: EntryRow[]): GraphLog => {
     }
     return !!c.call && !results.has(row.eid)
   })
+  if (busy) return 'busy'
   let generation = rows.filter((row) => row.comps.generation).at(-1)
   let edge =
     rows.find((row) => row.eid == generation?.comps.generation?.through)?.seq ??
@@ -172,12 +182,22 @@ export let graphLog = (source: EntryRow[]): GraphLog => {
     row.seq > edge && (row.comps.attention ||
       (row.comps.message?.role == 'user' && !row.comps.output))
   )
-  let terminal = !busy && !input &&
+  let terminal = !input &&
     rows.some((row) =>
       row.comps.output?.source == generation?.eid &&
       row.comps.output?.phase == 'final_answer' &&
       row.comps.message?.role == 'agent'
     )
+  return terminal ? 'terminal' : 'idle'
+}
+
+export let graphLog = (source: EntryRow[]): GraphLog => {
+  let rows = source.toSorted((a, b) => a.seq - b.seq)
+  let byEid = new Map(rows.map((row) => [row.eid, row]))
+  let stand = standingOf(rows)
+  let busy = stand == 'busy'
+  let terminal = stand == 'terminal'
+  let generation = rows.filter((row) => row.comps.generation).at(-1)
   let model = generation?.comps.generation
   let entries = rows.map((source) => {
     let row = shown(source, byEid)

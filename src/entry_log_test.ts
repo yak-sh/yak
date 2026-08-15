@@ -1,7 +1,12 @@
 // Graph Session log projection tests hold the provider-neutral rendering and
 // derived-state contract without a server, browser, or process transcript.
 import { assertEquals, assertMatch } from '@std/assert'
-import { type EntryRow, graphLog, graphLogPage } from './entry_log.ts'
+import {
+  type EntryRow,
+  graphLog,
+  graphLogPage,
+  standingOf,
+} from './entry_log.ts'
 
 let row = (
   eid: string,
@@ -217,4 +222,56 @@ Deno.test('output evidence without a lease is not ready twice', () => {
     }),
   ]
   assertEquals(graphLog(rows).busy, false)
+})
+
+// standingOf is the busy/terminal fact WITHOUT the entries build (the O(1)
+// facet the SessionDot materialization reads). It must never disagree with
+// graphLog's own busy/terminal — they share the derivation, this holds the seam.
+let agrees = (rows: EntryRow[]) => {
+  let log = graphLog(rows)
+  let want = log.busy ? 'busy' : log.terminal ? 'terminal' : 'idle'
+  assertEquals(standingOf(rows), want)
+  return standingOf(rows)
+}
+
+Deno.test('standingOf matches graphLog busy/terminal across states', () => {
+  // busy: a generation in flight (not delivered, no output sources it)
+  assertEquals(
+    agrees([row('gen', 1, { generation: { model: 'm' } })]),
+    'busy',
+  )
+  // terminal: the last generation delivered its final answer, nothing pending
+  assertEquals(
+    agrees([
+      row('input', 1, { message: { role: 'user' }, content: { body: 'go' } }),
+      row('gen', 2, {
+        generation: { through: 'input' },
+        delivered: { at: 'x' },
+      }),
+      row('final', 3, {
+        output: { source: 'gen', phase: 'final_answer' },
+        message: { role: 'agent' },
+        content: { body: 'done' },
+      }),
+    ]),
+    'terminal',
+  )
+  // idle: delivered generation but no final-answer output — neither busy nor terminal
+  assertEquals(
+    agrees([
+      row('gen', 1, { generation: {}, delivered: { at: 'x' } }),
+    ]),
+    'idle',
+  )
+  // pending input after the edge keeps it out of terminal (idle, not completed)
+  agrees([
+    row('gen', 1, { generation: {}, delivered: { at: 'x' } }),
+    row('final', 2, {
+      output: { source: 'gen', phase: 'final_answer' },
+      message: { role: 'agent' },
+    }),
+    row('ask', 3, { attention: {} }),
+  ])
+  // empty log is idle
+  assertEquals(agrees([]), 'idle')
 })
