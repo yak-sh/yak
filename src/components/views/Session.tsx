@@ -177,17 +177,19 @@ let weave = (rows: Entry[], cs: Ent[]) => {
   return [...out, ...cs.slice(i)]
 }
 
-let mentionText = (x: { row?: LogRow } | Ent) => {
-  if ('eid' in x) return [x.doc?.body ?? '']
-  let r = x.row
-  return r?.kind == 'say' ? [r.text] : []
+type MentionLine = Partial<Entry>
+let mentionLine = (x: MentionLine | Ent): x is MentionLine => 'row' in x
+
+let mentionText = (x: MentionLine | Ent) => {
+  if (mentionLine(x)) return x.row?.kind == 'say' ? [x.row.text] : []
+  return [x.doc?.body ?? '']
 }
 
 // The SCAN — the expensive half: mdMentions parses every text in the thread.
 // On a large log this is milliseconds, so the render path memoizes it (keyed on
 // mentionSig) and never runs it per render.
 export let threadMentions = (
-  thread: ({ row?: LogRow } | Ent)[],
+  thread: (MentionLine | Ent)[],
   repo?: string,
 ): Mention[] =>
   thread.flatMap(mentionText).flatMap((text) => mdMentions(text, repo))
@@ -219,7 +221,7 @@ export let resolveMentions = (raw: Mention[]): Mentioned[] => {
 // Parse then resolve. Non-render callers use this directly; the render path
 // splits the two so it can memoize the scan (threadMentions) alone.
 export let sessionMentions = (
-  thread: ({ row?: LogRow } | Ent)[],
+  thread: (MentionLine | Ent)[],
   repo?: string,
 ): Mentioned[] => resolveMentions(threadMentions(thread, repo))
 

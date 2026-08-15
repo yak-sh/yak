@@ -249,6 +249,19 @@ Deno.test('session references keep entity ids missing from the cache', () => {
   )
 })
 
+Deno.test('graph-native session rows contribute references', () => {
+  cache.value = {}
+  assertEquals(
+    sessionMentions([{
+      eid: 'entry',
+      seq: 1,
+      line: '{}',
+      row: { kind: 'say', role: 'agent', text: 'See T-42' },
+    }]),
+    [{ kind: 'entity', id: 'T-42' }],
+  )
+})
+
 Deno.test('session references link commits with actor repository context', () => {
   cache.value = {
     project: {
