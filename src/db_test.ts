@@ -41,9 +41,10 @@ let {
 let { assertEquals, assertMatch, assertNotEquals, assertThrows } = await import(
   '@std/assert'
 )
-let { comps, kindOrder, sessionOf, shortId, stamped } = await import(
-  './types.ts'
-)
+let { comps, kindOrder, lazy, partition, sessionOf, shortId, stamped } =
+  await import(
+    './types.ts'
+  )
 let { freshDb } = await import('./testdb.ts')
 
 // A migrated, seeded db per test, cloned from a snapshot (see freshDb) — the
@@ -121,6 +122,41 @@ Deno.test('componentCounts: the graph, not the snapshot the cache mirrors', () =
   let snap = snapshot(d)
   assertEquals(snap.changes.some((c) => c.name == 'recalled'), false)
   assertEquals(snap.changes.some((c) => c.name == 'entry'), false)
+  d.close()
+  Deno.removeSync(path)
+})
+
+Deno.test('partition: only entry is lazy, and snapshot honors the declaration', () => {
+  // The one-list drives sync partitioning (types.ts `partition`). entry is the
+  // one lazy comp today; wake and task ride the snapshot. This is the guard on
+  // the behavior-identical migration (T-18093): flipping wake to lazy is a real
+  // change gated on the whole-graph-scan audit (T-18094), never a silent side
+  // effect of reading the declaration.
+  assertEquals(lazy('entry'), true)
+  assertEquals(lazy('wake'), false)
+  assertEquals(lazy('task'), false)
+  assertEquals(partition.entry, 'lazy')
+
+  let path = Deno.makeTempFileSync({ suffix: '.db' })
+  let d = open(path)
+  let sess = uid()
+  apply(d, [{ eid: sess, name: 'session', comp: { id: uid() } }])
+  let logged = uid()
+  apply(d, [{ eid: logged, name: 'entry', comp: { session: sess } }])
+  let woken = uid()
+  apply(d, [{
+    eid: woken,
+    name: 'wake',
+    comp: { at: new Date().toISOString() },
+  }])
+
+  let snap = snapshot(d)
+  // The entry-partition entity is omitted wholesale; the wake entity rides.
+  assertEquals(snap.changes.some((c) => c.eid == logged), false)
+  assertEquals(
+    snap.changes.some((c) => c.eid == woken && c.name == 'wake'),
+    true,
+  )
   d.close()
   Deno.removeSync(path)
 })

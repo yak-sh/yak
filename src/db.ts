@@ -21,6 +21,7 @@ import {
   type Hit,
   idOf,
   kindOrder,
+  lazy,
   sessionActive,
   sessionComps,
   settled,
@@ -2423,6 +2424,15 @@ let readable: Record<string, string[]> = Object.fromEntries(
 let select = (name: string) =>
   `select ${readable[name].map(sqlName).join(', ')} from ${sqlName(name)}`
 
+// The boot snapshot omits every entity carrying a LAZY-partition comp
+// (types.ts `partition`) — the whole entity, so a lazy entity's eager comps
+// (a session's `recalled`) leave with it too. This subquery is the UNION of
+// the lazy tables' eids, derived from the one-list so a new lazy comp joins
+// the omission with zero further edits. Today lazy = {entry}, so it reads
+// `select eid from entry`, byte-identical to the former hardcoded clause.
+let lazyEids = Object.keys(readable).filter(lazy)
+  .map((name) => `select eid from ${sqlName(name)}`).join(' union ')
+
 let bound = (
   name: string,
   col: string,
@@ -4243,7 +4253,7 @@ export let snapshot = (db: DatabaseSync): Snapshot => {
     for (
       let row of prep(
         db,
-        `${select(name)} where eid not in (select eid from entry)`,
+        `${select(name)} where eid not in (${lazyEids})`,
       ).all() as Record<string, unknown>[]
     ) {
       changes.push({ eid: row.eid as string, name, comp: row })
@@ -4252,8 +4262,8 @@ export let snapshot = (db: DatabaseSync): Snapshot => {
   let deps = prep(
     db,
     `select parent as parent, type, child as child from dependency
-     where parent not in (select eid from entry)
-       and child not in (select eid from entry)`,
+     where parent not in (${lazyEids})
+       and child not in (${lazyEids})`,
   ).all() as Dep[]
   // A project's specialist personas ride derived `reads` edges (homeReads):
   // home is the one truth, so these compute here on the graph-out door

@@ -760,6 +760,20 @@ export let indexes: Record<string, Idx[]> = {
   subscription: [{ cols: ['actor', 'target'], unique: true }],
 }
 
+// Snapshot partition (T-18093, D-18092). A comp is `eager` — its entities
+// ride the boot snapshot every client mirrors — or `lazy` — never in it,
+// hydrated only on subscription (the working-set boot, T-18059). Default is
+// eager; only lazy comps are listed, so the same one-list that already drives
+// the db allowlist and MCP grammar now also drives sync partitioning:
+// snapshot() (db.ts) omits every entity carrying a lazy comp. `entry` is the
+// log partition — 110k+ rows no browser boots with. `wake` is deliberately
+// NOT lazy: it rides the snapshot today, so flipping it is a real behavior
+// change gated on the whole-graph-scan audit (T-18094), not this migration.
+// (Distinct from `unnumbered` in db.ts, the NUMBERING aspect, which does hold
+// wake — different concern, M-14942.)
+export let partition: Record<string, 'eager' | 'lazy'> = { entry: 'lazy' }
+export let lazy = (name: string) => partition[name] === 'lazy'
+
 // Server-stamped columns — never wire-writable (cols() reads `comps`
 // alone, so these never join the apply allowlist), but part of the
 // SCHEMA: backlinks and any reader of associations take the union, so an
