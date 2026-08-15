@@ -72,10 +72,12 @@ import {
   commented,
   deleted,
   logs,
+  maintainStandingFor,
   prepareWorktree,
   recover,
   recoverWorktree,
   spawned,
+  standingBackfill,
   stopped,
   tidy,
   watched,
@@ -501,6 +503,15 @@ let cast = (changes: Change[], except?: WebSocket) => {
   sendLive(changes, except)
   maintain(changes)
   nativeSoon(cast)
+  // Maintain the native-session `standing` facet at the write edge (T-17855),
+  // so SessionDot reads it O(1) instead of scanning the whole entry log per
+  // render (157ms/dot). cast is the one door BOTH writers of turn-edge entries
+  // funnel through — the runner (managed_codex, which never dispatches effects)
+  // and the wire (/apply, MCP). A turn-edge batch re-derives standingOf over
+  // the session's log once and stamps it; everything else is a cheap name
+  // check. The stamp casts back as a `session` change (not a turn-edge comp),
+  // so this cannot recurse.
+  maintainStandingFor(changes, cast)
 }
 
 // The effect half of a write, run AFTER the casts: a slow or failing
@@ -1480,6 +1491,13 @@ syncSoon()
 // still alive, finalize the ones that died while we were away. Nothing here
 // reaps a child; the watcher below must never learn how.
 recover(cast)
+
+// Backfill the native-session `standing` facet (T-17855): existing sessions
+// have logs but no facet stamped until their next transition, so their dots
+// would read idle until then. Backgrounded and yielding per session — never
+// holds boot (the sweep-saturation incident above is why this cannot be a
+// synchronous loop). A rejection nobody handles ends the process, so .catch.
+standingBackfill(cast).catch((e) => console.warn('standing backfill —', e))
 
 // Self-start each dream that has no pending wake — a fresh dream, or one whose
 // cadence wake fired-and-consumed while the server was down (a dream re-arms at

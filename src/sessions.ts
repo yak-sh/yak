@@ -41,7 +41,8 @@ import {
   healthChange,
 } from './deliver.ts'
 import { present, reachable } from './door.ts'
-import { append, callKeys, importedLines } from './entries.ts'
+import { append, callKeys, importedLines, readEntries } from './entries.ts'
+import { standingOf } from './entry_log.ts'
 import {
   type Batch,
   ingestEntries,
@@ -49,7 +50,7 @@ import {
   ingestTranscript,
   scrub,
 } from './ingest.ts'
-import { graphSession } from './managed_codex.ts'
+import { graphSession, runnerSessions } from './managed_codex.ts'
 import { dispatch, trace } from './effects.ts'
 import { legacyWorktreesDir, worktreesDir } from './ground.ts'
 import { hookClaim, rows, wrapChanges } from './client.ts'
@@ -297,6 +298,89 @@ let stamp = (
   }
   if (ending && was.status != body.status) {
     settled(eid, String(body.status), cast)
+  }
+}
+
+// A native (graph-born, managed-codex) session's SessionDot reads its `standing`
+// facet O(1); THIS is where the facet is maintained — at the write edge, not
+// scanned per render (T-17855, was 157ms/dot). Recompute standingOf over the
+// full log and stamp it. standingOf is the SAME function graphLog derives
+// busy/terminal from, so at every edge it's maintained on the facet equals the
+// log-derived truth exactly (maintainStandingFor picks the edges). stamp()
+// dedupes (writeSession only casts a moved column), so a no-op costs one read
+// and no write; graphSession() gates out process-backed sessions (their dots
+// never scanned). The O(log) recompute rides a rare turn edge off the render
+// path — the whole point of the facet.
+export let maintainStanding = (eid: string, cast: Cast) => {
+  if (!graphSession(db, eid)) return
+  stamp(eid, { standing: standingOf(readEntries(db, eid)) }, cast)
+}
+
+// The turn-edge comps whose appearance in a cast batch means a native session's
+// standing may have moved: a `generation` opens a turn (idle→busy);
+// `delivered`/`error`/`cancel`/`lease` and a final-answer `output` close it; a
+// `user` message or `attention` reopens it. `call`/`result` are excluded — the
+// tool loop never flips standing (the session stays busy across it), and every
+// edge fire recomputes the whole log anyway, catching any unresolved-call state
+// at the boundary. output/message ride non-edge variants too (streamed
+// reasoning, agent turns), screened by the field guards below.
+let edgeComp = new Set([
+  'generation',
+  'delivered',
+  'lease',
+  'error',
+  'cancel',
+  'attention',
+])
+
+// Called from the server's cast (T-17855) — the one door BOTH writers of
+// turn-edge entries funnel through (the runner, which never dispatches effects,
+// and the wire). A batch bearing a turn edge re-derives standingOf once per
+// native session it touched and stamps it; a batch without one is a cheap name
+// scan and returns. maintainStanding() gates non-native and dedupes, and its
+// stamp casts back as a `session` change (not a turn-edge comp), so this cannot
+// recurse. Session-level delivered/error (a stop_request, a wake) resolve to no
+// entry row and are skipped.
+export let maintainStandingFor = (changes: Change[], cast: Cast) => {
+  let eids = new Set<string>()
+  for (let c of changes) {
+    if (!c.comp) continue
+    if (edgeComp.has(c.name)) eids.add(c.eid)
+    else if (c.name == 'output' && c.comp.phase == 'final_answer') {
+      eids.add(c.eid)
+    } else if (c.name == 'message' && c.comp.role == 'user') eids.add(c.eid)
+  }
+  if (!eids.size) return
+  let sessions = new Set<string>()
+  for (let eid of eids) {
+    let row = db.prepare('select session from entry where eid = ?').get(eid) as
+      | { session: string }
+      | undefined
+    if (row?.session) sessions.add(row.session)
+  }
+  for (let eid of sessions) maintainStanding(eid, cast)
+}
+
+// Boot backfill for the facet above: an existing native session has a full log
+// but no `standing` stamped until its next transition, so its dot would read
+// idle until then. Stamp each once at boot. Backgrounded and YIELDING per
+// session (setTimeout, not a microtask) — the boot sweep that saturated the
+// event loop (incident 2026-08-12) is the cautionary tale: a synchronous churn
+// over all native sessions never returns to accept(). stamp() dedupes, so a
+// restart re-runs this cheaply (one read per session, no write when unchanged).
+export let standingBackfill = async (cast: Cast) => {
+  let breathe = () => new Promise<void>((r) => setTimeout(r))
+  let i = 0
+  for (let eid of runnerSessions(db)) {
+    // Yield to the macrotask queue every 20 sessions so a fleet-sized sweep
+    // stays a responsive background trickle (not the loop-saturating burst the
+    // 2026-08-12 incident was), while a handful of sessions never yields.
+    if (++i % 20 == 0) await breathe()
+    try {
+      maintainStanding(eid, cast)
+    } catch (e) {
+      console.warn(`standing backfill ${eid} —`, e)
+    }
   }
 }
 
