@@ -3601,6 +3601,17 @@ export let journalBy = (
       changes: canonicalChanges(JSON.parse(r.batch) as Change[]),
     }))
 
+// A released lease is gone from the graph, but not from the record. Sessions
+// use this cut to name every task they worked on, in first-claim order.
+export let journalClaims = (db: DatabaseSync, session: string): string[] =>
+  (db.prepare(`
+    select json_extract(je.value, '$.eid') as eid, min(j.rowid) as first
+    from journal j, json_each(j.batch) je
+    where json_extract(je.value, '$.name') = 'claim'
+      and json_extract(je.value, '$.comp.session') = ?
+    group by eid order by first
+  `).all(session) as { eid: string }[]).map((r) => r.eid)
+
 // Session entries are a lazy graph partition: root clients never receive
 // their eids or any facets/provenance hung from them. A Session subscription
 // still sees the unfiltered batch through maintain(), and keyed readers stay

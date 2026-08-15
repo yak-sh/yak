@@ -5,6 +5,7 @@ import { parseHTML } from 'linkedom'
 import { cache, ent, repoUrl } from '../../live.ts'
 import { resolve } from '../Entity.tsx'
 import { mount } from '../mount.ts'
+import { until } from '../../testing.ts'
 import {
   SessionBody,
   SessionContext,
@@ -16,32 +17,79 @@ import {
   SessionSummary,
 } from './Session.tsx'
 
-Deno.test('session row names its actor', () => {
+Deno.test('session Tile leads with model info and every worked task', async () => {
+  let prior = globalThis.fetch
+  globalThis.fetch =
+    (() => Promise.resolve(Response.json(['one', 'two']))) as typeof fetch
   cache.value = {
-    project: {
-      entity: { eid: 'project', num: 1 },
-      doc: { eid: 'project', title: 'Task Graph', body: '' },
-      project: { eid: 'project' },
+    persona: {
+      entity: { eid: 'persona', num: 1 },
+      doc: { eid: 'persona', title: 'Ada', body: '' },
+      persona: { eid: 'persona' },
     },
     session: {
       entity: { eid: 'session', num: 2 },
       session: {
         eid: 'session',
         id: 'session-id',
-        actor: 'project',
-        model: 'gpt-5.6',
+        model: 'gpt-5.6-sol',
+        effort: 'high',
+        persona: 'persona',
       },
+      created: { eid: 'session', at: '2026-08-15T09:00:00-04:00' },
+    },
+    one: {
+      entity: { eid: 'one', num: 3 },
+      doc: { eid: 'one', title: 'First task', body: '' },
+      task: { eid: 'one', status: 'done', priority: 1 },
+    },
+    two: {
+      entity: { eid: 'two', num: 4 },
+      doc: { eid: 'two', title: 'Second task', body: '' },
+      task: { eid: 'two', status: 'wip', priority: 1 },
     },
   }
 
   let e = ent('session')
-  let { root, free } = mount(h(resolve(e, 'List.Tile').Render, { e }))
-  assertEquals(
-    root.querySelector('.SessionRow_Actor')?.textContent,
-    'Task Graph',
-  )
-  free()
-  cache.value = {}
+  let mounted = mount(h(resolve(e, 'Tray.List.Tile').Render, { e }))
+  try {
+    let { root } = mounted
+    await until(() => root.querySelectorAll('.SessionRow_Task').length == 2)
+    let head = root.querySelector('.SessionRow_Head')!
+    assertEquals(
+      [...head.children].map((x) => x.className.split(' ')[0]),
+      [
+        'Dot',
+        'SessionRow_Persona',
+        'SessionRow_Model',
+        'SessionRow_Effort',
+        'Id',
+        'Stamp',
+      ],
+    )
+    assertEquals(
+      head.querySelector('.SessionRow_Persona')?.textContent,
+      'Ada',
+    )
+    assertEquals(
+      head.querySelector('.SessionRow_Model')?.textContent,
+      'GPT 5.6 Sol',
+    )
+    assertEquals(
+      head.querySelector('.SessionRow_Effort')?.textContent,
+      'high',
+    )
+    assertEquals(
+      [...root.querySelectorAll('.SessionRow_Task')].map((x) =>
+        x.textContent.replace(/\s+/g, ' ').trim()
+      ),
+      ['T-3 First task', 'T-4 Second task'],
+    )
+  } finally {
+    mounted.free()
+    cache.value = {}
+    globalThis.fetch = prior
+  }
 })
 
 Deno.test('session title names model and effort', () => {

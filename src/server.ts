@@ -23,6 +23,7 @@ import {
   epoch,
   file as graph,
   journalBy,
+  journalClaims,
   journalOf,
   locate,
   referrersOf,
@@ -1104,14 +1105,17 @@ let http = Deno.serve(
     // runs project their JSONL, graph runs project their ordered entries.
     let session = path.match(/^\/sessions\/([0-9a-f-]{36})\/logs$/)
     if (session) return Response.json(sessionLog(session[1], url.searchParams))
-    // The wire's record, per entity (?eid=) or instrument (?via= — a
-    // session's whole day, for the wrap ledger). Newest first. Raw eids
-    // only — id resolution is a client concern.
+    // The wire's record, per entity (?eid=), instrument (?via= — a session's
+    // whole day), or session claim history (?session=). Raw eids only — id
+    // resolution is a client concern.
     if (path == '/journal') {
       let via = url.searchParams.get('via')
+      let session = url.searchParams.get('session')
       let limit = Number(url.searchParams.get('limit') ?? 50) || 50
       return Response.json(
-        via
+        session
+          ? journalClaims(db, session)
+          : via
           ? journalBy(db, via, limit)
           : journalOf(db, url.searchParams.get('eid') ?? '', limit),
       )

@@ -1,11 +1,17 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
-import { awake, type Ent, friendly, kilo, type LogRow } from '../../types.ts'
+import {
+  awake,
+  type Ent,
+  friendly,
+  idOf,
+  kilo,
+  type LogRow,
+} from '../../types.ts'
 import {
   base,
   commentsOn,
   ent,
   findEid,
-  jobOf,
   mutate,
   observation,
   repoUrl,
@@ -19,7 +25,6 @@ import { Dot } from '../Dot.tsx'
 import { Composer, Note } from '../Comments.tsx'
 import { Id } from './Inline.tsx'
 import { Entity, resolve } from '../Entity.tsx'
-import { title } from '../title.tsx'
 import { Markdown } from '../Markdown.tsx'
 import { mdMentions } from '../../md.ts'
 import { UrlVal } from '../editors.tsx'
@@ -27,6 +32,7 @@ import { Ansi } from '../Ansi.tsx'
 import { SessionDot, useSessionStanding } from '../session_status.tsx'
 import { EntryLens, EntrySummary } from './Entry.tsx'
 import { entityUrl } from '../../url.ts'
+import { useQueryEids } from '../useQuery.ts'
 
 // An agent session, watched — the console (W-3676 #5): a sticky slim bar
 // (task, lifecycle summary, stop — server-owned columns riding
@@ -764,30 +770,72 @@ export let Session = ({ e }: { e: Ent }) => {
   )
 }
 
-// A session in a list: the dot carries the status, the way a task row's
-// does — plus what it's running and the task it's ON (jobOf: the claim
-// is the truth, the managed request the fallback). The whole tile is the
-// LINK (clickProps on the el: click peeks, double click navigates).
+// A released claim leaves the graph but stays in the journal. Current claims
+// make the list react immediately; each membership change rereads the durable
+// cut so releasing a task cannot make it disappear.
+let useWorkedTasks = (eid: string) => {
+  let current = useQueryEids(`.kind=task .claim.session=${eid}`)
+  let [past, setPast] = useState<{ eid: string; ids: string[] }>({
+    eid,
+    ids: [],
+  })
+  let claims = current.join(',')
+  useEffect(() => {
+    let alive = true
+    fetch(`${base()}/journal?session=${encodeURIComponent(eid)}`)
+      .then((r) => r.ok ? r.json() : [])
+      .then((ids: string[]) => {
+        if (alive) setPast({ eid, ids })
+      }, () => {})
+    return () => {
+      alive = false
+    }
+  }, [eid, claims])
+  let ids = past.eid == eid ? past.ids : []
+  return [...new Set([...ids, ...current])].map(ent).filter((x) => x.task)
+}
+
+// A session Tile is a model-information line followed by every task the
+// session has worked on. Each line keeps its own link target.
 let RowLine = block('div', 'SessionRow', {
-  Status: 'span',
+  Head: 'div',
+  Persona: 'span',
   Model: 'span',
-  Actor: 'span',
+  Effort: 'span',
+  Tasks: 'div',
   Task: 'span',
 })
 
 export let SessionRow = ({ e, slots, onOpen }: TileProps) => {
   let s = e.session!
-  let job = jobOf(e)
+  let tasks = useWorkedTasks(e.eid)
+  let persona = s.persona ? ent(s.persona) : undefined
   let model = s.serving_model || s.model
   return (
-    <RowLine {...tileLink(e, onOpen)}>
-      {slot(slots, 'before')}
-      <SessionDot e={e} />
-      {model && <RowLine.Model>{friendly(model)}</RowLine.Model>}
-      {s.actor && <RowLine.Actor {...title(ent(s.actor).doc?.title ?? '')} />}
-      {job && <RowLine.Task {...title(ent(job).doc?.title ?? '')} />}
-      <Id e={e} />
-      {slot(slots, 'after')}
+    <RowLine>
+      <RowLine.Head {...tileLink(e, onOpen)}>
+        {slot(slots, 'before')}
+        <SessionDot e={e} />
+        {persona && (
+          <RowLine.Persona>
+            {persona.doc?.title || idOf(persona)}
+          </RowLine.Persona>
+        )}
+        {model && <RowLine.Model>{friendly(model)}</RowLine.Model>}
+        {s.effort && <RowLine.Effort>{s.effort}</RowLine.Effort>}
+        <Id e={e} />
+        {slot(slots, 'after')}
+        <Stamp at={e.created?.at} />
+      </RowLine.Head>
+      {tasks.length > 0 && (
+        <RowLine.Tasks>
+          {tasks.map((task) => (
+            <RowLine.Task key={task.eid}>
+              <Entity eid={task.eid} view='Inline' />
+            </RowLine.Task>
+          ))}
+        </RowLine.Tasks>
+      )}
     </RowLine>
   )
 }

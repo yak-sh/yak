@@ -12,16 +12,13 @@ import {
   topZ,
   uuid,
 } from '../live.ts'
-import { awake, type Ent, friendly, idOf, type Session } from '../types.ts'
-import { block, Stamp } from './ui.tsx'
+import { awake, type Session } from '../types.ts'
+import { block } from './ui.tsx'
 import { Icon } from './icons.tsx'
 import { icons } from './Card.tsx'
 import { dragData } from './drag.ts'
 import { Entity } from './Entity.tsx'
 import { SessionDot } from './session_status.tsx'
-import { Id } from './views/Inline.tsx'
-import { useQuery } from './useQuery.ts'
-import { tileLink } from './Tile.tsx'
 
 // The Tray ("the Shelf"): the statusbar's right end. The strip — one
 // status dot per LIVE session, one view icon per shelved card — lives IN
@@ -117,47 +114,6 @@ let Frame = block('div', 'Tray', {
 })
 let { Strip, Chevron, Panel, Group, Label, Row, X, Hint } = Frame
 
-let Live = block('div', 'TrayLive', {
-  Head: 'div',
-  Persona: 'span',
-  Model: 'span',
-  Effort: 'span',
-  Tasks: 'div',
-  Task: 'div',
-})
-let { Head, Persona, Model, Effort, Tasks, Task } = Live
-
-// A tray session has its own face: identity and runtime facts lead, then one
-// line per lease. The claim query keeps this narrow — unrelated graph patches
-// cannot repaint every live run.
-export let LiveSession = ({ e }: { e: Ent }) => {
-  let s = e.session!
-  let claims = useQuery(`.kind=task .claim.session=${e.eid}`)
-  let persona = s.persona ? ent(s.persona) : undefined
-  let model = s.serving_model || s.model
-  return (
-    <Live>
-      <Head {...tileLink(e)}>
-        <SessionDot e={e} />
-        {persona && <Persona>{persona.doc?.title || idOf(persona)}</Persona>}
-        {model && <Model>{friendly(model)}</Model>}
-        {s.effort && <Effort>{s.effort}</Effort>}
-        <Id e={e} />
-        <Stamp at={e.created?.at} />
-      </Head>
-      {claims.length > 0 && (
-        <Tasks>
-          {claims.map((claim) => (
-            <Task key={claim.eid}>
-              <Entity eid={claim.eid} view='Inline' />
-            </Task>
-          ))}
-        </Tasks>
-      )}
-    </Live>
-  )
-}
-
 // Drop a card payload onto the shelf: repin an existing card ({pin} in the
 // payload) or mint a fresh card+pin for the target. The shelf is born here,
 // never on render.
@@ -245,7 +201,7 @@ export let Tray = () => {
                   // dropping it on the canvas SPAWNS a session card
                   onDragStart={(e: DragEvent) => dragData(e, eid, 'Session')}
                 >
-                  <LiveSession e={ent(eid)} />
+                  <Entity eid={eid} view='Tray.List.Tile' />
                   {
                     /* only a settled run dismisses — a live one wants your
                       eyes (stop it from its own view) */

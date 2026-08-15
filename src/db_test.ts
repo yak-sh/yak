@@ -13,6 +13,7 @@ let {
   healInboundDeliver,
   human,
   journalBy,
+  journalClaims,
   journalOf,
   liveDb,
   locate,
@@ -3145,6 +3146,24 @@ Deno.test('journalBy: cuts the ledger by session, not its resolved actor', () =>
   assertEquals(rows[0].actor, actor)
   assertEquals(rows[0].via, one)
   assertEquals(rows[0].changes[0].eid, first)
+})
+
+Deno.test('journalClaims keeps every task after its lease is released', () => {
+  let session = uid(), one = uid(), two = uid()
+  apply(db, [
+    { eid: session, name: 'session', comp: { id: session } },
+    { eid: one, name: 'doc', comp: { title: 'one' } },
+    { eid: one, name: 'task', comp: { status: 'open', priority: 1 } },
+    { eid: two, name: 'doc', comp: { title: 'two' } },
+    { eid: two, name: 'task', comp: { status: 'open', priority: 1 } },
+  ])
+  apply(db, [{ eid: one, name: 'claim', comp: { session } }])
+  apply(db, [{ eid: one, name: 'claim', comp: null }])
+  apply(db, [{ eid: two, name: 'claim', comp: { session } }])
+  apply(db, [{ eid: two, name: 'claim', comp: null }])
+  apply(db, [{ eid: one, name: 'claim', comp: { session } }])
+
+  assertEquals(journalClaims(db, session), [one, two])
 })
 
 Deno.test('actor fill: a session that ran in a repo resolves to its venture', () => {
