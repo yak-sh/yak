@@ -1757,13 +1757,18 @@ let briefOf = (r: Row) => {
 // is the bus cursor's own definition — created after the session's
 // last ack, or after its birth if it never acked. Machine events and
 // the actor's own words don't count.
-let unheard = (all: Row[], sess: Row | undefined, now: number) => {
+let unheard = (
+  sessions: Row[],
+  commentsByTarget: Map<string, Row[]>,
+  sess: Row | undefined,
+  now: number,
+) => {
   let actor = String(sess?.comps.session?.actor ?? '')
   if (!actor) return []
-  let recent = all
+  let recent = sessions
     .filter((r) =>
-      r.comps.session && r.eid != sess?.eid &&
-      r.comps.session.actor == actor &&
+      r.eid != sess?.eid &&
+      r.comps.session?.actor == actor &&
       now - Date.parse(editedAt(r)) < 7 * DAY
     )
     .sort((a, b) => editedAt(b).localeCompare(editedAt(a)))
@@ -1773,13 +1778,12 @@ let unheard = (all: Row[], sess: Row | undefined, now: number) => {
       // Unheard is the per-item stamp, the same rule notices() serves by —
       // so the digest and the bus can never disagree about what is owed.
       // Still floored at the session's birth: nothing can be owed to a
-      // session that did not exist when it was written.
-      let n = all.filter((r) => {
-        let c = r.comps.comment
-        return c && c.target == s.eid &&
-          r.comps.created?.by != actor && !r.comps.notified &&
-          bornAt(r) > bornAt(s)
-      }).length
+      // session that did not exist when it was written. The comment index
+      // makes this O(comments on s) rather than a scan of the whole graph.
+      let n = (commentsByTarget.get(s.eid) ?? []).filter((r) =>
+        r.comps.created?.by != actor && !r.comps.notified &&
+        bornAt(r) > bornAt(s)
+      ).length
       return [s, n] as const
     })
     .filter(([, n]) => n > 0)
@@ -1801,16 +1805,18 @@ let unheard = (all: Row[], sess: Row | undefined, now: number) => {
 // which is what lets a bare `task context` in a repo show exactly what that
 // project's operator sees. Empty scope means an unplaceable caller: a small
 // fleet peek (the hottest open work), never the whole board.
-let pulse = (all: Row[], now: number, budget: number, scope?: string) => {
+let pulse = (tasks: Row[], now: number, budget: number, scope?: string) => {
   if (budget < 2) return []
-  let age = (r: Row) => now - Date.parse(editedAt(r))
+  // Recency by string compare against a precomputed ISO cutoff, not a
+  // Date.parse per task: graph timestamps are ISO-Z, so lexical order IS
+  // chronological order — and `now - parse < 7d` ⟺ `editedAt > cutoff`, with
+  // an empty/absent stamp (Date.parse -> NaN, excluded) staying excluded (a
+  // stamp < cutoff). Date.parse over every open task was pulse's whole cost.
+  let cutoff = new Date(now - 7 * DAY).toISOString()
+  let fresh = (r: Row) => editedAt(r) > cutoff
   let mine = scope
-    ? all.filter((r) =>
-      r.comps.task && String(r.comps.task.project) == scope &&
-      age(r) < 7 * DAY
-    )
-    : all.filter((r) => r.comps.task && !settled(String(r.comps.task.status)))
-      .filter((r) => age(r) < 7 * DAY)
+    ? tasks.filter((r) => String(r.comps.task?.project) == scope && fresh(r))
+    : tasks.filter((r) => !settled(String(r.comps.task?.status))).filter(fresh)
   let hits = mine
     .sort((a, b) => editedAt(b).localeCompare(editedAt(a)))
     .slice(0, Math.min(budget - 1, scope ? 6 : 3))
@@ -1830,7 +1836,9 @@ let pulse = (all: Row[], now: number, budget: number, scope?: string) => {
 // the bus cursor (that stays the sweep's one job) and it never shows in a
 // bare preview, since a preview holds no claims to hear about.
 let onMine = (
-  all: Row[],
+  claims: Row[],
+  comments: Row[],
+  byEid: Map<string, Row>,
   sess: Row | undefined,
   now: number,
   budget: number,
@@ -1838,10 +1846,9 @@ let onMine = (
 ) => {
   if (!sess || budget < 1) return []
   let mine = new Set(
-    all.filter((r) => r.comps.claim?.session == sess.eid).map((r) => r.eid),
+    claims.filter((r) => r.comps.claim?.session == sess.eid).map((r) => r.eid),
   )
   if (!mine.size) return []
-  let byEid = new Map(all.map((r) => [r.eid, r]))
   let name = (eid: unknown) => {
     let r = byEid.get(String(eid))
     return String(
@@ -1849,7 +1856,7 @@ let onMine = (
         'someone',
     )
   }
-  let hits = all
+  let hits = comments
     .filter((r) => {
       let c = r.comps.comment
       return c && !skip.has(r.eid) && r.comps.created?.via != sess.eid &&
@@ -1879,19 +1886,18 @@ let onMine = (
 // sessions still belongs in the working set. Current-session claims already
 // lead the digest, so repeating them here would hide the next thing to pop.
 let resumptions = (
-  all: Row[],
+  tasks: Row[],
+  claims: Row[],
+  sessRows: Row[],
   sess: Row | undefined,
   budget: number,
 ) => {
   let actor = String(sess?.comps.session?.actor ?? '')
   if (!actor || budget < 2) return []
   let mine = new Set(
-    all.filter((r) => r.comps.claim?.session == sess?.eid).map((r) => r.eid),
+    claims.filter((r) => r.comps.claim?.session == sess?.eid).map((r) => r.eid),
   )
-  let sessions = new Map(
-    all.filter((r) => r.comps.session)
-      .map((r) => [r.eid, r] as const),
-  )
+  let sessions = new Map(sessRows.map((r) => [r.eid, r] as const))
   let at = (r: Row) =>
     String(r.comps.resume?.at ?? r.comps.claim?.claimed_at ?? editedAt(r))
   // The claim arm is a forward deref — task's claim → its session → that
@@ -1900,8 +1906,8 @@ let resumptions = (
   // JS/OR. `deref` is the pred's graph, keyed over the sessions already indexed.
   let mineClaim = parseQuery('.claim.session.actor=' + actor)
   let deref = (eid: string) => sessions.get(eid)?.comps
-  let hits = all
-    .filter((r) => r.comps.task && !settled(String(r.comps.task.status)))
+  let hits = tasks
+    .filter((r) => !settled(String(r.comps.task?.status)))
     .filter((r) => !mine.has(r.eid))
     .filter((r) => {
       if (r.comps.claim) return matchQuery(r.comps, mineClaim, deref)
@@ -1942,10 +1948,10 @@ export let decidedAt = (r: Row) => String(r.comps.decided?.at ?? '')
 // beside recall instead of inside it. The date leads the line — the point of
 // the section is WHEN, and a decision written up from an old letter has a
 // date its `created` stamp would misreport.
-let decisions = (all: Row[], budget: number, scope?: string) => {
+let decisions = (decided: Row[], budget: number, scope?: string) => {
   if (budget < 2) return []
-  let hits = all
-    .filter((r) => r.comps.decided && belongs(r, scope))
+  let hits = decided
+    .filter((r) => belongs(r, scope))
     .sort((a, b) => decidedAt(b).localeCompare(decidedAt(a)))
     .slice(0, budget - 1)
   if (!hits.length) return []
@@ -1985,8 +1991,16 @@ let fleetMemory = (all: Row[], now: number, budget: number) => {
 // gates beneath it (each with the status and who holds it). Shared by the
 // operator digest's "claimed by you" list and the subagent hook's lone task
 // block (cli.ts) — one renderer, so both doors read identically.
-export let taskBlock = (all: Row[], deps: Dep[], r: Row): string[] => {
-  let byEid = new Map(all.map((x) => [x.eid, x]))
+export let taskBlock = (
+  all: Row[],
+  deps: Dep[],
+  r: Row,
+  byIx?: Map<string, Row>,
+): string[] => {
+  // A caller already holding the whole-graph index (the digest shows several
+  // task blocks a call) passes it: rebuilding it here made every shown row an
+  // O(graph) map build.
+  let byEid = byIx ?? new Map(all.map((x) => [x.eid, x]))
   let out = [
     `- ${idOf(r)} ${r.comps.task?.status ?? r.kind} — ${
       r.comps.doc?.title ?? ''
@@ -2061,14 +2075,40 @@ export let contextDigest = (
   skip = new Set<string>(),
 ) => {
   let all = rows(snap)
-  let byEid = new Map(all.map((r) => [r.eid, r]))
-  let sess = all.find((r) =>
-    r.comps.session && String(r.comps.session.id) == session
-  )
+  // One pass buckets the graph by the components the digest sections read, so
+  // the ~dozen helpers below each scan their own kind rather than re-filtering
+  // the whole graph (and rebuilding byEid/sessions maps) apiece — the boot
+  // digest runs on every session start, so this is a fleet-wide hot path. The
+  // comment index in particular kills unheard's per-session nested O(n) scan.
+  let byEid = new Map<string, Row>()
+  let tasks: Row[] = []
+  let sessions: Row[] = []
+  let claims: Row[] = []
+  let comments: Row[] = []
+  let decided: Row[] = []
+  for (let r of all) {
+    byEid.set(r.eid, r)
+    let c = r.comps
+    if (c.task) tasks.push(r)
+    if (c.session) sessions.push(r)
+    if (c.claim) claims.push(r)
+    if (c.comment) comments.push(r)
+    if (c.decided) decided.push(r)
+  }
+  let commentsByTarget = new Map<string, Row[]>()
+  for (let r of comments) {
+    let t = String(r.comps.comment?.target ?? '')
+    let arr = commentsByTarget.get(t)
+    if (arr) arr.push(r)
+    else commentsByTarget.set(t, [r])
+  }
+  let sess = sessions.find((r) => String(r.comps.session?.id) == session)
   let cwd = String(sess?.comps.session?.cwd ?? '')
   scope = scopeFor(all, sess, cwd, scope)
   let here = scope ? byEid.get(scope) : undefined
-  let mine = sess ? all.filter((r) => r.comps.claim?.session == sess.eid) : []
+  let mine = sess
+    ? claims.filter((r) => r.comps.claim?.session == sess.eid)
+    : []
   mine.sort((a, b) =>
     String(b.comps.claim?.claimed_at ?? '').localeCompare(
       String(a.comps.claim?.claimed_at ?? ''),
@@ -2078,7 +2118,7 @@ export let contextDigest = (
     '# ' + (session ? `tasks · session ${session}` : 'tasks · a preview') +
     (here ? ` · ${idOf(here)} ${here.comps.doc?.title ?? ''}` : ''),
   ]
-  let show = (r: Row) => lines.push(...taskBlock(all, snap.deps, r))
+  let show = (r: Row) => lines.push(...taskBlock(all, snap.deps, r, byEid))
   if (mine.length) {
     lines.push('claimed by you:')
     mine.slice(0, 4).forEach(show)
@@ -2086,8 +2126,8 @@ export let contextDigest = (
     // Suggestions are local when a scope stands (a fleet's worth of
     // open work is task list's job) — an idle project falls back to
     // the fleet rather than suggesting nothing.
-    let open = all
-      .filter((r) => r.comps.task && !settled(String(r.comps.task.status)))
+    let open = tasks
+      .filter((r) => !settled(String(r.comps.task?.status)))
       .filter((r) => !r.comps.claim)
     let local = scope ? open.filter((r) => belongs(r, scope)) : open
     if (!local.length) local = open
@@ -2109,20 +2149,27 @@ export let contextDigest = (
   }
   // What your past selves were told after they stopped listening —
   // history on one line, never re-injected as live conversation.
-  lines.push(...unheard(all, sess, now))
+  lines.push(...unheard(sessions, commentsByTarget, sess, now))
   // The actor's own interruption stack comes before narrative memory: these
   // are live tasks the operator can claim and pop without reconstructing a
   // yak chain from prose. A bare preview has no actor and therefore no stack.
-  lines.push(...resumptions(all, sess, Math.min(5, 48 - lines.length)))
+  lines.push(
+    ...resumptions(
+      tasks,
+      claims,
+      sessions,
+      sess,
+      Math.min(5, 48 - lines.length),
+    ),
+  )
   // The thread from last time: the newest brief by the SAME operator —
   // the final message wrap captured, or a hand-written doc, never a
   // stub — so a session wakes knowing where its predecessor left off.
   let actor = String(sess?.comps.session?.actor ?? '') || scope
   let prev = actor
-    ? all
+    ? sessions
       .filter((r) =>
-        r.comps.session && r.eid != sess?.eid &&
-        r.comps.session.actor == actor && briefOf(r)
+        r.eid != sess?.eid && r.comps.session?.actor == actor && briefOf(r)
       )
       .sort((a, b) => editedAt(b).localeCompare(editedAt(a)))[0]
     : undefined
@@ -2144,9 +2191,11 @@ export let contextDigest = (
   // headroom is what makes the project layer render identically with or
   // without a session (parity).
   let room = () => 48 - lines.length
-  lines.push(...onMine(all, sess, now, Math.min(4, room()), skip))
-  lines.push(...pulse(all, now, room(), scope))
-  lines.push(...decisions(all, Math.min(6, room()), scope))
+  lines.push(
+    ...onMine(claims, comments, byEid, sess, now, Math.min(4, room()), skip),
+  )
+  lines.push(...pulse(tasks, now, room(), scope))
+  lines.push(...decisions(decided, Math.min(6, room()), scope))
   lines.push(...fleetMemory(all, now, Math.min(6, room())))
   lines.push(
     `claim: \`task claim <id> ${

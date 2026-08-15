@@ -3147,3 +3147,160 @@ Deno.test('separated: too narrow to touch prose', () => {
   assertEquals(separated([f]), undefined)
   Deno.removeSync(f)
 })
+
+// A whole-digest behavior-identical guard (T-18133): a rich graph exercising
+// every section at once — the cross-section ordering and budget interplay the
+// per-section tests above can't see. Frozen output; a one-pass-index refactor
+// of the digest helpers must not move a byte of it.
+Deno.test('contextDigest: golden — every section, frozen assembly', () => {
+  let NOW = Date.parse('2026-08-15T12:00:00Z')
+  let ago = (h: number) => new Date(NOW - h * 3600_000).toISOString()
+  let G = 'aaaaaaaa-0000-4000-8000-0000000009'
+  let mkE = (n: string, num: number, at: number, by?: string): Change[] => [
+    { eid: G + n, name: 'entity', comp: { eid: G + n, num } },
+    {
+      eid: G + n,
+      name: 'created',
+      comp: by ? { at: ago(at), by } : { at: ago(at) },
+    },
+  ]
+  let mkU = (n: string, at: number): Change => ({
+    eid: G + n,
+    name: 'updated',
+    comp: { at: ago(at) },
+  })
+  let P = G + 'P', S = G + 'S'
+  let changes: Change[] = [
+    ...mkE('P', 10, 200),
+    { eid: P, name: 'doc', comp: { title: 'Proj', body: '' } },
+    { eid: P, name: 'project', comp: {} },
+    ...mkE('S', 1, 100),
+    {
+      eid: S,
+      name: 'session',
+      comp: { id: 'sess-x', cwd: '/w', actor: 'alice' },
+    },
+    ...mkE('PS', 2, 50),
+    mkU('PS', 48),
+    {
+      eid: G + 'PS',
+      name: 'session',
+      comp: { id: 'sess-prev', actor: 'alice' },
+    },
+    {
+      eid: G + 'PS',
+      name: 'doc',
+      comp: {
+        title: 'Prev session',
+        body: 'line one of brief\nline two\nline three',
+      },
+    },
+    { eid: G + 'PS', name: 'brief', comp: {} },
+    ...mkE('WS', 3, 60),
+    mkU('WS', 55),
+    {
+      eid: G + 'WS',
+      name: 'session',
+      comp: { id: 'sess-wrap', actor: 'alice' },
+    },
+    {
+      eid: G + 'WS',
+      name: 'doc',
+      comp: { title: 'Wrapped session', body: 'wrap' },
+    },
+    ...mkE('T1', 4, 40),
+    { eid: G + 'T1', name: 'doc', comp: { title: 'First claimed', body: '' } },
+    {
+      eid: G + 'T1',
+      name: 'task',
+      comp: { status: 'wip', priority: 0, project: P },
+    },
+    { eid: G + 'T1', name: 'claim', comp: { session: S, claimed_at: ago(5) } },
+    ...mkE('T2', 5, 39),
+    { eid: G + 'T2', name: 'doc', comp: { title: 'Second claimed', body: '' } },
+    {
+      eid: G + 'T2',
+      name: 'task',
+      comp: { status: 'open', priority: 1, project: P },
+    },
+    { eid: G + 'T2', name: 'claim', comp: { session: S, claimed_at: ago(6) } },
+    ...mkE('T3', 6, 30),
+    mkU('T3', 2),
+    {
+      eid: G + 'T3',
+      name: 'doc',
+      comp: { title: 'Open in project', body: '' },
+    },
+    {
+      eid: G + 'T3',
+      name: 'task',
+      comp: { status: 'open', priority: 0, project: P },
+    },
+    ...mkE('T4', 7, 20, 'alice'),
+    {
+      eid: G + 'T4',
+      name: 'doc',
+      comp: { title: 'Actor created open', body: '' },
+    },
+    {
+      eid: G + 'T4',
+      name: 'task',
+      comp: { status: 'open', priority: 2, project: P },
+    },
+    ...mkE('C1', 8, 1, 'bob'),
+    {
+      eid: G + 'C1',
+      name: 'doc',
+      comp: { title: '', body: 'nice work on this' },
+    },
+    { eid: G + 'C1', name: 'comment', comp: { target: G + 'T1' } },
+    ...mkE('C2', 9, 10, 'carol'),
+    {
+      eid: G + 'C2',
+      name: 'doc',
+      comp: { title: '', body: 'a question after wrap' },
+    },
+    { eid: G + 'C2', name: 'comment', comp: { target: G + 'WS' } },
+    ...mkE('D1', 11, 70),
+    { eid: G + 'D1', name: 'doc', comp: { title: 'A decision', body: '' } },
+    { eid: G + 'D1', name: 'decided', comp: { at: ago(70), by: 'jeff' } },
+    {
+      eid: G + 'D1',
+      name: 'task',
+      comp: { status: 'done', priority: 0, project: P },
+    },
+    ...mkE('M1', 12, 80),
+    {
+      eid: G + 'M1',
+      name: 'doc',
+      comp: { title: 'A principle', body: 'body' },
+    },
+    { eid: G + 'M1', name: 'memory', comp: {} },
+  ]
+  let golden = [
+    '# tasks · session sess-x',
+    'claimed by you:',
+    '- T-4 wip — First claimed',
+    '- T-5 open — Second claimed',
+    '## inbox — 1 unread (task inbox)',
+    '## unheard — S-3 got 1 comment after it wrapped (task show)',
+    '## resume — pop your stack',
+    '- T-7 open — Actor created open',
+    '## previously — S-2 Prev session',
+    '> line one of brief',
+    '> line two',
+    '> line three',
+    '## on your tasks',
+    '- T-4 💬 someone: nice work on this',
+    '## fleet — nowhere placed',
+    '- T-6 open — Open in project',
+    '- T-7 open — Actor created open',
+    '- T-5 open — Second claimed',
+    '## decided',
+    '- 2026-08-12 T-11 — A decision',
+    '## from the fleet — read any that fit (memory_recall <id>), adopt what helps',
+    '- M-12 0.04 A principle',
+    'claim: `task claim <id> sess-x` · comment: `task comment <id> "…"` · release when done or handing off',
+  ].join('\n')
+  assertEquals(contextDigest({ changes, deps: [] }, 'sess-x', NOW), golden)
+})

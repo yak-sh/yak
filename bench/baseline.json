@@ -1,7 +1,8 @@
 {
   "apply: mint one task (2 comps)": 251006,
   "apply: patch one column": 40144,
-  "contextDigest: 2k-task graph": 1318583,
+  "contextDigest: 2k graph, actor path": 1463386,
+  "contextDigest: 2k-task graph": 701902,
   "freshDb: clone migrated image": 589997,
   "propAt: comp.prop -> Prop": 16.37,
   "propOwners: prop -> owning comps": 8.9668,
