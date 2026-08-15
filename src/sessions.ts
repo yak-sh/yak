@@ -313,8 +313,38 @@ let stamp = (
 // path — the whole point of the facet.
 export let maintainStanding = (eid: string, cast: Cast) => {
   if (!graphSession(db, eid)) return
-  stamp(eid, { standing: standingOf(readEntries(db, eid)) }, cast)
+  let standing = standingOf(readEntries(db, eid))
+  // finished_at is stamped from the SAME log-derived fact so the dot reads a
+  // graph operator's lifecycle O(1) (T-17855 producer; the consumer gives
+  // finished_at precedence over the standing facet). It means DONE and not
+  // coming back, so it is set only for a truly-ended run: `terminal` (a
+  // delivered final answer, nothing pending) AND no wake armed to bring it
+  // back — a parked operator (terminal + pending wake) reads `idle`, never
+  // finished (M-7323). Busy, idle, or parked → cleared, exactly as watch()
+  // reopens a reawakened door. Preserve any existing stamp rather than
+  // recompute lastHeard: a fresh lastHeard each edge would move updated.at and
+  // re-trigger; the first stamp of an already-shut door uses lastHeard, not
+  // now(), so a boot backfill of a long-settled run stamps its true ending.
+  let done = standing == 'terminal' && !pendingWake(eid)
+  let was = storedSession(db, eid)
+  stamp(eid, {
+    standing,
+    finished_at: done ? (was?.finished_at ?? lastHeard(eid)) : null,
+  }, cast)
 }
+
+// A wake still armed for this session — a `wake` aimed at it (deliver.to) that
+// is neither delivered nor errored — means the operator is PARKED, returning on
+// the timer, not finished. The client's usePendingWake asks exactly this.
+let pendingWake = (eid: string) =>
+  !!db.prepare(
+    `select 1 from deliver d
+       join wake w on w.eid = d.eid
+       left join delivered v on v.eid = d.eid
+       left join error x on x.eid = d.eid
+     where d."to" = ? and v.eid is null and x.eid is null
+     limit 1`,
+  ).get(eid)
 
 // The turn-edge comps whose appearance in a cast batch means a native session's
 // standing may have moved: a `generation` opens a turn (idle→busy);
@@ -343,15 +373,19 @@ let edgeComp = new Set([
 // entry row and are skipped.
 export let maintainStandingFor = (changes: Change[], cast: Cast) => {
   let eids = new Set<string>()
+  let sessions = new Set<string>()
   for (let c of changes) {
     if (!c.comp) continue
     if (edgeComp.has(c.name)) eids.add(c.eid)
     else if (c.name == 'output' && c.comp.phase == 'final_answer') {
       eids.add(c.eid)
     } else if (c.name == 'message' && c.comp.role == 'user') eids.add(c.eid)
+    // A wake armed for a session flips it to parked, and finished_at (which the
+    // dot ranks above the wake) must clear even when the wake lands AFTER the
+    // terminal edge — so re-derive the target the moment its deliver.to appears.
+    else if (c.name == 'deliver' && c.comp.to) sessions.add(String(c.comp.to))
   }
-  if (!eids.size) return
-  let sessions = new Set<string>()
+  if (!eids.size && !sessions.size) return
   for (let eid of eids) {
     let row = db.prepare('select session from entry where eid = ?').get(eid) as
       | { session: string }

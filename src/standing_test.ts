@@ -47,6 +47,51 @@ let native = () => {
 }
 
 let standing = (eid: string) => sessionRow(db, eid)?.standing ?? null
+let finishedAt = (eid: string) => sessionRow(db, eid)?.finished_at ?? null
+
+// Drive a session through one whole turn to `terminal`: a user prompt, a
+// generation, its delivery, and the final-answer output.
+let toTerminal = (eid: string) => {
+  let input = uid(), gen = uid()
+  cast(
+    append(
+      db,
+      eid,
+      [{ message: { role: 'user' }, content: { body: 'go' } }],
+      null,
+      [input],
+    )
+      .changes,
+  )
+  cast(
+    append(
+      db,
+      eid,
+      [{ generation: { through: input, provider: 'codex', model: 'm' } }],
+      null,
+      [gen],
+    )
+      .changes,
+  )
+  cast(apply(db, [{ eid: gen, name: 'delivered', comp: { at: 'now' } }]))
+  cast(
+    append(db, eid, [{
+      output: { source: gen, phase: 'final_answer' },
+      message: { role: 'agent' },
+      content: { body: 'done' },
+    }]).changes,
+  )
+}
+
+// Arm a wake for a session — a `wake` aimed at it via deliver.to, undelivered.
+let arm = (to: string) => {
+  let w = uid()
+  cast(apply(db, [
+    { eid: w, name: 'wake', comp: { at: 'now' } },
+    { eid: w, name: 'deliver', comp: { to } },
+  ]))
+  return w
+}
 
 Deno.test('native standing tracks the log across turn edges', () => {
   let eid = native()
@@ -206,4 +251,67 @@ Deno.test('standing backfill stamps native sessions and skips process ones', asy
   // maintainStanding is a no-op on a process session (graphSession false).
   maintainStanding(proc, cast)
   assertEquals(standing(proc), null)
+})
+
+Deno.test('finished_at marks a truly-ended operator and clears on reawaken', () => {
+  let eid = native()
+  assertEquals(finishedAt(eid), null)
+
+  // A terminal turn with no wake armed: the run is done → finished_at set.
+  toTerminal(eid)
+  assertEquals(standing(eid), 'terminal')
+  assert(finishedAt(eid) != null, 'a terminal run with no wake is finished')
+
+  // A new user turn reopens it → idle, no longer finished (the door reopened).
+  cast(
+    append(db, eid, [{ message: { role: 'user' }, content: { body: 'again' } }])
+      .changes,
+  )
+  assertEquals(standing(eid), 'idle')
+  assertEquals(finishedAt(eid), null)
+})
+
+Deno.test('a parked operator (terminal + pending wake) is never finished', () => {
+  // Wake armed BEFORE the terminal edge — the operator schedules its own return
+  // mid-turn, so the terminal edge sees it pending and never finishes it.
+  let a = native()
+  arm(a)
+  toTerminal(a)
+  assertEquals(standing(a), 'terminal')
+  assertEquals(finishedAt(a), null)
+
+  // Wake armed AFTER the terminal edge — arming re-derives the target, clearing
+  // the finished stamp so the dot reads idle (parked), not completed.
+  let b = native()
+  toTerminal(b)
+  assert(finishedAt(b) != null)
+  arm(b)
+  assertEquals(finishedAt(b), null)
+})
+
+Deno.test('a delivered wake lets a still-terminal operator finish', () => {
+  // Parked (wake pending) → not finished. The wake then fires (delivered) and the
+  // operator ends without a new turn; the next reconcile (boot backfill / edge)
+  // sees no pending wake and finishes the terminal run.
+  let eid = native()
+  let w = arm(eid)
+  toTerminal(eid)
+  assertEquals(finishedAt(eid), null)
+  // The wake fires: the server stamps `delivered` (at/via are server-owned, not
+  // wire-writable) — mirror that with a direct insert.
+  db.prepare('insert into delivered (eid, at) values (?, ?)').run(w, 'now')
+  maintainStanding(eid, cast)
+  assert(finishedAt(eid) != null)
+})
+
+Deno.test('finished_at holds steady across re-derives (no lastHeard churn)', () => {
+  let eid = native()
+  toTerminal(eid)
+  let first = finishedAt(eid)
+  assert(first != null)
+  // Re-deriving a settled run must not move the stamp — a fresh lastHeard each
+  // edge would churn updated.at and re-trigger every client.
+  maintainStanding(eid, cast)
+  maintainStanding(eid, cast)
+  assertEquals(finishedAt(eid), first)
 })
