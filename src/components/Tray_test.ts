@@ -67,3 +67,37 @@ Deno.test('graph-native status follows work, final answers, and wakes', () => {
   // A pending wake overrides a terminal facet — a woken session reads idle.
   assertEquals(graphStanding(session('terminal'), true), 'idle')
 })
+
+// finished_at is authoritative — an ENDED native session reads completed (or
+// failed on error), NEVER idle, whatever the log-derived facet says. Guards the
+// regression the O(1) facet introduced: a finished session with a null/idle
+// `standing` (killed, log had no clean final answer, or the boot backfill hasn't
+// reached it) was misdisplaying as idle instead of completed, fleet-wide.
+let finished = (standing?: string, error = false): Ent => ({
+  eid: 'session',
+  num: 1,
+  kind: 'session',
+  session: {
+    eid: 'session',
+    id: 'run',
+    origin: 'managed',
+    standing,
+    finished_at: '2026-07-01T00:00:00Z',
+  },
+  ...(error
+    ? { error: { eid: 'session', at: '2026-07-01T00:00:00Z', message: 'x' } }
+    : {}),
+  spawn: { eid: 'session', provider: 'codex' },
+  refs: [],
+  kids: [],
+})
+
+Deno.test('a finished native session reads completed, never idle', () => {
+  assertEquals(graphStanding(finished(undefined)), 'completed') // null facet, still done
+  assertEquals(graphStanding(finished('idle')), 'completed') // killed / no final answer
+  assertEquals(graphStanding(finished('terminal')), 'completed')
+  assertEquals(graphStanding(finished('busy')), 'completed') // a stale busy facet on an ended session
+  assertEquals(graphStanding(finished(undefined, true)), 'failed') // error wins over finished
+  // a pending wake cannot revive a finished session
+  assertEquals(graphStanding(finished(undefined), true), 'completed')
+})

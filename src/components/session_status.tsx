@@ -49,10 +49,14 @@ export let useEntryLog = (
   return graphLog(rows)
 }
 
-// The native session's log-derived standing, read O(1) from the server-
-// maintained `standing` facet (T-17855/6) — the dot never scans the log. busy →
-// running takes precedence over a pending wake; a null facet (never stamped, or
-// no activity yet) reads idle. A non-native session keeps the lifecycle word.
+// The native session's standing for the dot, read O(1) — never scans the log.
+// finished_at is authoritative: an ended session reads `completed` (or `failed`
+// on error), NEVER idle, whatever the log-derived facet says. A killed session,
+// or one whose log ended without a clean final answer, or one the boot backfill
+// hasn't stamped yet, can carry a null/idle `standing` while being long done —
+// so the lifecycle fact wins over the log fact. Only for a STILL-RUNNING session
+// does the server-maintained `standing` facet speak: busy → running (over a
+// pending wake), terminal → completed, else idle. Non-native keeps its word.
 export let graphStanding = (
   e: Ent,
   waking = false,
@@ -62,6 +66,7 @@ export let graphStanding = (
     e.spawn?.provider == 'codex'
   if (!native) return standing(s)
   if (e.error) return 'failed'
+  if (s.finished_at) return 'completed'
   if (s.standing == 'busy') return 'running'
   if (waking) return 'idle'
   return s.standing == 'terminal' ? 'completed' : 'idle'
