@@ -7,7 +7,7 @@
 //
 // Ids: `eid` is a UUID so ANY side (client included) can mint entities;
 // `num` is the server-minted human number (T-7 in the UI, one global counter).
-import { DatabaseSync } from 'node:sqlite'
+import { DatabaseSync, type StatementSync } from 'node:sqlite'
 import { dirname, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
 import { sha } from './sha.ts'
@@ -54,6 +54,31 @@ import {
   propOwners,
 } from './props.ts'
 import { fleetLocal } from './mailaddr.ts'
+
+// Prepared-statement cache, per db handle. node:sqlite recompiles the SQL on
+// every prepare(); apply() alone recompiles ~35 statements per call (~318µs
+// measured), which is the bulk of its cost. Caching per handle means each
+// distinct SQL string compiles ONCE and the whole cache dies with the handle
+// (WeakMap → GC): the long-lived server handle stays hot for the process, and a
+// test's throwaway db carries its own cache that vanishes with it. Safe because
+// no caller ever holds a statement open across other work — every use is
+// get/all/run, which step to completion and reset (there is no .iterate() caller
+// in this file), and no call site configures a statement after preparing it.
+// prep() is the ONE door; a `db.prepare(` anywhere else defeats the cache.
+let stmtCache = new WeakMap<DatabaseSync, Map<string, StatementSync>>()
+// Off during open(): migrations ALTER tables, so a statement cached against an
+// intermediate schema would strand. With caching off, prep() is exactly
+// db.prepare() — open()'s migrations behave identically to before — and only the
+// post-open runtime populates the cache.
+let caching = true
+let prep = (db: DatabaseSync, sql: string): StatementSync => {
+  if (!caching) return db.prepare(sql)
+  let m = stmtCache.get(db)
+  if (!m) stmtCache.set(db, m = new Map())
+  let s = m.get(sql)
+  if (!s) m.set(sql, s = db.prepare(sql))
+  return s
+}
 
 // The owner's live graph — the one path a test must never open (open() below
 // refuses it under `deno test`). A function, not a constant, so it re-reads
@@ -670,7 +695,7 @@ export let derived = [
 // components make it. Birth time is the `created` component's business
 // (T-6670), stamped by apply() from the batch's one clock — not taken here.
 let spine = (db: DatabaseSync, eid: string) =>
-  db.prepare('insert or ignore into entity (eid) values (?)').run(eid)
+  prep(db, 'insert or ignore into entity (eid) values (?)').run(eid)
 
 // The kinds that get a human number. Cheap/bulk/ephemeral kinds stay out:
 // `entry` (log lines), `wake` (one per pace cycle, read only by kind=wake and
@@ -690,17 +715,18 @@ export let numbered = (kind: string) => !unnumbered.has(kind)
 let mintNum = (db: DatabaseSync, eid: string) => {
   if (unnumbered.size) {
     let kind = kindOrder.find((k) =>
-      db.prepare(`select 1 from ${k} where eid = ?`).get(eid)
+      prep(db, `select 1 from ${k} where eid = ?`).get(eid)
     ) ?? 'entity'
     if (!numbered(kind)) {
       return
     }
   }
-  let { n } = db.prepare(
+  let { n } = prep(
+    db,
     `select coalesce(max(num), 0) + 1 as n from
        (select num from entity union all select num from tombstone)`,
   ).get() as { n: number }
-  db.prepare('update entity set num = ? where eid = ? and num is null')
+  prep(db, 'update entity set num = ? where eid = ? and num is null')
     .run(n, eid)
 }
 
@@ -712,34 +738,34 @@ let ent = (db: DatabaseSync) => {
 }
 
 let doc = (db: DatabaseSync, eid: string, title: string, body = '') =>
-  db.prepare('insert into doc (eid, title, body) values (?, ?, ?)')
+  prep(db, 'insert into doc (eid, title, body) values (?, ?, ?)')
     .run(eid, title, body)
 
 let addTask = (db: DatabaseSync, title: string, status: string, body = '') => {
   let eid = ent(db)
   doc(db, eid, title, body)
-  db.prepare('insert into task (eid, status) values (?, ?)').run(eid, status)
+  prep(db, 'insert into task (eid, status) values (?, ?)').run(eid, status)
   return eid
 }
 
 let addProject = (db: DatabaseSync, title: string) => {
   let eid = ent(db)
   doc(db, eid, title)
-  db.prepare('insert into project (eid) values (?)').run(eid)
+  prep(db, 'insert into project (eid) values (?)').run(eid)
   return eid
 }
 
 let addBoard = (db: DatabaseSync, title: string) => {
   let eid = ent(db)
   doc(db, eid, title)
-  db.prepare('insert into board (eid) values (?)').run(eid)
+  prep(db, 'insert into board (eid) values (?)').run(eid)
   return eid
 }
 
 // A card views one entity through one lens; pinning places it on a canvas.
 let addCard = (db: DatabaseSync, target: string, view: string) => {
   let eid = ent(db)
-  db.prepare('insert into card (eid, target, view) values (?, ?, ?)')
+  prep(db, 'insert into card (eid, target, view) values (?, ?, ?)')
     .run(eid, target, view)
   return eid
 }
@@ -753,14 +779,17 @@ let pin = (
   w: number,
   h: number,
 ) =>
-  db.prepare(
+  prep(
+    db,
     'insert into pin (eid, canvas, x, y, w, h) values (?, ?, ?, ?, ?, ?)',
   ).run(card, canvas, x, y, w, h)
 
 let link = (db: DatabaseSync, parent: string, type: string, child: string) =>
-  db.prepare(
-    'insert into dependency (parent, type, child) values (?, ?, ?)',
-  ).run(parent, type, child)
+  prep(db, 'insert into dependency (parent, type, child) values (?, ?, ?)').run(
+    parent,
+    type,
+    child,
+  )
 
 // A handful of neutral demo rows — a board containing tasks, one edge of
 // each type, and a root canvas showing it as a Board plus one task
@@ -798,17 +827,18 @@ let seed = (db: DatabaseSync) => {
   for (let t of [schema, view, keys, readme]) link(db, board, 'contains', t)
 
   let proj = addProject(db, 'Demo project')
-  db.prepare('update task set project = ?').run(proj)
+  prep(db, 'update task set project = ?').run(proj)
 
   let canvas = ent(db)
-  db.prepare('insert into canvas (eid) values (?)').run(canvas)
+  prep(db, 'insert into canvas (eid) values (?)').run(canvas)
   pin(db, canvas, addCard(db, board, 'Board'), 0, 0, 640, 0)
   pin(db, canvas, addCard(db, view, 'Full'), 664, 0, 320, 0)
   // These direct inserts bypass apply()'s late mint pass, so number the demo
   // entities now their components exist — in creation (rowid) order, so the
   // ids read 1, 2, 3… exactly as spine() used to hand them out (T-3684).
   for (
-    let { eid } of db.prepare(
+    let { eid } of prep(
+      db,
       'select eid from entity where num is null order by rowid',
     ).all() as { eid: string }[]
   ) mintNum(db, eid)
@@ -821,7 +851,7 @@ let seed = (db: DatabaseSync) => {
 // guards ask, and the gate on every backfill that reads a retired column:
 // once the drop lands, the read that fed it must stop compiling away.
 export let hasCol = (db: DatabaseSync, table: string, col: string) =>
-  (db.prepare(`select name from pragma_table_info('${table}')`)
+  (prep(db, `select name from pragma_table_info('${table}')`)
     .all() as { name: string }[]).some((c) => c.name == col)
 
 // The index twin of hasCol: is this named index already present? A bare
@@ -830,9 +860,8 @@ export let hasCol = (db: DatabaseSync, table: string, col: string) =>
 // byte-idempotency — so the index realization guards each create with this,
 // the same shape addCol takes with hasCol.
 export let hasIdx = (db: DatabaseSync, name: string) =>
-  !!db.prepare(
-    `select 1 from sqlite_master where type = 'index' and name = ?`,
-  ).get(name)
+  !!prep(db, `select 1 from sqlite_master where type = 'index' and name = ?`)
+    .get(name)
 
 // References used to repeat their representation in every column name. The
 // PropType now carries that fact alone; this is the one cutover from the old
@@ -911,7 +940,7 @@ let renameTeaching = (text: string) =>
 export let migrateRefs = (db: DatabaseSync) => {
   let renames = refRenames.filter((r) => hasCol(db, r.table, r.old))
   let boards = hasCol(db, 'board', 'query')
-    ? db.prepare('select eid, query from board where query is not null')
+    ? prep(db, 'select eid, query from board where query is not null')
       .all() as {
         eid: string
         query: string
@@ -921,7 +950,8 @@ export let migrateRefs = (db: DatabaseSync) => {
     .filter((r) => r.next != r.query)
   let kinds = ['memory', 'persona'].filter((table) => hasCol(db, table, 'eid'))
   let teachings = hasCol(db, 'doc', 'body') && kinds.length
-    ? db.prepare(
+    ? prep(
+      db,
       `select eid, title, body from doc where ${
         kinds.map((table) =>
           `exists (select 1 from ${table} where ${table}.eid = doc.eid)`
@@ -949,11 +979,9 @@ export let migrateRefs = (db: DatabaseSync) => {
         }`,
       )
     }
-    let writeBoard = db.prepare('update board set query = ? where eid = ?')
+    let writeBoard = prep(db, 'update board set query = ? where eid = ?')
     for (let r of staleBoards) writeBoard.run(r.next, r.eid)
-    let writeDoc = db.prepare(
-      'update doc set title = ?, body = ? where eid = ?',
-    )
+    let writeDoc = prep(db, 'update doc set title = ?, body = ? where eid = ?')
     for (let r of staleDocs) writeDoc.run(r.nextTitle, r.nextBody, r.eid)
     db.exec('commit')
   } catch (e) {
@@ -984,9 +1012,8 @@ let canonicalChanges = (changes: Change[]): Change[] => {
 }
 
 let ddlOf = (db: DatabaseSync, name: string) =>
-  (db.prepare(
-    `select sql from sqlite_master where type = 'table' and name = ?`,
-  ).get(name) as { sql: string } | undefined)?.sql
+  (prep(db, `select sql from sqlite_master where type = 'table' and name = ?`)
+    .get(name) as { sql: string } | undefined)?.sql
 let rebuild = (db: DatabaseSync, name: string, ddl: string) => {
   db.exec('begin')
   db.exec(`alter table ${name} rename to ${name}_stale`)
@@ -1097,7 +1124,8 @@ export let retireMemoryType = (db: DatabaseSync) => {
 // between old deployments may have lost the column while retaining its query.
 export let retireProposal = (db: DatabaseSync) => {
   let legacy = hasCol(db, 'task', 'proposal')
-  let stale = db.prepare(
+  let stale = prep(
+    db,
     "select 1 from board where instr(query, '.proposal=true') > 0 limit 1",
   ).get()
   if (!legacy && !stale) return
@@ -1138,9 +1166,7 @@ let retireFilter = (query: string) => {
 
 export let retireProjectRetiredAt = (db: DatabaseSync) => {
   let legacy = hasCol(db, 'project', 'retired_at')
-  let boards = db.prepare(
-    'select eid, query from board where query is not null',
-  )
+  let boards = prep(db, 'select eid, query from board where query is not null')
     .all() as { eid: string; query: string }[]
   let stale = boards.map((r) => ({ ...r, next: retireFilter(r.query) }))
     .filter((r) => r.next != r.query)
@@ -1151,7 +1177,7 @@ export let retireProjectRetiredAt = (db: DatabaseSync) => {
       db.exec(`insert or ignore into archived (eid, at)
         select eid, retired_at from project where retired_at is not null`)
     }
-    let write = db.prepare('update board set query = ? where eid = ?')
+    let write = prep(db, 'update board set query = ? where eid = ?')
     for (let r of stale) write.run(r.next, r.eid)
     if (legacy) db.exec('alter table project drop column retired_at')
     db.exec('commit')
@@ -1194,10 +1220,13 @@ export let backfillSpawn = (db: DatabaseSync) => {
     let different = cols.map((col) =>
       `s.${sqlName(col)} is not p.${sqlName(col)}`
     ).join(' or ')
-    let missed = db.prepare(`
+    let missed = prep(
+      db,
+      `
       select 1 from session s join spawn p on p.eid = s.eid
       where ${different} limit 1
-    `).get()
+    `,
+    ).get()
     if (missed) throw new Error('spawn backfill did not verify')
     db.exec('commit')
   } catch (e) {
@@ -1258,10 +1287,13 @@ export let backfillSessionFacets = (db: DatabaseSync) => {
       let different = cols.map((col) =>
         `s.${sqlName(col)} is not f.${sqlName(col)}`
       ).join(' or ')
-      let missed = db.prepare(`
+      let missed = prep(
+        db,
+        `
         select 1 from session s join ${table} f on f.eid = s.eid
         where ${different} limit 1
-      `).get()
+      `,
+      ).get()
       if (missed) throw new Error(`${table} backfill did not verify`)
     }
     db.exec('commit')
@@ -1296,7 +1328,8 @@ export let migrateErrors = (db: DatabaseSync) => {
       )
     }
     for (let table of tables) {
-      let missed = db.prepare(
+      let missed = prep(
+        db,
         `select 1 from ${table} source
          left join error target on target.eid = source.eid
          where source.error is not null
@@ -1382,7 +1415,7 @@ export let resolveId = (
   id: string,
 ): string | undefined => {
   let numOf = (n: number) =>
-    (db.prepare('select eid from entity where num = ?').get(n) as
+    (prep(db, 'select eid from entity where num = ?').get(n) as
       | { eid: string }
       | undefined)?.eid
   let pre = id.match(/^[A-Za-z]+-(\d+)$/)
@@ -1394,12 +1427,13 @@ export let resolveId = (
   }
   let low = id.toLowerCase()
   if (UUIDRE.test(id)) {
-    return (db.prepare('select eid from entity where eid = ?').get(low) as
+    return (prep(db, 'select eid from entity where eid = ?').get(low) as
       | { eid: string }
       | undefined)?.eid
   }
   if (SHORT.test(id)) {
-    let hits = db.prepare(
+    let hits = prep(
+      db,
       'select eid from entity where eid >= ? and eid < ? limit 2',
     ).all(low, succ(low)) as { eid: string }[]
     if (hits.length > 1) {
@@ -1415,7 +1449,8 @@ export let resolveId = (
   // space-delimited `slugs` set. instr on a space-padded column matches whole
   // tokens only ('task' never hits inside 'tasks'); the alias table is tiny,
   // so the scan is free.
-  return (db.prepare(
+  return (prep(
+    db,
     `select eid from alias where slug = ?
        or instr(' ' || coalesce(slugs, '') || ' ', ' ' || ? || ' ') > 0`,
   ).get(id, id) as
@@ -1436,13 +1471,13 @@ let ident = resolveId
 // with it the prefix — died with them: it stays the raw eid rather than
 // wear a guessed one.
 export let human = (db: DatabaseSync, eid: string): string => {
-  let row = db.prepare('select num from entity where eid = ?').get(eid) as
+  let row = prep(db, 'select num from entity where eid = ?').get(eid) as
     | { num: number }
     | undefined
   if (!row?.num) return shortId(eid)
   let kind =
     kindOrder.find((k) =>
-      db.prepare(`select 1 from ${k} where eid = ?`).get(eid)
+      prep(db, `select 1 from ${k} where eid = ?`).get(eid)
     ) ?? 'entity'
   return idOf({ eid, kind, num: row.num })
 }
@@ -1458,13 +1493,12 @@ let UUIDRE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 // SHADOW the real one in homeOf).
 let addressed = (db: DatabaseSync, addr: string): string | undefined => {
   let a = addr.trim()
-  let worn =
-    (db.prepare('select eid from email where address = ? collate nocase')
-      .get(a) as { eid: string } | undefined)?.eid
+  let worn = (prep(db, 'select eid from email where address = ? collate nocase')
+    .get(a) as { eid: string } | undefined)?.eid
   if (worn) return worn
   let m = /^([A-Za-z]+-(\d+))$/i.exec(fleetLocal(a) ?? '')
   if (!m) return undefined
-  let row = db.prepare('select eid from entity where num = ?')
+  let row = prep(db, 'select eid from entity where num = ?')
     .get(Number(m[2])) as { eid: string } | undefined
   return row && human(db, row.eid).toLowerCase() == m[1].toLowerCase()
     ? row.eid
@@ -1484,7 +1518,7 @@ export let addressEntity = (db: DatabaseSync, addr: string): string => {
   let a = addr.trim()
   let eid = uuid()
   spine(db, eid)
-  db.prepare('insert into email (eid, address) values (?, ?)').run(eid, a)
+  prep(db, 'insert into email (eid, address) values (?, ?)').run(eid, a)
   mintNum(db, eid) // spine no longer numbers at birth (T-3684); email is numbered
   return eid
 }
@@ -1500,9 +1534,7 @@ export let addressEntity = (db: DatabaseSync, addr: string): string => {
 // mail rebuild sees the trimmed shape; idempotent (insert-or-ignore on the
 // deliver pk, each source column guarded by hasCol, dedup by address on mint).
 export let migrateDeliver = (db: DatabaseSync) => {
-  let ins = db.prepare(
-    'insert or ignore into deliver (eid, "to") values (?, ?)',
-  )
+  let ins = prep(db, 'insert or ignore into deliver (eid, "to") values (?, ?)')
   for (let table of ['knock', 'wake']) {
     if (!hasCol(db, table, 'to_eid')) continue
     db.exec(
@@ -1512,7 +1544,8 @@ export let migrateDeliver = (db: DatabaseSync) => {
     db.exec(`alter table ${table} drop column to_eid`)
   }
   if (hasCol(db, 'mail', 'to')) {
-    let rows = db.prepare(
+    let rows = prep(
+      db,
       `select eid, "to", to_addr, received_at, sent_id from mail
          where "to" is not null and "to" != ''`,
     ).all() as {
@@ -1532,7 +1565,7 @@ export let migrateDeliver = (db: DatabaseSync) => {
       // with no deliver — this keeps a fresh migration matching that.
       if (r.received_at != null && r.sent_id == null) {
         if (!r.to_addr) {
-          db.prepare('update mail set to_addr = ? where eid = ?')
+          prep(db, 'update mail set to_addr = ? where eid = ?')
             .run(r.to, r.eid)
         }
         continue
@@ -1562,7 +1595,7 @@ export let migrateDeliver = (db: DatabaseSync) => {
 // skipped, so once every mirror is folded in a re-run finds nothing (this also
 // skips P-19, already board+project via `.project=<own eid>`).
 export let migrateBoardsToProjects = (db: DatabaseSync) => {
-  let boards = db.prepare('select eid, query from board').all() as {
+  let boards = prep(db, 'select eid, query from board').all() as {
     eid: string
     query: string | null
   }[]
@@ -1586,28 +1619,29 @@ export let migrateBoardsToProjects = (db: DatabaseSync) => {
       }
       if (p.at || p.value.includes(',')) continue
       let project = p.value
-      if (!db.prepare('select 1 from project where eid = ?').get(project)) {
+      if (!prep(db, 'select 1 from project where eid = ?').get(project)) {
         continue
       }
-      if (db.prepare('select 1 from board where eid = ?').get(project)) continue
+      if (prep(db, 'select 1 from board where eid = ?').get(project)) continue
       // (1) the project becomes the board
-      db.prepare('insert into board (eid, query) values (?, ?)')
+      prep(db, 'insert into board (eid, query) values (?, ?)')
         .run(project, query)
       // (2) repoint every view BEFORE the bury, so nothing cascades
-      db.prepare('update card set target = ? where target = ?')
+      prep(db, 'update card set target = ? where target = ?')
         .run(project, eid)
-      db.prepare('update fold set board = ? where board = ?').run(project, eid)
+      prep(db, 'update fold set board = ? where board = ?').run(project, eid)
       // (3) bury the now-unreferenced board — the reaper's shape
       for (let c of Object.keys(comps)) {
-        db.prepare(`delete from ${c} where eid = ?`).run(eid)
+        prep(db, `delete from ${c} where eid = ?`).run(eid)
       }
-      db.prepare('delete from dependency where parent = ? or child = ?')
+      prep(db, 'delete from dependency where parent = ? or child = ?')
         .run(eid, eid)
-      db.prepare(
+      prep(
+        db,
         `insert or ignore into tombstone (eid, num, deleted_at)
          values (?, (select num from entity where eid = ?), ?)`,
       ).run(eid, eid, now)
-      db.prepare('delete from entity where eid = ?').run(eid)
+      prep(db, 'delete from entity where eid = ?').run(eid)
     }
     db.exec('commit')
   } catch (e) {
@@ -1627,7 +1661,8 @@ export let migrateBoardsToProjects = (db: DatabaseSync) => {
 // Guarded by the data shape — no-ops the moment every stranded row is mended,
 // the mendMail/backfillOpened idiom.
 export let healInboundDeliver = (db: DatabaseSync) => {
-  let rows = db.prepare(
+  let rows = prep(
+    db,
     `select m.eid, em.address from mail m
        join deliver d on d.eid = m.eid
        join email em on em.eid = d."to"
@@ -1635,8 +1670,8 @@ export let healInboundDeliver = (db: DatabaseSync) => {
        and (m.to_addr is null or m.to_addr = '')`,
   ).all() as { eid: string; address: string }[]
   for (let { eid, address } of rows) {
-    db.prepare('update mail set to_addr = ? where eid = ?').run(address, eid)
-    db.prepare('delete from deliver where eid = ?').run(eid)
+    prep(db, 'update mail set to_addr = ? where eid = ?').run(address, eid)
+    prep(db, 'delete from deliver where eid = ?').run(eid)
   }
 }
 
@@ -1686,7 +1721,8 @@ export let healStored = (db: DatabaseSync) => {
   let tables = [...new Set([...Object.keys(comps), ...Object.keys(stamped)])]
   for (let table of tables) {
     let declared = { ...comps[table], ...stamped[table] }
-    let info = db.prepare(
+    let info = prep(
+      db,
       'select name, "notnull" as required from pragma_table_info(?)',
     ).all(table) as { name: string; required: number }[]
     for (let [col] of Object.entries(declared)) {
@@ -1695,7 +1731,8 @@ export let healStored = (db: DatabaseSync) => {
       if (!prop || required == null) {
         throw new Error(`declared column missing: ${table}.${col}`)
       }
-      let rows = db.prepare(
+      let rows = prep(
+        db,
         `select eid, ${sqlName(col)} as value from ${sqlName(table)}
          where ${sqlName(col)} is not null`,
       ).all() as { eid: string; value: unknown }[]
@@ -1719,7 +1756,8 @@ export let healStored = (db: DatabaseSync) => {
   db.exec('begin')
   try {
     for (let fix of fixes) {
-      db.prepare(
+      prep(
+        db,
         `update ${sqlName(fix.table)} set ${
           sqlName(fix.col)
         } = ? where eid = ?`,
@@ -1752,296 +1790,310 @@ export let open = (path = file) => {
   }
   Deno.mkdirSync(dirname(path), { recursive: true })
   let db = new DatabaseSync(path)
-  // Listener handoff overlaps two server processes. SQLite serializes their
-  // brief boot/write collision; waiting keeps a mutation on its accepting
-  // process instead of making the caller guess whether to replay it.
-  db.exec('pragma busy_timeout = 5000')
-  // Durability is tunable for throwaway graphs (TASKS_SYNC, like TASKS_BACKOFF):
-  // the default (unset) leaves SQLite's own `full`, which fsyncs every DDL
-  // statement — and open() runs ~200 of them (schema + migrations), so a
-  // fresh file on real disk costs ~2s. A test graph is ephemeral and never
-  // survives a crash, so the test task sets `off` and every file-backed open
-  // drops from ~2s to ~10ms. Production never sets it and stays fully durable.
-  let sync = Deno.env.get('TASKS_SYNC')
-  if (sync) db.exec(`pragma synchronous = ${sync}`)
-  // This must precede schema: an old table may not yet have the canonical
-  // columns named by a newly added index in the current DDL.
-  migrateRefs(db)
-  db.exec(schema)
-  let addCol = (table: string, col: string, ddl: string) => {
-    if (!hasCol(db, table, col)) {
-      db.exec(`alter table ${table} add column ${ddl}`)
+  // Migrations below ALTER tables; a cached statement would strand against an
+  // intermediate schema. Compile raw until the schema is final, then restore.
+  caching = false
+  try {
+    // Listener handoff overlaps two server processes. SQLite serializes their
+    // brief boot/write collision; waiting keeps a mutation on its accepting
+    // process instead of making the caller guess whether to replay it.
+    db.exec('pragma busy_timeout = 5000')
+    // Durability is tunable for throwaway graphs (TASKS_SYNC, like TASKS_BACKOFF):
+    // the default (unset) leaves SQLite's own `full`, which fsyncs every DDL
+    // statement — and open() runs ~200 of them (schema + migrations), so a
+    // fresh file on real disk costs ~2s. A test graph is ephemeral and never
+    // survives a crash, so the test task sets `off` and every file-backed open
+    // drops from ~2s to ~10ms. Production never sets it and stays fully durable.
+    let sync = Deno.env.get('TASKS_SYNC')
+    if (sync) db.exec(`pragma synchronous = ${sync}`)
+    // This must precede schema: an old table may not yet have the canonical
+    // columns named by a newly added index in the current DDL.
+    migrateRefs(db)
+    db.exec(schema)
+    let addCol = (table: string, col: string, ddl: string) => {
+      if (!hasCol(db, table, col)) {
+        db.exec(`alter table ${table} add column ${ddl}`)
+      }
     }
-  }
-  // The mirror of addCol, for a column whose mechanism is gone. A retired
-  // column that lingers still answers a schema read, so it keeps teaching a
-  // mechanism the code no longer has — the drop is what makes removal true.
-  let dropCol = (table: string, col: string) => {
-    if (hasCol(db, table, col)) {
-      db.exec(`alter table ${table} drop column ${col}`)
+    // The mirror of addCol, for a column whose mechanism is gone. A retired
+    // column that lingers still answers a schema read, so it keeps teaching a
+    // mechanism the code no longer has — the drop is what makes removal true.
+    let dropCol = (table: string, col: string) => {
+      if (hasCol(db, table, col)) {
+        db.exec(`alter table ${table} drop column ${col}`)
+      }
     }
-  }
-  // Retire an index whose name the derivation no longer spells — a hand-written
-  // `create index` line that has been superseded by its derived twin under a
-  // different name (subscription_one → subscription_actor_target). Guarded, so
-  // it runs once and a fresh db (which never had the legacy name) is a no-op.
-  let dropIdx = (name: string) => {
-    db.exec(`drop index if exists ${name}`)
-  }
-  // The DERIVED component tables (T-12764), planted beside the hand-written
-  // `schema` above from the same vocabulary `cmps`/`readable` read. Tables
-  // first — a fresh db gets them; then the additive column fill, the SAME alter
-  // path addCol runs for the hand tables, so a live db that predates a
-  // vocabulary edit grows the new column in place; then the indexes, which may
-  // name a column that fill just added. `migrateDelivery`/`migrateErrors` below
-  // pour into deliver/delivered/error, so those tables must already stand here.
-  for (let comp of derived) db.exec(tableDdl(comp) + ';')
-  for (let comp of derived) {
-    for (let { prop, ddl } of derivedCols(comp)) addCol(comp, prop, ddl)
-  }
-  // num is a UI label, not identity (T-3684): a cheap/bulk entity (T-3683)
-  // needs none, so the spine's num goes NULLABLE. One in-place ALTER on SQLite
-  // 3.53+ (ALTER COLUMN landed in 3.53.0), guarded on the notnull flag so it
-  // runs once. UNIQUE stays — SQLite treats NULLs as distinct, so num-less
-  // entities coexist. No rebuild, no backfill: existing nums are untouched.
-  if (
-    (db.prepare(
-      `select "notnull" as nn from pragma_table_info('entity') where name = 'num'`,
-    ).get() as { nn: number } | undefined)?.nn
-  ) {
-    db.exec('alter table entity alter column num drop not null')
-  }
-  // Retired by the per-comment `notified` stamp, which is per item and so
-  // cannot advance past an unserved sibling the way a cursor could.
-  dropCol('session', 'acked_at')
-  addCol('task', 'project', 'project text references entity(eid)')
-  addCol('task', 'assignee', 'assignee text references entity(eid)')
-  addCol('task', 'domain', 'domain text')
-  addCol('repo', 'url', 'url text')
-  // Off for every checkout the graph already knows: the permission to push
-  // is the owner's to grant per venture, never something a migration hands
-  // out (src/git.ts).
-  addCol('repo', 'push', 'push integer not null default 0')
-  // A missing gate refuses landing. There is no safe cross-language default,
-  // so the project names one complete command explicitly (src/land.ts).
-  addCol('repo', 'gate', 'gate text')
-  // Additional resolvable-only handles beside the primary `slug` (T-16673):
-  // a space-delimited set, every member globally unique (enforced in apply()).
-  addCol('alias', 'slugs', 'slugs text')
-  // A wake's note (T-17654): what the setter was mid-doing, relayed into the
-  // knock's words when it fires so a resumed session reconstitutes.
-  addCol('wake', 'note', 'note text')
-  // The crash-loop breaker's fresh-start fence (types.ts, src/roles.ts).
-  addCol('role', 'retry_at', 'retry_at text')
-  addCol('role', 'checkout', 'checkout text references entity(eid)')
-  addCol('role', 'schedule', 'schedule text')
-  addCol('role', 'wake_policy', "wake_policy text not null default 'always'")
-  addCol('role', 'wake_target', 'wake_target text references entity(eid)')
-  addCol('role', 'decision', 'decision text')
-  addCol('role', 'reason', 'reason text')
-  addCol('role', 'observed', 'observed text')
-  addCol('role', 'decided_at', 'decided_at text')
-  addCol('generation', 'serving_model', 'serving_model text')
-  addCol('session', 'cwd', 'cwd text')
-  addCol('session', 'pid', 'pid integer')
-  addCol('session', 'pane', 'pane text')
-  addCol('session', 'turn', 'turn text')
-  addCol('session', 'notice_at', 'notice_at text')
-  addCol('session', 'notice_accepted_at', 'notice_accepted_at text')
-  addCol('session', 'notice_token', 'notice_token text')
-  // A provider-owned transcript JSONL — an external session's log file.
-  addCol('session', 'transcript', 'transcript text')
-  // Self-reported at SessionStart (types.ts): what kind of session, how it booted.
-  addCol('session', 'agent_type', 'agent_type text')
-  addCol('session', 'source', 'source text')
-  addCol('session', 'operator', 'operator integer')
-  // The operator session a delegated agent descends from (types.ts): a child
-  // reifies as its own row rather than a second writer on the operator's.
-  addCol('session', 'parent', 'parent text references entity(eid)')
-  for (let table of ['created', 'updated', 'notified', 'opened', 'archived']) {
-    addCol(table, 'via', 'via text')
-  }
-  addCol('journal', 'via', 'via text')
-  // The managed-session lifecycle (src/sessions.ts): what it is doing and
-  // how it ended. The old launch aliases are planted before backfillSpawn()
-  // for live databases, then stay dormant as rollback input. The rest is
-  // server-owned and rides OUT in the snapshot.
-  // Listed once, planted in place; each ddl leads with its column name.
-  for (
-    let ddl of [
-      `origin text not null default 'external'`,
-      'provider text',
-      'model text',
-      'effort text',
-      'persona text',
-      'requested_task text',
-      'role text',
-      'branch text',
-      'base_revision text',
-      'status text',
-      'provider_session_id text',
-      'serving_model text',
-      'latest_seq integer not null default 0',
-      'started_at text',
-      'stop_requested_at text',
-      'input_at text',
-      'finished_at text',
-      'exit_code integer',
-      'stop_reason text',
-      'final_text text',
-      'usage_json text',
-    ]
-  ) addCol('session', ddl.split(' ')[0], ddl)
-  backfillSpawn(db)
-  backfillSessionFacets(db)
-  // The identity chain (types.ts): instruments point at who they act for.
-  addCol('client', 'actor', 'actor text references entity(eid)')
-  // Inbound provenance (inbound.ts): the fleet sweep's idempotency key
-  // (and the never-send mark), arrival time, and the edge's DKIM verdict
-  // — see stamped.mail in types.ts.
-  addCol('mail', 'message_id', 'message_id text')
-  addCol('mail', 'received_at', 'received_at text')
-  addCol('mail', 'verified', 'verified integer')
-  // Threading (mail.ts): the mail this one answers — no FK, like
-  // target (death 'keep' + tombstoned spines veto FK'd deletes,
-  // T-4593). sent_id is the sender-assigned Message-ID, server-stamped.
-  addCol('mail', 'reply_to', 'reply_to text')
-  addCol('mail', 'sent_id', 'sent_id text')
-  addCol('mail', 'in_reply_to', 'in_reply_to text')
-  addCol('session', 'actor', 'actor text references entity(eid)')
-  // board.query, project.color and the hook request columns (method/path/
-  // headers/sig_ok) were planted here before their tables were derived
-  // (T-12764); the addDerivedCols pass above now fills them from the vocabulary.
-  // A live table's check constraint is frozen at create; when the edge
-  // vocabulary outgrows the baked list (the 'about' verb shipped without
-  // this once — every about edge bounced off the old check), rebuild the
-  // table around the current one, rows copied whole.
-  let dep = ddlOf(db, 'dependency')
-  if (dep && edges.some((e) => !dep.includes(`'${e}'`))) {
-    rebuild(db, 'dependency', depDdl)
-  }
-  // The per-type delivery receipts become the shared delivered/error
-  // components, and the per-type recipient columns the shared deliver.to.
-  // Both before mendMail: a mail rebuild must see the trimmed shape.
-  migrateErrors(db)
-  migrateDelivery(db)
-  migrateDeliver(db)
-  mendMail(db)
-  // Mend the inbound letters an earlier migrateDeliver stranded in deliver{to}
-  // (T-15110). After mendMail so it reads the rebuilt mail table.
-  healInboundDeliver(db)
-  mendCalls(db)
-  mendApply(db)
-  // A legacy separate project-main-board collapses into its project — the
-  // project becomes its own board (T-17322). Idempotent; a no-op once every
-  // mirror is folded in.
-  migrateBoardsToProjects(db)
-  // A mail was briefly a 'send_request' (the intent idiom over-applied —
-  // the artifact deserved its name). Adopt the old table's rows once;
-  // `create if not exists mail` above already made the empty successor,
-  // so copy across and drop the stale name.
-  let sr = db.prepare(
-    `select 1 from sqlite_master where type = 'table' and name = 'send_request'`,
-  ).get()
-  if (sr) {
-    db.exec('begin')
-    db.exec('insert into mail select * from send_request')
-    db.exec('drop table send_request')
-    db.exec('commit')
-  }
-  // Nums already recycled before this column existed stay unknowable —
-  // monotonic from here on; old graves just don't raise the high-water.
-  addCol('tombstone', 'num', 'num integer')
-  // Both doc mirrors follow it by trigger from here on. Anything older,
-  // any out-of-band writer, or shadow-table damage (overlapping watcher
-  // restarts have managed it) shows up here as a failed integrity check
-  // or a count drift — one rebuild pass over the content table heals
-  // both, and at this scale it costs milliseconds on boot. A doc_gram
-  // that has never been built is exactly a count drift, so the index
-  // arrives filled on the first boot that knows about it.
-  let count = (t: string) =>
-    (db.prepare(`select count(*) as n from ${t}`).get() as { n: number }).n
-  let sound = (t: string) => {
-    try {
-      db.exec(`insert into ${t} (${t}, rank) values ('integrity-check', 1)`)
-      return count(t) == count('doc')
-    } catch {
-      return false
+    // Retire an index whose name the derivation no longer spells — a hand-written
+    // `create index` line that has been superseded by its derived twin under a
+    // different name (subscription_one → subscription_actor_target). Guarded, so
+    // it runs once and a fresh db (which never had the legacy name) is a no-op.
+    let dropIdx = (name: string) => {
+      db.exec(`drop index if exists ${name}`)
     }
-  }
-  for (let t of ['doc_fts', 'doc_gram']) {
-    if (!sound(t)) db.exec(`insert into ${t} (${t}) values ('rebuild')`)
-  }
-  let { n } = db.prepare('select count(*) as n from task').get() as {
-    n: number
-  }
-  if (!n) seed(db)
-  // Provenance components (T-6670), now the ONLY home: birth and last-edit
-  // moved off the spine, and this is the last pass that reads the old
-  // columns before they go. Runs AFTER seed so the demo entities (direct
-  // inserts, not apply) get provenance too; insert-or-ignore keeps it a
-  // no-op once healed.
-  //
-  // `updated` is deliberately NOT re-derived. A minted entity took its
-  // created_at from spine()'s clock and its modified_at from apply()'s, a
-  // few ms later — so `modified_at <> created_at` reads a birth as an edit
-  // and would mint provenance for entities nothing ever touched (61 such
-  // rows in the live graph). apply() has stamped the component directly
-  // since T-6670 shipped, so there is nothing left for a derivation to
-  // recover and nothing but noise for it to invent.
-  if (hasCol(db, 'entity', 'created_at')) {
-    db.exec(`insert or ignore into created (eid, at, "by")
+    // The DERIVED component tables (T-12764), planted beside the hand-written
+    // `schema` above from the same vocabulary `cmps`/`readable` read. Tables
+    // first — a fresh db gets them; then the additive column fill, the SAME alter
+    // path addCol runs for the hand tables, so a live db that predates a
+    // vocabulary edit grows the new column in place; then the indexes, which may
+    // name a column that fill just added. `migrateDelivery`/`migrateErrors` below
+    // pour into deliver/delivered/error, so those tables must already stand here.
+    for (let comp of derived) db.exec(tableDdl(comp) + ';')
+    for (let comp of derived) {
+      for (let { prop, ddl } of derivedCols(comp)) addCol(comp, prop, ddl)
+    }
+    // num is a UI label, not identity (T-3684): a cheap/bulk entity (T-3683)
+    // needs none, so the spine's num goes NULLABLE. One in-place ALTER on SQLite
+    // 3.53+ (ALTER COLUMN landed in 3.53.0), guarded on the notnull flag so it
+    // runs once. UNIQUE stays — SQLite treats NULLs as distinct, so num-less
+    // entities coexist. No rebuild, no backfill: existing nums are untouched.
+    if (
+      (prep(
+        db,
+        `select "notnull" as nn from pragma_table_info('entity') where name = 'num'`,
+      ).get() as { nn: number } | undefined)?.nn
+    ) {
+      db.exec('alter table entity alter column num drop not null')
+    }
+    // Retired by the per-comment `notified` stamp, which is per item and so
+    // cannot advance past an unserved sibling the way a cursor could.
+    dropCol('session', 'acked_at')
+    addCol('task', 'project', 'project text references entity(eid)')
+    addCol('task', 'assignee', 'assignee text references entity(eid)')
+    addCol('task', 'domain', 'domain text')
+    addCol('repo', 'url', 'url text')
+    // Off for every checkout the graph already knows: the permission to push
+    // is the owner's to grant per venture, never something a migration hands
+    // out (src/git.ts).
+    addCol('repo', 'push', 'push integer not null default 0')
+    // A missing gate refuses landing. There is no safe cross-language default,
+    // so the project names one complete command explicitly (src/land.ts).
+    addCol('repo', 'gate', 'gate text')
+    // Additional resolvable-only handles beside the primary `slug` (T-16673):
+    // a space-delimited set, every member globally unique (enforced in apply()).
+    addCol('alias', 'slugs', 'slugs text')
+    // A wake's note (T-17654): what the setter was mid-doing, relayed into the
+    // knock's words when it fires so a resumed session reconstitutes.
+    addCol('wake', 'note', 'note text')
+    // The crash-loop breaker's fresh-start fence (types.ts, src/roles.ts).
+    addCol('role', 'retry_at', 'retry_at text')
+    addCol('role', 'checkout', 'checkout text references entity(eid)')
+    addCol('role', 'schedule', 'schedule text')
+    addCol('role', 'wake_policy', "wake_policy text not null default 'always'")
+    addCol('role', 'wake_target', 'wake_target text references entity(eid)')
+    addCol('role', 'decision', 'decision text')
+    addCol('role', 'reason', 'reason text')
+    addCol('role', 'observed', 'observed text')
+    addCol('role', 'decided_at', 'decided_at text')
+    addCol('generation', 'serving_model', 'serving_model text')
+    addCol('session', 'cwd', 'cwd text')
+    addCol('session', 'pid', 'pid integer')
+    addCol('session', 'pane', 'pane text')
+    addCol('session', 'turn', 'turn text')
+    addCol('session', 'notice_at', 'notice_at text')
+    addCol('session', 'notice_accepted_at', 'notice_accepted_at text')
+    addCol('session', 'notice_token', 'notice_token text')
+    // A provider-owned transcript JSONL — an external session's log file.
+    addCol('session', 'transcript', 'transcript text')
+    // Self-reported at SessionStart (types.ts): what kind of session, how it booted.
+    addCol('session', 'agent_type', 'agent_type text')
+    addCol('session', 'source', 'source text')
+    addCol('session', 'operator', 'operator integer')
+    // The operator session a delegated agent descends from (types.ts): a child
+    // reifies as its own row rather than a second writer on the operator's.
+    addCol('session', 'parent', 'parent text references entity(eid)')
+    for (
+      let table of ['created', 'updated', 'notified', 'opened', 'archived']
+    ) {
+      addCol(table, 'via', 'via text')
+    }
+    addCol('journal', 'via', 'via text')
+    // The managed-session lifecycle (src/sessions.ts): what it is doing and
+    // how it ended. The old launch aliases are planted before backfillSpawn()
+    // for live databases, then stay dormant as rollback input. The rest is
+    // server-owned and rides OUT in the snapshot.
+    // Listed once, planted in place; each ddl leads with its column name.
+    for (
+      let ddl of [
+        `origin text not null default 'external'`,
+        'provider text',
+        'model text',
+        'effort text',
+        'persona text',
+        'requested_task text',
+        'role text',
+        'branch text',
+        'base_revision text',
+        'status text',
+        'provider_session_id text',
+        'serving_model text',
+        'latest_seq integer not null default 0',
+        'started_at text',
+        'stop_requested_at text',
+        'input_at text',
+        'finished_at text',
+        'exit_code integer',
+        'stop_reason text',
+        'final_text text',
+        'usage_json text',
+      ]
+    ) addCol('session', ddl.split(' ')[0], ddl)
+    backfillSpawn(db)
+    backfillSessionFacets(db)
+    // The identity chain (types.ts): instruments point at who they act for.
+    addCol('client', 'actor', 'actor text references entity(eid)')
+    // Inbound provenance (inbound.ts): the fleet sweep's idempotency key
+    // (and the never-send mark), arrival time, and the edge's DKIM verdict
+    // — see stamped.mail in types.ts.
+    addCol('mail', 'message_id', 'message_id text')
+    addCol('mail', 'received_at', 'received_at text')
+    addCol('mail', 'verified', 'verified integer')
+    // Threading (mail.ts): the mail this one answers — no FK, like
+    // target (death 'keep' + tombstoned spines veto FK'd deletes,
+    // T-4593). sent_id is the sender-assigned Message-ID, server-stamped.
+    addCol('mail', 'reply_to', 'reply_to text')
+    addCol('mail', 'sent_id', 'sent_id text')
+    addCol('mail', 'in_reply_to', 'in_reply_to text')
+    addCol('session', 'actor', 'actor text references entity(eid)')
+    // board.query, project.color and the hook request columns (method/path/
+    // headers/sig_ok) were planted here before their tables were derived
+    // (T-12764); the addDerivedCols pass above now fills them from the vocabulary.
+    // A live table's check constraint is frozen at create; when the edge
+    // vocabulary outgrows the baked list (the 'about' verb shipped without
+    // this once — every about edge bounced off the old check), rebuild the
+    // table around the current one, rows copied whole.
+    let dep = ddlOf(db, 'dependency')
+    if (dep && edges.some((e) => !dep.includes(`'${e}'`))) {
+      rebuild(db, 'dependency', depDdl)
+    }
+    // The per-type delivery receipts become the shared delivered/error
+    // components, and the per-type recipient columns the shared deliver.to.
+    // Both before mendMail: a mail rebuild must see the trimmed shape.
+    migrateErrors(db)
+    migrateDelivery(db)
+    migrateDeliver(db)
+    mendMail(db)
+    // Mend the inbound letters an earlier migrateDeliver stranded in deliver{to}
+    // (T-15110). After mendMail so it reads the rebuilt mail table.
+    healInboundDeliver(db)
+    mendCalls(db)
+    mendApply(db)
+    // A legacy separate project-main-board collapses into its project — the
+    // project becomes its own board (T-17322). Idempotent; a no-op once every
+    // mirror is folded in.
+    migrateBoardsToProjects(db)
+    // A mail was briefly a 'send_request' (the intent idiom over-applied —
+    // the artifact deserved its name). Adopt the old table's rows once;
+    // `create if not exists mail` above already made the empty successor,
+    // so copy across and drop the stale name.
+    let sr = prep(
+      db,
+      `select 1 from sqlite_master where type = 'table' and name = 'send_request'`,
+    ).get()
+    if (sr) {
+      db.exec('begin')
+      db.exec('insert into mail select * from send_request')
+      db.exec('drop table send_request')
+      db.exec('commit')
+    }
+    // Nums already recycled before this column existed stay unknowable —
+    // monotonic from here on; old graves just don't raise the high-water.
+    addCol('tombstone', 'num', 'num integer')
+    // Both doc mirrors follow it by trigger from here on. Anything older,
+    // any out-of-band writer, or shadow-table damage (overlapping watcher
+    // restarts have managed it) shows up here as a failed integrity check
+    // or a count drift — one rebuild pass over the content table heals
+    // both, and at this scale it costs milliseconds on boot. A doc_gram
+    // that has never been built is exactly a count drift, so the index
+    // arrives filled on the first boot that knows about it.
+    let count = (t: string) =>
+      (prep(db, `select count(*) as n from ${t}`).get() as { n: number }).n
+    let sound = (t: string) => {
+      try {
+        db.exec(`insert into ${t} (${t}, rank) values ('integrity-check', 1)`)
+        return count(t) == count('doc')
+      } catch {
+        return false
+      }
+    }
+    for (let t of ['doc_fts', 'doc_gram']) {
+      if (!sound(t)) db.exec(`insert into ${t} (${t}) values ('rebuild')`)
+    }
+    let { n } = prep(db, 'select count(*) as n from task').get() as {
+      n: number
+    }
+    if (!n) seed(db)
+    // Provenance components (T-6670), now the ONLY home: birth and last-edit
+    // moved off the spine, and this is the last pass that reads the old
+    // columns before they go. Runs AFTER seed so the demo entities (direct
+    // inserts, not apply) get provenance too; insert-or-ignore keeps it a
+    // no-op once healed.
+    //
+    // `updated` is deliberately NOT re-derived. A minted entity took its
+    // created_at from spine()'s clock and its modified_at from apply()'s, a
+    // few ms later — so `modified_at <> created_at` reads a birth as an edit
+    // and would mint provenance for entities nothing ever touched (61 such
+    // rows in the live graph). apply() has stamped the component directly
+    // since T-6670 shipped, so there is nothing left for a derivation to
+    // recover and nothing but noise for it to invent.
+    if (hasCol(db, 'entity', 'created_at')) {
+      db.exec(`insert or ignore into created (eid, at, "by")
       select eid, created_at, null from entity`)
-  }
-  backfillVia(db)
-  backfillOpened(db)
-  // The dormant columns are migration INPUT, and every one of them has now
-  // been read for the last time (T-6670, T-7113, T-7006). A retired column
-  // that lingers still answers a schema read, so it keeps teaching a
-  // mechanism the code no longer has.
-  dropCol('entity', 'created_at')
-  dropCol('entity', 'modified_at')
-  dropCol('comment', 'author_eid')
-  // Machine comments are not a species of their own: the sweep noise that
-  // wanted marking is deleted, and everything else was always someone's
-  // words (T-7018). Nothing reads the mark now, so the column goes.
-  dropCol('comment', 'event')
-  dropCol('memory', 'source_eid')
-  dropCol('mail', 'read_at')
-  // Reads memory.type and drops it in the same breath, so it belongs with
-  // the retirements rather than the backfills above.
-  retireMemoryType(db)
-  retireProposal(db)
-  retireProjectRetiredAt(db)
-  healStored(db)
-  // Indexes LAST — over EVERY component, not just `derived` (T-17678). SQLite
-  // auto-indexes no foreign key, and the hand-written `schema` tables (comment,
-  // cancel, card, stop_request, review, camera, fold, mail, …) carry {eid} ref
-  // columns too, so realizing indexDdl only over `derived` left comment.target
-  // and its siblings unindexed — a server-side `.comment.target=x` full-SCANNED
-  // the table (the browser is unaffected: index.ts builds the reverse map in
-  // memory). indexDdl is the one vocabulary's index set (index.ts indexesFor),
-  // so this is the SQL realization the design always anticipated. Placed after
-  // every addCol/rebuild above: a ref column may be added by migration
-  // (task.project, role.checkout, mail.reply_to) and a table rebuild (mendMail,
-  // migrateDelivery) drops and recreates its rows without indexes. Guarded by
-  // hasIdx — a bare `create index if not exists` still opens an empty write
-  // transaction that bumps the file change counter (breaking open()'s byte-
-  // idempotency), so the guard makes a re-open pure reads, the SAME shape addCol
-  // takes with hasCol.
-  for (let comp of new Set([...Object.keys(comps), ...Object.keys(stamped)])) {
-    for (let i of indexesFor(comp)) {
-      let name = `${comp}_${i.cols.join('_')}`
-      if (!hasIdx(db, name)) db.exec(indexDdlOne(comp, i) + ';')
     }
+    backfillVia(db)
+    backfillOpened(db)
+    // The dormant columns are migration INPUT, and every one of them has now
+    // been read for the last time (T-6670, T-7113, T-7006). A retired column
+    // that lingers still answers a schema read, so it keeps teaching a
+    // mechanism the code no longer has.
+    dropCol('entity', 'created_at')
+    dropCol('entity', 'modified_at')
+    dropCol('comment', 'author_eid')
+    // Machine comments are not a species of their own: the sweep noise that
+    // wanted marking is deleted, and everything else was always someone's
+    // words (T-7018). Nothing reads the mark now, so the column goes.
+    dropCol('comment', 'event')
+    dropCol('memory', 'source_eid')
+    dropCol('mail', 'read_at')
+    // Reads memory.type and drops it in the same breath, so it belongs with
+    // the retirements rather than the backfills above.
+    retireMemoryType(db)
+    retireProposal(db)
+    retireProjectRetiredAt(db)
+    healStored(db)
+    // Indexes LAST — over EVERY component, not just `derived` (T-17678). SQLite
+    // auto-indexes no foreign key, and the hand-written `schema` tables (comment,
+    // cancel, card, stop_request, review, camera, fold, mail, …) carry {eid} ref
+    // columns too, so realizing indexDdl only over `derived` left comment.target
+    // and its siblings unindexed — a server-side `.comment.target=x` full-SCANNED
+    // the table (the browser is unaffected: index.ts builds the reverse map in
+    // memory). indexDdl is the one vocabulary's index set (index.ts indexesFor),
+    // so this is the SQL realization the design always anticipated. Placed after
+    // every addCol/rebuild above: a ref column may be added by migration
+    // (task.project, role.checkout, mail.reply_to) and a table rebuild (mendMail,
+    // migrateDelivery) drops and recreates its rows without indexes. Guarded by
+    // hasIdx — a bare `create index if not exists` still opens an empty write
+    // transaction that bumps the file change counter (breaking open()'s byte-
+    // idempotency), so the guard makes a re-open pure reads, the SAME shape addCol
+    // takes with hasCol.
+    for (
+      let comp of new Set([...Object.keys(comps), ...Object.keys(stamped)])
+    ) {
+      for (let i of indexesFor(comp)) {
+        let name = `${comp}_${i.cols.join('_')}`
+        if (!hasIdx(db, name)) db.exec(indexDdlOne(comp, i) + ';')
+      }
+    }
+    // The one hand index whose name diverges from its derived twin: `schema` used
+    // to name subscription(actor,target) `subscription_one`, but indexDdl derives
+    // `subscription_actor_target` from the columns, so both would coexist. Retire
+    // the legacy name once — the derived unique index above already holds the
+    // (actor,target) uniqueness the drop would otherwise lose.
+    dropIdx('subscription_one')
+    return db
+  } finally {
+    // Runtime caches; a throwing migration still restores the flag.
+    caching = true
   }
-  // The one hand index whose name diverges from its derived twin: `schema` used
-  // to name subscription(actor,target) `subscription_one`, but indexDdl derives
-  // `subscription_actor_target` from the columns, so both would coexist. Retire
-  // the legacy name once — the derived unique index above already holds the
-  // (actor,target) uniqueness the drop would otherwise lose.
-  dropIdx('subscription_one')
-  return db
 }
 
 // The one live handle — the server shares it for the process lifetime.
@@ -2066,7 +2118,7 @@ let edgeCols = ['type', 'child', 'gone']
 let stored: Record<string, Set<string>> = {}
 let columnsOf = (table: string): Set<string> =>
   stored[table] ??= new Set(
-    (db.prepare('select name from pragma_table_info(?)').all(table) as {
+    (prep(db, 'select name from pragma_table_info(?)').all(table) as {
       name: string
     }[]).map((c) => c.name),
   )
@@ -2139,7 +2191,7 @@ let dualSpawn = (db: DatabaseSync, changes: Change[]): Change[] => {
   )
   let sessions = new Set(
     [...eids].filter((eid) =>
-      db.prepare('select 1 from session where eid = ?').get(eid)
+      prep(db, 'select 1 from session where eid = ?').get(eid)
     ),
   )
   let killed = new Set<string>()
@@ -2220,7 +2272,7 @@ let dualFacet = (
   )
   let sessions = new Set(
     [...eids].filter((eid) =>
-      db.prepare('select 1 from session where eid = ?').get(eid)
+      prep(db, 'select 1 from session where eid = ?').get(eid)
     ),
   )
   let killed = new Set<string>()
@@ -2234,7 +2286,8 @@ let dualFacet = (
     else sessions.add(change.eid)
   }
   for (let eid of sessions) {
-    let current = db.prepare(
+    let current = prep(
+      db,
       `select ${cols.map(sqlName).join(', ')} from ${sqlName(name)}
        where eid = ?`,
     ).get(eid) as Record<string, unknown> | undefined
@@ -2303,13 +2356,15 @@ let syncFacetAliases = (
       changes.filter((c) => c.name == name).map((c) => c.eid),
     )
     for (let eid of eids) {
-      if (!db.prepare('select 1 from session where eid = ?').get(eid)) continue
-      let row = db.prepare(
+      if (!prep(db, 'select 1 from session where eid = ?').get(eid)) continue
+      let row = prep(
+        db,
         `select ${cols.map(sqlName).join(', ')} from ${sqlName(name)}
          where eid = ?`,
       ).get(eid) as Record<string, unknown> | undefined
       let spec = row ?? Object.fromEntries(cols.map((col) => [col, null]))
-      db.prepare(
+      prep(
+        db,
         `update session set ${
           cols.map((col) => `${sqlName(col)} = ?`).join(', ')
         }
@@ -2391,19 +2446,20 @@ let refused = (
 ) => {
   if ((e as { errcode?: number })?.errcode != 787) return null
   let given: Record<string, unknown> = { eid, ...comp }
-  let bad = (db.prepare(
+  let bad = (prep(
+    db,
     `select "from" as col, "table" as t, coalesce("to", 'eid') as pk
      from pragma_foreign_key_list(?)`,
   ).all(name) as { col: string; t: string; pk: string }[])
     .filter((f) =>
       given[f.col] != null &&
-      !db.prepare(`select 1 from ${f.t} where ${f.pk} = ?`).get(
+      !prep(db, `select 1 from ${f.t} where ${f.pk} = ?`).get(
         given[f.col] as string,
       )
     )
     .map((f) =>
       `${f.col} → ${human(db, given[f.col] as string)} (${
-        db.prepare('select 1 from tombstone where eid = ?')
+        prep(db, 'select 1 from tombstone where eid = ?')
             .get(given[f.col] as string)
           ? 'tombstoned'
           : `no such ${f.t}`
@@ -2447,7 +2503,9 @@ let refRefused = (
   let args: string[] = []
   if (eid) args.push(eid)
   if (target) args.push(target)
-  let bad = db.prepare(`
+  let bad = prep(
+    db,
+    `
     select r.eid, r."${ref.col}" as target
     from ${ref.name} r
     left join ${to} t on t.eid = r."${ref.col}"
@@ -2455,11 +2513,12 @@ let refRefused = (
       ${eid ? 'and r.eid = ?' : ''}
       ${target ? `and r."${ref.col}" = ?` : ''}
     limit 1
-  `).get(...args) as
+  `,
+  ).get(...args) as
     | { eid: string; target: string }
     | undefined
   if (!bad) return null
-  let gone = db.prepare('select 1 from tombstone where eid = ?')
+  let gone = prep(db, 'select 1 from tombstone where eid = ?')
     .get(bad.target)
   return new Error(
     `${ref.name} ${human(db, bad.eid)} refused: ${ref.col} → ${
@@ -2475,7 +2534,7 @@ let refRefused = (
 // Nothing else may reach for this: an agent is not its owner and the
 // server's own machinery is nobody, so both resolve blank instead (T-9934).
 let ownerActor = (db: DatabaseSync): string | null => {
-  let people = db.prepare('select eid from person').all() as { eid: string }[]
+  let people = prep(db, 'select eid from person').all() as { eid: string }[]
   return people.length == 1 ? people[0].eid : null
 }
 
@@ -2504,7 +2563,7 @@ let worktreeGitdir = (cwd: string): string | null => {
 // operator-scoped door shares (client.ts repoAt is its cache-side twin).
 let ventureAt = (db: DatabaseSync, cwd?: string | null): string | null => {
   if (!cwd) return null
-  let repos = db.prepare('select eid, path from repo').all() as {
+  let repos = prep(db, 'select eid, path from repo').all() as {
     eid: string
     path: string
   }[]
@@ -2541,18 +2600,18 @@ let actorFor = (
   human: boolean,
 ): string | null => {
   if (!writer) return null
-  let s = db.prepare(
-    'select cwd, actor from session where id = ? or eid = ?',
-  ).get(writer, writer) as
-    | { cwd: string | null; actor: string | null }
-    | undefined
+  let s = prep(db, 'select cwd, actor from session where id = ? or eid = ?')
+    .get(writer, writer) as
+      | { cwd: string | null; actor: string | null }
+      | undefined
   if (s) return s.actor ?? ventureAt(db, s.cwd) ?? null
-  let c = db.prepare('select actor from client where eid = ?')
+  let c = prep(db, 'select actor from client where eid = ?')
     .get(writer) as { actor: string | null } | undefined
   if (c) return c.actor ?? (human ? ownerActor(db) : null)
   // A writer naming an actor entity (person or project) directly stands
   // for itself — the CLI's own operator eid, or a hand-set x-via.
-  let a = db.prepare(
+  let a = prep(
+    db,
     'select eid from person where eid = ? union select eid from project where eid = ?',
   ).get(writer, writer) as { eid: string } | undefined
   return a ? writer : null
@@ -2581,13 +2640,13 @@ export let writerVia = (
   writer?: string | null,
 ): string | null => {
   if (!writer) return null
-  let s = db.prepare('select eid from session where id = ? or eid = ?')
+  let s = prep(db, 'select eid from session where id = ? or eid = ?')
     .get(writer, writer) as { eid: string } | undefined
   if (s) return s.eid
-  let c = db.prepare('select eid from client where eid = ?')
+  let c = prep(db, 'select eid from client where eid = ?')
     .get(writer) as { eid: string } | undefined
   if (c) return c.eid
-  let r = db.prepare('select eid from runner where eid = ?')
+  let r = prep(db, 'select eid from runner where eid = ?')
     .get(writer) as { eid: string } | undefined
   return r?.eid ?? null
 }
@@ -2666,17 +2725,20 @@ export class Stale extends Error {
 // one another. The rule lives at apply(), where concurrent doors serialize;
 // command-side replacement would let two stale snapshots both survive.
 let replaceWakes = (db: DatabaseSync, changes: Change[]): Change[] => {
-  let exists = db.prepare('select 1 from wake where eid = ?')
+  let exists = prep(db, 'select 1 from wake where eid = ?')
   // Unacted = neither outcome component present (D-14945); the wake's own
   // receipt columns moved to the shared delivered/error tables. The recipient
   // moved too — to the `deliver {to}` facet, joined here and named in the same
   // batch, since a fresh self-wake always mints its deliver alongside.
-  let pending = db.prepare(`
+  let pending = prep(
+    db,
+    `
     select wake.eid from wake join deliver on deliver.eid = wake.eid
     where deliver."to" = ? and wake.target is null and wake.eid != ?
       and not exists (select 1 from delivered where delivered.eid = wake.eid)
       and not exists (select 1 from error where error.eid = wake.eid)
-  `)
+  `,
+  )
   let toOf = new Map<string, string>()
   for (let c of changes) {
     if (c.name == 'deliver' && c.comp && typeof c.comp.to == 'string') {
@@ -2721,7 +2783,7 @@ export let apply = (
     let kept = admitted(change)
     return kept ? [kept] : []
   })
-  let dead = db.prepare('select 1 from tombstone where eid = ?')
+  let dead = prep(db, 'select 1 from tombstone where eid = ?')
   let extra: Change[] = []
   let touched = new Set<string>()
   let minted = new Set<string>()
@@ -2747,10 +2809,13 @@ export let apply = (
     // Claim release is the interruption event. Capture the holder before the
     // row can vanish — including through a session cascade — then derive the
     // durable actor stack from the transaction's final state below.
-    let priorClaims = db.prepare(`
+    let priorClaims = prep(
+      db,
+      `
       select c.eid, c.claimed_at, c.rowid as claim_order, s.actor, s.cwd
       from claim c left join session s on s.eid = c.session
-    `).all() as {
+    `,
+    ).all() as {
       eid: string
       claimed_at: string
       claim_order: number
@@ -2774,7 +2839,7 @@ export let apply = (
       changes.filter((c) => c.name == 'entry' && c.comp?.session)
         .map((c) => c.eid),
     )
-    let existed = db.prepare('select 1 from entry where eid = ?')
+    let existed = prep(db, 'select 1 from entry where eid = ?')
     for (let { eid, name, comp } of changes) {
       if (!facts.has(name)) continue
       if (existed.get(eid)) {
@@ -2816,7 +2881,8 @@ export let apply = (
         // Both spines checked HERE for the friendlier message (node:sqlite
         // enforces FKs by default, but its bounce names no column): an
         // edge may only join entities that exist.
-        let spines = db.prepare(
+        let spines = prep(
+          db,
           'select count(*) as n from entity where eid in (?, ?)',
         ).get(eid, String(comp.child)) as { n: number }
         if (spines.n != 2) {
@@ -2826,15 +2892,21 @@ export let apply = (
         db.exec('savepoint change')
         try {
           if (comp.gone) {
-            db.prepare(`
+            prep(
+              db,
+              `
               delete from dependency
               where parent = ? and type = ? and child = ?
-            `).run(eid, String(comp.type), String(comp.child))
+            `,
+            ).run(eid, String(comp.type), String(comp.child))
           } else {
-            db.prepare(`
+            prep(
+              db,
+              `
               insert or ignore into dependency (parent, type, child)
               values (?, ?, ?)
-            `).run(eid, String(comp.type), String(comp.child))
+            `,
+            ).run(eid, String(comp.type), String(comp.child))
           }
           db.exec('release change')
           touched.add(eid) // a moved edge is news at both ends
@@ -2879,9 +2951,9 @@ export let apply = (
       // keeps NEITHER: partial application is how you end up with a body
       // from one writer and a title from another.
       if (was) {
-        let row = db.prepare(
-          `select * from ${sqlName(name)} where eid = ?`,
-        ).get(eid) as
+        let row = prep(db, `select * from ${sqlName(name)} where eid = ?`).get(
+          eid,
+        ) as
           | Record<string, unknown>
           | undefined
         let real = columnsOf(name)
@@ -2901,13 +2973,16 @@ export let apply = (
       // session re-claiming is a no-op refresh. apply() runs serially on
       // the one db handle, so check-then-write here IS the atomic take.
       if (name == 'claim' && comp) {
-        let cur = db.prepare(`
+        let cur = prep(
+          db,
+          `
           select c.session, s.id from claim c
           left join session s on s.eid = c.session
           where c.eid = ?
-        `).get(eid) as { session: string; id: string | null } | undefined
+        `,
+        ).get(eid) as { session: string; id: string | null } | undefined
         if (cur && cur.session != comp.session) {
-          let loser = db.prepare('select id from session where eid = ?')
+          let loser = prep(db, 'select id from session where eid = ?')
             .get(String(comp.session)) as { id: string } | undefined
           bounced = {
             target: eid,
@@ -2930,10 +3005,10 @@ export let apply = (
         // can claim-without-wip. Only open→wip; a stray claim never reopens a
         // done/cancelled task. The synthesized `task` change rides `extra` so
         // every client cache hears the status move.
-        let tk = db.prepare('select status from task where eid = ?')
+        let tk = prep(db, 'select status from task where eid = ?')
           .get(eid) as { status: string } | undefined
         if (tk?.status == 'open') {
-          db.prepare("update task set status = 'wip' where eid = ?").run(eid)
+          prep(db, "update task set status = 'wip' where eid = ?").run(eid)
           touched.add(eid)
           extra.push({ eid, name: 'task', comp: { status: 'wip' } })
         }
@@ -2943,11 +3018,12 @@ export let apply = (
       // loudly, like a bounced claim. (The stop itself is an EFFECT,
       // post-commit; this gate is the rule half.)
       if (name == 'stop_request' && comp?.target) {
-        let s = db.prepare('select origin, status from session where eid = ?')
+        let s = prep(db, 'select origin, status from session where eid = ?')
           .get(String(comp.target)) as
             | { origin: string; status: string | null }
             | undefined
-        let graph = !!db.prepare(
+        let graph = !!prep(
+          db,
           `select 1 from entry e where e.session = ? and (
              exists (select 1 from lease l where l.eid = e.eid)
              or (
@@ -2987,7 +3063,7 @@ export let apply = (
       // the whole set; a slug already worn by another entity bounces the batch,
       // the way a taken claim does.
       if (name == 'alias' && comp) {
-        let cur = db.prepare('select slug, slugs from alias where eid = ?')
+        let cur = prep(db, 'select slug, slugs from alias where eid = ?')
           .get(eid) as { slug: string; slugs: string | null } | undefined
         let slug = (comp.slug ?? cur?.slug ?? null) as string | null
         let extra = (comp.slugs !== undefined ? comp.slugs : cur?.slugs) as
@@ -2997,7 +3073,8 @@ export let apply = (
         for (let s of slugsOf({ slug, slugs: extra })) {
           if (seen.has(s)) throw new Error(`alias ${s} is listed twice`)
           seen.add(s)
-          let owner = db.prepare(
+          let owner = prep(
+            db,
             `select eid from alias where eid != ? and (slug = ?
                or instr(' ' || coalesce(slugs, '') || ' ', ' ' || ? || ' ') > 0)`,
           ).get(eid, s, s) as { eid: string } | undefined
@@ -3023,7 +3100,7 @@ export let apply = (
       if (comp == null) {
         if (name != 'entity') {
           if (
-            db.prepare(`delete from ${sqlName(name)} where eid = ?`).run(eid)
+            prep(db, `delete from ${sqlName(name)} where eid = ?`).run(eid)
               .changes
           ) {
             took(eid, name)
@@ -3041,7 +3118,7 @@ export let apply = (
         let doomed = [eid]
         for (let i = 0; i < doomed.length; i++) {
           for (let [t, col] of AIMED) {
-            let rows = db.prepare(`select eid from ${t} where ${col} = ?`)
+            let rows = prep(db, `select eid from ${t} where ${col} = ?`)
               .all(doomed[i]) as { eid: string }[]
             for (let r of rows) {
               if (!doomed.includes(r.eid)) doomed.push(r.eid)
@@ -3059,9 +3136,9 @@ export let apply = (
           // own entity-null already says everything, so only SURVIVORS
           // get a change.
           for (let [t, col] of RELEASED) {
-            let freed = db.prepare(`select eid from ${t} where ${col} = ?`)
+            let freed = prep(db, `select eid from ${t} where ${col} = ?`)
               .all(d) as { eid: string }[]
-            db.prepare(`delete from ${t} where ${col} = ?`).run(d)
+            prep(db, `delete from ${t} where ${col} = ?`).run(d)
             for (let { eid: held } of freed) {
               if (doomed.includes(held)) continue
               took(held, t)
@@ -3070,9 +3147,9 @@ export let apply = (
             }
           }
           for (let [t, col] of DETACHED) {
-            let homed = db.prepare(`select eid from ${t} where ${col} = ?`)
+            let homed = prep(db, `select eid from ${t} where ${col} = ?`)
               .all(d) as { eid: string }[]
-            db.prepare(`update ${t} set ${col} = null where ${col} = ?`).run(d)
+            prep(db, `update ${t} set ${col} = null where ${col} = ?`).run(d)
             for (let { eid: orphan } of homed) {
               if (doomed.includes(orphan)) continue
               touched.add(orphan)
@@ -3081,23 +3158,25 @@ export let apply = (
           }
           for (let c of Object.keys(cmps).toReversed()) {
             if (c != 'entity') {
-              if (db.prepare(`delete from ${c} where eid = ?`).run(d).changes) {
+              if (prep(db, `delete from ${c} where eid = ?`).run(d).changes) {
                 took(d, c)
               }
             }
           }
-          db.prepare(
-            'delete from dependency where parent = ? or child = ?',
-          ).run(d, d)
+          prep(db, 'delete from dependency where parent = ? or child = ?').run(
+            d,
+            d,
+          )
         }
         for (let d of doomed) {
-          db.prepare(
+          prep(
+            db,
             // The num rides into the grave: a dead entity keeps its name
             // answerable, and the allocator's high-water mark survives it.
             `insert or ignore into tombstone (eid, num, deleted_at)
              values (?, (select num from entity where eid = ?), ?)`,
           ).run(d, d, new Date().toISOString())
-          db.prepare('delete from entity where eid = ?').run(d)
+          prep(db, 'delete from entity where eid = ?').run(d)
           if (d != eid) extra.push({ eid: d, name: 'entity', comp: null })
         }
         continue
@@ -3116,7 +3195,8 @@ export let apply = (
       let hit: number | bigint = 0
       if (sent.length) {
         try {
-          hit = db.prepare(
+          hit = prep(
+            db,
             `update ${sqlName(name)} set ${
               sent.map((c) => `${sqlName(c)} = ?`).join(', ')
             }
@@ -3137,25 +3217,26 @@ export let apply = (
         if (spine(db, eid).changes) minted.add(eid)
         if (name == 'entry' && sent.length) {
           let session = String(comp.session)
-          let { seq } = db.prepare(
+          let { seq } = prep(
+            db,
             `select coalesce(max(seq), 0) + 1 as seq from entry
              where session = ?`,
           ).get(session) as { seq: number }
-          db.prepare(
-            'insert into entry (eid, session, seq) values (?, ?, ?)',
-          ).run(eid, session, seq)
+          prep(db, 'insert into entry (eid, session, seq) values (?, ?, ?)')
+            .run(eid, session, seq)
           // A graph-native session has no log FILE to tail, so its summary
           // is advanced here at the single door that assigns seq — same
           // transaction, so entry.seq and session.latest_seq cannot drift.
           // Not cast (like the JSONL tail, T-7063): it rides the snapshot's
           // whole-row select, not a per-entry broadcast.
-          db.prepare('update session set latest_seq = ? where eid = ?')
+          prep(db, 'update session set latest_seq = ? where eid = ?')
             .run(seq, session)
           createdComps.add(`${name} ${eid}`)
           t?.created.add(`${name} ${eid}`)
           extra.push({ eid, name: 'entry', comp: { eid, seq } })
         } else if (sent.length) {
-          db.prepare(
+          prep(
+            db,
             `insert into ${sqlName(name)} (eid${
               sent.map((c) => `, ${sqlName(c)}`).join('')
             })
@@ -3165,9 +3246,9 @@ export let apply = (
           t?.created.add(`${name} ${eid}`)
         } else {
           // A bare {} touch: create with defaults if possible, else no-op.
-          let made = db.prepare(
-            `insert or ignore into ${sqlName(name)} (eid) values (?)`,
-          ).run(eid).changes
+          let made =
+            prep(db, `insert or ignore into ${sqlName(name)} (eid) values (?)`)
+              .run(eid).changes
           if (made) {
             createdComps.add(`${name} ${eid}`)
             t?.created.add(`${name} ${eid}`)
@@ -3205,14 +3286,15 @@ export let apply = (
     // every write so deciding and spawning in one batch works, and before
     // commit so every door — including a raw session request — gets the same
     // refusal.
-    let request = db.prepare(
-      'select requested_task from session where eid = ?',
-    )
-    let pending = db.prepare(`
+    let request = prep(db, 'select requested_task from session where eid = ?')
+    let pending = prep(
+      db,
+      `
       select 1 from proposed p
       left join decided d on d.eid = p.eid
       where p.eid = ? and d.eid is null
-    `)
+    `,
+    )
     for (let key of createdComps) {
       if (!key.startsWith('session ')) continue
       let eid = key.slice('session '.length)
@@ -3236,10 +3318,10 @@ export let apply = (
     // claims in one batch, so claimed_at supplies their nested order and rank
     // preserves it after those lease rows are gone.
     let finalClaims = new Set(
-      (db.prepare('select eid from claim').all() as { eid: string }[])
+      (prep(db, 'select eid from claim').all() as { eid: string }[])
         .map((r) => r.eid),
     )
-    let status = db.prepare('select status from task where eid = ?')
+    let status = prep(db, 'select status from task where eid = ?')
     let clear = new Set(
       changes.filter((c) => c.name == 'claim' || c.name == 'task')
         .map((c) => c.eid),
@@ -3247,7 +3329,7 @@ export let apply = (
     for (let eid of clear) {
       let task = status.get(eid) as { status: string } | undefined
       if (!finalClaims.has(eid) && task && !settled(task.status)) continue
-      if (db.prepare('delete from resume where eid = ?').run(eid).changes) {
+      if (prep(db, 'delete from resume where eid = ?').run(eid).changes) {
         took(eid, 'resume')
         extra.push({ eid, name: 'resume', comp: null })
       }
@@ -3265,16 +3347,19 @@ export let apply = (
         a.claim_order - b.claim_order
       )
     let top = Number(
-      (db.prepare('select coalesce(max(rank), 0) as rank from resume')
+      (prep(db, 'select coalesce(max(rank), 0) as rank from resume')
         .get() as {
           rank: number
         }).rank,
     )
-    let push = db.prepare(`
+    let push = prep(
+      db,
+      `
       insert into resume (eid, actor, at, rank) values (?, ?, ?, ?)
       on conflict(eid) do update set actor = excluded.actor,
         at = excluded.at, rank = excluded.rank
-    `)
+    `,
+    )
     for (let item of released) {
       let comp = { actor: String(item.actor), at: now, rank: ++top }
       push.run(item.eid, comp.actor, comp.at, comp.rank)
@@ -3289,8 +3374,8 @@ export let apply = (
     // the server only fills the gap, and only for a session with a cwd (a
     // real run, never an abstract fixture), so the fill heals old blanks on
     // their next touch. It rides the return so caches hear it.
-    let fill = db.prepare('update session set actor = ? where eid = ?')
-    let has = db.prepare('select cwd, actor from session where eid = ?')
+    let fill = prep(db, 'update session set actor = ? where eid = ?')
+    let has = prep(db, 'select cwd, actor from session where eid = ?')
     for (let eid of touched) {
       let s = has.get(eid) as
         | { cwd: string | null; actor: string | null }
@@ -3312,14 +3397,13 @@ export let apply = (
     let via = writerVia(db, writer)
     // An entity minted then deleted in the same batch (or rolled back by its
     // savepoint) has no spine — the guard, like the births select below.
-    let alive = db.prepare('select 1 from entity where eid = ?')
-    let cNew = db.prepare(
+    let alive = prep(db, 'select 1 from entity where eid = ?')
+    let cNew = prep(
+      db,
       'insert or ignore into created (eid, at, "by", via) values (?, ?, ?, ?)',
     )
-    let cVia = db.prepare('update created set at = ?, via = ? where eid = ?')
-    let cRow = db.prepare(
-      'select eid, at, "by", via from created where eid = ?',
-    )
+    let cVia = prep(db, 'update created set at = ?, via = ? where eid = ?')
+    let cRow = prep(db, 'select eid, at, "by", via from created where eid = ?')
     for (let eid of minted) {
       if (!alive.get(eid)) continue
       if (saidCreator.has(eid)) cVia.run(now, via, eid)
@@ -3327,15 +3411,14 @@ export let apply = (
       let row = cRow.get(eid) as Change['comp'] | undefined
       if (row) extra.push({ eid, name: 'created', comp: row })
     }
-    let uSet = db.prepare(
+    let uSet = prep(
+      db,
       `insert into updated (eid, at, "by", via) values (?, ?, ?, ?)
        on conflict(eid) do update set at = excluded.at, "by" = excluded."by",
        via = excluded.via`,
     )
-    let uAt = db.prepare('update updated set at = ?, via = ? where eid = ?')
-    let uRow = db.prepare(
-      'select eid, at, "by", via from updated where eid = ?',
-    )
+    let uAt = prep(db, 'update updated set at = ?, via = ? where eid = ?')
+    let uRow = prep(db, 'select eid, at, "by", via from updated where eid = ?')
     for (let eid of touched) {
       if (minted.has(eid) || !alive.get(eid)) continue // birth writes created
       if (saidEditor.has(eid)) uAt.run(now, via, eid)
@@ -3349,7 +3432,8 @@ export let apply = (
     // `echoed` set below), so it reaches the journal and every replaying
     // cache — the coordinate is the durable cursor and must not be lost.
     if (imports) {
-      let stampImported = db.prepare(
+      let stampImported = prep(
+        db,
         'insert into imported (eid, source, line) values (?, ?, ?)',
       )
       for (let [eid, coord] of imports) {
@@ -3373,13 +3457,12 @@ export let apply = (
     for (let { eid, name, comp } of changes) {
       if (comp == null || !stamps.includes(name) || !alive.get(eid)) continue
       if (createdComps.has(`${name} ${eid}`)) {
-        db.prepare(
+        prep(
+          db,
           `update ${name} set "by" = coalesce("by", ?), via = ? where eid = ?`,
         ).run(actor, via, eid)
       }
-      let row = db.prepare(
-        `select eid, at, "by", via from ${name} where eid = ?`,
-      )
+      let row = prep(db, `select eid, at, "by", via from ${name} where eid = ?`)
         .get(eid) as Change['comp'] | undefined
       if (row) extra.push({ eid, name, comp: row })
     }
@@ -3398,8 +3481,8 @@ export let apply = (
     // swept row is stamped here as well and corrected a moment later by that
     // same stamp, before dispatch hands anything to delivery. Only the
     // intermediate cast ever carries the derived value.
-    let addrOf = db.prepare('select address from email where eid = ?')
-    let sender = db.prepare('update mail set "from" = ? where eid = ?')
+    let addrOf = prep(db, 'select address from email where eid = ?')
+    let sender = prep(db, 'update mail set "from" = ? where eid = ?')
     for (let key of createdComps) {
       if (!key.startsWith('mail ')) continue
       let eid = key.slice(5)
@@ -3424,7 +3507,8 @@ export let apply = (
       let eid = key.slice(cut + 1)
       let cols = cmps[name]
       if (!cols.length) continue
-      let row = db.prepare(
+      let row = prep(
+        db,
         `select ${cols.map(sqlName).join(', ')} from ${sqlName(name)}
          where eid = ?`,
       ).get(eid) as Change['comp'] | undefined
@@ -3438,7 +3522,7 @@ export let apply = (
     // A mint rolled back by its savepoint (or deleted later in the batch)
     // has no row — the select is the guard. entity === eid: only identity
     // rides now (T-6670), the timestamps travel as their components above.
-    let born = db.prepare('select eid, num from entity where eid = ?')
+    let born = prep(db, 'select eid, num from entity where eid = ?')
     for (let eid of minted) {
       let row = born.get(eid) as Change['comp'] | undefined
       if (row) extra.push({ eid, name: 'entity', comp: row })
@@ -3459,7 +3543,8 @@ export let apply = (
       let echoed = new Set(['created', 'updated', ...stamps])
       let logged = [...changes, ...extra.filter((c) => !echoed.has(c.name))]
       if (logged.length) {
-        db.prepare(
+        prep(
+          db,
           'insert into journal (ts, actor, via, batch) values (?, ?, ?, ?)',
         )
           .run(
@@ -3481,7 +3566,8 @@ export let apply = (
         db.exec('begin')
         let ceid = crypto.randomUUID()
         spine(db, ceid)
-        db.prepare(
+        prep(
+          db,
           `insert into conflict (eid, target, loser, holder)
            values (?, ?, ?, ?)`,
         ).run(ceid, bounced.target, bounced.loser, bounced.holder)
@@ -3504,11 +3590,14 @@ export let apply = (
 // Anyone may edit the doc between boots; the next boot writes it back —
 // server-minted, like every stamped column.
 export let vocabularyDoc = (db: DatabaseSync, body: string): void => {
-  let cur = db.prepare(`
+  let cur = prep(
+    db,
+    `
     select a.eid, d.body from alias a
     left join doc d on d.eid = a.eid
     where a.slug = 'vocabulary'
-  `).get() as { eid: string; body: string | null } | undefined
+  `,
+  ).get() as { eid: string; body: string | null } | undefined
   if (cur?.body == body) return
   let eid = cur?.eid ?? crypto.randomUUID()
   apply(
@@ -3534,7 +3623,7 @@ export let record = (
   writer?: string | null,
 ) => {
   try {
-    db.prepare('insert into journal (actor, via, batch) values (?, ?, ?)').run(
+    prep(db, 'insert into journal (actor, via, batch) values (?, ?, ?)').run(
       writerActor(db, writer),
       writerVia(db, writer),
       JSON.stringify(changes),
@@ -3559,12 +3648,15 @@ export let journalOf = (
   eid: string,
   limit = 50,
 ): JournalEntry[] =>
-  (db.prepare(`
+  (prep(
+    db,
+    `
     select distinct j.rowid, j.ts, j.actor, j.via, j.batch
     from journal j, json_each(j.batch) je
     where json_extract(je.value, '$.eid') = ?
     order by j.rowid desc limit ?
-  `).all(eid, limit) as {
+  `,
+  ).all(eid, limit) as {
     ts: string
     actor: string | null
     via: string | null
@@ -3586,10 +3678,13 @@ export let journalBy = (
   via: string,
   limit = 500,
 ): JournalEntry[] =>
-  (db.prepare(`
+  (prep(
+    db,
+    `
     select ts, actor, via, batch from journal
     where via = ? order by rowid desc limit ?
-  `).all(via, limit) as {
+  `,
+  ).all(via, limit) as {
     ts: string
     actor: string | null
     via: string | null
@@ -3605,13 +3700,16 @@ export let journalBy = (
 // A released lease is gone from the graph, but not from the record. Sessions
 // use this cut to name every task they worked on, in first-claim order.
 export let journalClaims = (db: DatabaseSync, session: string): string[] =>
-  (db.prepare(`
+  (prep(
+    db,
+    `
     select json_extract(je.value, '$.eid') as eid, min(j.rowid) as first
     from journal j, json_each(j.batch) je
     where json_extract(je.value, '$.name') = 'claim'
       and json_extract(je.value, '$.comp.session') = ?
     group by eid order by first
-  `).all(session) as { eid: string }[]).map((r) => r.eid)
+  `,
+  ).all(session) as { eid: string }[]).map((r) => r.eid)
 
 // Session entries are a lazy graph partition: root clients never receive
 // their eids or any facets/provenance hung from them. A Session subscription
@@ -3622,7 +3720,7 @@ export let rootChanges = (db: DatabaseSync, changes: Change[]): Change[] => {
   let hidden = new Set(
     changes.filter((c) => c.name == 'entry' && c.comp).map((c) => c.eid),
   )
-  let isEntry = db.prepare('select 1 from entry where eid = ?')
+  let isEntry = prep(db, 'select 1 from entry where eid = ?')
   for (let eid of new Set(changes.map((c) => c.eid))) {
     if (isEntry.get(eid)) hidden.add(eid)
   }
@@ -3645,7 +3743,8 @@ export let delta = (
   db: DatabaseSync,
   since: number,
 ): { changes: Change[]; cursor: number } => {
-  let log = db.prepare(
+  let log = prep(
+    db,
     `select rowid, ts, actor, via, batch from journal
      where rowid > ? order by rowid`,
   ).all(since) as {
@@ -3730,27 +3829,30 @@ export let touch = (
   let now = new Date().toISOString()
   let out: Change[] = []
   for (let eid of eids) {
-    if (!db.prepare('select 1 from entity where eid = ?').get(eid)) continue
-    db.prepare(`
+    if (!prep(db, 'select 1 from entity where eid = ?').get(eid)) continue
+    prep(
+      db,
+      `
       insert into recall (eid, first_at, last_at) values (?, ?, ?)
       on conflict (eid) do update
       set count = count + 1, last_at = excluded.last_at
-    `).run(eid, now, now)
+    `,
+    ).run(eid, now, now)
     out.push({
       eid,
       name: 'recall',
-      comp: db.prepare('select * from recall where eid = ?')
+      comp: prep(db, 'select * from recall where eid = ?')
         .get(eid) as Change['comp'],
     })
     if (
       confirm &&
-      db.prepare('update memory set last_confirmed_at = ? where eid = ?')
+      prep(db, 'update memory set last_confirmed_at = ? where eid = ?')
         .run(now, eid).changes
     ) {
       out.push({
         eid,
         name: 'memory',
-        comp: db.prepare('select * from memory where eid = ?')
+        comp: prep(db, 'select * from memory where eid = ?')
           .get(eid) as Change['comp'],
       })
     }
@@ -3819,7 +3921,9 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
   if (!match && !filters.length) return []
   // Filters screen AFTER the rank, so cast a wider net before the cap.
   let rows = match
-    ? db.prepare(`
+    ? prep(
+      db,
+      `
       select d.eid, d.title,
         highlight(doc_fts, 0, char(1), char(2)) as title_hit,
         snippet(doc_fts, 1, char(1), char(2), '…', 10) as snip,
@@ -3833,11 +3937,14 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
       order by bm25(doc_fts, 8.0, 1.0)
         - 2.0 / (1 + julianday('now') - julianday(coalesce(up.at, cr.at)))
         ${cap}
-    `).all(match, ...params, ...(cap ? [limit] : [])) as (Omit<
+    `,
+    ).all(match, ...params, ...(cap ? [limit] : [])) as (Omit<
       Hit,
       'kind' | 'open' | 'retired'
     >)[]
-    : db.prepare(`
+    : prep(
+      db,
+      `
       select d.eid, d.title, d.title as title_hit, '' as snip, e.num
       from doc d
       join entity e on e.eid = d.eid
@@ -3845,19 +3952,23 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
       left join created cr on cr.eid = e.eid
       where 1 ${screen}
       order by coalesce(up.at, cr.at) desc ${cap}
-    `).all(...params, ...(cap ? [limit] : [])) as (Omit<
+    `,
+    ).all(...params, ...(cap ? [limit] : [])) as (Omit<
       Hit,
       'kind' | 'open' | 'retired'
     >)[]
   // An address is identity, not prose. Keep textual mentions behind the
   // entity the operator named, without giving ids a second search index.
   if (addressed) {
-    let direct = db.prepare(`
+    let direct = prep(
+      db,
+      `
       select d.eid, d.title, d.title as title_hit, '' as snip, e.num
       from doc d
       join entity e on e.eid = d.eid
       where d.eid = ? ${screen}
-    `).get(addressed, ...params) as
+    `,
+    ).get(addressed, ...params) as
       | Omit<Hit, 'kind' | 'open' | 'retired'>
       | undefined
     if (direct) {
@@ -3883,7 +3994,7 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
       ]
     let names = [...new Set(filters.flatMap(predComps))]
     let get = new Map(
-      names.map((c) => [c, db.prepare(`select * from ${c} where eid = ?`)]),
+      names.map((c) => [c, prep(db, `select * from ${c} where eid = ?`)]),
     )
     let compsOf = (eid: string) => {
       let comps: Record<string, Record<string, unknown> | undefined> = {}
@@ -3907,23 +4018,29 @@ export let search = (db: DatabaseSync, q: string, limit = 20): Hit[] => {
       .slice(0, limit)
   }
   let is = kindOrder.map((k) =>
-    [k, db.prepare(`select 1 from ${k} where eid = ?`)] as const
+    [k, prep(db, `select 1 from ${k} where eid = ?`)] as const
   )
-  let aim = db.prepare(`
+  let aim = prep(
+    db,
+    `
     select c.target, d.title from comment c
     left join doc d on d.eid = c.target
     where c.eid = ?
-  `)
+  `,
+  )
   // Retirement sinks a hit, never hides it: a hit that IS a retired
   // project, or a task filed under one, keeps its rank order among the
   // sunk — they all queue behind the last live hit, flagged for the
   // renderers to mark.
-  let sank = db.prepare(`
+  let sank = prep(
+    db,
+    `
     select 1 from project p
     join archived a on a.eid = p.eid
     left join task t on t.eid = ?1
     where p.eid in (?1, t.project)
-  `)
+  `,
+  )
   let hits = rows.map((r) => {
     let kind = is.find(([, s]) => s.get(r.eid))?.[0] ?? 'entity'
     let at = aim.get(r.eid) as
@@ -3966,7 +4083,7 @@ export let vocabHash = vocabHashOf(comps, stamped)
 // next `since` from it; a subscription rides it on every pushed frame so a
 // client can bridge to the catch-up delta. 0 on an empty journal.
 export let cursorOf = (db: DatabaseSync): number =>
-  (db.prepare('select max(rowid) as m from journal')
+  (prep(db, 'select max(rowid) as m from journal')
     .get() as { m: number | null }).m ?? 0
 
 // One entity's current components, keyed read — what subscription maintenance
@@ -3977,13 +4094,13 @@ export let eager = (
   db: DatabaseSync,
   eid: string,
 ): Record<string, Record<string, unknown>> => {
-  let spine = db.prepare(`${select('entity')} where eid = ?`)
+  let spine = prep(db, `${select('entity')} where eid = ?`)
     .get(eid) as Record<string, unknown> | undefined
   if (!spine) return {}
   let out: Record<string, Record<string, unknown>> = { entity: spine }
   for (let name of Object.keys(readable)) {
     if (name == 'entity') continue
-    let row = db.prepare(`${select(name)} where eid = ?`)
+    let row = prep(db, `${select(name)} where eid = ?`)
       .get(eid) as Record<string, unknown> | undefined
     if (row) out[name] = row
   }
@@ -4003,7 +4120,8 @@ export let bodies = (db: DatabaseSync, eids: string[]): Change[] => {
   for (let name of Object.keys(readable)) {
     let cut = bodyCols(name).filter((c) => readable[name].includes(c))
     if (!cut.length) continue
-    let rows = db.prepare(
+    let rows = prep(
+      db,
       `select eid, ${cut.map(sqlName).join(', ')} from ${sqlName(name)}
        where eid in (${holes})`,
     ).all(...eids) as Record<string, unknown>[]
@@ -4016,7 +4134,7 @@ export let bodies = (db: DatabaseSync, eids: string[]): Change[] => {
 // its own table, where reading it out of a materialized graph costs the graph.
 // `only` is a where clause, so the narrow door asks the same question keyed.
 let homes = (db: DatabaseSync, only = '') =>
-  db.prepare(`select eid, home as home from persona ${only}`)
+  prep(db, `select eid, home as home from persona ${only}`)
     .all() as { eid: string; home: unknown }[]
 
 // The whole graph as one batch (plus edges) — what a fresh client cache eats.
@@ -4036,10 +4154,10 @@ let snapCache = new WeakMap<DatabaseSync, SnapHit>()
 
 let snapKey = (db: DatabaseSync) => ({
   local: Number(
-    (db.prepare('select total_changes() as n').get() as { n: number }).n,
+    (prep(db, 'select total_changes() as n').get() as { n: number }).n,
   ),
   remote: Number(
-    (db.prepare('pragma data_version').get() as { data_version: number })
+    (prep(db, 'pragma data_version').get() as { data_version: number })
       .data_version,
   ),
 })
@@ -4052,14 +4170,16 @@ export let snapshot = (db: DatabaseSync): Snapshot => {
   let changes: Change[] = []
   for (let name of Object.keys(readable)) {
     for (
-      let row of db.prepare(
+      let row of prep(
+        db,
         `${select(name)} where eid not in (select eid from entry)`,
       ).all() as Record<string, unknown>[]
     ) {
       changes.push({ eid: row.eid as string, name, comp: row })
     }
   }
-  let deps = db.prepare(
+  let deps = prep(
+    db,
     `select parent as parent, type, child as child from dependency
      where parent not in (select eid from entry)
        and child not in (select eid from entry)`,
@@ -4094,7 +4214,7 @@ export let componentCounts = (db: DatabaseSync): Record<string, number> => {
       out[name] = 0
       continue
     }
-    let { n } = db.prepare(`select count(*) as n from ${name}`).get() as {
+    let { n } = prep(db, `select count(*) as n from ${name}`).get() as {
       n: number
     }
     out[name] = n
@@ -4104,7 +4224,7 @@ export let componentCounts = (db: DatabaseSync): Record<string, number> => {
 
 // `deno task seed` (or a direct run) bootstraps the file without the server.
 if (import.meta.main) {
-  let n = (q: string) => (db.prepare(q).get() as { n: number }).n
+  let n = (q: string) => (prep(db, q).get() as { n: number }).n
   console.log(
     `seeded ${n('select count(*) as n from task')} tasks, ${
       n('select count(*) as n from dependency')
@@ -4132,7 +4252,7 @@ let clear = (db: DatabaseSync) => {
 // within one reader, never held across two.
 let stage = (db: DatabaseSync, eids: string[]) => {
   clear(db)
-  let put = db.prepare('insert or ignore into hit (eid) values (?)')
+  let put = prep(db, 'insert or ignore into hit (eid) values (?)')
   for (let e of eids) put.run(e)
 }
 
@@ -4140,13 +4260,13 @@ let stage = (db: DatabaseSync, eids: string[]) => {
 let staged = (db: DatabaseSync) => {
   let out = new Map<string, Record<string, Record<string, unknown>>>()
   let only = `where eid in (select eid from hit)`
-  let spine = db.prepare(`${select('entity')} ${only}`)
+  let spine = prep(db, `${select('entity')} ${only}`)
     .all() as Record<string, unknown>[]
   for (let r of spine) out.set(String(r.eid), { entity: r })
   if (!out.size) return []
   for (let name of Object.keys(readable)) {
     if (name == 'entity') continue
-    let rows = db.prepare(`${select(name)} ${only}`)
+    let rows = prep(db, `${select(name)} ${only}`)
       .all() as Record<string, unknown>[]
     for (let r of rows) {
       let e = out.get(String(r.eid))
@@ -4175,7 +4295,7 @@ export let matching = (
   filter: { sql: string; params: (string | number)[] },
 ): { eid: string; comps: Record<string, Record<string, unknown>> }[] => {
   clear(db)
-  db.prepare(`insert or ignore into hit (eid) ${filter.sql}`)
+  prep(db, `insert or ignore into hit (eid) ${filter.sql}`)
     .run(...filter.params)
   return staged(db)
 }
@@ -4203,7 +4323,7 @@ let entryRows = (
 // One entry by identity. Hosted work names its call directly; its Session
 // partition is unrelated to locating or hydrating that immutable row.
 export let entryOf = (db: DatabaseSync, eid: string) => {
-  let row = db.prepare('select eid, seq from entry where eid = ?').get(eid) as
+  let row = prep(db, 'select eid, seq from entry where eid = ?').get(eid) as
     | { eid: string; seq: number }
     | undefined
   return row ? entryRows(db, [row])[0] : undefined
@@ -4222,11 +4342,13 @@ export let entriesOf = (
 ) => {
   let cap = Math.max(1, Math.min(limit, 5000))
   let index = (through == null
-    ? db.prepare(
+    ? prep(
+      db,
       `select eid, seq from entry where session = ? and seq > ?
        order by seq limit ?`,
     ).all(session, after, cap)
-    : db.prepare(
+    : prep(
+      db,
       `select eid, seq from entry
        where session = ? and seq > ? and seq <= ?
        order by seq limit ?`,
@@ -4243,7 +4365,8 @@ export let entriesOf = (
 // per-session read; this is its unscoped sibling, bounded so an all-sessions
 // scan can never be unbounded.
 export let entriesScan = (db: DatabaseSync, after = 0, limit = 500) => {
-  let index = db.prepare(
+  let index = prep(
+    db,
     `select eid, seq from entry where seq > ?
      order by session, seq limit ?`,
   ).all(after, Math.max(1, Math.min(limit, 5000))) as {
@@ -4265,7 +4388,8 @@ export let depsOf = (db: DatabaseSync, eids: string[]): Dep[] => {
   if (!eids.length) return []
   stage(db, eids)
   let mine = `in (select eid from hit)`
-  let deps = db.prepare(
+  let deps = prep(
+    db,
     `select parent as parent, type, child as child from dependency
       where parent ${mine} or child ${mine}`,
   ).all() as Dep[]
@@ -4287,7 +4411,8 @@ export let refsOf = (db: DatabaseSync, eids: string[]) => {
   let out: { from: string; via: string; to: string }[] = []
   for (let [name, cols] of Object.entries(readable)) {
     for (let col of cols.filter((c) => isRef(name, c))) {
-      let rows = db.prepare(
+      let rows = prep(
+        db,
         `select eid, ${sqlName(col)} as at from ${sqlName(name)}
           where ${sqlName(col)} in (select eid from hit)`,
       ).all() as { eid: string; at: string }[]
@@ -4315,7 +4440,8 @@ export let referrersOf = (
   )
   let out = new Set<string>()
   for (let name of names) {
-    let rows = db.prepare(
+    let rows = prep(
+      db,
       `select eid from ${sqlName(name)}
         where ${sqlName(prop)} in (select eid from hit)`,
     ).all() as { eid: string }[]
@@ -4335,7 +4461,8 @@ export let refValuesOf = (
 ): string[] => {
   if (!eids.length || !readable[comp]?.includes(prop)) return []
   stage(db, eids)
-  let rows = db.prepare(
+  let rows = prep(
+    db,
     `select ${sqlName(prop)} as v from ${sqlName(comp)}
       where eid in (select eid from hit) and ${sqlName(prop)} is not null`,
   ).all() as { v: string }[]
