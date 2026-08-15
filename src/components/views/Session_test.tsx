@@ -7,7 +7,6 @@ import { resolve } from '../Entity.tsx'
 import { mount } from '../mount.ts'
 import { until } from '../../testing.ts'
 import {
-  SessionBody,
   SessionContext,
   SessionDiagnostics,
   SessionEntry,
@@ -115,36 +114,6 @@ Deno.test('session title names model and effort', () => {
   cache.value = {}
 })
 
-Deno.test('session user messages render as markdown', () => {
-  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
-  let { document } = parseHTML('<main></main>')
-  Object.defineProperty(globalThis, 'document', {
-    value: document,
-    configurable: true,
-  })
-  let root = document.querySelector('main')!
-  try {
-    render(
-      h(SessionBody, {
-        x: {
-          seq: 1,
-          line: '',
-          row: { kind: 'say', role: 'user', text: '**hello**' },
-        },
-      }),
-      root,
-    )
-    assertEquals(
-      root.innerHTML,
-      '<div class="Session_User"><p><strong>hello</strong></p>\n</div>',
-    )
-  } finally {
-    render(null, root)
-    if (prior) Object.defineProperty(globalThis, 'document', prior)
-    else delete (globalThis as { document?: unknown }).document
-  }
-})
-
 Deno.test('uncached graph entries keep their normalized session face', () => {
   let { root, free } = mount(
     <SessionEntry
@@ -156,7 +125,7 @@ Deno.test('uncached graph entries keep their normalized session face', () => {
       }}
     />,
   )
-  assertEquals(root.querySelector('.Session_ToolName')?.textContent, 'Read')
+  assertEquals(root.querySelector('.Entry_Name')?.textContent, 'Read')
   assertEquals(root.querySelector('.Json'), null)
   free()
 })
@@ -381,16 +350,16 @@ Deno.test('transient Session model progress renders through safe Markdown', () =
       root,
     )
     assertEquals(
-      root.querySelector('.Session_Agent')?.textContent.trim(),
+      root.querySelector('.Entry-agent')?.textContent.trim(),
       'answer <b>raw</b>',
     )
     assertEquals(
-      root.querySelector('.Session_Reason')?.textContent,
+      root.querySelector('.Entry_Reason')?.textContent,
       '[reason](javascript:alert(1))',
     )
     assertEquals(root.querySelector('a'), null)
     assertEquals(root.querySelector('b'), null)
-    assertEquals(root.querySelector('.Session_ToolName')?.textContent, 'shell')
+    assertEquals(root.querySelector('.Entry_Name')?.textContent, 'shell')
   } finally {
     render(null, root)
     if (prior) Object.defineProperty(globalThis, 'document', prior)

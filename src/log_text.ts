@@ -4,7 +4,7 @@
 // rendered by the process-backed adapters or the graph-native entry_log.
 //
 // A rowless entry is provider machinery the renderer OMITS — the same call
-// Session.tsx's SessionBody makes: a JSON line the adapter chose not to
+// Entry.tsx's EntryBody makes: a JSON line the adapter chose not to
 // normalize is bookkeeping, not a chat item. The one exception is a line that
 // is not JSON at all: raw bytes are evidence of a broken stream and stay
 // visible. This is what keeps a graph-native peek from dumping an entry's raw

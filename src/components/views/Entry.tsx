@@ -1,7 +1,7 @@
 // Session entries as a small renderer vocabulary. Summary and Full faces
 // share this kit; component-specific registrations choose what each face says.
 import { useState } from 'preact/hooks'
-import { type Ent } from '../../types.ts'
+import { type Ent, friendly, kilo, type LogRow } from '../../types.ts'
 import { backlinks, ent } from '../../live.ts'
 import { block, el } from '../ui.tsx'
 import { Entity } from '../Entity.tsx'
@@ -17,11 +17,39 @@ let Frame = block('div', 'Entry', {
   More: 'button',
   Name: 'span',
   Status: 'span',
+  Error: 'span',
   Code: 'pre',
   Output: 'div',
   Err: 'pre',
+  Raw: 'span',
+  Reason: 'div',
+  Turn: 'div',
+  Oops: 'div',
+  Sys: 'div',
+  SysTag: 'span',
+  SysText: 'span',
+  SysCount: 'span',
 })
-let { Lens, Tabs, Line, More, Name, Status, Code, Output, Err } = Frame
+let {
+  Lens,
+  Tabs,
+  Line,
+  More,
+  Name,
+  Status,
+  Error,
+  Code,
+  Output,
+  Err,
+  Raw,
+  Reason,
+  Turn,
+  Oops,
+  Sys,
+  SysTag,
+  SysText,
+  SysCount,
+} = Frame
 let Tab = el('button', 'Tab')
 
 let lines = (text = '') => text.replace(/\n$/, '').split('\n')
@@ -36,6 +64,143 @@ let failed = (e: Ent) => e.exit?.code != null && e.exit.code != 0
 let result = (e: Ent) => {
   let eid = backlinks(e.eid).find((x) => x.via == 'result.call')?.from
   return eid ? ent(eid) : undefined
+}
+
+export type EntryLine = {
+  eid?: string
+  seq: number
+  line: string
+  row?: LogRow
+  n?: number
+}
+
+let span = (ms: number) => {
+  let s = Math.round(ms / 1000)
+  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`
+}
+
+let usage = (json?: string) => {
+  if (!json) return ''
+  try {
+    let u = JSON.parse(json) as Record<string, number>
+    let up = (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) +
+      (u.cache_creation_input_tokens ?? 0)
+    let down = u.output_tokens ?? 0
+    return [up > 0 && `↑ ${kilo(up)}`, down > 0 && `↓ ${kilo(down)}`]
+      .filter(Boolean).join('  ')
+  } catch {
+    return ''
+  }
+}
+
+let bare = (line: string) => {
+  try {
+    return String((JSON.parse(line) as { type?: unknown }).type ?? '?')
+  } catch {
+    return null
+  }
+}
+
+export let entryVisible = (x: EntryLine) => !!x.row || !bare(x.line)
+
+export let ToolSummary = ({
+  name,
+  detail,
+  status,
+  error,
+  failed,
+}: {
+  name: string
+  detail?: string
+  status?: string | null
+  error?: string
+  failed?: boolean
+}) => (
+  <Frame mod={failed && 'fail'}>
+    <Name>{name}</Name>
+    {detail && <Line>{detail}</Line>}
+    {status && <Status>{status}</Status>}
+    {error && <Error>{error}</Error>}
+  </Frame>
+)
+
+// Process logs and graph entries meet at this normalized face. The Session
+// owns ordering and inspection; an individual transcript item belongs here.
+export let EntryBody = ({ x, repo }: { x: EntryLine; repo?: string }) => {
+  let r = x.row
+  if (!r) {
+    return bare(x.line) ? null : (
+      <Raw>
+        <Ansi text={x.line} />
+      </Raw>
+    )
+  }
+  switch (r.kind) {
+    case 'say':
+      return (
+        <Frame mod={r.role}>
+          <Markdown text={r.text} repo={repo} />
+        </Frame>
+      )
+    case 'reason':
+      return (
+        <Reason>
+          <Ansi text={r.text} />
+        </Reason>
+      )
+    case 'tool':
+      return (
+        <ToolSummary
+          name={r.name}
+          detail={r.detail}
+          status={r.ok == null ? null : r.ok ? '✓ done' : '✗ failed'}
+          error={r.error}
+          failed={r.ok === false}
+        />
+      )
+    case 'exec': {
+      let fail = r.exit != null ? r.exit != 0 : r.status == 'failed'
+      let status = r.exit != null
+        ? `${fail ? '✗' : '✓'} exit ${r.exit}`
+        : r.status
+      return (
+        <Frame mod={fail && 'fail'}>
+          <Name>$</Name>
+          <Line mod='command'>{first(r.command)}</Line>
+          {r.desc && r.desc != 'Command' && <Line>{r.desc}</Line>}
+          {status && <Status>{status}</Status>}
+        </Frame>
+      )
+    }
+    case 'turn':
+      return (
+        <Turn>
+          {[
+            r.model && friendly(r.model),
+            r.ms != null && span(r.ms),
+            usage(r.usage),
+          ].filter(Boolean).join(' · ')}
+        </Turn>
+      )
+    case 'error':
+      return (
+        <Oops>
+          <Ansi text={r.text} />
+        </Oops>
+      )
+    case 'sys':
+      return (
+        <Sys>
+          <SysTag>{r.tag}</SysTag>
+          {r.text && (
+            <SysText>
+              <Ansi text={r.text} />
+            </SysText>
+          )}
+          {(x.n ?? 1) > 1 && <SysCount>×{x.n}</SysCount>}
+        </Sys>
+      )
+  }
 }
 
 export let EntrySummary = ({ e }: { e: Ent }) => (

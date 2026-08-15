@@ -9,6 +9,7 @@ import { resolve } from '../Entity.tsx'
 import {
   CommandFull,
   CommandSummary,
+  EntryBody,
   EntryLens,
   EntrySummary,
   MessageSummary,
@@ -110,6 +111,53 @@ Deno.test('message summaries preserve who spoke', () =>
     } as Ent
     render(<MessageSummary e={e} />, root)
     assertEquals(root.querySelector('.Entry-user')?.textContent.trim(), 'hello')
+  }))
+
+Deno.test('normalized tools and shell calls share compact entry rows', () =>
+  withDom((root) => {
+    render(
+      <EntryBody
+        x={{
+          seq: 1,
+          line: '',
+          row: { kind: 'tool', name: 'Read', detail: 'src/query.ts' },
+        }}
+      />,
+      root,
+    )
+    assertEquals(root.querySelector('.Entry_Name')?.textContent, 'Read')
+    assertEquals(root.querySelector('.Entry_Line')?.textContent, 'src/query.ts')
+
+    render(
+      <EntryBody
+        x={{
+          seq: 2,
+          line: '',
+          row: { kind: 'exec', command: 'deno task check', desc: 'Command' },
+        }}
+      />,
+      root,
+    )
+    assertEquals(root.querySelector('.Entry_Name')?.textContent, '$')
+    assertEquals(
+      root.querySelector('.Entry_Line-command')?.textContent,
+      'deno task check',
+    )
+  }))
+
+Deno.test('normalized user messages render as entry markdown', () =>
+  withDom((root) => {
+    render(
+      <EntryBody
+        x={{
+          seq: 1,
+          line: '',
+          row: { kind: 'say', role: 'user', text: '**hello**' },
+        }}
+      />,
+      root,
+    )
+    assertEquals(root.querySelector('.Entry-user strong')?.textContent, 'hello')
   }))
 
 Deno.test('expanded entries offer only specifically rendered faces', () =>

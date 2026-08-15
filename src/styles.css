@@ -221,7 +221,7 @@ html {
 /* The mono keepers: ids, chips, badges, edge verbs, timestamps, code,
    and every command/inspector/log surface. Prose everywhere else is
    var(--font) via body. :where keeps this overridable. */
-:where(code, pre, kbd, .Id, .Prio, .Show_Domain, .Show_Project, .Show_Assignee, .Show_Claim, .Show_Deps, .Show_Mail, .Dependency_Type, .Relate_Verb, .Stamp, .Comments_When, .Comments_Who, .Comments_Via, .Board_ColName, .Board_Count, .Board_Chips, .Status, .Search_Box input, .Search_Id, .Debug, .Debug_Claim, .SessionRow, .Session_Facts, .Session_Tool, .Session_Exec, .Session_Turn, .Session_When, .Session_Err) {
+:where(code, pre, kbd, .Id, .Prio, .Show_Domain, .Show_Project, .Show_Assignee, .Show_Claim, .Show_Deps, .Show_Mail, .Dependency_Type, .Relate_Verb, .Stamp, .Comments_When, .Comments_Who, .Comments_Via, .Board_ColName, .Board_Count, .Board_Chips, .Status, .Search_Box input, .Search_Id, .Debug, .Debug_Claim, .SessionRow, .Session_Facts, .Entry_Turn, .Entry_Raw, .Session_When, .Session_Err) {
   font-family: var(--mono);
 }
 
@@ -3327,7 +3327,7 @@ a[data-ref]:hover {
   color: var(--dim);
 }
 /* An unparseable line: the bytes stay visible as evidence of a broken stream. */
-.Session_Raw {
+.Entry_Raw {
   font-family: var(--mono);
   font-size: 11px;
   color: var(--orange); /* not JSON: the bytes as the provider wrote them */
@@ -3371,6 +3371,7 @@ a[data-ref]:hover {
   gap: var(--half-gap);
   min-width: 0;
   color: var(--muted);
+  font-size: 12px;
 }
 .Entry_Line {
   flex: 1 1 auto;
@@ -3396,6 +3397,11 @@ a[data-ref]:hover {
   flex: none;
   color: var(--accent);
   font-family: var(--mono);
+}
+.Entry-fail .Entry_Name,
+.Entry-fail .Entry_Status,
+.Entry_Error {
+  color: var(--red);
 }
 .Entry-meta {
   display: block;
@@ -3429,120 +3435,26 @@ a[data-ref]:hover {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.Entry-fail .Entry_Status,
 .Entry_Err-fail {
   color: var(--red);
 }
-/* What the agent said: its markdown, in the normal text color. */
-.Session_Agent {
-  color: var(--text);
-  overflow-wrap: anywhere;
-}
-/* Human prompts and shell commands share one transcript surface; the accent
-   says who spoke or how the command ended. */
-:is(.Session_User, .Session_Exec) {
-  min-width: 0;
-  padding: var(--half-gap) var(--gap);
-  border-left: 2px solid var(--border2);
-  background: var(--soft);
-  border-radius: 0 var(--radius) var(--radius) 0;
-}
-.Session_User {
-  color: var(--text);
-  border-color: var(--blue);
-  overflow-wrap: anywhere;
-}
 /* The model thinking out loud — dim, skippable. */
-.Session_Reason {
+.Entry_Reason {
   color: var(--dim);
   font-size: 12px;
   font-style: italic;
   overflow-wrap: anywhere;
 }
-/* A tool call: its action leads, status lands at the edge, and the one
-   useful argument follows without turning back into an object dump. */
-.Session_Tool {
-  display: grid;
-  grid-template-columns: max-content 1fr max-content;
-  gap: 2px var(--half-gap);
-  align-items: center;
-  min-width: 0;
-  padding: 2px 0;
-  font-size: 12px;
-}
-.Session_ToolName {
-  flex: none;
-  color: var(--accent);
-  font-family: ui-monospace, monospace;
-}
-.Session_Tool-fail .Session_ToolName {
-  color: var(--red);
-}
-.Session_ToolDetail {
-  color: var(--dim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.Session_ToolStatus {
-  color: var(--accent);
-}
-.Session_Tool-fail .Session_ToolStatus {
-  color: var(--red);
-}
-.Session_ToolErr {
-  grid-column: 2 / -1;
-  color: var(--red);
-  overflow-wrap: anywhere;
-}
-/* A shell command: the model's summary leads like an activity title; the
-   literal command and its outcome remain visible evidence beneath it. */
-.Session_Exec {
-  display: grid;
-  gap: 2px;
-}
-.Session_Exec-ok {
-  border-color: var(--accent);
-}
-.Session_Exec-fail {
-  border-color: var(--red);
-}
-.Session_ExecHead {
-  display: flex;
-  gap: var(--half-gap);
-  align-items: baseline;
-  min-width: 0;
-}
-.Session_ExecCommand {
-  color: var(--muted);
-  font-size: 12px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.Session_ExecDesc {
-  flex: 1;
-  color: var(--text);
-  font-family: var(--font);
-  font-size: 13px;
-}
-.Session_ExecStatus {
-  flex: none;
-  color: var(--accent);
-  font-size: 11px;
-}
-.Session_Exec-fail .Session_ExecStatus {
-  color: var(--red);
-}
 /* A turn closing: a hairline flexes across, the duration and usage
    settle at its right end. */
-.Session_Turn {
+.Entry_Turn {
   display: flex;
   align-items: center;
   gap: var(--half-gap);
   color: var(--dim);
   font-size: 11px;
 }
-.Session_Turn::before {
+.Entry_Turn::before {
   content: '';
   flex: 1;
   border-top: 1px solid var(--border);
@@ -3566,29 +3478,29 @@ a[data-ref]:hover {
 }
 /* Provider housekeeping: one dim chip line — the tag names the family,
    the text the gist, ×N how many frames it speaks for. */
-.Session_Sys {
+.Entry_Sys {
   display: flex;
   gap: var(--half-gap);
   align-items: baseline;
   min-width: 0;
   font-size: 12px;
 }
-.Session_SysTag {
+.Entry_SysTag {
   flex: none;
   color: var(--muted);
 }
-.Session_SysText {
+.Entry_SysText {
   color: var(--dim);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.Session_SysCount {
+.Entry_SysCount {
   flex: none;
   color: var(--dim);
 }
 /* The run itself went wrong. */
-.Session_Oops {
+.Entry_Oops {
   color: var(--red);
   overflow-wrap: anywhere;
 }

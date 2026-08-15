@@ -30,7 +30,14 @@ import { mdMentions } from '../../md.ts'
 import { UrlVal } from '../editors.tsx'
 import { Ansi } from '../Ansi.tsx'
 import { SessionDot, useSessionStanding } from '../session_status.tsx'
-import { EntryLens, EntrySummary } from './Entry.tsx'
+import {
+  EntryBody,
+  EntryLens,
+  type EntryLine,
+  EntrySummary,
+  entryVisible,
+  ToolSummary,
+} from './Entry.tsx'
 import { entityUrl } from '../../url.ts'
 import { useQueryEids } from '../useQuery.ts'
 
@@ -70,28 +77,8 @@ let Frame = block('div', 'Session', {
   Content: 'div',
   Seq: 'button',
   When: 'time',
-  Raw: 'span',
-  Agent: 'div',
-  User: 'div',
-  Reason: 'div',
-  Tool: 'div',
-  ToolName: 'span',
-  ToolDetail: 'span',
-  ToolStatus: 'span',
-  ToolErr: 'span',
-  Exec: 'div',
-  ExecHead: 'div',
-  ExecCommand: 'code',
-  ExecDesc: 'span',
-  ExecStatus: 'span',
-  Turn: 'div',
-  Oops: 'div',
   Err: 'pre',
   Json: 'pre',
-  Sys: 'div',
-  SysTag: 'span',
-  SysText: 'span',
-  SysCount: 'span',
   Unsent: 'div',
   Foot: 'div',
 })
@@ -120,39 +107,13 @@ let {
   Content,
   Seq,
   When,
-  Raw,
-  Agent,
-  User,
-  Reason,
-  Tool,
-  ToolName,
-  ToolDetail,
-  ToolStatus,
-  ToolErr,
-  Exec,
-  ExecHead,
-  ExecCommand,
-  ExecDesc,
-  ExecStatus,
-  Turn,
-  Oops,
   Err,
   Json,
-  Sys,
-  SysTag,
-  SysText,
-  SysCount,
   Unsent,
   Foot,
 } = Frame
 
-type Entry = {
-  eid?: string
-  seq: number
-  line: string
-  row?: LogRow
-  n?: number
-}
+type Entry = EntryLine
 type Log = { entries: Entry[]; stderr?: string; context?: number }
 type Mentioned =
   | { kind: 'entity'; id: string; eid?: string }
@@ -185,12 +146,6 @@ let squeeze = (entries: Entry[]) => {
 
 // ISO in the db; a local clock is what a human reads.
 let when = (t?: string | null) => t ? new Date(t).toLocaleString() : null
-
-// A duration a human reads: 42s, 1m 40s.
-let span = (ms: number) => {
-  let s = Math.round(ms / 1000)
-  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`
-}
 
 let lineLabel = (text: string) => {
   let n = text.replace(/\n$/, '').split('\n').length
@@ -296,15 +251,29 @@ export let SessionObservation = (
   <Transient>
     {(state.items ?? []).map((item, i) =>
       item.kind == 'reasoning'
-        ? <Reason key={i}>{item.text}</Reason>
-        : item.kind == 'tool'
         ? (
-          <Tool key={i}>
-            <ToolName>{item.name}</ToolName>
-            <ToolStatus>preparing…</ToolStatus>
-          </Tool>
+          <EntryBody
+            key={i}
+            x={{
+              seq: i,
+              line: '',
+              row: { kind: 'reason', text: item.text },
+            }}
+          />
         )
-        : <Markdown key={i} as={Agent} text={item.text} repo={repo} />
+        : item.kind == 'tool'
+        ? <ToolSummary key={i} name={item.name} status='preparing…' />
+        : (
+          <EntryBody
+            key={i}
+            x={{
+              seq: i,
+              line: '',
+              row: { kind: 'say', role: 'agent', text: item.text },
+            }}
+            repo={repo}
+          />
+        )
     )}
   </Transient>
 )
@@ -382,126 +351,6 @@ export let SessionDiagnostics = ({
     )
     : null
 
-// Usage, said the compact way: ↑ everything sent up (input plus both
-// cache lanes), ↓ what came back.
-let usage = (json?: string) => {
-  if (!json) return ''
-  try {
-    let u = JSON.parse(json) as Record<string, number>
-    let up = (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) +
-      (u.cache_creation_input_tokens ?? 0)
-    let down = u.output_tokens ?? 0
-    return [up > 0 && `↑ ${kilo(up)}`, down > 0 && `↓ ${kilo(down)}`]
-      .filter(Boolean).join('  ')
-  } catch {
-    return ''
-  }
-}
-
-// The type of a line the adapter had no row for — just enough to place it,
-// or null when it isn't JSON at all (a provider printing over its stream).
-let bareType = (line: string) => {
-  try {
-    return String((JSON.parse(line) as { type?: unknown }).type ?? '?')
-  } catch {
-    return null
-  }
-}
-
-// The transcript face of a line, matched on the normalized row
-// (adapters.ts). JSON the adapter left out is provider machinery, not a
-// chat item. Non-JSON bytes stay visible because they are evidence of a
-// broken stream, not a dialect the adapter deliberately ignored.
-export let SessionBody = ({ x, repo }: { x: Entry; repo?: string }) => {
-  let r = x.row
-  if (!r) {
-    let t = bareType(x.line)
-    return t ? null : (
-      <Raw>
-        <Ansi text={x.line} />
-      </Raw>
-    )
-  }
-  switch (r.kind) {
-    case 'say':
-      // markdown, escaped of any markup by md.ts — as with a task body
-      return r.role == 'user'
-        ? <Markdown as={User} text={r.text} repo={repo} />
-        : <Markdown as={Agent} text={r.text} repo={repo} />
-    case 'reason':
-      return (
-        <Reason>
-          <Ansi text={r.text} />
-        </Reason>
-      )
-    case 'tool':
-      return (
-        <Tool mod={r.ok === false && 'fail'}>
-          <ToolName>{r.name}</ToolName>
-          {r.detail && (
-            <ToolDetail>
-              <Ansi text={r.detail} />
-            </ToolDetail>
-          )}
-          {r.ok != null && (
-            <ToolStatus>{r.ok ? '✓ done' : '✗ failed'}</ToolStatus>
-          )}
-          {r.error && (
-            <ToolErr>
-              <Ansi text={r.error} />
-            </ToolErr>
-          )}
-        </Tool>
-      )
-    case 'exec': {
-      let failed = r.exit != null ? r.exit != 0 : r.status == 'failed'
-      let status = r.exit != null
-        ? `${failed ? '✗' : '✓'} exit ${r.exit}`
-        : r.status
-      return (
-        <Exec mod={failed ? 'fail' : status ? 'ok' : undefined}>
-          <ExecHead>
-            <ExecDesc>{r.desc || 'Command'}</ExecDesc>
-            {status && <ExecStatus>{status}</ExecStatus>}
-          </ExecHead>
-          <ExecCommand>
-            $ <Ansi text={r.command} />
-          </ExecCommand>
-        </Exec>
-      )
-    }
-    case 'turn':
-      return (
-        <Turn>
-          {[
-            r.model && friendly(r.model),
-            r.ms != null && span(r.ms),
-            usage(r.usage),
-          ]
-            .filter(Boolean).join(' · ')}
-        </Turn>
-      )
-    case 'error':
-      return (
-        <Oops>
-          <Ansi text={r.text} />
-        </Oops>
-      )
-    case 'sys':
-      return (
-        <Sys>
-          <SysTag>{r.tag}</SysTag>
-          {r.text && (
-            <SysText>
-              <Ansi text={r.text} />
-            </SysText>
-          )}
-          {(x.n ?? 1) > 1 && <SysCount>×{x.n}</SysCount>}
-        </Sys>
-      )
-  }
-}
-
 // The raw event, pretty when it parses — the whole line, nothing elided.
 // (ui's `pretty` is the locale timestamp; the suffix keeps them apart.)
 let prettyJson = (line: string) => {
@@ -517,11 +366,11 @@ let prettyJson = (line: string) => {
 export let SessionEntry = (
   { x, repo, onOpen }: { x: Entry; repo?: string; onOpen?: () => void },
 ) => {
-  if (!x.eid) return <SessionBody x={x} repo={repo} />
+  if (!x.eid) return <EntryBody x={x} repo={repo} />
   let e = ent(x.eid)
   let face = resolve(e, 'Entry.Summary')
   return x.row && (face.Render == EntrySummary || face.view == 'JSON')
-    ? <SessionBody x={x} repo={repo} />
+    ? <EntryBody x={x} repo={repo} />
     : <face.Render e={e} onOpen={onOpen} />
 }
 
@@ -661,7 +510,7 @@ export let Session = ({ e }: { e: Ent }) => {
   let said = log.entries.some(
     (x) => x.row?.kind == 'say' && x.row.role == 'agent',
   )
-  let rows = squeeze(log.entries.filter((x) => x.row || !bareType(x.line)))
+  let rows = squeeze(log.entries.filter(entryVisible))
   // The facts fold behind the one lifecycle fact worth keeping in the bar.
   let gist = live
     ? s.started_at ? `started ${ago(s.started_at)}` : 'starting'
