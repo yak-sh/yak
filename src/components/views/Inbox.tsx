@@ -78,7 +78,7 @@ let Line = ({ r }: { r: Row }) => {
   )
 }
 
-export let Inbox = ({ e }: { e: Ent }) => {
+export let Inbox = ({ e, limit }: { e: Ent; limit?: number }) => {
   let all = rows()
   let items = all.filter(inboxItem(readerAt(all, e.eid))).sort(order)
   if (!items.length) {
@@ -89,6 +89,8 @@ export let Inbox = ({ e }: { e: Ent }) => {
     )
   }
   let unread = items.filter(isUnread).length
+  let shown = limit == null ? items : items.slice(0, limit)
+  let more = items.length - shown.length
   return (
     <ListFrame>
       {
@@ -99,7 +101,8 @@ export let Inbox = ({ e }: { e: Ent }) => {
         {items.length} item{items.length == 1 ? '' : 's'}
         {unread ? ` · ${unread} unread` : ''}
       </ListFrame.Summary>
-      {items.map((r) => <Line key={r.eid} r={r} />)}
+      {shown.map((r) => <Line key={r.eid} r={r} />)}
+      {more > 0 && <ListFrame.Row mod='more'>+{more} more</ListFrame.Row>}
     </ListFrame>
   )
 }

@@ -1,15 +1,8 @@
 import { awake, type Ent } from '../../types.ts'
-import {
-  backlinks,
-  boardsOver,
-  byWarmth,
-  ent,
-  jobOf,
-  rows,
-  unreadFor,
-} from '../../live.ts'
+import { boardsOver, byWarmth, ent, unreadFor } from '../../live.ts'
 import { block } from '../ui.tsx'
 import { Entity } from '../Entity.tsx'
+import { useQuery } from '../useQuery.ts'
 
 // The Project Cockpit (D-14587): a project's facets in a fixed grid —
 // Boards · Inbox · Roles · Sessions · Lately — the same vocabulary in the
@@ -54,14 +47,21 @@ let Facet = (
 )
 
 // The sessions serving this project: through the task each one is ON
-// (jobOf — the claim first, the managed request as fallback) or the role
-// it serves; both walks end at an eid naming this project. Awake first.
-let sessionsOf = (e: Ent) =>
-  rows()
-    .filter((r) => r.comps.session)
-    .map((r) => ent(r.eid))
+// (the newest claim first, the managed request as fallback) or the role it
+// serves; both walks end at an eid naming this project. Awake first.
+let sessionsOf = (e: Ent, sessions: Ent[], claims: Ent[]) => {
+  let jobs = new Map<string, Ent>()
+  for (let task of claims) {
+    if (!task.task || !task.claim) continue
+    let prior = jobs.get(task.claim.session)
+    if (
+      !prior || String(task.claim.claimed_at ?? '') >
+        String(prior.claim?.claimed_at ?? '')
+    ) jobs.set(task.claim.session, task)
+  }
+  return sessions
     .filter((s) => {
-      let job = jobOf(s)
+      let job = jobs.get(s.eid)?.eid ?? s.session?.requested_task
       let role = s.session?.role
       return (job != null && ent(job).task?.project == e.eid) ||
         (!!role && ent(role).role?.scope == e.eid)
@@ -69,38 +69,42 @@ let sessionsOf = (e: Ent) =>
     .sort((a, b) =>
       Number(awake(b.session!)) - Number(awake(a.session!)) || b.num - a.num
     )
+}
 
 // The roles scoped here, running first.
-let rolesOf = (e: Ent) =>
-  backlinks(e.eid)
-    .filter((b) => b.via == 'role.scope')
-    .map((b) => ent(b.from))
-    .sort((a, b) =>
+let rolesOf = (roles: Ent[]) =>
+  roles
+    .toSorted((a, b) =>
       Number(b.role?.state == 'running') -
         Number(a.role?.state == 'running') || a.num - b.num
     )
 
 // The digest's "lately", as a widget: the tasks homed here, warm first —
 // settled ones included, because recent work IS the news.
-let latelyOf = (e: Ent) =>
-  backlinks(e.eid)
-    .filter((b) => b.via == 'task.project')
-    .map((b) => ent(b.from))
-    .filter((t) => !!t.task)
-    .sort(byWarmth(Date.now()))
+let latelyOf = (tasks: Ent[]) => tasks.toSorted(byWarmth(Date.now()))
 
-export let Dashboard = ({ e }: { e: Ent }) => (
-  <Frame>
-    <Facet name='boards' ids={boardsOver(e.eid)} />
-    <Cell>
-      <Name>
-        inbox
-        {unreadFor(e.eid) > 0 && <Badge>{unreadFor(e.eid)}</Badge>}
-      </Name>
-      <Entity eid={e.eid} view='Inbox' />
-    </Cell>
-    <Facet name='roles' ids={rolesOf(e).map((r) => r.eid)} />
-    <Facet name='sessions' ids={sessionsOf(e).map((s) => s.eid)} />
-    <Facet name='lately' ids={latelyOf(e).map((t) => t.eid)} />
-  </Frame>
-)
+export let Dashboard = ({ e }: { e: Ent }) => {
+  let sessions = useQuery('.session!')
+  let claims = useQuery('.claim!')
+  let roles = useQuery(`.role.scope=${e.eid}`)
+  let tasks = useQuery(`.task.project=${e.eid}`)
+  let unread = unreadFor(e.eid)
+  return (
+    <Frame>
+      <Facet name='boards' ids={boardsOver(e.eid)} />
+      <Cell>
+        <Name>
+          inbox
+          {unread > 0 && <Badge>{unread}</Badge>}
+        </Name>
+        <Entity eid={e.eid} view='Inbox' limit={CAP} />
+      </Cell>
+      <Facet name='roles' ids={rolesOf(roles).map((r) => r.eid)} />
+      <Facet
+        name='sessions'
+        ids={sessionsOf(e, sessions, claims).map((s) => s.eid)}
+      />
+      <Facet name='lately' ids={latelyOf(tasks).map((t) => t.eid)} />
+    </Frame>
+  )
+}

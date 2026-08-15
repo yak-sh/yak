@@ -102,3 +102,41 @@ Deno.test('reading an inbox item keeps the order', () => {
     else delete (globalThis as { document?: unknown }).document
   }
 })
+
+Deno.test('a limited inbox keeps the whole count and bounds its rows', () => {
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let { document } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  cache.value = {
+    person: {
+      entity: { eid: 'person', num: 1 },
+      person: { eid: 'person' },
+    },
+    ...Object.fromEntries(
+      Array.from({ length: 10 }, (_, i) => [`comment-${i}`, {
+        entity: { eid: `comment-${i}`, num: i + 2 },
+        doc: { eid: `comment-${i}`, title: `Comment ${i}`, body: '' },
+        comment: { eid: `comment-${i}`, target: 'person' },
+        created: { eid: `comment-${i}`, at: `2026-08-07T12:00:${i}Z` },
+      }]),
+    ),
+  }
+  let root = document.querySelector('main')!
+  try {
+    render(<Inbox e={ent('person')} limit={8} />, root)
+    assertEquals(
+      root.querySelector('.List_Summary')?.textContent,
+      '10 items · 10 unread',
+    )
+    assertEquals(root.querySelectorAll('.ListTile').length, 8)
+    assertEquals(root.querySelector('.List_Row-more')?.textContent, '+2 more')
+  } finally {
+    render(null, root)
+    cache.value = {}
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else delete (globalThis as { document?: unknown }).document
+  }
+})
