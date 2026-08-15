@@ -30,7 +30,7 @@ let TOL = +(Deno.env.get('BENCH_TOL') ?? '0.10')
 let FLOOR = +(Deno.env.get('BENCH_FLOOR') ?? '500') // ns — small, since min barely jitters
 let ACCEPT = !!Deno.env.get('BENCH_ACCEPT')
 let BASELINE = 'bench/baseline.json'
-let FILES = ['src/db_bench.ts', 'src/client_bench.ts']
+let FILES = ['src/db_bench.ts', 'src/client_bench.ts', 'src/render_bench.ts']
 
 let us = (ns: number) =>
   // ns -> a human figure

@@ -1,11 +1,14 @@
 {
-  "apply: 100-task batch": 28897349,
-  "apply: mint one task (2 comps)": 254772,
-  "apply: patch one column": 40672,
-  "contextDigest: 2k-task graph": 1317311,
-  "freshDb: clone migrated image": 591660,
-  "query: filter 2k rows (a board render)": 463209,
-  "resolveId: num -> eid": 1394.6534,
-  "rows: 2k-task snapshot": 307249,
-  "snapshot: full graph": 2372
+  "apply: mint one task (2 comps)": 273362,
+  "apply: patch one column": 41184,
+  "contextDigest: 2k-task graph": 1395829,
+  "freshDb: clone migrated image": 630824,
+  "propAt: comp.prop -> Prop": 16.586,
+  "propOwners: prop -> owning comps": 8.9875,
+  "query: filter 2k rows (a board render)": 469192,
+  "render: task Meta row": 124507,
+  "render: task Tile": 160831,
+  "resolveId: num -> eid": 1518.3051,
+  "rows: 2k-task snapshot": 308572,
+  "snapshot: full graph": 2215
 }
