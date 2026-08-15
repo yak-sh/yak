@@ -41,7 +41,7 @@ Deno.test('the tray keeps a newly started session visible', () => {
   )
 })
 
-let session = (): Ent => ({
+let session = (standing?: string): Ent => ({
   eid: 'session',
   num: 1,
   kind: 'session',
@@ -49,24 +49,21 @@ let session = (): Ent => ({
     eid: 'session',
     id: 'run',
     origin: 'managed',
+    standing,
   },
   spawn: { eid: 'session', provider: 'codex' },
   refs: [],
   kids: [],
 })
 
+// graphStanding reads the server-maintained `standing` facet O(1) now (T-17855),
+// not a scanned log: busy → running, terminal → completed unless a wake is
+// pending, everything else idle.
 Deno.test('graph-native status follows work, final answers, and wakes', () => {
-  let e = session()
-  let log = { entries: [], busy: true, terminal: false, latest: 1 }
-  assertEquals(graphStanding(e, undefined, false), 'running')
-  assertEquals(graphStanding(e, log, false), 'running')
-  assertEquals(graphStanding(e, { ...log, busy: false }, false), 'idle')
-  assertEquals(
-    graphStanding(e, { ...log, busy: false, terminal: true }, false),
-    'completed',
-  )
-  assertEquals(
-    graphStanding(e, { ...log, busy: false, terminal: true }, true),
-    'idle',
-  )
+  assertEquals(graphStanding(session('busy')), 'running')
+  assertEquals(graphStanding(session(undefined)), 'idle')
+  assertEquals(graphStanding(session('idle')), 'idle')
+  assertEquals(graphStanding(session('terminal')), 'completed')
+  // A pending wake overrides a terminal facet — a woken session reads idle.
+  assertEquals(graphStanding(session('terminal'), true), 'idle')
 })

@@ -4,12 +4,13 @@
   "contextDigest: 2k-task graph": 1395829,
   "freshDb: clone migrated image": 630824,
   "propAt: comp.prop -> Prop": 16.586,
-  "propOwners: prop -> owning comps": 8.9875,
+  "propOwners: prop -> owning comps": 8.9748,
   "query: filter 2k rows (a board render)": 469192,
-  "render: task Meta row": 124507,
-  "render: task Tile": 160831,
+  "render: native SessionDot (O(1) standing)": 64821,
+  "render: task Meta row": 120583,
+  "render: task Tile": 66827,
   "resolveId: num -> eid": 1518.3051,
   "rows: 2k-task snapshot": 308572,
-  "scan: session mentions over a 60-row thread": 385648,
+  "scan: session mentions over a 60-row thread": 383203,
   "snapshot: full graph": 2215
 }

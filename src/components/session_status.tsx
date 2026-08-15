@@ -49,9 +49,12 @@ export let useEntryLog = (
   return graphLog(rows)
 }
 
+// The native session's log-derived standing, read O(1) from the server-
+// maintained `standing` facet (T-17855/6) — the dot never scans the log. busy →
+// running takes precedence over a pending wake; a null facet (never stamped, or
+// no activity yet) reads idle. A non-native session keeps the lifecycle word.
 export let graphStanding = (
   e: Ent,
-  log?: GraphLog,
   waking = false,
 ) => {
   let s = e.session!
@@ -59,18 +62,24 @@ export let graphStanding = (
     e.spawn?.provider == 'codex'
   if (!native) return standing(s)
   if (e.error) return 'failed'
-  if (!log || log.busy) return 'running'
+  if (s.standing == 'busy') return 'running'
   if (waking) return 'idle'
-  return log?.terminal ? 'completed' : 'idle'
+  return s.standing == 'terminal' ? 'completed' : 'idle'
 }
 
+// The dot reads the facet O(1): no useEntryLog subscription, so a busy agent's
+// growing log costs the dot nothing (was 157ms/render). Only the cheap pending-
+// wake query re-renders it.
+export let SessionDot = ({ e }: { e: Ent }) => (
+  <Dot status={graphStanding(e, usePendingWake(e.eid))} />
+)
+
+// The Session VIEW still loads the full log — it renders the transcript — but
+// its STATUS reads the same O(1) facet as the dot, so the two can never
+// disagree (the facet is stamped from the same standingOf the log derives).
 export let useSessionStanding = (e: Ent) => {
   let native = e.session?.origin == 'managed' && e.session.status == null &&
     e.spawn?.provider == 'codex'
   let log = useEntryLog(e.eid, native)
-  return { log, status: graphStanding(e, log, usePendingWake(e.eid)) }
+  return { log, status: graphStanding(e, usePendingWake(e.eid)) }
 }
-
-export let SessionDot = ({ e }: { e: Ent }) => (
-  <Dot status={useSessionStanding(e).status} />
-)
