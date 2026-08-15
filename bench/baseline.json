@@ -1,10 +1,10 @@
 {
-  "apply: 100-task batch": 33315900,
-  "apply: mint one task (2 comps)": 353192,
-  "apply: patch one column": 62315,
-  "contextDigest: 2k-task graph": 1325630,
-  "freshDb: clone migrated image": 595388,
-  "query: filter 2k rows (a board render)": 53714826,
+  "apply: 100-task batch": 28897349,
+  "apply: mint one task (2 comps)": 254772,
+  "apply: patch one column": 40672,
+  "contextDigest: 2k-task graph": 1317311,
+  "freshDb: clone migrated image": 591660,
+  "query: filter 2k rows (a board render)": 463209,
   "resolveId: num -> eid": 1394.6534,
   "rows: 2k-task snapshot": 307249,
   "snapshot: full graph": 2372
