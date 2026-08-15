@@ -386,10 +386,18 @@ let metasIn = (changes: Change[]) =>
 // index the batch's entry→session and eid→content(body), the way docsIn indexes
 // a comment's words. The `recalled` component is the entry's unique marker (an
 // ordinary message entry carries `message`, never `recalled`).
+// Only an entry change that CARRIES a session maps one. apply() echoes a second
+// `entry` change per write — the server-stamped ingest coordinate `{eid, seq}`,
+// no session (db.ts) — so a last-wins map would let that seq-only re-read erase
+// the real partition and the recall branch below would skip a floater aimed
+// straight at this session. entry.session is the partition key, never nulled, so
+// a session-less entry change is always that stamp, never a real reassignment.
 let sessionsIn = (changes: Change[]) => {
   let s = new Map<string, string>()
   for (let c of changes) {
-    if (c.name == 'entry' && c.comp) s.set(c.eid, str(c.comp.session))
+    if (c.name == 'entry' && c.comp && c.comp.session != null) {
+      s.set(c.eid, str(c.comp.session))
+    }
   }
   return s
 }

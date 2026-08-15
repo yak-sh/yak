@@ -596,6 +596,23 @@ Deno.test("a recall entry in another session's log isn't this session's", () => 
   assertEquals(channelEvents(batch, ctx()), [])
 })
 
+// The realistic apply() return: every entry write echoes a SECOND `entry`
+// change carrying only the server-stamped ingest coordinate `{eid, seq}`, no
+// session (db.ts). A session-blind last-wins over entry changes would let that
+// stamp erase the partition and drop the floater — the live-delivery bug behind
+// "recall written but not injected" (T-17470). Delivery must survive the stamp.
+Deno.test('a recall entry survives apply()s seq-stamp echo (live-inject shape)', () => {
+  let batch = [
+    ...recalled('r1', 'sess', 'M-9 · a floated thought'),
+    ch('r1', 'entry', { eid: 'r1', seq: 2 }), // the stamped re-read, no session
+  ]
+  assertEquals(channelEvents(batch, ctx()), [{
+    content: 'M-9 · a floated thought',
+    meta: { kind: 'recall' },
+    eid: 'r1',
+  }])
+})
+
 Deno.test('a bodiless recall entry is skipped', () => {
   let batch = [
     ch('r1', 'entry', { session: 'sess' }),
