@@ -55,8 +55,8 @@ type Hit = {
 let badge = async (url: string): Promise<Hit[]> => {
   let res = await fetch(
     `http://${U}/query?${
-      encodeURIComponent(`.web.url="${url}"`)
-    }&kind=web&backlinks=1`,
+      encodeURIComponent(`.web.url="${url}" .kind=web`)
+    }&backlinks=1`,
   )
   if (!res.ok) throw new Error(`query refused: ${await res.text()}`)
   return res.json()

@@ -16,7 +16,7 @@ permission, which is why it happens on a click.
 ## What it does
 
 - **The badge** counts what references the current page. It comes from
-  `GET /query?.web.url=<url>&kind=web&backlinks=1` — the generic read door, not
+  `GET /query?.web.url=<url> .kind=web&backlinks=1` — the generic read door, not
   a route of our own.
 - **The box** is the board's quick-add: a plain line files a task
   (`P1 .domain=Eng Ship it` parses), a line opening with `:` runs that verb

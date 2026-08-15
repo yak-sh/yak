@@ -2,6 +2,7 @@
 // may end in either order, but neither may erase text the user did not file.
 import { assertEquals } from '@std/assert'
 import { filed, recall, remember } from '../extension/draft.js'
+import { refs } from '../extension/tasks.js'
 
 let storage = () => {
   let values = new Map<string, string>()
@@ -34,4 +35,30 @@ Deno.test('a filing clears only the line it sent', () => {
 
   assertEquals(filed(saved, url, 'next thought', 'next thought'), '')
   assertEquals(recall(saved, url), '')
+})
+
+Deno.test('the extension badge carries kind in the graph query', async () => {
+  let priorFetch = globalThis.fetch
+  let priorChrome = Reflect.get(globalThis, 'chrome')
+  let seen = ''
+  Reflect.set(globalThis, 'chrome', {
+    storage: { sync: { get: () => Promise.resolve({ host: '' }) } },
+  })
+  globalThis.fetch = ((url: string | URL | Request) => {
+    seen = String(url)
+    return Promise.resolve(Response.json([]))
+  }) as typeof fetch
+  try {
+    await refs('https://one.test/page')
+    let query = new URL(seen).searchParams
+    assertEquals([...query.keys()], [
+      '.web.url="https://one.test/page" .kind=web',
+      'backlinks',
+    ])
+    assertEquals(query.has('kind'), false)
+  } finally {
+    globalThis.fetch = priorFetch
+    if (priorChrome === undefined) Reflect.deleteProperty(globalThis, 'chrome')
+    else Reflect.set(globalThis, 'chrome', priorChrome)
+  }
 })

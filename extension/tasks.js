@@ -33,8 +33,8 @@ let door = async (path, init) => {
 // and the value is QUOTED because '&' separates filters, which every
 // address with two query parameters carries.
 export let refs = async (url) => {
-  let q = encodeURIComponent(`.web.url="${url}"`)
-  let hits = await door(`/query?${q}&kind=web&backlinks=1`)
+  let q = encodeURIComponent(`.web.url="${url}" .kind=web`)
+  let hits = await door(`/query?${q}&backlinks=1`)
   return hits.flatMap((h) => h.backlinks ?? [])
     // An EDGE backlink is a sentence someone wrote (about, reads); a
     // dotted one is a column (card.target — a card left open on the
