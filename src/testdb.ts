@@ -20,13 +20,36 @@ import { open } from './db.ts'
 // when TASKS_SYNC is set. open() registers no custom SQL functions or
 // collations, so nothing else needs re-applying. The snapshot is built lazily
 // and shared, so the DDL cost is paid once per test process, not once per db.
+//
+// Each deserialized handle owns a private copy of the ~1.1MB migrated image,
+// and a db-heavy file calls freshDb() dozens of times. Handing out a handle
+// and never closing it left those copies live for the whole process: 2000
+// unclosed handles measured ~525µs/deserialize and climbing (allocation +
+// GC pressure), the accumulation tail that pushed db tests to 0.5–1.5ms. So
+// freshDb() closes the handle it minted LAST before minting the next — one
+// live copy at a time, a flat ~70µs/call with no tail. Tests use one db each
+// and run sequentially within a process, so the prior test's handle is always
+// spent by the next call; a test that needs two live dbs at once must open its
+// own via open(). (Savepoint rollback would reset in ~0.5µs, but apply() owns
+// the top-level transaction with `begin immediate` and can't nest inside an
+// open savepoint — so a fresh deserialized handle, not a shared reset one, is
+// what stays compatible with every writer.)
 let snap: Uint8Array | undefined
+let prev: DatabaseSync | undefined
 export let freshDb = () => {
   if (!snap) snap = open(':memory:').serialize()
+  if (prev) {
+    try {
+      prev.close()
+    } catch {
+      // a test may have closed its own db already — nothing left to free
+    }
+  }
   let db = new DatabaseSync(':memory:')
   db.deserialize(snap)
   db.exec('pragma busy_timeout = 5000')
   let sync = Deno.env.get('TASKS_SYNC')
   if (sync) db.exec(`pragma synchronous = ${sync}`)
+  prev = db
   return db
 }
