@@ -1,28 +1,11 @@
-// The Run form's menu is one unified catalog: Sol leads, every compatible
-// model appears ONCE, and the CLI fallback rides a model's transports instead
-// of minting a duplicate entry.
+// DOM-mount tests for the <Run/> form — they render the real form through
+// Preact + linkedom (heavy Run.tsx import), so they can't hit the 1ms budget.
+// The PURE catalog test moved to Run_catalog_test.ts (light imports, sub-ms).
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
 import { assertEquals } from '@std/assert'
-import { providers } from '../adapters.ts'
-import { catalog } from '../providers.ts'
 import { codexAccount } from '../account_client.ts'
 import { providers as loaded, Run, run } from './Run.tsx'
-
-Deno.test('the catalog offers each model once, Sol first, fallback as a transport', () => {
-  assertEquals(
-    catalog(providers()).map((c) => [c.model, c.label, c.transports]),
-    [
-      ['gpt-5.6-sol', 'GPT-5.6 Sol', ['codex', 'codex-cli']],
-      ['claude-opus-4-8', 'Opus', ['claude']],
-      ['fable', 'Fable', ['claude']],
-      ['sonnet', 'Sonnet', ['claude']],
-      ['haiku', 'Haiku', ['claude']],
-      ['gpt-5.6-terra', 'GPT-5.6 Terra', ['codex', 'codex-cli']],
-      ['gpt-5.6-luna', 'GPT-5.6 Luna', ['codex', 'codex-cli']],
-    ],
-  )
-})
 
 Deno.test('signed-out Codex offers login without blocking a raw spawn', async () => {
   let prior = Object.entries({
