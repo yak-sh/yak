@@ -72,6 +72,7 @@ let Frame = block('div', 'Session', {
   Final: 'div',
   Fault: 'p',
   Log: 'div',
+  Earlier: 'button',
   Line: 'div',
   Content: 'div',
   Seq: 'button',
@@ -102,6 +103,7 @@ let {
   Final,
   Fault,
   Log,
+  Earlier,
   Line,
   Content,
   Seq,
@@ -447,41 +449,96 @@ let useLog = (eid: string, live: boolean) => {
 // Null in the TUI's fake DOM (no parentElement), which switches the feature
 // off there.
 let scrollerOf = (n: HTMLElement | null) => {
+  // No getComputedStyle off the browser (TUI fake DOM, linkedom mounts): there
+  // is no scroller to find, so tail-pin/auto-grow simply switch off.
+  if (typeof getComputedStyle != 'function') return null
   for (let s = n; s; s = s.parentElement) {
     if (/auto|scroll/.test(getComputedStyle(s).overflowY)) return s
   }
   return null
 }
 
-// Follow the tail: while the reader sits at the scroller's end, each new
-// log row pins it there again; scroll up and it stays put, return to the
-// end and it follows once more. Stickiness is sampled on scroll events —
-// BEFORE new rows land, because right after a render the end has already
-// moved and measuring would always say "not at end". The programmatic
-// pin fires a scroll event too, re-arming itself.
-let useTail = (tail?: string | number) => {
+// The transcript is windowed from its tail: a long log renders only its last
+// WINDOW rows — the newest lines are the news — and grows older as the reader
+// nears the top, so opening a thousand-line session pays for a screenful, not
+// the whole file (rendering every row was ~4.6s of vnode work). Growth is
+// anchored by distance-from-bottom, an invariant across a prepend, so older
+// rows never jump the view.
+//
+// Follow the tail: while the reader sits at the scroller's end, each new log
+// row pins it there again and the window slides (bounded); scroll up and it
+// stays put — and a new tail row then widens the window instead of letting the
+// start advance and unmount the row being read. Stickiness is sampled on scroll
+// events (before new rows land — right after a render the end has already moved
+// and measuring would always say "not at end"). The programmatic pin fires a
+// scroll event too, re-arming itself.
+//
+// `enabled` is false in the TUI (no real scroller / getComputedStyle): there
+// the whole log renders as before, since the terminal owns its own scrollback.
+let WINDOW = 200
+let useTranscript = (
+  total: number,
+  tail: string | number,
+  enabled: boolean,
+  session: string,
+) => {
   let frame = useRef<HTMLDivElement>(null)
-  // Every session opens at the END of its log — the newest lines are the
-  // news, and now that the whole transcript loads, the top is a thousand
-  // lines from what just happened. A finished one pins once (its seq never
-  // moves again) and stays wherever the reader takes it.
   let stuck = useRef(true)
+  let [shown, setShown] = useState(WINDOW)
+  let anchor = useRef<number | null>(null)
+  let start = enabled ? Math.max(0, total - shown) : 0
+  // A new session starts back at its own tail.
+  useEffect(() => setShown(WINDOW), [session])
+
+  // Reveal older rows, holding the reader's place: distance from the bottom is
+  // invariant across a prepend, so restoring it after the grow keeps the view.
+  let older = () => {
+    if (anchor.current != null) return
+    let s = scrollerOf(frame.current)
+    anchor.current = s ? s.scrollHeight - s.scrollTop : 0
+    setShown((n) => n + WINDOW)
+  }
+  useLayoutEffect(() => {
+    if (anchor.current == null) return
+    let s = scrollerOf(frame.current)
+    if (s) s.scrollTop = s.scrollHeight - anchor.current
+    anchor.current = null
+  }, [shown])
+
+  // One scroll listener samples stickiness and auto-grows near the top.
+  let startRef = useRef(start)
+  startRef.current = start
   useEffect(() => {
     let s = scrollerOf(frame.current)
     if (!s) return
     let sample = () => {
       // within a scrollbar-rounding of the end still counts as AT it
       stuck.current = s.scrollTop + s.clientHeight >= s.scrollHeight - 4
+      if (startRef.current > 0 && s.scrollTop < 400) older()
     }
     s.addEventListener('scroll', sample)
     return () => s.removeEventListener('scroll', sample)
   }, [])
+
+  // A new tail row: when the reader has scrolled up, widen the window by the
+  // delta so `start` holds and no top row unmounts (in a layout effect, so the
+  // corrected window is committed before paint — no flash). While stuck, let it
+  // slide; the pin below keeps the bottom in view.
+  let seen = useRef(total)
+  useLayoutEffect(() => {
+    let d = total - seen.current
+    seen.current = total
+    if (d > 0 && !stuck.current) setShown((n) => n + d)
+  }, [total])
+
+  // Pin the bottom while stuck (the tail moved).
   useLayoutEffect(() => {
     if (!stuck.current) return
     let s = scrollerOf(frame.current)
     if (s) s.scrollTop = s.scrollHeight
   }, [tail])
-  return frame
+
+  return { frame, start, older }
 }
 
 export let Session = ({ e }: { e: Ent }) => {
@@ -502,7 +559,6 @@ export let Session = ({ e }: { e: Ent }) => {
   let log = native ? entries ?? graphLog([]) : file
   let context = log.context ??
     log.entries.findLast((x) => x.row?.context)?.row?.context
-  let frame = useTail(`${log.entries.at(-1)?.seq ?? 0}:${stream?.rev ?? 0}`)
   // The Final block IS the last agent say — don't print it twice. Only a
   // session whose log grew no say row (an external one, a torn log) still
   // leans on final_text.
@@ -533,6 +589,18 @@ export let Session = ({ e }: { e: Ent }) => {
   let cs = commentsOn(e.eid).filter((c) => !inputs.has(c.doc?.body ?? ''))
   let heard = (c: Ent) => c.created?.via == e.eid || !!c.notified
   let thread = weave(rows, cs.filter(heard))
+  // Windowed from the tail on the web; the whole thread in the TUI.
+  let { frame, start, older } = useTranscript(
+    thread.length,
+    `${log.entries.at(-1)?.seq ?? 0}:${stream?.rev ?? 0}`,
+    // Window on a real element tree (browser + linkedom mounts); render the
+    // whole log in the TUI, whose fake document has no querySelector and owns
+    // its own scrollback.
+    typeof document != 'undefined' &&
+      typeof document.querySelector == 'function',
+    e.eid,
+  )
+  let windowed = start > 0 ? thread.slice(start) : thread
   let unsent = cs.filter((c) => !heard(c))
   let mentions = sessionMentions([
     ...(!said && s.final_text
@@ -581,7 +649,12 @@ export let Session = ({ e }: { e: Ent }) => {
         {e.error?.message && <Fault mod='error'>{e.error.message}</Fault>}
         {s.stop_reason && <Fault>{s.stop_reason}</Fault>}
         <Log>
-          {thread.map((x) =>
+          {start > 0 && (
+            <Earlier type='button' onClick={older}>
+              ↑ {start} earlier {start == 1 ? 'line' : 'lines'}
+            </Earlier>
+          )}
+          {windowed.map((x) =>
             'seq' in x
               ? <Row key={x.seq} x={x} repo={repo} />
               : <Note key={x.eid} c={x} />

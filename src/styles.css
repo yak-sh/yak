@@ -3259,6 +3259,22 @@ a[data-ref]:hover {
   gap: var(--gap);
   font-size: inherit;
 }
+/* A long transcript renders only its tail; this reveals the rows above it
+   (auto-fires as the reader nears the top, so it's rarely clicked). */
+.Session_Earlier {
+  justify-self: center;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--soft);
+  color: var(--dim);
+  font: 11px var(--mono);
+  min-height: var(--tap);
+  padding: 0 var(--gap);
+  cursor: pointer;
+}
+.Session_Earlier:hover {
+  color: var(--text);
+}
 /* Every line: the seq gutter, the transcript face beside it, and (when
    opened) the raw-event inspector wrapping to its own full-width row. */
 .Session_Line {
