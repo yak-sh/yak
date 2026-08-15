@@ -2,8 +2,13 @@ import { crewed, gated } from '../../live.ts'
 import { Dot } from '../Dot.tsx'
 import { Entity } from '../Entity.tsx'
 import { menuAt } from '../nav.tsx'
-import { slot, TileFrame, tileLink, type TileProps } from '../Tile.tsx'
-import { title } from '../title.tsx'
+import {
+  slot,
+  TileFrame,
+  tileLink,
+  type TileProps,
+  tileTitle,
+} from '../Tile.tsx'
 
 let { Title } = TileFrame
 
@@ -21,9 +26,10 @@ export let TaskTile = ({ e, slots, onOpen }: TileProps) => (
   >
     {slot(slots, 'before')}
     <Dot status={e.task!.status} gated={gated(e)} live={crewed(e)} />
-    <Title {...title(e.doc?.title ?? '')} />
+    <Title {...tileTitle(slots, e.doc?.title ?? '')} />
     <Entity eid={e.eid} view='Meta' id>
       {slot(slots, 'after')}
     </Entity>
+    {slot(slots, 'body')}
   </TileFrame>
 )

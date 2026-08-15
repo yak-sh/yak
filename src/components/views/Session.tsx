@@ -19,7 +19,7 @@ import {
 } from '../../live.ts'
 import { graphLog } from '../../entry_log.ts'
 import { type ObservationState } from '../../observations.ts'
-import { slot, tileLink, type TileProps } from '../Tile.tsx'
+import { slot, tileLink, type TileProps, tileTitle } from '../Tile.tsx'
 import { ago, block, pretty, Stamp } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
 import { Composer, Note } from '../Comments.tsx'
@@ -816,17 +816,22 @@ export let SessionRow = ({ e, slots, onOpen }: TileProps) => {
       <RowLine.Head {...tileLink(e, onOpen)}>
         {slot(slots, 'before')}
         <SessionDot e={e} />
-        {persona && (
-          <RowLine.Persona>
-            {persona.doc?.title || idOf(persona)}
-          </RowLine.Persona>
+        {slots?.title != null ? <RowLine.Model {...tileTitle(slots, '')} /> : (
+          <>
+            {persona && (
+              <RowLine.Persona>
+                {persona.doc?.title || idOf(persona)}
+              </RowLine.Persona>
+            )}
+            {model && <RowLine.Model>{friendly(model)}</RowLine.Model>}
+            {s.effort && <RowLine.Effort>{s.effort}</RowLine.Effort>}
+          </>
         )}
-        {model && <RowLine.Model>{friendly(model)}</RowLine.Model>}
-        {s.effort && <RowLine.Effort>{s.effort}</RowLine.Effort>}
         <Id e={e} />
         {slot(slots, 'after')}
         <Stamp at={e.created?.at} />
       </RowLine.Head>
+      {slot(slots, 'body')}
       {tasks.length > 0 && (
         <RowLine.Tasks>
           {tasks.map((task) => (

@@ -3,7 +3,7 @@
 import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
-import { group, Search, searchOpen } from './Search.tsx'
+import { group, hitSlots, Search, searchOpen } from './Search.tsx'
 import { until } from '../testing.ts'
 
 let hit = (num: number, kind: string, title: string) => ({
@@ -28,6 +28,21 @@ Deno.test('search keeps exact ids and titles above kind groups', () => {
     group([persona, memory, task], '"fleet base common persona"')[0],
     persona,
   )
+})
+
+Deno.test('search fills tile titles and bodies with marked matches', () => {
+  let slots = hitSlots({
+    ...hit(1, 'task', 'One row'),
+    title_hit: 'One \x01row\x02',
+    snip: 'Body \x01match\x02',
+  })
+  let title = slots.title as unknown[]
+  let body = slots.body
+  assertEquals(title[0], 'One ')
+  assertEquals((title[1] as { type: unknown }).type, 'mark')
+  let snip = (body.props.children as unknown[]).flat()
+  assertEquals(snip[0], 'Body ')
+  assertEquals((snip[1] as { type: unknown }).type, 'mark')
 })
 
 Deno.test('search sends only the settled query while typing', async () => {

@@ -6,9 +6,14 @@ import { boardTasks, statuses } from '../../live.ts'
 import { Entity } from '../Entity.tsx'
 import { menuAt } from '../nav.tsx'
 import { useBoardSub } from '../subscriptions.ts'
-import { slot, TileFrame, tileLink, type TileProps } from '../Tile.tsx'
+import {
+  slot,
+  TileFrame,
+  tileLink,
+  type TileProps,
+  tileTitle,
+} from '../Tile.tsx'
 import { el } from '../ui.tsx'
-import { title } from '../title.tsx'
 import { Dot } from '../Dot.tsx'
 import { Meta } from './Show.tsx'
 
@@ -45,10 +50,11 @@ export let BoardTile = ({ e, slots, onOpen }: TileProps) => (
   >
     <TileFrame.Head>
       {slot(slots, 'before')}
-      <TileFrame.Title {...title(e.doc?.title ?? '')} />
+      <TileFrame.Title {...tileTitle(slots, e.doc?.title ?? '')} />
     </TileFrame.Head>
     <Entity eid={e.eid} view='Meta' id>
       {slot(slots, 'after')}
     </Entity>
+    {slot(slots, 'body')}
   </TileFrame>
 )

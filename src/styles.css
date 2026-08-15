@@ -579,6 +579,14 @@ html {
   gap: var(--half-gap);
   min-width: 0;
 }
+.TileSlot-body {
+  display: block;
+  flex-basis: 100%;
+  min-width: 0;
+}
+.ListTile:has(> .TileSlot-body) {
+  flex-wrap: wrap;
+}
 /* The loud cap: a board List cuts at 100 rows and says so. */
 .List_Row-more {
   color: var(--dim);
@@ -1295,6 +1303,9 @@ html {
   grid-column: 2;
   min-width: 0;
   overflow: hidden;
+}
+.Tile > .TileSlot-body {
+  grid-column: 1 / -1;
 }
 .Tile > .Show_Meta .Id {
   margin-left: auto;
@@ -2163,30 +2174,14 @@ html {
   border-top: 1px solid var(--border);
 }
 .Search_Hit {
-  padding: var(--half-gap) var(--gap);
+  padding: 2px var(--gap);
   cursor: pointer;
-  color: inherit; /* an anchor now — no link blue, no visited purple */
-  text-decoration: none;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0 var(--half-gap);
 }
-.Search_Hit-sel {
+.Search_Hit-sel > :where(.Tile, .ListTile, .SessionRow) {
   background: var(--soft);
 }
-.Search_Title {
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.Search_Id {
-  font-size: 11px;
-  color: var(--dim);
-  white-space: nowrap;
-}
 .Search_Snip {
-  grid-column: 1 / -1;
+  display: block;
   font-size: 12px;
   color: var(--muted);
   overflow: hidden;

@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { type Hit, idOf, kindOrder, plural, uuid } from '../types.ts'
 import { ent, mutate, searchOpen } from '../live.ts'
-import { menuAt, navigate } from './nav.tsx'
+import { navigate } from './nav.tsx'
 import { drop, peek, save } from './drafts.ts'
 import { block } from './ui.tsx'
 import { Icon } from './icons.tsx'
 import { useComplete } from './Complete.tsx'
+import { Entity } from './Entity.tsx'
 
 // `/` in normal mode opens the palette (the App shell owns the hotkey
 // and the mount, so any root can search; the `open` callback decides
@@ -21,12 +22,10 @@ let Frame = block('div', 'Search', {
   Line: 'div',
   Board: 'button',
   Head: 'div',
-  Hit: 'a',
-  Title: 'span',
-  Id: 'span',
-  Snip: 'div',
+  Hit: 'div',
+  Snip: 'span',
 })
-let { Box, Line, Board, Head, Hit: Row, Title, Id, Snip } = Frame
+let { Box, Line, Board, Head, Hit: Row, Snip } = Frame
 
 // The palette is a NAVIGATOR — you open a board or project, not read mail —
 // so hits group by kind: navigational kinds lead, bulky content kinds
@@ -62,6 +61,11 @@ let marked = (s: string) =>
     let [hit, rest] = chunk.split('\x02')
     return [<mark key={i}>{hit}</mark>, rest]
   })
+
+export let hitSlots = (h: Hit) => ({
+  title: marked(h.title_hit || h.title || '(untitled)'),
+  body: <Snip>{marked(h.snip)}{h.retired && ' · retired'}</Snip>,
+})
 
 export let Search = ({ open }: { open: (eid: string) => void }) => {
   let [hits, setHits] = useState<Hit[]>([])
@@ -234,9 +238,9 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
         </Line>
         {err && <Snip>{err}</Snip>}
         {
-          /* Each hit is a real anchor: cmd/middle-click opens a new tab,
-            right-click opens the target entity's menu, and a plain click
-            follows the palette's open callback. */
+          /* Each registry tile is its own real entity anchor. The result shell
+          intercepts only a plain click, whose search contract is to replace
+          the root; modifier clicks and the tile's entity menu stay native. */
         }
         {ordered.flatMap((h, i) => {
           // A header opens each kind's run; the tail kinds (mail, comment)
@@ -245,21 +249,18 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
           let row = (
             <Row
               key={h.eid}
-              href={href(h)}
               mod={i == sel ? 'sel' : undefined}
               onMouseEnter={() => setSel(i)}
-              onContextMenu={menuAt(ent(h.open))}
-              onClick={(e: MouseEvent) => {
+              onClickCapture={(e: MouseEvent) => {
                 if (e.metaKey || e.ctrlKey || e.shiftKey || e.button != 0) {
                   return
                 }
                 e.preventDefault()
+                e.stopPropagation()
                 pick(h)
               }}
             >
-              <Title>{marked(h.title_hit || h.title || '(untitled)')}</Title>
-              <Id>{idOf(h)}</Id>
-              <Snip>{marked(h.snip)}{h.retired && ' · retired'}</Snip>
+              <Entity eid={h.open} view='Tile' slots={hitSlots(h)} />
             </Row>
           )
           if (!head) return [row]

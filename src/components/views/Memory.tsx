@@ -1,8 +1,7 @@
 import { menuAt } from '../nav.tsx'
-import { slot, tileLink, type TileProps } from '../Tile.tsx'
+import { slot, tileLink, type TileProps, tileTitle } from '../Tile.tsx'
 import { block, el, Stamp } from '../ui.tsx'
 import { Id } from './Inline.tsx'
-import { title } from '../title.tsx'
 
 // A memory in a list: index line, confirmation age, id — with `feedback`
 // ahead of it when the memory records someone's correction, the one thing
@@ -16,9 +15,10 @@ export let MemoryTile = ({ e, slots, onOpen }: TileProps) => (
   <Line {...tileLink(e, onOpen)} onContextMenu={menuAt(e)}>
     {slot(slots, 'before')}
     {e.feedback ? <Type>feedback</Type> : null}
-    <Line.Title {...title(e.doc!.title)} />
+    <Line.Title {...tileTitle(slots, e.doc!.title)} />
     <Stamp at={e.memory!.last_confirmed_at} label='confirmed' />
     <Id e={e} />
     {slot(slots, 'after')}
+    {slot(slots, 'body')}
   </Line>
 )

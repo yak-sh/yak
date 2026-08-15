@@ -9,8 +9,7 @@ import { dragData } from '../drag.ts'
 import { useBoardSub } from '../subscriptions.ts'
 import { Id } from './Inline.tsx'
 import { Entity } from '../Entity.tsx'
-import { title } from '../title.tsx'
-import { slot, tileLink, type TileProps } from '../Tile.tsx'
+import { slot, tileLink, type TileProps, tileTitle } from '../Tile.tsx'
 import { ListFrame } from '../ListFrame.tsx'
 
 let { Row } = ListFrame
@@ -93,8 +92,9 @@ export let ListTile = ({ e, slots, onOpen }: TileProps) => (
   <Line {...tileLink(e, onOpen)} onContextMenu={menuAt(e)}>
     {slot(slots, 'before')}
     {/* a mail's stored subject may be an encoded-word — decode to read */}
-    <Line.Title {...title(summary(e))} />
+    <Line.Title {...tileTitle(slots, summary(e))} />
     <Id e={e} />
     {slot(slots, 'after')}
+    {slot(slots, 'body')}
   </Line>
 )
