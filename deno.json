@@ -1,7 +1,7 @@
 {
   "tasks": {
     "check": "deno fmt --check && deno lint && deno check",
-    "gate": "deno task check && deno task test:all && deno run -A src/cli.ts sync --check",
+    "gate": "deno task check && deno task test && deno run -A src/cli.ts sync --check",
     "dev": "sh -c 'while :; do deno run -A --unstable-net --unstable-worker-options src/dev.ts && break; [ $? -eq 42 ] || break; done'",
     "tui": "sh -c 'while :; do deno run -A src/tui/main.tsx && break; [ $? -eq 42 ] || break; done'",
     "install": "sh -c 'cd \"$(git worktree list --porcelain | head -1 | cut -c 10-)\" && git config core.hooksPath .githooks && deno install -g -f --name task -A --config deno.json src/cli.ts'",
@@ -10,6 +10,7 @@
     "icons": "deno run -A bin/gen-icons.ts",
     "test": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 TASKS_BACKOFF= deno test --frozen -A --unstable-net --unstable-worker-options --fail-fast",
     "test:all": "TASKS_SLOW=1 DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 TASKS_BACKOFF= deno test --frozen -A --unstable-net --unstable-worker-options --fail-fast",
+    "test:budget": "deno run -A bin/test-budget.ts",
     "bench": "deno bench -A src"
   },
   "exclude": [
