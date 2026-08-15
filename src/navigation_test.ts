@@ -1,5 +1,10 @@
 import { assertEquals } from '@std/assert'
-import { favoriteChange, favoriteLabel, navigationQuery } from './navigation.ts'
+import {
+  favoriteChange,
+  favoriteLabel,
+  navigationQuery,
+  navigationView,
+} from './navigation.ts'
 import type { Ent } from './types.ts'
 
 let entity = (favorite = false): Ent => ({
@@ -17,6 +22,7 @@ Deno.test('navigation uses one facet query and reversible favorite write', () =>
   let plain = entity()
   let favorite = entity(true)
   assertEquals(navigationQuery, '.favorite!')
+  assertEquals(navigationView, 'Navigation.List.Tile')
   assertEquals(favoriteLabel(plain), 'show in navigation')
   assertEquals(favoriteChange(plain), {
     eid: plain.eid,

@@ -52,7 +52,7 @@ import {
 import { catalog } from '../providers.ts'
 import { choose, load, providers } from '../components/Run.tsx'
 import { useQuery } from '../components/useQuery.ts'
-import { navigationQuery } from '../navigation.ts'
+import { navigationQuery, navigationView } from '../navigation.ts'
 
 export let sel = signal({ col: 0, row: 0 })
 export let quit = signal(false)
@@ -570,7 +570,7 @@ export let TNavigation = () => {
           class={`TNavigation_Row${i == pick ? ' TNavigation_Row-on' : ''}`}
           key={e.eid}
         >
-          <Entity eid={e.eid} view='List.Tile' />
+          <Entity eid={e.eid} view={navigationView} />
         </div>
       ))}
       {!favorites.length && (

@@ -303,10 +303,17 @@ html {
   z-index: 5;
 }
 .Navigation_Head {
-  padding: var(--gap);
+  display: flex;
+  align-items: center;
+  padding: calc(var(--half-gap) + env(safe-area-inset-top, 0px)) var(--gap)
+    var(--half-gap) var(--half-gap);
   border-bottom: 1px solid var(--border);
 }
 .Navigation_Title {
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  padding: 3px 4px;
   font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
@@ -321,30 +328,6 @@ html {
   display: flex;
   flex-direction: column;
   gap: 2px;
-}
-.Navigation_Item {
-  min-width: 0;
-  display: flex;
-  justify-content: space-between;
-  gap: var(--half-gap);
-  padding: var(--half-gap);
-  border-radius: var(--radius);
-  color: var(--text);
-  text-decoration: none;
-}
-.Navigation_Item:hover {
-  background: var(--soft);
-}
-.Navigation_Item > span {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.Navigation_Item > code {
-  flex: none;
-  color: var(--dim);
-  background: none;
 }
 .Navigation_Empty {
   margin: 0;
@@ -375,7 +358,6 @@ html {
     position: fixed;
     inset: 0 auto 0 0;
     width: min(85vw, 20rem);
-    padding-top: env(safe-area-inset-top, 0px);
     box-shadow: 8px 0 28px rgb(0 0 0 / 0.4);
   }
   .Navigation_Shade {

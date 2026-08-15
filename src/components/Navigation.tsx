@@ -1,12 +1,11 @@
 import { signal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
-import { navigationQuery } from '../navigation.ts'
+import { navigationQuery, navigationView } from '../navigation.ts'
 import { mode } from '../live.ts'
 import { block } from './ui.tsx'
 import { useQuery } from './useQuery.ts'
-import { follow } from './nav.tsx'
-import { idOf } from '../types.ts'
 import { AccountTab } from './Account.tsx'
+import { Entity } from './Entity.tsx'
 import { Icon } from './icons.tsx'
 
 let narrow = () => globalThis.matchMedia?.('(max-width: 700px)').matches
@@ -39,10 +38,9 @@ let Frame = block('aside', 'Navigation', {
   Title: 'span',
   Empty: 'p',
   Items: 'nav',
-  Item: 'a',
   Foot: 'footer',
 })
-let { Shade, Head, Title, Empty, Items, Item, Foot } = Frame
+let { Shade, Head, Title, Empty, Items, Foot } = Frame
 
 export let NavigationToggle = () => (
   <button
@@ -88,22 +86,14 @@ export let Navigation = () => {
           <Title>Navigation</Title>
         </Head>
         <Items>
-          {favorites.map((e) => {
-            let href = `/${idOf(e)}`
-            return (
-              <Item
-                key={e.eid}
-                href={href}
-                onClick={(ev: MouseEvent) => {
-                  follow(href)(ev)
-                  closeMobile()
-                }}
-              >
-                <span>{e.doc?.title ?? e.kind}</span>
-                <code>{idOf(e)}</code>
-              </Item>
-            )
-          })}
+          {favorites.map((e) => (
+            <Entity
+              key={e.eid}
+              eid={e.eid}
+              view={navigationView}
+              onOpen={closeMobile}
+            />
+          ))}
           {!favorites.length && (
             <Empty>Right-click an entity and choose show in navigation.</Empty>
           )}
