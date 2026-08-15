@@ -1,6 +1,7 @@
 // Personas, materialized. A persona is a curated view over the graph —
-// its doc is the core text, its EDGES are the tiers (contains = preload
-// the whole body, reads = carry the one-line index; everything else in
+// its doc describes the persona in the graph, its EDGES are the prompt tiers
+// (contains = preload the whole body, reads = carry the one-line index;
+// everything else in
 // scope stays searchable) — and this module renders that view as one
 // markdown document: for a spawned session's system prompt, and for the
 // repo-local .tasks/ files native harnesses read (CLAUDE.md symlinks
@@ -98,9 +99,10 @@ let tiers = (
   return { pre: warm(pre), idx: warm(idx) }
 }
 
-// The whole persona as one markdown document: header naming the edit
-// path, the core text, preloaded bodies (warmest first — the budgeted
-// auto-tier hangs off this ordering later), then the index. Each
+// The whole persona as one markdown document: header naming the edit path,
+// preloaded bodies (warmest first — the budgeted auto-tier hangs off this
+// ordering later), then the index. A persona's own body describes it to graph
+// readers; prompt instructions belong in contained memories. Each
 // preloaded body is its own little document — a rule before it, an H1
 // title over it — so a body may use ## freely. Rules ride as their own
 // parts: the \n\n join blank-lines every --- and no text line above can
@@ -113,16 +115,9 @@ export let materialize = (
   d: Dialect = DIALECT,
 ) => {
   let { pre, idx } = tiers(all, deps, p.eid, now)
-  let body = String(p.comps.doc?.body ?? '').trim()
   let header = d.header(idOf(p), String(p.comps.doc?.title ?? 'persona'))
-  // Native harnesses need YAML frontmatter at byte 0, so when the body opens
-  // with a --- block the header rides just after it, never before.
-  let fm = body.match(/^---\n[\s\S]*?\n---(?:\n|$)/)
-  let lead = fm
-    ? `${fm[0].trimEnd()}\n\n${header}\n\n${body.slice(fm[0].length).trim()}`
-    : `${header}\n\n${body}`
   let parts = [
-    lead,
+    header,
     ...pre.flatMap((r) => [
       d.rule,
       `# ${idOf(r)} ${r.comps.doc?.title ?? ''}\n\n${

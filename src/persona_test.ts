@@ -70,7 +70,7 @@ let indexed = row({
   recall: { count: 4, first_at: day(30), last_at: day(2) },
 }, 2)
 
-Deno.test('materialize: header, core, tiers in warmth order', () => {
+Deno.test('materialize: header and tiers in warmth order', () => {
   let all = [persona, warm, cold, indexed]
   let deps = [
     edge(persona, 'contains', cold),
@@ -80,7 +80,7 @@ Deno.test('materialize: header, core, tiers in warmth order', () => {
   let md = materialize(all, deps, persona, NOW)
   assertStringIncludes(md, `GENERATED from N-${persona.num}`)
   assertStringIncludes(md, `https://tasks.yak.sh/N-${persona.num}`)
-  assertStringIncludes(md, 'Review sternly.')
+  assert(!md.includes('Review sternly.'))
   // preloaded bodies ride whole — each its own document under an H1
   // title behind a rule, warm before cold, no tier label
   assert(!md.includes('## Preloaded'))
@@ -251,14 +251,14 @@ Deno.test('materialize: a persona cycle terminates', () => {
   assertStringIncludes(md, 'LOOPBODY.')
 })
 
-Deno.test('materialize: a bare persona is just header + core', () => {
+Deno.test('materialize: a bare persona is just its generated header', () => {
   let md = materialize([persona], [], persona, NOW)
   assert(!md.includes('---'))
   assert(!md.includes('## Memory Index'))
-  assertStringIncludes(md, 'Review sternly.')
+  assert(!md.includes('Review sternly.'))
 })
 
-Deno.test('materialize: frontmatter stays at byte 0, header rides after it', () => {
+Deno.test('materialize: persona descriptions never become prompt text', () => {
   let fm = row({
     doc: {
       title: 'operator',
@@ -268,13 +268,10 @@ Deno.test('materialize: frontmatter stays at byte 0, header rides after it', () 
   })
   // a preloaded memory's separator rule must not read as frontmatter
   let md = materialize([fm, warm], [edge(fm, 'contains', warm)], fm, NOW)
-  // frontmatter opens the file, so a native harness parses name/tools
-  assert(md.startsWith('---\n'))
-  // the generated header rides after the frontmatter close, never before it
-  let fmEnd = md.indexOf('\n---', 3) + '\n---'.length
-  assert(md.indexOf('GENERATED') > fmEnd)
-  assertStringIncludes(md, 'You run the fleet.')
-  assert(md.indexOf('Use the front door.') > md.indexOf('You run the fleet.'))
+  assert(md.startsWith('<!-- GENERATED'))
+  assert(!md.includes('name: operator'))
+  assert(!md.includes('You run the fleet.'))
+  assertStringIncludes(md, 'Use the front door.')
 })
 
 Deno.test('materialize: dead or docless tier members drop silently', () => {
@@ -336,11 +333,11 @@ Deno.test('indexLine: id, feedback tag, count, confirmed date — never warmth',
 Deno.test('commonOf: the persona its project contains', () => {
   let proj = row({ project: {}, doc: { title: 'Holdco' } })
   let base = row({
-    doc: { title: 'base', body: 'b' },
+    doc: { title: 'base', body: 'BASE DESCRIPTION' },
     persona: { home: proj.eid },
   })
   let other = row({
-    doc: { title: 'other', body: 'o' },
+    doc: { title: 'other', body: 'OTHER DESCRIPTION' },
     persona: { home: proj.eid },
   })
   let all = [proj, base, other]
@@ -413,8 +410,8 @@ Deno.test('filesFor: common → AGENTS.md, others → personas/<slug>.md, fleet 
     '/repo/.tasks/AGENTS.md',
     '/repo/.tasks/personas/reviewer.md',
   ])
-  assertStringIncludes(files[0].body, 'b')
-  assertStringIncludes(files[1].body, 'o')
+  assert(!files[0].body.includes('BASE DESCRIPTION'))
+  assert(!files[1].body.includes('OTHER DESCRIPTION'))
   // Every file carries its venture's push permission, and a venture that
   // never granted one grants none — git.ts reads this and nothing else.
   assertEquals(files.map((f) => f.push), [false, false])
