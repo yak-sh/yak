@@ -2,6 +2,7 @@
 // at a session) and the format (how each renders as a channel event), proven
 // without a socket or an MCP pipe. Run: deno test -A channels/tasks/.
 import { assertEquals } from '@std/assert'
+import { slow } from '../../src/testing.ts'
 import type { Change } from '../../src/types.ts'
 import {
   channelAck,
@@ -21,7 +22,8 @@ import {
 } from '../../src/channel.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, delta, open, snapshot } = await import('../../src/db.ts')
+let { apply, delta, snapshot } = await import('../../src/db.ts')
+let { freshDb } = await import('../../src/testdb.ts')
 
 let ch = (
   eid: string,
@@ -410,8 +412,8 @@ Deno.test('a bus-notified item injects; a channel-notified item does not', () =>
   )
 })
 
-Deno.test('a fresh channel recovers a bus stamp once, then stays quiet', () => {
-  let db = open()
+slow('a fresh channel recovers a bus stamp once, then stays quiet', () => {
+  let db = freshDb()
   let item = crypto.randomUUID()
   let bus = crypto.randomUUID()
   apply(db, [
@@ -500,8 +502,8 @@ Deno.test('a catch-up replay pushes a notified gap item anyway (T-7167)', () => 
   )
 })
 
-Deno.test('a catch-up comment keeps its actor and instrument byline', () => {
-  let db = open()
+slow('a catch-up comment keeps its actor and instrument byline', () => {
+  let db = freshDb()
   let actor = crypto.randomUUID()
   let writer = crypto.randomUUID()
   let target = crypto.randomUUID()

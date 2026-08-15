@@ -2,7 +2,7 @@
 // ordered log. Tests pin projection, provider boundaries, concurrency, errors,
 // unknown evidence, instructions, and graph-native correlation.
 import { assert, assertEquals, assertMatch, assertRejects } from '@std/assert'
-import { tick } from './testing.ts'
+import { slow, tick } from './testing.ts'
 import { type EntrySpec, type UsageValue } from './entries.ts'
 import { type ToolHost } from './harness_tools.ts'
 import {
@@ -39,35 +39,38 @@ let row = (
   comps: Record<string, Record<string, unknown>>,
 ): EntryRow => ({ eid, seq, comps })
 
-Deno.test('instructions load the hierarchy and describe host authority', async () => {
-  let tree = await Deno.makeTempDir({ prefix: 'tasks-runner-' })
-  let outside = await Deno.makeTempDir({ prefix: 'tasks-runner-out-' })
-  try {
-    await Deno.mkdir(`${tree}/a/b`, { recursive: true })
-    await Deno.writeTextFile(`${tree}/AGENTS.md`, 'root voice')
-    await Deno.writeTextFile(`${tree}/a/AGENTS.md`, 'near voice')
-    let body = await instructions({
-      tree,
-      cwd: 'a/b',
-      persona: 'patient persona',
-      prompt: 'finish T-1',
-    })
-    assert(body.indexOf('root voice') < body.indexOf('near voice'))
-    assertMatch(body, /patient persona/)
-    assertMatch(body, /finish T-1/)
-    assertMatch(body, /host filesystem and network access/)
-    assertMatch(body, /default place for repository\s+changes/)
-    assertMatch(body, /concise assistant messages/)
-    await assertRejects(
-      () => instructions({ tree, cwd: outside }),
-      Error,
-      'leaves worktree',
-    )
-  } finally {
-    await Deno.remove(tree, { recursive: true })
-    await Deno.remove(outside, { recursive: true })
-  }
-})
+slow(
+  'instructions load the hierarchy and describe host authority',
+  async () => {
+    let tree = await Deno.makeTempDir({ prefix: 'tasks-runner-' })
+    let outside = await Deno.makeTempDir({ prefix: 'tasks-runner-out-' })
+    try {
+      await Deno.mkdir(`${tree}/a/b`, { recursive: true })
+      await Deno.writeTextFile(`${tree}/AGENTS.md`, 'root voice')
+      await Deno.writeTextFile(`${tree}/a/AGENTS.md`, 'near voice')
+      let body = await instructions({
+        tree,
+        cwd: 'a/b',
+        persona: 'patient persona',
+        prompt: 'finish T-1',
+      })
+      assert(body.indexOf('root voice') < body.indexOf('near voice'))
+      assertMatch(body, /patient persona/)
+      assertMatch(body, /finish T-1/)
+      assertMatch(body, /host filesystem and network access/)
+      assertMatch(body, /default place for repository\s+changes/)
+      assertMatch(body, /concise assistant messages/)
+      await assertRejects(
+        () => instructions({ tree, cwd: outside }),
+        Error,
+        'leaves worktree',
+      )
+    } finally {
+      await Deno.remove(tree, { recursive: true })
+      await Deno.remove(outside, { recursive: true })
+    }
+  },
+)
 
 Deno.test('instructions describe a Tasks-only session without a worktree', async () => {
   let body = await instructions({ prompt: 'triage the graph' })
@@ -393,103 +396,106 @@ let memoryLog = (initial: EntryRow[]) => {
   return { log, entries, settled, failures }
 }
 
-Deno.test('the loop runs independent tools concurrently and feeds results back', async () => {
-  let state = memoryLog([
-    row('input', 1, {
-      message: { role: 'user' },
-      content: { body: 'run both' },
-    }),
-  ])
-  let requests: Record<string, unknown>[] = []
-  let replies = [
-    result([
-      {
-        type: 'function_call',
-        id: 'tool-item-1',
-        call_id: 'call-1',
+slow(
+  'the loop runs independent tools concurrently and feeds results back',
+  async () => {
+    let state = memoryLog([
+      row('input', 1, {
+        message: { role: 'user' },
+        content: { body: 'run both' },
+      }),
+    ])
+    let requests: Record<string, unknown>[] = []
+    let replies = [
+      result([
+        {
+          type: 'function_call',
+          id: 'tool-item-1',
+          call_id: 'call-1',
+          name: 'shell',
+          arguments: '{"command":"one"}',
+        },
+        {
+          type: 'function_call',
+          id: 'tool-item-2',
+          call_id: 'call-2',
+          name: 'shell',
+          arguments: '{"command":"two"}',
+        },
+        { type: 'future_item', id: 'future-1', payload: true },
+      ]),
+      result([{
+        type: 'message',
+        id: 'answer',
+        content: [{ type: 'output_text', text: 'both finished' }],
+      }]),
+    ]
+    let active = 0, peak = 0
+    let tools: ToolHost = {
+      tools: [{
+        type: 'function',
         name: 'shell',
-        arguments: '{"command":"one"}',
+        description: 'fake shell',
+        parameters: {},
+        strict: true,
+      }],
+      call: async (_name, args) => {
+        active++
+        peak = Math.max(peak, active)
+        // A yield holds every concurrent call open together so peak measures the
+        // overlap, without a span that a loaded box would smear.
+        await tick()
+        active--
+        return {
+          output: `out:${args.command}`,
+          facets: { exit: { code: 0 } },
+        }
       },
-      {
-        type: 'function_call',
-        id: 'tool-item-2',
-        call_id: 'call-2',
-        name: 'shell',
-        arguments: '{"command":"two"}',
+    }
+    let out = await runTurn({
+      log: state.log,
+      through: 'input',
+      provider: 'codex',
+      model: 'gpt-5.6-sol',
+      effort: 'high',
+      instructions: 'developer words',
+      transport: {
+        run: (request) => {
+          requests.push(request)
+          return Promise.resolve(replies.shift()!)
+        },
       },
-      { type: 'future_item', id: 'future-1', payload: true },
-    ]),
-    result([{
-      type: 'message',
-      id: 'answer',
-      content: [{ type: 'output_text', text: 'both finished' }],
-    }]),
-  ]
-  let active = 0, peak = 0
-  let tools: ToolHost = {
-    tools: [{
-      type: 'function',
-      name: 'shell',
-      description: 'fake shell',
-      parameters: {},
-      strict: true,
-    }],
-    call: async (_name, args) => {
-      active++
-      peak = Math.max(peak, active)
-      // A yield holds every concurrent call open together so peak measures the
-      // overlap, without a span that a loaded box would smear.
-      await tick()
-      active--
-      return {
-        output: `out:${args.command}`,
-        facets: { exit: { code: 0 } },
-      }
-    },
-  }
-  let out = await runTurn({
-    log: state.log,
-    through: 'input',
-    provider: 'codex',
-    model: 'gpt-5.6-sol',
-    effort: 'high',
-    instructions: 'developer words',
-    transport: {
-      run: (request) => {
-        requests.push(request)
-        return Promise.resolve(replies.shift()!)
-      },
-    },
-    tools,
-    cacheKey: 'session-1',
-  })
-  assertEquals(out.finalText, 'both finished')
-  assertEquals(peak, 2)
-  assertEquals(state.settled.length, 2)
-  assertEquals(
-    state.entries.filter((entry) => entry.comps.result).length,
-    2,
-  )
-  let replay = JSON.stringify(requests[1].input)
-  assertMatch(replay, /function_call_output/)
-  assertMatch(replay, /out:one/)
-  assertMatch(replay, /out:two/)
-  assertEquals(requests[0].instructions, 'developer words')
-  assertEquals(requests[0].reasoning, { effort: 'high' })
-  assertEquals(requests[0].prompt_cache_key, 'session-1')
-  // A known serving model carries the compaction policy so the provider
-  // compacts its own replay state past the threshold.
-  assertEquals(requests[0].context_management, [{
-    type: 'compaction',
-    compact_threshold: 300_000,
-  }])
-  assertEquals(
-    state.entries.some((entry) =>
-      entry.comps.opaque?.format == 'openai:future_item'
-    ),
-    true,
-  )
-})
+      tools,
+      cacheKey: 'session-1',
+    })
+    assertEquals(out.finalText, 'both finished')
+    assertEquals(peak, 2)
+    assertEquals(state.settled.length, 2)
+    assertEquals(
+      state.entries.filter((entry) => entry.comps.result).length,
+      2,
+    )
+    let replay = JSON.stringify(requests[1].input)
+    assertMatch(replay, /function_call_output/)
+    assertMatch(replay, /out:one/)
+    assertMatch(replay, /out:two/)
+    assertEquals(requests[0].instructions, 'developer words')
+    assertEquals(requests[0].reasoning, { effort: 'high' })
+    assertEquals(requests[0].prompt_cache_key, 'session-1')
+    // A known serving model carries the compaction policy so the provider
+    // compacts its own replay state past the threshold.
+    assertEquals(requests[0].context_management, [{
+      type: 'compaction',
+      compact_threshold: 300_000,
+    }])
+    assertEquals(
+      state.entries.some((entry) =>
+        entry.comps.opaque?.format == 'openai:future_item'
+      ),
+      true,
+    )
+  },
+)
 
 Deno.test('executeCall recovers typed dispatch and records tool failures as results', async () => {
   let call = row('call', 1, {

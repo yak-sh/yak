@@ -9,6 +9,7 @@ import {
   topology,
 } from './leader.ts'
 import { assertEquals } from '@std/assert'
+import { slow } from './testing.ts'
 
 let channels = <T>() => {
   let all: Channel<T>[] = []
@@ -58,52 +59,55 @@ let deferred = () => {
 
 let tick = () => new Promise((resolve) => setTimeout(resolve, 0))
 
-Deno.test('one holder routes follower writes and fans canonical frames', async () => {
-  let lock = locks()
-  let channel = channels<string>()
-  let leases = [deferred(), deferred()]
-  let calls = [[], []] as string[][]
-  let io = (i: number) => ({
-    lead: () => {
-      calls[i].push('lead')
-      return Promise.resolve()
-    },
-    follow: () => {
-      calls[i].push('follow')
-      return Promise.resolve()
-    },
-    solo: () => {
-      calls[i].push('solo')
-      return Promise.resolve()
-    },
-    receive: (frame: string) => {
-      calls[i].push(`in:${frame}`)
-    },
-    send: (frame: string) => {
-      calls[i].push(`out:${frame}`)
-    },
-  })
-  let a = topology(lock, channel(), io(0), () => 'a', () => leases[0].promise)
-  let b = topology(lock, channel(), io(1), () => 'b', () => leases[1].promise)
+slow(
+  'one holder routes follower writes and fans canonical frames',
+  async () => {
+    let lock = locks()
+    let channel = channels<string>()
+    let leases = [deferred(), deferred()]
+    let calls = [[], []] as string[][]
+    let io = (i: number) => ({
+      lead: () => {
+        calls[i].push('lead')
+        return Promise.resolve()
+      },
+      follow: () => {
+        calls[i].push('follow')
+        return Promise.resolve()
+      },
+      solo: () => {
+        calls[i].push('solo')
+        return Promise.resolve()
+      },
+      receive: (frame: string) => {
+        calls[i].push(`in:${frame}`)
+      },
+      send: (frame: string) => {
+        calls[i].push(`out:${frame}`)
+      },
+    })
+    let a = topology(lock, channel(), io(0), () => 'a', () => leases[0].promise)
+    let b = topology(lock, channel(), io(1), () => 'b', () => leases[1].promise)
 
-  await Promise.all([a.start(), b.start()])
-  assertEquals(calls, [['lead'], ['follow']])
+    await Promise.all([a.start(), b.start()])
+    assertEquals(calls, [['lead'], ['follow']])
 
-  b.route('write')
-  a.fan('canonical')
-  assertEquals(calls, [
-    ['lead', 'out:write'],
-    ['follow', 'in:canonical'],
-  ])
+    b.route('write')
+    a.fan('canonical')
+    assertEquals(calls, [
+      ['lead', 'out:write'],
+      ['follow', 'in:canonical'],
+    ])
 
-  leases[0].resolve()
-  await tick()
-  assertEquals(calls[1], ['follow', 'in:canonical', 'lead'])
+    leases[0].resolve()
+    await tick()
+    assertEquals(calls[1], ['follow', 'in:canonical', 'lead'])
 
-  b.route('after')
-  assertEquals(calls[1].at(-1), 'out:after')
-  leases[1].resolve()
-})
+    b.route('after')
+    assertEquals(calls[1].at(-1), 'out:after')
+    leases[1].resolve()
+  },
+)
 
 Deno.test('a follower drains frames that arrive while it hydrates', async () => {
   let lock = locks()
@@ -218,7 +222,7 @@ Deno.test('a failed lock cleanly restores the solo path', async () => {
   assertEquals(calls, ['solo', 'write'])
 })
 
-Deno.test('one board name lives until its final tab owner leaves', async () => {
+slow('one board name lives until its final tab owner leaves', async () => {
   let lock = locks()
   let channel = channels<string>()
   let leases = [deferred(), deferred()]
@@ -260,7 +264,7 @@ Deno.test('a hidden tab survives throttling but an abandoned lease expires', () 
   assertEquals(stale(0, 180_001), true)
 })
 
-Deno.test('a promoted follower replays the live ownership reduction', async () => {
+slow('a promoted follower replays the live ownership reduction', async () => {
   let lock = locks()
   let channel = channels<string>()
   let leases = [deferred(), deferred()]

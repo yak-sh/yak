@@ -126,7 +126,7 @@ let shellCall = (command: string) => ({
   arguments: JSON.stringify({ command, cwd: null, timeout_ms: 1000 }),
 })
 
-Deno.test('the runner ignores imported-only session partitions', () => {
+slow('the runner ignores imported-only session partitions', () => {
   let db = freshDb()
   let history = session(db)
   let old = uuid()
@@ -156,74 +156,77 @@ Deno.test('the runner ignores imported-only session partitions', () => {
   db.close()
 })
 
-Deno.test('managed Codex starts, runs tools, and settles in ordered entries', async () => {
-  let db = freshDb()
-  let tree = Deno.makeTempDirSync(), sid = session(db, tree)
-  let heard: Change[] = [], called: string[] = []
-  let queue = [
-    result([{
-      type: 'function_call',
-      id: 'item-1',
-      call_id: 'call-1',
-      name: 'shell',
-      arguments: JSON.stringify({
-        command: 'printf worked',
-        cwd: null,
-        timeout_ms: 1000,
-      }),
-    }]),
-    result([{
-      type: 'message',
-      id: 'item-2',
-      content: [{ type: 'output_text', text: 'done' }],
-    }]),
-  ]
-  let requests: Record<string, unknown>[] = []
-  let service = managedCodex({
-    db,
-    cast: (changes) => heard.push(...changes),
-    transport: {
-      run: (request) => {
-        requests.push(request)
-        return Promise.resolve(queue.shift()!)
+slow(
+  'managed Codex starts, runs tools, and settles in ordered entries',
+  async () => {
+    let db = freshDb()
+    let tree = Deno.makeTempDirSync(), sid = session(db, tree)
+    let heard: Change[] = [], called: string[] = []
+    let queue = [
+      result([{
+        type: 'function_call',
+        id: 'item-1',
+        call_id: 'call-1',
+        name: 'shell',
+        arguments: JSON.stringify({
+          command: 'printf worked',
+          cwd: null,
+          timeout_ms: 1000,
+        }),
+      }]),
+      result([{
+        type: 'message',
+        id: 'item-2',
+        content: [{ type: 'output_text', text: 'done' }],
+      }]),
+    ]
+    let requests: Record<string, unknown>[] = []
+    let service = managedCodex({
+      db,
+      cast: (changes) => heard.push(...changes),
+      transport: {
+        run: (request) => {
+          requests.push(request)
+          return Promise.resolve(queue.shift()!)
+        },
       },
-    },
-    tools: () => Promise.resolve(tools(called)),
-    prepare: () => Promise.resolve(),
-  })
+      tools: () => Promise.resolve(tools(called)),
+      prepare: () => Promise.resolve(),
+    })
 
-  await service.start(sid, job(tree))
-  let rows = readEntries(db, sid)
-  assertEquals(rows.map((row) => row.seq), [1, 2, 3, 4, 5, 6])
-  assertEquals(rows[0].comps.content.body, 'Do the task.')
-  assertEquals(rows[2].comps.call.key, 'call-1')
-  assertEquals(rows[3].comps.result.call, rows[2].eid)
-  assertEquals(rows[3].comps.exit.code, 0)
-  assertEquals(rows[5].comps.content.body, 'done')
-  assertEquals(rows[4].comps.generation.serving_model, 'gpt-serving')
-  assertEquals(rows[4].comps.usage.reasoning, 2)
-  assertEquals(called, ['shell'])
-  assertEquals(requests.length, 2)
-  let batches = db.prepare('select via, batch from journal order by rowid')
-    .all() as { via: string | null; batch: string }[]
-  let birth = batches.find((batch) => {
-    let changes = JSON.parse(batch.batch) as Change[]
-    return changes.some((change) => change.eid == rows[0].eid) &&
-      changes.some((change) => change.eid == rows[1].eid)
-  })
-  assertEquals(birth?.via, service.runner)
-  for (let row of rows) {
-    assertEquals(journalOf(db, row.eid)[0].via, service.runner)
-  }
-  assertEquals(
-    db.prepare('select status from session where eid = ?').get(sid),
-    { status: null },
-  )
-  assert(heard.some((change) => change.name == 'result'))
-  db.close()
-})
+    await service.start(sid, job(tree))
+    let rows = readEntries(db, sid)
+    assertEquals(rows.map((row) => row.seq), [1, 2, 3, 4, 5, 6])
+    assertEquals(rows[0].comps.content.body, 'Do the task.')
+    assertEquals(rows[2].comps.call.key, 'call-1')
+    assertEquals(rows[3].comps.result.call, rows[2].eid)
+    assertEquals(rows[3].comps.exit.code, 0)
+    assertEquals(rows[5].comps.content.body, 'done')
+    assertEquals(rows[4].comps.generation.serving_model, 'gpt-serving')
+    assertEquals(rows[4].comps.usage.reasoning, 2)
+    assertEquals(called, ['shell'])
+    assertEquals(requests.length, 2)
+    let batches = db.prepare('select via, batch from journal order by rowid')
+      .all() as { via: string | null; batch: string }[]
+    let birth = batches.find((batch) => {
+      let changes = JSON.parse(batch.batch) as Change[]
+      return changes.some((change) => change.eid == rows[0].eid) &&
+        changes.some((change) => change.eid == rows[1].eid)
+    })
+    assertEquals(birth?.via, service.runner)
+    for (let row of rows) {
+      assertEquals(journalOf(db, row.eid)[0].via, service.runner)
+    }
+    assertEquals(
+      db.prepare('select status from session where eid = ?').get(sid),
+      { status: null },
+    )
+    assert(heard.some((change) => change.name == 'result'))
+    db.close()
+  },
+)
 
-Deno.test('the generation dispatcher routes by provider to its runner', async () => {
+slow('the generation dispatcher routes by provider to its runner', async () => {
   let db = freshDb()
   // A codex generation reaches the Responses transport and settles clean.
   let sid = session(db)
@@ -331,7 +334,7 @@ Deno.test('the generation dispatcher routes by provider to its runner', async ()
   db.close()
 })
 
-Deno.test('a Session past one entry page still runs its next turn', async () => {
+slow('a Session past one entry page still runs its next turn', async () => {
   let db = freshDb()
   let sid = session(db)
   // 501 turns of prior transcript push the new turn's generation past one
@@ -373,337 +376,355 @@ Deno.test('a Session past one entry page still runs its next turn', async () => 
   db.close()
 })
 
-Deno.test('managed Codex relays typed progress until durable settlement', async () => {
-  let db = freshDb()
-  let tree = Deno.makeTempDirSync(), sid = session(db, tree)
-  let timeline: string[] = []
-  let observed: unknown[] = []
-  let service = managedCodex({
-    db,
-    cast: (changes) => {
-      if (changes.some((change) => change.name == 'output')) {
-        timeline.push('durable')
-      }
-    },
-    transport: {
-      run: (_request, options) => {
-        options?.event?.({
-          type: 'response.reasoning_summary_text.delta',
-          delta: 'checking',
-          hidden: 'provider detail',
-        })
-        options?.event?.({
-          type: 'response.output_item.added',
-          item: {
-            type: 'function_call',
-            name: 'shell',
-            arguments: 'not relayed',
-          },
-        })
-        options?.event?.({
-          type: 'response.output_text.delta',
-          delta: 'almost done',
-        })
-        return Promise.resolve(result([{
-          type: 'message',
-          content: [{ type: 'output_text', text: 'done' }],
-        }]))
+slow(
+  'managed Codex relays typed progress until durable settlement',
+  async () => {
+    let db = freshDb()
+    let tree = Deno.makeTempDirSync(), sid = session(db, tree)
+    let timeline: string[] = []
+    let observed: unknown[] = []
+    let service = managedCodex({
+      db,
+      cast: (changes) => {
+        if (changes.some((change) => change.name == 'output')) {
+          timeline.push('durable')
+        }
       },
-    },
-    tools: () => Promise.resolve(tools([])),
-    prepare: () => Promise.resolve(),
-    observe: (value) => {
-      observed.push(value)
-      timeline.push(value.kind)
-    },
-  })
-
-  await service.start(sid, job(tree))
-  assertEquals(observed, [{
-    session: sid,
-    generation: readEntries(db, sid)[1].eid,
-    kind: 'reasoning',
-    text: 'checking',
-  }, {
-    session: sid,
-    generation: readEntries(db, sid)[1].eid,
-    kind: 'tool',
-    name: 'shell',
-  }, {
-    session: sid,
-    generation: readEntries(db, sid)[1].eid,
-    kind: 'model',
-    text: 'almost done',
-  }, {
-    session: sid,
-    generation: readEntries(db, sid)[1].eid,
-    kind: 'clear',
-  }])
-  assertEquals(timeline, ['reasoning', 'tool', 'model', 'durable', 'clear'])
-  assertEquals(JSON.stringify(observed).includes('provider detail'), false)
-  assertEquals(JSON.stringify(observed).includes('not relayed'), false)
-  db.close()
-})
-
-Deno.test('a reclaimed generation rejects its former lease observations', async () => {
-  let db = freshDb()
-  let tree = Deno.makeTempDirSync(), sid = session(db, tree)
-  writeSession(db, sid, { base_revision: 'base' })
-  let oldResult = Promise.withResolvers<ResponseResult>()
-  let newResult = Promise.withResolvers<ResponseResult>()
-  let oldStarted = Promise.withResolvers<void>()
-  let newStarted = Promise.withResolvers<void>()
-  let stale: ((event: ResponseEvent) => void) | undefined
-  let observed: ({ source: string } & Observation)[] = []
-  let old = managedCodex({
-    db,
-    cast: () => {},
-    clock: () => new Date('2026-08-10T12:00:00Z'),
-    leaseMs: 100,
-    transport: {
-      run: (_request, options) => {
-        stale = options?.event
-        oldStarted.resolve()
-        return oldResult.promise
+      transport: {
+        run: (_request, options) => {
+          options?.event?.({
+            type: 'response.reasoning_summary_text.delta',
+            delta: 'checking',
+            hidden: 'provider detail',
+          })
+          options?.event?.({
+            type: 'response.output_item.added',
+            item: {
+              type: 'function_call',
+              name: 'shell',
+              arguments: 'not relayed',
+            },
+          })
+          options?.event?.({
+            type: 'response.output_text.delta',
+            delta: 'almost done',
+          })
+          return Promise.resolve(result([{
+            type: 'message',
+            content: [{ type: 'output_text', text: 'done' }],
+          }]))
+        },
       },
-    },
-    tools: () => Promise.resolve(tools([])),
-    prepare: () => Promise.resolve(),
-    observe: (value) => observed.push({ source: 'old', ...value }),
-  })
-  let first = old.start(sid, job(tree))
-  await oldStarted.promise
-
-  let replacement = managedCodex({
-    db,
-    cast: () => {},
-    clock: () => new Date('2026-08-10T12:00:01Z'),
-    leaseMs: 100,
-    transport: {
-      run: (_request, options) => {
-        options?.event?.({
-          type: 'response.output_text.delta',
-          delta: 'winner progress',
-        })
-        newStarted.resolve()
-        return newResult.promise
+      tools: () => Promise.resolve(tools([])),
+      prepare: () => Promise.resolve(),
+      observe: (value) => {
+        observed.push(value)
+        timeline.push(value.kind)
       },
-    },
-    tools: () => Promise.resolve(tools([])),
-    prepare: () => Promise.resolve(),
-    observe: (value) => observed.push({ source: 'new', ...value }),
-  })
-  let second = replacement.sweep()
-  await newStarted.promise
-  stale?.({ type: 'response.output_text.delta', delta: 'stale progress' })
-  oldResult.resolve(result([{
-    type: 'message',
-    content: [{ type: 'output_text', text: 'stale result' }],
-  }]))
-  await first
-  assertEquals(observed, [{
-    source: 'new',
-    session: sid,
-    generation: readEntries(db, sid)[1].eid,
-    kind: 'model',
-    text: 'winner progress',
-  }])
+    })
 
-  newResult.resolve(result([{
-    type: 'message',
-    content: [{ type: 'output_text', text: 'winner result' }],
-  }]))
-  await second
-  assertEquals(observed.at(-1), {
-    source: 'new',
-    session: sid,
-    generation: readEntries(db, sid)[1].eid,
-    kind: 'clear',
-  })
-  assertEquals(
-    readEntries(db, sid).at(-1)?.comps.content?.body,
-    'winner result',
-  )
-  db.close()
-})
-
-Deno.test('replayed starts finish preparation without duplicating input', async () => {
-  let db = freshDb()
-  let tree = Deno.makeTempDirSync(), sid = session(db, tree)
-  let prepares = 0, requests = 0
-  let options = () => ({
-    db,
-    cast: () => {},
-    transport: {
-      run: () => {
-        requests++
-        return Promise.resolve(result([{
-          type: 'message',
-          content: [{ type: 'output_text', text: 'settled' }],
-        }]))
-      },
-    },
-    tools: () => Promise.resolve(tools([])),
-    prepare: (eid: string) => {
-      prepares++
-      writeSession(db, eid, { base_revision: 'base' })
-      return Promise.resolve()
-    },
-  })
-  let first = managedCodex(options())
-  await Promise.all([first.start(sid, job(tree)), first.start(sid, job(tree))])
-  let rows = readEntries(db, sid)
-  assertEquals(
-    rows.filter((row) => row.comps.message?.role == 'user').length,
-    1,
-  )
-  assertEquals(rows.filter((row) => row.comps.generation).length, 1)
-  assertEquals(prepares, 1)
-  assertEquals(requests, 1)
-
-  let restarted = managedCodex(options())
-  await restarted.start(sid, job(tree))
-  assertEquals(readEntries(db, sid).length, rows.length)
-  assertEquals(prepares, 1)
-  assertEquals(requests, 1)
-
-  let stranded = session(db, tree), input = uuid(), generation = uuid()
-  append(
-    db,
-    stranded,
-    [{
-      message: { role: 'user' },
-      content: { body: 'already committed' },
+    await service.start(sid, job(tree))
+    assertEquals(observed, [{
+      session: sid,
+      generation: readEntries(db, sid)[1].eid,
+      kind: 'reasoning',
+      text: 'checking',
     }, {
-      generation: {
-        through: input,
-        provider: 'codex',
-        model: 'gpt-requested',
+      session: sid,
+      generation: readEntries(db, sid)[1].eid,
+      kind: 'tool',
+      name: 'shell',
+    }, {
+      session: sid,
+      generation: readEntries(db, sid)[1].eid,
+      kind: 'model',
+      text: 'almost done',
+    }, {
+      session: sid,
+      generation: readEntries(db, sid)[1].eid,
+      kind: 'clear',
+    }])
+    assertEquals(timeline, ['reasoning', 'tool', 'model', 'durable', 'clear'])
+    assertEquals(JSON.stringify(observed).includes('provider detail'), false)
+    assertEquals(JSON.stringify(observed).includes('not relayed'), false)
+    db.close()
+  },
+)
+
+slow(
+  'a reclaimed generation rejects its former lease observations',
+  async () => {
+    let db = freshDb()
+    let tree = Deno.makeTempDirSync(), sid = session(db, tree)
+    writeSession(db, sid, { base_revision: 'base' })
+    let oldResult = Promise.withResolvers<ResponseResult>()
+    let newResult = Promise.withResolvers<ResponseResult>()
+    let oldStarted = Promise.withResolvers<void>()
+    let newStarted = Promise.withResolvers<void>()
+    let stale: ((event: ResponseEvent) => void) | undefined
+    let observed: ({ source: string } & Observation)[] = []
+    let old = managedCodex({
+      db,
+      cast: () => {},
+      clock: () => new Date('2026-08-10T12:00:00Z'),
+      leaseMs: 100,
+      transport: {
+        run: (_request, options) => {
+          stale = options?.event
+          oldStarted.resolve()
+          return oldResult.promise
+        },
       },
-    }],
-    restarted.runner,
-    [input, generation],
-  )
-  await restarted.start(stranded, job(tree))
-  rows = readEntries(db, stranded)
-  assertEquals(
-    rows.filter((row) => row.comps.message?.role == 'user').length,
-    1,
-  )
-  assertEquals(rows.filter((row) => row.comps.generation).length, 1)
-  assertEquals(prepares, 2)
-  assertEquals(requests, 2)
-  db.close()
-})
+      tools: () => Promise.resolve(tools([])),
+      prepare: () => Promise.resolve(),
+      observe: (value) => observed.push({ source: 'old', ...value }),
+    })
+    let first = old.start(sid, job(tree))
+    await oldStarted.promise
 
-Deno.test('projectless starts use Tasks tools without preparing a worktree', async () => {
-  let db = freshDb()
-  let sid = session(db), prepares = 0, requests = 0
-  let trees: (string | undefined)[] = []
-  let options = () => ({
-    db,
-    cast: () => {},
-    transport: {
-      run: () => {
-        requests++
-        return Promise.resolve(result([{
-          type: 'message',
-          content: [{ type: 'output_text', text: 'triaged' }],
-        }]))
+    let replacement = managedCodex({
+      db,
+      cast: () => {},
+      clock: () => new Date('2026-08-10T12:00:01Z'),
+      leaseMs: 100,
+      transport: {
+        run: (_request, options) => {
+          options?.event?.({
+            type: 'response.output_text.delta',
+            delta: 'winner progress',
+          })
+          newStarted.resolve()
+          return newResult.promise
+        },
       },
-    },
-    tools: (tree: string | undefined) => {
-      trees.push(tree)
-      return Promise.resolve({
-        tools: [{
-          type: 'function' as const,
-          name: 'task_context',
-          description: 'test context',
-          parameters: { type: 'object' },
-          strict: true,
-        }],
-        call: () => Promise.resolve({ output: 'context' }),
-      })
-    },
-    prepare: () => {
-      prepares++
-      return Promise.resolve()
-    },
-  })
-
-  let first = managedCodex(options())
-  await first.start(sid, noCodeJob())
-  let entries = readEntries(db, sid)
-  assertEquals(prepares, 0)
-  assertEquals(requests, 1)
-  assertEquals(trees, [undefined])
-  assertEquals(entries.at(-1)?.comps.content.body, 'triaged')
-
-  let restarted = managedCodex(options())
-  await restarted.start(sid, noCodeJob())
-  assertEquals(readEntries(db, sid).length, entries.length)
-  assertEquals(prepares, 0)
-  assertEquals(requests, 1)
-  db.close()
-})
-
-Deno.test('a comment continues through one content-free attention entry', async () => {
-  let db = freshDb()
-  let tree = Deno.makeTempDirSync(),
-    sid = session(db, tree),
-    called: string[] = []
-  let requests: Record<string, unknown>[] = []
-  let queue = [
-    result([{
+      tools: () => Promise.resolve(tools([])),
+      prepare: () => Promise.resolve(),
+      observe: (value) => observed.push({ source: 'new', ...value }),
+    })
+    let second = replacement.sweep()
+    await newStarted.promise
+    stale?.({ type: 'response.output_text.delta', delta: 'stale progress' })
+    oldResult.resolve(result([{
       type: 'message',
-      content: [{ type: 'output_text', text: 'idle' }],
-    }]),
-    result([{
-      type: 'function_call',
-      call_id: 'context-1',
-      name: 'task_context',
-      arguments: '{}',
-    }]),
-    result([{
+      content: [{ type: 'output_text', text: 'stale result' }],
+    }]))
+    await first
+    assertEquals(observed, [{
+      source: 'new',
+      session: sid,
+      generation: readEntries(db, sid)[1].eid,
+      kind: 'model',
+      text: 'winner progress',
+    }])
+
+    newResult.resolve(result([{
       type: 'message',
-      content: [{ type: 'output_text', text: 'heard' }],
-    }]),
-  ]
-  let service = managedCodex({
-    db,
-    cast: () => {},
-    transport: {
-      run: (request) => {
-        requests.push(request)
-        return Promise.resolve(queue.shift()!)
+      content: [{ type: 'output_text', text: 'winner result' }],
+    }]))
+    await second
+    assertEquals(observed.at(-1), {
+      source: 'new',
+      session: sid,
+      generation: readEntries(db, sid)[1].eid,
+      kind: 'clear',
+    })
+    assertEquals(
+      readEntries(db, sid).at(-1)?.comps.content?.body,
+      'winner result',
+    )
+    db.close()
+  },
+)
+
+slow(
+  'replayed starts finish preparation without duplicating input',
+  async () => {
+    let db = freshDb()
+    let tree = Deno.makeTempDirSync(), sid = session(db, tree)
+    let prepares = 0, requests = 0
+    let options = () => ({
+      db,
+      cast: () => {},
+      transport: {
+        run: () => {
+          requests++
+          return Promise.resolve(result([{
+            type: 'message',
+            content: [{ type: 'output_text', text: 'settled' }],
+          }]))
+        },
       },
-    },
-    tools: () => Promise.resolve(tools(called)),
-    prepare: () => Promise.resolve(),
-  })
-  await service.start(sid, job(tree))
-  let comment = uuid()
-  apply(db, [
-    { eid: comment, name: 'doc', comp: { title: '', body: 'secret words' } },
-    { eid: comment, name: 'comment', comp: { target: sid } },
-  ])
-  service.comment(sid, comment)
-  await service.sweep()
+      tools: () => Promise.resolve(tools([])),
+      prepare: (eid: string) => {
+        prepares++
+        writeSession(db, eid, { base_revision: 'base' })
+        return Promise.resolve()
+      },
+    })
+    let first = managedCodex(options())
+    await Promise.all([
+      first.start(sid, job(tree)),
+      first.start(sid, job(tree)),
+    ])
+    let rows = readEntries(db, sid)
+    assertEquals(
+      rows.filter((row) => row.comps.message?.role == 'user').length,
+      1,
+    )
+    assertEquals(rows.filter((row) => row.comps.generation).length, 1)
+    assertEquals(prepares, 1)
+    assertEquals(requests, 1)
 
-  let rows = readEntries(db, sid)
-  assertEquals(rows.filter((row) => row.comps.attention).length, 1)
-  assertEquals(
-    rows.some((row) => row.comps.content?.body == 'secret words'),
-    false,
-  )
-  assertEquals(called, ['task_context'])
-  let replay = JSON.stringify(requests[1].input)
-  assertMatch(replay, /Task Graph has pending messages/)
-  assertEquals(replay.includes('secret words'), false)
-  db.close()
-})
+    let restarted = managedCodex(options())
+    await restarted.start(sid, job(tree))
+    assertEquals(readEntries(db, sid).length, rows.length)
+    assertEquals(prepares, 1)
+    assertEquals(requests, 1)
 
-Deno.test('an appended user message continues in the ordered log', async () => {
+    let stranded = session(db, tree), input = uuid(), generation = uuid()
+    append(
+      db,
+      stranded,
+      [{
+        message: { role: 'user' },
+        content: { body: 'already committed' },
+      }, {
+        generation: {
+          through: input,
+          provider: 'codex',
+          model: 'gpt-requested',
+        },
+      }],
+      restarted.runner,
+      [input, generation],
+    )
+    await restarted.start(stranded, job(tree))
+    rows = readEntries(db, stranded)
+    assertEquals(
+      rows.filter((row) => row.comps.message?.role == 'user').length,
+      1,
+    )
+    assertEquals(rows.filter((row) => row.comps.generation).length, 1)
+    assertEquals(prepares, 2)
+    assertEquals(requests, 2)
+    db.close()
+  },
+)
+
+slow(
+  'projectless starts use Tasks tools without preparing a worktree',
+  async () => {
+    let db = freshDb()
+    let sid = session(db), prepares = 0, requests = 0
+    let trees: (string | undefined)[] = []
+    let options = () => ({
+      db,
+      cast: () => {},
+      transport: {
+        run: () => {
+          requests++
+          return Promise.resolve(result([{
+            type: 'message',
+            content: [{ type: 'output_text', text: 'triaged' }],
+          }]))
+        },
+      },
+      tools: (tree: string | undefined) => {
+        trees.push(tree)
+        return Promise.resolve({
+          tools: [{
+            type: 'function' as const,
+            name: 'task_context',
+            description: 'test context',
+            parameters: { type: 'object' },
+            strict: true,
+          }],
+          call: () => Promise.resolve({ output: 'context' }),
+        })
+      },
+      prepare: () => {
+        prepares++
+        return Promise.resolve()
+      },
+    })
+
+    let first = managedCodex(options())
+    await first.start(sid, noCodeJob())
+    let entries = readEntries(db, sid)
+    assertEquals(prepares, 0)
+    assertEquals(requests, 1)
+    assertEquals(trees, [undefined])
+    assertEquals(entries.at(-1)?.comps.content.body, 'triaged')
+
+    let restarted = managedCodex(options())
+    await restarted.start(sid, noCodeJob())
+    assertEquals(readEntries(db, sid).length, entries.length)
+    assertEquals(prepares, 0)
+    assertEquals(requests, 1)
+    db.close()
+  },
+)
+
+slow(
+  'a comment continues through one content-free attention entry',
+  async () => {
+    let db = freshDb()
+    let tree = Deno.makeTempDirSync(),
+      sid = session(db, tree),
+      called: string[] = []
+    let requests: Record<string, unknown>[] = []
+    let queue = [
+      result([{
+        type: 'message',
+        content: [{ type: 'output_text', text: 'idle' }],
+      }]),
+      result([{
+        type: 'function_call',
+        call_id: 'context-1',
+        name: 'task_context',
+        arguments: '{}',
+      }]),
+      result([{
+        type: 'message',
+        content: [{ type: 'output_text', text: 'heard' }],
+      }]),
+    ]
+    let service = managedCodex({
+      db,
+      cast: () => {},
+      transport: {
+        run: (request) => {
+          requests.push(request)
+          return Promise.resolve(queue.shift()!)
+        },
+      },
+      tools: () => Promise.resolve(tools(called)),
+      prepare: () => Promise.resolve(),
+    })
+    await service.start(sid, job(tree))
+    let comment = uuid()
+    apply(db, [
+      { eid: comment, name: 'doc', comp: { title: '', body: 'secret words' } },
+      { eid: comment, name: 'comment', comp: { target: sid } },
+    ])
+    service.comment(sid, comment)
+    await service.sweep()
+
+    let rows = readEntries(db, sid)
+    assertEquals(rows.filter((row) => row.comps.attention).length, 1)
+    assertEquals(
+      rows.some((row) => row.comps.content?.body == 'secret words'),
+      false,
+    )
+    assertEquals(called, ['task_context'])
+    let replay = JSON.stringify(requests[1].input)
+    assertMatch(replay, /Task Graph has pending messages/)
+    assertEquals(replay.includes('secret words'), false)
+    db.close()
+  },
+)
+
+slow('an appended user message continues in the ordered log', async () => {
   let db = freshDb()
   let tree = Deno.makeTempDirSync(), sid = session(db, tree)
   let requests: Record<string, unknown>[] = []
@@ -749,7 +770,7 @@ Deno.test('an appended user message continues in the ordered log', async () => {
   db.close()
 })
 
-Deno.test('attention during a generation waits for its next boundary', async () => {
+slow('attention during a generation waits for its next boundary', async () => {
   let db = freshDb()
   let tree = Deno.makeTempDirSync(), sid = session(db, tree)
   let started = Promise.withResolvers<void>()
@@ -799,7 +820,7 @@ Deno.test('attention during a generation waits for its next boundary', async () 
   db.close()
 })
 
-Deno.test('comments on claimed work wake its graph-native holder', async () => {
+slow('comments on claimed work wake its graph-native holder', async () => {
   let db = freshDb()
   let tree = Deno.makeTempDirSync(), sid = session(db, tree)
   let called: string[] = [], requests: Record<string, unknown>[] = []
@@ -884,7 +905,7 @@ Deno.test('comments on claimed work wake its graph-native holder', async () => {
   db.close()
 })
 
-Deno.test('a failed generation consumes its wake and accepts the next', async () => {
+slow('a failed generation consumes its wake and accepts the next', async () => {
   let db = freshDb()
   let tree = Deno.makeTempDirSync(), sid = session(db, tree), calls = 0
   let service = managedCodex({
@@ -933,118 +954,124 @@ Deno.test('a failed generation consumes its wake and accepts the next', async ()
   db.close()
 })
 
-Deno.test('a failed generation persists the provider reason, not the bare status', async () => {
-  // End to end through the real Responses transport: a 400 whose complaint
-  // lives only in the body `message` must reach the session as a BREAK, or a
-  // graph-native failure reads as the useless `responses: HTTP 400` (T-16887).
-  // The fault is our own malformed request → the `exception` facet (T-17081).
-  let db = freshDb()
-  let sid = session(db)
-  let transport = responses({
-    credentials: { get: () => Promise.resolve({ token: 'secret-token' }) },
-    fetch: () =>
-      Promise.resolve(
-        new Response(
-          JSON.stringify({
-            error: {
-              message: 'No tool output found for function call call_7.',
-              type: 'invalid_request_error',
-              code: null,
-            },
-          }),
-          { status: 400 },
+slow(
+  'a failed generation persists the provider reason, not the bare status',
+  async () => {
+    // End to end through the real Responses transport: a 400 whose complaint
+    // lives only in the body `message` must reach the session as a BREAK, or a
+    // graph-native failure reads as the useless `responses: HTTP 400` (T-16887).
+    // The fault is our own malformed request → the `exception` facet (T-17081).
+    let db = freshDb()
+    let sid = session(db)
+    let transport = responses({
+      credentials: { get: () => Promise.resolve({ token: 'secret-token' }) },
+      fetch: () =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              error: {
+                message: 'No tool output found for function call call_7.',
+                type: 'invalid_request_error',
+                code: null,
+              },
+            }),
+            { status: 400 },
+          ),
         ),
-      ),
-  })
-  let service = managedCodex({
-    db,
-    cast: () => {},
-    transport,
-    tools: () => Promise.resolve(tools([])),
-    prepare: () => Promise.resolve(),
-  })
-  await service.start(sid, noCodeJob())
-  let broke = db.prepare('select message from exception where eid = ?').get(
-    sid,
-  ) as { message: string } | undefined
-  assertEquals(
-    broke?.message,
-    'responses: HTTP 400 — No tool output found for function call call_7.',
-  )
-  // A break, not a known error: it wears `exception`, not `error`.
-  assertEquals(
-    db.prepare('select 1 from error where eid = ?').get(sid),
-    undefined,
-  )
-  db.close()
-})
+    })
+    let service = managedCodex({
+      db,
+      cast: () => {},
+      transport,
+      tools: () => Promise.resolve(tools([])),
+      prepare: () => Promise.resolve(),
+    })
+    await service.start(sid, noCodeJob())
+    let broke = db.prepare('select message from exception where eid = ?').get(
+      sid,
+    ) as { message: string } | undefined
+    assertEquals(
+      broke?.message,
+      'responses: HTTP 400 — No tool output found for function call call_7.',
+    )
+    // A break, not a known error: it wears `exception`, not `error`.
+    assertEquals(
+      db.prepare('select 1 from error where eid = ?').get(sid),
+      undefined,
+    )
+    db.close()
+  },
+)
 
-Deno.test('stop aborts the leased generation and refuses its late output', async () => {
-  let db = freshDb()
-  let tree = Deno.makeTempDirSync(),
-    sid = session(db, tree),
-    started = Promise.withResolvers<void>(),
-    calls = 0
-  let service = managedCodex({
-    db,
-    cast: () => {},
-    transport: {
-      run: (_request, options) => {
-        if (!calls++) {
-          started.resolve()
-          return new Promise((_resolve, reject) =>
-            options?.signal?.addEventListener(
-              'abort',
-              () => reject(new DOMException('stopped', 'AbortError')),
-              { once: true },
+slow(
+  'stop aborts the leased generation and refuses its late output',
+  async () => {
+    let db = freshDb()
+    let tree = Deno.makeTempDirSync(),
+      sid = session(db, tree),
+      started = Promise.withResolvers<void>(),
+      calls = 0
+    let service = managedCodex({
+      db,
+      cast: () => {},
+      transport: {
+        run: (_request, options) => {
+          if (!calls++) {
+            started.resolve()
+            return new Promise((_resolve, reject) =>
+              options?.signal?.addEventListener(
+                'abort',
+                () => reject(new DOMException('stopped', 'AbortError')),
+                { once: true },
+              )
             )
-          )
-        }
-        return Promise.resolve(result([{
-          type: 'message',
-          content: [{ type: 'output_text', text: 'resumed after stop' }],
-        }]))
+          }
+          return Promise.resolve(result([{
+            type: 'message',
+            content: [{ type: 'output_text', text: 'resumed after stop' }],
+          }]))
+        },
       },
-    },
-    tools: () => Promise.resolve(tools([])),
-    prepare: () => Promise.resolve(),
-  })
-  let running = service.start(sid, job(tree))
-  await started.promise
-  let request = uuid()
-  apply(db, [{ eid: request, name: 'stop_request', comp: { target: sid } }])
-  assertEquals(await service.stop(request, sid), true)
-  await running
+      tools: () => Promise.resolve(tools([])),
+      prepare: () => Promise.resolve(),
+    })
+    let running = service.start(sid, job(tree))
+    await started.promise
+    let request = uuid()
+    apply(db, [{ eid: request, name: 'stop_request', comp: { target: sid } }])
+    assertEquals(await service.stop(request, sid), true)
+    await running
 
-  let rows = readEntries(db, sid)
-  assertEquals(rows.filter((row) => row.comps.cancel).length, 1)
-  assertEquals(rows.some((row) => row.comps.output), false)
-  // A stop is normal machinery, NEVER a break (T-17081): the aborted generation
-  // is screened by valid() before sessionFault, so neither the Session nor its
-  // cancelled entry wears an `exception` — nothing for self-healing to fix.
-  assertEquals(
-    db.prepare('select 1 from exception where eid = ?').get(sid),
-    undefined,
-  )
-  assertEquals(rows.some((row) => row.comps.exception), false)
-  assertEquals(
-    !!db.prepare('select 1 from delivered where eid = ?').get(request),
-    true,
-  )
-  let comment = uuid()
-  apply(db, [
-    { eid: comment, name: 'doc', comp: { title: '', body: 'resume' } },
-    { eid: comment, name: 'comment', comp: { target: sid } },
-  ])
-  service.comment(sid, comment)
-  await service.sweep()
-  rows = readEntries(db, sid)
-  assertEquals(rows.filter((row) => row.comps.generation).length, 2)
-  assertEquals(rows.at(-1)?.comps.content?.body, 'resumed after stop')
-  db.close()
-})
+    let rows = readEntries(db, sid)
+    assertEquals(rows.filter((row) => row.comps.cancel).length, 1)
+    assertEquals(rows.some((row) => row.comps.output), false)
+    // A stop is normal machinery, NEVER a break (T-17081): the aborted generation
+    // is screened by valid() before sessionFault, so neither the Session nor its
+    // cancelled entry wears an `exception` — nothing for self-healing to fix.
+    assertEquals(
+      db.prepare('select 1 from exception where eid = ?').get(sid),
+      undefined,
+    )
+    assertEquals(rows.some((row) => row.comps.exception), false)
+    assertEquals(
+      !!db.prepare('select 1 from delivered where eid = ?').get(request),
+      true,
+    )
+    let comment = uuid()
+    apply(db, [
+      { eid: comment, name: 'doc', comp: { title: '', body: 'resume' } },
+      { eid: comment, name: 'comment', comp: { target: sid } },
+    ])
+    service.comment(sid, comment)
+    await service.sweep()
+    rows = readEntries(db, sid)
+    assertEquals(rows.filter((row) => row.comps.generation).length, 2)
+    assertEquals(rows.at(-1)?.comps.content?.body, 'resumed after stop')
+    db.close()
+  },
+)
 
-Deno.test('deleting a Session aborts its flight after entry cascades', async () => {
+slow('deleting a Session aborts its flight after entry cascades', async () => {
   let db = freshDb()
   let tree = Deno.makeTempDirSync(), sid = session(db, tree)
   let started = Promise.withResolvers<void>(), aborted = false
@@ -1076,7 +1103,7 @@ Deno.test('deleting a Session aborts its flight after entry cascades', async () 
   db.close()
 })
 
-Deno.test('restart reclaims a lost generation without minting another', async () => {
+slow('restart reclaims a lost generation without minting another', async () => {
   let db = freshDb()
   let tree = Deno.makeTempDirSync()
   let sid = session(db, tree), old = uuid(), calls = 0
@@ -1129,7 +1156,7 @@ Deno.test('restart reclaims a lost generation without minting another', async ()
   db.close()
 })
 
-Deno.test('restart reclaims graph_query on the same call entry', async () => {
+slow('restart reclaims graph_query on the same call entry', async () => {
   let db = freshDb()
   let tree = Deno.makeTempDirSync()
   let sid = session(db, tree), old = uuid(), calls = 0
@@ -1191,7 +1218,7 @@ Deno.test('restart reclaims graph_query on the same call entry', async () => {
   db.close()
 })
 
-Deno.test('restart leaves an uncertain side-effecting call ambiguous', async () => {
+slow('restart leaves an uncertain side-effecting call ambiguous', async () => {
   let db = freshDb()
   let tree = Deno.makeTempDirSync()
   let sid = session(db, tree), old = uuid(), calls = 0
@@ -1283,86 +1310,89 @@ slow('an abandoned lease wakes the runner at its deadline', async () => {
   db.close()
 })
 
-Deno.test('a killed in-flight call recovers: replay pairs the orphaned call with an output', async () => {
-  // The real poison (S-16840/S-16872): a hosted shell call in flight when the
-  // runner died, reconciled to an error with no result. Before the fix the next
-  // generation's Responses input carried an orphaned function_call and every
-  // resume returned HTTP 400. Drive the whole path — reconciliation, advance,
-  // project, transport — and assert the input the provider sees is valid and the
-  // session recovers.
-  let db = freshDb()
-  let tree = Deno.makeTempDirSync()
-  let sid = session(db, tree), old = uuid()
-  writeSession(db, sid, { base_revision: 'base' })
-  apply(db, [{ eid: old, name: 'runner', comp: { name: 'old' } }])
-  let input = append(db, sid, [{ message: { role: 'user' } }]).eids[0]
-  let generation = append(db, sid, [{
-    generation: { through: input, provider: 'codex', model: 'gpt-requested' },
-  }]).eids[0]
-  let lease = takeEntry(db, generation, old)!
-  append(db, sid, [{
-    output: { source: generation },
-    call: { key: 'call_orphan' },
-    bash: { command: 'git commit -m rescue-me' },
-  }], old)
-  settleGeneration(db, lease.token)
-  let call = readEntries(db, sid).at(-1)!.eid
-  // The call is leased by the dead runner and its lease has already expired.
-  takeEntry(db, call, old, 100, () => new Date('2026-08-10T12:00:00Z'))
+slow(
+  'a killed in-flight call recovers: replay pairs the orphaned call with an output',
+  async () => {
+    // The real poison (S-16840/S-16872): a hosted shell call in flight when the
+    // runner died, reconciled to an error with no result. Before the fix the next
+    // generation's Responses input carried an orphaned function_call and every
+    // resume returned HTTP 400. Drive the whole path — reconciliation, advance,
+    // project, transport — and assert the input the provider sees is valid and the
+    // session recovers.
+    let db = freshDb()
+    let tree = Deno.makeTempDirSync()
+    let sid = session(db, tree), old = uuid()
+    writeSession(db, sid, { base_revision: 'base' })
+    apply(db, [{ eid: old, name: 'runner', comp: { name: 'old' } }])
+    let input = append(db, sid, [{ message: { role: 'user' } }]).eids[0]
+    let generation = append(db, sid, [{
+      generation: { through: input, provider: 'codex', model: 'gpt-requested' },
+    }]).eids[0]
+    let lease = takeEntry(db, generation, old)!
+    append(db, sid, [{
+      output: { source: generation },
+      call: { key: 'call_orphan' },
+      bash: { command: 'git commit -m rescue-me' },
+    }], old)
+    settleGeneration(db, lease.token)
+    let call = readEntries(db, sid).at(-1)!.eid
+    // The call is leased by the dead runner and its lease has already expired.
+    takeEntry(db, call, old, 100, () => new Date('2026-08-10T12:00:00Z'))
 
-  let inputs: unknown[][] = []
-  let service = managedCodex({
-    db,
-    cast: () => {},
-    clock: () => new Date('2026-08-10T12:00:01Z'),
-    transport: {
-      run: (request) => {
-        let items = request.input as { type?: string; call_id?: string }[]
-        inputs.push(items)
-        let calls = items.filter((item) => item.type == 'function_call')
-        let outputs = new Set(
-          items.filter((item) => item.type == 'function_call_output')
-            .map((item) => item.call_id),
-        )
-        let orphan = calls.find((item) => !outputs.has(item.call_id))
-        if (orphan) {
-          throw new Error(`orphaned function_call ${orphan.call_id} in input`)
-        }
-        return Promise.resolve(result([{
-          type: 'message',
-          content: [{ type: 'output_text', text: 'recovered and landed' }],
-        }]))
+    let inputs: unknown[][] = []
+    let service = managedCodex({
+      db,
+      cast: () => {},
+      clock: () => new Date('2026-08-10T12:00:01Z'),
+      transport: {
+        run: (request) => {
+          let items = request.input as { type?: string; call_id?: string }[]
+          inputs.push(items)
+          let calls = items.filter((item) => item.type == 'function_call')
+          let outputs = new Set(
+            items.filter((item) => item.type == 'function_call_output')
+              .map((item) => item.call_id),
+          )
+          let orphan = calls.find((item) => !outputs.has(item.call_id))
+          if (orphan) {
+            throw new Error(`orphaned function_call ${orphan.call_id} in input`)
+          }
+          return Promise.resolve(result([{
+            type: 'message',
+            content: [{ type: 'output_text', text: 'recovered and landed' }],
+          }]))
+        },
       },
-    },
-    tools: () => Promise.resolve(tools([])),
-    prepare: () => Promise.resolve(),
-  })
-  await service.sweep()
+      tools: () => Promise.resolve(tools([])),
+      prepare: () => Promise.resolve(),
+    })
+    await service.sweep()
 
-  let rows = readEntries(db, sid)
-  // Reconciliation happened: the orphaned call is errored, no fabricated result.
-  let callRow = rows.find((row) => row.eid == call)!
-  assertMatch(String(callRow.comps.error.message), /outcome is ambiguous/)
-  assertEquals(rows.some((row) => row.comps.result?.call == call), false)
-  // The provider saw a valid input: the orphaned call paired with an output.
-  let replay = inputs.at(-1)! as { type?: string; call_id?: string }[]
-  assertEquals(replay.some((item) => item.type == 'function_call'), true)
-  assertEquals(
-    replay.some((item) =>
-      item.type == 'function_call_output' && item.call_id == 'call_orphan'
-    ),
-    true,
-  )
-  // The session recovered end to end, with no lingering error.
-  assertEquals(rows.at(-1)?.comps.content?.body, 'recovered and landed')
-  assertEquals(
-    db.prepare('select 1 from error where eid = ?').get(sid),
-    undefined,
-  )
-  db.close()
-})
+    let rows = readEntries(db, sid)
+    // Reconciliation happened: the orphaned call is errored, no fabricated result.
+    let callRow = rows.find((row) => row.eid == call)!
+    assertMatch(String(callRow.comps.error.message), /outcome is ambiguous/)
+    assertEquals(rows.some((row) => row.comps.result?.call == call), false)
+    // The provider saw a valid input: the orphaned call paired with an output.
+    let replay = inputs.at(-1)! as { type?: string; call_id?: string }[]
+    assertEquals(replay.some((item) => item.type == 'function_call'), true)
+    assertEquals(
+      replay.some((item) =>
+        item.type == 'function_call_output' && item.call_id == 'call_orphan'
+      ),
+      true,
+    )
+    // The session recovered end to end, with no lingering error.
+    assertEquals(rows.at(-1)?.comps.content?.body, 'recovered and landed')
+    assertEquals(
+      db.prepare('select 1 from error where eid = ?').get(sid),
+      undefined,
+    )
+    db.close()
+  },
+)
 
-Deno.test('restart settles durable generation and call evidence', async () => {
+slow('restart settles durable generation and call evidence', async () => {
   let db = freshDb()
   let tree = Deno.makeTempDirSync(), sid = session(db, tree)
   let old = uuid(), calls = 0
@@ -1431,54 +1461,57 @@ Deno.test('restart settles durable generation and call evidence', async () => {
   db.close()
 })
 
-Deno.test('drain settles the in-flight generation and leaves new work ready', async () => {
-  let db = freshDb()
-  let tree = Deno.makeTempDirSync(), sid = session(db, tree)
-  writeSession(db, sid, { base_revision: 'base' })
-  let started = Promise.withResolvers<void>()
-  let gate = Promise.withResolvers<ResponseResult>()
-  let calls = 0
-  let service = managedCodex({
-    db,
-    cast: () => {},
-    transport: {
-      run: () => {
-        if (!calls++) {
-          started.resolve()
-          return gate.promise
-        }
-        return Promise.resolve(result([{
-          type: 'message',
-          content: [{ type: 'output_text', text: 'unreached' }],
-        }]))
+slow(
+  'drain settles the in-flight generation and leaves new work ready',
+  async () => {
+    let db = freshDb()
+    let tree = Deno.makeTempDirSync(), sid = session(db, tree)
+    writeSession(db, sid, { base_revision: 'base' })
+    let started = Promise.withResolvers<void>()
+    let gate = Promise.withResolvers<ResponseResult>()
+    let calls = 0
+    let service = managedCodex({
+      db,
+      cast: () => {},
+      transport: {
+        run: () => {
+          if (!calls++) {
+            started.resolve()
+            return gate.promise
+          }
+          return Promise.resolve(result([{
+            type: 'message',
+            content: [{ type: 'output_text', text: 'unreached' }],
+          }]))
+        },
       },
-    },
-    tools: () => Promise.resolve(tools([])),
-    prepare: () => Promise.resolve(),
-  })
-  let running = service.start(sid, job(tree))
-  await started.promise
-  // Drain, then let the held generation complete with a follow-on tool call.
-  let drained = service.settle(5000)
-  gate.resolve(result([shellCall('printf hi')]))
-  await drained
-  await running
+      tools: () => Promise.resolve(tools([])),
+      prepare: () => Promise.resolve(),
+    })
+    let running = service.start(sid, job(tree))
+    await started.promise
+    // Drain, then let the held generation complete with a follow-on tool call.
+    let drained = service.settle(5000)
+    gate.resolve(result([shellCall('printf hi')]))
+    await drained
+    await running
 
-  let rows = readEntries(db, sid)
-  let generation = rows.find((row) => row.comps.generation)!
-  // The in-flight generation reached a settled boundary.
-  assert(generation.comps.delivered)
-  assertEquals(generation.comps.lease, undefined)
-  assertEquals(generation.comps.error, undefined)
-  // Its follow-on tool call was never started: it sits ready for the successor.
-  let call = rows.find((row) => row.comps.call)!
-  assertEquals(call.comps.lease, undefined)
-  assertEquals(call.comps.result, undefined)
-  assertEquals(call.comps.error, undefined)
-  assertEquals(readyEntries(db, sid).map((e) => e.eid), [call.eid])
-  assertEquals(calls, 1)
-  db.close()
-})
+    let rows = readEntries(db, sid)
+    let generation = rows.find((row) => row.comps.generation)!
+    // The in-flight generation reached a settled boundary.
+    assert(generation.comps.delivered)
+    assertEquals(generation.comps.lease, undefined)
+    assertEquals(generation.comps.error, undefined)
+    // Its follow-on tool call was never started: it sits ready for the successor.
+    let call = rows.find((row) => row.comps.call)!
+    assertEquals(call.comps.lease, undefined)
+    assertEquals(call.comps.result, undefined)
+    assertEquals(call.comps.error, undefined)
+    assertEquals(readyEntries(db, sid).map((e) => e.eid), [call.eid])
+    assertEquals(calls, 1)
+    db.close()
+  },
+)
 
 slow(
   'the heartbeat keeps a generation outliving its lease TTL fresh',
@@ -1599,209 +1632,218 @@ slow(
   },
 )
 
-Deno.test('graph-native compaction bounds replay across a restart and a later turn', async () => {
-  let db = freshDb()
-  let tree = Deno.makeTempDirSync(), sid = session(db, tree)
-  // A preset base_revision makes the Session runnable for any daemon instance,
-  // so the restart picks up pending work straight from the graph.
-  writeSession(db, sid, { base_revision: 'base' })
-  let instructionMark = `ORIGINAL_INSTRUCTION_${uuid()}`
-  let compactionMark = `COMPACTION_BLOB_${uuid()}`
+slow(
+  'graph-native compaction bounds replay across a restart and a later turn',
+  async () => {
+    let db = freshDb()
+    let tree = Deno.makeTempDirSync(), sid = session(db, tree)
+    // A preset base_revision makes the Session runnable for any daemon instance,
+    // so the restart picks up pending work straight from the graph.
+    writeSession(db, sid, { base_revision: 'base' })
+    let instructionMark = `ORIGINAL_INSTRUCTION_${uuid()}`
+    let compactionMark = `COMPACTION_BLOB_${uuid()}`
 
-  // One provider result carrying explicit usage, so context telemetry is
-  // traceable per turn.
-  let reply = (
-    items: ResponseResult['items'],
-    input: number,
-  ): ResponseResult => ({
-    model: 'gpt-serving',
-    items,
-    unknown: [],
-    unknownItems: [],
-    usage: { input, cached: 0, output: 5, reasoning: 2, raw: {} },
-    response: {},
-    limits: {},
-  })
-  let shell = (id: string, command: string) => ({
-    type: 'function_call',
-    id,
-    call_id: id,
-    name: 'shell',
-    arguments: JSON.stringify({ command, cwd: null, timeout_ms: 1000 }),
-  })
-  let compaction = {
-    type: 'compaction',
-    id: 'compact-1',
-    summary: [{ type: 'summary_text', text: 'portable running summary' }],
-    encrypted_content: compactionMark,
-  }
+    // One provider result carrying explicit usage, so context telemetry is
+    // traceable per turn.
+    let reply = (
+      items: ResponseResult['items'],
+      input: number,
+    ): ResponseResult => ({
+      model: 'gpt-serving',
+      items,
+      unknown: [],
+      unknownItems: [],
+      usage: { input, cached: 0, output: 5, reasoning: 2, raw: {} },
+      response: {},
+      limits: {},
+    })
+    let shell = (id: string, command: string) => ({
+      type: 'function_call',
+      id,
+      call_id: id,
+      name: 'shell',
+      arguments: JSON.stringify({ command, cwd: null, timeout_ms: 1000 }),
+    })
+    let compaction = {
+      type: 'compaction',
+      id: 'compact-1',
+      summary: [{ type: 'summary_text', text: 'portable running summary' }],
+      encrypted_content: compactionMark,
+    }
 
-  // Requests and replies are shared closures, so the second daemon instance
-  // continues the same provider conversation a restart would.
-  let requests: Record<string, unknown>[] = []
-  let replies = [
-    reply([shell('call-1', 'printf one')], 250_000), // pre-compaction, large
-    reply([compaction, shell('call-2', 'printf two')], 260_000), // compacts
-    reply([{
+    // Requests and replies are shared closures, so the second daemon instance
+    // continues the same provider conversation a restart would.
+    let requests: Record<string, unknown>[] = []
+    let replies = [
+      reply([shell('call-1', 'printf one')], 250_000), // pre-compaction, large
+      reply([compaction, shell('call-2', 'printf two')], 260_000), // compacts
+      reply([{
+        type: 'message',
+        id: 'phase-one',
+        content: [{ type: 'output_text', text: 'phase one done' }],
+      }], 42_000), // post-compaction, bounded
+    ]
+    let options = (): ManagedCodexOptions => ({
+      db,
+      cast: () => {},
+      transport: {
+        run: (request) => {
+          requests.push(request)
+          return Promise.resolve(replies.shift()!)
+        },
+      },
+      tools: () => Promise.resolve(tools([])),
+      prepare: () => Promise.resolve(),
+    })
+
+    let service = managedCodex(options())
+    await service.start(sid, {
+      ...job(tree),
+      instruction: `${instructionMark} run the long chain`,
+    })
+    assertEquals(
+      readEntries(db, sid).filter((row) => row.comps.message?.role == 'agent')
+        .at(-1)?.comps.content.body,
+      'phase one done',
+    )
+    // A checkpoint entry was retained from the compaction item, its immutable
+    // audit prefix untouched.
+    let checkpoint = readEntries(db, sid).find((row) => row.comps.checkpoint)!
+    assertEquals(checkpoint.comps.opaque.format, 'openai:compaction')
+
+    // The request that ran the generation AFTER the compaction is bounded: it
+    // carries the compaction item, not the original instruction.
+    let bounded = requests.at(-1)!
+    let boundedInput = JSON.stringify(bounded.input)
+    assertEquals(boundedInput.includes(compactionMark), true)
+    assertEquals(boundedInput.includes(instructionMark), false)
+    // The first request, before any checkpoint existed, did carry the original.
+    assertEquals(
+      JSON.stringify(requests[0].input).includes(instructionMark),
+      true,
+    )
+
+    // A DIFFERENT daemon instance (restart) with no shared in-memory state, plus
+    // a later user turn, still replays a bounded request derived from entries.
+    replies.push(reply([{
       type: 'message',
-      id: 'phase-one',
-      content: [{ type: 'output_text', text: 'phase one done' }],
-    }], 42_000), // post-compaction, bounded
-  ]
-  let options = (): ManagedCodexOptions => ({
-    db,
-    cast: () => {},
-    transport: {
-      run: (request) => {
-        requests.push(request)
-        return Promise.resolve(replies.shift()!)
+      id: 'phase-two',
+      content: [{ type: 'output_text', text: 'phase two done' }],
+    }], 44_000))
+    let restarted = managedCodex(options())
+    append(db, sid, [{
+      message: { role: 'user' },
+      content: { body: 'now do phase two' },
+    }], restarted.runner)
+    await restarted.sweep()
+
+    let afterRestart = requests.at(-1)!
+    let restartInput = JSON.stringify(afterRestart.input)
+    assertEquals(restartInput.includes(compactionMark), true)
+    assertEquals(restartInput.includes(instructionMark), false)
+    assertEquals(restartInput.includes('now do phase two'), true)
+    assertEquals(
+      readEntries(db, sid).filter((row) => row.comps.message?.role == 'agent')
+        .at(-1)?.comps.content.body,
+      'phase two done',
+    )
+
+    // The full transcript still renders from entries: the original instruction,
+    // both tool calls, and the checkpoint are all present.
+    let log = graphLog(readEntries(db, sid))
+    let rendered = JSON.stringify(log.entries)
+    assertEquals(rendered.includes(instructionMark), true)
+    assertEquals(
+      log.entries.some((entry) =>
+        entry.row?.kind == 'sys' &&
+        entry.row.tag == 'checkpoint'
+      ),
+      true,
+    )
+    assertEquals(
+      log.entries.filter((entry) => entry.row?.kind == 'exec').length,
+      2,
+    )
+    // Context telemetry reflects the post-compaction request, not the pre.
+    assertEquals(log.context, 44_000)
+
+    // Every provider request kept store:false is not the concern here; every
+    // usage the graph recorded came from its own bounded turn.
+    assertEquals(
+      readEntries(db, sid).filter((row) => row.comps.usage)
+        .map((row) => Number(row.comps.usage.input)),
+      [250_000, 260_000, 42_000, 44_000],
+    )
+    db.close()
+  },
+)
+
+slow(
+  'provider execution reads only a checkpoint tail after a long prefix',
+  async () => {
+    let db = freshDb()
+    let sid = session(db)
+    writeSession(db, sid, { base_revision: 'base' })
+    let begin = uuid(), source = uuid()
+    append(
+      db,
+      sid,
+      [
+        { message: { role: 'user' }, content: { body: 'old prefix' } },
+        {
+          generation: { through: begin, provider: 'codex', model: 'old' },
+        },
+      ],
+      undefined,
+      [begin, source],
+    )
+    append(db, sid, Array.from({ length: 5_001 }, () => ({ attention: {} })))
+    let checkpoint = append(db, sid, [{
+      output: { source },
+      checkpoint: { through: source },
+      opaque: {
+        format: 'openai:compaction',
+        data: JSON.stringify({ type: 'compaction', encrypted_content: 'cut' }),
       },
-    },
-    tools: () => Promise.resolve(tools([])),
-    prepare: () => Promise.resolve(),
-  })
-
-  let service = managedCodex(options())
-  await service.start(sid, {
-    ...job(tree),
-    instruction: `${instructionMark} run the long chain`,
-  })
-  assertEquals(
-    readEntries(db, sid).filter((row) => row.comps.message?.role == 'agent')
-      .at(-1)?.comps.content.body,
-    'phase one done',
-  )
-  // A checkpoint entry was retained from the compaction item, its immutable
-  // audit prefix untouched.
-  let checkpoint = readEntries(db, sid).find((row) => row.comps.checkpoint)!
-  assertEquals(checkpoint.comps.opaque.format, 'openai:compaction')
-
-  // The request that ran the generation AFTER the compaction is bounded: it
-  // carries the compaction item, not the original instruction.
-  let bounded = requests.at(-1)!
-  let boundedInput = JSON.stringify(bounded.input)
-  assertEquals(boundedInput.includes(compactionMark), true)
-  assertEquals(boundedInput.includes(instructionMark), false)
-  // The first request, before any checkpoint existed, did carry the original.
-  assertEquals(
-    JSON.stringify(requests[0].input).includes(instructionMark),
-    true,
-  )
-
-  // A DIFFERENT daemon instance (restart) with no shared in-memory state, plus
-  // a later user turn, still replays a bounded request derived from entries.
-  replies.push(reply([{
-    type: 'message',
-    id: 'phase-two',
-    content: [{ type: 'output_text', text: 'phase two done' }],
-  }], 44_000))
-  let restarted = managedCodex(options())
-  append(db, sid, [{
-    message: { role: 'user' },
-    content: { body: 'now do phase two' },
-  }], restarted.runner)
-  await restarted.sweep()
-
-  let afterRestart = requests.at(-1)!
-  let restartInput = JSON.stringify(afterRestart.input)
-  assertEquals(restartInput.includes(compactionMark), true)
-  assertEquals(restartInput.includes(instructionMark), false)
-  assertEquals(restartInput.includes('now do phase two'), true)
-  assertEquals(
-    readEntries(db, sid).filter((row) => row.comps.message?.role == 'agent')
-      .at(-1)?.comps.content.body,
-    'phase two done',
-  )
-
-  // The full transcript still renders from entries: the original instruction,
-  // both tool calls, and the checkpoint are all present.
-  let log = graphLog(readEntries(db, sid))
-  let rendered = JSON.stringify(log.entries)
-  assertEquals(rendered.includes(instructionMark), true)
-  assertEquals(
-    log.entries.some((entry) =>
-      entry.row?.kind == 'sys' &&
-      entry.row.tag == 'checkpoint'
-    ),
-    true,
-  )
-  assertEquals(
-    log.entries.filter((entry) => entry.row?.kind == 'exec').length,
-    2,
-  )
-  // Context telemetry reflects the post-compaction request, not the pre.
-  assertEquals(log.context, 44_000)
-
-  // Every provider request kept store:false is not the concern here; every
-  // usage the graph recorded came from its own bounded turn.
-  assertEquals(
-    readEntries(db, sid).filter((row) => row.comps.usage)
-      .map((row) => Number(row.comps.usage.input)),
-    [250_000, 260_000, 42_000, 44_000],
-  )
-  db.close()
-})
-
-Deno.test('provider execution reads only a checkpoint tail after a long prefix', async () => {
-  let db = freshDb()
-  let sid = session(db)
-  writeSession(db, sid, { base_revision: 'base' })
-  let begin = uuid(), source = uuid()
-  append(
-    db,
-    sid,
-    [
-      { message: { role: 'user' }, content: { body: 'old prefix' } },
-      {
-        generation: { through: begin, provider: 'codex', model: 'old' },
+    }]).eids[0]
+    let tail = append(db, sid, [{
+      message: { role: 'user' },
+      content: { body: 'small tail' },
+    }]).eids[0]
+    let current = append(db, sid, [{
+      generation: { through: tail, provider: 'codex', model: 'new' },
+    }]).eids[0]
+    let consumed: string[] = []
+    let service = managedCodex({
+      db,
+      cast: () => {},
+      transport: { run: () => Promise.resolve(result([])) },
+      tools: () => Promise.resolve(tools([])),
+      prepare: () => Promise.resolve(),
+      generators: {
+        codex: (ctx) => {
+          consumed = ctx.entries.map((row) => row.eid)
+          return Promise.resolve({
+            specs: [{
+              output: { source: ctx.generation },
+              message: { role: 'agent' },
+              content: { body: 'done' },
+            }],
+            calls: [],
+            usage: { input: 1, cached: 0, output: 1, reasoning: 0 },
+            model: 'new',
+            finalText: 'done',
+          })
+        },
       },
-    ],
-    undefined,
-    [begin, source],
-  )
-  append(db, sid, Array.from({ length: 5_001 }, () => ({ attention: {} })))
-  let checkpoint = append(db, sid, [{
-    output: { source },
-    checkpoint: { through: source },
-    opaque: {
-      format: 'openai:compaction',
-      data: JSON.stringify({ type: 'compaction', encrypted_content: 'cut' }),
-    },
-  }]).eids[0]
-  let tail = append(db, sid, [{
-    message: { role: 'user' },
-    content: { body: 'small tail' },
-  }]).eids[0]
-  let current = append(db, sid, [{
-    generation: { through: tail, provider: 'codex', model: 'new' },
-  }]).eids[0]
-  let consumed: string[] = []
-  let service = managedCodex({
-    db,
-    cast: () => {},
-    transport: { run: () => Promise.resolve(result([])) },
-    tools: () => Promise.resolve(tools([])),
-    prepare: () => Promise.resolve(),
-    generators: {
-      codex: (ctx) => {
-        consumed = ctx.entries.map((row) => row.eid)
-        return Promise.resolve({
-          specs: [{
-            output: { source: ctx.generation },
-            message: { role: 'agent' },
-            content: { body: 'done' },
-          }],
-          calls: [],
-          usage: { input: 1, cached: 0, output: 1, reasoning: 0 },
-          model: 'new',
-          finalText: 'done',
-        })
-      },
-    },
-  })
+    })
 
-  await service.sweep()
-  assertEquals(new Set(consumed), new Set([source, checkpoint, tail, current]))
-  assertEquals(readEntries(db, sid).length, 5_007)
-  db.close()
-})
+    await service.sweep()
+    assertEquals(
+      new Set(consumed),
+      new Set([source, checkpoint, tail, current]),
+    )
+    assertEquals(readEntries(db, sid).length, 5_007)
+    db.close()
+  },
+)

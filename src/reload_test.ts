@@ -8,6 +8,7 @@
 // how eight modules went missing beneath a green suite.)
 import { assert, assertEquals } from '@std/assert'
 import { devFile, imports, serverClassifier, serverFile } from './reload.ts'
+import { slow } from './testing.ts'
 
 // A second, independent copy of the walk — the oracle. If reload.ts's graph()
 // ever under-walks, this still finds the module and the assert below fails. Its
@@ -72,7 +73,7 @@ let walk = async (entry: string, root: URL): Promise<Set<string>> => {
   return paths
 }
 
-Deno.test('serverFile: covers every module server.ts imports', async () => {
+slow('serverFile: covers every module server.ts imports', async () => {
   let root = new URL('.', import.meta.url)
   let reached = await walk('server.ts', root)
   assert(reached.size > 40, `walk found only ${reached.size} modules`)
@@ -83,19 +84,22 @@ Deno.test('serverFile: covers every module server.ts imports', async () => {
 
 // serverFile matches a path SUFFIX, not a substring: a browser module and a
 // `.old` sibling of a server file are both outside the graph.
-Deno.test('serverFile: matches on path suffix, so browser and .old files are out', () => {
-  for (
-    let [path, want] of [
-      ['/repo/src/server.ts', true],
-      ['/repo/src/reload.ts', true],
-      ['/repo/src/components/Card.tsx', false],
-      ['/repo/src/styles.css', false],
-      ['/repo/src/server.ts.old', false],
-    ] as [string, boolean][]
-  ) assertEquals(serverFile(path), want, path)
-})
+slow(
+  'serverFile: matches on path suffix, so browser and .old files are out',
+  () => {
+    for (
+      let [path, want] of [
+        ['/repo/src/server.ts', true],
+        ['/repo/src/reload.ts', true],
+        ['/repo/src/components/Card.tsx', false],
+        ['/repo/src/styles.css', false],
+        ['/repo/src/server.ts.old', false],
+      ] as [string, boolean][]
+    ) assertEquals(serverFile(path), want, path)
+  },
+)
 
-Deno.test('serverFile: sees imports added after the classifier was made', () => {
+slow('serverFile: sees imports added after the classifier was made', () => {
   let dir = Deno.makeTempDirSync({ prefix: 'tasks-reload-' })
   let root = new URL(`file://${dir}/`)
   try {

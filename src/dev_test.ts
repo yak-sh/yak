@@ -2,10 +2,11 @@
 // probe uses a tiny child instead of booting the graph server.
 import { assertEquals } from '@std/assert'
 import { insist, launch } from './dev.ts'
+import { slow } from './testing.ts'
 
 let tick = (ms = 0) => new Promise((r) => setTimeout(r, ms))
 
-Deno.test('launch: returns a child only after its ready signal', async () => {
+slow('launch: returns a child only after its ready signal', async () => {
   let js = `
     let arg = Deno.args.find((a) => a.startsWith('--ready='))
     using conn = await Deno.connect({
@@ -19,7 +20,7 @@ Deno.test('launch: returns a child only after its ready signal', async () => {
   assertEquals((await child.status).success, true)
 })
 
-Deno.test('insist: a handoff that failed comes back until it takes', async () => {
+slow('insist: a handoff that failed comes back until it takes', async () => {
   let tries = 0
   insist(() => Promise.resolve(++tries == 3), [0], 0)()
   while (tries < 3) await tick(1)
@@ -27,7 +28,7 @@ Deno.test('insist: a handoff that failed comes back until it takes', async () =>
   assertEquals(tries, 3) // and stops the moment one succeeds
 })
 
-Deno.test('insist: a rejected attempt is a failure, not a death', async () => {
+slow('insist: a rejected attempt is a failure, not a death', async () => {
   let tries = 0
   let fail = () => Promise.reject('insist probe: this rejection is the test')
   insist(() => ++tries == 2 ? Promise.resolve(true) : fail(), [0], 0)()
@@ -36,7 +37,7 @@ Deno.test('insist: a rejected attempt is a failure, not a death', async () => {
   assertEquals(tries, 2)
 })
 
-Deno.test('insist: edits arriving together make one attempt', async () => {
+slow('insist: edits arriving together make one attempt', async () => {
   let tries = 0
   let poke = insist(() => Promise.resolve(!!++tries), [0], 5)
   poke()
