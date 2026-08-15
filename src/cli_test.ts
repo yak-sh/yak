@@ -1228,7 +1228,7 @@ slow('list shows the wake title derived by the UI', async () => {
         '-A',
         new URL('./cli.ts', import.meta.url).pathname,
         'list',
-        'kind=wake',
+        '.kind=wake',
         '.wake.at>=now',
       ],
       clearEnv: true,
