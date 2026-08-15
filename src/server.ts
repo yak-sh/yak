@@ -38,6 +38,7 @@ import {
 } from './db.ts'
 import { bodied, bodyless, gaps, spread, type Step, step } from './subs.ts'
 import { dispatch, docs, on, relay, trace } from './effects.ts'
+import { registerSessionSource } from './source_session.ts'
 import { vocabularyMd } from './schema.ts'
 import { freeze, serveFrozen, store } from './freeze.ts'
 import { filed } from './page.ts'
@@ -1146,6 +1147,11 @@ let http = Deno.serve(
   },
 )
 bound(ownership)
+
+// Pass-through legacy sessions materialize on read from their transcript files
+// (D-17790 / T-17795) — registered here, server-only, so the read doors resolve
+// a purged session and stream its tail without a row ever landing.
+registerSessionSource()
 
 // The curated effects — the graph's post-commit levers, one list, like
 // Entity.tsx's renderer list. A session created with a spawn spec is a launch
