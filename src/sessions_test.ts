@@ -13,6 +13,7 @@ import {
   assert,
   assertEquals,
   assertMatch,
+  assertNotMatch,
   assertStringIncludes,
   assertThrows,
 } from '@std/assert'
@@ -947,7 +948,10 @@ slow('a worn persona rides the prompt whole — tiers and all', async () => {
   await done
   let first = logs(eid, new URLSearchParams('after=0&limit=1')).entries[0]
   let text = JSON.parse(first.line).text
-  assertMatch(text, /Be terse\./)
+  // The persona's OWN body describes it to graph readers, not the prompt —
+  // prompt content rides via contained memories (de1bd7f). So 'Be terse.'
+  // (per's description) stays OUT, while the contained memory rides whole.
+  assertNotMatch(text, /Be terse\./)
   assertMatch(text, /---\n\n# D-\d+ lesson/)
   assertMatch(text, /Front door\./)
   assertMatch(text, /House rules/)
