@@ -22,7 +22,7 @@ Deno.writeTextFileSync(
 )
 Deno.env.set('CLAUDE_PROJECTS', store)
 
-let { eager, entriesOf, resolveId } = await import('./db.ts')
+let { apply, eager, entriesOf, resolveId } = await import('./db.ts')
 let { clearSources } = await import('./source.ts')
 let { freshDb } = await import('./testdb.ts')
 let { registerSessionSource, sidEid, forgetSessionIndex } = await import(
@@ -91,4 +91,55 @@ Deno.test('session source: no source, no cost — a normal miss stays empty', ()
   let db = freshDb()
   assertEquals(resolveId(db, sid), undefined)
   assertEquals(eager(db, eid), {})
+})
+
+// End-to-end graduation (D-17790) through the REAL file source: a comment on a
+// purged session persists it at the same eid, numbered, with its transcript
+// facts — while the transcript LOG never lands a row and keeps streaming from
+// the file. This is the lazy-import the owner named, one engaged session at a
+// time, with the bloat (the log) staying on disk.
+Deno.test('session source: a write graduates the session; the log stays file-backed', () => {
+  let db = freshDb()
+  forgetSessionIndex()
+  let off = registerSessionSource()
+  try {
+    assertEquals(
+      db.prepare('select 1 from entity where eid = ?').get(eid),
+      undefined,
+    )
+    // A comment aimed at the purged session IS the graduation write.
+    let cid = crypto.randomUUID()
+    apply(db, [{ eid: cid, name: 'comment', comp: { target: eid } }])
+    // Persisted at the SAME eid, numbered, with its transcript-derived id.
+    // The source's synthetic origin ('native') is not a wire-writable column
+    // (nor a valid enum), so it drops and the schema default lands — origin
+    // 'external', exactly what a LIVE interactive session persists.
+    let e = db.prepare('select num from entity where eid = ?').get(eid) as
+      | { num: number | null }
+      | undefined
+    assertEquals(typeof e?.num, 'number')
+    assertEquals(
+      (db.prepare('select id from session where eid = ?').get(eid) as {
+        id: string
+      }).id,
+      sid,
+    )
+    assertEquals(
+      db.prepare('select origin from session where eid = ?').get(eid),
+      { origin: 'external' },
+    )
+    // No entry row was persisted — the transcript still streams from the file.
+    assertEquals(
+      (db.prepare('select count(*) as n from entry where session = ?').get(
+        eid,
+      ) as { n: number }).n,
+      0,
+    )
+    let tail = entriesOf(db, eid, 0, 500)
+    assertEquals(tail.length >= 1, true)
+    assertEquals(tail[0].seq, 1)
+  } finally {
+    off()
+    clearSources()
+  }
 })

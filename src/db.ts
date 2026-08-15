@@ -2530,6 +2530,56 @@ let refs = Object.entries(comps).flatMap(([name, props]) =>
   )
 )
 
+// Every eid-valued column, by component — the FULL set (refs above excludes
+// any-entity targets, but graduation must notice a comment or claim AIMED at an
+// ephemeral entity just as much as a typed reference). dependency's parent/child
+// are not comps columns, so graduate() handles the edge case explicitly.
+let eidCols: [string, string][] = Object.entries(comps).flatMap(
+  ([name, props]) =>
+    Object.entries(props).flatMap(([col, type]) =>
+      typeof type == 'object' && 'eid' in type
+        ? [[name, col] as [string, string]]
+        : []
+    ),
+)
+
+// Graduation on interaction (D-17790): a write that attaches to a source-
+// materialized (ephemeral) entity hydrates that entity's source components into
+// THIS batch, so it persists and mints its num alongside the write. The engaged
+// set is every eid this batch WRITES (a change's own eid) or NAMES (an
+// eid-valued reference — a comment.target, a claim.session, a dependency child).
+// An engaged eid with no spine, not tombstoned, and owned by a source
+// graduates; an untouched session stays pass-through forever. The source comps
+// ride the normal write loop, which keeps only wire-writable columns (so a
+// source's server-owned `origin`/`serving_model` drop just as they do on a live
+// interactive session) and mints the spine + num. Called only when sources
+// exist, and only ever prepends — a batch that engages nothing ephemeral is
+// returned untouched, so the non-graduating write path is unchanged.
+let graduate = (db: DatabaseSync, changes: Change[]): Change[] => {
+  let engaged = new Set<string>()
+  for (let { eid, name, comp } of changes) {
+    if (name == 'entity' && comp == null) continue // a delete never graduates
+    engaged.add(eid)
+    if (name == 'dependency') {
+      if (comp?.child) engaged.add(String(comp.child))
+      continue
+    }
+    if (!comp) continue
+    for (let [n, col] of eidCols) {
+      if (n == name && comp[col] != null) engaged.add(String(comp[col]))
+    }
+  }
+  let live = prep(db, 'select 1 from entity where eid = ?')
+  let dead = prep(db, 'select 1 from tombstone where eid = ?')
+  let hydration: Change[] = []
+  for (let eid of engaged) {
+    if (live.get(eid) || dead.get(eid)) continue
+    let batch = sourceResolve(eid)
+    if (batch) hydration.push(...batch)
+  }
+  return hydration.length ? [...hydration, ...changes] : changes
+}
+
 let refRefused = (
   db: DatabaseSync,
   ref: Ref,
@@ -2863,6 +2913,11 @@ export let apply = (
     changes = dualSpawn(db, changes)
     changes = dualFacet(db, changes, 'worktree')
     changes = dualFacet(db, changes, 'runtime')
+    // A write that engages a source-materialized entity graduates it — hydrates
+    // its source comps into this batch (D-17790). After the dual* transforms so
+    // a hydrated session.provider is never promoted to a spawn request; a
+    // historical session must not launch an agent.
+    if (hasSources()) changes = graduate(db, changes)
     // A log entry is an append-only fact. Every request/content facet is
     // born in the same batch as entry membership and can never be revised,
     // removed, or attached later. Outcomes use server-owned facets instead.
