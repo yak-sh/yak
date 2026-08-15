@@ -6,8 +6,8 @@
 // vendor's dialect: it asks the adapter "is this the init?", "is this the
 // end?" and stamps whatever comes back.
 //
-// `fake` ships in-repo for tests; `claude` and `codex-cli` shell the installed
-// CLIs (subscription auth rides HOME — no keys in argv, no keys in env).
+// `fake` ships in-repo for tests; `claude`, `ollama`, and `codex-cli` shell the
+// installed CLIs (subscription auth rides HOME — no keys in argv or env).
 // `codex` keeps this process adapter as the reliability floor even though
 // managed requests bearing that name normally route to the graph runner.
 // Event shapes below are copied from live probes of both CLIs, not docs.
@@ -602,6 +602,80 @@ adapters['codex-cli'] = {
   ...adapters.codex,
   labels: {},
   fallback: true,
+}
+
+// Ollama Cloud launches Claude Code behind its Anthropic-compatible API. The
+// launcher's --yes is the documented headless path: it selects and pulls the
+// named cloud model without a prompt, then passes everything after -- to
+// Claude. The resulting stream is therefore Claude's own dialect, including
+// its session id and resume contract; only the process prefix and model menu
+// differ. Ollama's sign-in state rides HOME, never argv or a copied secret.
+let ollamaModels = [
+  'kimi-k2.7-code:cloud',
+  'glm-5.2:cloud',
+  'deepseek-v4-flash:cloud',
+  'kimi-k3:cloud',
+  'gemma4:cloud',
+  'glm-5.1:cloud',
+  'minimax-m2.7:cloud',
+  'nemotron-3-super:cloud',
+  'minimax-m3:cloud',
+  'kimi-k2.6:cloud',
+  'deepseek-v4-pro:cloud',
+  'nemotron-3-ultra:cloud',
+  'qwen3.5:cloud',
+  'nemotron-3-nano:30b-cloud',
+  'mistral-large-3:675b-cloud',
+  'gpt-oss:120b-cloud',
+]
+
+let ollama = (model: string, args: string[]) => [
+  'ollama',
+  'launch',
+  'claude',
+  '--model',
+  model,
+  '--yes',
+  '--',
+  ...args,
+]
+
+adapters.ollama = {
+  ...adapters.claude,
+  models: ollamaModels,
+  efforts: [],
+  labels: Object.fromEntries(
+    ollamaModels.map((model) => [
+      model,
+      model.replace(/:(?:\d+b-)?cloud$/, ''),
+    ]),
+  ),
+  argv: (j) =>
+    ollama(j.model, [
+      '-p',
+      '--session-id',
+      j.session_id,
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--permission-mode',
+      'bypassPermissions',
+      '--',
+      j.instruction,
+    ]),
+  resume: (j, sid, text) =>
+    ollama(j.model, [
+      '-p',
+      '--resume',
+      sid,
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--permission-mode',
+      'bypassPermissions',
+      '--',
+      text,
+    ]),
 }
 
 // A codex item, as much of it as row() reads.

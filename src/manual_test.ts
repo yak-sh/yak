@@ -71,7 +71,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       delete: 'delete <id> [--cascade] [--force]',
       forget: 'forget <id> [--cascade] [--force]',
       subject: '<id> [show|is|as|edge] …',
-      spawn: 'spawn <id> [--provider=claude|codex|codex-cli] [--model=MODEL] ' +
+      spawn: 'spawn <id> [--provider=PROVIDER] [--model=MODEL] ' +
         '[--effort=high] [--persona=ID]',
       land: 'land',
       comment: 'comment <id> [text…] [--body=BODY] [--verdict=VERDICT]',
@@ -120,11 +120,12 @@ Deno.test('help topics cover nested and colon vocabularies', () => {
   assertThrows(() => help([':fix', 'extra']), Error, 'no such help topic')
 })
 
-Deno.test('spawn help teaches only values its declaration accepts', () => {
+Deno.test('spawn help and parsing share the provider vocabulary', () => {
   let out = help(['spawn'])
-  assert(out.includes('--provider=claude|codex'))
+  assert(out.includes('--provider=PROVIDER'))
   assert(out.includes('gpt-5.6-sol'))
   assertEquals(out.includes('gpt-5.4'), false)
+  check('spawn', ['T-1', '--provider=ollama'])
   assertThrows(
     check('spawn', ['T-1', '--model=gpt-5.4']),
     Error,
