@@ -10,5 +10,6 @@
   "render: task Tile": 160831,
   "resolveId: num -> eid": 1518.3051,
   "rows: 2k-task snapshot": 308572,
+  "scan: session mentions over a 60-row thread": 385648,
   "snapshot: full graph": 2215
 }

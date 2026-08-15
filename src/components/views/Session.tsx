@@ -1,4 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'preact/hooks'
 import {
   awake,
   type Ent,
@@ -26,7 +32,7 @@ import { Composer, Note } from '../Comments.tsx'
 import { Id } from './Inline.tsx'
 import { Entity, resolve } from '../Entity.tsx'
 import { Markdown } from '../Markdown.tsx'
-import { mdMentions } from '../../md.ts'
+import { mdMentions, type Mention } from '../../md.ts'
 import { UrlVal } from '../editors.tsx'
 import { Ansi } from '../Ansi.tsx'
 import { SessionDot, useSessionStanding } from '../session_status.tsx'
@@ -177,33 +183,74 @@ let mentionText = (x: { row?: LogRow } | Ent) => {
   return r?.kind == 'say' ? [r.text] : []
 }
 
-// The first mention wins its place. Entity spellings dedupe by the entity
-// they resolve to, so a labeled link and a later bare id still make one row.
-export let sessionMentions = (
+// The SCAN — the expensive half: mdMentions parses every text in the thread.
+// On a large log this is milliseconds, so the render path memoizes it (keyed on
+// mentionSig) and never runs it per render.
+export let threadMentions = (
   thread: ({ row?: LogRow } | Ent)[],
   repo?: string,
-): Mentioned[] => {
+): Mention[] =>
+  thread.flatMap(mentionText).flatMap((text) => mdMentions(text, repo))
+
+// Resolve entity ids to eids and dedupe — the CHEAP half over the already-parsed
+// mentions, so it stays per render and an eid that loads in late still links.
+// The first mention wins its place; entity spellings dedupe by the entity they
+// resolve to, so a labeled link and a later bare id still make one row.
+export let resolveMentions = (raw: Mention[]): Mentioned[] => {
   let out: Mentioned[] = []
   let seen = new Set<string>()
-  for (let text of thread.flatMap(mentionText)) {
-    for (let mention of mdMentions(text, repo)) {
-      let item: Mentioned | undefined
-      if (mention.kind == 'entity') {
-        let eid = findEid(mention.id)
-        item = { kind: 'entity', id: mention.id, ...(eid ? { eid } : {}) }
-      } else item = mention
-      if (!item) continue
-      let key = item.kind == 'entity'
-        ? `entity:${item.eid ?? item.id}`
-        : `link:${item.href}`
-      if (!seen.has(key)) {
-        seen.add(key)
-        out.push(item)
-      }
+  for (let mention of raw) {
+    let item: Mentioned
+    if (mention.kind == 'entity') {
+      let eid = findEid(mention.id)
+      item = { kind: 'entity', id: mention.id, ...(eid ? { eid } : {}) }
+    } else item = mention
+    let key = item.kind == 'entity'
+      ? `entity:${item.eid ?? item.id}`
+      : `link:${item.href}`
+    if (!seen.has(key)) {
+      seen.add(key)
+      out.push(item)
     }
   }
   return out
 }
+
+// Parse then resolve. Non-render callers use this directly; the render path
+// splits the two so it can memoize the scan (threadMentions) alone.
+export let sessionMentions = (
+  thread: ({ row?: LogRow } | Ent)[],
+  repo?: string,
+): Mentioned[] => resolveMentions(threadMentions(thread, repo))
+
+// A cheap content signature for the mention scan: everything that changes the
+// parsed mentions, read as ids/seqs/stamps — no markdown parse, no walk of the
+// thread text — so useMemo reruns the scan once per content change, never per
+// render. Log rows are append-only (seq + count + streaming rev cover growth);
+// a heard comment set is keyed by its size and newest edit (add/remove/edit/
+// heard-flip all move one of the two).
+export let mentionSig = (a: {
+  count: number
+  seq: number
+  rev: number
+  said: boolean
+  final: string
+  heard: Ent[]
+  repo?: string
+}): string =>
+  [
+    a.count,
+    a.seq,
+    a.rev,
+    a.said ? 1 : 0,
+    a.final,
+    a.heard.length,
+    a.heard.reduce((m, c) => {
+      let t = String(c.updated?.at ?? c.created?.at ?? '')
+      return t > m ? t : m
+    }, ''),
+    a.repo ?? '',
+  ].join('|')
 
 export let SessionReferences = ({ items }: { items: Mentioned[] }) => {
   let [open, setOpen] = useState(true)
@@ -588,7 +635,8 @@ export let Session = ({ e }: { e: Ent }) => {
   )
   let cs = commentsOn(e.eid).filter((c) => !inputs.has(c.doc?.body ?? ''))
   let heard = (c: Ent) => c.created?.via == e.eid || !!c.notified
-  let thread = weave(rows, cs.filter(heard))
+  let heardCs = cs.filter(heard)
+  let thread = weave(rows, heardCs)
   // Windowed from the tail on the web; the whole thread in the TUI.
   let { frame, start, older } = useTranscript(
     thread.length,
@@ -602,18 +650,36 @@ export let Session = ({ e }: { e: Ent }) => {
   )
   let windowed = start > 0 ? thread.slice(start) : thread
   let unsent = cs.filter((c) => !heard(c))
-  let mentions = sessionMentions([
-    ...(!said && s.final_text
-      ? [{
-        row: {
-          kind: 'say' as const,
-          role: 'agent' as const,
-          text: s.final_text,
-        },
-      }]
-      : []),
-    ...thread,
-  ], repo)
+  // The mention scan (mdMentions over the whole thread) is a per-render scan we
+  // can't pay — a 14M-log session stalled first paint on it. Parse once,
+  // memoized on the cheap content signature; resolve+dedup stays per render so a
+  // late-loading eid still links.
+  let sig = mentionSig({
+    count: log.entries.length,
+    seq: log.entries.at(-1)?.seq ?? 0,
+    rev: stream?.rev ?? 0,
+    said,
+    final: s.final_text ?? '',
+    heard: heardCs,
+    repo,
+  })
+  let raw = useMemo(
+    () =>
+      threadMentions([
+        ...(!said && s.final_text
+          ? [{
+            row: {
+              kind: 'say' as const,
+              role: 'agent' as const,
+              text: s.final_text,
+            },
+          }]
+          : []),
+        ...thread,
+      ], repo),
+    [sig],
+  )
+  let mentions = resolveMentions(raw)
   return (
     <Frame>
       <Head>

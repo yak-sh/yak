@@ -17,6 +17,7 @@ import { mount } from './components/mount.ts'
 import { resolve } from './components/Entity.tsx'
 import { cache, ent } from './live.ts'
 import { propAt, propOwners } from './props.ts'
+import { threadMentions } from './components/views/Session.tsx'
 
 // --- hot pure functions ----------------------------------------------------
 // Memoized over the immutable vocabulary (props.ts). A regression here — the
@@ -51,4 +52,21 @@ Deno.bench('render: task Meta row', () => {
 Deno.bench('render: task Tile', () => {
   let m = mount(h(resolve(e, 'Tile').Render, { e }))
   m.free()
+})
+
+// The mention SCAN (mdMentions over the whole thread). It used to run on EVERY
+// Session render — a pathological 14M-log session stalled first paint on it;
+// now it's memoized in the view (keyed on mentionSig), run once per content
+// change. This guards the scan stays cheap for a normal thread; the memo keeps
+// a big thread from paying it per render.
+let thread = Array.from({ length: 60 }, (_, i) => ({
+  row: {
+    kind: 'say' as const,
+    role: (i % 2 ? 'user' : 'agent') as 'user' | 'agent',
+    text: `line ${i}: see T-${i} and [ref](https://example.test/${i})`,
+  },
+}))
+
+Deno.bench('scan: session mentions over a 60-row thread', () => {
+  threadMentions(thread)
 })

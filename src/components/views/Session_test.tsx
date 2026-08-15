@@ -1,11 +1,14 @@
 // A session row keeps the actor it works for visible in every shared list.
 import { h, render } from 'preact'
-import { assertEquals } from '@std/assert'
+import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { cache, deps, ent, repoUrl } from '../../live.ts'
+import { type Ent } from '../../types.ts'
 import { resolve } from '../Entity.tsx'
 import { mount } from '../mount.ts'
 import {
+  mentionSig,
+  resolveMentions,
   SessionContext,
   SessionDiagnostics,
   SessionEntry,
@@ -13,6 +16,7 @@ import {
   SessionObservation,
   SessionReferences,
   SessionSummary,
+  threadMentions,
 } from './Session.tsx'
 
 Deno.test('session Tile leads with model info and every worked task', () => {
@@ -440,4 +444,59 @@ Deno.test('session lifecycle shares the task summary lane', () => {
     if (prior) Object.defineProperty(globalThis, 'document', prior)
     else delete (globalThis as { document?: unknown }).document
   }
+})
+
+// The mention scan is memoized in the view on this signature — it must be STABLE
+// when nothing feeding the parse changed (else the scan reruns every render, the
+// regression) and CHANGE whenever it did (else a new/edited mention goes stale).
+Deno.test('mentionSig: stable on unchanged content, shifts on every input', () => {
+  let base = {
+    count: 3,
+    seq: 10,
+    rev: 0,
+    said: false,
+    final: '',
+    heard: [] as Ent[],
+    repo: undefined as string | undefined,
+  }
+  let a = mentionSig(base)
+  assertEquals(mentionSig({ ...base }), a) // unchanged → same key → no rescan
+  assert(mentionSig({ ...base, seq: 11 }) != a, 'new log entry')
+  assert(mentionSig({ ...base, count: 4 }) != a, 'entry count')
+  assert(mentionSig({ ...base, rev: 1 }) != a, 'streaming growth of last entry')
+  assert(
+    mentionSig({ ...base, said: true }) != a,
+    'said flips the final prepend',
+  )
+  assert(mentionSig({ ...base, final: 'done T-9' }) != a, 'final_text')
+  assert(mentionSig({ ...base, repo: 'r' }) != a, 'repo scopes entity links')
+  let c = {
+    entity: { eid: 'c', num: 1 },
+    doc: { eid: 'c', body: 'hi @T-1' },
+    created: { eid: 'c', at: '2026-08-15T10:00:00Z' },
+  } as unknown as Ent
+  assert(mentionSig({ ...base, heard: [c] }) != a, 'a heard comment joins')
+  let edited = {
+    ...c,
+    updated: { eid: 'c', at: '2026-08-15T11:00:00Z' },
+  } as unknown as Ent
+  assert(
+    mentionSig({ ...base, heard: [c] }) !=
+      mentionSig({ ...base, heard: [edited] }),
+    'editing a heard comment bumps its updated.at',
+  )
+})
+
+// The view splits the scan (threadMentions) from resolve+dedup (resolveMentions)
+// to memoize the first alone — the split must stay behavior-identical to the
+// composed sessionMentions.
+Deno.test('sessionMentions == resolveMentions(threadMentions)', () => {
+  let thread = [{
+    row: {
+      kind: 'say' as const,
+      role: 'agent' as const,
+      text: 'see T-1 and T-1',
+    },
+  }]
+  assertEquals(sessionMentions(thread), resolveMentions(threadMentions(thread)))
 })
