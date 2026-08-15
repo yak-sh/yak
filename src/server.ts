@@ -67,7 +67,6 @@ import { type IO, mcpServer } from './mcp.ts'
 import { projection, syncFiles } from './persona.ts'
 import { commit } from './git.ts'
 import {
-  backfill,
   codexPending,
   commented,
   deleted,
@@ -1513,19 +1512,11 @@ for (let d of unwoken()) {
   }
 }
 
-// The historical counterpart (T-16822): reconcile the file-first Sessions that
-// ended BEFORE live ingestion into the same entry partitions recover() fills
-// for the live ones. Backgrounded — it sweeps all of owner data, so it must not
-// hold boot — and incremental, so once the backlog is drained a restart re-checks
-// it in one query per remaining session. It touches only finished/inactive
-// sessions (no live tailer), so it is safe beside recover()'s live loops.
-// GATED OFF by default (incident 2026-08-12): the boot sweep saturated the event
-// loop and wedged the server for the whole fleet — "backgrounded" is not the same
-// as yielding, and a synchronous churn over all of owner data never returns to
-// accept(). Re-enable with TASKS_BACKFILL=1 only once it yields per record.
-if (Deno.env.get('TASKS_BACKFILL') == '1') {
-  backfill(cast).catch((e) => console.warn('session backfill —', e))
-}
+// The file-first Sessions that ended before live ingestion are no longer
+// bulk-imported at boot (T-16822's sweep, retired in T-17797): they resolve as
+// ephemeral pass-through entities from their file sources and persist lazily,
+// one at a time, only when a real write engages one (graduation, D-17790). No
+// boot sweep, no saturation, no megabytes of settled transcript in the db.
 
 // Every reconciler runs on a timer, which means nothing is holding its
 // promise — and in Deno a rejection nobody handled ENDS THE PROCESS. A sweep
