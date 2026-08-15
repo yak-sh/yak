@@ -7,9 +7,10 @@
 # then writes that snapshot out as TEXT for history to hold.
 #
 # Restore = clone, then
-#   cat snap/schema.sql snap/graph.sql snap/journal.sql | sqlite3 tasks.db
+#   cat snap/schema.sql snap/graph.sql.part.* snap/journal.sql.part.* | sqlite3 tasks.db
 # and start the server. The FTS index rebuilds from the boot-time integrity
 # check and embeddings backfill on the sweep, which is why neither is dumped.
+# The .part.NNN suffixes are zero-padded, so the glob reassembles them in order.
 #
 # TEXT, not the binary, because git cannot delta a SQLite file: every hourly
 # commit stored a near-complete new copy (~167 MB/day, and .git reached 2.5 GB
@@ -20,12 +21,13 @@
 # doc_gram alone runs ~4x the size of the text it indexes — and all of them
 # rebuild themselves.
 #
-# SPLIT across files because GitHub's hard 100 MB limit is per FILE. The
-# journal is the largest table and the fastest-growing, and it is append-only,
-# so it gets its own file: it deltas to nearly nothing and its size cannot
-# push the rest of the graph over the ceiling. Splitting keeps every byte —
-# the alternative, pruning old journal rows, would buy the same headroom by
-# discarding the write history.
+# SPLIT across files, and SHARDED into parts, because GitHub's hard 100 MB limit
+# is per FILE. The journal is the largest, fastest-growing table and append-only,
+# so it gets its own file; and each big dump is split into <50 MB parts
+# (schema stays whole). Sharding keeps every byte — the alternative, pruning old
+# journal rows, would buy the same headroom by discarding the write history, and
+# the journal is mostly MIXED batches that also touch live entities, so pruning it
+# by "legacy" removes almost nothing without losing real undo history.
 #
 # Cron-safe: explicit PATH, no interactivity, exits 0 on "nothing new".
 # A missing origin is not an error — that is a deliberate local-history-only
@@ -103,16 +105,27 @@ sqlite3 -batch -init /dev/null snap/tasks.db \
 dump_data "name = 'journal'" > snap/journal.sql.tmp
 dump_data "name != 'journal'" > snap/graph.sql.tmp
 
-# The gate: the dump must restore to the same graph it came from. Comparing
-# row counts per table catches a truncated write, a quoting bug, and a table
-# silently dropped from the dump — the failures that would otherwise be found
-# at restore time, which is the one moment there is no second chance.
+# SHARD the big dumps into parts under GitHub's 100 MB hard limit (target <50 MB
+# to clear the soft warning too). The mixed write history in `journal` is
+# legitimately large — every byte is kept; sharding buys the headroom that
+# pruning history would otherwise cost. `split` cuts on BYTE boundaries, which is
+# safe because the restore cats the parts back byte-for-byte before sqlite ever
+# parses them; zero-padded numeric suffixes glob in order. schema stays whole.
+rm -f snap/graph.sql.part.* snap/journal.sql.part.*
+split -b 45M -d -a 3 snap/graph.sql.tmp   snap/graph.sql.part.
+split -b 45M -d -a 3 snap/journal.sql.tmp snap/journal.sql.part.
+
+# The gate: the dump must restore to the same graph it came from — and it must do
+# so FROM THE SHARDS, so a bad split is caught here, not at restore. Comparing row
+# counts per table catches a truncated write, a quoting bug, a table silently
+# dropped from the dump, and a shard that failed to reassemble — the failures that
+# would otherwise be found at restore time, the one moment there is no second chance.
 probe="snap/.verify.db"
 rm -f "$probe"
-cat snap/schema.sql.tmp snap/graph.sql.tmp snap/journal.sql.tmp |
+cat snap/schema.sql.tmp snap/graph.sql.part.* snap/journal.sql.part.* |
   sqlite3 -batch -init /dev/null "$probe" || {
   echo "backup: dump did not load back" >&2
-  rm -f "$probe" snap/*.sql.tmp
+  rm -f "$probe" snap/*.sql.tmp snap/graph.sql.part.* snap/journal.sql.part.*
   exit 1
 }
 for t in $(sq snap/tasks.db "select name from sqlite_master
@@ -122,12 +135,15 @@ for t in $(sq snap/tasks.db "select name from sqlite_master
   b=$(sq "$probe" "select count(*) from \"$t\"")
   [ "$a" = "$b" ] || {
     echo "backup: round-trip lost rows in $t ($a → $b)" >&2
-    rm -f "$probe" snap/*.sql.tmp
+    rm -f "$probe" snap/*.sql.tmp snap/graph.sql.part.* snap/journal.sql.part.*
     exit 1
   }
 done
 rm -f "$probe"
-for f in schema graph journal; do mv "snap/$f.sql.tmp" "snap/$f.sql"; done
+# schema whole; graph/journal live only as parts now — drop any monolithic files a
+# previous (pre-shard) run left tracked, so `git add -A` records the switch.
+mv snap/schema.sql.tmp snap/schema.sql
+rm -f snap/graph.sql snap/journal.sql snap/graph.sql.tmp snap/journal.sql.tmp
 
 git add -A
 # Nothing to commit is only healthy if everything already committed got out.
