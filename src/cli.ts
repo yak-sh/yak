@@ -2601,6 +2601,17 @@ let bind = (runs: Record<string, Run>): Record<string, Verb> => {
   )
 }
 
+let backfillWorked = async () => {
+  let via = me()
+  let res = await request(`http://${host()}/backfill/worked`, {
+    method: 'POST',
+    headers: via ? { 'x-via': via } : undefined,
+  })
+  if (!res.ok) throw new Error(`backfill failed: ${await res.text()}`)
+  let out = await res.json() as { found: number; landed: number }
+  console.log(`worked: ${out.landed}/${out.found} historical edges landed`)
+}
+
 export let verbs = bind({
   tui: () => tui(),
   claude,
@@ -2620,6 +2631,8 @@ export let verbs = bind({
   'mail search': mailSeek,
   'mail files': mailFiles,
   'mail doctor': () => mailDoctor(),
+  backfill: () => print(help(['backfill'])),
+  'backfill worked': backfillWorked,
   watch: subscribe('watch'),
   mute: subscribe('mute'),
   inbox: inboxList,

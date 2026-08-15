@@ -3746,6 +3746,35 @@ export let journalBy = (
       changes: canonicalChanges(JSON.parse(r.batch) as Change[]),
     }))
 
+// History is paid for only by the explicit migration door. The result is
+// ordinary graph changes, so the caller can land and broadcast them through
+// apply() rather than growing a second persistence path.
+export let historicalWorked = (db: DatabaseSync): Change[] =>
+  (prep(
+    db,
+    `
+    select distinct
+      json_extract(je.value, '$.comp.session') as parent,
+      json_extract(je.value, '$.eid') as child
+    from journal j, json_each(j.batch) je
+    join session s
+      on s.eid = json_extract(je.value, '$.comp.session')
+    join task t on t.eid = json_extract(je.value, '$.eid')
+    left join dependency d
+      on d.parent = json_extract(je.value, '$.comp.session')
+     and d.type = 'worked'
+     and d.child = json_extract(je.value, '$.eid')
+    where json_extract(je.value, '$.name') = 'claim'
+      and json_extract(je.value, '$.comp.session') is not null
+      and d.parent is null
+    order by parent, child
+  `,
+  ).all() as { parent: string; child: string }[]).map((r) => ({
+    eid: r.parent,
+    name: 'dependency',
+    comp: { type: 'worked', child: r.child },
+  }))
+
 // Session entries are a lazy graph partition: root clients never receive
 // their eids or any facets/provenance hung from them. A Session subscription
 // still sees the unfiltered batch through maintain(), and keyed readers stay

@@ -11,6 +11,7 @@ let {
   eager,
   hasCol,
   healInboundDeliver,
+  historicalWorked,
   human,
   journalBy,
   journalOf,
@@ -3175,6 +3176,30 @@ Deno.test('claim leaves one durable worked edge after its lease is released', ()
       .map((d) => d.child).sort(),
     [one, two].sort(),
   )
+})
+
+Deno.test('historical worked edges materialize explicitly and idempotently', () => {
+  let session = uid(), task = uid()
+  apply(db, [
+    { eid: session, name: 'session', comp: { id: session } },
+    { eid: task, name: 'doc', comp: { title: 'historical task' } },
+    { eid: task, name: 'task', comp: { status: 'open', priority: 1 } },
+  ])
+  apply(db, [{ eid: task, name: 'claim', comp: { session } }])
+  apply(db, [{ eid: task, name: 'claim', comp: null }])
+  db.prepare(`
+    delete from dependency
+    where parent = ? and type = 'worked' and child = ?
+  `).run(session, task)
+
+  let missing = historicalWorked(db)
+  assertEquals(missing, [{
+    eid: session,
+    name: 'dependency',
+    comp: { type: 'worked', child: task },
+  }])
+  apply(db, missing)
+  assertEquals(historicalWorked(db), [])
 })
 
 Deno.test('actor fill: a session that ran in a repo resolves to its venture', () => {

@@ -22,6 +22,7 @@ import {
   eager,
   epoch,
   file as graph,
+  historicalWorked,
   journalBy,
   journalOf,
   locate,
@@ -1056,6 +1057,29 @@ let http = Deno.serve(
         note(false, why)
         return new Response(why, { status: 400 })
       })
+    }
+    // Historical claim materialization is deliberate operator work, never a
+    // boot sweep. Ordinary apply batches keep persistence, live broadcasts,
+    // and effects on the same path as every new worked edge.
+    if (path == '/backfill/worked' && req.method == 'POST') {
+      let pending = historicalWorked(db)
+      let landed = 0
+      for (let i = 0; i < pending.length; i += 200) {
+        let t = trace()
+        let out = apply(
+          db,
+          pending.slice(i, i + 200),
+          t,
+          req.headers.get('x-via'),
+        )
+        landed += out.filter((c) =>
+          c.name == 'dependency' && c.comp?.type == 'worked'
+        ).length
+        cast(out)
+        effect(out, t)
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      }
+      return Response.json({ found: pending.length, landed })
     }
     // The adapter table, for a browser that must offer what a spawn
     // request will be checked against (adapters.ts is server-only).

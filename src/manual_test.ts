@@ -56,6 +56,8 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       'mail search': 'mail search <words…>',
       'mail files': 'mail files <id> [--out=DIR]',
       'mail doctor': 'mail doctor',
+      backfill: 'backfill',
+      'backfill worked': 'backfill worked',
       watch: 'watch <id> [--gone]',
       mute: 'mute <id> [--gone]',
       inbox: 'inbox [filters…] [--json] [--all] [--sent]',

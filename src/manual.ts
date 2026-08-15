@@ -294,6 +294,18 @@ export let manuals = declare({
     about: 'compare every book address with the Cloudflare routing rules',
     args: [],
   },
+  backfill: {
+    root: true,
+    about: 'run an explicit historical materialization',
+    args: [],
+  },
+  'backfill worked': {
+    about: 'materialize historical session work as graph edges',
+    detail:
+      'Explicit and idempotent. Scans historical claims once on request; ' +
+      'normal server boot and Session Tiles never read that history.',
+    args: [],
+  },
   watch: {
     about: 'put an entity in your inbox even when nothing is aimed at you',
     examples: ['task watch T-3', 'task watch T-3 --gone'],
