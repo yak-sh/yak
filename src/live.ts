@@ -2139,6 +2139,10 @@ export type Peeked = {
   y: number
   view?: string
   from?: Element
+  left?: number
+  top?: number
+  w?: number
+  h?: number
 }
 export let peek = signal<Peeked[]>([])
 

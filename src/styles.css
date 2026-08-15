@@ -3872,7 +3872,7 @@ a[data-ref]:hover {
 }
 /* A titlebar like a card's: the title flexes, the view tabs cluster
    right (the shared .Tab chips assume the --gap row), and the whole
-   head is the drag-to-pin handle. */
+   head moves the temporary card. The chips keep drag-to-pin. */
 .Peek_Head {
   display: flex;
   align-items: center;
@@ -3885,9 +3885,29 @@ a[data-ref]:hover {
   user-select: none;
 }
 .Peek_Body {
+  min-height: 0;
   padding: var(--half-gap);
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+.Peek_Resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 18px;
+  height: 18px;
+  cursor: nwse-resize;
+  touch-action: none;
+}
+.Peek_Resize::after {
+  content: '';
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
 }
 
 /* ---- the census: /admin — component sidebar, derived index tables ---- */
