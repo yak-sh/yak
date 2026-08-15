@@ -3867,6 +3867,11 @@ a[data-ref]:hover {
   width: min(60rem, calc(100vw - 2 * var(--gap)));
   max-width: none;
 }
+.Peek-sized {
+  min-width: 160px;
+  max-width: none;
+  max-height: none;
+}
 /* A titlebar like a card's: the title flexes, the view tabs cluster
    right (the shared .Tab chips assume the --gap row), and the whole
    head moves the temporary card. The chips keep drag-to-pin. */
@@ -3886,25 +3891,6 @@ a[data-ref]:hover {
   padding: var(--half-gap);
   overflow-y: auto;
   overscroll-behavior: contain;
-}
-.Peek_Resize {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 18px;
-  height: 18px;
-  cursor: nwse-resize;
-  touch-action: none;
-}
-.Peek_Resize::after {
-  content: '';
-  position: absolute;
-  right: 3px;
-  bottom: 3px;
-  width: 8px;
-  height: 8px;
-  border-right: 2px solid var(--muted);
-  border-bottom: 2px solid var(--muted);
 }
 
 /* ---- the census: /admin — component sidebar, derived index tables ---- */

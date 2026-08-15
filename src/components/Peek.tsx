@@ -3,7 +3,14 @@ import { ent, type Peeked } from '../live.ts'
 import { block, el } from './ui.tsx'
 import { cardMenuAt, peek } from './nav.tsx'
 import { applicable, resolve } from './registry.ts'
-import { dragData } from './drag.ts'
+import {
+  dragData,
+  moved,
+  moveEl,
+  resetSize,
+  resizeDirs,
+  resizeEl,
+} from './drag.ts'
 import { Entity } from './Entity.tsx'
 import { TabFace } from './Card.tsx'
 import { place } from './overlay.tsx'
@@ -23,16 +30,6 @@ export let peekKey = (key: string, typing: boolean) =>
   !typing && (key == 'Escape' || key == 'q')
 
 export let popPeek = (stack: Peeked[]) => stack.slice(0, -1)
-
-export let peekMove = (left: number, top: number, dx: number, dy: number) => ({
-  left: Math.round(left + dx),
-  top: Math.round(top + dy),
-})
-
-export let peekSize = (w: number, h: number, dx: number, dy: number) => ({
-  w: Math.max(340, Math.round(w + dx)),
-  h: Math.max(80, Math.round(h + dy)),
-})
 
 let PeekCard = ({ p }: { p: Peeked }) => {
   let root = useRef<HTMLDivElement>(null)
@@ -76,108 +73,72 @@ let PeekCard = ({ p }: { p: Peeked }) => {
     let box = root.current!
     let left = box.offsetLeft
     let top = box.offsetTop
-    let sx = e.clientX
-    let sy = e.clientY
-    let dx = 0
-    let dy = 0
-    let dragging = false
     let wasFree = free.current
-    let drag = (e: PointerEvent) => {
-      dx = e.clientX - sx
-      dy = e.clientY - sy
-      if (!dragging) {
-        if (Math.hypot(dx, dy) < 3) return
-        dragging = true
+    moveEl(
+      e,
+      box,
+      () => 1,
+      () => {
         free.current = true
-        box.setPointerCapture(e.pointerId)
-        box.style.willChange = 'transform'
-      }
-      box.style.transform = `translate(${dx}px, ${dy}px)`
-    }
-    let quit = () => {
-      removeEventListener('pointermove', drag)
-      removeEventListener('pointerup', up)
-      removeEventListener('pointercancel', cancel)
-      box.style.transform = ''
-      box.style.willChange = ''
-    }
-    let cancel = () => {
-      quit()
-      free.current = wasFree
-    }
-    let up = () => {
-      quit()
-      if (!dragging) return
-      let next = peekMove(left, top, dx, dy)
-      box.style.left = `${next.left}px`
-      box.style.top = `${next.top}px`
-      patch(next)
-    }
-    addEventListener('pointermove', drag)
-    addEventListener('pointerup', up)
-    addEventListener('pointercancel', cancel)
+      },
+      (dx, dy) => {
+        let next = moved(left, top, dx, dy)
+        patch({ left: next.x, top: next.y })
+      },
+      () => (free.current = wasFree),
+    )
   }
 
-  let resize = (e: PointerEvent) => {
+  let resize = (e: PointerEvent, d: string) => {
     e.stopPropagation()
     if (e.button != 0) return
     let box = root.current!
-    let w = box.offsetWidth
-    let h = box.offsetHeight
-    let sx = e.clientX
-    let sy = e.clientY
-    let next = { w, h }
-    let moved = false
     let wasFree = free.current
-    let before = {
-      width: box.style.width,
-      height: box.style.height,
-      maxWidth: box.style.maxWidth,
-      maxHeight: box.style.maxHeight,
-    }
+    let wasSized = box.classList.contains('Peek-sized')
     free.current = true
-    box.setPointerCapture(e.pointerId)
-    box.style.maxWidth = 'none'
-    box.style.maxHeight = 'none'
-    let size = (e: PointerEvent) => {
-      moved = true
-      next = peekSize(w, h, e.clientX - sx, e.clientY - sy)
-      box.style.width = `${next.w}px`
-      box.style.height = `${next.h}px`
-    }
-    let quit = () => {
-      removeEventListener('pointermove', size)
-      removeEventListener('pointerup', up)
-      removeEventListener('pointercancel', cancel)
-    }
-    let cancel = () => {
-      quit()
-      Object.assign(box.style, before)
-      free.current = wasFree
-    }
-    let up = () => {
-      quit()
-      if (!moved) return cancel()
-      patch({
-        left: box.offsetLeft,
-        top: box.offsetTop,
-        ...next,
-      })
-    }
-    addEventListener('pointermove', size)
-    addEventListener('pointerup', up)
-    addEventListener('pointercancel', cancel)
+    box.classList.add('Peek-sized')
+    resizeEl(
+      e,
+      e.currentTarget as HTMLElement,
+      box,
+      {
+        x: box.offsetLeft,
+        y: box.offsetTop,
+        w: box.offsetWidth,
+        h: box.offsetHeight,
+      },
+      d,
+      () => 1,
+      (next) =>
+        patch({
+          left: next.x ?? box.offsetLeft,
+          top: next.y ?? box.offsetTop,
+          w: next.w ?? p.w,
+          h: next.h ?? p.h,
+        }),
+      () => {
+        free.current = wasFree
+        if (!wasSized) box.classList.remove('Peek-sized')
+      },
+    )
   }
+
+  let reset = (d: string) => patch(resetSize(d))
 
   let style = [
     p.left != null && `left:${p.left}px`,
     p.top != null && `top:${p.top}px`,
-    p.w != null && `width:${p.w}px;max-width:none`,
-    p.h != null && `height:${p.h}px;max-height:none`,
+    p.w ? `width:${p.w}px` : false,
+    p.h ? `height:${p.h}px` : false,
   ].filter(Boolean).join(';')
 
   return (
-    <Frame elRef={root} style={style} onContextMenu={cardMenuAt(e)}>
+    <Frame
+      elRef={root}
+      mod={!!(p.w || p.h) && 'sized'}
+      style={style}
+      onContextMenu={cardMenuAt(e)}
+    >
       <Head
         onPointerDown={move}
         onDragEnd={flown}
@@ -211,7 +172,14 @@ let PeekCard = ({ p }: { p: Peeked }) => {
       <Body>
         <Entity eid={p.eid} view={`Card.${view}`} />
       </Body>
-      <div class='Peek_Resize' onPointerDown={resize} />
+      {resizeDirs.map((d) => (
+        <div
+          key={d}
+          class={`Handle Handle-${d}`}
+          onPointerDown={(e: PointerEvent) => resize(e, d)}
+          onDblClick={() => reset(d)}
+        />
+      ))}
     </Frame>
   )
 }

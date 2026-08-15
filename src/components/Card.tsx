@@ -3,7 +3,14 @@ import { camera, ent, mutate, pinZ, toFront, unreadFor } from '../live.ts'
 import { type Pinned } from '../types.ts'
 import { block, el } from './ui.tsx'
 import { applicable } from './registry.ts'
-import { dragData } from './drag.ts'
+import {
+  dragData,
+  moved,
+  moveEl,
+  resetSize,
+  resizeDirs,
+  resizeEl,
+} from './drag.ts'
 import { Entity } from './Entity.tsx'
 import { filterable, FilterInput } from './Filter.tsx'
 import { Icon } from './icons.tsx'
@@ -51,9 +58,6 @@ let Pin = el('div', 'Pin')
 let Tab = el('button', 'Tab')
 let Handle = el('div', 'Handle')
 
-// Resize handles live in the Pin's padding ring around the card — every
-// side and corner. Their name says which edges they move.
-let handles = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw']
 let Frame = block('section', 'Card', {
   Tabs: 'header',
   X: 'button',
@@ -96,56 +100,15 @@ export let Card = ({ p }: { p: Pinned }) => {
     if (!e.target.closest('.Card_Tabs')) return
     let el = e.currentTarget
     let from = { x: p.x, y: p.y }
-    let sx = e.clientX
-    let sy = e.clientY
-    // A click is not a drag: capturing the pointer retargets the derived
-    // mouse events (a title's dblclick would never fire), so the drag — and
-    // the capture — only start once the pointer has really moved.
-    let dragging = false
-    // The drag is compositor-only: the pin rides the pointer on a
-    // transform, and the GRAPH hears one pin patch on drop — a per-move
-    // cache write would re-render every board row in the app per mouse
-    // event.
-    let dx = 0
-    let dy = 0
-    let move = (e: PointerEvent) => {
-      if (!dragging) {
-        if (Math.hypot(e.clientX - sx, e.clientY - sy) < 3) return
-        dragging = true
-        el.setPointerCapture(e.pointerId)
-        el.style.willChange = 'transform'
-      }
-      // Pointer deltas are screen px; the pin lives in plane px.
-      let z = camera.value.zoom
-      dx = (e.clientX - sx) / z
-      dy = (e.clientY - sy) / z
-      el.style.transform = `translate(${dx}px, ${dy}px)`
-    }
-    // A dead gesture (pointercancel — touch-scroll takeover, etc.) snaps
-    // the card back and patches nothing; only a pointerup commits.
-    let quit = () => {
-      removeEventListener('pointermove', move)
-      removeEventListener('pointerup', up)
-      removeEventListener('pointercancel', quit)
-      el.style.transform = ''
-      el.style.willChange = ''
-    }
-    let up = () => {
-      quit()
-      if (!dragging) return
-      mutate({
-        eid: p.eid,
-        name: 'pin',
-        comp: { x: Math.round(from.x + dx), y: Math.round(from.y + dy) },
-      })
-    }
-    // The listeners ride the WINDOW: until the capture engages, moves only
-    // reach the element under the cursor, and a fast flick outruns the pin
-    // before its first pointermove — the card wedges mid-drag. The window
-    // can't be outrun.
-    addEventListener('pointermove', move)
-    addEventListener('pointerup', up)
-    addEventListener('pointercancel', quit)
+    moveEl(
+      e,
+      el,
+      () => camera.value.zoom,
+      () => {},
+      (dx, dy) => {
+        mutate({ eid: p.eid, name: 'pin', comp: moved(from.x, from.y, dx, dy) })
+      },
+    )
   }
 
   // Drag a side or corner to size the card; west/north edges move the pin
@@ -166,51 +129,31 @@ export let Card = ({ p }: { p: Pinned }) => {
       w: p.w || card.offsetWidth,
       h: p.h || card.offsetHeight,
     }
-    let sx = e.clientX
-    let sy = e.clientY
-    let comp: Record<string, number> = {}
-    grip.setPointerCapture(e.pointerId)
-    // Like the titlebar drag, the gesture rides inline styles — one pin
-    // reflows per move, the graph hears one patch on release.
     let pin = grip.parentElement as HTMLElement
-    let move = (e: PointerEvent) => {
-      let z = camera.value.zoom
-      let dx = (e.clientX - sx) / z
-      let dy = (e.clientY - sy) / z
-      comp = {}
-      if (d.includes('e')) comp.w = Math.max(160, Math.round(base.w + dx))
-      if (d.includes('w')) {
-        comp.w = Math.max(160, Math.round(base.w - dx))
-        comp.x = Math.round(base.x + base.w - comp.w)
-      }
-      if (d.includes('s')) comp.h = Math.max(60, Math.round(base.h + dy))
-      if (d.includes('n')) {
-        comp.h = Math.max(60, Math.round(base.h - dy))
-        comp.y = Math.round(base.y + base.h - comp.h)
-      }
-      if (comp.x != null) pin.style.left = `${comp.x}px`
-      if (comp.y != null) pin.style.top = `${comp.y}px`
-      if (comp.w != null) pin.style.width = `${comp.w}px`
-      if (comp.h != null) {
-        pin.style.height = `${comp.h}px`
-        pin.classList.add('Pin-sized')
-      }
-    }
-    let up = () => {
-      grip.removeEventListener('pointermove', move)
-      grip.removeEventListener('pointerup', up)
-      if (Object.keys(comp).length) mutate({ eid: p.eid, name: 'pin', comp })
-    }
-    grip.addEventListener('pointermove', move)
-    grip.addEventListener('pointerup', up)
+    let wasSized = pin.classList.contains('Pin-sized')
+    pin.classList.add('Pin-sized')
+    resizeEl(
+      e,
+      grip,
+      pin,
+      base,
+      d,
+      () => camera.value.zoom,
+      (comp) => {
+        if (comp.h != null) {
+          pin.style.height = `${comp.h}px`
+        }
+        mutate({ eid: p.eid, name: 'pin', comp })
+      },
+      () => {
+        if (!wasSized) pin.classList.remove('Pin-sized')
+      },
+    )
   }
 
   // Double-click a side to revert that dimension to auto; a corner, both.
   let reset = (d: string) => {
-    let comp: Record<string, number> = {}
-    if (d.includes('e') || d.includes('w')) comp.w = 0
-    if (d.includes('n') || d.includes('s')) comp.h = 0
-    mutate({ eid: p.eid, name: 'pin', comp })
+    mutate({ eid: p.eid, name: 'pin', comp: resetSize(d) })
   }
 
   return (
@@ -260,7 +203,7 @@ export let Card = ({ p }: { p: Pinned }) => {
           <Entity eid={p.target} view={`Card.${p.view}`} />
         </Scroll>
       </Frame>
-      {handles.map((d) => (
+      {resizeDirs.map((d) => (
         <Handle
           key={d}
           mod={d}
