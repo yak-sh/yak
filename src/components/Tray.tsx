@@ -60,7 +60,13 @@ let shown = (eid: string, s: Session) =>
   (trayRecent(s) && !seen.value.includes(eid))
 
 // LIVE: the digest a human wants without opening every session.
-let live = () => sessionRows().filter(([eid, session]) => shown(eid, session))
+let started = (s: Session) => Date.parse(s.started_at ?? '') || 0
+
+export let traySessions = (rows: [string, Session][]) =>
+  rows.toSorted(([, a], [, b]) => started(b) - started(a))
+
+let live = () =>
+  traySessions(sessionRows().filter(([eid, session]) => shown(eid, session)))
 
 let Frame = block('div', 'Tray', {
   Strip: 'button',

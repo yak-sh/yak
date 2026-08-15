@@ -3,7 +3,7 @@
 import { assertEquals } from '@std/assert'
 import { mode } from '../live.ts'
 import { type Ent } from '../types.ts'
-import { trayKey, trayOpen, trayRecent } from './Tray.tsx'
+import { trayKey, trayOpen, trayRecent, traySessions } from './Tray.tsx'
 import { graphStanding } from './session_status.tsx'
 
 Deno.test('t opens and closes the tray only from normal mode', () => {
@@ -38,6 +38,28 @@ Deno.test('the tray keeps a newly started session visible', () => {
       started_at: '2026-08-11T12:00:00-04:00',
     }, now),
     false,
+  )
+})
+
+Deno.test('tray sessions put the newest start at the top', () => {
+  let older = {
+    eid: 'older',
+    id: 'older',
+    started_at: '2026-08-12T10:00:00Z',
+    finished_at: '2026-08-12T12:00:00Z',
+  }
+  let newer = {
+    eid: 'newer',
+    id: 'newer',
+    started_at: '2026-08-12T11:00:00Z',
+  }
+  assertEquals(
+    traySessions([
+      ['unstarted', { eid: 'unstarted', id: 'unstarted' }],
+      ['older', older],
+      ['newer', newer],
+    ]).map(([eid]) => eid),
+    ['newer', 'older', 'unstarted'],
   )
 })
 
