@@ -1,7 +1,8 @@
 // Write-path baselines: apply() batches and snapshot() reads at the scale
 // the migration will push (thousands of entities). `deno task bench`.
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, db, snapshot } = await import('./db.ts')
+let { apply, db, resolveId, snapshot } = await import('./db.ts')
+let { freshDb } = await import('./testdb.ts')
 
 let uid = () => crypto.randomUUID()
 let task = (eid: string, i: number) => [
@@ -27,4 +28,13 @@ Deno.bench('apply: patch one column', () => {
 
 Deno.bench('snapshot: full graph', () => {
   snapshot(db)
+})
+
+Deno.bench('resolveId: num -> eid', () => {
+  resolveId(db, '500')
+})
+
+// The test-suite primitive: a regression here slows every db-backed test.
+Deno.bench('freshDb: clone migrated image', () => {
+  freshDb()
 })
