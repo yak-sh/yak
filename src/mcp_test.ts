@@ -3,7 +3,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
-import { rows } from './client.ts'
+import { idOf, rows } from './client.ts'
 import { evalGraph } from './graph_query.ts'
 import { CUT, elide, type IO, mcpServer } from './mcp.ts'
 import { commandOut } from './commands.ts'
@@ -82,6 +82,45 @@ Deno.test('command: open returns the public entity URL', async () => {
       arguments: { line: ':open T-7595' },
     }) as ToolResult
     assertEquals(said(out), 'https://tasks.yak.sh/T-7595')
+  })
+})
+
+Deno.test('command: setting a wake returns every pending wake for its session', async () => {
+  let { db, io } = graph()
+  let session = crypto.randomUUID()
+  let target = crypto.randomUUID()
+  let existing = crypto.randomUUID()
+  apply(db, [
+    { eid: session, name: 'session', comp: { id: 'wake-reader' } },
+    { eid: target, name: 'doc', comp: { title: 'Return here' } },
+    { eid: target, name: 'task', comp: { status: 'open' } },
+    {
+      eid: existing,
+      name: 'wake',
+      comp: {
+        at: new Date(Date.now() + 7_200_000).toISOString(),
+        target,
+        note: 'existing reminder',
+      },
+    },
+    { eid: existing, name: 'deliver', comp: { to: session } },
+  ])
+  let all = rows(snapshot(db))
+  let sid = idOf(all.find((r) => r.eid == session)!)
+  let tid = idOf(all.find((r) => r.eid == target)!)
+  await protocol(io, async (client) => {
+    let out = await client.callTool({
+      name: 'command',
+      arguments: {
+        line: `:wake ${sid} in 3 hours ${tid} -- new reminder`,
+        session: 'wake-reader',
+      },
+    }) as ToolResult
+    assertMatch(said(out), new RegExp(`pending wakes for ${sid} \\(2\\):`))
+    assertMatch(said(out), /existing reminder/)
+    assertMatch(said(out), /new reminder/)
+    let list = said(out).split(`pending wakes for ${sid}`)[1]
+    assertEquals((list.match(new RegExp(`→ ${tid}`, 'g')) ?? []).length, 2)
   })
 })
 

@@ -85,6 +85,7 @@ import {
 import { request } from './http.ts'
 import { spawnDefault } from './providers.ts'
 import { entityUrl } from './url.ts'
+import { wakeList } from './title.ts'
 
 // How the tools reach the graph — in-process on the server, HTTP here.
 export type IO = {
@@ -630,6 +631,23 @@ ${
       }
       if (out.changes?.length) await io.write(out.changes, session)
       let said = out.msg ? [out.msg] : []
+      if (line.replace(/^:/, '').trim().split(/\s/)[0] == 'wake') {
+        let to = String(
+          out.changes?.find((c) => c.name == 'deliver')?.comp?.to ?? '',
+        )
+        let wakes = await io.query(
+          `.wake! .deliver.to=${to} .delivered= .error=`,
+        )
+        let recipient = all.find((r) => r.eid == to) ?? {
+          eid: to,
+          kind: 'entity',
+          num: 0,
+          comps: {},
+        }
+        said.push(
+          wakeList(wakes, recipient, (id) => all.find((r) => r.eid == id)),
+        )
+      }
       if (out.spawn) {
         // A spawn on defaults — a fresh read sees the task the line may
         // have just filed; task_spawn is the door for overrides.

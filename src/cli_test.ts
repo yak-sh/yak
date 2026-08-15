@@ -34,8 +34,8 @@ import {
 import { rows } from './client.ts'
 import { manuals, parse } from './manual.ts'
 import { parseQuery } from './query.ts'
-import { fakeGraph } from './graph_fake.ts'
-import type { Snapshot } from './types.ts'
+import { answers, fakeGraph } from './graph_fake.ts'
+import type { Change, Snapshot } from './types.ts'
 import { slow } from './testing.ts'
 
 let transcript = (...events: unknown[]) => {
@@ -1237,6 +1237,68 @@ slow('list shows the wake title derived by the UI', async () => {
     assertEquals(out.code, 0, text(out.stderr))
     assertMatch(text(out.stdout), /^W-61\s+wake P-62 · in 2 hours$/m)
     assertEquals(seen.some((path) => path.startsWith('/snapshot')), false)
+  } finally {
+    await server.shutdown()
+  }
+})
+
+slow('setting a wake shows every pending wake for that session', async () => {
+  let session = 'bbbbbbbb-0000-4000-8000-000000000071'
+  let target = 'bbbbbbbb-0000-4000-8000-000000000072'
+  let existing = 'bbbbbbbb-0000-4000-8000-000000000073'
+  let changes: Change[] = [
+    { eid: session, name: 'entity', comp: { eid: session, num: 71 } },
+    { eid: session, name: 'session', comp: { id: 'wake-reader' } },
+    { eid: target, name: 'entity', comp: { eid: target, num: 72 } },
+    { eid: target, name: 'task', comp: { status: 'open' } },
+    { eid: existing, name: 'entity', comp: { eid: existing, num: null } },
+    {
+      eid: existing,
+      name: 'wake',
+      comp: {
+        at: new Date(Date.now() + 7_200_000).toISOString(),
+        target,
+        note: 'existing reminder',
+      },
+    },
+    { eid: existing, name: 'deliver', comp: { to: session } },
+  ]
+  let server = Deno.serve({ port: 0, onListen: () => {} }, async (req) => {
+    let url = new URL(req.url)
+    if (req.method == 'POST' && url.pathname == '/apply') {
+      let sent = await req.json() as Change[]
+      for (let eid of new Set(sent.map((c) => c.eid))) {
+        if (!changes.some((c) => c.eid == eid)) {
+          changes.push({ eid, name: 'entity', comp: { eid, num: null } })
+        }
+      }
+      changes.push(...sent)
+      return Response.json({ ok: true, changes: sent })
+    }
+    let snap = { changes, deps: [] }
+    if (url.pathname == '/snapshot') return Response.json(snap)
+    return Response.json(answers(snap)(decodeURIComponent(url.search.slice(1))))
+  })
+  try {
+    let out = await new Deno.Command(Deno.execPath(), {
+      args: [
+        'run',
+        '-A',
+        new URL('./cli.ts', import.meta.url).pathname,
+        'wake',
+        'S-71',
+        'in 3 hours',
+        'T-72',
+        '--body=new reminder',
+      ],
+      clearEnv: true,
+      env: { TASKS_HOST: `127.0.0.1:${server.addr.port}` },
+    }).output()
+    let stdout = text(out.stdout)
+    assertEquals(out.code, 0, text(out.stderr))
+    assertMatch(stdout, /pending wakes for S-71 \(2\):/)
+    assertMatch(stdout, /existing reminder/)
+    assertMatch(stdout, /new reminder/)
   } finally {
     await server.shutdown()
   }

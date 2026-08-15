@@ -113,7 +113,7 @@ import {
 import type { Log } from './telemetry.ts'
 import type { JournalEntry } from './client.ts'
 import { local } from './time.ts'
-import { wakeTitle } from './title.ts'
+import { wakeList, wakeTitle } from './title.ts'
 import {
   agentPid,
   bornAt as processBornAt,
@@ -1192,8 +1192,33 @@ let colon = async (focus: string | undefined, argv: string[]) => {
   // A shell has a filesystem, so a dot-param value here reads @file and
   // @- exactly as `task set` does — one convention across the CLI's doors.
   let out = runCommand(line, { eid, rows: all, session, read: inflate })
-  if (out.changes?.length) await send(await derefedChanges(out.changes))
+  let changes = out.changes?.length
+    ? await derefedChanges(out.changes)
+    : undefined
+  if (changes) await send(changes)
   if (out.msg) print(out.msg)
+  if (name == 'wake' && changes) {
+    let to = String(changes.find((c) => c.name == 'deliver')?.comp?.to ?? '')
+    let wakes = await query([
+      '.wake!',
+      `.deliver.to=${to}`,
+      '.delivered=',
+      '.error=',
+    ])
+    let refs = [
+      ...all,
+      ...await fetched(
+        wakes.map((r) => String(r.comps.wake?.target ?? '')).filter(Boolean),
+      ),
+    ]
+    let recipient = refs.find((r) => r.eid == to) ?? {
+      eid: to,
+      kind: 'entity',
+      num: 0,
+      comps: {},
+    }
+    print(wakeList(wakes, recipient, (id) => refs.find((r) => r.eid == id)))
+  }
   if (out.spawn) await launch(out.spawn, {})
   if (out.go) {
     let r = all.find((x) => x.eid == out.go)
