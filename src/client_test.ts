@@ -2412,6 +2412,7 @@ Deno.test('grammar: the teaching text derives from the vocabulary', async () => 
 // first): mint a task, claim it, comment on it, link it, finish it.
 let DAY: import('./client.ts').JournalEntry[] = [
   {
+    id: 4,
     ts: '2026-07-20T18:00:00Z',
     actor: 'sess-x',
     changes: [
@@ -2426,6 +2427,7 @@ let DAY: import('./client.ts').JournalEntry[] = [
     ],
   },
   {
+    id: 3,
     ts: '2026-07-20T12:00:00Z',
     actor: 'sess-x',
     changes: [
@@ -2437,11 +2439,13 @@ let DAY: import('./client.ts').JournalEntry[] = [
     ],
   },
   {
+    id: 2,
     ts: '2026-07-20T10:00:00Z',
     actor: 'sess-x',
     changes: [{ eid: T1, name: 'claim', comp: { session: S } }],
   },
   {
+    id: 1,
     ts: '2026-07-20T09:00:00Z',
     actor: 'sess-x',
     changes: [

@@ -12,7 +12,8 @@ import { type Change, edges, statuses, uuid, verdicts } from './types.ts'
 import { slow } from './testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, journalOf, snapshot, touch } = await import('./db.ts')
+let { apply, inverseBatch, journalOf, lastBatch, snapshot, touch } =
+  await import('./db.ts')
 let { freshDb } = await import('./testdb.ts')
 let { append } = await import('./entries.ts')
 
@@ -270,6 +271,7 @@ let blank = (): IO => ({
   touch: () => Promise.resolve(),
   logs: () => Promise.resolve({ entries: [] }),
   history: () => Promise.resolve([]),
+  undo: () => Promise.resolve([]),
   providers: () => Promise.resolve([{ name: 'test', models: ['test'] }]),
 })
 
@@ -292,6 +294,10 @@ let graph = () => {
     },
     logs: () => Promise.resolve({ entries: [] }),
     history: (eid, limit) => Promise.resolve(journalOf(db, eid, limit)),
+    undo: ({ id, eid }, via) => {
+      let batch = id ?? (eid ? lastBatch(db, eid) : 0)
+      return Promise.resolve(apply(db, inverseBatch(db, batch), undefined, via))
+    },
     providers: () => Promise.resolve([{ name: 'test', models: ['test'] }]),
   }
   return { db, io, pages }
@@ -395,6 +401,7 @@ let bases: Record<string, Record<string, unknown>> = {
   session_peek: { id: 'S-1' },
   transcript: { id: 'S-1' },
   history: { id: 'T-1' },
+  undo: { id: 'T-1' },
   task_comment: { id: 'T-1', session: 'test' },
   memory_save: { session: 'test' },
   memory_recall: {},
@@ -831,6 +838,43 @@ Deno.test('graph_apply carries a Change.was precondition to apply()', async () =
       }])
       assertEquals(ok.isError, undefined)
       assertEquals(body(), 'MERGED')
+    })
+  } finally {
+    g.db.close()
+  }
+})
+
+Deno.test("undo tool reverses an entity's latest batch by human id", async () => {
+  let g = graph()
+  let eid = crypto.randomUUID()
+  let status = () =>
+    snapshot(g.db).changes.find((c) => c.eid == eid && c.name == 'task')
+      ?.comp?.status
+  try {
+    apply(g.db, [
+      { eid, name: 'doc', comp: { title: 'undo me', body: '' } },
+      { eid, name: 'task', comp: { status: 'open' } },
+    ])
+    apply(g.db, [{ eid, name: 'task', comp: { status: 'done' } }])
+    let num =
+      (g.db.prepare('select num from entity where eid = ?').get(eid) as {
+        num: number
+      }).num
+    assertEquals(status(), 'done')
+    await protocol(g.io, async (client) => {
+      let out = await client.callTool({
+        name: 'undo',
+        arguments: { id: `T-${num}` },
+      }) as ToolResult
+      assertEquals(out.isError, undefined)
+      assertMatch(said(out), /undid .*task/)
+      assertEquals(status(), 'open') // the latest batch was reversed
+      // A target that names nothing refuses, never silently no-ops.
+      let miss = await client.callTool({
+        name: 'undo',
+        arguments: { id: 'T-999999' },
+      }) as ToolResult
+      assertEquals(miss.isError, true)
     })
   } finally {
     g.db.close()

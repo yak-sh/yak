@@ -61,6 +61,7 @@ import {
   spawnChanges,
   spawnDefaults,
   taskChanges,
+  undo,
 } from './client.ts'
 import {
   kidsOf,
@@ -119,6 +120,12 @@ export type IO = {
   // An entity's slice of the journal (db.ts journalOf in-process; GET
   // /journal over stdio) — the wire's write record, newest first.
   history: (eid: string, limit?: number) => Promise<JournalEntry[]>
+  // Reverse a journaled batch (inverseBatch+apply in-process; POST /undo over
+  // stdio) — the guarded inverse, refused loudly when the world moved.
+  undo: (
+    ref: { id?: number; eid?: string },
+    via?: string,
+  ) => Promise<Change[]>
   // The provider table (adapters in-process; GET /providers over stdio)
   // — task_spawn's last-resort default when neither the caller nor the
   // args name one.
@@ -841,6 +848,44 @@ maximum number of newest batches to return. ${BUS}`,
       let entries = await io.history(row.eid, limit)
       if (!entries.length) return bus(`${idOf(row)}: no history`, session)
       return bus(entries.map(historyLine).join('\n'), session)
+    },
+  )
+
+  tool(
+    'undo',
+    `Reverse a journaled batch — the graph's guarded undo. id names either a
+journal batch (a #id from history, e.g. 123) or an ENTITY (T-5, whose
+LATEST batch is reversed). The inverse restores exactly what the batch
+changed, but is REFUSED loudly if a guarded column moved since, or if the
+batch deleted an entity (a tombstone is permanent) — refusing beats
+clobbering a write you never saw. The undo is itself journaled, so undoing
+it is a redo. ${BUS}`,
+    {
+      id: z.string(),
+      session: z.string().optional(),
+    },
+    async ({ id, session }: { id: string; session?: string }) => {
+      let m = id.match(/^#?(\d+)$/)
+      let ref: { id?: number; eid?: string }
+      if (m) ref = { id: Number(m[1]) }
+      else {
+        let row = find(rows(await io.read()), id)
+        if (!row) return err(`no entity: ${id}`)
+        ref = { eid: row.eid }
+      }
+      let out = await io.undo(ref, session)
+      let noise = new Set(['created', 'updated', 'resume', 'imported'])
+      let what = out.filter((c) => !noise.has(c.name)).map((c) =>
+        c.comp == null
+          ? c.name == 'entity' ? '†' : `-${c.name}`
+          : `${c.name}{${
+            Object.keys(c.comp).filter((k) => k != 'eid').join(' ')
+          }}`
+      ).join(' · ')
+      return bus(
+        `undid ${m ? `#${m[1]}` : id}${what ? ` · ${what}` : ''}`,
+        session,
+      )
     },
   )
 
@@ -1657,6 +1702,7 @@ if (import.meta.main) {
       return res.json()
     },
     history: (eid, limit) => history(eid, limit),
+    undo: (ref, via) => undo(ref, via),
     providers: async () => {
       let res = await request(`http://${host()}/providers`)
       if (!res.ok) throw new Error(`server said ${res.status}`)

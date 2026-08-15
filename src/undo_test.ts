@@ -1,0 +1,159 @@
+// `task undo` — inverseBatch reversed through apply() against an in-memory db.
+// The contract: the guarded inverse restores what a batch changed, and REFUSES
+// loudly (never clobbers) when a column moved since or the batch deleted an
+// entity. Every case drives real apply() batches so the journal, the was-guard,
+// and the tombstone rule are the ones under test, not a mock of them.
+Deno.env.set('DB_PATH', ':memory:')
+let { apply, inverseBatch, lastBatch, snapshot } = await import('./db.ts')
+let { freshDb } = await import('./testdb.ts')
+let { assertEquals, assertNotEquals, assertThrows } = await import(
+  '@std/assert'
+)
+
+let uid = () => crypto.randomUUID()
+let compOf = (
+  d: ReturnType<typeof freshDb>,
+  eid: string,
+  name: string,
+) => snapshot(d).changes.find((c) => c.eid == eid && c.name == name)?.comp
+let alive = (d: ReturnType<typeof freshDb>, eid: string) =>
+  snapshot(d).changes.some((c) => c.eid == eid)
+// Reverse the latest batch that touched an entity — the ergonomic door.
+let undoLast = (d: ReturnType<typeof freshDb>, eid: string, via?: string) =>
+  apply(d, inverseBatch(d, lastBatch(d, eid)), undefined, via)
+
+let born = (d: ReturnType<typeof freshDb>, eid: string, status = 'open') =>
+  apply(d, [
+    { eid, name: 'doc', comp: { title: 'x', body: '' } },
+    { eid, name: 'task', comp: { status } },
+  ])
+
+Deno.test('undo restores a component update to its prior value', () => {
+  let db = freshDb(), t = uid()
+  born(db, t, 'open')
+  apply(db, [{ eid: t, name: 'task', comp: { status: 'done' } }])
+  assertEquals(compOf(db, t, 'task')?.status, 'done')
+  undoLast(db, t)
+  assertEquals(compOf(db, t, 'task')?.status, 'open')
+})
+
+Deno.test('undo of a component create deletes just that component', () => {
+  let db = freshDb(), t = uid()
+  apply(db, [{ eid: t, name: 'doc', comp: { title: 'x', body: '' } }])
+  apply(db, [{ eid: t, name: 'task', comp: { status: 'open' } }])
+  assertEquals(!!compOf(db, t, 'task'), true)
+  undoLast(db, t) // last batch created the task component
+  assertEquals(compOf(db, t, 'task'), undefined)
+  assertEquals(!!compOf(db, t, 'doc'), true) // entity + doc survive
+})
+
+Deno.test('undo of an entity creation deletes the entity', () => {
+  let db = freshDb(), t = uid()
+  born(db, t)
+  undoLast(db, t) // the birth batch → the whole entity is undone
+  assertEquals(alive(db, t), false)
+})
+
+Deno.test('undo refuses when a guarded column moved since', () => {
+  let db = freshDb(), t = uid()
+  born(db, t, 'open')
+  apply(db, [{ eid: t, name: 'task', comp: { status: 'done' } }])
+  let batch = lastBatch(db, t)
+  apply(db, [{ eid: t, name: 'task', comp: { status: 'wip' } }]) // moves it
+  assertThrows(
+    () => apply(db, inverseBatch(db, batch)),
+    Error,
+    'has moved since',
+  )
+  assertEquals(compOf(db, t, 'task')?.status, 'wip') // untouched by the refusal
+})
+
+Deno.test('undo of a creation refuses when the entity was touched since', () => {
+  let db = freshDb(), t = uid()
+  born(db, t)
+  let birth = lastBatch(db, t)
+  apply(db, [{ eid: t, name: 'task', comp: { status: 'done' } }]) // later touch
+  assertThrows(
+    () => inverseBatch(db, birth),
+    Error,
+    'was modified after',
+  )
+  assertEquals(alive(db, t), true) // still alive
+})
+
+Deno.test('undo refuses to reverse a deletion — a tombstone is permanent', () => {
+  let db = freshDb(), t = uid()
+  born(db, t)
+  apply(db, [{ eid: t, name: 'entity', comp: null }]) // delete
+  let del = lastBatch(db, t)
+  assertThrows(
+    () => inverseBatch(db, del),
+    Error,
+    'deletions are permanent',
+  )
+})
+
+Deno.test('undo flips an edge: a link becomes an unlink', () => {
+  let db = freshDb(), a = uid(), b = uid()
+  born(db, a)
+  born(db, b)
+  apply(db, [{
+    eid: a,
+    name: 'dependency',
+    comp: { type: 'requires', child: b },
+  }])
+  assertEquals(
+    snapshot(db).deps.some((d) => d.parent == a && d.child == b),
+    true,
+  )
+  undoLast(db, a) // undo the link
+  assertEquals(
+    snapshot(db).deps.some((d) => d.parent == a && d.child == b),
+    false,
+  )
+})
+
+Deno.test('undo restores a bool column (wire true/false vs stored 0/1)', () => {
+  let db = freshDb(), p = uid()
+  apply(db, [
+    { eid: p, name: 'doc', comp: { title: 'venture', body: '' } },
+    { eid: p, name: 'repo', comp: { path: '/x', push: false } },
+  ])
+  let before = compOf(db, p, 'repo')?.push
+  apply(db, [{ eid: p, name: 'repo', comp: { push: true } }])
+  assertNotEquals(compOf(db, p, 'repo')?.push, before) // the write took
+  // If the was-guard hashed the wire `true` instead of the stored 1, this undo
+  // would refuse as "moved". It restores, proving the stored-shape normalization.
+  undoLast(db, p)
+  assertEquals(compOf(db, p, 'repo')?.push, before)
+})
+
+Deno.test('undoing an undo is a redo', () => {
+  let db = freshDb(), t = uid()
+  born(db, t, 'open')
+  apply(db, [{ eid: t, name: 'task', comp: { status: 'done' } }])
+  undoLast(db, t)
+  assertEquals(compOf(db, t, 'task')?.status, 'open') // undone
+  undoLast(db, t) // undo the undo
+  assertEquals(compOf(db, t, 'task')?.status, 'done') // redone
+})
+
+Deno.test('undo by explicit batch id reverses that batch, not the latest', () => {
+  let db = freshDb(), t = uid()
+  born(db, t, 'open')
+  let priorPriority = compOf(db, t, 'task')?.priority // its birth default
+  apply(db, [{ eid: t, name: 'task', comp: { priority: 1 } }])
+  let setPriority = lastBatch(db, t)
+  apply(db, [{ eid: t, name: 'task', comp: { status: 'done' } }])
+  // Undo the older priority batch by id while the newer status write stands —
+  // the was-guard on `priority` still holds because `status` is a different col.
+  // Undo restores the EXACT prior value (the birth default), not a spurious null.
+  apply(db, inverseBatch(db, setPriority))
+  assertEquals(compOf(db, t, 'task')?.priority, priorPriority)
+  assertEquals(compOf(db, t, 'task')?.status, 'done') // status untouched
+})
+
+Deno.test('no journal batch #N — a clear refusal, not a silent no-op', () => {
+  let db = freshDb()
+  assertThrows(() => inverseBatch(db, 999999), Error, 'no journal batch')
+})

@@ -198,6 +198,18 @@ export let manuals = declare({
     args: [arg('id', id)],
     opts: [{ ...count, or: '50' }, json],
   },
+  undo: {
+    about: "reverse a journaled batch — the graph's guarded undo",
+    examples: ['task undo T-5', 'task undo #1287'],
+    detail:
+      'Reverses a batch by applying its inverse, guarded by Change.was: a ' +
+      'column that moved since, or a batch that deleted an entity (a tombstone ' +
+      'is permanent), is refused loudly rather than clobbered. A #id (from ' +
+      'task history) names a batch; an entity names its LATEST batch. The undo ' +
+      'is itself journaled, so undoing it is a redo.',
+    root: true,
+    args: [arg('id', id)],
+  },
   transcript: {
     about: "a session's whole log as a clean, ordered transcript",
     examples: [

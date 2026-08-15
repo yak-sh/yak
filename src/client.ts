@@ -484,6 +484,7 @@ export let inflate = (
 
 // An entity's slice of the journal — the wire's record, newest first.
 export type JournalEntry = {
+  id: number // the journal batch id (rowid), the handle `task undo` reverses
   ts: string
   actor: string | null
   via?: string | null
@@ -603,18 +604,37 @@ export let ledger = (entries: JournalEntry[], all: Row[]): string[] => {
   return [span, '', ...lines]
 }
 
-// One journal entry as a line: when · who · what. The patch is said
+// One journal entry as a line: #id · when · who · what. The patch is said
 // compactly — comp{cols} for writes, -comp for removals, † for the
-// entity's death — enough to scan a trail without reading JSON.
+// entity's death — enough to scan a trail without reading JSON. The #id is
+// the handle `task undo #id` reverses.
 export let historyLine = (e: JournalEntry) => {
   let what = e.changes.map((c) =>
     c.comp == null
       ? c.name == 'entity' ? '†' : `-${c.name}`
       : `${c.name}{${Object.keys(c.comp).filter((k) => k != 'eid').join(' ')}}`
   ).join(' · ')
-  return `${local(e.ts)}  ${
+  return `#${String(e.id).padEnd(6)} ${local(e.ts)}  ${
     (e.actor ?? 'unknown').slice(0, 24).padEnd(24)
   } ${what}`
+}
+
+// Reverse a journaled batch. The server builds the guarded inverse (only it
+// reads the journal) and applies it — this door just names the target and
+// carries who spoke. `id` is a journal batch number (from `task history`);
+// `eid` undoes that entity's latest batch. Throws the server's refusal
+// (deletion / world-moved / stale) verbatim.
+export let undo = async (
+  ref: { id?: number; eid?: string },
+  via = me(),
+): Promise<Change[]> => {
+  let q = ref.id != null ? `id=${ref.id}` : `eid=${ref.eid}`
+  let res = await request(`http://${host()}/undo?${q}`, {
+    method: 'POST',
+    headers: via ? { 'x-via': via } : {},
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return (await res.json() as { changes: Change[] }).changes
 }
 
 // ---- dot-params (the WRITE grammar: values are literal; the filter

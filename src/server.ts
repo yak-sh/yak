@@ -23,8 +23,10 @@ import {
   epoch,
   file as graph,
   historicalWorked,
+  inverseBatch,
   journalBy,
   journalOf,
+  lastBatch,
   locate,
   referrersOf,
   refsOf,
@@ -650,6 +652,22 @@ let graphIO: IO = {
   logs: async (eid, q) => sessionLog(eid, q),
   // deno-lint-ignore require-await
   history: async (eid, limit) => journalOf(db, eid, limit),
+  // Build the inverse and apply it in one synchronous stretch (no await
+  // between) — the same atomicity the /undo route relies on.
+  // deno-lint-ignore require-await
+  undo: async ({ id, eid }, via) => {
+    let batch = id ?? (eid ? lastBatch(db, eid) : 0)
+    if (!batch) {
+      throw new Error(
+        eid ? `${eid} has no history to undo` : 'undo needs id or eid',
+      )
+    }
+    let t = trace()
+    let out = apply(db, inverseBatch(db, batch), t, via)
+    cast(out)
+    effect(out, t)
+    return out
+  },
   providers: () => readyProviders(),
 }
 
@@ -1067,6 +1085,46 @@ let http = Deno.serve(
         note(false, why)
         return new Response(why, { status: 400 })
       })
+    }
+    // Undo reverses a journaled batch: the server builds the guarded inverse
+    // (only it reads the journal) and applies it through the same door as any
+    // write. Build and apply share this one synchronous tick — no await
+    // between — so the world can't move after the inverse is priced and before
+    // it lands. ?id= names a journal batch; ?eid= its entity's latest batch.
+    if (path == '/undo' && req.method == 'POST') {
+      let t0 = performance.now()
+      let note = (ok: boolean, error?: string) =>
+        record(db, {
+          source: 'http',
+          name: 'undo',
+          ok,
+          ms: performance.now() - t0,
+          error,
+        })
+      try {
+        let idParam = url.searchParams.get('id')
+        let eid = url.searchParams.get('eid')
+        let id = idParam != null
+          ? Number(idParam)
+          : eid
+          ? lastBatch(db, eid)
+          : 0
+        if (!id) {
+          throw new Error(
+            eid ? `${eid} has no history to undo` : 'undo needs ?id= or ?eid=',
+          )
+        }
+        let t = trace()
+        let out = apply(db, inverseBatch(db, id), t, req.headers.get('x-via'))
+        cast(out)
+        effect(out, t)
+        note(true)
+        return Response.json({ ok: true, changes: out, id })
+      } catch (e) {
+        let why = e instanceof Error ? e.message : String(e)
+        note(false, why)
+        return new Response(why, { status: 400 })
+      }
     }
     // Historical claim materialization is deliberate operator work, never a
     // boot sweep. Ordinary apply batches keep persistence, live broadcasts,

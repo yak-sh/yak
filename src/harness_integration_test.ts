@@ -4,7 +4,14 @@
 // and replayable surface is scanned for credential markers.
 import { assertEquals, assertMatch } from '@std/assert'
 import { rows } from './client.ts'
-import { apply, journalOf, open, snapshot } from './db.ts'
+import {
+  apply,
+  inverseBatch,
+  journalOf,
+  lastBatch,
+  open,
+  snapshot,
+} from './db.ts'
 import { readEntries } from './entries.ts'
 import { evalGraph } from './graph_query.ts'
 import { combineTools, localTools, tasksTools } from './harness_tools.ts'
@@ -53,6 +60,15 @@ let ioFor = (db: ReturnType<typeof open>): IO => ({
   touch: () => Promise.resolve(),
   logs: () => Promise.resolve({ entries: [] }),
   history: (eid, limit) => Promise.resolve(journalOf(db, eid, limit)),
+  undo: ({ id, eid }, via) =>
+    Promise.resolve(
+      apply(
+        db,
+        inverseBatch(db, id ?? (eid ? lastBatch(db, eid) : 0)),
+        undefined,
+        via,
+      ),
+    ),
   providers: () => Promise.resolve([]),
 })
 

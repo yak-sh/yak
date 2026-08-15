@@ -77,6 +77,7 @@ import {
   subChanges,
   taskBlock,
   taskChanges,
+  undo,
   unreadMail,
   unreadPipe,
   wrapChanges,
@@ -1436,6 +1437,27 @@ let past = async (got: Got) => {
   for (let e of entries) print(historyLine(e))
 }
 
+// Reverse a journaled batch — the graph's --ff-only undo. `task undo #123`
+// names a batch (the #id from `task history`); `task undo T-5` reverses that
+// entity's latest batch. The server builds the guarded inverse and refuses
+// loudly — a moved column, or a deleted entity that can't be resurrected —
+// rather than clobbering. The undo is itself journaled, so undoing it is a redo.
+let unwind = async (got: Got) => {
+  let id = got.args.id
+  if (!id) throw new Error('task undo <#batch | entity>')
+  let m = id.match(/^#?(\d+)$/)
+  let ref = m ? { id: Number(m[1]) } : { eid: (await needed(id)).eid }
+  let changes = await undo(ref)
+  // The user-facing effect, minus the provenance the server re-derives.
+  let noise = new Set(['created', 'updated', 'resume', 'imported'])
+  let what = changes.filter((c) => !noise.has(c.name)).map((c) =>
+    c.comp == null
+      ? c.name == 'entity' ? '†' : `-${c.name}`
+      : `${c.name}{${Object.keys(c.comp).filter((k) => k != 'eid').join(' ')}}`
+  ).join(' · ')
+  print(`undid ${m ? `#${m[1]}` : id}${what ? ` · ${what}` : ''}`)
+}
+
 // A session's WHOLE log as a clean, ordered transcript — the dump you want
 // first when debugging one. Reads the same /logs door session_peek does (the
 // authoritative entry partition for a graph-native session), renders through
@@ -2622,6 +2644,7 @@ export let verbs = bind({
   set,
   show,
   history: past,
+  undo: unwind,
   transcript,
   search: seek,
   mail: mailList,

@@ -3752,6 +3752,10 @@ export let record = (
 // does the walking — v0 reads are fine at this scale; a seek index
 // arrives with the lazy-partition work (T-3683) if logs outgrow it.
 export type JournalEntry = {
+  // The journal rowid — the batch's id, the handle `task undo` reverses. Blessed
+  // rather than added as a column: the rowid is already stable within an epoch,
+  // and a db restore mints a fresh epoch precisely to retire stale cursors.
+  id: number
   ts: string
   actor: string | null
   via: string | null
@@ -3771,12 +3775,14 @@ export let journalOf = (
     order by j.rowid desc limit ?
   `,
   ).all(eid, limit) as {
+    rowid: number
     ts: string
     actor: string | null
     via: string | null
     batch: string
   }[])
     .map((r) => ({
+      id: r.rowid,
       ts: r.ts,
       actor: r.actor,
       via: r.via,
@@ -3795,21 +3801,164 @@ export let journalBy = (
   (prep(
     db,
     `
-    select ts, actor, via, batch from journal
+    select rowid, ts, actor, via, batch from journal
     where via = ? order by rowid desc limit ?
   `,
   ).all(via, limit) as {
+    rowid: number
     ts: string
     actor: string | null
     via: string | null
     batch: string
   }[])
     .map((r) => ({
+      id: r.rowid,
       ts: r.ts,
       actor: r.actor,
       via: r.via,
       changes: canonicalChanges(JSON.parse(r.batch) as Change[]),
     }))
+
+// One entity's component state as of just BEFORE journal rowid `before`, rebuilt
+// by column-merging that entity's own journal slice (rowid < before, oldest
+// first) — per-entity and bounded, never a whole-log scan. A present component
+// key exists; its value is the merged columns. undo restores from this: the
+// value to put back is the value a batch found when it wrote.
+let stateBefore = (
+  db: DatabaseSync,
+  eid: string,
+  before: number,
+): Record<string, Record<string, unknown>> => {
+  let rows = prep(
+    db,
+    `select distinct j.rowid, j.batch from journal j, json_each(j.batch) je
+     where json_extract(je.value, '$.eid') = ? and j.rowid < ?
+     order by j.rowid`,
+  ).all(eid, before) as { rowid: number; batch: string }[]
+  let state: Record<string, Record<string, unknown>> = {}
+  for (let r of rows) {
+    for (let c of canonicalChanges(JSON.parse(r.batch) as Change[])) {
+      if (c.eid != eid || c.name == 'dependency') continue
+      // A death mid-window can't precede a valid target (a tombstone voids
+      // later writes), but resetting keeps the reconstruction honest if seen.
+      if (c.name == 'entity') {
+        if (!c.comp) state = {}
+        continue
+      }
+      if (c.comp == null) delete state[c.name]
+      else state[c.name] = { ...(state[c.name] ?? {}), ...c.comp }
+    }
+  }
+  return state
+}
+
+// The guard tokens for the columns a change wrote: sha of each value AS STORED,
+// null for a column it cleared. A bool rides the wire as true/false but apply()
+// reads it back as the 0/1 SQLite keeps, so it must hash in that shape or the
+// guard would refuse an unchanged column. apply() refuses the inverse if any
+// token has moved since the batch wrote it.
+let wasOf = (name: string, comp: Record<string, unknown>, keys: string[]) => {
+  let types = (comps as Record<string, Record<string, unknown>>)[name] ?? {}
+  let was: Record<string, string | null> = {}
+  for (let k of keys) {
+    let v = comp[k]
+    was[k] = v == null ? null : sha(types[k] == 'bool' ? (v ? 1 : 0) : v)
+  }
+  return was
+}
+
+// A journaled batch reversed: the guarded inverse patch that restores the state
+// each change found, for apply() to land atomically. The batch is read O(1) by
+// rowid and prior state is per-entity (stateBefore) — no whole-journal scan.
+// The refusals ARE the feature on a graph several agents write concurrently:
+//   - an entity DELETED in the batch → throws: a tombstone is permanent, so the
+//     eid cannot be resurrected.
+//   - an entity CREATED in the batch → the inverse deletes it, but only if
+//     nothing has touched it since (an entity-delete has no column to was-guard,
+//     so a later touch is the coarse "world moved").
+//   - every restored column carries `was` = the value the batch wrote, so a
+//     concurrent edit refuses the whole undo rather than clobbering it.
+// Server-owned components (resume, imported — empty wire vocabulary) and the
+// provenance echoes are re-derived by apply(), never user intent: skipped.
+export let inverseBatch = (db: DatabaseSync, id: number): Change[] => {
+  let row = prep(db, 'select rowid, batch from journal where rowid = ?')
+    .get(id) as { rowid: number; batch: string } | undefined
+  if (!row) throw new Error(`no journal batch #${id}`)
+  let batch = canonicalChanges(JSON.parse(row.batch) as Change[])
+
+  let dead = batch.find((c) => c.name == 'entity' && c.comp == null)
+  if (dead) {
+    throw new Error(
+      `${human(db, dead.eid)} was deleted in #${id} — deletions are permanent`,
+    )
+  }
+  let born = new Set(
+    batch.filter((c) => c.name == 'entity' && c.comp).map((c) => c.eid),
+  )
+  let touchedSince = prep(
+    db,
+    `select 1 from journal j, json_each(j.batch) je
+     where j.rowid > ? and json_extract(je.value, '$.eid') = ? limit 1`,
+  )
+  let priors = new Map<string, Record<string, Record<string, unknown>>>()
+  let priorOf = (eid: string) => {
+    let p = priors.get(eid)
+    if (!p) priors.set(eid, p = stateBefore(db, eid, id))
+    return p
+  }
+
+  let inverse: Change[] = []
+  for (let eid of born) {
+    if (touchedSince.get(id, eid)) {
+      throw new Error(
+        `${human(db, eid)} was modified after #${id} — undo refused`,
+      )
+    }
+    inverse.push({ eid, name: 'entity', comp: null })
+  }
+  for (let c of batch) {
+    if (born.has(c.eid) || c.name == 'entity') continue // the delete covers it
+    if (c.name == 'dependency') {
+      // Flip the edge: a link becomes an unlink and vice versa. A triple has no
+      // row key to guard; apply() refuses if an endpoint has died.
+      if (!c.comp) continue
+      let { type, child, gone } = c.comp as Record<string, unknown>
+      inverse.push({
+        eid: c.eid,
+        name: 'dependency',
+        comp: gone ? { type, child } : { type, child, gone: true },
+      })
+      continue
+    }
+    if (!cmps[c.name]?.length || !c.comp) continue // server-owned / derived
+    let keys = Object.keys(c.comp).filter((k) => k != 'eid')
+    if (!keys.length) continue
+    let was = wasOf(c.name, c.comp, keys) as Change['was']
+    let prior = priorOf(c.eid)[c.name]
+    if (!prior) {
+      // The batch CREATED this component → undo deletes it, guarded.
+      inverse.push({ eid: c.eid, name: c.name, comp: null, was })
+    } else {
+      // The batch UPDATED it → restore each written column to its prior value
+      // (absent → null, which column-merge clears).
+      let comp: Record<string, unknown> = {}
+      for (let k of keys) comp[k] = prior[k] ?? null
+      inverse.push({ eid: c.eid, name: c.name, comp, was })
+    }
+  }
+  return inverse
+}
+
+// The rowid of the latest batch that touched an entity — what `task undo <e>`
+// reverses. 0 when the entity has no history.
+export let lastBatch = (db: DatabaseSync, eid: string): number =>
+  Number(
+    (prep(
+      db,
+      `select max(j.rowid) as id from journal j, json_each(j.batch) je
+       where json_extract(je.value, '$.eid') = ?`,
+    ).get(eid) as { id: number | null } | undefined)?.id ?? 0,
+  )
 
 // History is paid for only by the explicit migration door. The result is
 // ordinary graph changes, so the caller can land and broadcast them through
