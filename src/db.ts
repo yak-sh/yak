@@ -111,6 +111,12 @@ let depDdl = `create table if not exists dependency (
     primary key (parent, type, child)
   )`
 
+// The primary key begins with parent; the reverse endpoint needs its own
+// index so backlinks and endpoint deletion never walk every edge. Dependency
+// is the graph's non-component table, so its access pattern stays beside its
+// hand-written DDL rather than pretending to be an IDB component store.
+let depIndex = { cols: ['child'] }
+
 // Outbound mail. "to"/"from" are SQL keywords — quoted here and by the
 // generic builders in apply(), which quote every column so the vocabulary
 // never bends to SQL's reserved words. target deliberately wears NO
@@ -2091,6 +2097,10 @@ export let open = (path = file) => {
     // transaction that bumps the file change counter (breaking open()'s byte-
     // idempotency), so the guard makes a re-open pure reads, the SAME shape addCol
     // takes with hasCol.
+    let depIndexName = `dependency_${depIndex.cols.join('_')}`
+    if (!hasIdx(db, depIndexName)) {
+      db.exec(indexDdlOne('dependency', depIndex) + ';')
+    }
     for (
       let comp of new Set([...Object.keys(comps), ...Object.keys(stamped)])
     ) {
