@@ -1210,6 +1210,8 @@ export let friendly = (model?: string | null) => {
 // parent supersedes child (the current entity replaces an older one — a
 // reshaped ticket, a redecided memory; the superseded end stays visible and
 // marked with what replaced it, never hidden or aged out; never gates).
+// parent worked child (a session once held the task's claim — durable after
+// the lease leaves, so session history is an indexed graph read; never gates).
 export let edges = [
   'requires',
   'contains',
@@ -1219,6 +1221,7 @@ export let edges = [
   'delegates',
   'recalled',
   'supersedes',
+  'worked',
 ] as const
 export type Edge = (typeof edges)[number]
 

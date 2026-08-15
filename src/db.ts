@@ -3024,6 +3024,28 @@ export let apply = (
             }`,
           )
         }
+        // A lease is temporary; having done the work is not. The edge is the
+        // durable, indexed truth used by Session Tiles. Insert it in the same
+        // transaction as the claim and echo only its first landing so every
+        // live cache learns the relation without a fetch or a journal read.
+        let session = String(comp.session)
+        if (
+          prep(
+            db,
+            `
+            insert or ignore into dependency (parent, type, child)
+            values (?, 'worked', ?)
+          `,
+          ).run(session, eid).changes
+        ) {
+          touched.add(session)
+          touched.add(eid)
+          extra.push({
+            eid: session,
+            name: 'dependency',
+            comp: { type: 'worked', child: eid },
+          })
+        }
         // A claim implies wip (T-17330, reversing T-3449): a task read `open`
         // while someone holds a claim misrepresents active work as available.
         // So a landing claim drags an OPEN task to wip in the same
@@ -3722,20 +3744,6 @@ export let journalBy = (
       via: r.via,
       changes: canonicalChanges(JSON.parse(r.batch) as Change[]),
     }))
-
-// A released lease is gone from the graph, but not from the record. Sessions
-// use this cut to name every task they worked on, in first-claim order.
-export let journalClaims = (db: DatabaseSync, session: string): string[] =>
-  (prep(
-    db,
-    `
-    select json_extract(je.value, '$.eid') as eid, min(j.rowid) as first
-    from journal j, json_each(j.batch) je
-    where json_extract(je.value, '$.name') = 'claim'
-      and json_extract(je.value, '$.comp.session') = ?
-    group by eid order by first
-  `,
-  ).all(session) as { eid: string }[]).map((r) => r.eid)
 
 // Session entries are a lazy graph partition: root clients never receive
 // their eids or any facets/provenance hung from them. A Session subscription

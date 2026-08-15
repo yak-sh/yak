@@ -39,7 +39,6 @@ import {
   ToolSummary,
 } from './Entry.tsx'
 import { entityUrl } from '../../url.ts'
-import { useQueryEids } from '../useQuery.ts'
 
 // An agent session, watched — the console (W-3676 #5): a sticky slim bar
 // (task, lifecycle summary, stop — server-owned columns riding
@@ -619,36 +618,11 @@ export let Session = ({ e }: { e: Ent }) => {
   )
 }
 
-// A released claim leaves the graph but stays in the journal. Current claims
-// make the list react immediately; each membership change rereads the durable
-// cut so releasing a task cannot make it disappear.
-let useWorkedTasks = (eid: string) => {
-  let current = useQueryEids(`.kind=task .claim.session=${eid}`)
-  let [past, setPast] = useState<{ eid: string; ids: string[] }>({
-    eid,
-    ids: [],
-  })
-  let claims = current.join(',')
-  useEffect(() => {
-    let alive = true
-    fetch(`${base()}/journal?session=${encodeURIComponent(eid)}`)
-      .then((r) => r.ok ? r.json() : [])
-      .then((ids: string[]) => {
-        if (alive) setPast({ eid, ids })
-      }, () => {})
-    return () => {
-      alive = false
-    }
-  }, [eid, claims])
-  let ids = past.eid == eid ? past.ids : []
-  return [...new Set([...ids, ...current])].map(ent).filter((x) => x.task)
-}
-
 // A session Tile is a model-information line followed by every task the
 // session has worked on. Each line keeps its own link target.
 let RowLine = block('div', 'SessionRow', {
   Head: 'div',
-  Persona: 'span',
+  Identity: 'span',
   Model: 'span',
   Effort: 'span',
   Tasks: 'div',
@@ -657,8 +631,11 @@ let RowLine = block('div', 'SessionRow', {
 
 export let SessionRow = ({ e, slots, onOpen }: TileProps) => {
   let s = e.session!
-  let tasks = useWorkedTasks(e.eid)
+  let tasks = e.refs.filter((r) => r.type == 'worked').map((r) => ent(r.child))
+    .filter((x) => x.task)
   let persona = s.persona ? ent(s.persona) : undefined
+  let actor = s.actor ? ent(s.actor) : undefined
+  let identity = persona ?? actor
   let model = s.serving_model || s.model
   return (
     <RowLine>
@@ -667,10 +644,10 @@ export let SessionRow = ({ e, slots, onOpen }: TileProps) => {
         <SessionDot e={e} />
         {slots?.title != null ? <RowLine.Model {...tileTitle(slots, '')} /> : (
           <>
-            {persona && (
-              <RowLine.Persona>
-                {persona.doc?.title || idOf(persona)}
-              </RowLine.Persona>
+            {identity && (
+              <RowLine.Identity>
+                {identity.doc?.title || idOf(identity)}
+              </RowLine.Identity>
             )}
             {model && <RowLine.Model>{friendly(model)}</RowLine.Model>}
             {s.effort && <RowLine.Effort>{s.effort}</RowLine.Effort>}

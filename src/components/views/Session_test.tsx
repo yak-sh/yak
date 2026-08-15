@@ -2,10 +2,9 @@
 import { h, render } from 'preact'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { cache, ent, repoUrl } from '../../live.ts'
+import { cache, deps, ent, repoUrl } from '../../live.ts'
 import { resolve } from '../Entity.tsx'
 import { mount } from '../mount.ts'
-import { until } from '../../testing.ts'
 import {
   SessionContext,
   SessionDiagnostics,
@@ -16,10 +15,13 @@ import {
   SessionSummary,
 } from './Session.tsx'
 
-Deno.test('session Tile leads with model info and every worked task', async () => {
+Deno.test('session Tile leads with model info and every worked task', () => {
   let prior = globalThis.fetch
-  globalThis.fetch =
-    (() => Promise.resolve(Response.json(['one', 'two']))) as typeof fetch
+  let fetched = 0
+  globalThis.fetch = (() => {
+    fetched++
+    throw new Error('session Tile must not fetch')
+  }) as typeof fetch
   cache.value = {
     persona: {
       entity: { eid: 'persona', num: 1 },
@@ -48,18 +50,21 @@ Deno.test('session Tile leads with model info and every worked task', async () =
       task: { eid: 'two', status: 'wip', priority: 1 },
     },
   }
+  deps.value = [
+    { parent: 'session', type: 'worked', child: 'one' },
+    { parent: 'session', type: 'worked', child: 'two' },
+  ]
 
   let e = ent('session')
   let mounted = mount(h(resolve(e, 'Tray.List.Tile').Render, { e }))
   try {
     let { root } = mounted
-    await until(() => root.querySelectorAll('.SessionRow_Task').length == 2)
     let head = root.querySelector('.SessionRow_Head')!
     assertEquals(
       [...head.children].map((x) => x.className.split(' ')[0]),
       [
         'Dot',
-        'SessionRow_Persona',
+        'SessionRow_Identity',
         'SessionRow_Model',
         'SessionRow_Effort',
         'Id',
@@ -67,7 +72,7 @@ Deno.test('session Tile leads with model info and every worked task', async () =
       ],
     )
     assertEquals(
-      head.querySelector('.SessionRow_Persona')?.textContent,
+      head.querySelector('.SessionRow_Identity')?.textContent,
       'Ada',
     )
     assertEquals(
@@ -81,13 +86,40 @@ Deno.test('session Tile leads with model info and every worked task', async () =
     assertEquals(
       [...root.querySelectorAll('.SessionRow_Task')].map((x) =>
         x.textContent.replace(/\s+/g, ' ').trim()
-      ),
+      ).sort(),
       ['T-3 First task', 'T-4 Second task'],
+    )
+    assertEquals(fetched, 0)
+  } finally {
+    mounted.free()
+    cache.value = {}
+    deps.value = []
+    globalThis.fetch = prior
+  }
+})
+
+Deno.test('session Tile falls back from persona to its actor', () => {
+  cache.value = {
+    actor: {
+      entity: { eid: 'actor', num: 1 },
+      doc: { eid: 'actor', title: 'Acme', body: '' },
+      project: { eid: 'actor' },
+    },
+    session: {
+      entity: { eid: 'session', num: 2 },
+      session: { eid: 'session', id: 'session-id', actor: 'actor' },
+    },
+  }
+  let e = ent('session')
+  let mounted = mount(h(resolve(e, 'Tray.List.Tile').Render, { e }))
+  try {
+    assertEquals(
+      mounted.root.querySelector('.SessionRow_Identity')?.textContent,
+      'Acme',
     )
   } finally {
     mounted.free()
     cache.value = {}
-    globalThis.fetch = prior
   }
 })
 

@@ -3537,12 +3537,12 @@ a[data-ref]:hover {
   color: inherit;
   text-decoration: none;
 }
-.SessionRow_Persona {
+.SessionRow_Identity {
   color: var(--text);
 }
 .SessionRow_Model {
-  color: var(--accent);
   font-weight: 600;
+  letter-spacing: 0.01em;
 }
 .SessionRow_Effort {
   padding: 0 0.35em;

@@ -13,7 +13,6 @@ let {
   healInboundDeliver,
   human,
   journalBy,
-  journalClaims,
   journalOf,
   liveDb,
   locate,
@@ -3148,7 +3147,7 @@ Deno.test('journalBy: cuts the ledger by session, not its resolved actor', () =>
   assertEquals(rows[0].changes[0].eid, first)
 })
 
-Deno.test('journalClaims keeps every task after its lease is released', () => {
+Deno.test('claim leaves one durable worked edge after its lease is released', () => {
   let session = uid(), one = uid(), two = uid()
   apply(db, [
     { eid: session, name: 'session', comp: { id: session } },
@@ -3157,13 +3156,25 @@ Deno.test('journalClaims keeps every task after its lease is released', () => {
     { eid: two, name: 'doc', comp: { title: 'two' } },
     { eid: two, name: 'task', comp: { status: 'open', priority: 1 } },
   ])
-  apply(db, [{ eid: one, name: 'claim', comp: { session } }])
+  let first = apply(db, [{ eid: one, name: 'claim', comp: { session } }])
+  assertEquals(
+    first.some((c) =>
+      c.eid == session && c.name == 'dependency' &&
+      c.comp?.type == 'worked' && c.comp.child == one
+    ),
+    true,
+  )
   apply(db, [{ eid: one, name: 'claim', comp: null }])
   apply(db, [{ eid: two, name: 'claim', comp: { session } }])
   apply(db, [{ eid: two, name: 'claim', comp: null }])
-  apply(db, [{ eid: one, name: 'claim', comp: { session } }])
+  let again = apply(db, [{ eid: one, name: 'claim', comp: { session } }])
+  assertEquals(again.some((c) => c.name == 'dependency'), false)
 
-  assertEquals(journalClaims(db, session), [one, two])
+  assertEquals(
+    snapshot(db).deps.filter((d) => d.parent == session && d.type == 'worked')
+      .map((d) => d.child).sort(),
+    [one, two].sort(),
+  )
 })
 
 Deno.test('actor fill: a session that ran in a repo resolves to its venture', () => {
