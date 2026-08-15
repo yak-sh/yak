@@ -26,6 +26,7 @@ import {
   jobOf,
   landObservation,
   landSub,
+  myMode,
   observation,
   openDeps,
   parents,
@@ -649,6 +650,85 @@ Deno.test('backlinks: stamped associations count', () => {
     via: 'session.requested_task',
   }])
   assertEquals(backlinks('s1'), [{ from: 'c1', via: 'claim.session' }])
+})
+
+// jobOf reads the claim.session reverse index rather than scanning the cache;
+// the answer is the newest claim-bearing task the session holds — unchanged.
+Deno.test('jobOf: newest claimed task, off the reverse index', () => {
+  cache.value = {
+    s1: { entity: { eid: 's1', num: 1 }, session: { eid: 's1', id: 'x' } },
+    // two claims by s1; the newer claimed_at wins regardless of cache order
+    t_old: {
+      entity: { eid: 't_old', num: 2 },
+      task: { eid: 't_old', status: 'open', priority: 1 },
+      claim: { eid: 't_old', session: 's1', claimed_at: '2026-01-01' },
+    },
+    t_new: {
+      entity: { eid: 't_new', num: 3 },
+      task: { eid: 't_new', status: 'open', priority: 1 },
+      claim: { eid: 't_new', session: 's1', claimed_at: '2026-08-01' },
+    },
+    // a claim by s1 on a non-task entity is skipped (the `r.task` screen)
+    d1: {
+      entity: { eid: 'd1', num: 4 },
+      doc: { eid: 'd1', title: 'note', body: '' },
+      claim: { eid: 'd1', session: 's1', claimed_at: '2026-12-01' },
+    },
+    // a claim by another session must not leak in
+    s2: { entity: { eid: 's2', num: 5 }, session: { eid: 's2', id: 'y' } },
+    t_other: {
+      entity: { eid: 't_other', num: 6 },
+      task: { eid: 't_other', status: 'open', priority: 1 },
+      claim: { eid: 't_other', session: 's2', claimed_at: '2026-12-31' },
+    },
+  }
+  assertEquals(jobOf({ eid: 's1' } as Ent), 't_new')
+  assertEquals(jobOf({ eid: 's2' } as Ent), 't_other')
+})
+
+// myMode reads the subscription.target reverse index; the unique (actor,
+// target) row is found, foreign actors are screened, quarantined rows skipped.
+Deno.test("myMode: this actor's subscription, off the reverse index", () => {
+  config.client = 'me_client'
+  cache.value = {
+    me_client: {
+      entity: { eid: 'me_client', num: 1 },
+      client: { eid: 'me_client', user_agent: 'probe', ip: '', actor: 'me' },
+    },
+    tgt: {
+      entity: { eid: 'tgt', num: 2 },
+      task: { eid: 'tgt', status: 'open', priority: 1 },
+    },
+    // my subscription on tgt
+    sub_mine: {
+      entity: { eid: 'sub_mine', num: 3 },
+      subscription: {
+        eid: 'sub_mine',
+        actor: 'me',
+        target: 'tgt',
+        mode: 'mute',
+      },
+    },
+    // another actor's subscription on the same target — must not match
+    sub_other: {
+      entity: { eid: 'sub_other', num: 4 },
+      subscription: {
+        eid: 'sub_other',
+        actor: 'you',
+        target: 'tgt',
+        mode: 'watch',
+      },
+    },
+  }
+  assertEquals(myMode('tgt'), 'mute')
+  assertEquals(myMode('absent'), undefined)
+  // a quarantined subscription is invisible, exactly as rows() had it
+  cache.value = {
+    ...cache.value,
+    sub_mine: { ...cache.value.sub_mine, quarantined: { eid: 'sub_mine' } },
+  }
+  assertEquals(myMode('tgt'), undefined)
+  config.client = undefined
 })
 
 Deno.test('relationship indices wake only their affected targets', () => {

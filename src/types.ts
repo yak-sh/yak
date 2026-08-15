@@ -1852,6 +1852,12 @@ export type Ent = {
   fold?: Fold
   shelf?: Shelf
   favorite?: Favorite
+  subscription?: {
+    eid: string
+    actor?: string | null
+    target?: string | null
+    mode?: (typeof subModes)[number]
+  }
   session?: Session
   worktree?: Worktree
   runtime?: Runtime

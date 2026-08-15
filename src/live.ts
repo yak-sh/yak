@@ -499,15 +499,20 @@ export let myActor = () => {
 }
 
 // What this viewer has said about an entity: 'watch', 'mute', or nothing.
+// One subscription per (actor, target), so this is a reverse-ref lookup on
+// target (index.ts `children`), not a whole-cache scan. rows() screened out
+// quarantined rows — keep that screen so the answer is unchanged.
 export let myMode = (target: string) => {
   let me = myActor()
   if (!me) return undefined
-  let hit = rows().find((r) =>
-    r.comps.subscription &&
-    String(r.comps.subscription.actor) == me &&
-    String(r.comps.subscription.target) == target
+  syncIx()
+  let g = cache.value
+  let hit = children(ix, target, 'subscription', 'target').find((eid) =>
+    !g[eid]?.quarantined && String(g[eid]?.subscription?.actor) == me
   )
-  return hit?.comps.subscription?.mode as 'watch' | 'mute' | undefined
+  return hit
+    ? (g[hit]?.subscription?.mode as 'watch' | 'mute' | undefined)
+    : undefined
 }
 
 // How many inbox items are waiting for this entity — a derived display
@@ -1984,14 +1989,20 @@ refreshBacklinks = (eids: Set<string>) => {
   }
 }
 
-let scanJob = (session: string): string | null =>
-  Object.entries(cache.value)
-    .filter(([, r]) => r.task && r.claim?.session == session)
-    .toSorted(([, a], [, b]) =>
-      String(b.claim?.claimed_at ?? '').localeCompare(
-        String(a.claim?.claimed_at ?? ''),
+// The claims aimed at a session ARE its reverse-ref set, so read them off the
+// derived index (index.ts `children`) instead of scanning the whole cache.
+// Output is one eid, decided by the sort — so scan order never mattered.
+let scanJob = (session: string): string | null => {
+  syncIx()
+  let g = cache.value
+  return children(ix, session, 'claim', 'session')
+    .filter((eid) => g[eid]?.task)
+    .toSorted((a, b) =>
+      String(g[b]?.claim?.claimed_at ?? '').localeCompare(
+        String(g[a]?.claim?.claimed_at ?? ''),
       )
-    )[0]?.[0] ?? null
+    )[0] ?? null
+}
 
 type JobSet = {
   graph: Record<string, Comps>
