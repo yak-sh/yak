@@ -10,6 +10,16 @@ import { ent } from '../live.ts'
 import { resolve } from './registry.ts'
 
 export type Box = { x: number; y: number; w: number; h: number }
+export let CARD_DATA = 'application/x-tasks-card'
+
+export let cardData = (raw: string): { target: string } | undefined => {
+  try {
+    let data = JSON.parse(raw)
+    return typeof data?.target == 'string' ? { target: data.target } : undefined
+  } catch {
+    return undefined
+  }
+}
 
 export let resizeDirs = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw']
 
@@ -162,7 +172,7 @@ export let dragData = (
   let e = ent(eid)
   let box = ev.currentTarget.getBoundingClientRect()
   ev.dataTransfer.setData(
-    'application/x-tasks-card',
+    CARD_DATA,
     JSON.stringify({
       target: eid,
       view,

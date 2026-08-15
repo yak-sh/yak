@@ -2,6 +2,7 @@ import { assertEquals } from '@std/assert'
 import {
   favoriteChange,
   favoriteLabel,
+  favoritePin,
   navigationQuery,
   navigationView,
 } from './navigation.ts'
@@ -35,4 +36,10 @@ Deno.test('navigation uses one facet query and reversible favorite write', () =>
     name: 'favorite',
     comp: null,
   })
+  assertEquals(favoritePin(plain), {
+    eid: plain.eid,
+    name: 'favorite',
+    comp: {},
+  })
+  assertEquals(favoritePin(favorite), undefined)
 })

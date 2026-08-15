@@ -11,5 +11,8 @@ export let favoriteChange = (e: Ent): Change => ({
   comp: e.favorite ? null : {},
 })
 
+export let favoritePin = (e: Ent): Change | undefined =>
+  e.favorite ? undefined : { eid: e.eid, name: 'favorite', comp: {} }
+
 export let favoriteLabel = (e: Ent) =>
   e.favorite ? 'remove from navigation' : 'show in navigation'

@@ -1,12 +1,13 @@
 import { signal } from '@preact/signals'
-import { useEffect } from 'preact/hooks'
-import { navigationQuery, navigationView } from '../navigation.ts'
-import { mode } from '../live.ts'
+import { useEffect, useState } from 'preact/hooks'
+import { favoritePin, navigationQuery, navigationView } from '../navigation.ts'
+import { cache, ent, mode, mutate } from '../live.ts'
 import { block } from './ui.tsx'
 import { useQuery } from './useQuery.ts'
 import { AccountTab } from './Account.tsx'
 import { Entity } from './Entity.tsx'
 import { Icon } from './icons.tsx'
+import { CARD_DATA, cardData } from './drag.ts'
 
 let narrow = () => globalThis.matchMedia?.('(max-width: 700px)').matches
 let remembered = globalThis.localStorage?.getItem('tasks-navigation')
@@ -56,6 +57,7 @@ export let NavigationToggle = () => (
 
 export let Navigation = () => {
   let favorites = useQuery(navigationQuery)
+  let [over, setOver] = useState(false)
   useEffect(() => {
     let key = (e: KeyboardEvent) => {
       let typing = e.target instanceof HTMLElement &&
@@ -74,6 +76,17 @@ export let Navigation = () => {
   }, [])
   if (!navigationOpen.value) return null
   let closeMobile = () => narrow() && toggleNavigation(false)
+  let accepts = (ev: DragEvent) =>
+    !!ev.dataTransfer && Array.from(ev.dataTransfer.types).includes(CARD_DATA)
+  let drop = (ev: DragEvent) => {
+    let data = cardData(ev.dataTransfer?.getData(CARD_DATA) ?? '')
+    setOver(false)
+    if (!data || !cache.peek()[data.target]) return
+    ev.preventDefault()
+    ev.stopPropagation()
+    let change = favoritePin(ent(data.target))
+    if (change) mutate(change)
+  }
   return (
     <>
       <Shade
@@ -81,7 +94,23 @@ export let Navigation = () => {
         aria-label='Close navigation'
         onClick={closeMobile}
       />
-      <Frame>
+      <Frame
+        mod={over && 'drop'}
+        onDragOver={(ev: DragEvent) => {
+          if (!accepts(ev)) return
+          ev.preventDefault()
+          ev.dataTransfer!.dropEffect = 'link'
+          setOver(true)
+        }}
+        onDragLeave={(ev: DragEvent) => {
+          let to = ev.relatedTarget
+          let from = ev.currentTarget as Node | null
+          if (!(to instanceof Node) || !from?.contains(to)) {
+            setOver(false)
+          }
+        }}
+        onDrop={drop}
+      >
         <Head>
           <Title>Navigation</Title>
         </Head>
@@ -95,7 +124,10 @@ export let Navigation = () => {
             />
           ))}
           {!favorites.length && (
-            <Empty>Right-click an entity and choose show in navigation.</Empty>
+            <Empty>
+              Drop an entity here, or right-click it and choose show in
+              navigation.
+            </Empty>
           )}
         </Items>
         <Foot>

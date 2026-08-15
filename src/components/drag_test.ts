@@ -1,5 +1,5 @@
 import { assertEquals } from '@std/assert'
-import { moved, resetSize, resizeDirs, sized } from './drag.ts'
+import { cardData, moved, resetSize, resizeDirs, sized } from './drag.ts'
 
 Deno.test('card geometry moves and sizes every edge on whole pixels', () => {
   assertEquals(resizeDirs, ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'])
@@ -16,4 +16,12 @@ Deno.test('card geometry moves and sizes every edge on whole pixels', () => {
     w: 160,
     h: 60,
   })
+})
+
+Deno.test('card drag data names one entity and rejects foreign payloads', () => {
+  assertEquals(cardData('{"target":"thing","view":"Full"}'), {
+    target: 'thing',
+  })
+  assertEquals(cardData('{"target":2}'), undefined)
+  assertEquals(cardData('not json'), undefined)
 })

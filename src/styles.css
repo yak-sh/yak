@@ -293,6 +293,7 @@ html {
 /* One graph-backed wayfinding rail. It is ordinary layout on a wide screen;
    on a phone it becomes a modal drawer so the current view keeps its width. */
 .Navigation {
+  --navigation-drop: transparent;
   width: 16rem;
   flex: 0 0 16rem;
   min-height: 0;
@@ -300,7 +301,12 @@ html {
   flex-direction: column;
   background: var(--surface);
   border-right: 1px solid var(--border);
+  outline: 2px solid var(--navigation-drop);
+  outline-offset: -2px;
   z-index: 5;
+}
+.Navigation-drop {
+  --navigation-drop: var(--accent);
 }
 .Navigation_Head {
   display: flex;
