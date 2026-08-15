@@ -50,7 +50,7 @@ export let NavigationToggle = () => (
     aria-expanded={navigationOpen.value}
     onClick={() => toggleNavigation()}
   >
-    <Icon name='list' />
+    <Icon name='menu' />
   </button>
 )
 

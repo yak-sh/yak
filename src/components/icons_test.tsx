@@ -42,3 +42,8 @@ Deno.test('the rejection icon survives the vocabulary migration', () => {
   let icon = svg('circle-x')
   assertEquals(icon.getAttribute('class'), 'lucide lucide-circle-x Icon')
 })
+
+Deno.test('the sidebar menu has its own icon', () => {
+  let icon = svg('menu')
+  assertEquals(icon.getAttribute('class'), 'lucide lucide-menu Icon')
+})
