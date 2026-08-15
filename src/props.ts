@@ -21,11 +21,30 @@ export type Prop = {
   type: PropType
 }
 
-let types = (comp: string) => ({ ...comps[comp], ...stamped[comp] })
+// comps/stamped are immutable module constants, so a component's merged type
+// map and a prop's owner list are fixed for the process. They sit on the hot
+// path — every query match, index pass and prop render funnels through them —
+// so recomputing the spread (a fresh object per call) and the O(components)
+// owner scan on each call was pure waste (T-17036, the 16ms frame budget).
+// Memoize both; nothing invalidates because nothing mutates the vocabulary.
+let typeCache = new Map<string, Record<string, PropType>>()
+let types = (comp: string): Record<string, PropType> => {
+  let hit = typeCache.get(comp)
+  if (hit) return hit
+  let t = { ...comps[comp], ...stamped[comp] }
+  typeCache.set(comp, t)
+  return t
+}
 
-export let propOwners = (prop: string) =>
-  [...new Set([...Object.keys(comps), ...Object.keys(stamped)])]
+let ownerCache = new Map<string, string[]>()
+export let propOwners = (prop: string): string[] => {
+  let hit = ownerCache.get(prop)
+  if (hit) return hit
+  let out = [...new Set([...Object.keys(comps), ...Object.keys(stamped)])]
     .filter((comp) => prop in types(comp))
+  ownerCache.set(prop, out)
+  return out
+}
 
 // The qualified name is only noise until two components share the column.
 export let propAt = (comp: string, prop: string): Prop | undefined => {

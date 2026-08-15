@@ -1,0 +1,7 @@
+{
+  "_comment": "Web-perf ratchet baseline: max acceptable ms per metric (bin/webperf.ts --json against a probe server). The perf gate FAILS if a run exceeds these; an improvement should ratchet these DOWN. load/board are dominated by client-side snapshot render (Preact) — still the open regression to drive down; palette is the warm-interaction floor. Regenerate: bin/webperf.ts <probe-url> --json.",
+  "load_to_interactive": 13000,
+  "open_board": 22000,
+  "open_palette": 100,
+  "tolerance_pct": 15
+}
