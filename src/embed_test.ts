@@ -3,9 +3,9 @@
 // itself never loads here — a test suite that downloads 30MB isn't one.
 Deno.env.set('DB_PATH', ':memory:')
 let { db } = await import('./db.ts')
-let { hash, prune, similar, similarTo, stale, stored, textOf } = await import(
-  './embed.ts'
-)
+let { freshDb } = await import('./testdb.ts')
+let { MODEL, hash, prune, similar, similarTo, stale, stored, textOf } =
+  await import('./embed.ts')
 let { assertEquals } = await import('@std/assert')
 
 let uid = (): string => crypto.randomUUID()
@@ -164,4 +164,51 @@ Deno.test('similar: dot-ranked, floored, limited', () => {
   let top = similar(db, vec(1, 0), 99, 0)
     .filter((h) => [x, y, z].includes(h.eid))
   assertEquals(top[0].eid, x)
+})
+
+// similar() answers from a per-handle contiguous cache of the model's vectors,
+// rebuilt only when a cheap signature moves. These two guard the signature: a
+// stale cache would silently return the wrong neighbours.
+
+Deno.test('similar: the vector cache rebuilds when rows are added or removed', () => {
+  let [a, b] = [uid(), uid()]
+  doc(a, 'cache probe one')
+  put(a, 'cache probe one', vec(1, 0))
+  let mine = () =>
+    similar(db, vec(1, 0), 99, 0).map((h) => h.eid)
+      .filter((id) => id == a || id == b)
+  assertEquals(mine(), [a]) // builds the cache
+  doc(b, 'cache probe two')
+  put(b, 'cache probe two', vec(1, 0)) // count moved — a stale cache misses b
+  assertEquals(mine().sort(), [a, b].sort())
+  db.prepare('delete from embedding where eid = ?').run(a) // count moved again
+  assertEquals(mine(), [b])
+})
+
+Deno.test('similar: a re-embed (same rowid, same count) is seen after a module write', () => {
+  // An isolated graph so prune() below deletes nothing: the row count and
+  // max(rowid) then stay fixed across the whole test, so the ONLY thing that
+  // can move the cache signature is the write generation. If that generation
+  // were dropped from the signature, the final assertion fails — this is the
+  // guard for the upsert-in-place case a row count alone cannot see.
+  let d = freshDb()
+  let e = uid()
+  d.prepare('insert into entity (eid, num) values (?, ?)')
+    .run(e, Math.floor(Math.random() * 1e9))
+  d.prepare('insert into doc (eid, title, body) values (?, ?, ?)')
+    .run(e, 'generation probe', '')
+  let store = (v: Float32Array) =>
+    d.prepare(
+      `insert into embedding (eid, model, hash, vec) values (?, ?, ?, ?)
+       on conflict (eid) do update set vec = excluded.vec`,
+    ).run(e, MODEL, hash('generation probe'), new Uint8Array(v.buffer))
+  let score = () =>
+    Math.round(
+      (similar(d, vec(1, 0), 9, -2).find((h) => h.eid == e)?.score ?? -9) * 100,
+    )
+  store(vec(1, 0))
+  assertEquals(score(), 100) // builds the cache: query IS the stored vector
+  store(vec(0, 1)) // in-place re-embed — invisible to a row-count signature, and
+  prune(d) // a real module write bumps the generation, forcing the rebuild
+  assertEquals(score(), 0) // rebuilt: the query is now orthogonal to the new vec
 })

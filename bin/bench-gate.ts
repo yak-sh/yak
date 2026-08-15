@@ -35,6 +35,7 @@ let FILES = [
   'src/client_bench.ts',
   'src/render_bench.ts',
   'src/recall_bench.ts',
+  'src/embed_bench.ts',
 ]
 
 let us = (ns: number) =>
