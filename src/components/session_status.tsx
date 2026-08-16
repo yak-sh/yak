@@ -84,8 +84,9 @@ export let SessionDot = ({ e }: { e: Ent }) => (
 // its STATUS reads the same O(1) facet as the dot, so the two can never
 // disagree (the facet is stamped from the same standingOf the log derives).
 export let useSessionStanding = (e: Ent) => {
-  let native = e.session?.origin == 'managed' && e.session.status == null &&
-    e.spawn?.provider == 'codex'
-  let log = useEntryLog(e.eid, native)
+  // Every substrate reads its transcript from the same entry-partition
+  // subscription (T-16824): a process-backed run's JSONL is ingested into these
+  // entries, so there is one live read path, not a per-substrate branch.
+  let log = useEntryLog(e.eid)
   return { log, status: graphStanding(e, usePendingWake(e.eid)) }
 }

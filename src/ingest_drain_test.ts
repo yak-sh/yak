@@ -6,7 +6,7 @@
 // reads it; no subprocess.
 import { assert, assertEquals } from '@std/assert'
 import { adapters } from './adapters.ts'
-import { uuid } from './types.ts'
+import { type Change, uuid } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 // Isolate via a temp HOME, NOT a global LOGS_DIR: Deno runs every test file in
@@ -120,6 +120,32 @@ Deno.test('re-draining from line 1 (recover / reload) duplicates nothing', async
   await drain(eid, adapters.codex, tail(), cast)
   let after = readEntries(db, eid).map((e) => e.eid)
   assertEquals(after, before)
+})
+
+Deno.test('a live-edge append casts its entry, so a subscriber tails through the graph', async () => {
+  // Liveness (T-16824): a process-backed run's transcript is read from its
+  // graph entry partition, so its live tail must reach entry subscribers the
+  // same way the runner's own appends do — through cast()/maintain(). The FIRST
+  // drain pass is the catch-up (history, silent); a later pass on the same live
+  // Tail casts every new entry. A subscriber then never polls a file.
+  let eid = managed([
+    prompt('go'),
+    cx({ id: 'i1', type: 'agent_message', text: 'first' }),
+  ])
+  let seen: Change[][] = []
+  let spy = (changes: Change[]) => void seen.push(changes)
+  // The summary stamp casts a `session` change every pass; the transcript rows
+  // are the `content`/`message` casts, and those are what a subscriber tails.
+  let entryCasts = () =>
+    seen.flat().filter((c) => c.name == 'content' || c.name == 'message')
+  let t = tail()
+  await drain(eid, adapters.codex, t, spy) // catch-up pass — appends silently
+  assertEquals(entryCasts().length, 0, 'the history catch-up cast an entry')
+
+  append(eid, cx({ id: 'i2', type: 'agent_message', text: 'second' }))
+  await drain(eid, adapters.codex, t, spy) // live edge — the new entry casts
+  assert(entryCasts().length > 0, 'a live-edge append cast no entry')
+  assertEquals(rows(eid).at(-1)?.text, 'second')
 })
 
 Deno.test('a half-written last line is ingested only once, whole', async () => {

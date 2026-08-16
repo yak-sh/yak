@@ -14,7 +14,6 @@ import {
   type LogRow,
 } from '../../types.ts'
 import {
-  base,
   commentsOn,
   ent,
   findEid,
@@ -121,7 +120,6 @@ let {
 } = Frame
 
 type Entry = EntryLine
-type Log = { entries: Entry[]; stderr?: string; context?: number }
 type Mentioned =
   | { kind: 'entity'; id: string; eid?: string }
   | { kind: 'link'; href: string }
@@ -461,53 +459,6 @@ let Row = ({ x, repo }: { x: Entry; repo?: string }) => {
   )
 }
 
-// Read the whole log, then keep reading the rest of it. `seq` is how far
-// we've got: `after=0` is the entire file, and every read after that asks
-// only for lines past the last one in hand, appended — the log grows by
-// its delta, so a long transcript is paid for once. `live` is in the deps
-// on purpose: when the status flips to an ending the effect re-runs, which
-// reads once more (the bytes a child writes on its way out are the
-// important ones) and leaves no timer behind.
-let useLog = (eid: string, live: boolean) => {
-  let [log, setLog] = useState<Log>({ entries: [] })
-  let seq = useRef(0)
-  // Another session is another log — never append one onto the other.
-  // Declared first, so an eid change resets before the read below runs.
-  useEffect(() => {
-    seq.current = 0
-    setLog({ entries: [] })
-  }, [eid])
-  useEffect(() => {
-    let go = true
-    let read = async () => {
-      try {
-        let r = await fetch(
-          `${base()}/sessions/${eid}/logs?after=${seq.current}`,
-        )
-        let l: Log = await r.json()
-        if (!go) return
-        seq.current = l.entries.at(-1)?.seq ?? seq.current
-        // stderr comes whole every time (it has no seqs to page), so it
-        // replaces; entries accrue.
-        setLog((was) => ({
-          entries: l.entries.length
-            ? [...was.entries, ...l.entries]
-            : was.entries,
-          stderr: l.stderr,
-          context: l.context ?? was.context,
-        }))
-      } catch { /* a server that's away comes back — the next tick reads */ }
-    }
-    read()
-    let t = live ? setInterval(read, 2000) : null
-    return () => {
-      go = false
-      if (t) clearInterval(t)
-    }
-  }, [eid, live])
-  return log
-}
-
 // The transcript's scroller, or the nearest host still owning that job.
 // Null in the TUI's fake DOM (no parentElement), which switches the feature
 // off there.
@@ -619,8 +570,11 @@ export let Session = ({ e }: { e: Ent }) => {
   let live = native ? !s.base_revision || !!entries?.busy : awake(s)
   let status = state.status
   let fault = e.exception?.message ?? e.error?.message
-  let file = useLog(e.eid, !native && live)
-  let log = native ? entries ?? graphLog([]) : file
+  // One read path (T-16824): the transcript is the session's entry partition
+  // for every substrate — the subscription useSessionStanding opened, live
+  // through the graph, never a /logs file-poll. graphLog([]) is the empty frame
+  // before the first entry arrives.
+  let log = entries ?? graphLog([])
   let context = log.context ??
     log.entries.findLast((x) => x.row?.context)?.row?.context
   // The Final block IS the last agent say — don't print it twice. Only a

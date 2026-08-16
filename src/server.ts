@@ -73,11 +73,11 @@ import {
   codexPending,
   commented,
   deleted,
-  logs,
   maintainStandingFor,
   prepareWorktree,
   recover,
   recoverWorktree,
+  sessionDiag,
   spawned,
   standingBackfill,
   stopped,
@@ -87,7 +87,7 @@ import {
 import { codexIssuer, codexStore } from './codex_auth.ts'
 import { accountHttp, accountService } from './accounts.ts'
 import { combineTools, localTools, tasksTools } from './harness_tools.ts'
-import { graphSession, managedCodex } from './managed_codex.ts'
+import { managedCodex } from './managed_codex.ts'
 import { sessionRow as storedSession } from './session_store.ts'
 import { responses } from './responses.ts'
 import { ollamaCloudTransport } from './ollama_cloud.ts'
@@ -619,8 +619,18 @@ let ws = (req: Request) => {
 // request and its reply).
 let partition = (eid: string) => readEntries(db, eid)
 
-let sessionLog = (eid: string, q: URLSearchParams) =>
-  graphSession(db, eid) ? graphLogPage(partition(eid), q) : logs(eid, q)
+// One read path for every substrate (T-16824): the ordered transcript is the
+// session's graph entry partition — graph-native, managed-CLI and native
+// interactive alike, since a process-backed run's JSONL is ingested into the
+// same entries (drain, T-16820/22/23). No `graphSession` branch, no file-backed
+// log projection. The unordered diagnostics (stderr tail, rollout context) ride
+// beside it via sessionDiag — empty for a graph-native session, so the shape is
+// uniform. T-16798 retires this door once diagnostics move into graph facets.
+let sessionLog = (eid: string, q: URLSearchParams) => {
+  let log = graphLogPage(partition(eid), q)
+  let diag = sessionDiag(eid)
+  return { ...log, ...diag, context: log.context ?? diag.context }
+}
 
 let graphIO: IO = {
   // deno-lint-ignore require-await

@@ -853,6 +853,7 @@ let ingestLine = (
   line: number,
   batch: Batch,
   errs: string[],
+  cast: Cast,
   live = false,
   at?: string,
 ) => {
@@ -865,6 +866,13 @@ let ingestLine = (
     state.lines.add(line)
     for (let [key, id] of batch.calls) state.state.calls.set(key, id)
     if (live && fresh(at)) {
+      // A real-time ingest reaches entry subscribers the same way the runner's
+      // own appends do — through the server's cast()/maintain() (T-16824) — so a
+      // live process-backed or native session tails through the graph
+      // subscription, not a file-backed poll. The catch-up first pass and
+      // recover/backfill (live false, or a stale `at`) stay silent history; a
+      // fresh subscriber picks those up in its subscription's initial frame.
+      cast(changes)
       dispatch(
         changes,
         trace,
@@ -937,7 +945,7 @@ export let drain = async (eid: string, ad: Adapter, t: Tail, cast: Cast) => {
   }
   let state = (t.imp ??= imp(eid, MANAGED))
   let emit = (batch: Batch, at?: string) =>
-    ingestLine(eid, state, t.seq, batch, t.errs, t.live, at)
+    ingestLine(eid, state, t.seq, batch, t.errs, cast, t.live, at)
   let patch: Summary = {}
   for (let line of lines) {
     t.seq++
@@ -1273,6 +1281,7 @@ let ingestNative = (
   ad: Adapter | undefined,
   t: Tail,
   lines: string[],
+  cast: Cast,
 ) => {
   for (let line of lines) {
     t.seq++
@@ -1300,6 +1309,7 @@ let ingestNative = (
       t.seq,
       ingestTranscript(ad.dialect, e, state.state),
       t.errs,
+      cast,
       t.live,
       timeOf(e),
     )
@@ -1324,7 +1334,7 @@ export let drainNative = async (
   let path = logOf(eid)
   sourceHealth(path, t)
   let lines = readLines(path, t)
-  ingestNative(eid, ad, t, lines)
+  ingestNative(eid, ad, t, lines, cast)
   // Drained to EOF: trail() reuses this Tail, so the NEXT pass's appends are
   // live thinking and dispatch their effects (created(message) → recall). This
   // first pass — the pre-existing transcript — stays effect-free history.
@@ -1486,6 +1496,21 @@ let errTail = (eid: string) => {
   } catch {
     return ''
   }
+}
+
+// The unordered diagnostics that ride BESIDE a session's ordered transcript,
+// never inside it (D-16704): the process stderr tail and, for a process-backed
+// run, the rollout's context count. Both are empty for a graph-native session
+// (no .err file, its context lives in usage entries), so the reader attaches
+// them the same way for every substrate — no `graphSession` branch. The
+// transcript itself is graph entries alone; T-16798 imports these into graph
+// facets and retires this file-read.
+export let sessionDiag = (
+  eid: string,
+): { stderr?: string; context?: number } => {
+  let stderr = errTail(eid)
+  let context = rolloutContext(eid)
+  return { ...(stderr ? { stderr } : {}), ...(context ? { context } : {}) }
 }
 
 // ---- spawning ----
@@ -2571,7 +2596,10 @@ export let recover = (cast: Cast) => {
     let ad = dialectOf(s.eid)
     let t: Tail = { at: 0, seq: 0, ended: false, errs: [] }
     sourceHealth(logOf(s.eid), t)
-    ingestNative(s.eid, ad, t, readLines(logOf(s.eid), t))
+    // History-only backfill (t.live stays false), so ingestLine appends
+    // silently — a reconnecting client catches up from its subscription's
+    // initial frame; watched() below owns liveness.
+    ingestNative(s.eid, ad, t, readLines(logOf(s.eid), t), cast)
     if (t.errs.length) stamp(s.eid, { error: diagnosis(t) }, cast)
   }
   // The other half of boot: sessions we never spawned but were watching.
