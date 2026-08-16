@@ -19,7 +19,7 @@ import {
   threadMentions,
 } from './Session.tsx'
 
-Deno.test('session Tile leads with model info and every worked task', () => {
+Deno.test('live session Tile omits its chip and lists every worked task', () => {
   let prior = globalThis.fetch
   let fetched = 0
   globalThis.fetch = (() => {
@@ -71,10 +71,10 @@ Deno.test('session Tile leads with model info and every worked task', () => {
         'SessionRow_Identity',
         'SessionRow_Model',
         'SessionRow_Effort',
-        'Id',
         'Stamp',
       ],
     )
+    assertEquals(head.querySelector('.Id'), null)
     assertEquals(
       head.querySelector('.SessionRow_Identity')?.textContent,
       'Ada',
@@ -102,7 +102,7 @@ Deno.test('session Tile leads with model info and every worked task', () => {
   }
 })
 
-Deno.test('session Tile falls back from persona to its actor', () => {
+Deno.test('session list Tile keeps its chip and falls back to its actor', () => {
   cache.value = {
     actor: {
       entity: { eid: 'actor', num: 1 },
@@ -115,12 +115,13 @@ Deno.test('session Tile falls back from persona to its actor', () => {
     },
   }
   let e = ent('session')
-  let mounted = mount(h(resolve(e, 'Tray.List.Tile').Render, { e }))
+  let mounted = mount(h(resolve(e, 'List.Tile').Render, { e }))
   try {
     assertEquals(
       mounted.root.querySelector('.SessionRow_Identity')?.textContent,
       'Acme',
     )
+    assertEquals(mounted.root.querySelector('.Id')?.textContent, 'S-2')
   } finally {
     mounted.free()
     cache.value = {}

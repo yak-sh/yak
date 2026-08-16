@@ -770,7 +770,9 @@ let RowLine = block('div', 'SessionRow', {
   Task: 'span',
 })
 
-export let SessionRow = ({ e, slots, onOpen }: TileProps) => {
+let SessionTile = (
+  { e, slots, onOpen, chip = true }: TileProps & { chip?: boolean },
+) => {
   let s = e.session!
   let tasks = e.refs.filter((r) => r.type == 'worked').map((r) => ent(r.child))
     .filter((x) => x.task)
@@ -794,7 +796,7 @@ export let SessionRow = ({ e, slots, onOpen }: TileProps) => {
             {s.effort && <RowLine.Effort>{s.effort}</RowLine.Effort>}
           </>
         )}
-        <Id e={e} />
+        {chip && <Id e={e} />}
         {slot(slots, 'after')}
         <Stamp at={e.created?.at} />
       </RowLine.Head>
@@ -811,3 +813,9 @@ export let SessionRow = ({ e, slots, onOpen }: TileProps) => {
     </RowLine>
   )
 }
+
+export let SessionRow = (props: TileProps) => <SessionTile {...props} />
+
+export let SessionLiveRow = (props: TileProps) => (
+  <SessionTile {...props} chip={false} />
+)
