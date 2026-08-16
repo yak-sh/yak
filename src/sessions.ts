@@ -61,7 +61,7 @@ import { dispatch, trace } from './effects.ts'
 import { legacyWorktreesDir, worktreesDir } from './ground.ts'
 import { hookClaim, rows, wrapChanges } from './client.ts'
 import { type Unlanded, unlanded } from './land.ts'
-import { materialize } from './persona.ts'
+import { materialize, wornPersona } from './persona.ts'
 import {
   sessionRow as storedSession,
   sessionRows as storedSessions,
@@ -1765,11 +1765,21 @@ export let spawned =
     // by materialize() so the spawn's prompt and the repo's .tasks files
     // say the same thing. The house rider stays independent: that is what
     // makes one landing contract reach every persona.
+    // No --persona falls back to the project's COMMON persona, so a spawn is
+    // never personaless (T-12867): an explicit request wears that persona; a
+    // bare spawn wears what the project `contains`, the same voice its
+    // .tasks/AGENTS.md carries. A taskless native chat has no project, so it
+    // stays bare — there is no common persona to wear.
     let worn: string | undefined
-    if (row.spawn_persona) {
+    if (row.spawn_persona || project) {
       let snap = snapshot(db)
       let all = rows(snap)
-      let p = all.find((r) => r.eid == String(row.spawn_persona) && r.comps.doc)
+      let p = wornPersona(
+        all,
+        snap.deps,
+        row.spawn_persona ? String(row.spawn_persona) : undefined,
+        project ? String(project) : undefined,
+      )
       if (p) worn = materialize(all, snap.deps, p, Date.now())
     }
     let { num } = db.prepare('select num from entity where eid = ?')

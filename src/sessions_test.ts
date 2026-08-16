@@ -992,6 +992,30 @@ slow('a worn persona rides the prompt whole — tiers and all', async () => {
   assertMatch(text, /task land/)
 })
 
+slow('a bare spawn wears the project common persona (T-12867)', async () => {
+  let { p, t } = seed()
+  // The project's COMMON persona: home==p AND p `contains` it. It contains a
+  // memory, since materialize renders contained memories, not the body itself.
+  let per = uid(), mem = uid()
+  apply(db, [
+    { eid: per, name: 'doc', comp: { title: 'common', body: 'desc' } },
+    { eid: per, name: 'persona', comp: { home: p } },
+    {
+      eid: mem,
+      name: 'doc',
+      comp: { title: 'house lore', body: 'Wear the voice.' },
+    },
+    { eid: p, name: 'dependency', comp: { type: 'contains', child: per } },
+    { eid: per, name: 'dependency', comp: { type: 'contains', child: mem } },
+  ])
+  let { eid, done } = begin(t) // no --persona
+  await done
+  let first = logs(eid, new URLSearchParams('after=0&limit=1')).entries[0]
+  let text = JSON.parse(first.line).text
+  assertMatch(text, /# D-\d+ house lore/)
+  assertMatch(text, /Wear the voice\./)
+})
+
 slow('a child that exits nonzero failed, whatever it said', async () => {
   let { t } = seed('fail:3')
   let { eid, done } = begin(t)

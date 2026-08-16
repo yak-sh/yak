@@ -145,6 +145,22 @@ export let commonOf = (all: Row[], deps: Dep[], projectEid: string) =>
     )
   )
 
+// The persona a spawn wears (T-12867): an explicit --persona if given,
+// else the project's COMMON persona — so a bare spawn is never personaless,
+// it wears the same voice the repo's .tasks/AGENTS.md carries. A taskless
+// native chat has no project, so it stays bare (nothing to fall back to).
+export let wornPersona = (
+  all: Row[],
+  deps: Dep[],
+  spawnPersona: string | undefined,
+  projectEid: string | undefined,
+): Row | undefined =>
+  spawnPersona
+    ? all.find((r) => r.eid == spawnPersona && r.comps.doc)
+    : projectEid
+    ? commonOf(all, deps, projectEid)
+    : undefined
+
 // A project's SPECIALIST personas, surfaced as edges. `home` is the
 // one truth for ownership (commonOf and filesFor derive from it); these
 // project→persona `reads` edges are DERIVED from it — never stored — so a

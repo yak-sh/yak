@@ -434,10 +434,12 @@ export let manuals = declare({
   },
   spawn: {
     dots: ['provider', 'model', 'effort', 'persona'],
-    about: "dispatch a managed agent (defaults: your session's provider)",
+    about: 'dispatch a managed agent — the model routes to its provider ' +
+      "automatically (defaults to your session's model; --effort defaults " +
+      'to high; no --persona wears the project common persona)',
     examples: [
       'task spawn T-3',
-      'task spawn T-3 --provider=codex --model=gpt-5.6-sol',
+      'task spawn T-3 --model=sonnet',
     ],
     root: true,
     args: [arg('id', id)],

@@ -23,6 +23,7 @@ import {
   projection,
   syncFiles,
   taskRoots,
+  wornPersona,
 } from './persona.ts'
 
 let NOW = Date.parse('2026-07-22T00:00:00Z')
@@ -569,4 +570,34 @@ Deno.test('projection: a deleted persona orphans its file; AGENTS.md untouched',
   } finally {
     Deno.removeSync(dir, { recursive: true })
   }
+})
+
+// The persona a spawn wears (T-12867): explicit wins, else the project's
+// common persona, else bare (no project to fall back to).
+Deno.test('wornPersona: explicit, else project common, else bare', () => {
+  let project = row({ doc: { title: 'Venture', body: '' }, project: {} })
+  let common = row({
+    doc: { title: 'Common', body: 'C.' },
+    persona: { home: project.eid },
+  })
+  let other = row({
+    doc: { title: 'Specialist', body: 'S.' },
+    persona: { home: project.eid },
+  })
+  // only the common persona is `contains`-ed by the project
+  let deps = [edge(project, 'contains', common)]
+  let all = [project, common, other]
+
+  // an explicit --persona wears exactly that persona
+  assertEquals(wornPersona(all, deps, other.eid, project.eid)?.eid, other.eid)
+  // no --persona falls back to the project's common persona
+  assertEquals(wornPersona(all, deps, undefined, project.eid)?.eid, common.eid)
+  // no --persona and no project stays bare
+  assertEquals(wornPersona(all, deps, undefined, undefined), undefined)
+  // a project with no common persona stays bare
+  let bare = row({ doc: { title: 'Bare', body: '' }, project: {} })
+  assertEquals(
+    wornPersona([...all, bare], deps, undefined, bare.eid),
+    undefined,
+  )
 })
