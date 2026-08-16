@@ -2351,8 +2351,16 @@ export let notices = (all: Row[], who: Reader) => {
   })
     // A session's own write is not a message back to itself.
     .filter((ev) => byEid.get(ev.eid)?.comps.created?.via != sessEid)
+    // A TOTAL order: bornAt, then eid. bus() gathers its rows from parallel
+    // keyed queries and concatenates them, while noticesFor() reads a whole
+    // snapshot — so the two feed notices() in different input orders. bornAt
+    // alone ties for every row sharing a created.at (a whole batch) or lacking
+    // one, and a tie left to input order makes bus() and noticesFor() disagree
+    // and a parallel-gathered bus flake run to run. eid is unique, so tie-broken
+    // by eid the order is the same however the rows arrived (T-15463).
     .sort((a, b) =>
-      bornAt(byEid.get(a.eid)!).localeCompare(bornAt(byEid.get(b.eid)!))
+      bornAt(byEid.get(a.eid)!).localeCompare(bornAt(byEid.get(b.eid)!)) ||
+      a.eid.localeCompare(b.eid)
     )
   if (!events.length) return none
   let served = events.slice(0, 20)

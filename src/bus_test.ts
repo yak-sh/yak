@@ -165,6 +165,21 @@ let cases: [string, Snapshot, number][] = [
   ['a comment on the claimed task', graph(said('c1', 20, T, 'heads up')), 1],
   ['a comment on the session itself', graph(said('c2', 21, S, 'ping')), 1],
   [
+    // Three comments sharing one created.at, inserted num-DESCENDING so the
+    // whole-snapshot supplier (rows(), insertion order) and the bus (uniq(),
+    // num order) feed notices() in OPPOSITE orders. bornAt ties for all three,
+    // so without a total-order tie-break the two suppliers render the lines in
+    // different orders and this differential fails — the parallel-bus flake of
+    // T-15463. The eid tie-break makes both orders identical.
+    'tied timestamps resolve identically for both suppliers',
+    graph(
+      said('z3', 42, S, 'gamma', '2026-01-05'),
+      said('z2', 41, S, 'beta', '2026-01-05'),
+      said('z1', 40, S, 'alpha', '2026-01-05'),
+    ),
+    3,
+  ],
+  [
     'a comment on a task nobody here claims',
     graph(said('c3', 22, X, 'away')),
     0,
