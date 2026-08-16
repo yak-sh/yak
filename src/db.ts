@@ -711,6 +711,9 @@ export let derived = [
   'exception',
   'fixer',
   'nofix',
+  // The git-anchor facet (D-18378): {paths, sha}, both nullable text, an
+  // entity-keyed spine, no FK — wholly PropType-expressible, so it derives.
+  'anchor',
 ]
 
 // Insert a bare entity spine — the eid, and nothing else. num is NOT minted

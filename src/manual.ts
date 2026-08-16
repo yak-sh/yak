@@ -145,6 +145,28 @@ export let manuals = declare({
     args: [arg('filters', text, true, false)],
     opts: [flag('--all'), json],
   },
+  stale: {
+    dots: 'filters',
+    about: 'anchored entities whose code has moved past their sha',
+    examples: [
+      'task stale',
+      'task stale .kind=memory',
+      'task stale --all',
+      'task stale --json',
+    ],
+    detail: 'An `anchor {paths, sha}` (set with ' +
+      '`task set <id> .anchor.paths=src/db.ts .anchor.sha=<commit>`) records ' +
+      'that an entity was verified against a commit. This asks git — in the ' +
+      'repo your cwd puts you in — whether anything newer than that sha ' +
+      'touched those paths, and reports the anchors that MOVED (stale) or ' +
+      "that git can't vouch for (unknown: a sha rebased away, no paths). " +
+      'The default hides current anchors; `--all` lists them too. It is the ' +
+      'freshness backbone for architecture docs, memories and personas — a ' +
+      'stale line means the prose may no longer match the code.',
+    root: true,
+    args: [arg('filters', text, true, false)],
+    opts: [flag('--all'), json],
+  },
   new: {
     dots: 'params',
     about: 'create a task (bare words become the title)',

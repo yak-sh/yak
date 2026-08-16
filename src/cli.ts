@@ -123,6 +123,7 @@ import {
   descends,
 } from './proc.ts'
 import { projection, syncFiles } from './persona.ts'
+import { anchorPaths, type Freshness, freshness } from './anchor.ts'
 import { commit } from './git.ts'
 import { land as landTree } from './land.ts'
 import { request } from './http.ts'
@@ -450,6 +451,67 @@ let decided = async (got: Got) => {
     )
   }
   if (!hits.length) warn('(nothing decided)')
+}
+
+// ---- task stale: which anchored entities describe code that has MOVED. Each
+// `anchor {paths, sha}` (types.ts) names the paths an entity's prose covers and
+// the sha it was verified against; this asks git — in the repo the caller
+// stands in — whether anything newer than that sha touched those paths
+// (src/anchor.ts). A doc, memory or persona reads STALE when its code moved out
+// from under it, UNKNOWN when git can't vouch (a sha rebased away, no paths, no
+// repo). Surfaced, never silent: this is the freshness backbone (D-18378) that
+// keeps architecture docs, memories and personas true as the code moves.
+// Filters screen it like any listing door (`task stale .kind=memory`); `--all`
+// keeps the current anchors in the report too. Runs one git query per anchor,
+// so the report is O(anchors) — a maintenance sweep, not a hot path.
+let staleLine = (r: Row, f: Freshness) => {
+  let head = `${f.state.padEnd(7)} ${idOf(r).padEnd(6)} ${
+    String(r.comps.doc?.title ?? '')
+  }`
+  let paths = anchorPaths(r.comps.anchor?.paths as string | null | undefined)
+  let tail = f.state == 'stale'
+    ? `${f.moved.length} commit${f.moved.length == 1 ? '' : 's'} since ${
+      String(r.comps.anchor?.sha ?? '').slice(0, 8)
+    } · ${paths.join(', ')}`
+    : f.state == 'unknown'
+    ? f.why
+    : paths.join(', ')
+  return tail ? `${head}\n        ${tail}` : head
+}
+
+let stale = async (got: Got) => {
+  let json = got.flags.has('--json')
+  await checkedRefs(predicates(got.words))
+  let rows = await query(['.anchor!', ...got.words])
+  let cwd = Deno.cwd()
+  let graded = []
+  for (let r of rows) {
+    graded.push({
+      r,
+      f: await freshness(cwd, {
+        sha: r.comps.anchor?.sha as string | null | undefined,
+        paths: r.comps.anchor?.paths as string | null | undefined,
+      }),
+    })
+  }
+  // The default answers "what needs a look" — clean anchors are noise here;
+  // `--all` keeps them, current-first hidden behind the moved and the unvouched.
+  let order = { stale: 0, unknown: 1, clean: 2 }
+  let shown =
+    (got.flags.has('--all')
+      ? graded
+      : graded.filter((g) => g.f.state != 'clean')).sort((a, b) =>
+        order[a.f.state] - order[b.f.state]
+      )
+  if (json) {
+    return print(
+      jsonText(shown.map((g) => ({ ...jsonOf(g.r), freshness: g.f }))),
+    )
+  }
+  for (let g of shown) print(staleLine(g.r, g.f))
+  if (!shown.length) {
+    warn(rows.length ? '(all anchors current)' : '(no anchored entities)')
+  }
 }
 
 // task new uses dot-params, not --flags. A stray --flag in the title is the
@@ -2702,6 +2764,7 @@ export let verbs = bind({
   codex,
   list,
   decided,
+  stale,
   new: create,
   set,
   show,
