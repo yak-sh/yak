@@ -114,6 +114,14 @@ Deno.test('printer: CLI styling wraps sanitized content', () => {
 
 Deno.test('usage reports preserve argv and session attribution', async () => {
   let got: { input?: string; init?: RequestInit } = {}
+  // me() reads CLAUDE_CODE_SESSION_ID before TASKS_SESSION and branches on
+  // CLAUDE_CODE_CHILD_SESSION — a suite run from a delegated Claude fork
+  // inherits both, so neutralize them or the attribution under test is the
+  // runner's identity, not the one we set.
+  let saved = ['CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_CHILD_SESSION'].map((
+    k,
+  ) => [k, Deno.env.get(k)] as const)
+  for (let [k] of saved) Deno.env.delete(k)
   Deno.env.set('TASKS_SESSION', 'agent-thread')
   try {
     await reportUsage(['help', 'edge'], 'no such help topic', (input, init) => {
@@ -122,6 +130,7 @@ Deno.test('usage reports preserve argv and session attribution', async () => {
     })
   } finally {
     Deno.env.delete('TASKS_SESSION')
+    for (let [k, v] of saved) if (v != null) Deno.env.set(k, v)
   }
   assertMatch(got.input!, /\/usage$/)
   assertEquals(JSON.parse(String(got.init?.body)), {
