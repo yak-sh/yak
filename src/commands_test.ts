@@ -256,6 +256,42 @@ Deno.test('status moves land on the focused task', () => {
   assertThrows(() => run('done because', ctx(T)), Error, 'usage :done')
 })
 
+Deno.test('chat starts a taskless model with an optional multiline prompt', () => {
+  assertEquals(run('chat', ctx()), {
+    spawn: {},
+    msg: 'chat → agent',
+  })
+  assertEquals(run('chat Explain this\nwith examples', ctx()), {
+    spawn: { prompt: 'Explain this\nwith examples' },
+    msg: 'chat → agent',
+  })
+  assertEquals(
+    run(
+      'chat .provider=codex .model=gpt-5.6-sol .effort=high Why?\nGo deep',
+      ctx(),
+    ),
+    {
+      spawn: {
+        prompt: 'Why?\nGo deep',
+        provider: 'codex',
+        model: 'gpt-5.6-sol',
+        effort: 'high',
+      },
+      msg: 'chat → agent',
+    },
+  )
+  assertThrows(
+    () => run('chat .task.status=done Why?', ctx()),
+    Error,
+    'chat: cannot set task',
+  )
+  assertThrows(
+    () => run('chat .persona=nobody Why?', ctx()),
+    Error,
+    'no entity: nobody',
+  )
+})
+
 Deno.test('cancel: trailing words become a plain comment, same batch', () => {
   assertEquals(run('cancel', ctx(T)).changes, [
     { eid: T, name: 'task', comp: { status: 'cancelled' } },

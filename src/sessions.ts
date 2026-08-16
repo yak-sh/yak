@@ -1603,6 +1603,9 @@ Tasks graph tools; no filesystem, shell, patch, commit, or landing operation is
 available. If repository changes are required, explain that the task needs a
 repo-backed project.`
 
+let CHAT = `This is a taskless chat. Answer the user's prompt directly. Do not
+claim or create a task unless asked.`
+
 // Session runtime beside its normalized launch spec. Explicit aliases avoid
 // duplicate column names and keep validation on the canonical component.
 let runRow = (eid: string) => {
@@ -1734,9 +1737,11 @@ export let spawned =
     if (row.role && !role) {
       return fail(`no such role: ${human(db, String(row.role))}`)
     }
-    if (!task && !role) return fail('a managed session needs a task or role')
     let project = task?.project ?? role?.scope
     let nativeRun = !!native && graphCodex(String(row.spawn_provider))
+    if (!task && !role && !nativeRun) {
+      return fail('a taskless chat requires a graph-native provider')
+    }
     // The workspace comes from the GRAPH, never the request: the task's
     // or role's project says which checkout. A graph-native no-code run is the
     // one worktree-less composition; process providers still need a checkout.
@@ -1780,7 +1785,12 @@ export let spawned =
     let job: Launch = {
       instruction: [
         worn,
-        repo ? CONTRACT : NO_CODE,
+        !task && !role ? CHAT : repo ? CONTRACT : NO_CODE,
+        !task && !role
+          ? (db.prepare('select body from doc where eid = ?').get(eid) as
+            | { body: string }
+            | undefined)?.body
+          : undefined,
         task && `T-${task.num}: ${task.title}`,
         task?.body,
         role && `# R-${role.num} ${role.title ?? ''}`,

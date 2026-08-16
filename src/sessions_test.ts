@@ -399,6 +399,29 @@ slow('a new Codex spawn routes to the graph-native lifecycle', async () => {
   )
 })
 
+slow(
+  'a taskless Codex chat launches with its document as the prompt',
+  async () => {
+    let eid = uid(), prompt = 'Compare these approaches\nwith examples.'
+    apply(db, [
+      { eid, name: 'doc', comp: { title: '', body: prompt } },
+      {
+        eid,
+        name: 'session',
+        comp: { id: uid(), provider: 'codex', model: 'gpt-5.6-sol' },
+      },
+    ])
+    await spawned(cast, (got, launch) => {
+      assertEquals(got, eid)
+      assertEquals(launch.task, undefined)
+      assertEquals(launch.instruction.includes(prompt), true)
+      return Promise.resolve()
+    })(eid, {})
+    assertEquals(row(eid)?.origin, 'managed')
+    assertEquals(row(eid)?.requested_task, null)
+  },
+)
+
 slow('a projectless Codex task starts as a no-code graph session', async () => {
   let task = uid(), eid = uid(), routed = 0
   apply(db, [

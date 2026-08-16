@@ -18,12 +18,14 @@ import {
   type Ctx,
   ghost,
   run,
+  type SpawnIntent,
+  spawnTask,
   suggest,
 } from '../commands.ts'
 import { navigate, screenTarget } from './nav.tsx'
 import { drop, peek, save } from './drafts.ts'
 import { choose, load, providers } from './Run.tsx'
-import { catalog } from '../providers.ts'
+import { catalog, offer } from '../providers.ts'
 import { Tray } from './Tray.tsx'
 import { block } from './ui.tsx'
 import { Id } from './views/Inline.tsx'
@@ -190,25 +192,34 @@ let scene = (task: string): Change[] => {
 // form shows. The session is one graph write on the same socket the task just
 // rode, so ordering is free. The bar narrates from the graph; anything it
 // can't honor lands as a failed Session.
-let launch = async (task: string) => {
+let launch = async (intent: string | SpawnIntent) => {
   if (!providers.value.length) await load()
-  let m = catalog(providers.value)[0]
-  if (!m) throw new Error('no providers')
-  let provider = await choose(m)
+  let wanted = typeof intent == 'string' ? {} : intent
+  let m = offer(catalog(providers.value), wanted)
+  if (!m) throw new Error('no matching provider/model')
+  let provider = wanted.provider ?? await choose(m)
   let eid = uuid()
-  mutate({
-    eid,
-    name: 'session',
-    comp: {
-      id: uuid(),
-      provider,
-      model: m.model,
-      ...(m.efforts.length
-        ? { effort: m.efforts.includes('medium') ? 'medium' : m.efforts[0] }
-        : {}),
-      requested_task: task,
+  mutate(
+    {
+      eid,
+      name: 'session',
+      comp: {
+        id: uuid(),
+        provider,
+        model: wanted.model ?? m.model,
+        ...(wanted.effort
+          ? { effort: wanted.effort }
+          : m.efforts.length
+          ? { effort: m.efforts.includes('medium') ? 'medium' : m.efforts[0] }
+          : {}),
+        ...(spawnTask(intent) ? { requested_task: spawnTask(intent) } : {}),
+        ...(wanted.persona ? { persona: wanted.persona } : {}),
+      },
     },
-  })
+    ...(wanted.prompt
+      ? [{ eid, name: 'doc', comp: { title: '', body: wanted.prompt } }]
+      : []),
+  )
   return eid
 }
 
@@ -217,11 +228,12 @@ let launch = async (task: string) => {
 // throw lands in the bar rather than a toast — the message is about the
 // line you just typed, so it belongs where you typed it.
 let exec = async (line: string) => {
-  let launching = false
+  let launching = ''
   try {
     let r = run(line, ctx(), local)
     let changes = r.changes ?? []
-    if (r.spawn) changes = [...changes, ...scene(r.spawn)]
+    let task = spawnTask(r.spawn)
+    if (task) changes = [...changes, ...scene(task)]
     if (changes.length) mutate(...changes)
     if (r.go) navigate(`/${idOf(ent(r.go))}`)
     if (r.card) {
@@ -230,16 +242,16 @@ let exec = async (line: string) => {
       else navigate(`/${idOf(ent(r.card))}`)
     }
     if (r.spawn) {
-      launching = true
+      launching = line.trim().split(/\s/)[0]
       msg.value = r.msg ?? ''
       let session = await launch(r.spawn)
-      msg.value = { task: r.spawn, session }
+      if (task) msg.value = { task, session }
     } else {
       msg.value = r.msg ?? ''
     }
   } catch (e) {
     let why = e instanceof Error ? e.message : String(e)
-    msg.value = `${launching ? 'fix: ' : ''}${why}`
+    msg.value = `${launching ? `${launching}: ` : ''}${why}`
   }
 }
 

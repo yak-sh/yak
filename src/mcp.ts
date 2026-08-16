@@ -76,7 +76,7 @@ import {
   resolveRefs,
   warm,
 } from './query.ts'
-import { commandOut, commands, focusOf } from './commands.ts'
+import { commandOut, commands, focusOf, spawnSpec } from './commands.ts'
 import {
   type LogEntry,
   renderEntry,
@@ -671,21 +671,26 @@ ${
         )
       }
       if (out.spawn) {
+        let want = spawnSpec(out.spawn)
         // A spawn on defaults — a fresh read sees the task the line may
         // have just filed; task_spawn is the door for overrides.
         let snap = await io.read()
         let now = rows(snap)
         let mine = spawnDefaults(now, session)
-        let { provider, model } = mine
+        let provider = want.provider ?? mine.provider
+        let model = want.model ?? (want.provider ? undefined : mine.model)
         if (!provider || !model) {
           let table = await io.providers()
-          let fallback = spawnDefault(table, { provider, model })
+          let fallback = spawnDefault(table, {
+            provider: want.provider ?? provider,
+            model: want.model ?? model,
+          })
           provider = fallback.provider
           model = fallback.model
           if (!provider || !model) return err('no provider to default to')
         }
         let made = spawnChanges(now, {
-          task: out.spawn,
+          ...want,
           provider,
           model,
           by: session,
@@ -693,10 +698,10 @@ ${
         })
         await io.write(made.changes, session)
         let after = find(rows(await io.read()), made.eid)
-        let onto = find(now, out.spawn)
+        let onto = want.task ? find(now, want.task) : undefined
         said.push(
-          `spawned ${after ? idOf(after) : made.eid} onto ${
-            onto ? idOf(onto) : out.spawn
+          `spawned ${after ? idOf(after) : made.eid}${
+            onto ? ` onto ${idOf(onto)}` : ' as chat'
           }`,
         )
       }

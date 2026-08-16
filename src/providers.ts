@@ -66,6 +66,16 @@ export let catalog = (ps: Provider[]): Pick[] => {
   return [...picks.values()].sort((a, b) => modelOrder(a.model, b.model))
 }
 
+export let offer = (picks: Pick[], want: Spawn = {}) =>
+  want.model
+    ? picks.find((p) =>
+      p.model == want.model &&
+      (!want.provider || p.transports.includes(want.provider))
+    )
+    : want.provider
+    ? picks.find((p) => p.transports.includes(want.provider!))
+    : picks[0]
+
 // The transport to actually run a picked model: the first one the caller
 // doesn't block, else the last-resort fallback. A graph-native provider is
 // blocked when its account isn't ready; a CLI fallback never is.

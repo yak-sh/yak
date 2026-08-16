@@ -67,9 +67,25 @@ export type Result = {
   changes?: Change[]
   go?: string // an eid to open — the platform picks the form (url, trail)
   card?: string // a minted entity to place on a canvas, or open elsewhere
-  spawn?: string // a task eid to start an agent on — platforms that can, do
+  spawn?: string | SpawnIntent // a launch platforms spend with their catalog
   msg?: string
 }
+
+export type SpawnIntent = {
+  prompt?: string
+  provider?: string
+  model?: string
+  effort?: string
+  persona?: string
+}
+
+export let spawnTask = (spawn: Result['spawn']) =>
+  typeof spawn == 'string' ? spawn : undefined
+
+export let spawnSpec = (
+  spawn: NonNullable<Result['spawn']>,
+): SpawnIntent & { task?: string } =>
+  typeof spawn == 'string' ? { task: spawn } : spawn
 
 export type Verb = (rest: string, ctx: Ctx) => Result
 
@@ -351,6 +367,37 @@ export let commands: Record<string, Command> = {
         }),
         spawn: eid,
         msg: `fix: ${title}`,
+      }
+    },
+  },
+  chat: {
+    args: '[.provider=codex .model=gpt-5.6-sol prompt…]',
+    about: 'start a taskless chat in the tray',
+    run: (rest, ctx) => {
+      let { title, body, grouped } = spec(rest, ctx.read)
+      for (let name of Object.keys(grouped)) {
+        if (!['doc', 'session', 'spawn'].includes(name)) {
+          throw new Error(`chat: cannot set ${name}`)
+        }
+      }
+      for (let name of Object.keys(grouped.session ?? {})) {
+        if (!['provider', 'model', 'effort', 'persona'].includes(name)) {
+          throw new Error(`chat: cannot set session.${name}`)
+        }
+      }
+      let prompt = [title, body].filter(Boolean).join('\n')
+      let launch: SpawnIntent = { ...grouped.session, ...grouped.spawn }
+      if (launch.persona) {
+        let persona = find(ctx.rows, launch.persona)
+        if (!persona) throw new Error(`no entity: ${launch.persona}`)
+        launch.persona = persona.eid
+      }
+      return {
+        spawn: {
+          ...(prompt ? { prompt } : {}),
+          ...launch,
+        },
+        msg: 'chat → agent',
       }
     },
   },

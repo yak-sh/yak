@@ -2,7 +2,13 @@
 // and route it graph-native → CLI fallback by readiness, independent of
 // provider-table order.
 import { assertEquals } from '@std/assert'
-import { catalog, type Provider, spawnDefault, transport } from './providers.ts'
+import {
+  catalog,
+  offer,
+  type Provider,
+  spawnDefault,
+  transport,
+} from './providers.ts'
 
 // The shipped shape: graph-native `codex` carries the menu; the `codex-cli`
 // fallback shares its models but offers no label of its own.
@@ -46,6 +52,17 @@ Deno.test('catalog offers each model once, Sol first, fallback as a transport', 
 Deno.test('catalog ranks the graph-native transport first regardless of table order', () => {
   let sol = catalog([codexCli, codex])[0]
   assertEquals(sol.transports, ['codex', 'codex-cli'])
+})
+
+Deno.test('offer resolves explicit model and transport combinations', () => {
+  let picks = catalog([codex, codexCli, claude])
+  assertEquals(offer(picks)?.model, 'gpt-5.6-sol')
+  assertEquals(offer(picks, { provider: 'claude' })?.model, 'claude-opus-4-8')
+  assertEquals(offer(picks, { model: 'gpt-5.6-terra' })?.model, 'gpt-5.6-terra')
+  assertEquals(
+    offer(picks, { provider: 'claude', model: 'gpt-5.6-sol' }),
+    undefined,
+  )
 })
 
 Deno.test('transport picks graph-native when ready, the fallback when blocked', () => {

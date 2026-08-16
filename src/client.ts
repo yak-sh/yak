@@ -1233,7 +1233,8 @@ export let spawnDefaults = (all: Row[], session?: string) => {
 export let spawnChanges = (
   all: Row[],
   s: {
-    task: string
+    task?: string
+    prompt?: string
     provider: string
     model: string
     effort?: string
@@ -1242,8 +1243,8 @@ export let spawnChanges = (
     deps?: Dep[]
   },
 ) => {
-  let task = find(all, s.task)
-  if (!task?.comps.task) throw new Error(`no task: ${s.task}`)
+  let task = s.task ? find(all, s.task) : undefined
+  if (s.task && !task?.comps.task) throw new Error(`no task: ${s.task}`)
   let persona = s.persona ? find(all, s.persona) : undefined
   if (s.persona && !persona) throw new Error(`no entity: ${s.persona}`)
   // Behalf is a CHOICE, not plumbing: wearing a persona owned by an
@@ -1267,17 +1268,20 @@ export let spawnChanges = (
   let caller = s.by
     ? all.find((r) => String(r.comps.session?.id) == s.by)?.comps.session
     : undefined
-  let actor = owner?.eid ?? task.comps.task.project ?? caller?.actor
+  let actor = owner?.eid ?? task?.comps.task.project ?? caller?.actor
   let eid = uuid()
   let changes = sessionFrames(eid, {
     id: uuid(),
     provider: s.provider,
     model: s.model,
     ...(s.effort ? { effort: s.effort } : {}),
-    requested_task: task.eid,
+    ...(task ? { requested_task: task.eid } : {}),
     ...(persona ? { persona: persona.eid } : {}),
     ...(actor ? { actor: actor } : {}),
   })
+  if (s.prompt) {
+    changes.push({ eid, name: 'doc', comp: { title: '', body: s.prompt } })
+  }
   return { eid, changes }
 }
 

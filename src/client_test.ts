@@ -741,6 +741,20 @@ Deno.test('spawnChanges: request speaks canonical and rollback frames', () => {
   )
 })
 
+Deno.test('spawnChanges: a chat has a prompt and no requested task', () => {
+  let made = spawnChanges(all, {
+    prompt: 'Compare these approaches',
+    provider: 'codex',
+    model: 'gpt-5.6-sol',
+  })
+  assertEquals(made.changes[0].comp?.requested_task, undefined)
+  assertEquals(made.changes.at(-1), {
+    eid: made.eid,
+    name: 'doc',
+    comp: { title: '', body: 'Compare these approaches' },
+  })
+})
+
 Deno.test("spawnChanges: the actor chain — owner, then the task's project, then the caller", () => {
   let J = 'aaaaaaaa-0000-4000-8000-000000000021' // person
   let O = 'aaaaaaaa-0000-4000-8000-000000000022' // operator project

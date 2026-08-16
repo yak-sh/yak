@@ -112,6 +112,8 @@ Deno.test('help topics cover nested and colon vocabularies', () => {
   assertMatch(help(['session', 'brief']), /^task session brief/)
   assertMatch(help(['fix']), /^task :fix/)
   assertMatch(help([':fix']), /^task :fix/)
+  assertMatch(help(['chat']), /^task :chat/)
+  assertMatch(help([':chat']), /^task :chat/)
   assertThrows(
     () => help(['grammar', 'extra']),
     Error,

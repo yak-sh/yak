@@ -28,7 +28,14 @@ import {
   statuses,
   uuid,
 } from '../live.ts'
-import { type Command, commands, type Ctx, run } from '../commands.ts'
+import {
+  type Command,
+  commands,
+  type Ctx,
+  run,
+  type SpawnIntent,
+  spawnTask,
+} from '../commands.ts'
 import { inflate } from '../client.ts'
 import {
   applicable,
@@ -49,7 +56,7 @@ import {
   type AccountView,
   codexAccount,
 } from '../account_client.ts'
-import { catalog } from '../providers.ts'
+import { catalog, offer } from '../providers.ts'
 import { choose, load, providers } from '../components/Run.tsx'
 import { useQuery } from '../components/useQuery.ts'
 import { navigationQuery, navigationView } from '../navigation.ts'
@@ -371,24 +378,34 @@ let local: Record<string, Command> = { q: bye, quit: bye }
 // the default model once, its transport chosen by readiness (graph-native Codex
 // when signed in, else the CLI fallback). No canvas here, so the session is a
 // lone graph write — created(session) validates and launches it.
-let spawn = async (task: string) => {
+let spawn = async (intent: string | SpawnIntent) => {
   if (!providers.value.length) await load()
-  let m = catalog(providers.value)[0]
-  if (!m) throw new Error('no providers')
-  let provider = await choose(m)
-  mutate({
-    eid: uuid(),
-    name: 'session',
-    comp: {
-      id: uuid(),
-      provider,
-      model: m.model,
-      ...(m.efforts.length
-        ? { effort: m.efforts.includes('medium') ? 'medium' : m.efforts[0] }
-        : {}),
-      requested_task: task,
+  let wanted = typeof intent == 'string' ? {} : intent
+  let m = offer(catalog(providers.value), wanted)
+  if (!m) throw new Error('no matching provider/model')
+  let provider = wanted.provider ?? await choose(m)
+  let eid = uuid()
+  mutate(
+    {
+      eid,
+      name: 'session',
+      comp: {
+        id: uuid(),
+        provider,
+        model: wanted.model ?? m.model,
+        ...(wanted.effort
+          ? { effort: wanted.effort }
+          : m.efforts.length
+          ? { effort: m.efforts.includes('medium') ? 'medium' : m.efforts[0] }
+          : {}),
+        ...(spawnTask(intent) ? { requested_task: spawnTask(intent) } : {}),
+        ...(wanted.persona ? { persona: wanted.persona } : {}),
+      },
     },
-  })
+    ...(wanted.prompt
+      ? [{ eid, name: 'doc', comp: { title: '', body: wanted.prompt } }]
+      : []),
+  )
 }
 
 let exec = (line: string) => {

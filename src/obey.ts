@@ -15,7 +15,7 @@
 import { apply, db, snapshot } from './db.ts'
 import { dispatch, trace } from './effects.ts'
 import { providers } from './adapters.ts'
-import { commandOut, orderIn } from './commands.ts'
+import { commandOut, orderIn, spawnSpec } from './commands.ts'
 import { spawnDefault } from './providers.ts'
 import { type Change, idOf, type Snapshot } from './types.ts'
 import { find, type Row, rows, spawnChanges, spawnDefaults } from './client.ts'
@@ -55,21 +55,25 @@ export let order = (
     // session entity like any other spawn; created(session) validates it,
     // so a bad one lands as a failed Session, never as a broken receipt.
     if (out.spawn) {
+      let want = spawnSpec(out.spawn)
       let mine = spawnDefaults(all, session)
       let table = providers()
-      let { provider, model } = spawnDefault(table, mine, blocked)
+      let { provider, model } = spawnDefault(table, {
+        provider: want.provider ?? mine.provider,
+        model: want.model ?? (want.provider ? undefined : mine.model),
+      }, blocked)
       if (!provider || !model) throw new Error('no provider to default to')
       let made = spawnChanges(all, {
-        task: out.spawn,
+        ...want,
         provider,
         model,
         by: session,
         deps: snap.deps,
       })
       changes.push(...made.changes)
-      spawned = out.spawn
-      let onto = find(all, out.spawn)
-      said = [said, `spawned onto ${onto ? idOf(onto) : out.spawn}`]
+      spawned = want.task ?? made.eid
+      let onto = want.task ? find(all, want.task) : undefined
+      said = [said, onto ? `spawned onto ${idOf(onto)}` : 'spawned chat']
         .filter(Boolean).join('\n')
     }
   } catch (e) {

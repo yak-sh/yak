@@ -1063,21 +1063,26 @@ let claim = async (got: Got) => {
 // Session on the board (task show <S-id> reads it back). Reads the graph
 // fresh so a task the caller just filed (:fix) is visible.
 let launch = async (
-  id: string,
+  id: string | undefined,
   flags: {
     provider?: string
     model?: string
     effort?: string
     persona?: string
+    prompt?: string
   },
 ) => {
   let by = me()
   let [task, caller, persona] = await Promise.all([
-    needed(id),
+    id ? needed(id) : undefined,
     by ? sessionRow(by) : undefined,
     flags.persona ? around(flags.persona) : undefined,
   ])
-  let all = [task, ...(caller ? [caller] : []), ...(persona?.all ?? [])]
+  let all = [
+    ...(task ? [task] : []),
+    ...(caller ? [caller] : []),
+    ...(persona?.all ?? []),
+  ]
   // Unnamed provider/model inherit: the calling session's own (a spawn
   // begets its own kind), then the shared anonymous default.
   let mine = spawnDefaults(all, by)
@@ -1095,6 +1100,7 @@ let launch = async (
   }
   let made = spawnChanges(all, {
     task: id,
+    prompt: flags.prompt,
     provider,
     model,
     effort: flags.effort,
@@ -1103,10 +1109,8 @@ let launch = async (
     deps: persona?.deps,
   })
   await send(made.changes)
-  let onto = find(all, id)
-  print(
-    `${await minted(made.eid)} spawned onto ${onto ? idOf(onto) : id}`,
-  )
+  let onto = id ? find(all, id) : undefined
+  print(`${await minted(made.eid)} spawned${onto ? ` onto ${idOf(onto)}` : ''}`)
 }
 
 let spawn = async (got: Got) => {
@@ -1263,7 +1267,10 @@ let colon = async (focus: string | undefined, argv: string[]) => {
     }
     print(wakeList(wakes, recipient, (id) => refs.find((r) => r.eid == id)))
   }
-  if (out.spawn) await launch(out.spawn, {})
+  if (out.spawn) {
+    if (typeof out.spawn == 'string') await launch(out.spawn, {})
+    else await launch(undefined, out.spawn)
+  }
   if (out.go) {
     let r = all.find((x) => x.eid == out.go)
     print(entityUrl(r ? idOf(r) : out.go))
