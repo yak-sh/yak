@@ -41,6 +41,18 @@ import {
 } from './client.ts'
 import { adopt, parseQuery } from './query.ts'
 import { instant } from './time.ts'
+import { type Arg, id, slotsOf, text } from './verb.ts'
+
+// A `:` command's argument, built terse: `a('id', 'T-42', { kind: id })`. The
+// default kind is free text; `eg` is the concrete sample the palette ghosts,
+// `need: false` marks it optional, `rest: true` a trailing catch-all. The
+// slots ARE the ghost — one per typed word — replacing the old prose regex.
+let a = (name: string, eg?: string, opts: Partial<Arg> = {}): Arg => ({
+  name,
+  kind: text,
+  ...(eg ? { eg } : {}),
+  ...opts,
+})
 
 // Where the typist is standing: the focused entity (the web's root card,
 // the TUI's trail head), the graph to resolve names against, and the
@@ -185,7 +197,10 @@ let del: Verb = (rest, ctx) => {
 // A command carries its own manual and any finite word count, so every
 // renderer and dispatcher shares both the prompt and the refusal.
 export type Command = {
-  args: string
+  // The positional slots, as data — usage renders `<name>` from each, the
+  // palette ghosts `eg ?? name` (one slot per typed word). Was an example
+  // string the ghost recovered by regex; now the slots are given (T-12929).
+  args: Arg[]
   about: string
   run: Verb
   words?: [min: number, max: number]
@@ -240,12 +255,16 @@ let sessionDefaults = (ctx: Ctx) => {
 }
 
 let card = (kind: typeof cardCommands[number]): Command => ({
-  args: {
-    task: '[P1 .domain=Eng title…]',
-    session: '[.id=review]',
-    doc: '[.title=Notes .body=…]',
-    memory: '[.title=Lesson .memory.scope=home]',
-  }[kind],
+  args: [a(
+    kind == 'task' ? 'title' : 'params',
+    {
+      task: 'P1 .domain=Eng title…',
+      session: '.id=review',
+      doc: '.title=Notes .body=…',
+      memory: '.title=Lesson .memory.scope=home',
+    }[kind],
+    { rest: true, need: false },
+  )],
   about: `add a ${kind} card`,
   dots: true,
   run: (rest, ctx) => {
@@ -309,7 +328,7 @@ export let commands: Record<string, Command> = {
   // — typed setters win over what the context hands down.
   new: {
     dots: true,
-    args: 'P1 .domain=Eng title…',
+    args: [a('title', 'P1 .domain=Eng title…', { rest: true })],
     about: 'file a task where you stand',
     run: (rest, ctx) => {
       let { title, body, grouped } = spec(rest, ctx.read)
@@ -325,7 +344,7 @@ export let commands: Record<string, Command> = {
     },
   },
   open: {
-    args: '[T-42]',
+    args: [a('id', 'T-42', { kind: id, need: false })],
     about: 'reopen the task — or go to T-42',
     words: [0, 1],
     run: (rest, ctx) => rest.trim() ? go(rest.trim(), ctx) : reopen(rest, ctx),
@@ -339,7 +358,10 @@ export let commands: Record<string, Command> = {
   // INTENT like go: this module never touches the wire.
   fix: {
     dots: true,
-    args: '[T-42 | the toolbar clips at small widths]',
+    args: [a('task', 'T-42 | the toolbar clips at small widths', {
+      rest: true,
+      need: false,
+    })],
     about: 'run a fix agent — here, on T-42, or on a task your words file',
     run: (rest, ctx) => {
       let text = rest.trim()
@@ -380,7 +402,10 @@ export let commands: Record<string, Command> = {
   },
   chat: {
     dots: true,
-    args: '[.provider=codex .model=gpt-5.6-sol prompt…]',
+    args: [a('prompt', '.provider=codex .model=gpt-5.6-sol prompt…', {
+      rest: true,
+      need: false,
+    })],
     about: 'start a taskless chat in the tray',
     run: (rest, ctx) => {
       let { title, body, grouped } = spec(rest, ctx.read)
@@ -411,20 +436,20 @@ export let commands: Record<string, Command> = {
     },
   },
   done: {
-    args: '',
+    args: [],
     about:
       'move the focused task to done (shell: `task done T-3 [comment]` names one explicitly)',
     words: [0, 0],
     run: move('done'),
   },
   wip: {
-    args: '',
+    args: [],
     about: 'move the focused task to wip',
     words: [0, 0],
     run: move('wip'),
   },
   cancel: {
-    args: '[reason]',
+    args: [a('reason', 'reason', { rest: true, need: false })],
     about: 'call off the focused task; the words become a comment ' +
       '(shell: `task cancel T-3 [reason]` names one explicitly)',
     run: (rest, ctx) => {
@@ -453,7 +478,9 @@ export let commands: Record<string, Command> = {
   // yet anchors on the session entity, so a memo never fails for want of a
   // transcript position.
   meta: {
-    args: 'the observation to leave for the dream',
+    args: [a('observation', 'the observation to leave for the dream', {
+      rest: true,
+    })],
     about:
       'leave a quiet meta memo in the transcript (harvested by the dream, not live)',
     run: (rest, ctx) => {
@@ -482,7 +509,7 @@ export let commands: Record<string, Command> = {
   // wins; otherwise the focused entity, which must be a project. Idempotent: a
   // second dream on the same venture is refused by dreamChanges.
   dream: {
-    args: 'P-19',
+    args: [a('project', 'P-19', { kind: id, need: false })],
     about: 'start a venture dreaming — the graph-native consolidation cycle',
     run: (rest, ctx) => {
       let first = rest.trim().split(/\s+/).filter(Boolean)[0]
@@ -509,7 +536,10 @@ export let commands: Record<string, Command> = {
   // must never become content. `:wake`, the same sentence with a clock,
   // has always refused an unresolvable first word — the siblings agree now.
   knock: {
-    args: 'homelab need the key today',
+    args: [
+      a('to', 'homelab', { kind: id, need: false }),
+      a('words', 'need the key today', { rest: true, need: false }),
+    ],
     about: "someone's attention, now — on the focused entity",
     run: (rest, ctx) => {
       let r = here(ctx)
@@ -544,7 +574,12 @@ export let commands: Record<string, Command> = {
   // resolves HERE, at mint, and the line says the moment it landed on,
   // so a time already past is visible rather than a silent knock now.
   wake: {
-    args: 'homelab in 60m T-42 -- what I was mid-doing',
+    args: [
+      a('to', 'homelab', { kind: id }),
+      a('when', 'in 60m'),
+      a('target', 'T-42', { kind: id, need: false }),
+      a('note', '-- what I was mid-doing', { rest: true, need: false }),
+    ],
     about: 'a knock on a timer — wake someone at a time, with an optional note',
     run: (rest, ctx) => {
       // `-- note` folds a note onto the wake (like :mail's `-- body`): what the
@@ -606,7 +641,11 @@ export let commands: Record<string, Command> = {
   // `to` stays as given: raw address or graph reference, the address
   // book resolves at delivery.
   mail: {
-    args: 'jeff subject… -- body…',
+    args: [
+      a('to', 'jeff', { kind: id }),
+      a('subject', 'subject…'),
+      a('body', '-- body…', { rest: true }),
+    ],
     about: 'send a letter: to, subject, -- body',
     run: (rest, ctx) => {
       let [, head, body] = rest.match(/^([\s\S]*?)\s+--\s+([\s\S]+)$/) ?? []
@@ -629,7 +668,10 @@ export let commands: Record<string, Command> = {
   // `page`); replyChanges aims at the far side and records the thread at
   // authoring (reply_to), delivery resolves it to a Message-ID.
   reply: {
-    args: '[E-9] the answer…',
+    args: [
+      a('id', 'E-9', { kind: id, need: false }),
+      a('answer', 'the answer…', { rest: true }),
+    ],
     about: 'answer the mail — Re: threads at delivery',
     run: (rest, ctx) => {
       let [, first, more] = rest.trim().match(/^(\S+)\s*([\s\S]*)$/) ?? []
@@ -651,7 +693,7 @@ export let commands: Record<string, Command> = {
   // the bus serves the ask); the spawn is the same pinned desk the
   // sweep uses. A desk already at work just gets the ask queued.
   scribe: {
-    args: '[S-31]',
+    args: [a('session', 'S-31', { kind: id, need: false })],
     about: "have the scribe write that session's brief",
     words: [0, 1],
     run: (rest, ctx) => {
@@ -683,7 +725,7 @@ export let commands: Record<string, Command> = {
     },
   },
   claim: {
-    args: '[session]',
+    args: [a('session', undefined, { need: false })],
     about: 'lease the focused entity',
     words: [0, 1],
     run: (rest, ctx) => {
@@ -702,7 +744,10 @@ export let commands: Record<string, Command> = {
   // door that has a filesystem, the same one `task set` speaks.
   set: {
     dots: true,
-    args: '.prop=value …',
+    args: [
+      a('param', '.prop=value'),
+      a('more', '…', { rest: true, need: false }),
+    ],
     about: 'patch the focused entity',
     run: (rest, ctx) => {
       let r = here(ctx)
@@ -717,12 +762,18 @@ export let commands: Record<string, Command> = {
     },
   },
   delete: {
-    args: '[T-42] [--cascade]',
+    args: [
+      a('id', 'T-42', { kind: id, need: false }),
+      a('--cascade', '--cascade', { need: false }),
+    ],
     about: 'tombstone an entity — the cascade takes its dependents (--cascade)',
     run: del,
   },
   forget: {
-    args: '[M-7] [--cascade]',
+    args: [
+      a('id', 'M-7', { kind: id, need: false }),
+      a('--cascade', '--cascade', { need: false }),
+    ],
     about: 'tombstone a memory (delete, said for memories)',
     run: del,
   },
@@ -744,7 +795,7 @@ export let run = (
   let words = (rest ?? '').trim().split(/\s+/).filter(Boolean).length
   if (v.words && (words < v.words[0] || words > v.words[1])) {
     throw new Error(
-      `${name}: usage :${`${name} ${v.args}`.trim()} ` +
+      `${name}: usage :${`${name} ${slotsOf(v.args)}`.trim()} ` +
         `(got ${words} argument${words == 1 ? '' : 's'})`,
     )
   }
@@ -808,10 +859,15 @@ export let suggest = (
   ]
 }
 
+// What one slot paints faded: its concrete sample if it has one, else the
+// metavar with a trailing `…` for a catch-all — `eg ?? name`, the teaching
+// half of the vocabulary (`jeff` reads faster than `<to>`).
+let ghostSlot = (arg: Arg) => arg.eg ?? `${arg.name}${arg.rest ? '…' : ''}`
+
 // What to paint faded past the caret: the best match's remaining letters
-// while the verb is still being typed; once it stands, the example args
-// it hasn't been given yet — the example is a list of slots, and each
-// typed word consumes one.
+// while the verb is still being typed; once it stands, the sample args it
+// hasn't been given yet — one Arg slot per typed word (T-12929), no longer
+// a regex over a prose example.
 export let ghost = (line: string, all: Record<string, Command>): string => {
   let m = line.match(/^(\S+)(\s+(.*))?$/s)
   if (!m) return ''
@@ -822,11 +878,9 @@ export let ghost = (line: string, all: Record<string, Command>): string => {
     if (!all[name]) return ''
   }
   let cmd = all[name]
-  if (!cmd?.args) return ''
+  if (!cmd?.args.length) return ''
   let typed = (rest ?? '').split(/\s+/).filter(Boolean).length
-  // A bracketed group ([T-42 | words…]) is ONE slot: the bracket names
-  // what a single argument may be, so one typed word consumes it whole.
-  let left = (cmd.args.match(/\[[^\]]*\]|\S+/g) ?? []).slice(typed)
+  let left = cmd.args.slice(typed)
   if (!left.length) return ''
-  return (/\s$/.test(line) ? '' : ' ') + left.join(' ')
+  return (/\s$/.test(line) ? '' : ' ') + left.map(ghostSlot).join(' ')
 }

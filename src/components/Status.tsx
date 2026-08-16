@@ -22,6 +22,7 @@ import {
   spawnTask,
   suggest,
 } from '../commands.ts'
+import { num, slotsOf } from '../verb.ts'
 import { navigate, screenTarget } from './nav.tsx'
 import { drop, peek, save } from './drafts.ts'
 import { choose, load, providers } from './Run.tsx'
@@ -138,7 +139,7 @@ let ctx = (): Ctx => ({ eid: screenTarget()?.eid, rows: rows() })
 // answer for. Everything else is the shared list (commands.ts).
 let local: Record<string, Command> = {
   zoom: {
-    args: '0.25–4',
+    args: [{ name: 'factor', kind: num, eg: '0.25–4', need: false }],
     about: 'zoom the canvas',
     run: (rest) => {
       let z = Math.min(4, Math.max(0.25, Number(rest.trim()) || 1))
@@ -471,7 +472,7 @@ export let Status = () => {
                       }}
                     >
                       <Name>{name}</Name>
-                      {c.args && <Args>{c.args}</Args>}
+                      {c.args.length > 0 && <Args>{slotsOf(c.args)}</Args>}
                       <About>{c.about}</About>
                     </Hint>
                   ))}

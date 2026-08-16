@@ -84,6 +84,7 @@ import {
   warm,
 } from './query.ts'
 import { commandOut, commands, focusOf, spawnSpec } from './commands.ts'
+import { slotsOf } from './verb.ts'
 import {
   type LogEntry,
   renderEntry,
@@ -675,7 +676,7 @@ Writes land, :fix spawns an agent (your session's provider defaults),
 :open returns the entity's URL. The vocabulary:
 ${
       Object.entries(commands)
-        .map(([n, c]) => `  :${`${n} ${c.args}`.trim()} — ${c.about}`)
+        .map(([n, c]) => `  :${`${n} ${slotsOf(c.args)}`.trim()} — ${c.about}`)
         .join('\n')
     } ${BUS}`,
     {

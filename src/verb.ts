@@ -90,6 +90,12 @@ let slot = (arg: Arg) => `${arg.name}${arg.rest ? '…' : ''}`
 let positional = (arg: Arg) =>
   arg.need === false ? `[${slot(arg)}]` : `<${slot(arg)}>`
 
+// The positional shape of an argument list, `<name>`/`[name…]` — the usage
+// half of the vocabulary, shared by CLI verbs (usageOf) and the `:` commands
+// (commands.ts). The ghost paints the concrete `eg` instead; this paints the
+// metavar name, the reference shape.
+export let slotsOf = (args: Arg[] = []) => args.map(positional).join(' ')
+
 let meta = (kind: Kind) => {
   let values = kind.of?.().join('|')
   return values && values.length <= 24 ? values : kind.name.toUpperCase()
@@ -106,9 +112,9 @@ let option = (opt: Opt, verb: Decl) => {
 export let usageOf = (verb: Decl) =>
   verb.syntax ?? [
     verb.name,
-    ...(verb.args ?? []).map(positional),
+    slotsOf(verb.args),
     ...(verb.opts ?? []).map((opt) => option(opt, verb)),
-  ].join(' ')
+  ].filter(Boolean).join(' ')
 
 export let wordsOf = (verb: Decl): [number, number?] => {
   let args = verb.args ?? []

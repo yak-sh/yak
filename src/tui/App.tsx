@@ -365,7 +365,7 @@ let ctx = (): Ctx => ({
 // Quitting is the one verb a browser has no answer for; the rest of the
 // language is shared (commands.ts).
 let bye: Command = {
-  args: '',
+  args: [],
   about: 'leave',
   run: () => {
     quit.value = true

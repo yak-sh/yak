@@ -12,6 +12,7 @@ import {
 } from './commands.ts'
 import { cascade, inflate, rows } from './client.ts'
 import { type Snapshot } from './types.ts'
+import { text } from './verb.ts'
 import { assertEquals, assertThrows } from '@std/assert'
 
 let S = 'aaaaaaaa-0000-4000-8000-000000000001' // session sess-x
@@ -354,7 +355,7 @@ Deno.test('open: an argument navigates, none is the status move', () => {
   assertEquals(run('open', ctx(T)).changes![0].comp, { status: 'open' })
   assertEquals(run('open', ctx(T)).go, undefined)
   assertThrows(() => run('open T-99', ctx()), Error, 'no such entity: T-99')
-  assertThrows(() => run('open T-4 extra', ctx()), Error, 'usage :open [T-42]')
+  assertThrows(() => run('open T-4 extra', ctx()), Error, 'usage :open [id]')
 })
 
 Deno.test('claim: names a session, or takes the ambient one', () => {
@@ -435,7 +436,7 @@ Deno.test('dispatch: unknown names say so, local verbs ride, empty is a no-op', 
   assertEquals(run('', ctx(T)), {})
   assertEquals(run('   ', ctx(T)), {})
   let zoom: Command = {
-    args: 'n',
+    args: [{ name: 'n', kind: text }],
     about: 'test',
     run: (rest) => ({ msg: `zoom ${rest}` }),
   }
@@ -451,16 +452,16 @@ Deno.test('suggest: prefix leads, substring trails, empty lists all', () => {
   assertEquals(names('zzz'), [])
 })
 
-Deno.test('ghost: verb remainder, then unconsumed example args', () => {
+Deno.test('ghost: verb remainder, then unconsumed sample args', () => {
   let g = (line: string) => ghost(line, commands)
   assertEquals(g('op'), 'en')
-  assertEquals(g('open'), ' [T-42]') // verb stands: the args appear
-  assertEquals(g('open '), '[T-42]')
+  assertEquals(g('open'), ' T-42') // verb stands: the sample slots appear
+  assertEquals(g('open '), 'T-42')
   assertEquals(g('open T-4'), '') // the slot is being consumed
   assertEquals(g('se'), 't')
   assertEquals(g('set .status=done '), '…') // one slot down, one to go
-  assertEquals(g('fix'), ' [T-42 | the toolbar clips at small widths]')
-  assertEquals(g('fix T-4'), '') // the bracket group is ONE slot
+  assertEquals(g('fix'), ' T-42 | the toolbar clips at small widths')
+  assertEquals(g('fix T-4'), '') // the whole sample is ONE slot
   assertEquals(g('done'), '') // no args to offer
   assertEquals(g('zzz'), '')
   assertEquals(g(''), '')
@@ -658,7 +659,7 @@ Deno.test('scribe: summon the desk onto a session brief', () => {
   assertThrows(
     () => run('scribe S-1 extra', ctx()),
     Error,
-    'usage :scribe [S-31]',
+    'usage :scribe [session]',
   )
 })
 

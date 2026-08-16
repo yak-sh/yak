@@ -25,6 +25,7 @@ import {
   of,
   type Opt,
   path,
+  slotsOf,
   text,
   usageOf,
   wordsOf,
@@ -960,7 +961,9 @@ let commandHelp = (name = '') => {
     throw new UsageError(`not a command: ${name} (task help : lists them)`)
   }
   return Object.entries(show)
-    .map(([n, c]) => `task :${`${n} ${c.args}`.trim().padEnd(34)} ${c.about}`)
+    .map(([n, c]) =>
+      `task :${`${n} ${slotsOf(c.args)}`.trim().padEnd(34)} ${c.about}`
+    )
     .join('\n')
 }
 
@@ -1309,7 +1312,7 @@ export let validateCommand = (name: string, args: string[]) => {
       : ''
     throw new UsageError(
       `:${name} does not take ${optionName(bad)}${hint}\n` +
-        `usage: task :${`${name} ${command.args}`.trim()}`,
+        `usage: task :${`${name} ${slotsOf(command.args)}`.trim()}`,
     )
   }
   // A verb that does not read dot-params must refuse an unknown one by name,
@@ -1321,7 +1324,7 @@ export let validateCommand = (name: string, args: string[]) => {
   if (dot) {
     throw new UsageError(
       `:${name} does not take .${dot}= — it takes positional arguments\n` +
-        `usage: task :${`${name} ${command.args}`.trim()}`,
+        `usage: task :${`${name} ${slotsOf(command.args)}`.trim()}`,
     )
   }
   if (
@@ -1344,7 +1347,9 @@ export let validateCommand = (name: string, args: string[]) => {
     }
     throw new UsageError(
       `:${name} expected ${command.words[0]}–${command.words[1]} arguments, ` +
-        `got ${args.length}\nusage: task :${`${name} ${command.args}`.trim()}`,
+        `got ${args.length}\nusage: task :${
+          `${name} ${slotsOf(command.args)}`.trim()
+        }`,
     )
   }
 }

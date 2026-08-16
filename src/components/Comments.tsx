@@ -1,5 +1,6 @@
 import { useRef, useState } from 'preact/hooks'
 import { commands, orderIn, suggest } from '../commands.ts'
+import { slotsOf } from '../verb.ts'
 import { commentsOn, ent, mutate, pending, repoUrl, uuid } from '../live.ts'
 import { ago, block, pretty } from './ui.tsx'
 import { useDraft } from './drafts.ts'
@@ -218,7 +219,7 @@ export let Composer = (
               }}
             >
               <Name>:{name}</Name>
-              {c.args && <Args>{c.args}</Args>}
+              {c.args.length > 0 && <Args>{slotsOf(c.args)}</Args>}
               <About>{c.about}</About>
             </Hint>
           ))}
