@@ -47,7 +47,6 @@ import {
   jsonAuthored,
   jsonOf,
   latestMessage,
-  mailAt,
   mailChanges,
   mailLine,
   mailThread,
@@ -81,7 +80,6 @@ import {
   taskBlock,
   taskChanges,
   undo,
-  unreadMail,
   unreadPipe,
   wrapChanges,
 } from './client.ts'
@@ -706,59 +704,12 @@ let seek = async (got: Got) => {
 // (T-14187). A param the verb does NOT take never gets this far — manual.ts
 // `dots` refuses it by name.
 
-// The MAIL SLICE (deprecated — `task inbox` is the door): YOUR unread
-// bare, the digest's own predicate scoped to the project you stand in;
-// --all/--sent widen to the fleet, dot-params screen (the one filter
-// grammar). A word that isn't a filter teaches the verb family instead of
-// guessing. `task inbox` now speaks all of this, which is what lets this
-// one retire.
-let mailList = async (got: Got) => {
-  let json = got.flags.has('--json')
-  let every = got.flags.has('--all'), sent = got.flags.has('--sent')
-  let preds = got.words.map((a) => {
-    let p = pred(a)
-    if (!p) throw new Error(`not a mail filter: ${a}\n\n${help(['mail'])}`)
-    return p
-  })
-  await checkedRefs(preds)
-  let filters = got.words
-  // The one predicate. "Your items" means the same thing here as in the
-  // inbox and the boot digest, so the mail-only slice can never disagree
-  // with the door it is a slice of.
-  let gathered = every
-    ? { rows: await query(['.kind=mail', ...filters]), who: undefined }
-    : sent
-    ? {
-      rows: await query(
-        ['.kind=mail', '.mail.to!', '.mail.message_id=', ...filters],
-      ),
-      who: undefined,
-    }
-    : await inboxRows(me(), Deno.cwd(), filters)
-  let mine = gathered.who ? inboxItem(gathered.who) : () => false
-  let hits = gathered.rows
-    .filter((r) => !!r.comps.mail)
-    .filter((r) =>
-      sent ? !r.comps.mail.message_id : every ? true : unreadMail(r) && mine(r)
-    )
-    .sort((a, b) => mailAt(a).localeCompare(mailAt(b)))
-  if (json) return print(jsonText(hits.map((r) => jsonOf(r))))
-  if (!hits.length) {
-    return warn(
-      sent ? '(nothing sent)' : every
-        ? '(no mail)'
-        // Points at the inbox, not at more mail: an operator reads this line
-        // and concludes they are current, so it must name the surface that
-        // actually holds everything owed to them.
-        : '(no unread mail — task inbox is everything addressed to you)',
-    )
-  }
-  let bold = Deno.stdout.isTerminal()
-  for (let r of hits) {
-    let line = mailLine(r)
-    print(line, bold && unreadMail(r))
-  }
-}
+// The bare `task mail` list form is retired (T-10847): `task inbox` speaks the
+// same filter grammar, --all and --sent, so the mail-only listing logic is
+// gone — its reasoning already lives on in inboxList's comments. `mail` stays
+// deprecated, so bare `task mail` hard-errors with a one-line pointer at
+// `task inbox` (T-16375), and this handler only ever prints help if that mark
+// is ever lifted; the real doors are the `mail send`/`reply`/`show` subverbs.
 
 // One mail whole, its thread beneath — and reading IS the mark: the
 // `opened` stamp (T-7006) lands by a normal wire patch. Nothing else
@@ -2721,7 +2672,7 @@ export let verbs = bind({
   undo: unwind,
   transcript,
   search: seek,
-  mail: mailList,
+  mail: () => print(help(['mail'])),
   'mail show': mailShow,
   'mail send': mailSend,
   'mail reply': mailReply,
