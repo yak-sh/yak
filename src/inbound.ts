@@ -36,6 +36,10 @@ export type FleetMsg = {
   text?: string | null
   verified?: boolean | null
   in_reply_to?: string | null
+  // The letter's headers as the fleet edge captured them: a JSON object,
+  // stringified (SpoolReq.headers's shape). Absent until the edge forwards
+  // them — `routingHeaders` keeps only the fixed few we persist (T-14133).
+  headers?: string | null
 }
 
 // One raw captured request from the edge's spool (the requests-spool
@@ -201,6 +205,43 @@ export let author = (m: FleetMsg) => {
 let arrivedAt = (m: FleetMsg) =>
   m.received_at ?? new Date(m.ts ?? Date.now()).toISOString()
 
+// The ONLY inbound headers we persist (T-14133): non-content routing headers,
+// canonical-cased. RFC 8058 one-click unsubscribe (Gmail/Yahoo bulk-sender
+// requirements) plus the envelope trio — no body, no addressing beyond
+// Reply-To, so this stays the narrow retention T-11903 settled on, never raw
+// MIME. Add a name here and it persists; nothing else changes.
+let keptHeaders = [
+  'List-Unsubscribe',
+  'List-Unsubscribe-Post',
+  'Reply-To',
+  'Return-Path',
+  'Auto-Submitted',
+]
+
+// Pick the kept headers out of the edge's captured set (a stringified JSON
+// object), case-insensitively, and return them under their canonical names as
+// a JSON string — or null when the letter carried none (or the edge forwarded
+// no headers at all). The graph reads this to prove which headers survived the
+// last hop; it invents nothing, so a header absent upstream stays absent.
+export let routingHeaders = (raw: string | null | undefined): string | null => {
+  if (!raw) return null
+  let all: Record<string, string>
+  try {
+    all = JSON.parse(raw) as Record<string, string>
+  } catch {
+    return null
+  }
+  let lower = new Map(
+    Object.keys(all).map((k) => [k.toLowerCase(), k]),
+  )
+  let kept: Record<string, string> = {}
+  for (let name of keptHeaders) {
+    let k = lower.get(name.toLowerCase())
+    if (k != null && all[k] != null) kept[name] = all[k]
+  }
+  return Object.keys(kept).length ? JSON.stringify(kept) : null
+}
+
 // An inbound RFC reference names the mail it answers, not its graph eid.
 // Match either the sender id on our outbound row or the unwrapped store id
 // on an earlier inbound row; absence keeps the header without inventing an
@@ -253,6 +294,7 @@ export let mailChanges = (m: FleetMsg, target: string | null) => {
     received_at: arrivedAt(m),
     verified: m.verified ? 1 : 0,
     in_reply_to: m.in_reply_to ?? null,
+    headers: routingHeaders(m.headers),
   }
   return { eid, wire, stamp }
 }

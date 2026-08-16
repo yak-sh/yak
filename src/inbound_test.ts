@@ -17,6 +17,7 @@ let {
   mailIdOf,
   mayStamp,
   routeTo,
+  routingHeaders,
   wearer,
 } = await import('./inbound.ts')
 let { mailed } = await import('./mail.ts')
@@ -203,6 +204,57 @@ Deno.test('mailChanges: subject and body land verbatim, provenance stamps', () =
   assertEquals(
     un.wire.find((c) => c.name == 'doc')!.comp!.title,
     '(no subject)',
+  )
+})
+
+Deno.test('routingHeaders: keeps the fixed few, case-blind, drops the rest', () => {
+  let raw = JSON.stringify({
+    'list-unsubscribe': '<https://x.test/u>, <mailto:u@x.test>',
+    'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    'Reply-To': 'help@x.test',
+    'Return-Path': '<bounce@x.test>',
+    'Auto-Submitted': 'auto-generated',
+    Subject: 'not a routing header',
+    'Content-Type': 'text/plain',
+  })
+  let kept = JSON.parse(routingHeaders(raw)!)
+  // canonical-cased keys, values verbatim, non-routing headers dropped
+  assertEquals(kept, {
+    'List-Unsubscribe': '<https://x.test/u>, <mailto:u@x.test>',
+    'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    'Reply-To': 'help@x.test',
+    'Return-Path': '<bounce@x.test>',
+    'Auto-Submitted': 'auto-generated',
+  })
+  // a letter carrying none of them, no headers at all, and junk each → null
+  assertEquals(routingHeaders(JSON.stringify({ Subject: 'x' })), null)
+  assertEquals(routingHeaders(null), null)
+  assertEquals(routingHeaders('not json'), null)
+})
+
+Deno.test('mailChanges: the kept headers ride the stamp, land readable', () => {
+  let headers = JSON.stringify({
+    'List-Unsubscribe': '<mailto:u@x.test>',
+    'X-Spam-Flag': 'NO',
+  })
+  let { eid, wire, stamp } = mailChanges(msg({ headers }), operator)
+  // only the kept header, off the wire (server-owned, like message_id)
+  assertEquals(
+    stamp.headers,
+    JSON.stringify({ 'List-Unsubscribe': '<mailto:u@x.test>' }),
+  )
+  assertEquals(wire.find((c) => c.name == 'mail')!.comp!.headers, undefined)
+  // a letter with no forwarded headers stamps null, never invents a header
+  assertEquals(mailChanges(msg(), operator).stamp.headers, null)
+  // and it lands in the mail row's readable column
+  apply(db, wire)
+  db.prepare('update mail set headers = ? where eid = ?').run(
+    stamp.headers,
+    eid,
+  )
+  assertEquals(
+    mailRow(eid).headers,
+    JSON.stringify({ 'List-Unsubscribe': '<mailto:u@x.test>' }),
   )
 })
 

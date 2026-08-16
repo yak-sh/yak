@@ -889,6 +889,16 @@ export let stamped: Record<string, Record<string, PropType>> = {
     // The inbound RFC header, preserved even when its named mail has not
     // reached this graph. inbound.ts derives reply_to when it has.
     in_reply_to: 'text',
+    // A SMALL FIXED set of non-content routing headers off an inbound letter,
+    // as a JSON object (canonical-cased keys), or null (T-14133). NOT raw MIME
+    // retention — T-11903 settled that hoarding whole letters inverts the
+    // privacy trade; these five (List-Unsubscribe/-Post, Reply-To,
+    // Return-Path, Auto-Submitted) are the narrow version, the last inch of
+    // CrayonBloom's delivery-proof loop (T-13875): the graph now reads whether
+    // RFC 8058 one-click headers survived the last hop. `text`, not `body`:
+    // five short values ride the snapshot, never a lazy trip. inbound.ts
+    // `routingHeaders` filters them from what the fleet edge forwards.
+    headers: 'text',
   },
   // Webhook provenance (inbound.ts): source names the edge route;
   // method/path/headers/payload/sig_ok are its captured request,

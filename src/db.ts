@@ -142,7 +142,8 @@ let mailDdl = `create table if not exists mail (
     verified    integer,
     reply_to text,
     sent_id     text,
-    in_reply_to text
+    in_reply_to text,
+    headers text
   )`
 
 // Named apart from `schema` for the same reason mail is: the sources are a
@@ -2023,6 +2024,10 @@ export let open = (path = file) => {
     addCol('mail', 'reply_to', 'reply_to text')
     addCol('mail', 'sent_id', 'sent_id text')
     addCol('mail', 'in_reply_to', 'in_reply_to text')
+    // The narrow routing-header set (T-14133) — last mail column, so it lands
+    // at the tail in both a fresh mailDdl and a live db, keeping mendMail's
+    // positional `insert select *` aligned. See stamped.mail in types.ts.
+    addCol('mail', 'headers', 'headers text')
     addCol('session', 'actor', 'actor text references entity(eid)')
     // board.query, project.color and the hook request columns (method/path/
     // headers/sig_ok) were planted here before their tables were derived
