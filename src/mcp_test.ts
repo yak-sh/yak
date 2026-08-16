@@ -1014,7 +1014,7 @@ Deno.test('graph_apply reports the authoritative effective batch', async () => {
   }
 })
 
-Deno.test('code_run throws and rejected batches are MCP errors', async () => {
+slow('code_run throws and rejected batches are MCP errors', async () => {
   let g = graph()
   try {
     await protocol(g.io, async (client) => {
@@ -1049,60 +1049,66 @@ Deno.test('code_run throws and rejected batches are MCP errors', async () => {
 // entry partition: its worker holds only the eager snapshot. graph.query /
 // graph.entries round-trip to the host's io.query, so a script sees the same
 // authoritative graph every other query door now does (T-16928, S-16889).
-Deno.test('code_run reaches the lazy entry partition via graph.entries/query', async () => {
-  let g = graph()
-  try {
-    let a = uuid()
-    let b = uuid() // stays empty — the genuinely-empty scope
-    apply(g.db, [{ eid: a, name: 'session', comp: { id: uuid() } }])
-    apply(g.db, [{ eid: b, name: 'session', comp: { id: uuid() } }])
-    let { eids: [e1] } = append(g.db, a, [
-      { message: { role: 'user' }, content: { body: 'go' } },
-    ])
-    append(g.db, a, [{
-      generation: { provider: 'codex', model: 'gpt-5', through: e1 },
-    }])
-    append(g.db, a, [{ response: { status: 500 }, content: { body: 'boom' } }])
+slow(
+  'code_run reaches the lazy entry partition via graph.entries/query',
+  async () => {
+    let g = graph()
+    try {
+      let a = uuid()
+      let b = uuid() // stays empty — the genuinely-empty scope
+      apply(g.db, [{ eid: a, name: 'session', comp: { id: uuid() } }])
+      apply(g.db, [{ eid: b, name: 'session', comp: { id: uuid() } }])
+      let { eids: [e1] } = append(g.db, a, [
+        { message: { role: 'user' }, content: { body: 'go' } },
+      ])
+      append(g.db, a, [{
+        generation: { provider: 'codex', model: 'gpt-5', through: e1 },
+      }])
+      append(g.db, a, [{
+        response: { status: 500 },
+        content: { body: 'boom' },
+      }])
 
-    let result = (out: ToolResult) => JSON.parse(said(out)).result
-    await protocol(g.io, async (client) => {
-      let run = (js: string) =>
-        client.callTool({ name: 'code_run', arguments: { js } })
-      // The eager snapshot omits entries …
-      assertEquals(
-        result(
-          await run('return graph.rows.filter(r => r.comps.entry).length'),
-        ),
-        0,
-      )
-      // … graph.entries reaches the partition, seq-ordered …
-      assertEquals(
-        result(
-          await run(
-            `return (await graph.entries('${a}')).map(r => r.comps.entry.seq)`,
+      let result = (out: ToolResult) => JSON.parse(said(out)).result
+      await protocol(g.io, async (client) => {
+        let run = (js: string) =>
+          client.callTool({ name: 'code_run', arguments: { js } })
+        // The eager snapshot omits entries …
+        assertEquals(
+          result(
+            await run('return graph.rows.filter(r => r.comps.entry).length'),
           ),
-        ),
-        [1, 2, 3],
-      )
-      // … graph.query names it through the filter grammar …
-      assertEquals(
-        result(
-          await run(
-            `return (await graph.query(['.entry.session=${a}'])).length`,
+          0,
+        )
+        // … graph.entries reaches the partition, seq-ordered …
+        assertEquals(
+          result(
+            await run(
+              `return (await graph.entries('${a}')).map(r => r.comps.entry.seq)`,
+            ),
           ),
-        ),
-        3,
-      )
-      // … and a real, empty scope is [] — empty means empty, not dropped.
-      assertEquals(
-        result(await run(`return (await graph.entries('${b}')).length`)),
-        0,
-      )
-    })
-  } finally {
-    g.db.close()
-  }
-})
+          [1, 2, 3],
+        )
+        // … graph.query names it through the filter grammar …
+        assertEquals(
+          result(
+            await run(
+              `return (await graph.query(['.entry.session=${a}'])).length`,
+            ),
+          ),
+          3,
+        )
+        // … and a real, empty scope is [] — empty means empty, not dropped.
+        assertEquals(
+          result(await run(`return (await graph.entries('${b}')).length`)),
+          0,
+        )
+      })
+    } finally {
+      g.db.close()
+    }
+  },
+)
 
 // The door where the loss was observed. A guard that never refuses passes
 // every test that never tries to make it refuse, so each case here drives

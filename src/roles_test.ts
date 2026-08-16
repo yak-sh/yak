@@ -2,7 +2,7 @@
 // Native tests exercise idempotence, drift, death, and stop without launching
 // a provider; managed tests prove one role session and graph-native stopping.
 import { assert, assertEquals, assertMatch } from '@std/assert'
-import { until } from './testing.ts'
+import { slow, until } from './testing.ts'
 import { type Change } from './types.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
@@ -151,41 +151,44 @@ let spawns = (role: string) =>
     a[0] == 'new-session' && a[a.indexOf('-s') + 1] == roleTmux(role)
   ).length
 
-Deno.test('role effects leave unrelated entries alone and reconcile their own facts', async () => {
-  commands = []
-  sessions.clear()
-  let { project, role } = seed('native')
-  let other = seed('native').role
-  let task = uid()
-  apply(db, [{ eid: task, name: 'task', comp: { project } }])
-  let session = uid()
-  apply(db, [{ eid: session, name: 'session', comp: { id: uid() } }])
-  let entry = append(db, session, [{ message: { role: 'user' } }]).eids[0]
-  roleSession(cast, deps)(entry)
-  assertEquals(spawns(role), 0)
-  assertEquals(spawns(other), 0)
+slow(
+  'role effects leave unrelated entries alone and reconcile their own facts',
+  async () => {
+    commands = []
+    sessions.clear()
+    let { project, role } = seed('native')
+    let other = seed('native').role
+    let task = uid()
+    apply(db, [{ eid: task, name: 'task', comp: { project } }])
+    let session = uid()
+    apply(db, [{ eid: session, name: 'session', comp: { id: uid() } }])
+    let entry = append(db, session, [{ message: { role: 'user' } }]).eids[0]
+    roleSession(cast, deps)(entry)
+    assertEquals(spawns(role), 0)
+    assertEquals(spawns(other), 0)
 
-  roleConfig(cast, deps)(role)
-  await until(() => spawns(role) == 1, { label: 'the role config effect' })
-  assertEquals(spawns(other), 0)
+    roleConfig(cast, deps)(role)
+    await until(() => spawns(role) == 1, { label: 'the role config effect' })
+    assertEquals(spawns(other), 0)
 
-  apply(db, [{ eid: role, name: 'role', comp: { state: 'stopped' } }])
-  roleConfig(cast, deps)(role)
-  await until(
-    () => !sessions.has(roleTmux(role)),
-    { label: 'the role state effect' },
-  )
+    apply(db, [{ eid: role, name: 'role', comp: { state: 'stopped' } }])
+    roleConfig(cast, deps)(role)
+    await until(
+      () => !sessions.has(roleTmux(role)),
+      { label: 'the role state effect' },
+    )
 
-  apply(db, [{ eid: role, name: 'role', comp: { state: 'running' } }])
-  roleAttention(cast, deps)(task)
-  await until(() => spawns(role) == 2, { label: 'the role attention effect' })
-  apply(db, [
-    { eid: role, name: 'entity', comp: null },
-    { eid: other, name: 'entity', comp: null },
-  ])
-  await roleRemoved(cast, deps)(role)
-  await roleRemoved(cast, deps)(other)
-})
+    apply(db, [{ eid: role, name: 'role', comp: { state: 'running' } }])
+    roleAttention(cast, deps)(task)
+    await until(() => spawns(role) == 2, { label: 'the role attention effect' })
+    apply(db, [
+      { eid: role, name: 'entity', comp: null },
+      { eid: other, name: 'entity', comp: null },
+    ])
+    await roleRemoved(cast, deps)(role)
+    await roleRemoved(cast, deps)(other)
+  },
+)
 
 Deno.test('the breaker trips on a burst of stillborn launches, never on a healthy cadence', () => {
   let now = Date.now()
@@ -438,7 +441,7 @@ Deno.test('deleting a managed role keeps history and requests a stop', async () 
   assert(removed.has(`${tasksHome}/.tasks/roles/${role}`))
 })
 
-Deno.test('managed attention resumes once with no graph content', async () => {
+slow('managed attention resumes once with no graph content', async () => {
   let { role } = seed('managed')
   await rolesSweep(cast, deps)
   let run = db.prepare(

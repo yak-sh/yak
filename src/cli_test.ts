@@ -1473,7 +1473,7 @@ Deno.test('claimedDigest: only this session lease, never the open board', () => 
   assertEquals(claimedDigest([]), '')
 })
 
-Deno.test('bare task prints usage without a session or server read', async () => {
+slow('bare task prints usage without a session or server read', async () => {
   let { server, seen, host } = graphServer()
   try {
     let out = await bareCli({ TASKS_HOST: host })
@@ -1507,7 +1507,7 @@ slow('invalid help reports the exact CLI usage failure', async () => {
   }
 })
 
-Deno.test('bare task appends the current claimed task digest', async () => {
+slow('bare task appends the current claimed task digest', async () => {
   let { server, seen, host } = graphServer()
   try {
     let out = await bareCli({ TASKS_HOST: host, TASKS_SESSION: 'sub-1' })
@@ -1537,7 +1537,7 @@ Deno.test('bare task appends the current claimed task digest', async () => {
   }
 })
 
-Deno.test('bare task never reads or prints the open board', async () => {
+slow('bare task never reads or prints the open board', async () => {
   let { server, seen, host } = graphServer()
   try {
     let out = await bareCli({ TASKS_HOST: host, TASKS_SESSION: 'idle-1' })
