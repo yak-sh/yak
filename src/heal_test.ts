@@ -255,6 +255,7 @@ Deno.test('a new break files a ticket AND mints exactly one fixer', () => {
   let sp = db.prepare('select provider, model from spawn where eid = ?')
     .get(fixers[0].eid) as { provider: string; model: string }
   assertEquals(sp.provider, 'fake')
+  assertEquals(sp.model, 'fake-fast')
 })
 
 Deno.test('a storm files ONE ticket and mints ONE fixer', () => {

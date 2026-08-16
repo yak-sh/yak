@@ -173,8 +173,8 @@ let openBug = (key: string) =>
 // Env-overridable so an operator can retune it (or a probe can point it at the
 // in-repo `fake` provider) without a code edit, the TASKS_CODEX_RUNNER way.
 export let FIXER = {
-  provider: Deno.env.get('TASKS_FIXER_PROVIDER') || 'claude',
-  model: Deno.env.get('TASKS_FIXER_MODEL') || 'sonnet',
+  provider: Deno.env.get('TASKS_FIXER_PROVIDER') || 'codex',
+  model: Deno.env.get('TASKS_FIXER_MODEL') || 'gpt-5.6-sol',
 }
 
 // The hard concurrency cap: never more than this many fixers running at once,
