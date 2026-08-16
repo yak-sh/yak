@@ -1,5 +1,5 @@
-import { assertEquals, assertRejects } from '@std/assert'
-import { ollamaCloudReady, ollamaCloudTransport } from './ollama_cloud.ts'
+import { assertEquals } from '@std/assert'
+import { ollamaCloudTransport } from './ollama_cloud.ts'
 
 let complete = () =>
   new Response(
@@ -18,7 +18,7 @@ let complete = () =>
     { headers: { 'content-type': 'text/event-stream' } },
   )
 
-Deno.test('ollama cloud calls the hosted Responses API with bearer auth', async () => {
+Deno.test('ollama cloud defaults to the keyless yak proxy', async () => {
   let input: string | URL | Request = ''
   let init: RequestInit | undefined
   let client = ollamaCloudTransport({
@@ -27,7 +27,7 @@ Deno.test('ollama cloud calls the hosted Responses API with bearer auth', async 
       init = value
       return Promise.resolve(complete())
     },
-  }, () => 'cloud-secret')
+  }, () => undefined)
 
   let result = await client.run({
     model: 'kimi-k2.7-code',
@@ -36,12 +36,8 @@ Deno.test('ollama cloud calls the hosted Responses API with bearer auth', async 
     tools: [{ type: 'function', name: 'graph_query' }],
   })
 
-  assertEquals(String(input), 'https://ollama.com/v1/responses')
-  assertEquals(
-    new Headers(init?.headers).get('authorization'),
-    'Bearer cloud-secret',
-  )
-  assertEquals(String(init?.body).includes('cloud-secret'), false)
+  assertEquals(String(input), 'https://ollama.yak.sh/v1/responses')
+  assertEquals(new Headers(init?.headers).has('authorization'), false)
   let body = JSON.parse(String(init?.body))
   assertEquals(body.model, 'kimi-k2.7-code')
   assertEquals(body.stream, true)
@@ -52,16 +48,27 @@ Deno.test('ollama cloud calls the hosted Responses API with bearer auth', async 
   assertEquals(result.model, 'kimi-k2.7-code')
 })
 
-Deno.test('ollama cloud readiness and missing credentials stay at the edge', async () => {
-  assertEquals(ollamaCloudReady(() => ' key '), true)
-  assertEquals(ollamaCloudReady(() => '  '), false)
-  await assertRejects(
-    () =>
-      ollamaCloudTransport({ retries: 0 }, () => undefined).run({
-        model: 'kimi-k2.7-code',
-        input: 'hello',
-      }),
-    Error,
-    'credential unavailable',
+Deno.test('ollama cloud supports a configured base and optional API key', async () => {
+  let input: string | URL | Request = ''
+  let init: RequestInit | undefined
+  let values: Record<string, string> = {
+    OLLAMA_BASE_URL: 'https://ollama.com/',
+    OLLAMA_API_KEY: 'cloud-secret',
+  }
+  let client = ollamaCloudTransport({
+    fetch: (url, value) => {
+      input = url
+      init = value
+      return Promise.resolve(complete())
+    },
+  }, (name) => values[name])
+
+  await client.run({ model: 'kimi-k2.7-code', input: 'hello' })
+
+  assertEquals(String(input), 'https://ollama.com/v1/responses')
+  assertEquals(
+    new Headers(init?.headers).get('authorization'),
+    'Bearer cloud-secret',
   )
+  assertEquals(String(init?.body).includes('cloud-secret'), false)
 })

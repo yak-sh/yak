@@ -1,5 +1,7 @@
-// Ollama's hosted Responses API. The API key is read only at the HTTP edge:
-// it never enters a Session, prompt, child environment, or command line.
+// Ollama's hosted Responses API. Configuration is read only at the HTTP edge:
+// an optional API key never enters a Session, prompt, child environment, or
+// command line. An origin gets Ollama's OpenAI-compatible /v1 path; a full /v1
+// base is left alone.
 import { type ResponseOptions, responses } from './responses.ts'
 
 let request = (value: Record<string, unknown>) =>
@@ -15,22 +17,27 @@ let request = (value: Record<string, unknown>) =>
     ].flatMap((name) => value[name] === undefined ? [] : [[name, value[name]]]),
   )
 
-export let ollamaCloudReady = (
-  read = () => Deno.env.get('OLLAMA_API_KEY'),
-) => !!read()?.trim()
+let base = (value = 'https://ollama.yak.sh/') => {
+  let root = value.trim().replace(/\/$/, '')
+  return root.endsWith('/v1') ? root : `${root}/v1`
+}
+
+type Environment = (name: string) => string | undefined
 
 export let ollamaCloudTransport = (
   options: Omit<ResponseOptions, 'credentials' | 'base'> = {},
-  read = () => Deno.env.get('OLLAMA_API_KEY'),
+  read: Environment = (name) => Deno.env.get(name),
 ) =>
   responses({
     ...options,
-    base: 'https://ollama.com/v1',
+    base: base(read('OLLAMA_BASE_URL')),
+    authentication: 'optional',
     // Ollama documents this exact non-stateful Responses subset. In
     // particular, OpenAI's encrypted reasoning replay and cache controls are
     // not part of the hosted contract.
     shape: (value) => ({ ...request(value), stream: true }),
     credentials: {
-      get: () => Promise.resolve({ token: read()?.trim() ?? '' }),
+      get: () =>
+        Promise.resolve({ token: read('OLLAMA_API_KEY')?.trim() ?? '' }),
     },
   })

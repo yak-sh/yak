@@ -60,6 +60,7 @@ export type ResponseFault = Error & {
 
 export type ResponseOptions = {
   credentials: CredentialSource
+  authentication?: 'required' | 'optional'
   base?: string
   fetch?: typeof fetch
   headers?: Record<string, string>
@@ -348,17 +349,18 @@ let terminal = async (
   }
 }
 
-let credential = (value: Credential) => {
-  if (!value.token?.trim()) throw fault('responses: no credential')
+let credential = (value: Credential, optional = false) => {
+  if (!optional && !value.token?.trim()) throw fault('responses: no credential')
   return value
 }
 
 let credentials = async (
   load: () => Promise<Credential>,
   message: string,
+  optional = false,
 ) => {
   try {
-    return credential(await load())
+    return credential(await load(), optional)
   } catch {
     throw fault(message)
   }
@@ -396,6 +398,7 @@ export let responses = (options: ResponseOptions) => {
     let auth = await credentials(
       options.credentials.get,
       'responses: credential unavailable',
+      options.authentication == 'optional',
     )
     remember(auth)
     let refreshed = false
@@ -404,7 +407,7 @@ export let responses = (options: ResponseOptions) => {
     while (true) {
       let headers = new Headers(options.headers)
       headers.set('accept', 'text/event-stream')
-      headers.set('authorization', `Bearer ${auth.token}`)
+      if (auth.token) headers.set('authorization', `Bearer ${auth.token}`)
       headers.set('content-type', 'application/json')
       headers.set('x-client-request-id', requestId)
       if (auth.account) headers.set('chatgpt-account-id', auth.account)
@@ -435,6 +438,7 @@ export let responses = (options: ResponseOptions) => {
         auth = await credentials(
           options.credentials.refresh,
           'responses: credential refresh failed',
+          options.authentication == 'optional',
         )
         remember(auth)
         refreshed = true
