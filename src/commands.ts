@@ -547,6 +547,15 @@ export let commands: Record<string, Command> = {
       let note = m ? m[2].trim() : ''
       let words = head.trim().split(/\s+/).filter(Boolean)
       let to = words[0] ? find(ctx.rows, words[0]) : undefined
+      // A present-but-unresolved first word is a lookup miss, not a missing
+      // argument — say so (the sibling of knock's "no such recipient"), so the
+      // reader isn't sent hunting for a syntax error that isn't there (T-13972).
+      if (words[0] && !to) {
+        throw new Error(
+          `wake: no such recipient: ${words[0]} — name an alias or id ` +
+            `(:wake homelab in 60m, :wake P-19 in 1h)`,
+        )
+      }
       if (!to) throw new Error('wake: name who to wake (:wake homelab in 60m)')
       let more = words.slice(1)
       let last = more.length > 1

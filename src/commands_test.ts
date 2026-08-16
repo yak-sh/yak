@@ -546,6 +546,14 @@ Deno.test('wake: who, when, and a trailing id is what to look at', () => {
     undefined,
   )
   assertThrows(() => run('wake', ctx(T)), Error, 'name who to wake')
+  // A present-but-unresolved who is a lookup miss, not a missing argument — say
+  // so, the sibling of knock's "no such recipient", instead of the generic
+  // usage that sent the reader hunting for a syntax error (T-13972).
+  assertThrows(
+    () => run('wake tasks in 60m', ctx(T)),
+    Error,
+    'no such recipient: tasks',
+  )
   assertThrows(() => run('wake B-3 whenever', ctx(T)), Error, 'when is')
   // A `-- note` folds a note onto the wake (like :mail's `-- body`); the head
   // before it is the ordinary who/when/target sentence.

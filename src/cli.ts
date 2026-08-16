@@ -1243,9 +1243,15 @@ let colon = async (focus: string | undefined, argv: string[]) => {
   if (name == 'knock') await one(rest[0])
   if (name == 'wake') {
     // Pre-fetch who + target from the head only — a `-- note` fold must not
-    // let the note's last word masquerade as the target reference.
+    // let the note's last word masquerade as the target reference. The who
+    // (first word) MUST resolve, so surface the near-match error the way `show`
+    // does (needed()), not the command's generic usage (T-13972); the last word
+    // is only MAYBE a target (a when-word or note), so it stays lenient.
     let head = line.split(/\s+--\s+/)[0].trim().split(/\s+/).slice(1)
-    await Promise.all([one(head[0]), one(head.at(-1))])
+    await Promise.all([
+      head[0] ? needed(head[0]).then((r) => void all.push(r)) : undefined,
+      one(head.at(-1)),
+    ])
   }
   if (name == 'claim' && rest[0]) {
     let sess = await sessionRow(rest[0])
