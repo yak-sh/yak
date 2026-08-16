@@ -45,6 +45,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       stale: 'stale [filters…] [--all] [--json]',
       new: 'new [title…]',
       set: 'set <id> [--comment=TEXT]',
+      edit: 'edit <id> <old> [new] [--all]',
       show: 'show <id> [--json] [--quarantined]',
       history: 'history <id> [-n=50] [--json]',
       undo: 'undo <id>',

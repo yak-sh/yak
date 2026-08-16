@@ -483,6 +483,7 @@ let bases: Record<string, Record<string, unknown>> = {
       comp: { future: true },
     }],
   },
+  doc_edit: { eid: 'T-1', old: 'x', new: 'y' },
   ui_state: {},
   card_open: { target: 'T-1' },
   card_move: { id: 'C-1' },
@@ -1231,6 +1232,45 @@ Deno.test('memory_save guards the body it replaces', async () => {
         arguments: { title: 'Fresh', body: 'No id, no guard', session: 'test' },
       })
       assertEquals(made.isError, undefined)
+    })
+  } finally {
+    g.db.close()
+  }
+})
+
+Deno.test('doc_edit: surgical replace, non-unique refusal, stale guard', async () => {
+  let g = graph()
+  let E = '60000000-0000-4000-8000-000000000001'
+  let body = () => rows(snapshot(g.db)).find((r) => r.eid == E)?.comps.doc?.body
+  try {
+    await protocol(g.io, async (client) => {
+      apply(g.db, [
+        { eid: E, name: 'entity', comp: { eid: E, num: 42 } },
+        { eid: E, name: 'doc', comp: { title: 'Doc', body: 'fix teh plan' } },
+        { eid: E, name: 'task', comp: { status: 'open' } },
+      ])
+      let edit = (args: Record<string, unknown>) =>
+        client.callTool({ name: 'doc_edit', arguments: { eid: E, ...args } })
+
+      // A surgical replace lands in place; the receipt names the entity.
+      let ok = await edit({ old: 'teh plan', new: 'the plan' })
+      assertEquals(ok.isError, undefined)
+      assertMatch(said(ok), /edited T-/)
+      assertEquals(body(), 'fix the plan')
+
+      // A match that isn't there, and one that isn't unique, are refused —
+      // the wrong text is never touched.
+      let miss = await edit({ old: 'nope', new: 'x' })
+      assertEquals(miss.isError, true)
+      assertMatch(said(miss), /not found/)
+      apply(g.db, [{ eid: E, name: 'doc', comp: { body: 'a a' } }])
+      let many = await edit({ old: 'a', new: 'b' })
+      assertEquals(many.isError, true)
+      assertMatch(said(many), /2 matches/)
+      assertEquals(body(), 'a a') // untouched by either refusal
+      let all = await edit({ old: 'a', new: 'b', replace_all: true })
+      assertEquals(all.isError, undefined)
+      assertEquals(body(), 'b b')
     })
   } finally {
     g.db.close()

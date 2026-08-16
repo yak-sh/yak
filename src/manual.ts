@@ -203,6 +203,25 @@ export let manuals = declare({
     args: [arg('id', id)],
     opts: [value('--comment', bodyText)],
   },
+  edit: {
+    about: 'surgical body edit: replace old with new, refusing a stale write',
+    examples: [
+      'task edit T-3 "teh plan" "the plan"',
+      'task edit D-9 "old paragraph" @new.md',
+      'task edit P-19 "typo" "" --all',
+    ],
+    detail: "The graph's Edit primitive: a targeted old→new replacement on " +
+      'a doc body, instead of a full `.body=` rewrite that clobbers a ' +
+      'concurrent edit. old must match exactly once (add surrounding text, ' +
+      'or --all for every occurrence); an omitted new deletes the match. ' +
+      'old/new take @file or -/@- (a long block over the pipe). The write ' +
+      'is guarded by the body read here, so a body that moved since is ' +
+      'refused with its current text and a fresh token — re-run to pick it ' +
+      'up. Works on any doc body: task, design, persona, memory, doc.',
+    root: true,
+    args: [arg('id', id), arg('old', text), arg('new', text, false, false)],
+    opts: [flag('--all')],
+  },
   show: {
     about: 'one entity as a document (--quarantined explicitly reveals)',
     examples: [

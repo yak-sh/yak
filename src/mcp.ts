@@ -84,6 +84,7 @@ import {
   warm,
 } from './query.ts'
 import { commandOut, commands, focusOf, spawnSpec } from './commands.ts'
+import { editChanges } from './edit.ts'
 import { slotsOf } from './verb.ts'
 import {
   type LogEntry,
@@ -1390,6 +1391,61 @@ effective batch returned by apply(). ${GRAMMAR}`,
         null,
         2,
       ))
+    },
+  )
+
+  tool(
+    'doc_edit',
+    `Surgical edit of a doc body — the graph's Edit primitive: replace the
+one occurrence of old with new, in place, instead of task_update
+".body=" which rewrites the WHOLE body (a transcription risk, and it
+clobbers a concurrent edit). Works on ANY doc body — a task, design,
+persona, memory, or plain doc (eid accepts a human id: T-3, D-9). old
+must occur exactly once unless replace_all; if it doesn't match, or
+matches several times, the edit is refused so you never change the
+wrong text. An empty new deletes the matched text. The write is guarded
+by the body read here, so a body that moved since another writer
+touched it is refused with its current text and a fresh token — read it
+back and retry. ${BUS}`,
+    {
+      eid: z.string(),
+      old: z.string().describe(
+        'The exact text to replace (unique, or use ' +
+          'replace_all). Include surrounding lines to disambiguate.',
+      ),
+      new: z.string().describe('The replacement (empty deletes the match).'),
+      replace_all: z.boolean().optional()
+        .describe(
+          'Replace every occurrence of old instead of refusing a ' +
+            'non-unique match.',
+        ),
+      session: z.string().optional(),
+    },
+    async (
+      { eid, old, new: fresh, replace_all, session }: {
+        eid: string
+        old: string
+        new: string
+        replace_all?: boolean
+        session?: string
+      },
+    ) => {
+      let row = find(rows(await io.read()), eid)
+      if (!row) return err(`no entity: ${eid}`)
+      let batch
+      try {
+        batch = editChanges(row, old, fresh, replace_all)
+      } catch (e) {
+        return err((e as Error).message)
+      }
+      try {
+        await io.write(batch, session)
+      } catch (e) {
+        // A stale refusal carries the current body and a fresh token (db.ts
+        // Stale) — exactly what the caller needs to merge and retry.
+        return err((e as Error).message)
+      }
+      return bus(`edited ${idOf(row)}`, session)
     },
   )
 

@@ -83,6 +83,7 @@ import {
   unreadPipe,
   wrapChanges,
 } from './client.ts'
+import { editChanges } from './edit.ts'
 import { entityUrl } from './url.ts'
 import { prune, reap, sweep } from './probes.ts'
 import {
@@ -645,6 +646,26 @@ let set = async (got: Got) => {
     ...(say ? commentChanges(all, row.eid, say, me()) : []),
   ])
   print(`${idOf(row)} updated`)
+}
+
+// `task edit <id> <old> [new]` — the graph's Edit primitive (T-16357): a
+// surgical old→new replacement on a doc body, in place of a full rewrite that
+// silently clobbers a concurrent edit. editChanges() guards the write with the
+// body it read (Change.was), so a body that moved since is refused with its
+// current text and a fresh token below — re-run and the fetch is fresh again.
+// old/new ride the @file / stdin door (M-4415) for a long block; an omitted
+// new deletes the matched text. --all replaces every occurrence (else old must
+// be unique). Works on ANY doc body — task, design, persona, memory, doc.
+let edit = async (got: Got) => {
+  let { id, old } = got.args
+  if (!id || old == null) throw new Error('task edit <id> <old> [new]')
+  let row = await needed(id)
+  let read = (v: string) =>
+    String(inflate({ comp: 'doc', prop: 'body', value: v }).value)
+  let oldV = read(old)
+  let newV = got.args.new == null ? '' : read(got.args.new)
+  await send(editChanges(row, oldV, newV, got.flags.has('--all')))
+  print(`${idOf(row)} edited`)
 }
 
 // `task done T-3 [comment]` / `task cancel T-3 [reason]` — sugar over
@@ -2793,6 +2814,7 @@ export let verbs = bind({
   stale,
   new: create,
   set,
+  edit,
   show,
   history: past,
   undo: unwind,
