@@ -602,6 +602,18 @@ let schema = `
     via   text,
     batch text not null
   );
+  -- The journal's seek index (T-13915): one row per (batch rowid, eid) the
+  -- batch touched, written beside the batch inside apply()'s transaction so a
+  -- per-entity read (journalOf, stateBefore, lastBatch, undo's touched-since)
+  -- is an index seek instead of a full json_each scan of the whole log. Still
+  -- log data — jrow is the journal rowid, there is no eid of its own, never in
+  -- snapshot() or a client cache. Backfilled once (backfillJournalTouch); the
+  -- index arrives with the other seek indexes in open(). Nothing deletes
+  -- journal rows, so no delete-sync is needed.
+  create table if not exists journal_touch (
+    jrow integer not null,
+    eid  text not null
+  );
   -- Log data, not graph: no eid, no components, so snapshot() (which walks
   -- the comps vocabulary) never carries it. telemetry.ts owns the rows.
   ${callDdl};
@@ -1112,6 +1124,37 @@ export let backfillVia = (db: DatabaseSync) => {
          where memory.eid = created.eid and source_eid is not null
        )`,
     )
+  }
+}
+
+// Fill journal_touch once from the existing journal (T-13915) — one row per
+// (batch rowid, eid), the same (rowid, '$.eid') pairs json_each found before the
+// index existed, so the reads it feeds stay behavior-identical. apply()/record()
+// keep it current from here on. Difference-guarded: a populated table (any later
+// boot) or an empty journal (a fresh db) is a pure read, so it is paid exactly
+// once. Runs after the mend* migrations that rewrite journal batches, so it
+// indexes the settled log.
+export let backfillJournalTouch = (db: DatabaseSync) => {
+  let touched =
+    (prep(db, 'select count(*) as n from journal_touch').get() as { n: number })
+      .n
+  if (touched) return
+  let entries = (prep(db, 'select max(rowid) as n from journal').get() as {
+    n: number | null
+  }).n
+  if (!entries) return
+  db.exec('begin')
+  try {
+    db.exec(
+      `insert into journal_touch (jrow, eid)
+       select distinct j.rowid, json_extract(je.value, '$.eid')
+       from journal j, json_each(j.batch) je
+       where json_extract(je.value, '$.eid') is not null`,
+    )
+    db.exec('commit')
+  } catch (e) {
+    db.exec('rollback')
+    console.warn('journal_touch backfill skipped —', e)
   }
 }
 
@@ -2065,6 +2108,10 @@ export let open = (path = file) => {
     }
     backfillVia(db)
     backfillOpened(db)
+    // Fill the journal seek index once (T-13915) before its index is built
+    // below — insert-then-index is the cheaper order for the one-time ~26k-row
+    // load, and later boots skip both (populated table, existing index).
+    backfillJournalTouch(db)
     // The dormant columns are migration INPUT, and every one of them has now
     // been read for the last time (T-6670, T-7113, T-7006). A retired column
     // that lingers still answers a schema read, so it keeps teaching a
@@ -2102,6 +2149,15 @@ export let open = (path = file) => {
     let depIndexName = `dependency_${depIndex.cols.join('_')}`
     if (!hasIdx(db, depIndexName)) {
       db.exec(indexDdlOne('dependency', depIndex) + ';')
+    }
+    // The journal seek index (T-13915): (eid, jrow desc) so a per-entity read is
+    // an index seek, newest-first, then a fetch by rowid. hasIdx-guarded like
+    // the rest — a bare `create index if not exists` bumps the file change
+    // counter and breaks open()'s byte-idempotency.
+    if (!hasIdx(db, 'journal_touch_eid')) {
+      db.exec(
+        'create index journal_touch_eid on journal_touch (eid, jrow desc);',
+      )
     }
     for (
       let comp of new Set([...Object.keys(comps), ...Object.keys(stamped)])
@@ -3657,16 +3713,19 @@ export let apply = (
       let echoed = new Set(['created', 'updated', ...stamps])
       let logged = [...changes, ...extra.filter((c) => !echoed.has(c.name))]
       if (logged.length) {
-        prep(
-          db,
-          'insert into journal (ts, actor, via, batch) values (?, ?, ?, ?)',
-        )
-          .run(
-            now,
-            actor, // the resolved writing actor (T-6669), same as the by-default
-            via,
-            JSON.stringify(logged),
+        let jrow = Number(
+          prep(
+            db,
+            'insert into journal (ts, actor, via, batch) values (?, ?, ?, ?)',
           )
+            .run(
+              now,
+              actor, // the resolved writing actor (T-6669), same as the by-default
+              via,
+              JSON.stringify(logged),
+            ).lastInsertRowid,
+        )
+        touchJournal(db, jrow, logged)
       }
     } catch (e) {
       console.warn('journal skipped —', e)
@@ -3725,6 +3784,16 @@ export let vocabularyDoc = (db: DatabaseSync, body: string): void => {
   )
 }
 
+// The seek-index side of a journal write (T-13915): one journal_touch row per
+// distinct eid the batch touched, so journalOf & kin seek instead of scanning.
+// Indexes the same eids json_extract(value,'$.eid') found — every change's own
+// eid — so the reads it replaces stay behavior-identical. Called inside the
+// caller's transaction, beside the journal insert it describes.
+let touchJournal = (db: DatabaseSync, jrow: number, changes: Change[]) => {
+  let ins = prep(db, 'insert into journal_touch (jrow, eid) values (?, ?)')
+  for (let eid of new Set(changes.map((c) => c.eid))) ins.run(jrow, eid)
+}
+
 // The journal door for a server STAMP — a write the wire may not carry
 // (frozen_at and kin), made by direct SQL beside this call. delta()
 // promises catch-up clients the same content the live cast carried, so
@@ -3737,20 +3806,23 @@ export let record = (
   writer?: string | null,
 ) => {
   try {
-    prep(db, 'insert into journal (actor, via, batch) values (?, ?, ?)').run(
-      writerActor(db, writer),
-      writerVia(db, writer),
-      JSON.stringify(changes),
+    let jrow = Number(
+      prep(db, 'insert into journal (actor, via, batch) values (?, ?, ?)').run(
+        writerActor(db, writer),
+        writerVia(db, writer),
+        JSON.stringify(changes),
+      ).lastInsertRowid,
     )
+    touchJournal(db, jrow, changes)
   } catch (e) {
     console.warn('journal skipped —', e)
   }
 }
 
 // A single entity's history, newest first: the journal rows that touched
-// the eid, each cut down to its changes. The batch is JSON and json_each
-// does the walking — v0 reads are fine at this scale; a seek index
-// arrives with the lazy-partition work (T-3683) if logs outgrow it.
+// the eid, each cut down to its changes. journal_touch (T-13915) makes this a
+// seek — the eid's rows by index, then the batch fetched by rowid and parsed —
+// rather than a full json_each scan of the whole log.
 export type JournalEntry = {
   // The journal rowid — the batch's id, the handle `task undo` reverses. Blessed
   // rather than added as a column: the rowid is already stable within an epoch,
@@ -3769,10 +3841,10 @@ export let journalOf = (
   (prep(
     db,
     `
-    select distinct j.rowid, j.ts, j.actor, j.via, j.batch
-    from journal j, json_each(j.batch) je
-    where json_extract(je.value, '$.eid') = ?
-    order by j.rowid desc limit ?
+    select j.rowid, j.ts, j.actor, j.via, j.batch
+    from journal_touch t join journal j on j.rowid = t.jrow
+    where t.eid = ?
+    order by t.jrow desc limit ?
   `,
   ).all(eid, limit) as {
     rowid: number
@@ -3831,9 +3903,10 @@ let stateBefore = (
 ): Record<string, Record<string, unknown>> => {
   let rows = prep(
     db,
-    `select distinct j.rowid, j.batch from journal j, json_each(j.batch) je
-     where json_extract(je.value, '$.eid') = ? and j.rowid < ?
-     order by j.rowid`,
+    `select j.rowid, j.batch
+     from journal_touch t join journal j on j.rowid = t.jrow
+     where t.eid = ? and t.jrow < ?
+     order by t.jrow`,
   ).all(eid, before) as { rowid: number; batch: string }[]
   let state: Record<string, Record<string, unknown>> = {}
   for (let r of rows) {
@@ -3897,8 +3970,7 @@ export let inverseBatch = (db: DatabaseSync, id: number): Change[] => {
   )
   let touchedSince = prep(
     db,
-    `select 1 from journal j, json_each(j.batch) je
-     where j.rowid > ? and json_extract(je.value, '$.eid') = ? limit 1`,
+    `select 1 from journal_touch where eid = ? and jrow > ? limit 1`,
   )
   let priors = new Map<string, Record<string, Record<string, unknown>>>()
   let priorOf = (eid: string) => {
@@ -3909,7 +3981,7 @@ export let inverseBatch = (db: DatabaseSync, id: number): Change[] => {
 
   let inverse: Change[] = []
   for (let eid of born) {
-    if (touchedSince.get(id, eid)) {
+    if (touchedSince.get(eid, id)) {
       throw new Error(
         `${human(db, eid)} was modified after #${id} — undo refused`,
       )
@@ -3955,8 +4027,7 @@ export let lastBatch = (db: DatabaseSync, eid: string): number =>
   Number(
     (prep(
       db,
-      `select max(j.rowid) as id from journal j, json_each(j.batch) je
-       where json_extract(je.value, '$.eid') = ?`,
+      `select max(jrow) as id from journal_touch where eid = ?`,
     ).get(eid) as { id: number | null } | undefined)?.id ?? 0,
   )
 

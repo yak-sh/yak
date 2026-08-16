@@ -3,7 +3,7 @@
 // sub-1ms bar the gate holds (a batch bench measures N ops at once — split into
 // the single-op cost instead). `deno task bench`.
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, db, resolveId, snapshot } = await import('./db.ts')
+let { apply, db, journalOf, resolveId, snapshot } = await import('./db.ts')
 let { freshDb } = await import('./testdb.ts')
 
 let uid = () => crypto.randomUUID()
@@ -30,6 +30,14 @@ Deno.bench('snapshot: full graph', () => {
 
 Deno.bench('resolveId: num -> eid', () => {
   resolveId(db, '500')
+})
+
+// One entity's history: a journal_touch seek (T-13915), flat as the log grows.
+// Before the index this was a full json_each scan of every journal row — the
+// cost that made `task history` 3s on the live graph. A regression back to the
+// scan grows this with the ~2k resident journal rows.
+Deno.bench("journalOf: seek one entity's history", () => {
+  journalOf(db, eids[500])
 })
 
 // The test-suite primitive: a regression here slows every db-backed test.

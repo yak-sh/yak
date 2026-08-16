@@ -83,6 +83,10 @@ Deno.test('indexes map matches the db and dependency plans use both ends', () =>
   ).all() as { name: string }[]
   let live = new Map<string, boolean>() // "table|cols" → is any index over them unique?
   for (let { name: t } of tables) {
+    // journal_touch is hand-written log infrastructure (T-13915), not part of
+    // the component vocabulary this map guards — its (eid, jrow) seek index is
+    // declared in db.ts's schema + open(), not in the indexes map.
+    if (t == 'journal_touch') continue
     let ixs = d.prepare(`pragma index_list("${t}")`).all() as {
       name: string
       unique: number

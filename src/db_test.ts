@@ -3,6 +3,7 @@
 Deno.env.set('DB_PATH', ':memory:')
 let {
   apply,
+  backfillJournalTouch,
   backfillOpened,
   backfillVia,
   componentCounts,
@@ -15,6 +16,7 @@ let {
   human,
   journalBy,
   journalOf,
+  lastBatch,
   liveDb,
   locate,
   mendCalls,
@@ -349,6 +351,7 @@ let outsideVocabulary: Record<string, string> = {
   dependency: 'edges: a triple keyed by (parent, type, child), no eid row',
   tombstone: 'death record: the eid is dead, nothing reads a component back',
   journal: 'the write log: append-only audit, never walked by snapshot()',
+  journal_touch: "the journal's seek index (jrow, eid): log data, never synced",
   tool_call: 'telemetry: no eid, no components — read at /telemetry',
   embedding: 'semantic vectors: rebuilt from doc on the sweep, never synced',
 }
@@ -3393,6 +3396,57 @@ Deno.test('journalOf: newest first, cut to the eid', () => {
     comp: { title: 'v2' },
   }])
   assertEquals(past.every((e) => e.changes.every((c) => c.eid == t)), true)
+})
+
+// journal_touch (T-13915) indexes every eid a batch touched, so a batch about
+// two entities is seekable from either — the same eids json_extract('$.eid')
+// found, so journalOf stays behavior-identical while becoming a seek.
+Deno.test('journal_touch: a multi-entity batch is seekable from each eid', () => {
+  let a = uid(), b = uid()
+  apply(db, [
+    { eid: a, name: 'doc', comp: { title: 'a' } },
+    { eid: b, name: 'doc', comp: { title: 'b' } },
+  ])
+  let batch = lastBatch(db, a)
+  assertEquals(lastBatch(db, b), batch) // one batch, both entities see it
+  assertEquals(journalOf(db, a)[0].id, batch)
+  assertEquals(journalOf(db, b)[0].id, batch)
+  // one row per (batch, eid) — no duplicate even though the batch had two
+  // changes; each eid appears once.
+  let rows = db.prepare(
+    'select count(*) as n from journal_touch where jrow = ?',
+  ).get(batch) as { n: number }
+  assertEquals(rows.n, 2)
+})
+
+// The one-time migration path: a live db has 26k journal rows and an empty
+// journal_touch. backfillJournalTouch fills it once from the existing rows, so a
+// per-entity read on an entity written before the index still seeks correctly —
+// and it is difference-guarded, a no-op once populated.
+Deno.test('backfillJournalTouch: rebuilds the index from the existing journal', () => {
+  let d = fresh()
+  let x = uid(), y = uid()
+  apply(d, [{ eid: x, name: 'doc', comp: { title: 'x1' } }])
+  apply(d, [
+    { eid: x, name: 'doc', comp: { title: 'x2' } },
+    { eid: y, name: 'doc', comp: { title: 'y1' } },
+  ])
+  let before = journalOf(d, x)
+  // Simulate a pre-index live db: the journal rows exist, the index does not.
+  d.exec('delete from journal_touch')
+  assertEquals(journalOf(d, x).length, 0) // proves the read depends on the index
+  backfillJournalTouch(d)
+  assertEquals(journalOf(d, x), before) // rebuilt identically from the log
+  assertEquals(journalOf(d, y).length, 1)
+  // Difference-guarded: a second run over the populated table changes nothing.
+  let n = (db2: typeof d) =>
+    (db2.prepare('select count(*) as n from journal_touch').get() as {
+      n: number
+    }).n
+  let filled = n(d)
+  backfillJournalTouch(d)
+  assertEquals(n(d), filled)
+  d.close()
 })
 
 Deno.test('num is monotonic: a grave keeps its number off the market', () => {
