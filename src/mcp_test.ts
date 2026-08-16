@@ -237,6 +237,12 @@ type Tool = {
   description?: string
   inputSchema: Record<string, unknown>
   outputSchema?: Record<string, unknown>
+  annotations?: {
+    readOnlyHint?: boolean
+    destructiveHint?: boolean
+    idempotentHint?: boolean
+    openWorldHint?: boolean
+  }
 }
 type Schema = {
   additionalProperties?: unknown
@@ -564,6 +570,44 @@ Deno.test('MCP schemas document parameters and derive closed vocabularies', asyn
       byName(tools, 'graph_apply').description ?? '',
       new RegExp(edges.join('\\|')),
     )
+  })
+})
+
+Deno.test('MCP tools declare closed-world, save task_spawn (the agent launch)', async () => {
+  await protocol(blank(), async (client) => {
+    let tools: Tool[] = (await client.listTools()).tools
+    // The graph is a closed domain, so every tool but task_spawn — which
+    // launches an autonomous agent — declares openWorldHint false, overriding
+    // the protocol's open-world default.
+    for (let tool of tools) {
+      assertEquals(
+        tool.annotations?.openWorldHint,
+        tool.name == 'task_spawn' ? true : false,
+        tool.name,
+      )
+    }
+  })
+})
+
+Deno.test('MCP annotations: queries read-only, deleters destructive, setters idempotent', async () => {
+  await protocol(blank(), async (client) => {
+    let tools: Tool[] = (await client.listTools()).tools
+    let a = (name: string) => byName(tools, name).annotations ?? {}
+
+    for (let q of ['search', 'task_list', 'task_show', 'graph_query']) {
+      assertEquals(a(q).readOnlyHint, true, q)
+    }
+    // A mutating tool is never marked read-only.
+    for (let w of ['task_new', 'graph_apply', 'task_comment']) {
+      assert(!a(w).readOnlyHint, w)
+    }
+    for (let s of ['task_update', 'task_claim', 'card_move']) {
+      assertEquals(a(s).idempotentHint, true, s)
+    }
+    for (let d of ['graph_apply', 'card_close', 'command']) {
+      assertEquals(a(d).destructiveHint, true, d)
+    }
+    assertEquals(a('task_spawn').openWorldHint, true)
   })
 })
 

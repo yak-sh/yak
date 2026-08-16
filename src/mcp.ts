@@ -10,7 +10,10 @@
 // spelling for the few collisions. The tool descriptions teach it.
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
+import type {
+  CallToolResult,
+  ToolAnnotations,
+} from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
 import {
   type Change,
@@ -230,6 +233,36 @@ markdown documents (paragraphs, lists, headings). Rewrite via task_update
 ".body=".`
     : ''
 
+// Per-tool behavior hints, keyed by tool name (T-14142). One data block so the
+// whole surface is auditable at a glance — the vocabulary is one list. Queries
+// are read-only; setters that converge to a value are idempotent; entity
+// deleters are destructive; task_spawn launches an autonomous agent, the one
+// tool whose reach is open-world. Everything absent takes the closed-world,
+// mutating default in tool(). readOnlyHint marks a QUERY: the ack-cursor and
+// recall bumps a read leaves behind are serve bookkeeping, not the caller's
+// intent, so they don't demote a query to mutating.
+let RO: ToolAnnotations = { readOnlyHint: true }
+let HINTS: Record<string, ToolAnnotations> = {
+  search: RO,
+  task_list: RO,
+  task_context: RO,
+  task_show: RO,
+  session_peek: RO,
+  transcript: RO,
+  history: RO,
+  memory_recall: RO,
+  graph_query: RO,
+  ui_state: RO,
+  task_update: { idempotentHint: true },
+  task_claim: { idempotentHint: true },
+  task_release: { idempotentHint: true },
+  card_move: { idempotentHint: true },
+  graph_apply: { destructiveHint: true },
+  card_close: { destructiveHint: true },
+  command: { destructiveHint: true },
+  task_spawn: { openWorldHint: true },
+}
+
 export let mcpServer = (io: IO) => {
   // Server instructions ride the initialize handshake and land in the
   // agent's standing context — the strongest ambient steering the
@@ -257,6 +290,14 @@ comments, and the comms bus.`,
         description,
         inputSchema: z.object(shape).strict(),
         outputSchema: output,
+        // Behavior hints (T-14142): the protocol defaults are pessimistic —
+        // every unmarked tool reads as mutating, destructive, non-idempotent
+        // and open-world, so a client confirms each call. Every tasks tool
+        // works the CLOSED local graph, so openWorldHint is false by default;
+        // HINTS refines the rest per tool. Hints only — apply() still enforces
+        // every rule server-side (M-17876), so a wrong hint mis-styles a
+        // prompt, never a permission.
+        annotations: { openWorldHint: false, ...HINTS[name] },
       },
       async (args: z.output<z.ZodObject<Shape>>) => {
         let out: CallToolResult = await run(args)
