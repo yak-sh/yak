@@ -1273,7 +1273,8 @@ export let validateCommand = (name: string, args: string[]) => {
     throw new UsageError(`not a command: :${name} (task help : lists them)`)
   }
   let end = args.indexOf('--')
-  let bad = (end < 0 ? args : args.slice(0, end)).find(option)
+  let head = end < 0 ? args : args.slice(0, end)
+  let bad = head.find(option)
   if (bad) {
     let hint = ['new', 'fix', 'set'].includes(name)
       ? ` — writes use .prop=value (task help grammar)`
@@ -1283,10 +1284,36 @@ export let validateCommand = (name: string, args: string[]) => {
         `usage: task :${`${name} ${command.args}`.trim()}`,
     )
   }
+  // A verb that does not read dot-params must refuse an unknown one by name,
+  // not swallow it into its text — the same guard the CLI verbs got in T-14187,
+  // now at the shared palette so a colon verb can't quietly absorb `.staus=done`
+  // as prose (T-14291). The write/spec verbs declare `dots` and are exempt; a
+  // `-- note` fold is prose, so only the head is screened.
+  let dot = command.dots ? undefined : head.map(dotted).find(Boolean)
+  if (dot) {
+    throw new UsageError(
+      `:${name} does not take .${dot}= — it takes positional arguments\n` +
+        `usage: task :${`${name} ${command.args}`.trim()}`,
+    )
+  }
   if (
     command.words &&
     (args.length < command.words[0] || args.length > command.words[1])
   ) {
+    // A colon verb reads its entity from the FOCUS, not the argument list, so
+    // an entity-shaped stray argument means the caller inverted the spelling —
+    // name the one that works instead of a bare count (T-10331).
+    let ent = head.find((a) => /^[A-Za-z]+-\d+$/.test(a))
+    if (ent) {
+      throw new UsageError(
+        `:${name} ${
+          command.words[1] == 0
+            ? 'takes no arguments'
+            : `expected ${command.words[0]}–${command.words[1]} arguments, ` +
+              `got ${args.length}`
+        } — did you mean 'task ${ent} :${name}'?`,
+      )
+    }
     throw new UsageError(
       `:${name} expected ${command.words[0]}–${command.words[1]} arguments, ` +
         `got ${args.length}\nusage: task :${`${name} ${command.args}`.trim()}`,

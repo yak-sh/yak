@@ -394,3 +394,43 @@ Deno.test('palette validation rejects CLI flags before command dispatch', () => 
     ':done expected 0–0 arguments',
   )
 })
+
+// The palette is the SAME vocabulary as the CLI verbs (CLAUDE.md: "one
+// vocabulary: palette, TUI, CLI colon, MCP command"), so the dot-param guard
+// that holds at the CLI door must hold at this one too — a colon verb that
+// reads no dot-params refuses an unknown one by name instead of absorbing it
+// into its text. Swept over the whole command table so the next colon verb
+// inherits the guard rather than having to remember it (T-14291).
+Deno.test('a colon verb refuses any dot-param it does not read, by name', () => {
+  for (let [name, command] of Object.entries(commands)) {
+    if (command.dots) continue
+    assertThrows(
+      () => validateCommand(name, ['.zzz=1']),
+      Error,
+      `:${name} does not take .zzz=`,
+    )
+  }
+  // The write/spec verbs still take their dot-params — the exemption holds.
+  validateCommand('set', ['.status=done'])
+  validateCommand('new', ['.domain=Eng', 'a title'])
+  // A `-- note` fold is prose, so a dot inside it is left alone.
+  validateCommand('wake', ['homelab', 'in', '60m', '--', 'left .x=1 mid-edit'])
+})
+
+// A colon verb reads its entity from the FOCUS, so an entity-shaped stray
+// argument means the caller inverted the spelling (`task done T-42` instead of
+// `task T-42 done`). The arity refusal names the form that works rather than a
+// bare count (T-10331).
+Deno.test('a colon arity error over an entity-shaped arg names the entity-first form', () => {
+  assertThrows(
+    () => validateCommand('done', ['T-10195']),
+    Error,
+    "did you mean 'task T-10195 :done'",
+  )
+  // A non-entity stray keeps the plain count + usage line.
+  assertThrows(
+    () => validateCommand('done', ['extra']),
+    Error,
+    'usage: task :done',
+  )
+})

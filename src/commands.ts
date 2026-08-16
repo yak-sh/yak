@@ -189,6 +189,11 @@ export type Command = {
   about: string
   run: Verb
   words?: [min: number, max: number]
+  // This verb reads dot-params (`.prop=value`) — the write/spec commands
+  // (new/fix/set, the card mints, chat). Every other colon verb takes
+  // positional words, so an unknown dot-param at it is a mistake to refuse by
+  // name, not text to absorb (T-14291) — the same guard the CLI verbs carry.
+  dots?: boolean
 }
 
 // Blank cards are the canvas's scratch paper: mint the smallest sound entity
@@ -242,6 +247,7 @@ let card = (kind: typeof cardCommands[number]): Command => ({
     memory: '[.title=Lesson .memory.scope=home]',
   }[kind],
   about: `add a ${kind} card`,
+  dots: true,
   run: (rest, ctx) => {
     let [line, ...lines] = rest.split('\n')
     // A leading doc setter is the card property's explicit spelling; its
@@ -302,6 +308,7 @@ export let commands: Record<string, Command> = {
   // :new speaks the spec grammar (client.ts): 'P1 .domain=Eng Ship it'
   // — typed setters win over what the context hands down.
   new: {
+    dots: true,
     args: 'P1 .domain=Eng title…',
     about: 'file a task where you stand',
     run: (rest, ctx) => {
@@ -331,6 +338,7 @@ export let commands: Record<string, Command> = {
   // alias stands). Explicit .project= always wins. The spawn is an
   // INTENT like go: this module never touches the wire.
   fix: {
+    dots: true,
     args: '[T-42 | the toolbar clips at small widths]',
     about: 'run a fix agent — here, on T-42, or on a task your words file',
     run: (rest, ctx) => {
@@ -371,6 +379,7 @@ export let commands: Record<string, Command> = {
     },
   },
   chat: {
+    dots: true,
     args: '[.provider=codex .model=gpt-5.6-sol prompt…]',
     about: 'start a taskless chat in the tray',
     run: (rest, ctx) => {
@@ -692,6 +701,7 @@ export let commands: Record<string, Command> = {
   // it for free. Values ride ctx.read — one @file convention for every
   // door that has a filesystem, the same one `task set` speaks.
   set: {
+    dots: true,
     args: '.prop=value …',
     about: 'patch the focused entity',
     run: (rest, ctx) => {
