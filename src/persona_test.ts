@@ -14,6 +14,7 @@ import { projectionSnapshot, type Row, rows } from './client.ts'
 import { fakeGraph } from './graph_fake.ts'
 import {
   commonOf,
+  composeWorn,
   DIALECT,
   filesFor,
   homeReads,
@@ -572,9 +573,10 @@ Deno.test('projection: a deleted persona orphans its file; AGENTS.md untouched',
   }
 })
 
-// The persona a spawn wears (T-12867): explicit wins, else the project's
-// common persona, else bare (no project to fall back to).
-Deno.test('wornPersona: explicit, else project common, else bare', () => {
+// The personas a spawn wears (T-18382): COMPOSED base-first, not either/or —
+// an explicit --persona rides ON TOP of the project base rather than dropping
+// it; with neither, the global base is the floor.
+Deno.test('wornPersona: composes project base + specific, deduped, floors on base', () => {
   let project = row({ doc: { title: 'Venture', body: '' }, project: {} })
   let common = row({
     doc: { title: 'Common', body: 'C.' },
@@ -582,22 +584,98 @@ Deno.test('wornPersona: explicit, else project common, else bare', () => {
   })
   let other = row({
     doc: { title: 'Specialist', body: 'S.' },
-    persona: { home: project.eid },
+    persona: { home: null },
+  })
+  let fleet = row({
+    doc: { title: 'fleet base', body: '' },
+    persona: { home: null },
   })
   // only the common persona is `contains`-ed by the project
   let deps = [edge(project, 'contains', common)]
-  let all = [project, common, other]
+  let all = [project, common, other, fleet]
+  let eids = (rs: Row[]) => rs.map((r) => r.eid)
 
-  // an explicit --persona wears exactly that persona
-  assertEquals(wornPersona(all, deps, other.eid, project.eid)?.eid, other.eid)
-  // no --persona falls back to the project's common persona
-  assertEquals(wornPersona(all, deps, undefined, project.eid)?.eid, common.eid)
-  // no --persona and no project stays bare
-  assertEquals(wornPersona(all, deps, undefined, undefined), undefined)
-  // a project with no common persona stays bare
-  let bare = row({ doc: { title: 'Bare', body: '' }, project: {} })
+  // an explicit --persona wears the project base FIRST, then the specific one
   assertEquals(
-    wornPersona([...all, bare], deps, undefined, bare.eid),
-    undefined,
+    eids(wornPersona(all, deps, other.eid, project.eid, fleet.eid)),
+    [common.eid, other.eid],
   )
+  // an explicit persona that IS the project common appears once (deduped)
+  assertEquals(
+    eids(wornPersona(all, deps, common.eid, project.eid, fleet.eid)),
+    [common.eid],
+  )
+  // no --persona wears just the project's common persona
+  assertEquals(
+    eids(wornPersona(all, deps, undefined, project.eid, fleet.eid)),
+    [common.eid],
+  )
+  // no --persona and no project floors on the global base
+  assertEquals(
+    eids(wornPersona(all, deps, undefined, undefined, fleet.eid)),
+    [fleet.eid],
+  )
+  // with no base to floor on either, it is finally bare
+  assertEquals(wornPersona(all, deps, undefined, undefined, undefined), [])
+})
+
+// composeWorn folds the base personas UNDER the specific one, so a spawn wears
+// base tiers + specialist tiers together — the compose-not-replace invariant.
+Deno.test('composeWorn: an explicit specialist still carries project base + fleet base', () => {
+  let project = row({ doc: { title: 'Venture', body: '' }, project: {} })
+  let fleet = row({
+    doc: { title: 'fleet base', body: '' },
+    persona: { home: null },
+  })
+  let baseMem = mem('fleet rule', 'FLEETRULE.')
+  let common = row({
+    doc: { title: 'Common', body: '' },
+    persona: { home: project.eid },
+  })
+  let specialist = row({
+    doc: { title: 'coder', body: '' },
+    persona: { home: null },
+  })
+  let specMem = mem('specialist rule', 'SPECRULE.')
+  let deps = [
+    edge(project, 'contains', common),
+    edge(common, 'contains', fleet), // project common nests the fleet base
+    edge(fleet, 'contains', baseMem),
+    edge(specialist, 'contains', specMem),
+  ]
+  let all = [project, fleet, baseMem, common, specialist, specMem]
+  let worn = wornPersona(all, deps, specialist.eid, project.eid, fleet.eid)
+  let md = composeWorn(all, deps, worn, NOW)!
+  // both the specialist's own memory AND the project base's fleet memory ride
+  assertStringIncludes(md, 'SPECRULE.')
+  assertStringIncludes(md, 'FLEETRULE.')
+  // the header names the specific persona (the primary), not the base
+  assertStringIncludes(md, `GENERATED from N-${specialist.num}`)
+})
+
+// A fleet-shared specialist wired to the fleet base (a stored contains edge)
+// carries it even with NO project — the no-project floor the wiring provides.
+Deno.test('composeWorn: a specialist wired to the fleet base carries it with no project', () => {
+  let fleet = row({
+    doc: { title: 'fleet base', body: '' },
+    persona: { home: null },
+  })
+  let baseMem = mem('fleet rule', 'FLEETRULE.')
+  let specialist = row({
+    doc: { title: 'coder', body: '' },
+    persona: { home: null },
+  })
+  let specMem = mem('specialist rule', 'SPECRULE.')
+  let deps = [
+    edge(fleet, 'contains', baseMem),
+    edge(specialist, 'contains', fleet), // the wiring: specialist → fleet base
+    edge(specialist, 'contains', specMem),
+  ]
+  let all = [fleet, baseMem, specialist, specMem]
+  // no project, explicit specialist
+  let worn = wornPersona(all, deps, specialist.eid, undefined, fleet.eid)
+  assertEquals(worn.map((r) => r.eid), [specialist.eid])
+  let md = composeWorn(all, deps, worn, NOW)!
+  assertStringIncludes(md, 'SPECRULE.')
+  assertStringIncludes(md, 'FLEETRULE.')
 })

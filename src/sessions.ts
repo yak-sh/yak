@@ -39,7 +39,7 @@ import {
   providerSpec,
   type Summary,
 } from './adapters.ts'
-import { apply, db, human, record, snapshot } from './db.ts'
+import { apply, db, human, record, resolveId, snapshot } from './db.ts'
 import {
   delivered,
   errorChange,
@@ -61,7 +61,7 @@ import { dispatch, trace } from './effects.ts'
 import { legacyWorktreesDir, worktreesDir } from './ground.ts'
 import { hookClaim, rows, wrapChanges } from './client.ts'
 import { type Unlanded, unlanded } from './land.ts'
-import { materialize, wornPersona } from './persona.ts'
+import { composeWorn, GLOBAL_BASE, wornPersona } from './persona.ts'
 import {
   sessionRow as storedSession,
   sessionRows as storedSessions,
@@ -1761,27 +1761,28 @@ export let spawned =
           'repo-backed project',
       )
     }
-    // The worn persona rides whole — core text plus its tiers, rendered
-    // by materialize() so the spawn's prompt and the repo's .tasks files
-    // say the same thing. The house rider stays independent: that is what
-    // makes one landing contract reach every persona.
-    // No --persona falls back to the project's COMMON persona, so a spawn is
-    // never personaless (T-12867): an explicit request wears that persona; a
-    // bare spawn wears what the project `contains`, the same voice its
-    // .tasks/AGENTS.md carries. A taskless native chat has no project, so it
-    // stays bare — there is no common persona to wear.
-    let worn: string | undefined
-    if (row.spawn_persona || project) {
-      let snap = snapshot(db)
-      let all = rows(snap)
-      let p = wornPersona(
+    // The worn persona is COMPOSED, never either/or (D-18378, T-18382): the
+    // project's COMMON persona (the project base) folds UNDER an explicit
+    // --persona, so a spawn wears global base → project base → specific,
+    // deduped — an explicit persona no longer DROPS the project base. With
+    // neither a persona nor a project, the global base (N-14853) is the floor,
+    // so a spawn is (almost) never personaless. The tiers ride whole — core
+    // memories plus the index — rendered by composeWorn so the spawn's prompt
+    // and the repo's .tasks files say the same thing.
+    let snap = snapshot(db)
+    let all = rows(snap)
+    let worn = composeWorn(
+      all,
+      snap.deps,
+      wornPersona(
         all,
         snap.deps,
         row.spawn_persona ? String(row.spawn_persona) : undefined,
         project ? String(project) : undefined,
-      )
-      if (p) worn = materialize(all, snap.deps, p, Date.now())
-    }
+        resolveId(db, GLOBAL_BASE),
+      ),
+      Date.now(),
+    )
     let { num } = db.prepare('select num from entity where eid = ?')
       .get(eid) as { num: number }
     let sid = `S-${num}`

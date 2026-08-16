@@ -145,21 +145,61 @@ export let commonOf = (all: Row[], deps: Dep[], projectEid: string) =>
     )
   )
 
-// The persona a spawn wears (T-12867): an explicit --persona if given,
-// else the project's COMMON persona — so a bare spawn is never personaless,
-// it wears the same voice the repo's .tasks/AGENTS.md carries. A taskless
-// native chat has no project, so it stays bare (nothing to fall back to).
+// The fleet base persona — the global floor a spawn wears when nothing else
+// applies (D-18378). A stable graph identity, named once here; sessions.ts
+// resolves it to an eid so persona.ts stays pure over rows. It is the last
+// resort: a taskless native chat with no project and no explicit persona still
+// wears this, so a spawn is (almost) never personaless.
+export let GLOBAL_BASE = 'N-14853'
+
+// The personas a spawn wears, base-first — COMPOSED, never either/or (D-18378,
+// T-18382). The project's COMMON persona is the project base; an explicit
+// --persona is the specific voice worn ON TOP of it. Returning both (not one
+// instead of the other) is the fix: an explicit persona no longer DROPS the
+// project base, so a spawn wears global base → project base → specific. Deduped
+// (an explicit persona that IS the project common appears once). With a project
+// and no --persona, the common rides alone; it already contains the global base.
+// With neither, `base` (the global floor) is worn, so a spawn is never
+// personaless. composeWorn renders the returned list as one document.
 export let wornPersona = (
   all: Row[],
   deps: Dep[],
   spawnPersona: string | undefined,
   projectEid: string | undefined,
-): Row | undefined =>
-  spawnPersona
-    ? all.find((r) => r.eid == spawnPersona && r.comps.doc)
-    : projectEid
-    ? commonOf(all, deps, projectEid)
-    : undefined
+  base?: string,
+): Row[] => {
+  let find = (e?: string) =>
+    e ? all.find((r) => r.eid == e && r.comps.doc) : undefined
+  let seen = new Set<string>()
+  let worn = [
+    projectEid ? commonOf(all, deps, projectEid) : undefined,
+    find(spawnPersona),
+  ].filter((r): r is Row => !!r && !seen.has(r.eid) && !!seen.add(r.eid))
+  return worn.length ? worn : [find(base)].filter((r): r is Row => !!r)
+}
+
+// Render the worn personas as ONE document. The most specific (last) is the
+// primary — it names the header — and each base before it folds in BENEATH it
+// as a contained tier (a synthetic contains edge), so base memories merge and
+// dedup through the very nesting machinery a stored contains edge uses (tiers).
+// No string concatenation, and no CLAUDE.md duplicated into a specialist body.
+// A single worn persona renders as itself; an empty list is bare (personaless).
+export let composeWorn = (
+  all: Row[],
+  deps: Dep[],
+  worn: Row[],
+  now: number,
+  d: Dialect = DIALECT,
+): string | undefined => {
+  if (!worn.length) return undefined
+  let primary = worn[worn.length - 1]
+  let folded: Dep[] = worn.slice(0, -1).map((r) => ({
+    parent: primary.eid,
+    type: 'contains',
+    child: r.eid,
+  }))
+  return materialize(all, [...deps, ...folded], primary, now, d)
+}
 
 // A project's SPECIALIST personas, surfaced as edges. `home` is the
 // one truth for ownership (commonOf and filesFor derive from it); these
