@@ -1894,6 +1894,27 @@ export let open = (path = file) => {
     // drops from ~2s to ~10ms. Production never sets it and stays fully durable.
     let sync = Deno.env.get('TASKS_SYNC')
     if (sync) db.exec(`pragma synchronous = ${sync}`)
+    // WAL lets readers proceed during a write, removing the reader/writer
+    // blocking of the default rollback journal (journal_mode = delete) — the
+    // fleet runs many concurrent `task` readers against one writer (T-13905).
+    // journal_mode is a PERSISTENT property stamped in the db header, so it
+    // survives the connection that set it: flipping the live 800MB graph is an
+    // operational step for an owner maintenance window, NOT something a plain
+    // restart may do silently. So this is GATED and default-OFF — an unset
+    // TASKS_WAL leaves the file at whatever it already is (`delete` today), and
+    // activation is a deliberate later step (set TASKS_WAL=1 in the service
+    // unit during a window). WAL's -wal/-shm sidecars are already gitignored,
+    // and bin/backup's VACUUM INTO reads a consistent snapshot under WAL
+    // unchanged. Setting synchronous = normal is WAL's crash-safe pairing (a
+    // checkpoint still fsyncs), unless TASKS_SYNC already named a mode.
+    if (Deno.env.get('TASKS_WAL')) {
+      let got = (db.prepare('pragma journal_mode = wal').get() as
+        | { journal_mode: string }
+        | undefined)?.journal_mode
+      if (got != 'wal') {
+        console.warn(`TASKS_WAL set but journal_mode is ${got}, not wal`)
+      } else if (!sync) db.exec('pragma synchronous = normal')
+    }
     // This must precede schema: an old table may not yet have the canonical
     // columns named by a newly added index in the current DDL.
     migrateRefs(db)

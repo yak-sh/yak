@@ -109,6 +109,40 @@ slow('snapshot shares a walk until either database handle writes', () => {
   Deno.removeSync(path)
 })
 
+slow(
+  'journal_mode: WAL is gated on TASKS_WAL, off by default (T-13905)',
+  () => {
+    let path = Deno.makeTempFileSync({ suffix: '.db' })
+    let mode = (d: ReturnType<typeof open>) =>
+      (d.prepare('pragma journal_mode').get() as { journal_mode: string })
+        .journal_mode
+    Deno.env.delete('TASKS_WAL')
+    try {
+      let a = open(path)
+      assertEquals(mode(a), 'delete') // default: rollback journal, never flipped
+      a.close()
+      Deno.env.set('TASKS_WAL', '1')
+      let b = open(path)
+      assertEquals(mode(b), 'wal') // the gated activation flips the file
+      b.close()
+      // journal_mode is a persistent header property, so a later DEFAULT open
+      // still reads WAL — which is why flipping the live db is owner-windowed.
+      Deno.env.delete('TASKS_WAL')
+      let c = open(path)
+      assertEquals(mode(c), 'wal')
+      c.close()
+    } finally {
+      Deno.env.delete('TASKS_WAL')
+      Deno.removeSync(path)
+      for (let s of ['-wal', '-shm']) {
+        try {
+          Deno.removeSync(`${path}${s}`)
+        } catch { /* absent when the mode never flipped */ }
+      }
+    }
+  },
+)
+
 Deno.test('componentCounts: the graph, not the snapshot the cache mirrors', () => {
   let d = fresh()
   // Entry-partition entities: each carries `entry` (so snapshot omits it) and
