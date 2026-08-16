@@ -798,9 +798,15 @@ export let manuals = declare({
     args: [arg('filters', text, true, false)],
     opts: [json],
   },
+  // context/wrap stay as supported top-level aliases of `session context`/
+  // `session wrap` — the ergonomic warm path the persona teaches for
+  // reconstitution, and the hook form other repos already carry. They are
+  // NOT deprecated: T-16375 made every deprecated verb hard-error, which
+  // caught these two as collateral and broke every post-clear operator
+  // (T-16484). `alias: true` keeps them out of root help; the canonical
+  // spelling lives under `session`.
   context: {
     about: 'reify and print the session digest',
-    deprecated: 'superseded by task session context',
     examples: ['task session context'],
     alias: true,
     args: [arg('sid', text, false, false)],
@@ -808,7 +814,6 @@ export let manuals = declare({
   },
   wrap: {
     about: 'release claims and preserve the session brief',
-    deprecated: 'superseded by task session wrap',
     examples: ['task session wrap'],
     alias: true,
     args: [arg('sid', text, false, false)],
