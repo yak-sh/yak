@@ -137,6 +137,7 @@ import {
   requestedHelp,
   route,
   usage,
+  UsageError,
   validateCommand,
 } from './manual.ts'
 import { type Got, type Run, type Verb } from './verb.ts'
@@ -155,6 +156,24 @@ export let printer =
 
 let print = printer((line) => console.log(line))
 let warn = printer((line) => console.error(line))
+
+// A refusal must not disappear with the shell that saw it. Reporting is
+// best-effort because a broken or absent server cannot replace the original
+// diagnostic, but a live server gets the argv and session needed to improve
+// the grammar, manual, or prompt that led the caller astray.
+export let reportUsage = async (
+  args: string[],
+  error: string,
+  call = request,
+) => {
+  try {
+    await call(`http://${host()}/usage`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ args, error, session: me() ?? null }),
+    })
+  } catch { /* telemetry can never replace the refusal it observes */ }
+}
 
 // JSON.stringify already escapes C0, but writes DEL and C1 as terminal bytes.
 // Spell those as JSON escapes so the parsed value and machine shape stay whole.
@@ -206,7 +225,7 @@ export let subject = (id: string | undefined, args: string[]) => {
       objects.length > 1 ||
       objects.some((x) => x != '--json' && x != '--quarantined')
     ) {
-      throw new Error(`task ${id} [show] [--json] [--quarantined]`)
+      throw new UsageError(`task ${id} [show] [--json] [--quarantined]`)
     }
     return { cmd: 'show', args: [id, verb, ...objects] }
   }
@@ -215,7 +234,7 @@ export let subject = (id: string | undefined, args: string[]) => {
       objects.length > 2 ||
       objects.some((x) => x != '--json' && x != '--quarantined')
     ) {
-      throw new Error(`task ${id} [show] [--json] [--quarantined]`)
+      throw new UsageError(`task ${id} [show] [--json] [--quarantined]`)
     }
     return { cmd: 'show', args: [id, ...objects] }
   }
@@ -226,19 +245,19 @@ export let subject = (id: string | undefined, args: string[]) => {
       children.length != 1 || flags.length > 1 ||
       flags.length != objects.length - 1
     ) {
-      throw new Error(`task ${id} ${verb} <id> [--gone]`)
+      throw new UsageError(`task ${id} ${verb} <id> [--gone]`)
     }
     return { cmd: 'dep', args: [id, verb, ...objects] }
   }
   if (verb == 'is') {
     if (objects.length != 1 || !statuses.some((s) => s == objects[0])) {
-      throw new Error(`status is one of: ${statuses.join(', ')}`)
+      throw new UsageError(`status is one of: ${statuses.join(', ')}`)
     }
     return { cmd: 'set', args: [id, `.status=${objects[0]}`] }
   }
   if (verb == 'as') {
     if (objects.length != 1 || !formats.includes(objects[0])) {
-      throw new Error(`format is one of: ${formats.join(', ')}`)
+      throw new UsageError(`format is one of: ${formats.join(', ')}`)
     }
     return {
       cmd: 'show',
@@ -248,7 +267,7 @@ export let subject = (id: string | undefined, args: string[]) => {
   // Focused palette commands keep their explicit colon: several accept
   // optional objects whose subject-first reading would be ambiguous.
   if (verb.startsWith(':')) return
-  throw new Error(`no subject verb: ${verb} (task ${id} --help)`)
+  throw new UsageError(`no subject verb: ${verb} (task ${id} --help)`)
 }
 
 // Every argument at a listing door must BE a filter — the query grammar's
@@ -2761,6 +2780,10 @@ if (import.meta.main) {
           ? manuals[cmd]
           : selected.manual
         if (spelled.deprecated && !routed) {
+          await reportUsage(
+            Deno.args,
+            `task ${spelled.name}: deprecated — ${spelled.deprecated}`,
+          )
           warn(`task ${spelled.name}: deprecated — ${spelled.deprecated}`)
           Deno.exit(1)
         }
@@ -2779,6 +2802,7 @@ if (import.meta.main) {
         validateCommand(cmd, rest)
         await colon(undefined, [cmd, ...rest])
       } else {
+        await reportUsage(Deno.args, `no such verb: ${cmd}`)
         print(usage())
         Deno.exit(2)
       }
@@ -2786,6 +2810,9 @@ if (import.meta.main) {
     // Whatever the verb did, hand over anything addressed to this session.
     await heard(hook)
   } catch (e) {
+    if (e instanceof UsageError) {
+      await reportUsage(Deno.args, e.message)
+    }
     warn(`task: ${(e as Error).message} (server: ${host()})`)
     Deno.exit(1)
   }

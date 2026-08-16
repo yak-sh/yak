@@ -18,7 +18,7 @@ import { type DatabaseSync } from 'node:sqlite'
 // `srv` is the server's own background work (the persona sync): no caller
 // to disappoint, but the same question — what failed, when, and why.
 export type Call = {
-  source: 'mcp' | 'http' | 'web' | 'srv'
+  source: 'mcp' | 'http' | 'web' | 'srv' | 'cli'
   name: string
   session_id?: string | null
   ok: boolean

@@ -47,7 +47,7 @@ import { registerManagedSource } from './source_managed.ts'
 import { vocabularyMd } from './schema.ts'
 import { freeze, serveFrozen, store } from './freeze.ts'
 import { filed } from './page.ts'
-import { PENDING } from './deliver.ts'
+import { excepted, PENDING } from './deliver.ts'
 import { ensureFixer, fileBug, FIXER_PENDING, HEAL_PENDING } from './heal.ts'
 import { recallEntry } from './recall.ts'
 import { fanout, FANOUT_PENDING, mailed } from './mail.ts'
@@ -795,6 +795,49 @@ let clientError = async (req: Request) => {
   return new Response(null, { status: 204 })
 }
 
+// A CLI grammar refusal is both feedback and a tooling fault. The invoking
+// Session is the useful broken entity: its transcript explains why the caller
+// reached for this spelling. A shell without an identity falls back to the
+// self-healing home so it still files, rather than becoming telemetry nobody
+// acts on.
+let cliUsage = async (req: Request) => {
+  try {
+    let b = JSON.parse(await bounded(req, 16 * 1024))
+    let args = Array.isArray(b.args) ? b.args.map(String) : []
+    let session = b.session == null ? null : String(b.session)
+    let error = String(b.error ?? 'invalid CLI usage')
+    let command = `task ${args.join(' ')}`.trim()
+    record(db, {
+      source: 'cli',
+      name: 'usage',
+      session_id: session,
+      ok: false,
+      error,
+      detail: JSON.stringify(args),
+    })
+    let target = session
+      ? (db.prepare('select eid from session where id = ?').get(session) as
+        | { eid: string }
+        | undefined)?.eid
+      : undefined
+    target ??= (db.prepare(
+      `select p.eid from project p join entity e on e.eid = p.eid
+       where e.num = 19`,
+    ).get() as { eid: string } | undefined)?.eid
+    if (target) {
+      excepted(
+        target,
+        `CLI usage failure: ${error}\nCommand: ${command}`,
+        null,
+        cast,
+      )
+    }
+  } catch (e) {
+    console.warn('CLI usage report dropped —', e)
+  }
+  return new Response(null, { status: 204 })
+}
+
 // The handoff supervisor starts the successor before asking this process to
 // drain. reusePort makes those listeners overlap; shutdown() keeps every
 // request on the process that accepted it until its response is complete.
@@ -1048,6 +1091,7 @@ let http = Deno.serve(
     }
     if (path == '/mcp' && req.method == 'POST') return mcp(req)
     if (path == '/error' && req.method == 'POST') return clientError(req)
+    if (path == '/usage' && req.method == 'POST') return cliUsage(req)
     if (path == '/telemetry') {
       return Response.json(recent(db, {
         since: url.searchParams.get('since') ?? undefined,

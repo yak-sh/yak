@@ -23,6 +23,7 @@ import {
   operatorHook,
   place,
   printer,
+  reportUsage,
   roleEid,
   strayFile,
   strayFlag,
@@ -109,6 +110,25 @@ Deno.test('printer: CLI styling wraps sanitized content', () => {
   let got = ''
   printer((line) => got = line)('safe\x1b[2Jtext', true)
   assertEquals(got, '\x1b[1msafe[2Jtext\x1b[0m')
+})
+
+Deno.test('usage reports preserve argv and session attribution', async () => {
+  let got: { input?: string; init?: RequestInit } = {}
+  Deno.env.set('TASKS_SESSION', 'agent-thread')
+  try {
+    await reportUsage(['help', 'edge'], 'no such help topic', (input, init) => {
+      got = { input: String(input), init }
+      return Promise.resolve(new Response(null, { status: 204 }))
+    })
+  } finally {
+    Deno.env.delete('TASKS_SESSION')
+  }
+  assertMatch(got.input!, /\/usage$/)
+  assertEquals(JSON.parse(String(got.init?.body)), {
+    args: ['help', 'edge'],
+    error: 'no such help topic',
+    session: 'agent-thread',
+  })
 })
 
 Deno.test('jsonText: terminal bytes go while parsed values stay whole', () => {
@@ -1451,6 +1471,28 @@ Deno.test('bare task prints usage without a session or server read', async () =>
     assertEquals(out.code, 0)
     assertMatch(text(out.stdout), /^task — the entity graph/)
     assertEquals(seen, [])
+  } finally {
+    await server.shutdown()
+  }
+})
+
+slow('invalid help reports the exact CLI usage failure', async () => {
+  let { server, seen, host } = graphServer()
+  try {
+    let out = await new Deno.Command(Deno.execPath(), {
+      args: [
+        'run',
+        '-A',
+        new URL('./cli.ts', import.meta.url).pathname,
+        'help',
+        'edge',
+      ],
+      clearEnv: true,
+      env: { TASKS_HOST: host, TASKS_SESSION: 'sub-1' },
+    }).output()
+    assertEquals(out.code, 1)
+    assertMatch(text(out.stderr), /no such help topic: edge/)
+    assertEquals(seen, ['/usage'])
   } finally {
     await server.shutdown()
   }

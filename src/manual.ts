@@ -901,7 +901,7 @@ let render = (name: string, m: Manual) => {
 let commandHelp = (name = '') => {
   let show = name ? { [name]: commands[name] } : commands
   if (name && !commands[name]) {
-    throw new Error(`not a command: ${name} (task help : lists them)`)
+    throw new UsageError(`not a command: ${name} (task help : lists them)`)
   }
   return Object.entries(show)
     .map(([n, c]) => `task :${`${n} ${c.args}`.trim().padEnd(34)} ${c.about}`)
@@ -921,7 +921,7 @@ export let help = (args: string[]) => {
   let manual = manuals[name]
   if (manual) return render(name, manual)
   if (args.length == 1 && commands[args[0]]) return commandHelp(args[0])
-  throw new Error(`no such help topic: ${name} (task help lists them)`)
+  throw new UsageError(`no such help topic: ${name} (task help lists them)`)
 }
 
 let helpAt = (args: string[]) => {
@@ -941,7 +941,7 @@ let helpAt = (args: string[]) => {
   }
   if (commands[args[0]]) return commandHelp(args[0])
   if (args[0].startsWith('-')) {
-    throw new Error(`no such verb: ${args[0]} (task --help lists them)`)
+    throw new UsageError(`no such verb: ${args[0]} (task --help lists them)`)
   }
   return subjectUsage(args[0])
 }
@@ -997,8 +997,10 @@ let takes = (manual: Manual) =>
     ? ` — it takes ${manual.dots.map((d) => `.${d}=`).join(' ')}`
     : ''
 
+export class UsageError extends Error {}
+
 let usageError = (name: string, manual: Manual, message: string) =>
-  new Error(
+  new UsageError(
     `${name} ${message}\nusage: task ${usageOf(manual)}` +
       (manual.deprecated ? `\ndeprecated: ${manual.deprecated}` : ''),
   )
@@ -1240,7 +1242,7 @@ export let validate = (
 export let validateCommand = (name: string, args: string[]) => {
   let command = commands[name]
   if (!command) {
-    throw new Error(`not a command: :${name} (task help : lists them)`)
+    throw new UsageError(`not a command: :${name} (task help : lists them)`)
   }
   let end = args.indexOf('--')
   let bad = (end < 0 ? args : args.slice(0, end)).find(option)
@@ -1248,7 +1250,7 @@ export let validateCommand = (name: string, args: string[]) => {
     let hint = ['new', 'fix', 'set'].includes(name)
       ? ` — writes use .prop=value (task help grammar)`
       : ''
-    throw new Error(
+    throw new UsageError(
       `:${name} does not take ${optionName(bad)}${hint}\n` +
         `usage: task :${`${name} ${command.args}`.trim()}`,
     )
@@ -1257,7 +1259,7 @@ export let validateCommand = (name: string, args: string[]) => {
     command.words &&
     (args.length < command.words[0] || args.length > command.words[1])
   ) {
-    throw new Error(
+    throw new UsageError(
       `:${name} expected ${command.words[0]}–${command.words[1]} arguments, ` +
         `got ${args.length}\nusage: task :${`${name} ${command.args}`.trim()}`,
     )
