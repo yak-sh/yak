@@ -31,12 +31,13 @@
   --muted: #9da9a0;
   --dim: #7a8478;
 
-  --accent: #a7c080; /* green — selection / primary */
+  --green: #a7c080;
   --red: #e67e80;
   --orange: #e69875;
   --purple: #d699b6;
   --blue: #7fbbb3;
   --yellow: #dbbc7f;
+  --accent: var(--green); /* selection / primary — the green hue, worn as a role */
   --soft: color-mix(in srgb, var(--text) 6%, transparent);
 
   /* status colours — dots and status text consume these */
@@ -69,7 +70,7 @@
     --muted: #829181;
     --dim: #a6b0a0;
 
-    --accent: #8da101;
+    --green: #8da101;
     --red: #f85552;
     --orange: #f57d26;
     --purple: #df69ba;
