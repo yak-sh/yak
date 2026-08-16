@@ -604,6 +604,7 @@ export let Session = ({ e }: { e: Ent }) => {
   let stream = native ? observation(e.eid) : undefined
   let live = native ? !s.base_revision || !!entries?.busy : awake(s)
   let status = state.status
+  let fault = e.exception?.message ?? e.error?.message
   let file = useLog(e.eid, !native && live)
   let log = native ? entries ?? graphLog([]) : file
   let context = log.context ??
@@ -714,7 +715,7 @@ export let Session = ({ e }: { e: Ent }) => {
         {!said && s.final_text && (
           <Markdown as={Final} text={s.final_text} repo={repo} />
         )}
-        {e.error?.message && <Fault mod='error'>{e.error.message}</Fault>}
+        {fault && <Fault mod='error'>{fault}</Fault>}
         {s.stop_reason && <Fault>{s.stop_reason}</Fault>}
         <Log>
           {start > 0 && (
