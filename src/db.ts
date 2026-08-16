@@ -4561,19 +4561,26 @@ export let snapshot = (db: DatabaseSync): Snapshot => {
 // so a presence-tally over the cache understates every entry-borne component
 // (recalled, message, reasoning, …). This counts the tables themselves, the
 // same way a board is a query against the graph rather than a cache scan.
-// Derived from `comps`, so a new component is counted here with zero edits;
-// a component whose table isn't present yet reports 0 rather than throwing.
+// Derived from `comps`, so a new component is counted here with zero edits.
+//
+// All counts ride ONE statement — 89 scalar subqueries in a single compile +
+// round-trip — not one prepared count(*) per table: 89 cold compiles on a fresh
+// handle were the census's whole ~1ms cost (and the db-test slowness behind
+// T-18336). Column-less facets stay 0 without a query. Aliases are quoted so a
+// component named like a SQL word stays safe; table names are `comps` keys,
+// already used unquoted as identifiers elsewhere.
 export let componentCounts = (db: DatabaseSync): Record<string, number> => {
   let out: Record<string, number> = {}
+  let named: string[] = []
   for (let name of Object.keys(comps)) {
-    if (!columnsOf(name).size) {
-      out[name] = 0
-      continue
-    }
-    let { n } = prep(db, `select count(*) as n from ${name}`).get() as {
-      n: number
-    }
-    out[name] = n
+    if (columnsOf(name).size) named.push(name)
+    else out[name] = 0
+  }
+  if (named.length) {
+    let sql = 'select ' +
+      named.map((n) => `(select count(*) from ${n}) as "${n}"`).join(', ')
+    let row = prep(db, sql).get() as Record<string, number>
+    for (let name of named) out[name] = Number(row[name])
   }
   return out
 }

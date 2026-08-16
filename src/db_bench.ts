@@ -3,7 +3,8 @@
 // sub-1ms bar the gate holds (a batch bench measures N ops at once — split into
 // the single-op cost instead). `deno task bench`.
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, db, journalOf, resolveId, snapshot } = await import('./db.ts')
+let { apply, componentCounts, db, journalOf, resolveId, snapshot } =
+  await import('./db.ts')
 let { freshDb } = await import('./testdb.ts')
 
 let uid = () => crypto.randomUUID()
@@ -43,4 +44,11 @@ Deno.bench("journalOf: seek one entity's history", () => {
 // The test-suite primitive: a regression here slows every db-backed test.
 Deno.bench('freshDb: clone migrated image', () => {
   freshDb()
+})
+
+// The admin census over all ~89 component tables (T-18336): one statement of
+// scalar counts. A regression back to one prepared count(*) per table restores
+// 89 round-trips (and 89 compiles cold), the cost this collapsed.
+Deno.bench('componentCounts: census over all tables', () => {
+  componentCounts(db)
 })
