@@ -690,6 +690,7 @@ export let derived = [
   'board',
   'layout',
   'design',
+  'architecture',
   'canvas',
   'favorite',
   'worktree',

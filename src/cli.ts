@@ -54,6 +54,7 @@ import {
   memoryChanges,
   minted,
   needed,
+  neighborhoods,
   noticeBlock,
   param,
   patches,
@@ -64,6 +65,7 @@ import {
   refsIn,
   replyChanges,
   repoAt,
+  rootFirst,
   type Row,
   rows,
   scopeFor,
@@ -452,6 +454,27 @@ let decided = async (got: Got) => {
     )
   }
   if (!hits.length) warn('(nothing decided)')
+}
+
+// ---- task docs: the architecture docs, root-first. These are `doc` entities
+// wearing the `architecture` tag (D-18378) — the graph's self-description of
+// what the system IS, linked root->leaf by `contains` edges. The root
+// (D-18438) contains the leaves, so it leads; a doc no other architecture doc
+// contains is a root. Filters screen it like any listing door
+// (`task docs .title~=mail`), a thin query over the one tag.
+let docs = async (got: Got) => {
+  let json = got.flags.has('--json')
+  let preds = predicates(got.words)
+  await checkedRefs(preds)
+  let hits = await query(['.architecture!', ...got.words])
+  // The `contains` edges among the docs name the leaves, so the root leads.
+  let { deps } = await neighborhoods(hits.map((r) => r.eid))
+  hits = rootFirst(hits, deps)
+  if (json) return print(jsonText(hits.map((r) => jsonOf(r))))
+  for (let r of hits) {
+    print(`${idOf(r).padEnd(6)} ${String(r.comps.doc?.title ?? '')}`)
+  }
+  if (!hits.length) warn('(no architecture docs)')
 }
 
 // ---- task stale: which anchored entities describe code that has MOVED. Each
@@ -2811,6 +2834,7 @@ export let verbs = bind({
   codex,
   list,
   decided,
+  docs,
   stale,
   new: create,
   set,

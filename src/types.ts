@@ -314,6 +314,12 @@ export let comps: Record<string, Record<string, PropType>> = {
   // the wire. A state enum here would be a second vocabulary for a fact
   // the graph holds, and the two would drift.
   design: {},
+  // Marks a doc as architecture documentation — the graph's self-description
+  // of what the system IS (root D-18438 + leaves, linked by `contains`). A
+  // presence-only tag like `design`, but NOT in kindOrder: a design outranks
+  // task because it is a proposal, whereas an architecture doc is still a
+  // plain doc — the tag only lets `task docs` and filters find them as a class.
+  architecture: {},
   canvas: {},
   web: { url: 'url' }, // frozen_at is server-stamped, never wire-writable
   card: { target: { eid: 'entity', death: 'cascade' }, view: 'text' },
@@ -1867,6 +1873,7 @@ export type Ent = {
   kind: string
   doc?: Doc
   design?: { eid: string }
+  architecture?: { eid: string }
   task?: Task
   project?: ProjectTag
   venture?: Venture

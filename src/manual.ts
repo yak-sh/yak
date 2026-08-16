@@ -146,6 +146,25 @@ export let manuals = declare({
     args: [arg('filters', text, true, false)],
     opts: [flag('--all'), json],
   },
+  docs: {
+    dots: 'filters',
+    about: 'the architecture docs — what the system IS, root-first',
+    examples: [
+      'task docs',
+      'task docs .title~=mail',
+      'task docs --json',
+    ],
+    detail: 'The architecture docs are `doc` entities wearing the ' +
+      "`architecture` tag: the graph's self-description of what the system " +
+      'IS (not what is PROPOSED — that is `task designs`). They are linked ' +
+      'root->leaf by `contains` edges, so the root (start here) leads and the ' +
+      'leaves follow. `task show <id>` reads one whole; the web canvas hangs ' +
+      'the leaves under the root. Filters screen the list with the one ' +
+      'grammar, exactly as `task list` takes them.',
+    root: true,
+    args: [arg('filters', text, true, false)],
+    opts: [json],
+  },
   stale: {
     dots: 'filters',
     about: 'anchored entities whose code has moved past their sha',

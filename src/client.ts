@@ -1173,6 +1173,26 @@ export let byBoard = (a: Row, b: Row) =>
   (Number(a.comps.task?.priority ?? 0) - Number(b.comps.task?.priority ?? 0)) ||
   (a.num - b.num)
 
+// A set of contains-linked docs, root-first: a doc no other doc in the set
+// contains is a root and leads; the rest fall to num order. Pure over the rows
+// and the `contains` edges among them, so `task docs` and its test share one
+// ordering. A leaf is the CHILD end of a contains edge whose parent is also in
+// the set — everything else is a root (the architecture tree has one, but the
+// rule needs no count).
+export let rootFirst = (hits: Row[], deps: Dep[]): Row[] => {
+  let ids = new Set(hits.map((r) => r.eid))
+  let leaf = new Set(
+    deps
+      .filter((d) =>
+        d.type == 'contains' && ids.has(d.parent) && ids.has(d.child)
+      )
+      .map((d) => d.child),
+  )
+  return [...hits].sort((a, b) =>
+    (leaf.has(a.eid) ? 1 : 0) - (leaf.has(b.eid) ? 1 : 0) || a.num - b.num
+  )
+}
+
 // A rolling client speaks both homes in one batch: an older server keeps the
 // session aliases, while a current server makes the canonical facet win.
 let sessionFrames = (

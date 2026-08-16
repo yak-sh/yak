@@ -34,6 +34,7 @@ import {
   replyChanges,
   repoAt,
   reSubject,
+  rootFirst,
   type Row,
   rows,
   scopeFor,
@@ -144,6 +145,31 @@ Deno.test('jsonOf: an entity is its components without SQL join keys', () => {
     doc: { title: 'First', body: '' },
     task: { status: 'wip', priority: 0 },
   })
+})
+
+// `task docs` orders the architecture docs root-first: the root `contains` the
+// leaves, so a doc that is the CHILD end of a contains edge within the set is a
+// leaf and sinks; the root leads, and leaves fall to num order. An edge whose
+// parent lies OUTSIDE the set (P-19 contains the root) must not demote the root.
+Deno.test('rootFirst: the containing doc leads, its contents follow by num', () => {
+  let doc = (eid: string, num: number, title: string): Row => ({
+    eid,
+    num,
+    kind: 'doc',
+    comps: { entity: { eid, num }, doc: { eid, title, body: '' } },
+  })
+  let root = doc('R', 10, 'the map')
+  let leafA = doc('LA', 25, 'sessions')
+  let leafB = doc('LB', 18, 'the wire')
+  let deps = [
+    // P-19 contains the root — parent outside the set, so the root stays a root.
+    { parent: 'P19', type: 'contains' as const, child: 'R' },
+    { parent: 'R', type: 'contains' as const, child: 'LA' },
+    { parent: 'R', type: 'contains' as const, child: 'LB' },
+  ]
+  // Fed in scrambled order, it comes back root-first then leaves ascending.
+  let sorted = rootFirst([leafA, root, leafB], deps)
+  assertEquals(sorted.map((r) => r.eid), ['R', 'LB', 'LA'])
 })
 
 // The grammar, as a case table: arg → routed {comp, prop, value} or error.

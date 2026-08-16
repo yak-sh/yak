@@ -42,6 +42,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       codex: 'codex [codex args…] [--operator]',
       list: 'list [kind] [filters…] [--json]',
       decided: 'decided [filters…] [--all] [--json]',
+      docs: 'docs [filters…] [--json]',
       stale: 'stale [filters…] [--all] [--json]',
       new: 'new [title…]',
       set: 'set <id> [--comment=TEXT]',
