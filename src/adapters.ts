@@ -223,9 +223,14 @@ export let trouble = (
   if (!model || !spec.models.includes(model)) {
     return `unknown model: ${model} — ${provider} has ${spec.models.join(', ')}`
   }
-  if (effort && !spec.efforts.includes(effort)) {
+  // An empty allowlist means the provider has no launch-time effort knob
+  // (claude takes no --effort flag), so an effort that reaches it — passed,
+  // inherited from the caller, or mirrored off a session/task hint — is a
+  // no-op, not a failure. Only a provider that DOES offer efforts rejects an
+  // unknown one, so a real typo (codex + 'heroic') still errors clearly.
+  if (effort && spec.efforts.length && !spec.efforts.includes(effort)) {
     return `unknown effort: ${effort} — ${provider} has ${
-      spec.efforts.join(', ') || 'none'
+      spec.efforts.join(', ')
     }`
   }
   return null
@@ -333,6 +338,10 @@ export let adapters: Record<string, Adapter> = {
       'claude-sonnet-5',
       'claude-haiku-4-5',
     ],
+    // No launch-time effort knob — `claude -p` takes no --effort flag, so the
+    // effort a claude run reports is observed, never selected here. Empty means
+    // an effort passed/inherited to a claude spawn is IGNORED, not rejected
+    // (adapters.trouble) — so switching provider to claude never dooms a spawn.
     efforts: [],
     // The MENU is the labels map. Opus is the pinned
     // 4-8; the other lines ride their alias, so the menu needs no edit when a

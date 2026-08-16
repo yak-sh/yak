@@ -255,6 +255,22 @@ Deno.test('trouble: unknown provider/model/effort each name the valid ones', () 
   )
 })
 
+// T-15352: a provider with no launch-effort knob (empty allowlist) IGNORES an
+// effort rather than rejecting it — so switching a spawn onto claude never dies
+// on an inherited/passed effort. A provider that offers efforts still rejects
+// an unknown one (guarded above).
+Deno.test('trouble: an empty effort allowlist ignores effort, never rejects', () => {
+  assertEquals(claude.efforts, []) // premise: claude offers no launch effort
+  assertEquals(
+    trouble({ provider: 'claude', model: 'haiku', effort: 'high' }),
+    null,
+  )
+  assertEquals(
+    trouble({ provider: 'ollama', model: 'kimi-k3', effort: 'high' }),
+    null,
+  )
+})
+
 Deno.test('argv: no secrets, instruction rides last behind --', () => {
   let j = {
     instruction: 'do the thing',

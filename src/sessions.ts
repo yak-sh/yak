@@ -1694,7 +1694,13 @@ export let spawned =
     if (!spec.models.includes(model)) {
       return fail(`unknown model: ${row.spawn_model}`)
     }
-    if (row.spawn_effort && !spec.efforts.includes(String(row.spawn_effort))) {
+    // Empty allowlist = the provider ignores effort (see adapters.trouble):
+    // an effort mirrored or inherited onto a claude/ollama spawn is a no-op,
+    // never a failed session. A provider that offers efforts still rejects one.
+    if (
+      row.spawn_effort && spec.efforts.length &&
+      !spec.efforts.includes(String(row.spawn_effort))
+    ) {
       return fail(`unknown effort: ${row.spawn_effort}`)
     }
     let task = row.requested_task

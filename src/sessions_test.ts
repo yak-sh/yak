@@ -291,6 +291,15 @@ slow(
       [{ effort: 'heroic' }, /unknown effort/],
       [{ requested_task: uid() }, /no such task/],
       [{ requested_task: no.t }, /no repo/],
+      // T-15352: claude offers no launch effort, so an effort on a claude spawn
+      // is IGNORED — this reaches the task check and fails there ('no such
+      // task'), never on 'unknown effort'. The effect twin of the door guard.
+      [{
+        provider: 'claude',
+        model: 'haiku',
+        effort: 'high',
+        requested_task: uid(),
+      }, /no such task/],
     ]
     for (let [extra, says] of cases) {
       let { eid, done } = begin(t, extra)
