@@ -820,6 +820,19 @@ export let manuals = declare({
     opts: [flag('--hook')],
     retired: { '--body': BRIEF_BODY },
   },
+  // `create` stays a supported top-level alias of `new` — the CRUD verb a
+  // caller reaches for on first guess before learning this vocabulary
+  // (T-18334). `alias: true` keeps it out of root help; the canonical
+  // spelling is `new`.
+  create: {
+    dots: 'params',
+    about: 'create a task (bare words become the title)',
+    body: 'body',
+    examples: ['task create P1 .project=holdco Fix the flux capacitor'],
+    alias: true,
+    args: [arg('title', text, true, false)],
+    passthrough: true,
+  },
 })
 
 export let cliVerbs = new Set(

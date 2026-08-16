@@ -103,6 +103,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       ls: 'ls [filters…] [--json]',
       context: 'context [sid] [--hook] [--subagent]',
       wrap: 'wrap [sid] [--hook]',
+      create: 'create [title…]',
     },
   )
 })
