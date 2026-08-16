@@ -2,9 +2,9 @@
 // pasted from a live probe of the CLI it mimics (trimmed, same shape).
 // If a vendor changes dialect, these say exactly which reader went deaf.
 import { assertEquals, assertMatch, assertNotEquals } from '@std/assert'
-import { adapters, providers, trouble } from './adapters.ts'
+import { adapters, ollamaCloud, providers, trouble } from './adapters.ts'
 
-let { claude, codex, ollama } = adapters
+let { claude, codex } = adapters
 
 Deno.test('claude: init names the session and the serving model', () => {
   let e = {
@@ -108,7 +108,7 @@ Deno.test('providers: every adapter but fake, allowlists only — no argv', () =
   let ps = providers()
   assertEquals(
     ps.map((p) => p.name),
-    Object.keys(adapters).filter((n) => n != 'fake'),
+    [...Object.keys(adapters).filter((n) => n != 'fake'), 'ollama'],
   )
   // Every non-fallback provider projects the four allowlist fields; the CLI
   // fallback adds only its `fallback` marker — never argv, never a `ready`
@@ -216,53 +216,21 @@ Deno.test('codex-cli is the same process adapter under an explicit request', () 
   assertEquals(fallback.fallback, true)
 })
 
-Deno.test('ollama: cloud models launch headless Claude and keep its dialect', () => {
-  let job = {
-    instruction: 'do the thing',
-    session_id: 'session',
-    model: 'kimi-k2.7-code:cloud',
-    effort: undefined,
-  }
-  assertEquals(ollama.models[0], 'kimi-k2.7-code:cloud')
-  assertEquals(ollama.models.every((model) => model.endsWith('cloud')), true)
-  assertEquals(ollama.labels['kimi-k2.7-code:cloud'], 'kimi-k2.7-code')
-  assertEquals(ollama.dialect, 'claude')
-  assertEquals(ollama.row, claude.row)
-  assertEquals(ollama.argv(job), [
-    'ollama',
-    'launch',
-    'claude',
-    '--model',
-    'kimi-k2.7-code:cloud',
-    '--yes',
-    '--',
-    '-p',
-    '--session-id',
-    'session',
-    '--output-format',
-    'stream-json',
-    '--verbose',
-    '--permission-mode',
-    'bypassPermissions',
-    '--',
-    'do the thing',
-  ])
-  let resume = ollama.resume(job, 'thread', 'continue')
-  assertEquals(resume.slice(0, 8), [
-    'ollama',
-    'launch',
-    'claude',
-    '--model',
-    'kimi-k2.7-code:cloud',
-    '--yes',
-    '--',
-    '-p',
-  ])
-  assertEquals(resume.slice(-2), ['--', 'continue'])
-  assertEquals(resume[resume.indexOf('--resume') + 1], 'thread')
-  assertEquals(resume.includes('--session-id'), false)
+Deno.test('ollama: direct cloud model ids are provider offers, not adapters', () => {
+  assertEquals(ollamaCloud.models[0], 'kimi-k2.7-code')
+  assertEquals(ollamaCloud.models.includes('gpt-oss:120b'), true)
   assertEquals(
-    trouble({ provider: 'ollama', model: 'kimi-k2.7-code:cloud' }),
+    ollamaCloud.models.some((model) => model.endsWith('-cloud')),
+    false,
+  )
+  assertEquals(
+    ollamaCloud.models.some((model) => model.endsWith(':cloud')),
+    false,
+  )
+  assertEquals(ollamaCloud.labels['kimi-k2.7-code'], 'Kimi K2.7 Code')
+  assertEquals('ollama' in adapters, false)
+  assertEquals(
+    trouble({ provider: 'ollama', model: 'kimi-k2.7-code' }),
     null,
   )
 })

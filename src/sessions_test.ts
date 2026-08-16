@@ -444,6 +444,8 @@ slow('a process provider names its projectless-task requirement', async () => {
 
 slow('Codex routing keeps both process fallback doors explicit', () => {
   assertEquals(graphCodex('codex', undefined), true)
+  assertEquals(graphCodex('ollama', undefined), true)
+  assertEquals(graphCodex('ollama', 'cli'), true)
   assertEquals(graphCodex('codex-cli', undefined), false)
   assertEquals(graphCodex('codex', 'cli'), false)
   assertEquals(graphCodex('claude', undefined), false)

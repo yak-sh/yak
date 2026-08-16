@@ -6,7 +6,7 @@
 // vendor's dialect: it asks the adapter "is this the init?", "is this the
 // end?" and stamps whatever comes back.
 //
-// `fake` ships in-repo for tests; `claude`, `ollama`, and `codex-cli` shell the
+// `fake` ships in-repo for tests; `claude` and `codex-cli` shell the
 // installed CLIs (subscription auth rides HOME — no keys in argv or env).
 // `codex` keeps this process adapter as the reliability floor even though
 // managed requests bearing that name normally route to the graph runner.
@@ -134,8 +134,64 @@ let at = (e: Event) => e.timestamp ? { at: String(e.timestamp) } : {}
 // `ready` stamps per-provider readiness when the server passes an account
 // probe; the default spawn blocker routes around any provider it marks unready,
 // so a stamped /providers picks the graph-native → CLI transport for free.
+export type ProviderSpec = Pick<Adapter, 'models' | 'efforts' | 'labels'> & {
+  fallback?: boolean
+}
+
+// Ollama Cloud is a direct HTTP provider, not an installed process adapter.
+// These are the model ids returned by https://ollama.com/api/tags; unlike the
+// local Ollama proxy, the hosted API does not use a `:cloud` suffix.
+export let ollamaCloud: ProviderSpec = {
+  models: [
+    'kimi-k2.7-code',
+    'glm-5.2',
+    'gpt-oss:120b',
+    'kimi-k2.6',
+    'deepseek-v4-pro:preview',
+    'mistral-large-3:675b',
+    'kimi-k3',
+    'gpt-oss:20b',
+    'nemotron-3-ultra',
+    'minimax-m2.7',
+    'gemma4:31b',
+    'deepseek-v4-flash:0731',
+    'glm-5.1',
+    'deepseek-v4-flash:preview',
+    'nemotron-3-nano:30b',
+    'minimax-m3',
+    'nemotron-3-super',
+    'deepseek-v4-pro:0813',
+    'qwen3.5:397b',
+  ],
+  efforts: [],
+  labels: {
+    'kimi-k2.7-code': 'Kimi K2.7 Code',
+    'glm-5.2': 'GLM-5.2',
+    'gpt-oss:120b': 'GPT-OSS 120B',
+    'kimi-k2.6': 'Kimi K2.6',
+    'deepseek-v4-pro:preview': 'DeepSeek V4 Pro Preview',
+    'mistral-large-3:675b': 'Mistral Large 3 675B',
+    'kimi-k3': 'Kimi K3',
+    'gpt-oss:20b': 'GPT-OSS 20B',
+    'nemotron-3-ultra': 'Nemotron 3 Ultra',
+    'minimax-m2.7': 'MiniMax M2.7',
+    'gemma4:31b': 'Gemma 4 31B',
+    'deepseek-v4-flash:0731': 'DeepSeek V4 Flash 0731',
+    'glm-5.1': 'GLM-5.1',
+    'deepseek-v4-flash:preview': 'DeepSeek V4 Flash Preview',
+    'nemotron-3-nano:30b': 'Nemotron 3 Nano 30B',
+    'minimax-m3': 'MiniMax M3',
+    'nemotron-3-super': 'Nemotron 3 Super',
+    'deepseek-v4-pro:0813': 'DeepSeek V4 Pro 0813',
+    'qwen3.5:397b': 'Qwen 3.5 397B',
+  },
+}
+
+export let providerSpec = (name: string): ProviderSpec | undefined =>
+  name == 'ollama' ? ollamaCloud : adapters[name]
+
 export let providers = (ready?: (name: string) => boolean) =>
-  Object.entries(adapters)
+  [...Object.entries(adapters), ['ollama', ollamaCloud] as const]
     .filter(([name]) => name != 'fake')
     .map(([name, a]) => ({
       name,
@@ -158,18 +214,18 @@ export let trouble = (
     effort?: string
   },
 ): string | null => {
-  let ad = adapters[String(provider)]
-  if (!ad) {
+  let spec = providerSpec(String(provider))
+  if (!spec) {
     return `unknown provider: ${provider} — have ${
       providers().map((p) => p.name).join(', ')
     }`
   }
-  if (!model || !ad.models.includes(model)) {
-    return `unknown model: ${model} — ${provider} has ${ad.models.join(', ')}`
+  if (!model || !spec.models.includes(model)) {
+    return `unknown model: ${model} — ${provider} has ${spec.models.join(', ')}`
   }
-  if (effort && !ad.efforts.includes(effort)) {
+  if (effort && !spec.efforts.includes(effort)) {
     return `unknown effort: ${effort} — ${provider} has ${
-      ad.efforts.join(', ') || 'none'
+      spec.efforts.join(', ') || 'none'
     }`
   }
   return null
@@ -602,80 +658,6 @@ adapters['codex-cli'] = {
   ...adapters.codex,
   labels: {},
   fallback: true,
-}
-
-// Ollama Cloud launches Claude Code behind its Anthropic-compatible API. The
-// launcher's --yes is the documented headless path: it selects and pulls the
-// named cloud model without a prompt, then passes everything after -- to
-// Claude. The resulting stream is therefore Claude's own dialect, including
-// its session id and resume contract; only the process prefix and model menu
-// differ. Ollama's sign-in state rides HOME, never argv or a copied secret.
-let ollamaModels = [
-  'kimi-k2.7-code:cloud',
-  'glm-5.2:cloud',
-  'deepseek-v4-flash:cloud',
-  'kimi-k3:cloud',
-  'gemma4:cloud',
-  'glm-5.1:cloud',
-  'minimax-m2.7:cloud',
-  'nemotron-3-super:cloud',
-  'minimax-m3:cloud',
-  'kimi-k2.6:cloud',
-  'deepseek-v4-pro:cloud',
-  'nemotron-3-ultra:cloud',
-  'qwen3.5:cloud',
-  'nemotron-3-nano:30b-cloud',
-  'mistral-large-3:675b-cloud',
-  'gpt-oss:120b-cloud',
-]
-
-let ollama = (model: string, args: string[]) => [
-  'ollama',
-  'launch',
-  'claude',
-  '--model',
-  model,
-  '--yes',
-  '--',
-  ...args,
-]
-
-adapters.ollama = {
-  ...adapters.claude,
-  models: ollamaModels,
-  efforts: [],
-  labels: Object.fromEntries(
-    ollamaModels.map((model) => [
-      model,
-      model.replace(/:(?:\d+b-)?cloud$/, ''),
-    ]),
-  ),
-  argv: (j) =>
-    ollama(j.model, [
-      '-p',
-      '--session-id',
-      j.session_id,
-      '--output-format',
-      'stream-json',
-      '--verbose',
-      '--permission-mode',
-      'bypassPermissions',
-      '--',
-      j.instruction,
-    ]),
-  resume: (j, sid, text) =>
-    ollama(j.model, [
-      '-p',
-      '--resume',
-      sid,
-      '--output-format',
-      'stream-json',
-      '--verbose',
-      '--permission-mode',
-      'bypassPermissions',
-      '--',
-      text,
-    ]),
 }
 
 // A codex item, as much of it as row() reads.

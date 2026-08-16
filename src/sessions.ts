@@ -32,7 +32,13 @@
 //    the truth exactly once and none of it ever rode the wire inbound.
 import { basename, dirname, resolve } from 'node:path'
 import { childEnv } from './agent_env.ts'
-import { type Adapter, adapters, type Event, type Summary } from './adapters.ts'
+import {
+  type Adapter,
+  adapters,
+  type Event,
+  providerSpec,
+  type Summary,
+} from './adapters.ts'
 import { apply, db, human, record, snapshot } from './db.ts'
 import {
   delivered,
@@ -1633,7 +1639,7 @@ export let landSpawnClaim = (
   }
 }
 
-// Boot reconciliation for a Codex launch request whose created(session)
+// Boot reconciliation for a graph-native launch request whose created(session)
 // effect was lost. Lifecycle-bearing Codex rows belong to the process
 // compatibility door; a graph-native request stays statusless.
 export let codexPending = `
@@ -1641,7 +1647,7 @@ export let codexPending = `
   and (requested_task is not null or role is not null)
   and exists (
     select 1 from spawn where spawn.eid = session.eid
-      and spawn.provider in ('codex', 'codex-cli')
+      and spawn.provider in ('codex', 'codex-cli', 'ollama')
   )
   and not exists (select 1 from error where error.eid = session.eid)
   and (
@@ -1652,14 +1658,13 @@ export let codexPending = `
     )
   )`
 
-// `codex` is the shipped graph-native default. `codex-cli` is an explicit
-// process request; the environment switch changes the default at process
-// birth without relabelling durable sessions. The graph sweep still owns any
-// ordered partitions that predate the rollback.
+// `codex` and Ollama Cloud are graph-native HTTP providers. `codex-cli` is an
+// explicit process request; the environment switch changes only the Codex
+// default at process birth without relabelling durable sessions.
 export let graphCodex = (
   provider: string,
   mode = Deno.env.get('TASKS_CODEX_RUNNER'),
-) => provider == 'codex' && mode != 'cli'
+) => provider == 'ollama' || (provider == 'codex' && mode != 'cli')
 
 // created(session) reads the committed spawn request. The session is already
 // committed and broadcast, so every way this can fail is a failed Session on
@@ -1678,13 +1683,14 @@ export let spawned =
       }, cast)
     let row = runRow(eid)
     if (!row?.spawn_provider) return // external, or deleted in its own batch
+    let spec = providerSpec(String(row.spawn_provider))
+    if (!spec) return fail(`unknown provider: ${row.spawn_provider}`)
     let ad = adapters[String(row.spawn_provider)]
-    if (!ad) return fail(`unknown provider: ${row.spawn_provider}`)
     let model = String(row.spawn_model)
-    if (!ad.models.includes(model)) {
+    if (!spec.models.includes(model)) {
       return fail(`unknown model: ${row.spawn_model}`)
     }
-    if (row.spawn_effort && !ad.efforts.includes(String(row.spawn_effort))) {
+    if (row.spawn_effort && !spec.efforts.includes(String(row.spawn_effort))) {
       return fail(`unknown effort: ${row.spawn_effort}`)
     }
     let task = row.requested_task
@@ -1803,6 +1809,7 @@ export let spawned =
       )
       return native(eid, job)
     }
+    if (!ad) return fail(`${row.spawn_provider} requires the graph runner`)
     if (!job.repo || !job.tree || !job.branch) {
       return fail('process-backed session has no worktree')
     }

@@ -66,6 +66,7 @@ export type ResponseOptions = {
   retries?: number
   pause?: (ms: number) => Promise<void>
   id?: () => string
+  shape?: (request: ResponseRequest) => Record<string, unknown>
 }
 
 type RunOptions = {
@@ -415,7 +416,7 @@ export let responses = (options: ResponseOptions) => {
         response = await fetcher(`${endpoint}/responses`, {
           method: 'POST',
           headers,
-          body: JSON.stringify(request(value)),
+          body: JSON.stringify(options.shape?.(value) ?? request(value)),
           signal: run.signal,
         })
       } catch (error) {

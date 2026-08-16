@@ -89,6 +89,8 @@ import { combineTools, localTools, tasksTools } from './harness_tools.ts'
 import { graphSession, managedCodex } from './managed_codex.ts'
 import { sessionRow as storedSession } from './session_store.ts'
 import { responses } from './responses.ts'
+import { ollamaCloudReady, ollamaCloudTransport } from './ollama_cloud.ts'
+import { codexGeneration } from './runner.ts'
 import { readEntries } from './entries.ts'
 import { graphLog, graphLogPage } from './entry_log.ts'
 import { type Observation, safeObservation } from './observations.ts'
@@ -679,7 +681,9 @@ let codexAccount = accountService(codexStore(), codexIssuer())
 // one probe instead of reading the account again at each door.
 let readyProviders = async () => {
   let ok = await codexAccount.status().then((s) => s.ready).catch(() => false)
-  return providers((name) => name != 'codex' || ok)
+  return providers((name) =>
+    name == 'codex' ? ok : name != 'ollama' || ollamaCloudReady()
+  )
 }
 let managed = managedCodex({
   db,
@@ -689,6 +693,9 @@ let managed = managedCodex({
     headers: { originator: 'tasks', version: '0' },
     retries: 1,
   }),
+  generators: {
+    ollama: codexGeneration(ollamaCloudTransport({ retries: 1 })),
+  },
   tools: async (tree, session) => {
     let tasks = await tasksTools(graphIO, session)
     if (!tree) return tasks
