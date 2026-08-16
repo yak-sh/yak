@@ -328,94 +328,8 @@ let lost = (via: string, ctx: Ctx) => {
   return !!me && via == `cast ${me}`
 }
 
-// The delivery OUTCOMES riding a batch, indexed by eid (D-14945): the
-// deliverable's `delivered`/`error` component travels as its own frame —
-// absent at a knock's mint, present in a resume snapshot. The knock branch
-// reads them to tell a fresh nudge from a settled receipt.
-let outcomesIn = (changes: Change[]) => {
-  let delivered = new Map<string, Record<string, unknown>>()
-  let errored = new Set<string>()
-  for (let c of changes) {
-    if (c.name == 'delivered' && c.comp) delivered.set(c.eid, c.comp)
-    if (c.name == 'error' && c.comp) errored.add(c.eid)
-  }
-  return { delivered, errored }
-}
-
-// WHO each deliverable in the batch is for — the shared `deliver {to}` facet,
-// indexed by eid. A knock is cast with its deliver alongside (and a resume
-// snapshot carries every component), so the recipient is always in the batch
-// the moment the knock is.
-let toIn = (changes: Change[]) => {
-  let to = new Map<string, string>()
-  for (let c of changes) {
-    if (c.name == 'deliver' && c.comp) to.set(c.eid, str(c.comp.to))
-  }
-  return to
-}
-
-// The two edges of the doc a component's body rides on, indexed by eid within
-// the batch — a comment's words and a knock's note both land as a `doc` change
-// beside their own component (mint-time). Bodiless means the doc isn't here.
-let docsIn = (changes: Change[]) => {
-  let docs = new Map<string, { title: string; body: string }>()
-  for (let c of changes) {
-    if (c.name == 'doc' && c.comp) {
-      docs.set(c.eid, { title: str(c.comp.title), body: str(c.comp.body) })
-    }
-  }
-  return docs
-}
-
 let words = (doc?: { title: string; body: string }) =>
   doc ? cleanBody(doc.body || doc.title) : ''
-
-// The comments in this batch tagged `meta` (T-17319) — a quiet transcript
-// memo for the dream, never a live knock. The tag rides the same batch as
-// the comment it marks (the :meta mint is atomic; a resume/inbox snapshot
-// carries every component), so a batch scan is the whole test. The comment
-// branch skips these, which is the load-bearing half: a meta memo that
-// falls back to anchoring on the SESSION entity would otherwise deliver as
-// an ordinary comment aimed at that session — the exact distraction it exists
-// to avoid.
-let metasIn = (changes: Change[]) =>
-  new Set(changes.filter((c) => c.name == 'meta' && c.comp).map((c) => c.eid))
-
-// A recall entry lands in a session's OWN log (recall.ts) — no target, no
-// recipient facet: the delivery address IS its `entry.session` partition. So
-// index the batch's entry→session and eid→content(body), the way docsIn indexes
-// a comment's words. The `recalled` component is the entry's unique marker (an
-// ordinary message entry carries `message`, never `recalled`).
-// Only an entry change that CARRIES a session maps one. apply() echoes a second
-// `entry` change per write — the server-stamped ingest coordinate `{eid, seq}`,
-// no session (db.ts) — so a last-wins map would let that seq-only re-read erase
-// the real partition and the recall branch below would skip a floater aimed
-// straight at this session. entry.session is the partition key, never nulled, so
-// a session-less entry change is always that stamp, never a real reassignment.
-let sessionsIn = (changes: Change[]) => {
-  let s = new Map<string, string>()
-  for (let c of changes) {
-    if (c.name == 'entry' && c.comp && c.comp.session != null) {
-      s.set(c.eid, str(c.comp.session))
-    }
-  }
-  return s
-}
-let bodiesIn = (changes: Change[]) => {
-  let b = new Map<string, string>()
-  for (let c of changes) {
-    if (c.name == 'content' && c.comp) b.set(c.eid, str(c.comp.body))
-  }
-  return b
-}
-
-let createdIn = (changes: Change[]) => {
-  let made = new Map<string, Record<string, unknown>>()
-  for (let c of changes) {
-    if (c.name == 'created' && c.comp) made.set(c.eid, c.comp)
-  }
-  return made
-}
 
 let byline = (
   stamp: Record<string, unknown> | undefined,
@@ -426,18 +340,99 @@ let byline = (
   return by && via && by != via ? `${by} · via ${via}` : by ?? via ?? 'unknown'
 }
 
-// When an entity was born, from the `created` stamps in the batch. A live
-// frame doesn't need this — everything in it is now — but a resume sweep
-// reads a whole snapshot, where a target may carry a year of comments, and
-// only the ones written in the knock's own minute rode with it.
-let bornIn = (changes: Change[]) => {
-  let born = new Map<string, number>()
+// Everything channelEvents reads from the batch, keyed by eid.
+type Batch = {
+  docs: Map<string, { title: string; body: string }>
+  created: Map<string, Record<string, unknown>>
+  delivered: Map<string, Record<string, unknown>>
+  errored: Set<string>
+  recipients: Map<string, string>
+  sessions: Map<string, string>
+  bodies: Map<string, string>
+  metas: Set<string>
+  born?: Map<string, number>
+}
+
+// Build every index channelEvents needs in ONE pass, not eight separate scans
+// (T-18331). On the whole-snapshot arm (resume/inbox: boot digest, MCP read,
+// tmux poll) `changes` is the entire graph, so eight passes cost ~8× for the
+// ~200 changes that matter. Each field is exactly what its former per-name
+// builder produced — last-wins per map, batch order preserved. `withBorn` is
+// set only on the resume/inbox arm: a live frame is one moment so commentOn
+// needs no birthdays, but a resume sweep reads a whole snapshot where a target
+// may carry a year of comments and only the knock's own minute rode with it.
+let indexBatch = (changes: Change[], withBorn: boolean): Batch => {
+  let docs = new Map<string, { title: string; body: string }>()
+  let created = new Map<string, Record<string, unknown>>()
+  let delivered = new Map<string, Record<string, unknown>>()
+  let errored = new Set<string>()
+  let recipients = new Map<string, string>()
+  let sessions = new Map<string, string>()
+  let bodies = new Map<string, string>()
+  let metas = new Set<string>()
+  let born = withBorn ? new Map<string, number>() : undefined
   for (let c of changes) {
-    if (c.name != 'created' || !c.comp) continue
-    let t = Date.parse(str(c.comp.at))
-    if (t) born.set(c.eid, t)
+    if (!c.comp) continue
+    switch (c.name) {
+      // A comment's words and a knock's note both land as a `doc` beside their
+      // own component at mint; a bodiless doc isn't in this batch.
+      case 'doc':
+        docs.set(c.eid, { title: str(c.comp.title), body: str(c.comp.body) })
+        break
+      // The `created` stamp byline reads; on the resume/inbox arm its parsed
+      // `at` is also the birthday commentOn dates a note by.
+      case 'created':
+        created.set(c.eid, c.comp)
+        if (born) {
+          let t = Date.parse(str(c.comp.at))
+          if (t) born.set(c.eid, t)
+        }
+        break
+      // A deliverable's OUTCOME (D-14945): delivered/error travel as their own
+      // frames — absent at a knock's mint, present in a resume snapshot.
+      case 'delivered':
+        delivered.set(c.eid, c.comp)
+        break
+      case 'error':
+        errored.add(c.eid)
+        break
+      // WHO a deliverable is for — the shared `deliver {to}` facet; a knock is
+      // cast with its deliver alongside, so the recipient is always in-batch.
+      case 'deliver':
+        recipients.set(c.eid, str(c.comp.to))
+        break
+      // A recall entry is addressed by its `entry.session` partition, not a
+      // recipient facet. Only an entry that CARRIES a session maps one: apply()
+      // echoes a second session-less `entry` per write (the stamped {eid,seq}
+      // ingest coordinate), and skipping it stops a last-wins map from erasing
+      // a floater's real partition. entry.session is never nulled, so a
+      // session-less entry change is always that stamp.
+      case 'entry':
+        if (c.comp.session != null) sessions.set(c.eid, str(c.comp.session))
+        break
+      case 'content':
+        bodies.set(c.eid, str(c.comp.body))
+        break
+      // Comments tagged `meta` (T-17319) — a transcript memo for the dream,
+      // never a live knock; the comment branch skips these (load-bearing: a
+      // meta memo must not fall through and deliver as an ordinary comment on
+      // its session, the exact distraction it exists to avoid).
+      case 'meta':
+        metas.add(c.eid)
+        break
+    }
   }
-  return born
+  return {
+    docs,
+    created,
+    delivered,
+    errored,
+    recipients,
+    sessions,
+    bodies,
+    metas,
+    born,
+  }
 }
 
 // The filter + format, pure. Given one broadcast batch and the session context,
@@ -458,18 +453,17 @@ let bornIn = (changes: Change[]) => {
 //      thought, written into its OWN log — addressed by the entry's session
 //      partition, not a recipient facet.
 export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
-  let docs = docsIn(changes)
-  let created = createdIn(changes)
-  let { delivered, errored } = outcomesIn(changes)
-  let recipients = toIn(changes)
-  let sessions = sessionsIn(changes)
-  let bodies = bodiesIn(changes)
-  let metas = metasIn(changes)
-  // Only the resume sweep needs birthdays (commentOn) — a live batch is one
-  // moment, so everything in it rode together.
-  let born = ctx.mode == 'resume' || ctx.mode == 'inbox'
-    ? bornIn(changes)
-    : undefined
+  let {
+    docs,
+    created,
+    delivered,
+    errored,
+    recipients,
+    sessions,
+    bodies,
+    metas,
+    born,
+  } = indexBatch(changes, ctx.mode == 'resume' || ctx.mode == 'inbox')
   let out: Event[] = []
   // Already told by PUSH: this run's deliveries, or an anonymous channel stamp
   // from an earlier process. Without a baseline (tests, the inbox sweep), the
