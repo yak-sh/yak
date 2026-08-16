@@ -292,6 +292,15 @@ export let link = (root: TElement, at: number) =>
 export let win = (top: number, at: number, h: number, n: number) =>
   Math.max(0, Math.min(Math.max(top, at - h + 1), at, n - h))
 
+// The line the window should follow. In an entity pane that's the line cursor
+// (`at`). On the board the cursor is over the QUERY, not lines (`at < 0`), and
+// it marks its selected row with an inverse style rather than a line number —
+// so follow THAT line and a wall of tasks scrolls to keep the selection in
+// view, exactly as the window tracks a real cursor. -1 (empty board / nothing
+// selected) leaves win() to pin the top.
+export let cursorLine = (lines: Line[], at: number) =>
+  at >= 0 ? at : lines.findIndex((l) => l.some((s) => s.style.inverse))
+
 // The cursor line, inverted: the terminal cursor is hidden, so the bar is
 // the only thing saying where j/k are. A blank line still shows one cell.
 let mark = (l: Line): Line =>
@@ -309,7 +318,7 @@ export let paint = (root: TElement, at = -1) => {
   let { lines, status } = pane(root)
   let h = rows - 1
   at = Math.min(at, lines.length - 1)
-  top = win(top, at, h, lines.length)
+  top = win(top, cursorLine(lines, at), h, lines.length)
   let out = '\x1b[H'
   for (let i = 0; i < h; i++) {
     let l = lines[top + i] ?? []

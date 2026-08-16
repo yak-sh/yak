@@ -2,7 +2,7 @@
 // the escape invariant: content never speaks to the terminal.
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { TElement, TNode, TText } from './dom.ts'
-import { ansi, pane, win } from './paint.ts'
+import { ansi, cursorLine, pane, win } from './paint.ts'
 
 // top, cursor, window height, content height -> where the window sits
 let cases: [number[], number][] = [
@@ -23,6 +23,31 @@ Deno.test('the window follows the cursor and stops at both ends', () => {
   for (let [[top, at, h, n], want] of cases) {
     assertEquals(win(top, at, h, n), want, `win(${top}, ${at}, ${h}, ${n})`)
   }
+})
+
+Deno.test('the board scrolls to its selected row, which paints inverse', () => {
+  // The board's cursor is over the query (at<0); it marks the selected row
+  // with TRow-on (inverse) rather than a line number. cursorLine finds that
+  // line so the window follows it — a wall of tasks scrolls.
+  let root = new TElement('root')
+  let sel = (cls: string, text: string) => {
+    let e = new TElement('div')
+    e.className = cls
+    e.appendChild(new TText(text))
+    root.appendChild(e)
+  }
+  for (let i = 0; i < 40; i++) sel('TRow', `row ${i}`)
+  sel('TRow TRow-on', 'selected') // line 40
+  sel('footer', 'status') // pane() pops the last line off as the statusbar
+  let { lines } = pane(root)
+  let cur = cursorLine(lines, -1)
+  assertEquals(cur, 40)
+  assertEquals(win(0, cur, 10, lines.length), 31) // pulled down to keep it on screen
+
+  // An entity pane has a real line cursor; the board with nothing selected
+  // (cur<0) leaves win() to pin the top, exactly as before.
+  assertEquals(cursorLine(lines, 5), 5)
+  assertEquals(cursorLine([[{ text: 'x', style: {} }]], -1), -1)
 })
 
 // A div wearing a class, and the bytes a tree hands the terminal — what
