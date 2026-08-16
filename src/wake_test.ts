@@ -57,22 +57,38 @@ let person = (name: string) => {
   return eid
 }
 
-let wake = (at: string, target?: string, to = jeff, note?: string) => {
+let wake = (
+  at: string,
+  target?: string,
+  to = jeff,
+  note?: string,
+  by?: string,
+) => {
   let eid = uid()
-  landed = apply(db, [
-    {
-      eid,
-      name: 'wake',
-      comp: {
-        at,
-        ...(target ? { target: target } : {}),
-        ...(note ? { note } : {}),
+  landed = apply(
+    db,
+    [
+      {
+        eid,
+        name: 'wake',
+        comp: {
+          at,
+          ...(target ? { target: target } : {}),
+          ...(note ? { note } : {}),
+        },
       },
-    },
-    { eid, name: 'deliver', comp: { to } },
-  ])
+      { eid, name: 'deliver', comp: { to } },
+    ],
+    undefined,
+    by,
+  )
   return eid
 }
+
+// The archived facet on a knock — the mark that keeps a self-cadence alarm
+// out of the inbox (T-12480).
+let knockArchived = (eid: string) =>
+  !!db.prepare('select 1 from archived where eid = ?').get(eid)
 
 // The words on the target — the comment a note relays into, the same seam a
 // :knock's words use (knock.ts wordsFor, channel.ts commentOn).
@@ -162,6 +178,26 @@ Deno.test('a new untargeted wake replaces only the pending untargeted one', () =
     landed.some((c) => c.eid == first && c.name == 'entity' && !c.comp),
     true,
   )
+})
+
+Deno.test('a self-cadence wake is born archived; every other wake is kept', () => {
+  let past = () => new Date(Date.now() - 1000).toISOString()
+  // A unique recipient per wake, so each knock is found by whom it woke.
+  let hank = person('hank') // set it for yourself, no target: your alarm clock
+  let iris = person('iris') // someone ELSE woke you (by != to): a nudge
+  let jane = person('jane') // a reminder ABOUT jeff: correspondence
+  let mine = wake(past(), undefined, hank, undefined, hank)
+  let nudge = wake(past(), undefined, iris, undefined, jeff)
+  let reminder = wake(past(), jeff, jane, undefined, jane)
+  arm(cast)
+  let kOf = (to: string) => knocks().find((k) => toOf(k.eid) == to)!
+  assertMatch(String(drow(mine)?.at), /^\d{4}-/)
+  assertMatch(String(drow(nudge)?.at), /^\d{4}-/)
+  assertMatch(String(drow(reminder)?.at), /^\d{4}-/)
+  // Only the alarm you set for yourself is archived out of the inbox.
+  assertEquals(knockArchived(kOf(hank).eid), true)
+  assertEquals(knockArchived(kOf(iris).eid), false)
+  assertEquals(knockArchived(kOf(jane).eid), false)
 })
 
 Deno.test('a phrase off the raw wire lands absolute, at MINT', () => {

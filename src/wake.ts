@@ -61,6 +61,17 @@ let fire = (r: Row, cast: Cast) => {
     { eid: ke, name: 'knock', comp: { target } },
     { eid: ke, name: 'deliver', comp: { to: r.to } },
   ]
+  // A cadence wake you set for YOURSELF (no target, and the woken actor is
+  // its own author) is an alarm clock, not correspondence: born archived, so
+  // it never accrues as an unread inbox row. The channel still injects it —
+  // channelEvents rings a knock on recipient + notified, never on `archived`
+  // — so the pass still resumes; only the inbox, which reads `!archived`,
+  // skips it, and `--all` remains the way back. A self-pacing operator would
+  // otherwise pollute its own `## inbox — N unread` count once per pass,
+  // forever (T-12480). A targeted wake is a genuine reminder and is kept.
+  if (!r.target && r.by && r.by == r.to) {
+    batch.push({ eid: ke, name: 'archived', comp: {} })
+  }
   if (r.note) {
     let ce = uuid()
     batch.push(
