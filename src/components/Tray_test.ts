@@ -95,7 +95,7 @@ Deno.test('graph-native status follows work, final answers, and wakes', () => {
 // regression the O(1) facet introduced: a finished session with a null/idle
 // `standing` (killed, log had no clean final answer, or the boot backfill hasn't
 // reached it) was misdisplaying as idle instead of completed, fleet-wide.
-let finished = (standing?: string, error = false): Ent => ({
+let finished = (standing?: string, failure?: 'error' | 'exception'): Ent => ({
   eid: 'session',
   num: 1,
   kind: 'session',
@@ -106,8 +106,16 @@ let finished = (standing?: string, error = false): Ent => ({
     standing,
     finished_at: '2026-07-01T00:00:00Z',
   },
-  ...(error
+  ...(failure == 'error'
     ? { error: { eid: 'session', at: '2026-07-01T00:00:00Z', message: 'x' } }
+    : failure == 'exception'
+    ? {
+      exception: {
+        eid: 'session',
+        at: '2026-07-01T00:00:00Z',
+        message: 'x',
+      },
+    }
     : {}),
   spawn: { eid: 'session', provider: 'codex' },
   refs: [],
@@ -119,7 +127,19 @@ Deno.test('a finished native session reads completed, never idle', () => {
   assertEquals(graphStanding(finished('idle')), 'completed') // killed / no final answer
   assertEquals(graphStanding(finished('terminal')), 'completed')
   assertEquals(graphStanding(finished('busy')), 'completed') // a stale busy facet on an ended session
-  assertEquals(graphStanding(finished(undefined, true)), 'failed') // error wins over finished
+  assertEquals(graphStanding(finished(undefined, 'error')), 'failed')
+  assertEquals(graphStanding(finished(undefined, 'exception')), 'failed')
   // a pending wake cannot revive a finished session
   assertEquals(graphStanding(finished(undefined), true), 'completed')
+})
+
+Deno.test('a session exception reads failed while the session rests', () => {
+  let e = session('idle')
+  e.exception = {
+    eid: e.eid,
+    at: '2026-07-01T00:00:00Z',
+    message: 'responses: failed',
+  }
+  assertEquals(graphStanding(e), 'failed')
+  assertEquals(graphStanding(e, true), 'failed')
 })

@@ -50,22 +50,23 @@ export let useEntryLog = (
 }
 
 // The native session's standing for the dot, read O(1) — never scans the log.
-// finished_at is authoritative: an ended session reads `completed` (or `failed`
-// on error), NEVER idle, whatever the log-derived facet says. A killed session,
-// or one whose log ended without a clean final answer, or one the boot backfill
-// hasn't stamped yet, can carry a null/idle `standing` while being long done —
-// so the lifecycle fact wins over the log fact. Only for a STILL-RUNNING session
-// does the server-maintained `standing` facet speak: busy → running (over a
-// pending wake), terminal → completed, else idle. Non-native keeps its word.
+// A failure facet is authoritative: the session reads `failed`, NEVER idle,
+// whatever its lifecycle or log-derived facet says. finished_at likewise wins
+// over the log facet for a clean ending. A killed session, or one whose log
+// ended without a clean final answer, or one the boot backfill hasn't stamped
+// yet, can carry a null/idle `standing` while being long done. Only for a
+// STILL-RUNNING session does the server-maintained `standing` facet speak:
+// busy → running (over a pending wake), terminal → completed, else idle.
+// Non-native keeps its word unless it carries the same shared failure fact.
 export let graphStanding = (
   e: Ent,
   waking = false,
 ) => {
   let s = e.session!
+  if (e.error || e.exception) return 'failed'
   let native = s.origin == 'managed' && s.status == null &&
     e.spawn?.provider == 'codex'
   if (!native) return standing(s)
-  if (e.error) return 'failed'
   if (s.finished_at) return 'completed'
   if (s.standing == 'busy') return 'running'
   if (waking) return 'idle'
