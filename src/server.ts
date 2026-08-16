@@ -630,6 +630,8 @@ let graphIO: IO = {
   // deno-lint-ignore require-await
   query: async (q, opts) => evalGraph(db, q, opts).hits,
   // deno-lint-ignore require-await
+  get: async (eids) => rowsOf(db, eids).map(rowed),
+  // deno-lint-ignore require-await
   write: async (changes, via) => {
     let t = trace()
     let out = apply(db, changes, t, via)

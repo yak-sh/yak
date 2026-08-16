@@ -212,6 +212,64 @@ export let bornAt = (r: Row) => String(r.comps.created?.at ?? '')
 export let editedAt = (r: Row) =>
   String(r.comps.updated?.at ?? r.comps.created?.at ?? '')
 
+let faceOf = (all: Row[], eid: unknown) => {
+  let r = all.find((r) => r.eid == String(eid))
+  if (!r) return eid ? { id: String(eid) } : undefined
+  let title = String(r.comps.doc?.title ?? '')
+  return { id: idOf(r), kind: r.kind, ...(title ? { title } : {}) }
+}
+
+// A provenance stamp names the actor and instrument; the instrument says
+// whether those words came from a person at a browser or a model wearing a
+// persona. Keep this small: authorship needs identity, not a session's body,
+// transcript, or final answer.
+export let authoringOf = (all: Row[], row: Row) => {
+  let out: Record<string, Record<string, unknown>> = {}
+  for (let name of ['created', 'proposed', 'decided']) {
+    let stamp = row.comps[name]
+    if (!stamp) continue
+    let via = all.find((r) => r.eid == String(stamp.via ?? ''))
+    let s = via?.comps.session
+    let persona = s?.persona ? faceOf(all, s.persona) : undefined
+    out[name] = {
+      ...(stamp.at ? { at: stamp.at } : {}),
+      ...(stamp.by ? { by: faceOf(all, stamp.by) } : {}),
+      ...(stamp.via ? { via: faceOf(all, stamp.via) } : {}),
+      ...(s?.provider ? { provider: s.provider } : {}),
+      ...(s?.serving_model || s?.model
+        ? { model: s.serving_model || s.model }
+        : {}),
+      ...(s?.effort ? { effort: s.effort } : {}),
+      ...(persona ? { persona } : {}),
+    }
+  }
+  return out
+}
+
+// The compact face for task indexes and injected context. Detail remains in
+// task_show, but a model must never mistake fleet-authored work for the
+// owner's merely because the row was rendered on one line.
+export let authoringLine = (all: Row[], row: Row) => {
+  let authored = authoringOf(all, row)
+  let face = (v: unknown) => {
+    if (!v || typeof v != 'object') return ''
+    let r: { id?: string; title?: string } = v
+    return r?.title ? `${r.id} ${r.title}` : r?.id ?? ''
+  }
+  return Object.entries(authored).flatMap(([name, a]) => {
+    let by = face(a.by)
+    let via = face(a.via)
+    let agent = [a.provider, a.model, a.effort].filter(Boolean).join('/')
+    let persona = face(a.persona)
+    let instrument = [agent, persona ? `persona ${persona}` : '']
+      .filter(Boolean).join(', ')
+    let source = by ? ` by ${by}` : ''
+    if (via && via != by) source += ` via ${via}`
+    if (instrument) source += ` (${instrument})`
+    return source ? [`${name}${source}`] : []
+  }).join(' · ')
+}
+
 // Full-text search, server-side (FTS5) — the graph's docs, ranked.
 export let search = async (q: string, limit = 20) => {
   let res = await request(
@@ -839,7 +897,11 @@ export let around = async (id: string, quarantined = false) => {
   for (let r of [row, ...comments]) for (let e of refsIn(r)) want.add(e)
   for (let d of deps) want.add(d.parent), want.add(d.child)
   want.delete(row.eid)
-  let all = uniq([row, ...comments, ...await fetched([...want])])
+  let named = await fetched([...want])
+  // Provenance instruments name their persona and actor in turn. One more
+  // bounded hop gives the authoring face a human id/title instead of a uuid.
+  let second = await fetched(named.flatMap(refsIn))
+  let all = uniq([row, ...comments, ...named, ...second])
   return { deps, all, row }
 }
 
@@ -2005,10 +2067,11 @@ export let taskBlock = (
   // task blocks a call) passes it: rebuilding it here made every shown row an
   // O(graph) map build.
   let byEid = byIx ?? new Map(all.map((x) => [x.eid, x]))
+  let authoring = authoringLine(all, r)
   let out = [
     `- ${idOf(r)} ${r.comps.task?.status ?? r.kind} — ${
       r.comps.doc?.title ?? ''
-    }`,
+    }${authoring ? ` · ${authoring}` : ''}`,
   ]
   for (let d of deps.filter((d) => d.parent == r.eid)) {
     let c = byEid.get(d.child)
@@ -2959,6 +3022,8 @@ export let showMd = (snap: { deps: Dep[] }, all: Row[], row: Row) => {
   }
   let held = claimant(all, row)
   if (held) fm.push(`claim: ${held}`)
+  let authoring = authoringLine(all, row)
+  if (authoring) fm.push(`authoring: ${authoring}`)
   let born = bornAt(row)
   if (born) fm.push(`created: ${local(born)}`)
   let edited = row.comps.updated?.at // absent until the first edit (T-6670)

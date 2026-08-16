@@ -11,6 +11,8 @@
 import {
   addressed,
   around,
+  authoringLine,
+  authoringOf,
   belongs,
   bornAt,
   bus,
@@ -60,6 +62,7 @@ import {
   query,
   readerFor,
   readerRows,
+  refsIn,
   replyChanges,
   repoAt,
   type Row,
@@ -319,9 +322,25 @@ let list = async (got: Got) => {
     hits.flatMap((r) => [
       String(r.comps.claim?.session ?? ''),
       String(r.comps.deliver?.to ?? ''),
+      String(r.comps.created?.by ?? ''),
+      String(r.comps.created?.via ?? ''),
+      String(r.comps.proposed?.by ?? ''),
+      String(r.comps.proposed?.via ?? ''),
+      String(r.comps.decided?.by ?? ''),
+      String(r.comps.decided?.via ?? ''),
     ]).filter((s) => s),
   )
-  if (json) return print(jsonText(hits.map((r) => jsonOf(r))))
+  let authors = await fetched(refs.flatMap(refsIn))
+  let context = [...refs, ...authors]
+  if (json) {
+    return print(jsonText(hits.map((r) => {
+      let authoring = authoringOf(context, r)
+      return {
+        ...jsonOf(r),
+        ...Object.keys(authoring).length ? { authoring } : {},
+      }
+    })))
+  }
   // Ids alone do not disambiguate — two projects are both titled `holdco`
   // — so the second column carries the handle a caller can TYPE: a task's
   // status, everything else's alias.
@@ -340,8 +359,11 @@ let list = async (got: Got) => {
     let title = r.comps.wake
       ? wakeTitle(r.comps, (eid) => refs.find((x) => x.eid == eid))
       : String(r.comps.doc?.title ?? '')
+    let authoring = authoringLine(context, r)
     print(
-      `${idOf(r).padEnd(6)} ${handle.padEnd(wide)} ${title}${flag}`,
+      `${idOf(r).padEnd(6)} ${handle.padEnd(wide)} ${title}${flag}${
+        authoring ? ` · ${authoring}` : ''
+      }`,
     )
   }
   if (!hits.length) {
@@ -1465,8 +1487,10 @@ let show = async (got: Got) => {
     // Edges and comments surround the same entity shape every list door uses.
     let comments = all.filter((r) => r.comps.comment?.target == row.eid)
     let edges = edgesOf(snap, all, row.eid)
+    let authoring = authoringOf(all, row)
     print(jsonText({
       ...jsonOf(row),
+      ...Object.keys(authoring).length ? { authoring } : {},
       ...edges,
       comments: comments.map((r) => jsonOf(r)),
     }))

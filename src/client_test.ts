@@ -1,6 +1,7 @@
 // The headless client's pure half: dot-param grammar, row assembly,
 // change builders, and the injection digest. No server, no db.
 import {
+  authoringOf,
   belongs,
   byBoard,
   checkRefs,
@@ -2343,6 +2344,83 @@ Deno.test('showMd: frontmatter, edge sentences, claim holder, body', () => {
   assertEquals(JSON.parse(JSON.stringify(typed)).comps.mail.verified, 1)
   let back = showMd(snap, all, by(T2))
   assertMatch(back, /referenced by:\n {2}- T-2 \(wip\) — First · requires this/)
+})
+
+Deno.test('authoring exposes actors, model settings, persona, and decisions', () => {
+  let actor = crypto.randomUUID(), session = crypto.randomUUID()
+  let persona = crypto.randomUUID(), task = crypto.randomUUID()
+  let graph: Snapshot = {
+    changes: [
+      { eid: actor, name: 'entity', comp: { eid: actor, num: 30 } },
+      { eid: actor, name: 'doc', comp: { title: 'Jeff' } },
+      { eid: actor, name: 'person', comp: {} },
+      { eid: persona, name: 'entity', comp: { eid: persona, num: 31 } },
+      { eid: persona, name: 'doc', comp: { title: 'Scribe' } },
+      { eid: persona, name: 'persona', comp: {} },
+      { eid: session, name: 'entity', comp: { eid: session, num: 32 } },
+      { eid: session, name: 'session', comp: { id: 'agent-run' } },
+      {
+        eid: session,
+        name: 'spawn',
+        comp: {
+          provider: 'claude',
+          model: 'haiku',
+          effort: 'low',
+          persona,
+        },
+      },
+      { eid: task, name: 'entity', comp: { eid: task, num: 33 } },
+      { eid: task, name: 'doc', comp: { title: 'An agent idea' } },
+      { eid: task, name: 'task', comp: { status: 'open' } },
+      {
+        eid: task,
+        name: 'created',
+        comp: { at: '2026-08-01', by: actor, via: session },
+      },
+      {
+        eid: task,
+        name: 'proposed',
+        comp: { at: '2026-08-02', by: actor, via: session },
+      },
+      {
+        eid: task,
+        name: 'decided',
+        comp: { at: '2026-08-03', by: actor },
+      },
+    ],
+    deps: [],
+  }
+  let all = rows(graph), row = all.find((r) => r.eid == task)!
+  assertEquals(authoringOf(all, row), {
+    created: {
+      at: '2026-08-01',
+      by: { id: 'U-30', kind: 'person', title: 'Jeff' },
+      via: { id: 'S-32', kind: 'session' },
+      provider: 'claude',
+      model: 'haiku',
+      effort: 'low',
+      persona: { id: 'N-31', kind: 'persona', title: 'Scribe' },
+    },
+    proposed: {
+      at: '2026-08-02',
+      by: { id: 'U-30', kind: 'person', title: 'Jeff' },
+      via: { id: 'S-32', kind: 'session' },
+      provider: 'claude',
+      model: 'haiku',
+      effort: 'low',
+      persona: { id: 'N-31', kind: 'persona', title: 'Scribe' },
+    },
+    decided: {
+      at: '2026-08-03',
+      by: { id: 'U-30', kind: 'person', title: 'Jeff' },
+    },
+  })
+  let shown = showMd(graph, all, row)
+  assertMatch(
+    shown,
+    /authoring: created by U-30 Jeff via S-32 \(claude\/haiku\/low, persona N-31 Scribe\) · proposed .* · decided by U-30 Jeff/,
+  )
+  assertMatch(taskBlock(all, [], row)[0], /created by U-30 Jeff via S-32/)
 })
 
 Deno.test('showMd: memories name their scope and persona memberships', () => {

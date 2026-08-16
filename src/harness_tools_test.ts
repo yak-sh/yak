@@ -162,6 +162,7 @@ slow(
     let io: IO = {
       read: () => Promise.resolve(empty),
       query: () => Promise.resolve([]),
+      get: () => Promise.resolve([]),
       write: (changes, via) => {
         writes.push({ changes, via })
         return Promise.resolve(changes)

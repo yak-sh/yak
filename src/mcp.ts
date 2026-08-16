@@ -25,6 +25,8 @@ import { trouble } from './adapters.ts'
 import { sha } from './sha.ts'
 import { FILTERS, GRAMMAR } from './grammar.ts'
 import {
+  authoringLine,
+  authoringOf,
   byBoard,
   checkRefs,
   claimant,
@@ -35,6 +37,7 @@ import {
   derefParams,
   edgesOf,
   feedbackChange,
+  fetched,
   find,
   history,
   historyLine,
@@ -51,6 +54,7 @@ import {
   query as queryHttp,
   recallIndex,
   refHandles,
+  refsIn,
   RETIRED_TYPE,
   type Row,
   rows,
@@ -100,6 +104,8 @@ export type IO = {
     q: string,
     opts?: { after?: number; limit?: number },
   ) => Promise<Row[]>
+  // Entities by eid, for bounded reference expansion in derived read faces.
+  get: (eids: string[]) => Promise<Row[]>
   // `via` is journal attribution — the calling session's id, when the
   // tool knows it. Never auth.
   write: (changes: Change[], via?: string) => Promise<Change[]>
@@ -144,9 +150,10 @@ let PEEK = 200
 
 let line = (all: Row[], r: Row) => {
   let who = claimant(all, r)
+  let authoring = authoringLine(all, r)
   return `${idOf(r)}  ${String(r.comps.task?.status ?? r.kind).padEnd(7)} ${
     r.comps.doc?.title ?? ''
-  }${who ? `  ⚑ ${who}` : ''}`
+  }${who ? `  ⚑ ${who}` : ''}${authoring ? ` · ${authoring}` : ''}`
 }
 
 let parseAll = (params: string[]) =>
@@ -1197,7 +1204,9 @@ recording someone's correction, and limit caps returned index lines
   tool(
     'graph_query',
     `The WHOLE graph, not just tasks: every entity as {kind,
-entity:{eid,num}, ...components}, dot-param filtered. Cards, pins
+entity:{eid,num}, ...components}, dot-param filtered. Tasks and docs also carry
+authoring: created/proposed/decided actor, instrument, model, effort, persona.
+Cards, pins
 (positions), cameras (what each
 client is looking at), sessions, comments — all live here. A query is a
 LIST door: long text values (persona bodies, mail, final_text) are cut
@@ -1244,8 +1253,26 @@ empty. ${GRAMMAR} ${FILTERS}`,
       // partition — not the snapshot()-only slice this tool used to screen.
       let q = query != null ? query : filters.join('&')
       let hits = await io.query(q, { after, limit })
+      let authored = hits.filter((r) => r.comps.task || r.comps.doc)
+      let refs = await io.get(
+        authored.flatMap((r) => [
+          String(r.comps.created?.by ?? ''),
+          String(r.comps.created?.via ?? ''),
+          String(r.comps.proposed?.by ?? ''),
+          String(r.comps.proposed?.via ?? ''),
+          String(r.comps.decided?.by ?? ''),
+          String(r.comps.decided?.via ?? ''),
+        ]).filter(Boolean),
+      )
+      let context = [...refs, ...await io.get(refs.flatMap(refsIn))]
       let out = JSON.stringify(
-        hits.map((r) => jsonOf(r, full ? r.comps : elide(r))),
+        hits.map((r) => {
+          let authoring = authoringOf(context, r)
+          return {
+            ...jsonOf(r, full ? r.comps : elide(r)),
+            ...Object.keys(authoring).length ? { authoring } : {},
+          }
+        }),
         null,
         2,
       )
@@ -1655,6 +1682,7 @@ in milliseconds (default 10000, maximum 30000).`,
   tool(
     'task_show',
     `One entity, whole: {kind, entity:{eid,num}, ...components}, plus its
+authoring (created/proposed/decided actor, instrument, model, effort, persona),
 edges (refs out, backrefs in) and comments in the same entity shape. id:
 T-3, bare num, or eid. Quarantined content requires quarantined: true. ${BUS}`,
     {
@@ -1675,10 +1703,12 @@ T-3, bare num, or eid. Quarantined content requires quarantined: true. ${BUS}`,
       if (!row) return err(`no entity: ${id}`)
       let comments = all.filter((r) => r.comps.comment?.target == row.eid)
       let edges = edgesOf(snap, all, row.eid)
+      let authoring = authoringOf(all, row)
       return bus(
         JSON.stringify(
           {
             ...jsonOf(row),
+            ...Object.keys(authoring).length ? { authoring } : {},
             ...edges,
             comments: comments.map((r) => jsonOf(r)),
           },
@@ -1702,6 +1732,7 @@ if (import.meta.main) {
     // reachable over stdio too. A filter LINE splits into its `&` tokens, the
     // encoding-safe unit client.query already speaks.
     query: (q, opts) => queryHttp(q.split('&').filter(Boolean), opts),
+    get: (eids) => fetched(eids),
     write: send,
     find: search,
     upload: async (eid, html) => {

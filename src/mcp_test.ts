@@ -265,6 +265,7 @@ let byName = (tools: Tool[], name: string) =>
 let blank = (): IO => ({
   read: () => Promise.resolve({ changes: [], deps: [] }),
   query: () => Promise.resolve([]),
+  get: () => Promise.resolve([]),
   write: (changes) => Promise.resolve(changes),
   find: () => Promise.resolve([]),
   upload: () => Promise.resolve(),
@@ -281,6 +282,8 @@ let graph = () => {
   let io: IO = {
     read: () => Promise.resolve(snapshot(db)),
     query: (q, opts) => Promise.resolve(evalGraph(db, q, opts).hits),
+    get: (eids) =>
+      Promise.resolve(rows(snapshot(db)).filter((r) => eids.includes(r.eid))),
     write: (changes, via) =>
       Promise.resolve(apply(db, changes, undefined, via)),
     find: () => Promise.resolve([]),
@@ -385,6 +388,66 @@ Deno.test('MCP entity JSON shares the component-shaped contract', async () => {
         comment: { target: task },
       }],
     })
+  })
+})
+
+Deno.test('MCP query and show expose agent authoring context', async () => {
+  let actor = crypto.randomUUID(), persona = crypto.randomUUID()
+  let session = crypto.randomUUID(), task = crypto.randomUUID()
+  let changes: Change[] = [
+    { eid: actor, name: 'entity', comp: { eid: actor, num: 51 } },
+    { eid: actor, name: 'doc', comp: { title: 'Task Graph' } },
+    { eid: actor, name: 'project', comp: {} },
+    { eid: persona, name: 'entity', comp: { eid: persona, num: 52 } },
+    { eid: persona, name: 'doc', comp: { title: 'Scribe' } },
+    { eid: persona, name: 'persona', comp: {} },
+    { eid: session, name: 'entity', comp: { eid: session, num: 53 } },
+    { eid: session, name: 'session', comp: { id: 'haiku-run' } },
+    {
+      eid: session,
+      name: 'spawn',
+      comp: { provider: 'claude', model: 'haiku', effort: 'low', persona },
+    },
+    { eid: task, name: 'entity', comp: { eid: task, num: 54 } },
+    { eid: task, name: 'doc', comp: { title: 'Candidate idea' } },
+    { eid: task, name: 'task', comp: { status: 'open' } },
+    {
+      eid: task,
+      name: 'created',
+      comp: { at: '2026-08-01', by: actor, via: session },
+    },
+    {
+      eid: task,
+      name: 'proposed',
+      comp: { at: '2026-08-02', by: actor, via: session },
+    },
+    {
+      eid: task,
+      name: 'decided',
+      comp: { at: '2026-08-03', by: actor },
+    },
+  ]
+  let graph = rows({ changes })
+  let io = blank()
+  io.read = () => Promise.resolve({ changes, deps: [] })
+  io.query = () => Promise.resolve([graph.find((r) => r.eid == task)!])
+  io.get = (eids) => Promise.resolve(graph.filter((r) => eids.includes(r.eid)))
+  await protocol(io, async (client) => {
+    for (let name of ['graph_query', 'task_show']) {
+      let result = await client.callTool({
+        name,
+        arguments: name == 'graph_query' ? { query: '.kind=task' } : {
+          id: 'T-54',
+        },
+      }) as ToolResult
+      let value = JSON.parse(said(result))
+      let authoring = (Array.isArray(value) ? value[0] : value).authoring
+      assertEquals(authoring.created.model, 'haiku')
+      assertEquals(authoring.created.effort, 'low')
+      assertEquals(authoring.created.persona.title, 'Scribe')
+      assertEquals(authoring.proposed.via.id, 'S-53')
+      assertEquals(authoring.decided.by.title, 'Task Graph')
+    }
   })
 })
 
