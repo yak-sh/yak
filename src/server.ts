@@ -1692,18 +1692,25 @@ if (mayStamp() && Deno.env.get('TASKS_SWEEP') == '1') {
         sessions.map((s) => ({ ...s, active: resumable(s.eid) })),
         repo,
       )
-      let killed = await reapProbes(seen.verdicts)
+      let { killed, leaked } = await reapProbes(seen.verdicts)
       let gone = seen.trees.filter((t) => t.prune && pruneTree(repo, t.tree))
       for (let v of seen.verdicts.filter((v) => v.reap)) {
         console.log(`swept ${v.proc.pid} — ${v.why}`)
       }
       for (let t of gone) console.log(`swept ${t.tree.path} — ${t.why}`)
-      if (killed.length || gone.length) {
+      for (let dir of leaked) console.warn(`profile not removed — ${dir}`)
+      if (killed.length || gone.length || leaked.length) {
         record(db, {
           source: 'http',
           name: 'probes',
-          ok: true,
-          detail: `${killed.length} process(es), ${gone.length} worktree(s)`,
+          // A leak left behind is the failure this run must own, not hide.
+          ok: leaked.length == 0,
+          detail: `${killed.length} process(es), ${gone.length} worktree(s)` +
+            (leaked.length
+              ? `, ${leaked.length} profile(s) NOT removed: ${
+                leaked.join(', ')
+              }`
+              : ''),
         })
       }
     } catch (e) {

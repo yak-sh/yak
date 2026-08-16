@@ -2372,10 +2372,12 @@ let probes = async (got: Got) => {
     )
     return
   }
-  let killed = await reap(seen.verdicts)
+  let { killed, leaked } = await reap(seen.verdicts)
   let pruned = repo ? stale.filter((t) => prune(repo, t.tree)) : []
+  for (let dir of leaked) warn(`profile not removed — ${dir}`)
   warn(
-    `reaped ${killed.length} process(es), ${pruned.length} worktree(s)`,
+    `reaped ${killed.length} process(es), ${pruned.length} worktree(s)` +
+      (leaked.length ? `, ${leaked.length} profile(s) leaked` : ''),
   )
 }
 

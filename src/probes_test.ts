@@ -13,6 +13,7 @@ import {
   probe,
   type Proc,
   profiles,
+  sweepProfile,
   throwaway,
   type Tree,
   trees,
@@ -409,4 +410,54 @@ Deno.test('profiles: the reaped browsers dirs, deduped and spared-safe', () => {
     ],
   })
   assertEquals(profiles([{ proc: home, reap: true, why: 'orphan' }]), [])
+})
+
+// The half of cleanup that used to be a silent `.catch(() => {})`: a removal
+// that fails must retry the teardown race and, if it still fails, be REPORTED.
+Deno.test('sweepProfile: a clean removal reports no leak', async () => {
+  let removed: string[] = []
+  let leak = await sweepProfile('/tmp/p', (d) => {
+    removed.push(d)
+    return Promise.resolve()
+  })
+  assertEquals(leak, undefined)
+  assertEquals(removed, ['/tmp/p'])
+})
+
+Deno.test('sweepProfile: an already-gone dir is success, not a leak', async () => {
+  let leak = await sweepProfile(
+    '/tmp/p',
+    () => Promise.reject(new Deno.errors.NotFound('gone')),
+  )
+  assertEquals(leak, undefined)
+})
+
+Deno.test('sweepProfile: it retries across the teardown race', async () => {
+  let n = 0
+  let leak = await sweepProfile(
+    '/tmp/p',
+    () => {
+      // EBUSY for the first two beats (chrome still dying), then it lands.
+      return ++n < 3 ? Promise.reject(new Error('EBUSY')) : Promise.resolve()
+    },
+    5,
+    0,
+  )
+  assertEquals(leak, undefined)
+  assertEquals(n, 3)
+})
+
+Deno.test('sweepProfile: a dir that never frees is returned as a leak', async () => {
+  let n = 0
+  let leak = await sweepProfile(
+    '/tmp/p',
+    () => {
+      n++
+      return Promise.reject(new Error('EBUSY'))
+    },
+    4,
+    0,
+  )
+  assertEquals(leak, '/tmp/p') // reported, never swallowed
+  assertEquals(n, 5) // the first attempt plus four retries
 })

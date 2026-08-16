@@ -265,20 +265,65 @@ export let profiles = (verdicts: Verdict[]) => [
   ),
 ]
 
-// TERM first, KILL what ignores it. A process already gone between the scan
-// and the signal is the outcome we wanted, so ESRCH is success.
-export let reap = async (verdicts: Verdict[]) => {
-  let doomed = verdicts.filter((v) => v.reap).map((v) => v.proc.pid)
-  for (let pid of doomed) signal(pid, 'SIGTERM')
-  if (!doomed.length) return []
-  await new Promise((ok) => setTimeout(ok, 2000))
-  for (let pid of doomed) if (commOf(pid)) signal(pid, 'SIGKILL')
-  // Profiles AFTER the kill, never before: a live chrome rewrites what we
-  // just removed, and would recreate the leak we came to collect.
-  for (let dir of profiles(verdicts)) {
-    await Deno.remove(dir, { recursive: true }).catch(() => {})
+let pause = (ms: number) => new Promise((ok) => setTimeout(ok, ms))
+
+// Every killed process actually gone, so its profile is safe to touch: a chrome
+// mid-teardown still holds and rewrites the files under its user-data-dir, and a
+// remove that lands in that window fails. Bounded — a SIGKILLed process leaves
+// in milliseconds — so a straggler past the cap is removed anyway on the next
+// sweep rather than blocking this one.
+let vanished = (pids: number[]) => pids.every((pid) => !commOf(pid))
+let settled = async (pids: number[], within = 2000, step = 50) => {
+  for (let waited = 0; waited < within && !vanished(pids); waited += step) {
+    await pause(step)
   }
-  return doomed
+}
+
+// Remove a throwaway profile, retrying across chrome's teardown race (a
+// still-dying browser unlinks its own lock and mmap'd files, so a remove can
+// fail EBUSY/ENOTEMPTY for a beat). Returns the dir it STILL cannot remove —
+// the real leak the caller must report, never the silent `.catch(() => {})`
+// that let 4.6G of profiles pile up and drive the box into OOM (T-10898,
+// T-12952). A dir already gone is the outcome we wanted, so NotFound is success.
+// `rm` is injectable so the retry/leak logic is tested without a real browser.
+export let sweepProfile = async (
+  dir: string,
+  rm: (d: string) => Promise<void> = (d) => Deno.remove(d, { recursive: true }),
+  tries = 5,
+  step = 100,
+): Promise<string | undefined> => {
+  for (let n = 0;; n++) {
+    try {
+      await rm(dir)
+      return
+    } catch (e) {
+      if (e instanceof Deno.errors.NotFound) return
+      if (n >= tries) return dir
+      await pause(step)
+    }
+  }
+}
+
+// TERM first, KILL what ignores it. A process already gone between the scan
+// and the signal is the outcome we wanted, so ESRCH is success. Returns the
+// pids it reaped AND the profile dirs it could not remove — a leak the caller
+// surfaces (telemetry + a line), never swallows.
+export let reap = async (verdicts: Verdict[]) => {
+  let killed = verdicts.filter((v) => v.reap).map((v) => v.proc.pid)
+  for (let pid of killed) signal(pid, 'SIGTERM')
+  if (!killed.length) return { killed, leaked: [] as string[] }
+  await pause(2000)
+  for (let pid of killed) if (commOf(pid)) signal(pid, 'SIGKILL')
+  // Profiles AFTER the processes are truly GONE, never before: a live or
+  // still-dying chrome rewrites what we just removed and recreates the leak we
+  // came to collect. Wait for the kill to land, then remove with retries.
+  await settled(killed)
+  let leaked: string[] = []
+  for (let dir of profiles(verdicts)) {
+    let stuck = await sweepProfile(dir)
+    if (stuck) leaked.push(stuck)
+  }
+  return { killed, leaked }
 }
 
 let signal = (pid: number, sig: Deno.Signal) => {
