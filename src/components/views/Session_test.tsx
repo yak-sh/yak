@@ -91,7 +91,7 @@ Deno.test('live session Tile omits its chip and lists every worked task', () => 
       [...root.querySelectorAll('.SessionRow_Task')].map((x) =>
         x.textContent.replace(/\s+/g, ' ').trim()
       ).sort(),
-      ['T-3 First task', 'T-4 Second task'],
+      ['First task', 'Second task'],
     )
     assertEquals(fetched, 0)
   } finally {

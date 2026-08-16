@@ -1471,9 +1471,9 @@ html {
 .Show_Meta .Id {
   margin-left: auto; /* the id keeps the row's right edge, as in a titlebar */
 }
-/* An entity said in flowing content (the Inline role): chip (+dot) + title,
-   one anchor. The title gives out first — ellipsis, never a wrap and never
-   a JS measure. */
+/* An entity said in flowing content (the Inline role): dot + title, one
+   anchor. The title gives out first — ellipsis, never a wrap and never a JS
+   measure. */
 .Inline {
   display: inline-flex;
   align-items: baseline;

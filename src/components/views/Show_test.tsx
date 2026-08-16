@@ -108,7 +108,9 @@ Deno.test('a superseded entity is marked on its face with what replaced it', () 
   let mark = a.root.querySelector('.Show_Superseded')
   assertExists(mark)
   assertEquals(mark!.textContent?.includes('superseded by'), true)
-  assertExists(a.root.querySelector('.Show_Superseded .Id')) // links the successor
+  let successor = a.root.querySelector('.Show_Superseded .Inline')
+  assertExists(successor)
+  assertEquals(successor!.textContent, '8×10 portrait')
   a.free()
 
   // The current end is not marked — it did the replacing.
