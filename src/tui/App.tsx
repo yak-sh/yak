@@ -515,7 +515,8 @@ export let key = (k: string) => {
       exec(buf.value)
       buf.value = ''
       mode.value = 'normal'
-    } else if (k == '\x1b') {
+    } else if (k == '\n') buf.value += '\n' // ⇧⏎ adds a line; ⏎ runs the command
+    else if (k == '\x1b') {
       buf.value = ''
       mode.value = 'normal'
     } else if (k == '\x7f') buf.value = buf.value.slice(0, -1)
@@ -694,9 +695,13 @@ export let TAccount = (
   )
 }
 
-let TStatus = () => {
+export let TStatus = () => {
   // the verb greens once it names a command — the web bar does the same
   let [, pre, verb, rest] = buf.value.match(/^(\s*)(\S+)(.*)$/s) ?? []
+  // A ⇧⏎ newline lives in the buffer (commands read a first-line/body split),
+  // but the command line is one painted row — show each break as a glyph so it
+  // stays on that row instead of splitting the pane.
+  let nl = (t: string) => t.replaceAll('\n', '⏎')
   return (
     <footer class='TStatus'>
       {mode.value == 'command'
@@ -705,14 +710,14 @@ let TStatus = () => {
             :{verb
               ? (
                 <>
-                  {pre}
+                  {nl(pre)}
                   {(commands[verb] ?? local[verb])
                     ? <span class='TStatus_Verb'>{verb}</span>
                     : verb}
-                  {rest}
+                  {nl(rest)}
                 </>
               )
-              : buf.value}█
+              : nl(buf.value)}█
           </span>
         )
         : (

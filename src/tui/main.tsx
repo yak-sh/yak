@@ -21,6 +21,7 @@ import {
   views,
 } from './App.tsx'
 import { paint } from './paint.ts'
+import { decode } from './input.ts'
 
 let enc = new TextEncoder()
 let out = (s: string) => Deno.stdout.writeSync(enc.encode(s))
@@ -29,8 +30,10 @@ let out = (s: string) => Deno.stdout.writeSync(enc.encode(s))
 // whole hot-reload mechanism, and it can never spam sockets: there is one
 // process, holding one socket, replaced whole. (deno's own --watch can't
 // do this: the old isolate's pending stdin read starves the new one.)
+// ESC[<u pops the kitty keyboard flags we pushed at startup, so the terminal
+// is left exactly as we found it.
 let bye = (code = 0) => {
-  out('\x1b[?25h\x1b[?1049l')
+  out('\x1b[<u\x1b[?25h\x1b[?1049l')
   Deno.stdin.setRaw(false)
   Deno.exit(code)
 }
@@ -68,7 +71,12 @@ extend(overrides)
 await boot()
 
 Deno.stdin.setRaw(true)
-out('\x1b[?1049h\x1b[?25l') // alt screen, cursor hidden
+// Alt screen, cursor hidden, and push the kitty keyboard protocol (disambiguate
+// flag) so a modified key like Shift+Enter is reported at all — without it the
+// terminal collapses ⇧⏎ to a bare CR. Terminals that don't speak it ignore the
+// private sequence; input.decode() turns whatever they do send back into the
+// legacy tokens key() reads.
+out('\x1b[?1049h\x1b[?25l\x1b[>1u')
 
 effect(() => {
   if (quit.value) bye()
@@ -81,21 +89,16 @@ onPaint(() => fit(paint(root, spot())))
 Deno.addSignalListener('SIGWINCH', touch)
 render(<App />, root as unknown as Parameters<typeof render>[1])
 
-// The key loop: raw bytes → key(). Multi-byte escape sequences (arrows,
-// function keys) arrive as one chunk, and a chunk is passed WHOLE or not
-// at all — dribbling one through key() char by char would type its
-// `[`, `Z`, … into the command line. Only ⇧⇥ is spoken for so far; the
-// rest are dropped, vim keys only.
+// The key loop: raw bytes → decode() → key(). A multi-byte escape sequence
+// (an arrow, a function key, or a kitty CSI-u report like ⇧⏎) arrives as one
+// chunk; decode() turns each chunk into the tokens key() reads — legacy bytes
+// for the keys the app binds, nothing for the ones it doesn't — so their
+// `[`, `Z`, … never leak into the command line.
 let buf = new Uint8Array(64)
 let dec = new TextDecoder()
 while (!quit.value) {
   let n = await Deno.stdin.read(buf)
   if (n == null) break
-  let s = dec.decode(buf.subarray(0, n))
-  if (s.length > 1 && s.startsWith('\x1b')) {
-    if (s == '\x1b[Z') key(s)
-    continue
-  }
-  for (let ch of s) key(ch)
+  for (let k of decode(dec.decode(buf.subarray(0, n)))) key(k)
 }
 bye()

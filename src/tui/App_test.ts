@@ -19,6 +19,7 @@ import {
   TAccount,
   TKeys,
   trail,
+  TStatus,
 } from './App.tsx'
 import { TElement } from './dom.ts'
 import { ansi, pane } from './paint.ts'
@@ -100,6 +101,35 @@ Deno.test('a cursor the content shrank past comes back to the last line', () => 
   trail.value = []
   fit(3) // nothing to fit at the board
   assertEquals(spot(), -1)
+})
+
+Deno.test('⇧⏎ builds a multi-line command shown on one row; ⏎ runs it', () => {
+  trail.value = []
+  mode.value = 'normal'
+  key(':')
+  assertEquals(mode.value, 'command')
+  for (let c of 'task One') key(c)
+  key('\n') // ⇧⏎ (input.decode maps the terminal's report to this): a newline
+  for (let c of 'the body') key(c)
+  assertEquals(mode.value, 'command') // a newline keeps typing, it doesn't submit
+
+  // One painted row: the embedded newline shows as a glyph rather than
+  // splitting the pane, and the buffer kept it (a command reads first line as
+  // args, the rest as body). The dummy footer stands in for the pinned bar
+  // pane() pops off the bottom, so TStatus's own line lands in `lines`.
+  let root = new TElement('root')
+  let target = root as unknown as Parameters<typeof render>[1]
+  render(h('div', null, h(TStatus, null), h('footer', null, 'x')), target)
+  let lines = pane(root).lines.map((l) => l.map((s) => s.text).join(''))
+    .filter(Boolean)
+  render(null, target)
+  assertEquals(lines, [':task One⏎the body█'])
+
+  key('\x1b') // discard it here — the test writes nothing to a server
+  assertEquals(mode.value, 'normal')
+  key(':')
+  key('\r') // ⏎ leaves command mode (submits)
+  assertEquals(mode.value, 'normal')
 })
 
 Deno.test('question mark shows keybindings until they are dismissed', () => {
