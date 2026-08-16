@@ -3760,6 +3760,8 @@ a[data-ref]:hover {
 .Tray {
   position: relative;
   display: flex;
+  min-width: 0;
+  max-width: 100%;
   align-items: center;
   font-size: 12px;
   color: var(--text);
@@ -3842,6 +3844,7 @@ a[data-ref]:hover {
   display: flex;
   align-items: center;
   gap: var(--half-gap);
+  max-width: 100%;
   padding: 0 var(--half-gap);
   min-width: 1.5rem;
   background: none;
@@ -3849,6 +3852,15 @@ a[data-ref]:hover {
   color: inherit;
   font: inherit;
   cursor: pointer;
+}
+.Tray_Dots {
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+  gap: var(--half-gap);
+}
+.Tray_Chevron {
+  flex: none;
 }
 .Tray_Strip:hover .Tray_Chevron {
   color: var(--text);

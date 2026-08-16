@@ -70,6 +70,7 @@ let live = () =>
 
 let Frame = block('div', 'Tray', {
   Strip: 'button',
+  Dots: 'span',
   Chevron: 'span',
   Panel: 'div',
   Group: 'section',
@@ -78,7 +79,7 @@ let Frame = block('div', 'Tray', {
   X: 'button',
   Hint: 'div',
 })
-let { Strip, Chevron, Panel, Group, Label, Row, X, Hint } = Frame
+let { Strip, Dots, Chevron, Panel, Group, Label, Row, X, Hint } = Frame
 
 export let Tray = () => {
   useEffect(() => {
@@ -103,7 +104,9 @@ export let Tray = () => {
         aria-label={trayOpen.value ? 'close tray' : 'open tray'}
         onClick={() => toggle(!trayOpen.value)}
       >
-        {ls.map(([eid]) => <SessionDot key={eid} e={ent(eid)} />)}
+        <Dots>
+          {ls.map(([eid]) => <SessionDot key={eid} e={ent(eid)} />)}
+        </Dots>
         <Chevron>{trayOpen.value ? '⌄' : '⌃'}</Chevron>
       </Strip>
       {trayOpen.value && (
