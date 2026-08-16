@@ -761,11 +761,19 @@ export let manuals = declare({
     ],
   },
   telemetry: {
-    about: 'tool calls + crashes',
-    examples: ['task telemetry --errors -n 20'],
+    about: 'tool calls + crashes; --stats for latency percentiles',
+    examples: ['task telemetry --errors -n 20', 'task telemetry --stats'],
+    detail: '--stats reports the latency distribution instead of raw rows: ' +
+      'per door and tool, the count of timed calls and the p50/p95/p99 of ' +
+      'their duration, computed in SQL. --errors and --since screen it too.',
     root: true,
     args: [],
-    opts: [flag('--errors'), value('--since', timestamp), count],
+    opts: [
+      flag('--errors'),
+      flag('--stats'),
+      value('--since', timestamp),
+      count,
+    ],
   },
   wake: {
     about: 'a knock on a timer',

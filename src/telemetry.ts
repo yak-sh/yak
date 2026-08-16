@@ -88,6 +88,44 @@ export let recent = (
   `).all(...args, n) as Log[]
 }
 
+// Latency distribution, computed in SQL (T-16327). Per (source, name) — the
+// door and the tool — the count of TIMED calls and the p50/p95/p99 of their
+// duration in ms, so a slow tool shows itself without pulling every row into
+// JS. SQLite's own percentile_cont (3.53+) skips nulls, so an untimed call
+// (ms null) never counts; the same since/only filters recent() takes screen
+// the rows, busiest group first.
+export type Stat = {
+  source: string
+  name: string
+  n: number
+  p50: number
+  p95: number
+  p99: number
+}
+
+export let stats = (
+  db: DatabaseSync,
+  { since, only }: { since?: string; only?: string } = {},
+): Stat[] => {
+  let where = ['ms is not null']
+  let args: string[] = []
+  if (since) {
+    where.push('ts >= ?')
+    args.push(since)
+  }
+  if (only == 'errors') where.push('ok = 0')
+  return db.prepare(`
+    select source, name, count(*) as n,
+      round(percentile_cont(ms, 0.5), 1) as p50,
+      round(percentile_cont(ms, 0.95), 1) as p95,
+      round(percentile_cont(ms, 0.99), 1) as p99
+    from tool_call
+    where ${where.join(' and ')}
+    group by source, name
+    order by n desc
+  `).all(...args) as unknown as Stat[]
+}
+
 // The /mcp body, classified. A tools/call is the interesting traffic —
 // which tool, whose session (agents pass `session` to the task_* tier).
 // initialize and tools/list are handshake noise; they record nothing.

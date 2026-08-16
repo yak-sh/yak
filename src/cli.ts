@@ -112,7 +112,7 @@ import {
 } from './types.ts'
 // `import type` (not the repo's usual inline `{ type X }`): telemetry.ts
 // reaches for node:sqlite, and the CLI has no business loading a db driver.
-import type { Log } from './telemetry.ts'
+import type { Log, Stat } from './telemetry.ts'
 import type { JournalEntry } from './client.ts'
 import { local } from './time.ts'
 import { wakeList, wakeTitle } from './title.ts'
@@ -2387,6 +2387,7 @@ let telemetry = async (got: Got) => {
   let q = new URLSearchParams()
   if (got.flags.has('--errors')) q.set('only', 'errors')
   if (got.opts['--since']) q.set('since', got.opts['--since'])
+  if (got.flags.has('--stats')) return telemetryStats(q)
   if (got.opts['-n']) q.set('limit', got.opts['-n'])
   let res = await request(`http://${host()}/telemetry?${q}`)
   if (!res.ok) throw new Error(`server said ${res.status}`)
@@ -2399,6 +2400,29 @@ let telemetry = async (got: Got) => {
       } ${(r.ms == null ? '' : `${r.ms}ms`).padStart(6)}  ${
         (r.session_id ?? '-').padEnd(10)
       }  ${(r.error ?? '').slice(0, 80)}`,
+    )
+  }
+}
+
+// The latency view: p50/p95/p99 per door+tool, computed in SQL server-side
+// (telemetry.ts stats()). Busiest group first, milliseconds right-aligned.
+let telemetryStats = async (q: URLSearchParams) => {
+  q.set('stats', '1')
+  let res = await request(`http://${host()}/telemetry?${q}`)
+  if (!res.ok) throw new Error(`server said ${res.status}`)
+  let rows = await res.json() as Stat[]
+  if (!rows.length) return warn('(nothing timed)')
+  let ms = (n: number) => `${n}ms`.padStart(9)
+  print(
+    `${'door'.padEnd(4)} ${'tool'.padEnd(14)} ${'n'.padStart(6)} ${
+      'p50'.padStart(9)
+    } ${'p95'.padStart(9)} ${'p99'.padStart(9)}`,
+  )
+  for (let r of rows) {
+    print(
+      `${r.source.padEnd(4)} ${r.name.padEnd(14)} ${String(r.n).padStart(6)} ${
+        ms(r.p50)
+      } ${ms(r.p95)} ${ms(r.p99)}`,
     )
   }
 }

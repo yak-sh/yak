@@ -3,7 +3,9 @@
 // tells tool traffic from handshake noise.
 Deno.env.set('DB_PATH', ':memory:')
 let { db } = await import('./db.ts')
-let { outcome, record, recent, toolCall } = await import('./telemetry.ts')
+let { outcome, record, recent, stats, toolCall } = await import(
+  './telemetry.ts'
+)
 let { assertEquals } = await import('@std/assert')
 
 // Each test tags its rows with a unique name, so they share one handle.
@@ -53,6 +55,33 @@ Deno.test('filters: errors only, and since a timestamp', () => {
   assertEquals(mine(name, { only: 'errors' }).length, 1)
   assertEquals(mine(name, { since: '2000-01-01T00:00:00Z' }).length, 2)
   assertEquals(mine(name, { since: '2999-01-01T00:00:00Z' }).length, 0)
+})
+
+Deno.test('stats: p50/p95/p99 per door+tool in SQL, untimed rows skipped', () => {
+  let name = tag()
+  for (let v of [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]) {
+    record(db, { source: 'mcp', name, ok: true, ms: v })
+  }
+  record(db, { source: 'mcp', name, ok: true, ms: null }) // untimed: uncounted
+  let row = stats(db).find((s) => s.name == name && s.source == 'mcp')!
+  assertEquals(row.n, 10)
+  assertEquals(row.p50, 55) // percentile_cont interpolates the median
+  assertEquals(row.p95, 95.5)
+  assertEquals(row.p99, 99.1)
+})
+
+Deno.test('stats: errors-only and since screen the distribution', () => {
+  let name = tag()
+  record(db, { source: 'http', name, ok: true, ms: 5 })
+  record(db, { source: 'http', name, ok: false, ms: 100, error: 'x' })
+  assertEquals(stats(db).find((s) => s.name == name)!.n, 2)
+  let errs = stats(db, { only: 'errors' }).find((s) => s.name == name)!
+  assertEquals(errs.n, 1)
+  assertEquals(errs.p50, 100)
+  assertEquals(
+    stats(db, { since: '2999-01-01T00:00:00Z' }).find((s) => s.name == name),
+    undefined,
+  )
 })
 
 Deno.test('record never throws: a broken db warns, the caller lives', () => {

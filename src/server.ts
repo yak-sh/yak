@@ -95,7 +95,7 @@ import { codexGeneration } from './runner.ts'
 import { readEntries } from './entries.ts'
 import { graphLog, graphLogPage } from './entry_log.ts'
 import { type Observation, safeObservation } from './observations.ts'
-import { outcome, recent, record, toolCall } from './telemetry.ts'
+import { outcome, recent, record, stats, toolCall } from './telemetry.ts'
 import { stamp } from './hot.ts'
 import { obeyed } from './obey.ts'
 import { serverFile } from './reload.ts'
@@ -1096,10 +1096,17 @@ let http = Deno.serve(
     if (path == '/error' && req.method == 'POST') return clientError(req)
     if (path == '/usage' && req.method == 'POST') return cliUsage(req)
     if (path == '/telemetry') {
+      let since = url.searchParams.get('since') ?? undefined
+      let only = url.searchParams.get('only') ?? undefined
+      // ?stats=1 asks for the latency distribution (p50/p95/p99 per door+tool,
+      // computed in SQL) instead of the raw rows.
+      if (url.searchParams.get('stats')) {
+        return Response.json(stats(db, { since, only }))
+      }
       return Response.json(recent(db, {
-        since: url.searchParams.get('since') ?? undefined,
+        since,
         limit: Number(url.searchParams.get('limit')) || undefined,
-        only: url.searchParams.get('only') ?? undefined,
+        only,
       }))
     }
     // HTTP writes (the CLI and MCP server): same apply, same allowlist,
