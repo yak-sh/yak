@@ -216,6 +216,12 @@ let CASES: [string, { comp: string; prop: string; value: unknown } | RegExp][] =
     // error. No column is hyphenated, so nothing new resolves.
     ['.blocked-by=T-1', /unknown prop/],
     ['.doc.nope=1', /no such prop/],
+    // An optional enum clears on empty like any other scalar (T-16491).
+    ['.venture.paused_from=', {
+      comp: 'venture',
+      prop: 'paused_from',
+      value: null,
+    }],
   ]
 Deno.test('dot-param routing', () => {
   for (let [arg, want] of CASES) {
@@ -228,6 +234,19 @@ Deno.test('dot-param routing', () => {
     doc: { title: 'a' },
     task: { status: 'wip' },
   })
+})
+
+// A bare facet used to reach propAt() with an empty prop and dereference
+// undefined — `Cannot read properties of undefined (reading 'type')` landed on
+// the operator (T-12981). Now it teaches the write spelling. Assert the MESSAGE,
+// not just that it throws: the old crash threw too.
+Deno.test('param: a bare facet teaches instead of crashing (T-12981)', () => {
+  // Assert the MESSAGE, not just that it throws — the old crash threw too (a
+  // raw TypeError, "Cannot read properties of undefined"). A facet with columns
+  // names its write spelling; a column-less one says it's server-stamped.
+  assertThrows(() => param('.proposed='), Error, '.proposed.at=')
+  assertThrows(() => param('.decided='), Error, '.decided.at=')
+  assertThrows(() => param('.archived='), Error, 'server-stamped mark')
 })
 
 Deno.test('find: T-num, bare num, eid, alias slug', () => {

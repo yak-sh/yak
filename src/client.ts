@@ -749,6 +749,20 @@ export let param = (arg: string): Param | null => {
     }
     p = { ...r, value: raw }
   }
+  if (!p.prop) {
+    // A bare facet (.proposed, .archived) is a presence mark, not a column:
+    // route() hands it the filter grammar (= absent, ~= present), but there's
+    // no scalar to write through, so propAt() below found nothing and the raw
+    // TypeError reached the operator (T-12981). Name the working spelling.
+    let cols = Object.keys(comps[p.comp] ?? {})
+    throw new Error(
+      cols.length
+        ? `.${p.comp} is a mark — write it as .${p.comp}.${
+          cols[0]
+        }=<value> (e.g. .${p.comp}.${cols[0]}=now)`
+        : `.${p.comp} is a server-stamped mark; it isn't set through a dot-param`,
+    )
+  }
   let declared = propAt(p.comp, p.prop)!
   if (!(typeof declared.type == 'object' && 'eid' in declared.type)) {
     p.value = parseProp(declared, raw)
