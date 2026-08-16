@@ -1122,3 +1122,92 @@ Deno.test('memory_save guards the body it replaces', async () => {
     g.db.close()
   }
 })
+
+// task_new must DEFAULT the project to the caller's — an orphaned task (no
+// project) is off every board and can't land, silent until a land fails
+// (T-16496). The caller is the session, resolved to its actor-when-a-project.
+Deno.test('task_new defaults the project to the caller (T-16496)', async () => {
+  let g = graph()
+  try {
+    let P = crypto.randomUUID()
+    let S = crypto.randomUUID()
+    apply(g.db, [
+      { eid: P, name: 'entity', comp: { eid: P, num: 30 } },
+      { eid: P, name: 'doc', comp: { title: 'Bindery', body: '' } },
+      { eid: P, name: 'project', comp: {} },
+      { eid: S, name: 'session', comp: { id: 'caller-sess', actor: P } },
+    ])
+    await protocol(g.io, async (client) => {
+      let out = await client.callTool({
+        name: 'task_new',
+        arguments: { title: 'Ship it', session: 'caller-sess' },
+      }) as ToolResult
+      assert(!out.isError, said(out))
+    })
+    let made = rows(snapshot(g.db))
+      .find((r) => r.comps.task && r.comps.doc?.title == 'Ship it')
+    assertEquals(String(made?.comps.task?.project), P)
+  } finally {
+    g.db.close()
+  }
+})
+
+// An explicit .project= still wins over the caller default.
+Deno.test('task_new honors an explicit project over the caller (T-16496)', async () => {
+  let g = graph()
+  try {
+    let P = crypto.randomUUID()
+    let P2 = crypto.randomUUID()
+    let S = crypto.randomUUID()
+    apply(g.db, [
+      { eid: P, name: 'entity', comp: { eid: P, num: 30 } },
+      { eid: P, name: 'doc', comp: { title: 'Bindery', body: '' } },
+      { eid: P, name: 'project', comp: {} },
+      { eid: P2, name: 'entity', comp: { eid: P2, num: 40 } },
+      { eid: P2, name: 'doc', comp: { title: 'Other', body: '' } },
+      { eid: P2, name: 'project', comp: {} },
+      { eid: S, name: 'session', comp: { id: 'caller-sess', actor: P } },
+    ])
+    // The server MINTS nums, so read back P2's real human id for the param.
+    let p2Human = `P-${rows(snapshot(g.db)).find((r) => r.eid == P2)!.num}`
+    await protocol(g.io, async (client) => {
+      let out = await client.callTool({
+        name: 'task_new',
+        arguments: {
+          title: 'Cross-project',
+          params: [`.project=${p2Human}`],
+          session: 'caller-sess',
+        },
+      }) as ToolResult
+      assert(!out.isError, said(out))
+    })
+    let made = rows(snapshot(g.db))
+      .find((r) => r.comps.doc?.title == 'Cross-project')
+    assertEquals(String(made?.comps.task?.project), P2)
+  } finally {
+    g.db.close()
+  }
+})
+
+// An unplaceable caller (no session, no scope) still creates the task — best
+// effort, never a crash — it just carries no project.
+Deno.test('task_new without a placeable caller still creates the task', async () => {
+  let g = graph()
+  try {
+    await protocol(g.io, async (client) => {
+      let out = await client.callTool({
+        name: 'task_new',
+        arguments: { title: 'Loose' },
+      }) as ToolResult
+      assert(!out.isError, said(out))
+    })
+    let made = rows(snapshot(g.db)).find((r) => r.comps.doc?.title == 'Loose')
+    assert(made, 'task created')
+    assert(
+      !made?.comps.task?.project,
+      'no project when the caller is unplaceable',
+    )
+  } finally {
+    g.db.close()
+  }
+})

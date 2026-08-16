@@ -503,6 +503,13 @@ let create = async (got: Got) => {
   if (priority != null) grouped.task = { priority, ...grouped.task }
   grouped.doc = { title: title.join(' '), ...grouped.doc }
   if (!grouped.doc.title) throw new Error('a task needs a .title')
+  // Default the project to the one this cwd/session stands in — an orphaned
+  // task is off every board and can't land (T-16496). An explicit .project=
+  // wins; scopeOf is undefined only when nothing places the caller.
+  if (!grouped.task?.project) {
+    let scope = await scopeOf()
+    if (scope) grouped.task = { ...grouped.task, project: scope }
+  }
   let eid = crypto.randomUUID()
   await send(taskChanges(eid, grouped))
   print(`${await minted(eid)} created`)

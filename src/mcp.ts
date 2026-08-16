@@ -54,6 +54,7 @@ import {
   RETIRED_TYPE,
   type Row,
   rows,
+  scopeFor,
   search,
   send,
   similarHint,
@@ -390,6 +391,17 @@ lands in one atomic apply. Reference param values accept human ids
       if (!want.length || want.some((t) => !t.title)) {
         return err('every task needs a title (pass title or tasks[])')
       }
+      // Default the project to the CALLER'S — the session (MCP has no cwd)
+      // resolves to its persona's home or its actor-when-a-project. A task
+      // with no project is orphaned: off every board and unlandable, silent
+      // until a land fails (T-16496). An explicit .project= in params still
+      // wins. scopeFor is undefined only when nothing places the caller.
+      let scope = scopeFor(
+        all,
+        session
+          ? all.find((r) => String(r.comps.session?.id) == session)
+          : undefined,
+      )
       let minted: string[] = []
       let changes = want.flatMap((t) => {
         let grouped = patches(derefParams(all, parseAll(t.params ?? [])))
@@ -399,6 +411,9 @@ lands in one atomic apply. Reference param values accept human ids
           ...(t.body != null ? { body: t.body } : {}),
         }
         if (t.status) grouped.task = { ...grouped.task, status: t.status }
+        if (!grouped.task?.project && scope) {
+          grouped.task = { ...grouped.task, project: scope }
+        }
         let eid = crypto.randomUUID()
         minted.push(eid)
         return taskChanges(eid, grouped)
