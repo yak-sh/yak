@@ -218,6 +218,9 @@ Deno.test('listing: a plural kind is the list verb, the singular is a subject', 
   assertEquals(listing('project', []), undefined)
   assertEquals(listing('T-3', []), undefined)
   assertEquals(listing(undefined, []), undefined)
+  // `docs` spells the plural of the `doc` kind but is also a registered verb,
+  // so the verb wins — the plural listing must not shadow it.
+  assertEquals(listing('docs', []), undefined)
 })
 
 Deno.test('subject: old commands and explicit focused commands keep their door', () => {

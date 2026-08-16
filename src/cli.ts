@@ -209,9 +209,15 @@ let bare = async () => {
 // `task projects` is `task list projects` — the plural IS the listing
 // verb, because it is what a cold caller types before reading any help.
 // Only the plural: the singular stays a subject (`task board`, `task
-// home`), so no alias is shadowed by a word that names a kind.
+// home`), so no alias is shadowed by a word that names a kind. And a
+// registered verb wins over the plural fallback — `task docs` lists the
+// architecture docs, not every `doc` entity — so a curated verb is never
+// shadowed by the kind whose plural it happens to spell (`task list docs`
+// still dumps them all).
 export let listing = (cmd: string | undefined, args: string[]) =>
-  cmd && plurals.has(cmd) ? { cmd: 'list', args: [cmd, ...args] } : undefined
+  cmd && plurals.has(cmd) && !cliVerbs.has(cmd)
+    ? { cmd: 'list', args: [cmd, ...args] }
+    : undefined
 
 // Subject-first is syntax sugar only. The returned route enters the same
 // handlers as the canonical subcommands, so graph behavior has one owner.
