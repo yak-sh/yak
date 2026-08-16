@@ -197,6 +197,12 @@ let logOf = (eid: string) =>
     : transcriptOf(eid)?.path ?? logFile(eid)
 
 let poll = () => Number(Deno.env.get('POLL_MS') ?? 300)
+// How often a watchFs-driven tailer wakes ON ITS OWN, absent any file event.
+// The tail itself is instant (a write wakes it); this tick only has to notice a
+// process that DIED without a final write, and stamp finished_at soon after. So
+// it can be far slower than the old 300ms drumbeat — an idle session that never
+// writes now costs one wakeup every few seconds, not three a second.
+let liveness = () => Number(Deno.env.get('LIVENESS_MS') ?? 2000)
 let grace = () => Number(Deno.env.get('STOP_GRACE_MS') ?? 5000)
 // How long a wrapper has to write its pidfile before the child is called
 // stillborn. Generous on purpose, and deliberately NOT shortened by the
@@ -1332,16 +1338,62 @@ export let drainNative = async (
     }, cast))
 }
 
+// A directory watch folded into one level-triggered wakeup, so a tailer wakes
+// on a WRITE (instant tail) instead of a fixed drumbeat. watchFs needs an
+// existing target and the log file may not exist yet, rotate, or be replaced —
+// the parent directory outlives all three, so we watch it and let the drain be
+// a cheap no-op when a sibling's write, not ours, is what fired. A single
+// reader pumps events into a counter (two concurrent reads on one FsWatcher
+// drop events); `wake` returns at once if any event arrived since the last
+// wait, else sleeps until the next event OR the liveness tick — whichever
+// first. No directory to watch degrades to a plain sleep, so the tick alone
+// carries the loop.
+let watchDir = (dir: string) => {
+  let fs: Deno.FsWatcher | undefined
+  try {
+    fs = Deno.watchFs(dir, { recursive: false })
+  } catch { /* no dir to watch — the liveness tick carries the loop */ }
+  let seen = 0 // events the pump has observed
+  let done = 0 // events the loop has already reacted to
+  let bump: () => void = () => {}
+  ;(async () => {
+    if (!fs) return
+    try {
+      for await (let _ of fs) {
+        seen++
+        bump()
+      }
+    } catch { /* closed */ }
+  })()
+  return {
+    wake: async (ms: number) => {
+      if (seen > done) return void (done = seen) // a write is already waiting
+      if (fs) {
+        await Promise.race([new Promise<void>((go) => (bump = go)), sleep(ms)])
+      } else await sleep(ms)
+      done = seen
+    },
+    close: () => fs?.close(),
+  }
+}
+
 // Sit beside the provider process, counting whatever log there is AND ingesting
 // each transcript line into the Session's ordered entry partition. Lifecycle
-// still comes only from the process, never from interpreting conversation.
+// still comes only from the process, never from interpreting conversation: the
+// file watch drives the tail, and the liveness tick is what still notices a
+// process that left without a parting write.
 let trail = async (eid: string, cast: Cast) => {
   let t: Tail = { at: 0, seq: 0, ended: false, errs: [] }
-  for (;;) {
-    let shut = !present(eid)
-    await drainNative(eid, t, cast, shut)
-    if (shut) return
-    await sleep(poll())
+  let watcher = watchDir(dirname(logOf(eid)))
+  try {
+    for (;;) {
+      let shut = !present(eid)
+      await drainNative(eid, t, cast, shut)
+      if (shut) return
+      await watcher.wake(liveness())
+    }
+  } finally {
+    watcher.close()
   }
 }
 
