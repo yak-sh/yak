@@ -5,6 +5,53 @@ import { devFile, serverFile } from './reload.ts'
 
 let src = new URL('.', import.meta.url).pathname
 let deno = Deno.execPath()
+
+// Where a successor's death reason is kept. Mirrors sessions.ts logsDir() (its
+// LOGS_DIR lever included), replicated rather than imported so the supervisor
+// stays off the served module graph. A managed run's stdout file IS its log;
+// the supervisor's children get the same treatment, one shared append log.
+let logsDir = () =>
+  Deno.env.get('LOGS_DIR') ?? `${Deno.env.get('HOME')}/.tasks/dev`
+
+// Pump a child's stderr to a durable file AND relay it to ours. `inherit` sent
+// every diagnostic to whatever stdio the supervisor had — on the live box a
+// socket owned by a shell long gone — so four handoff deaths left no reason on
+// disk (T-14308). Both writes are best-effort and this never rejects: logging
+// the failure must not become one. Returns once the child's stderr closes,
+// which a caller awaits on the failure path so the reason is on disk before the
+// throw; on success it runs unattended for the child's life.
+let record = async (stderr: ReadableStream<Uint8Array>, pid: number) => {
+  let file: Deno.FsFile | undefined
+  try {
+    Deno.mkdirSync(logsDir(), { recursive: true })
+    file = Deno.openSync(`${logsDir()}/dev.log`, {
+      create: true,
+      append: true,
+      write: true,
+    })
+    file.writeSync(
+      new TextEncoder().encode(`\n--- successor pid=${pid} ---\n`),
+    )
+  } catch {
+    // A log we cannot open is not a reason to lose the child's own output.
+  }
+  try {
+    for await (let chunk of stderr) {
+      try {
+        file?.writeSync(chunk)
+      } catch { /* durable write is best-effort */ }
+      try {
+        Deno.stderr.writeSync(chunk) // relayed when someone is watching
+      } catch { /* the inherited stdio may be a dead socket */ }
+    }
+  } catch {
+    // The stream aborted with the child; nothing left to record.
+  } finally {
+    try {
+      file?.close()
+    } catch { /* already gone */ }
+  }
+}
 let args = [
   'run',
   '-A',
@@ -56,8 +103,11 @@ export let launch = async (
     args: [...run, `--ready=${port}`],
     stdin: 'inherit',
     stdout: 'inherit',
-    stderr: 'inherit',
+    stderr: 'piped',
   }).spawn()
+  // Drain and durably record the child's stderr for its whole life. Piped
+  // stderr MUST be consumed or a chatty child blocks on a full pipe.
+  let recorded = record(child.stderr, child.pid)
   try {
     await Promise.race([
       signal(listener),
@@ -73,6 +123,9 @@ export let launch = async (
     } catch {
       // It already said why it could not start.
     }
+    // The child is condemned, so its stderr will close; wait for the pump so
+    // the reason it died is on disk before this rejection propagates.
+    await recorded
     throw e
   } finally {
     clearTimeout(timer)
@@ -225,7 +278,16 @@ let relaunch = async () => {
 }
 
 let supervise = async () => {
-  current = watch(await launch())
+  // A lost boot race (bind.ts refused this process — another server holds the
+  // port) is a clean stop, not a bug: one line and a non-42 exit ends the
+  // `deno task dev` loop rather than dumping an uncaught stack. Only the FIRST
+  // boot needs this; a later handoff/crash is absorbed by insist()/revive().
+  try {
+    current = watch(await launch())
+  } catch (e) {
+    console.error('supervisor could not start —', (e as Error).message)
+    Deno.exit(1)
+  }
   let handoff = insist(() => serial(swap))
   for await (let event of Deno.watchFs(src)) {
     if (event.paths.some(devFile)) return relaunch()

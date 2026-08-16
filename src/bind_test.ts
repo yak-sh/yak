@@ -24,6 +24,10 @@ let free = () => {
 
 let finding = <T>(value: T) => () => Promise.resolve(value)
 
+// An instant stand-in for the join-path retry delay, so the retrying cases
+// prove their logic without waiting real seconds.
+let now = () => Promise.resolve()
+
 slow('same: a path holds one graph, :memory: holds none', () => {
   assertEquals(same('/t/tasks.db', '/t/tasks.db'), true)
   assertEquals(same('/t/tasks.db', '/t/./tasks.db'), true)
@@ -70,9 +74,35 @@ slow(
   'alone: an empty address admits a first boot, not a successor',
   async () => {
     assertEquals(await alone(free(), '/t/tasks.db'), null)
-    await assertRejects(() => alone(free(), '/t/tasks.db', true))
+    // A join with no predecessor still fails — after the patience runs out.
+    await assertRejects(() => alone(free(), '/t/tasks.db', true, peer, 5, now))
   },
 )
+
+slow(
+  'alone: a busy peer that answers late is joined, not abandoned',
+  async () => {
+    // The incumbent misses the first probe (mid-swap burst) then answers. A
+    // first boot would have failed open to alone(); the successor waits and
+    // joins instead of dying before ready (T-14308).
+    let serving = { db: '/t/tasks.db', epoch: 'e', pid: 7 }
+    let calls = 0
+    let flaky = () => Promise.resolve(calls++ < 2 ? null : serving)
+    assertEquals(
+      (await alone(9999, '/t/tasks.db', true, flaky, 5, now))?.pid,
+      7,
+    )
+    assertEquals(calls, 3) // two empty answers, then the join takes
+  },
+)
+
+slow('alone: a first boot never waits on a missing peer', async () => {
+  // join=false skips the retry entirely: one probe, then proceed alone.
+  let calls = 0
+  let count = () => (calls++, Promise.resolve(null))
+  assertEquals(await alone(9999, '/t/tasks.db', false, count, 5, now), null)
+  assertEquals(calls, 1)
+})
 
 slow('alone: a peer over another file is refused, naming both', async () => {
   let { port, http } = answers({ db: '/live/tasks.db', epoch: 'e', pid: 7 })
@@ -139,6 +169,8 @@ slow('guard: the successor keeps the lock through the handoff', async () => {
   } finally {
     next.close()
   }
-  await assertRejects(() => guard(port, '/t/tasks.db', true, finding(null)))
+  await assertRejects(() =>
+    guard(port, '/t/tasks.db', true, finding(null), 5, now)
+  )
   using _after = await guard(port, '/t/tasks.db', false, finding(null))
 })

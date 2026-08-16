@@ -64,6 +64,8 @@ let lock = (port: number) => {
   )
 }
 
+let pause = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+
 // Throws rather than exits: a function that kills the process cannot be
 // tested, and the caller wants one clean line on stderr, not a stack.
 //
@@ -73,13 +75,30 @@ let lock = (port: number) => {
 // rather than the environment for the reason the ready port does: the server
 // spawns agents, and an env var would be inherited by every one of them and
 // by every probe they run, handing the mistake back its permission.
+//
+// A successor RETRIES a missing peer before it believes it: it is spawned only
+// to replace a live incumbent, and that incumbent is at its busiest exactly
+// when probed — server.ts's watcher fires on the same fs event and closes
+// every websocket before /graph can answer — so peer()'s deadline is asked of
+// a server mid-burst and times out into null. On a first boot the permissive
+// answer is safe (proceed alone); on the join path it is fatal (the successor
+// exits before ready, burning a whole boot every swap — T-14308), so here
+// "no answer" means "busy, ask again", not "gone". A genuinely absent
+// predecessor still fails after the patience runs out, and swap()'s catch
+// heals it as a fresh boot.
 export let alone = async (
   port: number,
   mine: string,
   join = false,
   find = peer,
+  tries = 5,
+  rest = pause,
 ) => {
   let held = await find(port)
+  for (let n = 1; !held && join && n < tries; n++) {
+    await rest(1000)
+    held = await find(port)
+  }
   if (!held) {
     if (join) {
       throw new Error(
@@ -127,6 +146,8 @@ export let guard = async (
   mine: string,
   join = false,
   find = peer,
+  tries = 5,
+  rest = pause,
 ) => {
   let file = lock(port)
   if (!file.tryLockSync(!join)) {
@@ -143,7 +164,7 @@ export let guard = async (
     )
   }
   try {
-    await alone(port, mine, join, find)
+    await alone(port, mine, join, find, tries, rest)
     return file
   } catch (e) {
     file.close()

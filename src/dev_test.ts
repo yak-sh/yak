@@ -1,23 +1,52 @@
 // The supervisor trusts a child only after its private ready handshake. This
 // probe uses a tiny child instead of booting the graph server.
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import { insist, launch } from './dev.ts'
 import { slow } from './testing.ts'
 
 let tick = (ms = 0) => new Promise((r) => setTimeout(r, ms))
 
+// Route the supervisor's durable stderr log to a throwaway dir so a launch
+// never writes to the live ~/.tasks/dev/dev.log during the suite.
+let withLogs = async (fn: (dir: string) => Promise<void>) => {
+  let dir = await Deno.makeTempDir()
+  let prev = Deno.env.get('LOGS_DIR')
+  Deno.env.set('LOGS_DIR', dir)
+  try {
+    await fn(dir)
+  } finally {
+    prev == null ? Deno.env.delete('LOGS_DIR') : Deno.env.set('LOGS_DIR', prev)
+    await Deno.remove(dir, { recursive: true })
+  }
+}
+
 slow('launch: returns a child only after its ready signal', async () => {
-  let js = `
-    let arg = Deno.args.find((a) => a.startsWith('--ready='))
-    using conn = await Deno.connect({
-      hostname: '127.0.0.1',
-      port: Number(arg.split('=')[1]),
-    })
-    await conn.write(new Uint8Array([1]))
-  `
-  // '--' hands the appended --ready flag to the code as Deno.args.
-  let child = await launch(Deno.execPath(), ['eval', js, '--'])
-  assertEquals((await child.status).success, true)
+  await withLogs(async () => {
+    let js = `
+      let arg = Deno.args.find((a) => a.startsWith('--ready='))
+      using conn = await Deno.connect({
+        hostname: '127.0.0.1',
+        port: Number(arg.split('=')[1]),
+      })
+      await conn.write(new Uint8Array([1]))
+    `
+    // '--' hands the appended --ready flag to the code as Deno.args.
+    let child = await launch(Deno.execPath(), ['eval', js, '--'])
+    assertEquals((await child.status).success, true)
+  })
+})
+
+slow('launch: a successor that dies leaves its reason on disk', async () => {
+  // The bug this closes: `inherit` sent every death reason to a dead socket,
+  // so four handoff failures left no error text (T-14308). A child that
+  // refuses to start must now be readable afterward.
+  await withLogs(async (dir) => {
+    let js = `console.error('boom: this successor refused to start')
+      Deno.exit(3)`
+    await assertRejects(() => launch(Deno.execPath(), ['eval', js, '--']))
+    let log = await Deno.readTextFile(`${dir}/dev.log`)
+    assertStringIncludes(log, 'boom: this successor refused to start')
+  })
 })
 
 slow('insist: a handoff that failed comes back until it takes', async () => {
