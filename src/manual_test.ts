@@ -97,7 +97,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       'role retire': 'role retire [ids…] [--all]',
       probes: 'probes [--all] [--reap] [--grace=30]',
       telemetry: 'telemetry [--errors] [--since=ISO] [-n=N]',
-      wake: 'wake <who> <when…> [target] [--body=BODY]',
+      wake: 'wake <who> [when…] [target] [--body=BODY] [--gone]',
       ':': ':<command> … | <id> :<command> …',
       help: 'help [verb|grammar|:] [nested verb]',
       ls: 'ls [filters…] [--json]',

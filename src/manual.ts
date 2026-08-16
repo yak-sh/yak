@@ -750,21 +750,27 @@ export let manuals = declare({
       'task wake S-31 in 60m',
       'task wake homelab "9am tomorrow" T-42',
       'task wake home "in 900s" --body="mid mail-loop port, T-7018 next"',
+      'task wake home --gone',
+      'task wake homelab --gone T-42',
     ],
     detail: 'The optional --body (or .body=@-, @file) is a NOTE — what you ' +
       'were mid-doing, why you will return. It rides through to the knock the ' +
       'wake mints, so a resumed session reconstitutes instead of guessing. A ' +
       'cadence return (a wake at your own home board) reads "your pass ' +
-      'resumes"; any other target reads "look at <id>".',
+      'resumes"; any other target reads "look at <id>".\n' +
+      '--gone clears a pending wake, deleting the row so the timer skips it — ' +
+      'there is no status to flip, and a `set .status=` would report success ' +
+      'while the wake fired anyway. Bare, it clears the untargeted cadence ' +
+      'wake (the YELLOW park case); with a target, that one reminder.',
     root: true,
     dots: ['body'],
     body: 'text',
     args: [
       arg('who', id),
-      arg('when', text, true),
+      arg('when', text, true, false),
       arg('target', id, false, false),
     ],
-    opts: [body],
+    opts: [body, flag('--gone')],
   },
   ':': {
     syntax: ':<command> … | <id> :<command> …',

@@ -1260,6 +1260,43 @@ let release = async (got: Got) => {
   print(`${idOf(row)} released`)
 }
 
+// `task wake <who> --gone [target]` clears a pending wake. A wake has no
+// status to flip — it is unacted while it wears neither delivered nor error,
+// and firing reads exactly that (wake.ts pending()), never a status column, so
+// a `set .status=cancelled` reports success while the wake fires anyway
+// (T-12471). Deleting the row is the honest stop: it is gone, so the timer's
+// next re-arm never sees it. Bare, it clears the untargeted CADENCE wake — the
+// YELLOW-park case in M-7323; with a target, only that one reminder, the same
+// cadence-vs-reminder split apply()'s replaceWakes already draws on the mint
+// side.
+let wakeCancel = async (rest: string[]) => {
+  let words = rest.filter((w) => w != '--gone')
+  if (!words[0] || words.length > 2) {
+    throw new UsageError(
+      'task wake <who> --gone [target] — name whose wake to clear',
+    )
+  }
+  let who = await needed(words[0])
+  let target = words[1] ? await needed(words[1]) : undefined
+  let pending = await query([
+    '.wake!',
+    `.deliver.to=${who.eid}`,
+    '.delivered=',
+    '.error=',
+    target ? `.wake.target=${target.eid}` : '.wake.target=',
+  ])
+  let where = target ? ` → ${idOf(target)}` : ''
+  if (!pending.length) return print(`no pending wake for ${idOf(who)}${where}`)
+  await send(
+    pending.map((r): Change => ({ eid: r.eid, name: 'entity', comp: null })),
+  )
+  print(
+    `cleared ${pending.length} wake${pending.length == 1 ? '' : 's'} for ${
+      idOf(who)
+    }${where}`,
+  )
+}
+
 // A role is DESIRED capacity, so the only honest stop is a state patch. The
 // reconciler drives processes toward this row every couple of seconds, which
 // means killing a pane or a tmux session is not a stop — it is a relaunch with
@@ -2719,7 +2756,7 @@ export let verbs = bind({
   // The note (what you were mid-doing) rides the body door and folds onto the
   // colon line as `-- <note>`, the same `--` :mail uses for its body.
   wake: (got) =>
-    colon(undefined, [
+    got.flags.has('--gone') ? wakeCancel(got.words) : colon(undefined, [
       'wake',
       ...got.words,
       ...(got.body != null ? ['--', got.body] : []),
