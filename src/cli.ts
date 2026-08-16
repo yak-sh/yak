@@ -2784,6 +2784,7 @@ export let verbs = bind({
   context,
   wrap,
   create,
+  rm: del,
 })
 
 // Only run the CLI when invoked as the program — importing this module (e.g.

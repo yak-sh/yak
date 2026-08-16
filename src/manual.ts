@@ -833,6 +833,19 @@ export let manuals = declare({
     args: [arg('title', text, true, false)],
     passthrough: true,
   },
+  // `rm` stays a supported top-level alias of `delete` — the shell verb a
+  // caller reaches for on first guess (T-18345). Without this entry `rm`
+  // isn't a cliVerb, so `task rm T-18345` fell through to subject-first
+  // parsing (`rm` read as the id) and failed on the second word instead of
+  // naming the actual mistake. `alias: true` keeps it out of root help;
+  // the canonical spelling is `delete`.
+  rm: {
+    about: 'tombstone an entity — the one warm path that REMOVES',
+    examples: ['task rm C-17310', 'task rm T-42 --cascade'],
+    alias: true,
+    args: [arg('id', id)],
+    opts: [flag('--cascade'), flag('--force')],
+  },
 })
 
 export let cliVerbs = new Set(

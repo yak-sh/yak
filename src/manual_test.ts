@@ -104,6 +104,7 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       context: 'context [sid] [--hook] [--subagent]',
       wrap: 'wrap [sid] [--hook]',
       create: 'create [title…]',
+      rm: 'rm <id> [--cascade] [--force]',
     },
   )
 })
