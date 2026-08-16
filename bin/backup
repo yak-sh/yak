@@ -49,6 +49,13 @@ mkdir -p snap
 # longer what history stores. It lives outside the repo (.gitignore) as the
 # consistent point-in-time source the text dump is written from, so the dump
 # can never catch the live db mid-transaction either.
+# Keep the query planner's stats fresh (T-16325): PRAGMA optimize updates
+# sqlite_stat1 for tables that drifted as the graph grew, so plans don't rot
+# with size. Safe on live data — it only rewrites the stat table. The
+# long-lived server connection runs this at graceful shutdown too; this hourly
+# run covers ungraceful exits (crash/kill) that never reach the drain.
+sq tasks.db "PRAGMA optimize;"
+
 rm -f snap/tasks.db # VACUUM INTO refuses to overwrite
 sq tasks.db "VACUUM INTO 'snap/tasks.db'"
 sq snap/tasks.db "pragma integrity_check;" | grep -qx ok || {

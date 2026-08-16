@@ -1853,6 +1853,17 @@ let drain = async () => {
   await managed.settle()
   await codexAccount.close()
   ownership.close()
+  // PRAGMA optimize on the long-lived connection at graceful shutdown — the
+  // point SQLite recommends for a persistent connection (T-16325). Since 3.46
+  // it auto-analyzes tables whose sqlite_stat1 drifted or is missing as the
+  // graph grew, so the next boot's planner starts on fresh stats instead of
+  // plans that rot with size. Best-effort: a stats refresh must never hold up
+  // a clean shutdown, and it only ever rewrites sqlite_stat1.
+  try {
+    db.exec('pragma optimize')
+  } catch (e) {
+    console.warn('pragma optimize skipped —', e)
+  }
   Deno.exit(0)
 }
 
