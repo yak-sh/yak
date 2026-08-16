@@ -59,7 +59,7 @@ export let topology = <T>(
   let pending = new Map<string, T>()
   let mine = new Map<string, Use>()
   let peers = new Map<string, { seen: number; uses: Use[] }>()
-  let present = new Map<string, string>()
+  let present = new Set<string>()
   let installed = new Map<string, string>()
   let clock = 0
   let timer: ReturnType<typeof setInterval> | undefined
@@ -86,23 +86,42 @@ export let topology = <T>(
         ) found.set(use.name, { tab: id, use })
       }
     }
-    return new Map([...found].map(([name, pick]) => [name, pick.use.value]))
+    // Return the winning PICK per name, not just its value: settle() needs to
+    // know WHO owns each name and at what rev, not only what to install.
+    return found
   }
+
+  // A subscription's owner identity: which tab holds the name, at which rev,
+  // for which query. Because a value can only change through a fresh use()
+  // (which bumps rev), this token moves exactly when a new tab takes the name
+  // or the query itself moves — and stays put across the unchanged 30s
+  // ownership pulses. That makes it the trigger for a one-shot refresh.
+  let token = (pick: { tab: string; use: Use }) =>
+    `${pick.tab}#${pick.use.rev}:${pick.use.value}`
 
   let settle = (force = false) => {
     let next = wanted()
-    for (let name of present.keys()) {
+    for (let name of present) {
       if (!next.has(name)) io.forget?.(name)
     }
-    present = next
+    present = new Set(next.keys())
     if (!(standalone || (leader && (serving || force)))) return
     for (let name of installed.keys()) {
       if (!next.has(name)) io.unsubscribe?.(name)
     }
-    for (let [name, value] of next) {
-      if (installed.get(name) != value) io.subscribe?.(name, value)
+    for (let [name, pick] of next) {
+      // Subscribe on a new name, a moved query, OR a new owning tab. The last
+      // is the fix for T-16854: a follower opening an already-installed
+      // subscription (a shared Session partition) must be replayed the current
+      // set, not just future deltas, or its log renders empty forever. The
+      // server answers a repeat subscribe with a fresh `replace` frame, which
+      // fans through the normal landing path to every tab. The owner token is
+      // stable across pulses, so an unchanged pulse refreshes nothing.
+      if (installed.get(name) != token(pick)) {
+        io.subscribe?.(name, pick.use.value)
+      }
     }
-    installed = new Map(next)
+    installed = new Map([...next].map(([name, pick]) => [name, token(pick)]))
   }
 
   let pulse = () => {

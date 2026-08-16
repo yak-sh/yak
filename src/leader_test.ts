@@ -241,13 +241,21 @@ slow('one board name lives until its final tab owner leaves', async () => {
   await Promise.all([a.start(), b.start()])
 
   a.use('board:x', '.status=open')
+  // b opening the same name is a new owner: the leader refreshes it once so
+  // the newcomer is replayed the current set (T-16854), even though a already
+  // held it with the same query. a dropping its own hold changes no owner, so
+  // it sends nothing.
   b.use('board:x', '.status=open')
   a.drop('board:x')
-  assertEquals(calls[0], ['sub:board:x:.status=open'])
+  assertEquals(calls[0], [
+    'sub:board:x:.status=open',
+    'sub:board:x:.status=open',
+  ])
 
   b.use('board:x', '.status=done')
   b.drop('board:x')
   assertEquals(calls[0], [
+    'sub:board:x:.status=open',
     'sub:board:x:.status=open',
     'sub:board:x:.status=done',
     'unsub:board:x',
@@ -258,6 +266,59 @@ slow('one board name lives until its final tab owner leaves', async () => {
   leases[0].resolve()
   leases[1].resolve()
 })
+
+slow(
+  'a new tab refreshes an installed subscription once; a pulse never does',
+  async () => {
+    let lock = locks()
+    let channel = channels<string>()
+    let lease = deferred()
+    let calls: string[] = []
+    let leader = topology(
+      lock,
+      channel(),
+      {
+        lead: () => Promise.resolve(),
+        follow: () => Promise.resolve(),
+        solo: () => Promise.resolve(),
+        receive: () => {},
+        send: () => {},
+        subscribe: (name, q) => calls.push(`sub:${name}:${q}`),
+        unsubscribe: (name) => calls.push(`unsub:${name}`),
+      },
+      () => 'leader',
+      () => lease.promise,
+    )
+    // A second tab shares the bus, but we drive its ownership frames by hand so
+    // the test controls when a pulse — a re-announce with unchanged revs —
+    // lands, distinct from a genuine new owner.
+    let peer = channel()
+    await leader.start()
+
+    leader.use('entries:S-1', '.entry.session=S-1')
+    assertEquals(calls, ['sub:entries:S-1:.entry.session=S-1'])
+
+    // A follower opens the same partition: a higher-rev use for the same query.
+    // The leader must refresh once so the newcomer receives the current set.
+    let use = { name: 'entries:S-1', value: '.entry.session=S-1', rev: 5 }
+    peer.postMessage({ kind: 'owned', tab: 'b', uses: [use] })
+    assertEquals(calls, [
+      'sub:entries:S-1:.entry.session=S-1',
+      'sub:entries:S-1:.entry.session=S-1',
+    ])
+
+    // A 30s ownership pulse re-announces the SAME use. Ownership is unchanged,
+    // so no second refresh goes out.
+    peer.postMessage({ kind: 'owned', tab: 'b', uses: [use] })
+    assertEquals(calls, [
+      'sub:entries:S-1:.entry.session=S-1',
+      'sub:entries:S-1:.entry.session=S-1',
+    ])
+
+    leader.leave()
+    lease.resolve()
+  },
+)
 
 Deno.test('a hidden tab survives throttling but an abandoned lease expires', () => {
   assertEquals(stale(0, 180_000), false)
