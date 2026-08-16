@@ -4507,6 +4507,22 @@ export let componentCounts = (db: DatabaseSync): Record<string, number> => {
   return out
 }
 
+// One entity's one component, projected exactly as snapshot() would (same
+// select()), read by primary key instead of walking the whole graph. The
+// narrow read a single-entity caller wants — snapshot() over a seeded graph
+// walks ~180 rows (~2ms); this hits the eid index (~µs). Undefined for an
+// absent row or a component with no readable columns.
+export let readComp = (
+  db: DatabaseSync,
+  eid: string,
+  name: string,
+): Record<string, unknown> | undefined =>
+  readable[name]
+    ? prep(db, `${select(name)} where eid = ?`).get(eid) as
+      | Record<string, unknown>
+      | undefined
+    : undefined
+
 // `deno task seed` (or a direct run) bootstraps the file without the server.
 if (import.meta.main) {
   let n = (q: string) => (prep(db, q).get() as { n: number }).n

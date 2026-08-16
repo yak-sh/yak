@@ -35,9 +35,13 @@ import { open } from './db.ts'
 // open savepoint — so a fresh deserialized handle, not a shared reset one, is
 // what stays compatible with every writer.)
 let snap: Uint8Array | undefined
+let bareSnap: Uint8Array | undefined
 let prev: DatabaseSync | undefined
-export let freshDb = () => {
-  if (!snap) snap = open(':memory:').serialize()
+
+// Deserialize a template into a fresh handle, closing the LAST one first (one
+// live copy at a time — see the note above). freshDb() and bareDb() share this
+// one `prev`, so alternating them across tests still keeps a single live image.
+let clone = (bytes: Uint8Array) => {
   if (prev) {
     try {
       prev.close()
@@ -46,10 +50,38 @@ export let freshDb = () => {
     }
   }
   let db = new DatabaseSync(':memory:')
-  db.deserialize(snap)
+  db.deserialize(bytes)
   db.exec('pragma busy_timeout = 5000')
   let sync = Deno.env.get('TASKS_SYNC')
   if (sync) db.exec(`pragma synchronous = ${sync}`)
   prev = db
   return db
+}
+
+export let freshDb = () => clone(snap ??= open(':memory:').serialize())
+
+// An UNSEEDED migrated clone: same schema as freshDb, but the ~180-row demo
+// seed stripped. snapshot() walks only the rows a test writes itself (~0.09ms)
+// instead of the whole seed (~1.9ms), so a test that creates its own entities
+// and reads them back stays well under the 1ms budget. Use freshDb() only when
+// a test actually reads the demo seed (its tasks, boards, or people).
+export let bareDb = () => {
+  if (!bareSnap) {
+    let d = open(':memory:')
+    // Strip the seed wholesale — FK off so table order doesn't matter (a parent
+    // may be cleared before its child). It's a connection pragma, not stored in
+    // the serialized bytes, so clones deserialize with enforcement intact.
+    d.exec('pragma foreign_keys = off')
+    for (
+      let { name } of d.prepare(
+        `select name from sqlite_master where type = 'table'
+           and name not like 'sqlite_%'
+           and name not like '%_fts%'
+           and name not like '%_gram%'`,
+      ).all() as { name: string }[]
+    ) d.exec(`delete from ${name}`)
+    bareSnap = d.serialize()
+    d.close()
+  }
+  return clone(bareSnap)
 }
