@@ -49,6 +49,55 @@ slow('launch: a successor that dies leaves its reason on disk', async () => {
   })
 })
 
+// Capture what the supervisor says to its OWN stderr (console.error), where a
+// boot-duration line and a failure diagnosis land — the journal, not dev.log.
+let saying = async (fn: () => Promise<void>) => {
+  let said: string[] = []
+  let was = console.error
+  console.error = (...a: unknown[]) => said.push(a.map(String).join(' '))
+  try {
+    await fn()
+  } finally {
+    console.error = was
+  }
+  return said.join('\n')
+}
+
+slow('launch: a ready boot surfaces its duration (T-13914)', async () => {
+  // A creeping regression must be visible before it crosses the deadline, so
+  // every successful boot logs how long it took.
+  await withLogs(async () => {
+    let js = `let arg = Deno.args.find((a) => a.startsWith('--ready='))
+      using conn = await Deno.connect({
+        hostname: '127.0.0.1',
+        port: Number(arg.split('=')[1]),
+      })
+      await conn.write(new Uint8Array([1]))`
+    let said = await saying(async () => {
+      let child = await launch(Deno.execPath(), ['eval', js, '--'])
+      await child.status
+    })
+    assertStringIncludes(said, 'ready in')
+    assertStringIncludes(said, 'ms')
+  })
+})
+
+slow(
+  'launch: a child that exits before ready is named, not silent',
+  async () => {
+    // Distinguish "died" from "never answered": the exit path names the pid and
+    // its code, so a failed attempt is a diagnosis rather than a silent retry.
+    await withLogs(async () => {
+      let js = `Deno.exit(7)`
+      let err = await assertRejects(() =>
+        launch(Deno.execPath(), ['eval', js, '--'])
+      ) as Error
+      assertStringIncludes(err.message, 'exited before ready')
+      assertStringIncludes(err.message, 'code 7')
+    })
+  },
+)
+
 slow('insist: a handoff that failed comes back until it takes', async () => {
   let tries = 0
   insist(() => Promise.resolve(++tries == 3), [0], 0)()
