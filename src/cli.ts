@@ -993,12 +993,29 @@ let subscribe = (mode: 'watch' | 'mute') => async (input: Got) => {
   print(`${gone ? `no longer ${said}` : said} ${idOf(row)}`)
 }
 
+// The session arg accepts a human S-id like every other reference
+// (CLAUDE.md invariant), not only the raw external session.id. An idLike arg
+// resolves to its session entity and yields that entity's external id; a
+// missing or non-session id ERRORS rather than minting a phantom session
+// named after the literal string — two builders passed `S-16450` and claimed
+// under a garbage session whose id was the string "S-16450", so `task land`
+// then found "no task" (T-16487). A raw external id (a uuid, never idLike)
+// passes straight through to claimChanges' find-or-mint, which reifies a
+// hook/spawn's session on first sight.
+let sessionArg = async (arg: string): Promise<string> => {
+  if (!idLike(arg)) return arg
+  let row = await needed(arg)
+  let sid = row.comps.session?.id
+  if (!sid) throw new Error(`${idOf(row)} is not a session`)
+  return String(sid)
+}
+
 // A claim is a session's lease on a task — other agents see who holds
 // it, and the server refuses to hand a held lease to someone else.
 let claim = async (got: Got) => {
   let id = got.args.id, sess = got.args.session
-  let session = sess ?? me()
   if (!id) throw new Error('task claim <id> [session]')
+  let session = sess ? await sessionArg(sess) : me()
   if (!session) {
     throw new Error('task claim <id> <session> (or run under a session)')
   }
