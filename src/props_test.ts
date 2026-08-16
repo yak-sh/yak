@@ -30,6 +30,8 @@ Deno.test('parseProp: text and optional scalar empties stay distinct', () => {
   }
   assertEquals(parse('target', { eid: '', death: 'keep' }, ''), null)
   assertEquals(parse('status', { enum: ['open'] }, null), null)
+  // An optional enum clears on empty too, like every other scalar (T-16491).
+  assertEquals(parse('status', { enum: ['open'] }, ''), null)
 })
 
 Deno.test('parseProp: numbers and priorities become finite numbers', () => {
@@ -143,7 +145,7 @@ Deno.test('parseProp: rejected values name the property, grammar, and input', ()
   let cases: [Prop, unknown, string][] = [
     [p('x', 'number'), '0x10', 'x is a finite decimal number'],
     [p('at', 'time'), 'later', 'at is a time'],
-    [p('status', { enum: ['open'] }), '', 'status is one of open'],
+    [p('status', { enum: ['open'] }), 'shut', 'status is one of open'],
     [p('title', 'text'), 3, "title is text — got '3'"],
   ]
   for (let [prop, input, message] of cases) {

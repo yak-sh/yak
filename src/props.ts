@@ -182,8 +182,12 @@ let url = (p: Prop, v: unknown): string => normalize(text(p, v))
 let tag = (t: PropType) =>
   typeof t == 'string' ? t : 'enum' in t ? 'enum' : 'eid' in t ? 'eid' : 'text'
 
+// Empty clears these — an optional enum too (T-16491): a closed set is still
+// an optional column, so `.venture.paused_from=` un-sets it the way every other
+// scalar does. A required enum (task.status: not null default) is protected by
+// the schema, so clearing it is refused loudly rather than silently corrupted.
 let nullable = (t: PropType) =>
-  ['number', 'priority', 'bool', 'time', 'eid'].includes(tag(t))
+  ['number', 'priority', 'bool', 'time', 'eid', 'enum'].includes(tag(t))
 
 type Parser = (
   p: Prop,
