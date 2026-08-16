@@ -12,7 +12,6 @@ import {
   addressed,
   around,
   authoringLine,
-  authoringOf,
   belongs,
   bornAt,
   bus,
@@ -45,6 +44,7 @@ import {
   isFile,
   isUnread,
   journalRows,
+  jsonAuthored,
   jsonOf,
   latestMessage,
   mailAt,
@@ -324,6 +324,8 @@ let list = async (got: Got) => {
       String(r.comps.deliver?.to ?? ''),
       String(r.comps.created?.by ?? ''),
       String(r.comps.created?.via ?? ''),
+      String(r.comps.updated?.by ?? ''),
+      String(r.comps.updated?.via ?? ''),
       String(r.comps.proposed?.by ?? ''),
       String(r.comps.proposed?.via ?? ''),
       String(r.comps.decided?.by ?? ''),
@@ -333,13 +335,7 @@ let list = async (got: Got) => {
   let authors = await fetched(refs.flatMap(refsIn))
   let context = [...refs, ...authors]
   if (json) {
-    return print(jsonText(hits.map((r) => {
-      let authoring = authoringOf(context, r)
-      return {
-        ...jsonOf(r),
-        ...Object.keys(authoring).length ? { authoring } : {},
-      }
-    })))
+    return print(jsonText(hits.map((r) => jsonAuthored(context, r))))
   }
   // Ids alone do not disambiguate — two projects are both titled `holdco`
   // — so the second column carries the handle a caller can TYPE: a task's
@@ -1493,10 +1489,8 @@ let show = async (got: Got) => {
     // Edges and comments surround the same entity shape every list door uses.
     let comments = all.filter((r) => r.comps.comment?.target == row.eid)
     let edges = edgesOf(snap, all, row.eid)
-    let authoring = authoringOf(all, row)
     print(jsonText({
-      ...jsonOf(row),
-      ...Object.keys(authoring).length ? { authoring } : {},
+      ...jsonAuthored(all, row),
       ...edges,
       comments: comments.map((r) => jsonOf(r)),
     }))

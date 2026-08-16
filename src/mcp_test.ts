@@ -391,7 +391,7 @@ Deno.test('MCP entity JSON shares the component-shaped contract', async () => {
   })
 })
 
-Deno.test('MCP query and show expose agent authoring context', async () => {
+Deno.test('MCP query and show expose provenance context in via', async () => {
   let actor = crypto.randomUUID(), persona = crypto.randomUUID()
   let session = crypto.randomUUID(), task = crypto.randomUUID()
   let changes: Change[] = [
@@ -441,12 +441,13 @@ Deno.test('MCP query and show expose agent authoring context', async () => {
         },
       }) as ToolResult
       let value = JSON.parse(said(result))
-      let authoring = (Array.isArray(value) ? value[0] : value).authoring
-      assertEquals(authoring.created.model, 'haiku')
-      assertEquals(authoring.created.effort, 'low')
-      assertEquals(authoring.created.persona.title, 'Scribe')
-      assertEquals(authoring.proposed.via.id, 'S-53')
-      assertEquals(authoring.decided.by.title, 'Task Graph')
+      let entity = Array.isArray(value) ? value[0] : value
+      assertEquals(entity.authoring, undefined)
+      assertEquals(entity.created.via.model, 'haiku')
+      assertEquals(entity.created.via.effort, 'low')
+      assertEquals(entity.created.via.persona.title, 'Scribe')
+      assertEquals(entity.proposed.via.id, 'S-53')
+      assertEquals(entity.decided.by, actor)
     }
   })
 })

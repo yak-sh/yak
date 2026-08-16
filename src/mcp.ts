@@ -26,7 +26,6 @@ import { sha } from './sha.ts'
 import { FILTERS, GRAMMAR } from './grammar.ts'
 import {
   authoringLine,
-  authoringOf,
   byBoard,
   checkRefs,
   claimant,
@@ -44,6 +43,7 @@ import {
   host,
   idOf,
   type JournalEntry,
+  jsonAuthored,
   jsonOf,
   memoryChanges,
   memoryHead,
@@ -1205,7 +1205,8 @@ recording someone's correction, and limit caps returned index lines
     'graph_query',
     `The WHOLE graph, not just tasks: every entity as {kind,
 entity:{eid,num}, ...components}, dot-param filtered. Tasks and docs also carry
-authoring: created/proposed/decided actor, instrument, model, effort, persona.
+created/proposed/decided stamps whose via value describes the instrument's
+model, effort, and persona.
 Cards, pins
 (positions), cameras (what each
 client is looking at), sessions, comments — all live here. A query is a
@@ -1258,6 +1259,8 @@ empty. ${GRAMMAR} ${FILTERS}`,
         authored.flatMap((r) => [
           String(r.comps.created?.by ?? ''),
           String(r.comps.created?.via ?? ''),
+          String(r.comps.updated?.by ?? ''),
+          String(r.comps.updated?.via ?? ''),
           String(r.comps.proposed?.by ?? ''),
           String(r.comps.proposed?.via ?? ''),
           String(r.comps.decided?.by ?? ''),
@@ -1266,13 +1269,13 @@ empty. ${GRAMMAR} ${FILTERS}`,
       )
       let context = [...refs, ...await io.get(refs.flatMap(refsIn))]
       let out = JSON.stringify(
-        hits.map((r) => {
-          let authoring = authoringOf(context, r)
-          return {
-            ...jsonOf(r, full ? r.comps : elide(r)),
-            ...Object.keys(authoring).length ? { authoring } : {},
-          }
-        }),
+        hits.map((r) =>
+          jsonAuthored(
+            context,
+            r,
+            full ? r.comps : elide(r),
+          )
+        ),
         null,
         2,
       )
@@ -1682,7 +1685,7 @@ in milliseconds (default 10000, maximum 30000).`,
   tool(
     'task_show',
     `One entity, whole: {kind, entity:{eid,num}, ...components}, plus its
-authoring (created/proposed/decided actor, instrument, model, effort, persona),
+created/proposed/decided stamps whose via value describes the instrument,
 edges (refs out, backrefs in) and comments in the same entity shape. id:
 T-3, bare num, or eid. Quarantined content requires quarantined: true. ${BUS}`,
     {
@@ -1703,12 +1706,10 @@ T-3, bare num, or eid. Quarantined content requires quarantined: true. ${BUS}`,
       if (!row) return err(`no entity: ${id}`)
       let comments = all.filter((r) => r.comps.comment?.target == row.eid)
       let edges = edgesOf(snap, all, row.eid)
-      let authoring = authoringOf(all, row)
       return bus(
         JSON.stringify(
           {
-            ...jsonOf(row),
-            ...Object.keys(authoring).length ? { authoring } : {},
+            ...jsonAuthored(all, row),
             ...edges,
             comments: comments.map((r) => jsonOf(r)),
           },

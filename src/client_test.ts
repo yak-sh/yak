@@ -1,7 +1,6 @@
 // The headless client's pure half: dot-param grammar, row assembly,
 // change builders, and the injection digest. No server, no db.
 import {
-  authoringOf,
   belongs,
   byBoard,
   checkRefs,
@@ -18,6 +17,7 @@ import {
   inflate,
   isOperator,
   isUnread,
+  jsonAuthored,
   jsonOf,
   ledger,
   mailAt,
@@ -2365,7 +2365,7 @@ Deno.test('showMd: frontmatter, edge sentences, claim holder, body', () => {
   assertMatch(back, /referenced by:\n {2}- T-2 \(wip\) — First · requires this/)
 })
 
-Deno.test('authoring exposes actors, model settings, persona, and decisions', () => {
+Deno.test('provenance exposes actors, model settings, persona, and decisions', () => {
   let actor = crypto.randomUUID(), session = crypto.randomUUID()
   let persona = crypto.randomUUID(), task = crypto.randomUUID()
   let graph: Snapshot = {
@@ -2398,6 +2398,11 @@ Deno.test('authoring exposes actors, model settings, persona, and decisions', ()
       },
       {
         eid: task,
+        name: 'updated',
+        comp: { at: '2026-08-04', by: actor, via: session },
+      },
+      {
+        eid: task,
         name: 'proposed',
         comp: { at: '2026-08-02', by: actor, via: session },
       },
@@ -2410,35 +2415,44 @@ Deno.test('authoring exposes actors, model settings, persona, and decisions', ()
     deps: [],
   }
   let all = rows(graph), row = all.find((r) => r.eid == task)!
-  assertEquals(authoringOf(all, row), {
-    created: {
-      at: '2026-08-01',
-      by: { id: 'U-30', kind: 'person', title: 'Jeff' },
-      via: { id: 'S-32', kind: 'session' },
+  let authored = jsonAuthored(all, row)
+  assertEquals(authored.created, {
+    at: '2026-08-01',
+    by: actor,
+    via: {
+      id: 'S-32',
+      kind: 'session',
       provider: 'claude',
       model: 'haiku',
       effort: 'low',
       persona: { id: 'N-31', kind: 'persona', title: 'Scribe' },
-    },
-    proposed: {
-      at: '2026-08-02',
-      by: { id: 'U-30', kind: 'person', title: 'Jeff' },
-      via: { id: 'S-32', kind: 'session' },
-      provider: 'claude',
-      model: 'haiku',
-      effort: 'low',
-      persona: { id: 'N-31', kind: 'persona', title: 'Scribe' },
-    },
-    decided: {
-      at: '2026-08-03',
-      by: { id: 'U-30', kind: 'person', title: 'Jeff' },
     },
   })
+  assertEquals(authored.proposed, {
+    at: '2026-08-02',
+    by: actor,
+    via: {
+      id: 'S-32',
+      kind: 'session',
+      provider: 'claude',
+      model: 'haiku',
+      effort: 'low',
+      persona: { id: 'N-31', kind: 'persona', title: 'Scribe' },
+    },
+  })
+  assertEquals(authored.decided, { at: '2026-08-03', by: actor })
   let shown = showMd(graph, all, row)
+  assertMatch(shown, /created:\n/)
+  assertMatch(shown, / {2}at: 2026-08-01T00:00:00-04:00/)
+  assertMatch(shown, / {2}by: U-30 — Jeff/)
   assertMatch(
     shown,
-    /authoring: created by U-30 Jeff via S-32 \(claude\/haiku\/low, persona N-31 Scribe\) · proposed .* · decided by U-30 Jeff/,
+    / {2}via: S-32 — agent-run \(claude\/haiku\/low, persona N-31 Scribe\)/,
   )
+  assertEquals(shown.includes('created.by:'), false)
+  assertMatch(shown, /updated:\n/)
+  assertEquals(shown.includes('updated.at:'), false)
+  assertEquals(shown.includes('modified:'), false)
   assertMatch(taskBlock(all, [], row)[0], /created by U-30 Jeff via S-32/)
 })
 

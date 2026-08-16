@@ -212,36 +212,41 @@ export let bornAt = (r: Row) => String(r.comps.created?.at ?? '')
 export let editedAt = (r: Row) =>
   String(r.comps.updated?.at ?? r.comps.created?.at ?? '')
 
-let faceOf = (all: Row[], eid: unknown) => {
+type Face = { id: string; kind?: string; title?: string }
+
+let faceOf = (all: Row[], eid: unknown): Face | undefined => {
   let r = all.find((r) => r.eid == String(eid))
   if (!r) return eid ? { id: String(eid) } : undefined
   let title = String(r.comps.doc?.title ?? '')
   return { id: idOf(r), kind: r.kind, ...(title ? { title } : {}) }
 }
 
-// A provenance stamp names the actor and instrument; the instrument says
-// whether those words came from a person at a browser or a model wearing a
-// persona. Keep this small: authorship needs identity, not a session's body,
-// transcript, or final answer.
-export let authoringOf = (all: Row[], row: Row) => {
-  let out: Record<string, Record<string, unknown>> = {}
-  for (let name of ['created', 'proposed', 'decided']) {
-    let stamp = row.comps[name]
-    if (!stamp) continue
-    let via = all.find((r) => r.eid == String(stamp.via ?? ''))
-    let s = via?.comps.session
-    let persona = s?.persona ? faceOf(all, s.persona) : undefined
-    out[name] = {
-      ...(stamp.at ? { at: stamp.at } : {}),
-      ...(stamp.by ? { by: faceOf(all, stamp.by) } : {}),
-      ...(stamp.via ? { via: faceOf(all, stamp.via) } : {}),
-      ...(s?.provider ? { provider: s.provider } : {}),
-      ...(s?.serving_model || s?.model
-        ? { model: s.serving_model || s.model }
-        : {}),
-      ...(s?.effort ? { effort: s.effort } : {}),
-      ...(persona ? { persona } : {}),
+// A provenance instrument's identity, without its transcript or final text.
+// This replaces a stamp's opaque via eid at agent-facing JSON doors.
+let viaOf = (all: Row[], eid: unknown) => {
+  let face = faceOf(all, eid)
+  let row = all.find((r) => r.eid == String(eid))
+  let s = row?.comps.session
+  let persona = s?.persona ? faceOf(all, s.persona) : undefined
+  return {
+    ...face,
+    ...(s?.provider ? { provider: s.provider } : {}),
+    ...(s?.serving_model || s?.model
+      ? { model: s.serving_model || s.model }
+      : {}),
+    ...(s?.effort ? { effort: s.effort } : {}),
+    ...(persona ? { persona } : {}),
+  }
+}
+
+export let jsonAuthored = (all: Row[], row: Row, source = row.comps) => {
+  let out = jsonOf(row, source)
+  for (let name of ['created', 'updated', 'proposed', 'decided']) {
+    let stamp = out[name]
+    if (!stamp || typeof stamp != 'object' || !('via' in stamp) || !stamp.via) {
+      continue
     }
+    out[name] = { ...stamp, via: viaOf(all, stamp.via) }
   }
   return out
 }
@@ -250,21 +255,24 @@ export let authoringOf = (all: Row[], row: Row) => {
 // task_show, but a model must never mistake fleet-authored work for the
 // owner's merely because the row was rendered on one line.
 export let authoringLine = (all: Row[], row: Row) => {
-  let authored = authoringOf(all, row)
   let face = (v: unknown) => {
     if (!v || typeof v != 'object') return ''
     let r: { id?: string; title?: string } = v
     return r?.title ? `${r.id} ${r.title}` : r?.id ?? ''
   }
-  return Object.entries(authored).flatMap(([name, a]) => {
-    let by = face(a.by)
-    let via = face(a.via)
-    let agent = [a.provider, a.model, a.effort].filter(Boolean).join('/')
-    let persona = face(a.persona)
+  return ['created', 'proposed', 'decided'].flatMap((name) => {
+    let stamp = row.comps[name]
+    if (!stamp) return []
+    let by = face(faceOf(all, stamp.by))
+    let via = stamp.via ? viaOf(all, stamp.via) : undefined
+    let viaFace = face(via)
+    let agent = [via?.provider, via?.model, via?.effort]
+      .filter(Boolean).join('/')
+    let persona = face(via?.persona)
     let instrument = [agent, persona ? `persona ${persona}` : '']
       .filter(Boolean).join(', ')
     let source = by ? ` by ${by}` : ''
-    if (via && via != by) source += ` via ${via}`
+    if (viaFace && viaFace != by) source += ` via ${viaFace}`
     if (instrument) source += ` (${instrument})`
     return source ? [`${name}${source}`] : []
   }).join(' · ')
@@ -3012,7 +3020,19 @@ export let showMd = (snap: { deps: Dep[] }, all: Row[], row: Row) => {
     let t = r.comps.doc?.title ?? r.comps.session?.id ?? ''
     // a mail's stored subject may be an encoded-word — decode to read
     let title = clip(r.comps.mail ? unmime(String(t)) : t)
-    return `${idOf(r)}${st ? ` (${st})` : ''}${title ? ` — ${title}` : ''}`
+    let s = r.comps.session
+    let model = s && [s.provider, s.serving_model || s.model, s.effort]
+      .filter(Boolean).join('/')
+    let persona = s?.persona ? faceOf(all, s.persona) : undefined
+    let agent = [
+      model,
+      persona
+        ? `persona ${persona.id}${persona.title ? ` ${persona.title}` : ''}`
+        : '',
+    ].filter(Boolean).join(', ')
+    return `${idOf(r)}${st ? ` (${st})` : ''}${title ? ` — ${title}` : ''}${
+      agent ? ` (${agent})` : ''
+    }`
   }
   let fm = [`id: ${idOf(row)}`, `kind: ${row.kind}`]
   for (let [comp, props] of Object.entries(comps)) {
@@ -3021,6 +3041,7 @@ export let showMd = (snap: { deps: Dep[] }, all: Row[], row: Row) => {
     // Stamped columns render too — the OUTCOME (acted_at, to_addr,
     // frozen_at) is the half a reader came for; only the wire refuses
     // them, not the page.
+    let values: string[] = []
     for (let prop of Object.keys({ ...props, ...stamped[comp] })) {
       let v = row.comps[comp][prop]
       if (v == null || v === '') {
@@ -3031,17 +3052,14 @@ export let showMd = (snap: { deps: Dep[] }, all: Row[], row: Row) => {
       let p = propAt(comp, prop)!
       let key = p.name
       let face = formatProp(p, v, { describe: said })
-      fm.push(`${key}: ${face}`)
+      if (['created', 'updated', 'proposed', 'decided'].includes(comp)) {
+        values.push(`  ${prop}: ${face}`)
+      } else fm.push(`${key}: ${face}`)
     }
+    if (values.length) fm.push(`${comp}:`, ...values)
   }
   let held = claimant(all, row)
   if (held) fm.push(`claim: ${held}`)
-  let authoring = authoringLine(all, row)
-  if (authoring) fm.push(`authoring: ${authoring}`)
-  let born = bornAt(row)
-  if (born) fm.push(`created: ${local(born)}`)
-  let edited = row.comps.updated?.at // absent until the first edit (T-6670)
-  if (edited) fm.push(`modified: ${local(String(edited))}`)
   // Edges as sentences, grouped by verb; the far side says its state.
   let refs = snap.deps.filter((d) => d.parent == row.eid)
   let backs = snap.deps.filter((d) => d.child == row.eid)
