@@ -101,25 +101,65 @@ let text = (bytes: Uint8Array[], total: number, limit: number) => {
     at += kept.length
     if (at == size) break
   }
-  let value = new TextDecoder().decode(joined)
-  return total > limit
-    ? `${value}\n[… ${total - limit} output bytes omitted]`
-    : value
+  return new TextDecoder().decode(joined)
 }
 
-let drain = async (stream: ReadableStream<Uint8Array>, limit: number) => {
-  let chunks: Uint8Array[] = []
-  let total = 0, kept = 0
-  for await (let chunk of stream) {
-    total += chunk.length
-    if (kept < limit) {
-      let part = chunk.slice(0, limit - kept)
-      chunks.push(part)
-      kept += part.length
-    }
-  }
-  return text(chunks, total, limit)
+type Drained = { text: string; total: number; file?: string }
+
+let write = async (file: Deno.FsFile, bytes: Uint8Array) => {
+  let at = 0
+  while (at < bytes.length) at += await file.write(bytes.subarray(at))
 }
+
+let drain = async (
+  stream: ReadableStream<Uint8Array>,
+  limit: number,
+  name: string,
+): Promise<Drained> => {
+  let chunks: Uint8Array[] = []
+  let total = 0,
+    kept = 0,
+    file: Deno.FsFile | undefined,
+    path: string | undefined
+  try {
+    for await (let chunk of stream) {
+      total += chunk.length
+      if (kept < limit) {
+        let part = chunk.slice(0, limit - kept)
+        chunks.push(part)
+        kept += part.length
+      }
+      if (!file && total > limit) {
+        path = await Deno.makeTempFile({
+          prefix: `tasks-${name}-`,
+          suffix: '.log',
+        })
+        file = await Deno.open(path, { write: true })
+        for (let part of chunks) await write(file, part)
+        let rest = chunk.subarray(Math.max(0, chunk.length - (total - limit)))
+        if (rest.length) await write(file, rest)
+      } else if (file) {
+        await write(file, chunk)
+      }
+    }
+  } catch (error) {
+    if (path) await Deno.remove(path).catch(() => {})
+    throw error
+  } finally {
+    file?.close()
+  }
+  return {
+    text: text(chunks, total, limit),
+    total,
+    ...path ? { file: path } : {},
+  }
+}
+
+let shown = (drained: Drained, name: string) =>
+  drained.file
+    ? `${drained.text}\n[… full ${name} saved to ${drained.file} ` +
+      `(${drained.total} bytes)]`
+    : drained.text
 
 let bounded = (value: unknown, fallback = 30_000) => {
   let n = Number(value ?? fallback)
@@ -147,7 +187,7 @@ export let localTools = async (
   options: LocalToolOptions,
 ): Promise<ToolHost> => {
   let tree = await Deno.realPath(options.tree)
-  let limit = Math.max(1024, options.outputLimit ?? 1024 * 1024)
+  let limit = Math.max(1024, options.outputLimit ?? 100_000)
 
   let run = async (
     command: string,
@@ -194,19 +234,27 @@ export let localTools = async (
     try {
       let [status, stdout, stderr] = await Promise.all([
         child.status,
-        drain(child.stdout, limit),
-        drain(child.stderr, limit),
+        drain(child.stdout, limit, 'stdout'),
+        drain(child.stderr, limit, 'stderr'),
       ])
-      if (context.signal?.aborted) throw context.signal.reason
+      if (context.signal?.aborted) {
+        for (let path of [stdout.file, stderr.file]) {
+          if (path) await Deno.remove(path).catch(() => {})
+        }
+        throw context.signal.reason
+      }
+      let stdoutText = shown(stdout, 'stdout')
+      let stderrText = shown(stderr, 'stderr')
       if (timedOut) {
-        stderr = `[timed out after ${timeout}ms]${stderr ? `\n${stderr}` : ''}`
+        stderrText = `[timed out after ${timeout}ms]` +
+          `${stderrText ? `\n${stderrText}` : ''}`
       }
       return {
-        output: stdout,
+        output: stdoutText,
         failed: !status.success,
         facets: {
           exit: { code: status.code },
-          ...stderr ? { stderr: { text: stderr } } : {},
+          ...stderrText ? { stderr: { text: stderrText } } : {},
         },
       }
     } finally {

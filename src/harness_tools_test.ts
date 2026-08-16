@@ -77,6 +77,35 @@ slow('local Git opens linked-worktree metadata on the host', async () => {
   }
 })
 
+slow('large command streams move whole output to named files', async () => {
+  let tree = await scratch()
+  let files: string[] = []
+  try {
+    let tools = await localTools({ tree, outputLimit: 1024 })
+    let out = await tools.call('shell', {
+      command: `printf '%02000d' 0; printf '%01500d' 0 >&2`,
+    })
+    let stdout = out.output.match(/full stdout saved to (.+) \(2000 bytes\)/)
+    let stderrText = String(out.facets?.stderr.text)
+    let stderr = stderrText.match(/full stderr saved to (.+) \(1500 bytes\)/)
+    if (stdout) files.push(stdout[1])
+    if (stderr) files.push(stderr[1])
+    assertEquals(out.output.slice(0, 1024), '0'.repeat(1024))
+    assertEquals(stderrText.slice(0, 1024), '0'.repeat(1024))
+    assertEquals(
+      stdout?.[1] && await Deno.readTextFile(stdout[1]),
+      '0'.repeat(2000),
+    )
+    assertEquals(
+      stderr?.[1] && await Deno.readTextFile(stderr[1]),
+      '0'.repeat(1500),
+    )
+  } finally {
+    for (let file of files) await Deno.remove(file).catch(() => {})
+    await Deno.remove(tree, { recursive: true })
+  }
+})
+
 slow(
   'local patch delegates Codex grammar unchanged and records facets',
   async () => {
