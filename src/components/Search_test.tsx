@@ -4,7 +4,7 @@ import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
 import { group, hitSlots, Search, searchOpen } from './Search.tsx'
-import { until } from '../testing.ts'
+import { slow, until } from '../testing.ts'
 
 let hit = (num: number, kind: string, title: string) => ({
   eid: `${num}`,
@@ -45,7 +45,9 @@ Deno.test('search fills tile titles and bodies with marked matches', () => {
   assertEquals((snip[1] as { type: unknown }).type, 'mark')
 })
 
-Deno.test('search sends only the settled query while typing', async () => {
+// Polls a real debounce window to prove only the settled query is sent — the
+// settle is the point, so it cannot be sub-ms; slow().
+slow('search sends only the settled query while typing', async () => {
   let prior = Object.entries({
     document: Object.getOwnPropertyDescriptor(globalThis, 'document'),
     fetch: Object.getOwnPropertyDescriptor(globalThis, 'fetch'),

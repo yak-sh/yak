@@ -18,6 +18,7 @@ import {
   takeEntry,
 } from './entries.ts'
 import { uuid } from './types.ts'
+import { slow } from './testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 let { apply, delta, numbered, open, snapshot } = await import('./db.ts')
@@ -357,7 +358,10 @@ Deno.test('failed leased work stays visible and cannot rerun', () => {
   db.close()
 })
 
-Deno.test('readEntries returns the whole partition past the pagination cap', () => {
+// Writes 504 entries on purpose — to outgrow the 500-row page and prove the
+// whole partition still reads back. The at-scale write is the point, not
+// trimmable, so it rides the slow tier.
+slow('readEntries returns the whole partition past the pagination cap', () => {
   let db = freshDb()
   let sid = session(db)
   // A long-lived Session outgrows one entriesOf page. The runner reads the

@@ -6,6 +6,7 @@ import { assertEquals, assertStringIncludes } from '@std/assert'
 import { TElement } from './dom.ts'
 import { Md } from './md.tsx'
 import { ansi, pane } from './paint.ts'
+import { slow } from '../testing.ts'
 
 let painted = (text: string) => {
   let root = new TElement('root')
@@ -13,7 +14,11 @@ let painted = (text: string) => {
   return pane(root).lines.map(ansi).join('\n')
 }
 
-Deno.test('terminal markdown highlights specified fenced code', () => {
+// Every case here renders <Md> through preact and highlights the fence with
+// hljs (grammar compile, and auto-detection when no language is named) — the
+// render+highlight path is inherently over the 1ms budget, so the whole file
+// rides the slow tier; test:all still exercises the ANSI-safety guards.
+slow('terminal markdown highlights specified fenced code', () => {
   let out = painted("```ts\nlet name: string = 'Ada'\n```")
   assertStringIncludes(out, '\x1b[38;2;230;126;128mlet\x1b[0m')
   assertStringIncludes(out, "\x1b[38;2;167;192;128m'Ada'\x1b[0m")
@@ -26,21 +31,21 @@ Deno.test('terminal markdown highlights specified fenced code', () => {
   )
 })
 
-Deno.test('terminal markdown detects unlabelled tilde fences', () => {
+slow('terminal markdown detects unlabelled tilde fences', () => {
   let out = painted(
     '~~~\n#!/usr/bin/env python3\ndef greet(name):\n    print(name)\n~~~',
   )
   assertStringIncludes(out, '\x1b[38;2;230;126;128mdef\x1b[0m')
 })
 
-Deno.test('terminal markdown detects indented code blocks', () => {
+slow('terminal markdown detects indented code blocks', () => {
   let out = painted(
     '    #!/usr/bin/env python3\n    def greet(name):\n        print(name)',
   )
   assertStringIncludes(out, '\x1b[38;2;230;126;128mdef\x1b[0m')
 })
 
-Deno.test('terminal highlighted code cannot speak ANSI', () => {
+slow('terminal highlighted code cannot speak ANSI', () => {
   let out = painted('```js\nlet x = "\x1b]52;c;QQ==\x07"\n```')
   assertEquals(out.includes('\x1b]52'), false)
   assertStringIncludes(out, ']52;c;QQ==')

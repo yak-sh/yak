@@ -6,8 +6,13 @@ import { parseHTML } from 'linkedom'
 import { compTone } from '../comp.ts'
 import { cache, ent } from '../../live.ts'
 import { applicable } from '../registry.ts'
+import { slow } from '../../testing.ts'
 
-Deno.test('raw formats are nested under Debug', async () => {
+// Each case imports Entity.tsx — the whole component registry — and mounts a
+// Debug view through preact; the first pays that registry import (and hljs to
+// render the Markdown/JSON tabs), the rest the mount. The registry load is the
+// floor here, not trimmable, so the whole file rides the slow tier.
+slow('raw formats are nested under Debug', async () => {
   await import('../Entity.tsx')
   let { DebugTabs } = await import('./Debug.tsx')
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
@@ -66,7 +71,7 @@ Deno.test('raw formats are nested under Debug', async () => {
   }
 })
 
-Deno.test('addable components keep their component tones', async () => {
+slow('addable components keep their component tones', async () => {
   await import('../Entity.tsx')
   let { AddComp } = await import('./Debug.tsx')
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
@@ -102,7 +107,7 @@ Deno.test('addable components keep their component tones', async () => {
   }
 })
 
-Deno.test('a reference reads as one association row, eid and all', async () => {
+slow('a reference reads as one association row, eid and all', async () => {
   await import('../Entity.tsx')
   let { Debug } = await import('./Debug.tsx')
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
@@ -144,7 +149,7 @@ Deno.test('a reference reads as one association row, eid and all', async () => {
   }
 })
 
-Deno.test('project backlinks omit attribution and cap associations', async () => {
+slow('project backlinks omit attribution and cap associations', async () => {
   await import('../Entity.tsx')
   let { ProjectDebug } = await import('./Debug.tsx')
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')

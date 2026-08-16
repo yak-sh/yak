@@ -2,6 +2,7 @@
 // re-vendored marked or a config change breaks one, this says so.
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { md, mdAbs, mdInline, mdMentions } from './md.ts'
+import { slow } from './testing.ts'
 
 Deno.test('mdInline: title markup has no block wrapper or nested links', () => {
   assertEquals(
@@ -27,13 +28,15 @@ Deno.test('md: gfm tables render', () => {
   assertStringIncludes(html, '<td>1</td>')
 })
 
-Deno.test('md: fenced code with blank lines survives whole', () => {
+// hljs highlights the fence — grammar compile and, absent a language, auto-
+// detection across every registered grammar: inherently heavy, so slow().
+slow('md: fenced code with blank lines survives whole', () => {
   let html = md('```\none\n\ntwo\n```')
   assertStringIncludes(html, '<pre><code class="hljs')
   assertStringIncludes(html, '</span>\n\ntwo')
 })
 
-Deno.test('md: fenced code follows its language or detects one', () => {
+slow('md: fenced code follows its language or detects one', () => {
   let typed = md("```ts\nlet name: string = 'Ada'\n```")
   assertStringIncludes(typed, '<code class="hljs language-ts">')
   assertStringIncludes(typed, '<span class="hljs-keyword">let</span>')

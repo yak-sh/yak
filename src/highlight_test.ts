@@ -2,8 +2,14 @@
 // explicit and inferred languages add only the library's semantic classes.
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { highlight } from './highlight.ts'
+import { slow } from './testing.ts'
 
-Deno.test('highlight: a specified language colors code and preserves text', () => {
+// Both invoke hljs's grammar work — compiling a language on first use, and, with
+// no language given, auto-detecting across every registered grammar. That cost
+// is the highlighter's, not trimmable, so they ride the slow tier. The escaping
+// guard below takes no grammar path (an unknown language never compiles), so it
+// stays a fast unit.
+slow('highlight: a specified language colors code and preserves text', () => {
   let lit = highlight("let name: string = 'Ada'", 'typescript')
   assertEquals(lit.language, 'typescript')
   assertStringIncludes(lit.html, 'hljs-keyword')
@@ -14,7 +20,7 @@ Deno.test('highlight: a specified language colors code and preserves text', () =
   )
 })
 
-Deno.test('highlight: an absent language is detected', () => {
+slow('highlight: an absent language is detected', () => {
   let lit = highlight(
     '#!/usr/bin/env python3\ndef greet(name):\n    print(f"hello {name}")',
   )

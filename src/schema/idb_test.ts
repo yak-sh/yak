@@ -22,6 +22,7 @@ import {
   storeNames,
 } from './idb.ts'
 import { assert, assertEquals } from '@std/assert'
+import { slow } from '../testing.ts'
 
 type Row = Record<string, Record<string, unknown> | undefined>
 type Graph = Record<string, Row>
@@ -263,7 +264,7 @@ Deno.test('the schema version is a positive int, moved by any shape change', () 
 // Frame-budget probe: the traversal set is the riskiest — an async cursor walk
 // where SQL would JOIN. Measure ready() (cold resolve) and refresh() (the live
 // re-test) over a graph large enough to be meaningful, and print the numbers.
-Deno.test('traversal resolves within the frame budget', async () => {
+slow('traversal resolves within the frame budget', async () => {
   let g: Graph = {}
   let N = 150
   for (let i = 0; i < N; i++) {
