@@ -271,6 +271,20 @@ Deno.test('create + patch + column clear', () => {
   assertEquals(comp(t, 'doc')?.body, 'b') // patch: untouched column survives
 })
 
+Deno.test('doc creates body-first: a missing title defaults to empty (T-10397)', () => {
+  // A session brief or comment is body-only; doc.title is NOT NULL with no
+  // default, so a body-first create used to raise a raw SQLite constraint.
+  let t = uid()
+  apply(db, [{ eid: t, name: 'doc', comp: { body: 'brief' } }])
+  assertEquals(comp(t, 'doc')?.title, '')
+  assertEquals(comp(t, 'doc')?.body, 'brief')
+  // A later body-only patch must not clobber a title set in between.
+  apply(db, [{ eid: t, name: 'doc', comp: { title: 'Named' } }])
+  apply(db, [{ eid: t, name: 'doc', comp: { body: 'more' } }])
+  assertEquals(comp(t, 'doc')?.title, 'Named')
+  assertEquals(comp(t, 'doc')?.body, 'more')
+})
+
 Deno.test('entity delete tombstones; nothing resurrects the eid', () => {
   let t = uid()
   apply(db, [{ eid: t, name: 'doc', comp: { title: 'gone' } }])

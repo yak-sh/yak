@@ -3385,6 +3385,17 @@ export let apply = (
         }
       }
       if (hit) continue
+      // A doc is title-optional: comments and session briefs are body-first,
+      // and an entity's display name is derived (kindOf), not its title. But
+      // doc.title is NOT NULL with no default (unlike body), so a body-only
+      // CREATE would raise a raw SQLite constraint the caller can't read
+      // (T-10397). Supply the empty title here, at the sole doc writer, and on
+      // CREATE only — the update above already ran, so an existing title is
+      // never clobbered. Empty is the natural absent title, mirroring body.
+      if (name == 'doc' && comp && !('title' in comp)) {
+        sent = ['title', ...sent]
+        vals = ['', ...vals]
+      }
       // No row: this change CREATES — spine + comp together, in a savepoint.
       // A known component that reaches SQL must land or fail its whole
       // batch: "applied N change(s)" means every accepted row landed.
