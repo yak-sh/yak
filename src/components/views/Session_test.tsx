@@ -7,7 +7,9 @@ import { type Ent } from '../../types.ts'
 import { resolve } from '../Entity.tsx'
 import { mount } from '../mount.ts'
 import {
+  doing,
   mentionSig,
+  observing,
   resolveMentions,
   SessionContext,
   SessionDiagnostics,
@@ -18,6 +20,29 @@ import {
   SessionSummary,
   threadMentions,
 } from './Session.tsx'
+
+Deno.test('session activity explains transcript and transient waits', () => {
+  assertEquals(doing(undefined, undefined, true), 'starting…')
+  assertEquals(
+    doing({ kind: 'say', role: 'agent', text: 'done' }, 'idle'),
+    'waiting for request…',
+  )
+  assertEquals(
+    doing({ kind: 'exec', command: 'deno task test' }),
+    'running command…',
+  )
+  assertEquals(
+    observing({
+      generation: 'g',
+      model: 'old model text',
+      reasoning: '',
+      tools: ['old_tool'],
+      items: [{ kind: 'reasoning', text: 'new thought' }],
+      rev: 3,
+    }),
+    'thinking…',
+  )
+})
 
 Deno.test('live session Tile omits its chip and lists every worked task', () => {
   let prior = globalThis.fetch

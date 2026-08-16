@@ -21,6 +21,7 @@ export type GraphLog = {
   busy: boolean
   terminal: boolean
   latest: number
+  activity?: { kind: 'tool' | 'model' | 'runner' | 'working'; label: string }
   model?: string
   stderr?: string
   context?: number
@@ -65,6 +66,49 @@ let usage = (comps: EntryRow['comps']) =>
       reasoning_tokens: Number(comps.usage.reasoning ?? 0),
     })
     : undefined
+
+// Busy is a lifecycle fact; activity says which unresolved edge owns it. A
+// lease distinguishes work an executor has picked up from work still queued.
+let activityOf = (rows: EntryRow[]) => {
+  let cancelled = new Set(
+    rows.flatMap((row) =>
+      row.comps.cancel?.target ? [text(row.comps.cancel.target)] : []
+    ),
+  )
+  let results = new Set(
+    rows.flatMap((row) =>
+      row.comps.result?.call ? [text(row.comps.result.call)] : []
+    ),
+  )
+  let outputs = new Set(
+    rows.flatMap((row) =>
+      row.comps.output?.source ? [text(row.comps.output.source)] : []
+    ),
+  )
+  let call = rows.findLast((row) =>
+    row.comps.call && !row.comps.error && !cancelled.has(row.eid) &&
+    !results.has(row.eid)
+  )
+  if (call) {
+    let name = toolName(call.comps)
+    return {
+      kind: 'tool' as const,
+      label: call.comps.lease ? `running ${name}…` : `waiting for ${name}…`,
+    }
+  }
+  let generation = rows.findLast((row) =>
+    row.comps.generation && !row.comps.error && !cancelled.has(row.eid) &&
+    !row.comps.delivered && !outputs.has(row.eid)
+  )
+  if (generation) {
+    return generation.comps.lease
+      ? { kind: 'model' as const, label: 'waiting for model…' }
+      : { kind: 'runner' as const, label: 'waiting for runner…' }
+  }
+  return rows.some((row) => row.comps.lease)
+    ? { kind: 'working' as const, label: 'working…' }
+    : undefined
+}
 
 let shown = (
   row: EntryRow,
@@ -197,6 +241,7 @@ export let graphLog = (source: EntryRow[]): GraphLog => {
   let stand = standingOf(rows)
   let busy = stand == 'busy'
   let terminal = stand == 'terminal'
+  let activity = busy ? activityOf(rows) : undefined
   let generation = rows.filter((row) => row.comps.generation).at(-1)
   let model = generation?.comps.generation
   let entries = rows.map((source) => {
@@ -220,6 +265,7 @@ export let graphLog = (source: EntryRow[]): GraphLog => {
     busy,
     terminal,
     latest: rows.at(-1)?.seq ?? 0,
+    ...(activity ? { activity } : {}),
     ...(context ? { context } : {}),
     ...model ? { model: text(model.serving_model || model.model) } : {},
   }

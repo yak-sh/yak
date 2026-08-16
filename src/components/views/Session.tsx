@@ -285,14 +285,26 @@ export let SessionReferences = ({ items }: { items: Mentioned[] }) => {
   )
 }
 
-// The tail thinks out loud: what the run is doing right now, read off
-// its newest row — thinking (with the streaming token count when the
-// squeeze kept one) or just working between events.
-let doing = (r?: LogRow) =>
+// The tail thinks out loud: provider progress and unresolved graph work win;
+// the newest durable row remains the fallback for process-backed sessions.
+export let doing = (r?: LogRow, turn?: string | null, starting = false) =>
   r?.kind == 'reason'
     ? 'thinking…'
     : r?.kind == 'sys' && r.tag == 'thinking'
     ? (r.text ? `thinking · ${r.text}` : 'thinking…')
+    : r?.kind == 'sys' && r.tag == 'generation'
+    ? 'waiting for model…'
+    : r?.kind == 'exec' && r.exit == null && !r.status
+    ? 'running command…'
+    : r?.kind == 'tool' && r.ok == null
+    ? `running ${r.name}…`
+    : turn == 'idle' || r?.kind == 'turn' ||
+        (r?.kind == 'say' && r.role == 'agent')
+    ? 'waiting for request…'
+    : r?.kind == 'say' && r.role == 'user'
+    ? 'waiting for response…'
+    : starting
+    ? 'starting…'
     : 'working…'
 
 export let SessionObservation = (
@@ -328,14 +340,16 @@ export let SessionObservation = (
   </Transient>
 )
 
-let observing = (state?: ObservationState) =>
-  state?.tools.at(-1)
-    ? `preparing ${state.tools.at(-1)}…`
-    : state?.model
+export let observing = (state?: ObservationState) => {
+  let item = state?.items.at(-1)
+  return item?.kind == 'tool'
+    ? `preparing ${item.name}…`
+    : item?.kind == 'model'
     ? 'responding…'
-    : state?.reasoning
+    : item?.kind == 'reasoning'
     ? 'thinking…'
     : undefined
+}
 
 // A named fact, present only when there IS one — absence says enough.
 let Fact = ({ k, v }: { k: string; v?: string | null }) =>
@@ -683,6 +697,16 @@ export let Session = ({ e }: { e: Ent }) => {
     [sig],
   )
   let mentions = resolveMentions(raw)
+  let graphActivity = native ? entries?.activity : undefined
+  let activity = graphActivity?.kind == 'tool'
+    ? graphActivity.label
+    : observing(stream) ?? graphActivity?.label ??
+      doing(
+        rows.at(-1)?.row,
+        s.turn ?? (status == 'idle' ? 'idle' : undefined),
+        !s.started_at,
+      )
+  let showActivity = live || status == 'idle'
   return (
     <Frame>
       <Head>
@@ -729,9 +753,7 @@ export let Session = ({ e }: { e: Ent }) => {
               : <Note key={x.eid} c={x} />
           )}
           {stream && <SessionObservation state={stream} repo={repo} />}
-          {live && (
-            <Think>✳ {observing(stream) ?? doing(rows.at(-1)?.row)}</Think>
-          )}
+          {showActivity && <Think>✳ {activity}</Think>}
         </Log>
         {
           /* stderr is durable evidence, not transcript: it has no seqs and

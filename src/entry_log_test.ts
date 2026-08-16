@@ -127,6 +127,10 @@ Deno.test('graph log derives busy and pages by sequence', () => {
     row('attention', 3, { attention: {} }),
   ]
   assertEquals(graphLog(rows).busy, true)
+  assertEquals(graphLog(rows).activity, {
+    kind: 'model',
+    label: 'waiting for model…',
+  })
   assertEquals(
     graphLogPage(rows, new URLSearchParams('after=1')).entries.map((e) =>
       e.seq
@@ -138,6 +142,41 @@ Deno.test('graph log derives busy and pages by sequence', () => {
       e.seq
     ),
     [2],
+  )
+})
+
+Deno.test('graph log names queued and running tool activity', () => {
+  let call = row('call', 2, {
+    call: { key: 'one' },
+    graph_query: { query: '.task.status=open' },
+  })
+  assertEquals(graphLog([call]).activity, {
+    kind: 'tool',
+    label: 'waiting for graph_query…',
+  })
+  assertEquals(
+    graphLog([
+      { ...call, comps: { ...call.comps, lease: { holder: 'runner' } } },
+    ]).activity,
+    {
+      kind: 'tool',
+      label: 'running graph_query…',
+    },
+  )
+  assertEquals(
+    graphLog([
+      call,
+      row('result', 3, { result: { call: 'call' } }),
+    ]).activity,
+    undefined,
+  )
+})
+
+Deno.test('graph log names a generation waiting to be picked up', () => {
+  assertEquals(
+    graphLog([row('generation', 1, { generation: { model: 'gpt' } })])
+      .activity,
+    { kind: 'runner', label: 'waiting for runner…' },
   )
 })
 
