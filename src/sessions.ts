@@ -375,6 +375,10 @@ export let maintainStandingFor = (changes: Change[], cast: Cast) => {
   let eids = new Set<string>()
   let sessions = new Set<string>()
   for (let c of changes) {
+    // Lease removal is the final cancellation edge: the cancel entry can land
+    // while its operation is still leased, so only this null frame makes the
+    // log idle.
+    if (c.name == 'lease') eids.add(c.eid)
     if (!c.comp) continue
     if (edgeComp.has(c.name)) eids.add(c.eid)
     else if (c.name == 'output' && c.comp.phase == 'final_answer') {

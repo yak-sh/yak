@@ -16,7 +16,7 @@ import {
   maintainStandingFor,
   standingBackfill,
 } from './sessions.ts'
-import { append, readEntries } from './entries.ts'
+import { append, cancelEntry, readEntries, takeEntry } from './entries.ts'
 import { standingOf } from './entry_log.ts'
 import { runnerSessions } from './managed_codex.ts'
 import { sessionRow } from './session_store.ts'
@@ -146,6 +146,25 @@ Deno.test('native standing tracks the log across turn edges', () => {
   )
   assertEquals(standing(eid), 'idle')
   assertEquals(standing(eid), truth())
+})
+
+Deno.test('cancelling a leased turn leaves its standing idle', () => {
+  let eid = native()
+  let input = append(db, eid, [{ message: { role: 'user' } }]).eids[0]
+  let gen = append(db, eid, [{
+    generation: { through: input, provider: 'codex', model: 'm' },
+  }]).eids[0]
+  let runner = uid()
+  apply(db, [{ eid: runner, name: 'runner', comp: { name: uid() } }])
+  let lease = takeEntry(db, gen, runner)!
+  cast(lease.changes)
+  assertEquals(standing(eid), 'busy')
+
+  cast(append(db, eid, [{ cancel: { target: gen } }]).changes)
+  assertEquals(standing(eid), 'busy')
+  cast(cancelEntry(db, lease.token))
+  assertEquals(standing(eid), 'idle')
+  assertEquals(standing(eid), standingOf(readEntries(db, eid)))
 })
 
 Deno.test('the tool loop holds standing steady between edges', () => {
