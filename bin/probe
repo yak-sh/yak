@@ -1,0 +1,5 @@
+#!/usr/bin/env -S deno run -A
+// bin/probe — the warm probe path. Thin shim over src/probe_tool.ts; -A is
+// required because reaping reads /proc to verify a pid before it signals it.
+import { main } from '../src/probe_tool.ts'
+await main()
