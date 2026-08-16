@@ -60,6 +60,7 @@ import {
   fleetApi,
   fleetRaw,
   inboundSweep,
+  isLive,
   mailIdOf,
   mayStamp,
 } from './inbound.ts'
@@ -1540,6 +1541,13 @@ let stuck = (e: unknown) => {
   })
 }
 let syncSoon = () => {
+  // A probe on a scratch copy must never scribble persona files into the
+  // LIVE venture repos it happens to point at: projection() computes each
+  // file's path from the project's real repo, not from DB_PATH, so an
+  // ungated probe write lands in someone's working tree (T-14612). Only
+  // the live instance materializes on a graph change; `task sync` stays
+  // the deliberate, operator-run door.
+  if (!isLive()) return
   clearTimeout(syncing)
   syncing = setTimeout(async () => {
     try {
@@ -1767,19 +1775,25 @@ tick('scribe', () => scribeSweep(cast), 10 * 60_000)
 // create reply say "this already exists" while the ink is still wet.
 // Boot sweeps the backfill; the interval catches anything the debounce
 // dropped. A box without the model sweeps zero rows, forever, silently.
-let embedding = tick('embed', () => embedSweep(db), 10 * 60_000)
-let embedSoon = (() => {
-  let t: ReturnType<typeof setTimeout> | undefined
-  return () => {
-    clearTimeout(t)
-    t = setTimeout(embedding, 3_000)
-  }
-})()
-on('doc', {
-  created: embedSoon,
-  changed: { title: embedSoon, body: embedSoon },
-  doc: 'docs keep a semantic vector — the embed sweep refreshes what moved',
-})
+// Only the live instance sweeps: a probe on a scratch copy stays inert,
+// never loading the 400MB model to rewrite vectors it will throw away
+// (T-14612). Reads still answer from whatever vectors the copy holds, so
+// /similar keeps working.
+if (isLive()) {
+  let embedding = tick('embed', () => embedSweep(db), 10 * 60_000)
+  let embedSoon = (() => {
+    let t: ReturnType<typeof setTimeout> | undefined
+    return () => {
+      clearTimeout(t)
+      t = setTimeout(embedding, 3_000)
+    }
+  })()
+  on('doc', {
+    created: embedSoon,
+    changed: { title: embedSoon, body: embedSoon },
+    doc: 'docs keep a semantic vector — the embed sweep refreshes what moved',
+  })
+}
 
 // Last, the worktree sweep: completed sessions whose merged, clean trees
 // outlived their usefulness let go — at boot, never at settle, so a live

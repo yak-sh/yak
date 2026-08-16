@@ -13,6 +13,7 @@ let {
   hookChanges,
   hookTo,
   inboundSweep,
+  isLive,
   mailChanges,
   mailIdOf,
   mayStamp,
@@ -511,6 +512,21 @@ Deno.test('inbound mail never delivers: arrival is a record, not an ask', async 
   ).all() as { eid: string }[]
   assertEquals(pending.some((p) => p.eid == eid), false)
   Deno.env.delete('TASKS_MAIL_CMD')
+})
+
+// The isolation predicate, pure: live is the default graph and nothing
+// else, and the mail opt-in never crosses over to it — so persona-sync
+// and embed, gated on isLive, stay inert on any probe (T-14612).
+Deno.test('isLive: only the default graph is live; the mail opt-in stays out', () => {
+  let env = (vars: Record<string, string>) => (k: string) => vars[k]
+  assertEquals(isLive(env({})), true)
+  assertEquals(isLive(env({ DB_PATH: '/tmp/probe.db' })), false)
+  assertEquals(isLive(env({ DB_PATH: ':memory:' })), false)
+  // FLEET_MAIL_SWEEP arms mail only — it must never make a probe "live".
+  assertEquals(
+    isLive(env({ DB_PATH: '/tmp/probe.db', FLEET_MAIL_SWEEP: '1' })),
+    false,
+  )
 })
 
 // The theft guard, pure: env in, verdict out. The live service (no

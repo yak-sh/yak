@@ -67,15 +67,26 @@ export type FleetApi = {
   processed: (ids: string[]) => Promise<void>
 }
 
+// The isolation predicate: am I the authoritative instance on the live
+// graph, or a probe on a scratch copy? False the moment DB_PATH names a
+// copy. It is the one gate every OUTWARD, to-disk-or-network effect asks
+// before touching anything a probe must leave alone — persona files in
+// live venture repos and the embed model (server.ts), and, with a
+// mail-specific opt-in layered on top, fleet-mail delivery (mayStamp
+// below). Pure over env, so the gate itself tests.
+export let isLive = (env = (k: string) => Deno.env.get(k)): boolean =>
+  !env('DB_PATH')
+
 // The theft guard: the store's notified stamp is first-writer-wins, so
 // a probe server on a scratch db (DB_PATH set) that inherits live creds
 // STEALS delivery — messages mint into a throwaway db and the live
 // server never sees them (it happened; T-3839). Probes will always
 // inherit env, so the sweep is the part that refuses: default-deny on
 // any non-default db, FLEET_MAIL_SWEEP=1 the deliberate opt-in. The
-// live service sets neither. Pure over env, so the gate itself tests.
+// live service sets neither. Layered on isLive so mail arms only where
+// it is both live AND opted in — the opt-in never leaks to other effects.
 export let mayStamp = (env = (k: string) => Deno.env.get(k)): boolean =>
-  !env('DB_PATH') || env('FLEET_MAIL_SWEEP') == '1'
+  isLive(env) || env('FLEET_MAIL_SWEEP') == '1'
 
 // Env → client, or null = dormant (no url/token configured, or a
 // non-live db refusing to stamp — the sweep never errors over absence;
