@@ -128,10 +128,10 @@ let depIndex = { cols: ['child'] }
 // The send OUTCOME moved off the row to the shared delivered/error
 // components (D-14945), and WHERE it goes to the shared `deliver {to}` — an
 // outbound mail wears one, an inbound arrival keeps its recipient in to_addr.
-// to_addr/sent_id/received_at stay as envelope DATA. Column order below is the
-// live table's order AFTER migrateDelivery()/migrateDeliver() drop
-// acted_at/error/to — mendMail's `insert select *` rebuild depends on the
-// match.
+// to_addr/sent_id/received_at stay as envelope DATA. mendMail's rebuild copies
+// by column NAME over the shape common to the FK-era table and this ddl, so a
+// column added here (or dropped by migrateDelivery()/migrateDeliver()) no
+// longer has to line up positionally (T-18475).
 let mailDdl = `create table if not exists mail (
     eid         text primary key references entity(eid),
     "from"      text,
@@ -875,14 +875,22 @@ let seed = (db: DatabaseSync) => {
 }
 
 // A baked constraint can't be changed in place: rebuild the table around
-// its current ddl, rows copied whole (column ORDER must match — additive
-// columns always append, so a ddl listing them in shipping order does).
+// its current ddl, rows copied by NAME over the columns common to both
+// shapes (see rebuild() below), so a widened or trimmed ddl never has to
+// line up positionally.
 // Does this table still carry that column? The one question both schema
 // guards ask, and the gate on every backfill that reads a retired column:
 // once the drop lands, the read that fed it must stop compiling away.
 export let hasCol = (db: DatabaseSync, table: string, col: string) =>
   (prep(db, `select name from pragma_table_info('${table}')`)
     .all() as { name: string }[]).some((c) => c.name == col)
+
+// A table's column names in declaration order — what rebuild() copies BY NAME
+// rather than by position, so a shape change never relies on `select *` lining
+// up value for value (T-18475).
+let colNames = (db: DatabaseSync, table: string) =>
+  (prep(db, 'select name from pragma_table_info(?)')
+    .all(table) as { name: string }[]).map((c) => c.name)
 
 // The index twin of hasCol: is this named index already present? A bare
 // `create index if not exists` on an existing index opens an empty write
@@ -1048,7 +1056,17 @@ let rebuild = (db: DatabaseSync, name: string, ddl: string) => {
   db.exec('begin')
   db.exec(`alter table ${name} rename to ${name}_stale`)
   db.exec(ddl)
-  db.exec(`insert into ${name} select * from ${name}_stale`)
+  // Copy BY NAME, over the columns common to both shapes — never `select *`.
+  // A rebuild whose new ddl adds a column (T-14133 added mail's 11th) leaves
+  // the fresh table wider than the stale one, so a positional `select *`
+  // supplies too few values ("N columns but M values"); one that drops a
+  // column supplies too many. Naming the intersection lets an added column
+  // take its default and a dropped one fall away, so widening the vocabulary
+  // never breaks the FK-era migration again (T-18475).
+  let fresh = new Set(colNames(db, name))
+  let cols = colNames(db, `${name}_stale`).filter((c) => fresh.has(c))
+  let list = cols.map(sqlName).join(', ')
+  db.exec(`insert into ${name} (${list}) select ${list} from ${name}_stale`)
   db.exec(`drop table ${name}_stale`)
   db.exec('commit')
 }
