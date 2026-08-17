@@ -17,7 +17,7 @@ import { trouble } from './adapters.ts'
 import { apply, cursorOf, db, record, snapshot } from './db.ts'
 import { errorChange, healthChange } from './deliver.ts'
 import { dispatch, trace } from './effects.ts'
-import { noticesFor, rows } from './client.ts'
+import { notices, noticesFor, readerAt, rows } from './client.ts'
 import { materialize } from './persona.ts'
 import { continueSession } from './sessions.ts'
 import {
@@ -846,6 +846,55 @@ let reconcileNative = async (
   }, cast)
 }
 
+// Deliver ONE wake to a settled session with pending notices, then let it
+// consume them and sleep. Extracted so the pinned managed path and the
+// non-pinning wake policies deliver attention through ONE door: content stays
+// in the atomic inbox, and a wake is coalesced to one per pending horizon so an
+// ignored prompt is not repeated every tick. A graph-native thread advances in
+// place; a process-backed thread is resumed with the fixed content-free line.
+let serveAttention = (
+  c: RoleConfig,
+  session: DbRow,
+  cast: Cast,
+  deps: RoleDeps,
+) => {
+  let pending = noticesFor(snapshot(db), String(session.id))
+  if (!pending.lines.length) return
+  let newest =
+    pending.ack.map((change) =>
+      (db.prepare('select at from created where eid = ?').get(change.eid) as
+        | { at: string }
+        | undefined)?.at ?? ''
+    ).sort().at(-1) ?? ''
+  let sent = String(session.notice_at ?? '')
+  // When this session last CONSUMED notices: serving stamps `notified` with
+  // the serving session as `via`, so the newest such stamp is the answer,
+  // per item and exact.
+  let served = String(
+    (db.prepare('select max(at) as at from notified where via = ?')
+      .get(String(session.eid)) as { at: string | null } | undefined)?.at ?? '',
+  )
+  // One wake per pending horizon. A task_context after the attempt consumes
+  // notices and may reveal overflow; a newer graph item creates a new
+  // horizon. An ignored prompt is not repeated every two seconds.
+  if (sent && served <= sent && newest <= sent) return
+  let at = deps.now()
+  stampSession(String(session.eid), {
+    notice_at: at,
+    notice_accepted_at: null,
+    notice_token: uuid(),
+  }, cast)
+  if (graphSession(db, String(session.eid))) {
+    graphAttention(db, String(session.eid), cast)
+  } else {
+    continueSession(
+      String(session.eid),
+      'You have pending Tasks messages. Call task_context now.',
+      cast,
+    ).catch((e) => stamp(c.eid, { error: String(e).slice(0, 2000) }, cast))
+  }
+}
+
 let reconcileManaged = async (
   c: RoleConfig,
   hash: string,
@@ -882,40 +931,58 @@ let reconcileManaged = async (
     if (session.status != 'completed' || !session.provider_session_id) return
   }
   if (!session) return
-  let pending = noticesFor(snapshot(db), String(session.id))
-  if (!pending.lines.length) return
-  let newest =
-    pending.ack.map((change) =>
-      (db.prepare('select at from created where eid = ?').get(change.eid) as
-        | { at: string }
-        | undefined)?.at ?? ''
-    ).sort().at(-1) ?? ''
-  let sent = String(session.notice_at ?? '')
-  // When this session last CONSUMED notices: serving stamps `notified` with
-  // the serving session as `via`, so the newest such stamp is the answer,
-  // per item and exact.
-  let served = String(
-    (db.prepare('select max(at) as at from notified where via = ?')
-      .get(String(session.eid)) as { at: string | null } | undefined)?.at ?? '',
-  )
-  // One wake per pending horizon. A task_context after the attempt consumes
-  // notices and may reveal overflow; a newer graph item creates a new
-  // horizon. An ignored prompt is not repeated every two seconds.
-  if (sent && served <= sent && newest <= sent) return
-  let at = deps.now()
-  stampSession(String(session.eid), {
-    notice_at: at,
-    notice_accepted_at: null,
-    notice_token: uuid(),
-  }, cast)
-  if (graph) graphAttention(db, String(session.eid), cast)
-  else {
-    continueSession(
-      String(session.eid),
-      'You have pending Tasks messages. Call task_context now.',
-      cast,
-    ).catch((e) => stamp(c.eid, { error: String(e).slice(0, 2000) }, cast))
+  serveAttention(c, session, cast, deps)
+}
+
+// Does the role's scope have attention a fresh operator session would pick up?
+// The non-pinning wake policies keep no session alive to idle, so a cold role's
+// trigger is read HERE — the same bus selection task_context serves, keyed on
+// the scope's operator loop, so what wakes the role is exactly what the spawned
+// session then consumes and stamps `notified`. Read-only: the ack is discarded,
+// the fresh session does the stamping when it actually serves. Scope-addressed,
+// matching where the scheduler (T-18725) aims its self-wake.
+let pendingForScope = (scope: string) => {
+  let all = rows(snapshot(db))
+  return notices(all, { ...readerAt(all, scope), session: scope })
+    .lines.length > 0
+}
+
+// The non-pinning wake policies (D-18722 part A). Unlike the pinned managed
+// path, this NEVER keeps a session alive to idle: `attention`/`scheduled` spawn
+// a fresh session only when the scope has pending attention, advance an
+// existing settled session when notices land, and otherwise sleep. `manual`
+// takes no automatic action — no cold spawn, no advance — the break-glass role
+// the reconciler leaves for an explicit `task role start` or a direct knock; it
+// still never tears down a running session the way `stopped` does. The
+// crash-loop breaker and spawn idempotency in reconcile() apply here unchanged.
+let reconcileWake = async (
+  c: RoleConfig,
+  policy: string,
+  hash: string,
+  cast: Cast,
+  deps: RoleDeps,
+) => {
+  let auto = policy != 'manual'
+  let killed = await tmuxKill(c.eid, deps)
+  let session = latest(c.eid)
+  if (killed || (active(session) && session?.origin != 'managed')) return
+  if (session) {
+    if (!graphSession(db, String(session.eid))) {
+      if (active(session)) return
+      if (session.status == 'failed') {
+        stamp(
+          c.eid,
+          { error: String(session.error_message ?? 'managed launch failed') },
+          cast,
+        )
+        return
+      }
+      if (session.status != 'completed' || !session.provider_session_id) return
+    }
+    if (auto) serveAttention(c, session, cast, deps)
+    return
   }
+  if (auto && pendingForScope(c.scope)) startManaged(c, hash, cast, deps)
 }
 
 let flights = new Set<string>()
@@ -969,10 +1036,27 @@ let reconcile = async (eid: string, cast: Cast, deps: RoleDeps) => {
     }
     let c = config(eid)
     let hash = roleHash(c)
+    // wake_policy actuates HERE (D-18722 part A). `always` (the default, so
+    // every migrated role is inert) pins a live session/pane; the other three
+    // do NOT pin — they spawn-on-trigger, settle, and sleep.
+    let policy = c.wakePolicy ?? 'always'
     if (c.surface == 'native') {
+      // A native role IS an interactive tmux door with no settle/sleep
+      // lifecycle to spawn-on-trigger into, so only `always` is actuated for
+      // it. A non-`always` native role is refused loudly rather than pinned in
+      // silence — a native wake policy is T-3906 part C's, via an in-process
+      // `surface: native` role. Managed is where the wake policies live.
+      if (policy != 'always') {
+        throw new Error(
+          `native roles are pinned; wake_policy '${policy}' needs a managed ` +
+            `role (native wake policies are T-3906 part C)`,
+        )
+      }
       await reconcileNative(c, hash, cast, deps)
-    } else {
+    } else if (policy == 'always') {
       await reconcileManaged(c, hash, cast, deps)
+    } else {
+      await reconcileWake(c, policy, hash, cast, deps)
     }
   } catch (e) {
     await tmuxKill(eid, deps)

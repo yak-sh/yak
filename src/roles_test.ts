@@ -151,6 +151,13 @@ let seed = (
   return { project, role }
 }
 
+// Managed launches FOR one role: startManaged mints a session carrying role,
+// so counting those rows isolates one role's spawns from the shared db.
+let mspawns = (role: string) =>
+  (db.prepare('select count(*) as n from session where role = ?').get(role) as {
+    n: number
+  }).n
+
 let count = (name: string) => commands.filter((args) => args[0] == name).length
 let failure = (eid: string) =>
   (db.prepare('select message from error where eid = ?').get(eid) as
@@ -534,6 +541,133 @@ slow('managed attention resumes once with no graph content', async () => {
     Deno.readTextFileSync(path).match(/"type":"session.input"/g)?.length,
     inputs,
   )
+})
+
+// ---- wake_policy actuation (D-18722 part A) ----
+
+// A settled, resumable managed session for `role` — the durable idle door a
+// previous turn left behind, so the non-pinning policies have something to
+// advance (or deliberately leave alone) without a live spawn.
+let settled = (role: string, project: string) => {
+  let run = uid()
+  apply(db, [{
+    eid: run,
+    name: 'session',
+    comp: { id: uid(), role, actor: project, operator: 1 },
+  }])
+  db.prepare(`
+    update session set origin = 'managed', status = 'completed',
+      provider_session_id = 'fake-thread', cwd = ?, finished_at = ?
+    where eid = ?
+  `).run(dir, new Date().toISOString(), run)
+  return run
+}
+
+// Attention aimed at `target`: a comment on the scope reaches its operator
+// loop, a comment on a session reaches that session directly.
+let ping = (target: string, body = 'ping') => {
+  let msg = uid()
+  apply(db, [
+    { eid: msg, name: 'doc', comp: { title: '', body } },
+    { eid: msg, name: 'comment', comp: { target } },
+  ])
+  return msg
+}
+
+Deno.test('wake_policy always pins proactively, and unset defaults to always (inert migration)', async () => {
+  let { role: pinned } = seed('managed')
+  apply(db, [{ eid: pinned, name: 'role', comp: { wake_policy: 'always' } }])
+  let { role: dflt } = seed('managed') // no wake_policy → defaults to always
+  await rolesSweep(cast, deps)
+  // Both PIN: a managed session is spawned with NO pending attention — the
+  // keep-alive door. Explicit `always` and unset behave identically, so every
+  // migrated role is inert.
+  assertEquals(mspawns(pinned), 1)
+  assertEquals(mspawns(dflt), 1)
+})
+
+Deno.test('wake_policy attention does not pin: no session while the scope is idle', async () => {
+  let { role } = seed('managed')
+  apply(db, [{ eid: role, name: 'role', comp: { wake_policy: 'attention' } }])
+  await rolesSweep(cast, deps)
+  assertEquals(mspawns(role), 0) // no keep-alive door burns while idle
+})
+
+Deno.test('wake_policy attention cold-spawns on pending scope attention, then sleeps', async () => {
+  let { project, role } = seed('managed')
+  apply(db, [{ eid: role, name: 'role', comp: { wake_policy: 'attention' } }])
+  let msg = ping(project)
+  await rolesSweep(cast, deps)
+  assertEquals(mspawns(role), 1) // spawned on the trigger, not before
+
+  // The fresh session consumes the attention (what task_context's serve does),
+  // so the trigger clears and the role sleeps: no second spawn.
+  let run = db.prepare(
+    'select eid from session where role = ? order by rowid desc limit 1',
+  ).get(role) as { eid: string }
+  db.prepare(`
+    update session set origin = 'managed', status = 'completed',
+      provider_session_id = 't', cwd = ?, finished_at = ? where eid = ?
+  `).run(dir, new Date().toISOString(), run.eid)
+  apply(db, [{ eid: msg, name: 'notified', comp: {} }])
+  await rolesSweep(cast, { ...deps, now: () => new Date().toISOString() })
+  assertEquals(mspawns(role), 1) // asleep — nothing pending
+})
+
+Deno.test('wake_policy attention advances an existing settled session when attention lands', async () => {
+  let { project, role } = seed('managed')
+  apply(db, [{ eid: role, name: 'role', comp: { wake_policy: 'attention' } }])
+  await rolesSweep(cast, deps)
+  assertEquals(mspawns(role), 0) // idle: no pin
+
+  let run = settled(role, project)
+  ping(run) // a notice straight at the session
+  await rolesSweep(cast, { ...deps, now: () => new Date().toISOString() })
+  // Advanced in place, not re-spawned: the same door got the wake stamp.
+  assertEquals(mspawns(role), 1)
+  let woken = db.prepare('select notice_at from session where eid = ?').get(
+    run,
+  ) as { notice_at: string | null }
+  assert(woken.notice_at)
+})
+
+Deno.test('wake_policy scheduled does not pin and cold-spawns on pending attention', async () => {
+  let { project, role } = seed('managed')
+  apply(db, [{ eid: role, name: 'role', comp: { wake_policy: 'scheduled' } }])
+  await rolesSweep(cast, deps)
+  assertEquals(mspawns(role), 0) // no pin while idle (cadence is T-18725)
+  ping(project)
+  await rolesSweep(cast, deps)
+  assertEquals(mspawns(role), 1) // attention-while-awake still wakes it
+})
+
+Deno.test('wake_policy manual never auto-wakes: no cold spawn, no advance, no teardown', async () => {
+  let { project, role } = seed('managed')
+  apply(db, [{ eid: role, name: 'role', comp: { wake_policy: 'manual' } }])
+  ping(project) // attention that WOULD wake an `attention` role
+  await rolesSweep(cast, deps)
+  assertEquals(mspawns(role), 0) // no automatic trigger
+
+  // Even with a settled door and a direct notice, manual advances nothing —
+  // but it does not tear the session down the way `stopped` would.
+  let run = settled(role, project)
+  ping(run)
+  await rolesSweep(cast, { ...deps, now: () => new Date().toISOString() })
+  let s = db.prepare(
+    'select status, notice_at from session where eid = ?',
+  ).get(run) as { status: string; notice_at: string | null }
+  assertEquals(s.notice_at, null) // not advanced
+  assertEquals(s.status, 'completed') // not stopped
+})
+
+Deno.test('a native role refuses a non-always wake_policy with a durable error', async () => {
+  commands = []
+  sessions.clear()
+  let { role } = seed('native')
+  apply(db, [{ eid: role, name: 'role', comp: { wake_policy: 'attention' } }])
+  await rolesSweep(cast, deps)
+  assertEquals(panesOf(role).length, 0)
+  assertMatch(failure(role) ?? '', /native roles are pinned/)
 })
 
 Deno.test('graph-native role attention is content-free and coalesced', async () => {
