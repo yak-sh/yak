@@ -1549,16 +1549,6 @@ let spawn = (
 
 // ---- the spawn effect ----
 
-// The standing rider every managed spawn carries, including one wearing a
-// persona. Mechanics belong to `task land`; repeating them here would turn
-// every refinement back into two prose contracts that can drift.
-let CONTRACT = `House rules for this run:
-- Work only in this dedicated worktree and commit focused changes.
-- Read docs/STYLE.md before writing code, if the repo has one, and
-  match the existing code's voice.
-- File discoveries as new tasks linked to yours instead of widening scope.
-- When the work is committed, land it with task land.`
-
 let NO_CODE = `This task has no repo-backed project. Work only through the
 Tasks graph tools; no filesystem, shell, patch, commit, or landing operation is
 available. If repository changes are required, explain that the task needs a
@@ -1757,7 +1747,7 @@ export let spawned =
     let job: Launch = {
       instruction: [
         worn,
-        !task && !role ? CHAT : repo ? CONTRACT : NO_CODE,
+        !task && !role ? CHAT : repo ? undefined : NO_CODE,
         !task && !role
           ? (db.prepare('select body from doc where eid = ?').get(eid) as
             | { body: string }

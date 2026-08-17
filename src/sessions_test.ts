@@ -1011,8 +1011,7 @@ slow('a worn persona rides the prompt whole — tiers and all', async () => {
   assertNotMatch(text, /Be terse\./)
   assertMatch(text, /---\n\n# D-\d+ lesson/)
   assertMatch(text, /Front door\./)
-  assertMatch(text, /House rules/)
-  assertMatch(text, /task land/)
+  assertNotMatch(text, /House rules for this run/)
 })
 
 slow('a bare spawn wears the project common persona (T-12867)', async () => {
