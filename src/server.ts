@@ -49,6 +49,7 @@ import { registerCodexSource } from './source_codex.ts'
 import { registerManagedSource } from './source_managed.ts'
 import { vocabularyMd } from './schema.ts'
 import { freeze, serveFrozen, store } from './freeze.ts'
+import { landBlob, serveBlob } from './blob.ts'
 import { filed } from './page.ts'
 import { excepted, PENDING } from './deliver.ts'
 import { ensureFixer, fileBug, FIXER_PENDING, HEAL_PENDING } from './heal.ts'
@@ -1437,6 +1438,33 @@ let http = Deno.serve(
     if (path.startsWith('/frozen/')) {
       return serveFrozen(path.slice(8).replace(/\.html$/, ''))
     }
+    // Attach a file: the raw body IS the bytes, its content-type the mime,
+    // ?name= the filename, ?eid= the entity to attach to (a fresh uuid mints
+    // a bare file entity). landBlob stores the bytes content-addressed; the
+    // `blob` metadata rides apply() like any write (blob.ts owns the store).
+    if (path == '/blob' && req.method == 'POST') {
+      try {
+        let eid = url.searchParams.get('eid') ?? ''
+        if (!eid) return new Response('eid required', { status: 400 })
+        let name = url.searchParams.get('name') ?? 'file'
+        let mime = req.headers.get('content-type') || 'application/octet-stream'
+        let bytes = new Uint8Array(await req.arrayBuffer())
+        let t = trace()
+        let out = apply(
+          db,
+          await landBlob(eid, name, mime, bytes),
+          t,
+          req.headers.get('x-via'),
+        )
+        cast(out)
+        effect(out, t)
+        return Response.json({ ok: true, changes: out })
+      } catch (e) {
+        let why = e instanceof Error ? e.message : String(e)
+        return new Response(why, { status: 400 })
+      }
+    }
+    if (path.startsWith('/blob/')) return serveBlob(path.slice(6))
     // An extensionless path is a ROUTE (/T-123): the app boots and reads
     // the URL — same shell, different root card.
     return file(src.slice(0, -1), path.includes('.') ? path : '/index.html')

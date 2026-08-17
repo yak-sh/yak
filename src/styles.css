@@ -2853,6 +2853,29 @@ html {
   color: var(--accent);
 }
 
+/* An attached image fills the card width, keeping its own aspect (its w/h
+   attributes reserve the box so nothing reflows when the bytes arrive). */
+.Media {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+}
+/* A non-image attachment: a plain download row — name left, size right. */
+.MediaFile {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--gap);
+  padding: var(--half-gap) 0;
+  color: var(--accent);
+  text-decoration: none;
+}
+.MediaFile_Size {
+  color: var(--dim);
+  font-size: 0.85em;
+}
+
 .Json,
 .Md {
   margin: 0;

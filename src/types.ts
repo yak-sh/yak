@@ -328,6 +328,25 @@ export let comps: Record<string, Record<string, PropType>> = {
   architecture: {},
   canvas: {},
   web: { url: 'url' }, // frozen_at is server-stamped, never wire-writable
+  // An attached file (T-12781). The entity carries only the METADATA — the
+  // file's mime, name, sha, byte size, and (for an image) w/h; the BYTES live
+  // beside the db at ~/.tasks/blobs/<sha>, content-addressed so the same file
+  // attached twice costs once. Never base64 in a column, never in snapshot(),
+  // never in a client cache — served at GET /blob/<sha> the way freeze.ts
+  // serves archives, so the db and every backup stay lean (the row-bytes
+  // lesson the backup doc paid for). One aspect — "this entity has a file"
+  // (M-14942) — worn by ANY entity: a bare blob IS a file, a task+blob a task
+  // with an attachment. Wire-writable: the upload door (POST /blob) stores the
+  // bytes and stamps this through apply() like any write, and a client may
+  // re-point name; a forged sha only aims a card at bytes that aren't there.
+  blob: {
+    mime: 'text',
+    name: 'text',
+    sha: 'text',
+    bytes: 'number',
+    w: 'number',
+    h: 'number',
+  },
   card: { target: { eid: 'entity', death: 'cascade' }, view: 'text' },
   pin: {
     canvas: { eid: 'entity', death: 'cascade' },
@@ -1177,6 +1196,10 @@ export let kindOrder = [
   'memory',
   'person',
   'persona',
+  // A bare file entity is a blob — ahead of doc so a file that also carries a
+  // doc (its name) still reads as a blob, while a task/session that merely
+  // wears an attachment keeps its own richer kind (all listed earlier).
+  'blob',
   'doc',
   // An address is a facet like a handle: it names an entity only when
   // nothing else does (a bare address-book entry), same reasoning as
@@ -1400,6 +1423,17 @@ export type Pane = {
 // server's frozen archive of it (one self-contained HTML file on disk),
 // stamped frozen_at when ready — frozen_at is server-owned, never wire-set.
 export type Web = { eid: string; url: string; frozen_at?: string | null }
+// An attached file's metadata (T-12781) — the bytes live at ~/.tasks/blobs/
+// <sha>, served at GET /blob/<sha>; this is all that rides the graph.
+export type BlobComp = {
+  eid: string
+  mime?: string | null
+  name?: string | null
+  sha?: string | null
+  bytes?: number | null
+  w?: number | null
+  h?: number | null
+}
 export type CardComp = { eid: string; target: string; view: string }
 export type Pin = {
   eid: string
@@ -1964,6 +1998,7 @@ export type Ent = {
   layout?: LayoutTag
   pane?: Pane
   web?: Web
+  blob?: BlobComp
   card?: CardComp
   pin?: Pin
   client?: Client

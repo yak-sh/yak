@@ -241,6 +241,21 @@ let schema = `
     url text not null,
     frozen_at text
   );
+  -- An attached file's metadata (T-12781). The bytes live beside the db at
+  -- ~/.tasks/blobs/<sha>, content-addressed; only this row rides the graph.
+  -- Hand-written (not derived) for the integer-affine sizes/dims; blob_sha
+  -- indexes the reverse lookup serveBlob does (sha -> mime/name) so the
+  -- byte-serving path never scans (M-17862).
+  create table if not exists blob (
+    eid   text primary key references entity(eid),
+    mime  text,
+    name  text,
+    sha   text,
+    bytes integer,
+    w     integer,
+    h     integer
+  );
+  create index if not exists blob_sha on blob(sha);
   create table if not exists card (
     eid        text primary key references entity(eid),
     target text not null references entity(eid),

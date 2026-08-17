@@ -50,6 +50,7 @@ import { Schema } from './views/Schema.tsx'
 import { Json } from './views/Json.tsx'
 import { Md, mdText } from './views/Md.tsx'
 import { Web } from './views/Web.tsx'
+import { Media } from './views/Media.tsx'
 import { Session, SessionRow } from './views/Session.tsx'
 import {
   CommandFull,
@@ -161,6 +162,11 @@ define([
     Render: (props) => <Role {...props} />,
   },
   { view: 'Web', match: has('web'), Render: Web },
+  // Registered AFTER Full: a bare blob entity has no doc, so Media is its
+  // sole match and its default face; a task/comment that merely wears an
+  // attachment keeps its own face (the tie at score 1 breaks to the
+  // earlier-registered Full) while still offering a Media tab.
+  { view: 'Media', match: has('blob'), Render: Media },
   { view: 'Session', match: has('session'), Render: Session },
   // Entry faces use the same specificity rules as every entity view. The
   // generic entry is the floor; facets such as bash and result override it.
@@ -258,6 +264,7 @@ define([
   'Role',
   'Full',
   'Web',
+  'Media',
   'Session',
   'Schema',
   'Debug',

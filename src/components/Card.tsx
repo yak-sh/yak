@@ -32,6 +32,7 @@ export let icons: Record<string, string> = {
   Usage: 'table',
   Role: 'bot',
   Web: 'globe',
+  Media: 'image',
   Session: 'bot',
   Markdown: 'hash',
   JSON: 'braces',
