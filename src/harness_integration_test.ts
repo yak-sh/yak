@@ -60,7 +60,6 @@ let ioFor = (db: ReturnType<typeof open>): IO => ({
   find: () => Promise.resolve([]),
   upload: () => Promise.resolve(),
   touch: () => Promise.resolve(),
-  logs: () => Promise.resolve({ entries: [] }),
   history: (eid, limit) => Promise.resolve(journalOf(db, eid, limit)),
   undo: ({ id, eid }, via) =>
     Promise.resolve(

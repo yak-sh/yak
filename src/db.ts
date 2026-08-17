@@ -2057,6 +2057,10 @@ export let open = (path = file) => {
         'stop_reason text',
         'final_text text',
         'usage_json text',
+        // The process stderr tail, bounded — a graph facet now (T-16798), so
+        // every reader shows a process-backed run's diagnostics from the graph
+        // rather than a /logs file-read.
+        'stderr text',
       ]
     ) addCol('session', ddl.split(' ')[0], ddl)
     backfillSpawn(db)

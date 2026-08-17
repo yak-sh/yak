@@ -22,7 +22,7 @@ import {
   repoUrl,
   uuid,
 } from '../../live.ts'
-import { graphLog } from '../../entry_log.ts'
+import { contextOf, graphLog } from '../../entry_log.ts'
 import { type ObservationState } from '../../observations.ts'
 import { slot, tileLink, type TileProps, tileTitle } from '../Tile.tsx'
 import { ago, block, pretty, Stamp } from '../ui.tsx'
@@ -52,9 +52,10 @@ import { entityUrl } from '../../url.ts'
 // the pinned composer (Comments.tsx), which is the way to talk TO the
 // agent.
 //
-// Both durable logs normalize to one renderer row: process-backed Sessions
-// page their JSONL over /logs, while graph-native Sessions subscribe to their
-// ordered entry partition. The browser never learns a provider dialect.
+// Every substrate normalizes to one renderer row: process-backed and
+// graph-native Sessions alike subscribe to their ordered entry partition (a
+// process run's JSONL is ingested into the same entries). The browser never
+// learns a provider dialect, and there is no /logs file-poll (T-16798).
 
 let Frame = block('div', 'Session', {
   Head: 'div',
@@ -575,8 +576,12 @@ export let Session = ({ e }: { e: Ent }) => {
   // through the graph, never a /logs file-poll. graphLog([]) is the empty frame
   // before the first entry arrives.
   let log = entries ?? graphLog([])
+  // Context: a graph-native run derives it from its usage ENTRIES (log.context);
+  // a process-backed run has none, so it derives from the session's usage_json
+  // facet, which the graph already holds (T-16798, contextOf) — no file-read.
   let context = log.context ??
-    log.entries.findLast((x) => x.row?.context)?.row?.context
+    log.entries.findLast((x) => x.row?.context)?.row?.context ??
+    contextOf(s.usage_json)
   // The Final block IS the last agent say — don't print it twice. Only a
   // session whose log grew no say row (an external one, a torn log) still
   // leans on final_text.
@@ -711,10 +716,12 @@ export let Session = ({ e }: { e: Ent }) => {
         </Log>
         {
           /* stderr is durable evidence, not transcript: it has no seqs and
-            resumes append to it. Routine noise folds; failed runs show it. */
+            resumes append to it. A process-backed run's tail rides the session
+            as its own graph facet now (T-16798), not a /logs file-read. Routine
+            noise folds; failed runs show it. */
         }
         <SessionDiagnostics
-          stderr={log.stderr}
+          stderr={s.stderr ?? undefined}
           exit={s.exit_code}
           open={status == 'failed'}
         />

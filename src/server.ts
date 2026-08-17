@@ -77,7 +77,6 @@ import {
   prepareWorktree,
   recover,
   recoverWorktree,
-  sessionDiag,
   spawned,
   standingBackfill,
   stopped,
@@ -93,7 +92,7 @@ import { responses } from './responses.ts'
 import { ollamaCloudTransport } from './ollama_cloud.ts'
 import { codexGeneration } from './runner.ts'
 import { readEntries } from './entries.ts'
-import { graphLog, graphLogPage } from './entry_log.ts'
+import { graphLog } from './entry_log.ts'
 import { type Observation, safeObservation } from './observations.ts'
 import { outcome, recent, record, stats, toolCall } from './telemetry.ts'
 import { stamp } from './hot.ts'
@@ -617,21 +616,6 @@ let ws = (req: Request) => {
 // Every tools/call is timed and recorded on the way through (telemetry.ts
 // classifies the body — this route is the only place that sees both the
 // request and its reply).
-let partition = (eid: string) => readEntries(db, eid)
-
-// One read path for every substrate (T-16824): the ordered transcript is the
-// session's graph entry partition — graph-native, managed-CLI and native
-// interactive alike, since a process-backed run's JSONL is ingested into the
-// same entries (drain, T-16820/22/23). No `graphSession` branch, no file-backed
-// log projection. The unordered diagnostics (stderr tail, rollout context) ride
-// beside it via sessionDiag — empty for a graph-native session, so the shape is
-// uniform. T-16798 retires this door once diagnostics move into graph facets.
-let sessionLog = (eid: string, q: URLSearchParams) => {
-  let log = graphLogPage(partition(eid), q)
-  let diag = sessionDiag(eid)
-  return { ...log, ...diag, context: log.context ?? diag.context }
-}
-
 let graphIO: IO = {
   // deno-lint-ignore require-await
   read: async () => snapshot(db),
@@ -663,8 +647,6 @@ let graphIO: IO = {
     let out = touch(db, eids, confirm)
     if (out.length) cast(out)
   },
-  // deno-lint-ignore require-await
-  logs: async (eid, q) => sessionLog(eid, q),
   // deno-lint-ignore require-await
   history: async (eid, limit) => journalOf(db, eid, limit),
   // Build the inverse and apply it in one synchronous stretch (no await
@@ -1264,10 +1246,6 @@ let http = Deno.serve(
         files: await res.json(),
       })
     }
-    // Both session substrates speak the same normalized log door: process
-    // runs project their JSONL, graph runs project their ordered entries.
-    let session = path.match(/^\/sessions\/([0-9a-f-]{36})\/logs$/)
-    if (session) return Response.json(sessionLog(session[1], url.searchParams))
     // The wire's record, per entity (?eid=) or instrument (?via= — a
     // session's whole day). Raw eids only — id resolution is a client concern.
     if (path == '/journal') {

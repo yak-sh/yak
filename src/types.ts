@@ -1002,6 +1002,15 @@ export let stamped: Record<string, Record<string, PropType>> = {
     stop_reason: 'text',
     final_text: 'body',
     usage_json: 'text',
+    // The process's stderr tail — the bounded, unordered diagnostic that rides
+    // BESIDE the transcript (D-16704), never inside it: a launcher's refusal, a
+    // provider's dying words. Imported into the graph so every reader shows it
+    // without a file-read side-channel (T-16798, replacing the old /logs
+    // stderr): the follow loop and finish() stamp errTail() here, capped at 8KB.
+    // Empty for a graph-native run (no .err file; its context lives in usage
+    // entries). Token `context` needs no twin — it derives from usage_json's
+    // input_tokens (entry_log contextOf), which the graph already holds.
+    stderr: 'body',
   },
   worktree: { branch: 'text', base_revision: 'text' },
   runtime: { provider_session_id: 'text', serving_model: 'text' },
@@ -1484,6 +1493,7 @@ export type Session = {
   stop_reason?: string | null
   final_text?: string | null
   usage_json?: string | null
+  stderr?: string | null // the process stderr tail, bounded — a graph facet now
 }
 
 // Token counts a provider self-reported for a settled session, normalized to

@@ -152,8 +152,9 @@ export let fileSource = (opts: {
   }
 
   // The transcript tail, shaped exactly as db.ts entryRows() shapes a persisted
-  // one, so the existing /logs + entriesOf path serves it unchanged — WITHOUT
-  // materializing an entry row. seq is a monotonic counter over the entries the
+  // one, so the existing entriesOf path (graphLog readers, T-16798) serves it
+  // unchanged — WITHOUT materializing an entry row. seq is a monotonic counter
+  // over the entries the
   // adapter recognizes, stable across reads, so a tailing reader's `after`
   // cursor advances the same way it would on a persisted partition.
   let entries = (eid: string, after: number, limit: number): EntryRow[] => {

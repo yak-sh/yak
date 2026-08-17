@@ -2,9 +2,10 @@
 // derived-state contract without a server, browser, or process transcript.
 import { assertEquals, assertMatch } from '@std/assert'
 import {
+  contextOf,
   type EntryRow,
   graphLog,
-  graphLogPage,
+  pageEntries,
   standingOf,
 } from './entry_log.ts'
 
@@ -132,17 +133,22 @@ Deno.test('graph log derives busy and pages by sequence', () => {
     label: 'waiting for model…',
   })
   assertEquals(
-    graphLogPage(rows, new URLSearchParams('after=1')).entries.map((e) =>
-      e.seq
-    ),
+    pageEntries(graphLog(rows).entries, { after: 1 }).map((e) => e.seq),
     [2, 3],
   )
   assertEquals(
-    graphLogPage(rows, new URLSearchParams('tail=2&limit=1')).entries.map((e) =>
+    pageEntries(graphLog(rows).entries, { tail: 2, limit: 1 }).map((e) =>
       e.seq
     ),
     [2],
   )
+})
+
+Deno.test('contextOf reads the latest turn context from usage_json', () => {
+  assertEquals(contextOf('{"input_tokens":13966,"output_tokens":5}'), 13966)
+  assertEquals(contextOf(undefined), undefined)
+  assertEquals(contextOf('{"output_tokens":5}'), undefined)
+  assertEquals(contextOf('not json'), undefined)
 })
 
 Deno.test('graph log names queued and running tool activity', () => {

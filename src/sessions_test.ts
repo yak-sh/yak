@@ -37,12 +37,14 @@ Deno.env.set('STOP_GRACE_MS', '1000')
 let { apply, db, delta, journalOf, snapshot } = await import('./db.ts')
 let { hookClaim, noticesFor, rows } = await import('./client.ts')
 let { childEnv, childPath } = await import('./agent_env.ts')
+let { readEntries } = await import('./entries.ts')
+let { graphLog, pageEntries } = await import('./entry_log.ts')
 let {
   codexPending,
   commented,
   continueSession,
   deleted,
-  logs,
+  drainNative,
   logsDir,
   graphCodex,
   landSpawnClaim,
@@ -60,6 +62,19 @@ let uid = () => crypto.randomUUID()
 let heard: Change[] = []
 let cast = (c: Change[]) => heard.push(...c)
 let row = (eid: string) => sessionRow(db, eid)
+// The readers' path in a test: a session's transcript is its graph entry
+// partition rendered through graphLog (T-16798) — the same door CLI/MCP/web now
+// read, no file-backed logs() projection. Pages the OUTPUT like a reader does.
+let logOf = (
+  eid: string,
+  p: { after?: number; tail?: number; limit?: number } = {},
+) => {
+  let log = graphLog(readEntries(db, eid))
+  return { ...log, entries: pageEntries(log.entries, p) }
+}
+// One rendered say's text, whatever role — for asserting a transcript line.
+let sayText = (e?: { row?: unknown }) =>
+  String((e?.row as { text?: unknown } | undefined)?.text ?? '')
 let failure = (eid: string) =>
   (db.prepare('select message from error where eid = ?').get(eid) as
     | { message: string }
@@ -807,26 +822,20 @@ slow('a fake session runs end to end', async () => {
   // The summary rode the wire as whole session comps, never as raw log.
   assert(heard.some((c) => c.name == 'session' && c.comp?.status == 'running'))
 
-  // Line 1 is what we SENT — the instruction, readable back as a user say.
-  let first = logs(eid, new URLSearchParams('after=0&limit=1')).entries[0]
+  // The transcript reads back from the session's graph entry partition — the
+  // reader path (T-16798), no file-log door. Entry 1 is what we SENT: the
+  // instruction, a user say (its projection/paging is ingest_drain_test's job).
+  let entries = logOf(eid).entries
+  let first = entries[0]
   assertEquals(first.seq, 1)
-  assertEquals(JSON.parse(first.line).type, 'session.prompt')
-  assertMatch(JSON.parse(first.line).text, /T-\d+/)
   assertEquals(first.row?.kind, 'say')
-
-  // The log reads back from the file, bounded, line number = seq.
-  let page = logs(eid, new URLSearchParams('after=2&limit=2'))
-  assertEquals(page.entries.map((e) => e.seq), [3, 4])
-  assertEquals(JSON.parse(page.entries[0].line).type, 'message')
-  assertEquals(logs(eid, new URLSearchParams('tail=1')).entries[0].seq, 5)
-  assertEquals(logs(eid, new URLSearchParams('after=99')).entries, [])
-  // No bounds asked for, none applied: the whole log, which is what a
-  // reader opening a session gets.
-  assertEquals(
-    logs(eid, new URLSearchParams()).entries.map((e) => e.seq),
-    [1, 2, 3, 4, 5],
-  )
-  assertMatch(String(page.stderr), /stderr noise/) // diagnostics, unordered
+  assertMatch(sayText(first), /T-\d+/)
+  assert(entries.length > 1) // the child's turns followed
+  // Paging bounds the OUTPUT (pageEntries), and stderr rides the session as a
+  // bounded graph facet now — the diagnostics, unordered, off the transcript.
+  assertEquals(logOf(eid, { tail: 1 }).entries.length, 1)
+  assertEquals(logOf(eid, { after: 999 }).entries, [])
+  assertMatch(String(row(eid)?.stderr), /stderr noise/)
 })
 
 slow('both Codex rollback names run through process JSONL', async () => {
@@ -867,7 +876,7 @@ slow('both Codex rollback names run through process JSONL', async () => {
       ).all(eid) as { imported: string | null }[]
       assert(ents.length > 0) // the transcript was ingested
       assertEquals(ents.filter((e) => !e.imported).length, 0) // all imported
-      assertEquals(logs(eid, new URLSearchParams()).entries.length > 1, true)
+      assertEquals(logOf(eid).entries.length > 1, true)
     }
     assertEquals(routed, 0)
   } finally {
@@ -957,7 +966,7 @@ slow('a canonical fake session dual-materializes and runs', async () => {
       .get(eid),
     { provider_session_id: String(row(eid)?.id) },
   )
-  assertEquals(logs(eid, new URLSearchParams()).entries.length, 5)
+  assert(logOf(eid).entries.length > 1)
 })
 
 slow('an external provider patch is not a launch request', async () => {
@@ -976,7 +985,7 @@ slow('an external provider patch is not a launch request', async () => {
   assertEquals(spawnRow(eid)?.provider, 'fake')
   assertEquals(row(eid)?.origin, 'external')
   assertEquals(row(eid)?.status, null)
-  assertEquals(logs(eid, new URLSearchParams()).entries, [])
+  assertEquals(logOf(eid).entries, [])
 })
 
 slow('a worn persona rides the prompt whole — tiers and all', async () => {
@@ -994,8 +1003,7 @@ slow('a worn persona rides the prompt whole — tiers and all', async () => {
   ])
   let { eid, done } = begin(t, { persona: per })
   await done
-  let first = logs(eid, new URLSearchParams('after=0&limit=1')).entries[0]
-  let text = JSON.parse(first.line).text
+  let text = sayText(logOf(eid, { limit: 1 }).entries[0])
   // The persona's OWN body describes it to graph readers, not the prompt —
   // prompt content rides via contained memories (de1bd7f). So 'Be terse.'
   // (per's description) stays OUT, while the contained memory rides whole.
@@ -1024,8 +1032,7 @@ slow('a bare spawn wears the project common persona (T-12867)', async () => {
   ])
   let { eid, done } = begin(t) // no --persona
   await done
-  let first = logs(eid, new URLSearchParams('after=0&limit=1')).entries[0]
-  let text = JSON.parse(first.line).text
+  let text = sayText(logOf(eid, { limit: 1 }).entries[0])
   assertMatch(text, /# D-\d+ house lore/)
   assertMatch(text, /Wear the voice\./)
 })
@@ -1517,13 +1524,16 @@ slow('an oversized line is truncated and the tail reaches exit 0', async () => {
   assertEquals(s.latest_seq, 4)
   assertMatch(failure(eid) ?? '', /line 2: truncated \(1100028 bytes/)
 
-  let entries = logs(eid, new URLSearchParams()).entries
-  assertEquals(entries.map((e) => e.seq), [1, 2, 3, 4])
-  assert(entries[1].line.startsWith('{"type":"message","text":"xxx'))
-  assert(entries[1].line.endsWith('… [truncated]'))
-  assertEquals(entries[1].row, undefined)
-  assertEquals(JSON.parse(entries[2].line).text, 'after')
-  assertEquals(JSON.parse(entries[3].line).final_text, 'done after truncation')
+  // The oversized line is dropped from the transcript — it never becomes an
+  // entry (drain skips it, recording only the diagnostic asserted above) — while
+  // the good message that followed still lands as a say.
+  let entries = logOf(eid).entries
+  assertEquals(entries.map((e) => sayText(e)), ['after'])
+  let blob = JSON.stringify(readEntries(db, eid).map((e) => e.comps))
+  assert(
+    !blob.includes('x'.repeat(200)),
+    'the oversized payload became an entry',
+  )
 })
 
 slow('boot: a resumed log re-opens at its input marker', async () => {
@@ -1724,30 +1734,24 @@ slow(
     let before = row(eid)!.latest_seq as number
 
     heard = []
-    let resumed = write(say(eid, 'and one more thing'))
+    let entriesBefore = logOf(eid).entries.length
+    let input = say(eid, 'and one more thing')
+    let resumed = write(input)
     // Flipped running straight away — the effect's synchronous half.
     assertEquals(row(eid)?.status, 'running')
     assertEquals(row(eid)?.finished_at, null)
     assert(
       heard.some((c) => c.name == 'session' && c.comp?.status == 'running'),
     )
-    // The synthetic line is now in the file, as the next seq, a user say.
-    let page = logs(eid, new URLSearchParams(`after=${before}&limit=1`))
-    assertEquals(page.entries[0].seq, before + 1)
-    assertEquals(JSON.parse(page.entries[0].line).type, 'session.input')
-    // the writer stamps its clock; the transcript shows when it landed
-    let { at, ...said } = page.entries[0].row as { at?: string }
-    assert(at && !Number.isNaN(Date.parse(at)))
-    assertEquals(said, {
-      kind: 'say',
-      role: 'user',
-      text: 'and one more thing',
-    })
 
-    // The continuation appends and the tailer settles it again — seq only grew.
+    // The continuation appends and the tailer settles it again. The words were
+    // delivered to the run (told — the comment joined the conversation, woven
+    // into the transcript by the reader), and the resumed turn grew the log.
     await resumed
     assertEquals(row(eid)?.status, 'completed')
-    assert((row(eid)!.latest_seq as number) > before + 1)
+    assert(told(input[1].eid))
+    assert((row(eid)!.latest_seq as number) > before)
+    assert(logOf(eid).entries.length > entriesBefore)
   },
 )
 
@@ -1980,98 +1984,65 @@ let SAID = JSON.stringify({
 slow(
   "external session logs read each provider's confined transcript",
   async () => {
+    // The reader path (T-16798): an external session's confined transcript is
+    // INGESTED into graph entries (drainNative), then read as entries — no
+    // file-log door. The projection detail is ingest_native_test's; here we hold
+    // that a confined store admits its own, and a crossed/traversal/symlink
+    // reference reads NOTHING (a transcript is a reference, never a capability).
     let c = await fakeClaude()
+    let fresh = () => ({ at: 0, seq: 0, ended: false, errs: [] })
+    let drained = async (eid: string) => {
+      await drainNative(eid, fresh(), cast)
+      return logOf(eid).entries
+    }
+    // The entry carries an ingest `at` (created.at); the transcript SHAPE is
+    // what we hold here, so strip the clock before comparing the first row.
+    let firstRow = (entries: { row?: unknown }[]) => {
+      let { at: _at, ...row } = (entries[0]?.row ?? {}) as { at?: string }
+      return row
+    }
+
     let { eid, path } = announce(c.pid, [SAID])
-    assertEquals(logs(eid, new URLSearchParams()).entries[0].row, {
+    assertEquals(firstRow(await drained(eid)), {
       kind: 'say',
       role: 'agent',
       text: 'hello from a tty',
-      at: '2026-07-26T12:00:00Z',
     })
-    // Older Claude rows predate provider stamping; their store still names
-    // the dialect. A contradictory provider cannot cross into another store.
-    writeSession(db, eid, { provider: null })
-    assertEquals(logs(eid, new URLSearchParams()).entries.length, 1)
+
+    // A contradictory provider cannot cross into another store: this claude path
+    // is refused when the session says codex, so nothing is ingested.
     let crossed = announce(c.pid, [], path, 'codex')
-    assertEquals(logs(crossed.eid, new URLSearchParams()).entries, [])
+    assertEquals(await drained(crossed.eid), [])
+
     let codex = announce(
       c.pid,
       [JSON.stringify({
-        timestamp: '2026-07-26T12:00:00Z',
         type: 'event_msg',
         payload: { type: 'user_message', message: 'hello Codex' },
       })],
       '',
       'codex',
     )
-    assertEquals(logs(codex.eid, new URLSearchParams()).entries[0].row, {
+    assertEquals(firstRow(await drained(codex.eid)), {
       kind: 'say',
       role: 'user',
       text: 'hello Codex',
-      at: '2026-07-26T12:00:00Z',
     })
-    let clocked = announce(
-      c.pid,
-      [JSON.stringify({
-        timestamp: '2026-07-26T12:01:00Z',
-        type: 'response_item',
-        payload: {
-          type: 'reasoning',
-          summary: [{ type: 'summary_text', text: 'thinking' }],
-        },
-      })],
-      '',
-      'codex',
-    )
-    assertEquals(logs(clocked.eid, new URLSearchParams()).entries[0].row, {
-      kind: 'reason',
-      text: 'thinking',
-      at: '2026-07-26T12:01:00Z',
-    })
-    // A transcript is a reference, never a capability: traversal and a
-    // symlink out of either provider's store both read nothing.
+
+    // Traversal and a symlink out of the provider's store both read nothing.
     let sneak = announce(c.pid, [], `${logsDir()}/../../etc/hostname`)
-    assertEquals(logs(sneak.eid, new URLSearchParams()).entries, [])
+    assertEquals(await drained(sneak.eid), [])
     let outside = Deno.makeTempFileSync({ suffix: '.jsonl' })
     let link = `${stores.codex}/escape.jsonl`
     Deno.symlinkSync(outside, link)
     let escaped = announce(c.pid, [], link, 'codex')
-    assertEquals(logs(escaped.eid, new URLSearchParams()).entries, [])
+    assertEquals(await drained(escaped.eid), [])
     Deno.removeSync(link)
     Deno.removeSync(outside)
     c.kill('SIGKILL')
     await c.status
   },
 )
-
-slow('managed Codex logs summarize context from their confined rollout', () => {
-  let eid = uid(), thread = uid()
-  let started = '2026-07-26T12:00:00Z'
-  apply(db, [{
-    eid,
-    name: 'session',
-    comp: { id: uid(), provider: 'codex', model: 'gpt-5.6-sol' },
-  }])
-  writeSession(db, eid, {
-    origin: 'managed',
-    provider_session_id: thread,
-    started_at: started,
-  })
-  Deno.mkdirSync(`${stores.codex}/2026/07/26`, { recursive: true })
-  let path = `${stores.codex}/2026/07/26/rollout-now-${thread}.jsonl`
-  let token = (input: number) =>
-    JSON.stringify({
-      type: 'event_msg',
-      payload: {
-        type: 'token_count',
-        info: { last_token_usage: { input_tokens: input } },
-      },
-    }) + '\n'
-  Deno.writeTextFileSync(path, token(75009))
-  assertEquals(logs(eid, new URLSearchParams()).context, 75009)
-  Deno.writeTextFileSync(path, token(81234), { append: true })
-  assertEquals(logs(eid, new URLSearchParams()).context, 81234)
-})
 
 slow('an external Codex transcript follows its provider process', async () => {
   let c = await fakeCodex()

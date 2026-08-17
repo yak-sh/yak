@@ -170,7 +170,6 @@ slow(
       find: () => Promise.resolve([]),
       upload: () => Promise.resolve(),
       touch: () => Promise.resolve(),
-      logs: () => Promise.resolve({ entries: [] }),
       history: () => Promise.resolve([]),
       undo: () => Promise.resolve([]),
       providers: () => Promise.resolve([]),

@@ -276,7 +276,6 @@ let blank = (): IO => ({
   find: () => Promise.resolve([]),
   upload: () => Promise.resolve(),
   touch: () => Promise.resolve(),
-  logs: () => Promise.resolve({ entries: [] }),
   history: () => Promise.resolve([]),
   undo: () => Promise.resolve([]),
   providers: () => Promise.resolve([{ name: 'test', models: ['test'] }]),
@@ -301,7 +300,6 @@ let graph = () => {
       touch(db, eids, confirm)
       return Promise.resolve()
     },
-    logs: () => Promise.resolve({ entries: [] }),
     history: (eid, limit) => Promise.resolve(journalOf(db, eid, limit)),
     undo: ({ id, eid }, via) => {
       let batch = id ?? (eid ? lastBatch(db, eid) : 0)

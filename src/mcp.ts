@@ -88,13 +88,13 @@ import {
 import { commandOut, commands, focusOf, spawnSpec } from './commands.ts'
 import { editChanges } from './edit.ts'
 import { slotsOf } from './verb.ts'
+import { renderEntry, seqRange, type Sift, transcribe } from './log_text.ts'
 import {
-  type LogEntry,
-  renderEntry,
-  seqRange,
-  type Sift,
-  transcribe,
-} from './log_text.ts'
+  type EntryRow,
+  type GraphLog,
+  graphLog,
+  pageEntries,
+} from './entry_log.ts'
 import { request } from './http.ts'
 import { spawnDefault } from './providers.ts'
 import { entityUrl } from './url.ts'
@@ -122,15 +122,6 @@ export type IO = {
   // Bump recall aggregates (server-stamped — recall never rides the
   // apply wire); confirm also stamps memory.last_confirmed_at.
   touch: (eids: string[], confirm?: boolean) => Promise<void>
-  // A session's log tail (sessions.ts logs() in-process; the HTTP route
-  // over stdio) — entries carry the renderer row when the line has one.
-  logs: (eid: string, q: URLSearchParams) => Promise<{
-    entries: LogEntry[]
-    stderr?: string
-    busy?: boolean
-    latest?: number
-    model?: string
-  }>
   // An entity's slice of the journal (db.ts journalOf in-process; GET
   // /journal over stdio) — the wire's write record, newest first.
   history: (eid: string, limit?: number) => Promise<JournalEntry[]>
@@ -148,6 +139,21 @@ export type IO = {
 
 // The teaching text lives in grammar.ts — derived from the vocabulary,
 // shared with `task help grammar`, so the two doors cannot disagree.
+
+// A session's whole entry partition, rendered through the shared graphLog
+// (T-16798): read via the graph query door — evalGraph in-process, /query over
+// stdio — so both transports share ONE read path, and the old /sessions/:eid/
+// logs door is gone. graphLog must see every entry to resolve call↔result and
+// derive busy/latest/model, so the whole partition is read; the caller pages
+// the OUTPUT (pageEntries).
+let entryLog = async (io: IO, eid: string): Promise<GraphLog> => {
+  let hits = await io.query(`.entry.session=${eid}`, { limit: 1_000_000 })
+  let rows: EntryRow[] = hits.flatMap((r) => {
+    let seq = Number(r.comps.entry?.seq ?? 0)
+    return seq ? [{ eid: r.eid, seq, comps: r.comps as EntryRow['comps'] }] : []
+  })
+  return graphLog(rows)
+}
 
 // A peek line is one entry rendered small: renderEntry (log_text.ts, the door
 // the whole `transcript` shares) clips to a glance at width 200 and drops the
@@ -833,25 +839,20 @@ running or settled; stderr rides along when the child wrote any. ${BUS}`,
       let row = find(all, id)
       if (!row?.comps.session) return err(`no session: ${id}`)
       let s = row.comps.session
-      // The cap is PEEK's, not the door's: /logs serves a whole log to a
-      // reader that wants one (the web pane does), so a glance clamps for
-      // itself rather than dropping a transcript into an agent's context.
-      let out = await io.logs(
-        row.eid,
-        new URLSearchParams({
-          tail: String(Math.min(Math.max(tail ?? 20, 1), 500)),
-        }),
-      )
-      let status = out.busy == null
-        ? s.status ?? 'external'
-        : out.busy
-        ? 'running'
-        : 'idle'
+      // The whole partition is read (entryLog); the glance pages the OUTPUT to
+      // the last `tail` rendered rows for itself, rather than dropping a
+      // transcript into an agent's context. stderr rides beside the log as the
+      // session's own graph facet now (T-16798), not a file side-channel.
+      let log = await entryLog(io, row.eid)
+      let out = pageEntries(log.entries, {
+        tail: Math.min(Math.max(tail ?? 20, 1), 500),
+      })
+      let status = log.busy ? 'running' : s.status ?? 'idle'
       let head = [
         `${idOf(row)} ${status}`,
-        `${s.provider ?? '?'} ${out.model ?? s.serving_model ?? s.model ?? ''}`
+        `${s.provider ?? '?'} ${log.model ?? s.serving_model ?? s.model ?? ''}`
           .trim(),
-        `seq ${out.latest ?? s.latest_seq ?? 0}`,
+        `seq ${log.latest || s.latest_seq || 0}`,
         ...(s.started_at ? [`started ${s.started_at}`] : []),
         ...(s.finished_at ? [`finished ${s.finished_at}`] : []),
         ...(s.exit_code == null ? [] : [`exit ${s.exit_code}`]),
@@ -859,12 +860,13 @@ running or settled; stderr rides along when the child wrote any. ${BUS}`,
           ? [`error: ${String(row.comps.error.message).slice(0, 200)}`]
           : []),
       ].join(' · ')
-      let lines = out.entries.flatMap((e) => {
+      let lines = out.flatMap((e) => {
         let l = renderEntry(e, PEEK)
         return l == null ? [] : [l]
       })
+      let stderr = s.stderr ? String(s.stderr) : ''
       return bus(
-        [head, ...lines, ...(out.stderr ? [`stderr:\n${out.stderr}`] : [])]
+        [head, ...lines, ...(stderr ? [`stderr:\n${stderr}`] : [])]
           .join('\n'),
         session,
       )
@@ -909,29 +911,22 @@ or a created-at window (since/until, ISO). ${BUS}`,
       // hints the next cursor. The whole partition is read either way (the
       // renderer needs it to resolve calls) — the page bounds the OUTPUT.
       let page = Math.min(Math.max(limit ?? 400, 1), 5000)
-      let q = new URLSearchParams({ limit: String(page) })
-      if (after) q.set('after', String(after))
-      let out = await io.logs(row.eid, q)
+      let log = await entryLog(io, row.eid)
+      let out = pageEntries(log.entries, { after, limit: page })
       let sift: Sift = {
         ...(prose ? { prose: true } : {}),
         ...(seq ? seqRange(seq) : {}),
         ...(since ? { since } : {}),
         ...(until ? { until } : {}),
       }
-      let lines = transcribe(out.entries, sift)
-      let last = out.entries.at(-1)?.seq ?? 0
-      let more = out.entries.length >= page && last < (out.latest ?? last)
+      let lines = transcribe(out, sift)
+      let last = out.at(-1)?.seq ?? 0
+      let more = out.length >= page && last < (log.latest ?? last)
       let head = [
-        `${idOf(row)} ${
-          out.busy == null
-            ? s.status ?? 'external'
-            : out.busy
-            ? 'running'
-            : 'idle'
-        }`,
-        `${s.provider ?? '?'} ${out.model ?? s.serving_model ?? s.model ?? ''}`
+        `${idOf(row)} ${log.busy ? 'running' : s.status ?? 'idle'}`,
+        `${s.provider ?? '?'} ${log.model ?? s.serving_model ?? s.model ?? ''}`
           .trim(),
-        `seq ${out.latest ?? s.latest_seq ?? 0}`,
+        `seq ${log.latest || s.latest_seq || 0}`,
       ].join(' · ')
       let foot = more
         ? `… more — transcript id=${idOf(row)} after=${last}`
@@ -1898,11 +1893,6 @@ if (import.meta.main) {
     // stdio transport reads memories without warming them. The in-process
     // mount (/mcp, the fleet's door) is where recall counts.
     touch: async () => {},
-    logs: async (eid, q) => {
-      let res = await request(`http://${host()}/sessions/${eid}/logs?${q}`)
-      if (!res.ok) throw new Error(`server said ${res.status}`)
-      return res.json()
-    },
     history: (eid, limit) => history(eid, limit),
     undo: (ref, via) => undo(ref, via),
     providers: async () => {

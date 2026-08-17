@@ -135,7 +135,8 @@ import { request } from './http.ts'
 import { spawnDefault } from './providers.ts'
 import { atFleet, mailDomain } from './mailaddr.ts'
 import { commands, focusOf, run as runCommand } from './commands.ts'
-import { type LogEntry, seqRange, type Sift, transcribe } from './log_text.ts'
+import { seqRange, type Sift, transcribe } from './log_text.ts'
+import { type EntryRow, graphLog, pageEntries } from './entry_log.ts'
 import {
   cliVerbs,
   help,
@@ -1635,10 +1636,10 @@ let unwind = async (got: Got) => {
 }
 
 // A session's WHOLE log as a clean, ordered transcript — the dump you want
-// first when debugging one. Reads the same /logs door session_peek does (the
-// authoritative entry partition for a graph-native session), renders through
-// the shared log_text formatter, and screens with --prose / --seq / since /
-// until. Pages by --after (a seq cursor) + --limit; default is the whole log.
+// first when debugging one. Reads the session's graph entry partition through
+// the graph query door (T-16798 — the /logs door is gone), renders through the
+// shared log_text formatter, and screens with --prose / --seq / since / until.
+// Pages by --after (a seq cursor) + --limit; default is the whole log.
 let transcript = async (got: Got) => {
   let json = got.flags.has('--json')
   let id = got.args.id
@@ -1649,33 +1650,37 @@ let transcript = async (got: Got) => {
   }
   let row = await needed(id)
   if (!row.comps.session) throw new Error(`not a session: ${idOf(row)}`)
-  let q = new URLSearchParams()
-  let after = got.opts['--after']
-  let limit = got.opts['--limit']
-  if (after) q.set('after', String(Number(after)))
-  if (limit) q.set('limit', String(Number(limit)))
-  let res = await request(`http://${host()}/sessions/${row.eid}/logs?${q}`)
-  let log = await res.json() as {
-    entries: LogEntry[]
-    latest?: number
-    model?: string
-    busy?: boolean
-  }
+  let after = got.opts['--after'] ? Number(got.opts['--after']) : undefined
+  let limit = got.opts['--limit'] ? Number(got.opts['--limit']) : undefined
+  // graphLog must see the WHOLE partition to resolve call↔result and derive
+  // busy/latest/model; --after/--limit bound the OUTPUT (pageEntries).
+  let hits = await query([`.entry.session=${row.eid}`], { limit: 1_000_000 })
+  let log = graphLog(hits.flatMap((r) => {
+    let seq = Number(r.comps.entry?.seq ?? 0)
+    return seq ? [{ eid: r.eid, seq, comps: r.comps as EntryRow['comps'] }] : []
+  }))
+  let entries = pageEntries(log.entries, { after, limit })
   let sift: Sift = {
     ...(got.flags.has('--prose') ? { prose: true } : {}),
     ...(got.opts['--seq'] ? seqRange(got.opts['--seq']) : {}),
     ...(got.opts['--since'] ? { since: got.opts['--since'] } : {}),
     ...(got.opts['--until'] ? { until: got.opts['--until'] } : {}),
   }
-  let entries = log.entries
-  if (json) return print(jsonText({ ...log, lines: transcribe(entries, sift) }))
   let s = row.comps.session
+  if (json) {
+    return print(jsonText({
+      latest: log.latest,
+      model: log.model,
+      busy: log.busy,
+      lines: transcribe(entries, sift),
+    }))
+  }
   print(
     [
       `${idOf(row)} ${log.busy ? 'running' : s.status ?? 'idle'}`,
       `${s.provider ?? '?'} ${log.model ?? s.serving_model ?? s.model ?? ''}`
         .trim(),
-      `seq ${log.latest ?? s.latest_seq ?? 0}`,
+      `seq ${log.latest || s.latest_seq || 0}`,
     ].join(' · '),
   )
   for (let line of transcribe(entries, sift)) print(line)

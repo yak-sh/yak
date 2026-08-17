@@ -67,7 +67,7 @@ import {
   sessionRows as storedSessions,
   writeSession,
 } from './session_store.ts'
-import { type Change, type LogRow, sessionActive, uuid } from './types.ts'
+import { type Change, sessionActive, uuid } from './types.ts'
 
 type Cast = (changes: Change[]) => void
 type Row = Record<string, unknown>
@@ -83,7 +83,8 @@ let codeFile = (eid: string) => `${logsDir()}/${eid}.code`
 // A terminal provider's own transcript — the path its SessionStart hook
 // reported. It arrives over the WIRE like any other self-report, so it is a
 // reference, not a capability: only the providers' canonical stores are
-// readable through it, or an unauthed /logs would become a file-read oracle.
+// readable through it (confined() below), or the ingest that follows it into
+// graph entries would become a file-read oracle.
 let transcriptStores = (): Record<string, string> => ({
   claude: `${Deno.env.get('HOME')}/.claude/projects`,
   codex: `${
@@ -111,43 +112,6 @@ let transcriptOf = (eid: string) => {
   for (let provider of providers) {
     let path = confined(s.transcript, stores[provider])
     if (path) return { path, provider }
-  }
-}
-
-// Codex files by the provider's local calendar while Tasks stamps UTC. The
-// neighboring days cover either side of midnight without walking the store.
-let rolloutDays = (at: string) => {
-  let ms = Date.parse(at)
-  if (!Number.isFinite(ms)) return []
-  return [-1, 0, 1].map((n) =>
-    new Date(ms + n * 86_400_000).toISOString().slice(0, 10)
-      .replaceAll('-', '/')
-  )
-}
-
-let rollouts = new Map<string, string>()
-let rolloutOf = (eid: string) => {
-  let s = storedSession(db, eid)
-  if (
-    s?.origin != 'managed' || s.provider != 'codex' ||
-    !s.provider_session_id || !s.started_at
-  ) return
-  let store = transcriptStores().codex
-  let was = rollouts.get(eid)
-  if (was && confined(was, store)) return was
-  let suffix = `-${s.provider_session_id}.jsonl`
-  for (let day of rolloutDays(s.started_at)) {
-    let dir = resolve(store, day)
-    try {
-      for (let entry of Deno.readDirSync(dir)) {
-        if (!entry.isFile || !entry.name.endsWith(suffix)) continue
-        let path = confined(resolve(dir, entry.name), store)
-        if (path) {
-          rollouts.set(eid, path)
-          return path
-        }
-      }
-    } catch { /* the provider has not made this day's store */ }
   }
 }
 
@@ -914,22 +878,10 @@ let readLines = (path: string, t: Tail) => {
   }
 }
 
-let contexts = new Map<string, { tail: Tail; value?: number }>()
-let rolloutContext = (eid: string) => {
-  let path = rolloutOf(eid)
-  if (!path) return
-  let state = contexts.get(path) ?? {
-    tail: { at: 0, seq: 0, ended: false, errs: [] },
-  }
-  contexts.set(path, state)
-  for (let line of readLines(path, state.tail)) {
-    try {
-      let row = adapters.codex.transcript?.(JSON.parse(line))
-      if (row?.context) state.value = row.context
-    } catch { /* a malformed provider line carries no context */ }
-  }
-  return state.value
-}
+// The stderr tail last stamped per session — so a drain only re-stamps (and
+// casts) when the tail actually grew, keeping an idle run's repeated passes off
+// the wire (the same discipline latest_seq keeps in stamp()).
+let stderrs = new Map<string, string>()
 
 // One pass over the new lines does BOTH halves (D-16704): it stamps the
 // summary columns (liveness) AND appends each recognized line's transcript
@@ -1005,6 +957,14 @@ export let drain = async (eid: string, ad: Adapter, t: Tail, cast: Cast) => {
   }
   patch.latest_seq = t.seq
   if (t.errs.length) patch.error = diagnosis(t)
+  // The stderr tail rides beside the transcript as a bounded session facet
+  // (T-16798) — a process-backed run's diagnostics, imported so every reader
+  // shows them from the graph rather than a /logs file-read. Only when it grew.
+  let err = errTail(eid)
+  if (err != stderrs.get(eid)) {
+    stderrs.set(eid, err)
+    patch.stderr = err
+  }
   // This pass drained to EOF: whatever follows is real-time. A follow() loop
   // reuses this Tail, so the NEXT pass's appends dispatch their effects; the
   // first pass (this one) stays history. recover()/backfill hand a one-shot
@@ -1141,6 +1101,12 @@ let finish = async (eid: string, t: Tail, run: Run, cast: Cast) => {
     resume(eid, cast, true).catch((e) => console.warn('input resume —', e))
     return
   }
+  // The dying words land AFTER the last drain (the child writes stderr on its
+  // way out), so capture the terminal tail here too — deduped, then forget the
+  // session so the map never outlives the run.
+  let endErr = errTail(eid)
+  let sawErr = endErr && endErr != stderrs.get(eid)
+  stderrs.delete(eid)
   await followWrite(eid, () =>
     stamp(eid, {
       status,
@@ -1149,6 +1115,7 @@ let finish = async (eid: string, t: Tail, run: Run, cast: Cast) => {
       input_at: null,
       finished_at: now(),
       latest_seq: t.seq,
+      ...(sawErr ? { stderr: endErr } : {}),
       ...health,
     }, cast))
 }
@@ -1409,86 +1376,6 @@ let trail = async (eid: string, cast: Cast) => {
 
 // ---- reading the log back ----
 
-// Every record stays addressable by seq. Its first 64,000 characters are
-// enough to inspect a runaway without shipping its full payload to a client.
-let clip = (s: string) =>
-  s.length > 64_000 ? `${s.slice(0, 64_000)}… [truncated]` : s
-
-// One line, normalized for the renderer: the synthetic input line is a
-// `say` from the human for EVERY provider (so it's handled here, before any
-// dialect dispatch), everything else goes through the session's adapter.
-// A line that isn't JSON, or that the adapter doesn't recognize, carries no
-// row — the client renders it as its bare type, as before.
-let rowOf = (
-  line: string,
-  read: Adapter['row'] | undefined,
-): LogRow | undefined => {
-  let e: Event
-  try {
-    e = JSON.parse(line)
-  } catch {
-    return undefined
-  }
-  if (
-    e && typeof e == 'object' &&
-    (e.type == 'session.input' || e.type == 'session.prompt')
-  ) {
-    return {
-      kind: 'say',
-      role: 'user',
-      text: String(e.text ?? ''),
-      ...(e.timestamp ? { at: String(e.timestamp) } : {}),
-    }
-  }
-  let row = read?.(e) ?? undefined
-  return row && e.timestamp && !row.at
-    ? { ...row, at: String(e.timestamp) }
-    : row
-}
-
-let readerOf = (eid: string) => {
-  let origin = storedSession(db, eid)?.origin
-  let ad = dialectOf(eid)
-  return origin == 'managed' ? ad?.row : ad?.transcript ?? ad?.row
-}
-
-// The log, WHOLE by default — a reader asking for a session's log wants
-// the session, not its last screenful. `after=N` reads forward from seq N
-// (the delta a tailing reader asks for, and how the pane stays cheap),
-// `tail=N` the last N lines, and `limit` caps a page only when a caller
-// names one: no records are dropped unbidden. Each line within the parser cap
-// carries its renderer `row` (the adapter's normalization — omitted when the
-// line is oversized or isn't worth one). stderr rides along whole (its tail,
-// anyway) — unordered diagnostics, plainly labelled as such. v0 reads the file
-// per request; when logs get big this is where a seq→offset index goes.
-export let logs = (eid: string, q: URLSearchParams) => {
-  let text = ''
-  try {
-    text = Deno.readTextFileSync(logOf(eid))
-  } catch { /* no log yet: an empty log is not an error */ }
-  let read = readerOf(eid)
-  let lines = text.split('\n')
-  if (lines.at(-1) == '') lines.pop() // the trailing newline isn't a line
-  let limit = Math.max(0, Number(q.get('limit')) || 0)
-  let tail = Math.max(0, Number(q.get('tail')) || 0)
-  let from = tail > 0
-    ? Math.max(0, lines.length - tail)
-    : Math.max(0, Number(q.get('after')) || 0)
-  let entries = lines.slice(from, limit > 0 ? from + limit : undefined)
-    .map((line, i) => {
-      let shown = clip(line)
-      let row = byteLength(line) <= lineCap ? rowOf(line, read) : undefined
-      return { seq: from + i + 1, line: shown, ...(row ? { row } : {}) }
-    })
-  let err = errTail(eid)
-  let context = rolloutContext(eid)
-  return {
-    entries,
-    ...(err ? { stderr: err } : {}),
-    ...(context ? { context } : {}),
-  }
-}
-
 let errTail = (eid: string) => {
   try {
     let text = Deno.readTextFileSync(errFile(eid))
@@ -1496,21 +1383,6 @@ let errTail = (eid: string) => {
   } catch {
     return ''
   }
-}
-
-// The unordered diagnostics that ride BESIDE a session's ordered transcript,
-// never inside it (D-16704): the process stderr tail and, for a process-backed
-// run, the rollout's context count. Both are empty for a graph-native session
-// (no .err file, its context lives in usage entries), so the reader attaches
-// them the same way for every substrate — no `graphSession` branch. The
-// transcript itself is graph entries alone; T-16798 imports these into graph
-// facets and retires this file-read.
-export let sessionDiag = (
-  eid: string,
-): { stderr?: string; context?: number } => {
-  let stderr = errTail(eid)
-  let context = rolloutContext(eid)
-  return { ...(stderr ? { stderr } : {}), ...(context ? { context } : {}) }
 }
 
 // ---- spawning ----

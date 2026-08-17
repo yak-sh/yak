@@ -271,19 +271,38 @@ export let graphLog = (source: EntryRow[]): GraphLog => {
   }
 }
 
-export let graphLogPage = (
-  rows: EntryRow[],
-  q: URLSearchParams,
-): GraphLog => {
-  let log = graphLog(rows)
-  let limit = Math.max(0, Number(q.get('limit')) || 0)
-  let tail = Math.max(0, Number(q.get('tail')) || 0)
-  let after = Math.max(0, Number(q.get('after')) || 0)
+// Bound a rendered log's ENTRIES to an output page. graphLog must see the WHOLE
+// partition to resolve call↔result and derive busy/latest/model, so a page
+// bounds only what a reader returns, never what it reads: `tail` takes the last
+// N rendered rows, else `after` is a seq cursor and `limit` a cap. A reader
+// spreads it back over its GraphLog — `{ ...log, entries: pageEntries(...) }`.
+export let pageEntries = (
+  entries: GraphLogEntry[],
+  p: { after?: number; tail?: number; limit?: number },
+): GraphLogEntry[] => {
+  let tail = Math.max(0, p.tail ?? 0)
+  let after = Math.max(0, p.after ?? 0)
+  let limit = Math.max(0, p.limit ?? 0)
   let picked = tail > 0
-    ? log.entries.slice(-tail)
-    : log.entries.filter((entry) => entry.seq > after)
-  return {
-    ...log,
-    entries: limit > 0 ? picked.slice(0, limit) : picked,
+    ? entries.slice(-tail)
+    : entries.filter((entry) => entry.seq > after)
+  return limit > 0 ? picked.slice(0, limit) : picked
+}
+
+// The token context (input tokens of the latest turn) for a PROCESS-BACKED
+// session, read from the session's `usage_json` facet — the graph already holds
+// it (adapters stamp it each turn.completed), so no rollout-file read. A
+// graph-native session derives context from its usage entries instead
+// (graphLog above); this covers the substrate whose usage never becomes an
+// entry (ingest routes token counts to summary — sessions.ts drain).
+export let contextOf = (usage_json?: string | null): number | undefined => {
+  if (!usage_json) return undefined
+  try {
+    let n = Number(
+      (JSON.parse(usage_json) as { input_tokens?: unknown }).input_tokens ?? 0,
+    )
+    return n > 0 ? n : undefined
+  } catch {
+    return undefined // a torn or foreign usage shape carries no context
   }
 }

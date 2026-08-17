@@ -15,7 +15,8 @@
 import type { Change } from './types.ts'
 
 // A pass-through entity's log tail, shaped exactly as db.ts entryRows() shapes a
-// persisted one, so the existing entriesOf/`/logs` path serves it unchanged.
+// persisted one, so the existing entriesOf path (graphLog readers, T-16798)
+// serves it unchanged.
 export type EntryRow = {
   eid: string
   seq: number
