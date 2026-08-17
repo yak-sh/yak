@@ -20,7 +20,7 @@
 // spelling (`comp: ''`, which reads whichever component happens to carry the
 // column), and a substring too short for a trigram (see `grams`).
 import { propAt } from './props.ts'
-import { EXISTS, ORDER, type Pred, TEXT } from './query.ts'
+import { AGG, EXISTS, ORDER, type Pred, refCols, TEXT } from './query.ts'
 import { comps, stamped } from './types.ts'
 
 // Bound values are only ever text or numbers — the grammar has no other
@@ -206,7 +206,9 @@ let CMP: Record<string, string> = { '<': '<', '<=': '<=', '>': '>', '>=': '>=' }
 
 let one = (p: Pred): Sql | null => {
   if (p.op == ORDER) return { sql: '1', params: [] } // a ranking, not a filter
+  if (p.op == AGG) return { sql: '1', params: [] } // a projection; see aggregateSql
   if (p.op == TEXT) return text(p.value)
+  if (p.refs) return refsSql(p) // multi-column reverse-union: an eid IN union
   if (p.rev) return revSql(p) // a reverse hop: a correlated EXISTS/count
   if (p.at) return null // path preds need a second join
   if (!known(p.comp, p.prop)) return null
@@ -318,6 +320,47 @@ let revSql = (p: Pred): Sql | null => {
     sql: `${r.not ? 'not ' : ''}exists (select 1 from "${base}"${inner.joins}` +
       ` where ${corr}${tail})`,
     params: inner.params,
+  }
+}
+
+// The multi-column reverse-union compiled: the backlinks of `value` are the
+// UNION of every ref column that equals it, each an index search (T-17678), so
+// the whole thing is `eid in (select … union select …)` — no wide join, the
+// `narrow()` doc_gram shape. Only the positive equality compiles; presence and
+// absence admit rows in no reverse map, so they decline and the matcher answers.
+let refsSql = (p: Pred): Sql | null => {
+  if (p.op != '' || !p.value) return null
+  let subs = refCols.map(([c, pr]) =>
+    `select "${c}"."eid" from "${c}" where ${asText(col(c, pr))} = ?`
+  )
+  return {
+    sql: `"entity"."eid" in (${subs.join(' union ')})`,
+    params: refCols.map(() => p.value),
+  }
+}
+
+// An aggregate query: the distinct values of a column, or a per-value tally,
+// over the entities the rest of the preds select. build() joins the column's
+// component (its AGG pred names it, one() compiling to '1') and every filter
+// beside it, so the projection rides the same exact WHERE as a membership query.
+// Empties (null and '') are dropped to match tally(); a numeric/time column
+// declines, since cast-to-text would disagree with the matcher's String(v).
+export let aggregateSql = (preds: Pred[]): Sql | null => {
+  let agg = preds.find((p) => p.op == AGG)
+  if (!agg?.comp || !agg.prop) return null
+  let tag = tagOf(agg.comp, agg.prop)
+  if (!['text', 'enum', 'eid'].includes(String(tag))) return null
+  let built = build(preds, 'entity')
+  if (!built) return null
+  let c = col(agg.comp, agg.prop)
+  let cond = `${c} is not null and ${asText(c)} != '' and ${built.cond}`
+  let sel = agg.agg == 'tally'
+    ? `select ${asText(c)} as value, count(*) as n`
+    : `select distinct ${asText(c)} as value`
+  return {
+    sql: `${sel} from "entity"${built.joins} where ${cond}` +
+      (agg.agg == 'tally' ? ' group by value' : '') + ' order by value',
+    params: built.params,
   }
 }
 

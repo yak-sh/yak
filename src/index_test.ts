@@ -94,6 +94,26 @@ Deno.test('anchor falls back to component presence, and to nothing', () => {
   assertEquals(anchor(ix, parseQuery('.delivered=')), undefined)
 })
 
+Deno.test('anchor unions the reverse index for a .refs= backlink lookup', () => {
+  let ix = emptyIndex()
+  indexAll(ix, {
+    // three referrers of t1 through THREE different {eid} columns...
+    c1: { comment: { target: 't1' } },
+    c2: { comment: { target: 't1' } },
+    t2: { task: { project: 't1' } },
+    // ...and one that points elsewhere
+    x: { comment: { target: 'other' } },
+  }, [])
+  // the candidate set is the union of every reverse map for t1 — O(referrers)
+  assertEquals(
+    anchor(ix, parseQuery('.refs=t1')),
+    new Set(['c1', 'c2', 't2']),
+  )
+  // presence/absence admit rows in no reverse map, so they anchor nothing
+  assertEquals(anchor(ix, parseQuery('.refs=')), undefined)
+  assertEquals(anchor(ix, parseQuery('.refs!')), undefined)
+})
+
 Deno.test('anchor narrows a multi-hop path to its NEAR component', () => {
   let ix = emptyIndex()
   indexAll(ix, {

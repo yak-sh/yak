@@ -81,6 +81,17 @@ export type Pred = {
   // mirror of `at` — one-to-many instead of one deref — so it carries the
   // existential/count semantics `at` never needs. See Rev.
   rev?: Rev
+  // A MULTI-COLUMN reverse-union: match any entity that references `value`
+  // through SOME `{eid}` column — the backlinks of `value`, the union of every
+  // reverse lookup the vocabulary implies (`.refs=T-3`). comp/prop stay empty:
+  // the union spans refCols, so anchor unions the reverse index and sql.ts
+  // unions the ref tables. `.comment.target=T-3` is one column of this.
+  refs?: boolean
+  // An AGGREGATE projection rather than a filter: `agg` names the reduction
+  // over this pred's column — `distinct` its non-empty values, `tally` each
+  // value's count. op is AGG, so matchQuery passes it through (the filter part
+  // selects the universe); aggOf()/tally()/aggregateSql() read the projection.
+  agg?: 'distinct' | 'tally'
 }
 
 // A reverse hop resolved: the child component + ref column whose value the
@@ -159,6 +170,16 @@ export let refCols: [string, string][] = [
     .map((p) => [c, p] as [string, string])
 )
 
+// The synthetic prop the multi-column reverse-union resolves its value through:
+// a plain entity reference with no owning column, so `.refs=T-3` turns T-3 into
+// its eid at delivery exactly as a real `{eid}` column would (resolveRefs).
+let REFS_PROP: Prop = {
+  comp: '',
+  prop: 'refs',
+  name: 'refs',
+  type: { eid: 'entity', death: 'keep' },
+}
+
 // A reverse ASSOCIATION: a component's `{eid}` ref column seen from the far side.
 // `.comments` are the entities whose comment.target points at me. One per ref
 // column, DERIVED from refCols — never hand-listed — named plural(comp) when the
@@ -181,6 +202,18 @@ export let reverseAssocs: Map<string, Assoc> = (() => {
 })()
 for (let name of reverseAssocs.keys()) {
   if (owned(name)) throw new Error(`reverse assoc .${name} shadows a real prop`)
+}
+
+// The reserved query WORDS — directives that are neither a column nor an
+// association: `.refs` (the multi-column reverse-union) and the `.distinct` /
+// `.tally` aggregates. Guarded here the way scopes and reverse assocs are, so a
+// vocabulary that ever grows one of these as a real prop is a load error rather
+// than a silently dead directive.
+export let reserved = ['refs', 'distinct', 'tally']
+for (let name of reserved) {
+  if (owned(name)) {
+    throw new Error(`reserved query word .${name} shadows a prop`)
+  }
 }
 
 // The dot-param shape, sketched — the tail of every strict rejection
@@ -283,6 +316,40 @@ export let ORDER = 'order'
 
 export let orderOf = (preds: Pred[]) => preds.find((p) => p.op == ORDER)?.value
 
+// An AGGREGATE directive rides the pred list like ORDER — `.distinct=domain`,
+// `.tally=domain`. matchQuery passes AGG through (true), so the OTHER preds
+// select the universe the aggregate reduces; a reader pulls the projection with
+// aggOf() and computes it with tally() (or aggregateSql server-side).
+export let AGG = 'agg'
+
+export let aggOf = (
+  preds: Pred[],
+): { op: 'distinct' | 'tally'; at: Hop } | undefined => {
+  let p = preds.find((p) => p.op == AGG)
+  return p?.agg ? { op: p.agg, at: { comp: p.comp, prop: p.prop } } : undefined
+}
+
+// The aggregate itself, over the rows a query matched: value → count, empties
+// (null and '') dropped exactly as the census always has. Distinct values are
+// its keys; a reader that wants them sorted takes `[...tally(rows, at).keys()]`.
+export let tally = (
+  rows: Iterable<Comps>,
+  at: Hop,
+): Map<string, number> => {
+  let m = new Map<string, number>()
+  for (let c of rows) {
+    let v = c[at.comp]?.[at.prop]
+    if (v == null || v === '') continue
+    let k = String(v)
+    m.set(k, (m.get(k) ?? 0) + 1)
+  }
+  return m
+}
+
+// The census in one line: the sorted distinct values of a column over `rows`.
+export let distinctValues = (rows: Iterable<Comps>, at: Hop): string[] =>
+  [...tally(rows, at).keys()].sort()
+
 // A query addresses the LAZY entry partition when it names any session-log
 // component (sessionComps) — `.entry.session`, `.generation.provider`,
 // `.response.status`, and the rest. Those entities are omitted from the root
@@ -379,7 +446,8 @@ let facet = (comp: string) => comp == 'doc' || !kindOrder.includes(comp)
 // is what makes it safe to add: a legitimate "none" is unchanged.
 export let resolution = (preds: Pred[], kind?: string) => {
   let crossed = preds.filter((p) =>
-    p.op != ORDER && p.comp && p.comp != kind && !facet(p.comp)
+    p.op != ORDER && p.op != AGG && !p.refs &&
+    p.comp && p.comp != kind && !facet(p.comp)
   )
   // The suggestion is composed through the routing table, so it can only
   // name a spelling that parses — an error naming a door owes that much.
@@ -549,6 +617,36 @@ export let preds = (token: string): Pred[] | null => {
   value = value.replace(/^"(.*)"$/s, '$1')
   if (path == 'order' && op == '=') {
     return [{ comp: '', prop: 'order', op: ORDER, value }]
+  }
+  // `.refs=T-3` — the multi-column reverse-union (this entity's backlinks of
+  // T-3). Presence/absence read like a reverse association: `.refs!` references
+  // something, `.refs=` references nothing. The value resolves like any id at
+  // delivery (resolveRefs). Guarded so a future `refs` column would win.
+  if (path == 'refs' && !owned('refs')) {
+    if (op == '=') return [{ comp: '', prop: '', op: '', value, refs: true }]
+    if (op == '!') {
+      return [{ comp: '', prop: '', op: EXISTS, value: '', refs: true }]
+    }
+    throw new Error(
+      '.refs takes an id (.refs=T-3), presence (.refs!) or absence (.refs=)',
+    )
+  }
+  // `.distinct=domain` / `.tally=domain` — an aggregate PROJECTION over one
+  // column, not a filter. Its column routes like any bare prop (or the explicit
+  // `.distinct=task.domain`); a path is refused — the census aggregates a single
+  // column. aggOf()/aggregateSql() read the AGG pred; matchQuery lets it through.
+  if ((path == 'distinct' || path == 'tally') && !owned(path)) {
+    if (op != '=' || !value) {
+      throw new Error(`.${path} names a column: .${path}=domain`)
+    }
+    let groups = groupsOf(value.split('.'))
+    let at = groups[groups.length - 1]
+    if (groups.length > 1 || !at.prop) {
+      throw new Error(
+        `.${path} aggregates one column, not a path: .${path}=${value}`,
+      )
+    }
+    return [{ comp: at.comp, prop: at.prop, op: AGG, value: '', agg: path }]
   }
   // A SCOPE resolves a virtual prop to the Pred[] it splices into the AND-list.
   // Real props win: `owned` names a prop a column/component already routes, so
@@ -762,6 +860,17 @@ export let resolveRefs = (
   lookup: (id: string) => string | undefined,
 ): Pred[] =>
   preds.map((p) => {
+    // A multi-column reverse-union's value is an id like any reference — but it
+    // owns no comp/prop to type it, so resolve it through the entity target.
+    if (p.refs) {
+      if (p.op != '' || !p.value) return p
+      try {
+        let value = String(parseProp(REFS_PROP, p.value, { resolve: lookup }))
+        return value == p.value ? p : { ...p, value }
+      } catch {
+        return p
+      }
+    }
     // A reverse hop's own value is a count, never a ref — but its sub-filter
     // carries the same typed values, so resolve THROUGH it (recursively).
     if (p.rev) {
@@ -882,7 +991,18 @@ export let matchQuery = (
   kids?: Kids,
 ) =>
   preds.every((p) => {
-    if (p.op == ORDER) return true
+    if (p.op == ORDER || p.op == AGG) return true
+    if (p.refs) {
+      // The multi-column reverse-union: read every {eid} column this bag
+      // carries. `.refs=X` holds when any equals X; `.refs!` when any is set;
+      // `.refs=` when none is — the same tri-state a reverse association marks.
+      let vals = refCols
+        .map(([comp, prop]) => c[comp]?.[prop])
+        .filter((v) => v != null)
+      if (p.op == EXISTS) return vals.length > 0
+      if (p.value == '') return vals.length == 0
+      return vals.some((v) => String(v) == p.value)
+    }
     if (p.op == TEXT) {
       let d = c.doc as { title?: string; body?: string } | undefined
       let needle = p.value.toLowerCase()

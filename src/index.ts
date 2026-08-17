@@ -195,6 +195,22 @@ export let anchor = (ix: Index, preds: Pred[]): Set<string> | undefined => {
       }
       continue
     }
+    if (p.refs) {
+      // The multi-column reverse-union: the referrers of `value` are the union
+      // of every reverse map's set for it — O(referrers), never a graph scan.
+      // Presence/absence (`.refs!`, `.refs=`) admit rows with no reference at
+      // all, not in any reverse map, so they anchor nothing.
+      if (p.op == '' && p.value) {
+        let out = new Set<string>()
+        for (let [c, pr] of refCols) {
+          for (let e of ix.refs.get(refKey(c, pr))?.get(p.value) ?? []) {
+            out.add(e)
+          }
+        }
+        consider(out)
+      }
+      continue
+    }
     if (
       !p.at && p.comp && p.prop && p.op == '' && p.value &&
       !p.value.includes(',') && !/\.\./.test(p.value) && isRef(p.comp, p.prop)

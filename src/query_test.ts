@@ -1,7 +1,11 @@
 // The filter grammar: one parser for boards, CLI and MCP.
 import {
   adopt,
+  AGG,
+  aggOf,
   complete,
+  distinctValues,
+  EXISTS,
   hot,
   kidsOf,
   kindPreds,
@@ -19,6 +23,7 @@ import {
   scopes,
   SUNK,
   sunk,
+  tally,
   warm as rank, // the test file's own `warm` fixture predates the export
 } from './query.ts'
 import { instant, span } from './time.ts'
@@ -355,6 +360,93 @@ Deno.test('reverse hop: ALL falls out of De Morgan, count compares', () => {
 
 Deno.test('reverse hop: a bare association needs a sub-path or a count', () => {
   assertThrows(() => preds('.comments~=foo'), Error)
+})
+
+// ---- multi-column reverse-union (.refs) ----
+
+// The backlinks of an entity: who points at it through ANY {eid} column. The
+// revGraph reused — c1/c2 both aim comment.target at T1, and each carries a
+// distinct created.by, so a target sits at the union of two different columns.
+let refHit = (q: string, eid: string) =>
+  matchQuery(revGraph()[eid], parseQuery(q))
+
+Deno.test('.refs parses to a multi-column reverse-union pred', () => {
+  assertEquals(preds('.refs=T-3'), [
+    { comp: '', prop: '', op: '', value: 'T-3', refs: true },
+  ])
+  assertEquals(preds('.refs!'), [
+    { comp: '', prop: '', op: EXISTS, value: '', refs: true },
+  ])
+  assertEquals(preds('.refs='), [
+    { comp: '', prop: '', op: '', value: '', refs: true },
+  ])
+  // an operator that has no reverse-union meaning is refused, not guessed
+  assertThrows(() => preds('.refs~=x'), Error)
+  assertThrows(() => preds('.refs>=1'), Error)
+})
+
+Deno.test('.refs matches every referrer regardless of which column carries it', () => {
+  assert(refHit('.refs=T1', 'c1')) // c1.comment.target = T1
+  assert(refHit('.refs=T1', 'c2')) // c2.comment.target = T1
+  assert(!refHit('.refs=T1', 'P1')) // P1 points at nothing
+  assert(refHit('.refs=jeff', 'c1')) // c1.created.by = jeff, a DIFFERENT column
+  assert(!refHit('.refs=jeff', 'c2')) // c2 is by sam
+  // presence / absence: c1 references two things, T1 references nothing
+  assert(refHit('.refs!', 'c1'))
+  assert(!refHit('.refs!', 'T1'))
+  assert(refHit('.refs=', 'T1'))
+})
+
+Deno.test('.refs resolves its value like any id at delivery', () => {
+  let uuid = '22222222-2222-4222-8222-222222222222'
+  let resolved = resolveRefs(
+    parseQuery('.refs=T-3'),
+    (id) => (id == 'T-3' ? uuid : undefined),
+  )
+  assertEquals(resolved[0].value, uuid)
+  // an unresolvable id stays as typed — a saved query may name an absent entity
+  assertEquals(
+    resolveRefs(parseQuery('.refs=nope'), () => undefined)[0].value,
+    'nope',
+  )
+})
+
+// ---- aggregates (.distinct / .tally) ----
+
+Deno.test('.distinct / .tally parse to an AGG projection over one column', () => {
+  assertEquals(preds('.distinct=domain'), [
+    { comp: 'task', prop: 'domain', op: AGG, value: '', agg: 'distinct' },
+  ])
+  assertEquals(preds('.tally=domain')![0].agg, 'tally')
+  // the explicit component spelling routes the same column
+  assertEquals(preds('.distinct=task.domain')![0], {
+    comp: 'task',
+    prop: 'domain',
+    op: AGG,
+    value: '',
+    agg: 'distinct',
+  })
+  // a path or a bare component is refused — the census aggregates one column
+  assertThrows(() => preds('.distinct=assignee.title'), Error)
+  assertThrows(() => preds('.distinct=proposed'), Error)
+  assertThrows(() => preds('.distinct='), Error)
+})
+
+Deno.test('an aggregate rides the pred list without filtering, read via aggOf', () => {
+  let rows = [
+    row({ domain: 'Ops' }),
+    row({ domain: 'Eng' }),
+    row({ domain: 'Ops' }),
+    row({ domain: '' }),
+  ]
+  let ps = parseQuery('.distinct=domain')
+  assert(rows.every((r) => matchQuery(r, ps))) // the directive filters nothing
+  let agg = aggOf(ps)!
+  assertEquals(agg, { op: 'distinct', at: { comp: 'task', prop: 'domain' } })
+  // distinct is sorted with the empty dropped; tally counts each value
+  assertEquals(distinctValues(rows, agg.at), ['Eng', 'Ops'])
+  assertEquals(tally(rows, agg.at).get('Ops'), 2)
+  assertEquals(tally(rows, agg.at).has(''), false)
 })
 
 Deno.test('query: pred routes and normalizes ops', () => {

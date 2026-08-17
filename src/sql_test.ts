@@ -11,8 +11,16 @@
 // string beside an absent column, a needle containing LIKE's wildcards.
 
 import { assertEquals } from '@std/assert'
-import { kidsOf, kindPreds, matchQuery, parseQuery } from './query.ts'
-import { where } from './sql.ts'
+import {
+  aggOf,
+  distinctValues,
+  kidsOf,
+  kindPreds,
+  matchQuery,
+  parseQuery,
+  tally,
+} from './query.ts'
+import { aggregateSql, where } from './sql.ts'
 import { open } from './db.ts'
 import { kindOf, kindOrder } from './types.ts'
 
@@ -302,6 +310,13 @@ let COMPILES = [
   // composes with an ordinary column pred, ANDed
   '.task.status=open&.comments!',
   '.comments.created.by=p1&.task.status=wip',
+  // the multi-column reverse-union: e1's referrers are its two comments
+  // (comment.target), p1's are its comments-by AND the tasks filed under it —
+  // a UNION across ref columns that a single-column pred can't express
+  '.refs=e1',
+  '.refs=p1',
+  '.refs=e2', // one comment (c3) points here
+  '.refs=nobody', // no referrers at all
 ]
 
 for (let q of COMPILES) {
@@ -340,6 +355,10 @@ let DECLINES = [
   // answers it — exactness-or-nothing across the correlated join.
   '.comments.created.at=today',
   '.comments.created.at>=1-week-ago',
+  // the reverse-union's presence/absence admit rows in no reverse map, so SQL
+  // declines them (as the anchor does) and the matcher answers
+  '.refs!',
+  '.refs=',
 ]
 
 for (let q of DECLINES) {
@@ -347,6 +366,37 @@ for (let q of DECLINES) {
     assertEquals(bySql(q), null, `${q} should have declined`)
   })
 }
+
+// The aggregate projections answer VALUES, not eids, so they run their own
+// parity — the compiled distinct/tally over the same graph the matcher reduces.
+// domain is a text column, where cast-to-text and String(v) agree; a numeric
+// column would disagree, and aggregateSql declines it rather than guess.
+Deno.test('aggregate: distinct SQL is the matcher census over a column', () => {
+  let ps = parseQuery('.distinct=domain')
+  let at = aggOf(ps)!.at
+  let built = aggregateSql(ps)!
+  let sql = (db.prepare(built.sql).all(...built.params) as { value: string }[])
+    .map((r) => r.value)
+  assertEquals(sql, distinctValues(Object.values(world), at))
+})
+
+Deno.test('aggregate: tally SQL is the matcher tally over a column', () => {
+  let ps = parseQuery('.tally=domain')
+  let at = aggOf(ps)!.at
+  let built = aggregateSql(ps)!
+  let sql = new Map(
+    (db.prepare(built.sql).all(...built.params) as {
+      value: string
+      n: number
+    }[])
+      .map((r) => [r.value, r.n] as [string, number]),
+  )
+  assertEquals(sql, tally(Object.values(world), at))
+})
+
+Deno.test('aggregate: a numeric column declines rather than mis-cast', () => {
+  assertEquals(aggregateSql(parseQuery('.distinct=priority')), null)
+})
 
 // kind=K is not a filter STRING but a synthetic Pred[] (query.ts kindPreds):
 // K present and every earlier kindOrder comp absent, which is EXACTLY kindOf.
