@@ -104,6 +104,7 @@ define([
   { view: 'Tile', match: has('session'), Render: SessionRow },
   { view: 'Tile', match: () => true, Render: ListTile },
   { view: 'Wake', match: has('wake'), Render: Wake },
+  { view: 'Session', match: has('session'), Render: Session },
   { view: 'Full', match: has('doc'), Render: Show },
   { view: 'Card.Full', match: has('doc'), Render: CardFull },
   { view: 'Board', match: has('doc', 'board'), Render: Board },
@@ -167,7 +168,6 @@ define([
   // attachment keeps its own face (the tie at score 1 breaks to the
   // earlier-registered Full) while still offering a Media tab.
   { view: 'Media', match: has('blob'), Render: Media },
-  { view: 'Session', match: has('session'), Render: Session },
   // Entry faces use the same specificity rules as every entity view. The
   // generic entry is the floor; facets such as bash and result override it.
   {
@@ -262,10 +262,10 @@ define([
   'Dashboard',
   'Usage',
   'Role',
+  'Session',
   'Full',
   'Web',
   'Media',
-  'Session',
   'Schema',
   'Debug',
 ])

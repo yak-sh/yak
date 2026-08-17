@@ -17,6 +17,20 @@ Deno.test('boards open on Board with List still available', () => {
   cache.value = {}
 })
 
+Deno.test('sessions open on Session with Full still available', () => {
+  cache.value = {
+    session: {
+      entity: { eid: 'session', num: 31 },
+      doc: { eid: 'session', title: 'Session', body: '' },
+      session: { eid: 'session', id: 'thread' },
+    },
+  }
+  let session = ent('session')
+  assertEquals(resolve(session).view, 'Session')
+  assertEquals(applicable(session).slice(0, 2), ['Session', 'Full'])
+  cache.value = {}
+})
+
 Deno.test('release names the session by its chip id', () => {
   cache.value = {
     task: {
