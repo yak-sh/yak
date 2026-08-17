@@ -974,20 +974,22 @@ Deno.test('wrap brief: a docless working session gets the stub', () => {
 
 Deno.test('wrap brief: the final message IS the brief when captured', () => {
   let AT = Date.UTC(2026, 6, 20)
-  let doc = wrapChanges(all, 'sess-x', AT, [], 'Shipped the thing.\n\nNext: x')
-    .find((c) => c.name == 'doc' && c.eid == S)
-  assertEquals(doc?.comp?.body, 'Shipped the thing.\n\nNext: x')
-  assertEquals(doc?.comp?.title, 'Work session 2026-07-20')
-  // a hand-written doc outranks the captured final message
-  let named = structuredClone(snap)
-  named.changes.push({
+  let out = wrapChanges(all, 'sess-x', AT, [], 'Shipped the thing.\n\nNext: x')
+  let brief = out.find((c) => c.name == 'brief' && c.eid == S)
+  // it lands on the first-class brief component, NOT the session doc — which
+  // stays free for the scribe's narrative (D-19459).
+  assertEquals(brief?.comp?.text, 'Shipped the thing.\n\nNext: x')
+  assertEquals(out.some((c) => c.name == 'doc' && c.eid == S), false)
+  // a deliberate brief already written is never clobbered
+  let briefed = structuredClone(snap)
+  briefed.changes.push({
     eid: S,
-    name: 'doc',
-    comp: { title: 'Mine', body: 'my own words' },
+    name: 'brief',
+    comp: { text: 'my own words' },
   })
   assertEquals(
-    wrapChanges(rows(named), 'sess-x', AT, [], 'captured')
-      .some((c) => c.name == 'doc' && c.eid == S),
+    wrapChanges(rows(briefed), 'sess-x', AT, [], 'captured')
+      .some((c) => c.name == 'brief' && c.eid == S),
     false,
   )
   // an idle session's final message is not worth a brief
@@ -1216,6 +1218,71 @@ Deno.test('contextDigest: a non-operator remains a normal graph participant', ()
   assertEquals(out.includes('T-2'), true)
   assertEquals(out.includes('claim:'), true)
   assertEquals(out.includes('observation-only'), false)
+})
+
+// `## previously` — the successor reads its predecessor's handoff (D-19459).
+// The brief is a first-class component now, shown IN FULL: no 4-line cap and
+// no 96-char per-line snip, which is why briefs never worked before. It falls
+// back to a managed run's final_text, and NEVER scrapes the session doc.body.
+let ACT = 'aaaaaaaa-0000-4000-8000-0000000000a1'
+let CUR = 'aaaaaaaa-0000-4000-8000-0000000000c1'
+let PREV = 'aaaaaaaa-0000-4000-8000-0000000000d1'
+// CUR (actor ACT) wakes after PREV (same actor) left the given session comp +
+// extra rows; return CUR's boot digest.
+let previously = (session: Record<string, unknown>, extra: Change[] = []) =>
+  contextDigest({
+    changes: [
+      { eid: ACT, name: 'entity', comp: { eid: ACT, num: 90, created_at: '' } },
+      { eid: ACT, name: 'person', comp: {} },
+      { eid: CUR, name: 'entity', comp: { eid: CUR, num: 91, created_at: '' } },
+      { eid: CUR, name: 'session', comp: { id: 'cur', actor: ACT } },
+      {
+        eid: PREV,
+        name: 'entity',
+        comp: { eid: PREV, num: 92, created_at: '' },
+      },
+      {
+        eid: PREV,
+        name: 'session',
+        comp: { id: 'prev', actor: ACT, ...session },
+      },
+      ...extra,
+    ],
+    deps: [],
+  }, 'cur')
+
+Deno.test('## previously: a multi-line brief comp renders in full', () => {
+  let long = 'A handoff line long past ninety-six characters, so the old ' +
+    'per-line snip would have cut it here and dropped everything after.'
+  let body = [
+    'Line one of the handoff.',
+    long,
+    'Line three.',
+    'Line four.',
+    'Line five — past the old four-line cap.',
+    'Line six.',
+  ].join('\n')
+  let d = previously({}, [{ eid: PREV, name: 'brief', comp: { text: body } }])
+  assertEquals(d.includes('## previously'), true)
+  assertEquals(d.includes(long), true) // full line, not snipped to 96
+  assertEquals(d.includes('Line five — past the old four-line cap.'), true)
+  assertEquals(d.includes('Line six.'), true) // past the old slice(0, 4)
+})
+
+Deno.test('## previously: falls back to a managed run final_text', () => {
+  let d = previously({ final_text: 'Managed run summary line.' })
+  assertEquals(d.includes('## previously'), true)
+  assertEquals(d.includes('Managed run summary line.'), true)
+})
+
+Deno.test('## previously: the session doc.body is never scraped', () => {
+  let d = previously({}, [{
+    eid: PREV,
+    name: 'doc',
+    comp: { title: 'Prev', body: 'Narrative that is not a handoff brief.' },
+  }])
+  assertEquals(d.includes('## previously'), false)
+  assertEquals(d.includes('Narrative that is not a handoff brief.'), false)
 })
 
 // The digest's frontmatter lead (T-4554): a reified session's own meta —
@@ -3177,18 +3244,18 @@ Deno.test("contextDigest: previously — the same operator's last brief", () => 
     changes: [
       ...mk(eid(1), ago(20), {
         session: { id: 'ws-old', actor: OP },
-        doc: {
-          title: 'Work session',
-          body: 'landed: everything\nnext: polish',
-        },
+        doc: { title: 'Work session' },
+        brief: { text: 'landed: everything\nnext: polish' },
       }),
       ...mk(eid(2), ago(30), {
         session: { id: 'ws-older', actor: OP },
-        doc: { title: 'Older', body: 'stale' },
+        doc: { title: 'Older' },
+        brief: { text: 'stale' },
       }),
       ...mk(eid(3), ago(4), {
         session: { id: 'ws-other', actor: eid(8) },
-        doc: { title: 'Other op', body: 'not yours' },
+        doc: { title: 'Other op' },
+        brief: { text: 'not yours' },
       }),
       ...mk(eid(4), ago(0), { session: { id: 'ws-new', actor: OP } }),
     ],
@@ -3205,16 +3272,19 @@ Deno.test("contextDigest: previously — the same operator's last brief", () => 
     d.split('\n').filter((l) => l.includes('Work session')).length,
     1,
   )
-  // a stubbed doc is no brief — final_text stands in
-  let stubbed = structuredClone(late)
-  stubbed.changes.find((c) => c.eid == eid(1) && c.name == 'doc')!.comp!.body =
-    `${STUB} — a stub, enrich me.`
-  stubbed.changes.find((c) => c.eid == eid(1) && c.name == 'session')!.comp!
-    .final_text = 'the closing words'
-  assertEquals(
-    contextDigest(stubbed, 'ws-new', NOW).includes('the closing words'),
-    true,
+  // the session doc.body is NEVER scraped — even a real-looking body is
+  // ignored; a managed run's final_text stands in when there is no brief comp
+  let noBrief = structuredClone(late)
+  noBrief.changes = noBrief.changes.filter(
+    (c) => !(c.eid == eid(1) && c.name == 'brief'),
   )
+  noBrief.changes.find((c) => c.eid == eid(1) && c.name == 'doc')!.comp!.body =
+    `${STUB} — a stub, ignore me.`
+  noBrief.changes.find((c) => c.eid == eid(1) && c.name == 'session')!.comp!
+    .final_text = 'the closing words'
+  let nb = contextDigest(noBrief, 'ws-new', NOW)
+  assertEquals(nb.includes('the closing words'), true)
+  assertEquals(nb.includes('a stub, ignore me'), false)
   // no operator in common: no previously line
   assertEquals(
     contextDigest(late, 'ws-other', NOW).includes('previously'),
@@ -3265,7 +3335,8 @@ Deno.test('contextDigest: resume pops this actor stack before narrative memory',
         name: 'session',
         comp: { id: 'resume-past', actor },
       },
-      { eid: past, name: 'doc', comp: { title: 'Last time', body: 'brief' } },
+      { eid: past, name: 'doc', comp: { title: 'Last time', body: '' } },
+      { eid: past, name: 'brief', comp: { text: 'brief' } },
       ...task(top, 5, 'Incident C', { actor, at: '2026-07-20', rank: 3 }),
       ...task(lower, 6, 'Original A', { actor, at: '2026-07-18', rank: 1 }),
       ...task(foreign, 7, 'Not my yak', {
@@ -3508,12 +3579,13 @@ Deno.test('contextDigest: golden — every section, frozen assembly', () => {
     {
       eid: G + 'PS',
       name: 'doc',
-      comp: {
-        title: 'Prev session',
-        body: 'line one of brief\nline two\nline three',
-      },
+      comp: { title: 'Prev session', body: '' },
     },
-    { eid: G + 'PS', name: 'brief', comp: {} },
+    {
+      eid: G + 'PS',
+      name: 'brief',
+      comp: { text: 'line one of brief\nline two\nline three' },
+    },
     ...mkE('WS', 3, 60),
     mkU('WS', 55),
     {

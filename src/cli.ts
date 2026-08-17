@@ -2326,11 +2326,11 @@ let wrap = async (got: Got) => {
   }
 }
 
-// The self-authored brief (T-4554): write YOUR session doc's body — the
-// narrative wrap preserves (a non-stub body is never clobbered) and the
-// next digest quotes as `## previously`. Body doors match mail's:
-// trailing words, --body=@file, --body=- or @- (piped stdin). Another
-// session's doc is task set's job (task set S-12 .body=@brief.md).
+// The self-authored brief (T-4554, D-19459): write YOUR session's `brief`
+// component — the first-class handoff the next digest quotes IN FULL as
+// `## previously`. It is NOT the session doc: doc.body stays free for the
+// scribe's narrative. Body doors match mail's: trailing words, --body=@file,
+// --body=- or @- (piped stdin).
 let sessionBrief = async (got: Got) => {
   let sid = me()
   if (!sid) throw new Error('session brief: run under a session (no identity)')
@@ -2344,10 +2344,7 @@ let sessionBrief = async (got: Got) => {
   if (!sess) {
     throw new Error(`no session entity for ${sid} — task session context first`)
   }
-  // Keep a hand-set title; name a nameless one the way wrap would.
-  let day = new Date().toISOString().slice(0, 10)
-  let title = String(sess.comps.doc?.title || `Work session ${day}`)
-  await send([{ eid: sess.eid, name: 'doc', comp: { title, body } }])
+  await send([{ eid: sess.eid, name: 'brief', comp: { text: body } }])
   print(`${idOf(sess)} brief written`)
 }
 

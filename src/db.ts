@@ -321,6 +321,12 @@ let schema = `
     id  text not null unique,
     cwd text
   );
+  -- The handoff a session leaves for its successor (D-19459), its own
+  -- component so it never contends with the session doc's narrative.
+  create table if not exists brief (
+    eid  text primary key references entity(eid),
+    text text not null
+  );
   create table if not exists runtime (
     eid                 text primary key references entity(eid),
     pid                 integer,

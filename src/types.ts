@@ -468,6 +468,13 @@ export let comps: Record<string, Record<string, PropType>> = {
     // parent detaches it, the child lives on.
     parent: { eid: 'session', death: 'detach' },
   },
+  // The handoff a session leaves for its successor (D-19459): a distinct
+  // ASPECT (M-14942) — "what the next run needs to know", NOT this session's
+  // own record (that is doc, free for the scribe/narrative). Written
+  // deliberately via `task session brief`, or captured from the session's
+  // final message at wrap; shown IN FULL under `## previously` in the
+  // successor's digest. Not on kindOrder — a brief names no entity of its own.
+  brief: { text: 'body' },
   // Where code work happens, independently of how the model runs. A coding
   // session wears this; chat may omit it. Branch facts are server-stamped.
   worktree: { cwd: 'text' },
@@ -1699,6 +1706,7 @@ export type Exit = { eid: string; code: number }
 export type ResponseComp = { eid: string; status: number }
 export type Headers = { eid: string; data: string }
 export type Stderr = { eid: string; text: string }
+export type Brief = { eid: string; text: string }
 export type Timeout = { eid: string; ms: number }
 export type Checkpoint = { eid: string; through: string }
 export type Recalled = { eid: string; source: string }
@@ -2109,6 +2117,7 @@ export type EntCore = {
     mode?: (typeof subModes)[number]
   }
   session?: Session
+  brief?: Brief
   worktree?: Worktree
   runtime?: Runtime
   entry?: Entry

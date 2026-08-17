@@ -2019,13 +2019,12 @@ export let belongs = (r: Scoped, scope?: string) => {
   if (r.comps.project) return r.eid == scope
   return true
 }
-// A session's brief: the doc body wrap captured or the operator wrote —
-// a stub isn't one — falling back to the managed row's final_text.
-let briefOf = (r: Row) => {
-  let b = String(r.comps.doc?.body ?? '')
-  if (b && !b.startsWith(STUB)) return b
-  return String(r.comps.session?.final_text ?? '')
-}
+// A session's brief: the first-class handoff it left (the operator wrote,
+// or wrap captured from the final message) — a distinct component from the
+// session doc, which is free for the scribe's narrative. Falls back to the
+// managed row's final_text for a session that never got a brief comp.
+let briefOf = (r: Row) =>
+  String(r.comps.brief?.text ?? '') || String(r.comps.session?.final_text ?? '')
 // Comments that landed on the actor's recent past sessions AFTER those
 // sessions stopped listening — one digest line of history, never
 // injected as conversation (a dead session's cursor stays frozen: it
@@ -2440,9 +2439,12 @@ export let contextDigest = (
       Math.min(5, 48 - lines.length),
     ),
   )
-  // The thread from last time: the newest brief by the SAME operator —
-  // the final message wrap captured, or a hand-written doc, never a
-  // stub — so a session wakes knowing where its predecessor left off.
+  // The thread from last time: the newest brief by the SAME operator — the
+  // first-class handoff it left (final message wrap captured, or one the
+  // operator wrote) — so a session wakes knowing where its predecessor left
+  // off. Shown IN FULL, no per-line snip: the brief is the handoff, and a
+  // truncated handoff is why briefs were "never seen to work" (D-19459). A
+  // generous line budget within the 48-line cap, with a pointer for any tail.
   let actor = String(sess?.comps.session?.actor ?? '') || scope
   let prev = actor
     ? sessions
@@ -2452,13 +2454,16 @@ export let contextDigest = (
       .sort((a, b) => editedAt(b).localeCompare(editedAt(a)))[0]
     : undefined
   if (prev) {
-    lines.push(
-      `## previously — ${idOf(prev)} ${
-        snip(String(prev.comps.doc?.title ?? ''))
-      }`,
-    )
-    let told = briefOf(prev).split('\n').map((l) => l.trim()).filter(Boolean)
-    for (let l of told.slice(0, 4)) lines.push(`> ${snip(l, 96)}`)
+    // A brief-captured session leaves no doc.title; name it by S-num alone
+    // rather than trailing an empty title.
+    let title = snip(String(prev.comps.doc?.title ?? ''))
+    lines.push(`## previously — ${idOf(prev)}${title ? ` ${title}` : ''}`)
+    let told = briefOf(prev).split('\n').map((l) => l.trimEnd()).filter(Boolean)
+    let budget = 18
+    for (let l of told.slice(0, budget)) lines.push(`> ${l}`)
+    if (told.length > budget) {
+      lines.push(`> … → \`task show ${idOf(prev)}\` for the rest`)
+    }
   }
   // The tail, four tiers drawing on the room the 48-line cap leaves:
   // onMine (SESSION layer — comments on your claimed tasks, the backstop
@@ -2976,12 +2981,14 @@ export let wrapChanges = (
   ]
 }
 
-// Continuity is SELF-AUTHORED (T-4469): the session's final message —
-// the closing summary the operator already wrote — IS the brief for most
-// sessions, captured into the session doc at wrap. A hand-written doc is
-// never clobbered. Only when nothing was captured does the mechanical
-// LEDGER stub ride instead — the standing invitation the scribe's sweep
-// answers; continuity never depends on it.
+// Continuity is SELF-AUTHORED (T-4469): the session's final message — the
+// closing summary the operator already wrote — IS the brief for most
+// sessions, captured into the first-class `brief` component at wrap. A
+// deliberate brief (task session brief) is never clobbered. Only when
+// nothing was captured does the mechanical LEDGER stub ride instead — on
+// the session DOC, the standing invitation the scribe's sweep answers
+// (scribe.ts queues on the doc's STUB marker); continuity never depends on
+// it, and the brief and the narrative never contend for one body.
 export let STUB = 'Auto-written at wrap' // the scribe's queue marker
 let brief = (
   all: Row[],
@@ -2991,18 +2998,23 @@ let brief = (
   entries: JournalEntry[],
   final?: string,
 ): Change[] => {
-  let body = String(sess.comps.doc?.body ?? '')
-  if (sess.comps.doc && body && !body.startsWith(STUB)) return []
   let spoke = all.some((r) =>
     r.comps.comment && r.comps.created?.via == sess.eid
   )
   let tasked = !!sess.comps.session?.requested_task
   if (!tasked && !held.length && !spoke && !entries.length) return []
+  // The self-authored handoff lands on the brief component. A deliberate
+  // brief already there is the operator's word — never overwrite it.
+  if (final) {
+    if (sess.comps.brief?.text) return []
+    return [{ eid: sess.eid, name: 'brief', comp: { text: final } }]
+  }
+  // Nothing self-authored: the ledger STUB queues the scribe on doc.body.
+  // A hand-written narrative doc is never clobbered.
+  let body = String(sess.comps.doc?.body ?? '')
+  if (sess.comps.doc && body && !body.startsWith(STUB)) return []
   let day = new Date(now).toISOString().slice(0, 10)
   let title = String(sess.comps.doc?.title || `Work session ${day}`)
-  if (final) {
-    return [{ eid: sess.eid, name: 'doc', comp: { title, body: final } }]
-  }
   let holding = held.map((r) =>
     `- ${idOf(r)} (${r.comps.task?.status ?? '?'}) ${r.comps.doc?.title ?? ''}`
   )
