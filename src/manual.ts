@@ -813,6 +813,32 @@ export let manuals = declare({
       count,
     ],
   },
+  usage: {
+    dots: 'filters',
+    about: 'what agent work cost and how fast it ran (filter grammar)',
+    examples: [
+      'task usage',
+      'task usage --by=project',
+      'task usage .provider=claude .finished_at>="1 week ago"',
+    ],
+    detail: 'A READ over the token counts already stamped on settled ' +
+      'sessions — no new capture. Filters screen the sessions first (the one ' +
+      'grammar: .provider=claude, .finished_at>=today). --by picks the ' +
+      'breakdown dimension (model, project, persona, task, provider); a TOTAL ' +
+      'always leads. Absent beats zero: an unreported facet reads —, never 0, ' +
+      'and a model with no list price contributes no cost (the cost line says ' +
+      'how many sessions it covered). --json dumps the full rolls with ' +
+      'per-facet n.',
+    root: true,
+    args: [arg('filters', text, true, false)],
+    opts: [
+      value(
+        '--by',
+        of('dim', () => ['model', 'project', 'persona', 'task', 'provider']),
+      ),
+      json,
+    ],
+  },
   wake: {
     about: 'a knock on a timer',
     examples: [

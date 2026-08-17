@@ -29,6 +29,7 @@ export let icons: Record<string, string> = {
   Persona: 'drama',
   Dashboard: 'layout-dashboard',
   Inbox: 'inbox',
+  Usage: 'table',
   Role: 'bot',
   Web: 'globe',
   Session: 'bot',

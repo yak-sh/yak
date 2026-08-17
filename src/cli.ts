@@ -110,9 +110,11 @@ import {
   kindWord,
   plural,
   plurals,
+  sessionOf,
   type Snapshot,
   statuses,
 } from './types.ts'
+import { cost, type Dim, group, report, roll, type Use, use } from './usage.ts'
 // `import type` (not the repo's usual inline `{ type X }`): telemetry.ts
 // reaches for node:sqlite, and the CLI has no business loading a db driver.
 import type { Log, Stat } from './telemetry.ts'
@@ -2477,6 +2479,62 @@ let telemetryStats = async (q: URLSearchParams) => {
   }
 }
 
+// What agent work cost, and how fast it ran — a READ over usage.ts, which
+// projects the token counts already stamped on settled sessions. Filters are
+// the one grammar (`.persona=…`, `.finished_at>=today`), screening the sessions
+// before the rollup. `--by model|project|persona|task|provider` picks the
+// breakdown dimension (model by default); a total always leads. Absent beats
+// zero throughout: an unreported facet reads `—`, never 0, and a model with no
+// price contributes no cost (the `$` covers `n/total` sessions, and says so).
+let usageDims: Dim[] = ['model', 'project', 'persona', 'task', 'provider']
+
+// Project every settled session's usage, attach the project one edge out
+// (session → requested_task → task.project), and collect human labels for the
+// eids we group by. Shared by the CLI verb and, in spirit, the MCP tool.
+let usesFrom = async (hits: Row[]) => {
+  let uses: Use[] = []
+  for (let r of hits) {
+    let s = sessionOf(r.comps)
+    let u = s && use(s)
+    if (u) uses.push(u)
+  }
+  let refs = await fetched([
+    ...new Set(uses.flatMap((u) => [u.task, u.persona].filter(Boolean))),
+  ] as string[])
+  let taskRows = refs.filter((r) => r.comps.task)
+  let projs = await fetched([
+    ...new Set(
+      taskRows.map((r) => String(r.comps.task?.project ?? '')).filter(Boolean),
+    ),
+  ])
+  let taskProj = new Map(
+    taskRows.map((r) => [r.eid, String(r.comps.task?.project ?? '')]),
+  )
+  let name = new Map([...refs, ...projs].map((r) => [r.eid, idOf(r)]))
+  for (let u of uses) if (u.task) u.project = taskProj.get(u.task) || undefined
+  return { uses, label: (k: string) => name.get(k) ?? k }
+}
+
+let usageReport = async (got: Got) => {
+  let by = (got.opts['--by'] ?? 'model') as Dim
+  if (!usageDims.includes(by)) {
+    throw new UsageError(`--by must be one of ${usageDims.join(', ')}`)
+  }
+  await checkedRefs(predicates(got.words))
+  let { uses, label } = await usesFrom(
+    await query(['.kind=session', ...got.words]),
+  )
+  if (got.flags.has('--json')) {
+    let groups = [...group(uses, (u) => u[by]).entries()].map(([k, us]) => ({
+      [by]: label(k),
+      roll: roll(us),
+      cost: cost(us),
+    }))
+    return print(jsonText({ total: roll(uses), cost: cost(uses), by, groups }))
+  }
+  print(report(uses, by, label))
+}
+
 // Backup is bin/backup (a data-dir git commit) — the CLI is its front
 // door so 'task backup' works wherever the CLI is installed.
 // Materialize every persona into its project repo's .tasks/ — write what
@@ -2894,6 +2952,7 @@ export let verbs = bind({
   'role retire': (got) => roleState('retire', got),
   probes,
   telemetry,
+  usage: usageReport,
   // The note (what you were mid-doing) rides the body door and folds onto the
   // colon line as `-- <note>`, the same `--` :mail uses for its body.
   wake: (got) =>

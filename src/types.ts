@@ -1486,6 +1486,22 @@ export type Session = {
   usage_json?: string | null
 }
 
+// Token counts a provider self-reported for a settled session, normalized to
+// ONE vocabulary (Anthropic's field names) at the adapter — the browser and CLI
+// read this shape, never a vendor's. Distinct from the per-entry `Usage`
+// component below: this splits cache reads from cache writes (their prices
+// differ 12×), which cost needs and `Usage.cached` conflates. Every field is
+// optional ON PURPOSE: a count a provider never reported stays ABSENT, it never
+// folds to 0 (absent beats zero — a missing number is not a free one). `input`
+// is FRESH input only, cache reads/writes split out, so the four are comparable
+// across providers even though each vendor slices its bill differently.
+export type Tokens = {
+  input?: number // fresh (uncached) input tokens
+  cache_read?: number // input served from cache (Anthropic's discount tier)
+  cache_creation?: number // input written to cache (Anthropic's premium tier)
+  output?: number // generated tokens (reasoning included, as the bill counts it)
+}
+
 export type Worktree = {
   eid: string
   cwd?: string | null

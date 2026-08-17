@@ -11,7 +11,7 @@
 // `codex` keeps this process adapter as the reliability floor even though
 // managed requests bearing that name normally route to the graph runner.
 // Event shapes below are copied from live probes of both CLIs, not docs.
-import { kilo, type LogRow, type Session } from './types.ts'
+import { kilo, type LogRow, type Session, type Tokens } from './types.ts'
 import { codexTranscript } from './transcripts.ts'
 
 // One parsed log line. Adapters own the dialect; anything they don't
@@ -74,6 +74,12 @@ export type Adapter = {
   // Interactive CLIs may persist a different dialect than the managed command
   // prints. Absent means row() already speaks both, as Claude's does.
   transcript?: (e: Event) => LogRow | null
+  // The parsed `usage_json` a settled session stamped, normalized to the ONE
+  // Tokens vocabulary (types.ts) — this is the only place a vendor's token
+  // dialect is known, one reader beside init/terminal/row. Returns null when
+  // the blob carried no token count at all; absent COUNTS stay absent (a field
+  // a provider never reported must never fold to 0 — see usage.ts).
+  usage?: (raw: unknown) => Tokens | null
 }
 
 // A claude message content block, as much of it as row() reads.
@@ -236,6 +242,56 @@ export let trouble = (
   return null
 }
 
+// --- usage normalization -------------------------------------------------
+// The two providers report token counts in different shapes; these readers
+// fold both into the ONE Tokens vocabulary (types.ts). Absent beats zero: a
+// field the blob never carried stays OFF the object, so a downstream sum can
+// tell "this provider never reported cache reads" from "it reported zero".
+
+let record = (v: unknown): v is Record<string, unknown> =>
+  typeof v == 'object' && v != null
+
+// A raw count → a number, or undefined when it was absent/unparseable. This is
+// the whole of absent-beats-zero: `?? 0` would erase the distinction here.
+let count = (v: unknown): number | undefined => {
+  if (v == null) return undefined
+  let n = Number(v)
+  return Number.isFinite(n) ? n : undefined
+}
+
+// Set key only when the value is present — the absent-beats-zero builder.
+let put = (k: keyof Tokens, v?: number): Tokens => v == null ? {} : { [k]: v }
+
+// Anthropic (claude, and the fake): input/cache tiers are already separate
+// fields — no arithmetic, just rename. output_tokens_details.thinking is a
+// SUBSET of output the bill already counts, so it folds into output.
+export let anthropicUsage = (raw: unknown): Tokens | null => {
+  if (!record(raw)) return null
+  let u: Tokens = {
+    ...put('input', count(raw.input_tokens)),
+    ...put('cache_read', count(raw.cache_read_input_tokens)),
+    ...put('cache_creation', count(raw.cache_creation_input_tokens)),
+    ...put('output', count(raw.output_tokens)),
+  }
+  return Object.keys(u).length ? u : null
+}
+
+// Codex/OpenAI: `input_tokens` INCLUDES the cached reads, so subtract them to
+// recover FRESH input and make it comparable to Anthropic's split. Codex has
+// no cache-creation tier. Absence still wins: subtract only what was reported.
+export let codexUsage = (raw: unknown): Tokens | null => {
+  if (!record(raw)) return null
+  let cached = count(raw.cached_input_tokens)
+  let total = count(raw.input_tokens)
+  let input = total == null ? undefined : Math.max(0, total - (cached ?? 0))
+  let u: Tokens = {
+    ...put('input', input),
+    ...put('cache_read', cached),
+    ...put('output', count(raw.output_tokens)),
+  }
+  return Object.keys(u).length ? u : null
+}
+
 // The fake provider ships in this repo: run it by absolute path — script
 // AND binary. Deno.execPath() is the deno running this server, so the
 // child never depends on the service manager's PATH carrying one.
@@ -311,6 +367,7 @@ export let adapters: Record<string, Adapter> = {
       }
       return null // init announces, it doesn't narrate
     },
+    usage: anthropicUsage,
   },
 
   // claude -p, stream-json: one JSON event per line. init announces the
@@ -530,6 +587,7 @@ export let adapters: Record<string, Adapter> = {
       }
       return null
     },
+    usage: anthropicUsage,
   },
 
   // codex exec --json. The stream never names its model, and text and
@@ -654,6 +712,7 @@ export let adapters: Record<string, Adapter> = {
       }
       return null // thread.started, turn.started, item.started
     },
+    usage: codexUsage,
   },
 }
 

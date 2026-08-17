@@ -19,12 +19,14 @@ import {
   type Change,
   edges,
   type Hit,
+  sessionOf,
   type Snapshot,
   statuses,
   uuid,
   verdicts,
 } from './types.ts'
 import { trouble } from './adapters.ts'
+import { type Dim, report, type Use, use } from './usage.ts'
 import { sha } from './sha.ts'
 import { FILTERS, GRAMMAR } from './grammar.ts'
 import {
@@ -246,6 +248,7 @@ markdown documents (paragraphs, lists, headings). Rewrite via task_update
 let RO: ToolAnnotations = { readOnlyHint: true }
 let HINTS: Record<string, ToolAnnotations> = {
   search: RO,
+  usage: RO,
   task_list: RO,
   task_context: RO,
   task_show: RO,
@@ -347,6 +350,55 @@ paging graph_query.`,
           `${h.retired ? ' · retired' : ''}`
         ).join('\n') || '(no hits)',
       )
+    },
+  )
+
+  tool(
+    'usage',
+    `What agent work cost and how fast it ran — a READ over the token
+counts already stamped on settled sessions (no new capture). Dot-param
+filters screen the sessions first (.provider=claude,
+.finished_at>="1 week ago"); 'by' picks the breakdown dimension (model by
+default; project rolls each session up through its task's project). A TOTAL
+leads. Absent beats zero: an unreported facet reads —, never 0, and a model
+with no list price adds no cost (the footer says how many sessions cost
+covered). ${FILTERS}`,
+    {
+      filters: z.array(z.string()).optional(),
+      by: z.enum(['model', 'project', 'persona', 'task', 'provider'])
+        .optional(),
+    },
+    async (
+      { filters = [], by = 'model' }: { filters?: string[]; by?: Dim },
+    ) => {
+      let ps = parseFilters(filters)
+      if (refHandles(ps).length) checkRefs(rows(await io.read(), true), ps)
+      let hits = await io.query(['.kind=session', ...filters].join('&'))
+      let uses: Use[] = []
+      for (let r of hits) {
+        let s = sessionOf(r.comps)
+        let u = s && use(s)
+        if (u) uses.push(u)
+      }
+      let refs = await io.get([
+        ...new Set(uses.flatMap((u) => [u.task, u.persona].filter(Boolean))),
+      ] as string[])
+      let taskRows = refs.filter((r) => r.comps.task)
+      let projs = await io.get([
+        ...new Set(
+          taskRows.map((r) => String(r.comps.task?.project ?? '')).filter(
+            Boolean,
+          ),
+        ),
+      ])
+      let taskProj = new Map(
+        taskRows.map((r) => [r.eid, String(r.comps.task?.project ?? '')]),
+      )
+      let name = new Map([...refs, ...projs].map((r) => [r.eid, idOf(r)]))
+      for (let u of uses) {
+        if (u.task) u.project = taskProj.get(u.task) || undefined
+      }
+      return text(report(uses, by, (k) => name.get(k) ?? k))
     },
   )
 

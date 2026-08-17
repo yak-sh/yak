@@ -4207,6 +4207,30 @@ a[data-ref]:hover {
   font-size: 11px;
 }
 
+/* The Usage view (views/Usage.tsx): a project's cost + throughput as a
+   monospace table, aligned by the shared usage.ts report(). The table is
+   the one wide thing, so it scrolls in its own box rather than the card. */
+.Usage {
+  display: grid;
+  gap: var(--half-gap);
+  padding: var(--gap);
+}
+.Usage_Head {
+  color: var(--dim);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.Usage_Table {
+  overflow-x: auto;
+  margin: 0;
+  font: 12px/1.5 var(--mono, monospace);
+}
+.Usage_Empty {
+  color: var(--dim);
+  font-size: 11px;
+}
+
 /* The tiling container (views/Layout.tsx, D-14718): a container pane is a
    flex row/column along its dir, each child weighted by its own size via
    inline flex-grow; gutters between siblings drag to resize. --gutter is

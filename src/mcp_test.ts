@@ -460,6 +460,7 @@ Deno.test('MCP query and show expose provenance context in via', async () => {
 
 let bases: Record<string, Record<string, unknown>> = {
   search: { q: 'x' },
+  usage: {},
   task_list: {},
   task_new: {},
   task_update: { id: 'T-1', params: ['.status=open'] },
