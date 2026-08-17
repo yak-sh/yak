@@ -147,6 +147,7 @@ import {
   roleSession,
 } from './roles.ts'
 import { prune as pruneTree, reap as reapProbes, sweep } from './probes.ts'
+import { loadPlugins, pluginSpecifiers } from './plugins.ts'
 
 // The last line of defence. A rejection nobody handled ends a Deno process,
 // and this process dying costs every operator (T-11139) — so an escaped one
@@ -903,6 +904,25 @@ try {
   console.error(`tasks: ${(e as Error).message}`)
   Deno.exit(1)
 }
+
+// Load configured plugins into THIS process before serving, so a plugin's
+// server-side registrars (effects via on(), a comps fragment) are in place when
+// the first request lands (D-18663 seam 1). Inert by default: no TASKS_PLUGINS
+// means an empty list and no imports.
+let specs = pluginSpecifiers()
+await loadPlugins(specs)
+// The BROWSER can't read the environment, so the server hands it the list. Only
+// plugins served from this repo's `plugins/` dir are browser-reachable (the
+// on-the-fly src server transforms them like any TS — no bundler); npm:/jsr:/
+// remote specifiers stay server-only. specs are resolved file:// URLs, so the
+// browser path is what sits under the repo root. Empty by default, so the shell
+// below is served byte-for-byte as today.
+let repo = new URL('..', import.meta.url).pathname
+let repoUrl = new URL('..', import.meta.url).href
+let browserPlugins = specs
+  .filter((s) => s.startsWith(`${repoUrl}plugins/`))
+  .map((s) => `/${s.slice(repoUrl.length)}`)
+
 let http = Deno.serve(
   { port, reusePort: true },
   async (req) => {
@@ -1478,9 +1498,28 @@ let http = Deno.serve(
         headers: { 'content-type': mime.css, 'cache-control': 'no-cache' },
       })
     }
+    // Plugin bytes: served from this repo's `plugins/` dir the same on-the-fly
+    // way src is (TS → JS, mtime-cached), so the browser imports the same
+    // modules the server did — a path prefix, not a bundler (D-18663 seam 1).
+    // Reachable only when a plugin is configured; otherwise nothing links here.
+    if (path.startsWith('/plugins/')) return file(repo.slice(0, -1), path)
     // An extensionless path is a ROUTE (/T-123): the app boots and reads
     // the URL — same shell, different root card.
-    return file(src.slice(0, -1), path.includes('.') ? path : '/index.html')
+    let shell = path.includes('.') ? path : '/index.html'
+    // When plugins are configured, inject their browser URLs into the shell so
+    // main.tsx can import them before first render. With none configured (the
+    // default), the shell is served byte-for-byte unchanged — the loader stays
+    // inert.
+    if (shell == '/index.html' && browserPlugins.length) {
+      let html = await Deno.readTextFile(`${src}index.html`)
+      let tag = `<script type="application/json" id="tasks-plugins">${
+        JSON.stringify(browserPlugins)
+      }</script>`
+      return new Response(html.replace('</head>', `  ${tag}\n  </head>`), {
+        headers: { 'content-type': mime.html, 'cache-control': 'no-cache' },
+      })
+    }
+    return file(src.slice(0, -1), shell)
   },
 )
 bound(ownership)

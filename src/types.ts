@@ -2054,7 +2054,19 @@ export type Ref = { type: Edge; child: string }
 // The bundle a renderer pattern-matches on: the entity plus whichever
 // components it carries, its edge sentences, and the entities it
 // contains. kind is derived (kindOf) — display convention, not data.
-export type Ent = {
+// EntCore is the CLOSED, precise face: one field per known component, each its
+// exact type, plus the scalar spine (eid/num/kind) and edges (refs/kids). Ent
+// (below) is the OPEN face the renderers see — a plugin's own component has no
+// core field, so the index signature admits it (as `unknown`, the only element
+// type that also tolerates the scalar spine in an object literal), enough to
+// pattern-match with has() while every known comp keeps its precise type
+// (intersection: T & unknown = T). The split is load-bearing: a bare index
+// signature INSIDE this literal would collapse `keyof Ent` to `string`, so
+// `Comps = Omit<Ent, …>` (live.ts) would lose every precise type. Applying the
+// index signature by intersection over a closed core keeps both faces honest
+// (D-18663 seam 2, T-12765 option 1). The richer option — derive EntCore from
+// `comps` — is deferred to T-18672.
+export type EntCore = {
   eid: string
   num: number
   kind: string
@@ -2159,6 +2171,12 @@ export type Ent = {
   refs: Ref[]
   kids: Ent[]
 }
+
+// The open face: EntCore plus an index signature that admits a plugin's own
+// components. `e.doc` stays precise; `e.invoice` (a plugin comp) typechecks as
+// `unknown` — enough for has('invoice') to be a valid matcher; a plugin's own
+// renderer narrows it. This is what widening has() to `string[]` relies on.
+export type Ent = EntCore & { [comp: string]: unknown }
 
 // A pin row joined to its card: where the card sits and what it shows.
 export type Pinned = Pin & { target: string; view: string }

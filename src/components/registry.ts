@@ -39,8 +39,11 @@ export type Renderer = {
   file?: { ext: string; mime: string; text: (e: Ent) => string }
 }
 
-// The standard matcher: all named components present → their count.
-export let has = (...names: (keyof Ent & string)[]) => (e: Ent) =>
+// The standard matcher: all named components present → their count. Names are
+// plain strings, not `keyof Ent`, so a plugin's own component (absent from the
+// closed EntCore) is a valid matcher argument — the open index signature on Ent
+// is what lets `e[n]` read it (D-18663 seam 2, T-12765).
+export let has = (...names: string[]) => (e: Ent) =>
   names.every((n) => !!e[n]) ? names.length : 0
 
 // Score a match: the count of components it claimed, 0.5 for a bare true.

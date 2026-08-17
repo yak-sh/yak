@@ -3,6 +3,7 @@ import { agreementProbe, boot, cache, clientId, config, ent } from './live.ts'
 import { idOf, slugsOf } from './types.ts'
 import { follows, restore, route } from './components/nav.tsx'
 import { App } from './components/App.tsx'
+import { loadPlugins } from './plugins.ts'
 
 // Tell the server when this page breaks (the rows land in telemetry) — a
 // crash nobody sees is a crash nobody fixes. Capped per page load: a
@@ -61,6 +62,13 @@ restore()
 // where the device landed, so the graph cursor only DRIVES live moves (an
 // agent showing you something), never overrides the per-device boot position.
 follows()
+
+// Load configured plugins before the first render, so their renderers, actions
+// and editors are registered when App mounts (D-18663 seam 1). The server hands
+// the browser the list (it read TASKS_PLUGINS) as a JSON script; absent by
+// default, so this imports nothing and the boot is unchanged.
+let pluginTag = document.getElementById('tasks-plugins')?.textContent
+await loadPlugins(pluginTag ? JSON.parse(pluginTag) : [])
 
 render(<App />, document.body)
 

@@ -13,6 +13,7 @@ import {
   type Change,
   type Dep,
   type Ent,
+  type EntCore,
   type Live,
   type Pinned,
   type Session,
@@ -66,12 +67,16 @@ import {
 } from './observations.ts'
 
 // A cache row: the spine plus whichever components the entity carries.
-// Derived from Ent so a new component (types.ts) threads through here —
+// Derived from EntCore so a new component (types.ts) threads through here —
 // and through ent() below — with zero edits. Exported so idb.ts persists
-// and hydrates the exact shape the signal holds (T-6823).
+// and hydrates the exact shape the signal holds (T-6823). Omit over the CLOSED
+// core keeps every known comp precise (an index signature on Ent would collapse
+// keyof and lose them); the same open index signature is intersected back on so
+// a plugin's comp reaches the cache as `unknown` (D-18663 seam 2, T-12765).
 export type Comps =
   & { entity?: { eid: string; num: number } }
-  & Omit<Ent, 'eid' | 'num' | 'kind' | 'refs' | 'kids'>
+  & Omit<EntCore, 'eid' | 'num' | 'kind' | 'refs' | 'kids'>
+  & { [comp: string]: Record<string, unknown> | undefined }
 
 export let cache = signal<Record<string, Comps>>({})
 export let deps = signal<Dep[]>([])

@@ -178,6 +178,11 @@ let weave = (rows: Entry[], cs: Ent[]) => {
 type MentionLine = Partial<Entry>
 let mentionLine = (x: MentionLine | Ent): x is MentionLine => 'row' in x
 
+// Ent carries an open index signature now (types.ts, D-18663 seam 2), so a bare
+// `'seq' in x` no longer narrows a woven comment (an Ent) away from a log line.
+// An explicit predicate keeps the transcript's two row kinds apart.
+let logLine = (x: Entry | Ent): x is Entry => 'seq' in x
+
 let mentionText = (x: MentionLine | Ent) => {
   if (mentionLine(x)) return x.row?.kind == 'say' ? [x.row.text] : []
   return [x.doc?.body ?? '']
@@ -706,7 +711,7 @@ export let Session = ({ e }: { e: Ent }) => {
             </Earlier>
           )}
           {windowed.map((x) =>
-            'seq' in x
+            logLine(x)
               ? <Row key={x.seq} x={x} repo={repo} />
               : <Note key={x.eid} c={x} />
           )}

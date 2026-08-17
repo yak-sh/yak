@@ -8,6 +8,7 @@ import { render } from 'preact'
 import { effect } from '@preact/signals'
 import { boot, config } from '../live.ts'
 import { extend } from '../components/registry.ts'
+import { loadPlugins, pluginSpecifiers } from '../plugins.ts'
 import { onMarkdown } from '../components/Markdown.tsx'
 import { Md } from './md.tsx'
 import {
@@ -75,6 +76,10 @@ effect(() => {
 onMarkdown((text, repo, inline) => (
   <Md text={text} repo={repo ?? undefined} inline={inline} />
 ))
+// Load configured plugins before the TUI's own overlays, so plugin renderers
+// and the terminal overrides compose in one pool (D-18663 seam 1). Inert by
+// default: no TASKS_PLUGINS means an empty list and no imports.
+await loadPlugins(pluginSpecifiers())
 extend(overrides)
 await boot()
 

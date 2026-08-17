@@ -143,6 +143,7 @@ import {
 } from './manual.ts'
 import { type Got, type Run, type Verb } from './verb.ts'
 import { complete } from './tabcomplete.ts'
+import { loadPlugins, pluginSpecifiers } from './plugins.ts'
 import { safe } from './terminal.ts'
 export { subjectUsage } from './manual.ts'
 
@@ -2989,6 +2990,10 @@ export let verbs = bind({
 // Only run the CLI when invoked as the program — importing this module (e.g.
 // from tests) must not dispatch a command or call Deno.exit.
 if (import.meta.main) {
+  // Load any configured plugins before dispatch, so a plugin's CLI-facing
+  // registrars are in place when a verb runs (D-18663 seam 1). Inert by
+  // default: no TASKS_PLUGINS means an empty list and no imports.
+  await loadPlugins(pluginSpecifiers())
   let [cmd, ...rest] = Deno.args
   try {
     let asked = requestedHelp(Deno.args)
