@@ -34,6 +34,7 @@ import {
   rootChanges,
   rowsOf,
   search,
+  settingEid,
   settingValue,
   snapshot,
   touch,
@@ -96,7 +97,7 @@ import {
   type OllamaConfig,
   ollamaProbe,
 } from './ollama_cloud.ts'
-import { resolve } from './config.ts'
+import { resolve, settingRows } from './config.ts'
 import { codexGeneration } from './runner.ts'
 import { readEntries } from './entries.ts'
 import { graphLog } from './entry_log.ts'
@@ -913,6 +914,25 @@ let http = Deno.serve(
     }
     if (path.startsWith('/config/credentials')) {
       return credentialHttp(credentials, req, path)
+    }
+    // The non-secret plane's source report (T-18590): each catalog setting's
+    // effective value + which plane answered + the existing setting eid a client
+    // save targets. GET-only, no-store; secrets never appear (settingRows is
+    // plainKeys only) — their state lives at /config/credentials.
+    if (path == '/config/settings') {
+      if (req.method != 'GET') {
+        return Response.json({ error: { code: 'method_not_allowed' } }, {
+          status: 405,
+          headers: { 'cache-control': 'no-store' },
+        })
+      }
+      return Response.json(
+        settingRows(
+          (key) => settingValue(db, key),
+          (key) => settingEid(db, key),
+        ),
+        { headers: { 'cache-control': 'no-store' } },
+      )
     }
     if (path == '/ws') return ws(req)
     if (path == '/snapshot') return Response.json(snapshot(db))

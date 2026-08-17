@@ -179,3 +179,45 @@ export let effective = (
   graph: Reader,
   env: Reader = (name) => Deno.env.get(name),
 ): Effective[] => plainKeys.map((key) => resolve(key, graph, env))
+
+// One non-secret setting as the config panel reads it over the wire: the
+// flattened catalog contract, the resolved value + which plane answered, and the
+// existing `setting` entity's eid when one holds an override. `setting.key` is
+// UNIQUE, so the eid is what a client save targets — writing a value against it
+// rather than minting a second, colliding row for the key. Secrets never appear:
+// `sensitive` is always false here, so it is dropped from the shape.
+export type SettingRow = {
+  key: string
+  label: string
+  group: string
+  type: SettingType
+  help: string
+  default?: string
+  value?: string
+  source: Source
+  eid?: string
+}
+
+// The wire shape for GET /config/settings. Owns the shaping here (server.ts
+// stays a thin route) while holding no db handle: the caller injects the graph
+// reader and an eid-by-key reader, the two halves of the graph plane. Non-secret
+// only, so no secret bytes and no credential state ever cross this door.
+export let settingRows = (
+  graph: Reader,
+  eidOf: (key: string) => string | undefined,
+  env: Reader = (name) => Deno.env.get(name),
+): SettingRow[] =>
+  effective(graph, env).map(({ key, value, source, spec }) => {
+    let eid = eidOf(key)
+    return {
+      key,
+      label: spec.label,
+      group: spec.group,
+      type: spec.type,
+      help: spec.help,
+      ...(spec.default == null ? {} : { default: spec.default }),
+      ...(value == null ? {} : { value }),
+      source,
+      ...(eid == null ? {} : { eid }),
+    }
+  })

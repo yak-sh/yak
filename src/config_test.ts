@@ -2,7 +2,7 @@
 // the graph > environment > default resolver with its source report, and the
 // apply() boundary that validates a `setting` write in-transaction.
 Deno.env.set('DB_PATH', ':memory:')
-let { apply, settingValue, snapshot } = await import('./db.ts')
+let { apply, settingEid, settingValue, snapshot } = await import('./db.ts')
 let {
   Invalid,
   catalog,
@@ -10,6 +10,7 @@ let {
   normalizeUrl,
   resolve,
   secretKeys,
+  settingRows,
   validate,
 } = await import('./config.ts')
 let { assertEquals, assertThrows } = await import('@std/assert')
@@ -187,6 +188,67 @@ Deno.test('apply: a second override of one key bounces on the unique constraint'
   )
   // The first override stands; the racing writer's value never landed.
   assertEquals(settingValue(db, 'OLLAMA_BASE_URL'), 'https://one')
+})
+
+Deno.test('settingRows: reports value, source, and the flattened contract', () => {
+  let rows = settingRows(none, () => undefined, none)
+  let base = rows.find((r) => r.key == 'OLLAMA_BASE_URL')!
+  // The catalog default answers when nothing overrides, reported as such, with
+  // the contract flattened onto the row.
+  assertEquals(base.value, 'https://ollama.yak.sh/')
+  assertEquals(base.source, 'default')
+  assertEquals(base.label, 'Ollama base URL')
+  assertEquals(base.type, 'url')
+  assertEquals(base.eid, undefined)
+})
+
+Deno.test('settingRows: the environment plane is reported when it answers', () => {
+  let rows = settingRows(
+    none,
+    () => undefined,
+    from({
+      OLLAMA_BASE_URL: 'https://env.example',
+    }),
+  )
+  let base = rows.find((r) => r.key == 'OLLAMA_BASE_URL')!
+  assertEquals(base.value, 'https://env.example')
+  assertEquals(base.source, 'environment')
+})
+
+Deno.test('settingRows: a graph override reports source=graph and carries its eid', () => {
+  let db = fresh()
+  let eid = uid()
+  apply(db, [{
+    eid,
+    name: 'setting',
+    comp: { key: 'OLLAMA_BASE_URL', value: 'https://graph.example/' },
+  }])
+  let rows = settingRows(
+    (k) => settingValue(db, k),
+    (k) => settingEid(db, k),
+    none,
+  )
+  let base = rows.find((r) => r.key == 'OLLAMA_BASE_URL')!
+  assertEquals(base.value, 'https://graph.example')
+  assertEquals(base.source, 'graph')
+  // The eid a client save targets — the UNIQUE setting row, not a new key.
+  assertEquals(base.eid, eid)
+})
+
+Deno.test('settingRows: never exposes a secret key or its bytes', () => {
+  // Even with a secret set in the environment, no secret key rides the wire
+  // shape and no secret value appears anywhere in it.
+  let rows = settingRows(
+    none,
+    () => undefined,
+    from({
+      OLLAMA_API_KEY: 'sk-secret',
+    }),
+  )
+  for (let k of secretKeys) {
+    assertEquals(rows.some((r) => r.key == k), false)
+  }
+  assertEquals(JSON.stringify(rows).includes('sk-secret'), false)
 })
 
 Deno.test('catalog: keys are unique and Ollama is present', () => {

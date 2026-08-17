@@ -3051,6 +3051,18 @@ export let settingValue = (
     value?: string | null
   } | undefined)?.value ?? undefined
 
+// The eid of the `setting` entity holding a catalog key's override, or
+// undefined. `setting.key` is UNIQUE, so this is the row a client save targets
+// (config.settingRows returns it) rather than mint a second, colliding key. The
+// eid-by-key half of the config panel's graph plane, beside settingValue.
+export let settingEid = (
+  db: DatabaseSync,
+  key: string,
+): string | undefined =>
+  (prep(db, 'select eid from setting where key = ?').get(key) as {
+    eid?: string
+  } | undefined)?.eid ?? undefined
+
 export let apply = (
   db: DatabaseSync,
   changes: Change[],
