@@ -21,6 +21,7 @@ import {
   dropQuery,
   ent,
   findEid,
+  foldFor,
   gated,
   holdQuery,
   jobOf,
@@ -34,6 +35,7 @@ import {
   projects,
   relations,
   repoUrl,
+  resetSignals,
   row,
   sessionRows,
   shelfFor,
@@ -319,6 +321,10 @@ let fill = (rows: [string, string | null][]) => {
         project: { eid: `e${i}` },
       },
   ]))
+  // A direct cache assignment simulates a seed; bring the query resolver (and the
+  // derived indexes) in step with it, the way seedFrom does in production — else
+  // a query subscribed by an earlier test keeps its stale, foreign eids.
+  resetSignals()
 }
 
 // scanFacets derives its lists from the byComp index, not four whole-cache
@@ -626,6 +632,226 @@ Deno.test('commentCount: cold targets share one graph scan', () => {
   assertEquals(commentCount('cold_one').value, 1)
   assertEquals(commentCount('cold_two').value, 1)
   assertEquals(scans, 1)
+})
+
+// commentsOn/commentCount now read the `comment.target` reverse index through the
+// query door (T-18101). Parity: the set equals the comments aimed here; the thread
+// wakes only when its own target gains, loses, or retargets a comment — never on a
+// comment to somewhere else or an unrelated row.
+Deno.test('comments: reverse-ref set, awake only for its own thread', () => {
+  let note = (eid: string, num: number, target: string) => ({
+    entity: { eid, num },
+    comment: { eid, target },
+    doc: { eid, title: '', body: eid },
+  })
+  cache.value = {
+    talk: {
+      entity: { eid: 'talk', num: 1 },
+      doc: { eid: 'talk', title: 't', body: '' },
+    },
+    c1: note('c1', 2, 'talk'),
+    other: note('other', 3, 'elsewhere'),
+  }
+  deps.value = []
+  resetSignals()
+  assertEquals(commentsOn('talk').map((c) => c.eid), ['c1'])
+  assertEquals(commentCount('talk').value, 1)
+
+  let runs = 0
+  let stop = effect(() => {
+    commentsOn('talk')
+    runs++
+  })
+  try {
+    // a comment aimed elsewhere leaves this thread asleep
+    applyLocal([
+      { eid: 'c2', name: 'entity', comp: { eid: 'c2', num: 4 } },
+      { eid: 'c2', name: 'comment', comp: { target: 'elsewhere' } },
+    ])
+    assertEquals(runs, 1)
+
+    // a comment aimed HERE wakes it and joins the set (num-ordered)
+    applyLocal([
+      { eid: 'c3', name: 'entity', comp: { eid: 'c3', num: 5 } },
+      { eid: 'c3', name: 'comment', comp: { target: 'talk' } },
+    ])
+    assertEquals(runs, 2)
+    assertEquals(commentsOn('talk').map((c) => c.eid), ['c1', 'c3'])
+
+    // retargeting c1 away wakes it and drops it — correct through the patch
+    applyLocal([{ eid: 'c1', name: 'comment', comp: { target: 'gone' } }])
+    assertEquals(runs, 3)
+    assertEquals(commentsOn('talk').map((c) => c.eid), ['c3'])
+  } finally {
+    stop()
+  }
+})
+
+// boardsOver reads a CONTAINS over `board.query` through the query door (T-18101):
+// a board query carries refs as text, so this names every board mentioning the
+// target and wakes only when a board's query gains or loses its eid.
+Deno.test('boardsOver: awake only when a board names or drops the target', () => {
+  cache.value = {
+    b1: {
+      entity: { eid: 'b1', num: 1 },
+      board: { eid: 'b1', query: '.project=P-9' },
+    },
+    b2: {
+      entity: { eid: 'b2', num: 2 },
+      board: { eid: 'b2', query: '.status=open' },
+    },
+    plain: {
+      entity: { eid: 'plain', num: 3 },
+      doc: { eid: 'plain', title: 'x', body: '' },
+    },
+  }
+  deps.value = []
+  resetSignals()
+  assertEquals(boardsOver('P-9'), ['b1'])
+
+  let runs = 0
+  let stop = effect(() => {
+    boardsOver('P-9')
+    runs++
+  })
+  try {
+    // an unrelated doc patch — asleep
+    applyLocal([{ eid: 'plain', name: 'doc', comp: { title: 'y' } }])
+    assertEquals(runs, 1)
+
+    // a board that still doesn't mention P-9 — asleep
+    applyLocal([{ eid: 'b2', name: 'board', comp: { query: '.priority=1' } }])
+    assertEquals(runs, 1)
+
+    // a new board naming P-9 wakes it and joins the answer
+    applyLocal([
+      { eid: 'b3', name: 'entity', comp: { eid: 'b3', num: 4 } },
+      {
+        eid: 'b3',
+        name: 'board',
+        comp: { query: '.project=P-9&.status=open' },
+      },
+    ])
+    assertEquals(runs, 2)
+    assertEquals(boardsOver('P-9').toSorted(), ['b1', 'b3'])
+
+    // b1 drops P-9 — wakes, leaves the answer
+    applyLocal([{ eid: 'b1', name: 'board', comp: { query: '.status=wip' } }])
+    assertEquals(runs, 3)
+    assertEquals(boardsOver('P-9'), ['b3'])
+  } finally {
+    stop()
+  }
+})
+
+// foldFor owns MEMBERSHIP through the query door (the unique client+board fold)
+// and reads its live `statuses` off that fold's own row signal (T-18099). So a
+// collapse/expand of MY fold wakes it, its birth/death wakes it, and another
+// client's fold or an unrelated row leaves it asleep.
+Deno.test('foldFor: query membership, live statuses off the row', () => {
+  cache.value = {
+    f1: {
+      entity: { eid: 'f1', num: 1 },
+      fold: { eid: 'f1', client: 'me', board: 'B-1', statuses: 'done' },
+    },
+    fOther: {
+      entity: { eid: 'fOther', num: 2 },
+      fold: { eid: 'fOther', client: 'you', board: 'B-1', statuses: 'wip' },
+    },
+    plain: {
+      entity: { eid: 'plain', num: 3 },
+      doc: { eid: 'plain', title: 'x', body: '' },
+    },
+  }
+  deps.value = []
+  resetSignals()
+  assertEquals(foldFor('me', 'B-1'), { eid: 'f1', statuses: 'done' })
+  assertEquals(foldFor('nobody', 'B-1'), undefined)
+
+  let runs = 0
+  let stop = effect(() => {
+    foldFor('me', 'B-1')
+    runs++
+  })
+  try {
+    // another client's fold on the same board — asleep
+    applyLocal([{ eid: 'fOther', name: 'fold', comp: { statuses: 'open' } }])
+    assertEquals(runs, 1)
+
+    // an unrelated doc — asleep
+    applyLocal([{ eid: 'plain', name: 'doc', comp: { title: 'y' } }])
+    assertEquals(runs, 1)
+
+    // MY fold's statuses edit wakes it (off the row signal), new value shows
+    applyLocal([{ eid: 'f1', name: 'fold', comp: { statuses: 'done,wip' } }])
+    assertEquals(runs, 2)
+    assertEquals(foldFor('me', 'B-1')?.statuses, 'done,wip')
+
+    // MY fold dies — membership wakes, the answer clears
+    applyLocal([{ eid: 'f1', name: 'entity', comp: null }])
+    assertEquals(runs, 3)
+    assertEquals(foldFor('me', 'B-1'), undefined)
+  } finally {
+    stop()
+  }
+})
+
+// The presence/reference facets (projects/sessionRows/shelfFor) ride the query
+// door now (T-18099), so each wakes only when ITS membership changes — a project
+// born, a session born, a shelf claimed — never on a sibling facet or an
+// unrelated row.
+Deno.test('facet reads wake only their own membership', () => {
+  cache.value = {
+    proj: {
+      entity: { eid: 'proj', num: 1 },
+      project: { eid: 'proj' },
+    },
+    sess: {
+      entity: { eid: 'sess', num: 2 },
+      session: { eid: 'sess', id: 'sess' },
+    },
+    plain: {
+      entity: { eid: 'plain', num: 3 },
+      doc: { eid: 'plain', title: 'plain', body: '' },
+    },
+  }
+  deps.value = []
+  resetSignals()
+  let runs = { projects: 0, sessions: 0, shelf: 0 }
+  let stops = [
+    effect(() => {
+      projects()
+      runs.projects++
+    }),
+    effect(() => {
+      sessionRows()
+      runs.sessions++
+    }),
+    effect(() => {
+      shelfFor('client')
+      runs.shelf++
+    }),
+  ]
+  try {
+    // an unrelated doc edit touches no facet — all stay asleep
+    applyLocal([{ eid: 'plain', name: 'doc', comp: { title: 'changed' } }])
+    assertEquals(runs, { projects: 1, sessions: 1, shelf: 1 })
+
+    // a project born wakes only the project census
+    applyLocal([{ eid: 'proj2', name: 'project', comp: {} }])
+    assertEquals(runs, { projects: 2, sessions: 1, shelf: 1 })
+
+    // a session born wakes only the session census
+    applyLocal([{ eid: 'sess2', name: 'session', comp: { id: 'sess2' } }])
+    assertEquals(runs, { projects: 2, sessions: 2, shelf: 1 })
+
+    // the client's shelf appears — only shelfFor wakes
+    applyLocal([{ eid: 'sh', name: 'shelf', comp: { client: 'client' } }])
+    assertEquals(runs, { projects: 2, sessions: 2, shelf: 2 })
+    assertEquals(shelfFor('client'), 'sh')
+  } finally {
+    for (let stop of stops) stop()
+  }
 })
 
 // Backlinks read the SCHEMA — every declared association points back at
