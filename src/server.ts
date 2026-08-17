@@ -99,7 +99,18 @@ import { outcome, recent, record, stats, toolCall } from './telemetry.ts'
 import { stamp } from './hot.ts'
 import { obeyed } from './obey.ts'
 import { serverFile } from './reload.ts'
-import { jsonOf, type Row, rows } from './client.ts'
+import {
+  actorRows,
+  addressed,
+  inboxFor,
+  inboxItem,
+  jsonOf,
+  readerAt,
+  readerFor,
+  readerRows,
+  type Row,
+  rows,
+} from './client.ts'
 import {
   listed,
   matchQuery,
@@ -107,7 +118,13 @@ import {
   type Pred,
   resolveRefs,
 } from './query.ts'
-import { evalFast, evalGraph, evalQuery, rowed } from './graph_query.ts'
+import {
+  evalFast,
+  evalGraph,
+  evalQuery,
+  localQuery,
+  rowed,
+} from './graph_query.ts'
 import { liveFrame } from './wire.ts'
 import { nativeSoon, nativeSweep, noticeAccepted } from './tmux.ts'
 import {
@@ -1116,6 +1133,39 @@ let http = Deno.serve(
         // read one answer.
         let { hits } = evalGraph(db, q, { after, limit })
         return Response.json(layers(hits))
+      } catch (e) {
+        return new Response(String((e as Error).message ?? e), { status: 400 })
+      }
+    }
+    if (path == '/inbox') {
+      // The inbox as the SERVER enumerates it — the SAME client.ts predicate
+      // (inboxFor's union, screened by inboxItem/addressed over a readerFor|
+      // readerAt reader), run in-process against THIS graph so a partial-cache
+      // client reads its FINISHED inbox in one round-trip instead of scanning a
+      // whole-graph cache it no longer holds (T-18105). `session`(+`cwd`) builds
+      // the working reader; `actor` the browsing one. `mode=all` is the CLI's
+      // --all (direct address incl. archived, no watch/mute); repeated `f=` are
+      // dot-param filters, screening the union the way `task inbox <filters>`
+      // does. A malformed filter is the typist's news, not a server error.
+      try {
+        let p = url.searchParams
+        let mode: 'inbox' | 'all' = p.get('mode') == 'all' ? 'all' : 'inbox'
+        let session = p.get('session') ?? undefined
+        let actor = p.get('actor') ?? undefined
+        if (!session && !actor) {
+          return new Response('session or actor required', { status: 400 })
+        }
+        let local = localQuery(db)
+        let who = session
+          ? readerFor(
+            await readerRows(session, local),
+            session,
+            p.get('cwd') ?? undefined,
+          )
+          : readerAt(await actorRows(actor, local), actor)
+        let union = await inboxFor(who, p.getAll('f'), mode, local)
+        let keep = mode == 'all' ? addressed(who) : inboxItem(who)
+        return Response.json(union.filter(keep).map((r) => jsonOf(r)))
       } catch (e) {
         return new Response(String((e as Error).message ?? e), { status: 400 })
       }

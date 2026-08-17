@@ -119,6 +119,13 @@ export let query = async (
   return hits.map(rowOf)
 }
 
+// How a filter line is ANSWERED — the /query door as a plain function. The
+// default runs it over HTTP (query, above); the server hands its own in-process
+// answerer (graph_query.ts localQuery) so a client.ts enumeration — reader diet,
+// inbox union — runs against the live graph with zero round-trips and one query
+// semantics. Every query-driven reader takes one so both callers exist.
+export type Querier = typeof query
+
 // Entities BY ADDRESS — the narrow half of find(), which needs `all: Row[]`
 // and so opens every CLI verb with a whole-graph snapshot. Speaks the same
 // four forms (T-3, a bare num, an alias slug, a uuid), resolved server-side
@@ -136,8 +143,8 @@ export let got = async (id: string) => (await fetched([id]))[0]
 // (never []), so undefined means genuinely-absent and only then, never on
 // a dropped read. sessionFor over this narrow row mints exactly when the
 // whole-snapshot find() would have — one session, on true first sight.
-export let sessionRow = async (sid: string) =>
-  (await query(['.kind=session', `.session.id=${sid}`]))
+export let sessionRow = async (sid: string, q: Querier = query) =>
+  (await q(['.kind=session', `.session.id=${sid}`]))
     .find((r) => String(r.comps.session?.id) == sid)
 
 // A session's NEWEST message entry — the transcript position a :meta memo
@@ -2452,14 +2459,18 @@ export let noticesFor = (snap: Snapshot, session: string) => {
 // mute (channelEvents has no such rule): a reader assembled from queries must
 // be the SAME reader, and an empty watching set reads as "no instruction"
 // rather than "never looked". It rides the same parallel round anyway.
-let readerSet = async (sess?: Row) => {
+let readerSet = async (sess?: Row, q: Querier = query) => {
   let s = sess?.comps.session ?? {}
   let actor = String(s.actor ?? '')
+  // fetched over the injected querier — `id=` is an address list, so the
+  // server running this in-process resolves the same four id forms find() does.
+  let pick = (ids: string[]) =>
+    ids.length ? q([`id=${ids.join(',')}`]) : Promise.resolve([] as Row[])
   let [kin, claims, subs, repos] = await Promise.all([
-    fetched([actor, String(s.persona ?? '')].filter(Boolean)),
-    sess ? query([`.claim.session=${sess.eid}`]) : [],
-    actor ? query([`.subscription.actor=${actor}`]) : [],
-    query(['.repo!']),
+    pick([actor, String(s.persona ?? '')].filter(Boolean)),
+    sess ? q([`.claim.session=${sess.eid}`]) : Promise.resolve([] as Row[]),
+    actor ? q([`.subscription.actor=${actor}`]) : Promise.resolve([] as Row[]),
+    q(['.repo!']),
   ])
   let home = String(
     kin.find((r) => r.comps.persona)?.comps.persona.home ?? '',
@@ -2470,29 +2481,45 @@ let readerSet = async (sess?: Row) => {
     ...claims,
     ...subs,
     ...repos,
-    ...(home ? await fetched([home]) : []),
+    ...(home ? await pick([home]) : []),
   ]
 }
 
-export let readerRows = async (session?: string) =>
-  readerSet(session ? await sessionRow(session) : undefined)
+export let readerRows = async (session?: string, q: Querier = query) =>
+  readerSet(session ? await sessionRow(session, q) : undefined, q)
 
-// The inbox's candidate UNION, assembled from the same bounded reader diet as
-// the bus. Each arm says one way an item can reach the reader; the pure
-// inboxItem/addressed predicate still makes the final decision, so query
-// assembly can only over-fetch, never invent a second attention policy.
+// The browsing actor's reader diet — the bounded `all` readerAt reads over,
+// assembled from queries instead of a whole-cache scan (T-18105): the actor's
+// own row carries the address it answers to and whether it IS a project
+// (scope), and its subscriptions carry the standing watch/mute. So
+// readerAt(await actorRows(a), a) is the SAME reader as readerAt(wholeGraph, a),
+// without holding the whole graph.
+export let actorRows = async (actor?: string, q: Querier = query) => {
+  if (!actor) return [] as Row[]
+  let [self, subs] = await Promise.all([
+    q([`id=${actor}`]),
+    q([`.subscription.actor=${actor}`]),
+  ])
+  return uniq([...self, ...subs])
+}
+
+// The inbox's candidate UNION for a resolved reader, assembled from the same
+// bounded reader diet as the bus. Each arm says one way an item can reach this
+// reader; the pure inboxItem/addressed predicate still makes the final decision
+// (the caller applies it), so assembly can only over-fetch, never invent a
+// second attention policy. Shared by the session door (inboxRows) and the
+// server /inbox route, so the CLI and a partial-cache browser read the SAME
+// policy off the same arms.
 //
-// `all` means the CLI's --all: direct address including archived items, with
-// standing watch/mute instructions deliberately ignored. The normal mode
+// `mode: 'all'` is the CLI's --all: direct address including archived items,
+// with standing watch/mute instructions deliberately ignored. The normal mode
 // includes watched targets and screens archived rows at the index.
-export let inboxRows = async (
-  session?: string,
-  cwd?: string,
+export let inboxFor = async (
+  who: Reader,
   filters: string[] = [],
   mode: 'inbox' | 'all' = 'inbox',
+  q: Querier = query,
 ) => {
-  let base = await readerRows(session)
-  let who = readerFor(base, session, cwd)
   let screen = [...(mode == 'inbox' ? ['.archived='] : []), ...filters]
   let watched = mode == 'inbox' ? [...who.watching ?? []] : []
   let comments = [
@@ -2511,7 +2538,7 @@ export let inboxRows = async (
   let addrs = who.operator ? [...(who.addrs ?? [])] : []
   let ask = (prop: string, vals: string[], extra: string[] = []) =>
     vals.length
-      ? query([`.${prop}=${vals.join(',')}`, ...extra, ...screen])
+      ? q([`.${prop}=${vals.join(',')}`, ...extra, ...screen])
       : Promise.resolve([] as Row[])
   let directMail = ['.mail.message_id!']
   let found = await Promise.all([
@@ -2531,7 +2558,40 @@ export let inboxRows = async (
     ask('knock.target', watched),
     ask('mail.target', watched),
   ])
-  return { who, rows: uniq(found.flat()) }
+  return uniq(found.flat())
+}
+
+export let inboxRows = async (
+  session?: string,
+  cwd?: string,
+  filters: string[] = [],
+  mode: 'inbox' | 'all' = 'inbox',
+  q: Querier = query,
+) => {
+  let base = await readerRows(session, q)
+  let who = readerFor(base, session, cwd)
+  return { who, rows: await inboxFor(who, filters, mode, q) }
+}
+
+// The server's FINISHED inbox over HTTP — /inbox enumerates the union AND
+// applies the inboxItem/addressed screen in-process, so a client with no
+// whole-graph cache (the browser under a partial boot, T-18105) reads its inbox
+// in one round-trip instead of scanning a cache it no longer holds. `session`
+// (+`cwd`) is the working reader; `actor` the browsing one (readerAt).
+export let inboxDoor = async (
+  who: { session?: string; actor?: string; cwd?: string },
+  mode: 'inbox' | 'all' = 'inbox',
+  filters: string[] = [],
+): Promise<Row[]> => {
+  let args = new URLSearchParams()
+  if (who.session) args.set('session', who.session)
+  if (who.actor) args.set('actor', who.actor)
+  if (who.cwd) args.set('cwd', who.cwd)
+  if (mode == 'all') args.set('mode', 'all')
+  for (let f of filters) args.append('f', f)
+  let res = await request(`http://${host()}/inbox?${args}`)
+  if (!res.ok) throw new Error(`server said ${res.status}`)
+  return (await res.json() as Record<string, unknown>[]).map(rowOf)
 }
 
 // The bounded graph a context digest reads. The renderer remains pure over a

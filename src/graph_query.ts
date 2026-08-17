@@ -13,8 +13,16 @@
 // entry predicates included, so the fast path cannot silently disagree.
 import type { DatabaseSync } from 'node:sqlite'
 import { kindOf, sessionOf } from './types.ts'
-import { find, type Row, rows } from './client.ts'
-import { entriesOf, entriesScan, locate, matching, snapshot } from './db.ts'
+import { find, type Querier, type Row, rows } from './client.ts'
+import {
+  eager,
+  entriesOf,
+  entriesScan,
+  locate,
+  matching,
+  referrersOf,
+  snapshot,
+} from './db.ts'
 import { where } from './sql.ts'
 import {
   kidsOf,
@@ -178,4 +186,31 @@ export let evalGraph = (
     )
   } else if (namesLazy(preds)) hits = orderedEntries(hits, after, limit)
   return { preds, hits }
+}
+
+// The /query door as a Querier bound to a db — the same id=+evalGraph
+// resolution the HTTP route runs, minus the backlinks/deps/paging presentation
+// a client.ts enumeration never asks for. This is what lets a server route
+// drive readerRows/inboxFor against the LIVE graph with no HTTP round-trip and
+// ONE query semantics (T-18105): the inbox predicate stays in client.ts, and
+// only its answerer swaps. `id=` FETCHES by address (locate: T-3, num, slug,
+// uuid) then screens by any remaining filter — quarantine included, the same as
+// the route's id path; everything else runs evalGraph.
+export let localQuery = (db: DatabaseSync): Querier =>
+// deno-lint-ignore require-await
+async (filters, opts) => {
+  let named = filters.filter((s) => s.startsWith('id='))
+    .flatMap((s) => s.slice(3).split(',')).filter(Boolean)
+  let q = filters.filter((s) => !s.startsWith('id=')).join('&')
+  if (!named.length) return evalGraph(db, q, opts).hits
+  let only = named.map((i) => locate(db, i)).filter(Boolean) as string[]
+  let preds = resolveRefs(parseQuery(q), (id) => locate(db, id))
+  let read = (e: string) => eager(db, e)
+  let kids = (eid: string, comp: string, prop: string) =>
+    referrersOf(db, [eid], { comp, prop }).map(read)
+  return only.map((eid) => rowed({ eid, comps: eager(db, eid) }))
+    .filter((r) =>
+      listed(r.comps, preds) &&
+      matchQuery(r.comps, preds, read, undefined, kids)
+    )
 }
