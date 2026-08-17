@@ -12,6 +12,7 @@ import {
   EntryBody,
   EntryLens,
   EntrySummary,
+  InstructionSummary,
   mergeTools,
   MessageSummary,
   ResultFull,
@@ -189,6 +190,29 @@ Deno.test('normalized user messages render as entry markdown', () =>
       root,
     )
     assertEquals(root.querySelector('.Entry-user strong')?.textContent, 'hello')
+  }))
+
+Deno.test('session instructions are collapsed persona entries', () =>
+  withDom((root) => {
+    let e: Ent = {
+      eid: 'instruction',
+      num: 1,
+      kind: 'entry',
+      refs: [],
+      kids: [],
+      entry: { eid: 'instruction', session: 'session', seq: 1 },
+      instruction: { eid: 'instruction' },
+      message: { eid: 'instruction', role: 'user' },
+      content: { eid: 'instruction', body: 'one\ntwo' },
+    }
+    assertEquals(resolve(e, 'Entry.Summary').Render, InstructionSummary)
+    render(<InstructionSummary e={e} />, root)
+    let details = root.querySelector('details.Instruction')!
+    assertEquals(details.hasAttribute('open'), false)
+    assertEquals(
+      details.querySelector('.Instruction_Gist')?.textContent,
+      'persona · 2 lines',
+    )
   }))
 
 Deno.test('expanded entries offer only specifically rendered faces', () =>

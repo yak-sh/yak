@@ -197,6 +197,7 @@ slow(
     await service.start(sid, job(tree))
     let rows = readEntries(db, sid)
     assertEquals(rows.map((row) => row.seq), [1, 2, 3, 4, 5, 6])
+    assert(rows[0].comps.instruction)
     assertEquals(rows[0].comps.content.body, 'Do the task.')
     assertEquals(rows[2].comps.call.key, 'call-1')
     assertEquals(rows[3].comps.result.call, rows[2].eid)

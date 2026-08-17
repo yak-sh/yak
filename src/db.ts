@@ -742,6 +742,7 @@ export let derived = [
   'favorite',
   'worktree',
   'attention',
+  'instruction',
   'task_context',
   'reasoning',
   'recalled',
@@ -2124,6 +2125,15 @@ export let open = (path = file) => {
         'stderr text',
       ]
     ) addCol('session', ddl.split(' ')[0], ddl)
+    // Managed prompts have always occupied seq 1. Materialize the facet for
+    // existing logs so deploy-time UI behavior matches newly appended runs.
+    db.exec(`
+      insert or ignore into instruction (eid)
+      select e.eid from entry e
+      join message m on m.eid = e.eid
+      join session s on s.eid = e.session
+      where e.seq = 1 and m.role = 'user' and s.origin = 'managed'
+    `)
     backfillSpawn(db)
     backfillSessionFacets(db)
     // The identity chain (types.ts): instruments point at who they act for.

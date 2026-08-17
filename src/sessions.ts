@@ -935,6 +935,7 @@ export let drain = async (eid: string, ad: Adapter, t: Tail, cast: Cast) => {
     if (type == 'session.prompt' || type == 'session.input') {
       emit({
         specs: [{
+          ...(type == 'session.prompt' ? { instruction: {} } : {}),
           message: { role: 'user' },
           content: { body: scrub(e.text) },
         }],

@@ -32,6 +32,10 @@ let Frame = block('div', 'Entry', {
   Part: 'section',
   PartName: 'div',
 })
+let Instruction = block('details', 'Instruction', {
+  Gist: 'summary',
+  Body: 'div',
+})
 let {
   Lens,
   Tabs,
@@ -295,6 +299,20 @@ export let MessageSummary = ({ e }: { e: Ent }) => (
     <Markdown text={body(e)} />
   </Frame>
 )
+
+export let InstructionSummary = ({ e }: { e: Ent }) => {
+  let n = lines(body(e)).length
+  return (
+    <Instruction>
+      <Instruction.Gist>
+        persona · {n} {n == 1 ? 'line' : 'lines'}
+      </Instruction.Gist>
+      <Instruction.Body>
+        <MessageSummary e={e} />
+      </Instruction.Body>
+    </Instruction>
+  )
+}
 
 export let CommandFull = ({ e }: { e: Ent }) => {
   return (

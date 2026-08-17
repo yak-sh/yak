@@ -633,6 +633,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
         db,
         eid,
         [{
+          instruction: {},
           message: { role: 'user' },
           content: { body: job.instruction },
         }, {

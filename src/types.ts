@@ -143,6 +143,9 @@ export let sessionComps: Record<string, Record<string, PropType>> = {
   entry: { session: { eid: 'session', death: 'cascade' } },
   content: { body: 'body' },
   message: { role: { enum: messageRoles } },
+  // The always-first user entry is session context, not conversation. Its
+  // own facet lets every transcript face fold it without inferring from seq.
+  instruction: {},
   attention: {},
   generation: {
     through: { eid: 'entry', death: 'keep' },

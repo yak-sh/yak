@@ -3627,6 +3627,28 @@ a[data-ref]:hover {
   color: var(--text);
   overflow-wrap: anywhere;
 }
+.Instruction {
+  min-width: 0;
+}
+.Instruction_Gist {
+  color: var(--dim);
+  cursor: pointer;
+  font: 11px var(--mono);
+  list-style: none;
+  text-transform: uppercase;
+}
+.Instruction_Gist::-webkit-details-marker {
+  display: none;
+}
+.Instruction_Gist::after {
+  content: ' ▸';
+}
+.Instruction[open] .Instruction_Gist::after {
+  content: ' ▾';
+}
+.Instruction_Body {
+  padding-top: var(--half-gap);
+}
 .Entry-agent {
   display: block;
   color: var(--text);
