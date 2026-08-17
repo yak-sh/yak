@@ -2151,8 +2151,12 @@ let context = async (input: Got) => {
       // The cwd names the scope directly — the reified session row may
       // not have landed in this snap yet.
       await tell(snap, sid, repoAt(rows(snap), cwd)?.eid)
-    } catch {
-      // silent: offline server or malformed stdin — the session goes on
+    } catch (e) {
+      // Never fail LOUDLY (offline server or malformed stdin must not break
+      // the session — stdout stays clean, exit stays 0), but never fail
+      // INVISIBLY either: a real defect like a 400 boot-bricked every wake
+      // unseen (T-19393). Warn to stderr so --debug and wrapper logs show it.
+      warn(`task context (hook): ${(e as Error).message}`)
     }
     return
   }
