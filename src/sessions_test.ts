@@ -1048,20 +1048,24 @@ slow('a child that exits nonzero failed, whatever it said', async () => {
 // The launcher's refusals are all SILENT — it backgrounds systemd-run and
 // exits 0 — so the only witness is the stderr file and the pidfile that
 // never appeared. Shadowing systemd-run with a refusal replays the whole
-// class (a scope name still held, an unreachable user bus) exactly.
+// class (a scope name still held, an unreachable user bus) exactly. The child
+// PATH is the tracked contract, led by `$HOME/.deno/bin` (T-16728,
+// agent_env.ts) — NOT the launcher's own PATH — so the shadow rides a tmp HOME
+// whose .deno/bin holds the refusing binary.
 slow(
   'a launch that never starts is stillborn, and says what refused',
   async () => {
     let { t } = seed()
-    let path = Deno.env.get('PATH')!
-    Deno.mkdirSync(`${tmp}/bin`, { recursive: true })
+    let home = Deno.env.get('HOME')!
+    let fakeHome = `${tmp}/stillborn-home`
+    Deno.mkdirSync(`${fakeHome}/.deno/bin`, { recursive: true })
     Deno.writeTextFileSync(
-      `${tmp}/bin/systemd-run`,
+      `${fakeHome}/.deno/bin/systemd-run`,
       '#!/bin/sh\necho "Failed to start transient scope unit: ' +
         'Unit already exists." >&2\nexit 1\n',
     )
-    Deno.chmodSync(`${tmp}/bin/systemd-run`, 0o755)
-    Deno.env.set('PATH', `${tmp}/bin:${path}`)
+    Deno.chmodSync(`${fakeHome}/.deno/bin/systemd-run`, 0o755)
+    Deno.env.set('HOME', fakeHome)
     Deno.env.set('BIRTH_GRACE_MS', '400')
     let eid: string
     try {
@@ -1069,7 +1073,7 @@ slow(
       eid = run.eid
       await run.done
     } finally {
-      Deno.env.set('PATH', path)
+      Deno.env.set('HOME', home)
       Deno.env.delete('BIRTH_GRACE_MS')
     }
     let s = row(eid)!
@@ -1109,6 +1113,15 @@ let settleComments = (task: string, via: string) =>
     `select d.body from comment c join doc d on d.eid = c.eid
      join created b on b.eid = c.eid
      where c.target = ? and b.via = ?`,
+  ).all(task, via) as { body: string }[]).map((c) => c.body)
+
+// A lease lapse is machinery, not speech (D-13858): it lands as a NOTICE on
+// the task, not a comment — same target, same instrument, off the thread.
+let settleNotices = (task: string, via: string) =>
+  (db.prepare(
+    `select d.body from notice n join doc d on d.eid = n.eid
+     join created b on b.eid = n.eid
+     where n.target = ? and b.via = ?`,
   ).all(task, via) as { body: string }[]).map((c) => c.body)
 
 slow('a settled session says so on its task', async () => {
@@ -1246,13 +1259,13 @@ slow(
     recover(cast)
     await running.get(eid)!.done
     assertEquals(row(eid)?.status, 'failed')
-    // The dead session's lease is gone and the lapse is on the task's
-    // trail — the same words task wrap leaves for an interactive end.
+    // The dead session's lease is gone and the lapse is a NOTICE on the task's
+    // trail (D-13858) — the same words task wrap leaves for an interactive end.
     assertEquals(
       db.prepare('select 1 from claim where eid = ?').get(t),
       undefined,
     )
-    let said = settleComments(t, eid)
+    let said = settleNotices(t, eid)
     assertEquals(said.length, 1)
     assertMatch(said[0], /lease lapsed/)
     // The release rode the CAST — no client cache keeps the ghost claim.

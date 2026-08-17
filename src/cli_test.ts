@@ -1530,6 +1530,7 @@ slow('bare task appends the current claimed task digest', async () => {
         `/query?.claim.session=${S}`,
         '/query?.repo!',
         `/query?.comment.target=${S},${T}&.notified=`,
+        `/query?.notice.target=${S},${T}&.notified=`,
         `/query?.deliver.to=${S}&.notified=`,
         `/query?.mail.target=${S}&.notified=&.opened=&.archived=`,
         `/query?.recalled.source!&.entry.session=${S}&.notified=&.created.at>=10-minutes-ago`,
