@@ -27,7 +27,9 @@ export type Call = {
   detail?: string | null
 }
 
-// What comes back out.
+// What comes back out. A run of identical errors reads as ONE row carrying the
+// cohort's count and span (see recent()); the extra fields are absent on a lone
+// row, so an uncollapsed log is unchanged.
 export type Log = {
   ts: string
   source: string
@@ -37,15 +39,46 @@ export type Log = {
   ms: number | null
   error: string | null
   detail: string | null
+  count?: number // occurrences in this cohort (> 1)
+  first?: string // ts of the oldest occurrence
+  last?: string // ts of the newest (the represented row)
 }
 
 // Free text arrives from stack traces and tool output — long enough to
 // bloat the table, never long enough to be worth it past the first screen.
 let CAP = 2048
-let clip = (s: string | null | undefined) =>
-  s == null ? null : s.length > CAP ? s.slice(0, CAP - 1) + '…' : s
+let clip = (s: string) => s.length > CAP ? s.slice(0, CAP - 1) + '…' : s
+
+// This log is served at /telemetry and this repo is public, so free text is
+// cleaned on the way IN — not a denylist chased pattern by pattern, but a fixed
+// set of shapes that carry secrets or defeat cohorting: control bytes, home
+// paths, URLs, and high-entropy tokens (uuids, long hex, long opaque runs). The
+// same normalization does double duty — it strips the variable bits that would
+// otherwise fingerprint two identical crashes apart (see fingerprint()). Capped
+// last, so the stored field is bounded whatever survived.
+let scrub = (s: string | null | undefined): string | null =>
+  s == null ? null : clip(
+    s
+      // deno-lint-ignore no-control-regex -- strip C0/DEL, keep \t and \n
+      .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '')
+      .replace(/(?:\/home\/|\/Users\/)[^/\s:]+/g, '~')
+      .replace(/\b[a-z][\w+.-]*:\/\/[^\s'")\]]+/gi, '«url»')
+      .replace(
+        /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi,
+        '«id»',
+      )
+      .replace(/\b(?:0x)?[0-9a-f]{16,}\b/gi, '«hex»')
+      .replace(/[A-Za-z0-9_-]{24,}/g, '«token»'),
+  )
+
+// A record() that observes its own append failure turns one broken call into a
+// loop; the guard makes the pipeline blind to itself, so a re-entrant record
+// (a future sink logging its own fault) is dropped, not chased.
+let inside = false
 
 export let record = (db: DatabaseSync, c: Call) => {
+  if (inside) return
+  inside = true
   try {
     db.prepare(`
       insert into tool_call (source, name, session_id, ok, ms, error, detail)
@@ -56,12 +89,75 @@ export let record = (db: DatabaseSync, c: Call) => {
       c.session_id ?? null,
       Number(c.ok),
       c.ms == null ? null : Math.round(c.ms),
-      clip(c.error),
-      clip(c.detail),
+      scrub(c.error),
+      scrub(c.detail),
     )
   } catch (e) {
     console.warn('telemetry: row dropped —', e)
+  } finally {
+    inside = false
   }
+}
+
+// A deterministic cohort key for an error: its CLASS and door and the SHAPE of
+// its top stack frames — never the variable message, which carries the one
+// value that differs run to run. Identical crashes share a key; N copies of the
+// same rendering bug collapse to "47×", which is both smaller and more useful
+// than a wall of the same line. Frames drop their line:col so a rebuild that
+// shifts every line still cohorts. Messages are already path/url/token-scrubbed
+// on write, so the fallback (an error with no class or frames) still matches.
+let errClass = (error: string) => {
+  let head = error.split('\n', 1)[0]
+  return head.match(/[\w.$]*(?:Error|Exception)\b/)?.[0] ?? ''
+}
+
+let frames = (detail: string | null) =>
+  (detail ?? '')
+    .split('\n')
+    .filter((l) => /\bat\b|@/.test(l))
+    .slice(0, 5)
+    .map((l) => l.replace(/:\d+:\d+/g, '').trim())
+    .join('|')
+
+let fingerprint = (r: Log) => {
+  let cls = errClass(r.error ?? '')
+  let fr = frames(r.detail)
+  let body = cls || fr ? `${cls}\n${fr}` : (r.error ?? '').split('\n', 1)[0]
+  return `${r.source}\n${r.name}\n${body}`
+}
+
+// Collapse repeated ERRORS into one counted cohort; successful calls pass
+// through untouched — each timed call is its own datum, which is what stats()
+// reads. Rows arrive newest-first, so the first sighting of a key is the
+// cohort's `last` and every later sighting walks `first` back in time. A lone
+// error keeps count 1 and sheds the extra fields, so an uncollapsed log is
+// byte-identical to before.
+let cohort = (rows: Log[]): Log[] => {
+  let seen = new Map<string, Log>()
+  let out: Log[] = []
+  for (let r of rows) {
+    if (r.ok) {
+      out.push(r)
+      continue
+    }
+    let hit = seen.get(fingerprint(r))
+    if (hit) {
+      hit.count = (hit.count ?? 1) + 1
+      hit.first = r.ts
+    } else {
+      let rep = { ...r, count: 1, first: r.ts, last: r.ts }
+      seen.set(fingerprint(r), rep)
+      out.push(rep)
+    }
+  }
+  for (let r of out) {
+    if (r.count == 1) {
+      delete r.count
+      delete r.first
+      delete r.last
+    }
+  }
+  return out
 }
 
 // Newest first. `only=errors` is the view you actually want most days.
@@ -79,13 +175,16 @@ export let recent = (
     args.push(since)
   }
   if (only == 'errors') where.push('ok = 0')
-  // rowid breaks ts ties — two calls can share a millisecond, and the
-  // later one is still later.
-  return db.prepare(`
+  // Pull the wide window (the hard cap) and cohort in memory, so a crash's
+  // count is right even when its copies outnumber the page; then slice to n.
+  // rowid breaks ts ties — two calls can share a millisecond, and the later one
+  // is still later.
+  let rows = db.prepare(`
     select ts, source, name, session_id, ok, ms, error, detail from tool_call
     ${where.length ? `where ${where.join(' and ')}` : ''}
-    order by ts desc, rowid desc limit ?
-  `).all(...args, n) as Log[]
+    order by ts desc, rowid desc limit 500
+  `).all(...args) as Log[]
+  return cohort(rows).slice(0, n)
 }
 
 // Latency distribution, computed in SQL (T-16327). Per (source, name) — the
