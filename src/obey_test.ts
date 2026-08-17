@@ -147,3 +147,26 @@ Deno.test('a sessionless :fix comment uses the shared Sol default', () => {
   ).get(t) as { provider: string; model: string }
   assertEquals(spawned, { provider: 'codex', model: 'gpt-5.6-sol' })
 })
+
+// The create-and-spawn path: a worded :fix files a NEW task and spawns onto
+// it in one atomic apply. The spawn must validate against the graph as the
+// command left it — read the pre-command snapshot instead and spawnChanges
+// throws `no task: <uuid>`, discarding the whole order for a bare refusal.
+Deno.test('a worded :fix files its task and spawns onto it', () => {
+  let t = task() // the card it was said on; the fix files a new task
+  say(t, ':fix the toolbar clips at small widths')
+  // The task landed…
+  let filed = db.prepare(
+    `select k.eid from task k join doc d on d.eid = k.eid where d.title = ?`,
+  ).get('the toolbar clips at small widths') as { eid: string } | undefined
+  assertEquals(!!filed, true)
+  // …a managed Session requests it…
+  let req = db.prepare(
+    `select requested_task from session where requested_task = ?`,
+  ).get(filed!.eid) as { requested_task: string } | undefined
+  assertEquals(req?.requested_task, filed!.eid)
+  // …and the receipt confirms the spawn rather than a `no task` UUID error.
+  let said = replies(t).map((r) => r.body)
+  assertEquals(said.some((b) => /no task/.test(b)), false)
+  assertEquals(said.some((b) => /spawned onto/.test(b)), true)
+})

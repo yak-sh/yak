@@ -55,6 +55,13 @@ export let order = (
     // session entity like any other spawn; created(session) validates it,
     // so a bad one lands as a failed Session, never as a broken receipt.
     if (out.spawn) {
+      // Validate the spawn against the graph AS THE COMMAND LEFT IT: a
+      // spec-line `:fix` files its task in out.changes, and that fresh eid
+      // must be visible or spawnChanges throws `no task` — the catch below
+      // would then discard the whole order and land a bare refusal receipt.
+      let after = out.changes?.length
+        ? rows({ changes: [...snap.changes, ...out.changes] })
+        : all
       let want = spawnSpec(out.spawn)
       let mine = spawnDefaults(all, session)
       let table = providers()
@@ -63,7 +70,7 @@ export let order = (
         model: want.model ?? (want.provider ? undefined : mine.model),
       }, blocked)
       if (!provider || !model) throw new Error('no provider to default to')
-      let made = spawnChanges(all, {
+      let made = spawnChanges(after, {
         ...want,
         provider,
         model,
@@ -72,7 +79,7 @@ export let order = (
       })
       changes.push(...made.changes)
       spawned = want.task ?? made.eid
-      let onto = want.task ? find(all, want.task) : undefined
+      let onto = want.task ? find(after, want.task) : undefined
       said = [said, onto ? `spawned onto ${idOf(onto)}` : 'spawned chat']
         .filter(Boolean).join('\n')
     }
