@@ -211,6 +211,12 @@ export let sessionComps: Record<string, Record<string, PropType>> = {
 export let settled = (status?: string | null) =>
   status == 'done' || status == 'cancelled'
 
+// What a notice records — the kinds of thing that happened but nobody
+// said (D-13858). `lapse` a session's lease went unreleased at wrap,
+// `sweep` a background sweep found something, `scene` a `:fix` capture.
+// A closed set like statuses: the mint sites (T-11046) name one of these.
+export let noticeKinds = ['lapse', 'sweep', 'scene'] as const
+
 // The component tables, their wire-writable columns AND what each column
 // is — THE one list, now with a type dimension. The db derives its
 // allowlist (and delete order) from the keys (cols()); the CLI and MCP
@@ -534,6 +540,22 @@ export let comps: Record<string, Record<string, PropType>> = {
   hook: {},
   comment: {
     target: { eid: 'entity', death: 'cascade' },
+  },
+  // A notice: something happened ABOUT this entity that nobody said
+  // (D-13858). Not a comment — it was emitted, so it is not in the
+  // conversation, is not counted as one, and never reaches the mail relay
+  // (fanout only ever looked at comments). The bus and the inbox deliver
+  // it beside comments, keyed the same way — `target` is what it is about
+  // (a session, a claimed task), the doc body says it in words, and `event`
+  // is what happened. `event`, not `kind`: `.kind` is the universal listing
+  // scope (query.ts), so a component column of that name would shadow it —
+  // `event` is the graph's existing word for "what happened" (hook.event).
+  // Wire-writable (the mint sites are headless doors), so it rides comps;
+  // death 'cascade' like comment.target — a notice about a dead entity dies
+  // with it. Same shape as comment, so it DERIVES its table (db.ts `derived`).
+  notice: {
+    target: { eid: 'entity', death: 'cascade' },
+    event: { enum: noticeKinds },
   },
   // A quiet transcript memo (T-17319): a bare tag a comment wears to say
   // "harvest at consolidation, never inject live". channel.ts excludes a
@@ -1131,6 +1153,7 @@ export let kindOrder = [
   'hook',
   'conflict',
   'review',
+  'notice',
   'comment',
   'memory',
   'person',
@@ -1761,6 +1784,16 @@ export type Comment = {
   target: string
 }
 
+// A notice: a doc EMITTED about its target, not said (D-13858). Same aim
+// column as comment, and `event` names what happened; the words ride the
+// doc. Delivered by the bus and inbox beside comments, but never a comment
+// — off the mail relay, out of the conversation thread.
+export type Notice = {
+  eid: string
+  target: string
+  event: string
+}
+
 // A verdict-bearing comment. The aim, rationale, and authorship stay on
 // comment + doc + created; this component contributes only judgment.
 export type Review = {
@@ -1948,6 +1981,7 @@ export type Ent = {
   email?: Email
   conflict?: Conflict
   comment?: Comment
+  notice?: Notice
   meta?: { eid: string }
   review?: Review
   alias?: Alias

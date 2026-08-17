@@ -54,6 +54,8 @@ Deno.test('death words: every reference declares, the sets hold', () => {
     new Set([
       'card.target',
       'comment.target',
+      // a notice dies with the entity it is about (D-13858)
+      'notice.target',
       // both ends: a standing instruction is meaningless without the
       // actor who gave it or the thread it is about
       'subscription.actor',

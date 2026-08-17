@@ -13,7 +13,7 @@
 // `.knock.to_eid` and this test is what goes red.
 
 import { assertEquals } from '@std/assert'
-import { bus } from './client.ts'
+import { bus, inboxItem, inboxRows, query } from './client.ts'
 import { slow } from './testing.ts'
 import type { Change } from './types.ts'
 
@@ -110,6 +110,45 @@ slow(
     // The knock and its words both reach the operator — two lines, matching
     // bus_test's `a knock, with the words riding as a comment on its target`.
     assertEquals(got.lines.length, 2)
+  },
+)
+
+// A notice (D-13858) minted on a claimed task reaches its claimant on the bus
+// AND in the inbox, but is never a comment — the thread query that feeds the
+// conversation view never returns it, and fanout (rooted in the comment table,
+// mail.ts) cannot see it. This is the whole point of a separate representation:
+// delivered like speech, counted as an event. Reuses P/S/T from the first case
+// (S is the operator that claims T).
+let N = uid(21) // a notice on T, emitted by another session
+
+slow(
+  'bus: a notice on a claimed task delivers but is not a comment',
+  alone,
+  async () => {
+    await post([
+      ...ent(N, 21, {
+        created: { at: '2026-01-05', by: P, via: B },
+        doc: { title: '', body: 'lease lapsed on T-4' },
+        notice: { target: T, event: 'lapse' },
+      }),
+    ])
+
+    // The bus serves it as its own line — emitted, but delivered like speech.
+    let got = await bus('sess-real', '/w')
+    let line = got.lines.find((l) => l.includes('lease lapsed on T-4'))
+    assertEquals(!!line, true)
+    assertEquals(line!.includes('notice'), true) // UNTRUSTED notice … : …
+
+    // The inbox carries it too — addressed like a comment on the claimed task.
+    let box = await inboxRows('sess-real', '/w')
+    let keep = inboxItem(box.who!)
+    assertEquals(box.rows.filter(keep).some((r) => r.eid == N), true)
+
+    // But the conversation thread (a `.comment.target` query, what Comments.tsx
+    // reads) never returns it: a notice is not a comment.
+    let thread = await query([`.comment.target=${T}`])
+    assertEquals(thread.some((r) => r.eid == N), false)
+    assertEquals(thread.some((r) => !!r.comps.notice), false)
   },
 )
 

@@ -437,13 +437,16 @@ let indexBatch = (changes: Change[], withBorn: boolean): Batch => {
 
 // The filter + format, pure. Given one broadcast batch and the session context,
 // return the channel events to emit — in batch order, so delivery is
-// deterministic. Four things are aimed at a session:
+// deterministic. Five things are aimed at a session:
 //
 //   1. a `comment` whose target is this session's eid OR one of its CLAIMED
 //      tasks (commenting on a task you hold IS messaging you — the comms bus
 //      rule) — but ONLY at mint, when the batch also carries the doc that holds
 //      the words (a bodiless later patch is skipped). A comment on a claimed
 //      task names that task in `on=` so the operator knows which one.
+//   1b. a `notice` (D-13858): keyed exactly like a comment (target is the
+//      session or a claimed task), but emitted, not said — off the mail relay
+//      and out of the conversation thread.
 //   2. a `knock` (types.ts): the shared `deliver {to}` is the recipient —
 //      this session or its actor — and target is what to look at; the
 //      words ride as a plain comment on the TARGET in the same batch (the
@@ -490,6 +493,28 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
       }
       // On a claimed TASK (not the session), name the target so the operator
       // knows which one — the sweep line prefixes the same id.
+      if (at != ctx.sessionEid) meta.on = cleanAttr(ctx.idOf(at) ?? at)
+      out.push({ content, meta, eid: c.eid })
+      continue
+    }
+
+    // A `notice` (D-13858): something happened ABOUT its target that nobody
+    // said. Served beside comments and keyed the same way — its target is
+    // this session or a task it claims — but it is not a comment: it carries
+    // its own words in a doc, never rode a conversation, and fanout cannot
+    // see it. `kind` names what happened; the byline is the emitter.
+    if (c.name == 'notice') {
+      let at = str(c.comp.target)
+      let mine = at == ctx.sessionEid || !!ctx.claimedEids?.has(at)
+      if (!mine) continue
+      let content = words(docs.get(c.eid))
+      if (!content) continue // bodiless mint or a later comp-only patch
+      if (told(c.eid)) continue
+      let from = byline(created.get(c.eid), ctx.idOf)
+      let meta: Record<string, string> = {
+        kind: 'notice',
+        from: cleanAttr(from),
+      }
       if (at != ctx.sessionEid) meta.on = cleanAttr(ctx.idOf(at) ?? at)
       out.push({ content, meta, eid: c.eid })
       continue

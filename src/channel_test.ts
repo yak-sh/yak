@@ -98,3 +98,29 @@ Deno.test('channelEvents: one-pass indexing feeds every branch', () => {
   // recall: content from the bodies index
   assertEquals(evs[4].content, 'M-1 · a memory')
 })
+
+// A notice (D-13858) is served beside comments, keyed the same way — about
+// the session or a claimed task — but as its own `notice` kind, with the
+// emitter's byline. A notice about an unrelated entity reaches nobody here.
+Deno.test('channelEvents: notices serve beside comments', () => {
+  let batch: Change[] = [
+    { eid: 'nz', name: 'notice', comp: { target: 'S', event: 'lapse' } },
+    { eid: 'nz', name: 'doc', comp: { title: '', body: 'lease lapsed' } },
+    { eid: 'nz', name: 'created', comp: { by: 'U-1' } },
+    { eid: 'nt', name: 'notice', comp: { target: 'TASK', event: 'sweep' } },
+    { eid: 'nt', name: 'doc', comp: { title: '', body: 'sweep found it' } },
+    { eid: 'nt', name: 'created', comp: { by: 'U-2' } },
+    // about an entity that is neither the session nor a claimed task — dropped
+    { eid: 'nx', name: 'notice', comp: { target: 'OTHER', event: 'scene' } },
+    { eid: 'nx', name: 'doc', comp: { title: '', body: 'not for me' } },
+  ]
+  let evs = channelEvents(batch, ctx)
+  assertEquals(evs.map((e) => e.meta.kind), ['notice', 'notice'])
+  // on the session: bare, byline from created
+  assertEquals(evs[0].content, 'lease lapsed')
+  assertEquals(evs[0].meta.on, undefined)
+  assertEquals(evs[0].meta.from, 'U-1')
+  // on the claimed task: names the task
+  assertEquals(evs[1].content, 'sweep found it')
+  assertEquals(evs[1].meta.on, 'T-9')
+})

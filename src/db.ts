@@ -715,6 +715,9 @@ export let derived = [
   'meta',
   'resume',
   'dream',
+  // A notice (D-13858): {target FK cascade, kind text} — an entity-keyed spine,
+  // every column nullable, wholly PropType-expressible, so it derives.
+  'notice',
   'deliver',
   'delivered',
   'error',

@@ -1481,8 +1481,8 @@ export type Reader = {
 // watch/mute sets are asked about.
 export let aboutOf = (r: Row) =>
   String(
-    r.comps.comment?.target ?? r.comps.mail?.target ??
-      r.comps.knock?.target ?? '',
+    r.comps.comment?.target ?? r.comps.notice?.target ??
+      r.comps.mail?.target ?? r.comps.knock?.target ?? '',
   )
 
 // Every entity this actor has said something about, split by mode.
@@ -1513,6 +1513,15 @@ export let addressed = (who: Reader) => (r: Row): boolean => {
     // it was unheard by anyone otherwise. Gated on `operator` exactly like
     // the actor knock below, so a specialist still hears only direct
     // address and its own claimed work.
+    return t == who.session || !!who.claims?.has(t) ||
+      (who.operator == true && !!who.actor && t == who.actor)
+  }
+  // A notice reaches the same doors a comment does — it is about the session
+  // or a task it claims (or the actor, for an operator loop) — but it was
+  // emitted, not said (D-13858). Same addressing, different provenance.
+  let n = r.comps.notice
+  if (n) {
+    let t = String(n.target ?? '')
     return t == who.session || !!who.claims?.has(t) ||
       (who.operator == true && !!who.actor && t == who.actor)
   }
@@ -2480,6 +2489,10 @@ export let inboxRows = async (
   let directMail = ['.mail.message_id!']
   let found = await Promise.all([
     ask('comment.target', comments),
+    // A notice is addressed exactly like a comment (D-13858) — about the
+    // session, a claimed task, or the operator's actor — so it rides the
+    // same recipient list into the same inboxItem screen.
+    ask('notice.target', comments),
     // WHO a knock is for is the shared deliver.to now; wakes/outbound mail
     // it also returns are screened back out by inboxItem (no wake arm, and
     // the mail arm demands an inbound message_id).
@@ -2487,6 +2500,7 @@ export let inboxRows = async (
     ask('mail.target', boxes, directMail),
     ask('mail.to_addr', addrs, directMail),
     ask('comment.target', watched),
+    ask('notice.target', watched),
     ask('knock.target', watched),
     ask('mail.target', watched),
   ])
@@ -2629,8 +2643,12 @@ let busRows = async (who: Reader) => {
   let held = [...mine, ...(who.claims ?? [])].join(',')
   let box = [who.session, ...(who.operator ? [who.scope] : [])]
     .filter(Boolean).join(',')
-  let [said, aimed, letters, floated] = await Promise.all([
+  let [said, emitted, aimed, letters, floated] = await Promise.all([
     query([`.comment.target=${held}`, '.notified=']),
+    // A notice (D-13858) is addressed like a comment — session, claimed task,
+    // or the operator's actor — so it rides the same `held` list. Its own arm
+    // here keeps busRows the SUPERSET of channelEvents' notice branch.
+    query([`.notice.target=${held}`, '.notified=']),
     // WHO a knock is for is the shared deliver.to; the same facet a wake/mail
     // wears, so keep only the knock rows the bus renders.
     query([`.deliver.to=${mine.join(',')}`, '.notified=']),
@@ -2658,7 +2676,7 @@ let busRows = async (who: Reader) => {
     ]),
   ])
   let knocks = aimed.filter((r) => r.comps.knock)
-  let seen = [...said, ...knocks, ...letters, ...floated]
+  let seen = [...said, ...emitted, ...knocks, ...letters, ...floated]
   if (!seen.length) return seen
   // What rendering needs BESIDE the candidates: a knock's target (its id, and
   // the comment carrying the words that rode with it) and each candidate's
