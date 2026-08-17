@@ -94,6 +94,15 @@ let prep = (db: DatabaseSync, sql: string): StatementSync => {
   return s
 }
 
+// Roll back only what actually began. A `begin`/`begin immediate` that fails
+// on SQLITE_BUSY opens no transaction, so an unconditional `rollback` in the
+// catch throws "no transaction is active" and MASKS the real BUSY that
+// sessionFault then bricks the session on. Every catch that rolls back a
+// begin it may not have reached calls this instead (T-19044).
+let rollback = (db: DatabaseSync) => {
+  if (db.inTransaction) db.exec('rollback')
+}
+
 // The owner's live graph — the one path a test must never open (open() below
 // refuses it under `deno test`). A function, not a constant, so it re-reads
 // HOME and the guard that holds this can't drift from a stale literal.
@@ -1075,7 +1084,7 @@ export let migrateRefs = (db: DatabaseSync) => {
     for (let r of staleDocs) writeDoc.run(r.nextTitle, r.nextBody, r.eid)
     db.exec('commit')
   } catch (e) {
-    db.exec('rollback')
+    rollback(db)
     throw e
   }
 }
@@ -1156,7 +1165,7 @@ export let mendApply = (db: DatabaseSync) => {
     db.exec('alter table apply rename column change to changes')
     db.exec('commit')
   } catch (e) {
-    db.exec('rollback')
+    rollback(db)
     throw e
   }
 }
@@ -1227,7 +1236,7 @@ export let backfillJournalTouch = (db: DatabaseSync) => {
     )
     db.exec('commit')
   } catch (e) {
-    db.exec('rollback')
+    rollback(db)
     console.warn('journal_touch backfill skipped —', e)
   }
 }
@@ -1278,7 +1287,7 @@ export let retireProposal = (db: DatabaseSync) => {
     if (legacy) db.exec('alter table task drop column proposal')
     db.exec('commit')
   } catch (e) {
-    db.exec('rollback')
+    rollback(db)
     throw e
   }
 }
@@ -1313,7 +1322,7 @@ export let retireProjectRetiredAt = (db: DatabaseSync) => {
     if (legacy) db.exec('alter table project drop column retired_at')
     db.exec('commit')
   } catch (e) {
-    db.exec('rollback')
+    rollback(db)
     throw e
   }
 }
@@ -1361,7 +1370,7 @@ export let backfillSpawn = (db: DatabaseSync) => {
     if (missed) throw new Error('spawn backfill did not verify')
     db.exec('commit')
   } catch (e) {
-    db.exec('rollback')
+    rollback(db)
     throw e
   }
 }
@@ -1429,7 +1438,7 @@ export let backfillSessionFacets = (db: DatabaseSync) => {
     }
     db.exec('commit')
   } catch (e) {
-    db.exec('rollback')
+    rollback(db)
     throw e
   }
 }
@@ -1471,7 +1480,7 @@ export let migrateErrors = (db: DatabaseSync) => {
     for (let table of tables) db.exec(`alter table ${table} drop column error`)
     db.exec('commit')
   } catch (e) {
-    db.exec('rollback')
+    rollback(db)
     throw e
   }
 }
@@ -1790,7 +1799,7 @@ export let migrateBoardsToProjects = (db: DatabaseSync) => {
     }
     db.exec('commit')
   } catch (e) {
-    db.exec('rollback')
+    rollback(db)
     throw e
   }
 }
@@ -1927,7 +1936,7 @@ export let healStored = (db: DatabaseSync) => {
     }
     db.exec('commit')
   } catch (e) {
-    db.exec('rollback')
+    rollback(db)
     throw e
   }
   return { changed: fixes.length, invalid }
@@ -4059,7 +4068,7 @@ export let apply = (
     db.exec('commit')
     return [...changes, ...extra]
   } catch (e) {
-    db.exec('rollback')
+    rollback(db)
     if (bounced) {
       try {
         db.exec('begin')
@@ -4073,7 +4082,7 @@ export let apply = (
         mintNum(db, ceid) // spine no longer numbers at birth (T-3684)
         db.exec('commit')
       } catch (audit) {
-        db.exec('rollback')
+        rollback(db)
         console.warn('conflict audit failed —', audit) // never mask the claim error
       }
     }

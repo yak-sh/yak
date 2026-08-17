@@ -96,6 +96,13 @@ export class DatabaseSync {
     return this.#db.open
   }
 
+  // True while a transaction is open (autocommit off). A rollback in a catch
+  // reads this so a `begin` that never took the lock (SQLITE_BUSY) is not
+  // rolled back — an empty rollback throws and would mask the real error.
+  get inTransaction() {
+    return this.#db.inTransaction
+  }
+
   get lastInsertRowId() {
     return this.#db.lastInsertRowId
   }
