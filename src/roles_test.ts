@@ -831,7 +831,7 @@ Deno.test('role window styling matches holdco, keyed on the venture', () => {
   ])
 })
 
-Deno.test('role hash covers instructions and materialized persona text', () => {
+Deno.test('role hash covers stable config, not warmth-ranked persona text', () => {
   let base = {
     eid: uid(),
     state: 'running',
@@ -842,12 +842,21 @@ Deno.test('role hash covers instructions and materialized persona text', () => {
     repo: { path: '/tmp/repo', base_branch: 'main' },
     provider: 'codex',
     model: 'gpt-5.6-sol',
+    persona: uid(),
   }
+  // Genuine, restart-worthy config still moves the hash.
   assert(roleHash(base) != roleHash({ ...base, body: 'two' }))
-  assert(
-    roleHash({ ...base, personaText: 'one' }) !=
-      roleHash({ ...base, personaText: 'two' }),
+  assert(roleHash(base) != roleHash({ ...base, model: 'gpt-5.6-pro' }))
+  assert(roleHash(base) != roleHash({ ...base, persona: uid() }))
+  // personaText is materialized with recall-warmth ranking that DECAYS with the
+  // clock; if it fed the hash an unchanged graph would flap it and churn the
+  // operator (T-19381). It must NOT change the hash — present, absent, or
+  // reordered all hash identically.
+  assertEquals(
+    roleHash({ ...base, personaText: 'one' }),
+    roleHash({ ...base, personaText: 'two' }),
   )
+  assertEquals(roleHash(base), roleHash({ ...base, personaText: 'anything' }))
 })
 
 // Integration tests LAST: rolesSweep reconciles every role in the shared db,
@@ -902,4 +911,47 @@ Deno.test('a still-starting native run gets no second spawn; a dead one is relau
     .run(new Date().toISOString(), s) // it died
   await rolesSweep(cast, live)
   assertEquals(spawns(role), 1) // now a relaunch is due
+})
+
+// The T-19381 churn: config drift under a LIVE operator must never tear the
+// pane down. A live native operator self-reifies its own session (role set, a
+// pid, no finished_at) — so active() is true — and once it is past the boot
+// grace it reaches reconcileNative, where a mere hash mismatch used to kill and
+// cold-restart it. It must defer, and the deferred config must land on the
+// operator's NEXT natural restart, not before.
+Deno.test('config drift defers under a live native operator, lands on restart', async () => {
+  commands = []
+  sessions.clear()
+  panes.clear()
+  let { role } = seed('native')
+  await rolesSweep(cast, live)
+  let pane0 = panesOf(role)[0]
+  assert(pane0) // launched once
+
+  // The live operator's own session: role-linked, a pid, no finished_at, and
+  // booted well past the idempotency grace so the reconciler treats it as live
+  // rather than still-starting.
+  let s = uid()
+  apply(db, [{ eid: s, name: 'session', comp: { id: uid(), role } }])
+  db.prepare(
+    'update session set pid = 4242, started_at = ?, finished_at = null where eid = ?',
+  ).run(new Date(Date.now() - 900_000).toISOString(), s)
+
+  // A genuine, hash-affecting config change (the role's contract body).
+  apply(db, [{ eid: role, name: 'doc', comp: { body: 'A changed contract.' } }])
+  await rolesSweep(cast, live)
+  assertEquals(panesOf(role), [pane0]) // the healthy pane SURVIVES — no kill
+  let after = db.prepare(
+    'select decision, reason from role where eid = ?',
+  ).get(role) as { decision: string; reason: string }
+  assertEquals(after.decision, 'defer')
+  assertMatch(after.reason, /config changed \(body\)/) // names the diffed field
+
+  // The operator's process exits; the deferred config lands on the relaunch.
+  db.prepare('update session set finished_at = ? where eid = ?')
+    .run(new Date().toISOString(), s)
+  await rolesSweep(cast, live)
+  let now = panesOf(role)
+  assertEquals(now.length, 1)
+  assert(now[0] != pane0) // rolled to a fresh pane carrying the new config
 })

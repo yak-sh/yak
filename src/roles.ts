@@ -475,35 +475,59 @@ let roleText = (c: RoleConfig) =>
     c.wakeTarget ? `Wake target: ${c.wakeTarget}` : undefined,
   ].filter(Boolean).join('\n\n') + '\n'
 
+// The identity a role RESTART is keyed on: stable config only, and pointedly
+// NOT the materialized personaText. materialize() ranks the preloaded tier by
+// recall warmth, which DECAYS with the clock, so the same unchanged graph
+// produced a different personaText — and thus a different hash — as time
+// passed. That flapped the hash on nothing, and the reconciler tore a healthy
+// operator down to cold-restart it, six roles churning on 4-8min lifetimes
+// (T-19381). The persona TEXT still ships fresh in roleText() on every launch;
+// an edit to it lands on the next natural restart (M-6995), it simply no longer
+// forces one. persona (the ID) stays in the hash, so re-pointing a role at a
+// different persona is still a genuine, restart-worthy change.
+let identity = (c: RoleConfig) => ({
+  surface: c.surface,
+  scope: c.scope,
+  checkout: c.checkout ?? c.scope,
+  schedule: c.schedule ?? null,
+  wakePolicy: c.wakePolicy ?? 'always',
+  wakeTarget: c.wakeTarget ?? null,
+  repo: c.repo,
+  provider: c.provider,
+  model: c.model,
+  effort: c.effort ?? null,
+  persona: c.persona ?? null,
+  title: c.title,
+  body: c.body,
+})
+
 export let roleHash = (c: RoleConfig) =>
-  createHash('sha256').update(JSON.stringify({
-    surface: c.surface,
-    scope: c.scope,
-    checkout: c.checkout ?? c.scope,
-    schedule: c.schedule ?? null,
-    wakePolicy: c.wakePolicy ?? 'always',
-    wakeTarget: c.wakeTarget ?? null,
-    repo: c.repo,
-    provider: c.provider,
-    model: c.model,
-    effort: c.effort ?? null,
-    persona: c.persona ?? null,
-    personaText: c.personaText ?? null,
-    title: c.title,
-    body: c.body,
-  })).digest('hex')
+  createHash('sha256').update(JSON.stringify(identity(c))).digest('hex')
+
+// The identity behind each role's applied_hash, kept in-process so a config
+// change can NAME which field moved — the per-kill diff T-19381 asked for,
+// recoverable now instead of inferred. Populated wherever we accept or apply a
+// hash (adopt, native launch, managed start); a fresh boot has none, so the
+// first drift in a new process reports 'unknown' rather than guessing.
+let applied = new Map<string, ReturnType<typeof identity>>()
+
+let driftFields = (c: RoleConfig): string => {
+  let prior = applied.get(c.eid) as Record<string, unknown> | undefined
+  if (!prior) return 'unknown'
+  let now = identity(c) as Record<string, unknown>
+  return Object.keys(now).filter((k) =>
+    JSON.stringify(prior[k]) !== JSON.stringify(now[k])
+  ).join(', ') || 'none'
+}
 
 // Materializing a persona walks the whole graph, and config() runs on every
 // roles tick to rebuild a hash that almost always matches what is applied.
 // The journal cursor is the graph's write version (the same one client sync
 // trusts), so a pass that follows no write reuses the text it already
 // derived: the walk is owed to a CHANGE, never to a tick. Keyed per persona
-// so several roles can't evict each other.
-//
-// It also stops the hash drifting on its own. materialize() ranks the
-// preloaded tier by recall warmth, which DECAYS with the clock — so the same
-// unchanged graph used to hash differently as time passed, and a role could
-// be torn down and restarted with nothing about it changed.
+// so several roles can't evict each other. (Warmth still reorders the text on a
+// real graph write; roleHash deliberately excludes personaText so that no
+// longer flaps the restart hash — see identity() above, T-19381.)
 let personas = new Map<string, { cursor: number; text: string }>()
 let personaFor = (eid: string): string => {
   let cursor = cursorOf(db)
@@ -751,6 +775,7 @@ let startManaged = (
       ...(c.persona ? { persona: c.persona } : {}),
     },
   }], cast)
+  applied.set(c.eid, identity(c))
   stamp(c.eid, {
     applied_hash: hash,
     applied_at: deps.now(),
@@ -822,6 +847,7 @@ let reconcileNative = async (
     c.eid,
   ) as { applied_hash: string | null }
   if (has && row.applied_hash == hash) {
+    applied.set(c.eid, identity(c))
     stamp(c.eid, {
       decision: 'adopt',
       reason: 'matching native session is active',
@@ -831,10 +857,43 @@ let reconcileNative = async (
     }, cast)
     return
   }
-  if (has) await tmuxKill(c.eid, deps)
+  // Config drifted, but the operator is LIVE — a native role's own claude
+  // process holds a pid until it exits, so its session is active(). Tearing
+  // the pane down here to relaunch is the T-19381 churn: it kills a healthy
+  // operator mid-pass and cold-restarts it. DEFER instead — keep the pane,
+  // leave applied_hash on the OLD value so the drift stays visible, and let the
+  // new config land when the operator next restarts on its own (or on an owner
+  // `task role start`). A persona/prompt edit no longer forces a live restart.
+  if (has && active(session)) {
+    let reason = `config changed (${driftFields(c)}); operator live, ` +
+      `applying on next restart`
+    if (
+      (db.prepare('select decision from role where eid = ?').get(c.eid) as
+        | { decision: string | null }
+        | undefined)?.decision != 'defer'
+    ) console.warn(`role ${c.eid}: deferring restart — ${reason}`)
+    stamp(c.eid, {
+      decision: 'defer',
+      reason,
+      decided_at: deps.now(),
+      error: null,
+      stopped_at: null,
+    }, cast)
+    return
+  }
+  if (has) {
+    if (row.applied_hash) {
+      console.warn(
+        `role ${c.eid}: relaunching stale native pane — config changed ` +
+          `(${driftFields(c)})`,
+      )
+    }
+    await tmuxKill(c.eid, deps)
+  }
   let file = instructionPath(c.eid)
   deps.write(file, roleText(c))
   await tmuxStart(c, file, deps)
+  applied.set(c.eid, identity(c))
   stamp(c.eid, {
     applied_hash: hash,
     applied_at: deps.now(),
@@ -910,8 +969,20 @@ let reconcileManaged = async (
   let graph = !!session && graphSession(db, String(session.eid))
   if (graph) {
     if (row.applied_hash != hash) {
-      if (graphBusy(db, String(session!.eid))) stopManaged(session!, cast)
-      else startManaged(c, hash, cast, deps)
+      // Config drifted. Stopping a mid-turn operator on a mere hash mismatch is
+      // the T-19381 churn (the managed twin of the native kill): DEFER while
+      // it's busy — let the turn finish — and apply the new config on the next
+      // settle, where the idle arm below spawns it. With personaText out of the
+      // hash, a busy operator only ever defers on a GENUINE config change.
+      if (graphBusy(db, String(session!.eid))) {
+        stamp(c.eid, {
+          decision: 'defer',
+          reason: `config changed (${driftFields(c)}); operator busy, ` +
+            `applying on next restart`,
+          decided_at: deps.now(),
+          error: null,
+        }, cast)
+      } else startManaged(c, hash, cast, deps)
       return
     }
   } else {
