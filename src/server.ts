@@ -67,7 +67,7 @@ import {
 import { scribeSweep } from './scribe.ts'
 import { embedSweep, similarTo } from './embed.ts'
 import { type IO, mcpServer } from './mcp.ts'
-import { projection, syncFiles } from './persona.ts'
+import { materialize, projection, syncFiles } from './persona.ts'
 import { commit } from './git.ts'
 import {
   codexPending,
@@ -925,6 +925,33 @@ let http = Deno.serve(
           title: String(comps.doc?.title ?? ''),
         }
       }))
+    }
+    if (path == '/persona') {
+      // A persona materialized over the FULL graph — the SAME bytes a spawned
+      // session reads as its system prompt (persona.ts materialize()), so the
+      // browser must NOT render them from its own cache: under a partial cache
+      // the tier walk misses memories and edges and quietly corrupts the very
+      // prompt. `id` addresses the persona (locate: T-3, num, uuid, slug).
+      // `scoped` is the in-scope memories the editor lists as untiered — the
+      // one other whole-graph walk the Persona view owed the cache — resolved
+      // here so discovery no longer depends on what the client happens to hold.
+      let eid = locate(db, url.searchParams.get('id') ?? '')
+      if (!eid) return new Response('no such entity', { status: 404 })
+      let snap = snapshot(db)
+      let all = rows(snap)
+      let p = all.find((r) => r.eid == eid && r.comps.persona && r.comps.doc)
+      if (!p) return new Response('not a persona', { status: 404 })
+      let home = p.comps.persona.home ?? null
+      let scoped = all
+        .filter((r) =>
+          r.comps.memory && r.comps.doc &&
+          ((r.comps.memory.scope as string | null) ?? null) == home
+        )
+        .map((r) => r.eid)
+      return Response.json({
+        text: materialize(all, snap.deps, p, Date.now()),
+        scoped,
+      })
     }
     if (path == '/query') {
       // The graph over plain GET: the query string IS the filter line —

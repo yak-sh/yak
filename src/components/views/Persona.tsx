@@ -1,5 +1,6 @@
+import { useEffect, useState } from 'preact/hooks'
 import { type Change, type Ent } from '../../types.ts'
-import { byWarmth, cache, ent, mutate, relations } from '../../live.ts'
+import { base, byWarmth, ent, mutate, relations } from '../../live.ts'
 import { block } from '../ui.tsx'
 import { dragData } from '../drag.ts'
 import { Entity } from '../Entity.tsx'
@@ -38,14 +39,23 @@ export let Persona = ({ e }: { e: Ent }) => {
   let pre = linked('contains')
   let idx = linked('reads')
   let tiered = new Set([...pre, ...idx].map((r) => r.eid))
-  // In scope = memories sharing the persona's home (fleet personas draw
-  // from unscoped memories); already-tiered ones show in their tier.
-  let home = e.persona?.home ?? null
-  let loose = Object.keys(cache.value).map(ent)
-    .filter((r) =>
-      r.memory && r.doc && !tiered.has(r.eid) &&
-      (r.memory.scope ?? null) == home
-    )
+  // In scope = memories the server says share this persona's home (fleet
+  // personas draw from unscoped memories) — fetched over the WHOLE graph
+  // (/persona), not scanned from this client's cache, which would only ever
+  // discover the memories it happened to load (T-18104). Already-tiered ones
+  // show in their tier, so drop them here — live off `tiered`, so a drag
+  // re-tiers without another round trip.
+  let [scoped, setScoped] = useState<string[]>([])
+  useEffect(() => {
+    let abort = new AbortController()
+    fetch(`${base()}/persona?id=${e.eid}`, { signal: abort.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setScoped(d.scoped))
+      .catch(() => {})
+    return () => abort.abort()
+  }, [e.eid])
+  let loose = scoped.map(ent)
+    .filter((r) => r.memory && r.doc && !tiered.has(r.eid))
     .toSorted(byWarmth(now))
   let both = pre.filter((r) => idx.some((x) => x.eid == r.eid))
 

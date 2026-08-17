@@ -1,30 +1,19 @@
-import { type Ent, idOf, kindOf } from '../../types.ts'
-import { cache, deps, ent, pending } from '../../live.ts'
+import { useEffect, useState } from 'preact/hooks'
+import { type Ent, idOf } from '../../types.ts'
+import { base, ent, pending } from '../../live.ts'
 import { el } from '../ui.tsx'
-import { materialize } from '../../persona.ts'
 import { highlight } from '../../highlight.ts'
-import type { Row } from '../../client.ts'
 
 // A doc as markdown with frontmatter — the file a dragged Markdown tab drops on
 // the desktop, shown raw by the Markdown view. Any entity with a doc qualifies;
 // workflow lines (status) appear only where the entity carries them.
 // A PERSONA's file is its materialization — the same bytes sync writes to
 // .tasks/ (header, core text, preloaded bodies, index) — so what you see
-// raw is exactly what a spawned session reads.
-let asRows = (): Row[] =>
-  Object.entries(cache.value).map(([eid, c]) => ({
-    eid,
-    num: Number(c.entity?.num ?? 0),
-    kind: kindOf(c),
-    comps: c as unknown as Row['comps'],
-  }))
-
+// raw is exactly what a spawned session reads. Those bytes are fetched from
+// the server (/persona), which materializes over the WHOLE graph: rendering
+// them from this client's cache would miss any tier memory or edge it hasn't
+// loaded and quietly show a corrupt prompt (T-18104).
 export let mdText = (e: Ent) => {
-  if (e.persona) {
-    let all = asRows()
-    let p = all.find((r) => r.eid == e.eid)
-    if (p) return materialize(all, deps.value, p, Date.now())
-  }
   let refs = e.refs
     .map((r) => `${r.type}: ${idOf(ent(r.child))}`)
     .join('\n')
@@ -43,10 +32,30 @@ export let mdText = (e: Ent) => {
   ].join('\n')
 }
 
+// A persona's materialization, fetched from the server so it never depends on
+// the client cache. Null while the round trip is in flight (rendered as `…`);
+// a dead server or a persona that vanished simply leaves the last text.
+let usePersonaMd = (e: Ent): string | null => {
+  let [text, setText] = useState<string | null>(null)
+  useEffect(() => {
+    if (!e.persona) return
+    setText(null)
+    let abort = new AbortController()
+    fetch(`${base()}/persona?id=${e.eid}`, { signal: abort.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setText(d.text))
+      .catch(() => {})
+    return () => abort.abort()
+  }, [e.eid, e.persona])
+  return text
+}
+
 let Pre = el('pre', 'Md')
 
 export let Md = ({ e }: { e: Ent }) => {
-  let lit = highlight(mdText(e), 'markdown')
+  let persona = usePersonaMd(e)
+  let text = e.persona ? (persona ?? '…\n') : mdText(e)
+  let lit = highlight(text, 'markdown')
   return (
     <Pre>
       <code
