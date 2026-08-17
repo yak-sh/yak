@@ -1,6 +1,6 @@
 import { type Ent } from '../../types.ts'
-import { inboxItem, isUnread, readerAt, type Row } from '../../client.ts'
-import { ent, mutate, rows } from '../../live.ts'
+import { isUnread, type Row } from '../../client.ts'
+import { ent, inbox, mutate } from '../../live.ts'
 import { Stamp } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
 import { Id } from './Inline.tsx'
@@ -79,8 +79,11 @@ let Line = ({ r }: { r: Row }) => {
 }
 
 export let Inbox = ({ e, limit }: { e: Ent; limit?: number }) => {
-  let all = rows()
-  let items = all.filter(inboxItem(readerAt(all, e.eid))).sort(order)
+  // The FINISHED inbox from the server (live.ts `inbox`, GET /inbox), already
+  // screened by the SAME client.ts inboxItem the digest and TUI read — never a
+  // scan of the whole-graph cache, which under a partial boot holds only a
+  // working set (T-18105). Sort here; membership is the server's.
+  let items = [...inbox(e.eid)].sort(order)
   if (!items.length) {
     return (
       <ListFrame.Empty>

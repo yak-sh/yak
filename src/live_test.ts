@@ -24,6 +24,7 @@ import {
   foldFor,
   gated,
   holdQuery,
+  inbox,
   jobOf,
   landObservation,
   landSub,
@@ -43,6 +44,7 @@ import {
   subEids,
   subscriptionChecks,
   topZ,
+  unreadFor,
   unsubscribe,
 } from './live.ts'
 import { parseQuery, resolveRefs } from './query.ts'
@@ -994,6 +996,64 @@ Deno.test("myMode: this actor's subscription, off the reverse index", () => {
   }
   assertEquals(myMode('tgt'), undefined)
   config.client = undefined
+})
+
+// The inbox is a SERVER query now (T-18105): unreadFor/inbox read GET /inbox,
+// never a whole-cache scan, so a partial-cache browser sees the same answer as
+// a full one. It stays live on a patch the inbox predicate reads (a comment
+// arriving) and asleep on one it doesn't (a task status move).
+Deno.test('inbox: the /inbox door, live on its own patches, asleep on others', async () => {
+  let flush = () => new Promise<void>((r) => setTimeout(r, 0))
+  // A /inbox answer in the wire shape the door returns (jsonOf → rowOf).
+  let item = (eid: string, num: number, opened = false) => ({
+    kind: 'comment',
+    entity: { eid, num },
+    comment: { target: 'actor' },
+    created: { at: '2026-08-15T12:00:00.000Z' },
+    ...(opened ? { opened: {} } : {}),
+  })
+  let answer: Record<string, unknown>[] = [
+    item('c1', 1),
+    item('c2', 2),
+    item('c3', 3, true),
+  ]
+  let calls = 0
+  let orig = globalThis.fetch
+  globalThis.fetch = ((url: string | URL) => {
+    if (String(url).includes('/inbox')) {
+      calls++
+      return Promise.resolve(Response.json(answer))
+    }
+    return Promise.resolve(new Response('', { status: 404 }))
+  }) as typeof fetch
+  cache.value = {}
+  try {
+    // The first read mints an empty signal and kicks the fetch.
+    assertEquals(inbox('actor'), [])
+    await flush()
+    assertEquals(calls, 1)
+    // Parity: the set/count is exactly the server's answer.
+    assertEquals(inbox('actor').map((r) => r.eid), ['c1', 'c2', 'c3'])
+    assertEquals(unreadFor('actor'), 2)
+    // An unrelated patch (a task status move) touches nothing the inbox reads.
+    applyLocal([{
+      eid: 'tsk',
+      name: 'task',
+      comp: { status: 'wip', priority: 1 },
+    }])
+    await flush()
+    assertEquals(calls, 1) // asleep
+    // A newly-addressed comment refetches; the door now answers with one more.
+    answer = [...answer, item('c4', 4)]
+    applyLocal([{ eid: 'c4', name: 'comment', comp: { target: 'actor' } }])
+    await flush()
+    assertEquals(calls, 2) // live
+    assertEquals(inbox('actor').length, 4)
+    assertEquals(unreadFor('actor'), 3)
+  } finally {
+    globalThis.fetch = orig
+    cache.value = {}
+  }
 })
 
 Deno.test('relationship indices wake only their affected targets', () => {

@@ -86,7 +86,7 @@ let projectSession = (
   return comps
 }
 
-let rowOf = (r: Record<string, unknown>): Row => {
+export let rowOf = (r: Record<string, unknown>): Row => {
   let { kind, ...comps } = r
   let entity = comps.entity as Record<string, unknown>
   return {

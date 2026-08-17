@@ -22,7 +22,7 @@ import {
   slugsOf,
   type Snapshot,
 } from './types.ts'
-import { inboxItem, isUnread, readerAt, type Row } from './client.ts'
+import { isUnread, type Row, rowOf } from './client.ts'
 import {
   EXISTS,
   type Field,
@@ -409,6 +409,9 @@ export let resetSignals = () =>
     resetQueries()
     refreshJobs(touched)
     refreshFacets(touched)
+    // A wholesale reseed (reconnect) is any-inbox-may-have-changed: refetch
+    // every mounted one rather than diffing what the new graph implies.
+    refreshInbox()
   })
 
 // A z-only pin patch binds straight to its one DOM attribute. The fallback
@@ -545,13 +548,96 @@ export let myMode = (target: string) => {
     : undefined
 }
 
-// How many inbox items are waiting for this entity — a derived display
-// fact like gated() above, so it belongs here rather than in the view.
-// The SAME predicate the Inbox view, `task inbox` and the boot digest
-// read: a number on a tab can never promise what the tab doesn't hold.
-export let unreadFor = (eid: string) => {
-  let all = rows()
-  return all.filter(inboxItem(readerAt(all, eid))).filter(isUnread).length
+// The inbox as the SERVER enumerates it (T-18105). The whole-graph cache is
+// no longer scanned for inbox membership: GET /inbox?actor=<eid> returns the
+// FINISHED rows for the browsing reader (the client.ts readerAt path, already
+// screened by inboxItem), so the badge and the Inbox view read a partial cache
+// exactly as they read a full one. A per-actor signal holds those rows; the
+// first read kicks the fetch, and refreshInbox refetches on a relevant patch.
+let inboxSignals = new Map<string, Signal<Row[]>>()
+// One fetch per eid in flight; a patch arriving mid-fetch sets `again` so the
+// door is asked once more when it settles — a burst collapses to one trailing
+// refetch rather than stacking a request per frame.
+let inboxLoading = new Set<string>()
+let inboxAgain = new Set<string>()
+let loadInbox = (eid: string) => {
+  if (inboxLoading.has(eid)) return void inboxAgain.add(eid)
+  inboxLoading.add(eid)
+  fetch(`${base()}/inbox?actor=${encodeURIComponent(eid)}`)
+    .then((r) => r.ok ? r.json() as Promise<Record<string, unknown>[]> : [])
+    .then((rs) => {
+      let sig = inboxSignals.get(eid)
+      if (sig) sig.value = rs.map(rowOf)
+    })
+    // A dead server is not an emptier inbox — keep the last answer and let the
+    // next relevant patch (or a reconnect reseed) retry.
+    .catch(() => {})
+    .finally(() => {
+      inboxLoading.delete(eid)
+      if (inboxAgain.delete(eid)) loadInbox(eid)
+    })
+}
+
+// The finished inbox rows for an entity, live. Minted once per eid so a patch
+// cannot wake an unrelated reader; refreshInbox refetches when the batch below
+// touches something the inbox predicate reads. Empty until the first fetch
+// lands — a badge that briefly shows nothing, never a stale count.
+export let inbox = (eid: string): Row[] => {
+  let sig = inboxSignals.get(eid)
+  if (!sig) {
+    inboxSignals.set(eid, sig = signal<Row[]>([]))
+    loadInbox(eid)
+  }
+  return sig.value
+}
+
+// Tests and host integrations plant an entity's inbox rows directly — the same
+// seam cache.value is (the /inbox door is the browser's only other filler),
+// letting a render assert over a known inbox without a server round-trip.
+export let setInbox = (eid: string, rows: Row[]) => {
+  let sig = inboxSignals.get(eid)
+  if (sig) sig.value = rows
+  else inboxSignals.set(eid, signal<Row[]>(rows))
+}
+
+// How many unread items are waiting for this entity — a derived display fact
+// like gated() above, so it belongs here rather than in the view. Reads the
+// SAME server door the Inbox view does, so a number on a tab can never promise
+// what the tab doesn't hold.
+export let unreadFor = (eid: string) => inbox(eid).filter(isUnread).length
+
+// Components an inbox item is made of, or whose edit changes membership or
+// read-state for the browsing reader (client.ts inboxItem/readerAt): the four
+// doors (comment/notice/knock with its `deliver` envelope/mail), the read+hide
+// stamps (opened/archived), and the standing instruction (subscription). A
+// batch naming none of these can't change any inbox, so every live one sleeps.
+let inboxComps = new Set(
+  [
+    'comment',
+    'notice',
+    'knock',
+    'deliver',
+    'mail',
+    'opened',
+    'archived',
+    'subscription',
+  ],
+)
+let inboxDoors = ['comment', 'notice', 'knock', 'mail']
+// Did this batch touch any live inbox? A cheap scan of the batch (never the
+// cache), so the O(1)-per-frame budget holds under a live patch stream. An
+// entity death counts only if the dead row WAS an inbox item — otherwise a
+// deleted item would linger in the badge.
+let inboxDirty = (changes: Change[], graph: Record<string, Comps>) =>
+  changes.some((c) =>
+    inboxComps.has(c.name) ||
+    (c.name == 'entity' && c.comp == null && !!graph[c.eid] &&
+      inboxDoors.some((n) => n in graph[c.eid]!))
+  )
+// Refetch every mounted inbox — used on a relevant live patch and on a
+// wholesale reseed (reconnect), where any inbox may have changed at once.
+let refreshInbox = () => {
+  for (let eid of inboxSignals.keys()) loadInbox(eid)
 }
 
 // A live hand on the entity: its claim's session is awake — a managed
@@ -713,6 +799,11 @@ export let applyLocal = (changes: Change[]) => {
       if (live) live.value = z
     }
   })
+  // A live inbox is a server query, not a cache scan, so it can't ride the
+  // signal republish above — refetch it only when the batch names something
+  // its predicate reads. `graph` is the pre-batch cache, so a deleted item's
+  // row is still there for inboxDirty to recognise.
+  if (inboxSignals.size && inboxDirty(changes, graph)) refreshInbox()
   // The touched keys feed either the boot catch-up write, or the Web-Lock
   // leader's live persist. Followers and 2.1 fallback tabs never persist a
   // live frame.

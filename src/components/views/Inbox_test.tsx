@@ -2,8 +2,14 @@
 import { render } from 'preact'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { cache, ent } from '../../live.ts'
+import { cache, ent, rows, setInbox } from '../../live.ts'
 import { Inbox } from './Inbox.tsx'
+
+// The membership predicate now lives on the server (/inbox), so these
+// rendering tests plant the finished inbox rows directly — the doors addressed
+// here — and assert the view's own job: naming, order, unread count and limit.
+let seedInbox = (eid: string) =>
+  setInbox(eid, rows().filter((r) => r.comps.knock || r.comps.comment))
 
 Deno.test('a knock names and opens its target', () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
@@ -29,6 +35,7 @@ Deno.test('a knock names and opens its target', () => {
       project: { eid: 'project' },
     },
   }
+  seedInbox('person')
   let root = document.querySelector('main')!
   try {
     render(<Inbox e={ent('person')} />, root)
@@ -88,6 +95,7 @@ Deno.test('reading an inbox item keeps the order', () => {
       opened: { eid: 'newer' },
     },
   }
+  seedInbox('person')
   let root = document.querySelector('main')!
   try {
     render(<Inbox e={ent('person')} />, root)
@@ -124,6 +132,7 @@ Deno.test('a limited inbox keeps the whole count and bounds its rows', () => {
       }]),
     ),
   }
+  seedInbox('person')
   let root = document.querySelector('main')!
   try {
     render(<Inbox e={ent('person')} limit={8} />, root)
