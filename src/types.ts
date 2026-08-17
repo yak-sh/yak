@@ -805,6 +805,49 @@ export let comps: Record<string, Record<string, PropType>> = {
   proposed: { at: 'time', by: { eid: 'entity', death: 'keep' } },
 }
 
+// Old spellings that still resolve — one declared table beside `comps`, the
+// compatibility promise in data. A rename ADDS a row here and NEVER removes
+// it: that is the whole guarantee, so a stored value, an old `?v=` URL, or a
+// third-party fragment written a year ago keeps answering. (Zed's extension
+// host keeps every historical binding generation compiled in and dispatches
+// by an embedded version; we get the same strength — "the old name works
+// forever" — for ~1% of the cost, because our vocabulary is a flat name→name
+// map, not a compiled interface, so it is a lookup, not code generation.)
+//
+// A key is namespaced by what it renames: `view:Old` for a renderer view
+// name (registry.ts resolve, bin/sweep-view-names), `comp.col` (or bare
+// `comp` for a whole component) for a graph name whose VALUE is its new
+// `comp.col`/`comp` (db.ts admitted rewrites the write, query.ts route
+// rewrites the filter). schema.ts publishes this table into the boot
+// Vocabulary doc, so the rename history IS the graph's own changelog — the
+// documentation Zed's mechanism lacks.
+//
+// NOT here: a REMOVAL (a breaking change; that is the deprecation-window
+// mechanism, and this table only ever adds), and a bidirectional
+// deprecation WINDOW that keeps BOTH homes live for old READERS
+// (session.{provider,model,effort,persona} ↔ spawn.*, mirrored by apply()'s
+// dualSpawn). Those keep old readers alive; this only redirects old writers
+// and stored data forward.
+export let renames: Record<string, string> = {
+  'view:Show': 'Full',
+  'view:Id': 'Inline',
+  'view:List.Item': 'List.Tile',
+  'view:Task.Row': 'Board.List.Tile',
+  'view:Debug.ListItem': 'Debug.Tile',
+}
+
+// The two doors read two projections of the one table, split by the `view:`
+// namespace so a new row lands at the right door by its key alone: view names
+// for the renderer/sweep, graph names for the write/filter rewrite.
+export let viewRenames: Record<string, string> = Object.fromEntries(
+  Object.entries(renames)
+    .filter(([k]) => k.startsWith('view:'))
+    .map(([k, v]) => [k.slice('view:'.length), v]),
+)
+export let propRenames: Record<string, string> = Object.fromEntries(
+  Object.entries(renames).filter(([k]) => !k.startsWith('view:')),
+)
+
 // The other half of "the vocabulary is one list": what to INDEX, not what a
 // column IS. An index is a component's ACCESS PATTERN, not a field's aspect
 // (M-14942 cohesion), so it rides its own map beside `comps`, never a `PropType`

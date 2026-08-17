@@ -92,6 +92,26 @@ Deno.test('a pending proposal keeps deletion named as deletion', () => {
   cache.value = {}
 })
 
+Deno.test('a renamed view still resolves through the renames table', () => {
+  cache.value = {
+    task: {
+      entity: { eid: 'task', num: 1 },
+      doc: { eid: 'task', title: 'T', body: '' },
+      task: { eid: 'task', status: 'open', priority: 0 },
+    },
+  }
+  let e = ent('task')
+  // Old view names (types.ts renames, `view:` namespace) heal to current
+  // instead of falling to JSON — card.view is live data and old ?v= URLs
+  // linger. The registry reads the ONE table, so this is that door proven: an
+  // old name resolves to exactly what its current name resolves to (proving
+  // the heal fired — without it 'Show' would fall to JSON, not to 'Full').
+  assertEquals(resolve(e, 'Show').view, 'Full')
+  assertEquals(resolve(e, 'Show').view, resolve(e, 'Full').view)
+  assertEquals(resolve(e, 'Task.Row').view, resolve(e, 'Board.List.Tile').view)
+  cache.value = {}
+})
+
 Deno.test('a role owns its lifecycle face, actions, and linked sessions', () => {
   cache.value = {
     role: {

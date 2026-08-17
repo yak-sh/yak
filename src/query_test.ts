@@ -3,6 +3,7 @@ import {
   adopt,
   AGG,
   aggOf,
+  bareRenamesOf,
   complete,
   distinctValues,
   EXISTS,
@@ -728,6 +729,21 @@ Deno.test('noFilter teaches the door a stray predicate belongs to', () => {
     Error,
     'unknown prop: .hovercraft — filters are dot-params',
   )
+})
+
+// The renames table's filter door: a bare prop whose COLUMN NAME changed
+// derives an old→new entry, so a stored board.query keeps answering. Only a
+// column-name change qualifies — a whole-component rename keeps its columns.
+Deno.test('bareRenamesOf: only a changed column name earns a bare redirect', () => {
+  assertEquals(bareRenamesOf({ 'task.persona_eid': 'spawn.persona' }), {
+    persona_eid: 'persona',
+  })
+  // A move that keeps the column name (session→spawn) needs no bare redirect —
+  // the column still routes through the new component in `routes`.
+  assertEquals(bareRenamesOf({ 'session.provider': 'spawn.provider' }), {})
+  // A whole-component rename keeps its columns, so nothing bare to redirect.
+  assertEquals(bareRenamesOf({ old: 'new' }), {})
+  assertEquals(bareRenamesOf({}), {})
 })
 
 // A dependency is an edge in EITHER grammar, so the miss teaches the edge

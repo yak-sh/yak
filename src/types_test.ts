@@ -5,12 +5,35 @@ import {
   deaths,
   friendly,
   nick,
+  propRenames,
+  renames,
   type Session,
   settled,
   stamped,
   standing,
+  viewRenames,
 } from './types.ts'
 import { assertEquals } from '@std/assert'
+
+Deno.test('renames: one table splits into view and prop doors by namespace', () => {
+  // Every row lands in exactly one door, chosen by its `view:` namespace.
+  for (let key of Object.keys(renames)) {
+    let isView = key.startsWith('view:')
+    assertEquals(key.slice('view:'.length) in viewRenames, isView, key)
+    assertEquals(key in propRenames, !isView, key)
+  }
+  assertEquals(
+    Object.keys(viewRenames).length + Object.keys(propRenames).length,
+    Object.keys(renames).length,
+  )
+  // The `view:` prefix is stripped for the renderer door.
+  assertEquals(viewRenames['Show'], 'Full')
+  assertEquals(viewRenames['Task.Row'], 'Board.List.Tile')
+  // A rename never points at itself — that would be a dead row.
+  for (let [from, to] of Object.entries(renames)) {
+    assertEquals(from.replace(/^view:/, '') == to, false, from)
+  }
+})
 
 Deno.test('the current vocabulary carries no representation suffixes', () => {
   for (let [comp, props] of Object.entries({ ...comps, ...stamped })) {

@@ -1,17 +1,12 @@
 #!/usr/bin/env -S deno run --allow-net --allow-env
 // One-time sweep for T-6631: patch stored card.view values to the role
-// vocabulary — the same renames the registry's alias map heals at
-// resolve time (kept inline so the script needs no browser imports).
+// vocabulary — the same view renames the registry's alias map heals at
+// resolve time, read from the ONE declared table (types.ts renames, `view:`
+// namespace) so the sweep can never drift from what resolve() heals.
 // Idempotent — a second run finds nothing. Targets TASKS_HOST (default
 // 127.0.0.1:5173); delete after the live run.
 import { rows, send, snapshot } from '../src/client.ts'
-
-let renames: Record<string, string> = {
-  'Show': 'Full',
-  'List.Item': 'List.Tile',
-  'Task.Row': 'Board.List.Tile',
-  'Debug.ListItem': 'Debug.Tile',
-}
+import { viewRenames as renames } from '../src/types.ts'
 
 let all = rows(await snapshot())
 let stale = all.filter((r) => renames[String(r.comps.card?.view)])

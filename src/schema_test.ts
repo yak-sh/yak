@@ -50,4 +50,7 @@ Deno.test('vocabularyMd: components, death words, effects — all present', () =
   assert(md.includes('- parent requires child'))
   assert(md.includes('open → wip → done → cancelled'))
   assert(md.includes('**session** created, removed — spawns the agent'))
+  // The renames table publishes itself as the vocabulary's own changelog.
+  assert(md.includes('## Renames'))
+  assert(md.includes('`view:Show` → `Full`'))
 })

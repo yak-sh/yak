@@ -1,5 +1,5 @@
 import { type FunctionComponent } from 'preact'
-import { type Ent } from '../types.ts'
+import { type Ent, viewRenames } from '../types.ts'
 
 // The renderer registry MACHINERY — no view imports, so anything (a view
 // module, the TUI, a future plugin) can import matchers and types from
@@ -110,17 +110,13 @@ let best = (e: Ent, pool: Renderer[]) => {
 
 let json = () => registry.find((r) => r.view == 'JSON')!
 
-// Old stored view names → current, consulted at every walk level.
-// card.view is live data and old ?v= URLs linger, so a renamed view must
-// keep resolving instead of falling to JSON — and the frame prefixes its
-// ask (Card.Show), so the heal must apply after a strip too.
-export let alias: Record<string, string> = {
-  'Show': 'Full',
-  'Id': 'Inline',
-  'List.Item': 'List.Tile',
-  'Task.Row': 'Board.List.Tile',
-  'Debug.ListItem': 'Debug.Tile',
-}
+// Old stored view names → current, consulted at every walk level. card.view
+// is live data and old ?v= URLs linger, so a renamed view must keep resolving
+// instead of falling to JSON — and the frame prefixes its ask (Card.Show), so
+// the heal must apply after a strip too. The names live in the ONE renames
+// table (types.ts, `view:` namespace); this is its view projection, so a
+// renamed view and the sweep that migrates stored card.view read one source.
+export let alias = viewRenames
 
 // A dotted view name is container qualifiers left, ROLE rightmost
 // (Board.List.Tile). The walk tries the full name, then strips the

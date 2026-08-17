@@ -22,6 +22,7 @@ import {
   idOf,
   kindOrder,
   lazy,
+  propRenames,
   sessionActive,
   sessionComps,
   settled,
@@ -2346,7 +2347,52 @@ let serverOwned = new Set([
   'exception',
 ])
 
+// Rewrite a change that names a RENAMED component or column to its current
+// home, per the prop projection of types.ts `renames`. A change is ONE
+// component, so a column whose new home is a different component moves the
+// whole change; two columns in one change disagreeing on the new component is
+// an authoring error in the table, refused here rather than silently split.
+// Empty map (today's state — session↔spawn is the bidirectional window, not a
+// rename) is a no-op. Exported so a test drives the mechanism with its own map
+// before the first real rename lands; admitted() binds the live table.
+export let renamed = (
+  change: Change,
+  map: Record<string, string> = propRenames,
+): Change => {
+  if (!Object.keys(map).length) return change
+  let name = map[change.name] ?? change.name
+  let comp = change.comp
+  if (comp) {
+    let out: Record<string, unknown> = {}
+    let hit = false
+    for (let [col, v] of Object.entries(comp)) {
+      let to = map[`${change.name}.${col}`]
+      if (!to) {
+        out[col] = v
+        continue
+      }
+      hit = true
+      let [dc, dcol] = to.includes('.') ? to.split('.') as [string, string] : [
+        name,
+        to,
+      ]
+      if (dc != name) {
+        if (name != change.name) {
+          throw new Error(`rename splits ${change.name} across ${name}, ${dc}`)
+        }
+        name = dc
+      }
+      out[dcol] = v
+    }
+    if (hit) comp = out
+  }
+  return name == change.name && comp == change.comp
+    ? change
+    : { ...change, name, comp }
+}
+
 let admitted = (change: Change): Change | undefined => {
+  change = renamed(change)
   let table = change.name
   let cols = table == 'dependency' ? edgeCols : cmps[table]
   if (!cols) return

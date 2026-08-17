@@ -27,6 +27,7 @@ let {
   open,
   readComp,
   refsOf,
+  renamed,
   resolveId,
   retireMemoryType,
   search,
@@ -671,6 +672,50 @@ Deno.test('a column naming nothing is refused, not silently defaulted', () => {
     'unknown column: task.statuss',
   )
   assertEquals(comp(t, 'doc'), undefined)
+})
+
+// The renames table's write door: a change naming an old component/column is
+// rewritten to its current home before validation, so an old writer or stored
+// batch lands instead of being refused as unknown. Driven with a synthetic map
+// (the live table's prop projection is empty until a real column rename lands).
+Deno.test('renamed: an old comp/column write is rewritten to its new home', () => {
+  // A column that MOVES to another component moves the whole change (the
+  // session→spawn shape), keeping its value.
+  assertEquals(
+    renamed({ eid: 'e', name: 'old', comp: { a: 1, b: 2 } }, {
+      'old.a': 'new.x',
+    }),
+    { eid: 'e', name: 'new', comp: { x: 1, b: 2 } },
+  )
+  // A whole-component rename keeps every column.
+  assertEquals(
+    renamed({ eid: 'e', name: 'old', comp: { a: 1 } }, { old: 'new' }),
+    { eid: 'e', name: 'new', comp: { a: 1 } },
+  )
+  // A bare new column name renames within the same component.
+  assertEquals(
+    renamed({ eid: 'e', name: 'c', comp: { a: 1 } }, { 'c.a': 'z' }),
+    { eid: 'e', name: 'c', comp: { z: 1 } },
+  )
+  // A delete (comp null) rewrites its component name too.
+  assertEquals(
+    renamed({ eid: 'e', name: 'old', comp: null }, { old: 'new' }),
+    { eid: 'e', name: 'new', comp: null },
+  )
+  // The empty table (today) is a strict no-op — same object back.
+  let unchanged = { eid: 'e', name: 'task', comp: { status: 'done' } }
+  assertEquals(renamed(unchanged, {}), unchanged)
+  // Two columns of one change disagreeing on the new component is refused:
+  // a change is one component, so the table author must not split it.
+  assertThrows(
+    () =>
+      renamed({ eid: 'e', name: 'old', comp: { a: 1, b: 2 } }, {
+        'old.a': 'x.p',
+        'old.b': 'y.q',
+      }),
+    Error,
+    'rename splits old',
+  )
 })
 
 // A board is a saved query, so an unparseable one is broken forever and

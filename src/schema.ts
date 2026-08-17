@@ -9,6 +9,7 @@ import {
   type Death,
   edges,
   type PropType,
+  renames,
   stamped,
   statuses,
 } from './types.ts'
@@ -108,6 +109,20 @@ export let vocabularyMd = (effects: EffectDoc[]): string => {
     }
     if (!cols.length) lines.push('- (a tag — the row is the statement)')
     lines.push('')
+  }
+  let renameLines = Object.entries(renames)
+  if (renameLines.length) {
+    lines.push(
+      '## Renames',
+      '',
+      'Old spellings that still resolve — a rename adds a row and never',
+      'removes it, so a stored value or an old link keeps answering. A',
+      '`view:` key renames a renderer view; any other key renames a graph',
+      'name. This IS the changelog for the vocabulary.',
+      '',
+      ...renameLines.map(([from, to]) => `- \`${from}\` → \`${to}\``),
+      '',
+    )
   }
   lines.push(
     '## Edges',

@@ -54,6 +54,7 @@ import {
   comps,
   kindOrder,
   kindWord,
+  propRenames,
   sessionComps,
   sessionFacetNames,
   stamped,
@@ -264,10 +265,29 @@ let sharedRefs = new Set(['actor', 'canvas', 'client', 'scope', 'target'])
 let sharedRef = (prop: string, owners: string[]) =>
   owners.length > 1 && sharedRefs.has(prop) && isRef('', prop)
 
+// Old bare prop → current, so a stored board.query written before a column
+// rename keeps answering. Derived from the ONE renames table (types.ts, prop
+// projection): only a rename that CHANGES the column name matters here — a
+// whole-component rename keeps its columns, which still route through the new
+// component in `routes` above. Empty today (session↔spawn keeps its column
+// names and is the twin window, not a rename). Exported so a test drives the
+// derivation with its own map before the first real column rename lands.
+export let bareRenamesOf = (
+  map: Record<string, string>,
+): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries(map)
+      .filter(([k, v]) => k.includes('.') && v.includes('.'))
+      .map(([k, v]) => [k.split('.')[1], v.split('.')[1]])
+      .filter(([from, to]) => from != to),
+  )
+let bareRenames = bareRenamesOf(propRenames)
+
 // Route a bare prop to its component; ambiguity is an error that names the
 // candidates rather than a guess. Same-named references are one read concept:
 // comp '' makes a filter scan every owner, while writes demand a component.
 export let route = (prop: string): { comp: string; prop: string } => {
+  prop = bareRenames[prop] ?? prop
   let hits = (p: string) =>
     Object.entries(routes)
       .filter(([, cols]) => cols.includes(p))
