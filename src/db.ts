@@ -8,6 +8,7 @@
 // Ids: `eid` is a UUID so ANY side (client included) can mint entities;
 // `num` is the server-minted human number (T-7 in the UI, one global counter).
 import { DatabaseSync, type StatementSync } from './sqlite.ts'
+import { initVector, loadVector } from './vector.ts'
 import { dirname, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
 import { sha } from './sha.ts'
@@ -686,6 +687,19 @@ let schema = `
     vec   blob not null,
     at    text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
+  -- The extension's ANN data is derived from embedding. These triggers are the
+  -- crash fence: any raw-vector write dirties the persisted index in the same
+  -- SQLite statement; vector.ts clears it only after a successful rebuild.
+  create table if not exists embedding_index (
+    id    integer primary key check (id = 1),
+    dirty integer not null
+  );
+  create trigger if not exists embedding_index_ai after insert on embedding
+  begin update embedding_index set dirty = 1 where id = 1; end;
+  create trigger if not exists embedding_index_au after update on embedding
+  begin update embedding_index set dirty = 1 where id = 1; end;
+  create trigger if not exists embedding_index_ad after delete on embedding
+  begin update embedding_index set dirty = 1 where id = 1; end;
   create virtual table if not exists doc_fts using fts5(
     title, body, content='doc', content_rowid='rowid'
   );
@@ -1961,6 +1975,7 @@ export let open = (path = file) => {
   }
   Deno.mkdirSync(dirname(path), { recursive: true })
   let db = new DatabaseSync(path)
+  loadVector(db)
   // Migrations below ALTER tables; a cached statement would strand against an
   // intermediate schema. Compile raw until the schema is final, then restore.
   caching = false
@@ -2328,6 +2343,7 @@ export let open = (path = file) => {
     // the legacy name once — the derived unique index above already holds the
     // (actor,target) uniqueness the drop would otherwise lose.
     dropIdx('subscription_one')
+    initVector(db)
     return db
   } finally {
     // Runtime caches; a throwing migration still restores the flag.

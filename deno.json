@@ -51,7 +51,12 @@
     "zod": "npm:zod@^3.24.0",
     "sucrase": "npm:sucrase@^3.35.0",
     "@std/assert": "jsr:@std/assert@^1.0.0",
-    "@db/sqlite": "jsr:@db/sqlite@0.13.0"
+    "@db/sqlite": "jsr:@db/sqlite@0.13.0",
+    "@sqlite-vector-linux-x86_64": "npm:@sqliteai/sqlite-vector-linux-x86_64@1.0.0",
+    "@sqlite-vector-linux-aarch64": "npm:@sqliteai/sqlite-vector-linux-arm64@1.0.0",
+    "@sqlite-vector-darwin-x86_64": "npm:@sqliteai/sqlite-vector-darwin-x86_64@1.0.0",
+    "@sqlite-vector-darwin-aarch64": "npm:@sqliteai/sqlite-vector-darwin-arm64@1.0.0",
+    "@sqlite-vector-windows-x86_64": "npm:@sqliteai/sqlite-vector-win32-x86_64@1.0.0"
   },
   "compilerOptions": {
     "lib": [

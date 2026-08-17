@@ -10,6 +10,7 @@
 // without the model just has no hints — the embedder dies once, quietly,
 // and every door degrades to silence. apply() never waits on any of this.
 import type { DatabaseSync } from './sqlite.ts'
+import { DIM, refreshVector } from './vector.ts'
 
 export let MODEL = 'Xenova/bge-small-en-v1.5'
 
@@ -136,11 +137,12 @@ export let prune = (db: DatabaseSync) => {
 let put = (db: DatabaseSync, eid: string, text: string, vec: Float32Array) => {
   writes++
   return db.prepare(
-    `insert into embedding (eid, model, hash, vec) values (?, ?, ?, ?)
+    `insert into embedding (eid, model, hash, vec)
+     values (?, ?, ?, vector_as_f32(?, ?))
      on conflict (eid) do update set
        model = excluded.model, hash = excluded.hash, vec = excluded.vec,
        at = strftime('%Y-%m-%dT%H:%M:%fZ','now')`,
-  ).run(eid, MODEL, hash(text), new Uint8Array(vec.buffer))
+  ).run(eid, MODEL, hash(text), new Uint8Array(vec.buffer), DIM)
 }
 
 // The sweep: prune, then embed what's owed, one at a time — each await
@@ -159,6 +161,7 @@ export let embedSweep = async (db: DatabaseSync) => {
       put(db, r.eid, r.text, vec)
       n++
     }
+    refreshVector(db)
     if (n) console.log(`embed sweep: ${n} fresh`)
   } catch (e) {
     console.warn('embed sweep —', e)

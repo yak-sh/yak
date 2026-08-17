@@ -16,6 +16,11 @@
     "npm:@modelcontextprotocol/sdk@^1.12.0": "1.29.0_zod@3.25.76",
     "npm:@preact/signals-core@^1.14.0": "1.14.4",
     "npm:@preact/signals@^2.9.0": "2.9.4_preact@10.29.7",
+    "npm:@sqliteai/sqlite-vector-darwin-arm64@1.0.0": "1.0.0",
+    "npm:@sqliteai/sqlite-vector-darwin-x86_64@1.0.0": "1.0.0",
+    "npm:@sqliteai/sqlite-vector-linux-arm64@1.0.0": "1.0.0",
+    "npm:@sqliteai/sqlite-vector-linux-x86_64@1.0.0": "1.0.0",
+    "npm:@sqliteai/sqlite-vector-win32-x86_64@1.0.0": "1.0.0",
     "npm:fake-indexeddb@6": "6.2.5",
     "npm:linkedom@~0.18.12": "0.18.13",
     "npm:lucide-preact@^1.31.0": "1.31.0_preact@10.29.7",
@@ -339,6 +344,31 @@
     },
     "@protobufjs/utf8@1.1.2": {
       "integrity": "sha512-b1UQwcEZ4yCnMCD8DAL1VlbvBJE9/IX4FTIp7BG1xYpf29SLazLSrqUkj4w7Y5y7cCVP6E5tcqqcI0xemPkHug=="
+    },
+    "@sqliteai/sqlite-vector-darwin-arm64@1.0.0": {
+      "integrity": "sha512-Z7tpJrOGexZInUbwWvB1a1/7seZQWzR25TvPk0JWeUQCSHW9auMt6qX/rm37gONIgzNSveqXqbrb9Y+a2cgYDQ==",
+      "os": ["darwin"],
+      "cpu": ["arm64"]
+    },
+    "@sqliteai/sqlite-vector-darwin-x86_64@1.0.0": {
+      "integrity": "sha512-ugm2x8D0hR9mwj26dYyLbEXnUo6IwgbCfiv2kyaB1NQCevSzhDYFxXdIaiNIOO2rSTYBSyf6096/88NOeFiStA==",
+      "os": ["darwin"],
+      "cpu": ["x64", "ia32"]
+    },
+    "@sqliteai/sqlite-vector-linux-arm64@1.0.0": {
+      "integrity": "sha512-avROgMf1Vn06Dkz7u+1t9s/0L/jgTmZ0gn9WfNlOMugPbmHybMWMIQ2wZm8+LQobrdl5uF0hcGdhpMrWVaxxlQ==",
+      "os": ["linux"],
+      "cpu": ["arm64"]
+    },
+    "@sqliteai/sqlite-vector-linux-x86_64@1.0.0": {
+      "integrity": "sha512-BnH1+NZ30qFqIST0WXAbX6rJz5PiiT+W8rBukFpIr5Wpc3i6SLWV5ojBihY30S1DTyQ7BUDD+RE61IPR7wcb+A==",
+      "os": ["linux"],
+      "cpu": ["x64", "ia32"]
+    },
+    "@sqliteai/sqlite-vector-win32-x86_64@1.0.0": {
+      "integrity": "sha512-fus/uA1+Ta/rnmUGzlrJKopR/gN3gfodZwwpTtRA/CYPk1G/M0Gfj+fZwLTwQaIwZxGbe3g2WRRNn0Q9yQmijg==",
+      "os": ["win32"],
+      "cpu": ["x64", "ia32"]
     },
     "@types/node@26.1.1": {
       "integrity": "sha512-nxAkRSVkN1Y0JC1W8ky/fTfkGsMmcrRsbx+3XoZE+rMOX71kLYTV7fLXpqud1GpbpP5TuffXFqfX7fH2GgZREw==",
@@ -1250,6 +1280,11 @@
       "npm:@modelcontextprotocol/sdk@^1.12.0",
       "npm:@preact/signals-core@^1.14.0",
       "npm:@preact/signals@^2.9.0",
+      "npm:@sqliteai/sqlite-vector-darwin-arm64@1.0.0",
+      "npm:@sqliteai/sqlite-vector-darwin-x86_64@1.0.0",
+      "npm:@sqliteai/sqlite-vector-linux-arm64@1.0.0",
+      "npm:@sqliteai/sqlite-vector-linux-x86_64@1.0.0",
+      "npm:@sqliteai/sqlite-vector-win32-x86_64@1.0.0",
       "npm:linkedom@~0.18.12",
       "npm:lucide-preact@^1.31.0",
       "npm:preact@^10.29.1",

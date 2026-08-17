@@ -424,11 +424,13 @@ let outsideVocabulary: Record<string, string> = {
   journal_touch: "the journal's seek index (jrow, eid): log data, never synced",
   tool_call: 'telemetry: no eid, no components — read at /telemetry',
   embedding: 'semantic vectors: rebuilt from doc on the sweep, never synced',
+  embedding_index: 'dirty state for the derived vector index, never synced',
 }
-// FTS5 generates a family of shadow tables per index (_data/_idx/_config/
-// _docsize); they refill from the doc sync triggers and hold no vocabulary.
-let ftsShadow = (t: string) =>
-  t.startsWith('doc_fts') || t.startsWith('doc_gram')
+// FTS5 and SQLite Vector generate physical tables for their derived indexes;
+// they refill from source rows and hold no vocabulary.
+let derivedShadow = (t: string) =>
+  t.startsWith('doc_fts') || t.startsWith('doc_gram') ||
+  t.startsWith('vector0_embedding') || t == '_sqliteai_vector'
 
 // The universal invariant CLAUDE.md names: every stored column is declared in
 // comps (wire-writable) or stamped (server-owned read), because snapshot()'s
@@ -444,7 +446,7 @@ Deno.test('every stored column is declared in comps or stamped', () => {
   ).all() as { name: string }[]).map((r) => r.name)
   let undeclared: string[] = []
   for (let t of tables) {
-    if (outsideVocabulary[t] || ftsShadow(t)) continue
+    if (outsideVocabulary[t] || derivedShadow(t)) continue
     // eid is the universal join key, present on every component table and
     // never in comps/stamped. A table nobody declared and nobody exempted
     // lands here with allow = {eid} alone, so its columns show as drift too —

@@ -64,13 +64,14 @@ sq snap/tasks.db "pragma integrity_check;" | grep -qx ok || {
 }
 
 # Derived tables carry no information the graph cannot rebuild: `embedding`
-# refills on the embed sweep, and doc_fts*/doc_gram* are external-content FTS5
+# and its vector0 ANN data refill on the embed sweep, and doc_fts*/doc_gram* are
+# external-content FTS5
 # indexes healed by the integrity check in db.ts open(). Their SCHEMA still
 # ships (the .schema dump below is complete) so a restored db has the tables to
 # fill. doc_gram is the biggest of the three by far — a trigram index runs ~4x
 # the size of the text it indexes — so dumping it would be the largest thing in
 # history and the least worth carrying.
-derived="name = 'embedding' or name glob 'doc_fts*' or name glob 'doc_gram*'"
+derived="name glob 'embedding*' or name glob 'vector0_embedding*' or name = '_sqliteai_vector' or name glob 'doc_fts*' or name glob 'doc_gram*'"
 
 # Data as INSERT statements, no DDL — `.mode insert` names each table, so the
 # files concatenate onto the schema in any order.
@@ -107,7 +108,8 @@ dump_data() {
 sqlite3 -batch -init /dev/null snap/tasks.db \
   "select sql || ';' from sqlite_master
    where sql is not null and not (type = 'table'
-     and (name glob 'doc_fts_*' or name glob 'doc_gram_*'))
+     and (name glob 'doc_fts_*' or name glob 'doc_gram_*'
+       or name glob 'vector0_embedding*' or name = '_sqliteai_vector'))
    order by rowid" > snap/schema.sql.tmp
 dump_data "name = 'journal'" > snap/journal.sql.tmp
 dump_data "name != 'journal'" > snap/graph.sql.tmp
