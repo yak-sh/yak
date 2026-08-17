@@ -21,6 +21,7 @@ import { cardCommands, run } from '../commands.ts'
 import { pasted } from '../paste.ts'
 import { block } from './ui.tsx'
 import { resolve } from './registry.ts'
+import { hits } from './hits.ts'
 import { Card } from './Card.tsx'
 import { actionsAt } from './nav.tsx'
 
@@ -234,16 +235,26 @@ export let Canvas = ({ eid }: { eid: string }) => {
     // bind the client to them on sight. Any other census (none, many)
     // leaves the choice to the status row: identity is an assertion, and
     // with candidates the user does the asserting.
+    //
+    // Ask the SERVER for the census (hits.ts), never the loaded cache: a
+    // partial cache can hold exactly one person while the graph holds many,
+    // and binding this browser to the wrong identity garbles its bylines —
+    // correctness, not just completeness. limit 2 is all "exactly one" needs.
+    // Fire-and-forget, aborted on unmount; the actor re-check guards a bind
+    // that raced the status row's own assertion.
+    let bind = new AbortController()
     if (!cache.value[id]?.client?.actor) {
-      let people = Object.keys(cache.value)
-        .filter((k) => cache.value[k].person)
-      if (people.length == 1) {
-        mutate({
-          eid: id,
-          name: 'client',
-          comp: { eid: id, actor: people[0] },
+      hits('.person!', 2, bind.signal)
+        .then((people) => {
+          if (people.length == 1 && !cache.value[id]?.client?.actor) {
+            mutate({
+              eid: id,
+              name: 'client',
+              comp: { eid: id, actor: people[0].eid },
+            })
+          }
         })
-      }
+        .catch(() => {})
     }
 
     // Another tab moving this camera moves ours too — but only the MOVE
@@ -318,6 +329,7 @@ export let Canvas = ({ eid }: { eid: string }) => {
       unlatch()
       flush() // a navigation inside the app must not eat the last gesture
       unhear()
+      bind.abort()
       removeEventListener('resize', resize)
       removeEventListener('keydown', key)
       removeEventListener('paste', paste)

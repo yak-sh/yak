@@ -2,12 +2,13 @@ import { type ComponentChildren, type JSX } from 'preact'
 import { useContext, useRef, useState } from 'preact/hooks'
 import { formatProp, propAt } from '../props.ts'
 import { idOf, type PropType, statuses } from '../types.ts'
-import { cache, census, domains, ent, mutate, problem } from '../live.ts'
+import { cache, domains, ent, mutate, problem } from '../live.ts'
 import { ago, block, focus, pretty, Surround } from './ui.tsx'
 import { Dot } from './Dot.tsx'
 import { Edit } from './Edit.tsx'
 import { Overlay } from './overlay.tsx'
 import { useComplete } from './Complete.tsx'
+import { pickLine, useHits } from './hits.ts'
 import * as suggest from './suggest.ts'
 
 // The PROP registry — the renderer registry's sibling. The typed
@@ -212,16 +213,14 @@ let WellEdit = ({ ...p }: EditorProps) => {
   )
 }
 
-// {eid: target}: a lazy search over the cache — entities carrying the
-// target component ('' = anything with a doc), filtered by what's typed,
-// newest first. A 'none' row clears the association.
+// {eid: target}: a server search (hits.ts) over entities carrying the target
+// component ('' = anything with a doc), narrowed by what's typed — so the
+// picker offers the whole graph, not just the slice the cache holds. A 'none'
+// row clears the association.
 let EidEdit = ({ ...p }: EditorProps) => {
   let t = p.t as { eid: string }
   let [q, setQ] = useState('')
-  let hits = candidates(t.eid)
-    .filter((e) => suggest.match(q, e))
-    .sort(suggest.order(q))
-    .slice(0, 8)
+  let hits = useHits(pickLine(q, t.eid))
   return (
     <Pop mod='list'>
       <Find
@@ -243,13 +242,6 @@ let EidEdit = ({ ...p }: EditorProps) => {
     </Pop>
   )
 }
-let candidates = (target: string) =>
-  census.value
-    .map((eid) => ent(eid))
-    .filter((e) =>
-      target ? !!(e as unknown as Record<string, unknown>)[target] : !!e.doc
-    )
-
 // ---- the stock faces ----
 
 // Most types show as their own text; empty shows nothing, so Prop can

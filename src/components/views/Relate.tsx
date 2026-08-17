@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { type Ent, uuid } from '../../types.ts'
-import { cache, ent, mutate, sieve } from '../../live.ts'
+import { mutate } from '../../live.ts'
 import { spec, taskChanges } from '../../client.ts'
 import { peek, useDraft } from '../drafts.ts'
 import { block } from '../ui.tsx'
 import { Overlay } from '../overlay.tsx'
+import { pickLine, useHits } from '../hits.ts'
 import * as suggest from '../suggest.ts'
 
 let Frame = block('span', 'Relate', {
@@ -62,17 +63,12 @@ export let Relate = ({ e }: { e: Ent }) => {
     ...e.refs.map((r) => r.child),
     ...e.kids.map((k) => k.eid),
   ])
-  let query = (_eid: string) => false
-  try {
-    query = sieve(q)
-  } catch { /* a half-typed filter simply has no query matches yet */ }
-  let hits = !verb ? [] : Object.keys(cache.value)
-    .map(ent)
-    .filter((t) => t.doc && !taken.has(t.eid))
-    // Human ids are labels, while terms and dot-filters are the shared query
-    // language. Either vocabulary can name the entity being linked.
-    .filter((t) => suggest.match(q, t) || query(t.eid))
-    .sort(suggest.order(q))
+  // Candidates come from the server (hits.ts): FTS over every doc plus
+  // id-addressing, so a typed id, title word, or dot-filter names an entity
+  // even when the cache holds only part of the graph. An unopened verb (no
+  // line) searches nothing; already-linked targets and the host drop out.
+  let hits = useHits(verb ? pickLine(q) : '')
+    .filter((h) => !taken.has(h.eid))
     .slice(0, 6)
   let fresh = q.trim() ? spec(q).title : ''
 

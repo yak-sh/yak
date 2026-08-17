@@ -1,25 +1,17 @@
 import { assertEquals } from '@std/assert'
-import { type Ent } from '../types.ts'
+import { type Hit } from '../types.ts'
 import * as suggest from './suggest.ts'
 
-let ent = (num: number, title: string): Ent => ({
+let hit = (num: number, title: string): Hit => ({
   eid: String(num),
   num,
   kind: 'task',
-  doc: { eid: String(num), title, body: '' },
-  refs: [],
-  kids: [],
+  title,
+  snip: '',
+  open: String(num),
 })
 
-Deno.test('entity suggestions show, find, and prefer human ids', () => {
-  let old = ent(123, 'Older')
-  let fresh = ent(456, 'Mentions T-123')
-  assertEquals(suggest.label(old), 'T-123 — Older')
-  assertEquals(suggest.match('t-123', old), true)
-  assertEquals(suggest.match('older', old), true)
-  assertEquals(
-    [old, fresh].filter((e) => suggest.match('T-123', e))
-      .sort(suggest.order('T-123')),
-    [old, fresh],
-  )
+Deno.test('entity suggestions label a hit by human id and title', () => {
+  assertEquals(suggest.label(hit(123, 'Older')), 'T-123 — Older')
+  assertEquals(suggest.label(hit(456, '')), 'T-456 — task')
 })

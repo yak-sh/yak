@@ -16,6 +16,7 @@ import {
   inSection,
 } from './admin.ts'
 import { FilterInput, passOf } from './Filter.tsx'
+import { pickLine, useHits } from './hits.ts'
 import { Prop } from './editors.tsx'
 import { Id } from './views/Inline.tsx'
 import { Entity } from './Entity.tsx'
@@ -207,6 +208,33 @@ let Index = (
 
 // ---- the new form: fields from the vocabulary, controls by type ----
 
+// The {eid} control's options come from the server (hits.ts): entities wearing
+// the referenced component (target; '' = any documented entity), most-recent
+// first — so the whole graph is offered, not the slice the cache holds. Its own
+// component because it holds a hook.
+let EidSelect = (
+  { target, value, set }: {
+    target: string
+    value: unknown
+    set: (v: unknown) => void
+  },
+) => {
+  let opts = useHits(pickLine('', target), 50)
+  return (
+    <select
+      value={String(value ?? '')}
+      onChange={(e: Event) => set((e.currentTarget as HTMLSelectElement).value)}
+    >
+      <option value=''>none</option>
+      {opts.map((h) => (
+        <option key={h.eid} value={h.eid}>
+          {idOf(h)} {h.title || h.kind}
+        </option>
+      ))}
+    </select>
+  )
+}
+
 // The editor registry's controls write in place on an existing entity;
 // a not-yet-minted one needs local state first, so the form derives from
 // the same PropType detection but commits once, as one batch.
@@ -229,26 +257,7 @@ let Control = (
     )
   }
   if (typeof t == 'object' && 'eid' in t) {
-    let target = t.eid
-    let opts = rows()
-      .filter((r) => target ? r.comps[target] : r.comps.doc)
-      .map((r) => ent(r.eid))
-      .sort((a, b) => b.num - a.num)
-      .slice(0, 50)
-    return (
-      <select
-        value={String(value ?? '')}
-        onChange={(e: Event) =>
-          set((e.currentTarget as HTMLSelectElement).value)}
-      >
-        <option value=''>none</option>
-        {opts.map((e) => (
-          <option key={e.eid} value={e.eid}>
-            {idOf(e)} {e.doc?.title ?? e.kind}
-          </option>
-        ))}
-      </select>
-    )
+    return <EidSelect target={t.eid} value={value} set={set} />
   }
   if (t == 'bool') {
     return (

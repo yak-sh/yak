@@ -31,6 +31,7 @@ import { Tray } from './Tray.tsx'
 import { block } from './ui.tsx'
 import { Id } from './views/Inline.tsx'
 import { title } from './title.tsx'
+import { pickLine, useHits } from './hits.ts'
 import { spawnHit } from './Canvas.tsx'
 import { useComplete } from './Complete.tsx'
 
@@ -264,9 +265,13 @@ let exec = async (line: string) => {
 // quiet.
 let WhoAmI = () => {
   let me = ent(clientId())
-  if (!me.client || me.client.actor) return null
-  let people = rows().filter((r) => r.comps.person)
-  if (people.length < 2) return null
+  // Ask only when this browser is bound to no one yet — and ask the SERVER
+  // (hits.ts) for the people, so a partial cache can't hide candidates or
+  // under-count them into a false "no choice". The empty line while already
+  // bound skips the round trip; the hook still runs (its rule) every render.
+  let asking = !!me.client && !me.client.actor
+  let people = useHits(asking ? pickLine('', 'person') : '', 50)
+  if (!asking || people.length < 2) return null
   return (
     <You>
       you are {people.map((p) => (
@@ -278,7 +283,7 @@ let WhoAmI = () => {
               name: 'client',
               comp: { actor: p.eid },
             })}
-          {...title(String(p.comps.doc?.title ?? '') || idOf(p))}
+          {...title(p.title || idOf(p))}
         />
       ))}
       ?
