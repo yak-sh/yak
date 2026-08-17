@@ -1732,7 +1732,12 @@ export let spawned =
     if (row.role && !role) {
       return fail(`no such role: ${human(db, String(row.role))}`)
     }
-    let project = task?.project ?? role?.scope
+    // A unified operator carries its `role` comp on the PROJECT itself, so an
+    // absent scope means the role's own entity — the project — is the workspace
+    // (D-19459). Mirrors config()'s scope-defaults-to-self so the launch finds
+    // the project's repo/checkout. A standalone role sets scope and is untouched.
+    let project = task?.project ?? role?.scope ??
+      (row.role ? String(row.role) : undefined)
     let nativeRun = !!native && graphCodex(String(row.spawn_provider))
     if (!task && !role && !nativeRun) {
       return fail('a taskless chat requires a graph-native provider')

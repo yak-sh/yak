@@ -543,20 +543,24 @@ let personaFor = (eid: string): string => {
 }
 
 let config = (eid: string): RoleConfig => {
+  // scope defaults to the role's OWN eid: a `role` comp on a project entity IS
+  // that project's operator role (actor = role = project, one entity — D-19459).
+  // A standalone role entity sets scope explicitly and is untouched. The joins
+  // resolve against the defaulted scope, so a project carrying role + spawn +
+  // repo comps configs off itself with no scope column at all.
   let row = db.prepare(`
     select r.*, d.title, d.body, p.provider, p.model, p.effort,
            p.persona, repo.path, repo.base_branch,
            scope.title as venture_title, venture.color as venture_color
     from role r
     left join doc d on d.eid = r.eid
-    left join doc scope on scope.eid = r.scope
-    left join project venture on venture.eid = r.scope
+    left join doc scope on scope.eid = coalesce(r.scope, r.eid)
+    left join project venture on venture.eid = coalesce(r.scope, r.eid)
     left join spawn p on p.eid = r.eid
-    left join repo on repo.eid = coalesce(r.checkout, r.scope)
+    left join repo on repo.eid = coalesce(r.checkout, r.scope, r.eid)
     where r.eid = ?
   `).get(eid) as DbRow | undefined
   if (!row) throw new Error('role no longer exists')
-  if (!row.scope) throw new Error('role has no scope')
   if (!row.path) throw new Error("the role's checkout has no repo")
   try {
     if (!Deno.statSync(String(row.path)).isDirectory) {
@@ -576,8 +580,8 @@ let config = (eid: string): RoleConfig => {
     eid,
     state: String(row.state),
     surface: String(row.surface),
-    scope: String(row.scope),
-    checkout: String(row.checkout ?? row.scope),
+    scope: String(row.scope ?? eid),
+    checkout: String(row.checkout ?? row.scope ?? eid),
     schedule: String(row.schedule ?? '') || undefined,
     wakePolicy: String(row.wake_policy ?? 'always'),
     wakeTarget: String(row.wake_target ?? '') || undefined,

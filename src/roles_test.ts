@@ -151,6 +151,30 @@ let seed = (
   return { project, role }
 }
 
+// A UNIFIED operator (D-19459): one project entity IS its own role — role +
+// spawn + repo comps sit ON the project, with NO scope column. config() must
+// default scope to the entity itself, so actor = role = project = one eid.
+let seedUnified = (provider = 'fake') => {
+  let project = uid()
+  apply(db, [
+    { eid: project, name: 'doc', comp: { title: 'Task Graph', body: '' } },
+    { eid: project, name: 'project', comp: {} },
+    { eid: project, name: 'repo', comp: { path: dir, base_branch: 'main' } },
+    // no scope: the role attaches to its own eid
+    {
+      eid: project,
+      name: 'role',
+      comp: { state: 'running', surface: 'managed' },
+    },
+    {
+      eid: project,
+      name: 'spawn',
+      comp: { provider, model: 'fake-fast' },
+    },
+  ])
+  return { project }
+}
+
 // Managed launches FOR one role: startManaged mints a session carrying role,
 // so counting those rows isolates one role's spawns from the shared db.
 let mspawns = (role: string) =>
@@ -464,6 +488,126 @@ Deno.test('managed role mints one operator session and stops through the graph',
     'select target from stop_request order by rowid desc limit 1',
   ).get()
   assertEquals(stop, { target: runEid })
+})
+
+Deno.test('a role comp on a project is its own operator: scope defaults to self, actor = the project', async () => {
+  commands = []
+  sessions.clear()
+  let { project } = seedUnified()
+  // The reconciler enumerates by the role COMPONENT (select eid from role), so
+  // a role comp on a project eid is picked up with no enumeration change.
+  await rolesSweep(cast, deps)
+  await rolesSweep(cast, deps)
+  let runs = db.prepare(
+    'select * from session where role = ?',
+  ).all(project) as Record<string, unknown>[]
+  // config() succeeded (no "role has no scope" throw) and startManaged minted
+  // exactly one operator whose actor is the project itself — one entity.
+  assertEquals(runs.length, 1)
+  assertEquals(runs[0].operator, 1)
+  assertEquals(runs[0].role, project)
+  assertEquals(runs[0].actor, project)
+})
+
+// Explicit scope on a standalone role entity is still honored unchanged: the
+// managed test above (actor == the separate project) is that escape hatch.
+
+// The migration path for unifying a live operator (P-19 + standalone R-14210 →
+// P-19 alone), proven REVERSIBLE here so the operator can run it deliberately.
+//
+// Two invariants shape it:
+//   - Retire = strip the standalone role's `role`+`spawn` comps, NEVER tombstone
+//     the entity: a tombstoned eid can't be resurrected, and the standalone
+//     doc/comments/history must survive so the flip can be reversed.
+//   - `session.role → role` is a referential guard (db.ts): a role's comps
+//     cannot be stripped while a live session still points at it. So each
+//     direction STOPS the operator session first (the D-19459 `task role cycle`
+//     gesture), then moves the comps. The operator runs these as graph_apply
+//     batches; this task does not touch the live db.
+let enumerated = () =>
+  (db.prepare('select eid from role order by eid').all() as { eid: string }[])
+    .map((r) => r.eid)
+let stop = (role: string) => {
+  for (
+    let s of db.prepare('select eid from session where role = ?').all(role) as {
+      eid: string
+    }[]
+  ) apply(db, [{ eid: s.eid, name: 'entity', comp: null }])
+}
+
+Deno.test('unify migration is reversible: comps move onto the project and back, entity never tombstoned', async () => {
+  commands = []
+  sessions.clear()
+  let { project, role } = seed('managed')
+  await rolesSweep(cast, deps) // the standalone role is the live operator
+  assert(enumerated().includes(role))
+  assert(!enumerated().includes(project))
+  assertEquals(
+    (db.prepare('select count(*) as n from session where role = ?').get(
+      role,
+    ) as { n: number }).n,
+    1,
+  )
+
+  // FORWARD: stop the operator session, then move role+spawn onto the project
+  // (scope OMITTED → defaults to self) and strip the standalone. Its entity and
+  // doc stay put — nothing is tombstoned.
+  stop(role)
+  apply(db, [
+    {
+      eid: project,
+      name: 'role',
+      comp: { state: 'running', surface: 'managed', wake_policy: 'always' },
+    },
+    {
+      eid: project,
+      name: 'spawn',
+      comp: { provider: 'fake', model: 'fake-fast' },
+    },
+    { eid: role, name: 'role', comp: null },
+    { eid: role, name: 'spawn', comp: null },
+  ])
+  assert(enumerated().includes(project))
+  assert(!enumerated().includes(role)) // no longer a role, but NOT tombstoned
+  assert(db.prepare('select eid from doc where eid = ?').get(role)) // doc lives
+  await rolesSweep(cast, deps)
+  await rolesSweep(cast, deps)
+  let unified = db.prepare('select actor from session where role = ?')
+    .all(project) as { actor: string }[]
+  assertEquals(unified.length, 1)
+  assertEquals(unified[0].actor, project) // actor = role = project, one entity
+
+  // REVERSE: stop the unified operator, restore the standalone (scope back to
+  // the project), strip the project. The reversal is exact.
+  stop(project)
+  apply(db, [
+    {
+      eid: role,
+      name: 'role',
+      comp: {
+        state: 'running',
+        surface: 'managed',
+        scope: project,
+        wake_policy: 'always',
+      },
+    },
+    {
+      eid: role,
+      name: 'spawn',
+      comp: { provider: 'fake', model: 'fake-fast' },
+    },
+    { eid: project, name: 'role', comp: null },
+    { eid: project, name: 'spawn', comp: null },
+  ])
+  assert(enumerated().includes(role))
+  assert(!enumerated().includes(project))
+  await rolesSweep(cast, deps)
+  assertEquals(
+    (db.prepare('select actor from session where role = ?').get(role) as {
+      actor: string
+    }).actor,
+    project, // standalone operator restored, actor = its explicit scope again
+  )
 })
 
 Deno.test('deleting a managed role keeps history and requests a stop', async () => {

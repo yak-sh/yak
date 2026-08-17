@@ -890,6 +890,46 @@ slow('both Codex rollback names run through process JSONL', async () => {
 })
 
 slow(
+  'a unified operator (role comp on the project) launches in its own repo, actor = itself',
+  async () => {
+    // The role comp sits ON the project with NO scope — the project IS its own
+    // operator (D-19459). The launch must resolve the workspace to the project's
+    // own repo (scope defaults to self) and stamp actor = the project entity.
+    let project = uid(), eid = uid(), id = uid()
+    let done = write([
+      { eid: project, name: 'doc', comp: { title: 'Task Graph', body: '' } },
+      { eid: project, name: 'project', comp: {} },
+      {
+        eid: project,
+        name: 'repo',
+        comp: { path: scratch, base_branch: 'main' },
+      },
+      {
+        eid: project,
+        name: 'role',
+        comp: { state: 'running', surface: 'managed' },
+      },
+      {
+        eid,
+        name: 'session',
+        comp: {
+          id,
+          provider: 'fake',
+          model: 'fake-fast',
+          role: project,
+          operator: 1,
+        },
+      },
+    ])
+    await done
+    assertEquals(row(eid)?.status, 'completed', JSON.stringify(row(eid)))
+    assertEquals(row(eid)?.actor, project) // actor = role = project, one entity
+    assertEquals(row(eid)?.cwd != null, true) // launched with a worktree
+    assertEquals(failure(eid), undefined)
+  },
+)
+
+slow(
   'a managed role runs in its project and resumes content-free',
   async () => {
     let project = uid(), role = uid(), eid = uid(), id = uid()
