@@ -8,7 +8,9 @@ import {
   ent,
   findEid,
   peek,
+  resolvingId,
   rootCanvas,
+  serverEid,
   trail,
 } from '../live.ts'
 import { type Action, actionsFor, resolve } from './registry.ts'
@@ -76,17 +78,33 @@ export let openAt = (eid: string, ev: MouseEvent) => {
 // order; undefined when unloaded, dead, or an ambiguous prefix. The slug
 // fallback is what lets a URL name an entity by handle (/home), matching the
 // CLI and MCP id doors.
+// Cache misses fall to serverEid — the server-resolve sidecar (live.ts) —
+// so a token naming a live-but-unloaded entity still navigates once the boot
+// flip (T-18059) serves a partial working set. The fallback is async: it
+// returns undefined the first miss and the real eid once /resolve lands (the
+// caller re-renders on resolveGen). A LOCAL ambiguity still refuses outright.
 export let eidOf = (id: string) => {
   let eids = census.value
   let m = id.match(/^[A-Za-z]+-(\d+)$/) ?? id.match(/^(\d+)$/)
-  if (m) return eids.find((eid) => cache.peek()[eid]?.entity?.num == +m![1])
+  if (m) {
+    return eids.find((eid) => cache.peek()[eid]?.entity?.num == +m![1]) ??
+      serverEid(id)
+  }
   if (eids.includes(id)) return id // a full eid, verbatim
   if (SHORT.test(id)) {
     let hits = eids.filter((eid) => eid.startsWith(id.toLowerCase()))
-    if (hits.length > 1) return undefined // ambiguous → no navigation
+    if (hits.length > 1) return undefined // ambiguous locally → no navigation
     if (hits.length == 1) return hits[0]
   }
-  return findEid(id) // an alias slug — resolves through every handle
+  // an alias slug through every cached handle, then the server
+  return findEid(id) ?? serverEid(id)
+}
+
+// Whether the route names an id the server is still resolving — the App shows
+// a resolving state instead of a premature Lost while /resolve is in flight.
+export let screenResolving = (at = route.value) => {
+  let id = decodeURIComponent(new URL(at, 'http://x').pathname.slice(1))
+  return !!id && resolvingId(id)
 }
 
 // The plain-click half of an in-app anchor: modifiers and middle-click keep

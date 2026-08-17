@@ -407,6 +407,7 @@ export let resetSignals = () =>
       found.value = ix.byChild.get(eid) ?? noRelations
     }
     resetQueries()
+    clearResolved() // a reseed may now hold what the server-resolve sidecar named
     refreshJobs(touched)
     refreshFacets(touched)
     // A wholesale reseed (reconnect) is any-inbox-may-have-changed: refetch
@@ -1567,6 +1568,110 @@ export let findEid = (id: string): string | undefined => {
     if (hits?.size) return // ambiguous
   }
   return aliasEids.get(id)
+}
+
+// The server id-resolve fallback (T-18102). Once the boot flip (T-18059)
+// serves a WORKING SET, the cache is partial: a token naming a live-but-
+// unloaded entity misses the vocabulary above, and navigation or a crumb
+// would silently 404. This sidecar is the miss path — it asks the server's
+// /resolve door (the same resolveId every read door uses) for the eid and the
+// two immutable facts a link or crumb needs: its num and kind. NAMING-ONLY,
+// never content — so nothing here reintroduces the content staleness a whole-
+// cache seed carried (jeff C-3528); content still rides subscriptions.
+//
+// The reads (serverEid/serverName) stay SYNC and O(1): they answer from this
+// sidecar and, on a first miss, KICK an async fetch and return "not yet". A
+// render therefore never blocks and a navigation never hangs on the wire —
+// resolveGen wakes the caller when an answer lands. A miss is BOUNDED: a slow
+// server is aborted after RESOLVE_MS, and a failure cools for COOLDOWN_MS so a
+// dead server can't drive a render→kick→fail retry storm, then heals on the
+// next render (or a reconnect, which clears the sidecar). null means the
+// server said "no such entity" — an honest Lost, not a pending spinner.
+type Named = { eid: string; num: number; kind: string }
+let named = new Map<string, Named | null>() // token OR eid -> naming (null = gone)
+let resolvingIds = new Map<string, Promise<Named | null>>() // token -> in flight
+let resolveFailed = new Map<string, number>() // token -> when its resolve failed
+export let resolveGen = signal(0) // bumped when a resolve settles, to re-render
+let RESOLVE_MS = 5000
+let COOLDOWN_MS = 3000
+
+let kickResolve = (token: string): Promise<Named | null> => {
+  let found = resolvingIds.get(token)
+  if (found) return found
+  let ctrl = new AbortController()
+  let timer = setTimeout(() => ctrl.abort(), RESOLVE_MS)
+  let settle = (n: Named | null) => {
+    clearTimeout(timer)
+    resolvingIds.delete(token)
+    resolveFailed.delete(token)
+    named.set(token, n)
+    if (n) named.set(n.eid, n) // resolvable by eid too, for the reverse read
+    resolveGen.value++
+    return n
+  }
+  let p = fetch(`${base()}/resolve?id=${encodeURIComponent(token)}`, {
+    signal: ctrl.signal,
+  })
+    .then(async (r) => {
+      if (r.status == 404) return settle(null) // genuine: no such entity
+      if (!r.ok) throw new Error(await r.text())
+      return settle((await r.json()) as Named)
+    })
+    // A slow or dead server is not "no such entity": don't poison the token —
+    // cool it so a later render (or a reconnect) retries, and say what failed.
+    .catch(() => {
+      clearTimeout(timer)
+      resolvingIds.delete(token)
+      resolveFailed.set(token, Date.now())
+      resolveGen.value++
+      return null
+    })
+  resolvingIds.set(token, p)
+  return p
+}
+
+// The sync read: a token's naming if a prior /resolve landed it, null if the
+// server said it's gone, undefined while unknown or in flight — and a first
+// miss (never asked, not cooling) KICKS the fetch. Reading resolveGen keeps
+// the caller live to the landing.
+let nameFor = (token: string): Named | null | undefined => {
+  resolveGen.value // subscribe: a landing re-runs the reader
+  if (named.has(token)) return named.get(token)!
+  if (resolvingIds.has(token)) return undefined // in flight
+  let failed = resolveFailed.get(token)
+  if (failed && Date.now() - failed < COOLDOWN_MS) return undefined // cooling
+  kickResolve(token)
+  return undefined
+}
+
+// Forward: a token's eid via the server, or undefined while unknown/gone. The
+// cache-side vocabulary (eidOf/findEid) tries this only after it misses.
+export let serverEid = (token: string): string | undefined =>
+  nameFor(token)?.eid
+
+// Reverse: an unloaded eid's naming (num, kind) for a crumb chip — undefined
+// while resolving, null once the server says it's gone.
+export let serverName = (eid: string): Named | null | undefined => nameFor(eid)
+
+// Whether a token is still being resolved (in flight or cooling after a
+// failure) — the "resolving" state a router shows in place of a premature
+// 404. A prior null (genuine miss) is NOT resolving.
+export let resolvingId = (token: string): boolean => {
+  resolveGen.value
+  if (named.has(token)) return false
+  let failed = resolveFailed.get(token)
+  return resolvingIds.has(token) ||
+    (!!failed && Date.now() - failed < COOLDOWN_MS)
+}
+
+// A reconnect reseeds the whole graph, so a token this client could not name
+// while a socket was down may resolve now — clear the sidecar (resetSignals
+// calls this) so the next render re-resolves rather than serving a stale miss.
+export let clearResolved = () => {
+  named.clear()
+  resolvingIds.clear()
+  resolveFailed.clear()
+  resolveGen.value++
 }
 // The same query over the WHOLE graph — the board's List face. No task
 // gate: sessions, memories, docs, web, people — anything that matches.

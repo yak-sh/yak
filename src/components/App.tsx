@@ -1,6 +1,6 @@
 import { useEffect } from 'preact/hooks'
 import { idOf } from '../types.ts'
-import { census, ent, mode } from '../live.ts'
+import { census, ent, mode, serverName } from '../live.ts'
 import { Admin } from './Admin.tsx'
 import { block, Chip, el } from './ui.tsx'
 import { filterable, FilterInput } from './Filter.tsx'
@@ -13,6 +13,7 @@ import {
   menu,
   navigate,
   route,
+  screenResolving,
   screenTarget,
   trail,
 } from './nav.tsx'
@@ -64,29 +65,52 @@ let Lost = () => {
   )
 }
 
+// The id is real but outside the working set, and its server resolve is in
+// flight (nav.tsx screenResolving) — the honest interim between a cache miss
+// and the answer, so a slow /resolve reads as "loading", never a false 404
+// (M-16612). It settles to the entity or to Lost when the resolve lands.
+let Resolving = () => {
+  let path = new URL(route.value, 'http://x').pathname
+  return (
+    <LostFrame>
+      <Code>…</Code>
+      <p>
+        resolving <Id>{decodeURIComponent(path)}</Id>
+      </p>
+    </LostFrame>
+  )
+}
+
 // The trail's last few, worn as breadcrumbs between brand and title —
 // bare chips (the titlebar surround says the title; the tooltip carries
 // it), each a real anchor whose plain click is the deliberate in-place
-// return. Dead entities just drop out.
+// return. A cached entity names itself; a trail eid the working set no
+// longer holds (once the boot flip serves a partial cache, T-18102) is
+// named by the server-resolve sidecar's num/kind, appearing once /resolve
+// lands. Dead entities (a null resolve) and still-resolving ones just drop
+// out — the same "last 3 that render" the census filter gave before.
 let Crumbs = () => {
-  let eids = trail.value.filter((eid) => census.value.includes(eid)).slice(-3)
-  if (!eids.length) return null
+  let items = trail.value.flatMap((eid) => {
+    let loaded = census.value.includes(eid)
+    let n = loaded ? undefined : serverName(eid) // kicks a resolve if unloaded
+    if (!loaded && !n) return [] // gone, or not resolved yet — not a crumb
+    let e = ent(eid)
+    let id = n ? idOf({ eid, kind: n.kind, num: n.num }) : idOf(e)
+    return [{ eid, id, tip: e.doc?.title }]
+  }).slice(-3)
+  if (!items.length) return null
   return (
     <Trail>
-      {eids.map((eid) => {
-        let e = ent(eid)
-        let href = `/${idOf(e)}`
-        return (
-          <Chip
-            key={eid}
-            href={href}
-            data-tip={e.doc?.title}
-            onClick={follow(href)}
-          >
-            {idOf(e)}
-          </Chip>
-        )
-      })}
+      {items.map(({ eid, id, tip }) => (
+        <Chip
+          key={eid}
+          href={`/${id}`}
+          data-tip={tip}
+          onClick={follow(`/${id}`)}
+        >
+          {id}
+        </Chip>
+      ))}
     </Trail>
   )
 }
@@ -161,7 +185,7 @@ export let App = () => {
             <Brand href='/'>Tasks</Brand>
           </Bar>
           <Body>
-            <Lost />
+            {screenResolving() ? <Resolving /> : <Lost />}
           </Body>
           <Status />
         </Main>

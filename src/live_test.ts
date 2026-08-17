@@ -13,6 +13,7 @@ import {
   byWarmth,
   cache,
   census,
+  clearResolved,
   commentCount,
   commentsOn,
   config,
@@ -37,7 +38,11 @@ import {
   relations,
   repoUrl,
   resetSignals,
+  resolveGen,
+  resolvingId,
   row,
+  serverEid,
+  serverName,
   sessionRows,
   shelfFor,
   sieve,
@@ -139,6 +144,134 @@ Deno.test('findEid does not scan or subscribe after indexing', () => {
     assertEquals(runs, 1)
   } finally {
     stop()
+  }
+})
+
+// The server id-resolve fallback (T-18102): a token the working-set cache
+// can't name resolves through /resolve, async and NAMING-ONLY. A cache hit
+// never touches the wire; a miss returns "not yet" without blocking and
+// settles on the answer. resolveGen wakes the reader. Each test isolates the
+// module-level sidecar with clearResolved and restores the real fetch.
+let stubFetch = (
+  handler: (id: string) => Response | Promise<Response>,
+) => {
+  let real = globalThis.fetch
+  let calls: string[] = []
+  globalThis.fetch = (input: string | URL | Request) => {
+    let url = new URL(String(input), 'http://x')
+    let id = url.searchParams.get('id') ?? ''
+    calls.push(id)
+    return Promise.resolve(handler(id))
+  }
+  return { calls, restore: () => (globalThis.fetch = real) }
+}
+
+Deno.test('server-resolve: an unloaded id resolves via /resolve, async and once', async () => {
+  clearResolved()
+  cache.value = {}
+  let eid = 'aaaaaaaa-0000-4000-8000-000000000099'
+  let f = stubFetch((id) =>
+    id == 'T-99'
+      ? Response.json({ eid, num: 99, kind: 'task' })
+      : new Response(null, { status: 404 })
+  )
+  try {
+    // A first miss KICKS the fetch and returns undefined — never blocks — and
+    // the token reads as resolving, not a premature miss.
+    assertEquals(serverEid('T-99'), undefined)
+    assertEquals(resolvingId('T-99'), true)
+    // A second read before the answer lands reuses the in-flight resolve.
+    assertEquals(serverEid('T-99'), undefined)
+    await until(() => serverEid('T-99') == eid)
+    // Naming-only, resolvable by eid too (the reverse read a crumb uses).
+    assertEquals(serverName(eid), { eid, num: 99, kind: 'task' })
+    assertEquals(resolvingId('T-99'), false)
+    assertEquals(f.calls, ['T-99']) // deduped: one round trip, not per read
+  } finally {
+    f.restore()
+  }
+})
+
+Deno.test('server-resolve: a cache hit never touches the wire', () => {
+  clearResolved()
+  cache.value = {
+    'bbbbbbbb-0000-4000-8000-000000000031': {
+      entity: { eid: 'bbbbbbbb-0000-4000-8000-000000000031', num: 31 },
+    },
+  }
+  resetSignals()
+  let f = stubFetch(() => {
+    throw new Error('a cache hit must not reach the server')
+  })
+  try {
+    assertEquals(findEid('T-31'), 'bbbbbbbb-0000-4000-8000-000000000031')
+    assertEquals(f.calls.length, 0)
+  } finally {
+    f.restore()
+  }
+})
+
+Deno.test('server-resolve: a 404 is a genuine miss — Lost, and no retry storm', async () => {
+  clearResolved()
+  cache.value = {}
+  let f = stubFetch(() => new Response(null, { status: 404 }))
+  try {
+    let gen = resolveGen.value
+    assertEquals(serverEid('T-404'), undefined)
+    await until(() => resolveGen.value > gen)
+    // null (gone), not undefined (pending): the router shows Lost, not a
+    // spinner. And the cached null stops any re-kick.
+    assertEquals(serverName('T-404'), null)
+    assertEquals(resolvingId('T-404'), false)
+    for (let i = 0; i < 20; i++) serverEid('T-404')
+    assertEquals(f.calls.length, 1)
+  } finally {
+    f.restore()
+  }
+})
+
+Deno.test('server-resolve: a hanging server never stalls nav, and never storms', async () => {
+  clearResolved()
+  cache.value = {}
+  let eid = 'cccccccc-0000-4000-8000-000000000007'
+  let release: (r: Response) => void = () => {}
+  let real = globalThis.fetch
+  let calls = 0
+  globalThis.fetch = () => {
+    calls++
+    return new Promise<Response>((res) => (release = res))
+  }
+  try {
+    // The read returns immediately though the wire hangs — routing/crumbs
+    // never block on a slow resolve (the risk this leaf guards).
+    assertEquals(serverEid('T-7'), undefined)
+    assertEquals(resolvingId('T-7'), true)
+    // Repeated reads while it hangs never launch a second request.
+    for (let i = 0; i < 20; i++) serverEid('T-7')
+    assertEquals(calls, 1)
+    // Let it finally answer — settling clears the abort timer (no leak).
+    release(Response.json({ eid, num: 7, kind: 'task' }))
+    await until(() => serverEid('T-7') == eid)
+  } finally {
+    globalThis.fetch = real
+  }
+})
+
+Deno.test('server-resolve: a reconnect reseed clears the sidecar', async () => {
+  clearResolved()
+  cache.value = {}
+  let eid = 'dddddddd-0000-4000-8000-000000000005'
+  let f = stubFetch(() => Response.json({ eid, num: 5, kind: 'task' }))
+  try {
+    serverEid('T-5')
+    await until(() => serverName(eid) != null)
+    // A wholesale reseed (reconnect) may now hold what was resolved remotely,
+    // so the sidecar is dropped and the next read re-resolves.
+    resetSignals()
+    assertEquals(serverName(eid), undefined) // dropped — and this re-kicks
+    await until(() => serverName(eid) != null) // let the re-kick settle (no leak)
+  } finally {
+    f.restore()
   }
 })
 

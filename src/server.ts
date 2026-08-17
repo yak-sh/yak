@@ -31,6 +31,7 @@ import {
   referrersOf,
   refsOf,
   refValuesOf,
+  resolveId,
   rootChanges,
   rowsOf,
   search,
@@ -939,6 +940,29 @@ let http = Deno.serve(
     // The admin census's graph-true counts: one COUNT per component table,
     // authoritative for eager AND entry-partition components the cache omits.
     if (path == '/census') return Response.json(componentCounts(db))
+    if (path == '/resolve') {
+      // The id-resolve fallback door (T-18102): a client whose working-set
+      // cache can't name a token resolves it here — the same resolveId every
+      // read door uses (T-3684). Naming-only: eid, num, kind — the immutable
+      // facts a link or crumb needs, never content (that rides subscriptions),
+      // so nothing folded from this answer can go stale. 404 = no such entity,
+      // so the client shows its honest Lost instead of a spinner that never
+      // settles; 400 = an ambiguous short-eid prefix, the typist's news.
+      let id = url.searchParams.get('id') ?? ''
+      let eid: string | undefined
+      try {
+        eid = id ? resolveId(db, id) : undefined
+      } catch (e) {
+        return new Response(String((e as Error).message ?? e), { status: 400 })
+      }
+      if (!eid) return new Response('no entity', { status: 404 })
+      let comps = eager(db, eid)
+      return Response.json({
+        eid,
+        num: Number(comps.entity?.num ?? 0) || null,
+        kind: kindOf(comps),
+      })
+    }
     if (path == '/body') {
       // The bodies a bodyless payload deferred, for the eids a view is about
       // to paint or edit (live.ts `want`). A Change batch, so it lands
