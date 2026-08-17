@@ -44,6 +44,11 @@ import {
   TEXT,
 } from './query.ts'
 import { where } from './sql.ts'
+import {
+  Invalid,
+  spec as configSpec,
+  validate as validateSetting,
+} from './config.ts'
 import { derivedCols, indexDdlOne, tableDdl } from './ddl.ts'
 import { indexesFor } from './index.ts'
 import {
@@ -519,6 +524,17 @@ let schema = `
     eid   text primary key references entity(eid),
     slug  text not null unique,
     slugs text
+  );
+  -- A non-secret runtime override (D-18092, config.ts): one row per catalog
+  -- key, with key unique so a second override of the same key bounces the batch
+  -- (concurrent-write safety) rather than shadowing the first. Hand-DDL like
+  -- alias, its keyed-handle twin: the single-column unique on a NON-reference
+  -- column is what keeps this table out of the derived set. apply() validates
+  -- the value against the catalog and refuses an unknown key. No secrets here.
+  create table if not exists setting (
+    eid   text primary key references entity(eid),
+    key   text not null unique,
+    value text
   );
   -- recall's not-null columns have no defaults ON PURPOSE: they refuse
   -- even apply()'s bare {} touch, so touch() below stays the one writer.
@@ -2987,6 +3003,54 @@ let replaceWakes = (db: DatabaseSync, changes: Change[]): Change[] => {
   })
 }
 
+// The setting boundary (D-18092): a `setting` write must name a KNOWN catalog
+// key, and its value is validated + normalized against that key before it lands
+// — the URL constraint, the secret refusal, the unknown-key refusal, all in the
+// same transaction so every door (CLI, MCP, web) is guarded, and a bad write
+// bounces the whole batch the way a claim does rather than storing garbage a
+// consumer would later read. A value-only patch resolves its key from the
+// existing row; a key-only or bare touch is refused unless the key is catalogued.
+// The value is normalized IN PLACE so storage and the echoed batch are canonical.
+let guardSettings = (db: DatabaseSync, changes: Change[]): Change[] => {
+  let keyOf = prep(db, 'select key from setting where eid = ?')
+  for (let c of changes) {
+    if (c.name != 'setting' || !c.comp) continue
+    let comp = c.comp
+    let setsKey = 'key' in comp && comp.key != null
+    let setsValue = 'value' in comp && comp.value != null
+    if (!setsKey && !setsValue) continue
+    let key = setsKey
+      ? String(comp.key)
+      : (keyOf.get(c.eid) as { key?: string } | undefined)?.key
+    if (!key) {
+      throw new Invalid(`setting ${shortId(c.eid)} names no catalog key`)
+    }
+    if (setsValue) {
+      // validate() checks the key is known + non-secret and normalizes the value.
+      comp.value = validateSetting(key, String(comp.value))
+    } else if (!configSpec(key) || configSpec(key)!.sensitive) {
+      // A key-only create still must be a known, non-secret catalog key.
+      throw new Invalid(
+        configSpec(key)
+          ? `${key} is a secret and cannot be stored in the graph`
+          : `unknown setting ${JSON.stringify(key)}`,
+      )
+    }
+  }
+  return changes
+}
+
+// The current non-secret override for a catalog key, or undefined. The graph
+// plane of config.resolve() — server code passes this as the reader so a value
+// is read at the operation boundary, current as of the last committed write.
+export let settingValue = (
+  db: DatabaseSync,
+  key: string,
+): string | undefined =>
+  (prep(db, 'select value from setting where key = ?').get(key) as {
+    value?: string | null
+  } | undefined)?.value ?? undefined
+
 export let apply = (
   db: DatabaseSync,
   changes: Change[],
@@ -3050,6 +3114,7 @@ export let apply = (
       cwd: string | null
     }[]
     changes = replaceWakes(db, changes)
+    changes = guardSettings(db, changes)
     changes = dualSpawn(db, changes)
     changes = dualFacet(db, changes, 'worktree')
     changes = dualFacet(db, changes, 'runtime')

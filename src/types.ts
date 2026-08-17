@@ -367,6 +367,16 @@ export let comps: Record<string, Record<string, PropType>> = {
   // Shared navigation is a graph fact, not one client's chrome. A favorite
   // remains whatever kind it already was, so this tag stays out of kindOrder.
   favorite: {},
+  // A non-secret runtime override, keyed by a catalog entry (config.ts). The
+  // code catalog owns what a setting IS — label, type, default, validation,
+  // sensitivity; this component holds only the OVERRIDE for a known key, unique
+  // by key (indexes below). Ordinary values are graph data (D-18092): they ride
+  // the normal mutation + broadcast path so a save reaches web and TUI and takes
+  // effect at the next use without a tasksd restart. apply() validates the value
+  // against the catalog and refuses an unknown key or a malformed one — SECRETS
+  // never wear this component; those stay server-only (credentials.ts). NOT in
+  // kindOrder: a setting is keyed by its catalog key, never addressed by num.
+  setting: { key: 'text', value: 'text' },
   // A session's identity and configuration. The launch/worktree/runtime
   // columns below are rolling aliases: old doors may still write them while
   // apply() mirrors them into their canonical optional facets. Keeping the
@@ -1441,6 +1451,11 @@ export type Fold = {
 export type Shelf = { eid: string; client: string }
 
 export type Favorite = { eid: string }
+export type Setting = {
+  eid: string
+  key?: string | null
+  value?: string | null
+}
 
 // An agent session's identity and the aspects whose later splits are owned by
 // T-16410/T-16411/T-16412. The launch/worktree/runtime fields at the tail are
@@ -1956,6 +1971,7 @@ export type Ent = {
   fold?: Fold
   shelf?: Shelf
   favorite?: Favorite
+  setting?: Setting
   subscription?: {
     eid: string
     actor?: string | null
