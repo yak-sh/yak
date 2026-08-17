@@ -1712,17 +1712,14 @@ Deno.test('pinned sleeps through an unrelated row patch', () => {
   }
 })
 
-// The agreement counter is the evidence stage 2b is waiting on, and it was
-// structurally unable to count. scanBoard is the only place that compared, and
-// a simple board scans exactly once — at mount, BEFORE its subscription's first
-// frame lands, so there is nothing to compare against. Every batch after that
-// takes the incremental branch of refreshBoards, which stamps `set.graph` and
-// so keeps any later render from rescanning either.
-//
-// The order below is the bug's order: scan first, subscription second, write
-// third. A counter that only ever reads zero is indistinguishable from one that
-// found no divergence, which is the worse of the two failures.
-Deno.test('the agreement counter counts on the incremental path', async () => {
+// A board now renders from the server's subscription (subEids); the local query
+// door is the pre-flip agreement check beside it, taken at the render that
+// actually reads them. So the counter counts once a render has BOTH doors: the
+// subscription's members and the query door resolved against the same cache.
+// Before the first sub frame the query door answers alone and there is nothing
+// to compare — the deferred counter stays null, which a probe must not mistake
+// for "no divergence found".
+Deno.test('the agreement counter counts when both doors answer', async () => {
   config.agreement = true
   cache.value = {
     board: {
@@ -1734,19 +1731,17 @@ Deno.test('the agreement counter counts on the incremental path', async () => {
       task: { eid: 't1', status: 'open', priority: 1 },
     },
   }
-  // What the Board component does on mount: register the subscription (the
-  // deferred counter only counts a sub some view is actually holding), then
-  // render from the scan.
+  // What a Board view does on mount: register the subscription, then render.
   let drop = boardSub(ent('board'))
   try {
-    // Mount: the scan runs with no subscription frame to compare against.
+    // Before the first sub frame the query door answers alone — nothing yet to
+    // compare it against.
     assertEquals(boardTasks(ent('board')).map((e) => e.eid), ['t1'])
     assertEquals(subscriptionChecks(), undefined)
 
-    // The subscription's first frame lands after the mount scan, as it does —
-    // and a SHADOW frame carries the spine alone. It has to be enough: the
-    // client is still on the complete broadcast, so membership is the only
-    // thing this frame is for.
+    // The subscription's first frame lands — a SHADOW frame carries the spine
+    // alone. It has to be enough: the client is still on the complete
+    // broadcast, so membership is the only thing this frame is for.
     landSub({
       sub: 'board:board',
       changes: [{ eid: 't1', name: 'entity', comp: { eid: 't1', num: 2 } }],
@@ -1755,12 +1750,9 @@ Deno.test('the agreement counter counts on the incremental path', async () => {
     })
     assertEquals(subEids('board:board')?.size, 1)
 
-    // A committed batch — the only thing that reaches a simple board now.
-    applyLocal([{
-      eid: 't1',
-      name: 'task',
-      comp: { eid: 't1', status: 'open', priority: 0 },
-    }])
+    // Now a render has the sub's members AND resolves the query door beside
+    // them: the two are compared.
+    assertEquals(boardTasks(ent('board')).map((e) => e.eid), ['t1'])
     // Poll the off-thread agreement counter instead of guessing its latency.
     let counts = await until(() => {
       let c = subscriptionChecks()
@@ -1770,6 +1762,152 @@ Deno.test('the agreement counter counts on the incremental path', async () => {
     assertEquals((counts?.agreements ?? 0) > 0, true, 'the counter counted')
   } finally {
     config.agreement = false
+    drop()
+    unsubscribe('board:board')
+  }
+})
+
+// A board IS a saved query, so the server's subscription is its membership: the
+// render reads subEids, not a cache scan. The first frame paints it, and a
+// maintenance frame that adds or drops an eid moves the board live — the join/
+// leave the boot flip needs to keep working under a partial cache (T-18099).
+Deno.test('a board renders from the subscription and tracks joins and leaves', () => {
+  cache.value = {
+    board: {
+      entity: { eid: 'board', num: 1 },
+      board: { eid: 'board', query: '.status=open' },
+    },
+    t1: {
+      entity: { eid: 't1', num: 2 },
+      task: { eid: 't1', status: 'open', priority: 1 },
+    },
+    t2: {
+      entity: { eid: 't2', num: 3 },
+      task: { eid: 't2', status: 'open', priority: 2 },
+    },
+  }
+  deps.value = []
+  let drop = boardSub(ent('board'))
+  try {
+    // The server's first frame IS the membership — the render reads it. (A
+    // shadow frame carries the spine; bodies rode the complete broadcast.)
+    landSub({
+      sub: 'board:board',
+      replace: true,
+      shadow: true,
+      changes: [{ eid: 't1', name: 'entity', comp: { eid: 't1', num: 2 } }],
+    })
+    assertEquals(boardTasks(ent('board')).map((e) => e.eid), ['t1'])
+
+    // A task joins the query: a maintenance frame adds it and the board picks
+    // it up live — no cache scan, no per-patch re-test.
+    landSub({
+      sub: 'board:board',
+      shadow: true,
+      changes: [{ eid: 't2', name: 'entity', comp: { eid: 't2', num: 3 } }],
+    })
+    assertEquals(
+      boardTasks(ent('board')).map((e) => e.eid).toSorted(),
+      ['t1', 't2'],
+    )
+
+    // A task leaves the query: the server drops it from THIS sub (it still
+    // exists), and the board drops it too.
+    landSub({ sub: 'board:board', shadow: true, changes: [], drop: ['t1'] })
+    assertEquals(boardTasks(ent('board')).map((e) => e.eid), ['t2'])
+  } finally {
+    drop()
+    unsubscribe('board:board')
+  }
+})
+
+// The render source is the subscription plus each member's own row signal, never
+// `cache.value` — so an unrelated ordinary patch (no sub frame, not a member)
+// never wakes the board, while a member's own edit does.
+Deno.test('a subscribed board sleeps through an unrelated ordinary patch', () => {
+  cache.value = {
+    board: {
+      entity: { eid: 'board', num: 1 },
+      board: { eid: 'board', query: '.status=open' },
+    },
+    t1: {
+      entity: { eid: 't1', num: 2 },
+      task: { eid: 't1', status: 'open', priority: 1 },
+    },
+    other: {
+      entity: { eid: 'other', num: 3 },
+      doc: { eid: 'other', title: 'unrelated', body: '' },
+    },
+  }
+  deps.value = []
+  let drop = boardSub(ent('board'))
+  landSub({
+    sub: 'board:board',
+    replace: true,
+    shadow: true,
+    changes: [{ eid: 't1', name: 'entity', comp: { eid: 't1', num: 2 } }],
+  })
+  let runs = 0
+  let stop = effect(() => {
+    boardTasks(ent('board'))
+    runs++
+  })
+  try {
+    assertEquals(runs, 1)
+    // An unrelated entity changes: not a member, no sub frame — untouched.
+    applyLocal([{ eid: 'other', name: 'doc', comp: { title: 'changed' } }])
+    assertEquals(runs, 1)
+    // A member's own edit wakes the board (its ent rides t1's row signal).
+    applyLocal([{ eid: 't1', name: 'task', comp: { priority: 5 } }])
+    assertEquals(runs, 2)
+  } finally {
+    stop()
+    drop()
+    unsubscribe('board:board')
+  }
+})
+
+// boardPost is the face split, wherever the members come from: the server can
+// stream the board's own eid and chrome (a comment, a card) into the sub's set,
+// and boardPost still keeps them out — the whole-graph face drops comment/card/
+// self, the tasks face keeps only task-bearing rows.
+Deno.test('boardPost excludes chrome and self from the subscription members', () => {
+  cache.value = {
+    board: {
+      entity: { eid: 'board', num: 1 },
+      doc: { eid: 'board', title: 'feed', body: '' },
+      board: { eid: 'board', query: '.order=hot' },
+    },
+    task: {
+      entity: { eid: 'task', num: 2 },
+      task: { eid: 'task', status: 'open', priority: 1 },
+    },
+    note: {
+      entity: { eid: 'note', num: 3 },
+      comment: { eid: 'note', target: 'task' },
+    },
+    card: {
+      entity: { eid: 'card', num: 4 },
+      card: { eid: 'card', target: 'task', view: 'Full' },
+    },
+  }
+  deps.value = []
+  let drop = boardSub(ent('board'))
+  try {
+    landSub({
+      sub: 'board:board',
+      replace: true,
+      shadow: true,
+      changes: [
+        { eid: 'board', name: 'entity', comp: { eid: 'board', num: 1 } },
+        { eid: 'task', name: 'entity', comp: { eid: 'task', num: 2 } },
+        { eid: 'note', name: 'entity', comp: { eid: 'note', num: 3 } },
+        { eid: 'card', name: 'entity', comp: { eid: 'card', num: 4 } },
+      ],
+    })
+    assertEquals(boardAll(ent('board')).map((e) => e.eid), ['task'])
+    assertEquals(boardTasks(ent('board')).map((e) => e.eid), ['task'])
+  } finally {
     drop()
     unsubscribe('board:board')
   }

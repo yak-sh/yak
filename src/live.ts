@@ -26,7 +26,6 @@ import { inboxItem, isUnread, readerAt, type Row } from './client.ts'
 import {
   EXISTS,
   type Field,
-  listed,
   matchQuery,
   namesLazy,
   parseQuery,
@@ -90,7 +89,6 @@ export let shown = (eid: string) =>
   !cache.value[eid]?.quarantined || revealed.value.has(eid)
 let canvasVersion = signal(0)
 let noRelations: Dep[] = []
-let refreshBoards = (_ids: Set<string>) => {}
 let refreshJobs = (_ids: Set<string>) => {}
 let refreshFacets = (_ids: Set<string>) => {}
 
@@ -409,7 +407,6 @@ export let resetSignals = () =>
       found.value = ix.byChild.get(eid) ?? noRelations
     }
     resetQueries()
-    refreshBoards(touched)
     refreshJobs(touched)
     refreshFacets(touched)
   })
@@ -708,7 +705,6 @@ export let applyLocal = (changes: Change[]) => {
     if (changedCensus) census.value = Object.keys(next)
     if (changedCanvas) canvasVersion.value++
     publish(changedRows, changedParents, changedChildren)
-    refreshBoards(changedRows)
     refreshJobs(changedRows)
     refreshQueries(changedRows)
     refreshFacets(changedRows)
@@ -994,7 +990,6 @@ let evict = (eids: string[]) => {
       census.value = Object.keys(next)
       if (changedCanvas) canvasVersion.value++
       publish(gone, new Set(), new Set())
-      refreshBoards(gone)
       refreshJobs(gone)
       refreshQueries(gone)
       refreshFacets(gone)
@@ -1099,11 +1094,12 @@ let entryUses = new Map<string, number>()
 // A board whose query NAMES the lazy partition (`.entry.session=S-3`) can't be
 // answered from the root cache — entries are omitted from the snapshot. So the
 // board holds an entry subscription per scoped session (the same door a Session
-// view opens), which streams those entries into the cache for boardHits to
-// match. Keyed by board sub → session eid → its unsubscribe. A cross-session
-// lazy board (no `.entry.session=`, e.g. `.generation.provider=codex`) has no
-// single session to subscribe and stays unrenderable in the cache; the server
-// query door answers it, board rendering waits on server-paged membership.
+// view opens), which streams those entries into the cache so boardScan's query
+// door resolves them. Keyed by board sub → session eid → its unsubscribe. A
+// cross-session lazy board (no `.entry.session=`, e.g. a `.generation.provider`
+// board) has no single session to subscribe and stays unrenderable in the
+// cache; the server query door answers it, board rendering waits on server-
+// paged membership.
 let boardEntrySubs = new Map<string, Map<string, () => void>>()
 
 let ownBoard = (sub: string, q: string) =>
@@ -1495,155 +1491,56 @@ export let boardPost = (
   eids: Iterable<string>,
 ): string[] =>
   [...eids].filter((eid) => {
-    let r = cache.value[eid]
+    // Each member read through its OWN row signal, never `cache.value` — the
+    // filter stays asleep on an unrelated patch and wakes on a member's edit
+    // (a row gaining/losing `task` moves the tasks-only face), where a whole-
+    // cache read would wake the board on every patch.
+    let r = row(eid).value
     // Facets are the truth: a shelf is also a canvas, so kindOf cannot name
     // the chrome component that keeps it out of the feed.
     return !!r && (tasks ? !!r.task : eid != e.eid && !chrome(r))
   })
 
-type BoardSet = {
-  eid: string
-  tasks: boolean
-  q: string
-  preds: ReturnType<typeof parseQuery>
-  complex: boolean
-  graph: Record<string, Comps>
-  ids: Signal<string[]>
-  error?: unknown
-}
-let boardSets = new Map<string, BoardSet>()
-let boardKey = (eid: string, tasks: boolean) =>
-  `${eid}:${tasks ? 'tasks' : 'all'}`
-let boardHits = (
-  e: Ent,
-  tasks: boolean,
-  preds: ReturnType<typeof parseQuery>,
-) =>
-  boardPost(e, tasks, Object.keys(cache.value))
-    .filter((eid) => listed(cache.value[eid], preds))
-    .filter((eid) =>
-      matchQuery(
-        cache.value[eid],
-        preds,
-        (t) => cache.value[t],
-        undefined,
-        kidsVia((t) => cache.value[t]),
-      )
+// A board's parsed, ref-resolved query, rebuilt each render — it THROWS on a
+// bad query the way the scan did, so the consumers catch it and show the error.
+// resolveRefs turns id references (T-3, P-19) into the eids the sub is keyed by.
+let boardPreds = (e: Ent) =>
+  resolveRefs(parseQuery(String(e.board?.query ?? '')), findEid)
+
+// A board IS a saved query, so its membership is the SERVER's answer: the
+// subscription boardSub installed (subEids) is the live, complete set — the
+// server maintains the query, forward-path and reverse hops included, where a
+// per-patch local re-test can't keep a complex board live (that was the whole-
+// cache rescan this replaces), and it stays complete under a working-set boot
+// where a cache scan would silently under-report (T-18094). It updates as tasks
+// join or leave: a maintenance frame adds/drops the eid and wakes this read.
+//
+// Until the subscription's first frame lands (undefined — an empty Set is a
+// ready, empty result), the query door answers from the cache so a board never
+// flashes empty on mount; that pass is correct even for a complex board, since
+// a one-shot resolve derefs forward. boardPost splits the one member set into
+// the tasks-only and whole-graph faces and drops chrome/self (a board is not
+// news to itself), reading each member through its own row signal — so the list
+// sleeps through an unrelated patch and wakes on a member's edit.
+let boardScan = (e: Ent, tasks: boolean): Ent[] => {
+  let preds = boardPreds(e) // throws on a bad query, before either door
+  let members = subEids(`board:${e.eid}`)
+  if (!members) return boardPost(e, tasks, queryEids(preds).value).map(ent)
+  let post = boardPost(e, tasks, members)
+  // Pre-flip agreement (probe only, config.agreement): the local query door
+  // must answer the same set the server streamed. The scan that used to be the
+  // render source is gone; this compares the two doors that outlive it, so a
+  // divergence still surfaces before the boot flip trusts the sub alone.
+  if (config.agreement) {
+    assertAgree(
+      `board:${e.eid}`,
+      String(e.board?.query ?? ''),
+      boardPost(e, tasks, queryEids(preds).value),
+      post,
     )
-
-let scanBoard = (set: BoardSet, e: Ent) => {
-  let q = String(e.board?.query ?? '')
-  let parsed = parseQuery(q)
-  let preds = resolveRefs(parsed, findEid)
-  let hits = boardHits(e, set.tasks, preds)
-  set.q = q
-  set.preds = preds
-  // A path OR a reverse hop can make one row's membership depend on another
-  // (a new comment moves its parent), so a touched row is not enough — the
-  // board rescans. Hot ordering cannot: membership is still row-local, and a
-  // touched member already republishes the ids below so the view re-sorts.
-  set.complex = preds.some((p) => !!p.at || !!p.rev)
-  set.graph = cache.value
-  set.error = undefined
-  agree(set, e, q, hits)
-  return hits
-}
-
-// Board membership is a local derived index, not a server subscription.
-// A graph patch tests only its touched rows; stable membership keeps a
-// parent Board asleep while an unrelated entity changes.
-let boardSet = (e: Ent, tasks: boolean) => {
-  let key = boardKey(e.eid, tasks)
-  let q = String(e.board?.query ?? '')
-  let found = boardSets.get(key)
-  if (!found) {
-    found = {
-      eid: e.eid,
-      tasks,
-      q: '\0',
-      preds: [],
-      complex: false,
-      graph: cache.peek(),
-      ids: signal<string[]>([]),
-    }
-    boardSets.set(key, found)
   }
-  if (found.q != q || found.graph != cache.peek()) {
-    try {
-      found.ids.value = untracked(() => scanBoard(found!, e))
-    } catch (error) {
-      found.q = q
-      found.graph = cache.peek()
-      found.error = error
-    }
-  }
-  if (found.error) throw found.error
-  return found
+  return post.map(ent)
 }
-
-refreshBoards = (eids: Set<string>) => {
-  for (let set of boardSets.values()) {
-    let board = ent(set.eid)
-    let q = String(board.board?.query ?? '')
-    if (set.q != q || set.complex) {
-      try {
-        set.ids.value = untracked(() => scanBoard(set, board))
-      } catch (error) {
-        set.q = q
-        set.graph = cache.peek()
-        set.error = error
-      }
-      continue
-    }
-    let ids = set.ids.peek()
-    let next = ids
-    for (let eid of eids) {
-      let had = next.includes(eid)
-      let row = cache.peek()[eid]
-      let candidate = !!row &&
-        (set.tasks ? !!row.task : eid != set.eid && !chrome(row)) &&
-        listed(row, set.preds)
-      let wants = candidate &&
-        matchQuery(
-          row,
-          set.preds,
-          (t) => cache.peek()[t],
-          undefined,
-          kidsVia((t) => cache.peek()[t]),
-        )
-      if (had != wants) {
-        next = wants ? [...next, eid] : next.filter((x) => x != eid)
-      } else if (had) next = [...next]
-    }
-    set.graph = cache.peek()
-    if (next != ids) set.ids.value = next
-    // The other half of the agreement check, and the half that actually runs.
-    // scanBoard's call can only fire on a full rescan, and a simple board gets
-    // exactly one of those — at mount, BEFORE its subscription's first frame
-    // has landed, so `members` is undefined and nothing is compared. From then
-    // on every batch takes the branch above, and `set.graph` is stamped here,
-    // so no later render rescans either: the counter for a simple board was
-    // structurally pinned at zero. Measured on the real graph — eighteen boards
-    // rendered, two writes pushed through, `subscriptionChecks()` still null.
-    //
-    // A counter that cannot count reads as "no divergence found" forever, which
-    // is worse than having none: it is the evidence 2b is waiting on.
-    agree(set, board, q, next)
-  }
-}
-
-// Compare the client's own membership against the subscription's, whichever
-// path produced it. `mine` is already post-filtered; the sub set is raw, so it
-// goes through the same boardPost before the two can be compared at all.
-let agree = (set: BoardSet, board: Ent, q: string, mine: string[]) => {
-  if (!config.agreement) return
-  let members = subEids(`board:${set.eid}`)
-  if (!members) return
-  assertAgree(`board:${set.eid}`, q, mine, boardPost(board, set.tasks, members))
-}
-
-let boardScan = (e: Ent, tasks: boolean): Ent[] =>
-  boardSet(e, tasks).ids.value.map(ent)
 
 export let boardTasks = (e: Ent): Ent[] => boardScan(e, true)
 export let boardAll = (e: Ent): Ent[] => boardScan(e, false)

@@ -17,17 +17,20 @@ import {
   commentsOn,
   crewed,
   ent,
+  findEid,
   gated,
   mode,
   mutate,
   pending,
   problem,
+  queryEids,
   repoUrl,
   rows as graph,
   send,
   statuses,
   uuid,
 } from '../live.ts'
+import { parseQuery, resolveRefs } from '../query.ts'
 import {
   type Command,
   commands,
@@ -470,10 +473,14 @@ export let accountKey = (
   return true
 }
 
+// The favorites for the navigation panel, read through the query door rather
+// than a whole-cache scan (T-18099) — the SAME query TNavigation renders with
+// `useQuery(navigationQuery)`, so this handler and that list agree on order and
+// the pick index lands on the row shown. A key handler is not a render, so we
+// read the shared signal's current value; the panel holds the query while it is
+// open (this only fires then), and refreshQueries keeps the set live regardless.
 let favoriteEids = () =>
-  Object.entries(cache.peek()).filter(([, row]) => row.favorite).map(([eid]) =>
-    eid
-  )
+  queryEids(resolveRefs(parseQuery(navigationQuery), findEid)).value
 
 export let navigationKey = (
   k: string,
