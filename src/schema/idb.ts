@@ -21,12 +21,15 @@
 import { comps, type Idx, stamped } from '../types.ts'
 import { implies, indexesFor } from '../index.ts'
 import {
+  type Field,
+  fieldsOf,
   kidsOf,
   leafOf,
   listed,
   matchQuery,
   ORDER,
   type Pred,
+  PROJECT,
   TEXT,
 } from '../query.ts'
 import { isRef } from '../props.ts'
@@ -235,6 +238,13 @@ export let seedIdb = async (
 // ---- the store-backed resolver ----
 
 let queryKey = (preds: Pred[]) => JSON.stringify(preds)
+let wakeFields = (preds: Pred[]): Field[] =>
+  (fieldsOf(preds) ?? []).filter((f) => f.wake)
+// The value signature of one member's waking projected columns, read off its
+// already-hydrated bag — what a refresh compares to tell a move from a mute
+// z-bump. Mirrors resolver.ts so the two backings re-fire on the same edits.
+let sig = (bag: Row | undefined, fields: Field[]): string =>
+  JSON.stringify(fields.map((f) => bag?.[f.comp]?.[f.prop] ?? null))
 
 // One column read across a bag: a named component reads that column, a shared
 // route ('') reads it off every component carrying it — the same fan query.ts
@@ -255,6 +265,13 @@ let touched = (preds: Pred[]): string[] | null => {
   let ok = true
   let visit = (p: Pred) => {
     if (p.op == ORDER) return
+    // A projection names the columns each row carries — load their components so
+    // a refresh can read the values, without forcing the full-store fallback the
+    // comp:'' check below would otherwise trip.
+    if (p.op == PROJECT) {
+      for (let f of p.fields ?? []) s.add(f.comp)
+      return
+    }
     if (p.op == TEXT) {
       s.add('doc')
       return
@@ -333,9 +350,18 @@ export let idbResolver = (
   gate?: Promise<unknown>,
 ): IdbResolver => {
   let names = stores.map((s) => s.name)
+  // Alongside membership each set carries its projection's waking columns and,
+  // per member, a signature of their values — so a change to a waking column
+  // (a pin's x) re-fires the set while a volatile one (its z) does not.
   let sets = new Map<
     string,
-    { preds: Pred[]; ids: Signal<string[]>; n: number }
+    {
+      preds: Pred[]
+      ids: Signal<string[]>
+      n: number
+      wake: Field[]
+      vals: Map<string, string>
+    }
   >()
 
   // Bulk-read the full bag for each eid in ONE readonly transaction: a get per
@@ -486,9 +512,16 @@ export let idbResolver = (
     if (!found) {
       sets.set(
         key,
-        found = { preds, ids: signal<string[]>(prime?.(preds) ?? []), n: 0 },
+        found = {
+          preds,
+          ids: signal<string[]>(prime?.(preds) ?? []),
+          n: 0,
+          wake: wakeFields(preds),
+          vals: new Map(),
+        },
       )
-      scan(preds).then((r) => {
+      scan(preds).then(async (r) => {
+        await seedVals(found!, r)
         if (!sameSet(found!.ids.peek(), r)) found!.ids.value = r
       })
     }
@@ -500,7 +533,10 @@ export let idbResolver = (
   let ready = async (preds: Pred[]): Promise<string[]> => {
     let out = await scan(preds)
     let s = sets.get(queryKey(preds))
-    if (s) s.ids.value = out
+    if (s) {
+      await seedVals(s, out)
+      s.ids.value = out
+    }
     return out
   }
 
@@ -520,11 +556,13 @@ export let idbResolver = (
   }
 
   // A membership test for a fixed eid set, hydrated once against the durable
-  // store — the async analogue of the memory resolver's row-local `matches`.
+  // store — the async analogue of the memory resolver's row-local `matches`. The
+  // hydrated `bags` ride back too, so a projection-waking refresh reads each
+  // member's field values off the same load rather than a second transaction.
   let membership = async (
     preds: Pred[],
     eids: string[],
-  ): Promise<(eid: string) => boolean> => {
+  ): Promise<{ test: (eid: string) => boolean; bags: Map<string, Row> }> => {
     if (gate) await gate
     let only = touched(preds) ?? names
     let bags = new Map<string, Row>()
@@ -533,11 +571,26 @@ export let idbResolver = (
     markQuarantined(bags, qs)
     let ent = (eid: string) => bags.get(eid)
     let kids = kidsOf(bags)
-    return (eid) => {
+    let test = (eid: string) => {
       let r = bags.get(eid)
       return !!r && listed(r, preds) &&
         matchQuery(r, preds, ent, undefined, kids)
     }
+    return { test, bags }
+  }
+
+  // (Re)build a set's member signatures from the durable store — the waking
+  // columns of each member in ONE readonly transaction. A membership-only query
+  // (no waking fields) keeps an empty map and pays nothing.
+  let seedVals = async (
+    s: { wake: Field[]; vals: Map<string, string> },
+    ids: string[],
+  ) => {
+    if (!s.wake.length) return
+    let comps = [...new Set(s.wake.map((f) => f.comp))]
+    let bags = ids.length ? await readBags(ids, comps) : new Map<string, Row>()
+    s.vals.clear()
+    for (let e of ids) s.vals.set(e, sig(bags.get(e), s.wake))
   }
 
   // The parents a touched CHILD moves: a reverse-hop query re-tests the target of
@@ -566,22 +619,40 @@ export let idbResolver = (
     for (let s of sets.values()) {
       let extra = await revParents(s.preds, ids)
       let list = extra.length ? [...new Set([...ids, ...extra])] : ids
-      let test = await membership(s.preds, list)
+      let { test, bags } = await membership(s.preds, list)
       let cur = s.ids.peek()
       let next = cur
+      let moved = false // a waking projected field of a standing member changed
       for (let e of list) {
         let had = next.includes(e)
         let wants = test(e)
         if (had != wants) {
           next = wants ? [...next, e] : next.filter((x) => x != e)
+          if (s.wake.length) {
+            if (wants) s.vals.set(e, sig(bags.get(e), s.wake))
+            else s.vals.delete(e)
+          }
+        } else if (had && s.wake.length) {
+          let now = sig(bags.get(e), s.wake)
+          if (s.vals.get(e) !== now) {
+            s.vals.set(e, now)
+            moved = true
+          }
         }
       }
+      // A membership change publishes the new set; a pure move republishes the
+      // same members as a fresh array so the view re-reads their boxes.
       if (next != cur) s.ids.value = next
+      else if (moved) s.ids.value = [...next]
     }
   }
 
   let reset = async () => {
-    for (let s of sets.values()) s.ids.value = await scan(s.preds)
+    for (let s of sets.values()) {
+      let r = await scan(s.preds)
+      await seedVals(s, r)
+      s.ids.value = r
+    }
   }
 
   return { resolve, subscribe, ready, refresh, reset, hold, drop }

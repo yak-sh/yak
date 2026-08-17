@@ -102,6 +102,45 @@ Deno.test('memoryResolver folds a multi-hop traversal (T-17123)', () => {
   assertEquals(ids.value.toSorted(), ['c1', 'c2'])
 })
 
+Deno.test('a projection re-fires on a waking column, sleeps on a volatile one', () => {
+  // The canvas working set's shape: pins on a canvas, projecting the box and
+  // marking z VOLATILE (`~`). Membership is `.pin.canvas=cv`; the projection
+  // rides along, so a move (x) re-fires while a z-bump never does — the exact
+  // wake the Card list depends on (T-18103).
+  let graph: Graph = {
+    a: { entity: { num: 1 }, pin: { canvas: 'cv', x: 0, y: 0, z: 1 } },
+    b: { entity: { num: 2 }, pin: { canvas: 'other', x: 0, y: 0, z: 1 } },
+  }
+  let r = memoryResolver(storeOver(graph))
+  let preds = q('.pin.canvas=cv&.fields=pin.x,pin.y,pin.z~')
+  let ids = r.subscribe(preds)
+  assertEquals(ids.value, ['a'])
+
+  let runs = 0
+  let stop = effect(() => {
+    ids.value
+    runs++
+  })
+  try {
+    // A z-bump on the member — projected but volatile — never wakes the set.
+    graph.a!.pin = { canvas: 'cv', x: 0, y: 0, z: 9 }
+    r.refresh(new Set(['a']))
+    assertEquals(runs, 1)
+    // A move (x) IS a waking column — the same members re-publish so the view
+    // re-reads their boxes.
+    graph.a!.pin = { canvas: 'cv', x: 50, y: 0, z: 9 }
+    r.refresh(new Set(['a']))
+    assertEquals(runs, 2)
+    // An unrelated row on another canvas — neither membership nor a member's
+    // fields moved, so the set stays asleep.
+    graph.b!.pin = { canvas: 'other', x: 7, y: 0, z: 1 }
+    r.refresh(new Set(['b']))
+    assertEquals(runs, 2)
+  } finally {
+    stop()
+  }
+})
+
 Deno.test('a second Resolver implementation satisfies the same interface', () => {
   // A stub backend answering from a canned set — no cache, no index. It stands
   // in wherever a Resolver is expected, so the seam is not shaped around the

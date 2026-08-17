@@ -25,11 +25,13 @@ import {
 import { inboxItem, isUnread, readerAt, type Row } from './client.ts'
 import {
   EXISTS,
+  type Field,
   listed,
   matchQuery,
   namesLazy,
   parseQuery,
   type Pred,
+  PROJECT,
   resolveRefs,
   scopedSessions,
   warm,
@@ -89,7 +91,6 @@ export let shown = (eid: string) =>
 let canvasVersion = signal(0)
 let noRelations: Dep[] = []
 let refreshBoards = (_ids: Set<string>) => {}
-let refreshPins = (_ids: Set<string>) => {}
 let refreshJobs = (_ids: Set<string>) => {}
 let refreshFacets = (_ids: Set<string>) => {}
 
@@ -409,7 +410,6 @@ export let resetSignals = () =>
     }
     resetQueries()
     refreshBoards(touched)
-    refreshPins(touched)
     refreshJobs(touched)
     refreshFacets(touched)
   })
@@ -587,7 +587,6 @@ export let applyLocal = (changes: Change[]) => {
   let changedRows = new Set<string>()
   let changedParents = new Set<string>()
   let changedChildren = new Set<string>()
-  let changedPins = new Set<string>()
   let changedCanvas = false
   let changedCensus = false
   let changed = false
@@ -617,7 +616,6 @@ export let applyLocal = (changes: Change[]) => {
         changed = true
         changedCensus = true
         changedRows.add(eid)
-        changedPins.add(eid)
         if (before.canvas) changedCanvas = true
       }
       // The cascade: every edge touching the dead eid leaves deps too —
@@ -669,7 +667,6 @@ export let applyLocal = (changes: Change[]) => {
       next[eid] = row as Comps
       changed = true
       changedRows.add(eid)
-      if (name == 'card' || name == 'pin') changedPins.add(eid)
       if (name == 'canvas' || (name == 'entity' && before?.canvas)) {
         changedCanvas = true
       }
@@ -681,10 +678,6 @@ export let applyLocal = (changes: Change[]) => {
     next[eid] = { ...before, [name]: after } as Comps
     if (!before) changedCensus = true
     if (name == 'pin' && after.z != null) zs.set(eid, Number(after.z))
-    if (
-      name == 'card' ||
-      (name == 'pin' && Object.keys(comp).some((p) => p != 'z'))
-    ) changedPins.add(eid)
     if (name == 'canvas' || (name == 'entity' && before?.canvas)) {
       changedCanvas = true
     }
@@ -716,7 +709,6 @@ export let applyLocal = (changes: Change[]) => {
     if (changedCanvas) canvasVersion.value++
     publish(changedRows, changedParents, changedChildren)
     refreshBoards(changedRows)
-    refreshPins(changedPins)
     refreshJobs(changedRows)
     refreshQueries(changedRows)
     refreshFacets(changedRows)
@@ -1003,7 +995,6 @@ let evict = (eids: string[]) => {
       if (changedCanvas) canvasVersion.value++
       publish(gone, new Set(), new Set())
       refreshBoards(gone)
-      refreshPins(gone)
       refreshJobs(gone)
       refreshQueries(gone)
       refreshFacets(gone)
@@ -1773,63 +1764,47 @@ export let foldFor = (client: string, board: string): Folded | undefined => {
   return f && { eid, statuses: String(f.statuses ?? '') }
 }
 
-// The root canvas (first canvas-tagged entity) and its pinned cards.
-// A canvas whose num hasn't arrived yet can't be "first" — sorting the
-// unknown to the front would yank every tab sitting on `/` to it.
+// The root canvas: the first canvas-tagged entity by num, read through the
+// query door (`.canvas!`) rather than a whole-cache scan, so a partial cache
+// resolves the same first canvas the complete graph would (T-18094). Membership
+// wakes it when a canvas is minted or dies; `canvasVersion` when a num arrives —
+// a canvas whose num hasn't landed yet can't be "first", or sorting the unknown
+// to the front would yank every tab sitting on `/` to it.
 export let rootCanvas = () => {
   canvasVersion.value
-  return Object.entries(cache.peek())
-    .filter(([, r]) => r.canvas)
+  return queryEids([has('canvas')]).value
+    .map((eid) => [eid, cache.peek()[eid]] as const)
     .sort(([, a], [, b]) =>
-      (a.entity?.num ?? Infinity) - (b.entity?.num ?? Infinity)
+      (a?.entity?.num ?? Infinity) - (b?.entity?.num ?? Infinity)
     )[0]
     ?.[0]
 }
 
-type PinSet = {
-  graph: Record<string, Comps>
-  ids: Signal<string[]>
-}
-let pinSets = new Map<string, PinSet>()
-let scanPins = (canvas: string) =>
-  Object.entries(cache.value)
-    .filter(([, r]) => r.pin?.canvas == canvas && r.card)
-    .map(([eid]) => eid)
-
-let pinSet = (canvas: string) => {
-  let found = pinSets.get(canvas)
-  if (!found) {
-    found = {
-      graph: cache.peek(),
-      ids: signal(untracked(() => scanPins(canvas))),
-    }
-    pinSets.set(canvas, found)
-  } else if (found.graph != cache.peek()) {
-    found.graph = cache.peek()
-    found.ids.value = untracked(() => scanPins(canvas))
-  }
-  return found
-}
-
-refreshPins = (eids: Set<string>) => {
-  for (let [canvas, set] of pinSets) {
-    let ids = set.ids.peek()
-    let next = ids
-    for (let eid of eids) {
-      let had = next.includes(eid)
-      let r = cache.peek()[eid]
-      let wants = !!r?.card && r.pin?.canvas == canvas
-      if (had != wants) {
-        next = wants ? [...next, eid] : next.filter((x) => x != eid)
-      } else if (had) next = [...next]
-    }
-    set.graph = cache.peek()
-    if (next != ids) set.ids.value = next
-  }
-}
+// The canvas working set: the carded pins on ONE canvas, scoped to it through
+// the query door so opening a canvas reads its own contents rather than
+// trusting the whole cache (T-18103) — under a partial cache a pin outside the
+// loaded set still counts, where a scan silently dropped it. `.fields` PROJECTS
+// each row's box (x/y/w/h) and card face (target/view) so a change to any of
+// them re-fires the list — the same rows the old refreshPins re-published — plus
+// `z~` VOLATILE: z's value rides along (seeding pinZ) but a z-bump on every
+// toFront never re-fires the list, the raise binding straight to pinZ instead.
+let pinFields: Field[] = [
+  { comp: 'pin', prop: 'x', wake: true },
+  { comp: 'pin', prop: 'y', wake: true },
+  { comp: 'pin', prop: 'w', wake: true },
+  { comp: 'pin', prop: 'h', wake: true },
+  { comp: 'pin', prop: 'z', wake: false },
+  { comp: 'card', prop: 'target', wake: true },
+  { comp: 'card', prop: 'view', wake: true },
+]
+let pinsOn = (canvas: string): Pred[] => [
+  eq('pin', 'canvas', canvas),
+  has('card'),
+  { comp: '', prop: '', op: PROJECT, value: '', fields: pinFields },
+]
 
 export let pinned = (canvas: string): Pinned[] =>
-  pinSet(canvas).ids.value
+  (!canvas ? [] : queryEids(pinsOn(canvas)).value)
     .map((eid) => [eid, cache.peek()[eid]] as const)
     .filter((x): x is readonly [string, Comps] => !!x[1]?.pin && !!x[1].card)
     .map(([eid, r]) => ({
@@ -1932,18 +1907,19 @@ export let parents = (eid: string) => childRelations(eid).value
 export let boardsOver = (target: string): string[] =>
   queryEids([contains('board', 'query', target)]).value
 
-// The highest stacking order on a canvas — a raised card gets topZ + 1.
-// The pin presence test is load-bearing: with `?.` alone a nullish canvas
-// matches every PINLESS row too (undefined == null) and the map crashes.
+// The highest stacking order on a canvas — a raised card gets topZ + 1. The
+// members come from the one canvas-scoped query (asleep on z-bumps), and each
+// pin's CURRENT z is read fresh off the cache: a z-only patch updates the row
+// in place without waking the list, so the max here is always live. A nullish
+// canvas names no query and matches nothing, the floor 0.
 export let topZ = (canvas: string) =>
   Math.max(
     0,
-    ...Object.values(cache.value)
-      .filter((r) => r.pin && r.pin.canvas == canvas)
-      .map((r) => r.pin!.z),
+    ...(!canvas ? [] : queryEids(pinsOn(canvas)).value
+      .map((eid) => cache.peek()[eid]?.pin?.z ?? 0)),
   )
 
-// Any interaction pulls a card to the front. Reads the pin fresh from the
+// Any interaction pulls a card to the front. Reads the pins fresh from the
 // cache, so a burst of events (a scroll's worth of wheels) raises once.
 // The card must clear every OTHER pin, not merely match the canvas top —
 // a tie at the top (fresh pins all land at 0) still raises.
@@ -1952,9 +1928,9 @@ export let toFront = (pin: string) => {
   if (!p) return
   let top = Math.max(
     -1,
-    ...Object.entries(cache.value)
-      .filter(([eid, r]) => eid != pin && r.pin?.canvas == p.canvas)
-      .map(([, r]) => r.pin!.z),
+    ...queryEids(pinsOn(p.canvas)).value
+      .filter((eid) => eid != pin)
+      .map((eid) => cache.peek()[eid]?.pin?.z ?? -1),
   )
   if (p.z <= top) mutate({ eid: pin, name: 'pin', comp: { z: top + 1 } })
 }
@@ -1968,11 +1944,14 @@ export let toPlane = (clientX: number, clientY: number, rect: DOMRect) => {
   }
 }
 
-// This client's camera over one canvas, if it exists yet.
+// This client's camera over one canvas, if it exists yet — resolved through the
+// query door (both {eid} columns anchor the derived index) rather than a
+// whole-cache scan, so a partial cache still finds the row the graph holds.
 export let myCamera = (client: string, canvas: string) =>
-  Object.values(cache.value).find((r) =>
-    r.camera?.client == client && r.camera?.canvas == canvas
-  )?.camera
+  queryEids([eq('camera', 'client', client), eq('camera', 'canvas', canvas)])
+    .value
+    .map((eid) => cache.peek()[eid]?.camera)
+    .find((c) => !!c)
 
 // Who this browser is: a client entity, its uuid minted into localStorage on
 // first visit. The db rows appear when the camera first persists.

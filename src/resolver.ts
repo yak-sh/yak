@@ -8,7 +8,14 @@
 // implementation behind the SAME interface with zero call-site churn — live.ts
 // (queryEids) and useQuery call the seam, never a concrete cache.
 import { type Signal, signal, untracked } from '@preact/signals'
-import { type Kids, listed, matchQuery, type Pred } from './query.ts'
+import {
+  type Field,
+  fieldsOf,
+  type Kids,
+  listed,
+  matchQuery,
+  type Pred,
+} from './query.ts'
 
 // A row as the resolver reads it — the merged-components bag both the live cache
 // and a client Row speak (the same structural shape index.ts and query.ts use,
@@ -52,8 +59,23 @@ export type MemoryResolver = Resolver & {
   reset: () => void
 }
 
-type QuerySet = { preds: Pred[]; ids: Signal<string[]>; n: number }
+// A query set also carries its projection's WAKING fields (`.fields=…`, minus
+// the `~`-volatile ones) and, per member, a signature of those columns' values.
+// Membership drives the signal; on top of it, a change to a waking projected
+// field of a STANDING member re-fires the set too, while a volatile column (a
+// pin's z) changes its value in the cache without ever waking the list. `wake`
+// is empty for a plain membership query, so the whole mechanism costs nothing
+// there — the reverse-index helpers stay membership-only.
+type QuerySet = {
+  preds: Pred[]
+  ids: Signal<string[]>
+  n: number
+  wake: Field[]
+  vals: Map<string, string>
+}
 let queryKey = (preds: Pred[]) => JSON.stringify(preds)
+let wakeFields = (preds: Pred[]): Field[] =>
+  (fieldsOf(preds) ?? []).filter((f) => f.wake)
 
 export let memoryResolver = (store: Store): MemoryResolver => {
   let sets = new Map<string, QuerySet>()
@@ -64,6 +86,18 @@ export let memoryResolver = (store: Store): MemoryResolver => {
     let r = store.read(eid)
     return !!r && listed(r, preds) &&
       matchQuery(r, preds, store.read, undefined, store.kids)
+  }
+
+  // The value signature of one member's waking projected columns — what a
+  // re-fire compares against to tell a move (x/y/w/h) from a mute z-bump.
+  let sig = (eid: string, fields: Field[]): string => {
+    let r = store.read(eid)
+    return JSON.stringify(fields.map((f) => r?.[f.comp]?.[f.prop] ?? null))
+  }
+  let seed = (s: QuerySet, ids: Iterable<string>) => {
+    if (!s.wake.length) return
+    s.vals.clear()
+    for (let e of ids) s.vals.set(e, sig(e, s.wake))
   }
 
   // One resolution pass: the index narrows to a candidate set (or the whole
@@ -83,7 +117,16 @@ export let memoryResolver = (store: Store): MemoryResolver => {
     let key = queryKey(preds)
     let found = sets.get(key)
     if (!found) {
-      sets.set(key, found = { preds, ids: signal(resolve(preds)), n: 0 })
+      let ids = resolve(preds)
+      found = {
+        preds,
+        ids: signal(ids),
+        n: 0,
+        wake: wakeFields(preds),
+        vals: new Map(),
+      }
+      seed(found, ids)
+      sets.set(key, found)
     }
     return found
   }
@@ -126,20 +169,38 @@ export let memoryResolver = (store: Store): MemoryResolver => {
       let test = extra.length ? new Set([...eids, ...extra]) : eids
       let ids = s.ids.peek()
       let next = ids
+      let moved = false // a waking projected field of a standing member changed
       for (let eid of test) {
         let had = next.includes(eid)
         let wants = matches(eid, s.preds)
         if (had != wants) {
           next = wants ? [...next, eid] : next.filter((x) => x != eid)
+          if (s.wake.length) {
+            if (wants) s.vals.set(eid, sig(eid, s.wake))
+            else s.vals.delete(eid)
+          }
+        } else if (had && s.wake.length) {
+          let now = sig(eid, s.wake)
+          if (s.vals.get(eid) !== now) {
+            s.vals.set(eid, now)
+            moved = true
+          }
         }
       }
+      // A membership change publishes the new set; a pure move republishes the
+      // same members as a fresh array so the view re-reads their boxes.
       if (next != ids) s.ids.value = next
+      else if (moved) s.ids.value = [...next]
     }
   }
 
   // A wholesale cache replacement (seed/reset) re-scans every held query.
   let reset = () => {
-    for (let s of sets.values()) s.ids.value = resolve(s.preds)
+    for (let s of sets.values()) {
+      let ids = resolve(s.preds)
+      seed(s, ids)
+      s.ids.value = ids
+    }
   }
 
   return { resolve, subscribe, hold, drop, refresh, reset }
