@@ -109,6 +109,7 @@ let depDdl = `create table if not exists dependency (
   edges.map((e) => `'${e}'`).join(',')
 })),
     child  text not null references entity(eid),
+    ord    integer,
     primary key (parent, type, child)
   )`
 
@@ -117,6 +118,13 @@ let depDdl = `create table if not exists dependency (
 // is the graph's non-component table, so its access pattern stays beside its
 // hand-written DDL rather than pretending to be an IDB component store.
 let depIndex = { cols: ['child'] }
+
+// The edge read carries `ord` so persona materialization can order tied tier
+// members; null is the common case (every edge that never declared one), so
+// drop the key rather than ride `ord: null` on every Dep — an edge without a
+// listing order reads exactly as it always has.
+let shedOrd = (d: Dep): Dep =>
+  d.ord == null ? { parent: d.parent, type: d.type, child: d.child } : d
 
 // Outbound mail. "to"/"from" are SQL keywords — quoted here and by the
 // generic builders in apply(), which quote every column so the vocabulary
@@ -2080,6 +2088,9 @@ export let open = (path = file) => {
     if (dep && edges.some((e) => !dep.includes(`'${e}'`))) {
       rebuild(db, 'dependency', depDdl)
     }
+    // A live edge table that predates the listing order grows the column in
+    // place (additive; null on every existing edge, unchanged behavior).
+    addCol('dependency', 'ord', 'ord integer')
     // The per-type delivery receipts become the shared delivered/error
     // components, and the per-type recipient columns the shared deliver.to.
     // Both before mendMail: a mail rebuild must see the trimmed shape.
@@ -2242,7 +2253,7 @@ let cmps: Record<string, string[]> = {
   ),
 }
 
-let edgeCols = ['type', 'child', 'gone']
+let edgeCols = ['type', 'child', 'ord', 'gone']
 
 // What the SCHEMA has, as opposed to what the wire may write — the
 // authority for telling a name that EXISTS from a name that doesn't.
@@ -3095,6 +3106,24 @@ export let apply = (
               where parent = ? and type = ? and child = ?
             `,
             ).run(eid, String(comp.type), String(comp.child))
+          } else if ('ord' in comp) {
+            // An edge carrying a listing order create-or-PATCHes its ord:
+            // re-linking the same sentence with a new ord sets it (an
+            // editable field, not a second edge). Absent ord (the else)
+            // leaves an existing edge's ord untouched.
+            prep(
+              db,
+              `
+              insert into dependency (parent, type, child, ord)
+              values (?, ?, ?, ?)
+              on conflict(parent, type, child) do update set ord = excluded.ord
+            `,
+            ).run(
+              eid,
+              String(comp.type),
+              String(comp.child),
+              (comp.ord ?? null) as number | null,
+            )
           } else {
             prep(
               db,
@@ -4593,12 +4622,13 @@ export let snapshot = (db: DatabaseSync): Snapshot => {
       changes.push({ eid: row.eid as string, name, comp: row })
     }
   }
-  let deps = prep(
+  let deps = (prep(
     db,
-    `select parent as parent, type, child as child from dependency
+    `select parent as parent, type, child as child, ord from dependency
      where parent not in (${lazyEids})
-       and child not in (${lazyEids})`,
-  ).all() as Dep[]
+       and child not in (${lazyEids})
+     order by parent, type, ord, child`,
+  ).all() as Dep[]).map(shedOrd)
   // A project's specialist personas ride derived `reads` edges (homeReads):
   // home is the one truth, so these compute here on the graph-out door
   // and can never drift from ownership — nothing to store, nothing to sync.
@@ -4857,11 +4887,12 @@ export let depsOf = (db: DatabaseSync, eids: string[]): Dep[] => {
   if (!eids.length) return []
   stage(db, eids)
   let mine = `in (select eid from hit)`
-  let deps = prep(
+  let deps = (prep(
     db,
-    `select parent as parent, type, child as child from dependency
-      where parent ${mine} or child ${mine}`,
-  ).all() as Dep[]
+    `select parent as parent, type, child as child, ord from dependency
+      where parent ${mine} or child ${mine}
+      order by parent, type, ord, child`,
+  ).all() as Dep[]).map(shedOrd)
   return [
     ...deps,
     ...homeReads(homes(db, `where home ${mine} or eid ${mine}`), deps),

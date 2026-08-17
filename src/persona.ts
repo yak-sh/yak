@@ -40,9 +40,6 @@ next sync overwrites hand edits. -->`,
     '## Memory Index\n\n*Recall a body by id (memory_recall / task show).*',
 }
 
-let byWarm = (now: number) => (a: Row, b: Row) =>
-  hot(b.comps, now) - hot(a.comps, now)
-
 // One index line — the memory_recall rendering, tolerant of non-memory
 // targets (any doc can ride the index tier). Warmth ORDERS the index but
 // never prints: a score in the line re-materializes every persona file
@@ -78,24 +75,36 @@ let tiers = (
 ): { pre: Row[]; idx: Row[] } => {
   let pre = new Map<string, Row>()
   let idx = new Map<string, Row>()
+  let ord = new Map<string, number>() // declared listing order, direct edges
   seen.add(eid)
   let kids = (type: Edge) =>
     deps.filter((d) => d.parent == eid && d.type == type)
-      .map((d) => all.find((r) => r.eid == d.child))
-      .filter((r): r is Row => !!r?.comps.doc)
+      .map((d) => ({ d, r: all.find((r) => r.eid == d.child) }))
+      .filter((x): x is { d: Dep; r: Row } => !!x.r?.comps.doc)
   for (let type of ['contains', 'reads'] as const) {
     let here = type == 'contains' ? pre : idx
-    for (let r of kids(type)) {
+    for (let { d, r } of kids(type)) {
       if (r.comps.persona) {
         if (seen.has(r.eid)) continue
         let sub = tiers(all, deps, r.eid, now, seen)
         for (let m of sub.pre) pre.set(m.eid, m)
         for (let m of sub.idx) idx.set(m.eid, m)
-      } else here.set(r.eid, r)
+      } else {
+        here.set(r.eid, r)
+        if (d.ord != null) ord.set(r.eid, d.ord)
+      }
     }
   }
   for (let e of pre.keys()) idx.delete(e) // preload wins the fuller form
-  let warm = (m: Map<string, Row>) => [...m.values()].sort(byWarm(now))
+  // Warmth ranks the tier; a declared edge `ord` breaks a tie (lower first,
+  // undeclared last), so equal cache classes keep an intentional order that
+  // snapshot's deterministic read makes identical across databases and
+  // rewrites. sub-persona members carry no ord here (their own edges ordered
+  // them within the sub) and trail on warmth alone, stably.
+  let rank = (e: string) => ord.get(e) ?? Number.MAX_SAFE_INTEGER
+  let byWarm = (a: Row, b: Row) =>
+    hot(b.comps, now) - hot(a.comps, now) || rank(a.eid) - rank(b.eid)
+  let warm = (m: Map<string, Row>) => [...m.values()].sort(byWarm)
   return { pre: warm(pre), idx: warm(idx) }
 }
 

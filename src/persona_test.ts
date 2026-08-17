@@ -45,10 +45,11 @@ let row = (comps: Row['comps'], daysOld = 0): Row => {
 }
 let doc = (title: string, body: string, daysOld = 0) =>
   row({ doc: { title, body } }, daysOld)
-let edge = (parent: Row, type: Edge, child: Row): Dep => ({
+let edge = (parent: Row, type: Edge, child: Row, ord?: number): Dep => ({
   parent: parent.eid,
   type,
   child: child.eid,
+  ...(ord == null ? {} : { ord }),
 })
 // homeReads takes the homes, not the graph — off the persona table in the
 // server, off a hand-made graph here.
@@ -96,6 +97,34 @@ Deno.test('materialize: header and tiers in warmth order', () => {
   assertStringIncludes(md, '---\n\n## Memory Index\n\n*Recall a body by id')
   assertStringIncludes(md, 'delegation discipline')
   assert(!md.includes('Worktrees only.'))
+})
+
+Deno.test('materialize: edge ord breaks a warmth tie, undeclared trails (T-12939)', () => {
+  // Three equally-warm preloads: warmth can't order them, so today they'd
+  // fall to whatever order the graph read hands back. A declared edge ord
+  // pins an intentional listing (lower first); an undeclared member trails.
+  let a = doc('alpha', 'ABODY.', 5)
+  let b = doc('beta', 'BBODY.', 5)
+  let c = doc('gamma', 'CBODY.', 5)
+  let all = [persona, a, b, c]
+  let deps = [
+    edge(persona, 'contains', a, 2),
+    edge(persona, 'contains', b, 1),
+    edge(persona, 'contains', c), // undeclared → last among the tie
+  ]
+  let md = materialize(all, deps, persona, NOW)
+  assert(md.indexOf('BBODY.') < md.indexOf('ABODY.'))
+  assert(md.indexOf('ABODY.') < md.indexOf('CBODY.'))
+  // ord is a TIE-break, never a warmth override: a warmer member with a
+  // larger ord still leads a colder one with a smaller ord.
+  let warmer = doc('hot', 'HOT.', 1)
+  let md2 = materialize(
+    [persona, warmer, a],
+    [edge(persona, 'contains', warmer, 9), edge(persona, 'contains', a, 1)],
+    persona,
+    NOW,
+  )
+  assert(md2.indexOf('HOT.') < md2.indexOf('ABODY.'))
 })
 
 Deno.test('projection queries only persona neighborhoods', async () => {

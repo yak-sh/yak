@@ -1859,7 +1859,12 @@ export type Hit = {
   retired?: boolean // its project is over — the hit sank to the tail
 }
 
-export type Dep = { parent: string; type: Edge; child: string }
+// `ord` is an optional, editable listing order for the edge — a tie-break
+// among members of one (parent, type) that share a rank. Only persona
+// materialization reads it today (equal-warmth tier members list in a
+// declared order, stable across databases and rewrites); every other edge
+// leaves it null and behaves exactly as before. Lower sorts first.
+export type Dep = { parent: string; type: Edge; child: string; ord?: number }
 
 // An outgoing edge, verb + child — the Dependency view resolves the name.
 export type Ref = { type: Edge; child: string }
@@ -1983,7 +1988,10 @@ export type Pinned = Pin & { target: string; view: string }
 // Edges ride the same shape with name 'dependency', but a triple has no
 // row key, so the comp names the WHOLE sentence: {type, child} links
 // eid→child, and the same sentence with gone: true unlinks it (comp: null
-// could never say which edge). Both endpoints must exist.
+// could never say which edge). Both endpoints must exist. An optional
+// `ord` on the comp is the edge's listing order (types.ts Dep) — carrying
+// it re-links the same sentence to set it (an editable patch, not a second
+// edge); omitting it leaves an existing edge's ord untouched.
 // `was` is a PRECONDITION — the graph's --ff-only. It names the value the
 // caller read, column by column (SHA-256 of it, or null for "I read no
 // value"), and apply() refuses the whole batch if any guarded column has

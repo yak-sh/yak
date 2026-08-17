@@ -2499,6 +2499,43 @@ Deno.test('edges: link once, unlink by the same sentence', () => {
   assertEquals(edges(), [])
 })
 
+Deno.test('edges: ord round-trips, patches on re-link, untouched when absent (T-12939)', () => {
+  let p = uid(), c = uid()
+  let dep = () => snapshot(db).deps.find((d) => d.parent == p && d.child == c)
+  apply(db, [
+    { eid: p, name: 'doc', comp: { title: 'persona' } },
+    { eid: c, name: 'doc', comp: { title: 'memory' } },
+    {
+      eid: p,
+      name: 'dependency',
+      comp: { type: 'contains', child: c, ord: 3 },
+    },
+  ])
+  assertEquals(dep(), { parent: p, type: 'contains', child: c, ord: 3 })
+  // re-linking the same sentence with a new ord PATCHes it (not a second edge)
+  apply(db, [{
+    eid: p,
+    name: 'dependency',
+    comp: { type: 'contains', child: c, ord: 1 },
+  }])
+  assertEquals(dep(), { parent: p, type: 'contains', child: c, ord: 1 })
+  // re-linking WITHOUT ord leaves the stored order untouched (PATCH semantics)
+  apply(db, [
+    { eid: p, name: 'dependency', comp: { type: 'contains', child: c } },
+  ])
+  assertEquals(dep(), { parent: p, type: 'contains', child: c, ord: 1 })
+  // an edge that never declared an ord carries none — Dep stays bare
+  let c2 = uid()
+  apply(db, [
+    { eid: c2, name: 'doc', comp: { title: 'other' } },
+    { eid: p, name: 'dependency', comp: { type: 'contains', child: c2 } },
+  ])
+  assertEquals(
+    snapshot(db).deps.find((d) => d.parent == p && d.child == c2),
+    { parent: p, type: 'contains', child: c2 },
+  )
+})
+
 // Every verb in the vocabulary must clear the table's baked check — the
 // 'about' verb once shipped in types.ts alone and every about edge
 // bounced off the constraint silently.
