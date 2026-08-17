@@ -2446,13 +2446,20 @@ export let contextDigest = (
   // truncated handoff is why briefs were "never seen to work" (D-19459). A
   // generous line budget within the 48-line cap, with a pointer for any tail.
   let actor = String(sess?.comps.session?.actor ?? '') || scope
-  let prev = actor
+  // Handoff is operator-to-operator. Now that actor == project (T-19461),
+  // every builder spawned here shares the operator's actor, so a builder's
+  // captured final_text would shadow the operator's deliberate brief just by
+  // being newer. Prefer the newest operator:true session with a brief; fall
+  // back to the newest brief of any kind, so a lone preview or first run
+  // doesn't lose its only thread.
+  let briefed = actor
     ? sessions
       .filter((r) =>
         r.eid != sess?.eid && r.comps.session?.actor == actor && briefOf(r)
       )
-      .sort((a, b) => editedAt(b).localeCompare(editedAt(a)))[0]
-    : undefined
+      .sort((a, b) => editedAt(b).localeCompare(editedAt(a)))
+    : []
+  let prev = briefed.find((r) => r.comps.session?.operator) ?? briefed[0]
   if (prev) {
     // A brief-captured session leaves no doc.title; name it by S-num alone
     // rather than trailing an empty title.

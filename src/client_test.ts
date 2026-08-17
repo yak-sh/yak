@@ -1285,6 +1285,43 @@ Deno.test('## previously: the session doc.body is never scraped', () => {
   assertEquals(d.includes('Narrative that is not a handoff brief.'), false)
 })
 
+// Handoff is operator-to-operator (T-19469). Since actor == project, a builder
+// spawned here shares the operator's actor; its captured brief must not shadow
+// the operator's deliberate handoff just by being newer. The NEWER builder
+// brief loses to the OLDER operator:true one. (The fallback — a lone
+// non-operator brief still shows — is held by the tests above, whose PREV
+// carries no operator.)
+Deno.test('## previously: an operator brief wins over a newer builder brief', () => {
+  let OP = 'aaaaaaaa-0000-4000-8000-0000000000e1'
+  let BLD = 'aaaaaaaa-0000-4000-8000-0000000000f1'
+  let d = contextDigest({
+    changes: [
+      { eid: ACT, name: 'entity', comp: { eid: ACT, num: 90, created_at: '' } },
+      { eid: ACT, name: 'person', comp: {} },
+      { eid: CUR, name: 'entity', comp: { eid: CUR, num: 91, created_at: '' } },
+      { eid: CUR, name: 'session', comp: { id: 'cur', actor: ACT } },
+      // OLDER operator session — the deliberate handoff.
+      { eid: OP, name: 'entity', comp: { eid: OP, num: 92, created_at: '' } },
+      { eid: OP, name: 'session', comp: { id: 'op', actor: ACT, operator: 1 } },
+      { eid: OP, name: 'created', comp: { at: '2026-08-01T00:00:00Z' } },
+      { eid: OP, name: 'brief', comp: { text: 'Operator handoff line.' } },
+      // NEWER builder (non-operator) session with its own captured summary.
+      { eid: BLD, name: 'entity', comp: { eid: BLD, num: 93, created_at: '' } },
+      {
+        eid: BLD,
+        name: 'session',
+        comp: { id: 'bld', actor: ACT, operator: 0 },
+      },
+      { eid: BLD, name: 'created', comp: { at: '2026-08-15T00:00:00Z' } },
+      { eid: BLD, name: 'brief', comp: { text: 'Builder captured summary.' } },
+    ],
+    deps: [],
+  }, 'cur')
+  assertEquals(d.includes('## previously'), true)
+  assertEquals(d.includes('Operator handoff line.'), true)
+  assertEquals(d.includes('Builder captured summary.'), false)
+})
+
 // The digest's frontmatter lead (T-4554): a reified session's own meta —
 // S-num first, so an agent can address its own session doc. Only what's
 // known prints; an unknown sid prints nothing at all.
