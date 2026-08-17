@@ -199,6 +199,39 @@ Deno.test('graph_query reads the lazy entry partition, ordered and by human id',
   })
 })
 
+// The MCP reader end to end: `transcript` renders the graph ENTRY PARTITION —
+// no /logs door, no file read (T-16798). It reads the whole partition through
+// io.query('.entry.session=') → graphLog and renders every entry kind, so a
+// reader that regressed to a file source would show nothing here (T-16825).
+Deno.test('the transcript tool renders the graph entry partition', async () => {
+  let { db, io } = graph()
+  let s = crypto.randomUUID()
+  apply(db, [{
+    eid: s,
+    name: 'session',
+    comp: { id: 'runner-1', provider: 'codex', model: 'gpt-x' },
+  }])
+  append(db, s, [
+    { message: { role: 'user' }, content: { body: 'TRANSCRIPT_USER_LINE' } },
+  ])
+  append(db, s, [
+    { call: { key: 'k1' }, bash: { command: 'echo TRANSCRIPT_CMD' } },
+  ])
+  append(db, s, [
+    { message: { role: 'agent' }, content: { body: 'TRANSCRIPT_AGENT_LINE' } },
+  ])
+  await protocol(io, async (client) => {
+    let out = await client.callTool({
+      name: 'transcript',
+      arguments: { id: s },
+    }) as ToolResult
+    let text = said(out)
+    assertMatch(text, /user: TRANSCRIPT_USER_LINE/)
+    assertMatch(text, /\$ echo TRANSCRIPT_CMD/)
+    assertMatch(text, /agent: TRANSCRIPT_AGENT_LINE/)
+  })
+})
+
 Deno.test('task_spawn refuses an undecided proposal without minting a session', async () => {
   let { db, io } = graph()
   let task = crypto.randomUUID()

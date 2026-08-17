@@ -2,7 +2,13 @@
 // CLI grammar is dot-params. The guard must catch both the glued `--project=P`
 // and the space-separated `--project P` forms — the latter is what agents
 // actually type, and the bug that let it through polluted the owner board.
-import { assertEquals, assertMatch, assertThrows } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertMatch,
+  assertStringIncludes,
+  assertThrows,
+} from '@std/assert'
 import {
   claimedDigest,
   claudeHookSettings,
@@ -1870,3 +1876,73 @@ Deno.test('parse: every misplaced-body spelling is refused, and @file still read
   assertEquals(commentBody([`@${f}`], tty), 'the whole ruling\n')
   Deno.removeSync(f)
 })
+
+// The CLI reader end to end: `task transcript` reads the graph ENTRY PARTITION
+// through the query door and renders it — the /logs door is gone (T-16798), so
+// this is the one thing that keeps the CLI reader honest after the cutover
+// (T-16825 acceptance). It asks `.entry.session=`, never /logs, never the whole
+// graph, and every entry kind (user say, exec, agent say) renders in seq order.
+slow(
+  'task transcript reads and renders the graph entry partition',
+  async () => {
+    let S = 'bbbbbbbb-0000-4000-8000-000000000071'
+    let e1 = 'bbbbbbbb-0000-4000-8000-0000000000a1'
+    let e2 = 'bbbbbbbb-0000-4000-8000-0000000000a2'
+    let e3 = 'bbbbbbbb-0000-4000-8000-0000000000a3'
+    let snap: Snapshot = {
+      changes: [
+        { eid: S, name: 'entity', comp: { eid: S, num: 71 } },
+        {
+          eid: S,
+          name: 'session',
+          comp: { id: 'sess-71', provider: 'codex', model: 'gpt-x' },
+        },
+        // seq 1 — the user's opening entry
+        { eid: e1, name: 'entity', comp: { eid: e1, num: null } },
+        { eid: e1, name: 'entry', comp: { session: S, seq: 1 } },
+        { eid: e1, name: 'message', comp: { role: 'user' } },
+        { eid: e1, name: 'content', comp: { body: 'USER_ASKS_XYZZY' } },
+        // seq 2 — a tool call the agent ran
+        { eid: e2, name: 'entity', comp: { eid: e2, num: null } },
+        { eid: e2, name: 'entry', comp: { session: S, seq: 2 } },
+        { eid: e2, name: 'call', comp: { key: 'k1' } },
+        { eid: e2, name: 'bash', comp: { command: 'echo PLOVER' } },
+        // seq 3 — the agent's answer
+        { eid: e3, name: 'entity', comp: { eid: e3, num: null } },
+        { eid: e3, name: 'entry', comp: { session: S, seq: 3 } },
+        { eid: e3, name: 'message', comp: { role: 'agent' } },
+        { eid: e3, name: 'content', comp: { body: 'AGENT_REPLIES_PLUGH' } },
+      ],
+      deps: [],
+    }
+    let { server, seen, host } = graphServer(snap)
+    try {
+      let out = await new Deno.Command(Deno.execPath(), {
+        args: [
+          'run',
+          '-A',
+          new URL('./cli.ts', import.meta.url).pathname,
+          'transcript',
+          'S-71',
+        ],
+        clearEnv: true,
+        env: { TASKS_HOST: host },
+      }).output()
+      assertEquals(out.code, 0, text(out.stderr))
+      let stdout = text(out.stdout)
+      // It reached the entry partition — never a /logs door, never a whole-graph read.
+      assert(seen.some((path) => path.includes('.entry.session=')))
+      assertEquals(seen.some((path) => path.includes('/logs')), false)
+      assertEquals(seen.some((path) => path.startsWith('/snapshot')), false)
+      // Every entry kind rendered, in seq order.
+      assertMatch(stdout, /user: USER_ASKS_XYZZY/)
+      assertMatch(stdout, /\$ echo PLOVER/)
+      assertMatch(stdout, /agent: AGENT_REPLIES_PLUGH/)
+      // The header names the session and its provider.
+      assertStringIncludes(stdout, 'S-71')
+      assertStringIncludes(stdout, 'codex')
+    } finally {
+      await server.shutdown()
+    }
+  },
+)

@@ -24,10 +24,17 @@ export let answers = (snap: Snapshot) => {
     let named = segs.filter((s) => s.startsWith('id='))
       .flatMap((s) => s.slice(3).split(',')).filter(Boolean)
     let eids = new Set(named.map((id) => find(all, id)?.eid).filter(Boolean))
+    // The same non-filter parameters the real /query door strips before it
+    // parses predicates (server.ts): `id=` fetches by address, `after=`/`limit=`
+    // page the lazy entry partition, and deps/backlinks/quarantined are flags.
+    // Leaving a pagination param in would parse it as a bogus text pred and
+    // filter every row out — which is how a paginated CLI read (task transcript)
+    // silently reads nothing against this fake.
     let preds = parseQuery(
       segs.filter((s) =>
-        !s.startsWith('id=') &&
-        s != 'deps=1' && s != 'backlinks=1'
+        !s.startsWith('id=') && !s.startsWith('after=') &&
+        !s.startsWith('limit=') &&
+        s != 'deps=1' && s != 'backlinks=1' && s != 'quarantined=1'
       ).join('&'),
     )
     return all.filter((r) =>

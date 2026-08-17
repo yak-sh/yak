@@ -254,3 +254,85 @@ Deno.test('scrub redacts credential markers but keeps opaque replay tokens', () 
   let signature = 'EqQBCkYIBRgCKkD' + 'a'.repeat(60) + '+/Zx=='
   assertEquals(scrub(signature), signature)
 })
+
+// The acceptance the scrub() unit test can't make: a credential can ride in ANY
+// stream string — a Bash command, a tool result, the agent's own answer — so the
+// proof is the READ-BACK. scrubDeep runs before append, so once the turn is
+// stored, grepping every body the graph now holds finds the marker redacted and
+// the raw token nowhere. This is "grep the entry partition for credential
+// shapes" (T-16825) encoded against the claude-per-turn substrate.
+Deno.test('a credential in the stream never reaches a graph entry body', async () => {
+  let leak = 'sk-ant-LEAK0000000000000000abcd'
+  let turn = await printFixture([
+    { type: 'system', subtype: 'init', model: 'haiku', uuid: 'i' },
+    {
+      type: 'assistant',
+      uuid: 'a1',
+      message: {
+        role: 'assistant',
+        content: [{
+          type: 'tool_use',
+          id: 'toolu-1',
+          name: 'Bash',
+          input: { command: `export KEY=${leak}` },
+        }],
+      },
+    },
+    {
+      type: 'user',
+      uuid: 'u1',
+      message: {
+        role: 'user',
+        content: [{
+          tool_use_id: 'toolu-1',
+          type: 'tool_result',
+          content: [{ type: 'text', text: `printed ${leak}` }],
+          is_error: false,
+        }],
+      },
+      tool_use_result: { stdout: `printed ${leak}`, stderr: '' },
+    },
+    {
+      type: 'assistant',
+      uuid: 'a2',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'text', text: `your key ${leak} is set` }],
+      },
+    },
+    {
+      type: 'result',
+      subtype: 'success',
+      is_error: false,
+      result: `your key ${leak} is set`,
+      usage: { input_tokens: 1, output_tokens: 1 },
+      uuid: 'r',
+    },
+  ])
+  let db = freshDb()
+  let sid = uuid()
+  apply(db, [{
+    eid: sid,
+    name: 'session',
+    comp: { id: uuid(), provider: 'claude', model: 'haiku' },
+  }])
+  let [input] = append(db, sid, [{
+    message: { role: 'user' },
+    content: { body: 'run it' },
+  }]).eids
+  let [gen] = append(db, sid, [{
+    generation: { through: input, provider: 'claude', model: 'haiku' },
+  }]).eids
+  let work = claudeWork(turn, gen)
+  append(db, sid, work.specs, null, work.ids)
+
+  // Every string a reader could render, straight from the partition.
+  let bodies = readEntries(db, sid).flatMap((row) => [
+    row.comps.content?.body,
+    row.comps.bash?.command,
+  ]).filter(Boolean).map(String)
+  // The raw credential is nowhere; the redaction marker took its place.
+  assertEquals(bodies.some((b) => b.includes('LEAK')), false)
+  assert(bodies.some((b) => b.includes('sk-ant-[redacted]')))
+  db.close()
+})

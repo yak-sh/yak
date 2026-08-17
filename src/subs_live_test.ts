@@ -18,7 +18,7 @@
 // so a fresh subscribe's reply necessarily follows every maintain frame the
 // writes before it enqueued.
 
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertStringIncludes } from '@std/assert'
 import { slow } from './testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
@@ -507,6 +507,36 @@ slow('bodies ride only where a body is read', alone, async () => {
     client.close()
   }
 })
+
+// The Session /logs door is RETIRED (T-16798): every reader now reads the graph
+// entry partition, and the file-backed `/sessions/:eid/logs` route is gone —
+// absent, not deprecated (T-16825 acceptance). An extensionless path is a SPA
+// ROUTE now (server.ts serves index.html), so the old door answers with the app
+// shell, never a JSON log payload. If a reader ever reintroduced the route this
+// would parse JSON instead of finding the app title, and fail here.
+slow(
+  'the retired /logs door serves the SPA, not a log payload',
+  alone,
+  async () => {
+    let session = uid()
+    await post([{
+      eid: session,
+      name: 'session',
+      comp: { id: `logs-gone-${session}` },
+    }])
+    let res = await fetch(`http://${U}/sessions/${session}/logs`)
+    assertEquals(res.status, 200)
+    let body = await res.text()
+    // The app shell, not a log door: the SPA title is present…
+    assertStringIncludes(body, '<title>Tasks</title>')
+    // …and the response is not a JSON array of log rows.
+    let parsed: unknown = undefined
+    try {
+      parsed = JSON.parse(body)
+    } catch { /* html body is not JSON — the point */ }
+    assertEquals(Array.isArray(parsed), false)
+  },
+)
 
 // Entry entities do not ride the root snapshot, so a membership-only shadow
 // would leave a Session with ids it could never render. Its initial frame is
