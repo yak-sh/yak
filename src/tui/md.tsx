@@ -51,7 +51,16 @@ let inline = (t: string, repo?: string): (string | JSX.Element)[] => {
   return out
 }
 
-export let Md = ({ text, repo }: { text: string; repo?: string }) => {
+export let Md = (
+  { text, repo, inline: flow }: {
+    text: string
+    repo?: string
+    inline?: boolean
+  },
+) => {
+  // Inline markdown (a title, a mention) stays one flowing span so it doesn't
+  // force a line break the way a block <div> would — the web's mdInline twin.
+  if (flow) return <span class='Md'>{inline(text, repo)}</span>
   let lines = text.split('\n')
   let code = (line: Token[], key: string) => (
     <div key={key} class='Md_Code'>

@@ -8,6 +8,8 @@ import { render } from 'preact'
 import { effect } from '@preact/signals'
 import { boot, config } from '../live.ts'
 import { extend } from '../components/registry.ts'
+import { onMarkdown } from '../components/Markdown.tsx'
+import { Md } from './md.tsx'
 import {
   App,
   fit,
@@ -67,6 +69,12 @@ effect(() => {
   )
 })
 
+// The shared Markdown door injects HTML the fake DOM can't honor, so a Session
+// say (and every other body) came out blank. Give the door the terminal
+// painter — the same registry the web uses now reads in the terminal too.
+onMarkdown((text, repo, inline) => (
+  <Md text={text} repo={repo ?? undefined} inline={inline} />
+))
 extend(overrides)
 await boot()
 
