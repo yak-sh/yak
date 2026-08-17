@@ -34,6 +34,7 @@ import {
   rootChanges,
   rowsOf,
   search,
+  settingValue,
   snapshot,
   touch,
   vocabHash,
@@ -90,7 +91,12 @@ import { combineTools, localTools, tasksTools } from './harness_tools.ts'
 import { managedCodex } from './managed_codex.ts'
 import { sessionRow as storedSession } from './session_store.ts'
 import { responses } from './responses.ts'
-import { ollamaCloudTransport } from './ollama_cloud.ts'
+import {
+  ollamaCloudTransport,
+  type OllamaConfig,
+  ollamaProbe,
+} from './ollama_cloud.ts'
+import { resolve } from './config.ts'
 import { codexGeneration } from './runner.ts'
 import { readEntries } from './entries.ts'
 import { graphLog } from './entry_log.ts'
@@ -688,10 +694,29 @@ let graphIO: IO = {
 
 let codexAccount = accountService(codexStore(), codexIssuer())
 
+// Ollama's base URL, resolved at each request boundary: graph override (read
+// live from the setting table) > environment > catalog default. The transport
+// and the readiness probe share this one resolver, so a saved base reaches the
+// next request and the next test alike, with no tasksd restart (T-18303).
+let ollamaBase = () =>
+  resolve('OLLAMA_BASE_URL', (key) => settingValue(db, key)).value!
+
 // The server-only credential store (T-18302): the secret plane of the config
 // catalog. Its bytes never enter the graph, the wire, or a child environment;
-// the HTTP surface below returns only state, never a value.
-let credentials = credentialService()
+// the HTTP surface below returns only state, never a value. Its `test` action
+// runs the provider-safe Ollama probe, which reaches the same resolved base.
+let credentials = credentialService(
+  undefined,
+  undefined,
+  ollamaProbe(ollamaBase),
+)
+
+// The transport's config view: base from the shared resolver, key from the
+// server-only store — read fresh per request, never cached across generations.
+let ollamaConfig: OllamaConfig = {
+  base: ollamaBase,
+  key: () => credentials.secret('OLLAMA_API_KEY'),
+}
 
 // The adapter table stamped with live readiness: the graph-native Codex
 // transport is ready only when its account is signed in, so every server-side
@@ -710,7 +735,7 @@ let managed = managedCodex({
     retries: 1,
   }),
   generators: {
-    ollama: codexGeneration(ollamaCloudTransport({ retries: 1 })),
+    ollama: codexGeneration(ollamaCloudTransport({ retries: 1 }, ollamaConfig)),
   },
   tools: async (tree, session) => {
     let tasks = await tasksTools(graphIO, session)
