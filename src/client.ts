@@ -35,7 +35,7 @@ import {
   type Pred,
   route,
 } from './query.ts'
-import { FLOOR } from './embed.ts'
+import { FLOOR } from './twin.ts'
 import { type Provider, spawnDefault } from './providers.ts'
 import { request } from './http.ts'
 import { unmime } from './rfc2047.ts'

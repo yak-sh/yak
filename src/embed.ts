@@ -11,13 +11,14 @@
 // and every door degrades to silence. apply() never waits on any of this.
 import type { DatabaseSync } from './sqlite.ts'
 import { DIM, refreshVector } from './vector.ts'
+// textOf and FLOOR live in twin.ts so the client may share them without pulling
+// this server-only module (and its vector.ts extension loader) into the browser
+// bundle. Re-exported here because embed.ts uses textOf internally and is the
+// facade its server callers already import from.
+import { FLOOR, textOf } from './twin.ts'
+export { FLOOR, textOf }
 
 export let MODEL = 'Xenova/bge-small-en-v1.5'
-
-// What a doc's vector means: title and body as one text, cut at the
-// model's horizon (bge reads ~512 tokens; beyond ~2KB is silence anyway).
-export let textOf = (title: unknown, body: unknown) =>
-  `${String(title ?? '')}\n${String(body ?? '')}`.trim().slice(0, 2000)
 
 // FNV-1a over model+text — names the exact embedding a row holds, so the
 // sweep can skip the unchanged without storing the text twice.
@@ -170,14 +171,6 @@ export let embedSweep = async (db: DatabaseSync) => {
   }
   return n
 }
-
-// The twin floor, measured on the live graph (2026-07-22): an exact
-// copy scores 1.0, a reworded twin ~0.83, a close sibling ~0.81, a
-// same-domain different fact ~0.68 — 0.78 catches the twins (with
-// margin for terser rewordings) and admits the odd sibling worth a
-// look, while topic-mates stay out. Every similar door shares it: the
-// dupe hint (client.ts) and the doc view's Similar section.
-export let FLOOR = 0.78
 
 // The model's vectors packed once into one contiguous Float32Array, held per db
 // handle. The dot below then streams cache-friendly memory instead of what cost

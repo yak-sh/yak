@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { type ComponentChildren } from 'preact'
 import { comps, type Ent } from '../../types.ts'
-import { FLOOR, textOf } from '../../embed.ts'
+import { FLOOR, textOf } from '../../twin.ts'
 import {
   backlinks,
   base,
