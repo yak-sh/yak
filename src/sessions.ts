@@ -1152,6 +1152,7 @@ type Watch = {
   origin: string
   started_at: string | null
   finished_at: string | null
+  latest_seq?: number
 }
 
 // The last time a session was heard from: its own clock, or the graph's —
@@ -1186,6 +1187,37 @@ let betweenTurns = (eid: string) => {
   return s?.provider == 'codex' && s.turn == 'idle'
 }
 
+// A death BEFORE the first turn (latest_seq 0, nothing delivered) is a BREAK the
+// self-healer should chase (D-19024, T-19149) — heal.ts fires on the `exception`
+// facet, and a startup death that stamps only `finished_at` leaves that facet
+// absent, which is how R-9381's fable operator crash-looped undiagnosed for
+// days. So the external lifecycle folds an `exception` into the SAME ending
+// stamp; stamp() already routes it to exceptionChange() and fires heal, so
+// there is no new writer and no widened seam.
+//
+// The GUARD (C-19190): stamp it ONLY for a session that was EXPECTED to run —
+// one serving a `role`, or an `operator`. A free interactive external session (a
+// human's `task claude` / `task codex`) opened and closed before its first turn
+// is a normal event, not a bug, and stamping every one of those would file a
+// spurious ticket and turn a real ticket-filer into a noise source — worse than
+// the current silence. The message is a CONSTANT so a crash-loop dedups to ONE
+// bug (heal.ts faultKey), and honest that a process we never forked yields
+// neither an exit code nor a stderr tail — the role reconciler enriches those
+// where it owns the pane. `seq` is passed by the caller because drainNative's
+// first turn can land in the very drain that also sees the door shut.
+let STILLBORN =
+  'operator died before its first turn (no diagnostic; process not owned)'
+let stillbornPatch = (
+  eid: string,
+  seq: number,
+): { exception?: { message: string } } => {
+  if (seq) return {} // it produced a turn — a real run, not a stillbirth
+  let s = storedSession(db, eid)
+  if (!s || !(s.role || s.operator)) return {} // free interactive — a normal close
+  if (db.prepare('select 1 from delivered where eid = ?').get(eid)) return {}
+  return { exception: { message: STILLBORN } }
+}
+
 // Re-armed by the graph, never by a timer: each interactive provider stamps
 // session.pid at SessionStart. A resumed Claude does too, so a woken session
 // starts being followed again without this code knowing it was woken.
@@ -1203,7 +1235,11 @@ export let watched = (cast: Cast) => (eid: string, comp: Row) => {
     ? watch(eid, was, cast)
     : betweenTurns(eid)
     ? Promise.resolve() // idle between turns, not ended — leave it awake
-    : followWrite(eid, () => stamp(eid, { finished_at: lastHeard(eid) }, cast))
+    : followWrite(eid, () =>
+      stamp(eid, {
+        finished_at: lastHeard(eid),
+        ...stillbornPatch(eid, was.latest_seq ?? 0),
+      }, cast))
   // Detached on purpose: a heartbeat outlives the batch that armed it.
   done
     .catch((e) => console.warn('session watch stopped —', e))
@@ -1324,7 +1360,14 @@ export let drainNative = async (
       ...(lines.length ? observed(eid, lines) : {}),
       latest_seq: t.seq,
       ...(t.errs.length ? { error: diagnosis(t) } : {}),
-      ...(shut && !betweenTurns(eid) ? { finished_at: now() } : {}),
+      // The door shutting at seq 0 is the SAME stillborn break the watched()
+      // death branch stamps — this is where a session that was alive when the
+      // watch armed and died before its first turn settles (the live S-17544
+      // path), so the exception must ride this ending too, not only the
+      // already-dead-at-arm one. stillbornPatch carries the C-19190 guard.
+      ...(shut && !betweenTurns(eid)
+        ? { finished_at: now(), ...stillbornPatch(eid, t.seq) }
+        : {}),
     }, cast))
 }
 
