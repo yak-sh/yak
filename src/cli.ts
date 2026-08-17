@@ -2452,12 +2452,19 @@ let telemetry = async (got: Got) => {
   let rows = await res.json() as Log[]
   if (!rows.length) return warn('(nothing recorded)')
   for (let r of rows) {
+    // A collapsed crash cohort (telemetry.ts recent()): the row IS the newest
+    // occurrence, so the leading ts is `last` — name the frequency and how far
+    // back the run reaches. Absent on a lone row, so an uncollapsed log reads
+    // exactly as before.
+    let cohort = r.count && r.count > 1
+      ? `  ${r.count}× since ${local(r.first ?? r.ts)}`
+      : ''
     print(
       `${local(r.ts)}  ${r.source.padEnd(4)} ${r.name.padEnd(14)} ${
         r.ok ? 'ok ' : 'ERR'
       } ${(r.ms == null ? '' : `${r.ms}ms`).padStart(6)}  ${
         (r.session_id ?? '-').padEnd(10)
-      }  ${(r.error ?? '').slice(0, 80)}`,
+      }  ${(r.error ?? '').slice(0, 80)}${cohort}`,
     )
   }
 }
