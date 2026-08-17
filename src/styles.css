@@ -342,6 +342,12 @@ html {
   flex-direction: column;
   gap: 2px;
 }
+.Navigation_Items > :where(.Tile, .ListTile, .SessionRow) {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  padding: var(--half-gap);
+}
 .Navigation_Empty {
   margin: 0;
   padding: var(--gap) var(--half-gap);
@@ -1264,7 +1270,6 @@ html {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 2px var(--half-gap);
-  border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--card);
   padding: var(--half-gap);
